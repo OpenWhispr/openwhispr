@@ -41,6 +41,7 @@ async function setup(t) {
   const cloud = createFakeCloud();
   const api = createElectronApi(db, { cloud });
   windowStub.electronAPI = api;
+  db.setActiveAccountId("user-harness");
   await establishValidatedAuth();
   const service = new SyncService();
   t.after(() => stopSyncTimers(service));
@@ -299,6 +300,7 @@ test("a cloud tombstone hard-deletes the local note", async (t) => {
   });
 
   // Tombstones only travel on the delta page, so the cursor must already exist.
+  localStorageStub.setItem("lastSyncedAt.personalAccountId", "user-harness");
   localStorageStub.setItem("lastSyncedAt.notes", "2026-07-01T00:00:00.000Z");
   await cloud.request({ method: "DELETE", path: "/api/notes/delete", body: { id: cloudRow.id } });
   const mark = cloud.log.length;

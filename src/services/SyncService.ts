@@ -4,6 +4,7 @@ import {
   noteAwaitsCloudResolution,
 } from "../helpers/noteFieldSync.js";
 import type {
+  ActiveAccountScope,
   DictionaryEntryItem,
   NoteItem,
   FolderItem,
@@ -45,6 +46,7 @@ import {
   isCloudBackupAllowed,
 } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
+import { findDefaultFolder } from "../components/notes/shared";
 import { useSettingsStore } from "../stores/settingsStore";
 import {
   hasWelcomedSharedDictionary,
@@ -96,6 +98,19 @@ import {
   type PurgedSpaceReason,
   type SyncConsent,
 } from "./syncPassPolicy";
+
+function captureSyncAccountScope(): ActiveAccountScope {
+  const accountId = getAuthRequestContextSnapshot().sessionUserId;
+  const authGeneration = getValidatedAuthGeneration();
+  if (!accountId || authGeneration == null) {
+    throw new CloudApiError(
+      "Authentication context is not validated",
+      0,
+      "AUTH_CONTEXT_UNVALIDATED"
+    );
+  }
+  return { accountId, authGeneration };
+}
 
 function isHttpStatus(err: unknown, status: number): boolean {
   return err instanceof CloudApiError && err.status === status;
@@ -174,6 +189,18 @@ const CAN_SYNC_KEYS = [
   "insightsSyncEnabled",
   "dataRetentionEnabled",
 ];
+
+// The account the personal pull cursors were advanced for. They are
+// device-wide, so another account's delta would skip everything older in this
+// one's cloud; each account's own are parked under `<key>@<accountId>` while
+// another account is signed in.
+const PERSONAL_CURSOR_ACCOUNT_KEY = "lastSyncedAt.personalAccountId";
+const PERSONAL_CURSOR_KEYS = ["lastSyncedAt.notes", "lastSyncedAt.folders"];
+
+function setOrRemoveItem(key: string, value: string | null): void {
+  if (value === null) localStorage.removeItem(key);
+  else localStorage.setItem(key, value);
+}
 
 // Cross-window guard against a space purge racing an in-flight pull: every
 // purge initiator records the cloud space id here, and pull/upsert paths park
@@ -432,6 +459,7 @@ export async function upsertCloudSpaces(cloudSpaces: MySpace[]): Promise<number[
 
 export class SyncService {
   private syncing = false;
+  private boundFoldersClaimedFor: string | null = null;
   private syncAllPending = false;
   private autoSyncStarted = false;
   private dictionaryDirty = false;
@@ -619,6 +647,23 @@ export class SyncService {
     }
   }
 
+  // An unowned legacy cursor may belong to another account. Replay the delta
+  // from the epoch when no parked cursor exists, including tombstones so stale
+  // local rows deleted on another device are removed too.
+  private bindPersonalCursorsToAccount(): void {
+    const accountId = getAuthRequestContextSnapshot().sessionUserId;
+    const owner = localStorage.getItem(PERSONAL_CURSOR_ACCOUNT_KEY);
+    if (!accountId || owner === accountId) return;
+    PERSONAL_CURSOR_KEYS.forEach((key) => {
+      const parked = localStorage.getItem(`${key}@${accountId}`);
+      if (owner) setOrRemoveItem(`${key}@${owner}`, localStorage.getItem(key));
+      localStorage.removeItem(`${key}@${accountId}`);
+      const replayFrom = owner || localStorage.getItem(key) ? "1970-01-01T00:00:00.000Z" : null;
+      setOrRemoveItem(key, parked ?? replayFrom);
+    });
+    localStorage.setItem(PERSONAL_CURSOR_ACCOUNT_KEY, accountId);
+  }
+
   // lastSyncedAt is written only when a syncAll() pass completes, and
   // localStorage is shared across windows, so it doubles as the global
   // "last completed sync" stamp for throttling.
@@ -728,6 +773,7 @@ export class SyncService {
         let personalSucceeded = true;
         if (!hasValidatedAuthContext()) return;
         if (full) {
+          this.bindPersonalCursorsToAccount();
           await this.syncFolders();
           if (!hasValidatedAuthContext()) return;
           await this.syncNotes();
@@ -961,6 +1007,7 @@ export class SyncService {
   }
 
   private async pushFolder(id: number): Promise<void> {
+    const expectedScope = captureSyncAccountScope();
     const folders = (await window.electronAPI.getFolders?.()) ?? [];
     const folder = folders.find((f) => f.id === id);
     if (!folder) return;
@@ -981,7 +1028,12 @@ export class SyncService {
         // over a teammate's newer rename on the next pass. Guarded settle: a
         // rename landing mid-flight stays pending so it still pushes (a blind
         // settle would let the next pull's LWW revert it).
-        await window.electronAPI.markFolderSyncedIfUnchanged?.(folder.id, folder, folder.cloud_id);
+        await window.electronAPI.markFolderSyncedIfUnchanged?.(
+          folder.id,
+          folder,
+          folder.cloud_id,
+          expectedScope
+        );
       } catch (err) {
         if (isFolderNameTakenError(err)) {
           this.dispatchFolderNameTaken(folder.name);
@@ -1012,6 +1064,7 @@ export class SyncService {
   // existing row; adopt its identity (as the batch path does) so later pulls
   // of that row match this folder instead of inserting a colliding duplicate.
   private async createCloudFolder(folder: FolderItem, scope: PushScopeFields): Promise<void> {
+    const expectedScope = captureSyncAccountScope();
     const cloud = await FoldersService.create({
       name: folder.name,
       client_folder_id: folder.client_folder_id,
@@ -1025,7 +1078,8 @@ export class SyncService {
       folder.cloud_id,
       cloud.client_folder_id ?? folder.client_folder_id,
       cloud.id,
-      cloud.updated_at
+      cloud.updated_at,
+      expectedScope
     );
   }
 
@@ -1042,6 +1096,7 @@ export class SyncService {
   }
 
   private async pushNote(id: number): Promise<void> {
+    const expectedScope = captureSyncAccountScope();
     const note = await window.electronAPI.getNote?.(id);
     if (!note) return;
     if (readNoteConflictIds().has(note.client_note_id)) {
@@ -1087,7 +1142,8 @@ export class SyncService {
           cloud.updated_at,
           cloud.user_id ?? null,
           cloud.revision ?? null,
-          cloud
+          cloud,
+          expectedScope
         );
       } else {
         await this.createCloudNote(note, cloudFolderId, scope);
@@ -1129,10 +1185,14 @@ export class SyncService {
   // (user_id), persisted so the UI can tell "my note" from a teammate's.
   private async acknowledgeCloudNoteCreate(
     note: NoteItem,
-    cloud: CloudNoteCreateResult
+    cloud: CloudNoteCreateResult,
+    expectedScope: ActiveAccountScope
   ): Promise<void> {
-    const outcome = await resolveRendererCloudNoteCreate(note, cloud, (cloudId) =>
-      NotesService.delete(cloudId)
+    const outcome = await resolveRendererCloudNoteCreate(
+      note,
+      cloud,
+      (cloudId) => NotesService.delete(cloudId),
+      { expectedScope }
     );
     if (outcome === "write-rejected" || outcome === "awaiting-cloud") this.requestSyncAll("retry");
   }
@@ -1142,13 +1202,14 @@ export class SyncService {
     cloudFolderId: string | null,
     scope: PushScopeFields
   ): Promise<void> {
+    const expectedScope = captureSyncAccountScope();
     const cloud = await NotesService.create({
       client_note_id: note.client_note_id,
       ...buildNoteCreatePayload(note, cloudFolderId),
       ...scope,
       created_at: note.created_at,
     });
-    await this.acknowledgeCloudNoteCreate(note, cloud);
+    await this.acknowledgeCloudNoteCreate(note, cloud, expectedScope);
   }
 
   // Batch-create fallback row push: recognized terminal rejections settle the
@@ -1617,7 +1678,10 @@ export class SyncService {
   }
 
   private async syncFolders(teamOnly = false): Promise<void> {
-    if (!teamOnly) await this.adoptDefaultFolders();
+    if (!teamOnly) {
+      await this.claimBoundFolders();
+      await this.adoptDefaultFolders();
+    }
     await this.pushPendingFolders(teamOnly);
     await this.pushFolderDeletes(teamOnly);
     if (!teamOnly && this.teamCursorLagging("folders")) {
@@ -1626,12 +1690,63 @@ export class SyncService {
     await this.pullFolders(teamOnly);
   }
 
+  // Older builds bound device-owned folders to this account's cloud folders
+  // without claiming them, and a delta pull skips them while they're
+  // unchanged. The cloud lists only the account's own folders, so a full list
+  // proves which ones are its, and which defaults are another account's and
+  // can't stand in for its own. Once per account per session, and only while
+  // such rows exist.
+  private async claimBoundFolders(): Promise<void> {
+    const accountId = getAuthRequestContextSnapshot().sessionUserId;
+    const authGeneration = getValidatedAuthGeneration();
+    if (!accountId || authGeneration == null || this.boundFoldersClaimedFor === accountId) return;
+    const expectedScope = { accountId, authGeneration };
+    const { privateSpace } = await this.buildSpaceContext();
+    const local = (await window.electronAPI.getFolders?.(privateSpace?.id ?? null)) ?? [];
+    const unclaimed = local.filter(
+      (folder) => !folder.account_id && folder.cloud_id && !folder.deleted_at
+    );
+    if (unclaimed.length > 0) {
+      try {
+        const { folders: cloudFolders } = await FoldersService.list();
+        const ownCloudIds = new Set(
+          cloudFolders.filter((f) => !f.space_id && !f.deleted_at).map((f) => f.id)
+        );
+        const foreignDefaults: string[] = [];
+        for (const folder of unclaimed) {
+          const cloudId = folder.cloud_id!;
+          if (!ownCloudIds.has(cloudId)) {
+            if (folder.is_default) foreignDefaults.push(cloudId);
+            continue;
+          }
+          // Claiming marks the row synced, so only a settled row qualifies;
+          // a pending one is claimed when its push is acknowledged.
+          if (folder.sync_status !== "synced") continue;
+          await window.electronAPI.markFolderSyncedIfUnchanged?.(
+            folder.id,
+            folder,
+            cloudId,
+            expectedScope
+          );
+        }
+        if (foreignDefaults.length > 0) {
+          await window.electronAPI.ensureAccountDefaultFolders?.(foreignDefaults, expectedScope);
+        }
+      } catch (err) {
+        console.error("Bound folder claim failed:", err);
+        return;
+      }
+    }
+    this.boundFoldersClaimedFor = accountId;
+  }
+
   // Each platform seeds "Personal"/"Meetings" with its own random
   // client_folder_id, so the second device to sync would register them as
   // new folders and collide with the cloud's per-user unique folder name.
   // Before the first push, adopt the cloud identity of any same-named
   // default folder so both platforms converge on a single folder.
   private async adoptDefaultFolders(): Promise<void> {
+    const expectedScope = captureSyncAccountScope();
     // Private space only — team folders never adopt by name.
     const pending = (await window.electronAPI.getPendingFolders?.("private")) ?? [];
     const unlinkedDefaults = pending.filter((f) => f.is_default && !f.cloud_id);
@@ -1653,7 +1768,8 @@ export class SyncService {
           local.cloud_id,
           match.client_folder_id ?? local.client_folder_id,
           match.id,
-          match.updated_at
+          match.updated_at,
+          expectedScope
         );
       }
     } catch (err) {
@@ -1692,6 +1808,7 @@ export class SyncService {
   }
 
   private async pushPendingFolders(teamOnly = false): Promise<void> {
+    const expectedScope = captureSyncAccountScope();
     const pending =
       (await window.electronAPI.getPendingFolders?.(teamOnly ? "team" : undefined)) ?? [];
     if (pending.length === 0) return;
@@ -1716,7 +1833,12 @@ export class SyncService {
           ...scope,
         });
         // Settle only if the row wasn't edited while the PATCH was in flight.
-        await window.electronAPI.markFolderSyncedIfUnchanged?.(folder.id, folder, folder.cloud_id!);
+        await window.electronAPI.markFolderSyncedIfUnchanged?.(
+          folder.id,
+          folder,
+          folder.cloud_id!,
+          expectedScope
+        );
         this.clear404(FOLDER_UPDATE_404_KEY, folder.client_folder_id);
       } catch (err) {
         if (isFolderNameTakenError(err)) {
@@ -1767,7 +1889,8 @@ export class SyncService {
             local.cloud_id,
             cloudFolder.client_folder_id ?? local.client_folder_id,
             cloudFolder.id,
-            cloudFolder.updated_at
+            cloudFolder.updated_at,
+            expectedScope
           );
         }
       } catch (err) {
@@ -1808,6 +1931,7 @@ export class SyncService {
   }
 
   private async pullFolders(teamOnly = false, snapshot = false): Promise<boolean> {
+    const expectedScope = captureSyncAccountScope();
     try {
       const cursorKey = teamOnly ? "lastSyncedAt.folders.team" : "lastSyncedAt.folders";
       const since = snapshot ? undefined : (localStorage.getItem(cursorKey) ?? undefined);
@@ -1882,7 +2006,8 @@ export class SyncService {
               ) {
                 await window.electronAPI.upsertFolderFromCloud?.(
                   cloudFolder as unknown as Record<string, unknown>,
-                  ctx.privateSpace.id
+                  ctx.privateSpace.id,
+                  expectedScope
                 );
               }
             }
@@ -1934,7 +2059,8 @@ export class SyncService {
                 nameMatch.cloud_id,
                 cloudFolder.client_folder_id ?? nameMatch.client_folder_id,
                 cloudFolder.id,
-                cloudFolder.updated_at
+                cloudFolder.updated_at,
+                expectedScope
               );
               continue;
             }
@@ -1951,7 +2077,8 @@ export class SyncService {
           ) {
             await window.electronAPI.upsertFolderFromCloud?.(
               cloudFolder as unknown as Record<string, unknown>,
-              space.id
+              space.id,
+              expectedScope
             );
           }
         } catch (err) {
@@ -2054,6 +2181,7 @@ export class SyncService {
   }
 
   private async pushPendingNotes(teamOnly = false): Promise<void> {
+    const expectedScope = captureSyncAccountScope();
     let pending = (await window.electronAPI.getPendingNotes?.(teamOnly ? "team" : undefined)) ?? [];
     const conflicted = readNoteConflictIds();
     // A surfaced conflict already holds its cloud copy; only rows still
@@ -2128,7 +2256,8 @@ export class SyncService {
           cloud.updated_at,
           cloud.user_id ?? null,
           cloud.revision ?? null,
-          cloud
+          cloud,
+          expectedScope
         );
         this.clear404(NOTE_UPDATE_404_KEY, note.client_note_id);
       } catch (err) {
@@ -2172,7 +2301,7 @@ export class SyncService {
         );
         for (const cloud of created) {
           const local = chunk.find(({ note }) => note.client_note_id === cloud.client_note_id);
-          if (local) await this.acknowledgeCloudNoteCreate(local.note, cloud);
+          if (local) await this.acknowledgeCloudNoteCreate(local.note, cloud, expectedScope);
         }
       } catch (err) {
         if (isAuthContextError(err)) throw err;
@@ -2226,6 +2355,7 @@ export class SyncService {
   }
 
   private async pullNotes(teamOnly = false, snapshot = false): Promise<boolean> {
+    const expectedScope = captureSyncAccountScope();
     try {
       const cursorKey = teamOnly ? "lastSyncedAt.notes.team" : "lastSyncedAt.notes";
       const since = snapshot ? undefined : (localStorage.getItem(cursorKey) ?? undefined);
@@ -2373,6 +2503,7 @@ export class SyncService {
               cloudNote.updated_at,
               cloudNote.user_id ?? null,
               {
+                expectedScope,
                 reconcilePending: true,
                 cloudNote,
                 cloudRevision: cloudNote.revision ?? null,
@@ -3575,9 +3706,7 @@ export class SyncService {
         .filter((f) => f.cloud_id)
         .map((f) => [f.cloud_id!, { id: f.id, space_id: f.space_id }])
     );
-    const personalFolder = folders.find(
-      (f) => f.is_default && f.name === "Personal" && f.space_id === privateSpaceId
-    );
+    const personalFolder = findDefaultFolder(folders.filter((f) => f.space_id === privateSpaceId));
     return { cloudToLocal, defaultFolderId: personalFolder?.id ?? null };
   }
 }

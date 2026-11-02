@@ -602,12 +602,8 @@ class MeetingDetectionEngine {
     const noteResult = this.databaseManager.saveNote(event.summary, "", "meeting");
     const meetingsFolder = this.databaseManager.getMeetingsFolder();
 
-    if (!noteResult?.note?.id || !meetingsFolder?.id) {
-      debugLogger.error(
-        "Manual meeting failed — missing note or folder",
-        { noteId: noteResult?.note?.id, folderId: meetingsFolder?.id },
-        "meeting"
-      );
+    if (!noteResult?.note?.id) {
+      debugLogger.error("Manual meeting failed — missing note", {}, "meeting");
       this._meetingModeActive = false;
       return;
     }
@@ -617,7 +613,9 @@ class MeetingDetectionEngine {
     await this.windowManager.queueMeetingNoteNavigation(
       {
         noteId: noteResult.note.id,
-        folderId: meetingsFolder.id,
+        spaceId: noteResult.note.space_id,
+        // Without a Meetings folder the note sits at the space root.
+        folderId: meetingsFolder?.id ?? null,
         event,
         trigger: "hotkey",
       },
@@ -637,7 +635,8 @@ class MeetingDetectionEngine {
     await this.windowManager.queueMeetingNoteNavigation(
       {
         noteId: existingNote.id,
-        folderId: existingNote.folder_id ?? this.databaseManager.getMeetingsFolder()?.id,
+        spaceId: existingNote.space_id,
+        folderId: existingNote.folder_id ?? null,
         event,
         trigger,
       },
@@ -668,12 +667,8 @@ class MeetingDetectionEngine {
     const noteResult = this.databaseManager.saveNote(calEvent.summary || "New note", "", "meeting");
     const meetingsFolder = this.databaseManager.getMeetingsFolder();
 
-    if (!noteResult?.note?.id || !meetingsFolder?.id) {
-      debugLogger.error(
-        "Join calendar meeting failed — missing note or folder",
-        { noteId: noteResult?.note?.id, folderId: meetingsFolder?.id },
-        "meeting"
-      );
+    if (!noteResult?.note?.id) {
+      debugLogger.error("Join calendar meeting failed — missing note", { eventId }, "meeting");
       this._meetingModeActive = false;
       return;
     }
@@ -689,7 +684,8 @@ class MeetingDetectionEngine {
     await this.windowManager.queueMeetingNoteNavigation(
       {
         noteId: noteResult.note.id,
-        folderId: meetingsFolder.id,
+        spaceId: noteResult.note.space_id,
+        folderId: meetingsFolder?.id ?? null,
         event: calEvent,
         trigger,
       },

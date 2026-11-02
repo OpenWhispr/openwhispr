@@ -95,6 +95,7 @@ async function launch(device, body) {
   writeStorage(device.storage);
   browserWindow.electronAPI = device.api;
   // Every launch re-validates the session, exactly as the renderer does.
+  device.db.setActiveAccountId("user-harness");
   await establishValidatedAuth();
   const service = new SyncService();
   try {
@@ -638,6 +639,7 @@ test("S5 a tombstone as the last row of a delta page still hands the next page a
   await cloud.request({ method: "DELETE", path: "/api/notes/delete", body: { id: boundary.id } });
   cloud.setClock(() => new Date().toISOString());
 
+  device.storage["lastSyncedAt.personalAccountId"] = "user-harness";
   device.storage["lastSyncedAt.notes"] = cursor;
   const before = snapshotNotes(db);
   await syncOnce(device);

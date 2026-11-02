@@ -312,6 +312,19 @@ test("upload creation keeps its selected workspace and sends transcript in the r
   const note = db.getNote(saved.note.id);
   assert.equal(note.folder_id, folder.id);
   assert.equal(note.space_id, spaceId);
+  window.location = { origin: "https://desktop.openwhispr.test" };
+  window.electronAPI.authGetTokenState = async () => ({ token: "synthetic-token", generation: 1 });
+  const auth = await vite.ssrLoadModule("/lib/authRequestContext.ts");
+  const authRequest = await auth.prepareAuthRequest({
+    url: `${window.location.origin}/api/auth/get-session`,
+    headers: {},
+  });
+  await auth.handleAuthRequestSuccess({
+    data: { user: { id: "synthetic-account" } },
+    response: new Response(null),
+    request: authRequest,
+  });
+  assert.equal(auth.commitValidatedAuthContext(1, "synthetic-account"), true);
   const { SyncService } = await vite.ssrLoadModule("/services/SyncService.ts");
   const service = new SyncService();
   await service.createCloudNote(note, "synthetic-cloud-folder", {

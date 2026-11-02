@@ -915,6 +915,8 @@ class IPCHandlers {
     this.enterpriseIdentityManager?.clear();
     if (!token) {
       this.databaseManager.setActiveAccountId(null);
+      this.databaseManager.ensureAccountDefaultFolders();
+      this._flushAccountRepairMirrors();
       accountScopeBinding.clear();
       broadcastToWindows("active-account-scope-changed", null);
       // As set-active-account-scope does: a connect can't outlive its account.
@@ -1143,7 +1145,7 @@ class IPCHandlers {
     markdownMirror.deleteFolder(folderName);
   }
 
-  _asyncMirrorWrite(note) {
+  _asyncMirrorWrite(note, speakerMappings) {
     if (!this._noteFilesEnabled) {
       debugLogger.debug(
         "Mirror write skipped: note files disabled",
@@ -1157,7 +1159,11 @@ class IPCHandlers {
       const folderName = this._getFolderName(note.folder_id);
       markdownMirror.writeNote(note, folderName);
       if (note.transcript) {
-        markdownMirror.writeTranscript(note, folderName, this._buildSpeakerMappings(note.id));
+        markdownMirror.writeTranscript(
+          note,
+          folderName,
+          speakerMappings ?? this._buildSpeakerMappings(note.id)
+        );
       }
     });
   }
@@ -1171,6 +1177,23 @@ class IPCHandlers {
       const markdownMirror = require("./markdownMirror");
       markdownMirror.deleteNote(noteId);
     });
+  }
+
+  _flushAccountRepairMirrors() {
+    if (!this._noteFilesEnabled) return;
+    for (const note of this.databaseManager.takeAccountRepairNotes()) {
+      // Startup repairs can include inactive accounts, whose speaker names
+      // the normal account-scoped getter cannot read.
+      const speakerMappings = note.transcript
+        ? Object.fromEntries(
+            this.databaseManager.db
+              .prepare("SELECT speaker_id, display_name FROM speaker_mappings WHERE note_id = ?")
+              .all(note.id)
+              .map((mapping) => [mapping.speaker_id, mapping.display_name])
+          )
+        : undefined;
+      this._asyncMirrorWrite(note, speakerMappings);
+    }
   }
 
   _buildFolderMap() {
@@ -2716,6 +2739,8 @@ class IPCHandlers {
         this._audioFeaturePolicy?.update(guestPolicy);
       }
       this.databaseManager.setActiveAccountId(accountId);
+      this.databaseManager.ensureAccountDefaultFolders();
+      this._flushAccountRepairMirrors();
       if (accountId !== null) accountScopeBinding.persist(accountId, state.token);
       else accountScopeBinding.clear();
       broadcastToWindows(
@@ -2764,6 +2789,9 @@ class IPCHandlers {
           this.notifyVectorChanges();
           for (const noteId of result.deletedNoteIds) {
             this._asyncMirrorDelete(noteId);
+          }
+          for (const note of result.relocatedNotes) {
+            if (!note.deleted_at) this._asyncMirrorWrite(note);
           }
           // The account's rows are already gone, so a vault that won't delete
           // must not report the deletion as failed; a later deletion retries it.
@@ -2993,9 +3021,24 @@ class IPCHandlers {
       }
       return note;
     });
+    // Scope changes run before useAuth waits for the sync lock. Cloud ownership
+    // evidence must still belong to the active account when its queued IPC lands.
+    const assertSyncAccountScope = (expectedScope) => {
+      const activeScope = accountScopeBinding.resolveActiveAccountScope({
+        ...tokenStore.getState(),
+        binding: accountScopeBinding.read(),
+      });
+      if (
+        !accountScopeBinding.matchesActiveAccountScope(expectedScope, activeScope) ||
+        this.databaseManager.activeAccountId !== expectedScope.accountId
+      ) {
+        throw new Error("Authentication context changed during sync acknowledgement");
+      }
+    };
     ipcMain.handle(
       "db-acknowledge-note-create",
       (_, id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) => {
+        if (options?.expectedScope !== undefined) assertSyncAccountScope(options.expectedScope);
         const result = this.databaseManager.acknowledgeNoteCreate(
           id,
           snapshot,
@@ -3013,7 +3056,18 @@ class IPCHandlers {
     );
     ipcMain.handle(
       "db-mark-note-synced-if-unchanged",
-      (_, id, snapshot, expectedCloudId, cloudUpdatedAt, ownerUserId, cloudRevision, cloudNote) => {
+      (
+        _,
+        id,
+        snapshot,
+        expectedCloudId,
+        cloudUpdatedAt,
+        ownerUserId,
+        cloudRevision,
+        cloudNote,
+        expectedScope
+      ) => {
+        if (expectedScope !== undefined) assertSyncAccountScope(expectedScope);
         const result = this.databaseManager.markNoteSyncedIfUnchanged(
           id,
           snapshot,
@@ -3066,26 +3120,59 @@ class IPCHandlers {
     ipcMain.handle("db-get-folder-by-client-id", (_, clientFolderId) =>
       this.databaseManager.getFolderByClientId(clientFolderId)
     );
-    ipcMain.handle("db-upsert-folder-from-cloud", (_, cloudFolder, localSpaceId) => {
+    ipcMain.handle("db-upsert-folder-from-cloud", (_, cloudFolder, localSpaceId, expectedScope) => {
+      if (expectedScope !== undefined) assertSyncAccountScope(expectedScope);
       const folder = this.databaseManager.upsertFolderFromCloud(cloudFolder, localSpaceId);
       if (folder) setImmediate(() => broadcastToWindows("folder-synced", folder));
       return folder;
     });
     ipcMain.handle(
       "db-acknowledge-folder-create",
-      (_, id, snapshot, expectedCloudId, responseClientFolderId, cloudId, cloudUpdatedAt) =>
-        this.databaseManager.acknowledgeFolderCreate(
+      (
+        _,
+        id,
+        snapshot,
+        expectedCloudId,
+        responseClientFolderId,
+        cloudId,
+        cloudUpdatedAt,
+        expectedScope
+      ) => {
+        if (expectedScope !== undefined) assertSyncAccountScope(expectedScope);
+        return this.databaseManager.acknowledgeFolderCreate(
           id,
           snapshot,
           expectedCloudId,
           responseClientFolderId,
           cloudId,
           cloudUpdatedAt
-        )
+        );
+      }
     );
-    ipcMain.handle("db-mark-folder-synced-if-unchanged", (_, id, snapshot, expectedCloudId) =>
-      this.databaseManager.markFolderSyncedIfUnchanged(id, snapshot, expectedCloudId)
+    ipcMain.handle(
+      "db-mark-folder-synced-if-unchanged",
+      (_, id, snapshot, expectedCloudId, expectedScope) => {
+        if (expectedScope !== undefined) assertSyncAccountScope(expectedScope);
+        return this.databaseManager.markFolderSyncedIfUnchanged(id, snapshot, expectedCloudId);
+      }
     );
+    ipcMain.handle("db-ensure-account-default-folders", (_, foreignCloudIds, expectedScope) => {
+      assertSyncAccountScope(expectedScope);
+      const before = this.databaseManager.getFolders();
+      this.databaseManager.ensureAccountDefaultFolders(
+        Array.isArray(foreignCloudIds)
+          ? foreignCloudIds.filter((cloudId) => typeof cloudId === "string")
+          : []
+      );
+      this._flushAccountRepairMirrors();
+      // A folder proved to be another account's is gone from this scope.
+      const kept = new Set(this.databaseManager.getFolders().map((folder) => folder.id));
+      setImmediate(() => {
+        for (const { id } of before) {
+          if (!kept.has(id)) broadcastToWindows("folder-deleted", { id });
+        }
+      });
+    });
     ipcMain.handle("db-get-folder-id-map", () => this.databaseManager.getFolderIdMap());
     ipcMain.handle("db-get-pending-folder-deletes", () =>
       this.databaseManager.getPendingFolderDeletes()
@@ -13441,6 +13528,7 @@ class IPCHandlers {
         } else {
           this._rebuildMirror(basePath);
         }
+        this._flushAccountRepairMirrors();
         return { success: true };
       } catch (error) {
         debugLogger.error(
@@ -13456,6 +13544,7 @@ class IPCHandlers {
       try {
         if (!this._noteFilesEnabled) return { success: false, error: "Note files not enabled" };
         this._rebuildMirror(newPath);
+        this._flushAccountRepairMirrors();
         return { success: true };
       } catch (error) {
         debugLogger.error("Failed to set note-files path", { error: error.message }, "note-files");
@@ -13467,6 +13556,7 @@ class IPCHandlers {
       try {
         if (!this._noteFilesEnabled) return { success: false, error: "Note files not enabled" };
         this._rebuildMirror();
+        this._flushAccountRepairMirrors();
         return { success: true };
       } catch (error) {
         debugLogger.error("Failed to rebuild note files", { error: error.message }, "note-files");

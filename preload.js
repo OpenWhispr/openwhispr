@@ -1238,7 +1238,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     cloudUpdatedAt,
     ownerUserId,
     cloudRevision,
-    cloudNote
+    cloudNote,
+    expectedScope
   ) =>
     ipcRenderer.invoke(
       "db-mark-note-synced-if-unchanged",
@@ -1248,7 +1249,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
       cloudUpdatedAt,
       ownerUserId,
       cloudRevision,
-      cloudNote
+      cloudNote,
+      expectedScope
     ),
   setNoteCloudBase: (id, cloudUpdatedAt, cloudRevision, options) =>
     ipcRenderer.invoke("db-set-note-cloud-base", id, cloudUpdatedAt, cloudRevision, options),
@@ -1265,15 +1267,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getPendingFolders: (spaceKind) => ipcRenderer.invoke("db-get-pending-folders", spaceKind),
   getFolderByClientId: (clientFolderId) =>
     ipcRenderer.invoke("db-get-folder-by-client-id", clientFolderId),
-  upsertFolderFromCloud: (cloudFolder, localSpaceId) =>
-    ipcRenderer.invoke("db-upsert-folder-from-cloud", cloudFolder, localSpaceId),
+  upsertFolderFromCloud: (cloudFolder, localSpaceId, expectedScope) =>
+    ipcRenderer.invoke("db-upsert-folder-from-cloud", cloudFolder, localSpaceId, expectedScope),
   acknowledgeFolderCreate: (
     id,
     snapshot,
     expectedCloudId,
     responseClientFolderId,
     cloudId,
-    cloudUpdatedAt
+    cloudUpdatedAt,
+    expectedScope
   ) =>
     ipcRenderer.invoke(
       "db-acknowledge-folder-create",
@@ -1282,10 +1285,19 @@ contextBridge.exposeInMainWorld("electronAPI", {
       expectedCloudId,
       responseClientFolderId,
       cloudId,
-      cloudUpdatedAt
+      cloudUpdatedAt,
+      expectedScope
     ),
-  markFolderSyncedIfUnchanged: (id, snapshot, expectedCloudId) =>
-    ipcRenderer.invoke("db-mark-folder-synced-if-unchanged", id, snapshot, expectedCloudId),
+  ensureAccountDefaultFolders: (foreignCloudIds, expectedScope) =>
+    ipcRenderer.invoke("db-ensure-account-default-folders", foreignCloudIds, expectedScope),
+  markFolderSyncedIfUnchanged: (id, snapshot, expectedCloudId, expectedScope) =>
+    ipcRenderer.invoke(
+      "db-mark-folder-synced-if-unchanged",
+      id,
+      snapshot,
+      expectedCloudId,
+      expectedScope
+    ),
   getFolderIdMap: () => ipcRenderer.invoke("db-get-folder-id-map"),
   getPendingFolderDeletes: () => ipcRenderer.invoke("db-get-pending-folder-deletes"),
   restoreFolderAfterDeniedDelete: (id) =>

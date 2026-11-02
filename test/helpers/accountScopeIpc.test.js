@@ -104,8 +104,13 @@ function readBinding() {
 }
 
 const databaseScopes = [];
+// The scope in force at each default-folder seeding: it must have moved first.
+const seededScopes = [];
 const databaseManager = new Proxy(
-  { setActiveAccountId: (accountId) => databaseScopes.push(accountId) },
+  {
+    setActiveAccountId: (accountId) => databaseScopes.push(accountId),
+    ensureAccountDefaultFolders: () => seededScopes.push(databaseScopes.at(-1)),
+  },
   { get: (value, property) => (property in value ? value[property] : anything()) }
 );
 
@@ -125,11 +130,13 @@ function buildFakeThis() {
 
 let fakeThis;
 let handleAuthTokenChange;
+let ipcPrototype;
 
 test.before(() => {
   delete require.cache[handlersModulePath];
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
+  ipcPrototype = Ctor.prototype;
   fakeThis = buildFakeThis();
   Ctor.prototype.setupHandlers.call(fakeThis);
   handleAuthTokenChange = (state) => Ctor.prototype._handleAuthTokenChange.call(fakeThis, state);
@@ -208,11 +215,13 @@ test("a sign-out in main stops connects without waiting for the renderer", async
 
   connectorCalls.length = 0;
   databaseScopes.length = 0;
+  seededScopes.length = 0;
   broadcasts.length = 0;
   handleAuthTokenChange({ generation: 8, token: null });
   assert.deepEqual(connectorCalls, [["accountChanged", null], ["notifyStatusChanged"]]);
   assert.equal(readBinding(), null);
   assert.deepEqual(databaseScopes, [null]);
+  assert.deepEqual(seededScopes, [null]);
   assert.deepEqual(broadcasts, [
     ["active-account-scope-changed", null],
     ["auth-token-state-changed", { generation: 8, hasToken: false }],
@@ -541,12 +550,13 @@ test("an enterprise meeting stops for another account once main learns it, not o
   assert.ok(stops.length > 0 && stops.every((reason) => reason === "accountChanged"), stops);
 });
 
-test("account deletion still deletes the note mirrors when the enterprise vault won't clear", async (t) => {
+test("account deletion updates deleted and relocated note mirrors when the enterprise vault won't clear", async (t) => {
   const originalTokenState = tokenState;
   const originals = {
     enterpriseAudioCredentials: fakeThis.enterpriseAudioCredentials,
     metaActivation: fakeThis.metaActivation,
     _asyncMirrorDelete: fakeThis._asyncMirrorDelete,
+    _asyncMirrorWrite: fakeThis._asyncMirrorWrite,
   };
   t.after(() => {
     Object.assign(fakeThis, originals);
@@ -555,11 +565,21 @@ test("account deletion still deletes the note mirrors when the enterprise vault 
     tokenState = originalTokenState;
   });
   const mirrored = [];
+  const rewritten = [];
+  const relocatedNote = { id: 13, folder_id: null, account_id: "another-account" };
   tokenState = { token: "delete-token", generation: 90 };
   connectorManager.disconnectAll = async () => {};
-  databaseManager.deleteAccountData = () => ({ deletedNoteIds: [11, 12] });
+  databaseManager.deleteAccountData = () => ({
+    deletedNoteIds: [11, 12],
+    deletedFolderIds: [10],
+    relocatedNotes: [
+      relocatedNote,
+      { id: 14, folder_id: null, deleted_at: "2026-10-01T00:00:00Z" },
+    ],
+  });
   fakeThis.metaActivation = { purge: () => {} };
   fakeThis._asyncMirrorDelete = (noteId) => mirrored.push(noteId);
+  fakeThis._asyncMirrorWrite = (note) => rewritten.push(note);
   fakeThis.enterpriseAudioCredentials = {
     removeAccount: async () => {
       throw new Error("vault locked");
@@ -569,4 +589,191 @@ test("account deletion still deletes the note mirrors when the enterprise vault 
   const result = await handlers.get("delete-account-data")({}, "deleted-account", 90);
   assert.equal(result.success, true);
   assert.deepEqual(mirrored, [11, 12]);
+  assert.deepEqual(rewritten, [relocatedNote]);
+});
+
+test("folder ownership evidence is fenced at the queued IPC boundary", async () => {
+  tokenState = { token: "folder-claim-token", generation: 101 };
+  await setScope("folder-claim-account", 101);
+  const expectedScope = { accountId: "folder-claim-account", authGeneration: 101 };
+  const calls = [];
+  const previousAccountId = databaseManager.activeAccountId;
+  const previousMark = databaseManager.markFolderSyncedIfUnchanged;
+  const previousEnsure = databaseManager.ensureAccountDefaultFolders;
+  databaseManager.activeAccountId = expectedScope.accountId;
+  databaseManager.markFolderSyncedIfUnchanged = (...args) => calls.push(["mark", ...args]);
+  databaseManager.ensureAccountDefaultFolders = (...args) => calls.push(["ensure", ...args]);
+  const mark = (scope) =>
+    handlers.get("db-mark-folder-synced-if-unchanged")({}, 1, {}, "cloud-folder", scope);
+  const ensure = (scope) =>
+    handlers.get("db-ensure-account-default-folders")({}, ["foreign"], scope);
+  try {
+    mark(expectedScope);
+    ensure(expectedScope);
+    assert.equal(calls.length, 2);
+    for (const staleScope of [
+      null,
+      { ...expectedScope, authGeneration: 100 },
+      { ...expectedScope, accountId: "other" },
+    ]) {
+      assert.throws(() => mark(staleScope), /Authentication context changed/);
+      assert.throws(() => ensure(staleScope), /Authentication context changed/);
+    }
+    assert.throws(() => ensure(undefined), /Authentication context changed/);
+    tokenState = { token: "rotated-folder-token", generation: 102 };
+    assert.throws(() => mark(expectedScope), /Authentication context changed/);
+    assert.throws(() => ensure(expectedScope), /Authentication context changed/);
+    await setScope(expectedScope.accountId, 102);
+    databaseManager.activeAccountId = "replacement-account";
+    const rotatedScope = { ...expectedScope, authGeneration: 102 };
+    assert.throws(() => mark(rotatedScope), /Authentication context changed/);
+    assert.throws(() => ensure(rotatedScope), /Authentication context changed/);
+    // setScope seeds defaults, so only the two explicit valid calls plus that
+    // seed may reach the database; stale cloud evidence never does.
+    assert.equal(calls.filter(([operation]) => operation === "mark").length, 1);
+    assert.equal(calls.filter(([operation, ids]) => operation === "ensure" && ids).length, 1);
+  } finally {
+    databaseManager.activeAccountId = previousAccountId;
+    databaseManager.markFolderSyncedIfUnchanged = previousMark;
+    databaseManager.ensureAccountDefaultFolders = previousEnsure;
+  }
+});
+
+test("repaired note mirrors wait for initialization and flush after account seeding", async (t) => {
+  const mirror = require("../../src/helpers/markdownMirror");
+  const basePath = fs.mkdtempSync(path.join(userDataDirectory, "repair-mirror-"));
+  const note = {
+    id: 401,
+    title: "Repaired meeting",
+    content: "Private content",
+    folder_id: null,
+    transcript: JSON.stringify([{ speaker: "speaker_0", timestamp: 0, text: "Hello." }]),
+  };
+  mirror.init(basePath);
+  mirror.writeNote(note, "Meetings");
+  mirror.writeTranscript(note, "Meetings", {});
+  const pending = [note];
+  let reads = 0;
+  const previousThis = Object.fromEntries(
+    [
+      "_noteFilesEnabled",
+      "_flushAccountRepairMirrors",
+      "_asyncMirrorWrite",
+      "_getFolderName",
+      "_buildSpeakerMappings",
+    ].map((key) => [key, fakeThis[key]])
+  );
+  const previousDatabase = databaseManager.db;
+  const previousTake = databaseManager.takeAccountRepairNotes;
+  const previousEnsure = databaseManager.ensureAccountDefaultFolders;
+  t.after(() => {
+    Object.assign(fakeThis, previousThis);
+    databaseManager.db = previousDatabase;
+    databaseManager.takeAccountRepairNotes = previousTake;
+    databaseManager.ensureAccountDefaultFolders = previousEnsure;
+  });
+  databaseManager.db = {
+    prepare: () => ({ all: () => [{ speaker_id: "speaker_0", display_name: "Dana" }] }),
+  };
+  databaseManager.takeAccountRepairNotes = () => {
+    reads += 1;
+    return pending.splice(0);
+  };
+  fakeThis._flushAccountRepairMirrors = () =>
+    ipcPrototype._flushAccountRepairMirrors.call(fakeThis);
+  fakeThis._asyncMirrorWrite = (row, mappings) =>
+    ipcPrototype._asyncMirrorWrite.call(fakeThis, row, mappings);
+  fakeThis._getFolderName = () => "Personal";
+  fakeThis._buildSpeakerMappings = () => ({});
+
+  const enable = handlers.get("note-files-set-enabled");
+  await enable({}, false);
+  assert.equal(reads, 0, "disabled mirrors retain startup repairs");
+  await enable({}, true, basePath, { skipRebuild: true });
+  await new Promise(setImmediate);
+  assert.equal(reads, 1);
+  assert.equal(path.dirname(mirror.getNotePath(note.id)), path.join(basePath, "Personal"));
+  assert.equal(fs.readdirSync(path.join(basePath, "Meetings")).length, 0);
+  assert.equal(fs.readdirSync(path.join(basePath, "Personal")).length, 2);
+  assert.match(
+    fs.readFileSync(path.join(basePath, "Personal", "401-repaired-meeting-transcript.md"), "utf8"),
+    /Dana/,
+    "inactive-account repairs preserve speaker names without the scoped getter"
+  );
+
+  const runtimeNote = { ...note, id: 402, transcript: null };
+  mirror.writeNote(runtimeNote, "Meetings");
+  databaseManager.ensureAccountDefaultFolders = () => pending.push(runtimeNote);
+  tokenState = { token: "repair-account-token", generation: 150 };
+  await setScope("repair-account", 150);
+  await new Promise(setImmediate);
+  assert.equal(reads, 2);
+  assert.equal(path.dirname(mirror.getNotePath(runtimeNote.id)), path.join(basePath, "Personal"));
+});
+
+test("ordinary cloud acknowledgements reject a replaced account before touching SQLite", async () => {
+  tokenState = { token: "ack-token", generation: 201 };
+  await setScope("ack-account", 201);
+  const expectedScope = { accountId: "ack-account", authGeneration: 201 };
+  const priorAccount = databaseManager.activeAccountId;
+  databaseManager.activeAccountId = "replacement-account";
+  try {
+    const calls = [
+      () =>
+        handlers.get("db-acknowledge-note-create")({}, 1, {}, "cloud", null, "ack-account", {
+          expectedScope,
+        }),
+      () =>
+        handlers.get("db-mark-note-synced-if-unchanged")(
+          {},
+          1,
+          {},
+          "cloud",
+          null,
+          "ack-account",
+          null,
+          null,
+          expectedScope
+        ),
+      () =>
+        handlers.get("db-acknowledge-folder-create")(
+          {},
+          1,
+          {},
+          null,
+          "client",
+          "cloud",
+          null,
+          expectedScope
+        ),
+      () => handlers.get("db-upsert-folder-from-cloud")({}, {}, 1, expectedScope),
+    ];
+    for (const invoke of calls) assert.throws(invoke, /Authentication context changed/);
+  } finally {
+    databaseManager.activeAccountId = priorAccount;
+  }
+});
+
+test("a folder the foreign proof moved out of scope is announced as deleted", async () => {
+  tokenState = { token: "foreign-proof-token", generation: 301 };
+  await setScope("foreign-proof-account", 301);
+  const lists = [
+    [{ id: 1 }, { id: 2 }],
+    [{ id: 2 }, { id: 3 }],
+  ];
+  const previousAccountId = databaseManager.activeAccountId;
+  databaseManager.activeAccountId = "foreign-proof-account";
+  databaseManager.getFolders = () => lists.shift();
+  broadcasts.length = 0;
+  try {
+    await handlers.get("db-ensure-account-default-folders")({}, ["cloud-a"], {
+      accountId: "foreign-proof-account",
+      authGeneration: 301,
+    });
+    await new Promise(setImmediate);
+    assert.deepEqual(broadcasts, [["folder-deleted", { id: 1 }]]);
+  } finally {
+    databaseManager.activeAccountId = previousAccountId;
+    delete databaseManager.getFolders;
+  }
 });

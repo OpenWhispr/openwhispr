@@ -555,6 +555,7 @@ export interface NoteCreateAckResult {
 }
 
 export interface NoteCreateAckWriteOptions {
+  expectedScope?: ActiveAccountScope;
   settleIfUnchanged?: boolean;
   cloudRevision?: number | null;
   // The server refused the create without writing it (write_applied: false).
@@ -657,6 +658,9 @@ export interface FolderItem {
   cloud_id: string | null;
   sync_status: "synced" | "pending" | "error";
   deleted_at: string | null;
+  // The local account that owns a private folder; NULL for team folders and
+  // device-owned ones not yet bound to an account's cloud.
+  account_id?: string | null;
   // 1 while a cloud-backed row that left a team space still owes its scope
   // retraction push (D6); cleared when the row settles.
   left_team?: number;
@@ -3837,7 +3841,8 @@ declare global {
         cloudUpdatedAt?: string | null,
         ownerUserId?: string | null,
         cloudRevision?: number | null,
-        cloudNote?: NoteCloudText | null
+        cloudNote?: NoteCloudText | null,
+        expectedScope?: ActiveAccountScope
       ) => Promise<NoteUpdateAckResult>;
       setNoteCloudBase?: (
         id: number,
@@ -3856,7 +3861,8 @@ declare global {
       getFolderByClientId?: (clientFolderId: string) => Promise<FolderItem | null>;
       upsertFolderFromCloud?: (
         cloudFolder: Record<string, unknown>,
-        localSpaceId?: number | null
+        localSpaceId?: number | null,
+        expectedScope?: ActiveAccountScope
       ) => Promise<FolderItem>;
       acknowledgeFolderCreate?: (
         id: number,
@@ -3864,13 +3870,19 @@ declare global {
         expectedCloudId: string | null,
         responseClientFolderId: string,
         cloudId: string,
-        cloudUpdatedAt?: string | null
+        cloudUpdatedAt?: string | null,
+        expectedScope?: ActiveAccountScope
       ) => Promise<FolderAckResult>;
       markFolderSyncedIfUnchanged?: (
         id: number,
         snapshot: FolderPushSnapshot,
-        expectedCloudId: string
+        expectedCloudId: string,
+        expectedScope?: ActiveAccountScope
       ) => Promise<FolderAckResult>;
+      ensureAccountDefaultFolders?: (
+        foreignCloudIds: string[],
+        expectedScope: ActiveAccountScope
+      ) => Promise<void>;
       getFolderIdMap?: () => Promise<FolderItem[]>;
       getPendingFolderDeletes?: () => Promise<FolderItem[]>;
       restoreFolderAfterDeniedDelete?: (id: number) => Promise<{

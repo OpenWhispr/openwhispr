@@ -1,4 +1,5 @@
 import type {
+  ActiveAccountScope,
   NoteCreateAckResult,
   NoteCreateAckWriteOptions,
   NoteCreateSnapshot,
@@ -45,6 +46,7 @@ export type NoteCreateResolution =
   | "orphan-cleanup-failed";
 
 export interface NoteCreateAckOptions {
+  expectedScope?: ActiveAccountScope;
   // Full sync creates send every mutable field and may settle an unchanged
   // row. Legacy migration creates are partial and must stay pending for the
   // subsequent full PATCH.
@@ -102,6 +104,7 @@ export async function resolveCloudNoteCreate(
     writeRejected ? (note.cloud_updated_at ?? null) : (cloud.updated_at ?? null),
     cloud.user_id ?? null,
     {
+      ...(options.expectedScope && { expectedScope: options.expectedScope }),
       settleIfUnchanged: (options.settleIfUnchanged ?? true) && !writeRejected,
       cloudRevision: writeRejected ? (note.cloud_revision ?? null) : (cloud.revision ?? null),
       writeRejected,

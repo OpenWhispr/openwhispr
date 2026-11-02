@@ -29,6 +29,7 @@ async function setup(t, cloudConfig) {
   enableSync();
   const cloud = createFakeCloud(cloudConfig);
   browserWindow.electronAPI = createElectronApi(db, { cloud });
+  db.setActiveAccountId("user-harness");
   await establishValidatedAuth();
   return { db, cloud };
 }

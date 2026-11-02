@@ -60,7 +60,10 @@ import {
   DEFAULT_INTEGRATIONS_SECTION,
   type IntegrationsSection,
 } from "./integrations/integrationsSections";
-import { navigateMeetingNotification } from "./meetingNotificationNavigation";
+import {
+  navigateAndLoadMeetingNote,
+  navigateMeetingNotification,
+} from "./meetingNotificationNavigation";
 import MeetingRecordingMount from "./MeetingRecordingMount";
 import MeetingRecordingPill from "./notes/MeetingRecordingPill";
 import NewNoteMenu from "./notes/NewNoteMenu";
@@ -464,15 +467,13 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         return;
       }
       if (!isCurrent()) return;
-      setActiveFolderId(data.folderId);
-      setActiveNoteId(data.noteId);
+      void navigateAndLoadMeetingNote(data.noteId, data.spaceId, data.folderId);
       setActiveView("personal-notes");
       setMeetingRecordingRequest({
         noteId: data.noteId,
         folderId: data.folderId,
         event: data.event,
       });
-      void initializeNotes(null, 50, data.folderId);
       if (
         data.trigger === "hotkey" &&
         useSettingsStore.getState().meetingHotkeyLayoutMode === "side-panel"

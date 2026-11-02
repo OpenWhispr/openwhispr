@@ -2,6 +2,10 @@ import { create } from "zustand";
 import { syncService } from "../services/SyncService.js";
 import { resolveRendererCloudNoteCreateBatch } from "../services/noteCreateAck";
 import {
+  getAuthRequestContextSnapshot,
+  getValidatedAuthGeneration,
+} from "../lib/authRequestContext";
+import {
   createClearedAccountNoteState,
   invalidateKeyedLoadGenerations,
   removeNoteFromLists,
@@ -1020,6 +1024,10 @@ export function useMigration(): { total: number; done: number } | null {
 }
 
 export async function startMigration(): Promise<void> {
+  const accountId = getAuthRequestContextSnapshot().sessionUserId;
+  const authGeneration = getValidatedAuthGeneration();
+  if (!accountId || authGeneration == null) return;
+  const expectedScope = { accountId, authGeneration };
   const gen = ++migrationGeneration;
   const accountGen = accountGeneration;
   const allNotes = (await window.electronAPI.getNotes(null, 9999, null)) ?? [];
@@ -1063,6 +1071,7 @@ export async function startMigration(): Promise<void> {
         // folder mapping, and space scope. Adopt the id/base but leave the row
         // pending so SyncService follows with the complete PATCH.
         {
+          expectedScope,
           settleIfUnchanged: false,
           // Starting a newer migration supersedes only this run's progress.
           // Both runs target the same account and idempotent cloud identity;

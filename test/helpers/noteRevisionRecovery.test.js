@@ -113,7 +113,9 @@ async function client(t, db, cloud) {
   installBrowserGlobals();
   enableSync();
   windowStub.electronAPI = createElectronApi(db, { cloud });
+  db.setActiveAccountId("user-harness");
   await establishValidatedAuth();
+  localStorageStub.setItem("lastSyncedAt.personalAccountId", "user-harness");
   localStorageStub.setItem("lastSyncedAt.notes", "2026-06-01T00:00:00.000Z");
   const service = new SyncService();
   t.after(() => stopSyncTimers(service));

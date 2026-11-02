@@ -46,6 +46,16 @@ function createElectronApi(db, options = {}) {
   // (space-revoked, note-relocated, …), recorded for assertions.
   const syncEvents = [];
 
+  const assertSyncAccountScope = (expectedScope) => {
+    if (
+      !expectedScope ||
+      expectedScope.accountId !== db.activeAccountId ||
+      expectedScope.authGeneration !== AUTH_GENERATION
+    ) {
+      throw new Error("Authentication context changed during sync acknowledgement");
+    }
+  };
+
   return {
     syncEvents,
 
@@ -70,8 +80,10 @@ function createElectronApi(db, options = {}) {
     getNoteByClientId: async (clientNoteId) => db.getNoteByClientId(clientNoteId),
     upsertNoteFromCloud: async (cloudNote, localFolderId, localSpaceId) =>
       db.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId),
-    acknowledgeNoteCreate: async (id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) =>
-      db.acknowledgeNoteCreate(id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options),
+    acknowledgeNoteCreate: async (id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) => {
+      if (options?.expectedScope !== undefined) assertSyncAccountScope(options.expectedScope);
+      return db.acknowledgeNoteCreate(id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options);
+    },
     markNoteSyncedIfUnchanged: async (
       id,
       snapshot,
@@ -79,9 +91,11 @@ function createElectronApi(db, options = {}) {
       cloudUpdatedAt,
       ownerUserId,
       cloudRevision,
-      cloudNote
-    ) =>
-      db.markNoteSyncedIfUnchanged(
+      cloudNote,
+      expectedScope
+    ) => {
+      if (expectedScope !== undefined) assertSyncAccountScope(expectedScope);
+      return db.markNoteSyncedIfUnchanged(
         id,
         snapshot,
         expectedCloudId,
@@ -89,7 +103,8 @@ function createElectronApi(db, options = {}) {
         ownerUserId,
         cloudRevision,
         cloudNote
-      ),
+      );
+    },
     setNoteCloudBase: async (id, cloudUpdatedAt, cloudRevision, options) =>
       db.setNoteCloudBase(id, cloudUpdatedAt, cloudRevision, options),
     markNoteSyncError: async (id) => db.markNoteSyncError(id),
@@ -104,26 +119,37 @@ function createElectronApi(db, options = {}) {
     getPendingFolders: async (spaceKind) => db.getPendingFolders(spaceKind),
     getPendingFolderDeletes: async () => db.getPendingFolderDeletes(),
     getFolderByClientId: async (clientFolderId) => db.getFolderByClientId(clientFolderId),
-    upsertFolderFromCloud: async (cloudFolder, localSpaceId) =>
-      db.upsertFolderFromCloud(cloudFolder, localSpaceId),
+    upsertFolderFromCloud: async (cloudFolder, localSpaceId, expectedScope) => {
+      if (expectedScope !== undefined) assertSyncAccountScope(expectedScope);
+      return db.upsertFolderFromCloud(cloudFolder, localSpaceId);
+    },
     acknowledgeFolderCreate: async (
       id,
       snapshot,
       expectedCloudId,
       responseClientFolderId,
       cloudId,
-      cloudUpdatedAt
-    ) =>
-      db.acknowledgeFolderCreate(
+      cloudUpdatedAt,
+      expectedScope
+    ) => {
+      if (expectedScope !== undefined) assertSyncAccountScope(expectedScope);
+      return db.acknowledgeFolderCreate(
         id,
         snapshot,
         expectedCloudId,
         responseClientFolderId,
         cloudId,
         cloudUpdatedAt
-      ),
-    markFolderSyncedIfUnchanged: async (id, snapshot, expectedCloudId) =>
-      db.markFolderSyncedIfUnchanged(id, snapshot, expectedCloudId),
+      );
+    },
+    markFolderSyncedIfUnchanged: async (id, snapshot, expectedCloudId, expectedScope) => {
+      if (expectedScope !== undefined) assertSyncAccountScope(expectedScope);
+      return db.markFolderSyncedIfUnchanged(id, snapshot, expectedCloudId);
+    },
+    ensureAccountDefaultFolders: async (foreignCloudIds, expectedScope) => {
+      assertSyncAccountScope(expectedScope);
+      return db.ensureAccountDefaultFolders(foreignCloudIds);
+    },
     restoreFolderAfterDeniedDelete: async (id) => db.restoreFolderAfterDeniedDelete(id),
     relocateRevokedFolder: async (id, privateSpaceId, preserveFolder) =>
       db.relocateRevokedFolder(id, privateSpaceId, preserveFolder),
@@ -181,6 +207,18 @@ function createElectronApi(db, options = {}) {
     clearDictionaryCloudId: async (id) => db.clearDictionaryCloudId(id),
     // The real handler re-reads the words to broadcast them; there are no windows here.
     broadcastDictionaryUpdated: async () => ({ success: true }),
+
+    getSharedDictionary: async (workspaceId) => db.getSharedDictionary(workspaceId),
+    applySharedDictionaryPull: async (workspaceId, change) =>
+      db.applySharedDictionaryPull(workspaceId, change),
+    replaceSharedDictionary: async (workspaceId, full) =>
+      db.replaceSharedDictionary(workspaceId, full),
+    applySharedDictionaryHides: async (workspaceId, change) =>
+      db.applySharedDictionaryHides(workspaceId, change),
+    replaceSharedDictionaryHides: async (workspaceId, hidden) =>
+      db.replaceSharedDictionaryHides(workspaceId, hidden),
+    clearSharedDictionary: async (workspaceId) => db.clearSharedDictionary(workspaceId),
+    pruneSharedDictionary: async (keepWorkspaceIds) => db.pruneSharedDictionary(keepWorkspaceIds),
 
     ...inertSnippetApi(),
     ...inertAnalyticsApi(),
