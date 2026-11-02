@@ -3260,8 +3260,8 @@
       "cannotRemoveSelf": "Vous ne pouvez pas vous retirer vous-même. Quittez l'espace depuis Général.",
       "done_one": "{{count}} membre retiré",
       "done_other": "{{count}} membres retirés",
-      "transferDone_one": "Propriété transférée à {{name}} et {{count}} membre retiré.",
-      "transferDone_other": "Propriété transférée à {{name}} et {{count}} membres retirés.",
+      "transferDone_one": "Leurs notes et espaces d'équipe ont été déplacés vers {{name}} et {{count}} membre a été retiré.",
+      "transferDone_other": "Leurs notes et espaces d'équipe ont été déplacés vers {{name}} et {{count}} membres ont été retirés.",
       "alreadyRemoved_one": "{{count}} membre avait déjà été retiré",
       "alreadyRemoved_other": "{{count}} membres avaient déjà été retirés"
     },

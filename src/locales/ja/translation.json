@@ -4974,7 +4974,7 @@
       "cannotRemoveOwner": "ワークスペースのオーナーは削除できません。",
       "cannotRemoveSelf": "自分自身は削除できません。「一般」からワークスペースを退出してください。",
       "done_other": "{{count}} 人のメンバーを削除しました",
-      "transferDone_other": "オーナー権限を {{name}} に譲渡し、{{count}} 人のメンバーを削除しました。",
+      "transferDone_other": "ノートとチームスペースを {{name}} に移動し、{{count}} 人のメンバーを削除しました。",
       "alreadyRemoved_other": "{{count}} 人のメンバーはすでに削除されています"
     },
     "cancelInvitation": {

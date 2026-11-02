@@ -5000,8 +5000,8 @@
       "cannotRemoveSelf": "Você não pode remover a si mesmo. Saia do espaço de trabalho em Geral.",
       "done_one": "{{count}} membro removido",
       "done_other": "{{count}} membros removidos",
-      "transferDone_one": "Propriedade transferida para {{name}} e {{count}} membro removido.",
-      "transferDone_other": "Propriedade transferida para {{name}} e {{count}} membros removidos.",
+      "transferDone_one": "As notas e os espaços de equipe deles foram movidos para {{name}} e {{count}} membro foi removido.",
+      "transferDone_other": "As notas e os espaços de equipe deles foram movidos para {{name}} e {{count}} membros foram removidos.",
       "alreadyRemoved_one": "{{count}} membro já tinha sido removido",
       "alreadyRemoved_other": "{{count}} membros já tinham sido removidos"
     },

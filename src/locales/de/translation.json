@@ -3260,8 +3260,8 @@
       "cannotRemoveSelf": "Sie können sich nicht selbst entfernen. Verlassen Sie den Workspace unter „Allgemein“.",
       "done_one": "{{count}} Mitglied entfernt",
       "done_other": "{{count}} Mitglieder entfernt",
-      "transferDone_one": "Inhaberschaft an {{name}} übertragen und {{count}} Mitglied entfernt.",
-      "transferDone_other": "Inhaberschaft an {{name}} übertragen und {{count}} Mitglieder entfernt.",
+      "transferDone_one": "Die Notizen und Teamspaces wurden zu {{name}} verschoben und {{count}} Mitglied wurde entfernt.",
+      "transferDone_other": "Die Notizen und Teamspaces wurden zu {{name}} verschoben und {{count}} Mitglieder wurden entfernt.",
       "alreadyRemoved_one": "{{count}} Mitglied wurde bereits entfernt",
       "alreadyRemoved_other": "{{count}} Mitglieder wurden bereits entfernt"
     },

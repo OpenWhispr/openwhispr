@@ -4974,7 +4974,7 @@
       "cannotRemoveOwner": "無法移除工作區擁有者。",
       "cannotRemoveSelf": "你無法移除自己。請在「一般」中離開工作區。",
       "done_other": "已移除 {{count}} 名成員",
-      "transferDone_other": "已將擁有權轉讓給 {{name}}，並移除了 {{count}} 名成員。",
+      "transferDone_other": "已將他們的筆記和團隊空間移至 {{name}}，並移除了 {{count}} 名成員。",
       "alreadyRemoved_other": "{{count}} 名成員已被移除"
     },
     "cancelInvitation": {

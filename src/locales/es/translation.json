@@ -5000,8 +5000,8 @@
       "cannotRemoveSelf": "No puedes quitarte a ti mismo. Sal del espacio de trabajo desde General.",
       "done_one": "{{count}} miembro quitado",
       "done_other": "{{count}} miembros quitados",
-      "transferDone_one": "Propiedad transferida a {{name}} y {{count}} miembro quitado.",
-      "transferDone_other": "Propiedad transferida a {{name}} y {{count}} miembros quitados.",
+      "transferDone_one": "Sus notas y espacios de equipo se movieron a {{name}} y se quitó {{count}} miembro.",
+      "transferDone_other": "Sus notas y espacios de equipo se movieron a {{name}} y se quitaron {{count}} miembros.",
       "alreadyRemoved_one": "{{count}} miembro ya había sido quitado",
       "alreadyRemoved_other": "{{count}} miembros ya habían sido quitados"
     },

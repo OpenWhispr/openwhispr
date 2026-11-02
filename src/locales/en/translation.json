@@ -3260,8 +3260,8 @@
       "cannotRemoveSelf": "You can't remove yourself. Leave the workspace from General.",
       "done_one": "Removed {{count}} member",
       "done_other": "Removed {{count}} members",
-      "transferDone_one": "Transferred ownership to {{name}} and removed {{count}} member.",
-      "transferDone_other": "Transferred ownership to {{name}} and removed {{count}} members.",
+      "transferDone_one": "Moved their notes and teamspaces to {{name}} and removed {{count}} member.",
+      "transferDone_other": "Moved their notes and teamspaces to {{name}} and removed {{count}} members.",
       "alreadyRemoved_one": "{{count}} member was already removed",
       "alreadyRemoved_other": "{{count}} members were already removed"
     },

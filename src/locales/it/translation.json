@@ -5000,8 +5000,8 @@
       "cannotRemoveSelf": "Non puoi rimuovere te stesso. Esci dall'area di lavoro da Generale.",
       "done_one": "{{count}} membro rimosso",
       "done_other": "{{count}} membri rimossi",
-      "transferDone_one": "Proprietà trasferita a {{name}} e {{count}} membro rimosso.",
-      "transferDone_other": "Proprietà trasferita a {{name}} e {{count}} membri rimossi.",
+      "transferDone_one": "Le loro note e i loro spazi team sono stati spostati a {{name}} ed è stato rimosso {{count}} membro.",
+      "transferDone_other": "Le loro note e i loro spazi team sono stati spostati a {{name}} e sono stati rimossi {{count}} membri.",
       "alreadyRemoved_one": "{{count}} membro era già stato rimosso",
       "alreadyRemoved_other": "{{count}} membri erano già stati rimossi"
     },
