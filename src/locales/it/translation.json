@@ -1160,6 +1160,7 @@
   },
   "auth": {
     "sessionExpired": "Sessione scaduta",
+    "unconfirmedSession": "Non è stato possibile confermare il tuo accesso, quindi non è stato modificato nulla. Riprova quando OpenWhispr potrà raggiungere i suoi server.",
     "cloudNotConfigured": "Cloud non configurato",
     "common": {
       "back": "Indietro",
@@ -1644,6 +1645,10 @@
       "notSignedIn": "Non hai effettuato l'accesso",
       "notSignedInDescription": "Crea un account per sbloccare le funzionalità premium.",
       "offline": "Offline",
+      "offlineAccount": {
+        "title": "Dati dell'ultimo accesso",
+        "description": "La sincronizzazione e le modifiche all'account sono in pausa finché OpenWhispr non potrà raggiungere i suoi server."
+      },
       "pastDue": {
         "description": "Sei nel piano gratuito per ora. Aggiorna il metodo di pagamento per tornare a Pro.",
         "title": "Non siamo riusciti a elaborare il pagamento"

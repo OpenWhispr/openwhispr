@@ -6,12 +6,22 @@ import {
   withRevenueCatUser,
 } from '../revenuecat';
 jest.mock('react-native', () => ({ Platform: { OS: 'android' } }));
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  __esModule: true,
+  default: { getItem: jest.fn(), setItem: jest.fn() },
+}));
+jest.mock('@/lib/appsflyer', () => ({
+  getAppsFlyerAttributionConsent: jest.fn(),
+  getAppsFlyerRevenueId: jest.fn(),
+  subscribeAppsFlyerAttribution: jest.fn(),
+}));
 jest.mock('react-native-purchases', () => ({
   __esModule: true,
   default: {
     configure: jest.fn(),
     logIn: jest.fn(async () => ({})),
     logOut: jest.fn(async () => ({})),
+    isAnonymous: jest.fn(async () => false),
     setLogLevel: jest.fn(),
   },
   LOG_LEVEL: { INFO: 'INFO' },
