@@ -1774,6 +1774,68 @@ test("upsertSpaceFromCloud mirrors the direct role and clears it when the grant 
   assert.equal(updated.my_direct_role, null);
 });
 
+test("upsertSpaceFromCloud stores and returns capabilities", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const capabilities = {
+    edit_notes: true,
+    manage_members: false,
+    manage_settings: false,
+    leave: true,
+  };
+  const created = db.upsertSpaceFromCloud({
+    id: "space-1",
+    name: "Design space",
+    workspace_id: "ws-1",
+    teams: [],
+    capabilities,
+  });
+  assert.deepEqual(created.capabilities, capabilities);
+  assert.deepEqual(db.getSpaceByCloudSpaceId("space-1").capabilities, capabilities);
+
+  // A later pass replaces the stored object.
+  const promoted = { edit_notes: true, manage_members: true, manage_settings: true, leave: true };
+  const updated = db.upsertSpaceFromCloud({
+    id: "space-1",
+    name: "Design space",
+    workspace_id: "ws-1",
+    teams: [],
+    capabilities: promoted,
+  });
+  assert.equal(updated.id, created.id);
+  assert.deepEqual(updated.capabilities, promoted);
+});
+
+test("space rows without capabilities read as null", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  // An older API sends no capabilities at all.
+  const created = db.upsertSpaceFromCloud({
+    id: "space-1",
+    name: "Design space",
+    workspace_id: "ws-1",
+    teams: [],
+  });
+  assert.equal(created.capabilities, null);
+
+  const capabilities = {
+    edit_notes: true,
+    manage_members: false,
+    manage_settings: false,
+    leave: false,
+  };
+  db.upsertSpaceFromCloud({ id: "space-1", name: "Design space", teams: [], capabilities });
+  // Dropping the field on the next pass must not leave stale capabilities behind.
+  assert.equal(
+    db.upsertSpaceFromCloud({ id: "space-1", name: "Design space", teams: [] }).capabilities,
+    null
+  );
+
+  // A corrupt column degrades to null, never throws.
+  db.db.prepare("UPDATE spaces SET capabilities = 'not json' WHERE id = ?").run(created.id);
+  assert.equal(db.getSpaces().find((s) => s.id === created.id).capabilities, null);
+});
+
 test("upsertSpaceFromCloud adopts a pre-spaces row via its single backfilled team", (t) => {
   const db = createDb(t);
   if (!db) return;
@@ -2051,14 +2113,17 @@ test("launch repair attributes legacy rows already bound to an account's cloud",
   const rehomed = reopened.db.prepare("SELECT * FROM notes WHERE id = ?").get(misroutedB);
   assert.equal(rehomed.folder_id, personalB, "B's note moves out of A's folder into B's own");
   assert.equal(rehomed.sync_status, "pending");
+  assert.deepEqual(
+    reopened.takeAccountRepairNotes().map((note) => note.id),
+    [misroutedB]
+  );
+  assert.deepEqual(reopened.takeAccountRepairNotes(), []);
 
   reopened.setActiveAccountId("account-b");
   assert.deepEqual(visibleDefaults(reopened), [
     "Meetings:account-b",
-    "Meetings:null",
     "Personal:account-b",
     "Videos:account-b",
-    "Videos:null",
   ]);
 
   // Idempotent: a second launch changes nothing.
@@ -2293,6 +2358,132 @@ test("a folder claimed for an account takes the device-owned notes inside it", (
 
   db.setActiveAccountId("account-b");
   assert.equal(db.getNote(guestNote.id), null);
+});
+
+test("seeding an account's own default rehomes notes saved before foreign defaults were identified", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.db
+    .prepare(
+      "UPDATE folders SET cloud_id = 'a-' || name, sync_status = 'synced' WHERE is_default = 1"
+    )
+    .run();
+  db.setActiveAccountId("account-b");
+  db.ensureAccountDefaultFolders();
+  const note = db.saveNote("B offline note", "Pending work", "personal").note;
+  const legacy = folderOf(db, null, "Personal");
+  assert.equal(note.folder_id, legacy.id);
+
+  db.ensureAccountDefaultFolders([legacy.cloud_id]);
+
+  const own = folderOf(db, "account-b", "Personal");
+  const moved = db.getNote(note.id);
+  assert.equal(moved.folder_id, own.id);
+  assert.equal(moved.account_id, "account-b");
+  assert.equal(moved.sync_status, "pending");
+  assert.equal(folderOf(db, null, "Personal").account_id, null);
+  db.updateNote(note.id, { title: "Edited after relocation" });
+  assert.equal(db.takeAccountRepairNotes()[0].title, "Edited after relocation");
+  db.ensureAccountDefaultFolders([legacy.cloud_id]);
+  assert.deepEqual(db.takeAccountRepairNotes(), []);
+});
+
+test("default folds queue live mirror rows only after the transaction commits", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  db.ensureAccountDefaultFolders();
+  db.setActiveAccountId(null);
+  db.ensureAccountDefaultFolders();
+  const note = db.saveNote("Guest note", "", "personal").note;
+  const deleted = db.saveNote("Deleted guest note", "", "personal").note;
+  db.deleteNote(deleted.id);
+  const rehome = db._rehomeStrandedPrivateNotes;
+  db._rehomeStrandedPrivateNotes = () => {
+    throw new Error("rollback after fold");
+  };
+  db.setActiveAccountId("account-a");
+  db.ensureAccountDefaultFolders();
+  assert.deepEqual(db.takeAccountRepairNotes(), []);
+  assert.equal(db.getNote(note.id).folder_id, note.folder_id);
+
+  db._rehomeStrandedPrivateNotes = rehome;
+  db.ensureAccountDefaultFolders();
+  const pending = db.takeAccountRepairNotes();
+  assert.deepEqual(
+    pending.map((row) => row.id),
+    [note.id]
+  );
+  assert.equal(pending[0].folder_id, folderOf(db, "account-a", "Personal").id);
+  assert.deepEqual(db.takeAccountRepairNotes(), []);
+});
+
+test("folder lists hide foreign bound defaults only behind the active account's own default", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const legacy = folderOf(db, null, "Personal");
+  db.db
+    .prepare("UPDATE folders SET cloud_id = 'a-personal', sync_status = 'synced' WHERE id = ?")
+    .run(legacy.id);
+  db.setActiveAccountId("account-b");
+  db.ensureAccountDefaultFolders(["a-personal"]);
+  assert.deepEqual(visibleDefaults(db), [
+    "Meetings:account-b",
+    "Personal:account-b",
+    "Videos:account-b",
+  ]);
+  assert.ok(db.getFolderIdMap().some((folder) => folder.id === legacy.id));
+  assert.equal(db.getFolderByClientId(legacy.client_folder_id).id, legacy.id);
+
+  db.setActiveAccountId(null);
+  assert.deepEqual(visibleDefaults(db), ["Personal:null"]);
+  db.setActiveAccountId("account-a");
+  assert.deepEqual(visibleDefaults(db), ["Personal:null"]);
+  db.markFolderSynced(legacy.id, "a-personal");
+  db.ensureAccountDefaultFolders();
+  assert.deepEqual(visibleDefaults(db), [
+    "Meetings:account-a",
+    "Personal:account-a",
+    "Videos:account-a",
+  ]);
+  db.setActiveAccountId(null);
+  db.ensureAccountDefaultFolders();
+  db.db
+    .prepare(
+      "INSERT INTO notes (title, folder_id, space_id, account_id) VALUES ('Legacy B', ?, ?, 'account-b')"
+    )
+    .run(folderOf(db, null, "Personal").id, db.getPrivateSpaceId());
+  db.setActiveAccountId("account-a");
+  db.ensureAccountDefaultFolders();
+  assert.ok(
+    visibleDefaults(db).includes("Personal:null"),
+    "an unbound shared default stays visible"
+  );
+});
+
+test("signing back in rehomes notes after another account claims a shared legacy default", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  const note = db.saveNote("A offline note", "Pending work", "personal").note;
+  db.setActiveAccountId("account-b");
+  db.ensureAccountDefaultFolders();
+  const shared = folderOf(db, null, "Personal");
+  db.acknowledgeFolderCreate(shared.id, shared, null, shared.client_folder_id, "b-personal-cloud");
+
+  db.setActiveAccountId("account-a");
+  db.ensureAccountDefaultFolders();
+
+  const own = folderOf(db, "account-a", "Personal");
+  assert.equal(db.getNote(note.id).folder_id, own.id);
+  assert.deepEqual(
+    db.getNotes(null, 100, own.id).map((row) => row.id),
+    [note.id]
+  );
+  assert.equal(
+    db.getFolders().some((folder) => folder.id === shared.id),
+    false
+  );
 });
 
 test("a pulled folder claims a legacy row bound to it and the notes inside", (t) => {

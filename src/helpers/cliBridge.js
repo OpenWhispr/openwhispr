@@ -7,6 +7,7 @@ const debugLogger = require("./debugLogger");
 const { isPortAvailable } = require("../utils/serverUtils");
 const { broadcastToWindows } = require("./windowBroadcast");
 const { NOTE_TEXT_FIELDS } = require("./noteFieldSync");
+const { isAudioPolicyRefusal } = require("./audioPolicyRefusals");
 
 const PORT_RANGE_START = 8200;
 const PORT_RANGE_END = 8219;
@@ -252,6 +253,11 @@ class CliBridge {
     }
     if (err.code === "VALIDATION") {
       sendV1Error(res, 400, "validation_error", err.message);
+      return;
+    }
+    // The cloud /v1 API answers every organization policy denial this way.
+    if (isAudioPolicyRefusal(err)) {
+      sendV1Error(res, 403, "forbidden", err.message);
       return;
     }
     debugLogger.error("CLI bridge route error", { error: err.message }, "cli-bridge");
@@ -551,13 +557,18 @@ class CliBridge {
         );
         const language =
           typeof body?.language === "string" && body.language ? body.language : undefined;
-        ipc.approveAudioPath(real);
-        const result = await ipc.transcribeLocalFile(real, { provider, model, language });
+        const result = await ipc._audioFeaturePolicy.run({}, "upload", (signal) => {
+          ipc.approveAudioPath(real);
+          return ipc.transcribeLocalFile(real, { provider, model, language, signal });
+        });
         if (!result?.success) {
           if (result?.code === "NO_SPEECH_DETECTED" || result?.message === "No audio detected") {
             return { data: { text: "", provider, model, warning: "No speech detected" } };
           }
-          throw new Error(result?.error || result?.message || "Local transcription failed");
+          throw Object.assign(
+            new Error(result?.error || result?.message || "Local transcription failed"),
+            { code: result?.code }
+          );
         }
         return { data: { text: result.text, provider, model } };
       }),

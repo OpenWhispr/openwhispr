@@ -1,4 +1,9 @@
-import { expandSnippets, getDictionaryHintWords, type Snippet } from '../snippets';
+import {
+  expandSnippets,
+  getDictionaryHintTiers,
+  splitLlmDictionary,
+  type Snippet,
+} from '../snippets';
 
 describe('expandSnippets', () => {
   it('replaces a trigger with its replacement', () => {
@@ -66,23 +71,71 @@ describe('expandSnippets', () => {
   });
 });
 
-describe('getDictionaryHintWords', () => {
+describe('getDictionaryHintTiers', () => {
+  const noShared = { space: [], workspace: [] };
+
   it('returns the custom dictionary unchanged when there are no snippets', () => {
-    expect(getDictionaryHintWords({ customDictionary: ['Acme', 'Vercel'], snippets: [] })).toEqual([
-      'Acme',
-      'Vercel',
+    expect(getDictionaryHintTiers(['Acme', 'Vercel'], [], noShared, true)).toEqual([
+      ['Acme', 'Vercel'],
+      [],
+      [],
     ]);
   });
 
-  it('appends snippet triggers to the custom dictionary', () => {
+  it('appends snippet triggers to the custom dictionary only when asked to', () => {
     const snippets: Snippet[] = [
       { trigger: 'linkedin', replacement: 'LinkedIn' },
       { trigger: 'eg', replacement: 'for example' },
     ];
-    expect(getDictionaryHintWords({ customDictionary: ['Acme'], snippets })).toEqual([
+    expect(getDictionaryHintTiers(['Acme'], snippets, noShared, true)[0]).toEqual([
       'Acme',
       'linkedin',
       'eg',
     ]);
+    expect(getDictionaryHintTiers(['Acme'], snippets, noShared, false)[0]).toEqual(['Acme']);
+  });
+
+  it('drops shared words already in a higher tier, case-insensitively', () => {
+    const snippets: Snippet[] = [{ trigger: 'sig', replacement: 'Best, Chad' }];
+    expect(
+      getDictionaryHintTiers(
+        ['OpenWhispr'],
+        snippets,
+        { space: ['openwhispr', 'Gizmo', 'SIG'], workspace: ['gizmo', 'Acme', 'acme'] },
+        true,
+      ),
+    ).toEqual([['OpenWhispr', 'sig'], ['Gizmo'], ['Acme']]);
+  });
+
+  it('drops a shared word that is a personal word in another Unicode form', () => {
+    // Personal "Café" is NFC; the shared copies are NFD and padded.
+    expect(
+      getDictionaryHintTiers(
+        ['Café'],
+        [],
+        { space: ['Café'], workspace: [' café ', 'Acme'] },
+        false,
+      ),
+    ).toEqual([['Café'], [], ['Acme']]);
+  });
+});
+
+describe('splitLlmDictionary', () => {
+  it('keeps every personal word and caps shared ones at 200 words, space first', () => {
+    const workspace = Array.from({ length: 300 }, (_, i) => `w${i}`);
+    const { personal, shared } = splitLlmDictionary([['Piha'], ['Space'], workspace]);
+    expect(personal).toEqual(['Piha']);
+    expect(shared).toEqual(['Space', ...workspace.slice(0, 199)]);
+  });
+
+  it('stops at the first shared word past 2,000 characters', () => {
+    const long = Array.from(
+      { length: 40 },
+      (_, i) => `${String(i).padStart(2, '0')}${'x'.repeat(48)}`,
+    );
+    const { shared } = splitLlmDictionary([[], [], [...long, 'short']]);
+    expect(shared).toEqual(long);
+    expect(shared.join('').length).toBe(2000);
+    expect(splitLlmDictionary([[], [], ['y'.repeat(2001), 'short']]).shared).toEqual([]);
   });
 });

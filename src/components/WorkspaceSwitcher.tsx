@@ -147,6 +147,29 @@ export default function WorkspaceSwitcher(): React.ReactElement | null {
                   )}
                 </div>
               </div>
+              {/* The last refresh failed, so this is the list from memory or the cache. */}
+              {error && (
+                <DropdownMenuItem
+                  onSelect={(event) => {
+                    // Stay open so the spinner, then the refreshed list, shows in place.
+                    event.preventDefault();
+                    void refresh();
+                  }}
+                  disabled={loading}
+                  className="mx-1 mb-1.5 flex-col items-start gap-0.5 rounded-lg px-2 py-1.5 text-xs leading-snug"
+                >
+                  <span className="text-muted-foreground">
+                    {t("settingsPage.workspace.staleList")}
+                  </span>
+                  {loading ? (
+                    <Loader2 size={12} className="animate-spin text-muted-foreground" />
+                  ) : (
+                    <span className="font-medium text-primary">
+                      {t("settingsPage.workspace.loadError.retry")}
+                    </span>
+                  )}
+                </DropdownMenuItem>
+              )}
               {state.kind === "workspace" && state.canInvite && (
                 <DropdownMenuItem
                   onSelect={() => setInvite({ workspace: current, afterCreate: false })}

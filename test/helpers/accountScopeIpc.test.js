@@ -110,7 +110,14 @@ const databaseManager = new Proxy(
 );
 
 function buildFakeThis() {
-  const target = { sessionId: "test-session", connectorManager, databaseManager };
+  const target = {
+    sessionId: "test-session",
+    connectorManager,
+    databaseManager,
+    _meetingMicStreaming: null,
+    _meetingSystemStreaming: null,
+    _activeEnterpriseAudioMeeting: false,
+  };
   return new Proxy(target, {
     get: (value, property) => (property in value ? value[property] : anything()),
   });
@@ -118,11 +125,13 @@ function buildFakeThis() {
 
 let fakeThis;
 let handleAuthTokenChange;
+let ipcPrototype;
 
 test.before(() => {
   delete require.cache[handlersModulePath];
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
+  ipcPrototype = Ctor.prototype;
   fakeThis = buildFakeThis();
   Ctor.prototype.setupHandlers.call(fakeThis);
   handleAuthTokenChange = (state) => Ctor.prototype._handleAuthTokenChange.call(fakeThis, state);
@@ -232,6 +241,21 @@ test("meeting prompt retirement precedes scope mutation and skips a true no-op",
   fakeThis.windowManager = originalManager;
 });
 
+test("a sign-out or account switch stops the meeting as an account change, not a policy refusal", async (t) => {
+  const originalStop = fakeThis._stopMeetingForPolicy;
+  const reasons = [];
+  fakeThis._stopMeetingForPolicy = (reason) => reasons.push(reason);
+  t.after(() => {
+    fakeThis._stopMeetingForPolicy = originalStop;
+  });
+  tokenState = { token: "switch-token", generation: 40 };
+  databaseManager.activeAccountId = "first-account";
+  await setScope("second-account", 40);
+  handleAuthTokenChange({ token: "rotated", generation: 41 });
+  handleAuthTokenChange({ token: null, generation: 42 });
+  assert.deepEqual(reasons, ["accountChanged", "accountChanged"]);
+});
+
 test("activation storage failure cannot prevent clearing the local bearer", async () => {
   const manager = fakeThis.metaActivation;
   fakeThis.metaActivation = {
@@ -247,5 +271,478 @@ test("activation storage failure cannot prevent clearing the local bearer", asyn
     assert.equal(tokenState.generation, 31);
   } finally {
     fakeThis.metaActivation = manager;
+  }
+});
+
+test("signed-out transitions restore guest meeting detection without granting a replacement bearer guest permissions", async (t) => {
+  const { createAudioFeaturePolicy } = require("../../src/helpers/audioFeaturePolicy");
+  const originalManager = fakeThis.windowManager;
+  const originalEngine = fakeThis.meetingDetectionEngine;
+  const originalPolicy = fakeThis._audioFeaturePolicy;
+  const originalAccount = databaseManager.activeAccountId;
+  const originalTokenState = tokenState;
+  t.after(() => {
+    fakeThis.windowManager = originalManager;
+    fakeThis.meetingDetectionEngine = originalEngine;
+    fakeThis._audioFeaturePolicy = originalPolicy;
+    databaseManager.activeAccountId = originalAccount;
+    tokenState = originalTokenState;
+  });
+  const applied = [];
+  fakeThis.windowManager = { notificationPrefs: {}, retireMeetingNotificationScope() {} };
+  fakeThis.meetingDetectionEngine = { setPreferences: (prefs) => applied.push(prefs) };
+  fakeThis._audioFeaturePolicy = createAudioFeaturePolicy({
+    getPolicy: async () => ({ success: false }),
+    onChange: () => fakeThis._syncMeetingDetectorPolicy(),
+  });
+  fakeThis._audioFeaturePolicy.update({
+    success: true,
+    managed: true,
+    policy: { features: { meetingRecordingEnabled: false } },
+  });
+  await handlers.get("sync-notification-preferences")(
+    {},
+    {
+      notificationsEnabled: true,
+      notifyMeetingDetection: true,
+      meetingProcessDetection: true,
+    }
+  );
+  assert.deepEqual(applied.at(-1), { audioDetection: false, processDetection: false });
+
+  tokenState = { token: null, generation: 40 };
+  handleAuthTokenChange(tokenState);
+  assert.equal(fakeThis._audioFeaturePolicy.failure("meeting"), null);
+  assert.deepEqual(applied.at(-1), { audioDetection: true, processDetection: true });
+
+  tokenState = { token: "replacement-bearer", generation: 41 };
+  handleAuthTokenChange(tokenState);
+  assert.equal(fakeThis._audioFeaturePolicy.failure("meeting").code, "POLICY_UNRESOLVABLE");
+  await setScope(null, 41);
+  assert.equal(fakeThis._audioFeaturePolicy.failure("meeting").code, "POLICY_UNRESOLVABLE");
+
+  tokenState = { token: null, generation: 42 };
+  databaseManager.activeAccountId = "departing-account";
+  await setScope(null, 42);
+  assert.equal(fakeThis._audioFeaturePolicy.failure("meeting"), null);
+  assert.deepEqual(applied.at(-1), { audioDetection: true, processDetection: true });
+});
+
+test("senderless audio policy uses the current bearer or a live app window's cookies, while renderer auth stays scoped", async (t) => {
+  const originalManager = fakeThis.windowManager;
+  const originalAccount = databaseManager.activeAccountId;
+  const originalTokenState = tokenState;
+  const originalApiUrl = process.env.OPENWHISPR_API_URL;
+  t.after(() => {
+    fakeThis.windowManager = originalManager;
+    databaseManager.activeAccountId = originalAccount;
+    tokenState = originalTokenState;
+    if (originalApiUrl === undefined) delete process.env.OPENWHISPR_API_URL;
+    else process.env.OPENWHISPR_API_URL = originalApiUrl;
+  });
+  process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
+  const requests = [];
+  t.mock.method(electronStub.net, "fetch", async (_url, init) => {
+    requests.push(init.headers);
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ data: { managed: false, policy: null, policyUpdatedAt: null } }),
+    };
+  });
+  const windowWithCookie = (value, destroyed = false) => ({
+    isDestroyed: () => destroyed,
+    webContents: {
+      session: { cookies: { get: async () => (value ? [{ name: "session", value }] : []) } },
+    },
+  });
+  const renderer = windowWithCookie("renderer-session");
+  t.mock.method(electronStub.BrowserWindow, "fromWebContents", () => renderer);
+  for (const [token, controlPanel, main, event, expected] of [
+    ["cli-bearer", null, null, {}, { Authorization: "Bearer cli-bearer" }],
+    [null, windowWithCookie("control-session"), null, {}, { Cookie: "session=control-session" }],
+    [
+      null,
+      windowWithCookie("stale", true),
+      windowWithCookie("main-session"),
+      {},
+      { Cookie: "session=main-session" },
+    ],
+    [
+      null,
+      windowWithCookie("control-session"),
+      null,
+      { sender: {} },
+      { Cookie: "session=renderer-session" },
+    ],
+    [null, windowWithCookie(""), null, {}, null],
+  ]) {
+    tokenState = { token, generation: tokenState.generation + 1 };
+    databaseManager.activeAccountId = expected ? "cli-account" : null;
+    fakeThis.windowManager = { controlPanelWindow: controlPanel, mainWindow: main };
+    const before = requests.length;
+    assert.deepEqual(
+      await fakeThis._audioFeaturePolicy.run(event, "upload", () => ({ success: true })),
+      { success: true }
+    );
+    // With a verdict already held, the lookup runs behind the answer.
+    for (let turn = 0; expected && turn < 50 && requests.length === before; turn++) {
+      await new Promise(setImmediate);
+    }
+    assert.equal(requests.length - before, expected ? 1 : 0);
+    if (expected) {
+      for (const [key, value] of Object.entries(expected)) {
+        assert.equal(requests.at(-1)[key], value);
+      }
+    }
+  }
+});
+
+test("a token rotation keeps the account's running jobs and meeting; another account ends them", async (t) => {
+  const { createAudioFeaturePolicy } = require("../../src/helpers/audioFeaturePolicy");
+  const { deferred } = require("./harness/deferred");
+  const originalPolicy = fakeThis._audioFeaturePolicy;
+  const originalStop = fakeThis._stopMeetingForPolicy;
+  const originalAccount = databaseManager.activeAccountId;
+  const originalTokenState = tokenState;
+  t.after(() => {
+    fakeThis._audioFeaturePolicy = originalPolicy;
+    fakeThis._stopMeetingForPolicy = originalStop;
+    databaseManager.activeAccountId = originalAccount;
+    tokenState = originalTokenState;
+  });
+  const allowed = { success: true, managed: true, policy: { features: {} } };
+  const stops = [];
+  fakeThis._stopMeetingForPolicy = (reason) => stops.push(reason);
+
+  for (const [nextAccount, accountChanged] of [
+    ["rotation-account", false],
+    ["other-account", true],
+  ]) {
+    stops.length = 0;
+    let lookup = deferred();
+    fakeThis._audioFeaturePolicy = createAudioFeaturePolicy({ getPolicy: () => lookup.promise });
+    tokenState = { token: "rotation-token-a", generation: 60 };
+    databaseManager.activeAccountId = "rotation-account";
+    await setScope("rotation-account", 60);
+    fakeThis._audioFeaturePolicy.update(allowed);
+
+    const entered = deferred();
+    const finish = deferred();
+    const upload = fakeThis._audioFeaturePolicy.run({}, "upload", async () => {
+      entered.resolve();
+      await finish.promise;
+      return { success: true };
+    });
+    await entered.promise;
+    lookup = deferred();
+
+    tokenState = { token: "rotation-token-b", generation: 61 };
+    handleAuthTokenChange(tokenState);
+    await setScope(nextAccount, 61);
+    // The same account's live meeting keeps transcribing until the new verdict
+    // arrives; nothing keeps the previous account's verdict.
+    assert.equal(
+      fakeThis._audioFeaturePolicy.activeFailure("meeting")?.code ?? null,
+      accountChanged ? "POLICY_UNRESOLVABLE" : null
+    );
+    assert.equal(fakeThis._audioFeaturePolicy.failure("meeting").code, "POLICY_UNRESOLVABLE");
+    finish.resolve();
+
+    assert.deepEqual(stops, accountChanged ? ["accountChanged"] : []);
+    assert.equal((await upload).success, !accountChanged);
+    lookup.resolve(allowed);
+    await new Promise(setImmediate);
+    assert.equal(fakeThis._audioFeaturePolicy.failure("meeting"), null);
+  }
+});
+
+// Runs an enterprise meeting under `workspace-a`, owned by main, and reports every stop.
+async function enterpriseMeeting(t, generation) {
+  const originalStop = fakeThis._stopMeetingForPolicy;
+  const originalManager = fakeThis.enterpriseIdentityManager;
+  const originalAccount = databaseManager.activeAccountId;
+  const originalTokenState = tokenState;
+  t.after(() => {
+    fakeThis._stopMeetingForPolicy = originalStop;
+    fakeThis.enterpriseIdentityManager = originalManager;
+    fakeThis._activeEnterpriseAudioMeeting = false;
+    databaseManager.activeAccountId = originalAccount;
+    tokenState = originalTokenState;
+  });
+  const stops = [];
+  fakeThis._stopMeetingForPolicy = (reason) => {
+    stops.push(reason);
+    fakeThis._activeEnterpriseAudioMeeting = false;
+  };
+  fakeThis.enterpriseIdentityManager = {
+    getConfig: async ({ accountId, workspaceId, expectedAuthGeneration }) => ({
+      success: true,
+      accountId,
+      workspaceId,
+      authGeneration: expectedAuthGeneration,
+      config: { generation: 1, providers: [] },
+    }),
+    clear: () => {},
+  };
+  const loadConfig = (accountId, workspaceId, authGeneration) =>
+    handlers.get("get-managed-enterprise-config")({}, accountId, workspaceId, authGeneration);
+  const clear = (options) => handlers.get("clear-managed-enterprise-identity")({}, options);
+  const next = (accountId, workspaceId) => ({ next: { accountId, workspaceId } });
+  const rotate = (generation) => {
+    tokenState = { token: `enterprise-token-${generation}`, generation };
+    handleAuthTokenChange(tokenState);
+  };
+
+  rotate(generation);
+  await setScope("enterprise-account", generation);
+  databaseManager.activeAccountId = "enterprise-account";
+  await loadConfig("enterprise-account", "workspace-a", generation);
+  fakeThis._activeEnterpriseAudioMeeting = true;
+  stops.length = 0;
+  return { stops, loadConfig, clear, next, rotate };
+}
+
+test("an enterprise meeting outlives a token rotation and any clear that names no scope", async (t) => {
+  const { stops, loadConfig, clear, next, rotate } = await enterpriseMeeting(t, 70);
+  rotate(71);
+  // A window booting mid-rotation reads no scope yet and clears without one.
+  await clear();
+  await clear(next("enterprise-account", "workspace-a"));
+  await setScope("enterprise-account", 71);
+  await loadConfig("enterprise-account", "workspace-a", 71);
+  assert.deepEqual(stops, [], "a same-account token rotation keeps the meeting");
+});
+
+test("an enterprise meeting stops as soon as the renderer moves to another workspace, even before the scope resolves", async (t) => {
+  const { stops, loadConfig, clear, next, rotate } = await enterpriseMeeting(t, 72);
+  rotate(73);
+  await clear(next("enterprise-account", "workspace-b"));
+  assert.deepEqual(stops, ["workspaceChanged"]);
+  // The config request that would otherwise have noticed is refused meanwhile.
+  await assert.rejects(loadConfig("enterprise-account", "workspace-b", 73), {
+    code: "AUTH_CONTEXT_CHANGED",
+  });
+});
+
+test("an enterprise meeting stops when the workspace is cleared with no config to follow", async (t) => {
+  const { stops, clear, next } = await enterpriseMeeting(t, 74);
+  await clear({ next: { accountId: "enterprise-account", workspaceId: 7 } });
+  assert.deepEqual(stops, [], "a malformed scope is ignored");
+  await clear(next("enterprise-account", null));
+  assert.deepEqual(stops, ["workspaceChanged"]);
+});
+
+test("an enterprise meeting stops for another account once main learns it, not on the renderer's clear", async (t) => {
+  const { stops, clear, rotate } = await enterpriseMeeting(t, 76);
+  rotate(77);
+  await clear();
+  assert.deepEqual(stops, []);
+  await setScope("other-account", 77);
+  // The account scope change stops any meeting as well; every stop names the account.
+  assert.ok(stops.length > 0 && stops.every((reason) => reason === "accountChanged"), stops);
+});
+
+test("account deletion updates deleted and relocated note mirrors when the enterprise vault won't clear", async (t) => {
+  const originalTokenState = tokenState;
+  const originals = {
+    enterpriseAudioCredentials: fakeThis.enterpriseAudioCredentials,
+    metaActivation: fakeThis.metaActivation,
+    _asyncMirrorDelete: fakeThis._asyncMirrorDelete,
+    _asyncMirrorWrite: fakeThis._asyncMirrorWrite,
+  };
+  t.after(() => {
+    Object.assign(fakeThis, originals);
+    delete connectorManager.disconnectAll;
+    delete databaseManager.deleteAccountData;
+    tokenState = originalTokenState;
+  });
+  const mirrored = [];
+  const rewritten = [];
+  const relocatedNote = { id: 13, folder_id: null, account_id: "another-account" };
+  tokenState = { token: "delete-token", generation: 90 };
+  connectorManager.disconnectAll = async () => {};
+  databaseManager.deleteAccountData = () => ({
+    deletedNoteIds: [11, 12],
+    deletedFolderIds: [10],
+    relocatedNotes: [
+      relocatedNote,
+      { id: 14, folder_id: null, deleted_at: "2026-10-01T00:00:00Z" },
+    ],
+  });
+  fakeThis.metaActivation = { purge: () => {} };
+  fakeThis._asyncMirrorDelete = (noteId) => mirrored.push(noteId);
+  fakeThis._asyncMirrorWrite = (note) => rewritten.push(note);
+  fakeThis.enterpriseAudioCredentials = {
+    removeAccount: async () => {
+      throw new Error("vault locked");
+    },
+  };
+
+  const result = await handlers.get("delete-account-data")({}, "deleted-account", 90);
+  assert.equal(result.success, true);
+  assert.deepEqual(mirrored, [11, 12]);
+  assert.deepEqual(rewritten, [relocatedNote]);
+});
+
+test("folder ownership evidence is fenced at the queued IPC boundary", async () => {
+  tokenState = { token: "folder-claim-token", generation: 101 };
+  await setScope("folder-claim-account", 101);
+  const expectedScope = { accountId: "folder-claim-account", authGeneration: 101 };
+  const calls = [];
+  const previousAccountId = databaseManager.activeAccountId;
+  const previousMark = databaseManager.markFolderSyncedIfUnchanged;
+  const previousEnsure = databaseManager.ensureAccountDefaultFolders;
+  databaseManager.activeAccountId = expectedScope.accountId;
+  databaseManager.markFolderSyncedIfUnchanged = (...args) => calls.push(["mark", ...args]);
+  databaseManager.ensureAccountDefaultFolders = (...args) => calls.push(["ensure", ...args]);
+  const mark = (scope) =>
+    handlers.get("db-mark-folder-synced-if-unchanged")({}, 1, {}, "cloud-folder", scope);
+  const ensure = (scope) =>
+    handlers.get("db-ensure-account-default-folders")({}, ["foreign"], scope);
+  try {
+    mark(expectedScope);
+    ensure(expectedScope);
+    assert.equal(calls.length, 2);
+    for (const staleScope of [
+      null,
+      { ...expectedScope, authGeneration: 100 },
+      { ...expectedScope, accountId: "other" },
+    ]) {
+      assert.throws(() => mark(staleScope), /Authentication context changed/);
+      assert.throws(() => ensure(staleScope), /Authentication context changed/);
+    }
+    assert.throws(() => ensure(undefined), /Authentication context changed/);
+    tokenState = { token: "rotated-folder-token", generation: 102 };
+    assert.throws(() => mark(expectedScope), /Authentication context changed/);
+    assert.throws(() => ensure(expectedScope), /Authentication context changed/);
+    await setScope(expectedScope.accountId, 102);
+    databaseManager.activeAccountId = "replacement-account";
+    const rotatedScope = { ...expectedScope, authGeneration: 102 };
+    assert.throws(() => mark(rotatedScope), /Authentication context changed/);
+    assert.throws(() => ensure(rotatedScope), /Authentication context changed/);
+    // setScope seeds defaults, so only the two explicit valid calls plus that
+    // seed may reach the database; stale cloud evidence never does.
+    assert.equal(calls.filter(([operation]) => operation === "mark").length, 1);
+    assert.equal(calls.filter(([operation, ids]) => operation === "ensure" && ids).length, 1);
+  } finally {
+    databaseManager.activeAccountId = previousAccountId;
+    databaseManager.markFolderSyncedIfUnchanged = previousMark;
+    databaseManager.ensureAccountDefaultFolders = previousEnsure;
+  }
+});
+
+test("repaired note mirrors wait for initialization and flush after account seeding", async (t) => {
+  const mirror = require("../../src/helpers/markdownMirror");
+  const basePath = fs.mkdtempSync(path.join(userDataDirectory, "repair-mirror-"));
+  const note = {
+    id: 401,
+    title: "Repaired meeting",
+    content: "Private content",
+    folder_id: null,
+    transcript: JSON.stringify([{ speaker: "speaker_0", timestamp: 0, text: "Hello." }]),
+  };
+  mirror.init(basePath);
+  mirror.writeNote(note, "Meetings");
+  mirror.writeTranscript(note, "Meetings", {});
+  const pending = [note];
+  let reads = 0;
+  const previousThis = Object.fromEntries(
+    [
+      "_noteFilesEnabled",
+      "_flushAccountRepairMirrors",
+      "_asyncMirrorWrite",
+      "_getFolderName",
+      "_buildSpeakerMappings",
+    ].map((key) => [key, fakeThis[key]])
+  );
+  const previousDatabase = databaseManager.db;
+  const previousTake = databaseManager.takeAccountRepairNotes;
+  const previousEnsure = databaseManager.ensureAccountDefaultFolders;
+  t.after(() => {
+    Object.assign(fakeThis, previousThis);
+    databaseManager.db = previousDatabase;
+    databaseManager.takeAccountRepairNotes = previousTake;
+    databaseManager.ensureAccountDefaultFolders = previousEnsure;
+  });
+  databaseManager.db = {
+    prepare: () => ({ all: () => [{ speaker_id: "speaker_0", display_name: "Dana" }] }),
+  };
+  databaseManager.takeAccountRepairNotes = () => {
+    reads += 1;
+    return pending.splice(0);
+  };
+  fakeThis._flushAccountRepairMirrors = () =>
+    ipcPrototype._flushAccountRepairMirrors.call(fakeThis);
+  fakeThis._asyncMirrorWrite = (row, mappings) =>
+    ipcPrototype._asyncMirrorWrite.call(fakeThis, row, mappings);
+  fakeThis._getFolderName = () => "Personal";
+  fakeThis._buildSpeakerMappings = () => ({});
+
+  const enable = handlers.get("note-files-set-enabled");
+  await enable({}, false);
+  assert.equal(reads, 0, "disabled mirrors retain startup repairs");
+  await enable({}, true, basePath, { skipRebuild: true });
+  await new Promise(setImmediate);
+  assert.equal(reads, 1);
+  assert.equal(path.dirname(mirror.getNotePath(note.id)), path.join(basePath, "Personal"));
+  assert.equal(fs.readdirSync(path.join(basePath, "Meetings")).length, 0);
+  assert.equal(fs.readdirSync(path.join(basePath, "Personal")).length, 2);
+  assert.match(
+    fs.readFileSync(path.join(basePath, "Personal", "401-repaired-meeting-transcript.md"), "utf8"),
+    /Dana/,
+    "inactive-account repairs preserve speaker names without the scoped getter"
+  );
+
+  const runtimeNote = { ...note, id: 402, transcript: null };
+  mirror.writeNote(runtimeNote, "Meetings");
+  databaseManager.ensureAccountDefaultFolders = () => pending.push(runtimeNote);
+  tokenState = { token: "repair-account-token", generation: 150 };
+  await setScope("repair-account", 150);
+  await new Promise(setImmediate);
+  assert.equal(reads, 2);
+  assert.equal(path.dirname(mirror.getNotePath(runtimeNote.id)), path.join(basePath, "Personal"));
+});
+
+test("ordinary cloud acknowledgements reject a replaced account before touching SQLite", async () => {
+  tokenState = { token: "ack-token", generation: 201 };
+  await setScope("ack-account", 201);
+  const expectedScope = { accountId: "ack-account", authGeneration: 201 };
+  const priorAccount = databaseManager.activeAccountId;
+  databaseManager.activeAccountId = "replacement-account";
+  try {
+    const calls = [
+      () =>
+        handlers.get("db-acknowledge-note-create")({}, 1, {}, "cloud", null, "ack-account", {
+          expectedScope,
+        }),
+      () =>
+        handlers.get("db-mark-note-synced-if-unchanged")(
+          {},
+          1,
+          {},
+          "cloud",
+          null,
+          "ack-account",
+          null,
+          null,
+          expectedScope
+        ),
+      () =>
+        handlers.get("db-acknowledge-folder-create")(
+          {},
+          1,
+          {},
+          null,
+          "client",
+          "cloud",
+          null,
+          expectedScope
+        ),
+      () => handlers.get("db-upsert-folder-from-cloud")({}, {}, 1, expectedScope),
+    ];
+    for (const invoke of calls) assert.throws(invoke, /Authentication context changed/);
+  } finally {
+    databaseManager.activeAccountId = priorAccount;
   }
 });
