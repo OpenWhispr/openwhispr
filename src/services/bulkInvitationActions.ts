@@ -36,6 +36,8 @@ function endsTheRun(error: unknown, classified: RowActionError): boolean {
   return (
     classified.kind === "notAllowed" ||
     classified.kind === "ssoRequired" ||
+    classified.kind === "rateLimited" ||
+    // A 429 from an answer with no code limits the rest just the same.
     (error instanceof CloudApiError && error.status === 429)
   );
 }

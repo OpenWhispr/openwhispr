@@ -181,11 +181,20 @@ export function InvitePeopleView({
   if (summary.overSeats && !summary.overCeiling) {
     const { available: count, excess } = summary.overSeats;
     const askOwner = !canManageBilling && billingManager;
+    // With no seats left, removing the excess would mean removing everyone.
+    let message: string;
+    if (count === 0) {
+      message = askOwner
+        ? t("workspaces.invite.seatsNoneAskOwner", { owner: isolate(askOwner) })
+        : t("workspaces.invite.seatsNone");
+    } else {
+      message = askOwner
+        ? t("workspaces.invite.seatsLeftAskOwner", { count, excess, owner: isolate(askOwner) })
+        : t("workspaces.invite.seatsLeft", { count, excess });
+    }
     warningBars.push({
       key: "seats",
-      message: askOwner
-        ? t("workspaces.invite.seatsLeftAskOwner", { count, excess, owner: isolate(askOwner) })
-        : t("workspaces.invite.seatsLeft", { count, excess }),
+      message,
       action:
         canManageBilling && onUpgrade
           ? { label: t("workspaces.invite.upgrade"), onClick: onUpgrade }

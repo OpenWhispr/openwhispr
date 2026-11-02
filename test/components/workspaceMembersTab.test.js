@@ -546,6 +546,14 @@ test("any other role change failure gives connection advice", async (t) => {
   assert.equal(toast.description, "settingsPage.workspace.people.roleFailed");
 });
 
+test("a rate-limited role change reads as a plain failure", async (t) => {
+  const { toast } = await changeRoleFailing(
+    t,
+    cloudApiError("Too many requests", 429, "rate_limited")
+  );
+  assert.equal(toast.description, "settingsPage.workspace.people.roleFailed");
+});
+
 test("a role change refused for single sign-on says to sign in with it", async (t) => {
   const { toast, reloads } = await changeRoleFailing(
     t,

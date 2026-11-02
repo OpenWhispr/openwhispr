@@ -81,6 +81,13 @@ test("single sign-on required on a row action is its own kind", () => {
   );
 });
 
+test("a rate limit on a row action is its own kind", () => {
+  const message = "Too many invitations right now. Try again later.";
+  assert.deepEqual(classifyRowActionError(new CloudApiError(message, 429, "rate_limited")), {
+    kind: "rateLimited",
+  });
+});
+
 test("a 404 that doesn't name the row proves nothing about it", () => {
   assert.deepEqual(classifyRowActionError(new CloudApiError("API error: 404", 404)), {
     kind: "failed",

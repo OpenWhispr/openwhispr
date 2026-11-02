@@ -71,6 +71,7 @@ export type RowActionError =
   | { kind: "gone" }
   | { kind: "notAllowed" }
   | { kind: "ssoRequired" }
+  | { kind: "rateLimited" }
   | { kind: "refused"; message: string }
   | { kind: "failed" };
 
@@ -85,6 +86,7 @@ const ROW_GONE_MESSAGE = /^(member|invitation) not found$/i;
 export function classifyRowActionError(error: unknown): RowActionError {
   if (error instanceof CloudApiError) {
     if (error.code === "SSO_REQUIRED") return { kind: "ssoRequired" };
+    if (error.code === "rate_limited") return { kind: "rateLimited" };
     if (error.status === 404) {
       if (ROW_GONE_MESSAGE.test(error.message)) return { kind: "gone" };
       if (error.message === "Workspace not found") return { kind: "notAllowed" };

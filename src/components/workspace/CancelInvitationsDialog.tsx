@@ -69,9 +69,13 @@ export function CancelInvitationsDialog({
         dispatch({ type: "succeeded" });
       } else {
         setStillFailing(outcome.failed.map(({ id }) => id));
-        // Permission and single sign-on end the run, so the first failure speaks for the rest.
+        // Permission, single sign-on and a rate limit end the run, so that failure speaks for the
+        // rest.
         const ended = outcome.failed.find(
-          ({ error }) => error.kind === "notAllowed" || error.kind === "ssoRequired"
+          ({ error }) =>
+            error.kind === "notAllowed" ||
+            error.kind === "ssoRequired" ||
+            error.kind === "rateLimited"
         );
         dispatch({ type: "failed", error: ended?.error ?? { kind: "failed" } });
       }
@@ -88,6 +92,8 @@ export function CancelInvitationsDialog({
         return t("workspaces.cancelInvitation.notAllowed", { workspace: workspaceName });
       case "ssoRequired":
         return t("workspaces.ssoRequired", { workspace: workspaceName });
+      case "rateLimited":
+        return t("workspaces.invite.errors.rateLimited");
       default:
         return t("workspaces.cancelInvitations.partial", { count: pendingIds.length });
     }

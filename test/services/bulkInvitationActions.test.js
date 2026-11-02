@@ -135,7 +135,22 @@ test("required single sign-on answers the rest without asking", async () => {
   ]);
 });
 
-test("a 429 stops the rest", async () => {
+test("a rate limit stops the rest and says what it was", async () => {
+  const { actions: bulk, calls } = await actions({
+    b: new CloudApiError("Too many invitations right now.", 429, "rate_limited"),
+  });
+
+  const outcome = await bulk.cancelInvitations("ws-1", ["a", "b", "c"]);
+
+  assert.equal(calls.length, 2);
+  assert.deepEqual(outcome.done, ["a"]);
+  assert.deepEqual(outcome.failed, [
+    { id: "b", error: { kind: "rateLimited" } },
+    { id: "c", error: { kind: "rateLimited" } },
+  ]);
+});
+
+test("a 429 without a code stops the rest too", async () => {
   const { actions: bulk, calls } = await actions({
     a: new CloudApiError("Too many invitations right now. Try again later.", 429),
   });

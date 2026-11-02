@@ -171,6 +171,7 @@ export default function WorkspaceMembersTab({
         });
       case "ssoRequired":
         return t("workspaces.ssoRequired", { workspace: isolate(workspace.name) });
+      case "rateLimited":
       case "failed":
         return t("settingsPage.workspace.people.roleFailed", { name: isolate(name) });
     }

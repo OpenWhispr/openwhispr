@@ -379,22 +379,68 @@ test("the seats warning offers Upgrade to billing managers and keeps Send enable
 
 test("admins without billing are told to ask the owner", async (t) => {
   const { render } = await loadView(t);
-  const state = { recipients: drafts(3), seats: { purchasedLeft: 0, ceilingLeft: null } };
+  const state = { recipients: drafts(3), seats: { purchasedLeft: 1, ceilingLeft: null } };
 
   const [bar] = bars(render(state, { billingManager: "Olivia", onUpgrade: () => {} }));
   assert.equal(bar.tone, "warning");
   assert.match(
     bar.body,
-    /workspaces\.invite\.seatsLeftAskOwner\|\{&quot;count&quot;:0,&quot;excess&quot;:3,&quot;owner&quot;:&quot;\u2068Olivia\u2069&quot;\}/
+    /workspaces\.invite\.seatsLeftAskOwner\|\{&quot;count&quot;:1,&quot;excess&quot;:2,&quot;owner&quot;:&quot;\u2068Olivia\u2069&quot;\}/
   );
   assert.equal(bar.action, null);
 
   const [unnamed] = bars(render(state, { billingManager: null, onUpgrade: () => {} }));
   assert.match(
     unnamed.body,
-    /workspaces\.invite\.seatsLeft\|\{&quot;count&quot;:0,&quot;excess&quot;:3\}/
+    /workspaces\.invite\.seatsLeft\|\{&quot;count&quot;:1,&quot;excess&quot;:2\}/
   );
   assert.equal(unnamed.action, null);
+});
+
+test("no seats left offers Upgrade to billing managers and never says to remove everyone", async (t) => {
+  const { render } = await loadView(t);
+  const state = { recipients: drafts(3), seats: { purchasedLeft: -2, ceilingLeft: 490 } };
+
+  const markup = render(state, { canManageBilling: true, onUpgrade: () => {} });
+
+  const [bar, ...rest] = bars(markup);
+  assert.deepEqual(rest, []);
+  assert.equal(bar.tone, "warning");
+  assert.match(bar.body, /workspaces\.invite\.seatsNone/);
+  assert.doesNotMatch(bar.body, /seatsLeft/);
+  assert.equal(bar.action, "workspaces.invite.upgrade");
+  assert.doesNotMatch(primaryButton(markup), /disabled=""/);
+});
+
+test("no seats left tells admins without billing to ask the owner", async (t) => {
+  const { render } = await loadView(t);
+  const state = { recipients: drafts(3), seats: { purchasedLeft: 0, ceilingLeft: null } };
+
+  const markup = render(state, { billingManager: "Olivia", onUpgrade: () => {} });
+
+  const [bar] = bars(markup);
+  assert.match(
+    bar.body,
+    /workspaces\.invite\.seatsNoneAskOwner\|\{&quot;owner&quot;:&quot;\u2068Olivia\u2069&quot;\}/
+  );
+  assert.equal(bar.action, null);
+  assert.doesNotMatch(primaryButton(markup), /disabled=""/);
+});
+
+test("no seats left with nobody to ask and nowhere to upgrade has no action", async (t) => {
+  const { render } = await loadView(t);
+  const state = { recipients: drafts(3), seats: { purchasedLeft: 0, ceilingLeft: null } };
+
+  for (const overrides of [
+    { billingManager: null, onUpgrade: () => {} },
+    { canManageBilling: true, billingManager: "Olivia" },
+  ]) {
+    const markup = render(state, overrides);
+    const [bar] = bars(markup);
+    assert.match(bar.body, /workspaces\.invite\.seatsNone(?!AskOwner)/);
+    assert.equal(bar.action, null);
+    assert.doesNotMatch(primaryButton(markup), /disabled=""/);
+  }
 });
 
 test("over the ceiling blocks Send with the ceiling copy", async (t) => {

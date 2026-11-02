@@ -517,6 +517,7 @@ for (const [error, line] of [
   [{ kind: "cannotRemove", reason: "owner" }, "workspaces.removeMembers.cannotRemoveOwner"],
   [{ kind: "cannotRemove", reason: "self" }, "workspaces.removeMembers.cannotRemoveSelf"],
   [{ kind: "failed" }, `workspaces.removeMember.failed|{"name":"${isolated("Liam")}"}`],
+  [{ kind: "rateLimited" }, `workspaces.removeMember.failed|{"name":"${isolated("Liam")}"}`],
 ]) {
   test(`a ${error.kind}${error.reason ? ` ${error.reason}` : ""} failure shows its line`, async (t) => {
     const { mount } = await loadDialog(t);

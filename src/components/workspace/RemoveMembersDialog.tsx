@@ -158,6 +158,7 @@ export function RemoveMembersDialog({
       // reducer turns `transferRequired` into the picker; both read as a plain failure.
       case "gone":
       case "transferRequired":
+      case "rateLimited":
       case "failed":
         if (transferring) return t("workspaces.removeMembers.transferFailed");
         return count === 1

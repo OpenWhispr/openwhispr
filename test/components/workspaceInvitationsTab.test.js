@@ -898,3 +898,179 @@ test("a failed resend of an invitation that left the list refreshes the members"
 
   assert.deepEqual(globalThis.__memberRefreshes, ["w1"]);
 });
+
+const threeRows = () => [...twoRows(), invitation("i3", "cleo@example.com", inDays(5))];
+const BOB = "\u2068bob@example.com\u2069";
+const CLEO = "\u2068cleo@example.com\u2069";
+const RATE_LIMITED = "workspaces.invite.errors.rateLimited";
+
+async function resendAll(t, Tab, rows, listedAfter, answer) {
+  globalThis.__bulkResendImpl = async () => answer;
+  const container = await mount(
+    t,
+    Tab,
+    ready(rows, async () => listedAfter)
+  );
+  await check(container, SELECT_ALL);
+  await React.act(async () => propsOf(barButton(container, "resendSelected")).onClick());
+  return container;
+}
+
+test("a row that left the list isn't reported as failed", async (t) => {
+  const { Tab } = await loadTab(t);
+  const rows = twoRows();
+
+  await resendAll(t, Tab, rows, [rows[0]], {
+    done: ["i1"],
+    noEmail: [],
+    failed: [{ id: "i2", error: { kind: "failed" } }],
+  });
+
+  assert.deepEqual(globalThis.__toasts, [
+    {
+      title: `${INVITATIONS}resentMany#1`,
+      description: `${INVITATIONS}noLongerPending#${BOB}`,
+    },
+  ]);
+  assert.deepEqual(globalThis.__memberRefreshes, ["w1"]);
+});
+
+test("several rows that left the list are counted", async (t) => {
+  const { Tab } = await loadTab(t);
+  const rows = threeRows();
+
+  await resendAll(t, Tab, rows, [rows[0]], {
+    done: ["i1"],
+    noEmail: [],
+    failed: [
+      { id: "i2", error: { kind: "gone" } },
+      { id: "i3", error: { kind: "gone" } },
+    ],
+  });
+
+  assert.deepEqual(globalThis.__toasts, [
+    {
+      title: `${INVITATIONS}resentMany#1`,
+      description: `${INVITATIONS}noLongerPendingMany#2`,
+    },
+  ]);
+});
+
+test("only rows that left the list say so, on their own", async (t) => {
+  const { Tab } = await loadTab(t);
+  const rows = twoRows();
+
+  await resendAll(t, Tab, rows, [], {
+    done: [],
+    noEmail: [],
+    failed: [
+      { id: "i1", error: { kind: "gone" } },
+      { id: "i2", error: { kind: "gone" } },
+    ],
+  });
+
+  assert.deepEqual(globalThis.__toasts, [{ title: `${INVITATIONS}noLongerPendingMany#2` }]);
+  assert.deepEqual(globalThis.__memberRefreshes, ["w1"]);
+});
+
+test("a listed failure keeps its toast and selection beside a row that left", async (t) => {
+  const { Tab } = await loadTab(t);
+  const rows = threeRows();
+
+  const container = await resendAll(t, Tab, rows, [rows[0], rows[1]], {
+    done: ["i1"],
+    noEmail: [],
+    failed: [
+      { id: "i2", error: { kind: "failed" } },
+      { id: "i3", error: { kind: "gone" } },
+    ],
+  });
+
+  assert.deepEqual(globalThis.__toasts, [
+    {
+      title: `${INVITATIONS}resentPartial#1`,
+      description: `${INVITATIONS}resendFailedSome#1#${BOB}`,
+    },
+    { title: `${INVITATIONS}noLongerPending#${CLEO}` },
+  ]);
+  assert.equal(checkbox(container, `${SELECT_ROW}${BOB}`).checked, true);
+});
+
+test("everything still listed failing keeps the failure toast beside a row that left", async (t) => {
+  const { Tab } = await loadTab(t);
+  const rows = twoRows();
+
+  await resendAll(t, Tab, rows, [rows[0]], {
+    done: [],
+    noEmail: [],
+    failed: [
+      { id: "i1", error: { kind: "failed" } },
+      { id: "i2", error: { kind: "gone" } },
+    ],
+  });
+
+  assert.deepEqual(globalThis.__toasts, [
+    { title: `${INVITATIONS}resendFailedAll#1`, variant: "destructive" },
+    { title: `${INVITATIONS}noLongerPending#${BOB}` },
+  ]);
+});
+
+test("a reload that failed reports the failures as before", async (t) => {
+  const { Tab } = await loadTab(t);
+
+  await resendAll(t, Tab, twoRows(), null, {
+    done: ["i1"],
+    noEmail: [],
+    failed: [{ id: "i2", error: { kind: "gone" } }],
+  });
+
+  assert.deepEqual(globalThis.__toasts, [
+    {
+      title: `${INVITATIONS}resentPartial#1`,
+      description: `${INVITATIONS}resendFailedSome#1#${BOB}`,
+    },
+  ]);
+  assert.deepEqual(globalThis.__memberRefreshes, []);
+});
+
+test("a bulk resend stopped by a rate limit says so", async (t) => {
+  const { Tab } = await loadTab(t);
+  const rows = twoRows();
+  const limited = { error: { kind: "rateLimited" } };
+
+  const container = await resendAll(t, Tab, rows, rows, {
+    done: [],
+    noEmail: [],
+    failed: [
+      { id: "i1", ...limited },
+      { id: "i2", ...limited },
+    ],
+  });
+  assert.deepEqual(globalThis.__toasts, [{ title: RATE_LIMITED, variant: "destructive" }]);
+  assert.equal(selectedCount(container), 2);
+
+  globalThis.__toasts.length = 0;
+  globalThis.__bulkResendImpl = async () => ({
+    done: ["i1"],
+    noEmail: [],
+    failed: [{ id: "i2", ...limited }],
+  });
+  await React.act(async () => propsOf(barButton(container, "resendSelected")).onClick());
+  assert.deepEqual(globalThis.__toasts, [
+    { title: `${INVITATIONS}resentPartial#1`, description: RATE_LIMITED },
+  ]);
+});
+
+test("a single resend stopped by a rate limit says so", async (t) => {
+  const { Tab, CloudApiError } = await loadTab(t);
+  globalThis.__resendImpl = async () => {
+    throw new CloudApiError("Too many invitations right now.", 429, "rate_limited");
+  };
+  const container = await mount(t, Tab, ready([invitation("i1", "ada@example.com", inDays(3))]));
+
+  await React.act(async () => propsOf(menuItem(container, "invitations.resend")).onClick());
+
+  assert.deepEqual(globalThis.__toasts, [
+    { title: "common.error", description: RATE_LIMITED, variant: "destructive" },
+  ]);
+});

@@ -239,6 +239,32 @@ test("lost permission and required single sign-on say so instead of blaming the 
   assert.match(view.text(), /!workspaces\.ssoRequired\|/);
 });
 
+test("a rate limit says so, even after some were canceled", async (t) => {
+  const { mount, confirming } = await loadDialog(t);
+  globalThis.__cancelImpl = async () =>
+    outcome({ failed: [failure("a", "rateLimited"), failure("b", "rateLimited")] });
+  const view = await mount(confirming([invitation("a"), invitation("b")]));
+  await view.clickPrimary();
+
+  assert.match(view.text(), /!workspaces\.invite\.errors\.rateLimited/);
+  assert.doesNotMatch(view.text(), /cancelInvitations\.partial/);
+
+  await view.send({ type: "dismiss" });
+  globalThis.__cancelImpl = async () =>
+    outcome({ done: ["a"], failed: [failure("b"), failure("c", "rateLimited")] });
+  const partial = await mount(confirming());
+  await partial.clickPrimary();
+
+  assert.match(partial.text(), /!workspaces\.invite\.errors\.rateLimited/);
+  assert.doesNotMatch(partial.text(), /cancelInvitations\.partial/);
+  assert.deepEqual(partial.canceled, [["a"]]);
+  // Everything still pending stays for Try again.
+  assert.deepEqual(globalThis.__cancelCalls.at(-1)[1], ["a", "b", "c"]);
+  globalThis.__cancelImpl = async (ids) => outcome({ done: ids });
+  await partial.clickPrimary();
+  assert.deepEqual(globalThis.__cancelCalls.at(-1)[1], ["b", "c"]);
+});
+
 test("a dialog opened again starts from its own selection", async (t) => {
   const { mount, confirming } = await loadDialog(t);
   globalThis.__cancelImpl = async () => outcome({ failed: [failure("a")] });

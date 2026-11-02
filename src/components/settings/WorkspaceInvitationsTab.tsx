@@ -137,6 +137,12 @@ export default function WorkspaceInvitationsTab({
           }),
           variant: "destructive",
         });
+      } else if (failure.kind === "rateLimited") {
+        toast({
+          title: t("common.error"),
+          description: t("workspaces.invite.errors.rateLimited"),
+          variant: "destructive",
+        });
       } else {
         toast({
           title: t("common.error"),
@@ -163,35 +169,48 @@ export default function WorkspaceInvitationsTab({
         selectedInvitations.map(({ id }) => id)
       );
       const listed = await reload();
-      // A failure that left the list may be an invitation that was accepted.
-      if (
-        listed &&
-        outcome.failed.some(
-          ({ id, error }) => error.kind === "gone" && !listed.some((entry) => entry.id === id)
-        )
-      ) {
-        refreshMembersQuietly();
-      }
+      const listedIds = listed && new Set(listed.map(({ id }) => id));
+      // A failure that left the list was accepted or canceled meanwhile, so it has no Actions to
+      // retry from and may have added a member. A failed reload says nothing about any of them.
+      const gone = listedIds ? outcome.failed.filter(({ id }) => !listedIds.has(id)) : [];
+      const failed = outcome.failed.filter((failure) => !gone.includes(failure));
+      if (gone.length > 0) refreshMembersQuietly();
       // Failed invitations stay selected, so Resend invites again retries only those.
       setSelection((current) => setRows(current, outcome.done, false));
 
-      const { done, failed, noEmail } = outcome;
+      const { done, noEmail } = outcome;
       const ended = failed.find(
         ({ error }) => error.kind === "notAllowed" || error.kind === "ssoRequired"
       );
-      if (failed.length === 0) {
+      const rateLimited = failed.some(({ error }) => error.kind === "rateLimited");
+      let goneLine: string | null = null;
+      if (gone.length === 1) {
+        goneLine = t("settingsPage.workspace.people.invitations.noLongerPending", {
+          email: isolate(emailsById.get(gone[0].id) ?? ""),
+        });
+      } else if (gone.length > 1) {
+        goneLine = t("settingsPage.workspace.people.invitations.noLongerPendingMany", {
+          count: gone.length,
+        });
+      }
+      if (failed.length === 0 && done.length === 0 && goneLine) {
+        toast({ title: goneLine });
+      } else if (failed.length === 0) {
         toast({
           title: t("settingsPage.workspace.people.invitations.resentMany", { count: done.length }),
+          ...(goneLine ? { description: goneLine } : {}),
         });
       } else if (done.length > 0) {
         toast({
           title: t("settingsPage.workspace.people.invitations.resentPartial", {
             count: done.length,
           }),
-          description: t("settingsPage.workspace.people.invitations.resendFailedSome", {
-            count: failed.length,
-            email: isolate(emailsById.get(failed[0].id) ?? ""),
-          }),
+          description: rateLimited
+            ? t("workspaces.invite.errors.rateLimited")
+            : t("settingsPage.workspace.people.invitations.resendFailedSome", {
+                count: failed.length,
+                email: isolate(emailsById.get(failed[0].id) ?? ""),
+              }),
         });
       } else if (ended?.error.kind === "ssoRequired") {
         toast({
@@ -205,6 +224,8 @@ export default function WorkspaceInvitationsTab({
           }),
           variant: "destructive",
         });
+      } else if (rateLimited) {
+        toast({ title: t("workspaces.invite.errors.rateLimited"), variant: "destructive" });
       } else {
         toast({
           title: t("settingsPage.workspace.people.invitations.resendFailedAll", {
@@ -213,6 +234,8 @@ export default function WorkspaceInvitationsTab({
           variant: "destructive",
         });
       }
+      // Neutral news, so it stays out from under a failure's text.
+      if (failed.length > 0 && goneLine) toast({ title: goneLine });
       if (noEmail.length > 0) {
         toast({
           title: t("settingsPage.workspace.invites.resentNoEmail"),
