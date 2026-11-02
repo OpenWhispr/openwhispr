@@ -7632,6 +7632,18 @@ class IPCHandlers {
     });
 
     ipcMain.handle("retry-transcription", async (event, id, settings) => {
+      const authGeneration = tokenStore.getState().generation;
+      const accountId = this.databaseManager.activeAccountId;
+      const assertRetryCurrent = () => {
+        if (isStaleSyncAck(authGeneration) || this.databaseManager.activeAccountId !== accountId) {
+          throw Object.assign(
+            new Error("Authentication context changed during transcription retry"),
+            {
+              code: "AUTH_CONTEXT_CHANGED",
+            }
+          );
+        }
+      };
       if (!this.databaseManager.getTranscriptionById(id)) {
         return { success: false, error: "Audio file not found" };
       }
@@ -7646,6 +7658,7 @@ class IPCHandlers {
             ? preferredLanguage.split("-")[0]
             : undefined;
         const { resolveTranscriptionRoute } = await import("./transcriptionRoute.ts");
+        assertRetryCurrent();
         const { convertBufferToWav, isWavFormat } = require("./ffmpegUtils");
         // Renderer pre-flight owns policy; retry re-routes stored audio through
         // whatever is selected NOW.
@@ -7753,6 +7766,7 @@ class IPCHandlers {
           const win = BrowserWindow.fromWebContents(event.sender);
           if (win) {
             const authHeader = await getAuthHeaderFromWindow(win);
+            assertRetryCurrent();
             if (Object.keys(authHeader).length) {
               const apiUrl = getApiUrl();
               if (apiUrl) {
@@ -7896,6 +7910,7 @@ class IPCHandlers {
             }
           }
 
+          assertRetryCurrent();
           const formData = new FormData();
           formData.append("file", new Blob([uploadBuffer], { type: uploadType }), uploadName);
           if (provider === "xai") {
@@ -7938,6 +7953,7 @@ class IPCHandlers {
           result = { text: data?.text, source: provider, model: route.model };
         }
 
+        assertRetryCurrent();
         if (result?.success === false) {
           throw localTranscriptionFailure(result);
         }
@@ -7964,7 +7980,15 @@ class IPCHandlers {
         const updated = this.databaseManager.getTranscriptionById(id);
         if (updated) {
           setImmediate(() => {
-            broadcastToWindows("transcription-updated", updated);
+            if (
+              isStaleSyncAck(authGeneration) ||
+              this.databaseManager.activeAccountId !== accountId
+            ) {
+              return;
+            }
+            const transcription = this.databaseManager.getTranscriptionById(id);
+            if (!transcription) return;
+            broadcastToWindows("transcription-updated", transcription);
             // A row that just reached "completed" is newly eligible.
             void this._ensureAnalyticsHistoryBackfilled();
           });
