@@ -117,7 +117,7 @@ const FOLDER_LINK_PENDING = "folder_link_pending";
 
 // Notes holding work the server may not have: the private fork of a removed or
 // revoked container keeps these and nothing else.
-const NOTE_HAS_UNSENT_WORK = "deleted_at IS NULL AND (sync_status != 'synced' OR cloud_id IS NULL)";
+const NOTE_HAS_UNSENT_WORK = `deleted_at IS NULL AND (sync_status NOT IN ('synced', '${FOLDER_LINK_PENDING}') OR cloud_id IS NULL)`;
 
 // Validates and normalizes the editable fields of a note template or action.
 function resolveActionFields(kind, fields) {
@@ -8370,7 +8370,7 @@ class DatabaseManager {
       }
       return this.db.transaction(() => {
         const heldFolders = [id, ...this._heldUnsyncedSubfolders(id).map((row) => row.id)].map(
-          (heldId) => this._heldFolderRestoreState(heldId)
+          (heldId) => this._heldFolderRestoreState(heldId, heldId !== id)
         );
         const refused = heldFolders.find((held) => !held.success);
         if (refused) return { ...refused, id };
@@ -8400,7 +8400,10 @@ class DatabaseManager {
         const clearJournal = this.db.prepare(
           "DELETE FROM optimistic_folder_delete_rows WHERE folder_id = ?"
         );
-        for (const { folderId, folderState, noteStates, conversationStates } of heldFolders) {
+        const setName = this.db.prepare("UPDATE folders SET name = ? WHERE id = ?");
+        for (const { folderId, name, folderState, noteStates, conversationStates } of heldFolders) {
+          // Renamed while still hidden: live, its old name would hit the unique index.
+          setName.run(name, folderId);
           restoreRow(restoreFolder, folderState, folderId);
           for (const state of noteStates) restoreRow(restoreNote, state, state.entity_id);
           for (const state of conversationStates) {
@@ -8455,9 +8458,22 @@ class DatabaseManager {
       .all(parentId);
   }
 
-  // Reads and checks one held folder's journal without writing, so a refusal
-  // for a subfolder leaves its parent held too.
-  _heldFolderRestoreState(id) {
+  // A free name in the space, as "name (2)" when it's taken.
+  _availableFolderName(name, spaceId, exceptFolderId) {
+    const taken = this.db.prepare(
+      "SELECT 1 FROM folders WHERE name = ? AND space_id = ? AND deleted_at IS NULL AND id != ?"
+    );
+    let available = name;
+    for (let n = 2; taken.get(available, spaceId, exceptFolderId); n++) {
+      available = `${name} (${n})`;
+    }
+    return available;
+  }
+
+  // Reads and checks one held folder's journal without writing. A subfolder the
+  // server never saw takes a free name rather than refuse, since refusing would
+  // keep its parent and all their notes hidden until the user renamed a folder.
+  _heldFolderRestoreState(id, renameOnClash) {
     const journalRows = this.db
       .prepare("SELECT * FROM optimistic_folder_delete_rows WHERE folder_id = ? ORDER BY entity_id")
       .all(id);
@@ -8470,16 +8486,11 @@ class DatabaseManager {
     if (!folder) {
       return { success: false, error: "Folder row is missing" };
     }
-    const collision = this.db
-      .prepare(
-        "SELECT id FROM folders WHERE name = ? AND space_id = ? AND deleted_at IS NULL AND id != ?"
-      )
-      .get(folder.name, folder.space_id, id);
-    if (collision) {
+    const name = this._availableFolderName(folder.name, folder.space_id, id);
+    if (name !== folder.name && !renameOnClash) {
       return {
         success: false,
         reason: "name-taken",
-        name: folder.name,
         error: "Folder name is no longer available",
       };
     }
@@ -8494,7 +8505,7 @@ class DatabaseManager {
     if (conversationStates.some((row) => !conversationExists.get(row.entity_id))) {
       return { success: false, error: "A folder conversation row is missing" };
     }
-    return { success: true, folderId: id, folderState, noteStates, conversationStates };
+    return { success: true, folderId: id, name, folderState, noteStates, conversationStates };
   }
 
   // Forks notes to the private space root with fresh identities, so the next
@@ -8550,6 +8561,30 @@ class DatabaseManager {
       .run(folderId, ...noteIds);
   }
 
+  // The server holds these notes with no folder, so its delete of the folder never
+  // reaches them and they stay live on other devices. Deleting them here would
+  // lose them on this device for good, with no pull to bring them back.
+  _unfileNotesWithoutFolderLink(folder) {
+    const unlinked = folder.cloud_id
+      ? `sync_status = '${FOLDER_LINK_PENDING}'`
+      : `sync_status IN ('synced', '${FOLDER_LINK_PENDING}')`;
+    const noteIds = this.db
+      .prepare(
+        `SELECT id FROM notes
+         WHERE folder_id = ? AND deleted_at IS NULL AND cloud_id IS NOT NULL AND ${unlinked}`
+      )
+      .all(folder.id)
+      .map((row) => row.id);
+    const unfile = this.db.prepare(
+      "UPDATE notes SET folder_id = NULL, sync_status = 'synced' WHERE id = ?"
+    );
+    const getNote = this.db.prepare("SELECT * FROM notes WHERE id = ?");
+    return noteIds.map((noteId) => {
+      unfile.run(noteId);
+      return getNote.get(noteId);
+    });
+  }
+
   // preserveDirtyNotes is for a tombstone from another device or teammate:
   // nobody here chose that delete, so unsent notes survive as private forks. A
   // delete this device made takes its held rows with it. Refused when there is
@@ -8572,13 +8607,14 @@ class DatabaseManager {
       }
       const result = this.db.transaction(() => {
         const removed = [...this._heldUnsyncedSubfolders(id), folder].map((target) =>
-          this._removeFolderRows(target, target.id === id ? privateSpaceId : null)
+          this._removeFolderRows(target, target.id === id && preserving, privateSpaceId)
         );
         return {
           changes: removed[removed.length - 1].changes,
           noteIds: removed.flatMap((rows) => rows.noteIds),
           relocatedNotes: removed.flatMap((rows) => rows.relocatedNotes),
           preservedNotes: removed.flatMap((rows) => rows.preservedNotes),
+          unfiledNotes: removed.flatMap((rows) => rows.unfiledNotes),
         };
       })();
       const { changes, ...rows } = result;
@@ -8590,7 +8626,7 @@ class DatabaseManager {
   }
 
   // Runs inside hardDeleteFolder's transaction.
-  _removeFolderRows(folder, forkDirtyNotesToSpaceId) {
+  _removeFolderRows(folder, pulledDelete, privateSpaceId) {
     const { id } = folder;
     const childNotes = "SELECT id FROM notes WHERE folder_id = ?";
     const heldNotes =
@@ -8599,21 +8635,22 @@ class DatabaseManager {
       "SELECT entity_id FROM optimistic_folder_delete_rows WHERE folder_id = ? AND entity_type = 'conversation'";
     const released = this._releaseOutOfScopeChildNotes(id);
     const preservedNotes =
-      forkDirtyNotesToSpaceId == null
-        ? []
-        : this._forkNotesToPrivateSpace(
+      pulledDelete && privateSpaceId != null
+        ? this._forkNotesToPrivateSpace(
             this.db
               .prepare(`SELECT id FROM notes WHERE folder_id = ? AND ${NOTE_HAS_UNSENT_WORK}`)
               .all(id)
               .map((row) => row.id),
-            forkDirtyNotesToSpaceId
-          );
+            privateSpaceId
+          )
+        : [];
+    const unfiledNotes = pulledDelete ? this._unfileNotesWithoutFolderLink(folder) : [];
     const accountScope = this._accountScopeCondition("notes");
     const noteIds = this.db
       .prepare(`${childNotes} AND ${accountScope.sql}`)
       .all(id, ...accountScope.params)
       .map((row) => row.id);
-    if (!folder.cloud_id) this._tombstoneSentNotesOfUnsyncedFolder(id);
+    if (!folder.cloud_id && !pulledDelete) this._tombstoneSentNotesOfUnsyncedFolder(id);
     // Note chats normally have note_id only. Retire them while the child
     // rows still identify which chats belong to this folder cleanup, then
     // handle independently folder-scoped conversations.
@@ -8658,8 +8695,9 @@ class DatabaseManager {
     return {
       changes,
       noteIds,
-      relocatedNotes: [...released, ...preservedNotes],
+      relocatedNotes: [...released, ...preservedNotes, ...unfiledNotes],
       preservedNotes,
+      unfiledNotes,
     };
   }
 
@@ -8691,6 +8729,7 @@ class DatabaseManager {
       const serverOwnedChildren =
         "SELECT id FROM notes WHERE folder_id = ? AND (deleted_at IS NOT NULL OR (sync_status = 'synced' AND cloud_id IS NOT NULL))";
       const result = this.db.transaction(() => {
+        const unfiledNotes = this._unfileNotesWithoutFolderLink(folder);
         const preservedIds = this.db
           .prepare(`SELECT id FROM notes WHERE folder_id = ? AND ${NOTE_HAS_UNSENT_WORK}`)
           .all(id)
@@ -8713,13 +8752,7 @@ class DatabaseManager {
         );
         let preservedFolder = null;
         if (preserveFolder) {
-          let name = folder.name;
-          const taken = this.db.prepare(
-            "SELECT 1 FROM folders WHERE name = ? AND space_id = ? AND deleted_at IS NULL AND id != ?"
-          );
-          for (let n = 2; taken.get(name, privateSpaceId, id); n++) {
-            name = `${folder.name} (${n})`;
-          }
+          const name = this._availableFolderName(folder.name, privateSpaceId, id);
           // Its subfolders go top-level where they are (as ON DELETE SET NULL
           // leaves them when the folder is deleted): in the team after a
           // revocation, as the server leaves them, or in the private space
@@ -8752,6 +8785,7 @@ class DatabaseManager {
         return {
           folder: preservedFolder,
           relocatedNotes,
+          unfiledNotes,
           deletedNoteIds,
         };
       })();

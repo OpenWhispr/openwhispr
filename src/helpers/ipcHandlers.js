@@ -3297,7 +3297,7 @@ class IPCHandlers {
         }
         setImmediate(() => {
           broadcastToWindows("folder-deleted", { id });
-          for (const note of result.preservedNotes ?? []) {
+          for (const note of [...(result.preservedNotes ?? []), ...(result.unfiledNotes ?? [])]) {
             broadcastToWindows("note-updated", note);
           }
           for (const child of subfolders) {
@@ -3316,7 +3316,8 @@ class IPCHandlers {
         // The triggers journaled the relocated and deleted notes. Mirror files live by
         // folder, so rewrite the relocated notes and drop the server-owned ones.
         this.notifyVectorChanges();
-        for (const note of result.relocatedNotes ?? []) {
+        const movedNotes = [...(result.relocatedNotes ?? []), ...(result.unfiledNotes ?? [])];
+        for (const note of movedNotes) {
           this._asyncMirrorWrite(note);
         }
         for (const noteId of result.deletedNoteIds ?? []) {
@@ -3325,7 +3326,7 @@ class IPCHandlers {
         setImmediate(() => {
           if (result.folder) broadcastToWindows("folder-synced", result.folder);
           else broadcastToWindows("folder-deleted", { id });
-          for (const note of result.relocatedNotes ?? []) {
+          for (const note of movedNotes) {
             broadcastToWindows("note-updated", note);
           }
           for (const noteId of result.deletedNoteIds ?? []) {
@@ -3341,7 +3342,7 @@ class IPCHandlers {
             this._queueMirrorFolderCleanup(
               [previousMirrorFolder],
               result.deletedNoteIds,
-              result.relocatedNotes
+              movedNotes
             );
           }
         });

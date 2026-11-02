@@ -3903,7 +3903,6 @@ declare global {
         subfolders?: FolderItem[];
         conversationIds?: number[];
         reason?: "name-taken";
-        name?: string;
         error?: string;
       }>;
       hardDeleteFolder?: (
@@ -3915,6 +3914,7 @@ declare global {
         noteIds?: number[];
         relocatedNotes?: NoteItem[];
         preservedNotes?: NoteItem[];
+        unfiledNotes?: NoteItem[];
         error?: string;
       }>;
       relocateRevokedFolder?: (

@@ -32,6 +32,28 @@ function setup(t, knownSubfolders = []) {
   return basePath;
 }
 
+test("a file system reporting no inodes doesn't collapse different directories", (t) => {
+  const basePath = setup(t);
+  const realStat = fs.statSync;
+  t.mock.method(fs, "statSync", (target, options) => {
+    const stats = realStat(target, options);
+    return options?.bigint ? { dev: stats.dev, ino: 0n } : stats;
+  });
+  const note = { id: 7, title: "Plan", content: "body", updated_at: "2026-01-01 00:00:00" };
+  fs.mkdirSync(path.join(basePath, "Alpha"));
+  fs.mkdirSync(path.join(basePath, "Beta"));
+  markdownMirror.writeNote(note, "Alpha");
+
+  markdownMirror.writeNote(note, "Beta");
+
+  assert.deepEqual(fs.readdirSync(path.join(basePath, "Alpha")), [], "no stale copy stays behind");
+  assert.equal(fs.readdirSync(path.join(basePath, "Beta")).length, 1);
+  assert.equal(
+    markdownMirror.folderDirectoryId("Alpha") === markdownMirror.folderDirectoryId("Beta"),
+    false
+  );
+});
+
 const write = (...segments) => {
   fs.mkdirSync(path.dirname(path.join(...segments)), { recursive: true });
   fs.writeFileSync(path.join(...segments), "the user's own");

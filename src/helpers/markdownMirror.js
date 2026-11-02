@@ -435,7 +435,8 @@ class MarkdownMirror {
   // a Windows file index doesn't fit a double.
   _directoryId(dirPath) {
     const { dev, ino } = fs.statSync(dirPath, { bigint: true });
-    return `${dev}:${ino}`;
+    // Some network and FUSE file systems report no inode for every directory.
+    return ino === 0n ? fs.realpathSync(dirPath) : `${dev}:${ino}`;
   }
 
   // Null while the folder has no directory.

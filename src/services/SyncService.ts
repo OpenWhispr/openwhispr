@@ -993,15 +993,17 @@ export class SyncService {
   }
 
   private async pushFolder(id: number): Promise<void> {
-    if (this.owedFolderParentBackfills(!this.canSync()).length > 0) {
-      // Pushing a row the backfill hasn't reached would flatten it for everyone.
+    const folders = (await window.electronAPI.getFolders?.()) ?? [];
+    const folder = folders.find((f) => f.id === id);
+    if (!folder) return;
+    if (
+      this.couldFlattenBeforeBackfill(folder) &&
+      this.owedFolderParentBackfills(!this.canSync()).length > 0
+    ) {
       // It stays pending for the full pass, which backfills first.
       this.requestSyncAll("interval");
       return;
     }
-    const folders = (await window.electronAPI.getFolders?.()) ?? [];
-    const folder = folders.find((f) => f.id === id);
-    if (!folder) return;
 
     const ctx = await this.buildSpaceContext();
     const scope = this.resolvePushScope("folder", folder, ctx);
@@ -1653,7 +1655,7 @@ export class SyncService {
       // throw would abort the whole pass. Surface a name clash for the user to
       // resolve; the tombstone stays journaled and retries next pass.
       if (restored?.reason === "name-taken") {
-        this.dispatchFolderNameTaken(restored.name ?? folder.name);
+        this.dispatchFolderNameTaken(folder.name);
       } else {
         console.error(
           `Could not roll back denied folder delete ${folder.id}: ${restored?.error ?? "unknown error"}`
@@ -1715,7 +1717,8 @@ export class SyncService {
 
   private async syncFolders(teamOnly = false): Promise<void> {
     if (!teamOnly) await this.adoptDefaultFolders();
-    if (await this.backfillFolderParents(teamOnly)) await this.pushPendingFolders(teamOnly);
+    const parentsKnown = await this.backfillFolderParents(teamOnly);
+    await this.pushPendingFolders(teamOnly, parentsKnown);
     await this.pushFolderDeletes(teamOnly);
     if (!teamOnly && this.teamCursorLagging("folders")) {
       await this.pullFolders(true);
@@ -1733,11 +1736,18 @@ export class SyncService {
       .filter((key) => localStorage.getItem(key) === null);
   }
 
+  // A row with a cloud id and no local parent, whose push says "top level": the
+  // backfill may be about to tell it otherwise. A folder leaving a team still goes,
+  // since its retraction can't wait and the move drops any parent anyway.
+  private couldFlattenBeforeBackfill(folder: FolderItem): boolean {
+    return !!folder.cloud_id && folder.parent_folder_id == null && !folder.left_team;
+  }
+
   // Delta pulls never replay folders pulled before parent_folder_id existed, so
   // such a subfolder stays flat here and its next push un-nests it for everyone.
-  // Returns false when folder pushes must wait: the list itself failed. A parked
-  // row retries the backfill next pass without holding pushes back, since one row
-  // that never applies would otherwise stop every folder push for good.
+  // Returns false when those rows must wait: the list itself failed. New folders
+  // and nested rows still push, so a list that keeps failing can't stop backups. A
+  // parked row retries the backfill next pass without holding anything back.
   private async backfillFolderParents(teamOnly: boolean): Promise<boolean> {
     const owed = this.owedFolderParentBackfills(teamOnly);
     if (owed.length === 0) return true;
@@ -1813,12 +1823,12 @@ export class SyncService {
     if (denied) await this.restoreDeniedRows("folder");
   }
 
-  private async pushPendingFolders(teamOnly = false): Promise<void> {
+  private async pushPendingFolders(teamOnly = false, parentsKnown = true): Promise<void> {
     // A subfolder waits for its parent to reach the cloud, so a parent created
     // or updated in this pass pushes first and the subfolders that waited
     // follow in a second round; a parent whose push failed holds them back.
-    const waiting = await this.pushPendingFolderRound(teamOnly);
-    if (waiting.size > 0) await this.pushPendingFolderRound(teamOnly, waiting);
+    const waiting = await this.pushPendingFolderRound(teamOnly, parentsKnown);
+    if (waiting.size > 0) await this.pushPendingFolderRound(teamOnly, parentsKnown, waiting);
   }
 
   // Returns the subfolders still waiting for their parent to reach the cloud.
@@ -1826,12 +1836,16 @@ export class SyncService {
   // retried.
   private async pushPendingFolderRound(
     teamOnly: boolean,
+    parentsKnown: boolean,
     only?: Set<number>
   ): Promise<Set<number>> {
     const waiting = new Set<number>();
     const pending = (
       (await window.electronAPI.getPendingFolders?.(teamOnly ? "team" : undefined)) ?? []
-    ).filter((folder) => !only || only.has(folder.id));
+    ).filter(
+      (folder) =>
+        (!only || only.has(folder.id)) && (parentsKnown || !this.couldFlattenBeforeBackfill(folder))
+    );
     if (pending.length === 0) return waiting;
 
     const ctx = await this.buildSpaceContext();
@@ -2542,7 +2556,7 @@ export class SyncService {
           // (plan §7.2).
           if (cloudNote.access_removed) {
             if (!local) continue;
-            if (local.sync_status !== "synced" && !local.deleted_at && ctx.privateSpace) {
+            if (hasUnpushedNoteEdits(local) && !local.deleted_at && ctx.privateSpace) {
               await this.forkNoteToPrivate(
                 local,
                 ctx.privateSpace,

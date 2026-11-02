@@ -2572,7 +2572,7 @@ test("a restart with a parent's delete pending keeps the unsynced subfolder rest
   assert.equal(reopened.getAgentConversation(chat.id).deleted_at, null);
 });
 
-test("a subfolder name taken meanwhile leaves the whole delete held", (t) => {
+test("a subfolder name taken meanwhile restores it under a free name, with its parent", (t) => {
   const db = createDb(t);
   if (!db) return;
   const { parent, subfolder } = parentWithUnsyncedSubfolder(db);
@@ -2583,11 +2583,97 @@ test("a subfolder name taken meanwhile leaves the whole delete held", (t) => {
 
   const restored = db.restoreFolderAfterDeniedDelete(parent.id);
 
+  assert.equal(restored.success, true);
+  assert.equal(rawFolder(db, parent.id).deleted_at, null, "the parent isn't kept hidden");
+  const back = rawFolder(db, subfolder.id);
+  assert.equal(back.deleted_at, null);
+  assert.equal(back.name, "Q1 (2)");
+  assert.equal(back.parent_folder_id, parent.id);
+});
+
+test("a parent's own name clash still refuses, and leaves the delete held", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const { parent, subfolder } = parentWithUnsyncedSubfolder(db);
+  const parentName = rawFolder(db, parent.id).name;
+  db.db.prepare("UPDATE folders SET name = 'Elsewhere' WHERE id = ?").run(parent.id);
+  db.createFolder(parentName);
+  db.db.prepare("UPDATE folders SET name = ? WHERE id = ?").run(parentName, parent.id);
+
+  const restored = db.restoreFolderAfterDeniedDelete(parent.id);
+
   assert.equal(restored.success, false);
   assert.equal(restored.reason, "name-taken");
-  assert.equal(restored.name, "Q1");
-  assert.ok(rawFolder(db, parent.id).deleted_at, "the parent stays held with it");
+  assert.ok(rawFolder(db, parent.id).deleted_at);
   assert.ok(rawFolder(db, subfolder.id).deleted_at);
+});
+
+test("a pulled delete of a folder the cloud never linked keeps its uploaded notes live", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const folder = db.createFolder("Client").folder;
+  const uploaded = syncedNote(db, "Uploaded", folder.id);
+
+  const result = db.hardDeleteFolder(folder.id, { preserveDirtyNotes: true });
+
+  assert.deepEqual(result.noteIds, [], "its mirror file must not be deleted");
+  assert.deepEqual(result.preservedNotes, []);
+  assert.deepEqual(
+    result.unfiledNotes.map((note) => note.id),
+    [uploaded.id]
+  );
+  const kept = rawNote(db, uploaded.id);
+  assert.equal(kept.deleted_at, null, "nobody chose to delete this note");
+  assert.equal(kept.folder_id, null);
+  assert.equal(kept.sync_status, "synced", "nothing is queued, so no DELETE goes up");
+  assert.equal(kept.client_note_id, uploaded.client_note_id);
+});
+
+test("this device's own delete of a never-synced folder still tombstones its uploaded notes", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const folder = db.createFolder("Client").folder;
+  const uploaded = syncedNote(db, "Uploaded", folder.id);
+
+  db.deleteFolder(folder.id);
+
+  const tombstone = rawNote(db, uploaded.id);
+  assert.ok(tombstone.deleted_at);
+  assert.equal(tombstone.sync_status, "pending");
+});
+
+test("a pulled delete unfiles a note still sending its folder link, without forking it", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const folder = db.createFolder("Client").folder;
+  db.markFolderSynced(folder.id, "cloud-client");
+  const linking = syncedNote(db, "Linking", folder.id, { sync_status: "folder_link_pending" });
+
+  const result = db.hardDeleteFolder(folder.id, { preserveDirtyNotes: true });
+
+  assert.deepEqual(result.preservedNotes, []);
+  const kept = rawNote(db, linking.id);
+  assert.equal(kept.folder_id, null);
+  assert.equal(kept.sync_status, "synced");
+  assert.equal(kept.cloud_id, "cloud-Linking", "the same cloud note, not a copy");
+});
+
+test("relocating a folder the cloud never linked keeps its uploaded notes on this device", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const team = createTestTeamSpace(db, { name: "Growth" }).space;
+  const folder = db.createFolder("Client", team.id).folder;
+  const uploaded = syncedNote(db, "Uploaded", folder.id);
+  db.db.prepare("UPDATE notes SET space_id = ? WHERE id = ?").run(team.id, uploaded.id);
+
+  const result = db.relocateRevokedFolder(folder.id, db.getPrivateSpaceId(), false);
+
+  assert.equal(result.success, true);
+  assert.deepEqual(result.deletedNoteIds, []);
+  const kept = rawNote(db, uploaded.id);
+  assert.equal(kept.deleted_at, null);
+  assert.equal(kept.folder_id, null);
+  assert.equal(kept.space_id, team.id, "it's still the cloud's note in that space");
 });
 
 test("revoking a space settles a held parent and its unsynced subfolder in any order", (t) => {

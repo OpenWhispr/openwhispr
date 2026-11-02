@@ -1701,6 +1701,68 @@ test("a failed backfill skips the folder push and retries next pass", async (t) 
   assert.equal(cloud.folder(cloudChildId).parent_folder_id, cloudParentId);
 });
 
+test("a failed backfill still creates new folders, so a list that keeps failing can't stop backups", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud } = ctx;
+  const service = await newSyncService(t);
+  const { child, cloudChildId } = await upgradedDevice(db, cloud, service);
+  db.renameFolder(child.id, "Q1 renamed");
+  const fresh = db.createFolder("Started offline").folder;
+  t.mock.method(console, "error", () => {});
+  cloud.failWith("/api/folders/list", { status: 500, error: "list down" });
+
+  await service.syncFolders();
+  await service.syncFolders();
+
+  assert.ok(folderByClientId(db, fresh.client_folder_id).cloud_id, "the new folder went up");
+  assert.notEqual(cloud.folder(cloudChildId).name, "Q1 renamed", "a flat row still waits");
+  assert.equal(folderByClientId(db, child.client_folder_id).sync_status, "pending");
+});
+
+test("a pulled delete of a folder whose create receipt was lost leaves its uploaded note live everywhere", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud } = ctx;
+  const service = await newSyncService(t);
+  await service.syncAll(true);
+
+  // The create reached the server but this device never got the receipt, and the
+  // note went up with no folder. Another device then deleted the empty folder.
+  const folder = db.createFolder("Client").folder;
+  const cloudFolder = cloud.seedFolder({
+    name: "Client",
+    client_folder_id: folder.client_folder_id,
+  });
+  const note = db.saveNote("Plan", "the only text", "personal", null, null, folder.id).note;
+  const cloudNote = cloud.seedNote({ client_note_id: note.client_note_id, title: "Plan" });
+  db.db
+    .prepare(
+      "UPDATE notes SET cloud_id = ?, cloud_revision = 1, sync_status = 'synced' WHERE id = ?"
+    )
+    .run(cloudNote.id, note.id);
+  const stamp = browserLocalStorage.getItem("lastSyncedAt.folders");
+  cloud.setClock(() => shift(stamp, 1));
+  await cloud.request({
+    method: "DELETE",
+    path: "/api/folders/delete",
+    body: { id: cloudFolder.id },
+  });
+  t.mock.method(console, "error", () => {});
+  cloud.failNext("POST /api/folders/batch-create", { status: 503, error: "busy" });
+  cloud.failNext("POST /api/folders/create", { status: 503, error: "busy" });
+
+  await service.syncAll(true);
+  await service.syncAll(true);
+
+  assert.equal(cloud.note(cloudNote.id).deleted_at, null, "nobody chose to delete this note");
+  const kept = db.getNote(note.id);
+  assert.equal(kept.deleted_at, null);
+  assert.equal(kept.content, "the only text");
+  assert.notEqual(kept.folder_id, folder.id);
+  assert.equal(folderByClientId(db, folder.client_folder_id) ?? null, null);
+});
+
 test("a debounced folder push waits for the backfill rather than flatten the row", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
