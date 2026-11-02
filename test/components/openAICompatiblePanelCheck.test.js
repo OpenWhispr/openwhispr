@@ -302,6 +302,38 @@ const openRouterListProps = async (t, modelNeeds, model = "", fetch = openRouter
 const openRouterList = async (...args) =>
   (await openRouterListProps(...args)).models.map((option) => option.value);
 
+test("OpenRouter removes a saved model without tools after another model is selected", async (t) => {
+  const incompatibleModel = "openai/gpt-4.1";
+  const catalog = t.mock.fn(
+    respond(200, {
+      data: [
+        { id: incompatibleModel, supported_parameters: [] },
+        { id: HAIKU, supported_parameters: ["tools"] },
+      ],
+    })
+  );
+  const panel = await mount(t, {
+    fetch: catalog,
+    overrides: {
+      provider: "openrouter",
+      baseUrl: "https://openrouter.ai/api/v1",
+      lockedBaseUrl: true,
+      model: incompatibleModel,
+      modelNeeds: ["tools"],
+    },
+  });
+  await panel.wait(0);
+  const choices = () =>
+    panel
+      .find((node) => Array.isArray(node.props?.models))[0]
+      .props.models.map((option) => option.value);
+  assert.deepEqual(choices(), [incompatibleModel, HAIKU], "the saved pick stays visible");
+
+  await panel.setProps({ model: HAIKU });
+  assert.deepEqual(choices(), [HAIKU], "the former saved pick is no longer selectable");
+  assert.equal(catalog.mock.callCount(), 1, "selection changes reuse the loaded catalog");
+});
+
 test("OpenRouter lists only the tested models the scope's requests can use", async (t) => {
   await t.test("text features skip batch variants and untested models", async (t) => {
     const list = await openRouterListProps(t);

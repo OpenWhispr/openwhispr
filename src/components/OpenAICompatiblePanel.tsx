@@ -29,6 +29,7 @@ interface ModelOption {
   label: string;
   description?: string;
   ownedBy?: string;
+  eligibleForScope: boolean;
 }
 
 interface OpenAICompatiblePanelProps {
@@ -231,14 +232,7 @@ export default function OpenAICompatiblePanel({
               : [];
 
           const options = (rawModels as Array<Record<string, unknown>>)
-            .filter(
-              (item) =>
-                provider !== "openrouter" ||
-                // A saved pick stays listed even when the scope can't use it.
-                item.id === modelRef.current ||
-                offersOpenRouterModel(item, modelNeeds)
-            )
-            .map((item) => {
+            .map((item): ModelOption | null => {
               // Coerce fields defensively: non-conformant endpoints may return
               // numeric ids or object descriptions, which would crash the render.
               const rawValue = item?.id ?? item?.name;
@@ -251,9 +245,19 @@ export default function OpenAICompatiblePanel({
                   : ownedBy
                     ? t("reasoning.custom.ownerLabel", { owner: ownedBy })
                     : undefined;
-              return { value, label: value, description, ownedBy } as ModelOption;
+              return {
+                value,
+                label: value,
+                description,
+                ownedBy,
+                eligibleForScope:
+                  provider !== "openrouter" || offersOpenRouterModel(item, modelNeeds),
+              };
             })
-            .filter(Boolean) as ModelOption[];
+            .filter(
+              (option): option is ModelOption =>
+                option !== null && (option.eligibleForScope || option.value === modelRef.current)
+            );
           // A saved pick that is off the list ranks -1, so it leads.
           return testedModels
             ? options.sort((a, b) => testedModels.indexOf(a.value) - testedModels.indexOf(b.value))
@@ -386,7 +390,16 @@ export default function OpenAICompatiblePanel({
     loadRemoteModels(undefined, true);
   }, [applyBase, isDraftDirty, trimmedDraft, loadRemoteModels]);
 
-  const displayedModels = isDraftDirty ? [] : modelOptions;
+  // Preserve an incompatible saved pick only while it is selected, without reloading the catalog.
+  const displayedModels = useMemo(
+    (): ModelOption[] =>
+      isDraftDirty
+        ? []
+        : modelOptions.filter(
+            (option): boolean => option.eligibleForScope || option.value === model
+          ),
+    [isDraftDirty, modelOptions, model]
+  );
   const queryUrl = buildApiUrl(hasBase ? normalizedBase : baseUrlPlaceholder, "/models");
 
   return (
