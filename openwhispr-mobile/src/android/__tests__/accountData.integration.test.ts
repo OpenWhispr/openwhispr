@@ -1,4 +1,8 @@
 jest.mock('@/store/useAuthStore', () => jest.requireActual('@/store/useAuthStore.android'));
+jest.mock('@/lib/transcriptScope', () => jest.requireActual('@/lib/transcriptScope.android'));
+jest.mock('@/lib/meetingAudioStorage', () =>
+  jest.requireActual('@/lib/meetingAudioStorage.android'),
+);
 
 jest.mock('@/db/migrate', () => jest.requireActual('@/db/migrate.android'));
 // Exercise the same database adapter Metro selects for Android.

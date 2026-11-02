@@ -1,4 +1,5 @@
-import { Platform } from 'react-native';
+import * as cloudBackup from '@/lib/cloudBackup';
+import { isCloudBackupEnabled as isAndroidBackupEnabled } from '@/lib/cloudBackup.android';
 import type { Folder, Note } from '@/data';
 
 jest.mock('@/store/useAuthStore', () => ({
@@ -337,8 +338,9 @@ it('resolves an already acknowledged note without waiting for another pass', asy
 });
 
 it('requires Android backup opt-in before sharing a personal note already on the server', async () => {
-  const originalPlatform = Platform.OS;
-  Platform.OS = 'android';
+  const backup = jest
+    .spyOn(cloudBackup, 'isCloudBackupEnabled')
+    .mockImplementation(isAndroidBackupEnabled);
   try {
     note = { ...note, remoteId: 'remote', pendingSync: 0 };
     useConfigStore.setState({ config: { defaultMode: 'cloud' } });
@@ -346,6 +348,6 @@ it('requires Android backup opt-in before sharing a personal note already on the
       /Privacy & Data/,
     );
   } finally {
-    Platform.OS = originalPlatform;
+    backup.mockRestore();
   }
 });
