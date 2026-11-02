@@ -1,0 +1,184 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const React = require("react");
+const { createRoot } = require("react-dom/client");
+const {
+  createRendererServer,
+  installBrowserGlobals,
+  installHostDom,
+} = require("../lib/rendererTestHarness");
+
+// The real ControlPanel, so the wiring between main's pending navigation and the
+// recording request is what's under test; everything it renders around that is a stub.
+const NULL_COMPONENT = "export default () => null;";
+const MOCKS = {
+  "./notes/PersonalNotesView": `
+    export default function PersonalNotesView(props) {
+      globalThis.__notesProps = props;
+      return null;
+    }`,
+  "/hooks/useCreateNote": `
+    export const useCreateNote = () => ({ createNote() {}, createNoteIn() {} });
+    export const startRecordingForNote = async (note, _recorderName, canAutoStart) => {
+      if (canAutoStart && !canAutoStart()) return false;
+      globalThis.__starts.push(note.id);
+      return true;
+    };`,
+  "/ui/useToast": `
+    const toast = () => "1";
+    export const useToast = () => ({ toast, dismiss() {} });
+  `,
+  "/useAuth": `
+    export const useAuth = () => ({ isLoaded: true, isSignedIn: true, user: null });`,
+  "/hooks/useSignOut": "export const useSignOut = () => ({ signOut() {} });",
+  "/hooks/useHotkey": `export const useHotkey = () => ({ hotkey: "F8" });`,
+  "/hooks/useUpdater": `
+    export const useUpdater = () => ({
+      status: {},
+      info: null,
+      downloadProgress: 0,
+      isChecking: false,
+      isDownloading: false,
+      isInstalling: false,
+      check() {},
+      download() {},
+      install() {},
+    });`,
+  "/hooks/useSettings": `
+    export const useSettings = () => new Proxy({}, { get: () => undefined });
+  `,
+  "/hooks/useUsage": "export const useUsage = () => null;",
+  "/hooks/useJoinableWorkspaces":
+    "export const useJoinableWorkspaces = () => ({ workspaces: [] });",
+  "/hooks/useGpuBannerAvailability": "export const useGpuBannerAvailability = () => false;",
+  "/hooks/useSignInCloudNudge": "export const useSignInCloudNudge = () => {};",
+  "/services/SyncService.js":
+    "export const syncService = { setNoteOpen() {}, start() {}, stop() {} };",
+  "./UpgradePrompt": NULL_COMPONENT,
+  "./PostMigrationOnboarding": NULL_COMPONENT,
+  "./RequiredModelsBanner": "export const RequiredModelsBanner = () => null;",
+  "./ControlPanelSidebar": NULL_COMPONENT,
+  "./ControlPanelTopBar": NULL_COMPONENT,
+  "./HistoryView": NULL_COMPONENT,
+  "./MeetingRecordingMount": NULL_COMPONENT,
+  "./notes/MeetingRecordingPill": NULL_COMPONENT,
+  "./notes/NewNoteMenu": NULL_COMPONENT,
+  "./ProfileMenu": NULL_COMPONENT,
+  "./notes/BackgroundActionToastListener": NULL_COMPONENT,
+  "./notes/AssistantNoteUndoListener": NULL_COMPONENT,
+  "./notes/SpaceSyncToastListener": NULL_COMPONENT,
+  "./SharedDictionaryArrivalToastListener": NULL_COMPONENT,
+  "./AcceptInvitationModal": NULL_COMPONENT,
+  "./JoinYourTeamModal": NULL_COMPONENT,
+};
+
+const NOTE = { id: 9, space_id: 1, folder_id: null, title: "Standup", note_type: "meeting" };
+
+function electronApi(navigation, calls) {
+  const known = {
+    getPlatform: () => "darwin",
+    getPendingMeetingNoteNavigation: async () => navigation,
+    confirmMeetingNoteNavigation: async () => ({ success: true, value: NOTE }),
+    meetingNoteOpenedWithoutRecording: async (id) => calls.noteOnly.push(id),
+    restoreFromMeetingMode: async () => calls.restore.push(true),
+    getSpaces: async () => [{ id: 1, kind: "private" }],
+    getFolders: async () => [],
+    getFolderNoteCounts: async () => [],
+    getNotes: async () => [],
+    getContainerNotes: async () => [],
+    getTranscriptions: async () => [],
+  };
+  return new Proxy(known, {
+    get: (target, name) =>
+      target[name] ?? (String(name).startsWith("on") ? () => () => {} : async () => undefined),
+  });
+}
+
+async function mount(t, navigation, transcriptionStart) {
+  let root;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+    delete globalThis.__notesProps;
+    delete globalThis.__starts;
+  });
+  const calls = { noteOnly: [], restore: [] };
+  globalThis.__starts = [];
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: electronApi(navigation, calls),
+      setTimeout: (fn, ms) => setTimeout(fn, ms),
+      clearTimeout: (id) => clearTimeout(id),
+    },
+  });
+  const container = installHostDom(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "control-panel-meeting-navigation-",
+    mockModules: MOCKS,
+  });
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  usePolicyStore.setState({
+    status: "managed",
+    appVersion: "1.11.1",
+    policy: {
+      version: 1,
+      transcription: { allowedModes: ["openwhispr", "local"], allowedByokProviders: [] },
+      llm: { allowedModes: ["openwhispr"], allowedByokProviders: [] },
+      features: {},
+      meetings: { transcriptionStart },
+      sharing: { externalLinkSharing: "allowed" },
+      dataRetention: {
+        audioRetentionMaxDays: null,
+        localHistoryMode: "user_choice",
+        cloudBackupAllowed: true,
+      },
+      minAppVersion: null,
+    },
+  });
+  const { default: ControlPanel } = await vite.ssrLoadModule("/components/ControlPanel.tsx");
+  root = createRoot(container);
+  await React.act(async () => root.render(React.createElement(ControlPanel)));
+  return calls;
+}
+
+// The drain loads the lazy editor and confirms the note over IPC before it settles.
+async function until(condition) {
+  for (let attempt = 0; attempt < 500 && !condition(); attempt += 1) {
+    await React.act(async () => new Promise((resolve) => setTimeout(resolve, 10)));
+  }
+  assert.ok(condition(), "timed out waiting for the meeting navigation to settle");
+}
+
+const NOTIFICATION = {
+  navigationId: "nav",
+  noteSessionId: "session",
+  noteId: 9,
+  spaceId: 1,
+  folderId: null,
+};
+
+test("a meeting prompt records under automatic policy", async (t) => {
+  const calls = await mount(t, NOTIFICATION, "automatic");
+  await until(() => globalThis.__starts.length > 0);
+  assert.deepEqual(globalThis.__starts, [9]);
+  assert.deepEqual(calls.noteOnly, []);
+});
+
+test("a meeting prompt only opens the note under manual policy", async (t) => {
+  const calls = await mount(t, NOTIFICATION, "manual");
+  await until(() => calls.noteOnly.length > 0);
+  assert.deepEqual(globalThis.__starts, []);
+  assert.deepEqual(calls.noteOnly, ["session"]);
+  assert.deepEqual(calls.restore, [], "suppression leaves the layout alone");
+});
+
+test("a pending navigation hands its trigger and session to the notes view", async (t) => {
+  await mount(
+    t,
+    { noteId: 9, folderId: null, event: null, trigger: "hotkey", noteSessionId: "session" },
+    "manual"
+  );
+  await until(() => globalThis.__notesProps?.meetingRecordingRequest);
+  const request = globalThis.__notesProps.meetingRecordingRequest;
+  assert.equal(request.trigger, "hotkey");
+  assert.equal(request.noteSessionId, "session");
+});
