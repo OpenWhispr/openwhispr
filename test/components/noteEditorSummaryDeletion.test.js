@@ -332,32 +332,37 @@ test("summary pill follows preference changes, renames and deletion without gene
   assert.equal(ran.length, 3);
 });
 
-test("deleting a summary offers the current default while regeneration retains the note template", async (t) => {
-  let ui;
-  t.after(() => ui?.unmount());
-  ui = await loadNoteEditor(t, undefined, {
-    actions: [TEMPLATE, DEFAULT_TEMPLATE, CUSTOM_TEMPLATE],
-    initialStorage: { defaultSummaryTemplateId: CUSTOM_TEMPLATE.client_id },
+for (const templateId of [TEMPLATE.client_id, null, "unavailable-template"]) {
+  test(`deleting a summary offers the current default while regeneration retains the note template (${templateId ?? "null"})`, async (t) => {
+    let ui;
+    t.after(() => ui?.unmount());
+    ui = await loadNoteEditor(t, undefined, {
+      actions: [TEMPLATE, DEFAULT_TEMPLATE, CUSTOM_TEMPLATE],
+      initialStorage: { defaultSummaryTemplateId: CUSTOM_TEMPLATE.client_id },
+    });
+    const ran = [];
+    const note = { ...NOTE, enhancement_template_id: templateId };
+    const expectedTemplate = templateId === TEMPLATE.client_id ? TEMPLATE : DEFAULT_TEMPLATE;
+    await ui.render(ENHANCEMENT, { note, onRunNoteAction: (action) => ran.push(action) });
+    assert.ok(!summaryCallout(ui.latest()));
+    let picker;
+    walk(ui.latest(), (node) => {
+      if (node.props.templates) picker = node;
+    });
+    assert.equal(picker.props.current, expectedTemplate);
+    assert.deepEqual(ran, []);
+    assert.ok(collectEditorValues(ui.latest()).includes(ENHANCEMENT.content));
+    picker.props.onRun(picker.props.current);
+    assert.deepEqual(ran, [expectedTemplate]);
+    await ui.render(undefined, {
+      note: { ...note, enhanced_content: null },
+      onRunNoteAction: (action) => ran.push(action),
+    });
+    assert.equal(summaryCallout(ui.latest()).props["aria-label"], "Generate with My meeting recap");
+    summaryCallout(ui.latest()).props.onClick();
+    assert.equal(ran.at(-1), CUSTOM_TEMPLATE);
   });
-  const ran = [];
-  const note = { ...NOTE, enhancement_template_id: TEMPLATE.client_id };
-  await ui.render(ENHANCEMENT, { note, onRunNoteAction: (action) => ran.push(action) });
-  assert.ok(!summaryCallout(ui.latest()));
-  let picker;
-  walk(ui.latest(), (node) => {
-    if (node.props.templates) picker = node;
-  });
-  assert.equal(picker.props.current, TEMPLATE);
-  assert.deepEqual(ran, []);
-  assert.ok(collectEditorValues(ui.latest()).includes(ENHANCEMENT.content));
-  await ui.render(undefined, {
-    note: { ...note, enhanced_content: null },
-    onRunNoteAction: (action) => ran.push(action),
-  });
-  assert.equal(summaryCallout(ui.latest()).props["aria-label"], "Generate with My meeting recap");
-  summaryCallout(ui.latest()).props.onClick();
-  assert.equal(ran.at(-1), CUSTOM_TEMPLATE);
-});
+}
 
 test("an empty template catalog hides the pill and retains the saved default", async (t) => {
   let ui;

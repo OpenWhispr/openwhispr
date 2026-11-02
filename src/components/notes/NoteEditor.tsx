@@ -487,11 +487,7 @@ export default function NoteEditor({
   const noteActions = useActionsOfKind("action");
   const defaultSummaryTemplateId = useSettingsStore((state) => state.defaultSummaryTemplateId);
   const defaultTemplate = resolveDefaultTemplate(templates, defaultSummaryTemplateId);
-  const noteTemplate = resolveTemplate(
-    templates,
-    note.enhancement_template_id,
-    defaultSummaryTemplateId
-  );
+  const noteTemplate = resolveTemplate(templates, note.enhancement_template_id);
   const isDefaultAiSummary = defaultTemplate?.translation_key === GENERATE_NOTES_KEY;
   const summaryCalloutLabel = isDefaultAiSummary
     ? t("notes.editor.generateSummary")
