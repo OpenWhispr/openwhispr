@@ -93,12 +93,11 @@ export function resolveDefaultTemplate(
 // Regeneration preserves the note's template when it is still available locally.
 export function resolveTemplate(
   templates: ActionItem[],
-  clientId: string | null | undefined,
-  defaultClientId?: string | null
+  clientId: string | null | undefined
 ): ActionItem | null {
   return (
     templates.find((action) => action.kind === "template" && action.client_id === clientId) ??
-    resolveDefaultTemplate(templates, defaultClientId)
+    resolveDefaultTemplate(templates)
   );
 }
 

@@ -67,8 +67,8 @@ test("default selection accepts only templates and preserves note-specific regen
   assert.equal(resolveDefaultTemplate([chat, custom], "missing"), custom);
   assert.equal(resolveDefaultTemplate([], custom.client_id), null);
   assert.equal(resolveDefaultTemplate([chat], chat.client_id), null);
-  assert.equal(resolveTemplate(catalog, previous.client_id, custom.client_id), previous);
-  assert.equal(resolveTemplate(catalog, "missing", custom.client_id), custom);
-  assert.equal(resolveTemplate(catalog, chat.client_id, custom.client_id), custom);
+  assert.equal(resolveTemplate(catalog, previous.client_id), previous);
+  assert.equal(resolveTemplate(catalog, "missing"), summary);
+  assert.equal(resolveTemplate(catalog, chat.client_id), summary);
   assert.equal(resolveTemplate(catalog, null), summary);
 });
