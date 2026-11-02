@@ -241,7 +241,7 @@ export function RemoveMembersDialog({
             {/* Named by the label and the chosen owner, so both are announced. */}
             <DropdownMenuTrigger
               aria-labelledby={`${pickerLabelId} ${pickerValueId}`}
-              disabled={busy}
+              disabled={busy || managedRefusal}
               className="flex h-10 w-full items-center gap-2 rounded-full border border-border/70 bg-surface-1 px-4 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
             >
               {newOwner ? (
@@ -269,6 +269,8 @@ export function RemoveMembersDialog({
               {candidates.map((member) => (
                 <DropdownMenuItem
                   key={member.user_id}
+                  // Typeahead matches from the first character, which the label's isolate would be.
+                  textValue={memberName(member)}
                   onSelect={() => dispatch({ type: "pickOwner", userId: member.user_id })}
                   className="gap-2.5"
                 >

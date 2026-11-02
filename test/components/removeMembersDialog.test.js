@@ -58,6 +58,7 @@ const GLOBALS = [
   "__actionDialogProps",
   "__menuContentProps",
   "__menuItems",
+  "__menuItemTextValues",
   "__triggerProps",
   "__toasts",
   "__previewCalls",
@@ -123,14 +124,16 @@ async function loadDialog(t) {
         export const DropdownMenuContent = (props) => {
           globalThis.__menuContentProps = props;
           globalThis.__menuItems = [];
+          globalThis.__menuItemTextValues = [];
           return React.createElement("div", { role: "menu" }, props.children);
         };
         export const DropdownMenuTrigger = (props) => {
           globalThis.__triggerProps = props;
           return React.createElement("button", null, "‹", props.children, "›");
         };
-        export const DropdownMenuItem = ({ children, onSelect }) => {
+        export const DropdownMenuItem = ({ children, onSelect, textValue }) => {
           globalThis.__menuItems.push(onSelect);
+          globalThis.__menuItemTextValues.push(textValue);
           return React.createElement("div", { role: "menuitem" }, "«", children, "»");
         };
       `,
@@ -289,6 +292,16 @@ test("the new owner's name sits by its avatar in RTL", async (t) => {
   await view.act(() => globalThis.__menuItems[3]());
   assert.equal(pickerText(view.text()), isolated("Zoe"));
   assert.equal(textOf(findById(view.container, valueId)), isolated("Zoe"));
+});
+
+test("typing in the picker matches the plain name, not the isolated label", async (t) => {
+  const { mount, opened } = await loadDialog(t);
+  globalThis.__previewImpl = async () => preview([owns("u-liam")]);
+
+  await mount(opened([LIAM]));
+
+  // Radix matches an item's text from its first character, and the label starts with an isolate.
+  assert.deepEqual(globalThis.__menuItemTextValues, ["Ronnie", "Alex", "Bea", "Zoe"]);
 });
 
 test("several content owners are counted", async (t) => {
@@ -680,6 +693,21 @@ test("the run's answer names the member and Remove stays disabled", async (t) =>
   assert.deepEqual(globalThis.__toasts, []);
 });
 
+test("the picker stays open to changes after other failures", async (t) => {
+  const { mount, opened, CloudApiError } = await loadDialog(t);
+  globalThis.__previewImpl = async () => preview([owns("u-liam")]);
+  globalThis.__removeImpl = async () => {
+    throw new CloudApiError("Server error", 500);
+  };
+  const view = await mount(opened([LIAM]));
+  assert.equal(globalThis.__triggerProps.disabled, false);
+
+  await view.clickPrimary();
+
+  assert.equal(globalThis.__actionDialogProps.primary.label, "workspaces.exit.tryAgain");
+  assert.equal(globalThis.__triggerProps.disabled, false);
+});
+
 test("a run refused while transferring keeps the transfer label, disabled", async (t) => {
   const { mount, opened, CloudApiError } = await loadDialog(t);
   globalThis.__previewImpl = async () => preview([owns("u-liam")]);
@@ -694,6 +722,8 @@ test("a run refused while transferring keeps the transfer label, disabled", asyn
   assert.equal(props.error, 'workspaces.removeMembers.directoryManaged|{"count":2}');
   assert.equal(props.primary.label, "workspaces.removeMembers.transferConfirm");
   assert.equal(props.primary.disabled, true);
+  // Choosing someone else can't help, so the picker doesn't offer to.
+  assert.equal(globalThis.__triggerProps.disabled, true);
 });
 
 test("other preview failures still offer the plain confirm", async (t) => {
