@@ -186,54 +186,122 @@ function createJoinDatabase(ownNote) {
   return { databaseManager, lookups, saved };
 }
 
-test("a note-only meeting releases detection on close without restoring layout", async () => {
+test("a note-only meeting releases detection at once without restoring layout", async () => {
   const { engine, meetingNavigations, shown, windowManager } = createEngine();
   engine.databaseManager = createJoinDatabase({ id: 41, folder_id: 7 }).databaseManager;
   windowManager.restoreFromMeetingMode = () => assert.fail("note-only cleanup changed layout");
   await engine.joinCalendarMeeting("event-1");
   const id = meetingNavigations[0].noteSessionId;
   assert.equal(typeof id, "string");
+  assert.equal(engine._meetingModeActive, true);
   engine.markMeetingNoteOnly(id);
-  engine.closeMeetingNote(id);
   assert.equal(engine._meetingModeActive, false);
+  engine.handleCalendarReminder({ id: "next", summary: "Next" });
+  assert.equal(shown.length, 1);
+  engine.closeMeetingNote(id);
+  assert.equal(engine._meetingNoteSession, null);
+  engine.stop();
+});
+
+test("a note left open with no calendar event never silences later meetings", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const { engine, shown } = createEngine();
+  engine.preferences.audioDetection = true;
+  const id = engine._beginMeetingNoteSession(41, null);
+  engine._meetingModeActive = true;
+  engine.markMeetingNoteOnly(id);
+  t.mock.timers.tick(3 * 24 * 60 * 60 * 1000);
+  engine.handleCalendarReminder({ id: "tomorrow", summary: "Tomorrow" });
+  assert.equal(shown.length, 1);
+  engine.activeDetections.clear();
+  engine._handleDetection("audio", "sustained-audio", { attributed: true });
+  assert.equal(shown.length, 2);
+  engine.stop();
+});
+
+test("the next meeting's reminder prompts while the last one's note-only event runs", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const { engine, meetingNavigations, shown } = createEngine();
+  engine.databaseManager = createJoinDatabase({ id: 41, folder_id: 7 }).databaseManager;
+  engine.databaseManager.getCalendarEventById = (id) => ({
+    id,
+    end_time: new Date(Date.now() + 60_000).toISOString(),
+  });
+  await engine.joinCalendarMeeting("current");
+  engine.markMeetingNoteOnly(meetingNavigations[0].noteSessionId);
+  engine.handleCalendarReminder({ id: "current", summary: "Current" });
+  assert.equal(shown.length, 0, "the open note's own event does not prompt");
   engine.handleCalendarReminder({ id: "next", summary: "Next" });
   assert.equal(shown.length, 1);
   engine.stop();
 });
 
-test("note-only calendar deadlines release only their own session", async (t) => {
+test("a joined event's call is claimed once and a later call still prompts", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
-  const { engine, meetingNavigations } = createEngine();
+  const { engine, meetingNavigations, shown } = createEngine();
+  engine.preferences.audioDetection = true;
+  engine.databaseManager = createJoinDatabase({ id: 41, folder_id: 7 }).databaseManager;
+  engine.databaseManager.getCalendarEventById = (id) => ({
+    id,
+    end_time: new Date(Date.now() + 60_000).toISOString(),
+  });
+  await engine.joinCalendarMeeting("event");
+  engine.markMeetingNoteOnly(meetingNavigations[0].noteSessionId);
+  engine._handleDetection("audio", "sustained-audio", { attributed: true });
+  assert.equal(shown.length, 0, "the mic of the meeting just joined is not news");
+  engine._handleDetection("audio", "sustained-audio", { attributed: true });
+  assert.equal(shown.length, 1, "a second detection is a different call");
+  engine.stop();
+});
+
+test("a joined event stops claiming detections once it ends", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const { engine, meetingNavigations, shown } = createEngine();
+  engine.preferences.audioDetection = true;
   engine.databaseManager = createJoinDatabase({ id: 41, folder_id: 7 }).databaseManager;
   engine.databaseManager.getCalendarEventById = (id) => ({
     id,
     end_time: new Date(Date.now() + 1000).toISOString(),
   });
-  await engine.joinCalendarMeeting("first");
-  const first = meetingNavigations[0].noteSessionId;
-  engine.markMeetingNoteOnly(first);
-  t.mock.timers.tick(500);
-  await engine.joinCalendarMeeting("second");
-  const second = meetingNavigations[1].noteSessionId;
-  engine.markMeetingNoteOnly(second);
-  engine.closeMeetingNote(first);
-  t.mock.timers.tick(500);
-  assert.equal(engine._meetingModeActive, true);
-  t.mock.timers.tick(500);
-  assert.equal(engine._meetingModeActive, false);
+  await engine.joinCalendarMeeting("event");
+  engine.markMeetingNoteOnly(meetingNavigations[0].noteSessionId);
+  t.mock.timers.tick(1000);
+  engine._handleDetection("audio", "sustained-audio", { attributed: true });
+  assert.equal(shown.length, 1);
   engine.stop();
 });
 
-test("note-only cleanup cannot release an established recording", async () => {
+test("a stale close cannot release a newer meeting note", async () => {
   const { engine, meetingNavigations } = createEngine();
   engine.databaseManager = createJoinDatabase({ id: 41, folder_id: 7 }).databaseManager;
+  await engine.joinCalendarMeeting("first");
+  const first = meetingNavigations[0].noteSessionId;
+  await engine.joinCalendarMeeting("second");
+  const second = meetingNavigations[1].noteSessionId;
+  engine.markMeetingNoteOnly(first);
+  engine.closeMeetingNote(first);
+  assert.equal(engine._meetingModeActive, true);
+  assert.equal(engine._meetingNoteSession.id, second);
+  engine.stop();
+});
+
+test("recording from a note-only meeting holds detection until Stop", async () => {
+  const { engine, meetingNavigations, shown } = createEngine();
+  engine.databaseManager = createJoinDatabase({ id: 41, folder_id: 7 }).databaseManager;
+  let promptResets = 0;
+  engine.audioActivityDetector.resetPrompt = () => (promptResets += 1);
   await engine.joinCalendarMeeting("event");
   const id = meetingNavigations[0].noteSessionId;
   engine.markMeetingNoteOnly(id);
-  engine._recordingSession = { sessionId: "live", noteId: 41 };
+  await engine.beginRecordingSession({ sessionId: "live", autoEndEligible: false, noteId: 41 });
   engine.closeMeetingNote(id);
   assert.equal(engine._meetingModeActive, true);
   assert.equal(engine._recordingSession.sessionId, "live");
+  engine.handleCalendarReminder({ id: "during", summary: "During" });
+  assert.equal(shown.length, 0);
+  assert.equal(engine.endRecordingSession("live"), true);
+  assert.equal(engine._meetingModeActive, false);
+  assert.equal(promptResets, 1, "Stop releases the prompt identity as after an automatic start");
   engine.stop();
 });
 
@@ -724,7 +792,7 @@ test("a card closing on its own during a dictation holds the queue until the dic
   assert.equal(shown.length, 2);
 });
 
-test("recording ownership cancels a note-only calendar deadline and stale closes", async (t) => {
+test("recording ownership outlives a note-only event's end and stale closes", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
   const { engine, meetingNavigations } = createEngine();
   engine.databaseManager = createJoinDatabase({ id: 41, folder_id: 7 }).databaseManager;
@@ -744,13 +812,13 @@ test("recording ownership cancels a note-only calendar deadline and stale closes
   engine.closeMeetingNote(id);
   assert.equal(engine._meetingModeActive, true);
   assert.equal(engine._recordingSession.sessionId, "recording");
-  assert.equal(engine._meetingNoteTimer, null);
+  assert.equal(engine._meetingNoteSession, null);
   engine.stop();
 });
 
-test("an ended note-only calendar event releases immediately and shutdown clears deadlines", async (t) => {
+test("an ended note-only calendar event claims nothing and shutdown clears the session", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
-  const { engine, meetingNavigations } = createEngine();
+  const { engine, meetingNavigations, shown } = createEngine();
   engine.databaseManager = createJoinDatabase({ id: 41, folder_id: 7 }).databaseManager;
   engine.databaseManager.getCalendarEventById = (id) => ({
     id,
@@ -758,17 +826,11 @@ test("an ended note-only calendar event releases immediately and shutdown clears
   });
   await engine.joinCalendarMeeting("past");
   engine.markMeetingNoteOnly(meetingNavigations[0].noteSessionId);
-  t.mock.timers.tick(1);
   assert.equal(engine._meetingModeActive, false);
-  engine.databaseManager.getCalendarEventById = (id) => ({
-    id,
-    end_time: new Date(5000).toISOString(),
-  });
-  await engine.joinCalendarMeeting("next");
-  engine.markMeetingNoteOnly(meetingNavigations[1].noteSessionId);
+  engine.handleCalendarReminder({ id: "past", summary: "Past" });
+  assert.equal(shown.length, 1);
   engine.stop();
   assert.equal(engine._meetingNoteSession, null);
-  assert.equal(engine._meetingNoteTimer, null);
 });
 
 test("closing a note-only meeting preserves the current audio prompt until a later call", async (t) => {

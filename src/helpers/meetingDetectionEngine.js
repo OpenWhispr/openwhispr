@@ -61,7 +61,6 @@ class MeetingDetectionEngine {
     this._userRecording = false;
     this._meetingModeActive = false;
     this._meetingNoteSession = null;
-    this._meetingNoteTimer = null;
     this._notificationQueue = [];
     this._postRecordingCooldown = null;
     this._recordingSession = null;
@@ -250,6 +249,9 @@ class MeetingDetectionEngine {
   }) {
     if (this._recordingSession) this._deactivateAutoEnd();
 
+    // Recording from a note-only session takes the meeting back over, so Stop
+    // releases it the way it does after an automatic start.
+    if (this._meetingNoteSession?.noteOnly) this._meetingModeActive = true;
     this._clearMeetingNoteSession();
     this._recordingSession = {
       sessionId,
@@ -360,6 +362,11 @@ class MeetingDetectionEngine {
 
     if (this.activeDetections.has(detectionId)) {
       debugLogger.debug("Detection already active, skipping", { detectionId }, "meeting");
+      return;
+    }
+
+    if (this._belongsToMeetingNote(source, key)) {
+      debugLogger.info("Suppressing detection — its note is open", { detectionId }, "meeting");
       return;
     }
 
@@ -784,35 +791,52 @@ class MeetingDetectionEngine {
   _beginMeetingNoteSession(noteId, event) {
     this._clearMeetingNoteSession();
     const id = randomUUID();
-    this._meetingNoteSession = { id, noteId, endsAt: Date.parse(event?.end_time), noteOnly: false };
+    const endsAt = Date.parse(event?.end_time);
+    this._meetingNoteSession = {
+      id,
+      noteId,
+      eventId: event?.id ?? null,
+      endsAt,
+      // Joining an event turns the mic on next; that call has no prompt of its own yet.
+      awaitingMic: Number.isFinite(endsAt) && !this.audioActivityDetector.hasPrompted,
+      noteOnly: false,
+    };
     return id;
   }
 
   _clearMeetingNoteSession() {
-    if (this._meetingNoteTimer) clearTimeout(this._meetingNoteTimer);
-    this._meetingNoteTimer = null;
     this._meetingNoteSession = null;
   }
 
+  // Until the event ends, its own reminder and the call it starts are not new
+  // meetings. Anything else still prompts.
+  _belongsToMeetingNote(source, key) {
+    const session = this._meetingNoteSession;
+    if (!session || !(this._now() < session.endsAt)) return false;
+    if (source === "calendar") return key === session.eventId;
+    if (!session.awaitingMic) return false;
+    session.awaitingMic = false;
+    return true;
+  }
+
+  // No capture follows, so prompts resume now: a note left open, or hidden in
+  // the tray, must not silence later meetings. The detector keeps its prompt
+  // identity, so the accepted call does not prompt again.
   markMeetingNoteOnly(id) {
     const session = this._meetingNoteSession;
     if (!session || session.id !== id || this._recordingSession || session.noteOnly) return;
     session.noteOnly = true;
-    if (Number.isFinite(session.endsAt)) {
-      this._meetingNoteTimer = setTimeout(
-        () => this.closeMeetingNote(id),
-        Math.max(0, Math.min(session.endsAt - this._now(), 2147483647))
-      );
-      this._meetingNoteTimer.unref?.();
-    }
+    this._meetingModeActive = false;
+    debugLogger.info("Meeting note opened without recording", {}, "meeting");
+    this._flushNotificationQueue();
   }
 
   closeMeetingNote(id) {
     if (!this._meetingNoteSession || this._meetingNoteSession.id !== id) return;
     const noteOnly = this._meetingNoteSession.noteOnly;
     this._clearMeetingNoteSession();
-    if (this._recordingSession) return;
-    this.setMeetingModeActive(false, { resetAudioPrompt: !noteOnly });
+    if (noteOnly || this._recordingSession) return;
+    this.setMeetingModeActive(false);
     this._flushNotificationQueue();
   }
 
@@ -820,15 +844,13 @@ class MeetingDetectionEngine {
     this.closeMeetingNote(this._meetingNoteSession?.id);
   }
 
-  setMeetingModeActive(active, { resetAudioPrompt = true } = {}) {
+  setMeetingModeActive(active) {
     this._meetingModeActive = active;
     debugLogger.info("Meeting mode active state changed", { active }, "meeting");
     if (!active) {
       this._clearMeetingNoteSession();
       // Own mic usage during meeting mode sets hasPrompted=true; reset so future detections work
-      // A note-only session did not use our mic; retain the external call's
-      // prompt identity until the detector observes inactivity or a new call.
-      if (resetAudioPrompt) this.audioActivityDetector.resetPrompt();
+      this.audioActivityDetector.resetPrompt();
     }
   }
 
