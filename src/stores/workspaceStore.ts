@@ -239,15 +239,18 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         const activeId = get().activeWorkspaceId;
         const stillValid = activeId && workspaces.some((w) => w.id === activeId);
         const resolvedActiveId = stillValid ? activeId : defaultActiveWorkspaceId(workspaces);
+        const activeChanged = resolvedActiveId !== activeId;
+        if (activeChanged) membersRequestSeq++;
         // Written before the state changes, as setActiveWorkspaceId does: the
         // subscribers publish for the workspace localStorage names.
-        if (resolvedActiveId !== activeId) writeActiveWorkspaceId(resolvedActiveId);
+        if (activeChanged) writeActiveWorkspaceId(resolvedActiveId);
         set({
           workspaces,
           loaded: true,
           loading: false,
           error: false,
           activeWorkspaceId: resolvedActiveId,
+          ...(activeChanged ? { members: [], membersWorkspaceId: null } : {}),
         });
         writeWorkspaceListCache(usePolicyStore.getState().accountId, workspaces);
         refreshForWorkspace(resolvedActiveId);
