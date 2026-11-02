@@ -304,7 +304,12 @@ const openRouterList = async (...args) =>
 
 test("OpenRouter lists only the tested models the scope's requests can use", async (t) => {
   await t.test("text features skip batch variants and untested models", async (t) => {
-    assert.deepEqual(await openRouterList(t), [HAIKU]);
+    const list = await openRouterListProps(t);
+    assert.deepEqual(
+      list.models.map((option) => option.value),
+      [HAIKU]
+    );
+    assert.ok(list.modelRanking.includes(HAIKU), "short lists keep provider grouping too");
   });
   await t.test("a saved pick stays listed, first, even when the scope can't use it", async (t) => {
     assert.deepEqual(await openRouterList(t, ["tools"], MISTRAL), [MISTRAL, HAIKU]);
@@ -324,7 +329,7 @@ test("OpenRouter lists only the tested models the scope's requests can use", asy
         list.models.map((option) => option.value),
         tested
       );
-      assert.equal(list.ordered, true, "the searchable list keeps that order");
+      assert.deepEqual(list.modelRanking, tested, "the searchable list ranks provider groups too");
     });
   }
 });

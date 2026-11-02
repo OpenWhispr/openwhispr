@@ -81,7 +81,7 @@ export default function OpenAICompatiblePanel({
   const latestBaseRef = useRef<string>(normalizeBaseUrl(baseUrl));
   const keyDraft = useCredentialDraft();
   const apiKey = keyDraft.value("apiKey", savedApiKey);
-  // OpenRouter offers the scope's tested list, in that list's order.
+  // OpenRouter's tested list supplies the recommendation ranking for this scope.
   const testedModels = provider === "openrouter" ? openRouterModelList(modelNeeds) : null;
   // The list reads the key, the model and the address setter through refs, so neither a key
   // change, a pick nor a parent's new setter on each render reloads it.
@@ -506,12 +506,13 @@ export default function OpenAICompatiblePanel({
             )}
           </>
         )}
-        {displayedModels.length > MODEL_SEARCH_THRESHOLD ? (
+        {displayedModels.length > MODEL_SEARCH_THRESHOLD ||
+        (testedModels && displayedModels.length > 0) ? (
           <SearchableModelList
             models={displayedModels}
             selectedModel={model}
             onModelSelect={setModel}
-            ordered={!!testedModels}
+            modelRanking={testedModels ?? undefined}
           />
         ) : (
           <ModelCardList

@@ -7,8 +7,7 @@ import { ModelCard, type ModelCardOption } from "./ModelCardList";
 import { getRemoteProviderIcon } from "../../utils/providerIcons";
 import { LIST_SEARCH_THRESHOLD } from "../../config/constants";
 
-// Above this count, OpenAICompatiblePanel switches from the plain list to this
-// searchable/grouped/virtualized variant.
+// Unranked lists switch to this searchable/grouped/virtualized variant above this count.
 export const MODEL_SEARCH_THRESHOLD = LIST_SEARCH_THRESHOLD;
 
 const OTHER_GROUP = "__other";
@@ -53,15 +52,15 @@ interface SearchableModelListProps {
   models: ModelCardOption[];
   selectedModel: string;
   onModelSelect: (modelId: string) => void;
-  // Keep the given order as one list: no vendor groups, no pinned selection.
-  ordered?: boolean;
+  // Models follow this ranking; provider groups follow their models' average rank.
+  modelRanking?: readonly string[];
 }
 
 export default function SearchableModelList({
   models,
   selectedModel,
   onModelSelect,
-  ordered = false,
+  modelRanking,
 }: SearchableModelListProps) {
   const { t } = useTranslation();
   const listboxId = useId();
@@ -76,25 +75,14 @@ export default function SearchableModelList({
   );
 
   const { rows, matchCount } = useMemo(() => {
-    if (ordered) {
-      const matches = models.filter(
-        (model) => !normalizedQuery || matchesQuery(model, normalizedQuery)
-      );
-      return {
-        rows: matches.map((model): Row => ({
-          type: "model",
-          key: `m:${model.value}`,
-          data: toDisplayOption(model, false),
-        })),
-        matchCount: matches.length,
-      };
-    }
+    const rankOf = (model: ModelCardOption) => modelRanking?.indexOf(model.value) ?? -1;
+    const pinSelection = selectedOption && (!modelRanking || rankOf(selectedOption) === -1);
     const groups = new Map<string, ModelCardOption[]>();
     const seen = new Set<string>();
     for (const model of models) {
-      if (model.value === selectedModel) continue; // pinned separately
+      if (pinSelection && model.value === selectedModel) continue;
+      if (modelRanking && rankOf(model) === -1) continue;
       if (seen.has(model.value)) continue;
-      if (normalizedQuery && !matchesQuery(model, normalizedQuery)) continue;
       seen.add(model.value);
       const prefix = model.group ?? providerPrefix(model.value);
       const key = prefix ? prefix.replace(/^~/, "").toLowerCase() : OTHER_GROUP;
@@ -103,15 +91,24 @@ export default function SearchableModelList({
       else groups.set(key, [model]);
     }
 
+    // Score the full groups before search so filtering doesn't change their order.
+    const averageRank = (key: string) => {
+      const bucket = groups.get(key)!;
+      return bucket.reduce((total, model) => total + rankOf(model), 0) / bucket.length;
+    };
     const sortedKeys = [...groups.keys()].sort((a, b) => {
       if (a === OTHER_GROUP) return 1;
       if (b === OTHER_GROUP) return -1;
+      if (modelRanking) {
+        const difference = averageRank(a) - averageRank(b);
+        if (difference !== 0) return difference;
+      }
       return a.localeCompare(b);
     });
 
     const result: Row[] = [];
     let matched = 0;
-    if (selectedOption) {
+    if (pinSelection) {
       result.push({
         type: "header",
         key: SELECTED_GROUP,
@@ -125,7 +122,11 @@ export default function SearchableModelList({
       });
     }
     for (const key of sortedKeys) {
-      const bucket = groups.get(key)!.sort((a, b) => a.label.localeCompare(b.label));
+      const bucket = groups
+        .get(key)!
+        .filter((model) => !normalizedQuery || matchesQuery(model, normalizedQuery))
+        .sort((a, b) => (modelRanking ? rankOf(a) - rankOf(b) : a.label.localeCompare(b.label)));
+      if (bucket.length === 0) continue;
       result.push({
         type: "header",
         key: `g:${key}`,
@@ -138,7 +139,7 @@ export default function SearchableModelList({
       }
     }
     return { rows: result, matchCount: matched };
-  }, [models, ordered, selectedModel, selectedOption, normalizedQuery, t]);
+  }, [models, modelRanking, selectedModel, selectedOption, normalizedQuery, t]);
 
   const virtualizer = useVirtualizer({
     count: rows.length,
