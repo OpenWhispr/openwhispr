@@ -85,9 +85,10 @@ export default function App() {
   const [mainWindowHorizontalDirection, setMainWindowHorizontalDirection] = useState(null);
 
   const setWindowInteractivity = React.useCallback((shouldCapture) => {
-    // Linux has one pointer-poll owner; native mouseleave must not undo its
-    // drag/menu capture or strand the next hover in click-through mode.
-    if (window.electronAPI?.getPlatform?.() === "linux") return;
+    // Linux and Windows have one pointer-poll owner; native mouseleave must not
+    // undo its drag/menu capture or strand the next hover in click-through mode.
+    const platform = window.electronAPI?.getPlatform?.();
+    if (platform === "linux" || platform === "win32") return;
     window.electronAPI?.setMainWindowInteractivity?.(shouldCapture);
   }, []);
   const dismissDictationError = React.useCallback(

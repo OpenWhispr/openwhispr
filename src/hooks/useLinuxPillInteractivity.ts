@@ -8,6 +8,8 @@ interface LinuxPillInteractivityOptions {
 
 // Native input shaping leaves hover delivery to the compositor, including
 // when the pointer crosses between XWayland and native Wayland applications.
+// Windows reuses the same region: main hit-tests the cursor against it, so
+// only the pill (not the transparent window around it) takes clicks.
 export function useLinuxPillInteractivity({
   pillRef,
   captureWindow,
@@ -16,7 +18,8 @@ export function useLinuxPillInteractivity({
   const nativeVisibleRef = useRef(true);
   useLayoutEffect(() => {
     const api = window.electronAPI;
-    if (api?.getPlatform?.() !== "linux") return;
+    const platform = api?.getPlatform?.();
+    if (platform !== "linux" && platform !== "win32") return;
     let disposed = false;
     let generation = 0;
     let pending = false;

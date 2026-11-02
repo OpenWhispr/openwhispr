@@ -4,6 +4,7 @@ const Module = require("node:module");
 const { EventEmitter } = require("node:events");
 let applyInputRegion;
 let focusInputRegion;
+let cursorPoint = { x: 0, y: 0 };
 
 // Load the real WindowManager with the module surface it touches at require
 // time. setMainWindowInteractivity only reads `this.mainWindow`, so the tests
@@ -15,6 +16,7 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
       app: { on: () => undefined },
       screen: {
         getPrimaryDisplay: () => ({}),
+        getCursorScreenPoint: () => cursorPoint,
         on: () => undefined,
       },
       BrowserWindow: class {},
@@ -110,6 +112,45 @@ test("macOS still returns the pill to click-through on mouse-leave", () => {
     { ignore: true, options: { forward: true } },
     INTERACTIVE,
   ]);
+});
+
+test("Windows captures clicks only while the cursor is over the reported pill region", async (t) => {
+  const original = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "win32", configurable: true });
+  t.after(() => Object.defineProperty(process, "platform", original));
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const win = {
+    ...fakeWindow(),
+    isVisible: () => true,
+    isMinimized: () => false,
+    // A 208x120 pill window parked in the bottom-right corner of 1920x1032.
+    getContentBounds: () => ({ x: 1708, y: 908, width: 208, height: 120 }),
+  };
+  const manager = Object.assign(Object.create(WindowManager.prototype), { mainWindow: win });
+  const region = { x: 156, y: 68, width: 40, height: 40, viewportWidth: 208, viewportHeight: 120 };
+
+  // Cursor over another app's button inside the invisible part of the window.
+  cursorPoint = { x: 1720, y: 920 };
+  assert.equal(await manager.setMainWindowInputRegion(region), true);
+  assert.deepEqual(win.calls, [{ ignore: true, options: undefined }]);
+
+  // Hovering the pill takes clicks again on the next poll.
+  cursorPoint = { x: 1884, y: 996 };
+  t.mock.timers.tick(30);
+  assert.deepEqual(win.calls.at(-1), INTERACTIVE);
+
+  // Unchanged state is not re-applied every tick.
+  t.mock.timers.tick(90);
+  assert.equal(win.calls.length, 2);
+
+  // A menu, toast or drag reports a null region: the whole window captures,
+  // even with the cursor outside the pill, and polling stops.
+  cursorPoint = { x: 1720, y: 920 };
+  await manager.setMainWindowInputRegion(null);
+  t.mock.timers.tick(90);
+  assert.equal(win.calls.length, 2);
+
+  manager._stopWin32HitTest();
 });
 
 test("a destroyed window is never touched", () => {
