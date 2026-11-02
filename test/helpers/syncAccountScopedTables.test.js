@@ -590,6 +590,7 @@ test("an older build can still open a database where two accounts share a trigge
   db.setSnippets([{ trigger: "addr", replacement: "A" }]);
   db.setActiveAccountId("account-b");
   db.setSnippets([{ trigger: "addr", replacement: "B" }]);
+  assert.equal(db.db.prepare("SELECT COUNT(*) AS n FROM snippets").get().n, 2);
 
   // What every build before per-account triggers runs at launch.
   assert.doesNotThrow(() =>
