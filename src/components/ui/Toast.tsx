@@ -336,6 +336,7 @@ const Toast: React.FC<
           onDismiss={dismissible ? onClose : undefined}
           actions={actions ?? []}
           onAction={handleStructuredAction}
+          tone="error"
           onPreferredHeightChange={handleErrorHeightChange}
           progressDuration={!isExiting ? duration : 0}
           progressPaused={timerPaused}
@@ -362,6 +363,7 @@ const Toast: React.FC<
         description={rawError ? undefined : description}
         descriptionHotkey={descriptionHotkey}
         role={isDestructive ? "alert" : "status"}
+        tone={isDestructive ? "error" : variant === "success" ? "success" : undefined}
         onDismiss={onClose}
         actions={actions ?? []}
         onAction={handleStructuredAction}
@@ -369,7 +371,9 @@ const Toast: React.FC<
         progressPaused={timerPaused}
       >
         {secondaryDescription && (
-          <p className="mt-1 text-sm leading-snug text-muted-foreground">{secondaryDescription}</p>
+          <p className="mt-1 text-[13px] leading-snug text-muted-foreground">
+            {secondaryDescription}
+          </p>
         )}
         {rawError && (
           <div className="mt-2 flex items-start justify-between gap-1.5 rounded-lg border border-border/60 bg-foreground/5 px-2 py-1.5 font-mono text-xs leading-snug text-destructive">

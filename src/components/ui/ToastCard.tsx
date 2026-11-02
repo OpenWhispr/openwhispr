@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, X } from "../icons";
+import { AlertCircle, Check, CheckCircle2, X } from "../icons";
 import { cn } from "../lib/utils";
 import type { ToastActionConfig } from "./useToast";
 import { TOAST_ACTION_ICONS } from "./toastActionIcons";
@@ -19,6 +19,8 @@ export interface ToastCardProps {
   ready?: boolean;
   /** "alert" interrupts a screen reader; "status" waits for it to finish speaking. */
   role?: "alert" | "status";
+  /** Adds a status icon; a toast that is neither success nor failure has none. */
+  tone?: "success" | "error";
   ref?: Ref<HTMLElement>;
 }
 
@@ -144,37 +146,38 @@ export function ToastCard({
   progressPaused = false,
   ready = true,
   role = "alert",
+  tone,
   ref,
 }: ToastCardProps) {
   const { t } = useTranslation();
   const hasSecondaryAction = actions.length > 1;
-  // A single action beside the text already keeps the text clear of the close button.
-  const besideAction = actions.length === 1;
-  const textClearsClose = onDismiss && !besideAction;
+  const StatusIcon = tone === "success" ? CheckCircle2 : tone === "error" ? AlertCircle : null;
 
   const text = (
-    <div className="min-w-0 flex-1 break-words px-2 py-1">
-      {title && (
-        <p
+    <div className="flex min-w-0 grow basis-64 items-start">
+      {StatusIcon && (
+        <StatusIcon
           className={cn(
-            "text-base font-normal leading-snug text-foreground",
-            textClearsClose && "pe-7"
+            "ms-2 mt-1 size-4.5 shrink-0",
+            tone === "success" ? "text-success" : "text-destructive"
           )}
-        >
-          {title}
-        </p>
+          aria-hidden="true"
+        />
       )}
-      {description && (
-        <p
-          className={cn(
-            "whitespace-pre-wrap text-sm leading-snug text-muted-foreground",
-            title ? "mt-1" : textClearsClose && "pe-7"
-          )}
-        >
-          <ToastCardDescription text={description} hotkey={descriptionHotkey} />
-        </p>
-      )}
-      {children}
+      <div className="min-w-0 flex-1 break-words px-2 py-1">
+        {title && <p className="text-sm font-normal leading-snug text-foreground">{title}</p>}
+        {description && (
+          <p
+            className={cn(
+              "whitespace-pre-wrap text-[13px] leading-snug text-muted-foreground",
+              title && "mt-1"
+            )}
+          >
+            <ToastCardDescription text={description} hotkey={descriptionHotkey} />
+          </p>
+        )}
+        {children}
+      </div>
     </div>
   );
 
@@ -194,78 +197,69 @@ export function ToastCard({
   const rowActions = singleRow ? [...labelledActions, ...iconActions] : actions;
 
   return (
-    <section
-      ref={ref}
-      role={role}
-      aria-live={role === "alert" ? "assertive" : "polite"}
-      data-action-count={actions.length}
+    <div
       className={cn(
-        "relative max-h-[calc(100vh-1.5rem)] w-full overflow-y-auto rounded-2xl border border-border/50 bg-surface-0",
-        "shadow-[var(--shadow-modal)] transition-[opacity,transform] duration-200 ease-out",
+        "group relative w-full transition-[opacity,transform] duration-200 ease-out",
         ready ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-1 opacity-0"
       )}
     >
-      {progressDuration > 0 && (
-        <svg
-          className="pointer-events-none absolute inset-x-0 top-0 z-10 h-4 w-full overflow-visible text-foreground"
-          viewBox="0 0 442 17"
-          preserveAspectRatio="none"
-          aria-hidden="true"
-        >
-          <path
-            d="M 1 16 A 15 15 0 0 1 16 1 H 426 A 15 15 0 0 1 441 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            vectorEffect="non-scaling-stroke"
-            strokeLinecap="butt"
-            pathLength="1"
-            strokeDasharray="1"
-            style={{
-              animation: `toast-border-progress ${progressDuration}ms linear forwards`,
-              animationPlayState: progressPaused ? "paused" : "running",
-            }}
-          />
-        </svg>
-      )}
+      <section
+        ref={ref}
+        role={role}
+        aria-live={role === "alert" ? "assertive" : "polite"}
+        data-action-count={actions.length}
+        className="relative max-h-[calc(100vh-1.5rem)] w-full overflow-y-auto rounded-2xl border border-border/50 bg-surface-0 shadow-[var(--shadow-modal)]"
+      >
+        {progressDuration > 0 && (
+          // Inset by the card's corner radius, so the timer runs along the straight edge only.
+          <div className="pointer-events-none absolute inset-x-4 top-0 z-10" aria-hidden="true">
+            <div
+              className="h-0.5 rounded-full bg-foreground"
+              style={{
+                animation: `toast-progress ${progressDuration}ms linear forwards`,
+                animationPlayState: progressPaused ? "paused" : "running",
+              }}
+            />
+          </div>
+        )}
+        {hasSecondaryAction ? (
+          <div className="px-2 py-3">
+            {text}
+            <div
+              className={cn("mt-3 grid gap-2", !singleRow && "grid-cols-2")}
+              style={
+                singleRow
+                  ? {
+                      gridTemplateColumns: [
+                        ...labelledActions.map(() => "minmax(0, 1fr)"),
+                        ...iconActions.map(() => "2rem"),
+                      ].join(" "),
+                    }
+                  : undefined
+              }
+            >
+              {rowActions.map(renderAction)}
+            </div>
+          </div>
+        ) : (
+          // A wide action drops under the text rather than squeezing it below basis-64.
+          <div className="flex flex-wrap items-center justify-end gap-2 px-2 py-3">
+            {text}
+            {actions.slice(0, 1).map(renderAction)}
+          </div>
+        )}
+      </section>
       {onDismiss && (
+        // Outside the section, whose scrolling would clip a button on its corner.
         <button
           type="button"
           onClick={onDismiss}
           aria-label={t("common.close")}
-          className="absolute end-2 top-2 z-10 flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-foreground/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          className="absolute -end-2 -top-2 z-20 flex size-6 items-center justify-center rounded-full border border-border/60 bg-surface-0 text-muted-foreground opacity-0 shadow-sm transition-opacity duration-150 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 group-hover:opacity-100"
         >
-          <X className="size-3.5" aria-hidden="true" />
+          <X className="size-3" aria-hidden="true" />
         </button>
       )}
-      {hasSecondaryAction ? (
-        <div className="px-2 py-3">
-          {text}
-          <div
-            className={cn("mt-3 grid gap-2", !singleRow && "grid-cols-2")}
-            style={
-              singleRow
-                ? {
-                    gridTemplateColumns: [
-                      ...labelledActions.map(() => "minmax(0, 1fr)"),
-                      ...iconActions.map(() => "2rem"),
-                    ].join(" "),
-                  }
-                : undefined
-            }
-          >
-            {rowActions.map(renderAction)}
-          </div>
-        </div>
-      ) : (
-        // The action stays clear of the close button's column.
-        <div
-          className={cn("flex items-center gap-2 px-2 py-3", onDismiss && besideAction && "pe-10")}
-        >
-          {text}
-          {actions.slice(0, 1).map(renderAction)}
-        </div>
-      )}
-    </section>
+    </div>
   );
 }

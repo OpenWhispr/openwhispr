@@ -1152,12 +1152,12 @@ a:hover {
   }
 }
 
-@keyframes toast-border-progress {
+@keyframes toast-progress {
   from {
-    stroke-dashoffset: 0;
+    width: 100%;
   }
   to {
-    stroke-dashoffset: 1;
+    width: 0%;
   }
 }
 
