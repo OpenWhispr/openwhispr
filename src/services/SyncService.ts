@@ -3643,10 +3643,10 @@ export class SyncService {
       if (!entry.cloud_id) continue;
       try {
         await SnippetService.delete(entry.cloud_id, authGeneration);
-        await window.electronAPI.hardDeleteSnippet?.(entry.id);
+        await window.electronAPI.hardDeleteSnippet?.(entry.id, authGeneration);
       } catch (err) {
         if (isHttpStatus(err, 404)) {
-          await window.electronAPI.hardDeleteSnippet?.(entry.id);
+          await window.electronAPI.hardDeleteSnippet?.(entry.id, authGeneration);
         } else {
           console.error("Snippet delete sync failed:", err);
         }

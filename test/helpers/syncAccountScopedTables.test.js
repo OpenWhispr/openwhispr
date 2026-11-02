@@ -524,6 +524,35 @@ test("an account switch while a push is in flight neither claims the row nor cle
   assert.equal(db.getPendingDictionary()[0]?.word, "Kubernetes", "A's word stays pending for A");
 });
 
+for (const status of [200, 404]) {
+  test(`a stale snippet delete completion after HTTP ${status} preserves the next account's restored edit`, async (t) => {
+    const db = setup(t);
+    if (!db) return;
+    const cloudA = createFakeCloud();
+    const remote = cloudA.seedSnippet({ trigger: "addr", replacement: "Shared address" });
+    db.upsertSnippetFromCloud(remote);
+    const accountA = await signInAs(t, db, cloudA, "account-a");
+    db.setSnippets([]);
+    if (status === 404) {
+      cloudA.failWith((call) => call.path === "/api/snippets/delete", { status: 404 });
+    }
+
+    const api = windowStub.electronAPI;
+    const hardDelete = api.hardDeleteSnippet;
+    const restored = [{ trigger: "addr", replacement: "B's restored address" }];
+    api.hardDeleteSnippet = async (...args) => {
+      db.setActiveAccountId("account-b");
+      api.authState.generation += 1;
+      db.setSnippets(restored);
+      return hardDelete(...args);
+    };
+    await accountA.pushSnippetDeletes();
+
+    assert.equal(cloudA.logFor("/api/snippets/delete").length, 1);
+    assert.deepEqual(db.getSnippets(), restored, "A's stale completion cannot delete B's edit");
+  });
+}
+
 test("clearing one account's history leaves another account's Insights rebuildable", (t) => {
   const db = createDb(t);
   if (!db) return;
