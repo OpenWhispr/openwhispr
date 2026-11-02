@@ -37,6 +37,44 @@ const httpError = (statusCode, message = `API error: ${statusCode}`, extra = {})
 const pieceName = (piece) => path.basename(piece, ".mp3");
 const noWait = { retryDelayMs: () => 0 };
 
+test("a single-piece upload preserves paragraphs and list formatting", async () => {
+  const { split } = fakeSplit(1);
+  const text = "First paragraph.\n\nSecond paragraph.\n- First item\n  - Nested item";
+  const result = await transcribeOpenRouterChunks({
+    inputPath: "in",
+    split,
+    transcribeChunk: async () => ({ text }),
+  });
+
+  assert.equal(result.text, text);
+});
+
+test("a partial upload preserves formatting around gaps and silent pieces", async () => {
+  const { split } = fakeSplit(4);
+  const result = await transcribeOpenRouterChunks({
+    inputPath: "in",
+    split,
+    transcribeChunk: async (piece) => {
+      switch (pieceName(piece)) {
+        case "chunk-000":
+          return { text: "First paragraph.\n\nSecond paragraph." };
+        case "chunk-001":
+          throw httpError(400, "Audio file could not be decoded");
+        case "chunk-002":
+          return { text: "" };
+        default:
+          return { text: "- First item\r\n  - Nested item" };
+      }
+    },
+  });
+
+  assert.equal(
+    result.text,
+    "First paragraph.\n\nSecond paragraph. [missing audio 4:00-8:00] - First item\r\n  - Nested item"
+  );
+  assert.equal(result.failedChunks, 1);
+});
+
 async function until(predicate) {
   for (let i = 0; i < 200 && !predicate(); i++) await new Promise((r) => setImmediate(r));
   assert.ok(predicate(), "condition never became true");
