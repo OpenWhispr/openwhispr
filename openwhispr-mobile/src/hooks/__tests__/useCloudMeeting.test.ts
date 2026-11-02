@@ -1,9 +1,12 @@
 import { act, renderHook } from '@testing-library/react-native';
 import { CloudMeetingFinishError, useCloudMeeting } from '../useCloudMeeting.android';
-import { startRealtimeMeetingWs } from '@/services/transcription/RealtimeMeetingWsService';
-import type { RealtimeCallbacks, RealtimeSession } from '@/services/transcription/realtimeEvents';
+import { startRealtimeMeetingWs } from '@/services/transcription/RealtimeMeetingWsService.android';
+import type {
+  RealtimeCallbacks,
+  RealtimeSession,
+} from '@/services/transcription/RealtimeMeetingWsService.android';
 
-jest.mock('@/services/transcription/RealtimeMeetingWsService', () => ({
+jest.mock('@/services/transcription/RealtimeMeetingWsService.android', () => ({
   startRealtimeMeetingWs: jest.fn(),
 }));
 

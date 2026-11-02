@@ -213,7 +213,7 @@ jest.mock('@/lib/accountAccess', () => ({
 }));
 jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
 jest.mock('@/lib/superwall', () => ({ SUPERWALL_PLACEMENTS: { meetingRecordStart: 'meeting' } }));
-jest.mock('@/services/transcription/RealtimeMeetingWsService', () => ({
+jest.mock('@/services/transcription/RealtimeMeetingWsService.android', () => ({
   startRealtimeMeetingWs: (...args: unknown[]) => mockRealtimeStart(...args),
 }));
 jest.mock('@/hooks/useCloudMeeting', () => ({

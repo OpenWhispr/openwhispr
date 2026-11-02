@@ -6,7 +6,12 @@
  * rotation clock elapse deterministically.
  */
 import { Buffer } from 'buffer';
-import { startRealtimeMeetingWs, type WebSocketLike } from '../RealtimeMeetingWsService';
+import { startRealtimeMeetingWs, type WebSocketLike } from '../RealtimeMeetingWsService.android';
+import { startRealtimeMeetingWs as startIOSMeetingWs } from '../RealtimeMeetingWsService';
+import {
+  addPcmStopListener,
+  addPcmErrorListener,
+} from '../../../../modules/live-pcm-streaming/src/index.android';
 import { ROTATION_MS } from '../realtimeReconnect';
 import { MEETING_RECORDING_DISABLED_MESSAGE } from '../policyErrors';
 import { api } from '@/lib/apiClient';
@@ -30,7 +35,13 @@ jest.mock('../../../../modules/live-pcm-streaming/src', () => ({
     isAvailable: jest.fn(() => true),
   },
   addPcmFrameListener: jest.fn(),
+  addPcmStopListener: jest.fn(),
+  addPcmErrorListener: jest.fn(),
 }));
+
+jest.mock('../../../../modules/live-pcm-streaming/src/index.android', () =>
+  jest.requireMock('../../../../modules/live-pcm-streaming/src'),
+);
 
 const FLUSH_MS = 150;
 
@@ -142,8 +153,9 @@ const completed = (itemId: string, transcript: string): WsMessage => ({
 async function boot(
   callbacks: Parameters<typeof startRealtimeMeetingWs>[1] = {},
   opts: Parameters<typeof startRealtimeMeetingWs>[0] = {},
+  start = startRealtimeMeetingWs,
 ): Promise<{ session: Awaited<ReturnType<typeof startRealtimeMeetingWs>>; leg1: FakeWebSocket }> {
-  const startPromise = startRealtimeMeetingWs(opts, callbacks, { wsFactory });
+  const startPromise = start(opts, callbacks, { wsFactory });
   await flushMicro();
   const leg1 = lastLeg();
   leg1.open();
@@ -162,6 +174,8 @@ beforeEach(() => {
   (LivePCMStreaming.start as jest.Mock).mockReset().mockResolvedValue(undefined);
   (LivePCMStreaming.stop as jest.Mock).mockReset().mockResolvedValue(undefined);
   (addPcmFrameListener as jest.Mock).mockReset().mockReturnValue({ remove: jest.fn() });
+  (addPcmStopListener as jest.Mock).mockReset().mockReturnValue({ remove: jest.fn() });
+  (addPcmErrorListener as jest.Mock).mockReset().mockReturnValue({ remove: jest.fn() });
 });
 
 afterEach(() => {
@@ -614,5 +628,136 @@ describe('meeting final transcript drain', () => {
     await check;
     expect(LivePCMStreaming.start).not.toHaveBeenCalled();
     expect(FakeWebSocket.instances).toHaveLength(0);
+  });
+});
+
+describe('upstream iOS transport boundary', () => {
+  it('exposes synchronous Stop and passes only the sample rate to native capture', async () => {
+    const { session, leg1 } = await boot({}, {}, startIOSMeetingWs);
+    expect(Object.keys(session).sort()).toEqual(['stop', 'utterances']);
+    expect(LivePCMStreaming.start).toHaveBeenCalledWith(24000);
+    expect(addPcmStopListener).not.toHaveBeenCalled();
+    expect(addPcmErrorListener).not.toHaveBeenCalled();
+    expect(session.stop()).toBeUndefined();
+    expect(leg1.didCommit()).toBe(true);
+    expect(leg1.closed).toBe(true);
+  });
+
+  it('retains upstream final-transcript arrival order', async () => {
+    const { session, leg1 } = await boot({}, {}, startIOSMeetingWs);
+    leg1.emit({ type: 'input_audio_buffer.speech_started', item_id: 'first', audio_start_ms: 0 });
+    leg1.emit({
+      type: 'input_audio_buffer.speech_started',
+      item_id: 'second',
+      audio_start_ms: 1000,
+    });
+    leg1.emit(completed('second', 'Second finished first.'));
+    leg1.emit(completed('first', 'First finished second.'));
+    expect(session.utterances().map((u) => u.text)).toEqual([
+      'Second finished first.',
+      'First finished second.',
+    ]);
+  });
+
+  it('retains upstream delivery of messages received after Stop', async () => {
+    const onUtterance = jest.fn();
+    const { session, leg1 } = await boot({ onUtterance }, {}, startIOSMeetingWs);
+    session.stop();
+    leg1.emit(completed('late', 'Late server text.'));
+    expect(onUtterance).toHaveBeenCalledTimes(1);
+    expect(session.utterances()[0].text).toBe('Late server text.');
+  });
+
+  it('retains upstream handling of an individual transcription failure', async () => {
+    const onError = jest.fn();
+    const onClose = jest.fn();
+    const { leg1 } = await boot({ onError, onClose }, {}, startIOSMeetingWs);
+    leg1.emit({ type: 'conversation.item.input_audio_transcription.failed', item_id: 'failed' });
+    expect(onError).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(LivePCMStreaming.stop).not.toHaveBeenCalled();
+  });
+
+  it('ignores the Android abort option on the upstream iOS entry', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const { session } = await boot({}, { signal: controller.signal, noteId: 7 }, startIOSMeetingWs);
+    expect(LivePCMStreaming.start).toHaveBeenCalledWith(24000);
+    expect(LivePCMStreaming.stop).not.toHaveBeenCalled();
+    session.stop();
+  });
+
+  it('commits and closes an upstream iOS retiring leg as soon as its replacement opens', async () => {
+    const { leg1 } = await boot({}, {}, startIOSMeetingWs);
+    await advanceToRotation();
+    const leg2 = lastLeg();
+    expect(leg2).not.toBe(leg1);
+    leg2.open();
+    await flushMicro();
+    expect(leg1.didCommit()).toBe(true);
+    expect(leg1.closed).toBe(true);
+  });
+
+  it('uses the upstream rotation offset captured before replacement connection time', async () => {
+    const { session } = await boot({}, {}, startIOSMeetingWs);
+    await advanceToRotation();
+    const leg2 = lastLeg();
+    jest.advanceTimersByTime(5000);
+    leg2.open();
+    await flushMicro();
+    leg2.emit({ type: 'input_audio_buffer.speech_started', item_id: 'new', audio_start_ms: 10 });
+    leg2.emit(completed('new', 'Rotated text.'));
+    expect(session.utterances()[0].startMs).toBe(ROTATION_MS + 10);
+  });
+});
+
+describe('Android native capture lifecycle', () => {
+  it('forwards notification Stop without discarding the active session', async () => {
+    const onStopRequested = jest.fn();
+    const { session } = await boot({ onStopRequested });
+    const notification = jest.mocked(addPcmStopListener).mock.calls[0][0];
+    notification();
+    expect(onStopRequested).toHaveBeenCalledTimes(1);
+    expect(LivePCMStreaming.stop).not.toHaveBeenCalled();
+    session.stop();
+    expect(jest.mocked(addPcmStopListener).mock.results[0].value.remove).toHaveBeenCalled();
+    expect(jest.mocked(addPcmErrorListener).mock.results[0].value.remove).toHaveBeenCalled();
+  });
+
+  it('retains native interruption as the terminal finalization error', async () => {
+    const onError = jest.fn();
+    const onClose = jest.fn();
+    const { session } = await boot({ onError, onClose });
+    jest.mocked(addPcmErrorListener).mock.calls[0][0]({ message: 'Native interruption' });
+    expect(onError).toHaveBeenCalledWith({ error: { message: 'Native interruption' } });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    await expect(session.finish?.()).rejects.toThrow('Native interruption');
+  });
+
+  it('does not fetch a token or start capture for an already canceled Android request', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      startRealtimeMeetingWs({ signal: controller.signal }, {}, { wsFactory }),
+    ).rejects.toThrow('Meeting cancelled.');
+    expect(api.post).not.toHaveBeenCalled();
+    expect(LivePCMStreaming.start).not.toHaveBeenCalled();
+  });
+
+  it('does not start Android capture after cancellation during token acquisition', async () => {
+    let grant!: (value: { clientSecret: string; model: string }) => void;
+    jest.mocked(api.post).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          grant = resolve;
+        }),
+    );
+    const controller = new AbortController();
+    const pending = startRealtimeMeetingWs({ signal: controller.signal }, {}, { wsFactory });
+    const rejected = expect(pending).rejects.toThrow('Meeting cancelled.');
+    controller.abort();
+    grant({ clientSecret: 'synthetic-token', model: 'synthetic-model' });
+    await rejected;
+    expect(LivePCMStreaming.start).not.toHaveBeenCalled();
   });
 });

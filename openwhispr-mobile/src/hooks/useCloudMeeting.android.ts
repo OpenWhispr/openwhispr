@@ -3,7 +3,7 @@ import {
   startRealtimeMeetingWs,
   type RealtimeSession,
   type RealtimeUtterance,
-} from '@/services/transcription/RealtimeMeetingWsService';
+} from '@/services/transcription/RealtimeMeetingWsService.android';
 
 export type CloudMeetingStatus = 'connecting' | 'live' | 'reconnecting' | 'error';
 
