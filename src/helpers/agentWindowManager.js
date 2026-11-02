@@ -169,7 +169,7 @@ class AgentWindowManager {
     if (!isFromWindow(event, this.window)) return;
     if (dragging === false) {
       void this.dragManager.stopWindowDrag();
-    } else if (dragging === true && this.window.isVisible() && this.layout === "modal") {
+    } else if (dragging === true && this.window.isVisible()) {
       void this.dragManager.startWindowDrag(this.window);
     }
   }

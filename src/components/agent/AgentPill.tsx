@@ -4,6 +4,7 @@ import { cn } from "../lib/utils";
 import { ICON_BUTTON } from "../chat/interactions/cardStyles";
 import { PillWaveform } from "../dictation/PillWaveform";
 import type { AgentPillButton, AgentPillControls } from "./agentWindowState";
+import { useAgentWindowDrag } from "./useAgentWindowDrag";
 
 const BUTTONS: Record<AgentPillButton, { icon: IconComponent; label: string }> = {
   expand: { icon: Maximize, label: "agentWindow.actions.expand" },
@@ -46,13 +47,17 @@ export function AgentPill({
   className,
 }: AgentPillProps) {
   const { t } = useTranslation();
+  const dragHandlers = useAgentWindowDrag();
+  const hasStatus = Boolean(notice || controls.waiting || controls.thinking || controls.waveform);
   return (
     <div
       className={cn(
-        "flex h-10 max-w-full items-center rounded-full border border-border ps-2.5 pe-1.25 text-muted-foreground shadow-[var(--shadow-card)]",
+        "flex h-10 max-w-full cursor-grab items-center rounded-full border border-border pe-1.25 select-none active:cursor-grabbing text-muted-foreground shadow-[var(--shadow-card)]",
+        hasStatus ? "ps-2.5" : "ps-1.25",
         inModal ? "bg-surface-1 dark:bg-surface-2" : "agent-panel bg-surface-0",
         className
       )}
+      {...dragHandlers}
     >
       {notice ? (
         <span className="ms-2.5 max-w-30 truncate text-xs text-foreground/80" title={notice}>
@@ -77,7 +82,7 @@ export function AgentPill({
           className="h-6 shrink-0 text-foreground"
         />
       ) : null}
-      {!controls.thinking && (
+      {hasStatus && !controls.thinking && (
         <span className="mx-3 h-3.5 w-px shrink-0 bg-border" aria-hidden="true" />
       )}
       <div className="flex items-center gap-0.5">

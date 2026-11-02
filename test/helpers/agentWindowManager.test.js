@@ -219,6 +219,30 @@ for (const platform of ["darwin", "win32", "linux"]) {
     assert.equal(win.bounds.y + win.bounds.height, ceiling, "dragged dock clears dictation");
   });
 
+  for (const layout of ["pill", "typing", "standalone"]) {
+    test(`dragging the ${layout} layout moves the modal's shared dock on ${platform}`, async (t) => {
+      cursor = { x: 720, y: 400 };
+      const { manager, win } = await openedManager({ platform });
+      t.after(() => manager.dragManager.cleanup());
+      manager.setLayout(fromAgent(win), { layout, focus: false, contentHeight: 120 });
+      manager.setDragging(fromAgent(win), true);
+      cursor = { x: 620, y: 264 };
+      manager.dragManager.updateWindowPosition();
+      manager.setDragging(fromAgent(win), false);
+      assert.deepEqual(manager.anchor, { centerX: 620, bottom: 760 });
+      manager.setLayout(fromAgent(win), { layout: "modal", focus: false });
+      assert.equal(win.bounds.x + win.bounds.width / 2, 620);
+      assert.equal(win.bounds.y + win.bounds.height, 760);
+      manager.hide(fromAgent(win));
+      manager.setDragging(fromAgent(win), true);
+      assert.equal(
+        manager.dragManager.isDragActive(),
+        false,
+        "a hidden window cannot start dragging"
+      );
+    });
+  }
+
   test(`a dragged modal keeps its dock across layouts and reopening on ${platform}`, async (t) => {
     cursor = { x: 720, y: 400 };
     const { manager, win } = await openedManager({ platform });
