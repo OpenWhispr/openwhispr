@@ -622,6 +622,12 @@ export function runBackgroundAction(
 
       const before = await window.electronAPI.getNote(noteId);
       if (isCancelled()) return;
+      // The note was deleted while the action ran, so there is nothing to write to.
+      if (!before) {
+        processingFlags.set(noteId, false);
+        clearNoteState(noteId);
+        return;
+      }
 
       const enhancedContent = options.knownPeople?.length
         ? tagActionItemOwners(enhanced, options.knownPeople)
