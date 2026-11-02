@@ -98,6 +98,84 @@ function createDeferred() {
   return { promise, resolve, reject };
 }
 
+test("revoked Whisper retry cannot dispatch after a peer replacement becomes ready", async (t) => {
+  const { createLocalModelPolicyGate } = require("../../src/helpers/localModelPolicyGate");
+  for (const accountChange of [false, true]) {
+    let identity = 1;
+    const gate = createLocalModelPolicyGate({
+      getPolicy: async () => ({ success: true, managed: false }),
+      getIdentity: () => identity,
+      getAppVersion: () => "1.11.1",
+    });
+    const pendingStart = createDeferred();
+    const firstRequest = createDeferred();
+    const waitingForReplacement = createDeferred();
+    let manager;
+    let requests = 0;
+    const { server, port } = await startServer((req, res) => {
+      requests++;
+      if (requests === 1) {
+        manager.startGeneration++;
+        manager.startupPromise = {
+          catch: () => {
+            waitingForReplacement.resolve();
+            return pendingStart.promise;
+          },
+        };
+        req.socket.destroy();
+        firstRequest.resolve();
+      } else res.end(JSON.stringify({ text: "prohibited retry" }));
+    });
+    t.after(() => server.close());
+    manager = createManager(port, { useCuda: true });
+    manager.localModelPolicy = gate;
+    manager.localModelIdForPath = () => "base";
+    manager.stop = async () => {
+      manager._stopRequested = true;
+    };
+    const result = manager.transcribe(Buffer.from("audio"));
+    await firstRequest.promise;
+    await waitingForReplacement.promise;
+    if (accountChange) {
+      identity++;
+      gate.invalidate();
+    } else
+      gate.update({
+        success: true,
+        managed: true,
+        policy: require("./harness/policyFixtures").managedPolicy({
+          transcription: { allowedModes: ["local"], allowedLocalModels: [] },
+        }),
+      });
+    manager._stopRequested = false;
+    manager.ready = true;
+    pendingStart.resolve();
+    await assert.rejects(result, {
+      code: accountChange ? "POLICY_UNRESOLVABLE" : "POLICY_MODEL_BLOCKED",
+    });
+    assert.equal(requests, 1, "revoked audio must not reach the replacement server");
+  }
+});
+
+test("LAN Whisper inference does not apply the built-in local-model catalog", async (t) => {
+  const { createLocalModelPolicyGate } = require("../../src/helpers/localModelPolicyGate");
+  let requests = 0;
+  const { server, port } = await startServer((_req, res) => {
+    requests++;
+    res.end(JSON.stringify({ text: "LAN result" }));
+  });
+  t.after(() => server.close());
+  const manager = createManager(port, { useCuda: false });
+  manager.isRemote = true;
+  manager.localModelPolicy = createLocalModelPolicyGate({
+    getPolicy: async () => ({ success: false }),
+    getIdentity: () => 1,
+    getAppVersion: () => "1.11.1",
+  });
+  assert.equal((await manager.transcribe(Buffer.from("audio"))).text, "LAN result");
+  assert.equal(requests, 1);
+});
+
 function createManager(port, { useCuda, useVulkan = false, fallbackToVulkan = false }) {
   const manager = new WhisperServerManager();
   manager.ready = true;

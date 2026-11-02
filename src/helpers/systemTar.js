@@ -37,6 +37,7 @@ function runSystemTar(
     timeoutMs = TIMEOUTS.INSTALL,
     killGraceMs = TAR_KILL_GRACE_MS,
     spawnImpl = spawn,
+    signal,
   } = {}
 ) {
   // Windows' bundled bsdtar can lack bz2lib and hang while invoking an
@@ -65,6 +66,7 @@ function runSystemTar(
           cwd,
           stdio: ["ignore", "ignore", "pipe"],
           windowsHide: true,
+          signal,
         }
       );
     } catch (err) {

@@ -1,3 +1,4 @@
+const { runLocalModelOperation, localModelOperationSignal } = require("./localModelPolicyGate");
 const fs = require("fs");
 const path = require("path");
 const debugLogger = require("./debugLogger");
@@ -111,6 +112,20 @@ class ParakeetServerManager {
   }
 
   async transcribe(audioBuffer, options = {}) {
+    return runLocalModelOperation(
+      this,
+      "transcription",
+      options.modelName ?? (this.localModelPolicy ? "" : "parakeet-tdt-0.6b-v3"),
+      () =>
+        this._policyAllowedTranscribe(audioBuffer, {
+          ...options,
+          signal: localModelOperationSignal(this, options.signal),
+        }),
+      { onAbort: () => this.stopServer() }
+    );
+  }
+
+  async _policyAllowedTranscribe(audioBuffer, options = {}) {
     // signal is optional; only cancellable uploads pass one. Aborting stops
     // scheduling further segments — the in-flight one finishes server-side.
     const { modelName = "parakeet-tdt-0.6b-v3", language, signal } = options;
@@ -264,7 +279,7 @@ class ParakeetServerManager {
       return { success: true, port: this.wsServer.port };
     } catch (error) {
       debugLogger.error("Failed to start parakeet WS server", { error: error.message });
-      return { success: false, reason: error.message };
+      return { success: false, reason: error.message, code: error.code };
     }
   }
 

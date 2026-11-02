@@ -2811,6 +2811,16 @@
       "contextTooLargeGeneric": "内容过长，{{model}} 无法在这台电脑上读取。请改用云端模型，或对更短的选区执行该操作。",
       "localServerUnavailable": "无法在这台电脑上启动 {{model}}。请重试，或改用云端模型。",
       "localModelBusy": "本地模型仍在处理另一个请求。请等待其完成后再试。"
+    },
+    "policy": {
+      "guidance": "请选择组织批准的本地模型。",
+      "notApproved": "未批准",
+      "noneSupported": "此应用版本或设备不支持任何已批准的本地模型。请更新 OpenWhispr 或联系管理员。",
+      "emptyIntersection": "工作区没有可用于此任务的已批准本地模型。",
+      "modelBlocked": "组织未批准此本地模型。请选择已批准的模型。",
+      "modeBlocked": "组织已禁用本地处理。",
+      "unresolved": "无法获取工作区策略。请连接网络后重试。",
+      "versionBlocked": "请更新 OpenWhispr 以使用组织批准的模型。"
     }
   },
   "referral": {

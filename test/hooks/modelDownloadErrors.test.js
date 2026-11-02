@@ -128,7 +128,7 @@ test("remount restores concurrent LLM downloads and cancellation settles only it
   let activeDownloads = [
     {
       modelType: "llm",
-      modelId: "model-a",
+      modelId: "qwen3.5-4b-q4_k_m",
       phase: "downloading",
       progress: 20,
       downloadedBytes: 200,
@@ -137,7 +137,7 @@ test("remount restores concurrent LLM downloads and cancellation settles only it
     },
     {
       modelType: "llm",
-      modelId: "model-b",
+      modelId: "qwen3.5-2b-q4_k_m",
       phase: "downloading",
       progress: 30,
       downloadedBytes: 300,
@@ -172,7 +172,7 @@ test("remount restores concurrent LLM downloads and cancellation settles only it
   }
 
   await renderer.render(Harness);
-  assert.deepEqual(Object.keys(download.downloads), ["model-a", "model-b"]);
+  assert.deepEqual(Object.keys(download.downloads), ["qwen3.5-4b-q4_k_m", "qwen3.5-2b-q4_k_m"]);
   await renderer.unmount();
   assert.equal(listeners.size, 0);
 
@@ -181,32 +181,37 @@ test("remount restores concurrent LLM downloads and cancellation settles only it
     { ...activeDownloads[1], progress: 50, downloadedBytes: 500, sequence: 4 },
   ];
   await renderer.render(Harness);
-  assert.equal(download.downloads["model-a"].progress, 40);
-  assert.equal(download.downloads["model-b"].progress, 50);
+  assert.equal(download.downloads["qwen3.5-4b-q4_k_m"].progress, 40);
+  assert.equal(download.downloads["qwen3.5-2b-q4_k_m"].progress, 50);
 
-  await React.act(async () => download.cancelDownload("model-a"));
-  assert.deepEqual(cancellations, ["model-a"]);
-  assert.equal(download.isCancellingModel("model-a"), true);
-  assert.equal(download.isCancellingModel("model-b"), false);
+  await React.act(async () => download.cancelDownload("qwen3.5-4b-q4_k_m"));
+  assert.deepEqual(cancellations, ["qwen3.5-4b-q4_k_m"]);
+  assert.equal(download.isCancellingModel("qwen3.5-4b-q4_k_m"), true);
+  assert.equal(download.isCancellingModel("qwen3.5-2b-q4_k_m"), false);
 
   await React.act(async () => {
     for (const listener of listeners) {
       listener(null, {
         type: "error",
-        modelId: "model-a",
+        modelId: "qwen3.5-4b-q4_k_m",
         error: "Download cancelled by user",
         code: "DOWNLOAD_CANCELLED",
         sequence: 5,
       });
     }
   });
-  assert.deepEqual(Object.keys(download.downloads), ["model-b"]);
-  assert.equal(download.isCancellingModel("model-a"), false);
+  assert.deepEqual(Object.keys(download.downloads), ["qwen3.5-2b-q4_k_m"]);
+  assert.equal(download.isCancellingModel("qwen3.5-4b-q4_k_m"), false);
   assert.deepEqual(download.downloadErrors, {});
 
   await React.act(async () => {
     for (const listener of listeners) {
-      listener(null, { type: "complete", modelId: "model-b", progress: 100, sequence: 6 });
+      listener(null, {
+        type: "complete",
+        modelId: "qwen3.5-2b-q4_k_m",
+        progress: 100,
+        sequence: 6,
+      });
     }
   });
   assert.equal(download.isDownloading, false);
@@ -310,7 +315,7 @@ for (const outcome of ["error", "complete", "cancel"]) {
     await renderer.render(Harness);
     let request;
     await React.act(async () => {
-      request = download.downloadModel("model-a", () => {
+      request = download.downloadModel("qwen3.5-4b-q4_k_m", () => {
         selections += 1;
       });
     });
@@ -322,9 +327,9 @@ for (const outcome of ["error", "complete", "cancel"]) {
       progressListener(
         null,
         outcome === "complete"
-          ? { modelId: "model-a", type: "complete", progress: 100, sequence: 2 }
+          ? { modelId: "qwen3.5-4b-q4_k_m", type: "complete", progress: 100, sequence: 2 }
           : {
-              modelId: "model-a",
+              modelId: "qwen3.5-4b-q4_k_m",
               type: "error",
               error: outcome === "cancel" ? "Download cancelled by user" : "ENOTFOUND",
               code: outcome === "cancel" ? "DOWNLOAD_CANCELLED" : "ENOTFOUND",
@@ -376,9 +381,62 @@ for (const modelType of ["whisper", "parakeet", "llm"]) {
       return null;
     }
     await renderer.render(Harness);
-    await React.act(async () => download.downloadModel("requested-model"));
-    assert.equal(download.isDownloadingModel("requested-model"), false);
+    const requestedId =
+      modelType === "llm"
+        ? "qwen3.5-4b-q4_k_m"
+        : modelType === "parakeet"
+          ? "parakeet-tdt-0.6b-v3"
+          : "base";
+    await React.act(async () => download.downloadModel(requestedId));
+    assert.equal(download.isDownloadingModel(requestedId), false);
     assert.equal(download.downloadingModel, modelType === "llm" ? null : "active-model");
     if (modelType !== "llm") assert.equal(download.downloadProgress.percentage, 42);
   });
 }
+
+test("a required model denied before dispatch records a terminal refusal without Retry", async (t) => {
+  const requests = [];
+  const renderer = await createDownloadRenderer(t, {
+    onWhisperDownloadProgress: () => () => {},
+    onParakeetDownloadProgress: () => () => {},
+    modelGetActiveDownloads: async () => [],
+    downloadWhisperModel: async (id) => {
+      requests.push(id);
+      return { success: true };
+    },
+  });
+  const { usePolicyStore } = await renderer.vite.ssrLoadModule("/stores/policyStore.ts");
+  usePolicyStore.setState({
+    status: "managed",
+    appVersion: "1.11.1",
+    policy: {
+      transcription: { allowedModes: ["local"], allowedLocalModels: [] },
+      minAppVersion: null,
+    },
+  });
+  const { RequiredModelDownloadStep } = await renderer.vite.ssrLoadModule(
+    "/components/onboarding/RequiredModelDownloadStep.tsx"
+  );
+  let tree;
+  const required = ["base"];
+  const props = {
+    required,
+    missing: required,
+    loading: false,
+    refresh: async () => {},
+    onProceed() {},
+  };
+  function Harness() {
+    tree = RequiredModelDownloadStep(props);
+    return null;
+  }
+  await renderer.render(Harness);
+  assert.deepEqual(requests, []);
+  assert.equal(findRetryButtons(tree).length, 0);
+  const textContent = (node) => {
+    if (Array.isArray(node)) return node.map(textContent).join("");
+    if (node && typeof node === "object") return textContent(node.props?.children);
+    return typeof node === "string" ? node : "";
+  };
+  assert.match(textContent(tree), /models.policy.modelBlocked/);
+});

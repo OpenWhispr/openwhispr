@@ -22,7 +22,7 @@ test("cleanup validates completed provider output using the request's prompt set
   setCustomPrompt("");
   window.electronAPI.processLocalReasoning = async () => ({ success: true, text: DUPLICATE });
   const process = (config = {}) =>
-    service.processText(RAW, "test-model", null, {
+    service.processText(RAW, "qwen3.5-0.8b-q4_k_m", null, {
       provider: "local",
       ...config,
     });
@@ -110,7 +110,7 @@ test("cleanup validates completed provider output using the request's prompt set
     useSettingsStore.setState({
       cleanupMode: "local",
       cleanupProvider: "local",
-      cleanupModel: "test-model",
+      cleanupModel: "qwen3.5-0.8b-q4_k_m",
     });
     window.electronAPI.processLocalReasoning = async () => ({ success: true, text: DUPLICATE });
     const row = { id: 123, text: RAW, raw_text: RAW };

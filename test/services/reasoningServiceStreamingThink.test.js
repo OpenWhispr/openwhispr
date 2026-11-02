@@ -73,6 +73,181 @@ async function collectAgentText(stream) {
   return output;
 }
 
+test("local streams reject buffered old-policy and old-identity deltas on both transports", async (t) => {
+  const { reasoningService, vite } = await loadReasoningService(
+    t,
+    "openwhispr-buffered-policy-stream-test-",
+    {
+      window: { electronAPI: { llamaServerStart: async () => ({ success: true, port: 11434 }) } },
+    }
+  );
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const { managedPolicy } = require("../helpers/harness/policyFixtures");
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  for (const sdk of [false, true]) {
+    for (const changeIdentity of [false, true]) {
+      for (const completion of [false, true]) {
+        await t.test(
+          `${sdk ? "SDK" : "raw"} ${changeIdentity ? "identity switch" : "model revocation"} ${completion ? "completion" : "content"}`,
+          async () => {
+            usePolicyStore.setState({
+              status: "unmanaged",
+              policy: null,
+              accountId: "first",
+              authGeneration: 1,
+            });
+            globalThis.fetch = async () =>
+              sdk
+                ? createOpenAiSseResponse(completion ? ["first"] : ["first", "forbidden"])
+                : createRawSseResponse(completion ? ["first"] : ["first", "forbidden"]);
+            const args = [
+              [{ role: "user", content: "hi" }],
+              "qwen3-4b-q4_k_m",
+              "local",
+              { systemPrompt: "s", disableThinking: true },
+            ];
+            const stream = sdk
+              ? reasoningService.processTextStreamingAI(...args, {})
+              : reasoningService.processTextStreaming(...args);
+            t.after(() => stream.return());
+            const first = await stream.next();
+            assert.equal(sdk ? first.value.text : first.value, "first");
+            if (changeIdentity) usePolicyStore.setState({ accountId: "second", authGeneration: 2 });
+            else
+              usePolicyStore.setState({
+                status: "managed",
+                policy: {
+                  ...managedPolicy({ llm: { allowedModes: ["local"], allowedLocalModels: [] } }),
+                  features: { agentEnabled: true, webSearchEnabled: false },
+                },
+              });
+            await assert.rejects(stream.next(), {
+              code: changeIdentity ? "POLICY_UNRESOLVABLE" : "POLICY_MODEL_BLOCKED",
+            });
+          }
+        );
+      }
+    }
+  }
+});
+
+test("local streaming transport shutdown retains a newly learned policy refusal", async (t) => {
+  const { reasoningService, vite } = await loadReasoningService(
+    t,
+    "openwhispr-policy-stream-error-test-",
+    {
+      window: { electronAPI: { llamaServerStart: async () => ({ success: true, port: 11434 }) } },
+    }
+  );
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const { managedPolicy } = require("../helpers/harness/policyFixtures");
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  for (const sdk of [false, true]) {
+    await t.test(sdk ? "SDK shutdown" : "raw shutdown", async () => {
+      usePolicyStore.setState({ status: "unmanaged", policy: null });
+      let fail;
+      globalThis.fetch = async () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              const event = sdk
+                ? createOpenAiChunk({ content: "first" })
+                : { choices: [{ delta: { content: "first" } }] };
+              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`));
+              fail = () => controller.error(new TypeError("server stopped"));
+            },
+          }),
+          { headers: { "content-type": "text/event-stream" } }
+        );
+      const args = [
+        [{ role: "user", content: "hi" }],
+        "qwen3-4b-q4_k_m",
+        "local",
+        { systemPrompt: "s", disableThinking: true },
+      ];
+      const stream = sdk
+        ? reasoningService.processTextStreamingAI(...args, {})
+        : reasoningService.processTextStreaming(...args);
+      await stream.next();
+      usePolicyStore.setState({
+        status: "managed",
+        policy: {
+          ...managedPolicy({ llm: { allowedModes: ["local"], allowedLocalModels: [] } }),
+          features: { agentEnabled: true, webSearchEnabled: false },
+        },
+      });
+      fail();
+      await assert.rejects(stream.next(), { code: "POLICY_MODEL_BLOCKED" });
+    });
+  }
+});
+
+test("an identity switch during local stream setup prevents either transport from dispatching", async (t) => {
+  let finishSetup;
+  let startedSetup;
+  const { reasoningService, vite } = await loadReasoningService(
+    t,
+    "openwhispr-policy-stream-setup-test-",
+    {
+      window: {
+        electronAPI: {
+          llamaServerStart: () => {
+            startedSetup();
+            return new Promise((resolve) => {
+              finishSetup = resolve;
+            });
+          },
+        },
+      },
+    }
+  );
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  let requests = 0;
+  globalThis.fetch = async () => {
+    requests++;
+    return createOpenAiSseResponse(["old account"]);
+  };
+  for (const sdk of [false, true]) {
+    await t.test(sdk ? "SDK setup" : "raw setup", async () => {
+      usePolicyStore.setState({
+        status: "unmanaged",
+        policy: null,
+        accountId: "old",
+        authGeneration: 1,
+      });
+      const setupStarted = new Promise((resolve) => {
+        startedSetup = resolve;
+      });
+      const args = [
+        [{ role: "user", content: "hi" }],
+        "qwen3-4b-q4_k_m",
+        "local",
+        { systemPrompt: "s" },
+      ];
+      const stream = sdk
+        ? reasoningService.processTextStreamingAI(...args, {})
+        : reasoningService.processTextStreaming(...args);
+      t.after(() => stream.return());
+      const first = stream.next();
+      await setupStarted;
+      usePolicyStore.setState({ accountId: "new", authGeneration: 2 });
+      finishSetup({ success: true, port: 11434 });
+      await assert.rejects(first, { code: "POLICY_UNRESOLVABLE" });
+    });
+  }
+  assert.equal(requests, 0);
+});
+
 function createAgentStreamBridge() {
   const startCalls = [];
   const cancelCalls = [];
@@ -366,7 +541,7 @@ test("cancelling tool-ineligible local setup prevents raw streaming", async (t) 
 
   const stream = reasoningService.processTextStreamingAI(
     [{ role: "user", content: "hello" }],
-    "qwen3-1.7b-q4_k_m",
+    "qwen3-1.7b-q8_0",
     "local",
     { systemPrompt: "Answer the user.", disableThinking: true },
     undefined
@@ -414,7 +589,7 @@ test("cancelling a raw stream after its reader starts ends normally", async (t) 
 
   const stream = reasoningService.processTextStreamingAI(
     [{ role: "user", content: "hello" }],
-    "qwen3-1.7b-q4_k_m",
+    "qwen3-1.7b-q8_0",
     "lan",
     {
       systemPrompt: "Answer the user.",
@@ -462,7 +637,7 @@ test("a timeout-owned abort during raw response reading remains a timeout error"
 
   const stream = reasoningService.processTextStreamingAI(
     [{ role: "user", content: "hello" }],
-    "qwen3-1.7b-q4_k_m",
+    "qwen3-1.7b-q8_0",
     "lan",
     {
       systemPrompt: "Answer the user.",

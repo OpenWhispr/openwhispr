@@ -88,7 +88,7 @@ test("the server stops once the last local scope leaves", async (t) => {
   assert.equal(s.shouldStopLocalServer(needs, MODEL), true);
 });
 
-test("a policy that forbids local inference reports the clamped mode", async (t) => {
+test("a policy that forbids local inference leaves an inert model without switching modes", async (t) => {
   const s = await loadStore(
     t,
     { ...ALL_CLOUD, cleanupMode: "local", cleanupProvider: "qwen", cleanupModel: MODEL },
@@ -117,6 +117,7 @@ test("a policy that forbids local inference reports the clamped mode", async (t)
 
   const prefs = s.selectLocalServerPrefs(s.useSettingsStore.getState(), cloudOnly);
 
-  assert.notEqual(prefs.cleanupMode, "local");
+  assert.equal(prefs.cleanupMode, "local");
+  assert.equal(prefs.cleanupModel, "");
   assert.deepEqual(s.resolveLocalServerNeeds(prefs).models, []);
 });

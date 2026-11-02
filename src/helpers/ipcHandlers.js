@@ -1,3 +1,5 @@
+const modelRegistryData = require("../models/modelRegistryData.json");
+const { isLocalModelPolicyRefusal } = require("./localModelPolicyGate");
 const { OrukeetStreaming, MANAGED_STREAM_OPTIONS } = require("./orukeetStreaming");
 const { connectManagedOrukeet } = require("./orukeetCloudSession");
 const { ipcMain, app, shell, BrowserWindow, systemPreferences, net, session } = require("electron");
@@ -679,6 +681,86 @@ class IPCHandlers {
     this.clipboardManager = managers.clipboardManager;
     this.whisperManager = managers.whisperManager;
     this.parakeetManager = managers.parakeetManager;
+    const { createLocalModelPolicyGate } = require("./localModelPolicyGate");
+    const localLlmManager = require("./modelManagerBridge").default;
+    const localServers = [
+      [
+        "transcription",
+        this.whisperManager.serverManager,
+        () =>
+          this.whisperManager.serverManager.localModelIdForPath?.(
+            this.whisperManager.serverManager.modelPath
+          ),
+      ],
+      [
+        "transcription",
+        this.parakeetManager.serverManager.wsServer,
+        () => this.parakeetManager.serverManager.wsServer.modelName,
+      ],
+      [
+        "llm",
+        localLlmManager.serverManager,
+        () =>
+          localLlmManager.serverManager.localModelIdForPath?.(
+            localLlmManager.serverManager.modelPath
+          ),
+      ],
+    ];
+    this._localModelPolicy = createLocalModelPolicyGate({
+      getPolicy: () => this._getMainModelPolicy?.() ?? { success: false },
+      getIdentity: () => tokenStore.getState().generation,
+      getAppVersion: () => app.getVersion(),
+      isSnapshotCurrent: (snapshot) =>
+        snapshot?.accountId === undefined ||
+        snapshot.accountId === this.databaseManager.activeAccountId,
+      onChange: () => {
+        for (const [scope, server, modelId] of localServers) {
+          if (server.isRemote || !modelId()) continue;
+          const denied = this._localModelPolicy.failure(scope, modelId());
+          if (denied) {
+            void server.stop().catch((error) =>
+              debugLogger.warn("Could not stop policy-blocked local server", {
+                error: error.message,
+              })
+            );
+          }
+        }
+        if (this._activeLocalMeetingLease) {
+          try {
+            this._localModelPolicy.assertCurrent(this._activeLocalMeetingLease);
+          } catch (error) {
+            this._stopMeetingForPolicy?.(error.code);
+          }
+        }
+      },
+    });
+    for (const manager of [
+      this.whisperManager,
+      this.parakeetManager,
+      this.parakeetManager.serverManager,
+      localLlmManager,
+      ...localServers.map(([, server]) => server),
+    ]) {
+      manager.localModelPolicy = this._localModelPolicy;
+    }
+    const samePath = (actual, expected) =>
+      typeof actual === "string" && path.resolve(actual) === path.resolve(expected);
+    this.whisperManager.serverManager.localModelIdForPath = (modelPath) =>
+      Object.keys(modelRegistryData.whisperModels).find((id) =>
+        samePath(modelPath, this.whisperManager.getModelPath(id))
+      );
+    this.parakeetManager.serverManager.wsServer.localModelIdForPath = (modelPath, id) =>
+      modelRegistryData.parakeetModels[id] &&
+      samePath(modelPath, this.parakeetManager.getModelPath(id))
+        ? id
+        : undefined;
+    localLlmManager.serverManager.localModelIdForPath = (modelPath) =>
+      modelRegistryData.localProviders
+        .flatMap((provider) => provider.models)
+        .find((model) =>
+          samePath(modelPath, path.join(localLlmManager.getModelsDir(), model.fileName))
+        )?.id;
+
     this.diarizationManager = managers.diarizationManager;
     this.windowManager = managers.windowManager;
     this.updateManager = managers.updateManager;
@@ -892,6 +974,7 @@ class IPCHandlers {
   }
 
   _handleAuthTokenChange({ generation, token }) {
+    this._localModelPolicy?.invalidate();
     // A new bearer may belong to another account, so its policy is fetched
     // before new work; only a sign-out ends the work already running. A real
     // account switch is cancelled once set-active-account-scope learns it.
@@ -2704,6 +2787,7 @@ class IPCHandlers {
       // holds for the same account: that only re-scopes the policy, and only a
       // different account ends the work and meeting already running.
       if (accountChanged || (accountId !== null && previousScope?.accountId !== accountId)) {
+        this._localModelPolicy?.invalidate();
         this._audioFeaturePolicy?.invalidate(guestPolicy);
         if (accountChanged) {
           this._audioFeaturePolicy?.cancelJobs();
@@ -2716,6 +2800,7 @@ class IPCHandlers {
         this._audioFeaturePolicy?.update(guestPolicy);
       }
       this.databaseManager.setActiveAccountId(accountId);
+      if (guestPolicy) this._localModelPolicy?.update(guestPolicy);
       if (accountId !== null) accountScopeBinding.persist(accountId, state.token);
       else accountScopeBinding.clear();
       broadcastToWindows(
@@ -3777,6 +3862,8 @@ class IPCHandlers {
         return result;
       } catch (error) {
         debugLogger.error("Local Whisper transcription error", error);
+        if (isLocalModelPolicyRefusal(error))
+          return { success: false, error: error.message, code: error.code };
         const errorMessage = error.message || "Unknown error";
 
         // Return specific error types for better user feedback
@@ -4159,6 +4246,8 @@ class IPCHandlers {
         return result;
       } catch (error) {
         debugLogger.error("Local Parakeet transcription error", error);
+        if (isLocalModelPolicyRefusal(error))
+          return { success: false, error: error.message, code: error.code };
         const errorMessage = error.message || "Unknown error";
 
         if (errorMessage.includes("sherpa-onnx") && errorMessage.includes("not found")) {
@@ -6144,7 +6233,7 @@ class IPCHandlers {
         this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
         return { success: true, port: modelManager.serverManager.port };
       } catch (error) {
-        return { success: false, error: error.message };
+        return { success: false, error: error.message, code: error.code };
       }
     });
 
@@ -6852,41 +6941,55 @@ class IPCHandlers {
       broadcast: (snapshot) => {
         if (snapshot.authGeneration === tokenStore.getState().generation) {
           this._audioFeaturePolicy?.update(snapshot);
+          this._localModelPolicy?.update(snapshot);
         }
         broadcastToWindows("workspace-policy-changed", snapshot);
       },
       logger: debugLogger,
     });
     const { createAudioFeaturePolicy } = require("./audioFeaturePolicy");
-    this._audioFeaturePolicy = createAudioFeaturePolicy({
-      getPolicy: async (event, { refresh = false } = {}) => {
-        const generation = tokenStore.getState().generation;
-        const authHeaders = event.sender
-          ? await getAuthHeader(event)
-          : await getAuthHeaderFromWindow(
-              [this.windowManager.controlPanelWindow, this.windowManager.mainWindow].find(
-                (win) => win && !win.isDestroyed()
-              )
-            );
-        if (generation !== tokenStore.getState().generation) return { success: false };
-        if (!authHeaders.Authorization && !authHeaders.Cookie) {
-          return typeof this.databaseManager.activeAccountId === "string"
-            ? { success: false }
-            : { success: true, managed: false };
-        }
-        return workspacePolicyManager.getPolicy({
-          accountId: this.databaseManager.activeAccountId,
-          expectedAuthGeneration: generation,
-          authHeaders,
-          refresh,
-        });
+    const getMainPolicy = async (event = {}, { refresh = false } = {}) => {
+      const generation = tokenStore.getState().generation;
+      const authHeaders = event.sender
+        ? await getAuthHeader(event)
+        : await getAuthHeaderFromWindow(
+            [this.windowManager.controlPanelWindow, this.windowManager.mainWindow].find(
+              (win) => win && !win.isDestroyed()
+            )
+          );
+      if (generation !== tokenStore.getState().generation) return { success: false };
+      if (!authHeaders.Authorization && !authHeaders.Cookie) {
+        return typeof this.databaseManager.activeAccountId === "string"
+          ? { success: false }
+          : guestAudioPolicy(generation);
+      }
+      return workspacePolicyManager.getPolicy({
+        accountId: this.databaseManager.activeAccountId,
+        expectedAuthGeneration: generation,
+        authHeaders,
+        refresh,
+      });
+    };
+    this._getMainModelPolicy = getMainPolicy;
+    // CLI and tray-only sessions also refresh while a native server stays loaded.
+    this._localModelPolicyRefreshTimer = setInterval(
+      () => {
+        void this._localModelPolicy?.resolve().catch(() => {});
       },
+      5 * 60 * 1000
+    );
+    this._localModelPolicyRefreshTimer.unref();
+    this._audioFeaturePolicy = createAudioFeaturePolicy({
+      getPolicy: getMainPolicy,
       onBlocked: (purpose, code) => {
         if (purpose === "meeting") this._stopMeetingForPolicy?.(code);
       },
       onChange: () => this._syncMeetingDetectorPolicy?.(),
       logger: debugLogger,
     });
+    void getMainPolicy()
+      .then((snapshot) => this._localModelPolicy.update(snapshot))
+      .catch(() => {});
     this.windowManager.getMeetingRecordingRefusal = () =>
       this._audioFeaturePolicy.failure("meeting");
     this.windowManager.resolveMeetingRecordingRefusal = () =>
@@ -8514,6 +8617,8 @@ class IPCHandlers {
     const assertMeetingAllowed = () => {
       const denied = this._audioFeaturePolicy.activeFailure("meeting");
       if (denied) throw Object.assign(new Error(denied.error), { code: denied.code });
+      if (this._activeLocalMeetingLease)
+        this._localModelPolicy.assertCurrent(this._activeLocalMeetingLease);
     };
 
     const resolveEnterpriseMeetingOptions = async (event, options) => {
@@ -9289,6 +9394,9 @@ class IPCHandlers {
         // A decode that outlives a revocation must not deliver its text, as
         // the streaming path's uncommitted disconnect does not.
         if (this._audioFeaturePolicy.activeFailure("meeting")) return;
+        assertMeetingAllowed();
+        if (isLocalModelPolicyRefusal(result))
+          throw Object.assign(new Error(result.error), { code: result.code });
 
         if (result?.success && result.text?.trim()) {
           const text = result.text.trim();
@@ -9410,8 +9518,12 @@ class IPCHandlers {
           error: error.message,
         });
         if (meetingLocalWin && !meetingLocalWin.isDestroyed()) {
-          meetingLocalWin.webContents.send("meeting-transcription-error", error.message);
+          meetingLocalWin.webContents.send(
+            "meeting-transcription-error",
+            isLocalModelPolicyRefusal(error) ? error.code : error.message
+          );
         }
+        if (isLocalModelPolicyRefusal(error)) this._stopMeetingForPolicy?.(error.code);
       }
     };
 
@@ -9451,6 +9563,10 @@ class IPCHandlers {
     };
 
     const resetMeetingLocalState = () => {
+      if (this._activeLocalMeetingLease) {
+        this._localModelPolicy.release(this._activeLocalMeetingLease);
+        this._activeLocalMeetingLease = null;
+      }
       if (meetingLocalTimer) {
         clearInterval(meetingLocalTimer);
         meetingLocalTimer = null;
@@ -9507,6 +9623,7 @@ class IPCHandlers {
     let dictationPreviewChunkCount = 0;
     // Online-runtime models stream here instead of the 1.5s chunked path.
     let dictationPreviewStream = null;
+    let dictationPreviewPolicyError = null;
     // false = headless streaming session (commit-only, no preview window).
     let dictationPreviewDisplay = true;
     // Bumped on every reset so async preview work can detect a stale session.
@@ -9526,6 +9643,7 @@ class IPCHandlers {
     };
 
     const resetDictationPreviewState = ({ preserveSession = false } = {}) => {
+      dictationPreviewPolicyError = null;
       dictationPreviewGen++;
       if (dictationPreviewTimer) {
         clearInterval(dictationPreviewTimer);
@@ -9545,6 +9663,13 @@ class IPCHandlers {
       dictationPreviewModel = null;
       dictationPreviewLanguage = null;
       dictationPreviewDisplay = true;
+    };
+
+    const stopDictationPreviewForPolicy = (error) => {
+      resetDictationPreviewState();
+      dictationPreviewPolicyError = error;
+      this.windowManager.hideTranscriptionPreview();
+      return { success: false, error: error.message, code: error.code, streamed: false, text: "" };
     };
 
     const startDictationPreviewTimer = () => {
@@ -9603,6 +9728,12 @@ class IPCHandlers {
         if (result?.success && result.text?.trim()) {
           this.windowManager.appendTranscriptionPreview(result.text.trim());
         } else if (result && !result.success) {
+          if (isLocalModelPolicyRefusal(result)) {
+            stopDictationPreviewForPolicy(
+              Object.assign(new Error(result.error), { code: result.code })
+            );
+            return;
+          }
           debugLogger.warn("Dictation preview chunk returned failure", {
             error: result.error || result.message,
             provider,
@@ -9610,6 +9741,10 @@ class IPCHandlers {
         }
       } catch (error) {
         if (gen !== dictationPreviewGen) return;
+        if (isLocalModelPolicyRefusal(error)) {
+          stopDictationPreviewForPolicy(error);
+          return;
+        }
         debugLogger.error("Dictation preview transcription chunk failed", {
           error: error.message,
           provider,
@@ -10018,6 +10153,22 @@ class IPCHandlers {
       }
 
       meetingTranscriptionStartInProgress = true;
+      if (options.provider === "local" && this._localModelPolicy) {
+        try {
+          this._activeLocalMeetingLease = await this._localModelPolicy.authorize(
+            "transcription",
+            options.localModel
+          );
+          this._localModelPolicy.assertCurrent(this._activeLocalMeetingLease);
+        } catch (error) {
+          if (this._activeLocalMeetingLease) {
+            this._localModelPolicy.release(this._activeLocalMeetingLease);
+            this._activeLocalMeetingLease = null;
+          }
+          meetingTranscriptionStartInProgress = false;
+          return toPolicyFailure(error);
+        }
+      }
       // The lifecycle wrapper is the only caller and always injects the same
       // sessionId it registered; re-deriving one here would silently break
       // scoped stop/auto-end matching.
@@ -10774,6 +10925,10 @@ class IPCHandlers {
               },
               onError: (error) => {
                 if (gen !== dictationPreviewGen || dictationPreviewStream !== stream) return;
+                if (isLocalModelPolicyRefusal(error)) {
+                  stopDictationPreviewForPolicy(error);
+                  return;
+                }
                 // Keep the preview alive on the chunked path; the final
                 // transcript falls back to decoding the full recording.
                 debugLogger.warn("Online preview stream failed mid-session, falling back", {
@@ -10795,6 +10950,7 @@ class IPCHandlers {
             dictationPreviewBuffer = [];
             return { success: true };
           } catch (error) {
+            if (isLocalModelPolicyRefusal(error)) return stopDictationPreviewForPolicy(error);
             debugLogger.warn("Online preview stream unavailable, falling back to chunked preview", {
               model,
               error: error.message,
@@ -10826,7 +10982,12 @@ class IPCHandlers {
       }
       const pcm = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
       if (dictationPreviewStream) {
-        dictationPreviewStream.sendPcm16(pcm);
+        try {
+          dictationPreviewStream.sendPcm16(pcm);
+        } catch (error) {
+          if (isLocalModelPolicyRefusal(error)) stopDictationPreviewForPolicy(error);
+          else throw error;
+        }
         return;
       }
       dictationPreviewBuffer.push(pcm);
@@ -10879,6 +11040,8 @@ class IPCHandlers {
     );
 
     ipcMain.handle("stop-dictation-preview", async (_event, options = {}) => {
+      if (dictationPreviewPolicyError)
+        return stopDictationPreviewForPolicy(dictationPreviewPolicyError);
       if (!dictationPreviewMode && !dictationPreviewSessionActive) {
         return { success: true, streamed: false, text: "" };
       }
@@ -10893,7 +11056,13 @@ class IPCHandlers {
         const stream = dictationPreviewStream;
         dictationPreviewStream = null;
         const gen = dictationPreviewGen;
-        const result = await stream.finish().catch(() => null);
+        let result;
+        try {
+          result = await stream.finish();
+        } catch (error) {
+          if (isLocalModelPolicyRefusal(error)) return stopDictationPreviewForPolicy(error);
+          result = null;
+        }
         if (gen !== dictationPreviewGen) {
           return { success: true, streamed: false, text: "" };
         }
@@ -11438,6 +11607,7 @@ class IPCHandlers {
       // takes it here too, as it takes every broadcast.
       if (snapshot.success && snapshot.authGeneration === tokenStore.getState().generation) {
         this._audioFeaturePolicy.update(snapshot);
+        this._localModelPolicy?.update(snapshot);
       }
       return snapshot;
     });

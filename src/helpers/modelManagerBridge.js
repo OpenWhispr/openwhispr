@@ -1,3 +1,9 @@
+const {
+  runLocalModelOperation,
+  assertLocalModelOperation,
+  localModelOperationSignal,
+  isLocalModelPolicyRefusal,
+} = require("./localModelPolicyGate");
 const path = require("path");
 const fs = require("fs");
 const { promises: fsPromises } = require("fs");
@@ -303,6 +309,16 @@ class ModelManager {
   }
 
   async downloadModel(modelId, onProgress) {
+    return runLocalModelOperation(
+      this,
+      "llm",
+      modelId,
+      () => this._policyAllowedDownloadModel(modelId, onProgress),
+      { onAbort: () => this.cancelDownload(modelId) }
+    );
+  }
+
+  async _policyAllowedDownloadModel(modelId, onProgress) {
     this.ensureInitialized();
     const modelInfo = this.findModelById(modelId);
     if (!modelInfo) {
@@ -324,7 +340,8 @@ class ModelManager {
 
     this.activeDownloads.set(modelId, true);
     this.downloadLifecycleVersion += 1;
-    const { signal, abort } = createDownloadSignal();
+    const { signal: downloadSignal, abort } = createDownloadSignal();
+    const signal = localModelOperationSignal(this, downloadSignal);
     this.activeRequests.set(modelId, { abort });
 
     try {
@@ -371,6 +388,7 @@ class ModelManager {
         if (onProgress) onProgress(progress, combined, combinedTotal);
       };
 
+      assertLocalModelOperation(this);
       await sharedDownloadFile(downloadUrl, modelPath, {
         signal,
         onProgress: hasDrafter
@@ -404,6 +422,7 @@ class ModelManager {
       if (hasDrafter) {
         const draftPath = path.join(this.modelsDir, model.draftFileName);
         try {
+          assertLocalModelOperation(this);
           await sharedDownloadFile(this.getDraftDownloadUrl(provider, model), draftPath, {
             signal,
             onProgress: (downloadedBytes) => emitCombined(stats.size + downloadedBytes),
@@ -637,6 +656,16 @@ class ModelManager {
   }
 
   async runInference(modelId, prompt, options = {}) {
+    return runLocalModelOperation(
+      this,
+      "llm",
+      modelId,
+      () => this._policyAllowedRunInference(modelId, prompt, options),
+      { onAbort: () => this.cancelInference() }
+    );
+  }
+
+  async _policyAllowedRunInference(modelId, prompt, options = {}) {
     this.ensureInitialized();
     const startTime = Date.now();
     debugLogger.logReasoning("INFERENCE_START", {
@@ -761,6 +790,7 @@ class ModelManager {
         // be stepped down again.
         if (this.serverManager.contextSize < contextSize) refuse(contextSize);
       } catch (error) {
+        if (isLocalModelPolicyRefusal(error)) throw error;
         refuse(contextSize);
         // start() stops the running server before it spawns, so a grow that
         // dies has already taken a working window with it. Come back at the
@@ -778,6 +808,7 @@ class ModelManager {
         try {
           await startAt(restorableContextSize);
         } catch (restoreError) {
+          if (isLocalModelPolicyRefusal(restoreError)) throw restoreError;
           throw unavailable(restoreError);
         }
       }
@@ -895,6 +926,16 @@ class ModelManager {
   }
 
   async prewarmServer(modelId) {
+    return runLocalModelOperation(
+      this,
+      "llm",
+      modelId,
+      () => this._policyAllowedPrewarmServer(modelId),
+      { memoryOnly: true, onAbort: () => this.stopServer() }
+    );
+  }
+
+  async _policyAllowedPrewarmServer(modelId) {
     if (!modelId) return false;
     this.ensureInitialized();
 

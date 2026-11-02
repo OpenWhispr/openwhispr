@@ -21,10 +21,17 @@ test("pending local model selections remain isolated by scope", async () => {
     modelId: "qwen3.5-4b-q4_k_m",
   });
 
-  assert.deepEqual(pending.consumePendingLocalModel("dictation", "base"), {
-    provider: "whisper",
-    modelId: "base",
-  });
+  assert.deepEqual(
+    pending.consumePendingLocalModel("dictation", "base", {
+      status: "unmanaged",
+      policy: null,
+      appVersion: "1.11.1",
+    }),
+    {
+      provider: "whisper",
+      modelId: "base",
+    }
+  );
   assert.equal(pending.hasPendingLocalModels(), true);
   assert.deepEqual(pending.readPendingLocalModels().assistant, {
     provider: "qwen",
@@ -38,7 +45,14 @@ test("a completion cannot consume a different pending model", async () => {
 
   pending.rememberPendingLocalModel("dictation", { provider: "whisper", modelId: "small" });
 
-  assert.equal(pending.consumePendingLocalModel("dictation", "base"), null);
+  assert.equal(
+    pending.consumePendingLocalModel("dictation", "base", {
+      status: "unmanaged",
+      policy: null,
+      appVersion: "1.11.1",
+    }),
+    null
+  );
   assert.equal(pending.readPendingLocalModels().dictation.modelId, "small");
   pending.forgetPendingLocalModel("dictation", "small");
   assert.equal(pending.hasPendingLocalModels(), false);
@@ -87,4 +101,66 @@ test("pending local model availability distinguishes active, installed, and orph
     "missing"
   );
   assert.equal(getPendingLocalModelAvailability("dictation", dictation, {}), "unknown");
+});
+
+test("pending activation checks current approvals without changing saved preferences", async () => {
+  global.localStorage = createStorage();
+  const pending = await import("../../src/components/onboarding/pendingLocalModels.ts");
+  const policy = {
+    status: "managed",
+    appVersion: "1.11.1",
+    policy: {
+      transcription: { allowedModes: ["local"], allowedLocalModels: [] },
+      minAppVersion: null,
+    },
+  };
+  localStorage.setItem("whisperModel", "small");
+  pending.rememberPendingLocalModel("dictation", { provider: "whisper", modelId: "base" });
+  assert.equal(pending.consumePendingLocalModel("dictation", "base", policy), null);
+  assert.equal(localStorage.getItem("whisperModel"), "small");
+  assert.equal(pending.hasPendingLocalModels(), false);
+  policy.policy.transcription.allowedLocalModels = ["base"];
+  pending.rememberPendingLocalModel("dictation", { provider: "whisper", modelId: "base" });
+  assert.deepEqual(pending.consumePendingLocalModel("dictation", "base", policy), {
+    provider: "whisper",
+    modelId: "base",
+  });
+});
+
+test("pending activation cannot cross an account generation", async () => {
+  global.localStorage = createStorage();
+  const pending = await import("../../src/components/onboarding/pendingLocalModels.ts");
+  pending.rememberPendingLocalModel("dictation", {
+    provider: "whisper",
+    modelId: "base",
+    accountId: "first",
+    authGeneration: 4,
+  });
+  assert.equal(
+    pending.consumePendingLocalModel("dictation", "base", {
+      status: "unmanaged",
+      policy: null,
+      appVersion: "1.11.1",
+      accountId: "second",
+      authGeneration: 5,
+    }),
+    null
+  );
+  assert.equal(pending.hasPendingLocalModels(), false);
+});
+
+test("Cohere pending inventory uses the shared native manager family", async () => {
+  const { getPendingLocalModelAvailability } =
+    await import("../../src/components/onboarding/pendingLocalModels.ts");
+  assert.equal(
+    getPendingLocalModelAvailability(
+      "dictation",
+      {
+        provider: "cohere",
+        modelId: "cohere-transcribe-03-2026",
+      },
+      { whisper: [], parakeet: [{ model: "cohere-transcribe-03-2026", downloaded: true }] }
+    ),
+    "downloaded"
+  );
 });

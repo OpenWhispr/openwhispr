@@ -1,5 +1,6 @@
 import {
   filterByokProviderOptionsByPolicy,
+  filterLocalModelOptionsByPolicy,
   isModeAllowedByPolicy,
   isProviderAllowedByPolicy,
   type PolicyDecisionSnapshot,
@@ -26,11 +27,15 @@ export function getOnboardingSetupAvailability({
   agentAllowed,
   transcriptionProviders,
   llmProviders,
+  supportedLocalTranscriptionModels,
+  supportedLocalLlmModels,
 }: {
   policy: PolicyDecisionSnapshot;
   agentAllowed: boolean;
   transcriptionProviders: ProviderOption[];
   llmProviders: ProviderOption[];
+  supportedLocalTranscriptionModels: ProviderOption[];
+  supportedLocalLlmModels: ProviderOption[];
 }): OnboardingSetupAvailability {
   const transcriptionByokAvailable =
     isModeAllowedByPolicy(policy, "transcription", "providers") &&
@@ -43,8 +48,10 @@ export function getOnboardingSetupAvailability({
     isModeAllowedByPolicy(policy, "transcription", "openwhispr") &&
     (!agentAllowed || isModeAllowedByPolicy(policy, "llm", "openwhispr"));
   const local =
-    isModeAllowedByPolicy(policy, "transcription", "local") &&
-    (!agentAllowed || isModeAllowedByPolicy(policy, "llm", "local"));
+    filterLocalModelOptionsByPolicy(supportedLocalTranscriptionModels, "transcription", policy)
+      .length > 0 &&
+    (!agentAllowed ||
+      filterLocalModelOptionsByPolicy(supportedLocalLlmModels, "llm", policy).length > 0);
   const byok = transcriptionByokAvailable && (!agentAllowed || llmByokAvailable);
   const selfHosted =
     isModeAllowedByPolicy(policy, "transcription", "self-hosted") &&

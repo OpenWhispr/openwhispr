@@ -4,6 +4,7 @@ import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Download, Trash2, Cloud, Lock, X, Zap, Check, CircleAlert } from "./icons";
 import { ProviderIcon } from "./ui/ProviderIcon";
+import { LocalModelPolicyNotice } from "./ui/LocalModelPolicyNotice";
 import { ProviderTabs } from "./ui/ProviderTabs";
 import ModelCardList from "./ui/ModelCardList";
 import { DownloadProgressBar } from "./ui/DownloadProgressBar";
@@ -27,10 +28,12 @@ import { useSettingsStore } from "../stores/settingsStore";
 import {
   filterByokProviderOptionsByPolicy,
   isProviderAllowedByPolicy,
+  isLocalModelAllowedByPolicy,
   reconcileCloudProviderSelection,
   shouldPersistProviderFallback,
   type TranscriptionPolicyContext,
 } from "../stores/policyRules";
+import { usePolicyStore } from "../stores/policyStore";
 import { usePolicySnapshot } from "../hooks/usePolicy";
 import {
   LOCAL_ASR_ORGANIZATIONS,
@@ -76,6 +79,8 @@ interface LocalModelCardProps {
   isDownloading: boolean;
   isCancelling: boolean;
   isInstalling: boolean;
+  policyBlocked?: boolean;
+  unavailable?: boolean;
   recommended?: boolean;
   provider: string;
   languageLabel?: string;
@@ -98,6 +103,8 @@ function LocalModelCard({
   isDownloading,
   isCancelling,
   isInstalling,
+  policyBlocked = false,
+  unavailable = false,
   recommended,
   provider,
   languageLabel,
@@ -110,7 +117,7 @@ function LocalModelCard({
 }: LocalModelCardProps) {
   const { t } = useTranslation();
   const handleClick = () => {
-    if (isDownloaded && !isSelected) {
+    if (!policyBlocked && !unavailable && isDownloaded && !isSelected) {
       onSelect();
     }
   };
@@ -118,9 +125,17 @@ function LocalModelCard({
   return (
     <div
       onClick={handleClick}
+      aria-disabled={policyBlocked || unavailable || undefined}
+      title={
+        policyBlocked
+          ? t("models.policy.modelBlocked")
+          : unavailable
+            ? t("transcription.parakeet.unavailable")
+            : undefined
+      }
       className={`relative w-full text-start overflow-hidden rounded-md border transition-colors duration-200 group ${
         isSelected ? cardStyles.modelCard.selected : cardStyles.modelCard.default
-      } ${isDownloaded && !isSelected ? "cursor-pointer" : ""}`}
+      } ${isDownloaded && !isSelected && !policyBlocked && !unavailable ? "cursor-pointer" : ""}`}
     >
       <div className="flex items-center gap-1.5 p-2">
         <div className="shrink-0">
@@ -147,8 +162,11 @@ function LocalModelCard({
           <span className="text-xs text-muted-foreground/70 tabular-nums shrink-0">
             {actualSizeMb ? `${actualSizeMb}MB` : size}
           </span>
-          {recommended && (
+          {recommended && !policyBlocked && (
             <span className={cardStyles.badges.recommended}>{t("common.recommended")}</span>
+          )}
+          {policyBlocked && (
+            <span className="text-xs text-muted-foreground">{t("models.policy.notApproved")}</span>
           )}
           {languageLabel && (
             <span className="text-xs text-muted-foreground/70 font-medium shrink-0">
@@ -160,7 +178,7 @@ function LocalModelCard({
         <div className="flex items-center gap-1.5 shrink-0">
           {isDownloaded ? (
             <>
-              {isSelected && (
+              {isSelected && !policyBlocked && !unavailable && (
                 <span className="text-xs font-medium text-primary px-2 py-0.5 bg-primary/10 rounded-sm">
                   {t("common.active")}
                 </span>
@@ -170,6 +188,7 @@ function LocalModelCard({
                   e.stopPropagation();
                   onDelete();
                 }}
+                aria-label={t("common.delete")}
                 size="icon"
                 variant="ghost"
                 className="size-6 text-muted-foreground/70 hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,opacity,transform] active:scale-95"
@@ -191,7 +210,7 @@ function LocalModelCard({
               <X size={11} className="me-0.5" />
               {isCancelling ? "..." : t("common.cancel")}
             </Button>
-          ) : (
+          ) : policyBlocked || unavailable ? null : (
             <Button
               onClick={(e) => {
                 e.stopPropagation();
@@ -548,9 +567,27 @@ export default function TranscriptionModelPicker({
     // provider must each leave the sherpa tabs on their own: moving the tab off
     // the disabled entry keeps the UI usable, while committing "whisper"
     // is what actually reroutes transcription on unsupported Macs.
-    if (usesParakeetManager(internalLocalProvider)) setInternalLocalProvider("whisper");
-    if (isSherpaLocalProvider(selectedLocalProvider)) onLocalProviderSelect?.("whisper");
-  }, [internalLocalProvider, onLocalProviderSelect, parakeetCapability, selectedLocalProvider]);
+    if (
+      usesParakeetManager(internalLocalProvider) &&
+      !parakeetModels.some(
+        (model) =>
+          model.downloaded && getASRModelOrganization(model.model) === internalLocalProvider
+      )
+    )
+      setInternalLocalProvider("whisper");
+    if (
+      isSherpaLocalProvider(selectedLocalProvider) &&
+      isLocalModelAllowedByPolicy(usePolicyStore.getState(), "transcription", selectedLocalModel)
+    )
+      onLocalProviderSelect?.("whisper");
+  }, [
+    internalLocalProvider,
+    onLocalProviderSelect,
+    parakeetCapability,
+    selectedLocalProvider,
+    selectedLocalModel,
+    parakeetModels,
+  ]);
 
   const localModelsLoadQueueRef = useRef<Promise<void>>(Promise.resolve());
   const parakeetModelsLoadQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -595,7 +632,11 @@ export default function TranscriptionModelPicker({
   const localProviderTabs = useMemo(
     () =>
       LOCAL_PROVIDER_TABS.map((provider) =>
-        usesParakeetManager(provider.id) && parakeetCapability?.supported === false
+        usesParakeetManager(provider.id) &&
+        parakeetCapability?.supported === false &&
+        !parakeetModels.some(
+          (model) => model.downloaded && getASRModelOrganization(model.model) === provider.id
+        )
           ? {
               ...provider,
               disabled: true,
@@ -607,7 +648,7 @@ export default function TranscriptionModelPicker({
             }
           : provider
       ),
-    [parakeetCapability, t]
+    [parakeetCapability, parakeetModels, t]
   );
 
   useEffect(() => {
@@ -619,7 +660,11 @@ export default function TranscriptionModelPicker({
 
   const validateAndSelectModel = useCallback((loadedModels: LocalModel[]) => {
     const current = selectedLocalModelRef.current;
-    if (!current) return;
+    if (
+      !current ||
+      !isLocalModelAllowedByPolicy(usePolicyStore.getState(), "transcription", current)
+    )
+      return;
 
     // The whisper list loads on a mere browse of the Whisper tab, so the
     // committed selection can be a foreign id (a Parakeet model while nvidia
@@ -627,7 +672,11 @@ export default function TranscriptionModelPicker({
     const currentEntry = loadedModels.find((m) => m.model === current);
     if (!currentEntry || currentEntry.downloaded) return;
 
-    const downloaded = loadedModels.filter((m) => m.downloaded);
+    const downloaded = loadedModels.filter(
+      (m) =>
+        m.downloaded &&
+        isLocalModelAllowedByPolicy(usePolicyStore.getState(), "transcription", m.model)
+    );
     onLocalModelSelectRef.current(downloaded[0]?.model ?? "", "whisper");
   }, []);
 
@@ -1001,6 +1050,7 @@ export default function TranscriptionModelPicker({
 
   const handleWhisperModelSelect = useCallback(
     (modelId: string) => {
+      if (!isLocalModelAllowedByPolicy(usePolicyStore.getState(), "transcription", modelId)) return;
       setInternalLocalProvider("whisper");
       onLocalProviderSelect?.("whisper");
       onLocalModelSelect(modelId, "whisper");
@@ -1010,13 +1060,18 @@ export default function TranscriptionModelPicker({
 
   const handleParakeetModelSelect = useCallback(
     (modelId: string) => {
+      if (
+        parakeetCapability?.supported === false ||
+        !isLocalModelAllowedByPolicy(usePolicyStore.getState(), "transcription", modelId)
+      )
+        return;
       const organization = getASRModelOrganization(modelId);
       const provider = organization === "cohere" ? "cohere" : "nvidia";
       setInternalLocalProvider(organization);
       onLocalProviderSelect?.(provider);
       onLocalModelSelect(modelId, provider);
     },
-    [onLocalModelSelect, onLocalProviderSelect]
+    [onLocalModelSelect, onLocalProviderSelect, parakeetCapability]
   );
 
   const handleBaseUrlBlur = useCallback(() => {
@@ -1267,45 +1322,55 @@ export default function TranscriptionModelPicker({
 
     return (
       <div className="space-y-0.5">
-        {modelsToRender.map((model) => {
-          const modelId = model.model;
-          const info = WHISPER_MODEL_INFO[modelId] ?? {
-            name: modelId,
-            description: t("transcription.fallback.whisperModelDescription"),
-            size: t("common.unknown"),
-            recommended: false,
-          };
+        {modelsToRender
+          .filter(
+            (model) =>
+              model.downloaded ||
+              isLocalModelAllowedByPolicy(policyState, "transcription", model.model)
+          )
+          .map((model) => {
+            const modelId = model.model;
+            const info = WHISPER_MODEL_INFO[modelId] ?? {
+              name: modelId,
+              description: t("transcription.fallback.whisperModelDescription"),
+              size: t("common.unknown"),
+              recommended: false,
+            };
 
-          return (
-            <LocalModelCard
-              key={modelId}
-              modelId={modelId}
-              name={info.name}
-              description={info.description}
-              size={info.size}
-              actualSizeMb={model.size_mb}
-              isSelected={modelId === selectedLocalModel}
-              isDownloaded={model.downloaded ?? false}
-              isDownloading={isDownloadingModel(modelId)}
-              isCancelling={isCancellingModel(modelId)}
-              isInstalling={whisperDownloads[modelId]?.phase === "installing"}
-              recommended={info.recommended}
-              provider="whisper"
-              onSelect={() => handleWhisperModelSelect(modelId)}
-              onDelete={() => handleDelete(modelId)}
-              onDownload={() =>
-                downloadModel(modelId, (downloadedId) => {
-                  setLocalModels((prev) =>
-                    prev.map((m) => (m.model === downloadedId ? { ...m, downloaded: true } : m))
-                  );
-                  handleWhisperModelSelect(downloadedId);
-                })
-              }
-              onCancel={() => cancelDownload(modelId)}
-              styles={styles}
-            />
-          );
-        })}
+            return (
+              <LocalModelCard
+                key={modelId}
+                modelId={modelId}
+                name={info.name}
+                description={info.description}
+                size={info.size}
+                actualSizeMb={model.size_mb}
+                isSelected={
+                  modelId === selectedLocalModel &&
+                  isLocalModelAllowedByPolicy(policyState, "transcription", modelId)
+                }
+                policyBlocked={!isLocalModelAllowedByPolicy(policyState, "transcription", modelId)}
+                isDownloaded={model.downloaded ?? false}
+                isDownloading={isDownloadingModel(modelId)}
+                isCancelling={isCancellingModel(modelId)}
+                isInstalling={whisperDownloads[modelId]?.phase === "installing"}
+                recommended={info.recommended}
+                provider="whisper"
+                onSelect={() => handleWhisperModelSelect(modelId)}
+                onDelete={() => handleDelete(modelId)}
+                onDownload={() =>
+                  downloadModel(modelId, (downloadedId) => {
+                    setLocalModels((prev) =>
+                      prev.map((m) => (m.model === downloadedId ? { ...m, downloaded: true } : m))
+                    );
+                    handleWhisperModelSelect(downloadedId);
+                  })
+                }
+                onCancel={() => cancelDownload(modelId)}
+                styles={styles}
+              />
+            );
+          })}
       </div>
     );
   };
@@ -1343,48 +1408,59 @@ export default function TranscriptionModelPicker({
 
     return (
       <div className="space-y-0.5">
-        {modelsToRender.map((model) => {
-          const modelId = model.model;
-          const info = PARAKEET_MODEL_INFO[modelId] ?? {
-            name: modelId,
-            description: t("transcription.fallback.parakeetModelDescription"),
-            modelCardUrl: undefined,
-            size: t("common.unknown"),
-            language: "en",
-            recommended: false,
-          };
+        {modelsToRender
+          .filter(
+            (model) =>
+              model.downloaded ||
+              isLocalModelAllowedByPolicy(policyState, "transcription", model.model)
+          )
+          .map((model) => {
+            const modelId = model.model;
+            const info = PARAKEET_MODEL_INFO[modelId] ?? {
+              name: modelId,
+              description: t("transcription.fallback.parakeetModelDescription"),
+              modelCardUrl: undefined,
+              size: t("common.unknown"),
+              language: "en",
+              recommended: false,
+            };
 
-          return (
-            <LocalModelCard
-              key={modelId}
-              modelId={modelId}
-              name={info.name}
-              description={info.description}
-              size={info.size}
-              actualSizeMb={model.size_mb}
-              isSelected={modelId === selectedLocalModel}
-              isDownloaded={model.downloaded ?? false}
-              isDownloading={isDownloadingParakeetModel(modelId)}
-              isCancelling={isCancellingParakeetModel(modelId)}
-              isInstalling={parakeetDownloads[modelId]?.phase === "installing"}
-              recommended={info.recommended}
-              provider={getASRModelOrganization(modelId)}
-              modelCardUrl={info.modelCardUrl}
-              onSelect={() => handleParakeetModelSelect(modelId)}
-              onDelete={() => handleParakeetDelete(modelId)}
-              onDownload={() =>
-                downloadParakeetModel(modelId, (downloadedId) => {
-                  setParakeetModels((prev) =>
-                    prev.map((m) => (m.model === downloadedId ? { ...m, downloaded: true } : m))
-                  );
-                  handleParakeetModelSelect(downloadedId);
-                })
-              }
-              onCancel={() => cancelParakeetDownload(modelId)}
-              styles={styles}
-            />
-          );
-        })}
+            return (
+              <LocalModelCard
+                key={modelId}
+                modelId={modelId}
+                name={info.name}
+                description={info.description}
+                size={info.size}
+                actualSizeMb={model.size_mb}
+                isSelected={
+                  modelId === selectedLocalModel &&
+                  isLocalModelAllowedByPolicy(policyState, "transcription", modelId)
+                }
+                policyBlocked={!isLocalModelAllowedByPolicy(policyState, "transcription", modelId)}
+                unavailable={parakeetCapability?.supported === false}
+                isDownloaded={model.downloaded ?? false}
+                isDownloading={isDownloadingParakeetModel(modelId)}
+                isCancelling={isCancellingParakeetModel(modelId)}
+                isInstalling={parakeetDownloads[modelId]?.phase === "installing"}
+                recommended={info.recommended}
+                provider={getASRModelOrganization(modelId)}
+                modelCardUrl={info.modelCardUrl}
+                onSelect={() => handleParakeetModelSelect(modelId)}
+                onDelete={() => handleParakeetDelete(modelId)}
+                onDownload={() =>
+                  downloadParakeetModel(modelId, (downloadedId) => {
+                    setParakeetModels((prev) =>
+                      prev.map((m) => (m.model === downloadedId ? { ...m, downloaded: true } : m))
+                    );
+                    handleParakeetModelSelect(downloadedId);
+                  })
+                }
+                onCancel={() => cancelParakeetDownload(modelId)}
+                styles={styles}
+              />
+            );
+          })}
       </div>
     );
   };
@@ -1573,6 +1649,13 @@ export default function TranscriptionModelPicker({
             colorScheme="purple"
           />
 
+          <LocalModelPolicyNotice
+            scope="transcription"
+            hasSupportedModel={[
+              ...Object.keys(WHISPER_MODEL_INFO),
+              ...(parakeetCapability?.supported ? Object.keys(PARAKEET_MODEL_INFO) : []),
+            ].some((id) => isLocalModelAllowedByPolicy(policyState, "transcription", id))}
+          />
           {progressDisplay}
 
           {gpuDownloading && internalLocalProvider === "whisper" && (

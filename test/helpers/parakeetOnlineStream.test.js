@@ -52,6 +52,59 @@ function onlineWsServerAt(port) {
   return server;
 }
 
+test("model revocation closes an online stream, blocks later frames, and suppresses final text", async () => {
+  const { createLocalModelPolicyGate } = require("../../src/helpers/localModelPolicyGate");
+  const { managedPolicy } = require("./harness/policyFixtures");
+  let firstFrame;
+  const received = new Promise((resolve) => {
+    firstFrame = resolve;
+  });
+  let frames = 0;
+  const mock = await startMockOnlineServer({
+    onBinary: () => {
+      frames++;
+      firstFrame();
+    },
+  });
+  mock.ignoreDone();
+  const gate = createLocalModelPolicyGate({
+    getPolicy: async () => ({ success: true, managed: false }),
+    getIdentity: () => 1,
+    getAppVersion: () => "1.11.1",
+  });
+  await gate.resolve();
+  const server = onlineWsServerAt(mock.port);
+  server.modelName = "nemotron-speech-streaming-en-0.6b";
+  server.localModelPolicy = gate;
+  let refusal;
+  const stream = server.createOnlineStream({
+    onError: (error) => {
+      refusal = error;
+    },
+  });
+  try {
+    stream.sendPcm16(Buffer.alloc(3200));
+    await received;
+    const finishing = Promise.allSettled([stream.finish(), stream.finish()]);
+    gate.update({
+      success: true,
+      managed: true,
+      policy: managedPolicy({ transcription: { allowedModes: ["local"], allowedLocalModels: [] } }),
+    });
+    for (const result of await finishing) {
+      assert.equal(result.status, "rejected");
+      assert.equal(result.reason.code, "POLICY_MODEL_BLOCKED");
+    }
+    assert.equal(refusal.code, "POLICY_MODEL_BLOCKED");
+    assert.throws(() => stream.sendPcm16(Buffer.alloc(3200)), { code: "POLICY_MODEL_BLOCKED" });
+    assert.throws(() => stream.finish(), { code: "POLICY_MODEL_BLOCKED" });
+    assert.equal(frames, 1);
+  } finally {
+    stream.abort();
+    await mock.close();
+  }
+});
+
 test("online stream emits live updates and finish resolves with the final text", async () => {
   const mock = await startMockOnlineServer({
     onBinary: (socket, _data, frameCount) => {

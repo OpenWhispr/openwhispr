@@ -1,4 +1,4 @@
-import { Fragment, forwardRef, useRef, useState } from "react";
+import { Fragment, forwardRef, useRef, useState, useEffect } from "react";
 import {
   AlertCircle,
   BanknoteCheck,
@@ -18,6 +18,8 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dia
 import { usePolicySnapshot } from "../../hooks/usePolicy";
 import {
   getParakeetModelInfo,
+  getParakeetModels,
+  getWhisperModels,
   getTranscriptionProviders,
   modelRegistry,
 } from "../../models/ModelRegistry";
@@ -125,6 +127,19 @@ export default function SetupChoiceStep({
 }: SetupChoiceStepProps) {
   const { t } = useTranslation();
   const policy = usePolicySnapshot();
+  const [parakeetSupported, setParakeetSupported] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    window.electronAPI
+      ?.checkParakeetInstallation?.()
+      .then((capability) => {
+        if (!cancelled) setParakeetSupported(capability.supported);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [pending, setPending] = useState<WarningSetupMode | null>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
   const [showMore, setShowMore] = useState(false);
@@ -146,6 +161,13 @@ export default function SetupChoiceStep({
     agentAllowed,
     transcriptionProviders: getTranscriptionProviders(),
     llmProviders: modelRegistry.getCloudProviders(),
+    supportedLocalTranscriptionModels: [
+      ...Object.keys(getWhisperModels()),
+      ...(parakeetSupported ? Object.keys(getParakeetModels()) : []),
+    ].map((id) => ({ id })),
+    supportedLocalLlmModels: modelRegistry
+      .getAllProviders()
+      .flatMap((provider) => provider.models.filter((model) => !model.legacy)),
   });
   const {
     cloud: cloudAllowed,
@@ -161,7 +183,7 @@ export default function SetupChoiceStep({
   };
 
   const confirmPending = () => {
-    if (!pending) return;
+    if (!pending || !availability[pending === "local" ? "local" : "selfHosted"]) return;
     onSelect(pending);
     setPending(null);
   };

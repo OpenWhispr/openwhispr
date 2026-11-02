@@ -41,6 +41,7 @@ async function createSetupHarness(
     resumeState,
     capability = { supported: true },
     freshInstall = false,
+    policy,
   } = {}
 ) {
   let unmount = async () => {};
@@ -129,6 +130,8 @@ async function createSetupHarness(
       provider === "nvidia" ? "nvidia" : "whisper"
     );
   }
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  if (policy) usePolicyStore.setState(policy);
   const { LocalModelSetupStep } = await vite.ssrLoadModule(
     "/components/onboarding/ProviderSetupStep.tsx"
   );
@@ -137,8 +140,12 @@ async function createSetupHarness(
   const { default: BackgroundModelDownloadTray } = await vite.ssrLoadModule(
     "/components/onboarding/BackgroundModelDownloadTray.tsx"
   );
+  const { LocalModelPolicyNotice } = await vite.ssrLoadModule(
+    "/components/ui/LocalModelPolicyNotice.tsx"
+  );
   let tree;
   let trayTree;
+  let noticeTree;
   let ready = false;
   let proceeded = false;
   let skipped = false;
@@ -161,6 +168,8 @@ async function createSetupHarness(
     // Execute the real component and hooks with React lifecycle, while leaving
     // native controls unmounted: their returned handlers are the test boundary.
     tree = LocalModelSetupStep(props);
+    const notice = findElement(tree, (node) => node.type === LocalModelPolicyNotice);
+    noticeTree = LocalModelPolicyNotice(notice.props);
     trayTree = BackgroundModelDownloadTray({ placement: "onboarding" });
     return null;
   }
@@ -235,6 +244,9 @@ async function createSetupHarness(
     );
   return {
     store: useSettingsStore,
+    setPolicy: async (policy) => {
+      await React.act(async () => usePolicyStore.setState(policy));
+    },
     pending,
     row,
     click,
@@ -271,6 +283,7 @@ async function createSetupHarness(
     proceeded: () => proceeded,
     skipped: () => skipped,
     ready: () => ready,
+    noticeText: () => textContent(noticeTree),
     resumeDrafts: () => resumeDrafts,
     canProceed: () => !actionButton("onboarding.rehaul.provider.proceed").props.disabled,
     canSkip: () => {
@@ -576,4 +589,129 @@ test("an extracting row says so while another model is still downloading", async
   assert.match(textContent(setup.trayRow(`llm:${FIRST_LLM}`)), /40%/);
   // Not every row has reached extraction, so the strip stays on downloading.
   assert.equal(setup.trayHeader(), "onboarding.rehaul.local.downloadInProgress");
+});
+
+function localPolicy(allowedSpeech = ["base"], allowedLlm = [FIRST_LLM]) {
+  return {
+    status: "managed",
+    appVersion: "1.11.1",
+    policy: {
+      transcription: { allowedModes: ["local"], allowedLocalModels: allowedSpeech },
+      llm: { allowedModes: ["local"], allowedLocalModels: allowedLlm },
+      features: { agentEnabled: true },
+      minAppVersion: null,
+    },
+  };
+}
+
+test("blocked installed selections remain inert and deletable without rewriting preferences", async (t) => {
+  const setup = await createSetupHarness(t, {
+    assistant: true,
+    selectedModel: FIRST_LLM,
+    installed: { llm: [FIRST_LLM, SECOND_LLM] },
+    policy: localPolicy(["base"], [SECOND_LLM]),
+  });
+  assert.equal(setup.ready(), false);
+  assert.doesNotMatch(
+    textContent(setup.row(FIRST_LLM)),
+    /onboarding\.rehaul\.local\.(selected|use)/
+  );
+  assert.match(textContent(setup.row(FIRST_LLM)), /models\.policy\.notApproved/);
+  assert.equal(setup.store.getState().chatAgentModel, FIRST_LLM);
+  await setup.click(SECOND_LLM, "onboarding.rehaul.local.use");
+  assert.equal(setup.store.getState().chatAgentModel, SECOND_LLM);
+});
+
+test("policy revocation during a download suppresses step and tray activation", async (t) => {
+  const setup = await createSetupHarness(t, { assistant: true, policy: localPolicy() });
+  await setup.click(FIRST_LLM, "onboarding.rehaul.local.download");
+  localStorage.setItem("localSetupPending", "true");
+  await setup.setPolicy(localPolicy(["base"], []));
+  assert.equal(setup.canProceed(), false);
+  await setup.complete(FIRST_LLM);
+  assert.equal(setup.store.getState().chatAgentModel, "");
+  assert.equal(setup.ready(), false);
+});
+
+test("fresh setup offers an approved family when the Orukeet default is blocked", async (t) => {
+  const setup = await createSetupHarness(t, { freshInstall: true, policy: localPolicy() });
+  assert.ok(setup.row("base"));
+  assert.throws(() => setup.row("orukeet-v0.1.0"));
+  assert.equal(setup.store.getState().whisperModel, "");
+});
+
+test("an old account download cannot activate under a new approved account", async (t) => {
+  const setup = await createSetupHarness(t, {
+    assistant: true,
+    policy: { ...localPolicy(), accountId: "first", authGeneration: 1 },
+  });
+  await setup.click(FIRST_LLM, "onboarding.rehaul.local.download");
+  localStorage.setItem("localSetupPending", "true");
+  await setup.setPolicy({ ...localPolicy(), accountId: "second", authGeneration: 2 });
+  await setup.complete(FIRST_LLM);
+  assert.equal(setup.store.getState().chatAgentModel, "");
+  assert.equal(setup.ready(), false);
+  assert.equal(setup.pending.hasPendingLocalModels(), false);
+});
+
+test("a denied installed speech family still advertises supported approvals in another family", async (t) => {
+  const setup = await createSetupHarness(t, {
+    provider: "nvidia",
+    selectedModel: "orukeet-v0.1.0",
+    installed: { parakeet: ["orukeet-v0.1.0"] },
+    policy: localPolicy(["base"]),
+  });
+  assert.equal(setup.noticeText(), "models.policy.guidance");
+  assert.equal(setup.store.getState().parakeetModel, "orukeet-v0.1.0");
+  await setup.chooseProvider("whisper");
+  assert.ok(setup.row("base"));
+});
+
+test("a denied installed LLM family still advertises supported approvals in another family", async (t) => {
+  const setup = await createSetupHarness(t, {
+    assistant: true,
+    provider: "llama",
+    selectedModel: LEGACY_LLM,
+    installed: { llm: [LEGACY_LLM] },
+    policy: localPolicy(),
+  });
+  assert.equal(setup.noticeText(), "models.policy.guidance");
+  assert.equal(setup.store.getState().chatAgentModel, LEGACY_LLM);
+  await setup.chooseProvider("qwen");
+  assert.ok(setup.row(FIRST_LLM));
+});
+
+test("Cohere-only approvals stay reachable from a saved Whisper family and preserve provider identity", async (t) => {
+  const modelId = "cohere-transcribe-03-2026";
+  const setup = await createSetupHarness(t, {
+    provider: "whisper",
+    selectedModel: "base",
+    installed: { whisper: ["base"], parakeet: [modelId] },
+    policy: localPolicy([modelId]),
+  });
+  assert.equal(setup.providerListed("cohere"), true);
+  assert.equal(setup.store.getState().whisperModel, "base");
+  await setup.chooseProvider("cohere");
+  await setup.click(modelId, "onboarding.rehaul.local.use");
+  assert.equal(setup.store.getState().localTranscriptionProvider, "cohere");
+  assert.equal(setup.store.getState().cohereModel, modelId);
+  await setup.chooseProvider("whisper");
+  await setup.chooseProvider("cohere");
+  assert.equal(setup.ready(), true);
+});
+
+test("a Cohere download activates its own model field through the background tray", async (t) => {
+  const modelId = "cohere-transcribe-03-2026";
+  const setup = await createSetupHarness(t, { policy: localPolicy([modelId]) });
+  await setup.chooseProvider("cohere");
+  await setup.click(modelId, "onboarding.rehaul.local.download");
+  assert.deepEqual(setup.pending.readPendingLocalModels().dictation, {
+    provider: "cohere",
+    modelId,
+  });
+  await setup.proceed();
+  await setup.complete(modelId);
+  assert.equal(setup.store.getState().localTranscriptionProvider, "cohere");
+  assert.equal(setup.store.getState().cohereModel, modelId);
+  assert.equal(setup.ready(), true);
 });

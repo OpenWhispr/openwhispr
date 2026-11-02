@@ -4,10 +4,11 @@ const { loadAudioManager: loadAudioManagerHarness } = require("./harness/audioMa
 
 // The shared harness supplies the renderer-graph stubs; this wrapper adds the
 // no-op instance surface every manager in this suite needs.
-async function loadAudioManager(t, { cachePrefix, settingsKey }) {
+async function loadAudioManager(t, { cachePrefix, settingsKey, mockModules = {} }) {
   const { window, vite, setSettings, createManager } = await loadAudioManagerHarness(t, {
     cachePrefix,
     settingsKey,
+    mockModules,
   });
   return {
     window,
@@ -628,4 +629,231 @@ test("config-error code survives a failed local fallback", async (t) => {
       return true;
     }
   );
+});
+
+test("local policy refusals preserve their code and never trigger a cloud fallback", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-local-policy-fallback-test-",
+    settingsKey: "__localPolicyFallbackSettings",
+  });
+  setSettings({
+    useLocalWhisper: true,
+    allowOpenAIFallback: true,
+    cloudTranscriptionProvider: "openai",
+  });
+  let cloudCalls = 0;
+  const manager = createManager({
+    processWithOpenAIAPI: async () => {
+      cloudCalls++;
+      return { success: true, text: "cloud" };
+    },
+  });
+  const audio = new Blob([new Uint8Array([1, 2, 3])]);
+  for (const code of [
+    "POLICY_MODEL_BLOCKED",
+    "POLICY_LOCAL_MODE_BLOCKED",
+    "POLICY_UNRESOLVABLE",
+    "POLICY_APP_VERSION_BLOCKED",
+  ]) {
+    for (const [channel, method] of [
+      ["transcribeLocalWhisper", "processWithLocalWhisper"],
+      ["transcribeLocalParakeet", "processWithLocalParakeet"],
+    ]) {
+      window.electronAPI[channel] = async () => ({ success: false, error: "Access revoked", code });
+      await assert.rejects(manager[method](audio), { code });
+    }
+  }
+  assert.equal(cloudCalls, 0);
+});
+
+test("an ordinary local failure uses the approved BYOK route despite the saved local mode", async (t) => {
+  const { window, vite, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-local-byok-fallback-test-",
+    settingsKey: "__localByokFallbackSettings",
+  });
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  usePolicyStore.setState({
+    status: "managed",
+    appVersion: "1.11.1",
+    policy: buildManagedPolicy(["local", "providers"]),
+  });
+  setSettings({
+    useLocalWhisper: true,
+    transcriptionMode: "local",
+    whisperModel: "base",
+    allowOpenAIFallback: true,
+    cloudTranscriptionProvider: "openai",
+  });
+  window.electronAPI.transcribeLocalWhisper = async () => ({
+    success: false,
+    error: "engine unavailable",
+  });
+  const fetched = captureFetch(t, okJson({ text: "BYOK recovery" }));
+  const result = await createManager().processWithLocalWhisper(
+    new Blob(["audio"], { type: "audio/webm" }),
+    "base"
+  );
+  assert.equal(result.text, "BYOK recovery");
+  assert.equal(fetched.length, 1);
+});
+
+test("final dictation refuses a policy-cleared Parakeet selection before inference or fallback", async (t) => {
+  const { setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-final-blocked-parakeet-test-",
+    settingsKey: "__blockedParakeetSettings",
+  });
+  let nativeCalls = 0;
+  let cloudCalls = 0;
+  let reported;
+  setSettings({
+    useLocalWhisper: true,
+    localTranscriptionProvider: "nvidia",
+    parakeetModel: "parakeet-tdt-0.6b-v2",
+    policyBlockedLocalScopes: [],
+  });
+  // A policy refresh during capture derives an inert final selection even with preview disabled.
+  setSettings({
+    useLocalWhisper: true,
+    localTranscriptionProvider: "nvidia",
+    parakeetModel: "",
+    policyBlockedLocalScopes: ["dictation"],
+    allowOpenAIFallback: true,
+  });
+  const manager = createManager({
+    _startProcessingPipeline: () => ({}),
+    _shouldAbandonProcessingPipeline: () => false,
+    _settleProcessingPipeline: () => true,
+    _completeActivationCapture: async () => {},
+    _takePendingResultExtras: () => ({}),
+    onError: (error) => {
+      reported = error;
+    },
+    processWithLocalParakeet: async () => {
+      nativeCalls++;
+      return { success: true, text: "default" };
+    },
+    processWithOpenAIAPI: async () => {
+      cloudCalls++;
+      return { success: true, text: "cloud" };
+    },
+  });
+  await manager.processAudio(new Blob(["audio"]));
+  assert.equal(nativeCalls, 0);
+  assert.equal(cloudCalls, 0);
+  assert.equal(reported.code, "POLICY_MODEL_BLOCKED");
+  setSettings({
+    useLocalWhisper: true,
+    localTranscriptionProvider: "nvidia",
+    parakeetModel: undefined,
+  });
+  await manager.processAudio(new Blob(["audio"]));
+  assert.equal(
+    nativeCalls,
+    0,
+    "a missing final model must not activate the manager's default model"
+  );
+});
+
+test("managed enterprise dictation outranks a blocked saved personal local selection", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-managed-before-local-guard-test-",
+    settingsKey: "__managedBeforeLocalSettings",
+    mockModules: {
+      "/services/managedTranscription.ts": `
+        export const getManagedTranscriptionResolution = () => globalThis.__managedBeforeLocalResolution;
+        export const isManagedTranscriptionActive = () => true;
+      `,
+    },
+  });
+  t.after(() => {
+    delete globalThis.__managedBeforeLocalResolution;
+  });
+  setSettings({
+    useLocalWhisper: true,
+    localTranscriptionProvider: "nvidia",
+    parakeetModel: "",
+    policyBlockedLocalScopes: ["dictation"],
+    allowLocalFallback: true,
+    allowOpenAIFallback: true,
+  });
+  let managedCalls = 0;
+  let nativeCalls = 0;
+  let reported;
+  let completed;
+  window.electronAPI.managedTranscribe = async (payload) => {
+    managedCalls++;
+    assert.equal(payload.managed.provider, "azure");
+    return { text: "managed enterprise transcript" };
+  };
+  const manager = createManager({
+    isProcessing: true,
+    _startProcessingPipeline: () => ({}),
+    _shouldAbandonProcessingPipeline: () => false,
+    _settleProcessingPipeline: () => true,
+    _completeActivationCapture: async () => {},
+    _takePendingResultExtras: () => ({}),
+    getCustomDictionaryPromptTiers: () => [],
+    onError: (error) => {
+      reported = error;
+    },
+    onTranscriptionComplete: (result) => {
+      completed = result;
+    },
+    processWithLocalParakeet: async () => {
+      nativeCalls++;
+      throw new Error("unexpected local dispatch");
+    },
+    processWithLocalWhisper: async () => {
+      nativeCalls++;
+      throw new Error("unexpected local fallback");
+    },
+  });
+  globalThis.__managedBeforeLocalResolution = {
+    kind: "managed",
+    provider: "azure",
+    deployment: "enterprise-stt",
+    context: { accountId: "account", workspaceId: "workspace", authGeneration: 1 },
+  };
+  await manager.processAudio(new Blob(["audio"], { type: "audio/webm" }));
+  assert.equal(managedCalls, 1);
+  assert.equal(nativeCalls, 0);
+  assert.equal(reported, undefined);
+  assert.equal(completed.text, "managed enterprise transcript");
+
+  globalThis.__managedBeforeLocalResolution = {
+    kind: "error",
+    message: "Managed configuration changed",
+    code: "MANAGED_CONFIG_UNAVAILABLE",
+  };
+  await manager.processAudio(new Blob(["audio"], { type: "audio/webm" }));
+  assert.equal(reported.code, "MANAGED_CONFIG_UNAVAILABLE");
+  assert.equal(managedCalls, 1);
+  assert.equal(nativeCalls, 0);
+});
+
+test("a policy refusal from cloud setup is terminal even when local fallback is approved", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-cloud-terminal-policy-test-",
+    settingsKey: "__cloudTerminalPolicySettings",
+  });
+  setSettings({
+    useLocalWhisper: false,
+    allowLocalFallback: true,
+    fallbackWhisperModel: "base",
+    cloudTranscriptionProvider: "openai",
+  });
+  let nativeCalls = 0;
+  window.electronAPI.transcribeLocalWhisper = async () => {
+    nativeCalls++;
+    return { success: true, text: "must not fall back" };
+  };
+  const manager = createManager({
+    getAPIKey: async () => {
+      throw Object.assign(new Error("revoked"), { code: "POLICY_RESTRICTED" });
+    },
+  });
+  await assert.rejects(manager.processWithOpenAIAPI(new Blob(["audio"])), {
+    code: "POLICY_RESTRICTED",
+  });
+  assert.equal(nativeCalls, 0);
 });

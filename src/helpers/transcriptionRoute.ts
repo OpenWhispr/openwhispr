@@ -71,6 +71,10 @@ export interface TranscriptionRouteSettings {
   cortiEnvironment?: string;
   cortiTenant?: string;
   preferredLanguage?: string;
+  localTranscriptionProvider?: string;
+  whisperModel?: string;
+  parakeetModel?: string;
+  cohereModel?: string;
 }
 
 /**
@@ -286,6 +290,12 @@ export function resolveTranscriptionRoute({
     !isTranscriptionSelectionAllowed(policy!, {
       mode: (s.transcriptionMode || (s.useLocalWhisper ? "local" : "providers")) as never,
       provider: s.cloudTranscriptionProvider || "",
+      model:
+        s.localTranscriptionProvider === "cohere"
+          ? s.cohereModel
+          : s.localTranscriptionProvider === "nvidia"
+            ? s.parakeetModel
+            : s.whisperModel,
     })
   ) {
     return error(

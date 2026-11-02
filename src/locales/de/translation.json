@@ -2905,6 +2905,16 @@
       "contextTooLargeGeneric": "Das ist zu lang, als dass {{model}} es auf diesem Computer lesen könnte. Versuchen Sie ein Cloud-Modell oder führen Sie die Aktion für eine kürzere Auswahl aus.",
       "localServerUnavailable": "{{model}} konnte auf diesem Computer nicht gestartet werden. Versuchen Sie es erneut oder wechseln Sie zu einem Cloud-Modell.",
       "localModelBusy": "Das lokale Modell bearbeitet noch eine andere Anfrage. Warten Sie, bis sie abgeschlossen ist, und versuchen Sie es dann erneut."
+    },
+    "policy": {
+      "guidance": "Wähle ein von deiner Organisation genehmigtes lokales Modell.",
+      "notApproved": "Nicht genehmigt",
+      "noneSupported": "Diese App-Version oder dieses Gerät unterstützt kein genehmigtes lokales Modell. Aktualisiere OpenWhispr oder kontaktiere deine Administration.",
+      "emptyIntersection": "Für diese Aufgabe gibt es in deinem Arbeitsbereich keine genehmigten lokalen Modelle.",
+      "modelBlocked": "Deine Organisation hat dieses lokale Modell nicht genehmigt. Wähle ein genehmigtes Modell.",
+      "modeBlocked": "Deine Organisation hat die lokale Verarbeitung deaktiviert.",
+      "unresolved": "Die Arbeitsbereichsrichtlinie konnte nicht ermittelt werden. Stelle eine Verbindung her und versuche es erneut.",
+      "versionBlocked": "Aktualisiere OpenWhispr, um die genehmigten Modelle deiner Organisation zu nutzen."
     }
   },
   "insights": {

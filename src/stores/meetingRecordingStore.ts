@@ -536,6 +536,9 @@ const MEETING_POLICY_REFUSALS = new Set([
   "POLICY_MEETING_RECORDING_DISABLED",
   "AUDIO_PURPOSE_REQUIRED",
   "POLICY_UNRESOLVABLE",
+  "POLICY_MODEL_BLOCKED",
+  "POLICY_LOCAL_MODE_BLOCKED",
+  "POLICY_APP_VERSION_BLOCKED",
 ]);
 
 // Main-process errors that mean main has already ended the recording: a policy

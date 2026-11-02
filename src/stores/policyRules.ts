@@ -239,6 +239,56 @@ export function isConnectorsBlockedByOrg(state: PolicyDecisionSnapshot): boolean
 }
 
 const warnedUnknownRequiredModelIds = new Set<string>();
+const KNOWN_LOCAL_MODEL_IDS: Record<PolicyScope, ReadonlySet<string>> = {
+  transcription: new Set([
+    ...Object.keys(modelRegistryData.whisperModels),
+    ...Object.keys(modelRegistryData.parakeetModels),
+  ]),
+  llm: new Set(
+    modelRegistryData.localProviders.flatMap((provider) => provider.models.map((model) => model.id))
+  ),
+};
+const warnedUnknownLocalModelIds = new Set<string>();
+
+export function isKnownLocalModelId(scope: PolicyScope, modelId: string): boolean {
+  return KNOWN_LOCAL_MODEL_IDS[scope].has(modelId);
+}
+
+export function allowedLocalModelIds(
+  state: PolicyDecisionSnapshot,
+  scope: PolicyScope
+): string[] | null {
+  const ids = managedPolicy(state)?.[scope].allowedLocalModels;
+  if (ids == null) return null;
+  return ids.filter((id) => {
+    if (KNOWN_LOCAL_MODEL_IDS[scope].has(id)) return true;
+    const key = `${scope}:${id}`;
+    if (!warnedUnknownLocalModelIds.has(key)) {
+      warnedUnknownLocalModelIds.add(key);
+      console.warn(`[policy] Ignoring unknown ${scope} local model id: ${id}`);
+    }
+    return false;
+  });
+}
+
+export function isLocalModelAllowedByPolicy(
+  state: PolicyDecisionSnapshot,
+  scope: PolicyScope,
+  modelId: string
+): boolean {
+  if (!isKnownLocalModelId(scope, modelId)) return false;
+  if (!isModeAllowedByPolicy(state, scope, "local")) return false;
+  const ids = allowedLocalModelIds(state, scope);
+  return ids === null || ids.includes(modelId);
+}
+
+export function filterLocalModelOptionsByPolicy<T extends { id: string }>(
+  options: T[],
+  scope: PolicyScope,
+  state: PolicyDecisionSnapshot
+): T[] {
+  return options.filter((option) => isLocalModelAllowedByPolicy(state, scope, option.id));
+}
 
 /**
  * Model ids the org requires on disk, filtered to ids this build's registry
@@ -257,7 +307,8 @@ export function requiredLocalModelIds(state: PolicyDecisionSnapshot): string[] {
   const usable: string[] = [];
   for (const id of required) {
     if (known.has(id)) {
-      if (!usable.includes(id)) usable.push(id);
+      if (!usable.includes(id) && isLocalModelAllowedByPolicy(state, "transcription", id))
+        usable.push(id);
     } else if (!warnedUnknownRequiredModelIds.has(id)) {
       warnedUnknownRequiredModelIds.add(id);
       console.warn(`[policy] Ignoring unknown required local model id: ${id}`);
@@ -294,6 +345,7 @@ export function cloudBackupResumed(
 export interface LlmSelection {
   mode: InferenceMode;
   provider: string;
+  model?: string;
 }
 
 export interface PolicySelectionCatalog {
@@ -361,6 +413,8 @@ export function isLlmSelectionAllowed(
   state: PolicyDecisionSnapshot,
   selection: LlmSelection
 ): boolean {
+  if (selection.mode === "local")
+    return isLocalModelAllowedByPolicy(state, "llm", selection.model ?? "");
   if (!isModeAllowedByPolicy(state, "llm", selection.mode)) return false;
   if (selection.mode === "providers") {
     return isProviderAllowedByPolicy(state, "llm", selection.provider);
@@ -374,12 +428,15 @@ export function isLlmSelectionAllowed(
 export interface TranscriptionSelection {
   mode: InferenceMode;
   provider: string;
+  model?: string;
 }
 
 export function isTranscriptionSelectionAllowed(
   state: PolicyDecisionSnapshot,
   selection: TranscriptionSelection
 ): boolean {
+  if (selection.mode === "local")
+    return isLocalModelAllowedByPolicy(state, "transcription", selection.model ?? "");
   if (!isModeAllowedByPolicy(state, "transcription", selection.mode)) return false;
   if (selection.mode === "providers") {
     return isProviderAllowedByPolicy(state, "transcription", selection.provider);
@@ -396,19 +453,39 @@ export function getTranscriptionSelection(
   settings: SettingsState,
   context: TranscriptionPolicyContext
 ): TranscriptionSelection {
+  const prefix = context === "dictation" ? "" : context;
+  const read = (
+    key: "localTranscriptionProvider" | "whisperModel" | "parakeetModel" | "cohereModel"
+  ): string => {
+    const contextKey = prefix ? `${prefix}${key[0].toUpperCase()}${key.slice(1)}` : key;
+    return (settings[contextKey as keyof SettingsState] as string) || settings[key];
+  };
+  const provider = read("localTranscriptionProvider");
+  const model = settings.policyBlockedLocalScopes?.includes(context)
+    ? ""
+    : read(
+        provider === "whisper"
+          ? "whisperModel"
+          : provider === "cohere"
+            ? "cohereModel"
+            : "parakeetModel"
+      );
   if (context === "meeting") {
     return {
+      model,
       mode: settings.meetingTranscriptionMode,
       provider: settings.meetingCloudTranscriptionProvider || settings.cloudTranscriptionProvider,
     };
   }
   if (context === "upload") {
     return {
+      model,
       mode: settings.uploadTranscriptionMode,
       provider: settings.uploadCloudTranscriptionProvider || settings.cloudTranscriptionProvider,
     };
   }
   return {
+    model,
     mode: settings.transcriptionMode,
     provider: settings.cloudTranscriptionProvider,
   };

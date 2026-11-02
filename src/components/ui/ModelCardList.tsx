@@ -23,6 +23,7 @@ export interface ModelCardOption {
   recommended?: boolean;
   // Shown grayed out and can't be picked; a downloaded one can still be deleted.
   legacy?: boolean;
+  policyBlocked?: boolean;
 }
 
 const COLOR_CONFIG: Record<
@@ -80,7 +81,8 @@ export function ModelCard({
   const isDownloading = model.isDownloading;
   const modelIsCancelling = model.isCancelling ?? false;
   const isLegacy = Boolean(model.legacy);
-  const isSelectable = !isLegacy && (!isLocalMode || (isDownloaded && !isSelected));
+  const isBlocked = Boolean(model.policyBlocked);
+  const isSelectable = !isLegacy && !isBlocked && (!isLocalMode || (isDownloaded && !isSelected));
   const specHref = model.specUrl ? withUtm(model.specUrl, "model_spec") : undefined;
 
   const handleCardClick = () => {
@@ -107,10 +109,16 @@ export function ModelCard({
   return (
     <div
       onClick={handleCardClick}
-      title={isLegacy ? t("models.legacyHint") : undefined}
-      aria-disabled={isLegacy || undefined}
+      title={
+        isBlocked ? t("models.policy.modelBlocked") : isLegacy ? t("models.legacyHint") : undefined
+      }
+      aria-disabled={isLegacy || isBlocked || undefined}
       className={`relative w-full p-2 rounded-md border text-start transition-colors duration-200 group overflow-hidden ${
-        isSelected ? styles.selected : isLegacy ? LEGACY_CARD_CLASS : styles.default
+        isSelected && !isBlocked
+          ? styles.selected
+          : isLegacy || isBlocked
+            ? LEGACY_CARD_CLASS
+            : styles.default
       } ${isSelectable ? "cursor-pointer" : ""}`}
     >
       <div className="flex items-center gap-1.5">
@@ -167,10 +175,13 @@ export function ModelCard({
           </a>
         )}
 
-        {model.recommended && (
+        {model.recommended && !isBlocked && (
           <span className="text-xs font-medium text-primary px-1.5 py-0.5 bg-primary/10 rounded-sm shrink-0">
             {t("common.recommended")}
           </span>
+        )}
+        {isBlocked && (
+          <span className="text-xs text-muted-foreground">{t("models.policy.notApproved")}</span>
         )}
         {isLegacy && (
           <span className="text-xs font-medium text-muted-foreground px-1.5 py-0.5 bg-muted rounded-sm shrink-0">
@@ -179,7 +190,7 @@ export function ModelCard({
         )}
 
         <div className="ms-auto flex items-center gap-1.5 shrink-0">
-          {isSelected && (
+          {isSelected && !isBlocked && (
             <span className="text-xs font-medium text-primary px-2 py-0.5 bg-primary/10 rounded-sm">
               {t("common.active")}
             </span>
@@ -193,6 +204,7 @@ export function ModelCard({
                     e.stopPropagation();
                     onDelete?.(model.value);
                   }}
+                  aria-label={t("common.delete")}
                   size="icon"
                   variant="ghost"
                   className="size-6 text-muted-foreground/70 hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,opacity,transform] active:scale-95"
@@ -213,7 +225,7 @@ export function ModelCard({
                   <X size={11} className="me-0.5" />
                   {modelIsCancelling ? "..." : t("common.cancel")}
                 </Button>
-              ) : isLegacy ? null : (
+              ) : isLegacy || isBlocked ? null : (
                 <Button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -274,7 +286,7 @@ export default function ModelCardList({
         <ModelCard
           key={model.value}
           model={model}
-          isSelected={selectedModel === model.value}
+          isSelected={selectedModel === model.value && !model.policyBlocked}
           onSelect={onModelSelect}
           colorScheme={colorScheme}
           truncateDescription={truncateDescription}

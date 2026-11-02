@@ -143,7 +143,7 @@ export function RequiredModelDownloadStep({
                       : t("onboarding.rehaul.local.downloadingShort")}
                   </span>
                 </span>
-              ) : failure ? (
+              ) : failure && download.isPolicyBlockedModel(modelId) ? null : failure ? (
                 <Button
                   type="button"
                   onClick={() => startDownload(modelId)}
@@ -178,7 +178,15 @@ export function RequiredModelDownloadStep({
             {t("onboarding.requiredModels.failed.title")}
           </h2>
           <p className="mt-1.5 text-xs leading-5 text-[var(--onboarding-text-secondary)]">
-            {t("onboarding.requiredModels.failed.description")}
+            {t(
+              required.some(
+                (id) =>
+                  whisperDownload.isPolicyBlockedModel(id) ||
+                  parakeetDownload.isPolicyBlockedModel(id)
+              )
+                ? "models.policy.guidance"
+                : "onboarding.requiredModels.failed.description"
+            )}
           </p>
         </div>
       )}

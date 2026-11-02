@@ -1,3 +1,5 @@
+import { usePolicyStore } from "../../stores/policyStore";
+import { getDownloadErrorMessage } from "../../hooks/useModelDownload";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { ProviderIcon } from "../ui/ProviderIcon";
@@ -69,12 +71,15 @@ function downloadDisplay(download: ActiveDownload) {
 
 function activatePendingLocalModel(kind: PendingLocalModelKind, modelId: string) {
   if (localStorage.getItem("localSetupPending") !== "true") return;
-  const selection = consumePendingLocalModel(kind, modelId);
+  const selection = consumePendingLocalModel(kind, modelId, usePolicyStore.getState());
   if (!selection) return;
 
   const store = useSettingsStore.getState();
   if (kind === "dictation") {
-    if (selection.provider === "nvidia") {
+    if (selection.provider === "cohere") {
+      store.setLocalTranscriptionProvider("cohere");
+      store.setCohereModel(selection.modelId);
+    } else if (selection.provider === "nvidia") {
       store.setLocalTranscriptionProvider("nvidia");
       store.setParakeetModel(selection.modelId);
     } else {
@@ -253,6 +258,7 @@ export default function BackgroundModelDownloadTray({
       type: "progress" | "installing" | "complete" | "error";
       percentage: number | undefined;
       error?: string;
+      code?: string;
     }) => {
       // The required-models onboarding step owns its downloads: it renders its
       // own per-row progress, and cancelling from here cannot stick because the
@@ -294,7 +300,10 @@ export default function BackgroundModelDownloadTray({
             kind: event.kind,
             percentage: clampPercentage(event.percentage),
             installing: event.type === "installing",
-            error: event.type === "error" ? event.error : undefined,
+            error:
+              event.type === "error"
+                ? getDownloadErrorMessage(t, event.error ?? "", event.code)
+                : undefined,
           },
         };
       });
@@ -310,6 +319,7 @@ export default function BackgroundModelDownloadTray({
         type: data.type,
         percentage: data.percentage,
         error: data.error,
+        code: data.code,
       });
 
     const normalizeLlm = (_event: unknown, data: LocalLLMDownloadProgressEvent) =>
@@ -319,6 +329,7 @@ export default function BackgroundModelDownloadTray({
         type: data.type ?? "progress",
         percentage: data.type === "error" ? 0 : data.progress,
         error: data.type === "error" ? data.error : undefined,
+        code: data.type === "error" ? data.code : undefined,
       });
 
     const disposeWhisper = window.electronAPI?.onWhisperDownloadProgress?.((_event, data) =>
@@ -334,7 +345,7 @@ export default function BackgroundModelDownloadTray({
       disposeParakeet?.();
       disposeLlm?.();
     };
-  }, []);
+  }, [t]);
 
   const cancelDownload = useCallback(async (download: ActiveDownload) => {
     const key = downloadKey(download.kind, download.id);

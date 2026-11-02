@@ -7,8 +7,9 @@ import {
   type FocusEvent,
   type ReactNode,
 } from "react";
-import { AudioLines, Check, CircleCheck, Download, MousePointer2 } from "../icons";
+import { AudioLines, Check, CircleCheck, Download, MousePointer2, Trash2 } from "../icons";
 import { useTranslation } from "react-i18next";
+import { LocalModelPolicyNotice } from "../ui/LocalModelPolicyNotice";
 import { FieldLabel, ProviderCheckField } from "../ui/ProviderCheckField";
 import { ConnectionCheckAnnouncer } from "../ui/ConnectionCheckAnnouncer";
 import { Button } from "../ui/button";
@@ -18,6 +19,7 @@ import { useConnectionAutoCheck } from "../../hooks/useConnectionAutoCheck";
 import { isWindowSwitchBlur } from "../../hooks/useFocusHold";
 import { useModelDownload } from "../../hooks/useModelDownload";
 import type { ParakeetCheckResult } from "../../types/electron";
+import { usePolicyStore } from "../../stores/policyStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { normalizeBaseUrl } from "../../config/constants";
 import { withHttpsScheme } from "../../utils/urlUtils";
@@ -25,6 +27,8 @@ import { usePolicySnapshot } from "../../hooks/usePolicy";
 import {
   filterByokProviderOptionsByPolicy,
   isModeAllowedByPolicy,
+  isLocalModelAllowedByPolicy,
+  type PolicyDecisionSnapshot,
   isProviderAllowedByPolicy,
 } from "../../stores/policyRules";
 import {
@@ -266,7 +270,8 @@ function isSameEndpoint(baseUrl: string, savedBaseUrl: string): boolean {
 function resolveInitialLocalSelection(
   assistant: boolean,
   resumeState: OnboardingLocalModelDraft | undefined,
-  store: ReturnType<typeof useSettingsStore.getState>
+  store: ReturnType<typeof useSettingsStore.getState>,
+  policy: PolicyDecisionSnapshot
 ): OnboardingLocalModelDraft {
   const pending = readPendingLocalModels()[assistant ? "assistant" : "dictation"];
   // A fresh install has never picked a local provider (the store only falls back
@@ -274,7 +279,19 @@ function resolveInitialLocalSelection(
   const hasChosenLocalASR =
     !!store.parakeetModel || localStorage.getItem("localTranscriptionProvider") !== null;
   if (!assistant && !resumeState && !pending && !hasChosenLocalASR) {
-    return DEFAULT_LOCAL_ASR_SELECTION;
+    if (isLocalModelAllowedByPolicy(policy, "transcription", DEFAULT_LOCAL_ASR_SELECTION.modelId))
+      return DEFAULT_LOCAL_ASR_SELECTION;
+    const approvedWhisper = Object.keys(getWhisperModels()).find((id) =>
+      isLocalModelAllowedByPolicy(policy, "transcription", id)
+    );
+    if (approvedWhisper) return { provider: "whisper", modelId: "" };
+    const approvedParakeet = Object.keys(getParakeetModels()).find((id) =>
+      isLocalModelAllowedByPolicy(policy, "transcription", id)
+    );
+    return {
+      provider: approvedParakeet ? getASRModelOrganization(approvedParakeet) : "whisper",
+      modelId: "",
+    };
   }
   const savedProvider = assistant
     ? modelRegistry.getProvider(store.chatAgentProvider)
@@ -292,14 +309,16 @@ function resolveInitialLocalSelection(
     ? modelRegistry.getProvider(requestedProvider)
       ? requestedProvider
       : "qwen"
-    : requestedProvider === "nvidia" || requestedProvider === "oruk"
+    : usesParakeetManager(requestedProvider)
       ? requestedProvider
       : "whisper";
   const savedModel = assistant
     ? store.chatAgentModel
-    : usesParakeetManager(provider)
-      ? store.parakeetModel
-      : store.whisperModel;
+    : provider === "cohere"
+      ? store.cohereModel
+      : usesParakeetManager(provider)
+        ? store.parakeetModel
+        : store.whisperModel;
 
   const modelId =
     (resumeProvider === provider ? resumeState?.modelId : "") ||
@@ -309,7 +328,16 @@ function resolveInitialLocalSelection(
   const listsAModel = modelRegistry
     .getProvider(provider)
     ?.models.some((model) => isListedModel(model, model.id === modelId));
-  if (assistant && !listsAModel) return { provider: "qwen", modelId: "" };
+  if (assistant && (!listsAModel || !modelId)) {
+    const approvedProvider = modelRegistry
+      .getAllProviders()
+      .find((candidate) =>
+        candidate.models.some(
+          (model) => !model.legacy && isLocalModelAllowedByPolicy(policy, "llm", model.id)
+        )
+      );
+    return { provider: approvedProvider?.id ?? "qwen", modelId: "" };
+  }
   return { provider, modelId };
 }
 
@@ -325,7 +353,12 @@ function savedLocalSelection(
   );
   return {
     provider,
-    modelId: usesParakeetManager(provider) ? store.parakeetModel : store.whisperModel,
+    modelId:
+      provider === "cohere"
+        ? store.cohereModel
+        : usesParakeetManager(provider)
+          ? store.parakeetModel
+          : store.whisperModel,
   };
 }
 
@@ -796,8 +829,14 @@ export function LocalModelSetupStep({
   const { t } = useTranslation();
   const store = useSettingsStore();
   const assistant = stepId === "local-assistant";
+  const policy = usePolicySnapshot();
+  const scope = assistant ? "llm" : "transcription";
+  const modelAllowed = useCallback(
+    (modelId: string): boolean => isLocalModelAllowedByPolicy(policy, scope, modelId),
+    [policy, scope]
+  );
   const [initialSelection] = useState(() =>
-    resolveInitialLocalSelection(assistant, resumeState, store)
+    resolveInitialLocalSelection(assistant, resumeState, store, policy)
   );
   const [selectedProvider, setSelectedProvider] = useState(initialSelection.provider);
   const [selectedModel, setSelectedModel] = useState(initialSelection.modelId);
@@ -822,11 +861,16 @@ export function LocalModelSetupStep({
   }, [assistant]);
 
   useEffect(() => {
-    if (parakeetUnavailable && usesParakeetManager(selectedProvider)) {
+    if (
+      parakeetUnavailable &&
+      usesParakeetManager(selectedProvider) &&
+      !store.parakeetModel &&
+      !resumeState
+    ) {
       setSelectedProvider("whisper");
       setSelectedModel("");
     }
-  }, [parakeetUnavailable, selectedProvider]);
+  }, [parakeetUnavailable, selectedProvider, store.parakeetModel, resumeState]);
 
   const refreshDownloadedModels = useCallback(async () => {
     const [whisper, parakeet, llm] = await Promise.all([
@@ -882,8 +926,14 @@ export function LocalModelSetupStep({
       return modelRegistry
         .getAllProviders()
         .filter((provider) =>
-          provider.models.some((model) =>
-            isListedModel(model, model.id === selectedModel || model.id === keptModelId)
+          provider.models.some(
+            (model) =>
+              (modelAllowed(model.id) || downloadedLlm.has(model.id)) &&
+              isListedModel(
+                model,
+                model.id === selectedModel || model.id === keptModelId,
+                downloadedLlm.has(model.id)
+              )
           )
         )
         .map((provider) => ({
@@ -892,13 +942,11 @@ export function LocalModelSetupStep({
           icon: provider.id,
         }));
     }
-    return LOCAL_ASR_ORGANIZATIONS.filter((organization) => organization.id !== "cohere").map(
-      (organization) => ({
-        ...organization,
-        icon: organization.id === "whisper" ? "openai" : organization.id,
-      })
-    );
-  }, [assistant, keptModelId, selectedModel]);
+    return LOCAL_ASR_ORGANIZATIONS.map((organization) => ({
+      ...organization,
+      icon: organization.id === "whisper" ? "openai" : organization.id,
+    }));
+  }, [assistant, keptModelId, selectedModel, modelAllowed, downloadedLlm]);
 
   const models = useMemo<
     Array<{
@@ -912,7 +960,9 @@ export function LocalModelSetupStep({
   >(() => {
     if (assistant) {
       return (modelRegistry.getProvider(selectedProvider)?.models ?? [])
-        .filter((model) => isListedModel(model, model.id === selectedModel))
+        .filter((model) =>
+          isListedModel(model, model.id === selectedModel, downloadedLlm.has(model.id))
+        )
         .map((model) => ({
           id: model.id,
           name: model.name,
@@ -940,13 +990,17 @@ export function LocalModelSetupStep({
       recommended: model.recommended,
       icon: "openai",
     }));
-  }, [assistant, selectedModel, selectedProvider]);
+  }, [assistant, selectedModel, selectedProvider, downloadedLlm]);
 
   useEffect(() => {
-    if (selectedModel && !models.some((model) => model.id === selectedModel)) {
+    if (
+      selectedModel &&
+      modelAllowed(selectedModel) &&
+      !models.some((model) => model.id === selectedModel)
+    ) {
       setSelectedModel("");
     }
-  }, [models, selectedModel]);
+  }, [models, selectedModel, modelAllowed]);
 
   useEffect(() => {
     onResumeStateChange?.({ provider: selectedProvider, modelId: selectedModel });
@@ -961,6 +1015,7 @@ export function LocalModelSetupStep({
   const downloadedModels = downloadedFor(selectedProvider);
   const selectedReady = Boolean(
     selectedModel &&
+    modelAllowed(selectedModel) &&
     downloadedModels.has(selectedModel) &&
     !(parakeetUnavailable && usesParakeetManager(selectedProvider))
   );
@@ -971,6 +1026,7 @@ export function LocalModelSetupStep({
 
   const selectInstalledModel = useCallback(
     (modelId: string): void => {
+      if (!isLocalModelAllowedByPolicy(usePolicyStore.getState(), scope, modelId)) return;
       if (parakeetUnavailable && usesParakeetManager(selectedProvider)) return;
       const kind = assistant ? "assistant" : "dictation";
       setSelectedModel(modelId);
@@ -978,6 +1034,9 @@ export function LocalModelSetupStep({
         store.setChatAgentMode("local");
         store.setChatAgentProvider(selectedProvider);
         store.setChatAgentModel(modelId);
+      } else if (selectedProvider === "cohere") {
+        store.setLocalTranscriptionProvider("cohere");
+        store.setCohereModel(modelId);
       } else if (usesParakeetManager(selectedProvider)) {
         store.setLocalTranscriptionProvider("nvidia");
         store.setParakeetModel(modelId);
@@ -989,7 +1048,7 @@ export function LocalModelSetupStep({
         forgetPendingLocalModel(kind, modelId);
       }
     },
-    [assistant, parakeetUnavailable, selectedProvider, store]
+    [assistant, parakeetUnavailable, selectedProvider, store, scope]
   );
 
   const chooseInstalledModel = (modelId: string): void => {
@@ -998,6 +1057,7 @@ export function LocalModelSetupStep({
   };
 
   const downloadModel = (modelId: string): void => {
+    if (!isLocalModelAllowedByPolicy(usePolicyStore.getState(), scope, modelId)) return;
     if (parakeetUnavailable && usesParakeetManager(selectedProvider)) return;
     const kind = assistant ? "assistant" : "dictation";
     // LLMs can download concurrently; a refused duplicate or native transfer
@@ -1006,9 +1066,13 @@ export function LocalModelSetupStep({
       !activeDownload.isDownloadingModel(modelId) &&
       (assistant || !activeDownload.isDownloading)
     ) {
+      const identity = usePolicyStore.getState();
       rememberPendingLocalModel(kind, {
         provider: selectedProvider === "oruk" ? "nvidia" : selectedProvider,
         modelId,
+        ...(identity.accountId != null
+          ? { accountId: identity.accountId, authGeneration: identity.authGeneration }
+          : {}),
       });
     }
     void activeDownload.downloadModel(modelId, (downloadedId): void => {
@@ -1032,18 +1096,26 @@ export function LocalModelSetupStep({
           saved.chatAgentModel === downloadedId
         : getSelectedASROrganization(saved.localTranscriptionProvider, saved.parakeetModel) ===
             selectedProvider &&
-          (usesParakeetManager(selectedProvider) ? saved.parakeetModel : saved.whisperModel) ===
-            downloadedId;
+          (selectedProvider === "cohere"
+            ? saved.cohereModel
+            : usesParakeetManager(selectedProvider)
+              ? saved.parakeetModel
+              : saved.whisperModel) === downloadedId;
       if (alreadySelected) setSelectedModel(downloadedId);
     });
   };
 
   const chooseProvider = (providerId: string) => {
-    if (parakeetUnavailable && usesParakeetManager(providerId)) return;
+    if (
+      parakeetUnavailable &&
+      usesParakeetManager(providerId) &&
+      ![...downloadedParakeet].some((id) => getASRModelOrganization(id) === providerId)
+    )
+      return;
     const restoresSaved = providerId === saved.provider && keptModelId !== "";
     setSelectedProvider(providerId);
     setSelectedModel(restoresSaved ? keptModelId : "");
-    onReadinessChange(restoresSaved);
+    onReadinessChange(restoresSaved && modelAllowed(keptModelId));
   };
 
   const anyDownloadActive = isLocalStageDownloadActive(assistant ? "assistant" : "dictation", {
@@ -1054,13 +1126,15 @@ export function LocalModelSetupStep({
   const pendingSelection = readPendingLocalModels()[assistant ? "assistant" : "dictation"];
   const pendingDownload = assistant
     ? llmDownload
-    : pendingSelection?.provider === "nvidia"
+    : usesParakeetManager(pendingSelection?.provider ?? "")
       ? parakeetDownload
       : whisperDownload;
   // Only the pending selection will activate in the background. Other transfers
   // can outlive it when the user cancels the newest of several downloads.
   const hasPendingDownload = Boolean(
-    pendingSelection && pendingDownload.isDownloadingModel(pendingSelection.modelId)
+    pendingSelection &&
+    modelAllowed(pendingSelection.modelId) &&
+    pendingDownload.isDownloadingModel(pendingSelection.modelId)
   );
   const canProceed = selectedReady || hasPendingDownload;
   const showSkip = anyDownloadActive || (assistant && !selectedReady);
@@ -1096,7 +1170,11 @@ export function LocalModelSetupStep({
                 key={provider.id}
                 value={provider.id}
                 className={SELECT_ITEM_CLASS}
-                disabled={parakeetUnavailable && usesParakeetManager(provider.id)}
+                disabled={
+                  parakeetUnavailable &&
+                  usesParakeetManager(provider.id) &&
+                  ![...downloadedParakeet].some((id) => getASRModelOrganization(id) === provider.id)
+                }
               >
                 <span className="flex items-center gap-2.5">
                   <ProviderIcon
@@ -1121,102 +1199,150 @@ export function LocalModelSetupStep({
         )}
       </div>
 
+      <LocalModelPolicyNotice
+        scope={scope}
+        hasSupportedModel={
+          assistant
+            ? modelRegistry
+                .getAllProviders()
+                .some((provider) =>
+                  provider.models.some(
+                    (model) =>
+                      modelAllowed(model.id) &&
+                      isListedModel(model, model.id === saved.modelId, downloadedLlm.has(model.id))
+                  )
+                )
+            : Object.keys(getWhisperModels()).some(modelAllowed) ||
+              (parakeetCapability?.supported === true &&
+                Object.keys(getParakeetModels()).some(modelAllowed))
+        }
+      />
       {/* A fixed list height keeps the card and footer stable while the visible
           scrollbar makes additional provider models discoverable. */}
       <div className="onboarding-list-scroll mt-4 h-56 rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface-secondary)]">
-        {models.map((model) => {
-          const isDownloaded = downloadedModels.has(model.id);
-          const download = activeDownload.downloads[model.id];
-          const isDownloading = Boolean(download);
-          const isSelected = selectedModel === model.id && isDownloaded;
-          const percentage = Math.round(download?.progress ?? 0);
-          return (
-            <div
-              key={model.id}
-              title={model.legacy ? t("models.legacyHint") : undefined}
-              className="flex min-h-20 items-center gap-3 border-b border-[var(--onboarding-control-border)] px-2 py-3 last:border-b-0"
-            >
-              <span className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)]">
-                <ProviderIcon
-                  provider={model.icon}
-                  className="size-5"
-                  monochrome={assistant && model.icon === "qwen"}
-                />
-              </span>
-              <button
-                type="button"
-                disabled={!isDownloaded || model.legacy}
-                onClick={() => chooseInstalledModel(model.id)}
-                className="min-w-0 flex-1 rounded-lg text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)] disabled:cursor-default"
+        {models
+          .filter(
+            (model) =>
+              downloadedModels.has(model.id) ||
+              (modelAllowed(model.id) &&
+                !(parakeetUnavailable && usesParakeetManager(selectedProvider)))
+          )
+          .map((model) => {
+            const isDownloaded = downloadedModels.has(model.id);
+            const download = activeDownload.downloads[model.id];
+            const isDownloading = Boolean(download);
+            const policyBlocked = !modelAllowed(model.id);
+            const unavailable = parakeetUnavailable && usesParakeetManager(selectedProvider);
+            const isSelected =
+              !policyBlocked && !unavailable && selectedModel === model.id && isDownloaded;
+            const percentage = Math.round(download?.progress ?? 0);
+            return (
+              <div
+                key={model.id}
+                title={
+                  policyBlocked
+                    ? t("models.policy.modelBlocked")
+                    : model.legacy
+                      ? t("models.legacyHint")
+                      : undefined
+                }
+                className="flex min-h-20 items-center gap-3 border-b border-[var(--onboarding-control-border)] px-2 py-3 last:border-b-0"
               >
-                <span
-                  className={`block truncate text-base font-medium ${
-                    model.legacy
-                      ? "text-[var(--onboarding-text-secondary)]"
-                      : "text-[var(--onboarding-text-primary)]"
-                  }`}
-                >
-                  {model.name}
-                </span>
-                <span className="mt-1 block truncate text-sm text-[var(--onboarding-text-secondary)]">
-                  {model.size}
-                  {!assistant && model.recommended && ` - ${t("common.recommended")}`}
-                  {model.legacy && ` - ${t("models.legacy")}`}
-                </span>
-              </button>
-
-              {isDownloading ? (
-                // Figma "Frame 25": white pill, #E3E3E3 stroke, radius 38, 6/12
-                // padding, gap 8, both labels Inter Medium 14/140% in
-                // text-secondary. Progress is a light/surface-tertiary fill
-                // growing from the left behind them, not a fixed-width segment
-                // around the percentage.
-                // No aria-live: BackgroundModelDownloadTray is the one live region
-                // for download progress, so a second one here read every tick twice.
-                <span className="relative flex h-8 shrink-0 items-center gap-2 overflow-hidden rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-3 text-sm font-medium leading-[1.4] tabular-nums text-[var(--onboarding-text-secondary)]">
-                  {/* Figma draws the rect taller than the pill so it bleeds top
-                      and bottom; inset-y-0 does that without a magic height. */}
-                  <span
-                    className="absolute inset-y-0 start-0 bg-[var(--onboarding-surface-tertiary)] transition-[width] duration-300 ease-out"
-                    style={{ width: `${percentage}%` }}
-                    aria-hidden="true"
+                <span className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)]">
+                  <ProviderIcon
+                    provider={model.icon}
+                    className="size-5"
+                    monochrome={assistant && model.icon === "qwen"}
                   />
-                  <span className="relative">{percentage}%</span>
-                  <span className="relative whitespace-nowrap">
-                    {download?.phase === "installing"
-                      ? t("onboarding.rehaul.local.installing")
-                      : t("onboarding.rehaul.local.downloadingShort")}
-                  </span>
                 </span>
-              ) : isSelected ? (
-                // Same token as the Use pill it replaces on click.
-                <span className="flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-[var(--onboarding-accent)] px-3 text-sm text-[var(--onboarding-accent-foreground)]">
-                  <Check className="size-4" />
-                  {t("onboarding.rehaul.local.selected")}
-                </span>
-              ) : isDownloaded ? (
-                // Installed alternatives remain explicit primary actions until
-                // they become the active selection.
-                <Button
+                <button
                   type="button"
+                  disabled={!isDownloaded || model.legacy || policyBlocked || unavailable}
                   onClick={() => chooseInstalledModel(model.id)}
-                  className="h-8 gap-1.5 px-3 text-sm"
+                  className="min-w-0 flex-1 rounded-lg text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)] disabled:cursor-default"
                 >
-                  {t("onboarding.rehaul.local.use")}
-                </Button>
-              ) : model.legacy ? null : (
-                <Button
-                  type="button"
-                  onClick={() => downloadModel(model.id)}
-                  className="h-8 gap-1.5 px-3 text-sm"
-                >
-                  <Download className="size-3.5" />
-                  {t("onboarding.rehaul.local.download")}
-                </Button>
-              )}
-            </div>
-          );
-        })}
+                  <span
+                    className={`block truncate text-base font-medium ${
+                      model.legacy
+                        ? "text-[var(--onboarding-text-secondary)]"
+                        : "text-[var(--onboarding-text-primary)]"
+                    }`}
+                  >
+                    {model.name}
+                  </span>
+                  <span className="mt-1 block truncate text-sm text-[var(--onboarding-text-secondary)]">
+                    {model.size}
+                    {policyBlocked && ` - ${t("models.policy.notApproved")}`}
+                    {!assistant && model.recommended && ` - ${t("common.recommended")}`}
+                    {model.legacy && ` - ${t("models.legacy")}`}
+                  </span>
+                </button>
+
+                {isDownloading ? (
+                  // Figma "Frame 25": white pill, #E3E3E3 stroke, radius 38, 6/12
+                  // padding, gap 8, both labels Inter Medium 14/140% in
+                  // text-secondary. Progress is a light/surface-tertiary fill
+                  // growing from the left behind them, not a fixed-width segment
+                  // around the percentage.
+                  // No aria-live: BackgroundModelDownloadTray is the one live region
+                  // for download progress, so a second one here read every tick twice.
+                  <span className="relative flex h-8 shrink-0 items-center gap-2 overflow-hidden rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-3 text-sm font-medium leading-[1.4] tabular-nums text-[var(--onboarding-text-secondary)]">
+                    {/* Figma draws the rect taller than the pill so it bleeds top
+                      and bottom; inset-y-0 does that without a magic height. */}
+                    <span
+                      className="absolute inset-y-0 start-0 bg-[var(--onboarding-surface-tertiary)] transition-[width] duration-300 ease-out"
+                      style={{ width: `${percentage}%` }}
+                      aria-hidden="true"
+                    />
+                    <span className="relative">{percentage}%</span>
+                    <span className="relative whitespace-nowrap">
+                      {download?.phase === "installing"
+                        ? t("onboarding.rehaul.local.installing")
+                        : t("onboarding.rehaul.local.downloadingShort")}
+                    </span>
+                  </span>
+                ) : (policyBlocked || unavailable || (model.legacy && !isSelected)) &&
+                  isDownloaded ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={t("common.delete")}
+                    onClick={() =>
+                      void activeDownload.deleteModel(model.id, refreshDownloadedModels)
+                    }
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                ) : isSelected ? (
+                  // Same token as the Use pill it replaces on click.
+                  <span className="flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-[var(--onboarding-accent)] px-3 text-sm text-[var(--onboarding-accent-foreground)]">
+                    <Check className="size-4" />
+                    {t("onboarding.rehaul.local.selected")}
+                  </span>
+                ) : isDownloaded ? (
+                  // Installed alternatives remain explicit primary actions until
+                  // they become the active selection.
+                  <Button
+                    type="button"
+                    onClick={() => chooseInstalledModel(model.id)}
+                    className="h-8 gap-1.5 px-3 text-sm"
+                  >
+                    {t("onboarding.rehaul.local.use")}
+                  </Button>
+                ) : model.legacy || policyBlocked ? null : (
+                  <Button
+                    type="button"
+                    onClick={() => downloadModel(model.id)}
+                    className="h-8 gap-1.5 px-3 text-sm"
+                  >
+                    <Download className="size-3.5" />
+                    {t("onboarding.rehaul.local.download")}
+                  </Button>
+                )}
+              </div>
+            );
+          })}
       </div>
 
       <div className={`mt-5 grid gap-2 ${showSkip ? "grid-cols-2" : "grid-cols-1"}`}>

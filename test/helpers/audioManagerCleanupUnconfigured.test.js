@@ -66,7 +66,11 @@ test("cleanup on with no model warns once it is shown, and again after a fix bre
 
   // A reachable model runs cleanup and forgets the warning, so the same broken
   // setup warns again once the model is gone.
-  setSettings({ cleanupMode: "local", cleanupProvider: "local", cleanupModel: "test-model" });
+  setSettings({
+    cleanupMode: "local",
+    cleanupProvider: "local",
+    cleanupModel: "qwen3.5-0.8b-q4_k_m",
+  });
   window.electronAPI.processLocalReasoning = async () => ({ success: true, text: "Cleaned." });
   assert.equal(await manager.processTranscriptionCore("fixed now", "local"), "Cleaned.");
   assert.equal(manager._takePendingResultExtras().cleanupFailure, undefined);
@@ -106,7 +110,11 @@ test("a BYOK cleanup model with no API key reports the missing key", async (t) =
   assert.equal(failure.settingsTarget, "llms");
 
   // A local model needs no key, so it is never reported as one missing.
-  setSettings({ cleanupMode: "local", cleanupProvider: "local", cleanupModel: "test-model" });
+  setSettings({
+    cleanupMode: "local",
+    cleanupProvider: "local",
+    cleanupModel: "qwen3.5-0.8b-q4_k_m",
+  });
   assert.equal(await dictate(manager, "local model words"), undefined);
 });
 

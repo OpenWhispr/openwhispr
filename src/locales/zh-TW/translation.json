@@ -2811,6 +2811,16 @@
       "contextTooLargeGeneric": "內容過長，{{model}} 無法在這台電腦上讀取。請改用雲端模型，或對更短的選取範圍執行該動作。",
       "localServerUnavailable": "無法在這台電腦上啟動 {{model}}。請重試，或改用雲端模型。",
       "localModelBusy": "本機模型仍在處理另一個請求。請等待其完成後再試。"
+    },
+    "policy": {
+      "guidance": "請選擇組織核准的本機模型。",
+      "notApproved": "未核准",
+      "noneSupported": "此應用程式版本或裝置不支援任何已核准的本機模型。請更新 OpenWhispr 或聯絡管理員。",
+      "emptyIntersection": "工作區沒有可用於此工作的已核准本機模型。",
+      "modelBlocked": "組織未核准此本機模型。請選擇已核准的模型。",
+      "modeBlocked": "組織已停用本機處理。",
+      "unresolved": "無法取得工作區原則。請連線後再試一次。",
+      "versionBlocked": "請更新 OpenWhispr 以使用組織核准的模型。"
     }
   },
   "referral": {

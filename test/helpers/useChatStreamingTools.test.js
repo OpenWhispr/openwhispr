@@ -766,7 +766,7 @@ for (const [mode, settings] of Object.entries({
   local: {
     chatAgentMode: "local",
     chatAgentProvider: "qwen",
-    chatAgentModel: "qwen3-1.7b-q4_k_m",
+    chatAgentModel: "qwen3-1.7b-q8_0",
   },
 })) {
   test(`${mode} chat actions receive source fidelity once without changing visible history`, async (t) => {
@@ -949,7 +949,7 @@ test("a local model too small for tools is told so, with no tool notes in its hi
     settings: {
       chatAgentMode: "local",
       chatAgentProvider: "qwen",
-      chatAgentModel: "qwen3-1.7b-q4_k_m",
+      chatAgentModel: "qwen3-1.7b-q8_0",
     },
   });
   const earlier = [

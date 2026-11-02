@@ -1,3 +1,9 @@
+const {
+  runLocalModelOperation,
+  isLocalModelPolicyRefusal,
+  assertLocalModelOperation,
+  localModelOperationSignal,
+} = require("./localModelPolicyGate");
 const fs = require("fs");
 const fsPromises = require("fs").promises;
 const path = require("path");
@@ -290,7 +296,7 @@ class WhisperManager {
 
           try {
             const serverStartTime = Date.now();
-            await this.serverManager.start(modelPath, gpuOptions);
+            await this.serverManager.start(modelPath, { ...gpuOptions, policyMemoryOnly: true });
             this.currentServerModel = whisperModel;
 
             debugLogger.info("whisper-server pre-warmed successfully", {
@@ -393,6 +399,22 @@ class WhisperManager {
   }
 
   async startServer(modelName, options = {}) {
+    try {
+      return await runLocalModelOperation(
+        this,
+        "transcription",
+        modelName,
+        () => this._policyAllowedStartServer(modelName, options),
+        { onAbort: () => this.stopServer() }
+      );
+    } catch (error) {
+      if (isLocalModelPolicyRefusal(error))
+        return { success: false, reason: error.message, code: error.code };
+      throw error;
+    }
+  }
+
+  async _policyAllowedStartServer(modelName, options = {}) {
     if (!this.serverManager.isAvailable()) {
       return { success: false, reason: "whisper-server binary not found" };
     }
@@ -412,7 +434,7 @@ class WhisperManager {
       return { success: true, port: this.serverManager.port };
     } catch (error) {
       debugLogger.error("Failed to start whisper-server", { error: error.message });
-      return { success: false, reason: error.message };
+      return { success: false, reason: error.message, code: error.code };
     }
   }
 
@@ -476,6 +498,16 @@ class WhisperManager {
   }
 
   async transcribeLocalWhisper(audioBlob, options = {}) {
+    return runLocalModelOperation(
+      this,
+      "transcription",
+      options.model ?? (this.localModelPolicy ? "" : "base"),
+      () => this._policyAllowedTranscribeLocalWhisper(audioBlob, options),
+      { onAbort: () => this.stopServer() }
+    );
+  }
+
+  async _policyAllowedTranscribeLocalWhisper(audioBlob, options = {}) {
     debugLogger.logWhisperPipeline("transcribeLocalWhisper - start", {
       options,
       audioBlobType: audioBlob?.constructor?.name,
@@ -521,6 +553,26 @@ class WhisperManager {
   }
 
   async _runServerTranscription(audioBlob, model, language, initialPrompt = null, options = {}) {
+    return runLocalModelOperation(
+      this,
+      "transcription",
+      model,
+      () =>
+        this._policyAllowedRunServerTranscription(audioBlob, model, language, initialPrompt, {
+          ...options,
+          signal: localModelOperationSignal(this, options.signal),
+        }),
+      { onAbort: () => this.stopServer() }
+    );
+  }
+
+  async _policyAllowedRunServerTranscription(
+    audioBlob,
+    model,
+    language,
+    initialPrompt = null,
+    options = {}
+  ) {
     // An already-cancelled upload skips the server boot entirely.
     if (options.signal?.aborted) {
       throw createAbortError("whisper-server transcription cancelled");
@@ -700,6 +752,16 @@ class WhisperManager {
   }
 
   async downloadWhisperModel(modelName, progressCallback = null) {
+    return runLocalModelOperation(
+      this,
+      "transcription",
+      modelName,
+      () => this._policyAllowedDownloadWhisperModel(modelName, progressCallback),
+      { onAbort: () => this.cancelDownload() }
+    );
+  }
+
+  async _policyAllowedDownloadWhisperModel(modelName, progressCallback = null) {
     this.validateModelName(modelName);
     const modelConfig = getWhisperModelConfig(modelName);
 
@@ -722,7 +784,8 @@ class WhisperManager {
       throw createDownloadInProgressError(modelName, this.currentDownloadProcess.model);
     }
 
-    const { signal, abort } = createDownloadSignal();
+    const { signal: downloadSignal, abort } = createDownloadSignal();
+    const signal = localModelOperationSignal(this, downloadSignal);
     const downloadProcess = {
       abort,
       model: modelName,
@@ -744,6 +807,7 @@ class WhisperManager {
         );
       }
 
+      assertLocalModelOperation(this);
       await downloadFile(modelConfig.url, modelPath, {
         timeout: 600000,
         signal,
@@ -770,6 +834,7 @@ class WhisperManager {
       const stats = await fsPromises.stat(modelPath);
 
       if (progressCallback) {
+        assertLocalModelOperation(this);
         progressCallback({ type: "complete", model: modelName, percentage: 100 });
       }
 

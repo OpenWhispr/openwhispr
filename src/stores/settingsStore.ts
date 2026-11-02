@@ -51,6 +51,7 @@ import { MEETING_STREAMING_PROVIDER_IDS } from "../helpers/meetingTranscriptionR
 import { STREAMING_ONLY_PROVIDERS } from "../helpers/transcriptionRoute";
 import {
   getTranscriptionSelection,
+  isLocalModelAllowedByPolicy,
   isScreenContextAllowed,
   resolveEffectivePolicySelection,
   type PolicyDecisionSnapshot,
@@ -1025,6 +1026,8 @@ export interface SettingsState
     PrivacySettings,
     ThemeSettings,
     ChatAgentSettings {
+  /** Derived only: preserve a denied blank instead of inheriting a different saved model. */
+  policyBlockedLocalScopes?: readonly (TranscriptionPolicyContext | InferenceScope)[];
   isSignedIn: boolean;
   audioCuesEnabled: boolean;
   pauseMediaOnDictation: boolean;
@@ -2989,10 +2992,16 @@ export const selectResolvedMeetingTranscription = (
   state: SettingsState
 ): ResolvedMeetingTranscription => ({
   useLocalWhisper: state.meetingUseLocalWhisper,
-  whisperModel: state.meetingWhisperModel || state.whisperModel,
+  whisperModel: state.policyBlockedLocalScopes?.includes("meeting")
+    ? ""
+    : state.meetingWhisperModel || state.whisperModel,
   localTranscriptionProvider: state.meetingLocalTranscriptionProvider,
-  parakeetModel: state.meetingParakeetModel || state.parakeetModel,
-  cohereModel: state.meetingCohereModel || state.cohereModel,
+  parakeetModel: state.policyBlockedLocalScopes?.includes("meeting")
+    ? ""
+    : state.meetingParakeetModel || state.parakeetModel,
+  cohereModel: state.policyBlockedLocalScopes?.includes("meeting")
+    ? ""
+    : state.meetingCohereModel || state.cohereModel,
   cloudTranscriptionProvider:
     state.meetingCloudTranscriptionProvider || state.cloudTranscriptionProvider,
   cloudTranscriptionModel: state.meetingCloudTranscriptionModel || state.cloudTranscriptionModel,
@@ -3033,10 +3042,16 @@ export const selectResolvedUploadTranscription = (
   const inheritsDictationProvider = !STREAMING_ONLY_PROVIDERS.has(state.cloudTranscriptionProvider);
   return {
     useLocalWhisper: state.uploadUseLocalWhisper,
-    whisperModel: state.uploadWhisperModel || state.whisperModel,
+    whisperModel: state.policyBlockedLocalScopes?.includes("upload")
+      ? ""
+      : state.uploadWhisperModel || state.whisperModel,
     localTranscriptionProvider: state.uploadLocalTranscriptionProvider,
-    parakeetModel: state.uploadParakeetModel || state.parakeetModel,
-    cohereModel: state.uploadCohereModel || state.cohereModel,
+    parakeetModel: state.policyBlockedLocalScopes?.includes("upload")
+      ? ""
+      : state.uploadParakeetModel || state.parakeetModel,
+    cohereModel: state.policyBlockedLocalScopes?.includes("upload")
+      ? ""
+      : state.uploadCohereModel || state.cohereModel,
     cloudTranscriptionProvider:
       state.uploadCloudTranscriptionProvider ||
       (inheritsDictationProvider
@@ -3123,7 +3138,9 @@ export const selectResolvedLLMConfig = (
     scope,
     mode: state[def.storeKeys.mode] as InferenceMode,
     provider: read("provider") || fallback?.provider || "",
-    model: read("model") || fallback?.model || "",
+    model: state.policyBlockedLocalScopes?.includes(scope)
+      ? ""
+      : read("model") || fallback?.model || "",
     cloudMode: read("cloudMode") || fallback?.cloudMode,
     cloudBaseUrl: read("cloudBaseUrl") || fallback?.cloudBaseUrl,
     remoteUrl: read("remoteUrl") || fallback?.remoteUrl,
@@ -3275,11 +3292,27 @@ export function selectPolicyEffectiveSettings(
 
   const effective = { ...state };
   const writable = effective as unknown as Record<string, unknown>;
+  const blockedLocalScopes: (TranscriptionPolicyContext | InferenceScope)[] = [];
+  effective.policyBlockedLocalScopes = blockedLocalScopes;
 
   if (!isScreenContextAllowed(policyState)) writable.voiceAgentScreenContext = false;
 
   for (const keys of TRANSCRIPTION_CONTEXT_KEYS) {
     const rawSelection = getTranscriptionSelection(state, keys.context);
+    if (
+      rawSelection.mode === "local" &&
+      !isLocalModelAllowedByPolicy(policyState, "transcription", rawSelection.model ?? "")
+    ) {
+      blockedLocalScopes.push(keys.context);
+      for (const field of ["whisperModel", "parakeetModel", "cohereModel"]) {
+        const key =
+          keys.context === "dictation"
+            ? field
+            : `${keys.context}${field[0].toUpperCase()}${field.slice(1)}`;
+        writable[key] = "";
+      }
+      continue;
+    }
     const selection = resolveEffectivePolicySelection(
       policyState,
       "transcription",
@@ -3336,6 +3369,11 @@ export function selectPolicyEffectiveSettings(
     const rawModel = state[definition.storeKeys.model] as string | undefined;
     if (definition.optional && !rawModel?.trim()) continue;
     const config = resolvedConfigs[scope];
+    if (config.mode === "local" && !isLocalModelAllowedByPolicy(policyState, "llm", config.model)) {
+      blockedLocalScopes.push(scope);
+      writable[definition.storeKeys.model] = "";
+      continue;
+    }
     const selection = resolveEffectivePolicySelection(
       policyState,
       "llm",

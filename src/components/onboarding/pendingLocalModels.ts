@@ -1,3 +1,5 @@
+import { usesParakeetManager } from "../../helpers/localASROrganization";
+import { isLocalModelAllowedByPolicy, type PolicyDecisionSnapshot } from "../../stores/policyRules";
 import type {
   LocalLLMModelStatus,
   ParakeetModelResult,
@@ -11,6 +13,8 @@ export type PendingLocalModelKind = "dictation" | "assistant";
 export interface PendingLocalModelSelection {
   provider: string;
   modelId: string;
+  accountId?: string | null;
+  authGeneration?: number | null;
 }
 
 export type PendingLocalModelSelections = Partial<
@@ -61,13 +65,28 @@ export function isPendingLocalModel(
 
 export function consumePendingLocalModel(
   kind: PendingLocalModelKind,
-  modelId: string
+  modelId: string,
+  policy: PolicyDecisionSnapshot & { accountId?: string | null; authGeneration?: number | null }
 ): PendingLocalModelSelection | null {
   const selections = readPendingLocalModels();
   const selection = selections[kind];
   if (!selection || selection.modelId !== modelId) return null;
   delete selections[kind];
   writePendingLocalModels(selections);
+  if (
+    (policy.accountId != null && selection.accountId !== policy.accountId) ||
+    (selection.accountId !== undefined && selection.accountId !== policy.accountId) ||
+    (selection.authGeneration !== undefined && selection.authGeneration !== policy.authGeneration)
+  )
+    return null;
+  if (
+    !isLocalModelAllowedByPolicy(
+      policy,
+      kind === "assistant" ? "llm" : "transcription",
+      selection.modelId
+    )
+  )
+    return null;
   return selection;
 }
 
@@ -100,7 +119,7 @@ export function getPendingLocalModelAvailability(
     return "missing";
   }
 
-  const models = selection.provider === "nvidia" ? inventory.parakeet : inventory.whisper;
+  const models = usesParakeetManager(selection.provider) ? inventory.parakeet : inventory.whisper;
   if (!models) return "unknown";
   const model = models.find((candidate) => candidate.model === selection.modelId);
   if (model?.downloaded) return "downloaded";

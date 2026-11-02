@@ -368,3 +368,20 @@ test("a policy flip that cancels a start still in progress says why", async (t) 
     "Recording stopped because your organization's settings couldn't be checked."
   );
 });
+
+for (const [code, message] of [
+  [
+    "POLICY_MODEL_BLOCKED",
+    "Your organization does not approve this local model. Choose an approved model.",
+  ],
+  ["POLICY_LOCAL_MODE_BLOCKED", "Your organization has disabled local processing."],
+  ["POLICY_APP_VERSION_BLOCKED", "Update OpenWhispr to use your organization’s approved models."],
+]) {
+  test(`${code} stops meeting capture and explains the local policy refusal`, async (t) => {
+    const { start, store, streamError, toasts } = await setup(t);
+    await start();
+    await streamError(code);
+    assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
+    assert.equal(toasts.at(-1)?.description, message);
+  });
+}

@@ -432,7 +432,11 @@ export function useChatStreaming({
               : llmConfig.provider;
         if (
           !isAgentAllowed(policyState) ||
-          !isLlmSelectionAllowed(policyState, { mode: llmMode, provider: policyProvider })
+          !isLlmSelectionAllowed(policyState, {
+            mode: llmMode,
+            provider: policyProvider,
+            model: llmConfig.model,
+          })
         ) {
           // The user message is already appended; answer it instead of dead-ending silently.
           const restriction = !isAgentAllowed(policyState)

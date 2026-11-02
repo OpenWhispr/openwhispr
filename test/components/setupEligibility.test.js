@@ -33,6 +33,8 @@ function availability(policy, overrides = {}) {
       agentAllowed: true,
       transcriptionProviders: TRANSCRIPTION_PROVIDERS,
       llmProviders: LLM_PROVIDERS,
+      supportedLocalTranscriptionModels: [{ id: "base" }],
+      supportedLocalLlmModels: [{ id: "qwen3.5-4b-q4_k_m" }],
       ...overrides,
     })
   );
@@ -119,4 +121,66 @@ test("dictation-only policies ignore LLM availability when the agent is disabled
     byok: true,
     selfHosted: true,
   });
+});
+
+test("local setup requires approved device-supported speech and optional agent models", async () => {
+  const policy = managedPolicy({
+    transcription: { allowedModes: ["local"], allowedLocalModels: ["orukeet-v0.1.0"] },
+    llm: { allowedModes: ["local"], allowedLocalModels: [] },
+  });
+  assert.equal((await availability(policy, { agentAllowed: false })).local, false);
+  assert.equal(
+    (
+      await availability(policy, {
+        agentAllowed: false,
+        supportedLocalTranscriptionModels: [{ id: "orukeet-v0.1.0" }],
+      })
+    ).local,
+    true
+  );
+  assert.equal(
+    (
+      await availability(policy, {
+        supportedLocalTranscriptionModels: [{ id: "orukeet-v0.1.0" }],
+      })
+    ).local,
+    false
+  );
+  policy.policy.llm.allowedLocalModels = ["qwen3.5-4b-q4_k_m"];
+  assert.equal(
+    (
+      await availability(policy, {
+        supportedLocalTranscriptionModels: [{ id: "orukeet-v0.1.0" }],
+      })
+    ).local,
+    true
+  );
+  policy.policy.transcription.allowedLocalModels = ["future-speech"];
+  assert.equal((await availability(policy, { agentAllowed: false })).local, false);
+});
+
+test("Cohere-only speech approvals enable local setup only on a supported device", async () => {
+  const modelId = "cohere-transcribe-03-2026";
+  const policy = managedPolicy({
+    transcription: { allowedModes: ["local"], allowedLocalModels: [modelId] },
+    llm: { allowedModes: ["local"], allowedLocalModels: ["qwen3.5-4b-q4_k_m"] },
+  });
+  assert.equal((await availability(policy, { agentAllowed: false })).local, false);
+  assert.equal(
+    (
+      await availability(policy, {
+        agentAllowed: false,
+        supportedLocalTranscriptionModels: [{ id: modelId }],
+      })
+    ).local,
+    true
+  );
+  assert.equal(
+    (
+      await availability(policy, {
+        supportedLocalTranscriptionModels: [{ id: modelId }],
+      })
+    ).local,
+    true
+  );
 });

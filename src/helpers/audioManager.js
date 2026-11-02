@@ -91,6 +91,7 @@ import {
 } from "./selfHostedTranscription";
 import {
   isManagedOrukeetStream,
+  isTranscriptionPolicyRefusal,
   resolveStreamingFallbackTarget,
   resolveStreamingStartFallback,
 } from "./transcriptionFallback";
@@ -1956,8 +1957,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.onTranscriptionComplete?.({ success: true, text: "" });
       return;
     }
-    // Non-commit sessions stop concurrently with the decode below.
-    const previewStop = this._streamingCommitActive ? await previewStopPromise : null;
+    // A preview policy refusal also forbids decoding the full recording.
+    const previewStop = await previewStopPromise;
     if (wasCancelled()) {
       this._settleProcessingPipeline(processingPipeline);
       return;
@@ -1972,6 +1973,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         analyticsOccurredAt,
         ...(salvagedRecording ? { salvagedRecording: true } : {}),
         ...(previewStop?.streamed ? { streamedText: previewStop.text } : {}),
+        ...(isTranscriptionPolicyRefusal(previewStop) ? { localPolicyRefusal: previewStop } : {}),
         ...(rawWav ? { rawWav } : {}),
       },
       processingPipeline
@@ -2285,10 +2287,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     try {
       const useLocalWhisper = settings.useLocalWhisper;
+      if (isTranscriptionPolicyRefusal(metadata.localPolicyRefusal)) {
+        throw errorFromIpcResult(metadata.localPolicyRefusal);
+      }
       const localProvider = settings.localTranscriptionProvider;
       const whisperModel = settings.whisperModel;
-      const parakeetModel = settings.parakeetModel || "parakeet-tdt-0.6b-v3";
-
+      const parakeetModel = settings.parakeetModel;
       const cloudTranscriptionMode = settings.cloudTranscriptionMode;
       const isSignedIn = settings.isSignedIn;
 
@@ -2312,6 +2316,22 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           managedTranscription.kind === "managed" ? managedTranscription.deployment : null;
         result = await this.processWithOpenAIAPI(audioBlob, metadata, wasCancelled);
       } else if (useLocalWhisper) {
+        const finalLocalModel =
+          localProvider === "cohere"
+            ? settings.cohereModel
+            : isSherpaLocalProvider(localProvider)
+              ? parakeetModel
+              : whisperModel;
+        if (
+          settings.policyBlockedLocalScopes?.includes("dictation") ||
+          typeof finalLocalModel !== "string" ||
+          !finalLocalModel.trim()
+        ) {
+          throw Object.assign(
+            new Error("Selected local model is restricted by your organization."),
+            { code: "POLICY_MODEL_BLOCKED", messageKey: "models.policy.modelBlocked" }
+          );
+        }
         if (isSherpaLocalProvider(localProvider)) {
           activeModel = localProvider === "cohere" ? settings.cohereModel : parakeetModel;
           result = await this.processWithLocalParakeet(
@@ -2481,6 +2501,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       const transcriptionStart = performance.now();
       let result = await window.electronAPI.transcribeLocalWhisper(arrayBuffer, options);
+      if (isTranscriptionPolicyRefusal(result)) throw errorFromIpcResult(result);
       timings.transcriptionProcessingDurationMs = Math.round(
         performance.now() - transcriptionStart
       );
@@ -2517,7 +2538,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               ...(options.language ? { language: options.language } : {}),
               skipVad: true,
             });
+            if (isTranscriptionPolicyRefusal(retry)) throw errorFromIpcResult(retry);
           } catch (retryError) {
+            if (isTranscriptionPolicyRefusal(retryError)) throw retryError;
             if (strictDictionaryEcho) throw retryError;
             // A heuristic recovery is best-effort; keep the initial text if it fails.
             logger.warn(
@@ -2600,6 +2623,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         throw new Error(result.message || result.error || "Local Whisper transcription failed");
       }
     } catch (error) {
+      if (isTranscriptionPolicyRefusal(error)) throw error;
       if (error.selectionEditFatal) {
         throw error;
       }
@@ -2623,6 +2647,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           const fallbackResult = await this.processWithOpenAIAPI(audioBlob, metadata, wasCancelled);
           return { ...fallbackResult, source: "openai-fallback" };
         } catch (fallbackError) {
+          if (isTranscriptionPolicyRefusal(fallbackError)) throw fallbackError;
           if (fallbackError.selectionEditFatal) {
             throw fallbackError;
           }
@@ -2672,6 +2697,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           model,
           language: getBaseLanguageCode(this.getEffectiveSttLanguage(getSettings())),
         });
+        if (isTranscriptionPolicyRefusal(result)) throw errorFromIpcResult(result);
         timings.transcriptionProcessingDurationMs = Math.round(
           performance.now() - transcriptionStart
         );
@@ -2711,6 +2737,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         throw new Error(result.message || result.error || "Parakeet transcription failed");
       }
     } catch (error) {
+      if (isTranscriptionPolicyRefusal(error)) throw error;
       if (error.selectionEditFatal) {
         throw error;
       }
@@ -2734,6 +2761,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           const fallbackResult = await this.processWithOpenAIAPI(audioBlob, metadata, wasCancelled);
           return { ...fallbackResult, source: "openai-fallback" };
         } catch (fallbackError) {
+          if (isTranscriptionPolicyRefusal(fallbackError)) throw fallbackError;
           if (fallbackError.selectionEditFatal) {
             throw fallbackError;
           }
@@ -4430,7 +4458,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         );
       }
     } catch (error) {
-      if (error.name === "AbortError") throw error;
+      if (error.name === "AbortError" || isTranscriptionPolicyRefusal(error)) throw error;
       if (error.selectionEditFatal) {
         throw error;
       }
@@ -4443,6 +4471,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const fallbackAllowedByPolicy = isTranscriptionSelectionAllowed(usePolicyStore.getState(), {
         mode: "local",
         provider: "",
+        model: fallbackModel,
       });
 
       if (allowLocalFallback && isOpenAIMode && fallbackAllowedByPolicy) {
@@ -4467,6 +4496,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           }
           throw error;
         } catch (fallbackError) {
+          if (isTranscriptionPolicyRefusal(fallbackError)) throw fallbackError;
           if (fallbackError.selectionEditFatal) {
             throw fallbackError;
           }
@@ -4510,7 +4540,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // the local→cloud fallback resolves its cloud endpoint through this too.
   resolveBatchRoute(settings, deploymentName = "") {
     const route = resolveTranscriptionRoute({
-      settings: { ...settings, useLocalWhisper: false },
+      settings: {
+        ...settings,
+        useLocalWhisper: false,
+        transcriptionMode:
+          settings.transcriptionMode === "local" ? "providers" : settings.transcriptionMode,
+      },
       policy: usePolicyStore.getState(),
       providers: getTranscriptionProviders(),
       hasProviderKey: Boolean(

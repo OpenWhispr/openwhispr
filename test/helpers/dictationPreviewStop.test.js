@@ -74,16 +74,18 @@ function deferred() {
 function scenario(t, { decode, stream, online = false } = {}) {
   const timers = new Map();
   t.mock.method(global, "setInterval", (callback) => {
-    const id = {};
+    const id = { unref() {} };
     timers.set(id, callback);
     return id;
   });
   t.mock.method(global, "clearInterval", (id) => timers.delete(id));
   const calls = { decode: [], appended: [], shown: [], held: [], hidden: 0 };
+  let streamOptions;
   const target = {
     parakeetManager: {
       supportsOnlineStreaming: () => online,
-      createOnlineStream: async () => {
+      createOnlineStream: async (_model, options) => {
+        streamOptions = options;
         if (stream instanceof Error) throw stream;
         return stream;
       },
@@ -126,6 +128,7 @@ function scenario(t, { decode, stream, online = false } = {}) {
     invoke,
     start,
     audio,
+    failStream: (error) => streamOptions.onError(error),
     tick: () => Promise.all([...timers.values()].map((callback) => callback())),
   };
 }
@@ -252,3 +255,42 @@ test("failed online startup skips the offline preview tail and leaves final deco
   });
   assert.equal(s.calls.decode.length, 0);
 });
+
+const blockedModel = () =>
+  Object.assign(new Error("Model blocked"), { code: "POLICY_MODEL_BLOCKED" });
+
+for (const stage of ["start", "send", "finish", "callback", "chunk"]) {
+  test(`policy denial during preview ${stage} is terminal and preserves its code`, async (t) => {
+    const error = blockedModel();
+    const s = scenario(t, {
+      online: stage !== "chunk",
+      decode: async () => {
+        throw error;
+      },
+      stream:
+        stage === "start"
+          ? error
+          : {
+              sendPcm16() {
+                if (stage === "send") throw error;
+              },
+              finish: async () => {
+                throw error;
+              },
+              abort() {},
+            },
+    });
+    const started = await s.start("online-model");
+    if (stage === "start") assert.equal(started.code, error.code);
+    assert.doesNotThrow(() => s.audio());
+    if (stage === "callback") s.failStream(error);
+    if (stage === "chunk") await s.tick();
+    const result = await s.invoke("stop-dictation-preview");
+    assert.equal(result.success, false);
+    assert.equal(result.code, error.code);
+    s.audio();
+    await s.tick();
+    assert.equal(s.calls.decode.length, stage === "chunk" ? 1 : 0);
+    assert.deepEqual(s.calls.appended, []);
+  });
+}

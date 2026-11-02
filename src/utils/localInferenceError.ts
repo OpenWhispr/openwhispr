@@ -49,6 +49,13 @@ export function buildLocalInferenceError(result: LocalInferenceFailure): LocalIn
   const error: LocalInferenceError = new Error(result.error || "Local inference failed");
   if (result.code) error.code = result.code;
 
+  const policyKeys: Record<string, string> = {
+    POLICY_MODEL_BLOCKED: "models.policy.modelBlocked",
+    POLICY_LOCAL_MODE_BLOCKED: "models.policy.modeBlocked",
+    POLICY_UNRESOLVABLE: "models.policy.unresolved",
+    POLICY_APP_VERSION_BLOCKED: "models.policy.versionBlocked",
+  };
+  if (result.code && policyKeys[result.code]) error.messageKey = policyKeys[result.code];
   const details = result.details ?? {};
   if (result.code === "CONTEXT_TOO_LARGE") {
     Object.assign(error, contextTooLarge(details));

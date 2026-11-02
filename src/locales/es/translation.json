@@ -2863,6 +2863,16 @@
       "contextTooLargeGeneric": "Esto es demasiado largo para que {{model}} lo lea en este equipo. Prueba con un modelo en la nube o ejecuta la acción sobre una selección más corta.",
       "localServerUnavailable": "No se pudo iniciar {{model}} en este ordenador. Inténtalo de nuevo o cambia a un modelo en la nube.",
       "localModelBusy": "El modelo local todavía está procesando otra solicitud. Espera a que termine y vuelve a intentarlo."
+    },
+    "policy": {
+      "guidance": "Elige un modelo local aprobado por tu organización.",
+      "notApproved": "No aprobado",
+      "noneSupported": "Esta versión de la aplicación o este dispositivo no admite ningún modelo local aprobado. Actualiza OpenWhispr o contacta con tu administrador.",
+      "emptyIntersection": "Tu espacio de trabajo no tiene modelos locales aprobados para esta tarea.",
+      "modelBlocked": "Tu organización no aprueba este modelo local. Elige uno aprobado.",
+      "modeBlocked": "Tu organización ha desactivado el procesamiento local.",
+      "unresolved": "No se pudo obtener la política del espacio de trabajo. Conéctate e inténtalo de nuevo.",
+      "versionBlocked": "Actualiza OpenWhispr para usar los modelos aprobados por tu organización."
     }
   },
   "referral": {

@@ -29,6 +29,9 @@ const MEETING_ERROR_KEYS: Record<string, string> = {
   POLICY_MEETING_RECORDING_DISABLED: "notes.meeting.recordingDisabledByOrg",
   AUDIO_PURPOSE_REQUIRED: "notes.meeting.restrictedByOrg",
   POLICY_UNRESOLVABLE: "common.policyUnresolved",
+  POLICY_MODEL_BLOCKED: "models.policy.modelBlocked",
+  POLICY_LOCAL_MODE_BLOCKED: "models.policy.modeBlocked",
+  POLICY_APP_VERSION_BLOCKED: "models.policy.versionBlocked",
   // A running recording stopped because the policy couldn't be checked.
   policyUnresolvedStop: "notes.meeting.stoppedPolicyUnresolved",
   // The main process ended the recording because it belonged to the previous account.

@@ -1,3 +1,8 @@
+const {
+  runLocalModelOperation,
+  assertLocalModelOperation,
+  localModelOperationSignal,
+} = require("./localModelPolicyGate");
 const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
@@ -85,6 +90,16 @@ class ParakeetWsServer {
   }
 
   async start(modelName, modelDir, runtime = "offline", language = null) {
+    return runLocalModelOperation(
+      this,
+      "transcription",
+      this.localModelIdForPath ? this.localModelIdForPath(modelDir, modelName) : modelName,
+      () => this._policyAllowedStart(modelName, modelDir, runtime, language),
+      { onAbort: () => this.stop() }
+    );
+  }
+
+  async _policyAllowedStart(modelName, modelDir, runtime = "offline", language = null) {
     // Serialize with any in-flight startup; join it only when it's for the same model.
     while (this.startupPromise) {
       if (this.startingModelName === modelName && this.startingLanguage === language) {
@@ -157,6 +172,7 @@ class ParakeetWsServer {
 
     debugLogger.debug("Starting parakeet WS server", { port: this.port, modelName, runtime, args });
 
+    assertLocalModelOperation(this);
     const child = spawn(wsBinary, args, {
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
@@ -293,6 +309,19 @@ class ParakeetWsServer {
 
   // signal is optional; dictation and warm-up flows never pass one.
   transcribe(samplesBuffer, sampleRate, { signal } = {}) {
+    return runLocalModelOperation(
+      this,
+      "transcription",
+      this.modelName,
+      () =>
+        this._policyAllowedTranscribe(samplesBuffer, sampleRate, {
+          signal: localModelOperationSignal(this, signal),
+        }),
+      { onAbort: () => this.stop() }
+    );
+  }
+
+  _policyAllowedTranscribe(samplesBuffer, sampleRate, { signal } = {}) {
     if (!this.ready || !this.process) {
       throw new Error("parakeet-ws server is not running");
     }
@@ -457,6 +486,11 @@ class ParakeetWsServer {
       throw new Error("createOnlineStream requires an online-runtime model");
     }
 
+    const policyLease = this.localModelPolicy?.authorizeCached("transcription", this.modelName);
+    const checkPolicy = () => {
+      if (policyLease) this.localModelPolicy.assertCurrent(policyLease);
+    };
+
     const results = createOnlineAccumulator();
     const pendingChunks = [];
     let finishResolve = null;
@@ -481,6 +515,10 @@ class ParakeetWsServer {
     const settle = () => {
       if (closed) return;
       closed = true;
+      if (policyLease) {
+        policyLease.signal.removeEventListener("abort", onPolicyAbort);
+        this.localModelPolicy.release(policyLease);
+      }
       clearIdleTimer();
       if (finishResolve) finishResolve({ text: results.text(), truncated });
     };
@@ -501,7 +539,16 @@ class ParakeetWsServer {
       idleTimer.unref?.();
     };
 
+    const onPolicyAbort = () => {
+      aborted = true;
+      onError?.(policyLease.signal.reason);
+      ws.close();
+      settle();
+    };
+    policyLease?.signal.addEventListener("abort", onPolicyAbort, { once: true });
+
     const sendFloat32 = (float32Samples) => {
+      checkPolicy();
       if (closed) return;
       // A chunk after finish() means the renderer flushed late (contract broke) so the
       // tail is lost; when only closed is set, settle already happened and a plain drop is fine.
@@ -522,6 +569,7 @@ class ParakeetWsServer {
     };
 
     ws.on("open", () => {
+      if (policyLease?.signal.aborted) return onPolicyAbort();
       for (const chunk of pendingChunks) {
         ws.send(chunk, (err) => {
           if (err) {
@@ -543,7 +591,7 @@ class ParakeetWsServer {
         return;
       }
       const text = results.push(message);
-      if (!closed && text && text !== lastEmitted) {
+      if (!closed && !policyLease?.signal.aborted && text && text !== lastEmitted) {
         lastEmitted = text;
         onUpdate?.(text);
       }
@@ -568,6 +616,7 @@ class ParakeetWsServer {
       sendFloat32,
       sendPcm16: (pcmBuffer) => sendFloat32(pcm16ToFloat32(pcmBuffer)),
       finish: (options = {}) => {
+        checkPolicy();
         if (finishPromise) return finishPromise;
         if (options.idleTimeoutMs) idleTimeoutMs = options.idleTimeoutMs;
         finishPromise = new Promise((resolve) => {
@@ -578,6 +627,9 @@ class ParakeetWsServer {
           finishResolve = resolve;
           if (ws.readyState === WebSocket.OPEN) ws.send("Done");
           armIdleTimer();
+        }).then((result) => {
+          checkPolicy();
+          return result;
         });
         return finishPromise;
       },
