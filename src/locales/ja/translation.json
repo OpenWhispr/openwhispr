@@ -4964,6 +4964,8 @@
       "owners_other": "そのうち {{count}} 人がノートまたはチームスペースを所有しています。",
       "directoryManagedOne": "{{name}} は ID プロバイダーによって割り当てられています。ID プロバイダー側で削除してください。",
       "directoryManaged_other": "そのうち {{count}} 人は ID プロバイダーによって割り当てられています。ID プロバイダー側で削除してください。",
+      "directoryManagedOneOthers": "{{name}} は ID プロバイダーによって割り当てられています。ID プロバイダー側で削除するか、チェックを外して他のメンバーを削除してください。",
+      "directoryManagedOthers_other": "そのうち {{count}} 人は ID プロバイダーによって割り当てられています。ID プロバイダー側で削除するか、チェックを外して他のメンバーを削除してください。",
       "transferLabel": "譲渡先",
       "transferBody": "ノートとチームスペースは新しいオーナーに移動します。削除されたメンバーはこのワークスペースにアクセスできなくなります。",
       "you": "{{name}}（あなた）",

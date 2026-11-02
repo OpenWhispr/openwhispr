@@ -718,6 +718,48 @@ test("a removal drops the removed people from the selection", async (t) => {
   assert.match(barText(container), /selection\.count#1/);
 });
 
+test("Cancel on a refused removal keeps the selection, so one person can be unticked", async (t) => {
+  const { container } = await mountPeople(t);
+  const boxes = checkboxes(container).slice(1);
+  await React.act(async () => propsOf(boxes[0]).onChange({ target: { checked: true } }));
+  await React.act(async () => propsOf(boxes[1]).onChange({ target: { checked: true } }));
+  const pressRemove = () =>
+    React.act(async () =>
+      propsOf(
+        findNode(
+          container,
+          (node) =>
+            node.localName === "button" &&
+            textOf(node).includes("settingsPage.workspace.people.selection.remove")
+        )
+      ).onClick()
+    );
+  await pressRemove();
+
+  await React.act(async () =>
+    globalThis.__removeDialog.dispatch({
+      type: "previewRefused",
+      error: { kind: "directoryManaged", userIds: ["u-member"] },
+    })
+  );
+  assert.equal(globalThis.__removeDialog.state.kind, "failed");
+
+  await React.act(async () => globalThis.__removeDialog.dispatch({ type: "dismiss" }));
+  assert.equal(globalThis.__removeDialog.state.kind, "closed");
+  assert.match(barText(container), /selection\.count#2/);
+
+  await React.act(async () =>
+    propsOf(checkboxes(container).slice(1)[0]).onChange({ target: { checked: false } })
+  );
+  assert.match(barText(container), /selection\.count#1/);
+
+  await pressRemove();
+  assert.deepEqual(
+    globalThis.__removeDialog.state.subjects.map((member) => member.user_id),
+    ["u-oliver"]
+  );
+});
+
 test("the row menu's Remove opens the same dialog with one member", async (t) => {
   const WorkspaceMembersTab = await loadMembersTab(t, { members: PEOPLE, captureRoleMenus: true });
   globalThis.__authUser = { id: "u-admin" };

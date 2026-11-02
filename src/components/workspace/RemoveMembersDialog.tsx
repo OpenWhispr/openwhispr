@@ -162,17 +162,20 @@ export function RemoveMembersDialog({
           ? t("workspaces.removeMembers.cannotRemoveOwner")
           : t("workspaces.removeMembers.cannotRemoveSelf");
       case "directoryManaged": {
-        if (count === 1 || error.userIds.length === 1) {
-          const managed =
-            subjects.find((subject) => subject.user_id === error.userIds[0]) ?? subjects[0];
-          return t("workspaces.removeMembers.directoryManagedOne", {
-            name: isolate(memberName(managed)),
-          });
+        if (count === 1) {
+          return t("workspaces.removeMembers.directoryManagedOne", { name: firstName });
         }
-        // An unreadable list says nothing about who, only that the selection can't be removed.
-        return t("workspaces.removeMembers.directoryManaged", {
-          count: error.userIds.length > 0 ? error.userIds.length : count,
-        });
+        // Only people in this selection can be unticked. No one here means the list can't be
+        // read, which says only that the selection can't be removed.
+        const managed = subjects.filter((subject) => error.userIds.includes(subject.user_id));
+        if (managed.length === 0 || managed.length === count) {
+          return t("workspaces.removeMembers.directoryManaged", { count });
+        }
+        return managed.length === 1
+          ? t("workspaces.removeMembers.directoryManagedOneOthers", {
+              name: isolate(memberName(managed[0])),
+            })
+          : t("workspaces.removeMembers.directoryManagedOthers", { count: managed.length });
       }
       // The API reports people already gone in `already_removed`, never as `gone`, and the
       // reducer turns `transferRequired` into the picker; both read as a plain failure.

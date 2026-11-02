@@ -4964,6 +4964,8 @@
       "owners_other": "其中 {{count}} 人擁有筆記或團隊空間。",
       "directoryManagedOne": "{{name}} 由身分識別提供者指派。請改在身分識別提供者中移除。",
       "directoryManaged_other": "其中 {{count}} 人由身分識別提供者指派。請改在身分識別提供者中移除。",
+      "directoryManagedOneOthers": "{{name}} 由身分識別提供者指派。請在身分識別提供者中移除，或取消勾選以移除其他人。",
+      "directoryManagedOthers_other": "其中 {{count}} 人由身分識別提供者指派。請在身分識別提供者中移除，或取消勾選以移除其他人。",
       "transferLabel": "轉讓給",
       "transferBody": "他們的筆記和團隊空間將轉給新擁有者。他們將失去此工作區的存取權限。",
       "you": "{{name}}（你）",

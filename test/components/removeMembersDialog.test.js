@@ -601,7 +601,7 @@ test("a member the identity provider assigns is named and Remove stays disabled"
   // Alex, not whoever was selected first.
   assert.equal(
     props.error,
-    `workspaces.removeMembers.directoryManagedOne|{"name":"${isolated("Alex")}"}`
+    `workspaces.removeMembers.directoryManagedOneOthers|{"name":"${isolated("Alex")}"}`
   );
   assert.equal(props.primary.label, 'workspaces.removeMembers.confirm|{"count":2}');
   assert.equal(props.primary.disabled, true);
@@ -628,7 +628,8 @@ test("a one-person selection names them when the list can't be read", async (t) 
   assert.equal(props.primary.disabled, true);
 });
 
-test("a managed id outside the selection falls back to the first subject", async (t) => {
+test("a managed id outside the selection reads like an unreadable list", async (t) => {
+  // Nobody here to name, and no one to tell the user to untick.
   const { mount, opened, CloudApiError } = await loadDialog(t);
   globalThis.__previewImpl = async () => {
     throw directoryManaged(CloudApiError, { user_ids: ["u-someone-else"] });
@@ -638,7 +639,81 @@ test("a managed id outside the selection falls back to the first subject", async
 
   assert.equal(
     globalThis.__actionDialogProps.error,
+    'workspaces.removeMembers.directoryManaged|{"count":2}'
+  );
+});
+
+test("one person selected keeps the plain line, without the untick", async (t) => {
+  const { mount, opened, CloudApiError } = await loadDialog(t);
+  globalThis.__previewImpl = async () => {
+    throw directoryManaged(CloudApiError, { user_ids: ["u-liam"] });
+  };
+
+  await mount(opened([LIAM]));
+
+  assert.equal(
+    globalThis.__actionDialogProps.error,
     `workspaces.removeMembers.directoryManagedOne|{"name":"${isolated("Liam")}"}`
+  );
+});
+
+test("several selected and one managed names them and says the others can go", async (t) => {
+  const { mount, opened, CloudApiError } = await loadDialog(t);
+  globalThis.__previewImpl = async () => {
+    throw directoryManaged(CloudApiError, { user_ids: ["u-zoe"] });
+  };
+
+  await mount(opened([LIAM, ALEX, ZOE]));
+
+  const props = globalThis.__actionDialogProps;
+  assert.equal(
+    props.error,
+    `workspaces.removeMembers.directoryManagedOneOthers|{"name":"${isolated("Zoe")}"}`
+  );
+  assert.equal(props.primary.disabled, true);
+  assert.equal(props.cancelLabel, "common.cancel");
+});
+
+test("several selected and some managed counts them and says the others can go", async (t) => {
+  const { mount, opened, CloudApiError } = await loadDialog(t);
+  globalThis.__previewImpl = async () => {
+    // One id from outside the selection: the count is the people the user can see.
+    throw directoryManaged(CloudApiError, { user_ids: ["u-liam", "u-alex", "u-someone-else"] });
+  };
+
+  await mount(opened([LIAM, ALEX, ZOE]));
+
+  const props = globalThis.__actionDialogProps;
+  assert.equal(props.error, 'workspaces.removeMembers.directoryManagedOthers|{"count":2}');
+  assert.equal(props.primary.disabled, true);
+  assert.equal(props.cancelLabel, "common.cancel");
+});
+
+test("everyone selected being managed offers no untick", async (t) => {
+  const { mount, opened, CloudApiError } = await loadDialog(t);
+  globalThis.__previewImpl = async () => {
+    throw directoryManaged(CloudApiError, { user_ids: ["u-liam", "u-alex"] });
+  };
+
+  await mount(opened([LIAM, ALEX]));
+
+  assert.equal(
+    globalThis.__actionDialogProps.error,
+    'workspaces.removeMembers.directoryManaged|{"count":2}'
+  );
+});
+
+test("an empty list on several people counts them all", async (t) => {
+  const { mount, opened, CloudApiError } = await loadDialog(t);
+  globalThis.__previewImpl = async () => {
+    throw directoryManaged(CloudApiError, { user_ids: [] });
+  };
+
+  await mount(opened([LIAM, ALEX, ZOE]));
+
+  assert.equal(
+    globalThis.__actionDialogProps.error,
+    'workspaces.removeMembers.directoryManaged|{"count":3}'
   );
 });
 
@@ -651,7 +726,7 @@ test("several are counted", async (t) => {
   await mount(opened([LIAM, ALEX, ZOE]));
 
   const props = globalThis.__actionDialogProps;
-  assert.equal(props.error, 'workspaces.removeMembers.directoryManaged|{"count":2}');
+  assert.equal(props.error, 'workspaces.removeMembers.directoryManagedOthers|{"count":2}');
   assert.equal(props.primary.label, 'workspaces.removeMembers.confirm|{"count":3}');
   assert.equal(props.primary.disabled, true);
 });
@@ -683,7 +758,7 @@ test("the run's answer names the member and Remove stays disabled", async (t) =>
   const props = globalThis.__actionDialogProps;
   assert.equal(
     props.error,
-    `workspaces.removeMembers.directoryManagedOne|{"name":"${isolated("Alex")}"}`
+    `workspaces.removeMembers.directoryManagedOneOthers|{"name":"${isolated("Alex")}"}`
   );
   assert.equal(props.primary.label, 'workspaces.removeMembers.confirm|{"count":2}');
   assert.equal(props.primary.disabled, true);

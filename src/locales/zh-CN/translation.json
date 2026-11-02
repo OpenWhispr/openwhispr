@@ -4964,6 +4964,8 @@
       "owners_other": "其中 {{count}} 人拥有笔记或团队空间。",
       "directoryManagedOne": "{{name}} 由身份提供商分配。请改在身份提供商中移除。",
       "directoryManaged_other": "其中 {{count}} 人由身份提供商分配。请改在身份提供商中移除。",
+      "directoryManagedOneOthers": "{{name}} 由身份提供商分配。请在身份提供商中移除，或取消勾选以移除其他人。",
+      "directoryManagedOthers_other": "其中 {{count}} 人由身份提供商分配。请在身份提供商中移除，或取消勾选以移除其他人。",
       "transferLabel": "转让给",
       "transferBody": "他们的笔记和团队空间将转给新所有者。他们将失去此工作区的访问权限。",
       "you": "{{name}}（你）",
