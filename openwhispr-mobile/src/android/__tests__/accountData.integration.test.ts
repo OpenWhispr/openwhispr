@@ -184,7 +184,7 @@ it("does not sweep another account's meeting recordings after restoring a differ
 it('keeps upload history separate through A, Local and B and clears only the active owner', async () => {
   require('@/db/migrate').runMigrations();
   const { useAuthStore } = require('@/store/useAuthStore');
-  const { StorageService } = require('@/services/storage/StorageService');
+  const { StorageService } = require('@/services/storage/StorageService.android');
   const row = (id: string) => ({
     id,
     text: `${id} private transcript`,
@@ -214,7 +214,7 @@ it('preserves unowned history without assigning it to the account restored durin
   const legacy = JSON.stringify([{ id: 'legacy', text: 'Keep the original bytes' }]);
   localStorage.setItem('@openwhispr:transcripts', legacy);
   const { useAuthStore } = require('@/store/useAuthStore');
-  const { StorageService } = require('@/services/storage/StorageService');
+  const { StorageService } = require('@/services/storage/StorageService.android');
   await useAuthStore.getState().initialize();
   expect(await StorageService.getTranscripts()).toEqual([]);
   await StorageService.clearTranscripts();
@@ -771,7 +771,7 @@ it('clears visible history before a switch and discards a delayed previous-accou
   require('@/db/migrate').runMigrations();
   const { useAuthStore } = require('@/store/useAuthStore');
   const { useTranscriptStore } = require('@/store/useTranscriptStore');
-  const { StorageService } = require('@/services/storage/StorageService');
+  const { StorageService } = require('@/services/storage/StorageService.android');
   await useAuthStore.getState().initialize();
   await useTranscriptStore
     .getState()
@@ -802,7 +802,7 @@ it('clears visible history before a switch and discards a delayed previous-accou
 it('keeps unassigned history accessible only through the signed-out device archive', async () => {
   require('@/db/migrate').runMigrations();
   const { useAuthStore } = require('@/store/useAuthStore');
-  const { StorageService } = require('@/services/storage/StorageService');
+  const { StorageService } = require('@/services/storage/StorageService.android');
   const rows = [{ id: 'unassigned', text: 'Preserved text' }];
   localStorage.setItem('@openwhispr:transcripts', JSON.stringify(rows));
   await useAuthStore.getState().initialize();
@@ -815,7 +815,7 @@ it('keeps unassigned history accessible only through the signed-out device archi
 it('erases the deleted account history without erasing Local, B or unassigned history', async () => {
   require('@/db/migrate').runMigrations();
   const { useAuthStore } = require('@/store/useAuthStore');
-  const { StorageService } = require('@/services/storage/StorageService');
+  const { StorageService } = require('@/services/storage/StorageService.android');
   await useAuthStore.getState().initialize();
   await StorageService.saveTranscripts([{ id: 'a', text: 'A' }]);
   const aKey = StorageService.transcriptOwner();
@@ -837,7 +837,7 @@ it('erases the deleted account history without erasing Local, B or unassigned hi
 it('keeps anonymous history with its collection when that account is linked', async () => {
   require('@/db/migrate').runMigrations();
   const { useAuthStore } = require('@/store/useAuthStore');
-  const { StorageService } = require('@/services/storage/StorageService');
+  const { StorageService } = require('@/services/storage/StorageService.android');
   mockSessionUser = { id: 'anon', email: '', isAnonymous: true };
   await useAuthStore.getState().initialize();
   const rows = [{ id: 'anonymous-owned', text: 'My anonymous recording' }];

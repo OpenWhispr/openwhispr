@@ -1,3 +1,6 @@
+jest.mock('@/services/storage/StorageService.android', () =>
+  jest.requireMock('@/services/storage/StorageService'),
+);
 jest.mock('@/lib/transcriptAudio.android', () => jest.requireMock('@/lib/transcriptAudio'));
 import { Platform } from 'react-native';
 import type { Transcript } from '@/types';

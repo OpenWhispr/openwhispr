@@ -1,3 +1,6 @@
+jest.mock('@/services/storage/StorageService.android', () =>
+  jest.requireMock('@/services/storage/StorageService'),
+);
 jest.mock('@/lib/transcriptAudio.android', () => jest.requireMock('@/lib/transcriptAudio'));
 let mockHistoryScope: { owner: string; key: string; revision: number } | null = null;
 jest.mock('@/lib/transcriptScope', () => ({

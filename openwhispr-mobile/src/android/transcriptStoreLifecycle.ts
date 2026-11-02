@@ -4,7 +4,7 @@ import {
   observeTranscriptScope,
 } from '@/lib/transcriptScope';
 import { abortError } from '@/services/providers/NativeProviderTransport';
-import { StorageService } from '@/services/storage/StorageService';
+import { StorageService } from '@/services/storage/StorageService.android';
 import {
   garbageCollectTranscriptAudio,
   releaseTranscriptAudio,

@@ -209,7 +209,7 @@ export async function eraseAccountData(userId: string): Promise<void> {
     });
     await Promise.all(audio.map((uri) => FileSystem.deleteAsync(uri, { idempotent: true })));
     const { StorageService } =
-      require('@/services/storage/StorageService') as typeof import('@/services/storage/StorageService');
+      require('@/services/storage/StorageService.android') as typeof import('@/services/storage/StorageService.android');
     await StorageService.eraseTranscriptOwner(`history:${account.audioNamespace || 'original'}`);
     const latest = readManifest();
     const erased = latest.accounts.find((entry) => entry.owner === account.owner);

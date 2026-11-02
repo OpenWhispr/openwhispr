@@ -1,5 +1,5 @@
 import { toFriendlyTranscriptionErrorMessage } from '@/lib/transcriptionErrors';
-import { StorageService } from '@/services/storage/StorageService';
+import { StorageService } from '@/services/storage/StorageService.android';
 import type { Transcript } from '@/types';
 import { AppState } from 'react-native';
 import { useBubbleResult } from '@/android/bubbleResult';
