@@ -317,6 +317,36 @@ async function runSummaryOn(t, note, speakerMappings = [], { user, spaces, roste
   return { input, options };
 }
 
+test("a calendar-linked summary preserves named titles and only regenerates placeholders", async (t) => {
+  const calls = await mountView(t);
+  const event = { id: "calendar-title-regression", summary: "Weekly Team Sync" };
+  globalThis.window.electronAPI.gcalGetEvent = async () => ({ success: true, event });
+  globalThis.__noteActionCalls = [];
+  t.after(() => {
+    delete globalThis.__noteActionCalls;
+  });
+
+  for (const [title, allowTitleGeneration] of [
+    ["Weekly Team Sync", false],
+    ["My renamed meeting", false],
+    ["New note", true],
+    ["Untitled Note", true],
+    ["", true],
+  ]) {
+    globalThis.__note = { ...NOTE, title, calendar_event_id: event.id };
+    await calls.rerender();
+    // The old rule only renamed the note after its linked event had loaded.
+    assert.equal(globalThis.__editorProps.linkedEvent?.summary, event.summary);
+    globalThis.__noteActionCalls.length = 0;
+    await React.act(async () => {
+      await globalThis.__editorProps.onRunNoteAction(AI_SUMMARY);
+    });
+    assert.equal(globalThis.__noteActionCalls.length, 1);
+    const [, , , options] = globalThis.__noteActionCalls[0];
+    assert.equal(options.allowTitleGeneration, allowTitleGeneration, title);
+  }
+});
+
 test("a transcript stored as plain text runs as one, with the user and the invitees for owner mentions", async (t) => {
   const transcript = "Alice, can you fix the build by Friday? Sure, I'll do it.";
   const { input, options } = await runSummaryOn(t, { transcript, participants: PARTICIPANTS });

@@ -429,7 +429,6 @@ export default function PersonalNotesView({
     : linkedEventLookup?.id === linkedEventId
       ? linkedEventLookup.event
       : undefined;
-  const calendarEventName = linkedEvent?.summary ?? null;
 
   const startRecording = useCallback(
     () =>
@@ -856,11 +855,11 @@ export default function PersonalNotesView({
       knownPeople,
       fromSummary,
       material,
-      allowTitleGeneration: isRegenerableNoteTitle(
-        editorNote.title,
-        [t("notes.list.untitledNote"), t("notes.list.newNote"), t("notes.sidebar.newNote")],
-        calendarEventName
-      ),
+      allowTitleGeneration: isRegenerableNoteTitle(editorNote.title, [
+        t("notes.list.untitledNote"),
+        t("notes.list.newNote"),
+        t("notes.sidebar.newNote"),
+      ]),
     });
   };
 
