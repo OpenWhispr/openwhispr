@@ -198,6 +198,9 @@ const ToastViewport: React.FC<{
 
   if (toasts.length === 0) return null;
 
+  // A live preview can keep the native window short. Safe end alignment lets
+  // taller standard cards start below the top gutter instead of clipping Close.
+
   return (
     <div
       className={cn(
@@ -205,7 +208,7 @@ const ToastViewport: React.FC<{
         isDictationPanel
           ? hasDictationError
             ? "inset-x-3 bottom-3"
-            : "bottom-20 end-6"
+            : "top-4 bottom-20 end-6 justify-end-safe"
           : "bottom-5 end-5"
       )}
     >
@@ -349,7 +352,7 @@ const Toast: React.FC<
   return (
     <div
       className={cn(
-        "pointer-events-auto w-100 max-w-[calc(100vw-3rem)]",
+        "pointer-events-auto shrink-0 w-100 max-w-[calc(100vw-3rem)]",
         "transition-[opacity,transform] duration-200 ease-out",
         isExiting
           ? "opacity-0 translate-x-2 rtl:-translate-x-2 scale-[0.98]"

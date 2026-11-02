@@ -94,6 +94,8 @@
   --color-brand-link: #2e3659;
   --color-pattern: #e7e5e4;
 
+  --shadow-modal: 0 24px 48px -12px oklch(0 0 0 / 0.18);
+
   /* Model picker premium effects (light mode) */
   --shadow-metallic-light: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 1px 3px rgba(0, 0, 0, 0.08);
   --shadow-card-hover-subtle: 0 2px 8px -2px rgba(0, 0, 0, 0.1);
