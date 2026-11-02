@@ -120,6 +120,18 @@ export default function ConversationList({
     };
   }, [loadConversations, refreshKey]);
 
+  useEffect(() => {
+    const refresh = () => void loadConversations();
+    const disposers = [
+      window.electronAPI?.onNoteUpdated?.(refresh),
+      window.electronAPI?.onNoteSynced?.(refresh),
+      window.electronAPI?.onNoteDeleted?.(refresh),
+      window.electronAPI?.onSpacePurged?.(refresh),
+      window.electronAPI?.onFolderDeleted?.(refresh),
+    ];
+    return () => disposers.forEach((dispose) => dispose?.());
+  }, [loadConversations]);
+
   const filtered = useMemo(() => {
     return showArchived
       ? conversations.filter((c) => c.is_archived)

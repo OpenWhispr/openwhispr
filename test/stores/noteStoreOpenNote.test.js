@@ -75,6 +75,23 @@ test("reloading the folder keeps the open note", async (t) => {
   assert.equal(store.getNoteFromStore(103), null);
 });
 
+for (const insert of ["addNote", "updateNoteInStore"]) {
+  test(`${insert} keeps the older open note when trimming its container`, async (t) => {
+    const { store } = await fixture(t);
+    store.setActiveNoteId(103);
+    await store.ensureNoteLoaded(103);
+
+    for (let id = 200; id < 250; id++) store[insert]({ ...notes[0], id });
+    assert.equal(store.getNoteFromStore(103)?.title, "Q3 planning sync");
+    assert.equal(store.getActiveNoteIdValue(), 103);
+    assert.ok(store.getNoteFromStore(249));
+
+    store.setActiveNoteId(249);
+    store[insert]({ ...notes[0], id: 250 });
+    assert.equal(store.getNoteFromStore(103), null);
+  });
+}
+
 test("a loaded note isn't fetched, and a trashed one isn't added", async (t) => {
   const { store, getNoteCalls } = await fixture(t);
 
@@ -89,6 +106,26 @@ function deferred() {
   const { promise, resolve } = Promise.withResolvers();
   return { promise, resolve };
 }
+
+test("deleting a note while its container loads cannot add its earlier snapshot", async (t) => {
+  const { store } = await fixture(t);
+  const container = deferred();
+  const started = deferred();
+  let note = { ...notes[2], folder_id: 20 };
+  globalThis.window.electronAPI.getNote = async () => note;
+  globalThis.window.electronAPI.getNotes = () => {
+    started.resolve();
+    return container.promise;
+  };
+  store.setActiveNoteId(note.id);
+  const opening = store.ensureNoteLoaded(note.id);
+  await started.promise;
+  note = { ...note, deleted_at: "2026-11-02T10:00:00Z" };
+  store.removeNote(note.id);
+  container.resolve([]);
+  await opening;
+  assert.equal(store.getNoteFromStore(note.id), null);
+});
 
 test("account reset cancels an outstanding note lookup", async (t) => {
   const { store } = await fixture(t);

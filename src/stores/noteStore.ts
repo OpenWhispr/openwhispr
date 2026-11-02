@@ -566,11 +566,19 @@ export async function ensureNoteLoaded(id: number): Promise<void> {
   const key = noteContainerKey(note);
   await ensureContainerLoaded(key);
   if (accountGen !== accountGeneration) return;
+  const refreshed = await window.electronAPI.getNote(id);
+  if (
+    accountGen !== accountGeneration ||
+    !refreshed ||
+    refreshed.deleted_at ||
+    noteContainerKey(refreshed) !== key
+  )
+    return;
   const state = useNoteStore.getState();
   if (findNoteInState(state, id)) return;
   applyContainers({
     ...state.notesByContainer,
-    [key]: [...(state.notesByContainer[key] ?? []), note],
+    [key]: [...(state.notesByContainer[key] ?? []), refreshed],
   });
 }
 
@@ -708,9 +716,8 @@ export function addNote(note: NoteItem): void {
   const items = state.notesByContainer[key];
   // Not-yet-loaded containers pick the note up on their lazy load.
   if (!items) return;
-  const next = [note, ...items.filter((existing) => existing.id !== note.id)].slice(
-    0,
-    currentLimit
+  const next = [note, ...items.filter((existing) => existing.id !== note.id)].filter(
+    (existing, index) => index < currentLimit || existing.id === state.activeNoteId
   );
   applyContainers({ ...state.notesByContainer, [key]: next });
 }
@@ -736,7 +743,9 @@ export function updateNoteInStore(note: NoteItem): void {
   }
   const target = notesByContainer[targetKey];
   if (target && !target.some((existing) => existing.id === note.id)) {
-    notesByContainer[targetKey] = [note, ...target].slice(0, currentLimit);
+    notesByContainer[targetKey] = [note, ...target].filter(
+      (existing, index) => index < currentLimit || existing.id === state.activeNoteId
+    );
     changed = true;
   }
   if (changed) applyContainers(notesByContainer);

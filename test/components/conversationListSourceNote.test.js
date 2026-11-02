@@ -43,7 +43,7 @@ const CHATS = [
   }),
 ];
 
-async function renderConversationList(t) {
+async function renderConversationList(t, api = {}) {
   let root;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
@@ -53,6 +53,7 @@ async function renderConversationList(t) {
       electronAPI: {
         getAgentConversationsWithPreview: async (_limit, _offset, isArchived) =>
           isArchived ? [] : CHATS,
+        ...api,
       },
     },
   });
@@ -112,3 +113,31 @@ test("a plain chat's row keeps its preview", async (t) => {
   const container = await renderConversationList(t);
   assert.match(rowText(container, "Summarize my week"), /Here's a recap/);
 });
+
+for (const [event, changes, expected] of [
+  ["onNoteUpdated", { note_title: "Renamed planning sync" }, /Renamed planning sync/],
+  ["onNoteSynced", { note_title: "Synced planning sync" }, /Synced planning sync/],
+  ["onNoteDeleted", { note_deleted_at: "2026-11-02T10:00:00Z" }, /chat\.sourceNote\.deletedShort/],
+  ["onFolderDeleted", { note_title: null }, /three decisions/],
+  ["onSpacePurged", { note_title: null }, /three decisions/],
+]) {
+  test(`${event} refreshes source metadata without remounting the list`, async (t) => {
+    let chats = CHATS;
+    let refresh;
+    let disposed = false;
+    const container = await renderConversationList(t, {
+      getAgentConversationsWithPreview: async (_limit, _offset, isArchived) =>
+        isArchived ? [] : chats,
+      [event]: (callback) => {
+        refresh = callback;
+        return () => {
+          disposed = true;
+        };
+      },
+    });
+    chats = CHATS.map((chat) => (chat.id === 1 ? { ...chat, ...changes } : chat));
+    await React.act(async () => refresh?.(event === "onSpacePurged" ? { spaceId: 1 } : { id: 5 }));
+    assert.match(rowText(container, "Onboarding decisions"), expected);
+    t.after(() => assert.equal(disposed, true, "the subscription is disposed on unmount"));
+  });
+}
