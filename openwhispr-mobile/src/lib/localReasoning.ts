@@ -298,7 +298,6 @@ export function toLocalReasoningError(error: unknown): LocalReasoningError {
     case 'APPLE_LLM_UNSUPPORTED_LANGUAGE':
       return new LocalReasoningError(code, UNSUPPORTED_LANGUAGE_MESSAGE);
     case 'LOCAL_CONTEXT_LIMIT':
-    case 'LOCAL_OUTPUT_LIMIT':
     case 'LOCAL_REASONING_FAILED':
     case 'APPLE_LLM_GUARDRAIL':
     case 'APPLE_LLM_CONTEXT_LIMIT':
@@ -330,16 +329,14 @@ export function isLocalContextLimitError(error: unknown): boolean {
   );
 }
 
-// Android reports the token limit directly. FoundationModels reports decodingFailure (a
-// ParsingError on iOS 27) for truncated or malformed guided output. Both can benefit from
-// the Notes pipeline's bounded retry with less material per run.
+// FoundationModels throws decodingFailure (a ParsingError on iOS 27) when guided generation's
+// output can't be decoded. That is most often the output cap cutting it off mid-structure, but
+// malformed output reads the same; either way, less material per run is what helps.
 export function isLocalOutputLimitError(error: unknown): boolean {
   return (
     typeof error === 'object' &&
     error !== null &&
     'code' in error &&
-    ['APPLE_LLM_OUTPUT_LIMIT', 'LOCAL_OUTPUT_LIMIT'].includes(
-      String((error as { code?: unknown }).code),
-    )
+    (error as { code?: unknown }).code === 'APPLE_LLM_OUTPUT_LIMIT'
   );
 }

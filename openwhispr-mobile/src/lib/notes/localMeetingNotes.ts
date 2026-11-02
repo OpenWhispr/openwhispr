@@ -218,6 +218,16 @@ function splitTranscriptLine(line: string): [string, string] | null {
   ];
 }
 
+function isAndroidOutputLimitError(error: unknown): boolean {
+  return (
+    Platform.OS === 'android' &&
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === 'LOCAL_OUTPUT_LIMIT'
+  );
+}
+
 async function generateStructuredNotes(input: {
   instructions: string;
   prompt: string;
@@ -243,6 +253,8 @@ async function generateStructuredNotes(input: {
     });
     return normalizeMeetingNotes(notes);
   } catch (error) {
+    // Preserve Android's native limit without changing shared or Apple error normalization.
+    if (isAndroidOutputLimitError(error)) throw error;
     throw toLocalReasoningError(error);
   }
 }
@@ -268,7 +280,7 @@ async function mapChunkWithRetry(input: {
   outputLimitSplitsLeft?: number;
   checkpoint: () => void;
 }): Promise<StructuredMeetingNotes[]> {
-  input.checkpoint();
+  if (Platform.OS === 'android') input.checkpoint();
   const outputLimitSplitsLeft = input.outputLimitSplitsLeft ?? MAX_OUTPUT_LIMIT_SPLITS;
   const chunkInput = buildChunkInput({
     note: input.note,
@@ -287,7 +299,7 @@ async function mapChunkWithRetry(input: {
       }),
     ];
   } catch (error) {
-    const outputLimit = isLocalOutputLimitError(error);
+    const outputLimit = isLocalOutputLimitError(error) || isAndroidOutputLimitError(error);
     if (!isLocalContextLimitError(error) && !(outputLimit && outputLimitSplitsLeft > 0)) {
       throw error;
     }
@@ -338,7 +350,7 @@ async function reduceStructuredNotes(input: {
   budget: number;
   checkpoint: () => void;
 }): Promise<StructuredMeetingNotes> {
-  input.checkpoint();
+  if (Platform.OS === 'android') input.checkpoint();
   if (input.notes.length === 0) return emptyMeetingNotes();
   if (input.notes.length === 1) return normalizeMeetingNotes(input.notes[0]);
 
@@ -350,7 +362,7 @@ async function reduceStructuredNotes(input: {
       budget: input.budget,
     })
   ) {
-    input.checkpoint();
+    if (Platform.OS === 'android') input.checkpoint();
     try {
       return await generateStructuredNotes({
         instructions: input.instructions,
@@ -358,7 +370,7 @@ async function reduceStructuredNotes(input: {
       });
     } catch (error) {
       // Merged notes too long for the output cap are merged like ones too long to read.
-      if (!isLocalOutputLimitError(error)) throw error;
+      if (!isLocalOutputLimitError(error) && !isAndroidOutputLimitError(error)) throw error;
     }
   }
 
