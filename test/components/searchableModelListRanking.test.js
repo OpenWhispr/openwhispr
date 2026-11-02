@@ -10,30 +10,47 @@ const {
 } = require("../lib/rendererTestHarness");
 
 const RANKING = [
+  "deepseek/z-fast",
   "openai/z-fast",
-  "z-ai/z-fast",
+  "google/z-fast",
   "anthropic/z-fast",
+  "z-ai/z-fast",
   "anthropic/a-slow",
-  "z-ai/a-slow",
+  "google/a-slow",
   "openai/a-slow",
+  "anthropic/b-slower",
   "openai/b-slowest",
+  "anthropic/c-slowest",
+  "google/b-slowest",
+  "z-ai/a-slow",
+  "minimax/z-fast",
 ];
 const MODELS = [...RANKING].reverse().map((value) => ({
   value,
   label: value,
-  description: [RANKING[0], RANKING[3], RANKING[4]].includes(value) ? "search match" : "",
+  description: [RANKING[0], RANKING[5], RANKING[6], RANKING[7], RANKING[12]].includes(value)
+    ? "search match"
+    : "",
 }));
 const GROUPED = [
-  "anthropic (2)",
+  "anthropic (4)",
   "anthropic/z-fast",
   "anthropic/a-slow",
-  "z-ai (2)",
-  "z-ai/z-fast",
-  "z-ai/a-slow",
+  "anthropic/b-slower",
+  "anthropic/c-slowest",
+  "google (3)",
+  "google/z-fast",
+  "google/a-slow",
+  "google/b-slowest",
   "openai (3)",
   "openai/z-fast",
   "openai/a-slow",
   "openai/b-slowest",
+  "reasoning.custom.otherGroup (4)",
+  "deepseek/z-fast",
+  "z-ai/z-fast",
+  "z-ai/a-slow",
+  "minimax/z-fast",
 ];
 
 async function mountList(t, overrides = {}) {
@@ -111,9 +128,8 @@ async function mountList(t, overrides = {}) {
   };
 }
 
-test("providers use average rank, ties use provider name, and models keep their rank", async (t) => {
-  // Anthropic and Z.AI average 2.5; OpenAI averages 3.67 despite having the top model.
-  const list = await mountList(t, { selectedModel: RANKING[0] });
+test("larger providers lead, ties use provider name, and small providers share Other", async (t) => {
+  const list = await mountList(t, { selectedModel: RANKING[1] });
   assert.deepEqual(list.order(), GROUPED);
   const cards = list.rows().filter((row) => row.props.role === "option");
   assert.equal(cards.filter((row) => row.props["aria-selected"]).length, 1);
@@ -122,27 +138,35 @@ test("providers use average rank, ties use provider name, and models keep their 
     "z-fast",
     "the header names the provider"
   );
-  for (let index = 0; index < 3; index++) await list.key("ArrowDown");
+  assert.equal(
+    cards.at(-1).props.children.props.model.label,
+    "minimax/z-fast",
+    "Other keeps provider prefixes visible"
+  );
+  for (let index = 0; index < 5; index++) await list.key("ArrowDown");
   await list.key("Enter");
-  assert.deepEqual(list.selected, ["z-ai/z-fast"], "keyboard navigation skips provider headers");
+  assert.deepEqual(list.selected, ["google/z-fast"], "keyboard navigation skips provider headers");
 });
 
-test("search keeps providers' collective rank even when the matching models rank differently", async (t) => {
+test("search preserves provider order and keeps small matches in their existing groups", async (t) => {
   const list = await mountList(t);
   await list.search("SEARCH MATCH");
   assert.deepEqual(list.order(), [
     "anthropic (1)",
     "anthropic/a-slow",
-    "z-ai (1)",
-    "z-ai/a-slow",
+    "google (1)",
+    "google/a-slow",
     "openai (1)",
-    "openai/z-fast",
+    "openai/a-slow",
+    "reasoning.custom.otherGroup (2)",
+    "deepseek/z-fast",
+    "z-ai/a-slow",
   ]);
   await list.search("no matching model");
   assert.deepEqual(list.order(), [], "empty provider groups are hidden");
 });
 
-test("a saved model outside the ranking stays Selected without changing provider scores", async (t) => {
+test("a saved model outside the ranking stays Selected without changing provider counts", async (t) => {
   const saved = { value: "openai/saved", label: "openai/saved" };
   const list = await mountList(t, {
     models: [saved, ...MODELS],
@@ -153,9 +177,11 @@ test("a saved model outside the ranking stays Selected without changing provider
   assert.deepEqual(list.order(), [
     "reasoning.custom.selectedGroup (1)",
     saved.value,
-    "anthropic (2)",
+    "anthropic (4)",
     "anthropic/z-fast",
     "anthropic/a-slow",
+    "anthropic/b-slower",
+    "anthropic/c-slowest",
   ]);
 });
 
@@ -177,13 +203,23 @@ test("choosing a recommendation removes the previous unranked selection without 
 });
 
 test("lists without recommendations keep alphabetical groups and their pinned selection", async (t) => {
-  const list = await mountList(t, { modelRanking: undefined, selectedModel: RANKING[0] });
+  const list = await mountList(t, { modelRanking: undefined, selectedModel: RANKING[1] });
   assert.deepEqual(list.order(), [
     "reasoning.custom.selectedGroup (1)",
     "openai/z-fast",
-    "anthropic (2)",
+    "anthropic (4)",
     "anthropic/a-slow",
+    "anthropic/b-slower",
+    "anthropic/c-slowest",
     "anthropic/z-fast",
+    "deepseek (1)",
+    "deepseek/z-fast",
+    "google (3)",
+    "google/a-slow",
+    "google/b-slowest",
+    "google/z-fast",
+    "minimax (1)",
+    "minimax/z-fast",
     "openai (2)",
     "openai/a-slow",
     "openai/b-slowest",

@@ -52,7 +52,7 @@ interface SearchableModelListProps {
   models: ModelCardOption[];
   selectedModel: string;
   onModelSelect: (modelId: string) => void;
-  // Models follow this ranking; provider groups follow their models' average rank.
+  // Models follow this ranking; larger provider groups come first.
   modelRanking?: readonly string[];
 }
 
@@ -91,16 +91,21 @@ export default function SearchableModelList({
       else groups.set(key, [model]);
     }
 
-    // Score the full groups before search so filtering doesn't change their order.
-    const averageRank = (key: string) => {
-      const bucket = groups.get(key)!;
-      return bucket.reduce((total, model) => total + rankOf(model), 0) / bucket.length;
-    };
+    // Keep providers with fewer than three recommendations together, before search.
+    if (modelRanking) {
+      for (const [key, bucket] of groups) {
+        if (key === OTHER_GROUP || bucket.length >= 3) continue;
+        const others = groups.get(OTHER_GROUP);
+        if (others) others.push(...bucket);
+        else groups.set(OTHER_GROUP, bucket);
+        groups.delete(key);
+      }
+    }
     const sortedKeys = [...groups.keys()].sort((a, b) => {
       if (a === OTHER_GROUP) return 1;
       if (b === OTHER_GROUP) return -1;
       if (modelRanking) {
-        const difference = averageRank(a) - averageRank(b);
+        const difference = groups.get(b)!.length - groups.get(a)!.length;
         if (difference !== 0) return difference;
       }
       return a.localeCompare(b);
@@ -134,7 +139,11 @@ export default function SearchableModelList({
         count: bucket.length,
       });
       for (const model of bucket) {
-        result.push({ type: "model", key: `m:${model.value}`, data: toDisplayOption(model, true) });
+        result.push({
+          type: "model",
+          key: `m:${model.value}`,
+          data: toDisplayOption(model, key !== OTHER_GROUP),
+        });
         matched += 1;
       }
     }
