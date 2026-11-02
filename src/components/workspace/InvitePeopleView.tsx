@@ -474,9 +474,12 @@ export function InvitePeopleView({
                   <Loader2 className="size-4 animate-spin" aria-hidden="true" />
                   {t("workspaces.invite.submitting", { count: sendingCount })}
                 </>
+              ) : summary.sendable.length > 1 ? (
+                t("workspaces.invite.submit", { count: summary.sendable.length })
               ) : (
-                // The empty field still reads "Send invite" rather than "Send 0 invites".
-                t("workspaces.invite.submit", { count: Math.max(1, summary.sendable.length) })
+                // One address, and the empty field, read "Send invite". A plural form can't say
+                // that: fr, pt and ru reuse "one" for other counts, so it must carry the number.
+                t("workspaces.invite.submitOne")
               )}
             </button>
             {sending ? null : (

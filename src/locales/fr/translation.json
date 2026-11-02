@@ -1772,7 +1772,8 @@
           "resentMany_other": "{{count}} invitations ont été renvoyées.",
           "resentPartial_one": "{{count}} invitation renvoyée.",
           "resentPartial_other": "{{count}} invitations renvoyées.",
-          "resendFailedSome_one": "L'invitation de {{email}} a échoué. Réessayez depuis Actions.",
+          "resendFailedOne": "L'invitation de {{email}} a échoué. Réessayez depuis Actions.",
+          "resendFailedSome_one": "{{count}} invitation a échoué. Réessayez depuis Actions.",
           "resendFailedSome_other": "{{count}} invitations ont échoué. Réessayez depuis Actions.",
           "resendFailedAll_one": "Impossible de renvoyer {{count}} invitation. Vérifiez votre connexion et réessayez.",
           "resendFailedAll_other": "Impossible de renvoyer {{count}} invitations. Vérifiez votre connexion et réessayez."
@@ -3153,6 +3154,7 @@
       "seatCostMany_other": "Si toutes les invitations sont acceptées, {{count}} sièges seront ajoutés à votre offre · facturation au prorata estimée à {{amount}}.",
       "seatCostManyUnpriced_one": "Si toutes les invitations sont acceptées, {{count}} siège sera ajouté à votre offre.",
       "seatCostManyUnpriced_other": "Si toutes les invitations sont acceptées, {{count}} sièges seront ajoutés à votre offre.",
+      "submitOne": "Envoyer l'invitation",
       "submit_one": "Envoyer {{count}} invitation",
       "submit_other": "Envoyer {{count}} invitations",
       "submitting_one": "Invitation de {{count}} personne…",

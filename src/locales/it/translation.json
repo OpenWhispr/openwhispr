@@ -2501,7 +2501,8 @@
           "resentMany_other": "Reinviati {{count}} inviti.",
           "resentPartial_one": "{{count}} invito reinviato.",
           "resentPartial_other": "{{count}} inviti reinviati.",
-          "resendFailedSome_one": "L'invito per {{email}} non è riuscito. Riprova da Azioni.",
+          "resendFailedOne": "L'invito per {{email}} non è riuscito. Riprova da Azioni.",
+          "resendFailedSome_one": "{{count}} invito non è riuscito. Riprova da Azioni.",
           "resendFailedSome_other": "{{count}} inviti non sono riusciti. Riprova da Azioni.",
           "resendFailedAll_one": "Impossibile reinviare {{count}} invito. Controlla la connessione e riprova.",
           "resendFailedAll_other": "Impossibile reinviare {{count}} inviti. Controlla la connessione e riprova."
@@ -5294,6 +5295,7 @@
       "seatCostMany_other": "Se tutti accettano, verranno aggiunti {{count}} posti al piano · addebito proporzionale stimato di {{amount}}.",
       "seatCostManyUnpriced_one": "Se tutti accettano, verrà aggiunto {{count}} posto al piano.",
       "seatCostManyUnpriced_other": "Se tutti accettano, verranno aggiunti {{count}} posti al piano.",
+      "submitOne": "Invia invito",
       "submit_one": "Invia {{count}} invito",
       "submit_other": "Invia {{count}} inviti",
       "submitting_one": "Invito di {{count}} persona in corso…",

@@ -2480,7 +2480,8 @@
           "resentMany_other": "Foram reenviados {{count}} convites.",
           "resentPartial_one": "{{count}} convite reenviado.",
           "resentPartial_other": "{{count}} convites reenviados.",
-          "resendFailedSome_one": "O convite para {{email}} falhou. Tente novamente em Ações.",
+          "resendFailedOne": "O convite para {{email}} falhou. Tente novamente em Ações.",
+          "resendFailedSome_one": "{{count}} convite falhou. Tente novamente em Ações.",
           "resendFailedSome_other": "{{count}} convites falharam. Tente novamente em Ações.",
           "resendFailedAll_one": "Não foi possível reenviar {{count}} convite. Verifique sua conexão e tente novamente.",
           "resendFailedAll_other": "Não foi possível reenviar {{count}} convites. Verifique sua conexão e tente novamente."
@@ -5294,6 +5295,7 @@
       "seatCostMany_other": "Se todos aceitarem, serão adicionados {{count}} assentos ao plano · cobrança proporcional estimada de {{amount}}.",
       "seatCostManyUnpriced_one": "Se todos aceitarem, será adicionado {{count}} assento ao plano.",
       "seatCostManyUnpriced_other": "Se todos aceitarem, serão adicionados {{count}} assentos ao plano.",
+      "submitOne": "Enviar convite",
       "submit_one": "Enviar {{count}} convite",
       "submit_other": "Enviar {{count}} convites",
       "submitting_one": "Convidando {{count}} pessoa…",

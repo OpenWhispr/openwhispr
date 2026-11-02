@@ -713,6 +713,34 @@ test("resend clears the resent rows from the selection", async (t) => {
   assert.equal(selectedCount(container), 0);
 });
 
+test("a partial resend with several failures counts them", async (t) => {
+  const { Tab } = await loadTab(t);
+  globalThis.__bulkResendImpl = async () => ({
+    done: ["i1"],
+    noEmail: [],
+    failed: [
+      { id: "i2", error: { kind: "failed" } },
+      { id: "i3", error: { kind: "failed" } },
+    ],
+  });
+  const rows = twoRows();
+  const container = await mount(
+    t,
+    Tab,
+    ready([...rows, { ...rows[1], id: "i3", email: "cy@example.com" }])
+  );
+  await check(container, SELECT_ALL);
+
+  await React.act(async () => propsOf(barButton(container, "resendSelected")).onClick());
+
+  assert.deepEqual(globalThis.__toasts, [
+    {
+      title: `${INVITATIONS}resentPartial#1`,
+      description: `${INVITATIONS}resendFailedSome#2`,
+    },
+  ]);
+});
+
 test("a partial resend keeps the failed row selected and names it", async (t) => {
   const { Tab } = await loadTab(t);
   globalThis.__bulkResendImpl = async () => ({
@@ -728,7 +756,7 @@ test("a partial resend keeps the failed row selected and names it", async (t) =>
   assert.deepEqual(globalThis.__toasts, [
     {
       title: `${INVITATIONS}resentPartial#1`,
-      description: `${INVITATIONS}resendFailedSome#1#\u2068bob@example.com\u2069`,
+      description: `${INVITATIONS}resendFailedOne#\u2068bob@example.com\u2069`,
     },
   ]);
   assert.equal(selectedCount(container), 1);
@@ -1048,7 +1076,7 @@ test("a listed failure keeps its toast and selection beside a row that left", as
   assert.deepEqual(globalThis.__toasts, [
     {
       title: `${INVITATIONS}resentPartial#1`,
-      description: `${INVITATIONS}resendFailedSome#1#${BOB}`,
+      description: `${INVITATIONS}resendFailedOne#${BOB}`,
     },
     { title: `${INVITATIONS}noLongerPending#${CLEO}` },
   ]);
@@ -1086,7 +1114,7 @@ test("a reload that failed reports the failures as before", async (t) => {
   assert.deepEqual(globalThis.__toasts, [
     {
       title: `${INVITATIONS}resentPartial#1`,
-      description: `${INVITATIONS}resendFailedSome#1#${BOB}`,
+      description: `${INVITATIONS}resendFailedOne#${BOB}`,
     },
   ]);
   assert.deepEqual(globalThis.__memberRefreshes, []);

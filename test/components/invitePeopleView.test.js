@@ -94,6 +94,7 @@ test("empty field shows the hint and a disabled send", async (t) => {
   assert.match(markup, /workspaces\.invite\.emailHint/);
   assert.match(markup, /placeholder="workspaces\.invite\.emailPlaceholder"/);
   assert.match(primaryButton(markup), /disabled=""/);
+  assert.match(primaryButton(markup), /workspaces\.invite\.submitOne/);
   assert.match(markup, /common\.cancel/);
 });
 
@@ -506,7 +507,7 @@ test("one skipped member shows the skipped bar and Send stays enabled", async (t
   );
   assert.equal(bar.action, null);
   assert.doesNotMatch(primaryButton(markup), /disabled=""/);
-  assert.match(primaryButton(markup), /workspaces\.invite\.submit\|\{&quot;count&quot;:1\}/);
+  assert.match(primaryButton(markup), /workspaces\.invite\.submitOne/);
   // A skipped address is no error in the field.
   assert.doesNotMatch(markup.match(/<input[^>]*>/)[0], /aria-invalid/);
 });

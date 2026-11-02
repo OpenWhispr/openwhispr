@@ -209,10 +209,13 @@ export default function WorkspaceInvitationsTab({
           }),
           description: rateLimited
             ? t("workspaces.invite.errors.rateLimited")
-            : t("settingsPage.workspace.people.invitations.resendFailedSome", {
-                count: failed.length,
-                email: isolate(emailsById.get(failed[0].id) ?? ""),
-              }),
+            : failed.length === 1
+              ? t("settingsPage.workspace.people.invitations.resendFailedOne", {
+                  email: isolate(emailsById.get(failed[0].id) ?? ""),
+                })
+              : t("settingsPage.workspace.people.invitations.resendFailedSome", {
+                  count: failed.length,
+                }),
         });
       } else if (ended?.error.kind === "ssoRequired") {
         toast({

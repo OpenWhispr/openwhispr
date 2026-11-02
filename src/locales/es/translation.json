@@ -2553,7 +2553,8 @@
           "resentMany_other": "Se reenviaron {{count}} invitaciones.",
           "resentPartial_one": "{{count}} invitación reenviada.",
           "resentPartial_other": "{{count}} invitaciones reenviadas.",
-          "resendFailedSome_one": "La invitación de {{email}} falló. Reintenta desde Acciones.",
+          "resendFailedOne": "La invitación de {{email}} falló. Reintenta desde Acciones.",
+          "resendFailedSome_one": "{{count}} invitación falló. Reintenta desde Acciones.",
           "resendFailedSome_other": "{{count}} invitaciones fallaron. Reintenta desde Acciones.",
           "resendFailedAll_one": "No se pudo reenviar {{count}} invitación. Comprueba tu conexión e inténtalo de nuevo.",
           "resendFailedAll_other": "No se pudieron reenviar {{count}} invitaciones. Comprueba tu conexión e inténtalo de nuevo."
@@ -5294,6 +5295,7 @@
       "seatCostMany_other": "Si todos aceptan, se añadirán {{count}} puestos a tu plan · cargo prorrateado estimado de {{amount}}.",
       "seatCostManyUnpriced_one": "Si todos aceptan, se añadirá {{count}} puesto a tu plan.",
       "seatCostManyUnpriced_other": "Si todos aceptan, se añadirán {{count}} puestos a tu plan.",
+      "submitOne": "Enviar invitación",
       "submit_one": "Enviar {{count}} invitación",
       "submit_other": "Enviar {{count}} invitaciones",
       "submitting_one": "Invitando a {{count}} persona…",

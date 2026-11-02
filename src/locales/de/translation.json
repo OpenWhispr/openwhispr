@@ -1772,7 +1772,8 @@
           "resentMany_other": "Es wurden {{count}} Einladungen erneut gesendet.",
           "resentPartial_one": "{{count}} Einladung erneut gesendet.",
           "resentPartial_other": "{{count}} Einladungen erneut gesendet.",
-          "resendFailedSome_one": "Die Einladung an {{email}} ist fehlgeschlagen. Versuchen Sie es erneut über Aktionen.",
+          "resendFailedOne": "Die Einladung an {{email}} ist fehlgeschlagen. Versuchen Sie es erneut über Aktionen.",
+          "resendFailedSome_one": "{{count}} Einladung ist fehlgeschlagen. Versuchen Sie es erneut über Aktionen.",
           "resendFailedSome_other": "{{count}} Einladungen sind fehlgeschlagen. Versuchen Sie es erneut über Aktionen.",
           "resendFailedAll_one": "{{count}} Einladung konnte nicht erneut gesendet werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
           "resendFailedAll_other": "{{count}} Einladungen konnten nicht erneut gesendet werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
@@ -3153,6 +3154,7 @@
       "seatCostMany_other": "Wenn alle annehmen, werden Ihrem Tarif {{count}} Plätze hinzugefügt · geschätzte anteilige Kosten: {{amount}}.",
       "seatCostManyUnpriced_one": "Wenn alle annehmen, wird Ihrem Tarif {{count}} Platz hinzugefügt.",
       "seatCostManyUnpriced_other": "Wenn alle annehmen, werden Ihrem Tarif {{count}} Plätze hinzugefügt.",
+      "submitOne": "Einladung senden",
       "submit_one": "{{count}} Einladung senden",
       "submit_other": "{{count}} Einladungen senden",
       "submitting_one": "{{count}} Person wird eingeladen…",
