@@ -2,7 +2,11 @@ import { useCallback, useMemo, useRef } from "react";
 import { useAuth } from "./useAuth";
 import { useShallow } from "zustand/react/shallow";
 import { usePolicyStore } from "../stores/policyStore";
-import { selectPolicyEffectiveSettings, useSettingsStore } from "../stores/settingsStore";
+import {
+  getSettings,
+  selectPolicyEffectiveSettings,
+  useSettingsStore,
+} from "../stores/settingsStore";
 import {
   filterModeOptionsByPolicy,
   getTranscriptionSelection,
@@ -10,6 +14,7 @@ import {
   isTranscriptionSelectionAllowed,
   isAudioFeatureAllowed,
   isMeetingAutoTranscriptionAllowed,
+  isTranscriptionContextAllowed,
   reconcilePolicyModeSelection,
   type PolicyDecisionSnapshot,
   type TranscriptionPolicyContext,
@@ -36,12 +41,15 @@ export function useMeetingAutoTranscriptionCheck(): () => boolean {
   const { isLoaded, isSignedIn } = useAuth();
   const auth = useRef({ isLoaded, isSignedIn });
   auth.current = { isLoaded, isSignedIn };
-  return useCallback(
-    () =>
-      auth.current.isLoaded &&
-      isMeetingAutoTranscriptionAllowed(usePolicyStore.getState(), auth.current.isSignedIn),
-    []
-  );
+  return useCallback(() => {
+    const policy = usePolicyStore.getState();
+    // A recording these checks refuse never captures. Let it reach startRecording,
+    // which tells the member why and restores the layout.
+    if (!isTranscriptionContextAllowed(policy, getSettings(), "meeting")) return true;
+    return (
+      auth.current.isLoaded && isMeetingAutoTranscriptionAllowed(policy, auth.current.isSignedIn)
+    );
+  }, []);
 }
 
 /** Reactive to both stores — updates when the policy or the relevant settings change. */
