@@ -1,5 +1,5 @@
 import { act, renderHook } from '@testing-library/react-native';
-import { CloudMeetingFinishError, useCloudMeeting } from '../useCloudMeeting';
+import { CloudMeetingFinishError, useCloudMeeting } from '../useCloudMeeting.android';
 import { startRealtimeMeetingWs } from '@/services/transcription/RealtimeMeetingWsService';
 import type { RealtimeCallbacks, RealtimeSession } from '@/services/transcription/realtimeEvents';
 
