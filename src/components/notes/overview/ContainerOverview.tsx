@@ -129,11 +129,26 @@ export function ContainerOverview({
     [notes, subfolders, notesByContainer]
   );
 
+  const spaceFolders = useMemo(
+    () => folders.filter((f) => f.space_id === space.id),
+    [folders, space.id]
+  );
+  const subfolderNoteCount = subfolders.reduce((sum, f) => sum + (folderCounts[f.id] ?? 0), 0);
+  // DB-backed counts, as in SpacesTree: the visible list is capped at the
+  // container page size, so notes.length undercounts large containers.
+  const noteCount = folder
+    ? (folderCounts[folder.id] ?? notes.length) + subfolderNoteCount
+    : spaceFolders.reduce((sum, f) => sum + (folderCounts[f.id] ?? 0), 0) +
+      (spaceRootCounts[space.id] ?? 0);
+  // A parent whose notes all sit in its subfolders isn't an empty folder.
+  const hasNotes = notes.length > 0 || subfolderNoteCount > 0;
+
   const chat = useContainerChat({
     space,
     folder,
     folderLabel: folder ? folderPathLabel(folder, folders, t) : null,
     notes: chatNotes,
+    noteCount,
   });
 
   const workspace = space.workspace_id
@@ -146,17 +161,6 @@ export function ContainerOverview({
     !!space.cloud_space_id &&
     !!workspace &&
     workspaceCan(workspace, "manage_members");
-
-  const spaceFolders = useMemo(
-    () => folders.filter((f) => f.space_id === space.id),
-    [folders, space.id]
-  );
-  // DB-backed counts, as in SpacesTree: the visible list is capped at the
-  // container page size, so notes.length undercounts large containers.
-  const noteCount = folder
-    ? (folderCounts[folder.id] ?? notes.length)
-    : spaceFolders.reduce((sum, f) => sum + (folderCounts[f.id] ?? 0), 0) +
-      (spaceRootCounts[space.id] ?? 0);
 
   const metaParts: string[] = [];
   if (space.kind === "team" && workspace) metaParts.push(workspace.name);
@@ -228,7 +232,7 @@ export function ContainerOverview({
           </p>
           <div className="mt-1 flex items-center gap-2">
             {/* The empty state keeps its own focal create CTA in the list. */}
-            {notes.length > 0 && (
+            {hasNotes && (
               <button
                 onClick={onNewNote}
                 className="inline-flex items-center gap-1.5 px-3 h-7 rounded-md border border-border/70 dark:border-white/10 text-xs font-medium text-foreground/60 hover:text-foreground/85 hover:border-border/70 hover:bg-foreground/3 dark:hover:bg-white/3 transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
@@ -249,12 +253,10 @@ export function ContainerOverview({
           </div>
         </div>
 
-        {notes.length > 0 && (
-          <OverviewExplainerBanner kind={space.kind === "team" ? "team" : "private"} />
-        )}
-        {notes.length > 0 && askSection}
+        {hasNotes && <OverviewExplainerBanner kind={space.kind === "team" ? "team" : "private"} />}
+        {hasNotes && askSection}
         {subfolders.length > 0 && (
-          <div className={notes.length > 0 ? "border-t border-border/70 dark:border-white/10" : ""}>
+          <div className={hasNotes ? "border-t border-border/70 dark:border-white/10" : ""}>
             <div className="pt-4 pb-1 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider select-none">
               {t("notes.overview.subfolders")}
             </div>
@@ -275,16 +277,18 @@ export function ContainerOverview({
             ))}
           </div>
         )}
-        <div className={notes.length > 0 ? "border-t border-border/70 dark:border-white/10" : ""}>
-          <OverviewNoteList
-            notes={notes}
-            space={space}
-            onOpenNote={onOpenNote}
-            onNewNote={onNewNote}
-            onAddExisting={onAddExisting}
-          />
-        </div>
-        {notes.length === 0 && askSection}
+        {(notes.length > 0 || !hasNotes) && (
+          <div className={notes.length > 0 ? "border-t border-border/70 dark:border-white/10" : ""}>
+            <OverviewNoteList
+              notes={notes}
+              space={space}
+              onOpenNote={onOpenNote}
+              onNewNote={onNewNote}
+              onAddExisting={onAddExisting}
+            />
+          </div>
+        )}
+        {!hasNotes && askSection}
       </div>
 
       {canInvite && workspace && space.cloud_space_id && (

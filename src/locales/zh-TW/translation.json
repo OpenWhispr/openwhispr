@@ -2954,6 +2954,8 @@
       "confirmMoveInTitle": "移動到 {{space}}？",
       "confirmMoveIn": "{{space}} 中的所有人都將能檢視和編輯這則筆記。之後筆記將無法移出團隊空間。",
       "confirmMoveInFolder": "{{space}} 中的所有人都將能檢視和編輯這個資料夾及其筆記。之後資料夾及其筆記將無法移出團隊空間。",
+      "confirmMoveInFolderSubfolders": "{{space}} 中的所有人都將能檢視和編輯這個資料夾，包括其中的 {{subfolders}}和 {{notes}}。之後資料夾及其筆記將無法移出團隊空間。",
+      "confirmMoveInSubfolder": "{{space}} 中的所有人都將能檢視和編輯這個子資料夾及其筆記。它將成為 {{space}} 中的最上層資料夾，此移動無法復原。",
       "cantMoveOut": "筆記無法移出團隊空間。",
       "cantMoveTeammate": "只有筆記擁有者或工作區管理員才能將其移至其他空間。",
       "moved": "已將「{{title}}」移動到 {{target}}",

@@ -66,6 +66,23 @@ export function orderFoldersAsTree(folders: FolderItem[]): FolderItem[] {
   return folderTree(folders).flatMap(({ folder, subfolders }) => [folder, ...subfolders]);
 }
 
+const FOLDER_PATH_SEPARATOR = " / ";
+
+export function joinFolderPath(parentName: string, name: string): string {
+  return `${parentName}${FOLDER_PATH_SEPARATOR}${name}`;
+}
+
+// Splits at the last separator, since subfolders go one level deep: only the
+// last segment can name a subfolder.
+export function splitFolderPath(path: string): { parentName: string; name: string } | null {
+  const separatorAt = path.lastIndexOf(FOLDER_PATH_SEPARATOR);
+  if (separatorAt < 0) return null;
+  return {
+    parentName: path.slice(0, separatorAt).trim(),
+    name: path.slice(separatorAt + FOLDER_PATH_SEPARATOR.length).trim(),
+  };
+}
+
 export function folderPathLabel(
   folder: FolderItem,
   folders: FolderItem[],
@@ -73,7 +90,7 @@ export function folderPathLabel(
 ): string {
   const parent = loadedParent(folder, folders);
   const name = defaultFolderDisplayName(folder, t);
-  return parent ? `${defaultFolderDisplayName(parent, t)} / ${name}` : name;
+  return parent ? joinFolderPath(defaultFolderDisplayName(parent, t), name) : name;
 }
 
 export function findDefaultFolder(folders: FolderItem[]): FolderItem | undefined {

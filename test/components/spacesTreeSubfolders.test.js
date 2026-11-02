@@ -343,6 +343,77 @@ test("deleting a parent folder counts its subfolders even when no notes are in t
   );
 });
 
+// Main moves and deletes only the subfolders in the folder's own space. This one
+// sits in another space with a stale parent link.
+const WITH_CROSS_SPACE_CHILD = {
+  folders: [...WITH_SUBFOLDERS.folders, folder(13, 2, "Elsewhere", 11)],
+  counts: { ...WITH_SUBFOLDERS.counts, 13: 5 },
+};
+
+test("deleting a parent folder doesn't count a child in another space", async (t) => {
+  const rows = await mountTree(t, WITH_CROSS_SPACE_CHILD);
+
+  await focus(rowTitled(rows, "Work"));
+  await keyDown("Backspace");
+
+  assert.equal(
+    globalThis.__confirmDialogs.at(-1).description,
+    'This will permanently delete "Work", including 1 subfolder and 9 notes. This cannot be undone.'
+  );
+});
+
+const MOVE_RESTRICTION = "Folders and notes can't be moved back out of a team space later.";
+
+const moveDescription = async (rows, title) => {
+  await click(menuItem(rowTitled(rows, title), "Engineering"));
+  return globalThis.__confirmDialogs.at(-1).description;
+};
+
+test("moving a parent into a team counts its subfolders and all their notes", async (t) => {
+  const rows = await mountTree(t, WITH_SUBFOLDERS);
+
+  assert.equal(
+    await moveDescription(rows, "Work"),
+    `Everyone in Engineering will be able to view and edit this folder, including 1 subfolder and 9 notes. ${MOVE_RESTRICTION}`
+  );
+});
+
+test("moving a parent into a team counts subfolders with no notes", async (t) => {
+  const empty = await mountTree(t, { ...WITH_SUBFOLDERS, counts: {} });
+
+  assert.equal(
+    await moveDescription(empty, "Work"),
+    `Everyone in Engineering will be able to view and edit this folder, including 1 subfolder and 0 notes. ${MOVE_RESTRICTION}`
+  );
+});
+
+test("moving a parent into a team leaves out a child in another space", async (t) => {
+  const rows = await mountTree(t, WITH_CROSS_SPACE_CHILD);
+
+  assert.equal(
+    await moveDescription(rows, "Work"),
+    `Everyone in Engineering will be able to view and edit this folder, including 1 subfolder and 9 notes. ${MOVE_RESTRICTION}`
+  );
+});
+
+test("moving a subfolder into a team says it becomes top-level there, for good", async (t) => {
+  const rows = await mountTree(t, WITH_SUBFOLDERS);
+
+  assert.equal(
+    await moveDescription(rows, "Q1"),
+    "Everyone in Engineering will be able to view and edit this subfolder and its notes. It will become a top-level folder in Engineering, and this move can't be undone."
+  );
+});
+
+test("moving a folder without subfolders into a team keeps its wording", async (t) => {
+  const rows = await mountTree(t, WITHOUT_SUBFOLDERS);
+
+  assert.equal(
+    await moveDescription(rows, "Work"),
+    `Everyone in Engineering will be able to view and edit this folder and its notes. ${MOVE_RESTRICTION}`
+  );
+});
+
 test("only a top-level folder offers New subfolder, and only one without subfolders can move into a folder", async (t) => {
   const rows = await mountTree(t, {
     folders: [...WITH_SUBFOLDERS.folders, folder(13, 1, "Ideas")],

@@ -2954,6 +2954,8 @@
       "confirmMoveInTitle": "Mover para {{space}}?",
       "confirmMoveIn": "Todos em {{space}} poderão ver e editar esta nota. As notas não podem ser retiradas de um espaço de equipe depois.",
       "confirmMoveInFolder": "Todos em {{space}} poderão ver e editar esta pasta e suas notas. As pastas e notas não podem ser retiradas de um espaço de equipe depois.",
+      "confirmMoveInFolderSubfolders": "Todos em {{space}} poderão ver e editar esta pasta, incluindo {{subfolders}} e {{notes}}. As pastas e notas não podem ser retiradas de um espaço de equipe depois.",
+      "confirmMoveInSubfolder": "Todos em {{space}} poderão ver e editar esta subpasta e suas notas. Ela se tornará uma pasta de nível superior em {{space}}, e esta movimentação não pode ser desfeita.",
       "cantMoveOut": "As notas não podem ser retiradas de um espaço de equipe.",
       "cantMoveTeammate": "Apenas o proprietário da nota ou um administrador do workspace pode movê-la para outro espaço.",
       "moved": "“{{title}}” movida para {{target}}",

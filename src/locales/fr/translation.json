@@ -3372,6 +3372,8 @@
       "confirmMoveInTitle": "Déplacer vers {{space}} ?",
       "confirmMoveIn": "Tous les membres de {{space}} pourront voir et modifier cette note. Les notes ne pourront plus être retirées d'un espace d'équipe par la suite.",
       "confirmMoveInFolder": "Tous les membres de {{space}} pourront voir et modifier ce dossier et ses notes. Les dossiers et les notes ne pourront plus être retirés d'un espace d'équipe par la suite.",
+      "confirmMoveInFolderSubfolders": "Tous les membres de {{space}} pourront voir et modifier ce dossier, y compris {{subfolders}} et {{notes}}. Les dossiers et les notes ne pourront plus être retirés d'un espace d'équipe par la suite.",
+      "confirmMoveInSubfolder": "Tous les membres de {{space}} pourront voir et modifier ce sous-dossier et ses notes. Il deviendra un dossier de niveau supérieur dans {{space}}, et ce déplacement est irréversible.",
       "cantMoveOut": "Les notes ne peuvent pas être retirées d'un espace d'équipe.",
       "cantMoveTeammate": "Seul le propriétaire de la note ou un administrateur du workspace peut la déplacer vers un autre espace.",
       "moved": "« {{title}} » déplacée vers {{target}}",

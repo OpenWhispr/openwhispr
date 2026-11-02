@@ -3372,6 +3372,8 @@
       "confirmMoveInTitle": "Nach {{space}} verschieben?",
       "confirmMoveIn": "Alle in {{space}} können diese Notiz sehen und bearbeiten. Notizen können später nicht wieder aus einem Team-Bereich herausbewegt werden.",
       "confirmMoveInFolder": "Alle in {{space}} können diesen Ordner und seine Notizen sehen und bearbeiten. Ordner und Notizen können später nicht wieder aus einem Team-Bereich herausbewegt werden.",
+      "confirmMoveInFolderSubfolders": "Alle in {{space}} können diesen Ordner sehen und bearbeiten, einschließlich {{subfolders}} und {{notes}}. Ordner und Notizen können später nicht wieder aus einem Team-Bereich herausbewegt werden.",
+      "confirmMoveInSubfolder": "Alle in {{space}} können diesen Unterordner und seine Notizen sehen und bearbeiten. Er wird in {{space}} zu einem Ordner auf oberster Ebene, und diese Verschiebung kann nicht rückgängig gemacht werden.",
       "cantMoveOut": "Notizen können nicht aus einem Team-Bereich herausbewegt werden.",
       "cantMoveTeammate": "Nur der Besitzer der Notiz oder ein Workspace-Admin kann sie in einen anderen Bereich verschieben.",
       "moved": "„{{title}}“ nach {{target}} verschoben",

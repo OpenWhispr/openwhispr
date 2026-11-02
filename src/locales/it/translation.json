@@ -2954,6 +2954,8 @@
       "confirmMoveInTitle": "Spostare in {{space}}?",
       "confirmMoveIn": "Tutti in {{space}} potranno vedere e modificare questa nota. Le note non potranno più essere spostate fuori da uno spazio del team.",
       "confirmMoveInFolder": "Tutti in {{space}} potranno vedere e modificare questa cartella e le sue note. Le cartelle e le note non potranno più essere spostate fuori da uno spazio del team.",
+      "confirmMoveInFolderSubfolders": "Tutti in {{space}} potranno vedere e modificare questa cartella, insieme a {{subfolders}} e {{notes}}. Le cartelle e le note non potranno più essere spostate fuori da uno spazio del team.",
+      "confirmMoveInSubfolder": "Tutti in {{space}} potranno vedere e modificare questa sottocartella e le sue note. Diventerà una cartella di livello principale in {{space}} e questo spostamento non può essere annullato.",
       "cantMoveOut": "Le note non possono essere spostate fuori da uno spazio del team.",
       "cantMoveTeammate": "Solo il proprietario della nota o un amministratore del workspace può spostarla in un altro spazio.",
       "moved": "“{{title}}” spostata in {{target}}",

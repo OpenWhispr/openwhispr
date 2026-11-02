@@ -3006,6 +3006,8 @@
       "confirmMoveInTitle": "¿Mover a {{space}}?",
       "confirmMoveIn": "Todos en {{space}} podrán ver y editar esta nota. Las notas no se pueden sacar de un espacio de equipo más tarde.",
       "confirmMoveInFolder": "Todos en {{space}} podrán ver y editar esta carpeta y sus notas. Las carpetas y notas no se pueden sacar de un espacio de equipo más tarde.",
+      "confirmMoveInFolderSubfolders": "Todos en {{space}} podrán ver y editar esta carpeta, incluidas {{subfolders}} y {{notes}}. Las carpetas y notas no se pueden sacar de un espacio de equipo más tarde.",
+      "confirmMoveInSubfolder": "Todos en {{space}} podrán ver y editar esta subcarpeta y sus notas. Pasará a ser una carpeta de nivel superior en {{space}} y este movimiento no se puede deshacer.",
       "cantMoveOut": "Las notas no se pueden sacar de un espacio de equipo.",
       "cantMoveTeammate": "Solo el propietario de la nota o un administrador del workspace pueden moverla a otro espacio.",
       "moved": "«{{title}}» se movió a {{target}}",

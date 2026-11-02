@@ -2882,6 +2882,8 @@
       "confirmMoveInTitle": "{{space}}に移動しますか？",
       "confirmMoveIn": "{{space}}の全員がこのノートを表示・編集できるようになります。ノートは後からチームスペースの外に移動できません。",
       "confirmMoveInFolder": "{{space}}の全員がこのフォルダとそのノートを表示・編集できるようになります。フォルダとノートは後からチームスペースの外に移動できません。",
+      "confirmMoveInFolderSubfolders": "{{space}}の全員がこのフォルダと、その中の {{subfolders}} と {{notes}} を表示・編集できるようになります。フォルダとノートは後からチームスペースの外に移動できません。",
+      "confirmMoveInSubfolder": "{{space}}の全員がこのサブフォルダとそのノートを表示・編集できるようになります。{{space}}では最上位のフォルダになり、この移動は取り消せません。",
       "cantMoveOut": "ノートはチームスペースの外に移動できません。",
       "cantMoveTeammate": "ノートを別のスペースに移動できるのは、所有者またはワークスペースの管理者のみです。",
       "moved": "「{{title}}」を{{target}}に移動しました",

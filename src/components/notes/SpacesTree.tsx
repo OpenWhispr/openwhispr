@@ -1407,21 +1407,52 @@ export default function SpacesTree({
     });
   };
 
+  // What a folder takes with it when it's deleted or moved: only subfolders in
+  // its own space, and DB-backed counts, since a large folder's notes are only
+  // partly loaded.
+  const folderContents = (folder: FolderItem): { subfolderCount: number; noteCount: number } => {
+    const subfolders = folderNodes.find((node) => node.folder.id === folder.id)?.subfolders ?? [];
+    return {
+      subfolderCount: subfolders.length,
+      noteCount: [folder, ...subfolders].reduce((sum, f) => sum + (folderCounts[f.id] ?? 0), 0),
+    };
+  };
+  const folderContentsLabels = (contents: {
+    subfolderCount: number;
+    noteCount: number;
+  }): { subfolders: string; notes: string } => ({
+    subfolders: t("notes.folders.subfolderCount", { count: contents.subfolderCount }),
+    notes: t("notes.spaces.noteCount", { count: contents.noteCount }),
+  });
+
+  const moveFolderDescription = (folder: FolderItem, space: string): string => {
+    if (folder.parent_folder_id != null) {
+      return t("notes.spaces.confirmMoveInSubfolder", { space });
+    }
+    const contents = folderContents(folder);
+    return contents.subfolderCount > 0
+      ? t("notes.spaces.confirmMoveInFolderSubfolders", {
+          space,
+          ...folderContentsLabels(contents),
+        })
+      : t("notes.spaces.confirmMoveInFolder", { space });
+  };
+
   // Every permitted cross-space move enters a team space (private→team or
   // team→team): moving OUT of a team space is policy-blocked in
   // canMoveBetweenSpaces, and there is only one private space.
   const confirmCrossSpaceMove = (
     toSpaceId: number,
-    isFolder: boolean,
+    folder: FolderItem | null,
     onConfirm: () => void
   ): void => {
     const intoSpace = spaces.find((s) => s.id === toSpaceId);
     if (!intoSpace) return;
     showConfirmDialog({
       title: t("notes.spaces.confirmMoveInTitle", { space: intoSpace.name }),
-      description: t(isFolder ? "notes.spaces.confirmMoveInFolder" : "notes.spaces.confirmMoveIn", {
-        space: intoSpace.name,
-      }),
+      description: folder
+        ? moveFolderDescription(folder, intoSpace.name)
+        : t("notes.spaces.confirmMoveIn", { space: intoSpace.name }),
       confirmText: t("notes.spaces.moveConfirm"),
       onConfirm,
     });
@@ -1501,7 +1532,7 @@ export default function SpacesTree({
     if (note.space_id !== target.spaceId) {
       if (!allowsCrossSpaceMove(note.space_id, target.spaceId)) return;
       if (!canChangeNoteScope(note)) return;
-      confirmCrossSpaceMove(target.spaceId, false, () => void commitMoveNote(noteId, target));
+      confirmCrossSpaceMove(target.spaceId, null, () => void commitMoveNote(noteId, target));
     } else {
       void commitMoveNote(noteId, target);
     }
@@ -1564,14 +1595,14 @@ export default function SpacesTree({
     if (space.id === folder.space_id) return;
     if (!allowsCrossSpaceMove(folder.space_id, space.id)) return;
     if (!canManageFolderDestructive(folder)) return;
-    confirmCrossSpaceMove(space.id, true, () => void commitMoveFolder(folder, space));
+    confirmCrossSpaceMove(space.id, folder, () => void commitMoveFolder(folder, space));
   };
 
   const { dragState, noteDragHandlers, dropTargetHandlers } = useNoteDragAndDrop({
     untitledLabel: t("notes.list.untitled"),
     onMoveToTarget: commitMoveNote,
     onCrossSpaceDrop: (_note, target, commit) => {
-      confirmCrossSpaceMove(target.spaceId, false, commit);
+      confirmCrossSpaceMove(target.spaceId, null, commit);
     },
     canCrossSpaceDrop: (note, target) => {
       if (!allowsCrossSpaceMove(note.spaceId, target.spaceId)) return false;
@@ -1705,19 +1736,20 @@ export default function SpacesTree({
   const requestDeleteFolder = (folder: FolderItem) => {
     if (!canManageFolderDestructive(folder)) return;
     // Main deletes the subfolders and all their notes along with the folder.
-    const subfolders = folders.filter((f) => f.parent_folder_id === folder.id);
-    const count = [folder, ...subfolders].reduce((sum, f) => sum + (folderCounts[f.id] ?? 0), 0);
+    const contents = folderContents(folder);
     showConfirmDialog({
       title: t("notes.folders.deleteTitle"),
       description:
-        subfolders.length > 0
+        contents.subfolderCount > 0
           ? t("notes.folders.deleteDescriptionSubfolders", {
               name: folder.name,
-              subfolders: t("notes.folders.subfolderCount", { count: subfolders.length }),
-              notes: t("notes.spaces.noteCount", { count }),
+              ...folderContentsLabels(contents),
             })
-          : count > 0
-            ? t("notes.folders.deleteDescription", { name: folder.name, count })
+          : contents.noteCount > 0
+            ? t("notes.folders.deleteDescription", {
+                name: folder.name,
+                count: contents.noteCount,
+              })
             : t("notes.folders.deleteDescriptionEmpty", { name: folder.name }),
       confirmText: t("notes.folders.deleteConfirm"),
       variant: "destructive",

@@ -16,6 +16,8 @@ interface UseContainerChatOptions {
   // The folder as the UI names it, with its parent for a subfolder.
   folderLabel: string | null;
   notes: NoteItem[];
+  // The container's real total: notes holds at most a page of each container.
+  noteCount: number;
 }
 
 export interface ContainerConversationItem {
@@ -47,6 +49,7 @@ export function useContainerChat({
   folder,
   folderLabel,
   notes,
+  noteCount,
 }: UseContainerChatOptions): UseContainerChatReturn {
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [conversations, setConversations] = useState<ContainerConversationItem[]>([]);
@@ -59,14 +62,14 @@ export function useContainerChat({
 
   const containerContext = useMemo(() => {
     const header = folderLabel
-      ? `The user is viewing the folder "${folderLabel}" in the space "${space.name}" (${notes.length} notes).`
-      : `The user is viewing the space "${space.name}" (${notes.length} notes).`;
+      ? `The user is viewing the folder "${folderLabel}" in the space "${space.name}" (${noteCount} notes).`
+      : `The user is viewing the space "${space.name}" (${noteCount} notes).`;
     const noteBlocks = notes.slice(0, MAX_CONTEXT_NOTES).map((note) => {
       const body = (note.enhanced_content || note.content || "").slice(0, NOTE_SNIPPET_LENGTH);
       return `<note id="${note.id}" title="${note.title}" updated="${note.updated_at}">\n${body}\n</note>`;
     });
     return [header, ...noteBlocks].join("\n\n");
-  }, [folderLabel, space.name, notes]);
+  }, [folderLabel, space.name, notes, noteCount]);
 
   const searchScope = useMemo<ContainerScope>(
     () => ({ spaceId: space.id, folderId }),

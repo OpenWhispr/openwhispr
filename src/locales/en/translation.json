@@ -3372,6 +3372,8 @@
       "confirmMoveInTitle": "Move to {{space}}?",
       "confirmMoveIn": "Everyone in {{space}} will be able to view and edit this note. Notes can't be moved back out of a team space later.",
       "confirmMoveInFolder": "Everyone in {{space}} will be able to view and edit this folder and its notes. Folders and notes can't be moved back out of a team space later.",
+      "confirmMoveInFolderSubfolders": "Everyone in {{space}} will be able to view and edit this folder, including {{subfolders}} and {{notes}}. Folders and notes can't be moved back out of a team space later.",
+      "confirmMoveInSubfolder": "Everyone in {{space}} will be able to view and edit this subfolder and its notes. It will become a top-level folder in {{space}}, and this move can't be undone.",
       "cantMoveOut": "Notes can't be moved out of a team space.",
       "cantMoveTeammate": "Only the note's owner or a workspace admin can move it to another space.",
       "moved": "Moved “{{title}}” to {{target}}",
