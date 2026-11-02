@@ -1363,6 +1363,10 @@ export interface ConversationPreview {
   message_count: number;
   last_message?: string | null;
   last_message_role?: "user" | "assistant" | "system" | null;
+  /** The note the chat was started from, joined in by the Chat list queries. */
+  note_id?: number | null;
+  note_title?: string | null;
+  note_deleted_at?: string | null;
 }
 
 export interface ConversationCreateSnapshot {
@@ -3160,6 +3164,7 @@ declare global {
       getAgentConversation?: (id: number) => Promise<{
         id: number;
         title: string;
+        note_id?: number | null;
         archived_at?: string;
         cloud_id?: string | null;
         client_conversation_id?: string | null;
@@ -3829,6 +3834,7 @@ declare global {
         localFolderId: number | null,
         localSpaceId?: number | null
       ) => Promise<NoteItem | null>;
+      markNoteCreatesAttempted?: (clientNoteIds: string[]) => Promise<string[]>;
       acknowledgeNoteCreate?: (
         id: number,
         snapshot: NoteCreateSnapshot,
@@ -3916,6 +3922,7 @@ declare global {
         cloudConv: Record<string, unknown>,
         messages: Array<Record<string, unknown>>
       ) => Promise<void>;
+      markConversationCreateAttempted?: (id: number) => Promise<{ success: boolean }>;
       acknowledgeConversationCreate?: (
         id: number,
         snapshot: ConversationCreateSnapshot,

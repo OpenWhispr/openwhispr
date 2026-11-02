@@ -39,10 +39,10 @@ test("dynamic prose and identity values keep their own direction", () => {
     ["src/components/notes/SpacesTree.tsx", /<span\s+dir="auto"[^>]*>\s*\{title\}\s*<\/span>/],
     ["src/components/EmailVerificationStep.tsx", /<span\s+dir="ltr"[^>]*>\s*\{email\}/],
     [
-      "src/components/SettingsModal.tsx",
+      "src/components/SettingsPage.tsx",
       /<p\s+dir="auto"[^>]*>\s*\{user\.name \|\| t\("settingsPage\.account\.user"\)\}/,
     ],
-    ["src/components/SettingsModal.tsx", /<bdi dir="ltr">\{user\.email\}<\/bdi>/],
+    ["src/components/SettingsPage.tsx", /<bdi dir="ltr">\{user\.email\}<\/bdi>/],
     [
       "src/components/settings/WorkspaceMembersTab.tsx",
       /<p\s+dir="auto"[^>]*>\s*\{member\.name \|\| member\.email\}/,
@@ -128,10 +128,7 @@ test("technical output values remain LTR inside an Arabic document", () => {
       /<span\s+dir="ltr"[^>]*>\s*\{row\.preview\.fileName\}/,
     ],
     ["src/components/skills/SkillDetailDialog.tsx", /<span\s+dir="ltr"[^>]*>\s*\{file\.path\}/],
-    [
-      "src/components/skills/CreateSkillScreen.tsx",
-      /<span\s+dir="ltr"[^>]*>\s*\{file\.fileName\}/,
-    ],
+    ["src/components/skills/CreateSkillScreen.tsx", /<span\s+dir="ltr"[^>]*>\s*\{file\.fileName\}/],
   ];
 
   for (const [file, pattern] of expectations) {
@@ -200,7 +197,9 @@ test("user-authored names and previews detect direction at their display boundar
     ["src/components/CommandSearch.tsx", /<span\s+dir="auto"[^>]*>\s*\{spaceLabel\(scopeSpace\)\}/],
     ["src/components/CommandSearch.tsx", /<span\s+dir="auto"[^>]*>\s*\{spaceLabel\(space\)\}/],
     ["src/components/CommandSearch.tsx", /<p\s+dir="auto"[^>]*>\s*\{target\.label\}/],
-    ["src/components/chat/ConversationItem.tsx", /<p\s+dir="auto"[^>]*>\s*\{conversation\.title\}/],
+    ["src/components/chat/ConversationItem.tsx", /<p\s+dir="auto"[^>]*>\s*\{title\}/],
+    ["src/components/chat/ConversationItem.tsx", /<span\s+dir="auto"[^>]*>\s*\{sourceNote\.title/],
+    ["src/components/chat/SourceNoteBar.tsx", /<span\s+dir="auto"[^>]*>\s*\{title\}/],
     [
       "src/components/chat/ConversationItem.tsx",
       /<p\s+dir="auto"[^>]*>\s*\{conversation\.preview\}/,
@@ -225,11 +224,11 @@ test("user-authored names and previews detect direction at their display boundar
     ["src/components/notes/CreateSpaceDialog.tsx", /<span\s+dir="auto"[^>]*>\s*\{team\.name\}/],
     ["src/components/notes/SpaceGroupsSection.tsx", /<span\s+dir="auto"[^>]*>\s*\{teamRef\.name\}/],
     ["src/components/notes/SpaceGroupsSection.tsx", /<span\s+dir="auto"[^>]*>\s*\{team\.name\}/],
+    // The page shows the name only in its input.
     [
-      "src/components/settings/WorkspaceSection.tsx",
-      /<h2\s+dir="auto"[^>]*>\s*\{workspace\.name\}/,
+      "src/components/settings/WorkspaceGeneralSection.tsx",
+      /<Input\s+id=\{nameId\}\s+dir="auto"\s+value=\{name\}/,
     ],
-    ["src/components/settings/WorkspaceSection.tsx", /<span\s+dir="auto"[^>]*>\s*\{w\.name\}/],
     ["src/components/notes/NoteEditor.tsx", /<span\s+dir="auto"[^>]*>\s*\{space\.name\}/],
     ["src/components/notes/NoteEditor.tsx", /<span\s+dir="auto"[^>]*>\s*\{folderName\}/],
     [

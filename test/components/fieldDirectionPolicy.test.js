@@ -79,7 +79,7 @@ const EXPECTED_SHARED_FIELD_DIRECTIONS = {
   "src/components/settings/EnterpriseCheckoutDialog.tsx": ["inherit"],
   "src/components/settings/ProfileSection.tsx": ["auto", "ltr", "ltr", "ltr"],
   "src/components/settings/WorkspaceDeveloperTab.tsx": ["auto"],
-  "src/components/settings/WorkspaceSection.tsx": ["auto"],
+  "src/components/settings/WorkspaceGeneralSection.tsx": ["auto"],
   // A skill's name and the skills search accept text in any script.
   "src/components/skills/CreateSkillScreen.tsx": ["auto"],
   "src/components/skills/SkillSearchInput.tsx": ["auto"],

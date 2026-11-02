@@ -75,6 +75,9 @@ import ThemedEmptyIllustration from "../ui/ThemedEmptyIllustration";
 import transcriptsEmptyLight from "../../assets/empty-states/notes-transcripts-light.svg";
 import transcriptsEmptyDark from "../../assets/empty-states/notes-transcripts-dark.svg";
 import { Button } from "../ui/button";
+import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "../ui/BidiInterpolatedText";
+import { useSettingsStore } from "../../stores/settingsStore";
+import { GENERATE_NOTES_KEY } from "../../helpers/builtinActions";
 import EmbeddedChat, { type EmbeddedChatMode } from "./EmbeddedChat";
 import { useEmbeddedChat } from "../../hooks/useEmbeddedChat";
 import ActionChips from "./ActionChips";
@@ -86,6 +89,7 @@ import {
   getActionDescription,
   getActionName,
   initializeActions,
+  resolveDefaultTemplate,
   resolveTemplate,
   useActionsOfKind,
 } from "../../stores/actionStore";
@@ -485,8 +489,15 @@ export default function NoteEditor({
 
   const templates = useActionsOfKind("template");
   const noteActions = useActionsOfKind("action");
-  // Regenerating keeps the note's template; a first summary uses the default.
+  const defaultSummaryTemplateId = useSettingsStore((state) => state.defaultSummaryTemplateId);
+  const defaultTemplate = resolveDefaultTemplate(templates, defaultSummaryTemplateId);
   const noteTemplate = resolveTemplate(templates, note.enhancement_template_id);
+  const isDefaultAiSummary = defaultTemplate?.translation_key === GENERATE_NOTES_KEY;
+  const summaryCalloutLabel = isDefaultAiSummary
+    ? t("notes.editor.generateSummary")
+    : t("notes.editor.generateWithTemplate", {
+        template: defaultTemplate ? getActionName(defaultTemplate, t) : "",
+      });
   const isActionRunning = actionProcessingState === "processing";
   const hasNoteMaterial = !!note.content.trim() || hasMeetingTranscript;
   const canRunTemplate =
@@ -503,7 +514,8 @@ export default function NoteEditor({
 
   const hasChatSegments = displaySegments.length > 0;
   const showSummaryCallout =
-    canRunTemplate &&
+    !!onRunNoteAction &&
+    !!defaultTemplate &&
     shouldOfferMeetingSummary({
       isRecording,
       hasTranscriptSegments: hasNoteMaterial,
@@ -1594,14 +1606,27 @@ export default function NoteEditor({
             slashCommands={actionCommands}
             callout={
               showSummaryCallout &&
-              noteTemplate &&
+              defaultTemplate &&
               selectedSegmentIds.size === 0 && (
                 <Button
-                  className="h-9 gap-2 px-4 text-sm"
-                  onClick={() => onRunNoteAction?.(noteTemplate)}
+                  className="h-9 max-w-full min-w-0 gap-2 px-4 text-sm"
+                  aria-label={summaryCalloutLabel}
+                  onClick={() => onRunNoteAction?.(defaultTemplate)}
                 >
-                  <AlignLeft size={16} />
-                  {t("notes.editor.generateSummary")}
+                  <AlignLeft size={16} className="shrink-0" />
+                  <span className="truncate">
+                    {isDefaultAiSummary ? (
+                      summaryCalloutLabel
+                    ) : (
+                      <BidiInterpolatedText
+                        text={t("notes.editor.generateWithTemplate", {
+                          template: BIDI_VALUE_TOKEN,
+                        })}
+                        value={getActionName(defaultTemplate, t)}
+                        dir="auto"
+                      />
+                    )}
+                  </span>
                 </Button>
               )
             }

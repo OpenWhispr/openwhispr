@@ -1,6 +1,15 @@
 const { OrukeetStreaming, MANAGED_STREAM_OPTIONS } = require("./orukeetStreaming");
 const { connectManagedOrukeet } = require("./orukeetCloudSession");
-const { ipcMain, app, shell, BrowserWindow, systemPreferences, net, session } = require("electron");
+const {
+  ipcMain,
+  app,
+  shell,
+  BrowserWindow,
+  systemPreferences,
+  net,
+  session,
+  powerMonitor,
+} = require("electron");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
@@ -3064,6 +3073,9 @@ class IPCHandlers {
       }
       return note;
     });
+    ipcMain.handle("db-mark-note-creates-attempted", (_, clientNoteIds) =>
+      this.databaseManager.markNoteCreatesAttempted(clientNoteIds)
+    );
     ipcMain.handle(
       "db-acknowledge-note-create",
       (_, id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) => {
@@ -3294,6 +3306,9 @@ class IPCHandlers {
     );
     ipcMain.handle("db-upsert-conversation-from-cloud", (_, cloudConv, messages) =>
       this.databaseManager.upsertConversationFromCloud(cloudConv, messages)
+    );
+    ipcMain.handle("db-mark-conversation-create-attempted", (_, id) =>
+      this.databaseManager.markConversationCreateAttempted(id)
     );
     ipcMain.handle("db-acknowledge-conversation-create", (_, id, snapshot, cloudId) =>
       this.databaseManager.acknowledgeConversationCreate(id, snapshot, cloudId)
@@ -6931,8 +6946,12 @@ class IPCHandlers {
           proxyFetch: (url, init) =>
             proxyFetch(url, { ...init, signal: AbortSignal.timeout(10_000) }),
         }),
+        logger: debugLogger,
       });
       this.metaActivation.start();
+      // A machine that slept through the hourly re-sync takes server time
+      // again on wake, before its next batch.
+      powerMonitor.on("resume", () => void this.metaActivation?.resync());
     } catch {
       // Marketing bookkeeping must never prevent ordinary dictation/startup.
       debugLogger.warn("Activation storage unavailable");

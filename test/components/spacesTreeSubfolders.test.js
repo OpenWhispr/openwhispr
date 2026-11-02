@@ -402,7 +402,7 @@ test("moving a subfolder to the top level can be undone", async (t) => {
 
   await click(menuItem(rowTitled(rows, "Q1"), "Top level"));
   const moved = globalThis.__toasts.at(-1);
-  await React.act(async () => moved.action.props.onClick());
+  await React.act(async () => moved.actions[0].onClick());
 
   assert.equal(moved.title, "Moved \u201cQ1\u201d to Top level");
   assert.deepEqual(globalThis.__calls, [
@@ -420,7 +420,7 @@ test("a parent moved to another space can be undone, a subfolder moved on its ow
 
   await moveToEngineering("Work");
   const moved = globalThis.__toasts.at(-1);
-  await React.act(async () => moved.action.props.onClick());
+  await React.act(async () => moved.actions[0].onClick());
   await moveToEngineering("Q1");
 
   assert.equal(moved.title, "Moved \u201cWork\u201d to Engineering");
