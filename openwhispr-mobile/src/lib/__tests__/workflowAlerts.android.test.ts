@@ -33,6 +33,9 @@ jest.mock('@/services/transcription/LocalTranscriptionService', () => ({
 jest.mock('@/lib/localReasoning', () => ({
   ...jest.requireActual('@/lib/localReasoning'),
   getLocalReasoningReadiness: () => mockTextReadiness(),
+  // Jest uses its default resolver; exercise the implementation Metro selects on Android.
+  getLocalReasoningUnavailableMessage: (...args: unknown[]) =>
+    jest.requireActual('../localReasoning.android').getLocalReasoningUnavailableMessage(...args),
 }));
 
 import { showAccountRequiredAlert } from '../accountAccess';
