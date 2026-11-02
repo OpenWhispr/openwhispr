@@ -76,6 +76,51 @@ function createFinalizingManager(AudioManager) {
   return { manager, states, getProviderStopCalls: () => providerStopCalls };
 }
 
+test("streamed selection failures keep local error parameters and recovery details without publishing text", async (t) => {
+  const AudioManager = await loadManagerClass(t, {
+    "/config/prompts": "export const resolvePrompt = () => 'agent prompt';",
+  });
+  Object.assign(globalThis.__streamingFinalizationSettings, {
+    useDictationAgent: true,
+    dictationAgentMode: "local",
+    dictationAgentModel: "local-model",
+  });
+  const { manager } = createFinalizingManager(AudioManager);
+  const errors = [];
+  const published = [];
+  manager.streamingFinalText = "replace this";
+  manager.voiceAgentRequested = true;
+  manager.consumeScreenContext = async () => null;
+  const fields = {
+    code: "CONTEXT_TOO_LARGE",
+    messageKey: "models.errors.contextTooLarge",
+    messageParams: { model: "Qwen 3.5 2B", needed: 18000, max: 16384 },
+    surface: "llm",
+    settingsTarget: "dictationAgent",
+    technicalDetails: { model: "local-model" },
+  };
+  manager.processAgentCommand = async () => {
+    throw Object.assign(new Error("too long"), fields, { selectionEditFatal: true });
+  };
+  const saved = [];
+  manager.saveFailedTranscription = async (...args) => {
+    saved.push(args);
+  };
+  manager.onError = (error) => errors.push(error);
+  manager.onTranscriptionComplete = (result) => published.push(result);
+  assert.equal(await manager.stopStreamingRecording(), false);
+  assert.equal(errors.length, 1);
+  for (const [key, value] of Object.entries(fields)) assert.deepEqual(errors[0][key], value);
+  assert.equal(errors[0].selectionEditFatal, true);
+  assert.equal(errors[0].transcript, "replace this");
+  assert.deepEqual(published, []);
+  assert.equal(manager.pendingSelectionEdit, null);
+  // The streamed transcript is kept in a failed history entry, as batch keeps it (#2676).
+  assert.equal(saved.length, 1);
+  assert.equal(saved[0][1], "CONTEXT_TOO_LARGE");
+  assert.deepEqual(saved[0][3], { transcript: "replace this" });
+});
+
 test("streaming finalization is immediately processing and cannot start another session", async (t) => {
   const AudioManager = await loadManagerClass(t);
   const { manager, states, getProviderStopCalls } = createFinalizingManager(AudioManager);
@@ -137,6 +182,84 @@ test("streaming completion keeps the recording occurrence time", async (t) => {
   await manager.stopStreamingRecording();
 
   assert.equal(completion.analyticsOccurredAt, new Date(recordingStartedAt).toISOString());
+});
+
+// Starts a stream on `providerName` under `startMode`, switches the saved mode to
+// `stopMode` mid-recording, and stops with a streamed transcript.
+async function streamAcrossModeSwitch(t, AudioManager, { providerName, startMode, stopMode }) {
+  globalThis.__streamingFinalizationSettings = {
+    ...globalThis.__streamingFinalizationSettings,
+    cloudTranscriptionMode: startMode,
+    isSignedIn: true,
+    insightsSyncEnabled: true,
+  };
+  installCapture(t);
+  const provider = startingOrukeetProvider({
+    finalizeAcknowledged: false,
+    awaitsFinalTranscript: false,
+    finalize() {},
+  });
+  const { manager, completions } = createStartingManager(AudioManager, { providerName, provider });
+  manager.finalizeChineseScript = async (text) => text;
+  const usageCalls = [];
+  globalThis.window.electronAPI.cloudStreamingUsage = async (...args) => {
+    usageCalls.push(args);
+    return { success: true };
+  };
+  const events = [];
+  globalThis.window.dispatchEvent = (event) => events.push(event.type);
+
+  assert.equal(await manager.startStreamingRecording(), true);
+  globalThis.__streamingFinalizationSettings = {
+    ...globalThis.__streamingFinalizationSettings,
+    cloudTranscriptionMode: stopMode,
+  };
+  manager.streamingFinalText = "Words from this stream.";
+  await manager.stopStreamingRecording();
+  await new Promise(setImmediate);
+  return { completion: completions[0], usageCalls, events };
+}
+
+test("a stream counts toward Cloud usage by the credentials it started on", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+
+  await t.test("a Cloud stream switched to own keys mid-recording is still counted", async (t) => {
+    const { usageCalls, events } = await streamAcrossModeSwitch(t, AudioManager, {
+      providerName: "gemini",
+      startMode: "openwhispr",
+      stopMode: "byok",
+    });
+    assert.equal(usageCalls.length, 1);
+    assert.equal(usageCalls[0][0], "Words from this stream.");
+    assert.equal(usageCalls[0][2].sttProvider, "gemini");
+    assert.equal(usageCalls[0][2].sendLogs, true);
+    assert.deepEqual(events, ["usage-changed"]);
+  });
+
+  // #2558: a Free user's own Gemini key filled the Cloud word allowance.
+  await t.test("an own-key stream switched to Cloud mid-recording is not counted", async (t) => {
+    const { completion, usageCalls, events } = await streamAcrossModeSwitch(t, AudioManager, {
+      providerName: "gemini",
+      startMode: "byok",
+      stopMode: "openwhispr",
+    });
+    assert.equal(completion.text, "Words from this stream.");
+    // The opted-in insights sync pushes the local row under these.
+    assert.ok(completion.clientTranscriptionId);
+    assert.ok(completion.analyticsOccurredAt);
+    assert.deepEqual(usageCalls, []);
+    assert.deepEqual(events, []);
+  });
+
+  await t.test("tinfoil in Cloud mode streams on the user's key and is not counted", async (t) => {
+    const { usageCalls, events } = await streamAcrossModeSwitch(t, AudioManager, {
+      providerName: "tinfoil-realtime",
+      startMode: "openwhispr",
+      stopMode: "openwhispr",
+    });
+    assert.deepEqual(usageCalls, []);
+    assert.deepEqual(events, []);
+  });
 });
 
 test("only a provider that prefers its stop transcript pastes it over the streamed finals", async (t) => {
@@ -336,6 +459,102 @@ test("cancelling while the streaming microphone opens never enters recording", a
     false,
     "a cancelled start must not publish a recording state"
   );
+});
+
+// A managed Orukeet recording that resolves its provider through the real
+// sttConfig routing, with every provider channel recording what reached it.
+async function startManagedOrukeetRecording(t, AudioManager) {
+  useManagedOrukeetSettings();
+  installCapture(t);
+  const calls = [];
+  const record = (name, result) => async () => {
+    calls.push(name);
+    return result;
+  };
+  const listen = () => () => {};
+  let raiseStreamError;
+  Object.assign(globalThis.window.electronAPI, {
+    dictationRealtimeStart: async (options) => {
+      calls.push(`${options.provider}:start:${options.model}`);
+      return { success: true };
+    },
+    dictationRealtimeFinalize: record("realtime:finalize", {
+      success: true,
+      text: "Bonjour",
+      language: "fr",
+    }),
+    dictationRealtimeStop: record("realtime:stop", { success: true }),
+    onDictationRealtimePartial: listen,
+    onDictationRealtimeFinal: listen,
+    onDictationRealtimeError: (listener) => {
+      raiseStreamError = listener;
+      return () => {};
+    },
+    onDictationRealtimeSessionEnd: listen,
+    deepgramStreamingFinalize: record("deepgram:finalize", { success: true }),
+    deepgramStreamingStop: record("deepgram:stop", { success: true }),
+    cloudStreamingUsage: async (_text, _durationSeconds, usage) => {
+      calls.push(`usage:${usage.sttProvider}:${usage.sttDetectedLanguage}`);
+      return { success: true };
+    },
+  });
+  globalThis.window.dispatchEvent = () => true;
+
+  const { manager, errors, completions } = createStartingManager(AudioManager, {});
+  delete manager.getStreamingProvider;
+  delete manager.getStreamingProviderName;
+  manager.setSttConfig({ dictation: { mode: "streaming" }, streamingProvider: "orukeet" });
+  // The hook's background TTL refresh lands while the mic opens and would now
+  // route a new recording elsewhere.
+  const openMic = manager._acquireCaptureStream;
+  manager._acquireCaptureStream = async (constraints) => {
+    manager.setSttConfig({ dictation: { mode: "streaming" }, streamingProvider: "deepgram" });
+    return openMic(constraints);
+  };
+
+  assert.equal(await manager.startStreamingRecording(), true);
+  assert.equal(manager.getStreamingProviderName(), "deepgram");
+
+  return { manager, calls, completions, errors, raiseStreamError };
+}
+
+test("stop finalizes the Orukeet stream after an STT config refresh reroutes while the mic opens", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const { manager, calls, completions } = await startManagedOrukeetRecording(t, AudioManager);
+
+  assert.equal(await manager.stopStreamingRecording(), true);
+
+  assert.deepEqual(calls, [
+    "orukeet:start:orukeet-v0.1.0",
+    "realtime:finalize",
+    "realtime:stop",
+    "usage:orukeet:fr",
+  ]);
+  assert.equal(completions.length, 1);
+  assert.equal(completions[0].text, "Bonjour");
+  assert.equal(completions[0].source, "orukeet-streaming");
+  assert.equal(manager._activeStreamingProviderName, null);
+});
+
+test("cancel and cleanup disconnect the Orukeet stream after an STT config refresh reroutes while the mic opens", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  for (const teardown of ["cancelStreamingRecording", "cleanup"]) {
+    await t.test(teardown, async (t) => {
+      const { manager, calls, completions, errors, raiseStreamError } =
+        await startManagedOrukeetRecording(t, AudioManager);
+      manager.preparedMicCapture.cancel = () => {};
+      manager.micStreamHold = { drop() {} };
+      // The managed Orukeet session fails over, so the error never surfaces.
+      raiseStreamError("Orukeet connection closed");
+
+      await manager[teardown]();
+
+      assert.deepEqual(calls, ["orukeet:start:orukeet-v0.1.0", "realtime:stop"]);
+      assert.deepEqual(completions, []);
+      assert.deepEqual(errors, []);
+      assert.equal(manager._activeStreamingProviderName, null);
+    });
+  }
 });
 
 test("cancel overrides a normal streaming stop before it can publish text", async (t) => {
@@ -548,24 +767,54 @@ test("a no-final stream whose Cloud upload finds no speech keeps the recording q
   assert.deepEqual(completions, [{ success: true, text: "" }]);
 });
 
+test("a no-final stream whose upload transcribed but failed its selection edit keeps the text", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  globalThis.__streamingFinalizationSettings = {
+    ...globalThis.__streamingFinalizationSettings,
+    cloudTranscriptionMode: "openwhispr",
+    isSignedIn: true,
+  };
+  const { manager } = createFinalizingManager(AudioManager);
+  manager.recordingStartTime = Date.now() - 5000;
+  manager.mergeRecordedSegments = async () => new Blob([new Uint8Array(100)]);
+  const saved = [];
+  const errors = [];
+  manager.saveFailedTranscription = (...args) => saved.push(args);
+  manager.onError = (error) => errors.push(error);
+  manager.processWithOpenWhisprCloud = async () => {
+    const error = Object.assign(new Error("Selection edit failed"), {
+      selectionEditFatal: true,
+      code: "SELECTION_EDIT_CAPTURE_FAILED",
+    });
+    Object.defineProperty(error, "transcript", { value: "Fallback text" });
+    throw error;
+  };
+
+  await manager.stopStreamingRecording();
+
+  // Unlike a real transcription failure here, it is reported and kept as batch's is.
+  assert.deepEqual(
+    errors.map(({ code, transcript }) => [code, transcript]),
+    [["SELECTION_EDIT_CAPTURE_FAILED", "Fallback text"]]
+  );
+  assert.deepEqual(
+    saved.map((args) => [args[1], args[3].transcript]),
+    [["SELECTION_EDIT_CAPTURE_FAILED", "Fallback text"]]
+  );
+});
+
 test("Orukeet uses the acknowledged final even if the transcript event is delayed", async (t) => {
   const AudioManager = await loadManagerClass(t);
   const { manager } = createFinalizingManager(AudioManager);
+  manager.getStreamingProviderName = () => "orukeet";
   manager.getStreamingProvider = () => ({
     finalizeAcknowledged: true,
     finalize: async () => ({ success: true, text: "Acknowledged final" }),
     stop: async () => ({ success: true, text: "" }),
   });
-  let usageReported;
-  const usage = new Promise((resolve) => {
-    usageReported = resolve;
-  });
-  globalThis.window.electronAPI.cloudStreamingUsage = async () => ({ success: true });
-  globalThis.window.dispatchEvent = () => usageReported();
   const results = [];
   manager.onTranscriptionComplete = (result) => results.push(result);
   await manager.stopStreamingRecording();
-  await usage;
   assert.equal(results[0].text, "Acknowledged final");
 });
 
@@ -1248,6 +1497,7 @@ test("a failed-over selection edit that fails is reported as a selection edit fa
     {
       title: "Selection Edit Failed",
       description: "Selection edit could not safely read the selection: gone",
+      selectionEditFatal: true,
       code: "SELECTION_EDIT_CAPTURE_FAILED",
       messageKey: "hooks.audioRecording.selectionEditing.unavailable",
     },
@@ -1320,6 +1570,8 @@ async function stopManagedDictation(
     ...settings,
   };
   const { manager } = createFinalizingManager(AudioManager);
+  manager._streamingMeteredByCloud =
+    globalThis.__streamingFinalizationSettings.cloudTranscriptionMode === "openwhispr";
   manager.recordingStartTime = Date.now() - 8000;
   manager.mergeRecordedSegments = async () => new Blob([new Uint8Array(100)]);
   manager.getStreamingProvider = () => orukeetProvider(final);
@@ -1339,22 +1591,18 @@ async function stopManagedDictation(
     return { success: true, text: `${text}。` };
   };
   const usage = [];
-  globalThis.window.electronAPI.cloudStreamingUsage = async (_text, _seconds, opts) => {
-    usage.push(opts);
+  globalThis.window.electronAPI.cloudStreamingUsage = async (text, seconds, opts) => {
+    usage.push({ ...opts, text, seconds });
     return { success: true };
   };
-  let usageSettled;
-  const settled = new Promise((resolve) => {
-    usageSettled = resolve;
-  });
-  globalThis.window.dispatchEvent = () => usageSettled();
+  globalThis.window.dispatchEvent = () => true;
   const published = [];
   manager.onTranscriptionComplete = (result) => published.push(result);
   const errors = [];
   manager.onError = (error) => errors.push(error);
   const stopResult = await manager.stopStreamingRecording();
-  // Usage settles only after a non-empty transcript is published.
-  if (published.some((result) => result.text)) await settled;
+  // Usage is reported in the background after the transcript is published.
+  await new Promise(setImmediate);
   return { manager, uploads, reasonCalls, usage, published, errors, stopResult };
 }
 
@@ -1662,6 +1910,31 @@ test("an empty Orukeet final with a confident unsupported estimate still re-tran
   assert.equal(usage.length, 0);
 });
 
+test("a language re-transcription whose selection edit fails keeps Cloud's transcript", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const saved = [];
+  const { published, errors } = await stopManagedDictation(AudioManager, {
+    final: JA_FINAL,
+    upload: async () => {
+      const error = Object.assign(new Error("Selection edit failed"), {
+        selectionEditFatal: true,
+        code: "SELECTION_EDIT_REASONING_FAILED",
+      });
+      // What processWithOpenWhisprCloud attaches before rethrowing.
+      Object.defineProperty(error, "transcript", { value: "明日の会議" });
+      Object.defineProperty(error, "transcriptClientId", { value: "cloud-client-id" });
+      throw error;
+    },
+    overrides: { saveFailedTranscription: (...args) => saved.push(args) },
+  });
+  assert.equal(errors[0].transcript, "明日の会議");
+  assert.deepEqual(
+    saved.map((args) => args[3]),
+    [{ transcript: "明日の会議", clientTranscriptionId: "cloud-client-id" }]
+  );
+  assert.deepEqual(published, []);
+});
+
 test("a selection edit that fails during the language re-transcription surfaces its error", async (t) => {
   const AudioManager = await loadManagerClass(t);
   const selectionEditFailure = () =>
@@ -1702,4 +1975,555 @@ test("a selection edit that fails during the language re-transcription surfaces 
   assert.equal(cancelled.stopResult, true);
   assert.deepEqual(cancelled.errors, []);
   assert.deepEqual(cancelled.published, []);
+});
+
+test("language-score rollout modes reach the real finalization path without leaking content", async (t) => {
+  globalThis.__orukeetRoutingLog = [];
+  t.after(() => delete globalThis.__orukeetRoutingLog);
+  const AudioManager = await loadManagerClass(t, {
+    "/utils/logger": `export default { debug() {}, warn() {}, error() {}, logReasoning() {}, info(message, meta) { if (message === "Orukeet language routing comparison") globalThis.__orukeetRoutingLog.push(meta); } };`,
+  });
+  const sample = {
+    ...JA_FINAL,
+    text: "PRIVATE DICTATION",
+    language: "hi",
+    languageConfidence: 0.55,
+    languageSupportedScore: 0.02,
+  };
+  for (const [mode, expected] of [
+    ["shadow", false],
+    ["supported-0.30", true],
+    ["supported-0.10", true],
+    ["off", false],
+  ]) {
+    globalThis.__orukeetRoutingLog.length = 0;
+    const result = await stopManagedDictation(AudioManager, {
+      final: sample,
+      overrides: { sttConfig: { orukeetLanguageRouting: mode } },
+      upload: async () => ({ text: "Cloud result", rawText: "Cloud result" }),
+    });
+    assert.equal(result.uploads.length, expected ? 1 : 0, mode);
+    assert.equal(result.published[0].text, expected ? "Cloud result" : sample.text, mode);
+    assert.equal(result.reasonCalls.length, 0, "no extra cleanup call");
+    assert.equal(globalThis.__orukeetRoutingLog.length, mode === "off" ? 0 : 1);
+    assert.doesNotMatch(
+      JSON.stringify(globalThis.__orukeetRoutingLog),
+      /PRIVATE DICTATION|Cloud result/
+    );
+    if (mode !== "off") {
+      assert.equal(globalThis.__orukeetRoutingLog[0].fallbackAvailable, true);
+      const telemetry = expected ? result.uploads[0] : result.usage[0];
+      assert.deepEqual(telemetry.orukeetLanguageRouting, globalThis.__orukeetRoutingLog[0]);
+      if (expected) assert.equal(telemetry.streamingFallbackReason, "language_supported_score_low");
+    }
+  }
+});
+
+test("language-score routing uses analyzed time and preserves explicit language, BYOK and unavailable metadata", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const sample = {
+    ...JA_FINAL,
+    language: "hi",
+    languageConfidence: 0.55,
+    languageSupportedScore: 0.02,
+  };
+  for (const overrides of [
+    { final: { ...sample, languageAudioSeconds: 3 } },
+    { final: { ...sample, languageSupportedScore: undefined } },
+    { language: "en" },
+    { settings: { cloudTranscriptionMode: "byok" } },
+    { providerName: "deepgram" },
+  ]) {
+    const r = await stopManagedDictation(AudioManager, {
+      final: sample,
+      overrides: { sttConfig: { orukeetLanguageRouting: "supported-0.30" } },
+      upload: async () => ({ text: "Unexpected cloud", rawText: "Unexpected cloud" }),
+      ...overrides,
+    });
+    assert.equal(r.uploads.length, 0, JSON.stringify(overrides));
+    // An own-key stream reports no Cloud usage (#2558).
+    if (overrides.settings?.cloudTranscriptionMode === "byok") assert.deepEqual(r.usage, []);
+    if (overrides.providerName === "deepgram")
+      assert.equal(r.usage[0].orukeetLanguageRouting, undefined);
+  }
+});
+
+test("group-score fallback failure still discards the unsupported transcript", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const r = await stopManagedDictation(AudioManager, {
+    final: { ...JA_FINAL, languageConfidence: 0.4, languageSupportedScore: 0.01 },
+    overrides: {
+      sttConfig: { orukeetLanguageRouting: "supported-0.30" },
+      saveFailedTranscription() {},
+    },
+    upload: async () => {
+      throw Object.assign(new Error("Cloud unavailable"), { code: "NETWORK_ERROR" });
+    },
+  });
+  assert.equal(r.uploads.length, 1);
+  assert.equal(
+    r.published.some((x) => x.text === JA_FINAL.text),
+    false
+  );
+  assert.equal(r.errors.length, 1);
+});
+
+test("combined cleanup is reused once, while changed options or failed cleanup use the ordinary route", async (t) => {
+  const AudioManager = await loadManagerClass(t, {
+    "/stores/settingsStore": `
+      export const getSettings = () => globalThis.__streamingFinalizationSettings;
+      export const getEffectiveCleanupModel = () => null;
+      export const selectResolvedLLMConfig = () => ({ model: null, provider: null });
+      export const isCloudCleanupMode = () => true;
+      export const isCloudDictationAgentMode = () => false;
+      export const isCloudTranslationMode = () => false;
+    `,
+  });
+  for (const [cleanupStatus, changed, calls, empty] of [
+    ["complete", false, 0, false],
+    ["complete", true, 1, false],
+    ["fallback", false, 1, false],
+    ["complete", false, 1, true],
+  ]) {
+    const options = { customDictionary: ["Orukeet"], language: "en" };
+    const { reasonCalls, usage, published } = await stopManagedDictation(AudioManager, {
+      final: {
+        success: true,
+        text: "please send invoice 128",
+        cleanupStatus,
+        cleanupText: empty ? "" : "Please send invoice 128.",
+        asrFinalMs: 103,
+        cleanup: {
+          status: cleanupStatus,
+          model: "gemma-4-12b",
+          processingMs: 220,
+          inputTokens: 40,
+          outputTokens: 8,
+        },
+        cleanupOptions: options,
+      },
+      settings: { useCleanupModel: true, cleanupCloudMode: "openwhispr", customPrompts: {} },
+      overrides: {
+        _activePipelineOptions: changed ? { ...options, language: "fr" } : options,
+        finalizeChineseScript: async (text) => text,
+      },
+    });
+    assert.equal(reasonCalls.length, calls);
+    assert.equal(published[0].rawText, "please send invoice 128");
+    assert.equal(
+      published[0].text,
+      calls ? "please send invoice 128。" : "Please send invoice 128."
+    );
+    assert.equal(usage.length, 1);
+    // Raw words are billed only when the combined cleanup is the pasted text.
+    assert.equal(usage[0].text, calls ? published[0].text : "please send invoice 128");
+    assert.equal(usage[0].sendLogs, calls === 0);
+    assert.equal(usage[0].sttProcessingMs, 103);
+    // A completed Gemma cleanup that wasn't used is never reported as this request's.
+    const reported = cleanupStatus === "fallback" || calls === 0;
+    assert.equal(usage[0].orukeetCleanup?.processingMs, reported ? 220 : undefined);
+    if (calls)
+      assert.equal(reasonCalls[0][1].orukeetCleanup?.status, reported ? "fallback" : undefined);
+  }
+});
+
+test("combined cleanup that never finished pastes the raw text with a cleanup notice", async (t) => {
+  const AudioManager = await loadManagerClass(t, {
+    "/stores/settingsStore": `
+      export const getSettings = () => globalThis.__streamingFinalizationSettings;
+      export const getEffectiveCleanupModel = () => null;
+      export const selectResolvedLLMConfig = () => ({ model: null, provider: null });
+      export const isCloudCleanupMode = () => true;
+      export const isCloudDictationAgentMode = () => false;
+      export const isCloudTranslationMode = () => false;
+    `,
+  });
+  const { reasonCalls, uploads, usage, published } = await stopManagedDictation(AudioManager, {
+    final: {
+      success: true,
+      text: "please send invoice 128",
+      cleanupError: "Orukeet final transcript timed out",
+      asrFinalMs: 103,
+      cleanup: { status: "fallback" },
+    },
+    upload: async () => assert.fail("The finished ASR text must not be transcribed again"),
+    settings: { useCleanupModel: true, cleanupCloudMode: "openwhispr", customPrompts: {} },
+  });
+  assert.equal(reasonCalls.length, 0);
+  assert.equal(uploads.length, 0);
+  assert.equal(published[0].text, "please send invoice 128");
+  assert.equal(published[0].cleanupFailure.messageKey, "app.toasts.cleanupFailed.title");
+  assert.equal(usage[0].text, "please send invoice 128");
+  assert.equal(usage[0].sendLogs, true);
+  assert.deepEqual(usage[0].orukeetCleanup, { status: "fallback" });
+});
+
+test("combined text never replaces an unsupported-language fallback", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const { uploads, published, reasonCalls } = await stopManagedDictation(AudioManager, {
+    final: {
+      ...JA_FINAL,
+      cleanupStatus: "complete",
+      cleanupText: "Wrong cleanup.",
+      cleanupOptions: {},
+      cleanup: { status: "complete", model: "gemma-4-12b" },
+    },
+    upload: async () => ({ text: "明日の会議", rawText: "明日の会議" }),
+    overrides: { getPipelineCleanupOptions: () => ({}) },
+  });
+  assert.equal(uploads.length, 1);
+  assert.equal(uploads[0].orukeetCleanup, undefined);
+  assert.equal(reasonCalls.length, 0);
+  assert.equal(published[0].text, "明日の会議");
+});
+
+test("ordinary Orukeet streams meter processed text and BYOK streams meter nothing", async (t) => {
+  const AudioManager = await loadManagerClass(t, {
+    "/stores/settingsStore": `
+    export const getSettings = () => globalThis.__streamingFinalizationSettings;
+    export const getEffectiveCleanupModel = () => null;
+    export const selectResolvedLLMConfig = () => ({ model: null, provider: null });
+    export const isCloudCleanupMode = () => true;
+    export const isCloudDictationAgentMode = () => false;
+    export const isCloudTranslationMode = () => false;
+  `,
+  });
+  for (const cloudTranscriptionMode of ["openwhispr", "byok"]) {
+    const result = await stopManagedDictation(AudioManager, {
+      final: { success: true, text: "um please send invoice 128" },
+      settings: {
+        cloudTranscriptionMode,
+        useCleanupModel: true,
+        cleanupCloudMode: "openwhispr",
+        customPrompts: { cleanup: "Keep text." },
+      },
+    });
+    assert.equal(result.published[0].text, "um please send invoice 128。");
+    if (cloudTranscriptionMode === "byok") {
+      // An own-key stream reports no Cloud usage (#2558).
+      assert.deepEqual(result.usage, []);
+      continue;
+    }
+    assert.equal(result.usage[0].text, result.published[0].text);
+    assert.equal(result.usage[0].sendLogs, false);
+  }
+});
+
+test("recording config snapshot survives a rollback until the next recording", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const result = await stopManagedDictation(AudioManager, {
+    final: { ...JA_FINAL, languageConfidence: 0.55, languageSupportedScore: 0.02 },
+    overrides: {
+      _activeStreamingConfig: { orukeetLanguageRouting: "supported-0.30" },
+      sttConfig: { orukeetLanguageRouting: "off", streamingProvider: "deepgram" },
+    },
+    upload: async () => ({ text: "Cloud result" }),
+  });
+  assert.equal(result.uploads.length, 1);
+  assert.equal(result.uploads[0].orukeetLanguageRouting.mode, "supported-0.30");
+  assert.equal(result.manager._activeStreamingConfig, null);
+});
+
+test("combined options are captured and passed through recording start", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  useManagedOrukeetSettings();
+  installCapture(t);
+  const options = { customDictionary: ["Orukeet"], language: "en" };
+  let sent;
+  const { manager } = createStartingManager(AudioManager, {
+    providerName: "orukeet",
+    provider: startingOrukeetProvider({
+      start: async (value) => {
+        sent = value;
+        return { success: true };
+      },
+    }),
+  });
+  manager.getPipelineCleanupOptions = () => options;
+  manager.sttConfig = { orukeetPipeline: "gemma12", orukeetLanguageRouting: "shadow" };
+  await manager.startStreamingRecording();
+  assert.deepEqual(sent.pipelineOptions, options);
+  assert.equal(manager._activePipelineOptions, options);
+  manager.setSttConfig({ streamingProvider: "deepgram" });
+  assert.equal(manager._activeStreamingConfig.orukeetPipeline, "gemma12");
+  await manager.cancelStreamingRecording();
+});
+
+// Cleanup routes on the store's whole cloud predicate, so the mock mirrors
+// selectIsCloudCleanupMode: onboarding's local choice leaves cleanupCloudMode at
+// its "openwhispr" default, and that field alone must never send text to Cloud.
+const CLEANUP_ROUTING_STORE = `
+  export const getSettings = () => globalThis.__streamingFinalizationSettings;
+  export const isCloudCleanupMode = () => {
+    const s = getSettings();
+    return !!s.isSignedIn && s.cleanupMode === "openwhispr" && s.cleanupCloudMode === "openwhispr";
+  };
+  export const selectResolvedLLMConfig = (s) => ({
+    model: s.cleanupModel,
+    provider: s.cleanupMode === "openwhispr" ? "openwhispr" : "qwen",
+    mode: s.cleanupMode,
+  });
+  export const getEffectiveCleanupModel = () =>
+    isCloudCleanupMode() ? "" : selectResolvedLLMConfig(getSettings()).model;
+  export const isCloudDictationAgentMode = () => false;
+  export const isCloudTranslationMode = () => false;
+`;
+
+const LOCAL_CLEANUP_MODEL = "qwen3.5-4b-q4_k_m";
+
+// `expected` is where cleanup runs: "cloud" (cloudReason), "model" (the scope's
+// own model) or "raw" (no reachable cleanup, so the transcript is kept as is).
+const CLEANUP_ROUTING_CASES = [
+  {
+    label: "local, cloud field left at default",
+    cleanupMode: "local",
+    cleanupCloudMode: "openwhispr",
+    expected: "model",
+  },
+  {
+    label: "local, cloud field byok",
+    cleanupMode: "local",
+    cleanupCloudMode: "byok",
+    expected: "model",
+  },
+  {
+    label: "local, model not downloaded",
+    cleanupMode: "local",
+    cleanupCloudMode: "openwhispr",
+    cleanupModel: "",
+    expected: "raw",
+  },
+  {
+    label: "self-hosted, cloud field left at default",
+    cleanupMode: "self-hosted",
+    cleanupCloudMode: "openwhispr",
+    expected: "model",
+  },
+  {
+    label: "providers (BYOK)",
+    cleanupMode: "providers",
+    cleanupCloudMode: "byok",
+    expected: "model",
+  },
+  {
+    label: "providers, cloud field left at default",
+    cleanupMode: "providers",
+    cleanupCloudMode: "openwhispr",
+    expected: "model",
+  },
+  {
+    label: "OpenWhispr Cloud",
+    cleanupMode: "openwhispr",
+    cleanupCloudMode: "openwhispr",
+    expected: "cloud",
+  },
+  {
+    label: "OpenWhispr Cloud, signed out",
+    cleanupMode: "openwhispr",
+    cleanupCloudMode: "openwhispr",
+    cleanupModel: "",
+    isSignedIn: false,
+    expected: "raw",
+  },
+];
+
+const SIGNED_IN_CLEANUP_ROUTING_CASES = CLEANUP_ROUTING_CASES.filter(
+  ({ isSignedIn }) => isSignedIn !== false
+);
+
+function cleanupRoutingSettings({
+  cleanupMode,
+  cleanupCloudMode,
+  cleanupModel = LOCAL_CLEANUP_MODEL,
+  isSignedIn = true,
+}) {
+  return {
+    useCleanupModel: true,
+    cleanupMode,
+    cleanupCloudMode,
+    cleanupModel,
+    isSignedIn,
+    customPrompts: {},
+  };
+}
+
+function cleanedText(text, { expected }) {
+  if (expected === "cloud") return `${text}。`;
+  return expected === "model" ? `${text} (local)` : text;
+}
+
+const CLEANUP_TRANSLATION_MODULES = {
+  "/stores/settingsStore": CLEANUP_ROUTING_STORE,
+  "/config/prompts": `
+    export const resolvePrompt = () => "translation prompt";
+    export const appendScreenContextSuffix = (prompt) => prompt;
+  `,
+  "/dictationAgentInference": `
+    export const resolveDictationAgentInference = () => ({ reachable: false, config: {} });
+    export const resolveDictationAgentVisionInference = () => ({ active: false, config: {} });
+  `,
+  "/dictationTranslationInference": `
+    export const resolveDictationTranslationInference = () => ({
+      reachable: true, model: "translation-model", config: { provider: "qwen" }
+    });
+  `,
+};
+
+// Cloud carries the STT telemetry for its combined log; any other cleanup
+// descriptor names the scope's model and sends nothing to Cloud.
+function assertChainCleanup(cleanup, routing) {
+  if (routing.expected === "cloud") {
+    assert.equal(cleanup.mode, "cloudReason");
+    return;
+  }
+  assert.equal(cleanup.mode, "model");
+  assert.equal(cleanup.model, cleanupRoutingSettings(routing).cleanupModel);
+  assert.equal(cleanup.meta, undefined);
+}
+
+function useOnlineNavigator(t) {
+  const originalNavigator = globalThis.navigator;
+  Object.defineProperty(globalThis, "navigator", { value: { onLine: true }, configurable: true });
+  t.after(() =>
+    Object.defineProperty(globalThis, "navigator", {
+      value: originalNavigator,
+      configurable: true,
+    })
+  );
+}
+
+function countingReasoningModel(localCalls) {
+  return async (text, model) => {
+    localCalls.push([text, model]);
+    return `${text} (local)`;
+  };
+}
+
+test("streaming cleanup goes to Cloud only when the cleanup scope is OpenWhispr Cloud", async (t) => {
+  const AudioManager = await loadManagerClass(t, {
+    "/stores/settingsStore": CLEANUP_ROUTING_STORE,
+  });
+  for (const routing of CLEANUP_ROUTING_CASES) {
+    await t.test(routing.label, async () => {
+      const localCalls = [];
+      const { reasonCalls, usage, published } = await stopManagedDictation(AudioManager, {
+        final: { success: true, text: "hello there", model: "orukeet-v0.1.0" },
+        language: "en",
+        upload: async () => assert.fail("must not re-transcribe"),
+        settings: cleanupRoutingSettings(routing),
+        overrides: {
+          processWithReasoningModel: countingReasoningModel(localCalls),
+          finalizeChineseScript: async (text) => text,
+        },
+      });
+      assert.equal(reasonCalls.length, routing.expected === "cloud" ? 1 : 0);
+      assert.deepEqual(
+        localCalls.map(([, model]) => model),
+        routing.expected === "model" ? [LOCAL_CLEANUP_MODEL] : []
+      );
+      assert.equal(published[0].text, cleanedText("hello there", routing));
+      // Only a Cloud cleanup writes the combined log, so only it suppresses the STT one.
+      assert.equal(usage.length, 1);
+      assert.equal(usage[0].sendLogs, routing.expected !== "cloud");
+    });
+  }
+});
+
+test("streaming translation cleans up in Cloud only when the cleanup scope is OpenWhispr Cloud", async (t) => {
+  const AudioManager = await loadManagerClass(t, CLEANUP_TRANSLATION_MODULES);
+  for (const routing of CLEANUP_ROUTING_CASES) {
+    await t.test(routing.label, async () => {
+      const chainCleanups = [];
+      await stopManagedDictation(AudioManager, {
+        final: { success: true, text: "hello there", model: "orukeet-v0.1.0" },
+        language: "en",
+        upload: async () => assert.fail("must not re-transcribe"),
+        settings: {
+          ...cleanupRoutingSettings(routing),
+          translationSourceLanguage: "en",
+          translationTargetLanguage: "es",
+        },
+        overrides: {
+          translationRequested: true,
+          runTranslationChain: async ({ cleanup }) => {
+            chainCleanups.push(cleanup);
+            return { text: "hola" };
+          },
+          finalizeChineseScript: async (text) => text,
+        },
+      });
+      assert.equal(chainCleanups.length, 1);
+      assertChainCleanup(chainCleanups[0], routing);
+    });
+  }
+});
+
+test("batch Cloud cleanup goes to Cloud only when the cleanup scope is OpenWhispr Cloud", async (t) => {
+  const AudioManager = await loadManagerClass(t, {
+    "/stores/settingsStore": CLEANUP_ROUTING_STORE,
+  });
+  useOnlineNavigator(t);
+  // Signed out never re-transcribes through Cloud, so it never reaches this path.
+  for (const routing of SIGNED_IN_CLEANUP_ROUTING_CASES) {
+    await t.test(routing.label, async () => {
+      const transcribeOpts = [];
+      globalThis.window.electronAPI.cloudTranscribe = async (_audio, opts) => {
+        transcribeOpts.push(opts);
+        return { success: true, text: "明日の会議", sttProvider: "openai" };
+      };
+      const localCalls = [];
+      const { reasonCalls, published } = await stopManagedDictation(AudioManager, {
+        final: JA_FINAL,
+        settings: cleanupRoutingSettings(routing),
+        overrides: {
+          isDictionaryEcho: () => false,
+          getWhisperPrompt: () => null,
+          finalizeChineseScript: async (text) => text,
+          processWithReasoningModel: countingReasoningModel(localCalls),
+        },
+      });
+      assert.equal(transcribeOpts.length, 1);
+      assert.equal(reasonCalls.length, routing.expected === "cloud" ? 1 : 0);
+      assert.equal(localCalls.length, routing.expected === "model" ? 1 : 0);
+      assert.equal(published[0].text, cleanedText("明日の会議", routing));
+      // Only a Cloud cleanup writes the combined log, so only it suppresses the STT one.
+      assert.equal(transcribeOpts[0].sendLogs, routing.expected === "cloud" ? "false" : undefined);
+    });
+  }
+});
+
+test("batch Cloud translation cleans up in Cloud only when the cleanup scope is OpenWhispr Cloud", async (t) => {
+  const AudioManager = await loadManagerClass(t, CLEANUP_TRANSLATION_MODULES);
+  useOnlineNavigator(t);
+  for (const routing of SIGNED_IN_CLEANUP_ROUTING_CASES) {
+    await t.test(routing.label, async () => {
+      const transcribeOpts = [];
+      globalThis.window.electronAPI.cloudTranscribe = async (_audio, opts) => {
+        transcribeOpts.push(opts);
+        return { success: true, text: "明日の会議", sttProvider: "openai" };
+      };
+      const chainCleanups = [];
+      await stopManagedDictation(AudioManager, {
+        final: JA_FINAL,
+        settings: {
+          ...cleanupRoutingSettings(routing),
+          translationSourceLanguage: "ja",
+          translationTargetLanguage: "en",
+        },
+        overrides: {
+          translationRequested: true,
+          isDictionaryEcho: () => false,
+          getWhisperPrompt: () => null,
+          runTranslationChain: async ({ cleanup }) => {
+            chainCleanups.push(cleanup);
+            return { text: "tomorrow's meeting" };
+          },
+          finalizeChineseScript: async (text) => text,
+        },
+      });
+      assert.equal(transcribeOpts.length, 1);
+      assert.equal(chainCleanups.length, 1);
+      assertChainCleanup(chainCleanups[0], routing);
+    });
+  }
 });

@@ -3,10 +3,17 @@ import { useEffect } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { OnboardingShell } from '@/components/onboarding/OnboardingShell';
 import { AnimatedKeyboardPreview } from '@/components/onboarding/AnimatedKeyboardPreview';
+import { SystemIcon } from '@/components/ui/SystemIcon';
+import { Text } from '@/components/ui/Text';
 
 const WELCOME_VIDEO = require('../../../../assets/onboarding/videos/welcome-setup.mp4');
 const WELCOME_VIDEO_ASPECT_RATIO = 720 / 630;
 const WELCOME_VIDEO_START_DELAY_MS = 500;
+const TRUST_POINTS = [
+  'No selling your data',
+  'No advertising profile',
+  'You control where processing happens',
+];
 
 type ExpoVideoModule = {
   VideoView: React.ComponentType<{
@@ -47,14 +54,22 @@ export function WelcomeStep() {
 
   return (
     <OnboardingShell
-      title="Let's set up OpenWhispr"
-      titleAccent="set up"
+      title="Security-first speech to text"
+      titleAccent="Security-first"
       subtitle="Dictate naturally anywhere on iPhone. Emails, messages, notes and AI chats."
       ctaLabel="Set up"
       onCta={goNext}
     >
-      <View className="flex-1 items-center justify-center">
+      <View className="flex-1 justify-center gap-5">
         <WelcomeIntroVideo />
+        <View className="gap-2">
+          {TRUST_POINTS.map((point) => (
+            <View key={point} className="flex-row items-center gap-2">
+              <SystemIcon name="checkmark" mdName="Check" size={14} color="systemGreen" />
+              <Text className="flex-1 text-[14px] leading-[19px] text-secondaryLabel">{point}</Text>
+            </View>
+          ))}
+        </View>
       </View>
     </OnboardingShell>
   );

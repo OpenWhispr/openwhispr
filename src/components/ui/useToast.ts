@@ -28,7 +28,6 @@ export interface ToastProps {
   secondaryDescription?: string;
   copyCommand?: string;
   technicalDetails?: TechnicalErrorDetailsData;
-  action?: React.ReactNode;
   actions?: ToastActionConfig[];
   presentation?: ToastPresentation;
   variant?: "default" | "destructive" | "success";

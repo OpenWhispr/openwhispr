@@ -2,7 +2,11 @@ import { memo, useCallback, useEffect, useRef, useState, type CSSProperties } fr
 import { useTranslation } from "react-i18next";
 import { Check, Copy, Plus, X } from "../icons";
 import { BrandMarkIcon } from "./BrandMarkIcon";
+import { HelpEvidence } from "../chat/GroundedHelpEvidence";
+import { extractHelpEvidence } from "../chat/helpEvidence";
+import { helpAnswerPlainText } from "../chat/helpEvidenceText";
 import { MarkdownRenderer } from "../ui/MarkdownRenderer";
+import { CodeBlockActions } from "../chat/CodeBlockActions";
 import { TechnicalErrorDetails } from "../ui/TechnicalErrorDetails";
 import { openProviderSettings } from "../../utils/describeProviderError";
 import { Button } from "../ui/button";
@@ -24,7 +28,7 @@ import {
   AGENT_TOOL_NAME_FALLBACK_KEY,
 } from "../../helpers/agentToolPresentation";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
-import type { AgentState, ChatImageAttachment } from "../chat/types";
+import type { AgentState, ChatImageAttachment, Message } from "../chat/types";
 import {
   normalizeAgentSelectionContext,
   type AgentSelectionContext,
@@ -46,7 +50,11 @@ import {
 } from "../../helpers/assistantResponseDelivery";
 import { buildAssistantCommandSendOptions } from "./assistantCommandOptions";
 import { ApprovalCard } from "../chat/ApprovalCard";
+import { SkillApprovalCard, SkillCardSummary } from "../chat/SkillApprovalCard";
+import { readSkillCardRecord } from "../chat/skillCardRecord";
+import { SkillChip } from "../chat/SkillChip";
 import { approvalKey, useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
+import { useSkillApprovalStore } from "../../stores/skillApprovalStore";
 
 export interface AssistantCommand {
   id: number;
@@ -84,10 +92,24 @@ interface AssistantPanelProps {
   onResponseContent: () => void;
   onConversationReset: () => void;
   onSelectionContextChange: (context: AgentSelectionContext | null) => void;
+  /** The conversation's picked skill, kept by the owner because the panel unmounts on close. */
+  skillChoice: AssistantSkillChoice;
+  onSkillChoiceChange: (choice: AssistantSkillChoice) => void;
+  /** The panel's voice command was spoken over another app, so code can be pasted there. */
+  canPasteIntoApp?: boolean;
+}
+
+/** A skill the app picked for a model without tools, and whether the user turned picking off. */
+export interface AssistantSkillChoice {
+  picked: { name: string; displayName: string } | null;
+  pickOff: boolean;
 }
 
 // Avoid reparsing Markdown when only the selection indicator changes.
 const StableAssistantMarkdown = memo(MarkdownRenderer);
+// Module-level, so the markdown keeps the same callback from render to render.
+const pasteCodeBlock = (code: string) => <CodeBlockActions code={code} paste />;
+const copyCodeBlock = (code: string) => <CodeBlockActions code={code} />;
 
 export function AssistantPanel({
   pendingCommand,
@@ -107,8 +129,11 @@ export function AssistantPanel({
   onResponseContent,
   onConversationReset,
   onSelectionContextChange,
+  skillChoice,
+  onSkillChoiceChange,
+  canPasteIntoApp = false,
 }: AssistantPanelProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const { handleMouseDown, handleMouseUp } = useWindowDrag();
   const voiceAgentKey = useSettingsStore((state) => state.voiceAgentKey);
@@ -123,6 +148,7 @@ export function AssistantPanel({
     // Spoken commands answer on the Voice Assistant scope, not the Chat one.
     inferenceScope: "dictationAgent",
     allowConnectors: true,
+    skillsEnabled: true,
     onStreamComplete: (_assistantId, content, toolCalls) => {
       void persistence.saveAssistantMessage(content, toolCalls);
     },
@@ -138,6 +164,18 @@ export function AssistantPanel({
   );
 
   const [submissionInFlight, setSubmissionInFlight] = useState(false);
+  // A skill the app picked for a model without tools; later sends keep it until it's removed,
+  // and then nothing else is picked in this conversation.
+  const { picked: pickedSkill, pickOff: skillPickOff } = skillChoice;
+  const skillSendOptions = useCallback(
+    () => ({
+      attachedSkill: pickedSkill ? { name: pickedSkill.name } : undefined,
+      allowSkillPick: !skillPickOff,
+      onSkillPicked: (picked: { name: string; displayName: string }) =>
+        onSkillChoiceChange({ picked, pickOff: skillPickOff }),
+    }),
+    [pickedSkill, skillPickOff, onSkillChoiceChange]
+  );
   const sendMessage = useChatMessageSender({
     conversationId: persistence.conversationId,
     persistence,
@@ -149,14 +187,35 @@ export function AssistantPanel({
     .reverse()
     .find((message) => message.role === "assistant");
   const responseContent = latestAssistantMessage?.content ?? "";
-  const {
-    copied,
-    copy: handleCopy,
-    copyText,
-    confirmCopied,
-  } = useCopyFeedback(responseContent, {
+  // A follow-up keeps the previous answer, and its help sources, on screen
+  // until the new answer has content.
+  const displayedMessageRef = useRef<Message | undefined>(undefined);
+  if (responseContent) displayedMessageRef.current = latestAssistantMessage;
+  const displayedMessage = displayedMessageRef.current;
+  const displayedResponse = displayedMessage?.content ?? "";
+  const helpEvidence = extractHelpEvidence(displayedMessage?.toolCalls);
+  // Keyed by the answer itself, which is what auto-copy confirms; explicit
+  // Copy adds the help sources to what it writes.
+  const { copied, copyText, confirmCopied } = useCopyFeedback(responseContent, {
     resetMs: MANUAL_COPY_FEEDBACK_MS,
   });
+  const handleCopy = useCallback(async () => {
+    const responseCopyText = helpAnswerPlainText(
+      displayedResponse,
+      helpEvidence,
+      t,
+      i18n?.resolvedLanguage
+    );
+    if (await copyText(responseCopyText.trim())) confirmCopied(responseContent);
+  }, [
+    copyText,
+    confirmCopied,
+    displayedResponse,
+    helpEvidence,
+    t,
+    i18n?.resolvedLanguage,
+    responseContent,
+  ]);
 
   useEffect(() => {
     onConversationIdChange(persistence.conversationId);
@@ -213,7 +272,7 @@ export function AssistantPanel({
       setSelectedContext(null);
       onSelectionContextChange(null);
     }
-    void sendMessage(pendingCommand.text, sendOptions)
+    void sendMessage(pendingCommand.text, { ...sendOptions, ...skillSendOptions() })
       .then((sent) => {
         if (sent) {
           onCommandConsumed(commandId);
@@ -253,19 +312,31 @@ export function AssistantPanel({
     onResponseContent,
     confirmCopied,
     sendMessage,
+    skillSendOptions,
     setMessages,
     t,
   ]);
 
   const approvalEntries = useConnectorApprovalStore((state) => state.entries);
-  const panelApprovals = latestAssistantMessage
-    ? (latestAssistantMessage.toolCalls ?? [])
-        .map((toolCall) => approvalEntries[approvalKey(latestAssistantMessage.id, toolCall.id)])
-        .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
+  const skillApprovalEntries = useSkillApprovalStore((state) => state.entries);
+  const latestToolKeys = latestAssistantMessage
+    ? (latestAssistantMessage.toolCalls ?? []).map((toolCall) =>
+        approvalKey(latestAssistantMessage.id, toolCall.id)
+      )
     : [];
-  const approvalAwaitingUser = panelApprovals.some(
-    (entry) => entry.state === "pending" || entry.state === "committing"
-  );
+  const panelApprovals = latestToolKeys.flatMap((key) => approvalEntries[key] ?? []);
+  const panelSkillApprovals = latestToolKeys.flatMap((key) => skillApprovalEntries[key] ?? []);
+  const savedSkillCards = latestAssistantMessage
+    ? (latestAssistantMessage.toolCalls ?? []).flatMap((toolCall) => {
+        const key = approvalKey(latestAssistantMessage.id, toolCall.id);
+        if (skillApprovalEntries[key]) return [];
+        const record = readSkillCardRecord(toolCall);
+        return record ? [{ key, record }] : [];
+      })
+    : [];
+  const approvalAwaitingUser =
+    panelApprovals.some((entry) => entry.state === "pending" || entry.state === "committing") ||
+    panelSkillApprovals.some((entry) => entry.state === "pending" || entry.state === "saving");
   const isToolExecuting = Boolean(streaming.activeToolName) && !approvalAwaitingUser;
   const isBusy = resolveAssistantPanelBusy({
     agentState: streaming.agentState,
@@ -291,9 +362,6 @@ export function AssistantPanel({
     return () => onBusyChange(false);
   }, [isBusy, onBusyChange]);
 
-  const displayedResponseRef = useRef("");
-  if (responseContent) displayedResponseRef.current = responseContent;
-  const displayedResponse = responseContent || displayedResponseRef.current;
   // Keep the previous response ineligible throughout a follow-up request. Audio
   // processing can return voiceState to idle one render before the chat stream
   // reports busy; without this latch, the old response briefly restores the
@@ -319,7 +387,7 @@ export function AssistantPanel({
     persistence.handleNewChat();
     onConversationIdChange(null);
     clearSelectedContext();
-    displayedResponseRef.current = "";
+    displayedMessageRef.current = undefined;
     onConversationReset();
   }, [
     clearSelectedContext,
@@ -335,10 +403,20 @@ export function AssistantPanel({
       if (!historyReady) return;
       const context = selectedContext;
       if (context) clearSelectedContext();
-      void sendMessage(text, context ? { selectedContext: context } : undefined);
+      void sendMessage(text, {
+        ...(context && { selectedContext: context }),
+        ...skillSendOptions(),
+      });
     },
-    [clearSelectedContext, historyReady, selectedContext, sendMessage]
+    [clearSelectedContext, historyReady, selectedContext, sendMessage, skillSendOptions]
   );
+
+  const composerAreaRef = useRef<HTMLDivElement | null>(null);
+  const removePickedSkill = useCallback(() => {
+    onSkillChoiceChange({ picked: null, pickOff: true });
+    // The × is gone with the chip, so the cursor goes back to the composer.
+    composerAreaRef.current?.querySelector("textarea")?.focus();
+  }, [onSkillChoiceChange]);
 
   const showEmptyState =
     historyReady &&
@@ -497,7 +575,10 @@ export function AssistantPanel({
         </div>
       </header>
 
-      <div className="relative mx-4 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border/40 bg-surface-1 shadow-inner">
+      <div
+        ref={composerAreaRef}
+        className="relative mx-4 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border/40 bg-surface-1 shadow-inner"
+      >
         <main
           data-panel-scroll-region
           className="agent-chat-scroll min-h-0 flex-1 overflow-y-auto px-5 py-4"
@@ -517,6 +598,12 @@ export function AssistantPanel({
                 >
                   <StableAssistantMarkdown
                     content={displayedResponse}
+                    // A block still streaming may be cut short, or become several lines.
+                    codeBlockActions={
+                      canPasteIntoApp && !latestAssistantMessage?.isStreaming
+                        ? pasteCodeBlock
+                        : copyCodeBlock
+                    }
                     className="text-[15px] leading-relaxed text-foreground selection:bg-agent-brand/35 selection:text-foreground [&_p]:text-[15px] [&_li]:text-[15px]"
                   />
                   {latestAssistantMessage?.isStreaming && (
@@ -526,6 +613,7 @@ export function AssistantPanel({
                     />
                   )}
                 </div>
+                {helpEvidence && <HelpEvidence evidence={helpEvidence} />}
                 {/* Outside responseSelectionRootRef: a drag-select + copy over the
                     response must never pick up these affordances. */}
                 {latestAssistantMessage?.error?.settingsTarget && (
@@ -546,6 +634,12 @@ export function AssistantPanel({
             ) : null}
             {panelApprovals.map((entry) => (
               <ApprovalCard key={entry.key} entry={entry} />
+            ))}
+            {panelSkillApprovals.map((entry) => (
+              <SkillApprovalCard key={entry.key} entry={entry} />
+            ))}
+            {savedSkillCards.map(({ key, record }) => (
+              <SkillCardSummary key={key} record={record} />
             ))}
             {thinking && (
               <div role="status">
@@ -572,6 +666,15 @@ export function AssistantPanel({
           }
           autoFocus={historyReady && open && messages.length === 0}
           className="px-3 pb-3"
+          leadingRow={
+            pickedSkill && (
+              <SkillChip
+                key={pickedSkill.name}
+                name={pickedSkill.displayName}
+                onRemove={removePickedSkill}
+              />
+            )
+          }
         />
 
         {showContentFlourish && (

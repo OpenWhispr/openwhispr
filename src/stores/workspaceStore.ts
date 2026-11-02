@@ -4,6 +4,7 @@ import { WorkspacesService } from "../services/WorkspacesService";
 import logger from "../utils/logger";
 import { usePolicyStore } from "./policyStore";
 import { useEnterpriseIdentityStore } from "./enterpriseIdentityStore";
+import { defaultActiveWorkspaceId } from "../lib/workspaceSwitcher";
 
 interface WorkspaceState {
   workspaces: Workspace[];
@@ -14,8 +15,17 @@ interface WorkspaceState {
   members: WorkspaceMember[];
 
   setActiveWorkspaceId: (id: string | null) => void;
+  /**
+   * Drops a workspace the user just left or deleted, so a failed refresh can't show it again, and
+   * moves the active workspace off it.
+   */
+  forgetWorkspace: (id: string) => void;
   resetForAccountChange: () => void;
-  refresh: () => Promise<void>;
+  /**
+   * Joins the request in flight, if any. `fresh` is for callers that just changed the list on the
+   * server: an answer to a request sent before that change is dropped, and a new one is sent.
+   */
+  refresh: (options?: { fresh?: boolean }) => Promise<void>;
   createWorkspace: (name: string) => Promise<Workspace>;
   refreshMembers: (workspaceId: string) => Promise<void>;
 }
@@ -23,7 +33,10 @@ interface WorkspaceState {
 // Shared by every window of this origin; the dictation window mirrors it (lib/accountScopeMirror).
 export const ACTIVE_WORKSPACE_KEY = "activeWorkspaceId";
 
-function readActiveWorkspaceId(): string | null {
+// The workspace every window uses right now. A window's store follows it
+// through storage events, which arrive a task later; work that must not run for
+// a workspace another window just left reads this instead.
+export function readActiveWorkspaceId(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem(ACTIVE_WORKSPACE_KEY);
 }
@@ -34,7 +47,88 @@ function writeActiveWorkspaceId(id: string | null): void {
   else localStorage.removeItem(ACTIVE_WORKSPACE_KEY);
 }
 
+// Last successful workspace list, shown when a signed-in session can't load the list (the API
+// is unreachable or the request fails). It is only read for the account that wrote it, and only
+// while it is recent: the server still decides every action, but a list this old is likely wrong.
+export const WORKSPACE_LIST_CACHE_KEY = "workspaceListCache";
+const WORKSPACE_LIST_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
+function writeWorkspaceListCache(accountId: string | null, workspaces: Workspace[]): void {
+  if (typeof window === "undefined" || !accountId) return;
+  try {
+    localStorage.setItem(
+      WORKSPACE_LIST_CACHE_KEY,
+      JSON.stringify({ accountId, fetchedAt: Date.now(), workspaces })
+    );
+  } catch {
+    // Storage can be full or blocked; the cache is only a convenience.
+  }
+}
+
+function readWorkspaceListCache(accountId: string | null): Workspace[] | null {
+  if (typeof window === "undefined" || !accountId) return null;
+  try {
+    const raw = localStorage.getItem(WORKSPACE_LIST_CACHE_KEY);
+    if (!raw) return null;
+    const cached: unknown = JSON.parse(raw);
+    if (!cached || typeof cached !== "object") return null;
+    const {
+      accountId: cachedAccountId,
+      fetchedAt,
+      workspaces,
+    } = cached as {
+      accountId?: unknown;
+      fetchedAt?: unknown;
+      workspaces?: unknown;
+    };
+    if (cachedAccountId !== accountId || !Array.isArray(workspaces)) return null;
+    if (typeof fetchedAt !== "number" || Date.now() - fetchedAt > WORKSPACE_LIST_CACHE_MAX_AGE_MS) {
+      return null;
+    }
+    // A malformed entry would throw in later `.find(w => w.id …)` calls.
+    const wellFormed = workspaces.every(
+      (entry) => entry && typeof entry === "object" && typeof entry.id === "string"
+    );
+    return wellFormed ? (workspaces as Workspace[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+// Keeps the entry's age: pruning one workspace is not a fresh read of the list.
+function pruneWorkspaceListCache(accountId: string | null, workspaceId: string): void {
+  const cached = readWorkspaceListCache(accountId);
+  if (!cached || !cached.some((w) => w.id === workspaceId)) return;
+  try {
+    const { fetchedAt } = JSON.parse(localStorage.getItem(WORKSPACE_LIST_CACHE_KEY) ?? "{}") as {
+      fetchedAt?: number;
+    };
+    localStorage.setItem(
+      WORKSPACE_LIST_CACHE_KEY,
+      JSON.stringify({
+        accountId,
+        fetchedAt,
+        workspaces: cached.filter((w) => w.id !== workspaceId),
+      })
+    );
+  } catch {
+    // The cache is only a convenience; a stale entry ages out on its own.
+  }
+}
+
+function clearWorkspaceListCache(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(WORKSPACE_LIST_CACHE_KEY);
+  } catch {
+    // Nothing to clear if storage is unreachable.
+  }
+}
+
 let refreshPromise: Promise<void> | null = null;
+// Bumped by a fresh refresh; a request sent under an older epoch answers for a list that changed.
+let listEpoch = 0;
+let refreshPromiseEpoch = 0;
 let membersRequestSeq = 0;
 let accountGeneration = 0;
 
@@ -49,17 +143,14 @@ export function refreshManagedEnterpriseIdentity(
   workspaceId: string | null = useWorkspaceStore.getState().activeWorkspaceId
 ): void {
   const enterprise = useEnterpriseIdentityStore.getState();
+  const clearOptions = accountId ? { next: { accountId, workspaceId } } : undefined;
   if (!workspaceId || !accountId || authGeneration == null) {
-    enterprise.clear();
+    enterprise.clear(clearOptions);
     return;
   }
-  if (
-    enterprise.workspaceId !== workspaceId ||
-    enterprise.accountId !== accountId ||
-    enterprise.authGeneration !== authGeneration
-  ) {
-    enterprise.clear();
-  }
+  // refresh() drops the previous identity's config itself. clear() would also
+  // delete main's disk cache, which is keyed by credential, account and
+  // workspace, so the new identity could never fall back to it offline.
   void enterprise.refresh(accountId, workspaceId, authGeneration);
 }
 
@@ -85,6 +176,16 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     refreshForWorkspace(id);
   },
 
+  forgetWorkspace: (id) => {
+    const workspaces = get().workspaces.filter((w) => w.id !== id);
+    set({ workspaces });
+    pruneWorkspaceListCache(usePolicyStore.getState().accountId, id);
+    // Chosen now, not by the refresh that follows: a failed refresh keeps the old active id.
+    if (get().activeWorkspaceId === id) {
+      get().setActiveWorkspaceId(defaultActiveWorkspaceId(workspaces));
+    }
+  },
+
   resetForAccountChange: () => {
     accountGeneration += 1;
     membersRequestSeq += 1;
@@ -92,6 +193,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     // old request prevents its result/finally block from touching new state.
     refreshPromise = null;
     writeActiveWorkspaceId(null);
+    clearWorkspaceListCache();
     useEnterpriseIdentityStore.getState().clear();
     set({
       workspaces: [],
@@ -103,44 +205,61 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     });
   },
 
-  refresh: () => {
-    if (refreshPromise) return refreshPromise;
+  refresh: ({ fresh = false } = {}) => {
+    if (fresh) listEpoch += 1;
+    if (refreshPromise && refreshPromiseEpoch === listEpoch) return refreshPromise;
     const generation = accountGeneration;
+    const epoch = listEpoch;
+    const superseded = (): boolean => generation !== accountGeneration || epoch !== listEpoch;
     set({ loading: true });
     let request!: Promise<void>;
     request = (async () => {
       try {
         const workspaces = await WorkspacesService.list();
-        if (generation !== accountGeneration) return;
+        if (superseded()) return;
         const activeId = get().activeWorkspaceId;
         const stillValid = activeId && workspaces.some((w) => w.id === activeId);
-        const resolvedActiveId = stillValid
-          ? activeId
-          : workspaces.length === 1
-            ? workspaces[0].id
-            : null;
+        const resolvedActiveId = stillValid ? activeId : defaultActiveWorkspaceId(workspaces);
+        const activeChanged = resolvedActiveId !== activeId;
+        if (activeChanged) membersRequestSeq++;
+        // Written before the state changes, as setActiveWorkspaceId does: the
+        // subscribers publish for the workspace localStorage names.
+        if (activeChanged) writeActiveWorkspaceId(resolvedActiveId);
         set({
           workspaces,
           loaded: true,
           loading: false,
           error: false,
           activeWorkspaceId: resolvedActiveId,
+          ...(activeChanged ? { members: [] } : {}),
         });
-        if (resolvedActiveId !== activeId) writeActiveWorkspaceId(resolvedActiveId);
+        writeWorkspaceListCache(usePolicyStore.getState().accountId, workspaces);
         refreshForWorkspace(resolvedActiveId);
       } catch (error) {
-        if (generation !== accountGeneration) return;
+        if (superseded()) return;
         logger.error(
           "Failed to load workspaces",
           { error: (error as Error).message },
           "workspaces"
         );
-        set({ loading: false, loaded: true, error: true });
+        // Nothing in memory: show the last list this account saw. `error` stays true so the
+        // reconnect retry replaces it with the server's answer and the UI marks it out of date.
+        const cached =
+          get().workspaces.length === 0
+            ? readWorkspaceListCache(usePolicyStore.getState().accountId)
+            : null;
+        set({
+          ...(cached ? { workspaces: cached } : {}),
+          loading: false,
+          loaded: true,
+          error: true,
+        });
       } finally {
         if (refreshPromise === request) refreshPromise = null;
       }
     })();
     refreshPromise = request;
+    refreshPromiseEpoch = epoch;
     return request;
   },
 
@@ -149,6 +268,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const workspace = await WorkspacesService.create(name);
     if (generation === accountGeneration) {
       set((s) => ({ workspaces: [...s.workspaces, workspace] }));
+      // A list request sent before the create would answer without it and drop it again.
+      if (refreshPromise) void get().refresh({ fresh: true });
     }
     return workspace;
   },
@@ -170,3 +291,21 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
   },
 }));
+
+// Another window switched, auto-selected or cleared the workspace: follow it,
+// or this window keeps dictating, syncing and publishing shared words for the
+// old one. Nothing is written back, and the managed enterprise identity is
+// left to the window's own refresh (the dictation window re-resolves it in
+// accountScopeMirror on this same event).
+export function handleActiveWorkspaceStorage(event: StorageEvent): void {
+  if (event.key !== ACTIVE_WORKSPACE_KEY) return;
+  const id = event.newValue;
+  if (id === useWorkspaceStore.getState().activeWorkspaceId) return;
+  // The old workspace's roster must not land under the new one.
+  membersRequestSeq++;
+  useWorkspaceStore.setState({ activeWorkspaceId: id, members: [] });
+}
+
+if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+  window.addEventListener("storage", handleActiveWorkspaceStorage);
+}

@@ -33,14 +33,16 @@ test("all configured scopes migrate offline once, including upgrades with both o
     assert.equal(storage.getItem(storeKeys.model), glm.id);
   }
   assert.equal(storage.getItem("_retiredTinfoilModelsMigrated3"), "1");
-  const { consumeTinfoilModelSwitches } = await vite.ssrLoadModule(
-    "/stores/tinfoilModelSwitchStore.ts"
+  const { consumeRetiredModelSwitches } = await vite.ssrLoadModule(
+    "/stores/retiredModelSwitchStore.ts"
   );
-  assert.deepEqual(consumeTinfoilModelSwitches(), [{ from: flash.name, to: glm.name }]);
+  assert.deepEqual(consumeRetiredModelSwitches(), [
+    { provider: "tinfoil", from: flash.name, to: glm.name },
+  ]);
   const restart = await createRendererServer(t);
   await restart.ssrLoadModule("/stores/settingsStore.ts");
-  const notice = await restart.ssrLoadModule("/stores/tinfoilModelSwitchStore.ts");
-  assert.deepEqual(notice.consumeTinfoilModelSwitches(), []);
+  const notice = await restart.ssrLoadModule("/stores/retiredModelSwitchStore.ts");
+  assert.deepEqual(notice.consumeRetiredModelSwitches(), []);
 });
 
 for (const cachedModels of [[flash], [other, flash], [other, flash, glm]]) {
@@ -86,8 +88,10 @@ test("live refresh removes Flash and normalizes a selection restored after start
     [other.id, glm.id]
   );
   assert.equal(settings.getSettings().cleanupModel, glm.id);
-  const notice = await vite.ssrLoadModule("/stores/tinfoilModelSwitchStore.ts");
-  assert.deepEqual(notice.consumeTinfoilModelSwitches(), [{ from: flash.name, to: glm.name }]);
+  const notice = await vite.ssrLoadModule("/stores/retiredModelSwitchStore.ts");
+  assert.deepEqual(notice.consumeRetiredModelSwitches(), [
+    { provider: "tinfoil", from: flash.name, to: glm.name },
+  ]);
 });
 
 for (const response of [null, [], [flash], "network-error"]) {

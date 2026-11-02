@@ -1,3 +1,4 @@
+import { EnterpriseAudioSettings } from "./settings/EnterpriseAudioSettings";
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
@@ -43,6 +44,7 @@ import { AUTH_URL, signOut } from "../lib/auth";
 import { deleteAccount } from "../lib/accountDeletionRequest";
 import { executeAccountDeletion } from "../lib/accountDeletionFlow";
 import { getValidatedAuthGeneration } from "../lib/authRequestContext";
+import { checkoutErrorDescriptionKey } from "../lib/billingPortalError";
 import { useBillingPortal } from "../hooks/useBillingPortal";
 import MicPermissionWarning from "./ui/MicPermissionWarning";
 import MicrophoneSettings from "./ui/MicrophoneSettings";
@@ -64,6 +66,8 @@ import {
 import { Alert, AlertTitle, AlertDescription } from "./ui/alert";
 import { useSettings } from "../hooks/useSettings";
 import { useDialogs } from "../hooks/useDialogs";
+import { useSignOut } from "../hooks/useSignOut";
+import { useAccountPlan } from "../hooks/useAccountPlan";
 import { useInsightsSyncOptIn } from "../hooks/useInsightsSyncOptIn";
 import { useLeaderboardParticipation } from "../hooks/useLeaderboardParticipation";
 import { useWhisper } from "../hooks/useWhisper";
@@ -108,9 +112,15 @@ import type {
   InferenceMode,
 } from "../types/electron";
 import logger from "../utils/logger";
-import { SettingsRow, InferenceModeSelector } from "./ui/SettingsSection";
+import {
+  SettingsRow,
+  SettingsPanel,
+  SettingsPanelRow,
+  InferenceModeSelector,
+} from "./ui/SettingsSection";
 import type { InferenceModeOption } from "./ui/SettingsSection";
 import { useSettingsLayout } from "./ui/useSettingsLayout";
+import { TabPanel } from "./ui/TabPanel";
 import { useUsage } from "../hooks/useUsage";
 import { cn } from "./lib/utils";
 import { GRADIENT_CIRCLE } from "./ui/gradientCircle";
@@ -131,8 +141,7 @@ import {
   type HotkeyRegistrationResult,
 } from "../stores/settingsStore";
 import { useWorkspaceStore } from "../stores/workspaceStore";
-import { highestPlan } from "../lib/usageStore";
-import { decideProPlanCardCta } from "../lib/upsell";
+import { decideProPlanCardCta, storeSubscriptionsUrl } from "../lib/upsell";
 import {
   canChangeCloudBackupPreference,
   effectiveAudioRetentionDays,
@@ -145,36 +154,32 @@ import {
 } from "../stores/policyRules";
 import { usePolicyModeOptions, usePolicySnapshot } from "../hooks/usePolicy";
 import { usePolicyStore } from "../stores/policyStore";
-import { stopRecording } from "../stores/meetingRecordingStore";
 import { requestSignIn } from "../utils/requestSignIn";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
-import WorkspaceSection from "./settings/WorkspaceSection";
+import WorkspaceGeneralSection from "./settings/WorkspaceGeneralSection";
+import WorkspacePeopleSection from "./settings/WorkspacePeopleSection";
+import WorkspaceDeveloperSection from "./settings/WorkspaceDeveloperSection";
+import type { SettingsSectionType } from "../lib/settingsNav";
 import { enterpriseTileCta, type EnterpriseTileCta } from "../lib/workspaceBilling";
 import WorkspaceBillingOverview from "./settings/WorkspaceBillingOverview";
 import EnterpriseCheckoutDialog from "./settings/EnterpriseCheckoutDialog";
 import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
 import ProfileSection from "./settings/ProfileSection";
+import ToneStyleSection from "./settings/ToneStyleSection";
 import { formatAmount } from "../utils/formatAmount";
 import { enterpriseProviderName, getTranscriptionProvider } from "../models/ModelRegistry";
 import { useManagedScopeResolution } from "../stores/enterpriseIdentityStore";
 import { supportsLiveTranscriptionPreview } from "../utils/transcriptionPreview";
 
-export type SettingsSectionType =
-  | "account"
-  | "plansBilling"
-  | "workspace"
-  | "general"
-  | "hotkeys"
-  | "speechToText"
-  | "llms"
-  | "privacyData"
-  | "system";
+export type { SettingsSectionType };
 
 interface SettingsPageProps {
   activeSection?: SettingsSectionType;
-  onNavigateToSection?: (section: SettingsSectionType) => void;
+  onNavigateToSection?: (section: SettingsSectionType, subTab?: string) => void;
   /** When a legacy section ID was used (e.g. `meetings`), land on the matching sub-tab. */
   initialSubTab?: string;
+  /** Opens the workspace picker in the Settings nav (owned by SettingsModal). */
+  onChooseWorkspace?: () => void;
 }
 
 const UI_LANGUAGE_OPTIONS: import("./ui/LanguageSelector").LanguageOption[] = [
@@ -194,39 +199,9 @@ const UI_LANGUAGE_OPTIONS: import("./ui/LanguageSelector").LanguageOption[] = [
 const RETENTION_DAY_OPTIONS = [1, 7, 14, 30, 60, 90];
 
 const RETENTION_SELECT_CLASS =
-  "h-7 rounded border border-border/70 bg-surface-1/80 px-2.5 text-xs font-medium text-foreground shadow-sm backdrop-blur-sm hover:border-border-hover hover:bg-surface-2/70 focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 transition-colors duration-200";
+  "h-7 rounded border border-border/70 bg-surface-1/80 px-2.5 text-xs font-medium text-foreground shadow-sm hover:border-border-hover hover:bg-surface-2/70 focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 transition-colors duration-200";
 
 const noop = () => {};
-
-function SettingsPanel({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div
-      className={`rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 backdrop-blur-sm divide-y divide-border/60 dark:divide-border-subtle/50 ${className}`}
-    >
-      {children}
-    </div>
-  );
-}
-
-function SettingsPanelRow({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  const { isCompact } = useSettingsLayout();
-
-  return (
-    <div className={`${isCompact ? "px-3 py-2.5" : "px-4 py-3"} ${className}`}>{children}</div>
-  );
-}
 
 function SectionHeader({
   title,
@@ -575,7 +550,7 @@ function TranscriptionSection({
         description: t("settingsPage.transcription.modes.openwhisprDesc"),
         icon: <Cloud className="w-4 h-4" />,
         disabled: !isSignedIn,
-        badge: !isSignedIn ? t("common.freeAccountRequired") : undefined,
+        signInRequired: !isSignedIn,
       },
       {
         id: "providers",
@@ -619,12 +594,19 @@ function TranscriptionSection({
       requestSignIn();
       return;
     }
-    if (mode === effectiveTranscriptionMode) return;
-    setTranscriptionMode(mode);
-    setUseLocalWhisper(mode === "local");
-    updateTranscriptionSettings({ useLocalWhisper: mode === "local" });
-    setCloudTranscriptionMode(mode === "openwhispr" ? "openwhispr" : "byok");
-    if (mode === "enterprise") setEnterpriseTranscriptionSetupMode("managed");
+    // Only the explicit enterprise controls change the shared setup mode. Managed setup
+    // outranks the personal mode, which stays as the user left it so "Use personal
+    // setup" returns to it.
+    if (mode === "enterprise") {
+      if (enterpriseTranscriptionSetupMode === "managed") return;
+      setEnterpriseTranscriptionSetupMode("managed");
+    } else {
+      if (mode === effectiveTranscriptionMode) return;
+      setTranscriptionMode(mode);
+      setUseLocalWhisper(mode === "local");
+      updateTranscriptionSettings({ useLocalWhisper: mode === "local" });
+      setCloudTranscriptionMode(mode === "openwhispr" ? "openwhispr" : "byok");
+    }
 
     const toastKey = {
       openwhispr: "switchedCloud",
@@ -770,6 +752,7 @@ function TranscriptionSection({
     <div className="space-y-4">
       {errorCard}
       {managedCard}
+      <EnterpriseAudioSettings />
       {!errorCard && !managedCard && (
         <>
           {enterpriseTranscriptionSetupMode === "manual" && managedAvailable.kind === "managed" && (
@@ -948,10 +931,6 @@ function VADLabelWithInfo({ label, description }: { label: string; description: 
       </Popover>
     </div>
   );
-}
-
-function TabPanel({ active, children }: { active: boolean; children: React.ReactNode }) {
-  return <div className={active ? undefined : "hidden"}>{children}</div>;
 }
 
 // "Gabriel Stein" → "GS"; single names fall back to their first letter.
@@ -1168,6 +1147,7 @@ export default function SettingsPage({
   activeSection = "general",
   onNavigateToSection,
   initialSubTab,
+  onChooseWorkspace,
 }: SettingsPageProps) {
   const { isCompact } = useSettingsLayout();
   const {
@@ -1400,6 +1380,7 @@ export default function SettingsPage({
     hasYdotool: boolean;
     hasYdotoold: boolean;
     hasWtype: boolean;
+    hasWlCopy: boolean;
     daemonRunning: boolean;
     hasService: boolean;
     hasUinput: boolean;
@@ -1408,8 +1389,7 @@ export default function SettingsPage({
     isKde: boolean;
     isWlroots: boolean;
     isCosmic: boolean;
-    hasXclip: boolean;
-    hasXsel: boolean;
+    requiresWlCopy: boolean;
     isNixOS: boolean;
   } | null>(null);
   const [ydotoolGuideKey, setYdotoolGuideKey] = useState<string | null>(null);
@@ -1438,23 +1418,8 @@ export default function SettingsPage({
   const enterpriseCta: EnterpriseTileCta = billingWorkspacesLoaded
     ? enterpriseTileCta(billingWorkspaces, activeWorkspaceId)
     : { action: "contactSales", ownerName: null };
-  const coveringWorkspaces = billingWorkspaces.filter((workspace) =>
-    usage?.entitledWorkspaceIds?.includes(workspace.id)
-  );
-  const coveringWorkspaceNames = coveringWorkspaces.map((workspace) => workspace.name);
-  // Reads the usage payload, not the workspace store, so the upgrade affordances
-  // stay hidden across the window where the store is still loading.
-  const isWorkspaceCovered =
-    !usage?.isPersonallySubscribed && (usage?.entitledWorkspaceIds?.length ?? 0) > 0;
-  // Null until the store resolves, so the label waits rather than guessing a tier.
-  const coveringPlanLabel =
-    isWorkspaceCovered && coveringWorkspaces.length
-      ? t(
-          `settingsPage.workspace.billing.planLabel.${highestPlan(
-            coveringWorkspaces.map((workspace) => workspace.plan)
-          )}`
-        )
-      : null;
+  const { accountPlan, isWorkspaceCovered, coveringWorkspaceNames, coveringPlanLabel, planLabel } =
+    useAccountPlan(usage);
   const hasShownApproachingToast = useRef(false);
   useEffect(() => {
     if (usage?.isApproachingLimit && !hasShownApproachingToast.current) {
@@ -1809,7 +1774,7 @@ export default function SettingsPage({
     });
   }, [isRemovingModels, cachePathHint, showConfirmDialog, showAlertDialog, t]);
 
-  const { isSignedIn, isLoaded, user, refetch } = useAuth();
+  const { isSignedIn, isLoaded, user, refetch, isOfflineAccount } = useAuth();
   const {
     canToggleSync: canToggleInsightsSync,
     disableInsightsSync,
@@ -1876,11 +1841,21 @@ export default function SettingsPage({
     isSignedIn,
     planStateKnown,
     isPersonallySubscribed: usage?.isPersonallySubscribed ?? false,
+    isStoreBilled: Boolean(usage?.storeBilling),
     plan: usage?.plan ?? "free",
     isTrial: usage?.isTrial ?? false,
     isWorkspaceCovered,
   });
-  const [isSigningOut, setIsSigningOut] = useState(false);
+  const storeBilling = usage?.storeBilling ?? null;
+  const storeUrl = storeBilling?.store ? storeSubscriptionsUrl(storeBilling.store) : null;
+  const periodEndDate = usage?.currentPeriodEnd
+    ? new Date(usage.currentPeriodEnd).toLocaleDateString(i18n.language, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : null;
+  const { requestSignOut, isSigningOut } = useSignOut({ showConfirmDialog, showAlertDialog });
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [isDeleteAccountDialogOpen, setIsDeleteAccountDialogOpen] = useState(false);
   const [eraseDeviceData, setEraseDeviceData] = useState(false);
@@ -1909,8 +1884,7 @@ export default function SettingsPage({
         if (!preview.success) {
           toast({
             title: t("settingsPage.account.checkout.couldNotOpenTitle"),
-            description:
-              preview.error || t("settingsPage.account.checkout.couldNotOpenDescription"),
+            description: preview.error || t(checkoutErrorDescriptionKey(preview.code)),
           });
           return;
         }
@@ -1944,7 +1918,7 @@ export default function SettingsPage({
     } else {
       toast({
         title: t("settingsPage.account.checkout.couldNotOpenTitle"),
-        description: result.error || t("settingsPage.account.checkout.couldNotOpenDescription"),
+        description: result.error || t(checkoutErrorDescriptionKey(result.code)),
       });
     }
   }, [switchPreview, usage, toast, t]);
@@ -1957,34 +1931,12 @@ export default function SettingsPage({
       if (!result.success) {
         toast({
           title: t("settingsPage.account.checkout.couldNotOpenTitle"),
-          description: t("settingsPage.account.checkout.couldNotOpenDescription"),
+          description: t(checkoutErrorDescriptionKey(result.code)),
         });
       }
     },
     [usage, toast, t]
   );
-
-  const handleSignOut = useCallback(async () => {
-    setIsSigningOut(true);
-    try {
-      // End a live meeting while its note is still in scope: signing out clears
-      // the account scope, and anything said after that could not be saved.
-      await stopRecording();
-      // Clear account-scoped renderer/session state before ending the session.
-      // Workspace-owned rows remain cached behind their membership boundary.
-      await syncService.purgeTeamSpacesForSignOut();
-      await signOut();
-      window.location.reload();
-    } catch (error) {
-      logger.error("Sign out failed", error, "auth");
-      showAlertDialog({
-        title: t("settingsPage.account.signOut.failedTitle"),
-        description: t("settingsPage.account.signOut.failedDescription"),
-      });
-    } finally {
-      setIsSigningOut(false);
-    }
-  }, [showAlertDialog, t]);
 
   const handleDeleteAccount = useCallback(() => {
     setEraseDeviceData(false);
@@ -2209,29 +2161,54 @@ export default function SettingsPage({
             ) : isLoaded && isSignedIn && user ? (
               <>
                 <SectionHeader title={t("settingsPage.account.title")} />
+                <div className="flex items-center gap-3">
+                  <AccountAvatar
+                    image={user.image}
+                    name={user.name || t("settingsPage.account.user")}
+                  />
+                  <div className="min-w-0">
+                    <p dir="auto" className="truncate text-[13px] font-semibold text-foreground">
+                      {user.name || t("settingsPage.account.user")}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      <bdi dir="ltr">{user.email}</bdi>
+                    </p>
+                  </div>
+                </div>
+                {isOfflineAccount && (
+                  <SettingsPanel>
+                    <SettingsPanelRow>
+                      <SettingsRow
+                        label={t("settingsPage.account.offlineAccount.title")}
+                        description={t("settingsPage.account.offlineAccount.description")}
+                      >
+                        <Badge variant="outline">{t("settingsPage.account.offline")}</Badge>
+                      </SettingsRow>
+                    </SettingsPanelRow>
+                  </SettingsPanel>
+                )}
                 <ProfileSection
                   name={user.name || ""}
+                  readOnly={isOfflineAccount}
                   onSessionRefresh={() => {
                     void refetch();
                   }}
                 />
 
-                <SettingsPanel>
-                  <SettingsPanelRow>
-                    <Button
-                      onClick={handleSignOut}
-                      variant="outline"
-                      disabled={isSigningOut}
-                      size="sm"
-                      className="w-full text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/50"
-                    >
-                      <LogOut className="me-1.5 h-3.5 w-3.5" />
-                      {isSigningOut
-                        ? t("settingsPage.account.signOut.signingOut")
-                        : t("settingsPage.account.signOut.signOut")}
-                    </Button>
-                  </SettingsPanelRow>
-                </SettingsPanel>
+                <div className="flex justify-end">
+                  <Button
+                    onClick={requestSignOut}
+                    variant="outline"
+                    disabled={isSigningOut}
+                    size="sm"
+                    className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/50"
+                  >
+                    <LogOut className="me-1.5 h-3.5 w-3.5" />
+                    {isSigningOut
+                      ? t("settingsPage.account.signOut.signingOut")
+                      : t("settingsPage.account.signOut.signOut")}
+                  </Button>
+                </div>
 
                 <SettingsPanel>
                   <SettingsPanelRow>
@@ -2242,7 +2219,7 @@ export default function SettingsPage({
                       <Button
                         onClick={handleDeleteAccount}
                         variant="outline"
-                        disabled={isDeletingAccount}
+                        disabled={isDeletingAccount || isOfflineAccount}
                         size="sm"
                         className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive"
                       >
@@ -2389,58 +2366,46 @@ export default function SettingsPage({
 
                         <SettingsPanelRow>
                           <SettingsRow
-                            label={
-                              usage.isTrial
-                                ? t("settingsPage.account.planLabels.trial")
-                                : usage.isPastDue
-                                  ? t("settingsPage.account.planLabels.free")
-                                  : usage.isPersonallySubscribed
-                                    ? usage.plan === "business"
-                                      ? t("settingsPage.account.planLabels.business")
-                                      : t("settingsPage.account.planLabels.pro")
-                                    : (coveringPlanLabel ??
-                                      t("settingsPage.account.planLabels.free"))
-                            }
+                            label={planLabel ?? t("settingsPage.account.planLabels.free")}
                             description={
-                              usage.isTrial
+                              accountPlan.description === "trial"
                                 ? t("settingsPage.account.planDescriptions.trial", {
                                     days: usage.trialDaysLeft,
                                   })
-                                : usage.isPastDue
+                                : accountPlan.description === "pastDue"
                                   ? t("settingsPage.account.planDescriptions.pastDue", {
                                       used: usage.wordsUsed.toLocaleString(i18n.language),
                                       limit: usage.limit.toLocaleString(i18n.language),
                                     })
-                                  : usage.isPersonallySubscribed
-                                    ? usage.currentPeriodEnd
-                                      ? t("settingsPage.account.planDescriptions.nextBilling", {
-                                          date: new Date(usage.currentPeriodEnd).toLocaleDateString(
-                                            i18n.language,
-                                            { month: "short", day: "numeric", year: "numeric" }
-                                          ),
+                                  : accountPlan.description === "storePaymentIssue"
+                                    ? t("settingsPage.account.planDescriptions.storePaymentIssue")
+                                    : accountPlan.description === "accessUntil"
+                                      ? t("settingsPage.account.planDescriptions.accessUntil", {
+                                          date: periodEndDate,
                                         })
-                                      : t("settingsPage.account.planDescriptions.unlimited")
-                                    : coveringWorkspaceNames.length > 0
-                                      ? t("settingsPage.unifiedBilling.providedBy", {
-                                          workspaces: coveringWorkspaceNames.join(", "),
-                                        })
-                                      : // usage.limit is -1 once subscribed, which the
-                                        // free-usage copy would print as "-1 words".
-                                        isWorkspaceCovered
-                                        ? t("settingsPage.account.planDescriptions.unlimited")
-                                        : t("settingsPage.account.planDescriptions.freeUsage", {
-                                            used: usage.wordsUsed.toLocaleString(i18n.language),
-                                            limit: usage.limit.toLocaleString(i18n.language),
+                                      : accountPlan.description === "nextBilling"
+                                        ? t("settingsPage.account.planDescriptions.nextBilling", {
+                                            date: periodEndDate,
                                           })
+                                        : accountPlan.description === "unlimited"
+                                          ? t("settingsPage.account.planDescriptions.unlimited")
+                                          : accountPlan.description === "providedBy"
+                                            ? t("settingsPage.unifiedBilling.providedBy", {
+                                                workspaces: coveringWorkspaceNames.join(", "),
+                                              })
+                                            : t("settingsPage.account.planDescriptions.freeUsage", {
+                                                used: usage.wordsUsed.toLocaleString(i18n.language),
+                                                limit: usage.limit.toLocaleString(i18n.language),
+                                              })
                             }
                           >
-                            {usage.isTrial ? (
+                            {accountPlan.row === "trial" ? (
                               <Badge variant="info">{t("settingsPage.account.badges.trial")}</Badge>
-                            ) : usage.isPastDue ? (
+                            ) : accountPlan.row === "pastDue" ? (
                               <Badge variant="destructive">
                                 {t("settingsPage.account.badges.pastDue")}
                               </Badge>
-                            ) : usage.isPersonallySubscribed ? (
+                            ) : accountPlan.row === "personal" || accountPlan.row === "store" ? (
                               <Badge variant="success">
                                 {usage.plan === "business"
                                   ? t("settingsPage.account.badges.business")
@@ -2494,12 +2459,15 @@ export default function SettingsPage({
                                   <span>{t("settingsPage.account.rollingWeeklyLimit")}</span>
                                 )}
                               </div>
+                              <p className="text-xs text-muted-foreground">
+                                {t("settingsPage.account.planDescriptions.byokUnlimited")}
+                              </p>
                             </div>
                           </SettingsPanelRow>
                         )}
 
                         <SettingsPanelRow>
-                          {usage.isPastDue ? (
+                          {accountPlan.action === "updatePayment" ? (
                             <Button
                               onClick={() => void openBillingPortal()}
                               disabled={isOpeningBilling}
@@ -2515,7 +2483,22 @@ export default function SettingsPage({
                                 t("settingsPage.account.billing.updatePaymentMethod")
                               )}
                             </Button>
-                          ) : usage.isPersonallySubscribed && !usage.isTrial ? (
+                          ) : accountPlan.action === "manageInStore" && storeUrl ? (
+                            <Button
+                              onClick={() => void window.electronAPI?.openExternal?.(storeUrl)}
+                              variant="outline"
+                              size="sm"
+                              className="w-full"
+                            >
+                              {storeBilling?.store === "play_store"
+                                ? t("settingsPage.account.billing.manageInGooglePlay")
+                                : t("settingsPage.account.billing.manageInAppStore")}
+                            </Button>
+                          ) : accountPlan.action === "storeNote" ? (
+                            <p className="text-xs text-muted-foreground">
+                              {t("settingsPage.account.billing.managedInMobileStore")}
+                            </p>
+                          ) : accountPlan.action === "manageBilling" ? (
                             <Button
                               onClick={() => void openBillingPortal()}
                               variant="outline"
@@ -2527,7 +2510,7 @@ export default function SettingsPage({
                                 ? t("settingsPage.account.billing.opening")
                                 : t("settingsPage.account.billing.manageBilling")}
                             </Button>
-                          ) : isWorkspaceCovered ? null : (
+                          ) : accountPlan.action === "none" ? null : (
                             <Button
                               onClick={async () => {
                                 setCheckoutTier("plan-upgrade");
@@ -2539,9 +2522,7 @@ export default function SettingsPage({
                                 if (!result.success) {
                                   toast({
                                     title: t("settingsPage.account.checkout.couldNotOpenTitle"),
-                                    description: t(
-                                      "settingsPage.account.checkout.couldNotOpenDescription"
-                                    ),
+                                    description: t(checkoutErrorDescriptionKey(result.code)),
                                     variant: "destructive",
                                   });
                                 }
@@ -2569,6 +2550,7 @@ export default function SettingsPage({
                         "rounded-md p-2.5 flex flex-col",
                         planStateKnown &&
                           !usage?.isPersonallySubscribed &&
+                          !storeBilling &&
                           !usage?.isTrial &&
                           !isWorkspaceCovered
                           ? "border-2 border-primary/30 bg-primary/3 dark:border-primary/20 dark:bg-primary/5"
@@ -2631,7 +2613,7 @@ export default function SettingsPage({
                             ? t("settingsPage.account.billing.opening")
                             : t("settingsPage.account.pricing.downgrade")}
                         </Button>
-                      ) : planStateKnown && !isWorkspaceCovered ? (
+                      ) : planStateKnown && !isWorkspaceCovered && !storeBilling ? (
                         <div className="mt-2 text-center">
                           <span className="text-[9px] font-medium text-primary/70">
                             {t("settingsPage.account.pricing.currentPlan")}
@@ -2643,7 +2625,8 @@ export default function SettingsPage({
                     <div
                       className={cn(
                         "rounded-md border-2 p-2.5 flex flex-col",
-                        usage?.isPersonallySubscribed && usage?.plan === "pro"
+                        (usage?.isPersonallySubscribed || (storeBilling && !isWorkspaceCovered)) &&
+                          usage?.plan === "pro"
                           ? "border-primary/40 bg-primary/5 dark:border-primary/30 dark:bg-primary/8"
                           : "border-primary/20 bg-primary/2 dark:border-primary/15 dark:bg-primary/3"
                       )}
@@ -3040,8 +3023,26 @@ export default function SettingsPage({
           </div>
         );
 
-      case "workspace":
-        return <WorkspaceSection initialSubTab={initialSubTab} />;
+      case "workspaceGeneral":
+        return (
+          <WorkspaceGeneralSection
+            onNavigateToSection={onNavigateToSection}
+            onChooseWorkspace={onChooseWorkspace}
+          />
+        );
+
+      case "workspacePeople":
+        return <WorkspacePeopleSection initialSubTab={initialSubTab} />;
+
+      case "workspaceDeveloper":
+        return <WorkspaceDeveloperSection />;
+
+      case "toneStyle":
+        return (
+          <ToneStyleSection
+            onOpenCleanupSettings={() => onNavigateToSection?.("llms", "dictationCleanup")}
+          />
+        );
 
       case "general":
         return (
@@ -3291,7 +3292,7 @@ export default function SettingsPage({
                           e.target.value as "bottom-right" | "center" | "bottom-left"
                         )
                       }
-                      className="h-7 rounded border border-border/70 bg-surface-1/80 px-2.5 text-xs font-medium text-foreground shadow-sm backdrop-blur-sm hover:border-border-hover hover:bg-surface-2/70 focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-1 transition-colors duration-200"
+                      className="h-7 rounded border border-border/70 bg-surface-1/80 px-2.5 text-xs font-medium text-foreground shadow-sm hover:border-border-hover hover:bg-surface-2/70 focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-1 transition-colors duration-200"
                     >
                       <option value="bottom-right">
                         {t("settingsPage.general.floatingIcon.bottomRight")}
@@ -3793,24 +3794,21 @@ EOF`,
                     },
                   ];
 
-                  if (ydotoolStatus.isKde) {
+                  if (ydotoolStatus.requiresWlCopy || ydotoolStatus.isKde) {
                     checks.push({
-                      key: "hasXclip",
-                      label: "xclip",
-                      ok: ydotoolStatus.hasXclip || ydotoolStatus.hasXsel || false,
-                      required: true,
-                      desc: t("settingsPage.general.waylandPaste.xclipDesc", {
-                        defaultValue: "Clipboard tool for KDE Wayland paste (xclip or xsel)",
-                      }),
+                      key: "hasWlCopy",
+                      label: "wl-copy",
+                      ok: ydotoolStatus.hasWlCopy,
+                      required: ydotoolStatus.requiresWlCopy || ydotoolStatus.isKde,
+                      desc: t("settingsPage.general.waylandPaste.wlCopyDesc"),
                       steps: [
                         {
-                          title: t("settingsPage.general.waylandPaste.guide.xclip.step1Title", {
-                            defaultValue: "Install xclip",
-                          }),
-                          cmds: [
-                            { cmd: "sudo dnf install xclip  # Fedora" },
-                            { cmd: "sudo apt install xclip  # Debian/Ubuntu" },
-                          ],
+                          title: t("settingsPage.general.waylandPaste.guide.wlCopy.step1Title"),
+                          cmds: getLinuxPasteInstallCommands(t, "wl-clipboard"),
+                        },
+                        {
+                          title: t("settingsPage.general.waylandPaste.guide.wlCopy.step2Title"),
+                          cmds: [{ cmd: "which wl-copy" }],
                         },
                       ],
                     });
@@ -4619,156 +4617,158 @@ EOF`,
                   </SettingsPanelRow>
                 )}
 
-                <SettingsPanelRow>
-                  <div className="space-y-2.5">
-                    <Button
-                      onClick={async () => {
-                        try {
-                          const result = await checkForUpdates();
-                          if (result && !result.updateAvailable) {
-                            toast({
-                              title: t("settingsPage.general.updates.dialogs.noUpdates.title"),
-                              description: t(
-                                "settingsPage.general.updates.dialogs.noUpdates.description"
-                              ),
-                            });
-                          }
-                        } catch {
-                          showAlertDialog({
-                            title: t("settingsPage.general.updates.dialogs.checkFailed.title"),
-                            description: t(
-                              "settingsPage.general.updates.dialogs.checkFailed.description"
-                            ),
-                          });
-                        }
-                      }}
-                      disabled={
-                        checkingForUpdates ||
-                        updateStatus.isDevelopment ||
-                        !updateStatus.isSupported
-                      }
-                      variant="outline"
-                      className="w-full"
-                      size="sm"
-                    >
-                      <RefreshCw
-                        size={13}
-                        className={`me-1.5 ${checkingForUpdates ? "animate-spin" : ""}`}
-                      />
-                      {checkingForUpdates
-                        ? t("settingsPage.general.updates.checking")
-                        : t("settingsPage.general.updates.checkForUpdates")}
-                    </Button>
-
-                    {isUpdateAvailable && !updateStatus.updateDownloaded && (
-                      <div className="space-y-2">
-                        <Button
-                          onClick={async () => {
-                            try {
-                              await downloadUpdate();
-                            } catch {
-                              showAlertDialog({
-                                title: t(
-                                  "settingsPage.general.updates.dialogs.downloadFailed.title"
-                                ),
-                                description: t(
-                                  "settingsPage.general.updates.dialogs.downloadFailed.description"
-                                ),
-                              });
-                            }
-                          }}
-                          disabled={downloadingUpdate}
-                          variant="success"
-                          className="w-full"
-                          size="sm"
-                        >
-                          <Download
-                            size={13}
-                            className={`me-1.5 ${downloadingUpdate ? "animate-pulse" : ""}`}
-                          />
-                          {downloadingUpdate
-                            ? t("settingsPage.general.updates.downloading", {
-                                progress: Math.round(updateDownloadProgress),
-                              })
-                            : t("settingsPage.general.updates.downloadUpdate", {
-                                version: updateInfo?.version || "",
-                              })}
-                        </Button>
-
-                        {downloadingUpdate && (
-                          <div className="h-1 w-full overflow-hidden rounded-full bg-muted/50">
-                            <div
-                              className="h-full bg-success transition-[width] duration-200 rounded-full"
-                              style={{
-                                width: `${Math.min(100, Math.max(0, updateDownloadProgress))}%`,
-                              }}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {updateStatus.updateDownloaded && (
-                      <Button
-                        onClick={() => {
-                          showConfirmDialog({
-                            title: t("settingsPage.general.updates.dialogs.installUpdate.title"),
-                            description: t(
-                              "settingsPage.general.updates.dialogs.installUpdate.description",
-                              { version: updateInfo?.version || "" }
-                            ),
-                            confirmText: t(
-                              "settingsPage.general.updates.dialogs.installUpdate.confirmText"
-                            ),
-                            onConfirm: async () => {
+                {(isUpdateAvailable ||
+                  updateStatus.updateDownloaded ||
+                  updateInfo?.releaseNotes) && (
+                  <SettingsPanelRow>
+                    <div className="space-y-2.5">
+                      {isUpdateAvailable && !updateStatus.updateDownloaded && (
+                        <div className="space-y-2">
+                          <Button
+                            onClick={async () => {
                               try {
-                                await installUpdateAction();
+                                await downloadUpdate();
                               } catch {
                                 showAlertDialog({
                                   title: t(
-                                    "settingsPage.general.updates.dialogs.installFailed.title"
+                                    "settingsPage.general.updates.dialogs.downloadFailed.title"
                                   ),
                                   description: t(
-                                    "settingsPage.general.updates.dialogs.installFailed.description"
+                                    "settingsPage.general.updates.dialogs.downloadFailed.description"
                                   ),
                                 });
                               }
-                            },
-                          });
-                        }}
-                        disabled={installInitiated}
-                        className="w-full"
-                        size="sm"
-                      >
-                        <RefreshCw
-                          size={14}
-                          className={`me-2 ${installInitiated ? "animate-spin" : ""}`}
-                        />
-                        {installInitiated
-                          ? t("settingsPage.general.updates.restarting")
-                          : t("settingsPage.general.updates.installAndRestart")}
-                      </Button>
-                    )}
-                  </div>
+                            }}
+                            disabled={downloadingUpdate}
+                            variant="success"
+                            className="w-full"
+                            size="sm"
+                          >
+                            <Download
+                              size={13}
+                              className={`me-1.5 ${downloadingUpdate ? "animate-pulse" : ""}`}
+                            />
+                            {downloadingUpdate
+                              ? t("settingsPage.general.updates.downloading", {
+                                  progress: Math.round(updateDownloadProgress),
+                                })
+                              : t("settingsPage.general.updates.downloadUpdate", {
+                                  version: updateInfo?.version || "",
+                                })}
+                          </Button>
 
-                  {updateInfo?.releaseNotes && (
-                    <div className="mt-4 pt-4 border-t border-border/70">
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-                        <BidiInterpolatedText
-                          text={t("settingsPage.general.updates.whatsNew", {
-                            version: BIDI_VALUE_TOKEN,
-                          })}
-                          value={updateInfo.version}
-                        />
-                      </p>
-                      <div
-                        className="text-xs text-muted-foreground [&_ul]:list-disc [&_ul]:ps-4 [&_ul]:space-y-1 [&_ol]:list-decimal [&_ol]:ps-4 [&_ol]:space-y-1 [&_li]:ps-1 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_a]:text-link [&_a]:underline"
-                        dangerouslySetInnerHTML={{ __html: updateInfo.releaseNotes }}
-                      />
+                          {downloadingUpdate && (
+                            <div className="h-1 w-full overflow-hidden rounded-full bg-muted/50">
+                              <div
+                                className="h-full bg-success transition-[width] duration-200 rounded-full"
+                                style={{
+                                  width: `${Math.min(100, Math.max(0, updateDownloadProgress))}%`,
+                                }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {updateStatus.updateDownloaded && (
+                        <Button
+                          onClick={() => {
+                            showConfirmDialog({
+                              title: t("settingsPage.general.updates.dialogs.installUpdate.title"),
+                              description: t(
+                                "settingsPage.general.updates.dialogs.installUpdate.description",
+                                { version: updateInfo?.version || "" }
+                              ),
+                              confirmText: t(
+                                "settingsPage.general.updates.dialogs.installUpdate.confirmText"
+                              ),
+                              onConfirm: async () => {
+                                try {
+                                  await installUpdateAction();
+                                } catch {
+                                  showAlertDialog({
+                                    title: t(
+                                      "settingsPage.general.updates.dialogs.installFailed.title"
+                                    ),
+                                    description: t(
+                                      "settingsPage.general.updates.dialogs.installFailed.description"
+                                    ),
+                                  });
+                                }
+                              },
+                            });
+                          }}
+                          disabled={installInitiated}
+                          className="w-full"
+                          size="sm"
+                        >
+                          <RefreshCw
+                            size={14}
+                            className={`me-2 ${installInitiated ? "animate-spin" : ""}`}
+                          />
+                          {installInitiated
+                            ? t("settingsPage.general.updates.restarting")
+                            : t("settingsPage.general.updates.installAndRestart")}
+                        </Button>
+                      )}
                     </div>
-                  )}
-                </SettingsPanelRow>
+
+                    {updateInfo?.releaseNotes && (
+                      <div className="mt-4 pt-4 border-t border-border/70">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+                          <BidiInterpolatedText
+                            text={t("settingsPage.general.updates.whatsNew", {
+                              version: BIDI_VALUE_TOKEN,
+                            })}
+                            value={updateInfo.version}
+                          />
+                        </p>
+                        <div
+                          className="text-xs text-muted-foreground [&_ul]:list-disc [&_ul]:ps-4 [&_ul]:space-y-1 [&_ol]:list-decimal [&_ol]:ps-4 [&_ol]:space-y-1 [&_li]:ps-1 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_a]:text-link [&_a]:underline"
+                          dangerouslySetInnerHTML={{ __html: updateInfo.releaseNotes }}
+                        />
+                      </div>
+                    )}
+                  </SettingsPanelRow>
+                )}
               </SettingsPanel>
+              <div className="mt-5 flex justify-end">
+                <Button
+                  onClick={async () => {
+                    try {
+                      const result = await checkForUpdates();
+                      if (result && !result.updateAvailable) {
+                        toast({
+                          title: t("settingsPage.general.updates.dialogs.noUpdates.title"),
+                          description: t(
+                            "settingsPage.general.updates.dialogs.noUpdates.description"
+                          ),
+                        });
+                      }
+                    } catch {
+                      showAlertDialog({
+                        title: t("settingsPage.general.updates.dialogs.checkFailed.title"),
+                        description: t(
+                          "settingsPage.general.updates.dialogs.checkFailed.description"
+                        ),
+                      });
+                    }
+                  }}
+                  disabled={
+                    checkingForUpdates || updateStatus.isDevelopment || !updateStatus.isSupported
+                  }
+                  variant="outline"
+                  size="sm"
+                >
+                  <RefreshCw
+                    size={13}
+                    className={`me-1.5 ${checkingForUpdates ? "animate-spin" : ""}`}
+                  />
+                  {checkingForUpdates
+                    ? t("settingsPage.general.updates.checking")
+                    : t("settingsPage.general.updates.checkForUpdates")}
+                </Button>
+              </div>
             </div>
 
             {/* Developer Tools */}

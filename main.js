@@ -2,6 +2,7 @@
 // late — the flag has to come from a relaunch.
 const { XWAYLAND_FLAG, shouldForceXWayland } = require("./src/helpers/xwayland");
 const { createHotkeyRepeatGate } = require("./src/helpers/hotkeyRepeatGate");
+const { shouldDisableGpuCompositing } = require("./src/helpers/linuxGpuCompositing");
 
 if (shouldForceXWayland(process.argv)) {
   const { spawn } = require("child_process");
@@ -108,10 +109,16 @@ if (process.platform === "win32") {
 
 // Fix transparent window flickering on Linux: --enable-transparent-visuals requires
 // the compositor to set up an ARGB visual before any windows are created.
-// --disable-gpu-compositing prevents GPU compositing conflicts with the compositor.
 if (process.platform === "linux") {
   app.commandLine.appendSwitch("gtk-version", "3");
   app.commandLine.appendSwitch("enable-transparent-visuals");
+}
+
+// Linux composites on the GPU except while an NVIDIA driver is loaded (#203). Anyone else whose
+// transparent windows flicker can add --disable-gpu-compositing to the launcher's flags file
+// (scripts/lib/linux-launcher.js).
+const gpuCompositingDisabledForNvidia = shouldDisableGpuCompositing();
+if (gpuCompositingDisabledForNvidia) {
   app.commandLine.appendSwitch("disable-gpu-compositing");
 }
 
@@ -298,6 +305,7 @@ const WindowsKeyManager = require("./src/helpers/windowsKeyManager");
 const LinuxKeyManager = require("./src/helpers/linuxKeyManager");
 const TextEditMonitor = require("./src/helpers/textEditMonitor");
 const SelectionManager = require("./src/helpers/selectionManager");
+const { AssistantPasteTarget } = require("./src/helpers/assistantPasteTarget");
 const { PermissionGuideManager } = require("./src/helpers/permissionGuideManager");
 const WhisperCudaManager = require("./src/helpers/whisperCudaManager");
 const WhisperVulkanManager = require("./src/helpers/whisperVulkanManager");
@@ -446,6 +454,23 @@ function initializeCoreManagers() {
 
   debugLogger = require("./src/helpers/debugLogger");
   debugLogger.ensureFileLogging();
+  if (process.platform === "linux") {
+    // The compositing mode is settled once the GPU process has reported its info; a GPU
+    // process crash can still drop it to software later, logged below.
+    app
+      .getGPUInfo("basic")
+      .catch(() => {})
+      .then(() => {
+        debugLogger.info("Linux GPU compositing", {
+          status: app.getGPUFeatureStatus().gpu_compositing,
+          disabledForNvidia: gpuCompositingDisabledForNvidia,
+        });
+      });
+  }
+  app.on("child-process-gone", (_event, details) => {
+    if (details.type !== "GPU") return;
+    debugLogger.warn("GPU process gone", { reason: details.reason, exitCode: details.exitCode });
+  });
   // Registration runs before app ready, when the logger cannot write its file yet.
   if (linuxSchemeHandler?.reason) {
     debugLogger.warn("Could not register the Linux URL scheme handler entry", {
@@ -540,8 +565,8 @@ function initializeCoreManagers() {
       llamaVulkanManager,
     ]);
     if (clearedPacks.length > 0) {
-      // No window exists yet — persist the notice; a control panel window
-      // shows it as a toast and clears it. See #1606.
+      // No window exists yet — persist the notice; the window that shows it
+      // as a toast takes it (#1606, #2554).
       require("./src/helpers/gpuPackMigrationNotice").record(clearedPacks);
     }
     // The 1.8.3 migration deleted lib-carrying packs without recording that
@@ -549,10 +574,40 @@ function initializeCoreManagers() {
     // with no pack on disk only happens via such data loss. recordOnce gates
     // each pack to one notice so a dismissed toast doesn't return every launch.
     const gpuPacks = [
-      { manager: whisperCudaManager, enabledEnvVar: "WHISPER_CUDA_ENABLED", group: "whisper" },
-      { manager: whisperVulkanManager, enabledEnvVar: "WHISPER_VULKAN_ENABLED", group: "whisper" },
+      {
+        manager: whisperCudaManager,
+        enabledEnvVar: "WHISPER_CUDA_ENABLED",
+        group: "whisper",
+        backend: "cuda",
+      },
+      {
+        manager: whisperVulkanManager,
+        enabledEnvVar: "WHISPER_VULKAN_ENABLED",
+        group: "whisper",
+        backend: "vulkan",
+      },
       { manager: llamaVulkanManager, enabledEnvVar: "LLAMA_VULKAN_ENABLED" },
     ];
+    // A pack whose backend failed here and then vanished (a distro launcher
+    // deletes it, #2168) was no loss: drop its flag as a delete would, so no
+    // notice names it, even after an upgrade clears the remembered failure.
+    const failedBackends = WhisperManager.resolveFailedGpuBackends(process.env.WHISPER_GPU_FAILED);
+    for (const { manager, enabledEnvVar, backend } of gpuPacks) {
+      if (
+        failedBackends.includes(backend) &&
+        process.env[enabledEnvVar] === "true" &&
+        !manager.isDownloaded() &&
+        !manager.needsUpdate()
+      ) {
+        delete process.env[enabledEnvVar];
+        environmentManager.removeKeyFromEnvFile(enabledEnvVar).catch((err) => {
+          debugLogger.error("Failed to clear a vanished GPU pack's flag from .env", {
+            key: enabledEnvVar,
+            error: err.message,
+          });
+        });
+      }
+    }
     const orphanedPacks = detectOrphanedGpuPacks(gpuPacks);
     if (orphanedPacks.length > 0) {
       require("./src/helpers/gpuPackMigrationNotice").recordOnce(orphanedPacks);
@@ -630,6 +685,10 @@ function initializeCoreManagers() {
   meetingAecManager = new MeetingAecManager();
   windowManager.textEditMonitor = textEditMonitor;
   windowManager.selectionManager = selectionManager;
+  windowManager.assistantPasteTarget = new AssistantPasteTarget({
+    textEditMonitor,
+    selectionManager,
+  });
   windowManager.windowsKeyManager = windowsKeyManager;
   windowManager.linuxKeyManager = linuxKeyManager;
   windowManager.permissionGuide = new PermissionGuideManager(windowManager);
@@ -734,6 +793,33 @@ function initializeDeferredManagers() {
   meetingDetectionEngine.start();
 }
 
+let pendingEnterpriseAudioTest = null;
+// The control panel acts on each link once, so a link it can't use never
+// reopens Settings on a later mount; Settings still reads it until consumed.
+let enterpriseAudioTestClaimed = false;
+ipcMain.handle("get-pending-enterprise-audio-test", (_event, consume = false) => {
+  const pending = pendingEnterpriseAudioTest;
+  if (consume) pendingEnterpriseAudioTest = null;
+  return pending;
+});
+ipcMain.handle("claim-enterprise-audio-test", () => {
+  if (enterpriseAudioTestClaimed) return null;
+  enterpriseAudioTestClaimed = true;
+  return pendingEnterpriseAudioTest;
+});
+function handleEnterpriseAudioLink(url) {
+  const request = require("./src/helpers/enterpriseAudioDeepLink").parseEnterpriseAudioDeepLink(
+    url,
+    OAUTH_PROTOCOL
+  );
+  if (!request) return false;
+  pendingEnterpriseAudioTest = request;
+  enterpriseAudioTestClaimed = false;
+  void windowManager?.showControlPanel();
+  windowManager?.controlPanelWindow?.webContents.send("enterprise-audio-test-requested");
+  return true;
+}
+
 app.on("open-url", (event, url) => {
   event.preventDefault();
   if (!url.startsWith(`${OAUTH_PROTOCOL}://`)) return;
@@ -742,6 +828,8 @@ app.on("open-url", (event, url) => {
     handleUpgradeDeepLink();
     return;
   }
+
+  if (handleEnterpriseAudioLink(url)) return;
 
   if (isNoteDeepLink(url)) {
     void handleNoteDeepLink(url);
@@ -755,11 +843,7 @@ app.on("open-url", (event, url) => {
 
   void handleOAuthDeepLink(url);
 
-  if (windowManager && isLiveWindow(windowManager.controlPanelWindow)) {
-    windowManager.controlPanelWindow.show();
-    windowManager.controlPanelWindow.focus();
-    dockManager.setControlPanelVisible(true);
-  }
+  windowManager?.showControlPanel();
 });
 
 function isInvitationDeepLink(url) {
@@ -859,9 +943,7 @@ function handleInvitationDeepLink(deepLinkUrl) {
     pendingInvitationDeepLinkToken = token;
     if (!windowManager) return;
     if (isLiveWindow(windowManager.controlPanelWindow)) {
-      windowManager.controlPanelWindow.show();
-      windowManager.controlPanelWindow.focus();
-      dockManager.setControlPanelVisible(true);
+      windowManager.showControlPanel();
       // Best-effort fast path — the get-pending-invitation-token pull is the reliable path.
       windowManager.controlPanelWindow.webContents.send("workspace-invitation-token", token);
     } else {
@@ -970,9 +1052,7 @@ async function applySessionTokenAndRefresh(token) {
       oauthProtocol: OAUTH_PROTOCOL,
     });
   }
-  windowManager.controlPanelWindow.show();
-  windowManager.controlPanelWindow.focus();
-  dockManager.setControlPanelVisible(true);
+  windowManager.showControlPanel();
 }
 
 async function handleOAuthDeepLink(deepLinkUrl) {
@@ -997,9 +1077,7 @@ function handleUpgradeDeepLink() {
     windowManager.controlPanelWindow.webContents.executeJavaScript(
       'window.dispatchEvent(new Event("upgrade-success"))'
     );
-    windowManager.controlPanelWindow.show();
-    windowManager.controlPanelWindow.focus();
-    dockManager.setControlPanelVisible(true);
+    windowManager.showControlPanel();
   }
 }
 
@@ -1092,6 +1170,47 @@ function startAuthBridgeServer() {
   });
 }
 
+// Startup restores the saved activation mode before any hotkey registers. Desktop
+// backends (GNOME, KDE, Hyprland) register the saved hotkey a moment later, in
+// this mode, so check that hotkey rather than the provisional default it
+// replaces: a supported Hold is kept and an unsupported one becomes Tap before
+// registration. Elsewhere, check the hotkey that registered. This is a runtime
+// fallback, not a change to the user's saved preference: the next launch retries it.
+async function dropUnsupportedStartupHold() {
+  if (windowManager.getActivationMode() !== "push") return;
+  const manager = windowManager.hotkeyManager;
+  const hotkey = manager.isUsingNativeShortcut()
+    ? await manager.getSavedDictationHotkey()
+    : manager.getCurrentHotkey();
+  if (!manager.supportsPushToTalk(hotkey)) {
+    const changed = await windowManager.setActivationModeCache("tap");
+    if (changed) {
+      for (const browserWindow of BrowserWindow.getAllWindows()) {
+        if (!browserWindow.isDestroyed()) {
+          browserWindow.webContents.send("setting-updated", {
+            key: "activationMode",
+            value: "tap",
+          });
+        }
+      }
+    }
+  }
+}
+
+// A desktop backend that cannot register falls back to globalShortcut after the
+// first check, and globalShortcut may still be reading the saved hotkey, so
+// check again once that registration settles.
+async function checkStartupHold() {
+  windowManager.hotkeyManager.once("hotkey-loaded", () => {
+    dropUnsupportedStartupHold().catch((err) => {
+      debugLogger.warn("[HotkeyManager] Startup activation mode recheck failed", {
+        error: err.message,
+      });
+    });
+  });
+  await dropUnsupportedStartupHold();
+}
+
 // Main application startup
 async function startApp() {
   // Await so a stale sidecar is confirmed dead before new ones can spawn and
@@ -1179,21 +1298,9 @@ async function startApp() {
   const launchedHidden = wasLaunchedAtLoginHidden();
   const startMinimized = environmentManager.getStartMinimized() || launchedHidden;
   if (debugLogger) debugLogger.info("Start minimized", { enabled: startMinimized, launchedHidden });
+  windowManager.startedMinimized = startMinimized;
   await windowManager.createMainWindow();
-  // The activation mode was cached before the hotkey was registered, so a saved
-  // Hold could not be checked against its key until now.
-  if (
-    windowManager.getActivationMode() === "push" &&
-    !windowManager.hotkeyManager.supportsPushToTalk()
-  ) {
-    await windowManager.setActivationModeCache("tap");
-    environmentManager.saveActivationMode("tap");
-    for (const browserWindow of BrowserWindow.getAllWindows()) {
-      if (!browserWindow.isDestroyed()) {
-        browserWindow.webContents.send("setting-updated", { key: "activationMode", value: "tap" });
-      }
-    }
-  }
+  await checkStartupHold();
   if (!startMinimized) {
     await windowManager.createControlPanelWindow();
   }
@@ -1201,7 +1308,9 @@ async function startApp() {
   // Windows/Linux cold start delivers protocol URLs via argv (macOS uses
   // open-url); without this scan a deep link that launches the app is lost.
   const initialProtocolUrl = process.argv.find((arg) => arg.startsWith(`${OAUTH_PROTOCOL}://`));
-  if (initialProtocolUrl && isNoteDeepLink(initialProtocolUrl)) {
+  if (initialProtocolUrl && handleEnterpriseAudioLink(initialProtocolUrl)) {
+    // The renderer consumes the saved setup request after settings mount.
+  } else if (initialProtocolUrl && isNoteDeepLink(initialProtocolUrl)) {
     await handleNoteDeepLink(initialProtocolUrl);
   } else {
     if (initialProtocolUrl && process.platform !== "darwin") {
@@ -1276,7 +1385,8 @@ async function startApp() {
   const meetingHotkeyCallback = () => {
     if (!isMeetingPress()) return;
     debugLogger.info("Meeting hotkey triggered", {}, "meeting");
-    windowManager.startManualMeeting();
+    // Usually pressed mid-call: an open panel updates behind the meeting app.
+    windowManager.startManualMeeting({ activate: false });
   };
 
   const savedMeetingKey = environmentManager.getMeetingKey?.() || "";
@@ -1572,6 +1682,7 @@ async function startApp() {
     let rightModActiveKey = null;
 
     globeKeyManager.on("right-modifier-down", async (modifier) => {
+      hotkeyManager.logHotkeyEvent("macos-native", "down", modifier);
       // Check voice agent slot for right-modifier
       if (hotkeyManager.slotHasHotkey("voiceAgent", modifier)) {
         windowManager.sendToggleVoiceAgent();
@@ -1608,6 +1719,7 @@ async function startApp() {
     });
 
     globeKeyManager.on("right-modifier-up", async (modifier) => {
+      hotkeyManager.logHotkeyEvent("macos-native", "up", modifier);
       if (hotkeyManager.slotHasHotkey("dictation", modifier)) {
         if (!isLiveWindow(windowManager.mainWindow)) return;
 
@@ -1660,6 +1772,7 @@ async function startApp() {
     globeKeyManager.on("mouse-button-down", async (button) => {
       if (hotkeyManager.isInListeningMode && hotkeyManager.isInListeningMode()) return;
       if (!isMouseButtonHotkey(button)) return;
+      hotkeyManager.logHotkeyEvent("macos-native", "down", button);
 
       if (hotkeyManager.slotHasHotkey("voiceAgent", button)) {
         windowManager.sendToggleVoiceAgent();
@@ -1699,6 +1812,7 @@ async function startApp() {
     globeKeyManager.on("mouse-button-up", async (button) => {
       if (hotkeyManager.isInListeningMode && hotkeyManager.isInListeningMode()) return;
       if (!isMouseButtonHotkey(button)) return;
+      hotkeyManager.logHotkeyEvent("macos-native", "up", button);
 
       if (!hotkeyManager.slotHasHotkey("dictation", button)) return;
       if (!isLiveWindow(windowManager.mainWindow)) return;
@@ -1803,6 +1917,7 @@ async function startApp() {
     // Dictation supports push-to-talk and needs the overlay window; meeting
     // drives other windows (matching their globalShortcut callbacks and macOS).
     const dispatchNativeKeyDown = (key) => {
+      hotkeyManager.logHotkeyEvent("native-listener", "down", key);
       if (hotkeyManager.slotHasHotkey("dictation", key)) {
         if (!isLiveWindow(windowManager.mainWindow)) return;
         if (windowManager.getActivationMode() === "push") {
@@ -1817,12 +1932,13 @@ async function startApp() {
       } else if (hotkeyManager.slotHasHotkey("translation", key)) {
         windowManager.sendToggleTranslation();
       } else if (hotkeyManager.slotHasHotkey("meeting", key)) {
-        windowManager.startManualMeeting();
+        windowManager.startManualMeeting({ activate: false });
       }
     };
 
     // Only dictation drives push-to-talk, so only its key-up matters.
     const dispatchNativeKeyUp = (key) => {
+      hotkeyManager.logHotkeyEvent("native-listener", "up", key);
       if (!hotkeyManager.slotHasHotkey("dictation", key)) return;
       if (windowManager.winPushState?.active) {
         windowManager.handleWindowsPushKeyUp(key);
@@ -1924,12 +2040,7 @@ if (gotSingleInstanceLock) {
     }
 
     if (isLiveWindow(windowManager.controlPanelWindow)) {
-      if (windowManager.controlPanelWindow.isMinimized()) {
-        windowManager.controlPanelWindow.restore();
-      }
-      windowManager.controlPanelWindow.show();
-      windowManager.controlPanelWindow.focus();
-      dockManager.setControlPanelVisible(true);
+      windowManager.showControlPanel();
       if (windowManager.controlPanelWindow.webContents.isCrashed()) {
         windowManager.loadControlPanel();
       }
@@ -1946,6 +2057,7 @@ if (gotSingleInstanceLock) {
     // Check for OAuth protocol URL in command line arguments (Windows/Linux)
     const url = commandLine.find((arg) => arg.startsWith(`${OAUTH_PROTOCOL}://`));
     if (url) {
+      if (handleEnterpriseAudioLink(url)) return;
       if (url.includes("upgrade-success")) {
         handleUpgradeDeepLink();
       } else if (isNoteDeepLink(url)) {
@@ -2030,12 +2142,7 @@ if (gotSingleInstanceLock) {
     } else {
       // Show control panel when dock icon is clicked (most common user action)
       if (windowManager && isLiveWindow(windowManager.controlPanelWindow)) {
-        if (windowManager.controlPanelWindow.isMinimized()) {
-          windowManager.controlPanelWindow.restore();
-        }
-        windowManager.controlPanelWindow.show();
-        windowManager.controlPanelWindow.focus();
-        dockManager.setControlPanelVisible(true);
+        windowManager.showControlPanel();
       } else if (windowManager) {
         // If control panel doesn't exist, create it
         windowManager.createControlPanelWindow();
@@ -2061,7 +2168,13 @@ if (gotSingleInstanceLock) {
     }
     event.preventDefault();
     performSyncTeardown();
-    sidecarRegistry.shutdownAll().finally(() => app.exit(0));
+    Promise.allSettled([
+      sidecarRegistry.shutdownAll(),
+      Promise.race([
+        ipcHandlers?.metaActivation?.shutdown(),
+        new Promise((resolve) => setTimeout(resolve, 1500)),
+      ]),
+    ]).finally(() => app.exit(0));
   });
 }
 

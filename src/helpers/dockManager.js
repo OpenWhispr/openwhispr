@@ -33,7 +33,10 @@ class DockManager {
       platform: process.platform,
       controlPanelVisible: this._controlPanelVisible,
     });
-    if (visible === null || !app.dock) return;
+    // Only act on a change. On an active app dock.show() hands activation to
+    // the Dock even when the icon is already up (see DockShow in
+    // browser_mac.mm), so reopening an open panel must not call it.
+    if (visible === null || !app.dock || visible === app.dock.isVisible()) return;
 
     if (visible) {
       app.dock.show();

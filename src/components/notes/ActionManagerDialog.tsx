@@ -4,20 +4,26 @@ import { Sparkles, Trash2, Loader2, Plus, Zap, ChevronUp, ChevronDown, X } from 
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { Toggle } from "../ui/toggle";
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
 import { useToast } from "../ui/useToast";
 import { cn } from "../lib/utils";
-import { useActionsOfKind, initializeActions, getActionName } from "../../stores/actionStore";
-import { NOTE_ACTION_LIMITS } from "../../helpers/builtinActions";
+import {
+  useActionsOfKind,
+  initializeActions,
+  getActionName,
+  resolveDefaultTemplate,
+} from "../../stores/actionStore";
+import { useSettingsStore } from "../../stores/settingsStore";
+import { GENERATE_NOTES_KEY, NOTE_ACTION_LIMITS } from "../../helpers/builtinActions";
 import { normalizeSections } from "../../helpers/templatePrompts";
-import type { ActionItem, ActionKind, ActionOutput, TemplateSection } from "../../types/electron";
+import { getActionIcon } from "./actionIcons";
+import type { ActionItem, ActionKind, TemplateSection } from "../../types/electron";
 
 interface ActionManagerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialKind: ActionKind;
-  /** Picks chat or summary for an action saved with Auto. */
-  onInferOutput: (prompt: string) => Promise<ActionOutput>;
 }
 
 // Rows keep a stable key while sections are reordered or removed.
@@ -37,12 +43,6 @@ const TEXTAREA_CLASS = cn(
   "font-mono text-[13px]"
 );
 
-const OUTPUT_HINT_KEYS = {
-  auto: "notes.actions.output.autoHint",
-  chat: "notes.actions.output.chatHint",
-  summary: "notes.actions.output.summaryHint",
-} as const;
-
 const ICON_BUTTON_CLASS =
   "p-1 rounded-md text-muted-foreground/70 hover:text-foreground/70 hover:bg-foreground/5 dark:hover:bg-white/6 transition-colors duration-150 disabled:opacity-30 disabled:pointer-events-none";
 
@@ -50,17 +50,21 @@ export default function ActionManagerDialog({
   open,
   onOpenChange,
   initialKind,
-  onInferOutput,
 }: ActionManagerDialogProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const [kind, setKind] = useState<ActionKind>(initialKind);
   const items = useActionsOfKind(kind);
+  const templates = useActionsOfKind("template");
+  const defaultSummaryTemplateId = useSettingsStore((state) => state.defaultSummaryTemplateId);
+  const setDefaultSummaryTemplateId = useSettingsStore(
+    (state) => state.setDefaultSummaryTemplateId
+  );
+  const defaultTemplate = resolveDefaultTemplate(templates, defaultSummaryTemplateId);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [prompt, setPrompt] = useState("");
   const [sections, setSections] = useState<SectionDraft[]>([]);
-  const [output, setOutput] = useState<ActionOutput | "auto">("auto");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -73,7 +77,6 @@ export default function ActionManagerDialog({
     setDescription("");
     setPrompt("");
     setSections([]);
-    setOutput("auto");
     setEditingId(null);
   };
 
@@ -101,7 +104,6 @@ export default function ActionManagerDialog({
     setDescription(action.description);
     setPrompt(action.prompt);
     setSections(toDrafts(action.sections));
-    setOutput(action.output ?? "chat");
     setIsCreating(false);
   };
 
@@ -153,9 +155,7 @@ export default function ActionManagerDialog({
     if (!canSave) return;
     setIsSaving(true);
     try {
-      const fields = isTemplate
-        ? { sections: savedSections }
-        : { output: output === "auto" ? await onInferOutput(prompt.trim()) : output };
+      const fields = isTemplate ? { sections: savedSections } : {};
       const result =
         editingId !== null
           ? await window.electronAPI.updateAction(editingId, {
@@ -176,6 +176,8 @@ export default function ActionManagerDialog({
         return;
       }
       if (editingId === null) setIsCreating(false);
+    } catch {
+      toast({ title: t("notes.actions.errors.saveFailed"), variant: "destructive" });
     } finally {
       setIsSaving(false);
     }
@@ -183,26 +185,33 @@ export default function ActionManagerDialog({
 
   const showEditor = isCreating || selectedId !== null;
   const selectedAction = items.find((a) => a.id === selectedId);
+  const handleDefaultChange = (checked: boolean): void => {
+    if (!selectedAction || !isTemplate || isSaving) return;
+    try {
+      setDefaultSummaryTemplateId(checked ? selectedAction.client_id : GENERATE_NOTES_KEY);
+    } catch {
+      toast({ title: t("notes.templates.defaultSaveFailed"), variant: "destructive" });
+    }
+  };
   const hasUnsavedChanges = isCreating
     ? name.trim() !== "" || prompt.trim() !== "" || savedSections.length > 0
     : selectedAction
       ? name !== selectedAction.name ||
         description !== selectedAction.description ||
         prompt !== selectedAction.prompt ||
-        JSON.stringify(savedSections) !== JSON.stringify(selectedAction.sections ?? []) ||
-        (!isTemplate && output !== selectedAction.output)
+        JSON.stringify(savedSections) !== JSON.stringify(selectedAction.sections ?? [])
       : false;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl p-0 gap-0 overflow-hidden">
+      <DialogContent className="sm:max-w-4xl p-0 gap-0 overflow-hidden">
         {/* Hidden accessible title */}
         <DialogTitle className="sr-only">{t("notes.templates.managerTitle")}</DialogTitle>
 
-        <div className="flex h-120">
+        <div className="flex h-[min(44rem,85vh)]">
           {/* Left panel — template/action list */}
           <div
-            // Auto can take a moment on save; switching away then would drop the new draft.
+            // Keep the draft selected until the save has finished.
             inert={isSaving}
             className={cn(
               "w-56 shrink-0 border-e border-border dark:border-white/10 flex flex-col bg-card/50 dark:bg-surface-1/30",
@@ -216,11 +225,11 @@ export default function ActionManagerDialog({
                 onValueChange={(value) => showKind(value as ActionKind)}
                 className="flex-1 min-w-0"
               >
-                <TabsList className="h-7 w-full p-0.5">
-                  <TabsTrigger value="template" className="flex-1 px-2 py-0.5 text-xs">
+                <TabsList variant="pill" className="w-full">
+                  <TabsTrigger value="template" variant="pill" className="flex-1 px-2 text-xs">
                     {t("notes.templates.tab")}
                   </TabsTrigger>
-                  <TabsTrigger value="action" className="flex-1 px-2 py-0.5 text-xs">
+                  <TabsTrigger value="action" variant="pill" className="flex-1 px-2 text-xs">
                     {t("notes.actions.tab")}
                   </TabsTrigger>
                 </TabsList>
@@ -259,66 +268,74 @@ export default function ActionManagerDialog({
                 </div>
               ) : (
                 <div className="space-y-0.5">
-                  {items.map((action) => (
-                    <div
-                      key={action.id}
-                      onClick={() => handleSelectAction(action)}
-                      className={cn(
-                        "flex items-center gap-2 w-full px-2.5 py-2 rounded-md text-start group cursor-pointer",
-                        "transition-colors duration-150",
-                        selectedId === action.id && !isCreating
-                          ? "bg-accent/8 dark:bg-accent/10"
-                          : "hover:bg-foreground/3 dark:hover:bg-white/3"
-                      )}
-                    >
-                      <Sparkles
-                        size={12}
+                  {items.map((action) => {
+                    const Icon = isTemplate ? Sparkles : getActionIcon(action);
+                    return (
+                      <div
+                        key={action.id}
+                        onClick={() => handleSelectAction(action)}
                         className={cn(
-                          "shrink-0 transition-colors duration-150",
+                          "flex items-center gap-2 w-full px-2.5 py-2 rounded-md text-start group cursor-pointer",
+                          "transition-colors duration-150",
                           selectedId === action.id && !isCreating
-                            ? "text-accent/60"
-                            : "text-muted-foreground/70"
+                            ? "bg-accent/8 dark:bg-accent/10"
+                            : "hover:bg-foreground/3 dark:hover:bg-white/3"
                         )}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span
+                      >
+                        <Icon
+                          size={12}
+                          className={cn(
+                            "shrink-0 transition-colors duration-150",
+                            selectedId === action.id && !isCreating
+                              ? "text-accent/60"
+                              : "text-muted-foreground/70"
+                          )}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={cn(
+                                "text-xs font-medium truncate",
+                                selectedId === action.id && !isCreating
+                                  ? "text-foreground"
+                                  : "text-foreground/70"
+                              )}
+                            >
+                              {getActionName(action, t)}
+                            </span>
+                            {action.is_builtin === 1 && (
+                              <span className="text-[10px] font-medium px-1 py-px rounded bg-foreground/5 dark:bg-white/6 text-muted-foreground/70 shrink-0">
+                                {t("notes.actions.builtIn")}
+                              </span>
+                            )}
+                            {action.client_id === defaultTemplate?.client_id && (
+                              <span className="text-[10px] font-medium px-1 py-px rounded bg-accent/10 text-accent shrink-0">
+                                {t("notes.templates.defaultBadge")}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {action.is_builtin !== 1 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(action.id);
+                            }}
+                            aria-label={t("notes.context.delete")}
                             className={cn(
-                              "text-xs font-medium truncate",
-                              selectedId === action.id && !isCreating
-                                ? "text-foreground"
-                                : "text-foreground/70"
+                              "p-1 rounded-md shrink-0",
+                              "text-muted-foreground/0 group-hover:text-muted-foreground/70",
+                              "hover:text-destructive/60! hover:bg-destructive/5",
+                              "active:bg-destructive/8",
+                              "transition-all duration-150"
                             )}
                           >
-                            {getActionName(action, t)}
-                          </span>
-                          {action.is_builtin === 1 && (
-                            <span className="text-[10px] font-medium px-1 py-px rounded bg-foreground/5 dark:bg-white/6 text-muted-foreground/70 shrink-0">
-                              {t("notes.actions.builtIn")}
-                            </span>
-                          )}
-                        </div>
+                            <Trash2 size={11} />
+                          </button>
+                        )}
                       </div>
-                      {action.is_builtin !== 1 && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete(action.id);
-                          }}
-                          aria-label={t("notes.context.delete")}
-                          className={cn(
-                            "p-1 rounded-md shrink-0",
-                            "text-muted-foreground/0 group-hover:text-muted-foreground/70",
-                            "hover:text-destructive/60! hover:bg-destructive/5",
-                            "active:bg-destructive/8",
-                            "transition-all duration-150"
-                          )}
-                        >
-                          <Trash2 size={11} />
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -374,7 +391,36 @@ export default function ActionManagerDialog({
                 </div>
 
                 {/* Editor form */}
-                <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+                <div className="flex flex-1 flex-col overflow-y-auto px-5 py-4 space-y-3">
+                  {isTemplate &&
+                    (isCreating ? (
+                      <p className="text-xs text-muted-foreground/70">
+                        {t("notes.templates.saveBeforeDefault")}
+                      </p>
+                    ) : (
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="space-y-1">
+                          <p className="text-xs font-medium">{t("notes.templates.defaultLabel")}</p>
+                          <p className="text-xs text-muted-foreground/70">
+                            {t("notes.templates.defaultHint")}
+                          </p>
+                        </div>
+                        <Toggle
+                          ariaLabel={t("notes.templates.defaultLabel")}
+                          checked={
+                            !!selectedAction &&
+                            selectedAction.client_id === defaultTemplate?.client_id
+                          }
+                          onChange={handleDefaultChange}
+                          disabled={
+                            isSaving ||
+                            !selectedAction ||
+                            (selectedAction.translation_key === GENERATE_NOTES_KEY &&
+                              selectedAction.client_id === defaultTemplate?.client_id)
+                          }
+                        />
+                      </div>
+                    ))}
                   <Input
                     dir="auto"
                     ref={nameInputRef}
@@ -399,35 +445,18 @@ export default function ActionManagerDialog({
                     className="h-9"
                   />
 
-                  {!isTemplate && (
-                    <div className="space-y-1.5">
-                      <Tabs
-                        value={output}
-                        onValueChange={(value) => setOutput(value as ActionOutput | "auto")}
-                      >
-                        <TabsList className="h-8 p-0.5">
-                          {/* A saved action keeps the output it was given, so Auto is for new ones. */}
-                          {editingId === null && (
-                            <TabsTrigger value="auto" className="px-3 py-1 text-xs">
-                              {t("notes.actions.output.auto")}
-                            </TabsTrigger>
-                          )}
-                          <TabsTrigger value="chat" className="px-3 py-1 text-xs">
-                            {t("notes.actions.output.chat")}
-                          </TabsTrigger>
-                          <TabsTrigger value="summary" className="px-3 py-1 text-xs">
-                            {t("notes.actions.output.summary")}
-                          </TabsTrigger>
-                        </TabsList>
-                      </Tabs>
-                      <p className="text-xs text-muted-foreground/70">
-                        {t(OUTPUT_HINT_KEYS[output])}
-                      </p>
-                    </div>
-                  )}
+                  <p className="text-xs text-muted-foreground/70">
+                    {t(
+                      isTemplate
+                        ? "notes.templates.outputHint"
+                        : selectedAction?.output === "summary"
+                          ? "notes.actions.output.summaryHint"
+                          : "notes.actions.output.chatHint"
+                    )}
+                  </p>
 
                   {/* Prompt — a template's context, or what an action does */}
-                  <div className="flex flex-col flex-1 space-y-1.5 min-h-0">
+                  <div className="flex flex-col flex-1 space-y-1.5">
                     <label className="text-xs font-medium text-foreground/50">
                       {t(isTemplate ? "notes.templates.contextLabel" : "notes.actions.promptLabel")}
                     </label>

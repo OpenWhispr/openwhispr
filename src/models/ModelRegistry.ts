@@ -18,6 +18,8 @@ export interface ModelDefinition {
   hfRepo: string;
   recommended?: boolean;
   supportsThinking?: boolean;
+  /** Superseded: kept so existing selections keep working; see isListedModel. */
+  legacy?: boolean;
   // Optional MTP speculative-decoding drafter downloaded alongside the main GGUF.
   draftHfRepo?: string;
   draftFileName?: string;
@@ -49,6 +51,13 @@ export interface CloudModelDefinition {
   supportsVision?: boolean;
   tokenParam?: "max_tokens" | "max_completion_tokens";
   supportsTemperature?: boolean;
+  reasoningEffort?: ReasoningEffortCapability;
+  legacy?: boolean;
+}
+
+export interface ReasoningEffortCapability {
+  options: string[];
+  defaultValue?: string;
 }
 
 export interface CloudProviderData {
@@ -69,6 +78,7 @@ export interface TranscriptionModelDefinition {
   description: string;
   descriptionKey?: string;
   streaming?: boolean;
+  legacy?: boolean;
 }
 
 export interface TranscriptionProviderData {
@@ -229,6 +239,7 @@ export interface ReasoningModel {
   label: string;
   description: string;
   descriptionKey?: string;
+  legacy?: boolean;
 }
 
 export interface ReasoningProvider {
@@ -244,7 +255,8 @@ export function isEnterpriseProvider(value: unknown): value is EnterpriseProvide
   return typeof value === "string" && (ENTERPRISE_PROVIDERS as readonly string[]).includes(value);
 }
 
-export function enterpriseProviderName(provider: EnterpriseProvider): string {
+export function enterpriseProviderName(provider: EnterpriseProvider | "openai-compatible"): string {
+  if (provider === "openai-compatible") return "OpenAI-compatible";
   return modelRegistry.getEnterpriseProviders().find((p) => p.id === provider)?.name ?? provider;
 }
 
@@ -254,6 +266,7 @@ export function toReasoningModel(m: CloudModelDefinition): ReasoningModel {
     label: m.name,
     description: m.description,
     descriptionKey: m.descriptionKey,
+    legacy: m.legacy,
   };
 }
 
@@ -287,12 +300,7 @@ function buildReasoningProviders(): ReasoningProviders {
   for (const ep of modelRegistry.getEnterpriseProviders()) {
     providers[ep.id] = {
       name: ep.name,
-      models: ep.models.map((m) => ({
-        value: m.id,
-        label: m.name,
-        description: m.description,
-        descriptionKey: m.descriptionKey,
-      })),
+      models: ep.models.map(toReasoningModel),
     };
   }
 

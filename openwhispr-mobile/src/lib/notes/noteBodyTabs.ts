@@ -1,10 +1,11 @@
 export type NoteBodyView = 'enhanced' | 'transcript' | 'notes';
 
 export interface NoteBodyTabInput {
+  isUpload: boolean;
   usesSegmentTranscript: boolean;
   /** The transcript is still being made or failed, so its tab shows that status. */
   transcriptPending: boolean;
-  /** Uploaded audio stores its flat transcript as the note body; it has no notes of its own. */
+  /** An upload from before desktop stored its text as the transcript: its body is that text. */
   contentIsTranscript: boolean;
   hasEnhanced: boolean;
 }
@@ -20,6 +21,7 @@ const NOTE_BODY_TAB_LABELS: Record<NoteBodyView, string> = {
  * an upload's transcript have nowhere else to go, so they keep their tab.
  */
 export function getNoteBodyTabs({
+  isUpload,
   usesSegmentTranscript,
   transcriptPending,
   contentIsTranscript,
@@ -27,10 +29,9 @@ export function getNoteBodyTabs({
 }: NoteBodyTabInput): NoteBodyView[] {
   const tabs: NoteBodyView[] = [];
   if (hasEnhanced) tabs.push('enhanced');
-  const showTranscript =
-    transcriptPending || (usesSegmentTranscript && (!hasEnhanced || contentIsTranscript));
+  const showTranscript = transcriptPending || (usesSegmentTranscript && (!hasEnhanced || isUpload));
   if (showTranscript) tabs.push('transcript');
-  // An upload's body only duplicates its transcript, so it shows only when there is no other.
+  // A legacy upload's body duplicates its transcript, so it shows only when there is no other.
   if (!(contentIsTranscript && showTranscript)) tabs.push('notes');
   return tabs;
 }

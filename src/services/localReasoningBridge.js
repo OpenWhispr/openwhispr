@@ -45,6 +45,7 @@ class LocalReasoningService {
         systemPrompt: config.systemPrompt || "",
         disableThinking: config.disableThinking !== false,
         requireCompleteOutput: config.requireCompleteOutput,
+        responseFormat: config.responseFormat,
         refuseClippedByWindow: config.refuseClippedByWindow,
         // A minimum context window for this request. Rebuilding this object
         // field-by-field is what silently orphaned it before #2142: it was
@@ -58,10 +59,15 @@ class LocalReasoningService {
       });
 
       const result = await modelManager.runInference(modelId, text, inferenceConfig);
-      const stripThinking = config.disableThinking !== false;
-      const cleanResult = stripThinking
-        ? (await import("../helpers/stripThinking.js")).stripThinkingTags(result)
-        : result.trim();
+      let cleanResult = result;
+      // Thinking tags inside a JSON string are document data. The caller
+      // validates the complete envelope instead of stripping anything from it.
+      if (!config.responseFormat) {
+        const stripThinking = config.disableThinking !== false;
+        cleanResult = stripThinking
+          ? (await import("../helpers/stripThinking.js")).stripThinkingTags(result)
+          : result.trim();
+      }
 
       const processingTime = Date.now() - startTime;
 

@@ -45,10 +45,6 @@ async function mountListener(
       `,
       "/services/ReasoningService": `export default { processText: async () => "" };`,
       "/utils/generateTitle": `export const generateNoteTitle = async () => undefined;`,
-      "/ui/Toast": `
-        import { createElement } from "react";
-        export const ToastActionButton = ({ onClick, children }) => createElement("button", { onClick }, children);
-      `,
     },
   });
   const { default: Listener } = await vite.ssrLoadModule(
@@ -61,11 +57,14 @@ async function mountListener(
   return { store, writes, focusListeners };
 }
 
+// A first summary's Undo: clear_fields has to reach the database, or the
+// restore is a local blank and the summary syncs back.
 const PREVIOUS = {
   enhanced_content: null,
   enhancement_prompt: null,
   enhancement_template_id: null,
   enhanced_at_content_hash: null,
+  clear_fields: ["enhanced_content"],
 };
 const APPLIED = {
   noteId: 4,
@@ -84,7 +83,7 @@ test("a note run offers Undo, which writes back what the run replaced", async (t
   assert.ok(toast.duration >= 5000 && toast.duration <= 6000, "a short undo window");
   assert.deepEqual(store.useActionProcessingStore.getState().appliedEvents, [], "consumed once");
 
-  await React.act(async () => toast.action.props.onClick());
+  await React.act(async () => toast.actions[0].onClick());
   assert.deepEqual(writes, [{ noteId: 4, payload: PREVIOUS }]);
   assert.deepEqual(globalThis.__dismissed, ["toast-1"]);
 });
@@ -95,7 +94,7 @@ test("an undo the database refused leaves the toast up to try again", async (t) 
     store.useActionProcessingStore.setState({ appliedEvents: [APPLIED] })
   );
 
-  await React.act(async () => globalThis.__toasts[0].action.props.onClick());
+  await React.act(async () => globalThis.__toasts[0].actions[0].onClick());
   assert.equal(writes.length, 1);
   assert.deepEqual(globalThis.__dismissed, []);
 });
@@ -130,7 +129,7 @@ test("Undo leaves a note deleted since alone instead of bringing it back", async
     store.useActionProcessingStore.setState({ appliedEvents: [APPLIED] })
   );
 
-  await React.act(async () => globalThis.__toasts[0].action.props.onClick());
+  await React.act(async () => globalThis.__toasts[0].actions[0].onClick());
   assert.deepEqual(writes, []);
   assert.deepEqual(globalThis.__dismissed, ["toast-1"]);
 });

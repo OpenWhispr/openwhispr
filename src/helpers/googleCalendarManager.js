@@ -2,12 +2,11 @@ const { net } = require("electron");
 const debugLogger = require("./debugLogger");
 const GoogleCalendarOAuth = require("./googleCalendarOAuth");
 const CalendarSyncInterval = require("./calendarSyncInterval");
-const { MAX_BUFFER_MINUTES } = require("./calendarAvailability");
+const { CALENDAR_LOOKBACK_MS } = require("./calendarCacheWindow");
 const { extractMeetingUrl } = require("./meetingJoinUrl");
 const { broadcastToWindows } = require("./windowBroadcast");
 
 const CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3";
-const BUFFER_COVERAGE_MS = MAX_BUFFER_MINUTES * 60 * 1000;
 const ALL_DAY_TIMEZONE_PADDING_MS = 48 * 60 * 60 * 1000;
 
 // Sync tokens pin the full sync's timeMin/timeMax window, so discard them
@@ -15,6 +14,20 @@ const ALL_DAY_TIMEZONE_PADDING_MS = 48 * 60 * 60 * 1000;
 const SYNC_LOOKAHEAD_MS = 33 * 24 * 60 * 60 * 1000;
 const SYNC_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const GOOGLE_RESPONSE_STATUSES = new Set(["accepted", "declined", "tentative", "needsAction"]);
+
+// The browser opens an event link under its default Google account, so with
+// several signed in it finds no such event; authuser picks the calendar's own.
+function eventWebLink(htmlLink, accountEmail) {
+  if (!htmlLink) return null;
+  if (!accountEmail) return htmlLink;
+  try {
+    const url = new URL(htmlLink);
+    url.searchParams.set("authuser", accountEmail);
+    return url.toString();
+  } catch {
+    return htmlLink;
+  }
+}
 
 class GoogleCalendarManager {
   constructor(databaseManager, windowManager, reminderScheduler) {
@@ -171,9 +184,7 @@ class GoogleCalendarManager {
       new URLSearchParams({
         singleEvents: "true",
         orderBy: "startTime",
-        timeMin: new Date(
-          Date.now() - BUFFER_COVERAGE_MS - ALL_DAY_TIMEZONE_PADDING_MS
-        ).toISOString(),
+        timeMin: new Date(Date.now() - CALENDAR_LOOKBACK_MS).toISOString(),
         timeMax: new Date(
           Date.now() + SYNC_LOOKAHEAD_MS + ALL_DAY_TIMEZONE_PADDING_MS
         ).toISOString(),
@@ -263,6 +274,7 @@ class GoogleCalendarManager {
         hangout_link: item.hangoutLink || extractMeetingUrl([item.location, item.description]),
         conference_data: item.conferenceData ? JSON.stringify(item.conferenceData) : null,
         organizer_email: item.organizer?.email || null,
+        web_link: eventWebLink(item.htmlLink, accountEmail),
         attendees_count: item.attendees?.length || 0,
         attendees: item.attendees
           ? JSON.stringify(
@@ -270,7 +282,9 @@ class GoogleCalendarManager {
                 email: a.email,
                 displayName: a.displayName || null,
                 responseStatus: a.responseStatus || null,
-                self: a.self || false,
+                // Stored self means the user, as on Microsoft and Apple; on a
+                // shared calendar Google's flag marks the calendar's owner.
+                self: selfIsUser ? a.self === true : a.email?.toLowerCase() === ownEmail,
                 ...(a.resource ? { resource: true } : {}),
               }))
             )

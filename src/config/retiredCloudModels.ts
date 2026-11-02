@@ -20,6 +20,13 @@
 export { RETIRED_CLOUD_MODELS } from "./retiredCloudModelPolicy.js";
 import { RETIRED_CLOUD_MODELS } from "./retiredCloudModelPolicy.js";
 
+export interface RetiredProviderModels {
+  migratedKey: string;
+  models: Record<string, string>;
+}
+
+export type RetiredModelProvider = keyof typeof RETIRED_CLOUD_MODELS;
+
 interface RetiredModelStorage {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
@@ -32,7 +39,7 @@ interface ScopeStorageKeys {
 
 export interface SweptModelSelection {
   storeKey: string;
-  provider: string;
+  provider: RetiredModelProvider;
   from: string;
   to: string;
 }
@@ -47,7 +54,8 @@ export function sweepRetiredCloudModelSelections(
 ): SweptModelSelection[] {
   const swept: SweptModelSelection[] = [];
 
-  for (const [providerId, entry] of Object.entries(RETIRED_CLOUD_MODELS)) {
+  for (const providerId of Object.keys(RETIRED_CLOUD_MODELS) as RetiredModelProvider[]) {
+    const entry: RetiredProviderModels = RETIRED_CLOUD_MODELS[providerId];
     try {
       if (storage.getItem(entry.migratedKey) === "1") continue;
 

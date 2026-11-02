@@ -28,6 +28,10 @@ jest.mock('@/store/useOnboardingStore', () => ({
     getState: () => ({ currentStep: mockCurrentStep, chooseMode: mockChooseMode }),
   },
 }));
+let mockAccountHistory = false;
+jest.mock('@/sync/syncIdentity', () => ({
+  hasRealAccountHistory: () => mockAccountHistory,
+}));
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: {
     getState: () => ({
@@ -43,6 +47,7 @@ beforeEach(() => {
   mockError = null;
   mockUser = null;
   mockGuest = false;
+  mockAccountHistory = false;
   mockCurrentStep = 'privacy-mode';
   mockConfig = { defaultMode: 'private' };
   mockUpdateConfig.mockResolvedValue(undefined);
@@ -127,12 +132,143 @@ it('moves the dictation route with the chosen mode and restores both on failure'
   );
   expect(mockUpdateConfig).toHaveBeenNthCalledWith(1, {
     defaultMode: 'private',
-    inference: { dictation: { mode: 'local' } },
-    pinnedInference: undefined,
+    inference: {
+      dictation: { mode: 'local' },
+      upload: { mode: 'local' },
+      cleanup: { mode: 'local' },
+    },
+    pinnedInference: ['upload', 'cleanup'],
   });
   expect(mockUpdateConfig).toHaveBeenLastCalledWith({
     defaultMode: 'providers',
     inference,
     pinnedInference: ['upload'],
+  });
+});
+
+// Choosing Local in setup keeps uploads and cleanup on this iPhone, even for a signed-in account,
+// whose Local Mode defaults would send them to Cloud. They are automatic pins, not the user's own.
+it('keeps uploads and cleanup on this iPhone when setup picks Local', async () => {
+  mockUser = { id: 'u', isAnonymous: false };
+  mockConfig = {
+    defaultMode: 'cloud',
+    inference: { dictation: { mode: 'openwhispr' }, cleanup: { mode: 'openwhispr' } },
+    rememberedInference: { upload: { local: { mode: 'local', modelId: 'whisper-base' } } },
+  };
+  await chooseOnboardingMode('private', 'privacy-mode');
+  expect(mockUpdateConfig.mock.calls[0][0]).toMatchObject({
+    defaultMode: 'private',
+    inference: {
+      dictation: { mode: 'local' },
+      upload: { mode: 'local', modelId: 'whisper-base' },
+      cleanup: { mode: 'local' },
+    },
+    pinnedInference: ['upload', 'cleanup'],
+  });
+});
+
+it.each([
+  ['On-Device', { mode: 'local', modelId: 'parakeet-v2' }],
+  ['provider', { mode: 'providers', providerId: 'groq', modelId: 'llama-3.3-70b-versatile' }],
+])('keeps a saved %s choice when setup picks Local', async (_label, saved) => {
+  mockConfig = { defaultMode: 'cloud', inference: { upload: saved, cleanup: saved } };
+  await chooseOnboardingMode('private', 'privacy-mode');
+  const { inference, pinnedInference } = mockUpdateConfig.mock.calls[0][0];
+  expect(inference.upload).toEqual(saved);
+  expect(inference.cleanup).toEqual(saved);
+  expect(pinnedInference).toEqual([]);
+});
+
+// Going back to Cloud in setup changes the mode, which releases what Local held.
+it('releases them when setup goes back to Cloud', async () => {
+  mockUser = { id: 'u', isAnonymous: false };
+  mockConfig = {
+    defaultMode: 'private',
+    inference: {
+      dictation: { mode: 'local' },
+      upload: { mode: 'local' },
+      cleanup: { mode: 'local' },
+    },
+    pinnedInference: ['upload', 'cleanup'],
+  };
+  await chooseOnboardingMode('cloud', 'privacy-mode');
+  expect(mockUpdateConfig.mock.calls[0][0]).toEqual({
+    defaultMode: 'cloud',
+    inference: { dictation: { mode: 'openwhispr' } },
+    pinnedInference: undefined,
+  });
+});
+
+// A Dictation change in AI Models holds the other workflows where they ran, so replaying setup
+// must release them even when it picks the mode dictation is already in.
+it('releases what a Dictation change held when setup is replayed with Cloud', async () => {
+  mockUser = { id: 'u', isAnonymous: false };
+  mockConfig = {
+    defaultMode: 'cloud',
+    inference: {
+      dictation: { mode: 'openwhispr' },
+      upload: { mode: 'local' },
+      cleanup: { mode: 'local' },
+      notes: { mode: 'local' },
+    },
+    pinnedInference: ['upload', 'cleanup', 'notes'],
+  };
+  await chooseOnboardingMode('cloud', 'privacy-mode');
+  expect(mockUpdateConfig.mock.calls[0][0]).toEqual({
+    defaultMode: 'cloud',
+    inference: { dictation: { mode: 'openwhispr' } },
+    pinnedInference: undefined,
+  });
+});
+
+it('holds only uploads and cleanup when setup is replayed with Local', async () => {
+  mockConfig = {
+    defaultMode: 'private',
+    inference: {
+      dictation: { mode: 'local' },
+      upload: { mode: 'local' },
+      cleanup: { mode: 'local' },
+      notes: { mode: 'openwhispr' },
+    },
+    pinnedInference: ['upload', 'cleanup', 'notes'],
+  };
+  await chooseOnboardingMode('private', 'privacy-mode');
+  expect(mockUpdateConfig.mock.calls[0][0]).toEqual({
+    defaultMode: 'private',
+    inference: {
+      dictation: { mode: 'local' },
+      upload: { mode: 'local' },
+      cleanup: { mode: 'local' },
+    },
+    pinnedInference: ['upload', 'cleanup'],
+  });
+});
+
+it('keeps a cleanup the user saved when setup picks Cloud', async () => {
+  mockUser = { id: 'u', isAnonymous: false };
+  const cleanup = { mode: 'local' };
+  mockConfig = { defaultMode: 'cloud', inference: { dictation: { mode: 'openwhispr' }, cleanup } };
+  await chooseOnboardingMode('cloud', 'privacy-mode');
+  expect(mockUpdateConfig.mock.calls[0][0].inference.cleanup).toEqual(cleanup);
+});
+
+// A new identity there would read as an account switch and wipe the synced account's notes.
+describe('on a device that synced an account, signed out', () => {
+  beforeEach(() => {
+    mockAccountHistory = true;
+  });
+
+  it('refuses Cloud at the mode choice without opening a session', async () => {
+    const attempt = chooseOnboardingMode('cloud', 'privacy-mode');
+    await expect(attempt).rejects.toThrow('Cloud needs you signed in');
+    expect(mockEnsureSession).not.toHaveBeenCalled();
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
+  });
+
+  it('saves Cloud for after sign-in when leaving a stuck download', async () => {
+    mockCurrentStep = 'private-download';
+    await chooseOnboardingMode('cloud', 'private-download');
+    expect(mockEnsureSession).not.toHaveBeenCalled();
+    expect(mockChooseMode).toHaveBeenCalledWith('cloud', 'private-download');
   });
 });

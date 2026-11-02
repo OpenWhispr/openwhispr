@@ -1,0 +1,3 @@
+// Shared by chat and saved-note generation, including user-written actions.
+export const SOURCE_FIDELITY_RULE =
+  "Preserve the source's meaning when summarizing, shortening, or drafting from it. Keep uncertainty, negation, and status: proposed, not yet authorized, and decided are different; suggestions are not votes. Keep each task with its stated owner and deadline, including relative deadlines such as this weekend. Preserve before/after timing and do not move one task's deadline onto another. Never replace a supplied deadline with a placeholder. If sources conflict, state the uncertainty rather than inventing a resolution.";

@@ -35,8 +35,7 @@ async function mountNudge(t, { settings = {}, prompted = true } = {}) {
   });
   const container = installHookDom(t);
   const toasts = [];
-  const dismissed = [];
-  globalThis.__cloudNudgeToasts = { toasts, dismissed };
+  globalThis.__cloudNudgeToasts = { toasts };
   t.after(() => delete globalThis.__cloudNudgeToasts);
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-cloud-nudge-",
@@ -53,8 +52,7 @@ async function mountNudge(t, { settings = {}, prompted = true } = {}) {
           toasts.push(props);
           return "toast-" + toasts.length;
         }
-        function dismiss(id) { globalThis.__cloudNudgeToasts.dismissed.push(id); }
-        export function useToast() { return { toast, dismiss }; }
+        export function useToast() { return { toast }; }
       `,
     },
   });
@@ -83,7 +81,6 @@ async function mountNudge(t, { settings = {}, prompted = true } = {}) {
   return {
     storage,
     toasts,
-    dismissed,
     rerender: render,
     settingsOpened: () => settingsOpened,
     signIn: async () => {
@@ -111,8 +108,10 @@ test("a sign-in nudges towards Cloud once the account's policy settles", async (
   assert.equal(nudge.storage.getItem("transcriptionMode"), "providers");
   assert.equal(nudge.storage.getItem("cloudTranscriptionMode"), "byok");
 
-  nudge.toasts[0].action.props.onClick();
-  assert.deepEqual(nudge.dismissed, ["toast-1"]);
+  const [openSettings] = nudge.toasts[0].actions;
+  assert.equal(openSettings.label, "controlPanel.cloudNudge.action");
+  assert.notEqual(openSettings.dismissOnClick, false, "the click closes the toast");
+  openSettings.onClick();
   assert.equal(nudge.settingsOpened(), 1);
 
   await nudge.rerender();

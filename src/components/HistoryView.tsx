@@ -18,6 +18,10 @@ import UpcomingMeetings from "./UpcomingMeetings";
 import { useSettingsStore } from "../stores/settingsStore";
 import { effectiveLocalHistoryEnabled } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
+import { useToneStylePrompt } from "../hooks/useToneStylePrompt";
+import ToneStyleBanner from "./toneStyle/ToneStyleBanner";
+import ToneStyleSetupDialog from "./toneStyle/ToneStyleSetupDialog";
+import { turnOnDictationCleanup } from "./toneStyle/dictationCleanup";
 
 interface HistoryViewProps {
   history: TranscriptionItemType[];
@@ -63,6 +67,7 @@ export default function HistoryView({
     effectiveLocalHistoryEnabled(policyState, personalDataRetentionEnabled)
   );
   const { events, isLoading: eventsLoading, isConnected } = useUpcomingEvents();
+  const toneStylePrompt = useToneStylePrompt();
   const firstName = userName?.trim().split(/\s+/)[0];
   const hasHistory = history.length > 0;
 
@@ -119,7 +124,23 @@ export default function HistoryView({
           t(hasHistory ? "controlPanel.history.welcomeBack" : "controlPanel.history.welcome")
         )}
       </h2>
-      {!useCleanupModel && !aiCTADismissed && (
+      {toneStylePrompt.showBanner && (
+        <ToneStyleBanner
+          cleanupEnabled={useCleanupModel}
+          onStart={() => {
+            if (!useCleanupModel) turnOnDictationCleanup();
+            toneStylePrompt.setDialogOpen(true);
+          }}
+          onDismiss={toneStylePrompt.dismissBanner}
+        />
+      )}
+      <ToneStyleSetupDialog
+        open={toneStylePrompt.dialogOpen}
+        onOpenChange={toneStylePrompt.setDialogOpen}
+        onOpenSettings={onOpenSettings}
+      />
+      {/* The Tone & Style banner offers to turn cleanup on itself. */}
+      {!useCleanupModel && !aiCTADismissed && !toneStylePrompt.showBanner && (
         <div className="mb-3 relative rounded-lg border border-primary/20 bg-primary/5 dark:bg-primary/10 p-3">
           <button
             onClick={() => {
@@ -217,7 +238,7 @@ export default function HistoryView({
                         onDelete={deleteTranscription}
                         onShowAudioInFolder={onShowAudioInFolder}
                         onRetryTranscription={onRetryTranscription}
-                        onOpenSettings={() => onOpenSettings("transcription")}
+                        onOpenSettings={(section) => onOpenSettings(section ?? "transcription")}
                       />
                     ))}
                   </div>

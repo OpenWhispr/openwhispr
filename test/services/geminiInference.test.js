@@ -72,6 +72,9 @@ test("Gemini cleanup uses native instructions and metadata-only logs", async (t)
 test("thinking suppression uses controls supported by each registered Gemini model", async (t) => {
   const { call, requests } = await setup(t);
   for (const [model, control] of [
+    ["gemini-3.6-flash", { thinkingLevel: "minimal" }],
+    ["gemini-3.8-flash", { thinkingLevel: "low" }],
+    ["gemini-4-argon", { thinkingLevel: "low" }],
     ["gemini-3.5-flash", { thinkingLevel: "minimal" }],
     ["gemini-3.5-flash-lite", { thinkingLevel: "minimal" }],
     ["gemini-3.1-flash-lite", { thinkingLevel: "minimal" }],

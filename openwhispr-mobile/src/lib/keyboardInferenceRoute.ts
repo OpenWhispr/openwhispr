@@ -7,7 +7,7 @@ import { resolveMobileInferenceRoute } from '@/lib/mobileProviders';
 const STORAGE_KEY = 'keyboard_inference_route';
 
 export function snapshotKeyboardInferenceRoute(jobId: string): TranscriptionJobRoute {
-  const route = snapshotTranscriptionJob('dictation');
+  const route = snapshotTranscriptionJob('dictation', ['cleanup', 'agent']);
   AppGroupStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, jobId, route }));
   return route;
 }
@@ -61,7 +61,8 @@ function readRoute(jobId: string, storageKey: string): TranscriptionJobRoute | u
     for (const scope of ['cleanup', 'agent'] as const) {
       const field = scope === 'cleanup' ? 'cleanupRoute' : 'agentRoute';
       const stage = value[field];
-      if (stage) {
+      if (!stage) continue;
+      try {
         if (typeof stage !== 'object' || stage === null) throw new Error('Invalid text route.');
         const saved = stage as Record<string, unknown>;
         if (saved.scope !== scope) throw new Error('Invalid text scope.');
@@ -72,6 +73,12 @@ function readRoute(jobId: string, storageKey: string): TranscriptionJobRoute | u
               ? { mode: saved.mode, scope }
               : undefined;
         if (!route[field]) throw new Error('Invalid text route.');
+      } catch (error) {
+        // Only a wand job reads the voice assistant's route, so one that no longer resolves leaves
+        // the wand unavailable rather than failing the dictation.
+        if (scope === 'cleanup') throw error;
+        route.agentUnavailable =
+          'The voice assistant is unavailable. Your raw transcript is saved.';
       }
     }
     if (value.cleanupUnavailable)
@@ -85,7 +92,12 @@ function readRoute(jobId: string, storageKey: string): TranscriptionJobRoute | u
         if (route.provider === 'byok')
           route[unavailable] =
             `${scope === 'cleanup' ? 'Cleanup' : 'The voice assistant'} is unavailable. Your raw transcript is saved.`;
-        else route[field] = { mode: route.provider === 'local' ? 'local' : 'openwhispr', scope };
+        // The voice assistant has no on-device version, so only cleanup defaults to this iPhone.
+        else
+          route[field] = {
+            mode: route.provider === 'local' && scope === 'cleanup' ? 'local' : 'openwhispr',
+            scope,
+          };
       }
     }
     return route;

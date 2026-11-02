@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, type MutableRefObject } from "react";
+import { useEffect, useRef, useCallback, useState, type MutableRefObject } from "react";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import { cn } from "../lib/utils";
 import { createMentionExtension } from "./RichTextEditorMention";
@@ -6,6 +6,31 @@ import { createRichTextExtensions } from "./RichTextEditorExtensions";
 import { RichTextEditorFormatMenu } from "./RichTextEditorFormatMenu";
 import { RichTextEditorTableMenu } from "./RichTextEditorTableMenu";
 import type { MentionPerson } from "../../utils/mentionMarkdown";
+
+/**
+ * ProseMirror's scroll margin or threshold (`side` on every side), raised at the
+ * bottom to whatever an ancestor overlays there: NoteBottomBar publishes its height
+ * in --bottom-overlay-height. ProseMirror reads the sides each time it scrolls the
+ * caret into view, so the getter follows the bar as it grows (action chips, the
+ * summary callout, an open chat).
+ */
+function clearOfBottomOverlay(
+  containerRef: MutableRefObject<HTMLElement | null>,
+  side: number
+): Record<"top" | "right" | "bottom" | "left", number> {
+  return {
+    top: side,
+    right: side,
+    left: side,
+    get bottom(): number {
+      const container = containerRef.current;
+      const overlay = container
+        ? parseFloat(getComputedStyle(container).getPropertyValue("--bottom-overlay-height"))
+        : NaN;
+      return Number.isFinite(overlay) ? Math.max(overlay, side) : side;
+    },
+  };
+}
 
 interface RichTextEditorProps {
   value: string;
@@ -16,6 +41,19 @@ interface RichTextEditorProps {
   editorRef?: MutableRefObject<Editor | null>;
   /** Enables @mention tagging with these people as suggestions. */
   mentionPeople?: MentionPerson[];
+}
+
+/**
+ * Starts a new undo history. Earlier steps would otherwise be mapped onto a
+ * value set from outside: one that spanned the whole document (select all,
+ * then type or delete) maps onto the whole new value, so Ctrl+Z would put the
+ * user's older text back over it and save that.
+ */
+function resetUndoHistory(editor: Editor): void {
+  const { plugins } = editor.state;
+  editor.unregisterPlugin("history");
+  // Reconfiguring keeps every other plugin's state; the history starts empty.
+  editor.view.updateState(editor.state.reconfigure({ plugins }));
 }
 
 export function RichTextEditor({
@@ -38,6 +76,12 @@ export function RichTextEditor({
   }, [mentionPeople]);
   const withMentions = useRef(mentionPeople != null).current;
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scrollClearance] = useState(() => ({
+    scrollMargin: clearOfBottomOverlay(containerRef, 5),
+    scrollThreshold: clearOfBottomOverlay(containerRef, 0),
+  }));
+
   const editor = useEditor({
     extensions: [
       ...(withMentions ? [createMentionExtension(() => mentionPeopleRef.current ?? [])] : []),
@@ -45,8 +89,11 @@ export function RichTextEditor({
     ],
     content: value,
     editable: !disabled,
-    onUpdate: ({ editor: ed }) => {
-      if (suppressUpdateRef.current) return;
+    onUpdate: ({ editor: ed, transaction }) => {
+      // A plugin's appended change (the trailing paragraph after a list, added
+      // on the first click) is not an edit; saving it would also discard the
+      // assistant's Undo for the note.
+      if (suppressUpdateRef.current || !transaction.docChanged) return;
 
       const md = (ed.storage as any).markdown.getMarkdown() as string;
       internalValueRef.current = md;
@@ -57,6 +104,7 @@ export function RichTextEditor({
         class: "rich-text-editor-content",
         dir: "auto",
       },
+      ...scrollClearance,
     },
   });
 
@@ -70,7 +118,9 @@ export function RichTextEditor({
   // Sync external value changes (e.g. dictation, programmatic updates)
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
-    if (value === internalValueRef.current) return;
+    // A whitespace-only note is saved empty; that echo is not a new value, and
+    // applying it would move the caret.
+    if (value === internalValueRef.current || (!value && !internalValueRef.current.trim())) return;
 
     internalValueRef.current = value;
     suppressUpdateRef.current = true;
@@ -83,6 +133,7 @@ export function RichTextEditor({
     const safeFrom = Math.min(from, docSize);
     const safeTo = Math.min(to, docSize);
     editor.commands.setTextSelection({ from: safeFrom, to: safeTo });
+    resetUndoHistory(editor);
 
     suppressUpdateRef.current = false;
   }, [value, editor]);
@@ -101,18 +152,25 @@ export function RichTextEditor({
   }, [editor, disabled]);
 
   return (
-    <div className={cn("relative w-full h-full", className)} onClick={handleClick}>
+    <div
+      ref={containerRef}
+      className={cn("relative w-full h-full", className)}
+      onClick={handleClick}
+    >
       <EditorContent
         editor={editor}
         className={cn(
           // relative: the table menu positions against this scroller and scrolls with it.
           "relative h-full overflow-y-auto",
-          disabled && "pointer-events-none opacity-70",
-          // Reserved by an ancestor via --floating-inset; 0 elsewhere.
-          "pb-[var(--floating-inset,0px)]"
+          disabled && "pointer-events-none opacity-70"
         )}
       />
-      {editor && !disabled && <RichTextEditorFormatMenu editor={editor} />}
+      {editor && !disabled && (
+        <RichTextEditorFormatMenu
+          editor={editor}
+          lineMenuPadding={scrollClearance.scrollThreshold}
+        />
+      )}
       {editor && !disabled && <RichTextEditorTableMenu editor={editor} />}
     </div>
   );

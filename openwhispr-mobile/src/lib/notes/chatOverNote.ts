@@ -24,7 +24,6 @@ export interface ChatOverNotePayload {
 }
 
 const MAX_CONTEXT_CHARS = 24_000;
-const CONTEXT_EDGE_CHARS = 12_000;
 const MAX_HISTORY_MESSAGES = 6;
 const TRUNCATION_MARKER = '\n\n[...middle omitted for chat context...]\n\n';
 // Generated notes lead with their summary and action items, so a long one keeps its start.
@@ -76,21 +75,33 @@ interface BoundedContext {
   truncated: boolean;
 }
 
-export const boundChatContext = (context: string): BoundedContext => {
+// JavaScript slices UTF-16 code units, so a boundary can otherwise leave half an emoji.
+export const truncateChatText = (text: string, maxChars: number): string => {
+  const clipped = text.slice(0, Math.max(0, maxChars));
+  const last = clipped.charCodeAt(clipped.length - 1);
+  return last >= 0xd800 && last <= 0xdbff ? clipped.slice(0, -1) : clipped;
+};
+
+export const boundChatContext = (
+  context: string,
+  maxChars: number = MAX_CONTEXT_CHARS,
+): BoundedContext => {
   const trimmed = context.trim();
-  if (trimmed.length <= MAX_CONTEXT_CHARS) {
+  if (trimmed.length <= maxChars) {
     return { text: trimmed, truncated: false };
   }
 
+  const edgeChars = Math.max(0, Math.floor(maxChars / 2));
+  let tail = edgeChars > 0 ? trimmed.slice(-edgeChars) : '';
+  const first = tail.charCodeAt(0);
+  if (first >= 0xdc00 && first <= 0xdfff) tail = tail.slice(1);
   return {
-    text: `${trimmed.slice(0, CONTEXT_EDGE_CHARS).trimEnd()}${TRUNCATION_MARKER}${trimmed
-      .slice(-CONTEXT_EDGE_CHARS)
-      .trimStart()}`,
+    text: `${truncateChatText(trimmed, edgeChars).trimEnd()}${TRUNCATION_MARKER}${tail.trimStart()}`,
     truncated: true,
   };
 };
 
-const formatHistory = (history: ChatOverNoteMessage[]): string => {
+export const formatChatHistory = (history: ChatOverNoteMessage[]): string => {
   const messages = history
     .slice(-MAX_HISTORY_MESSAGES)
     .map((message) => {
@@ -112,7 +123,7 @@ export const buildChatOverNotePayload = (request: ChatOverNoteRequest): ChatOver
     systemPrompt: CHAT_OVER_NOTE_SYSTEM_PROMPT,
     text: `NOTE OR TRANSCRIPT CONTEXT:\n${boundedContext.text}${truncationNote}
 
-RECENT EPHEMERAL CHAT:\n${formatHistory(request.history)}
+RECENT EPHEMERAL CHAT:\n${formatChatHistory(request.history)}
 
 USER QUESTION:\n${request.question.trim()}`,
   };

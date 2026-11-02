@@ -6,6 +6,8 @@ const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
 const { isPortAvailable } = require("../utils/serverUtils");
 const { broadcastToWindows } = require("./windowBroadcast");
+const { NOTE_TEXT_FIELDS } = require("./noteFieldSync");
+const { isAudioPolicyRefusal } = require("./audioPolicyRefusals");
 
 const PORT_RANGE_START = 8200;
 const PORT_RANGE_END = 8219;
@@ -101,6 +103,20 @@ function unwrapMutationResult(result, label) {
     throw new Error(result?.error || `Failed to write ${label}`);
   }
   return result[label];
+}
+
+// The public v1 contract: a provided blank content or enhanced_content clears
+// that field. updateNote treats a bare blank as unconfirmed (never synced as a
+// clear), so the bridge states the intent; updateNote still validates it.
+function withProvidedBlanksCleared(body) {
+  const blanks = NOTE_TEXT_FIELDS.filter(
+    (field) =>
+      field in body &&
+      (body[field] == null || (typeof body[field] === "string" && !body[field].trim()))
+  );
+  if (blanks.length === 0 || (body.clear_fields !== undefined && !Array.isArray(body.clear_fields)))
+    return body;
+  return { ...body, clear_fields: [...new Set([...(body.clear_fields ?? []), ...blanks])] };
 }
 
 class CliBridge {
@@ -239,6 +255,11 @@ class CliBridge {
       sendV1Error(res, 400, "validation_error", err.message);
       return;
     }
+    // The cloud /v1 API answers every organization policy denial this way.
+    if (isAudioPolicyRefusal(err)) {
+      sendV1Error(res, 403, "forbidden", err.message);
+      return;
+    }
     debugLogger.error("CLI bridge route error", { error: err.message }, "cli-bridge");
     sendV1Error(res, 500, "internal_error", err.message || "Internal server error");
   }
@@ -357,14 +378,14 @@ class CliBridge {
         const err = new Error(
           requested
             ? `Unknown model '${requested}'. Available: ${models.map((m) => m.model).join(", ")}`
-            : "No local transcription model is selected. Choose one in OpenWhispr under Settings → Transcription, or pass 'model'."
+            : "No local transcription model is selected. Choose one in OpenWhispr under Settings → Speech to Text, or pass 'model'."
         );
         err.code = "VALIDATION";
         throw err;
       }
       if (!match.downloaded) {
         const err = new Error(
-          `Model '${match.model}' is not downloaded. Open OpenWhispr and download it under Settings → Transcription.`
+          `Model '${match.model}' is not downloaded. Open OpenWhispr and download it under Settings → Speech to Text.`
         );
         err.code = "VALIDATION";
         throw err;
@@ -438,7 +459,7 @@ class CliBridge {
           err.code = "NOT_FOUND";
           throw err;
         }
-        const result = db.updateNote(id, body || {});
+        const result = db.updateNote(id, withProvidedBlanksCleared(body || {}));
         // The note exists, so a remaining error names a folder or space that doesn't.
         if (result.error) {
           const err = new Error(result.error);
@@ -536,13 +557,18 @@ class CliBridge {
         );
         const language =
           typeof body?.language === "string" && body.language ? body.language : undefined;
-        ipc.approveAudioPath(real);
-        const result = await ipc.transcribeLocalFile(real, { provider, model, language });
+        const result = await ipc._audioFeaturePolicy.run({}, "upload", (signal) => {
+          ipc.approveAudioPath(real);
+          return ipc.transcribeLocalFile(real, { provider, model, language, signal });
+        });
         if (!result?.success) {
           if (result?.code === "NO_SPEECH_DETECTED" || result?.message === "No audio detected") {
             return { data: { text: "", provider, model, warning: "No speech detected" } };
           }
-          throw new Error(result?.error || result?.message || "Local transcription failed");
+          throw Object.assign(
+            new Error(result?.error || result?.message || "Local transcription failed"),
+            { code: result?.code }
+          );
         }
         return { data: { text: result.text, provider, model } };
       }),

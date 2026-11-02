@@ -1,11 +1,9 @@
-import { useState, type ReactElement } from "react";
+import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Copy, ExternalLink } from "../icons";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { CopyableCommand } from "../ui/CopyableCommand";
 import { SectionLabel, SettingsPanel, SettingsPanelRow } from "../ui/SettingsSection";
-import { useToast } from "../ui/useToast";
 import { IntegrationsPane } from "./IntegrationsPane";
 
 const CLI_DOCS_URL = "https://docs.openwhispr.com/cli/install";
@@ -21,54 +19,12 @@ interface CliPaneProps {
 
 export function CliPane({ title, isPaid, onUpgrade }: CliPaneProps): ReactElement {
   const { t } = useTranslation();
-  const { toast } = useToast();
-  const [docsLinkCopied, setDocsLinkCopied] = useState(false);
-
-  const handleCopyDocsLink = async () => {
-    try {
-      await navigator.clipboard.writeText(CLI_DOCS_URL);
-      setDocsLinkCopied(true);
-      toast({
-        title: t("integrations.cli.docsLinkCopied"),
-        variant: "success",
-        duration: 2000,
-      });
-      setTimeout(() => setDocsLinkCopied(false), 2000);
-    } catch {
-      /* noop */
-    }
-  };
 
   return (
     <IntegrationsPane
       title={title}
       description={t("integrations.cli.description")}
-      actions={
-        <>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleCopyDocsLink}
-            className="gap-1.5 text-muted-foreground"
-          >
-            {docsLinkCopied ? (
-              <Check className="h-3 w-3 text-success" />
-            ) : (
-              <Copy className="h-3 w-3" />
-            )}
-            {t("integrations.cli.copyDocsLink")}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => window.electronAPI?.openExternal?.(CLI_DOCS_URL)}
-            className="gap-1.5"
-          >
-            {t("integrations.cli.learnMore")}
-            <ExternalLink className="h-3 w-3" />
-          </Button>
-        </>
-      }
+      docsUrl={CLI_DOCS_URL}
     >
       <div>
         <SectionLabel>{t("integrations.cli.installLabel")}</SectionLabel>

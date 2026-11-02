@@ -51,6 +51,7 @@ export function buildAssistantCommandSendOptions(
       suppressResponseContent: delivery?.mode === "paste",
       // A caret in a markdown-friendly app still keeps the compact pill.
       plainTextResponse: delivery?.mode === "paste" && delivery.plainText,
+      destinationAppCategory: delivery?.mode === "paste" ? delivery.appCategory : undefined,
       onApprovalRequested: () => holdInPanel(),
       onHoldDelivery: holdInPanel,
       onComplete: delivery

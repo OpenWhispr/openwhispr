@@ -182,13 +182,18 @@ interface AgentAddress {
   end: number;
   /** The words the indices refer to (CJK transcripts are normalized first). */
   rawWords: string[];
+  /** Address span in the transcript, or its NFC form for CJK detection. */
+  sourceStart: number;
+  sourceEnd: number;
+  sourceIsNfc: boolean;
 }
 
 function locateAgentAddress(
   transcript: string,
   agentName: string,
   language?: string,
-  snippets?: Snippet[] | null
+  snippets?: Snippet[] | null,
+  refinePrefix = false
 ): AgentAddress | null {
   const name = agentName.trim();
   if (!name || name.length < 2) return null;
@@ -224,14 +229,18 @@ function locateAgentAddress(
   // against the name, allowing length-scaled edits.
   const maxSpan = Math.max(2, detectionName.split(/\s+/).length);
 
-  for (let i = 0; i < words.length; i++) {
+  let address: AgentAddress | null = null;
+  let bestDistance = maxEdits;
+  let searchEnd = words.length;
+  for (let i = 0; i < searchEnd; i++) {
     const cueBefore = i > 0 && (VOCATIVE_CUES.has(words[i - 1]) || localizedCues.has(words[i - 1]));
     let joined = "";
-    for (let span = 0; span < maxSpan && i + span < words.length; span++) {
+    for (let span = 0; span < maxSpan && i + span < searchEnd; span++) {
       joined += words[i + span];
       if (Math.abs(joined.length - nameLower.length) > maxEdits) continue;
+      const distance = levenshteinDistance(joined, nameLower);
       if (
-        levenshteinDistance(joined, nameLower) <= maxEdits &&
+        distance <= bestDistance &&
         // A cue names the agent outright, so it outranks a trigger the words
         // happen to span; without one the trigger the user configured wins.
         (cueBefore ||
@@ -246,12 +255,26 @@ function locateAgentAddress(
         const addressEnd = SEPARATE_ADDRESS_PUNCTUATION.has(rawWords[nameEnd])
           ? nameEnd + 1
           : nameEnd;
-        return { start: cueBefore ? i - 1 : i, end: addressEnd, rawWords };
+        const start = cueBefore ? i - 1 : i;
+        // Selection edits refine only the prefix of the first match:
+        // "B. OpenWhispr" must prefer "OpenWhispr", without extending a fuzzy
+        // name over a following operand ("OpenWhisp, R.").
+        if (!address) searchEnd = nameEnd;
+        bestDistance = distance;
+        address = {
+          start,
+          end: addressEnd,
+          rawWords,
+          sourceStart: originAt(wordStarts[start]),
+          sourceEnd: originAt(wordStarts[addressEnd - 1] + rawWords[addressEnd - 1].length - 1) + 1,
+          sourceIsNfc: normalizeCjk,
+        };
+        if (!refinePrefix) return address;
       }
     }
   }
 
-  return null;
+  return address;
 }
 
 export function detectAgentName(
@@ -280,4 +303,37 @@ export function stripAgentAddress(
   const { rawWords, start, end } = address;
   const remaining = [...rawWords.slice(0, start), ...rawWords.slice(end)].join(" ").trim();
   return remaining || transcript;
+}
+
+/** Remove only the address and its following separator; edit operands stay verbatim. */
+export function stripAgentAddressPreservingFormatting(
+  transcript: string,
+  agentName: string,
+  language?: string,
+  snippets?: Snippet[] | null
+): string {
+  const address = locateAgentAddress(transcript, agentName, language, snippets, true);
+  if (!address) return transcript;
+  let { sourceStart: start, sourceEnd: end } = address;
+  if (address.sourceIsNfc && transcript !== transcript.normalize("NFC")) {
+    // Detection indexes NFC text. Map grapheme boundaries back to the original
+    // UTF-16 offsets so decomposed text outside the address is never rewritten.
+    const boundaries = new Map<number, number>([[0, 0]]);
+    let normalizedOffset = 0;
+    for (const { segment, index } of new Intl.Segmenter(undefined, {
+      granularity: "grapheme",
+    }).segment(transcript)) {
+      normalizedOffset += segment.normalize("NFC").length;
+      boundaries.set(normalizedOffset, index + segment.length);
+    }
+    const originalStart = boundaries.get(start);
+    const originalEnd = boundaries.get(end);
+    // A partial grapheme match is ambiguous; keeping the address is safer.
+    if (originalStart === undefined || originalEnd === undefined) return transcript;
+    start = originalStart;
+    end = originalEnd;
+  }
+  while (end < transcript.length && /\s/.test(transcript[end])) end++;
+  const remaining = transcript.slice(0, start) + transcript.slice(end);
+  return remaining.trim() ? remaining : transcript;
 }

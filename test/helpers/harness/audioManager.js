@@ -6,7 +6,11 @@
 //
 // `settingsKey` names the globalThis slot the suite swaps its settings
 // through — a unique key per suite keeps the per-test module caches isolated.
-const { createRendererServer, installBrowserGlobals } = require("../../lib/rendererTestHarness");
+const {
+  addTeardown,
+  createRendererServer,
+  installBrowserGlobals,
+} = require("../../lib/rendererTestHarness");
 
 const defaultMockModules = (settingsKey) => ({
   "/utils/logger":
@@ -32,7 +36,7 @@ async function loadAudioManager(t, { cachePrefix, settingsKey, settings, mockMod
     cachePrefix,
     mockModules: { ...defaultMockModules(settingsKey), ...mockModules },
   });
-  t.after(() => {
+  addTeardown(t, () => {
     delete globalThis[settingsKey];
   });
   globalThis[settingsKey] = settings ?? {};

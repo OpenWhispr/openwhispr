@@ -59,7 +59,12 @@ test("openai cloud mints per-stream client secrets and validates the dual pair",
       return { clientSecret: "cs-single", clientSecrets: ["cs-a", "cs-b"] };
     },
   });
-  const options = { mode: "openwhispr", model: "gpt-4o-mini-transcribe", language: "en" };
+  const options = {
+    mode: "openwhispr",
+    model: "gpt-4o-mini-transcribe",
+    language: "en",
+    purpose: "dictation",
+  };
 
   assert.equal(
     await fetchRealtimeTokenForProvider("openai-realtime", cloudDeps, options),
@@ -71,7 +76,7 @@ test("openai cloud mints per-stream client secrets and validates the dual pair",
   );
   assert.deepEqual(calls[0], {
     path: "/api/openai-realtime-token",
-    body: { model: "gpt-4o-mini-transcribe", language: "en", streams: 1 },
+    body: { model: "gpt-4o-mini-transcribe", language: "en", streams: 1, purpose: "dictation" },
   });
   assert.equal(calls[1].body.streams, 2);
 
@@ -129,7 +134,7 @@ test("deepgram byok duplicates the key; cloud mints per stream", async () => {
     await fetchRealtimeTokenForProvider(
       "deepgram-realtime",
       cloudDeps,
-      { mode: "openwhispr" },
+      { mode: "openwhispr", purpose: "meeting" },
       { streams: 2 }
     ),
     ["dg-1", "dg-2"]
@@ -157,7 +162,7 @@ test("gemini byok duplicates the raw key; cloud mints one token per stream", asy
     await fetchRealtimeTokenForProvider(
       "gemini-realtime",
       cloudDeps,
-      { mode: "openwhispr" },
+      { mode: "openwhispr", purpose: "dictation" },
       { streams: 2 }
     ),
     ["gm-1", "gm-2"]
@@ -165,6 +170,7 @@ test("gemini byok duplicates the raw key; cloud mints one token per stream", asy
   await assert.rejects(
     fetchRealtimeTokenForProvider("gemini-realtime", deps({ postServerToken: async () => ({}) }), {
       mode: "openwhispr",
+      purpose: "dictation",
     }),
     /No Gemini token received/
   );
@@ -204,7 +210,7 @@ test("missing byok keys throw configuration errors, not token errors", async () 
   }
 });
 
-test('wire bodies: dictation posts the bare {"streams":1}; meetings post model+language+streams', async () => {
+test("wire bodies identify dictation and meetings explicitly, including single-stream meetings", async () => {
   const { fetchRealtimeTokenForProvider } = await load();
   const wire = [];
   const cloudDeps = deps({
@@ -217,13 +223,23 @@ test('wire bodies: dictation posts the bare {"streams":1}; meetings post model+l
     },
   });
 
-  // Dictation: ipcHandlers' connectDictationStreaming passes only { mode, provider }.
-  await fetchRealtimeTokenForProvider("openai-realtime", cloudDeps, { mode: "openwhispr" });
+  // Dictation: ipcHandlers' connectDictationStreaming passes { mode, provider, language }
+  // (base ISO-639-1, undefined for Auto) and never a model — the server owns it (#2050).
+  await fetchRealtimeTokenForProvider("openai-realtime", cloudDeps, {
+    mode: "openwhispr",
+    language: "de",
+    purpose: "dictation",
+  });
+  await fetchRealtimeTokenForProvider("openai-realtime", cloudDeps, {
+    mode: "openwhispr",
+    language: undefined,
+    purpose: "dictation",
+  });
   // Meeting with system audio.
   await fetchRealtimeTokenForProvider(
     "openai-realtime",
     cloudDeps,
-    { mode: "openwhispr", model: "gpt-4o-mini-transcribe", language: "en" },
+    { mode: "openwhispr", model: "gpt-4o-mini-transcribe", language: "en", purpose: "meeting" },
     { streams: 2 }
   );
   // Meeting whose system audio is unsupported (connectRealtimeStreaming's single-stream
@@ -231,20 +247,187 @@ test('wire bodies: dictation posts the bare {"streams":1}; meetings post model+l
   await fetchRealtimeTokenForProvider(
     "openai-realtime",
     cloudDeps,
-    { mode: "openwhispr", model: "gpt-4o-mini-transcribe", language: undefined },
+    {
+      mode: "openwhispr",
+      model: "gpt-4o-mini-transcribe",
+      language: undefined,
+      purpose: "meeting",
+    },
     { streams: 1 }
   );
 
-  // Gemini's endpoint reads nothing from the request; it must post a bare body.
-  await fetchRealtimeTokenForProvider("gemini-realtime", cloudDeps, { mode: "openwhispr" });
+  // Gemini is dictation-only and carries the same explicit purpose.
+  await fetchRealtimeTokenForProvider("gemini-realtime", cloudDeps, {
+    mode: "openwhispr",
+    purpose: "dictation",
+  });
 
-  assert.deepEqual(wire, [
-    { path: "/api/openai-realtime-token", json: '{"streams":1}' },
-    {
-      path: "/api/openai-realtime-token",
-      json: '{"model":"gpt-4o-mini-transcribe","language":"en","streams":2}',
+  assert.deepEqual(
+    wire.map(({ path, json }) => ({ path, body: JSON.parse(json) })),
+    [
+      {
+        path: "/api/openai-realtime-token",
+        body: { language: "de", streams: 1, purpose: "dictation" },
+      },
+      { path: "/api/openai-realtime-token", body: { streams: 1, purpose: "dictation" } },
+      {
+        path: "/api/openai-realtime-token",
+        body: { model: "gpt-4o-mini-transcribe", language: "en", streams: 2, purpose: "meeting" },
+      },
+      {
+        path: "/api/openai-realtime-token",
+        body: { model: "gpt-4o-mini-transcribe", streams: 1, purpose: "meeting" },
+      },
+      { path: "/api/gemini-live-token", body: { purpose: "dictation" } },
+    ]
+  );
+});
+
+test("a managed mint without an audio purpose is refused before it reaches the server", async () => {
+  const { fetchRealtimeTokenForProvider } = await load();
+  const posted = [];
+  const cloudDeps = deps({
+    postServerToken: async (path) => {
+      posted.push(path);
+      return { token: "server-token", clientSecret: "cs" };
     },
-    { path: "/api/openai-realtime-token", json: '{"model":"gpt-4o-mini-transcribe","streams":1}' },
-    { path: "/api/gemini-live-token", json: "{}" },
-  ]);
+  });
+  for (const provider of [
+    "assemblyai-realtime",
+    "deepgram-realtime",
+    "gemini-realtime",
+    "openai-realtime",
+  ]) {
+    for (const purpose of [undefined, "upload"]) {
+      await assert.rejects(
+        fetchRealtimeTokenForProvider(provider, cloudDeps, { mode: "openwhispr", purpose }),
+        { code: "AUDIO_PURPOSE_REQUIRED" },
+        `${provider} (${purpose})`
+      );
+    }
+  }
+  assert.deepEqual(posted, []);
+});
+
+// A Cloud note recording whose token request is refused used to toast the API's
+// bare "Invalid session" / "Not authenticated"; these codes let it offer sign-in (#2427).
+const serverTokenPoster = async (overrides = {}) => {
+  const { createServerTokenPoster } = await load();
+  return createServerTokenPoster({
+    getApiUrl: () => "https://api.example",
+    getAuthHeader: async () => ({ Authorization: "Bearer stale" }),
+    proxyFetch: async () => jsonResponse(200, { clientSecret: "secret" }),
+    withPolicyHeaders: (headers) => headers,
+    classifyAndLog: () => ({ isNetworkError: false }),
+    ...overrides,
+  });
+};
+
+test("server tokens: a code-less 401 is AUTH_EXPIRED and keeps the server's message", async () => {
+  const post = await serverTokenPoster({
+    proxyFetch: async () => jsonResponse(401, { error: "Invalid session" }),
+  });
+  await assert.rejects(post("/api/openai-realtime-token"), {
+    message: "Invalid session",
+    code: "AUTH_EXPIRED",
+    status: 401,
+  });
+});
+
+test("server tokens: a missing credential is AUTH_REQUIRED and never reaches the API", async () => {
+  let fetched = false;
+  const post = await serverTokenPoster({
+    getAuthHeader: async () => ({}),
+    proxyFetch: async () => {
+      fetched = true;
+      return jsonResponse(200, {});
+    },
+  });
+  await assert.rejects(post("/api/openai-realtime-token"), {
+    message: "Not authenticated",
+    code: "AUTH_REQUIRED",
+  });
+  assert.equal(fetched, false);
+});
+
+test("server tokens: codes the API sends are kept, and other refusals stay untagged", async () => {
+  const refuse = async (status, body) =>
+    (await serverTokenPoster({ proxyFetch: async () => jsonResponse(status, body) }))(
+      "/api/openai-realtime-token"
+    );
+  await assert.rejects(refuse(401, { error: "Session expired", code: "SESSION_REVOKED" }), {
+    code: "SESSION_REVOKED",
+  });
+  await assert.rejects(refuse(403, { error: "Blocked", code: "POLICY_BLOCKED" }), {
+    code: "POLICY_BLOCKED",
+  });
+  await assert.rejects(refuse(500, null), (error) => {
+    assert.equal(error.message, "Token request failed: 500");
+    assert.equal(error.code, undefined);
+    return true;
+  });
+});
+
+test("server tokens: a network failure is NETWORK_ERROR, not a sign-in prompt", async () => {
+  const post = await serverTokenPoster({
+    proxyFetch: async () => {
+      throw Object.assign(new Error("getaddrinfo ENOTFOUND"), { code: "ENOTFOUND" });
+    },
+    classifyAndLog: () => ({
+      isNetworkError: true,
+      code: "ENOTFOUND",
+      messageKey: "streaming.errors.cloudUnreachable.dnsBlocked",
+    }),
+  });
+  await assert.rejects(post("/api/openai-realtime-token"), {
+    code: "NETWORK_ERROR",
+    networkCode: "ENOTFOUND",
+  });
+});
+
+test("server tokens: a success posts the body with credential and policy headers", async () => {
+  const requests = [];
+  const post = await serverTokenPoster({
+    proxyFetch: async (url, init) => {
+      requests.push({ url, init });
+      return jsonResponse(200, { clientSecret: "secret" });
+    },
+    withPolicyHeaders: (headers) => ({ ...headers, "x-policy": "applied" }),
+  });
+  assert.deepEqual(await post("/api/openai-realtime-token", { streams: 1 }), {
+    clientSecret: "secret",
+  });
+  assert.equal(requests[0].url, "https://api.example/api/openai-realtime-token");
+  assert.equal(requests[0].init.headers.Authorization, "Bearer stale");
+  assert.equal(requests[0].init.headers["x-policy"], "applied");
+  assert.equal(requests[0].init.body, '{"streams":1}');
+});
+
+test("server tokens: only session refusals count as sign-in refusals", async () => {
+  const { isSignInRefusal } = await load();
+  const refusal = async (overrides) => {
+    try {
+      await (
+        await serverTokenPoster(overrides)
+      )("/api/openai-realtime-token");
+    } catch (error) {
+      return error;
+    }
+    assert.fail("expected the token request to be refused");
+  };
+  assert.equal(
+    isSignInRefusal(await refusal({ proxyFetch: async () => jsonResponse(401, {}) })),
+    true
+  );
+  assert.equal(isSignInRefusal(await refusal({ getAuthHeader: async () => ({}) })), true);
+  assert.equal(
+    isSignInRefusal(
+      await refusal({ proxyFetch: async () => jsonResponse(403, { code: "POLICY_BLOCKED" }) })
+    ),
+    false
+  );
+  assert.equal(
+    isSignInRefusal(await refusal({ proxyFetch: async () => jsonResponse(500, null) })),
+    false
+  );
 });

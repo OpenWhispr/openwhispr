@@ -1,13 +1,17 @@
 // Pure policy shared by main-process catalogue filtering and renderer requests.
 export const RETIRED_CLOUD_MODELS = {
-  // Retired 2026-08-16. The key predates this table and is already set on
-  // installed apps, so it stays exactly as it shipped.
+  // qwen3-32b and both Llamas (retired 2026-08-16) were swept under the
+  // original key, which predates this table. Groq shut down both Compound
+  // systems on 2026-09-21 with no named successor; installed builds had
+  // already written that key, so adding them rotated it.
   groq: {
-    migratedKey: "_retiredGroqModelsMigrated",
+    migratedKey: "_retiredGroqModelsMigrated2",
     models: {
       "qwen/qwen3-32b": "openai/gpt-oss-120b",
       "llama-3.3-70b-versatile": "openai/gpt-oss-120b",
       "llama-3.1-8b-instant": "openai/gpt-oss-20b",
+      "groq/compound": "openai/gpt-oss-120b",
+      "groq/compound-mini": "openai/gpt-oss-20b",
     },
   },
   // All three shipped as seed entries — deepseek-v4-pro in v1.7.4, kimi-k2-6
@@ -25,6 +29,14 @@ export const RETIRED_CLOUD_MODELS = {
       "deepseek-v4-pro": "deepseek-v4-1-flash",
       "deepseek-v4-flash": "deepseek-v4-1-flash",
       "kimi-k2-6": "kimi-k3",
+    },
+  },
+  // OpenAI shut down gpt-4.1-nano on 2026-10-23. GPT-6 Luna is its fastest,
+  // lowest-cost successor.
+  openai: {
+    migratedKey: "_retiredOpenAIModelsMigrated",
+    models: {
+      "gpt-4.1-nano": "gpt-6-luna",
     },
   },
 };
