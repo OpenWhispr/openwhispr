@@ -131,7 +131,7 @@ function PeopleBody({
         </p>
       </div>
 
-      <div className="border-b border-border/70 dark:border-border-subtle/60 -mx-1 flex items-center gap-0.5 px-1">
+      <div className="border-b border-border/70 dark:border-border-subtle/60 -mx-1 flex flex-wrap items-center gap-0.5 px-1">
         <div role="tablist" className="flex items-center gap-0.5">
           {visibleTabs.map((id) => (
             <button

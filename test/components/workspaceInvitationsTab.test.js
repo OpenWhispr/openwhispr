@@ -208,6 +208,64 @@ test("pending shows days left", async (t) => {
   assert.match(markup, /settingsPage\.workspace\.people\.columns\.actions/);
 });
 
+test("a narrow table keeps every email whole, with role and status under it", async (t) => {
+  const { Tab } = await loadTab(t);
+
+  const markup = render(Tab, ready([invitation("i1", "ada@example.com", inDays(3))]));
+
+  // The settings pane's width isn't the viewport's, so the frame is what the table responds to.
+  assert.match(markup, /<div class="[^"]*@container[^"]*"><table/);
+  const email = markup.match(/<p class="([^"]*)"><bdi dir="ltr">ada@example\.com<\/bdi><\/p>/);
+  assert.ok(email, "the email is one isolated run");
+  const classes = email[1].split(" ");
+  assert.ok(classes.includes("break-all"));
+  // Truncating is for wide tables only: below the breakpoint rows must stay distinguishable.
+  assert.ok(!classes.includes("truncate"));
+  assert.ok(classes.includes("@xl:truncate"));
+  assert.match(
+    markup,
+    /<p class="[^"]*@xl:hidden[^"]*text-muted-foreground[^"]*">settingsPage\.workspace\.role\.member · settingsPage\.workspace\.people\.invitations\.pending#3<\/p>/
+  );
+});
+
+test("role and status show in one place at each width", async (t) => {
+  const { Tab } = await loadTab(t);
+
+  const markup = render(Tab, ready([invitation("i1", "ada@example.com", inDays(3))]));
+
+  // Two columns, each hidden until the table is wide enough, in the header and in the row.
+  assert.equal(markup.match(/<th [^>]*class="[^"]*hidden @xl:table-cell/g)?.length, 2);
+  assert.equal(markup.match(/<td class="[^"]*hidden @xl:table-cell/g)?.length, 2);
+  assert.match(
+    markup,
+    /<td class="[^"]*hidden @xl:table-cell[^"]*">settingsPage\.workspace\.role\.member<\/td>/
+  );
+  assert.match(
+    markup,
+    /<td class="[^"]*hidden @xl:table-cell[^"]*">settingsPage\.workspace\.people\.invitations\.pending#3<\/td>/
+  );
+  // The column's copy and the second line's, and nothing else that could also be announced.
+  assert.equal(markup.match(/invitations\.pending#3/g)?.length, 2);
+  assert.equal(markup.match(/workspace\.role\.member/g)?.length, 2);
+  // Checkbox and Actions stay at every width.
+  assert.equal(markup.match(/<th [^>]*class="(?![^"]*hidden)/g)?.length, 3);
+});
+
+test("expired keeps its colour in the wide column and reads muted under the email", async (t) => {
+  const { Tab } = await loadTab(t);
+
+  const markup = render(Tab, ready([invitation("i1", "ada@example.com", ago(1))]));
+
+  assert.match(
+    markup,
+    /<td class="[^"]*hidden @xl:table-cell[^"]*text-destructive[^"]*">settingsPage\.workspace\.people\.invitations\.expired<\/td>/
+  );
+  assert.match(
+    markup,
+    /<p class="[^"]*@xl:hidden[^"]*text-muted-foreground[^"]*">settingsPage\.workspace\.role\.member · settingsPage\.workspace\.people\.invitations\.expired<\/p>/
+  );
+});
+
 test("the email is isolated in a left-to-right run", async (t) => {
   const { Tab } = await loadTab(t);
 

@@ -359,6 +359,15 @@ test("Add sits beside the tab list, not inside it", async (t) => {
   assert.doesNotMatch(markup, /aria-label="settingsPage\.workspace\.people\.addLabel"/);
 });
 
+test("Add wraps under the tabs rather than scroll a narrow pane sideways", async (t) => {
+  const Section = await loadSection(t);
+  const markup = render(Section, ADMIN);
+
+  const row = markup.match(/<div class="([^"]*)"><div role="tablist"/);
+  assert.ok(row, "the row holding the tab list and Add");
+  assert.ok(row[1].split(" ").includes("flex-wrap"));
+});
+
 test("Upgrade opens Plan & Billing", async (t) => {
   const Section = await loadSection(t);
   const opened = [];

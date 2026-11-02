@@ -40,6 +40,8 @@ const ROW_DIVIDER = "border-t border-border/60 dark:border-border-subtle/50";
 // The header sticks over the rows on the settings pane's own background.
 const HEADER_CELL =
   "sticky top-0 z-10 h-9 bg-background dark:bg-surface-1 text-xs font-normal text-muted-foreground first:rounded-ss-xl last:rounded-se-xl";
+// Display none, so these and their copy under the email are never announced at the same width.
+const WIDE_ONLY = "hidden @xl:table-cell";
 const SKELETON_ROWS = 3;
 const HEADER_CHECKED = { none: false, some: "mixed", all: true } as const;
 
@@ -304,7 +306,9 @@ export default function WorkspaceInvitationsTab({
       )}
 
       {rows.length > 0 && (
-        <div className={TABLE_FRAME}>
+        // A container, since the settings pane's width isn't the viewport's. Below @xl the role and
+        // status columns move under the email, which then wraps so rows can be told apart.
+        <div className={cn(TABLE_FRAME, "@container")}>
           <table className="w-full border-collapse">
             <thead>
               <tr>
@@ -321,10 +325,16 @@ export default function WorkspaceInvitationsTab({
                 <th scope="col" className={cn(HEADER_CELL, "ps-3 pe-3 text-start")}>
                   {t("settingsPage.workspace.people.columns.email")}
                 </th>
-                <th scope="col" className={cn(HEADER_CELL, "px-3 text-start whitespace-nowrap")}>
+                <th
+                  scope="col"
+                  className={cn(HEADER_CELL, WIDE_ONLY, "px-3 text-start whitespace-nowrap")}
+                >
                   {t("settingsPage.workspace.people.columns.role")}
                 </th>
-                <th scope="col" className={cn(HEADER_CELL, "px-3 text-start whitespace-nowrap")}>
+                <th
+                  scope="col"
+                  className={cn(HEADER_CELL, WIDE_ONLY, "px-3 text-start whitespace-nowrap")}
+                >
                   {t("settingsPage.workspace.people.columns.status")}
                 </th>
                 <th scope="col" className={cn(HEADER_CELL, "ps-3 pe-4 text-end whitespace-nowrap")}>
@@ -336,6 +346,12 @@ export default function WorkspaceInvitationsTab({
               {rows.map((invitation) => {
                 const expired = invitationStatus(invitation, now) === "expired";
                 const resending = resendingIds.has(invitation.id);
+                const role = t(`settingsPage.workspace.role.${invitation.workspace_role}`);
+                const status = expired
+                  ? t("settingsPage.workspace.people.invitations.expired")
+                  : t("settingsPage.workspace.people.invitations.pending", {
+                      count: invitationDaysLeft(invitation, now),
+                    });
                 return (
                   <tr key={invitation.id} className={cn("h-14", ROW_DIVIDER)}>
                     <td className="w-10 ps-4 pe-0">
@@ -350,26 +366,26 @@ export default function WorkspaceInvitationsTab({
                         }
                       />
                     </td>
-                    {/* max-w-0 lets the email truncate inside an auto-layout table. */}
-                    <td className="ps-3 pe-3 w-full max-w-0">
-                      <p className="text-xs font-medium text-foreground truncate">
+                    {/* max-w-0 keeps the email from widening the column in an auto-layout table. */}
+                    <td className="ps-3 pe-3 py-2 @xl:py-0 w-full max-w-0">
+                      <p className="text-xs font-medium text-foreground break-all @xl:truncate">
                         <bdi dir="ltr">{invitation.email}</bdi>
                       </p>
+                      <p className="@xl:hidden mt-0.5 text-xs text-muted-foreground">
+                        {role} · {status}
+                      </p>
                     </td>
-                    <td className="px-3 whitespace-nowrap text-xs text-foreground">
-                      {t(`settingsPage.workspace.role.${invitation.workspace_role}`)}
+                    <td className={cn(WIDE_ONLY, "px-3 whitespace-nowrap text-xs text-foreground")}>
+                      {role}
                     </td>
                     <td
                       className={cn(
+                        WIDE_ONLY,
                         "px-3 whitespace-nowrap text-xs",
                         expired ? "text-destructive" : "text-muted-foreground"
                       )}
                     >
-                      {expired
-                        ? t("settingsPage.workspace.people.invitations.expired")
-                        : t("settingsPage.workspace.people.invitations.pending", {
-                            count: invitationDaysLeft(invitation, now),
-                          })}
+                      {status}
                     </td>
                     <td className="ps-3 pe-4 w-px whitespace-nowrap text-end">
                       <DropdownMenu>
