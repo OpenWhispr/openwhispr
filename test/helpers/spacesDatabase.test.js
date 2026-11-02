@@ -2036,7 +2036,7 @@ test("a legacy note pushed for an account becomes that account's note", (t) => {
   assert.equal(db.getNote(pushed.id), null);
 });
 
-test("launch repair attributes legacy rows already bound to an account's cloud", (t) => {
+test("launch repair attributes pushed legacy notes to their account", (t) => {
   const db = createDb(t);
   if (!db) return;
 
@@ -2085,7 +2085,7 @@ test("launch repair attributes legacy rows already bound to an account's cloud",
     null,
     null
   ).lastInsertRowid;
-  // A user folder bound to some cloud with no notes to name its owner.
+  // A user folder bound to some cloud.
   const work = db.db
     .prepare(
       "INSERT INTO folders (name, space_id, client_folder_id, cloud_id, sync_status) VALUES ('Work', ?, 'work-client', 'work-cloud', 'synced')"
@@ -2099,7 +2099,7 @@ test("launch repair attributes legacy rows already bound to an account's cloud",
   const accountOf = (table, id) =>
     reopened.db.prepare(`SELECT account_id FROM ${table} WHERE id = ?`).get(id).account_id;
 
-  // A note proves nothing about its folder; A's next folder pull claims these.
+  // A note proves nothing about its folder; A's next full sync claims these.
   assert.equal(accountOf("folders", seeded.Personal), null, "A's synced note doesn't name it");
   assert.equal(accountOf("folders", seeded.Meetings), null);
   assert.equal(accountOf("folders", seeded.Videos), null);
@@ -2149,7 +2149,7 @@ test("deleting an account releases device-owned notes from its folders", (t) => 
   const personalA = db.db
     .prepare("SELECT id FROM folders WHERE name = 'Personal' AND account_id = 'account-a'")
     .get().id;
-  // Left by a build that claimed the folder but not the notes inside it.
+  // A never-pushed note stays device-owned when its folder is claimed.
   const guest = {
     id: db.db
       .prepare(
@@ -2614,13 +2614,11 @@ test("launch repair never names a folder's owner from the notes inside", (t) => 
     `INSERT INTO notes (title, content, folder_id, space_id, client_note_id, cloud_id, account_id, sync_status, deleted_at)
      VALUES (?, '', ?, ?, ?, ?, ?, ?, ?)`
   );
-  // B only ever saw these folders; its pushes into them were rejected.
   insertNote.run("B in Work", work, privateId, "n1", null, "account-b", "error", null);
   insertNote.run("B trashed", archive, privateId, "n2", "c2", "account-b", "synced", "2026-10-01");
   // The server clears a foreign folder and still syncs the note.
   const videos = folderOf(db, null, "Videos").id;
   insertNote.run("B in Videos", videos, privateId, "n4", "c4", "account-b", "synced", null);
-  // B's notes elsewhere make B the only account known on the device.
   insertNote.run("B elsewhere", null, privateId, "n3", "c3", "account-b", "synced", null);
 
   db.setActiveAccountId(null);
