@@ -15,18 +15,19 @@ import { SkillChatActionsContext } from "./skillChatActions";
 import { useDialogs } from "../../hooks/useDialogs";
 import { getCachedPlatform } from "../../utils/platform";
 import { observeChatComposerInset } from "./composerLayout";
-import type { SkillChatRequest, SkillRef } from "../../types/skills";
+import {
+  NO_CHAT_SKILLS,
+  forgetChatSkills,
+  readChatSkills,
+  writeChatSkills,
+  type AttachedSkill,
+  type ChatSkills,
+} from "./chatSkillMemory";
+import type { SkillChatRequest } from "../../types/skills";
 
 const CommandSearch = lazy(() => import("../CommandSearch"));
 
 const platform = getCachedPlatform();
-
-interface AttachedSkill {
-  ref: SkillRef;
-  displayName: string;
-  /** Picked by the app for a model without tools, rather than attached by the user. */
-  picked?: boolean;
-}
 
 interface ChatViewProps {
   /** A new id opens a new chat with that skill attached. */
@@ -47,11 +48,9 @@ export default function ChatView({
   const [refreshKey, setRefreshKey] = useState(0);
   const [showSearch, setShowSearch] = useState(false);
   const [submissionInFlight, setSubmissionInFlight] = useState(false);
-  const [attachedSkill, setAttachedSkill] = useState<AttachedSkill | null>(null);
-  // The user removed a skill the app picked; no other is picked in this chat.
-  const [skillPickOff, setSkillPickOff] = useState(false);
-  // Skills the user took off this chat stay off it, even where the model loaded them.
-  const [removedSkills, setRemovedSkills] = useState<string[]>([]);
+  // A conversation's skills come back with it when the user returns to it.
+  const [chatSkills, setChatSkills] = useState<ChatSkills>(NO_CHAT_SKILLS);
+  const { attached: attachedSkill, pickOff: skillPickOff, removed: removedSkills } = chatSkills;
   const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
 
   const persistence = useChatPersistence({
@@ -81,12 +80,11 @@ export default function ChatView({
       cancelStream();
       setActiveConversationId(id);
       setIsNewChat(false);
-      setAttachedSkill(null);
-      setSkillPickOff(false);
-      setRemovedSkills([]);
+      setChatSkills(readChatSkills(id));
       if ((await persistence.loadConversation(id)) === null) {
         setActiveConversationId(null);
         setIsNewChat(true);
+        setChatSkills(NO_CHAT_SKILLS);
       }
     },
     [activeConversationId, cancelStream, persistence]
@@ -96,9 +94,7 @@ export default function ChatView({
     cancelStream();
     setActiveConversationId(null);
     setIsNewChat(true);
-    setAttachedSkill(null);
-    setSkillPickOff(false);
-    setRemovedSkills([]);
+    setChatSkills(NO_CHAT_SKILLS);
     persistence.handleNewChat();
   }, [cancelStream, persistence]);
 
@@ -143,20 +139,27 @@ export default function ChatView({
         allowSkillPick: !skillPickOff,
         removedSkills,
         onSkillPicked: ({ name, displayName }) =>
-          setAttachedSkill({ ref: { name }, displayName, picked: true }),
+          setChatSkills((skills) => ({
+            ...skills,
+            attached: { ref: { name }, displayName, picked: true },
+          })),
       }),
     [handleTextSubmit, skillPickOff, removedSkills]
   );
 
   const removeSkill = useCallback(() => {
-    if (attachedSkill?.picked) setSkillPickOff(true);
-    if (attachedSkill && !attachedSkill.ref.builtin) {
-      setRemovedSkills((names) => [...names, attachedSkill.ref.name]);
-    }
-    setAttachedSkill(null);
+    setChatSkills(({ attached, pickOff, removed }) => ({
+      attached: null,
+      pickOff: pickOff || Boolean(attached?.picked),
+      removed: attached && !attached.ref.builtin ? [...removed, attached.ref.name] : removed,
+    }));
     // The × is gone with the chip, so the cursor goes back to the composer.
     focusComposer();
-  }, [attachedSkill, focusComposer]);
+  }, [focusComposer]);
+
+  useEffect(() => {
+    if (activeConversationId !== null) writeChatSkills(activeConversationId, chatSkills);
+  }, [activeConversationId, chatSkills]);
 
   // Try now, Create with assistant and Draft with assistant each open a new chat. The request
   // stays set until the parent clears it, so each id is handled once.
@@ -178,16 +181,20 @@ export default function ChatView({
               ref: { name: "skill-creator", builtin: true },
               displayName: t("skills.chat.creatorName"),
             };
-      setAttachedSkill(skill);
+      setChatSkills((skills) => ({ ...skills, attached: skill }));
       if (request.kind === "create" && request.draft) {
-        const { title, description } = request.draft;
-        void sendWithSkill(
+        const { title, description, instructions, fileNames } = request.draft;
+        const draftText = [
           t("skills.chat.draftPrompt", {
             name: title || t("skills.chat.noneYet"),
             description: description || t("skills.chat.noneYet"),
           }),
-          skill
-        );
+          ...(instructions ? [t("skills.chat.draftInstructions", { instructions })] : []),
+          ...(fileNames.length > 0
+            ? [t("skills.chat.draftFiles", { files: fileNames.join(", ") })]
+            : []),
+        ].join("\n");
+        void sendWithSkill(draftText, skill);
       }
       onSkillRequestHandled?.();
     });
@@ -196,7 +203,13 @@ export default function ChatView({
     };
   }, [skillRequest, startNewChat, sendWithSkill, onSkillRequestHandled, t]);
 
-  const skillChatActions = useMemo(() => ({ openSkill: onOpenSkill }), [onOpenSkill]);
+  // Open skill leaves the chat, which ends a running turn; a turn that so far holds only the
+  // card's tool call isn't saved then, so the link waits for the turn to finish.
+  const turnRunning = submissionInFlight || streaming.agentState !== "idle";
+  const skillChatActions = useMemo(
+    () => ({ openSkill: turnRunning ? undefined : onOpenSkill }),
+    [turnRunning, onOpenSkill]
+  );
 
   const handleArchive = useCallback(
     async (id: number) => {
@@ -216,6 +229,7 @@ export default function ChatView({
         description: t("chat.deleteConfirm"),
         onConfirm: async () => {
           await window.electronAPI?.deleteAgentConversation?.(id);
+          forgetChatSkills(id);
           if (activeConversationId === id) {
             handleNewChat();
           }
@@ -275,21 +289,18 @@ export default function ChatView({
           <div className="relative flex-1 min-w-80 min-h-0 flex flex-col">
             <ChatMessages
               messages={persistence.messages}
+              leading={attachedSkill?.ref.builtin ? <CreatorOpening /> : undefined}
               emptyState={
-                attachedSkill?.ref.builtin ? (
-                  <CreatorOpening />
-                ) : (
-                  <NewChatEmptyState
-                    onPrompt={(prompt) => {
-                      // The starter card unmounts once the message lands; move focus to the
-                      // composer first so it isn't dropped.
-                      focusComposer();
-                      void sendWithSkill(prompt, attachedSkill);
-                    }}
-                    showSuggestions={isNewChat}
-                    disabled={submissionInFlight || streaming.agentState !== "idle"}
-                  />
-                )
+                <NewChatEmptyState
+                  onPrompt={(prompt) => {
+                    // The starter card unmounts once the message lands; move focus to the
+                    // composer first so it isn't dropped.
+                    focusComposer();
+                    void sendWithSkill(prompt, attachedSkill);
+                  }}
+                  showSuggestions={isNewChat}
+                  disabled={submissionInFlight || streaming.agentState !== "idle"}
+                />
               }
               contentClassName={`${PAGE_CONTENT_WIDTH_CLASS} pb-[var(--chat-composer-inset,5rem)]`}
             />

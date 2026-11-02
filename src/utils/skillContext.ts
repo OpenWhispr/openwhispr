@@ -15,11 +15,39 @@ const FILE_CUT = "[The rest of this file was cut to fit.]";
 // Each list of file names gets at most this share of a skill's budget, so a skill with
 // hundreds of files can't push its own instructions out.
 const FILE_NAMES_SHARE = 8;
+// A description in the skills list says when to use the skill; past this it is cut.
+const CATALOG_DESCRIPTION_MAX_CHARS = 300;
+
+// Characters a reader doesn't see (zero-width spaces and joiners, the soft hyphen, combining
+// marks), which can sit inside a tag and leave it reading as one.
+const UNSEEN = "[\\p{Cf}\\p{Mn}]*";
+// Each letter as written, or its full-width form, in either case, with unseen characters between.
+const anyWidth = (word: string): string =>
+  [...word]
+    .map((char) => `[${char}${String.fromCharCode(char.charCodeAt(0) + 0xfee0)}]`)
+    .join(UNSEEN);
+// A tag that opens or closes one of the blocks skill text is fenced in, however it is written:
+// any case, spaced out or with unseen characters inside, with full-width or look-alike
+// brackets, slashes and dashes.
+const FENCE_TAG = new RegExp(
+  `[<\uff1c\ufe64\u2039\u2329\u27e8\u3008](?=[\\s\\p{Cf}\\p{Mn}]*[/\uff0f\u2044\u2215]?[\\s\\p{Cf}\\p{Mn}]*${anyWidth(
+    "skill"
+  )}[\\s_\uff3f\\-\u2010-\u2015\\p{Cf}\\p{Mn}]*(?:${["content", "file", "catalog"]
+    .map(anyWidth)
+    .join("|")}))`,
+  "giu"
+);
 
 const oneLine = (text: string): string => text.replace(/\s+/g, " ").trim();
-// A skill's text is data: a closing tag inside it must not end its block early.
-const asData = (text: string): string => text.replace(/<\/skill_/g, "<\\/skill_").trimEnd();
-const asAttribute = (text: string): string => oneLine(text).replace(/"/g, "&quot;");
+// A skill's text is data: no tag inside it may end its block early or open another.
+const asData = (text: string): string => text.replace(FENCE_TAG, "&lt;").trimEnd();
+const asAttribute = (text: string): string => asData(oneLine(text)).replace(/"/g, "&quot;");
+const catalogDescription = (text: string): string => {
+  const chars = [...asData(oneLine(text))];
+  return chars.length > CATALOG_DESCRIPTION_MAX_CHARS
+    ? `${chars.slice(0, CATALOG_DESCRIPTION_MAX_CHARS).join("").trimEnd()}…`
+    : chars.join("");
+};
 const lastUse = (skill: SkillSummary): string => skill.lastUsedAt ?? "";
 
 // The leading whole lines of `text` that fit, marked when cut. One token stays free for the
@@ -62,22 +90,23 @@ const fileBlock = (file: SkillForModel["files"][number]): string =>
   `<skill_file path="${asAttribute(file.path)}">\n${asData(file.content ?? "")}\n</skill_file>`;
 
 /**
- * One line per skill, most recently used first. Past the budget the least-used lose their
- * descriptions, but every name stays.
+ * One line per skill, most recently used first, fenced as data: descriptions can come from an
+ * uploaded skill. Past the budget the least-used lose their descriptions, but every name stays.
  */
 export function buildSkillCatalog(skills: SkillSummary[], maxTokens: number): string {
   const ordered = [...skills].sort((a, b) =>
     lastUse(a) < lastUse(b) ? 1 : lastUse(a) > lastUse(b) ? -1 : 0
   );
-  const lines = ordered.map((skill) => `- ${skill.name}: ${oneLine(skill.description)}`);
+  const lines = ordered.map((skill) => `- ${skill.name}: ${catalogDescription(skill.description)}`);
+  const fenced = (): string => ["<skill_catalog>", ...lines, "</skill_catalog>"].join("\n");
   for (
     let index = lines.length - 1;
-    index >= 0 && estimateNoteTokens(lines.join("\n")) > maxTokens;
+    index >= 0 && estimateNoteTokens(fenced()) > maxTokens;
     index -= 1
   ) {
     lines[index] = `- ${ordered[index].name}`;
   }
-  return lines.join("\n");
+  return fenced();
 }
 
 /**
@@ -179,6 +208,15 @@ export function activeSkillNames(history: Message[], attached?: SkillRef): Skill
     }
   }
   return active;
+}
+
+/**
+ * Stands in for a skill the user attached that can't be used now (switched off, broken or
+ * unreadable): the chip still shows it, so the model says the answer doesn't follow it. The
+ * name is a skill folder's, which can't carry markup.
+ */
+export function skillNotUsedNote(name: string): string {
+  return `[The user attached the ${name} skill, but it couldn't be read, so this answer doesn't follow it. Say so first.]`;
 }
 
 /** The latest user turn as only the model sees it: the skills first, then the request. */

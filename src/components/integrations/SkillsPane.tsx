@@ -119,7 +119,8 @@ export function SkillsPane({
           onCreated={(name) => arriveHome([name])}
           onBack={goHome}
           onDraftWithAssistant={
-            onStartSkillChat && ((draft) => onStartSkillChat({ kind: "create", draft }))
+            onStartSkillChat &&
+            ((draft) => onStartSkillChat({ kind: "create", ...(draft ? { draft } : {}) }))
           }
         />
       )}

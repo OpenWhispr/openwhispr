@@ -50,7 +50,8 @@ import {
 } from "../../helpers/assistantResponseDelivery";
 import { buildAssistantCommandSendOptions } from "./assistantCommandOptions";
 import { ApprovalCard } from "../chat/ApprovalCard";
-import { SkillApprovalCard } from "../chat/SkillApprovalCard";
+import { SkillApprovalCard, SkillCardSummary } from "../chat/SkillApprovalCard";
+import { readSkillCardRecord } from "../chat/skillCardRecord";
 import { SkillChip } from "../chat/SkillChip";
 import { approvalKey, useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
 import { useSkillApprovalStore } from "../../stores/skillApprovalStore";
@@ -94,6 +95,8 @@ interface AssistantPanelProps {
   /** The conversation's picked skill, kept by the owner because the panel unmounts on close. */
   skillChoice: AssistantSkillChoice;
   onSkillChoiceChange: (choice: AssistantSkillChoice) => void;
+  /** The panel's voice command was spoken over another app, so code can be pasted there. */
+  canPasteIntoApp?: boolean;
 }
 
 /** A skill the app picked for a model without tools, and whether the user turned picking off. */
@@ -104,8 +107,9 @@ export interface AssistantSkillChoice {
 
 // Avoid reparsing Markdown when only the selection indicator changes.
 const StableAssistantMarkdown = memo(MarkdownRenderer);
-// The panel keeps the app it opened over as its paste target, so code can go straight there.
+// Module-level, so the markdown keeps the same callback from render to render.
 const pasteCodeBlock = (code: string) => <CodeBlockActions code={code} paste />;
+const copyCodeBlock = (code: string) => <CodeBlockActions code={code} />;
 
 export function AssistantPanel({
   pendingCommand,
@@ -127,6 +131,7 @@ export function AssistantPanel({
   onSelectionContextChange,
   skillChoice,
   onSkillChoiceChange,
+  canPasteIntoApp = false,
 }: AssistantPanelProps) {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
@@ -321,6 +326,14 @@ export function AssistantPanel({
     : [];
   const panelApprovals = latestToolKeys.flatMap((key) => approvalEntries[key] ?? []);
   const panelSkillApprovals = latestToolKeys.flatMap((key) => skillApprovalEntries[key] ?? []);
+  const savedSkillCards = latestAssistantMessage
+    ? (latestAssistantMessage.toolCalls ?? []).flatMap((toolCall) => {
+        const key = approvalKey(latestAssistantMessage.id, toolCall.id);
+        if (skillApprovalEntries[key]) return [];
+        const record = readSkillCardRecord(toolCall);
+        return record ? [{ key, record }] : [];
+      })
+    : [];
   const approvalAwaitingUser =
     panelApprovals.some((entry) => entry.state === "pending" || entry.state === "committing") ||
     panelSkillApprovals.some((entry) => entry.state === "pending" || entry.state === "saving");
@@ -585,7 +598,12 @@ export function AssistantPanel({
                 >
                   <StableAssistantMarkdown
                     content={displayedResponse}
-                    codeBlockActions={pasteCodeBlock}
+                    // A block still streaming may be cut short, or become several lines.
+                    codeBlockActions={
+                      canPasteIntoApp && !latestAssistantMessage?.isStreaming
+                        ? pasteCodeBlock
+                        : copyCodeBlock
+                    }
                     className="text-[15px] leading-relaxed text-foreground selection:bg-agent-brand/35 selection:text-foreground [&_p]:text-[15px] [&_li]:text-[15px]"
                   />
                   {latestAssistantMessage?.isStreaming && (
@@ -619,6 +637,9 @@ export function AssistantPanel({
             ))}
             {panelSkillApprovals.map((entry) => (
               <SkillApprovalCard key={entry.key} entry={entry} />
+            ))}
+            {savedSkillCards.map(({ key, record }) => (
+              <SkillCardSummary key={key} record={record} />
             ))}
             {thinking && (
               <div role="status">

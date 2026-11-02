@@ -85,46 +85,40 @@ async function fill(container, { name = "", description = "", instructions = "" 
   if (instructions) await typeInto(field(container, "instructions"), instructions);
 }
 
-test(
-  "Create stays dimmed until every field is filled, and still explains why on press",
-  async (t) => {
-    const { container, calls } = await renderCreate(t);
-    assert.equal(createButton(container).getAttribute("aria-disabled"), "true");
-    assert.equal(createButton(container).getAttribute("disabled"), null);
+test("Create stays dimmed until every field is filled, and still explains why on press", async (t) => {
+  const { container, calls } = await renderCreate(t);
+  assert.equal(createButton(container).getAttribute("aria-disabled"), "true");
+  assert.equal(createButton(container).getAttribute("disabled"), null);
 
-    await fill(container, { name: "Weekly status report", description: "Writes my update." });
-    assert.equal(createButton(container).getAttribute("aria-disabled"), "true");
-    await click(createButton(container));
-    assert.match(label(container), /skills\.create\.instructionsMissing/);
-    assert.deepEqual(calls.saved, []);
+  await fill(container, { name: "Weekly status report", description: "Writes my update." });
+  assert.equal(createButton(container).getAttribute("aria-disabled"), "true");
+  await click(createButton(container));
+  assert.match(label(container), /skills\.create\.instructionsMissing/);
+  assert.deepEqual(calls.saved, []);
 
-    await fill(container, { instructions: "## Steps\n1. Read notes." });
-    assert.equal(createButton(container).getAttribute("aria-disabled"), "false");
-  }
-);
+  await fill(container, { instructions: "## Steps\n1. Read notes." });
+  assert.equal(createButton(container).getAttribute("aria-disabled"), "false");
+});
 
-test(
-  "pressing Create with gaps shows each message under its field and focuses the first",
-  async (t) => {
-    const { container } = await renderCreate(t);
-    await fill(container, { description: "Writes my update." });
+test("pressing Create with gaps shows each message under its field and focuses the first", async (t) => {
+  const { container } = await renderCreate(t);
+  await fill(container, { description: "Writes my update." });
 
-    await click(createButton(container));
+  await click(createButton(container));
 
-    const name = field(container, "name");
-    assert.equal(focused(container) === name, true);
-    assert.equal(name.getAttribute("aria-invalid"), "true");
-    assert.equal(field(container, "instructions").getAttribute("aria-invalid"), "true");
-    assert.equal(messageFor(container, "name"), "skills.create.nameMissing");
-    assert.equal(messageFor(container, "instructions"), "skills.create.instructionsMissing");
-    assert.equal(field(container, "description").getAttribute("aria-invalid"), null);
+  const name = field(container, "name");
+  assert.equal(focused(container) === name, true);
+  assert.equal(name.getAttribute("aria-invalid"), "true");
+  assert.equal(field(container, "instructions").getAttribute("aria-invalid"), "true");
+  assert.equal(messageFor(container, "name"), "skills.create.nameMissing");
+  assert.equal(messageFor(container, "instructions"), "skills.create.instructionsMissing");
+  assert.equal(field(container, "description").getAttribute("aria-invalid"), null);
 
-    // Fixing a field clears its message
-    await typeInto(name, "Weekly status report");
-    assert.equal(name.getAttribute("aria-invalid"), null);
-    assert.doesNotMatch(label(container), /skills\.create\.nameMissing/);
-  }
-);
+  // Fixing a field clears its message
+  await typeInto(name, "Weekly status report");
+  assert.equal(name.getAttribute("aria-invalid"), null);
+  assert.doesNotMatch(label(container), /skills\.create\.nameMissing/);
+});
 
 test("a filled form creates the skill, clears the draft and toasts", async (t) => {
   const { container, calls, toasts, store, pushes } = await renderCreate(t);
@@ -153,32 +147,29 @@ test("a filled form creates the skill, clears the draft and toasts", async (t) =
   assert.deepEqual(pushes, ["syncSkillsNow"]);
 });
 
-test(
-  "leaving with unsaved text shows the bar; Keep editing stays and Discard leaves",
-  async (t) => {
-    const { container, calls, store } = await renderCreate(t);
-    await click(button(container, "common.cancel"));
-    assert.equal(calls.back, 1, "an empty form leaves at once");
+test("leaving with unsaved text shows the bar; Keep editing stays and Discard leaves", async (t) => {
+  const { container, calls, store } = await renderCreate(t);
+  await click(button(container, "common.cancel"));
+  assert.equal(calls.back, 1, "an empty form leaves at once");
 
-    await fill(container, { name: "Half done" });
-    await click(button(container, "common.cancel"));
-    assert.equal(
-      label(alert(container)),
-      "skills.create.unsavedskills.create.keepEditingskills.create.discard"
-    );
-    assert.equal(calls.back, 1);
+  await fill(container, { name: "Half done" });
+  await click(button(container, "common.cancel"));
+  assert.equal(
+    label(alert(container)),
+    "skills.create.unsavedskills.create.keepEditingskills.create.discard"
+  );
+  assert.equal(calls.back, 1);
 
-    await click(button(container, "skills.create.keepEditing"));
-    assert.equal(alert(container), null);
-    assert.equal(focused(container) === field(container, "name"), true);
+  await click(button(container, "skills.create.keepEditing"));
+  assert.equal(alert(container), null);
+  assert.equal(focused(container) === field(container, "name"), true);
 
-    await click(button(container, "skills.breadcrumb.root"));
-    assert.ok(alert(container));
-    await click(button(container, "skills.create.discard"));
-    assert.equal(calls.back, 2);
-    assert.equal(store.useSkillsStore.getState().createDraft, null);
-  }
-);
+  await click(button(container, "skills.breadcrumb.root"));
+  assert.ok(alert(container));
+  await click(button(container, "skills.create.discard"));
+  assert.equal(calls.back, 2);
+  assert.equal(store.useSkillsStore.getState().createDraft, null);
+});
 
 test("Esc with unsaved text shows the bar, and Esc again dismisses it", async (t) => {
   const { container, calls } = await renderCreate(t);
@@ -456,4 +447,132 @@ test("a file that would take the skill past 25 MB is refused before it is read",
   assert.deepEqual(toasts, [
     { title: "video.mov", description: "skills.create.filesTooLarge", variant: "destructive" },
   ]);
+});
+
+for (const finishDraft of ["discard", "save"]) {
+  test(`a file from an earlier screen mount stays out after its draft is ${finishDraft === "save" ? "saved" : "discarded"}`, async (t) => {
+    let remount;
+    const { container, store } = await mountSkillsComponent(t, {
+      modulePath: "/components/skills/CreateSkillScreen.tsx",
+      exportName: "CreateSkillScreen",
+      api: { skillsCreate: async () => ({ ok: true, name: "old-draft" }) },
+      wrap: (Component) => {
+        function Owner() {
+          const [version, setVersion] = React.useState(0);
+          remount = () => setVersion((current) => current + 1);
+          return React.createElement(Component, {
+            key: version,
+            onCreated() {},
+            onBack() {},
+          });
+        }
+        return React.createElement(Owner);
+      },
+    });
+    await fill(container, { name: "Old draft", description: "Does it.", instructions: "Go" });
+    const slow = slowFile("old-file.md");
+    await pick(container, [slow]);
+    // Leaving Integrations and returning creates another screen instance with the same draft.
+    await React.act(async () => remount());
+    await settle();
+    if (finishDraft === "save") {
+      await click(createButton(container));
+      await settle();
+    } else {
+      await click(button(container, "common.cancel"));
+      await click(button(container, "skills.create.discard"));
+    }
+    assert.equal(store.useSkillsStore.getState().createDraft, null);
+    await fill(container, { name: "New draft" });
+
+    await React.act(async () => slow.finishRead());
+    await settle();
+
+    const draft = store.useSkillsStore.getState().createDraft;
+    assert.equal(draft.title, "New draft");
+    assert.deepEqual(draft.files, []);
+  });
+}
+
+test("a Create response from an earlier screen cannot discard a newer draft", async (t) => {
+  let completeSave;
+  let remount;
+  const pendingSave = new Promise((resolve) => (completeSave = resolve));
+  const created = [];
+  const { container, store, toasts, pushes } = await mountSkillsComponent(t, {
+    modulePath: "/components/skills/CreateSkillScreen.tsx",
+    exportName: "CreateSkillScreen",
+    api: { skillsCreate: () => pendingSave },
+    wrap: (Component) => {
+      function Owner() {
+        const [version, setVersion] = React.useState(0);
+        remount = () => setVersion((current) => current + 1);
+        return React.createElement(Component, {
+          key: version,
+          onCreated: (name) => created.push(name),
+          onBack() {},
+        });
+      }
+      return React.createElement(Owner);
+    },
+  });
+  await fill(container, { name: "Original", description: "Does it.", instructions: "Go" });
+  await click(createButton(container));
+  await React.act(async () => remount());
+  await click(button(container, "common.cancel"));
+  await click(button(container, "skills.create.discard"));
+  await fill(container, { name: "New draft", description: "Keep this", instructions: "New text" });
+
+  await React.act(async () => completeSave({ ok: true, name: "original" }));
+  await settle();
+
+  assert.equal(store.useSkillsStore.getState().createDraft?.title, "New draft");
+  assert.equal(field(container, "instructions").value, "New text");
+  assert.deepEqual(created, []);
+  assert.deepEqual(toasts, []);
+  assert.deepEqual(pushes, ["syncSkillsNow"], "the completed write is backed up after leaving");
+});
+
+for (const [outcome, result] of [
+  ["succeeds", { ok: true, name: "original" }],
+  ["rejects a field", { ok: false, problems: [{ code: "descriptionAngleBrackets" }] }],
+  ["cannot write", { ok: false, error: "permission" }],
+]) {
+  test(`a Create response that ${outcome} leaves later edits alone`, async (t) => {
+    let completeSave;
+    const pendingSave = new Promise((resolve) => (completeSave = resolve));
+    const { container, store, calls, toasts } = await renderCreate(t, {
+      api: { skillsCreate: () => pendingSave },
+    });
+    await fill(container, { name: "Original", description: "Uses <b>", instructions: "Go" });
+    await click(createButton(container));
+    await typeInto(field(container, "description"), "Corrected description");
+
+    await React.act(async () => completeSave(result));
+    await settle();
+
+    assert.equal(store.useSkillsStore.getState().createDraft?.description, "Corrected description");
+    assert.equal(field(container, "description").getAttribute("aria-invalid"), null);
+    assert.equal(createButton(container).getAttribute("disabled"), null);
+    assert.deepEqual(calls.created, []);
+    assert.deepEqual(toasts, []);
+  });
+}
+
+test("a completed Create refresh cannot navigate away from a new draft", async (t) => {
+  let finishRefresh;
+  const pendingRefresh = new Promise((resolve) => (finishRefresh = resolve));
+  const { container, store, calls } = await renderCreate(t, {
+    api: { skillsList: () => pendingRefresh },
+  });
+  await fill(container, { name: "Original", description: "Does it.", instructions: "Go" });
+  await click(createButton(container));
+  assert.equal(store.useSkillsStore.getState().createDraft, null);
+  await fill(container, { name: "New draft" });
+
+  await React.act(async () => finishRefresh({ skills: [] }));
+  await settle();
+
+  assert.equal(store.useSkillsStore.getState().createDraft?.title, "New draft");
+  assert.deepEqual(calls.created, []);
 });

@@ -3,6 +3,12 @@ export interface DiffLine {
   text: string;
 }
 
+/** A run of unchanged lines left out of a folded diff. */
+export interface FoldedLines {
+  kind: "fold";
+  count: number;
+}
+
 // The table below grows with both line counts; past this, whole blocks are shown instead.
 const MAX_DIFF_LINES = 2_000;
 
@@ -12,10 +18,10 @@ function toLines(text: string): string[] {
   return lines;
 }
 
-/** The line-by-line changes from `before` to `after`, in order, removals before additions. */
-export function lineDiff(before: string, after: string): DiffLine[] {
-  const removed = toLines(before);
-  const added = toLines(after);
+const unchanged = (lines: string[]): DiffLine[] => lines.map((text) => ({ kind: " ", text }));
+
+// The changes between two runs of lines that differ at both ends.
+function diffMiddle(removed: string[], added: string[]): DiffLine[] {
   if (removed.length > MAX_DIFF_LINES || added.length > MAX_DIFF_LINES) {
     return [
       ...removed.map((text): DiffLine => ({ kind: "-", text })),
@@ -54,4 +60,59 @@ export function lineDiff(before: string, after: string): DiffLine[] {
   for (; i < removed.length; i += 1) diff.push({ kind: "-", text: removed[i] });
   for (; j < added.length; j += 1) diff.push({ kind: "+", text: added[j] });
   return diff;
+}
+
+/** The line-by-line changes from `before` to `after`, in order, removals before additions. */
+export function lineDiff(before: string, after: string): DiffLine[] {
+  const removed = toLines(before);
+  const added = toLines(after);
+  // Lines both ends share need no table, so a small change to a long file stays cheap.
+  let start = 0;
+  while (start < removed.length && start < added.length && removed[start] === added[start]) {
+    start += 1;
+  }
+  let end = 0;
+  while (
+    end < removed.length - start &&
+    end < added.length - start &&
+    removed[removed.length - 1 - end] === added[added.length - 1 - end]
+  ) {
+    end += 1;
+  }
+  return [
+    ...unchanged(removed.slice(0, start)),
+    ...diffMiddle(
+      removed.slice(start, removed.length - end),
+      added.slice(start, added.length - end)
+    ),
+    ...unchanged(removed.slice(removed.length - end)),
+  ];
+}
+
+/** The diff with long unchanged runs folded, keeping `context` lines beside each change. */
+export function foldUnchanged(diff: DiffLine[], context = 2): Array<DiffLine | FoldedLines> {
+  const folded: Array<DiffLine | FoldedLines> = [];
+  let index = 0;
+  while (index < diff.length) {
+    if (diff[index].kind !== " ") {
+      folded.push(diff[index]);
+      index += 1;
+      continue;
+    }
+    let runEnd = index;
+    while (runEnd < diff.length && diff[runEnd].kind === " ") runEnd += 1;
+    const keepBefore = index === 0 ? 0 : context;
+    const keepAfter = runEnd === diff.length ? 0 : context;
+    const hidden = runEnd - index - keepBefore - keepAfter;
+    // Folding a line or two would take as much room as showing them.
+    if (hidden > 1) {
+      folded.push(...diff.slice(index, index + keepBefore));
+      folded.push({ kind: "fold", count: hidden });
+      folded.push(...diff.slice(runEnd - keepAfter, runEnd));
+    } else {
+      folded.push(...diff.slice(index, runEnd));
+    }
+    index = runEnd;
+  }
+  return folded;
 }

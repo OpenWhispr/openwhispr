@@ -40,7 +40,7 @@ const toastTitles = (toasts) => toasts.map((toast) => toast.title);
 
 test("Copy writes the code unchanged", async (t) => {
   // Leading spaces and inner lines are part of the code.
-  const code = "  for f in *.md; do\n    wc -l \"$f\"\n  done";
+  const code = '  for f in *.md; do\n    wc -l "$f"\n  done';
   const { calls, button } = await mountActions(t, { code });
 
   await click(button("common.copy"));
@@ -50,14 +50,27 @@ test("Copy writes the code unchanged", async (t) => {
   assert.ok(button("common.copied"), "the button says it copied");
 });
 
-test("Paste into app sends the code unchanged with raw on", async (t) => {
+test("Paste into app sends the code unchanged, to the command's app only", async (t) => {
   const { calls, button, toasts } = await mountActions(t, { paste: true });
 
   await click(button("skills.code.paste"));
   await settle();
 
-  assert.deepEqual(calls.paste, [[CODE, { raw: true }]]);
+  assert.deepEqual(calls.paste, [[CODE, { raw: true, assistantTarget: true }]]);
   assert.deepEqual(toastTitles(toasts), ["skills.code.pasted"]);
+});
+
+test("with no app to paste into, the code is copied instead", async (t) => {
+  const { calls, button, toasts } = await mountActions(t, {
+    paste: true,
+    pasteText: () => ({ success: false, pasted: false, reason: "no-target" }),
+  });
+
+  await click(button("skills.code.paste"));
+  await settle();
+
+  assert.deepEqual(calls.clipboard, [CODE]);
+  assert.deepEqual(toastTitles(toasts), ["skills.code.pasteFailed"]);
 });
 
 test("a failed paste says the text is on the clipboard", async (t) => {
@@ -153,6 +166,37 @@ test("a block of several lines offers Copy only, even where Paste into app exist
   assert.equal(Boolean(button("common.copy")), true);
   assert.equal(Boolean(button("skills.code.paste")), false);
   assert.doesNotMatch(container.textContent, /skills\.code\.pasteNote/);
+});
+
+// Each would make the pasted line act or read differently from the one shown.
+test("a line with control, invisible or direction characters offers Copy only", async (t) => {
+  for (const code of [
+    "ls\r",
+    "ls\tpart",
+    "echo hi\x0f",
+    "\x1b[2Kls",
+    "ls\v",
+    "ls\u0085",
+    "ls\u2028",
+    "rm \u202eetadpu",
+    "ls\u200b-la",
+    "ls\ufeff",
+    // Spaces that look plain but aren't, and fillers that show nothing.
+    "ls\u00a0-la",
+    "ls\u3000-la",
+    "ls\u2003-la",
+    "ls\u034f",
+    "echo \u3164",
+  ]) {
+    await t.test(JSON.stringify(code), async (st) => {
+      const { button } = await mountActions(st, { code, paste: true });
+      assert.equal(Boolean(button("skills.code.paste")), false);
+    });
+  }
+  await t.test("ordinary Unicode still pastes", async (st) => {
+    const { button } = await mountActions(st, { code: "echo 'héllo — 世界' | wc -c", paste: true });
+    assert.equal(Boolean(button("skills.code.paste")), true);
+  });
 });
 
 test("the actions stay out of a selection, and the small print isn't a paragraph", async (t) => {

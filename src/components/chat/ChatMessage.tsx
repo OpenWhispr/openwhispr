@@ -21,15 +21,19 @@ import { HelpEvidence } from "./GroundedHelpEvidence";
 import { extractHelpEvidence } from "./helpEvidence";
 import { toolIcons } from "./toolIcons";
 import { ApprovalCard } from "./ApprovalCard";
-import { SkillApprovalCard } from "./SkillApprovalCard";
+import { SkillApprovalCard, SkillCardSummary } from "./SkillApprovalCard";
+import { readSkillCardRecord, SKILL_CARD_TOOLS } from "./skillCardRecord";
 import { CodeBlockActions } from "./CodeBlockActions";
 import { approvalKey, useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
 import { useSkillApprovalStore } from "../../stores/skillApprovalStore";
 import { loadSkillTarget } from "../../utils/skillContext";
 
-// Their card stands in for their step: once the call is over, a call that showed no card
+// A skill card stands in for its step: once the call is over, a call that showed no card
 // (the proposal went back to the model to fix) leaves nothing behind.
-const SKILL_CARD_TOOLS = new Set(["propose_skill", "update_skill"]);
+const showsNothing = (toolCall: ToolCallInfo): boolean =>
+  SKILL_CARD_TOOLS.has(toolCall.name) &&
+  toolCall.status !== "executing" &&
+  !readSkillCardRecord(toolCall);
 
 // Module-level, so the markdown keeps the same callback from render to render.
 const copyCodeBlock = (code: string) => <CodeBlockActions code={code} />;
@@ -169,7 +173,10 @@ function ToolCallItem({ messageId, toolCall }: { messageId: string; toolCall: To
   const skillApproval = useSkillApprovalStore((state) => state.entries[key]);
   if (approval) return <ApprovalCard entry={approval} />;
   if (skillApproval) return <SkillApprovalCard entry={skillApproval} />;
-  if (SKILL_CARD_TOOLS.has(toolCall.name) && toolCall.status !== "executing") return null;
+  // A reopened chat has no live card, only the outcome the call saved.
+  const skillRecord = readSkillCardRecord(toolCall);
+  if (skillRecord) return <SkillCardSummary record={skillRecord} />;
+  if (showsNothing(toolCall)) return null;
   return <ToolCallStep toolCall={toolCall} />;
 }
 
@@ -267,7 +274,9 @@ export const ChatMessage = memo(function ChatMessage({
     );
   }
 
-  const visibleToolCalls = toolCalls?.filter((tc) => tc.name !== "grounded_product_help");
+  const visibleToolCalls = toolCalls?.filter(
+    (tc) => tc.name !== "grounded_product_help" && !showsNothing(tc)
+  );
   const hasToolCalls = visibleToolCalls && visibleToolCalls.length > 0;
   const hasContent = content.length > 0;
   const noteCards = extractNoteCards(toolCalls, t("notes.list.untitledNote"));

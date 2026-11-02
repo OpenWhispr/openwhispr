@@ -17,7 +17,14 @@ const {
 const COPIED = "\uFEFF---\r\nname: x\r\n---\r\n";
 
 async function renderManage(t, { skills, api = {}, backup = false }) {
-  const calls = { opened: [], focusedAtOpen: [], back: 0, revealed: [], clipboard: [], switched: [] };
+  const calls = {
+    opened: [],
+    focusedAtOpen: [],
+    back: 0,
+    revealed: [],
+    clipboard: [],
+    switched: [],
+  };
   const mounted = await mountSkillsComponent(t, {
     modulePath: "/components/skills/ManageSkillsScreen.tsx",
     exportName: "ManageSkillsScreen",
@@ -62,51 +69,48 @@ const rowFor = (container, name) => rows(container).find((row) => label(row).sta
 const button = (root, text) =>
   findElement(root, (node) => node.tagName === "BUTTON" && label(node) === text);
 
-test(
-  "Manage lists every skill with its menu and switch, and a row opens the detail",
-  async (t) => {
-    const skills = [
-      ...Array.from({ length: 7 }, (_, index) => skill(`skill-${index + 1}`)),
-      skill("paused", { enabled: false }),
-      skill("broken", { valid: false, problem: { code: "nameMismatch" } }),
-    ];
-    const { container, calls } = await renderManage(t, { skills });
+test("Manage lists every skill with its menu and switch, and a row opens the detail", async (t) => {
+  const skills = [
+    ...Array.from({ length: 7 }, (_, index) => skill(`skill-${index + 1}`)),
+    skill("paused", { enabled: false }),
+    skill("broken", { valid: false, problem: { code: "nameMismatch" } }),
+  ];
+  const { container, calls } = await renderManage(t, { skills });
 
-    const crumbs = findElement(container, (node) => node.tagName === "NAV");
-    assert.equal(ariaLabel(crumbs), "skills.breadcrumb.label");
-    assert.match(label(crumbs), /^skills\.breadcrumb\.root\s*skills\.manage\.title$/);
-    await click(button(crumbs, "skills.breadcrumb.root"));
-    assert.equal(calls.back, 1);
+  const crumbs = findElement(container, (node) => node.tagName === "NAV");
+  assert.equal(ariaLabel(crumbs), "skills.breadcrumb.label");
+  assert.match(label(crumbs), /^skills\.breadcrumb\.root\s*skills\.manage\.title$/);
+  await click(button(crumbs, "skills.breadcrumb.root"));
+  assert.equal(calls.back, 1);
 
-    assert.equal(rows(container).length, 9);
-    for (const row of rows(container)) {
-      // Every skill here is the user's own, so no row carries a badge saying so.
-      assert.doesNotMatch(label(row), /skills\.manage\.personal/);
-      assert.ok(findElement(row, (node) => ariaLabel(node).startsWith("skills.detail.more")));
-    }
-    const switchOf = (name) =>
-      findElement(rowFor(container, name), (node) => node.getAttribute("role") === "switch");
-    assert.equal(switchOf("paused").getAttribute("aria-checked"), "false");
-    assert.equal(switchOf("skill 1").getAttribute("aria-checked"), "true");
-    assert.equal(switchOf("broken").getAttribute("disabled"), "");
-    assert.equal(
-      ariaLabel(switchOf("broken")),
-      'skills.detail.problem{"reason":"skills.problems.nameMismatch"}'
-    );
-
-    const open = findElement(rowFor(container, "skill 3"), (node) => node.tagName === "BUTTON");
-    await click(open);
-    await click(button(rowFor(container, "skill 4"), "skills.menu.uninstall"));
-    assert.deepEqual(calls.opened, [
-      ["skill-3", false],
-      ["skill-4", true],
-    ]);
-
-    await click(switchOf("paused"));
-    await settle();
-    assert.deepEqual(calls.switched, [["paused", true]]);
+  assert.equal(rows(container).length, 9);
+  for (const row of rows(container)) {
+    // Every skill here is the user's own, so no row carries a badge saying so.
+    assert.doesNotMatch(label(row), /skills\.manage\.personal/);
+    assert.ok(findElement(row, (node) => ariaLabel(node).startsWith("skills.detail.more")));
   }
-);
+  const switchOf = (name) =>
+    findElement(rowFor(container, name), (node) => node.getAttribute("role") === "switch");
+  assert.equal(switchOf("paused").getAttribute("aria-checked"), "false");
+  assert.equal(switchOf("skill 1").getAttribute("aria-checked"), "true");
+  assert.equal(switchOf("broken").getAttribute("disabled"), "");
+  assert.equal(
+    ariaLabel(switchOf("broken")),
+    'skills.detail.problem{"reason":"skills.problems.nameMismatch"}'
+  );
+
+  const open = findElement(rowFor(container, "skill 3"), (node) => node.tagName === "BUTTON");
+  await click(open);
+  await click(button(rowFor(container, "skill 4"), "skills.menu.uninstall"));
+  assert.deepEqual(calls.opened, [
+    ["skill-3", false],
+    ["skill-4", true],
+  ]);
+
+  await click(switchOf("paused"));
+  await settle();
+  assert.deepEqual(calls.switched, [["paused", true]]);
+});
 
 test("a row's switch that can't be saved says so", async (t) => {
   const { container, toasts } = await renderManage(t, {
@@ -209,10 +213,7 @@ test("search narrows the list and says when nothing matches", async (t) => {
     ],
   });
   const search = findElement(container, (node) => node.tagName === "INPUT");
-  assert.deepEqual(
-    [ariaLabel(search), search.getAttribute("dir")],
-    ["skills.pane.search", "auto"]
-  );
+  assert.deepEqual([ariaLabel(search), search.getAttribute("dir")], ["skills.pane.search", "auto"]);
 
   await typeInto(search, "calls");
   assert.equal(rows(container).length, 1);

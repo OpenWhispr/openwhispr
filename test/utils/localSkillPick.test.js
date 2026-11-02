@@ -48,7 +48,7 @@ test("a tie picks nothing", () => {
   assert.equal(pickName("help with the meeting recap", skills), "meeting-recap");
 });
 
-test("a score under 2 picks nothing", () => {
+test("one shared word picks nothing", () => {
   const skills = [
     summary({
       name: "weekly-recap",
@@ -57,8 +57,37 @@ test("a score under 2 picks nothing", () => {
     }),
   ];
 
-  assert.equal(pickName("open my notes", skills), null, "one description word scores 1");
+  assert.equal(pickName("open my notes", skills), null, "one description word");
+  assert.equal(pickName("recap", skills), null, "one name word");
   assert.equal(pickName("my notes for the recap", skills), "weekly-recap");
+});
+
+test("a request that only names a skill's topic picks nothing", () => {
+  for (const request of ["is Slack down", "what is Linear", "open Slack", "summary", "reply all"]) {
+    assert.equal(pickName(request, skillsFor("en")), null, request);
+  }
+  for (const request of ["返信", "Slackを開いて"]) {
+    assert.equal(pickName(request, skillsFor("ja")), null, request);
+  }
+});
+
+test("function words in German, Russian and Arabic don't count", () => {
+  const reply = summary({
+    name: "reply-in-my-voice",
+    displayName: "In meinem Stil antworten",
+    description:
+      "Entwirft Antworten in meinem Schreibstil. Nutze es, wenn ich nicht weiß, was ich schreiben soll.",
+  });
+  const recap = summary({
+    name: "weekly-recap",
+    displayName: "ملخص أسبوعي",
+    description: "يكتب ملخصي الأسبوعي من ملاحظات هذا الأسبوع. Что это за неделя для меня.",
+  });
+
+  assert.equal(pickName("ich bin nicht in meinem Büro", [reply]), null);
+  assert.equal(pickName("что это для меня", [recap]), null);
+  assert.equal(pickName("ما هو الطقس في هذا الأسبوع", [recap]), null);
+  assert.equal(pickName("اكتب ملخص أسبوعي", [recap]), "weekly-recap");
 });
 
 test("Japanese requests match without spaces", () => {

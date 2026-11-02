@@ -51,7 +51,7 @@ async function setup(t, electron = fakeElectron()) {
   return { propose, entry, approvals, calls: electron.calls, settled };
 }
 
-test("skill tools are offered signed out and on the free plan", async () => {
+test("propose_skill is offered signed out and on the free plan", async () => {
   const { createToolRegistry } = await import("../../src/services/tools/index.ts");
 
   const registry = createToolRegistry({
@@ -65,6 +65,8 @@ test("skill tools are offered signed out and on the free plan", async () => {
       read: async () => null,
       markUsed() {},
       maxTokens: 2_500,
+      // A first skill comes from the creator (Create with assistant).
+      creatorAttached: true,
     },
   });
 
@@ -82,9 +84,18 @@ test("nothing is written before Save skill", async (t) => {
   assert.deepEqual(calls.check, [{ kind: "create", proposal: { ...ARGS, files: [] } }]);
   assert.deepEqual(calls.save, []);
   await approvals.saveSkillApproval(key);
+  // A record, so the chat saves the outcome (never the skill's text) and a reopened chat
+  // rebuilds the card from it.
   assert.deepEqual(await result, {
     success: true,
-    data: "Saved the follow-up-email-from-notes skill. Tell the user it's saved and how it's used.",
+    data: {
+      status: "saved",
+      kind: "create",
+      name: "follow-up-email-from-notes",
+      title: ARGS.title,
+      message:
+        "Saved the follow-up-email-from-notes skill. Tell the user it's saved and how it's used.",
+    },
     displayText: "",
   });
   assert.equal(calls.save.length, 1);
@@ -135,12 +146,22 @@ test("the model hears what the user did with the card", async (t) => {
   await approvals.saveSkillApproval(edited.key);
   approvals.skipSkillApproval(skipped.key);
 
-  assert.equal(
-    (await edited.result).data,
-    "Saved the follow-up-email-from-notes skill. Tell the user it's saved and how it's used. " +
-      "The user edited it before saving."
-  );
-  assert.equal((await skipped.result).data, "The user skipped it. Nothing was saved.");
+  assert.deepEqual((await edited.result).data, {
+    status: "saved",
+    kind: "create",
+    name: "follow-up-email-from-notes",
+    title: "Call follow-up",
+    message:
+      "Saved the follow-up-email-from-notes skill. Tell the user it's saved and how it's used. " +
+      "The user edited it before saving.",
+  });
+  assert.deepEqual((await skipped.result).data, {
+    status: "skipped",
+    kind: "create",
+    name: "follow-up-email-from-notes",
+    title: ARGS.title,
+    message: "The user skipped it. Nothing was saved.",
+  });
 });
 
 test("a save that fails tells the model to offer another try", async (t) => {
@@ -153,7 +174,11 @@ test("a save that fails tells the model to offer another try", async (t) => {
   await settled();
   await approvals.saveSkillApproval(card.key);
 
-  assert.equal((await card.result).data, "It couldn't be saved. Say so and offer to try again.");
+  assert.equal((await card.result).data.status, "failed");
+  assert.equal(
+    (await card.result).data.message,
+    "It couldn't be saved. Say so and offer to try again."
+  );
 });
 
 // ---- Changing a skill (update_skill) ----
@@ -294,10 +319,15 @@ test("the card carries intent, removals, learned-from and the current text", asy
 
   await approvals.saveSkillApproval(key);
   assert.deepEqual(calls.apply, [card.draft]);
-  assert.equal(
-    (await result).data,
-    "Updated the enterprise-call-playbook skill. Tell the user it's updated and how it's used."
-  );
+  assert.deepEqual((await result).data, {
+    status: "saved",
+    kind: "update",
+    name: PLAYBOOK.name,
+    title: PLAYBOOK.displayName,
+    versionId: "1760950800000",
+    message:
+      "Updated the enterprise-call-playbook skill. Tell the user it's updated and how it's used.",
+  });
 });
 
 test("a change naming ./References/Objections.md diffs against the file it replaces", async (t) => {

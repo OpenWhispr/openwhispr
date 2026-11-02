@@ -214,7 +214,6 @@ async function mountSkillsComponent(
   return { container, toasts, pushes, store, vite, unmount };
 }
 
-
 module.exports = {
   SKILLS_MOCKS,
   cloudBackup,

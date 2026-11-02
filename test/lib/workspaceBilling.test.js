@@ -5,6 +5,8 @@ const {
   canUpgradeWorkspaceToEnterprise,
   enterpriseTileCta,
   hasActiveWorkspaceSubscription,
+  hasSharedDictionaryPlan,
+  hasSubscription,
   isEnterpriseConsoleAvailable,
 } = require("../../src/lib/workspaceBilling.ts");
 
@@ -126,6 +128,76 @@ test("enterpriseTileCta: eligible owners get the dialog, first-timers get create
   );
   // Unknown active id falls back to the first workspace; a missing name stays null.
   assert.deepEqual(enterpriseTileCta([ws("a", "member")], "gone"), {
+    action: "contactSales",
+    ownerName: null,
+  });
+});
+
+test("hasSharedDictionaryPlan: Business or Enterprise while entitled, nothing else", () => {
+  for (const plan of ["business", "enterprise"]) {
+    assert.equal(hasSharedDictionaryPlan({ plan, status: "active" }), true);
+    assert.equal(hasSharedDictionaryPlan({ plan, status: "trialing" }), true);
+    assert.equal(hasSharedDictionaryPlan({ plan, status: "past_due" }), false);
+    assert.equal(hasSharedDictionaryPlan({ plan, status: "canceled" }), false);
+  }
+  for (const plan of ["free", "pro"]) {
+    assert.equal(hasSharedDictionaryPlan({ plan, status: "active" }), false);
+  }
+  assert.equal(hasSharedDictionaryPlan(null), false);
+  assert.equal(hasSharedDictionaryPlan(undefined), false);
+});
+
+test("hasSubscription falls back to the Stripe id", () => {
+  assert.equal(hasSubscription({ has_subscription: true, stripe_subscription_id: null }), true);
+  assert.equal(
+    hasSubscription({ has_subscription: false, stripe_subscription_id: "sub_1" }),
+    false
+  );
+  // Older APIs send no has_subscription.
+  assert.equal(hasSubscription({ stripe_subscription_id: "sub_1" }), true);
+  assert.equal(hasSubscription({ stripe_subscription_id: null }), false);
+});
+
+test("billing gates follow capabilities over the role", () => {
+  const capabilities = (overrides = {}) => ({
+    manage_members: true,
+    manage_teams: true,
+    create_spaces: true,
+    manage_settings: true,
+    manage_billing: false,
+    delete_workspace: false,
+    transfer_ownership: false,
+    leave: true,
+    ...overrides,
+  });
+  // An owner the server denies billing (Require SSO unmet) gets no checkout.
+  const blockedOwner = workspace({
+    role: "owner",
+    capabilities: capabilities({ manage_settings: false }),
+  });
+  assert.equal(canSelfServeEnterprise(blockedOwner), false);
+  assert.equal(
+    isEnterpriseConsoleAvailable({ ...blockedOwner, plan: "enterprise", status: "active" }),
+    false
+  );
+});
+
+test("has_subscription drives the checkout gate", () => {
+  // The API reports the checkout gate, so a flagged free workspace cannot check out.
+  const flagged = workspace({ has_subscription: true });
+  assert.equal(canSelfServeEnterprise(flagged), false);
+});
+
+test("an owner of a manually provisioned plan stays sales-led", () => {
+  const manual = workspace({
+    plan: "business",
+    status: "active",
+    stripe_subscription_id: null,
+    has_subscription: true,
+  });
+  assert.equal(canSelfServeEnterprise(manual), false);
+  assert.equal(canUpgradeWorkspaceToEnterprise(manual), false);
+  assert.deepEqual(enterpriseTileCta([{ id: "a", ...manual }], null), {
     action: "contactSales",
     ownerName: null,
   });

@@ -1,9 +1,10 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useId } from "react";
 import { useTranslation } from "react-i18next";
 import {
   FileAudio,
   X,
   AlertCircle,
+  AlertTriangle,
   ArrowRight,
   FolderOpen,
   Plus,
@@ -36,6 +37,7 @@ import {
   findVideosFolder,
   DOWNLOAD_ERROR_KEYS,
   transcriptionErrorKey,
+  uploadRestrictionKey,
   MEETINGS_FOLDER_NAME,
 } from "./shared";
 import { useAuth } from "../../hooks/useAuth";
@@ -49,6 +51,7 @@ import {
   getParakeetModelInfo,
   getTranscriptionProviders,
   isSherpaLocalProvider,
+  enterpriseProviderName,
 } from "../../models/ModelRegistry";
 import {
   useSettingsStore,
@@ -74,7 +77,7 @@ import { MAX_SPEAKER_COUNT } from "../../constants/speakerDetection.json";
 import BatchQueueView from "./BatchQueueView";
 import { generateNoteTitle } from "../../utils/generateTitle";
 import { getBaseLanguageCode } from "../../utils/languageSupport";
-import { isTranscriptionContextAllowed } from "../../stores/policyRules";
+import { isAudioFeatureAllowed, isTranscriptionContextAllowed } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
 import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
 import { byokFileSizeLimit, resolveTranscriptionRoute } from "../../helpers/transcriptionRoute";
@@ -303,6 +306,10 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     )
   );
   const uploadAllowedByPolicy = useTranscriptionContextAllowed("upload");
+  // The org's upload switch, which the banner explains and the inputs follow.
+  const uploadFeatureAllowed = isAudioFeatureAllowed(policyState, "upload");
+  const uploadRestrictionId = useId();
+  const uploadRestrictionDescription = uploadFeatureAllowed ? undefined : uploadRestrictionId;
 
   const setUploadTranscriptionMode = useSettingsStore((s) => s.setUploadTranscriptionMode);
   const setUploadCloudTranscriptionMode = useSettingsStore(
@@ -326,15 +333,18 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const enterpriseTranscriptionSetupMode = useSettingsStore(
     (s) => s.enterpriseTranscriptionSetupMode
   );
-  const managedActive =
-    useManagedScopeResolution("transcription", enterpriseTranscriptionSetupMode).kind === "managed";
+  const managed = useManagedScopeResolution("transcription", enterpriseTranscriptionSetupMode);
+  const managedActive = managed.kind === "managed";
 
   const isOpenWhisprCloud =
-    isSignedIn && cloudTranscriptionMode === "openwhispr" && !useLocalWhisper;
+    !managedActive && isSignedIn && cloudTranscriptionMode === "openwhispr" && !useLocalWhisper;
 
   // Mode detection
   const isSelfHosted = transcriptionMode === "self-hosted" && !useLocalWhisper;
   const isByok = !useLocalWhisper && !isOpenWhisprCloud;
+  // Managed audio never reaches the saved personal provider, so its diarize notes don't apply.
+  const byokDiarizeProvider =
+    isByok && !managedActive && !isSelfHosted ? cloudTranscriptionProvider : null;
 
   // Mode-aware file size validation
   // Local: no limits at all
@@ -350,8 +360,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   let isLargeFile = false;
 
   if (file) {
-    if (useLocalWhisper) {
-      // Local transcription: no file size restrictions
+    if (managedActive || useLocalWhisper) {
+      // Managed audio is prepared/chunked to its endpoint cap; local decoding has no size limit.
     } else if (isSelfHosted || cloudTranscriptionProvider === "custom") {
       // Self-hosted / custom endpoints (e.g. local whisper.cpp): no file size restrictions
     } else if (isByok) {
@@ -370,6 +380,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   useEffect(() => {
     return () => {
       if (progressRef.current) clearInterval(progressRef.current);
+      progressCleanupRef.current?.();
     };
   }, []);
 
@@ -494,6 +505,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   ]);
 
   const getActiveModelLabel = (): string => {
+    if (managed.kind === "managed")
+      return `${enterpriseProviderName(managed.provider)} · ${managed.model}`;
     if (isOpenWhisprCloud) return t("notes.upload.openwhisprCloud");
     if (useLocalWhisper) {
       if (localTranscriptionProvider === "nvidia")
@@ -535,6 +548,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
   // Batch counterpart of the single-file size gating above; returns keys under notes.upload.*.
   const getBatchSizeErrorKey = (sizeBytes: number): string | null => {
+    if (managedActive) return null;
     if (useLocalWhisper || isSelfHosted || cloudTranscriptionProvider === "custom") return null;
     if (isByok) return sizeBytes > byokMaxFileSize ? "byokTooLarge" : null;
     if (sizeBytes > CLOUD_PRO_MAX_FILE_SIZE) return "fileTooLarge";
@@ -551,6 +565,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   };
 
   const handleBrowse = async () => {
+    if (!isAudioFeatureAllowed(usePolicyStore.getState(), "upload")) return;
     const res = await window.electronAPI.selectAudioFile({ multiple: true });
     if (res.canceled) return;
 
@@ -578,6 +593,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   };
 
   const handleDroppedFiles = (files: File[]) => {
+    if (!isAudioFeatureAllowed(usePolicyStore.getState(), "upload")) return;
     const validFiles: Array<{ name: string; path: string; sizeBytes: number }> = [];
     const skippedNames: string[] = [];
     for (const f of files) {
@@ -638,8 +654,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   };
 
   const cancelTranscription = () => {
-    // True backend abort for cloud and local uploads; the run-id bump still
-    // discards any late result from providers that can't be aborted (BYOK).
+    // Abort the provider request and discard late results from a cancelled run.
     if (activeRequestIdRef.current) {
       window.electronAPI.cancelUploadTranscription?.(activeRequestIdRef.current);
       activeRequestIdRef.current = null;
@@ -647,11 +662,37 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     runIdRef.current++;
     reset();
   };
+  useEffect(() => {
+    return usePolicyStore.subscribe((policy) => {
+      if (isAudioFeatureAllowed(policy, "upload")) return;
+      const active = activeRequestIdRef.current || singleDownloadIdRef.current;
+      runIdRef.current++;
+      if (active) {
+        if (progressRef.current) clearInterval(progressRef.current);
+        progressCleanupRef.current?.();
+        progressCleanupRef.current = null;
+        setState("error");
+        setError(t(uploadRestrictionKey(policy)));
+      }
+      if (activeRequestIdRef.current) {
+        window.electronAPI.cancelUploadTranscription?.(activeRequestIdRef.current);
+        activeRequestIdRef.current = null;
+      }
+      if (singleDownloadIdRef.current)
+        window.electronAPI.cancelUrlDownload(singleDownloadIdRef.current);
+    });
+  }, [t]);
+
   const handleTranscribe = async () => {
     if (!file || batch.isProcessing) return;
+    const policy = usePolicyStore.getState();
+    if (!isAudioFeatureAllowed(policy, "upload")) {
+      setError(t(uploadRestrictionKey(policy)));
+      return;
+    }
     if (
       !isManagedTranscriptionActive() &&
-      !isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload")
+      !isTranscriptionContextAllowed(policy, getSettings(), "upload")
     ) {
       setError(t("common.managedByOrg"));
       return;
@@ -667,20 +708,23 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setChunkProgress(null);
     setDiarizationWarning(false);
 
-    const useChunkProgress = isOpenWhisprCloud && isLargeFile;
+    const useChunkProgress = managedActive || (isOpenWhisprCloud && isLargeFile);
 
     if (useChunkProgress) {
       progressCleanupRef.current =
         window.electronAPI.onUploadTranscriptionProgress?.((data) => {
-          if (data.chunksTotal > 0) {
-            setChunkProgress({
-              chunksTotal: data.chunksTotal,
-              chunksCompleted: data.chunksCompleted,
-            });
-            setProgress((data.chunksCompleted / data.chunksTotal) * 90);
-          }
+          // A managed upload under the endpoint cap is one request with no
+          // intermediate progress, so the simulated bar keeps covering it.
+          if (data.chunksTotal === 0 || (managedActive && data.chunksTotal === 1)) return;
+          if (progressRef.current) clearInterval(progressRef.current);
+          setChunkProgress({
+            chunksTotal: data.chunksTotal,
+            chunksCompleted: data.chunksCompleted,
+          });
+          setProgress((prev) => Math.max(prev, (data.chunksCompleted / data.chunksTotal) * 90));
         }) ?? null;
-    } else {
+    }
+    if (!useChunkProgress || managedActive) {
       progressRef.current = setInterval(() => {
         setProgress((prev) => {
           if (prev >= 90) {
@@ -700,9 +744,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         diarization,
         currentFile.durationSeconds,
         { requestId, timestamps: true }
-      ).finally(() => {
-        if (activeRequestIdRef.current === requestId) activeRequestIdRef.current = null;
-      });
+      );
 
       if (runId !== runIdRef.current) return;
 
@@ -774,10 +816,13 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         );
       }
       setState("error");
+    } finally {
+      if (activeRequestIdRef.current === requestId) activeRequestIdRef.current = null;
     }
   };
 
   const handleUrlSubmit = async () => {
+    if (!isAudioFeatureAllowed(usePolicyStore.getState(), "upload")) return;
     const trimmed = urlInput.trim();
     if (!trimmed) return;
 
@@ -878,6 +923,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   };
 
   const handleBatchUrlSubmit = () => {
+    if (!isAudioFeatureAllowed(usePolicyStore.getState(), "upload")) return;
     const { valid, skipped } = parseBatchUrls(urlInput);
     if (valid.length > 0) {
       batch.addUrls(valid);
@@ -894,9 +940,14 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
   const startBatchProcessing = async () => {
     if (state === "downloading" || state === "transcribing") return;
+    const policy = usePolicyStore.getState();
+    if (!isAudioFeatureAllowed(policy, "upload")) {
+      setSkippedNotice(t(uploadRestrictionKey(policy)));
+      return;
+    }
     if (
       !isManagedTranscriptionActive() &&
-      !isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload")
+      !isTranscriptionContextAllowed(policy, getSettings(), "upload")
     ) {
       setSkippedNotice(t("common.managedByOrg"));
       return;
@@ -947,6 +998,10 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   };
 
   const getTranscribingLabel = (): string => {
+    if (managed.kind === "managed")
+      return t("notes.upload.transcribingProvider", {
+        provider: enterpriseProviderName(managed.provider),
+      });
     if (isOpenWhisprCloud) return t("notes.upload.transcribingCloud");
     if (useLocalWhisper) return t("notes.upload.transcribingLocal");
     if (isSelfHosted) {
@@ -963,6 +1018,19 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 py-8 shrink-0 my-auto")}
         style={{ animation: "float-up 0.4s ease-out" }}
       >
+        {!uploadFeatureAllowed && (
+          <p
+            id={uploadRestrictionId}
+            role="status"
+            className="mb-5 flex items-center justify-center gap-2 rounded-lg border border-warning/20 bg-warning/8 px-4 py-3 text-sm text-amber-700 dark:bg-warning/10 dark:text-warning/90"
+          >
+            <AlertTriangle
+              aria-hidden="true"
+              className="w-3.5 h-3.5 shrink-0 text-amber-600 dark:text-warning"
+            />
+            {t(uploadRestrictionKey(policyState))}
+          </p>
+        )}
         {state === "idle" && providerReady === false && (
           <NoProviderView t={t} onOpenSettings={() => onOpenSettings?.("uploadTranscription")} />
         )}
@@ -975,6 +1043,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               handleDroppedFiles={handleDroppedFiles}
               handleBrowse={handleBrowse}
               onOpenSettings={onOpenSettings}
+              disabled={!uploadFeatureAllowed}
+              describedBy={uploadRestrictionDescription}
             />
 
             <div className="my-5 flex items-center gap-3">
@@ -985,7 +1055,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               <div className="h-px flex-1 bg-border/70 dark:bg-white/10" />
             </div>
 
-            {urlExpanded ? (
+            {urlExpanded && uploadFeatureAllowed ? (
               <div>
                 <textarea
                   dir="ltr"
@@ -1062,16 +1132,18 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                     }
                   }}
                   placeholder={t("notes.upload.urlPlaceholder")}
-                  className="h-11 w-full rounded-full! pl-11 pr-12 text-sm placeholder:text-foreground/45"
+                  disabled={!uploadFeatureAllowed}
+                  aria-describedby={uploadRestrictionDescription}
+                  className="h-11 w-full rounded-full! pl-11 pr-12 text-sm placeholder:text-foreground/45 disabled:cursor-not-allowed disabled:opacity-50"
                 />
                 <button
                   onClick={handleUrlSubmit}
-                  disabled={!urlInput.trim()}
+                  disabled={!uploadFeatureAllowed || !urlInput.trim()}
                   aria-label={t("notes.upload.urlSubmit")}
                   className={cn(
                     "absolute right-1.5 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full transition-[filter,transform] duration-100",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
-                    urlInput.trim()
+                    uploadFeatureAllowed && urlInput.trim()
                       ? cn(GRADIENT_CIRCLE, "hover:brightness-110 active:scale-95")
                       : "bg-muted text-muted-foreground"
                   )}
@@ -1105,7 +1177,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               }
             />
 
-            {!batch.isProcessing && batch.queue.some((i) => i.status === "queued") && (
+            {!batch.isProcessing && batch.hasPending && (
               <div className="mt-4 flex flex-col items-center gap-3">
                 {folders.length > 0 && (
                   <FolderSelect
@@ -1239,33 +1311,21 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                     {t("notes.upload.speakerDetectionDescription")}
                   </p>
 
-                  {diarizationEnabled &&
-                    !useLocalWhisper &&
-                    !isOpenWhisprCloud &&
-                    !isSelfHosted &&
-                    cloudTranscriptionProvider === "openai" && (
-                      <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-                        {t("notes.upload.openaiDiarizeNote")}
-                      </p>
-                    )}
-                  {diarizationEnabled &&
-                    !useLocalWhisper &&
-                    !isOpenWhisprCloud &&
-                    !isSelfHosted &&
-                    cloudTranscriptionProvider === "mistral" && (
-                      <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-                        {t("notes.upload.mistralDiarizeNote")}
-                      </p>
-                    )}
-                  {diarizationEnabled &&
-                    !useLocalWhisper &&
-                    !isOpenWhisprCloud &&
-                    !isSelfHosted &&
-                    cloudTranscriptionProvider === "groq" && (
-                      <p className="mt-1.5 text-xs leading-relaxed text-warning">
-                        {t("notes.upload.groqDiarizeNote")}
-                      </p>
-                    )}
+                  {diarizationEnabled && byokDiarizeProvider === "openai" && (
+                    <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                      {t("notes.upload.openaiDiarizeNote")}
+                    </p>
+                  )}
+                  {diarizationEnabled && byokDiarizeProvider === "mistral" && (
+                    <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                      {t("notes.upload.mistralDiarizeNote")}
+                    </p>
+                  )}
+                  {diarizationEnabled && byokDiarizeProvider === "groq" && (
+                    <p className="mt-1.5 text-xs leading-relaxed text-warning">
+                      {t("notes.upload.groqDiarizeNote")}
+                    </p>
+                  )}
 
                   {diarizationDownloading && (
                     <p className="mt-1.5 text-xs leading-relaxed text-primary">
@@ -1273,7 +1333,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                     </p>
                   )}
 
-                  {diarizationEnabled && isOpenWhisprCloud && (
+                  {diarizationEnabled && (isOpenWhisprCloud || managedActive) && (
                     <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
                       {t("notes.upload.diarizationRunsLocally")}
                     </p>
@@ -1442,6 +1502,8 @@ interface IdleViewProps {
   handleDroppedFiles: (files: File[]) => void;
   handleBrowse: () => void;
   onOpenSettings?: (section: string) => void;
+  disabled: boolean;
+  describedBy?: string;
 }
 
 function IdleView({
@@ -1450,6 +1512,8 @@ function IdleView({
   handleDroppedFiles,
   handleBrowse,
   onOpenSettings,
+  disabled,
+  describedBy,
 }: IdleViewProps) {
   return (
     <>
@@ -1471,6 +1535,8 @@ function IdleView({
         hint={t("notes.upload.supportedFormats")}
         onFiles={handleDroppedFiles}
         onBrowse={handleBrowse}
+        disabled={disabled}
+        describedBy={describedBy}
       />
     </>
   );

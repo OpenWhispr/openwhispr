@@ -9,6 +9,7 @@ const {
   addTeardown,
   createRendererServer,
   installBrowserGlobals,
+  installHookDom,
 } = require("../lib/rendererTestHarness");
 
 const summary = (name, displayName, description, extra = {}) => ({
@@ -61,11 +62,18 @@ function skillsApi({ skills = SKILLS, readable = READABLE } = {}) {
 // Drives the real useChatStreaming hook (one synchronous render, then its sendToAI
 // closure), with the stream stubbed so the test can read what each send hands the model.
 // With `sender`, useChatMessageSender sits in front of it, as in the chat view.
-async function renderChat(t, hookOptions = {}, { settings = {}, electronAPI = {} } = {}) {
+async function renderChat(
+  t,
+  hookOptions = {},
+  { settings = {}, electronAPI = {}, live = false, persist = false, conversationId = 1 } = {}
+) {
+  let unmount;
+  if (live) addTeardown(t, async () => unmount?.());
   installBrowserGlobals(t, {
     initialStorage: { isSubscribed: "true" },
     window: { electronAPI },
   });
+  const container = live ? installHookDom(t) : null;
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-chat-streaming-skills-test-",
     mockModules: SIGNED_OUT_AUTH_MOCK,
@@ -90,6 +98,7 @@ async function renderChat(t, hookOptions = {}, { settings = {}, electronAPI = {}
   usePolicyStore.setState({ status: "unmanaged", appVersion: "1.10.0", policy: null });
   useSettingsStore.setState({ chatAgentMode: "openwhispr", isSignedIn: true, ...settings });
 
+  const { useChatPersistence } = await vite.ssrLoadModule("/components/chat/useChatPersistence.ts");
   const { useChatStreaming } = await vite.ssrLoadModule("/components/chat/useChatStreaming.ts");
   const { useChatMessageSender } = await vite.ssrLoadModule(
     "/components/chat/useChatMessageSender.ts"
@@ -125,27 +134,46 @@ async function renderChat(t, hookOptions = {}, { settings = {}, electronAPI = {}
     messages = typeof updater === "function" ? updater(messages) : updater;
   };
   const saved = [];
-  const persistence = {
+  const stubPersistence = {
     get messages() {
       return messages;
     },
     setMessages,
     saveUserMessage: async (text) => saved.push(text),
+    saveAssistantMessage: async () => {},
     getSessionVersion: () => 1,
   };
+  let persistence;
   let captured = null;
   let send = null;
   function Harness() {
-    captured = useChatStreaming({ messages, setMessages, ...hookOptions });
+    persistence = persist ? useChatPersistence({ conversationId }) : stubPersistence;
+    captured = useChatStreaming({
+      messages: persistence.messages,
+      setMessages: persistence.setMessages,
+      ...hookOptions,
+    });
     send = useChatMessageSender({
-      conversationId: 1,
+      conversationId,
       persistence,
       streaming: captured,
-      createConversation: async () => 1,
+      createConversation: persist ? persistence.createConversation : async () => 1,
     });
     return null;
   }
-  renderToStaticMarkup(React.createElement(Harness));
+  if (live) {
+    const { createRoot } = require("react-dom/client");
+    const root = createRoot(container);
+    await React.act(async () => root.render(React.createElement(Harness)));
+    let unmounted = false;
+    unmount = async () => {
+      if (unmounted) return;
+      unmounted = true;
+      await React.act(async () => root.unmount());
+    };
+  } else {
+    renderToStaticMarkup(React.createElement(Harness));
+  }
   return {
     captured,
     send,
@@ -154,7 +182,9 @@ async function renderChat(t, hookOptions = {}, { settings = {}, electronAPI = {}
     toolDefinitions,
     sentMessages,
     reasoningService,
-    getMessages: () => messages,
+    getMessages: () => (persist ? persistence.messages : messages),
+    getPersistence: () => persistence,
+    unmount,
     vite,
   };
 }
@@ -326,9 +356,13 @@ const OPENING =
 test("the attached creator learns the user's skills, connected apps and tool use", async (t) => {
   const creator = { attachedSkill: { name: "skill-creator", builtin: true } };
   const cloud = skillsApi();
-  const tools = await renderChat(t, { ...SKILLS_ON, allowConnectors: true }, {
-    electronAPI: cloud.api,
-  });
+  const tools = await renderChat(
+    t,
+    { ...SKILLS_ON, allowConnectors: true },
+    {
+      electronAPI: cloud.api,
+    }
+  );
   const { useConnectorStatusStore } = await tools.vite.ssrLoadModule(
     "/stores/connectorStatusStore.ts"
   );
@@ -343,8 +377,8 @@ test("the attached creator learns the user's skills, connected apps and tool use
   assert.ok(
     block.endsWith(
       `</skill_content>\n${OPENING}\nThe user's skills (name: when to use it):\n` +
-        "- meeting-prep: Briefs me before meetings.\n- weekly-recap: Recaps my week on Fridays.\n" +
-        "Connected apps: Slack"
+        "<skill_catalog>\n- meeting-prep: Briefs me before meetings.\n" +
+        "- weekly-recap: Recaps my week on Fridays.\n</skill_catalog>\nConnected apps: Slack"
     ),
     block
   );
@@ -384,7 +418,9 @@ const catalogOf = (sent) => {
   const start = prompt.indexOf(`${CATALOG_INTRO}\n`);
   if (start < 0) return null;
   const rest = prompt.slice(start + CATALOG_INTRO.length + 1);
-  return rest.slice(0, rest.indexOf("\n\n"));
+  const fenced = rest.slice(0, rest.indexOf("\n\n"));
+  assert.match(fenced, /^<skill_catalog>\n[\s\S]*\n<\/skill_catalog>$/);
+  return fenced.slice("<skill_catalog>\n".length, -"\n</skill_catalog>".length);
 };
 const loadSkillEnum = (definitions) =>
   definitions.find((tool) => tool.name === "load_skill")?.parameters.properties.name.enum;
@@ -452,27 +488,21 @@ test("an invalid skill is left out of the catalog and the load_skill enum", asyn
   assert.deepEqual(loadSkillEnum(toolDefinitions[0]), ["meeting-prep"]);
 });
 
-test(
-  "a skill loaded in an earlier turn is re-sent in the next turn's model-only text",
-  async (t) => {
-    const { api, calls } = skillsApi();
-    const { captured, sentMessages } = await renderChat(t, SKILLS_ON, { electronAPI: api });
-    const history = [
-      userMessage("u1", "prep me"),
-      loadedEarlier("meeting-prep"),
-      userMessage("u2", "and the agenda?"),
-    ];
+test("a skill loaded in an earlier turn is re-sent in the next turn's model-only text", async (t) => {
+  const { api, calls } = skillsApi();
+  const { captured, sentMessages } = await renderChat(t, SKILLS_ON, { electronAPI: api });
+  const history = [
+    userMessage("u1", "prep me"),
+    loadedEarlier("meeting-prep"),
+    userMessage("u2", "and the agenda?"),
+  ];
 
-    await captured.sendToAI("and the agenda?", history);
+  await captured.sendToAI("and the agenda?", history);
 
-    assert.equal(
-      latestUserText(sentMessages[0]),
-      withRequest(MEETING_PREP_BLOCK, "and the agenda?")
-    );
-    assert.equal(userTurns(sentMessages[0])[0].content, "prep me");
-    assert.deepEqual(calls.reads, [{ name: "meeting-prep", withFiles: false }]);
-  }
-);
+  assert.equal(latestUserText(sentMessages[0]), withRequest(MEETING_PREP_BLOCK, "and the agenda?"));
+  assert.equal(userTurns(sentMessages[0])[0].content, "prep me");
+  assert.deepEqual(calls.reads, [{ name: "meeting-prep", withFiles: false }]);
+});
 
 test("a skill the user took off the chat isn't re-sent, though the model loaded it", async (t) => {
   const { api, calls } = skillsApi();
@@ -491,7 +521,36 @@ test("a skill the user took off the chat isn't re-sent, though the model loaded 
   assert.deepEqual(calls.reads, []);
 });
 
-test("a skill read that fails sends the turn without that skill", async (t) => {
+test("a skill the user took off the chat leaves its list and load_skill too", async (t) => {
+  const { api } = skillsApi();
+  const { captured, sentMessages, toolDefinitions } = await renderChat(t, SKILLS_ON, {
+    electronAPI: api,
+  });
+
+  await captured.sendToAI("prep me", [userMessage("u1", "prep me")], {
+    removedSkills: ["meeting-prep"],
+  });
+
+  assert.equal(catalogOf(sentMessages[0]), "- weekly-recap: Recaps my week on Fridays.");
+  assert.deepEqual(loadSkillEnum(toolDefinitions[0]), ["weekly-recap"]);
+});
+
+test("someone with no skills is offered no skill tools, unless the creator is attached", async (t) => {
+  const { api } = skillsApi({ skills: [] });
+  const { captured, offeredTools } = await renderChat(t, SKILLS_ON, { electronAPI: api });
+
+  await captured.sendToAI("hi", [userMessage("u1", "hi")]);
+  await captured.sendToAI("make a skill", [userMessage("u2", "make a skill")], {
+    attachedSkill: { name: "skill-creator", builtin: true },
+  });
+
+  assert.deepEqual(
+    offeredTools.map((tools) => tools.filter((name) => name.includes("skill"))),
+    [[], ["propose_skill"]]
+  );
+});
+
+test("a skill read that fails sends the turn without that skill, and says so", async (t) => {
   const { api } = skillsApi();
   api.skillsReadForModel = async () => {
     throw new Error("EACCES: permission denied");
@@ -502,7 +561,15 @@ test("a skill read that fails sends the turn without that skill", async (t) => {
     attachedSkill: { name: "meeting-prep" },
   });
 
-  assert.equal(latestUserText(sentMessages[0]), "prep me");
+  // The chip still shows it, so the model hears it isn't used, to say so.
+  assert.equal(
+    latestUserText(sentMessages[0]),
+    withRequest(
+      "[The user attached the meeting-prep skill, but it couldn't be read, so this answer " +
+        "doesn't follow it. Say so first.]",
+      "prep me"
+    )
+  );
 });
 
 test("switching a skill off mid-conversation stops re-sending it", async (t) => {
@@ -630,7 +697,7 @@ test("a skill cut to fit is left to load_skill, not marked loaded", async (t) =>
   assert.match(results[0].data, /^<skill_content name="weekly-recap"/);
 });
 
-test("a first skill cut to fit is still sent, and load_skill can give it whole", async (t) => {
+test("a first skill cut to fit is still sent, and load_skill doesn't send it again", async (t) => {
   const steps = Array.from({ length: 4_000 }, (_, index) => `Prep step ${index + 1} done.`);
   const long = forModel("meeting-prep", "Meeting prep", steps.join("\n"));
   const readable = { ...READABLE, "meeting-prep": long };
@@ -650,7 +717,8 @@ test("a first skill cut to fit is still sent, and load_skill can give it whole",
   });
 
   assert.match(latestUserText(sentMessages[0]), /The rest of this skill was cut to fit/);
-  assert.match(results[0].data, /^<skill_content name="meeting-prep"/, "not 'already loaded'");
+  // load_skill has the same room, so it could only send the same cut copy a second time.
+  assert.match(results[0].data, /already loaded/);
 });
 
 test("a local model above the 4B gate gets a 330-token catalog", async (t) => {
@@ -760,3 +828,299 @@ test("an unparsed model id counts as no tools and picks", async (t) => {
   assert.equal(latestUserText(sentMessages[0]), withRequest(MEETING_PREP_BLOCK, PREP_REQUEST));
   assert.deepEqual(picked, [{ name: "meeting-prep", displayName: "Meeting prep" }]);
 });
+
+for (const [ending, mode] of [
+  ["complete", "cloud"],
+  ["completion abort", "cloud"],
+  ["stop", "cloud"],
+  ["abort before result", "cloud"],
+  ["unmount", "cloud"],
+  ["navigate", "cloud"],
+  ["new conversation", "cloud"],
+  ["abort before result", "byok"],
+]) {
+  test(`a saved skill keeps its Undo in the originating chat after ${ending} (${mode})`, async (t) => {
+    const { setup } = require("./skills/libraryFixture");
+    const { library } = setup(t);
+    const proposal = {
+      title: "Weekly recap",
+      description: "Recaps my week.",
+      instructions: "Original steps",
+      files: [],
+    };
+    library.saveProposal(proposal);
+    const stored = [];
+    const api = {
+      skillsList: async () => ({ skills: library.scan() }),
+      skillsCheckProposal: async (input) => library.checkProposal(input),
+      skillsSaveProposal: async (input) => ({ ok: true, ...library.saveProposal(input) }),
+      addAgentMessage: async (id, role, content, metadata) => {
+        stored.push({ id, role, content, metadata });
+      },
+      createAgentConversation: async () => ({ id: 17 }),
+      getAgentConversation: async (id) => ({
+        id,
+        messages: stored
+          .filter((row) => row.id === id)
+          .map((row) => ({
+            ...row,
+            metadata: row.metadata ? JSON.stringify(row.metadata) : undefined,
+          })),
+      }),
+    };
+    let deliveries = 0;
+    let chat;
+    chat = await renderChat(
+      t,
+      {
+        skillsEnabled: true,
+        onStreamComplete: (_id, content, toolCalls) => {
+          void chat.getPersistence().saveAssistantMessage(content, toolCalls);
+        },
+      },
+      {
+        electronAPI: api,
+        live: true,
+        persist: true,
+        conversationId: ending === "new conversation" ? null : 1,
+        settings: mode === "byok" ? BYOK : {},
+      }
+    );
+    const approvals = await chat.vite.ssrLoadModule("/stores/skillApprovalStore.ts");
+    const replacement = { ...proposal, instructions: "New steps" };
+    const call = { id: "save-1", name: "propose_skill", arguments: JSON.stringify(replacement) };
+    const stream = async function* (execute) {
+      if (ending === "stop") yield { type: "content", text: "A partial explanation." };
+      yield { type: "tool_calls", calls: [call] };
+      const saving = execute();
+      await new Promise((resolve) => setImmediate(resolve));
+      const entry = Object.values(approvals.useSkillApprovalStore.getState().entries)[0];
+      assert.ok(entry, "the actual proposal tool opens its approval card");
+      await approvals.saveSkillApproval(entry.key);
+      const result = await saving;
+      assert.equal(result.metadata.status, "saved");
+      assert.ok(result.metadata.versionId);
+      if (ending === "unmount") await chat.unmount();
+      if (["abort before result", "navigate", "new conversation"].includes(ending)) {
+        chat.captured.cancelStream();
+      }
+      if (ending === "navigate") await chat.getPersistence().loadConversation(2);
+      if (ending === "abort before result") {
+        throw new DOMException("Stopped", "AbortError");
+      }
+      yield { type: "tool_result", callId: call.id, toolName: call.name, ...result };
+      if (ending === "stop") chat.captured.cancelStream();
+      if (ending === "completion abort") yield { type: "content", text: "Saved." };
+      yield { type: "done", finishReason: "stop" };
+    };
+    if (mode === "cloud") {
+      chat.reasoningService.processTextStreamingCloud.mock.mockImplementation((_messages, config) =>
+        stream(() => config.executeToolCall(call.name, call.arguments, call.id))
+      );
+    } else {
+      chat.reasoningService.processTextStreamingAI.mock.mockImplementation(
+        (_m, _model, _p, _c, tools) =>
+          stream(async () => ({
+            metadata: await tools.propose_skill.execute(replacement, { toolCallId: call.id }),
+            displayText: "",
+          }))
+      );
+    }
+    await React.act(async () => {
+      await chat.send("Replace my weekly recap", {
+        onComplete: () => {
+          deliveries += 1;
+          if (ending === "completion abort") {
+            chat.captured.cancelStream();
+            throw new DOMException("Closed", "AbortError");
+          }
+        },
+      });
+    });
+    assert.match(library.get("weekly-recap").markdown, /New steps/);
+    const assistant = stored.filter((row) => row.role === "assistant");
+    assert.equal(assistant.length, 1, "the committed result is saved exactly once");
+    assert.equal(assistant[0].id, ending === "new conversation" ? 17 : 1);
+    assert.equal(assistant[0].content, ending === "completion abort" ? "Saved." : "");
+    assert.equal(deliveries, ending === "completion abort" ? 1 : 0);
+    const [savedCall] = assistant[0].metadata.toolCalls;
+    assert.equal(savedCall.arguments, "{}", "skill drafts stay out of saved chat history");
+    assert.equal(savedCall.metadata.status, "saved");
+    assert.equal(library.undo(savedCall.metadata.name, savedCall.metadata.versionId), true);
+    assert.match(library.get("weekly-recap").markdown, /Original steps/);
+    if (ending === "navigate") assert.deepEqual(chat.getMessages(), []);
+  });
+}
+
+for (const [ending, mode, writeFails, partialText] of [
+  ["provider error", "cloud", false, true],
+  ["provider error", "byok", false, true],
+  ["provider error during Save", "byok", false, true],
+  ["stop", "cloud", false, false],
+  ["navigate", "cloud", false, false],
+  ["unmount", "cloud", false, false],
+  ["unmount", "cloud", false, true],
+  ["stop", "byok", false, false],
+  ["navigate", "byok", false, false],
+  ["unmount", "byok", false, false],
+  ["stop", "cloud", true, false],
+  ["stop", "byok", true, false],
+]) {
+  test(`a skill Save still in flight after ${ending} preserves its outcome (${mode}, ${writeFails ? "failed" : "saved"}${partialText ? ", partial answer" : ""})`, async (t) => {
+    const { setup } = require("./skills/libraryFixture");
+    const { library } = setup(t);
+    const proposal = {
+      title: "Weekly recap",
+      description: "Recaps my week.",
+      instructions: "Original steps",
+      files: [],
+    };
+    library.saveProposal(proposal);
+    const stored = [];
+    let releaseSave;
+    const response = new Promise((resolve) => {
+      releaseSave = resolve;
+    });
+    t.after(() => releaseSave());
+    let notifyWrite;
+    const writeStarted = new Promise((resolve) => {
+      notifyWrite = resolve;
+    });
+    const api = {
+      skillsList: async () => ({ skills: library.scan() }),
+      skillsCheckProposal: async (input) => library.checkProposal(input),
+      skillsSaveProposal: async (input) => {
+        const result = writeFails
+          ? { ok: false, error: "write" }
+          : { ok: true, ...library.saveProposal(input) };
+        notifyWrite();
+        await response;
+        return result;
+      },
+      addAgentMessage: async (id, role, content, metadata) => {
+        stored.push({ id, role, content, metadata });
+      },
+      getAgentConversation: async (id) => ({
+        id,
+        messages: stored
+          .filter((row) => row.id === id)
+          .map((row) => ({
+            ...row,
+            metadata: row.metadata ? JSON.stringify(row.metadata) : undefined,
+          })),
+      }),
+    };
+    const chat = await renderChat(
+      t,
+      { skillsEnabled: true },
+      {
+        electronAPI: api,
+        live: true,
+        persist: true,
+        settings: mode === "byok" ? BYOK : {},
+      }
+    );
+    const approvals = await chat.vite.ssrLoadModule("/stores/skillApprovalStore.ts");
+    const replacement = { ...proposal, instructions: "New steps" };
+    const call = {
+      id: "save-in-flight",
+      name: "propose_skill",
+      arguments: JSON.stringify(replacement),
+    };
+    if (mode === "cloud") {
+      // Exercise the real cloud iterator, including its cancellation check after a tool.
+      chat.reasoningService.processTextStreamingCloud.mock.restore();
+      let ipcStep = 0;
+      t.mock.method(chat.reasoningService, "streamFromIPC", () => ({
+        stream: (async function* () {
+          if (ipcStep++ > 0) throw new Error("Network connection lost after Save");
+          if (partialText) yield { type: "content", text: "Working on it." };
+          yield { type: "tool_call", ...call };
+        })(),
+        wasCancelled: () => false,
+      }));
+    } else {
+      chat.reasoningService.processTextStreamingAI.mock.mockImplementation(
+        (_messages, _model, _provider, _config, tools) =>
+          (async function* () {
+            if (partialText) yield { type: "content", text: "Working on it." };
+            yield { type: "tool_calls", calls: [call] };
+            const executing = tools.propose_skill.execute(replacement, { toolCallId: call.id });
+            if (ending === "provider error during Save") {
+              await writeStarted;
+              throw new Error("Network connection lost during Save");
+            }
+            await executing;
+            if (ending === "provider error") throw new Error("Network connection lost after Save");
+          })()
+      );
+    }
+    let notifyApproval;
+    const approvalShown = new Promise((resolve) => {
+      notifyApproval = resolve;
+    });
+    const unsubscribe = approvals.useSkillApprovalStore.subscribe((state) => {
+      const entry = Object.values(state.entries).find((entry) => entry.state === "pending");
+      if (entry) notifyApproval(entry.key);
+    });
+    t.after(unsubscribe);
+    await React.act(async () => {
+      const sending = chat.send("Replace my weekly recap");
+      const key = await approvalShown;
+      const saving = approvals.saveSkillApproval(key);
+      await writeStarted;
+      if (ending === "unmount") await chat.unmount();
+      else if (!ending.startsWith("provider error")) chat.captured.cancelStream();
+      if (ending === "provider error") releaseSave();
+      if (ending === "navigate") await chat.getPersistence().loadConversation(2);
+      // The send lock releases even though the write's IPC response has not arrived.
+      await sending;
+      releaseSave();
+      await saving;
+      await new Promise((resolve) => setImmediate(resolve));
+    });
+    const assistants = stored.filter((row) => row.role === "assistant");
+    const savedCalls = assistants
+      .flatMap((row) => row.metadata?.toolCalls ?? [])
+      .filter((entry) => entry.metadata?.status === "saved");
+    if (writeFails) {
+      assert.deepEqual(assistants, []);
+      assert.match(library.get("weekly-recap").markdown, /Original steps/);
+    } else {
+      assert.equal(savedCalls.length, 1, "the committed outcome is persisted exactly once");
+      assert.ok(
+        assistants.every((row) => row.id === 1),
+        "the outcome belongs to its original chat"
+      );
+      assert.equal(savedCalls[0].arguments, "{}", "saved history excludes skill drafts");
+      assert.match(library.get("weekly-recap").markdown, /New steps/);
+      assert.equal(
+        library.undo(savedCalls[0].metadata.name, savedCalls[0].metadata.versionId),
+        true
+      );
+      assert.match(library.get("weekly-recap").markdown, /Original steps/);
+      if (ending.startsWith("provider error")) {
+        assert.equal(assistants.length, 1);
+        assert.equal(assistants[0].content, "", "failed partial answers stay out of saved history");
+        const reply = chat.getMessages().find((message) => message.role === "assistant");
+        assert.equal(reply.isStreaming, false);
+        assert.notEqual(
+          reply.content,
+          "Working on it.",
+          "the provider error still replaces the answer"
+        );
+      } else if (partialText) {
+        assert.equal(assistants[0].content, "Working on it.");
+        assert.equal(
+          assistants
+            .flatMap((row) => row.metadata?.toolCalls ?? [])
+            .filter((entry) => entry.name === "propose_skill" && entry.status === "executing")
+            .length,
+          0,
+          "reopened history does not leave the saved skill permanently executing"
+        );
+      } else assert.equal(assistants.length, 1);
+    }
+    if (ending === "navigate") assert.deepEqual(chat.getMessages(), []);
+  });
+}

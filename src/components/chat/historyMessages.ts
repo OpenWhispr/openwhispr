@@ -23,8 +23,9 @@ const TRACE_ARGUMENT: Record<string, string> = {
   load_skill: "name",
 };
 
-// A connector action's status (its saved result), as the model reads it. Without
-// it, a follow-up turn can't tell an issue was already created and files it again.
+// A connector action's or skill card's status (its saved result), as the model reads
+// it. Without it, a follow-up turn can't tell an issue was already created, or a skill
+// already saved, and does it again.
 const ACTION_OUTCOME: Record<string, string> = {
   sent: "sent",
   draft_opened: "draft opened",
@@ -34,6 +35,10 @@ const ACTION_OUTCOME: Record<string, string> = {
   failed: "failed",
   unavailable: "unavailable",
   needs_clarification: "needed details",
+  saved: "saved",
+  skipped: "skipped by the user",
+  changed: "not saved, the skill had changed",
+  not_saved: "not saved",
 };
 const OUTCOME_URL_MAX_CHARS = 200;
 
@@ -57,8 +62,8 @@ function outcomeUrl(value: unknown): string | null {
 }
 
 /**
- * What a connector action did, plus what a sent one created (its reference and
- * link). Never the destination, the user's edits on the card, or error text:
+ * What a connector action or skill card did, plus what a sent action created (its
+ * reference and link). Never the destination, the user's edits on the card, or error text:
  * a display name or an error body is other people's text.
  */
 function traceOutcome(call: ToolCallInfo): string | null {

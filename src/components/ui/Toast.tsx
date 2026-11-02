@@ -1,5 +1,5 @@
 import * as React from "react";
-import { X, Copy, Check } from "../icons";
+import { Copy, Check } from "../icons";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 import {
@@ -16,77 +16,8 @@ import {
 } from "../../helpers/toastPresentation";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
 import { DictationErrorCard } from "../dictation/DictationErrorCard";
-import { TOAST_ACTION_ICONS } from "./toastActionIcons";
+import { ToastCard } from "./ToastCard";
 import { TechnicalErrorDetails } from "./TechnicalErrorDetails";
-
-/** The inline action beside a toast's text; dismissing is left to the caller. */
-export function ToastActionButton({
-  onClick,
-  children,
-}: {
-  onClick: () => void | Promise<void>;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="rounded-sm border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-medium whitespace-nowrap text-white/90 transition-colors hover:border-white/35 hover:bg-white/20 hover:text-white"
-    >
-      {children}
-    </button>
-  );
-}
-
-/** A structured action under a standard toast's text: a compact button, or its icon alone. */
-function StandardToastAction({
-  action,
-  onAction,
-}: {
-  action: ToastActionConfig;
-  onAction: (action: ToastActionConfig) => ReturnType<ToastActionConfig["onClick"]>;
-}) {
-  const [result, setResult] = React.useState<boolean | undefined>();
-  const resetTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  React.useEffect(() => () => clearTimeout(resetTimer.current), []);
-
-  const handleClick = async () => {
-    let outcome: void | boolean;
-    try {
-      outcome = await onAction(action);
-    } catch {
-      outcome = false;
-    }
-    if (!action.feedback || typeof outcome !== "boolean") return;
-    setResult(outcome);
-    clearTimeout(resetTimer.current);
-    resetTimer.current = setTimeout(() => setResult(undefined), 1800);
-  };
-
-  const label =
-    result === true
-      ? action.feedback?.successLabel
-      : result === false
-        ? action.feedback?.failureLabel
-        : action.label;
-  if (!action.iconOnly) {
-    return <ToastActionButton onClick={handleClick}>{label}</ToastActionButton>;
-  }
-  const Icon = result === true ? Check : action.icon ? TOAST_ACTION_ICONS[action.icon] : Copy;
-  return (
-    <button
-      type="button"
-      onClick={() => void handleClick()}
-      title={label}
-      className="rounded-sm border border-white/20 bg-white/10 p-1 text-white/70 transition-colors hover:border-white/35 hover:bg-white/20 hover:text-white"
-    >
-      <Icon className="size-3" aria-hidden="true" />
-      <span className="sr-only" aria-live={action.feedback ? "polite" : undefined}>
-        {label}
-      </span>
-    </button>
-  );
-}
 
 interface ToastState extends ToastProps {
   id: string;
@@ -267,15 +198,22 @@ const ToastViewport: React.FC<{
 
   if (toasts.length === 0) return null;
 
+  // A live preview can keep the native window short. Safe end alignment lets
+  // taller standard cards start below the top gutter instead of clipping Close.
+
   return (
     <div
       className={cn(
-        "fixed z-[100] flex flex-col gap-1.5 pointer-events-none",
+        "fixed z-[100] flex flex-col gap-2 pointer-events-none",
         isDictationPanel
           ? hasDictationError
             ? "inset-x-3 bottom-3"
-            : "bottom-20 end-6"
-          : "bottom-5 end-5"
+            : "top-4 bottom-20 end-6 justify-end-safe"
+          : "bottom-5 end-5",
+        isDictationPanel &&
+          !hasDictationError &&
+          toasts.length > 1 &&
+          "pointer-events-auto -m-2 overflow-y-auto p-2"
       )}
     >
       {toasts.map((toast) => (
@@ -297,21 +235,6 @@ const ToastViewport: React.FC<{
   );
 };
 
-const variantConfig = {
-  default: {
-    accentClass: "bg-white/20",
-    progressClass: "bg-white/15",
-  },
-  destructive: {
-    accentClass: "bg-red-400",
-    progressClass: "bg-red-400/30",
-  },
-  success: {
-    accentClass: "bg-emerald-400",
-    progressClass: "bg-emerald-400/30",
-  },
-};
-
 const Toast: React.FC<
   ToastState & {
     onClose?: () => void;
@@ -326,9 +249,7 @@ const Toast: React.FC<
   secondaryDescription,
   copyCommand,
   technicalDetails,
-  action,
   actions,
-  actionsAlign = "start",
   presentation = "standard",
   variant = "default",
   duration = 3500,
@@ -338,7 +259,6 @@ const Toast: React.FC<
   onPauseTimer,
   onResumeTimer,
 }) => {
-  const config = variantConfig[variant];
   const pausedAtRef = React.useRef<number | null>(null);
   const remainingDurationRef = React.useRef(duration);
   const timerStartedAtRef = React.useRef(createdAt);
@@ -401,11 +321,10 @@ const Toast: React.FC<
     pausedAtRef.current = null;
   };
 
-  const message = title || description;
-  const detail = title && description ? description : undefined;
-  // Structured actions come with a classified error: its description is a
-  // sentence to read, and Copy details replaces the raw-error copy box.
-  const rowActions = actions?.length ? actions : undefined;
+  // Structured actions or a recovery command come with a classified error whose
+  // description is a sentence to read; otherwise a destructive one is the raw error.
+  const rawError =
+    isDestructive && !actions?.length && !copyCommand && title ? description : undefined;
 
   if (presentation === "dictation-error") {
     return (
@@ -424,6 +343,7 @@ const Toast: React.FC<
           onDismiss={dismissible ? onClose : undefined}
           actions={actions ?? []}
           onAction={handleStructuredAction}
+          tone="error"
           onPreferredHeightChange={handleErrorHeightChange}
           progressDuration={!isExiting ? duration : 0}
           progressPaused={timerPaused}
@@ -436,8 +356,7 @@ const Toast: React.FC<
   return (
     <div
       className={cn(
-        "group toast-surface pointer-events-auto relative flex w-75",
-        "rounded-[5px]",
+        "pointer-events-auto shrink-0 w-100 max-w-[calc(100vw-3rem)]",
         "transition-[opacity,transform] duration-200 ease-out",
         isExiting
           ? "opacity-0 translate-x-2 rtl:-translate-x-2 scale-[0.98]"
@@ -446,113 +365,56 @@ const Toast: React.FC<
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      <div className={cn("w-0.5 shrink-0", config.accentClass)} />
-
-      <div className="flex items-start gap-2 flex-1 min-w-0 px-2.5 py-2">
-        <div className="flex-1 min-w-0">
-          {message && (
-            <div className="text-xs font-medium leading-tight text-white/90">{message}</div>
-          )}
-          {secondaryDescription && (
-            <div className="mt-1 text-xs leading-snug text-white/45">{secondaryDescription}</div>
-          )}
-          {detail &&
-            (isDestructive && !rowActions ? (
-              <div
-                className={cn(
-                  "text-xs leading-snug mt-1 px-1.5 py-1 rounded-[3px] font-mono",
-                  "bg-white/4 border border-white/6",
-                  "text-red-300/80"
-                )}
-              >
-                <div className="flex items-start justify-between gap-1.5">
-                  <span className="select-all wrap-break-word min-w-0">{detail}</span>
-                  <button
-                    onClick={() => void copy()}
-                    className={cn(
-                      "shrink-0 p-0.5 rounded-xs mt-px",
-                      "text-white/30 hover:text-white/70",
-                      "hover:bg-white/6",
-                      "transition-colors duration-150"
-                    )}
-                    aria-label="Copy error"
-                  >
-                    {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="text-xs leading-snug mt-0.5 text-white/45">{detail}</div>
-            ))}
-          {copyCommand && (
-            <div className="mt-1.5 flex items-center gap-1.5 rounded-[3px] border border-white/6 bg-white/4 px-1.5 py-1">
-              <code
-                dir="ltr"
-                className="min-w-0 flex-1 wrap-break-word font-mono text-[11px] text-white/60 select-all"
-              >
-                {copyCommand}
-              </code>
-              <button
-                type="button"
-                onClick={() => void copyRecoveryCommand()}
-                className="shrink-0 rounded-xs p-1 text-white/30 transition-colors hover:bg-white/6 hover:text-white/70"
-                aria-label={t("reasoning.enterprise.technicalDetails.copyCommand")}
-              >
-                {commandCopied ? <Check className="size-3" /> : <Copy className="size-3" />}
-              </button>
-            </div>
-          )}
-          <TechnicalErrorDetails details={technicalDetails} onDark />
-          {rowActions && (
-            <div
-              className={cn(
-                "mt-2 flex items-center gap-1.5",
-                actionsAlign === "end" && "justify-end"
-              )}
+      <ToastCard
+        title={title}
+        description={rawError ? undefined : description}
+        descriptionHotkey={descriptionHotkey}
+        role={isDestructive ? "alert" : "status"}
+        tone={isDestructive ? "error" : variant === "success" ? "success" : undefined}
+        onDismiss={onClose}
+        actions={actions ?? []}
+        onAction={handleStructuredAction}
+        progressDuration={!isExiting ? duration : 0}
+        progressPaused={timerPaused}
+      >
+        {secondaryDescription && (
+          <p className="mt-1 text-[13px] leading-snug text-muted-foreground">
+            {secondaryDescription}
+          </p>
+        )}
+        {rawError && (
+          <div className="mt-2 flex items-start justify-between gap-1.5 rounded-lg border border-border/60 bg-foreground/5 px-2 py-1.5 font-mono text-xs leading-snug text-destructive">
+            <span className="min-w-0 select-all wrap-break-word">{rawError}</span>
+            <button
+              type="button"
+              onClick={() => void copy()}
+              className="shrink-0 rounded-xs p-0.5 text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+              aria-label={t("common.copy")}
             >
-              {rowActions.map((rowAction, index) => (
-                <StandardToastAction
-                  key={`${rowAction.label}-${index}`}
-                  action={rowAction}
-                  onAction={handleStructuredAction}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-
-        {action && <div className="shrink-0 self-center">{action}</div>}
-      </div>
-
-      {onClose && (
-        <button
-          onClick={onClose}
-          className={cn(
-            "absolute -start-2 -top-2 size-6 rounded-full",
-            "flex items-center justify-center",
-            "bg-white/10 backdrop-blur-sm border border-white/10",
-            "text-white/70 hover:text-white hover:bg-white/20",
-            "opacity-0 scale-75 group-hover:opacity-100 group-hover:scale-100",
-            "transition-all duration-150",
-            "focus:outline-none focus-visible:ring-1 focus-visible:ring-white/30"
-          )}
-        >
-          <X className="size-3" />
-          <span className="sr-only">Close</span>
-        </button>
-      )}
-
-      {duration > 0 && !isExiting && (
-        <div className="absolute bottom-0 start-0.5 end-0 h-px overflow-hidden">
-          <div
-            className={cn("h-full", config.progressClass)}
-            style={{
-              animation: `toast-progress ${duration}ms linear forwards`,
-              animationPlayState: timerPaused ? "paused" : "running",
-            }}
-          />
-        </div>
-      )}
+              {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+            </button>
+          </div>
+        )}
+        {copyCommand && (
+          <div className="mt-2 flex items-center gap-1.5 rounded-lg border border-border/60 bg-foreground/5 px-2 py-1.5">
+            <code
+              dir="ltr"
+              className="min-w-0 flex-1 wrap-break-word font-mono text-xs text-muted-foreground select-all"
+            >
+              {copyCommand}
+            </code>
+            <button
+              type="button"
+              onClick={() => void copyRecoveryCommand()}
+              className="shrink-0 rounded-xs p-1 text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+              aria-label={t("reasoning.enterprise.technicalDetails.copyCommand")}
+            >
+              {commandCopied ? <Check className="size-3" /> : <Copy className="size-3" />}
+            </button>
+          </div>
+        )}
+        <TechnicalErrorDetails details={technicalDetails} />
+      </ToastCard>
     </div>
   );
 };

@@ -17,6 +17,7 @@ import {
   isWebSearchBlockedByOrg,
 } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
+import { readSkillCardRecord, SKILL_CARD_TOOLS } from "./skillCardRecord";
 import { useAuth } from "../../hooks/useAuth";
 import { getUsageState } from "../../lib/usageStore";
 import { readIsSubscribed } from "../../lib/subscriptionFlag";
@@ -45,18 +46,24 @@ import {
   buildSkillBlock,
   buildSkillCatalog,
   fitSkillBlock,
+  skillNotUsedNote,
   withSkillContext,
 } from "../../utils/skillContext";
 import { pickSkillForRequest } from "../../utils/localSkillPick";
 import type { SkillRef, SkillSummary } from "../../types/skills";
-import { getDictionaryHintWords } from "../../utils/snippets";
+import { getLlmDictionaryWords } from "../../utils/snippets";
 import { noteAttendeesContext, withoutAttendeesFence } from "../../utils/noteAttendees";
 import { FULL_TRANSCRIPT_MAX_TOKENS } from "../../utils/transcriptEvidence";
 import { createToolRegistry } from "../../services/tools";
+import type { SharedDictionaryWord } from "../../services/tools/dictionaryTool";
+import { setSharedWordsHidden } from "../../services/sharedDictionaryActions";
+import { readActiveWorkspaceId } from "../../stores/workspaceStore";
+import { selectAppliedSharedWords } from "../../utils/sharedDictionaryHints";
 import {
   executeTool,
   type HoldDeliveryOptions,
   type ToolRegistry,
+  type ToolResult,
 } from "../../services/tools/ToolRegistry";
 import { createToolExecutionScope, type ToolExecutionScope } from "./toolExecutionScope";
 import { isQueryResultData } from "../../services/tools/connectors/runQueryAction";
@@ -75,6 +82,32 @@ const RAG_NOTE_SNIPPET_LENGTH = 500;
 const STREAM_FLUSH_INTERVAL_MS = 32;
 
 const LOCAL_TOOL_MIN_PARAMS_B = 4;
+
+// The tool reads the DB mirror over IPC (not the control panel's store), so it
+// also works from the dictation window, for the workspace every window uses now.
+async function readAppliedSharedWords(): Promise<SharedDictionaryWord[]> {
+  const workspaceId = readActiveWorkspaceId();
+  if (!workspaceId) return [];
+  try {
+    const snapshot = await window.electronAPI?.getSharedDictionary?.(workspaceId);
+    if (!snapshot) return [];
+    return selectAppliedSharedWords(snapshot, getSettings());
+  } catch (error) {
+    // The assistant then treats shared words as absent rather than failing the call.
+    logger.warn(
+      "Failed to read the shared dictionary for the assistant",
+      { error: (error as Error)?.message },
+      "dictionary"
+    );
+    return [];
+  }
+}
+
+async function hideAppliedSharedWords(ids: string[]): Promise<void> {
+  const workspaceId = readActiveWorkspaceId();
+  if (!workspaceId) throw new Error("No active workspace");
+  await setSharedWordsHidden(workspaceId, ids, true);
+}
 
 function estimateModelSizeB(modelId: string): number {
   const match = modelId.match(/-([\d.]+)[bB]/);
@@ -177,6 +210,8 @@ interface UseChatStreamingOptions {
 }
 
 export interface SendToAIOptions {
+  /** Bound to this send's conversation before it can change or unmount. */
+  persistAssistantMessage?: (content: string, toolCalls?: ToolCallInfo[]) => void | Promise<void>;
   /** Screenshot for this message; attached only when the resolved model can see it. */
   attachment?: ChatImageAttachment;
   /** Agent-response selection attached to this request without changing chat history. */
@@ -237,7 +272,6 @@ function transformLastUserMessage(
 }
 
 export function useChatStreaming({
-  messages,
   setMessages,
   inferenceScope = "chatIntelligence",
   noteContext: externalNoteContext,
@@ -256,7 +290,6 @@ export function useChatStreaming({
   const [toolStatus, setToolStatus] = useState("");
   const [activeToolName, setActiveToolName] = useState("");
   const mountedRef = useRef(true);
-  const messagesRef = useRef<Message[]>([]);
   const noteContextRef = useRef(externalNoteContext);
   noteContextRef.current = externalNoteContext;
   const openNoteRef = useRef(openNote);
@@ -317,10 +350,6 @@ export function useChatStreaming({
 
     toolActivityTimerRef.current = setTimeout(clearToolActivity, remainingMs);
   }, [clearToolActivity, clearToolActivityTimer]);
-
-  useEffect(() => {
-    messagesRef.current = messages;
-  }, [messages]);
 
   const sendGenerationRef = useRef(0);
   // Generation stamped by the most recent cancel issued while still mounted
@@ -446,6 +475,9 @@ export function useChatStreaming({
           !isCloudAgent && (isLocalProvider || isLanAgent) ? "selfHosted" : "hosted";
 
         let usableSkills: SkillSummary[] = [];
+        // The skills this chat may use: the user's, less those taken off it. The creator still
+        // hears of every skill, so it doesn't propose one the user already has.
+        let offeredSkills: SkillSummary[] = [];
         const removedSkills = new Set(options?.removedSkills);
         let activeRefs: SkillRef[] = skillsEnabled
           ? activeSkillNames(allMessages, options?.attachedSkill).filter(
@@ -458,6 +490,7 @@ export function useChatStreaming({
           usableSkills = useSkillsStore
             .getState()
             .skills.filter((skill) => skill.enabled && skill.valid);
+          offeredSkills = usableSkills.filter((skill) => !removedSkills.has(skill.name));
         }
 
         const scope = searchScopeRef.current;
@@ -489,8 +522,9 @@ export function useChatStreaming({
           // Triggers ride in the tool description, so a snippet edit rebuilds the registry.
           const snippetKey = settings.snippets.map((s) => s.trigger).join("|");
           // load_skill names the usable skills and a budget for this model.
+          const creatorAttached = Boolean(options?.attachedSkill?.builtin);
           const skillKey = skillsEnabled
-            ? `${contextTier}:${usableSkills.map((s) => `${s.name}@${s.updatedAt}`).join("|")}`
+            ? `${contextTier}:${creatorAttached}:${offeredSkills.map((s) => `${s.name}@${s.updatedAt}`).join("|")}`
             : "";
           const keepNotesUnchanged = !!options?.keepNotesUnchanged;
           const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${productHelpEnabled}-${snippetKey}-${connectors?.emailDraftTarget ?? "no-connectors"}-${connectors?.readyConnectorIds.join(",") ?? ""}-${keepNotesUnchanged}-${skillKey}`;
@@ -508,6 +542,8 @@ export function useChatStreaming({
                 getDictionary: () => getSettings().customDictionary,
                 updateDictionary: (changes) =>
                   useSettingsStore.getState().updateCustomDictionary(changes),
+                getSharedWords: readAppliedSharedWords,
+                hideSharedWords: hideAppliedSharedWords,
                 getSnippets: () => getSettings().snippets,
                 setSnippets: (snippets) => useSettingsStore.getState().setSnippets(snippets),
               },
@@ -515,7 +551,7 @@ export function useChatStreaming({
               keepNotesUnchanged,
               skills: skillsEnabled
                 ? {
-                    usable: usableSkills,
+                    usable: offeredSkills,
                     activeNames: () => carriedSkillNamesRef.current,
                     read: (ref) =>
                       window.electronAPI?.skillsReadForModel?.(ref) ?? Promise.resolve(null),
@@ -523,6 +559,7 @@ export function useChatStreaming({
                     markUsed: (name) =>
                       void window.electronAPI?.skillsMarkUsed?.(name).catch(() => {}),
                     maxTokens: SKILL_CONTEXT_MAX_TOKENS[contextTier],
+                    creatorAttached,
                   }
                 : undefined,
             });
@@ -563,10 +600,7 @@ export function useChatStreaming({
           registry === null &&
           !options?.attachedSkill &&
           options?.allowSkillPick !== false
-            ? pickSkillForRequest(
-                userText,
-                usableSkills.filter((skill) => !removedSkills.has(skill.name))
-              )
+            ? pickSkillForRequest(userText, offeredSkills)
             : null;
         if (picked) {
           activeRefs = [
@@ -578,13 +612,23 @@ export function useChatStreaming({
         const carried = new Set<string>();
         let skillRoom: number = SKILL_CONTEXT_MAX_TOKENS[contextTier];
         for (const ref of activeRefs) {
-          // Switched off or broken since it was attached or loaded.
-          if (!ref.builtin && !usableSkills.some((skill) => skill.name === ref.name)) continue;
-          // A skill that can't be read is left out; the turn still goes.
+          // A skill switched off, broken or unreadable since it was attached or loaded is left
+          // out, and the turn still goes. The attached one's chip still shows, so the model is
+          // told it isn't used, to say so.
+          const leftOut = (): void => {
+            if (ref === options?.attachedSkill) skillBlocks.push(skillNotUsedNote(ref.name));
+          };
+          if (!ref.builtin && !usableSkills.some((skill) => skill.name === ref.name)) {
+            leftOut();
+            continue;
+          }
           const skill = await window.electronAPI
             ?.skillsReadForModel?.({ ...ref, withFiles: registry === null })
             .catch(() => null);
-          if (!skill) continue;
+          if (!skill) {
+            leftOut();
+            continue;
+          }
           const connectedApps = connectorsAvailable
             ? readyConnectorIds().map((id) => CONNECTOR_NAMES[id] ?? id)
             : [];
@@ -602,15 +646,17 @@ export function useChatStreaming({
             blockOptions
           );
           const whole = !cut;
-          // A model with tools reads a cut skill whole with load_skill, unless nothing came before
-          // it to take its room.
-          if (!whole && registry !== null && skillBlocks.length > 0) continue;
+          // The first skill had all the room load_skill has, so even cut it is as much of it as
+          // the model can get. A later one was cut by the skills before it: a model with tools
+          // reads it with load_skill, which gives it that whole room.
+          const first = skillBlocks.length === 0;
+          if (!whole && registry !== null && !first) continue;
           const block = fitted + creatorContext;
           skillRoom -= estimateNoteTokens(block);
           skillBlocks.push(block);
-          // Only a skill carried whole is "already loaded" for load_skill; without tools there is
-          // no load_skill, and what's carried is what the picked chip names.
-          if (!ref.builtin && (whole || registry === null)) carried.add(ref.name);
+          // A carried skill is "already loaded" for load_skill, which would only send it again;
+          // without tools there is no load_skill, and what's carried is what the picked chip names.
+          if (!ref.builtin && (whole || first || registry === null)) carried.add(ref.name);
           if (skillRoom <= 0) break;
         }
         if (cancelled() || !mountedRef.current) return;
@@ -660,11 +706,11 @@ export function useChatStreaming({
               ? { tones: settings.toneStyles, destination: options?.destinationAppCategory }
               : undefined,
             skillCatalog: registry?.get("load_skill")
-              ? buildSkillCatalog(usableSkills, SKILL_CATALOG_MAX_TOKENS[contextTier])
+              ? buildSkillCatalog(offeredSkills, SKILL_CATALOG_MAX_TOKENS[contextTier])
               : undefined,
             skillContent: skillBlocks.length > 0,
           }),
-          getDictionaryHintWords(settings),
+          getLlmDictionaryWords(settings, { includeTriggers: true }),
           settings.uiLanguage
         );
 
@@ -726,6 +772,57 @@ export function useChatStreaming({
         const llmMessages = [{ role: "system", content: systemPrompt }, ...history];
 
         const assistantId = crypto.randomUUID();
+        let persisted = false;
+        let interrupted = false;
+        const persistedSkillCalls = new Set<string>();
+        const writeMessage = (content: string, toolCalls?: ToolCallInfo[]): void => {
+          for (const call of toolCalls ?? []) {
+            if (readSkillCardRecord(call)?.status === "saved") persistedSkillCalls.add(call.id);
+          }
+          if (options?.persistAssistantMessage) {
+            void options.persistAssistantMessage(content, toolCalls);
+          } else {
+            onStreamComplete?.(assistantId, content, toolCalls);
+          }
+        };
+        const persist = (content: string, toolCalls?: ToolCallInfo[]): void => {
+          if (persisted) return;
+          persisted = true;
+          writeMessage(content, toolCalls);
+        };
+        // Keep this send's outcomes independently of React's next render or conversation.
+        const turnToolCalls: ToolCallInfo[] = [];
+        const toolResults = new Map<string, Partial<ToolCallInfo>>();
+        const snapshotToolCalls = (): ToolCallInfo[] =>
+          turnToolCalls.map((call) => ({
+            ...call,
+            ...toolResults.get(call.id),
+          }));
+        const recordExecutedResult = (id: string, result: ToolResult): void => {
+          const metadata =
+            result.success && result.data && typeof result.data === "object"
+              ? (result.data as ToolCallInfo["metadata"])
+              : undefined;
+          toolResults.set(id, {
+            status: "completed",
+            result: result.displayText,
+            ...(metadata && !isQueryResultData(metadata) ? { metadata } : {}),
+            ...(result.success ? {} : { failed: true }),
+          });
+          if (interrupted) persistNewSavedSkills();
+        };
+        const persistNewSavedSkills = (): void => {
+          const savedSkills = snapshotToolCalls().filter(
+            (call) =>
+              call.status === "completed" &&
+              readSkillCardRecord(call)?.status === "saved" &&
+              !persistedSkillCalls.has(call.id)
+          );
+          if (savedSkills.length === 0) return;
+          // The send can already be over when a committed write's IPC reply arrives.
+          persisted = true;
+          writeMessage("", savedSkills);
+        };
         setMessages((prev) => [
           ...prev,
           { id: assistantId, role: "assistant", content: "", isStreaming: true },
@@ -752,6 +849,27 @@ export function useChatStreaming({
         const scheduleContentFlush = () => {
           if (contentFlushTimer !== null) return;
           contentFlushTimer = setTimeout(flushContentNow, STREAM_FLUSH_INTERVAL_MS);
+        };
+
+        const finishInterrupted = (): void => {
+          interrupted = true;
+          flushContentNow();
+          const toolCalls = snapshotToolCalls();
+          setMessages((prev) =>
+            prev.map((message) =>
+              message.id === assistantId ? { ...message, toolCalls, isStreaming: false } : message
+            )
+          );
+          const explicitlyCancelled = explicitCancelGenerationRef.current > sendGeneration;
+          if (!explicitlyCancelled && fullContent.trim().length > 0) {
+            // Pending skill writes may finish later; their eventual card gets its own row.
+            const historyToolCalls = toolCalls.filter(
+              (call) => !SKILL_CARD_TOOLS.has(call.name) || call.status === "completed"
+            );
+            persist(fullContent, historyToolCalls.length ? historyToolCalls : undefined);
+          }
+          // Stop can discard a partial answer, but cannot undo a skill already saved.
+          persistNewSavedSkills();
         };
 
         try {
@@ -783,7 +901,8 @@ export function useChatStreaming({
                   const result = await executeTool(
                     tool,
                     args,
-                    toolScope.createContext({ messageId: assistantId, toolCallId })
+                    toolScope.createContext({ messageId: assistantId, toolCallId }),
+                    (result) => recordExecutedResult(toolCallId, result)
                   );
                   const data = result.success
                     ? typeof result.data === "string"
@@ -821,7 +940,10 @@ export function useChatStreaming({
                   toolCallId,
                   signal: abortSignal,
                 }),
-              (id, text) => toolDisplayTexts.set(id, text)
+              (id, text, result) => {
+                toolDisplayTexts.set(id, text);
+                recordExecutedResult(id, result);
+              }
             );
             stream = ReasoningService.processTextStreamingAI(
               llmMessages,
@@ -861,6 +983,7 @@ export function useChatStreaming({
               flushContentNow();
               if (chunk.calls.length > 0) announceResponse();
               for (const call of chunk.calls) {
+                turnToolCalls.push({ ...call, status: "executing" });
                 setAgentState("tool-executing");
                 beginToolActivity(
                   call.name,
@@ -886,30 +1009,23 @@ export function useChatStreaming({
                 );
               }
             } else if (chunk.type === "tool_result") {
+              const call = turnToolCalls.find((entry) => entry.id === chunk.callId);
+              toolResults.set(chunk.callId, {
+                ...toolResults.get(chunk.callId),
+                status: "completed",
+                result: toolDisplayTexts.get(chunk.callId) ?? chunk.displayText,
+                ...(chunk.failed ? { failed: true } : {}),
+                ...(chunk.metadata && !isQueryResultData(chunk.metadata)
+                  ? {
+                      metadata:
+                        productHelpMetadata(call?.name ?? "", chunk.metadata) ?? chunk.metadata,
+                    }
+                  : {}),
+              });
+              const toolCalls = snapshotToolCalls();
               setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantId && m.toolCalls
-                    ? {
-                        ...m,
-                        toolCalls: m.toolCalls.map((tc) =>
-                          tc.id === chunk.callId
-                            ? {
-                                ...tc,
-                                status: "completed" as const,
-                                result: toolDisplayTexts.get(chunk.callId) ?? chunk.displayText,
-                                ...(chunk.failed ? { failed: true } : {}),
-                                ...(chunk.metadata && !isQueryResultData(chunk.metadata)
-                                  ? {
-                                      metadata:
-                                        productHelpMetadata(tc.name, chunk.metadata) ??
-                                        chunk.metadata,
-                                    }
-                                  : {}),
-                              }
-                            : tc
-                        ),
-                      }
-                    : m
+                prev.map((message) =>
+                  message.id === assistantId ? { ...message, toolCalls } : message
                 )
               );
               setAgentState("streaming");
@@ -918,22 +1034,7 @@ export function useChatStreaming({
           }
 
           if (cancelled() || !mountedRef.current) {
-            flushContentNow();
-            setMessages((prev) =>
-              prev.map((message) =>
-                message.id === assistantId ? { ...message, isStreaming: false } : message
-              )
-            );
-            // An unmount mid-stream (page navigation) keeps the partial reply in
-            // history so the saved conversation matches what the user last saw;
-            // an explicit cancel drops it. The unmount cleanup cancels too, so
-            // cancelled() alone cannot tell the two apart. Neither path may run
-            // the per-request delivery hook.
-            const explicitlyCancelled = explicitCancelGenerationRef.current > sendGeneration;
-            if (!explicitlyCancelled && fullContent.trim().length > 0) {
-              const finalMsg = messagesRef.current.find((m) => m.id === assistantId);
-              onStreamComplete?.(assistantId, fullContent, finalMsg?.toolCalls);
-            }
+            finishInterrupted();
             return;
           }
 
@@ -955,24 +1056,21 @@ export function useChatStreaming({
             prev.map((m) => (m.id === assistantId ? { ...m, isStreaming: false } : m))
           );
 
-          const finalMsg = messagesRef.current.find((m) => m.id === assistantId);
-          onStreamComplete?.(assistantId, fullContent, finalMsg?.toolCalls);
+          const toolCalls = snapshotToolCalls();
+          persist(fullContent, toolCalls.length ? toolCalls : undefined);
           if (hasDeliverableContent) {
             await options?.onComplete?.({
               assistantId,
               content: fullContent,
-              toolCalls: finalMsg?.toolCalls,
+              toolCalls: toolCalls.length ? toolCalls : undefined,
             });
           }
         } catch (error) {
           if (cancelled()) {
-            flushContentNow();
-            setMessages((prev) =>
-              prev.map((message) =>
-                message.id === assistantId ? { ...message, isStreaming: false } : message
-              )
-            );
+            finishInterrupted();
           } else {
+            interrupted = true;
+            persistNewSavedSkills();
             cancelContentFlush();
             logger.error(
               "Assistant request failed",

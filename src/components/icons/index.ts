@@ -8,6 +8,7 @@ export {
   ChevronsUpDown,
   Circle,
   CopyRounded,
+  EyeOff,
   FolderRounded,
   Heading,
   Italic,

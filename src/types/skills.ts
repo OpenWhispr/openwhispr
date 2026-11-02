@@ -151,6 +151,8 @@ export type SkillSaveResult =
     }
   | { ok: false; problems: SkillIssue<SkillProblemCode>[] }
   | { ok: false; error: SkillWriteError }
+  /** A save from a card made before the skill last changed; nothing was written. */
+  | { ok: false; error: "changed" }
   | SkillInvalidRequest;
 
 /** A skill a chat uses: one of the user's, or the app's built-in skill creator. */
@@ -161,8 +163,16 @@ export interface SkillRef {
 
 /** How the Skills page opens a chat: with one skill attached, or with the skill creator. */
 export type SkillChatStart =
-  | { kind: "try"; name: string; displayName: string }
-  | { kind: "create"; draft?: { title: string; description: string } };
+  { kind: "try"; name: string; displayName: string } | { kind: "create"; draft?: SkillChatDraft };
+
+/** What Draft with assistant hands the skill creator from the Create skill form. */
+export interface SkillChatDraft {
+  title: string;
+  description: string;
+  instructions: string;
+  /** The names of the files the form holds; their content stays in the form. */
+  fileNames: string[];
+}
 
 /** A chat start on its way to the chat view; a new id is a new request. */
 export type SkillChatRequest = SkillChatStart & { id: number };
@@ -189,6 +199,8 @@ export interface SkillProposal {
   description: string;
   instructions: string;
   files: { path: string; content: string }[];
+  /** For a proposal that updates a skill: the skill's hash when its card was made. */
+  baseHash?: string;
 }
 
 /** A change the assistant proposes to one of the user's skills; nothing changes until approved. */
@@ -198,6 +210,8 @@ export interface SkillUpdate {
   instructions?: string;
   /** The full new text of each file it changes or adds. */
   files: { path: string; content: string }[];
+  /** The skill's hash when its card was made; a save after the skill changed is refused. */
+  baseHash?: string;
 }
 
 export interface SkillProposalCheck {
@@ -206,4 +220,24 @@ export interface SkillProposalCheck {
   /** A skill already has that name, so saving updates it. */
   existing: boolean;
   problems: SkillIssue<SkillProblemCode>[];
+  /** The hash of the skill saving would change, for its save to compare. */
+  hash?: string;
+}
+
+/**
+ * How a skill card ended, as its tool returns it. It is saved with the chat, so a reopened
+ * chat still shows the outcome (and Undo), and later turns know what was saved. Never the
+ * skill's text: that stays in the skill's folder.
+ */
+export interface SkillCardRecord {
+  status: "saved" | "skipped" | "failed" | "changed" | "not_saved";
+  kind: "create" | "update";
+  /** The folder it wrote, or would have. */
+  name: string;
+  /** The title the card showed. */
+  title: string;
+  /** The copy Undo restores, after a save that replaced a skill's folder. */
+  versionId?: string;
+  /** What the model is told. */
+  message: string;
 }

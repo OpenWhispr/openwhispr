@@ -353,6 +353,25 @@ test("a proposal that can't be saved reports why and broadcasts nothing", async 
   assert.deepEqual([...refused.broadcasts, ...full.broadcasts], []);
 });
 
+test("a save from a card made before the skill changed is refused without a broadcast", async () => {
+  const stale = setup({
+    saveProposal: () => ({ changed: true }),
+    applyUpdate: () => ({ changed: true }),
+  });
+  const update = { name: "meeting-prep", instructions: "New", files: [], baseHash: "a".repeat(64) };
+
+  assert.deepEqual(await stale.call("skills-save-proposal", { ...proposal, baseHash: "b" }), {
+    ok: false,
+    error: "changed",
+  });
+  assert.deepEqual(await stale.call("skills-apply-update", update), {
+    ok: false,
+    error: "changed",
+  });
+  assert.deepEqual(await stale.call("skills-apply-update", { ...update, baseHash: 1 }), INVALID);
+  assert.deepEqual(stale.broadcasts, []);
+});
+
 const update = { name: "meeting-prep", instructions: "New steps", files: [] };
 
 test("updates and Undo are checked before the library runs", async () => {

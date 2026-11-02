@@ -101,7 +101,10 @@ const submit = (container) =>
     (node) => node.tagName === "BUTTON" && label(node).startsWith("skills.upload.submit")
   );
 const removeButton = (container, path) =>
-  findElement(container, (node) => ariaLabel(node) === `skills.create.removeFile{"path":"${path}"}`);
+  findElement(
+    container,
+    (node) => ariaLabel(node) === `skills.create.removeFile{"path":"${path}"}`
+  );
 const second = (preview) => ({ ...preview, token: `${preview.token}-2` });
 
 test("ready, invalid and duplicate files each get their row and reason", async (t) => {
@@ -244,7 +247,10 @@ test("Upload counts ready skills and replaced ones", async (t) => {
 
   await drop(fakeFile("a.md"), fakeFile("b.zip"));
   assert.equal(label(submit(container)), 'skills.upload.submitCount{"count":1}');
-  assert.equal(findElement(container, (node) => label(node) === "skills.upload.chooseFile"), null);
+  assert.equal(
+    findElement(container, (node) => label(node) === "skills.upload.chooseFile"),
+    null
+  );
   await click(button(rows(container)[1], "skills.upload.replace"));
   assert.equal(label(submit(container)), 'skills.upload.submitCount{"count":2}');
 

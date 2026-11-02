@@ -48,6 +48,7 @@ function fixture(backend, savedHotkey = "Scrolllock", registrationResult = true)
     "./kdeShortcut": { isKDE: () => backend === "KDE" },
     "./i18nMain": { i18nMain: { t: (key) => key } },
     "./hotkeyList": require("../../src/helpers/hotkeyList"),
+    "./hotkeyRepeatGate": require("../../src/helpers/hotkeyRepeatGate"),
   };
   const context = {
     module: { exports: {} },

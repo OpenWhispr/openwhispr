@@ -40,6 +40,9 @@ export function useAssistantPanel({
   // The conversation's picked skill and whether the user turned picking off: they outlive the
   // panel, which unmounts on close while the conversation carries on.
   const [skillChoice, setSkillChoice] = useState(NO_SKILL_CHOICE);
+  // Whether Paste into app has somewhere to go: the app the panel's voice command was spoken
+  // over. Main holds that app; a panel opened from the tray or the pill menu has none.
+  const [canPasteIntoApp, setCanPasteIntoApp] = useState(false);
 
   const openRef = useRef(open);
   const closingRef = useRef(false);
@@ -153,6 +156,15 @@ export function useAssistantPanel({
       // already streaming into a visible conversation, and delivering it to
       // the external caret would snap that surface away mid-read.
       const delivery = openRef.current ? null : (command.delivery ?? null);
+      // A command's paste goes to the app it was spoken over. A follow-up spoken over the panel
+      // itself keeps the conversation's app, so its Paste stays offered while main decides.
+      const id = commandIdRef.current;
+      if (!openRef.current) setCanPasteIntoApp(false);
+      void Promise.resolve(window.electronAPI?.assistantPasteTarget?.("adopt"))
+        .catch(() => false)
+        .then((available) => {
+          if (id === commandIdRef.current) setCanPasteIntoApp(available === true);
+        });
       beginThinking();
       setPendingCommand({
         id: commandIdRef.current,
@@ -241,6 +253,7 @@ export function useAssistantPanel({
     setPendingCommand(closeState.pendingCommand);
     setConversationId(closeState.conversationId);
     if (closeState.conversationId == null) setSkillChoice(NO_SKILL_CHOICE);
+    setCanPasteIntoApp(false);
     selectionContextRef.current = null;
     hasContentRef.current = false;
     clearTimeout(closeTimerRef.current);
@@ -287,6 +300,16 @@ export function useAssistantPanel({
   const handleClose = useCallback(() => {
     beginClose(false);
   }, [beginClose]);
+
+  // The tray's and the pill menu's Ask assistant: no command, so no app to paste into. One
+  // pressed while a command is still thinking leaves that command's app alone.
+  const openPanelWithoutCommand = useCallback(() => {
+    if (!openRef.current && !mountedRef.current) {
+      setCanPasteIntoApp(false);
+      void window.electronAPI?.assistantPasteTarget?.("forget")?.catch?.(() => {});
+    }
+    return openPanel();
+  }, [openPanel]);
 
   useEffect(() => {
     if (dictationErrorActionCount > 0) {
@@ -337,11 +360,12 @@ export function useAssistantPanel({
     conversationId,
     skillChoice,
     setSkillChoice,
+    canPasteIntoApp,
     openRef,
     setBusy,
     setResponseReady,
     setConversationId,
-    openPanel,
+    openPanel: openPanelWithoutCommand,
     beginThinking,
     handleCommand,
     handleResponseContent,

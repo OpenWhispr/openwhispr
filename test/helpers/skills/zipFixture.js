@@ -9,7 +9,7 @@ const MADE_BY_UNIX = (3 << 8) | 20;
  * that doesn't match it, an entry that points at an earlier entry's data, or a listing whose
  * sizes point at a zip64 field the entry doesn't have.
  * Entries: { path, data = "", mode = 0o100644, declaredSize, deflate, crc, sharesDataOf,
- * sizeInZip64 }.
+ * sizeInZip64, pathBytes, utf8Names = true, extra }.
  */
 function buildZip(entries) {
   const parts = [];
@@ -17,7 +17,9 @@ function buildZip(entries) {
   const written = [];
   let offset = 0;
   for (const entry of entries) {
-    const name = Buffer.from(entry.path, "utf8");
+    const name = entry.pathBytes ?? Buffer.from(entry.path, "utf8");
+    const flags = entry.utf8Names === false ? 0 : UTF8_NAMES;
+    const extra = entry.extra ?? Buffer.alloc(0);
     let record = entry.sharesDataOf === undefined ? null : written[entry.sharesDataOf];
     if (!record) {
       const data = Buffer.from(entry.data ?? "");
@@ -32,14 +34,15 @@ function buildZip(entries) {
       const local = Buffer.alloc(30);
       local.writeUInt32LE(0x04034b50, 0);
       local.writeUInt16LE(20, 4);
-      local.writeUInt16LE(UTF8_NAMES, 6);
+      local.writeUInt16LE(flags, 6);
       local.writeUInt16LE(record.method, 8);
       local.writeUInt32LE(record.crc, 14);
       local.writeUInt32LE(record.compressed, 18);
       local.writeUInt32LE(record.size, 22);
       local.writeUInt16LE(name.length, 26);
-      parts.push(local, name, stored);
-      offset += local.length + name.length + stored.length;
+      local.writeUInt16LE(extra.length, 28);
+      parts.push(local, name, extra, stored);
+      offset += local.length + name.length + extra.length + stored.length;
     }
     written.push(record);
 
@@ -47,16 +50,17 @@ function buildZip(entries) {
     central.writeUInt32LE(0x02014b50, 0);
     central.writeUInt16LE(MADE_BY_UNIX, 4);
     central.writeUInt16LE(20, 6);
-    central.writeUInt16LE(UTF8_NAMES, 8);
+    central.writeUInt16LE(flags, 8);
     central.writeUInt16LE(record.method, 10);
     central.writeUInt32LE(record.crc, 16);
     // 0xffffffff sends a reader to the entry's zip64 field for its sizes.
     central.writeUInt32LE(entry.sizeInZip64 ? 0xffffffff : record.compressed, 20);
     central.writeUInt32LE(entry.sizeInZip64 ? 0xffffffff : record.size, 24);
     central.writeUInt16LE(name.length, 28);
+    central.writeUInt16LE(extra.length, 30);
     central.writeUInt32LE(((entry.mode ?? 0o100644) << 16) >>> 0, 38);
     central.writeUInt32LE(record.offset, 42);
-    directory.push(central, name);
+    directory.push(central, name, extra);
   }
   const centralDirectory = Buffer.concat(directory);
   const end = Buffer.alloc(22);

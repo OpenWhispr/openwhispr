@@ -137,3 +137,105 @@ test("a skill card renders in place of its tool step", async (t) => {
   assert.ok(!skillCard(), "another message's call shows no card");
   assert.equal(container.textContent, "", "nor a bare propose_skill step");
 });
+
+test("a reopened chat shows a skill card from its saved outcome, and no empty divider", async (t) => {
+  let root = null;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  installBrowserGlobals(t);
+  const container = installInteractiveDom(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-chat-message-skill-record-test-",
+  });
+  const store = await vite.ssrLoadModule("/stores/skillApprovalStore.ts");
+  const { ChatMessage } = await vite.ssrLoadModule("/components/chat/ChatMessage.tsx");
+  store.useSkillApprovalStore.setState({ entries: {}, undos: {} });
+  root = createRoot(container);
+  const render = (toolCalls) =>
+    React.act(async () =>
+      root.render(
+        React.createElement(ChatMessage, {
+          // A reloaded message gets a new id, so no live card matches it.
+          messageId: "msg-reloaded",
+          role: "assistant",
+          content: "Updated your playbook.",
+          isStreaming: false,
+          toolCalls,
+        })
+      )
+    );
+  const record = {
+    status: "saved",
+    kind: "update",
+    name: "enterprise-call-playbook",
+    title: "Enterprise call playbook",
+    versionId: "1760950800000",
+    message: "Updated the enterprise-call-playbook skill.",
+  };
+  const summary = () =>
+    findElement(
+      container,
+      (element) => element.getAttribute?.("data-skill-card-record") === record.name
+    );
+  const divider = () =>
+    findElement(container, (element) =>
+      String(element.getAttribute?.("class") ?? "")
+        .split(/\s+/)
+        .includes("border-b")
+    );
+
+  await render([
+    { id: "call-1", name: "update_skill", arguments: "{}", status: "completed", metadata: record },
+  ]);
+  assert.ok(summary(), "the card's outcome, with its Undo, is still there");
+  assert.match(container.textContent, /Enterprise call playbook/);
+
+  // A proposal that went back to the model showed no card: nothing above the reply.
+  await render([{ id: "call-2", name: "propose_skill", arguments: "{}", status: "completed" }]);
+  assert.ok(!summary());
+  assert.ok(!divider(), "no divider for a call that shows nothing");
+  assert.match(container.textContent, /Updated your playbook\./);
+});
+
+test("the skill creator's opening stays above the thread once the user answers", async (t) => {
+  let root = null;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  installBrowserGlobals(t);
+  const container = installInteractiveDom(t);
+  // The thread's stick-to-bottom watches its size; nothing here resizes.
+  const originalResizeObserver = globalThis.ResizeObserver;
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+  t.after(() => {
+    globalThis.ResizeObserver = originalResizeObserver;
+  });
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-chat-messages-leading-test-",
+  });
+  const { ChatMessages } = await vite.ssrLoadModule("/components/chat/ChatMessages.tsx");
+  root = createRoot(container);
+  const render = (messages) =>
+    React.act(async () =>
+      root.render(
+        React.createElement(ChatMessages, {
+          messages,
+          leading: React.createElement("p", null, "What do you do the same way every time?"),
+          emptyState: React.createElement("p", null, "Starter prompts"),
+        })
+      )
+    );
+
+  await render([]);
+  assert.match(container.textContent, /What do you do the same way/);
+  assert.doesNotMatch(container.textContent, /Starter prompts/);
+
+  await render([{ id: "u1", role: "user", content: "My weekly report", isStreaming: false }]);
+  const text = container.textContent;
+  assert.ok(text.indexOf("What do you do") < text.indexOf("My weekly report"), text);
+});

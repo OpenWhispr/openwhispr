@@ -7,12 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { useToast } from "../ui/useToast";
 import { useAuth } from "../../hooks/useAuth";
 import { useDialogs } from "../../hooks/useDialogs";
-import {
-  canLeaveSpace,
-  canManageSpace,
-  canManageWorkspace,
-  teamsUserCanLeave,
-} from "../../lib/spacePermissions";
+import { spaceCan, workspaceCan } from "../../lib/capabilities";
+import { teamsUserCanLeave } from "../../lib/spacePermissions";
 import { formatList } from "../../lib/formatList";
 import { localMutationErrorKey } from "../../lib/localMutationError";
 import { leaveSpace, leaveTeam, renameSpace } from "../../services/spaceActions";
@@ -51,13 +47,17 @@ export default function SpaceSettingsDialog({
   const { toast } = useToast();
   const { user } = useAuth();
   const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
-  const workspaceRole = useWorkspaceStore(
-    (s) => s.workspaces.find((w) => w.id === space.workspace_id)?.role ?? null
-  );
+  const workspace = useWorkspaceStore((s) => s.workspaces.find((w) => w.id === space.workspace_id));
   // Local-only spaces stay fully manageable; cloud spaces follow space and
-  // workspace roles. Cosmetic — the server enforces.
-  const canManage = !space.cloud_space_id || canManageSpace(space, workspaceRole);
-  const isWorkspaceAdmin = canManageWorkspace(workspaceRole);
+  // workspace capabilities. Cosmetic — the server enforces.
+  const canManage =
+    !space.cloud_space_id ||
+    spaceCan(space, "manage_settings") ||
+    workspaceCan(workspace, "manage_settings");
+  // Workspace admins reach every space whatever they hold, so they have
+  // nothing to leave. The space role fallback has no workspace role to check
+  // that against, so the check stays here.
+  const isWorkspaceAdmin = workspaceCan(workspace, "manage_settings");
 
   const [draftName, setDraftName] = useState(space.name);
   // The name the draft was seeded from or last saved as; null while closed.
@@ -134,7 +134,10 @@ export default function SpaceSettingsDialog({
 
   const leaveTeams = teamsUserCanLeave(space);
   const canLeave =
-    Boolean(space.cloud_space_id) && !isWorkspaceAdmin && canLeaveSpace(space) && Boolean(user?.id);
+    Boolean(space.cloud_space_id) &&
+    !isWorkspaceAdmin &&
+    spaceCan(space, "leave") &&
+    Boolean(user?.id);
 
   // A direct grant is dropped on its own and access through groups is left
   // where it is: groups are managed in the group. Leaving through groups is

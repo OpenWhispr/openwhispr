@@ -77,12 +77,17 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
   if (settings.connectors) registerConnectorTools(registry, settings.connectors);
 
   if (settings.skills) {
-    if (settings.skills.usable.length > 0) {
+    const hasSkills = settings.skills.usable.length > 0;
+    if (hasSkills) {
       registry.register(createLoadSkillTool(settings.skills));
       registry.register(createUpdateSkillTool(settings.skills.usable));
     }
     // A skill card writes only on this computer, so it needs no sign-in, plan or connector.
-    registry.register(createProposeSkillTool());
+    // Someone with no skills makes their first through the skill creator, so every other
+    // request leaves the tool out.
+    if (hasSkills || settings.skills.creatorAttached) {
+      registry.register(createProposeSkillTool());
+    }
   }
 
   return registry;

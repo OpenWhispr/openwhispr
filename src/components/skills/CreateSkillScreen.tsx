@@ -17,7 +17,7 @@ import {
   type SkillCreateDraft,
 } from "../../stores/skillsStore";
 import { syncAfterLocalWrite } from "../../services/syncAfterLocalWrite";
-import type { SkillProblemCode } from "../../types/skills";
+import type { SkillChatDraft, SkillProblemCode } from "../../types/skills";
 import { MAX_SKILL_BYTES, problemKey, writeFailedToast } from "./skillCopy";
 
 type Field = "name" | "description" | "instructions";
@@ -48,8 +48,9 @@ function fieldFor(code: SkillProblemCode): Field | null {
 interface CreateSkillScreenProps {
   onCreated: (name: string) => void;
   onBack: () => void;
-  /** Hands the name and description to the skill creator chat; the draft stays here. */
-  onDraftWithAssistant?: (draft: { title: string; description: string }) => void;
+  /** Hands what the form holds to the skill creator chat, or nothing for an empty form; the
+   *  draft stays here. */
+  onDraftWithAssistant?: (draft?: SkillChatDraft) => void;
 }
 
 export function CreateSkillScreen({
@@ -64,8 +65,6 @@ export function CreateSkillScreen({
   const [leaving, setLeaving] = useState(false);
   const [saving, setSaving] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
-  // Counts the drafts discarded or saved, so files still being read for one are dropped.
-  const draftsCleared = useRef(0);
   const controls = {
     name: useRef<HTMLInputElement>(null),
     description: useRef<HTMLTextAreaElement>(null),
@@ -84,9 +83,8 @@ export function CreateSkillScreen({
   // Leaving an empty draft, by any way out, drops a file still being read for it, so the file
   // doesn't turn up in the next one.
   useEffect(() => {
-    const cleared = draftsCleared;
     return () => {
-      if (!hasContent(currentDraft())) cleared.current += 1;
+      if (!hasContent(currentDraft())) setCreateDraft(null);
     };
   }, []);
 
@@ -121,7 +119,7 @@ export function CreateSkillScreen({
       sizes.set(key, file.size);
       return true;
     });
-    const startedFor = draftsCleared.current;
+    const startedFor = useSkillsStore.getState().createDraftGeneration;
     const read = await Promise.all(
       fitting.map(async (file) => {
         try {
@@ -137,7 +135,7 @@ export function CreateSkillScreen({
         }
       })
     );
-    if (draftsCleared.current !== startedFor) return;
+    if (useSkillsStore.getState().createDraftGeneration !== startedFor) return;
     const added = new Map(read.flat().map((file) => [fileKey(file.fileName), file] as const));
     const current = currentDraft();
     setCreateDraft({
@@ -158,7 +156,6 @@ export function CreateSkillScreen({
   const requestLeave = () => (dirty ? setLeaving(true) : onBack());
 
   const discard = () => {
-    draftsCleared.current += 1;
     setCreateDraft(null);
     onBack();
   };
@@ -186,15 +183,22 @@ export function CreateSkillScreen({
       return;
     }
 
+    const startedFor = useSkillsStore.getState().createDraftGeneration;
     setSaving(true);
     const result = await window.electronAPI?.skillsCreate?.(draft);
     setSaving(false);
+    if (result?.ok) syncAfterLocalWrite("syncSkillsNow");
+    // The user can leave, discard or edit while main writes. That result belongs only to
+    // the submitted draft, so it must not clear or mark a newer draft with old errors.
+    if (useSkillsStore.getState().createDraftGeneration !== startedFor || currentDraft() !== draft)
+      return;
     if (result?.ok) {
-      syncAfterLocalWrite("syncSkillsNow");
-      draftsCleared.current += 1;
       setCreateDraft(null);
+      const clearedFor = useSkillsStore.getState().createDraftGeneration;
       // Listed before going home, so its card is there to play and take focus.
       await refreshSkills();
+      const current = useSkillsStore.getState();
+      if (current.createDraftGeneration !== clearedFor || current.createDraft !== null) return;
       toast({
         title: t("skills.toasts.created", { name: draft.title.trim() }),
         variant: "success",
@@ -369,10 +373,16 @@ export function CreateSkillScreen({
                 variant="ghost"
                 size="sm"
                 onClick={() =>
-                  onDraftWithAssistant({
-                    title: draft.title.trim(),
-                    description: draft.description.trim(),
-                  })
+                  onDraftWithAssistant(
+                    hasContent(draft)
+                      ? {
+                          title: draft.title.trim(),
+                          description: draft.description.trim(),
+                          instructions: draft.instructions.trim(),
+                          fileNames: draft.files.map((file) => file.fileName),
+                        }
+                      : undefined
+                  )
                 }
                 className="-ms-2"
               >

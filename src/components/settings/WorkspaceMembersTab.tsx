@@ -25,7 +25,7 @@ import {
   DropdownMenuItem,
 } from "../ui/dropdown-menu";
 import { cn } from "../lib/utils";
-import { canManageWorkspace } from "../../lib/spacePermissions";
+import { workspaceCan } from "../../lib/capabilities";
 
 interface Props {
   workspace: Workspace;
@@ -54,7 +54,8 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
   const [membersLoading, setMembersLoading] = useState(false);
   const [membersError, setMembersError] = useState(false);
   const [invitationsError, setInvitationsError] = useState(false);
-  const canManage = canManageWorkspace(workspace.role);
+  const canManage = workspaceCan(workspace, "manage_members");
+  const canTransferOwnership = workspaceCan(workspace, "transfer_ownership");
   async function loadMembers() {
     setMembersLoading(true);
     setMembersError(false);
@@ -300,7 +301,7 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
                         {t("settingsPage.workspace.members.demote")}
                       </DropdownMenuItem>
                     )}
-                    {workspace.role === "owner" && (
+                    {canTransferOwnership && (
                       <DropdownMenuItem onSelect={() => confirmTransferOwnership(member)}>
                         {t("settingsPage.workspace.members.transferOwnership")}
                       </DropdownMenuItem>

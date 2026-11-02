@@ -92,7 +92,7 @@ test("the Add menu, empty state, detail and Create offer the chat entry points",
 
   assert.deepEqual(starts.at(-1), {
     kind: "create",
-    draft: { title: "Weekly report", description: "" },
+    draft: { title: "Weekly report", description: "", instructions: "", fileNames: [] },
   });
   assert.equal(store.useSkillsStore.getState().createDraft?.title, "Weekly report");
   assert.doesNotMatch(container.textContent, /skills\.create\.unsaved/);

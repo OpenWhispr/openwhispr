@@ -26,12 +26,13 @@ test("load_skill is registered only when a skill is usable", async () => {
     cloudBackupEnabled: false,
     webSearchEnabled: false,
   };
-  const skills = (usable) => ({
+  const skills = (usable, creatorAttached = false) => ({
     usable,
     activeNames: () => new Set(),
     read: async () => null,
     markUsed: () => {},
     maxTokens: 2_500,
+    creatorAttached,
   });
   const meetingPrep = { name: "meeting-prep", displayName: "Meeting prep", description: "Preps." };
 
@@ -39,4 +40,33 @@ test("load_skill is registered only when a skill is usable", async () => {
   const none = createToolRegistry({ ...settings, skills: skills([]) });
   assert.equal(none.get("load_skill"), undefined);
   assert.ok(createToolRegistry({ ...settings, skills: skills([meetingPrep]) }).get("load_skill"));
+});
+
+test("propose_skill is offered to someone with skills, or with the skill creator attached", async () => {
+  const { createToolRegistry } = await import("../../src/services/tools/index.ts");
+  const settings = {
+    isSignedIn: false,
+    calendarConnected: false,
+    cloudBackupEnabled: false,
+    webSearchEnabled: false,
+  };
+  const skills = (usable, creatorAttached) => ({
+    usable,
+    activeNames: () => new Set(),
+    read: async () => null,
+    markUsed: () => {},
+    maxTokens: 2_500,
+    creatorAttached,
+  });
+  const meetingPrep = { name: "meeting-prep", displayName: "Meeting prep", description: "Preps." };
+  const offers = (usable, creatorAttached) =>
+    Boolean(
+      createToolRegistry({ ...settings, skills: skills(usable, creatorAttached) }).get(
+        "propose_skill"
+      )
+    );
+
+  assert.equal(offers([], false), false, "no skills and no creator: nothing extra in each request");
+  assert.equal(offers([], true), true, "Create with assistant");
+  assert.equal(offers([meetingPrep], false), true);
 });

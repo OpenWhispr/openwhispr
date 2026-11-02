@@ -195,7 +195,14 @@ async function loadTonedOrukeetStart(t, cachePrefix) {
     getKeyterms: () => [],
     onStateChange() {},
   });
-  return { window, manager, minted, sent, workletPort, classify: (app) => classifier.classify(app) };
+  return {
+    window,
+    manager,
+    minted,
+    sent,
+    workletPort,
+    classify: (app) => classifier.classify(app),
+  };
 }
 
 const tick = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -274,4 +281,34 @@ test("a start cancelled while it waits for the app mints no session", async (t) 
   assert.equal(minted.length, 0);
   // cancelStreamingRecording waits on this settlement.
   assert.equal(manager.streamingStartInProgress, false);
+});
+
+test("combined cleanup options carry shared words in sharedDictionary only when there are some", async (t) => {
+  const { useSettingsStore, createManager } = await load(t, "orukeet-pipeline-shared-");
+  const manager = createManager();
+  useSettingsStore.setState({
+    ...good,
+    sharedDictionaryHints: { space: ["Kube"], workspace: ["orukeet", "Acme"] },
+  });
+  assert.deepEqual(manager.getPipelineCleanupOptions(useSettingsStore.getState()), {
+    agentName: "OpenWhispr",
+    customDictionary: ["Orukeet"],
+    sharedDictionary: ["Kube", "Acme"],
+    customPrompt: good.customPrompts.cleanup,
+    language: "en",
+    locale: "en",
+  });
+  useSettingsStore.setState({ ...good, sharedDictionaryHints: { space: [], workspace: [] } });
+  const personalOnly = manager.getPipelineCleanupOptions(useSettingsStore.getState());
+  assert.equal(Object.hasOwn(personalOnly, "sharedDictionary"), false);
+  assert.equal(
+    JSON.stringify(personalOnly),
+    JSON.stringify({
+      agentName: "OpenWhispr",
+      customDictionary: ["Orukeet"],
+      customPrompt: good.customPrompts.cleanup,
+      language: "en",
+      locale: "en",
+    })
+  );
 });

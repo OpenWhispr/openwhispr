@@ -5,9 +5,16 @@ import { Button } from "../ui/button";
 import { useToast } from "../ui/useToast";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
 
+// What a paste must not carry: line breaks of any kind, which a terminal without bracketed
+// paste runs as they land, other control characters (Tab completes, Ctrl-O runs the line, ESC
+// starts a sequence), invisible or direction-changing ones that make what is shown differ
+// from what is pasted (Hangul fillers and variation selectors among them), and every space
+// but the plain one: a no-break space looks like one but a shell reads it as part of a word.
+const UNPASTEABLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}]|(?! )\p{Zs}/u;
+
 /**
  * Copy for a code block in an answer, and Paste into app where a paste target exists. Paste is
- * for one line only: a terminal without bracketed paste runs each pasted line as it lands.
+ * for one plain line only; anything else keeps Copy, so the user sees what they paste.
  */
 export function CodeBlockActions({
   code,
@@ -18,7 +25,7 @@ export function CodeBlockActions({
 }): ReactElement {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const canPaste = paste && !/[\r\n]/.test(code);
+  const canPaste = paste && !UNPASTEABLE.test(code);
   // copyText writes the code exactly; copy() would trim its indentation.
   const { copied, copyText, confirmCopied } = useCopyFeedback(code);
   const pasting = useRef(false);
@@ -33,14 +40,17 @@ export function CodeBlockActions({
     if (pasting.current) return;
     pasting.current = true;
     try {
-      const result = await window.electronAPI?.pasteText?.(code, { raw: true }).catch(() => null);
+      const result = await window.electronAPI
+        ?.pasteText?.(code, { raw: true, assistantTarget: true })
+        .catch(() => null);
       if (result?.success && result.pasted) {
         toast({ title: t("skills.code.pasted"), variant: "success" });
         return;
       }
       // A clipboard-only paste and a missing Accessibility permission leave it on the
-      // clipboard already; after any other failure it is put there.
-      if (!result) await copyText(code);
+      // clipboard already; after any other failure, or with the app no longer there to paste
+      // into, it is put there.
+      if (!result || result.reason === "no-target") await copyText(code);
       toast({ title: t("skills.code.pasteFailed") });
     } finally {
       pasting.current = false;

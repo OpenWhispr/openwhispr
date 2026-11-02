@@ -1,47 +1,159 @@
 {
   "skills": {
     "en": [
-      { "name": "action-items-to-linear", "displayName": "Action items to Linear", "description": "Pulls action items from a meeting and drafts Linear issues for me to approve. Use after a meeting when I ask for action items." },
-      { "name": "meeting-summary-to-slack", "displayName": "Meeting summary to Slack", "description": "Writes a short meeting summary and drafts it to a Slack channel. Use when I ask to share a meeting summary." },
-      { "name": "one-on-one-prep", "displayName": "1:1 prep", "description": "Gathers what changed since my last one-on-one with someone. Use when I ask to prep for a 1:1." },
-      { "name": "meeting-decisions", "displayName": "Meeting decisions", "description": "Finds the decisions in my meeting notes, with the date and meeting of each. Use when I ask what we decided." },
-      { "name": "meeting-prep", "displayName": "Meeting prep", "description": "Briefs me before a meeting: who is coming, what we discussed last time and the open questions. Use when I ask to prep for a meeting or call." },
-      { "name": "reply-in-my-voice", "displayName": "Reply in my voice", "description": "Drafts replies to emails and messages in my writing style. Use when I ask to reply to someone." },
-      { "name": "weekly-recap", "displayName": "Weekly recap", "description": "Writes my weekly recap from this week's notes. Use on Fridays or when I ask for a recap of the week." }
+      {
+        "name": "action-items-to-linear",
+        "displayName": "Action items to Linear",
+        "description": "Pulls action items from a meeting and drafts Linear issues for me to approve. Use after a meeting when I ask for action items."
+      },
+      {
+        "name": "meeting-summary-to-slack",
+        "displayName": "Meeting summary to Slack",
+        "description": "Writes a short meeting summary and drafts it to a Slack channel. Use when I ask to share a meeting summary."
+      },
+      {
+        "name": "one-on-one-prep",
+        "displayName": "1:1 prep",
+        "description": "Gathers what changed since my last one-on-one with someone. Use when I ask to prep for a 1:1."
+      },
+      {
+        "name": "meeting-decisions",
+        "displayName": "Meeting decisions",
+        "description": "Finds the decisions in my meeting notes, with the date and meeting of each. Use when I ask what we decided."
+      },
+      {
+        "name": "meeting-prep",
+        "displayName": "Meeting prep",
+        "description": "Briefs me before a meeting: who is coming, what we discussed last time and the open questions. Use when I ask to prep for a meeting or call."
+      },
+      {
+        "name": "reply-in-my-voice",
+        "displayName": "Reply in my voice",
+        "description": "Drafts replies to emails and messages in my writing style. Use when I ask to reply to someone."
+      },
+      {
+        "name": "weekly-recap",
+        "displayName": "Weekly recap",
+        "description": "Writes my weekly recap from this week's notes. Use on Fridays or when I ask for a recap of the week."
+      }
     ],
     "es": [
-      { "name": "action-items-to-linear", "displayName": "Tareas a Linear", "description": "Extrae las tareas de una reunión y prepara borradores de incidencias de Linear para que yo los apruebe. Úsala después de una reunión cuando pida las tareas." },
-      { "name": "meeting-summary-to-slack", "displayName": "Resumen de reunión a Slack", "description": "Escribe un resumen breve de la reunión y prepara un borrador para un canal de Slack. Úsala cuando pida compartir un resumen de la reunión." },
-      { "name": "one-on-one-prep", "displayName": "Preparación de 1:1", "description": "Reúne lo que ha cambiado desde mi última reunión individual con alguien. Úsala cuando pida preparar un 1:1." },
-      { "name": "meeting-decisions", "displayName": "Decisiones de reuniones", "description": "Encuentra las decisiones en las notas de mis reuniones, con la fecha y la reunión de cada una. Úsala cuando pregunte qué decidimos." },
-      { "name": "meeting-prep", "displayName": "Preparar reunión", "description": "Me informa antes de una reunión: quién viene, de qué hablamos la última vez y las preguntas abiertas. Úsala cuando pida preparar una reunión o llamada." },
-      { "name": "reply-in-my-voice", "displayName": "Responder con mi estilo", "description": "Redacta respuestas a correos y mensajes con mi forma de escribir. Úsala cuando pida responder a alguien." },
-      { "name": "weekly-recap", "displayName": "Resumen semanal", "description": "Escribe mi resumen semanal a partir de las notas de la semana. Úsala los viernes o cuando pida un resumen de la semana." }
+      {
+        "name": "action-items-to-linear",
+        "displayName": "Tareas a Linear",
+        "description": "Extrae las tareas de una reunión y prepara borradores de incidencias de Linear para que yo los apruebe. Úsala después de una reunión cuando pida las tareas."
+      },
+      {
+        "name": "meeting-summary-to-slack",
+        "displayName": "Resumen de reunión a Slack",
+        "description": "Escribe un resumen breve de la reunión y prepara un borrador para un canal de Slack. Úsala cuando pida compartir un resumen de la reunión."
+      },
+      {
+        "name": "one-on-one-prep",
+        "displayName": "Preparación de 1:1",
+        "description": "Reúne lo que ha cambiado desde mi última reunión individual con alguien. Úsala cuando pida preparar un 1:1."
+      },
+      {
+        "name": "meeting-decisions",
+        "displayName": "Decisiones de reuniones",
+        "description": "Encuentra las decisiones en las notas de mis reuniones, con la fecha y la reunión de cada una. Úsala cuando pregunte qué decidimos."
+      },
+      {
+        "name": "meeting-prep",
+        "displayName": "Preparar reunión",
+        "description": "Me informa antes de una reunión: quién viene, de qué hablamos la última vez y las preguntas abiertas. Úsala cuando pida preparar una reunión o llamada."
+      },
+      {
+        "name": "reply-in-my-voice",
+        "displayName": "Responder con mi estilo",
+        "description": "Redacta respuestas a correos y mensajes con mi forma de escribir. Úsala cuando pida responder a alguien."
+      },
+      {
+        "name": "weekly-recap",
+        "displayName": "Resumen semanal",
+        "description": "Escribe mi resumen semanal a partir de las notas de la semana. Úsala los viernes o cuando pida un resumen de la semana."
+      }
     ],
     "ja": [
-      { "name": "action-items-to-linear", "displayName": "アクションをLinearへ", "description": "会議からアクションを抽出し、承認用のLinearの課題を下書きします。会議の後にアクションの洗い出しを頼んだときに使います。" },
-      { "name": "meeting-summary-to-slack", "displayName": "会議の要約をSlackへ", "description": "会議の短い要約を書き、Slackチャンネル向けに下書きします。会議の要約を共有したいと頼んだときに使います。" },
-      { "name": "one-on-one-prep", "displayName": "1on1の準備", "description": "特定の相手との前回の1on1以降に変わったことをまとめます。1on1の準備を頼んだときに使います。" },
-      { "name": "meeting-decisions", "displayName": "会議の決定事項", "description": "会議メモから決定事項を探し、それぞれの日付と会議を示します。何を決めたか尋ねたときに使います。" },
-      { "name": "meeting-prep", "displayName": "会議の準備", "description": "会議の前に、参加者、前回話したこと、未解決の質問をまとめます。会議や通話の準備を頼んだときに使います。" },
-      { "name": "reply-in-my-voice", "displayName": "自分の文体で返信", "description": "メールやメッセージへの返信を自分の文体で下書きします。誰かへの返信を頼んだときに使います。" },
-      { "name": "weekly-recap", "displayName": "週次まとめ", "description": "今週のメモから週次のまとめを書きます。金曜日や、今週のまとめを頼んだときに使います。" }
+      {
+        "name": "action-items-to-linear",
+        "displayName": "アクションをLinearへ",
+        "description": "会議からアクションを抽出し、承認用のLinearの課題を下書きします。会議の後にアクションの洗い出しを頼んだときに使います。"
+      },
+      {
+        "name": "meeting-summary-to-slack",
+        "displayName": "会議の要約をSlackへ",
+        "description": "会議の短い要約を書き、Slackチャンネル向けに下書きします。会議の要約を共有したいと頼んだときに使います。"
+      },
+      {
+        "name": "one-on-one-prep",
+        "displayName": "1on1の準備",
+        "description": "特定の相手との前回の1on1以降に変わったことをまとめます。1on1の準備を頼んだときに使います。"
+      },
+      {
+        "name": "meeting-decisions",
+        "displayName": "会議の決定事項",
+        "description": "会議メモから決定事項を探し、それぞれの日付と会議を示します。何を決めたか尋ねたときに使います。"
+      },
+      {
+        "name": "meeting-prep",
+        "displayName": "会議の準備",
+        "description": "会議の前に、参加者、前回話したこと、未解決の質問をまとめます。会議や通話の準備を頼んだときに使います。"
+      },
+      {
+        "name": "reply-in-my-voice",
+        "displayName": "自分の文体で返信",
+        "description": "メールやメッセージへの返信を自分の文体で下書きします。誰かへの返信を頼んだときに使います。"
+      },
+      {
+        "name": "weekly-recap",
+        "displayName": "週次まとめ",
+        "description": "今週のメモから週次のまとめを書きます。金曜日や、今週のまとめを頼んだときに使います。"
+      }
     ]
   },
   "cases": [
     { "request": "prep me for my 2pm meeting", "locale": "en", "expect": "meeting-prep" },
-    { "request": "what did we decide about pricing", "locale": "en", "expect": "meeting-decisions" },
-    { "request": "pull the action items from this meeting", "locale": "en", "expect": "action-items-to-linear" },
-    { "request": "share a summary of the meeting in Slack", "locale": "en", "expect": "meeting-summary-to-slack" },
+    {
+      "request": "what did we decide about pricing",
+      "locale": "en",
+      "expect": "meeting-decisions"
+    },
+    {
+      "request": "pull the action items from this meeting",
+      "locale": "en",
+      "expect": "action-items-to-linear"
+    },
+    {
+      "request": "share a summary of the meeting in Slack",
+      "locale": "en",
+      "expect": "meeting-summary-to-slack"
+    },
     { "request": "prep for my 1:1 with Dana", "locale": "en", "expect": "one-on-one-prep" },
     { "request": "write my weekly recap", "locale": "en", "expect": "weekly-recap" },
     { "request": "reply to Sam's email", "locale": "en", "expect": "reply-in-my-voice" },
-    { "request": "draft an answer to this message in my voice", "locale": "en", "expect": "reply-in-my-voice" },
-    { "request": "make Linear tickets from the action items", "locale": "en", "expect": "action-items-to-linear" },
+    {
+      "request": "draft an answer to this message in my voice",
+      "locale": "en",
+      "expect": "reply-in-my-voice"
+    },
+    {
+      "request": "make Linear tickets from the action items",
+      "locale": "en",
+      "expect": "action-items-to-linear"
+    },
     { "request": "brief me before the call with Acme", "locale": "en", "expect": "meeting-prep" },
-    { "request": "prepara las tareas de la reunión para Linear", "locale": "es", "expect": "action-items-to-linear" },
+    {
+      "request": "prepara las tareas de la reunión para Linear",
+      "locale": "es",
+      "expect": "action-items-to-linear"
+    },
     { "request": "¿qué decidimos sobre el precio?", "locale": "es", "expect": "meeting-decisions" },
-    { "request": "会議の要約をSlackで共有して", "locale": "ja", "expect": "meeting-summary-to-slack" },
+    {
+      "request": "会議の要約をSlackで共有して",
+      "locale": "ja",
+      "expect": "meeting-summary-to-slack"
+    },
     { "request": "what's the weather", "locale": "en", "expect": null },
     { "request": "log my hours", "locale": "en", "expect": null },
     { "request": "reply to Sam", "locale": "en", "without": ["reply-in-my-voice"], "expect": null },
@@ -52,6 +164,11 @@
     { "request": "what time is it in Tokyo", "locale": "en", "expect": null },
     { "request": "summarize this article", "locale": "en", "expect": null },
     { "request": "open my notes", "locale": "en", "expect": null },
-    { "request": "prep", "locale": "en", "expect": null }
+    { "request": "prep", "locale": "en", "expect": null },
+    { "request": "¿qué hora es en Tokio?", "locale": "es", "expect": null },
+    { "request": "dime el precio de la casa", "locale": "es", "expect": null },
+    { "request": "東京の人口を教えて", "locale": "ja", "expect": null },
+    { "request": "10分のタイマーを設定して", "locale": "ja", "expect": null },
+    { "request": "今日の天気はどうですか", "locale": "ja", "expect": null }
   ]
 }

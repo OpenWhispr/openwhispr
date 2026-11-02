@@ -423,3 +423,73 @@ test("a skill whose files can't be read is never replaced or removed from the cl
   assert.deepEqual(listDir(path.join(ctx.skillsDir, "recap", "notes")), ["mine.md"]);
   assert.ok(fs.lstatSync(path.join(ctx.skillsDir, "recap", "linked")).isSymbolicLink());
 });
+
+for (const priorState of ["absent", "synced", "deleted"]) {
+  test(`a failed cloud write restores the complete ${priorState} state`, (t) => {
+    const ctx = setup(t);
+    if (!ctx) return;
+    const originalEntry = cloudSkill("recap", [utf8("SKILL.md", skillText("recap", "Old."))]);
+    if (priorState !== "absent") ctx.library.applyFromCloud(originalEntry);
+    if (priorState === "deleted") ctx.library.uninstall("recap");
+    const original = ctx.database.getSkillStateForRecovery("recap");
+    const rename = fs.renameSync;
+    t.mock.method(fs, "renameSync", (from, to) => {
+      if (
+        path.basename(from).startsWith(".writing-") &&
+        path.basename(to).startsWith(".written-")
+      ) {
+        throw Object.assign(new Error("commit locked"), { code: "EACCES" });
+      }
+      return rename(from, to);
+    });
+    const changed = cloudSkill("recap", [utf8("SKILL.md", skillText("recap", "New."))], {
+      enabled: false,
+      updated_at: "2026-10-22T09:00:00.000Z",
+    });
+
+    assert.throws(() => ctx.library.applyFromCloud(changed), /commit locked/);
+
+    assert.deepEqual(ctx.database.getSkillStateForRecovery("recap"), original);
+    assert.deepEqual(listDir(ctx.skillsDir), priorState === "synced" ? ["recap"] : []);
+    if (priorState === "synced") {
+      assert.equal(readSkill(ctx.skillsDir, "recap"), skillText("recap", "Old."));
+    }
+    t.mock.restoreAll();
+    assert.equal(ctx.library.applyFromCloud(changed), true);
+    assert.equal(readSkill(ctx.skillsDir, "recap"), skillText("recap", "New."));
+  });
+}
+
+test("cloud sync waits for a blocked journal to restore its files and sync state", (t) => {
+  const ctx = setup(t);
+  if (!ctx) return;
+  const originalEntry = cloudSkill("recap", [utf8("SKILL.md", skillText("recap", "Old."))]);
+  ctx.library.applyFromCloud(originalEntry);
+  const original = ctx.database.getSkillStateForRecovery("recap");
+  const changed = cloudSkill("recap", [utf8("SKILL.md", skillText("recap", "New."))], {
+    updated_at: "2026-10-22T09:00:00.000Z",
+  });
+  const rename = fs.renameSync;
+  t.mock.method(fs, "renameSync", (from, to) => {
+    if (path.basename(from).startsWith(".writing-") && path.basename(to).startsWith(".written-")) {
+      throw Object.assign(new Error("commit locked"), { code: "EACCES" });
+    }
+    return rename(from, to);
+  });
+  t.mock.method(ctx.database, "restoreSkillState", () => {
+    throw new Error("database locked");
+  });
+  assert.throws(() => ctx.library.applyFromCloud(changed), /commit locked/);
+  assert.equal(ctx.library.exportForCloud("recap"), null);
+  assert.throws(() => ctx.library.applyFromCloud(changed), /needs recovery/);
+  assert.deepEqual(ctx.library.scan(), []);
+  t.mock.restoreAll();
+
+  const reopened = new SkillLibrary({
+    userDataDir: path.dirname(ctx.skillsDir),
+    database: ctx.database,
+  });
+  assert.deepEqual(ctx.database.getSkillStateForRecovery("recap"), original);
+  assert.equal(readSkill(ctx.skillsDir, "recap"), skillText("recap", "Old."));
+  assert.equal(reopened.applyFromCloud(changed), true);
+});

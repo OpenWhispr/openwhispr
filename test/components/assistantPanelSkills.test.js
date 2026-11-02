@@ -10,7 +10,7 @@ const noop = () => {};
 
 // The voice panel with its chat hooks replaced: sends are recorded with their options, and
 // the composer renders its leading row so a chip is real and clickable.
-function panelMocks({ realMarkdown = false } = {}) {
+function panelMocks({ realMarkdown = false, realSkillCards = false } = {}) {
   return {
     "react-i18next": SKILLS_MOCKS["react-i18next"],
     "/ui/useToast": `export function useToast() { return { toast() {} }; }`,
@@ -54,7 +54,8 @@ function panelMocks({ realMarkdown = false } = {}) {
         return createElement("div", null, props.leadingRow, createElement("textarea"));
       }
     `,
-    "/chat/SkillApprovalCard": `
+    ...(!realSkillCards && {
+      "/chat/SkillApprovalCard": `
       import { createElement } from "react";
       import { useSkillChatActions } from "/components/chat/skillChatActions.ts";
       export function SkillApprovalCard({ entry }) {
@@ -65,6 +66,7 @@ function panelMocks({ realMarkdown = false } = {}) {
         });
       }
     `,
+    }),
     "/hooks/useWindowDrag": `
       export function useWindowDrag() { return { handleMouseDown() {}, handleMouseUp() {} }; }
     `,
@@ -114,7 +116,10 @@ const PANEL_PROPS = {
 };
 
 // Browser globals (and, for a mount, the DOM) come first: react-dom reads them as it loads.
-async function loadPanel(t, { messages = [], activeToolName = null, realMarkdown } = {}) {
+async function loadPanel(
+  t,
+  { messages = [], activeToolName = null, realMarkdown, realSkillCards } = {}
+) {
   globalThis.__panelMessages = messages;
   globalThis.__panelActiveToolName = activeToolName;
   globalThis.__panelSends = [];
@@ -132,7 +137,7 @@ async function loadPanel(t, { messages = [], activeToolName = null, realMarkdown
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-assistant-panel-skills-test-",
     noExternal: ["react-i18next"],
-    mockModules: panelMocks({ realMarkdown }),
+    mockModules: panelMocks({ realMarkdown, realSkillCards }),
   });
   const { AssistantPanel } = await vite.ssrLoadModule("/components/dictation/AssistantPanel.tsx");
   return { vite, AssistantPanel };
@@ -277,6 +282,59 @@ test("the voice panel renders skill cards", async (t) => {
   );
 });
 
+test("a reopened voice panel restores the saved skill card and its working Undo", async (t) => {
+  const messages = [
+    {
+      id: "reloaded-assistant",
+      role: "assistant",
+      content: "Saved the change.",
+      isStreaming: false,
+      toolCalls: [
+        {
+          id: "saved-call",
+          name: "update_skill",
+          arguments: "{}",
+          status: "completed",
+          metadata: {
+            status: "saved",
+            kind: "update",
+            name: "weekly-report",
+            title: "Weekly report",
+            versionId: "123",
+          },
+        },
+      ],
+    },
+  ];
+  const { container, vite } = await mountPanel(
+    t,
+    { pendingCommand: null },
+    { messages, realSkillCards: true }
+  );
+  const store = await vite.ssrLoadModule("/stores/skillApprovalStore.ts");
+  const undoCalls = [];
+  globalThis.window.electronAPI.skillsUndo = async (...args) => {
+    undoCalls.push(args);
+    return { ok: true };
+  };
+  // A loaded conversation has fresh message IDs and no matching live approval entry.
+  await React.act(async () => store.useSkillApprovalStore.setState({ entries: {}, undos: {} }));
+  const buttons = () =>
+    findAll(
+      container,
+      (node) => node.tagName === "BUTTON" && node.textContent === "skills.approval.undo"
+    );
+
+  assert.equal(buttons().length, 1);
+  assert.match(container.textContent, /Weekly report/);
+  await click(buttons()[0]);
+  await settle();
+
+  assert.deepEqual(undoCalls, [["weekly-report", "123"]]);
+  assert.match(container.textContent, /skills\.approval\.undone/);
+  assert.equal(buttons().length, 0);
+});
+
 test("voice panel code blocks offer Paste into app", async (t) => {
   const messages = [
     {
@@ -288,13 +346,109 @@ test("voice panel code blocks offer Paste into app", async (t) => {
   ];
   installBrowserGlobals(t);
   const { AssistantPanel } = await loadPanel(t, { messages, realMarkdown: true });
+  const render = (props) =>
+    renderToStaticMarkup(
+      React.createElement(AssistantPanel, { ...PANEL_PROPS, pendingCommand: null, ...props })
+    );
 
-  const markup = renderToStaticMarkup(
-    React.createElement(AssistantPanel, { ...PANEL_PROPS, pendingCommand: null })
-  );
-
+  const markup = render({ canPasteIntoApp: true });
   assert.match(markup, /skills\.code\.paste/);
   assert.match(markup, /common\.copy/);
+
+  // Opened from the tray or the pill menu, or over OpenWhispr itself: no app to paste into.
+  const copyOnly = render({ canPasteIntoApp: false });
+  assert.doesNotMatch(copyOnly, /skills\.code\.paste/);
+  assert.match(copyOnly, /common\.copy/);
+});
+
+test("Paste into app waits for the answer to finish streaming", async (t) => {
+  // Half a command can read as another one, and a one-line block can still grow lines.
+  const messages = [
+    {
+      id: "assistant-1",
+      role: "assistant",
+      content: "Run this:\n\n```sh\nrm -rf ./",
+      isStreaming: true,
+    },
+  ];
+  installBrowserGlobals(t);
+  const { AssistantPanel } = await loadPanel(t, { messages, realMarkdown: true });
+
+  const markup = renderToStaticMarkup(
+    React.createElement(AssistantPanel, {
+      ...PANEL_PROPS,
+      pendingCommand: null,
+      canPasteIntoApp: true,
+    })
+  );
+
+  assert.doesNotMatch(markup, /skills\.code\.paste/);
+  assert.match(markup, /common\.copy/);
+});
+
+test("each voice command adopts its app as the paste target; the tray and a close drop it", async (t) => {
+  let root = null;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  const calls = [];
+  let available = true;
+  installBrowserGlobals(t, {
+    window: {
+      setInterval: () => 1,
+      clearInterval() {},
+      electronAPI: {
+        assistantPasteTarget: async (action) => {
+          calls.push(action);
+          return action === "adopt" && available;
+        },
+      },
+    },
+  });
+  const container = installInteractiveDom(t);
+  const { createRoot } = require("react-dom/client");
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-assistant-panel-paste-target-test-",
+  });
+  const { useAssistantPanel } = await vite.ssrLoadModule("/hooks/useAssistantPanel.js");
+  let assistant;
+  function Harness() {
+    assistant = useAssistantPanel({
+      requestMainWindowSize: async () => ({ success: true }),
+      dictationErrorActionCount: 0,
+      recordingControlsRef: { current: null },
+    });
+    return null;
+  }
+  root = createRoot(container);
+  await React.act(async () => root.render(React.createElement(Harness)));
+
+  await React.act(async () => assistant.handleCommand({ text: "How do I list files?" }));
+  assert.deepEqual(calls, ["adopt"]);
+  assert.equal(assistant.canPasteIntoApp, true);
+
+  // A follow-up spoken into the open panel asks again: main moves Paste to the app it was spoken
+  // over, or keeps the conversation's.
+  await React.act(async () => assistant.handleCommand({ text: "Sorted by size?" }));
+  assert.deepEqual(calls, ["adopt", "adopt"]);
+  assert.equal(assistant.canPasteIntoApp, true);
+
+  await React.act(async () => assistant.handleClose());
+  await React.act(async () => assistant.completeContentFade());
+  assert.equal(assistant.canPasteIntoApp, false);
+
+  // Main finds no usable app (OpenWhispr was in front): Copy only.
+  available = false;
+  await React.act(async () => assistant.handleCommand({ text: "And hidden files?" }));
+  assert.equal(assistant.canPasteIntoApp, false);
+
+  await React.act(async () => assistant.handleClose());
+  await React.act(async () => assistant.completeContentFade());
+  // The panel unmounts once its closing transition ends.
+  await React.act(() => new Promise((resolve) => setTimeout(resolve, 400)));
+  await React.act(async () => assistant.openPanel());
+  assert.equal(calls.at(-1), "forget");
+  assert.equal(assistant.canPasteIntoApp, false);
 });
 
 test("the panel's owner keeps the skill choice through a close, and resets it", async (t) => {
@@ -336,4 +490,3 @@ test("the panel's owner keeps the skill choice through a close, and resets it", 
   await React.act(async () => assistant.setConversationId(null));
   assert.deepEqual(assistant.skillChoice, { picked: null, pickOff: false });
 });
-

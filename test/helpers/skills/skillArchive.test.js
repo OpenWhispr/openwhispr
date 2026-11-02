@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const unzipper = require("unzipper");
+const zlib = require("node:zlib");
 
 const { readSkillArchive, isSafeArchivePath } = require("../../../src/helpers/skills/skillArchive");
 const { buildZip, withClaimedEntries, withComment } = require("./zipFixture");
@@ -276,4 +277,151 @@ test("archive paths are checked the way the folder will be written", () => {
   assert.equal(isSafeArchivePath("references/"), false);
   assert.equal(isSafeArchivePath('say"hi".md'), false);
   assert.equal(isSafeArchivePath("references/con x.md"), true);
+});
+
+test("Unicode case aliases are refused before they can overwrite a file", async () => {
+  for (const [first, second] of [
+    ["Σ.md", "ς.md"],
+    ["s.md", "ſ.md"],
+    ["Σ", "ς/a.md"],
+  ]) {
+    assert.deepEqual(
+      await read([
+        { path: "SKILL.md", data: SKILL },
+        { path: `references/${first}`, data: "First file" },
+        { path: `references/${second}`, data: "Second file" },
+      ]),
+      refusal("unsafePath")
+    );
+  }
+});
+
+test("legacy CP437 filenames preserve the paths referenced by the skill", async () => {
+  const result = await read([
+    { path: "SKILL.md", data: SKILL },
+    {
+      pathBytes: Buffer.from([...Buffer.from("references/caf"), 0x82, ...Buffer.from(".md")]),
+      utf8Names: false,
+      data: "Reference",
+    },
+    {
+      pathBytes: Buffer.from([...Buffer.from("assets/"), 0x9c, 0xe1, 0xff, ...Buffer.from(".txt")]),
+      utf8Names: false,
+      data: "Symbols",
+    },
+  ]);
+  assert.deepEqual(result.problems, []);
+  assert.deepEqual(paths(result), ["SKILL.md", "assets/£ß .txt", "references/café.md"]);
+  assert.equal(
+    result.files.find((file) => file.path === "references/café.md").data.toString(),
+    "Reference"
+  );
+});
+
+test("UTF-8 filenames keep their Unicode spelling", async () => {
+  const result = await read([
+    { path: "SKILL.md", data: SKILL },
+    { path: "references/会議-café.md", data: "Notes" },
+  ]);
+  assert.deepEqual(paths(result), ["SKILL.md", "references/会議-café.md"]);
+});
+
+test("unflagged UTF-8 filenames from macOS archives keep their Unicode spelling", async () => {
+  const result = await read([
+    { path: "SKILL.md", data: SKILL },
+    { path: "references/café.md", utf8Names: false, data: "Notes" },
+    { path: "references/会議.md", utf8Names: false, data: "Meeting" },
+  ]);
+  assert.deepEqual(result.problems, []);
+  assert.deepEqual(paths(result), ["SKILL.md", "references/café.md", "references/会議.md"]);
+});
+
+test("malformed UTF-8 filenames are refused instead of renamed with replacement characters", async () => {
+  for (const bytes of [[0xff], [0xc0, 0xaf]]) {
+    assert.deepEqual(
+      await read([
+        { path: "SKILL.md", data: SKILL },
+        {
+          pathBytes: Buffer.from([...Buffer.from("references/"), ...bytes, ...Buffer.from(".md")]),
+          data: "Notes",
+        },
+      ]),
+      refusal("unreadableArchive")
+    );
+  }
+});
+
+function unicodePathExtra(
+  pathBytes,
+  unicodePath,
+  { crc = zlib.crc32(pathBytes), version = 1 } = {}
+) {
+  const encoded = Buffer.isBuffer(unicodePath) ? unicodePath : Buffer.from(unicodePath);
+  const extra = Buffer.alloc(9 + encoded.length);
+  extra.writeUInt16LE(0x7075, 0);
+  extra.writeUInt16LE(5 + encoded.length, 2);
+  extra[4] = version;
+  extra.writeUInt32LE(crc, 5);
+  encoded.copy(extra, 9);
+  return extra;
+}
+
+test("a checksummed Unicode path field supplies a legacy entry's real filename", async () => {
+  const pathBytes = Buffer.from("references/notes.md");
+  const result = await read([
+    { path: "SKILL.md", data: SKILL },
+    {
+      pathBytes,
+      utf8Names: false,
+      extra: unicodePathExtra(pathBytes, "references/会議.md"),
+      data: "Notes",
+    },
+  ]);
+  assert.deepEqual(result.problems, []);
+  assert.deepEqual(paths(result), ["SKILL.md", "references/会議.md"]);
+});
+
+test("an invalid Unicode path checksum or unsupported version falls back to the legacy name", async () => {
+  const pathBytes = Buffer.from("references/notes.md");
+  for (const options of [{ crc: 0 }, { version: 2 }]) {
+    const result = await read([
+      { path: "SKILL.md", data: SKILL },
+      {
+        pathBytes,
+        utf8Names: false,
+        extra: unicodePathExtra(pathBytes, "references/会議.md", options),
+        data: "Notes",
+      },
+    ]);
+    assert.deepEqual(paths(result), ["SKILL.md", "references/notes.md"]);
+  }
+});
+
+test("Unicode path fields cannot bypass path or collision validation", async () => {
+  const pathBytes = Buffer.from("references/notes.md");
+  for (const unsafe of ["../outside.md", "SKILL.md"]) {
+    assert.deepEqual(
+      await read([
+        { path: "SKILL.md", data: SKILL },
+        { pathBytes, utf8Names: false, extra: unicodePathExtra(pathBytes, unsafe), data: "Notes" },
+      ]),
+      refusal("unsafePath")
+    );
+  }
+});
+
+test("a matching Unicode path field with malformed UTF-8 is refused", async () => {
+  const pathBytes = Buffer.from("references/notes.md");
+  assert.deepEqual(
+    await read([
+      { path: "SKILL.md", data: SKILL },
+      {
+        pathBytes,
+        utf8Names: false,
+        extra: unicodePathExtra(pathBytes, Buffer.from([0xff])),
+        data: "Notes",
+      },
+    ]),
+    refusal("unreadableArchive")
+  );
 });

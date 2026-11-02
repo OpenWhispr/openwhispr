@@ -17,7 +17,9 @@ export type SkillApprovalState =
   | "not_saved"
   | "undone"
   /** Undo refused: the skill changed again after this card saved it. */
-  | "changed_since";
+  | "changed_since"
+  /** Save refused: the skill changed after this card was made, so it would undo that change. */
+  | "outdated";
 
 interface SkillApprovalBase {
   /** approvalKey(messageId, toolCallId). */
@@ -33,6 +35,8 @@ interface SkillApprovalBase {
   undoFailed?: boolean;
   /** Why main refused the last Save; the card stays open so the user can fix it. */
   problems?: SkillIssue<SkillProblemCode>[];
+  /** The hash of the skill this card changes, as the card shows it; Save is refused if it moved. */
+  baseHash?: string;
 }
 
 /** A new skill. One named like a skill the user has updates it. */
@@ -40,6 +44,8 @@ export interface SkillCreateApproval extends SkillApprovalBase {
   kind: "create";
   /** A skill already has this name, so saving updates it. */
   replacesExisting?: boolean;
+  /** The title that check was made for; an edit away from it makes the card check again. */
+  checkedTitle: string;
   /** What Save writes; Edit changes it. */
   draft: SkillProposal;
   /** As proposed, to tell the model whether the user edited it. */
@@ -63,21 +69,36 @@ export interface SkillUpdateApproval extends SkillApprovalBase {
 export type SkillApprovalEntry = SkillCreateApproval | SkillUpdateApproval;
 
 type SkillApprovalRequest =
-  | Pick<SkillCreateApproval, "kind" | "name" | "replacesExisting" | "draft">
+  | Pick<SkillCreateApproval, "kind" | "name" | "replacesExisting" | "draft" | "baseHash">
   | Pick<
       SkillUpdateApproval,
-      "kind" | "name" | "displayName" | "draft" | "current" | "intent" | "removals" | "learnedFrom"
+      | "kind"
+      | "name"
+      | "displayName"
+      | "draft"
+      | "current"
+      | "intent"
+      | "removals"
+      | "learnedFrom"
+      | "baseHash"
     >;
 
 export type SkillApprovalOutcome =
-  | { state: "saved"; name: string; edited: boolean }
+  | { state: "saved"; name: string; title: string; versionId?: string; edited: boolean }
   | { state: "skipped" }
   | { state: "failed" }
+  | { state: "changed" }
   | { state: "not_saved"; reason: "expired" | "conversation_ended" | "duplicate_tool_call" };
 
-export const useSkillApprovalStore = create<{ entries: Record<string, SkillApprovalEntry> }>(
-  () => ({ entries: {} })
-);
+/** How an Undo of one save went, kept by version so a reopened chat's card still knows. */
+export type SkillUndoState = "undoing" | "undone" | "changed_since" | "failed";
+
+export const skillVersionKey = (name: string, versionId: string): string => `${name}/${versionId}`;
+
+export const useSkillApprovalStore = create<{
+  entries: Record<string, SkillApprovalEntry>;
+  undos: Record<string, SkillUndoState>;
+}>(() => ({ entries: {}, undos: {} }));
 
 interface PendingResolution {
   resolve: (outcome: SkillApprovalOutcome) => void;
@@ -100,7 +121,11 @@ function entryFor(key: string): SkillApprovalEntry | undefined {
   return useSkillApprovalStore.getState().entries[key];
 }
 
-type SkillCreatePatch = Pick<SkillCreateApproval, "replacesExisting">;
+// Matches the library's title comparison, including cosmetic edits to a deleted target.
+export const skillTitleKey = (title: string): string =>
+  title.trim().replace(/\s+/g, " ").normalize("NFC").toLowerCase();
+
+type SkillCreatePatch = Pick<SkillCreateApproval, "replacesExisting" | "baseHash" | "checkedTitle">;
 
 function patchEntry(
   key: string,
@@ -174,6 +199,7 @@ export function requestSkillApproval(
       messageId,
       toolCallId,
       ...request,
+      ...(request.kind === "create" ? { checkedTitle: request.draft.title } : {}),
       draft: copyDraft(request.draft),
       original: copyDraft(request.draft),
       state: "pending",
@@ -197,6 +223,7 @@ export async function saveSkillApproval(key: string): Promise<void> {
   const entry = entryFor(key);
   if (!entry || entry.state !== "pending") return;
   patchEntry(key, { state: "saving", problems: undefined });
+  let baseHash = entry.baseHash;
   if (entry.kind === "create") {
     // An edited title can name a skill the user already has, and saving would replace it.
     // The card says so first, and the next Save confirms.
@@ -208,17 +235,37 @@ export async function saveSkillApproval(key: string): Promise<void> {
       return;
     }
     if (check.existing && !(entry.replacesExisting && check.name === entry.name)) {
-      reopen(key, { name: check.name, replacesExisting: true });
+      reopen(key, {
+        name: check.name,
+        replacesExisting: true,
+        baseHash: check.hash,
+        checkedTitle: entry.draft.title,
+      });
       return;
     }
+    if (!check.existing && skillTitleKey(entry.draft.title) !== skillTitleKey(entry.checkedTitle)) {
+      baseHash = undefined;
+      patchEntry(key, {
+        name: check.name,
+        replacesExisting: false,
+        baseHash: undefined,
+        checkedTitle: entry.draft.title,
+      });
+    }
   }
+  // The hash the card was shown against, so a skill changed since isn't overwritten unseen.
+  const base = baseHash === undefined ? {} : { baseHash };
   const saving =
     entry.kind === "update"
-      ? window.electronAPI?.skillsApplyUpdate?.(entry.draft)
-      : window.electronAPI?.skillsSaveProposal?.(entry.draft);
+      ? window.electronAPI?.skillsApplyUpdate?.({ ...entry.draft, ...base })
+      : window.electronAPI?.skillsSaveProposal?.({ ...entry.draft, ...base });
   const result = await saving?.catch(() => null);
   if (result && !result.ok && "problems" in result) {
     reopen(key, { problems: result.problems });
+    return;
+  }
+  if (result && !result.ok && result.error === "changed") {
+    settle(key, { state: "changed" }, { state: "outdated" });
     return;
   }
   if (!result?.ok) {
@@ -228,9 +275,16 @@ export async function saveSkillApproval(key: string): Promise<void> {
   syncAfterLocalWrite("syncSkillsNow");
   if (entry.kind === "create") playSkillIcon(result.name);
   const edited = JSON.stringify(entry.draft) !== JSON.stringify(entry.original);
+  const title = entry.kind === "create" ? entry.draft.title : entry.displayName;
   settle(
     key,
-    { state: "saved", name: result.name, edited },
+    {
+      state: "saved",
+      name: result.name,
+      title,
+      ...(result.versionId ? { versionId: result.versionId } : {}),
+      edited,
+    },
     { state: "saved", name: result.name, versionId: result.versionId }
   );
 }
@@ -240,32 +294,42 @@ export function skipSkillApproval(key: string): void {
   settle(key, { state: "skipped" }, { state: "skipped" });
 }
 
-// Undos under way. Main refuses a second Undo of one save, so a second press would end on
-// "changed since" although the first one worked.
-const undoing = new Set<string>();
+const isUndoing = (versionKey: string): boolean =>
+  useSkillApprovalStore.getState().undos[versionKey] === "undoing";
+
+function setUndo(versionKey: string, undo: SkillUndoState): void {
+  useSkillApprovalStore.setState((state) => ({ undos: { ...state.undos, [versionKey]: undo } }));
+}
+
+/**
+ * Puts back the skill one save replaced, from its live card or from the card a reopened chat
+ * rebuilds. Main refuses a second Undo of one save, so a second press while one runs is
+ * ignored: it would end on "changed since" although the first one worked.
+ */
+export async function undoSkillVersion(name: string, versionId: string): Promise<void> {
+  const versionKey = skillVersionKey(name, versionId);
+  if (isUndoing(versionKey)) return;
+  setUndo(versionKey, "undoing");
+  const result = await window.electronAPI?.skillsUndo?.(name, versionId).catch(() => null);
+  if (result?.ok) syncAfterLocalWrite("syncSkillsNow");
+  // Main refuses once a later save changed the skill: undoing this one would lose that. A
+  // write that failed leaves the save in place, so Undo can be tried again.
+  setUndo(
+    versionKey,
+    result?.ok ? "undone" : result?.error === "invalid" ? "changed_since" : "failed"
+  );
+}
 
 /** Puts back the skill a save replaced; the tool call has already settled by then. */
 export async function undoSkillApproval(key: string): Promise<void> {
   const entry = entryFor(key);
-  if (!entry || entry.state !== "saved" || !entry.versionId || undoing.has(key)) return;
-  undoing.add(key);
+  if (!entry || entry.state !== "saved" || !entry.versionId) return;
+  const versionKey = skillVersionKey(entry.name, entry.versionId);
+  if (isUndoing(versionKey)) return;
   // Cleared while it runs, so a failure that repeats is shown and announced again.
   patchEntry(key, { undoFailed: false });
-  try {
-    const result = await window.electronAPI
-      ?.skillsUndo?.(entry.name, entry.versionId)
-      .catch(() => null);
-    if (result?.ok) {
-      patchEntry(key, { state: "undone" });
-      syncAfterLocalWrite("syncSkillsNow");
-    } else if (result?.error === "invalid") {
-      // Main refuses once a later save changed the skill: undoing this one would lose that.
-      patchEntry(key, { state: "changed_since" });
-    } else {
-      // A write that failed leaves the save in place, so Undo can be tried again.
-      patchEntry(key, { undoFailed: true });
-    }
-  } finally {
-    undoing.delete(key);
-  }
+  await undoSkillVersion(entry.name, entry.versionId);
+  const undo = useSkillApprovalStore.getState().undos[versionKey];
+  if (undo === "undone" || undo === "changed_since") patchEntry(key, { state: undo });
+  else patchEntry(key, { undoFailed: true });
 }

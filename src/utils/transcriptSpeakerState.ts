@@ -100,7 +100,10 @@ export const lockTranscriptSpeaker = (
   });
 
 const mergeSpeakerFields = (existing: TranscriptSegment, incoming: TranscriptSegment) => {
-  const merged = { ...incoming } as TranscriptSegment;
+  const merged = {
+    ...incoming,
+    ...(existing.recorderName ? { recorderName: existing.recorderName } : {}),
+  } as TranscriptSegment;
   const existingFields = existing as Record<SpeakerStateField, unknown>;
   const mergedFields = merged as Record<SpeakerStateField, unknown>;
 
@@ -198,6 +201,7 @@ export const serializeTranscriptSegments = (segments: TranscriptSegment[]) =>
       timestamp: segment.timestamp,
       speaker: segment.speaker,
       speakerName: segment.speakerName,
+      recorderName: segment.recorderName,
       speakerIsPlaceholder: segment.speakerIsPlaceholder,
       suggestedName: segment.suggestedName,
       suggestedProfileId: segment.suggestedProfileId,
@@ -211,14 +215,22 @@ export const serializeTranscriptSegments = (segments: TranscriptSegment[]) =>
 // user correcting one stretch of it. The correction has to outrank the cluster,
 // or reassigning part of a mis-split block appears to do nothing (#1533). This
 // mirrors the precedence the exporter already applies in transcriptFormatter.js.
-export const resolveSegmentSpeakerName = (
+export const resolveMappedSpeakerName = (
   segment: TranscriptSegment,
   speakerMappings?: Record<string, string>
 ): string | undefined => {
-  if (segment.speakerName && isTranscriptSpeakerLocked(segment)) return segment.speakerName;
-  const mapped = segment.speaker ? speakerMappings?.[segment.speaker] : undefined;
-  return mapped || segment.speakerName;
+  if (segment.speakerName && isTranscriptSpeakerLocked(segment)) return undefined;
+  // A legacy self mapping belongs to the original recorder, not a teammate
+  // who subsequently recorded into the note. Explicit row corrections win above.
+  return segment.speaker && !(segment.speaker === "you" && segment.recorderName)
+    ? speakerMappings?.[segment.speaker]
+    : undefined;
 };
+
+export const resolveSegmentSpeakerName = (
+  segment: TranscriptSegment,
+  speakerMappings?: Record<string, string>
+): string | undefined => resolveMappedSpeakerName(segment, speakerMappings) || segment.speakerName;
 
 // Naming a speaker "You" is how the user marks their own voice. The name is
 // stored in the UI language it was saved in, so English "You" counts in every

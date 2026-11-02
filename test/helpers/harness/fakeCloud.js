@@ -494,9 +494,10 @@ function createFakeCloud(config = {}) {
       case "DELETE /api/skills/delete": {
         const row = skills.get(body?.id);
         if (!row) throw new HttpError(404, "Skill not found", "not_found");
-        if (!row.deleted_at) Object.assign(tombstone({ store: skills, prefix: "skill" }, row.id), {
-          files: [],
-        });
+        if (!row.deleted_at)
+          Object.assign(tombstone({ store: skills, prefix: "skill" }, row.id), {
+            files: [],
+          });
         return {};
       }
       default:

@@ -1,19 +1,20 @@
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { PAGE_CONTENT_WIDTH_CLASS } from "../ui/pageWidth";
 import { ChatMessage } from "./ChatMessage";
 
-/** The skill creator's first question, shown in its empty chat. It is never saved. */
+/**
+ * The skill creator's first question, at the top of its chat for as long as the creator is
+ * attached, so the user's answer never reads as the start. It is never saved; the model hears
+ * it was asked through the creator's context.
+ */
 export function CreatorOpening(): ReactElement {
   const { t } = useTranslation();
   return (
-    <div className={PAGE_CONTENT_WIDTH_CLASS}>
-      <ChatMessage
-        messageId="skill-creator-opening"
-        role="assistant"
-        content={t("skills.chat.creatorOpening")}
-        isStreaming={false}
-      />
-    </div>
+    <ChatMessage
+      messageId="skill-creator-opening"
+      role="assistant"
+      content={t("skills.chat.creatorOpening")}
+      isStreaming={false}
+    />
   );
 }
