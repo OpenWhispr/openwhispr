@@ -168,6 +168,7 @@ export function InvitePeopleView({
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
+    if (event.nativeEvent.isComposing) return;
     if (listOpen && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
       event.preventDefault();
       const step = event.key === "ArrowDown" ? 1 : -1;

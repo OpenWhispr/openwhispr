@@ -134,6 +134,26 @@ test("the role menu keeps Radix's trigger id so the open menu is named", async (
   assert.ok(document.getElementById(menuLabelId), "the menu's label resolves to an element");
 });
 
+test("Enter commits an address only after IME composition finishes", async (t) => {
+  const events = [];
+  const document = await mountView(t, (event) => events.push(event), "田中");
+  const input = document.querySelector("input[role='combobox']");
+  input.focus();
+
+  for (const isComposing of [true, false]) {
+    const enter = new happyWindow.KeyboardEvent("keydown", {
+      key: "Enter",
+      isComposing,
+      bubbles: true,
+      cancelable: true,
+    });
+    await React.act(async () => input.dispatchEvent(enter));
+
+    assert.equal(enter.defaultPrevented, !isComposing);
+    assert.deepEqual(events, isComposing ? [] : [{ type: "commit" }]);
+  }
+});
+
 for (const [name, text, draft, start, end] of [
   ["LF", "Alpha Person <alpha@example.invalid>\nBeta Person <beta@example.invalid>", "", 0, 0],
   ["CRLF", "Alpha Person <alpha@example.invalid>\r\nBeta Person <beta@example.invalid>", "", 0, 0],

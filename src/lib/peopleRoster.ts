@@ -19,13 +19,6 @@ export function rosterFor(
   return workspaceId && state.membersWorkspaceId === workspaceId ? state.members : NO_MEMBERS;
 }
 
-export function filterMembers<M extends { name?: string | null; email?: string | null }>(
-  members: M[],
-  query: string
-): M[] {
-  return filterMemberCandidates(members, query);
-}
-
 // An API from before release 3 omits `teams` entirely; an empty array means the
 // API sent teams and this member just has none. The column only hides in the
 // first case.
@@ -62,7 +55,7 @@ export function membersView(input: {
     return error && !loading ? { kind: "failed" } : { kind: "loading" };
   }
   const trimmed = query.trim();
-  const rows = filterMembers(members, trimmed);
+  const rows = filterMemberCandidates(members, trimmed);
   if (rows.length === 0 && trimmed) return { kind: "noResults", query: trimmed };
   return { kind: "rows", rows };
 }

@@ -400,13 +400,28 @@ test("a resend refused for single sign-on says to sign in with it", async (t) =>
 
 test("a list that couldn't be refreshed says it may be out of date", async (t) => {
   const { Tab } = await loadTab(t);
-  const stale = { ...ready([invitation("i1", "ada@example.com", inDays(3))]), stale: true };
+  for (const rows of [[], [invitation("i1", "ada@example.com", inDays(3))]]) {
+    assert.match(
+      render(Tab, { ...ready(rows), stale: true }),
+      /settingsPage\.workspace\.people\.invitations\.refreshFailed/
+    );
+    assert.doesNotMatch(render(Tab, ready(rows)), /refreshFailed/);
+  }
 
-  assert.match(render(Tab, stale), /settingsPage\.workspace\.people\.invitations\.refreshFailed/);
-  assert.doesNotMatch(
-    render(Tab, ready([invitation("i1", "ada@example.com", inDays(3))])),
-    /refreshFailed/
+  let reloads = 0;
+  const container = await mount(t, Tab, {
+    ...ready([], async () => {
+      reloads += 1;
+    }),
+    stale: true,
+  });
+  const retry = findNode(
+    container,
+    (node) => node.localName === "button" && textOf(node).includes("workspaces.exit.tryAgain")
   );
+  assert.ok(retry, "Try again button for an empty stale list");
+  await React.act(async () => propsOf(retry).onClick());
+  assert.equal(reloads, 1);
 });
 
 test("a refused resend shows the server's message", async (t) => {

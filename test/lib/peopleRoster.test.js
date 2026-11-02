@@ -2,7 +2,6 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   TEAM_SUMMARY_SHOWN,
-  filterMembers,
   rosterHasTeams,
   teamSummary,
   membersView,
@@ -34,14 +33,6 @@ const invitation = (id, expiresAt) => ({
   created_at: "2026-10-20T00:00:00.000Z",
   accepted_at: null,
   revoked_at: null,
-});
-
-test("filter trims, ignores case and matches email", () => {
-  const members = [
-    { name: "Oliver", email: "rowan@acme.test" },
-    { name: "Ada", email: "ada@acme.test" },
-  ];
-  assert.deepEqual(filterMembers(members, "  ROWAN "), [members[0]]);
 });
 
 test("team summary shows two names and counts the rest", () => {
