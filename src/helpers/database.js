@@ -18,6 +18,7 @@ const debugLogger = require("./debugLogger");
 const { buildNoteSearchQuery } = require("./noteSearch");
 const { normalizeStoredSpeakerCount } = require("./speakerCount");
 const { parseEventTime } = require("./calendarAvailability");
+const { isCloudEntryNewer } = require("./cloudSyncGuards");
 // An explicit zone marks an instant this app captured at dictation time. A
 // naive timestamp may instead be a sync artifact: upsertTranscriptionFromCloud
 // keeps the cloud created_at but lets timestamp default to the local pull, so
@@ -3171,6 +3172,17 @@ class DatabaseManager {
         const claim = this._claimUnattributedSql("custom_dictionary", {
           proven: Boolean(byCloud),
         });
+        if (
+          byCloud &&
+          !existing.account_id &&
+          this.activeAccountId &&
+          !isCloudEntryNewer(updatedAt, existing.updated_at)
+        ) {
+          this.db
+            .prepare(`UPDATE custom_dictionary SET ${claim.sql} WHERE id = ?`)
+            .run(...claim.params, existing.id);
+          return this.db.prepare("SELECT * FROM custom_dictionary WHERE id = ?").get(existing.id);
+        }
         // Manual is sticky — a pull never demotes a local manual row to learned.
         const mergedSource =
           existing.source === "manual" || incomingSource === "manual" ? "manual" : "learned";
@@ -4053,6 +4065,18 @@ class DatabaseManager {
       });
 
       if (existing) {
+        if (
+          !existing.account_id &&
+          this.activeAccountId &&
+          (existing.client_snippet_id === clientSnippetId || existing.cloud_id === cloudEntry.id) &&
+          !isCloudEntryNewer(updatedAt, existing.updated_at)
+        ) {
+          const claim = this._claimUnattributedSql("snippets", { proven: true });
+          this.db
+            .prepare(`UPDATE snippets SET ${claim.sql} WHERE id = ?`)
+            .run(...claim.params, existing.id);
+          return this.db.prepare("SELECT * FROM snippets WHERE id = ?").get(existing.id);
+        }
         // A different active row may already hold this trigger (cross-device
         // rename); it must yield first or the UPDATE trips the active-trigger
         // unique index and aborts the pull.
@@ -9269,6 +9293,18 @@ class DatabaseManager {
             "database"
           );
           return null;
+        }
+        if (
+          existing &&
+          !existing.account_id &&
+          this.activeAccountId &&
+          !isCloudEntryNewer(cloudConv.updated_at, existing.updated_at)
+        ) {
+          const claim = this._claimUnattributedSql("agent_conversations", { proven: true });
+          this.db
+            .prepare(`UPDATE agent_conversations SET ${claim.sql} WHERE id = ?`)
+            .run(...claim.params, existing.id);
+          return this.db.prepare("SELECT * FROM agent_conversations WHERE id = ?").get(existing.id);
         }
         if (existing?.deleted_at) return existing;
 

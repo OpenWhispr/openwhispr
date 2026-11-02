@@ -726,6 +726,7 @@ export interface SpaceItem {
 
 export interface DictionaryEntryItem {
   id: number;
+  account_id?: string | null;
   word: string;
   source: "manual" | "learned";
   created_at: string;
@@ -744,6 +745,7 @@ export interface DictionaryEntryItem {
 
 export interface SnippetEntryItem {
   id: number;
+  account_id?: string | null;
   trigger: string;
   replacement: string;
   created_at: string;
@@ -1355,6 +1357,7 @@ export type LocalLLMDownloadProgressEvent =
 
 export interface ConversationPreview {
   id: number;
+  account_id?: string | null;
   title: string;
   created_at: string;
   updated_at: string;

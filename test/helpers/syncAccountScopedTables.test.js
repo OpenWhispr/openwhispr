@@ -860,40 +860,90 @@ for (const kind of ["conversations", "transcriptions", "dictionary"]) {
   }
 }
 
-test("a matching legacy transcription pull claims ownership without overwriting local edits", async (t) => {
+test("matching legacy pulls claim ownership without overwriting local edits or deletions", async (t) => {
   const db = setup(t);
   if (!db) return;
-  const { id } = db.saveTranscription("locally edited text", "local raw text", {
+  db.saveTranscription("locally edited text", "local raw text", {
     clientTranscriptionId: "legacy-transcription",
   });
-  db.db
-    .prepare(
-      "UPDATE transcriptions SET cloud_id = 'legacy-cloud', sync_status = 'synced', legacy_unattributed = 1 WHERE id = ?"
-    )
-    .run(id);
-  const before = db.getTranscriptionById(id);
-  const accountA = await signInAs(t, db, createFakeCloud(), "account-a");
-  windowStub.electronAPI.cloudApiRequest = async () => ({
-    success: true,
-    data: {
-      transcriptions: [
-        {
-          id: "legacy-cloud",
-          client_transcription_id: "legacy-transcription",
-          text: "old cloud text",
-          raw_text: "old cloud raw text",
-          status: "failed",
-          created_at: "2026-10-01T00:00:00.000Z",
-        },
-      ],
+  db.applyDictionaryChanges({ add: ["local-word"] });
+  db.setSnippets([{ trigger: "local-trigger", replacement: "local replacement" }]);
+  const chat = db.createAgentConversation("local title");
+  db.addAgentMessage(chat.id, "user", "local message");
+  const updatedAt = "2026-10-03 00:00:00";
+  const tables = ["transcriptions", "custom_dictionary", "snippets", "agent_conversations"];
+  for (const table of tables) {
+    db.db
+      .prepare(`UPDATE ${table} SET cloud_id = ?, legacy_unattributed = 1, sync_status = 'pending'`)
+      .run(`${table}-cloud`);
+    if (table !== "transcriptions") {
+      db.db.prepare(`UPDATE ${table} SET updated_at = ?`).run(updatedAt);
+    }
+  }
+  db.db.prepare("UPDATE snippets SET deleted_at = ?").run(updatedAt);
+  const before = tables.map((table) => db.db.prepare(`SELECT * FROM ${table}`).get());
+  const messagesBefore = db.getAgentMessages(chat.id);
+  const payloads = {
+    transcriptions: {
+      id: "transcriptions-cloud",
+      client_transcription_id: "legacy-transcription",
+      text: "old cloud text",
+      raw_text: "old cloud raw text",
+      status: "failed",
+      created_at: "2026-10-01T00:00:00.000Z",
     },
-  });
+    dictionary: {
+      id: "custom_dictionary-cloud",
+      client_dict_id: before[1].client_dict_id,
+      word: "cloud-word",
+      source: "learned",
+      updated_at: "2026-10-03T00:00:00.000Z",
+    },
+    snippets: {
+      id: "snippets-cloud",
+      client_snippet_id: before[2].client_snippet_id,
+      trigger: "cloud-trigger",
+      replacement: "cloud replacement",
+      updated_at: "2026-10-01T00:00:00.000Z",
+    },
+    conversations: {
+      id: "agent_conversations-cloud",
+      client_conversation_id: before[3].client_conversation_id,
+      title: "cloud title",
+      updated_at: "2026-10-03T00:00:00.000Z",
+      messages: [{ role: "user", content: "old cloud message" }],
+    },
+  };
+  const accountA = await signInAs(t, db, createFakeCloud(), "account-a");
+  windowStub.electronAPI.cloudApiRequest = async ({ path }) => {
+    const kind = path.split("/")[2];
+    return {
+      success: true,
+      data: { [kind === "dictionary" || kind === "snippets" ? "entries" : kind]: [payloads[kind]] },
+    };
+  };
 
   await accountA.pullTranscriptions();
+  await accountA.pullDictionary();
+  await accountA.pullSnippets();
+  await accountA.pullConversations();
 
-  assert.deepEqual(db.getTranscriptionById(id), { ...before, account_id: "account-a" });
+  for (const [index, table] of tables.entries()) {
+    assert.deepEqual(
+      db.db.prepare(`SELECT * FROM ${table}`).get(),
+      {
+        ...before[index],
+        account_id: "account-a",
+      },
+      `${table}: only ownership changes`
+    );
+  }
+  assert.deepEqual(db.getAgentMessages(chat.id), messagesBefore);
   db.setActiveAccountId("account-b");
   assert.deepEqual(db.getTranscriptions(), [], "B no longer sees A's proven history");
+  assert.deepEqual(db.getDictionary(), []);
+  assert.deepEqual(db.getSnippets(), []);
+  assert.deepEqual(db.getAgentConversations(), []);
 });
 
 test("a pull page that lands after the account changed is not written for the next account", async (t) => {
