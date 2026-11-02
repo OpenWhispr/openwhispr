@@ -209,7 +209,11 @@ const ToastViewport: React.FC<{
           ? hasDictationError
             ? "inset-x-3 bottom-3"
             : "top-4 bottom-20 end-6 justify-end-safe"
-          : "bottom-5 end-5"
+          : "bottom-5 end-5",
+        isDictationPanel &&
+          !hasDictationError &&
+          toasts.length > 1 &&
+          "pointer-events-auto -m-2 overflow-y-auto p-2"
       )}
     >
       {toasts.map((toast) => (
