@@ -23,6 +23,11 @@ interface Props {
   workspaceName: string;
   /** Called after each send that invited anyone, with the normalized addresses it invited. */
   onInvited?: (emails: string[]) => void;
+  /**
+   * Called once after a run that invited anyone or was answered already invited, which can be this
+   * run's own invitation from a request whose answer was lost. For callers that list invitations.
+   */
+  onInvitationsChanged?: () => void;
   cancelLabel?: string;
   /** Teams the invitee joins on accept (threaded into the invitation). */
   teamIds?: string[];
@@ -51,6 +56,7 @@ export default function InviteTeammateDialog({
   workspaceId,
   workspaceName,
   onInvited,
+  onInvitationsChanged,
   cancelLabel,
   teamIds,
   spaceIds,
@@ -274,6 +280,7 @@ export default function InviteTeammateDialog({
     }
     if (controller.signal.aborted) return;
     if (invited.length > 0) onInvited?.(invited);
+    if (alreadyInvited || invited.length > 0) onInvitationsChanged?.();
     // The workspace list's seats_used is what the seats left and the room under the ceiling are
     // worked out from: it is behind this run's invitations, and after a seat refusal behind
     // whoever else invited people meanwhile. An already-invited answer can be this run's own

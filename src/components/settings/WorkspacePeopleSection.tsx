@@ -112,13 +112,9 @@ function PeopleBody({
   };
 
   const { reload } = invitations;
-  const handleInvited = useCallback(
-    (emails: string[]): void => {
-      invitedCountRef.current += emails.length;
-      void reload();
-    },
-    [reload]
-  );
+  const handleInvited = useCallback((emails: string[]): void => {
+    invitedCountRef.current += emails.length;
+  }, []);
 
   return (
     <>
@@ -192,6 +188,7 @@ function PeopleBody({
           workspaceId={workspace.id}
           workspaceName={workspace.name}
           onInvited={handleInvited}
+          onInvitationsChanged={reload}
           knownEmails={knownEmails}
           onUpgrade={onOpenSection ? handleUpgrade : undefined}
         />

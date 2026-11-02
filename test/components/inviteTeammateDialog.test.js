@@ -415,3 +415,80 @@ test("a run answered already invited refreshes the workspace list so the seats c
   assert.equal(latest().state.phase, "editing");
   assert.deepEqual(globalThis.__refreshCalls, [{ fresh: true }]);
 });
+
+test("an already-invited answer asks the caller to reload", async (t) => {
+  globalThis.__sendOutcome = { ok: false, kind: "alreadyInvited" };
+  const invited = [];
+  let changes = 0;
+  const { latest } = await mountWithWorkspace(t, WORKSPACE, {
+    initialEmail: "a@x.com",
+    onInvited: (emails) => invited.push(emails),
+    onInvitationsChanged: () => {
+      changes += 1;
+    },
+  });
+
+  await React.act(async () => latest().onSend());
+
+  assert.equal(changes, 1);
+  // Nobody was invited, so a caller that says "Invitation sent to" has nothing to say.
+  assert.deepEqual(invited, []);
+});
+
+test("a run that invited someone asks once", async (t) => {
+  const invited = [];
+  let changes = 0;
+  const { latest } = await mountWithWorkspace(t, WORKSPACE, {
+    onInvited: (emails) => invited.push(emails),
+    onInvitationsChanged: () => {
+      changes += 1;
+    },
+  });
+  await React.act(async () => latest().dispatch({ type: "draft", text: "a@x.com, b@x.com," }));
+
+  await React.act(async () => latest().onSend());
+
+  assert.equal(changes, 1);
+  assert.deepEqual(invited, [["a@x.com", "b@x.com"]]);
+});
+
+test("an aborted run doesn't", async (t) => {
+  let release;
+  globalThis.__sendGate = new Promise((resolve) => {
+    release = resolve;
+  });
+  let changes = 0;
+  const { latest, unmount } = await mountWithWorkspace(t, WORKSPACE, {
+    initialEmail: "a@x.com",
+    onInvitationsChanged: () => {
+      changes += 1;
+    },
+  });
+  let sending;
+  await React.act(async () => {
+    sending = latest().onSend();
+  });
+  await unmount();
+
+  release();
+  await sending;
+  assert.equal(changes, 0);
+});
+
+test("a run that changed no invitation doesn't ask", async (t) => {
+  for (const kind of ["alreadyMember", "requestFailed"]) {
+    globalThis.__sendOutcome = { ok: false, kind };
+    let changes = 0;
+    const { latest, unmount } = await mountWithWorkspace(t, WORKSPACE, {
+      initialEmail: "a@x.com",
+      onInvitationsChanged: () => {
+        changes += 1;
+      },
+    });
+
+    await React.act(async () => latest().onSend());
+    await unmount();
+
+    assert.equal(changes, 0, kind);
+  }
+});

@@ -260,12 +260,33 @@ test("inviting reloads the list and closing the dialog afterwards opens Invitati
   await React.act(async () => propsOf(addButton).onClick());
   assert.equal(globalThis.__dialogProps.open, true);
 
-  await React.act(async () => globalThis.__dialogProps.onInvited(["new@example.com"]));
+  await React.act(async () => {
+    globalThis.__dialogProps.onInvited(["new@example.com"]);
+    globalThis.__dialogProps.onInvitationsChanged();
+  });
   assert.equal(globalThis.__reloadCalls, 1);
   await React.act(async () => globalThis.__dialogProps.onOpenChange(false));
 
   assert.ok(findNode(container, (node) => node.getAttribute?.("data-tab-panel") === "invitations"));
   assert.equal(localStorage.getItem("settings.workspacePeopleTab"), '"invitations"');
+});
+
+test("a send that found invitations already there reloads the list and keeps the current tab", async (t) => {
+  const Section = await loadSection(t);
+  const container = await mount(t, Section, ADMIN);
+
+  const addButton = findNode(
+    container,
+    (node) => node.getAttribute?.("title") === "settingsPage.workspace.people.addLabel"
+  );
+  await React.act(async () => propsOf(addButton).onClick());
+
+  await React.act(async () => globalThis.__dialogProps.onInvitationsChanged());
+  assert.equal(globalThis.__reloadCalls, 1);
+  await React.act(async () => globalThis.__dialogProps.onOpenChange(false));
+
+  assert.ok(findNode(container, (node) => node.getAttribute?.("data-tab-panel") === "members"));
+  assert.equal(localStorage.getItem("settings.workspacePeopleTab"), '"members"');
 });
 
 test("closing the dialog without inviting anyone keeps the current tab", async (t) => {
