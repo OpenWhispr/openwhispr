@@ -50,6 +50,8 @@ export interface OrgPolicy {
      */
     memoryEnabled?: boolean;
   };
+  /** Absent on older servers; absent means automatic. Unknown strings suppress auto-start. */
+  meetings?: { transcriptionStart?: string };
   sharing: {
     externalLinkSharing: ExternalSharingMode;
   };

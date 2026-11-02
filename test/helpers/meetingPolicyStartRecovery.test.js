@@ -4,6 +4,52 @@ const { EventEmitter } = require("node:events");
 const Module = require("node:module");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 
+test("suppressed automatic requests finish once without restoring layout; only hotkey bypasses", async () => {
+  const { handleMeetingRecordingRequest } =
+    await import("../../src/helpers/meetingRecordingRequest.ts");
+  for (const trigger of [undefined, "calendar-join", "manual", "future", "hotkey"]) {
+    const calls = [];
+    await handleMeetingRecordingRequest({
+      args: { noteId: 1, noteTitle: "Meeting", folderId: null, autoEndEligible: true },
+      trigger,
+      canAutoStart: () => false,
+      startRecording: async () => {
+        calls.push("record");
+        return true;
+      },
+      restoreFromMeetingMode: () => calls.push("restore"),
+      onSuppressed: () => calls.push("note-only"),
+      onHandled: () => calls.push("handled"),
+    });
+    assert.deepEqual(
+      calls,
+      trigger === "hotkey" ? ["record", "handled"] : ["handled", "note-only"]
+    );
+  }
+});
+
+test("policy refusal during preparation cannot replay or restore an automatic request", async () => {
+  const { handleMeetingRecordingRequest } =
+    await import("../../src/helpers/meetingRecordingRequest.ts");
+  let allowed = true;
+  const calls = [];
+  await handleMeetingRecordingRequest({
+    args: { noteId: 1, noteTitle: "Meeting", folderId: null, autoEndEligible: true },
+    canAutoStart: () => allowed,
+    startRecording: async (args) => {
+      allowed = false;
+      assert.equal(args.canAutoStart(), false);
+      allowed = true;
+      assert.equal(args.canAutoStart(), false);
+      return false;
+    },
+    restoreFromMeetingMode: () => calls.push("restore"),
+    onSuppressed: () => calls.push("note-only"),
+    onHandled: () => calls.push("handled"),
+  });
+  assert.deepEqual(calls, ["handled", "note-only"]);
+});
+
 function loadMeetingDetectionEngine() {
   const originalLoad = Module._load;
   Module._load = function loadWithMeetingMocks(request, parent, isMain) {
@@ -165,4 +211,34 @@ test("a repeated policy denial re-notifies the toast effect", async (t) => {
     first.errorNonce + 1,
     "an identical repeated denial must still produce a distinct notification"
   );
+});
+
+test("a suppressed request is consumed before delayed IPC so remount cannot replay it", async () => {
+  const { handleMeetingRecordingRequest } =
+    await import("../../src/helpers/meetingRecordingRequest.ts");
+  const notification = Promise.withResolvers();
+  let requestPending = true;
+  let allowed = false;
+  let captures = 0;
+  const request = () =>
+    handleMeetingRecordingRequest({
+      args: { noteId: 1, noteTitle: "Meeting", folderId: null, autoEndEligible: true },
+      canAutoStart: () => allowed,
+      startRecording: async () => {
+        captures++;
+        return true;
+      },
+      onSuppressed: () => notification.promise,
+      onHandled: () => {
+        requestPending = false;
+      },
+      restoreFromMeetingMode: () => assert.fail("unexpected layout restoration"),
+    });
+  const pending = request();
+  allowed = true;
+  // A fresh view only receives the parent's still-pending request.
+  if (requestPending) await request();
+  notification.resolve();
+  await pending;
+  assert.equal(captures, 0);
 });

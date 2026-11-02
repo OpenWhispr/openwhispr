@@ -60,6 +60,8 @@ class MeetingDetectionEngine {
     this.preferences = { processDetection: false, audioDetection: false };
     this._userRecording = false;
     this._meetingModeActive = false;
+    this._meetingNoteSession = null;
+    this._meetingNoteTimer = null;
     this._notificationQueue = [];
     this._postRecordingCooldown = null;
     this._recordingSession = null;
@@ -248,6 +250,7 @@ class MeetingDetectionEngine {
   }) {
     if (this._recordingSession) this._deactivateAutoEnd();
 
+    this._clearMeetingNoteSession();
     this._recordingSession = {
       sessionId,
       autoEndEligible: autoEndEligible === true,
@@ -550,15 +553,18 @@ class MeetingDetectionEngine {
     this._meetingModeActive = true;
     // Join leaves the meeting it just opened in front: an open panel updates
     // behind it instead of covering the call.
+    const noteSessionId = this._beginMeetingNoteSession(
+      note.id,
+      eventId ? owner.detection.event : null
+    );
     const navigation = await this.windowManager.queueMeetingNoteNavigation(
-      { ...owner.authorizedNote, navigationId: randomUUID() },
+      { ...owner.authorizedNote, navigationId: randomUUID(), noteSessionId },
       { owner, activate: action !== "join" }
     );
     if (!navigation.success) {
-      this._meetingModeActive = false;
+      this.closeMeetingNote(noteSessionId);
       return navigation;
     }
-    this.audioActivityDetector.resetPrompt();
     this.activeDetections.delete(owner.prompt.detectionId);
     this.windowManager.dismissMeetingNotification({ notifyEngine: false });
     return { success: true, value: null };
@@ -617,6 +623,7 @@ class MeetingDetectionEngine {
     await this.windowManager.queueMeetingNoteNavigation(
       {
         noteId: noteResult.note.id,
+        noteSessionId: this._beginMeetingNoteSession(noteResult.note.id, null),
         folderId: meetingsFolder.id,
         event,
         trigger: "hotkey",
@@ -637,6 +644,7 @@ class MeetingDetectionEngine {
     await this.windowManager.queueMeetingNoteNavigation(
       {
         noteId: existingNote.id,
+        noteSessionId: this._beginMeetingNoteSession(existingNote.id, event),
         folderId: existingNote.folder_id ?? this.databaseManager.getMeetingsFolder()?.id,
         event,
         trigger,
@@ -689,6 +697,7 @@ class MeetingDetectionEngine {
     await this.windowManager.queueMeetingNoteNavigation(
       {
         noteId: noteResult.note.id,
+        noteSessionId: this._beginMeetingNoteSession(noteResult.note.id, calEvent),
         folderId: meetingsFolder.id,
         event: calEvent,
         trigger,
@@ -772,12 +781,54 @@ class MeetingDetectionEngine {
     this.audioActivityDetector.dismiss();
   }
 
-  setMeetingModeActive(active) {
+  _beginMeetingNoteSession(noteId, event) {
+    this._clearMeetingNoteSession();
+    const id = randomUUID();
+    this._meetingNoteSession = { id, noteId, endsAt: Date.parse(event?.end_time), noteOnly: false };
+    return id;
+  }
+
+  _clearMeetingNoteSession() {
+    if (this._meetingNoteTimer) clearTimeout(this._meetingNoteTimer);
+    this._meetingNoteTimer = null;
+    this._meetingNoteSession = null;
+  }
+
+  markMeetingNoteOnly(id) {
+    const session = this._meetingNoteSession;
+    if (!session || session.id !== id || this._recordingSession || session.noteOnly) return;
+    session.noteOnly = true;
+    if (Number.isFinite(session.endsAt)) {
+      this._meetingNoteTimer = setTimeout(
+        () => this.closeMeetingNote(id),
+        Math.max(0, Math.min(session.endsAt - this._now(), 2147483647))
+      );
+      this._meetingNoteTimer.unref?.();
+    }
+  }
+
+  closeMeetingNote(id) {
+    if (!this._meetingNoteSession || this._meetingNoteSession.id !== id) return;
+    const noteOnly = this._meetingNoteSession.noteOnly;
+    this._clearMeetingNoteSession();
+    if (this._recordingSession) return;
+    this.setMeetingModeActive(false, { resetAudioPrompt: !noteOnly });
+    this._flushNotificationQueue();
+  }
+
+  closeCurrentMeetingNote() {
+    this.closeMeetingNote(this._meetingNoteSession?.id);
+  }
+
+  setMeetingModeActive(active, { resetAudioPrompt = true } = {}) {
     this._meetingModeActive = active;
     debugLogger.info("Meeting mode active state changed", { active }, "meeting");
     if (!active) {
+      this._clearMeetingNoteSession();
       // Own mic usage during meeting mode sets hasPrompted=true; reset so future detections work
-      this.audioActivityDetector.resetPrompt();
+      // A note-only session did not use our mic; retain the external call's
+      // prompt identity until the detector observes inactivity or a new call.
+      if (resetAudioPrompt) this.audioActivityDetector.resetPrompt();
     }
   }
 
@@ -829,6 +880,7 @@ class MeetingDetectionEngine {
   stop() {
     debugLogger.info("Meeting detection engine stopped", {}, "meeting");
     this._deactivateAutoEnd();
+    this._clearMeetingNoteSession();
     this._recordingSession = null;
     this.meetingProcessDetector.stop();
     this.audioActivityDetector.stop();

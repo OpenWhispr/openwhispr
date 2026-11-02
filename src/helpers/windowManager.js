@@ -1561,6 +1561,7 @@ class WindowManager {
     });
 
     this.controlPanelWindow.on("closed", () => {
+      this.meetingDetectionEngine?.closeCurrentMeetingNote?.();
       this._clearControlPanelVisibilityTimer();
       this.endOnboardingDemo();
       this.controlPanelWindow = null;
@@ -1574,7 +1575,18 @@ class WindowManager {
 
     MenuManager.setupControlPanelMenu(this.controlPanelWindow, () => this.openSettings());
 
+    // The initial load may already own a queued note; only release a replaced document's session.
+    let controlPanelDocumentLoaded = false;
+    this.controlPanelWindow.webContents.on(
+      "did-start-navigation",
+      ({ isMainFrame, isSameDocument }) => {
+        if (!controlPanelDocumentLoaded || !isMainFrame || isSameDocument) return;
+        controlPanelDocumentLoaded = false;
+        this.meetingDetectionEngine?.closeCurrentMeetingNote?.();
+      }
+    );
     this.controlPanelWindow.webContents.on("did-finish-load", () => {
+      controlPanelDocumentLoaded = true;
       // Every fresh document starts unresolved. AppRouter releases the gate
       // only after it commits the normal app, so OAuth/onboarding reloads cannot
       // expose the dictation pill, hotkeys, or popup surfaces in between.
@@ -1599,6 +1611,7 @@ class WindowManager {
     );
 
     this.controlPanelWindow.webContents.on("render-process-gone", (_event, details) => {
+      this.meetingDetectionEngine?.closeCurrentMeetingNote?.();
       if (details.reason === "crashed" || details.reason === "killed" || details.reason === "oom") {
         debugLogger.error(
           "Control panel renderer process gone",
@@ -2554,8 +2567,16 @@ class WindowManager {
   async queueMeetingNoteNavigation(payload, options) {
     if (!payload.navigationId) {
       this._pendingMeetingNoteNavigation = payload;
-      await this.createControlPanelWindow(options);
-      this.sendToControlPanel("meeting-note-navigation-pending");
+      try {
+        await this.createControlPanelWindow(options);
+        if (this._pendingMeetingNoteNavigation === payload)
+          this.sendToControlPanel("meeting-note-navigation-pending");
+      } catch (error) {
+        if (this._pendingMeetingNoteNavigation === payload)
+          this._pendingMeetingNoteNavigation = null;
+        this.meetingDetectionEngine?.closeMeetingNote?.(payload.noteSessionId);
+        throw error;
+      }
       return;
     }
     if (!this.isMeetingNotificationOwner(options.owner))
@@ -2622,6 +2643,8 @@ class WindowManager {
 
   _settleMeetingNavigation(operation, result) {
     if (this._meetingNavigationOperation !== operation) return;
+    if (!result.success)
+      this.meetingDetectionEngine?.closeMeetingNote?.(operation.payload.noteSessionId);
     this._meetingNavigationOperation = null;
     clearTimeout(operation.timer);
     operation.panel?.removeListener("closed", operation.onClose);

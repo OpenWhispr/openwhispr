@@ -262,16 +262,20 @@ const requestSystemAudioDisplayStream = async (mode: "loopback" | "portal") => {
   }
 };
 
-const prepareMeetingSystemAudioCapture = (initialSystemAudioAccess: SystemAudioAccessResult) => {
+const prepareMeetingSystemAudioCapture = (
+  initialSystemAudioAccess: SystemAudioAccessResult,
+  beginCapture: () => boolean
+) => {
   const initialSystemAudioStrategy = initialSystemAudioAccess.strategy ?? "unsupported";
   const initialDisplayCaptureStrategy = isRendererSystemAudioStrategy(initialSystemAudioStrategy)
     ? initialSystemAudioStrategy
     : null;
-  const systemCapturePromise = initialDisplayCaptureStrategy
-    ? requestSystemAudioDisplayStream(
-        getDisplayCaptureModeForStrategy(initialDisplayCaptureStrategy)
-      )
-    : Promise.resolve({ stream: null, error: null });
+  const systemCapturePromise =
+    initialDisplayCaptureStrategy && beginCapture()
+      ? requestSystemAudioDisplayStream(
+          getDisplayCaptureModeForStrategy(initialDisplayCaptureStrategy)
+        )
+      : Promise.resolve({ stream: null, error: null });
 
   return {
     initialSystemAudioStrategy,
@@ -886,6 +890,7 @@ export interface StartRecordingArgs {
   expectedCount?: number | null;
   expectedCountIsExplicit?: boolean;
   autoEndEligible: boolean;
+  canAutoStart?: () => boolean;
 }
 
 // Resolves false only when workspace policy refuses the recording; every other
@@ -893,6 +898,7 @@ export interface StartRecordingArgs {
 // "accepted" so callers don't roll back UI they didn't own.
 export async function startRecording(args: StartRecordingArgs): Promise<boolean> {
   if (isRecordingFlag || isStartingFlag) return true;
+  if (args.canAutoStart && !args.canAutoStart()) return false;
   const policy = usePolicyStore.getState();
   if (!isTranscriptionContextAllowed(policy, getSettings(), "meeting")) {
     logger.warn("Meeting recording blocked by workspace policy", {}, "meeting");
@@ -917,17 +923,32 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
   }
 
   const sessionId = createMeetingRecordingSessionId();
+  let automaticStartSuppressed = false;
   await meetingRecordingStartCoordinator.runStart(sessionId, async (startOperation) => {
     if (isRecordingFlag || isStartingFlag) return;
 
     await meetingRecordingStopBarrier.waitForPendingStop();
     if (!startOperation.isCurrent() || isRecordingFlag || isStartingFlag) return;
+    if (args.canAutoStart && !args.canAutoStart()) {
+      automaticStartSuppressed = true;
+      return;
+    }
     isStartingFlag = true;
     activeRecordingSessionId = sessionId;
     const isCurrentStart = () =>
       startOperation.isCurrent() &&
       activeRecordingSessionId === sessionId &&
       isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "meeting");
+    let captureStarted = false;
+    // Native, display and mic capture can each be first. Consent remains live
+    // through their preparation waits, then stays latched for this recording.
+    const beginCapture = (): boolean => {
+      if (!captureStarted && args.canAutoStart && !args.canAutoStart())
+        automaticStartSuppressed = true;
+      if (automaticStartSuppressed || !isCurrentStart()) return false;
+      captureStarted = true;
+      return true;
+    };
 
     const initialEnabled =
       args.diarizationEnabled ??
@@ -1063,12 +1084,18 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       const initialSystemAudioAccess =
         (await (window.electronAPI?.checkSystemAudioAccess?.() ??
           Promise.resolve(DEFAULT_SYSTEM_AUDIO_ACCESS))) ?? getFallbackSystemAudioAccess();
+      if (args.canAutoStart && !args.canAutoStart()) {
+        automaticStartSuppressed = true;
+        useMeetingRecordingStore.setState({ isRecording: false, isTranscribing: false });
+        await teardownStart();
+        return;
+      }
       if (!isCurrentStart()) {
         await teardownStart();
         return;
       }
       const { initialSystemAudioStrategy, initialDisplayCaptureStrategy, systemCapturePromise } =
-        prepareMeetingSystemAudioCapture(initialSystemAudioAccess);
+        prepareMeetingSystemAudioCapture(initialSystemAudioAccess, beginCapture);
 
       // Held until main connects; capturedAt keeps main's timeline on capture time.
       const pendingMicChunks: { chunk: ArrayBuffer; capturedAt: number }[] = [];
@@ -1079,11 +1106,8 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         if (preparePromise) {
           logger.debug("Waiting for in-flight prepare to finish...", {}, "meeting");
           await preparePromise;
-          if (!isCurrentStart()) {
-            return;
-          }
         }
-
+        if (!beginCapture()) return;
         startOperation.markMainStartAttempted();
         return window.electronAPI?.meetingTranscriptionStart?.({
           ...getMeetingTranscriptionOptions(),
@@ -1096,7 +1120,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       })();
       const micCapturePromise = getMeetingMicConstraints()
         .then(async (constraints) => {
-          if (!isCurrentStart()) return null;
+          if (!beginCapture()) return null;
           try {
             return await navigator.mediaDevices.getUserMedia(constraints);
           } catch (err) {
@@ -1206,6 +1230,11 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
 
       if (systemCaptureOutcome.status === "fulfilled") {
         setupSystemCaptureResult = systemCaptureOutcome.value;
+      }
+      if (automaticStartSuppressed) {
+        useMeetingRecordingStore.setState({ isRecording: false, isTranscribing: false });
+        await teardownStart();
+        return;
       }
       if (startOutcome.status === "rejected") throw startOutcome.reason;
       if (micOutcome.status === "rejected") throw micOutcome.reason;
@@ -1736,7 +1765,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       await teardownStart();
     }
   });
-  return true;
+  return !automaticStartSuppressed;
 }
 
 // Writes the live segments to the recording's note, serialized exactly as the

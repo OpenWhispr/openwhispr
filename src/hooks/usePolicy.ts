@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
+import { useAuth } from "./useAuth";
 import { useShallow } from "zustand/react/shallow";
 import { usePolicyStore } from "../stores/policyStore";
 import { selectPolicyEffectiveSettings, useSettingsStore } from "../stores/settingsStore";
@@ -8,6 +9,7 @@ import {
   isModeAllowedByPolicy,
   isTranscriptionSelectionAllowed,
   isAudioFeatureAllowed,
+  isMeetingAutoTranscriptionAllowed,
   reconcilePolicyModeSelection,
   type PolicyDecisionSnapshot,
   type TranscriptionPolicyContext,
@@ -21,6 +23,25 @@ export function usePolicySnapshot(): PolicyDecisionSnapshot {
   const policy = usePolicyStore((state) => state.policy);
   const appVersion = usePolicyStore((state) => state.appVersion);
   return useMemo(() => ({ status, policy, appVersion }), [status, policy, appVersion]);
+}
+
+export function useMeetingAutoTranscriptionAllowed(): boolean {
+  const snapshot = usePolicySnapshot();
+  const { isLoaded, isSignedIn } = useAuth();
+  return isLoaded && isMeetingAutoTranscriptionAllowed(snapshot, isSignedIn);
+}
+
+/** Pending navigation must read current policy and auth, not its original render. */
+export function useMeetingAutoTranscriptionCheck(): () => boolean {
+  const { isLoaded, isSignedIn } = useAuth();
+  const auth = useRef({ isLoaded, isSignedIn });
+  auth.current = { isLoaded, isSignedIn };
+  return useCallback(
+    () =>
+      auth.current.isLoaded &&
+      isMeetingAutoTranscriptionAllowed(usePolicyStore.getState(), auth.current.isSignedIn),
+    []
+  );
 }
 
 /** Reactive to both stores — updates when the policy or the relevant settings change. */

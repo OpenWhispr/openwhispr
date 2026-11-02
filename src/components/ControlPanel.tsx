@@ -38,7 +38,9 @@ import {
 import { usePolicyStore } from "../stores/policyStore";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import type { EnterpriseAudioTestLink } from "../types/enterpriseAudio";
-import { usePolicySnapshot } from "../hooks/usePolicy";
+import { usePolicySnapshot, useMeetingAutoTranscriptionCheck } from "../hooks/usePolicy";
+import { handleMeetingRecordingRequest } from "../helpers/meetingRecordingRequest";
+import { useMeetingNoteSession } from "../hooks/useMeetingNoteSession";
 import {
   isAgentAllowed,
   isAudioFeatureAllowed,
@@ -173,6 +175,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     noteId: number;
     folderId: number | null;
     event: any;
+    trigger?: string;
+    noteSessionId?: string;
   } | null>(null);
   // Try now and Create with assistant open a chat; Open skill on a chat's card opens the skill.
   const [skillChatRequest, setSkillChatRequest] = useState<SkillChatRequest | null>(null);
@@ -428,6 +432,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
 
   // A ref, not a per-run flag: StrictMode's remount must not cancel the first drain.
   const meetingNavigationMounted = useRef(false);
+  const canAutoStartMeeting = useMeetingAutoTranscriptionCheck();
+  const meetingNoteSession = useMeetingNoteSession(activeView, activeNoteId);
   const recordingIdentityRef = useRef({ user, t });
   recordingIdentityRef.current = { user, t };
   useEffect(() => {
@@ -448,22 +454,42 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           () => import("./notes/PersonalNotesView"),
           (note) => {
             const { user: recordingUser, t: translate } = recordingIdentityRef.current;
-            void startRecordingForNote(note, recordingRecorderName(note, recordingUser, translate))
-              .then((accepted) => {
-                if (!accepted) void window.electronAPI?.restoreFromMeetingMode?.();
-              })
-              .catch((error) =>
-                logger.warn(
-                  "Failed to start notification recording",
-                  { error: String(error) },
-                  "meeting"
-                )
-              );
+            if (data.noteSessionId)
+              meetingNoteSession.current = { id: data.noteSessionId, noteId: note.id };
+            void handleMeetingRecordingRequest({
+              args: {
+                noteId: note.id,
+                noteTitle: note.title,
+                folderId: note.folder_id,
+                autoEndEligible: true,
+              },
+              canAutoStart: canAutoStartMeeting,
+              startRecording: (args) =>
+                startRecordingForNote(
+                  note,
+                  recordingRecorderName(note, recordingUser, translate),
+                  args.canAutoStart
+                ),
+              restoreFromMeetingMode: () => window.electronAPI?.restoreFromMeetingMode?.(),
+              onSuppressed: () =>
+                data.noteSessionId
+                  ? window.electronAPI?.meetingNoteOpenedWithoutRecording?.(data.noteSessionId)
+                  : undefined,
+              onHandled: () => {},
+            }).catch((error) =>
+              logger.warn(
+                "Failed to start notification recording",
+                { error: String(error) },
+                "meeting"
+              )
+            );
           }
         );
         return;
       }
       if (!isCurrent()) return;
+      if (data.noteSessionId)
+        meetingNoteSession.current = { id: data.noteSessionId, noteId: data.noteId };
       setActiveFolderId(data.folderId);
       setActiveNoteId(data.noteId);
       setActiveView("personal-notes");
@@ -471,6 +497,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         noteId: data.noteId,
         folderId: data.folderId,
         event: data.event,
+        trigger: data.trigger,
+        noteSessionId: data.noteSessionId,
       });
       void initializeNotes(null, 50, data.folderId);
       if (
@@ -491,7 +519,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       meetingNavigationMounted.current = false;
       cleanup?.();
     };
-  }, []);
+  }, [canAutoStartMeeting, meetingNoteSession]);
 
   useEffect(() => {
     const drain = async () => {

@@ -5,6 +5,9 @@ interface MeetingRecordingRequestOptions {
   startRecording: (args: StartRecordingArgs) => Promise<boolean>;
   restoreFromMeetingMode: () => Promise<void> | void;
   onHandled: () => void;
+  trigger?: string;
+  canAutoStart?: () => boolean;
+  onSuppressed?: () => Promise<void> | void;
 }
 
 export async function handleMeetingRecordingRequest({
@@ -12,11 +15,38 @@ export async function handleMeetingRecordingRequest({
   startRecording,
   restoreFromMeetingMode,
   onHandled,
+  trigger,
+  canAutoStart,
+  onSuppressed,
 }: MeetingRecordingRequestOptions): Promise<void> {
-  try {
-    const accepted = await startRecording(args);
-    if (!accepted) await restoreFromMeetingMode();
-  } finally {
+  let suppressed = false;
+  let handled = false;
+  const finish = (): void => {
+    if (handled) return;
+    handled = true;
     onHandled();
+  };
+  const check =
+    trigger === "hotkey" || !canAutoStart
+      ? undefined
+      : (): boolean => {
+          suppressed ||= !canAutoStart();
+          return !suppressed;
+        };
+  try {
+    if (check && !check()) {
+      finish();
+      await onSuppressed?.();
+      return;
+    }
+    const accepted = await startRecording(check ? { ...args, canAutoStart: check } : args);
+    if (!accepted) {
+      if (suppressed) {
+        finish();
+        await onSuppressed?.();
+      } else await restoreFromMeetingMode();
+    }
+  } finally {
+    finish();
   }
 }

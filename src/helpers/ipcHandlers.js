@@ -13389,6 +13389,22 @@ class IPCHandlers {
     ipcMain.handle("confirm-meeting-note-navigation", (event, navigationId, status) =>
       this.windowManager.confirmMeetingNoteNavigation(event.sender, navigationId, status)
     );
+    ipcMain.handle("meeting-note-opened-without-recording", (event, id) => {
+      if (
+        event.sender !== this.windowManager.controlPanelWindow?.webContents ||
+        typeof id !== "string"
+      )
+        return;
+      this.meetingDetectionEngine?.markMeetingNoteOnly(id);
+    });
+    ipcMain.handle("meeting-note-closed", (event, id) => {
+      if (
+        event.sender !== this.windowManager.controlPanelWindow?.webContents ||
+        typeof id !== "string"
+      )
+        return;
+      this.meetingDetectionEngine?.closeMeetingNote(id);
+    });
 
     ipcMain.handle("join-calendar-meeting", async (_event, eventId) => {
       try {

@@ -8,7 +8,7 @@ import {
   useActiveContext,
 } from "../stores/noteStore";
 import { startRecording, useMeetingRecordingStore } from "../stores/meetingRecordingStore";
-import { useTranscriptionContextAllowed } from "./usePolicy";
+import { useMeetingAutoTranscriptionCheck, useTranscriptionContextAllowed } from "./usePolicy";
 import { parseSeedSegments } from "../utils/parseTranscriptSegments";
 import { isExplicitSpeakerCount, resolveExpectedSpeakerCount } from "../utils/participants";
 import { isMeetingAutoEndEligible } from "../helpers/meetingRecordingSession";
@@ -16,7 +16,8 @@ import { isMeetingAutoEndEligible } from "../helpers/meetingRecordingSession";
 /** Start a meeting recording seeded with the note's transcript and speaker setup. */
 export function startRecordingForNote(
   note: NoteItem | null,
-  recorderName?: string
+  recorderName?: string,
+  canAutoStart?: () => boolean
 ): Promise<boolean> {
   return startRecording({
     noteId: note?.id ?? null,
@@ -28,6 +29,7 @@ export function startRecordingForNote(
     expectedCount: resolveExpectedSpeakerCount(note),
     expectedCountIsExplicit: isExplicitSpeakerCount(note?.expected_speaker_count),
     autoEndEligible: isMeetingAutoEndEligible(note),
+    canAutoStart,
   });
 }
 
@@ -40,6 +42,7 @@ export function useCreateNote() {
   const activeContext = useActiveContext();
   const isRecording = useMeetingRecordingStore((s) => s.isRecording);
   const recordingAllowed = useTranscriptionContextAllowed("meeting");
+  const canAutoStart = useMeetingAutoTranscriptionCheck();
 
   const createNoteIn = useCallback(
     async (spaceId: number | null, folderId: number | null) => {
@@ -56,10 +59,11 @@ export function useCreateNote() {
       setActiveContext(result.note.space_id, result.note.folder_id);
       revealContainer(result.note.space_id, result.note.folder_id);
       setActiveNoteId(result.note.id);
-      // A new note is a recording waiting to happen: start it unless one is already live.
-      if (recordingAllowed && !isRecording) void startRecordingForNote(result.note);
+      if (recordingAllowed && !isRecording && canAutoStart()) {
+        void startRecordingForNote(result.note, undefined, canAutoStart);
+      }
     },
-    [t, recordingAllowed, isRecording]
+    [t, recordingAllowed, isRecording, canAutoStart]
   );
 
   const createNote = useCallback(

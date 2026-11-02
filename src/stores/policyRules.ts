@@ -60,6 +60,18 @@ export function isPolicyActionAllowed(state: PolicyDecisionSnapshot): boolean {
   return compareAppVersions(state.appVersion, state.policy.minAppVersion) >= 0;
 }
 
+/** A signed-in window must resolve policy before treating note navigation as consent. */
+export function isMeetingAutoTranscriptionAllowed(
+  state: PolicyDecisionSnapshot,
+  isSignedIn: boolean
+): boolean {
+  if (state.status === "unmanaged") return true;
+  if (state.status === "idle") return !isSignedIn;
+  if (!isPolicyActionAllowed(state)) return false;
+  const policy = managedPolicy(state);
+  return policy !== null && (policy.meetings?.transcriptionStart ?? "automatic") === "automatic";
+}
+
 /** Whether the org's minimum app version blocks this build (drives the update banner). */
 export function isUpdateRequiredByOrg(state: PolicyDecisionSnapshot): boolean {
   const minAppVersion = managedPolicy(state)?.minAppVersion;

@@ -186,6 +186,57 @@ function createJoinDatabase(ownNote) {
   return { databaseManager, lookups, saved };
 }
 
+test("a note-only meeting releases detection on close without restoring layout", async () => {
+  const { engine, meetingNavigations, shown, windowManager } = createEngine();
+  engine.databaseManager = createJoinDatabase({ id: 41, folder_id: 7 }).databaseManager;
+  windowManager.restoreFromMeetingMode = () => assert.fail("note-only cleanup changed layout");
+  await engine.joinCalendarMeeting("event-1");
+  const id = meetingNavigations[0].noteSessionId;
+  assert.equal(typeof id, "string");
+  engine.markMeetingNoteOnly(id);
+  engine.closeMeetingNote(id);
+  assert.equal(engine._meetingModeActive, false);
+  engine.handleCalendarReminder({ id: "next", summary: "Next" });
+  assert.equal(shown.length, 1);
+  engine.stop();
+});
+
+test("note-only calendar deadlines release only their own session", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const { engine, meetingNavigations } = createEngine();
+  engine.databaseManager = createJoinDatabase({ id: 41, folder_id: 7 }).databaseManager;
+  engine.databaseManager.getCalendarEventById = (id) => ({
+    id,
+    end_time: new Date(Date.now() + 1000).toISOString(),
+  });
+  await engine.joinCalendarMeeting("first");
+  const first = meetingNavigations[0].noteSessionId;
+  engine.markMeetingNoteOnly(first);
+  t.mock.timers.tick(500);
+  await engine.joinCalendarMeeting("second");
+  const second = meetingNavigations[1].noteSessionId;
+  engine.markMeetingNoteOnly(second);
+  engine.closeMeetingNote(first);
+  t.mock.timers.tick(500);
+  assert.equal(engine._meetingModeActive, true);
+  t.mock.timers.tick(500);
+  assert.equal(engine._meetingModeActive, false);
+  engine.stop();
+});
+
+test("note-only cleanup cannot release an established recording", async () => {
+  const { engine, meetingNavigations } = createEngine();
+  engine.databaseManager = createJoinDatabase({ id: 41, folder_id: 7 }).databaseManager;
+  await engine.joinCalendarMeeting("event");
+  const id = meetingNavigations[0].noteSessionId;
+  engine.markMeetingNoteOnly(id);
+  engine._recordingSession = { sessionId: "live", noteId: 41 };
+  engine.closeMeetingNote(id);
+  assert.equal(engine._meetingModeActive, true);
+  assert.equal(engine._recordingSession.sessionId, "live");
+  engine.stop();
+});
+
 test("joining a calendar meeting resumes the user's own note for the event", async () => {
   const { engine, meetingNavigations } = createEngine();
   const db = createJoinDatabase({ id: 5, folder_id: 3 });
@@ -671,4 +722,84 @@ test("a card closing on its own during a dictation holds the queue until the dic
   engine.setUserRecording(false);
   t.mock.timers.tick(2500);
   assert.equal(shown.length, 2);
+});
+
+test("recording ownership cancels a note-only calendar deadline and stale closes", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const { engine, meetingNavigations } = createEngine();
+  engine.databaseManager = createJoinDatabase({ id: 41, folder_id: 7 }).databaseManager;
+  engine.databaseManager.getCalendarEventById = (id) => ({
+    id,
+    end_time: new Date(2000).toISOString(),
+  });
+  await engine.joinCalendarMeeting("event");
+  const id = meetingNavigations[0].noteSessionId;
+  engine.markMeetingNoteOnly(id);
+  await engine.beginRecordingSession({
+    sessionId: "recording",
+    autoEndEligible: false,
+    noteId: 41,
+  });
+  t.mock.timers.tick(1000);
+  engine.closeMeetingNote(id);
+  assert.equal(engine._meetingModeActive, true);
+  assert.equal(engine._recordingSession.sessionId, "recording");
+  assert.equal(engine._meetingNoteTimer, null);
+  engine.stop();
+});
+
+test("an ended note-only calendar event releases immediately and shutdown clears deadlines", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const { engine, meetingNavigations } = createEngine();
+  engine.databaseManager = createJoinDatabase({ id: 41, folder_id: 7 }).databaseManager;
+  engine.databaseManager.getCalendarEventById = (id) => ({
+    id,
+    end_time: new Date(500).toISOString(),
+  });
+  await engine.joinCalendarMeeting("past");
+  engine.markMeetingNoteOnly(meetingNavigations[0].noteSessionId);
+  t.mock.timers.tick(1);
+  assert.equal(engine._meetingModeActive, false);
+  engine.databaseManager.getCalendarEventById = (id) => ({
+    id,
+    end_time: new Date(5000).toISOString(),
+  });
+  await engine.joinCalendarMeeting("next");
+  engine.markMeetingNoteOnly(meetingNavigations[1].noteSessionId);
+  engine.stop();
+  assert.equal(engine._meetingNoteSession, null);
+  assert.equal(engine._meetingNoteTimer, null);
+});
+
+test("closing a note-only meeting preserves the current audio prompt until a later call", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const AudioActivityDetector = require("../../src/helpers/audioActivityDetector");
+  const detector = new AudioActivityDetector(() => []);
+  let active = true;
+  detector._isMicActive = async () => active;
+  const { engine, shown } = createEngine();
+  engine.preferences.audioDetection = true;
+  engine.audioActivityDetector = detector;
+  detector.on("sustained-audio-detected", (data) =>
+    engine._handleDetection("audio", "sustained-audio", data)
+  );
+  await detector._check();
+  await detector._check();
+  assert.equal(shown.length, 1);
+  // The member opened this prompt's note; no recording takes ownership.
+  const id = engine._beginMeetingNoteSession(41, null);
+  engine._meetingModeActive = true;
+  engine.activeDetections.delete("audio:sustained-audio");
+  engine.markMeetingNoteOnly(id);
+  engine.closeMeetingNote(id);
+  await detector._check();
+  assert.equal(shown.length, 1, "the same live call must not prompt again");
+  active = false;
+  await detector._check();
+  t.mock.timers.tick(60000);
+  active = true;
+  await detector._check();
+  await detector._check();
+  assert.equal(shown.length, 2, "a later call still prompts without a dismissal cooldown");
+  engine.stop();
 });
