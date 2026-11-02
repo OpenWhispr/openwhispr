@@ -3932,6 +3932,10 @@
     "expand": "Expandir barra lateral"
   },
   "chat": {
+    "answering": "Respondendo…",
+    "conversationCreateFailed": "Não foi possível iniciar a conversa. Sua pergunta está de volta em Nova conversa.",
+    "messageSaveFailed": "Não foi possível salvar esta mensagem. Tente novamente.",
+    "conversationLoadFailed": "Não foi possível carregar esta conversa. Tente novamente.",
     "newChat": "Novo chat",
     "search": "Pesquisar conversas...",
     "archived": "Arquivadas",

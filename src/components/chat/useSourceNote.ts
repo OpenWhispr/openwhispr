@@ -38,8 +38,8 @@ interface UseSourceNoteResult {
 export function useSourceNote(noteId: number | null | undefined): UseSourceNoteResult {
   const { user, isLoaded: authLoaded } = useAuth();
   const userId = user?.id ?? null;
-  const targetRef = useRef({ noteId, userId, authLoaded });
-  targetRef.current = { noteId, userId, authLoaded };
+  const targetRef = useRef({ userId, authLoaded });
+  targetRef.current = { userId, authLoaded };
   const [loaded, setLoaded] = useState<LoadedNote | null>(null);
   // Bumped when the note changes elsewhere (an assistant edit, a sync pull, a delete).
   const [revision, setRevision] = useState(0);
@@ -147,7 +147,6 @@ export function useSourceNote(noteId: number | null | undefined): UseSourceNoteR
         const target = targetRef.current;
         if (
           revisionRef.current !== loaded.revision ||
-          target.noteId !== loaded.noteId ||
           target.userId !== loaded.userId ||
           !target.authLoaded
         ) {

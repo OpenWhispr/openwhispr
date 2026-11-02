@@ -61,6 +61,7 @@ function createContext(calls) {
     },
     window: { location: { reload: () => calls.push("reloaded") } },
     setIsSigningOut: () => {},
+    resetChatForAccountChange: () => calls.push("chat reset"),
     logger: { error: (message) => calls.push(`error: ${message}`) },
     showAlertDialog: () => calls.push("alert"),
     t: (key) => key,
@@ -78,7 +79,13 @@ test("sign-out ends a live meeting before the account scope is cleared", async (
 
   await performSignOut();
 
-  assert.deepEqual(calls, ["meeting stopped", "team spaces purged", "signed out", "reloaded"]);
+  assert.deepEqual(calls, [
+    "chat reset",
+    "meeting stopped",
+    "team spaces purged",
+    "signed out",
+    "reloaded",
+  ]);
 });
 
 test("sign-out asks first only when it would end a meeting recording", () => {

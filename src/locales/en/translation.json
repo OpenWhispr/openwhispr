@@ -3204,6 +3204,10 @@
     }
   },
   "chat": {
+    "answering": "Answering…",
+    "conversationCreateFailed": "Couldn’t start the conversation. Your question is back in New chat.",
+    "messageSaveFailed": "Couldn’t save this message. Please try again.",
+    "conversationLoadFailed": "Couldn’t load this conversation. Please try again.",
     "newChat": "New chat",
     "search": "Search conversations...",
     "archived": "Archived",

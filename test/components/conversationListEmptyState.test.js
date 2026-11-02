@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const React = require("react");
+const { chat } = require("../../src/locales/en/translation.json");
 const { createRoot } = require("react-dom/client");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 const { installInteractiveDom } = require("../lib/interactiveDom");
@@ -54,11 +55,11 @@ async function renderConversationList(t, { active, archived }) {
 
 test("with every chat archived, the list says so instead of showing nothing", async (t) => {
   const container = await renderConversationList(t, { active: [], archived: [ARCHIVED_CHAT] });
-  assert.match(container.textContent, /chat\.allArchived/);
-  assert.doesNotMatch(container.textContent, /chat\.noConversations/);
+  assert.ok(container.textContent.includes(chat.allArchived));
+  assert.equal(container.textContent.includes(chat.noConversations), false);
 });
 
 test("with no chats at all, the list shows its empty state", async (t) => {
   const container = await renderConversationList(t, { active: [], archived: [] });
-  assert.match(container.textContent, /chat\.noConversations/);
+  assert.ok(container.textContent.includes(chat.noConversations));
 });

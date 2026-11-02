@@ -3204,6 +3204,10 @@
     }
   },
   "chat": {
+    "answering": "Antwort wird erstellt…",
+    "conversationCreateFailed": "Die Unterhaltung konnte nicht gestartet werden. Deine Frage ist wieder unter „Neuer Chat“.",
+    "messageSaveFailed": "Diese Nachricht konnte nicht gespeichert werden. Bitte versuche es erneut.",
+    "conversationLoadFailed": "Diese Unterhaltung konnte nicht geladen werden. Bitte versuche es erneut.",
     "newChat": "Neuer Chat",
     "search": "Unterhaltungen suchen...",
     "archived": "Archiviert",

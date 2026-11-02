@@ -3204,6 +3204,10 @@
     }
   },
   "chat": {
+    "answering": "Réponse en cours…",
+    "conversationCreateFailed": "Impossible de démarrer la conversation. Votre question est de retour dans Nouveau chat.",
+    "messageSaveFailed": "Impossible d’enregistrer ce message. Veuillez réessayer.",
+    "conversationLoadFailed": "Impossible de charger cette conversation. Veuillez réessayer.",
     "newChat": "Nouveau chat",
     "search": "Rechercher des conversations...",
     "archived": "Archivées",
