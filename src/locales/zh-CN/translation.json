@@ -3094,6 +3094,7 @@
       "transcriptEmptyDescription": "开始录音后，所说的一切都会显示在这里。",
       "startRecording": "开始录制",
       "generateSummary": "生成 AI 摘要",
+      "generateWithTemplate": "使用{{template}}生成",
       "startWriting": "开始书写...",
       "staleIndicator": "内容在增强后已更改",
       "live": "实时",
@@ -3388,6 +3389,11 @@
       "applied": "已使用 {{name}} 更新 AI 摘要"
     },
     "templates": {
+      "defaultLabel": "默认摘要模板",
+      "defaultHint": "会议结束后的摘要按钮将使用此模板。",
+      "defaultBadge": "默认",
+      "saveBeforeDefault": "保存此模板后即可将其设为默认模板。",
+      "defaultSaveFailed": "无法更新默认模板，请重试。",
       "tab": "模板",
       "managerTitle": "模板和操作",
       "manage": "管理模板...",

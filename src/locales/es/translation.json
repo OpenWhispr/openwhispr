@@ -3146,6 +3146,7 @@
       "transcriptEmptyDescription": "Inicia una grabación y todo lo que se diga aparecerá aquí.",
       "startRecording": "Empezar a grabar",
       "generateSummary": "Generar resumen con IA",
+      "generateWithTemplate": "Generar con {{template}}",
       "startWriting": "Comienza a escribir...",
       "staleIndicator": "El contenido ha cambiado desde la mejora",
       "live": "En vivo",
@@ -3440,6 +3441,11 @@
       "applied": "Resumen con IA actualizado con {{name}}"
     },
     "templates": {
+      "defaultLabel": "Plantilla de resumen predeterminada",
+      "defaultHint": "Usar esta plantilla para el botón de resumen después de una reunión.",
+      "defaultBadge": "Predeterminada",
+      "saveBeforeDefault": "Guarda esta plantilla para establecerla como predeterminada.",
+      "defaultSaveFailed": "No se pudo actualizar la plantilla predeterminada. Inténtalo de nuevo.",
       "tab": "Plantillas",
       "managerTitle": "Plantillas y acciones",
       "manage": "Gestionar plantillas...",

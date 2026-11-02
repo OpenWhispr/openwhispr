@@ -3094,6 +3094,7 @@
       "transcriptEmptyDescription": "Inicie uma gravação e tudo o que for dito aparecerá aqui.",
       "startRecording": "Começar a gravar",
       "generateSummary": "Gerar resumo com IA",
+      "generateWithTemplate": "Gerar com {{template}}",
       "startWriting": "Comece a escrever...",
       "staleIndicator": "O conteúdo mudou desde o aprimoramento",
       "live": "Ao vivo",
@@ -3388,6 +3389,11 @@
       "applied": "Resumo com IA atualizado com {{name}}"
     },
     "templates": {
+      "defaultLabel": "Modelo de resumo padrão",
+      "defaultHint": "Usar este modelo para o botão de resumo após uma reunião.",
+      "defaultBadge": "Padrão",
+      "saveBeforeDefault": "Salve este modelo para defini-lo como padrão.",
+      "defaultSaveFailed": "Não foi possível atualizar o modelo padrão. Tente novamente.",
       "tab": "Modelos",
       "managerTitle": "Modelos e ações",
       "manage": "Gerenciar modelos...",

@@ -2643,6 +2643,7 @@
       "transcriptEmptyDescription": "ابدأ التسجيل وسيظهر هنا كل ما يُقال.",
       "startRecording": "بدء التسجيل",
       "generateSummary": "إنشاء ملخص بالذكاء الاصطناعي",
+      "generateWithTemplate": "إنشاء باستخدام {{template}}",
       "startWriting": "ابدأ الكتابة...",
       "staleIndicator": "تم تغيير المحتوى منذ التحسين",
       "live": "مباشر",
@@ -2959,6 +2960,11 @@
       "applied": "تم تحديث الملخص بالذكاء الاصطناعي باستخدام {{name}}"
     },
     "templates": {
+      "defaultLabel": "قالب الملخص الافتراضي",
+      "defaultHint": "استخدم هذا القالب لزر الملخص بعد الاجتماع.",
+      "defaultBadge": "افتراضي",
+      "saveBeforeDefault": "احفظ هذا القالب لتعيينه كقالب افتراضي.",
+      "defaultSaveFailed": "تعذّر تحديث القالب الافتراضي. حاول مرة أخرى.",
       "tab": "القوالب",
       "managerTitle": "القوالب والإجراءات",
       "manage": "إدارة القوالب...",

@@ -3094,6 +3094,7 @@
       "transcriptEmptyDescription": "開始錄音後，所說的一切都會顯示在這裡。",
       "startRecording": "開始錄製",
       "generateSummary": "產生 AI 摘要",
+      "generateWithTemplate": "使用{{template}}產生",
       "startWriting": "開始撰寫...",
       "staleIndicator": "內容在增強後已變更",
       "live": "即時",
@@ -3388,6 +3389,11 @@
       "applied": "已使用 {{name}} 更新 AI 摘要"
     },
     "templates": {
+      "defaultLabel": "預設摘要範本",
+      "defaultHint": "會議結束後的摘要按鈕將使用此範本。",
+      "defaultBadge": "預設",
+      "saveBeforeDefault": "儲存此範本後即可將其設為預設範本。",
+      "defaultSaveFailed": "無法更新預設範本，請重試。",
       "tab": "範本",
       "managerTitle": "範本與動作",
       "manage": "管理範本...",

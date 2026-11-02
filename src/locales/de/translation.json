@@ -3446,6 +3446,7 @@
       "transcriptEmptyDescription": "Starte eine Aufnahme, und alles Gesagte erscheint hier.",
       "startRecording": "Aufnahme starten",
       "generateSummary": "KI-Zusammenfassung erstellen",
+      "generateWithTemplate": "Mit {{template}} erstellen",
       "startWriting": "Schreibe los...",
       "staleIndicator": "Der Inhalt hat sich seit der Verbesserung geändert",
       "live": "Live",
@@ -3756,6 +3757,11 @@
       "applied": "KI-Zusammenfassung mit {{name}} aktualisiert"
     },
     "templates": {
+      "defaultLabel": "Standardvorlage für Zusammenfassungen",
+      "defaultHint": "Diese Vorlage für die Zusammenfassungsschaltfläche nach einem Meeting verwenden.",
+      "defaultBadge": "Standard",
+      "saveBeforeDefault": "Speichere diese Vorlage, um sie als Standard festzulegen.",
+      "defaultSaveFailed": "Die Standardvorlage konnte nicht aktualisiert werden. Versuche es erneut.",
       "tab": "Vorlagen",
       "managerTitle": "Vorlagen & Aktionen",
       "manage": "Vorlagen verwalten...",
