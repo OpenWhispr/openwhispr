@@ -1,3 +1,7 @@
+jest.mock('@/lib/transcriptAudio', () => jest.requireActual('@/lib/transcriptAudio.android'));
+jest.mock('@/store/useTranscriptStore', () =>
+  jest.requireActual('@/store/useTranscriptStore.android'),
+);
 jest.mock('@/store/useNotesStore', () => jest.requireActual('@/store/useNotesStore.android'));
 jest.mock('@/store/useDictionaryStore', () =>
   jest.requireActual('@/store/useDictionaryStore.android'),

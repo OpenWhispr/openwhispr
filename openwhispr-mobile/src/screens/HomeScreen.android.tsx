@@ -10,7 +10,7 @@ import { useFocusEffect } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
-import { useTranscriptStore } from '@/store/useTranscriptStore';
+import { useTranscriptStore } from '@/store/useTranscriptStore.android';
 import { useAppInit } from '@/hooks/useAppInit';
 import { Page, Card, Button, Row, styles } from '@/android/ui';
 import { useConfigStore } from '@/store/useConfigStore';

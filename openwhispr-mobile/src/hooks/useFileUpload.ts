@@ -240,7 +240,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
           return;
         }
         try {
-          await addFailedTranscript({
+          const failedUpload = {
             id: transcriptId,
             audioUrl: retainedAudioUrl,
             audioFileName: file.name,
@@ -249,11 +249,12 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
             inferenceRoute: provider === 'byok' ? jobRoute.inferenceRoute : undefined,
             cleanupRoute: jobRoute.cleanupRoute,
             cleanupUnavailable: jobRoute.cleanupUnavailable,
-            requestContext: 'file',
+            requestContext: 'file' as const,
             jobId: transcriptId,
             clientTranscriptionId,
             errorMessage: toFriendlyTranscriptionErrorMessage(error),
-          });
+          };
+          await addFailedTranscript(failedUpload);
         } catch (failedRowError) {
           if (__DEV__) {
             console.warn('[upload] Failed to save retryable failed transcript:', failedRowError);

@@ -1,3 +1,6 @@
+jest.mock('@/store/useTranscriptStore.android', () =>
+  jest.requireMock('@/store/useTranscriptStore'),
+);
 const mockUnassignedHistory = jest.fn(async () => []);
 jest.mock('@/services/storage/StorageService', () => ({
   StorageService: { getUnassignedTranscripts: () => mockUnassignedHistory() },
