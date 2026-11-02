@@ -161,6 +161,24 @@ test("applyChineseScript keeps 么 in Simplified text", async () => {
   assert.equal(await applyChineseScript("這是繁體中文軟體", "simplified"), "这是繁体中文软件");
 });
 
+test("Simplified conversion preserves sentence-final 么 in explicit and auto modes", async () => {
+  const { applyChineseScript, resolveChineseScriptTarget } = await load();
+  for (const text of ["是么", "对么", "可以么"]) {
+    for (const preferredLanguage of ["zh-CN", "auto"]) {
+      const target = resolveChineseScriptTarget(preferredLanguage, "simplified", text);
+      assert.equal(target, "simplified", `${preferredLanguage}: ${text}`);
+      assert.equal(await applyChineseScript(text, target), text, `${preferredLanguage}: ${text}`);
+    }
+  }
+});
+
+test("applyChineseScript preserves legitimate 幺 alongside 么", async () => {
+  const { applyChineseScript } = await load();
+  for (const text of ["幺蛾子", "幺九", "为什么会有幺蛾子"]) {
+    assert.equal(await applyChineseScript(text, "simplified"), text);
+  }
+});
+
 // On auto, short phrases like 為什麼 had no listed variant and kept their
 // Traditional characters despite the Simplified preference (#2985).
 test("auto detects 么 / 麼 phrases as Chinese", async () => {
