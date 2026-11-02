@@ -545,6 +545,10 @@ for (const [error, line] of [
   [{ kind: "cannotRemove", reason: "self" }, "workspaces.removeMembers.cannotRemoveSelf"],
   [{ kind: "failed" }, `workspaces.removeMember.failed|{"name":"${isolated("Liam")}"}`],
   [{ kind: "rateLimited" }, `workspaces.removeMember.failed|{"name":"${isolated("Liam")}"}`],
+  [
+    { kind: "directoryManaged", userIds: ["u-liam"] },
+    `workspaces.removeMembers.directoryManagedOne|{"name":"${isolated("Liam")}"}`,
+  ],
 ]) {
   test(`a ${error.kind}${error.reason ? ` ${error.reason}` : ""} failure shows its line`, async (t) => {
     const { mount } = await loadDialog(t);
@@ -562,3 +566,156 @@ for (const [error, line] of [
     assert.deepEqual(globalThis.__previewCalls, []);
   });
 }
+
+const directoryManaged = (CloudApiError, details) =>
+  new CloudApiError(
+    "Remove them in your identity provider instead",
+    409,
+    "directory_managed",
+    details
+  );
+
+test("a member the identity provider assigns is named and Remove stays disabled", async (t) => {
+  const { mount, opened, CloudApiError } = await loadDialog(t);
+  globalThis.__previewImpl = async () => {
+    throw directoryManaged(CloudApiError, { user_ids: ["u-alex"] });
+  };
+
+  const view = await mount(opened([LIAM, ALEX]));
+
+  assert.equal(view.events.at(-1).type, "previewRefused");
+  const props = globalThis.__actionDialogProps;
+  // Alex, not whoever was selected first.
+  assert.equal(
+    props.error,
+    `workspaces.removeMembers.directoryManagedOne|{"name":"${isolated("Alex")}"}`
+  );
+  assert.equal(props.primary.label, 'workspaces.removeMembers.confirm|{"count":2}');
+  assert.equal(props.primary.disabled, true);
+  assert.notEqual(props.primary.pending, true);
+  assert.equal(props.cancelLabel, "common.cancel");
+  assert.notEqual(props.busy, true);
+  assert.deepEqual(globalThis.__removeCalls, []);
+});
+
+test("a one-person selection names them when the list can't be read", async (t) => {
+  const { mount, opened, CloudApiError } = await loadDialog(t);
+  globalThis.__previewImpl = async () => {
+    throw directoryManaged(CloudApiError, {});
+  };
+
+  await mount(opened([LIAM]));
+
+  const props = globalThis.__actionDialogProps;
+  assert.equal(
+    props.error,
+    `workspaces.removeMembers.directoryManagedOne|{"name":"${isolated("Liam")}"}`
+  );
+  assert.equal(props.primary.label, "workspaces.removeMember.confirm");
+  assert.equal(props.primary.disabled, true);
+});
+
+test("a managed id outside the selection falls back to the first subject", async (t) => {
+  const { mount, opened, CloudApiError } = await loadDialog(t);
+  globalThis.__previewImpl = async () => {
+    throw directoryManaged(CloudApiError, { user_ids: ["u-someone-else"] });
+  };
+
+  await mount(opened([LIAM, ALEX]));
+
+  assert.equal(
+    globalThis.__actionDialogProps.error,
+    `workspaces.removeMembers.directoryManagedOne|{"name":"${isolated("Liam")}"}`
+  );
+});
+
+test("several are counted", async (t) => {
+  const { mount, opened, CloudApiError } = await loadDialog(t);
+  globalThis.__previewImpl = async () => {
+    throw directoryManaged(CloudApiError, { user_ids: ["u-liam", "u-alex"] });
+  };
+
+  await mount(opened([LIAM, ALEX, ZOE]));
+
+  const props = globalThis.__actionDialogProps;
+  assert.equal(props.error, 'workspaces.removeMembers.directoryManaged|{"count":2}');
+  assert.equal(props.primary.label, 'workspaces.removeMembers.confirm|{"count":3}');
+  assert.equal(props.primary.disabled, true);
+});
+
+test("a malformed list on several people counts them all", async (t) => {
+  const { mount, opened, CloudApiError } = await loadDialog(t);
+  globalThis.__previewImpl = async () => {
+    throw directoryManaged(CloudApiError, { user_ids: "nope" });
+  };
+
+  await mount(opened([LIAM, ALEX, ZOE]));
+
+  assert.equal(
+    globalThis.__actionDialogProps.error,
+    'workspaces.removeMembers.directoryManaged|{"count":3}'
+  );
+});
+
+test("the run's answer names the member and Remove stays disabled", async (t) => {
+  const { mount, opened, CloudApiError } = await loadDialog(t);
+  globalThis.__removeImpl = async () => {
+    throw directoryManaged(CloudApiError, { user_ids: ["u-alex"] });
+  };
+  const view = await mount(opened([LIAM, ALEX]));
+
+  await view.clickPrimary();
+
+  assert.equal(globalThis.__removeCalls.length, 1);
+  const props = globalThis.__actionDialogProps;
+  assert.equal(
+    props.error,
+    `workspaces.removeMembers.directoryManagedOne|{"name":"${isolated("Alex")}"}`
+  );
+  assert.equal(props.primary.label, 'workspaces.removeMembers.confirm|{"count":2}');
+  assert.equal(props.primary.disabled, true);
+  assert.equal(props.cancelLabel, "common.cancel");
+  assert.notEqual(props.busy, true);
+  assert.deepEqual(view.removed, []);
+  assert.deepEqual(globalThis.__toasts, []);
+});
+
+test("a run refused while transferring keeps the transfer label, disabled", async (t) => {
+  const { mount, opened, CloudApiError } = await loadDialog(t);
+  globalThis.__previewImpl = async () => preview([owns("u-liam")]);
+  globalThis.__removeImpl = async () => {
+    throw directoryManaged(CloudApiError, { user_ids: ["u-liam", "u-alex"] });
+  };
+  const view = await mount(opened([LIAM, ALEX]));
+
+  await view.clickPrimary();
+
+  const props = globalThis.__actionDialogProps;
+  assert.equal(props.error, 'workspaces.removeMembers.directoryManaged|{"count":2}');
+  assert.equal(props.primary.label, "workspaces.removeMembers.transferConfirm");
+  assert.equal(props.primary.disabled, true);
+});
+
+test("other preview failures still offer the plain confirm", async (t) => {
+  const { mount, opened, CloudApiError } = await loadDialog(t);
+
+  for (const failure of [
+    new CloudApiError("Server error", 500),
+    new CloudApiError("Forbidden", 403),
+    new CloudApiError("SSO", 403, "SSO_REQUIRED"),
+    new CloudApiError("Transfer required", 409, "transfer_required", { members: [] }),
+    new CloudApiError("Slow down", 429, "rate_limited"),
+    new Error("offline"),
+  ]) {
+    globalThis.__previewImpl = async () => {
+      throw failure;
+    };
+    const view = await mount(opened([LIAM, ALEX]));
+
+    assert.equal(view.events.at(-1).type, "previewFailed", failure.message);
+    const props = globalThis.__actionDialogProps;
+    assert.equal(props.error, null, failure.message);
+    assert.equal(props.primary.label, 'workspaces.removeMembers.confirm|{"count":2}');
+    assert.notEqual(props.primary.disabled, true, failure.message);
+  }
+});

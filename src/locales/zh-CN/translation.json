@@ -4962,6 +4962,8 @@
       "failed_other": "无法移除 {{count}} 名成员。他们的工作区访问权限未变。请检查网络连接后重试。",
       "ownerOne": "{{name}} 在此工作区中拥有笔记或团队空间。",
       "owners_other": "其中 {{count}} 人拥有笔记或团队空间。",
+      "directoryManagedOne": "{{name}} 由身份提供商分配。请改在身份提供商中移除。",
+      "directoryManaged_other": "其中 {{count}} 人由身份提供商分配。请改在身份提供商中移除。",
       "transferLabel": "转让给",
       "transferBody": "他们的笔记和团队空间将转给新所有者。他们将失去此工作区的访问权限。",
       "you": "{{name}}（你）",

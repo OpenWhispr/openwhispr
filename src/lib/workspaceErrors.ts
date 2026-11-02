@@ -101,6 +101,7 @@ export type RemovalError =
   | { kind: "transferRequired"; owners: OwnedMemberContent[] }
   | { kind: "invalidTransferTarget" }
   | { kind: "cannotRemove"; reason: "owner" | "self" }
+  | { kind: "directoryManaged"; userIds: string[] }
   | RowActionError;
 
 /** Maps a failed bulk removal; codes come first, then the row action kinds. */
@@ -118,6 +119,15 @@ export function classifyRemovalError(error: unknown): RemovalError {
         return { kind: "cannotRemove", reason: "owner" };
       case "cannot_remove_self":
         return { kind: "cannotRemove", reason: "self" };
+      case "directory_managed": {
+        const userIds = detailsRecord(error.details)?.user_ids;
+        return {
+          kind: "directoryManaged",
+          userIds: Array.isArray(userIds)
+            ? userIds.filter((id): id is string => typeof id === "string")
+            : [],
+        };
+      }
     }
   }
   return classifyRowActionError(error);

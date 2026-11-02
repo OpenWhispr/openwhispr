@@ -195,6 +195,34 @@ test("removal refusals map to their reasons", () => {
   });
 });
 
+test("directory_managed names who the identity provider assigns", () => {
+  assert.deepEqual(
+    classifyRemovalError(
+      new CloudApiError("Remove them in your identity provider instead", 409, "directory_managed", {
+        user_ids: ["u1", "u2"],
+      })
+    ),
+    { kind: "directoryManaged", userIds: ["u1", "u2"] }
+  );
+});
+
+test("a malformed directory_managed list keeps only string ids", () => {
+  for (const [details, userIds] of [
+    [null, []],
+    [undefined, []],
+    [{}, []],
+    [{ user_ids: "u1" }, []],
+    [{ user_ids: [1, null, { id: "u1" }] }, []],
+    [{ user_ids: ["u1", 2, null, "u3"] }, ["u1", "u3"]],
+  ]) {
+    assert.deepEqual(
+      classifyRemovalError(new CloudApiError("x", 409, "directory_managed", details)),
+      { kind: "directoryManaged", userIds },
+      JSON.stringify(details)
+    );
+  }
+});
+
 test("other removal failures fall back to row action kinds", () => {
   assert.deepEqual(classifyRemovalError(new CloudApiError("Forbidden", 403)), {
     kind: "notAllowed",

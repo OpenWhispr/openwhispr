@@ -4962,6 +4962,8 @@
       "failed_other": "無法移除 {{count}} 名成員。他們的工作區存取權限未變。請檢查網路連線後再試一次。",
       "ownerOne": "{{name}} 在此工作區中擁有筆記或團隊空間。",
       "owners_other": "其中 {{count}} 人擁有筆記或團隊空間。",
+      "directoryManagedOne": "{{name}} 由身分識別提供者指派。請改在身分識別提供者中移除。",
+      "directoryManaged_other": "其中 {{count}} 人由身分識別提供者指派。請改在身分識別提供者中移除。",
       "transferLabel": "轉讓給",
       "transferBody": "他們的筆記和團隊空間將轉給新擁有者。他們將失去此工作區的存取權限。",
       "you": "{{name}}（你）",

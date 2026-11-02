@@ -22,6 +22,8 @@ export type MemberRemovalEvent =
   // The preview's entries; only those that own something are kept.
   | { type: "previewed"; owners: unknown }
   | { type: "previewFailed" }
+  // The server refused to check at all, for a reason the removal would be refused for too.
+  | { type: "previewRefused"; error: RemovalError }
   | { type: "pickOwner"; userId: string }
   | { type: "confirm" }
   | { type: "failed"; error: RemovalError }
@@ -89,11 +91,16 @@ export function memberRemovalReducer(
     case "previewFailed":
       // The removal itself tells the dialog when someone owns content (transfer_required).
       return state.kind === "checking" ? confirmWith(state, []) : state;
+    case "previewRefused":
+      if (state.kind !== "checking") return state;
+      return { ...state, kind: "failed", owners: [], transferTo: null, error: event.error };
     case "pickOwner":
       if (state.kind !== "confirm" && state.kind !== "failed") return state;
       return { ...state, transferTo: event.userId };
     case "confirm":
       if (state.kind !== "confirm" && state.kind !== "failed") return state;
+      // Trying again can't help until the identity provider stops assigning them.
+      if (state.error?.kind === "directoryManaged") return state;
       return {
         kind: "running",
         subjects: state.subjects,

@@ -72,8 +72,14 @@ export function RemoveMembersDialog({
         const owners: unknown = preview?.members;
         dispatch(Array.isArray(owners) ? { type: "previewed", owners } : { type: "previewFailed" });
       },
-      () => {
-        if (!cancelled) dispatch({ type: "previewFailed" });
+      (error: unknown) => {
+        if (cancelled) return;
+        const failure = classifyRemovalError(error);
+        dispatch(
+          failure.kind === "directoryManaged"
+            ? { type: "previewRefused", error: failure }
+            : { type: "previewFailed" }
+        );
       }
     );
     return () => {
@@ -90,6 +96,7 @@ export function RemoveMembersDialog({
   const firstName = isolate(memberName(subjects[0]));
   const transferring = needsTransfer(state);
   const busy = state.kind === "running";
+  const managedRefusal = state.kind === "failed" && state.error?.kind === "directoryManaged";
   const candidates = ownerCandidates(roster, state);
   const newOwner = roster.find((member) => member.user_id === transferTo) ?? null;
 
@@ -154,6 +161,19 @@ export function RemoveMembersDialog({
         return error.reason === "owner"
           ? t("workspaces.removeMembers.cannotRemoveOwner")
           : t("workspaces.removeMembers.cannotRemoveSelf");
+      case "directoryManaged": {
+        if (count === 1 || error.userIds.length === 1) {
+          const managed =
+            subjects.find((subject) => subject.user_id === error.userIds[0]) ?? subjects[0];
+          return t("workspaces.removeMembers.directoryManagedOne", {
+            name: isolate(memberName(managed)),
+          });
+        }
+        // An unreadable list says nothing about who, only that the selection can't be removed.
+        return t("workspaces.removeMembers.directoryManaged", {
+          count: error.userIds.length > 0 ? error.userIds.length : count,
+        });
+      }
       // The API reports people already gone in `already_removed`, never as `gone`, and the
       // reducer turns `transferRequired` into the picker; both read as a plain failure.
       case "gone":
@@ -187,7 +207,7 @@ export function RemoveMembersDialog({
         ? t("workspaces.removeMembers.transferring")
         : t("workspaces.removeMember.removing");
     }
-    if (state.kind === "failed") return t("workspaces.exit.tryAgain");
+    if (state.kind === "failed" && !managedRefusal) return t("workspaces.exit.tryAgain");
     if (transferring) return t("workspaces.removeMembers.transferConfirm");
     return count === 1
       ? t("workspaces.removeMember.confirm")
@@ -205,7 +225,7 @@ export function RemoveMembersDialog({
         label: primaryLabel(),
         onClick: () => void run(),
         tone: "destructive",
-        disabled: checking || (transferring && !transferTo),
+        disabled: checking || managedRefusal || (transferring && !transferTo),
         pending: checking,
       }}
       cancelLabel={t("common.cancel")}

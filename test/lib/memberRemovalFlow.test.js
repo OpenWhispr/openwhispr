@@ -309,3 +309,85 @@ test("candidates without a name sort by email", async () => {
     ["u-self", "u-alex", "u-anna", "u-owner", "u-liam"]
   );
 });
+
+const DIRECTORY_MANAGED = { kind: "directoryManaged", userIds: ["u-liam"] };
+
+test("a preview the server refuses fails with no owners", async () => {
+  const { memberRemovalReducer, needsTransfer } = await load();
+
+  const state = run(memberRemovalReducer, [
+    open(),
+    { type: "previewRefused", error: DIRECTORY_MANAGED },
+  ]);
+
+  assert.deepEqual(state, {
+    kind: "failed",
+    subjects: [LIAM, ALEX],
+    owners: [],
+    transferTo: null,
+    defaultOwnerId: SELF.user_id,
+    error: DIRECTORY_MANAGED,
+  });
+  assert.equal(needsTransfer(state), false);
+});
+
+test("a preview refusal only applies while checking", async () => {
+  const { memberRemovalReducer } = await load();
+  const event = { type: "previewRefused", error: DIRECTORY_MANAGED };
+
+  for (const events of [
+    [],
+    [open(), { type: "previewFailed" }],
+    [open(), { type: "previewFailed" }, { type: "confirm" }],
+  ]) {
+    const state = run(memberRemovalReducer, events);
+    assert.equal(memberRemovalReducer(state, event), state);
+  }
+});
+
+test("confirm is ignored while the identity provider still assigns a member", async () => {
+  const { memberRemovalReducer } = await load();
+
+  const refused = run(memberRemovalReducer, [
+    open(),
+    { type: "previewRefused", error: DIRECTORY_MANAGED },
+  ]);
+  assert.equal(memberRemovalReducer(refused, { type: "confirm" }), refused);
+
+  const refusedOnRun = run(memberRemovalReducer, [
+    open(),
+    { type: "previewFailed" },
+    { type: "confirm" },
+    { type: "failed", error: DIRECTORY_MANAGED },
+  ]);
+  assert.equal(refusedOnRun.kind, "failed");
+  assert.deepEqual(refusedOnRun.error, DIRECTORY_MANAGED);
+  assert.equal(memberRemovalReducer(refusedOnRun, { type: "confirm" }), refusedOnRun);
+});
+
+test("other failures can still be retried", async () => {
+  const { memberRemovalReducer } = await load();
+
+  const state = run(memberRemovalReducer, [
+    open(),
+    { type: "previewFailed" },
+    { type: "confirm" },
+    { type: "failed", error: { kind: "failed" } },
+    { type: "confirm" },
+  ]);
+
+  assert.equal(state.kind, "running");
+});
+
+test("opening again after a refusal checks again", async () => {
+  const { memberRemovalReducer } = await load();
+
+  const state = run(memberRemovalReducer, [
+    open(),
+    { type: "previewRefused", error: DIRECTORY_MANAGED },
+    open(),
+  ]);
+
+  assert.equal(state.kind, "checking");
+  assert.equal(state.error, undefined);
+});
