@@ -520,9 +520,15 @@ export async function loadContainerNotes(
       kind === "f"
         ? ((await window.electronAPI.getNotes(noteType, limit, id)) ?? [])
         : ((await window.electronAPI.getNotes(noteType, limit, null, id)) ?? []);
-    // A newer load for this container may have resolved first.
+    // Refreshing an older open note adds another async boundary; a newer
+    // load or account reset must supersede the entire result.
+    if (containerLoadGenerations.get(key) !== gen) return items;
+    const withOpen = await withOpenNote(key, items);
     if (containerLoadGenerations.get(key) === gen) {
-      applyContainers({ ...useNoteStore.getState().notesByContainer, [key]: items });
+      applyContainers({
+        ...useNoteStore.getState().notesByContainer,
+        [key]: withOpen,
+      });
     }
     return items;
   })();
@@ -532,6 +538,51 @@ export async function loadContainerNotes(
   } finally {
     if (containerLoadsInFlight.get(key) === load) containerLoadsInFlight.delete(key);
   }
+}
+
+// The open note can sit past its container's loaded page (ensureNoteLoaded, or
+// newer notes pushing it down); a reload must not close it.
+async function withOpenNote(key: string, items: NoteItem[]): Promise<NoteItem[]> {
+  const { activeNoteId, notesByContainer } = useNoteStore.getState();
+  if (activeNoteId == null || items.some((note) => note.id === activeNoteId)) return items;
+  const open = notesByContainer[key]?.find((note) => note.id === activeNoteId);
+  if (!open) return items;
+  const refreshed = await window.electronAPI.getNote(activeNoteId);
+  const state = useNoteStore.getState();
+  if (state.activeNoteId !== activeNoteId) return items;
+  const current = state.notesByContainer[key]?.find((note) => note.id === activeNoteId);
+  // IPC updates and deletions arriving during the lookup are newer than its snapshot.
+  const note = current === open ? refreshed : current;
+  return note && !note.deleted_at && noteContainerKey(note) === key ? [...items, note] : items;
+}
+
+/**
+ * Jump navigation opens a note by id, but the notes view only shows notes in
+ * the store, and containers load their newest page. A note past it is fetched
+ * and added to its container.
+ */
+export async function ensureNoteLoaded(id: number): Promise<void> {
+  if (getNoteFromStore(id)) return;
+  const accountGen = accountGeneration;
+  const note = await window.electronAPI.getNote(id);
+  if (accountGen !== accountGeneration || !note || note.deleted_at) return;
+  const key = noteContainerKey(note);
+  await ensureContainerLoaded(key);
+  if (accountGen !== accountGeneration) return;
+  const refreshed = await window.electronAPI.getNote(id);
+  if (
+    accountGen !== accountGeneration ||
+    !refreshed ||
+    refreshed.deleted_at ||
+    noteContainerKey(refreshed) !== key
+  )
+    return;
+  const state = useNoteStore.getState();
+  if (findNoteInState(state, id)) return;
+  applyContainers({
+    ...state.notesByContainer,
+    [key]: [...(state.notesByContainer[key] ?? []), refreshed],
+  });
 }
 
 export async function ensureContainerLoaded(key: string): Promise<NoteItem[]> {
@@ -668,9 +719,8 @@ export function addNote(note: NoteItem): void {
   const items = state.notesByContainer[key];
   // Not-yet-loaded containers pick the note up on their lazy load.
   if (!items) return;
-  const next = [note, ...items.filter((existing) => existing.id !== note.id)].slice(
-    0,
-    currentLimit
+  const next = [note, ...items.filter((existing) => existing.id !== note.id)].filter(
+    (existing, index) => index < currentLimit || existing.id === state.activeNoteId
   );
   applyContainers({ ...state.notesByContainer, [key]: next });
 }
@@ -696,7 +746,9 @@ export function updateNoteInStore(note: NoteItem): void {
   }
   const target = notesByContainer[targetKey];
   if (target && !target.some((existing) => existing.id === note.id)) {
-    notesByContainer[targetKey] = [note, ...target].slice(0, currentLimit);
+    notesByContainer[targetKey] = [note, ...target].filter(
+      (existing, index) => index < currentLimit || existing.id === state.activeNoteId
+    );
     changed = true;
   }
   if (changed) applyContainers(notesByContainer);

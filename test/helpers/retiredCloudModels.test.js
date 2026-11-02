@@ -190,7 +190,7 @@ test("a sentinel a shipped build already wrote does not stop the rotated sweep",
       to: "deepseek-v4-1-flash",
     },
   ]);
-  assert.equal(storage.map.get("_retiredTinfoilModelsMigrated2"), "1");
+  assert.equal(storage.map.get("_retiredTinfoilModelsMigrated3"), "1");
 });
 
 test("no replacement is itself retired, and every provider has its own sentinel", async () => {
@@ -236,8 +236,8 @@ test("each provider's sentinel is pinned to the exact set of ids it covers", asy
       ],
     },
     tinfoil: {
-      migratedKey: "_retiredTinfoilModelsMigrated2",
-      retired: ["deepseek-v4-flash", "deepseek-v4-pro", "glm-5-2", "kimi-k2-6"],
+      migratedKey: "_retiredTinfoilModelsMigrated3",
+      retired: ["deepseek-v4-flash", "deepseek-v4-pro", "glm-5-2", "glm-5-3-flash", "kimi-k2-6"],
     },
     openai: {
       migratedKey: "_retiredOpenAIModelsMigrated",
@@ -254,7 +254,7 @@ test("a storage that cannot be written leaves the sentinel unset, so the next la
   };
 
   assert.deepEqual(sweepRetiredCloudModelSelections(storage, [CLEANUP]), []);
-  assert.equal(storage.map.get("_retiredTinfoilModelsMigrated2"), undefined);
+  assert.equal(storage.map.get("_retiredTinfoilModelsMigrated3"), undefined);
   // Groq shares the storage but not the failure's blast radius.
   assert.equal(storage.map.get("_retiredGroqModelsMigrated2"), undefined);
 });
