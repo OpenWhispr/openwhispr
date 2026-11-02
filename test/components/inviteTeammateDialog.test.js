@@ -347,7 +347,6 @@ test("seats left come from the workspace list", async (t) => {
 
 test("the seat line and the seat warning count the same seats", async (t) => {
   // An admin: the owner-only preview refuses, and seats_used counts pending invitations too.
-  globalThis.__members = Array.from({ length: 8 }, (_, index) => ({ user_id: `u${index}` }));
   const { latest } = await mountWithWorkspace(t, {
     ...WORKSPACE,
     has_subscription: true,
@@ -377,13 +376,51 @@ test("the seat line prefers the workspace list over the preview", async (t) => {
   assert.equal(latest().seatLine, 'workspaces.invite.seatUsage|{"used":10,"seats":20}');
 });
 
-test("an older API without seats_used still shows the member count", async (t) => {
-  globalThis.__members = Array.from({ length: 8 }, (_, index) => ({ user_id: `u${index}` }));
-  const { latest } = await mountWithWorkspace(t, WORKSPACE);
+test("a free workspace hides the seat line and reads no members for it", async (t) => {
+  // Its seats is a placeholder 1, so "Using 12 of 1 seats" would read wrong.
+  const { latest } = await mountWithWorkspace(t, {
+    ...WORKSPACE,
+    has_subscription: false,
+    seats: 1,
+    seats_used: 12,
+  });
   await React.act(async () => {});
 
-  assert.equal(latest().seatLine, 'workspaces.invite.seatUsage|{"used":8,"seats":20}');
-  assert.equal(globalThis.__memberListCalls, 1);
+  assert.equal(latest().seatLine, null);
+  assert.equal(globalThis.__memberListCalls, undefined);
+});
+
+test("a free workspace on an older API without seats_used reads no members either", async (t) => {
+  const { latest } = await mountWithWorkspace(t, {
+    ...WORKSPACE,
+    has_subscription: false,
+    seats: 1,
+  });
+  await React.act(async () => {});
+
+  assert.equal(latest().seatLine, null);
+  assert.equal(globalThis.__memberListCalls, undefined);
+});
+
+test("a subscribed workspace shows the seat line", async (t) => {
+  const { latest } = await mountWithWorkspace(t, {
+    ...WORKSPACE,
+    has_subscription: true,
+    seats_used: 12,
+  });
+  await React.act(async () => {});
+
+  assert.equal(latest().seatLine, 'workspaces.invite.seatUsage|{"used":12,"seats":20}');
+  assert.equal(globalThis.__memberListCalls, undefined);
+});
+
+test("a subscribed workspace with no count to show hides the line and reads no members", async (t) => {
+  // An older API without seats_used, and an admin, whom the owner-only preview refuses.
+  const { latest } = await mountWithWorkspace(t, { ...WORKSPACE, has_subscription: true });
+  await React.act(async () => {});
+
+  assert.equal(latest().seatLine, null);
+  assert.equal(globalThis.__memberListCalls, undefined);
 });
 
 test("an older API's preview still fills the seat line", async (t) => {
@@ -393,7 +430,7 @@ test("an older API's preview still fills the seat line", async (t) => {
     amount_due: 1200,
     currency: "usd",
   };
-  const { latest } = await mountWithWorkspace(t, WORKSPACE);
+  const { latest } = await mountWithWorkspace(t, { ...WORKSPACE, has_subscription: true });
   await React.act(async () => {});
 
   assert.equal(latest().seatLine, 'workspaces.invite.seatUsage|{"used":9,"seats":20}');
