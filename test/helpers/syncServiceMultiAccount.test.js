@@ -338,6 +338,57 @@ function bindLegacyFolder(db, name, cloudFolder, clientFolderId) {
     .run(cloudFolder.id, clientFolderId, cloudFolder.updated_at, name);
 }
 
+test("a second account's synced note never takes the first account's legacy folder", async (t) => {
+  resetBrowserGlobals();
+  const db = createDb(t);
+  if (!db) return;
+
+  // The pre-fix data through real sync: C's defaults stay device-owned, and only
+  // D files a note in Meetings.
+  db._claimLegacyPrivateRow = () => {};
+  db.ensureAccountDefaultFolders = () => {};
+  const cloudC = accountCloud("account-c", { serverDefaults: true });
+  for (const folder of cloudC.folders()) {
+    bindLegacyFolder(db, folder.name, folder, folder.client_folder_id);
+  }
+  signOut(db);
+  const cloudD = accountCloud("account-d", { serverDefaults: false });
+  await signIn(t, db, "account-d", cloudD);
+  const dMeeting = db.saveNote("D meeting", "d", "meeting").note;
+  await sync(t);
+  const legacyMeetings = folderOf(db, null, "Meetings");
+  assert.equal(db.getNote(dMeeting.id).folder_id, legacyMeetings.id);
+  assert.equal(db.getNote(dMeeting.id).sync_status, "synced");
+  assert.equal(cloudNote(cloudD, "D meeting").folder_id, null, "the server clears C's folder");
+
+  // Upgrade: the launch repair runs, and D's synced note proves nothing.
+  delete db._claimLegacyPrivateRow;
+  delete db.ensureAccountDefaultFolders;
+  signOut(db);
+  db._repairCloudBoundLegacyRows();
+  assert.equal(folderOf(db, null, "Meetings").id, legacyMeetings.id);
+
+  // D's own folder list proves these aren't D's, and D gets its own.
+  await signIn(t, db, "account-d", cloudD);
+  assert.deepEqual(visibleDefaults(db), ownDefaults("account-d"));
+  assert.equal(db.getNote(dMeeting.id).folder_id, folderOf(db, "account-d", "Meetings").id);
+  await sync(t);
+  assert.equal(cloudNote(cloudD, "D meeting").folder_id, cloudFolderId(cloudD, "Meetings"));
+
+  // C returns to its own cloud folder, nothing stuck.
+  signOut(db);
+  await signIn(t, db, "account-c", cloudC);
+  assert.deepEqual(visibleDefaults(db), ownDefaults("account-c"));
+  const meetingsC = folderOf(db, "account-c", "Meetings");
+  assert.equal(meetingsC.id, legacyMeetings.id);
+  assert.equal(meetingsC.cloud_id, cloudFolderId(cloudC, "Meetings"));
+  assert.equal(meetingsC.sync_status, "synced");
+  db.saveNote("C meeting", "c", "meeting");
+  await sync(t);
+  assert.equal(cloudNote(cloudC, "C meeting").folder_id, meetingsC.cloud_id);
+  assertRelaunches(t);
+});
+
 test("an upgraded account claims its legacy folder in place, whatever its client id", async (t) => {
   resetBrowserGlobals();
   const db = createDb(t);

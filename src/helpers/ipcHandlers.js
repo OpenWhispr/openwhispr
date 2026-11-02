@@ -3158,12 +3158,20 @@ class IPCHandlers {
     );
     ipcMain.handle("db-ensure-account-default-folders", (_, foreignCloudIds, expectedScope) => {
       assertSyncAccountScope(expectedScope);
+      const before = this.databaseManager.getFolders();
       this.databaseManager.ensureAccountDefaultFolders(
         Array.isArray(foreignCloudIds)
           ? foreignCloudIds.filter((cloudId) => typeof cloudId === "string")
           : []
       );
       this._flushAccountRepairMirrors();
+      // A folder proved to be another account's is gone from this scope.
+      const kept = new Set(this.databaseManager.getFolders().map((folder) => folder.id));
+      setImmediate(() => {
+        for (const { id } of before) {
+          if (!kept.has(id)) broadcastToWindows("folder-deleted", { id });
+        }
+      });
     });
     ipcMain.handle("db-get-folder-id-map", () => this.databaseManager.getFolderIdMap());
     ipcMain.handle("db-get-pending-folder-deletes", () =>

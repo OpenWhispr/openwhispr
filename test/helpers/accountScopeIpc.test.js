@@ -104,8 +104,13 @@ function readBinding() {
 }
 
 const databaseScopes = [];
+// The scope in force at each default-folder seeding: it must have moved first.
+const seededScopes = [];
 const databaseManager = new Proxy(
-  { setActiveAccountId: (accountId) => databaseScopes.push(accountId) },
+  {
+    setActiveAccountId: (accountId) => databaseScopes.push(accountId),
+    ensureAccountDefaultFolders: () => seededScopes.push(databaseScopes.at(-1)),
+  },
   { get: (value, property) => (property in value ? value[property] : anything()) }
 );
 
@@ -210,11 +215,13 @@ test("a sign-out in main stops connects without waiting for the renderer", async
 
   connectorCalls.length = 0;
   databaseScopes.length = 0;
+  seededScopes.length = 0;
   broadcasts.length = 0;
   handleAuthTokenChange({ generation: 8, token: null });
   assert.deepEqual(connectorCalls, [["accountChanged", null], ["notifyStatusChanged"]]);
   assert.equal(readBinding(), null);
   assert.deepEqual(databaseScopes, [null]);
+  assert.deepEqual(seededScopes, [null]);
   assert.deepEqual(broadcasts, [
     ["active-account-scope-changed", null],
     ["auth-token-state-changed", { generation: 8, hasToken: false }],
@@ -744,5 +751,29 @@ test("ordinary cloud acknowledgements reject a replaced account before touching 
     for (const invoke of calls) assert.throws(invoke, /Authentication context changed/);
   } finally {
     databaseManager.activeAccountId = priorAccount;
+  }
+});
+
+test("a folder the foreign proof moved out of scope is announced as deleted", async () => {
+  tokenState = { token: "foreign-proof-token", generation: 301 };
+  await setScope("foreign-proof-account", 301);
+  const lists = [
+    [{ id: 1 }, { id: 2 }],
+    [{ id: 2 }, { id: 3 }],
+  ];
+  const previousAccountId = databaseManager.activeAccountId;
+  databaseManager.activeAccountId = "foreign-proof-account";
+  databaseManager.getFolders = () => lists.shift();
+  broadcasts.length = 0;
+  try {
+    await handlers.get("db-ensure-account-default-folders")({}, ["cloud-a"], {
+      accountId: "foreign-proof-account",
+      authGeneration: 301,
+    });
+    await new Promise(setImmediate);
+    assert.deepEqual(broadcasts, [["folder-deleted", { id: 1 }]]);
+  } finally {
+    databaseManager.activeAccountId = previousAccountId;
+    delete databaseManager.getFolders;
   }
 });

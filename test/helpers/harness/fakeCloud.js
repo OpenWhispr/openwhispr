@@ -356,7 +356,14 @@ function createFakeCloud(config = {}) {
             const rowCreated = ![...notes.values()].some(
               (row) => row.client_note_id === input.client_note_id
             );
-            const row = upsertRow(noteCollection, input);
+            // As the API: a folder this account doesn't have is cleared, and
+            // the note still syncs, unfiled.
+            const folder = folders.get(input.folder_id);
+            const folderInScope = !input.folder_id || (folder && !folder.deleted_at);
+            const row = upsertRow(
+              noteCollection,
+              folderInScope ? input : { ...input, folder_id: null }
+            );
             return { ...row, row_created: rowCreated, write_applied: true };
           }),
         };

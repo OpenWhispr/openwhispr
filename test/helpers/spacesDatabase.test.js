@@ -2099,13 +2099,13 @@ test("launch repair attributes legacy rows already bound to an account's cloud",
   const accountOf = (table, id) =>
     reopened.db.prepare(`SELECT account_id FROM ${table} WHERE id = ?`).get(id).account_id;
 
-  assert.equal(accountOf("folders", seeded.Personal), "account-a", "A's synced note proves it");
-  // No synced note proves who owns these; A's next folder pull claims them.
+  // A note proves nothing about its folder; A's next folder pull claims these.
+  assert.equal(accountOf("folders", seeded.Personal), null, "A's synced note doesn't name it");
   assert.equal(accountOf("folders", seeded.Meetings), null);
   assert.equal(accountOf("folders", seeded.Videos), null);
   assert.equal(accountOf("folders", work), null, "no evidence names Work's owner");
   assert.equal(accountOf("notes", legacyA), "account-a");
-  assert.equal(accountOf("notes", unpushed), "account-a", "an unpushed note follows its folder");
+  assert.equal(accountOf("notes", unpushed), null, "an unpushed note stays the device's");
 
   const personalB = reopened.db
     .prepare("SELECT id FROM folders WHERE name = 'Personal' AND account_id = 'account-b'")
@@ -2276,9 +2276,16 @@ test("every scope gets default folders it can see, and signed-out ones fold into
   db.ensureAccountDefaultFolders();
   assert.deepEqual(visibleDefaults(db), ["Meetings:null", "Personal:null", "Videos:null"]);
   const guestNote = db.saveNote("Guest note", "", "personal").note;
+  const guestChat = db.createAgentConversation(
+    "Guest chat",
+    null,
+    null,
+    folderOf(db, null, "Personal").id
+  );
   assert.ok(db.getMeetingsFolder());
 
-  // Back in A, the signed-out defaults fold into A's own, notes included.
+  // Back in A, the signed-out defaults fold into A's own, notes and chats
+  // included. A note that was never pushed stays the device's.
   db.setActiveAccountId("account-a");
   db.ensureAccountDefaultFolders();
   assert.deepEqual(visibleDefaults(db), [
@@ -2287,9 +2294,14 @@ test("every scope gets default folders it can see, and signed-out ones fold into
     "Videos:account-a",
   ]);
   const moved = db.getNote(guestNote.id);
-  assert.equal(moved.account_id, "account-a");
+  assert.equal(moved.account_id, null);
   assert.equal(moved.folder_id, folderOf(db, "account-a", "Personal").id);
   assert.equal(moved.sync_status, "pending");
+  assert.equal(
+    db.db.prepare("SELECT folder_id FROM agent_conversations WHERE id = ?").get(guestChat.id)
+      .folder_id,
+    folderOf(db, "account-a", "Personal").id
+  );
 
   const settledCount = folderCount();
   db.ensureAccountDefaultFolders();
@@ -2318,7 +2330,7 @@ test("an account signing in after a sign-out takes the signed-out defaults rathe
     "Personal:account-b",
     "Videos:account-b",
   ]);
-  assert.equal(db.getNote(guestNote.id).account_id, "account-b");
+  assert.equal(db.getNote(guestNote.id).account_id, null);
   db.saveNote("B note", "", "personal");
 
   db.setActiveAccountId("account-a");
@@ -2347,17 +2359,77 @@ test("a device-owned default still holding another account's notes is shared, ne
   );
 });
 
-test("a folder claimed for an account takes the device-owned notes inside it", (t) => {
+test("a folder claimed for an account takes the pushed device-owned notes inside it", (t) => {
   const db = createDb(t);
   if (!db) return;
 
   db.setActiveAccountId(null);
-  const guestNote = db.saveNote("Guest note", "", "personal").note;
+  const pushed = db.saveNote("Pushed guest note", "", "personal").note;
+  const unpushed = db.saveNote("Unpushed guest note", "", "personal").note;
+  db.db.prepare("UPDATE notes SET cloud_id = 'guest-cloud' WHERE id = ?").run(pushed.id);
   adoptSeededDefaults(db, "account-a");
-  assert.equal(db.getNote(guestNote.id).account_id, "account-a");
+  assert.equal(db.getNote(pushed.id).account_id, "account-a");
+  assert.equal(db.getNote(unpushed.id).account_id, null);
 
   db.setActiveAccountId("account-b");
-  assert.equal(db.getNote(guestNote.id), null);
+  assert.equal(db.getNote(pushed.id), null);
+});
+
+test("deleting an account keeps a never-pushed guest note and takes a pushed one", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  db.setActiveAccountId(null);
+  const pushed = db.saveNote("Pushed guest note", "", "personal").note;
+  const unpushed = db.saveNote("Unpushed guest note", "", "personal").note;
+  db.db.prepare("UPDATE notes SET cloud_id = 'guest-cloud' WHERE id = ?").run(pushed.id);
+  adoptSeededDefaults(db, "account-a");
+  const result = db.deleteAccountData("account-a");
+
+  assert.deepEqual(result.deletedNoteIds, [pushed.id]);
+  const kept = db.db.prepare("SELECT * FROM notes WHERE id = ?").get(unpushed.id);
+  assert.equal(kept.account_id, null);
+  assert.equal(kept.folder_id, null);
+});
+
+test("an unbound device-owned namesake counts as taken beside a foreign default list", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.db.prepare("DELETE FROM folders WHERE name = 'Videos'").run();
+  db.db
+    .prepare(
+      "INSERT INTO folders (name, sort_order, space_id, client_folder_id) VALUES ('Videos', 5, ?, 'device-videos')"
+    )
+    .run(db.getPrivateSpaceId());
+
+  db.setActiveAccountId("account-b");
+  db.ensureAccountDefaultFolders(["another-cloud-folder"]);
+
+  assert.equal(
+    db.db.prepare("SELECT COUNT(*) AS count FROM folders WHERE name = 'Videos'").get().count,
+    1
+  );
+});
+
+test("binding a device-owned folder keeps it device-owned when the account owns the name", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  pullOwnDefaults(db, "account-a");
+  const legacy = folderOf(db, null, "Personal");
+
+  const ack = db.acknowledgeFolderCreate(
+    legacy.id,
+    legacy,
+    null,
+    "legacy-client",
+    "legacy-cloud",
+    "2026-10-01T00:00:00.000Z"
+  );
+
+  assert.equal(ack.outcome, "synced");
+  const bound = db.db.prepare("SELECT * FROM folders WHERE id = ?").get(legacy.id);
+  assert.equal(bound.cloud_id, "legacy-cloud");
+  assert.equal(bound.account_id, null);
 });
 
 test("seeding an account's own default rehomes notes saved before foreign defaults were identified", (t) => {
@@ -2486,7 +2558,7 @@ test("signing back in rehomes notes after another account claims a shared legacy
   );
 });
 
-test("a pulled folder claims a legacy row bound to it and the notes inside", (t) => {
+test("a pulled folder claims a legacy row bound to it and the pushed notes inside", (t) => {
   const db = createDb(t);
   if (!db) return;
   const personal = folderOf(db, null, "Personal");
@@ -2497,6 +2569,7 @@ test("a pulled folder claims a legacy row bound to it and the notes inside", (t)
     .run(personal.id);
   db.setActiveAccountId(null);
   const guestNote = db.saveNote("Guest note", "", "personal").note;
+  db.db.prepare("UPDATE notes SET cloud_id = 'guest-cloud' WHERE id = ?").run(guestNote.id);
 
   db.setActiveAccountId("account-a");
   db.upsertFolderFromCloud({
@@ -2513,7 +2586,7 @@ test("a pulled folder claims a legacy row bound to it and the notes inside", (t)
   assert.equal(db.getNote(guestNote.id).account_id, "account-a");
 });
 
-test("launch repair names a folder's owner only from synced, live notes", (t) => {
+test("launch repair never names a folder's owner from the notes inside", (t) => {
   const db = createDb(t);
   if (!db) return;
   const privateId = db.getPrivateSpaceId();
@@ -2544,6 +2617,9 @@ test("launch repair names a folder's owner only from synced, live notes", (t) =>
   // B only ever saw these folders; its pushes into them were rejected.
   insertNote.run("B in Work", work, privateId, "n1", null, "account-b", "error", null);
   insertNote.run("B trashed", archive, privateId, "n2", "c2", "account-b", "synced", "2026-10-01");
+  // The server clears a foreign folder and still syncs the note.
+  const videos = folderOf(db, null, "Videos").id;
+  insertNote.run("B in Videos", videos, privateId, "n4", "c4", "account-b", "synced", null);
   // B's notes elsewhere make B the only account known on the device.
   insertNote.run("B elsewhere", null, privateId, "n3", "c3", "account-b", "synced", null);
 

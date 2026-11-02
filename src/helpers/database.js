@@ -318,7 +318,8 @@ class DatabaseManager {
       const nameTaken = this.db.prepare(
         `SELECT 1 FROM folders
          WHERE name = ? AND space_id = ? AND ${FOLDER_NAME_TAKEN_FILTER} AND ${accountScope.sql}
-           AND NOT (account_id IS NULL AND cloud_id IN (SELECT value FROM json_each(?)))`
+           AND NOT (account_id IS NULL AND cloud_id IS NOT NULL
+             AND cloud_id IN (SELECT value FROM json_each(?)))`
       );
       const foreign = JSON.stringify(accountId ? foreignCloudIds : []);
       const ownFolder = this.db.prepare(
@@ -374,11 +375,11 @@ class DatabaseManager {
     const movedNotes = this.db
       .prepare(
         `UPDATE notes
-         SET folder_id = ?, account_id = COALESCE(account_id, ?), sync_status = 'pending',
-             updated_at = datetime('now')
+         SET folder_id = ?, sync_status = 'pending', updated_at = datetime('now')
          WHERE folder_id = ? RETURNING id`
       )
-      .all(intoFolderId, accountId, fromFolderId);
+      .all(intoFolderId, fromFolderId);
+    this._claimFolderNotes(intoFolderId, accountId);
     this.db
       .prepare("UPDATE agent_conversations SET folder_id = ? WHERE folder_id = ?")
       .run(intoFolderId, fromFolderId);
@@ -436,12 +437,15 @@ class DatabaseManager {
     if (table === "folders" && changes > 0) this._claimFolderNotes(id, this.activeAccountId);
   }
 
-  // Device-owned notes follow the folder they sit in once an account owns it;
-  // left NULL they stay visible to every account inside a folder only one of
-  // them can see.
+  // Pushed device-owned notes follow the folder they sit in once an account
+  // owns it. A never-pushed one stays device-owned until its own push is
+  // acknowledged: it may be the only copy, so it must outlive the account.
   _claimFolderNotes(folderId, accountId) {
     this.db
-      .prepare("UPDATE notes SET account_id = ? WHERE folder_id = ? AND account_id IS NULL")
+      .prepare(
+        `UPDATE notes SET account_id = ?
+         WHERE folder_id = ? AND account_id IS NULL AND cloud_id IS NOT NULL`
+      )
       .run(accountId, folderId);
   }
 
@@ -487,55 +491,20 @@ class DatabaseManager {
   // Builds before _claimLegacyPrivateRow bound device-owned private rows to an
   // account's cloud without attributing them, so a second local account saw
   // the first one's default folders beside its own and saved notes into them.
-  // Attribute such rows where the owner can be proven, and move notes out of
-  // folders that can't be their account's. Folders with no proof stay
-  // device-owned until their account's folder pull claims them. Idempotent;
-  // runs every launch.
+  // Attribute pushed notes to their owner, and move notes out of folders that
+  // can't be their account's. Folders stay device-owned: the server clears a
+  // foreign folder and still syncs the note, so a note proves nothing, and only
+  // an account's own folder list settles them. Idempotent; runs every launch.
   _repairCloudBoundLegacyRows() {
-    const privateRow = (table) =>
-      `${table}.space_id IN (SELECT id FROM spaces WHERE kind = 'private')`;
     const changedNoteIds = this.db.transaction(() => {
       // A pushed note's owner is the account's user id, which is the account id.
       this.db
         .prepare(
           `UPDATE notes SET account_id = owner_user_id
            WHERE account_id IS NULL AND cloud_id IS NOT NULL AND owner_user_id IS NOT NULL
-             AND ${privateRow("notes")}`
+             AND notes.space_id IN (SELECT id FROM spaces WHERE kind = 'private')`
         )
         .run();
-
-      const boundFolders = this.db
-        .prepare(
-          `SELECT id, name, is_default, space_id FROM folders
-           WHERE account_id IS NULL AND cloud_id IS NOT NULL AND deleted_at IS NULL
-             AND ${privateRow("folders")}`
-        )
-        .all();
-      if (boundFolders.length > 0) {
-        // Only synced notes prove an owner: the server accepts a note into a
-        // folder only for the folder's own account.
-        const syncedNoteAccounts = this.db.prepare(
-          `SELECT DISTINCT account_id FROM notes
-           WHERE folder_id = ? AND account_id IS NOT NULL AND cloud_id IS NOT NULL
-             AND sync_status = 'synced' AND deleted_at IS NULL`
-        );
-        const hasOwnFolder = this.db.prepare(
-          `SELECT 1 FROM folders
-           WHERE space_id = ? AND name = ? AND account_id = ? AND deleted_at IS NULL`
-        );
-        const attribute = this.db.prepare(
-          "UPDATE folders SET account_id = ? WHERE id = ? AND account_id IS NULL"
-        );
-        for (const folder of boundFolders) {
-          const candidates = syncedNoteAccounts
-            .all(folder.id)
-            .map((row) => row.account_id)
-            .filter((accountId) => !hasOwnFolder.get(folder.space_id, folder.name, accountId));
-          if (candidates.length !== 1) continue;
-          attribute.run(candidates[0], folder.id);
-          this._claimFolderNotes(folder.id, candidates[0]);
-        }
-      }
 
       return this._rehomeStrandedPrivateNotes();
     })();
