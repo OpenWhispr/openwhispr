@@ -23,6 +23,20 @@ function render(element: React.ReactElement) {
   });
 }
 
+jest.mock('@/lib/inferenceModes', () => {
+  const { Platform: runtimePlatform } = require('react-native') as typeof import('react-native');
+  const defaults = jest.requireActual(
+    '@/lib/inferenceModes',
+  ) as typeof import('@/lib/inferenceModes');
+  const android = jest.requireActual(
+    '@/lib/inferenceModes.android',
+  ) as typeof import('@/lib/inferenceModes.android');
+  return new Proxy(defaults, {
+    get: (_target, name) =>
+      Reflect.get(runtimePlatform.OS === 'android' ? android : defaults, name),
+  });
+});
+
 const mockUpdateConfig = jest.fn().mockResolvedValue(undefined);
 const mockSetActiveMode = jest.fn();
 const mockSetCredential = jest.fn().mockResolvedValue(undefined);

@@ -1,5 +1,7 @@
 import { Alert, Platform } from 'react-native';
 
+jest.mock('@/lib/inferenceModes', () => jest.requireActual('@/lib/inferenceModes.android'));
+
 const mockUpdateConfig = jest.fn().mockResolvedValue(undefined);
 const mockSetActiveMode = jest.fn();
 const mockPush = jest.fn();
