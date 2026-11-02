@@ -208,6 +208,8 @@ for (const surface of ["note chat", "assistant panel"]) {
                   onResponseContent: noop,
                   onConversationReset: noop,
                   onSelectionContextChange: noop,
+                  skillChoice: { picked: null, pickOff: false },
+                  onSkillChoiceChange: noop,
                   voiceState: "idle",
                   thinking: false,
                   open: true,

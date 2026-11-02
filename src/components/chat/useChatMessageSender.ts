@@ -80,7 +80,12 @@ export function useChatMessageSender({
           });
           if (!isCurrent()) return;
           submitted = true;
-          await streaming.sendToAI(text, [...previousMessages, userMessage], options);
+          await streaming.sendToAI(text, [...previousMessages, userMessage], {
+            ...options,
+            // A late result still belongs to this conversation after navigation or New chat.
+            persistAssistantMessage: (content, toolCalls) =>
+              persistence.saveAssistantMessage(content, toolCalls, convId),
+          });
         } catch (error) {
           if (isCurrent()) throw error;
         } finally {

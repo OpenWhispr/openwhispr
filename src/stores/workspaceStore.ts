@@ -33,7 +33,10 @@ interface WorkspaceState {
 // Shared by every window of this origin; the dictation window mirrors it (lib/accountScopeMirror).
 export const ACTIVE_WORKSPACE_KEY = "activeWorkspaceId";
 
-function readActiveWorkspaceId(): string | null {
+// The workspace every window uses right now. A window's store follows it
+// through storage events, which arrive a task later; work that must not run for
+// a workspace another window just left reads this instead.
+export function readActiveWorkspaceId(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem(ACTIVE_WORKSPACE_KEY);
 }
@@ -140,17 +143,14 @@ export function refreshManagedEnterpriseIdentity(
   workspaceId: string | null = useWorkspaceStore.getState().activeWorkspaceId
 ): void {
   const enterprise = useEnterpriseIdentityStore.getState();
+  const clearOptions = accountId ? { next: { accountId, workspaceId } } : undefined;
   if (!workspaceId || !accountId || authGeneration == null) {
-    enterprise.clear();
+    enterprise.clear(clearOptions);
     return;
   }
-  if (
-    enterprise.workspaceId !== workspaceId ||
-    enterprise.accountId !== accountId ||
-    enterprise.authGeneration !== authGeneration
-  ) {
-    enterprise.clear();
-  }
+  // refresh() drops the previous identity's config itself. clear() would also
+  // delete main's disk cache, which is keyed by credential, account and
+  // workspace, so the new identity could never fall back to it offline.
   void enterprise.refresh(accountId, workspaceId, authGeneration);
 }
 
@@ -222,6 +222,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         const resolvedActiveId = stillValid ? activeId : defaultActiveWorkspaceId(workspaces);
         const activeChanged = resolvedActiveId !== activeId;
         if (activeChanged) membersRequestSeq++;
+        // Written before the state changes, as setActiveWorkspaceId does: the
+        // subscribers publish for the workspace localStorage names.
+        if (activeChanged) writeActiveWorkspaceId(resolvedActiveId);
         set({
           workspaces,
           loaded: true,
@@ -230,7 +233,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           activeWorkspaceId: resolvedActiveId,
           ...(activeChanged ? { members: [] } : {}),
         });
-        if (activeChanged) writeActiveWorkspaceId(resolvedActiveId);
         writeWorkspaceListCache(usePolicyStore.getState().accountId, workspaces);
         refreshForWorkspace(resolvedActiveId);
       } catch (error) {
@@ -289,3 +291,21 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
   },
 }));
+
+// Another window switched, auto-selected or cleared the workspace: follow it,
+// or this window keeps dictating, syncing and publishing shared words for the
+// old one. Nothing is written back, and the managed enterprise identity is
+// left to the window's own refresh (the dictation window re-resolves it in
+// accountScopeMirror on this same event).
+export function handleActiveWorkspaceStorage(event: StorageEvent): void {
+  if (event.key !== ACTIVE_WORKSPACE_KEY) return;
+  const id = event.newValue;
+  if (id === useWorkspaceStore.getState().activeWorkspaceId) return;
+  // The old workspace's roster must not land under the new one.
+  membersRequestSeq++;
+  useWorkspaceStore.setState({ activeWorkspaceId: id, members: [] });
+}
+
+if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+  window.addEventListener("storage", handleActiveWorkspaceStorage);
+}
