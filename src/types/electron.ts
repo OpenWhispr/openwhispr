@@ -3880,7 +3880,11 @@ declare global {
       ) => Promise<FolderAckResult>;
       getFolderIdMap?: () => Promise<FolderItem[]>;
       applyCloudFolderParents?: (
-        links: Array<{ cloudId: string; parentCloudId: string | null }>
+        links: Array<{
+          cloudId: string;
+          parentCloudId: string | null;
+          snapshot: FolderPushSnapshot;
+        }>
       ) => Promise<void>;
       getPendingFolderDeletes?: () => Promise<FolderItem[]>;
       restoreFolderAfterDeniedDelete?: (id: number) => Promise<{

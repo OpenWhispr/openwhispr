@@ -8675,9 +8675,12 @@ class DatabaseManager {
       const setParent = this.db.prepare("UPDATE folders SET parent_folder_id = ? WHERE id = ?");
       const changed = new Map();
       this.db.transaction(() => {
-        for (const { cloudId, parentCloudId } of links) {
+        for (const { cloudId, parentCloudId, snapshot } of links) {
           const folder = findByCloudId.get(cloudId, ...accountScope.params);
           if (!folder || folder.sync_status === "pending") continue;
+          // A debounced push can settle a newer reparent while this pull is
+          // in flight, even in the same SQLite timestamp second.
+          if (!rowMatchesSnapshot(folder, snapshot, FOLDER_ACK_FIELDS)) continue;
           const parent =
             parentCloudId != null ? findByCloudId.get(parentCloudId, ...accountScope.params) : null;
           const nestable =

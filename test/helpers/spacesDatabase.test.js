@@ -2131,10 +2131,26 @@ test("applyCloudFolderParents links pulled subfolders and keeps invalid ones top
   db.db.prepare("UPDATE folders SET cloud_id = 'c-pending' WHERE id = ?").run(pending.id);
 
   const changed = db.applyCloudFolderParents([
-    { cloudId: "c-grandchild", parentCloudId: "c-child" },
-    { cloudId: "c-child", parentCloudId: "c-parent" },
-    { cloudId: "c-team", parentCloudId: "c-parent" },
-    { cloudId: "c-pending", parentCloudId: "c-parent" },
+    {
+      cloudId: "c-grandchild",
+      parentCloudId: "c-child",
+      snapshot: db.getFolderByClientId(grandchild.client_folder_id),
+    },
+    {
+      cloudId: "c-child",
+      parentCloudId: "c-parent",
+      snapshot: db.getFolderByClientId(child.client_folder_id),
+    },
+    {
+      cloudId: "c-team",
+      parentCloudId: "c-parent",
+      snapshot: db.getFolderByClientId(teamFolder.client_folder_id),
+    },
+    {
+      cloudId: "c-pending",
+      parentCloudId: "c-parent",
+      snapshot: db.getFolderByClientId(pending.client_folder_id),
+    },
   ]);
   const parentOf = (id) => db.getFolders().find((f) => f.id === id).parent_folder_id;
   assert.equal(parentOf(child.id), parent.id);
@@ -2147,13 +2163,33 @@ test("applyCloudFolderParents links pulled subfolders and keeps invalid ones top
   );
   assert.equal(changed.find((f) => f.id === grandchild.id).parent_folder_id, null);
 
-  db.applyCloudFolderParents([{ cloudId: "c-child", parentCloudId: null }]);
+  db.applyCloudFolderParents([
+    {
+      cloudId: "c-child",
+      parentCloudId: null,
+      snapshot: db.getFolderByClientId(child.client_folder_id),
+    },
+  ]);
   assert.equal(parentOf(child.id), null);
 
-  db.applyCloudFolderParents([{ cloudId: "c-grandchild", parentCloudId: "c-parent" }]);
   db.applyCloudFolderParents([
-    { cloudId: "c-child", parentCloudId: "c-grandchild" },
-    { cloudId: "c-grandchild", parentCloudId: null },
+    {
+      cloudId: "c-grandchild",
+      parentCloudId: "c-parent",
+      snapshot: db.getFolderByClientId(grandchild.client_folder_id),
+    },
+  ]);
+  db.applyCloudFolderParents([
+    {
+      cloudId: "c-child",
+      parentCloudId: "c-grandchild",
+      snapshot: db.getFolderByClientId(child.client_folder_id),
+    },
+    {
+      cloudId: "c-grandchild",
+      parentCloudId: null,
+      snapshot: db.getFolderByClientId(grandchild.client_folder_id),
+    },
   ]);
   assert.equal(
     parentOf(child.id),
@@ -2174,7 +2210,13 @@ test("applyCloudFolderParents un-nests the pending end of a too-deep chain", (t)
   db.markFolderSynced(archive.id, "c-archive");
   db.setFolderParent(client.id, archive.id);
 
-  db.applyCloudFolderParents([{ cloudId: "c-quarter", parentCloudId: "c-client" }]);
+  db.applyCloudFolderParents([
+    {
+      cloudId: "c-quarter",
+      parentCloudId: "c-client",
+      snapshot: db.getFolderByClientId(quarter.client_folder_id),
+    },
+  ]);
   const folder = (id) => db.getFolders().find((f) => f.id === id);
   assert.equal(folder(quarter.id).parent_folder_id, client.id, "the server's nesting stands");
   assert.equal(folder(client.id).parent_folder_id, null);

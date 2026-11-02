@@ -218,7 +218,11 @@ test("a pulled un-nest moves the subfolder's directory out of its old parent's",
   fs.writeFileSync(path.join(basePath, "Client A", "Q1", "1-plan.md"), "---\nid: 1\n---\n");
 
   await handlers.get("db-apply-cloud-folder-parents")(null, [
-    { cloudId: "c-child", parentCloudId: null },
+    {
+      cloudId: "c-child",
+      parentCloudId: null,
+      snapshot: db.getFolderByClientId(child.client_folder_id),
+    },
   ]);
   await settle();
   await handlers.get("db-hard-delete-folder")(null, parent.id);

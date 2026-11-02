@@ -7,6 +7,7 @@ import type {
   DictionaryEntryItem,
   NoteItem,
   FolderItem,
+  FolderPushSnapshot,
   SpaceItem,
   TranscriptionItem,
   ConversationPreview,
@@ -1903,13 +1904,33 @@ export class SyncService {
       const syncStartedAt = new Date().toISOString();
       const teamCapable = this.canSyncTeamSpaces() && this.hasTeamSpacesCapability();
       const scope = teamCapable ? "all" : undefined;
+      const foldersBeforePull = new Map(
+        ((await window.electronAPI.getFolderIdMap?.()) ?? []).map((folder) => [
+          folder.cloud_id,
+          folder,
+        ])
+      );
       const { folders: cloudFolders } = await FoldersService.list(since, scope);
       if (cloudFolders.length > 0) this.teamPassMovedWork = true;
       const ctx = await this.buildSpaceContext();
       // Parked or failed rows must retry: they hold the cursor back (and fail
       // a backfill) so one bad row never drops the rest of the delta.
       let parkedRows = 0;
-      const parentLinks: Array<{ cloudId: string; parentCloudId: string | null }> = [];
+      const parentLinks: Array<{
+        cloudId: string;
+        parentCloudId: string | null;
+        snapshot: FolderPushSnapshot;
+      }> = [];
+      const addParentLink = (
+        folder: FolderItem | null | undefined,
+        parentCloudId: string | null | undefined
+      ): void => {
+        // Guard both edits during the request and edits while the rest of this
+        // page is being stored, including edits sharing a SQLite timestamp.
+        if (folder?.cloud_id && parentCloudId !== undefined) {
+          parentLinks.push({ cloudId: folder.cloud_id, parentCloudId, snapshot: folder });
+        }
+      };
 
       for (const cloudFolder of cloudFolders) {
         try {
@@ -1970,18 +1991,13 @@ export class SyncService {
                 local.sync_status !== "pending" &&
                 isCloudEntryNewer(cloudFolder.updated_at, local.updated_at)
               ) {
-                await window.electronAPI.upsertFolderFromCloud?.(
+                const folder = await window.electronAPI.upsertFolderFromCloud?.(
                   cloudFolder as unknown as Record<string, unknown>,
                   ctx.privateSpace.id
                 );
                 // The space change cleared the parent; a carried subfolder
                 // nests again under its parent once both are private.
-                if (cloudFolder.parent_folder_id !== undefined) {
-                  parentLinks.push({
-                    cloudId: cloudFolder.id,
-                    parentCloudId: cloudFolder.parent_folder_id,
-                  });
-                }
+                addParentLink(folder, cloudFolder.parent_folder_id);
               }
             }
             continue;
@@ -1995,14 +2011,6 @@ export class SyncService {
               this.clear404(FOLDER_UPDATE_404_KEY, local.client_folder_id);
             }
             continue;
-          }
-
-          // An API without subfolders sends no parent; the local one stands.
-          if (cloudFolder.parent_folder_id !== undefined) {
-            parentLinks.push({
-              cloudId: cloudFolder.id,
-              parentCloudId: cloudFolder.parent_folder_id,
-            });
           }
 
           const space = await this.resolveSpaceForCloudRow(cloudFolder.space_id, ctx);
@@ -2034,7 +2042,7 @@ export class SyncService {
                   f.name.toLowerCase() === cloudFolder.name.toLowerCase()
               );
             if (nameMatch) {
-              await window.electronAPI.acknowledgeFolderCreate?.(
+              const result = await window.electronAPI.acknowledgeFolderCreate?.(
                 nameMatch.id,
                 nameMatch,
                 nameMatch.cloud_id,
@@ -2042,6 +2050,19 @@ export class SyncService {
                 cloudFolder.id,
                 cloudFolder.updated_at
               );
+              if (result?.outcome === "synced") {
+                addParentLink(
+                  {
+                    ...nameMatch,
+                    client_folder_id: cloudFolder.client_folder_id ?? nameMatch.client_folder_id,
+                    cloud_id: cloudFolder.id,
+                    sync_status: "synced",
+                    left_team: 0,
+                    updated_at: cloudFolder.updated_at,
+                  },
+                  cloudFolder.parent_folder_id
+                );
+              }
               continue;
             }
           }
@@ -2055,10 +2076,18 @@ export class SyncService {
             (local.sync_status !== "pending" &&
               isCloudEntryNewer(cloudFolder.updated_at, local.updated_at))
           ) {
-            await window.electronAPI.upsertFolderFromCloud?.(
+            const folder = await window.electronAPI.upsertFolderFromCloud?.(
               cloudFolder as unknown as Record<string, unknown>,
               space.id
             );
+            addParentLink(folder, cloudFolder.parent_folder_id);
+          } else if (
+            local.sync_status !== "pending" &&
+            normalizeTimestamp(local.updated_at) === normalizeTimestamp(cloudFolder.updated_at)
+          ) {
+            // An equal-version replay may finish a link whose parent failed
+            // to load on the previous pass. Only the pre-request row may match.
+            addParentLink(foldersBeforePull.get(cloudFolder.id), cloudFolder.parent_folder_id);
           }
         } catch (err) {
           parkedRows++;

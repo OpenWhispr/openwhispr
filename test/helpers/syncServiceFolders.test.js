@@ -17,6 +17,7 @@ const {
 } = require("./harness/browserGlobals.js");
 const { createElectronApi } = require("./harness/electronApiBridge.js");
 const { createFakeCloud } = require("./harness/fakeCloud.js");
+const { deferred } = require("./harness/deferred.js");
 
 installBrowserGlobals();
 
@@ -68,6 +69,95 @@ function setFolderRow(db, id, columns) {
 function shift(iso, hours) {
   return new Date(Date.parse(iso) + hours * 3600_000).toISOString();
 }
+
+for (const [pauseAt, sameSecond] of [
+  ["folder response", false],
+  ["parent application", false],
+  ["folder response", true],
+  ["parent application", true],
+]) {
+  test(`a reparent pushed during ${pauseAt} survives a ${sameSecond ? "same-second" : "stale"} pull and a later rename`, async (t) => {
+    const ctx = await setup(t);
+    if (!ctx) return;
+    const { db, cloud } = ctx;
+    const service = await newSyncService(t);
+    const parent = db.createFolder("Parent").folder;
+    const child = db.createFolder("Child").folder;
+    cloud.setClock(() => "2027-01-01T00:00:00.000Z");
+    await service.pushPendingFolders();
+    const cloudChildId = folderByClientId(db, child.client_folder_id).cloud_id;
+    const cloudParentId = folderByClientId(db, parent.client_folder_id).cloud_id;
+    if (pauseAt === "parent application") {
+      setFolderRow(db, child.id, { updated_at: "2026-01-01 00:00:00" });
+    }
+    const paused = deferred();
+    const resume = deferred();
+    t.after(() => resume.resolve());
+    const api = browserWindow.electronAPI;
+    if (pauseAt === "folder response") {
+      const request = api.cloudApiRequest;
+      t.mock.method(api, "cloudApiRequest", async (options) => {
+        const response = await request(options);
+        if (options.path.startsWith("/api/folders/list")) {
+          paused.resolve();
+          await resume.promise;
+        }
+        return response;
+      });
+    } else {
+      const applyParents = api.applyCloudFolderParents;
+      t.mock.method(api, "applyCloudFolderParents", async (links) => {
+        paused.resolve();
+        await resume.promise;
+        return applyParents(links);
+      });
+    }
+
+    const pull = service.pullFolders();
+    await paused.promise;
+    assert.equal(db.setFolderParent(child.id, parent.id).success, true);
+    setFolderRow(db, child.id, {
+      updated_at: sameSecond ? "2027-01-01 00:00:00" : "2027-01-01 00:00:01",
+    });
+    cloud.setClock(() => "2027-01-01T00:00:01.000Z");
+    await service.pushEntity("folder", child.id);
+    assert.equal(folderByClientId(db, child.client_folder_id).sync_status, "synced");
+    assert.equal(cloud.folder(cloudChildId).parent_folder_id, cloudParentId);
+
+    resume.resolve();
+    assert.equal(await pull, true);
+    assert.equal(folderByClientId(db, child.client_folder_id).parent_folder_id, parent.id);
+    assert.equal(db.renameFolder(child.id, "Renamed child").success, true);
+    await service.pushEntity("folder", child.id);
+    assert.equal(cloud.folder(cloudChildId).parent_folder_id, cloudParentId);
+  });
+}
+
+test("a pulled subfolder still links when its parent's failed upsert is retried", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud } = ctx;
+  const service = await newSyncService(t);
+  const parent = cloud.seedFolder({ client_folder_id: "remote-parent", name: "Parent" });
+  cloud.seedFolder({
+    client_folder_id: "remote-child",
+    name: "Child",
+    parent_folder_id: parent.id,
+  });
+  const upsert = browserWindow.electronAPI.upsertFolderFromCloud;
+  let failParent = true;
+  t.mock.method(console, "error", () => {});
+  t.mock.method(browserWindow.electronAPI, "upsertFolderFromCloud", async (folder, spaceId) => {
+    if (folder.id === parent.id && failParent) throw new Error("temporary write failure");
+    return upsert(folder, spaceId);
+  });
+
+  assert.equal(await service.pullFolders(), false);
+  assert.equal(folderByName(db, "Child").parent_folder_id, null);
+  failParent = false;
+  assert.equal(await service.pullFolders(), true);
+  assert.equal(folderByName(db, "Child").parent_folder_id, folderByName(db, "Parent").id);
+});
 
 test("a note in a folder with no cloud mapping pushes folder_id undefined, not the local row id", async (t) => {
   const ctx = await setup(t);
