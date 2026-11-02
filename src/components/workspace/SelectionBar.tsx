@@ -37,7 +37,7 @@ export function SelectionBar({ count, onClear, actions }: SelectionBarProps): Re
       <div
         role="region"
         aria-label={t("settingsPage.workspace.people.selection.label")}
-        className="pointer-events-auto flex items-center gap-1 rounded-full border border-border/70 bg-popover py-1 ps-4 pe-1 text-popover-foreground shadow-lg"
+        className="pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-1 rounded-2xl border border-border/70 bg-popover py-1 ps-4 pe-1 text-popover-foreground shadow-lg"
       >
         <span className="text-sm font-medium tabular-nums">
           {t("settingsPage.workspace.people.selection.count", { count })}

@@ -129,3 +129,23 @@ test("the mixed checkbox is indeterminate", async (t) => {
   assert.equal(input.indeterminate, false);
   assert.equal(input.checked, true);
 });
+
+test("the bar wraps inside a narrow pane and its labels never truncate", async (t) => {
+  const { SelectionBar } = await loadBar(t);
+
+  const markup = renderToStaticMarkup(
+    React.createElement(SelectionBar, {
+      count: 2,
+      onClear: () => {},
+      actions: [{ label: "Einladungen erneut senden", onClick: () => {} }],
+    })
+  );
+
+  const bar = markup.match(/<div[^>]*role="region"[^>]*class="([^"]*)"/)?.[1] ?? "";
+  const classes = bar.split(/\s+/);
+  for (const name of ["flex-wrap", "justify-center", "max-w-full", "rounded-2xl", "ps-4", "pe-1"]) {
+    assert.ok(classes.includes(name), `missing ${name} in "${bar}"`);
+  }
+  assert.ok(!classes.includes("rounded-full"), "a wrapped pill's radius reads as a blob");
+  assert.doesNotMatch(markup, /truncate/);
+});
