@@ -54,6 +54,10 @@ jest.mock('../../lib/transcriptAudio', () => ({
 }));
 
 import { useFileUpload } from '../useFileUpload';
+import * as transcriptionErrors from '@/lib/transcriptionErrors';
+import { toFriendlyTranscriptionErrorMessage as androidMessage } from '@/lib/transcriptionErrors.android';
+
+afterEach(() => jest.restoreAllMocks());
 
 const byokRoute = {
   provider: 'byok',
@@ -297,6 +301,9 @@ it('discards a picker result from the previous account before uploading', async 
 });
 
 it('retains a failed Android Cloud upload and gives the alert the same connection guidance as history', async () => {
+  jest
+    .spyOn(transcriptionErrors, 'toFriendlyTranscriptionErrorMessage')
+    .mockImplementation(androidMessage);
   mockSnapshotTranscriptionJob.mockReturnValue({ provider: 'cloud' });
   pick({ name: 'voice.wav', size: MB });
   mockTranscribeAndCleanup.mockRejectedValueOnce(
