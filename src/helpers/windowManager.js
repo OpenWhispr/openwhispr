@@ -1808,6 +1808,21 @@ class WindowManager {
     });
   }
 
+  // hide() also hides Chromium's child input window (Chrome_RenderWidgetHostHWND),
+  // and showing the pill again does not bring it back. Clicks then land on the
+  // non-focusable top-level window, which answers WM_MOUSEACTIVATE with
+  // MA_NOACTIVATEANDEAT, so Windows drops every button press while moves and
+  // releases still arrive: the pill can't be clicked or dragged until something
+  // resizes the window (a menu or toast). A resize shows the child again, so
+  // nudge the width and put it back.
+  _restoreWin32MainWindowClicks() {
+    const win = this.mainWindow;
+    if (!win || win.isDestroyed()) return;
+    const bounds = win.getBounds();
+    win.setBounds({ ...bounds, width: bounds.width + 1 });
+    win.setBounds(bounds);
+  }
+
   showDictationPanel(options = {}) {
     if (this._onboardingActive) return;
     const { focus = false, reposition = false, targetPidPromise } = options;
@@ -2307,6 +2322,7 @@ class WindowManager {
 
     this.mainWindow.on("show", () => {
       this.enforceMainWindowOnTop();
+      if (process.platform === "win32") this._restoreWin32MainWindowClicks();
       if (this._assistantPanelOpen) this.showAgentDictationPill();
     });
 
