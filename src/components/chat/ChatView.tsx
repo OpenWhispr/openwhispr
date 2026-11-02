@@ -68,7 +68,7 @@ export default function ChatView({
   });
 
   // A chat started from a note stays about that note here too, as in the note's own chat.
-  const { sourceNote, openNote } = useSourceNote(persistence.noteId);
+  const { sourceNote, openNote, isLoading: sourceNoteLoading } = useSourceNote(persistence.noteId);
 
   const streaming = useChatStreaming({
     messages: persistence.messages,
@@ -312,13 +312,16 @@ export default function ChatView({
               emptyState={
                 <NewChatEmptyState
                   onPrompt={(prompt) => {
+                    if (sourceNoteLoading) return;
                     // The starter card unmounts once the message lands; move focus to the
                     // composer first so it isn't dropped.
                     focusComposer();
                     void sendWithSkill(prompt, attachedSkill);
                   }}
                   showSuggestions={isNewChat}
-                  disabled={submissionInFlight || streaming.agentState !== "idle"}
+                  disabled={
+                    sourceNoteLoading || submissionInFlight || streaming.agentState !== "idle"
+                  }
                 />
               }
               contentClassName={`${PAGE_CONTENT_WIDTH_CLASS} pb-[var(--chat-composer-inset,5rem)]`}
@@ -339,7 +342,10 @@ export default function ChatView({
                     : streaming.agentState
                 }
                 partialTranscript=""
-                onTextSubmit={(text) => void sendWithSkill(text, attachedSkill)}
+                sendDisabled={sourceNoteLoading}
+                onTextSubmit={(text) => {
+                  if (!sourceNoteLoading) void sendWithSkill(text, attachedSkill);
+                }}
                 onCancel={streaming.cancelStream}
                 voiceDraft
                 focusOnIdle={false}

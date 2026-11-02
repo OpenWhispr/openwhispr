@@ -84,3 +84,90 @@ test("a loaded note isn't fetched, and a trashed one isn't added", async (t) => 
   await store.ensureNoteLoaded(104);
   assert.equal(store.getNoteFromStore(104), null);
 });
+
+function deferred() {
+  const { promise, resolve } = Promise.withResolvers();
+  return { promise, resolve };
+}
+
+test("account reset cancels an outstanding note lookup", async (t) => {
+  const { store } = await fixture(t);
+  const lookup = deferred();
+  globalThis.window.electronAPI.getNote = () => lookup.promise;
+  const opening = store.ensureNoteLoaded(103);
+  store.resetForAccountChange();
+  lookup.resolve(notes[2]);
+  await opening;
+  assert.equal(store.getNoteFromStore(103), null);
+});
+
+test("account reset cancels a note waiting for its container", async (t) => {
+  const { store } = await fixture(t);
+  const container = deferred();
+  const started = deferred();
+  globalThis.window.electronAPI.getNote = async () => ({ ...notes[2], folder_id: 20 });
+  globalThis.window.electronAPI.getNotes = () => {
+    started.resolve();
+    return container.promise;
+  };
+  const opening = store.ensureNoteLoaded(103);
+  await started.promise;
+  store.resetForAccountChange();
+  container.resolve([]);
+  await opening;
+  assert.equal(store.getNoteFromStore(103), null);
+});
+
+test("reloading refreshes an older open note after its folder changes space", async (t) => {
+  const { store } = await fixture(t);
+  store.setActiveNoteId(103);
+  await store.ensureNoteLoaded(103);
+  globalThis.window.electronAPI.getNote = async () => ({ ...notes[2], space_id: 2 });
+  await store.loadContainerNotes(store.folderContainerKey(10));
+  assert.equal(store.getNoteFromStore(103)?.space_id, 2);
+});
+
+for (const [name, refreshed] of [
+  ["missing", null],
+  ["deleted", { ...notes[2], deleted_at: "2026-11-02T10:00:00Z" }],
+  ["moved to another container", { ...notes[2], folder_id: 20 }],
+]) {
+  test(`reloading drops an older open note that is ${name}`, async (t) => {
+    const { store } = await fixture(t);
+    store.setActiveNoteId(103);
+    await store.ensureNoteLoaded(103);
+    globalThis.window.electronAPI.getNote = async () => refreshed;
+    await store.loadContainerNotes(store.folderContainerKey(10));
+    assert.equal(store.getNoteFromStore(103), null);
+  });
+}
+
+for (const mutation of ["update", "delete", "account reset", "newer load"]) {
+  test(`an older note refresh cannot overwrite ${mutation}`, async (t) => {
+    const { store } = await fixture(t);
+    store.setActiveNoteId(103);
+    await store.ensureNoteLoaded(103);
+    const lookup = deferred();
+    const started = deferred();
+    globalThis.window.electronAPI.getNote = () => {
+      started.resolve();
+      return lookup.promise;
+    };
+    const loading = store.loadContainerNotes(store.folderContainerKey(10));
+    await started.promise;
+    const updated = { ...notes[2], title: "Newer update" };
+    if (mutation === "update") store.updateNoteInStore(updated);
+    if (mutation === "delete") store.removeNote(103);
+    if (mutation === "account reset") store.resetForAccountChange();
+    if (mutation === "newer load") {
+      globalThis.window.electronAPI.getNotes = async () => [notes[0], updated];
+      await store.loadContainerNotes(store.folderContainerKey(10));
+    }
+    lookup.resolve({ ...notes[2], title: "Stale lookup" });
+    await loading;
+    assert.equal(
+      store.getNoteFromStore(103)?.title ?? null,
+      mutation === "update" || mutation === "newer load" ? "Newer update" : null
+    );
+  });
+}

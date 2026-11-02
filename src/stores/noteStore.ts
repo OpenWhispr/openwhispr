@@ -517,11 +517,14 @@ export async function loadContainerNotes(
       kind === "f"
         ? ((await window.electronAPI.getNotes(noteType, limit, id)) ?? [])
         : ((await window.electronAPI.getNotes(noteType, limit, null, id)) ?? []);
-    // A newer load for this container may have resolved first.
+    // Refreshing an older open note adds another async boundary; a newer
+    // load or account reset must supersede the entire result.
+    if (containerLoadGenerations.get(key) !== gen) return items;
+    const withOpen = await withOpenNote(key, items);
     if (containerLoadGenerations.get(key) === gen) {
       applyContainers({
         ...useNoteStore.getState().notesByContainer,
-        [key]: withOpenNote(key, items),
+        [key]: withOpen,
       });
     }
     return items;
@@ -536,11 +539,18 @@ export async function loadContainerNotes(
 
 // The open note can sit past its container's loaded page (ensureNoteLoaded, or
 // newer notes pushing it down); a reload must not close it.
-function withOpenNote(key: string, items: NoteItem[]): NoteItem[] {
+async function withOpenNote(key: string, items: NoteItem[]): Promise<NoteItem[]> {
   const { activeNoteId, notesByContainer } = useNoteStore.getState();
   if (activeNoteId == null || items.some((note) => note.id === activeNoteId)) return items;
   const open = notesByContainer[key]?.find((note) => note.id === activeNoteId);
-  return open ? [...items, open] : items;
+  if (!open) return items;
+  const refreshed = await window.electronAPI.getNote(activeNoteId);
+  const state = useNoteStore.getState();
+  if (state.activeNoteId !== activeNoteId) return items;
+  const current = state.notesByContainer[key]?.find((note) => note.id === activeNoteId);
+  // IPC updates and deletions arriving during the lookup are newer than its snapshot.
+  const note = current === open ? refreshed : current;
+  return note && !note.deleted_at && noteContainerKey(note) === key ? [...items, note] : items;
 }
 
 /**
@@ -550,10 +560,12 @@ function withOpenNote(key: string, items: NoteItem[]): NoteItem[] {
  */
 export async function ensureNoteLoaded(id: number): Promise<void> {
   if (getNoteFromStore(id)) return;
+  const accountGen = accountGeneration;
   const note = await window.electronAPI.getNote(id);
-  if (!note || note.deleted_at) return;
+  if (accountGen !== accountGeneration || !note || note.deleted_at) return;
   const key = noteContainerKey(note);
   await ensureContainerLoaded(key);
+  if (accountGen !== accountGeneration) return;
   const state = useNoteStore.getState();
   if (findNoteInState(state, id)) return;
   applyContainers({

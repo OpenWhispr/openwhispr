@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { OpenNoteContext } from "./useChatStreaming";
 import type { NoteItem } from "../../types/electron";
 import { buildOpenNoteContext } from "./openNoteContext";
@@ -18,12 +18,15 @@ export interface SourceNote {
 
 interface LoadedNote {
   noteId: number;
-  note: NoteItem;
+  userId: string | null;
+  revision: number;
+  note: NoteItem | null;
   speakerMappings: Record<string, string>;
 }
 
 interface UseSourceNoteResult {
   sourceNote: SourceNote | null;
+  isLoading: boolean;
   /** Grounds the chat in its note, as the note's own chat is; absent once the note is deleted. */
   openNote?: (maxTranscriptTokens: number) => OpenNoteContext;
 }
@@ -33,28 +36,40 @@ interface UseSourceNoteResult {
  * `noteId` is undefined while the conversation loads.
  */
 export function useSourceNote(noteId: number | null | undefined): UseSourceNoteResult {
-  const { user } = useAuth();
+  const { user, isLoaded: authLoaded } = useAuth();
+  const userId = user?.id ?? null;
+  const targetRef = useRef({ noteId, userId, authLoaded });
+  targetRef.current = { noteId, userId, authLoaded };
   const [loaded, setLoaded] = useState<LoadedNote | null>(null);
   // Bumped when the note changes elsewhere (an assistant edit, a sync pull, a delete).
   const [revision, setRevision] = useState(0);
+  const revisionRef = useRef(0);
 
   if (noteId === null && loaded !== null) setLoaded(null);
 
   useEffect(() => {
-    if (noteId == null) return;
-    const refresh = (changed: { id: number } | null) => {
-      if (changed?.id === noteId) setRevision((value) => value + 1);
+    if (noteId === null) return;
+    const invalidate = (): void => {
+      // Invalidate synchronously too: a send or IPC reply may already be preparing.
+      revisionRef.current += 1;
+      setRevision(revisionRef.current);
+    };
+    const refresh = (changed: { id: number } | null): void => {
+      if (noteId === undefined || changed?.id === noteId) invalidate();
     };
     const disposers = [
       window.electronAPI?.onNoteUpdated?.(refresh),
       window.electronAPI?.onNoteSynced?.(refresh),
       window.electronAPI?.onNoteDeleted?.(refresh),
+      // A pending fetch has no container metadata yet, so recheck on any removal.
+      window.electronAPI?.onSpacePurged?.(invalidate),
+      window.electronAPI?.onFolderDeleted?.(invalidate),
     ];
     return () => disposers.forEach((dispose) => dispose?.());
   }, [noteId]);
 
   useEffect(() => {
-    if (noteId == null) return;
+    if (noteId == null || !authLoaded) return;
     let cancelled = false;
     void (async () => {
       const [note, mappings] = await Promise.all([
@@ -62,32 +77,44 @@ export function useSourceNote(noteId: number | null | undefined): UseSourceNoteR
         // Saved names only relabel speakers; without them the transcript still reads.
         window.electronAPI?.getSpeakerMappings?.(noteId).catch(() => []),
       ]);
-      if (cancelled) return;
-      setLoaded(
-        note
-          ? {
-              noteId,
-              note,
-              speakerMappings: Object.fromEntries(
-                (mappings ?? []).map((mapping) => [mapping.speaker_id, mapping.display_name])
-              ),
-            }
-          : null
-      );
+      if (cancelled || revision !== revisionRef.current) return;
+      setLoaded({
+        noteId,
+        userId,
+        revision,
+        note: note ?? null,
+        speakerMappings: Object.fromEntries(
+          (mappings ?? []).map((mapping) => [mapping.speaker_id, mapping.display_name])
+        ),
+      });
     })();
     return () => {
       cancelled = true;
     };
-  }, [noteId, revision]);
-
-  const userId = user?.id;
+  }, [noteId, revision, userId, authLoaded]);
   const userName = user?.name;
   const userEmail = user?.email;
 
   return useMemo(() => {
     // While the next conversation loads, its bar keeps the last note's rather
     // than flashing; only a note loaded for this conversation grounds a send.
-    if (!loaded || noteId === null) return { sourceNote: null };
+    const isLoading =
+      noteId === undefined ||
+      (noteId !== null &&
+        (!authLoaded ||
+          !loaded ||
+          loaded.noteId !== noteId ||
+          loaded.userId !== userId ||
+          loaded.revision !== revision));
+    if (
+      !loaded?.note ||
+      noteId === null ||
+      !authLoaded ||
+      loaded.userId !== userId ||
+      loaded.revision !== revision
+    ) {
+      return { sourceNote: null, isLoading };
+    }
     const { note, speakerMappings } = loaded;
     const deleted = note.deleted_at != null;
     const sourceNote: SourceNote = {
@@ -97,7 +124,7 @@ export function useSourceNote(noteId: number | null | undefined): UseSourceNoteR
       spaceId: note.space_id ?? null,
       deleted,
     };
-    if (deleted || loaded.noteId !== noteId) return { sourceNote };
+    if (deleted || loaded.noteId !== noteId) return { sourceNote, isLoading };
 
     // As the note's own chat (NoteEditor): the transcript says who took the notes.
     const recordedByUser = isNoteRecorder(note, userId);
@@ -115,8 +142,18 @@ export function useSourceNote(noteId: number | null | undefined): UseSourceNoteR
       "";
     return {
       sourceNote,
-      openNote: (maxTranscriptTokens: number) =>
-        buildOpenNoteContext(
+      isLoading,
+      openNote: (maxTranscriptTokens: number): OpenNoteContext => {
+        const target = targetRef.current;
+        if (
+          revisionRef.current !== loaded.revision ||
+          target.noteId !== loaded.noteId ||
+          target.userId !== loaded.userId ||
+          !target.authLoaded
+        ) {
+          return { text: "", transcriptPreview: false };
+        }
+        return buildOpenNoteContext(
           {
             id: note.id,
             folderId: note.folder_id,
@@ -126,7 +163,8 @@ export function useSourceNote(noteId: number | null | undefined): UseSourceNoteR
             transcript,
           },
           maxTranscriptTokens
-        ),
+        );
+      },
     };
-  }, [loaded, noteId, userId, userName, userEmail]);
+  }, [loaded, noteId, revision, authLoaded, userId, userName, userEmail]);
 }

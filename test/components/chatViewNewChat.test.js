@@ -33,6 +33,7 @@ const MOCKS = {
     export function useChatPersistence() {
       return {
         conversationId: null,
+        noteId: null,
         messages: [],
         setMessages() {},
         createConversation: async () => {

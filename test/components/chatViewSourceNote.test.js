@@ -14,7 +14,7 @@ const MOCKS = {
     export function useChatStreaming(options) {
       globalThis.__chatStreamingOptions = options;
       const cancelStream = useCallback(() => {}, []);
-      return { agentState: "idle", toolStatus: "", activeToolName: "", sendToAI() {}, cancelStream };
+      return { agentState: "idle", toolStatus: "", activeToolName: "", sendToAI(text) { globalThis.__sentContexts.push({ text, context: options.openNote?.(Infinity) }); }, cancelStream };
     }
   `,
   "/useChatPersistence": `
@@ -61,10 +61,10 @@ const NOTE = {
   deleted_at: null,
 };
 
-async function renderChatView(t, { noteId, note, user = null }) {
+async function renderChatView(t, { noteId, note, user = null, api = {} }) {
   let root = null;
   const opened = [];
-  const noteListeners = new Set();
+  const listeners = new Map();
   let currentNote = note;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
@@ -72,12 +72,22 @@ async function renderChatView(t, { noteId, note, user = null }) {
     delete globalThis.__user;
     delete globalThis.__chatInput;
     delete globalThis.__chatStreamingOptions;
+    delete globalThis.__sentContexts;
   });
   globalThis.__noteId = noteId;
   globalThis.__user = user;
-  const subscribe = (listener) => {
-    noteListeners.add(listener);
-    return () => noteListeners.delete(listener);
+  const sent = [];
+  globalThis.__sentContexts = sent;
+  const subscribe = (event) => (listener) => {
+    if (!listeners.has(event)) listeners.set(event, new Set());
+    listeners.get(event).add(listener);
+    return () => listeners.get(event).delete(listener);
+  };
+  const emit = async (event, payload) => {
+    await React.act(async () => {
+      for (const listener of listeners.get(event) ?? []) listener(payload);
+    });
+    await settle();
   };
   installBrowserGlobals(t, {
     window: {
@@ -86,9 +96,12 @@ async function renderChatView(t, { noteId, note, user = null }) {
       electronAPI: {
         getNote: async (id) => (id === currentNote?.id ? currentNote : null),
         getSpeakerMappings: async () => [],
-        onNoteUpdated: subscribe,
-        onNoteSynced: subscribe,
-        onNoteDeleted: subscribe,
+        onNoteUpdated: subscribe("updated"),
+        onNoteSynced: subscribe("synced"),
+        onNoteDeleted: subscribe("deleted"),
+        onSpacePurged: subscribe("spacePurged"),
+        onFolderDeleted: subscribe("folderDeleted"),
+        ...api,
       },
     },
   });
@@ -110,6 +123,16 @@ async function renderChatView(t, { noteId, note, user = null }) {
   return {
     container,
     opened,
+    sent,
+    emit,
+    setUser: async (nextUser) => {
+      globalThis.__user = nextUser;
+      await render();
+    },
+    submit: async (text) => {
+      await React.act(async () => globalThis.__chatInput.onTextSubmit(text));
+      await settle();
+    },
     // The open conversation's note changes, as persistence reports it.
     setNoteId: async (id) => {
       globalThis.__noteId = id;
@@ -118,8 +141,7 @@ async function renderChatView(t, { noteId, note, user = null }) {
     // The note changes elsewhere, and main broadcasts it.
     editNote: async (changes) => {
       currentNote = { ...currentNote, ...changes };
-      for (const listener of noteListeners) listener(currentNote);
-      await settle();
+      await emit("updated", currentNote);
     },
   };
 }
@@ -252,4 +274,141 @@ test("a long note title is shortened in the composer placeholder", async (t) => 
     globalThis.__chatInput.placeholder,
     "Ask about Weekly product sync with the design team..."
   );
+});
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((complete) => {
+    resolve = complete;
+  });
+  return { promise, resolve };
+}
+
+test("a follow-up waits for source-note loading without starting a fake reply", async (t) => {
+  const pending = deferred();
+  const chat = await renderChatView(t, {
+    noteId: NOTE.id,
+    note: NOTE,
+    api: { getNote: () => pending.promise },
+  });
+
+  await chat.submit("What were the decisions?");
+  assert.deepEqual(chat.sent, [], "a pending note must not send an ungrounded question");
+  assert.equal(globalThis.__chatInput.sendDisabled, true);
+  assert.equal(globalThis.__chatInput.agentState, "idle");
+
+  await React.act(async () => pending.resolve(NOTE));
+  await settle();
+  await chat.submit("What were the decisions?");
+  assert.equal(chat.sent.length, 1);
+  assert.match(chat.sent[0].context.text, /three-step flow/);
+  assert.equal(globalThis.__chatInput.sendDisabled, false);
+});
+
+for (const [event, payload] of [
+  ["spacePurged", { spaceId: 2 }],
+  ["folderDeleted", { id: 9 }],
+]) {
+  test(`${event} clears cached grounding before rechecking the source note`, async (t) => {
+    const chat = await renderChatView(t, { noteId: NOTE.id, note: NOTE });
+    const cachedContext = globalThis.__chatStreamingOptions.openNote;
+    const pending = deferred();
+    globalThis.window.electronAPI.getNote = () => pending.promise;
+
+    await chat.emit(event, payload);
+    assert.equal(globalThis.__chatStreamingOptions.openNote, undefined);
+    assert.equal(
+      cachedContext(Infinity).text,
+      "",
+      "a send already preparing must not reuse revoked content"
+    );
+    assert.doesNotMatch(chat.container.textContent, /Q3 planning sync/);
+    await chat.submit("Summarize this note");
+    assert.deepEqual(chat.sent, []);
+
+    await React.act(async () => pending.resolve(null));
+    await settle();
+    assert.equal(globalThis.__chatStreamingOptions.openNote, undefined);
+    assert.equal(globalThis.__chatInput.sendDisabled, false);
+  });
+
+  test(`${event} invalidates a source-note fetch already in flight`, async (t) => {
+    const stale = deferred();
+    const chat = await renderChatView(t, {
+      noteId: NOTE.id,
+      note: NOTE,
+      api: { getNote: () => stale.promise },
+    });
+    globalThis.window.electronAPI.getNote = async () => null;
+    await chat.emit(event, payload);
+    await React.act(async () => stale.resolve(NOTE));
+    await settle();
+
+    assert.equal(globalThis.__chatStreamingOptions.openNote, undefined);
+    assert.doesNotMatch(chat.container.textContent, /Q3 planning sync/);
+    assert.equal(globalThis.__chatInput.sendDisabled, false);
+  });
+}
+
+test("a follow-up waits for an edited source note to finish refreshing", async (t) => {
+  const chat = await renderChatView(t, { noteId: NOTE.id, note: NOTE });
+  const pending = deferred();
+  globalThis.window.electronAPI.getNote = () => pending.promise;
+  await chat.emit("updated", { id: NOTE.id });
+  await chat.submit("What is the current decision?");
+  assert.deepEqual(chat.sent, []);
+  assert.equal(globalThis.__chatStreamingOptions.openNote, undefined);
+
+  await React.act(async () => pending.resolve({ ...NOTE, content: "Ship the four-step flow." }));
+  await settle();
+  await chat.submit("What is the current decision?");
+  assert.match(chat.sent[0].context.text, /Ship the four-step flow/);
+});
+
+test("changing accounts invalidates pending source-note content", async (t) => {
+  const stale = deferred();
+  const chat = await renderChatView(t, {
+    noteId: NOTE.id,
+    note: NOTE,
+    user: { id: "user-a" },
+    api: { getNote: () => stale.promise },
+  });
+  globalThis.window.electronAPI.getNote = async () => null;
+  await chat.setUser({ id: "user-b" });
+  await React.act(async () => stale.resolve(NOTE));
+  await settle();
+  assert.equal(globalThis.__chatStreamingOptions.openNote, undefined);
+  assert.doesNotMatch(chat.container.textContent, /Q3 planning sync/);
+});
+
+test("switching through an unknown source blocks sending until a plain chat is ready", async (t) => {
+  const chat = await renderChatView(t, { noteId: NOTE.id, note: NOTE });
+  await chat.setNoteId(undefined);
+  await chat.submit("Question while switching");
+  assert.deepEqual(chat.sent, []);
+  assert.equal(globalThis.__chatInput.sendDisabled, true);
+
+  await chat.setNoteId(null);
+  await chat.submit("A general question");
+  assert.equal(chat.sent.length, 1);
+  assert.equal(chat.sent[0].context, undefined);
+  assert.equal(globalThis.__chatInput.sendDisabled, false);
+});
+
+test("a note update during conversation switching invalidates the same-note cache", async (t) => {
+  const chat = await renderChatView(t, { noteId: NOTE.id, note: NOTE });
+  await chat.setNoteId(undefined);
+  const pending = deferred();
+  globalThis.window.electronAPI.getNote = () => pending.promise;
+  await chat.emit("updated", { id: NOTE.id });
+  await chat.setNoteId(NOTE.id);
+
+  await chat.submit("What is the current decision?");
+  assert.deepEqual(chat.sent, [], "the old snapshot must not survive the update while switching");
+  assert.equal(globalThis.__chatInput.sendDisabled, true);
+
+  await React.act(async () => pending.resolve({ ...NOTE, content: "Ship the four-step flow." }));
+  await settle();
+  await chat.submit("What is the current decision?");
+  assert.match(chat.sent[0].context.text, /Ship the four-step flow/);
 });
