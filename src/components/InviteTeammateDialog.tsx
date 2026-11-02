@@ -135,8 +135,12 @@ export default function InviteTeammateDialog({
         setSeatsUsed(preview.seats_used);
       })
       .catch(async () => {
-        // Free workspace — the preview needs a subscription. Fall back to the
-        // member count so the seat line still renders, with nothing to bill.
+        // A free workspace, or an admin: the preview needs a subscription and the owner. The seat
+        // line reads the workspace list's count; only an older API without it needs the members.
+        const known = useWorkspaceStore
+          .getState()
+          .workspaces.find((candidate) => candidate.id === workspaceId)?.seats_used;
+        if (typeof known === "number") return;
         try {
           const members = await WorkspacesService.listMembers(workspaceId);
           if (!cancelled) setSeatsUsed(members.length);
@@ -218,9 +222,11 @@ export default function InviteTeammateDialog({
     };
   }, [open, workspaceId, billedSeats, batchPreviews]);
 
+  // The list's count includes pending invitations, as the seat warning's does.
+  const seatLineUsed = typeof workspaceSeatsUsed === "number" ? workspaceSeatsUsed : seatsUsed;
   const seatLine =
-    seatsUsed !== null && seats !== null
-      ? t("workspaces.invite.seatUsage", { used: seatsUsed, seats })
+    seatLineUsed !== null && seats !== null
+      ? t("workspaces.invite.seatUsage", { used: seatLineUsed, seats })
       : null;
   // The opening preview prices one added seat; more come from their own preview.
   const batchPreview = billedSeats > 1 ? batchPreviews.get(billedSeats) : undefined;

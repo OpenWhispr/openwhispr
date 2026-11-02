@@ -21,6 +21,8 @@ async function mountDialog(t, props) {
       "__workspaces",
       "__sendOutcome",
       "__refreshCalls",
+      "__members",
+      "__memberListCalls",
     ]) {
       delete globalThis[key];
     }
@@ -68,6 +70,7 @@ async function mountDialog(t, props) {
         export const useWorkspaceStore = (selector) =>
           selector({ workspaces: globalThis.__workspaces ?? [] });
         useWorkspaceStore.getState = () => ({
+          workspaces: globalThis.__workspaces ?? [],
           refresh: async (options) => {
             (globalThis.__refreshCalls ??= []).push(options);
           },
@@ -85,7 +88,10 @@ async function mountDialog(t, props) {
                 })
               : Promise.reject(new Error("no subscription"));
           },
-          listMembers: async () => [],
+          listMembers: async () => {
+            globalThis.__memberListCalls = (globalThis.__memberListCalls ?? 0) + 1;
+            return globalThis.__members ?? [];
+          },
         };
       `,
     },
@@ -308,6 +314,61 @@ test("seats left come from the workspace list", async (t) => {
   });
 
   assert.deepEqual(latest().state.seats, { purchasedLeft: 10, ceilingLeft: 490 });
+});
+
+test("the seat line and the seat warning count the same seats", async (t) => {
+  // An admin: the owner-only preview refuses, and seats_used counts pending invitations too.
+  globalThis.__members = Array.from({ length: 8 }, (_, index) => ({ user_id: `u${index}` }));
+  const { latest } = await mountWithWorkspace(t, {
+    ...WORKSPACE,
+    has_subscription: true,
+    seats_used: 10,
+  });
+  await React.act(async () => {});
+
+  assert.equal(latest().seatLine, 'workspaces.invite.seatUsage|{"used":10,"seats":20}');
+  assert.deepEqual(latest().state.seats, { purchasedLeft: 10, ceilingLeft: 490 });
+  assert.equal(globalThis.__memberListCalls, undefined);
+});
+
+test("the seat line prefers the workspace list over the preview", async (t) => {
+  globalThis.__seatPreview = {
+    seats_used: 9,
+    current_quantity: 20,
+    amount_due: 1200,
+    currency: "usd",
+  };
+  const { latest } = await mountWithWorkspace(t, {
+    ...WORKSPACE,
+    has_subscription: true,
+    seats_used: 10,
+  });
+  await React.act(async () => {});
+
+  assert.equal(latest().seatLine, 'workspaces.invite.seatUsage|{"used":10,"seats":20}');
+});
+
+test("an older API without seats_used still shows the member count", async (t) => {
+  globalThis.__members = Array.from({ length: 8 }, (_, index) => ({ user_id: `u${index}` }));
+  const { latest } = await mountWithWorkspace(t, WORKSPACE);
+  await React.act(async () => {});
+
+  assert.equal(latest().seatLine, 'workspaces.invite.seatUsage|{"used":8,"seats":20}');
+  assert.equal(globalThis.__memberListCalls, 1);
+});
+
+test("an older API's preview still fills the seat line", async (t) => {
+  globalThis.__seatPreview = {
+    seats_used: 9,
+    current_quantity: 20,
+    amount_due: 1200,
+    currency: "usd",
+  };
+  const { latest } = await mountWithWorkspace(t, WORKSPACE);
+  await React.act(async () => {});
+
+  assert.equal(latest().seatLine, 'workspaces.invite.seatUsage|{"used":9,"seats":20}');
+  assert.equal(globalThis.__memberListCalls, undefined);
 });
 
 test("a free workspace gets no seat warning", async (t) => {
