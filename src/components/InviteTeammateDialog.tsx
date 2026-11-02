@@ -247,6 +247,7 @@ export default function InviteTeammateDialog({
       .map((recipient) => recipient.email);
     const invited: string[] = [];
     let seatRefused = false;
+    let alreadyInvited = false;
     try {
       await invitePeople.sendInvitations({
         workspaceId,
@@ -259,6 +260,7 @@ export default function InviteTeammateDialog({
           dispatch({ type: "result", email, outcome });
           if (outcome.ok === true) invited.push(email);
           else if (outcome.kind === "seatLimit") seatRefused = true;
+          else if (outcome.kind === "alreadyInvited") alreadyInvited = true;
         },
       });
     } finally {
@@ -274,8 +276,9 @@ export default function InviteTeammateDialog({
     if (invited.length > 0) onInvited?.(invited);
     // The workspace list's seats_used is what the seats left and the room under the ceiling are
     // worked out from: it is behind this run's invitations, and after a seat refusal behind
-    // whoever else invited people meanwhile.
-    if (seatRefused || invited.length > 0) {
+    // whoever else invited people meanwhile. An already-invited answer can be this run's own
+    // invitation, created by a request whose answer was lost.
+    if (seatRefused || alreadyInvited || invited.length > 0) {
       void useWorkspaceStore.getState().refresh({ fresh: true });
     }
   };

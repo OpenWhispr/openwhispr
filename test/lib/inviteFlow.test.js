@@ -572,6 +572,75 @@ test("the send finishes as done when only skipped chips remain", () => {
   assert.deepEqual(emails(state), ["m@ws.io"]);
 });
 
+test("a send that invited nobody stays editing and shows why", () => {
+  let state = run(commitText(fresh(), "a@x.com b@y.io"), { type: "send" });
+  state = run(
+    state,
+    { type: "result", email: "a@x.com", outcome: { ok: false, kind: "alreadyInvited" } },
+    { type: "result", email: "b@y.io", outcome: { ok: false, kind: "alreadyMember" } },
+    { type: "finished" }
+  );
+
+  assert.equal(state.phase, "editing");
+  assert.deepEqual(state.sent, []);
+  const summary = inviteSummary(state);
+  assert.deepEqual(
+    summary.skipped.map((recipient) => recipient.email),
+    ["a@x.com", "b@y.io"]
+  );
+  assert.equal(summary.canSend, false);
+});
+
+test("a lost answer whose retry finds the address already invited doesn't claim it was sent", () => {
+  let state = run(commitText(fresh(), "a@x.com"), { type: "send" });
+  state = run(
+    state,
+    { type: "result", email: "a@x.com", outcome: { ok: false, kind: "requestFailed" } },
+    { type: "finished" }
+  );
+  assert.equal(state.phase, "editing");
+
+  // The lost request may have created it, so "already invited" is true and "sent" is not known.
+  state = run(
+    run(state, { type: "send" }),
+    { type: "result", email: "a@x.com", outcome: { ok: false, kind: "alreadyInvited" } },
+    { type: "finished" }
+  );
+
+  assert.equal(state.phase, "editing");
+  assert.deepEqual(state.sent, []);
+  assert.deepEqual(state.recipients, [
+    { email: "a@x.com", state: { status: "blocked", reason: "alreadyInvited" } },
+  ]);
+});
+
+test("an earlier send still counts when the retry only finds skipped addresses", () => {
+  let state = run(commitText(fresh(), "a@x.com b@y.io"), { type: "send" });
+  state = run(
+    state,
+    { type: "result", email: "a@x.com", outcome: { ok: true, emailSent: true } },
+    { type: "result", email: "b@y.io", outcome: { ok: false, kind: "requestFailed" } },
+    { type: "finished" }
+  );
+
+  state = run(
+    run(state, { type: "send" }),
+    { type: "result", email: "b@y.io", outcome: { ok: false, kind: "alreadyInvited" } },
+    { type: "finished" }
+  );
+
+  assert.equal(state.phase, "done");
+  assert.deepEqual(state.sent, [{ email: "a@x.com", emailSent: true }]);
+});
+
+test("an empty list with nothing sent never reads as done", () => {
+  const sending = { ...fresh(), phase: "sending" };
+  assert.equal(run(sending, { type: "finished" }).phase, "editing");
+
+  const skipped = commitText(run(fresh(), members("m@ws.io")), "m@ws.io");
+  assert.equal(run(skipped, { type: "remove", email: "m@ws.io" }).phase, "editing");
+});
+
 test("the send stays editing when a failed chip remains beside skipped ones", () => {
   let state = run(commitText(run(fresh(), members("m@ws.io")), "a@x.com m@ws.io"), {
     type: "send",

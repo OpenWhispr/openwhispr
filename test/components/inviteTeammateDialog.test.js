@@ -385,3 +385,33 @@ test("a run that invited nobody and met no seat refusal leaves the workspace lis
 
   assert.equal(globalThis.__refreshCalls, undefined);
 });
+
+test("an already-member refusal from the switcher invites nobody and says so", async (t) => {
+  globalThis.__sendOutcome = { ok: false, kind: "alreadyMember" };
+  const invited = [];
+  // The workspace switcher passes no knownEmails, so only the server can say who is a member.
+  const { latest } = await mountWithWorkspace(t, WORKSPACE, {
+    initialEmail: "m@x.com",
+    onInvited: (emails) => invited.push(emails),
+  });
+
+  await React.act(async () => latest().onSend());
+
+  assert.equal(latest().state.phase, "editing");
+  assert.deepEqual(latest().state.sent, []);
+  assert.deepEqual(latest().state.recipients, [
+    { email: "m@x.com", state: { status: "blocked", reason: "alreadyMember" } },
+  ]);
+  assert.deepEqual(invited, []);
+  assert.equal(globalThis.__refreshCalls, undefined);
+});
+
+test("a run answered already invited refreshes the workspace list so the seats count them", async (t) => {
+  globalThis.__sendOutcome = { ok: false, kind: "alreadyInvited" };
+  const { latest } = await mountWithWorkspace(t, WORKSPACE, { initialEmail: "a@x.com" });
+
+  await React.act(async () => latest().onSend());
+
+  assert.equal(latest().state.phase, "editing");
+  assert.deepEqual(globalThis.__refreshCalls, [{ fresh: true }]);
+});

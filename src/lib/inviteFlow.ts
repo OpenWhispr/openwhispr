@@ -163,9 +163,10 @@ function shortfall(left: number | null, requested: number): SeatShortfall | null
   return { available, excess: requested - available };
 }
 
-// Only blocked chips are left, so there is nothing more to send or fix.
-function isSettled(recipients: InviteRecipient[]): boolean {
-  return recipients.every((recipient) => recipient.state.status === "blocked");
+// Something went out and only blocked chips are left, so there is nothing more to send or fix.
+// With nothing sent there is nothing to confirm: the chips stay to say why.
+function isSettled(recipients: InviteRecipient[], sent: InviteFlowState["sent"]): boolean {
+  return sent.length > 0 && recipients.every((recipient) => recipient.state.status === "blocked");
 }
 
 function resolveResult(
@@ -299,7 +300,11 @@ export function inviteReducer(state: InviteFlowState, event: InviteFlowEvent): I
           ? { email: recipient.email, state: { status: "failed", kind: "requestFailed" } }
           : recipient
       );
-      return { ...state, recipients, phase: isSettled(recipients) ? "done" : "editing" };
+      return {
+        ...state,
+        recipients,
+        phase: isSettled(recipients, state.sent) ? "done" : "editing",
+      };
     }
     return state;
   }
@@ -318,10 +323,7 @@ export function inviteReducer(state: InviteFlowState, event: InviteFlowEvent): I
       // Removing the last failed chip of a partial send must still confirm the invitations that
       // went out, and warn about any whose email wasn't delivered.
       const settled =
-        state.phase === "editing" &&
-        isSettled(recipients) &&
-        state.draft === "" &&
-        state.sent.length > 0;
+        state.phase === "editing" && isSettled(recipients, state.sent) && state.draft === "";
       return { ...state, recipients, phase: settled ? "done" : state.phase };
     }
     case "role":

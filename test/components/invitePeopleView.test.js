@@ -460,6 +460,20 @@ test("one skipped member shows the skipped bar and Send stays enabled", async (t
   assert.doesNotMatch(markup.match(/<input[^>]*>/)[0], /aria-invalid/);
 });
 
+test("a send that invited nobody shows why, not a success screen", async (t) => {
+  const { render } = await loadView(t);
+
+  const markup = render({
+    recipients: [chip("nina@x.com", { status: "blocked", reason: "alreadyMember" })],
+  });
+
+  const [bar] = bars(markup);
+  assert.equal(bar.tone, "warning");
+  assert.match(bar.body, /workspaces\.invite\.errors\.alreadyMember/);
+  assert.doesNotMatch(markup, /workspaces\.invite\.sentTitle/);
+  assert.match(primaryButton(markup), /disabled=""/);
+});
+
 test("several skipped show the count", async (t) => {
   const { render } = await loadView(t);
 
