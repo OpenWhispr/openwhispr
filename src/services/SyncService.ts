@@ -75,7 +75,11 @@ import {
   isCloudNoteNewer,
   normalizeTimestamp,
 } from "../helpers/cloudSyncGuards.js";
-import { resolveRendererCloudNoteCreate, type CloudNoteCreateResult } from "./noteCreateAck";
+import {
+  recordNoteCreateAttempts,
+  resolveRendererCloudNoteCreate,
+  type CloudNoteCreateResult,
+} from "./noteCreateAck";
 import {
   clearUpdate404,
   isPermissionDenialCode,
@@ -357,6 +361,10 @@ interface ConversationCreateSource {
   updated_at: string;
   messages: readonly unknown[];
 }
+
+type LocalConversation = NonNullable<
+  Awaited<ReturnType<NonNullable<Window["electronAPI"]["getAgentConversation"]>>>
+>;
 
 function conversationCreateSnapshot(
   conversation: ConversationCreateSource
@@ -1142,6 +1150,8 @@ export class SyncService {
     cloudFolderId: string | null,
     scope: PushScopeFields
   ): Promise<void> {
+    const recorded = await recordNoteCreateAttempts([note.client_note_id]);
+    if (!recorded.has(note.client_note_id)) return;
     const cloud = await NotesService.create({
       client_note_id: note.client_note_id,
       ...buildNoteCreatePayload(note, cloudFolderId),
@@ -1206,6 +1216,31 @@ export class SyncService {
     }
   }
 
+  // Recorded before the request is sent, so a chat deleted while it is in
+  // flight stays a tombstone its late receipt can link. A chat deleted since it
+  // was read is not sent.
+  private async createCloudConversation(full: LocalConversation): Promise<void> {
+    const recorded = await window.electronAPI.markConversationCreateAttempted?.(full.id);
+    if (!recorded?.success) return;
+    const snapshot = conversationCreateSnapshot(full);
+    const cloud = await ConversationsService.create({
+      client_conversation_id: full.client_conversation_id ?? String(full.id),
+      title: full.title,
+      created_at: full.created_at,
+      updated_at: full.updated_at,
+      messages: full.messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+        metadata: m.metadata
+          ? typeof m.metadata === "string"
+            ? JSON.parse(m.metadata)
+            : m.metadata
+          : null,
+      })),
+    });
+    await this.acknowledgeConversationCreate(full.id, snapshot, cloud.id);
+  }
+
   private async pushConversation(id: number): Promise<void> {
     const full = await window.electronAPI.getAgentConversation?.(id);
     if (!full) return;
@@ -1213,23 +1248,7 @@ export class SyncService {
     if (full.cloud_id) {
       await ConversationsService.update(full.cloud_id, { title: full.title });
     } else {
-      const snapshot = conversationCreateSnapshot(full);
-      const cloud = await ConversationsService.create({
-        client_conversation_id: full.client_conversation_id ?? String(full.id),
-        title: full.title,
-        created_at: full.created_at,
-        updated_at: full.updated_at,
-        messages: full.messages.map((m) => ({
-          role: m.role,
-          content: m.content,
-          metadata: m.metadata
-            ? typeof m.metadata === "string"
-              ? JSON.parse(m.metadata)
-              : m.metadata
-            : null,
-        })),
-      });
-      await this.acknowledgeConversationCreate(full.id, snapshot, cloud.id);
+      await this.createCloudConversation(full);
     }
   }
 
@@ -2157,7 +2176,10 @@ export class SyncService {
     if (denied) await this.restoreDeniedRows("note");
 
     for (let i = 0; i < fresh.length; i += BATCH_SIZE) {
-      const chunk = fresh.slice(i, i + BATCH_SIZE);
+      const batch = fresh.slice(i, i + BATCH_SIZE);
+      const recorded = await recordNoteCreateAttempts(batch.map(({ note }) => note.client_note_id));
+      const chunk = batch.filter(({ note }) => recorded.has(note.client_note_id));
+      if (chunk.length === 0) continue;
       try {
         const { created } = await NotesService.batchCreate(
           chunk.map(({ note: n, scope }) => ({
@@ -2504,23 +2526,7 @@ export class SyncService {
       try {
         const full = await window.electronAPI.getAgentConversation?.(conv.id);
         if (!full) continue;
-        const snapshot = conversationCreateSnapshot(full);
-        const cloudConv = await ConversationsService.create({
-          client_conversation_id: full.client_conversation_id ?? String(full.id),
-          title: full.title,
-          created_at: full.created_at,
-          updated_at: full.updated_at,
-          messages: full.messages.map((m) => ({
-            role: m.role,
-            content: m.content,
-            metadata: m.metadata
-              ? typeof m.metadata === "string"
-                ? JSON.parse(m.metadata)
-                : m.metadata
-              : null,
-          })),
-        });
-        await this.acknowledgeConversationCreate(full.id, snapshot, cloudConv.id);
+        await this.createCloudConversation(full);
       } catch (err) {
         console.error("Conversation sync failed:", err);
       }

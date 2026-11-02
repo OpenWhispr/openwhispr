@@ -3822,6 +3822,7 @@ declare global {
         localFolderId: number | null,
         localSpaceId?: number | null
       ) => Promise<NoteItem | null>;
+      markNoteCreatesAttempted?: (clientNoteIds: string[]) => Promise<string[]>;
       acknowledgeNoteCreate?: (
         id: number,
         snapshot: NoteCreateSnapshot,
@@ -3903,6 +3904,7 @@ declare global {
         cloudConv: Record<string, unknown>,
         messages: Array<Record<string, unknown>>
       ) => Promise<void>;
+      markConversationCreateAttempted?: (id: number) => Promise<{ success: boolean }>;
       acknowledgeConversationCreate?: (
         id: number,
         snapshot: ConversationCreateSnapshot,
