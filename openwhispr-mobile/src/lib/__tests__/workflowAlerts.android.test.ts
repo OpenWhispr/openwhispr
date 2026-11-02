@@ -4,6 +4,12 @@ import { router } from 'expo-router';
 import en from '@/locales/en/translation.json';
 import ar from '@/locales/ar/translation.json';
 
+jest.mock('@/lib/privateMode', () => ({
+  ...jest.requireActual('@/lib/privateMode'),
+  getPrivateModeUnavailableMessage: () =>
+    jest.requireActual('@/lib/privateMode.android').getPrivateModeUnavailableMessage(),
+}));
+
 const mockUpdateConfig = jest.fn();
 const mockSetMode = jest.fn();
 const mockSpeechReady = jest.fn();
