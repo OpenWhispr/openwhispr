@@ -1,3 +1,5 @@
+jest.mock('@/store/useAuthStore', () => jest.requireActual('@/store/useAuthStore.android'));
+
 jest.mock('@/db/migrate', () => jest.requireActual('@/db/migrate.android'));
 // Exercise the same database adapter Metro selects for Android.
 jest.mock('@/db', () => jest.requireActual('@/db/index.android'));
@@ -473,7 +475,7 @@ it('preserves the original Android startup error and retries without opening the
 it('retains the existing iOS initialization fallback when its session request fails', async () => {
   require('react-native').Platform.OS = 'ios';
   mockSessionFailure = new Error('Session initialization failed');
-  const { useAuthStore } = require('@/store/useAuthStore');
+  const { useAuthStore } = jest.requireActual('@/store/useAuthStore');
   await expect(useAuthStore.getState().initialize()).resolves.toBeUndefined();
   expect(useAuthStore.getState()).toMatchObject({ isInitialized: true, isLoading: false });
 });
