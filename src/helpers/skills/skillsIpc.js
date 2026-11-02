@@ -298,12 +298,12 @@ function registerSkillsIpc({ ipcMain, library, shell, broadcast }) {
       : null
   );
   // Not false when the write fails: false means the entry was skipped for good.
-  ipcMain.handle("skills-apply-from-cloud", (_event, entry) =>
+  ipcMain.handle("skills-apply-from-cloud", (_event, entry, expectedLocal) =>
     isCloudEntry(entry)
       ? answering(
           "Could not write a skill from Cloud backup",
           (error) => ({ ok: false, error: writeErrorCode(error) }),
-          () => library.applyFromCloud(entry)
+          () => library.applyFromCloud(entry, expectedLocal)
         )
       : false
   );
@@ -321,6 +321,13 @@ function registerSkillsIpc({ ipcMain, library, shell, broadcast }) {
     isSkillFolderName(name)
       ? answering("Could not forget a removed skill", NOT_SAVED, () =>
           database.hardDeleteSkillState(name)
+        )
+      : null
+  );
+  ipcMain.handle("skills-queue-cloud-delete", (_event, name, cloudId) =>
+    isSkillFolderName(name) && typeof cloudId === "string"
+      ? answering("Could not queue a skill removal", NOT_SAVED, () =>
+          database.queueSkillCloudDelete(name, cloudId)
         )
       : null
   );

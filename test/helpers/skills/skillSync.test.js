@@ -40,6 +40,53 @@ const cloudSkill = (name, files, extra = {}) => ({
 });
 const utf8 = (filePath, content) => ({ path: filePath, encoding: "utf8", content });
 
+for (const deleted of [false, true]) {
+  test(`a cloud ${deleted ? "delete" : "update"} leaves a root directory link intact`, (t) => {
+    const ctx = setup(t);
+    if (!ctx) return;
+    const entry = cloudSkill("linked", [utf8("SKILL.md", skillText("linked"))]);
+    ctx.library.applyFromCloud(entry);
+    const folder = path.join(ctx.skillsDir, "linked");
+    const target = path.join(path.dirname(ctx.skillsDir), "linked-target");
+    fs.renameSync(folder, target);
+    fs.symlinkSync(target, folder, process.platform === "win32" ? "junction" : "dir");
+    ctx.library.scan();
+
+    assert.equal(
+      ctx.library.applyFromCloud({
+        ...entry,
+        updated_at: "2026-11-01T00:00:00.000Z",
+        deleted_at: deleted ? "2026-11-01T00:00:00.000Z" : null,
+      }),
+      false
+    );
+    assert.equal(fs.lstatSync(folder).isSymbolicLink(), true);
+    assert.equal(fs.readFileSync(path.join(target, "SKILL.md"), "utf8"), skillText("linked"));
+  });
+}
+
+test("an external edit after the merge lookup is kept pending instead of replaced", (t) => {
+  const ctx = setup(t);
+  if (!ctx) return;
+  const entry = cloudSkill("recap", [utf8("SKILL.md", skillText("recap"))]);
+  ctx.library.applyFromCloud(entry);
+  ctx.library.scan();
+  writeFolder(ctx.skillsDir, "recap", { "SKILL.md": skillText("recap", "My edit.") });
+
+  assert.equal(
+    ctx.library.applyFromCloud({
+      ...entry,
+      files: [utf8("SKILL.md", skillText("recap", "Cloud edit."))],
+    }),
+    false
+  );
+  assert.equal(readSkill(ctx.skillsDir, "recap"), skillText("recap", "My edit."));
+  assert.deepEqual(
+    ctx.database.getPendingSkills().map((row) => row.name),
+    ["recap"]
+  );
+});
+
 test("a skill exports byte for byte: text as UTF-8, everything else as base64", (t) => {
   const ctx = setup(t);
   if (!ctx) return;
@@ -179,9 +226,7 @@ test("a skill over the sync caps reports tooLargeToSync and is never pushed", (t
   assert.deepEqual(ctx.library.exportForCloud("many-files"), { tooLargeToSync: true });
 });
 
-test("a pulled skill is validated and written atomically; an invalid one is skipped and logged", (
-  t
-) => {
+test("a pulled skill is validated and written atomically; an invalid one is skipped and logged", (t) => {
   const ctx = setup(t);
   if (!ctx) return;
   const warnings = t.mock.method(debugLogger, "warn", () => {});
@@ -194,9 +239,7 @@ test("a pulled skill is validated and written atomically; an invalid one is skip
   ]);
   assert.equal(ctx.library.applyFromCloud({ ...updated, enabled: false }), true);
   assert.equal(readSkill(ctx.skillsDir, "meeting-prep"), skillText("meeting-prep", "New."));
-  assert.deepEqual(listDir(path.join(ctx.skillsDir, "meeting-prep", "references")), [
-    "agenda.md",
-  ]);
+  assert.deepEqual(listDir(path.join(ctx.skillsDir, "meeting-prep", "references")), ["agenda.md"]);
   const [summary] = ctx.library.scan();
   assert.deepEqual([summary.description, summary.enabled], ["New.", false]);
 

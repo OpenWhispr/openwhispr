@@ -681,7 +681,7 @@ class SkillLibrary {
 
   // A skill from Cloud backup: checked like one found on disk, then written in one swap. A
   // tombstone removes the skill and its versions. False when the entry was skipped.
-  applyFromCloud(entry) {
+  applyFromCloud(entry, expectedLocal) {
     const name = entry?.name;
     const skip = (reason) => {
       debugLogger.warn("Skipped a skill from Cloud backup", { name, reason }, "skills");
@@ -691,10 +691,47 @@ class SkillLibrary {
     // One too large to back up stays as it is here; the cloud never had this copy of it. Nor
     // does one whose files can't be read to compare: past this computer's own limits, holding
     // a link, or not readable by the app.
-    if (this.skillDir(name)) {
+    const onDisk = fs.lstatSync(path.join(this.skillsDir, name), { throwIfNoEntry: false });
+    const local = this.database.getSkillForCloudMerge(entry);
+    // UI writes can land between the renderer's merge decision and this IPC call. A remote
+    // delete still wins over an edit, but must not remove a new installation of the same name.
+    const changedSinceLookup =
+      expectedLocal !== undefined &&
+      [
+        "id",
+        "client_skill_id",
+        "cloud_id",
+        "content_hash",
+        "enabled",
+        "sync_status",
+        "deleted_at",
+        "updated_at",
+      ].some((field) => local?.[field] !== expectedLocal?.[field]);
+    if (
+      changedSinceLookup &&
+      (!entry.deleted_at ||
+        !local ||
+        local.deleted_at ||
+        local.client_skill_id !== expectedLocal?.client_skill_id)
+    )
+      return skip("changedLocally");
+    if (onDisk) {
+      if (!onDisk.isDirectory() || onDisk.isSymbolicLink()) return skip("unreadable");
       const here = this._inspect(name);
       if (here.tooLargeToSync) return skip("tooLargeToSync");
       if (!here.hash) return skip("unreadable");
+      // The pull waited on HTTP and IPC after its scan. Compare again in the same main-process
+      // turn as the replacement, so an external edit made during those waits stays local.
+      if (!entry.deleted_at && (!local || here.hash !== local.content_hash)) {
+        this.database.upsertSkillState(name, {
+          contentHash: here.hash,
+          ...(!local ? { enabled: false } : {}),
+        });
+        return skip("changedLocally");
+      }
+    } else if (!entry.deleted_at && local && !local.deleted_at) {
+      this.database.deleteSkillState(name);
+      return skip("removedLocally");
     }
     if (entry.deleted_at) {
       this._removeSkill(name);

@@ -562,20 +562,10 @@ export class SyncService {
           if (!hasValidatedAuthContext()) return;
           await this.syncTranscriptions();
           if (!hasValidatedAuthContext()) return;
-          // Edits during the awaits above set dictionaryDirty (syncing is already
-          // true), so re-run until clean rather than stalling until the next trigger.
-          do {
-            this.dictionaryDirty = false;
-            await this.syncDictionary();
-          } while (this.dictionaryDirty);
-          do {
-            this.snippetsDirty = false;
-            await this.syncSnippets();
-          } while (this.snippetsDirty);
-          do {
-            this.skillsDirty = false;
-            await this.syncSkills();
-          } while (this.skillsDirty);
+          this.dictionaryDirty = true;
+          this.snippetsDirty = true;
+          this.skillsDirty = true;
+          await this.syncDirtyLibraries();
         } else {
           // Backup is off: team-space content still syncs (membership is
           // consent, D7) and note deletes still propagate so revoked/deleted
@@ -588,6 +578,7 @@ export class SyncService {
         // Outside the branch above: Insights uploads ride their own opt-in,
         // while queued erasures run for every authenticated account.
         await this.syncAnalytics();
+        await this.syncDirtyLibraries();
         // Stamped after the push, so a pass that moved counters is recorded as
         // work rather than as another empty one. A pass that loses auth before
         // reaching here now leaves the streak unstamped where it used to stamp
@@ -667,61 +658,53 @@ export class SyncService {
   }
 
   async syncDictionaryNow(): Promise<void> {
-    if (!this.canSync()) return;
-    // A sync already running will drain dictionaryDirty before it finishes, so
-    // flag a re-run instead of dropping this request.
-    if (this.syncing) {
-      this.dictionaryDirty = true;
-      return;
-    }
-    this.syncing = true;
-    try {
-      do {
-        this.dictionaryDirty = false;
-        await this.syncDictionary();
-      } while (this.dictionaryDirty);
-    } catch (err) {
-      console.error("Dictionary sync failed:", err);
-    } finally {
-      this.syncing = false;
-    }
+    await this.syncLibraryNow("dictionary");
   }
 
   async syncSnippetsNow(): Promise<void> {
-    if (!this.canSync()) return;
-    if (this.syncing) {
-      this.snippetsDirty = true;
-      return;
-    }
-    this.syncing = true;
-    try {
-      do {
-        this.snippetsDirty = false;
-        await this.syncSnippets();
-      } while (this.snippetsDirty);
-    } catch (err) {
-      console.error("Snippets sync failed:", err);
-    } finally {
-      this.syncing = false;
-    }
+    await this.syncLibraryNow("snippets");
   }
 
   async syncSkillsNow(): Promise<void> {
+    await this.syncLibraryNow("skills");
+  }
+
+  private async syncLibraryNow(kind: "dictionary" | "snippets" | "skills"): Promise<void> {
     if (!this.canSync()) return;
-    if (this.syncing) {
-      this.skillsDirty = true;
-      return;
-    }
+    this[`${kind}Dirty`] = true;
+    if (this.syncing) return;
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return;
     this.syncing = true;
     try {
-      do {
-        this.skillsDirty = false;
-        await this.syncSkills();
-      } while (this.skillsDirty);
+      // Immediate writes share the full pass's lock across renderer windows. Read pending
+      // rows only after acquiring it, so an older upload cannot follow a newer one.
+      await navigator.locks.request(SYNC_ALL_LOCK, async () => {
+        await assertAuthGenerationCurrent(authGeneration);
+        await this.syncDirtyLibraries();
+      });
     } catch (err) {
-      console.error("Skills sync failed:", err);
+      if (!isAuthContextError(err)) console.error("Library sync failed:", err);
     } finally {
       this.syncing = false;
+    }
+    if (this.syncAllPending) {
+      this.syncAllPending = false;
+      await this.syncAll();
+    }
+  }
+
+  private async syncDirtyLibraries(): Promise<void> {
+    // A write may arrive during a different library's pass, including one already visited.
+    while (this.canSync() && (this.dictionaryDirty || this.snippetsDirty || this.skillsDirty)) {
+      for (const kind of ["dictionary", "snippets", "skills"] as const) {
+        if (!this.canSync()) return;
+        if (!this[`${kind}Dirty`]) continue;
+        this[`${kind}Dirty`] = false;
+        if (kind === "dictionary") await this.syncDictionary();
+        else if (kind === "snippets") await this.syncSnippets();
+        else await this.syncSkills();
+      }
     }
   }
 
@@ -2998,6 +2981,7 @@ export class SyncService {
       "applySkillFromCloud",
       "markSkillSynced",
       "hardDeleteSkill",
+      "queueSkillCloudDelete",
       "clearSkillCloudId",
       "broadcastSkillsUpdated",
     ] as const;
@@ -3086,9 +3070,7 @@ export class SyncService {
           // A lookup that failed can't tell, so the copy is left as it is.
           if (isSkillLookupFailed(row)) continue;
           if (!row || row.deleted_at) {
-            await SkillsService.delete(server.id).catch((deleteErr) =>
-              console.error("Skill orphan cleanup failed:", deleteErr)
-            );
+            await window.electronAPI.queueSkillCloudDelete?.(local.name, server.id);
           }
         }
       } catch (err) {
@@ -3165,7 +3147,10 @@ export class SyncService {
                   local.cloud_id !== cloudEntry.id);
           if (!shouldApply) continue;
           try {
-            const applied = await window.electronAPI.applySkillFromCloud?.(cloudEntry);
+            const applied = await window.electronAPI.applySkillFromCloud?.(
+              cloudEntry,
+              local ?? null
+            );
             if (typeof applied === "object") {
               throw new Error(`Couldn't write the skill: ${applied.error}`);
             }

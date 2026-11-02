@@ -3281,6 +3281,8 @@ class DatabaseManager {
              content_hash = COALESCE(@contentHash, content_hash),
              sync_status = CASE WHEN ${SKILL_CHANGED} THEN 'pending' ELSE sync_status END,
              updated_at = CASE WHEN ${SKILL_CHANGED} THEN ${SKILL_NOW} ELSE updated_at END,
+             cloud_id = CASE WHEN deleted_at IS NOT NULL THEN NULL ELSE cloud_id END,
+             client_skill_id = CASE WHEN deleted_at IS NOT NULL THEN @clientId ELSE client_skill_id END,
              deleted_at = NULL`
         )
         .run({
@@ -3338,6 +3340,26 @@ class DatabaseManager {
       this.db.prepare("DELETE FROM skills WHERE name = ? AND cloud_id IS NULL").run(name);
     } catch (error) {
       debugLogger.error("Error deleting skill state", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  // A first upload may finish after uninstall removed its unsent row. Keep the returned
+  // cloud id as a tombstone before making another network request, so a failed delete retries.
+  queueSkillCloudDelete(name, cloudId) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const result = this.db
+        .prepare(
+          `INSERT INTO skills (name, client_skill_id, cloud_id, sync_status, deleted_at)
+           VALUES (@name, @clientId, @cloudId, 'pending', ${SKILL_NOW})
+           ON CONFLICT(name) DO UPDATE SET cloud_id = @cloudId, sync_status = 'pending'
+           WHERE deleted_at IS NOT NULL AND (cloud_id IS NULL OR cloud_id = @cloudId)`
+        )
+        .run({ name, cloudId, clientId: randomUUID() });
+      return { success: result.changes > 0 };
+    } catch (error) {
+      debugLogger.error("Error queuing a skill cloud delete", { error: error.message }, "database");
       throw error;
     }
   }

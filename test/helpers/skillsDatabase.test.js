@@ -176,8 +176,23 @@ test("reinstalling a tombstoned name revives the row", (t) => {
   const row = syncRow(db, "recap");
   assert.deepEqual(
     [row.deleted_at, row.sync_status, row.cloud_id, row.enabled],
-    [null, "pending", "cloud-1", 1]
+    [null, "pending", null, 1]
   );
+  assert.deepEqual(db.getPendingSkillDeletes(), []);
+  assert.deepEqual(pendingNames(db), ["recap"]);
+});
+
+test("a late upload acknowledgement can queue a durable delete without replacing a reinstall", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.queueSkillCloudDelete("recap", "cloud-1");
+  assert.deepEqual(
+    db.getPendingSkillDeletes().map((row) => [row.name, row.cloud_id]),
+    [["recap", "cloud-1"]]
+  );
+  assert.deepEqual(db.getSkillStates(), []);
+  db.upsertSkillState("recap", { contentHash: "new-copy" });
+  assert.equal(db.queueSkillCloudDelete("recap", "cloud-1").success, false);
   assert.deepEqual(db.getPendingSkillDeletes(), []);
   assert.deepEqual(pendingNames(db), ["recap"]);
 });
@@ -231,10 +246,9 @@ test("skills from the cloud and from this computer list newest first together", 
     "h1"
   );
   db.upsertSkillState("made-here", { contentHash: "h2" });
-  db.db.prepare("UPDATE skills SET created_at = ? WHERE name = ?").run(
-    "2026-10-21 09:00:00",
-    "made-here"
-  );
+  db.db
+    .prepare("UPDATE skills SET created_at = ? WHERE name = ?")
+    .run("2026-10-21 09:00:00", "made-here");
 
   assert.deepEqual(
     db.getSkillStates().map((state) => state.name),

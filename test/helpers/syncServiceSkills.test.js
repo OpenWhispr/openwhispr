@@ -14,6 +14,7 @@ const {
   enableSync,
   establishValidatedAuth,
   stopSyncTimers,
+  acquireLock,
   localStorage: localStorageStub,
   window: windowStub,
 } = require("./harness/browserGlobals.js");
@@ -42,8 +43,7 @@ async function setup(t) {
 }
 
 const create = (library, title) =>
-  library.create({ title, description: `About ${title}.`, instructions: "Steps.", files: [] })
-    .name;
+  library.create({ title, description: `About ${title}.`, instructions: "Steps.", files: [] }).name;
 const pendingNames = (db) => db.getPendingSkills().map((row) => row.name);
 const cloudByName = (cloud) => Object.fromEntries(cloud.skills().map((row) => [row.name, row]));
 const sentNames = (cloud) =>
@@ -53,6 +53,107 @@ const sentNames = (cloud) =>
 const silence = (t, method = "error") => t.mock.method(console, method, () => {});
 const messages = (mock) =>
   mock.mock.calls.map((call) => call.arguments.map((a) => String(a?.message ?? a)).join(" "));
+
+test("immediate skills sync waits for another window's full sync", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const name = create(ctx.library, "Meeting prep");
+  const release = await acquireLock("openwhispr-sync-all");
+  const syncing = ctx.service.syncSkillsNow();
+  try {
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(ctx.cloud.skills().length, 0, "no upload while another window holds the lock");
+  } finally {
+    release();
+    await syncing;
+  }
+  assert.ok(cloudByName(ctx.cloud)[name]);
+});
+
+test("two windows preserve the newest edit when an older upload is delayed", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const secondWindow = new SyncService();
+  t.after(() => stopSyncTimers(secondWindow));
+  const name = create(ctx.library, "Meeting prep");
+  await ctx.service.syncSkillsNow();
+  const edit = (body) => {
+    writeFolder(ctx.skillsDir, name, { "SKILL.md": skillText(name, "Use it.", body) });
+    ctx.library.scan();
+  };
+  edit("Older edit.");
+  const started = Promise.withResolvers();
+  const upload = Promise.withResolvers();
+  whileSending(ctx, "PATCH /api/skills/update", async () => {
+    started.resolve();
+    await upload.promise;
+  });
+  const firstPass = ctx.service.syncSkillsNow();
+  await started.promise;
+  edit("Newest edit.");
+  const secondPass = secondWindow.syncSkillsNow();
+  // Let an unlocked second pass finish while the first upload is held at the HTTP boundary.
+  await new Promise((resolve) => setImmediate(resolve));
+  upload.resolve();
+  await Promise.all([firstPass, secondPass]);
+  await secondWindow.syncSkillsNow();
+  assert.match(cloudByName(ctx.cloud)[name].files[0].content, /Newest edit\./);
+  assert.match(skillFile(ctx.skillsDir, name), /Newest edit\./);
+  assert.deepEqual(pendingNames(ctx.db), []);
+});
+
+for (const mutation of ["edit", "uninstall"]) {
+  test(`a local ${mutation} after the merge lookup is not overwritten`, async (t) => {
+    const ctx = await setup(t);
+    if (!ctx) return;
+    const name = create(ctx.library, "Meeting prep");
+    await ctx.service.syncSkillsNow();
+    ctx.cloud.setClock(() => new Date(Date.now() + 60_000).toISOString());
+    seedRemote(ctx, name, "Remote edit.");
+    const apply = ctx.api.applySkillFromCloud;
+    ctx.api.applySkillFromCloud = async (...args) => {
+      if (mutation === "uninstall") ctx.library.uninstall(name);
+      else {
+        writeFolder(ctx.skillsDir, name, { "SKILL.md": skillText(name, "Use it.", "My edit.") });
+        ctx.library.scan();
+      }
+      return apply(...args);
+    };
+    await ctx.service.syncSkillsNow();
+    if (mutation === "uninstall") {
+      assert.deepEqual(listDir(ctx.skillsDir), []);
+      assert.ok(cloudByName(ctx.cloud)[name].deleted_at);
+    } else {
+      assert.match(skillFile(ctx.skillsDir, name), /My edit\./);
+      assert.match(cloudByName(ctx.cloud)[name].files[0].content, /My edit\./);
+    }
+  });
+}
+
+for (const [method, route] of [
+  ["syncDictionaryNow", "GET /api/dictionary/list"],
+  ["syncSnippetsNow", "GET /api/snippets/list"],
+]) {
+  test(`a skill written during ${method} is backed up before it finishes`, async (t) => {
+    const ctx = await setup(t);
+    if (!ctx) return;
+    whileSending(ctx, route, async () => {
+      create(ctx.library, "Meeting prep");
+      await ctx.service.syncSkillsNow();
+    });
+    await ctx.service[method]();
+    assert.ok(cloudByName(ctx.cloud)["meeting-prep"]);
+    assert.deepEqual(pendingNames(ctx.db), []);
+  });
+
+  test(`${method} queued during skills sync runs before it finishes`, async (t) => {
+    const ctx = await setup(t);
+    if (!ctx) return;
+    whileSending(ctx, "GET /api/skills/list", () => ctx.service[method]());
+    await ctx.service.syncSkillsNow();
+    assert.equal(ctx.cloud.logFor(route.split(" ")[1]).length, 1);
+  });
+}
 
 test("skills sync after snippets only with Cloud backup consent", async (t) => {
   const ctx = await setup(t);
@@ -496,4 +597,45 @@ test("an uninstall mid-push whose mark fails doesn't bring the skill back", asyn
 
   assert.deepEqual(listDir(ctx.skillsDir), []);
   assert.ok(cloudByName(ctx.cloud)[name].deleted_at, "the copy that got through is deleted");
+});
+
+test("a failed first-upload cleanup retries without resurrecting the uninstalled skill", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  silence(t);
+  const name = create(ctx.library, "Meeting prep");
+  whileSending(ctx, "POST /api/skills/batch-create", () => ctx.library.uninstall(name));
+  ctx.cloud.failNext("DELETE /api/skills/delete", { status: 500 });
+  await ctx.service.syncSkillsNow();
+  assert.deepEqual(listDir(ctx.skillsDir), []);
+  await ctx.service.syncSkillsNow();
+  assert.deepEqual(listDir(ctx.skillsDir), [], "uninstalled skill should stay absent");
+});
+test("an external edit made while a pull is in flight survives", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const name = create(ctx.library, "Meeting prep");
+  await ctx.service.syncSkillsNow();
+  ctx.cloud.setClock(() => new Date(Date.now() + 60_000).toISOString());
+  seedRemote(ctx, name, "Theirs.\n");
+  whileSending(ctx, "GET /api/skills/list", () => {
+    writeFolder(ctx.skillsDir, name, { "SKILL.md": skillText(name, "Use it.", "Mine.\n") });
+  });
+  await ctx.service.syncSkillsNow();
+  assert.match(skillFile(ctx.skillsDir, name), /Mine\./, "external edit must survive");
+});
+test("reinstalling while a cloud delete is in flight survives the next pull", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const name = create(ctx.library, "Meeting prep");
+  await ctx.service.syncSkillsNow();
+  ctx.library.uninstall(name);
+  whileSending(ctx, "DELETE /api/skills/delete", () => {
+    create(ctx.library, "Meeting prep");
+    ctx.cloud.setClock(() => new Date(Date.now() + 60_000).toISOString());
+  });
+  await ctx.service.syncSkillsNow();
+  assert.deepEqual(listDir(ctx.skillsDir), [name]);
+  await ctx.service.syncSkillsNow();
+  assert.deepEqual(listDir(ctx.skillsDir), [name], "reinstalled skill must survive");
 });

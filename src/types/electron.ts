@@ -3837,7 +3837,8 @@ declare global {
       ) => Promise<SkillSyncRow | null | SkillSyncUnavailable>;
       /** False when the entry was skipped for good; a failed write answers why. */
       applySkillFromCloud?: (
-        cloudEntry: CloudSkillEntry
+        cloudEntry: CloudSkillEntry,
+        expectedLocal?: SkillSyncRow | null
       ) => Promise<boolean | { ok: false; error: SkillWriteError }>;
       markSkillSynced?: (
         name: string,
@@ -3847,6 +3848,10 @@ declare global {
         expectedEnabled: boolean
       ) => Promise<{ success: boolean; changes: number } | null>;
       hardDeleteSkill?: (name: string) => Promise<{ success: boolean } | null>;
+      queueSkillCloudDelete?: (
+        name: string,
+        cloudId: string
+      ) => Promise<{ success: boolean } | null>;
       clearSkillCloudId?: (name: string) => Promise<{ success: boolean } | null>;
       broadcastSkillsUpdated?: () => Promise<void>;
     };

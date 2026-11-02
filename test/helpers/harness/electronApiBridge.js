@@ -34,6 +34,7 @@ function skillApi(library, onBroadcast) {
       applySkillFromCloud: async () => false,
       markSkillSynced: async () => ({ success: true, changes: 1 }),
       hardDeleteSkill: async () => ({ success: true }),
+      queueSkillCloudDelete: async () => ({ success: true }),
       clearSkillCloudId: async () => ({ success: true }),
       broadcastSkillsUpdated: async () => undefined,
     };
@@ -60,6 +61,7 @@ function skillApi(library, onBroadcast) {
     applySkillFromCloud: invoke("skills-apply-from-cloud"),
     markSkillSynced: invoke("skills-mark-synced"),
     hardDeleteSkill: invoke("skills-hard-delete"),
+    queueSkillCloudDelete: invoke("skills-queue-cloud-delete"),
     clearSkillCloudId: invoke("skills-clear-cloud-id"),
     broadcastSkillsUpdated: invoke("skills-broadcast-updated"),
   };

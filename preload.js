@@ -231,8 +231,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getPendingSkills: () => ipcRenderer.invoke("skills-get-pending"),
   getPendingSkillDeletes: () => ipcRenderer.invoke("skills-get-pending-deletes"),
   exportSkillForCloud: (name) => ipcRenderer.invoke("skills-export-for-cloud", name),
-  getSkillForCloudMerge: (cloudEntry) => ipcRenderer.invoke("skills-get-for-cloud-merge", cloudEntry),
-  applySkillFromCloud: (cloudEntry) => ipcRenderer.invoke("skills-apply-from-cloud", cloudEntry),
+  getSkillForCloudMerge: (cloudEntry) =>
+    ipcRenderer.invoke("skills-get-for-cloud-merge", cloudEntry),
+  applySkillFromCloud: (cloudEntry, expectedLocal) =>
+    ipcRenderer.invoke("skills-apply-from-cloud", cloudEntry, expectedLocal),
   markSkillSynced: (name, cloudId, serverUpdatedAt, expectedHash, expectedEnabled) =>
     ipcRenderer.invoke(
       "skills-mark-synced",
@@ -243,6 +245,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
       expectedEnabled
     ),
   hardDeleteSkill: (name) => ipcRenderer.invoke("skills-hard-delete", name),
+  queueSkillCloudDelete: (name, cloudId) =>
+    ipcRenderer.invoke("skills-queue-cloud-delete", name, cloudId),
   clearSkillCloudId: (name) => ipcRenderer.invoke("skills-clear-cloud-id", name),
   broadcastSkillsUpdated: () => ipcRenderer.invoke("skills-broadcast-updated"),
   onSkillsChanged: (callback) => {

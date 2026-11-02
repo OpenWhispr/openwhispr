@@ -97,7 +97,10 @@ test("a malformed name or upload item is refused before the library runs", async
   for (const input of [null, { ...draft, title: 3 }, { ...draft, files: [upload({ data: [] })] }]) {
     assert.deepEqual(await call("skills-create", input), INVALID);
   }
-  assert.deepEqual(await call("skills-add-recommended", "meeting-decisions", { title: 1 }), INVALID);
+  assert.deepEqual(
+    await call("skills-add-recommended", "meeting-decisions", { title: 1 }),
+    INVALID
+  );
   const copy = { title: "a", description: "b" };
   assert.deepEqual(await call("skills-add-recommended", "../x", copy), INVALID);
 
@@ -168,7 +171,11 @@ test("uploads a window was still reading when it closed or reloaded are let go o
 
     assert.deepEqual(await previewed, { items: [late] }, what);
     const discards = library.calls.filter(([method]) => method === "discardUploads");
-    assert.deepEqual(discards.map(([, tokens]) => tokens), discarded, what);
+    assert.deepEqual(
+      discards.map(([, tokens]) => tokens),
+      discarded,
+      what
+    );
   }
 });
 
@@ -443,6 +450,7 @@ test("the sync channels refuse a malformed name or entry", async () => {
     assert.equal(await call("skills-export-for-cloud", name), null);
     assert.equal(await call("skills-mark-synced", name, "c1", null, "h", true), null);
     assert.equal(await call("skills-hard-delete", name), null);
+    assert.equal(await call("skills-queue-cloud-delete", name, "c1"), null);
     assert.equal(await call("skills-clear-cloud-id", name), null);
   }
   for (const entry of [null, "x", { name: 7 }]) {
@@ -450,6 +458,7 @@ test("the sync channels refuse a malformed name or entry", async () => {
     assert.equal(await call("skills-get-for-cloud-merge", entry), null);
   }
   assert.equal(await call("skills-mark-synced", "meeting-prep", 3, null, "h", true), null);
+  assert.equal(await call("skills-queue-cloud-delete", "meeting-prep", 3), null);
 
   assert.deepEqual(library.calls, []);
 });
@@ -472,6 +481,7 @@ test("the sync channels answer and log when the library or database fails", asyn
       getSkillForCloudMerge: fail,
       markSkillSynced: fail,
       hardDeleteSkillState: fail,
+      queueSkillCloudDelete: fail,
       clearSkillCloudId: fail,
     },
   });
@@ -493,10 +503,11 @@ test("the sync channels answer and log when the library or database fails", asyn
   );
   for (const answer of [
     await call("skills-hard-delete", "meeting-prep"),
+    await call("skills-queue-cloud-delete", "meeting-prep", "c1"),
     await call("skills-clear-cloud-id", "meeting-prep"),
   ]) {
     assert.deepEqual(answer, { success: false });
   }
-  assert.equal(warn.mock.callCount(), 8);
+  assert.equal(warn.mock.callCount(), 9);
   assert.deepEqual(broadcasts, []);
 });
