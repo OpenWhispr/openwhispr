@@ -185,11 +185,14 @@ class ClipboardManager {
   // True when wl-copy wrote the Wayland clipboard; every other path only reaches
   // XWayland's.
   _writeClipboardWayland(text, webContents) {
+    const { isKde } = getLinuxSessionInfo();
     if (this._wlCopyExists()) {
       try {
         const result = spawnWlCopy([], text);
         if (result.status === 0) {
-          clipboard.writeText(text);
+          // KWin bridges the Wayland owner to XWayland. Reclaiming it through
+          // Electron while PRIMARY is updated can clear CLIPBOARD before paste.
+          if (!isKde) clipboard.writeText(text);
           return true;
         }
       } catch {}
@@ -210,15 +213,15 @@ class ClipboardManager {
   // target so we cover Wayland, X11, and XWayland setups. True when wl-copy wrote
   // the Wayland primary selection.
   _writePrimarySelection(text) {
-    const { isWayland, isKde } = getLinuxSessionInfo();
+    const { isWayland } = getLinuxSessionInfo();
     if (process.platform !== "linux" && !isWayland) return false;
 
     if (isWayland && this.commandExists("wl-copy")) {
       try {
         const result = spawnWlCopy(["--primary"], text);
         if (result.status === 0) {
-          // KDE can leave XWayland's selection out of sync with Wayland's, so write both.
-          if (isKde) clipboard.writeText(text, "selection");
+          // Keep one owner on KDE too; an X11 mirror races KWin's bridge and
+          // can empty the clipboard the target is about to paste.
           return true;
         }
       } catch {}
