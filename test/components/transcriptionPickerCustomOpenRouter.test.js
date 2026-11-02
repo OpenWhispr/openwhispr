@@ -171,7 +171,10 @@ test("opening Settings keeps an OpenRouter model outside the shortlist", async (
 // even though other OpenRouter ids outside the shortlist are kept.
 test("opening Settings moves dictation off Deepgram via OpenRouter; Upload keeps it", async (t) => {
   const { useSettingsStore, mount } = await loadPicker(t);
-  const expected = { dictation: "openai/gpt-transcribe", upload: "deepgram/nova-3" };
+  const expected = {
+    dictation: "mistralai/voxtral-mini-transcribe-3-0",
+    upload: "deepgram/nova-3",
+  };
   for (const context of ["dictation", "upload"]) {
     useSettingsStore.setState({
       useLocalWhisper: false,

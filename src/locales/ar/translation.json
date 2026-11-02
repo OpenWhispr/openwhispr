@@ -285,10 +285,14 @@
         "assemblyai_universal_3_6_pro": "أعلى دقة في الوقت الفعلي، 32 لغة",
         "mistral_voxtral_mini_transcribe_3_0": "تفريغ سريع بأكثر من 50 لغة (معاينة)",
         "mistral_voxtral_small_transcribe_3_0": "Voxtral الأكثر دقة، أكثر من 50 لغة (معاينة)",
-        "openrouter_openai_gpt_transcribe": "نموذج التفريغ الحالي من OpenAI",
+        "openrouter_mistralai_voxtral_mini_transcribe_3_0": "تفريغ سريع ودقيق متعدد اللغات من Mistral",
+        "openrouter_nvidia_nemotron_3_5_transcribe": "تفريغ منخفض التكلفة من NVIDIA بـ 40 لغة",
         "openrouter_deepgram_nova_3": "تفريغ سريع متعدد اللغات من Deepgram",
-        "openrouter_google_chirp_3": "تحويل الكلام إلى نص من Google بأكثر من 100 لغة",
-        "openrouter_mistralai_voxtral_mini_transcribe": "تفريغ متعدد اللغات منخفض التكلفة"
+        "openrouter_assemblyai_universal_3_6_pro": "أدق تفريغ من AssemblyAI",
+        "openrouter_elevenlabs_scribe_v2": "تفريغ دقيق من ElevenLabs بأكثر من 90 لغة",
+        "openrouter_mistralai_voxtral_small_transcribe_3_0": "نموذج التفريغ الأكبر متعدد اللغات من Mistral",
+        "openrouter_nvidia_parakeet_tdt_0_6b_v3": "تفريغ منخفض التكلفة من NVIDIA للغات الأوروبية",
+        "openrouter_nvidia_nemotron_3_5_asr_streaming_multilingual_0_6b": "أقل تفريغ متعدد اللغات تكلفةً من NVIDIA"
       },
       "cloud": {
         "openai_gpt_5_2": "نموذج استنتاج قوي",

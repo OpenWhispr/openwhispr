@@ -2686,10 +2686,14 @@
         "assemblyai_universal_3_6_pro": "最高精度のリアルタイム、32言語",
         "mistral_voxtral_mini_transcribe_3_0": "50 以上の言語に対応した高速文字起こし（プレビュー）",
         "mistral_voxtral_small_transcribe_3_0": "最も高精度な Voxtral、50 以上の言語（プレビュー）",
-        "openrouter_openai_gpt_transcribe": "OpenAI の最新の文字起こしモデル",
+        "openrouter_mistralai_voxtral_mini_transcribe_3_0": "Mistral の高速・高精度な多言語文字起こし",
+        "openrouter_nvidia_nemotron_3_5_transcribe": "NVIDIA の低コストな文字起こし（40 言語）",
         "openrouter_deepgram_nova_3": "Deepgram の高速な多言語文字起こし",
-        "openrouter_google_chirp_3": "100 以上の言語に対応する Google の音声文字起こし",
-        "openrouter_mistralai_voxtral_mini_transcribe": "低コストの多言語文字起こし"
+        "openrouter_assemblyai_universal_3_6_pro": "AssemblyAI の最も高精度な文字起こし",
+        "openrouter_elevenlabs_scribe_v2": "ElevenLabs の高精度な文字起こし（90 以上の言語）",
+        "openrouter_mistralai_voxtral_small_transcribe_3_0": "Mistral の大型多言語文字起こしモデル",
+        "openrouter_nvidia_parakeet_tdt_0_6b_v3": "NVIDIA の低コストな文字起こし（ヨーロッパの言語）",
+        "openrouter_nvidia_nemotron_3_5_asr_streaming_multilingual_0_6b": "NVIDIA の最も低コストな多言語文字起こし"
       },
       "cloud": {
         "openai_gpt_5_2": "強力な推論モデル",

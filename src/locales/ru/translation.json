@@ -2702,10 +2702,14 @@
         "assemblyai_universal_3_6_pro": "Максимальная точность в реальном времени, 32 языка",
         "mistral_voxtral_mini_transcribe_3_0": "Быстрая транскрипция на 50+ языках (предварительная версия)",
         "mistral_voxtral_small_transcribe_3_0": "Самый точный Voxtral, 50+ языков (предварительная версия)",
-        "openrouter_openai_gpt_transcribe": "Актуальная модель транскрипции OpenAI",
+        "openrouter_mistralai_voxtral_mini_transcribe_3_0": "Быстрая и точная многоязычная транскрипция от Mistral",
+        "openrouter_nvidia_nemotron_3_5_transcribe": "Недорогая транскрипция от NVIDIA на 40 языках",
         "openrouter_deepgram_nova_3": "Быстрая многоязычная транскрипция Deepgram",
-        "openrouter_google_chirp_3": "Распознавание речи Google на 100+ языках",
-        "openrouter_mistralai_voxtral_mini_transcribe": "Недорогая многоязычная транскрипция"
+        "openrouter_assemblyai_universal_3_6_pro": "Самая точная транскрипция от AssemblyAI",
+        "openrouter_elevenlabs_scribe_v2": "Точная транскрипция от ElevenLabs на 90+ языках",
+        "openrouter_mistralai_voxtral_small_transcribe_3_0": "Более крупная многоязычная модель транскрипции от Mistral",
+        "openrouter_nvidia_parakeet_tdt_0_6b_v3": "Недорогая транскрипция от NVIDIA для европейских языков",
+        "openrouter_nvidia_nemotron_3_5_asr_streaming_multilingual_0_6b": "Самая недорогая многоязычная транскрипция от NVIDIA"
       },
       "cloud": {
         "openai_gpt_5_2": "Сильная модель рассуждения",

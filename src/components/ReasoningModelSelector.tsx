@@ -39,6 +39,7 @@ import {
   reconcileProviderSelection,
 } from "../stores/policyRules";
 import { usePolicySnapshot } from "../hooks/usePolicy";
+import type { ModelCapability } from "../config/inferenceScopes";
 
 type CloudModelOption = {
   value: string;
@@ -75,6 +76,7 @@ interface ReasoningModelSelectorProps {
   setCustomReasoningApiKey?: (key: string) => void;
   setReasoningMode?: (mode: InferenceMode) => void;
   mode?: "cloud" | "local";
+  modelNeeds?: readonly ModelCapability[];
 }
 
 function GpuStatusBadge() {
@@ -349,6 +351,7 @@ export default function ReasoningModelSelector({
   setCustomReasoningApiKey,
   setReasoningMode: setReasoningModeProp,
   mode,
+  modelNeeds,
 }: ReasoningModelSelectorProps) {
   const { t } = useTranslation();
   const openaiApiKey = useSettingsStore((s) => s.openaiApiKey);
@@ -650,6 +653,7 @@ export default function ReasoningModelSelector({
                   lockedBaseUrl
                   apiKeyRequired
                   getKeyUrl={OPENROUTER_KEYS_URL}
+                  modelNeeds={modelNeeds}
                 />
               ) : displayedCloudProvider === "custom" ? (
                 <OpenAICompatiblePanel

@@ -4386,8 +4386,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         );
       }
 
-      // Check for text - handle both empty string and missing field
-      if (result.text && result.text.trim().length > 0) {
+      // Check for text - handle both empty string and missing field. ElevenLabs
+      // Scribe answers silence with "[pause]" instead of an empty string.
+      const spokenText = result.text?.trim();
+      if (spokenText && spokenText !== "[pause]") {
         if (
           sendsDictionary &&
           this.isDictionaryEcho(
