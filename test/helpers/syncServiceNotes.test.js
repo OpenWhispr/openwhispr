@@ -348,6 +348,53 @@ test("a pending local delete issues the DELETE and then hard-deletes locally", a
   assert.ok(cloud.note(cloudRow.id).deleted_at, "the cloud row is tombstoned");
 });
 
+test("a cloud tombstone keeps an unsent edit as a new note, but not this device's own delete", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+
+  const seedDeletedElsewhere = async (clientNoteId, fields) => {
+    const cloudRow = cloud.seedNote({
+      client_note_id: clientNoteId,
+      title: clientNoteId,
+      content: "from the cloud",
+      created_at: "2026-07-20T08:00:00.000Z",
+      updated_at: "2026-07-20T08:00:00.000Z",
+    });
+    const local = db.saveNote(clientNoteId, "edited here", "personal").note;
+    updateNote(db, local.id, {
+      client_note_id: clientNoteId,
+      cloud_id: cloudRow.id,
+      created_at: LOCAL_EARLY,
+      updated_at: LOCAL_EARLY,
+      ...fields,
+    });
+    await cloud.request({ method: "DELETE", path: "/api/notes/delete", body: { id: cloudRow.id } });
+    return local;
+  };
+  const edited = await seedDeletedElsewhere("client-edited", { sync_status: "pending" });
+  const failed = await seedDeletedElsewhere("client-failed", { sync_status: "error" });
+  const mine = await seedDeletedElsewhere("client-mine", {
+    sync_status: "pending",
+    deleted_at: LOCAL_LATE,
+  });
+
+  localStorageStub.setItem("lastSyncedAt.notes", "2026-07-01T00:00:00.000Z");
+  await service.syncAll(true);
+
+  for (const { id, clientNoteId } of [
+    { id: edited.id, clientNoteId: "client-edited" },
+    { id: failed.id, clientNoteId: "client-failed" },
+  ]) {
+    assert.equal(db.getNoteByClientId(clientNoteId), null, "the deleted identity is gone");
+    const kept = db.getNote(id);
+    assert.equal(kept.content, "edited here", "the unsent edit survives");
+    assert.equal(kept.deleted_at, null);
+  }
+  assert.equal(db.getNoteByClientId("client-mine"), null);
+  assert.equal(db.getNote(mine.id) ?? null, null, "this device's own delete stands");
+});
+
 test("a 500 on the delete leaves the tombstone pending and the local row intact", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;

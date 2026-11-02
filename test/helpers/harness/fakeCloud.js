@@ -10,6 +10,8 @@
 //   coalesceOnConflict an absent/null incoming field keeps the stored value
 //   staleWriteGuard    a write whose basis predates the stored row is rejected
 //   updatedAtClamp     a stored updated_at never moves backwards
+// noteRevisions is off by default: rows carry a revision, and a note PATCH naming
+// another base_revision gets the real 409 with the current row.
 
 // The server compares timestamps itself; it must not borrow the client's guard,
 // or a client-side regression would be invisible here.
@@ -29,10 +31,11 @@ function compare(a, b) {
 }
 
 class HttpError extends Error {
-  constructor(status, message, code) {
+  constructor(status, message, code, details) {
     super(message);
     this.status = status;
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -90,6 +93,7 @@ function createFakeCloud(config = {}) {
     coalesceOnConflict: true,
     staleWriteGuard: true,
     updatedAtClamp: true,
+    noteRevisions: false,
     ...config,
   };
 
@@ -208,6 +212,11 @@ function createFakeCloud(config = {}) {
     row.updated_at = at;
     return row;
   }
+
+  const stampRevision = (row) => {
+    if (cfg.noteRevisions) row.revision ??= 1;
+    return row;
+  };
 
   const noteCollection = {
     store: notes,
@@ -332,7 +341,7 @@ function createFakeCloud(config = {}) {
           (row) => row.client_note_id === body?.client_note_id
         );
         return {
-          ...upsertRow(noteCollection, body ?? {}),
+          ...stampRevision(upsertRow(noteCollection, body ?? {})),
           row_created: rowCreated,
           write_applied: true,
         };
@@ -344,14 +353,22 @@ function createFakeCloud(config = {}) {
             const rowCreated = ![...notes.values()].some(
               (row) => row.client_note_id === input.client_note_id
             );
-            const row = upsertRow(noteCollection, input);
+            const row = stampRevision(upsertRow(noteCollection, input));
             return { ...row, row_created: rowCreated, write_applied: true };
           }),
         };
       }
       case "PATCH /api/notes/update": {
-        const { id, ...updates } = body ?? {};
-        return applyWrite(noteCollection, requireLive(noteCollection, id), updates);
+        const { id, base_revision: baseRevision, ...updates } = body ?? {};
+        const row = requireLive(noteCollection, id);
+        if (cfg.noteRevisions && baseRevision !== undefined && baseRevision !== row.revision) {
+          throw new HttpError(409, "note changed", "note_version_conflict", {
+            note: structuredClone(row),
+          });
+        }
+        applyWrite(noteCollection, row, updates);
+        if (cfg.noteRevisions) row.revision += 1;
+        return row;
       }
       case "DELETE /api/notes/delete":
         tombstone(noteCollection, body?.id);
@@ -374,6 +391,7 @@ function createFakeCloud(config = {}) {
         return upsertRow(folderCollection, body ?? {});
       case "POST /api/folders/batch-create": {
         const inputs = Array.isArray(body?.folders) ? body.folders : [];
+        if (inputs.length > 50) throw new HttpError(400, "too many folders", "validation_error");
         return { created: inputs.map((input) => upsertRow(folderCollection, input)) };
       }
       case "PATCH /api/folders/update": {
@@ -381,6 +399,10 @@ function createFakeCloud(config = {}) {
         return applyWrite(folderCollection, requireLive(folderCollection, id), updates);
       }
       case "DELETE /api/folders/delete":
+        // The server tombstones the folder's notes with it.
+        for (const row of notes.values()) {
+          if (row.folder_id === body?.id && !row.deleted_at) tombstone(noteCollection, row.id);
+        }
         tombstone(folderCollection, body?.id);
         return {};
       case "GET /api/folders/list": {
@@ -475,6 +497,7 @@ function createFakeCloud(config = {}) {
         error: failure.error ?? "fake cloud failure",
         status: failure.status ?? 500,
         code: failure.code,
+        details: failure.details,
       };
     }
 
@@ -484,7 +507,13 @@ function createFakeCloud(config = {}) {
       return { success: true, data: structuredClone(data) };
     } catch (err) {
       if (err instanceof HttpError) {
-        return { success: false, error: err.message, status: err.status, code: err.code };
+        return {
+          success: false,
+          error: err.message,
+          status: err.status,
+          code: err.code,
+          details: err.details,
+        };
       }
       throw err;
     }
@@ -502,7 +531,7 @@ function createFakeCloud(config = {}) {
     setClock: (fn) => {
       clock = fn;
     },
-    seedNote: (input) => structuredClone(insertRow(noteCollection, input)),
+    seedNote: (input) => structuredClone(stampRevision(insertRow(noteCollection, input))),
     seedFolder: (input) => structuredClone(insertRow(folderCollection, input)),
     // Conversation deletes are echo-stubs, so a tombstone has to be seeded here
     // rather than produced by the DELETE route.

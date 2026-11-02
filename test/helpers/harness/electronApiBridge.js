@@ -133,7 +133,7 @@ function createElectronApi(db, options = {}) {
     applyCloudFolderParents: async (links) => {
       db.applyCloudFolderParents(links);
     },
-    hardDeleteFolder: async (id) => db.hardDeleteFolder(id),
+    hardDeleteFolder: async (id, options) => db.hardDeleteFolder(id, options),
 
     // Spaces
     getSpaces: async () => db.getSpaces(),

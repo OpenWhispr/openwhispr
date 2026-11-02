@@ -3202,6 +3202,9 @@ class IPCHandlers {
         }
         setImmediate(() => {
           if (result.folder) broadcastToWindows("folder-synced", result.folder);
+          for (const subfolder of result.subfolders ?? []) {
+            broadcastToWindows("folder-synced", subfolder);
+          }
           for (const note of result.notes ?? []) {
             broadcastToWindows("note-synced", note);
           }
@@ -3209,15 +3212,16 @@ class IPCHandlers {
       }
       return result;
     });
-    ipcMain.handle("db-hard-delete-folder", (_, id) => {
+    ipcMain.handle("db-hard-delete-folder", (_, id, options) => {
       const mirrorFolder = this._noteFilesEnabled ? this._getMirrorFolder(id) : null;
       // The server keeps a deleted parent's live subfolders, now top-level.
       const subfolders = mirrorFolder ? this.databaseManager.getSubfolders(id) : [];
-      const result = this.databaseManager.hardDeleteFolder(id);
+      const result = this.databaseManager.hardDeleteFolder(id, options);
       if (result?.success) {
         this.notifyVectorChanges();
-        // Other accounts' notes were released to the space root; their mirror
-        // files leave with the folder directory, so rewrite the live ones.
+        // Other accounts' notes were released to the space root and unsent ones
+        // forked to Personal; their mirror files leave with the folder
+        // directory, so rewrite the live ones.
         for (const note of result.relocatedNotes ?? []) {
           if (!note.deleted_at) this._asyncMirrorWrite(note);
         }
@@ -3227,6 +3231,9 @@ class IPCHandlers {
         }
         setImmediate(() => {
           broadcastToWindows("folder-deleted", { id });
+          for (const note of result.preservedNotes ?? []) {
+            broadcastToWindows("note-updated", note);
+          }
           for (const child of subfolders) {
             this._mirrorMoveFolder([mirrorFolder, child.name], child.id);
           }

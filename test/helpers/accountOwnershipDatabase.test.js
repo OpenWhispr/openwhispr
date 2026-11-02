@@ -55,6 +55,7 @@ function createDatabaseManager() {
       space_id INTEGER,
       client_note_id TEXT,
       cloud_id TEXT,
+      cloud_create_attempted INTEGER NOT NULL DEFAULT 0,
       sync_status TEXT NOT NULL DEFAULT 'synced',
       account_id TEXT,
       transcript TEXT,

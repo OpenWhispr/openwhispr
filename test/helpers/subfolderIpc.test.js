@@ -422,3 +422,73 @@ test("a subfolder whose directory can't move out of a deleted parent is rewritte
   );
   assert.ok(!fs.existsSync(path.join(basePath, "Client A")));
 });
+
+test("a pulled folder delete rewrites preserved notes' files and removes only the clean ones'", async (t) => {
+  const ctx = setup(t);
+  if (!ctx) return;
+  const { db, basePath } = ctx;
+
+  const folder = (await handlers.get("db-create-folder")(null, "Client A")).folder;
+  db.markFolderSynced(folder.id, "c-client");
+  const clean = db.saveNote("Clean", "pushed", "personal", null, null, folder.id).note;
+  db.markNoteSynced(clean.id, "c-clean");
+  const unsent = db.saveNote("Unsent", "only here", "personal", null, null, folder.id).note;
+  markdownMirror.writeNote(clean, "Client A");
+  markdownMirror.writeNote(unsent, "Client A");
+  await settle();
+  sent.length = 0;
+
+  const result = await handlers.get("db-hard-delete-folder")(null, folder.id, {
+    preserveDirtyNotes: true,
+  });
+  await settle();
+  await settle();
+
+  assert.ok(result.success);
+  assert.deepEqual(result.noteIds, [clean.id]);
+  assert.equal(markdownMirror.getNotePath(clean.id), null);
+  assert.equal(
+    markdownMirror.getNotePath(unsent.id),
+    path.join(basePath, "Personal", `${unsent.id}-unsent.md`),
+    "the preserved note's file moved with it rather than being deleted after the rewrite"
+  );
+  assert.ok(!fs.existsSync(path.join(basePath, "Client A")));
+  const updated = sent.filter(([channel]) => channel === "note-updated");
+  assert.deepEqual(
+    updated.map(([, note]) => note.id),
+    [unsent.id]
+  );
+  assert.equal(updated[0][1].folder_id, null);
+  assert.deepEqual(
+    sent.filter(([channel]) => channel === "folder-deleted"),
+    [["folder-deleted", { id: folder.id }]]
+  );
+});
+
+test("a refused delete announces the unsynced subfolder it restores", async (t) => {
+  const ctx = setup(t);
+  if (!ctx) return;
+  const { db } = ctx;
+
+  const parent = (await handlers.get("db-create-folder")(null, "Client A")).folder;
+  db.markFolderSynced(parent.id, "c-client");
+  const child = (await handlers.get("db-create-folder")(null, "Q1", null, parent.id)).folder;
+  const note = db.saveNote("Plan", "Body", "personal", null, null, child.id).note;
+  await handlers.get("db-delete-folder")(null, parent.id);
+  await settle();
+  sent.length = 0;
+
+  const result = await handlers.get("db-restore-folder-after-denied-delete")(null, parent.id);
+  await settle();
+
+  assert.ok(result.success);
+  assert.deepEqual(
+    sent.filter(([channel]) => channel === "folder-synced").map(([, folder]) => folder.id),
+    [parent.id, child.id]
+  );
+  assert.deepEqual(
+    sent.filter(([channel]) => channel === "note-synced").map(([, row]) => row.id),
+    [note.id]
+  );
+  assert.equal(markdownMirror.getNotePath(note.id) !== null, true);
+});

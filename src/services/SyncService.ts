@@ -142,6 +142,12 @@ function isNoteVersionConflictError(err: unknown): boolean {
   return err instanceof CloudApiError && err.code === "note_version_conflict";
 }
 
+// A row queued only to send its folder link holds no edit a cloud copy could
+// conflict with; any local edit turns it plain 'pending'.
+function hasUnpushedNoteEdits(note: NoteItem): boolean {
+  return note.sync_status !== "synced" && note.sync_status !== "folder_link_pending";
+}
+
 function conflictCloudNote(err: unknown): CloudNote | null {
   const details = (err as CloudApiError).details as { note?: CloudNote } | undefined;
   return details?.note ?? null;
@@ -208,6 +214,14 @@ const PURGED_SPACE_GUARD_LOCK = "openwhispr-purged-spaces";
 // written only inside the SYNC_ALL_LOCK pass, so it needs no lock of its own.
 const NOTE_UPDATE_404_KEY = "noteUpdate404Counts";
 const FOLDER_UPDATE_404_KEY = "folderUpdate404Counts";
+// Per-folder time (ms) a folder with no cloud id was first seen holding its notes
+// back, keyed by client id, so that wait has a limit. A parent that can't reach
+// the cloud (it keeps being refused) would otherwise withhold them for good.
+const FOLDER_WAIT_STARTED_KEY = "folderWaitStartedAt";
+const FOLDER_WAIT_RELEASE_MS = 30 * 60 * 1000;
+// Set per account once folders pulled before parent_folder_id existed have been
+// replayed: one for the personal rows a full pass covers, one for team rows.
+const FOLDER_PARENTS_BACKFILLED_KEY = "folderParentsBackfilled";
 
 const SHARED_DICTIONARY_PAGE_LIMIT = 200;
 // Writers on different lists can commit out of updated_at order, so every
@@ -470,6 +484,7 @@ export class SyncService {
   // Set by any pass that actually moves team or shared content; drives the
   // ambient team-only backoff (see shouldRunAmbientTeamOnlyPass).
   private teamPassMovedWork = false;
+  private lastFolderPullParkedRows = false;
   // Set when the current shared dictionary pass changed the mirror or hides.
   private sharedDictionaryPassChanged = false;
   // The auth generation a plain 404 answered the shared dictionary routes
@@ -978,6 +993,12 @@ export class SyncService {
   }
 
   private async pushFolder(id: number): Promise<void> {
+    if (this.owedFolderParentBackfills(!this.canSync()).length > 0) {
+      // Pushing a row the backfill hasn't reached would flatten it for everyone.
+      // It stays pending for the full pass, which backfills first.
+      this.requestSyncAll("interval");
+      return;
+    }
     const folders = (await window.electronAPI.getFolders?.()) ?? [];
     const folder = folders.find((f) => f.id === id);
     if (!folder) return;
@@ -1110,10 +1131,10 @@ export class SyncService {
     }
 
     const ctx = await this.buildSpaceContext();
-    const { localToCloud, blockedFolderIds } = await this.buildLocalToCloudFolderMap(
-      ctx.privateSpace?.id ?? null
-    );
-    if (note.folder_id && blockedFolderIds.has(note.folder_id)) {
+    const { localToCloud, blockedFolderIds, waitingFolders } =
+      await this.buildLocalToCloudFolderMap(ctx.privateSpace?.id ?? null);
+    const releasedFolderIds = this.releaseWaitingFolders(waitingFolders);
+    if (this.noteWaitsForFolder(note, localToCloud, blockedFolderIds, releasedFolderIds)) {
       // The folder's own changes haven't landed (e.g. a cross-space move that
       // 409'd on a name conflict): the server would reject this note's
       // folder_id as out of scope. Stay pending; the note retries after the
@@ -1563,6 +1584,18 @@ export class SyncService {
     if (relocated) this.dispatchNoteRelocated(note.title, spaceName);
   }
 
+  // Applies a note delete made on another device or by a teammate. An edit that
+  // never reached the cloud has no other copy, so it survives as a new note; this
+  // device's own delete and clean copies just go.
+  private async applyPulledNoteDelete(local: NoteItem, ctx: SpaceSyncContext): Promise<void> {
+    if (!local.deleted_at && hasUnpushedNoteEdits(local) && ctx.privateSpace) {
+      const spaceName = ctx.byId.get(local.space_id)?.name;
+      await this.forkNoteToPrivate(local, ctx.privateSpace, "pull", spaceName);
+      return;
+    }
+    await window.electronAPI.hardDeleteNote?.(local.id);
+  }
+
   // A folder PATCH was rejected because its team is gone or access was
   // revoked: the server row moved to a scope we can't write, so retrying
   // would fail forever. Preserve the dirty folder in Personal with a forked
@@ -1620,7 +1653,7 @@ export class SyncService {
       // throw would abort the whole pass. Surface a name clash for the user to
       // resolve; the tombstone stays journaled and retries next pass.
       if (restored?.reason === "name-taken") {
-        this.dispatchFolderNameTaken(folder.name);
+        this.dispatchFolderNameTaken(restored.name ?? folder.name);
       } else {
         console.error(
           `Could not roll back denied folder delete ${folder.id}: ${restored?.error ?? "unknown error"}`
@@ -1682,12 +1715,37 @@ export class SyncService {
 
   private async syncFolders(teamOnly = false): Promise<void> {
     if (!teamOnly) await this.adoptDefaultFolders();
-    await this.pushPendingFolders(teamOnly);
+    if (await this.backfillFolderParents(teamOnly)) await this.pushPendingFolders(teamOnly);
     await this.pushFolderDeletes(teamOnly);
     if (!teamOnly && this.teamCursorLagging("folders")) {
       await this.pullFolders(true);
     }
     await this.pullFolders(teamOnly);
+  }
+
+  // What this pass's pull covers and no earlier pull has replayed: personal rows
+  // on a full pass, team rows whenever the list includes them.
+  private owedFolderParentBackfills(teamOnly: boolean): string[] {
+    const accountId = getAuthRequestContextSnapshot().sessionUserId;
+    const teamCapable = this.canSyncTeamSpaces() && this.hasTeamSpacesCapability();
+    return [...(teamOnly ? [] : ["personal"]), ...(teamCapable ? ["team"] : [])]
+      .map((rows) => `${FOLDER_PARENTS_BACKFILLED_KEY}.${rows}.${accountId}`)
+      .filter((key) => localStorage.getItem(key) === null);
+  }
+
+  // Delta pulls never replay folders pulled before parent_folder_id existed, so
+  // such a subfolder stays flat here and its next push un-nests it for everyone.
+  // Returns false when folder pushes must wait: the list itself failed. A parked
+  // row retries the backfill next pass without holding pushes back, since one row
+  // that never applies would otherwise stop every folder push for good.
+  private async backfillFolderParents(teamOnly: boolean): Promise<boolean> {
+    const owed = this.owedFolderParentBackfills(teamOnly);
+    if (owed.length === 0) return true;
+    const pulled = await this.pullFolders(teamOnly, true, true);
+    if (pulled) {
+      for (const key of owed) localStorage.setItem(key, "true");
+    }
+    return pulled || this.lastFolderPullParkedRows;
   }
 
   // Each platform seeds "Personal"/"Meetings" with its own random
@@ -1837,10 +1895,12 @@ export class SyncService {
     }
     if (denied) await this.restoreDeniedRows("folder");
 
-    if (fresh.length > 0) {
+    // A round's parents are all in the cloud already, so chunks can land in any order.
+    for (let start = 0; start < fresh.length; start += BATCH_SIZE) {
+      const chunk = fresh.slice(start, start + BATCH_SIZE);
       try {
         const { created } = await FoldersService.batchCreate(
-          fresh.map(({ folder, scope, parentFolderId }) => ({
+          chunk.map(({ folder, scope, parentFolderId }) => ({
             name: folder.name,
             client_folder_id: folder.client_folder_id,
             is_default: !!folder.is_default,
@@ -1852,14 +1912,14 @@ export class SyncService {
         // created preserves input order; the cloud may return an existing
         // folder with a different client_folder_id when a same-named
         // default already exists there — adopt its identity in that case.
-        if (created.length !== fresh.length) {
+        if (created.length !== chunk.length) {
           console.error(
-            `Folder batch create returned ${created.length} folders for ${fresh.length} inputs; skipping identity adoption`
+            `Folder batch create returned ${created.length} folders for ${chunk.length} inputs; skipping identity adoption`
           );
-          return waiting;
+          continue;
         }
         for (const [i, cloudFolder] of created.entries()) {
-          const local = fresh[i].folder;
+          const local = chunk[i].folder;
           await window.electronAPI.acknowledgeFolderCreate?.(
             local.id,
             local,
@@ -1880,7 +1940,7 @@ export class SyncService {
           // response, and the server stops at the first one; create
           // individually so one rejected folder settles on its own without
           // stranding (or relocating) the rest.
-          for (const { folder, scope, parentFolderId } of fresh) {
+          for (const { folder, scope, parentFolderId } of chunk) {
             await this.pushFreshFolder(folder, scope, parentFolderId, ctx);
           }
         } else {
@@ -1916,7 +1976,16 @@ export class SyncService {
     }
   }
 
-  private async pullFolders(teamOnly = false, snapshot = false): Promise<boolean> {
+  // backfillParents replays parents onto rows the ordinary pull leaves alone (see
+  // backfillFolderParents). A pending row with no parent adopts the cloud's: a row
+  // from before subfolders couldn't have been nested here, so a queued rename won't
+  // flatten it. One with a local parent keeps it.
+  private async pullFolders(
+    teamOnly = false,
+    snapshot = false,
+    backfillParents = false
+  ): Promise<boolean> {
+    this.lastFolderPullParkedRows = false;
     try {
       const cursorKey = teamOnly ? "lastSyncedAt.folders.team" : "lastSyncedAt.folders";
       const since = snapshot ? undefined : (localStorage.getItem(cursorKey) ?? undefined);
@@ -1939,6 +2008,7 @@ export class SyncService {
         cloudId: string;
         parentCloudId: string | null;
         snapshot: FolderPushSnapshot;
+        adoptIfPending: boolean;
       }> = [];
       const addParentLink = (
         folder: FolderItem | null | undefined,
@@ -1947,7 +2017,12 @@ export class SyncService {
         // Guard both edits during the request and edits while the rest of this
         // page is being stored, including edits sharing a SQLite timestamp.
         if (folder?.cloud_id && parentCloudId !== undefined) {
-          parentLinks.push({ cloudId: folder.cloud_id, parentCloudId, snapshot: folder });
+          parentLinks.push({
+            cloudId: folder.cloud_id,
+            parentCloudId,
+            snapshot: folder,
+            adoptIfPending: backfillParents,
+          });
         }
       };
 
@@ -1986,9 +2061,10 @@ export class SyncService {
                 parkedRows++;
                 console.warn(`Could not relocate revoked folder ${local.id}:`, result?.error);
               }
-            } else {
-              await window.electronAPI.hardDeleteFolder?.(local.id);
+            } else if (await this.applyPulledFolderDelete(local, ctx)) {
               this.clear404(FOLDER_UPDATE_404_KEY, local.client_folder_id);
+            } else {
+              parkedRows++;
             }
             continue;
           }
@@ -2004,7 +2080,7 @@ export class SyncService {
               ctx.privateSpace
             ) {
               if (cloudFolder.deleted_at) {
-                await window.electronAPI.hardDeleteFolder?.(local.id);
+                if (!(await this.applyPulledFolderDelete(local, ctx))) parkedRows++;
               } else if (
                 // Pending rows are never overwritten by pull (D2), here too.
                 local.sync_status !== "pending" &&
@@ -2024,10 +2100,13 @@ export class SyncService {
 
           if (cloudFolder.deleted_at) {
             if (local) {
-              await window.electronAPI.hardDeleteFolder?.(local.id);
-              // A tombstone disambiguates a 404'd push as a genuine delete;
-              // drop any streak so it can't resurrect the folder in Personal.
-              this.clear404(FOLDER_UPDATE_404_KEY, local.client_folder_id);
+              if (await this.applyPulledFolderDelete(local, ctx)) {
+                // A tombstone disambiguates a 404'd push as a genuine delete;
+                // drop any streak so it can't resurrect the folder in Personal.
+                this.clear404(FOLDER_UPDATE_404_KEY, local.client_folder_id);
+              } else {
+                parkedRows++;
+              }
             }
             continue;
           }
@@ -2101,8 +2180,10 @@ export class SyncService {
             );
             addParentLink(folder, cloudFolder.parent_folder_id);
           } else if (
-            local.sync_status !== "pending" &&
-            normalizeTimestamp(local.updated_at) === normalizeTimestamp(cloudFolder.updated_at)
+            backfillParents
+              ? local.sync_status !== "pending" || local.parent_folder_id === null
+              : local.sync_status !== "pending" &&
+                normalizeTimestamp(local.updated_at) === normalizeTimestamp(cloudFolder.updated_at)
           ) {
             // An equal-version replay may finish a link whose parent failed
             // to load on the previous pass. Only the pre-request row may match.
@@ -2124,11 +2205,33 @@ export class SyncService {
       });
       if (advanceCursor) localStorage.setItem(cursorKey, syncStartedAt);
       if (advanceTeamCursor) localStorage.setItem("lastSyncedAt.folders.team", syncStartedAt);
+      this.lastFolderPullParkedRows = parkedRows > 0;
       return parkedRows === 0;
     } catch (err) {
       console.error("Folder pull failed:", err);
       return false;
     }
+  }
+
+  // Applies a folder delete made on another device or by a teammate. Nobody here
+  // chose it, so unsent notes survive in Personal; the database still takes this
+  // device's own delete whole. False leaves the row for a later pass.
+  private async applyPulledFolderDelete(
+    local: FolderItem,
+    ctx: SpaceSyncContext
+  ): Promise<boolean> {
+    const result = await window.electronAPI.hardDeleteFolder?.(local.id, {
+      preserveDirtyNotes: true,
+    });
+    if (!result?.success) {
+      console.warn(`Could not apply deleted folder ${local.id}:`, result?.error);
+      return false;
+    }
+    const spaceName = ctx.byId.get(local.space_id)?.name;
+    for (const note of result.preservedNotes ?? []) {
+      this.dispatchNoteRelocated(note.title, spaceName);
+    }
+    return true;
   }
 
   // The team cursor lags the personal one only when degraded passes advanced
@@ -2234,9 +2337,9 @@ export class SyncService {
     this.teamPassMovedWork = true;
 
     const ctx = await this.buildSpaceContext();
-    const { localToCloud, blockedFolderIds } = await this.buildLocalToCloudFolderMap(
-      ctx.privateSpace?.id ?? null
-    );
+    const { localToCloud, blockedFolderIds, waitingFolders } =
+      await this.buildLocalToCloudFolderMap(ctx.privateSpace?.id ?? null);
+    const releasedFolderIds = this.releaseWaitingFolders(waitingFolders);
     const pushable: Array<{ note: NoteItem; scope: PushScopeFields }> = [];
     for (const note of pending) {
       if (
@@ -2249,7 +2352,7 @@ export class SyncService {
         // no revision waits for a pull to supply one.
         continue;
       }
-      if (note.folder_id && blockedFolderIds.has(note.folder_id)) {
+      if (this.noteWaitsForFolder(note, localToCloud, blockedFolderIds, releasedFolderIds)) {
         // The folder's own changes haven't landed (e.g. a cross-space move
         // that 409'd on a name conflict): the server would reject the note's
         // folder_id as out of scope, stranding it in 'error'. Stay pending;
@@ -2294,8 +2397,10 @@ export class SyncService {
           // Stays pending (not error): unpushed local work awaiting the
           // user's Keep/Refresh choice; the registry gate above skips the
           // row on later passes so the 409 doesn't repeat. A 409 also proves
-          // the note is still accessible, so reset any prior 404 streak.
-          const cloudNote = conflictCloudNote(err);
+          // the note is still accessible, so reset any prior 404 streak. A row
+          // sending only its folder link has no edit to weigh: this pass's pull
+          // takes the newer copy and the link retries on its revision.
+          const cloudNote = hasUnpushedNoteEdits(note) ? conflictCloudNote(err) : null;
           if (cloudNote) await this.surfaceNoteConflict(note.client_note_id, cloudNote);
           this.clear404(NOTE_UPDATE_404_KEY, note.client_note_id);
         } else if (isPermissionDenialError(err)) {
@@ -2470,11 +2575,11 @@ export class SyncService {
             // edit's push would re-team the privatized note.
             if (local && !local.deleted_at && ctx.byId.get(local.space_id)?.kind === "team") {
               if (cloudNote.deleted_at) {
-                await window.electronAPI.hardDeleteNote?.(local.id);
+                await this.applyPulledNoteDelete(local, ctx);
                 await this.settleNoteConflict(local.client_note_id);
               } else if (isCloudNoteNewer(cloudNote, local)) {
                 // 'error' rows carry unpushed work just like 'pending' ones.
-                if (local.sync_status !== "synced") {
+                if (hasUnpushedNoteEdits(local)) {
                   await this.surfaceNoteConflict(local.client_note_id, cloudNote);
                 } else if (cloudNote.folder_id && !cloudToLocal.has(cloudNote.folder_id)) {
                   // Filing to the fallback would stick (the advanced cursor
@@ -2502,7 +2607,7 @@ export class SyncService {
 
           if (cloudNote.deleted_at) {
             if (local) {
-              await window.electronAPI.hardDeleteNote?.(local.id);
+              await this.applyPulledNoteDelete(local, ctx);
               // A tombstone disambiguates a 404'd push as a genuine delete;
               // drop any streak so it can't resurrect the note in Personal,
               // and settle any conflict so the registry doesn't keep the
@@ -2559,7 +2664,7 @@ export class SyncService {
             !hasNoteRevision(local.cloud_revision) &&
             hasNoteRevision(cloudNote.revision) &&
             local.cloud_id === cloudNote.id;
-          if (preRevision && local.sync_status !== "synced") {
+          if (preRevision && hasUnpushedNoteEdits(local)) {
             // Adopt the revision when this device's base is the server's
             // current row. An unpushed edit on a row acked before timestamp
             // bases existed pushed last-write-wins until now; it still does.
@@ -2581,9 +2686,9 @@ export class SyncService {
           // adopting only the revision would mark the copies equal from now
           // on, so a clear made elsewhere while this device ran a release that
           // kept the text would never arrive.
-          const cleanPreRevision = preRevision && local.sync_status === "synced";
+          const cleanPreRevision = preRevision && !hasUnpushedNoteEdits(local);
           if (!local || cleanPreRevision || isCloudNoteNewer(cloudNote, local)) {
-            if (local && local.sync_status !== "synced") {
+            if (local && hasUnpushedNoteEdits(local)) {
               // A newer cloud copy over unpushed local edits ('pending' or
               // 'error'): surface the conflict to the editor banner instead
               // of silently dropping the local edit (plan §7.3).
@@ -3703,25 +3808,58 @@ export class SyncService {
     // waiting for its parent holds its notes back too, or they'd upload with
     // no folder; a private one only when backup will push it.
     blockedFolderIds: Set<number>;
+    // The blocked folders with no cloud id, whose wait has a limit.
+    waitingFolders: FolderItem[];
   }> {
     const folders = (await window.electronAPI.getFolderIdMap?.()) ?? [];
     const localToCloud = new Map(folders.filter((f) => f.cloud_id).map((f) => [f.id, f.cloud_id!]));
     const unpushed = new Set(
       folders.filter((f) => f.cloud_id && f.sync_status === "pending").map((f) => f.id)
     );
+    const blocked = folders.filter((f) =>
+      f.cloud_id
+        ? unpushed.has(f.id) && (f.left_team || f.space_id !== privateSpaceId)
+        : (this.canSync() || f.space_id !== privateSpaceId) &&
+          this.cloudParentFolderId(f, localToCloud, unpushed) === undefined
+    );
     return {
       localToCloud,
-      blockedFolderIds: new Set(
-        folders
-          .filter((f) =>
-            f.cloud_id
-              ? unpushed.has(f.id) && (f.left_team || f.space_id !== privateSpaceId)
-              : (this.canSync() || f.space_id !== privateSpaceId) &&
-                this.cloudParentFolderId(f, localToCloud, unpushed) === undefined
-          )
-          .map((f) => f.id)
-      ),
+      blockedFolderIds: new Set(blocked.map((f) => f.id)),
+      waitingFolders: blocked.filter((f) => !f.cloud_id),
     };
+  }
+
+  // Records when each waiting folder started waiting, forgets the ones no longer
+  // waiting, and returns those past the limit. Their notes upload unfiled, keeping
+  // the local folder; the link follows when the folder gets its cloud id.
+  private releaseWaitingFolders(waitingFolders: FolderItem[]): Set<number> {
+    const now = Date.now();
+    const started = this.read404Counts(FOLDER_WAIT_STARTED_KEY);
+    const next = Object.fromEntries(
+      waitingFolders.map((f) => [f.client_folder_id, started[f.client_folder_id] ?? now])
+    );
+    this.write404Counts(FOLDER_WAIT_STARTED_KEY, next);
+    const released = waitingFolders.filter(
+      (f) => now - next[f.client_folder_id] >= FOLDER_WAIT_RELEASE_MS
+    );
+    for (const folder of released) {
+      console.warn(`Folder ${folder.id} still has no cloud id; its notes upload without it`);
+    }
+    return new Set(released.map((f) => f.id));
+  }
+
+  // Folders with a cloud id hold their notes until their own changes land. One
+  // without holds them only until the limit, and never holds a note leaving a team:
+  // it stays visible to teammates until its retraction lands, so it goes unfiled.
+  private noteWaitsForFolder(
+    note: NoteItem,
+    localToCloud: Map<number, string>,
+    blockedFolderIds: Set<number>,
+    releasedFolderIds: Set<number>
+  ): boolean {
+    if (!note.folder_id || !blockedFolderIds.has(note.folder_id)) return false;
+    if (localToCloud.has(note.folder_id)) return true;
+    return !note.left_team && !releasedFolderIds.has(note.folder_id);
   }
 
   private async buildCloudToLocalFolderMap(privateSpaceId: number | null): Promise<{

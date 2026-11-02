@@ -493,7 +493,8 @@ export interface NoteItem {
   created_at: string;
   updated_at: string;
   client_note_id: string;
-  sync_status: "synced" | "pending" | "error";
+  // folder_link_pending: nothing changed but the folder link still to send.
+  sync_status: "synced" | "pending" | "error" | "folder_link_pending";
   deleted_at: string | null;
   // Computed by getNoteByClientId while a parent folder DELETE awaits its
   // server result. Held notes stay hidden and must not be pulled/queued alone.
@@ -3890,6 +3891,7 @@ declare global {
           cloudId: string;
           parentCloudId: string | null;
           snapshot: FolderPushSnapshot;
+          adoptIfPending?: boolean;
         }>
       ) => Promise<void>;
       getPendingFolderDeletes?: () => Promise<FolderItem[]>;
@@ -3898,11 +3900,23 @@ declare global {
         id: number;
         folder?: FolderItem;
         notes?: NoteItem[];
+        subfolders?: FolderItem[];
         conversationIds?: number[];
         reason?: "name-taken";
+        name?: string;
         error?: string;
       }>;
-      hardDeleteFolder?: (id: number) => Promise<{ success: boolean; id: number }>;
+      hardDeleteFolder?: (
+        id: number,
+        options?: { preserveDirtyNotes?: boolean }
+      ) => Promise<{
+        success: boolean;
+        id: number;
+        noteIds?: number[];
+        relocatedNotes?: NoteItem[];
+        preservedNotes?: NoteItem[];
+        error?: string;
+      }>;
       relocateRevokedFolder?: (
         id: number,
         privateSpaceId: number,

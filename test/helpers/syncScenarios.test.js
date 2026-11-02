@@ -393,7 +393,7 @@ test("S3 a delete travels to the cloud and back down to the other device", async
   assertNoContentRegression(beforeB, snapshotNotes(deviceB.db), cloud.notes());
 });
 
-test("S3 a delete racing an unsynced edit is won by the cloud tombstone", async (t) => {
+test("S3 a delete racing an unsynced edit keeps the edit as a new note", async (t) => {
   const cloud = freshCloud();
   const deviceA = createDevice(t, cloud);
   if (!deviceA) return;
@@ -430,13 +430,23 @@ test("S3 a delete racing an unsynced edit is won by the cloud tombstone", async 
   assert.equal(patches.length, 1, "B still tries to push its edit onto the tombstoned row");
   assert.equal(patches[0].body.content, "B's late edit that never shipped");
 
-  // Documented current behaviour, not a preference: the tombstone wins and the
-  // edit that never reached the cloud is destroyed.
-  assert.equal(noteByClientId(deviceB.db, clientNoteId), null, "the tombstone removes B's row");
-  assert.equal(noteCount(deviceB.db), 0);
+  // The edit has no other copy, so it survives under a new identity; the delete
+  // still stands for the row A deleted.
+  assert.equal(noteByClientId(deviceB.db, clientNoteId), null, "the deleted row's identity is gone");
+  assert.equal(noteCount(deviceB.db), 1);
+  const kept = deviceB.db.getNote(onB.id);
+  assert.equal(kept.content, "B's late edit that never shipped");
+  assert.equal(kept.cloud_id, null);
+  assert.equal(kept.sync_status, "pending");
   assert.ok(cloud.note(cloudId).deleted_at, "the cloud row stays deleted");
 
   assertNoContentRegression(beforeB, snapshotNotes(deviceB.db), cloud.notes());
+
+  await syncOnce(deviceB);
+  const uploaded = deviceB.db.getNote(onB.id);
+  assert.ok(uploaded.cloud_id, "the next pass uploads it as a new note");
+  assert.notEqual(uploaded.cloud_id, cloudId);
+  assert.equal(cloud.note(uploaded.cloud_id).content, "B's late edit that never shipped");
 });
 
 test("S4 a quit before the push loses nothing and the next launch uploads the note", async (t) => {
