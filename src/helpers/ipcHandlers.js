@@ -1956,7 +1956,8 @@ class IPCHandlers {
       const result = this.databaseManager.saveTranscription(text, rawText, options);
       if (result?.success && result?.transcription) {
         setImmediate(() => {
-          broadcastToWindows("transcription-added", result.transcription);
+          const transcription = this.databaseManager.getTranscriptionById(result.transcription.id);
+          if (transcription) broadcastToWindows("transcription-added", transcription);
         });
       }
       return result;

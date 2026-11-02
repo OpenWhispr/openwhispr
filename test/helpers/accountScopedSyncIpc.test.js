@@ -140,6 +140,29 @@ function setup(t) {
 
 const invoke = (channel, ...args) => handlers.get(channel)({}, ...args);
 
+test("a queued transcription addition is broadcast only while its account can see it", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  const current = await invoke("db-save-transcription", "A's current dictation");
+  await new Promise(setImmediate);
+  assert.deepEqual(
+    broadcasts.filter(([channel]) => channel === "transcription-added"),
+    [["transcription-added", current.transcription]]
+  );
+
+  broadcasts.length = 0;
+  await invoke("db-save-transcription", "A's delayed dictation");
+  tokenState = { token: null, generation: tokenState.generation + 1 };
+  handleAuthTokenChange(tokenState);
+  await new Promise(setImmediate);
+  assert.deepEqual(
+    broadcasts.filter(([channel]) => channel === "transcription-added"),
+    [],
+    "the queued addition cannot restore A's private history after sign-out"
+  );
+});
+
 test("a push ack or pulled row from a replaced sign-in is refused", async (t) => {
   const db = setup(t);
   if (!db) return;

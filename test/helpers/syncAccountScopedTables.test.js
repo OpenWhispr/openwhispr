@@ -729,6 +729,36 @@ for (const boundary of ["getSnippetForCloudMerge", "hardDeleteSnippet"]) {
   });
 }
 
+test("a snippet pull preserves the next account's cursor after its final lookup completes", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const cloudA = createFakeCloud();
+  const snippet = cloudA.seedSnippet({
+    trigger: "addr",
+    replacement: "A's address",
+    client_snippet_id: "a-snippet",
+    created_at: "2026-10-03T00:00:00.000Z",
+    updated_at: "2026-10-03T00:00:00.000Z",
+  });
+  const accountA = await signInAs(t, db, cloudA, "account-a");
+  db.upsertSnippetFromCloud(snippet);
+  const api = windowStub.electronAPI;
+  const lookup = api.getSnippetForCloudMerge;
+  api.getSnippetForCloudMerge = async (...args) => {
+    const local = await lookup(...args);
+    db.setActiveAccountId("account-b");
+    api.authState.generation += 1;
+    localStorageStub.setItem("lastSyncedAt.snippets", "2026-10-01T00:00:00.000Z");
+    localStorageStub.setItem("lastSyncedAt.snippets.id", "b-cursor");
+    return local;
+  };
+
+  await accountA.pullSnippets();
+
+  assert.equal(localStorageStub.getItem("lastSyncedAt.snippets"), "2026-10-01T00:00:00.000Z");
+  assert.equal(localStorageStub.getItem("lastSyncedAt.snippets.id"), "b-cursor");
+});
+
 for (const kind of ["conversations", "transcriptions", "dictionary"]) {
   for (const boundary of ["lookup", "delete", "empty-page"]) {
     test(`a stale ${kind} tombstone stops at ${boundary} without changing rows or cursors`, async (t) => {
