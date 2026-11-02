@@ -21,6 +21,8 @@ interface AgentPillProps {
   readLevel: () => number;
   /** Shown in place of the waveform (already translated). */
   notice?: string | null;
+  /** The provider or microphone failure behind a voice notice. */
+  noticeDetail?: string;
   /** Voice input is unavailable with this transcription provider: Mic is off. */
   micUnavailableHint?: string;
   /** A take is still transcribing, or a reply is running. */
@@ -39,6 +41,7 @@ export function AgentPill({
   recording,
   readLevel,
   notice,
+  noticeDetail,
   micUnavailableHint,
   micDisabled = false,
   expandCue = false,
@@ -60,7 +63,10 @@ export function AgentPill({
       {...dragHandlers}
     >
       {notice ? (
-        <span className="ms-2.5 max-w-30 truncate text-xs text-foreground/80" title={notice}>
+        <span
+          className="ms-2.5 max-w-30 truncate text-xs text-foreground/80"
+          title={noticeDetail ? `${notice}\n${noticeDetail}` : notice}
+        >
           {notice}
         </span>
       ) : controls.waiting ? (

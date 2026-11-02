@@ -20,6 +20,7 @@ import {
   useConnectorApprovalStore,
 } from "../../stores/connectorApprovalStore";
 import { editSelectedText } from "../../services/editSelectedText";
+import { getSelectionCaptureDisposition } from "../../helpers/selectionEditing";
 import type { ToneAppCategory } from "../../config/toneStyle";
 import { useSkillApprovalStore } from "../../stores/skillApprovalStore";
 import { INTERACTION_TOOL_NAMES } from "../../services/tools/interactionTools";
@@ -56,6 +57,7 @@ import { SelectedContextBlock } from "./AgentContext";
 const PRESS_CAPTURE_WAIT_MS = 3000;
 // How long a new step may take to show the card it asks with.
 const STEP_SETTLE_MS = 300;
+const NOTICE_MS = 5000;
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -540,14 +542,27 @@ export default function AgentWindow() {
     [dispatch, submit]
   );
 
+  const voiceErrorDetail = useRef("");
   const voice = useAgentVoice({
     onTranscript: (text, intent) => void handleTranscript(text, intent),
     onEmpty: () => dispatch({ type: "notice", notice: "agentWindow.notices.nothingHeard" }),
-    onError: () => dispatch({ type: "notice", notice: "agentWindow.notices.transcriptionFailed" }),
-    onMicError: () => dispatch({ type: "notice", notice: "agentWindow.notices.micUnavailable" }),
+    onError: (message) => {
+      voiceErrorDetail.current = message;
+      dispatch({ type: "notice", notice: "agentWindow.notices.transcriptionFailed" });
+    },
+    onMicError: (message) => {
+      voiceErrorDetail.current = message;
+      dispatch({ type: "notice", notice: "agentWindow.notices.micUnavailable" });
+    },
   });
   const listening = voice.status === "recording" || voice.opening;
   const transcribing = voice.status === "transcribing";
+
+  useEffect(() => {
+    if (!state.notice || listening || transcribing || busy) return;
+    const timer = setTimeout(() => dispatch({ type: "notice", notice: null }), NOTICE_MS);
+    return () => clearTimeout(timer);
+  }, [busy, dispatch, listening, state.notice, transcribing]);
 
   const nudge = useAnswerNudge({
     pendingKey: pendingCard?.id ?? null,
@@ -599,7 +614,11 @@ export default function AgentWindow() {
                 .catch(() => null);
               if (isCurrent()) target.appCategory = category ?? null;
             }
-          } else if (isCurrent() && capture && capture.status !== "none") {
+          } else if (
+            isCurrent() &&
+            capture &&
+            getSelectionCaptureDisposition(capture) !== "standalone"
+          ) {
             dispatch({
               type: "notice",
               notice:
@@ -990,10 +1009,16 @@ export default function AgentWindow() {
 
   const pill = (placement: "compact" | "typing" | "modal") => (
     <AgentPill
-      controls={resolveAgentPillControls(placement, pillStatus(placement), Boolean(notice))}
+      controls={resolveAgentPillControls(placement, pillStatus(placement))}
       recording={voice.status === "recording"}
       readLevel={voice.readLevel}
       notice={placement === "typing" ? null : notice}
+      noticeDetail={
+        state.notice === "agentWindow.notices.transcriptionFailed" ||
+        state.notice === "agentWindow.notices.micUnavailable"
+          ? voiceErrorDetail.current
+          : undefined
+      }
       micUnavailableHint={micHint}
       micDisabled={busy || transcribing}
       expandCue={placement === "compact" && nudge.cue}

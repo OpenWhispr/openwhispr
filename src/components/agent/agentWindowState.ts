@@ -289,16 +289,14 @@ export interface AgentPillControls {
 
 /**
  * The pill's controls for where it shows and what is happening. Expand only
- * exists outside the modal; the typing layout swaps Keyboard for Mic. A notice
- * (it heard nothing, say) leaves the compact pill room for Mic and Close only.
+ * exists outside the modal; the typing layout swaps Keyboard for Mic.
  * "Thinking…" covers transcribing and a reply with nothing to show yet; in the
  * modal that reply can already be stopped. Waiting for an answer, the pill
  * offers the keyboard (and Expand) to reach the card.
  */
 export function resolveAgentPillControls(
   placement: AgentPillPlacement,
-  status: AgentPillStatus,
-  notice = false
+  status: AgentPillStatus
 ): AgentPillControls {
   const controls = (buttons: AgentPillButton[], shows: Partial<AgentPillControls> = {}) => ({
     waveform: false,
@@ -308,7 +306,6 @@ export function resolveAgentPillControls(
     buttons,
   });
   if (placement === "typing") return controls(["expand", "mic", "close"]);
-  if (notice && placement === "compact" && status === "idle") return controls(["mic", "close"]);
   const expand: AgentPillButton[] = placement === "compact" ? ["expand"] : [];
   switch (status) {
     case "listening":

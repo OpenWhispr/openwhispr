@@ -1470,6 +1470,63 @@ const write = async (view, text) => {
   });
   await React.act(async () => view.button("Send").click());
 };
+test("an unreadable optional selection does not replace the assistant's voice status", async (t) => {
+  const view = await mountWindow(t);
+  view.happyWindow.electronAPI.captureSelectedText = async () => ({
+    status: "unavailable",
+    code: "accessibility_unavailable",
+  });
+  await React.act(async () => view.main.handlers.hotkey({ external: true }));
+  await view.settle();
+  assert.doesNotMatch(view.host.textContent, /could not safely read/);
+  await React.act(async () => globalThis.__voice.callbacks.onTranscript("Hello", "submit"));
+  assert.deepEqual(globalThis.__chat.sent, ["Hello"]);
+  assert.equal(globalThis.__chat.sentOptions[0].selectedContext, undefined);
+});
+
+test("a selection known to be too large still warns instead of being silently dropped", async (t) => {
+  const view = await mountWindow(t);
+  view.happyWindow.electronAPI.captureSelectedText = async () => ({ status: "too_large" });
+  await React.act(async () => view.main.handlers.hotkey({ external: true }));
+  await view.settle();
+  assert.match(view.host.textContent, /selection is too large/i);
+});
+
+test("voice errors keep typing and expansion available and expire without hiding the chat", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.hotkey({ external: false }));
+  await React.act(async () => globalThis.__voice.callbacks.onError("A provider failure"));
+  await view.settle();
+  assert.match(view.host.textContent, /Couldn't transcribe that/);
+  assert.equal(
+    view.host.querySelector('span[title*="A provider failure"]').title,
+    "Couldn't transcribe that\nA provider failure"
+  );
+  assert.ok(view.button("Expand"));
+  assert.ok(view.button("Type"));
+  await view.wait(5200);
+  await view.settle();
+  assert.doesNotMatch(view.host.textContent, /Couldn't transcribe that/);
+  assert.equal(view.layout(), "pill");
+  assert.equal(view.main.layouts.at(-1).wide, undefined);
+  assert.equal(globalThis.__chat.newChats, 0);
+});
+
+test("a new take clears a voice error before its notice timer fires", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.hotkey({ external: false }));
+  await React.act(async () => globalThis.__voice.callbacks.onEmpty());
+  await view.settle();
+  assert.match(view.host.textContent, /Didn't catch that/);
+  await React.act(async () => view.button("Speak").click());
+  await view.settle();
+  assert.doesNotMatch(view.host.textContent, /Didn't catch that/);
+  assert.deepEqual(
+    globalThis.__voice.events.filter((event) => event === "start"),
+    ["start", "start"]
+  );
+});
+
 test("late press capture cannot enter the next request", async (t) => {
   const view = await mountWindow(t);
   const settings = await view.vite.ssrLoadModule("/stores/settingsStore.ts");

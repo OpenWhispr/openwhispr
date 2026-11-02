@@ -153,8 +153,7 @@ test("the pill's controls follow the reference states", async () => {
   assert.deepEqual(controls("modal", "listening").buttons, ["keyboard", "close"]);
   assert.deepEqual(controls("modal", "streaming").buttons, ["keyboard", "stop", "close"]);
   assert.deepEqual(controls("modal", "idle").buttons, ["mic", "keyboard", "close"]);
-  assert.deepEqual(controls("compact", "idle", true).buttons, ["mic", "close"]);
-  assert.deepEqual(controls("modal", "idle", true).buttons, ["mic", "keyboard", "close"]);
+  assert.deepEqual(controls("compact", "idle").buttons, ["expand", "mic", "keyboard", "close"]);
 });
 
 test("in the modal a reply can be stopped before it has anything to show", async () => {
