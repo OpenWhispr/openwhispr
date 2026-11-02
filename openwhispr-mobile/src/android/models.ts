@@ -141,6 +141,8 @@ export async function downloadAndroidModel(
         { intermediates: true },
       );
       try {
+        // Cancellation during file preparation has no native transfer to pause yet.
+        if (job.cancelled) throw new Error(i18n.t('downloadCancelled'));
         job.download = FileSystem.createDownloadResumable(file.url, temporary, {}, (event) =>
           progress(
             Math.min(0.98, (completed + event.totalBytesWritten) / ANDROID_MODELS[id].bytes),
