@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { TFunction } from "i18next";
 import type { ActionItem, ActionKind } from "../types/electron";
-import { DETAILED_NOTES_KEY } from "../helpers/builtinActions";
+import { GENERATE_NOTES_KEY } from "../helpers/builtinActions";
 
 interface ActionState {
   actions: ActionItem[];
@@ -88,7 +88,7 @@ export function resolveTemplate(
 ): ActionItem | null {
   return (
     templates.find((a) => a.client_id === clientId) ??
-    templates.find((a) => a.translation_key === DETAILED_NOTES_KEY) ??
+    templates.find((a) => a.translation_key === GENERATE_NOTES_KEY) ??
     templates[0] ??
     null
   );

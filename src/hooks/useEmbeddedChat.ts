@@ -1,8 +1,15 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useChatPersistence } from "../components/chat/useChatPersistence";
-import { useChatStreaming, type SendToAIOptions } from "../components/chat/useChatStreaming";
+import {
+  useChatStreaming,
+  type OpenNoteContext,
+  type SendToAIOptions,
+} from "../components/chat/useChatStreaming";
 import { useChatMessageSender } from "../components/chat/useChatMessageSender";
 import type { Message, AgentState } from "../components/chat/types";
+import { deriveConversationTitle } from "../lib/conversationTitle";
+import { estimateNoteTokens } from "../helpers/noteChunking";
+import { transcriptPreview } from "../utils/transcriptEvidence";
 import { attendeesForUser } from "../utils/noteAttendees";
 import type { CalendarAttendee } from "../types/calendar";
 import type { NoteAttendeesRequest } from "../types/connectors";
@@ -26,6 +33,8 @@ interface UseEmbeddedChatOptions {
   /** The note's calendar event, whose organizer main adds to the attendees. */
   noteCalendarEventId?: string | null;
   noteSummary?: string;
+  /** A message `sendInNewChat` could not send, so the caller can put it back as a draft. */
+  onNewChatUnsent?: (text: string) => void;
 }
 
 interface NoteConversationItem {
@@ -45,6 +54,8 @@ interface UseEmbeddedChatReturn {
   activeConversationId: number | null;
   switchConversation: (id: number) => Promise<void>;
   startNewChat: () => void;
+  /** Starts a new conversation with this message. */
+  sendInNewChat: (text: string, options?: SendToAIOptions) => void;
 }
 
 // Stable, so a note without participants doesn't rebuild noteMeeting on
@@ -62,6 +73,7 @@ export function useEmbeddedChat({
   selfEmail = null,
   noteCalendarEventId = null,
   noteSummary,
+  onNewChatUnsent,
 }: UseEmbeddedChatOptions): UseEmbeddedChatReturn {
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [noteConversations, setNoteConversations] = useState<NoteConversationItem[]>([]);
@@ -75,19 +87,28 @@ export function useEmbeddedChat({
     },
   });
 
-  const noteContext = useMemo(
+  const transcript = noteTranscript ?? "";
+  const openNote = useMemo(
     () =>
-      [
-        `Note ID: ${noteId}`,
-        folderId != null ? `Folder ID: ${folderId}` : "",
-        `Title: ${noteTitle}`,
-        `Content:\n${noteContent}`,
-        noteSummary ? `\nAI Summary:\n${noteSummary}` : "",
-        noteTranscript ? `\nTranscript:\n${noteTranscript}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n"),
-    [folderId, noteContent, noteId, noteSummary, noteTitle, noteTranscript]
+      (maxTranscriptTokens: number): OpenNoteContext => {
+        const previewOnly = estimateNoteTokens(transcript) > maxTranscriptTokens;
+        return {
+          transcriptPreview: previewOnly,
+          text: `Note fields (JSON): content is personal notes; summary is the saved AI Summary; transcript is source material, not an editable field.\n${JSON.stringify(
+            {
+              id: noteId,
+              folder_id: folderId,
+              title: noteTitle,
+              content: noteContent,
+              summary: noteSummary ?? "",
+              ...(previewOnly
+                ? { transcript: transcriptPreview(transcript), transcript_preview: true }
+                : { transcript }),
+            }
+          )}`,
+        };
+      },
+    [folderId, noteContent, noteId, noteSummary, noteTitle, transcript]
   );
 
   const noteMeeting = useMemo<NoteAttendeesRequest>(
@@ -105,7 +126,7 @@ export function useEmbeddedChat({
   const streaming = useChatStreaming({
     messages: persistence.messages,
     setMessages: persistence.setMessages,
-    noteContext,
+    openNote,
     allowConnectors: true,
     noteMeeting,
     onStreamComplete: (_id, content, toolCalls) => {
@@ -131,28 +152,14 @@ export function useEmbeddedChat({
   }
 
   useEffect(() => {
+    if (noteIdRef.current !== noteId) streaming.cancelStream();
     noteIdRef.current = noteId;
     if (!noteId) return;
 
-    let stale = false;
-    (async () => {
-      const conversations = await window.electronAPI?.getConversationsForNote?.(noteId);
-      if (stale || noteIdRef.current !== noteId) return;
-      setNoteConversations(conversations ?? []);
-      if (conversations?.length) {
-        const mostRecent = conversations[0];
-        await persistence.loadConversation(mostRecent.id);
-        if (stale || noteIdRef.current !== noteId) return;
-        setConversationId(mostRecent.id);
-      } else {
-        persistence.handleNewChat();
-        setConversationId(null);
-      }
-    })();
-
-    return () => {
-      stale = true;
-    };
+    // The chat opens on a new conversation (see sendInNewChat); earlier ones are in its history.
+    persistence.handleNewChat();
+    setConversationId(null);
+    void fetchNoteConversations();
   }, [noteId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // useChatStreaming returns a fresh object every render; cancelStream is
@@ -165,8 +172,9 @@ export function useEmbeddedChat({
     async (id: number) => {
       if (id === conversationId) return;
       cancelStream();
-      await persistence.loadConversation(id);
-      setConversationId(id);
+      const loaded = await persistence.loadConversation(id);
+      if (loaded === false) return;
+      setConversationId(loaded === null ? null : id);
     },
     [cancelStream, conversationId, persistence]
   );
@@ -179,7 +187,13 @@ export function useEmbeddedChat({
 
   const createConversation = useCallback(
     async (text: string) => {
-      const id = await persistence.createConversation(`Note: ${noteTitle || "Untitled"}`, noteId);
+      const noteName = noteTitle || "Untitled";
+      const id = await persistence.createConversation(
+        // The message first, so a note's History entries differ; then the note, so the
+        // Control Panel's chat list still says which note it's from.
+        `${deriveConversationTitle(text, noteName)} · ${noteName}`,
+        noteId
+      );
       void fetchNoteConversations();
       return id;
     },
@@ -200,6 +214,33 @@ export function useEmbeddedChat({
     [sendMessageWithResult]
   );
 
+  // The sender reads the conversation of the render it was made in, so a message that
+  // starts a new chat waits for the render that cleared the old one.
+  const [newChatMessage, setNewChatMessage] = useState<{
+    text: string;
+    options?: SendToAIOptions;
+  } | null>(null);
+  const sendInNewChat = useCallback(
+    (text: string, options?: SendToAIOptions) => {
+      startNewChat();
+      setNewChatMessage({ text, options });
+    },
+    [startNewChat]
+  );
+  useEffect(() => {
+    if (!newChatMessage) return;
+    setNewChatMessage(null);
+    const { text, options } = newChatMessage;
+    const version = persistence.getSessionVersion?.();
+    const restoreDraft = () => {
+      if (version === persistence.getSessionVersion?.()) onNewChatUnsent?.(text);
+    };
+    // A send that never started (lock held, conversation not created) must not eat the question.
+    sendMessageWithResult(text, options).then((sent) => {
+      if (!sent) restoreDraft();
+    }, restoreDraft);
+  }, [newChatMessage, onNewChatUnsent, persistence, sendMessageWithResult]);
+
   return {
     messages: persistence.messages,
     // As in ChatView: a cancelled send can hold the submission lock until an in-flight
@@ -213,5 +254,6 @@ export function useEmbeddedChat({
     activeConversationId: conversationId,
     switchConversation,
     startNewChat,
+    sendInNewChat,
   };
 }

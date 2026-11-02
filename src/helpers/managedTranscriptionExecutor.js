@@ -3,6 +3,7 @@
 // mismatch), mints an Entra token, and posts the audio straight to the
 // workspace's Azure resource. No user-owned API key is involved.
 const DEFAULT_TIMEOUT_MS = 120_000;
+const { runAbortableOperation } = require("./enterpriseProviderErrors");
 
 // Azure keys the accepted-format check off the multipart filename's extension
 // and does not list "opus". Every .opus file is Opus in an Ogg container, so
@@ -20,46 +21,70 @@ function createManagedTranscriptionExecutor({
   return async function executeManagedTranscription(
     event,
     route,
-    { audioBuffer, fileName, contentType, prompt }
+    { audioBuffer, fileName, contentType, prompt, signal }
   ) {
-    if (route?.provider !== "azure" || route?.context?.inferenceScope !== "transcription") {
+    if (
+      !["azure", "openai-compatible"].includes(route?.provider) ||
+      route?.context?.inferenceScope !== "transcription"
+    ) {
       throw Object.assign(new Error("Managed transcription route is invalid"), {
         code: "MANAGED_ROUTE_INVALID",
         messageKey: "hooks.audioRecording.errorDescriptions.managedRouteInvalid",
       });
     }
-    const runtime = await resolveEnterpriseRuntime(event, route.provider, null, {
-      managedContext: route.context,
-    });
+    const runtime = await runAbortableOperation(
+      () =>
+        resolveEnterpriseRuntime(event, route.provider, null, {
+          managedContext: route.context,
+        }),
+      signal
+    );
     const { azureEndpoint, azureApiVersion, managedTokenProvider } = runtime.enterprise;
+    const audioProfile = runtime.enterprise.audioProfile;
     // The workspace's default deployment wins over anything the renderer sent.
     const deployment = runtime.model;
-    const endpoint = await buildUrl(azureEndpoint, deployment, azureApiVersion);
+    const endpoint =
+      audioProfile?.endpoint ?? (await buildUrl(azureEndpoint, deployment, azureApiVersion));
     if (!endpoint) {
       throw new Error("Managed Azure transcription endpoint could not be built");
     }
-    const token = await managedTokenProvider();
+    const token = audioProfile ? null : await runAbortableOperation(managedTokenProvider, signal);
     const formData = new FormData();
     formData.append(
       "file",
       new Blob([audioBuffer], { type: contentType }),
-      azureFileName(fileName)
+      route.provider === "azure" ? azureFileName(fileName) : fileName
     );
     formData.append("model", deployment);
     formData.append("response_format", "json");
-    if (route.language && route.language !== "auto") {
+    if (
+      route.language &&
+      route.language !== "auto" &&
+      (!audioProfile || route.provider === "azure" || audioProfile.section.supportsLanguage)
+    ) {
       formData.append("language", route.language);
     }
-    if (prompt) formData.append("prompt", prompt);
-    const response = await proxyFetch(endpoint, {
+    if (
+      prompt &&
+      (!audioProfile || route.provider === "azure" || audioProfile.section.supportsPrompt)
+    )
+      formData.append("prompt", prompt);
+    const request = {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
+      headers: audioProfile ? {} : { Authorization: `Bearer ${token}` },
       body: formData,
-      signal: AbortSignal.timeout(timeoutMs),
-    });
+      // The enterprise transport applies the workspace's own deadline.
+      signal:
+        audioProfile && !audioProfile.systemNetwork
+          ? signal
+          : AbortSignal.any([AbortSignal.timeout(timeoutMs), ...(signal ? [signal] : [])]),
+    };
+    const response = audioProfile
+      ? await audioProfile.request(request)
+      : await proxyFetch(endpoint, request);
     if (!response.ok) {
-      const errorText = await response.text();
-      const err = new Error(`Azure transcription error: ${response.status} ${errorText}`);
+      const err = new Error(`Enterprise transcription error: ${response.status}`);
+      err.status = response.status;
       if (response.status === 429) {
         err.code = "PROVIDER_RATE_LIMITED";
         err.messageKey = "hooks.audioRecording.errorDescriptions.providerRateLimited";
@@ -68,12 +93,28 @@ function createManagedTranscriptionExecutor({
         err.messageKey = "hooks.audioRecording.errorDescriptions.managedAuthRejected";
       } else if (response.status >= 500) {
         err.code = "SERVER_ERROR";
+        err.messageKey = "hooks.audioRecording.errorDescriptions.managedTranscriptionUnavailable";
+      } else {
+        err.code = "MANAGED_REQUEST_REJECTED";
+        err.messageKey = "hooks.audioRecording.errorDescriptions.managedRequestRejected";
+        err.messageParams = { status: response.status };
       }
       throw err;
     }
-    const result = await response.json();
+    const malformed = () =>
+      Object.assign(new Error("Managed transcription response was malformed"), {
+        code: "MANAGED_RESPONSE_MALFORMED",
+        messageKey: "hooks.audioRecording.errorDescriptions.managedResponseMalformed",
+      });
+    let result;
+    try {
+      result = await response.json();
+    } catch {
+      request.signal?.throwIfAborted();
+      throw malformed();
+    }
     if (typeof result?.text !== "string") {
-      throw new Error("Managed transcription response was malformed");
+      throw malformed();
     }
     if (!result.text.trim()) {
       throw Object.assign(new Error("No speech detected in audio"), { code: "NO_SPEECH_DETECTED" });

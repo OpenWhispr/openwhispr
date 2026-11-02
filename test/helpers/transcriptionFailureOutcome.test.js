@@ -28,3 +28,14 @@ test("an unclassified failure keeps today's description", async () => {
   assert.equal(report.description, "Transcription failed: boom");
   assert.equal(report.title, "Transcription Error");
 });
+
+test("a transcript that outlived the failure reaches the pill", async () => {
+  const { transcriptionFailureOutcome } = await load();
+  const error = Object.assign(new Error("Selection edit failed"), {
+    selectionEditFatal: true,
+    code: "SELECTION_EDIT_CAPTURE_FAILED",
+  });
+  assert.equal("transcript" in transcriptionFailureOutcome(error).report, false);
+  Object.defineProperty(error, "transcript", { value: "kept text" });
+  assert.equal(transcriptionFailureOutcome(error).report.transcript, "kept text");
+});

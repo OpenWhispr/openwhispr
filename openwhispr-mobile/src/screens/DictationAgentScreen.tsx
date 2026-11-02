@@ -22,11 +22,9 @@ export function DictationAgentScreen(): React.JSX.Element {
   const agentSelected = !!config?.inference?.agent;
   // Bring Your Own Key skips the assistant until it has a selection of its own.
   const unavailableNotice =
-    activeMode === 'private'
-      ? 'Voice Assistant needs Cloud or Bring Your Own Key mode. Your settings are saved and apply once one is active.'
-      : activeMode === 'providers' && !agentSelected
-        ? 'Bring Your Own Key skips the voice assistant until Chat & Voice Assistant has a selection. Your settings are saved and apply once it does.'
-        : null;
+    activeMode === 'providers' && !agentSelected
+      ? 'Bring Your Own Key skips the voice assistant until you choose a provider for it in AI Models. Your settings are saved and apply once you do.'
+      : null;
   const isAvailable = !unavailableNotice;
   const enabled = config ? isDictationAgentEnabled(config) : true;
   const shareContext = config?.dictationAgentShareContext ?? false;
@@ -34,7 +32,13 @@ export function DictationAgentScreen(): React.JSX.Element {
 
   const [nameValue, setNameValue] = useState(currentName);
 
-  const handleToggleEnabled = useConfigToggle('dictationAgentEnabled');
+  const handleToggleEnabled = useCallback(
+    (value: boolean): void => {
+      safeHaptics('light');
+      void updateConfig({ dictationAgentEnabled: value });
+    },
+    [updateConfig],
+  );
   const handleToggleShareContext = useConfigToggle('dictationAgentShareContext');
 
   const commitName = useCallback((): void => {
@@ -52,9 +56,10 @@ export function DictationAgentScreen(): React.JSX.Element {
       <SettingsScreen keyboardShouldPersistTaps="handled">
         <View className="mx-4 mb-2 px-4">
           <Text className="text-[13px] text-secondaryLabel">
-            When you say your assistant’s name while dictating, OpenWhispr rewrites what you said
-            into polished, ready-to-use text instead of inserting it word for word. Requires Cloud
-            or Bring Your Own Key mode.
+            Tap the wand on the OpenWhispr keyboard and say what to write, like a reply or a rewrite
+            of the selected text. Your assistant drafts it for you to insert, regenerate or change.
+            Saying its name while dictating gives no command. It runs on the AI chosen for the Voice
+            Assistant in AI Models, whatever Dictation uses.
           </Text>
         </View>
 
@@ -75,10 +80,11 @@ export function DictationAgentScreen(): React.JSX.Element {
             icon="person.wave.2"
             mdIcon="UserRoundCog"
             title="Enable Voice Assistant"
-            description="Say your assistant’s name while dictating to have OpenWhispr rewrite what you said. Also turns note chat on or off."
+            description="Use the wand on the OpenWhispr keyboard."
             rightElement={
               <SettingsSwitch
-                value={enabled}
+                // Shows what runs: the voice assistant is off wherever it can't run.
+                value={enabled && isAvailable}
                 onValueChange={handleToggleEnabled}
                 disabled={!isAvailable}
               />
@@ -107,9 +113,7 @@ export function DictationAgentScreen(): React.JSX.Element {
         </SettingsSection>
         <View className="mx-4 -mt-5 mb-7 px-4">
           <Text className="text-[13px] text-secondaryLabel">
-            Start with this name, or say &quot;Hey&quot; and the name, to trigger the voice
-            assistant. A mention mid-sentence is transcribed as usual. The name is automatically
-            added to your transcription hints so the speech model recognises it.
+            Shown on the keyboard while you tell your assistant what to write.
           </Text>
         </View>
 

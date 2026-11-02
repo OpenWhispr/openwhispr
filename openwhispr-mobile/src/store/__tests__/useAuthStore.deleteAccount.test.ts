@@ -23,6 +23,12 @@ jest.mock('@/store/useUsageStore', () => ({
   useUsageStore: { getState: () => ({ reset: jest.fn(), load: jest.fn() }) },
 }));
 jest.mock('@/services/agent/AgentComposerService', () => ({ clearAllSessions: jest.fn() }));
+const mockClearChatHistory = jest.fn();
+const mockStopChatTurn = jest.fn();
+jest.mock('@/lib/chat/chatHistory', () => ({
+  clearChatHistory: (...args: unknown[]) => mockClearChatHistory(...args),
+  stopChatTurn: (...args: unknown[]) => mockStopChatTurn(...args),
+}));
 jest.mock('@/services/providers/ProviderCredentials', () => ({
   clearProviderCredentials: (...args: unknown[]) => mockClearProviderCredentials(...args),
 }));
@@ -84,4 +90,42 @@ it('finishes a completed deletion even if the keys cannot be erased', async () =
 it('keeps provider keys when the user only signs out', async () => {
   await useAuthStore.getState().signOut();
   expect(mockClearProviderCredentials).not.toHaveBeenCalled();
+});
+
+it('clears local chat history on sign-out and on account deletion', async () => {
+  await useAuthStore.getState().signOut();
+  expect(mockClearChatHistory).toHaveBeenCalledTimes(1);
+
+  useAuthStore.setState({ user: member, sessionCookie: 'fixture-session' });
+  await useAuthStore.getState().deleteAccount();
+  expect(mockClearChatHistory).toHaveBeenCalledTimes(2);
+});
+
+it('keeps local chats when a guest or anonymous session signs out, as it keeps their notes', async () => {
+  useAuthStore.setState({ user: { ...member, id: 'anon', isAnonymous: true } });
+  await useAuthStore.getState().signOut();
+
+  useAuthStore.setState({ user: null, sessionCookie: null, isGuest: true });
+  await useAuthStore.getState().signOut();
+
+  expect(mockClearChatHistory).not.toHaveBeenCalled();
+  // The turn that was running still stops, so its answer isn't saved after the session has gone.
+  expect(mockStopChatTurn).toHaveBeenCalledTimes(2);
+});
+
+it('clears an anonymous session’s chats when its account is deleted', async () => {
+  useAuthStore.setState({ user: { ...member, id: 'anon', isAnonymous: true } });
+  await useAuthStore.getState().deleteAccount();
+  expect(mockClearChatHistory).toHaveBeenCalledTimes(1);
+});
+
+it('finishes signing out when the chat history cannot be cleared', async () => {
+  const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+  mockClearChatHistory.mockImplementationOnce(() => {
+    throw new Error('Cannot find module');
+  });
+  await expect(useAuthStore.getState().signOut()).resolves.toBeUndefined();
+  expect(useAuthStore.getState()).toMatchObject({ user: null, isLoading: false });
+  expect(warn).toHaveBeenCalled();
+  warn.mockRestore();
 });

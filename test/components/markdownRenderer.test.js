@@ -104,7 +104,8 @@ test("Markdown component types stay stable across streaming and parent rerenders
   let components;
   function InspectMarkdown(props) {
     const element = MarkdownRenderer(props);
-    components = element.props.children.props.children.props.components;
+    // div → footnote prefix → code block actions → Markdown
+    components = element.props.children.props.children.props.children.props.components;
     return element;
   }
   renderToStaticMarkup(createElement(InspectMarkdown, { content: TABLE_MARKDOWN }));
@@ -257,4 +258,101 @@ test("URL sanitisation is unchanged with the plugin enabled", async (t) => {
   assert.ok(!html.includes("javascript:"), "javascript: href is stripped");
   assert.ok(!html.includes("data:text"), "data: href is stripped");
   assert.ok(!html.includes("<img"), "raw HTML stays escaped");
+});
+
+// A GFM table row is a single line, so models break lines inside a cell with
+// <br>. Raw HTML stays escaped, which printed those tags as literal text.
+test("<br> inside a table cell becomes a line break, not literal text", async (t) => {
+  const html = await renderMarkdown(
+    t,
+    [
+      "| Call | Topics |",
+      "|------|--------|",
+      "| One | • first<br>• second<br/>• third<BR />• fourth |",
+      "",
+    ].join("\n")
+  );
+
+  assert.ok(!html.includes("&lt;br"), "no literal <br> text in the cell");
+  assert.equal((html.match(/<br\/?>/g) || []).length, 3, "each tag is a real line break");
+  assert.ok(html.includes("fourth"), "text after the breaks still renders");
+});
+
+test("other raw HTML stays escaped next to a converted <br>", async (t) => {
+  const html = await renderMarkdown(t, "line one<br>line two <b>bold</b> <br onclick=x>\n");
+
+  assert.equal((html.match(/<br\/?>/g) || []).length, 1, "only the plain <br> converts");
+  assert.ok(html.includes("&lt;b&gt;"), "<b> is still escaped");
+  assert.ok(html.includes("&lt;br onclick=x&gt;"), "a <br> with attributes is still escaped");
+  assert.ok(!html.includes("onclick=x>"), "no attribute reaches the DOM");
+});
+
+test("<br> in inline code stays literal", async (t) => {
+  const html = await renderMarkdown(t, "Use `<br>` for a break.\n");
+
+  assert.ok(html.includes("&lt;br&gt;"), "code shows the tag as written");
+  assert.ok(!/<br\/?>/.test(html), "no line break is inserted");
+});
+
+test(
+  "hideFrontmatter drops a leading header block, CRLF included, and leaves other content alone",
+  async (t) => {
+    installBrowserGlobals(t);
+    const vite = await createRendererServer(t, {
+      cachePrefix: "openwhispr-markdown-frontmatter-test-",
+    });
+    const { default: MarkdownRenderer } = await vite.ssrLoadModule(
+      "/components/ui/MarkdownRenderer.tsx"
+    );
+    const render = (content, hideFrontmatter) =>
+      renderToStaticMarkup(createElement(MarkdownRenderer, { content, hideFrontmatter }));
+    const skill = "---\nname: recap\ndescription: Recaps.\n---\n\n## Steps\n\nGo";
+
+    const hidden = render(skill, true);
+    assert.doesNotMatch(hidden, /name: recap/);
+    assert.match(hidden, /<h2[^>]*>Steps<\/h2>/);
+    assert.equal(render(skill.replace(/\n/g, "\r\n"), true), hidden);
+    assert.equal(render(`\uFEFF${skill}`, true), hidden);
+    // Without the prop a leading header renders as it always has
+    assert.match(render(skill, false), /name: recap/);
+    // A rule later on is content, and an unclosed opening line isn't a header
+    for (const content of ["Intro\n\n---\n\nMore", "---\nname: recap\n\nNo closing line"]) {
+      assert.equal(render(content, true), render(content, false), content);
+    }
+  }
+);
+
+async function renderWithActions(t, content, codeBlockActions) {
+  installBrowserGlobals(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-markdown-code-actions-test-",
+  });
+  const mod = await vite.ssrLoadModule("/components/ui/MarkdownRenderer.tsx");
+  return renderToStaticMarkup(createElement(mod.default, { content, codeBlockActions }));
+}
+
+test(
+  "the code block's trailing newline from markdown is dropped, inner newlines kept",
+  async (t) => {
+    const codes = [];
+    const html = await renderWithActions(
+      t,
+      "Run `pwd` first, then:\n\n```sh\nls -la\ncd ..\n```\n",
+      (code) => {
+        codes.push(code);
+        return createElement("output", { "data-actions": "" });
+      }
+    );
+
+    assert.deepEqual(codes, ["ls -la\ncd .."], "inline code gets no actions");
+    assert.match(html, /<\/pre><output data-actions=""><\/output>/);
+  }
+);
+
+test("without codeBlockActions, code blocks render as before", async (t) => {
+  const html = await renderWithActions(t, "```sh\nls -la\n```\n");
+
+  const pre = '<pre dir="ltr" class="bg-black/10 p-2 rounded overflow-x-auto text-xs mb-2">';
+  assert.ok(html.includes(pre), html);
+  assert.match(html, /<code[^>]*>ls -la\n<\/code><\/pre><\/div>$/, "nothing follows the block");
 });

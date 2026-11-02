@@ -52,7 +52,7 @@ import PrivacyDataScreen from '../PrivacyDataScreen';
 it('lists the voice assistant in Preferences', () => {
   render(<PreferencesScreen />);
   expect(screen.getByText('Voice Assistant')).toBeTruthy();
-  expect(screen.getByText('Trigger AI actions by saying your assistant’s name')).toBeTruthy();
+  expect(screen.getByText('Have the keyboard’s wand write for you')).toBeTruthy();
   expect(screen.queryByText(/agent/i)).toBeNull();
 });
 
@@ -60,7 +60,7 @@ it('names the voice assistant throughout its settings screen', () => {
   render(<DictationAgentScreen />);
   expect(screen.getByText('Enable Voice Assistant')).toBeTruthy();
   expect(screen.getByText('Assistant Name')).toBeTruthy();
-  expect(screen.getByText(/Voice Assistant needs Cloud or Bring Your Own Key mode/)).toBeTruthy();
+  expect(screen.getByText(/the AI chosen for the Voice Assistant in AI Models/)).toBeTruthy();
   expect(screen.queryByText(/agent/i)).toBeNull();
 });
 

@@ -120,6 +120,22 @@ test("overlapping narrow, full and narrow updates retain FIFO acknowledgement or
   assert.equal(spawns.length, 1);
 });
 
+test("keyboard focus requests share the acknowledged FIFO with region updates", async (t) => {
+  const { writer, child, writes, spawns } = loadInputRegion(t);
+  const applied = [writer.set(REGION), writer.focus()];
+  const results = applied.map(trackSettlement);
+  assert.deepEqual(writes, ["208 120 104 60 84 40\n", "focus\n"]);
+  child.stdout.write("OK\n");
+  await applied[0];
+  assert.deepEqual(
+    results.map((result) => result.state),
+    ["fulfilled", "pending"]
+  );
+  child.stdout.write("OK\n");
+  await Promise.all(applied);
+  assert.equal(spawns.length, 1);
+});
+
 test("fragmented and combined acknowledgement chunks settle each queued update once", async (t) => {
   const { writer, child } = loadInputRegion(t);
   const applied = [writer.set(REGION), writer.set(null)];
@@ -164,8 +180,8 @@ test("timeout blocks pending and later callers until the old native writer close
   );
   assert.equal(writes.length, 2, "failed writers must not receive subsequent region commands");
   child.emit("close", null, "SIGKILL");
-  await Promise.all(applied.map((promise) => assert.rejects(promise, /update timed out/)));
-  await assert.rejects(writer.set(null), /update timed out/);
+  await Promise.all(applied.map((promise) => assert.rejects(promise, /helper timed out/)));
+  await assert.rejects(writer.set(null), /helper timed out/);
   assert.equal(spawns.length, 1);
   assert.equal(warnings.length, 1);
 });

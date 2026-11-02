@@ -133,6 +133,68 @@ test("an explicit temperature of 0 reaches llama-server instead of the 0.7 defau
 
   assert.equal(requests.length, 1);
   assert.equal(requests[0].temperature, 0);
+  assert.equal(requests[0].response_format, undefined);
+});
+
+test("structured selection output reaches the wire and preserves literal thinking tags", async (t) => {
+  const { SELECTION_EDIT_RESPONSE_FORMAT, extractLocalSelectionEditReplacement } =
+    await import("../../src/helpers/selectionEditing.js");
+  const replacement = '  <think>keep me</think> "quoted" \\path\n';
+  const { bridge, modelId, requests } = await setupChain(t, () =>
+    completion("stop", JSON.stringify({ replacement }))
+  );
+  const response = await bridge.processText("edit request", modelId, {
+    systemPrompt: "Dedicated editor",
+    requireCompleteOutput: true,
+    responseFormat: SELECTION_EDIT_RESPONSE_FORMAT,
+    disableThinking: true,
+  });
+  assert.deepEqual(requests[0].response_format, SELECTION_EDIT_RESPONSE_FORMAT);
+  assert.deepEqual(requests[0].messages, [
+    { role: "system", content: "Dedicated editor" },
+    { role: "user", content: "edit request" },
+  ]);
+  assert.equal(extractLocalSelectionEditReplacement(response), replacement);
+});
+
+test("structured selection output requires confirmed completion and real answer content", async (t) => {
+  const { SELECTION_EDIT_RESPONSE_FORMAT, extractLocalSelectionEditReplacement } =
+    await import("../../src/helpers/selectionEditing.js");
+  let reply;
+  const { bridge, modelId } = await setupChain(t, () => reply);
+  for (const finishReason of ["length", "max_tokens", undefined, null, "tool_calls", "unknown"]) {
+    reply = completion(finishReason, '{"replacement":"looks complete"}');
+    await assert.rejects(
+      bridge.processText("edit", modelId, {
+        requireCompleteOutput: true,
+        responseFormat: SELECTION_EDIT_RESPONSE_FORMAT,
+      }),
+      {
+        code: ["length", "max_tokens"].includes(finishReason)
+          ? "OUTPUT_TRUNCATED"
+          : "OUTPUT_COMPLETION_UNVERIFIED",
+      }
+    );
+  }
+  for (const content of ["", " \n", undefined, null, [], 123]) {
+    reply = {
+      choices: [
+        {
+          finish_reason: "stop",
+          message: {
+            content,
+            reasoning_content: '{"replacement":"not an answer"}',
+          },
+        },
+      ],
+    };
+    const response = await bridge.processText("edit", modelId, {
+      responseFormat: SELECTION_EDIT_RESPONSE_FORMAT,
+    });
+    assert.throws(() => extractLocalSelectionEditReplacement(response), {
+      code: "SELECTION_EDIT_EMPTY_RESPONSE",
+    });
+  }
 });
 
 test("a caller's contextSize reaches the server start (regression: it was dropped)", async (t) => {

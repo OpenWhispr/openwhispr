@@ -5,7 +5,7 @@ export interface HistoryMessage {
   content: string | Array<Record<string, unknown>>;
 }
 
-const HISTORY_LIMIT = 20;
+export const HISTORY_LIMIT = 20;
 const TRACE_ARG_MAX_CHARS = 80;
 const TRACE_OPENING = "[Tools used:";
 const ECHOED_TRACE = /^\s*\[Tools used:[^\]\n]*\]\s*/;
@@ -20,7 +20,27 @@ const TRACE_ARGUMENT: Record<string, string> = {
   github_search_issues: "query",
   find_contact: "name",
   create_note: "title",
+  load_skill: "name",
 };
+
+// A connector action's or skill card's status (its saved result), as the model reads
+// it. Without it, a follow-up turn can't tell an issue was already created, or a skill
+// already saved, and does it again.
+const ACTION_OUTCOME: Record<string, string> = {
+  sent: "sent",
+  draft_opened: "draft opened",
+  unknown: "may have been sent",
+  cancelled_by_user: "cancelled by the user",
+  not_sent: "not sent",
+  failed: "failed",
+  unavailable: "unavailable",
+  needs_clarification: "needed details",
+  saved: "saved",
+  skipped: "skipped by the user",
+  changed: "not saved, the skill had changed",
+  not_saved: "not saved",
+};
+const OUTCOME_URL_MAX_CHARS = 200;
 
 function traceArgument(call: ToolCallInfo): string | null {
   const field = TRACE_ARGUMENT[call.name];
@@ -31,7 +51,32 @@ function traceArgument(call: ToolCallInfo): string | null {
   } catch {
     return null;
   }
-  const value = (args as Record<string, unknown> | null)?.[field];
+  return traceText((args as Record<string, unknown> | null)?.[field]);
+}
+
+// A link is shown whole or not at all: a cut one would point somewhere else.
+function outcomeUrl(value: unknown): string | null {
+  if (typeof value !== "string" || value.length > OUTCOME_URL_MAX_CHARS) return null;
+  if (!/^https:\/\/[^\s"[\]]+$/.test(value)) return null;
+  return value;
+}
+
+/**
+ * What a connector action or skill card did, plus what a sent action created (its
+ * reference and link). Never the destination, the user's edits on the card, or error text:
+ * a display name or an error body is other people's text.
+ */
+function traceOutcome(call: ToolCallInfo): string | null {
+  const data = call.metadata;
+  if (!data || Array.isArray(data) || typeof data.status !== "string") return null;
+  if (!Object.hasOwn(ACTION_OUTCOME, data.status)) return null;
+  const outcome = ACTION_OUTCOME[data.status];
+  if (data.status !== "sent") return outcome;
+  const created = [traceText(data.reference), outcomeUrl(data.url)].filter(Boolean);
+  return created.length ? `${outcome}: ${created.join(" ")}` : outcome;
+}
+
+function traceText(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const clean = value
     .replace(/[\r\n"[\]]+/g, " ")
@@ -47,19 +92,23 @@ function traceArgument(call: ToolCallInfo): string | null {
 
 /**
  * A short record of the tools a turn called, so the model sees its own
- * precedent. Never results or outcomes: query items and web results are other
- * people's text, and a restored call's status can't say whether a card was sent.
+ * precedent. Never results: query items and web results are other people's
+ * text. A connector action's outcome is noted, so it isn't done twice.
  */
 export function toolTrace(toolCalls: ReadonlyArray<ToolCallInfo> | undefined): string {
   if (!toolCalls?.length) return "";
-  const entries = toolCalls.map((call) => {
-    const arg = traceArgument(call);
-    // A call still executing was cut off before its result arrived, but its side
-    // effect may have happened (a send commits in main after Esc).
-    const unrecorded = call.status === "executing" ? " (outcome not recorded)" : "";
-    return `${call.name}${arg ? ` ("${arg}")` : ""}${unrecorded}`;
-  });
-  return `${TRACE_OPENING} ${entries.join(", ")}]`;
+  // Older versions stored built-in help evidence as a synthetic tool call. It
+  // was never a model tool and must not teach future turns to invoke it.
+  const entries = toolCalls
+    .filter((call) => call.name !== "grounded_product_help")
+    .map((call) => {
+      const arg = traceArgument(call);
+      // A call still executing was cut off before its result arrived, but its side
+      // effect may have happened (a send commits in main after Esc).
+      const outcome = call.status === "executing" ? "outcome not recorded" : traceOutcome(call);
+      return `${call.name}${arg ? ` ("${arg}")` : ""}${outcome ? ` (${outcome})` : ""}`;
+    });
+  return entries.length ? `${TRACE_OPENING} ${entries.join(", ")}]` : "";
 }
 
 /**

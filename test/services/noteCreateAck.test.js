@@ -16,6 +16,7 @@ test("resolveCloudNoteCreate deletes a proven orphan create", async () => {
       client_note_id: note.client_note_id,
       updated_at: "2026-07-29T10:00:00.000Z",
       user_id: "owner-42",
+      row_created: true,
     },
     {
       acknowledge: async (...args) => {
@@ -34,7 +35,13 @@ test("resolveCloudNoteCreate deletes a proven orphan create", async () => {
     "cloud-note-42",
     "2026-07-29T10:00:00.000Z",
     "owner-42",
-    true,
+    {
+      settleIfUnchanged: true,
+      cloudRevision: null,
+      writeRejected: false,
+      cloudNote: undefined,
+      requiresReconciliation: true,
+    },
   ]);
   assert.deepEqual(calls[1], ["delete", "cloud-note-42"]);
 });
@@ -75,7 +82,7 @@ test("resolveCloudNoteCreate leaves newer local work pending without cleanup", a
   let deleted = false;
   const result = await resolveCloudNoteCreate(
     note,
-    { id: "cloud-note-42", client_note_id: note.client_note_id },
+    { id: "cloud-note-42", client_note_id: note.client_note_id, row_created: true },
     {
       acknowledge: async () => ({ success: true, outcome: "pending" }),
       deleteCloud: async () => {
@@ -94,7 +101,7 @@ test("resolveCloudNoteCreate treats orphan cleanup as best-effort", async () => 
   let reported = null;
   const result = await resolveCloudNoteCreate(
     note,
-    { id: "cloud-note-42", client_note_id: note.client_note_id },
+    { id: "cloud-note-42", client_note_id: note.client_note_id, row_created: true },
     {
       acknowledge: async () => ({ success: true, outcome: "orphaned" }),
       deleteCloud: async () => {
@@ -123,6 +130,7 @@ test("resolveCloudNoteCreateBatch routes migration results by snapshot identity"
         id: "cloud-note-84",
         client_note_id: otherNote.client_note_id,
         updated_at: "2026-07-29T14:00:00.000Z",
+        row_created: true,
       },
     ],
     {
@@ -136,7 +144,20 @@ test("resolveCloudNoteCreateBatch routes migration results by snapshot identity"
   );
 
   assert.deepEqual(acknowledgements, [
-    [otherNote.id, otherNote, "cloud-note-84", "2026-07-29T14:00:00.000Z", null, false],
+    [
+      otherNote.id,
+      otherNote,
+      "cloud-note-84",
+      "2026-07-29T14:00:00.000Z",
+      null,
+      {
+        settleIfUnchanged: false,
+        cloudRevision: null,
+        writeRejected: false,
+        cloudNote: undefined,
+        requiresReconciliation: true,
+      },
+    ],
   ]);
   assert.deepEqual(deleted, ["cloud-note-84"]);
   assert.deepEqual(results, ["orphan-cleaned"]);
@@ -210,7 +231,7 @@ test("an account reset cleans an invalidated migration without touching SQLite",
   accountGeneration += 1;
   let acknowledged = false;
   const deleted = [];
-  const cloud = { id: "old-account-cloud", client_note_id: note.client_note_id };
+  const cloud = { id: "old-account-cloud", client_note_id: note.client_note_id, row_created: true };
   const results = await resolveCloudNoteCreateBatch(
     [note],
     [cloud],
@@ -231,3 +252,59 @@ test("an account reset cleans an invalidated migration without touching SQLite",
   assert.deepEqual(deleted, ["old-account-cloud"]);
   assert.deepEqual(results, ["orphan-cleaned"]);
 });
+
+for (const invalidated of [false, true]) {
+  test(`a rejected create never cleans an existing row (invalidated=${invalidated})`, async () => {
+    const { resolveCloudNoteCreate } = await import("../../src/services/noteCreateAck.ts");
+    let acknowledged = false;
+    const outcome = await resolveCloudNoteCreate(
+      note,
+      {
+        id: "protected",
+        client_note_id: note.client_note_id,
+        revision: 12,
+        write_applied: false,
+      },
+      {
+        acknowledge: async (...args) => {
+          acknowledged = true;
+          // No fresh base or revision: the server never wrote this request.
+          assert.deepEqual(args[5], {
+            settleIfUnchanged: false,
+            cloudRevision: null,
+            writeRejected: true,
+          });
+          return { success: true, outcome: "orphaned" };
+        },
+        deleteCloud: () => assert.fail("Rejected create is not owned by this request"),
+      },
+      { requestStillCurrent: () => !invalidated }
+    );
+    assert.equal(outcome, "write-rejected");
+    assert.equal(acknowledged, !invalidated);
+  });
+}
+
+for (const blocked of [{ deleted_at: "2026-10-09T10:00:00Z" }, { access_removed: true }]) {
+  test(`create receipt cannot adopt an unavailable row: ${Object.keys(blocked)[0]}`, async () => {
+    const { resolveCloudNoteCreate } = await import("../../src/services/noteCreateAck.ts");
+    const note = { id: 42, client_note_id: "unavailable-note" };
+    assert.equal(
+      await resolveCloudNoteCreate(
+        note,
+        {
+          id: "cloud-unavailable",
+          client_note_id: note.client_note_id,
+          content: "Text",
+          enhanced_content: null,
+          ...blocked,
+        },
+        {
+          acknowledge: () => assert.fail("Unavailable row cannot be adopted"),
+          deleteCloud: () => assert.fail("Unavailable row cannot be deleted"),
+        }
+      ),
+      "unresolved"
+    );
+  });
+}

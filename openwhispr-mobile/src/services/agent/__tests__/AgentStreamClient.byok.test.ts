@@ -68,7 +68,8 @@ it('uses the persisted provider route after provider settings change', async () 
     systemPrompt: 'Compose text.',
     inferenceRoute: route,
   });
-  expect(resolveMobileProviderRoute).toHaveBeenCalledWith('agent', route);
+  // The provider saved for the voice assistant is the user's choice, so Local Mode doesn't refuse it.
+  expect(resolveMobileProviderRoute).toHaveBeenCalledWith('agent', route, false, true);
   expect(fetch).not.toHaveBeenCalled();
 });
 

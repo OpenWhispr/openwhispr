@@ -1,3 +1,4 @@
+import { getManagedTranscriptionResolution } from "../services/managedTranscription";
 import { create } from "zustand";
 import { getSettings, selectResolvedMeetingTranscription } from "./settingsStore";
 import { useStreamingProvidersStore } from "./streamingProvidersStore";
@@ -7,6 +8,7 @@ import { followsSystemDefaultMic } from "../helpers/micSelectionRecovery";
 import { resolvePreferredMicrophone } from "../helpers/microphoneSelection";
 import { ActiveMicRecoveryController } from "../helpers/activeMicRecovery";
 import { getBaseLanguageCode } from "../utils/languageSupport";
+import { getKeytermDictionaryWords } from "../utils/snippets";
 import {
   resolveInitialSpeakerCountOverride,
   resolveParticipantSpeakerCountSync,
@@ -29,18 +31,27 @@ import {
   MAX_SPEAKER_COUNT,
 } from "../constants/speakerDetection.json";
 import logger from "../utils/logger";
-import { isTranscriptionContextAllowed } from "./policyRules";
+import {
+  isAudioFeatureAllowed,
+  isTranscriptionContextAllowed,
+  meetingRecordingRefusal,
+  type PolicyDecisionSnapshot,
+} from "./policyRules";
 import { usePolicyStore } from "./policyStore";
+import { useWorkspaceStore } from "./workspaceStore";
 import {
   lockTranscriptSpeaker,
-  mergeTranscriptSegments,
   normalizeTranscriptSegment,
   serializeTranscriptSegments,
   type TranscriptSpeakerLockSource,
   type TranscriptSpeakerStatus,
 } from "../utils/transcriptSpeakerState";
-import { parseTranscriptSegments } from "../utils/parseTranscriptSegments";
-import { resolveDiarizationTarget, selectBaseSegments } from "../utils/diarizationCompletion";
+import { parseSeedSegments } from "../utils/parseTranscriptSegments";
+import {
+  mergeSessionDiarization,
+  resolveDiarizationTarget,
+  selectBaseSegments,
+} from "../utils/diarizationCompletion";
 import { createSerialQueue } from "../utils/serialQueue";
 import { reduceMeetingSegmentEvent, type MeetingSegmentEvent } from "./meetingSegmentReducer";
 import {
@@ -59,6 +70,8 @@ export interface TranscriptSegment {
   timestamp?: number;
   speaker?: string;
   speakerName?: string;
+  /** Session recorder for self-labelled lines appended to somebody else's note. */
+  recorderName?: string;
   speakerIsPlaceholder?: boolean;
   suggestedName?: string;
   suggestedProfileId?: number;
@@ -137,10 +150,12 @@ const buildTranscriptText = (segments: TranscriptSegment[]) =>
     .join(" ")
     .trim();
 
+// Seeds come from synced transcript JSON, so an index past safe integers is ignored.
 const getSpeakerNumericIndex = (speakerId?: string): number | null => {
   if (!speakerId) return null;
-  const match = speakerId.match(/speaker_(\d+)/);
-  return match ? Number(match[1]) : null;
+  const match = /^speaker_(\d+)$/.exec(speakerId);
+  const index = match ? Number(match[1]) : null;
+  return index != null && Number.isSafeInteger(index) ? index : null;
 };
 
 const isSegmentWithinIdentificationWindow = (
@@ -153,26 +168,57 @@ const isSegmentWithinIdentificationWindow = (
   );
 };
 
+// MeetingRecordingMount translates the `managedConfig:<key>` sentinel.
+const describeMeetingSetupError = (err: unknown): string => {
+  const { message, messageKey } = (err ?? {}) as { message?: string; messageKey?: unknown };
+  return typeof messageKey === "string" ? `managedConfig:${messageKey}` : String(message);
+};
+
 const getMeetingTranscriptionOptions = () => {
+  const { accountId, authGeneration } = usePolicyStore.getState();
+  const workspaceId = useWorkspaceStore.getState().activeWorkspaceId;
+  const enterpriseIdentity =
+    accountId && workspaceId && authGeneration != null
+      ? { accountId, workspaceId, authGeneration }
+      : undefined;
+  const managed = getManagedTranscriptionResolution("realtime");
+  if (managed?.kind === "error")
+    throw Object.assign(new Error(managed.message), {
+      code: managed.code,
+      messageKey: managed.messageKey,
+    });
+  if (managed?.kind === "managed")
+    return {
+      provider: "enterprise-realtime",
+      mode: "enterprise",
+      model: managed.deployment,
+      managedContext: managed.context,
+      enterpriseIdentity,
+      language: getBaseLanguageCode(getSettings().preferredLanguage),
+    };
   const state = getSettings();
   const resolved = selectResolvedMeetingTranscription(state);
   const language = getBaseLanguageCode(state.preferredLanguage);
 
-  return resolveMeetingTranscriptionOptions({
-    transcriptionMode: resolved.transcriptionMode,
-    language,
-    localProvider: resolved.localTranscriptionProvider,
-    whisperModel: resolved.whisperModel,
-    parakeetModel: resolved.parakeetModel,
-    cohereModel: resolved.cohereModel,
-    selectedProvider: resolved.cloudTranscriptionProvider,
-    selectedModel: resolved.cloudTranscriptionModel,
-    byokProviders: getMeetingStreamingTranscriptionProviders(),
-    managedProviders: useStreamingProvidersStore.getState().providers,
-    cortiEnvironment: state.cortiEnvironment,
-    cortiTenant: state.cortiTenant,
-    keyterms: (state.customDictionary ?? []).filter(Boolean),
-  });
+  return {
+    ...resolveMeetingTranscriptionOptions({
+      transcriptionMode: resolved.transcriptionMode,
+      language,
+      localProvider: resolved.localTranscriptionProvider,
+      whisperModel: resolved.whisperModel,
+      parakeetModel: resolved.parakeetModel,
+      cohereModel: resolved.cohereModel,
+      selectedProvider: resolved.cloudTranscriptionProvider,
+      selectedModel: resolved.cloudTranscriptionModel,
+      byokProviders: getMeetingStreamingTranscriptionProviders(),
+      managedProviders: useStreamingProvidersStore.getState().providers,
+      cortiEnvironment: state.cortiEnvironment,
+      cortiTenant: state.cortiTenant,
+      keyterms: getKeytermDictionaryWords(state).filter(Boolean),
+    }),
+    enterpriseIdentity,
+    enterpriseSetupMode: state.enterpriseTranscriptionSetupMode,
+  };
 };
 
 const stopMediaStream = (stream: MediaStream | null) => {
@@ -421,10 +467,29 @@ const meetingRecordingStartCoordinator = createMeetingRecordingStartCoordinator(
 const meetingRecordingStopBarrier = createMeetingRecordingStopBarrier();
 let isPrepared = false;
 let segmentsRefValue: TranscriptSegment[] = [];
+// A resumed note seeds the recording with its earlier transcript, but that
+// session's diarization covers only its own audio, so its result must not be
+// matched against the seeded rows. Keyed by diarization session at stop.
+let sessionSeedLength = 0;
+let sessionRecorderName: string | undefined;
+const seedLengthByDiarizationSession = new Map<
+  string,
+  { noteId: number | null; seedLength: number; fallbackTranscript: string; recorderName?: string }
+>();
+// The stopping session's seed, until its stop call returns and keys it above.
+let stoppingSeed: {
+  noteId: number | null;
+  seedLength: number;
+  fallbackTranscript: string;
+  recorderName?: string;
+} | null = null;
 let preparePromise: Promise<void> | null = null;
 let ipcCleanups: Array<() => void> = [];
 let speakerIdentifications: SpeakerIdentification[] = [];
 let nextPlaceholderSpeakerIndex = 0;
+// First speaker index this session owns; a resumed note's earlier sessions keep the
+// ids below it. Main may raise it (see _resolveMeetingSpeakerIndexBase).
+let sessionSpeakerIndexBase = 0;
 let systemPartialSpeakerIdValue: string | null = null;
 let recentSystemSpeaker: RecentSystemSpeaker | null = null;
 let speakerLocks: Map<string, string> = new Map();
@@ -463,6 +528,46 @@ export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
   micCaptureStatus: "inactive",
   windowWidth: typeof window !== "undefined" ? window.innerWidth : SIDE_PANEL_BREAKPOINT_PX,
 }));
+
+// Org-policy refusals: the main process's own sentinel and the refusal codes it
+// forwards. Each ends the recording; MeetingRecordingMount explains it.
+const MEETING_POLICY_REFUSALS = new Set([
+  "policyRestricted",
+  "POLICY_MEETING_RECORDING_DISABLED",
+  "AUDIO_PURPOSE_REQUIRED",
+  "POLICY_UNRESOLVABLE",
+]);
+
+// Main-process errors that mean main has already ended the recording: a policy
+// refusal, or the recording belonging to an account or workspace no longer active.
+const MEETING_MAIN_STOPS = new Set([
+  ...MEETING_POLICY_REFUSALS,
+  "accountChanged",
+  "workspaceChanged",
+]);
+
+// The last session main ended itself, so a policy stop of the same session
+// from this window doesn't explain it a second time.
+let mainStoppedSessionId: string | null = null;
+
+// A recording ended because the policy could not be checked. Unlike
+// POLICY_UNRESOLVABLE at start, there is nothing to try again in a moment.
+const POLICY_UNRESOLVED_STOP = "policyUnresolvedStop";
+
+// The sentinel explaining a meeting policy refuses, for a start or a stop.
+function meetingPolicyRefusalError(
+  policy: PolicyDecisionSnapshot,
+  phase: "start" | "stop"
+): string {
+  switch (meetingRecordingRefusal(policy)) {
+    case "unresolved":
+      return phase === "stop" ? POLICY_UNRESOLVED_STOP : "POLICY_UNRESOLVABLE";
+    case "disabled":
+      return "POLICY_MEETING_RECORDING_DISABLED";
+    default:
+      return "policyRestricted";
+  }
+}
 
 function reportMeetingError(error: string, extra: Partial<MeetingRecordingState> = {}): void {
   useMeetingRecordingStore.setState((state) => ({
@@ -600,12 +705,24 @@ function reserveSpeakerIndex(speakerId?: string) {
   nextPlaceholderSpeakerIndex = Math.max(nextPlaceholderSpeakerIndex, idx + 1);
 }
 
+function isEarlierSessionSpeaker(speakerId?: string): boolean {
+  const idx = getSpeakerNumericIndex(speakerId);
+  return idx != null && idx < sessionSpeakerIndexBase;
+}
+
+function adoptSpeakerIndexBase(base: number | undefined): void {
+  if (base == null || base <= sessionSpeakerIndexBase) return;
+  sessionSpeakerIndexBase = base;
+  nextPlaceholderSpeakerIndex = Math.max(nextPlaceholderSpeakerIndex, base);
+}
+
 // Other-speaker cap is expectedCount - 1 (the mic track is "you"); mirrors the
-// backend cap so live labels can't climb past the count the user expects.
+// backend cap so live labels can't climb past the count the user expects. The
+// cap counts this session's speakers, so it starts at the session's base.
 function mintPlaceholderSpeakerId(): string {
   const expected = useMeetingRecordingStore.getState().sessionExpectedCount;
   const cap = Math.max(1, expected - 1);
-  const index = Math.min(nextPlaceholderSpeakerIndex, cap - 1);
+  const index = Math.min(nextPlaceholderSpeakerIndex, sessionSpeakerIndexBase + cap - 1);
   nextPlaceholderSpeakerIndex = Math.max(nextPlaceholderSpeakerIndex, index + 1);
   return `speaker_${index}`;
 }
@@ -636,15 +753,15 @@ function assignProvisionalSpeaker(segment: TranscriptSegment): TranscriptSegment
     });
   }
 
-  const previousSystemSegment = [...segmentsRefValue]
-    .reverse()
-    .find(
-      (candidate) =>
-        candidate.source === "system" &&
-        candidate.speaker &&
-        candidate.timestamp != null &&
-        nowMs - candidate.timestamp <= SYSTEM_SPEAKER_CARRY_FORWARD_MS
-    );
+  const previousSystemSegment = [...segmentsRefValue].reverse().find(
+    (candidate) =>
+      candidate.source === "system" &&
+      candidate.speaker &&
+      // A seeded row from a session that just ended is not this session's voice.
+      !isEarlierSessionSpeaker(candidate.speaker) &&
+      candidate.timestamp != null &&
+      nowMs - candidate.timestamp <= SYSTEM_SPEAKER_CARRY_FORWARD_MS
+  );
 
   if (previousSystemSegment?.speaker) {
     reserveSpeakerIndex(previousSystemSegment.speaker);
@@ -764,6 +881,7 @@ export interface StartRecordingArgs {
   noteTitle: string | null;
   folderId: number | null;
   seedSegments?: TranscriptSegment[];
+  recorderName?: string;
   diarizationEnabled?: boolean | null;
   expectedCount?: number | null;
   expectedCountIsExplicit?: boolean;
@@ -775,10 +893,27 @@ export interface StartRecordingArgs {
 // "accepted" so callers don't roll back UI they didn't own.
 export async function startRecording(args: StartRecordingArgs): Promise<boolean> {
   if (isRecordingFlag || isStartingFlag) return true;
-  if (!isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "meeting")) {
+  const policy = usePolicyStore.getState();
+  if (!isTranscriptionContextAllowed(policy, getSettings(), "meeting")) {
     logger.warn("Meeting recording blocked by workspace policy", {}, "meeting");
-    reportMeetingError("policyRestricted");
+    reportMeetingError(
+      isAudioFeatureAllowed(policy, "meeting")
+        ? "policyRestricted"
+        : meetingPolicyRefusalError(policy, "start")
+    );
     return false;
+  }
+
+  // Resolve the managed route before any capture so a failure never lights the mic indicator.
+  const managed = getManagedTranscriptionResolution("realtime");
+  if (managed?.kind === "error") {
+    logger.warn(
+      "Meeting recording blocked by managed audio setup",
+      { code: managed.code },
+      "meeting"
+    );
+    reportMeetingError(describeMeetingSetupError(managed));
+    return true;
   }
 
   const sessionId = createMeetingRecordingSessionId();
@@ -790,7 +925,9 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
     isStartingFlag = true;
     activeRecordingSessionId = sessionId;
     const isCurrentStart = () =>
-      startOperation.isCurrent() && activeRecordingSessionId === sessionId;
+      startOperation.isCurrent() &&
+      activeRecordingSessionId === sessionId &&
+      isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "meeting");
 
     const initialEnabled =
       args.diarizationEnabled ??
@@ -804,18 +941,27 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
     logger.info("Meeting transcription starting...", {}, "meeting");
     const seed = args.seedSegments ?? [];
     const locks = new Map<string, string>();
+    const keepSeedSelfLocks = !args.recorderName && !seed.some((segment) => segment.recorderName);
     let maxSpeakerIndex = -1;
     for (const s of seed) {
       const idx = getSpeakerNumericIndex(s.speaker);
       if (idx != null && idx > maxSpeakerIndex) maxSpeakerIndex = idx;
-      if (s.speakerLocked && s.speaker && s.speakerName) {
+      if (
+        s.speakerLocked &&
+        s.speaker &&
+        s.speakerName &&
+        (s.speaker !== "you" || keepSeedSelfLocks)
+      ) {
         locks.set(s.speaker, s.speakerName);
       }
     }
 
     segmentsRefValue = seed;
+    sessionSeedLength = seed.length;
+    sessionRecorderName = args.recorderName;
     speakerIdentifications = [];
-    nextPlaceholderSpeakerIndex = maxSpeakerIndex + 1;
+    sessionSpeakerIndexBase = maxSpeakerIndex + 1;
+    nextPlaceholderSpeakerIndex = sessionSpeakerIndexBase;
     recentSystemSpeaker = null;
     speakerLocks = locks;
     systemPartialSpeakerIdValue = null;
@@ -862,7 +1008,6 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         systemAudioInterruptedNonce: state.systemAudioInterruptedNonce + 1,
       }));
     };
-    let setupMicResult: MediaStream | null = null;
     let setupSystemCaptureResult: { stream: MediaStream | null; error: Error | null } = {
       stream: null,
       error: null,
@@ -875,9 +1020,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         await window.electronAPI?.meetingTranscriptionStop?.(sessionId).catch(() => undefined);
       });
     const teardownStart = async () => {
-      stopMediaStream(setupMicResult);
       stopMediaStream(setupSystemCaptureResult.stream);
-      setupMicResult = null;
       setupSystemCaptureResult = { stream: null, error: null };
       isRecordingFlag = false;
       isStartingFlag = false;
@@ -916,15 +1059,6 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         resumedCleanup?.();
       });
 
-      if (preparePromise) {
-        logger.debug("Waiting for in-flight prepare to finish...", {}, "meeting");
-        await preparePromise;
-        if (!isCurrentStart()) {
-          await teardownStart();
-          return;
-        }
-      }
-
       const startTime = performance.now();
       const initialSystemAudioAccess =
         (await (window.electronAPI?.checkSystemAudioAccess?.() ??
@@ -936,58 +1070,140 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       const { initialSystemAudioStrategy, initialDisplayCaptureStrategy, systemCapturePromise } =
         prepareMeetingSystemAudioCapture(initialSystemAudioAccess);
 
-      startOperation.markMainStartAttempted();
-      const mainStartPromise = window.electronAPI?.meetingTranscriptionStart?.({
-        ...getMeetingTranscriptionOptions(),
-        noteId: args.noteId ?? null,
-        sessionId,
-        autoEndEligible: args.autoEndEligible,
-        aecEnabled: getSettings().meetingAecEnabled,
-      });
-      const micCapturePromise = getMeetingMicConstraints().then(async (constraints) => {
-        if (!isCurrentStart()) return null;
-        try {
-          return await navigator.mediaDevices.getUserMedia(constraints);
-        } catch (err) {
-          const hasExactDevice =
-            typeof constraints.audio === "object" &&
-            constraints.audio !== null &&
-            "deviceId" in constraints.audio;
-          if (hasExactDevice && isCurrentStart()) {
-            try {
-              const fallbackStream = await navigator.mediaDevices.getUserMedia({
-                audio: MEETING_MIC_PRIMARY_AUDIO_CONSTRAINTS,
-              });
-              logger.info(
-                "Meeting mic capture recovered using default device",
-                { error: (err as Error).message },
-                "meeting"
-              );
-              return fallbackStream;
-            } catch (fallbackErr) {
-              logger.error(
-                "Meeting mic capture failed, continuing with system audio only",
-                { error: (fallbackErr as Error).message },
-                "meeting"
-              );
-              return null;
-            }
+      // Held until main connects; capturedAt keeps main's timeline on capture time.
+      const pendingMicChunks: { chunk: ArrayBuffer; capturedAt: number }[] = [];
+      const pendingSystemChunks: { chunk: ArrayBuffer; capturedAt: number }[] = [];
+      let socketReady = false;
+
+      const mainStartPromise = (async () => {
+        if (preparePromise) {
+          logger.debug("Waiting for in-flight prepare to finish...", {}, "meeting");
+          await preparePromise;
+          if (!isCurrentStart()) {
+            return;
           }
-          logger.error(
-            "Meeting mic capture failed, continuing with system audio only",
-            { error: (err as Error).message, constraints },
-            "meeting"
-          );
-          return null;
         }
-      });
+
+        startOperation.markMainStartAttempted();
+        return window.electronAPI?.meetingTranscriptionStart?.({
+          ...getMeetingTranscriptionOptions(),
+          noteId: args.noteId ?? null,
+          sessionId,
+          autoEndEligible: args.autoEndEligible,
+          aecEnabled: getSettings().meetingAecEnabled,
+          speakerIndexBase: sessionSpeakerIndexBase,
+        });
+      })();
+      const micCapturePromise = getMeetingMicConstraints()
+        .then(async (constraints) => {
+          if (!isCurrentStart()) return null;
+          try {
+            return await navigator.mediaDevices.getUserMedia(constraints);
+          } catch (err) {
+            const hasExactDevice =
+              typeof constraints.audio === "object" &&
+              constraints.audio !== null &&
+              "deviceId" in constraints.audio;
+            if (hasExactDevice && isCurrentStart()) {
+              try {
+                const fallbackStream = await navigator.mediaDevices.getUserMedia({
+                  audio: MEETING_MIC_PRIMARY_AUDIO_CONSTRAINTS,
+                });
+                logger.info(
+                  "Meeting mic capture recovered using default device",
+                  { error: (err as Error).message },
+                  "meeting"
+                );
+                return fallbackStream;
+              } catch (fallbackErr) {
+                logger.error(
+                  "Meeting mic capture failed, continuing with system audio only",
+                  { error: (fallbackErr as Error).message },
+                  "meeting"
+                );
+                return null;
+              }
+            }
+            logger.error(
+              "Meeting mic capture failed, continuing with system audio only",
+              { error: (err as Error).message, constraints },
+              "meeting"
+            );
+            return null;
+          }
+        })
+        .then(async (micResult) => {
+          if (!micResult) return null;
+          if (!isCurrentStart()) {
+            stopMediaStream(micResult);
+            return null;
+          }
+          micStream = micResult;
+          // A Stop while main is still connecting (up to its connect timeout)
+          // turns the microphone off now; the rest is torn down once start settles.
+          startOperation.onCancel(() => {
+            if (micStream !== micResult) return;
+            stopMediaStream(micResult);
+            micStream = null;
+          });
+          const ctx = new AudioContext({ sampleRate: 24000 });
+          micContext = ctx;
+          await detachFromOutputDevice(ctx);
+          if (!isCurrentStart()) {
+            await teardownStart();
+            return null;
+          }
+
+          await createAudioPipeline({
+            stream: micResult,
+            context: ctx,
+            onChunk: (chunk) => {
+              if (!isRecordingFlag || activeRecordingSessionId !== sessionId) return;
+              if (socketReady) {
+                window.electronAPI?.meetingTranscriptionSend?.(chunk, "mic");
+                return;
+              }
+              pendingMicChunks.push({ chunk: chunk.slice(0), capturedAt: Date.now() });
+            },
+          }).then(async ({ source, processor }) => {
+            if (!isCurrentStart()) {
+              source.disconnect();
+              await flushAndDisconnectProcessor(processor);
+              return;
+            }
+            micSource = source;
+            micProcessor = processor;
+
+            // AnalyserNode must reach the destination for Chrome's pull-based
+            // renderer to update its internal buffer; route through a muted gain.
+            const analyser = ctx.createAnalyser();
+            analyser.fftSize = 256;
+            analyser.smoothingTimeConstant = 0.4;
+            const analyserSink = ctx.createGain();
+            analyserSink.gain.value = 0;
+            source.connect(analyser);
+            analyser.connect(analyserSink);
+            analyserSink.connect(ctx.destination);
+            micAnalyser = analyser;
+
+            const micTrack = micResult.getAudioTracks()[0];
+            logger.info(
+              "Mic capture started for meeting transcription",
+              {
+                label: micTrack?.label,
+                settings: micTrack?.getSettings(),
+              },
+              "meeting"
+            );
+          });
+          return micResult;
+        });
       const [startOutcome, micOutcome, systemCaptureOutcome] = await Promise.allSettled([
         mainStartPromise,
         micCapturePromise,
         systemCapturePromise,
       ] as const);
 
-      if (micOutcome.status === "fulfilled") setupMicResult = micOutcome.value;
       if (systemCaptureOutcome.status === "fulfilled") {
         setupSystemCaptureResult = systemCaptureOutcome.value;
       }
@@ -996,7 +1212,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       if (systemCaptureOutcome.status === "rejected") throw systemCaptureOutcome.reason;
 
       const startResult = startOutcome.value;
-      const micResult = setupMicResult;
+      const micResult = micOutcome.value;
       const initialSystemCaptureResult = setupSystemCaptureResult;
       let systemCaptureResult = initialSystemCaptureResult;
 
@@ -1018,12 +1234,15 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         reportMeetingError(
           needsSignIn
             ? "signInRequired"
-            : startResult?.error || "Failed to start meeting transcription",
+            : startResult?.code && MEETING_POLICY_REFUSALS.has(startResult.code)
+              ? startResult.code
+              : describeMeetingSetupError({
+                  message: startResult?.error || "Failed to start meeting transcription",
+                  messageKey: startResult?.messageKey,
+                }),
           { isRecording: false, isTranscribing: false }
         );
-        stopMediaStream(micResult);
         stopMediaStream(systemCaptureResult.stream);
-        setupMicResult = null;
         setupSystemCaptureResult = { stream: null, error: null };
         isRecordingFlag = false;
         isStartingFlag = false;
@@ -1031,6 +1250,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         releaseSession();
         return;
       }
+      adoptSpeakerIndexBase(startResult.speakerIndexBase);
       const systemAudioMode = startResult.systemAudioMode || initialSystemAudioAccess.mode;
       const systemAudioStrategy = startResult.systemAudioStrategy || initialSystemAudioStrategy;
       systemCaptureResult = await ensureRendererSystemAudioCapture({
@@ -1086,7 +1306,9 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
               // reduction inserts into that snapshot. Reads of segmentsRefValue (assignProvisionalSpeaker)
               // still see the previous segments, exactly as before the reducer extraction.
               decorateFinal: (rawSegment) => {
-                let decorated = rawSegment;
+                let decorated = args.recorderName
+                  ? { ...rawSegment, recorderName: args.recorderName }
+                  : rawSegment;
                 for (let i = speakerIdentifications.length - 1; i >= 0; i -= 1) {
                   decorated = applySpeakerIdentification(decorated, speakerIdentifications[i]);
                 }
@@ -1221,8 +1443,11 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
 
       const errorCleanup = window.electronAPI?.onMeetingTranscriptionError?.((err) => {
         if (activeRecordingSessionId !== sessionId) return;
-        reportMeetingError(err);
+        reportMeetingError(err === "POLICY_UNRESOLVABLE" ? POLICY_UNRESOLVED_STOP : err);
         logger.error("Meeting transcription stream error", { error: err }, "meeting");
+        if (!MEETING_MAIN_STOPS.has(err)) return;
+        mainStoppedSessionId = sessionId;
+        if (isRecordingFlag) void stopRecording(sessionId);
       });
       if (errorCleanup) ipcCleanups.push(errorCleanup);
 
@@ -1267,7 +1492,8 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
 
       if (startResult.oneOnOneAttendee) {
         const synthetic: SpeakerIdentification = {
-          speakerId: "speaker_0",
+          // Main's live identifier mints the session's first cluster at the base too.
+          speakerId: `speaker_${sessionSpeakerIndexBase}`,
           displayName: startResult.oneOnOneAttendee.displayName,
           startTime: 0,
           endTime: Number.MAX_SAFE_INTEGER,
@@ -1278,68 +1504,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         speakerIdentifications.push(synthetic);
       }
 
-      const pendingMicChunks: ArrayBuffer[] = [];
-      const pendingSystemChunks: ArrayBuffer[] = [];
-      let socketReady = false;
-
-      let micPipelinePromise: Promise<void> | null = null;
       if (micResult) {
-        micStream = micResult;
-        setupMicResult = null;
-        const ctx = new AudioContext({ sampleRate: 24000 });
-        micContext = ctx;
-        await detachFromOutputDevice(ctx);
-        if (!isCurrentStart()) {
-          await teardownStart();
-          return;
-        }
-
-        micPipelinePromise = createAudioPipeline({
-          stream: micResult,
-          context: ctx,
-          onChunk: (chunk) => {
-            if (!isRecordingFlag || activeRecordingSessionId !== sessionId) return;
-            if (socketReady) {
-              window.electronAPI?.meetingTranscriptionSend?.(chunk, "mic");
-              return;
-            }
-            pendingMicChunks.push(chunk.slice(0));
-          },
-        }).then(async ({ source, processor }) => {
-          if (!isCurrentStart()) {
-            source.disconnect();
-            await flushAndDisconnectProcessor(processor);
-            return;
-          }
-          micSource = source;
-          micProcessor = processor;
-
-          // AnalyserNode must reach the destination for Chrome's pull-based
-          // renderer to update its internal buffer; route through a muted gain.
-          const analyser = ctx.createAnalyser();
-          analyser.fftSize = 256;
-          analyser.smoothingTimeConstant = 0.4;
-          const analyserSink = ctx.createGain();
-          analyserSink.gain.value = 0;
-          source.connect(analyser);
-          analyser.connect(analyserSink);
-          analyserSink.connect(ctx.destination);
-          micAnalyser = analyser;
-
-          const micTrack = micResult.getAudioTracks()[0];
-          logger.info(
-            "Mic capture started for meeting transcription",
-            {
-              label: micTrack?.label,
-              settings: micTrack?.getSettings(),
-            },
-            "meeting"
-          );
-        });
-      }
-
-      if (micPipelinePromise) {
-        await micPipelinePromise;
         if (!isCurrentStart()) {
           await teardownStart();
           return;
@@ -1410,7 +1575,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
               window.electronAPI?.meetingTranscriptionSend?.(chunk, "system");
               return;
             }
-            pendingSystemChunks.push(chunk.slice(0));
+            pendingSystemChunks.push({ chunk: chunk.slice(0), capturedAt: Date.now() });
           },
         });
         systemSource = source;
@@ -1535,11 +1700,11 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       isStartingFlag = false;
       socketReady = true;
 
-      for (const chunk of pendingMicChunks) {
-        window.electronAPI?.meetingTranscriptionSend?.(chunk, "mic");
+      for (const { chunk, capturedAt } of pendingMicChunks) {
+        window.electronAPI?.meetingTranscriptionSend?.(chunk, "mic", capturedAt);
       }
-      for (const chunk of pendingSystemChunks) {
-        window.electronAPI?.meetingTranscriptionSend?.(chunk, "system");
+      for (const { chunk, capturedAt } of pendingSystemChunks) {
+        window.electronAPI?.meetingTranscriptionSend?.(chunk, "system", capturedAt);
       }
 
       const totalMs = performance.now() - startTime;
@@ -1562,7 +1727,10 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         { error: (err as Error).message },
         "meeting"
       );
-      reportMeetingError((err as Error).message, { isRecording: false, isTranscribing: false });
+      reportMeetingError(describeMeetingSetupError(err), {
+        isRecording: false,
+        isTranscribing: false,
+      });
       isRecordingFlag = false;
       isStartingFlag = false;
       await teardownStart();
@@ -1607,6 +1775,8 @@ export interface StopRecordingResult {
   // True only when this call ended a live recording — false for a no-op stop
   // (nothing recording, or a scoped stop for a session that is not active).
   stopped: boolean;
+  // True when this call cancelled a start that was still in progress.
+  cancelledStart?: boolean;
 }
 
 export async function stopRecording(expectedSessionId?: string): Promise<StopRecordingResult> {
@@ -1626,7 +1796,7 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
       currentMicLevel: 0,
       recordingStartedAt: null,
     });
-    return { diarizationSessionId: null, stopped: false };
+    return { diarizationSessionId: null, stopped: false, cancelledStart: true };
   }
 
   await meetingRecordingStopBarrier.waitForPendingStop();
@@ -1655,6 +1825,8 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
     // that view is unmounted, and any view-scoped saver dies with it. (Delayed
     // diarization results are persisted by the module-level listener below.)
     const { recordingNoteId, segments: finalSegments } = useMeetingRecordingStore.getState();
+    const hasNewSegments = finalSegments.length > sessionSeedLength;
+    let stopTranscript = "";
     const persistTranscript = async (transcript: string) => {
       if (recordingNoteId == null) return;
       try {
@@ -1670,10 +1842,24 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
 
     const diarizationSessionId = await persistFinalTranscriptAroundStop({
       segments: finalSegments,
+      seedLength: sessionSeedLength,
       serializeSegments: serializeTranscriptSegments,
       persist: persistTranscript,
-      fallbackTranscript: () => useMeetingRecordingStore.getState().transcript,
+      fallbackTranscript: () =>
+        stopTranscript &&
+        (finalSegments.length === 0
+          ? stopTranscript
+          : serializeTranscriptSegments(useMeetingRecordingStore.getState().segments)),
       stop: async () => {
+        // Set before cleanup's awaits: the final transcript write is already
+        // posted, so an earlier session's result can land from here on.
+        const seed = {
+          noteId: recordingNoteId,
+          seedLength: sessionSeedLength,
+          fallbackTranscript: "",
+          recorderName: sessionRecorderName,
+        };
+        stoppingSeed = seed;
         await cleanup();
 
         let stoppedDiarizationSessionId: string | null = null;
@@ -1683,12 +1869,27 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
           );
           if (result?.diarizationSessionId) {
             stoppedDiarizationSessionId = result.diarizationSessionId;
+            seedLengthByDiarizationSession.set(stoppedDiarizationSessionId, seed);
             useMeetingRecordingStore.setState({
               diarizationSessionId: stoppedDiarizationSessionId,
             });
           }
           if (result?.success && result.transcript) {
-            useMeetingRecordingStore.setState({ transcript: result.transcript });
+            if (hasNewSegments) {
+              useMeetingRecordingStore.setState({ transcript: result.transcript });
+            } else {
+              stopTranscript = result.transcript;
+              seed.fallbackTranscript = result.transcript.trim();
+              const segments = [
+                ...useMeetingRecordingStore.getState().segments,
+                { id: "stop-plain", text: seed.fallbackTranscript, source: "system" as const },
+              ];
+              segmentsRefValue = segments;
+              useMeetingRecordingStore.setState({
+                segments,
+                transcript: buildTranscriptText(segments),
+              });
+            }
           } else if (result?.error) {
             reportMeetingError(result.error);
           }
@@ -1699,6 +1900,8 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
             { error: (err as Error).message },
             "meeting"
           );
+        } finally {
+          stoppingSeed = null;
         }
         return stoppedDiarizationSessionId;
       },
@@ -1723,11 +1926,27 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
   });
 }
 
-export function lockSpeaker(speakerId: string, displayName: string): void {
+/**
+ * Ends a recording this window's policy now refuses, which main may still allow
+ * (an unresolved policy, a minimum app version). Says why only when this call
+ * ended it, so not for a stop the user or main already had under way.
+ */
+export async function stopRecordingForPolicy(): Promise<void> {
+  const sessionId = activeRecordingSessionId;
+  const reason = meetingPolicyRefusalError(usePolicyStore.getState(), "stop");
+  const { stopped, cancelledStart } = await stopRecording();
+  if ((stopped || cancelledStart) && sessionId && mainStoppedSessionId !== sessionId) {
+    reportMeetingError(reason);
+  }
+}
+
+export function lockSpeaker(speakerId: string, displayName: string, recorderName?: string): void {
   if (!speakerId || !displayName) return;
-  speakerLocks.set(speakerId, displayName);
+  if (speakerId !== "you" || recorderName === sessionRecorderName) {
+    speakerLocks.set(speakerId, displayName);
+  }
   const next = useMeetingRecordingStore.getState().segments.map((s) =>
-    s.speaker === speakerId
+    s.speaker === speakerId && (speakerId !== "you" || s.recorderName === recorderName)
       ? lockTranscriptSpeaker(s, {
           speakerName: displayName,
           speakerIsPlaceholder: false,
@@ -1764,6 +1983,7 @@ if (typeof window !== "undefined") {
   const enqueueDiarizationCompletion = createSerialQueue();
   window.electronAPI?.onMeetingDiarizationComplete?.((data) => {
     enqueueDiarizationCompletion(async () => {
+      await meetingRecordingStopBarrier.waitForPendingStop();
       const {
         diarizationSessionId,
         isRecording,
@@ -1776,7 +1996,10 @@ if (typeof window !== "undefined") {
         currentSessionId: diarizationSessionId,
         activeRecordingNoteId: isRecording ? recordingNoteId : null,
       });
-      if (targetNoteId == null) return;
+      if (targetNoteId == null) {
+        if (data?.sessionId) seedLengthByDiarizationSession.delete(data.sessionId);
+        return;
+      }
 
       // Publishing an empty result clears a waiting editor's spinner without
       // painting an overlay; anything non-empty is already persisted.
@@ -1789,6 +2012,7 @@ if (typeof window !== "undefined") {
       };
 
       if (!data?.segments?.length) {
+        if (data?.sessionId) seedLengthByDiarizationSession.delete(data.sessionId);
         publish([]);
         return;
       }
@@ -1803,6 +2027,11 @@ if (typeof window !== "undefined") {
           "meeting"
         );
       }
+      // Read after the getNote await: a skipped diarization is sent before the
+      // stop call that records this session's seed length returns.
+      const seed = data.sessionId ? seedLengthByDiarizationSession.get(data.sessionId) : undefined;
+      const seedLength = seed?.seedLength ?? 0;
+      if (data.sessionId) seedLengthByDiarizationSession.delete(data.sessionId);
       // No note means no safe base to merge into, and writing to a deleted one
       // would resurrect its tombstone in the sidebar, cloud mirror, and vector
       // index.
@@ -1812,21 +2041,30 @@ if (typeof window !== "undefined") {
       }
 
       const existing = selectBaseSegments({
-        persistedSegments: persisted.transcript
-          ? parseTranscriptSegments(persisted.transcript)
-          : null,
+        persistedSegments: persisted.transcript ? parseSeedSegments(persisted.transcript) : null,
         liveSegments,
         recordingNoteId,
         targetNoteId,
       });
-      const enriched = mergeTranscriptSegments(
+      const recordedSegments = seed?.recorderName
+        ? data.segments.map((segment) => ({ ...segment, recorderName: seed.recorderName }))
+        : data.segments;
+      const { segments: enriched, removedCount } = mergeSessionDiarization({
         existing,
-        data.segments.map((segment, index) => ({
-          ...segment,
-          id: segment.id || `diarized-${index}`,
-        }))
-      );
+        seedLength,
+        fallbackTranscript: seed?.fallbackTranscript,
+        segments: recordedSegments,
+        removedSegments: data.removedSegments,
+      });
 
+      // A later session seeded this session's rows, so move its boundary when
+      // removing rows or replacing a fallback with individual diarized rows.
+      // Only sessions whose final write is already posted count: one posted
+      // after this write puts the rows back.
+      const laterSeeds = [...seedLengthByDiarizationSession.values(), stoppingSeed].filter(
+        (pending): pending is NonNullable<typeof stoppingSeed> =>
+          pending?.noteId === targetNoteId && pending.seedLength > seedLength
+      );
       try {
         // Awaited so the next queued completion's getNote is guaranteed to
         // read this write — without it the ordering depends on db-update-note
@@ -1837,6 +2075,31 @@ if (typeof window !== "undefined") {
       } catch (error) {
         publish([]);
         throw error;
+      }
+      for (const pending of laterSeeds) pending.seedLength -= removedCount;
+
+      // The resumed recording must save the replacement too, or its next
+      // periodic/stop write would put the combined fallback back.
+      const current = useMeetingRecordingStore.getState();
+      if (
+        current.recordingNoteId === targetNoteId &&
+        sessionSeedLength > seedLength &&
+        seed?.fallbackTranscript &&
+        current.segments[seedLength]?.text === seed.fallbackTranscript
+      ) {
+        const merged = mergeSessionDiarization({
+          existing: current.segments,
+          seedLength,
+          fallbackTranscript: seed.fallbackTranscript,
+          segments: recordedSegments,
+          removedSegments: data.removedSegments,
+        });
+        sessionSeedLength -= merged.removedCount;
+        segmentsRefValue = merged.segments;
+        useMeetingRecordingStore.setState({
+          segments: merged.segments,
+          transcript: buildTranscriptText(merged.segments),
+        });
       }
       publish(enriched);
 

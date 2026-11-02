@@ -141,7 +141,7 @@ test("reset removes only the WHISPER_GPU_FAILED line; hand-added .env lines surv
       envPath,
       [
         "# OpenWhispr Environment Variables",
-        "OPENWHISPR_LOG_LEVEL=debug", // hand-added: not in PERSISTED_KEYS
+        "OPENWHISPR_LOG_LEVEL=debug", // a line the targeted removal must keep
         "WHISPER_GPU_FAILED=cuda",
         "WHISPER_CUDA_ENABLED=true",
         "",

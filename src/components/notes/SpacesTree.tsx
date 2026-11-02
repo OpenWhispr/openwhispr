@@ -19,6 +19,8 @@ import {
   Trash2,
   Users,
 } from "../icons";
+import { FolderNotesPopover } from "./FolderNotesPopover";
+import { sidebarFolderNotes } from "./sidebarFolderNotes";
 import { Button } from "../ui/button";
 import ThemedEmptyIllustration from "../ui/ThemedEmptyIllustration";
 import sharedSpaceEmptyLight from "../../assets/empty-states/notes-shared-space-light.svg";
@@ -45,17 +47,16 @@ import SpaceSettingsDialog from "./SpaceSettingsDialog";
 import {
   canChangeSpaceNoteScope,
   canDeleteSpaceNote,
-  canManageSpace,
-  canManageWorkspace,
   canMoveBetweenSpaces,
   canMoveOrDeleteSpaceFolder,
 } from "../../lib/spacePermissions";
+import { spaceCan, workspaceCan } from "../../lib/capabilities";
 import {
   canOrganizeNote as canOrganizeSharedNote,
   resolveNotePermission,
   sharedNoteBlocksDelete,
 } from "../../lib/notePermissions";
-import { groupTeamSpacesByWorkspace } from "../../lib/workspaceSelection";
+import { spacesInWorkspaceScope } from "../../lib/workspaceSelection";
 import { localMutationErrorKey } from "../../lib/localMutationError";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { cn } from "../lib/utils";
@@ -64,7 +65,7 @@ import CreateSpaceDialog from "./CreateSpaceDialog";
 import DeleteSpaceDialog from "./DeleteSpaceDialog";
 import { treeHorizontalIntent, treeRowActionClearanceStyle } from "./treeDirection";
 import { defaultFolderDisplayName } from "./shared";
-import type { FolderItem, NoteItem, SpaceItem, WorkspaceRole } from "../../types/electron";
+import type { FolderItem, NoteItem, SpaceItem, Workspace } from "../../types/electron";
 import {
   folderContainerKey,
   spaceContainerKey,
@@ -76,6 +77,7 @@ import {
   useExpandedContainers,
   useActiveContext,
   useActiveNoteId,
+  useActiveNote,
   useIsTreeLoading,
   setActiveContext,
   setActiveNoteId,
@@ -126,6 +128,7 @@ const SUB_TRIGGER_CLASS = cn(
 type TFn = (key: string, options?: Record<string, unknown>) => string;
 
 type TreeRow =
+  | { type: "more"; key: string; folder: FolderItem; parentKey: string; level: 2 | 3 }
   | { type: "space"; key: string; space: SpaceItem; parentKey?: undefined }
   | {
       type: "folder";
@@ -149,7 +152,7 @@ interface DropHandlers {
   onDrop: (e: React.DragEvent) => void;
 }
 
-interface RowA11yProps {
+export interface RowA11yProps {
   tabIndex: number;
   rowRef: (el: HTMLDivElement | null) => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
@@ -1116,19 +1119,27 @@ export default function SpacesTree({
   const { toast, dismiss } = useToast();
   const fileManagerName = getFileManagerName();
 
-  const spaces = useSpaces();
+  const allSpaces = useSpaces();
   const folders = useFolders();
   const folderCounts = useFolderCounts();
   const spaceRootCounts = useSpaceRootCounts();
   const notesByContainer = useNotesByContainer();
+  const [openFolderId, setOpenFolderId] = useState<number | null>(null);
   const expanded = useExpandedContainers();
   const activeContext = useActiveContext();
   const activeNoteId = useActiveNoteId();
+  const activeNote = useActiveNote();
+
   const isTreeLoading = useIsTreeLoading();
   const { isSignedIn, user } = useAuth();
   const teamCapability = useTeamSpacesCapability(isSignedIn);
   const canCreateTeamSpace = useCanCreateTeamSpace();
-  const { workspaces, loaded: workspacesLoaded } = useWorkspace();
+  const { workspaces, active: activeWorkspace, loaded: workspacesLoaded } = useWorkspace();
+  // Other workspaces' teamspaces stay out of the tree until the user switches.
+  const spaces = useMemo(
+    () => spacesInWorkspaceScope(allSpaces, activeWorkspace?.id ?? null, workspaces),
+    [allSpaces, activeWorkspace?.id, workspaces]
+  );
   const noteFilesEnabled = useSettingsStore((s) => s.noteFilesEnabled);
   const shareByCloudId = useShareCache();
 
@@ -1154,13 +1165,6 @@ export default function SpacesTree({
     ? expanded.has(spaceContainerKey(privateSpace.id))
     : false;
   const teamSpaces = useMemo(() => spaces.filter((s) => s.kind === "team"), [spaces]);
-  const showWorkspaceGroups = workspaces.length > 1;
-  const {
-    groups: teamSpaceGroups,
-    ungrouped: ungroupedTeamSpaces,
-    ordered: groupedTeamSpaces,
-  } = useMemo(() => groupTeamSpacesByWorkspace(workspaces, teamSpaces), [teamSpaces, workspaces]);
-  const orderedTeamSpaces = showWorkspaceGroups ? groupedTeamSpaces : teamSpaces;
   const visibleSpaces = teamCapability ? spaces : privateSpaces;
   const spacesById = useMemo(() => new Map(spaces.map((space) => [space.id, space])), [spaces]);
   // Valid move destinations per source space (the source itself stays listed —
@@ -1185,13 +1189,15 @@ export default function SpacesTree({
   const workspacesPending = isSignedIn && !workspacesLoaded;
 
   const currentUserId = user?.id ?? null;
-  const workspaceRoleFor = (space: SpaceItem | undefined): WorkspaceRole | null =>
-    workspaces.find((w) => w.id === space?.workspace_id)?.role ?? null;
+  const workspaceFor = (space: SpaceItem | undefined): Workspace | null =>
+    workspaces.find((w) => w.id === space?.workspace_id) ?? null;
 
   // Local-only spaces (no cloud id) stay fully manageable; cloud spaces
-  // follow space/workspace roles. Cosmetic — the server enforces.
+  // follow space/workspace capabilities. Cosmetic — the server enforces.
   const canManageTeamSpace = (space: SpaceItem): boolean =>
-    !space.cloud_space_id || canManageSpace(space, workspaceRoleFor(space));
+    !space.cloud_space_id ||
+    spaceCan(space, "manage_settings") ||
+    workspaceCan(workspaceFor(space), "manage_settings");
 
   // Note-level ACL for cloud-backed personal notes shared with this user.
   // Without a cache entry (note never opened this session, offline) the
@@ -1217,11 +1223,11 @@ export default function SpacesTree({
   const canDeleteNote = (note: NoteItem): boolean => {
     if (sharedNoteBlocksDelete(sharedNotePermission(note), sharedNoteScope(note))) return false;
     const space = spacesById.get(note.space_id);
-    return canDeleteSpaceNote(note, space, currentUserId, workspaceRoleFor(space));
+    return canDeleteSpaceNote(note, space, currentUserId, workspaceFor(space));
   };
   const canChangeNoteScope = (note: NoteItem): boolean => {
     const space = spacesById.get(note.space_id);
-    return canChangeSpaceNoteScope(note, space, currentUserId, workspaceRoleFor(space));
+    return canChangeSpaceNoteScope(note, space, currentUserId, workspaceFor(space));
   };
   // Any local re-filing (same-space folder moves included): owner-only on
   // shared personal notes — a denied folder_id PATCH would fork an
@@ -1230,7 +1236,7 @@ export default function SpacesTree({
     canOrganizeSharedNote(sharedNotePermission(note), sharedNoteScope(note));
   const canManageFolderDestructive = (folder: FolderItem): boolean => {
     const space = spacesById.get(folder.space_id);
-    return canMoveOrDeleteSpaceFolder(space, workspaceRoleFor(space));
+    return canMoveOrDeleteSpaceFolder(space, workspaceFor(space));
   };
 
   // Cross-space targets require scope-change permission; same-space folder
@@ -1456,7 +1462,14 @@ export default function SpacesTree({
           const folderKey = folderContainerKey(folder.id);
           rows.push({ type: "folder", key: folderKey, folder, level: 1 });
           if (expanded.has(folderKey)) {
-            (notesByContainer[folderKey] ?? []).forEach((note) => {
+            const folderNotes = notesByContainer[folderKey] ?? [];
+            const { notes: shownNotes, hiddenCount } = sidebarFolderNotes(
+              folderNotes,
+              activeNote,
+              folder.id,
+              folderCounts[folder.id] ?? folderNotes.length
+            );
+            shownNotes.forEach((note) => {
               rows.push({
                 type: "note",
                 key: `n:${note.id}`,
@@ -1465,6 +1478,15 @@ export default function SpacesTree({
                 level: 2,
               });
             });
+            if (hiddenCount > 0) {
+              rows.push({
+                type: "more",
+                key: `more:${folder.id}`,
+                folder,
+                parentKey: folderKey,
+                level: 2,
+              });
+            }
           }
         });
       (notesByContainer[spaceKey] ?? []).forEach((note) => {
@@ -1481,7 +1503,14 @@ export default function SpacesTree({
           const folderKey = folderContainerKey(folder.id);
           rows.push({ type: "folder", key: folderKey, folder, parentKey: spaceKey, level: 2 });
           if (expanded.has(folderKey)) {
-            (notesByContainer[folderKey] ?? []).forEach((note) => {
+            const folderNotes = notesByContainer[folderKey] ?? [];
+            const { notes: shownNotes, hiddenCount } = sidebarFolderNotes(
+              folderNotes,
+              activeNote,
+              folder.id,
+              folderCounts[folder.id] ?? folderNotes.length
+            );
+            shownNotes.forEach((note) => {
               rows.push({
                 type: "note",
                 key: `n:${note.id}`,
@@ -1490,6 +1519,15 @@ export default function SpacesTree({
                 level: 3,
               });
             });
+            if (hiddenCount > 0) {
+              rows.push({
+                type: "more",
+                key: `more:${folder.id}`,
+                folder,
+                parentKey: folderKey,
+                level: 3,
+              });
+            }
           }
         });
       (notesByContainer[spaceKey] ?? []).forEach((note) => {
@@ -1497,9 +1535,18 @@ export default function SpacesTree({
       });
     };
     privateSpaces.forEach(pushPrivateSpace);
-    if (teamCapability) orderedTeamSpaces.forEach(pushSpace);
+    if (teamCapability) teamSpaces.forEach(pushSpace);
     return rows;
-  }, [privateSpaces, orderedTeamSpaces, folders, notesByContainer, expanded, teamCapability]);
+  }, [
+    privateSpaces,
+    teamSpaces,
+    folders,
+    notesByContainer,
+    expanded,
+    teamCapability,
+    activeNote,
+    folderCounts,
+  ]);
 
   const effectiveFocusKey =
     focusedKey && visibleRows.some((r) => r.key === focusedKey)
@@ -1519,7 +1566,9 @@ export default function SpacesTree({
   };
 
   const activateRow = (row: TreeRow) => {
-    if (row.type === "space") {
+    if (row.type === "more") {
+      setOpenFolderId(row.folder.id);
+    } else if (row.type === "space") {
       // Deselect the note so the main pane shows the container overview.
       setActiveNoteId(null);
       setActiveContext(row.space.id, null);
@@ -1582,7 +1631,7 @@ export default function SpacesTree({
     const horizontalIntent = treeHorizontalIntent(e.key, i18n.dir());
     if (horizontalIntent === "inward") {
       e.preventDefault();
-      if (row.type === "note") return;
+      if (row.type === "note" || row.type === "more") return;
       if (!expanded.has(row.key)) {
         setContainerExpanded(row.key, true);
       } else if (visibleRows[idx + 1]?.parentKey === row.key) {
@@ -1592,7 +1641,7 @@ export default function SpacesTree({
     }
     if (horizontalIntent === "outward") {
       e.preventDefault();
-      if (row.type !== "note" && expanded.has(row.key)) {
+      if (row.type !== "note" && row.type !== "more" && expanded.has(row.key)) {
         setContainerExpanded(row.key, false);
       } else if (row.parentKey) {
         focusRow(row.parentKey);
@@ -1741,6 +1790,14 @@ export default function SpacesTree({
     const folderKey = folderContainerKey(folder.id);
     const isExpanded = expanded.has(folderKey);
     const isRenaming = renamingFolderId === folder.id;
+    const folderNotes = notesByContainer[folderKey] ?? [];
+    const total = folderCounts[folder.id] ?? folderNotes.length;
+    const { notes: shownNotes, hiddenCount } = sidebarFolderNotes(
+      folderNotes,
+      activeNote,
+      folder.id,
+      total
+    );
 
     if (isRenaming) {
       return (
@@ -1802,8 +1859,29 @@ export default function SpacesTree({
         />
         <TreeChildren open={isExpanded}>
           <div className="space-y-px">
-            {(notesByContainer[folderKey] ?? []).map((note) =>
+            {shownNotes.map((note) =>
               level === 1 ? renderNote(note, 2, folderKey, "ps-8") : renderNote(note, 3, folderKey)
+            )}
+            {hiddenCount > 0 && (
+              <FolderNotesPopover
+                folder={folder}
+                total={total}
+                hiddenCount={hiddenCount}
+                activeNoteId={activeNoteId}
+                level={level === 1 ? 2 : 3}
+                open={openFolderId === folder.id}
+                onOpenChange={(open) => setOpenFolderId(open ? folder.id : null)}
+                a11y={a11yFor(`more:${folder.id}`)}
+                onPick={(note, keyboard) => {
+                  setActiveNoteId(note.id);
+                  if (keyboard) focusRowSoon(`n:${note.id}`);
+                  else setFocusedKey(`n:${note.id}`);
+                }}
+                onOpenFolder={() => {
+                  setActiveNoteId(null);
+                  setActiveContext(folder.space_id, folder.id);
+                }}
+              />
             )}
           </div>
         </TreeChildren>
@@ -1975,11 +2053,7 @@ export default function SpacesTree({
         {teamCapability && (
           <div role="none" className="group/section">
             <SectionHeader
-              label={
-                showWorkspaceGroups
-                  ? t("workspaces.switcher.workspaces")
-                  : t("notes.spaces.teamSpaces")
-              }
+              label={t("notes.spaces.teamSpaces")}
               className="mt-4"
               action={
                 <div className="flex items-center gap-px">
@@ -1994,14 +2068,12 @@ export default function SpacesTree({
                       <Info size={11} />
                     </Button>
                   )}
-                  {/* With one workspace the header + is unambiguous; with several,
-                      each workspace row carries its own + instead. */}
-                  {canCreateTeamSpace && !showWorkspaceGroups && (
+                  {canCreateTeamSpace && (
                     <Button
                       variant="ghost"
                       size="icon"
                       aria-label={t("notes.spaces.newSpace")}
-                      onClick={() => openCreateSpace()}
+                      onClick={() => openCreateSpace(activeWorkspace?.id ?? null)}
                       className={cn(HOVER_REVEAL_BUTTON_CLASS, "group-hover/section:opacity-100")}
                     >
                       <Plus size={12} />
@@ -2014,47 +2086,7 @@ export default function SpacesTree({
               <SkeletonRows />
             ) : (
               <>
-                {showWorkspaceGroups
-                  ? teamSpaceGroups.map(({ workspace, spaces: workspaceSpaces }) => (
-                      <div
-                        key={workspace.id}
-                        role="group"
-                        aria-label={workspace.name}
-                        className="mt-1 group/workspace"
-                      >
-                        <div
-                          role="none"
-                          className="flex items-center justify-between h-5 ps-4 pe-2"
-                        >
-                          <span
-                            dir="auto"
-                            title={workspace.name}
-                            className="min-w-0 text-[10px] font-medium text-foreground/60 truncate"
-                          >
-                            {workspace.name}
-                          </span>
-                          {canManageWorkspace(workspace.role) && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              aria-label={t("notes.spaces.newSpaceInWorkspace", {
-                                workspace: workspace.name,
-                              })}
-                              onClick={() => openCreateSpace(workspace.id)}
-                              className={cn(
-                                HOVER_REVEAL_BUTTON_CLASS,
-                                "group-hover/workspace:opacity-100"
-                              )}
-                            >
-                              <Plus size={12} />
-                            </Button>
-                          )}
-                        </div>
-                        {workspaceSpaces.map(renderSpace)}
-                      </div>
-                    ))
-                  : teamSpaces.map(renderSpace)}
-                {showWorkspaceGroups && ungroupedTeamSpaces.map(renderSpace)}
+                {teamSpaces.map(renderSpace)}
                 {teamSpaces.length === 0 && (
                   <div role="none" className="flex flex-col items-center px-3 py-6 text-center">
                     <ThemedEmptyIllustration
@@ -2069,11 +2101,11 @@ export default function SpacesTree({
                     <p className="mt-2 text-xs text-muted-foreground">
                       {t("notes.spaces.emptyTeamHint")}
                     </p>
-                    {canCreateTeamSpace && !showWorkspaceGroups && (
+                    {canCreateTeamSpace && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => openCreateSpace()}
+                        onClick={() => openCreateSpace(activeWorkspace?.id ?? null)}
                         className="mt-3 h-7 gap-1 text-xs text-primary"
                       >
                         <Plus size={11} />

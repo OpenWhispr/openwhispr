@@ -250,6 +250,20 @@ test("getOwnNoteByCalendarEventId never resumes a teammate's note for the same e
   db.db.close();
 });
 
+test("getOwnNoteByCalendarEventId never matches a note whose event link was removed", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const note = db.saveNote("Weekly sync", "", "meeting").note;
+  db.updateNote(note.id, { calendar_event_id: "event-1" });
+  db.updateNote(note.id, { calendar_event_id: "" });
+
+  assert.equal(db.getNote(note.id).calendar_event_id, "");
+  assert.equal(db.getOwnNoteByCalendarEventId(""), null);
+  assert.equal(db.getOwnNoteByCalendarEventId(null), null);
+
+  db.db.close();
+});
+
 test("getOwnNoteByCalendarEventId resumes notes the user owns, newest first", (t) => {
   const db = createDb(t);
   if (!db) return;

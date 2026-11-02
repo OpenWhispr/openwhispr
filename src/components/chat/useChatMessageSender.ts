@@ -54,10 +54,14 @@ export function useChatMessageSender({
 
   return useCallback(
     async (text: string, options?: SendToAIOptions) => {
-      return await submissionLockRef.current!.run(async () => {
+      const version = persistence.getSessionVersion?.();
+      const isCurrent = () => version === persistence.getSessionVersion?.();
+      let submitted = false;
+      const accepted = await submissionLockRef.current!.run(async () => {
         onSendingChange?.(true);
         try {
           const convId = conversationId ?? (await createConversation(text));
+          if (!isCurrent()) return;
           const previousMessages = persistence.messages;
           const userMessage: Message = {
             id: crypto.randomUUID(),
@@ -68,16 +72,27 @@ export function useChatMessageSender({
 
           persistence.setMessages((messages) => [...messages, userMessage]);
           await persistence.saveUserMessage(text);
+          if (!isCurrent()) return;
           await onMessagePersisted?.({
             conversationId: convId,
             text,
             isFirstMessage: previousMessages.length === 0,
           });
-          await streaming.sendToAI(text, [...previousMessages, userMessage], options);
+          if (!isCurrent()) return;
+          submitted = true;
+          await streaming.sendToAI(text, [...previousMessages, userMessage], {
+            ...options,
+            // A late result still belongs to this conversation after navigation or New chat.
+            persistAssistantMessage: (content, toolCalls) =>
+              persistence.saveAssistantMessage(content, toolCalls, convId),
+          });
+        } catch (error) {
+          if (isCurrent()) throw error;
         } finally {
           onSendingChange?.(false);
         }
       });
+      return accepted && submitted;
     },
     [
       conversationId,

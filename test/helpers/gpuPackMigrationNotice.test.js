@@ -31,6 +31,14 @@ test("record/read/clear round-trip", () => {
   assert.equal(notice.read(), null);
 });
 
+test("take hands the notice out once", () => {
+  notice.record(["CUDA whisper"]);
+
+  assert.deepEqual(notice.take(), { packs: ["CUDA whisper"] });
+  assert.equal(notice.take(), null);
+  assert.equal(notice.read(), null);
+});
+
 test("recording again merges and dedupes instead of overwriting", () => {
   notice.record(["CUDA whisper"]);
   notice.record(["CUDA whisper", "Vulkan llama"]);

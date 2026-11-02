@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Key, Copy, Check, Trash2, Plus, Shield, AlertTriangle } from "./icons";
+import { Key, Copy, Check, Trash2, Shield, AlertTriangle } from "./icons";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";
@@ -47,9 +47,13 @@ function formatRelativeTime(dateString: string): string {
 interface ApiKeysSectionProps {
   /** Bumped by a "Create API key" elsewhere; opens the create dialog once keys load. */
   createRequest?: number;
+  onCanCreateChange: (canCreate: boolean) => void;
 }
 
-export default function ApiKeysSection({ createRequest = 0 }: ApiKeysSectionProps) {
+export default function ApiKeysSection({
+  createRequest = 0,
+  onCanCreateChange,
+}: ApiKeysSectionProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
 
@@ -73,6 +77,11 @@ export default function ApiKeysSection({ createRequest = 0 }: ApiKeysSectionProp
   useEffect(() => {
     fetchKeys();
   }, [fetchKeys]);
+
+  useEffect(() => {
+    onCanCreateChange(!isLoading && keys.length < MAX_API_KEYS);
+    return () => onCanCreateChange(false);
+  }, [isLoading, keys.length, onCanCreateChange]);
 
   // At the key limit there's nothing to create; the list says so instead.
   useEffect(() => {
@@ -101,15 +110,6 @@ export default function ApiKeysSection({ createRequest = 0 }: ApiKeysSectionProp
 
   return (
     <div className="space-y-3">
-      {!isLoading && keys.length > 0 && keys.length < MAX_API_KEYS && (
-        <div className="flex justify-end">
-          <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-3.5 w-3.5 me-1.5" />
-            {t("apiKeysSection.createButton")}
-          </Button>
-        </div>
-      )}
-
       {isLoading ? (
         <SettingsPanel>
           {[0, 1].map((i) => (
@@ -129,11 +129,7 @@ export default function ApiKeysSection({ createRequest = 0 }: ApiKeysSectionProp
           <SettingsPanelRow>
             <div className="flex flex-col items-center py-4 text-center">
               <Key className="h-5 w-5 text-muted-foreground/70 mb-2" />
-              <p className="text-xs text-muted-foreground mb-3">{t("apiKeysSection.empty")}</p>
-              <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
-                <Plus className="h-3.5 w-3.5 me-1.5" />
-                {t("apiKeysSection.createButton")}
-              </Button>
+              <p className="text-xs text-muted-foreground">{t("apiKeysSection.empty")}</p>
             </div>
           </SettingsPanelRow>
         </SettingsPanel>

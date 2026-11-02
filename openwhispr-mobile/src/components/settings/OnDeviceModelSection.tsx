@@ -20,6 +20,9 @@ import { useModelDownloadStore } from '@/store/useModelDownloadStore';
 type Props = {
   scope: 'dictation' | 'upload';
   picked: LocalModelKey | undefined;
+  // The workflow is saved to a mode Private mode locks and shown as Automatic, so tapping
+  // Automatic must not replace that choice; picking a model still does.
+  lockedChoice?: boolean;
 };
 
 function modelInUse(languages: string[], availability: LocalEngineAvailability): string {
@@ -40,7 +43,11 @@ function radio(selected: boolean): { icon: string; mdIcon: 'CircleCheck' | 'Circ
     : { icon: 'circle', mdIcon: 'Circle' };
 }
 
-export function OnDeviceModelSection({ scope, picked }: Props): React.JSX.Element | null {
+export function OnDeviceModelSection({
+  scope,
+  picked,
+  lockedChoice = false,
+}: Props): React.JSX.Element | null {
   const [availability, setAvailability] = useState<LocalEngineAvailability | null>(null);
   const completedCount = useModelDownloadStore((state) => state.completedCount);
 
@@ -81,7 +88,7 @@ export function OnDeviceModelSection({ scope, picked }: Props): React.JSX.Elemen
         description={`Best downloaded model for your languages. ${modelInUse(languages, availability)}`}
         selected={!effectivePick}
         showChevron={false}
-        onPress={() => pickLocalModel(scope, undefined)}
+        onPress={lockedChoice ? undefined : () => pickLocalModel(scope, undefined)}
       />
       {catalog.map((entry) =>
         entry.downloaded ? (

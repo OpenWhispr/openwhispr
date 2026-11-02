@@ -102,6 +102,10 @@
   --shadow-glass:
     inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 0 0 1px rgba(255, 255, 255, 0.45),
     0 2px 10px rgba(15, 23, 42, 0.06);
+  /* The open note chat: the glass rim over a deep, soft lift. */
+  --shadow-chat-card:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85), inset 0 0 0 1px rgba(255, 255, 255, 0.5),
+    0 28px 64px -24px rgba(15, 23, 42, 0.3), 0 2px 10px rgba(15, 23, 42, 0.06);
   /* Same rim on brand-blue surfaces (mic/send buttons): the app icon's glass.
      Softer than --shadow-glass because it sits on colour. */
   --shadow-brand-glass:
@@ -186,6 +190,9 @@
   --shadow-glass:
     inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.05),
     0 2px 12px rgba(0, 0, 0, 0.35);
+  --shadow-chat-card:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 32px 72px -24px rgba(0, 0, 0, 0.8), 0 2px 12px rgba(0, 0, 0, 0.35);
   --shadow-brand-tile: var(--shadow-brand-glass), 0 10px 24px -8px rgb(0 0 0 / 0.6);
 }
 
@@ -734,26 +741,6 @@ body.dark:has(.onboarding-canvas) {
   background-image: none;
 }
 
-/* Compact-frame hero: a brand-blue band that dithers into the page surface.
-   Drawn from --color-primary so it follows the theme; the dot layer fades in
-   as the solid fades out. */
-.onboarding-compact-hero {
-  background: linear-gradient(
-    color-mix(in srgb, var(--color-primary) 88%, white),
-    var(--color-primary) 70%,
-    transparent
-  );
-}
-
-.onboarding-compact-hero::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 2px 2px, var(--color-primary) 1.3px, transparent 1.5px) 0
-    0 / 4px 4px;
-  mask-image: linear-gradient(transparent 55%, #000 72%, #000 84%, transparent);
-}
-
 /* Primary Buttons in onboarding disable into the quiet capsule (sunken fill,
    tertiary text) instead of fading the glass. */
 .onboarding-canvas [data-slot="button"][data-variant="default"]:disabled {
@@ -929,18 +916,21 @@ h1 {
   background-color: var(--onboarding-surface-secondary) !important;
 }
 
+/* The shared credential field (ui/ProviderCheckField.tsx). Outside onboarding these names
+   are unset, so each falls back to the app theme: the mapping .onboarding-embedded-auth
+   gives the control panel's sign-in dialog. Onboarding defines them, so it keeps its own. */
 .onboarding-provider-input,
 .onboarding-provider-input:hover,
 .onboarding-provider-input:focus-visible,
 .onboarding-provider-input:disabled {
-  border-color: var(--onboarding-control-border) !important;
-  background-color: var(--onboarding-surface-secondary) !important;
-  color: var(--onboarding-text-primary) !important;
+  border-color: var(--onboarding-control-border, var(--color-border)) !important;
+  background-color: var(--onboarding-surface-secondary, var(--color-muted)) !important;
+  color: var(--onboarding-text-primary, var(--color-foreground)) !important;
   opacity: 1 !important;
 }
 
 .onboarding-provider-input::placeholder {
-  color: var(--onboarding-text-secondary) !important;
+  color: var(--onboarding-text-secondary, var(--color-muted-foreground)) !important;
 }
 
 .onboarding-provider-icon-monochrome {
@@ -1308,6 +1298,15 @@ a:hover {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* Holds a clip only while it runs, so what overflows during an unfold stays hidden
+   and nothing is clipped at rest. */
+@keyframes clip-while-unfolding {
+  from,
+  to {
+    clip-path: inset(0 round 1.5rem);
   }
 }
 
@@ -1709,8 +1708,9 @@ a:hover {
 .rich-text-editor-content {
   outline: none;
   unicode-bidi: plaintext;
-  /* The bottom clears the note's ask bar and the action chips above it. */
-  padding-block: 0.75rem 7.5rem;
+  /* The bottom lets the last line scroll clear of the note's bottom bar, chips, callout
+     and an open chat included: NoteBottomBar publishes its height. */
+  padding-block: 0.75rem max(5rem, var(--bottom-overlay-height, 0px));
   /* Centers the text in the page column (PAGE_CONTENT_WIDTH_CLASS) with padding, not a
      max-width, so the editable area spans the pane and a margin click places the caret. */
   padding-inline: max(1.25rem, calc((100% - var(--container-5xl)) / 2 + 1.25rem));

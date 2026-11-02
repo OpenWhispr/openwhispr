@@ -65,6 +65,16 @@ test("gemini gets reasoning_effort minimal and nothing else", async () => {
   assert.deepEqual(body, { reasoning_effort: "minimal" });
 });
 
+test("gemini models without minimal get reasoning_effort low", async () => {
+  const { suppressThinking } = await load();
+
+  for (const model of ["gemini-3.8-flash", "gemini-4-argon", "gemini-3.1-pro-preview"]) {
+    const body = {};
+    suppressThinking(body, "gemini", model);
+    assert.deepEqual(body, { reasoning_effort: "low" }, model);
+  }
+});
+
 test("openrouter gets its native reasoning toggle and nothing else", async () => {
   const { suppressThinking } = await load();
 
@@ -106,6 +116,18 @@ test("lan sends a family's suppress floor inside the reasoning object, not a fla
     chat_template_kwargs: { enable_thinking: false },
   });
   assert.ok(!("reasoning_effort" in body), "flat reasoning_effort trips vLLM on lan (#1611)");
+});
+
+test("lan glm-5.3 floors at low: the family cannot disable reasoning", async () => {
+  const { suppressThinking } = await load();
+
+  const body = {};
+  suppressThinking(body, "lan", "glm-5.3-flash");
+
+  assert.deepEqual(body, {
+    reasoning: { effort: "low" },
+    chat_template_kwargs: { enable_thinking: false },
+  });
 });
 
 test("unlisted providers keep the legacy reasoning_effort none plus chat_template_kwargs", async () => {

@@ -1,5 +1,6 @@
 import { cn } from "../lib/utils";
 import type { FolderItem } from "../../types/electron";
+import type { MeetingRecordingRefusal, PolicyDecisionSnapshot } from "../../stores/policyRules";
 
 export const DEFAULT_FOLDER_NAME = "Personal";
 export const MEETINGS_FOLDER_NAME = "Meetings";
@@ -63,7 +64,39 @@ const TRANSCRIPTION_ERROR_KEYS: Record<string, string> = {
   CHUNK_LOSS_EXCEEDED: "chunkLossExceeded",
   CUSTOM_ENDPOINT_INVALID: "customEndpointInvalid",
   STREAMING_ONLY_PROVIDER: "streamingOnlyProvider",
+  // Server refusals under org policy. Uploads always send their source, so a
+  // purpose refusal here can only be the upload control's.
+  POLICY_AUDIO_UPLOAD_DISABLED: "disabledByOrg",
+  AUDIO_PURPOSE_REQUIRED: "disabledByOrg",
 };
+
+// Why policy refuses a meeting recording, as an i18n key.
+export const MEETING_RECORDING_REFUSAL_KEYS: Record<MeetingRecordingRefusal, string> = {
+  unresolved: "common.policyUnresolved",
+  disabled: "notes.meeting.recordingDisabledByOrg",
+  restricted: "notes.meeting.restrictedByOrg",
+};
+
+// Why policy refuses an upload, as an i18n key.
+export function uploadRestrictionKey(policy: PolicyDecisionSnapshot): string {
+  if (policy.status !== "managed" || !policy.policy) return "common.policyUnresolved";
+  return policy.policy.features.audioUploadEnabled === false
+    ? "notes.upload.disabledByOrg"
+    : "common.policyTranscriptionRestricted";
+}
+
+// Org-policy refusals from main or the server. Every later upload would meet
+// the same refusal, so a batch stops at the first one.
+const UPLOAD_POLICY_REFUSAL_CODES = new Set([
+  "POLICY_AUDIO_UPLOAD_DISABLED",
+  "AUDIO_PURPOSE_REQUIRED",
+  "POLICY_UNRESOLVABLE",
+]);
+
+export function isUploadPolicyRefusal(failure: unknown): boolean {
+  const code = (failure as { code?: string } | null | undefined)?.code;
+  return !!code && UPLOAD_POLICY_REFUSAL_CODES.has(code);
+}
 
 // A coded failure arrives either as a returned result (BYOK, local) or as a
 // thrown error — OpenWhispr Cloud rethrows it through withSessionRefresh — so
@@ -111,14 +144,6 @@ export const notesTextareaClass = cn(
   "bg-foreground/3 dark:bg-white/4 border border-border/70 dark:border-white/10",
   "text-foreground/80 placeholder:text-foreground/45 outline-none",
   "focus:border-primary/30 transition-colors duration-150"
-);
-
-/** Rounded suggestion pill above an ask box: the folder overview's prompts, a note's actions. */
-export const ASK_PILL_CLASS = cn(
-  "inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[11px]",
-  "border border-border/70 bg-card text-foreground/55 shadow-sm dark:border-white/10",
-  "hover:bg-surface-3 hover:text-foreground/80 disabled:pointer-events-none disabled:text-foreground/30",
-  "transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
 );
 
 /** Neutral capsule for note header facts (date + attendees, folder, space). */

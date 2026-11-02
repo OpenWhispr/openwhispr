@@ -21,7 +21,7 @@ import { useToast } from "../ui/useToast";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { formatList } from "../../lib/formatList";
 import { orderMemberCandidates } from "../../lib/memberCandidates";
-import { canManageSpace, canManageWorkspace } from "../../lib/spacePermissions";
+import { spaceCan, workspaceCan } from "../../lib/capabilities";
 import type { SpaceItem, TeamRole, WorkspaceMember } from "../../types/electron";
 
 interface SpaceMembersPanelProps {
@@ -54,9 +54,9 @@ export default function SpaceMembersPanel({ space }: SpaceMembersPanelProps) {
   const [invitedEmail, setInvitedEmail] = useState<string | null>(null);
   const [groupsOpen, setGroupsOpen] = useState(false);
 
-  const canManage = canManageSpace(space, workspace?.role ?? null);
-  // Workspace invites are 403'd below workspace admin.
-  const isWorkspaceAdmin = canManageWorkspace(workspace?.role);
+  const canManage = spaceCan(space, "manage_members") || workspaceCan(workspace, "manage_settings");
+  // Workspace invites are 403'd without manage_members.
+  const canInviteToWorkspace = workspaceCan(workspace, "manage_members");
   const spaceId = space.cloud_space_id;
 
   const load = useCallback(
@@ -164,7 +164,7 @@ export default function SpaceMembersPanel({ space }: SpaceMembersPanelProps) {
           addCandidates={addCandidates}
           onAdd={handleAdd}
           onInvite={
-            isWorkspaceAdmin
+            canInviteToWorkspace
               ? (email) => {
                   setInviteEmail(email);
                   setInviteOpen(true);

@@ -230,7 +230,6 @@ test("a free plan can still disconnect a Gmail login it has", async (t) => {
 test("a free plan without a login still sees what Gmail does, with no button", async (t) => {
   const container = await renderGmailRow(t, { status: DISCONNECTED, isPaid: false });
   assert.match(container.textContent, /connectors\.gmail\.description/);
-  assert.match(container.textContent, /connectors\.beta/);
   assert.equal(hasButton(container, "integrations.api.viewPlans"), false);
   assert.equal(hasButton(container, "connectors.gmail.connect"), false);
 });
