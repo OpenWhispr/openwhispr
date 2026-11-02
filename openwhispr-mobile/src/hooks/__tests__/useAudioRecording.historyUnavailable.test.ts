@@ -1,7 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { act, renderHook } from '@testing-library/react-native';
 import { transcribeAndCleanup } from '@/lib/transcribeAndCleanup';
-import { useAudioRecording } from '../useAudioRecording';
+import { useAudioRecording } from '../useAudioRecording.android';
 
 jest.mock('expo-file-system/legacy', () => ({
   getInfoAsync: jest.fn(async () => ({ exists: true, size: 1024 })),

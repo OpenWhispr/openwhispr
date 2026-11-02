@@ -878,20 +878,15 @@ export default function NoteEditorScreen({
       };
     }, []),
   );
-  const {
-    isStarting,
-    isRecording,
-    isProcessing,
-    currentText,
-    startRecording,
-    stopRecording,
-    cancelRecording,
-  } = useAudioRecording({
+  const recording = useAudioRecording({
     onComplete: handleDictationComplete,
     onError: handleDictationError,
     onLocalModelMissing: (retryWithCloud) => promptLocalModelFallback(retryWithCloud),
     onUsageLimitReached: handleUsageLimitReached,
   });
+  const { isRecording, isProcessing, currentText, startRecording, stopRecording, cancelRecording } =
+    recording;
+  const isStarting = 'isStarting' in recording && recording.isStarting === true;
 
   const handleDictate = useCallback(async () => {
     safeHaptics('medium');
