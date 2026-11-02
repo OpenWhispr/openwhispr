@@ -75,6 +75,74 @@ test("one-shot and AI SDK tool/stream dispatch normalize stale Flash selections 
   assert.equal(custom.modelId, "glm-5-3-flash");
 });
 
+test("retired Tinfoil streaming selections preserve replacement model temperatures", async (t) => {
+  installBrowserGlobals(t, {
+    window: { electronAPI: { getTinfoilKey: async () => "synthetic-key" } },
+  });
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    throw new Error("Unexpected network request in streaming fixture");
+  };
+  const calls = [];
+  globalThis.__tinfoilStreamingCalls = calls;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+    delete globalThis.__tinfoilStreamingCalls;
+  });
+  const vite = await createRendererServer(t, {
+    noExternal: ["tinfoil"],
+    mockModules: {
+      tinfoil: `
+        import { MockLanguageModelV3, simulateReadableStream } from "ai/test";
+        export const createTinfoilAI = async key => model => new MockLanguageModelV3({
+          modelId: model,
+          doStream: async options => {
+            globalThis.__tinfoilStreamingCalls.push({ key, model, temperature: options.temperature });
+            return { stream: simulateReadableStream({ chunks: [
+              { type: "stream-start", warnings: [] },
+              { type: "text-start", id: "answer" },
+              { type: "text-delta", id: "answer", delta: "Answer" },
+              { type: "text-end", id: "answer" },
+              {
+                type: "finish",
+                finishReason: { unified: "stop", raw: "stop" },
+                usage: { inputTokens: { total: 1 }, outputTokens: { total: 1 } },
+              },
+            ] }) };
+          },
+        });
+      `,
+    },
+  });
+  const { default: reasoningService } = await vite.ssrLoadModule("/services/ReasoningService.ts");
+  t.after(() => reasoningService.destroy());
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  usePolicyStore.setState({ status: "unmanaged", appVersion: "1.10.2", policy: null });
+
+  for (const temperature of [0, undefined]) {
+    await t.test(
+      `preserves ${temperature === undefined ? "default" : "explicit zero"} temperature`,
+      async () => {
+        const chunks = [];
+        for await (const chunk of reasoningService.processTextStreamingAI(
+          [{ role: "user", content: "synthetic text" }],
+          "glm-5-3-flash",
+          "tinfoil",
+          { systemPrompt: "Answer the user", temperature }
+        )) {
+          chunks.push(chunk);
+        }
+        assert.deepEqual(calls.at(-1), {
+          key: "synthetic-key",
+          model: "glm-5-3",
+          temperature: temperature === undefined ? 0.3 : 0,
+        });
+        assert.ok(chunks.some((chunk) => chunk.type === "content" && chunk.text === "Answer"));
+      }
+    );
+  }
+});
+
 test("Tinfoil image input remains unwired in the shared dictation/chat capability gate", async (t) => {
   installBrowserGlobals(t);
   const vite = await createRendererServer(t);
