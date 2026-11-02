@@ -43,6 +43,7 @@ import {
   DEFAULT_LOCAL_ASR_SELECTION,
 } from "../../helpers/localASROrganization";
 import { pickDefaultModelId } from "../../models/providerDefaultModel";
+import { isListedModel } from "../../models/legacyModels";
 import {
   RESUME_DRAFT_PERSIST_DELAY_MS,
   type OnboardingByokDraft,
@@ -300,12 +301,31 @@ function resolveInitialLocalSelection(
       ? store.parakeetModel
       : store.whisperModel;
 
+  const modelId =
+    (resumeProvider === provider ? resumeState?.modelId : "") ||
+    (pendingProvider === provider ? pending?.modelId : "") ||
+    savedModel;
+  // A provider whose models are all legacy lists nothing once its model is gone.
+  const listsAModel = modelRegistry
+    .getProvider(provider)
+    ?.models.some((model) => isListedModel(model, model.id === modelId));
+  if (assistant && !listsAModel) return { provider: "qwen", modelId: "" };
+  return { provider, modelId };
+}
+
+/** The local model the store holds for this step; browsing other providers never changes it. */
+function savedLocalSelection(
+  assistant: boolean,
+  store: ReturnType<typeof useSettingsStore.getState>
+): OnboardingLocalModelDraft {
+  if (assistant) return { provider: store.chatAgentProvider, modelId: store.chatAgentModel };
+  const provider = getSelectedASROrganization(
+    store.localTranscriptionProvider,
+    store.parakeetModel
+  );
   return {
     provider,
-    modelId:
-      (resumeProvider === provider ? resumeState?.modelId : "") ||
-      (pendingProvider === provider ? pending?.modelId : "") ||
-      savedModel,
+    modelId: usesParakeetManager(provider) ? store.parakeetModel : store.whisperModel,
   };
 }
 
@@ -474,7 +494,12 @@ export function ByokProviderStep({
   };
 
   const chooseProvider = (providerId: string) => {
-    const fallbackModel = pickDefaultModelId(providers.find((item) => item.id === providerId));
+    // Returning to the provider this card opened on restores its model: a legacy
+    // one can't be picked again from the list.
+    const fallbackModel =
+      providerId === seed.provider && seed.model
+        ? seed.model
+        : pickDefaultModelId(providers.find((item) => item.id === providerId));
     setSelectedProvider(providerId);
     setSelectedModel(fallbackModel);
     setDraftApiKey(providerCredential(providerId, store).value);
@@ -692,11 +717,18 @@ export function ByokProviderStep({
                   )}
                 </SelectTrigger>
                 <SelectContent className={`max-h-[14.625rem] ${SELECT_PANEL_CLASS}`}>
-                  {models.map((model) => (
-                    <SelectItem key={model.id} value={model.id} className={SELECT_ITEM_CLASS}>
-                      {model.name}
-                    </SelectItem>
-                  ))}
+                  {models
+                    .filter((model) => isListedModel(model, model.id === selectedModel))
+                    .map((model) => (
+                      <SelectItem
+                        key={model.id}
+                        value={model.id}
+                        disabled={model.legacy}
+                        className={SELECT_ITEM_CLASS}
+                      >
+                        {model.name}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </label>
@@ -834,13 +866,31 @@ export function LocalModelSetupStep({
     void refreshDownloadedModels();
   }, [refreshDownloadedModels]);
 
+  const downloadedFor = (providerId: string): Set<string> =>
+    assistant
+      ? downloadedLlm
+      : usesParakeetManager(providerId)
+        ? downloadedParakeet
+        : downloadedWhisper;
+  // The installed model the store holds stays reachable, so browsing away from a
+  // legacy one can come back to it.
+  const saved = savedLocalSelection(assistant, store);
+  const keptModelId = downloadedFor(saved.provider).has(saved.modelId) ? saved.modelId : "";
+
   const providerOptions = useMemo(() => {
     if (assistant) {
-      return modelRegistry.getAllProviders().map((provider) => ({
-        id: provider.id,
-        name: provider.name,
-        icon: provider.id,
-      }));
+      return modelRegistry
+        .getAllProviders()
+        .filter((provider) =>
+          provider.models.some((model) =>
+            isListedModel(model, model.id === selectedModel || model.id === keptModelId)
+          )
+        )
+        .map((provider) => ({
+          id: provider.id,
+          name: provider.name,
+          icon: provider.id,
+        }));
     }
     return LOCAL_ASR_ORGANIZATIONS.filter((organization) => organization.id !== "cohere").map(
       (organization) => ({
@@ -848,17 +898,29 @@ export function LocalModelSetupStep({
         icon: organization.id === "whisper" ? "openai" : organization.id,
       })
     );
-  }, [assistant]);
+  }, [assistant, keptModelId, selectedModel]);
 
-  const models = useMemo(() => {
+  const models = useMemo<
+    Array<{
+      id: string;
+      name: string;
+      size: string;
+      recommended?: boolean;
+      icon: string;
+      legacy?: boolean;
+    }>
+  >(() => {
     if (assistant) {
-      return (modelRegistry.getProvider(selectedProvider)?.models ?? []).map((model) => ({
-        id: model.id,
-        name: model.name,
-        size: model.size,
-        recommended: model.recommended,
-        icon: selectedProvider,
-      }));
+      return (modelRegistry.getProvider(selectedProvider)?.models ?? [])
+        .filter((model) => isListedModel(model, model.id === selectedModel))
+        .map((model) => ({
+          id: model.id,
+          name: model.name,
+          size: model.size,
+          recommended: model.recommended,
+          icon: selectedProvider,
+          legacy: model.legacy,
+        }));
     }
     if (usesParakeetManager(selectedProvider)) {
       return Object.entries(getParakeetModels())
@@ -878,7 +940,7 @@ export function LocalModelSetupStep({
       recommended: model.recommended,
       icon: "openai",
     }));
-  }, [assistant, selectedProvider]);
+  }, [assistant, selectedModel, selectedProvider]);
 
   useEffect(() => {
     if (selectedModel && !models.some((model) => model.id === selectedModel)) {
@@ -896,11 +958,7 @@ export function LocalModelSetupStep({
     : usesParakeetManager(selectedProvider)
       ? parakeetDownload
       : whisperDownload;
-  const downloadedModels = assistant
-    ? downloadedLlm
-    : usesParakeetManager(selectedProvider)
-      ? downloadedParakeet
-      : downloadedWhisper;
+  const downloadedModels = downloadedFor(selectedProvider);
   const selectedReady = Boolean(
     selectedModel &&
     downloadedModels.has(selectedModel) &&
@@ -982,9 +1040,10 @@ export function LocalModelSetupStep({
 
   const chooseProvider = (providerId: string) => {
     if (parakeetUnavailable && usesParakeetManager(providerId)) return;
+    const restoresSaved = providerId === saved.provider && keptModelId !== "";
     setSelectedProvider(providerId);
-    setSelectedModel("");
-    onReadinessChange(false);
+    setSelectedModel(restoresSaved ? keptModelId : "");
+    onReadinessChange(restoresSaved);
   };
 
   const anyDownloadActive = isLocalStageDownloadActive(assistant ? "assistant" : "dictation", {
@@ -1074,6 +1133,7 @@ export function LocalModelSetupStep({
           return (
             <div
               key={model.id}
+              title={model.legacy ? t("models.legacyHint") : undefined}
               className="flex min-h-20 items-center gap-3 border-b border-[var(--onboarding-control-border)] px-2 py-3 last:border-b-0"
             >
               <span className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)]">
@@ -1085,16 +1145,23 @@ export function LocalModelSetupStep({
               </span>
               <button
                 type="button"
-                disabled={!isDownloaded}
+                disabled={!isDownloaded || model.legacy}
                 onClick={() => chooseInstalledModel(model.id)}
                 className="min-w-0 flex-1 rounded-lg text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)] disabled:cursor-default"
               >
-                <span className="block truncate text-base font-medium text-[var(--onboarding-text-primary)]">
+                <span
+                  className={`block truncate text-base font-medium ${
+                    model.legacy
+                      ? "text-[var(--onboarding-text-secondary)]"
+                      : "text-[var(--onboarding-text-primary)]"
+                  }`}
+                >
                   {model.name}
                 </span>
                 <span className="mt-1 block truncate text-sm text-[var(--onboarding-text-secondary)]">
                   {model.size}
                   {!assistant && model.recommended && ` - ${t("common.recommended")}`}
+                  {model.legacy && ` - ${t("models.legacy")}`}
                 </span>
               </button>
 
@@ -1137,7 +1204,7 @@ export function LocalModelSetupStep({
                 >
                   {t("onboarding.rehaul.local.use")}
                 </Button>
-              ) : (
+              ) : model.legacy ? null : (
                 <Button
                   type="button"
                   onClick={() => downloadModel(model.id)}

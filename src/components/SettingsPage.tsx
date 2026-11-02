@@ -1,3 +1,4 @@
+import { EnterpriseAudioSettings } from "./settings/EnterpriseAudioSettings";
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
@@ -43,6 +44,7 @@ import { AUTH_URL, signOut } from "../lib/auth";
 import { deleteAccount } from "../lib/accountDeletionRequest";
 import { executeAccountDeletion } from "../lib/accountDeletionFlow";
 import { getValidatedAuthGeneration } from "../lib/authRequestContext";
+import { checkoutErrorDescriptionKey } from "../lib/billingPortalError";
 import { useBillingPortal } from "../hooks/useBillingPortal";
 import MicPermissionWarning from "./ui/MicPermissionWarning";
 import MicrophoneSettings from "./ui/MicrophoneSettings";
@@ -592,12 +594,19 @@ function TranscriptionSection({
       requestSignIn();
       return;
     }
-    if (mode === effectiveTranscriptionMode) return;
-    setTranscriptionMode(mode);
-    setUseLocalWhisper(mode === "local");
-    updateTranscriptionSettings({ useLocalWhisper: mode === "local" });
-    setCloudTranscriptionMode(mode === "openwhispr" ? "openwhispr" : "byok");
-    if (mode === "enterprise") setEnterpriseTranscriptionSetupMode("managed");
+    // Only the explicit enterprise controls change the shared setup mode. Managed setup
+    // outranks the personal mode, which stays as the user left it so "Use personal
+    // setup" returns to it.
+    if (mode === "enterprise") {
+      if (enterpriseTranscriptionSetupMode === "managed") return;
+      setEnterpriseTranscriptionSetupMode("managed");
+    } else {
+      if (mode === effectiveTranscriptionMode) return;
+      setTranscriptionMode(mode);
+      setUseLocalWhisper(mode === "local");
+      updateTranscriptionSettings({ useLocalWhisper: mode === "local" });
+      setCloudTranscriptionMode(mode === "openwhispr" ? "openwhispr" : "byok");
+    }
 
     const toastKey = {
       openwhispr: "switchedCloud",
@@ -743,6 +752,7 @@ function TranscriptionSection({
     <div className="space-y-4">
       {errorCard}
       {managedCard}
+      <EnterpriseAudioSettings />
       {!errorCard && !managedCard && (
         <>
           {enterpriseTranscriptionSetupMode === "manual" && managedAvailable.kind === "managed" && (
@@ -1764,7 +1774,7 @@ export default function SettingsPage({
     });
   }, [isRemovingModels, cachePathHint, showConfirmDialog, showAlertDialog, t]);
 
-  const { isSignedIn, isLoaded, user, refetch } = useAuth();
+  const { isSignedIn, isLoaded, user, refetch, isOfflineAccount } = useAuth();
   const {
     canToggleSync: canToggleInsightsSync,
     disableInsightsSync,
@@ -1874,8 +1884,7 @@ export default function SettingsPage({
         if (!preview.success) {
           toast({
             title: t("settingsPage.account.checkout.couldNotOpenTitle"),
-            description:
-              preview.error || t("settingsPage.account.checkout.couldNotOpenDescription"),
+            description: preview.error || t(checkoutErrorDescriptionKey(preview.code)),
           });
           return;
         }
@@ -1909,7 +1918,7 @@ export default function SettingsPage({
     } else {
       toast({
         title: t("settingsPage.account.checkout.couldNotOpenTitle"),
-        description: result.error || t("settingsPage.account.checkout.couldNotOpenDescription"),
+        description: result.error || t(checkoutErrorDescriptionKey(result.code)),
       });
     }
   }, [switchPreview, usage, toast, t]);
@@ -1922,7 +1931,7 @@ export default function SettingsPage({
       if (!result.success) {
         toast({
           title: t("settingsPage.account.checkout.couldNotOpenTitle"),
-          description: t("settingsPage.account.checkout.couldNotOpenDescription"),
+          description: t(checkoutErrorDescriptionKey(result.code)),
         });
       }
     },
@@ -2166,8 +2175,21 @@ export default function SettingsPage({
                     </p>
                   </div>
                 </div>
+                {isOfflineAccount && (
+                  <SettingsPanel>
+                    <SettingsPanelRow>
+                      <SettingsRow
+                        label={t("settingsPage.account.offlineAccount.title")}
+                        description={t("settingsPage.account.offlineAccount.description")}
+                      >
+                        <Badge variant="outline">{t("settingsPage.account.offline")}</Badge>
+                      </SettingsRow>
+                    </SettingsPanelRow>
+                  </SettingsPanel>
+                )}
                 <ProfileSection
                   name={user.name || ""}
+                  readOnly={isOfflineAccount}
                   onSessionRefresh={() => {
                     void refetch();
                   }}
@@ -2197,7 +2219,7 @@ export default function SettingsPage({
                       <Button
                         onClick={handleDeleteAccount}
                         variant="outline"
-                        disabled={isDeletingAccount}
+                        disabled={isDeletingAccount || isOfflineAccount}
                         size="sm"
                         className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive"
                       >
@@ -2500,9 +2522,7 @@ export default function SettingsPage({
                                 if (!result.success) {
                                   toast({
                                     title: t("settingsPage.account.checkout.couldNotOpenTitle"),
-                                    description: t(
-                                      "settingsPage.account.checkout.couldNotOpenDescription"
-                                    ),
+                                    description: t(checkoutErrorDescriptionKey(result.code)),
                                     variant: "destructive",
                                   });
                                 }

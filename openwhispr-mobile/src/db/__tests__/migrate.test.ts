@@ -255,4 +255,19 @@ describe('runMigrations — spaces', () => {
       ),
     ).not.toThrow();
   });
+
+  it('creates the chat tables', () => {
+    const { runMigrations } = loadMigrate();
+    runMigrations();
+
+    const columns = (
+      raw.prepare('PRAGMA table_info(chat_messages)').all() as { name: string }[]
+    ).map((column) => column.name);
+    expect(columns).toEqual(expect.arrayContaining(['steps_json', 'sources_json']));
+
+    const conversationColumns = (
+      raw.prepare('PRAGMA table_info(chat_conversations)').all() as { name: string }[]
+    ).map((column) => column.name);
+    expect(conversationColumns).toEqual(['id', 'title', 'created_at', 'updated_at']);
+  });
 });

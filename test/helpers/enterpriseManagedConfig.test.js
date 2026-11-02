@@ -144,6 +144,7 @@ test("an ambiguous cached provider switch fails closed", () => {
   );
   assert.equal(result.kind, "error");
   assert.equal(result.code, "MANAGED_CONFIG_AMBIGUOUS");
+  assert.equal(result.messageKey, "common.managedConfigAmbiguous");
 });
 
 test("accepts Azure resource and Foundry endpoints, rejects sovereign and path-qualified ones", () => {
@@ -272,20 +273,142 @@ test("managedScopesForConfig lists the scopes each active record carries, split 
   assert.deepEqual(managedScopesForConfig(llmRequired), {
     managed: Object.keys(scopes),
     enforced: Object.keys(scopes),
+    managedAudioOperations: [],
+    enforcedAudioOperations: [],
   });
   const sttDefault = envelope([azureProvider({ transcription })]);
   assert.deepEqual(managedScopesForConfig(sttDefault), {
     managed: ["transcription"],
     enforced: [],
+    managedAudioOperations: ["batch"],
+    enforcedAudioOperations: [],
   });
   const sttLocked = envelope([azureProvider({ transcription }, { allowManualSetup: false })]);
   assert.deepEqual(managedScopesForConfig(sttLocked), {
     managed: ["transcription"],
     enforced: ["transcription"],
+    managedAudioOperations: ["batch"],
+    enforcedAudioOperations: ["batch"],
   });
-  assert.deepEqual(managedScopesForConfig(null), { managed: [], enforced: [] });
-  assert.deepEqual(managedScopesForConfig(envelope([provider({ mode: "disabled" })])), {
+  const none = {
     managed: [],
     enforced: [],
+    managedAudioOperations: [],
+    enforcedAudioOperations: [],
+  };
+  assert.deepEqual(managedScopesForConfig(null), none);
+  assert.deepEqual(managedScopesForConfig(envelope([provider({ mode: "disabled" })])), none);
+  // Realtime is enforced only by a required record that configures it.
+  const realtime = { defaultDeployment: "company-realtime" };
+  const meetingsOptional = envelope([
+    azureProvider({ transcription }, { allowManualSetup: false }),
+    provider({ provider: "openai-compatible", config: { realtime } }),
+  ]);
+  assert.deepEqual(managedScopesForConfig(meetingsOptional), {
+    managed: ["transcription"],
+    enforced: ["transcription"],
+    managedAudioOperations: ["batch", "realtime"],
+    enforcedAudioOperations: ["batch"],
   });
+  const realtimeRequired = envelope([
+    provider({ provider: "openai-compatible", mode: "managed_required", config: { realtime } }),
+  ]);
+  assert.deepEqual(managedScopesForConfig(realtimeRequired).enforcedAudioOperations, [
+    "batch",
+    "realtime",
+  ]);
+});
+
+test("a required batch-only audio record leaves realtime on the user's route but keeps batch enforced", () => {
+  const transcription = {
+    allowedDeployments: ["gpt-4o-transcribe"],
+    defaultDeployment: "gpt-4o-transcribe",
+  };
+  const batch = { defaultDeployment: "company-batch" };
+  const realtime = { defaultDeployment: "company-realtime" };
+  for (const overrides of [{ mode: "managed_required" }, { allowManualSetup: false }]) {
+    for (const record of [
+      azureProvider({ transcription }, overrides),
+      provider({ provider: "openai-compatible", config: { batch }, ...overrides }),
+    ]) {
+      for (const setupMode of ["auto", "managed", "manual"]) {
+        assert.deepEqual(
+          resolveManagedEnterpriseScope(envelope([record]), "transcription", setupMode, "realtime"),
+          { kind: "manual" }
+        );
+        const uploads = resolveManagedEnterpriseScope(
+          envelope([record]),
+          "transcription",
+          setupMode,
+          "batch"
+        );
+        assert.equal(uploads.kind, "managed");
+      }
+    }
+    // A required record that configures realtime still owns it.
+    const both = provider({
+      provider: "openai-compatible",
+      config: { batch, realtime },
+      ...overrides,
+    });
+    const meeting = resolveManagedEnterpriseScope(
+      envelope([both]),
+      "transcription",
+      "manual",
+      "realtime"
+    );
+    assert.equal(meeting.kind, "managed");
+    assert.equal(meeting.model, "company-realtime");
+    // Batch for a realtime-only required record keeps failing closed, now translatable.
+    const realtimeOnly = provider({
+      provider: "openai-compatible",
+      config: { realtime },
+      ...overrides,
+    });
+    assert.deepEqual(
+      resolveManagedEnterpriseScope(envelope([realtimeOnly]), "transcription", "auto", "batch"),
+      {
+        kind: "error",
+        code: "MANAGED_OPERATION_UNAVAILABLE",
+        message: "Your organization has not configured this enterprise audio operation.",
+        messageKey: "enterprise.audio.operationUnavailable",
+      }
+    );
+    // A present realtime section without a usable model fails closed.
+    const unusable = provider({
+      provider: "openai-compatible",
+      config: { batch, realtime: { defaultDeployment: " " } },
+      ...overrides,
+    });
+    assert.equal(
+      resolveManagedEnterpriseScope(envelope([unusable]), "transcription", "auto", "realtime").code,
+      "MANAGED_OPERATION_UNAVAILABLE"
+    );
+  }
+});
+
+test("a gateway batch upload limit outside the API's bounds rejects the envelope", () => {
+  const gateway = (maxUploadBytes) =>
+    provider({
+      provider: "openai-compatible",
+      config: {
+        batch: {
+          allowedDeployments: ["company-batch"],
+          defaultDeployment: "company-batch",
+          endpoint: "https://gateway.example.com/v1/audio/transcriptions",
+          authentication: { type: "bearer", credentialSlot: "http" },
+          ...(maxUploadBytes === undefined ? {} : { maxUploadBytes }),
+        },
+      },
+    });
+  for (const valid of [undefined, 1024 * 1024, 25 * 1024 * 1024, 100 * 1024 * 1024]) {
+    assert.ok(validateManagedEnterpriseEnvelope(envelope([gateway(valid)]), "workspace-a"), valid);
+  }
+  for (const invalid of [NaN, "26214400", 1024 * 1024 - 1, 100 * 1024 * 1024 + 1, 2.5e6 + 0.5]) {
+    assert.equal(
+      validateManagedEnterpriseEnvelope(envelope([gateway(invalid)]), "workspace-a"),
+      null,
+      String(invalid)
+    );
+  }
 });

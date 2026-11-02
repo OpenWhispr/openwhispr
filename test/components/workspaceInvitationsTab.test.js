@@ -62,6 +62,7 @@ async function loadTab(t) {
     cachePrefix: "openwhispr-workspace-invitations-tab-",
     noExternal: ["react-i18next"],
     mockModules: {
+      "/i18n": "export default { t: (key) => key };",
       "react-i18next": `
         export const useTranslation = () => ({
           t: (key, options) =>

@@ -86,6 +86,7 @@ async function loadDialog(t) {
     cachePrefix: "openwhispr-remove-members-dialog-",
     noExternal: ["react-i18next"],
     mockModules: {
+      "/i18n": "export default { t: (key) => key };",
       "react-i18next": `
         export function useTranslation() {
           return { t: (key, params) => (params ? key + "|" + JSON.stringify(params) : key) };

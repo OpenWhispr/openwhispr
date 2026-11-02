@@ -30,6 +30,7 @@ async function loadDialog(t) {
     cachePrefix: "openwhispr-cancel-invitation-dialog-",
     noExternal: ["react-i18next"],
     mockModules: {
+      "/i18n": "export default { t: (key) => key };",
       "react-i18next": `
         export function useTranslation() {
           return { t: (key, params) => (params ? key + "|" + JSON.stringify(params) : key) };

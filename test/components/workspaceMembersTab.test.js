@@ -43,6 +43,7 @@ async function loadMembersTab(
     cachePrefix: "openwhispr-workspace-members-tab-",
     noExternal: ["react-i18next"],
     mockModules: {
+      "/i18n": "export default { t: (key) => key };",
       "react-i18next": `
         export const useTranslation = () => ({
           t: (key, options) =>
