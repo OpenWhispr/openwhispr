@@ -108,6 +108,7 @@
       "./plugins/android-bundle-inputs/withAndroidBundleInputs",
       "./plugins/android-billing/withAndroidBilling",
       "./plugins/android-inference/withAndroidInference",
+      "./plugins/android-updates/withAndroidUpdates",
       [
         "expo-splash-screen",
         {
