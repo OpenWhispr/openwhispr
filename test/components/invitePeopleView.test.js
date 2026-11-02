@@ -370,11 +370,6 @@ test("the seats warning offers Upgrade to billing managers and keeps Send enable
   assert.equal(bar.action, "workspaces.invite.upgrade");
   assert.doesNotMatch(primaryButton(markup), /disabled=""/);
   assert.match(primaryButton(markup), /workspaces\.invite\.submit\|\{&quot;count&quot;:3\}/);
-
-  // A caller with nowhere to send them (no Plan & Billing page) offers no Upgrade.
-  const withoutUpgrade = bars(render(state, { canManageBilling: true }));
-  assert.match(withoutUpgrade[0].body, /workspaces\.invite\.seatsLeft\|/);
-  assert.equal(withoutUpgrade[0].action, null);
 });
 
 test("admins without billing are told to ask the owner", async (t) => {
@@ -427,20 +422,16 @@ test("no seats left tells admins without billing to ask the owner", async (t) =>
   assert.doesNotMatch(primaryButton(markup), /disabled=""/);
 });
 
-test("no seats left with nobody to ask and nowhere to upgrade has no action", async (t) => {
+test("no seats left with nobody to ask has no action", async (t) => {
   const { render } = await loadView(t);
   const state = { recipients: drafts(3), seats: { purchasedLeft: 0, ceilingLeft: null } };
 
-  for (const overrides of [
-    { billingManager: null, onUpgrade: () => {} },
-    { canManageBilling: true, billingManager: "Olivia" },
-  ]) {
-    const markup = render(state, overrides);
-    const [bar] = bars(markup);
-    assert.match(bar.body, /workspaces\.invite\.seatsNone(?!AskOwner)/);
-    assert.equal(bar.action, null);
-    assert.doesNotMatch(primaryButton(markup), /disabled=""/);
-  }
+  const markup = render(state, { billingManager: null, onUpgrade: () => {} });
+
+  const [bar] = bars(markup);
+  assert.match(bar.body, /workspaces\.invite\.seatsNone(?!AskOwner)/);
+  assert.equal(bar.action, null);
+  assert.doesNotMatch(primaryButton(markup), /disabled=""/);
 });
 
 test("over the ceiling blocks Send with the ceiling copy", async (t) => {

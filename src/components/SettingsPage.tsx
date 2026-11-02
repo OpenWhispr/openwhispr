@@ -3012,12 +3012,7 @@ export default function SettingsPage({
         );
 
       case "workspacePeople":
-        return (
-          <WorkspacePeopleSection
-            initialSubTab={initialSubTab}
-            onOpenSection={onNavigateToSection}
-          />
-        );
+        return <WorkspacePeopleSection initialSubTab={initialSubTab} />;
 
       case "workspaceDeveloper":
         return <WorkspaceDeveloperSection />;

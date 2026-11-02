@@ -1515,7 +1515,9 @@ declare global {
       }>;
       hideWindow: () => Promise<void>;
       showDictationPanel: () => Promise<void>;
-      openSettingsSection?: (section: ProviderSettingsTarget) => Promise<{ success: boolean }>;
+      openSettingsSection?: (
+        section: ProviderSettingsTarget | "plansBilling"
+      ) => Promise<{ success: boolean }>;
       captureDictationTarget?: () => Promise<{ success: boolean; pid: number | null }>;
       captureDictationAppCategory?: () => Promise<ToneAppCategory>;
       onToggleDictation: (callback: () => void) => () => void;

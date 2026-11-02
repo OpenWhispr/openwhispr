@@ -8,7 +8,7 @@ const {
   installHostDom,
 } = require("../lib/rendererTestHarness");
 
-async function mountDialog(t, props) {
+async function mountDialog(t, props, { realView = false } = {}) {
   let root;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
@@ -23,13 +23,20 @@ async function mountDialog(t, props) {
       "__refreshCalls",
       "__members",
       "__memberListCalls",
+      "__settingsRequests",
     ]) {
       delete globalThis[key];
     }
   });
   installBrowserGlobals(t, {
     window: {
-      electronAPI: { searchInviteContacts: async () => ({ success: true, contacts: [] }) },
+      electronAPI: {
+        searchInviteContacts: async () => ({ success: true, contacts: [] }),
+        openSettingsSection: async (section) => {
+          (globalThis.__settingsRequests ??= []).push(section);
+          return { success: true };
+        },
+      },
     },
   });
   const container = installHostDom(t);
@@ -46,15 +53,32 @@ async function mountDialog(t, props) {
       `,
       "/ui/dialog": `
         import React from "react";
-        export const Dialog = ({ children }) => React.createElement("div", null, children);
+        const box = ({ children }) => React.createElement("div", null, children);
+        export const Dialog = box;
+        export const DialogContent = box;
+        export const DialogTitle = box;
+        export const DialogDescription = box;
+      `,
+      "/ui/dropdown-menu": `
+        import React from "react";
+        const box = ({ children }) => React.createElement("div", null, children);
+        export const DropdownMenu = box;
+        export const DropdownMenuTrigger = box;
+        export const DropdownMenuContent = box;
+        export const DropdownMenuRadioGroup = box;
+        export const DropdownMenuRadioItem = box;
       `,
       // Records every render's props, so the test can read the state and press Send.
-      "/InvitePeopleView": `
-        export function InvitePeopleView(props) {
-          (globalThis.__viewProps ??= []).push(props);
-          return null;
-        }
-      `,
+      ...(realView
+        ? {}
+        : {
+            "/InvitePeopleView": `
+              export function InvitePeopleView(props) {
+                (globalThis.__viewProps ??= []).push(props);
+                return null;
+              }
+            `,
+          }),
       "/services/invitePeople": `
         export const invitePeople = {
           async sendInvitations(input) {
@@ -102,6 +126,7 @@ async function mountDialog(t, props) {
   root = createRoot(container);
   await React.act(async () => root.render(React.createElement(InviteTeammateDialog, props)));
   return {
+    container,
     latest: () => globalThis.__viewProps.at(-1),
     unmount: async () => {
       await React.act(async () => root.unmount());
@@ -293,15 +318,19 @@ test("closing the page mid-send stops the rest of the run", async (t) => {
 
 const WORKSPACE = { id: "w1", name: "Acme", role: "admin", seats: 20, seat_limit: 500 };
 
-async function mountWithWorkspace(t, workspace, props = {}) {
+async function mountWithWorkspace(t, workspace, props = {}, options) {
   globalThis.__workspaces = [workspace];
-  return mountDialog(t, {
-    open: true,
-    onOpenChange: () => {},
-    workspaceId: "w1",
-    workspaceName: "Acme",
-    ...props,
-  });
+  return mountDialog(
+    t,
+    {
+      open: true,
+      onOpenChange: () => {},
+      workspaceId: "w1",
+      workspaceName: "Acme",
+      ...props,
+    },
+    options
+  );
 }
 
 test("seats left come from the workspace list", async (t) => {
@@ -394,17 +423,15 @@ test("an older API without seat_limit has no ceiling check", async (t) => {
   assert.deepEqual(latest().state.seats, { purchasedLeft: 2, ceilingLeft: null });
 });
 
-test("the view learns who manages billing and how to upgrade", async (t) => {
-  const onUpgrade = () => {};
-  const { latest } = await mountWithWorkspace(
-    t,
-    { ...WORKSPACE, role: "admin", billing_manager: "Olivia" },
-    { onUpgrade }
-  );
+test("the view learns who manages billing", async (t) => {
+  const { latest } = await mountWithWorkspace(t, {
+    ...WORKSPACE,
+    role: "admin",
+    billing_manager: "Olivia",
+  });
 
   assert.equal(latest().canManageBilling, false);
   assert.equal(latest().billingManager, "Olivia");
-  assert.equal(latest().onUpgrade, onUpgrade);
 });
 
 test("an owner can upgrade from the invite dialog", async (t) => {
@@ -412,6 +439,78 @@ test("an owner can upgrade from the invite dialog", async (t) => {
 
   assert.equal(latest().canManageBilling, true);
   assert.equal(latest().billingManager, null);
+});
+
+// Seats all taken, so one address brings up the warning. These run the real view, so they read and
+// press what a person does, and pass nothing about billing: the caller is any entry point.
+const NO_SEATS_LEFT = {
+  ...WORKSPACE,
+  has_subscription: true,
+  seats_used: 20,
+  billing_manager: "Olivia",
+};
+const UPGRADE = "workspaces.invite.upgrade";
+
+function findUpgrade(node) {
+  if (node.nodeType === 1 && node.localName === "button" && node.textContent === UPGRADE) {
+    return node;
+  }
+  for (const child of node.childNodes ?? []) {
+    const found = findUpgrade(child);
+    if (found) return found;
+  }
+  return null;
+}
+
+const pressButton = (button) => {
+  const key = Object.keys(button).find((name) => name.startsWith("__reactProps$"));
+  return React.act(async () => button[key].onClick());
+};
+
+test("Upgrade shows from every entry point", async (t) => {
+  const { container } = await mountWithWorkspace(
+    t,
+    { ...NO_SEATS_LEFT, role: "owner" },
+    { initialEmail: "a@x.com" },
+    { realView: true }
+  );
+  await React.act(async () => {});
+
+  assert.ok(findUpgrade(container), container.textContent);
+});
+
+test("Upgrade closes the dialog and asks for Plan & Billing", async (t) => {
+  const steps = [];
+  const { container } = await mountWithWorkspace(
+    t,
+    { ...NO_SEATS_LEFT, role: "owner" },
+    {
+      initialEmail: "a@x.com",
+      onOpenChange: (open) => steps.push(`open:${open}`),
+      onOpeningBilling: () => steps.push("opening billing"),
+    },
+    { realView: true }
+  );
+  await React.act(async () => {});
+
+  await pressButton(findUpgrade(container));
+
+  assert.deepEqual(steps, ["open:false", "opening billing"]);
+  assert.deepEqual(globalThis.__settingsRequests, ["plansBilling"]);
+});
+
+test("admins never see it", async (t) => {
+  const { container } = await mountWithWorkspace(
+    t,
+    { ...NO_SEATS_LEFT, role: "admin" },
+    { initialEmail: "a@x.com" },
+    { realView: true }
+  );
+  await React.act(async () => {});
+
+  assert.equal(findUpgrade(container), null);
+  assert.match(container.textContent, /workspaces\.invite\.seatsNoneAskOwner/);
+  assert.equal(globalThis.__settingsRequests, undefined);
 });
 
 test("a ceiling refusal refreshes the workspace list so the seats catch up", async (t) => {

@@ -36,8 +36,8 @@ interface Props {
   initialEmail?: string;
   /** Addresses that can't be invited again; their chips are blocked before anything is sent. */
   knownEmails?: { members: string[]; invited: string[] };
-  /** Opens Plan & Billing from the seats warning; the warning offers no Upgrade without it. */
-  onUpgrade?: () => void;
+  /** Called as Upgrade leaves for Plan & Billing, so a dialog holding this one can close too. */
+  onOpeningBilling?: () => void;
 }
 
 interface Roster {
@@ -62,7 +62,7 @@ export default function InviteTeammateDialog({
   spaceIds,
   initialEmail,
   knownEmails,
-  onUpgrade,
+  onOpeningBilling,
 }: Props): ReactElement {
   const { t } = useTranslation();
   const [state, setState] = useState<InviteFlowState>(() => createInviteFlow({ initialEmail }));
@@ -298,6 +298,14 @@ export default function InviteTeammateDialog({
 
   const close = (): void => onOpenChange(false);
 
+  // A named section remounts Settings, so this also works from inside Settings and takes any
+  // dialog in there with it.
+  const handleUpgrade = (): void => {
+    close();
+    onOpeningBilling?.();
+    void window.electronAPI?.openSettingsSection?.("plansBilling");
+  };
+
   // Invitations in flight can't be taken back, so the dialog stays until the run reports.
   const handleOpenChange = (nextOpen: boolean): void => {
     if (!nextOpen && state.phase === "sending") return;
@@ -315,7 +323,7 @@ export default function InviteTeammateDialog({
         seatCostLine={seatCostLine}
         canManageBilling={canManageBilling}
         billingManager={billingManager}
-        onUpgrade={onUpgrade}
+        onUpgrade={handleUpgrade}
         cancelLabel={cancelLabel ?? t("common.cancel")}
         onCancel={close}
         onSend={() => void handleSend()}

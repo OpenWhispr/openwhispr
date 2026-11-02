@@ -367,25 +367,3 @@ test("Add wraps under the tabs rather than scroll a narrow pane sideways", async
   assert.ok(row, "the row holding the tab list and Add");
   assert.ok(row[1].split(" ").includes("flex-wrap"));
 });
-
-test("Upgrade opens Plan & Billing", async (t) => {
-  const Section = await loadSection(t);
-  const opened = [];
-  const container = await mount(t, Section, ADMIN, {
-    onOpenSection: (section) => opened.push(section),
-  });
-  await openAdd(container);
-  assert.equal(globalThis.__dialogProps.open, true);
-
-  await React.act(async () => globalThis.__dialogProps.onUpgrade());
-
-  assert.deepEqual(opened, ["plansBilling"]);
-  assert.equal(globalThis.__dialogProps.open, false);
-});
-
-test("without a section switcher the invite dialog offers no Upgrade", async (t) => {
-  const Section = await loadSection(t);
-  render(Section, ADMIN);
-
-  assert.equal(globalThis.__dialogProps.onUpgrade, undefined);
-});
