@@ -752,6 +752,8 @@ class IPCHandlers {
     this._retentionSettings = { ...DEFAULT_RETENTION_SETTINGS }; // Synced from renderer
     this._retentionSettingsSynced = false;
     this._noteFilesEnabled = false;
+    this._mirrorTasks = [];
+    this._mirrorTaskScheduled = false;
     this._granolaImportPending = null;
     this._analyticsHistoryBackfillPromise = null;
     this.speakerDiarizationEnabled = true;
@@ -1140,54 +1142,125 @@ class IPCHandlers {
     this.getSemanticSearch?.()?.notifyChanges();
   }
 
-  // Folder names are only unique per space — a live folder with the same path
-  // in another space shares the mirror directory. Names compare as the
-  // platform's directories do: exactly on Linux, without case on macOS and
-  // Windows, and without Unicode normalization on macOS too.
-  _mirrorFolderInUse(mirrorFolder, exceptFolderId = null) {
-    const [parentName, name] = Array.isArray(mirrorFolder) ? mirrorFolder : [null, mirrorFolder];
-    const pathKey = (value) => {
-      if (value == null || process.platform === "linux") return value;
-      const folded = value.toLowerCase();
-      return process.platform === "darwin" ? folded.normalize("NFC") : folded;
-    };
+  // The folders matching a condition on `f` as the markdown mirror addresses
+  // them: a name, or [parent, name] for a subfolder. Subfolders come first, so
+  // a cleanup empties them before their parents.
+  _mirrorFoldersWhere(condition, ...params) {
     return this.databaseManager.db
       .prepare(
         `SELECT f.name, p.name AS parent_name FROM folders f
          LEFT JOIN folders p ON p.id = f.parent_folder_id
-         WHERE f.id IS NOT ? AND f.deleted_at IS NULL`
+         WHERE ${condition}
+         ORDER BY f.parent_folder_id IS NULL`
       )
-      .all(exceptFolderId)
-      .some(
-        (folder) =>
-          pathKey(folder.name) === pathKey(name) &&
-          pathKey(folder.parent_name) === pathKey(parentName)
-      );
+      .all(...params)
+      .map((folder) => (folder.parent_name ? [folder.parent_name, folder.name] : folder.name));
   }
 
-  _mirrorDeleteFolderIfUnshared(mirrorFolder) {
-    if (!this._noteFilesEnabled || this._mirrorFolderInUse(mirrorFolder)) return;
+  // Folder names are only unique per space — a live folder that resolves to the
+  // same directory, in any space or account, shares it. A folder with no
+  // directory has nothing to protect.
+  _mirrorFolderInUse(mirrorFolder, exceptFolderId = null) {
     const markdownMirror = require("./markdownMirror");
-    markdownMirror.deleteFolder(mirrorFolder);
+    const directoryId = markdownMirror.folderDirectoryId(mirrorFolder);
+    return (
+      directoryId !== null &&
+      this._mirrorFoldersWhere("f.id IS NOT ? AND f.deleted_at IS NULL", exceptFolderId).some(
+        (folder) => markdownMirror.folderDirectoryId(folder) === directoryId
+      )
+    );
+  }
+
+  _mirrorDeleteFolderIfUnshared(mirrorFolder, noteIds) {
+    if (this._mirrorFolderInUse(mirrorFolder)) return;
+    const markdownMirror = require("./markdownMirror");
+    markdownMirror.deleteFolder(mirrorFolder, noteIds);
+  }
+
+  // Clears directories the database has stopped knowing, once the writes and
+  // deletes already queued have run. Scans no longer reach them, so these notes'
+  // files are removed by id: the ones deleted, and old copies of the ones moved.
+  _queueMirrorFolderCleanup(mirrorFolders, noteIds = [], relocatedNotes = []) {
+    if (!this._noteFilesEnabled) return;
+    const affectedNoteIds = [...noteIds, ...relocatedNotes.map((note) => note.id)];
+    for (const mirrorFolder of mirrorFolders) {
+      this._enqueueMirrorTask(() =>
+        this._mirrorDeleteFolderIfUnshared(mirrorFolder, affectedNoteIds)
+      );
+    }
   }
 
   // Renames or moves a folder's mirror directory after a change to its path.
-  // A directory another folder still uses stays put, and one that couldn't
-  // move may be deleted with its old parent next; either way this folder's
-  // notes (its subfolders' included) are rewritten at the new path.
+  // A directory another folder still uses stays put, and what couldn't move
+  // stays behind; either way this folder's notes (its subfolders' included) are
+  // rewritten at the new path, then their old copies are removed.
   _mirrorMoveFolder(previousMirrorFolder, folderId) {
     if (!this._noteFilesEnabled || !previousMirrorFolder) return;
-    const mirrorFolder = this._getMirrorFolder(folderId);
-    if (JSON.stringify(mirrorFolder) === JSON.stringify(previousMirrorFolder)) return;
-    const markdownMirror = require("./markdownMirror");
-    if (
-      this._mirrorFolderInUse(previousMirrorFolder, folderId) ||
-      !markdownMirror.renameFolder(previousMirrorFolder, mirrorFolder)
-    ) {
-      for (const noteId of this.databaseManager.getNoteIdsInFolder(folderId)) {
-        this._asyncMirrorWrite(this.databaseManager.getNote(noteId));
+    this._enqueueMirrorTask(() => {
+      const mirrorFolder = this._getMirrorFolder(folderId);
+      if (JSON.stringify(mirrorFolder) === JSON.stringify(previousMirrorFolder)) return;
+      const markdownMirror = require("./markdownMirror");
+      if (
+        !this._mirrorFolderInUse(previousMirrorFolder, folderId) &&
+        markdownMirror.renameFolder(previousMirrorFolder, mirrorFolder)
+      ) {
+        return;
       }
+      const subfolders = this.databaseManager.getSubfolders(folderId);
+      const folderIds = new Set([folderId, ...subfolders.map((subfolder) => subfolder.id)]);
+      const noteIds = this.databaseManager.getNoteIdsInFolder(folderId);
+      const previousFolders = Array.isArray(previousMirrorFolder)
+        ? [previousMirrorFolder]
+        : [
+            ...subfolders.map((subfolder) => [previousMirrorFolder, subfolder.name]),
+            previousMirrorFolder,
+          ];
+      // Ahead of the queue, since a cleanup queued behind this move must still
+      // follow these rewrites.
+      this._mirrorTasks.unshift(
+        ...noteIds.map((noteId) => () => this._mirrorRewriteNote(noteId, folderIds)),
+        ...previousFolders.map(
+          (previousFolder) => () => this._mirrorDeleteFolderIfUnshared(previousFolder, noteIds)
+        )
+      );
+    });
+  }
+
+  // Reads the note at its turn: one deleted or moved while it waited has its own
+  // delete or write behind it, and writing it here could bring its file back.
+  _mirrorRewriteNote(noteId, folderIds) {
+    const note = this.databaseManager.getNote(noteId);
+    if (note && !note.deleted_at && folderIds.has(note.folder_id)) this._mirrorWriteNote(note);
+  }
+
+  _mirrorWriteNote(note) {
+    const markdownMirror = require("./markdownMirror");
+    const mirrorFolder = this._getMirrorFolder(note.folder_id);
+    markdownMirror.writeNote(note, mirrorFolder);
+    if (note.transcript) {
+      markdownMirror.writeTranscript(note, mirrorFolder, this._buildSpeakerMappings(note.id));
     }
+  }
+
+  // Mirror work runs in order, one task per event-loop turn: a folder change can
+  // write hundreds of files, and timers and I/O must run between them.
+  _enqueueMirrorTask(task) {
+    this._mirrorTasks.push(task);
+    this._scheduleMirrorTask();
+  }
+
+  _scheduleMirrorTask() {
+    if (this._mirrorTaskScheduled || this._mirrorTasks.length === 0) return;
+    this._mirrorTaskScheduled = true;
+    setImmediate(() => {
+      this._mirrorTaskScheduled = false;
+      try {
+        this._mirrorTasks.shift()();
+      } catch (error) {
+        debugLogger.error("Mirror task failed", { error: error.message }, "note-files");
+      }
+      this._scheduleMirrorTask();
+    });
   }
 
   _asyncMirrorWrite(note) {
@@ -1199,14 +1272,7 @@ class IPCHandlers {
       );
       return;
     }
-    setImmediate(() => {
-      const markdownMirror = require("./markdownMirror");
-      const mirrorFolder = this._getMirrorFolder(note.folder_id);
-      markdownMirror.writeNote(note, mirrorFolder);
-      if (note.transcript) {
-        markdownMirror.writeTranscript(note, mirrorFolder, this._buildSpeakerMappings(note.id));
-      }
-    });
+    this._enqueueMirrorTask(() => this._mirrorWriteNote(note));
   }
 
   _asyncMirrorDelete(noteId) {
@@ -1214,7 +1280,7 @@ class IPCHandlers {
       debugLogger.debug("Mirror delete skipped: note files disabled", { noteId }, "note-files");
       return;
     }
-    setImmediate(() => {
+    this._enqueueMirrorTask(() => {
       const markdownMirror = require("./markdownMirror");
       markdownMirror.deleteNote(noteId);
     });
@@ -1359,15 +1425,7 @@ class IPCHandlers {
   // [parent, name] for a subfolder.
   _getMirrorFolder(folderId) {
     if (!folderId) return "Personal";
-    const folder = this.databaseManager.db
-      .prepare(
-        `SELECT f.name, p.name AS parent_name FROM folders f
-         LEFT JOIN folders p ON p.id = f.parent_folder_id
-         WHERE f.id = ?`
-      )
-      .get(folderId);
-    if (!folder) return "Personal";
-    return folder.parent_name ? [folder.parent_name, folder.name] : folder.name;
+    return this._mirrorFoldersWhere("f.id = ?", folderId)[0] ?? "Personal";
   }
 
   // Every word that already reaches the transcription prompt: personal plus the
@@ -2679,24 +2737,25 @@ class IPCHandlers {
     );
 
     ipcMain.handle("db-delete-folder", async (event, id) => {
-      const mirrorFolder = this._noteFilesEnabled ? this._getMirrorFolder(id) : null;
+      const mirrorFolders = this._noteFilesEnabled
+        ? this._mirrorFoldersWhere("f.id = ? OR f.parent_folder_id = ?", id, id)
+        : [];
       const result = this.databaseManager.deleteFolder(id);
       if (result?.success) {
         this.notifyVectorChanges();
-        // Other accounts' notes were released to the space root; their mirror
-        // files leave with the folder directory, so rewrite the live ones.
+        // Other accounts' notes were released to the space root, so rewrite the
+        // live ones there.
         for (const note of result.relocatedNotes ?? []) {
           if (!note.deleted_at) this._asyncMirrorWrite(note);
         }
-        // A directory another folder still uses stays, so remove the files by note.
         for (const noteId of result.noteIds ?? []) {
           this._asyncMirrorDelete(noteId);
         }
+        this._queueMirrorFolderCleanup(mirrorFolders, result.noteIds, result.relocatedNotes);
         setImmediate(() => {
           for (const folderId of result.folderIds) {
             broadcastToWindows("folder-deleted", { id: folderId });
           }
-          if (mirrorFolder) this._mirrorDeleteFolderIfUnshared(mirrorFolder);
         });
       }
       return result;
@@ -2839,12 +2898,19 @@ class IPCHandlers {
           await this.connectorManager?.disconnectAll({
             erasingDevice: options?.erasingDevice === true,
           });
+          const mirrorFolders = this._noteFilesEnabled
+            ? this._mirrorFoldersWhere(
+                "f.account_id = ? AND f.space_id IN (SELECT id FROM spaces WHERE kind = 'private')",
+                accountId
+              )
+            : [];
           const result = this.databaseManager.deleteAccountData(accountId);
           this.metaActivation?.purge(accountId);
           this.notifyVectorChanges();
           for (const noteId of result.deletedNoteIds) {
             this._asyncMirrorDelete(noteId);
           }
+          this._queueMirrorFolderCleanup(mirrorFolders, result.deletedNoteIds);
           // The account's rows are already gone, so a vault that won't delete
           // must not report the deletion as failed; a later deletion retries it.
           try {
@@ -2880,6 +2946,9 @@ class IPCHandlers {
           };
         }
       }
+      const mirrorFolders = this._noteFilesEnabled
+        ? this._mirrorFoldersWhere("f.space_id = ?", id)
+        : [];
       const result = this.databaseManager.purgeSpace(id, options);
       if (result?.success) {
         if (!result.preservedForOtherAccounts) {
@@ -2892,13 +2961,9 @@ class IPCHandlers {
           for (const noteId of result.noteIds ?? []) {
             this._asyncMirrorDelete(noteId);
           }
+          this._queueMirrorFolderCleanup(mirrorFolders, result.noteIds, result.relocatedNotes);
         }
-        setImmediate(() => {
-          broadcastToWindows("space-purged", { spaceId: result.spaceId });
-          for (const folderName of result.folderNames ?? []) {
-            this._mirrorDeleteFolderIfUnshared(folderName);
-          }
-        });
+        setImmediate(() => broadcastToWindows("space-purged", { spaceId: result.spaceId }));
       }
       return result;
     });
@@ -3214,18 +3279,19 @@ class IPCHandlers {
     });
     ipcMain.handle("db-hard-delete-folder", (_, id, options) => {
       const mirrorFolder = this._noteFilesEnabled ? this._getMirrorFolder(id) : null;
+      const mirrorFolders = mirrorFolder
+        ? this._mirrorFoldersWhere("f.id = ? OR f.parent_folder_id = ?", id, id)
+        : [];
       // The server keeps a deleted parent's live subfolders, now top-level.
       const subfolders = mirrorFolder ? this.databaseManager.getSubfolders(id) : [];
       const result = this.databaseManager.hardDeleteFolder(id, options);
       if (result?.success) {
         this.notifyVectorChanges();
         // Other accounts' notes were released to the space root and unsent ones
-        // forked to Personal; their mirror files leave with the folder
-        // directory, so rewrite the live ones.
+        // forked to Personal, so rewrite the live ones there.
         for (const note of result.relocatedNotes ?? []) {
           if (!note.deleted_at) this._asyncMirrorWrite(note);
         }
-        // A directory another folder still uses stays, so remove the files by note.
         for (const noteId of result.noteIds ?? []) {
           this._asyncMirrorDelete(noteId);
         }
@@ -3237,7 +3303,7 @@ class IPCHandlers {
           for (const child of subfolders) {
             this._mirrorMoveFolder([mirrorFolder, child.name], child.id);
           }
-          if (mirrorFolder) this._mirrorDeleteFolderIfUnshared(mirrorFolder);
+          this._queueMirrorFolderCleanup(mirrorFolders, result.noteIds, result.relocatedNotes);
         });
       }
       return result;
@@ -3272,7 +3338,11 @@ class IPCHandlers {
             !result.folder ||
             JSON.stringify(this._getMirrorFolder(id)) !== JSON.stringify(previousMirrorFolder);
           if (previousMirrorFolder && folderGone) {
-            this._mirrorDeleteFolderIfUnshared(previousMirrorFolder);
+            this._queueMirrorFolderCleanup(
+              [previousMirrorFolder],
+              result.deletedNoteIds,
+              result.relocatedNotes
+            );
           }
         });
       }
@@ -13565,6 +13635,9 @@ class IPCHandlers {
     });
 
     // Note files (markdown mirror) handlers
+    require("./markdownMirror").setSubfolderResolver(() =>
+      this._mirrorFoldersWhere("f.parent_folder_id IS NOT NULL AND f.deleted_at IS NULL")
+    );
     ipcMain.handle("note-files-set-enabled", async (_event, enabled, customPath, options) => {
       try {
         this._noteFilesEnabled = !!enabled;

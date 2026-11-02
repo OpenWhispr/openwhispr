@@ -432,7 +432,11 @@ test("S3 a delete racing an unsynced edit keeps the edit as a new note", async (
 
   // The edit has no other copy, so it survives under a new identity; the delete
   // still stands for the row A deleted.
-  assert.equal(noteByClientId(deviceB.db, clientNoteId), null, "the deleted row's identity is gone");
+  assert.equal(
+    noteByClientId(deviceB.db, clientNoteId),
+    null,
+    "the deleted row's identity is gone"
+  );
   assert.equal(noteCount(deviceB.db), 1);
   const kept = deviceB.db.getNote(onB.id);
   assert.equal(kept.content, "B's late edit that never shipped");

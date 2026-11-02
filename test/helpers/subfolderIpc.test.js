@@ -17,6 +17,7 @@ const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
 const handlers = new Map();
 const sent = [];
+const tokenState = { token: "token", generation: 1 };
 
 const electronStub = {
   app: {
@@ -66,6 +67,9 @@ Module._load = function loadWithElectronStub(request, parent, isMain) {
   if (parent?.filename === handlersModulePath && request === "./debugLogger") {
     return new Proxy({}, { get: () => () => {} });
   }
+  if (parent?.filename === handlersModulePath && request === "./tokenStore") {
+    return { get: () => null, getState: () => tokenState, subscribe: () => () => {} };
+  }
   return originalLoad.call(this, request, parent, isMain);
 };
 
@@ -81,6 +85,7 @@ function anything() {
 }
 
 const current = { db: null };
+let handlersThis = null;
 // Handler setup opens its own databases under userData before any test sets one.
 const setupUserData = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-subfolder-ipc-"));
 
@@ -89,8 +94,10 @@ test.before(() => {
   delete require.cache[handlersModulePath];
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
-  const target = {
+  handlersThis = {
     _noteFilesEnabled: true,
+    _mirrorTasks: [],
+    _mirrorTaskScheduled: false,
     notifyVectorChanges: () => {},
     get databaseManager() {
       return current.db;
@@ -99,16 +106,23 @@ test.before(() => {
   for (const method of [
     "createFolderWithEffects",
     "_buildFolderMap",
+    "_buildSpeakerMappings",
     "_getMirrorFolder",
+    "_mirrorFoldersWhere",
     "_mirrorMoveFolder",
     "_mirrorFolderInUse",
     "_mirrorDeleteFolderIfUnshared",
+    "_queueMirrorFolderCleanup",
+    "_mirrorRewriteNote",
+    "_mirrorWriteNote",
+    "_enqueueMirrorTask",
+    "_scheduleMirrorTask",
     "_asyncMirrorWrite",
     "_asyncMirrorDelete",
   ]) {
-    target[method] = Ctor.prototype[method];
+    handlersThis[method] = Ctor.prototype[method];
   }
-  const self = new Proxy(target, {
+  const self = new Proxy(handlersThis, {
     get: (value, property) => (property in value ? value[property] : anything()),
   });
   Ctor.prototype.setupHandlers.call(self);
@@ -131,7 +145,37 @@ function setup(t) {
   return { db, basePath };
 }
 
-const settle = () => new Promise((resolve) => setImmediate(resolve));
+// Lets the handlers' deferred work run, then the mirror's queue drain.
+const settle = async () => {
+  do {
+    await new Promise((resolve) => setImmediate(resolve));
+  } while (handlersThis._mirrorTasks.length > 0 || handlersThis._mirrorTaskScheduled);
+};
+
+const writeUserFile = (...segments) => {
+  fs.mkdirSync(path.dirname(path.join(...segments)), { recursive: true });
+  fs.writeFileSync(path.join(...segments), "the user's own");
+};
+const transcript = JSON.stringify([{ speaker: "speaker_0", timestamp: 0, text: "Hello." }]);
+const saveMirroredNote = (db, title, folderId, mirrorFolder) => {
+  const note = db.saveNote(title, "Body", "personal", null, null, folderId, null, transcript).note;
+  markdownMirror.writeNote(note, mirrorFolder);
+  markdownMirror.writeTranscript(note, mirrorFolder, {});
+  return note;
+};
+const addTeam = (db, name) => {
+  const team = db.db
+    .prepare(
+      "INSERT INTO spaces (client_space_id, kind, name, sort_order) VALUES (?, 'team', ?, 1)"
+    )
+    .run(`team-${name}`, name);
+  db.db
+    .prepare("INSERT INTO space_accounts (space_id, account_id) VALUES (?, ?)")
+    .run(team.lastInsertRowid, "test-account");
+  return team.lastInsertRowid;
+};
+const filesUnder = (dirPath) =>
+  fs.existsSync(dirPath) ? fs.readdirSync(dirPath, { recursive: true }).sort() : [];
 
 test("creating, renaming and re-parenting a subfolder keeps its mirror directory in its parent's", async (t) => {
   const ctx = setup(t);
@@ -351,7 +395,6 @@ test("nesting a folder leaves the directory another space's same-named folder sh
 
   await handlers.get("db-set-folder-parent")(null, archive.id, parent.id);
   await settle();
-  await settle();
   assert.ok(fs.existsSync(path.join(basePath, "Archive", "77-roadmap.md")));
   assert.equal(
     markdownMirror.getNotePath(note.id),
@@ -360,44 +403,385 @@ test("nesting a folder leaves the directory another space's same-named folder sh
   );
 });
 
-// Each platform's directories decide whether two spaces' folders share one.
-for (const [platform, personalName, teamName, how, shared] of [
-  ["linux", "Casey", "casey", "another case", false],
-  ["darwin", "Été", "été", "another case", true],
-  ["darwin", "Caf\u00e9", "Cafe\u0301", "another Unicode form", true],
-  ["win32", "Été", "été", "another case", true],
-  ["win32", "Caf\u00e9", "Cafe\u0301", "another Unicode form", false],
+// Whether two names are one directory is the file system's call, and no name
+// comparison gets all of them: APFS folds each of these pairs together.
+for (const [personalName, teamName] of [
+  ["Straße", "STRASSE"],
+  ["ſtudio", "studio"],
+  ["ﬁles", "files"],
+  ["λόγος", "ΛΌΓΟΣ"],
+  ["µ", "μ"],
+  ["Caf\u00e9", "Cafe\u0301"],
+  ["Été", "été"],
 ]) {
-  test(`on ${platform}, a folder named in ${how} ${shared ? "shares" : "doesn't share"} a deleted folder's directory`, async (t) => {
+  test(`deleting the team's ${teamName} leaves the file of a live note in ${personalName}`, async (t) => {
     const ctx = setup(t);
     if (!ctx) return;
-    const { db } = ctx;
-    const realPlatform = Object.getOwnPropertyDescriptor(process, "platform");
-    Object.defineProperty(process, "platform", { value: platform });
-    t.after(() => Object.defineProperty(process, "platform", realPlatform));
-    const deleteFolder = t.mock.method(markdownMirror, "deleteFolder");
+    const { db, basePath } = ctx;
 
-    const team = db.db
-      .prepare(
-        "INSERT INTO spaces (client_space_id, kind, name, sort_order) VALUES (?, 'team', ?, 1)"
-      )
-      .run("team-same-directory", "Growth");
-    db.db
-      .prepare("INSERT INTO space_accounts (space_id, account_id) VALUES (?, ?)")
-      .run(team.lastInsertRowid, "test-account");
+    const team = addTeam(db, "same-directory");
     const personal = (await handlers.get("db-create-folder")(null, personalName)).folder;
-    await handlers.get("db-create-folder")(null, teamName, team.lastInsertRowid);
-    const deletedNote = db.saveNote("Plan", "Body", "personal", null, null, personal.id).note;
-    markdownMirror.writeNote(deletedNote, personalName);
+    const teamFolder = (await handlers.get("db-create-folder")(null, teamName, team)).folder;
+    await settle();
+    const live = saveMirroredNote(db, "Live", personal.id, personalName);
+    const deleted = saveMirroredNote(db, "Deleted", teamFolder.id, teamName);
+    const sharesDirectory =
+      fs.statSync(path.join(basePath, personalName)).ino ===
+      fs.statSync(path.join(basePath, teamName)).ino;
+
+    await handlers.get("db-delete-folder")(null, teamFolder.id);
     await settle();
 
-    await handlers.get("db-delete-folder")(null, personal.id);
+    assert.ok(markdownMirror.getNotePath(live.id), "the live note's file stays");
+    assert.equal(markdownMirror.getNotePath(deleted.id), null, "the deleted note's file goes");
+    assert.equal(fs.existsSync(path.join(basePath, teamName)), sharesDirectory);
+  });
+
+  test(`renaming the team's ${teamName} leaves a live note in ${personalName} where it is`, async (t) => {
+    const ctx = setup(t);
+    if (!ctx) return;
+    const { db, basePath } = ctx;
+
+    const team = addTeam(db, "same-directory-rename");
+    const personal = (await handlers.get("db-create-folder")(null, personalName)).folder;
+    const teamFolder = (await handlers.get("db-create-folder")(null, teamName, team)).folder;
     await settle();
+    const live = saveMirroredNote(db, "Live", personal.id, personalName);
+    const moved = saveMirroredNote(db, "Moved", teamFolder.id, teamName);
+
+    await handlers.get("db-rename-folder")(null, teamFolder.id, "Renamed");
     await settle();
-    assert.equal(deleteFolder.mock.callCount(), shared ? 0 : 1);
-    assert.equal(markdownMirror.getNotePath(deletedNote.id), null, "the deleted note's file goes");
+
+    assert.equal(
+      markdownMirror.getNotePath(live.id),
+      path.join(basePath, personalName, `${live.id}-live.md`)
+    );
+    assert.equal(
+      markdownMirror.getNotePath(moved.id),
+      path.join(basePath, "Renamed", `${moved.id}-moved.md`)
+    );
   });
 }
+
+test("deleting a folder removes its notes' files and keeps the user's own", async (t) => {
+  const ctx = setup(t);
+  if (!ctx) return;
+  const { db, basePath } = ctx;
+
+  const parent = (await handlers.get("db-create-folder")(null, "P")).folder;
+  const child = (await handlers.get("db-create-folder")(null, "Q", null, parent.id)).folder;
+  await settle();
+  const parentNote = saveMirroredNote(db, "Parent", parent.id, "P");
+  const childNote = saveMirroredNote(db, "Child", child.id, ["P", "Q"]);
+  writeUserFile(basePath, "P", "contract.pdf");
+  writeUserFile(basePath, "P", "Q", "photo.png");
+
+  await handlers.get("db-delete-folder")(null, parent.id);
+  await settle();
+
+  assert.equal(markdownMirror.getNotePath(parentNote.id), null);
+  assert.equal(markdownMirror.getNotePath(childNote.id), null);
+  assert.deepEqual(filesUnder(path.join(basePath, "P")), [
+    "Q",
+    path.join("Q", "photo.png"),
+    "contract.pdf",
+  ]);
+});
+
+test("a folder delete leaves no note text in a subfolder the database already forgot", async (t) => {
+  const ctx = setup(t);
+  if (!ctx) return;
+  const { db, basePath } = ctx;
+
+  // An unsynced folder's rows go at once, so by the time its notes' files are
+  // removed no scan reaches the subfolder's directory.
+  const parent = (await handlers.get("db-create-folder")(null, "P")).folder;
+  const child = (await handlers.get("db-create-folder")(null, "Q", null, parent.id)).folder;
+  await settle();
+  saveMirroredNote(db, "Secret", child.id, ["P", "Q"]);
+
+  await handlers.get("db-delete-folder")(null, child.id);
+  await settle();
+
+  assert.deepEqual(filesUnder(path.join(basePath, "P")), []);
+});
+
+test("a pulled delete keeps the user's files, and a denied delete restores notes beside them", async (t) => {
+  const ctx = setup(t);
+  if (!ctx) return;
+  const { db, basePath } = ctx;
+
+  const denied = (await handlers.get("db-create-folder")(null, "Denied")).folder;
+  const pulled = (await handlers.get("db-create-folder")(null, "Pulled")).folder;
+  await settle();
+  db.markFolderSynced(denied.id, "c-denied");
+  db.markFolderSynced(pulled.id, "c-pulled");
+  const deniedNote = saveMirroredNote(db, "Kept", denied.id, "Denied");
+  db.markNoteSynced(deniedNote.id, "c-kept");
+  const pulledNote = saveMirroredNote(db, "Gone", pulled.id, "Pulled");
+  db.markNoteSynced(pulledNote.id, "c-gone");
+  writeUserFile(basePath, "Denied", "mine.txt");
+  writeUserFile(basePath, "Pulled", "mine.txt");
+
+  await handlers.get("db-hard-delete-folder")(null, pulled.id, { preserveDirtyNotes: true });
+  await settle();
+  assert.deepEqual(filesUnder(path.join(basePath, "Pulled")), ["mine.txt"]);
+
+  await handlers.get("db-delete-folder")(null, denied.id);
+  await settle();
+  assert.deepEqual(filesUnder(path.join(basePath, "Denied")), ["mine.txt"]);
+  await handlers.get("db-restore-folder-after-denied-delete")(null, denied.id);
+  await settle();
+  assert.ok(markdownMirror.getNotePath(deniedNote.id));
+  assert.ok(fs.existsSync(path.join(basePath, "Denied", "mine.txt")));
+});
+
+test("purging a space removes its notes' files, subfolders' too, and keeps the user's", async (t) => {
+  const ctx = setup(t);
+  if (!ctx) return;
+  const { db, basePath } = ctx;
+
+  const team = addTeam(db, "purged");
+  const parent = (await handlers.get("db-create-folder")(null, "P", team)).folder;
+  const child = (await handlers.get("db-create-folder")(null, "Q", team, parent.id)).folder;
+  await settle();
+  saveMirroredNote(db, "Removed", child.id, ["P", "Q"]);
+  const unsent = saveMirroredNote(db, "Unsent", child.id, ["P", "Q"]);
+  const synced = saveMirroredNote(db, "Synced", child.id, ["P", "Q"]);
+  db.markNoteSynced(synced.id, "c-synced");
+  writeUserFile(basePath, "P", "Q", "photo.png");
+
+  const result = await handlers.get("db-purge-space")(null, team, {});
+  await settle();
+
+  assert.ok(result.success);
+  assert.ok(result.relocatedNotes.some((note) => note.id === unsent.id));
+  assert.deepEqual(filesUnder(path.join(basePath, "P")), ["Q", path.join("Q", "photo.png")]);
+  assert.equal(
+    path.dirname(markdownMirror.getNotePath(unsent.id)),
+    path.join(basePath, "Personal"),
+    "the relocated note's only copy is the rewritten one"
+  );
+});
+
+test("deleting an account leaves none of its notes' text in subfolder directories", async (t) => {
+  const ctx = setup(t);
+  if (!ctx) return;
+  const { db, basePath } = ctx;
+
+  const parent = (await handlers.get("db-create-folder")(null, "P")).folder;
+  const child = (await handlers.get("db-create-folder")(null, "Q", null, parent.id)).folder;
+  await settle();
+  saveMirroredNote(db, "Secret", child.id, ["P", "Q"]);
+  writeUserFile(basePath, "P", "Q", "photo.png");
+
+  const result = await handlers.get("delete-account-data")(
+    {},
+    "test-account",
+    tokenState.generation
+  );
+  await settle();
+
+  assert.ok(result.success, result.error);
+  assert.deepEqual(filesUnder(path.join(basePath, "P")), ["Q", path.join("Q", "photo.png")]);
+});
+
+test("a shared parent's rename rewrites its subfolder's notes and removes the old copies", async (t) => {
+  const ctx = setup(t);
+  if (!ctx) return;
+  const { db, basePath } = ctx;
+
+  const team = addTeam(db, "shared-rename");
+  const parent = (await handlers.get("db-create-folder")(null, "P")).folder;
+  const child = (await handlers.get("db-create-folder")(null, "Q", null, parent.id)).folder;
+  await handlers.get("db-create-folder")(null, "P", team);
+  await settle();
+  const note = saveMirroredNote(db, "Child", child.id, ["P", "Q"]);
+  writeUserFile(basePath, "P", "Q", "photo.png");
+
+  await handlers.get("db-rename-folder")(null, parent.id, "R");
+  await settle();
+
+  assert.equal(
+    markdownMirror.getNotePath(note.id),
+    path.join(basePath, "R", "Q", `${note.id}-child.md`)
+  );
+  assert.deepEqual(filesUnder(path.join(basePath, "P")), ["Q", path.join("Q", "photo.png")]);
+
+  markdownMirror.deleteNote(note.id);
+  assert.deepEqual(filesUnder(path.join(basePath, "R", "Q")), []);
+});
+
+test("a failed move out of a parent leaves no old copy a later delete can't find", async (t) => {
+  const ctx = setup(t);
+  if (!ctx) return;
+  const { db, basePath } = ctx;
+
+  const parent = (await handlers.get("db-create-folder")(null, "P")).folder;
+  const child = (await handlers.get("db-create-folder")(null, "Q", null, parent.id)).folder;
+  await settle();
+  const note = saveMirroredNote(db, "Child", child.id, ["P", "Q"]);
+  writeUserFile(basePath, "P", "Q", "photo.png");
+  const renameSync = t.mock.method(fs, "renameSync", () => {
+    throw Object.assign(new Error("operation not permitted"), { code: "EPERM" });
+  });
+
+  await handlers.get("db-set-folder-parent")(null, child.id, null);
+  await settle();
+  renameSync.mock.restore();
+
+  assert.deepEqual(filesUnder(path.join(basePath, "P", "Q")), ["photo.png"]);
+  assert.equal(
+    markdownMirror.getNotePath(note.id),
+    path.join(basePath, "Q", `${note.id}-child.md`)
+  );
+});
+
+test("a merge that leaves a note's copy behind removes it once the note is rewritten", async (t) => {
+  const ctx = setup(t);
+  if (!ctx) return;
+  const { db, basePath } = ctx;
+
+  const parent = (await handlers.get("db-create-folder")(null, "P")).folder;
+  const child = (await handlers.get("db-create-folder")(null, "Q", null, parent.id)).folder;
+  await settle();
+  const note = saveMirroredNote(db, "Child", child.id, ["P", "Q"]);
+  fs.mkdirSync(path.join(basePath, "Q"));
+  fs.copyFileSync(
+    path.join(basePath, "P", "Q", `${note.id}-child.md`),
+    path.join(basePath, "Q", `${note.id}-child.md`)
+  );
+
+  await handlers.get("db-set-folder-parent")(null, child.id, null);
+  await settle();
+
+  assert.deepEqual(filesUnder(path.join(basePath, "P")), []);
+  assert.deepEqual(filesUnder(path.join(basePath, "Q")), [
+    `${note.id}-child-transcript.md`,
+    `${note.id}-child.md`,
+  ]);
+  assert.match(fs.readFileSync(markdownMirror.getNotePath(note.id), "utf-8"), /Body$/);
+});
+
+test("a pulled nest of a parent moves its un-nested child out first, leaving one copy", async (t) => {
+  const ctx = setup(t);
+  if (!ctx) return;
+  const { db, basePath } = ctx;
+
+  const outer = (await handlers.get("db-create-folder")(null, "R")).folder;
+  const parent = (await handlers.get("db-create-folder")(null, "P")).folder;
+  const child = (await handlers.get("db-create-folder")(null, "C", null, parent.id)).folder;
+  await settle();
+  db.markFolderSynced(outer.id, "c-outer");
+  db.markFolderSynced(parent.id, "c-parent");
+  const note = saveMirroredNote(db, "Child", child.id, ["P", "C"]);
+
+  await handlers.get("db-apply-cloud-folder-parents")(null, [
+    {
+      cloudId: "c-parent",
+      parentCloudId: "c-outer",
+      snapshot: db.getFolderByClientId(parent.client_folder_id),
+    },
+  ]);
+  await settle();
+
+  const folders = db.getFolders();
+  assert.equal(folders.find((f) => f.id === parent.id).parent_folder_id, outer.id);
+  assert.equal(folders.find((f) => f.id === child.id).parent_folder_id, null);
+  assert.deepEqual(filesUnder(path.join(basePath, "R")), ["P"]);
+  assert.deepEqual(filesUnder(path.join(basePath, "C")), [
+    `${note.id}-child-transcript.md`,
+    `${note.id}-child.md`,
+  ]);
+
+  markdownMirror.deleteNote(note.id);
+  assert.deepEqual(filesUnder(path.join(basePath, "C")), []);
+  assert.deepEqual(filesUnder(path.join(basePath, "R")), ["P"]);
+});
+
+test("a rewrite writes one note per event-loop turn and follows the note at its turn", async (t) => {
+  const ctx = setup(t);
+  if (!ctx) return;
+  const { db, basePath } = ctx;
+
+  const team = addTeam(db, "shared-spread");
+  const folder = (await handlers.get("db-create-folder")(null, "A")).folder;
+  const other = (await handlers.get("db-create-folder")(null, "Elsewhere")).folder;
+  await handlers.get("db-create-folder")(null, "A", team);
+  await settle();
+  const notes = ["One", "Two", "Three", "Four", "Five", "Six"].map((title) =>
+    saveMirroredNote(db, title, folder.id, "A")
+  );
+  writeUserFile(basePath, "A", "mine.txt");
+
+  let turn = 0;
+  let countingTurns = true;
+  const countTurn = () => {
+    turn++;
+    if (countingTurns) setImmediate(countTurn);
+  };
+  setImmediate(countTurn);
+  t.after(() => {
+    countingTurns = false;
+  });
+  const writeTurns = [];
+  const realWriteNote = markdownMirror.writeNote;
+  const writeNote = t.mock.method(markdownMirror, "writeNote", (...args) => {
+    writeTurns.push(turn);
+    return realWriteNote.apply(markdownMirror, args);
+  });
+  const failing = notes[1].id;
+  const realWriteTranscript = markdownMirror.writeTranscript;
+  t.mock.method(markdownMirror, "writeTranscript", (note, ...rest) => {
+    if (note.id === failing) throw new Error("disk full");
+    return realWriteTranscript.call(markdownMirror, note, ...rest);
+  });
+
+  await handlers.get("db-rename-folder")(null, folder.id, "B");
+  // Only the move has run, so what happens to these two reaches the rewrites.
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(writeNote.mock.callCount(), 0);
+  db.deleteNote(notes[2].id);
+  handlersThis._asyncMirrorDelete(notes[2].id);
+  db.updateNote(notes[3].id, { folder_id: other.id });
+
+  await settle();
+
+  assert.equal(new Set(writeTurns).size, writeTurns.length, "one write per event-loop turn");
+  assert.deepEqual(
+    writeNote.mock.calls.map((call) => call.arguments[0].id),
+    [notes[0].id, notes[1].id, notes[4].id, notes[5].id],
+    "a deleted or moved note isn't written, and a failed write doesn't stop the rest"
+  );
+  assert.equal(markdownMirror.getNotePath(notes[2].id), null);
+  assert.equal(path.dirname(markdownMirror.getNotePath(notes[0].id)), path.join(basePath, "B"));
+  assert.ok(fs.existsSync(path.join(basePath, "A", "mine.txt")));
+});
+
+test("a cleanup queued behind a failed move runs after that move's rewrites", async (t) => {
+  const ctx = setup(t);
+  if (!ctx) return;
+  const { db, basePath } = ctx;
+
+  const parent = (await handlers.get("db-create-folder")(null, "P")).folder;
+  const child = (await handlers.get("db-create-folder")(null, "Q", null, parent.id)).folder;
+  await settle();
+  const notes = ["One", "Two", "Three"].map((title) =>
+    saveMirroredNote(db, title, child.id, ["P", "Q"])
+  );
+  t.mock.method(fs, "renameSync", () => {
+    throw Object.assign(new Error("operation not permitted"), { code: "EPERM" });
+  });
+
+  assert.ok((await handlers.get("db-hard-delete-folder")(null, parent.id)).success);
+  await settle();
+
+  for (const note of notes) {
+    assert.equal(path.dirname(markdownMirror.getNotePath(note.id)), path.join(basePath, "Q"));
+  }
+  assert.ok(!fs.existsSync(path.join(basePath, "P")));
+});
 
 test("a subfolder whose directory can't move out of a deleted parent is rewritten at the top level", async (t) => {
   const ctx = setup(t);
@@ -414,7 +798,6 @@ test("a subfolder whose directory can't move out of a deleted parent is rewritte
   });
 
   assert.ok((await handlers.get("db-hard-delete-folder")(null, parent.id)).success);
-  await settle();
   await settle();
   assert.equal(
     markdownMirror.getNotePath(note.id),
@@ -441,7 +824,6 @@ test("a pulled folder delete rewrites preserved notes' files and removes only th
   const result = await handlers.get("db-hard-delete-folder")(null, folder.id, {
     preserveDirtyNotes: true,
   });
-  await settle();
   await settle();
 
   assert.ok(result.success);
