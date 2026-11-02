@@ -27,7 +27,7 @@ import { canRunCloudMeeting } from '@/lib/accountAccess';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { CloudMeetingFinishError, useCloudMeeting } from '@/hooks/useCloudMeeting.android';
 import { useMeetingLiveActivity, type MeetingActivityPhase } from '@/hooks/useMeetingLiveActivity';
-import { CloudMeetingRecording } from '@/components/notes/CloudMeetingRecording';
+import { CloudMeetingRecording } from '@/components/notes/CloudMeetingRecording.android';
 import { canTransition } from '@/lib/diarization/transcriptionStatus';
 import { MeetingSetup } from '@/android/MeetingSetup';
 import { LocalMeetingRecorder } from '@/android/LocalMeetingRecorder';

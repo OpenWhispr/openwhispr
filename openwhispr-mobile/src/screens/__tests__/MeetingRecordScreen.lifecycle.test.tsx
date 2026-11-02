@@ -873,3 +873,7 @@ it('does not persist an Android recording draft after its owner changes', async 
   view.unmount();
   jest.useRealTimers();
 });
+
+jest.mock('@/components/notes/CloudMeetingRecording.android', () =>
+  jest.requireMock('@/components/notes/CloudMeetingRecording'),
+);
