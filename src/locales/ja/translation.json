@@ -2997,6 +2997,7 @@
       "transcriptEmptyDescription": "録音を始めると、話した内容がここに表示されます。",
       "startRecording": "録音を開始",
       "generateSummary": "AI要約を生成",
+      "generateWithTemplate": "{{template}}で生成",
       "startWriting": "書き始める...",
       "table": {
         "actions": "表の操作",
@@ -3163,6 +3164,11 @@
       "applied": "{{name}}でAI要約を更新しました"
     },
     "templates": {
+      "defaultLabel": "デフォルトの要約テンプレート",
+      "defaultHint": "会議終了後の要約ボタンにこのテンプレートを使用します。",
+      "defaultBadge": "デフォルト",
+      "saveBeforeDefault": "デフォルトに設定するには、このテンプレートを保存してください。",
+      "defaultSaveFailed": "デフォルトのテンプレートを更新できませんでした。もう一度お試しください。",
       "tab": "テンプレート",
       "managerTitle": "テンプレートとアクション",
       "manage": "テンプレートを管理...",

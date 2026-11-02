@@ -3094,6 +3094,7 @@
       "transcriptEmptyDescription": "Avvia una registrazione e tutto ciò che viene detto apparirà qui.",
       "startRecording": "Avvia registrazione",
       "generateSummary": "Genera riepilogo AI",
+      "generateWithTemplate": "Genera con {{template}}",
       "startWriting": "Inizia a scrivere...",
       "staleIndicator": "Il contenuto è cambiato dall'ultimo miglioramento",
       "live": "Dal vivo",
@@ -3388,6 +3389,11 @@
       "applied": "Riepilogo AI aggiornato con {{name}}"
     },
     "templates": {
+      "defaultLabel": "Modello di riepilogo predefinito",
+      "defaultHint": "Usa questo modello per il pulsante di riepilogo dopo una riunione.",
+      "defaultBadge": "Predefinito",
+      "saveBeforeDefault": "Salva questo modello per impostarlo come predefinito.",
+      "defaultSaveFailed": "Impossibile aggiornare il modello predefinito. Riprova.",
       "tab": "Modelli",
       "managerTitle": "Modelli e azioni",
       "manage": "Gestisci modelli...",

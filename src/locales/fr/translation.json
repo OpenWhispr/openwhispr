@@ -3446,6 +3446,7 @@
       "transcriptEmptyDescription": "Lancez un enregistrement et tout ce qui est dit apparaîtra ici.",
       "startRecording": "Démarrer l'enregistrement",
       "generateSummary": "Générer un résumé IA",
+      "generateWithTemplate": "Générer avec {{template}}",
       "startWriting": "Commencez à écrire...",
       "staleIndicator": "Le contenu a changé depuis l'amélioration",
       "live": "En direct",
@@ -3756,6 +3757,11 @@
       "applied": "Résumé IA mis à jour avec {{name}}"
     },
     "templates": {
+      "defaultLabel": "Modèle de résumé par défaut",
+      "defaultHint": "Utiliser ce modèle pour le bouton de résumé après une réunion.",
+      "defaultBadge": "Par défaut",
+      "saveBeforeDefault": "Enregistrez ce modèle pour le définir par défaut.",
+      "defaultSaveFailed": "Impossible de mettre à jour le modèle par défaut. Réessayez.",
       "tab": "Modèles",
       "managerTitle": "Modèles et actions",
       "manage": "Gérer les modèles...",

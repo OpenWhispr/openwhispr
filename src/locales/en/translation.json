@@ -3446,6 +3446,7 @@
       "transcriptEmptyDescription": "Start a recording and everything said will appear here.",
       "startRecording": "Start recording",
       "generateSummary": "Generate AI Summary",
+      "generateWithTemplate": "Generate with {{template}}",
       "startWriting": "Start writing...",
       "staleIndicator": "Content has changed since enhancement",
       "live": "Live",
@@ -3756,6 +3757,11 @@
       "applied": "AI summary updated with {{name}}"
     },
     "templates": {
+      "defaultLabel": "Default summary template",
+      "defaultHint": "Use this template for the summary button after a meeting.",
+      "defaultBadge": "Default",
+      "saveBeforeDefault": "Save this template to set it as your default.",
+      "defaultSaveFailed": "Couldn't update the default template. Try again.",
       "tab": "Templates",
       "managerTitle": "Templates & Actions",
       "manage": "Manage Templates...",
