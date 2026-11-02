@@ -96,7 +96,7 @@ export function RemoveMembersDialog({
   const ownerLabel = (member: WorkspaceMember): string =>
     member.user_id === defaultOwnerId
       ? t("workspaces.removeMembers.you", { name: isolate(memberName(member)) })
-      : memberName(member);
+      : isolate(memberName(member));
 
   const doneTitle = (result: MemberRemovalResult, ownerName: string): string => {
     const gone = result.removed.length + result.already_removed.length;
@@ -232,7 +232,7 @@ export function RemoveMembersDialog({
                   size="sm"
                 />
               ) : null}
-              <span id={pickerValueId} dir="auto" className="flex-1 truncate text-start">
+              <span id={pickerValueId} className="flex-1 truncate text-start">
                 {newOwner ? ownerLabel(newOwner) : ""}
               </span>
               <ChevronDown className="size-3.5 shrink-0" aria-hidden="true" />
@@ -259,9 +259,7 @@ export function RemoveMembersDialog({
                     size="sm"
                   />
                   <div className="min-w-0">
-                    <p dir="auto" className="truncate text-sm">
-                      {ownerLabel(member)}
-                    </p>
+                    <p className="truncate text-sm">{ownerLabel(member)}</p>
                     {member.name ? (
                       <p className="truncate text-xs text-muted-foreground">
                         <bdi dir="ltr">{member.email}</bdi>

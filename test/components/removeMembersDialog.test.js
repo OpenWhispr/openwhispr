@@ -44,6 +44,11 @@ function findById(node, id) {
   return null;
 }
 
+function findAutoDirection(node) {
+  const here = node.attributes?.dir === "auto" ? [node] : [];
+  return [...here, ...(node.childNodes ?? []).flatMap(findAutoDirection)];
+}
+
 function textOf(node) {
   if (node.nodeType === 3) return node.nodeValue;
   return [...node.childNodes].map(textOf).join("");
@@ -254,14 +259,36 @@ test("one content owner shows the picker with you chosen", async (t) => {
   // You first, then everyone not being removed by name, each with their email.
   assert.deepEqual(menuItems(text), [
     `workspaces.removeMembers.you|{"name":"${isolated("Ronnie")}"}self@example.com`,
-    "Alexalex@example.com",
-    "Beaowner@example.com",
-    "Zoezoe@example.com",
+    `${isolated("Alex")}alex@example.com`,
+    `${isolated("Bea")}owner@example.com`,
+    `${isolated("Zoe")}zoe@example.com`,
   ]);
   assert.equal(globalThis.__menuContentProps.side, "top");
   assert.equal(globalThis.__menuContentProps.avoidCollisions, false);
   assert.match(globalThis.__menuContentProps.className, /max-h-\[min\(16rem,/);
   assert.notEqual(globalThis.__actionDialogProps.primary.disabled, true);
+});
+
+test("the new owner's name sits by its avatar in RTL", async (t) => {
+  const { mount, opened } = await loadDialog(t);
+  globalThis.__previewImpl = async () => preview([owns("u-liam")]);
+
+  const view = await mount(opened([LIAM]));
+
+  // dir="auto" resolves a Latin name to LTR, which starts it on the far side of an RTL row.
+  const [labelId, valueId] = globalThis.__triggerProps["aria-labelledby"].split(" ");
+  const value = findById(view.container, valueId);
+  assert.ok(findById(view.container, labelId));
+  assert.equal(value.attributes.dir, undefined);
+  for (const name of ["flex-1", "truncate", "text-start"]) {
+    assert.ok(value.attributes.class.split(" ").includes(name), name);
+  }
+  assert.deepEqual(findAutoDirection(view.container), []);
+
+  // The picked name is still its own run, now that nothing around it resolves the direction.
+  await view.act(() => globalThis.__menuItems[3]());
+  assert.equal(pickerText(view.text()), isolated("Zoe"));
+  assert.equal(textOf(findById(view.container, valueId)), isolated("Zoe"));
 });
 
 test("several content owners are counted", async (t) => {
@@ -325,7 +352,7 @@ test("a transfer sends the new owner and toasts the transfer", async (t) => {
 
   // Candidates: you, Bea, Zoe.
   await view.act(() => globalThis.__menuItems[2]());
-  assert.equal(pickerText(view.text()), "Zoe");
+  assert.equal(pickerText(view.text()), isolated("Zoe"));
   await view.clickPrimary();
 
   assert.deepEqual(globalThis.__removeCalls, [
