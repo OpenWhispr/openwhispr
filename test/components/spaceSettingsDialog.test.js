@@ -84,3 +84,63 @@ test("Upgrade from the Members tab closes the dialog, so it isn't left under Set
 
   assert.deepEqual(opens, [false]);
 });
+
+test("the members panel hands the invite dialog's Upgrade up to the space dialog", async (t) => {
+  let root;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+    delete globalThis.__inviteProps;
+  });
+  installBrowserGlobals(t);
+  const container = installHostDom(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-space-members-panel-",
+    noExternal: ["react-i18next"],
+    mockModules: {
+      "react-i18next": `export const useTranslation = () => ({ t: (key) => key, i18n: {} });`,
+      "/ui/dialog": `export const ConfirmDialog = () => null;`,
+      "/ui/useToast": `export const useToast = () => ({ toast: () => {} });`,
+      "/hooks/useAuth": `export const useAuth = () => ({ user: { id: "u1" } });`,
+      "/hooks/useMemberRoster": `
+        const empty = [];
+        const busy = new Set();
+        export const useMemberRoster = () => ({
+          members: empty,
+          loading: false,
+          loadFailed: false,
+          reload: async () => {},
+          busyIds: busy,
+          mutate: async () => {},
+        });
+      `,
+      "/stores/workspaceStore": `
+        const state = {
+          workspaces: [{ id: "w1", name: "Acme", role: "owner" }],
+          members: [],
+          membersWorkspaceId: "w1",
+          refreshMembers: async () => {},
+        };
+        export const useWorkspaceStore = (selector) => selector(state);
+      `,
+      "/services/SpacesService": `export const SpacesService = { listMembers: async () => [] };`,
+      "/MemberRoster": `export default function Mock() { return null; }`,
+      "/SpaceGroupsSection": `export default function Mock() { return null; }`,
+      "/InviteTeammateDialog": `
+        export default function Mock(props) {
+          globalThis.__inviteProps = props;
+          return null;
+        }
+      `,
+    },
+  });
+  const { default: SpaceMembersPanel } = await vite.ssrLoadModule(
+    "/components/notes/SpaceMembersPanel.tsx"
+  );
+  const onOpeningBilling = () => {};
+  root = createRoot(container);
+  await React.act(async () =>
+    root.render(React.createElement(SpaceMembersPanel, { space: SPACE, onOpeningBilling }))
+  );
+
+  assert.equal(globalThis.__inviteProps.onOpeningBilling, onOpeningBilling);
+});
