@@ -1,3 +1,6 @@
+// Exercise the same database adapter Metro selects for Android.
+jest.mock('@/db', () => jest.requireActual('@/db/index.android'));
+
 jest.mock('../../../modules/background-uploader/src', () => ({
   BackgroundUploader: { listProviderRecoveryJobIds: () => [], clearProviderRecovery: () => false },
 }));
