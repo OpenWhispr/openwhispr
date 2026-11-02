@@ -113,6 +113,22 @@ test("writes reject a symlinked folder that resolves outside the mirror", (t) =>
   assert.equal(markdownMirror.getFolderPath("linked"), null);
 });
 
+test("subfolder writes and moves reject a symlinked parent that resolves outside the mirror", (t) => {
+  const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
+  const outsidePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-outside-"));
+  t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));
+  t.after(() => fs.rmSync(outsidePath, { recursive: true, force: true }));
+  fs.symlinkSync(outsidePath, path.join(basePath, "linked"), "dir");
+
+  markdownMirror.init(basePath);
+  markdownMirror.writeNote({ id: 18, title: "Escaped", content: "Body" }, ["linked", "Q2"]);
+  markdownMirror.writeNote({ id: 19, title: "Kept", content: "Body" }, "Q1");
+  assert.equal(markdownMirror.renameFolder("Q1", ["linked", "Q1"]), false);
+
+  assert.deepEqual(fs.readdirSync(outsidePath), []);
+  assert.equal(markdownMirror.getNotePath(19), path.join(basePath, "Q1", "19-kept.md"));
+});
+
 test("writes reject a symlinked note file without changing its target", (t) => {
   const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
   const outsidePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-outside-"));
@@ -318,4 +334,66 @@ test("a note file re-saved with a BOM or CRLF is still recognised as its note", 
     fs.writeFileSync(notePath, rewritten, "utf-8");
     assert.equal(markdownMirror.getNotePath(note.id), notePath);
   }
+});
+
+test("a subfolder mirrors inside its parent's directory and moves with it", (t) => {
+  const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
+  t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));
+  markdownMirror.init(basePath);
+
+  const note = { id: 21, title: "Budget", content: "Numbers" };
+  markdownMirror.writeNote(note, ["Client A", "Q1"]);
+  const nestedPath = path.join(basePath, "Client A", "Q1", "21-budget.md");
+  assert.equal(fs.existsSync(nestedPath), true);
+  assert.match(fs.readFileSync(nestedPath, "utf-8"), /^folder: Client A\/Q1$/m);
+  assert.equal(markdownMirror.getNotePath(21), nestedPath);
+
+  markdownMirror.renameFolder("Client A", "Client B");
+  const renamedPath = path.join(basePath, "Client B", "Q1", "21-budget.md");
+  assert.equal(
+    markdownMirror.getNotePath(21),
+    renamedPath,
+    "renaming a parent carries its subfolders"
+  );
+
+  markdownMirror.renameFolder(["Client B", "Q1"], "Q1");
+  assert.equal(markdownMirror.getNotePath(21), path.join(basePath, "Q1", "21-budget.md"));
+
+  markdownMirror.renameFolder("Q1", ["Client B", "Q1"]);
+  markdownMirror.writeNote(note, "Personal");
+  assert.equal(markdownMirror.getNotePath(21), path.join(basePath, "Personal", "21-budget.md"));
+  assert.equal(
+    fs.readdirSync(path.join(basePath, "Client B", "Q1")).length,
+    0,
+    "the stale nested copy is removed"
+  );
+});
+
+test("each subfolder segment gets a portable directory name", (t) => {
+  const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
+  t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));
+  markdownMirror.init(basePath);
+
+  markdownMirror.writeNote({ id: 22, title: "Plan", content: "Body" }, ["CON", "../up"]);
+  const notePath = markdownMirror.getNotePath(22);
+  assert.ok(notePath.startsWith(basePath + path.sep));
+  const [parentDir, childDir] = path.relative(basePath, path.dirname(notePath)).split(path.sep);
+  assert.match(parentDir, /^__ow-[0-9a-f]{64}$/);
+  assert.match(childDir, /^__ow-[0-9a-f]{64}$/);
+});
+
+test("renaming a folder into a shared directory merges same-named subfolders", (t) => {
+  const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
+  t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));
+  markdownMirror.init(basePath);
+
+  markdownMirror.writeNote({ id: 31, title: "Plan", content: "Body" }, ["Client A", "Q1"]);
+  markdownMirror.writeNote({ id: 32, title: "Roadmap", content: "Body" }, ["Client B", "Q1"]);
+  markdownMirror.renameFolder("Client A", "Client B");
+
+  assert.deepEqual(fs.readdirSync(path.join(basePath, "Client B", "Q1")).sort(), [
+    "31-plan.md",
+    "32-roadmap.md",
+  ]);
+  assert.equal(fs.existsSync(path.join(basePath, "Client A")), false);
 });

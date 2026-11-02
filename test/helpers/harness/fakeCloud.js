@@ -53,7 +53,7 @@ const NOTE_FIELDS = [
   "expected_speaker_count",
 ];
 
-const FOLDER_FIELDS = ["name", "is_default", "sort_order"];
+const FOLDER_FIELDS = ["name", "is_default", "sort_order", "parent_folder_id"];
 
 // Conversations are read-only here: only the pull is modelled, so `messages`
 // rides along as a plain stored field.
@@ -78,7 +78,7 @@ const NOTE_DEFAULTS = {
   expected_speaker_count: null,
 };
 
-const FOLDER_DEFAULTS = { name: "", is_default: false, sort_order: 0 };
+const FOLDER_DEFAULTS = { name: "", is_default: false, sort_order: 0, parent_folder_id: null };
 
 const CONVERSATION_DEFAULTS = { title: "Untitled", archived_at: null, messages: [] };
 
@@ -136,7 +136,12 @@ function createFakeCloud(config = {}) {
         continue;
       }
       const value = incoming[key];
-      if (cfg.coalesceOnConflict && (value === null || value === undefined) && row[key] != null) {
+      if (
+        cfg.coalesceOnConflict &&
+        (value === null || value === undefined) &&
+        row[key] != null &&
+        !collection.clearable?.includes(key)
+      ) {
         next[key] = row[key];
         continue;
       }
@@ -215,6 +220,9 @@ function createFakeCloud(config = {}) {
     store: folders,
     fields: FOLDER_FIELDS,
     defaults: FOLDER_DEFAULTS,
+    // The API gates the parent on the key's presence: an explicit null
+    // moves the folder to the top level.
+    clearable: ["parent_folder_id"],
     clientKey: "client_folder_id",
     prefix: "folder",
   };

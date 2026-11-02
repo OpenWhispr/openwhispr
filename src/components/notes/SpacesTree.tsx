@@ -684,7 +684,7 @@ function FolderRow({
                 <DropdownMenuItem
                   onClick={(e) => {
                     e.stopPropagation();
-                    window.electronAPI?.showFolderInExplorer?.(folder.name);
+                    window.electronAPI?.showFolderInExplorer?.(folder.id);
                   }}
                   className={MENU_ITEM_CLASS}
                 >
