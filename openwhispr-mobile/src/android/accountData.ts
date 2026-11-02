@@ -257,7 +257,7 @@ export function prepareAccountData(user: User): void {
     useSharedDictionaryStore.getState().reset();
     selectAccountData(user);
     const { useNotesStore } =
-      require('@/store/useNotesStore') as typeof import('@/store/useNotesStore');
+      require('@/store/useNotesStore.android') as typeof import('@/store/useNotesStore.android');
     const { useDictionaryStore } =
       require('@/store/useDictionaryStore') as typeof import('@/store/useDictionaryStore');
     const { useSnippetsStore } =

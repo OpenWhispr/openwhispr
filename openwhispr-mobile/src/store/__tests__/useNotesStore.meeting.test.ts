@@ -143,7 +143,9 @@ jest.mock('@/services/transcription/TranscriptionService', () => ({
 }));
 
 import { Platform } from 'react-native';
-import { useNotesStore } from '../useNotesStore';
+import { useNotesStore as useIosNotesStore } from '../useNotesStore';
+import { useNotesStore as useAndroidNotesStore } from '../useNotesStore.android';
+let useNotesStore = useIosNotesStore;
 import { notesRepository, spacesRepository } from '@/data';
 import { ReasoningService } from '@/services/reasoning/ReasoningService';
 import { generateLocalMeetingNotes } from '@/lib/notes/localMeetingNotes';
@@ -192,14 +194,16 @@ const segment = (text: string) => ({
 const signedInUser = { id: 'user-1', email: 'user@example.com', emailVerified: true };
 
 beforeEach(() => {
+  useNotesStore = useIosNotesStore;
   // loadNotes/loadFolders read SQLite; stub them on the store for these unit tests.
-  useNotesStore.setState({
-    folders: [],
-    loadNotes: () => {},
-    loadFolders: () => {},
-    transcriptRevision: 0,
-    meetingSpeakerEmbeddingsByNoteId: {},
-  });
+  for (const store of [useIosNotesStore, useAndroidNotesStore])
+    store.setState({
+      folders: [],
+      loadNotes: () => {},
+      loadFolders: () => {},
+      transcriptRevision: 0,
+      meetingSpeakerEmbeddingsByNoteId: {},
+    });
   jest.clearAllMocks();
   mockAuthState.user = null;
   mockConfigState.config.autoGenerateNoteTitle = false;
@@ -414,7 +418,24 @@ describe('finalizeCloudMeeting', () => {
       status = next;
     });
   });
-  it('persists an incomplete transcript without generating notes or claiming completion', async () => {
+  it('preserves upstream iOS completion when given the Android incomplete option', async () => {
+    await useIosNotesStore
+      .getState()
+      .finalizeCloudMeeting(
+        7,
+        [{ itemId: 'saved', text: 'Saved words.', startMs: 0, endMs: 1000 }],
+        1,
+        { incomplete: true },
+      );
+    expect(notesRepository.setTranscriptionStatus).toHaveBeenLastCalledWith(7, 'done');
+    expect(mockLogTranscriptionCompleted).toHaveBeenCalledWith({
+      source: 'meeting',
+      provider: 'cloud',
+    });
+  });
+  it('persists an incomplete Android transcript without generating notes or claiming completion', async () => {
+    useNotesStore = useAndroidNotesStore;
+    (notesRepository.getNoteById as jest.Mock).mockReturnValue({ id: 7, noteType: 'meeting' });
     await useNotesStore
       .getState()
       .finalizeCloudMeeting(
@@ -500,6 +521,7 @@ describe('finalizeCloudMeeting', () => {
   ])('keeps an Android meeting without recognized words retryable', async ({ utterances }) => {
     const originalPlatform = Platform.OS;
     Object.defineProperty(Platform, 'OS', { value: 'android', configurable: true });
+    useNotesStore = useAndroidNotesStore;
     try {
       (notesRepository.getNoteById as jest.Mock).mockReturnValue({
         id: 7,
@@ -521,6 +543,7 @@ describe('finalizeCloudMeeting', () => {
   it('still completes Android meetings with recognized words', async () => {
     const originalPlatform = Platform.OS;
     Object.defineProperty(Platform, 'OS', { value: 'android', configurable: true });
+    useNotesStore = useAndroidNotesStore;
     try {
       (notesRepository.getNoteById as jest.Mock).mockReturnValue({ id: 7, noteType: 'meeting' });
       await useNotesStore
@@ -563,15 +586,43 @@ describe('finalizeCloudMeeting', () => {
 
     expect(mockLogTranscriptionCompleted).not.toHaveBeenCalled();
   });
-  it('finishes a recovered recording that is already transcribing', async () => {
+  it('retains the upstream iOS transition guard when already transcribing', async () => {
     (notesRepository.getTranscriptionStatus as jest.Mock).mockReturnValue('transcribing');
-    await useNotesStore.getState().finalizeCloudMeeting(7, [], 0);
+    await expect(useNotesStore.getState().finalizeCloudMeeting(7, [], 0)).rejects.toThrow(
+      'Illegal transcription status transition: transcribing -> transcribing',
+    );
+    expect(notesRepository.setTranscriptionStatus).not.toHaveBeenCalled();
+  });
+
+  it('finishes an Android recording with saved words that is already transcribing', async () => {
+    (notesRepository.getNoteById as jest.Mock).mockReturnValue({ id: 7, noteType: 'meeting' });
+    (notesRepository.getTranscriptionStatus as jest.Mock).mockReturnValue('transcribing');
+    await useAndroidNotesStore
+      .getState()
+      .finalizeCloudMeeting(
+        7,
+        [{ itemId: 'recovered', text: 'Saved words.', startMs: 0, endMs: 1000 }],
+        1,
+      );
     expect(notesRepository.setTranscriptionStatus).toHaveBeenCalledTimes(1);
     expect(notesRepository.setTranscriptionStatus).toHaveBeenCalledWith(7, 'done');
   });
 });
 
 describe('runMeetingPipeline', () => {
+  it('preserves the iOS metadata failure before entering pipeline cleanup', async () => {
+    const loadNotes = jest.fn();
+    useIosNotesStore.setState({ loadNotes });
+    jest.mocked(notesRepository.updateNoteMeta).mockImplementationOnce(() => {
+      throw new Error('Metadata write failed');
+    });
+    await expect(
+      useIosNotesStore.getState().runMeetingPipeline(7, 'file://meeting.wav', 2),
+    ).rejects.toThrow('Metadata write failed');
+    expect(mockProcessMeeting).not.toHaveBeenCalled();
+    expect(loadNotes).not.toHaveBeenCalled();
+  });
+
   it('logs a persisted local meeting transcription', async () => {
     (notesRepository.getSegments as jest.Mock).mockReturnValue([segment('Transcript')]);
 
@@ -1599,6 +1650,7 @@ describe('Android private meeting recovery ownership', () => {
   const originalPlatform = Platform.OS;
   beforeEach(() => {
     Platform.OS = 'android';
+    useNotesStore = useAndroidNotesStore;
     mockProcessingModeState.activeMode = 'private';
     mockAuthState.user = { id: 'owner-a', email: 'test@example.invalid', emailVerified: true };
     (notesRepository.getNoteById as jest.Mock).mockReturnValue({
@@ -1797,6 +1849,7 @@ describe('Android Cloud meeting ownership', () => {
       savedState.set(key, value);
     });
     Platform.OS = 'android';
+    useNotesStore = useAndroidNotesStore;
     mockAuthState.user = signedInUser;
     (notesRepository.getNoteById as jest.Mock).mockReturnValue({
       id: 7,
@@ -1831,6 +1884,31 @@ describe('Android Cloud meeting ownership', () => {
     expect(mockCloudTranscribe.mock.calls[1][0].clientTranscriptionId).toBe(firstId);
     expect(notesRepository.setSyncState).toHaveBeenCalledWith(expect.any(String), firstId);
     expect(notesRepository.getTranscriptionStatus(7)).toBe('failed');
+  });
+
+  it('uses the current finalizer after an asynchronous Android retry upload', async () => {
+    let finish!: (value: { text: string; duration: number }) => void;
+    mockCloudTranscribe.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const original = useNotesStore.getState().finalizeCloudMeeting;
+    const finalize = jest.fn().mockResolvedValue(undefined);
+    const pending = useNotesStore.getState().retryMeetingTranscription(7);
+    useNotesStore.setState({ finalizeCloudMeeting: finalize });
+    try {
+      finish({ text: 'Saved speech', duration: 1 });
+      await pending;
+      expect(finalize).toHaveBeenCalledWith(
+        7,
+        [{ itemId: 'recovered-7', text: 'Saved speech', startMs: 0, endMs: 1000 }],
+        1,
+      );
+    } finally {
+      useNotesStore.setState({ finalizeCloudMeeting: original });
+    }
   });
 
   it('does not upload if its retry identity cannot be saved', async () => {
