@@ -2112,10 +2112,12 @@ class IPCHandlers {
     });
 
     ipcMain.handle("get-audio-path", async (event, id) => {
+      if (!this.databaseManager.getTranscriptionById(id)) return null;
       return this.audioStorageManager.getAudioPath(id);
     });
 
     ipcMain.handle("show-audio-in-folder", async (event, id) => {
+      if (!this.databaseManager.getTranscriptionById(id)) return { success: false };
       const filePath = this.audioStorageManager.getAudioPath(id);
       if (!filePath) return { success: false };
       shell.showItemInFolder(filePath);
@@ -2123,6 +2125,7 @@ class IPCHandlers {
     });
 
     ipcMain.handle("get-audio-buffer", async (event, id) => {
+      if (!this.databaseManager.getTranscriptionById(id)) return null;
       const buffer = this.audioStorageManager.getAudioBuffer(id);
       return buffer ? buffer.buffer : null;
     });
@@ -3345,6 +3348,7 @@ class IPCHandlers {
     ipcMain.handle("db-hard-delete-transcription", (_, id) => {
       const result = this.databaseManager.hardDeleteTranscription(id);
       if (result?.success) {
+        this.audioStorageManager.deleteAudio(id);
         setImmediate(() => broadcastToWindows("transcription-deleted", { id }));
       }
       return result;
@@ -7624,6 +7628,9 @@ class IPCHandlers {
     });
 
     ipcMain.handle("retry-transcription", async (event, id, settings) => {
+      if (!this.databaseManager.getTranscriptionById(id)) {
+        return { success: false, error: "Audio file not found" };
+      }
       const buffer = this.audioStorageManager.getAudioBuffer(id);
       if (!buffer) return { success: false, error: "Audio file not found" };
       let providerErrorContext = null;

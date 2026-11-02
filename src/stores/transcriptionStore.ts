@@ -14,6 +14,7 @@ const useTranscriptionStore = create<TranscriptionState>()(() => ({
 let hasBoundIpcListeners = false;
 const DEFAULT_LIMIT = 50;
 let currentLimit = DEFAULT_LIMIT;
+let loadGeneration = 0;
 
 function ensureIpcListeners() {
   if (hasBoundIpcListeners || typeof window === "undefined") {
@@ -62,6 +63,16 @@ function ensureIpcListeners() {
     }
   }
 
+  if (window.electronAPI?.onActiveAccountScopeChanged) {
+    const dispose = window.electronAPI.onActiveAccountScopeChanged(() => {
+      clearTranscriptions();
+      void initializeTranscriptions().catch((error) => {
+        console.error("Failed to reload transcription history after an account change:", error);
+      });
+    });
+    disposers.push(dispose);
+  }
+
   hasBoundIpcListeners = true;
 
   window.addEventListener("beforeunload", () => {
@@ -75,7 +86,9 @@ export async function initializeTranscriptions(
 ) {
   currentLimit = limit;
   ensureIpcListeners();
+  const gen = ++loadGeneration;
   const items = await window.electronAPI.getTranscriptions(limit, { includeDiscarded });
+  if (gen !== loadGeneration) return items;
   useTranscriptionStore.setState({ transcriptions: items, includeDiscarded });
   return items;
 }

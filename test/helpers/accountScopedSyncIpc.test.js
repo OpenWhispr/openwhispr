@@ -44,7 +44,7 @@ const electronStub = {
       return null;
     }
   },
-  shell: {},
+  shell: { showItemInFolder: (filePath) => revealedAudio.push(filePath) },
   dialog: {},
   screen: { getPrimaryDisplay: () => ({ workAreaSize: { width: 0, height: 0 } }) },
   systemPreferences: { getMediaAccessStatus: () => "granted" },
@@ -85,15 +85,26 @@ function anything() {
 }
 
 const deletedAudio = [];
+const readAudio = [];
+const revealedAudio = [];
+const audioStorageStub = {
+  getAudioPath: (id) => {
+    readAudio.push(id);
+    return `audio-${id}.webm`;
+  },
+  getAudioBuffer: (id) => {
+    readAudio.push(id);
+    return Buffer.from("recording");
+  },
+  deleteAudio: (id) => {
+    deletedAudio.push(id);
+    return { success: true };
+  },
+};
 const target = {
   sessionId: "test-session",
   databaseManager: null,
-  audioStorageManager: {
-    deleteAudio: (id) => {
-      deletedAudio.push(id);
-      return { success: true };
-    },
-  },
+  audioStorageManager: audioStorageStub,
 };
 let handleAuthTokenChange;
 
@@ -118,9 +129,12 @@ function setup(t) {
   const db = createDb(t);
   if (!db) return null;
   target.databaseManager = db;
+  target.audioStorageManager = audioStorageStub;
   tokenState = { token: "token-a", generation: 3 };
   broadcasts.length = 0;
   deletedAudio.length = 0;
+  readAudio.length = 0;
+  revealedAudio.length = 0;
   return db;
 }
 
@@ -225,6 +239,49 @@ test("a recording is deleted only for a dictation the active account can see", a
   db.setActiveAccountId("account-a");
   assert.equal((await invoke("delete-transcription-audio", id)).success, true);
   assert.deepEqual(deletedAudio, [id]);
+});
+
+test("another account cannot read, reveal, or retry a cached history recording", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  const { id } = db.saveTranscription("A dictated this");
+  db.setActiveAccountId("account-b");
+
+  assert.equal(await invoke("get-audio-path", id), null);
+  assert.equal(await invoke("get-audio-buffer", id), null);
+  assert.equal((await invoke("show-audio-in-folder", id)).success, false);
+  assert.equal((await invoke("retry-transcription", id, {})).success, false);
+  assert.deepEqual(readAudio, [], "the other account never reaches the recording");
+  assert.deepEqual(revealedAudio, []);
+
+  db.setActiveAccountId("account-a");
+  assert.equal(await invoke("get-audio-path", id), `audio-${id}.webm`);
+  assert.ok((await invoke("get-audio-buffer", id)) instanceof ArrayBuffer);
+  assert.equal((await invoke("show-audio-in-folder", id)).success, true);
+  assert.deepEqual(revealedAudio, [`audio-${id}.webm`]);
+});
+
+test("a scoped cloud hard-delete removes the row and its recording", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const AudioStorageManager = require("../../src/helpers/audioStorage");
+  const audio = new AudioStorageManager();
+  target.audioStorageManager = audio;
+  db.setActiveAccountId("account-a");
+  const { id: aId } = db.saveTranscription("A's recording");
+  const aPath = audio.saveAudio(aId, Buffer.from("A's recording")).path;
+  db.setActiveAccountId("account-b");
+  const { id: bId } = db.saveTranscription("B's recording");
+  const bPath = audio.saveAudio(bId, Buffer.from("B's recording")).path;
+
+  assert.equal((await invoke("db-hard-delete-transcription", aId)).success, false);
+  assert.equal(fs.existsSync(aPath), true, "another account's deletion is refused");
+  db.setActiveAccountId("account-a");
+  assert.equal((await invoke("db-hard-delete-transcription", aId)).success, true);
+  assert.equal(db.getTranscriptionById(aId), null);
+  assert.equal(fs.existsSync(aPath), false, "the remote deletion leaves no orphaned recording");
+  assert.equal(fs.existsSync(bPath), true, "the other account's recording stays");
 });
 
 test("an account change sends every window the new account's dictionary and snippets, once", async (t) => {

@@ -162,6 +162,7 @@ function buildFakeThis() {
   const dbRows = new Map([
     [7, { id: 7, audio_duration_ms: 1200 }],
     [8, { id: 8, audio_duration_ms: 1200 }],
+    [9, { id: 9, audio_duration_ms: 1200 }],
   ]);
   const target = {
     sessionId: "test-session",
