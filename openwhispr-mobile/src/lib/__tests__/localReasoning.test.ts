@@ -316,6 +316,7 @@ describe('toLocalReasoningError', () => {
     'APPLE_LLM_RATE_LIMITED',
     'APPLE_LLM_CONTEXT_LIMIT',
     'APPLE_LLM_OUTPUT_LIMIT',
+    'LOCAL_OUTPUT_LIMIT',
   ])('marks %s as not worth retrying', (code) => {
     expect(toLocalReasoningError(Object.assign(new Error('x'), { code }))).toMatchObject({
       code,
@@ -324,16 +325,19 @@ describe('toLocalReasoningError', () => {
   });
 });
 
-it('reads the native output-limit code as an output limit, and nothing else', () => {
-  const outputLimit = toLocalReasoningError(
-    Object.assign(new Error('decodingFailure'), { code: 'APPLE_LLM_OUTPUT_LIMIT' }),
-  );
-  expect(isLocalOutputLimitError(outputLimit)).toBe(true);
-  expect(
-    isLocalOutputLimitError(Object.assign(new Error('x'), { code: 'APPLE_LLM_CONTEXT_LIMIT' })),
-  ).toBe(false);
-  expect(isLocalOutputLimitError(new Error('x'))).toBe(false);
-});
+it.each(['APPLE_LLM_OUTPUT_LIMIT', 'LOCAL_OUTPUT_LIMIT'])(
+  'preserves %s through normalization so Notes can retry smaller chunks',
+  (code) => {
+    const outputLimit = toLocalReasoningError(
+      Object.assign(new Error('Output did not fit'), { code }),
+    );
+    expect(isLocalOutputLimitError(outputLimit)).toBe(true);
+    expect(
+      isLocalOutputLimitError(Object.assign(new Error('x'), { code: 'APPLE_LLM_CONTEXT_LIMIT' })),
+    ).toBe(false);
+    expect(isLocalOutputLimitError(new Error('x'))).toBe(false);
+  },
+);
 
 describe('countLocalInputTokens', () => {
   it('counts on the device, and estimates instructions and prompt together without it', async () => {

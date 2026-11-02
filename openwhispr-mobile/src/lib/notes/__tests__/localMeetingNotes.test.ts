@@ -17,6 +17,7 @@ jest.mock('@/data', () => ({
 }));
 
 jest.mock('@/lib/localReasoning', () => ({
+  ...jest.requireActual('@/lib/localReasoning'),
   LOCAL_OUTPUT_TOKEN_RESERVE: 900,
   countLocalInputTokens: jest.fn(async () => 700),
   fitsLocalReasoningBudget: jest.fn(async () => true),
@@ -26,19 +27,6 @@ jest.mock('@/lib/localReasoning', () => ({
     contextSize: 4096,
     tokenCounting: true,
   })),
-  isLocalContextLimitError: (error: unknown) =>
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    ['APPLE_LLM_CONTEXT_LIMIT', 'LOCAL_CONTEXT_LIMIT'].includes(
-      String((error as { code?: unknown }).code),
-    ),
-  isLocalOutputLimitError: (error: unknown) =>
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error as { code?: unknown }).code === 'APPLE_LLM_OUTPUT_LIMIT',
-  toLocalReasoningError: (error: unknown) => error,
 }));
 
 import {
@@ -407,4 +395,97 @@ describe('Android local meeting formatting', () => {
       Platform.OS = original;
     }
   });
+
+  it('recovers an Android output limit by splitting the input and retaining both halves', async () => {
+    const original = Platform.OS;
+    Platform.OS = 'android';
+    mockGetSegments.mockReturnValue(segmentsOf(2));
+    const generate = jest.mocked(LocalTextModel.processText);
+    generate
+      .mockRejectedValueOnce(Object.assign(new Error('Too long'), { code: 'LOCAL_OUTPUT_LIMIT' }))
+      .mockResolvedValueOnce({ text: JSON.stringify(partialNotes('First half')), model: 'local' })
+      .mockResolvedValueOnce({ text: JSON.stringify(partialNotes('Second half')), model: 'local' })
+      .mockRejectedValueOnce(Object.assign(new Error('Too long'), { code: 'LOCAL_OUTPUT_LIMIT' }));
+    try {
+      const markdown = await generateLocalMeetingNotes(7);
+      expect(markdown).toContain('First half');
+      expect(markdown).toContain('Second half');
+      expect(generate).toHaveBeenCalledTimes(4);
+      expect(generate.mock.calls[1][0].text).toContain('Line 0');
+      expect(generate.mock.calls[1][0].text).not.toContain('Line 1');
+      expect(generate.mock.calls[2][0].text).toContain('Line 1');
+      expect(generate.mock.calls[2][0].text).not.toContain('Line 0');
+      expect(mockGenerateMeetingNotes).not.toHaveBeenCalled();
+    } finally {
+      Platform.OS = original;
+    }
+  });
+
+  it.each([
+    [1, 1],
+    [8, 3],
+  ])('bounds Android output-limit recovery for %i transcript lines', async (lines, calls) => {
+    const original = Platform.OS;
+    Platform.OS = 'android';
+    mockGetSegments.mockReturnValue(segmentsOf(lines));
+    const generate = jest.mocked(LocalTextModel.processText);
+    generate.mockRejectedValue(
+      Object.assign(new Error('Too long'), { code: 'LOCAL_OUTPUT_LIMIT' }),
+    );
+    try {
+      await expect(generateLocalMeetingNotes(7)).rejects.toMatchObject({
+        code: 'LOCAL_OUTPUT_LIMIT',
+      });
+      expect(generate).toHaveBeenCalledTimes(calls);
+      expect(mockGenerateMeetingNotes).not.toHaveBeenCalled();
+    } finally {
+      Platform.OS = original;
+    }
+  });
+
+  it.each(['first-limit', 'left-half', 'merge-limit', 'merge-budget'])(
+    'does not start another Android generation after cancellation during %s',
+    async (stage) => {
+      const original = Platform.OS;
+      Platform.OS = 'android';
+      const reduce = stage.startsWith('merge-');
+      mockGetSegments.mockReturnValue(segmentsOf(reduce ? 4 : 2));
+      let cancelled = false;
+      const checkpoint = () => {
+        if (cancelled) throw Object.assign(new Error('Cancelled'), { name: 'AbortError' });
+      };
+      if (reduce) {
+        mockFitsBudget.mockImplementation(async ({ prompt }: { prompt: string }) => {
+          if (prompt.startsWith('Merge these')) {
+            if (stage === 'merge-budget') cancelled = true;
+            return true;
+          }
+          return (prompt.match(/Line \d about/g) ?? []).length <= 1;
+        });
+      }
+      const generate = jest.mocked(LocalTextModel.processText).mockReset();
+      generate.mockImplementation(async ({ text }) => {
+        if (text.startsWith('Merge these') || (!reduce && generate.mock.calls.length === 1)) {
+          if (stage !== 'left-half') cancelled = true;
+          throw Object.assign(new Error('Too long'), { code: 'LOCAL_OUTPUT_LIMIT' });
+        }
+        if (stage === 'left-half') cancelled = true;
+        return { text: JSON.stringify(partialNotes('Supported summary')), model: 'local' };
+      });
+      try {
+        await expect(generateLocalMeetingNotes(7, { checkpoint })).rejects.toMatchObject({
+          name: 'AbortError',
+        });
+        const expectedCalls = {
+          'first-limit': 1,
+          'left-half': 2,
+          'merge-limit': 5,
+          'merge-budget': 4,
+        };
+        expect(generate).toHaveBeenCalledTimes(expectedCalls[stage as keyof typeof expectedCalls]);
+      } finally {
+        Platform.OS = original;
+      }
+    },
+  );
 });

@@ -266,7 +266,9 @@ async function mapChunkWithRetry(input: {
   instructions: string;
   previousSummary?: string;
   outputLimitSplitsLeft?: number;
+  checkpoint: () => void;
 }): Promise<StructuredMeetingNotes[]> {
+  input.checkpoint();
   const outputLimitSplitsLeft = input.outputLimitSplitsLeft ?? MAX_OUTPUT_LIMIT_SPLITS;
   const chunkInput = buildChunkInput({
     note: input.note,
@@ -334,7 +336,9 @@ async function reduceStructuredNotes(input: {
   notes: StructuredMeetingNotes[];
   instructions: string;
   budget: number;
+  checkpoint: () => void;
 }): Promise<StructuredMeetingNotes> {
+  input.checkpoint();
   if (input.notes.length === 0) return emptyMeetingNotes();
   if (input.notes.length === 1) return normalizeMeetingNotes(input.notes[0]);
 
@@ -346,6 +350,7 @@ async function reduceStructuredNotes(input: {
       budget: input.budget,
     })
   ) {
+    input.checkpoint();
     try {
       return await generateStructuredNotes({
         instructions: input.instructions,
@@ -433,6 +438,7 @@ export async function generateLocalMeetingNotes(
         meetingContext,
         instructions,
         previousSummary,
+        checkpoint,
       })),
     );
   }
@@ -442,6 +448,7 @@ export async function generateLocalMeetingNotes(
     notes: mapped,
     instructions,
     budget: Math.min(budget, LOCAL_MEETING_MERGE_MAX_INPUT_TOKENS),
+    checkpoint,
   });
   checkpoint();
   const markdown = renderStructuredMeetingNotesToMarkdown(reduced);
