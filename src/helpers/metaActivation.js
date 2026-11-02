@@ -303,8 +303,21 @@ class MetaActivation {
           stream.id
         );
       stream = this.current(scope);
-      if (Number.isSafeInteger(response.device.last_seq))
-        this.restampUnsent(stream, response.device.last_seq, this.clock(scope));
+      if (Number.isSafeInteger(response.device.last_seq)) {
+        // Only advance backdated events: the server cannot accept them at or
+        // below its watermark. Future stamps may still commit after this
+        // snapshot, so preserve them and wait for server time to catch up.
+        this.db
+          .prepare(
+            "UPDATE captures SET occurred_at=? WHERE stream_id=? AND (seq IS NULL OR seq>?) AND occurred_at<=?"
+          )
+          .run(
+            new Date(Date.parse(stream.complete_through) + 1).toISOString(),
+            stream.id,
+            response.device.last_seq,
+            stream.complete_through
+          );
+      }
     }
     const pending = this.db
       .prepare("SELECT * FROM captures WHERE stream_id=? ORDER BY seq")
@@ -350,31 +363,6 @@ class MetaActivation {
           "UPDATE streams SET complete_through=?,state=CASE WHEN ? AND state='closing' THEN 'closed' ELSE state END WHERE id=?"
         )
         .run(completeThrough, stream.state === "closing" ? 1 : 0, stream.id);
-    })();
-  }
-
-  // Captures stamped by a clock that ran ahead would hold the watermark in the
-  // future. The server stored nothing past its last_seq, so those stamps can
-  // move back to the corrected time, still after the acknowledged watermark.
-  // A batch abandoned at its timeout but still running on the server could
-  // commit the old stamps after last_seq was read, so the next replay
-  // conflicts; that needs a clock more than 10 s ahead, which the hourly
-  // re-sync leaves only to the first registration after an update.
-  restampUnsent(stream, lastSeq, time) {
-    const now = Math.ceil(time);
-    const floor = (Date.parse(stream.complete_through) || 0) + 1;
-    const rows = this.db
-      .prepare("SELECT * FROM captures WHERE stream_id=? AND (seq IS NULL OR seq>?)")
-      .all(stream.id, lastSeq);
-    const update = this.db.prepare("UPDATE captures SET started_at=?,occurred_at=? WHERE id=?");
-    this.db.transaction(() => {
-      for (const row of rows) {
-        const startedAt = Math.min(Date.parse(row.started_at), now - 1);
-        const occurredAt = row.occurred_at
-          ? new Date(Math.max(Math.min(Date.parse(row.occurred_at), now), floor)).toISOString()
-          : null;
-        update.run(new Date(startedAt).toISOString(), occurredAt, row.id);
-      }
     })();
   }
 

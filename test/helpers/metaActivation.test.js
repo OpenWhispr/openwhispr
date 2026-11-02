@@ -23,17 +23,27 @@ function rig(t) {
   let seq = 0;
   let total = 0;
   let device = null;
+  const contributions = new Map();
   // Mirrors recordActivationBatch's watermark and contribution checks.
   const rejects = (body) =>
     !body.gap &&
     (Date.parse(body.completeThrough) > wall + 30_000 ||
       Date.parse(body.completeThrough) < Date.parse(device.complete_through) ||
-      body.events.some(
-        (e) =>
-          e.seq > seq &&
-          (Date.parse(e.occurredAt) <= Date.parse(device.complete_through) ||
-            Date.parse(e.occurredAt) > Date.parse(body.completeThrough))
-      ));
+      body.events.some((e) => {
+        if (e.seq <= seq) {
+          const old = contributions.get(e.seq);
+          return (
+            !old ||
+            old.eventId !== e.eventId ||
+            old.words !== e.words ||
+            Date.parse(old.occurredAt) !== Date.parse(e.occurredAt)
+          );
+        }
+        return (
+          Date.parse(e.occurredAt) <= Date.parse(device.complete_through) ||
+          Date.parse(e.occurredAt) > Date.parse(body.completeThrough)
+        );
+      }));
   const request = async ({ path, body }) => {
     calls.push({ path, body: structuredClone(body) });
     if (offline) throw new Error("offline");
@@ -54,6 +64,7 @@ function rig(t) {
     }
     for (const e of body.events)
       if (e.seq > seq) {
+        contributions.set(e.seq, structuredClone(e));
         seq = e.seq;
         total += e.words;
       }
@@ -414,7 +425,7 @@ test("excluded assistant capture still honors immediate startup cancellation", a
 const batches = (r) => r.calls.filter((c) => c.path.endsWith("/batch"));
 const registrations = (r) => r.calls.filter((c) => c.path.endsWith("/device")).length;
 
-test("a clock drifting ahead re-syncs hourly instead of outrunning the server window", async (t) => {
+test("an hourly re-sync preserves future captures until server time catches up", async (t) => {
   const r = rig(t);
   await r.manager.flush();
   // 40 s ahead after an hour: one batch from this clock is past the 30 s window.
@@ -422,9 +433,14 @@ test("a clock drifting ahead re-syncs hourly instead of outrunning the server wi
   assert.ok(r.manager.clock(r.manager.getScope()) > r.wall() + 30_000);
   await capture(r, 5);
   assert.equal(registrations(r), 2);
+  const original = batches(r).at(-1).body.events[0];
+  assert.equal(batches(r).at(-1).status, 409);
+  assert.equal(r.db.prepare("SELECT count(*) n FROM captures").get().n, 1);
+  r.tick(30_000);
+  await r.manager.flush();
   const batch = batches(r).at(-1);
   assert.equal(batch.status, undefined);
-  assert.ok(Date.parse(batch.body.events[0].occurredAt) <= r.wall());
+  assert.deepEqual(batch.body.events[0], original);
   assert.ok(Date.parse(batch.body.completeThrough) <= r.wall() + 30_000);
   assert.equal(batch.body.gap, false);
   assert.equal(r.manager.current().total_words, 5);
@@ -438,6 +454,9 @@ test("a clock past its hourly re-sync still stamps dictation and sends it once r
   await capture(r, 3);
   assert.equal(r.manager.current().gap, 0);
   r.offline(false);
+  await r.manager.flush();
+  assert.equal(batches(r).at(-1).status, 409);
+  r.tick(30_000);
   await r.manager.flush();
   assert.equal(batches(r).at(-1).status, undefined);
   assert.equal(batches(r).at(-1).body.events[0].words, 3);
@@ -471,6 +490,9 @@ test("a rejected batch re-syncs once instead of resending the same watermark", a
   assert.equal(batches(r).at(-1).status, 409);
   assert.deepEqual(r.warnings, ["Activation batch rejected; clock re-synced"]);
   await capture(r, 7);
+  assert.equal(batches(r).at(-1).status, 409);
+  r.tick(30_000);
+  await r.manager.flush();
   assert.equal(batches(r).at(-1).status, undefined);
   assert.equal(r.manager.current().gap, 0);
 });
@@ -523,6 +545,62 @@ test("waking an unenrolled device posts nothing", async (t) => {
   await r.manager.flush();
   await r.manager.resync();
   assert.equal(r.calls.length, 1);
+});
+test("contribution replays preserve their event id, words and timestamp", async (t) => {
+  const r = rig(t);
+  await r.manager.flush();
+  await capture(r, 2);
+  const { path, body } = batches(r).at(-1);
+  assert.equal((await r.manager.request({ path, body })).success, true);
+  for (const change of [
+    { eventId: "different" },
+    { words: 3 },
+    { occurredAt: new Date(Date.parse(body.events[0].occurredAt) - 1).toISOString() },
+  ]) {
+    const replay = structuredClone(body);
+    Object.assign(replay.events[0], change);
+    assert.equal((await r.manager.request({ path, body: replay })).status, 409);
+  }
+});
+test("a timed-out batch committed after a registration snapshot replays unchanged after restart", async (t) => {
+  const r = rig(t);
+  await r.manager.flush();
+  r.drift(10 * 60_000, 25_000);
+  const request = r.manager.request;
+  let delayed;
+  r.manager.request = async (req) => {
+    delayed = structuredClone(req);
+    r.tick(10_000);
+    throw new Error("timeout");
+  };
+  const id = r.manager.begin();
+  r.tick();
+  r.manager.stopCapture(id);
+  r.tick(3000);
+  r.manager.finish(id, 2);
+  await r.manager.flush();
+  const original = delayed.body.events[0];
+  const restarted = r.create();
+  let committed = false;
+  restarted.request = async (req) => {
+    const response = await request(req);
+    if (!committed && req.path.endsWith("/device")) {
+      assert.equal(response.data.device.last_seq, 0);
+      assert.equal((await request(delayed)).success, true);
+      committed = true;
+    }
+    return response;
+  };
+  await restarted.flush();
+  // The late commit advanced the watermark past the capture's stop time.
+  assert.equal(batches(r).at(-1).status, 409);
+  await restarted.flush();
+  assert.equal(batches(r).at(-1).status, undefined);
+  for (const batch of batches(r).filter((c) => c.body.events.length))
+    assert.deepEqual(batch.body.events[0], original);
+  assert.equal(r.db.prepare("SELECT count(*) n FROM captures").get().n, 0);
+  assert.equal(restarted.current().total_words, 2);
+  assert.equal(restarted.current().complete_through, r.device().complete_through);
 });
 test("a lost acknowledgement followed by a backward re-sync never lands behind the server", async (t) => {
   const r = rig(t);
