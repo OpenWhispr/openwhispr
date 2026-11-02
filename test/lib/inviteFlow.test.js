@@ -482,6 +482,23 @@ test("addresses within the purchased seats don't warn", () => {
   assert.equal(inviteSummary(state).overSeats, null);
 });
 
+test("with nothing to send there's no shortfall, even with seats already over", () => {
+  // seats_used counts pending invitations and sends only warn, so the room left can be negative.
+  const empty = run(fresh(), seats(-2, -2));
+  assert.equal(inviteSummary(empty).overSeats, null);
+  assert.equal(inviteSummary(empty).overCeiling, null);
+
+  const typed = commitText(empty, addresses(1).join(" "));
+  assert.deepEqual(inviteSummary(typed).overSeats, { available: 0, excess: 1 });
+  assert.deepEqual(inviteSummary(typed).overCeiling, { available: 0, excess: 1 });
+
+  const sending = run(commitText(run(fresh(), seats(-2, 490)), addresses(1).join(" ")), {
+    type: "send",
+  });
+  assert.equal(sending.phase, "sending");
+  assert.equal(inviteSummary(sending).overSeats, null);
+});
+
 test("addresses over the ceiling block sending", () => {
   const state = commitText(run(fresh(), seats(null, 4)), addresses(6).join(" "));
   const summary = inviteSummary(state);

@@ -46,7 +46,7 @@ export interface InvitePeopleViewProps {
   canManageBilling: boolean;
   /** Who to ask for more seats, for admins who can't buy them. */
   billingManager: string | null;
-  /** Opens Plan & Billing; without it the seats warning offers no Upgrade. */
+  /** Opens Plan & Billing from the seats warning, for those who can manage billing. */
   onUpgrade: () => void;
   cancelLabel: string;
   onCancel: () => void;
@@ -195,9 +195,10 @@ export function InvitePeopleView({
     warningBars.push({
       key: "seats",
       message,
-      action: canManageBilling
-        ? { label: t("workspaces.invite.upgrade"), onClick: onUpgrade }
-        : undefined,
+      action:
+        canManageBilling && !sending
+          ? { label: t("workspaces.invite.upgrade"), onClick: onUpgrade }
+          : undefined,
     });
   }
   if (summary.skipped.length === 1) {

@@ -291,6 +291,8 @@ export default function InviteTeammateDialog({
   // A named section remounts Settings, so this also works from inside Settings and takes any
   // dialog in there with it.
   const handleUpgrade = (): void => {
+    // Closing mid-send would unmount the dialog, which aborts the run and loses its report.
+    if (state.phase === "sending") return;
     close();
     onOpeningBilling?.();
     void window.electronAPI?.openSettingsSection?.("plansBilling");

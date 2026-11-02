@@ -158,9 +158,11 @@ function setDraft(state: InviteFlowState, text: string): InviteFlowState {
 }
 
 function shortfall(left: number | null, requested: number): SeatShortfall | null {
-  if (left === null || requested <= left) return null;
+  if (left === null) return null;
+  // The room left can be negative, since sends over the purchased seats only warn. With nothing
+  // to send, that is still no shortfall.
   const available = Math.max(0, left);
-  return { available, excess: requested - available };
+  return requested <= available ? null : { available, excess: requested - available };
 }
 
 // Something went out and only blocked chips are left, so there is nothing more to send or fix.

@@ -488,21 +488,21 @@ const NO_SEATS_LEFT = {
 };
 const UPGRADE = "workspaces.invite.upgrade";
 
-function findUpgrade(node) {
-  if (node.nodeType === 1 && node.localName === "button" && node.textContent === UPGRADE) {
-    return node;
-  }
+function findNode(node, predicate) {
+  if (node.nodeType === 1 && predicate(node)) return node;
   for (const child of node.childNodes ?? []) {
-    const found = findUpgrade(child);
+    const found = findNode(child, predicate);
     if (found) return found;
   }
   return null;
 }
 
-const pressButton = (button) => {
-  const key = Object.keys(button).find((name) => name.startsWith("__reactProps$"));
-  return React.act(async () => button[key].onClick());
-};
+const findUpgrade = (container) =>
+  findNode(container, (node) => node.localName === "button" && node.textContent === UPGRADE);
+
+const propsOf = (node) => node[Object.keys(node).find((name) => name.startsWith("__reactProps$"))];
+
+const pressButton = (button) => React.act(async () => propsOf(button).onClick());
 
 test("Upgrade shows from every entry point", async (t) => {
   const { container } = await mountWithWorkspace(
@@ -545,9 +545,90 @@ test("admins never see it", async (t) => {
   );
   await React.act(async () => {});
 
-  assert.equal(findUpgrade(container), null);
+  assert.ok(!findUpgrade(container), "no Upgrade for admins");
   assert.match(container.textContent, /workspaces\.invite\.seatsNoneAskOwner/);
   assert.equal(globalThis.__settingsRequests, undefined);
+});
+
+test("Upgrade can't interrupt a send with seats already over", async (t) => {
+  let release;
+  globalThis.__sendGate = new Promise((resolve) => {
+    release = resolve;
+  });
+  t.after(() => release());
+  const opens = [];
+  const invited = [];
+  const { container } = await mountWithWorkspace(
+    t,
+    { ...NO_SEATS_LEFT, role: "owner", seats_used: 22 },
+    {
+      initialEmail: "a@x.com",
+      onOpenChange: (open) => opens.push(open),
+      onInvited: (emails) => invited.push(emails),
+    },
+    { realView: true }
+  );
+  await React.act(async () => {});
+  assert.ok(findUpgrade(container), "offered before the send");
+
+  const send = findNode(
+    container,
+    (node) => node.localName === "button" && /invite\.submit/.test(node.textContent)
+  );
+  let sending;
+  await React.act(async () => {
+    sending = propsOf(send).onClick();
+  });
+
+  assert.equal(globalThis.__sendCalls.length, 1);
+  assert.ok(!findUpgrade(container), "no Upgrade while sending");
+  assert.deepEqual(opens, []);
+
+  release();
+  await React.act(async () => {
+    await sending;
+  });
+  assert.deepEqual(invited, [["a@x.com"]]);
+});
+
+test("Upgrade pressed as a send starts leaves the run alone", async (t) => {
+  let release;
+  globalThis.__sendGate = new Promise((resolve) => {
+    release = resolve;
+  });
+  t.after(() => release());
+  const opens = [];
+  const billing = [];
+  const invited = [];
+  const { latest } = await mountWithWorkspace(
+    t,
+    { ...NO_SEATS_LEFT, role: "owner" },
+    {
+      initialEmail: "a@x.com",
+      onOpenChange: (open) => opens.push(open),
+      onOpeningBilling: () => billing.push(true),
+      onInvited: (emails) => invited.push(emails),
+    }
+  );
+  // A press the render hadn't caught up with: the handler is the view's, from before the send.
+  let sending;
+  await React.act(async () => {
+    sending = latest().onSend();
+  });
+  assert.equal(latest().state.phase, "sending");
+
+  await React.act(async () => latest().onUpgrade());
+
+  assert.deepEqual(opens, []);
+  assert.deepEqual(billing, []);
+  assert.equal(globalThis.__settingsRequests, undefined);
+  assert.equal(globalThis.__sendCalls[0].signal.aborted, false);
+
+  release();
+  await React.act(async () => {
+    await sending;
+  });
+  assert.deepEqual(invited, [["a@x.com"]]);
 });
 
 test("a ceiling refusal refreshes the workspace list so the seats catch up", async (t) => {

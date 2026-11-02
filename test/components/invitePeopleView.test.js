@@ -372,6 +372,20 @@ test("the seats warning offers Upgrade to billing managers and keeps Send enable
   assert.match(primaryButton(markup), /workspaces\.invite\.submit\|\{&quot;count&quot;:3\}/);
 });
 
+test("Upgrade isn't offered while a send is running", async (t) => {
+  const { render } = await loadView(t);
+
+  // A chip still counted as sendable, so the warning itself stays up.
+  const markup = render(
+    { phase: "sending", recipients: drafts(3), seats: { purchasedLeft: 1, ceilingLeft: 490 } },
+    { canManageBilling: true, onUpgrade: () => {} }
+  );
+
+  const [bar] = bars(markup);
+  assert.match(bar.body, /workspaces\.invite\.seatsLeft\|/);
+  assert.equal(bar.action, null);
+});
+
 test("admins without billing are told to ask the owner", async (t) => {
   const { render } = await loadView(t);
   const state = { recipients: drafts(3), seats: { purchasedLeft: 1, ceilingLeft: null } };
