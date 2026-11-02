@@ -14,13 +14,23 @@ context.keys = () =>
 // Exercise the installed Router's actual selection without loading native app
 // modules or executing startup side effects (including local SQLite migrations).
 for (const platform of ['ios', 'android']) {
-  test(`${platform} selects its root and tabs entrypoints`, () => {
+  test(`${platform} selects its platform layout and redirect entrypoints`, () => {
     const routes = getRoutes(context, {
       platform,
       ignoreEntryPoints: true,
       skipGenerated: true,
     });
     const suffix = platform === 'android' ? '.android' : '';
+    assert.equal(
+      routes.children.find((route) => route.route === '(account)').contextKey,
+      `./(account)/_layout${suffix}.tsx`,
+    );
+    assert.equal(
+      routes.children
+        .find((route) => route.route === '(tabs)')
+        .children.find((route) => route.route === '(notes)').contextKey,
+      `./(tabs)/(notes)/_layout${suffix}.tsx`,
+    );
     assert.equal(routes.contextKey, `./_layout${suffix}.tsx`);
     assert.equal(
       routes.children.find((route) => route.route === '(tabs)').contextKey,
