@@ -24,6 +24,9 @@ function writeDismissed(userId: string, ids: Set<string>): void {
 
 export function useJoinableWorkspaces(userId: string | null, enabled: boolean) {
   const [joinable, setJoinable] = useState<JoinableWorkspace[]>([]);
+  // The account whose check has answered. Compared during render, so the check reads as pending
+  // from the very render that enables it (no frame in which another prompt can open first).
+  const [checkedUserId, setCheckedUserId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!enabled || !userId) {
@@ -39,7 +42,10 @@ export function useJoinableWorkspaces(userId: string | null, enabled: boolean) {
         const dismissed = readDismissed(userId);
         setJoinable(entries.filter((entry) => !dismissed.has(entry.workspace_id)));
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setCheckedUserId(userId);
+      });
     return () => {
       cancelled = true;
     };
@@ -65,5 +71,10 @@ export function useJoinableWorkspaces(userId: string | null, enabled: boolean) {
   // re-opening the dialog just to show "Requested" would be nagging.
   const hasActionable = joinable.some((entry) => entry.request_state === "none");
 
-  return { joinable: hasActionable ? joinable : [], dismiss, markRequested };
+  return {
+    joinable: hasActionable ? joinable : [],
+    pending: enabled && userId !== null && checkedUserId !== userId,
+    dismiss,
+    markRequested,
+  };
 }

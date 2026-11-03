@@ -1,5 +1,7 @@
 import { normalizeFallbackTargets, type FallbackTarget } from "../helpers/modelFallback";
+import { RETIRED_TINFOIL_MODEL_NAMES } from "../config/retiredCloudModelPolicy.js";
 import { create } from "zustand";
+import { GENERATE_NOTES_KEY } from "../helpers/builtinActions";
 import { API_ENDPOINTS } from "../config/constants";
 import i18n, { normalizeUiLanguage } from "../i18n";
 import { ensureAgentNameInDictionary } from "../utils/agentName";
@@ -979,10 +981,12 @@ if (Object.keys(healedMeetingFollowModes).length > 0) {
   );
 }
 
-// Resolved offline, so a retired model's name survives only in Tinfoil's
-// catalog cache, and a replacement's only if the registry lists it. The raw-id
-// fallback is what the live-catalog reconcile shows too.
+// Resolve names offline, including retired models already removed from the cache.
+// Unseeded replacements fall back to their id, as the live reconcile does.
 function sweptModelName(providerId: RetiredModelProvider, modelId: string): string {
+  if (providerId === "tinfoil" && RETIRED_TINFOIL_MODEL_NAMES[modelId]) {
+    return RETIRED_TINFOIL_MODEL_NAMES[modelId];
+  }
   const cached = providerId === "tinfoil" ? readCachedTinfoilModels().models : [];
   const named =
     cached.find((model) => model.id === modelId) ??
@@ -1155,6 +1159,7 @@ export interface SettingsState
   // dedicated model used only when a screenshot is attached.
   voiceAgentScreenContext: boolean;
   emailDraftTarget: EmailDraftTargetSetting;
+  defaultSummaryTemplateId: string;
   toneStyleEnabled: boolean;
   toneStyles: ToneStyles;
   useDictationAgentVisionModel: boolean;
@@ -1191,6 +1196,7 @@ export interface SettingsState
   setToneStyleEnabled: (value: boolean) => void;
   setToneStyles: (styles: ToneStyles) => void;
   setEmailDraftTarget: (value: EmailDraftTargetSetting) => void;
+  setDefaultSummaryTemplateId: (clientId: string) => void;
   setUseDictationAgentVisionModel: (value: boolean) => void;
   setDictationAgentVisionProvider: (value: string) => void;
   setDictationAgentVisionModel: (value: string) => void;
@@ -2120,6 +2126,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   voiceAgentScreenContext: readBoolean("voiceAgentScreenContext", false),
   emailDraftTarget: normalizeEmailDraftTarget(readString("emailDraftTarget", "auto")),
+  defaultSummaryTemplateId: readString("defaultSummaryTemplateId", GENERATE_NOTES_KEY),
   toneStyleEnabled: readBoolean("toneStyleEnabled", false),
   toneStyles: normalizeToneStyles(readString("toneStyles", "")),
   useDictationAgentVisionModel: readBoolean("useDictationAgentVisionModel", false),
@@ -2167,6 +2174,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   setVoiceAgentScreenContext: createBooleanSetter("voiceAgentScreenContext"),
   setEmailDraftTarget: createStringSetter("emailDraftTarget"),
+  setDefaultSummaryTemplateId: createStringSetter("defaultSummaryTemplateId"),
   setToneStyleEnabled: createBooleanSetter("toneStyleEnabled"),
   setToneStyles: (styles) => {
     if (isBrowser) localStorage.setItem("toneStyles", JSON.stringify(styles));
