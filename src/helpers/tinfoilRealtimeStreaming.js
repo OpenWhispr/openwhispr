@@ -62,7 +62,7 @@ class TinfoilRealtimeStreaming extends OpenAIRealtimeStreaming {
       // auto-detection like dictation does.
       language: undefined,
       model,
-      createSocket: () => this._createSocketImpl({ model, apiKey }),
+      createSocket: (signal) => this._createSocketImpl({ model, apiKey, signal }),
     });
   }
 

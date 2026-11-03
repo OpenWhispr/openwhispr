@@ -8,7 +8,11 @@ import type { InferenceMode } from "../../types/electron";
 import { getTinfoilLanguageModel } from "./tinfoilClient";
 import { API_ENDPOINTS } from "../../config/constants";
 import { openCodeSessionHeaders } from "./openCodeSession";
-import { assertAgentAllowedByPolicy, assertReasoningAllowedByPolicy } from "../reasoningPolicy";
+import {
+  assertAgentAllowedByPolicy,
+  assertReasoningAllowedByPolicy,
+  onPolicyRestriction,
+} from "../reasoningPolicy";
 import { guardLanguageModel } from "./policyModel";
 
 // Renderer-side AI SDK factory. Cloud + local only — enterprise providers
@@ -42,6 +46,7 @@ async function createAIModel(
     reasoningEffort?: string;
     mode?: InferenceMode;
     requiresAgent?: boolean;
+    signal?: AbortSignal;
   }
 ): Promise<LanguageModel> {
   switch (provider) {
@@ -61,7 +66,7 @@ async function createAIModel(
     case "gemini":
       return createGoogleGenerativeAI({ apiKey })(model);
     case "tinfoil":
-      return getTinfoilLanguageModel(apiKey, model);
+      return getTinfoilLanguageModel(apiKey, model, opts?.signal);
     case "corti":
       // Corti's gateway is Chat Completions-compatible, not the OpenAI Responses API.
       return createOpenAI({ apiKey, baseURL: API_ENDPOINTS.CORTI_MODELS_BASE }).chat(model);
@@ -96,12 +101,24 @@ async function createAIModel(
 export async function getAIModel(
   ...args: Parameters<typeof createAIModel>
 ): Promise<LanguageModel> {
-  const [provider, , , , opts] = args;
+  const [provider, model, apiKey, baseURL, opts] = args;
   const mode = opts?.mode ?? (provider === "local" ? "local" : "providers");
   const assertAllowed = () => {
     assertReasoningAllowedByPolicy(provider, mode);
     if (opts?.requiresAgent) assertAgentAllowedByPolicy();
   };
   assertAllowed();
-  return guardLanguageModel((await createAIModel(...args)) as LanguageModelV3, assertAllowed);
+  const controller = new AbortController();
+  const unsubscribe = onPolicyRestriction(assertAllowed, (error) => controller.abort(error));
+  const signal = opts?.signal
+    ? AbortSignal.any([opts.signal, controller.signal])
+    : controller.signal;
+  try {
+    const resolved = await createAIModel(provider, model, apiKey, baseURL, { ...opts, signal });
+    signal.throwIfAborted();
+    assertAllowed();
+    return guardLanguageModel(resolved as LanguageModelV3, assertAllowed);
+  } finally {
+    unsubscribe();
+  }
 }

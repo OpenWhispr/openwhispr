@@ -21,7 +21,7 @@ import {
   getLlmStreamingFirstByteTimeoutSeconds,
   llmRequestTimeoutError,
 } from "../helpers/llmRequestTimeout.js";
-import { streamText, stepCountIs } from "ai";
+import { streamText, stepCountIs, type LanguageModel } from "ai";
 import { compactTranscriptHistory } from "./ai/transcriptHistory";
 import { getAIModel } from "./ai/providers";
 import { createEnterpriseChatModel } from "./ai/enterpriseChatModel";
@@ -979,14 +979,23 @@ class ReasoningService extends BaseReasoningService {
     // No Tinfoil model offers a level, so this needn't wait for the registry refresh below.
     const reasoningEffort = chosenReasoningEffort(aiProvider, model, config, baseURL);
     // Resolving a Tinfoil model refreshes the registry, so read model config after it.
-    const aiModel = isEnterprise
-      ? createEnterpriseChatModel(provider as EnterpriseProvider, model, config.inferenceScope)
-      : await getAIModel(aiProvider, model, apiKey, baseURL, {
-          mode,
-          requiresAgent: true,
-          disableThinking: openrouterDisableThinking,
-          reasoningEffort: provider === "openrouter" ? reasoningEffort : undefined,
-        });
+    let aiModel: LanguageModel;
+    try {
+      aiModel = isEnterprise
+        ? createEnterpriseChatModel(provider as EnterpriseProvider, model, config.inferenceScope)
+        : await getAIModel(aiProvider, model, apiKey, baseURL, {
+            mode,
+            signal: abortController.signal,
+            requiresAgent: true,
+            disableThinking: openrouterDisableThinking,
+            reasoningEffort: provider === "openrouter" ? reasoningEffort : undefined,
+          });
+    } catch (error) {
+      if (this.streamAbortController === abortController) this.streamAbortController = null;
+      if (!abortController.signal.aborted) throw error;
+      yield { type: "done", finishReason: "stop" };
+      return;
+    }
 
     if (abortController.signal.aborted) {
       yield { type: "done", finishReason: "stop" };

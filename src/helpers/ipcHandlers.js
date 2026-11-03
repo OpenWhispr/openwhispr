@@ -5573,7 +5573,7 @@ class IPCHandlers {
     );
 
     handleRemoteProduct("get-tinfoil-chat-models", async () => {
-      return getTinfoilChatModels();
+      return getTinfoilChatModels(this._productRequestContext.getStore().signal);
     });
 
     // Enclave attestation is Node-only, so batch transcription is proxied through main.
@@ -10378,7 +10378,7 @@ class IPCHandlers {
               model,
               // The capture worklet emits 16kHz PCM; declare the true rate.
               inputRate: 16000,
-              createSocket: () => createTinfoilRealtimeSocket({ model, apiKey }),
+              createSocket: (signal) => createTinfoilRealtimeSocket({ model, apiKey, signal }),
             });
           } else {
             await streaming.connect({

@@ -31,7 +31,8 @@
     "dev:renderer": "cd src && vite",
     "prebuild": "npm run compile:native && npm run download:whisper-cpp && npm run download:llama-server && npm run download:sherpa-onnx && npm run download:yt-dlp && npm run download:qdrant && npm run download:meeting-aec-helper && npm run download:whisper-vad-model && npm run download:embedding-model -- --for-build && npm run download:diarization-models -- --output-dir resources/bin/diarization-models && npm run download:brand-fonts",
     "build": "cd src && vite build && cd .. && electron-builder",
-    "postinstall": "electron-builder install-app-deps",
+    "apply:patches": "patch-package --error-on-fail",
+    "postinstall": "npm run apply:patches && electron-builder install-app-deps",
     "build:renderer": "cd src && vite build",
     "compile:mac-icon": "node scripts/compile-macos-icon.js",
     "prebuild:mac": "npm run compile:native && npm run compile:mac-icon && npm run download:whisper-cpp && npm run download:llama-server && npm run download:sherpa-onnx && npm run download:yt-dlp && npm run download:qdrant && npm run download:meeting-aec-helper && npm run download:whisper-vad-model && npm run download:diarization-models -- --output-dir resources/bin/diarization-models && npm run download:brand-fonts",
@@ -116,6 +117,7 @@
     "espree": "^11.2.0",
     "globals": "17.5.0",
     "happy-dom": "^21.0.4",
+    "patch-package": "8.0.1",
     "postcss": "^8.5.10",
     "prettier": "^3.8.3",
     "tailwindcss": "^4.1.10",
@@ -192,7 +194,7 @@
     "shadcn-ui": "^0.9.5",
     "tailwind-merge": "^3.3.1",
     "tar": "^7.5.22",
-    "tinfoil": "^1.1.8",
+    "tinfoil": "1.1.8",
     "tiptap-markdown": "^0.9.0",
     "tw-animate-css": "^1.3.4",
     "unbzip2-stream": "^1.4.3",
@@ -233,6 +235,9 @@
     "ip-address": "10.2.0",
     "markdown-it": "14.3.3",
     "shell-quote": "1.12.0",
-    "tmp": "0.2.7"
+    "tmp": "0.2.7",
+    "tinfoil": {
+      "ehbp": "0.2.5"
+    }
   }
 }
