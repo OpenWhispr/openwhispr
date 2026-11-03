@@ -216,7 +216,13 @@
     "managedConfigUnavailable": "マネージド エンタープライズ アクセスを利用できません。再度サインインするか、管理者にお問い合わせください。",
     "managedConfigAmbiguous": "組織のマネージド設定に矛盾があります。管理者にお問い合わせください。",
     "managedPolicyConflict": "ワークスペースのポリシーによりマネージド アクセスがブロックされています。管理者にお問い合わせください。",
-    "resizePanel": "パネルのサイズを変更"
+    "resizePanel": "パネルのサイズを変更",
+    "managedDevice": "管理対象デバイス",
+    "managedDeviceAndWorkspace": "管理対象デバイスとワークスペース",
+    "deviceLocalOnly": "このデバイスではローカル処理のみを使用します。以前ログインしたアカウントでもクラウド機能は利用できません。",
+    "deviceSignInRequired": "組織により、このデバイスではログインが必要です。",
+    "devicePolicyInvalid": "デバイスポリシーを読み取れないか、無効です。管理者にお問い合わせください。修正されるまで管理対象の操作はブロックされます。",
+    "deviceWorkspaceUnavailable": "このデバイスではローカル処理が必要ですが、保存されたアカウントのワークスペースポリシーを取得できません。ログアウトしてそのアカウントを使わずに続行するか、管理者にお問い合わせください。"
   },
   "onboarding": {
     "rehaul": {

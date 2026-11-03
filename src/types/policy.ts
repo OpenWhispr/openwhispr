@@ -70,3 +70,21 @@ export interface OrgPolicy {
 
 /** Which allowlist a mode/provider check applies to. */
 export type PolicyScope = "transcription" | "llm";
+
+export interface EffectivePolicySnapshot {
+  success: boolean;
+  status: "loading" | "managed" | "unmanaged" | "error";
+  revision: number;
+  accountId: string | null;
+  authGeneration: number;
+  managed: boolean;
+  policy: OrgPolicy | null;
+  deviceReady: boolean;
+  deviceManaged: boolean;
+  workspaceManaged: boolean;
+  workspaceRequired: boolean;
+  localOnly: boolean;
+  requireSignIn: boolean;
+  code?: string;
+  policyUpdatedAt?: string | null;
+}

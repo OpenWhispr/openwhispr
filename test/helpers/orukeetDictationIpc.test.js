@@ -1,3 +1,4 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -40,6 +41,8 @@ const event = { sender: new EventEmitter() };
 event.sender.send = (channel, text) => messages.push([channel, text]);
 event.sender.id = 1;
 const backendFetch = async (url, options) => {
+  if (url.endsWith("/api/workspace-policy"))
+    return Response.json({ data: { managed: false, policy: null, policyUpdatedAt: null } });
   assert.ok(
     [
       "https://api.openwhispr.test/api/stt/orukeet/session",
@@ -222,7 +225,8 @@ test.before(async () => {
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
   target = buildFakeThis();
-  Ctor.prototype.setupHandlers.call(target);
+  Ctor.prototype.setupHandlers.call(withDevicePolicy(target));
+  await target.refreshEffectivePolicy(event);
 });
 
 test.after(async () => {

@@ -37,9 +37,19 @@ let fetchToken = mintToken;
 let authGeneration = 1;
 // The org's current verdict, as the policy manager would answer it: each
 // change carries a newer revision, so a lookup answered earlier can't undo it.
-const UNMANAGED_POLICY = { success: true, managed: false };
+const UNMANAGED_POLICY = { success: true, managed: false, accountId: "personal-account" };
 let policyRevision = 0;
 let workspacePolicy = { ...UNMANAGED_POLICY, authGeneration, revision: policyRevision };
+const {
+  normalizeDeviceValues,
+  defaultDevicePolicy,
+} = require("../../src/helpers/managedDevicePolicy");
+let deviceSnapshot = normalizeDeviceValues({});
+const deviceListeners = new Set();
+function setDeviceValues(values) {
+  deviceSnapshot = normalizeDeviceValues(values);
+  for (const listener of deviceListeners) listener(deviceSnapshot);
+}
 const environmentManager = Object.fromEntries(
   bindings.flatMap(({ get, save, storeKey }) => [
     [get, () => keys.get(storeKey) || ""],
@@ -146,7 +156,7 @@ const electron = {
   dialog: {},
   screen: { getPrimaryDisplay: () => ({ workAreaSize: { width: 0, height: 0 } }) },
   systemPreferences: { getMediaAccessStatus: () => "granted" },
-  session: { fromPartition: () => ({}) },
+  session: { fromPartition: () => ({}), defaultSession: { webRequest: { onBeforeRequest() {} } } },
 };
 Module._load = function (request, parent, isMain) {
   if (request === "electron") return electron;
@@ -167,6 +177,7 @@ Module._load = function (request, parent, isMain) {
         ...originalLoad.call(this, request, parent, isMain),
         createWorkspacePolicyManager: () => ({
           getPolicy: async () => workspacePolicy,
+          getCachedPolicy: () => workspacePolicy,
         }),
       };
     if (request === "./tokenStore")
@@ -206,6 +217,17 @@ function anything() {
   });
 }
 const target = {
+  _remoteProductRetirement: new AbortController(),
+  _activeRecordingPipeline: null,
+  _remoteCalendarsReady: false,
+  _remoteCalendarsStarted: false,
+  managedDevicePolicy: {
+    getSnapshot: () => deviceSnapshot,
+    subscribe: (listener) => {
+      deviceListeners.add(listener);
+      return () => deviceListeners.delete(listener);
+    },
+  },
   environmentManager,
   assemblyAiStreaming: null,
   deepgramStreaming: null,
@@ -231,11 +253,103 @@ const target = {
 const handlersThis = new Proxy(target, {
   get: (value, property) => (property in value ? value[property] : anything()),
 });
-test.before(() => {
+test.beforeEach(() => {
+  setDeviceValues({});
+  setWorkspacePolicy(UNMANAGED_POLICY);
+});
+
+test.before(async () => {
   const IPCHandlers = require(modulePath);
+  target._stopRemoteProductWork = IPCHandlers.prototype._stopRemoteProductWork.bind(handlersThis);
+  target._startRemoteProductWork = IPCHandlers.prototype._startRemoteProductWork.bind(handlersThis);
   IPCHandlers.prototype.setupHandlers.call(handlersThis);
+  await target.refreshEffectivePolicy();
 });
 const invoke = (channel, ...args) => handlers.get(channel)({ sender: editor }, ...args);
+
+test("local-only device policy refuses direct remote IPC despite saved keys and closes warm streams", async () => {
+  invoke("save-assemblyai-key", "saved-provider-key");
+  assert.equal((await invoke("assemblyai-streaming-warmup", { mode: "byok" })).success, true);
+  const warmed = target.assemblyAiStreaming;
+  const enterprise = new AbortController();
+  const download = new AbortController();
+  target.enterpriseStreamAborts.set("policy-probe", enterprise);
+  target.activeUrlDownloads.set("policy-probe", download);
+  setDeviceValues({ RequireSignIn: false });
+  assert.equal(enterprise.signal.aborted, true);
+  assert.equal(download.signal.aborted, true);
+  target.enterpriseStreamAborts.delete("policy-probe");
+  target.activeUrlDownloads.delete("policy-probe");
+  assert.ok(warmed.disconnects > 0);
+  assert.equal(target.assemblyAiStreaming, null);
+  for (const channel of [
+    "assemblyai-streaming-start",
+    "cloud-health-check",
+    "agent-web-search",
+    "process-anthropic-reasoning",
+    "process-enterprise-reasoning",
+    "gcal-start-oauth",
+  ]) {
+    assert.equal((await invoke(channel, {})).code, "DEVICE_POLICY_BLOCKED", channel);
+  }
+  assert.equal(
+    (await invoke("meeting-transcription-prepare", { provider: "deepgram-realtime", mode: "byok" }))
+      .success,
+    false
+  );
+  assert.equal(
+    (await invoke("meeting-transcription-prepare", { provider: "local" })).success,
+    true
+  );
+  const effective = await invoke("get-effective-policy");
+  assert.equal(effective.localOnly, true);
+  assert.deepEqual(effective.policy.transcription.allowedModes, ["local"]);
+  assert.equal((await invoke("acquire-recording-lock", "dictation")).success, true);
+  await invoke("release-recording-lock", "dictation");
+});
+
+test("calendar background sync resumes after removing local-only device policy", (t) => {
+  const originalGoogle = target.googleCalendarManager;
+  const originalMicrosoft = target.microsoftCalendarManager;
+  let starts = 0;
+  let stops = 0;
+  const manager = {
+    start() {
+      starts++;
+    },
+    stop() {
+      stops++;
+    },
+  };
+  target.googleCalendarManager = manager;
+  target.microsoftCalendarManager = manager;
+  t.after(() => {
+    target.googleCalendarManager = originalGoogle;
+    target.microsoftCalendarManager = originalMicrosoft;
+    target._remoteCalendarsReady = false;
+    target._remoteCalendarsStarted = false;
+  });
+  require(modulePath).prototype.startPolicyCalendars.call(handlersThis);
+  assert.equal(starts, 2);
+  setDeviceValues({ RequireSignIn: false });
+  assert.equal(stops, 2);
+  setDeviceValues({});
+  assert.equal(starts, 4);
+});
+
+test("invalid trusted device policy denies capture and cannot be bypassed through workspace-policy IPC", async () => {
+  deviceSnapshot = {
+    status: "invalid",
+    managed: true,
+    policy: null,
+    code: "DEVICE_POLICY_INVALID",
+  };
+  for (const listener of deviceListeners) listener(deviceSnapshot);
+  assert.equal((await invoke("acquire-recording-lock", "dictation")).success, false);
+  await invoke("get-workspace-policy", "personal-account", authGeneration);
+  assert.equal(target.effectivePolicyManager.getCurrent().code, "DEVICE_POLICY_INVALID");
+  assert.equal((await invoke("cloud-health-check")).code, "DEVICE_POLICY_BLOCKED");
+});
 
 // Managed starts mint from the account, which needs an API URL.
 function withManagedApi(t) {
@@ -568,13 +682,25 @@ const assertMeetingStreams = ([mic, system]) => {
   assert.equal(target._meetingSystemStreaming, system);
 };
 const setWorkspacePolicy = (snapshot) => {
-  workspacePolicy = { ...snapshot, authGeneration, revision: ++policyRevision };
-  target._audioFeaturePolicy.update(workspacePolicy);
+  workspacePolicy = {
+    ...snapshot,
+    accountId: "personal-account",
+    authGeneration,
+    revision: ++policyRevision,
+  };
+  target.effectivePolicyManager.updateWorkspace(workspacePolicy);
 };
 const REVOKED_MEETINGS = {
   success: true,
   managed: true,
-  policy: { features: { meetingRecordingEnabled: false, audioUploadEnabled: true } },
+  policy: {
+    ...defaultDevicePolicy(),
+    features: {
+      ...defaultDevicePolicy().features,
+      meetingRecordingEnabled: false,
+      audioUploadEnabled: true,
+    },
+  },
 };
 
 const resetMeeting = (t) => {

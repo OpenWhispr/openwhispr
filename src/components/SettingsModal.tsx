@@ -61,6 +61,9 @@ export default function SettingsModal({
   const { t } = useTranslation();
   const { isSignedIn } = useAuth();
   const policyManaged = usePolicyStore((s) => s.managed);
+  const deviceManaged = usePolicyStore((s) => s.deviceManaged);
+  const workspaceManaged = usePolicyStore((s) => s.workspaceManaged);
+  const localOnly = usePolicyStore((s) => s.localOnly);
   const { workspaces, activeWorkspaceId, workspacesLoaded } = useWorkspaceStore(
     useShallow((s) => ({
       workspaces: s.workspaces,
@@ -161,8 +164,12 @@ export default function SettingsModal({
         policyManaged
           ? {
               icon: <ShieldCheck className="h-3.5 w-3.5 shrink-0" />,
-              label: t("settingsModal.managedAccount"),
-              description: t("settingsModal.managedByOrg"),
+              label: deviceManaged
+                ? t(workspaceManaged ? "common.managedDeviceAndWorkspace" : "common.managedDevice")
+                : t("settingsModal.managedAccount"),
+              description: localOnly
+                ? t("common.deviceLocalOnly")
+                : t("settingsModal.managedByOrg"),
             }
           : undefined
       }

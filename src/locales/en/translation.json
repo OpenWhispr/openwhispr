@@ -216,7 +216,13 @@
     "managedConfigUnavailable": "Managed enterprise access is unavailable. Sign in again or contact your administrator.",
     "managedConfigAmbiguous": "Your organization's managed setup is inconsistent. Contact your administrator.",
     "managedPolicyConflict": "Managed access is blocked by your workspace policy. Contact your administrator.",
-    "resizePanel": "Resize panel"
+    "resizePanel": "Resize panel",
+    "managedDevice": "Managed device",
+    "managedDeviceAndWorkspace": "Managed device and workspace",
+    "deviceLocalOnly": "This device uses local processing only. Cloud features are unavailable, including for previously signed-in accounts.",
+    "deviceSignInRequired": "Your organization requires sign-in on this device.",
+    "devicePolicyInvalid": "The device policy could not be read or is invalid. Contact your administrator. Managed actions are blocked until the policy is corrected.",
+    "deviceWorkspaceUnavailable": "This device requires local processing, but the saved account's workspace policy is unavailable. Log out to continue without that account, or contact your administrator."
   },
   "onboarding": {
     "rehaul": {

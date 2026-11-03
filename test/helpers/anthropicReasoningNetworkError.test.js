@@ -1,3 +1,4 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -88,7 +89,7 @@ test.before(() => {
   delete require.cache[handlersModulePath];
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
-  Ctor.prototype.setupHandlers.call(buildFakeThis());
+  Ctor.prototype.setupHandlers.call(withDevicePolicy(buildFakeThis()));
   anthropicHandler = handlers.get("process-anthropic-reasoning");
   assert.ok(anthropicHandler, "process-anthropic-reasoning must be registered");
 });
@@ -146,7 +147,7 @@ test("an already-classified failure (missing key) passes through unchanged", asy
   delete require.cache[handlersModulePath];
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
-  Ctor.prototype.setupHandlers.call(proxiedThis);
+  Ctor.prototype.setupHandlers.call(withDevicePolicy(proxiedThis));
   electronStub.ipcMain.handle = originalHandle;
 
   const handler = handlersForNoKey.get("process-anthropic-reasoning");

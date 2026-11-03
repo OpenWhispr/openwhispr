@@ -1,3 +1,4 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -55,7 +56,8 @@ const electronStub = {
 
 Module._load = function loadWithMocks(request, parent, isMain) {
   if (request === "electron") return electronStub;
-  if (request === "./tokenStore") return { get: () => "test-token" };
+  if (request === "./tokenStore")
+    return { get: () => null, getState: () => ({ token: null, generation: 0 }) };
   if (request === "./enterpriseIdentityManager") {
     return {
       createEnterpriseIdentityManager: () => ({
@@ -182,7 +184,7 @@ test.before(() => {
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
   handlerContext = buildFakeThis();
-  Ctor.prototype.setupHandlers.call(handlerContext);
+  Ctor.prototype.setupHandlers.call(withDevicePolicy(handlerContext));
   assert.ok(handlers.get("test-enterprise-connection"));
   assert.ok(handlers.get("process-enterprise-reasoning"));
   assert.ok(listeners.get("enterprise-reasoning-cancel"));

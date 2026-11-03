@@ -1,3 +1,4 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -83,7 +84,7 @@ test.before(() => {
   handlerThis = new Proxy(target, {
     get: (value, property) => (property in value ? value[property] : anything()),
   });
-  Ctor.prototype.setupHandlers.call(handlerThis);
+  Ctor.prototype.setupHandlers.call(withDevicePolicy(handlerThis));
 });
 
 test.after(() => {

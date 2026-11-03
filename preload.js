@@ -851,6 +851,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getSttConfig: () => ipcRenderer.invoke("get-stt-config"),
   getWorkspacePolicy: (accountId, expectedAuthGeneration) =>
     ipcRenderer.invoke("get-workspace-policy", accountId, expectedAuthGeneration),
+  getEffectivePolicy: () => ipcRenderer.invoke("get-effective-policy"),
+  onEffectivePolicyChanged: registerListener(
+    "effective-policy-changed",
+    (callback) => (_event, snapshot) => callback(snapshot)
+  ),
   onWorkspacePolicyChanged: (callback) => {
     const listener = (_event, snapshot) => callback(snapshot);
     ipcRenderer.on("workspace-policy-changed", listener);

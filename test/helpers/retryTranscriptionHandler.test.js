@@ -1,3 +1,4 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -117,12 +118,21 @@ Module._load = function loadWithMocks(request, parent, isMain) {
       return {
         ...originalLoad.call(this, request, parent, isMain),
         createWorkspacePolicyManager: () => ({
-          getPolicy: async () => policySnapshot,
+          getPolicy: async () => ({ ...policySnapshot, accountId: "account-a", authGeneration: 1 }),
         }),
       };
     if (request === "./tokenStore") {
-      return { ...originalLoad.call(this, request, parent, isMain), get: () => "test-token" };
+      return {
+        ...originalLoad.call(this, request, parent, isMain),
+        get: () => "test-token",
+        getState: () => ({ token: "test-token", generation: 1 }),
+      };
     }
+    if (request === "./accountScopeBinding")
+      return {
+        ...originalLoad.call(this, request, parent, isMain),
+        resolveActiveAccountScope: () => ({ accountId: "account-a", authGeneration: 1 }),
+      };
     if (request === "./windowBroadcast") {
       return { broadcastToWindows: () => {} };
     }
@@ -211,12 +221,13 @@ function buildFakeThis() {
 
 let retryHandler;
 let fakeThis;
-test.before(() => {
+test.before(async () => {
   delete require.cache[handlersModulePath];
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
   fakeThis = buildFakeThis();
-  Ctor.prototype.setupHandlers.call(fakeThis);
+  Ctor.prototype.setupHandlers.call(withDevicePolicy(fakeThis));
+  await fakeThis.refreshEffectivePolicy();
   retryHandler = handlers.get("retry-transcription");
   assert.ok(retryHandler, "retry-transcription must be registered");
 });
@@ -1230,7 +1241,17 @@ test("main enterprise audio resolution honors provider and mode policy before HT
     { allowedModes: ["local"], allowedEnterpriseProviders: [] },
     { allowedModes: ["local", "enterprise"], allowedEnterpriseProviders: ["azure"] },
   ]) {
-    policySnapshot = { success: true, managed: true, policy: { transcription } };
+    policySnapshot = {
+      success: true,
+      managed: true,
+      policy: {
+        ...require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy(),
+        transcription: {
+          ...require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy().transcription,
+          ...transcription,
+        },
+      },
+    };
     for (const operation of ["batch", "realtime"]) {
       resolved.mode = "managed_default";
       resolved.allowManualSetup = true;
@@ -1261,7 +1282,14 @@ test("main enterprise audio resolution honors provider and mode policy before HT
   policySnapshot = {
     success: true,
     managed: true,
-    policy: { transcription: { allowedModes: ["local"], allowedEnterpriseProviders: [] } },
+    policy: {
+      ...require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy(),
+      transcription: {
+        ...require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy().transcription,
+        allowedModes: ["local"],
+        allowedEnterpriseProviders: [],
+      },
+    },
   };
   await assert.rejects(batch.request({}), { code: "MANAGED_CONFIG_CHANGED" });
   await assert.rejects(realtime.createSocket(), { code: "MANAGED_CONFIG_CHANGED" });

@@ -216,7 +216,13 @@
     "managedConfigUnavailable": "託管企業存取無法使用。請重新登入或聯絡管理員。",
     "managedConfigAmbiguous": "您組織的託管設定不一致。請聯絡管理員。",
     "managedPolicyConflict": "託管存取已被您工作區的政策封鎖。請聯絡管理員。",
-    "resizePanel": "調整面板大小"
+    "resizePanel": "調整面板大小",
+    "managedDevice": "受管理的裝置",
+    "managedDeviceAndWorkspace": "受管理的裝置與工作區",
+    "deviceLocalOnly": "此裝置僅使用本機處理。雲端功能無法使用，先前登入過的帳戶亦然。",
+    "deviceSignInRequired": "你的組織要求在此裝置上登入。",
+    "devicePolicyInvalid": "無法讀取裝置原則，或原則無效。請聯絡管理員。原則修正前，受管理的操作將遭到封鎖。",
+    "deviceWorkspaceUnavailable": "此裝置要求本機處理，但已儲存帳戶的工作區原則無法使用。請登出以不使用該帳戶繼續，或聯絡管理員。"
   },
   "onboarding": {
     "rehaul": {

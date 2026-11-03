@@ -1,3 +1,4 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -103,9 +104,11 @@ function scenario(t, { decode, stream, online = false } = {}) {
   };
   const IPCHandlers = require(handlersModulePath);
   IPCHandlers.prototype.setupHandlers.call(
-    new Proxy(target, {
-      get: (value, property) => (property in value ? value[property] : anything()),
-    })
+    withDevicePolicy(
+      new Proxy(target, {
+        get: (value, property) => (property in value ? value[property] : anything()),
+      })
+    )
   );
   const invoke = (channel, ...args) => handlers.get(channel)({}, ...args);
   const start = (model = "orukeet-v0.1.0") =>

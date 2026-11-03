@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import logger from "../utils/logger";
-import type { OrgPolicy } from "../types/policy";
+import type { OrgPolicy, EffectivePolicySnapshot } from "../types/policy";
 import {
   POLICY_SUCCESS_REFRESH_MS,
   resolvedPolicyRefreshIdentity,
@@ -16,6 +16,14 @@ export interface PolicyState extends PolicyDecisionSnapshot {
   revision: number;
   /** True once the org enforces a policy on this user. */
   managed: boolean;
+  deviceReady: boolean;
+  deviceManaged: boolean;
+  workspaceManaged?: boolean;
+  workspaceRequired?: boolean;
+  localOnly: boolean;
+  requireSignIn: boolean;
+  code?: string;
+  bootstrap: () => Promise<void>;
   fetchPolicy: (accountId: string, authGeneration: number) => Promise<void>;
   clearPolicy: () => void;
   /**
@@ -146,10 +154,64 @@ function applyPolicyFailure(result: PolicyIpcSnapshot): boolean {
   return true;
 }
 
+let effectiveFetch: Promise<void> | null = null;
+
+function applyEffectiveSnapshot(
+  snapshot: EffectivePolicySnapshot,
+  appVersion: string | null
+): void {
+  const current = usePolicyStore.getState();
+  if (
+    snapshot.revision < current.revision ||
+    (current.authGeneration != null && snapshot.authGeneration < current.authGeneration)
+  )
+    return;
+  usePolicyStore.setState({
+    ...snapshot,
+    code: snapshot.code,
+    status: snapshot.success ? (snapshot.managed ? "managed" : "unmanaged") : snapshot.status,
+    appVersion,
+  });
+}
+
+export function refreshEffectivePolicy(): Promise<void> {
+  ensurePolicyLifecycleListeners();
+  if (effectiveFetch) return effectiveFetch;
+  const read = window.electronAPI.getEffectivePolicy;
+  if (!read) {
+    usePolicyStore.setState({ deviceReady: true });
+    return Promise.resolve();
+  }
+  const pending = (async () => {
+    const revision = usePolicyStore.getState().revision;
+    try {
+      const [snapshot, appVersion] = await Promise.all([read(), readAppVersion()]);
+      applyEffectiveSnapshot(snapshot, appVersion);
+    } catch (error) {
+      if (usePolicyStore.getState().revision !== revision) return;
+      logger.error("Failed to read effective policy:", error);
+      usePolicyStore.setState({
+        status: "error",
+        deviceReady: true,
+        code: "DEVICE_POLICY_INVALID",
+        policy: null,
+      });
+    }
+  })();
+  effectiveFetch = pending.finally(() => {
+    effectiveFetch = null;
+  });
+  return effectiveFetch;
+}
+
 function ensurePolicyLifecycleListeners(): void {
   if (lifecycleListenersReady) return;
   lifecycleListenersReady = true;
+  window.electronAPI.onEffectivePolicyChanged?.((snapshot) => {
+    void readAppVersion().then((version) => applyEffectiveSnapshot(snapshot, version));
+  });
   window.electronAPI.onWorkspacePolicyChanged?.((snapshot) => {
+    if (window.electronAPI.getEffectivePolicy) return;
     if (!snapshot.success) {
       applyPolicyFailure(snapshot);
       return;
@@ -157,6 +219,10 @@ function ensurePolicyLifecycleListeners(): void {
     void readAppVersion().then((appVersion) => applyPolicySnapshot(snapshot, appVersion));
   });
   const refreshResolvedPolicy = (): void => {
+    if (window.electronAPI.getEffectivePolicy) {
+      void refreshEffectivePolicy();
+      return;
+    }
     const state = usePolicyStore.getState();
     const identity = resolvedPolicyRefreshIdentity(state);
     if (!identity) return;
@@ -169,6 +235,11 @@ function ensurePolicyLifecycleListeners(): void {
 
 export const usePolicyStore = create<PolicyState>()((set, get) => {
   const resetPolicy = (status: "idle" | "loading"): void => {
+    if (window.electronAPI.getEffectivePolicy) {
+      set({ status: "loading", policy: null });
+      void refreshEffectivePolicy();
+      return;
+    }
     fetchSequence += 1;
     fetchInFlight = null;
     set({
@@ -183,6 +254,11 @@ export const usePolicyStore = create<PolicyState>()((set, get) => {
   };
 
   return {
+    deviceReady: false,
+    deviceManaged: false,
+    localOnly: false,
+    requireSignIn: false,
+    bootstrap: refreshEffectivePolicy,
     accountId: null,
     authGeneration: null,
     revision: 0,
@@ -191,6 +267,7 @@ export const usePolicyStore = create<PolicyState>()((set, get) => {
     policy: null,
     appVersion: null,
     fetchPolicy: (accountId: string, authGeneration: number): Promise<void> => {
+      if (window.electronAPI.getEffectivePolicy) return refreshEffectivePolicy();
       ensurePolicyLifecycleListeners();
       if (
         fetchInFlight?.accountId === accountId &&

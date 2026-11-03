@@ -1,3 +1,4 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -35,7 +36,7 @@ const electronStub = {
     fetch: async () => ({
       ok: true,
       status: 200,
-      json: async () => ({}),
+      json: async () => ({ data: { managed: false, policy: null, policyUpdatedAt: null } }),
       text: async () => "{}",
     }),
   },
@@ -74,7 +75,12 @@ Module._load = function loadWithMocks(request, parent, isMain) {
       };
     }
     if (request === "./windowBroadcast") {
-      return { broadcastToWindows: (channel, data) => broadcasts.push([channel, data]) };
+      return {
+        broadcastToWindows: (channel, data) => {
+          if (!["effective-policy-changed", "workspace-policy-changed"].includes(channel))
+            broadcasts.push([channel, data]);
+        },
+      };
     }
   }
   return originalLoad.call(this, request, parent, isMain);
@@ -105,7 +111,13 @@ function readBinding() {
 
 const databaseScopes = [];
 const databaseManager = new Proxy(
-  { setActiveAccountId: (accountId) => databaseScopes.push(accountId) },
+  {
+    activeAccountId: null,
+    setActiveAccountId(accountId) {
+      this.activeAccountId = accountId;
+      databaseScopes.push(accountId);
+    },
+  },
   { get: (value, property) => (property in value ? value[property] : anything()) }
 );
 
@@ -131,8 +143,11 @@ test.before(() => {
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
   fakeThis = buildFakeThis();
-  Ctor.prototype.setupHandlers.call(fakeThis);
-  handleAuthTokenChange = (state) => Ctor.prototype._handleAuthTokenChange.call(fakeThis, state);
+  Ctor.prototype.setupHandlers.call(withDevicePolicy(fakeThis));
+  handleAuthTokenChange = (state) => {
+    tokenState = { ...state };
+    return Ctor.prototype._handleAuthTokenChange.call(fakeThis, state);
+  };
 });
 
 test.after(() => {
@@ -400,11 +415,13 @@ test("a token rotation keeps the account's running jobs and meeting; another acc
   const { createAudioFeaturePolicy } = require("../../src/helpers/audioFeaturePolicy");
   const { deferred } = require("./harness/deferred");
   const originalPolicy = fakeThis._audioFeaturePolicy;
+  const originalRefresh = fakeThis.refreshEffectivePolicy;
   const originalStop = fakeThis._stopMeetingForPolicy;
   const originalAccount = databaseManager.activeAccountId;
   const originalTokenState = tokenState;
   t.after(() => {
     fakeThis._audioFeaturePolicy = originalPolicy;
+    fakeThis.refreshEffectivePolicy = originalRefresh;
     fakeThis._stopMeetingForPolicy = originalStop;
     databaseManager.activeAccountId = originalAccount;
     tokenState = originalTokenState;
@@ -419,6 +436,7 @@ test("a token rotation keeps the account's running jobs and meeting; another acc
   ]) {
     stops.length = 0;
     let lookup = deferred();
+    fakeThis.refreshEffectivePolicy = () => lookup.promise;
     fakeThis._audioFeaturePolicy = createAudioFeaturePolicy({ getPolicy: () => lookup.promise });
     tokenState = { token: "rotation-token-a", generation: 60 };
     databaseManager.activeAccountId = "rotation-account";

@@ -6,6 +6,7 @@ import type { LanguageModel } from "ai";
 import { getTinfoilLanguageModel } from "./tinfoilClient";
 import { API_ENDPOINTS } from "../../config/constants";
 import { openCodeSessionHeaders } from "./openCodeSession";
+import { assertReasoningAllowedByPolicy } from "../reasoningPolicy";
 
 // Renderer-side AI SDK factory. Cloud + local only — enterprise providers
 // (bedrock/azure/vertex) run in the main process via the
@@ -35,6 +36,7 @@ export async function getAIModel(
   baseURL?: string,
   opts?: { disableThinking?: boolean; reasoningEffort?: string }
 ): Promise<LanguageModel> {
+  assertReasoningAllowedByPolicy(provider, provider === "local" ? "local" : "providers");
   switch (provider) {
     case "openai":
       return createOpenAI({ apiKey })(model);

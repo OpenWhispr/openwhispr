@@ -1,3 +1,4 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -139,7 +140,7 @@ test.before(() => {
   delete require.cache[handlersModulePath];
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
-  Ctor.prototype.setupHandlers.call(buildFakeThis());
+  Ctor.prototype.setupHandlers.call(withDevicePolicy(buildFakeThis()));
   assert.ok(
     handlers.get("toggle-agent-panel-dictation"),
     "toggle-agent-panel-dictation must be registered"

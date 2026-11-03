@@ -1,3 +1,4 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -116,7 +117,13 @@ test.before(() => {
   const Ctor = IPCHandlers.default || IPCHandlers;
   const target = {};
   fakeThis = new Proxy(target, { get: (t, prop) => (prop in t ? t[prop] : anything()) });
-  Ctor.prototype.setupHandlers.call(fakeThis);
+  Ctor.prototype.setupHandlers.call(withDevicePolicy(fakeThis));
+  fakeThis.effectivePolicyManager.updateWorkspace({
+    success: true,
+    managed: false,
+    accountId: "account-a",
+    authGeneration: 1,
+  });
   target._stopMeetingForPolicy = () => stops++;
   target._audioFeaturePolicy = {
     run: (_event, _purpose, fn) => fn(new AbortController().signal),
