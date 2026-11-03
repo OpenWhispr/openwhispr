@@ -51,7 +51,7 @@ function makeHarness({ failures = {}, lost = {}, refreshFails = false } = {}) {
           members = { ...server.roles };
         }),
       listedWorkspaceIds: () => (list.error ? null : list.workspaces),
-      memberRole: (userId) => members[userId] ?? null,
+      memberRole: (workspaceId, userId) => members[userId] ?? null,
     },
     sync: { requestSyncAll: (reason) => calls.push(["requestSyncAll", reason]) },
     notifyUsageChanged: () => calls.push(["usageChanged"]),
@@ -212,4 +212,53 @@ test("a failed transfer stays failed when the roster can't be read", async () =>
     failures: { updateMemberRole: failure, refreshMembers: new Error("offline") },
   });
   await assert.rejects(createWorkspaceActions(deps).transferOwnership("ws-1", "user-2"), failure);
+});
+
+test("remove member refreshes the roster", async () => {
+  const { createWorkspaceActions } = await load();
+  const { calls, deps } = makeHarness();
+
+  const outcome = await createWorkspaceActions(deps).removeMember("ws-1", "user-2");
+
+  assert.equal(outcome, "removed");
+  assert.deepEqual(names(calls), ["removeMember", "refreshMembers"]);
+  assert.deepEqual(calls[0], ["removeMember", "ws-1", "user-2"]);
+  assert.deepEqual(calls[1], ["refreshMembers", "ws-1"]);
+});
+
+test("a member already gone counts as removed", async () => {
+  const { createWorkspaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { calls, deps } = makeHarness({
+    failures: { removeMember: new CloudApiError("Member not found", 404) },
+  });
+
+  const outcome = await createWorkspaceActions(deps).removeMember("ws-1", "user-2");
+
+  assert.equal(outcome, "alreadyRemoved");
+  assert.deepEqual(names(calls), ["removeMember", "refreshMembers"]);
+});
+
+test("a refused removal changes nothing locally", async () => {
+  const { createWorkspaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { calls, deps } = makeHarness({
+    failures: { removeMember: new CloudApiError("Forbidden", 403) },
+  });
+
+  await assert.rejects(createWorkspaceActions(deps).removeMember("ws-1", "user-2"), {
+    status: 403,
+  });
+
+  assert.deepEqual(names(calls), ["removeMember"]);
+});
+
+test("a removal succeeds even when the roster refresh fails", async () => {
+  const { createWorkspaceActions } = await load();
+  const { calls, deps } = makeHarness({ failures: { refreshMembers: new Error("offline") } });
+
+  const outcome = await createWorkspaceActions(deps).removeMember("ws-1", "user-2");
+
+  assert.equal(outcome, "removed");
+  assert.deepEqual(names(calls), ["removeMember", "refreshMembers"]);
 });

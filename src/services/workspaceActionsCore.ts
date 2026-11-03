@@ -1,4 +1,5 @@
 import logger from "../utils/logger";
+import { classifyRowActionError } from "../lib/workspaceErrors";
 import type { WorkspaceMember } from "../types/electron";
 
 export interface WorkspaceActionsDependencies {
@@ -13,7 +14,8 @@ export interface WorkspaceActionsDependencies {
     refreshMembers(workspaceId: string): Promise<void>;
     /** Ids from the last refresh, or null when it failed. */
     listedWorkspaceIds(): string[] | null;
-    memberRole(userId: string): WorkspaceMember["role"] | null;
+    /** The member's role in `workspaceId`'s last refreshed roster, or null when it isn't held. */
+    memberRole(workspaceId: string, userId: string): WorkspaceMember["role"] | null;
   };
   sync: { requestSyncAll(reason: string): void };
   /** Tells the plan badge and word limit to re-read the entitlement. */
@@ -24,6 +26,7 @@ export interface WorkspaceActions {
   leaveWorkspace(workspaceId: string, userId: string): Promise<void>;
   deleteWorkspace(workspaceId: string): Promise<void>;
   transferOwnership(workspaceId: string, newOwnerId: string): Promise<void>;
+  removeMember(workspaceId: string, userId: string): Promise<"removed" | "alreadyRemoved">;
 }
 
 export function createWorkspaceActions(deps: WorkspaceActionsDependencies): WorkspaceActions {
@@ -97,12 +100,29 @@ export function createWorkspaceActions(deps: WorkspaceActionsDependencies): Work
       () => deps.api.updateMemberRole(workspaceId, newOwnerId, "owner"),
       async () => {
         await deps.store.refreshMembers(workspaceId);
-        return deps.store.memberRole(newOwnerId) === "owner";
+        return deps.store.memberRole(workspaceId, newOwnerId) === "owner";
       }
     );
     await refreshQuietly("list", () => deps.store.refresh({ fresh: true }));
     await refreshQuietly("members", () => deps.store.refreshMembers(workspaceId));
   }
 
-  return { leaveWorkspace, deleteWorkspace, transferOwnership };
+  // A 404 means the member is already gone, which is what the caller wanted. Any other failure
+  // leaves the roster alone: nothing changed, and the dialog offers a retry.
+  async function removeMember(
+    workspaceId: string,
+    userId: string
+  ): Promise<"removed" | "alreadyRemoved"> {
+    let outcome: "removed" | "alreadyRemoved" = "removed";
+    try {
+      await deps.api.removeMember(workspaceId, userId);
+    } catch (err) {
+      if (classifyRowActionError(err).kind !== "gone") throw err;
+      outcome = "alreadyRemoved";
+    }
+    await refreshQuietly("members", () => deps.store.refreshMembers(workspaceId));
+    return outcome;
+  }
+
+  return { leaveWorkspace, deleteWorkspace, transferOwnership, removeMember };
 }
