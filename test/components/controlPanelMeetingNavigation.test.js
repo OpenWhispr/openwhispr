@@ -83,6 +83,7 @@ function electronApi(navigation, calls) {
     getPendingMeetingNoteNavigation: async () => navigation,
     confirmMeetingNoteNavigation: async () => ({ success: true, value: NOTE }),
     meetingNoteOpenedWithoutRecording: async (id) => calls.noteOnly.push(id),
+    meetingNoteClosed: async (id) => calls.closed.push(id),
     restoreFromMeetingMode: async () => calls.restore.push(true),
     getSpaces: async () => [{ id: 1, kind: "private" }],
     getFolders: async () => [],
@@ -99,13 +100,18 @@ function electronApi(navigation, calls) {
 
 async function mount(t, navigation, transcriptionStart) {
   let root;
+  const unmount = async () => {
+    const mounted = root;
+    root = null;
+    await React.act(async () => mounted.unmount());
+  };
   t.after(async () => {
-    if (root) await React.act(async () => root.unmount());
+    if (root) await unmount();
     delete globalThis.__notesProps;
     delete globalThis.__starts;
     delete globalThis.__createNoteCheck;
   });
-  const calls = { noteOnly: [], restore: [] };
+  const calls = { noteOnly: [], restore: [], closed: [], unmount };
   globalThis.__starts = [];
   installBrowserGlobals(t, {
     window: {
@@ -188,4 +194,19 @@ test("a pending navigation hands its trigger and session to the notes view", asy
   assert.equal(request.trigger, "hotkey");
   assert.equal(request.noteSessionId, "session");
   assert.equal(globalThis.__notesProps.canAutoStartMeeting, globalThis.__createNoteCheck);
+});
+
+test("a navigation the panel unmounted before reading closes its session", async (t) => {
+  const pending = Promise.withResolvers();
+  const calls = await mount(t, pending.promise, "manual");
+  await calls.unmount();
+  pending.resolve({
+    noteId: 9,
+    folderId: null,
+    event: null,
+    trigger: "calendar-join",
+    noteSessionId: "session",
+  });
+  await new Promise(setImmediate);
+  assert.deepEqual(calls.closed, ["session"], "main already gave this navigation away");
 });

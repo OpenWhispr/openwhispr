@@ -510,7 +510,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         );
         return;
       }
-      if (!isCurrent()) return;
+      if (!isCurrent()) {
+        // Main already gave this navigation away, so nothing else can end its session.
+        if (data.noteSessionId) void window.electronAPI?.meetingNoteClosed?.(data.noteSessionId);
+        return;
+      }
       if (data.noteSessionId)
         meetingNoteSession.current = { id: data.noteSessionId, noteId: data.noteId };
       setActiveFolderId(data.folderId);
