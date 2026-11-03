@@ -3915,7 +3915,7 @@
   },
   "chat": {
     "answering": "正在回答…",
-    "conversationCreateFailed": "無法開始對話。你的問題已還原至新聊天中。",
+    "conversationCreateFailed": "無法開始對話。你的問題已還原至新對話中。",
     "messageSaveFailed": "無法儲存此訊息。請再試一次。",
     "conversationLoadFailed": "無法載入此對話。請再試一次。",
     "newChat": "新對話",

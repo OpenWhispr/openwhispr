@@ -4,7 +4,7 @@ import { useMainChatSession } from "./useMainChatSession";
 import {
   useChatTurnStore,
   dropChatConversation,
-  setChatDraft,
+  returnChatDraft,
   getChatSkills,
 } from "../../stores/chatTurnStore";
 import { ChatMessages } from "./ChatMessages";
@@ -103,7 +103,7 @@ export default function ChatView({
           after.accountGeneration === before.accountGeneration &&
           after.selectionRevision === before.selectionRevision
         ) {
-          setChatDraft(before.selection, text);
+          returnChatDraft(before.selection, text);
         }
       }
     },

@@ -122,6 +122,13 @@ export function setChatDraft(selection: ChatSelection, text: string): void {
   );
 }
 
+export function returnChatDraft(selection: ChatSelection, text: string): void {
+  const { newChatDraft, drafts } = useChatTurnStore.getState();
+  const draft =
+    selection.kind === "conversation" ? (drafts[selection.conversationId] ?? "") : newChatDraft;
+  setChatDraft(selection, withQuestionReturned(draft, text));
+}
+
 export function setChatSkills(selection: ChatSelection, skills: ChatSkills): void {
   if (selection.kind === "new-chat") {
     useChatTurnStore.setState({ newChatSkills: skills });
@@ -142,15 +149,26 @@ export function setChatSkills(selection: ChatSelection, skills: ChatSkills): voi
   });
 }
 
+export function resolveChatSkills(
+  selection: ChatSelection,
+  entrySkills: ChatSkills | undefined,
+  storedSkills: ChatSkills | undefined
+): ChatSkills {
+  if (entrySkills) return entrySkills;
+  if (selection.kind === "conversation")
+    return storedSkills ?? readChatSkills(selection.conversationId);
+  return storedSkills ?? NO_CHAT_SKILLS;
+}
+
 export function getChatSkills(selection: ChatSelection): ChatSkills {
   const state = useChatTurnStore.getState();
-  const entry = state.entries[chatSelectionKey(selection)];
-  if (entry) return entry.skills;
-  if (selection.kind === "conversation")
-    return (
-      state.conversationSkills[selection.conversationId] ?? readChatSkills(selection.conversationId)
-    );
-  return state.newChatSkills;
+  return resolveChatSkills(
+    selection,
+    state.entries[chatSelectionKey(selection)]?.skills,
+    selection.kind === "conversation"
+      ? state.conversationSkills[selection.conversationId]
+      : state.newChatSkills
+  );
 }
 
 function bumpListRevision(): void {
@@ -222,9 +240,8 @@ export function startChatSend(input: StartChatSendInput): boolean {
     entries: { ...state.entries, [key]: entry },
     selection,
     selectionRevision: state.selectionRevision + (conversationId === null ? 1 : 0),
-    ...(conversationId === null
-      ? { newChatDraft: "", newChatError: null, newChatSkills: NO_CHAT_SKILLS }
-      : { drafts: { ...state.drafts, [conversationId]: "" } }),
+    // Not the draft: the composer clears what it sends, and a starter card or skill draft isn't it.
+    ...(conversationId === null ? { newChatError: null, newChatSkills: NO_CHAT_SKILLS } : {}),
   });
   const ownerCurrent = (): boolean =>
     useChatTurnStore.getState().accountGeneration === operation.generation &&

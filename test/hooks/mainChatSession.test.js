@@ -12,7 +12,9 @@ async function mountSession(t, fixture) {
   );
   const root = createRoot(container);
   let session;
+  let renders = 0;
   function Harness() {
+    renders += 1;
     session = useMainChatSession();
     return null;
   }
@@ -25,7 +27,7 @@ async function mountSession(t, fixture) {
     }
   };
   fixture.unmounts.push(unmount);
-  return { session: () => session, unmount };
+  return { session: () => session, unmount, renders: () => renders };
 }
 
 for (const archived of [true, false]) {
@@ -415,4 +417,38 @@ test("a stale load error doesn't show on a pending submission", async (t) => {
   assert.equal(mounted.session().selection.kind, "submission");
   assert.equal(mounted.session().error, null);
   assert.equal(mounted.session().messages.length, 1);
+});
+
+test("another conversation's streaming doesn't re-render the one on screen", async (t) => {
+  const fixture = await setupChatTurns(t);
+  const { store } = fixture;
+  const mounted = await mountSession(t, fixture);
+  await React.act(async () => mounted.session().openConversation(1, "sidebar"));
+  await React.act(async () => mounted.session().send("background question"));
+  await until(() => fixture.streams.length === 1);
+  await React.act(async () => mounted.session().openConversation(2, "sidebar"));
+  await flush();
+  const update = (change) => React.act(async () => store.useChatTurnStore.setState(change));
+  const chunk = (key) => (state) => ({
+    entries: {
+      ...state.entries,
+      [key]: { ...state.entries[key], toolStatus: `${state.entries[key].toolStatus}.` },
+    },
+  });
+
+  let before = mounted.renders();
+  await update(chunk("conversation:1"));
+  await update((state) => ({ listRevision: state.listRevision + 1 }));
+  await update((state) => ({ drafts: { ...state.drafts, 1: "elsewhere" } }));
+  assert.equal(mounted.renders(), before);
+
+  await React.act(async () => mounted.session().send("question on screen"));
+  await until(() => fixture.streams.length === 2);
+  await flush();
+  const skills = mounted.session().skills;
+  before = mounted.renders();
+  await update(chunk("conversation:2"));
+  assert.equal(mounted.renders(), before + 1, "its own chunk still renders");
+  assert.equal(mounted.session().toolStatus, ".");
+  assert.equal(mounted.session().skills, skills, "skills aren't read back on every chunk");
 });

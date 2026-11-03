@@ -602,10 +602,11 @@ test("non-local streaming remains unfiltered", async (t) => {
 
 test("chat cancellation leaves single-shot reasoning alive until all requests are cancelled", async (t) => {
   const streamOwner = new AbortController();
+  const bridge = createAgentStreamBridge();
   const { reasoningService } = await loadReasoningService(
     t,
     "openwhispr-non-streaming-reason-cancel-test-",
-    { window: { electronAPI: { getGroqKey: async () => "test-key" } } }
+    { window: { electronAPI: { getGroqKey: async () => "test-key", ...bridge.electronAPI } } }
   );
   const originalFetch = globalThis.fetch;
   t.after(() => {
@@ -636,7 +637,16 @@ test("chat cancellation leaves single-shot reasoning alive until all requests ar
   while (!requestStarted) await waitForMicrotasks();
   const cancelled = assert.rejects(reasoning, /cancelled/i);
 
+  const chatStream = reasoningService.processTextStreamingCloud(
+    [{ role: "user", content: "hi" }],
+    { systemPrompt: "Answer" },
+    streamOwner.signal
+  );
+  const chatEnded = chatStream.next();
+  while (bridge.startCalls.length === 0) await waitForMicrotasks();
   streamOwner.abort();
+  await chatEnded;
+  assert.equal(bridge.cancelCalls.length, 1, "the chat stream itself was cancelled");
   assert.equal(requestSignal?.aborted, false);
 
   reasoningService.cancelAllRequests();

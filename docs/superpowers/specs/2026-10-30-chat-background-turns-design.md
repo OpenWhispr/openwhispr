@@ -66,7 +66,7 @@ that belongs to its conversation, not to whatever is on screen.
 ## Anti-goals (would be a failure even if it "works")
 
 - An answer saved into the wrong conversation, or saved twice.
-- Esc / Stop in one conversation cancelling another conversation's answer.
+- Stop in one conversation cancelling another conversation's answer.
 - Note chat, container chat or a dictation cancel killing a main-chat
   background answer (today `cancelActiveStream()` is renderer-global).
 - A fabricated "empty response" reply persisted for a turn that was
@@ -97,8 +97,8 @@ conversation switch, New chat) ends it.
 
 A turn is cancelled only by:
 
-- Esc / Stop in that conversation (explicit cancel: partial answer
-  discarded, as today);
+- Stop in that conversation (explicit cancel: the partial answer stays on
+  screen but isn't saved, as today);
 - deleting that conversation;
 - a new send superseding it (cannot happen in the UI: the composer is locked
   while the conversation answers);
@@ -276,9 +276,10 @@ in-progress states. Hover still swaps in the ⋯ menu. The row gets an
 accessible "Answering…" label, a new i18n key added to every locale. The
 loader goes away when the turn finishes, fails or is cancelled.
 
-### Esc / Stop
+### Stop
 
-`ChatInput`'s cancel applies to the conversation on screen only.
+`ChatInput`'s cancel applies to the conversation on screen only. Esc doesn't
+cancel a chat turn in the main Chat view, before or after this change.
 
 ### Open skill link
 
@@ -370,7 +371,7 @@ it, and no longer cancels on unmount, switch or New chat.
 - Whether `ChatView` keeps using `useChatMessageSender` (with a
   per-conversation lock and no navigation drop) or sends through the store.
 - Test strategy, beyond: concurrency of two conversations; leaving and
-  returning mid-stream and after finish; Esc cancelling only its own
+  returning mid-stream and after finish; Stop cancelling only its own
   conversation; another surface's cancel not touching a main-chat turn;
   delete cancelling; the sidebar loader appearing and clearing; leaving the
   view and returning lands on the same conversation with its draft. Also:

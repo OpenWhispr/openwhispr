@@ -288,7 +288,8 @@ export function createChatTurnEngine(
   const ownerCurrent = (): boolean => getOptions().isOwnerCurrent?.() ?? true;
   const cancel = ({ explicit }: { explicit: boolean }): void => {
     if (!current) return;
-    current.explicit = explicit;
+    // Leaving after Stop must not turn a discarded answer back into one worth saving.
+    current.explicit ||= explicit;
     current.controller.abort();
     current.scope.abort();
     current.clearTimers();

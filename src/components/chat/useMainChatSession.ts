@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import i18n from "../../i18n";
 import { useAuth } from "../../hooks/useAuth";
 import {
@@ -15,6 +16,7 @@ import {
   setChatDraft,
   setChatSkills,
   getChatSkills,
+  resolveChatSkills,
   type ChatSelection,
 } from "../../stores/chatTurnStore";
 import { decodeChatMessages } from "./chatPersistence";
@@ -59,9 +61,28 @@ const EMPTY_MESSAGES: Message[] = [];
 
 export function useMainChatSession(): MainChatSession {
   const { user } = useAuth();
-  const state = useChatTurnStore();
-  const { selection } = state;
-  const token = selectionToken();
+  // Only what this conversation shows: another turn's chunks must not re-render the whole view.
+  const state = useChatTurnStore(
+    useShallow((current) => {
+      const { selection: selected } = current;
+      const openId = selected.kind === "conversation" ? selected.conversationId : null;
+      return {
+        selection: selected,
+        token: chatSelectionToken(current),
+        createdSelectionToken: current.createdSelectionToken,
+        entry: current.entries[chatSelectionKey(selected)],
+        newChatError: current.newChatError,
+        draft:
+          selected.kind === "new-chat"
+            ? current.newChatDraft
+            : openId !== null
+              ? (current.drafts[openId] ?? "")
+              : "",
+        storedSkills: openId !== null ? current.conversationSkills[openId] : current.newChatSkills,
+      };
+    })
+  );
+  const { selection, token, entry, storedSkills } = state;
   const [loaded, setLoaded] = useState<LoadedSnapshot | null>(null);
   const startedLoad = useRef<string | null>(null);
   const loadSource = useRef<"sidebar" | "restore">("restore");
@@ -122,7 +143,6 @@ export function useMainChatSession(): MainChatSession {
     void validate(selection.conversationId, loadSource.current);
   }, [selection, token, validate]);
 
-  const entry = state.entries[chatSelectionKey(selection)];
   // A row this store just created still validates, in the background: it has nothing to load.
   const justCreated = state.createdSelectionToken === token;
   const validated = selection.kind !== "conversation" || loaded?.token === token || justCreated;
@@ -203,9 +223,16 @@ export function useMainChatSession(): MainChatSession {
     [loaded, user?.name, source.isLoading, source.openNote]
   );
 
-  const setSkills = useCallback((skills: ChatSkills): void => {
-    setChatSkills(useChatTurnStore.getState().selection, skills);
+  const setSkills = useCallback((next: ChatSkills): void => {
+    setChatSkills(useChatTurnStore.getState().selection, next);
   }, []);
+
+  // A conversation with no skills in the store reads them from localStorage.
+  const entrySkills = entry?.skills;
+  const skills = useMemo(
+    () => resolveChatSkills(selection, entrySkills, storedSkills),
+    [selection, entrySkills, storedSkills]
+  );
 
   return {
     selection,
@@ -223,13 +250,8 @@ export function useMainChatSession(): MainChatSession {
       : "idle",
     toolStatus: entry?.toolStatus ?? "",
     activeToolName: entry?.activeToolName ?? "",
-    skills: getChatSkills(selection),
-    draft:
-      selection.kind === "new-chat"
-        ? state.newChatDraft
-        : selection.kind === "conversation"
-          ? (state.drafts[selection.conversationId] ?? "")
-          : "",
+    skills,
+    draft: state.draft,
     error,
     sourceNote: source.sourceNote,
     sourceNoteLoading: source.isLoading,

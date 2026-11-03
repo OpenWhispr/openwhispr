@@ -75,6 +75,25 @@ for (const explicit of [true, false]) {
   });
 }
 
+test("leaving after Stop doesn't save the answer the user discarded", async (t) => {
+  const fixture = await setup(t);
+  let releaseTool;
+  const toolReturned = new Promise((resolve) => (releaseTool = resolve));
+  t.mock.method(fixture.service, "processTextStreamingAI", async function* () {
+    yield { type: "content", text: "Partial answer" };
+    // A running tool holds the stream open past the abort.
+    await toolReturned;
+  });
+  const send = fixture.engine.send("hello", []);
+  for (let count = 0; count < 20 && fixture.state() !== "streaming"; count++) await flush();
+  await flush();
+  fixture.engine.cancel({ explicit: true });
+  fixture.engine.cancel({ explicit: false });
+  releaseTool();
+  await send;
+  assert.deepEqual(fixture.writes, []);
+});
+
 test("a replaced account prevents a late response from persisting or reaching the sink", async (t) => {
   const fixture = await setup(t);
   let release;

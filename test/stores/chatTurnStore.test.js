@@ -7,11 +7,11 @@ test("New chat is reserved before creation and navigation does not move its answ
   const { store, state, send, streams, writes } = await setupChatTurns(t, {
     createAgentConversation: () => creation.promise,
   });
-  store.setChatDraft({ kind: "new-chat" }, "Question");
+  store.setChatDraft({ kind: "new-chat" }, "typed, not sent");
   assert.equal(send(), true);
   assert.equal(state().selection.kind, "submission");
   assert.equal(Object.values(state().entries)[0].agentState, "thinking");
-  assert.equal(state().newChatDraft, "");
+  assert.equal(state().newChatDraft, "typed, not sent", "only the composer clears what it sends");
   assert.equal(send(), false);
   store.selectChat({ kind: "conversation", conversationId: 7 });
   creation.resolve({ id: 21 });
@@ -317,4 +317,50 @@ test("an account reset during creation removes the row without restoring the que
   await flush();
   assert.equal(state().newChatDraft, "");
   assert.deepEqual(writes, []);
+});
+
+test("a conversation's unsent text survives a send that didn't come from the composer", async (t) => {
+  const { store, state, send, streams } = await setupChatTurns(t);
+  store.selectChat({ kind: "conversation", conversationId: 2 });
+  store.setChatDraft(state().selection, "typed, not sent");
+  send("from a suggestion");
+  await until(() => streams.length === 1);
+  assert.equal(state().drafts[2], "typed, not sent");
+});
+
+test("a refused send returns its text after whatever is already typed", async (t) => {
+  const { store, state } = await setupChatTurns(t);
+  store.returnChatDraft({ kind: "new-chat" }, "refused");
+  assert.equal(state().newChatDraft, "refused");
+  store.setChatDraft({ kind: "new-chat" }, "typed");
+  store.returnChatDraft({ kind: "new-chat" }, "refused");
+  assert.equal(state().newChatDraft, "typed\n\nrefused");
+  store.returnChatDraft({ kind: "conversation", conversationId: 2 }, "refused");
+  assert.equal(state().drafts[2], "refused");
+  store.returnChatDraft({ kind: "conversation", conversationId: 2 }, "again");
+  assert.equal(state().drafts[2], "refused\n\nagain");
+});
+
+test("main chat offers the connector tools and skills", async (t) => {
+  t.after(() => delete globalThis.__turnOptions);
+  const { send } = await setupChatTurns(
+    t,
+    {},
+    {
+      "/chatTurnEngine": `
+      export function createChatTurnEngine(getOptions) {
+        return {
+          async send() {
+            globalThis.__turnOptions = getOptions();
+          },
+          cancel() {},
+        };
+      }
+    `,
+    }
+  );
+  send();
+  await until(() => globalThis.__turnOptions);
+  assert.equal(globalThis.__turnOptions.allowConnectors, true);
+  assert.equal(globalThis.__turnOptions.skillsEnabled, true);
 });

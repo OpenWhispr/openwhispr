@@ -14,7 +14,8 @@ function deferred() {
   return { promise, resolve, reject };
 }
 async function until(predicate) {
-  const deadline = performance.now() + 10_000;
+  // These tests wait on real IPC-style turns, and a busy CI runner has taken over 10 s.
+  const deadline = performance.now() + 30_000;
   while (performance.now() < deadline) {
     if (predicate()) return;
     await flush();

@@ -3915,7 +3915,7 @@
   },
   "chat": {
     "answering": "正在回答…",
-    "conversationCreateFailed": "无法开始对话。你的问题已恢复到新聊天中。",
+    "conversationCreateFailed": "无法开始对话。你的问题已恢复到新对话中。",
     "messageSaveFailed": "无法保存此消息。请重试。",
     "conversationLoadFailed": "无法加载此对话。请重试。",
     "newChat": "新对话",

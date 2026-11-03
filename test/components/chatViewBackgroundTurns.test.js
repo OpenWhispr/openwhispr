@@ -99,3 +99,23 @@ test("while a conversation validates the composer can still be typed in, but can
   });
   assert.equal(globalThis.__backgroundInput.sendDisabled, false);
 });
+test("a starter card leaves the text typed in New chat alone", async (t) => {
+  const fixture = await renderView(t);
+  await React.act(async () => fixture.input().onDraftChange("half a thought"));
+  await React.act(async () => {
+    globalThis.__backgroundMessages.emptyState.props.onPrompt("Starter prompt");
+    await until(() => fixture.streams.length === 1);
+  });
+  await React.act(async () => fixture.list().onNewChat());
+  assert.equal(fixture.input().draftText, "half a thought");
+});
+test("a refused starter card adds to the typed text instead of replacing it", async (t) => {
+  const fixture = await renderView(t);
+  await React.act(async () => fixture.input().onDraftChange("half a thought"));
+  await React.act(async () => {
+    fixture.policy.setState({ status: "loading" });
+    globalThis.__backgroundMessages.emptyState.props.onPrompt("Starter prompt");
+    await flush();
+  });
+  assert.equal(fixture.input().draftText, "half a thought\n\nStarter prompt");
+});
