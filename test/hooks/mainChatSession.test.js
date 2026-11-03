@@ -457,6 +457,12 @@ for (const [event, changedId, unmount = false] of [
   ["onNoteUpdated", 2],
   ["onNoteUpdated", 1],
   ["onNoteDeleted", 1],
+  ["onNoteUpdated", 1, true],
+  ["onNoteUpdated", 2, true],
+  ["onNoteSynced", 1, true],
+  ["onNoteSynced", 2, true],
+  ["onNoteDeleted", 1, true],
+  ["onNoteDeleted", 2, true],
   ["onSpacePurged", 2],
   ["onFolderDeleted", 9],
   ["onSpacePurged", 2, true],
@@ -511,12 +517,16 @@ for (const [event, changedId, unmount = false] of [
       await until(() => fixture.streams.length === 1);
     });
     const prompt = fixture.streams[0].messages[0].content;
-    assert.equal(prompt.includes("Source content 1"), event === "onNoteUpdated" && changedId !== 1);
+    assert.equal(
+      prompt.includes("Source content 1"),
+      ["onNoteUpdated", "onNoteSynced", "onNoteDeleted"].includes(event) && changedId !== 1
+    );
     assert.doesNotMatch(prompt, /Source content 2/);
+    assert.equal(listeners.size, unmount ? 1 : 2, "the pending turn keeps its subscription");
     await React.act(async () => {
       fixture.streams[0].resolve("Answer");
       await until(() => !fixture.state().entries["conversation:1"]?.running);
     });
-    assert.equal(listeners.size, unmount ? 0 : 1);
+    assert.equal(listeners.size, unmount ? 0 : 1, "the settled turn releases its subscription");
   });
 }

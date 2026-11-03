@@ -217,10 +217,11 @@ export function useMainChatSession(): MainChatSession {
         userName: user?.name ?? null,
         // A skill request starts a new chat and sends in one tick: never carry the last chat's note.
         openNote: currentSelection.kind === "conversation" ? source.openNote : undefined,
+        sourceNoteId: currentSelection.kind === "conversation" ? source.sourceNote?.id : undefined,
         options,
       });
     },
-    [loaded, user?.name, source.isLoading, source.openNote]
+    [loaded, user?.name, source.isLoading, source.openNote, source.sourceNote?.id]
   );
 
   const setSkills = useCallback((next: ChatSkills): void => {

@@ -45,6 +45,7 @@ export interface StartChatSendInput {
   userName: string | null;
   /** The note this conversation was started from, bound for this turn. */
   openNote?: ChatTurnOptions["openNote"];
+  sourceNoteId?: number;
   options?: SendToAIOptions;
 }
 
@@ -282,9 +283,15 @@ export function startChatSend(input: StartChatSendInput): boolean {
     const invalidateNote = (): void => {
       noteAvailable = false;
     };
-    // Container revocation must reach this send after its source-note hook unmounts.
+    const invalidateChangedNote = (note: { id: number }): void => {
+      if (note.id === input.sourceNoteId) invalidateNote();
+    };
+    // Note changes and container revocation must reach this send after its source-note hook unmounts.
     const noteDisposers = openNote
       ? [
+          window.electronAPI?.onNoteUpdated?.(invalidateChangedNote),
+          window.electronAPI?.onNoteSynced?.(invalidateChangedNote),
+          window.electronAPI?.onNoteDeleted?.(invalidateChangedNote),
           window.electronAPI?.onSpacePurged?.(invalidateNote),
           window.electronAPI?.onFolderDeleted?.(invalidateNote),
         ]
