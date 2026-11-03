@@ -1306,8 +1306,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-mark-conversation-create-attempted", id),
   acknowledgeConversationCreate: (id, snapshot, cloudId) =>
     ipcRenderer.invoke("db-acknowledge-conversation-create", id, snapshot, cloudId),
-  markConversationSynced: (id, cloudId) =>
-    ipcRenderer.invoke("db-mark-conversation-synced", id, cloudId),
+  markConversationSynced: (id, cloudId, snapshot) =>
+    ipcRenderer.invoke("db-mark-conversation-synced", id, cloudId, snapshot),
+  replaceConversationClientId: (id, expectedClientId) =>
+    ipcRenderer.invoke("db-replace-conversation-client-id", id, expectedClientId),
   hardDeleteConversation: (id) => ipcRenderer.invoke("db-hard-delete-conversation", id),
 
   getPendingTranscriptions: () => ipcRenderer.invoke("db-get-pending-transcriptions"),

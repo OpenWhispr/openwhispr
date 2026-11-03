@@ -3167,6 +3167,7 @@ declare global {
         archived_at?: string;
         cloud_id?: string | null;
         client_conversation_id?: string | null;
+        cloud_create_attempted?: number;
         created_at: string;
         updated_at: string;
         messages: Array<{
@@ -3931,8 +3932,13 @@ declare global {
       ) => Promise<ConversationCreateAckResult | undefined>;
       markConversationSynced?: (
         id: number,
-        cloudId: string
+        cloudId: string,
+        snapshot?: ConversationCreateSnapshot
       ) => Promise<{ success: boolean } | undefined>;
+      replaceConversationClientId?: (
+        id: number,
+        expectedClientId: string | null
+      ) => Promise<{ success: boolean }>;
       hardDeleteConversation?: (id: number) => Promise<void>;
 
       getPendingTranscriptions?: () => Promise<TranscriptionItem[]>;

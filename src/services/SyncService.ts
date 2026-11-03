@@ -377,6 +377,36 @@ function conversationCreateSnapshot(
   };
 }
 
+function conversationMessageMetadata(metadata: unknown): Record<string, unknown> | null {
+  if (!metadata) return null;
+  return typeof metadata === "string"
+    ? JSON.parse(metadata)
+    : (metadata as Record<string, unknown>);
+}
+
+// Messages carry no shared id, so a local message counts as sent while the cloud
+// holds an unmatched one with the same role and text. The messages route refuses
+// empty content, so a tool-only turn stays on this device.
+function missingConversationMessages<Message extends { role: string; content: string }>(
+  local: readonly Message[],
+  cloud: ReadonlyArray<{ role: string; content: string }>
+): Message[] {
+  const key = (message: { role: string; content: string }): string =>
+    JSON.stringify([message.role, message.content]);
+  const unmatched = new Map<string, number>();
+  for (const message of cloud) {
+    unmatched.set(key(message), (unmatched.get(key(message)) ?? 0) + 1);
+  }
+  return local.filter((message) => {
+    const remaining = unmatched.get(key(message)) ?? 0;
+    if (remaining > 0) {
+      unmatched.set(key(message), remaining - 1);
+      return false;
+    }
+    return message.content.length > 0;
+  });
+}
+
 function readPurgedSpaceIds(): Record<string, PurgedSpaceEntry> {
   try {
     const raw = localStorage.getItem(PURGED_SPACE_GUARD_KEY);
@@ -1207,13 +1237,38 @@ export class SyncService {
     );
     if (!result?.success) return;
 
+    if (result.outcome === "changed") {
+      await this.sendMissingConversationContent(localId, cloudId);
+      return;
+    }
+
     const shouldDeleteCreate =
-      result.outcome === "changed" ||
       result.outcome === "orphaned" ||
       (result.outcome === "already-linked" && result.cloud_id !== cloudId);
     if (shouldDeleteCreate) {
       await ConversationsService.delete(cloudId);
     }
+  }
+
+  // A create can't carry these, since it inserts its messages again on a chat
+  // already in the cloud. Each attempt reads the copy first, so a retry after a
+  // failure part way through sends nothing twice. The chat stays pending until
+  // the cloud holds what this pass read, so a later edit gets its own attempt.
+  private async sendMissingConversationContent(localId: number, cloudId: string): Promise<void> {
+    const local = await window.electronAPI.getAgentConversation?.(localId);
+    if (!local) return;
+    const snapshot = conversationCreateSnapshot(local);
+    const { messages: cloudMessages } = await ConversationsService.listMessages(cloudId);
+    for (const message of missingConversationMessages(local.messages, cloudMessages)) {
+      await ConversationsService.addMessage(
+        cloudId,
+        message.role,
+        message.content,
+        conversationMessageMetadata(message.metadata)
+      );
+    }
+    await ConversationsService.update(cloudId, { title: local.title });
+    await window.electronAPI.markConversationSynced?.(localId, cloudId, snapshot);
   }
 
   // Recorded before the request is sent, so a chat deleted while it is in
@@ -1222,22 +1277,31 @@ export class SyncService {
   private async createCloudConversation(full: LocalConversation): Promise<void> {
     const recorded = await window.electronAPI.markConversationCreateAttempted?.(full.id);
     if (!recorded?.success) return;
-    const snapshot = conversationCreateSnapshot(full);
+    // An earlier request may have reached the cloud, and a second one would insert
+    // its messages again. This one only finds the copy; the messages follow it.
+    const messages = full.cloud_create_attempted ? [] : full.messages;
+    const snapshot = conversationCreateSnapshot({ ...full, messages });
     const cloud = await ConversationsService.create({
       client_conversation_id: full.client_conversation_id ?? String(full.id),
       title: full.title,
       created_at: full.created_at,
       updated_at: full.updated_at,
-      messages: full.messages.map((m) => ({
+      messages: messages.map((m) => ({
         role: m.role,
         content: m.content,
-        metadata: m.metadata
-          ? typeof m.metadata === "string"
-            ? JSON.parse(m.metadata)
-            : m.metadata
-          : null,
+        metadata: conversationMessageMetadata(m.metadata),
       })),
     });
+    // Create keeps an existing row's tombstone, and that row takes no further
+    // writes. Linking it would let the next pull delete this chat, so the chat
+    // gets a new identity and the next pass creates a live copy.
+    if (cloud.deleted_at) {
+      await window.electronAPI.replaceConversationClientId?.(
+        full.id,
+        snapshot.client_conversation_id
+      );
+      return;
+    }
     await this.acknowledgeConversationCreate(full.id, snapshot, cloud.id);
   }
 
@@ -2515,8 +2579,7 @@ export class SyncService {
 
     for (const conv of migration) {
       try {
-        await ConversationsService.update(conv.cloud_id!, { title: conv.title });
-        await window.electronAPI.markConversationSynced?.(conv.id, conv.cloud_id!);
+        await this.sendMissingConversationContent(conv.id, conv.cloud_id!);
       } catch (err) {
         console.error("Conversation migration sync failed:", err);
       }
@@ -2570,8 +2633,15 @@ export class SyncService {
           // snapshot mode, so authoritative remote changes are not lost.
           if (local?.folder_delete_pending) continue;
 
+          // A tombstone speaks only for the copy this row is linked to. A live row
+          // that isn't linked to it still has the only copy of its chat. A row
+          // deleted here before its create receipt arrived has nothing else to
+          // clear it, since the delete queue needs a cloud id.
           if (cloudConv.deleted_at) {
-            if (local) await window.electronAPI.hardDeleteConversation?.(local.id);
+            const isLinkedCopy = local?.cloud_id === cloudConv.id;
+            if (local && (isLinkedCopy || (local.deleted_at && !local.cloud_id))) {
+              await window.electronAPI.hardDeleteConversation?.(local.id);
+            }
             continue;
           }
 
@@ -2580,7 +2650,17 @@ export class SyncService {
           // above is authoritative enough to hard-delete it locally.
           if (local?.deleted_at) continue;
 
-          if (!local || isCloudEntryNewer(cloudConv.updated_at, local.updated_at)) {
+          // The next push sends what this row is still missing from the cloud.
+          if (local?.cloud_id && local.sync_status === "pending") continue;
+
+          // Applying a cloud copy replaces every local message, and messages added
+          // after a chat's first create exist only on this device.
+          const holdsLocalHistory =
+            (cloudConv.messages?.length ?? 0) >= (local?.message_count ?? 0);
+          if (
+            !local ||
+            (holdsLocalHistory && isCloudEntryNewer(cloudConv.updated_at, local.updated_at))
+          ) {
             await window.electronAPI.upsertConversationFromCloud?.(
               cloudConv as unknown as Record<string, unknown>,
               (cloudConv.messages ?? []) as unknown as Array<Record<string, unknown>>

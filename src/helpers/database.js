@@ -8853,7 +8853,8 @@ class DatabaseManager {
                EXISTS (
                  SELECT 1 FROM optimistic_folder_delete_rows r
                  WHERE r.entity_type = 'conversation' AND r.entity_id = c.id
-               ) AS folder_delete_pending
+               ) AS folder_delete_pending,
+               (SELECT COUNT(*) FROM agent_messages m WHERE m.conversation_id = c.id) AS message_count
              FROM agent_conversations c
              WHERE c.client_conversation_id = ?`
           )
@@ -8940,18 +8941,52 @@ class DatabaseManager {
     }
   }
 
-  markConversationSynced(id, cloudId) {
+  _conversationWithMessageCount(id) {
+    return this.db
+      .prepare(
+        `SELECT c.*, COUNT(m.id) AS message_count
+         FROM agent_conversations c
+         LEFT JOIN agent_messages m ON m.conversation_id = c.id
+         WHERE c.id = ?
+         GROUP BY c.id`
+      )
+      .get(id);
+  }
+
+  _conversationMatchesSnapshot(current, snapshot) {
+    return (
+      current.title === snapshot.title &&
+      current.updated_at === snapshot.updated_at &&
+      Number(current.message_count) === snapshot.message_count
+    );
+  }
+
+  // With a snapshot, only a chat still matching what was sent to the cloud
+  // settles; a later edit leaves it pending for the next pass.
+  markConversationSynced(id, cloudId, snapshot = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      const result = this.db
-        .prepare(
-          `UPDATE agent_conversations
-           SET cloud_id = COALESCE(cloud_id, ?),
-               sync_status = CASE WHEN deleted_at IS NULL THEN 'synced' ELSE 'pending' END
-           WHERE id = ?`
-        )
-        .run(cloudId, id);
-      return { success: result.changes > 0 };
+      return this.db.transaction(() => {
+        if (snapshot) {
+          const current = this._conversationWithMessageCount(id);
+          if (
+            !current ||
+            current.cloud_id !== cloudId ||
+            !this._conversationMatchesSnapshot(current, snapshot)
+          ) {
+            return { success: false };
+          }
+        }
+        const result = this.db
+          .prepare(
+            `UPDATE agent_conversations
+             SET cloud_id = COALESCE(cloud_id, ?),
+                 sync_status = CASE WHEN deleted_at IS NULL THEN 'synced' ELSE 'pending' END
+             WHERE id = ?`
+          )
+          .run(cloudId, id);
+        return { success: result.changes > 0 };
+      })();
     } catch (error) {
       debugLogger.error("Error marking conversation synced", { error: error.message }, "database");
       throw error;
@@ -8977,6 +9012,29 @@ class DatabaseManager {
     }
   }
 
+  // The cloud's only copy under this identity is a tombstone that takes no more
+  // writes, so a live chat gets a new identity and goes up as a new copy.
+  replaceConversationClientId(id, expectedClientId) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const result = this.db
+        .prepare(
+          `UPDATE agent_conversations
+           SET client_conversation_id = ?, cloud_create_attempted = 0, sync_status = 'pending'
+           WHERE id = ? AND client_conversation_id = ? AND cloud_id IS NULL AND deleted_at IS NULL`
+        )
+        .run(randomUUID(), id, expectedClientId);
+      return { success: result.changes > 0 };
+    } catch (error) {
+      debugLogger.error(
+        "Error replacing conversation client id",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
   acknowledgeConversationCreate(id, snapshot, cloudId) {
     try {
       if (!this.db) throw new Error("Database not initialized");
@@ -8985,15 +9043,7 @@ class DatabaseManager {
       }
 
       return this.db.transaction(() => {
-        const current = this.db
-          .prepare(
-            `SELECT c.*, COUNT(m.id) AS message_count
-             FROM agent_conversations c
-             LEFT JOIN agent_messages m ON m.conversation_id = c.id
-             WHERE c.id = ?
-             GROUP BY c.id`
-          )
-          .get(id);
+        const current = this._conversationWithMessageCount(id);
         const expectedClientId = snapshot.client_conversation_id ?? null;
 
         if (!current || (current.client_conversation_id ?? null) !== expectedClientId) {
@@ -9024,12 +9074,18 @@ class DatabaseManager {
           return { success: true, outcome: "delete-pending", cloud_id: cloudId };
         }
 
-        const unchanged =
-          current.title === snapshot.title &&
-          current.updated_at === snapshot.updated_at &&
-          Number(current.message_count) === snapshot.message_count;
-        if (!unchanged) {
-          return { success: true, outcome: "changed", cloud_id: null };
+        // Linked at once, so a failure from here on can't lead to a second create,
+        // which would insert this request's messages again. Still pending until
+        // the cloud has the rest.
+        if (!this._conversationMatchesSnapshot(current, snapshot)) {
+          this.db
+            .prepare(
+              `UPDATE agent_conversations
+               SET cloud_id = ?, sync_status = 'pending'
+               WHERE id = ? AND cloud_id IS NULL`
+            )
+            .run(cloudId, id);
+          return { success: true, outcome: "changed", cloud_id: cloudId };
         }
 
         this.db
