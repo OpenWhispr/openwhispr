@@ -120,6 +120,8 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/notes/NotesOnboarding.tsx": ["auto", "auto", "auto"],
   "src/components/notes/ShareNoteDialog.tsx": ["auto"],
   "src/components/notes/SpaceNameField.tsx": ["auto"],
+  // A teamspace's name and description, edited in place in the settings header: prose in any script.
+  "src/components/notes/SpaceSettingsDialog.tsx": ["auto", "auto"],
   "src/components/notes/SpacesTree.tsx": ["auto", "auto", "auto", "auto"],
   "src/components/notes/UploadAudioView.tsx": ["ltr", "ltr", "inherit"],
   "src/components/onboarding/DemoStep.tsx": ["auto"],

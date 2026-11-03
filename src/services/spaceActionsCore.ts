@@ -160,9 +160,13 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
 
   async function renameSpace(
     space: SpaceItem,
-    updates: { name: string; emoji: string | null }
+    updates: { name: string; emoji: string | null; description?: string | null }
   ): Promise<{ success: boolean; error?: string }> {
-    const local = await deps.local.updateSpaceMeta(space.id, updates);
+    // The mirror has no description column, so the local row only ever gets the name and emoji.
+    const local = await deps.local.updateSpaceMeta(space.id, {
+      name: updates.name,
+      emoji: updates.emoji,
+    });
     if (!local.success) return local;
     if (!space.cloud_space_id) {
       await deps.local.setSpaceSyncStatus(space.id, "synced");
@@ -213,8 +217,9 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
         await deps.spaces.remove(space.cloud_space_id);
       } catch (err) {
         const failure = classifySpaceError(err);
-        // An archived space is gone: an earlier delete went through and its answer was lost.
-        if (failure.kind !== "archived") {
+        // An archived or missing space is gone: an earlier delete went through and its answer was
+        // lost, or someone else deleted it first. Either way the mirror still lists it.
+        if (failure.kind !== "archived" && failure.kind !== "gone") {
           return { success: false, error: errorMessage(err), failure };
         }
       }

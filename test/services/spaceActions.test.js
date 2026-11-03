@@ -130,6 +130,61 @@ test("createSpace leaves no local trace when the cloud create fails", async () =
   assert.equal(calls.length, 0);
 });
 
+test("renameSpace sends a description to the server and keeps it out of the local mirror", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps, localSpace } = makeHarness();
+  const actions = createSpaceActions(deps);
+
+  const result = await actions.renameSpace(localSpace, {
+    name: "Roadmap",
+    emoji: null,
+    description: "Plans for the year",
+  });
+
+  assert.deepEqual(result, { success: true });
+  assert.deepEqual(
+    calls.filter(([name]) => name === "local.update"),
+    [["local.update", 7, { name: "Roadmap", emoji: null }]],
+    "the mirror holds no description column"
+  );
+  assert.deepEqual(
+    calls.filter(([name]) => name === "space.update"),
+    [
+      [
+        "space.update",
+        "cloud-space-1",
+        { name: "Roadmap", emoji: null, description: "Plans for the year" },
+      ],
+    ]
+  );
+});
+
+test("renameSpace can clear a description", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps, localSpace } = makeHarness();
+  const actions = createSpaceActions(deps);
+
+  await actions.renameSpace(localSpace, { name: "Roadmap", emoji: null, description: null });
+
+  assert.deepEqual(
+    calls.find(([name]) => name === "space.update"),
+    ["space.update", "cloud-space-1", { name: "Roadmap", emoji: null, description: null }]
+  );
+});
+
+test("renameSpace without a description leaves it out of the request", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps, localSpace } = makeHarness();
+  const actions = createSpaceActions(deps);
+
+  await actions.renameSpace(localSpace, { name: "Roadmap", emoji: "🧭" });
+
+  assert.deepEqual(
+    calls.find(([name]) => name === "space.update"),
+    ["space.update", "cloud-space-1", { name: "Roadmap", emoji: "🧭" }]
+  );
+});
+
 test("renameSpace rolls back a rejected cloud rename", async () => {
   const { createSpaceActions } = await load();
   const { calls, deps, localSpace } = makeHarness();
@@ -501,6 +556,26 @@ test("a retried delete that finds it archived reports success", async () => {
   deps.spaces.remove = async (spaceId) => {
     calls.push(["space.remove", spaceId]);
     throw new CloudApiError("Space archived", 410, "space_archived");
+  };
+  const actions = createSpaceActions(deps);
+
+  assert.deepEqual(await actions.deleteSpace(localSpace), { success: true });
+  assert.deepEqual(calls, [
+    ["space.remove", "cloud-space-1"],
+    ["roster.invalidate", "cloud-space-1"],
+    ["guard", "cloud-space-1", "deleted"],
+    ["local.purge", 7],
+  ]);
+});
+
+test("a delete that finds the teamspace gone reports success and drops the mirror's copy", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { calls, deps, localSpace } = makeHarness();
+  // Someone else deleted it first, so there is nothing left to retry against.
+  deps.spaces.remove = async (spaceId) => {
+    calls.push(["space.remove", spaceId]);
+    throw new CloudApiError("Space not found", 404, "space_not_found");
   };
   const actions = createSpaceActions(deps);
 

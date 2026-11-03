@@ -179,3 +179,22 @@ export function classifySpaceError(error: unknown): SpaceActionError {
   }
   return classifyRowActionError(error);
 }
+
+/**
+ * The row-action kind a confirm dialog can show for a failed space action. The kinds only a space
+ * has (a taken name, the last admin, a closed or archived space) have no screen of their own
+ * there, so they read as a plain failure.
+ */
+export function rowActionErrorOf(failure: SpaceActionError | undefined): RowActionError {
+  switch (failure?.kind) {
+    case "gone":
+    case "notAllowed":
+    case "ssoRequired":
+    case "rateLimited":
+    case "refused":
+    case "failed":
+      return failure;
+    default:
+      return { kind: "failed" };
+  }
+}

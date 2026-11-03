@@ -1,19 +1,130 @@
-import { useState } from "react";
+import { useReducer, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { ConfirmDialog } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { useToast } from "../ui/useToast";
+import { WorkspaceActionDialog } from "../workspace/WorkspaceActionDialog";
+import { confirmActionReducer } from "../../lib/confirmActionFlow";
 import { localMutationErrorKey } from "../../lib/localMutationError";
+import { rowActionErrorOf } from "../../lib/workspaceErrors";
 import { deleteSpace } from "../../services/spaceActions";
+import { isolate } from "../../utils/bidiIsolate";
 import type { SpaceItem } from "../../types/electron";
 
 interface DeleteSpaceDialogProps {
   space: SpaceItem | null;
   onClose: () => void;
+  /**
+   * A cloud teamspace was deleted, so a dialog stacked beneath this one (its settings) closes with
+   * it. A cancel only calls `onClose`.
+   */
+  onDeleted?: () => void;
 }
 
-/** Type-the-name destructive confirm that deletes a (team) space. */
-export default function DeleteSpaceDialog({ space, onClose }: DeleteSpaceDialogProps) {
+/**
+ * Deletes a (team) space. A teamspace on the server asks once and shows the delete running; one
+ * that only exists on this device asks for its name, since nothing restores it.
+ */
+export default function DeleteSpaceDialog({
+  space,
+  onClose,
+  onDeleted,
+}: DeleteSpaceDialogProps): ReactElement {
+  if (space?.cloud_space_id) {
+    // Keyed by the teamspace so each one starts at the confirm, whatever the last one ended on.
+    return (
+      <CloudDeleteSpaceDialog
+        key={space.id}
+        space={space}
+        onClose={onClose}
+        onDeleted={onDeleted}
+      />
+    );
+  }
+  return <LocalDeleteSpaceDialog space={space} onClose={onClose} />;
+}
+
+interface CloudDeleteSpaceDialogProps {
+  space: SpaceItem;
+  onClose: () => void;
+  onDeleted?: () => void;
+}
+
+// The server finishes the delete even if this window goes away, as any single request does, so
+// the dialog stays only to report how it went.
+function CloudDeleteSpaceDialog({
+  space,
+  onClose,
+  onDeleted,
+}: CloudDeleteSpaceDialogProps): ReactElement {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const [state, dispatch] = useReducer(confirmActionReducer<SpaceItem>, {
+    kind: "confirm",
+    subject: space,
+  });
+  const name = isolate(space.name);
+  const busy = state.kind === "running";
+  const failed = state.kind === "failed";
+
+  const run = async (): Promise<void> => {
+    dispatch({ type: "confirm" });
+    try {
+      const result = await deleteSpace(space);
+      if (!result.success) {
+        dispatch({ type: "failed", error: rowActionErrorOf(result.failure) });
+        return;
+      }
+    } catch {
+      dispatch({ type: "failed", error: { kind: "failed" } });
+      return;
+    }
+    toast({ title: t("settingsPage.workspace.teamspaces.exit.deleted", { space: name }) });
+    dispatch({ type: "succeeded" });
+    onDeleted?.();
+    onClose();
+  };
+
+  let title = t("settingsPage.workspace.teamspaces.exit.deleteTitle", { space: name });
+  let body = t("settingsPage.workspace.teamspaces.exit.deleteBody", { space: name });
+  let action = t("settingsPage.workspace.teamspaces.settings.deleteAction");
+  if (busy) {
+    title = t("settingsPage.workspace.teamspaces.exit.deletingTitle", { space: name });
+    body = t("settingsPage.workspace.teamspaces.exit.deletingBody");
+    action = t("settingsPage.workspace.teamspaces.exit.deletingAction");
+  } else if (failed) {
+    title = t("settingsPage.workspace.teamspaces.exit.deleteFailedTitle", { space: name });
+    body = t("settingsPage.workspace.teamspaces.exit.deleteFailedBody");
+    action = t("workspaces.exit.tryAgain");
+  }
+
+  return (
+    <WorkspaceActionDialog
+      open
+      icon="trash"
+      title={title}
+      body={body}
+      error={state.kind === "failed" && state.error.kind === "refused" ? state.error.message : null}
+      primary={{
+        label: action,
+        onClick: () => void run(),
+        tone: failed ? "primary" : "destructive",
+      }}
+      cancelLabel={t("common.cancel")}
+      busy={busy}
+      onDismiss={onClose}
+    />
+  );
+}
+
+/** Type-the-name destructive confirm that deletes a space that lives on this device only. */
+function LocalDeleteSpaceDialog({
+  space,
+  onClose,
+}: {
+  space: SpaceItem | null;
+  onClose: () => void;
+}): ReactElement {
   const { t } = useTranslation();
   const { toast } = useToast();
   const [nameInput, setNameInput] = useState("");
@@ -44,14 +155,7 @@ export default function DeleteSpaceDialog({ space, onClose }: DeleteSpaceDialogP
       onOpenChange={(open) => !open && onClose()}
       title={t("notes.spaces.deleteConfirmTitle")}
       description={
-        space
-          ? t(
-              space.cloud_space_id
-                ? "notes.spaces.deleteConfirmTeamDescription"
-                : "notes.spaces.deleteConfirmDescription",
-              { space: space.name }
-            )
-          : undefined
+        space ? t("notes.spaces.deleteConfirmDescription", { space: space.name }) : undefined
       }
       confirmText={t("notes.spaces.deleteSpace")}
       variant="destructive"
