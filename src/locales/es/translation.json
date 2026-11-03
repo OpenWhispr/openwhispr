@@ -2611,6 +2611,23 @@
         "rowMenu": {
           "settings": "Ajustes",
           "delete": "Eliminar teamspace"
+        },
+        "picker": {
+          "groupPeople_one": "{{count}} persona",
+          "groupPeople_other": "{{count}} personas",
+          "groupChip_one": "{{name}} · {{count}} persona",
+          "groupChip_other": "{{name}} · {{count}} personas",
+          "emailChip": "{{email}} · {{role}}",
+          "noMember": "No se encontró ningún miembro",
+          "inviteToWorkspace": "Invitar al espacio de trabajo",
+          "newToWorkspace": "Nuevo en el espacio de trabajo",
+          "select": "Seleccionar",
+          "noResultsTitle": "No se encontraron personas ni grupos",
+          "noResultsBody": "Prueba con otro nombre o introduce una dirección de correo completa.",
+          "noResultsBodyNoInvite": "Prueba con otro nombre.",
+          "hasAccess": "Ya tiene acceso",
+          "groupHasAccess_one": "Ya tiene acceso · {{count}} persona",
+          "groupHasAccess_other": "Ya tiene acceso · {{count}} personas"
         }
       },
       "role": {

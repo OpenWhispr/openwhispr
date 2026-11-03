@@ -3981,6 +3981,35 @@
         "rowMenu": {
           "settings": "الإعدادات",
           "delete": "حذف مساحة الفريق"
+        },
+        "picker": {
+          "groupPeople_zero": "{{count}} أشخاص",
+          "groupPeople_one": "{{count}} شخص",
+          "groupPeople_two": "{{count}} شخصان",
+          "groupPeople_few": "{{count}} أشخاص",
+          "groupPeople_many": "{{count}} شخصًا",
+          "groupPeople_other": "{{count}} شخص",
+          "groupChip_zero": "{{name}} · {{count}} أشخاص",
+          "groupChip_one": "{{name}} · {{count}} شخص",
+          "groupChip_two": "{{name}} · {{count}} شخصان",
+          "groupChip_few": "{{name}} · {{count}} أشخاص",
+          "groupChip_many": "{{name}} · {{count}} شخصًا",
+          "groupChip_other": "{{name}} · {{count}} شخص",
+          "emailChip": "{{email}} · {{role}}",
+          "noMember": "لم يتم العثور على عضو",
+          "inviteToWorkspace": "دعوة إلى مساحة العمل",
+          "newToWorkspace": "جديد في مساحة العمل",
+          "select": "اختيار",
+          "noResultsTitle": "لم يتم العثور على أشخاص أو مجموعات",
+          "noResultsBody": "جرّب اسمًا آخر أو أدخل عنوان بريد إلكتروني كاملًا.",
+          "noResultsBodyNoInvite": "جرّب اسمًا آخر.",
+          "hasAccess": "لديه صلاحية الوصول بالفعل",
+          "groupHasAccess_zero": "لديه صلاحية الوصول بالفعل · {{count}} أشخاص",
+          "groupHasAccess_one": "لديه صلاحية الوصول بالفعل · {{count}} شخص",
+          "groupHasAccess_two": "لديه صلاحية الوصول بالفعل · {{count}} شخصان",
+          "groupHasAccess_few": "لديه صلاحية الوصول بالفعل · {{count}} أشخاص",
+          "groupHasAccess_many": "لديه صلاحية الوصول بالفعل · {{count}} شخصًا",
+          "groupHasAccess_other": "لديه صلاحية الوصول بالفعل · {{count}} شخص"
         }
       },
       "role": {

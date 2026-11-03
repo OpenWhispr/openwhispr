@@ -2559,6 +2559,23 @@
         "rowMenu": {
           "settings": "設定",
           "delete": "刪除 Teamspace"
+        },
+        "picker": {
+          "groupPeople_one": "{{count}} 人",
+          "groupPeople_other": "{{count}} 人",
+          "groupChip_one": "{{name}} · {{count}} 人",
+          "groupChip_other": "{{name}} · {{count}} 人",
+          "emailChip": "{{email}} · {{role}}",
+          "noMember": "找不到成員",
+          "inviteToWorkspace": "邀請加入工作區",
+          "newToWorkspace": "工作區新成員",
+          "select": "選取",
+          "noResultsTitle": "找不到成員或群組",
+          "noResultsBody": "請嘗試其他名稱，或輸入完整的電子郵件地址。",
+          "noResultsBodyNoInvite": "請嘗試其他名稱。",
+          "hasAccess": "已有存取權",
+          "groupHasAccess_one": "已有存取權 · {{count}} 人",
+          "groupHasAccess_other": "已有存取權 · {{count}} 人"
         }
       },
       "role": {

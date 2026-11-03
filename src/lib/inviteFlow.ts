@@ -94,12 +94,12 @@ function normalize(email: string): string {
 }
 
 // Deliberately loose: the server has the final say on what an address is.
-function isValidEmail(email: string): boolean {
+export function isValidEmail(email: string): boolean {
   return email.length <= MAX_EMAIL_LENGTH && EMAIL_REGEX.test(email);
 }
 
 /** The addresses in pasted or typed text, with any "Name <address>" reduced to its address. */
-function parseEmails(text: string): string[] {
+export function parseEmails(text: string): string[] {
   const emails: string[] = [];
   for (const line of text.split(/[\n\r]+/)) {
     for (const part of parseAddressList(line)) {

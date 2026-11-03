@@ -2585,6 +2585,29 @@
         "rowMenu": {
           "settings": "Настройки",
           "delete": "Удалить teamspace"
+        },
+        "picker": {
+          "groupPeople_one": "{{count}} человек",
+          "groupPeople_few": "{{count}} человека",
+          "groupPeople_many": "{{count}} человек",
+          "groupPeople_other": "{{count}} человека",
+          "groupChip_one": "{{name}} · {{count}} человек",
+          "groupChip_few": "{{name}} · {{count}} человека",
+          "groupChip_many": "{{name}} · {{count}} человек",
+          "groupChip_other": "{{name}} · {{count}} человека",
+          "emailChip": "{{email}} · {{role}}",
+          "noMember": "Участник не найден",
+          "inviteToWorkspace": "Пригласить в рабочее пространство",
+          "newToWorkspace": "Новый в рабочем пространстве",
+          "select": "Выбрать",
+          "noResultsTitle": "Люди и группы не найдены",
+          "noResultsBody": "Попробуйте другое имя или введите адрес электронной почты полностью.",
+          "noResultsBodyNoInvite": "Попробуйте другое имя.",
+          "hasAccess": "Уже есть доступ",
+          "groupHasAccess_one": "Уже есть доступ · {{count}} человек",
+          "groupHasAccess_few": "Уже есть доступ · {{count}} человека",
+          "groupHasAccess_many": "Уже есть доступ · {{count}} человек",
+          "groupHasAccess_other": "Уже есть доступ · {{count}} человека"
         }
       },
       "role": {

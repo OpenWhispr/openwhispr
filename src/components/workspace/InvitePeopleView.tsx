@@ -30,6 +30,7 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { WorkspaceErrorBar } from "./WorkspaceErrorBar";
+import { CHIP_REMOVE_BUTTON, CHIP_TONE_DEFAULT, CHIP_TONE_ERROR } from "./recipientChipStyles";
 
 export interface InviteSuggestion {
   email: string;
@@ -589,9 +590,7 @@ function RecipientChip({
       title={error}
       className={cn(
         "inline-flex h-7 max-w-full items-center gap-0.5 rounded-full border ps-2.5 pe-0.5 text-xs",
-        error
-          ? "border-destructive/60 bg-destructive/5 text-destructive"
-          : "border-border/70 bg-surface-2 text-foreground"
+        error ? CHIP_TONE_ERROR : CHIP_TONE_DEFAULT
       )}
     >
       <bdi dir="ltr" className="truncate">
@@ -602,7 +601,7 @@ function RecipientChip({
         disabled={disabled}
         onClick={onRemove}
         aria-label={t("workspaces.invite.removeRecipient", { email: recipient.email })}
-        className="flex size-6 shrink-0 items-center justify-center rounded-full opacity-70 transition-colors hover:bg-foreground/10 hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none"
+        className={CHIP_REMOVE_BUTTON}
       >
         <X className="size-3" aria-hidden="true" />
       </button>

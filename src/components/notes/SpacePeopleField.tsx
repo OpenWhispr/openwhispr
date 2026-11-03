@@ -1,0 +1,628 @@
+import {
+  useId,
+  useState,
+  type ClipboardEvent,
+  type FocusEvent,
+  type KeyboardEvent,
+  type ReactElement,
+  type ReactNode,
+} from "react";
+import { useTranslation } from "react-i18next";
+import {
+  addRecipients,
+  emailRecipient,
+  groupRecipient,
+  memberRecipient,
+  pickerResults,
+  recipientKey,
+  recipientsFromText,
+  type PickedRecipient,
+} from "../../lib/spacePeoplePicker";
+import type { Team, WorkspaceMember } from "../../types/electron";
+import { isolate } from "../../utils/bidiIsolate";
+import { ChevronDown, Mail, X } from "../icons";
+import { cn } from "../lib/utils";
+import MemberAvatar from "../MemberAvatar";
+import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "../ui/BidiInterpolatedText";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
+import { Input } from "../ui/input";
+import { Popover, PopoverAnchor, PopoverContent } from "../ui/popover";
+import {
+  CHIP_REMOVE_BUTTON,
+  CHIP_TONE_DEFAULT,
+  CHIP_TONE_ERROR,
+} from "../workspace/recipientChipStyles";
+import { TileGlyph } from "./SpaceNameField";
+
+type InviteRole = "admin" | "member";
+
+export interface SpacePeopleFieldProps {
+  id?: string;
+  roster: WorkspaceMember[];
+  groups: Team[];
+  accessUserIds?: ReadonlySet<string>;
+  accessGroupIds?: ReadonlySet<string>;
+  hiddenUserIds?: ReadonlySet<string>;
+  canInvite: boolean;
+  /** Members tab: the invite row offers a role menu and Select. Create: Invite to workspace. */
+  inviteRoleChoice: boolean;
+  picked: PickedRecipient[];
+  onChange: (picked: PickedRecipient[]) => void;
+  disabled?: boolean;
+  placeholder: string;
+}
+
+type PickerRow =
+  | { kind: "member"; member: WorkspaceMember; hasAccess: boolean }
+  | { kind: "group"; group: Team; hasAccess: boolean }
+  | { kind: "invite"; email: string };
+
+const NO_IDS: ReadonlySet<string> = new Set();
+
+// An address list typed up to a separator, or a pasted "Name <address>" that is closed: complete,
+// unlike the same words while a name is still being searched for.
+const FINISHED_LIST = /[,;،，、]\s*$|<[^<>]*>\s*$/;
+const PASTED_LIST = /[,;،，、\n\r]|<[^<>]*>/;
+
+// The avatar's initial would read as a stray letter before the name it sits beside.
+function PersonAvatar({
+  name,
+  email,
+  image,
+}: {
+  name: string | null;
+  email: string;
+  image?: string | null;
+}): ReactElement {
+  return (
+    <span aria-hidden="true" className="flex shrink-0">
+      <MemberAvatar name={name} email={email} image={image} size="sm" />
+    </span>
+  );
+}
+
+const TILE =
+  "flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-foreground/5 dark:bg-white/6";
+// The tile's glyph is an emoji sized for a larger tile in the table.
+const GROUP_TILE = cn(TILE, "[&>span]:text-xs");
+const ACTION_PILL =
+  "shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-primary/15";
+
+const isPickable = (row: PickerRow): boolean => row.kind === "invite" || !row.hasAccess;
+
+export function SpacePeopleField({
+  id,
+  roster,
+  groups,
+  accessUserIds = NO_IDS,
+  accessGroupIds = NO_IDS,
+  hiddenUserIds,
+  canInvite,
+  inviteRoleChoice,
+  picked,
+  onChange,
+  disabled = false,
+  placeholder,
+}: SpacePeopleFieldProps): ReactElement {
+  const { t } = useTranslation();
+  const listId = useId();
+  const [query, setQuery] = useState("");
+  const [focused, setFocused] = useState(false);
+  // Escape closes the list until the person types, arrows or clicks the field again.
+  const [dismissed, setDismissed] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const [inviteRole, setInviteRole] = useState<InviteRole>("member");
+  const [fieldElement, setFieldElement] = useState<HTMLDivElement | null>(null);
+  const [listElement, setListElement] = useState<HTMLDivElement | null>(null);
+
+  const results = pickerResults({
+    query,
+    roster,
+    groups,
+    picked,
+    accessUserIds,
+    accessGroupIds,
+    hiddenUserIds,
+    canInvite,
+  });
+  const rows: PickerRow[] = [
+    ...results.members.map(({ member, hasAccess }): PickerRow => ({
+      kind: "member",
+      member,
+      hasAccess,
+    })),
+    ...results.groups.map(({ group, hasAccess }): PickerRow => ({
+      kind: "group",
+      group,
+      hasAccess,
+    })),
+    ...(results.inviteEmail ? [{ kind: "invite", email: results.inviteEmail } as const] : []),
+  ];
+  // An empty field with nobody left to list has nothing to say.
+  const showEmptyState = results.noResults && query.trim() !== "";
+  const listOpen = focused && !dismissed && !disabled && (rows.length > 0 || showEmptyState);
+  const active =
+    listOpen && activeIndex >= 0 && activeIndex < rows.length && isPickable(rows[activeIndex])
+      ? activeIndex
+      : -1;
+  const hasInvalid = picked.some((recipient) => recipient.kind === "email" && !recipient.valid);
+
+  const stage = (incoming: PickedRecipient[]): void => {
+    const next = addRecipients(picked, incoming, { accessUserIds, hiddenUserIds });
+    if (next !== picked) onChange(next);
+  };
+
+  // Stages every address in the text and returns what couldn't be staged, to leave in the field:
+  // an address nobody here may invite, or a member who already has access.
+  const stageText = (text: string): string => {
+    const parsed = recipientsFromText(text, roster);
+    const allowed = canInvite ? parsed : parsed.filter((recipient) => recipient.kind === "member");
+    const next = addRecipients(picked, allowed, { accessUserIds, hiddenUserIds });
+    if (next !== picked) onChange(next);
+    const stagedKeys = new Set(next.map(recipientKey));
+    return parsed
+      .filter((recipient) => !stagedKeys.has(recipientKey(recipient)))
+      .map((recipient) => (recipient.kind === "group" ? recipient.label : recipient.email))
+      .join(", ");
+  };
+
+  // Half a name is a search; only text that reads as an address is chipped.
+  const commitQuery = (): void => {
+    if (query.includes("@")) setQuery(stageText(query));
+  };
+
+  const pick = (row: PickerRow): void => {
+    if (!isPickable(row)) return;
+    if (row.kind === "member") stage([memberRecipient(row.member)]);
+    else if (row.kind === "group") stage([groupRecipient(row.group)]);
+    else {
+      stage([emailRecipient(row.email.toLowerCase(), inviteRoleChoice ? inviteRole : "member")]);
+      // Never carried to the next address: an admin invitation is a choice made each time.
+      setInviteRole("member");
+    }
+    setQuery("");
+    setActiveIndex(-1);
+    setDismissed(true);
+  };
+
+  const move = (step: 1 | -1): void => {
+    const pickable = rows.flatMap((row, index) => (isPickable(row) ? [index] : []));
+    if (pickable.length === 0) return;
+    const position = pickable.indexOf(active);
+    const next =
+      position === -1
+        ? step === 1
+          ? 0
+          : pickable.length - 1
+        : (position + step + pickable.length) % pickable.length;
+    setActiveIndex(pickable[next]);
+  };
+
+  const handleChange = (value: string): void => {
+    setActiveIndex(-1);
+    setDismissed(false);
+    setQuery(value.includes("@") && FINISHED_LIST.test(value) ? stageText(value) : value);
+  };
+
+  const handlePaste = (event: ClipboardEvent<HTMLInputElement>): void => {
+    const pasted = event.clipboardData.getData("text/plain");
+    // One address or a name pastes into the field like any text.
+    if (!pasted.includes("@") || !PASTED_LIST.test(pasted)) return;
+    event.preventDefault();
+    const leftover = stageText(pasted);
+    setQuery(leftover === "" ? query : leftover);
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
+    if (event.nativeEvent.isComposing) return;
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (listOpen) move(event.key === "ArrowDown" ? 1 : -1);
+      else setDismissed(false);
+    } else if (event.key === "Enter") {
+      // Enter belongs to the field: the dialog around it is not submitted from here.
+      event.preventDefault();
+      if (active >= 0) pick(rows[active]);
+      else commitQuery();
+    }
+  };
+
+  // Blur bubbles up from the field, the list and its role menu alike; only leaving all of them is
+  // leaving the field, so choosing a role never chips the address it is for.
+  const handleBlur = (event: FocusEvent<HTMLElement>): void => {
+    const next = event.relatedTarget;
+    if (next instanceof Node && (fieldElement?.contains(next) || listElement?.contains(next))) {
+      return;
+    }
+    setFocused(false);
+    commitQuery();
+  };
+
+  const emojiByTeam = new Map(groups.map((group) => [group.id, group.emoji ?? null]));
+
+  return (
+    <div className="flex flex-col gap-2" onBlur={handleBlur}>
+      <Popover
+        open={listOpen}
+        onOpenChange={(open) => {
+          // Radix closes the list on Escape before the dialog around it sees the key.
+          if (!open) setDismissed(true);
+        }}
+      >
+        <PopoverAnchor asChild>
+          <div ref={setFieldElement}>
+            <Input
+              id={id}
+              dir="auto"
+              type="text"
+              autoComplete="off"
+              spellCheck={false}
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded={listOpen}
+              aria-controls={listOpen && rows.length > 0 ? listId : undefined}
+              aria-activedescendant={active >= 0 ? `${listId}-${active}` : undefined}
+              aria-invalid={hasInvalid ? true : undefined}
+              disabled={disabled}
+              value={query}
+              placeholder={placeholder}
+              onChange={(event) => handleChange(event.target.value)}
+              onFocus={() => {
+                setFocused(true);
+                setDismissed(false);
+              }}
+              onClick={() => setDismissed(false)}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+            />
+          </div>
+        </PopoverAnchor>
+        <PopoverContent
+          ref={setListElement}
+          // Focus stays in the field, so typing carries on and its blur doesn't chip the text.
+          onOpenAutoFocus={(event) => event.preventDefault()}
+          onCloseAutoFocus={(event) => event.preventDefault()}
+          onInteractOutside={(event) => {
+            if (event.target instanceof Node && fieldElement?.contains(event.target)) {
+              event.preventDefault();
+            }
+          }}
+          onMouseDown={(event) => event.preventDefault()}
+          className="max-h-[min(18rem,var(--radix-popover-content-available-height))] w-[var(--radix-popover-trigger-width)] min-w-0 overflow-y-auto rounded-xl p-1.5"
+        >
+          {rows.length > 0 ? (
+            <div
+              id={listId}
+              role="listbox"
+              aria-label={t("workspaces.invite.suggestions")}
+              className="flex flex-col gap-0.5"
+            >
+              {rows.map((row, index) => {
+                const disabledRow = !isPickable(row);
+                return (
+                  <div
+                    key={rowKey(row)}
+                    id={`${listId}-${index}`}
+                    role="option"
+                    aria-selected={index === active}
+                    aria-disabled={disabledRow || undefined}
+                    onMouseEnter={() => {
+                      if (!disabledRow) setActiveIndex(index);
+                    }}
+                    onClick={() => pick(row)}
+                    className={cn(
+                      "flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-start",
+                      disabledRow ? "cursor-default opacity-50" : "cursor-pointer",
+                      index === active && "bg-muted"
+                    )}
+                  >
+                    <RowContent
+                      row={row}
+                      inviteRoleChoice={inviteRoleChoice}
+                      inviteRole={inviteRole}
+                      onInviteRoleChange={setInviteRole}
+                      menuContainer={listElement}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div role="status" className="flex flex-col gap-0.5 px-2.5 py-2">
+              <p className="text-xs font-medium text-foreground">
+                {t("settingsPage.workspace.teamspaces.picker.noResultsTitle")}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {canInvite
+                  ? t("settingsPage.workspace.teamspaces.picker.noResultsBody")
+                  : t("settingsPage.workspace.teamspaces.picker.noResultsBodyNoInvite")}
+              </p>
+            </div>
+          )}
+        </PopoverContent>
+      </Popover>
+
+      {picked.length > 0 ? (
+        <ul className="flex flex-wrap gap-1.5">
+          {picked.map((recipient) => (
+            <RecipientChip
+              key={recipientKey(recipient)}
+              recipient={recipient}
+              emoji={
+                recipient.kind === "group" ? (emojiByTeam.get(recipient.teamId) ?? null) : null
+              }
+              showRole={inviteRoleChoice}
+              disabled={disabled}
+              onRemove={() =>
+                onChange(picked.filter((entry) => recipientKey(entry) !== recipientKey(recipient)))
+              }
+            />
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+function rowKey(row: PickerRow): string {
+  if (row.kind === "member") return `member:${row.member.user_id}`;
+  if (row.kind === "group") return `group:${row.group.id}`;
+  return "invite";
+}
+
+function RowContent({
+  row,
+  inviteRoleChoice,
+  inviteRole,
+  onInviteRoleChange,
+  menuContainer,
+}: {
+  row: PickerRow;
+  inviteRoleChoice: boolean;
+  inviteRole: InviteRole;
+  onInviteRoleChange: (role: InviteRole) => void;
+  menuContainer: HTMLElement | null;
+}): ReactElement {
+  const { t } = useTranslation();
+
+  if (row.kind === "member") {
+    const { member, hasAccess } = row;
+    const secondary: ReactNode = hasAccess ? (
+      t("settingsPage.workspace.teamspaces.picker.hasAccess")
+    ) : member.name ? (
+      <bdi dir="ltr">{member.email}</bdi>
+    ) : null;
+    return (
+      <>
+        <PersonAvatar name={member.name} email={member.email} image={member.image} />
+        <RowText
+          primary={
+            member.name ? (
+              <span dir="auto">{member.name}</span>
+            ) : (
+              <bdi dir="ltr">{member.email}</bdi>
+            )
+          }
+          secondary={secondary}
+        />
+      </>
+    );
+  }
+
+  if (row.kind === "group") {
+    const { group, hasAccess } = row;
+    const count = group.member_count ?? 0;
+    return (
+      <>
+        <span aria-hidden="true" className={GROUP_TILE}>
+          <TileGlyph emoji={group.emoji ?? null} name={group.name} />
+        </span>
+        <RowText
+          primary={<span dir="auto">{group.name}</span>}
+          secondary={
+            hasAccess
+              ? t("settingsPage.workspace.teamspaces.picker.groupHasAccess", { count })
+              : t("settingsPage.workspace.teamspaces.picker.groupPeople", { count })
+          }
+        />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <span aria-hidden="true" className={cn(TILE, "text-muted-foreground")}>
+        <Mail className="size-3" aria-hidden="true" />
+      </span>
+      <RowText
+        primary={<bdi dir="ltr">{row.email}</bdi>}
+        secondary={
+          inviteRoleChoice
+            ? t("settingsPage.workspace.teamspaces.picker.newToWorkspace")
+            : t("settingsPage.workspace.teamspaces.picker.noMember")
+        }
+      />
+      {inviteRoleChoice ? (
+        <>
+          {/* The menu is part of this row's React tree, so its clicks would reach the row and stage. */}
+          <div className="shrink-0" onClick={(event) => event.stopPropagation()}>
+            <InviteRoleMenu
+              role={inviteRole}
+              onRoleChange={onInviteRoleChange}
+              container={menuContainer}
+            />
+          </div>
+          <button type="button" className={ACTION_PILL}>
+            {t("settingsPage.workspace.teamspaces.picker.select")}
+          </button>
+        </>
+      ) : (
+        <span className={ACTION_PILL}>
+          {t("settingsPage.workspace.teamspaces.picker.inviteToWorkspace")}
+        </span>
+      )}
+    </>
+  );
+}
+
+function RowText({
+  primary,
+  secondary,
+}: {
+  primary: ReactNode;
+  secondary: ReactNode;
+}): ReactElement {
+  return (
+    <span className="flex min-w-0 flex-1 flex-col">
+      <span className="truncate text-xs text-foreground">{primary}</span>
+      {secondary ? (
+        <span className="truncate text-[11px] text-muted-foreground">{secondary}</span>
+      ) : null}
+    </span>
+  );
+}
+
+function InviteRoleMenu({
+  role,
+  onRoleChange,
+  container,
+}: {
+  role: InviteRole;
+  onRoleChange: (role: InviteRole) => void;
+  container: HTMLElement | null;
+}): ReactElement {
+  const { t } = useTranslation();
+  const itemClass = "items-start rounded-lg py-2 [&>span:first-child]:top-3";
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-xs text-foreground outline-none transition-colors hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-foreground/5">
+        <span className="sr-only">{t("workspaces.invite.roleLabel")}</span>
+        <span>
+          {role === "admin"
+            ? t("notes.spaces.members.roleAdmin")
+            : t("notes.spaces.members.roleMember")}
+        </span>
+        <ChevronDown className="size-3 shrink-0" aria-hidden="true" />
+      </DropdownMenuTrigger>
+      {/* In the list's own element, so moving focus into the menu is not leaving the field. */}
+      <DropdownMenuContent align="end" container={container} className="w-64">
+        <DropdownMenuRadioGroup
+          value={role}
+          onValueChange={(value) => onRoleChange(value === "admin" ? "admin" : "member")}
+        >
+          <DropdownMenuRadioItem value="member" className={itemClass}>
+            <span className="flex min-w-0 flex-col gap-0.5">
+              <span className="text-sm text-foreground">{t("workspaces.invite.role.member")}</span>
+              <span className="text-xs text-muted-foreground">
+                {t("workspaces.invite.roleDescription.member")}
+              </span>
+            </span>
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="admin" className={itemClass}>
+            <span className="flex min-w-0 flex-col gap-0.5">
+              <span className="text-sm text-foreground">{t("workspaces.invite.role.admin")}</span>
+              <span className="text-xs text-muted-foreground">
+                {t("workspaces.invite.roleDescription.admin")}
+              </span>
+            </span>
+          </DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function RecipientChip({
+  recipient,
+  emoji,
+  showRole,
+  disabled,
+  onRemove,
+}: {
+  recipient: PickedRecipient;
+  emoji: string | null;
+  showRole: boolean;
+  disabled: boolean;
+  onRemove: () => void;
+}): ReactElement {
+  const { t } = useTranslation();
+  const invalid = recipient.kind === "email" && !recipient.valid;
+
+  let leading: ReactElement;
+  let label: ReactNode;
+  let removeName: string;
+  if (recipient.kind === "member") {
+    leading = <PersonAvatar name={recipient.label} email={recipient.email} />;
+    label = <span dir="auto">{recipient.label}</span>;
+    removeName = recipient.label;
+  } else if (recipient.kind === "group") {
+    leading = (
+      <span aria-hidden="true" className={GROUP_TILE}>
+        <TileGlyph emoji={emoji} name={recipient.label} />
+      </span>
+    );
+    label = (
+      <span dir="auto">
+        {t("settingsPage.workspace.teamspaces.picker.groupChip", {
+          name: isolate(recipient.label),
+          count: recipient.memberCount,
+        })}
+      </span>
+    );
+    removeName = recipient.label;
+  } else {
+    leading = (
+      <span aria-hidden="true" className={cn(TILE, "text-muted-foreground")}>
+        <Mail className="size-3" aria-hidden="true" />
+      </span>
+    );
+    label = showRole ? (
+      <BidiInterpolatedText
+        text={t("settingsPage.workspace.teamspaces.picker.emailChip", {
+          email: BIDI_VALUE_TOKEN,
+          role:
+            recipient.role === "admin"
+              ? t("notes.spaces.members.roleAdmin")
+              : t("notes.spaces.members.roleMember"),
+        })}
+        value={recipient.email}
+      />
+    ) : (
+      <bdi dir="ltr">{recipient.email}</bdi>
+    );
+    removeName = recipient.email;
+  }
+
+  return (
+    <li
+      data-chip={recipient.kind}
+      data-invalid={invalid ? "" : undefined}
+      title={
+        invalid ? t("workspaces.invite.errors.invalid", { email: isolate(removeName) }) : undefined
+      }
+      className={cn(
+        "inline-flex h-7 max-w-full items-center gap-1.5 rounded-full border ps-1 pe-0.5 text-xs",
+        invalid ? CHIP_TONE_ERROR : CHIP_TONE_DEFAULT
+      )}
+    >
+      {leading}
+      <span className="truncate">{label}</span>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={onRemove}
+        aria-label={t("workspaces.invite.removeRecipient", { email: isolate(removeName) })}
+        className={CHIP_REMOVE_BUTTON}
+      >
+        <X className="size-3" aria-hidden="true" />
+      </button>
+    </li>
+  );
+}

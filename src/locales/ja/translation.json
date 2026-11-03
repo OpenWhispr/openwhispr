@@ -2559,6 +2559,23 @@
         "rowMenu": {
           "settings": "設定",
           "delete": "Teamspace を削除"
+        },
+        "picker": {
+          "groupPeople_one": "{{count}}人",
+          "groupPeople_other": "{{count}}人",
+          "groupChip_one": "{{name}} · {{count}}人",
+          "groupChip_other": "{{name}} · {{count}}人",
+          "emailChip": "{{email}} · {{role}}",
+          "noMember": "メンバーが見つかりません",
+          "inviteToWorkspace": "ワークスペースに招待",
+          "newToWorkspace": "ワークスペースの新規ユーザー",
+          "select": "選択",
+          "noResultsTitle": "メンバーまたはグループが見つかりません",
+          "noResultsBody": "別の名前を試すか、メールアドレス全体を入力してください。",
+          "noResultsBodyNoInvite": "別の名前をお試しください。",
+          "hasAccess": "すでにアクセス権があります",
+          "groupHasAccess_one": "すでにアクセス権があります · {{count}}人",
+          "groupHasAccess_other": "すでにアクセス権があります · {{count}}人"
         }
       },
       "role": {
