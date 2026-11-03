@@ -1662,3 +1662,32 @@ test("a chat that follows its note into another space drops the old scope", (t) 
     { note_id: kept, space_id: null }
   );
 });
+
+test("a pull landing on a just-deleted note keeps its delete queued", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const id = insertCloudCopy(db, {
+    client_note_id: "racing",
+    cloud_id: "cloud-1",
+    sync_status: "pending",
+    deleted_at: LOCAL_LATE,
+  });
+
+  db.upsertNoteFromCloud(
+    {
+      id: "cloud-1",
+      client_note_id: "racing",
+      title: "Copy",
+      content: "newer",
+      created_at: "2026-07-20T09:00:00.000Z",
+      updated_at: "2026-07-20T13:00:00.000Z",
+    },
+    null,
+    db.getPrivateSpaceId()
+  );
+
+  assert.deepEqual(
+    db.getPendingNoteDeletes().map((note) => note.id),
+    [id]
+  );
+});
