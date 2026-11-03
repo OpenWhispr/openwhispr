@@ -34,8 +34,9 @@ export function startRecordingForNote(
 }
 
 /**
- * Creates a note, opens it, and starts recording into it. A null space resolves
- * to the private space in the database, so this works before the Notes tree loads.
+ * Creates a note, opens it, and starts recording into it unless policy keeps that
+ * manual. A null space resolves to the private space in the database, so this works
+ * before the Notes tree loads.
  */
 export function useCreateNote(canAutoStart: () => boolean) {
   const { t } = useTranslation();

@@ -893,9 +893,9 @@ export interface StartRecordingArgs {
   canAutoStart?: () => boolean;
 }
 
-// Resolves false only when workspace policy refuses the recording; every other
-// outcome (including setup failures, which are reported through the store) is
-// "accepted" so callers don't roll back UI they didn't own.
+// Resolves false only when workspace policy refuses the recording or an automatic
+// start loses its consent; every other outcome (including setup failures, which are
+// reported through the store) is "accepted" so callers don't roll back UI they didn't own.
 export async function startRecording(args: StartRecordingArgs): Promise<boolean> {
   if (isRecordingFlag || isStartingFlag) return true;
   if (args.canAutoStart && !args.canAutoStart()) return false;
@@ -1053,6 +1053,22 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       });
     };
 
+    // Nothing was captured, so nothing of this start stays on screen.
+    const endSuppressedStart = async () => {
+      segmentsRefValue = [];
+      useMeetingRecordingStore.setState({
+        isRecording: false,
+        isTranscribing: false,
+        recordingNoteId: null,
+        recordingNoteTitle: null,
+        recordingFolderId: null,
+        recordingStartedAt: null,
+        segments: [],
+        transcript: "",
+      });
+      await teardownStart();
+    };
+
     try {
       // Main capture can fail while microphone permission is still pending.
       // Keep its latest report until setup establishes whether this session
@@ -1086,8 +1102,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
           Promise.resolve(DEFAULT_SYSTEM_AUDIO_ACCESS))) ?? getFallbackSystemAudioAccess();
       if (args.canAutoStart && !args.canAutoStart()) {
         automaticStartSuppressed = true;
-        useMeetingRecordingStore.setState({ isRecording: false, isTranscribing: false });
-        await teardownStart();
+        await endSuppressedStart();
         return;
       }
       if (!isCurrentStart()) {
@@ -1232,8 +1247,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         setupSystemCaptureResult = systemCaptureOutcome.value;
       }
       if (automaticStartSuppressed) {
-        useMeetingRecordingStore.setState({ isRecording: false, isTranscribing: false });
-        await teardownStart();
+        await endSuppressedStart();
         return;
       }
       if (startOutcome.status === "rejected") throw startOutcome.reason;

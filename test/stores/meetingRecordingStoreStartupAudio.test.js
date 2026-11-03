@@ -49,7 +49,14 @@ for (const unresolvedPolicy of [false, true]) {
     const { startRecording, useMeetingRecordingStore } = await vite.ssrLoadModule(
       "/stores/meetingRecordingStore.ts"
     );
-    const starting = startRecording({ ...START_ARGS, canAutoStart: () => allowed });
+    const starting = startRecording({
+      ...START_ARGS,
+      noteId: 7,
+      noteTitle: "Standup",
+      folderId: 3,
+      seedSegments: [{ id: "earlier", text: "Earlier", source: "mic", timestamp: 1 }],
+      canAutoStart: () => allowed,
+    });
     await checking.promise;
     allowed = false;
     if (unresolvedPolicy) {
@@ -65,8 +72,15 @@ for (const unresolvedPolicy of [false, true]) {
     assert.equal(await starting, false);
     assert.equal(await startRecording({ ...START_ARGS, canAutoStart: () => false }), false);
     assert.equal(captures, 0);
-    assert.equal(useMeetingRecordingStore.getState().isRecording, false);
-    assert.equal(useMeetingRecordingStore.getState().error, null);
+    const state = useMeetingRecordingStore.getState();
+    assert.equal(state.isRecording, false);
+    assert.equal(state.error, null);
+    assert.equal(state.recordingNoteId, null, "a start that never captured owns no note");
+    assert.equal(state.recordingNoteTitle, null);
+    assert.equal(state.recordingFolderId, null);
+    assert.equal(state.recordingStartedAt, null);
+    assert.deepEqual(state.segments, []);
+    assert.equal(state.transcript, "");
   });
 }
 
