@@ -54,8 +54,15 @@ test("the installed record keeps out a model the running app is too old for", (t
     minAppVersion: "99.0.0",
   };
   store.replaceRegistryData({ data, manifestVersion: old.manifestVersion + 1 });
-  t.after(() => store.replaceRegistryData({ data: old.data, manifestVersion: old.manifestVersion + 2 }));
+  t.after(() =>
+    store.replaceRegistryData({ data: old.data, manifestVersion: old.manifestVersion + 2 })
+  );
   installed.rememberInstalledModel("whisperModels", "", "future-whisper");
-  assert.equal(installed.withInstalledModels(structuredClone(seed), "1.12.0").whisperModels["future-whisper"], undefined);
-  assert.ok(installed.withInstalledModels(structuredClone(seed), "99.0.0").whisperModels["future-whisper"]);
+  assert.equal(
+    installed.withInstalledModels(structuredClone(seed), "1.12.0").whisperModels["future-whisper"],
+    undefined
+  );
+  assert.ok(
+    installed.withInstalledModels(structuredClone(seed), "99.0.0").whisperModels["future-whisper"]
+  );
 });

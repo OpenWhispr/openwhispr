@@ -29,12 +29,21 @@ test("installed local models survive a catalog that lacks them, but retired ones
   assert.equal(restored.whisperModels["remote-whisper"].fileName, "ggml-remote.bin");
 
   const retired = structuredClone(seed);
-  retired.whisperModels["remote-whisper"] = { ...withRemote.whisperModels["remote-whisper"], retired: true };
-  assert.equal(installed.withInstalledModels(retired).whisperModels["remote-whisper"].retired, true);
+  retired.whisperModels["remote-whisper"] = {
+    ...withRemote.whisperModels["remote-whisper"],
+    retired: true,
+  };
+  assert.equal(
+    installed.withInstalledModels(retired).whisperModels["remote-whisper"].retired,
+    true
+  );
 
   installed.forgetInstalledModels("whisperModels", "", "remote-whisper");
   installed.forgetInstalledModels("localProviders");
   const forgotten = installed.withInstalledModels(structuredClone(seed));
   assert.equal(forgotten.whisperModels["remote-whisper"], undefined);
-  assert.equal(forgotten.localProviders[0].models.some((m) => m.id === "remote-gguf"), false);
+  assert.equal(
+    forgotten.localProviders[0].models.some((m) => m.id === "remote-gguf"),
+    false
+  );
 });

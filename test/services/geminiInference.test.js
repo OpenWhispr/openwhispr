@@ -167,7 +167,9 @@ test("a Gemini model added through the catalog brings its own thinking floor", a
     thinkingFloor: { level: "low" },
   });
   store.replaceRegistryData({ data, manifestVersion: old.manifestVersion + 1 });
-  t.after(() => store.replaceRegistryData({ data: old.data, manifestVersion: old.manifestVersion + 2 }));
+  t.after(() =>
+    store.replaceRegistryData({ data: old.data, manifestVersion: old.manifestVersion + 2 })
+  );
   const { requests, call } = await setup(t);
   await call({ model: "gemini-9-flash" });
   assert.deepEqual(requests.at(-1).generationConfig.thinkingConfig, {

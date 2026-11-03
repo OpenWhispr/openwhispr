@@ -11,7 +11,8 @@ const seed = require("../../src/models/modelRegistryData.json");
 const pair = generateKeyPairSync("ed25519");
 const trustedKeys = { fixture: pair.publicKey.export({ type: "spki", format: "pem" }) };
 const CLIENT = "c".repeat(64);
-const openaiIds = (data) => data.cloudProviders.find((p) => p.id === "openai").models.map((m) => m.id);
+const openaiIds = (data) =>
+  data.cloudProviders.find((p) => p.id === "openai").models.map((m) => m.id);
 
 function signed(version, data = seed, { tested = [CLIENT], extra = {} } = {}) {
   return JSON.stringify(
@@ -22,7 +23,11 @@ function signed(version, data = seed, { tested = [CLIENT], extra = {} } = {}) {
           manifestVersion: version,
           publishedAt: "2026-11-03T12:00:00Z",
           sourceCommit: "a".repeat(40),
-          contractHashes: { schema: "a".repeat(64), envelope: "b".repeat(64), selection: "c".repeat(64) },
+          contractHashes: {
+            schema: "a".repeat(64),
+            envelope: "b".repeat(64),
+            selection: "c".repeat(64),
+          },
           testedClientContracts: tested,
           data,
           ...extra,
@@ -93,7 +98,10 @@ test("a catalog with fields or entries this app cannot read still applies", asyn
   assert.equal(x.loader.getSnapshot().manifestVersion, 2);
   assert.ok(openaiIds(accepted).includes("plain-addition"));
   assert.equal(openaiIds(accepted).includes("future-reader-only"), false);
-  assert.equal(accepted.cloudProviders.find((p) => p.id === "openai").models[0].futureCapability, undefined);
+  assert.equal(
+    accepted.cloudProviders.find((p) => p.id === "openai").models[0].futureCapability,
+    undefined
+  );
   assert.equal(x.errors.length, 0);
 });
 
