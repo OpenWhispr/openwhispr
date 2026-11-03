@@ -21,6 +21,7 @@
 ## Decisions (made with the user; do not re-litigate)
 
 - **One downloadable model:** Qwen3.5-2B Q4_K_M, the same file as desktop's `qwen3.5-2b-q4_k_m` entry: `bartowski/Qwen_Qwen3.5-2B-GGUF` / `Qwen_Qwen3.5-2B-Q4_K_M.gguf`, ~1.3 GB, Apache 2.0. There is no 4B option.
+  - **Revisited 2026-11-03:** the spike also benchmarks **MiniCPM5-2B** (OpenBMB, Apache 2.0, Sep 2026; ~1.6 GB), the highest-scoring open model under 4B on Artificial Analysis's index. Qwen3.5-2B stays the default unless MiniCPM5-2B wins on the device runs. **LFM3-1.7B** (Liquid AI, Oct 2026; ~1 GB) is held back: its LFM Open License is free only under $10M annual revenue, and it likely needs llama.rn 0.13, which is still a release candidate. It goes into the spike only once the user confirms the license works.
 - **Eligibility by RAM, not by model list:** total RAM ≥ 5 GiB.
   - On iPhone that means all 6 GB+ models: 12 Pro, 13 Pro, the 14 line and everything since.
   - The 4 GB phones (11, 12, 13, SE 2/3, XS/XR) see why it isn't available, with the phone's name and RAM.
@@ -259,16 +260,16 @@ Throwaway branch off this one. Results are written into "Spike results" at the b
 
 ## Spike results
 
-**Status (2026-10-07):** the spike build is on branch `spike/mobile-local-llm-qwen`. Steps 0.1 and 0.2 are done; 0.3–0.7 need a physical iPhone. Hugging Face and GitHub are blocked from the cloud environment that built it, so no model has run yet.
+**Status (2026-11-03):** the spike build is on branch `spike/mobile-local-llm-qwen` and benchmarks Qwen3.5-2B and MiniCPM5-2B. Steps 0.1 and 0.2 are done; 0.3–0.7 need a physical iPhone. Hugging Face and GitHub are blocked from the cloud environment that built it, so no model has run yet.
 
 ### How to run it
 
 1. Check out `spike/mobile-local-llm-qwen`, then in `openwhispr-mobile` run `npm ci` under Node 24 and `npm run ios` with a physical iPhone attached.
    - `npm ci` downloads llama.rn's prebuilt iOS framework from GitHub releases (its postinstall), so the machine needs GitHub access.
    - Signing needs the two memory capabilities on the App ID. With automatic signing, Xcode adds them; otherwise enable them in the Developer portal.
-2. Open `openwhispr-dev://qwen-benchmark` on the phone (paste it into Safari).
-3. Tap Download (about 1.3 GB, straight from Hugging Face).
-4. Do these runs on each phone:
+2. Open `openwhispr-dev://llm-benchmark` on the phone (paste it into Safari).
+3. Download both models (about 1.3 GB and 1.6 GB, straight from Hugging Face). The app finds the Q4_K_M file in each repo's listing and checks the download against the listed size.
+4. Do these runs on each phone, once per model (pick it under Settings → Model):
    - Metal · 16384, Metal · 4096, CPU · 16384;
    - the background test with CPU · 4096: tap it, go to the Home Screen within 15 s, and come back after a minute.
 5. Tap **Copy as JSON** and paste the result into the PR or chat. It contains measurements only, never model output. Do read "Show output" on the meeting-notes run yourself, to judge the notes' quality.
@@ -281,4 +282,5 @@ The meeting-notes run uses the longest meeting note on the phone when there is o
 - **Install size:** llama.rn's postinstall fetches a 682 MB xcframework with iOS, tvOS and simulator slices. The iOS device slice is 114 MB including dSYMs. Measure the actual IPA growth on the first device build.
 - **Qwen3.5 is a hybrid model** (recurrent plus attention layers). llama.rn can clear its state only as a whole (`clearCache`), so the spike clears between tasks. Phase 2's "reuse the system-prompt KV cache" is probably not possible for this model; verify before planning it.
 - **CPU-only runs** set both `n_gpu_layers: 0` and `no_gpu_devices: true`. The second keeps Metal from initialising at all, which matters for the background test.
+- **MiniCPM5-2B thinking:** sources disagree on whether it honours `enable_thinking: false`. If its runs report "Thinking leaked", it is too slow for cleanup however good its notes are.
 - **Thinking off:** the runs set `enable_thinking: false` with `reasoning_format: 'auto'`, so any thinking that still comes back lands in `reasoning_content` and is reported as "Thinking leaked".
