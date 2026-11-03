@@ -1237,7 +1237,8 @@ async function startApp() {
     isAllowed: (url) => ipcHandlers.isProductNetworkAllowed(url),
   });
   await managedDevicePolicy.start();
-  void ipcHandlers.refreshEffectivePolicy();
+  const effectivePolicyReady = ipcHandlers.refreshEffectivePolicy();
+  if (managedDevicePolicy.getSnapshot().localOnly) await effectivePolicyReady;
   await environmentManager.init();
   // After any upgrade the GPU gets one fresh attempt: clear the remembered
   // failure before the whisper pre-warm below resolves its GPU backend.

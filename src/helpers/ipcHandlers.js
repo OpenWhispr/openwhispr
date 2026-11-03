@@ -1650,7 +1650,14 @@ class IPCHandlers {
     for (const controller of this.enterpriseStreamAborts?.values() ?? []) controller.abort();
     for (const controller of this.activeUrlDownloads?.values() ?? []) controller.abort();
     this._remoteCalendarsStarted = false;
-    for (const controller of this._productRequests?.keys() ?? []) controller.abort();
+    const snapshot = this.effectivePolicyManager.getCurrent();
+    for (const [controller, operation] of this._productRequests ?? []) {
+      if (
+        operation.remote ||
+        !productOperationAllowed(snapshot, app.getVersion(), operation.channel, operation.args)
+      )
+        controller.abort();
+    }
     for (const registry of [
       this._agentStreamRequests,
       this._cloudReasonRequests,
@@ -1660,7 +1667,7 @@ class IPCHandlers {
       for (const win of BrowserWindow.getAllWindows()) registry.cancelSender(win.webContents.id);
     }
     if (this._meetingMicStreaming || this._meetingSystemStreaming)
-      this._stopMeetingForPolicy?.("policyChanged");
+      this._stopMeetingForPolicy?.("policyRestricted");
     for (const key of [
       "assemblyAiStreaming",
       "deepgramStreaming",
@@ -1698,13 +1705,14 @@ class IPCHandlers {
       )
         this.enterpriseStreamAborts.get(streamId)?.abort();
     }
+    const meetingOptions = this.getMeetingTranscriptionOptions?.();
     if (
-      this._meetingPolicyOptions &&
+      meetingOptions &&
       !productOperationAllowed(snapshot, app.getVersion(), "meeting-transcription", [
-        this._meetingPolicyOptions,
+        meetingOptions,
       ])
     )
-      this._stopMeetingForPolicy?.("policyChanged");
+      this._stopMeetingForPolicy?.("policyRestricted");
     for (const [channel, registry] of [
       ["cloud-agent-stream-start", this._agentStreamRequests],
       ["cloud-reason", this._cloudReasonRequests],
@@ -1761,7 +1769,7 @@ class IPCHandlers {
             : null;
         if (streamProperty) this._remoteStreamPolicies.set(streamProperty, { channel, args });
         const controller = new AbortController();
-        const operation = { channel, args, signal: controller.signal };
+        const operation = { channel, args, remote, signal: controller.signal };
         this._productRequests.set(controller, operation);
         let result;
         try {
@@ -7104,7 +7112,7 @@ class IPCHandlers {
     this.refreshEffectivePolicy = async (event, { refresh = false } = {}) => {
       const scope = getScope();
       const device = this.managedDevicePolicy.getSnapshot();
-      if (device.localOnly || device.status === "loading" || device.status === "invalid")
+      if (device.status === "loading" || device.status === "invalid")
         return this.effectivePolicyManager.getPolicy({
           accountId: scope.accountId,
           expectedAuthGeneration: scope.authGeneration,
@@ -8821,7 +8829,6 @@ class IPCHandlers {
         throw Object.assign(new Error(i18nMain.t("common.managedPolicyConflict")), {
           code: "DEVICE_POLICY_BLOCKED",
         });
-      this._meetingPolicyOptions = options;
       if (policy.localOnly) return options;
       const request = await getEnterpriseAudioRequest(
         event,
@@ -8841,12 +8848,6 @@ class IPCHandlers {
         request.setupMode = "manual";
       const runtime = await this.enterpriseAudioRuntime.resolve(request, "realtime");
       this._activeEnterpriseAudioMeeting = Boolean(runtime);
-      if (runtime)
-        this._meetingPolicyOptions = {
-          ...options,
-          provider: "enterprise-realtime",
-          managedContext: { provider: runtime.provider },
-        };
       if (!runtime) return options;
       return {
         ...options,
@@ -8998,6 +8999,7 @@ class IPCHandlers {
       }
       this._meetingMicStreaming = null;
       this._meetingSystemStreaming = null;
+      meetingConnectionOptions = options;
       const win = BrowserWindow.fromWebContents(event.sender);
 
       const connectOpts = {
@@ -9126,6 +9128,7 @@ class IPCHandlers {
     let meetingReconnectCount = 0;
     const MAX_MEETING_RECONNECTS = 5;
     let meetingConnectionOptions = null;
+    this.getMeetingTranscriptionOptions = () => meetingConnectionOptions;
     let meetingConnectionWin = null;
     let meetingConnectionKey = null;
     let policyMeetingStop = null;
@@ -10346,7 +10349,6 @@ class IPCHandlers {
       // Stop captures and clears the segments, but a stop that fails partway
       // (the audio tap won't stop) never gets there.
       meetingDiarizationSegments = [];
-      meetingConnectionOptions = options;
       meetingConnectionWin = BrowserWindow.fromWebContents(event.sender);
       meetingReconnectCount = 0;
       meetingFatalErrorSent = false;
@@ -10413,6 +10415,7 @@ class IPCHandlers {
           meetingConnectionKey === requestedConnectionKey
         ) {
           debugLogger.debug("Meeting transcription start: reusing warm connections");
+          meetingConnectionOptions = options;
           const win = BrowserWindow.fromWebContents(event.sender);
           attachMeetingStreamingHandlers(this._meetingMicStreaming, win, "mic");
           if (systemAudioMode !== "unsupported") {
@@ -10435,6 +10438,8 @@ class IPCHandlers {
         }
 
         if (options.provider === "local") {
+          await disconnectMeetingStreaming();
+          meetingConnectionOptions = options;
           meetingLocalMode = true;
           meetingLocalProvider = options.localProvider || "whisper";
           meetingLocalModel = options.localModel || null;
@@ -10499,7 +10504,16 @@ class IPCHandlers {
     };
 
     const sendMeetingAudio = (audioBuffer, source, synthetic = false, capturedAt = null) => {
-      if (this._audioFeaturePolicy.activeFailure("meeting")) return;
+      if (
+        this._audioFeaturePolicy.activeFailure("meeting") ||
+        !productOperationAllowed(
+          this.effectivePolicyManager.getCurrent(),
+          app.getVersion(),
+          "meeting-transcription",
+          [meetingConnectionOptions ?? {}]
+        )
+      )
+        return;
       const outboundBuffer = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
       // Auto-end judges "is anyone audible" from the raw chunk of either
       // channel, before AEC/holdback/muting can swallow it.

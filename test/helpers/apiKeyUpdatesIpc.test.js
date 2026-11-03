@@ -1091,3 +1091,38 @@ test("valid inference restrictions retire active provider streams without disabl
   assert.equal(messages[0][0], "cloud-agent-stream-error");
   assert.equal(messages[0][1].code, "DEVICE_POLICY_BLOCKED");
 });
+
+test("a local prepare cannot replace the policy identity of an active remote meeting", async (t) => {
+  resetMeeting(t);
+  invoke("save-deepgram-key", "saved-provider-key");
+  assert.equal(
+    (await invoke("meeting-transcription-start", { provider: "deepgram-realtime", mode: "byok" }))
+      .success,
+    true
+  );
+  const streams = meetingStreams();
+  assert.equal(
+    (await invoke("meeting-transcription-prepare", { provider: "local" })).success,
+    true
+  );
+  const policy = defaultDevicePolicy();
+  policy.transcription.allowedModes = ["local"];
+  setDeviceValues({ Policy: JSON.stringify(policy) });
+  await new Promise(setImmediate);
+  assert.ok(streams.every((stream) => !stream.isConnected));
+});
+
+test("valid local-only policy refreshes retain permitted local work", () => {
+  setDeviceValues({ RequireSignIn: false });
+  const local = new AbortController();
+  const remote = new AbortController();
+  target._productRequests.set(local, { channel: "transcribe-audio-file", args: [], remote: false });
+  target._productRequests.set(remote, { channel: "cloud-transcribe", args: [], remote: true });
+  const policy = defaultDevicePolicy();
+  policy.dataRetention.audioRetentionMaxDays = 7;
+  setDeviceValues({ RequireSignIn: false, Policy: JSON.stringify(policy) });
+  assert.equal(local.signal.aborted, false);
+  assert.equal(remote.signal.aborted, true);
+  target._productRequests.delete(local);
+  target._productRequests.delete(remote);
+});

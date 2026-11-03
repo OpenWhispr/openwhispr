@@ -8,6 +8,9 @@ function withDevicePolicy(context) {
     subscribe: () => () => {},
   };
   context._remoteProductRetirement = new AbortController();
+  if (!Object.hasOwn(context, "_uploadCancelRegistry"))
+    context._uploadCancelRegistry =
+      require("../../../src/helpers/uploadCancelRegistry").createUploadCancelRegistry();
   for (const key of [
     "_agentStreamRequests",
     "_cloudReasonRequests",
