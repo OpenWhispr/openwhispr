@@ -77,11 +77,7 @@ import { useNotesOnboarding } from "../../hooks/useNotesOnboarding";
 import { startRecordingForNote, useCreateNote } from "../../hooks/useCreateNote";
 import { useTeamSpacesCapability } from "../../hooks/useTeamSpacesCapability";
 import { useAuth } from "../../hooks/useAuth";
-import {
-  usePolicySnapshot,
-  useTranscriptionContextAllowed,
-  useMeetingAutoTranscriptionCheck,
-} from "../../hooks/usePolicy";
+import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
 import NotesOnboarding from "./NotesOnboarding";
 import { defaultFolderDisplayName, notesEmptyTitleKey } from "./shared";
 import { isRegenerableNoteTitle } from "../../helpers/regenerableNoteTitle";
@@ -147,6 +143,7 @@ interface PersonalNotesViewProps {
   onMeetingRecordingRequestHandled?: () => void;
   invitationEntry?: InvitationNotesEntry | null;
   onInvitationEntryHandled?: () => void;
+  canAutoStartMeeting: () => boolean;
 }
 
 // The list's CSS cap: 30% of the view it shares with the note.
@@ -161,6 +158,7 @@ export default function PersonalNotesView({
   onMeetingRecordingRequestHandled,
   invitationEntry,
   onInvitationEntryHandled,
+  canAutoStartMeeting,
 }: PersonalNotesViewProps) {
   const isMeetingMode = useIsMeetingMode();
   const isNarrowWindow = useIsNarrowWindow();
@@ -617,7 +615,7 @@ export default function PersonalNotesView({
     return () => flushPendingSaves("unmount");
   }, [flushPendingSaves]);
 
-  const { createNote, createNoteIn } = useCreateNote();
+  const { createNote, createNoteIn } = useCreateNote(canAutoStartMeeting);
 
   const privateSpaceId = useMemo(
     () => spaces.find((s) => s.kind === "private")?.id ?? null,
@@ -731,7 +729,6 @@ export default function PersonalNotesView({
     [activeNoteId]
   );
 
-  const canAutoStartMeeting = useMeetingAutoTranscriptionCheck();
   const handledMeetingRequest = useRef<typeof meetingRecordingRequest>(null);
   useEffect(() => {
     if (

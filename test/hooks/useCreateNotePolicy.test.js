@@ -24,8 +24,7 @@ test("new notes stay open without recording when policy changes during save", as
     cachePrefix: "new-note-policy-",
     mockModules: {
       "react-i18next": "export const useTranslation = () => ({ t: (key) => key });",
-      "./usePolicy": `export const useTranscriptionContextAllowed = () => true;
-      export const useMeetingAutoTranscriptionCheck = () => () => globalThis.__notePolicyTest.allowed;`,
+      "./usePolicy": `export const useTranscriptionContextAllowed = () => true;`,
       "/stores/meetingRecordingStore": `export const useMeetingRecordingStore = (select) => select({isRecording:false});
       export const startRecording = async (args) => { globalThis.__notePolicyTest.starts.push(args); return true; };`,
       "/stores/noteStore": `export const useActiveContext = () => null;
@@ -37,7 +36,7 @@ test("new notes stay open without recording when policy changes during save", as
     await vite.ssrLoadModule("/hooks/useCreateNote.ts");
   let createNote;
   function Harness() {
-    ({ createNote } = useCreateNote());
+    ({ createNote } = useCreateNote(() => globalThis.__notePolicyTest.allowed));
     return null;
   }
   root = createRoot(container);

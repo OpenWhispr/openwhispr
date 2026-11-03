@@ -8,7 +8,7 @@ import {
   useActiveContext,
 } from "../stores/noteStore";
 import { startRecording, useMeetingRecordingStore } from "../stores/meetingRecordingStore";
-import { useMeetingAutoTranscriptionCheck, useTranscriptionContextAllowed } from "./usePolicy";
+import { useTranscriptionContextAllowed } from "./usePolicy";
 import { parseSeedSegments } from "../utils/parseTranscriptSegments";
 import { isExplicitSpeakerCount, resolveExpectedSpeakerCount } from "../utils/participants";
 import { isMeetingAutoEndEligible } from "../helpers/meetingRecordingSession";
@@ -37,12 +37,11 @@ export function startRecordingForNote(
  * Creates a note, opens it, and starts recording into it. A null space resolves
  * to the private space in the database, so this works before the Notes tree loads.
  */
-export function useCreateNote() {
+export function useCreateNote(canAutoStart: () => boolean) {
   const { t } = useTranslation();
   const activeContext = useActiveContext();
   const isRecording = useMeetingRecordingStore((s) => s.isRecording);
   const recordingAllowed = useTranscriptionContextAllowed("meeting");
-  const canAutoStart = useMeetingAutoTranscriptionCheck();
 
   const createNoteIn = useCallback(
     async (spaceId: number | null, folderId: number | null) => {

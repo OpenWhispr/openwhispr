@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef } from "react";
-import { useAuth } from "./useAuth";
+import { hasUsableCredential } from "../lib/authRequestContext";
 import { useShallow } from "zustand/react/shallow";
 import { usePolicyStore } from "../stores/policyStore";
 import {
@@ -30,15 +30,20 @@ export function usePolicySnapshot(): PolicyDecisionSnapshot {
   return useMemo(() => ({ status, policy, appVersion }), [status, policy, appVersion]);
 }
 
-export function useMeetingAutoTranscriptionAllowed(): boolean {
-  const snapshot = usePolicySnapshot();
-  const { isLoaded, isSignedIn } = useAuth();
-  return isLoaded && isMeetingAutoTranscriptionAllowed(snapshot, isSignedIn);
+interface MeetingAutoTranscriptionAuth {
+  isLoaded: boolean;
+  isSignedIn: boolean;
 }
 
 /** Pending navigation must read current policy and auth, not its original render. */
-export function useMeetingAutoTranscriptionCheck(): () => boolean {
-  const { isLoaded, isSignedIn } = useAuth();
+export function useMeetingAutoTranscriptionCheck({
+  isLoaded,
+  isSignedIn,
+}: MeetingAutoTranscriptionAuth): () => boolean {
+  // A settled guest's session refetch reports not-loaded with nothing having
+  // changed. A signed-in account stays gated, since that is how a switch reads.
+  const settledGuest = useRef(false);
+  if (isLoaded) settledGuest.current = !isSignedIn;
   const auth = useRef({ isLoaded, isSignedIn });
   auth.current = { isLoaded, isSignedIn };
   return useCallback(() => {
@@ -46,8 +51,12 @@ export function useMeetingAutoTranscriptionCheck(): () => boolean {
     // A recording these checks refuse never captures. Let it reach startRecording,
     // which tells the member why and restores the layout.
     if (!isTranscriptionContextAllowed(policy, getSettings(), "meeting")) return true;
+    // A sign-in in progress or a stale offline profile also reads as a guest, but
+    // holds a credential whose policy hasn't resolved yet.
+    const hasAccount = auth.current.isSignedIn || hasUsableCredential();
     return (
-      auth.current.isLoaded && isMeetingAutoTranscriptionAllowed(policy, auth.current.isSignedIn)
+      (auth.current.isLoaded || settledGuest.current) &&
+      isMeetingAutoTranscriptionAllowed(policy, hasAccount)
     );
   }, []);
 }

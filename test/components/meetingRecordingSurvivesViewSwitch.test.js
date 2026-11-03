@@ -56,7 +56,10 @@ const MOCKS = {
       }, []);
       return null;
     }`,
-  "./SpacesTree": `export default () => null;`,
+  "./SpacesTree": `export default (props) => {
+    globalThis.__spacesTreeProps = props;
+    return null;
+  };`,
   "/overview/ContainerOverview": `export const ContainerOverview = () => null;`,
   "./NotesStructureIntroDialog": `export default () => null;`,
   "./ActionManagerDialog": `export default () => null;`,
@@ -111,7 +114,13 @@ async function setup(t) {
   t.after(async () => {
     if (store) await React.act(async () => store.stopRecording());
     if (root) await React.act(async () => root.unmount());
-    for (const key of ["__editorLog", "__editorProps", "__notes", "__setActiveNoteId"]) {
+    for (const key of [
+      "__editorLog",
+      "__editorProps",
+      "__notes",
+      "__setActiveNoteId",
+      "__spacesTreeProps",
+    ]) {
       delete globalThis[key];
     }
   });
@@ -138,6 +147,7 @@ async function setup(t) {
       return { success: true, systemAudioMode: "native", systemAudioStrategy: "native" };
     },
     meetingNoteOpenedWithoutRecording: async (id) => calls.noteOnly.push(id),
+    saveNote: async () => ({ success: true, note: globalThis.__notes[12] }),
     meetingTranscriptionSetSystemAudioAvailable: async () => ({ success: true }),
     meetingTranscriptionStop: async () => {
       calls.stop += 1;
@@ -201,12 +211,18 @@ async function setup(t) {
   store = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
 
   const Home = () => React.createElement("div", null, "home");
+  const { useMeetingAutoTranscriptionCheck } = await vite.ssrLoadModule("/hooks/usePolicy.ts");
+  const AutoStartingNotes = (props) =>
+    React.createElement(PersonalNotesView, {
+      ...props,
+      canAutoStartMeeting: useMeetingAutoTranscriptionCheck({ isLoaded: true, isSignedIn: false }),
+    });
   const Shell = ({ view, notesProps }) =>
     React.createElement(
       React.Fragment,
       null,
       React.createElement(Mount),
-      view === "personal-notes" ? React.createElement(PersonalNotesView, notesProps) : null,
+      view === "personal-notes" ? React.createElement(AutoStartingNotes, notesProps) : null,
       view === "home" ? React.createElement(Home) : null
     );
   root = createRoot(container);
@@ -346,4 +362,17 @@ test("a meeting request records under automatic policy, and under manual only fr
   assert.equal(calls.start, 2, "the hotkey is an explicit start");
   assert.equal(isRecording(), true);
   assert.deepEqual(calls.noteOnly, ["join"]);
+});
+
+test("New note in the notes view records under automatic policy but not manual", async (t) => {
+  const { show, calls, setStartMode, store } = await setup(t);
+  await setStartMode("manual");
+  await show("personal-notes");
+  await React.act(async () => globalThis.__spacesTreeProps.onNewNote(1, null));
+  assert.equal(calls.start, 0);
+
+  await setStartMode("automatic");
+  await React.act(async () => globalThis.__spacesTreeProps.onNewNote(1, null));
+  assert.equal(calls.start, 1);
+  await React.act(async () => store.stopRecording());
 });

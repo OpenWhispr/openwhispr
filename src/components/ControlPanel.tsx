@@ -189,6 +189,10 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const { toast } = useToast();
   const { useCleanupModel } = useSettings();
   const { isSignedIn, isLoaded: authLoaded, user } = useAuth();
+  const canAutoStartMeeting = useMeetingAutoTranscriptionCheck({
+    isLoaded: authLoaded,
+    isSignedIn,
+  });
   // Suppressed while a deep-linked invitation is open so the two never stack.
   const {
     joinable,
@@ -251,7 +255,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   ]);
 
   const agentAllowedByPolicy = usePolicyStore(isAgentAllowed);
-  const { createNote } = useCreateNote();
+  const { createNote } = useCreateNote(canAutoStartMeeting);
   // The note is created before the view switches so Notes mounts with it already open.
   const handleNewNote = useCallback(async () => {
     await createNote();
@@ -432,7 +436,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
 
   // A ref, not a per-run flag: StrictMode's remount must not cancel the first drain.
   const meetingNavigationMounted = useRef(false);
-  const canAutoStartMeeting = useMeetingAutoTranscriptionCheck();
   const meetingNoteSession = useMeetingNoteSession(activeView, activeNoteId);
   const recordingIdentityRef = useRef({ user, t });
   recordingIdentityRef.current = { user, t };
@@ -1347,6 +1350,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                       setShowSettings(true);
                     }}
                     meetingRecordingRequest={meetingRecordingRequest}
+                    canAutoStartMeeting={canAutoStartMeeting}
                     onMeetingRecordingRequestHandled={handleMeetingRecordingRequestHandled}
                     invitationEntry={invitationNotesEntry}
                     onInvitationEntryHandled={() => setInvitationNotesEntry(null)}

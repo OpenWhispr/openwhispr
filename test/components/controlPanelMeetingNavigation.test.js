@@ -18,7 +18,10 @@ const MOCKS = {
       return null;
     }`,
   "/hooks/useCreateNote": `
-    export const useCreateNote = () => ({ createNote() {}, createNoteIn() {} });
+    export const useCreateNote = (canAutoStart) => {
+      globalThis.__createNoteCheck = canAutoStart;
+      return { createNote() {}, createNoteIn() {} };
+    };
     export const startRecordingForNote = async (note, _recorderName, canAutoStart) => {
       if (canAutoStart && !canAutoStart()) return false;
       globalThis.__starts.push(note.id);
@@ -100,6 +103,7 @@ async function mount(t, navigation, transcriptionStart) {
     if (root) await React.act(async () => root.unmount());
     delete globalThis.__notesProps;
     delete globalThis.__starts;
+    delete globalThis.__createNoteCheck;
   });
   const calls = { noteOnly: [], restore: [] };
   globalThis.__starts = [];
@@ -160,6 +164,7 @@ test("a meeting prompt records under automatic policy", async (t) => {
   const calls = await mount(t, NOTIFICATION, "automatic");
   await until(() => globalThis.__starts.length > 0);
   assert.deepEqual(globalThis.__starts, [9]);
+  assert.equal(globalThis.__createNoteCheck(), true, "New note follows the policy too");
   assert.deepEqual(calls.noteOnly, []);
 });
 
@@ -169,6 +174,7 @@ test("a meeting prompt only opens the note under manual policy", async (t) => {
   assert.deepEqual(globalThis.__starts, []);
   assert.deepEqual(calls.noteOnly, ["session"]);
   assert.deepEqual(calls.restore, [], "suppression leaves the layout alone");
+  assert.equal(globalThis.__createNoteCheck(), false, "New note follows the policy too");
 });
 
 test("a pending navigation hands its trigger and session to the notes view", async (t) => {
@@ -181,4 +187,5 @@ test("a pending navigation hands its trigger and session to the notes view", asy
   const request = globalThis.__notesProps.meetingRecordingRequest;
   assert.equal(request.trigger, "hotkey");
   assert.equal(request.noteSessionId, "session");
+  assert.equal(globalThis.__notesProps.canAutoStartMeeting, globalThis.__createNoteCheck);
 });

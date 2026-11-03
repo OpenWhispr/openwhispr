@@ -27,84 +27,90 @@ const managedPolicy = (overrides) => ({
   ...overrides,
 });
 
-test("automatic-start checks use settled auth and live policy after asynchronous work", async (t) => {
+async function mountCheck(t, cachePrefix, mockModules) {
   let root;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
   });
   installBrowserGlobals(t);
   const container = installHookDom(t);
-  globalThis.__meetingAuth = { isLoaded: false, isSignedIn: false };
-  t.after(() => delete globalThis.__meetingAuth);
-  const vite = await createRendererServer(t, {
-    cachePrefix: "meeting-auto-policy-",
-    mockModules: { "./useAuth": "export const useAuth = () => globalThis.__meetingAuth;" },
-  });
+  const vite = await createRendererServer(t, { cachePrefix, mockModules });
   const hooks = await vite.ssrLoadModule("/hooks/usePolicy.ts");
   const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
-  let allowed;
   let check;
-  function Harness() {
-    allowed = hooks.useMeetingAutoTranscriptionAllowed();
-    check = hooks.useMeetingAutoTranscriptionCheck();
+  function Harness({ auth }) {
+    check = hooks.useMeetingAutoTranscriptionCheck(auth);
     return null;
   }
   root = createRoot(container);
-  const render = () => React.act(async () => root.render(React.createElement(Harness)));
-  await render();
-  assert.equal(allowed, false);
-  assert.equal(check(), false);
-  globalThis.__meetingAuth = { isLoaded: true, isSignedIn: false };
-  await render();
-  assert.equal(allowed, true);
-  const pendingCheck = check;
-  globalThis.__meetingAuth = { isLoaded: true, isSignedIn: true, isOfflineAccount: true };
-  await render();
-  assert.equal(pendingCheck(), false);
+  const render = (auth) =>
+    React.act(async () => root.render(React.createElement(Harness, { auth })));
+  return { vite, usePolicyStore, render, check: () => check };
+}
+
+test("automatic-start checks use settled auth and live policy after asynchronous work", async (t) => {
+  const { usePolicyStore, render, check } = await mountCheck(t, "meeting-auto-policy-");
+  await render({ isLoaded: false, isSignedIn: false });
+  assert.equal(check()(), false, "unsettled auth is not evidence of a guest");
+  await render({ isLoaded: true, isSignedIn: false });
+  assert.equal(check()(), true);
+  const pendingCheck = check();
+  await render({ isLoaded: true, isSignedIn: true });
+  assert.equal(check(), pendingCheck, "the check stays stable across renders");
+  assert.equal(pendingCheck(), false, "a signed-in window waits for its policy");
   await React.act(async () =>
     usePolicyStore.setState({
       status: "managed",
       policy: managedPolicy({ meetings: { transcriptionStart: "automatic" } }),
     })
   );
-  assert.equal(allowed, true);
   assert.equal(pendingCheck(), true, "automatic policy still starts");
   // No render is needed between a store update and the pending action's decision.
-  await React.act(async () => {
-    usePolicyStore.setState({
-      policy: managedPolicy({ meetings: { transcriptionStart: "manual" } }),
-    });
-    assert.equal(pendingCheck(), false);
+  usePolicyStore.setState({
+    policy: managedPolicy({ meetings: { transcriptionStart: "manual" } }),
   });
-  assert.equal(allowed, false);
+  assert.equal(pendingCheck(), false);
+});
+
+test("a settled guest's session refetch doesn't lose an automatic start", async (t) => {
+  const { render, check } = await mountCheck(t, "meeting-auto-guest-refetch-");
+  await render({ isLoaded: true, isSignedIn: false });
+  await render({ isLoaded: false, isSignedIn: false });
+  assert.equal(check()(), true);
+});
+
+test("an account switch still blocks automatic starts until it settles", async (t) => {
+  const { render, check, usePolicyStore } = await mountCheck(t, "meeting-auto-account-switch-");
+  usePolicyStore.setState({ status: "unmanaged", policy: null });
+  await render({ isLoaded: true, isSignedIn: true });
+  assert.equal(check()(), true);
+  await render({ isLoaded: false, isSignedIn: false });
+  assert.equal(check()(), false);
+});
+
+test("a credential holder shown as a guest waits for its policy", async (t) => {
+  globalThis.__hasCredential = false;
+  t.after(() => delete globalThis.__hasCredential);
+  const { render, check } = await mountCheck(t, "meeting-auto-credential-", {
+    "/lib/authRequestContext": "export const hasUsableCredential = () => globalThis.__hasCredential;",
+  });
+  await render({ isLoaded: true, isSignedIn: false });
+  assert.equal(check()(), true, "a real guest has no policy to wait for");
+  globalThis.__hasCredential = true;
+  assert.equal(check()(), false, "a token not yet bound to a session, or a stale offline profile");
+  await render({ isLoaded: false, isSignedIn: false });
+  assert.equal(check()(), false, "a sign-in in progress is not a guest's refetch");
+  globalThis.__hasCredential = false;
+  assert.equal(check()(), true, "a guest's refetch stays settled");
 });
 
 test("a recording policy refuses still reports why under automatic policy", async (t) => {
-  let root;
-  t.after(async () => {
-    if (root) await React.act(async () => root.unmount());
-    delete globalThis.__meetingAuth;
-  });
-  installBrowserGlobals(t);
-  const container = installHookDom(t);
-  globalThis.__meetingAuth = { isLoaded: true, isSignedIn: true };
-  const vite = await createRendererServer(t, {
-    cachePrefix: "meeting-auto-refusal-",
-    mockModules: { "./useAuth": "export const useAuth = () => globalThis.__meetingAuth;" },
-  });
-  const hooks = await vite.ssrLoadModule("/hooks/usePolicy.ts");
-  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const { vite, usePolicyStore, render, check } = await mountCheck(t, "meeting-auto-refusal-");
+  await render({ isLoaded: true, isSignedIn: true });
   const store = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
   const { handleMeetingRecordingRequest } = await vite.ssrLoadModule(
     "/helpers/meetingRecordingRequest.ts"
   );
-  let check;
-  function Harness() {
-    check = hooks.useMeetingAutoTranscriptionCheck();
-    return null;
-  }
-  root = createRoot(container);
-  await React.act(async () => root.render(React.createElement(Harness)));
   const snapshots = [
     {
       status: "managed",
@@ -119,12 +125,12 @@ test("a recording policy refuses still reports why under automatic policy", asyn
   ];
   for (const snapshot of snapshots) {
     await React.act(async () => usePolicyStore.setState(snapshot));
-    assert.equal(check(), true, snapshot.status);
+    assert.equal(check()(), true, snapshot.status);
     store.useMeetingRecordingStore.setState({ error: null });
     const calls = [];
     await handleMeetingRecordingRequest({
       args: { noteId: 1, noteTitle: "Meeting", folderId: null, autoEndEligible: true },
-      canAutoStart: check,
+      canAutoStart: check(),
       startRecording: store.startRecording,
       restoreFromMeetingMode: () => calls.push("restore"),
       onSuppressed: () => calls.push("note-only"),
