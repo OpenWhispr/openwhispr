@@ -296,6 +296,7 @@ test("upload creation keeps its selected workspace and sends transcript in the r
         },
       };
     },
+    markNoteCreatesAttempted: async (clientNoteIds) => db.markNoteCreatesAttempted(clientNoteIds),
     acknowledgeNoteCreate: async (...args) => db.acknowledgeNoteCreate(...args),
     getNote: async (id) => db.getNote(id),
   });

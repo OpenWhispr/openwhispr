@@ -1,6 +1,15 @@
 const { OrukeetStreaming, MANAGED_STREAM_OPTIONS } = require("./orukeetStreaming");
 const { connectManagedOrukeet } = require("./orukeetCloudSession");
-const { ipcMain, app, shell, BrowserWindow, systemPreferences, net, session } = require("electron");
+const {
+  ipcMain,
+  app,
+  shell,
+  BrowserWindow,
+  systemPreferences,
+  net,
+  session,
+  powerMonitor,
+} = require("electron");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
@@ -228,6 +237,8 @@ const XAI_STT_URL = "https://api.x.ai/v1/stt";
 
 // Debounce delay: wait for user to stop typing before processing corrections
 const AUTO_LEARN_DEBOUNCE_MS = 1500;
+// Suggestions the invite dialog shows under its field.
+const INVITE_SUGGESTION_LIMIT = 5;
 
 // Route caps vary by provider (Gemini's inline-base64 limit is the lowest), so
 // the message reports the cap that actually applied.
@@ -2993,6 +3004,9 @@ class IPCHandlers {
       }
       return note;
     });
+    ipcMain.handle("db-mark-note-creates-attempted", (_, clientNoteIds) =>
+      this.databaseManager.markNoteCreatesAttempted(clientNoteIds)
+    );
     ipcMain.handle(
       "db-acknowledge-note-create",
       (_, id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) => {
@@ -3186,6 +3200,9 @@ class IPCHandlers {
     );
     ipcMain.handle("db-upsert-conversation-from-cloud", (_, cloudConv, messages) =>
       this.databaseManager.upsertConversationFromCloud(cloudConv, messages)
+    );
+    ipcMain.handle("db-mark-conversation-create-attempted", (_, id) =>
+      this.databaseManager.markConversationCreateAttempted(id)
     );
     ipcMain.handle("db-acknowledge-conversation-create", (_, id, snapshot, cloudId) =>
       this.databaseManager.acknowledgeConversationCreate(id, snapshot, cloudId)
@@ -6823,8 +6840,12 @@ class IPCHandlers {
           proxyFetch: (url, init) =>
             proxyFetch(url, { ...init, signal: AbortSignal.timeout(10_000) }),
         }),
+        logger: debugLogger,
       });
       this.metaActivation.start();
+      // A machine that slept through the hourly re-sync takes server time
+      // again on wake, before its next batch.
+      powerMonitor.on("resume", () => void this.metaActivation?.resync());
     } catch {
       // Marketing bookkeeping must never prevent ordinary dictation/startup.
       debugLogger.warn("Activation storage unavailable");
@@ -13243,6 +13264,30 @@ class IPCHandlers {
         const contacts = this.databaseManager.searchContacts(query);
         return { success: true, contacts };
       } catch (error) {
+        return { success: false, contacts: [] };
+      }
+    });
+
+    // Limited to connected calendars and contact sources, like find_contact, with the addresses
+    // the invite dialog can't use left out before the limit so they don't crowd out the rest.
+    ipcMain.handle("search-invite-contacts", async (_event, query, exclude) => {
+      try {
+        const excluded = new Set(
+          (Array.isArray(exclude) ? exclude : []).map((email) => String(email).toLowerCase())
+        );
+        const { contacts } = searchContacts(
+          this.databaseManager.getContactLookupSources(),
+          String(query ?? ""),
+          { limit: excluded.size + INVITE_SUGGESTION_LIMIT }
+        );
+        return {
+          success: true,
+          contacts: contacts
+            .filter((contact) => !excluded.has(contact.email.toLowerCase()))
+            .slice(0, INVITE_SUGGESTION_LIMIT)
+            .map(({ email, name }) => ({ email, name })),
+        };
+      } catch {
         return { success: false, contacts: [] };
       }
     });

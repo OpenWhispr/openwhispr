@@ -76,7 +76,7 @@ const ENGLISH = {
     "Couldn't get a response from {{provider}}. Check your API key and connection.",
   "providerErrors.unknown": "{{provider}} returned an unexpected error.",
   "providerErrors.keyMissing":
-    "No API key is set for {{provider}}. Add it in Settings → Language Models.",
+    "No API key is set for {{provider}}. Add it in Settings → Language Model.",
   "providerErrors.selfHosted.authFailed": "Your server rejected the API key.",
   "providerErrors.selfHosted.accessDenied":
     "Your server denied access. The key may not include this model.",

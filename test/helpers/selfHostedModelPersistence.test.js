@@ -21,7 +21,7 @@ test("cloud model reconciliation respects each scope's active mode", async (t) =
     storage.setItem("_llmScopeKeysMigrated", "1");
     if (skipStartupMigration) {
       storage.setItem("_retiredGroqModelsMigrated2", "1");
-      storage.setItem("_retiredTinfoilModelsMigrated2", "1");
+      storage.setItem("_retiredTinfoilModelsMigrated3", "1");
     }
     for (const { storeKeys } of scopes) {
       storage.setItem(storeKeys.mode, mode);
