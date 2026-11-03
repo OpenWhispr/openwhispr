@@ -38,7 +38,6 @@ export interface SpaceActionsDependencies {
     remove: (spaceId: string) => Promise<void>;
     assignTeam: (spaceId: string, teamId: string, access?: "admin" | "member") => Promise<void>;
     unassignTeam: (spaceId: string, teamId: string) => Promise<void>;
-    addMember: (spaceId: string, userId: string, role?: TeamRole) => Promise<void>;
     setMemberRole: (spaceId: string, userId: string, role: TeamRole) => Promise<void>;
     removeMember: (spaceId: string, userId: string) => Promise<SpaceMemberRemoval>;
     join: (spaceId: string) => Promise<{ joined: boolean }>;
@@ -249,18 +248,6 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     deps.sync.requestSyncAll("manual");
   }
 
-  async function addSpaceMembers(
-    space: SpaceItem,
-    userIds: string[]
-  ): Promise<{ failures: unknown[] }> {
-    const spaceId = requireCloudSpaceId(space);
-    const failures = await settleAddMembers(userIds, (userId) =>
-      deps.spaces.addMember(spaceId, userId)
-    );
-    await refreshSpaceMirror();
-    return { failures };
-  }
-
   // A newly reachable space inserts as pending in the mirror; the sync pass backfills its content.
   async function joinSpace(cloudSpaceId: string): Promise<{ joined: boolean }> {
     const result = await deps.spaces.join(cloudSpaceId);
@@ -369,7 +356,6 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     assignTeamToSpace,
     setSpaceTeamAccess,
     unassignTeamFromSpace,
-    addSpaceMembers,
     joinSpace,
     addPeopleToSpace,
     setSpaceAccessFlags,

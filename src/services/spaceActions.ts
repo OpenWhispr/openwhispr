@@ -37,7 +37,6 @@ export const {
   assignTeamToSpace,
   setSpaceTeamAccess,
   unassignTeamFromSpace,
-  addSpaceMembers,
   joinSpace,
   addPeopleToSpace,
   setSpaceAccessFlags,

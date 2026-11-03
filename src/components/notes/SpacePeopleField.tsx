@@ -60,6 +60,13 @@ export interface SpacePeopleFieldProps {
   onChange: (picked: PickedRecipient[]) => void;
   disabled?: boolean;
   placeholder: string;
+  /** A control beside the input (Add members); the chips sit under both. */
+  action?: ReactNode;
+  /**
+   * Each increase moves focus into the input with its list closed, to hand the field back after
+   * a run: the list is for someone who came to pick, and would cover what the run just said.
+   */
+  focusRequest?: number;
 }
 
 type PickerRow =
@@ -116,6 +123,8 @@ export function SpacePeopleField({
   onChange,
   disabled = false,
   placeholder,
+  action,
+  focusRequest = 0,
 }: SpacePeopleFieldProps): ReactElement {
   const { t } = useTranslation();
   const listId = useId();
@@ -174,6 +183,13 @@ export function SpacePeopleField({
       document.getElementById(`${listId}-${active}`)?.scrollIntoView({ block: "nearest" });
     }
   }, [active, listId]);
+
+  useEffect(() => {
+    if (focusRequest === 0) return;
+    inputRef.current?.focus();
+    // Focus opens the list; this focus is only the field coming back.
+    setDismissed(true);
+  }, [focusRequest]);
 
   const stage = (incoming: PickedRecipient[], replaceRole = false): void => {
     const next = addRecipients(picked, incoming, { ...stagingRules, replaceRole });
@@ -300,7 +316,12 @@ export function SpacePeopleField({
   const emojiByTeam = new Map(groups.map((group) => [group.id, group.emoji ?? null]));
 
   return (
-    <div className="flex flex-col gap-2" onBlur={handleBlur}>
+    <div
+      className={cn(
+        action ? "grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2" : "flex flex-col gap-2"
+      )}
+      onBlur={handleBlur}
+    >
       <Popover
         open={listOpen}
         onOpenChange={(open) => {
@@ -407,9 +428,10 @@ export function SpacePeopleField({
           )}
         </PopoverContent>
       </Popover>
+      {action}
 
       {picked.length > 0 ? (
-        <ul className="flex flex-wrap gap-1.5">
+        <ul className="col-span-2 flex flex-wrap gap-1.5">
           {picked.map((recipient) => (
             <RecipientChip
               key={recipientKey(recipient)}

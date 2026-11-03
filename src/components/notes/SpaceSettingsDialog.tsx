@@ -446,7 +446,7 @@ export default function SpaceSettingsDialog({
                 {general}
               </TabsContent>
               <TabsContent value="members" className="mt-4">
-                <SpaceMembersPanel space={space} onOpeningBilling={close} />
+                <SpaceMembersPanel space={space} />
               </TabsContent>
             </Tabs>
           ) : (

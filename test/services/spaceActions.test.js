@@ -36,8 +36,6 @@ function makeHarness() {
       assignTeam: async (spaceId, teamId, access) =>
         calls.push(["space.assignTeam", spaceId, teamId, access]),
       unassignTeam: async (spaceId, teamId) => calls.push(["space.unassignTeam", spaceId, teamId]),
-      addMember: async (spaceId, userId, role) =>
-        calls.push(["space.addMember", spaceId, userId, role]),
       setMemberRole: async (spaceId, userId, role) =>
         calls.push(["space.setMemberRole", spaceId, userId, role]),
       removeMember: async (spaceId, userId) => {
@@ -376,29 +374,6 @@ test("direct member mutations refresh the mirror and only leaving schedules sync
   );
 });
 
-test("addSpaceMembers reports partial failures and still refreshes the mirror", async () => {
-  const { createSpaceActions } = await load();
-  const { calls, deps, localSpace } = makeHarness();
-  deps.spaces.addMember = async (spaceId, userId) => {
-    calls.push(["space.addMember", spaceId, userId]);
-    if (userId === "bad-user") throw new Error("not in workspace");
-  };
-  const actions = createSpaceActions(deps);
-
-  const { failures } = await actions.addSpaceMembers(localSpace, ["good-user", "bad-user"]);
-
-  assert.equal(failures.length, 1);
-  assert.match(failures[0].message, /not in workspace/);
-  assert.deepEqual(
-    calls.filter(([name]) => name === "space.addMember"),
-    [
-      ["space.addMember", "cloud-space-1", "good-user"],
-      ["space.addMember", "cloud-space-1", "bad-user"],
-    ]
-  );
-  assert.ok(calls.some(([name]) => name === "mirror.upsert"));
-});
-
 test("addTeamMembers reports partial failures and still refreshes the mirror", async () => {
   const { createSpaceActions } = await load();
   const { calls, deps } = makeHarness();
@@ -421,7 +396,6 @@ test("team assignment rejects local-only spaces before making a cloud request", 
 
   const localOnly = { ...localSpace, cloud_space_id: null };
   await assert.rejects(actions.assignTeamToSpace(localOnly, "team-1"), /Not a cloud space/);
-  await assert.rejects(actions.addSpaceMembers(localOnly, ["user-1"]), /Not a cloud space/);
   await assert.rejects(actions.leaveSpace(localOnly, "me"), /Not a cloud space/);
   assert.equal(calls.length, 0);
 });
