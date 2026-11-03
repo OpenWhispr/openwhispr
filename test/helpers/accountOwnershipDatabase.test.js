@@ -127,6 +127,7 @@ function createDatabaseManager() {
   const manager = Object.create(DatabaseManager.prototype);
   manager.db = sqlite;
   manager.activeAccountId = null;
+  manager._accountChanges = [];
   return { manager, sqlite };
 }
 

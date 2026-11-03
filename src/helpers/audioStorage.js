@@ -138,12 +138,9 @@ class AudioStorageManager {
   cleanupExpiredAudio(retentionDays, databaseManager) {
     try {
       const cutoffMs = Date.now() - retentionDays * 86400000;
-      const otherAccounts = new Set(
-        (databaseManager?.getOtherAccountTranscriptionIds() ?? []).map(String)
-      );
-      const files = fs
-        .readdirSync(this.audioDir)
-        .filter((f) => f.endsWith(".webm") && !otherAccounts.has(transcriptionIdFromFile(f)));
+      // Device-wide like the setting: an account that has left this device must
+      // not keep a recording past the period Settings promises.
+      const files = fs.readdirSync(this.audioDir).filter((f) => f.endsWith(".webm"));
       const expiredIds = [];
       let kept = 0;
 

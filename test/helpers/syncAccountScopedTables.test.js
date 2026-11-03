@@ -1088,3 +1088,87 @@ test("an unattributed row whose PATCH 404s waits for an edit, and the account's 
   await accountA.syncAll(true);
   assert.equal(patches("/api/dictionary/update"), 2, "an edit tries again");
 });
+
+// A legacy row on a device another account has used, as it looks after this
+// device uploaded it for whichever account synced first.
+function seedUploadedLegacyTranscription(db, cloudId) {
+  db.setActiveAccountId(null);
+  db.saveTranscription("legacy dictation", null, { clientTranscriptionId: `client-${cloudId}` });
+  db.db
+    .prepare(
+      "UPDATE transcriptions SET cloud_id = ?, sync_status = 'synced', legacy_unattributed = 2 WHERE client_transcription_id = ?"
+    )
+    .run(cloudId, `client-${cloudId}`);
+}
+
+test("Clear history deletes a legacy row's cloud copy from the account that holds it", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const cloudA = createFakeCloud();
+  const inA = cloudA.seedTranscription({ client_transcription_id: "a-copy", text: "legacy" });
+  seedUploadedLegacyTranscription(db, inA.id);
+  db.setActiveAccountId("account-b");
+  db.saveTranscription("B's own dictation");
+
+  const accountA = await signInAs(t, db, cloudA, "account-a");
+  db.clearTranscriptions();
+  assert.deepEqual(db.getTranscriptions(), [], "gone from A's history at once");
+  await accountA.syncAll(true);
+
+  assert.equal(
+    cloudA.transcriptions().find((row) => row.id === inA.id)?.deleted_at != null,
+    true,
+    "the dialog promises it leaves A's account too"
+  );
+  assert.equal(
+    db.db.prepare("SELECT COUNT(*) AS n FROM transcriptions WHERE cloud_id = ?").get(inA.id).n,
+    0,
+    "the tombstone is gone once the delete lands"
+  );
+});
+
+test("A's Clear history can't reach a legacy row's copy in B's cloud", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const cloudA = createFakeCloud();
+  const cloudB = createFakeCloud();
+  const inB = cloudB.seedTranscription({ client_transcription_id: "b-copy", text: "legacy" });
+  seedUploadedLegacyTranscription(db, inB.id);
+  db.setActiveAccountId("account-b");
+  db.saveTranscription("B's own dictation");
+
+  await signInAs(t, db, cloudA, "account-a");
+  db.clearTranscriptions();
+
+  db.setActiveAccountId("account-b");
+  assert.equal(
+    db.getPendingTranscriptionDeletes().some((row) => row.cloud_id === inB.id),
+    false,
+    "the tombstone is A's to push, so B's next pass can't delete B's copy"
+  );
+
+  const accountA = await signInAs(t, db, cloudA, "account-a");
+  await accountA.syncAll(true);
+  assert.equal(
+    db.db.prepare("SELECT COUNT(*) AS n FROM transcriptions WHERE cloud_id = ?").get(inB.id).n,
+    0
+  );
+  assert.equal(cloudB.transcriptions().find((row) => row.id === inB.id)?.deleted_at ?? null, null);
+});
+
+test("retention tombstones an expired legacy row for the account that clears it", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const cloudA = createFakeCloud();
+  const inA = cloudA.seedTranscription({ client_transcription_id: "a-old", text: "legacy" });
+  seedUploadedLegacyTranscription(db, inA.id);
+  db.db.prepare("UPDATE transcriptions SET created_at = datetime('now', '-90 days')").run();
+  db.setActiveAccountId("account-b");
+  db.saveTranscription("B's own dictation");
+
+  const accountA = await signInAs(t, db, cloudA, "account-a");
+  db.deleteTranscriptionsExpiredBefore(30);
+  await accountA.syncAll(true);
+
+  assert.equal(cloudA.transcriptions().find((row) => row.id === inA.id)?.deleted_at != null, true);
+});

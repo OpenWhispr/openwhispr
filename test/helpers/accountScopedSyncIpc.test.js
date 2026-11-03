@@ -482,3 +482,142 @@ test("the seed IPCs write a cached list only into a database that has never held
   );
   assert.deepEqual(db.getDictionary(), ["Kubernetes"]);
 });
+
+test("audio retention expires a recording whoever owns it, signed out too", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const AudioStorageManager = require("../../src/helpers/audioStorage");
+  const audio = new AudioStorageManager();
+  const record = (accountId, text, ageDays) => {
+    db.setActiveAccountId(accountId);
+    const { id } = db.saveTranscription(text);
+    const { path: filePath } = audio.saveAudio(id, Buffer.from(text));
+    const modified = new Date(Date.now() - ageDays * 86400000);
+    fs.utimesSync(filePath, modified, modified);
+    db.updateTranscriptionAudio(id, { hasAudio: 1 });
+    return { id, filePath };
+  };
+  const expiredA = record("account-a", "A's old recording", 90);
+  const expiredB = record("account-b", "B's old recording", 90);
+  const freshB = record("account-b", "B's new recording", 1);
+
+  db.setActiveAccountId(null);
+  assert.equal(audio.cleanupExpiredAudio(30, db).deleted, 2);
+
+  assert.equal(fs.existsSync(expiredA.filePath), false, "signed out, A's expired file goes");
+  assert.equal(fs.existsSync(expiredB.filePath), false, "signed out, B's expired file goes");
+  assert.equal(fs.existsSync(freshB.filePath), true, "a recording inside the period stays");
+  db.setActiveAccountId("account-a");
+  assert.equal(db.getTranscriptionById(expiredA.id).has_audio, 0);
+  db.setActiveAccountId("account-b");
+  assert.equal(db.getTranscriptionById(expiredB.id).has_audio, 0);
+  assert.equal(db.getTranscriptionById(freshB.id).has_audio, 1);
+});
+
+const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
+
+test("a dictation in flight across a switch belongs to whoever spoke it", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  await tick();
+  const spokenAt = new Date().toISOString();
+  await tick();
+  db.setActiveAccountId("account-b");
+
+  const saved = await invoke("db-save-transcription", "A's late dictation", null, {
+    clientTranscriptionId: "late",
+    analyticsOccurredAt: spokenAt,
+  });
+  db.recordAnalyticsEvent({
+    eventId: "late",
+    wordCount: 3,
+    occurredAt: spokenAt,
+    localDate: spokenAt.slice(0, 10),
+  });
+  await new Promise(setImmediate);
+
+  const owner = (table, where) =>
+    db.db.prepare(`SELECT account_id FROM ${table} WHERE ${where}`).get().account_id;
+  assert.equal(owner("transcriptions", `id = ${saved.id}`), "account-a");
+  assert.equal(owner("analytics_events", "event_id = 'late'"), "account-a");
+  assert.equal(db.getTranscriptionById(saved.id), null, "B can't see or push it");
+  assert.deepEqual(
+    broadcasts.filter(([channel]) => channel === "transcription-added"),
+    [],
+    "B's open history isn't told about it"
+  );
+  db.setActiveAccountId("account-a");
+  assert.equal(db.getTranscriptionById(saved.id).text, "A's late dictation");
+});
+
+test("a dictation spoken signed out stays unattributed if an account arrives first", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  db.setActiveAccountId(null);
+  await tick();
+  const spokenAt = new Date().toISOString();
+  await tick();
+  db.setActiveAccountId("account-a");
+
+  const saved = await invoke("db-save-transcription", "guest dictation", null, {
+    analyticsOccurredAt: spokenAt,
+  });
+
+  assert.equal(saved.transcription.account_id, null);
+  assert.equal(db.getTranscriptionById(saved.id).text, "guest dictation", "A can still see it");
+});
+
+test("a dictation with no spoken time, or spoken after the switch, is the active account's", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  await tick();
+  db.setActiveAccountId("account-b");
+  await tick();
+
+  const noTime = await invoke("db-save-transcription", "no time");
+  const after = await invoke("db-save-transcription", "after the switch", null, {
+    analyticsOccurredAt: new Date().toISOString(),
+  });
+
+  assert.equal(noTime.transcription.account_id, "account-b");
+  assert.equal(after.transcription.account_id, "account-b");
+});
+
+test("main reports whether the account changed since a recording started", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  await tick();
+  const startedBeforeSwitch = new Date().toISOString();
+  await tick();
+
+  db.setActiveAccountId("account-a");
+  assert.equal(
+    await invoke("db-account-changed-since", startedBeforeSwitch),
+    false,
+    "re-scoping the same account after a token rotation isn't a change"
+  );
+  db.setActiveAccountId("account-b");
+  assert.equal(await invoke("db-account-changed-since", startedBeforeSwitch), true);
+  await tick();
+  assert.equal(await invoke("db-account-changed-since", new Date().toISOString()), false);
+  assert.equal(await invoke("db-account-changed-since", undefined), false);
+});
+
+test("signing in on a device nobody else used claims the rows from before attribution", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  db.setActiveAccountId(null);
+  const { id } = db.saveTranscription("from before the upgrade");
+  db.db.prepare("UPDATE transcriptions SET legacy_unattributed = 1").run();
+
+  const result = await invoke("set-active-account-scope", "account-a", tokenState.generation);
+
+  assert.equal(result.success, true);
+  assert.equal(
+    db.db.prepare("SELECT account_id FROM transcriptions WHERE id = ?").get(id).account_id,
+    "account-a"
+  );
+});

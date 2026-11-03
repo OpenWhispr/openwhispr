@@ -293,12 +293,32 @@ class DatabaseManager {
   constructor() {
     this.db = null;
     this.activeAccountId = null;
+    this._accountTrackedSince = Date.now();
+    this._accountChanges = [];
     this.initDatabase();
   }
 
   setActiveAccountId(accountId) {
-    this.activeAccountId =
+    const next =
       typeof accountId === "string" && accountId.trim().length > 0 ? accountId.trim() : null;
+    if (next !== this.activeAccountId) {
+      this._accountChanges.push({ at: Date.now(), previous: this.activeAccountId });
+    }
+    this.activeAccountId = next;
+  }
+
+  // A dictation belongs to whoever was signed in when it was spoken, not whoever
+  // is when its processing finishes. A time from before this launch (a recovered
+  // recording) can't be placed, so it reads as the active account.
+  _accountSpokenUnder(occurredAt) {
+    const spokenAt = Date.parse(occurredAt);
+    if (!(spokenAt >= this._accountTrackedSince)) return this.activeAccountId;
+    const change = this._accountChanges.find(({ at }) => spokenAt < at);
+    return change ? change.previous : this.activeAccountId;
+  }
+
+  accountChangedSince(occurredAt) {
+    return this._accountSpokenUnder(occurredAt) !== this.activeAccountId;
   }
 
   _accountScopeCondition(tableName) {
@@ -468,6 +488,27 @@ class DatabaseManager {
       .run(this.activeAccountId);
   }
 
+  // With nobody else on this device, a row from before attribution that no cloud
+  // holds can only be this account's, and nothing else could ever prove it. A row
+  // with a cloud id waits for its own cloud to prove it, in case another account
+  // left no other trace here. A twin of the account's own word or snippet stays
+  // hidden.
+  claimLegacyRowsOfOnlyAccount() {
+    if (!this.activeAccountId || this.hasOtherAccountRows()) return;
+    this.db.transaction(() => {
+      for (const table of PERSONAL_ROW_TABLES) {
+        const keyed = Boolean(PERSONAL_ROW_KEYS[table]);
+        this.db
+          .prepare(
+            `UPDATE ${table} SET account_id = ?
+             WHERE account_id IS NULL AND legacy_unattributed != 0 AND cloud_id IS NULL
+               ${keyed ? `AND NOT ${this._ownedDuplicateSql(table)}` : ""}`
+          )
+          .run(this.activeAccountId, ...(keyed ? [this.activeAccountId] : []));
+      }
+    })();
+  }
+
   // Rows from before attribution whose cloud copy could prove their owner.
   hasUnclaimedLegacyRows() {
     return Boolean(
@@ -480,15 +521,6 @@ class DatabaseManager {
         )
         .get()
     );
-  }
-
-  // A cloud id on a legacy row may be another account's, and a tombstone would
-  // delete that account's copy on its next sync. With only one account ever
-  // here it can only be theirs. Signed out, the Clear history copy says so.
-  _unprovenLegacyRowSql(tableName) {
-    return this.hasOtherAccountRows()
-      ? `(${tableName}.account_id IS NULL AND ${tableName}.legacy_unattributed != 0)`
-      : "0";
   }
 
   // A cloud row may only land on a local row this account can see. Another
@@ -2128,7 +2160,7 @@ class DatabaseManager {
         routeKind,
         clientTranscriptionId,
         occurredAt,
-        this.activeAccountId
+        this._accountSpokenUnder(analyticsOccurredAt)
       );
 
       const fetchStmt = this.db.prepare("SELECT * FROM transcriptions WHERE id = ?");
@@ -2437,7 +2469,7 @@ class DatabaseManager {
         )
         .run(
           eventId,
-          this.activeAccountId,
+          this._accountSpokenUnder(occurredAt),
           occurredAt,
           localDate,
           wordCount,
@@ -2459,11 +2491,11 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       // Grouped in SQL so the row count is bounded by distinct days rather than
       // by dictations; summarizeAnalyticsDays still owns every derived figure.
-      // The active account's, like its history. Signed out it stays device-wide:
-      // filtering on account_id would blank the view on every sign-out.
+      // Whatever the history above it can show: the active account's and
+      // unattributed counters, and signed out only the unattributed ones.
       const accountFilter = this.activeAccountId
         ? "AND (account_id IS NULL OR account_id = ?)"
-        : "";
+        : "AND account_id IS NULL";
       const days = this.db
         .prepare(
           `SELECT local_date AS date,
@@ -2631,13 +2663,28 @@ class DatabaseManager {
     return { success: true, deleted: complete() };
   }
 
+  // An unattributed counter isn't on offer if its dictation is another
+  // account's, or on a shared device could be: a legacy dictation is claimed only
+  // when the account's own cloud proves it.
+  _claimableAnalyticsSql() {
+    const unproven = this.hasOtherAccountRows()
+      ? "OR (dictation.account_id IS NULL AND dictation.legacy_unattributed != 0)"
+      : "";
+    return `(analytics_events.account_id IS NULL AND NOT EXISTS (
+      SELECT 1 FROM transcriptions dictation
+      WHERE dictation.client_transcription_id = analytics_events.event_id
+        AND ((dictation.account_id IS NOT NULL AND dictation.account_id IS NOT ?) ${unproven})
+    ))`;
+  }
+
   countUnclaimedAnalyticsEvents() {
     if (!this.db) throw new Error("Database not initialized");
     return this.db
       .prepare(
-        "SELECT COUNT(*) AS count FROM analytics_events WHERE account_id IS NULL AND deleted_at IS NULL"
+        `SELECT COUNT(*) AS count FROM analytics_events
+         WHERE deleted_at IS NULL AND ${this._claimableAnalyticsSql()}`
       )
-      .get().count;
+      .get(this.activeAccountId).count;
   }
 
   // Everything turning Insights sync on would upload: this account's queued
@@ -2655,9 +2702,9 @@ class DatabaseManager {
       .prepare(
         `SELECT COUNT(*) AS count FROM analytics_events
          WHERE deleted_at IS NULL AND sync_status <> 'synced'
-           AND (account_id IS NULL OR account_id = ?)`
+           AND (account_id = ? OR ${this._claimableAnalyticsSql()})`
       )
-      .get(accountId).count;
+      .get(accountId, accountId).count;
   }
 
   // Device-local rows stay unattributed until the signed-in user explicitly
@@ -2674,9 +2721,10 @@ class DatabaseManager {
       }
       const result = this.db
         .prepare(
-          "UPDATE analytics_events SET account_id = ? WHERE account_id IS NULL AND deleted_at IS NULL"
+          `UPDATE analytics_events SET account_id = ?
+           WHERE deleted_at IS NULL AND ${this._claimableAnalyticsSql()}`
         )
-        .run(accountId);
+        .run(accountId, accountId);
       return { success: true, claimed: result.changes };
     } catch (error) {
       debugLogger.error("Error claiming analytics events", { error: error.message }, "database");
@@ -2713,12 +2761,13 @@ class DatabaseManager {
       const clearedIds = this.db.prepare(
         `SELECT id FROM transcriptions WHERE deleted_at IS NULL AND ${scope.sql}`
       );
-      const unproven = this._unprovenLegacyRowSql("transcriptions");
+      // A tombstone is the clearing account's to push. Its token can only delete
+      // its own cloud's copy, so a legacy row's copy in another account's stays.
       const tombstone = this.db.prepare(
-        `UPDATE transcriptions SET deleted_at = datetime('now'), sync_status = 'pending' WHERE cloud_id IS NOT NULL AND deleted_at IS NULL AND NOT ${unproven} AND ${scope.sql}`
+        `UPDATE transcriptions SET deleted_at = datetime('now'), sync_status = 'pending', account_id = COALESCE(account_id, ?) WHERE cloud_id IS NOT NULL AND deleted_at IS NULL AND ${scope.sql}`
       );
       const hardDelete = this.db.prepare(
-        `DELETE FROM transcriptions WHERE (cloud_id IS NULL OR ${unproven}) AND ${scope.sql}`
+        `DELETE FROM transcriptions WHERE cloud_id IS NULL AND ${scope.sql}`
       );
       // One rule decides every row: a counter the cloud never received is
       // erased outright, and only a counter it did receive leaves a tombstone
@@ -2766,7 +2815,8 @@ class DatabaseManager {
       const clearAll = this.db.transaction(() => {
         const ids = clearedIds.all(...scope.params).map((row) => row.id);
         const cleared =
-          tombstone.run(...scope.params).changes + hardDelete.run(...scope.params).changes;
+          tombstone.run(this.activeAccountId, ...scope.params).changes +
+          hardDelete.run(...scope.params).changes;
         updateClearState.run("", clearedThrough);
         if (this.activeAccountId) updateClearState.run(this.activeAccountId, clearedThrough);
         // The account-wide cutoff is what erases rows this device no longer
@@ -2804,7 +2854,6 @@ class DatabaseManager {
         .get(`-${retentionDays} days`).cutoff;
       // As with Clear history: another account's rows wait for that account.
       const scope = this._ownedRowScope("transcriptions");
-      const unproven = this._unprovenLegacyRowSql("transcriptions");
       const expired = this.db
         .prepare(
           `SELECT id FROM transcriptions WHERE deleted_at IS NULL AND created_at < ? AND ${scope.sql}`
@@ -2813,10 +2862,10 @@ class DatabaseManager {
         .map((row) => row.id);
 
       const tombstone = this.db.prepare(
-        `UPDATE transcriptions SET deleted_at = datetime('now'), sync_status = 'pending' WHERE cloud_id IS NOT NULL AND deleted_at IS NULL AND created_at < ? AND NOT ${unproven} AND ${scope.sql}`
+        `UPDATE transcriptions SET deleted_at = datetime('now'), sync_status = 'pending', account_id = COALESCE(account_id, ?) WHERE cloud_id IS NOT NULL AND deleted_at IS NULL AND created_at < ? AND ${scope.sql}`
       );
       const hardDelete = this.db.prepare(
-        `DELETE FROM transcriptions WHERE (cloud_id IS NULL OR ${unproven}) AND created_at < ? AND ${scope.sql}`
+        `DELETE FROM transcriptions WHERE cloud_id IS NULL AND created_at < ? AND ${scope.sql}`
       );
       // Counters follow the transcripts they describe, on the same cutoff and
       // in the same transaction. Matched on created_at, never occurred_at:
@@ -2839,7 +2888,7 @@ class DatabaseManager {
       );
       let analyticsPurged = 0;
       this.db.transaction(() => {
-        tombstone.run(cutoff, ...scope.params);
+        tombstone.run(this.activeAccountId, cutoff, ...scope.params);
         hardDelete.run(cutoff, ...scope.params);
         analyticsPurged =
           tombstoneSyncedAnalytics.run(cutoff, this.activeAccountId).changes +

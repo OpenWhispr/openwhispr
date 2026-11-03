@@ -674,12 +674,8 @@ test("clearing history tombstones only the counters the cloud actually holds", (
   db.clearTranscriptions();
 
   assert.equal(db.getAnalyticsSummary().totalDictations, 0, "account-a's counters are gone");
-  db.setActiveAccountId(null);
-  assert.equal(
-    db.getAnalyticsSummary().totalDictations,
-    1,
-    "only account-b's counter is left in the device summary"
-  );
+  db.setActiveAccountId("account-b");
+  assert.equal(db.getAnalyticsSummary().totalDictations, 1, "account-b's counter is left");
   db.setActiveAccountId("account-a");
   assert.deepEqual(db.getPendingAnalyticsEvents(), []);
   assert.equal(db.countUnclaimedAnalyticsEvents(), 0);
@@ -812,11 +808,7 @@ test("signed-out clearing leaves account counters and their queued deletions alo
 
   db.clearTranscriptions();
 
-  assert.equal(
-    db.getAnalyticsSummary().totalDictations,
-    1,
-    "the guest counter goes; the account's live counter stays"
-  );
+  assert.equal(db.getAnalyticsSummary().totalDictations, 0, "the guest counter goes");
   assert.equal(db.getPendingAnalyticsClear(), null);
   const { cleared_through: clearedThrough } = db.db
     .prepare("SELECT cleared_through FROM analytics_account_clear_state WHERE account_scope = ''")
@@ -824,8 +816,9 @@ test("signed-out clearing leaves account counters and their queued deletions alo
   recordEvent(db, "late-guest-event", {
     occurredAt: new Date(Date.parse(clearedThrough) - 1).toISOString(),
   });
-  assert.equal(db.getAnalyticsSummary().totalDictations, 1);
+  assert.equal(db.getAnalyticsSummary().totalDictations, 0);
   db.setActiveAccountId("account-a");
+  assert.equal(db.getAnalyticsSummary().totalDictations, 1, "the account's live counter stays");
   assert.deepEqual(db.getPendingAnalyticsDeletes(), [{ event_id: "pending-account-delete" }]);
 });
 
@@ -972,4 +965,71 @@ test("the opt-in count covers everything turning sync on would upload", (t) => {
     1,
     "another account sees only the unattributed row, never account-a's"
   );
+});
+
+test("signed out, Insights counts only what a signed-out user can see", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  recordEvent(db, "account-event");
+  db.setActiveAccountId(null);
+  recordEvent(db, "guest-event");
+
+  assert.equal(db.getAnalyticsSummary().totalDictations, 1, "another account's total stays hidden");
+
+  db.clearTranscriptions();
+  assert.equal(
+    db.getAnalyticsSummary().totalDictations,
+    0,
+    "the dialog promises the counters are removed"
+  );
+  db.setActiveAccountId("account-a");
+  assert.equal(db.getAnalyticsSummary().totalDictations, 1, "the account's own survive for it");
+});
+
+function seedLegacyCounter(db, eventId, { accountId = null, legacy = 1 } = {}) {
+  db.setActiveAccountId(accountId);
+  db.saveTranscription("three spoken words", null, { clientTranscriptionId: eventId });
+  db.db
+    .prepare(
+      "UPDATE transcriptions SET legacy_unattributed = ? WHERE client_transcription_id = ?"
+    )
+    .run(legacy, eventId);
+  db.setActiveAccountId(null);
+  recordEvent(db, eventId);
+}
+
+test("a legacy counter on a shared device waits for its dictation's owner to be proven", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  seedLegacyCounter(db, "unproven");
+  seedLegacyCounter(db, "b-proven", { accountId: "account-b" });
+  seedLegacyCounter(db, "guest", { legacy: 0 });
+  recordEvent(db, "no-transcription");
+
+  db.setActiveAccountId("account-a");
+  assert.equal(db.countUnclaimedAnalyticsEvents(), 2, "A isn't offered unproven or B's counters");
+  assert.equal(db.countAnalyticsEventsAwaitingUpload("account-a"), 2);
+  assert.equal(db.claimAnonymousAnalyticsEvents("account-a").claimed, 2);
+  const owner = (eventId) =>
+    db.db.prepare("SELECT account_id FROM analytics_events WHERE event_id = ?").get(eventId)
+      .account_id;
+  assert.equal(owner("unproven"), null);
+  assert.equal(owner("b-proven"), null);
+  assert.equal(owner("guest"), "account-a");
+
+  db.setActiveAccountId("account-b");
+  assert.equal(db.claimAnonymousAnalyticsEvents("account-b").claimed, 1, "B claims its own");
+  assert.equal(owner("b-proven"), "account-b");
+  assert.equal(owner("unproven"), null);
+});
+
+test("the only account on a device can still claim its legacy counters", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  seedLegacyCounter(db, "only-mine");
+
+  db.setActiveAccountId("account-a");
+  assert.equal(db.countUnclaimedAnalyticsEvents(), 1);
+  assert.equal(db.claimAnonymousAnalyticsEvents("account-a").claimed, 1);
 });

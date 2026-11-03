@@ -1960,6 +1960,10 @@ class IPCHandlers {
       return result;
     });
 
+    ipcMain.handle("db-account-changed-since", (_event, occurredAt) =>
+      this.databaseManager.accountChangedSince(occurredAt)
+    );
+
     ipcMain.handle("db-get-transcriptions", async (event, limit = 50, options = {}) => {
       return this.databaseManager.getTranscriptions(limit, options);
     });
@@ -2828,6 +2832,7 @@ class IPCHandlers {
       }
       this.databaseManager.setActiveAccountId(accountId);
       this.databaseManager.claimSignedOutLocalRows();
+      this.databaseManager.claimLegacyRowsOfOnlyAccount();
       if (accountId !== null) {
         accountScopeBinding.persist(accountId, state.token);
         scopedAccountByGeneration.set(state.generation, accountId);

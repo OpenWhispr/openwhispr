@@ -1950,6 +1950,7 @@ declare global {
       // Space operations
       getSpaces?: () => Promise<SpaceItem[]>;
       hasOtherAccountRows?: () => Promise<boolean>;
+      accountChangedSince?: (occurredAt?: string) => Promise<boolean>;
       hasUnclaimedLegacyRows?: () => Promise<boolean>;
       setActiveAccountScope?: (
         accountId: string | null,

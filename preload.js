@@ -293,6 +293,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Space functions
   getSpaces: () => ipcRenderer.invoke("db-get-spaces"),
   hasOtherAccountRows: () => ipcRenderer.invoke("db-has-other-account-rows"),
+  accountChangedSince: (occurredAt) => ipcRenderer.invoke("db-account-changed-since", occurredAt),
   hasUnclaimedLegacyRows: () => ipcRenderer.invoke("db-has-unclaimed-legacy-rows"),
   setActiveAccountScope: (accountId, expectedAuthGeneration) =>
     ipcRenderer.invoke("set-active-account-scope", accountId, expectedAuthGeneration),

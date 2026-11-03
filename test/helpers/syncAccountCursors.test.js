@@ -273,7 +273,7 @@ test("a device with nothing to claim downloads nothing extra", async (t) => {
   );
 });
 
-test("a legacy row's own upload proves nothing about who owns it", async (t) => {
+test("on a shared device, a legacy row's own upload proves nothing about who owns it", async (t) => {
   const db = setup(t);
   if (!db) return;
   db.setActiveAccountId(null);
@@ -285,6 +285,8 @@ test("a legacy row's own upload proves nothing about who owns it", async (t) => 
   for (const table of ["custom_dictionary", "snippets", "agent_conversations", "transcriptions"]) {
     db.db.prepare(`UPDATE ${table} SET legacy_unattributed = 1`).run();
   }
+  db.setActiveAccountId("account-c");
+  db.saveTranscription("C used this device too", null, { clientTranscriptionId: "c-own" });
 
   const cloudA = accountCloud();
   const accountA = await signInAs(t, db, cloudA, "account-a");
@@ -296,7 +298,8 @@ test("a legacy row's own upload proves nothing about who owns it", async (t) => 
 
   for (const table of ["custom_dictionary", "snippets", "agent_conversations", "transcriptions"]) {
     assert.equal(
-      db.db.prepare(`SELECT account_id FROM ${table}`).get().account_id,
+      db.db.prepare(`SELECT account_id FROM ${table} WHERE account_id IS NOT 'account-c'`).get()
+        .account_id,
       null,
       `${table} stays unattributed`
     );
@@ -348,7 +351,7 @@ test("a chat or dictation delete the cloud already applied doesn't retry forever
   assert.deepEqual(db.getPendingTranscriptionDeletes(), []);
 });
 
-test("clearing history leaves another account's possible legacy rows in its cloud", async (t) => {
+test("clearing history queues a legacy row's delete for the clearing account alone", async (t) => {
   const db = setup(t);
   if (!db) return;
   db.setActiveAccountId(null);
@@ -371,16 +374,25 @@ test("clearing history leaves another account's possible legacy rows in its clou
   db.db.prepare("ROLLBACK").run();
   assert.ok(db.db.prepare("SELECT 1 FROM transcriptions WHERE id = ?").get(single));
 
-  // Another account has: B can clear its own view, not delete from A's cloud.
+  // Another account has: A's token can only delete A's own copy, so B's next
+  // pass must never pick up this tombstone and delete B's.
   db.setActiveAccountId("account-b");
   db.saveTranscription("B's own");
   db.setActiveAccountId("account-a");
   db.clearTranscriptions();
-  assert.equal(db.db.prepare("SELECT 1 FROM transcriptions WHERE id = ?").get(single), undefined);
+  assert.deepEqual(
+    db.getPendingTranscriptionDeletes().map((row) => row.cloud_id),
+    ["someone-elses"]
+  );
+  db.setActiveAccountId("account-b");
   assert.deepEqual(db.getPendingTranscriptionDeletes(), []);
+  assert.deepEqual(
+    db.getTranscriptions().map((row) => row.text),
+    ["B's own"]
+  );
 });
 
-test("retention follows the active account and spares another account's cloud copies", (t) => {
+test("retention follows the active account and leaves another account's rows alone", (t) => {
   const db = setup(t);
   if (!db) return;
   const old = "2020-01-01 00:00:00";
@@ -399,10 +411,11 @@ test("retention follows the active account and spares another account's cloud co
   );
   assert.deepEqual(
     db.getPendingTranscriptionDeletes().map((row) => row.cloud_id),
-    ["cloud-b"],
-    "the legacy row goes from this device only"
+    ["cloud-b", "cloud-legacy"],
+    "B's token can only delete a copy in B's own cloud"
   );
-  assert.equal(db.db.prepare("SELECT 1 FROM transcriptions WHERE id = ?").get(legacy), undefined);
+  db.setActiveAccountId("account-a");
+  assert.deepEqual(db.getPendingTranscriptionDeletes(), [], "A's next pass can't push them");
 });
 
 test("deleting an account takes legacy rows only when no other account has used the device", (t) => {
@@ -722,7 +735,7 @@ test("signing in takes the signed-out rows that never sync, and only those", (t)
   assert.equal(dictationOwner(legacyFailed.id), null, "and nobody knows whose this is");
 });
 
-test("Insights counts the active account's dictations, and every one while signed out", (t) => {
+test("Insights counts the active account's dictations, and signed out only unattributed ones", (t) => {
   const db = setup(t);
   if (!db) return;
   const insert = db.db.prepare(
@@ -731,13 +744,150 @@ test("Insights counts the active account's dictations, and every one while signe
   );
   insert.run("a", "account-a");
   insert.run("b", "account-b");
+  insert.run("guest", null);
 
   db.setActiveAccountId("account-b");
-  assert.equal(db.getAnalyticsSummary().totalDictations, 1);
+  assert.equal(db.getAnalyticsSummary().totalDictations, 2, "B's own and the guest counter");
+  db.setActiveAccountId(null);
+  assert.equal(db.getAnalyticsSummary().totalDictations, 1, "neither account's total shows");
   db.setActiveAccountId("account-a");
-  assert.equal(db.getAnalyticsSummary().totalDictations, 1);
+  assert.equal(db.getAnalyticsSummary().totalDictations, 2);
   db.clearTranscriptions();
   assert.equal(db.getAnalyticsSummary().totalDictations, 0, "A's clear reads as cleared");
+  db.setActiveAccountId("account-b");
+  assert.equal(db.getAnalyticsSummary().totalDictations, 1, "B's own survives A's clear");
+});
+
+const LEGACY_TABLES = ["custom_dictionary", "snippets", "agent_conversations", "transcriptions"];
+
+function seedLegacyRows(db) {
   db.setActiveAccountId(null);
-  assert.equal(db.getAnalyticsSummary().totalDictations, 1, "signing out doesn't blank the view");
+  db.applyDictionaryChanges({ add: ["Legacy"] });
+  db.setSnippets([{ trigger: "leg", replacement: "x" }]);
+  const chat = db.createAgentConversation("legacy chat");
+  db.addAgentMessage(chat.id, "user", "hello");
+  db.saveTranscription("legacy dictation", null, { clientTranscriptionId: "legacy-dictation" });
+  for (const table of LEGACY_TABLES) {
+    db.db.prepare(`UPDATE ${table} SET legacy_unattributed = 1`).run();
+  }
+}
+
+const rowOwner = (db, table) => db.db.prepare(`SELECT account_id FROM ${table}`).get().account_id;
+
+test("the only account on a device owns its pending legacy rows, so the next one never sees them", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  seedLegacyRows(db);
+
+  const cloudA = accountCloud();
+  db.setActiveAccountId("account-a");
+  db.claimLegacyRowsOfOnlyAccount();
+  for (const table of LEGACY_TABLES) assert.equal(rowOwner(db, table), "account-a", table);
+
+  const accountA = await signInAs(t, db, cloudA, "account-a");
+  await accountA.syncAll(true);
+  assert.equal(cloudA.dictionary().length, 1, "still uploaded exactly once");
+  assert.equal(cloudA.conversations().length, 1);
+  assert.equal(cloudA.transcriptions().length, 1);
+
+  db.setActiveAccountId("account-b");
+  assert.deepEqual(db.getDictionary(), []);
+  assert.deepEqual(db.getSnippets(), []);
+  assert.deepEqual(db.getAgentConversations(), []);
+  assert.deepEqual(db.getTranscriptions(), []);
+  db.setActiveAccountId(null);
+  assert.deepEqual(db.getTranscriptions(), [], "nor does a signed-out guest");
+});
+
+test("legacy rows stay unattributed when another account has used the device", (t) => {
+  const db = setup(t);
+  if (!db) return;
+  seedLegacyRows(db);
+  db.setActiveAccountId("account-b");
+  db.saveTranscription("B's own dictation", null, { clientTranscriptionId: "b-own" });
+
+  db.setActiveAccountId("account-a");
+  db.claimLegacyRowsOfOnlyAccount();
+
+  for (const table of ["custom_dictionary", "snippets", "agent_conversations"]) {
+    assert.equal(rowOwner(db, table), null, table);
+  }
+  assert.equal(
+    db.db
+      .prepare(
+        "SELECT account_id FROM transcriptions WHERE client_transcription_id = 'legacy-dictation'"
+      )
+      .get().account_id,
+    null
+  );
+});
+
+test("the only account's claim leaves a legacy twin of its own word hidden", (t) => {
+  const db = setup(t);
+  if (!db) return;
+  seedLegacyRows(db);
+  db.setActiveAccountId("account-a");
+  db.db
+    .prepare("INSERT INTO custom_dictionary (word, client_dict_id, account_id) VALUES (?, ?, ?)")
+    .run("Legacy", "a-own", "account-a");
+
+  db.claimLegacyRowsOfOnlyAccount();
+
+  assert.deepEqual(db.getDictionary(), ["Legacy"], "listed once, and no UNIQUE failure");
+  assert.equal(
+    db.db.prepare("SELECT COUNT(*) AS n FROM custom_dictionary WHERE account_id IS NULL").get().n,
+    1
+  );
+});
+
+test("signing out and back in with the only account doesn't reopen its legacy rows", (t) => {
+  const db = setup(t);
+  if (!db) return;
+  seedLegacyRows(db);
+  db.setActiveAccountId("account-a");
+  db.claimLegacyRowsOfOnlyAccount();
+  db.setActiveAccountId(null);
+  db.saveTranscription("signed-out dictation", null, { clientTranscriptionId: "guest" });
+
+  db.setActiveAccountId("account-a");
+  db.claimLegacyRowsOfOnlyAccount();
+
+  assert.equal(
+    db.db
+      .prepare("SELECT account_id FROM transcriptions WHERE client_transcription_id = 'guest'")
+      .get().account_id,
+    null,
+    "only rows from before attribution are claimed this way; a guest row joins when it syncs"
+  );
+});
+
+test("the only account's claim leaves a synced legacy row for its own cloud to prove", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const cloudB = accountCloud();
+  const inB = cloudB.seedTranscription({
+    client_transcription_id: "b-dictation",
+    text: "B's dictation",
+    created_at: daysAgo(5),
+    updated_at: daysAgo(5),
+  });
+  db.setActiveAccountId(null);
+  db.saveTranscription("B's dictation", null, { clientTranscriptionId: "b-dictation" });
+  db.db
+    .prepare(
+      "UPDATE transcriptions SET cloud_id = ?, sync_status = 'synced', legacy_unattributed = 1"
+    )
+    .run(inB.id);
+
+  db.setActiveAccountId("account-a");
+  db.claimLegacyRowsOfOnlyAccount();
+  assert.equal(rowOwner(db, "transcriptions"), null, "a cloud id isn't A's to take on no evidence");
+
+  const accountB = await signInAs(t, db, cloudB, "account-b");
+  await accountB.syncAll(true);
+  assert.equal(rowOwner(db, "transcriptions"), "account-b", "B's own cloud proves it");
+  assert.deepEqual(
+    db.getTranscriptions().map((row) => row.text),
+    ["B's dictation"]
+  );
 });
