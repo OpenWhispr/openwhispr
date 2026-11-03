@@ -58,7 +58,7 @@ test("shows the count, Clear and the actions", async (t) => {
     markup,
     /settingsPage\.workspace\.people\.selection\.count\|\{&quot;count&quot;:3\}/
   );
-  const labels = buttons(markup).map((button) => button.replace(/<[^>]+>/g, ""));
+  const labels = buttons(markup).map((button) => button.replace(/[<>]/g, ""));
   assert.deepEqual(labels, [
     "settingsPage.workspace.people.selection.clear",
     "Resend invites",
