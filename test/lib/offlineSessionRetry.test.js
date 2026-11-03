@@ -195,6 +195,97 @@ test("an interrupted session body stays fenced until recovery and cancellation k
   assert.equal(browser.focusListenerCount(), 0);
 });
 
+// What better-fetch hands onSuccess for each body, through the real client.
+const nonAnswers = [
+  ["an HTML block page", "<html><body>Blocked by your network</body></html>", "text/html"],
+  ["HTML without a content type", "<html>Blocked</html>", null],
+  ["an empty body", "", "application/json"],
+  ["a JSON value that is no session", "true", "application/json"],
+  ["a JSON array", "[]", "application/json"],
+  ["a binary body", "\u0000\u0001", "application/octet-stream"],
+];
+
+for (const [name, body, contentType] of nonAnswers) {
+  test(`${name} on a 200 counts as unreachable, not as signed out`, async (t) => {
+    const { authContext, session } = await createValidatedSession(t);
+    globalThis.fetch = async () =>
+      new Response(body, { headers: contentType ? { "Content-Type": contentType } : {} });
+
+    await session.value.refetch();
+
+    assert.equal(session.value.data.user.id, "user-a");
+    assert.ok(session.value.error);
+    const snapshot = authContext.getAuthRequestContextSnapshot();
+    assert.equal(snapshot.sessionUserId, "user-a");
+    assert.equal(snapshot.sessionRejectedGeneration, null);
+    assert.equal(snapshot.refetchFailedGeneration, 4);
+    assert.equal(authContext.getBoundSessionGeneration("user-a"), 4);
+    assert.equal(authContext.getValidatedAuthGeneration(), null);
+    assert.equal(authContext.sessionAwaitsVerdict(), true);
+  });
+}
+
+test("an HTML block page on launch presents the bound account offline", async (t) => {
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const browser = installWindow({ token: "token-a", generation: 3 });
+  t.after(browser.restore);
+  const vite = await createRendererServer(t, { cachePrefix: "openwhispr-offline-retry-" });
+  const authContext = await vite.ssrLoadModule("/lib/authRequestContext.ts");
+  const { authClient } = await vite.ssrLoadModule("/lib/auth.ts");
+  authContext.resetAuthRequestContextForTests();
+  t.mock.method(
+    globalThis,
+    "fetch",
+    async () => new Response("<html>Blocked</html>", { headers: { "Content-Type": "text/html" } })
+  );
+
+  await authClient.$store.atoms.session.value.refetch();
+
+  assert.equal(authClient.$store.atoms.session.value.data, null);
+  assert.deepEqual(authContext.getOfflineAccount(), { userId: "user-a", generation: 3 });
+  assert.equal(authContext.getAuthRequestContextSnapshot().sessionResolved, false);
+});
+
+const signedOutAnswers = [
+  ["null", "null"],
+  ["an object with no user", '{"session":null,"user":null}'],
+  ["an empty object", "{}"],
+];
+
+for (const [name, body] of signedOutAnswers) {
+  test(`${name} from the server still signs out`, async (t) => {
+    const { authContext, session } = await createValidatedSession(t);
+    globalThis.fetch = async () =>
+      new Response(body, { headers: { "Content-Type": "application/json" } });
+
+    await session.value.refetch();
+
+    assert.equal(session.value.error, null);
+    const snapshot = authContext.getAuthRequestContextSnapshot();
+    assert.equal(snapshot.sessionResolved, true);
+    assert.equal(snapshot.sessionUserId, null);
+    assert.equal(snapshot.sessionRejectedGeneration, 4);
+    assert.equal(authContext.getBoundSessionGeneration(null), 4);
+    assert.equal(authContext.getValidatedAuthGeneration(), null);
+  });
+}
+
+test("a 401 with an HTML body is still a rejected credential", async (t) => {
+  const { authContext, session } = await createValidatedSession(t);
+  globalThis.fetch = async () =>
+    new Response("<html>Unauthorized</html>", {
+      status: 401,
+      headers: { "Content-Type": "text/html" },
+    });
+
+  await session.value.refetch();
+
+  assert.equal(session.value.data, null);
+  const snapshot = authContext.getAuthRequestContextSnapshot();
+  assert.equal(snapshot.sessionRejectedGeneration, 4);
+  assert.equal(snapshot.sessionResolved, false);
+});
+
 test("a cancelled server-error binding read cannot clear a newer successful session", async (t) => {
   const { browser, authContext, session, answer } = await createValidatedSession(t);
 

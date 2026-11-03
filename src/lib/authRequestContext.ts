@@ -212,7 +212,14 @@ export async function authContextFetch(
   try {
     response = await globalThis.fetch(input, { ...init, credentials: "omit" });
     // Fetch resolves at headers; a broken session body must fence the lease too.
-    if (isGetSessionRequest((init ?? {}) as AuthRequest)) await response.clone().text();
+    if (isGetSessionRequest((init ?? {}) as AuthRequest)) {
+      const body = await response.clone().text();
+      if (response.ok && !isSessionAnswer(body)) {
+        throw Object.assign(new Error("get-session answered with something other than a session"), {
+          code: "AUTH_SESSION_UNREADABLE",
+        });
+      }
+    }
     await assertAuthRequestCurrent(init);
     return response;
   } catch (error) {
@@ -239,6 +246,21 @@ function isGetSessionRequest(request: AuthRequest): boolean {
   try {
     const path = new URL(String(request.url), window.location.origin).pathname;
     return path.endsWith("/get-session");
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Better Auth encodes "no session" as JSON null or an object with no user.
+ * Better-fetch hands onSuccess any other 200 too (a proxy's HTML page arrives
+ * as a string), and reading that as "no user" would sign the account out and
+ * purge its content.
+ */
+function isSessionAnswer(body: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(body);
+    return parsed === null || (typeof parsed === "object" && !Array.isArray(parsed));
   } catch {
     return false;
   }
