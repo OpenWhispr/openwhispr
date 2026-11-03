@@ -1,6 +1,6 @@
 import { TeamsService } from "./TeamsService";
 import { SpacesService } from "./SpacesService";
-import { markSpacePurged, syncService, upsertCloudSpaces } from "./SyncService";
+import { markSpacePurged, releasePurgedSpace, syncService, upsertCloudSpaces } from "./SyncService";
 import { loadSpaces, purgeSpace, updateSpaceMeta } from "../stores/noteStore";
 import { invalidateSpaceRoster } from "../lib/spaceRosterCache";
 import { createSpaceActions } from "./spaceActionsCore";
@@ -26,6 +26,7 @@ const actions = createSpaceActions({
   mirror: { upsertCloudSpaces },
   sync: syncService,
   markSpacePurged,
+  releasePurgedSpace,
   invalidateSpaceRoster,
 });
 

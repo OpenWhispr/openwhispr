@@ -81,6 +81,7 @@ function makeHarness() {
       requestSyncAll: (reason) => calls.push(["sync", reason]),
     },
     markSpacePurged: async (spaceId, reason) => calls.push(["guard", spaceId, reason]),
+    releasePurgedSpace: async (spaceId) => calls.push(["releasePurgedSpace", spaceId]),
     invalidateSpaceRoster: (spaceId) => calls.push(["roster.invalidate", spaceId]),
   };
   return { calls, cloudSpace, localSpace, deps };
@@ -417,6 +418,7 @@ test("joining refreshes the mirror and asks for a sync", async () => {
 
   assert.deepEqual(calls, [
     ["space.join", "cloud-space-1"],
+    ["releasePurgedSpace", "cloud-space-1"],
     ["roster.invalidate", undefined],
     ["space.mySpaces"],
     ["mirror.upsert", ["cloud-space-1"]],
@@ -425,16 +427,37 @@ test("joining refreshes the mirror and asks for a sync", async () => {
   ]);
 });
 
+test("joining releases the purge guard before refreshing", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps } = makeHarness();
+  const actions = createSpaceActions(deps);
+
+  await actions.joinSpace("cloud-space-1");
+
+  // Leaving a space guards its id for 15 minutes, and the refresh skips guarded ids, so the
+  // rejoined space would never reach the mirror.
+  assert.deepEqual(
+    calls
+      .map(([name]) => name)
+      .filter((name) => ["space.join", "releasePurgedSpace", "space.mySpaces"].includes(name)),
+    ["space.join", "releasePurgedSpace", "space.mySpaces"]
+  );
+});
+
 test("joining reports a space the caller was already in", async () => {
   const { createSpaceActions } = await load();
-  const { deps } = makeHarness();
+  const { calls, deps } = makeHarness();
   deps.spaces.join = async () => ({ joined: false });
   const actions = createSpaceActions(deps);
 
   assert.deepEqual(await actions.joinSpace("cloud-space-1"), { joined: false });
+  assert.ok(
+    calls.some(([name]) => name === "releasePurgedSpace"),
+    "already being in the space is as good as joining it"
+  );
 });
 
-test("a refused join changes nothing locally", async () => {
+test("a refused join leaves the guard alone", async () => {
   const { createSpaceActions } = await load();
   const { CloudApiError } = await import("../../src/services/cloudApi.ts");
   const { calls, deps } = makeHarness();
@@ -563,6 +586,28 @@ test("a lost create with no matching teamspace rethrows", async () => {
     (error) => error === lost
   );
   assert.equal(calls.filter(([name]) => name.startsWith("local.")).length, 0);
+});
+
+test("a refusal with a code at status 0 never looks", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { calls, deps } = makeHarness();
+  // Main refuses the request itself when the session changed; it never reached the server.
+  const refusal = new CloudApiError("Session changed", 0, "AUTH_CONTEXT_CHANGED");
+  deps.spaces.create = async () => {
+    throw refusal;
+  };
+  deps.spaces.mySpaces = async () => {
+    calls.push(["space.mySpaces"]);
+    return [ownCreate()];
+  };
+  const actions = createSpaceActions(deps);
+
+  await assert.rejects(
+    actions.createSpace("workspace-1", { name: "Roadmap" }, { memberIds: [], teamIds: [] }),
+    (error) => error === refusal
+  );
+  assert.equal(calls.length, 0);
 });
 
 test("a lost create whose lookup fails too rethrows the create's error", async () => {

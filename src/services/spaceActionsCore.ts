@@ -65,6 +65,7 @@ export interface SpaceActionsDependencies {
     requestSyncAll: (reason: string) => void;
   };
   markSpacePurged: (cloudSpaceId: string, reason: "deleted") => Promise<void>;
+  releasePurgedSpace: (cloudSpaceId: string) => Promise<void>;
   invalidateSpaceRoster: (cloudSpaceId?: string) => void;
 }
 
@@ -77,9 +78,10 @@ function errorMessage(err: unknown): string | undefined {
   return err instanceof Error ? err.message : undefined;
 }
 
-// No response at all (status 0): the request may have been carried out before the answer was lost.
+// No response at all: the request may have been carried out before the answer was lost. A status
+// 0 with a code is main refusing the request itself (a changed session), which never went out.
 function isLostAnswer(err: unknown): boolean {
-  return err instanceof CloudApiError && !err.status;
+  return err instanceof CloudApiError && !err.status && !err.code;
 }
 
 export function createSpaceActions(deps: SpaceActionsDependencies) {
@@ -257,6 +259,10 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
   // A newly reachable space inserts as pending in the mirror; the sync pass backfills its content.
   async function joinSpace(cloudSpaceId: string): Promise<{ joined: boolean }> {
     const result = await deps.spaces.join(cloudSpaceId);
+    // Joined or already in, the server says the caller belongs. A space they left within the guard's
+    // TTL is skipped by the refresh, so the guard is released on this answer; the refresh itself
+    // must not release from its own listing, which can be stale.
+    await deps.releasePurgedSpace(cloudSpaceId);
     await refreshSpaceMirror();
     deps.sync.requestSyncAll("manual");
     return result;

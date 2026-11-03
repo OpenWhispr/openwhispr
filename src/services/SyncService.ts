@@ -404,6 +404,17 @@ export async function markSpacePurged(
   });
 }
 
+// For a space the caller has just been told they belong to (a join): leaving it guarded the id,
+// and the guard would keep the mirror from taking it back until the TTL or a full spaces pass.
+export async function releasePurgedSpace(cloudSpaceId: string): Promise<void> {
+  await navigator.locks.request(PURGED_SPACE_GUARD_LOCK, () => {
+    const kept = Object.fromEntries(
+      Object.entries(readPurgedSpaceIds()).filter(([id]) => id !== cloudSpaceId)
+    );
+    localStorage.setItem(PURGED_SPACE_GUARD_KEY, JSON.stringify(kept));
+  });
+}
+
 async function prunePurgedSpaceIds(liveCloudSpaceIds: Set<string>): Promise<void> {
   await navigator.locks.request(PURGED_SPACE_GUARD_LOCK, () => {
     const kept = Object.fromEntries(
