@@ -278,7 +278,14 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     flags: { is_default?: boolean; is_open?: boolean }
   ): Promise<void> {
     await deps.spaces.update(cloudSpaceId, flags);
-    await refreshSpaceMirror();
+    try {
+      await refreshSpaceMirror();
+    } catch (err) {
+      // The server has the change, so this is not a failed save: the sync pass catches the
+      // mirror up instead.
+      console.error("Space flags mirror refresh failed:", err);
+      deps.sync.requestSyncAll("manual");
+    }
   }
 
   // A space reached through a join or an add is mirrored by then; a miss means the mirror is stale.
@@ -311,7 +318,17 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
   // Dropping one's own direct grant can revoke container access, so the
   // sync pass runs to purge content the mirror no longer lists.
   async function leaveSpace(space: SpaceItem, userId: string): Promise<SpaceMemberRemoval> {
-    const result = await removeSpaceMember(space, userId);
+    const spaceId = requireCloudSpaceId(space);
+    let result: SpaceMemberRemoval;
+    try {
+      result = await deps.spaces.removeMember(spaceId, userId);
+    } catch (err) {
+      // Already out, or the space is gone: an earlier leave went through and its answer was lost,
+      // or someone else got there first. Nothing is left to remove, but the mirror still lists it.
+      if (classifySpaceError(err).kind !== "gone") throw err;
+      result = { removed: false, still_via_teams: [] };
+    }
+    await refreshSpaceMirror();
     deps.sync.requestSyncAll("manual");
     return result;
   }
@@ -338,7 +355,12 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
   }
 
   async function leaveTeam(teamId: string, userId: string): Promise<void> {
-    await deps.teams.removeMember(teamId, userId);
+    try {
+      await deps.teams.removeMember(teamId, userId);
+    } catch (err) {
+      // Already out of the group, as after a leave that got partway: the mirror is what's left.
+      if (classifySpaceError(err).kind !== "gone") throw err;
+    }
     await refreshSpaceMirror();
     deps.sync.requestSyncAll("manual");
   }

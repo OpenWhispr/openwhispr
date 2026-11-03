@@ -119,6 +119,58 @@ test("the hook loads, then reloads", async (t) => {
   assert.deepEqual(globalThis.__spaceListCalls, ["w1", "w1"]);
 });
 
+test("it counts the reads that landed, so a consumer can tell a list is newer than a moment", async (t) => {
+  const { mount, state } = await loadHook(t);
+  const first = deferred();
+  globalThis.__spaceListImpl = () => first.promise;
+
+  await mount("w1", true);
+  assert.equal(state().loads, 0);
+
+  await React.act(async () => first.resolve([currentRow("s1")]));
+  assert.equal(state().loads, 1);
+
+  // A read that fails leaves the list, and the count, as they were.
+  globalThis.__spaceListImpl = async () => {
+    throw new Error("offline");
+  };
+  await React.act(async () => {
+    await state().reload();
+  });
+  assert.equal(state().loads, 1);
+  assert.equal(state().stale, true);
+
+  globalThis.__spaceListImpl = async () => [currentRow("s1")];
+  await React.act(async () => {
+    await state().reload();
+  });
+  assert.equal(state().loads, 2);
+});
+
+test("a read overtaken by a newer one isn't counted", async (t) => {
+  const { mount, state } = await loadHook(t);
+  const slow = deferred();
+  const fast = deferred();
+  const answers = [slow, fast];
+  globalThis.__spaceListImpl = () => answers.shift().promise;
+  await mount("w1", true);
+
+  let newest;
+  await React.act(async () => {
+    newest = state().reload();
+    fast.resolve([currentRow("s2")]);
+    await newest;
+    slow.resolve([currentRow("s1")]);
+  });
+  await React.act(async () => {});
+
+  assert.equal(state().loads, 1);
+  assert.deepEqual(
+    state().spaces.map((space) => space.id),
+    ["s2"]
+  );
+});
+
 test("a failed first load has status failed, and reload retries", async (t) => {
   const { mount, state } = await loadHook(t);
   globalThis.__spaceListImpl = async () => {

@@ -82,14 +82,7 @@ export function LeaveSpaceDialog({
       const { still_via_teams } = await leaveSpace(space, userId);
       return { stillViaTeams: still_via_teams.map((team) => team.name) };
     }
-    for (const team of leaveTeams) {
-      try {
-        await leaveTeam(team.id, userId);
-      } catch (error) {
-        // Already out of this group, as after an attempt that got partway: not what a retry fails on.
-        if (classifySpaceError(error).kind !== "gone") throw error;
-      }
-    }
+    for (const team of leaveTeams) await leaveTeam(team.id, userId);
     return { stillViaTeams: [] };
   };
 
@@ -109,12 +102,9 @@ export function LeaveSpaceDialog({
       }
     } catch (error) {
       const failure = classifySpaceError(error);
-      // The teamspace is already without this user, so there is nothing left to leave.
-      if (failure.kind !== "gone") {
-        if (failure.kind === "lastAdmin") setBlocked(true);
-        dispatch({ type: "failed", error: rowActionErrorOf(failure) });
-        return;
-      }
+      if (failure.kind === "lastAdmin") setBlocked(true);
+      dispatch({ type: "failed", error: rowActionErrorOf(failure) });
+      return;
     }
     toast({ title: t("settingsPage.workspace.teamspaces.exit.left", { space: name }) });
     finish();

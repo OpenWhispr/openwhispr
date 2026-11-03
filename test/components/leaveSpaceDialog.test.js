@@ -278,32 +278,6 @@ test("someone with a group keeps the group-access wording", async (t) => {
   assert.deepEqual(events, [["open", false], ["left"]]);
 });
 
-test("a group already left doesn't stop the rest, or a retry", async (t) => {
-  const space = {
-    ...SPACE,
-    my_direct_role: null,
-    teams: [
-      { id: "g1", name: "Sales", my_role: "member" },
-      { id: "g2", name: "Support", my_role: "member" },
-    ],
-  };
-  const { callsTo } = await mount(t, {
-    space,
-    leaveTeam: async (teamId) => {
-      if (teamId === "g1") throw new CloudApiError("Member not found", 404);
-    },
-  });
-
-  await ui.click(buttonNamed("Leave teamspace"));
-  await ui.settle();
-
-  assert.deepEqual(
-    callsTo("leaveTeam").map(([, teamId]) => teamId),
-    ["g1", "g2"]
-  );
-  assert.deepEqual(toastTitles(), ["You left Customer Calls."]);
-});
-
 test("a group that fails stops the leave and offers Try again", async (t) => {
   const space = {
     ...SPACE,
@@ -351,20 +325,6 @@ test("access that remains through a group keeps its toast and the settings open"
   // The dialog goes, but this isn't a leave: the settings behind it have nothing to close.
   assert.deepEqual(events, [["open", false]]);
   assert.equal(dialog(), null);
-});
-
-test("a teamspace that is already gone counts as left", async (t) => {
-  const { events } = await mount(t, {
-    leaveSpace: async () => {
-      throw new CloudApiError("Space not found", 404, "space_not_found");
-    },
-  });
-
-  await ui.click(buttonNamed("Leave teamspace"));
-  await ui.settle();
-
-  assert.deepEqual(toastTitles(), ["You left Customer Calls."]);
-  assert.deepEqual(events, [["open", false], ["left"]]);
 });
 
 test("a refusal that carries a reason shows it under the failure", async (t) => {

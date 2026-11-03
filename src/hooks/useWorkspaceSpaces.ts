@@ -9,6 +9,12 @@ export interface WorkspaceSpacesState {
   /** The last reload failed, so the list on screen may be out of date. */
   stale: boolean;
   /**
+   * How many reads have landed with a list since this hook mounted. The list is kept between
+   * uses, so a consumer that outlives its own openings notes the count when one begins, and
+   * believes the list once the count has gone up.
+   */
+  loads: number;
+  /**
    * Resolves once the list has settled, with the list it read, or null when the read failed or
    * was overtaken. Never rejects.
    */
@@ -34,6 +40,7 @@ export function useWorkspaceSpaces(
   enabled: boolean = true
 ): WorkspaceSpacesState {
   const [slot, setSlot] = useState<WorkspaceSlot | null>(null);
+  const [loads, setLoads] = useState(0);
   const currentWorkspaceRef = useRef<string | null>(workspaceId);
   const latestRequestRef = useRef(0);
 
@@ -74,6 +81,7 @@ export function useWorkspaceSpaces(
           ? { workspaceId: targetWorkspaceId, spaces, failed: false }
           : { ...base, failed: true };
       });
+      if (spaces) setLoads((count) => count + 1);
       return spaces;
     },
     []
@@ -97,5 +105,5 @@ export function useWorkspaceSpaces(
   else if (own?.failed) status = "failed";
   else status = "loading";
 
-  return { status, spaces, stale: Boolean(own?.spaces && own.failed), reload };
+  return { status, spaces, stale: Boolean(own?.spaces && own.failed), loads, reload };
 }

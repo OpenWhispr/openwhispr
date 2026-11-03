@@ -740,6 +740,108 @@ test("flags go through update and refresh the mirror", async () => {
   ]);
 });
 
+test("a failed mirror refresh after the flags saved isn't a failed save", async (t) => {
+  const { createSpaceActions } = await load();
+  const { calls, deps } = makeHarness();
+  t.mock.method(console, "error", () => {});
+  deps.spaces.mySpaces = async () => {
+    calls.push(["space.mySpaces"]);
+    throw new Error("offline");
+  };
+  const actions = createSpaceActions(deps);
+
+  // The server has the change, so the caller is told so, and the sync pass catches the mirror up.
+  await actions.setSpaceAccessFlags("cloud-space-1", { is_open: true });
+
+  assert.deepEqual(calls.at(-1), ["sync", "manual"]);
+});
+
+test("a flags save the server refuses is still a failed save, and leaves the mirror alone", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps } = makeHarness();
+  deps.spaces.update = async () => {
+    throw new Error("Insufficient role");
+  };
+  const actions = createSpaceActions(deps);
+
+  await assert.rejects(
+    actions.setSpaceAccessFlags("cloud-space-1", { is_open: true }),
+    /Insufficient role/
+  );
+  assert.deepEqual(calls, []);
+});
+
+test("leaving a space that no longer has the caller counts as left, and refreshes the mirror", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { calls, deps, localSpace } = makeHarness();
+  // An earlier leave went through and its answer was lost, or the space was deleted meanwhile.
+  deps.spaces.removeMember = async (spaceId, userId) => {
+    calls.push(["space.removeMember", spaceId, userId]);
+    throw new CloudApiError("Member not found", 404);
+  };
+  const actions = createSpaceActions(deps);
+
+  assert.deepEqual(await actions.leaveSpace(localSpace, "me"), {
+    removed: false,
+    still_via_teams: [],
+  });
+  assert.deepEqual(
+    calls.map(([name]) => name),
+    [
+      "space.removeMember",
+      "roster.invalidate",
+      "space.mySpaces",
+      "mirror.upsert",
+      "local.load",
+      "sync",
+    ]
+  );
+  assert.deepEqual(calls.at(-1), ["sync", "manual"]);
+});
+
+test("a leave that fails any other way still throws, without touching the mirror", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { calls, deps, localSpace } = makeHarness();
+  deps.spaces.removeMember = async () => {
+    throw new CloudApiError("You are the only admin", 409, "last_space_admin");
+  };
+  deps.teams.removeMember = async () => {
+    throw new CloudApiError("API error: 500", 500);
+  };
+  const actions = createSpaceActions(deps);
+
+  await assert.rejects(actions.leaveSpace(localSpace, "me"), { code: "last_space_admin" });
+  await assert.rejects(actions.leaveTeam("team-1", "me"), { status: 500 });
+  assert.deepEqual(calls, []);
+});
+
+test("leaving a group the caller is already out of counts as left, and refreshes the mirror", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { calls, deps } = makeHarness();
+  deps.teams.removeMember = async (teamId, userId) => {
+    calls.push(["team.removeMember", teamId, userId]);
+    throw new CloudApiError("Member not found", 404);
+  };
+  const actions = createSpaceActions(deps);
+
+  await actions.leaveTeam("team-1", "me");
+
+  assert.deepEqual(
+    calls.map(([name]) => name),
+    [
+      "team.removeMember",
+      "roster.invalidate",
+      "space.mySpaces",
+      "mirror.upsert",
+      "local.load",
+      "sync",
+    ]
+  );
+});
+
 test("localSpaceIdFor refreshes once on a miss", async () => {
   const { createSpaceActions } = await load();
   const { calls, deps, localSpace } = makeHarness();

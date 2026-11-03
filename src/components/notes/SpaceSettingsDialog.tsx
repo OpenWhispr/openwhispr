@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  Loader2,
   LogIn,
   LogOut,
   Settings,
@@ -88,11 +89,18 @@ export default function SpaceSettingsDialog({
   // The flags and description live in the directory, not the local mirror, so the dialog asks the
   // server for them, and a local-only space has nothing to ask about.
   const directory = useWorkspaceSpaces(space.workspace_id, open && Boolean(cloudSpaceId));
-  const row = directory.spaces.find((candidate) => candidate.id === cloudSpaceId);
-  const directoryFailed = directory.status === "failed" || (directory.status === "ready" && !row);
-  const otherAdmins = (row?.admins ?? []).some((contact) => contact.user_id !== user?.id);
-
   const [wasOpen, setWasOpen] = useState(open);
+  // Hosts keep this dialog mounted and the hook keeps its list, so the list on hand at an opening
+  // is the last opening's. Its row is believed only once a read has landed since this one began.
+  const [loadsAtOpen, setLoadsAtOpen] = useState(directory.loads);
+  const loadedSinceOpen = directory.loads > loadsAtOpen;
+  const row = loadedSinceOpen
+    ? directory.spaces.find((candidate) => candidate.id === cloudSpaceId)
+    : undefined;
+  // Failed only when there is nothing to believe: still reading is not failing.
+  const directoryFailed =
+    !row && (directory.status === "failed" || directory.stale || loadedSinceOpen);
+
   const [tab, setTab] = useState<SpaceSettingsTab>(initialTab);
   const [draftName, setDraftName] = useState(space.name);
   // The name the draft was seeded from or last saved as; null while closed.
@@ -105,15 +113,27 @@ export default function SpaceSettingsDialog({
   const [flagChoices, setFlagChoices] = useState<Partial<Record<AccessFlag, boolean>>>({});
   const [savingFlags, setSavingFlags] = useState<ReadonlySet<AccessFlag>>(() => new Set());
   const [leaveOpen, setLeaveOpen] = useState(false);
+  const [checkingLeave, setCheckingLeave] = useState(false);
+  // What Leave's dialog is told, read when it's pressed: whether the user is the only admin, and
+  // whether anyone else is. Unknown (undefined) leaves the answer to the server.
+  const [leaveFacts, setLeaveFacts] = useState<{
+    soleAdmin: boolean | undefined;
+    otherAdmins: boolean;
+  }>({ soleAdmin: undefined, otherAdmins: false });
   const [deleteTarget, setDeleteTarget] = useState<SpaceItem | null>(null);
 
   // Saves run one at a time, each building its payload from the latest row the
   // store has handed us rather than a snapshot another in-flight save may roll back.
   const saveChain = useRef(Promise.resolve());
+  // The texts being saved right now, so Enter and the blur that follows it are one edit.
+  const namesInFlight = useRef(new Set<string>());
+  const descriptionsInFlight = useRef(new Set<string>());
   const latestSpace = useRef(space);
+  const isOpen = useRef(open);
   useEffect(() => {
     latestSpace.current = space;
-  }, [space]);
+    isOpen.current = open;
+  }, [space, open]);
 
   // Seed on open, and follow renames made elsewhere until the user edits.
   if (
@@ -133,10 +153,12 @@ export default function SpaceSettingsDialog({
     setDraftDescription(row.description ?? "");
   } else if (!open && descriptionBaseline !== null) {
     setDescriptionBaseline(null);
+    setDraftDescription("");
   }
   // Each opening starts on the tab it was asked for, with nothing carried over from the last.
   if (open !== wasOpen) {
     setWasOpen(open);
+    setLoadsAtOpen(directory.loads);
     setTab(initialTab);
     setFlagChoices({});
   }
@@ -176,25 +198,37 @@ export default function SpaceSettingsDialog({
       setDraftName(nameBaseline);
       return;
     }
-    if (await save({ name }, t("notes.spaces.couldNotRename"))) setNameBaseline(name);
-    else setDraftName(nameBaseline);
+    if (namesInFlight.current.has(name)) return;
+    namesInFlight.current.add(name);
+    try {
+      if (await save({ name }, t("notes.spaces.couldNotRename"))) setNameBaseline(name);
+      else setDraftName(nameBaseline);
+    } finally {
+      namesInFlight.current.delete(name);
+    }
   };
 
   const commitDescription = async (): Promise<void> => {
     if (!canManage || descriptionBaseline === null) return;
     const description = draftDescription.trim();
     if (description === descriptionBaseline) return;
-    if (
-      await save(
-        { description: description || null },
-        t("settingsPage.workspace.teamspaces.settings.flagSaveFailed")
-      )
-    ) {
-      setDescriptionBaseline(description);
-      setDraftDescription(description);
-      void directory.reload();
-    } else {
-      setDraftDescription(descriptionBaseline);
+    if (descriptionsInFlight.current.has(description)) return;
+    descriptionsInFlight.current.add(description);
+    try {
+      if (
+        await save(
+          { description: description || null },
+          t("settingsPage.workspace.teamspaces.settings.flagSaveFailed")
+        )
+      ) {
+        setDescriptionBaseline(description);
+        setDraftDescription(description);
+        void directory.reload();
+      } else {
+        setDraftDescription(descriptionBaseline);
+      }
+    } finally {
+      descriptionsInFlight.current.delete(description);
     }
   };
 
@@ -218,17 +252,21 @@ export default function SpaceSettingsDialog({
     setFlagChoices((choices) => ({ ...choices, [flag]: next }));
     setSavingFlags((saving) => new Set(saving).add(flag));
     try {
-      await setSpaceAccessFlags(
-        cloudSpaceId,
-        flag === "is_default" ? { is_default: next } : { is_open: next }
-      );
-      void directory.reload();
-    } catch {
-      setFlagChoices((choices) => ({ ...choices, [flag]: previous }));
-      toast({
-        title: t("settingsPage.workspace.teamspaces.settings.flagSaveFailed"),
-        variant: "destructive",
-      });
+      try {
+        await setSpaceAccessFlags(
+          cloudSpaceId,
+          flag === "is_default" ? { is_default: next } : { is_open: next }
+        );
+      } catch {
+        setFlagChoices((choices) => ({ ...choices, [flag]: previous }));
+        toast({
+          title: t("settingsPage.workspace.teamspaces.settings.flagSaveFailed"),
+          variant: "destructive",
+        });
+      }
+      // Read the server's value whichever way the save went: an answer that was lost may still
+      // have landed. Once it's in, the row carries the switch again, not the choice.
+      if (await directory.reload()) setFlagChoices((choices) => withoutChoice(choices, flag));
     } finally {
       setSavingFlags((saving) => {
         const remaining = new Set(saving);
@@ -236,6 +274,22 @@ export default function SpaceSettingsDialog({
         return remaining;
       });
     }
+  };
+
+  // Reads the directory afresh before the confirm opens: who else is an admin changes while this
+  // dialog is open (the block sends people to the Members tab to fix exactly that), and the list
+  // it holds is from before. A failed read leaves the answer to the server.
+  const startLeave = async (): Promise<void> => {
+    setCheckingLeave(true);
+    const fresh = await directory.reload();
+    setCheckingLeave(false);
+    if (!isOpen.current) return;
+    const freshRow = fresh?.find((candidate) => candidate.id === cloudSpaceId);
+    setLeaveFacts({
+      soleAdmin: freshRow?.sole_admin,
+      otherAdmins: (freshRow?.admins ?? []).some((contact) => contact.user_id !== user?.id),
+    });
+    setLeaveOpen(true);
   };
 
   const flagsReady = Boolean(row);
@@ -300,12 +354,15 @@ export default function SpaceSettingsDialog({
           >
             <button
               type="button"
-              onClick={() => setLeaveOpen(true)}
+              onClick={() => void startLeave()}
+              disabled={checkingLeave}
+              aria-busy={checkingLeave}
               className={cn(
                 ROW_BUTTON_CLASS,
-                "bg-surface-3 text-foreground hover:bg-surface-raised"
+                "gap-1.5 bg-surface-3 text-foreground hover:bg-surface-raised"
               )}
             >
+              {checkingLeave && <Loader2 className="size-3 animate-spin" aria-hidden="true" />}
               {t("settingsPage.workspace.teamspaces.settings.leaveAction")}
             </button>
           </SettingRow>
@@ -461,8 +518,8 @@ export default function SpaceSettingsDialog({
           userId={user.id}
           open={leaveOpen}
           onOpenChange={setLeaveOpen}
-          soleAdmin={row?.sole_admin}
-          otherAdmins={otherAdmins}
+          soleAdmin={leaveFacts.soleAdmin}
+          otherAdmins={leaveFacts.otherAdmins}
           onManageMembers={() => setTab("members")}
           onLeft={() => onOpenChange(false)}
         />
@@ -475,6 +532,15 @@ export default function SpaceSettingsDialog({
       />
     </>
   );
+}
+
+function withoutChoice(
+  choices: Partial<Record<AccessFlag, boolean>>,
+  flag: AccessFlag
+): Partial<Record<AccessFlag, boolean>> {
+  const rest = { ...choices };
+  delete rest[flag];
+  return rest;
 }
 
 interface HeaderTileProps {

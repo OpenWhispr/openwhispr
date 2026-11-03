@@ -197,6 +197,8 @@ async function mount(
   const calls = [];
   const events = [];
   const hostApi = { setSpace: () => {}, reopen: () => {} };
+  // Lets an action a test supplies do what the store does as soon as a rename starts.
+  globalThis.__hostApi = hostApi;
   globalThis.__store = { workspaces: [workspace] };
   globalThis.__toasts = [];
   globalThis.__listInWorkspace = async (workspaceId) => {
@@ -242,7 +244,14 @@ async function mount(
   t.after(async () => {
     await React.act(async () => root.unmount());
     container.remove();
-    for (const name of ["__store", "__toasts", "__listInWorkspace", "__actions", "__panelProps"]) {
+    for (const name of [
+      "__store",
+      "__toasts",
+      "__listInWorkspace",
+      "__actions",
+      "__panelProps",
+      "__hostApi",
+    ]) {
       delete globalThis[name];
     }
   });
@@ -690,4 +699,270 @@ test("the Members tab gives the panel its teamspace and nothing to close for", a
 
   assert.deepEqual(Object.keys(globalThis.__panelProps), ["space"]);
   assert.equal(globalThis.__panelProps.space, space);
+});
+
+// The answers a test gives the directory, one per read, the last one standing from then on.
+const readsOf = (answers) => {
+  let index = 0;
+  return async () => {
+    const answer = answers[Math.min(index, answers.length - 1)];
+    index += 1;
+    return typeof answer === "function" ? answer() : answer;
+  };
+};
+
+const NOT_AN_ADMIN = () => workspaceWith({ manage_settings: false });
+
+test("Leave reads the teamspace again, so the fix the block asked for takes effect", async (t) => {
+  const alone = [directoryRow({ sole_admin: true, admins: [admin("me", "Ronnie")] })];
+  const withMisa = [directoryRow({ sole_admin: false })];
+  const { callsTo } = await mount(t, {
+    workspace: NOT_AN_ADMIN(),
+    // The opening, the first Leave, then the read after Misa was made an admin on the Members tab.
+    listInWorkspace: readsOf([alone, alone, withMisa]),
+  });
+
+  await ui.click(settingsButton("Leave teamspace"));
+  await ui.settle();
+  assert.equal(heading(), "Add another admin first");
+
+  await ui.click(topButton("Manage members"));
+  await ui.pressTab(tabNamed("General"));
+  await ui.click(settingsButton("Leave teamspace"));
+  await ui.settle();
+
+  assert.equal(callsTo("list").length, 3, "each press of Leave reads the directory");
+  assert.equal(heading(), "Leave Customer Calls?", "no longer blocked on the old answer");
+  assert.match(text(top()), /Another admin will continue managing this teamspace\./);
+});
+
+test("Leave shows it's busy while it reads, and a failed read leaves the decision to the server", async (t) => {
+  const read = deferred();
+  const stale = [directoryRow({ sole_admin: true, admins: [admin("me", "Ronnie")] })];
+  const { callsTo } = await mount(t, {
+    workspace: NOT_AN_ADMIN(),
+    listInWorkspace: readsOf([stale, () => read.promise]),
+    actions: {
+      leaveSpace: async () => {
+        throw new CloudApiError("You are the only admin", 409, "last_space_admin");
+      },
+    },
+  });
+
+  await ui.click(settingsButton("Leave teamspace"));
+
+  assert.equal(settingsButton("Leave teamspace").disabled, true, "busy while it reads");
+  assert.equal(dialogs().length, 1, "nothing opens until the read is back");
+
+  read.reject(new CloudApiError("Cloud API request failed", 0));
+  await ui.settle();
+
+  // The earlier read said sole admin, but it is the one that can no longer be trusted.
+  assert.equal(heading(), "Leave Customer Calls?");
+  assert.equal(settingsButton("Leave teamspace").disabled, false);
+  assert.match(text(top()), /Your direct membership will end\./);
+  assert.doesNotMatch(text(top()), /Another admin will continue managing/);
+
+  await ui.click(topButton("Leave teamspace"));
+  await ui.settle();
+
+  assert.equal(callsTo("leaveSpace").length, 1, "the server was asked, and it decides");
+  assert.equal(heading(), "Add another admin first");
+});
+
+test("a Leave read that returns after the dialog was closed opens nothing", async (t) => {
+  const read = deferred();
+  const { events } = await mount(t, {
+    workspace: NOT_AN_ADMIN(),
+    listInWorkspace: readsOf([[directoryRow()], () => read.promise]),
+  });
+
+  await ui.click(settingsButton("Leave teamspace"));
+  await ui.click(
+    [...settings().querySelectorAll("button")].find((button) => text(button) === "Close")
+  );
+  assert.deepEqual(events, [false]);
+
+  read.resolve([directoryRow()]);
+  await ui.settle();
+
+  assert.equal(dialogs().length, 0, "no confirm left floating over a closed settings dialog");
+});
+
+test("a reopened dialog waits for its own read instead of using the last opening's row", async (t) => {
+  const second = deferred();
+  const { reopen, events } = await mount(t, {
+    listInWorkspace: readsOf([
+      [directoryRow({ is_open: false, description: "First words" })],
+      () => second.promise,
+    ]),
+  });
+  assert.deepEqual(switchStates(), ["true", "false"]);
+  assert.equal(descriptionInput().value, "First words");
+
+  await ui.click(
+    [...settings().querySelectorAll("button")].find((button) => text(button) === "Close")
+  );
+  assert.deepEqual(events, [false]);
+  await reopen();
+
+  // The first opening's row is still in the hook, and is not believed.
+  assert.deepEqual(
+    switches().map((control) => control.disabled),
+    [true, true]
+  );
+  assert.equal(descriptionInput().readOnly, true);
+  assert.equal(descriptionInput().value, "", "nor is its description");
+
+  second.resolve([directoryRow({ is_open: true, description: "Second words" })]);
+  await ui.settle();
+
+  assert.deepEqual(switchStates(), ["true", "true"]);
+  assert.deepEqual(
+    switches().map((control) => control.disabled),
+    [false, false]
+  );
+  assert.equal(descriptionInput().readOnly, false);
+  assert.equal(descriptionInput().value, "Second words");
+});
+
+test("a reopened dialog whose read fails shows the failure, not the last opening's row", async (t) => {
+  const { reopen } = await mount(t, {
+    listInWorkspace: readsOf([
+      [directoryRow()],
+      () => {
+        throw new CloudApiError("Cloud API request failed", 0);
+      },
+    ]),
+  });
+  await ui.click(
+    [...settings().querySelectorAll("button")].find((button) => text(button) === "Close")
+  );
+  await reopen();
+  await ui.settle();
+
+  assert.match(text(settings()), /Couldn't load these settings\./);
+  assert.deepEqual(
+    switches().map((control) => control.disabled),
+    [true, true]
+  );
+});
+
+test("a switch settles on what the server holds once it has been read again", async (t) => {
+  // Someone else turned Open back off between the save and the read.
+  const { callsTo } = await mount(t, { listInWorkspace: async () => [directoryRow()] });
+
+  await ui.click(switchNamed("Open teamspace"));
+  await ui.settle();
+
+  assert.equal(callsTo("setSpaceAccessFlags").length, 1);
+  assert.equal(callsTo("list").length, 2);
+  assert.deepEqual(switchStates(), ["true", "false"], "the server's answer, not the choice");
+  assert.equal(switchNamed("Open teamspace").disabled, false);
+});
+
+test("a failed save reads the server again, since the change may have landed", async (t) => {
+  const server = directoryRow();
+  const { callsTo } = await mount(t, {
+    listInWorkspace: async () => [{ ...server }],
+    actions: {
+      setSpaceAccessFlags: async () => {
+        // The change was saved but its answer was lost.
+        server.is_open = true;
+        throw new CloudApiError("Cloud API request failed", 0);
+      },
+    },
+  });
+
+  await ui.click(switchNamed("Open teamspace"));
+  await ui.settle();
+
+  assert.deepEqual(toastTitles(), ["Couldn't save that. Try again."]);
+  assert.equal(callsTo("list").length, 2, "read again after the failure too");
+  assert.deepEqual(switchStates(), ["true", "true"], "and it shows what the server holds");
+});
+
+test("a failed save whose read also fails still flips back", async (t) => {
+  let reads = 0;
+  await mount(t, {
+    listInWorkspace: async () => {
+      if (reads++ > 0) throw new CloudApiError("Cloud API request failed", 0);
+      return [directoryRow()];
+    },
+    actions: {
+      setSpaceAccessFlags: async () => {
+        throw new CloudApiError("API error: 500", 500);
+      },
+    },
+  });
+
+  await ui.click(switchNamed("Open teamspace"));
+  await ui.settle();
+
+  assert.deepEqual(switchStates(), ["true", "false"]);
+  assert.equal(switchNamed("Open teamspace").disabled, false);
+});
+
+test("Enter then blur before the save returns sends one save, and a failure says so once", async (t) => {
+  const answer = deferred();
+  const { callsTo } = await mount(t, { actions: { renameSpace: () => answer.promise } });
+
+  await ui.type(nameInput(), "Customer Voices");
+  await ui.press(nameInput(), "Enter");
+  await ui.blur(nameInput());
+  assert.equal(callsTo("renameSpace").length, 1);
+
+  answer.resolve({ success: false, error: "offline" });
+  await ui.settle();
+
+  assert.equal(callsTo("renameSpace").length, 1);
+  assert.deepEqual(toastTitles(), ["Couldn't rename space"]);
+  assert.equal(nameInput().value, "Customer Calls");
+});
+
+test("a description saved by Enter isn't saved again by the blur that follows", async (t) => {
+  const answer = deferred();
+  const { callsTo } = await mount(t, { actions: { renameSpace: () => answer.promise } });
+
+  await ui.typeText(descriptionInput(), "Calls with customers");
+  await ui.press(descriptionInput(), "Enter");
+  await ui.blur(descriptionInput());
+  assert.equal(callsTo("renameSpace").length, 1);
+
+  answer.resolve({ success: true });
+  await ui.settle();
+
+  assert.equal(callsTo("renameSpace").length, 1);
+  assert.equal(descriptionInput().value, "Calls with customers");
+});
+
+test("text typed while a save runs is still saved after it", async (t) => {
+  const answers = [deferred(), deferred()];
+  let next = 0;
+  const { callsTo } = await mount(t, {
+    actions: {
+      renameSpace: async (_target, updates) => {
+        // The store has the new name from the moment a rename starts.
+        globalThis.__hostApi.setSpace((current) => ({ ...current, name: updates.name }));
+        return answers[next++].promise;
+      },
+    },
+  });
+
+  await ui.type(nameInput(), "Customer Voices");
+  await ui.press(nameInput(), "Enter");
+  await ui.type(nameInput(), "Customer Voices Two");
+  await ui.blur(nameInput());
+  assert.equal(callsTo("renameSpace").length, 1, "the second save waits its turn");
+
+  answers[0].resolve({ success: true });
+  await ui.settle();
+  assert.deepEqual(
+    callsTo("renameSpace").map(([, , updates]) => updates.name),
+    ["Customer Voices", "Customer Voices Two"]
+  );
+
+  answers[1].resolve({ success: true });
+  await ui.settle();
+  assert.equal(nameInput().value, "Customer Voices Two");
 });
