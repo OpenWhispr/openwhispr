@@ -4,14 +4,6 @@ const assert = require("node:assert/strict");
 const load = () => import("../../src/services/invitePeople.ts");
 const { CloudApiError } = require("../../src/services/cloudApi.ts");
 
-const BATCH_STATUSES = [
-  "invited",
-  "invalid_email",
-  "already_member",
-  "already_invited",
-  "directory_required",
-];
-
 // Records every batch request; an answer per address (a status, or an Error to reject the
 // whole request) defaults to a sent invitation.
 function makeSendBatch(answers = {}) {
@@ -103,7 +95,6 @@ test("each address gets its own outcome", async () => {
       { ok: false, kind: "directoryRequired" },
     ]
   );
-  assert.equal(BATCH_STATUSES.length, 5);
 });
 
 test("results match addresses regardless of case", async () => {

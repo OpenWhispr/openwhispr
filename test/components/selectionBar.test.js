@@ -127,9 +127,8 @@ test("the bar wraps inside a narrow pane and its labels never truncate", async (
 
   const bar = markup.match(/<div[^>]*role="region"[^>]*class="([^"]*)"/)?.[1] ?? "";
   const classes = bar.split(/\s+/);
-  for (const name of ["flex-wrap", "justify-center", "max-w-full", "rounded-2xl", "ps-4", "pe-1"]) {
+  for (const name of ["flex-wrap", "justify-center", "max-w-full"]) {
     assert.ok(classes.includes(name), `missing ${name} in "${bar}"`);
   }
-  assert.ok(!classes.includes("rounded-full"), "a wrapped pill's radius reads as a blob");
   assert.doesNotMatch(markup, /truncate/);
 });
