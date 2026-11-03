@@ -207,7 +207,7 @@ test("a note left open with no calendar event never silences later meetings", as
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
   const { engine, shown } = createEngine();
   engine.preferences.audioDetection = true;
-  const id = engine._beginMeetingNoteSession(41, null);
+  const id = engine._beginMeetingNoteSession(null);
   engine._meetingModeActive = true;
   engine.markMeetingNoteOnly(id);
   t.mock.timers.tick(3 * 24 * 60 * 60 * 1000);
@@ -984,7 +984,7 @@ test("closing a note-only meeting preserves the current audio prompt until a lat
   await detector._check();
   assert.equal(shown.length, 1);
   // The member opened this prompt's note; no recording takes ownership.
-  const id = engine._beginMeetingNoteSession(41, null);
+  const id = engine._beginMeetingNoteSession(null);
   engine._meetingModeActive = true;
   engine.activeDetections.delete("audio:sustained-audio");
   engine.markMeetingNoteOnly(id);
@@ -1005,12 +1005,12 @@ test("a failed navigation keeps the prompt identity; a closed note's start reset
   const { engine } = createEngine();
   let promptResets = 0;
   engine.audioActivityDetector.resetPrompt = () => (promptResets += 1);
-  let id = engine._beginMeetingNoteSession(41, null);
+  let id = engine._beginMeetingNoteSession(null);
   engine._meetingModeActive = true;
   engine.abandonMeetingNote(id);
   assert.equal(engine._meetingModeActive, false);
   assert.equal(promptResets, 0, "the note never opened, so the mic was never ours");
-  id = engine._beginMeetingNoteSession(42, null);
+  id = engine._beginMeetingNoteSession(null);
   engine._meetingModeActive = true;
   engine.closeMeetingNote(id);
   assert.equal(engine._meetingModeActive, false);
@@ -1020,7 +1020,7 @@ test("a failed navigation keeps the prompt identity; a closed note's start reset
 
 test("a replaced document keeps a session whose navigation is still queued", async () => {
   const { engine, windowManager } = createEngine();
-  const id = engine._beginMeetingNoteSession(41, null);
+  const id = engine._beginMeetingNoteSession(null);
   engine._meetingModeActive = true;
   windowManager.isMeetingNoteNavigationPending = (sessionId) => sessionId === id;
   engine.closeCurrentMeetingNote();

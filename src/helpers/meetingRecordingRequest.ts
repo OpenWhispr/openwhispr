@@ -20,12 +20,7 @@ export async function handleMeetingRecordingRequest({
   onSuppressed,
 }: MeetingRecordingRequestOptions): Promise<void> {
   let suppressed = false;
-  let handled = false;
-  const finish = (): void => {
-    if (handled) return;
-    handled = true;
-    onHandled();
-  };
+  let accepted = false;
   const check =
     trigger === "hotkey" || !canAutoStart
       ? undefined
@@ -34,19 +29,12 @@ export async function handleMeetingRecordingRequest({
           return !suppressed;
         };
   try {
-    if (check && !check()) {
-      finish();
-      await onSuppressed?.();
-      return;
-    }
-    const accepted = await startRecording(check ? { ...args, canAutoStart: check } : args);
-    if (!accepted) {
-      if (suppressed) {
-        finish();
-        await onSuppressed?.();
-      } else await restoreFromMeetingMode();
+    if (!check || check()) {
+      accepted = await startRecording(check ? { ...args, canAutoStart: check } : args);
+      if (!accepted && !suppressed) await restoreFromMeetingMode();
     }
   } finally {
-    finish();
+    onHandled();
   }
+  if (!accepted && suppressed) return onSuppressed?.();
 }

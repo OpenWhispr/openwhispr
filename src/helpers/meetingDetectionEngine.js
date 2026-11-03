@@ -560,11 +560,9 @@ class MeetingDetectionEngine {
     this._meetingModeActive = true;
     // Join leaves the meeting it just opened in front: an open panel updates
     // behind it instead of covering the call.
-    const noteSessionId = this._beginMeetingNoteSession(
-      note.id,
-      eventId ? owner.detection.event : null,
-      { acceptedMicPrompt: owner.detection.source === "audio" }
-    );
+    const noteSessionId = this._beginMeetingNoteSession(eventId ? owner.detection.event : null, {
+      acceptedMicPrompt: owner.detection.source === "audio",
+    });
     const navigation = await this.windowManager.queueMeetingNoteNavigation(
       { ...owner.authorizedNote, navigationId: randomUUID(), noteSessionId },
       { owner, activate: action !== "join" }
@@ -631,7 +629,7 @@ class MeetingDetectionEngine {
     await this.windowManager.queueMeetingNoteNavigation(
       {
         noteId: noteResult.note.id,
-        noteSessionId: this._beginMeetingNoteSession(noteResult.note.id, null),
+        noteSessionId: this._beginMeetingNoteSession(null),
         folderId: meetingsFolder.id,
         event,
         trigger: "hotkey",
@@ -652,7 +650,7 @@ class MeetingDetectionEngine {
     await this.windowManager.queueMeetingNoteNavigation(
       {
         noteId: existingNote.id,
-        noteSessionId: this._beginMeetingNoteSession(existingNote.id, event),
+        noteSessionId: this._beginMeetingNoteSession(event),
         folderId: existingNote.folder_id ?? this.databaseManager.getMeetingsFolder()?.id,
         event,
         trigger,
@@ -705,7 +703,7 @@ class MeetingDetectionEngine {
     await this.windowManager.queueMeetingNoteNavigation(
       {
         noteId: noteResult.note.id,
-        noteSessionId: this._beginMeetingNoteSession(noteResult.note.id, calEvent),
+        noteSessionId: this._beginMeetingNoteSession(calEvent),
         folderId: meetingsFolder.id,
         event: calEvent,
         trigger,
@@ -797,13 +795,12 @@ class MeetingDetectionEngine {
     this.audioActivityDetector.dismiss();
   }
 
-  _beginMeetingNoteSession(noteId, event, { acceptedMicPrompt = false } = {}) {
+  _beginMeetingNoteSession(event, { acceptedMicPrompt = false } = {}) {
     this._clearMeetingNoteSession();
     const id = randomUUID();
     const endsAt = Date.parse(event?.end_time);
     this._meetingNoteSession = {
       id,
-      noteId,
       eventId: event?.id ?? null,
       endsAt,
       // Joining an event turns the mic on next. Only a mic prompt means that call is
