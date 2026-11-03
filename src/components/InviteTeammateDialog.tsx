@@ -120,8 +120,7 @@ export default function InviteTeammateDialog({
     if (open) dispatch({ type: "roster", ...roster });
   }, [open, roster, dispatch]);
 
-  // Re-sent on every open, since a fresh flow starts with nothing known. The reducer drops one
-  // that arrives mid-send; the refresh after a seat refusal brings a newer one.
+  // Re-sent on every open, since a fresh flow starts with nothing known.
   useEffect(() => {
     if (open) dispatch({ type: "seats", purchasedLeft, ceilingLeft });
   }, [open, purchasedLeft, ceilingLeft, dispatch]);

@@ -525,7 +525,7 @@ test("seats arriving later re-judge the chips already added", () => {
 });
 
 test("a seat failure from the server updates the seats left", () => {
-  let state = run(commitText(fresh(), "a@x.com b@y.io"), { type: "send" });
+  let state = run(commitText(run(fresh(), seats(null, 3)), "a@x.com b@y.io"), { type: "send" });
   state = run(
     state,
     { type: "result", email: "a@x.com", outcome: { ok: false, kind: "seatLimit", available: 1 } },
@@ -539,7 +539,9 @@ test("a seat failure from the server updates the seats left", () => {
 });
 
 test("after a ceiling refusal, removing the excess lets the rest send", () => {
-  let state = run(commitText(fresh(), "a@x.com b@y.io c@z.org"), { type: "send" });
+  let state = run(commitText(run(fresh(), seats(null, 3)), "a@x.com b@y.io c@z.org"), {
+    type: "send",
+  });
   state = run(
     state,
     ...["a@x.com", "b@y.io", "c@z.org"].map((email) => ({
@@ -571,9 +573,12 @@ test("a seat failure without a count leaves the seats alone", () => {
   assert.deepEqual(state.recipients[0].state, { status: "failed", kind: "seatLimit" });
 });
 
-test("seats events are ignored while sending", () => {
-  const sending = run(commitText(fresh(), "a@x.com"), { type: "send" });
-  assert.deepEqual(run(sending, seats(1, 1)), sending);
+test("seat eligibility stays current while the submitted recipients stay fixed", () => {
+  const sending = run(commitText(run(fresh(), seats(1, 1)), "a@x.com"), { type: "send" });
+  const updated = run(sending, seats(null, null));
+  assert.deepEqual(updated.seats, { purchasedLeft: null, ceilingLeft: null });
+  assert.equal(updated.phase, "sending");
+  assert.equal(updated.recipients, sending.recipients);
 });
 
 test("the send finishes as done when only skipped chips remain", () => {

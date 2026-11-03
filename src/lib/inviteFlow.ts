@@ -228,7 +228,11 @@ function resolveResult(
     next = { status: "failed", kind: "refused", message: outcome.message };
   } else next = { status: "failed", kind: outcome.kind };
 
-  const seats = seatRoom === null ? state.seats : { ...state.seats, ceilingLeft: seatRoom };
+  // Without a complete roster, the count can't exclude existing members and invitations.
+  const seats =
+    seatRoom === null || state.seats.ceilingLeft === null
+      ? state.seats
+      : { ...state.seats, ceilingLeft: seatRoom };
 
   return {
     ...state,
@@ -330,7 +334,7 @@ export function inviteSummary(state: InviteFlowState): InviteSummary {
 }
 
 export function inviteReducer(state: InviteFlowState, event: InviteFlowEvent): InviteFlowState {
-  if (state.phase === "sending") {
+  if (state.phase === "sending" && event.type !== "seats") {
     if (event.type === "result") return resolveResult(state, event.email, event.outcome);
     if (event.type === "finished") {
       // A chip the run never answered would otherwise stay "sending" and never be sendable again.
