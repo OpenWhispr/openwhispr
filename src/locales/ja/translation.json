@@ -2639,6 +2639,7 @@
           "partialInviteFailed": "{{names}} への招待を送信できませんでした。もう一度お試しください。",
           "partialInviteFailedMany": "{{names}} への招待を送信できませんでした。もう一度お試しください。",
           "partialAddFailed": "{{names}} を追加できませんでした。もう一度お試しください。",
+          "partialLeft": "{{names}} はワークスペースを退出したため、追加されませんでした。",
           "skippedInvited": "{{names}} にはすでにワークスペースへの招待があるため、この Teamspace には追加されませんでした。",
           "skippedInvitedMany": "{{names}} にはすでにワークスペースへの招待があるため、この Teamspace には追加されませんでした。"
         },

@@ -2,8 +2,16 @@ import type { SpaceMemberEntry } from "../services/SpacesService";
 import type { SpaceInvitation, SpaceTeamRef, TeamRole } from "../types/electron";
 
 export type SpaceMemberRow =
-  // Has a direct role, so it can be changed or removed here.
-  | { kind: "person"; id: string; member: SpaceMemberEntry; editable: boolean }
+  // Has a direct role, so it can be changed or removed here. `adminVia` names the groups whose
+  // admins are admins of this teamspace through them: while there is one, a direct Member role
+  // can't make this person less than an admin.
+  | {
+      kind: "person";
+      id: string;
+      member: SpaceMemberEntry;
+      editable: boolean;
+      adminVia: string[];
+    }
   // Reaches the teamspace only through a group, so the change belongs to that group.
   | {
       kind: "inherited";
@@ -52,6 +60,9 @@ export function buildSpaceMemberRows({
         // A row with no direct grant would gain one from a role change, which isn't what a menu
         // on it would mean.
         editable: canManage && member.direct_role != null,
+        adminVia: member.via_teams
+          .filter((team) => team.role === "admin" && team.access === "admin")
+          .map((team) => team.name),
       };
     }
     return {

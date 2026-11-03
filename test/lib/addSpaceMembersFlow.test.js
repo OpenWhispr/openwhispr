@@ -1,6 +1,10 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { attemptSummary, remainingAfter } = require("../../src/lib/addSpaceMembersFlow.ts");
+const {
+  attemptSummary,
+  remainingAfter,
+  settleListedInvites,
+} = require("../../src/lib/addSpaceMembersFlow.ts");
 
 const ethan = { kind: "member", userId: "ethan", label: "Ethan", email: "ethan@openronnie.com" };
 const maya = { kind: "member", userId: "maya", label: "Maya", email: "maya@openronnie.com" };
@@ -17,6 +21,7 @@ const outcome = (overrides = {}) => ({
   invited: [],
   failedInvites: [],
   skippedInvites: [],
+  leftMembers: [],
   ...overrides,
 });
 
@@ -93,4 +98,34 @@ test("some went and some failed is partial", () => {
     attemptSummary(outcome({ invited: [alex], failedMembers: [ethan] })).kind,
     "partial"
   );
+});
+
+test("someone who left the workspace is dropped, not kept for a retry", () => {
+  const picked = [ethan, maya];
+
+  assert.deepEqual(
+    remainingAfter(picked, outcome({ failedMembers: [ethan], leftMembers: [maya] })),
+    [ethan]
+  );
+  assert.equal(attemptSummary(outcome({ leftMembers: [maya] })).kind, "allDone");
+  assert.equal(
+    attemptSummary(outcome({ failedMembers: [ethan], leftMembers: [maya] })).kind,
+    "allFailed"
+  );
+});
+
+test("an address the teamspace lists as invited moves from skipped to invited", () => {
+  const settled = settleListedInvites(
+    outcome({ invited: [noor], skippedInvites: [alex, { ...noor, email: "kim@example.com" }] }),
+    new Set(["alex@example.com"])
+  );
+
+  assert.deepEqual(settled.invited, [noor, alex]);
+  assert.deepEqual(settled.skippedInvites, [{ ...noor, email: "kim@example.com" }]);
+});
+
+test("nothing is listed, nothing changes", () => {
+  const before = outcome({ skippedInvites: [alex] });
+
+  assert.deepEqual(settleListedInvites(before, new Set()), before);
 });

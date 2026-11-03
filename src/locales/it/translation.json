@@ -2639,6 +2639,7 @@
           "partialInviteFailed": "L'invito a {{names}} non è stato inviato. Riprova.",
           "partialInviteFailedMany": "Gli inviti a {{names}} non sono stati inviati. Riprova.",
           "partialAddFailed": "Impossibile aggiungere {{names}}. Riprova.",
+          "partialLeft": "Hanno lasciato l'area di lavoro, quindi non sono stati aggiunti: {{names}}.",
           "skippedInvited": "{{names}} ha già un invito all'area di lavoro, quindi non è stato aggiunto a questo teamspace.",
           "skippedInvitedMany": "{{names}} hanno già inviti all'area di lavoro, quindi non sono stati aggiunti a questo teamspace."
         },

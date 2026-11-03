@@ -1,5 +1,6 @@
 import type { ReactElement, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { formatList } from "../../lib/formatList";
 import type { SpaceMemberRow } from "../../lib/spaceMemberRows";
 import type { TeamRole } from "../../types/electron";
 import { isolate } from "../../utils/bidiIsolate";
@@ -147,7 +148,7 @@ function MemberRow({
   onRoleChange,
   onRemove,
 }: MemberRowProps): ReactElement {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const roleLabel = (role: TeamRole): string =>
     role === "admin" ? t("notes.spaces.members.roleAdmin") : t("notes.spaces.members.roleMember");
 
@@ -195,6 +196,11 @@ function MemberRow({
           pending={pending}
           onRoleChange={(next) => onRoleChange(row, next)}
           onRemove={() => onRemove(row)}
+          adminThrough={
+            row.adminVia.length > 0
+              ? formatList(i18n.language, row.adminVia.map(isolate))
+              : undefined
+          }
         />
       );
     } else {

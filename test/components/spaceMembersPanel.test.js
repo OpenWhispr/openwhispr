@@ -55,6 +55,7 @@ test.before(async (t) => {
         export const unassignTeamFromSpace = call("unassignTeamFromSpace");
         export const setSpaceMemberRole = call("setSpaceMemberRole");
         export const removeSpaceMember = call("removeSpaceMember");
+        export const leaveSpace = call("leaveSpace");
       `,
       "/services/invitePeople": `
         export const invitePeople = {
@@ -212,7 +213,7 @@ async function mount(
     membersWorkspaceId: "w1",
     refreshMembers: async (workspaceId) => {
       calls.push(["roster", workspaceId]);
-      await refreshMembers?.(workspaceId);
+      await refreshMembers?.(workspaceId, store);
     },
   };
   globalThis.__store = store;
@@ -221,12 +222,13 @@ async function mount(
     listMembers: async (id) => {
       calls.push(["members", id]);
       if (listMembers) return listMembers(state);
-      return state.members;
+      return [...state.members];
     },
     listInvitations: async (id) => {
       calls.push(["invitations", id]);
       if (listInvitations) return listInvitations(state);
-      return state.invitations;
+      // A read answers with its own list, as a request does.
+      return [...state.invitations];
     },
     listTeams: async (id) => {
       calls.push(["teams", id]);
@@ -263,6 +265,12 @@ async function mount(
       state.members = state.members.filter((member) => member.user_id !== userId);
       return { removed: true, still_via_teams: [] };
     },
+    leaveSpace: async (spaceArg, userId) => {
+      calls.push(["leaveSpace", spaceArg, userId]);
+      if (actions.leaveSpace) return actions.leaveSpace(spaceArg, userId, state);
+      state.members = state.members.filter((member) => member.user_id !== userId);
+      return { removed: true, still_via_teams: [] };
+    },
     sendInvitations: async (input) => {
       calls.push(["sendInvitations", input]);
       if (actions.sendInvitations) return actions.sendInvitations(input, state);
@@ -278,17 +286,20 @@ async function mount(
     container.remove();
     for (const name of ["__store", "__toasts", "__spaces", "__actions"]) delete globalThis[name];
   });
+  const lefts = [];
+  const onLeft = () => lefts.push(true);
   await React.act(async () => {
-    root.render(h(SpaceMembersPanel, { space }));
+    root.render(h(SpaceMembersPanel, { space, onLeft }));
   });
   await ui.settle();
   return {
     space,
     state,
     calls,
+    lefts,
     callsTo: (name) => calls.filter(([call]) => call === name),
     rerender: async () => {
-      await React.act(async () => root.render(h(SpaceMembersPanel, { space })));
+      await React.act(async () => root.render(h(SpaceMembersPanel, { space, onLeft })));
       await ui.settle();
     },
   };
@@ -1048,6 +1059,190 @@ test("a send that throws leaves its addresses failed", async (t) => {
   assert.equal(text(addButton()), "Try again");
 });
 
+test("people already in come back as already members and count as added", async (t) => {
+  // A retry after a lost answer meets the people the first try already added.
+  const { callsTo } = await mount(t, {
+    actions: {
+      addPeopleToSpace: async (id, userIds) => ({ added: [], already_members: userIds }),
+    },
+  });
+
+  await pickPerson("Ethan");
+  await ui.click(addButton());
+  await ui.settle();
+
+  assert.equal(callsTo("addPeopleToSpace").length, 1);
+  assert.deepEqual(chipTexts(), []);
+  assert.equal(lineText(), "Added Ethan.");
+});
+
+test("someone who left the workspace is dropped and named; the others are kept to retry", async (t) => {
+  let attempts = 0;
+  const { callsTo } = await mount(t, {
+    actions: {
+      addPeopleToSpace: async (id, userIds) => {
+        attempts += 1;
+        if (attempts === 1) {
+          throw new CloudApiError("Not workspace members", 400, "not_workspace_members", {
+            user_ids: ["saket"],
+          });
+        }
+        return { added: userIds, already_members: [] };
+      },
+    },
+  });
+  const rosterReads = callsTo("roster").length;
+
+  await pickPerson("Ethan");
+  await pickPerson("Saket");
+  await ui.click(addButton());
+  await ui.settle();
+
+  assert.deepEqual(chipTexts(), ["Ethan"], "only the person who can still be added stays");
+  assert.equal(
+    lineText(),
+    "Couldn't add members. Your selections are kept. Try again. " +
+      "Saket left the workspace, so they weren't added."
+  );
+  assert.equal(text(addButton()), "Try again");
+  assert.equal(callsTo("roster").length, rosterReads + 1, "the roster is read again");
+
+  await ui.click(addButton());
+  await ui.settle();
+
+  assert.deepEqual(callsTo("addPeopleToSpace")[1], ["addPeopleToSpace", "cloud-1", ["ethan"]]);
+  assert.deepEqual(chipTexts(), []);
+  assert.equal(lineText(), "Added Ethan.");
+});
+
+test("one person who left and nobody else to add leaves nothing to retry", async (t) => {
+  await mount(t, {
+    actions: {
+      addPeopleToSpace: async () => {
+        throw new CloudApiError("Not workspace members", 400, "not_workspace_members", {
+          user_ids: ["saket"],
+        });
+      },
+    },
+  });
+
+  await pickPerson("Saket");
+  await ui.click(addButton());
+  await ui.settle();
+
+  assert.deepEqual(chipTexts(), []);
+  assert.equal(lineText(), "Saket left the workspace, so they weren't added.");
+  assert.equal(addButton().disabled, true);
+});
+
+test("a refusal that names nobody is an ordinary failure", async (t) => {
+  await mount(t, {
+    actions: {
+      addPeopleToSpace: async () => {
+        throw new CloudApiError("Not workspace members", 400, "not_workspace_members");
+      },
+    },
+  });
+
+  await pickPerson("Ethan");
+  await ui.click(addButton());
+  await ui.settle();
+
+  assert.deepEqual(chipTexts(), ["Ethan"]);
+  assert.equal(lineText(), "Couldn't add members. Your selections are kept. Try again.");
+});
+
+test("an address that turns out to be a member becomes that member for Try again", async (t) => {
+  let rosterReads = 0;
+  const { callsTo } = await mount(t, {
+    refreshMembers: async (workspaceId, store) => {
+      rosterReads += 1;
+      // The second read, after the refusal, now knows them.
+      if (rosterReads === 2) {
+        store.members = [...ROSTER, workspaceMember("alex", "Alex", "alex@example.com")];
+      }
+    },
+    actions: {
+      sendInvitations: async ({ emails, onResult }) => {
+        for (const email of emails) onResult(email, { ok: false, kind: "alreadyMember" });
+      },
+    },
+  });
+
+  await addAddress("alex@example.com");
+  await ui.click(addButton());
+  await ui.settle();
+
+  assert.deepEqual(chipTexts(), ["Alex"], "the chip is the person now");
+  assert.equal(lineText(), "Couldn't add members. Your selections are kept. Try again.");
+  assert.equal(text(addButton()), "Try again");
+
+  await ui.click(addButton());
+  await ui.settle();
+
+  assert.deepEqual(callsTo("addPeopleToSpace"), [["addPeopleToSpace", "cloud-1", ["alex"]]]);
+  assert.equal(callsTo("sendInvitations").length, 1, "no second invitation for a member");
+  assert.deepEqual(chipTexts(), []);
+  assert.equal(lineText(), "Added Alex.");
+});
+
+test("an address the roster still doesn't know stays an address chip", async (t) => {
+  await mount(t, {
+    actions: {
+      sendInvitations: async ({ emails, onResult }) => {
+        for (const email of emails) onResult(email, { ok: false, kind: "alreadyMember" });
+      },
+    },
+  });
+
+  await addAddress("alex@example.com");
+  await ui.click(addButton());
+  await ui.settle();
+
+  assert.deepEqual(chipTexts(), ["alex@example.com · Member"]);
+});
+
+test("an invitation whose answer was lost counts as sent when this teamspace lists it", async (t) => {
+  const { callsTo } = await mount(t, {
+    actions: {
+      // The first send went through and attached the teamspace; its answer never arrived.
+      sendInvitations: async ({ emails, onResult }, state) => {
+        state.invitations.push(invitation("inv-alex", "alex@example.com"));
+        for (const email of emails) onResult(email, { ok: false, kind: "alreadyInvited" });
+      },
+    },
+  });
+
+  await addAddress("alex@example.com");
+  await ui.click(addButton());
+  await ui.settle();
+
+  assert.deepEqual(chipTexts(), []);
+  assert.equal(lineText(), "Sent alex@example.com a workspace invitation.");
+  assert.equal(lineElement().getAttribute("role"), "status");
+  assert.ok(rowFor("alex@example.com"), "and it is listed as pending");
+  assert.ok(callsTo("invitations").length > 1);
+});
+
+test("an invitation this teamspace doesn't list is still skipped", async (t) => {
+  await mount(t, {
+    actions: {
+      sendInvitations: async ({ emails, onResult }) => {
+        for (const email of emails) onResult(email, { ok: false, kind: "alreadyInvited" });
+      },
+    },
+  });
+
+  await addAddress("alex@example.com");
+  await ui.click(addButton());
+  await ui.settle();
+
+  assert.equal(
+    lineText(),
+    "alex@example.com already has a workspace invitation, so they weren't added to this teamspace."
+  );
+});
+
 // ---- changing roles
 
 test("a person's role changes from their row", async (t) => {
@@ -1066,6 +1261,55 @@ test("a person's role changes from their row", async (t) => {
   assert.deepEqual(callsTo("setSpaceMemberRole"), [["setSpaceMemberRole", space, "misa", "admin"]]);
   assert.deepEqual(toastTitles(), ["Role updated"]);
   assert.ok(callsTo("members").length > 1, "the rows are read again");
+});
+
+test("someone who is admin through a group can't be made a plain member here", async (t) => {
+  const { callsTo } = await mount(t, {
+    members: [
+      entry("me", "Ronnie", { role: "admin", direct_role: "admin" }),
+      entry("misa", "Misa", {
+        role: "admin",
+        direct_role: "member",
+        via_teams: [
+          { team_id: "sales", name: "Sales", role: "admin", access: "admin" },
+          { team_id: "design", name: "Design Team", role: "admin", access: "admin" },
+        ],
+      }),
+    ],
+  });
+
+  await openMenu(roleTrigger(rowFor("Misa")));
+  const member = menuItem("Teamspace Member");
+  assert.equal(member.getAttribute("aria-checked"), "false");
+  assert.equal(member.getAttribute("aria-disabled"), "true");
+  assert.equal(
+    text(member),
+    "Teamspace Member Admin through Sales and Design Team. Change it there."
+  );
+  assert.equal(menuItem("Teamspace Admin").getAttribute("aria-disabled"), null);
+
+  await ui.click(member);
+  await ui.settle();
+
+  assert.equal(callsTo("setSpaceMemberRole").length, 0);
+  assert.deepEqual(toastTitles(), [], "nothing was changed, so nothing is said");
+});
+
+test("a group that only caps access at Member doesn't lock the role", async (t) => {
+  await mount(t, {
+    members: [
+      entry("me", "Ronnie", { role: "admin", direct_role: "admin" }),
+      entry("misa", "Misa", {
+        direct_role: "member",
+        via_teams: [{ team_id: "sales", name: "Sales", role: "admin", access: "member" }],
+      }),
+    ],
+  });
+
+  await openMenu(roleTrigger(rowFor("Misa")));
+
+  assert.equal(menuItem("Teamspace Member").getAttribute("aria-disabled"), null);
+  assert.equal(text(menuItem("Teamspace Member")), "Teamspace Member Can view and edit notes");
 });
 
 test("choosing the role someone already has changes nothing", async (t) => {
@@ -1234,9 +1478,9 @@ test("someone already gone closes the dialog and reads the rows again", async (t
 });
 
 test("the only admin removing themselves is told why, and can still try again", async (t) => {
-  await mount(t, {
+  const { lefts } = await mount(t, {
     actions: {
-      removeSpaceMember: async () => {
+      leaveSpace: async () => {
         throw new CloudApiError("You are the only admin", 409, "last_space_admin");
       },
     },
@@ -1252,6 +1496,57 @@ test("the only admin removing themselves is told why, and can still try again", 
     dialogText(),
     /You're the only admin of Customer Calls\. Make another member an admin before you leave\./
   );
+  assert.deepEqual(lefts, []);
+});
+
+test("removing your own row leaves the teamspace and closes the settings", async (t) => {
+  const { callsTo, space, lefts } = await mount(t);
+
+  await openMenu(roleTrigger(rowFor("Ronnie")));
+  await ui.click(menuItem("Remove from teamspace"));
+  await ui.click(dialogButton("Remove member"));
+  await ui.settle();
+
+  // Leaving drops cached content the grant no longer reaches, which a plain removal doesn't.
+  assert.deepEqual(callsTo("leaveSpace"), [["leaveSpace", space, "me"]]);
+  assert.equal(callsTo("removeSpaceMember").length, 0);
+  assert.deepEqual(toastTitles(), ["You left Customer Calls."]);
+  assert.deepEqual(lefts, [true], "the settings close, as after Leave");
+  assert.equal(dialogs().length, 0);
+});
+
+test("removing your own row while a group still reaches you stays open and says so", async (t) => {
+  const { lefts } = await mount(t, {
+    actions: {
+      leaveSpace: async (space, userId, state) => {
+        state.members = state.members.filter((member) => member.user_id !== userId);
+        return { removed: true, still_via_teams: [{ team_id: "sales", name: "Sales" }] };
+      },
+    },
+  });
+
+  await openMenu(roleTrigger(rowFor("Ronnie")));
+  await ui.click(menuItem("Remove from teamspace"));
+  await ui.click(dialogButton("Remove member"));
+  await ui.settle();
+
+  assert.deepEqual(toastTitles(), ["You still have access to Customer Calls through Sales."]);
+  assert.deepEqual(lefts, [], "they are still in, so the settings stay");
+  assert.equal(dialogs().length, 0, "only the confirm closes");
+  assert.ok(!rowFor("Ronnie"), "the direct row is gone");
+});
+
+test("removing someone else never leaves", async (t) => {
+  const { callsTo, lefts } = await mount(t);
+
+  await openMenu(roleTrigger(rowFor("Lila")));
+  await ui.click(menuItem("Remove from teamspace"));
+  await ui.click(dialogButton("Remove member"));
+  await ui.settle();
+
+  assert.equal(callsTo("leaveSpace").length, 0);
+  assert.equal(callsTo("removeSpaceMember").length, 1);
+  assert.deepEqual(lefts, []);
 });
 
 test("removing a group asks first", async (t) => {

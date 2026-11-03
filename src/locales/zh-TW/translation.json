@@ -2639,6 +2639,7 @@
           "partialInviteFailed": "無法向 {{names}} 發送邀請。請重試。",
           "partialInviteFailedMany": "無法向 {{names}} 發送邀請。請重試。",
           "partialAddFailed": "無法加入 {{names}}。請重試。",
+          "partialLeft": "{{names}} 已離開工作區，因此未被加入。",
           "skippedInvited": "{{names}} 已有工作區邀請，因此未被加入此 Teamspace。",
           "skippedInvitedMany": "{{names}} 已有工作區邀請，因此未被加入此 Teamspace。"
         },

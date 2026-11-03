@@ -99,6 +99,25 @@ test("someone both direct and via a group is a direct row", () => {
   assert.equal(row.editable, true);
 });
 
+test("a person with a direct role carries the groups that make them an admin", () => {
+  const [row] = build({
+    members: [
+      person("misa", "Misa", {
+        role: "admin",
+        via_teams: [
+          { team_id: "sales", name: "Sales", role: "admin", access: "admin" },
+          { team_id: "design", name: "Design", role: "member", access: "admin" },
+          { team_id: "ops", name: "Ops", role: "admin", access: "member" },
+        ],
+      }),
+      person("ravi", "Ravi"),
+    ],
+  });
+
+  assert.deepEqual(row.adminVia, ["Sales"], "a group admin through an admin-capped assignment");
+  assert.deepEqual(build({ members: [person("ravi", "Ravi")] })[0].adminVia, []);
+});
+
 test("an inherited person has no menu and names the group", () => {
   const [row] = build({
     members: [

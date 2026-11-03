@@ -2691,6 +2691,7 @@
           "partialInviteFailed": "La invitación a {{names}} no se envió. Inténtalo de nuevo.",
           "partialInviteFailedMany": "Las invitaciones a {{names}} no se enviaron. Inténtalo de nuevo.",
           "partialAddFailed": "No se pudo añadir a {{names}}. Inténtalo de nuevo.",
+          "partialLeft": "Salieron del espacio de trabajo y no se añadieron: {{names}}.",
           "skippedInvited": "{{names}} ya tiene una invitación al espacio de trabajo, así que no se añadió a este teamspace.",
           "skippedInvitedMany": "{{names}} ya tienen invitaciones al espacio de trabajo, así que no se añadieron a este teamspace."
         },

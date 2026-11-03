@@ -693,12 +693,17 @@ test("the dialog opens on the tab it was asked for, and goes back to it when reo
   assert.equal(tabNamed("Members").getAttribute("aria-selected"), "true");
 });
 
-test("the Members tab gives the panel its teamspace and nothing to close for", async (t) => {
+test("the Members tab gives the panel its teamspace, and closing for a leave closes the dialog", async (t) => {
   const space = cloudSpace();
-  await mount(t, { space, props: { initialTab: "members" } });
+  const { events } = await mount(t, { space, props: { initialTab: "members" } });
 
-  assert.deepEqual(Object.keys(globalThis.__panelProps), ["space"]);
   assert.equal(globalThis.__panelProps.space, space);
+  // The invite dialog's Upgrade is gone from this tab, so there is nothing to close for.
+  assert.equal("onOpeningBilling" in globalThis.__panelProps, false);
+
+  await React.act(async () => globalThis.__panelProps.onLeft());
+
+  assert.deepEqual(events, [false]);
 });
 
 // The answers a test gives the directory, one per read, the last one standing from then on.

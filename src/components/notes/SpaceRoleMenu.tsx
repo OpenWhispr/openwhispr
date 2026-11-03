@@ -56,6 +56,12 @@ interface SpaceRoleMenuProps {
   pending: boolean;
   onRoleChange: (role: TeamRole) => void;
   onRemove: () => void;
+  /**
+   * The groups (already named for reading aloud) that make this person an admin. While there are
+   * some, Member is not on offer: a direct Member role wouldn't lower them, and the row would go
+   * on reading Admin.
+   */
+  adminThrough?: string;
 }
 
 // The role cell of a person or group the viewer manages: the two teamspace roles, then removal.
@@ -66,6 +72,7 @@ export function SpaceRoleMenu({
   pending,
   onRoleChange,
   onRemove,
+  adminThrough,
 }: SpaceRoleMenuProps): ReactElement {
   const { t } = useTranslation();
 
@@ -96,8 +103,14 @@ export function SpaceRoleMenu({
         >
           {ROLES.map((option) => {
             const Icon = ROLE_ICON[option];
+            const lockedByGroup = option === "member" && Boolean(adminThrough);
             return (
-              <DropdownMenuRadioItem key={option} value={option} className={ITEM_CLASS}>
+              <DropdownMenuRadioItem
+                key={option}
+                value={option}
+                disabled={lockedByGroup}
+                className={ITEM_CLASS}
+              >
                 <Icon
                   className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
                   aria-hidden="true"
@@ -106,7 +119,11 @@ export function SpaceRoleMenu({
                   <span className="text-sm font-medium text-foreground">
                     {t(ROLE_LABEL_KEY[option])}
                   </span>
-                  <span className="text-xs text-muted-foreground">{t(ROLE_BODY_KEY[option])}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {lockedByGroup
+                      ? t("notes.spaces.members.roleFromGroup", { group: adminThrough })
+                      : t(ROLE_BODY_KEY[option])}
+                  </span>
                 </span>
                 {option === role ? (
                   <Check

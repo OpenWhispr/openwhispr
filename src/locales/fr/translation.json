@@ -1910,6 +1910,7 @@
           "partialInviteFailed": "L'invitation à {{names}} n'a pas été envoyée. Réessayez.",
           "partialInviteFailedMany": "Les invitations à {{names}} n'ont pas été envoyées. Réessayez.",
           "partialAddFailed": "Impossible d'ajouter {{names}}. Réessayez.",
+          "partialLeft": "Ont quitté l'espace de travail et n'ont donc pas été ajoutés : {{names}}.",
           "skippedInvited": "{{names}} a déjà une invitation à l'espace de travail ; cette personne n'a donc pas été ajoutée à ce teamspace.",
           "skippedInvitedMany": "{{names}} ont déjà des invitations à l'espace de travail ; ces personnes n'ont donc pas été ajoutées à ce teamspace."
         },

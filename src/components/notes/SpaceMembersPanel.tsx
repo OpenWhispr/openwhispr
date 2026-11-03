@@ -14,6 +14,7 @@ import { Button } from "../ui/button";
 import { useToast } from "../ui/useToast";
 import { WorkspaceActionDialog } from "../workspace/WorkspaceActionDialog";
 import { cn } from "../lib/utils";
+import { useAuth } from "../../hooks/useAuth";
 import { useMemberRoster } from "../../hooks/useMemberRoster";
 import { spaceCan, workspaceCan } from "../../lib/capabilities";
 import { confirmActionReducer } from "../../lib/confirmActionFlow";
@@ -22,16 +23,23 @@ import { rosterFor } from "../../lib/peopleRoster";
 import {
   attemptSummary,
   remainingAfter,
+  settleListedInvites,
   type AddAttemptOutcome,
 } from "../../lib/addSpaceMembersFlow";
 import { buildSpaceMemberRows, type SpaceMemberRow } from "../../lib/spaceMemberRows";
-import { pickedSummary, type PickedRecipient } from "../../lib/spacePeoplePicker";
+import {
+  addRecipients,
+  memberRecipient,
+  pickedSummary,
+  type PickedRecipient,
+} from "../../lib/spacePeoplePicker";
 import { classifySpaceError, rowActionErrorOf } from "../../lib/workspaceErrors";
 import { invitePeople } from "../../services/invitePeople";
 import { SpacesService, type SpaceMemberEntry } from "../../services/SpacesService";
 import {
   addPeopleToSpace,
   assignTeamToSpace,
+  leaveSpace,
   removeSpaceMember,
   setSpaceMemberRole,
   setSpaceTeamAccess,
@@ -50,6 +58,8 @@ const NO_TEAMS: Team[] = [];
 
 interface SpaceMembersPanelProps {
   space: SpaceItem;
+  /** The signed-in user removed their own last direct access: whatever hosts this can close. */
+  onLeft?: () => void;
 }
 
 type LoadStatus = "idle" | "loading" | "ready" | "failed";
@@ -59,24 +69,28 @@ type LoadStatus = "idle" | "loading" | "ready" | "failed";
 function useLoad<T>(
   load: (() => Promise<T>) | null,
   empty: T
-): { status: LoadStatus; data: T; reload: () => Promise<void> } {
+): { status: LoadStatus; data: T; reload: () => Promise<T | null> } {
   const [state, setState] = useState<{ status: LoadStatus; data: T }>({
     status: load ? "loading" : "idle",
     data: empty,
   });
   const latest = useRef(0);
 
-  const run = useCallback(async (): Promise<void> => {
-    if (!load) return;
+  // Resolves with what it read, or null when the read failed or was overtaken.
+  const run = useCallback(async (): Promise<T | null> => {
+    if (!load) return null;
     const request = ++latest.current;
     setState((current) =>
       current.status === "ready" ? current : { ...current, status: "loading" }
     );
     try {
       const data = await load();
-      if (latest.current === request) setState({ status: "ready", data });
+      if (latest.current !== request) return null;
+      setState({ status: "ready", data });
+      return data;
     } catch {
       if (latest.current === request) setState((current) => ({ ...current, status: "failed" }));
+      return null;
     }
   }, [load]);
 
@@ -115,6 +129,7 @@ function emptyOutcome(): AddAttemptOutcome {
     invited: [],
     failedInvites: [],
     skippedInvites: [],
+    leftMembers: [],
   };
 }
 
@@ -124,10 +139,12 @@ async function runAddAttempt(input: {
   space: SpaceItem;
   cloudSpaceId: string;
   picked: PickedRecipient[];
-}): Promise<{ outcome: AddAttemptOutcome; rosterStale: boolean }> {
+}): Promise<{ outcome: AddAttemptOutcome; rosterStale: boolean; knownAddresses: string[] }> {
   const { space, cloudSpaceId, picked } = input;
   const outcome = emptyOutcome();
   let rosterStale = false;
+  // Addresses the server says belong to a workspace member, which the roster should now resolve.
+  const knownAddresses: string[] = [];
 
   const people = picked.filter(isMember);
   if (people.length > 0) {
@@ -138,8 +155,14 @@ async function runAddAttempt(input: {
         people.map((recipient) => recipient.userId)
       );
       outcome.addedMembers = people;
-    } catch {
-      outcome.failedMembers = people;
+    } catch (error) {
+      const failure = classifySpaceError(error);
+      const gone =
+        failure.kind === "notWorkspaceMembers" ? new Set(failure.userIds) : new Set<string>();
+      // One person who left must not hold everyone else back, nor be sent again and refused again.
+      outcome.leftMembers = people.filter((recipient) => gone.has(recipient.userId));
+      outcome.failedMembers = people.filter((recipient) => !gone.has(recipient.userId));
+      if (outcome.leftMembers.length > 0) rosterStale = true;
     }
   }
 
@@ -176,7 +199,10 @@ async function runAddAttempt(input: {
           else {
             outcome.failedInvites.push(recipient);
             // They are a workspace member after all: the roster this field offered from is stale.
-            if (result.kind === "alreadyMember") rosterStale = true;
+            if (result.kind === "alreadyMember") {
+              rosterStale = true;
+              knownAddresses.push(key);
+            }
           }
         },
       });
@@ -188,7 +214,7 @@ async function runAddAttempt(input: {
     }
   }
 
-  return { outcome, rosterStale };
+  return { outcome, rosterStale, knownAddresses };
 }
 
 interface StatusLine {
@@ -247,6 +273,9 @@ function describeAttempt(t: TFunction, language: string, outcome: AddAttemptOutc
     }
   }
 
+  if (outcome.leftMembers.length > 0) {
+    sentences.push(t(`${COPY}.partialLeft`, { names: names(outcome.leftMembers) }));
+  }
   if (outcome.skippedInvites.length > 0) {
     sentences.push(
       t(
@@ -267,9 +296,13 @@ type RemovalSubject =
 // Everyone with access to a teamspace, in one table: people added directly, people who come
 // through a group, invitations still waiting, and the groups themselves. Rendered inside
 // SpaceSettingsDialog's Members tab. Admins of the teamspace also add people here.
-export default function SpaceMembersPanel({ space }: SpaceMembersPanelProps): ReactElement | null {
+export default function SpaceMembersPanel({
+  space,
+  onLeft,
+}: SpaceMembersPanelProps): ReactElement | null {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
+  const { user } = useAuth();
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const attemptRunning = useRef(false);
   const { workspace, roster, rosterLoaded, refreshMembers } = useWorkspaceStore(
@@ -415,6 +448,28 @@ export default function SpaceMembersPanel({ space }: SpaceMembersPanelProps): Re
     return t(`${COPY}.progressPeople`, { names });
   };
 
+  // The roster is read again after an answer showed it out of date. An address the server calls a
+  // member's becomes that member in the selection, so Try again adds the person it meant.
+  const refreshRoster = async (knownAddresses: string[]): Promise<void> => {
+    await reloadRoster();
+    if (knownAddresses.length === 0) return;
+    const fresh = rosterFor(useWorkspaceStore.getState(), workspaceId);
+    const byAddress = new Map(
+      fresh.filter((member) => member.email).map((member) => [member.email.toLowerCase(), member])
+    );
+    setPicked((current) =>
+      addRecipients(
+        [],
+        current.map((recipient) => {
+          if (recipient.kind !== "email") return recipient;
+          const address = recipient.email.toLowerCase();
+          const member = knownAddresses.includes(address) ? byAddress.get(address) : undefined;
+          return member ? memberRecipient(member) : recipient;
+        })
+      )
+    );
+  };
+
   const handleAdd = async (): Promise<void> => {
     if (attemptRunning.current || !spaceId || picked.length === 0 || summary.hasInvalid) return;
     attemptRunning.current = true;
@@ -423,11 +478,20 @@ export default function SpaceMembersPanel({ space }: SpaceMembersPanelProps): Re
     setAttempt(null);
     setProgress(describeProgress(staged));
     try {
-      const { outcome, rosterStale } = await runAddAttempt({
-        space,
-        cloudSpaceId: spaceId,
-        picked: staged,
-      });
+      const ran = await runAddAttempt({ space, cloudSpaceId: spaceId, picked: staged });
+      const invitationsRead = reloadInvitations();
+      let outcome = ran.outcome;
+      if (outcome.skippedInvites.length > 0) {
+        // An address that answers "already invited" may be one an earlier try of this Add invited
+        // for this teamspace before its answer was lost; the teamspace's own list says which.
+        const listed = await invitationsRead;
+        if (listed) {
+          outcome = settleListedInvites(
+            outcome,
+            new Set(listed.map((invitation) => invitation.email.toLowerCase()))
+          );
+        }
+      }
       const remaining = remainingAfter(staged, outcome);
       setPicked(remaining);
       setAttempt(describeAttempt(t, i18n.language, outcome));
@@ -436,8 +500,7 @@ export default function SpaceMembersPanel({ space }: SpaceMembersPanelProps): Re
       else setRefocusButton(true);
 
       void reloadMembers();
-      void reloadInvitations();
-      if (rosterStale) void reloadRoster();
+      if (ran.rosterStale) void refreshRoster(ran.knownAddresses);
     } finally {
       attemptRunning.current = false;
       setProgress(null);
@@ -506,21 +569,37 @@ export default function SpaceMembersPanel({ space }: SpaceMembersPanelProps): Re
   const runRemoval = async (subject: RemovalSubject): Promise<void> => {
     dispatchRemoval({ type: "confirm" });
     let title: string;
+    let left = false;
     try {
       if (subject.kind === "person") {
         const name = isolate(subject.member.name || subject.member.email);
-        const { still_via_teams } = await removeSpaceMember(space, subject.member.user_id);
-        // Access through a group stays; the toast says so rather than claiming they are gone.
-        title =
-          still_via_teams.length > 0
-            ? t("notes.spaces.members.stillViaGroups", {
-                name,
-                groups: formatList(
-                  i18n.language,
-                  still_via_teams.map((team) => isolate(team.name))
-                ),
-              })
-            : t(`${COPY}.removed`, { name, space: spaceName });
+        const groupsOf = (teams: { name: string }[]): string =>
+          formatList(
+            i18n.language,
+            teams.map((team) => isolate(team.name))
+          );
+        if (user?.id && subject.member.user_id === user.id) {
+          // Dropping your own grant can revoke access to what the device holds, which Leave's sync
+          // purges; a removal of someone else's has nothing of the kind to do.
+          const { still_via_teams } = await leaveSpace(space, user.id);
+          left = still_via_teams.length === 0;
+          title = left
+            ? t("settingsPage.workspace.teamspaces.exit.left", { space: spaceName })
+            : t("notes.spaces.stillViaGroups", {
+                space: spaceName,
+                groups: groupsOf(still_via_teams),
+              });
+        } else {
+          const { still_via_teams } = await removeSpaceMember(space, subject.member.user_id);
+          // Access through a group stays; the toast says so rather than claiming they are gone.
+          title =
+            still_via_teams.length > 0
+              ? t("notes.spaces.members.stillViaGroups", {
+                  name,
+                  groups: groupsOf(still_via_teams),
+                })
+              : t(`${COPY}.removed`, { name, space: spaceName });
+        }
       } else {
         await unassignTeamFromSpace(space, subject.team.id);
         title = t("notes.spaces.teamsMembers.teamRemoved", {
@@ -553,6 +632,7 @@ export default function SpaceMembersPanel({ space }: SpaceMembersPanelProps): Re
     toast({ title });
     dispatchRemoval({ type: "succeeded" });
     void reloadMembers();
+    if (left) onLeft?.();
   };
 
   if (!spaceId) return null;

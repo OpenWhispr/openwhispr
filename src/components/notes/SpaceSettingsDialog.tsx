@@ -503,7 +503,7 @@ export default function SpaceSettingsDialog({
                 {general}
               </TabsContent>
               <TabsContent value="members" className="mt-4">
-                <SpaceMembersPanel space={space} />
+                <SpaceMembersPanel space={space} onLeft={() => onOpenChange(false)} />
               </TabsContent>
             </Tabs>
           ) : (

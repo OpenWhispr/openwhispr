@@ -1910,6 +1910,7 @@
           "partialInviteFailed": "Die Einladung an {{names}} wurde nicht gesendet. Versuchen Sie es erneut.",
           "partialInviteFailedMany": "Die Einladungen an {{names}} wurden nicht gesendet. Versuchen Sie es erneut.",
           "partialAddFailed": "Hinzufügen nicht möglich: {{names}}. Versuchen Sie es erneut.",
+          "partialLeft": "Aus dem Workspace ausgetreten und deshalb nicht hinzugefügt: {{names}}.",
           "skippedInvited": "{{names}} hat bereits eine Workspace-Einladung und wurde deshalb nicht zu diesem Teamspace hinzugefügt.",
           "skippedInvitedMany": "{{names}} haben bereits Workspace-Einladungen und wurden deshalb nicht zu diesem Teamspace hinzugefügt."
         },

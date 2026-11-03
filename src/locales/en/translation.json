@@ -1910,6 +1910,7 @@
           "partialInviteFailed": "{{names}}'s invitation didn't send. Try again.",
           "partialInviteFailedMany": "Invitations to {{names}} didn't send. Try again.",
           "partialAddFailed": "Couldn't add {{names}}. Try again.",
+          "partialLeft": "{{names}} left the workspace, so they weren't added.",
           "skippedInvited": "{{names}} already has a workspace invitation, so they weren't added to this teamspace.",
           "skippedInvitedMany": "{{names}} already have workspace invitations, so they weren't added to this teamspace."
         },
