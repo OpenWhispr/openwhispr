@@ -775,6 +775,66 @@ test("compact macOS onboarding shows the native traffic lights", () => {
   }
 });
 
+for (const platform of ["linux", "win32"]) {
+  test(`${platform} starts native listeners after registration without a fixed delay`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+    Object.defineProperty(process, "platform", { value: platform, configurable: true });
+    t.after(() => Object.defineProperty(process, "platform", originalPlatform));
+    const manager = new WindowManager();
+    manager.mainWindow = { isDestroyed: () => false };
+    let finishRegistration;
+    manager.hotkeyManager.registrationReady = new Promise((resolve) => {
+      finishRegistration = resolve;
+    });
+    let keys = ["Control+Space"];
+    const calls = [];
+    manager.hotkeyManager.getNativeListenerKeys = () => keys;
+    manager.hotkeyManager.isUsingNativeShortcut = () => false;
+    manager.linuxKeyManager = manager.windowsKeyManager = {
+      setKeys: (watched) => calls.push(watched),
+    };
+
+    manager.reconcileNativeKeyListeners();
+    assert.deepEqual(calls, [], "no listener before its dispatch handlers are installed");
+    const startup = manager.initializeNativeKeyListeners();
+    assert.deepEqual(calls, [], "wait for the saved dictation key, not the placeholder");
+    keys = ["Control+Shift+Space", "RightControl"];
+    finishRegistration();
+    await startup;
+    assert.deepEqual(calls, [keys], "start with the current slots as soon as registration settles");
+  });
+
+  for (const blockedBy of ["quit", "capture", "destroyed window"]) {
+    test(`${platform} does not start native listeners after ${blockedBy} during registration`, async (t) => {
+      const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+      Object.defineProperty(process, "platform", { value: platform, configurable: true });
+      t.after(() => Object.defineProperty(process, "platform", originalPlatform));
+      const manager = new WindowManager();
+      manager.mainWindow = { isDestroyed: () => blockedBy === "destroyed window" };
+      let finishRegistration;
+      manager.hotkeyManager.registrationReady = new Promise((resolve) => {
+        finishRegistration = resolve;
+      });
+      const calls = [];
+      manager.hotkeyManager.getNativeListenerKeys = () => ["Control+Space"];
+      manager.hotkeyManager.isUsingNativeShortcut = () => false;
+      manager.linuxKeyManager = manager.windowsKeyManager = { setKeys: (keys) => calls.push(keys) };
+      const startup = manager.initializeNativeKeyListeners();
+      if (blockedBy === "quit") manager.isQuitting = true;
+      if (blockedBy === "capture") manager.hotkeyManager.isInListeningMode = () => true;
+      finishRegistration();
+      await startup;
+      assert.deepEqual(calls, []);
+      if (blockedBy === "capture") {
+        manager.hotkeyManager.isInListeningMode = () => false;
+        manager.reconcileNativeKeyListeners();
+        assert.deepEqual(calls, [["Control+Space"]], "capture exit can restore listeners");
+      }
+    });
+  }
+}
+
 test("native Linux push-to-talk keeps only the dictation low-level listener", async () => {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
   Object.defineProperty(process, "platform", { value: "linux", configurable: true });
@@ -791,6 +851,7 @@ test("native Linux push-to-talk keeps only the dictation low-level listener", as
       slotHasHotkey: (slot, key) => slot === "dictation" && key === "Control+Space",
     };
     await manager.setActivationModeCache("push");
+    manager._nativeKeyListenersReady = true;
     manager.linuxKeyManager = {
       setKeys: (keys) => {
         reconciledKeys = keys;

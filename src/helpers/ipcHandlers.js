@@ -4772,6 +4772,11 @@ class IPCHandlers {
       }
       if (this._hotkeyCaptureMode === enabled) return { success: true, skipped: true };
       this._hotkeyCaptureMode = enabled;
+      if (enabled && (process.platform === "win32" || process.platform === "linux")) {
+        // Retired listeners cannot release an active Hold. End it before capture
+        // mode blocks the stop event sent to the recording renderer.
+        this.windowManager.resetWindowsPushState();
+      }
       this.windowManager.setHotkeyListeningMode(enabled);
       ipcMain.emit("hotkey-listening-mode-changed", null, enabled);
       const hotkeyManager = this.windowManager.hotkeyManager;

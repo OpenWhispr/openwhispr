@@ -116,6 +116,7 @@ class WindowManager {
     this.loadErrorShown = false;
     this.macCompoundPushState = null;
     this.winPushState = null;
+    this._nativeKeyListenersReady = false;
     this._cachedActivationMode = "tap";
     this._floatingIconAutoHide = false;
     this._panelStartPosition = "bottom-right";
@@ -1337,12 +1338,21 @@ class WindowManager {
     return true;
   }
 
+  // Called once dispatch handlers and optional slots are installed. Registration
+  // may still be reading the saved dictation key or falling back to another backend.
+  async initializeNativeKeyListeners() {
+    await this.hotkeyManager.registrationReady;
+    this._nativeKeyListenersReady = true;
+    this.reconcileNativeKeyListeners();
+  }
+
   /**
    * Sync the native low-level key listeners (Windows/Linux) so every hotkey slot
    * that needs one is watched. Call after any change to a slot hotkey or the
    * activation mode. No-op during hotkey capture (listeners are stopped then).
    */
   reconcileNativeKeyListeners() {
+    if (this.isQuitting || !this._nativeKeyListenersReady) return;
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     if (this.hotkeyManager.isInListeningMode()) return;
     const activationMode = this.getActivationMode();
