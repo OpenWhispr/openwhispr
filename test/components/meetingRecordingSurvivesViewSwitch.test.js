@@ -364,6 +364,27 @@ test("a meeting request records under automatic policy, and under manual only fr
   assert.deepEqual(calls.noteOnly, ["join"]);
 });
 
+test("Record starts from a note that manual policy opened without recording", async (t) => {
+  const { show, isRecording, calls, setStartMode } = await setup(t);
+  await setStartMode("manual");
+  await show("personal-notes", {
+    meetingRecordingRequest: {
+      noteId: 11,
+      folderId: null,
+      event: null,
+      trigger: "calendar-join",
+      noteSessionId: "join",
+    },
+    onMeetingRecordingRequestHandled: () => {},
+  });
+  assert.equal(calls.start, 0);
+  assert.equal(isRecording(), false);
+
+  await React.act(async () => globalThis.__editorProps.onStartRecording());
+  assert.equal(calls.start, 1, "pressing Record is the member's choice");
+  assert.equal(isRecording(), true);
+});
+
 test("New note in the notes view records under automatic policy but not manual", async (t) => {
   const { show, calls, setStartMode, store } = await setup(t);
   await setStartMode("manual");
