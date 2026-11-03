@@ -3998,22 +3998,21 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // real problem (a realtime-only provider, or its missing key), whereas the
       // key read blames the OpenAI key for a provider that never uses it.
       const route = managedResolution ? null : this.resolveBatchRoute(apiSettings, model);
-      if (route?.transport === "http-batch") {
-        requestController = new AbortController();
-        this._activeTranscriptionAbortController = requestController;
-        const selection = {
-          mode:
-            route.provider === "self-hosted" || apiSettings.transcriptionMode === "self-hosted"
-              ? "self-hosted"
-              : "providers",
-          provider: route.provider,
-        };
-        const stopIfDisallowed = (state) => {
-          if (!isTranscriptionSelectionAllowed(state, selection)) requestController.abort();
-        };
-        unsubscribePolicy = usePolicyStore.subscribe(stopIfDisallowed);
-        stopIfDisallowed(usePolicyStore.getState());
-      }
+      requestController = new AbortController();
+      this._activeTranscriptionAbortController = requestController;
+      const selection = {
+        mode: managedResolution
+          ? "enterprise"
+          : route.provider === "self-hosted" || apiSettings.transcriptionMode === "self-hosted"
+            ? "self-hosted"
+            : "providers",
+        provider: managedResolution?.provider ?? route.provider,
+      };
+      const stopIfDisallowed = (state) => {
+        if (!isTranscriptionSelectionAllowed(state, selection)) requestController.abort();
+      };
+      unsubscribePolicy = usePolicyStore.subscribe(stopIfDisallowed);
+      stopIfDisallowed(usePolicyStore.getState());
       const apiKey = managedResolution ? null : await this.getAPIKey();
       requestController?.signal.throwIfAborted();
       const optimizedAudio = audioBlob;
@@ -4060,6 +4059,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         } catch (err) {
           throw classifyProxyFailure(err);
         }
+        requestController.signal.throwIfAborted();
         if (result?.error) {
           // Main serialises an unclassified network failure as its bare
           // message (net::ERR_*), so classify the rebuilt error here.
@@ -4092,6 +4092,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const source = (await this.isReasoningAvailable())
           ? `${providerName}-reasoned`
           : providerName;
+        requestController.signal.throwIfAborted();
         return {
           success: true,
           text,

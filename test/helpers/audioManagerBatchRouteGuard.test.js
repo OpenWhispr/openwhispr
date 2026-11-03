@@ -159,3 +159,42 @@ for (const provider of ["openai", "groq"]) {
     assert.equal(requestSignal.aborted, false);
   });
 }
+
+for (const restriction of ["mode", "provider", "unrelated"]) {
+  test(`proxied batch policy ${restriction} update during postprocessing fences xAI output`, async (t) => {
+    const { createManager, usePolicyStore, window } = await loadManager(t);
+    setSettings({
+      cloudTranscriptionProvider: "xai",
+      cloudTranscriptionModel: "grok-stt",
+      allowLocalFallback: true,
+    });
+    const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+    usePolicyStore.setState({ status: "managed", policy, appVersion: "1.11.1" });
+    const proxy = t.mock.fn(async () => ({ success: true, text: "provider output" }));
+    window.electronAPI.proxyXaiTranscription = proxy;
+    const fallback = t.mock.fn(async () => ({ success: true, text: "fallback output" }));
+    window.electronAPI.transcribeLocalWhisper = fallback;
+    const manager = createManager({
+      getAPIKey: async () => "saved-key",
+      getWhisperPrompt: () => null,
+      getCustomDictionaryPromptTiers: () => [],
+      getKeyterms: () => [],
+      stripTrailingDictionaryEcho: (text) => text,
+      isDictionaryEcho: () => false,
+      isReasoningAvailable: async () => false,
+      processTranscription: async (text) => {
+        const next = structuredClone(policy);
+        if (restriction === "mode") next.transcription.allowedModes = ["local"];
+        else if (restriction === "provider") next.transcription.allowedByokProviders = [];
+        else next.features.webSearchEnabled = false;
+        usePolicyStore.setState({ policy: next });
+        return text;
+      },
+    });
+    const result = manager.processWithOpenAIAPI(audioBlob());
+    if (restriction === "unrelated") assert.equal((await result).text, "provider output");
+    else await assert.rejects(result, { name: "AbortError" });
+    assert.equal(proxy.mock.callCount(), 1);
+    assert.equal(fallback.mock.callCount(), 0);
+  });
+}
