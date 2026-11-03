@@ -1,4 +1,5 @@
 const { autoUpdater } = require("electron-updater");
+const { getNetSession } = require("electron-updater/out/electronHttpExecutor");
 
 // electron-updater can only replace an AppImage on Linux; deb, rpm and tar.gz
 // installs are updated by the package manager instead.
@@ -28,6 +29,8 @@ class UpdateManager {
     this.checkPromise = null;
     this.downloadEpoch = null;
     this.downloadToken = null;
+    this.downloadPromise = null;
+    this.requestCleanup = null;
     this.updateCancellationToken = null;
     this.installDeferred = false;
     this.startupCheckTimeout = null;
@@ -182,6 +185,7 @@ class UpdateManager {
   async checkForUpdates() {
     try {
       if (this.getPolicy) await this.refreshPolicy();
+      if (!this._policyFailure() && this.requestCleanup) await this.requestCleanup;
       const failure = this._policyFailure();
       if (failure) return { ...failure, updateAvailable: false };
       if (process.env.NODE_ENV === "development") {
@@ -210,6 +214,8 @@ class UpdateManager {
         this.checkEpoch = null;
       }
     } catch (error) {
+      const failure = this._policyFailure();
+      if (failure) return { ...failure, updateAvailable: false };
       console.error("❌ Update check error:", error);
       throw error;
     }
@@ -260,6 +266,7 @@ class UpdateManager {
           message: "Updates are installed through the system package manager",
         };
       if (this.getPolicy) await this.refreshPolicy();
+      if (!this._policyFailure() && this.requestCleanup) await this.requestCleanup;
       const failure = this._policyFailure();
       if (failure) return failure;
 
@@ -283,7 +290,8 @@ class UpdateManager {
       this.downloadToken = this.updateCancellationToken;
       this.downloadEpoch = epoch;
       console.log("📥 Starting update download...");
-      await autoUpdater.downloadUpdate(this.downloadToken ?? undefined);
+      this.downloadPromise = autoUpdater.downloadUpdate(this.downloadToken ?? undefined);
+      await this.downloadPromise;
       if (epoch !== this.policyEpoch || this._policyFailure()) {
         return this._policyFailure() ?? this._policyChanged();
       }
@@ -300,6 +308,7 @@ class UpdateManager {
         this.isDownloading = false;
         this.downloadEpoch = null;
         this.downloadToken = null;
+        this.downloadPromise = null;
       }
     }
   }
@@ -446,6 +455,17 @@ class UpdateManager {
     this.policyReady = false;
     this.downloadToken?.cancel();
     this.updateCancellationToken?.cancel();
+    if (this.checkPromise || this.downloadPromise) {
+      // The updater's cancellation token rejects its promise without aborting
+      // the HTTP request. Close only its dedicated network session.
+      this.requestCleanup = Promise.allSettled([
+        this.checkPromise,
+        this.downloadPromise,
+        Promise.resolve()
+          .then(() => getNetSession().closeAllConnections())
+          .catch((error) => console.error("Failed to close update connections:", error)),
+      ]);
+    }
     this.updateAvailable = false;
     if (!this.updateDownloaded) this.lastUpdateInfo = null;
     this._syncInstallOnQuit();
