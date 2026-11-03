@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { withActiveProviderJob } from './providerJobActivity';
 import { snapshotTextInference } from './inferenceRouting';
 import {
@@ -19,11 +20,15 @@ import { isNoSpeechError } from './permissions';
 import { withRetry, type RetryOptions } from './retry';
 import { expandSnippets } from './snippets';
 import { isUsageLimitError } from './usageLimitError';
+import { abortError } from '@/services/providers/NativeProviderTransport';
 import type { KeyboardTone, TranscriptionRequest, TranscriptionResponse } from '@/types';
 
 type ProcessingStage = 'transcribing' | 'cleaning';
 
 export interface DictationProcessingLifecycle {
+  signal?: AbortSignal;
+  // Voice actions process the raw speech themselves; skip cleanup, agent actions and snippets.
+  transcriptionOnly?: boolean;
   onStage?: (stage: ProcessingStage, details?: { fusedCleanup?: boolean }) => void;
   onTranscribeDone?: (result: TranscriptionResponse) => void;
   onCleanupDone?: (result: TranscriptionResponse) => void;
@@ -63,7 +68,8 @@ function rawTranscriptResult(transcription: TranscriptionResponse): DictationPro
 // saved On-Device cleanup, the local route is pinned only without an account, so it is read as one.
 function cleansLocalTranscript(request: TranscriptionRequest): boolean {
   if (!request.cleanupRoute) return false;
-  if (request.cleanupRoute.mode !== 'local') return true;
+  if (request.cleanupRoute.mode !== 'local')
+    return Platform.OS !== 'android' || request.cleanupRoute.mode === 'providers';
   return cleanupRunsOnDevice(
     useConfigStore.getState().config,
     useProcessingModeStore.getState().activeMode,
@@ -77,7 +83,7 @@ function cleansLocalTranscript(request: TranscriptionRequest): boolean {
 // skipped quietly rather than warning on every transcript the user never asked to clean. The cached
 // readiness outlives a fix in iOS Settings, so it is checked again before skipping.
 async function skipsLocalModeCleanup(request: TranscriptionRequest): Promise<boolean> {
-  if (request.cleanupRoute?.mode !== 'local') return false;
+  if (Platform.OS === 'android' || request.cleanupRoute?.mode !== 'local') return false;
   const config = useConfigStore.getState().config;
   if (config?.inference?.cleanup?.mode === 'local' && !config.pinnedInference?.includes('cleanup'))
     return false;
@@ -85,14 +91,16 @@ async function skipsLocalModeCleanup(request: TranscriptionRequest): Promise<boo
   return (await getLocalReasoningReadiness({ refresh: true })).status !== 'ready';
 }
 
-// Tones are a Cloud cleanup option: On-Device cleanup never takes one, and in Private mode the
-// keyboard offers none (isToneApplicable), so a tone picked earlier can't rewrite its dictations.
+// Android Style also applies to Qwen. The iOS keyboard offers tones only for Cloud/provider
+// cleanup, so a tone picked there before Local Mode must not rewrite local dictations.
 function cleanupToneForRequest(request: TranscriptionRequest): KeyboardTone | undefined {
   if (request.requestContext !== 'keyboard') return undefined;
   if (!request.keyboardTone || request.keyboardTone === 'default') return undefined;
+  const cleanupEnabled = useConfigStore.getState().config?.cleanupEnabled;
+  if (Platform.OS === 'android') return (cleanupEnabled ?? true) ? request.keyboardTone : undefined;
   if (request.cleanupRoute?.mode === 'local') return undefined;
   const { activeMode } = useProcessingModeStore.getState();
-  if (!isToneApplicable(activeMode, useConfigStore.getState().config?.cleanupEnabled)) {
+  if (!isToneApplicable(activeMode, cleanupEnabled)) {
     return undefined;
   }
   return request.keyboardTone;
@@ -137,7 +145,10 @@ function transcriptionRetry(lifecycle: DictationProcessingLifecycle): RetryOptio
     initialDelay: 1000,
     // Stop the moment the user abandons the dictation; don't burn backoff time
     // retrying a result they've already cancelled.
-    shouldRetry: (error) => !lifecycle.shouldCancel?.() && isRetryableTranscriptionError(error),
+    shouldRetry: (error) =>
+      !lifecycle.signal?.aborted &&
+      !lifecycle.shouldCancel?.() &&
+      isRetryableTranscriptionError(error),
     onRetry: (attempt, error, delayMs) => {
       if (__DEV__) {
         console.warn(
@@ -208,6 +219,8 @@ async function runSerialTranscribeAndCleanup(
   const originalText = transcription.text;
   lifecycle.onRawTranscript?.(originalText, transcription);
 
+  if (lifecycle.transcriptionOnly) return rawTranscriptResult(transcription);
+
   // A transcript made on this iPhone leaves it only for the cleanup route pinned for it;
   // otherwise it is cleaned by On-Device cleanup or not at all.
   if (transcription.provider === 'local' && !cleansLocalTranscript(request)) {
@@ -226,6 +239,7 @@ async function runSerialTranscribeAndCleanup(
   // Tone applies only to keyboard dictation; snippet triggers to dictation
   // contexts (recording/keyboard) — never to file uploads.
   const finalText = await cleanupTranscript(originalText, {
+    signal: lifecycle.signal,
     inferenceRoute: request.cleanupRoute,
     cleanupUnavailable: request.cleanupUnavailable,
     requireProvider: transcription.provider === 'byok',
@@ -260,7 +274,7 @@ async function runTranscribeAndCleanup(
   request: TranscriptionRequest,
   lifecycle: DictationProcessingLifecycle = {},
 ): Promise<DictationProcessingResult> {
-  if (await shouldAttemptFusedCloudCleanup(request)) {
+  if (!lifecycle.transcriptionOnly && (await shouldAttemptFusedCloudCleanup(request))) {
     lifecycle.onStage?.('transcribing', { fusedCleanup: true });
     try {
       const transcription = await withRetry(
@@ -292,6 +306,7 @@ async function runTranscribeAndCleanup(
       lifecycle.onStage?.('cleaning', { fusedCleanup: false });
       let cleanupWarning: string | undefined;
       const finalText = await cleanupTranscript(originalText, {
+        signal: lifecycle.signal,
         onSkipped: (reason): void => {
           cleanupWarning = reason;
         },
@@ -353,7 +368,7 @@ async function processTranscriptionJob(
     cleanupRoute: pinnedRequest.cleanupRoute,
     cleanupUnavailable: pinnedRequest.cleanupUnavailable,
   };
-  if (!isDictationContext(request.requestContext)) return result;
+  if (lifecycle.transcriptionOnly || !isDictationContext(request.requestContext)) return result;
 
   const snippetState = useSnippetsStore.getState();
   if (!snippetState.isLoaded || snippetState.entries.length === 0) return result;
@@ -372,8 +387,10 @@ export async function transcribeAndCleanup(
   request: TranscriptionRequest,
   lifecycle: DictationProcessingLifecycle = {},
 ): Promise<DictationProcessingResult> {
+  const signal = lifecycle.signal ?? request.signal;
+  if (signal?.aborted) throw abortError('Transcription cancelled.');
   return withActiveProviderJob(
     request.provider === 'byok' ? (request.jobId ?? request.clientTranscriptionId) : undefined,
-    () => processTranscriptionJob(request, lifecycle),
+    () => processTranscriptionJob({ ...request, signal }, { ...lifecycle, signal }),
   );
 }

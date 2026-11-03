@@ -1,3 +1,4 @@
+import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { useMemo } from 'react';
 import { View } from 'react-native';
 import { GroupedList } from './GroupedList';
@@ -24,7 +25,7 @@ type WorkspaceGroup = {
  * whose workspace name hasn't been mirrored yet (a backend without
  * /api/workspaces, or a sync pass whose name fetch failed).
  */
-function groupByWorkspace(spaces: Space[]): WorkspaceGroup[] {
+function groupByWorkspace(spaces: Space[], fallbackLabel: string): WorkspaceGroup[] {
   const groups = new Map<string, WorkspaceGroup>();
   for (const space of spaces) {
     const key = space.workspaceId ?? '';
@@ -32,14 +33,16 @@ function groupByWorkspace(spaces: Space[]): WorkspaceGroup[] {
     if (group) {
       group.spaces.push(space);
     } else {
-      groups.set(key, { key, label: space.workspaceName ?? 'Spaces', spaces: [space] });
+      groups.set(key, { key, label: space.workspaceName ?? fallbackLabel, spaces: [space] });
     }
   }
   return [...groups.values()].sort((a, b) => a.label.localeCompare(b.label));
 }
 
 export function SpacesSection({ spaces, onSelect }: SpacesSectionProps) {
-  const groups = useMemo(() => groupByWorkspace(spaces), [spaces]);
+  const { copy } = useAndroidCopy();
+  const fallbackLabel = copy('library.spaces', 'Spaces');
+  const groups = useMemo(() => groupByWorkspace(spaces, fallbackLabel), [spaces, fallbackLabel]);
 
   if (spaces.length === 0) return null;
 

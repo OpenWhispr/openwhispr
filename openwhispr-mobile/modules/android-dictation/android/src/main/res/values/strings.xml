@@ -1,0 +1,12 @@
+<resources>
+  <string name="ow_insertion_label">OpenWhispr text insertion</string>
+  <string name="ow_insertion_description">Inserts your dictation into the field you focused. Only the selected field is read when you activate dictation. Password fields are excluded. OpenWhispr does not send messages, tap buttons, or monitor your screen.</string>
+  <string name="ow_bubble_ready">OpenWhispr is ready</string>
+  <string name="ow_bubble_recording">OpenWhispr is recording</string>
+  <string name="ow_bubble_notice">Tap to open. Turn off the bubble in Account.</string>
+  <string name="ow_bubble_channel">Dictation bubble</string>
+  <string name="ow_audio_unreadable">This audio file could not be read. Try a valid WAV, MP3, or M4A file.</string>
+  <string name="ow_meeting_notice">Meeting audio is being recorded.</string>
+  <string name="ow_meeting_stop">Stop</string>
+  <string name="ow_meeting_stopped">Recording stopped. Your audio is saved.</string>
+</resources>

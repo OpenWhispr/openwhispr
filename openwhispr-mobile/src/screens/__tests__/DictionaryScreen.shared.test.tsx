@@ -1,5 +1,6 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
+import { Alert, Platform } from 'react-native';
 import DictionaryScreen from '../DictionaryScreen';
 import type { DictionaryEntry } from '@/store/useDictionaryStore';
 import type { SharedDictionarySummary } from '@/store/useSharedDictionaryStore';
@@ -8,6 +9,29 @@ let mockEntries: DictionaryEntry[] = [];
 let mockSummary: SharedDictionarySummary | null = null;
 let mockSharedWordsLower = new Set<string>();
 let mockHiddenOnlyKeys = new Set<string>();
+const mockRemoveWord = jest.fn();
+let mockLanguage = 'en';
+
+jest.mock('@/android/ui', () => ({ AccountButton: () => null }));
+jest.mock('@/components/ui/SegmentedControl', () => ({ SegmentedControl: () => null }));
+jest.mock('@/android/libraryTime', () => ({ formatLibraryTime: () => 'today' }));
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string, options?: { defaultValue?: string }) => {
+      const resource =
+        mockLanguage === 'ar'
+          ? require('@/locales/ar/translation.json').android
+          : require('@/locales/en/translation.json').android;
+      let value: unknown = resource;
+      for (const part of key.split('.')) {
+        value =
+          value && typeof value === 'object' ? (value as Record<string, unknown>)[part] : undefined;
+      }
+      return typeof value === 'string' ? value : (options?.defaultValue ?? key);
+    },
+    i18n: { resolvedLanguage: mockLanguage },
+  }),
+}));
 
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
@@ -31,7 +55,7 @@ jest.mock('@/store/useDictionaryStore', () => ({
       isLoaded: true,
       load: jest.fn(),
       addWords: jest.fn(),
-      removeWord: jest.fn(),
+      removeWord: mockRemoveWord,
     }),
 }));
 jest.mock('@/store/useSharedDictionaryStore', () => ({
@@ -51,6 +75,8 @@ const entry = (word: string, sharedAt: number | null = null): DictionaryEntry =>
 });
 
 beforeEach(() => {
+  mockRemoveWord.mockClear();
+  mockLanguage = 'en';
   mockEntries = [entry('Kubernetes')];
   mockSummary = null;
   mockSharedWordsLower = new Set();
@@ -186,3 +212,32 @@ it('never marks a personal word that was not moved', () => {
   render(<DictionaryScreen />);
   expect(screen.queryByText(/Hidden for you/)).not.toBeOnTheScreen();
 });
+
+it.each([
+  ['en', 'Manual', 'Hidden for you', 'Cancel'],
+  ['ar', 'يدوي', 'مخفي عنك', 'إلغاء'],
+])(
+  'announces hidden team words in %s and confirms accessible deletion on Android',
+  (language, manual, hidden, cancel) => {
+    mockLanguage = language;
+    const originalPlatform = Platform.OS;
+    Platform.OS = 'android';
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    mockEntries = [entry('Grafana', 5)];
+    mockHiddenOnlyKeys = new Set(['grafana']);
+    try {
+      render(<DictionaryScreen />);
+      const row = screen.getByLabelText(`Grafana, ${manual} · today · ${hidden}`);
+      expect(screen.getByText(`${manual} · today · ${hidden}`).props.numberOfLines).toBeUndefined();
+      fireEvent(row, 'accessibilityAction', { nativeEvent: { actionName: 'delete' } });
+      expect(mockRemoveWord).not.toHaveBeenCalled();
+      const buttons = alert.mock.calls[0][2] ?? [];
+      expect(buttons.find((button) => button.style === 'cancel')?.text).toBe(cancel);
+      buttons.find((button) => button.style === 'destructive')?.onPress?.();
+      expect(mockRemoveWord).toHaveBeenCalledWith('Grafana');
+    } finally {
+      alert.mockRestore();
+      Platform.OS = originalPlatform;
+    }
+  },
+);

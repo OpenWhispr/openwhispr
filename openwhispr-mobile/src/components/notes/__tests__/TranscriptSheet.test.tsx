@@ -1,4 +1,4 @@
-import { Alert, Share, Text } from 'react-native';
+import { Alert, Platform, Share, Text } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import type { TranscriptBlock } from '@/lib/diarization/transcriptDisplay';
 import { TranscriptSheet } from '../TranscriptSheet';
@@ -143,4 +143,68 @@ describe('TranscriptSheet', () => {
     const { getByText } = renderSheet({ children: <Text>rename-sheet</Text> });
     expect(getByText('rename-sheet')).toBeTruthy();
   });
+});
+
+let mockLanguage = 'en';
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    i18n: { resolvedLanguage: mockLanguage },
+    t: (key: string, options: Record<string, unknown> = {}) => {
+      const resources =
+        mockLanguage === 'ar'
+          ? require('@/locales/ar/translation.json').android
+          : require('@/locales/en/translation.json').android;
+      const value =
+        key.split('.').reduce((node: any, part: string) => node?.[part], resources) ??
+        options.defaultValue ??
+        key;
+      return String(value).replace(/\{\{(\w+)\}\}/g, (_, name) => String(options[name] ?? ''));
+    },
+  }),
+}));
+
+it('changes Android controls without translating shared/exported content or changing speaker identity', async () => {
+  const original = Platform.OS;
+  Platform.OS = 'android';
+  const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: 'sharedAction' });
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  const onExport = jest.fn();
+  const onSpeakerPress = jest.fn();
+  const onClose = jest.fn();
+  const props = {
+    visible: true,
+    blocks: [block],
+    selectedSpeakerId: null,
+    shareText: 'Literal export text',
+    onExport,
+    onSpeakerPress,
+    onClose,
+  };
+  try {
+    const view = render(<TranscriptSheet {...props} />);
+    expect(view.getByText('Transcript')).toBeTruthy();
+    mockLanguage = 'ar';
+    view.rerender(<TranscriptSheet {...props} />);
+    expect(view.getByText('مراجعة النص الكامل أو مشاركته أو تصديره.')).toBeTruthy();
+    expect(view.getByText('Hello there')).toBeTruthy();
+    fireEvent.press(view.getByLabelText('تعديل Speaker 1'));
+    expect(onSpeakerPress).toHaveBeenCalledWith(block);
+    await act(async () => fireEvent.press(view.getByText('مشاركة')));
+    expect(share).toHaveBeenCalledWith({ message: 'Literal export text' });
+    fireEvent.press(view.getByText('تصدير Markdown'));
+    fireEvent.press(view.getByText('تصدير نص عادي'));
+    expect(onExport.mock.calls).toEqual([['md'], ['txt']]);
+    share.mockRejectedValueOnce(new Error('share unavailable'));
+    await act(async () => fireEvent.press(view.getByText('مشاركة')));
+    expect(alert).toHaveBeenCalledWith('خطأ', 'تعذّرت مشاركة النص');
+    fireEvent.press(view.getByLabelText('إغلاق'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    view.rerender(<TranscriptSheet {...props} blocks={[]} />);
+    expect(view.getByText('لا توجد مقاطع نصية بعد.')).toBeTruthy();
+  } finally {
+    Platform.OS = original;
+    mockLanguage = 'en';
+    share.mockRestore();
+    alert.mockRestore();
+  }
 });

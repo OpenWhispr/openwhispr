@@ -1,9 +1,12 @@
 import type { NativeStackNavigationOptions } from '@react-navigation/native-stack';
+import { Platform } from 'react-native';
 import { displayFontFamily } from '@/lib/fonts';
 
 export const glassStackOptions: NativeStackNavigationOptions = {
-  headerTransparent: true,
-  headerLargeTitle: true,
+  // iOS adjusts the scroll inset beneath a transparent native header. Android
+  // does not, so an opaque header must reserve its own space there.
+  headerTransparent: Platform.OS === 'ios',
+  headerLargeTitle: Platform.OS === 'ios',
   headerBlurEffect: 'systemMaterial',
   headerLargeStyle: { backgroundColor: 'transparent' },
   // Without Yowza the family is undefined and titles stay in the system font.

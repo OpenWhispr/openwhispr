@@ -1,3 +1,5 @@
+jest.mock('@/android/accountData', () => ({ assertAccountDataOwner: jest.fn() }));
+import { Platform } from 'react-native';
 jest.mock('../privateNoteDeletion', () => ({
   pushPrivateNoteDeletes: jest.fn(),
   clearPrivateNoteDeletionQueue: jest.fn(),
@@ -41,7 +43,7 @@ jest.mock('@/store/useAuthStore', () => ({
 }));
 
 const mockConfigState = {
-  config: { cloudBackupEnabled: true } as { cloudBackupEnabled: boolean } | undefined,
+  config: { cloudBackupEnabled: true } as { cloudBackupEnabled?: boolean } | undefined,
 };
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: { subscribe: jest.fn(() => () => {}), getState: () => mockConfigState },
@@ -1082,5 +1084,43 @@ describe('personal dictionary pass', () => {
 
     expect(mockPushDictionary).not.toHaveBeenCalled();
     expect(useSyncStore.getState().policyBlocked).toBe(true);
+  });
+});
+
+describe('Android backup consent defaults', () => {
+  const originalPlatform = Platform.OS;
+  afterEach(() => {
+    Platform.OS = originalPlatform;
+  });
+
+  it.each([undefined, {}])(
+    'keeps personal uploads off with an unset preference (%p)',
+    async (config) => {
+      Platform.OS = 'android';
+      mockConfigState.config = config;
+      await requestSync('manual');
+      expect(mockPullSharedDictionary).toHaveBeenCalled();
+      expect(mockPushFolders).toHaveBeenCalledWith(true, expect.any(Function));
+      expect(mockPushNotes).toHaveBeenCalledWith(true, expect.any(Function));
+      expect(mockPullFolders).not.toHaveBeenCalled();
+      expect(mockPushDictionary).not.toHaveBeenCalled();
+      expect(mockPushSnippets).not.toHaveBeenCalled();
+      expect(mockFetchUsage).not.toHaveBeenCalled();
+      expect(useSyncStore.getState().lastError).toBeNull();
+    },
+  );
+
+  it('allows personal backup after explicit Android opt-in', async () => {
+    Platform.OS = 'android';
+    await requestSync('manual');
+    expect(mockPushFolders).toHaveBeenCalledWith(false, expect.any(Function));
+    expect(mockPushDictionary).toHaveBeenCalled();
+  });
+
+  it('preserves the existing iOS default', async () => {
+    Platform.OS = 'ios';
+    mockConfigState.config = {};
+    await requestSync('manual');
+    expect(mockPushFolders).toHaveBeenCalledWith(false, expect.any(Function));
   });
 });

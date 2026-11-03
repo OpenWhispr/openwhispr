@@ -19,6 +19,7 @@ jest.mock('@/store/useAuthStore', () => ({
 
 import { streamAgentText, type AgentMessage } from '../AgentStreamClient';
 import { ApiError } from '@/lib/apiClient';
+import { Platform } from 'react-native';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const mockFetch = (require('expo/fetch') as { fetch: jest.Mock }).fetch;
@@ -66,6 +67,27 @@ beforeEach(() => {
 afterEach(() => {
   jest.useRealTimers();
 });
+
+it.each(['android', 'ios'] as const)(
+  'isolates the stream session on %s without losing response chunks',
+  async (platform) => {
+    const original = Platform.OS;
+    Platform.OS = platform;
+    try {
+      setupFetch([
+        ndjsonLine({ type: 'content', text: 'hello' }),
+        ndjsonLine({ type: 'done', finishReason: 'stop' }),
+      ]);
+      await expect(streamAgentText({ messages: BASE_MESSAGES })).resolves.toBe('hello');
+      const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+      expect(init.credentials).toBe(platform === 'android' ? 'omit' : undefined);
+      expect((init.headers as Record<string, string>).Cookie).toBe('test-session-cookie');
+      expect(init.signal).toBeDefined();
+    } finally {
+      Platform.OS = original;
+    }
+  },
+);
 
 // ---------------------------------------------------------------------------
 // NDJSON parser: chunk-boundary splits

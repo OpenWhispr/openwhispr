@@ -1,3 +1,4 @@
+import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import type { TranscriptBlock } from '@/lib/diarization/transcriptDisplay';
@@ -15,8 +16,13 @@ export function SpeakerTranscript({
   selectable = false,
   onSpeakerPress,
 }: SpeakerTranscriptProps) {
+  const { copy } = useAndroidCopy();
   if (blocks.length === 0) {
-    return <Text className="text-[15px] text-tertiaryLabel">No transcript segments yet.</Text>;
+    return (
+      <Text className="text-[15px] text-tertiaryLabel">
+        {copy('noteDetails.noSegments', 'No transcript segments yet.')}
+      </Text>
+    );
   }
 
   return (
@@ -39,7 +45,9 @@ export function SpeakerTranscript({
                 disabled={!onSpeakerPress || block.speakerId == null}
                 hitSlop={6}
                 accessibilityRole="button"
-                accessibilityLabel={`Edit ${block.speakerName}`}
+                accessibilityLabel={copy('noteDetails.editSpeaker', `Edit ${block.speakerName}`, {
+                  name: block.speakerName,
+                })}
                 onPress={() => onSpeakerPress?.(block)}
                 testID={`speaker-button-${block.speakerId ?? block.id}`}
                 className={selected ? 'rounded-md bg-tertiarySystemFill px-1' : 'px-1'}

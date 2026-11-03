@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 import type { CalendarParticipant } from '@/data/calendarTypes';
 import { NoteMetaRow } from '../NoteMetaRow';
@@ -133,4 +134,83 @@ describe('AttendeesSheet', () => {
     fireEvent.press(getByLabelText('Close'));
     expect(onClose).toHaveBeenCalled();
   });
+});
+
+let mockLanguage = 'en';
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    i18n: { resolvedLanguage: mockLanguage },
+    t: (key: string, options: Record<string, unknown> = {}) => {
+      const resources =
+        mockLanguage === 'ar'
+          ? require('@/locales/ar/translation.json').android
+          : require('@/locales/en/translation.json').android;
+      const value =
+        key.split('.').reduce((node: any, part: string) => node?.[part], resources) ??
+        options.defaultValue ??
+        key;
+      return String(value).replace(/\{\{(\w+)\}\}/g, (_, name) => String(options[name] ?? ''));
+    },
+  }),
+}));
+
+it('localizes attendee roles while preserving names, addresses and organizer ordering', () => {
+  const original = Platform.OS;
+  Platform.OS = 'android';
+  mockLanguage = 'ar';
+  try {
+    const close = jest.fn();
+    const view = render(
+      <AttendeesSheet
+        visible
+        onClose={close}
+        participants={[
+          person({ displayName: 'Literal Name', email: 'name@example.com', organizer: true }),
+          person({ self: true, email: 'viewer@example.com' }),
+          person({}),
+          person({ displayName: 'Room', resource: true }),
+        ]}
+      />,
+    );
+    expect(view.getByText('الحضور')).toBeTruthy();
+    expect(view.getByText('المنظّم')).toBeTruthy();
+    expect(view.getByText('أنت')).toBeTruthy();
+    expect(view.queryByText('ضيف')).toBeNull(); // Empty calendar entries are filtered, not invented guests.
+    expect(view.getByText('Literal Name')).toBeTruthy();
+    expect(view.getByText('name@example.com')).toBeTruthy();
+    expect(view.queryByText('Room')).toBeNull();
+    fireEvent.press(view.getByLabelText('إغلاق'));
+    expect(close).toHaveBeenCalledTimes(1);
+  } finally {
+    Platform.OS = original;
+    mockLanguage = 'en';
+  }
+});
+
+it('localizes metadata actions without renaming the selected folder or attendees', () => {
+  const original = Platform.OS;
+  Platform.OS = 'android';
+  mockLanguage = 'ar';
+  try {
+    const attendees = jest.fn();
+    const folder = jest.fn();
+    const props = {
+      dateLabel: 'Literal date',
+      attendeeLabel: 'Sam +3',
+      folderLabel: 'Meetings',
+      onPressAttendees: attendees,
+      onPressFolder: folder,
+    };
+    const view = render(<NoteMetaRow {...props} />);
+    fireEvent.press(view.getByLabelText('الحضور: Sam +3'));
+    fireEvent.press(view.getByLabelText('المجلد: Meetings. نقل الملاحظة'));
+    expect(attendees).toHaveBeenCalledTimes(1);
+    expect(folder).toHaveBeenCalledTimes(1);
+    expect(view.getByText('Meetings')).toBeTruthy();
+    view.rerender(<NoteMetaRow {...props} folderLabel={null} />);
+    expect(view.getByText('إضافة إلى مجلد')).toBeTruthy();
+  } finally {
+    Platform.OS = original;
+    mockLanguage = 'en';
+  }
 });

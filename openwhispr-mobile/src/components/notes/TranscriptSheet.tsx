@@ -1,5 +1,6 @@
+import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import type React from 'react';
-import { Alert, Modal, Pressable, ScrollView, Share, View } from 'react-native';
+import { Alert, Modal, Platform, Pressable, ScrollView, Share, View } from 'react-native';
 import { MenuView } from '@react-native-menu/menu';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
@@ -33,12 +34,16 @@ export function TranscriptSheet({
   children,
 }: TranscriptSheetProps): React.JSX.Element {
   const insets = useSafeAreaInsets();
+  const { copy } = useAndroidCopy();
 
   const handleShare = async (): Promise<void> => {
     try {
       await Share.share({ message: shareText });
     } catch {
-      Alert.alert('Error', 'Unable to share transcript');
+      Alert.alert(
+        copy('noteDetails.error', 'Error'),
+        copy('noteDetails.shareFailed', 'Unable to share transcript'),
+      );
     }
   };
 
@@ -49,26 +54,48 @@ export function TranscriptSheet({
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <View className="flex-1 bg-systemBackground">
-        <View className="flex-row items-start justify-between gap-4 px-6 pb-4 pt-8">
-          <View className="flex-1">
+      <View
+        className="flex-1 bg-systemBackground"
+        style={Platform.OS === 'android' ? { paddingTop: insets.top } : undefined}
+      >
+        <View
+          className={
+            Platform.OS === 'android'
+              ? 'gap-4 px-6 pb-4 pt-8'
+              : 'flex-row items-start justify-between gap-4 px-6 pb-4 pt-8'
+          }
+        >
+          <View className={Platform.OS === 'android' ? '' : 'flex-1'}>
             <Text
               accessibilityRole="header"
               className="text-[28px] text-label"
               style={{ fontFamily: displayFontFamily }}
             >
-              Transcript
+              {copy('importTranscript', 'Transcript')}
             </Text>
             <Text className="mt-1 text-[15px] leading-5 text-secondaryLabel">
-              Review, share or export the full transcript.
+              {copy(
+                'noteDetails.transcriptSubtitle',
+                'Review, share or export the full transcript.',
+              )}
             </Text>
           </View>
-          <View className="flex-row gap-3">
+          <View
+            className={Platform.OS === 'android' ? 'flex-row justify-end gap-3' : 'flex-row gap-3'}
+          >
             <MenuView
               actions={[
-                { id: 'share', title: 'Share', image: 'square.and.arrow.up' },
-                { id: 'export-md', title: 'Export Markdown', image: 'doc.text' },
-                { id: 'export-txt', title: 'Export Plain Text', image: 'doc.plaintext' },
+                { id: 'share', title: copy('editor.share', 'Share'), image: 'square.and.arrow.up' },
+                {
+                  id: 'export-md',
+                  title: copy('noteDetails.exportMarkdown', 'Export Markdown'),
+                  image: 'doc.text',
+                },
+                {
+                  id: 'export-txt',
+                  title: copy('noteDetails.exportText', 'Export Plain Text'),
+                  image: 'doc.plaintext',
+                },
               ]}
               onPressAction={({ nativeEvent }) => {
                 if (nativeEvent.event === 'share') handleShare().catch(() => {});
@@ -80,7 +107,10 @@ export function TranscriptSheet({
               <Pressable
                 hitSlop={8}
                 accessibilityRole="button"
-                accessibilityLabel="Share or export transcript"
+                accessibilityLabel={copy(
+                  'noteDetails.shareTranscript',
+                  'Share or export transcript',
+                )}
                 style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
               >
                 <GlassCapsule>
@@ -88,7 +118,7 @@ export function TranscriptSheet({
                 </GlassCapsule>
               </Pressable>
             </MenuView>
-            <GlassIconButton onPress={onClose} accessibilityLabel="Close">
+            <GlassIconButton onPress={onClose} accessibilityLabel={copy('close', 'Close')}>
               <SystemIcon name="xmark" mdName="X" size={15} color="secondaryLabel" />
             </GlassIconButton>
           </View>

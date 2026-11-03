@@ -170,3 +170,45 @@ describe('formatAttendeeChipLabel', () => {
     expect(formatAttendeeChipLabel([person({ displayName: 'Room', resource: true })])).toBeNull();
   });
 });
+
+describe('Android metadata presentation', () => {
+  it('uses the selected language for clock/calendar labels without changing the instant', () => {
+    const now = new Date(2026, 9, 16, 12);
+    const earlier = new Date(2026, 9, 15, 9, 5);
+    const presentation = { language: 'ar', today: 'اليوم', yesterday: 'أمس' };
+    const before = earlier.getTime();
+    const time = earlier.toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' });
+    expect(formatNoteMetaDate(toSqlite(earlier), now, presentation)).toBe(`أمس ${time}`);
+    expect(formatNoteMetaDate(now, now, presentation)).toBe(
+      `اليوم ${now.toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' })}`,
+    );
+    expect(earlier.getTime()).toBe(before);
+    expect(formatNoteMetaDate(earlier, now)).toBe('Yesterday 09:05');
+  });
+
+  it('localizes older dates and omits an invalid Date value', () => {
+    const now = new Date(2026, 9, 16, 12);
+    const date = new Date(2025, 0, 3, 8, 7);
+    const presentation = { language: 'de', today: 'Heute', yesterday: 'Gestern' };
+    expect(formatNoteMetaDate(date, now, presentation)).toBe(
+      `${date.toLocaleDateString('de', { month: 'short', day: 'numeric', year: 'numeric' })}, ${date.toLocaleTimeString('de', { hour: '2-digit', minute: '2-digit' })}`,
+    );
+    expect(formatNoteMetaDate(new Date(NaN), now, presentation)).toBe('');
+  });
+});
+
+it('localizes anonymous attendee labels without changing supplied names or membership', () => {
+  const labels = { you: 'أنت', guest: 'ضيف' };
+  const attendees = [
+    person({ self: true, email: 'viewer@example.com' }),
+    person({ displayName: 'Sam Lee' }),
+    person({}),
+  ];
+  expect(attendeeName(attendees[0], labels)).toBe('أنت');
+  expect(attendeeName(attendees[1], labels)).toBe('Sam Lee');
+  expect(attendeeName(attendees[2], labels)).toBe('ضيف');
+  expect(formatAttendeeChipLabel(attendees, labels)).toBe('Sam +1');
+  expect(formatAttendeeChipLabel([attendees[0]], labels)).toBe('أنت');
+  expect(formatAttendeeChipLabel([attendees[2]], labels)).toBeNull();
+  expect(attendees[0].self).toBe(true);
+});

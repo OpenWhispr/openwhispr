@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import type { ReasoningRequest, ReasoningResponse, ReasoningRoutingOptions } from '../../types';
 import type { InferenceSelection } from '@/lib/mobileProviders';
 import { buildProviderPrompt, stripThinkingTags } from './buildProviderPrompt';
@@ -61,7 +62,7 @@ export interface ReasoningPlacement {
   localSelected: boolean;
   chosenProvider: boolean;
   privateContent: boolean;
-  /** The request must try Apple Intelligence on this iPhone first. */
+  /** The request must try the local model first. */
   localRequired: boolean;
 }
 
@@ -79,9 +80,12 @@ export function resolveReasoningPlacement(
   const localSelected = selection?.mode === 'local';
   const chosenProvider = usesProviders && routing?.sendToChosenProvider === true;
   let privateContent = !chosenProvider && routing?.isPrivateNote === true;
-  // Local Mode keeps cleanup and note chat on this iPhone unless the user chose otherwise; note
-  // formatting follows its own selection there.
-  if (scope !== 'notes' && ((usesProviders && !chosenProvider) || localSelected)) {
+  // Local Mode keeps requests on Android local unless the user chose otherwise. On iOS,
+  // note formatting follows its own selection; cleanup and note chat retain the local preference.
+  if (
+    (Platform.OS === 'android' || scope !== 'notes') &&
+    ((usesProviders && !chosenProvider) || localSelected)
+  ) {
     const { useProcessingModeStore } =
       require('@/store/useProcessingModeStore') as typeof import('@/store/useProcessingModeStore');
     privateContent ||= useProcessingModeStore.getState().activeMode === 'private';
@@ -217,13 +221,15 @@ export class ReasoningService {
             // The input fitting the context isn't enough for cleanup: its reply is as long as the
             // transcript, and Apple Intelligence cuts it off at LOCAL_OUTPUT_TOKEN_RESERVE without an
             // error.
-            (scope !== 'cleanup' || (await fitsLocalCleanupOutput(text)));
+            (Platform.OS !== 'ios' || scope !== 'cleanup' || (await fitsLocalCleanupOutput(text)));
 
           if (!fits) {
             if (!allowCloudFallback) {
               throw new LocalReasoningError(
                 'LOCAL_CONTEXT_LIMIT',
-                'This request is too large for local Apple Intelligence.',
+                Platform.OS === 'android'
+                  ? 'This request is too large for the selected local model.'
+                  : 'This request is too large for local Apple Intelligence.',
               );
             }
           } else {

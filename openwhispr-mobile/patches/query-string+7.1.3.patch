@@ -1,0 +1,20 @@
+diff --git a/node_modules/query-string/index.js b/node_modules/query-string/index.js
+--- a/node_modules/query-string/index.js
++++ b/node_modules/query-string/index.js
+@@ -1,6 +1,6 @@
+ 'use strict';
+ const strictUriEncode = require('strict-uri-encode');
+-const decodeComponent = require('decode-uri-component');
++const decodeComponent = require('decode-uri-component').default;
+ const splitOnFirst = require('split-on-first');
+ const filterObject = require('filter-obj');
+ 
+@@ -230,7 +230,7 @@
+ 
+ function decode(value, options) {
+ 	if (options.decode) {
+-		return decodeComponent(value);
++		return decodeComponent(value.replace(/\+/g, ' '));
+ 	}
+ 
+ 	return value;

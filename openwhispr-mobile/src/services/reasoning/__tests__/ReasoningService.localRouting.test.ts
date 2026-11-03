@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 jest.mock('@/lib/inferenceRouting', () => ({ getInferenceSelection: jest.fn(() => undefined) }));
 
 jest.mock('@/lib/apiClient', () => ({
@@ -233,4 +234,25 @@ describe('On-Device cleanup output cap', () => {
     expect(mockFitsCleanupOutput).not.toHaveBeenCalled();
     expect(mockLocalProcessText).toHaveBeenCalledTimes(1);
   });
+});
+
+it('keeps Android cleanup on its local model without applying the Apple output cap', async () => {
+  const original = Platform.OS;
+  Platform.OS = 'android';
+  mockFitsCleanupOutput.mockResolvedValue(false);
+  try {
+    await expect(
+      ReasoningService.processText({
+        text: 'Local Android transcript',
+        systemPrompt: 'Clean the transcript',
+        inferenceScope: 'cleanup',
+        inferenceRoute: { mode: 'local', scope: 'cleanup' },
+      }),
+    ).resolves.toMatchObject({ text: 'local result' });
+    expect(mockFitsCleanupOutput).not.toHaveBeenCalled();
+    expect(mockLocalProcessText).toHaveBeenCalledTimes(1);
+    expect(mockPost).not.toHaveBeenCalled();
+  } finally {
+    Platform.OS = original;
+  }
 });

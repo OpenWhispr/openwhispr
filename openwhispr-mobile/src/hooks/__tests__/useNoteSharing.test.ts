@@ -1,7 +1,25 @@
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import * as WebBrowser from 'expo-web-browser';
-import { AppState, Share, type AppStateStatus } from 'react-native';
+import { AppState, Platform, Share, type AppStateStatus } from 'react-native';
 import type { Note } from '@/data';
+
+let mockLanguage = 'en';
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    i18n: { resolvedLanguage: mockLanguage },
+    t: (key: string, options: Record<string, unknown> = {}) => {
+      const locale =
+        mockLanguage === 'ar'
+          ? require('@/locales/ar/translation.json').android
+          : require('@/locales/en/translation.json').android;
+      return (
+        key.split('.').reduce((node: any, part: string) => node?.[part], locale) ??
+        options.defaultValue ??
+        key
+      );
+    },
+  }),
+}));
 
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: require('zustand').create(() => ({
@@ -96,6 +114,7 @@ function storeToken(token: string): void {
     );
 }
 beforeEach((): void => {
+  mockLanguage = 'en';
   jest.clearAllMocks();
   jest.mocked(tokens.removeNoteShareToken).mockResolvedValue(undefined);
   jest.mocked(tokens.saveNoteShareToken).mockResolvedValue(undefined);
@@ -1180,4 +1199,96 @@ it('erases the stored link when the note’s cloud copy changes', async (): Prom
     useNotesStore.setState({ notes: [note] });
   });
   expect(tokens.removeNoteShareToken).toHaveBeenCalledWith('owner', 'remote');
+});
+
+describe('Android sharing feedback language', () => {
+  const originalPlatform = Platform.OS;
+  beforeEach(() => {
+    Platform.OS = 'android';
+  });
+  afterEach(() => {
+    Platform.OS = originalPlatform;
+  });
+
+  it('translates an owned load failure without restarting the pending request', async () => {
+    let rejectLoad!: (reason: unknown) => void;
+    let signal!: AbortSignal;
+    jest.mocked(sharing.getNoteShareState).mockImplementationOnce((_id, options) => {
+      signal = options!.signal!;
+      return new Promise((_resolve, reject) => {
+        rejectLoad = reject;
+      });
+    });
+    const { result, rerender } = setup();
+    await waitFor(() => expect(result.current.sharingMode).toBe('allowed'));
+    mockLanguage = 'ar';
+    rerender(undefined);
+    expect(signal.aborted).toBe(false);
+    expect(sharing.getNoteShareState).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      rejectLoad(new ApiError('policy', 403, 'POLICY_SHARING_BLOCKED'));
+    });
+    expect(result.current.error).toBe('تفرض مؤسستك قيودًا على المشاركة.');
+    mockLanguage = 'en';
+    rerender(undefined);
+    expect(result.current.error).toBe('Sharing is restricted by your organization.');
+    expect(sharing.getNoteShareState).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps provider validation text literal even when it matches an owned English message', async () => {
+    mockLanguage = 'ar';
+    jest
+      .mocked(sharing.getNoteShareState)
+      .mockRejectedValueOnce(new ApiError('Enter a valid email address.', 400));
+    const { result } = setup();
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.error).toBe('Enter a valid email address.');
+    expect(result.current).toHaveProperty('errorCode', null);
+  });
+
+  it('keeps invalid-address identity across language changes without submitting an invitation', async () => {
+    const { result, rerender } = setup();
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await act(async () => {
+      expect(await result.current.inviteEmail('bad-address')).toBe(false);
+    });
+    mockLanguage = 'ar';
+    rerender(undefined);
+    expect(result.current.error).toBe('أدخل عنوان بريد إلكتروني صالحًا.');
+    expect(result.current).toHaveProperty('errorCode', 'invalidEmail');
+    expect(sharing.createNoteAccessGrant).not.toHaveBeenCalled();
+    expect(ensureNoteSynced).not.toHaveBeenCalled();
+  });
+
+  it('preserves an in-flight resend and translates its eventual success', async () => {
+    let complete!: () => void;
+    jest.mocked(sharing.resendNoteInvitation).mockImplementationOnce(
+      () =>
+        new Promise<{ id: string; resent: boolean }>((resolve) => {
+          complete = () => resolve({ id: 'invite-1', resent: true });
+        }),
+    );
+    const { result, rerender } = setup();
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    let pending!: Promise<void>;
+    act(() => {
+      pending = result.current.resendInvitation({ id: 'invite-1' } as Parameters<
+        typeof result.current.resendInvitation
+      >[0]);
+    });
+    await waitFor(() => expect(sharing.resendNoteInvitation).toHaveBeenCalledTimes(1));
+    const args = jest.mocked(sharing.resendNoteInvitation).mock.calls[0];
+    expect(args.slice(0, 2)).toEqual(['remote', 'invite-1']);
+    mockLanguage = 'ar';
+    rerender(undefined);
+    expect(result.current.busy).toBe(true);
+    expect(args[2]!.signal!.aborted).toBe(false);
+    await act(async () => {
+      complete();
+      await pending;
+    });
+    expect(result.current.busy).toBe(false);
+    expect(result.current.message).toBe('تم إرسال الدعوة.');
+    expect(sharing.resendNoteInvitation).toHaveBeenCalledTimes(1);
+  });
 });

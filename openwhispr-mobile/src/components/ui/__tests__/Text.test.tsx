@@ -1,4 +1,4 @@
-import { StyleSheet } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import { render } from '@testing-library/react-native';
 
 // nativewind's native build does not load under Jest; className is unused here.
@@ -19,6 +19,18 @@ function fontFamilyOf(element: ReturnType<typeof render>['root']): string | unde
 }
 
 describe('Text', () => {
+  it('uses logical start alignment on Android and preserves explicit alignment', () => {
+    const original = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { value: 'android' });
+    try {
+      const view = render(<Text>Arabic label</Text>);
+      expect(StyleSheet.flatten(view.root.props.style).textAlign).toBe('left');
+      view.rerender(<Text style={{ textAlign: 'center' }}>Arabic label</Text>);
+      expect(StyleSheet.flatten(view.root.props.style).textAlign).toBe('center');
+    } finally {
+      Object.defineProperty(Platform, 'OS', { value: original });
+    }
+  });
   beforeEach(() => {
     mockFonts.displayFontFamily = 'Display';
   });

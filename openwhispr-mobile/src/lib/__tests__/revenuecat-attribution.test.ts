@@ -313,6 +313,28 @@ it('links once the ID becomes readable instead of clearing', async () => {
   expect(server['billing-a']).toBe('af-device');
 });
 
+it('records an explicitly selected purchase owner with that owner’s attribution', async () => {
+  await rc.recordRevenueCatPurchase('pro.monthly', 'billing-a', () => {});
+  expect(device.user).toBe('billing-a');
+  expect(server['billing-a']).toBe('af-device');
+  expect(sdk.recordPurchase).toHaveBeenCalledWith('pro.monthly');
+});
+
+it('does not post a purchase after its owner changes during attribution linking', async () => {
+  let current = true;
+  await rc.identifyRevenueCatUser('billing-a');
+  sdk.setAttributes.mockImplementation(async (attributes) => {
+    if (attributes.$appsflyerId) current = false;
+  });
+  const checkIdentity = () => {
+    if (!current) throw new Error('Purchase owner changed');
+  };
+  await expect(
+    rc.recordRevenueCatPurchase('pro.monthly', 'billing-a', checkIdentity),
+  ).resolves.toBe(false);
+  expect(sdk.recordPurchase).not.toHaveBeenCalled();
+});
+
 it('does not restore under an account that changed while linking', async () => {
   let current = true;
   await rc.identifyRevenueCatUser('billing-a');

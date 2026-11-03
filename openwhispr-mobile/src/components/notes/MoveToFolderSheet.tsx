@@ -1,4 +1,8 @@
-import { Modal, View, ScrollView, Alert } from 'react-native';
+import { useAndroidCopy } from '@/hooks/useAndroidCopy';
+import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/Button';
+import { Modal, View, ScrollView, Alert, Platform, TextInput } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GroupedList } from './GroupedList';
@@ -43,11 +47,28 @@ export function MoveToFolderSheet({
   activeSpaceId = null,
   onPickSpace,
 }: MoveToFolderSheetProps) {
+  const { t } = useTranslation('android');
+  const { copy } = useAndroidCopy();
+  const [creating, setCreating] = useState(false);
+  const [folderName, setFolderName] = useState('');
+  useEffect(() => {
+    if (!visible) {
+      setCreating(false);
+      setFolderName('');
+    }
+  }, [visible]);
   const insets = useSafeAreaInsets();
   const targets = folders.filter((f) => f.id !== excludeFolderId && !f.deletedAt);
-  const title = activeSpaceId == null ? 'Move to Folder' : 'Move Note';
+  const title =
+    activeSpaceId == null
+      ? copy('library.moveToFolder', 'Move to Folder')
+      : copy('library.moveNote', 'Move Note');
 
   const handleCreate = () => {
+    if (Platform.OS === 'android') {
+      setCreating(true);
+      return;
+    }
     Alert.prompt('New Folder', 'Enter a name for the new folder', (text) => {
       const trimmed = text?.trim();
       if (trimmed) {
@@ -72,14 +93,27 @@ export function MoveToFolderSheet({
       visible={visible}
       animationType="slide"
       presentationStyle="pageSheet"
-      onRequestClose={onClose}
+      onRequestClose={() => {
+        if (creating) setCreating(false);
+        else onClose();
+      }}
     >
       <View className="flex-1 bg-systemBackground">
-        <View className="flex-row items-center justify-between px-6 pb-4 pt-8">
-          <Text accessibilityRole="header" className="text-[22px] font-bold text-label">
+        <View
+          className="flex-row items-center justify-between px-6 pb-4 pt-8"
+          style={Platform.OS === 'android' ? { paddingTop: insets.top + 20 } : undefined}
+        >
+          <Text
+            accessibilityRole="header"
+            className={
+              Platform.OS === 'android'
+                ? 'min-w-0 flex-1 text-[22px] font-bold text-label'
+                : 'text-[22px] font-bold text-label'
+            }
+          >
             {title}
           </Text>
-          <GlassIconButton onPress={onClose} accessibilityLabel="Close">
+          <GlassIconButton onPress={onClose} accessibilityLabel={copy('close', 'Close')}>
             <SystemIcon name="xmark" mdName="X" size={15} color="secondaryLabel" />
           </GlassIconButton>
         </View>
@@ -92,49 +126,84 @@ export function MoveToFolderSheet({
           }}
           keyboardShouldPersistTaps="handled"
         >
-          <GroupedList>
-            <GroupedList.Row
-              onPress={handleCreate}
-              accessibilityRole="button"
-              accessibilityLabel="Create new folder"
-              leadingIconSlot={
-                <SystemIcon name="folder.badge.plus" mdName="FolderPlus" size={22} color="brand" />
-              }
-            >
-              <Text className="text-[17px] font-medium text-link">Create New Folder</Text>
-            </GroupedList.Row>
-          </GroupedList>
-
-          {targets.length > 0 && (
-            <GroupedList>
-              {targets.map((folder) => (
-                <FolderRow
-                  key={folder.id}
-                  sfName="folder"
-                  mdName="Folder"
-                  label={folder.name}
-                  count={folderCounts[folder.id] ?? 0}
-                  onPress={() => handlePick(folder.id)}
-                />
-              ))}
-            </GroupedList>
-          )}
-
-          {spaces.length > 0 && (
-            <View className="gap-2">
-              <Text className="px-1 text-[13px] uppercase tracking-wider text-secondaryLabel">
-                Spaces
-              </Text>
-              <GroupedList>
-                {spaces.map((space) => (
-                  <SpaceRow
-                    key={space.id}
-                    space={space}
-                    onPress={() => handlePickSpace(space.id)}
-                  />
-                ))}
-              </GroupedList>
+          {creating ? (
+            <View className="gap-4">
+              <TextInput
+                autoFocus
+                value={folderName}
+                onChangeText={setFolderName}
+                accessibilityLabel={t('folderName')}
+                placeholder={t('folderName')}
+                className="min-h-12 rounded-xl bg-tertiarySystemFill px-4 text-base text-label"
+              />
+              <Button
+                disabled={!folderName.trim()}
+                onPress={() => {
+                  if (!folderName.trim()) return;
+                  onCreateAndPick(folderName.trim());
+                  setCreating(false);
+                }}
+              >
+                {t('createFolder')}
+              </Button>
+              <Button variant="secondary" onPress={() => setCreating(false)}>
+                {t('cancel')}
+              </Button>
             </View>
+          ) : (
+            <>
+              <GroupedList>
+                <GroupedList.Row
+                  onPress={handleCreate}
+                  accessibilityRole="button"
+                  accessibilityLabel={copy('createFolder', 'Create new folder')}
+                  leadingIconSlot={
+                    <SystemIcon
+                      name="folder.badge.plus"
+                      mdName="FolderPlus"
+                      size={22}
+                      color="brand"
+                    />
+                  }
+                >
+                  <Text className="text-[17px] font-medium text-link">
+                    {copy('createFolder', 'Create New Folder')}
+                  </Text>
+                </GroupedList.Row>
+              </GroupedList>
+
+              {targets.length > 0 && (
+                <GroupedList>
+                  {targets.map((folder) => (
+                    <FolderRow
+                      key={folder.id}
+                      sfName="folder"
+                      mdName="Folder"
+                      label={folder.name}
+                      count={folderCounts[folder.id] ?? 0}
+                      onPress={() => handlePick(folder.id)}
+                    />
+                  ))}
+                </GroupedList>
+              )}
+
+              {spaces.length > 0 && (
+                <View className="gap-2">
+                  <Text className="px-1 text-[13px] uppercase tracking-wider text-secondaryLabel">
+                    {copy('library.spaces', 'Spaces')}
+                  </Text>
+                  <GroupedList>
+                    {spaces.map((space) => (
+                      <SpaceRow
+                        key={space.id}
+                        space={space}
+                        onPress={() => handlePickSpace(space.id)}
+                      />
+                    ))}
+                  </GroupedList>
+                </View>
+              )}
+            </>
           )}
         </ScrollView>
       </View>

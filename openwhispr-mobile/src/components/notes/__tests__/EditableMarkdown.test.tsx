@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 import { EditableMarkdown } from '../EditableMarkdown';
 
@@ -158,4 +159,54 @@ describe('EditableMarkdown', () => {
     unmount();
     expect(onEditingChange).toHaveBeenLastCalledWith(false);
   });
+});
+
+let mockLanguage = 'en';
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    i18n: { resolvedLanguage: mockLanguage },
+    t: (key: string, options?: { defaultValue?: string }) => {
+      const locale =
+        mockLanguage === 'de'
+          ? require('@/locales/de/translation.json').android
+          : require('@/locales/en/translation.json').android;
+      return (
+        key.split('.').reduce((value: any, part) => value?.[part], locale) ??
+        options?.defaultValue ??
+        key
+      );
+    },
+  }),
+}));
+
+it('translates editing controls without replacing an open draft or triggering a save', () => {
+  const original = Platform.OS;
+  Platform.OS = 'android';
+  const onChange = jest.fn();
+  const onEditingChange = jest.fn();
+  const props = { content: '## Saved original', onChange, onEditingChange };
+  try {
+    const view = render(<EditableMarkdown {...props} />);
+    fireEvent.press(view.getByText('Edit'));
+    fireEvent.changeText(view.getByTestId('enhanced-editor'), '## Exact unsaved draft');
+    onChange.mockClear();
+    onEditingChange.mockClear();
+    mockLanguage = 'de';
+    view.rerender(<EditableMarkdown {...props} />);
+    expect(view.getByLabelText('Überarbeitet').props.value).toBe('## Exact unsaved draft');
+    expect(view.getByText('Fertig')).toBeTruthy();
+    expect(onChange).not.toHaveBeenCalled();
+    expect(onEditingChange).not.toHaveBeenCalled();
+    fireEvent.press(view.getByText('Fertig'));
+    expect(view.getByTestId('rendered-markdown').props.children).toBe('## Exact unsaved draft');
+    expect(view.getByText('Bearbeiten')).toBeTruthy();
+    expect(onEditingChange).toHaveBeenCalledTimes(1);
+    expect(onEditingChange).toHaveBeenCalledWith(false);
+    Platform.OS = 'ios';
+    view.rerender(<EditableMarkdown {...props} />);
+    expect(view.getByText('Edit')).toBeTruthy();
+  } finally {
+    Platform.OS = original;
+    mockLanguage = 'en';
+  }
 });

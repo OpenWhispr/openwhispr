@@ -239,9 +239,8 @@ function reportRevenueCatError(operation: string, error: unknown): void {
   Sentry.captureException(error, { tags: { feature: 'revenuecat', operation } });
 }
 
-// Observer mode: Superwall/StoreKit completes purchases; RevenueCat only observes
-// transactions for analytics and never gates access. Without a key it is a no-op,
-// so builds without RevenueCat configured are unaffected.
+// iOS observes Superwall/StoreKit purchases; Android uses RevenueCat as its sole
+// purchase controller. Backend entitlements remain the authority for app access.
 export function configureRevenueCat(): void {
   if (configured) return;
   const apiKey = getRevenueCatApiKey();
@@ -250,10 +249,14 @@ export function configureRevenueCat(): void {
   try {
     Purchases.configure({
       apiKey,
-      purchasesAreCompletedBy: {
-        type: PURCHASES_ARE_COMPLETED_BY_TYPE.MY_APP,
-        storeKitVersion: STOREKIT_VERSION.STOREKIT_2,
-      },
+      ...(Platform.OS === 'ios'
+        ? {
+            purchasesAreCompletedBy: {
+              type: PURCHASES_ARE_COMPLETED_BY_TYPE.MY_APP,
+              storeKitVersion: STOREKIT_VERSION.STOREKIT_2,
+            },
+          }
+        : {}),
     });
     if (__DEV__) Purchases.setLogLevel(LOG_LEVEL.INFO);
     configured = true;
@@ -269,6 +272,30 @@ export function configureRevenueCat(): void {
   } catch (error) {
     reportRevenueCatError('configure', error);
   }
+}
+
+// Store UI can stay open longer than an identity call deadline, but it must
+// hold the same queue as timed login/logout and receipt synchronization.
+function enqueueBilling<T>(operation: () => Promise<T>): Promise<T> {
+  const next = identityQueue.then(operation, operation);
+  identityQueue = next.catch(() => undefined);
+  return next;
+}
+
+// Identity stays fixed for the entire store interaction, including permission/payment UI.
+export function withRevenueCatUser<T>(
+  userId: string,
+  operation: () => Promise<T>,
+  checkIdentity?: () => void,
+): Promise<T> {
+  return enqueueBilling(async () => {
+    checkIdentity?.();
+    configureRevenueCat();
+    if (!configured) throw new Error('Store billing is not configured in this build.');
+    await Purchases.logIn(userId);
+    checkIdentity?.();
+    return operation();
+  });
 }
 
 export async function identifyRevenueCatUser(userId: string): Promise<boolean> {
@@ -325,14 +352,25 @@ export async function reconcileRevenueCatPurchases(
 // observe a brand-new transaction on its own — it must be recorded explicitly,
 // or backend reconciliation asks RevenueCat about a purchase it can't see yet.
 // New purchases only; renewals and restores are covered by syncPurchases.
-export async function recordRevenueCatPurchase(productId: string): Promise<boolean> {
+export async function recordRevenueCatPurchase(
+  productId: string,
+  userId?: string,
+  checkIdentity?: () => void,
+): Promise<boolean> {
   if (Platform.OS !== 'ios') return false;
   if (!configured) configureRevenueCat();
   if (!configured) return false;
   try {
+    checkIdentity?.();
+    if (userId) requestedUserId = userId;
     await withIdentity(async () => {
+      checkIdentity?.();
+      if (userId) await logInWithAttribution(userId);
+      checkIdentity?.();
       await syncRevenueAttribution({ beforePost: true });
+      checkIdentity?.();
       await Purchases.recordPurchase(productId);
+      checkIdentity?.();
     });
     return true;
   } catch (error) {

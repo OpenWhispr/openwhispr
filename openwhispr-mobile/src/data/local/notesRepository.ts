@@ -1,4 +1,5 @@
 import { isManagedMeetingAudioUri } from '@/lib/transcriptAudio';
+import { meetingTranscriptionIdKey } from '@/lib/notes/meetingTranscriptionId';
 import {
   eq,
   ne,
@@ -472,7 +473,22 @@ export class LocalNotesRepository implements NotesRepository {
   createNote(title: string, content: string, folderId?: number, spaceId?: number): Note {
     // Created straight into a space (browsing it with no folder open): the note
     // sits in the space itself rather than in any folder.
-    const targetFolderId = spaceId != null ? null : (folderId ?? 1);
+    const targetSpace =
+      spaceId == null
+        ? null
+        : this.database
+            .select()
+            .from(spaces)
+            .where(and(eq(spaces.id, spaceId), isNull(spaces.deletedAt)))
+            .get();
+    const privateFolders = targetSpace ? [] : this.getPrivateFolders();
+    const targetFolder = targetSpace
+      ? null
+      : (this.getFolders().find((folder) => folder.id === folderId) ??
+        privateFolders.find((folder) => folder.isDefault) ??
+        privateFolders[0] ??
+        null);
+    const targetFolderId = targetFolder?.id ?? null;
     return this.database
       .insert(notes)
       .values({
@@ -481,10 +497,7 @@ export class LocalNotesRepository implements NotesRepository {
         folderId: targetFolderId,
         // A note always belongs to whatever space holds its folder — filing a
         // team folder's note into the private space would strand it.
-        spaceId:
-          targetFolderId != null
-            ? (this.getFolderSpaceId(targetFolderId) ?? this.getPrivateSpaceId())
-            : (spaceId ?? this.getPrivateSpaceId()),
+        spaceId: targetFolder?.spaceId ?? targetSpace?.id ?? this.getPrivateSpaceId(),
         pendingSync: 1,
         updatedAt: sql`datetime('now')`,
       })
@@ -633,16 +646,6 @@ export class LocalNotesRepository implements NotesRepository {
       .run();
   }
 
-  private getFolderSpaceId(folderId: number): number | null {
-    return (
-      this.database
-        .select({ spaceId: folders.spaceId })
-        .from(folders)
-        .where(eq(folders.id, folderId))
-        .get()?.spaceId ?? null
-    );
-  }
-
   updateNote(id: number, updates: NoteUpdate): void {
     this.database
       .update(notes)
@@ -655,6 +658,7 @@ export class LocalNotesRepository implements NotesRepository {
   // meeting WAV must be removed explicitly on EVERY delete path (soft delete, hard delete,
   // remote-delete apply, and full wipe) — otherwise they orphan in the DB and on disk.
   private deleteNoteChildrenAndAudio(id: number): void {
+    this.clearSyncState(meetingTranscriptionIdKey(id));
     const row = this.database
       .select({ sourceFile: notes.sourceFile })
       .from(notes)

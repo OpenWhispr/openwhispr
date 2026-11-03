@@ -12,11 +12,11 @@ export function confirmDestructive(
   // iOS draws an empty message as a blank line, so a title-only alert leaves it undefined.
   message: string | undefined,
   onConfirm: ConfirmCallback,
-  options?: { destructiveLabel?: string; onCancel?: () => void },
+  options?: { destructiveLabel?: string; cancelLabel?: string; onCancel?: () => void },
 ): void {
   const onCancel = options?.onCancel;
   const buttons: AlertButton[] = [
-    { text: 'Cancel', style: 'cancel', onPress: onCancel },
+    { text: options?.cancelLabel ?? 'Cancel', style: 'cancel', onPress: onCancel },
     {
       text: options?.destructiveLabel ?? 'Delete',
       style: 'destructive',
@@ -51,11 +51,15 @@ export function confirmAccountDeletion(deleteAccount: () => Promise<void>): void
   );
 }
 
-export function confirmCloudOnce(message: string, onConfirm: ConfirmCallback): void {
-  Alert.alert('Use cloud AI?', message, [
-    { text: 'Cancel', style: 'cancel' },
+export function confirmCloudOnce(
+  message: string,
+  onConfirm: ConfirmCallback,
+  labels?: { title: string; cancel: string; confirm: string },
+): void {
+  Alert.alert(labels?.title ?? 'Use cloud AI?', message, [
+    { text: labels?.cancel ?? 'Cancel', style: 'cancel' },
     {
-      text: 'Use Cloud Once',
+      text: labels?.confirm ?? 'Use Cloud Once',
       onPress: () => {
         runConfirm(onConfirm);
       },

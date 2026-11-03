@@ -33,8 +33,8 @@ jest.mock('@/lib/cleanupTranscript', () => ({ CLEANUP_TIMEOUT_MS: 30000 }));
 jest.mock('../../../../modules/background-uploader/src', () => ({
   BackgroundUploader: { isAvailable: () => true, upload: jest.fn() },
 }));
-jest.mock('../../../../modules/audio-tools/src', () => ({
-  AudioTools: { isAvailable: () => true, splitToChunks: jest.fn(), cleanup: jest.fn() },
+jest.mock('../cloudAudio', () => ({
+  CloudAudioTools: { isAvailable: () => true, splitToChunks: jest.fn(), cleanup: jest.fn() },
 }));
 jest.mock('../../../../modules/app-group-storage/src', () => ({
   AppGroupStorage: { setItem: jest.fn() },

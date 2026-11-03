@@ -65,7 +65,8 @@ import {
   type SharedDictionaryState,
 } from '../sharedDictionaryState';
 import { ApiError } from '@/lib/apiClient';
-import { SyncStalledError } from '../syncContext';
+import { SyncCancelledError, SyncStalledError } from '../syncContext';
+import * as sharedDictionaryState from '../sharedDictionaryState';
 import type {
   RemoteSharedEntry,
   RemoteSharedHide,
@@ -809,5 +810,86 @@ describe('resetAllPullCursors', () => {
     expect(mockSyncState.has(SHARED_DICTIONARY_CURSOR_ID_KEY)).toBe(false);
     expect(mockSyncState.has(SHARED_DICTIONARY_HIDES_CURSOR_KEY)).toBe(false);
     expect(mockSyncState.has(SHARED_DICTIONARY_HIDES_CURSOR_ID_KEY)).toBe(false);
+  });
+});
+
+describe('pullSharedDictionary account changes during persistence', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it.each(['final save', 'initial reset', 'revoked membership', 'no workspace', 'access lost'])(
+    'preserves the next account state and cursors after %s',
+    async (phase) => {
+      // Both accounts own a full state and all four cursors; resetting or advancing
+      // even one of B's keys from A's continuation must fail this assertion.
+      const nextAccount = new Map<string, string>([
+        [SHARED_DICTIONARY_STATE_KEY, JSON.stringify({ ...STORED, workspaceId: 'ws-b' })],
+        [SHARED_DICTIONARY_CURSOR_KEY, T2],
+        [SHARED_DICTIONARY_CURSOR_ID_KEY, 'b-entry'],
+        [SHARED_DICTIONARY_HIDES_CURSOR_KEY, T2],
+        [SHARED_DICTIONARY_HIDES_CURSOR_ID_KEY, 'b-hide'],
+      ]);
+      let active = true;
+      const switchAccount = (): void => {
+        active = false;
+        mockSyncState.clear();
+        for (const [key, value] of nextAccount) mockSyncState.set(key, value);
+      };
+      const checkpoint = (): void => {
+        if (!active) throw new SyncCancelledError();
+      };
+
+      if (phase !== 'initial reset') await seedStored();
+      if (phase === 'revoked membership') {
+        mockFetchMyWorkspaces.mockResolvedValue({ data: [{ id: 'ws-2', name: 'Other' }] });
+      } else if (phase === 'no workspace') {
+        // Keep membership but leave workspace resolution ambiguous, so this reaches
+        // the no-target clear rather than the revoked-membership clear above it.
+        mockFetchMyWorkspaces.mockResolvedValue({
+          data: [
+            { id: 'ws-1', name: 'Acme' },
+            { id: 'ws-2', name: 'Other' },
+          ],
+        });
+        mockUsageState.usage = { entitlementSources: { workspaceIds: ['ws-1', 'ws-2'] } };
+      } else if (phase === 'access lost') {
+        mockFetchSharedDictionary.mockRejectedValueOnce(apiError(403, 'SSO_REQUIRED'));
+      } else if (phase === 'final save') {
+        mockFetchSharedDictionary.mockResolvedValueOnce(listPage([entry('e3', 'Widget')]));
+      }
+      const save = sharedDictionaryState.saveSharedDictionaryState;
+      jest
+        .spyOn(sharedDictionaryState, 'saveSharedDictionaryState')
+        .mockImplementationOnce((state) => {
+          const saved = save(state);
+          // SQLite writes synchronously, but its async wrapper yields before the
+          // caller's cursor writes. Switch databases in exactly that microtask gap.
+          queueMicrotask(switchAccount);
+          return saved;
+        });
+
+      await expect(pullSharedDictionary(checkpoint)).rejects.toBeInstanceOf(SyncCancelledError);
+
+      expect(mockSyncState).toEqual(nextAccount);
+    },
+  );
+
+  it('does not disable shared pulls after a stale account receives an unavailable-endpoint error', async () => {
+    const isolated = loadIsolatedPull();
+    let active = true;
+    mockFetchSharedDictionary.mockImplementationOnce(async () => {
+      active = false;
+      throw apiError(404, undefined, isolated.ApiError);
+    });
+    const checkpoint = (): void => {
+      if (!active) throw new SyncCancelledError();
+    };
+
+    await expect(isolated.pull(checkpoint)).rejects.toBeInstanceOf(SyncCancelledError);
+
+    active = true;
+    await expect(isolated.pull(checkpoint)).resolves.toEqual({ changed: true });
+    expect(mockFetchSharedDictionary).toHaveBeenCalledTimes(2);
   });
 });

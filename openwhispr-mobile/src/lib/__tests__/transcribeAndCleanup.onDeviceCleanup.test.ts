@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 /**
  * A transcript made on this phone is cleaned by Apple Intelligence in Local Mode, or wherever
  * the user chose On-Device cleanup, or by the provider they saved for cleanup with their own
@@ -401,4 +402,32 @@ it('sends a custom cleanup prompt to On-Device cleanup', async () => {
   const req = mockReason.mock.calls[0][0] as Record<string, unknown>;
   expect(req.customPrompt).toBe('Always use bullet points.');
   expect(req.inferenceRoute).toEqual({ mode: 'local', scope: 'cleanup' });
+});
+
+describe('Android local transcript cleanup boundary', () => {
+  const originalOS = Platform.OS;
+  beforeEach(() => {
+    Platform.OS = 'android';
+  });
+  afterEach(() => {
+    Platform.OS = originalOS;
+  });
+  it('refuses a pinned Cloud cleanup route on a local transcript', async () => {
+    const result = await transcribeAndCleanup({
+      audioUri: 'file://a.wav',
+      provider: 'local',
+      requestContext: 'recording',
+      cleanupRoute: { mode: 'openwhispr', scope: 'cleanup' },
+    });
+    expect(result.cleanupApplied).toBe(false);
+    expect(result.text).toBe('um hello there');
+    expect(mockReason).not.toHaveBeenCalled();
+  });
+  it('keeps cleanup skipped when no local or provider selection has been saved', async () => {
+    mockConfig = { defaultMode: 'private', cleanupEnabled: true };
+    const result = await transcribeOnDevice();
+    expect(result.cleanupApplied).toBe(false);
+    expect(mockReason).not.toHaveBeenCalled();
+    expect(mockReadiness).not.toHaveBeenCalled();
+  });
 });

@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo } from 'react';
 import { Platform } from 'react-native';
-import { SuperwallProvider } from 'expo-superwall';
+import { CustomPurchaseControllerProvider, SuperwallProvider } from 'expo-superwall';
 import { Sentry } from '@/lib/sentry';
 import { SuperwallEntitlementBridge } from './SuperwallEntitlementBridge';
 import {
@@ -52,7 +52,7 @@ export function OpenWhisprSuperwallProvider({ children }: Props) {
     return <DisabledSuperwallGateProvider>{children}</DisabledSuperwallGateProvider>;
   }
 
-  return (
+  const content = (
     <SuperwallProvider
       apiKeys={apiKeys}
       options={{
@@ -72,5 +72,13 @@ export function OpenWhisprSuperwallProvider({ children }: Props) {
       <SuperwallEntitlementBridge />
       <EnabledSuperwallGateProvider>{children}</EnabledSuperwallGateProvider>
     </SuperwallProvider>
+  );
+  if (Platform.OS !== 'android') return content;
+  const { androidPurchaseController } =
+    require('@/android/billing') as typeof import('@/android/billing');
+  return (
+    <CustomPurchaseControllerProvider controller={androidPurchaseController}>
+      {content}
+    </CustomPurchaseControllerProvider>
   );
 }

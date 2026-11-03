@@ -36,7 +36,9 @@ const REVENUE_ID_LOOKUP_TIMEOUT_MS = 2_000;
 
 let didSetUp = false;
 let didInit = false;
-let stopped = false;
+// Null means the native state change failed and must be retried when policy is reapplied.
+let stopped: boolean | null = false;
+let sdkStopPending: Promise<boolean> | null = null;
 let sessionReady = false;
 let didStartCurrentSession = false;
 let sdkReady: Promise<boolean> | null = null;
@@ -140,7 +142,7 @@ function getAppsFlyer(): AppsFlyerSdk {
 // AppsFlyer records install/app-open attribution and a small set of product
 // milestones — never transcription content. Like Sentry, every interaction is
 // gated behind the user's Usage Analytics preference: disabling the toggle
-// stops the SDK immediately, re-enabling resumes it. A null result means the
+// requests native stop and immediately blocks app events. A null result means the
 // persisted preference has not hydrated yet, so no SDK interaction is allowed.
 function analyticsPreference(): boolean | null {
   const config = useConfigStore.getState().config;
@@ -170,7 +172,14 @@ function collectionAllowed(): boolean {
 }
 
 function startSessionIfAllowed(): void {
-  if (!sessionReady || didStartCurrentSession || !collectionAllowed()) return;
+  if (
+    !sessionReady ||
+    didStartCurrentSession ||
+    stopped !== false ||
+    sdkStopPending ||
+    !collectionAllowed()
+  )
+    return;
 
   didStartCurrentSession = true;
   const startOperation = invokeSdk(() => getAppsFlyer().start())
@@ -250,21 +259,25 @@ function setSdkStopped(shouldStop: boolean): void {
 
   stopped = shouldStop;
   const preferenceChange = updateSdkStoppedState(shouldStop);
-  if (shouldStop) {
-    sdkReady = null;
-    return;
-  }
+  sdkStopPending = preferenceChange;
 
   const readiness = preferenceChange.then((updated): boolean => {
-    if (!updated || stopped) return false;
+    // An older completion cannot confirm or invalidate a newer consent decision.
+    if (sdkStopPending !== preferenceChange) return false;
+    sdkStopPending = null;
+    if (!updated) {
+      stopped = null;
+      return false;
+    }
+
+    if (shouldStop || !collectionAllowed()) return false;
     startSessionIfAllowed();
     flushPendingEvents();
     return true;
   });
-  sdkReady = readiness;
+  sdkReady = shouldStop ? null : readiness;
   readiness.then((ready): void => {
-    // A resume that starts no session of its own (after the ATT re-check, or one
-    // that superseded a pending start) still makes the identifier readable.
+    // A resume can make the identifier readable without starting a new session.
     if (ready && sdkReady === readiness) publishAttributionState(true);
   });
 }
@@ -313,6 +326,7 @@ export function setAppsFlyerTrackingAuthorizationStatus(status: TrackingAuthoriz
 
 export async function refreshAppsFlyerTrackingAuthorization(): Promise<void> {
   if (trackingAuthorizationStatus === 'notSupported') {
+    if (didSetUp && DEV_KEY) applyAttributionPolicy(DEV_KEY);
     startSessionIfAllowed();
     return;
   }

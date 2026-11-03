@@ -1,4 +1,5 @@
-import { View } from 'react-native';
+import { useAndroidCopy } from '@/hooks/useAndroidCopy';
+import { Platform, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { CloudOff } from 'lucide-react-native';
 import { GroupedList } from './GroupedList';
@@ -14,7 +15,7 @@ type NoteRowProps = {
   bucket: DateBucketKey;
   onPress: () => void;
   onLongPress?: () => void;
-  onDelete: (restore: RestoreRow) => void;
+  onDelete: (restore?: RestoreRow) => void;
   onMove?: () => void;
   /** Match the parent GroupedList's tinted background. */
   tinted?: boolean;
@@ -29,9 +30,17 @@ export function NoteRow({
   onMove,
   tinted = false,
 }: NoteRowProps) {
-  const title = note.title || 'Untitled';
-  const preview = (note.content || 'No additional text').replace(/\s+/g, ' ').trim();
-  const timeLabel = formatNoteRowTime(note.updatedAt, bucket);
+  const { copy, language } = useAndroidCopy();
+  const title = note.title || copy('library.untitled', 'Untitled');
+  const preview = (note.content || copy('library.noAdditionalText', 'No additional text'))
+    .replace(/\s+/g, ' ')
+    .trim();
+  const timeLabel = formatNoteRowTime(
+    note.updatedAt,
+    bucket,
+    Platform.OS === 'android' ? language : undefined,
+    copy('library.yesterday', 'Yesterday'),
+  );
 
   return (
     <SwipeableCard
@@ -45,6 +54,22 @@ export function NoteRow({
         onLongPress={onLongPress}
         accessibilityRole="button"
         accessibilityLabel={`${title}, ${timeLabel}, ${preview}`}
+        accessibilityActions={
+          Platform.OS === 'android'
+            ? [
+                ...(onMove ? [{ name: 'move', label: copy('moveAction', 'Move') }] : []),
+                { name: 'delete', label: copy('deleteAction', 'Delete') },
+              ]
+            : undefined
+        }
+        onAccessibilityAction={
+          Platform.OS === 'android'
+            ? ({ nativeEvent }) => {
+                if (nativeEvent.actionName === 'move') onMove?.();
+                else if (nativeEvent.actionName === 'delete') onDelete();
+              }
+            : undefined
+        }
         contentInsetLeft={16}
       >
         <View className="gap-0.5">

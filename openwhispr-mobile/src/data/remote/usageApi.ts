@@ -16,6 +16,7 @@ export interface UsageInfo {
   entitlementSources?: {
     personal: boolean;
     provider: boolean;
+    providerStore?: 'app_store' | 'play_store' | null;
     workspaceIds: string[];
   };
 }

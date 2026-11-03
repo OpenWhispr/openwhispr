@@ -80,7 +80,10 @@ describe('isAccountRequiredError', () => {
 
 // accountAccess pulls in Alert, the router and the auth store; stub those
 // surfaces so the predicates and the alert's wiring can be exercised directly.
-jest.mock('react-native', () => ({ Alert: { alert: jest.fn() } }));
+jest.mock('react-native', () => ({
+  Alert: { alert: jest.fn() },
+  Platform: { OS: 'ios' },
+}));
 jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
 type MockAuthState = { user: { id: string; isAnonymous: boolean } | null };
 let mockAuthStoreState: MockAuthState = { user: null };

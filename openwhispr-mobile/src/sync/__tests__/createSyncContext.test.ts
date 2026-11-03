@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 jest.mock('@/store/useAuthStore', () => {
   const { create } = jest.requireActual<typeof import('zustand')>('zustand');
   return {
@@ -93,4 +94,19 @@ it('allows team uploads and private-copy deletion when personal backup was alrea
   expect(() => context.checkpoint(true)).not.toThrow();
   expect(() => context.checkpoint()).not.toThrow();
   context.dispose();
+});
+
+it('cancels an Android personal upload if its preference becomes unset, even after re-enabling', () => {
+  const originalPlatform = Platform.OS;
+  Platform.OS = 'android';
+  const context = createSyncContext();
+  try {
+    useConfigStore.setState({ config: { defaultMode: 'cloud' } });
+    useConfigStore.setState({ config: { defaultMode: 'cloud', cloudBackupEnabled: true } });
+    expect(() => context.checkpoint(true)).toThrow(SyncCancelledError);
+    expect(() => context.checkpoint()).not.toThrow();
+  } finally {
+    context.dispose();
+    Platform.OS = originalPlatform;
+  }
 });

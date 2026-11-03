@@ -1,0 +1,12 @@
+<resources>
+  <string name="ow_insertion_label">OpenWhispr · 插入文字</string>
+  <string name="ow_insertion_description">無障礙功能允許 OpenWhispr 在聽寫時讀取目前欄位並插入結果。它不會傳送訊息或讀取密碼欄位。</string>
+  <string name="ow_bubble_ready">OpenWhispr 已就緒</string>
+  <string name="ow_bubble_recording">OpenWhispr · 正在聆聽…</string>
+  <string name="ow_bubble_notice">點按開啟。在「帳戶」中關閉浮動按鈕。</string>
+  <string name="ow_bubble_channel">顯示浮動按鈕</string>
+  <string name="ow_audio_unreadable">無法讀取此音訊檔案。請嘗試有效的 WAV、MP3 或 M4A 檔案。</string>
+  <string name="ow_meeting_notice">正在錄製會議音訊。</string>
+  <string name="ow_meeting_stop">停止</string>
+  <string name="ow_meeting_stopped">錄音已停止。音訊已儲存。</string>
+</resources>

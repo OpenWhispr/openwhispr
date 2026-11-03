@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 const mockAuthState: { user: { id: string } | null } = { user: null };
 const mockProcessingState: { activeMode: 'cloud' | 'private' } = { activeMode: 'cloud' };
 const mockConfigState: { config: { appleLocalIntelligenceEnabled?: boolean } | null } = {
@@ -24,6 +25,8 @@ jest.mock('@/store/useConfigStore', () => ({
 }));
 
 import {
+  countLocalReasoningTokens,
+  isLocalReasoningRequired,
   canRunLocalReasoning,
   clearLocalReasoningReadinessCache,
   countLocalInputTokens,
@@ -54,6 +57,17 @@ beforeEach(() => {
 });
 
 describe('local reasoning readiness policy', () => {
+  it('keeps Android Local Mode notes local even when a note is shared', () => {
+    const original = Platform.OS;
+    Platform.OS = 'android';
+    mockProcessingState.activeMode = 'private';
+    try {
+      expect(isLocalReasoningRequired({ isPrivateNote: false })).toBe(true);
+    } finally {
+      Platform.OS = original;
+    }
+  });
+
   it('does not use local reasoning for signed-in public cloud-mode content', async () => {
     await expect(shouldUseLocalReasoning({ isPrivateNote: false })).resolves.toBe(false);
     expect(mockAppleAvailability).not.toHaveBeenCalled();
@@ -159,6 +173,17 @@ it.each([
   ['unsupportedOS', 'On-Device AI needs iOS 26 or later on an iPhone with Apple Intelligence.'],
 ] as const)('says what an unsupported iPhone needs (%s)', (status, message) => {
   expect(getLocalReasoningUnavailableMessage({ status, tokenCounting: false })).toBe(message);
+});
+
+it('never asks the Apple engine to count Android input tokens', async () => {
+  const original = Platform.OS;
+  Platform.OS = 'android';
+  try {
+    await expect(countLocalReasoningTokens({ prompt: 'Private Android note' })).resolves.toBeNull();
+    expect(AppleLLM.countTokens).not.toHaveBeenCalled();
+  } finally {
+    Platform.OS = original;
+  }
 });
 
 // iOS reports Apple Intelligence as off when the language keeps it off, so the language explains it.

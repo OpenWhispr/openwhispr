@@ -27,19 +27,25 @@ export function noteTakenAt(
  * "Today 09:27", "Yesterday 14:05", "Sep 21, 09:27", or "Sep 21, 2025, 09:27", with the time
  * shown as the notes list shows it.
  */
-export function formatNoteMetaDate(timestamp: string | Date | null | undefined, now: Date): string {
+export function formatNoteMetaDate(
+  timestamp: string | Date | null | undefined,
+  now: Date,
+  presentation?: { language: string; today: string; yesterday: string },
+): string {
   const date = tryParseNoteTimestamp(timestamp);
-  if (!date) return '';
+  if (!date || !Number.isFinite(date.getTime())) return '';
 
-  const time = formatClockTime(date);
-  if (isSameDay(date, now)) return `Today ${time}`;
+  const time = presentation
+    ? date.toLocaleTimeString(presentation.language, { hour: '2-digit', minute: '2-digit' })
+    : formatClockTime(date);
+  if (isSameDay(date, now)) return `${presentation?.today ?? 'Today'} ${time}`;
 
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
-  if (isSameDay(date, yesterday)) return `Yesterday ${time}`;
+  if (isSameDay(date, yesterday)) return `${presentation?.yesterday ?? 'Yesterday'} ${time}`;
 
   const day = date.toLocaleDateString(
-    undefined,
+    presentation?.language,
     date.getFullYear() === now.getFullYear()
       ? { month: 'short', day: 'numeric' }
       : { month: 'short', day: 'numeric', year: 'numeric' },
@@ -75,23 +81,31 @@ export function markViewer(
   }));
 }
 
-export function attendeeName(participant: CalendarParticipant): string {
-  if (participant.self) return 'You';
-  return participant.displayName?.trim() || participant.email || 'Guest';
+const defaultAttendeeLabels = { you: 'You', guest: 'Guest' };
+
+export function attendeeName(
+  participant: CalendarParticipant,
+  labels = defaultAttendeeLabels,
+): string {
+  if (participant.self) return labels.you;
+  return participant.displayName?.trim() || participant.email || labels.guest;
 }
 
-const attendeeFirstName = (participant: CalendarParticipant): string =>
-  participant.displayName?.trim().split(/\s+/)[0] || participant.email?.split('@')[0] || 'Guest';
+const attendeeFirstName = (participant: CalendarParticipant, guest: string): string =>
+  participant.displayName?.trim().split(/\s+/)[0] || participant.email?.split('@')[0] || guest;
 
 /** "Sam +3": the first attendee who isn't you, plus everyone else. Null when nobody attends. */
-export function formatAttendeeChipLabel(participants: CalendarParticipant[]): string | null {
+export function formatAttendeeChipLabel(
+  participants: CalendarParticipant[],
+  labels = defaultAttendeeLabels,
+): string | null {
   const people = sortAttendees(participants);
   if (people.length === 0) return null;
 
   const first = people.find((participant) => !participant.self);
-  if (!first) return 'You';
+  if (!first) return labels.you;
 
   const others = people.length - 1;
-  const name = attendeeFirstName(first);
+  const name = attendeeFirstName(first, labels.guest);
   return others > 0 ? `${name} +${others}` : name;
 }

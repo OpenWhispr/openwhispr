@@ -200,11 +200,37 @@ describe('useNotesStore — spaces', () => {
   });
 
   it('createNote() still uses the active folder when no space is being browsed', () => {
+    mockNotesRepository.getFolders.mockReturnValue([folder({ id: 5 })]);
     useNotesStore.setState({ activeFolderId: 5, activeSpaceId: null });
 
     useNotesStore.getState().createNote();
 
     expect(mockNotesRepository.createNote).toHaveBeenCalledWith('Untitled', '', 5);
+  });
+
+  it('falls back from a stale explicit folder to the current private default and visible scope', () => {
+    const personal = folder({ id: 41 });
+    mockNotesRepository.getFolders.mockReturnValue([personal]);
+    mockNotesRepository.getPrivateFolders.mockReturnValue([personal]);
+    useNotesStore.setState({ folders: [personal], activeFolderId: 88, isInitialized: true });
+    useNotesStore.getState().createNote('Local note', 'Local body', 88);
+    expect(mockNotesRepository.createNote).toHaveBeenCalledWith('Local note', 'Local body', 41);
+    expect(useNotesStore.getState().activeFolderId).toBe(41);
+  });
+
+  it('preserves an open search when refocusing a still-valid folder', () => {
+    const personal = folder({ id: 41 });
+    mockNotesRepository.getFolders.mockReturnValue([personal]);
+    useNotesStore.setState({
+      activeFolderId: 41,
+      activeSpaceId: null,
+      isInitialized: true,
+      searchQuery: 'retained',
+      isSearching: true,
+    });
+    useNotesStore.getState().setActiveFolderId(41);
+    expect(useNotesStore.getState().searchQuery).toBe('retained');
+    expect(mockNotesRepository.getNotesByFolder).not.toHaveBeenCalled();
   });
 
   it('createFolder(name, spaceId) creates the folder inside that space', () => {

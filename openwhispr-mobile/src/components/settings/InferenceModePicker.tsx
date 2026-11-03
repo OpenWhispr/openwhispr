@@ -1,4 +1,5 @@
 import React from 'react';
+import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { SettingsRow, SettingsSection } from '@/components/ui/SettingsSection';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { getInferenceModes, type InferenceScope } from '@/lib/inferenceModes';
@@ -23,17 +24,28 @@ export function InferenceModePicker({
   unavailable,
   statuses,
 }: Props) {
+  const { copy } = useAndroidCopy();
   const modes = getInferenceModes(scope);
   return (
-    <SettingsSection title="Mode">
+    <SettingsSection title={copy('workflowSettings.mode', 'Mode')}>
       {modes.map((opt) => (
         <SettingsRow
           key={opt.mode}
           iconStyle="line"
           icon={opt.icon}
           mdIcon={opt.mdIcon}
-          title={opt.title}
-          description={unavailable?.[opt.mode] ?? statuses?.[opt.mode] ?? opt.description}
+          title={copy(
+            `workflowSettings.${opt.mode === 'providers' ? 'byok' : opt.mode === 'openwhispr' ? 'cloud' : 'local'}`,
+            opt.title,
+          )}
+          description={
+            unavailable?.[opt.mode] ??
+            statuses?.[opt.mode] ??
+            copy(
+              `workflowSettings.${opt.mode === 'providers' ? 'byokBody' : opt.mode === 'openwhispr' ? 'cloudBody' : scope === 'speech' ? 'localSpeechBody' : 'localTextBody'}`,
+              opt.description,
+            )
+          }
           disabled={!!unavailable?.[opt.mode]}
           onPress={() => onSelect(opt.mode)}
           selected={selectedMode === opt.mode}

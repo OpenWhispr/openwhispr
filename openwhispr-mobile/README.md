@@ -101,6 +101,19 @@ Copy [.env.example](./.env.example) to `.env.local`. It documents the hosted-ser
 
 Variables prefixed with `EXPO_PUBLIC_` are bundled into the application. Never put secrets in them or commit local environment files.
 
+## Dependency security checks
+
+`npm run test:security` runs after dependency patches during installation and in CI.
+It checks the signing dependency and Zod's rejection of oversized arrays before
+element validation. Zod is pinned to 4.6.6 for
+[GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5).
+Expo CLI 55.0.37 still requests Zod 3, so a version-scoped override makes it use
+the same patched Zod as the app. Tests exercise Expo's actual plugin descriptors,
+command schemas and output parser to check compatibility across that major-version
+change. Review and remove the override when upgrading Expo CLI to a release that
+depends on patched Zod; the audit and regression must continue to pass. No Zod
+advisory is allowlisted.
+
 ## Contributing
 
 Bug reports, PRs, and ideas are welcome. Read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening a PR. For security issues, see [SECURITY.md](./SECURITY.md).

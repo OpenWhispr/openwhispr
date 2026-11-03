@@ -1,8 +1,9 @@
+import { isCloudBackupEnabled } from '@/lib/cloudBackup';
 import { clearPrivateNoteDeletionQueue, pushPrivateNoteDeletes } from './privateNoteDeletion';
 import { createSyncContext } from './createSyncContext';
 import { SyncCancelledError, SyncStalledError, type SyncCheckpoint } from './syncContext';
 import * as Sentry from '@sentry/react-native';
-import { AppState, type AppStateStatus } from 'react-native';
+import { AppState, Platform, type AppStateStatus } from 'react-native';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useNotesStore } from '@/store/useNotesStore';
@@ -186,6 +187,11 @@ function currentUserId(): string | null {
 function reconcileSyncIdentity(auth: ReturnType<typeof useAuthStore.getState>): void {
   if (!auth.user || auth.isGuest) return;
   const userId = auth.user.id;
+  if (Platform.OS === 'android') {
+    const { assertAccountDataOwner } =
+      require('@/android/accountData') as typeof import('@/android/accountData');
+    assertAccountDataOwner(auth.user);
+  }
 
   const lastUserId = getLastSyncedUserId();
   if (lastUserId !== userId) {
@@ -195,6 +201,9 @@ function reconcileSyncIdentity(auth: ReturnType<typeof useAuthStore.getState>): 
     // backfill below rather than wiped.
     const linkedFromAnonymous = lastUserId !== null && isLinkFromAnonymous(lastUserId);
     if (lastUserId && !linkedFromAnonymous) {
+      // Android switches durable databases before publishing the new session.
+      // An ownership mismatch is an error, never permission to delete records.
+      if (Platform.OS === 'android') throw new Error('Local account ownership mismatch.');
       // Account switched on this device. Wipe the previous user's local
       // data before pulling the new user's — otherwise we'd leak the
       // previous user's folders/notes into the new user's view.
@@ -297,7 +306,7 @@ async function runSyncNow(reason: SyncReason): Promise<void> {
     return new Promise((resolve) => pendingTriggerWaiters.push(resolve));
   }
 
-  const cloudBackupEnabled = useConfigStore.getState().config?.cloudBackupEnabled ?? true;
+  const cloudBackupEnabled = isCloudBackupEnabled(useConfigStore.getState().config);
 
   // Foreground triggers fire on every AppState→active transition, which can
   // be noisy (window focus, sim re-focus). Skip if we synced very recently.
@@ -413,7 +422,7 @@ async function runSyncNow(reason: SyncReason): Promise<void> {
       // that started while it was on would keep pushing notes/dictionary after the
       // user opted out. Pulls above are harmless downloads; pushes must stop the
       // instant the opt-out lands.
-      if (!(useConfigStore.getState().config?.cloudBackupEnabled ?? true)) {
+      if (!isCloudBackupEnabled(useConfigStore.getState().config)) {
         useSyncStore.getState().set({
           status: 'idle',
           lastError: null,
@@ -633,11 +642,10 @@ export function initSyncTriggers(): void {
         }
         resetSubscriptionCache();
         requestSync('sign-in');
-      } else {
-        // Sign-out: clear in-memory dictionary + snippets (and the shared
-        // words) so the previous user's data doesn't bleed into a guest
-        // session or transcription prompts before the next sync wipes/reloads
-        // SQLite.
+      } else if (Platform.OS !== 'android') {
+        // Android resets shared words before switching its account database.
+        // Other platforms clear all in-memory words and snippets on sign-out
+        // before the next sync wipes/reloads SQLite.
         useDictionaryStore.getState().reset();
         useSnippetsStore.getState().reset();
         useSharedDictionaryStore.getState().reset();

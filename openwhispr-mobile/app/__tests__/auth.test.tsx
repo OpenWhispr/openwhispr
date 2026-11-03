@@ -5,6 +5,7 @@ const mockReplace = jest.fn();
 let mockAuthScreenProps: { hideGuestContinue?: boolean } = {};
 type MockAuthState = { user: { id: string; isAnonymous: boolean } | null; isGuest: boolean };
 let mockAuthState: MockAuthState = { user: null, isGuest: false };
+let mockSessionRejected = false;
 
 jest.mock('expo-router', () => ({
   router: {
@@ -16,6 +17,10 @@ jest.mock('expo-router', () => ({
 }));
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: (selector: (state: MockAuthState) => unknown) => selector(mockAuthState),
+}));
+jest.mock('@/store/useUsageStore', () => ({
+  useUsageStore: (selector: (state: { sessionRejected: boolean }) => unknown) =>
+    selector({ sessionRejected: mockSessionRejected }),
 }));
 jest.mock('@/screens/AuthScreen', () => ({
   __esModule: true,
@@ -30,6 +35,7 @@ import AuthRoute from '../auth';
 beforeEach(() => {
   jest.clearAllMocks();
   mockAuthScreenProps = {};
+  mockSessionRejected = false;
 });
 
 describe('/auth route', () => {
@@ -50,6 +56,18 @@ describe('/auth route', () => {
 
     render(<AuthRoute />);
 
+    expect(mockReplace).toHaveBeenCalledWith('/(tabs)/(record)');
+  });
+
+  it('keeps reauthentication open until the rejected session is replaced', () => {
+    mockAuthState = { user: { id: 'real-user', isAnonymous: false }, isGuest: false };
+    mockSessionRejected = true;
+    const view = render(<AuthRoute />);
+
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(mockAuthScreenProps.hideGuestContinue).toBe(true);
+    mockSessionRejected = false;
+    view.rerender(<AuthRoute />);
     expect(mockReplace).toHaveBeenCalledWith('/(tabs)/(record)');
   });
 });

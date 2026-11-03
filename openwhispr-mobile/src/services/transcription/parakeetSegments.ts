@@ -29,7 +29,7 @@ function pushWord(segments: WhisperSegment[], word: WordAccumulator): void {
  * meeting-diarization pipeline (`whisperSegmentsToWords`) works identically for both engines.
  */
 export function tokenTimingsToWhisperSegments(
-  timings: readonly ParakeetTokenTiming[],
+  timings: readonly Pick<ParakeetTokenTiming, 'token' | 'startTime' | 'endTime'>[],
 ): WhisperSegment[] {
   const segments: WhisperSegment[] = [];
   let current: WordAccumulator | null = null;

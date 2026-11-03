@@ -1,10 +1,11 @@
+import { Platform } from 'react-native';
 import type { AuthUser } from '@/lib/authClient';
 import { isDictationAgentEnabled, isNoteChatEnabled } from '@/lib/dictationAgent';
 import type { InferenceSelection } from '@/lib/mobileProviders';
 import { localModeDefault, MODE_LABELS, type CloudAccess } from '@/lib/inferenceModes';
 import { isLocalModelKey, LOCAL_MODEL_TITLES } from '@/lib/localModelCatalog';
 import { providerDisplayName, type MobileInferenceScope } from '@/lib/mobileProviders';
-import type { ProcessingMode, UserConfig } from '@/types';
+import type { InferenceMode, ProcessingMode, UserConfig } from '@/types';
 
 export const WORKFLOW_LABELS: Record<MobileInferenceScope, string> = {
   dictation: 'Dictation',
@@ -25,24 +26,60 @@ export const UNSET_PROVIDER_NOTES: Partial<Record<MobileInferenceScope, string>>
 
 // On-Device cleanup on an iPhone that can never run Apple Intelligence.
 export const ON_DEVICE_CLEANUP_UNSUPPORTED_NOTE =
-  "This iPhone can't run On-Device cleanup, so it's skipped. OpenWhispr Cloud can clean up your transcripts.";
+  Platform.OS === 'android'
+    ? 'On-device cleanup is unavailable. Your raw transcript stays on this phone.'
+    : "This iPhone can't run On-Device cleanup, so it's skipped. OpenWhispr Cloud can clean up your transcripts.";
 
-// Dictation owns Local Mode: On-Device dictation turns it on, and the other modes turn it off. Note
-// formatting and the voice assistant keep their own choices; notes made in Local Mode are private.
+// Dictation owns Local Mode: On-Device dictation turns it on, and the other modes turn it off.
+const deviceLabel = Platform.OS === 'android' ? 'phone' : 'iPhone';
 export const LOCAL_MODE_DICTATION_NOTES = {
-  on: 'Local Mode is on: dictation stays on this iPhone, notes you make stay private, and chat asks before leaving it. Choose OpenWhispr Cloud or Bring Your Own Key to turn it off.',
-  off: 'On-Device turns on Local Mode: dictation stays on this iPhone, notes you make stay private, and chat asks before leaving it.',
+  on:
+    Platform.OS === 'android'
+      ? 'Local Mode keeps dictation on this phone. Turn it off in Models & processing to use Cloud, or choose Bring Your Own Key.'
+      : `Local Mode is on: dictation stays on this ${deviceLabel}, notes you make stay private, and chat asks before leaving it. Choose OpenWhispr Cloud or Bring Your Own Key to turn it off.`,
+  off:
+    Platform.OS === 'android'
+      ? 'On-Device turns on Local Mode: dictation stays on this phone and notes ask before leaving it.'
+      : 'On-Device turns on Local Mode: dictation stays on this iPhone, notes you make stay private, and chat asks before leaving it.',
 };
 
 // What Local Mode means for chat.
 export const ON_DEVICE_MODE_NOTES: Partial<Record<MobileInferenceScope, string>> = {
-  noteChat: 'In Local Mode chat asks before sending notes off this iPhone.',
+  ...(Platform.OS === 'android'
+    ? {
+        upload: 'Local Mode keeps uploads on this phone.',
+        notes:
+          'Local Mode formats notes on this phone and asks before sending one to your choice here.',
+        agent: 'In Local Mode the voice assistant is off.',
+        cleanup:
+          'In Local Mode, cleanup runs on this phone, or sends only the transcript text to your provider with Bring Your Own Key. OpenWhispr Cloud cleanup is skipped until Local Mode is off.',
+      }
+    : {}),
+  noteChat:
+    Platform.OS === 'android'
+      ? 'In Local Mode note chat asks before sending a note off this phone.'
+      : 'In Local Mode chat asks before sending notes off this iPhone.',
 };
+
+export const PRIVATE_MODE_LOCKED_REASON =
+  Platform.OS === 'android'
+    ? 'Off while Local Mode is on. Turn it off in Models & processing.'
+    : 'Off while Local Mode is on. Change Dictation in AI Models to turn it off.';
+
+// Android's explicit Local Mode switch continues to protect uploads and cleanup.
+export const ANDROID_LOCAL_MODE_LOCKED: Partial<Record<MobileInferenceScope, InferenceMode[]>> = {
+  dictation: ['openwhispr'],
+  upload: ['openwhispr', 'providers'],
+  cleanup: ['openwhispr'],
+};
+
+export function cleanupSavedOnDevice(config: UserConfig | null): boolean {
+  return config?.inference?.cleanup?.mode === 'local';
+}
 
 // Outside Cloud dictation, cleaning with OpenWhispr Cloud is a separate Cloud pass, which needs a
 // signed-in account.
-export const CLOUD_CLEANUP_NEEDS_ACCOUNT_NOTE =
-  'OpenWhispr Cloud cleans transcripts made on this iPhone or with your own key only for a signed-in account, so cleanup is skipped until you sign in.';
+export const CLOUD_CLEANUP_NEEDS_ACCOUNT_NOTE = `OpenWhispr Cloud cleans transcripts made on this ${deviceLabel} or with your own key only for a signed-in account, so cleanup is skipped until you sign in.`;
 
 export function cloudAccessFor(user: AuthUser | null): CloudAccess {
   if (!user) return 'none';
@@ -58,6 +95,7 @@ export function cloudCleanupNeedsAccount(
   cloudAccess: CloudAccess,
 ): boolean {
   return (
+    Platform.OS !== 'android' &&
     activeMode !== 'cloud' &&
     cloudAccess !== 'account' &&
     workflowSelection(config, 'cleanup', activeMode, cloudAccess).mode === 'openwhispr'
@@ -71,6 +109,7 @@ export function cleanupRunsOnDevice(
   activeMode: ProcessingMode,
   cloudAccess: CloudAccess,
 ): boolean {
+  if (Platform.OS === 'android') return cleanupSavedOnDevice(config);
   return workflowSelection(config, 'cleanup', activeMode, cloudAccess).mode === 'local';
 }
 
@@ -87,6 +126,7 @@ export function workflowSelection(
 ): InferenceSelection {
   const saved = config?.inference?.[scope];
   const heldOnCloudInLocalMode =
+    Platform.OS !== 'android' &&
     activeMode === 'private' &&
     saved?.mode === 'openwhispr' &&
     !!config?.pinnedInference?.includes(scope);
@@ -115,6 +155,7 @@ export function voiceAssistantCanRun(
   cloudAccess: CloudAccess,
 ): boolean {
   if (!config || workflowSwitchedOff(config, 'agent')) return false;
+  if (Platform.OS === 'android' && activeMode === 'private') return false;
   const selection = workflowSelection(config, 'agent', activeMode, cloudAccess);
   if (selection.mode === 'providers') return !!selection.providerId;
   return selection.mode === 'openwhispr' && cloudAccess === 'account';
@@ -155,12 +196,21 @@ export function workflowSummary(
   } = {},
 ): string {
   if (workflowSwitchedOff(config, scope)) return 'Off';
+  if (Platform.OS === 'android' && activeMode === 'private' && scope === 'agent') return 'Off';
   if (scope === 'cleanup') {
     if (cleanupRunsOnDevice(config, activeMode, cloudAccess) && onDeviceUnavailable)
       return `Skipped · ${onDeviceUnavailable}`;
     if (cloudCleanupNeedsAccount(config, activeMode, cloudAccess)) return 'Skipped · Sign in';
   }
   const selection = workflowSelection(config, scope, activeMode, cloudAccess);
+  if (Platform.OS === 'android' && activeMode === 'private') {
+    if (
+      scope === 'cleanup' &&
+      !['local', 'providers'].includes(config?.inference?.cleanup?.mode ?? '')
+    )
+      return 'Skipped';
+    if (scope === 'upload' || scope === 'notes') return MODE_LABELS.local;
+  }
   // Local Mode runs dictation and provider note chat on this phone first, whatever is saved; note
   // chat set to OpenWhispr, or not set, goes straight to Cloud. The other workflows run what is
   // saved for them.
