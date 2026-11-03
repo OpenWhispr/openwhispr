@@ -1149,6 +1149,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             // The side-panel layout (a meeting, or a narrow window with a note open) has no room for it.
             workspaceIntroAllowed={!showSettings && !isSidePanelLayout}
             updateAction={
+              updateStatus.policyReady !== false &&
+              updateStatus.updateMode !== "it_managed" &&
               !updateStatus.isDevelopment &&
               (updateStatus.updateAvailable ||
                 updateStatus.updateDownloaded ||
@@ -1209,9 +1211,14 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                         </p>
                         <p className="text-xs text-amber-700 dark:text-amber-300/80">
                           <BidiInterpolatedText
-                            text={t("controlPanel.updateRequiredByOrg.description", {
-                              version: BIDI_VALUE_TOKEN,
-                            })}
+                            text={t(
+                              updateStatus.updateMode === "it_managed"
+                                ? "controlPanel.updateRequiredByOrg.contactIT"
+                                : "controlPanel.updateRequiredByOrg.description",
+                              {
+                                version: BIDI_VALUE_TOKEN,
+                              }
+                            )}
                             value={policyMinAppVersion}
                           />
                         </p>

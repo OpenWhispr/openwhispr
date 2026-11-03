@@ -906,6 +906,7 @@ class IPCHandlers {
   }
 
   _handleAuthTokenChange({ generation, token }) {
+    this.updateManager?.invalidatePolicy();
     // A new bearer may belong to another account, so its policy is fetched
     // before new work; only a sign-out ends the work already running. A real
     // account switch is cancelled once set-active-account-scope learns it.
@@ -2786,6 +2787,7 @@ class IPCHandlers {
       // holds for the same account: that only re-scopes the policy, and only a
       // different account ends the work and meeting already running.
       if (accountChanged || (accountId !== null && previousScope?.accountId !== accountId)) {
+        this.updateManager?.invalidatePolicy();
         this._audioFeaturePolicy?.invalidate();
         if (accountChanged) {
           this._audioFeaturePolicy?.cancelJobs();
@@ -6740,10 +6742,15 @@ class IPCHandlers {
           this.metaActivation?.close(),
           new Promise((resolve) => setTimeout(resolve, 1500)),
         ]).catch(() => {});
-        const tokenState = tokenStore.clear();
-        const win = BrowserWindow.fromWebContents(event.sender);
-        if (win) {
-          await win.webContents.session.clearStorageData({ storages: ["cookies"] });
+        let tokenState;
+        try {
+          const win = BrowserWindow.fromWebContents(event.sender);
+          if (win) {
+            await win.webContents.session.clearStorageData({ storages: ["cookies"] });
+          }
+        } finally {
+          // Retire cookie-authorized requests after cookie storage has settled.
+          tokenState = tokenStore.clear();
         }
         return {
           success: tokenState.success,
@@ -6801,10 +6808,11 @@ class IPCHandlers {
     const getSessionCookiesFromWindow = async (win) => {
       const scopedUrls = [getAuthUrl(), getApiUrl()].filter(Boolean);
       const cookiesByName = new Map();
+      const cookieSession = win?.webContents.session ?? session.defaultSession;
 
       for (const url of scopedUrls) {
         try {
-          const scopedCookies = await win.webContents.session.cookies.get({ url });
+          const scopedCookies = await cookieSession.cookies.get({ url });
           for (const cookie of scopedCookies) {
             if (!cookiesByName.has(cookie.name)) {
               cookiesByName.set(cookie.name, cookie.value);
@@ -6820,7 +6828,7 @@ class IPCHandlers {
 
       // Fallback for older sessions where cookies are not URL-scoped as expected.
       if (cookiesByName.size === 0) {
-        const allCookies = await win.webContents.session.cookies.get({});
+        const allCookies = await cookieSession.cookies.get({});
         for (const cookie of allCookies) {
           if (!cookiesByName.has(cookie.name)) {
             cookiesByName.set(cookie.name, cookie.value);
@@ -6855,7 +6863,7 @@ class IPCHandlers {
     const getAuthHeaderFromWindow = async (win) => {
       const token = tokenStore.get();
       if (token) return { Authorization: `Bearer ${token}` };
-      const cookieHeader = win ? await getSessionCookiesFromWindow(win) : "";
+      const cookieHeader = await getSessionCookiesFromWindow(win);
       return cookieHeader ? { Cookie: cookieHeader } : {};
     };
 
@@ -6952,6 +6960,7 @@ class IPCHandlers {
       },
       logger: debugLogger,
     });
+    let cookieGeneration = null;
     const getScope = () => {
       const state = tokenStore.getState();
       const active = accountScopeBinding.resolveActiveAccountScope({
@@ -6959,10 +6968,16 @@ class IPCHandlers {
         binding: accountScopeBinding.read(),
       });
       return {
-        accountId: active?.accountId ?? null,
+        accountId:
+          active?.accountId ??
+          this.databaseManager.activeAccountId ??
+          accountScopeBinding.read()?.accountId ??
+          null,
         authGeneration: state.generation,
         authenticated:
-          Boolean(state.token) || typeof this.databaseManager.activeAccountId === "string",
+          Boolean(state.token) ||
+          typeof this.databaseManager.activeAccountId === "string" ||
+          cookieGeneration === state.generation,
       };
     };
     this.effectivePolicyManager = createEffectivePolicyManager({
@@ -6972,7 +6987,7 @@ class IPCHandlers {
       broadcast: (snapshot) => {
         if (snapshot.status !== "loading" || !snapshot.deviceReady)
           this._audioFeaturePolicy?.update(snapshot);
-        this.updateManager.updatePolicy?.(snapshot);
+        this.updateManager?.updatePolicy?.(snapshot);
         if (!snapshot.deviceReady || snapshot.status === "error" || snapshot.localOnly)
           this._stopRemoteProductWork();
         else if (snapshot.success) this._startRemoteProductWork();
@@ -6988,13 +7003,18 @@ class IPCHandlers {
               (win) => win && !win.isDestroyed()
             )
           );
+      if (scope.authGeneration !== tokenStore.getState().generation)
+        return this.effectivePolicyManager.getCurrent();
+      cookieGeneration = authHeaders.Cookie ? scope.authGeneration : null;
+      const currentScope = getScope();
       return this.effectivePolicyManager.getPolicy({
-        accountId: scope.accountId,
+        accountId: currentScope.accountId,
         expectedAuthGeneration: scope.authGeneration,
         authHeaders,
         refresh,
       });
     };
+    this.getUpdatePolicy = () => this.refreshEffectivePolicy();
     const { createAudioFeaturePolicy } = require("./audioFeaturePolicy");
     this._audioFeaturePolicy = createAudioFeaturePolicy({
       getPolicy: (event, options) => this.refreshEffectivePolicy(event, options),

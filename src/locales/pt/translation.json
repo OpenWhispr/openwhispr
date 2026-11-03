@@ -603,7 +603,8 @@
   "controlPanel": {
     "updateRequiredByOrg": {
       "title": "Atualização obrigatória",
-      "description": "Sua organização exige o OpenWhispr {{version}} ou mais recente. Atualize o aplicativo."
+      "description": "Sua organização exige o OpenWhispr {{version}} ou mais recente. Atualize o aplicativo.",
+      "contactIT": "A sua organização requer OpenWhispr {{version}} ou posterior. Contacte a equipa de TI para instalar uma versão aprovada."
     },
     "update": {
       "readyTitle": "Atualização pronta para instalar",
@@ -2186,7 +2187,13 @@
         "restarting": "Reiniciando...",
         "title": "Atualizações",
         "versionPlaceholder": "—",
-        "whatsNew": "Novidades na v{{version}}"
+        "whatsNew": "Novidades na v{{version}}",
+        "managedByOrganization": "Gerido pela sua organização.",
+        "itManaged": "A sua organização gere as atualizações.",
+        "policyLoading": "A carregar as definições de atualização…",
+        "policyUnavailable": "A política de atualizações está indisponível. Tente novamente quando tiver ligação.",
+        "managedBadge": "Gerido",
+        "stagedBeforePolicy": "Uma atualização foi preparada antes da aplicação desta política e poderá ser instalada ao fechar a aplicação. Contacte a equipa de TI antes de fechar ou reiniciar."
       },
       "translationHotkey": {
         "title": "Atalho de Tradução",

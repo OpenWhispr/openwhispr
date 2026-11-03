@@ -62,6 +62,7 @@ const electronStub = {
 
 Module._load = function loadWithMocks(request, parent, isMain) {
   if (request === "electron") return electronStub;
+  if (request === "electron-updater") return { autoUpdater: {} };
   if (parent?.filename === handlersModulePath) {
     if (request === "./tokenStore") {
       return {
@@ -69,6 +70,7 @@ Module._load = function loadWithMocks(request, parent, isMain) {
         getState: () => ({ ...tokenState }),
         clear: () => {
           tokenState = { token: null, generation: tokenState.generation + 1 };
+          handleAuthTokenChange(tokenState);
           return { success: true, ...tokenState };
         },
         subscribe: () => () => {},
@@ -285,6 +287,158 @@ test("activation storage failure cannot prevent clearing the local bearer", asyn
   } finally {
     fakeThis.metaActivation = manager;
   }
+});
+
+async function signOutUpdater(t, generation) {
+  const previous = {
+    updateManager: fakeThis.updateManager,
+    databaseManager: fakeThis.databaseManager,
+    windowManager: fakeThis.windowManager,
+    metaActivation: fakeThis.metaActivation,
+  };
+  const previousTokenState = tokenState;
+  t.after(() => {
+    fakeThis.updateManager.cleanup();
+    Object.assign(fakeThis, previous);
+    tokenState = previousTokenState;
+  });
+  tokenState = { token: `sign-out-token-${generation}`, generation };
+  fakeThis.databaseManager = {
+    activeAccountId: "departing-account",
+    setActiveAccountId(accountId) {
+      this.activeAccountId = accountId;
+    },
+  };
+  const win = {
+    isDestroyed: () => false,
+    webContents: { session: { cookies: { get: async () => [] } } },
+  };
+  fakeThis.windowManager = { controlPanelWindow: win, retireMeetingNotificationScope() {} };
+  await setScope("departing-account", generation);
+  fakeThis.metaActivation = { close: async () => {} };
+  const previousEnvironment = process.env.NODE_ENV;
+  try {
+    process.env.NODE_ENV = "development";
+    const UpdateManager = require("../../src/updater");
+    fakeThis.updateManager = new UpdateManager({ getPolicy: () => fakeThis.getUpdatePolicy() });
+  } finally {
+    if (previousEnvironment === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousEnvironment;
+  }
+  fakeThis.updateManager.updatePolicy({
+    success: true,
+    managed: true,
+    policy: { updates: { mode: "it_managed" } },
+  });
+  return { manager: fakeThis.updateManager, win };
+}
+
+test("local sign-out restores guest updater readiness without a server or renderer response", async (t) => {
+  const { manager } = await signOutUpdater(t, 100);
+  let requests = 0;
+  t.mock.method(electronStub.net, "fetch", async () => {
+    requests++;
+    throw new Error("offline");
+  });
+  const result = await handlers.get("auth-clear-session")({ sender: {} });
+  await new Promise(setImmediate);
+
+  assert.equal(result.success, true);
+  assert.equal(readBinding(), null);
+  assert.equal(fakeThis.databaseManager.activeAccountId, null);
+  assert.equal((await manager.getUpdateStatus()).policyReady, true);
+  assert.equal((await manager.getUpdateStatus()).updateMode, "user_choice");
+  assert.equal(requests, 0);
+});
+
+test("completed cookie sign-out discards a pending cookie-authorized updater policy", async (t) => {
+  const { deferred } = require("./harness/deferred");
+  const { manager, win } = await signOutUpdater(t, 102);
+  tokenState = { token: null, generation: 102 };
+  const clearing = deferred();
+  const cleared = deferred();
+  const requested = deferred();
+  const reply = deferred();
+  let cookie = "departing-cookie";
+  win.webContents.session.cookies.get = async () =>
+    cookie ? [{ name: "session", value: cookie }] : [];
+  win.webContents.session.clearStorageData = async (options) => {
+    assert.deepEqual(options, { storages: ["cookies"] });
+    clearing.resolve();
+    await cleared.promise;
+    cookie = null;
+  };
+  t.mock.method(electronStub.BrowserWindow, "fromWebContents", () => win);
+  t.mock.method(electronStub.net, "fetch", async (_url, init) => {
+    assert.equal(init.headers.Cookie, "session=departing-cookie");
+    requested.resolve();
+    return reply.promise;
+  });
+  const previousApiUrl = process.env.OPENWHISPR_API_URL;
+  process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
+  const response = {
+    ok: true,
+    status: 200,
+    json: async () => ({
+      data: {
+        managed: true,
+        policy: {
+          version: 1,
+          transcription: { allowedModes: [], allowedByokProviders: [] },
+          llm: { allowedModes: [], allowedByokProviders: [], allowedEnterpriseProviders: [] },
+          features: { agentEnabled: false, webSearchEnabled: false },
+          sharing: { externalLinkSharing: "disabled" },
+          dataRetention: {
+            audioRetentionMaxDays: null,
+            localHistoryMode: "user_choice",
+            cloudBackupAllowed: false,
+          },
+          minAppVersion: null,
+          updates: { mode: "it_managed" },
+        },
+        policyUpdatedAt: "2026-11-03T00:00:00.000Z",
+      },
+    }),
+  };
+  t.after(() => {
+    cleared.resolve();
+    reply.resolve(response);
+    if (previousApiUrl === undefined) delete process.env.OPENWHISPR_API_URL;
+    else process.env.OPENWHISPR_API_URL = previousApiUrl;
+  });
+  broadcasts.length = 0;
+  const signOut = handlers.get("auth-clear-session")({ sender: {} });
+  await clearing.promise;
+  const policy = manager.refreshPolicy();
+  await requested.promise;
+  cleared.resolve();
+  assert.equal((await signOut).success, true);
+  await new Promise(setImmediate);
+  assert.equal((await manager.getUpdateStatus()).policyReady, true);
+  assert.equal((await manager.getUpdateStatus()).updateMode, "user_choice");
+
+  reply.resolve(response);
+  await policy;
+  assert.equal((await manager.getUpdateStatus()).policyReady, true);
+  assert.equal((await manager.getUpdateStatus()).updateMode, "user_choice");
+  assert.equal(
+    broadcasts.some(([channel]) => channel === "workspace-policy-changed"),
+    false
+  );
+});
+
+test("cookie storage failure still clears the local bearer and reports the failure", async (t) => {
+  const { win } = await signOutUpdater(t, 104);
+  win.webContents.session.clearStorageData = async () => {
+    throw new Error("cookie storage unavailable");
+  };
+  t.mock.method(electronStub.BrowserWindow, "fromWebContents", () => win);
+  const result = await handlers.get("auth-clear-session")({ sender: {} });
+
+  assert.deepEqual(result, { success: false, error: "cookie storage unavailable" });
+  assert.deepEqual(tokenState, { token: null, generation: 105 });
+  assert.equal(readBinding(), null);
+  assert.equal(fakeThis.databaseManager.activeAccountId, null);
 });
 
 test("signed-out transitions restore guest meeting detection without granting a replacement bearer guest permissions", async (t) => {
