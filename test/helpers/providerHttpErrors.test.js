@@ -162,6 +162,27 @@ test("a self-hosted 404 without a model signal is a generic error, not a model e
   assert.equal(c.messageParams.provider, "Your server");
 });
 
+test("a 404 for a missing conversation item doesn't blame the model", async () => {
+  const c = await classify({
+    provider: "OpenAI",
+    surface: "llm",
+    status: 404,
+    model: "gpt-5-mini",
+    body: {
+      error: {
+        message:
+          "Item with id 'rs_123' not found. Items are not persisted for Zero Data Retention " +
+          "organizations. Remove this item from your input and try again.",
+        type: "invalid_request_error",
+        code: null,
+      },
+    },
+  });
+  assert.equal(c.code, "PROVIDER_BAD_REQUEST");
+  assert.equal(c.messageKey, "providerErrors.badRequest");
+  assert.equal(c.settingsTarget, undefined);
+});
+
 test("413, other 4xx, timeouts, 5xx and unknown statuses", async () => {
   assert.equal((await classify({ status: 413, body: "" })).code, "PROVIDER_PAYLOAD_TOO_LARGE");
   for (const status of [400, 415, 422]) {

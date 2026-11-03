@@ -10,6 +10,7 @@ import { BaseReasoningService, ReasoningConfig } from "./BaseReasoningService";
 import { SecureCache } from "../utils/SecureCache";
 import { withRetry, createApiRetryStrategy, httpError } from "../utils/retry";
 import { API_ENDPOINTS, TOKEN_LIMITS, buildApiUrl, ensureV1Suffix } from "../config/constants";
+import { resolveRetiredCloudModel } from "../config/retiredCloudModelPolicy.js";
 import logger from "../utils/logger";
 import { assertValidCleanupOutput } from "../utils/cleanupOutput";
 import { getSettings, isCloudCleanupMode } from "../stores/settingsStore";
@@ -65,6 +66,8 @@ interface ToolExecutionResult {
   data: string;
   displayText: string;
   metadata?: ToolMetadata;
+  /** The tool ran but didn't do what was asked; displayText says why. */
+  failed?: boolean;
 }
 
 const BYOK_STREAM_PROVIDERS = [
@@ -96,6 +99,7 @@ export type AgentStreamChunk =
       toolName: string;
       displayText: string;
       metadata?: ToolMetadata;
+      failed?: boolean;
     }
   | { type: "done"; finishReason?: string };
 
@@ -698,6 +702,10 @@ class ReasoningService extends BaseReasoningService {
       model,
       surface: "llm",
     };
+    const timeoutError = () =>
+      route.kind === "self-hosted"
+        ? providerError(PROVIDER_ERROR_CODES.TIMEOUT, selfHostedErrorContext)
+        : new Error("Streaming request timed out");
     let response: Response;
     try {
       response = await fetchWithParamFallback(
@@ -716,17 +724,24 @@ class ReasoningService extends BaseReasoningService {
       clearTimeout(timeoutId);
       if ((error as Error).name === "AbortError" && abortController.signal.aborted) {
         if (!timeoutTriggered) return;
-        throw route.kind === "self-hosted"
-          ? providerError(PROVIDER_ERROR_CODES.TIMEOUT, selfHostedErrorContext)
-          : new Error("Streaming request timed out");
+        throw timeoutError();
       }
       // A stopped LAN server rejects the fetch before any response.
       throw route.kind === "self-hosted" ? asProviderError(error, selfHostedErrorContext) : error;
     }
 
     if (!response.ok) {
-      clearTimeout(timeoutId);
-      const errorText = await response.text();
+      // Keep the deadline running while the error body arrives, or a stalled body hangs.
+      let errorText: string;
+      try {
+        errorText = await response.text();
+      } catch (error) {
+        if (!abortController.signal.aborted) throw error;
+        if (!timeoutTriggered) return;
+        throw timeoutError();
+      } finally {
+        clearTimeout(timeoutId);
+      }
       logger.logReasoning("AGENT_STREAM_ERROR", {
         status: response.status,
         body: redactProviderBody(errorText),
@@ -808,9 +823,7 @@ class ReasoningService extends BaseReasoningService {
     } catch (error) {
       if ((error as Error).name === "AbortError" && abortController.signal.aborted) {
         if (!timeoutTriggered) return;
-        throw route.kind === "self-hosted"
-          ? providerError(PROVIDER_ERROR_CODES.TIMEOUT, selfHostedErrorContext)
-          : new Error("Streaming request timed out");
+        throw timeoutError();
       }
       throw error;
     } finally {
@@ -905,6 +918,9 @@ class ReasoningService extends BaseReasoningService {
       ({ apiKey, baseURL } = await this.resolveByokAccess(provider, config));
     }
     const aiProvider = isLocalProvider || isLanChat ? "local" : provider;
+    if (aiProvider === "tinfoil") {
+      model = resolveRetiredCloudModel("tinfoil", model);
+    }
     // OpenRouter ids are never in the local registry, so the supportsThinking
     // exemption below can't apply — honor the toggle directly.
     const openrouterDisableThinking = provider === "openrouter" && config.disableThinking === true;
@@ -928,7 +944,7 @@ class ReasoningService extends BaseReasoningService {
     const userSuppressesThinking = config.disableThinking === true && !!modelDef?.supportsThinking;
     const needsGroqDisableThinking =
       provider === "groq" && (modelDef?.disableThinking || userSuppressesThinking);
-    const needsGeminiMinimalThinking = provider === "gemini" && userSuppressesThinking;
+    const needsGeminiThinkingSuppressed = provider === "gemini" && userSuppressesThinking;
     const providerOptions = {
       // The effort value is a family fact: gpt-oss has no "none" (#1611).
       ...(needsGroqDisableThinking
@@ -939,17 +955,33 @@ class ReasoningService extends BaseReasoningService {
             },
           }
         : {}),
-      ...(needsGeminiMinimalThinking
-        ? { google: { thinkingConfig: { thinkingLevel: "minimal", includeThoughts: false } } }
+      ...(needsGeminiThinkingSuppressed
+        ? {
+            google: {
+              thinkingConfig: {
+                thinkingLevel:
+                  getModelFamilyConstraints(model)?.reasoningEffort?.suppressValue ?? "minimal",
+                includeThoughts: false,
+              },
+            },
+          }
         : {}),
       ...(reasoningEffort && provider === "groq" ? { groq: { reasoningEffort } } : {}),
       ...(reasoningEffort && provider === "gemini"
         ? { google: { thinkingConfig: { thinkingLevel: reasoningEffort, includeThoughts: false } } }
         : {}),
+      // store: false makes the SDK resend each tool step's reasoning inline
+      // (encrypted) rather than by id: a Zero Data Retention org keeps nothing
+      // to look an id up in, so the step after a tool call would 404.
       // The SDK sends a Responses effort only for model ids it knows as reasoning
       // models; forceReasoning covers newer OpenAI ids such as gpt-6-astra.
-      ...(reasoningEffort && provider === "openai"
-        ? { openai: { reasoningEffort, forceReasoning: true } }
+      ...(provider === "openai"
+        ? {
+            openai: {
+              store: false,
+              ...(reasoningEffort ? { reasoningEffort, forceReasoning: true } : {}),
+            },
+          }
         : {}),
       ...(reasoningEffort && provider === "custom" ? { openai: { reasoningEffort } } : {}),
     };
@@ -1026,6 +1058,7 @@ class ReasoningService extends BaseReasoningService {
             toolName: chunk.toolName,
             displayText,
             ...(metadata ? { metadata } : {}),
+            ...(isToolFailure ? { failed: true } : {}),
           };
         } else if (chunk.type === "tool-error") {
           // A call the SDK rejected (unknown tool, invalid input) never ran; without
@@ -1036,6 +1069,7 @@ class ReasoningService extends BaseReasoningService {
             callId: chunk.toolCallId,
             toolName: chunk.toolName,
             displayText: `Error: ${cause instanceof Error ? cause.message : String(cause)}`,
+            failed: true,
           };
         } else if (chunk.type === "abort") {
           canFlushFilteredText = false;
@@ -1309,7 +1343,7 @@ class ReasoningService extends BaseReasoningService {
           toolResult = await config.executeToolCall(call.name, call.arguments, call.id);
         } catch (error) {
           const errMsg = `Error: ${(error as Error).message}`;
-          toolResult = { data: errMsg, displayText: errMsg };
+          toolResult = { data: errMsg, displayText: errMsg, failed: true };
         }
         if (operationWasCancelled()) return;
         yield {
@@ -1318,6 +1352,7 @@ class ReasoningService extends BaseReasoningService {
           toolName: call.name,
           displayText: toolResult.displayText,
           ...(toolResult.metadata ? { metadata: toolResult.metadata } : {}),
+          ...(toolResult.failed ? { failed: true } : {}),
         };
 
         currentMessages = [

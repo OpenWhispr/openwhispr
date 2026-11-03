@@ -91,12 +91,14 @@ export const SettingsRow: React.FC<SettingsRowProps> = ({
 export function SettingsPanel({
   children,
   className = "",
-}: {
+  ...props
+}: React.HTMLAttributes<HTMLDivElement> & {
   children: React.ReactNode;
   className?: string;
 }) {
   return (
     <div
+      {...props}
       className={`rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 divide-y divide-border/60 dark:divide-border-subtle/50 ${className}`}
     >
       {children}

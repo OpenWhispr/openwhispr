@@ -183,6 +183,8 @@ class GnomeShortcutManager {
     this.globalShortcutsPortal = new GnomeGlobalShortcutsPortal();
     // Track which slots have been registered in gsettings
     this.registeredSlots = new Set();
+    // Set by HotkeyManager to debug-log each press: (slotName, action).
+    this.onHotkeyEvent = null;
   }
 
   static isGnome() {
@@ -261,21 +263,25 @@ class GnomeShortcutManager {
       this.bus.exportInterface(
         {
           Toggle: () => {
+            this.onHotkeyEvent?.("dictation", "press");
             if (this.dictationCallback) {
               this.dictationCallback();
             }
           },
           ToggleMeeting: () => {
+            this.onHotkeyEvent?.("meeting", "press");
             if (this.meetingCallback) {
               this.meetingCallback();
             }
           },
           ToggleVoiceAgent: () => {
+            this.onHotkeyEvent?.("voiceAgent", "press");
             if (this.voiceAgentCallback) {
               this.voiceAgentCallback();
             }
           },
           ToggleTranslation: () => {
+            this.onHotkeyEvent?.("translation", "press");
             if (this.translationCallback) {
               this.translationCallback();
             }
@@ -330,7 +336,10 @@ class GnomeShortcutManager {
     await this.unregisterKeybinding("dictation");
     const registered = await this.globalShortcutsPortal.registerKeybinding(
       keysym ? preferredTrigger.replace(EXTENDED_FUNCTION_KEY, keysym) : preferredTrigger,
-      callback
+      (hotkeyArg, phase) => {
+        this.onHotkeyEvent?.("dictation", phase);
+        return callback(hotkeyArg, phase);
+      }
     );
     if (!registered) {
       await this.registerKeybinding(tapShortcut, "dictation", resolved);

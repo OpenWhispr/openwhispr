@@ -20,7 +20,7 @@ import {
 } from "../../stores/settingsStore";
 import { usePolicySnapshot } from "../../hooks/usePolicy";
 import { getLanguageLabel } from "../../utils/languageSupport";
-import { getDictionaryHintWords } from "../../utils/snippets";
+import { getLlmDictionaryWords } from "../../utils/snippets";
 import { resolveDictationAgentInference } from "../../helpers/dictationAgentInference";
 import { resolveDictationTranslationInference } from "../../helpers/dictationTranslationInference";
 
@@ -165,7 +165,9 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
               systemPrompt: resolvePrompt("translate", {
                 agentName,
                 targetLanguageLabel: getLanguageLabel(translationTargetLanguage),
-                customDictionary: getDictionaryHintWords(effectiveSettings),
+                customDictionary: getLlmDictionaryWords(effectiveSettings, {
+                  includeTriggers: true,
+                }),
                 uiLanguage,
               }),
             }
@@ -205,7 +207,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
             systemPrompt: resolvePrompt("dictationAgent", {
               agentName,
               language: settings.preferredLanguage,
-              customDictionary: getDictionaryHintWords(settings),
+              customDictionary: getLlmDictionaryWords(settings, { includeTriggers: true }),
               uiLanguage,
             }),
           });

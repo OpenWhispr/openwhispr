@@ -4,6 +4,13 @@ const { WHISPER_CPP_TAG, WINDOWS_MSVC_RUNTIME_LIBRARIES } = require("./whisperCp
 // Pinned so untested future binaries never auto-ship; bump together with the digests below
 // sha256 per release tag; tags without an entry fall back to the API-reported digest
 const EXPECTED_DIGESTS = {
+  // Same source as 0.0.10, rebuilt alongside the bundled Linux CUDA runtime
+  "0.0.11": {
+    "whisper-server-win32-x64-vulkan.zip":
+      "24790f91e3ffb161f4c2c9d1f3f6e9d138a23898808d13741b6cdd8921258029",
+    "whisper-server-linux-x64-vulkan.zip":
+      "aa14ad4196ceedbc958366ea5957b1f0497c9999eeef78a4159baa04236af497",
+  },
   // Adds app-local MSVC runtime DLLs to the Windows archive
   "0.0.10": {
     "whisper-server-win32-x64-vulkan.zip":

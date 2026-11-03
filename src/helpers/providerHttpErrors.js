@@ -76,7 +76,7 @@ const ENGLISH = {
     "Couldn't get a response from {{provider}}. Check your API key and connection.",
   "providerErrors.unknown": "{{provider}} returned an unexpected error.",
   "providerErrors.keyMissing":
-    "No API key is set for {{provider}}. Add it in Settings → Language Models.",
+    "No API key is set for {{provider}}. Add it in Settings → Language Model.",
   "providerErrors.selfHosted.authFailed": "Your server rejected the API key.",
   "providerErrors.selfHosted.accessDenied":
     "Your server denied access. The key may not include this model.",
@@ -113,6 +113,7 @@ const QUOTA_SIGNAL =
   /insufficient_quota|credit balance|insufficient (credits|balance|funds)|out of credits|payment required/i;
 const MODEL_SIGNAL =
   /model_not_found|model[^.\n]{0,80}(not found|does not exist|not available|is not supported)|(unknown|invalid|unsupported) model/i;
+const MISSING_ITEM_SIGNAL = /\bitem with id\b[^.\n]{0,80}\bnot found\b/i;
 
 const NETWORK_CODES = new Set([
   "ENOTFOUND",
@@ -186,6 +187,8 @@ function codeForStatus(status, text, selfHosted) {
   if (status === 403) return C.ACCESS_DENIED;
   if (status === 429) return C.RATE_LIMITED;
   if (status === 404) {
+    // OpenAI 404s an input item it no longer holds; the model itself is fine.
+    if (MISSING_ITEM_SIGNAL.test(text)) return C.BAD_REQUEST;
     // A self-hosted 404 is far more often a wrong URL than a wrong model.
     return selfHosted && !MODEL_SIGNAL.test(text) ? C.ERROR : C.MODEL_NOT_FOUND;
   }
