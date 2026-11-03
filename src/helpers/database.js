@@ -7404,13 +7404,12 @@ class DatabaseManager {
 
   // Older releases stored a new row each time a pull carried a cloud note with
   // no client id. Every copy still writes to that one cloud note, so deleting
-  // any of them deletes it everywhere. Converges on the copy nearest the cloud's
-  // current state, and never mixes copies: a blended row could carry cleared or
-  // stale text under a current base, which the server would accept. A copy is
-  // removed only when it holds no text the kept one lacks; otherwise it becomes
-  // a note of its own, so the worst case is an extra note. Copies a folder delete
-  // or an unresolved create still owns wait for a later launch. Returns the
-  // removed note ids.
+  // any of them deletes it everywhere. Pending metadata keeps its original
+  // cloud identity; otherwise the copy nearest the cloud's current state wins.
+  // Never mix copies: stale text under a current base could overwrite the cloud.
+  // Other distinct pending edits become notes of their own. Copies a folder
+  // delete or unresolved create still owns wait for a later launch. Returns
+  // the removed note ids.
   mergeDuplicateCloudNotes() {
     if (!this.db) throw new Error("Database not initialized");
     const cloudIds = this.db
@@ -7457,8 +7456,22 @@ class DatabaseManager {
       a.id - b.id;
     const text = (value) => (value ?? "").trim();
     const TEXT_FIELDS = ["content", "enhanced_content", "transcript"];
+    const METADATA_FIELDS = [
+      ...SUMMARY_METADATA,
+      "note_type",
+      "source_file",
+      "audio_duration_seconds",
+      "folder_id",
+      "space_id",
+      "left_team",
+      "calendar_event_id",
+      "participants",
+      "diarization_enabled",
+      "expected_speaker_count",
+    ];
     const sameText = (a, b) =>
       ["title", ...TEXT_FIELDS].every((field) => text(a[field]) === text(b[field]));
+    const sameMetadata = (a, b) => METADATA_FIELDS.every((field) => a[field] === b[field]);
     // Text the kept copy doesn't have, blank copies aside. A blank on the kept
     // copy may be a clear the cloud recorded or may not; only its own pending
     // clear is certain.
@@ -7469,14 +7482,28 @@ class DatabaseManager {
     const holdsEdit = (note, kept) =>
       ["title", ...TEXT_FIELDS].some(
         (field) => text(note[field]) && text(note[field]) !== text(kept[field])
-      );
+      ) || !sameMetadata(note, kept);
     const soleSpaceAccount = this.db
       .prepare("SELECT account_id FROM space_accounts WHERE space_id = ?")
       .pluck();
 
     const merge = this.db.transaction((copies, account) => {
       const sorted = copies.toSorted(preference);
-      const kept = sorted.find((note) => !note.deleted_at) ?? sorted[0];
+      const preferred = sorted.find((note) => !note.deleted_at) ?? sorted[0];
+      // A pending move or metadata edit still targets the original cloud row.
+      // Keep that complete snapshot with its own base so conflict resolution
+      // can settle it. Multiple linked copies would make Refresh hit a sibling.
+      const metadataDiffers = sorted.some(
+        (note) => !note.deleted_at && !sameMetadata(note, preferred)
+      );
+      const pendingMetadata = sorted.filter(
+        (note) =>
+          !note.deleted_at &&
+          isDirty(note) &&
+          ((note.id === preferred.id && metadataDiffers) || !sameMetadata(note, preferred))
+      );
+      const kept =
+        pendingMetadata.find((note) => note.left_team) ?? pendingMetadata[0] ?? preferred;
       // The share lives only on this device, and its token can't be fetched again.
       const shared = sorted.find((note) => note.share_token) ?? kept;
       const ownNotes = [kept];
@@ -7486,11 +7513,11 @@ class DatabaseManager {
       let keptCleanText = false;
       for (const note of sorted) {
         if (note.id === kept.id) continue;
-        const holdsText =
+        const preserveCopy =
           !note.deleted_at &&
-          !ownNotes.some((other) => sameText(note, other)) &&
+          !ownNotes.some((other) => sameText(note, other) && sameMetadata(note, other)) &&
           (isDirty(note) ? holdsEdit(note, kept) : !keptCleanText && fillsBlank(note, kept));
-        if (holdsText) {
+        if (preserveCopy) {
           if (!isDirty(note)) keptCleanText = true;
           const inTeam = spaceKind.get(note.space_id) === "team";
           const spaceAccounts = inTeam ? soleSpaceAccount.all(note.space_id) : [];

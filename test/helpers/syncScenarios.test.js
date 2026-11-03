@@ -563,7 +563,7 @@ test("S4 a 500 mid-batch leaves error rows that the next pass retries on its own
   assertNoContentRegression(before, snapshotNotes(db), cloud.notes());
 });
 
-test("S5 a snapshot pull of exactly BATCH_SIZE notes still asks for the page after it", async (t) => {
+test("S5 a first feed pull of exactly BATCH_SIZE notes still asks for the page after it", async (t) => {
   const cloud = freshCloud();
   const device = createDevice(t, cloud);
   if (!device) return;
@@ -593,12 +593,13 @@ test("S5 a snapshot pull of exactly BATCH_SIZE notes still asks for the page aft
     2,
     "a full last page is indistinguishable from a full middle one, so the pull must probe again"
   );
-  assert.equal(queryParam(lists[0].path, "before"), null);
+  assert.equal(queryParam(lists[0].path, "since"), "1970-01-01T00:00:00.000Z");
   assert.equal(
-    queryParam(lists[1].path, "before"),
-    seeded[0].created_at,
-    "the probe must carry the oldest row of the full page as its cursor"
+    queryParam(lists[1].path, "since"),
+    seeded[49].updated_at,
+    "the probe must carry the newest row of the full page as its cursor"
   );
+  assert.equal(queryParam(lists[1].path, "since_id"), seeded[49].id);
 
   assert.equal(noteCount(db), BATCH_SIZE, "every seeded note must be applied exactly once");
   assert.equal(noteByClientId(db, "cn-000").content, "cloud body 0");

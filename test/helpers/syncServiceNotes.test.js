@@ -465,7 +465,7 @@ test("a 500 on the delete leaves the tombstone pending and the local row intact"
   assert.equal(cloud.note(cloudRow.id).deleted_at, null, "the cloud row is untouched");
 });
 
-test("the pull pages 120 cloud notes with a correct cursor and stamps the cursor once", async (t) => {
+test("the first pull pages 120 cloud notes across tied timestamps and stamps its cursor", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
   const { db, cloud, service } = ctx;
@@ -473,7 +473,7 @@ test("the pull pages 120 cloud notes with a correct cursor and stamps the cursor
   const base = Date.parse("2026-07-20T08:00:00.000Z");
   const seeded = [];
   for (let i = 0; i < 120; i += 1) {
-    const at = new Date(base + i * 60000).toISOString();
+    const at = new Date(base + Math.floor(i / 60) * 60000).toISOString();
     seeded.push(
       cloud.seedNote({
         client_note_id: `client-${String(i).padStart(3, "0")}`,
@@ -490,11 +490,13 @@ test("the pull pages 120 cloud notes with a correct cursor and stamps the cursor
   const listCalls = cloud.logFor("/api/notes/list");
   assert.equal(listCalls.length, 3, "120 notes at a page size of 50 must take three requests");
   assert.equal(queryParam(listCalls[0].path, "limit"), String(BATCH_SIZE));
-  assert.equal(queryParam(listCalls[0].path, "before"), null, "the first page carries no cursor");
-  // Pages walk created_at backwards, so each cursor is the oldest row of the
-  // page before it.
-  assert.equal(queryParam(listCalls[1].path, "before"), seeded[70].created_at);
-  assert.equal(queryParam(listCalls[2].path, "before"), seeded[20].created_at);
+  assert.equal(queryParam(listCalls[0].path, "since"), "1970-01-01T00:00:00.000Z");
+  assert.equal(queryParam(listCalls[0].path, "since_id"), null);
+  // A tied timestamp spans each page boundary; the id must carry the rest.
+  assert.equal(queryParam(listCalls[1].path, "since"), seeded[49].updated_at);
+  assert.equal(queryParam(listCalls[1].path, "since_id"), seeded[49].id);
+  assert.equal(queryParam(listCalls[2].path, "since"), seeded[99].updated_at);
+  assert.equal(queryParam(listCalls[2].path, "since_id"), seeded[99].id);
 
   assert.equal(noteCount(db), 120, "every page must be applied exactly once");
   assert.equal(db.getNoteByClientId("client-000").content, "cloud body 0");
@@ -523,9 +525,9 @@ test("a mid-pagination failure leaves the pull cursor unstamped", async (t) => {
     });
   }
 
-  // Only pages after the first carry a cursor.
+  // Only pages after the first carry the row id of a completed page.
   cloud.failNext(
-    (call) => call.path.startsWith("/api/notes/list") && call.path.includes("before="),
+    (call) => call.path.startsWith("/api/notes/list") && call.path.includes("since_id="),
     { status: 500, error: "page 2 exploded" }
   );
 
@@ -1080,6 +1082,230 @@ test("merging keeps an unpushed edit made on the current cloud revision", (t) =>
   assert.equal(noteCount(db), 1);
 });
 
+for (const { name, before, changes } of [
+  {
+    name: "calendar unlink",
+    before: { calendar_event_id: "calendar-event" },
+    changes: { calendar_event_id: "" },
+  },
+  {
+    name: "participant removal",
+    before: { participants: '[{"email":"ada@example.com"}]' },
+    changes: { participants: "[]" },
+  },
+  {
+    name: "folder move",
+    before: {},
+    changes: {},
+  },
+  {
+    name: "summary template change",
+    before: { enhanced_content: "Summary", enhancement_template_id: "old-template" },
+    changes: { enhancement_template_id: "new-template" },
+  },
+]) {
+  test(`merging preserves a pending ${name} until cloud reconciliation`, (t) => {
+    const db = createDb(t);
+    if (!db) return;
+    const pending = insertCloudCopy(db, {
+      client_note_id: "pending-copy",
+      cloud_id: "cloud-1",
+      cloud_revision: 2,
+      ...before,
+    });
+    const newest = insertCloudCopy(db, {
+      client_note_id: "newest-copy",
+      cloud_id: "cloud-1",
+      cloud_revision: 3,
+      ...before,
+    });
+    const updates =
+      name === "folder move" ? { folder_id: db.createFolder("Destination").folder.id } : changes;
+    assert.equal(db.updateNote(pending, updates).success, true);
+    const snapshot = db.getNote(pending);
+
+    assert.deepEqual(db.mergeDuplicateCloudNotes(), [newest]);
+    assert.deepEqual(db.getNote(pending), snapshot, "retain the original cloud identity and base");
+    assert.deepEqual(
+      db.getPendingNotes().map((note) => note.id),
+      [pending]
+    );
+    assert.equal(copiesOf(db, "cloud-1").length, 1);
+
+    // A later server receipt settles the original operation without creating
+    // another local identity or assigning a sibling's newer base to the edit.
+    db.upsertNoteFromCloud(
+      { ...snapshot, id: "cloud-1", revision: 4, updated_at: "2026-07-20T12:00:00.000Z" },
+      snapshot.folder_id,
+      snapshot.space_id
+    );
+    assert.deepEqual(db.mergeDuplicateCloudNotes(), []);
+    assert.equal(db.getNote(pending).sync_status, "synced");
+    for (const [field, value] of Object.entries(updates)) {
+      assert.equal(db.getNote(pending)[field], value);
+    }
+    assert.equal(noteCount(db), 1);
+  });
+}
+
+test("merging preserves a pending team retraction even with distinct text", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  const teamSpace = db.db
+    .prepare("INSERT INTO spaces (name, kind) VALUES ('Team', 'team')")
+    .run().lastInsertRowid;
+  db.db
+    .prepare("INSERT INTO space_accounts (space_id, account_id) VALUES (?, ?)")
+    .run(teamSpace, "account-a");
+  const pending = insertCloudCopy(db, {
+    client_note_id: "pending-copy",
+    cloud_id: "cloud-1",
+    cloud_revision: 2,
+    space_id: teamSpace,
+  });
+  const alternate = insertCloudCopy(db, {
+    client_note_id: "newest-copy",
+    cloud_id: "cloud-1",
+    cloud_revision: 3,
+    space_id: teamSpace,
+    sync_status: "pending",
+  });
+  // Undoing a Personal-to-Team move must retract the original cloud note,
+  // including when text changed too: a detached copy cannot do that.
+  assert.equal(
+    db.updateNote(pending, {
+      space_id: db.getPrivateSpaceId(),
+      folder_id: null,
+      content: "Private edit",
+    }).success,
+    true
+  );
+  const snapshot = db.getNote(pending);
+  assert.equal(snapshot.left_team, 1);
+
+  assert.deepEqual(db.mergeDuplicateCloudNotes(), []);
+  assert.deepEqual(db.getNote(pending), snapshot);
+  assert.deepEqual(
+    db.getPendingNotes("team").map((note) => note.id),
+    [pending]
+  );
+  assert.equal(copiesOf(db, "cloud-1").length, 1);
+  assert.equal(db.getNote(alternate).cloud_id, null);
+  assert.equal(db.getNote(alternate).space_id, db.getPrivateSpaceId());
+});
+
+test("merging preserves distinct pending metadata as independent recovery notes", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const current = insertCloudCopy(db, {
+    client_note_id: "current",
+    cloud_id: "cloud-1",
+    cloud_revision: 4,
+    calendar_event_id: "new-event",
+    sync_status: "pending",
+  });
+  const alternate = insertCloudCopy(db, {
+    client_note_id: "alternate",
+    cloud_id: "cloud-1",
+    cloud_revision: 2,
+    calendar_event_id: "",
+    sync_status: "error",
+  });
+  const duplicate = insertCloudCopy(db, {
+    client_note_id: "duplicate",
+    cloud_id: "cloud-1",
+    cloud_revision: 1,
+    calendar_event_id: "",
+    sync_status: "pending",
+  });
+  const snapshot = db.getNote(current);
+
+  assert.deepEqual(db.mergeDuplicateCloudNotes(), [duplicate]);
+  assert.deepEqual(db.getNote(current), snapshot, "the preferred dirty copy keeps its own base");
+  assert.deepEqual(
+    copiesOf(db, "cloud-1").map((note) => note.id),
+    [current]
+  );
+  const recovered = db.getNote(alternate);
+  assert.equal(recovered.cloud_id, null);
+  assert.equal(recovered.cloud_revision, null);
+  assert.equal(recovered.calendar_event_id, "");
+  assert.equal(recovered.sync_status, "pending");
+  assert.notEqual(recovered.client_note_id, "alternate");
+  assert.equal(noteCount(db), 2);
+});
+
+for (const refresh of [false, true]) {
+  test(`merged pending metadata ${refresh ? "refreshes once before" : "leaves no ghost after"} a cloud delete`, async (t) => {
+    const ctx = await setup(t);
+    if (!ctx) return;
+    const { db, cloud, api, service } = ctx;
+    const { readNoteConflicts } = require("../../src/lib/noteConflictRegistry.ts");
+    const { clearNoteConflict } = require("../../src/stores/noteStore.ts");
+    cloud.setClock(() => "2026-10-28T00:00:00.000Z");
+    const row = cloud.seedNote({
+      client_note_id: "cloud-key",
+      title: "Copy",
+      content: "body",
+      calendar_event_id: "event",
+    });
+    cloud.setNoteRevision(row.id, 3);
+    const remote = cloud.note(row.id);
+    db.upsertNoteFromCloud(remote, null);
+    const pending = insertCloudCopy(db, {
+      client_note_id: "pending-copy",
+      cloud_id: row.id,
+      cloud_revision: 2,
+      cloud_updated_at: "2026-10-27T00:00:00.000Z",
+      calendar_event_id: "event",
+    });
+    assert.equal(db.updateNote(pending, { calendar_event_id: "" }).success, true);
+    const request = api.cloudApiRequest;
+    let patches = 0;
+    api.cloudApiRequest = async (options) => {
+      if (options.method === "PATCH" && options.path === "/api/notes/update") {
+        patches++;
+        assert.equal(options.body.base_revision, 2, "never borrow the clean sibling's base");
+        return {
+          success: false,
+          status: 409,
+          code: "note_version_conflict",
+          error: "stale revision",
+          details: { note: remote },
+        };
+      }
+      return request(options);
+    };
+
+    db.mergeDuplicateCloudNotes();
+    await service.pushPendingNotes(false);
+    assert.equal(patches, 1);
+    assert.ok(readNoteConflicts()["pending-copy"]);
+    if (refresh) {
+      const note = db.getNote(pending);
+      const fresh = await api.upsertNoteFromCloud(
+        readNoteConflicts()["pending-copy"],
+        note.folder_id,
+        note.space_id
+      );
+      clearNoteConflict(note.client_note_id);
+      if (fresh) clearNoteConflict(fresh.client_note_id);
+      assert.equal(fresh.id, pending, "Refresh must settle the copy that conflicted");
+      assert.equal(fresh.sync_status, "synced");
+      await service.pushPendingNotes(false);
+      assert.equal(patches, 1, "Refresh must not repeat the same conflict");
+    }
+
+    localStorageStub.setItem("lastSyncedAt.notes", "2026-10-28T12:00:00.000Z");
+    cloud.setClock(() => "2026-10-29T00:00:00.000Z");
+    await cloud.request({ method: "DELETE", path: "/api/notes/delete", body: { id: row.id } });
+    await service.pullNotes(false);
+    assert.equal(copiesOf(db, row.id).length, 0);
+    assert.equal(noteCount(db), 0, "the original cloud note has no remaining ghost");
+  });
+}
+
 test("a queued delete of one copy no longer deletes the note everywhere", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
@@ -1272,9 +1498,11 @@ test("unpushed text that differs reaches the cloud as a note of its own", async 
   await service.syncAll(true);
   const [keyed] = copiesOf(db, row.id);
   updateNote(db, keyed.id, { sync_status: "pending", updated_at: LOCAL_LATE });
+  // These are text-only edits, so keep the pulled copy's resolved default folder.
   const other = insertCloudCopy(db, {
     client_note_id: "edited-copy",
     cloud_id: row.id,
+    folder_id: keyed.folder_id,
     title: "Keyed",
     content: "only here",
     sync_status: "pending",
@@ -1284,6 +1512,7 @@ test("unpushed text that differs reaches the cloud as a note of its own", async 
   insertCloudCopy(db, {
     client_note_id: "same-copy",
     cloud_id: row.id,
+    folder_id: keyed.folder_id,
     title: "Keyed",
     content: "cloud\n",
     sync_status: "pending",
@@ -1665,10 +1894,11 @@ test("a chat that follows its note into another space drops the old scope", (t) 
 
 // A desktop that synced before pulls matched by cloud id: its cursor has passed
 // the delete, and nothing since has shown the copy that delete was for.
-function syncedPastTheFeed(service) {
-  localStorageStub.setItem("lastSyncedAt.notes", new Date(Date.now() + 1000).toISOString());
+function syncedPastTheFeed(service, cloud) {
+  localStorageStub.setItem("lastSyncedAt.notes", "2026-10-30T00:00:00.000Z");
   localStorageStub.removeItem("noteFeedReplay.v1");
   service.noteFeedReplayTried.clear();
+  return cloud.log.length;
 }
 
 test("replaying the feed once retires a copy whose delete the cursor had passed", async (t) => {
@@ -1676,19 +1906,23 @@ test("replaying the feed once retires a copy whose delete the cursor had passed"
   if (!ctx) return;
   const { db, cloud, service } = ctx;
 
+  cloud.setClock(() => "2026-10-28T00:00:00.000Z");
   const row = cloud.seedNote({ client_note_id: "cloud-key", title: "Gone", content: "body" });
   await service.syncAll(true);
   updateNote(db, copiesOf(db, row.id)[0].id, { client_note_id: "local-key" });
-  await new Promise((resolve) => setTimeout(resolve, 5));
+  cloud.setClock(() => "2026-10-29T00:00:00.000Z");
   await cloud.request({ method: "DELETE", path: "/api/notes/delete", body: { id: row.id } });
-  syncedPastTheFeed(service);
+  const mark = syncedPastTheFeed(service, cloud);
   assert.equal(noteCount(db), 1, "the ghost is there before the replay");
 
   await service.syncAll(true);
 
   assert.equal(noteCount(db), 0);
   const replays = () =>
-    cloud.logFor("/api/notes/list").filter((call) => call.path.includes("1970-01-01")).length;
+    cloud.log
+      .slice(mark)
+      .filter((call) => call.path.startsWith("/api/notes/list") && call.path.includes("1970-01-01"))
+      .length;
   assert.equal(replays(), 1);
 
   const fresh = new SyncService();
@@ -1702,13 +1936,14 @@ test("the replay leaves a copy with unpushed text to its push", async (t) => {
   if (!ctx) return;
   const { db, cloud, service } = ctx;
 
+  cloud.setClock(() => "2026-10-28T00:00:00.000Z");
   const row = cloud.seedNote({ client_note_id: "cloud-key", title: "Gone", content: "body" });
   await service.syncAll(true);
   const [copy] = copiesOf(db, row.id);
   updateNote(db, copy.id, { client_note_id: "local-key" });
-  await new Promise((resolve) => setTimeout(resolve, 5));
+  cloud.setClock(() => "2026-10-29T00:00:00.000Z");
   await cloud.request({ method: "DELETE", path: "/api/notes/delete", body: { id: row.id } });
-  syncedPastTheFeed(service);
+  syncedPastTheFeed(service, cloud);
   updateNote(db, copy.id, { content: "unpushed", sync_status: "pending" });
 
   await service.syncAll(true);
@@ -1728,7 +1963,7 @@ test("a note the feed no longer returns stays, as it may exist and be unreadable
     cloud_id: "absent-cloud",
     cloud_updated_at: "2020-01-01T00:00:00.000Z",
   });
-  syncedPastTheFeed(service);
+  syncedPastTheFeed(service, cloud);
 
   await service.syncAll(true);
 
@@ -1741,14 +1976,16 @@ test("a failed replay is retried next session, and stops after a few attempts", 
   const { db, cloud, service } = ctx;
   silenceConsoleErrors(t);
 
+  cloud.setClock(() => "2026-10-28T00:00:00.000Z");
   const row = cloud.seedNote({ client_note_id: "cloud-key", title: "Gone", content: "body" });
   await service.syncAll(true);
   updateNote(db, copiesOf(db, row.id)[0].id, { client_note_id: "local-key" });
-  await new Promise((resolve) => setTimeout(resolve, 5));
+  cloud.setClock(() => "2026-10-29T00:00:00.000Z");
   await cloud.request({ method: "DELETE", path: "/api/notes/delete", body: { id: row.id } });
-  syncedPastTheFeed(service);
-  const isReplay = (call) => call.path.includes("1970-01-01");
-  const replays = () => cloud.logFor("/api/notes/list").filter(isReplay).length;
+  const mark = syncedPastTheFeed(service, cloud);
+  const isReplay = (call) =>
+    call.path.startsWith("/api/notes/list") && call.path.includes("1970-01-01");
+  const replays = () => cloud.log.slice(mark).filter(isReplay).length;
   cloud.failWith((call) => call.path.includes("/api/notes/list") && isReplay(call), {
     status: 500,
   });
@@ -1774,7 +2011,7 @@ test("a failed replay is retried next session, and stops after a few attempts", 
   assert.equal(localStorageStub.getItem("noteFeedReplay.v1"), "3");
 });
 
-test("a first sync doesn't replay the feed", async (t) => {
+test("a first sync covers the feed without a second full read", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
   const { cloud, service } = ctx;
@@ -1783,8 +2020,155 @@ test("a first sync doesn't replay the feed", async (t) => {
   await service.syncAll(true);
 
   assert.equal(localStorageStub.getItem("noteFeedReplay.v1"), "3");
-  assert.ok(!cloud.logFor("/api/notes/list").some((call) => call.path.includes("1970-01-01")));
+  const lists = cloud.logFor("/api/notes/list");
+  assert.equal(lists.length, 1, "a clean first sync traverses the feed only once");
+  assert.equal(queryParam(lists[0].path, "since"), "1970-01-01T00:00:00.000Z");
 });
+
+test("a retry of a partial first pull removes old tombstones", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  silenceConsoleErrors(t);
+  t.mock.method(console, "warn", () => {});
+  cloud.setClock(() => "2026-10-28T00:00:00.000Z");
+  const folder = cloud.seedFolder({ client_folder_id: "later-folder", name: "Later" });
+  const saved = cloud.seedUnkeyedNote({ title: "Saved before the failure", content: "body" });
+  const parked = cloud.seedNote({
+    client_note_id: "parked",
+    title: "Waiting for its folder",
+    content: "body",
+    folder_id: folder.id,
+  });
+  cloud.failWith("GET /api/folders/list", { status: 503 });
+
+  await service.syncAll(true);
+
+  assert.equal(copiesOf(db, saved.id).length, 1);
+  assert.equal(copiesOf(db, parked.id).length, 0);
+  assert.equal(localStorageStub.getItem("lastSyncedAt.notes"), null);
+  cloud.clearFailures();
+  cloud.setClock(() => "2026-10-29T00:00:00.000Z");
+  await cloud.request({ method: "DELETE", path: "/api/notes/delete", body: { id: saved.id } });
+  const mark = cloud.log.length;
+
+  await service.syncAll(true);
+
+  assert.equal(copiesOf(db, saved.id).length, 0, "the retry must see the retained tombstone");
+  assert.equal(copiesOf(db, parked.id).length, 1);
+  assert.equal(localStorageStub.getItem("noteFeedReplay.v1"), "3");
+  const lists = cloud.log.slice(mark).filter((call) => call.path.startsWith("/api/notes/list"));
+  assert.equal(lists.length, 1, "the successful retry needs only one full traversal");
+});
+
+test("a first feed pull preserves unpushed text behind an old tombstone", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  silenceConsoleErrors(t);
+  cloud.setClock(() => "2026-10-28T00:00:00.000Z");
+  const row = cloud.seedUnkeyedNote({ title: "Edited offline", content: "old text" });
+  const local = db.upsertNoteFromCloud(row, null, db.getPrivateSpaceId());
+  db.updateNote(local.id, { content: "unpushed text" });
+  cloud.setClock(() => "2026-10-29T00:00:00.000Z");
+  await cloud.request({ method: "DELETE", path: "/api/notes/delete", body: { id: row.id } });
+
+  await service.syncAll(true);
+
+  assert.equal(db.getNote(local.id).content, "unpushed text");
+  assert.equal(db.getNote(local.id).sync_status, "error", "the failed push remains retryable");
+  assert.ok(localStorageStub.getItem("lastSyncedAt.notes"));
+});
+
+for (const backup of [true, false]) {
+  test(`${backup ? "full" : "team-only"} replay waits for team capability without spending attempts`, async (t) => {
+    const ctx = await setup(t);
+    if (!ctx) return;
+    const { db, cloud, api, service } = ctx;
+    silenceConsoleErrors(t);
+    localStorageStub.setItem("cloudBackupEnabled", String(backup));
+    db.setActiveAccountId("user-harness");
+    const space = {
+      id: "cloud-space",
+      workspace_id: "workspace",
+      name: "Team",
+      slug: "team",
+      description: null,
+      emoji: null,
+      my_role: "admin",
+      my_direct_role: "admin",
+      member_count: 1,
+      teams: [],
+      created_at: "2026-10-28T00:00:00.000Z",
+      updated_at: "2026-10-28T00:00:00.000Z",
+    };
+    const localSpace = db.upsertSpaceFromCloud(space);
+    db.setSpaceSyncStatus(localSpace.id, "synced");
+    cloud.setClock(() => "2026-10-28T00:00:00.000Z");
+    const row = cloud.seedUnkeyedNote({ title: "Old team copy", content: "body" });
+    cloud.setNoteRevision(row.id, 1);
+    const local = db.upsertNoteFromCloud(
+      { ...row, space_id: space.id, user_id: "user-harness", revision: 1 },
+      null,
+      localSpace.id
+    );
+    cloud.setClock(() => "2026-10-29T00:00:00.000Z");
+    await cloud.request({ method: "DELETE", path: "/api/notes/delete", body: { id: row.id } });
+    localStorageStub.setItem("lastSyncedAt.notes", "2026-10-30T00:00:00.000Z");
+    localStorageStub.setItem("lastSyncedAt.notes.team", "2026-10-30T00:00:00.000Z");
+    cloud.setClock(() => "2026-11-01T00:00:00.000Z");
+    const personal = cloud.seedNote({ client_note_id: "personal-delta", title: "Personal" });
+
+    let available = false;
+    const request = api.cloudApiRequest;
+    api.cloudApiRequest = async (opts) => {
+      const response = await request(opts);
+      if (opts.path === "/api/me/spaces" && available) {
+        return { success: true, data: { data: [space] } };
+      }
+      if (opts.path.startsWith("/api/notes/list") && response.success) {
+        return {
+          ...response,
+          data: {
+            notes: response.data.notes
+              .filter((note) => note.id !== row.id || queryParam(opts.path, "scope") === "all")
+              .map((note) =>
+                note.id === row.id ? { ...note, space_id: space.id, user_id: "user-harness" } : note
+              ),
+          },
+        };
+      }
+      return response;
+    };
+
+    const replayKey = backup ? "noteFeedReplay.v1" : "noteFeedReplay.v1.team";
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const session = attempt === 0 ? service : new SyncService();
+      t.after(() => stopSyncTimers(session));
+      await session.syncAll(true);
+    }
+
+    assert.ok(db.getNote(local.id), "personal scope cannot see the old team tombstone");
+    assert.equal(localStorageStub.getItem(replayKey), null, "incomplete scope spends no attempts");
+    assert.equal(
+      copiesOf(db, personal.id).length,
+      backup ? 1 : 0,
+      "ordinary personal pulls continue"
+    );
+    available = true;
+
+    await service.syncAll(true);
+
+    assert.equal(db.getNote(local.id), null, "capability recovery must replay the old tombstone");
+    assert.equal(localStorageStub.getItem(replayKey), "3");
+    const replays = () =>
+      cloud.logFor("/api/notes/list").filter((call) => call.path.includes("1970-01-01"));
+    assert.equal(replays().length, 1);
+    assert.equal(queryParam(replays()[0].path, "scope"), "all");
+    await service.syncAll(true);
+    assert.equal(replays().length, 1, "a completed repair is not repeated");
+  });
+}
 
 test("a pull landing on a just-deleted note keeps its delete queued", (t) => {
   const db = createDb(t);

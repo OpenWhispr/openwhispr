@@ -2019,13 +2019,26 @@ export class SyncService {
     }
     const replayKey = teamOnly ? `${NOTE_FEED_REPLAY_KEY}.team` : NOTE_FEED_REPLAY_KEY;
     const cursorKey = teamOnly ? "lastSyncedAt.notes.team" : "lastSyncedAt.notes";
-    // A first sync has no old copies to reconcile.
-    if (!localStorage.getItem(cursorKey)) {
-      localStorage.setItem(replayKey, String(NOTE_FEED_REPLAY_ATTEMPTS));
-    }
+    const fromStart = !localStorage.getItem(cursorKey);
+    // A missing cursor can follow a partial legacy pull. Read tombstones too,
+    // so its saved copies are repaired without a second full traversal.
     // A parked pull left its cursors in place, so the next pass re-sees the
     // parked rows — typically after syncSpaces has mirrored the missing team.
-    if (await this.pullNotes(teamOnly)) await this.replayNoteFeed(teamOnly, replayKey);
+    if (await this.pullNotes(teamOnly, false, fromStart)) {
+      const teamCapable = this.canSyncTeamSpaces() && this.hasTeamSpacesCapability();
+      const uncoveredTeams =
+        !teamCapable &&
+        ((await window.electronAPI.getSpaces?.()) ?? []).some((space) => space.kind === "team");
+      // Personal deltas still run during an outage, but cannot complete a
+      // repair of existing team copies or spend its bounded retry attempts.
+      if (!uncoveredTeams) {
+        if (fromStart) {
+          localStorage.setItem(replayKey, String(NOTE_FEED_REPLAY_ATTEMPTS));
+        } else {
+          await this.replayNoteFeed(teamOnly, replayKey);
+        }
+      }
+    }
     // After the delta pull, which usually shows whether the server keeps
     // revisions without a probe.
     await this.backfillNoteRevisions(teamOnly);
@@ -2049,12 +2062,6 @@ export class SyncService {
     }
   }
 
-  // Rows synced before revisions carry none, and an unchanged server row never
-  // re-enters a delta pull, so a clear made elsewhere while this device ran a
-  // release that kept the text would never arrive. One successful snapshot per
-  // session applies them (pullNotes takes a clean pre-revision row whole),
-  // and only against a server that keeps revisions: an older API would
-  // otherwise repeat it every session for nothing.
   // Pulls used to match a cloud row only by client id, so a delete never found a
   // copy stored under another key, and the cursor has since moved past it. One
   // read of the whole feed brings those deletes back, for the normal path to
@@ -2072,6 +2079,12 @@ export class SyncService {
     }
   }
 
+  // Rows synced before revisions carry none, and an unchanged server row never
+  // re-enters a delta pull, so a clear made elsewhere while this device ran a
+  // release that kept the text would never arrive. One successful snapshot per
+  // session applies them (pullNotes takes a clean pre-revision row whole),
+  // and only against a server that keeps revisions: an older API would
+  // otherwise repeat it every session for nothing.
   private async backfillNoteRevisions(teamOnly: boolean): Promise<void> {
     if (this.revisionBackfillChecked) return;
     try {
