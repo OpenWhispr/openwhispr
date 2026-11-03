@@ -7,7 +7,11 @@ import {
   setActiveNoteId,
   useActiveContext,
 } from "../stores/noteStore";
-import { startRecording, useMeetingRecordingStore } from "../stores/meetingRecordingStore";
+import {
+  startRecording,
+  useMeetingRecordingStore,
+  type StartRecordingResult,
+} from "../stores/meetingRecordingStore";
 import { useTranscriptionContextAllowed } from "./usePolicy";
 import { parseSeedSegments } from "../utils/parseTranscriptSegments";
 import { isExplicitSpeakerCount, resolveExpectedSpeakerCount } from "../utils/participants";
@@ -18,7 +22,7 @@ export function startRecordingForNote(
   note: NoteItem | null,
   recorderName?: string,
   canAutoStart?: () => boolean
-): Promise<boolean> {
+): Promise<StartRecordingResult> {
   return startRecording({
     noteId: note?.id ?? null,
     noteTitle: note?.title ?? null,

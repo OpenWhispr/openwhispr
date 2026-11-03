@@ -369,10 +369,9 @@ test("automatic consent stays live while both prewarm and microphone selection a
 });
 
 for (const nativeCapture of [false, true]) {
-  test(`main setup ${nativeCapture ? "with" : "without"} native capture preserves the first capture boundary`, async (t) => {
+  test(`automatic main setup ${nativeCapture ? "with" : "without"} native capture waits for microphone selection`, async (t) => {
     const selecting = Promise.withResolvers();
     const devices = Promise.withResolvers();
-    const mainRequested = Promise.withResolvers();
     let store;
     let starting;
     t.after(async () => {
@@ -382,6 +381,7 @@ for (const nativeCapture of [false, true]) {
     });
     let allowed = true;
     let microphoneCalls = 0;
+    let mainStarts = 0;
     let mainStops = 0;
     installMicCaptureGlobals(t);
     const acquire = navigator.mediaDevices.getUserMedia;
@@ -404,7 +404,7 @@ for (const nativeCapture of [false, true]) {
             granted: nativeCapture,
           }),
           meetingTranscriptionStart: async () => {
-            mainRequested.resolve();
+            mainStarts++;
             return { success: true, systemAudioMode: strategy, systemAudioStrategy: strategy };
           },
           meetingTranscriptionStop: async () => {
@@ -417,15 +417,86 @@ for (const nativeCapture of [false, true]) {
     const vite = await createRendererServer(t, { cachePrefix: "meeting-main-capture-consent-" });
     store = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
     starting = store.startRecording({ ...START_ARGS, canAutoStart: () => allowed });
-    await Promise.all([selecting.promise, mainRequested.promise]);
+    await selecting.promise;
+    assert.equal(mainStarts, 0, "main setup cannot consume the note session before capture");
     allowed = false;
     devices.resolve([]);
-    assert.equal(await starting, nativeCapture);
-    assert.equal(microphoneCalls, nativeCapture ? 1 : 0);
-    assert.equal(store.useMeetingRecordingStore.getState().isRecording, nativeCapture);
+    assert.equal(await starting, false);
+    assert.equal(microphoneCalls, 0);
+    assert.equal(mainStarts, 0);
+    assert.equal(mainStops, 0);
+    assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
     assert.equal(store.useMeetingRecordingStore.getState().error, null);
-    if (!nativeCapture) assert.equal(mainStops, 1, "the suppressed main setup is torn down");
   });
+}
+
+for (const automatic of [false, true]) {
+  for (const microphoneFails of [false, true]) {
+    test(`${automatic ? "automatic" : "explicit"} native startup preserves capture ordering and continuity (microphone fails: ${microphoneFails})`, async (t) => {
+      const connecting = Promise.withResolvers();
+      const connected = Promise.withResolvers();
+      const requestedMicrophone = Promise.withResolvers();
+      const calls = [];
+      let allowed = true;
+      let store;
+      let starting;
+      t.after(async () => {
+        connected.resolve({
+          success: true,
+          systemAudioMode: "native",
+          systemAudioStrategy: "native",
+        });
+        await starting;
+        await store?.stopRecording();
+      });
+      installMicCaptureGlobals(t);
+      const acquire = navigator.mediaDevices.getUserMedia;
+      navigator.mediaDevices.getUserMedia = async (...args) => {
+        calls.push("mic");
+        requestedMicrophone.resolve();
+        if (microphoneFails) throw new Error("Microphone unavailable");
+        return acquire(...args);
+      };
+      installBrowserGlobals(t, {
+        window: {
+          electronAPI: {
+            checkSystemAudioAccess: async () => ({
+              mode: "native",
+              strategy: "native",
+              status: "granted",
+              granted: true,
+            }),
+            meetingTranscriptionStart: () => {
+              calls.push("main");
+              connecting.resolve();
+              return connected.promise;
+            },
+            meetingTranscriptionStop: async () => ({ success: true }),
+          },
+        },
+      });
+      const vite = await createRendererServer(t, { cachePrefix: "meeting-native-start-order-" });
+      store = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
+      starting = store.startRecording({
+        ...START_ARGS,
+        canAutoStart: automatic ? () => allowed : undefined,
+      });
+      await Promise.all([connecting.promise, requestedMicrophone.promise]);
+      assert.deepEqual(calls, automatic ? ["mic", "main"] : ["main", "mic"]);
+      allowed = false;
+      connected.resolve({
+        success: true,
+        systemAudioMode: "native",
+        systemAudioStrategy: "native",
+      });
+      assert.equal(
+        await starting,
+        true,
+        "a policy flip after the first capture request keeps the recording"
+      );
+      assert.equal(store.useMeetingRecordingStore.getState().isRecording, true);
+    });
+  }
 }
 
 test("policy changes after capture begins do not interrupt pending connection or live audio", async (t) => {

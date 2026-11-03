@@ -364,6 +364,47 @@ test("a meeting request records under automatic policy, and under manual only fr
   assert.deepEqual(calls.noteOnly, ["join"]);
 });
 
+test("a pending automatic start is consumed before a notes-view remount and cannot replay after suppression", async (t) => {
+  const access = Promise.withResolvers();
+  const nativeAccess = { granted: true, status: "granted", mode: "native", strategy: "native" };
+  t.after(() => access.resolve(nativeAccess));
+  const { show, calls, setStartMode, isRecording } = await setup(t);
+  globalThis.window.electronAPI.checkSystemAudioAccess = () => access.promise;
+  await setStartMode("automatic");
+  let pendingRequest = {
+    noteId: 11,
+    folderId: null,
+    event: null,
+    trigger: "calendar-join",
+    noteSessionId: "pending",
+  };
+  let handled = 0;
+  const notesProps = () => ({
+    meetingRecordingRequest: pendingRequest,
+    onMeetingRecordingRequestHandled: () => {
+      handled++;
+      pendingRequest = null;
+    },
+  });
+  await show("personal-notes", notesProps());
+  assert.equal(pendingRequest, null, "the parent must stop handing out an in-flight request");
+  assert.equal(handled, 1);
+  await show("home");
+  await show("personal-notes", notesProps());
+  await setStartMode("manual");
+  await React.act(async () => {
+    access.resolve(nativeAccess);
+    await new Promise(setImmediate);
+  });
+  assert.equal(isRecording(), false);
+  assert.deepEqual(calls.noteOnly, ["pending"]);
+  await setStartMode("automatic");
+  await show("home");
+  await show("personal-notes", notesProps());
+  assert.equal(handled, 1);
+  assert.equal(calls.start, 0);
+});
+
 test("Record starts from a note that manual policy opened without recording", async (t) => {
   const { show, isRecording, calls, setStartMode } = await setup(t);
   await setStartMode("manual");

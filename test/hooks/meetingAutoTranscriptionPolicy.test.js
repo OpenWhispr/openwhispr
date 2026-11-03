@@ -217,7 +217,7 @@ test("a recording policy refuses still reports why under automatic policy", asyn
       onSuppressed: () => calls.push("note-only"),
       onHandled: () => calls.push("handled"),
     });
-    assert.deepEqual(calls, ["restore", "handled"], snapshot.status);
+    assert.deepEqual(calls, ["handled", "restore"], snapshot.status);
     assert.ok(store.useMeetingRecordingStore.getState().error, snapshot.status);
   }
 });

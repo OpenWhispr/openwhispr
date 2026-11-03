@@ -1,8 +1,8 @@
-import type { StartRecordingArgs } from "../stores/meetingRecordingStore";
+import type { StartRecordingArgs, StartRecordingResult } from "../stores/meetingRecordingStore";
 
 interface MeetingRecordingRequestOptions {
   args: StartRecordingArgs;
-  startRecording: (args: StartRecordingArgs) => Promise<boolean>;
+  startRecording: (args: StartRecordingArgs) => Promise<StartRecordingResult>;
   restoreFromMeetingMode: () => Promise<void> | void;
   onHandled: () => void;
   trigger?: string;
@@ -20,7 +20,7 @@ export async function handleMeetingRecordingRequest({
   onSuppressed,
 }: MeetingRecordingRequestOptions): Promise<void> {
   let suppressed = false;
-  let accepted = false;
+  let accepted: StartRecordingResult = false;
   const check =
     trigger === "hotkey" || !canAutoStart
       ? undefined
@@ -28,13 +28,11 @@ export async function handleMeetingRecordingRequest({
           suppressed ||= !canAutoStart();
           return !suppressed;
         };
-  try {
-    if (!check || check()) {
-      accepted = await startRecording(check ? { ...args, canAutoStart: check } : args);
-      if (!accepted && !suppressed) await restoreFromMeetingMode();
-    }
-  } finally {
-    onHandled();
+  // Consume before setup can outlive the notes view and be replayed on remount.
+  onHandled();
+  if (!check || check()) {
+    accepted = await startRecording(check ? { ...args, canAutoStart: check } : args);
+    if (accepted === false && !suppressed) await restoreFromMeetingMode();
   }
-  if (!accepted && suppressed) return onSuppressed?.();
+  if (accepted === "cancelled" || (!accepted && suppressed)) return onSuppressed?.();
 }

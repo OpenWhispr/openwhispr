@@ -27,7 +27,7 @@ test("suppressed automatic requests finish once without restoring layout; only h
     });
     assert.deepEqual(
       calls,
-      trigger === "hotkey" ? ["record", "handled"] : ["handled", "note-only"]
+      trigger === "hotkey" ? ["handled", "record"] : ["handled", "note-only"]
     );
   }
 });
@@ -93,7 +93,7 @@ const blockedMeetingPolicy = {
   minAppVersion: null,
 };
 
-test("a policy-rejected automatic meeting start restores manager mode before clearing", async (t) => {
+test("a policy-rejected automatic meeting start consumes the request and restores manager mode", async (t) => {
   const MeetingDetectionEngine = loadMeetingDetectionEngine();
   const reminderScheduler = { getActiveMeetingState: () => ({}) };
   const processDetector = new EventEmitter();
@@ -162,7 +162,7 @@ test("a policy-rejected automatic meeting start restores manager mode before cle
   });
 
   assert.equal(engine._meetingModeActive, false);
-  assert.deepEqual(lifecycle, ["restored", "handled"]);
+  assert.deepEqual(lifecycle, ["handled", "restored"]);
   assert.equal(
     useMeetingRecordingStore.getState().error,
     "policyRestricted",
@@ -300,6 +300,115 @@ test("overlapping automatic joins each release their note when the pending start
   engine.handleCalendarReminder({ id: "third", summary: "Third" });
   assert.equal(shown.length, 1, "a later meeting prompts with the second note still open");
 });
+
+for (const cancel of [false, true]) {
+  test(`${cancel ? "cancellation during microphone permission" : "suppression during microphone selection"} keeps the joined event's note identity`, async (t) => {
+    const MeetingDetectionEngine = loadMeetingDetectionEngine();
+    const selecting = Promise.withResolvers();
+    const devices = Promise.withResolvers();
+    const microphoneRequested = Promise.withResolvers();
+    const permission = Promise.withResolvers();
+    let allowed = true;
+    let store;
+    let request;
+    t.after(async () => {
+      devices.resolve([]);
+      permission.resolve();
+      await request;
+      await store?.stopRecording();
+    });
+    installMicCaptureGlobals(t);
+    const acquire = navigator.mediaDevices.getUserMedia;
+    navigator.mediaDevices.getUserMedia = async (...args) => {
+      microphoneRequested.resolve();
+      await permission.promise;
+      return acquire(...args);
+    };
+    navigator.mediaDevices.enumerateDevices = () => {
+      selecting.resolve();
+      return devices.promise;
+    };
+    const navigations = [];
+    const shown = [];
+    const engine = new MeetingDetectionEngine(
+      { getActiveMeetingState: () => ({}) },
+      Object.assign(new EventEmitter(), { stop() {} }),
+      Object.assign(new EventEmitter(), { start() {}, stop() {}, resetPrompt() {} }),
+      {
+        notificationPrefs: {},
+        queueMeetingNoteNavigation: async (payload) => navigations.push(payload),
+        showMeetingNotification: (payload) => shown.push(payload),
+      },
+      {
+        getCalendarEventById: (id) => ({
+          id,
+          end_time: new Date(Date.now() + 60_000).toISOString(),
+        }),
+        getOwnNoteByCalendarEventId: () => ({ id: 1, folder_id: 7 }),
+      }
+    );
+    t.after(() => engine.stop());
+    engine.preferences.audioDetection = true;
+    installBrowserGlobals(t, {
+      window: {
+        electronAPI: {
+          checkSystemAudioAccess: async () => ({
+            mode: "unsupported",
+            strategy: "unsupported",
+            status: "unsupported",
+            granted: false,
+          }),
+          meetingTranscriptionStart: async (args) => {
+            await engine.beginRecordingSession(args);
+            return {
+              success: true,
+              systemAudioMode: "unsupported",
+              systemAudioStrategy: "unsupported",
+            };
+          },
+          meetingTranscriptionStop: async (id) => {
+            engine.endRecordingSession(id);
+            return { success: true };
+          },
+        },
+      },
+    });
+    const vite = await createRendererServer(t, { cachePrefix: "meeting-note-selection-consent-" });
+    store = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
+    const { handleMeetingRecordingRequest } = await vite.ssrLoadModule(
+      "/helpers/meetingRecordingRequest.ts"
+    );
+    await engine.joinCalendarMeeting("joined");
+    const note = navigations[0];
+    request = handleMeetingRecordingRequest({
+      args: { noteId: note.noteId, noteTitle: "Meeting", folderId: 7, autoEndEligible: true },
+      trigger: "calendar-join",
+      canAutoStart: () => allowed,
+      startRecording: store.startRecording,
+      onSuppressed: () => engine.markMeetingNoteOnly(note.noteSessionId),
+      onHandled() {},
+      restoreFromMeetingMode: () => assert.fail("suppression must preserve the layout"),
+    });
+    await selecting.promise;
+    if (cancel) {
+      devices.resolve([]);
+      await microphoneRequested.promise;
+    }
+    const stopping = cancel ? store.stopRecording() : null;
+    allowed = cancel;
+    devices.resolve([]);
+    permission.resolve();
+    await request;
+    await stopping;
+    assert.equal(engine._meetingNoteSession?.id, note.noteSessionId);
+    assert.equal(engine._meetingModeActive, false);
+    engine.handleCalendarReminder({ id: "joined", summary: "Joined" });
+    engine._handleDetection("audio", "sustained-audio", { attributed: true });
+    assert.equal(shown.length, 0, "the note's own reminder and first call stay quiet");
+    engine.handleCalendarReminder({ id: "next", summary: "Next" });
+    assert.equal(shown.length, 1, "a later meeting still prompts");
+  });
+}
 
 test("a suppressed request is consumed before delayed IPC so remount cannot replay it", async () => {
   const { handleMeetingRecordingRequest } =
