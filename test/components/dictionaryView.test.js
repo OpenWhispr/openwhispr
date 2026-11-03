@@ -13,6 +13,7 @@ const MOCKS = {
   "react-i18next": `
     const t = (key, options) => (options ? key + JSON.stringify(options) : key);
     export const useTranslation = () => ({ t, i18n: { language: "en" } });
+    export const initReactI18next = { type: "3rdParty", init() {} };
   `,
   "/hooks/useSettings": `
     export function useSettings() { return globalThis.__settings; }
