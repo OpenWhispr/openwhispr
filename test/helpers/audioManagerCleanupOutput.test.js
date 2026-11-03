@@ -144,7 +144,7 @@ test("invalid completed cleanup keeps raw text across dictation routes", async (
     useSettingsStore.setState({
       cleanupMode: "local",
       cleanupProvider: "local",
-      cleanupModel: "qwen3.5-0.8b-q4_k_m",
+      cleanupModel: "test-model",
       customPrompts: { cleanup: "" },
     });
     window.electronAPI.processLocalReasoning = async () => ({ success: true, text: DUPLICATE });

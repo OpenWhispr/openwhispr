@@ -9,6 +9,7 @@ import {
 } from "react";
 import { AudioLines, Check, CircleCheck, Download, MousePointer2, Trash2 } from "../icons";
 import { useTranslation } from "react-i18next";
+import { ConfirmDialog } from "../ui/dialog";
 import { LocalModelPolicyNotice } from "../ui/LocalModelPolicyNotice";
 import { FieldLabel, ProviderCheckField } from "../ui/ProviderCheckField";
 import { ConnectionCheckAnnouncer } from "../ui/ConnectionCheckAnnouncer";
@@ -16,6 +17,7 @@ import { Button } from "../ui/button";
 import { ProviderIcon } from "../ui/ProviderIcon";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { useConnectionAutoCheck } from "../../hooks/useConnectionAutoCheck";
+import { useDialogs } from "../../hooks/useDialogs";
 import { isWindowSwitchBlur } from "../../hooks/useFocusHold";
 import { useModelDownload } from "../../hooks/useModelDownload";
 import type { ParakeetCheckResult } from "../../types/electron";
@@ -25,6 +27,7 @@ import { normalizeBaseUrl } from "../../config/constants";
 import { withHttpsScheme } from "../../utils/urlUtils";
 import { usePolicySnapshot } from "../../hooks/usePolicy";
 import {
+  allowedLocalModelIds,
   filterByokProviderOptionsByPolicy,
   isModeAllowedByPolicy,
   isLocalModelAllowedByPolicy,
@@ -56,6 +59,7 @@ import {
 } from "./flow";
 import { useDebouncedCallback } from "../../hooks/useDebouncedCallback";
 import {
+  consumePendingLocalModel,
   forgetPendingLocalModel,
   isPendingLocalModel,
   readPendingLocalModels,
@@ -262,6 +266,36 @@ function isSameEndpoint(baseUrl: string, savedBaseUrl: string): boolean {
   return Boolean(saved) && endpointIdentity(baseUrl) === saved;
 }
 
+function speechFamilyModelIds(familyId: string): string[] {
+  return usesParakeetManager(familyId)
+    ? Object.keys(getParakeetModels()).filter((id) => getASRModelOrganization(id) === familyId)
+    : Object.keys(getWhisperModels());
+}
+
+/** The first family a restricted member can pick from, in the order the step lists them. */
+function firstApprovedLocalFamily(
+  assistant: boolean,
+  policy: PolicyDecisionSnapshot,
+  parakeetUnavailable = false
+): string | undefined {
+  if (assistant) {
+    return modelRegistry
+      .getAllProviders()
+      .find((provider) =>
+        provider.models.some(
+          (model) => !model.legacy && isLocalModelAllowedByPolicy(policy, "llm", model.id)
+        )
+      )?.id;
+  }
+  return LOCAL_ASR_ORGANIZATIONS.find(
+    ({ id }) =>
+      !(parakeetUnavailable && usesParakeetManager(id)) &&
+      speechFamilyModelIds(id).some((modelId) =>
+        isLocalModelAllowedByPolicy(policy, "transcription", modelId)
+      )
+  )?.id;
+}
+
 /**
  * The provider/model a local step opens on: the draft this step last wrote, then
  * a selection whose download is still pending, then whatever the store already
@@ -278,20 +312,15 @@ function resolveInitialLocalSelection(
   // to whisper); open on the recommended Oruk model instead of that fallback.
   const hasChosenLocalASR =
     !!store.parakeetModel || localStorage.getItem("localTranscriptionProvider") !== null;
+  // Only a settled restriction moves away from what anyone else would open on.
+  const restricted = policy.status === "managed";
   if (!assistant && !resumeState && !pending && !hasChosenLocalASR) {
-    if (isLocalModelAllowedByPolicy(policy, "transcription", DEFAULT_LOCAL_ASR_SELECTION.modelId))
+    if (
+      !restricted ||
+      isLocalModelAllowedByPolicy(policy, "transcription", DEFAULT_LOCAL_ASR_SELECTION.modelId)
+    )
       return DEFAULT_LOCAL_ASR_SELECTION;
-    const approvedWhisper = Object.keys(getWhisperModels()).find((id) =>
-      isLocalModelAllowedByPolicy(policy, "transcription", id)
-    );
-    if (approvedWhisper) return { provider: "whisper", modelId: "" };
-    const approvedParakeet = Object.keys(getParakeetModels()).find((id) =>
-      isLocalModelAllowedByPolicy(policy, "transcription", id)
-    );
-    return {
-      provider: approvedParakeet ? getASRModelOrganization(approvedParakeet) : "whisper",
-      modelId: "",
-    };
+    return { provider: firstApprovedLocalFamily(false, policy) ?? "whisper", modelId: "" };
   }
   const savedProvider = assistant
     ? modelRegistry.getProvider(store.chatAgentProvider)
@@ -324,20 +353,23 @@ function resolveInitialLocalSelection(
     (resumeProvider === provider ? resumeState?.modelId : "") ||
     (pendingProvider === provider ? pending?.modelId : "") ||
     savedModel;
-  // A provider whose models are all legacy lists nothing once its model is gone.
-  const listsAModel = modelRegistry
-    .getProvider(provider)
-    ?.models.some((model) => isListedModel(model, model.id === modelId));
-  if (assistant && (!listsAModel || !modelId)) {
-    const approvedProvider = modelRegistry
-      .getAllProviders()
-      .find((candidate) =>
-        candidate.models.some(
-          (model) => !model.legacy && isLocalModelAllowedByPolicy(policy, "llm", model.id)
-        )
+  const assistantModels = modelRegistry.getProvider(provider)?.models ?? [];
+  const familyHasApprovedModel = assistant
+    ? assistantModels.some(
+        (model) =>
+          isListedModel(model, model.id === modelId) &&
+          isLocalModelAllowedByPolicy(policy, "llm", model.id)
+      )
+    : speechFamilyModelIds(provider).some((id) =>
+        isLocalModelAllowedByPolicy(policy, "transcription", id)
       );
-    return { provider: approvedProvider?.id ?? "qwen", modelId: "" };
+  if (restricted && !familyHasApprovedModel) {
+    const approvedFamily = firstApprovedLocalFamily(assistant, policy);
+    if (approvedFamily) return { provider: approvedFamily, modelId: "" };
   }
+  // A provider whose models are all legacy lists nothing once its model is gone.
+  const listsAModel = assistantModels.some((model) => isListedModel(model, model.id === modelId));
+  if (assistant && !listsAModel) return { provider: "qwen", modelId: "" };
   return { provider, modelId };
 }
 
@@ -845,6 +877,12 @@ export function LocalModelSetupStep({
   const [downloadedLlm, setDownloadedLlm] = useState<Set<string>>(new Set());
   const [parakeetCapability, setParakeetCapability] = useState<ParakeetCheckResult | null>(null);
   const parakeetUnavailable = !assistant && parakeetCapability?.supported === false;
+  const [inventoryLoaded, setInventoryLoaded] = useState(false);
+  const hasInstalledModelInFamily = (familyId: string): boolean =>
+    usesParakeetManager(familyId)
+      ? [...downloadedParakeet].some((id) => getASRModelOrganization(id) === familyId)
+      : downloadedWhisper.size > 0;
+  const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
 
   useEffect(() => {
     if (assistant) return;
@@ -860,17 +898,18 @@ export function LocalModelSetupStep({
     };
   }, [assistant]);
 
+  // A family with something installed stays open, so its models can be deleted.
+  const parakeetFamilyStranded =
+    parakeetUnavailable &&
+    inventoryLoaded &&
+    usesParakeetManager(selectedProvider) &&
+    !hasInstalledModelInFamily(selectedProvider);
   useEffect(() => {
-    if (
-      parakeetUnavailable &&
-      usesParakeetManager(selectedProvider) &&
-      !store.parakeetModel &&
-      !resumeState
-    ) {
+    if (parakeetFamilyStranded) {
       setSelectedProvider("whisper");
       setSelectedModel("");
     }
-  }, [parakeetUnavailable, selectedProvider, store.parakeetModel, resumeState]);
+  }, [parakeetFamilyStranded]);
 
   const refreshDownloadedModels = useCallback(async () => {
     const [whisper, parakeet, llm] = await Promise.all([
@@ -891,6 +930,7 @@ export function LocalModelSetupStep({
     setDownloadedLlm(
       new Set((llm ?? []).filter((model) => model.isDownloaded).map((model) => model.id))
     );
+    setInventoryLoaded(true);
   }, []);
 
   const whisperDownload = useModelDownload({
@@ -921,20 +961,33 @@ export function LocalModelSetupStep({
   const saved = savedLocalSelection(assistant, store);
   const keptModelId = downloadedFor(saved.provider).has(saved.modelId) ? saved.modelId : "";
 
+  const restricted = policy.status === "managed";
+  // Only a restricted member sees an installed model base would hide, to delete it.
+  const installedAndBlocked = useCallback(
+    (modelId: string): boolean =>
+      restricted && downloadedLlm.has(modelId) && !modelAllowed(modelId),
+    [downloadedLlm, modelAllowed, restricted]
+  );
+  const approvedCohereOffered =
+    allowedLocalModelIds(policy, "transcription") !== null &&
+    speechFamilyModelIds("cohere").some(modelAllowed);
+
   const providerOptions = useMemo(() => {
     if (assistant) {
       return modelRegistry
         .getAllProviders()
-        .filter((provider) =>
-          provider.models.some(
-            (model) =>
-              (modelAllowed(model.id) || downloadedLlm.has(model.id)) &&
-              isListedModel(
-                model,
-                model.id === selectedModel || model.id === keptModelId,
-                downloadedLlm.has(model.id)
-              )
-          )
+        .filter(
+          (provider) =>
+            (restricted && provider.id === selectedProvider) ||
+            provider.models.some(
+              (model) =>
+                (!restricted || modelAllowed(model.id) || installedAndBlocked(model.id)) &&
+                isListedModel(
+                  model,
+                  model.id === selectedModel || model.id === keptModelId,
+                  installedAndBlocked(model.id)
+                )
+            )
         )
         .map((provider) => ({
           id: provider.id,
@@ -942,11 +995,34 @@ export function LocalModelSetupStep({
           icon: provider.id,
         }));
     }
-    return LOCAL_ASR_ORGANIZATIONS.map((organization) => ({
+    const installedFamilies = new Set([
+      ...[...downloadedParakeet].map(getASRModelOrganization),
+      ...(downloadedWhisper.size > 0 ? ["whisper"] : []),
+    ]);
+    return LOCAL_ASR_ORGANIZATIONS.filter(({ id }) => {
+      if (id === selectedProvider || id === saved.provider || installedFamilies.has(id)) {
+        return true;
+      }
+      // Cohere has no automatic language detection, so it is only ever an opt-in.
+      if (id === "cohere") return approvedCohereOffered;
+      return !restricted || speechFamilyModelIds(id).some(modelAllowed);
+    }).map((organization) => ({
       ...organization,
       icon: organization.id === "whisper" ? "openai" : organization.id,
     }));
-  }, [assistant, keptModelId, selectedModel, modelAllowed, downloadedLlm]);
+  }, [
+    approvedCohereOffered,
+    assistant,
+    downloadedParakeet,
+    downloadedWhisper,
+    installedAndBlocked,
+    keptModelId,
+    modelAllowed,
+    restricted,
+    saved.provider,
+    selectedModel,
+    selectedProvider,
+  ]);
 
   const models = useMemo<
     Array<{
@@ -961,7 +1037,7 @@ export function LocalModelSetupStep({
     if (assistant) {
       return (modelRegistry.getProvider(selectedProvider)?.models ?? [])
         .filter((model) =>
-          isListedModel(model, model.id === selectedModel, downloadedLlm.has(model.id))
+          isListedModel(model, model.id === selectedModel, installedAndBlocked(model.id))
         )
         .map((model) => ({
           id: model.id,
@@ -990,7 +1066,7 @@ export function LocalModelSetupStep({
       recommended: model.recommended,
       icon: "openai",
     }));
-  }, [assistant, selectedModel, selectedProvider, downloadedLlm]);
+  }, [assistant, selectedModel, selectedProvider, installedAndBlocked]);
 
   useEffect(() => {
     if (
@@ -1013,6 +1089,24 @@ export function LocalModelSetupStep({
       ? parakeetDownload
       : whisperDownload;
   const downloadedModels = downloadedFor(selectedProvider);
+  const visibleModels = models.filter(
+    (model) =>
+      downloadedModels.has(model.id) ||
+      (modelAllowed(model.id) && !(parakeetUnavailable && usesParakeetManager(selectedProvider)))
+  );
+  // The policy can settle after this step opened on a family it leaves empty. This
+  // only moves what is on screen: nothing is saved or downloaded until a choice.
+  const approvedFamily =
+    restricted && inventoryLoaded && visibleModels.length === 0
+      ? firstApprovedLocalFamily(assistant, policy, parakeetUnavailable)
+      : undefined;
+  useEffect(() => {
+    if (approvedFamily) {
+      setSelectedProvider(approvedFamily);
+      setSelectedModel("");
+    }
+  }, [approvedFamily]);
+
   const selectedReady = Boolean(
     selectedModel &&
     modelAllowed(selectedModel) &&
@@ -1051,9 +1145,35 @@ export function LocalModelSetupStep({
     [assistant, parakeetUnavailable, selectedProvider, store, scope]
   );
 
+  // A download that finished while the policy was unresolved kept its selection,
+  // and the settled verdict decides it. Past Proceed or Skip, the tray does this.
+  useEffect(() => {
+    const kind = assistant ? "assistant" : "dictation";
+    const pending = readPendingLocalModels()[kind];
+    if (
+      !pending ||
+      localStorage.getItem("localSetupPending") === "true" ||
+      pending.provider !== (selectedProvider === "oruk" ? "nvidia" : selectedProvider) ||
+      !downloadedModels.has(pending.modelId)
+    )
+      return;
+    if (consumePendingLocalModel(kind, pending.modelId, usePolicyStore.getState())) {
+      selectInstalledModel(pending.modelId);
+    }
+  }, [assistant, downloadedModels, policy, selectInstalledModel, selectedProvider]);
+
   const chooseInstalledModel = (modelId: string): void => {
     forgetPendingLocalModel(assistant ? "assistant" : "dictation");
     selectInstalledModel(modelId);
+  };
+
+  const confirmDelete = (modelId: string): void => {
+    showConfirmDialog({
+      title: t("transcription.deleteModel.title"),
+      description: t("transcription.deleteModel.description"),
+      onConfirm: () => void activeDownload.deleteModel(modelId, refreshDownloadedModels),
+      variant: "destructive",
+    });
   };
 
   const downloadModel = (modelId: string): void => {
@@ -1066,13 +1186,11 @@ export function LocalModelSetupStep({
       !activeDownload.isDownloadingModel(modelId) &&
       (assistant || !activeDownload.isDownloading)
     ) {
-      const identity = usePolicyStore.getState();
+      const { accountId } = usePolicyStore.getState();
       rememberPendingLocalModel(kind, {
         provider: selectedProvider === "oruk" ? "nvidia" : selectedProvider,
         modelId,
-        ...(identity.accountId != null
-          ? { accountId: identity.accountId, authGeneration: identity.authGeneration }
-          : {}),
+        ...(accountId != null ? { accountId } : {}),
       });
     }
     void activeDownload.downloadModel(modelId, (downloadedId): void => {
@@ -1109,7 +1227,7 @@ export function LocalModelSetupStep({
     if (
       parakeetUnavailable &&
       usesParakeetManager(providerId) &&
-      ![...downloadedParakeet].some((id) => getASRModelOrganization(id) === providerId)
+      !hasInstalledModelInFamily(providerId)
     )
       return;
     const restoresSaved = providerId === saved.provider && keptModelId !== "";
@@ -1155,79 +1273,71 @@ export function LocalModelSetupStep({
   };
 
   return (
-    <section className={`mt-8 ${LOCAL_MODEL_CARD_CLASS}`}>
-      <SetupStageStepper stepId={stepId} />
+    <>
+      <section className={`mt-8 ${LOCAL_MODEL_CARD_CLASS}`}>
+        <SetupStageStepper stepId={stepId} />
 
-      <div className="mt-6">
-        <FieldLabel>{t("onboarding.rehaul.local.providerLabel")}</FieldLabel>
-        <Select value={selectedProvider} onValueChange={chooseProvider}>
-          <SelectTrigger className={LOCAL_SELECT_TRIGGER_CLASS}>
-            <span>{currentProvider?.name ?? selectedProvider}</span>
-          </SelectTrigger>
-          <SelectContent className={`max-h-[14.625rem] ${SELECT_PANEL_CLASS}`}>
-            {providerOptions.map((provider) => (
-              <SelectItem
-                key={provider.id}
-                value={provider.id}
-                className={SELECT_ITEM_CLASS}
-                disabled={
-                  parakeetUnavailable &&
-                  usesParakeetManager(provider.id) &&
-                  ![...downloadedParakeet].some((id) => getASRModelOrganization(id) === provider.id)
-                }
-              >
-                <span className="flex items-center gap-2.5">
-                  <ProviderIcon
-                    provider={provider.icon}
-                    className="size-5"
-                    monochrome={assistant && provider.id === "qwen"}
-                  />
-                  {provider.name}
-                </span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {parakeetUnavailable && (
-          <p className="mt-2 text-xs text-[var(--onboarding-text-secondary)]">
-            {parakeetCapability.minimumMacOSVersion
-              ? t("transcription.parakeet.requiresMacOS", {
-                  version: parakeetCapability.minimumMacOSVersion,
-                })
-              : t("transcription.parakeet.unavailable")}
-          </p>
-        )}
-      </div>
+        <div className="mt-6">
+          <FieldLabel>{t("onboarding.rehaul.local.providerLabel")}</FieldLabel>
+          <Select value={selectedProvider} onValueChange={chooseProvider}>
+            <SelectTrigger className={LOCAL_SELECT_TRIGGER_CLASS}>
+              <span>{currentProvider?.name ?? selectedProvider}</span>
+            </SelectTrigger>
+            <SelectContent className={`max-h-[14.625rem] ${SELECT_PANEL_CLASS}`}>
+              {providerOptions.map((provider) => (
+                <SelectItem
+                  key={provider.id}
+                  value={provider.id}
+                  className={SELECT_ITEM_CLASS}
+                  disabled={
+                    parakeetUnavailable &&
+                    usesParakeetManager(provider.id) &&
+                    !hasInstalledModelInFamily(provider.id)
+                  }
+                >
+                  <span className="flex items-center gap-2.5">
+                    <ProviderIcon
+                      provider={provider.icon}
+                      className="size-5"
+                      monochrome={assistant && provider.id === "qwen"}
+                    />
+                    {provider.name}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {parakeetUnavailable && (
+            <p className="mt-2 text-xs text-[var(--onboarding-text-secondary)]">
+              {parakeetCapability.minimumMacOSVersion
+                ? t("transcription.parakeet.requiresMacOS", {
+                    version: parakeetCapability.minimumMacOSVersion,
+                  })
+                : t("transcription.parakeet.unavailable")}
+            </p>
+          )}
+        </div>
 
-      <LocalModelPolicyNotice
-        scope={scope}
-        hasSupportedModel={
-          assistant
-            ? modelRegistry
-                .getAllProviders()
-                .some((provider) =>
-                  provider.models.some(
-                    (model) =>
-                      modelAllowed(model.id) &&
-                      isListedModel(model, model.id === saved.modelId, downloadedLlm.has(model.id))
+        <LocalModelPolicyNotice
+          scope={scope}
+          hasSupportedModel={
+            assistant
+              ? modelRegistry
+                  .getAllProviders()
+                  .some((provider) =>
+                    provider.models.some(
+                      (model) =>
+                        modelAllowed(model.id) && isListedModel(model, model.id === saved.modelId)
+                    )
                   )
-                )
-            : Object.keys(getWhisperModels()).some(modelAllowed) ||
-              (parakeetCapability?.supported === true &&
-                Object.keys(getParakeetModels()).some(modelAllowed))
-        }
-      />
-      {/* A fixed list height keeps the card and footer stable while the visible
+              : Object.keys(getWhisperModels()).some(modelAllowed) ||
+                (!parakeetUnavailable && Object.keys(getParakeetModels()).some(modelAllowed))
+          }
+        />
+        {/* A fixed list height keeps the card and footer stable while the visible
           scrollbar makes additional provider models discoverable. */}
-      <div className="onboarding-list-scroll mt-4 h-56 rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface-secondary)]">
-        {models
-          .filter(
-            (model) =>
-              downloadedModels.has(model.id) ||
-              (modelAllowed(model.id) &&
-                !(parakeetUnavailable && usesParakeetManager(selectedProvider)))
-          )
-          .map((model) => {
+        <div className="onboarding-list-scroll mt-4 h-56 rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface-secondary)]">
+          {visibleModels.map((model) => {
             const isDownloaded = downloadedModels.has(model.id);
             const download = activeDownload.downloads[model.id];
             const isDownloading = Boolean(download);
@@ -1308,9 +1418,7 @@ export function LocalModelSetupStep({
                     variant="ghost"
                     size="icon"
                     aria-label={t("common.delete")}
-                    onClick={() =>
-                      void activeDownload.deleteModel(model.id, refreshDownloadedModels)
-                    }
+                    onClick={() => confirmDelete(model.id)}
                   >
                     <Trash2 className="size-4" />
                   </Button>
@@ -1343,24 +1451,36 @@ export function LocalModelSetupStep({
               </div>
             );
           })}
-      </div>
+        </div>
 
-      <div className={`mt-5 grid gap-2 ${showSkip ? "grid-cols-2" : "grid-cols-1"}`}>
-        {/* On the assistant step, Skip also lets local-dictation users finish
+        <div className={`mt-5 grid gap-2 ${showSkip ? "grid-cols-2" : "grid-cols-1"}`}>
+          {/* On the assistant step, Skip also lets local-dictation users finish
             without configuring a cleanup model. */}
-        {showSkip && (
-          <StepSecondaryAction
-            onClick={skip}
-            disabled={!assistant && !canProceed}
-            className="h-10!"
-          >
-            {t("common.skip")}
-          </StepSecondaryAction>
-        )}
-        <StepPrimaryAction onClick={proceed} disabled={!canProceed} className="h-10!">
-          {t("onboarding.rehaul.provider.proceed")}
-        </StepPrimaryAction>
-      </div>
-    </section>
+          {showSkip && (
+            <StepSecondaryAction
+              onClick={skip}
+              disabled={!assistant && !canProceed}
+              className="h-10!"
+            >
+              {t("common.skip")}
+            </StepSecondaryAction>
+          )}
+          <StepPrimaryAction onClick={proceed} disabled={!canProceed} className="h-10!">
+            {t("onboarding.rehaul.provider.proceed")}
+          </StepPrimaryAction>
+        </div>
+      </section>
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        onOpenChange={(open) => !open && hideConfirmDialog()}
+        title={confirmDialog.title}
+        description={confirmDialog.description}
+        confirmText={confirmDialog.confirmText}
+        cancelText={confirmDialog.cancelText}
+        onConfirm={confirmDialog.onConfirm}
+        variant={confirmDialog.variant}
+      />
+    </>
   );
 }

@@ -58,8 +58,11 @@ import {
   isAgentAllowed,
   isCloudBackupAllowed,
   isLlmSelectionAllowed,
+  isLocalChoiceRefusal,
+  isLocalModelAllowedByPolicy,
   isTranscriptionContextAllowed,
   isTranscriptionSelectionAllowed,
+  localModelRefusal,
 } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
 import {
@@ -2292,7 +2295,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
       const localProvider = settings.localTranscriptionProvider;
       const whisperModel = settings.whisperModel;
-      const parakeetModel = settings.parakeetModel;
+      const parakeetModel = settings.parakeetModel || "parakeet-tdt-0.6b-v3";
+
       const cloudTranscriptionMode = settings.cloudTranscriptionMode;
       const isSignedIn = settings.isSignedIn;
 
@@ -2316,20 +2320,26 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           managedTranscription.kind === "managed" ? managedTranscription.deployment : null;
         result = await this.processWithOpenAIAPI(audioBlob, metadata, wasCancelled);
       } else if (useLocalWhisper) {
-        const finalLocalModel =
+        // Judges the saved model, not parakeetModel: its default is for guests and
+        // unmanaged users, and a blank under a managed policy must never reach it.
+        const savedLocalModel =
           localProvider === "cohere"
             ? settings.cohereModel
             : isSherpaLocalProvider(localProvider)
-              ? parakeetModel
+              ? settings.parakeetModel
               : whisperModel;
+        const policyState = usePolicyStore.getState();
         if (
           settings.policyBlockedLocalScopes?.includes("dictation") ||
-          typeof finalLocalModel !== "string" ||
-          !finalLocalModel.trim()
+          !isLocalModelAllowedByPolicy(policyState, "transcription", savedLocalModel ?? "")
         ) {
+          const { code, messageKey, settingsTarget } = localModelRefusal(
+            policyState,
+            "transcription"
+          );
           throw Object.assign(
             new Error("Selected local model is restricted by your organization."),
-            { code: "POLICY_MODEL_BLOCKED", messageKey: "models.policy.modelBlocked" }
+            { code, messageKey, ...(isLocalChoiceRefusal(code) ? { settingsTarget } : {}) }
           );
         }
         if (isSherpaLocalProvider(localProvider)) {

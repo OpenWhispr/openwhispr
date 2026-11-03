@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { usePolicyStore } from "../stores/policyStore";
+import { useManagedScopeResolution } from "../stores/enterpriseIdentityStore";
 import { selectPolicyEffectiveSettings, useSettingsStore } from "../stores/settingsStore";
 import {
   filterModeOptionsByPolicy,
@@ -9,6 +10,8 @@ import {
   isTranscriptionSelectionAllowed,
   isAudioFeatureAllowed,
   reconcilePolicyModeSelection,
+  transcriptionChoiceRefusal,
+  type LocalModelRefusal,
   type PolicyDecisionSnapshot,
   type TranscriptionPolicyContext,
 } from "../stores/policyRules";
@@ -31,8 +34,35 @@ export function useTranscriptionContextAllowed(context: TranscriptionPolicyConte
       getTranscriptionSelection(selectPolicyEffectiveSettings(settings, snapshot), context)
     )
   );
+  const setupMode = useSettingsStore((settings) => settings.enterpriseTranscriptionSetupMode);
+  const managed = useManagedScopeResolution(
+    "transcription",
+    setupMode,
+    context === "meeting" ? "realtime" : "batch"
+  );
+  // Managed audio outranks the personal selection, which a restricted model list
+  // may refuse. A meeting's setup error still reaches the start, which reports it.
+  const usesManagedRoute =
+    managed.kind === "managed" || (context === "meeting" && managed.kind === "error");
   return (
-    isAudioFeatureAllowed(snapshot, context) && isTranscriptionSelectionAllowed(snapshot, selection)
+    isAudioFeatureAllowed(snapshot, context) &&
+    (usesManagedRoute || isTranscriptionSelectionAllowed(snapshot, selection))
+  );
+}
+
+/** Why the personal selection is refused, when choosing another local model would fix it. */
+export function useTranscriptionChoiceRefusal(
+  context: TranscriptionPolicyContext
+): LocalModelRefusal | null {
+  const snapshot = usePolicySnapshot();
+  return useSettingsStore(
+    useShallow((settings) =>
+      transcriptionChoiceRefusal(
+        snapshot,
+        selectPolicyEffectiveSettings(settings, snapshot),
+        context
+      )
+    )
   );
 }
 

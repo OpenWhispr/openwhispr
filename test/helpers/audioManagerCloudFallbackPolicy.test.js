@@ -698,7 +698,7 @@ test("an ordinary local failure uses the approved BYOK route despite the saved l
 });
 
 test("final dictation refuses a policy-cleared Parakeet selection before inference or fallback", async (t) => {
-  const { setSettings, createManager } = await loadAudioManager(t, {
+  const { vite, setSettings, createManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-final-blocked-parakeet-test-",
     settingsKey: "__blockedParakeetSettings",
   });
@@ -741,17 +741,79 @@ test("final dictation refuses a policy-cleared Parakeet selection before inferen
   assert.equal(nativeCalls, 0);
   assert.equal(cloudCalls, 0);
   assert.equal(reported.code, "POLICY_MODEL_BLOCKED");
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  usePolicyStore.setState({
+    status: "managed",
+    managed: true,
+    appVersion: "1.8.1",
+    policy: buildManagedPolicy(["local"]),
+  });
   setSettings({
     useLocalWhisper: true,
     localTranscriptionProvider: "nvidia",
     parakeetModel: undefined,
+    policyBlockedLocalScopes: [],
   });
   await manager.processAudio(new Blob(["audio"]));
   assert.equal(
     nativeCalls,
     0,
-    "a missing final model must not activate the manager's default model"
+    "a missing final model must not activate the manager's default model under a managed policy"
   );
+  assert.equal(reported.code, "POLICY_MODEL_BLOCKED");
+  assert.equal(reported.settingsTarget, "speechToText");
+});
+
+test("guests and unmanaged users keep the engine defaults and ordinary errors for a blank or unknown model", async (t) => {
+  const { vite, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-final-unmanaged-default-test-",
+    settingsKey: "__unmanagedDefaultSettings",
+  });
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  for (const status of ["idle", "unmanaged"]) {
+    usePolicyStore.setState({ status, managed: false, policy: null });
+    const models = [];
+    let reported = null;
+    const manager = createManager({
+      isProcessing: true,
+      _startProcessingPipeline: () => ({}),
+      _shouldAbandonProcessingPipeline: () => false,
+      _settleProcessingPipeline: () => true,
+      _completeActivationCapture: async () => {},
+      _takePendingResultExtras: () => ({}),
+      onError: (error) => {
+        reported = error;
+      },
+      processWithLocalParakeet: async (_blob, model) => {
+        models.push(["parakeet", model]);
+        return { success: true, text: "parakeet" };
+      },
+      processWithLocalWhisper: async (_blob, model) => {
+        models.push(["whisper", model]);
+        return { success: true, text: "whisper" };
+      },
+    });
+    for (const settings of [
+      { localTranscriptionProvider: "nvidia", parakeetModel: "" },
+      { localTranscriptionProvider: "nvidia", parakeetModel: "not-a-model" },
+      { localTranscriptionProvider: "whisper", whisperModel: "" },
+      { localTranscriptionProvider: "whisper", whisperModel: "not-a-model" },
+    ]) {
+      setSettings({ useLocalWhisper: true, ...settings });
+      await manager.processAudio(new Blob(["audio"]));
+    }
+    assert.equal(reported, null, status);
+    assert.deepEqual(
+      models,
+      [
+        ["parakeet", "parakeet-tdt-0.6b-v3"],
+        ["parakeet", "not-a-model"],
+        ["whisper", ""],
+        ["whisper", "not-a-model"],
+      ],
+      status
+    );
+  }
 });
 
 test("managed enterprise dictation outranks a blocked saved personal local selection", async (t) => {

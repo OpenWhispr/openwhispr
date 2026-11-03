@@ -195,3 +195,48 @@ test("an upload refused before it starts names the reason the policy gives", asy
     assert.deepEqual(errors, [expected]);
   }
 });
+
+test("an upload refused for its local model shows the reason instead of nothing", async () => {
+  const { transcriptionChoiceRefusal } = await import("../../src/stores/policyRules.ts");
+  const managed = (allowedModes, allowedLocalModels) => ({
+    status: "managed",
+    appVersion: "1.11.1",
+    policy: {
+      transcription: { allowedModes, allowedLocalModels, allowedByokProviders: [] },
+      features: {},
+      minAppVersion: null,
+    },
+  });
+  const settings = {
+    uploadTranscriptionMode: "local",
+    localTranscriptionProvider: "whisper",
+    whisperModel: "small",
+    cloudTranscriptionProvider: "",
+  };
+  for (const [policy, expected] of [
+    [managed(["local"], ["base"]), "models.policy.modelBlocked"],
+    [managed(["openwhispr"], null), "models.policy.modeBlocked"],
+    [{ status: "loading", policy: null }, "common.managedByOrg"],
+  ]) {
+    const errors = [];
+    const states = [];
+    const context = {
+      file: { path: "/tmp/audio.wav" },
+      batch: { isProcessing: false },
+      usePolicyStore: { getState: () => policy },
+      isAudioFeatureAllowed: () => true,
+      isManagedTranscriptionActive: () => false,
+      isTranscriptionContextAllowed: () => false,
+      transcriptionChoiceRefusal,
+      getSettings: () => settings,
+      setError: (error) => errors.push(error),
+      setState: (state) => states.push(state),
+      t: (key) => key,
+    };
+
+    await vm.runInNewContext(callbacks, context).transcribe();
+
+    assert.deepEqual(errors, [expected]);
+    assert.deepEqual(states, ["error"], "the error view only renders in the error state");
+  }
+});

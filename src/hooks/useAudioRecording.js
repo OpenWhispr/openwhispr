@@ -11,8 +11,10 @@ import { isAccessibilitySkipped } from "../utils/permissions";
 import { needsSttConfigBeforeStart } from "../helpers/sttConfigPolicy";
 import {
   isAgentAllowed,
+  isLocalChoiceRefusal,
   isScreenContextAllowed,
   isTranscriptionContextAllowed,
+  transcriptionChoiceRefusal,
 } from "../stores/policyRules";
 import { isManagedTranscriptionActive } from "../services/managedTranscription";
 import { usePolicyStore } from "../stores/policyStore";
@@ -150,10 +152,18 @@ export const useAudioRecording = (toast, options = {}) => {
         if (!audioManagerRef.current) return false;
         const policyState = usePolicyStore.getState();
         if (
-          (!isManagedTranscriptionActive() &&
-            !isTranscriptionContextAllowed(policyState, getSettings(), "dictation")) ||
-          (voiceAgentRequested && !isAgentAllowed(policyState))
+          !isManagedTranscriptionActive() &&
+          !isTranscriptionContextAllowed(policyState, getSettings(), "dictation")
         ) {
+          const refusal = transcriptionChoiceRefusal(policyState, getSettings(), "dictation");
+          toast({
+            title: t(refusal?.messageKey ?? "common.managedByOrg"),
+            variant: "default",
+            ...(refusal ? { actions: providerErrorActions(refusal, t) } : {}),
+          });
+          return false;
+        }
+        if (voiceAgentRequested && !isAgentAllowed(policyState)) {
           toast({ title: t("common.managedByOrg"), variant: "default" });
           return false;
         }
@@ -588,7 +598,10 @@ export const useAudioRecording = (toast, options = {}) => {
             duration: error?.code === "AUTH_EXPIRED" ? 8000 : undefined,
             code: error?.code,
             transcript: error?.transcript,
-            settingsTarget: error?.settingsTarget,
+            // Main's refusals name the model, not where to choose another.
+            settingsTarget:
+              error?.settingsTarget ??
+              (isLocalChoiceRefusal(error?.code) ? "speechToText" : undefined),
             technicalDetails: error?.technicalDetails,
           });
         }

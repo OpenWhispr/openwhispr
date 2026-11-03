@@ -584,7 +584,8 @@
       "queued": "En cola",
       "failed": {
         "title": "Una descarga no se completó",
-        "description": "Comprueba tu conexión y el espacio libre en disco, y vuelve a intentarlo. Si sigue fallando, contacta a tu administrador."
+        "description": "Comprueba tu conexión y el espacio libre en disco, y vuelve a intentarlo. Si sigue fallando, contacta a tu administrador.",
+        "notApproved": "Tu organización no aprueba este modelo. Puedes continuar sin él."
       }
     },
     "permissionGuide": {

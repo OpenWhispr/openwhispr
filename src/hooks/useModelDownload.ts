@@ -10,10 +10,13 @@ import type {
 } from "../types/electron";
 import { usePolicyStore } from "../stores/policyStore";
 import {
+  allowedLocalModelIds,
   isLocalModelAllowedByPolicy,
   isModeAllowedByPolicy,
   isPolicyActionAllowed,
+  type PolicyDecisionSnapshot,
 } from "../stores/policyRules";
+import type { PolicyScope } from "../types/policy";
 import { clearMissingLocalModelSelections } from "../stores/settingsStore";
 import "../types/electron";
 
@@ -59,6 +62,31 @@ export function formatETA(seconds: number): string {
   if (seconds < 60) return `${Math.round(seconds)}s`;
   const minutes = Math.floor(seconds / 60);
   return `${minutes}m ${Math.round(seconds % 60)}s`;
+}
+
+// Retrying can't change these answers; POLICY_UNRESOLVABLE can clear by itself, so it isn't one.
+const TERMINAL_POLICY_ERROR_CODES: ReadonlySet<string> = new Set([
+  "POLICY_MODEL_BLOCKED",
+  "POLICY_LOCAL_MODE_BLOCKED",
+  "POLICY_APP_VERSION_BLOCKED",
+]);
+
+function isPolicyErrorCode(code: string | undefined): boolean {
+  return code?.startsWith("POLICY_") ?? false;
+}
+
+// Periodic refreshes replace the policy object, so what it decides is compared instead.
+function localModelVerdictKey(
+  state: PolicyDecisionSnapshot & { accountId: string | null },
+  scope: PolicyScope
+): string {
+  return JSON.stringify([
+    state.status,
+    state.accountId,
+    isPolicyActionAllowed(state),
+    isModeAllowedByPolicy(state, scope, "local"),
+    allowedLocalModelIds(state, scope),
+  ]);
 }
 
 export function getDownloadErrorMessage(t: TFunction, error: string, code?: string): string {
@@ -117,12 +145,30 @@ export function useModelDownload({
   const [downloadErrorCodes, setDownloadErrorCodes] = useState<Record<string, string | undefined>>(
     {}
   );
+  const policyScope = modelType === "llm" ? "llm" : "transcription";
+  const localModelVerdict = usePolicyStore((state) => localModelVerdictKey(state, policyScope));
   const ownedRequestsRef = useRef(new Map<string, ModelDownloadTerminalEvent | null>());
   const settlingDownloadsRef = useRef(new Set<string>());
   const terminalSequencesRef = useRef<Record<string, number>>({});
   const lastProgressUpdateRef = useRef<Record<string, number>>({});
   const onDownloadCompleteRef = useRef(onDownloadComplete);
   const onModelsClearedRef = useRef(onModelsCleared);
+
+  // A refusal answered the policy it was made under, so a new verdict lets the
+  // model be tried again: revoking and re-approving it mustn't leave it stuck.
+  const lastVerdictRef = useRef(localModelVerdict);
+  useEffect(() => {
+    if (lastVerdictRef.current === localModelVerdict) return;
+    lastVerdictRef.current = localModelVerdict;
+    const refused = Object.keys(downloadErrorCodes).filter((modelId) =>
+      isPolicyErrorCode(downloadErrorCodes[modelId])
+    );
+    if (refused.length === 0) return;
+    const withoutRefused = <T>(record: Record<string, T>): Record<string, T> =>
+      Object.fromEntries(Object.entries(record).filter(([id]) => !refused.includes(id)));
+    setDownloadErrors(withoutRefused);
+    setDownloadErrorCodes(withoutRefused);
+  }, [downloadErrorCodes, localModelVerdict]);
 
   useEffect(() => {
     onDownloadCompleteRef.current = onDownloadComplete;
@@ -311,15 +357,14 @@ export function useModelDownload({
 
   const downloadModel = useCallback(
     async (modelId: string, onSelectAfterDownload?: (id: string) => void) => {
-      const scope = modelType === "llm" ? "llm" : "transcription";
       const policy = usePolicyStore.getState();
-      if (!isLocalModelAllowedByPolicy(policy, scope, modelId)) {
+      if (!isLocalModelAllowedByPolicy(policy, policyScope, modelId)) {
         const code =
           policy.status === "loading" || policy.status === "error"
             ? "POLICY_UNRESOLVABLE"
             : !isPolicyActionAllowed(policy)
               ? "POLICY_APP_VERSION_BLOCKED"
-              : !isModeAllowedByPolicy(policy, scope, "local")
+              : !isModeAllowedByPolicy(policy, policyScope, "local")
                 ? "POLICY_LOCAL_MODE_BLOCKED"
                 : "POLICY_MODEL_BLOCKED";
         const message = getDownloadErrorMessage(t, "", code);
@@ -375,10 +420,10 @@ export function useModelDownload({
         if (result?.success) {
           notifyLocalModelsChanged();
           const currentPolicy = usePolicyStore.getState();
+          // Only the account matters: a rotated token is the same member.
           if (
             policy.accountId === currentPolicy.accountId &&
-            policy.authGeneration === currentPolicy.authGeneration &&
-            isLocalModelAllowedByPolicy(currentPolicy, scope, modelId)
+            isLocalModelAllowedByPolicy(currentPolicy, policyScope, modelId)
           ) {
             onSelectAfterDownload?.(modelId);
           }
@@ -447,6 +492,7 @@ export function useModelDownload({
     [
       downloads,
       handleTerminalDownload,
+      policyScope,
       modelType,
       settleDownload,
       showAlertDialog,
@@ -539,8 +585,9 @@ export function useModelDownload({
   return {
     downloads,
     downloadErrors,
+    downloadErrorCodes,
     isPolicyBlockedModel: (modelId: string): boolean =>
-      downloadErrorCodes[modelId]?.startsWith("POLICY_") ?? false,
+      TERMINAL_POLICY_ERROR_CODES.has(downloadErrorCodes[modelId] ?? ""),
     downloadingModel,
     downloadProgress: {
       percentage: activeDownload?.progress || 0,

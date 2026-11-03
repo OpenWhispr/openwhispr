@@ -15,6 +15,7 @@ import {
   isLlmSelectionAllowed,
   isWebSearchAllowed,
   isWebSearchBlockedByOrg,
+  localChoiceRefusal,
 } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
 import { readSkillCardRecord, SKILL_CARD_TOOLS } from "./skillCardRecord";
@@ -439,9 +440,12 @@ export function useChatStreaming({
           })
         ) {
           // The user message is already appended; answer it instead of dead-ending silently.
-          const restriction = !isAgentAllowed(policyState)
+          const agentAllowed = isAgentAllowed(policyState);
+          const refusal =
+            agentAllowed && llmMode === "local" ? localChoiceRefusal(policyState, "llm") : null;
+          const restriction = !agentAllowed
             ? t("common.policyAgentRestricted")
-            : t("common.policyAiProcessingRestricted");
+            : t(refusal?.messageKey ?? "common.policyAiProcessingRestricted");
           announceResponse();
           setMessages((prev) => [
             ...prev,
@@ -450,6 +454,7 @@ export function useChatStreaming({
               role: "assistant",
               content: restriction,
               isStreaming: false,
+              ...(refusal ? { error: { settingsTarget: refusal.settingsTarget } } : {}),
             },
           ]);
           return;

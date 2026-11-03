@@ -563,7 +563,8 @@
       "queued": "Na fila",
       "failed": {
         "title": "Um download não foi concluído",
-        "description": "Verifique sua conexão e o espaço livre em disco e tente novamente. Se continuar falhando, entre em contato com seu administrador."
+        "description": "Verifique sua conexão e o espaço livre em disco e tente novamente. Se continuar falhando, entre em contato com seu administrador.",
+        "notApproved": "Sua organização não aprova este modelo. Você pode continuar sem ele."
       }
     },
     "permissionGuide": {

@@ -35,6 +35,7 @@ import {
   isAudioFeatureAllowed,
   isTranscriptionContextAllowed,
   meetingRecordingRefusal,
+  transcriptionChoiceRefusal,
   type PolicyDecisionSnapshot,
 } from "./policyRules";
 import { usePolicyStore } from "./policyStore";
@@ -572,6 +573,17 @@ function meetingPolicyRefusalError(
   }
 }
 
+// Managed audio outranks the personal selection, which a restricted model list
+// may refuse, but not the org's meeting recording switch. Judged on the realtime
+// route, since a batch-only deployment leaves meetings on the personal one.
+function isMeetingAllowedByPolicy(policy: PolicyDecisionSnapshot): boolean {
+  if (!isAudioFeatureAllowed(policy, "meeting")) return false;
+  return (
+    !!getManagedTranscriptionResolution("realtime") ||
+    isTranscriptionContextAllowed(policy, getSettings(), "meeting")
+  );
+}
+
 function reportMeetingError(error: string, extra: Partial<MeetingRecordingState> = {}): void {
   useMeetingRecordingStore.setState((state) => ({
     ...extra,
@@ -843,7 +855,7 @@ async function cleanup(): Promise<void> {
 
 export async function prepareTranscription(): Promise<void> {
   if (isPrepared || isRecordingFlag || isStartingFlag) return;
-  if (!isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "meeting")) return;
+  if (!isMeetingAllowedByPolicy(usePolicyStore.getState())) return;
   if (preparePromise) return preparePromise;
 
   logger.info("Meeting transcription preparing (pre-warming WebSockets)...", {}, "meeting");
@@ -897,11 +909,11 @@ export interface StartRecordingArgs {
 export async function startRecording(args: StartRecordingArgs): Promise<boolean> {
   if (isRecordingFlag || isStartingFlag) return true;
   const policy = usePolicyStore.getState();
-  if (!isTranscriptionContextAllowed(policy, getSettings(), "meeting")) {
+  if (!isMeetingAllowedByPolicy(policy)) {
     logger.warn("Meeting recording blocked by workspace policy", {}, "meeting");
     reportMeetingError(
       isAudioFeatureAllowed(policy, "meeting")
-        ? "policyRestricted"
+        ? (transcriptionChoiceRefusal(policy, getSettings(), "meeting")?.code ?? "policyRestricted")
         : meetingPolicyRefusalError(policy, "start")
     );
     return false;
@@ -930,7 +942,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
     const isCurrentStart = () =>
       startOperation.isCurrent() &&
       activeRecordingSessionId === sessionId &&
-      isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "meeting");
+      isMeetingAllowedByPolicy(usePolicyStore.getState());
 
     const initialEnabled =
       args.diarizationEnabled ??

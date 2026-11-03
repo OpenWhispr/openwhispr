@@ -138,6 +138,7 @@ test("revoked Whisper retry cannot dispatch after a peer replacement becomes rea
     await waitingForReplacement.promise;
     if (accountChange) {
       identity++;
+      gate.cancelJobs();
       gate.invalidate();
     } else
       gate.update({

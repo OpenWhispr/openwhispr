@@ -164,3 +164,121 @@ test("Cohere pending inventory uses the shared native manager family", async () 
     "downloaded"
   );
 });
+
+const APPROVED_BASE = {
+  transcription: { allowedModes: ["local"], allowedLocalModels: ["base"] },
+  minAppVersion: null,
+};
+const SELECTION = { provider: "whisper", modelId: "base", accountId: "first" };
+
+for (const unresolved of [
+  { status: "loading", accountId: "first", authGeneration: 5 },
+  { status: "error", accountId: "first", authGeneration: 5 },
+  // suspendPolicy and a relaunch before the first fetch both blank the account.
+  { status: "loading", accountId: null, authGeneration: null },
+  { status: "idle", accountId: null, authGeneration: null },
+]) {
+  test(`pending activation waits out ${unresolved.status} with account ${unresolved.accountId}`, async () => {
+    global.localStorage = createStorage();
+    const pending = await import("../../src/components/onboarding/pendingLocalModels.ts");
+    pending.rememberPendingLocalModel("dictation", SELECTION);
+    const snapshot = { ...unresolved, policy: null, appVersion: null };
+
+    assert.equal(pending.consumePendingLocalModel("dictation", "base", snapshot), null);
+    assert.deepEqual(pending.readPendingLocalModels().dictation, SELECTION);
+
+    assert.deepEqual(
+      pending.consumePendingLocalModel("dictation", "base", {
+        status: "managed",
+        appVersion: "1.11.1",
+        policy: APPROVED_BASE,
+        accountId: "first",
+        authGeneration: 5,
+      }),
+      SELECTION
+    );
+    assert.equal(pending.hasPendingLocalModels(), false);
+  });
+}
+
+test("a same-account token rotation does not drop a pending selection", async () => {
+  global.localStorage = createStorage();
+  const pending = await import("../../src/components/onboarding/pendingLocalModels.ts");
+  // authGeneration is what an earlier build of this feature stored beside the account.
+  const remembered = { ...SELECTION, authGeneration: 4 };
+  pending.rememberPendingLocalModel("dictation", remembered);
+  assert.deepEqual(
+    pending.consumePendingLocalModel("dictation", "base", {
+      status: "managed",
+      appVersion: "1.11.1",
+      policy: APPROVED_BASE,
+      accountId: "first",
+      authGeneration: 5,
+    }),
+    remembered
+  );
+});
+
+test("a settled denial after an unresolved completion drops the selection", async () => {
+  global.localStorage = createStorage();
+  const pending = await import("../../src/components/onboarding/pendingLocalModels.ts");
+  pending.rememberPendingLocalModel("dictation", SELECTION);
+  const identity = { accountId: "first", authGeneration: 5 };
+  assert.equal(
+    pending.consumePendingLocalModel("dictation", "base", {
+      status: "loading",
+      policy: null,
+      appVersion: null,
+      ...identity,
+    }),
+    null
+  );
+  assert.equal(pending.hasPendingLocalModels(), true);
+  assert.equal(
+    pending.consumePendingLocalModel("dictation", "base", {
+      status: "managed",
+      appVersion: "1.11.1",
+      policy: {
+        ...APPROVED_BASE,
+        transcription: { allowedModes: ["local"], allowedLocalModels: [] },
+      },
+      ...identity,
+    }),
+    null
+  );
+  assert.equal(pending.hasPendingLocalModels(), false);
+});
+
+test("another account drops a pending selection even before its policy resolves", async () => {
+  global.localStorage = createStorage();
+  const pending = await import("../../src/components/onboarding/pendingLocalModels.ts");
+  pending.rememberPendingLocalModel("dictation", SELECTION);
+  assert.equal(
+    pending.consumePendingLocalModel("dictation", "base", {
+      status: "loading",
+      policy: null,
+      appVersion: null,
+      accountId: "second",
+      authGeneration: 6,
+    }),
+    null
+  );
+  assert.equal(pending.hasPendingLocalModels(), false);
+});
+
+test("a guest's pending selection activates without a policy", async () => {
+  global.localStorage = createStorage();
+  const pending = await import("../../src/components/onboarding/pendingLocalModels.ts");
+  const guest = { provider: "whisper", modelId: "base" };
+  pending.rememberPendingLocalModel("dictation", guest);
+  assert.deepEqual(
+    pending.consumePendingLocalModel("dictation", "base", {
+      status: "idle",
+      policy: null,
+      appVersion: null,
+      accountId: null,
+      authGeneration: null,
+    }),
+    guest
+  );
+});

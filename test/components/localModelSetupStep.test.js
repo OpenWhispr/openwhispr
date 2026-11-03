@@ -53,6 +53,7 @@ async function createSetupHarness(
     llm: new Set(installed.llm),
   };
   const requests = new Map();
+  const deleted = [];
   const events = new EventTarget();
   const subscribe = (family) => (listener) => {
     listeners[family].add(listener);
@@ -79,6 +80,11 @@ async function createSetupHarness(
         modelGetAll: async () =>
           [...inventory.llm].map((id) => ({ id, isDownloaded: true, isDownloading: false })),
         modelGetActiveDownloads: async () => [],
+        modelDelete: async (modelId) => {
+          deleted.push(modelId);
+          inventory.llm.delete(modelId);
+          return { success: true };
+        },
         downloadWhisperModel: startDownload("whisper"),
         downloadParakeetModel: startDownload("parakeet"),
         modelDownload: startDownload("llm"),
@@ -150,6 +156,7 @@ async function createSetupHarness(
   let proceeded = false;
   let skipped = false;
   const resumeDrafts = [];
+  let feedDraftBack = () => {};
   const props = {
     stepId: assistant ? "local-assistant" : "local-dictation",
     onReadinessChange: (value) => {
@@ -161,13 +168,18 @@ async function createSetupHarness(
     onSkip() {
       skipped = true;
     },
-    resumeState,
-    onResumeStateChange: (draft) => resumeDrafts.push(draft),
+    // OnboardingFlow stores each draft in the session and passes it straight back.
+    onResumeStateChange: (draft) => {
+      resumeDrafts.push(draft);
+      feedDraftBack(draft);
+    },
   };
   function Harness() {
+    const [draft, setDraft] = React.useState(resumeState);
+    feedDraftBack = setDraft;
     // Execute the real component and hooks with React lifecycle, while leaving
     // native controls unmounted: their returned handlers are the test boundary.
-    tree = LocalModelSetupStep(props);
+    tree = LocalModelSetupStep({ ...props, resumeState: draft });
     const notice = findElement(tree, (node) => node.type === LocalModelPolicyNotice);
     noticeTree = LocalModelPolicyNotice(notice.props);
     trayTree = BackgroundModelDownloadTray({ placement: "onboarding" });
@@ -294,6 +306,22 @@ async function createSetupHarness(
       Boolean(
         findElement(tree, (node) => node.key === providerId && node.props?.value === providerId)
       ),
+    openProvider: () =>
+      findElement(tree, (node) => typeof node.props?.onValueChange === "function").props.value,
+    hasRow: (modelId) =>
+      Boolean(findElement(tree, (node) => node.type === "div" && node.key === modelId)),
+    startedDownloads: () => [...requests.keys()],
+    deleted,
+    clickDelete: async (modelId) => {
+      const button = findElement(
+        row(modelId),
+        (node) => node.props?.["aria-label"] === "common.delete"
+      );
+      assert.ok(button, `Delete is available for ${modelId}`);
+      await React.act(async () => button.props.onClick());
+    },
+    confirmDialog: () => findElement(tree, (node) => "onConfirm" in (node.props ?? {})),
+    flush: () => React.act(async () => new Promise((resolve) => setImmediate(resolve))),
   };
 }
 
@@ -559,6 +587,38 @@ test("unsupported Macs cannot choose Oruk or NVIDIA during local onboarding", as
   }
 });
 
+test("a fresh install on an unsupported Mac moves to Whisper after its draft came back", async (t) => {
+  const setup = await createSetupHarness(t, {
+    freshInstall: true,
+    capability: { supported: false, minimumMacOSVersion: "15.5" },
+  });
+  assert.equal(setup.openProvider(), "whisper");
+  assert.ok(setup.row("base"));
+  assert.equal(setup.resumeDrafts().at(-1).provider, "whisper");
+});
+
+test("a resumed Oruk draft on an unsupported Mac moves to Whisper", async (t) => {
+  const setup = await createSetupHarness(t, {
+    resumeState: { provider: "oruk", modelId: "orukeet-v0.1.0" },
+    capability: { supported: false, minimumMacOSVersion: "15.5" },
+  });
+  assert.equal(setup.openProvider(), "whisper");
+  assert.ok(setup.row("base"));
+});
+
+test("an unsupported Mac stays on a family that has an installed model to delete", async (t) => {
+  const setup = await createSetupHarness(t, {
+    provider: "nvidia",
+    selectedModel: PARAKEET,
+    resumeState: { provider: "nvidia", modelId: PARAKEET },
+    installed: { parakeet: [PARAKEET] },
+    capability: { supported: false, minimumMacOSVersion: "15.5" },
+  });
+  assert.equal(setup.openProvider(), "nvidia");
+  assert.ok(setup.row(PARAKEET));
+  assert.equal(setup.ready(), false);
+});
+
 test("the tray header follows the transfer into its installing phase", async (t) => {
   const modelId = "parakeet-tdt-0.6b-v3";
   const setup = await createSetupHarness(t, { provider: "nvidia" });
@@ -714,4 +774,204 @@ test("a Cohere download activates its own model field through the background tra
   assert.equal(setup.store.getState().localTranscriptionProvider, "cohere");
   assert.equal(setup.store.getState().cohereModel, modelId);
   assert.equal(setup.ready(), true);
+});
+
+test("a member approved only for Gemma opens on Gemma despite the default chat model", async (t) => {
+  const modelId = "gemma-4-31b-it-q4_k_m";
+  const setup = await createSetupHarness(t, {
+    assistant: true,
+    provider: "groq",
+    selectedModel: "openai/gpt-oss-120b",
+    policy: localPolicy(["base"], [modelId]),
+  });
+  assert.equal(setup.openProvider(), "gemma");
+  assert.ok(setup.row(modelId));
+  assert.equal(setup.providerListed("qwen"), false);
+  assert.equal(setup.store.getState().chatAgentModel, "openai/gpt-oss-120b");
+});
+
+test("a resumed draft under a policy that excludes its family opens on an approved one", async (t) => {
+  const setup = await createSetupHarness(t, {
+    resumeState: { provider: "oruk", modelId: "orukeet-v0.1.0" },
+    policy: localPolicy(["base"]),
+  });
+  assert.equal(setup.openProvider(), "whisper");
+  assert.ok(setup.row("base"));
+  assert.equal(setup.providerListed("oruk"), false);
+  assert.equal(setup.providerListed("nvidia"), false);
+  assert.equal(setup.providerListed("cohere"), false);
+});
+
+test("a policy arriving after mount re-picks the family with no store write or download", async (t) => {
+  const setup = await createSetupHarness(t, {
+    resumeState: { provider: "oruk", modelId: "orukeet-v0.1.0" },
+    policy: { status: "loading", policy: null, appVersion: null },
+  });
+  assert.equal(setup.openProvider(), "oruk");
+  const before = setup.store.getState();
+
+  await setup.setPolicy(localPolicy(["base"]));
+  assert.equal(setup.openProvider(), "whisper");
+  assert.ok(setup.row("base"));
+  assert.equal(setup.ready(), false);
+  assert.deepEqual(setup.startedDownloads(), []);
+  const after = setup.store.getState();
+  assert.equal(after.whisperModel, before.whisperModel);
+  assert.equal(after.parakeetModel, before.parakeetModel);
+  assert.equal(after.localTranscriptionProvider, before.localTranscriptionProvider);
+});
+
+test("a policy arriving after mount leaves a family with an approved model alone", async (t) => {
+  const setup = await createSetupHarness(t, {
+    resumeState: { provider: "nvidia", modelId: PARAKEET },
+    policy: { status: "loading", policy: null, appVersion: null },
+  });
+  await setup.setPolicy(localPolicy(["base", PARAKEET]));
+  assert.equal(setup.openProvider(), "nvidia");
+  assert.ok(setup.row(PARAKEET));
+});
+
+test("browsing to a family with only a blocked installed model stays there to delete it", async (t) => {
+  const setup = await createSetupHarness(t, {
+    installed: { parakeet: [PARAKEET] },
+    policy: localPolicy(["base"]),
+  });
+  assert.equal(setup.providerListed("nvidia"), true);
+  assert.equal(setup.providerListed("oruk"), false);
+  await setup.chooseProvider("nvidia");
+  assert.equal(setup.openProvider(), "nvidia");
+  assert.ok(setup.row(PARAKEET));
+  assert.doesNotMatch(textContent(setup.row(PARAKEET)), /onboarding\.rehaul\.local\.use/);
+});
+
+test("guests get base's speech families: no Cohere unless it's already theirs", async (t) => {
+  const setup = await createSetupHarness(t);
+  for (const family of ["oruk", "whisper", "nvidia"]) {
+    assert.equal(setup.providerListed(family), true, family);
+  }
+  assert.equal(setup.providerListed("cohere"), false);
+});
+
+test("Cohere is offered to a guest who has it installed", async (t) => {
+  const setup = await createSetupHarness(t, {
+    installed: { parakeet: ["cohere-transcribe-03-2026"] },
+  });
+  assert.equal(setup.providerListed("cohere"), true);
+});
+
+test("an unrestricted managed policy doesn't offer Cohere either", async (t) => {
+  const setup = await createSetupHarness(t, { policy: localPolicy(null) });
+  assert.equal(setup.providerListed("oruk"), true);
+  assert.equal(setup.providerListed("cohere"), false);
+});
+
+test("a guest's downloaded legacy model stays hidden, as on base", async (t) => {
+  const setup = await createSetupHarness(t, {
+    assistant: true,
+    installed: { llm: [LEGACY_LLM] },
+  });
+  assert.equal(setup.providerListed("llama"), false);
+  assert.equal(setup.hasRow(LEGACY_LLM), false);
+});
+
+test("deleting a blocked installed model from onboarding asks first", async (t) => {
+  const setup = await createSetupHarness(t, {
+    assistant: true,
+    provider: "llama",
+    selectedModel: LEGACY_LLM,
+    installed: { llm: [LEGACY_LLM] },
+    resumeState: { provider: "llama", modelId: LEGACY_LLM },
+    policy: localPolicy(["base"], [LEGACY_LLM + "-other"]),
+  });
+  await setup.chooseProvider("llama");
+  await setup.clickDelete(LEGACY_LLM);
+  assert.deepEqual(setup.deleted, [], "nothing is deleted before the confirmation");
+  const dialog = setup.confirmDialog();
+  assert.equal(dialog.props.open, true);
+  assert.equal(dialog.props.variant, "destructive");
+  await React.act(async () => dialog.props.onConfirm());
+  assert.deepEqual(setup.deleted, [LEGACY_LLM]);
+});
+
+test("a model finishing while the policy is unresolved activates once it is approved", async (t) => {
+  const identity = { accountId: "first", authGeneration: 1 };
+  const setup = await createSetupHarness(t, {
+    assistant: true,
+    policy: { ...localPolicy(), ...identity },
+  });
+  await setup.click(FIRST_LLM, "onboarding.rehaul.local.download");
+  await setup.proceed();
+  assert.equal(localStorage.getItem("localSetupPending"), "true");
+
+  const unresolved = { status: "loading", policy: null, appVersion: null };
+  await setup.setPolicy({ ...unresolved, accountId: "first", authGeneration: 2 });
+  await setup.complete(FIRST_LLM);
+  assert.equal(setup.store.getState().chatAgentModel, "");
+  assert.equal(setup.pending.readPendingLocalModels().assistant.modelId, FIRST_LLM);
+
+  await setup.setPolicy({ ...localPolicy(), accountId: "first", authGeneration: 2 });
+  await setup.flush();
+  assert.equal(setup.store.getState().chatAgentModel, FIRST_LLM);
+  assert.equal(setup.pending.hasPendingLocalModels(), false);
+});
+
+test("a model finishing during a policy error waits, and a later denial drops it", async (t) => {
+  const identity = { accountId: "first", authGeneration: 1 };
+  const setup = await createSetupHarness(t, {
+    assistant: true,
+    policy: { ...localPolicy(), ...identity },
+  });
+  await setup.click(FIRST_LLM, "onboarding.rehaul.local.download");
+  await setup.proceed();
+  await setup.setPolicy({ status: "error", policy: null, ...identity });
+  await setup.complete(FIRST_LLM);
+  assert.equal(setup.pending.hasPendingLocalModels(), true);
+
+  await setup.setPolicy({ ...localPolicy(["base"], []), ...identity });
+  await setup.flush();
+  assert.equal(setup.store.getState().chatAgentModel, "");
+  assert.equal(setup.pending.hasPendingLocalModels(), false);
+});
+
+test("a token rotation during a download still selects the model on the step", async (t) => {
+  const setup = await createSetupHarness(t, {
+    assistant: true,
+    policy: { ...localPolicy(), accountId: "first", authGeneration: 1 },
+  });
+  await setup.click(FIRST_LLM, "onboarding.rehaul.local.download");
+  await setup.setPolicy({ ...localPolicy(), accountId: "first", authGeneration: 2 });
+  await setup.complete(FIRST_LLM);
+  await setup.flush();
+  assert.equal(setup.store.getState().chatAgentModel, FIRST_LLM);
+  assert.equal(setup.ready(), true);
+});
+
+test("a model finishing on the step while unresolved is selected when the policy approves it", async (t) => {
+  const identity = { accountId: "first", authGeneration: 1 };
+  const setup = await createSetupHarness(t, {
+    assistant: true,
+    policy: { ...localPolicy(), ...identity },
+  });
+  await setup.click(FIRST_LLM, "onboarding.rehaul.local.download");
+  await setup.setPolicy({ status: "loading", policy: null, appVersion: null, ...identity });
+  await setup.complete(FIRST_LLM);
+  assert.equal(setup.ready(), false);
+
+  await setup.setPolicy({ ...localPolicy(), ...identity });
+  await setup.flush();
+  assert.equal(setup.store.getState().chatAgentModel, FIRST_LLM);
+  assert.equal(setup.ready(), true);
+  assert.equal(setup.pending.hasPendingLocalModels(), false);
+});
+
+test("with AI text blocked the assistant step shows why and offers only Skip", async (t) => {
+  const blocked = localPolicy(["base"], []);
+  blocked.policy.llm.allowedModes = [];
+  const setup = await createSetupHarness(t, { assistant: true, policy: blocked });
+  assert.equal(setup.noticeText(), "models.policy.modeBlocked");
+  assert.equal(setup.canProceed(), false);
+  await setup.skip();
+  assert.equal(setup.skipped(), true);
+  assert.equal(setup.pending.hasPendingLocalModels(), false);
+  assert.equal(setup.store.getState().chatAgentModel, "");
 });

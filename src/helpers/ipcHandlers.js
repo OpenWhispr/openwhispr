@@ -350,6 +350,9 @@ function approveAudioPath(filePath) {
   }
 }
 
+// __Secure-openwhispr.session_token in production, and the names older builds used.
+const SESSION_COOKIE_PATTERN = /(?:^|;\s*)[^=;]*session_token=/;
+
 // Signed out, nothing restricts audio: guests keep every feature.
 function guestAudioPolicy(authGeneration) {
   return { success: true, managed: false, authGeneration };
@@ -681,85 +684,7 @@ class IPCHandlers {
     this.clipboardManager = managers.clipboardManager;
     this.whisperManager = managers.whisperManager;
     this.parakeetManager = managers.parakeetManager;
-    const { createLocalModelPolicyGate } = require("./localModelPolicyGate");
-    const localLlmManager = require("./modelManagerBridge").default;
-    const localServers = [
-      [
-        "transcription",
-        this.whisperManager.serverManager,
-        () =>
-          this.whisperManager.serverManager.localModelIdForPath?.(
-            this.whisperManager.serverManager.modelPath
-          ),
-      ],
-      [
-        "transcription",
-        this.parakeetManager.serverManager.wsServer,
-        () => this.parakeetManager.serverManager.wsServer.modelName,
-      ],
-      [
-        "llm",
-        localLlmManager.serverManager,
-        () =>
-          localLlmManager.serverManager.localModelIdForPath?.(
-            localLlmManager.serverManager.modelPath
-          ),
-      ],
-    ];
-    this._localModelPolicy = createLocalModelPolicyGate({
-      getPolicy: () => this._getMainModelPolicy?.() ?? { success: false },
-      getIdentity: () => tokenStore.getState().generation,
-      getAppVersion: () => app.getVersion(),
-      isSnapshotCurrent: (snapshot) =>
-        snapshot?.accountId === undefined ||
-        snapshot.accountId === this.databaseManager.activeAccountId,
-      onChange: () => {
-        for (const [scope, server, modelId] of localServers) {
-          if (server.isRemote || !modelId()) continue;
-          const denied = this._localModelPolicy.failure(scope, modelId());
-          if (denied) {
-            void server.stop().catch((error) =>
-              debugLogger.warn("Could not stop policy-blocked local server", {
-                error: error.message,
-              })
-            );
-          }
-        }
-        if (this._activeLocalMeetingLease) {
-          try {
-            this._localModelPolicy.assertCurrent(this._activeLocalMeetingLease);
-          } catch (error) {
-            this._stopMeetingForPolicy?.(error.code);
-          }
-        }
-      },
-    });
-    for (const manager of [
-      this.whisperManager,
-      this.parakeetManager,
-      this.parakeetManager.serverManager,
-      localLlmManager,
-      ...localServers.map(([, server]) => server),
-    ]) {
-      manager.localModelPolicy = this._localModelPolicy;
-    }
-    const samePath = (actual, expected) =>
-      typeof actual === "string" && path.resolve(actual) === path.resolve(expected);
-    this.whisperManager.serverManager.localModelIdForPath = (modelPath) =>
-      Object.keys(modelRegistryData.whisperModels).find((id) =>
-        samePath(modelPath, this.whisperManager.getModelPath(id))
-      );
-    this.parakeetManager.serverManager.wsServer.localModelIdForPath = (modelPath, id) =>
-      modelRegistryData.parakeetModels[id] &&
-      samePath(modelPath, this.parakeetManager.getModelPath(id))
-        ? id
-        : undefined;
-    localLlmManager.serverManager.localModelIdForPath = (modelPath) =>
-      modelRegistryData.localProviders
-        .flatMap((provider) => provider.models)
-        .find((model) =>
-          samePath(modelPath, path.join(localLlmManager.getModelsDir(), model.fileName))
-        )?.id;
+    this._initLocalModelPolicy(require("./modelManagerBridge").default);
 
     this.diarizationManager = managers.diarizationManager;
     this.windowManager = managers.windowManager;
@@ -973,14 +898,103 @@ class IPCHandlers {
     }
   }
 
+  _initLocalModelPolicy(localLlmManager) {
+    const { createLocalModelPolicyGate } = require("./localModelPolicyGate");
+    const localServers = [
+      [
+        "transcription",
+        this.whisperManager.serverManager,
+        () =>
+          this.whisperManager.serverManager.localModelIdForPath?.(
+            this.whisperManager.serverManager.modelPath
+          ),
+      ],
+      [
+        "transcription",
+        this.parakeetManager.serverManager.wsServer,
+        () => this.parakeetManager.serverManager.wsServer.modelName,
+      ],
+      [
+        "llm",
+        localLlmManager.serverManager,
+        () =>
+          localLlmManager.serverManager.localModelIdForPath?.(
+            localLlmManager.serverManager.modelPath
+          ),
+      ],
+    ];
+    this._localModelPolicy = createLocalModelPolicyGate({
+      getPolicy: (options) => this._getMainModelPolicy?.({}, options) ?? { success: false },
+      getIdentity: () => tokenStore.getState().generation,
+      getAppVersion: () => app.getVersion(),
+      isSnapshotCurrent: (snapshot) =>
+        snapshot?.accountId === undefined ||
+        snapshot.accountId === this.databaseManager.activeAccountId,
+      onChange: () => {
+        for (const [scope, server, modelId] of localServers) {
+          if (server.isRemote || !modelId()) continue;
+          const denied = this._localModelPolicy.failure(scope, modelId());
+          if (denied) {
+            void server.stop().catch((error) =>
+              debugLogger.warn("Could not stop policy-blocked local server", {
+                error: error.message,
+              })
+            );
+          }
+        }
+        if (this._activeLocalMeetingLease) {
+          try {
+            this._localModelPolicy.assertCurrent(this._activeLocalMeetingLease);
+          } catch (error) {
+            this._stopMeetingForPolicy?.(error.code);
+          }
+        }
+      },
+    });
+    for (const manager of [
+      this.whisperManager,
+      this.parakeetManager,
+      this.parakeetManager.serverManager,
+      localLlmManager,
+      ...localServers.map(([, server]) => server),
+    ]) {
+      manager.localModelPolicy = this._localModelPolicy;
+    }
+    const samePath = (actual, expected) =>
+      typeof actual === "string" && path.resolve(actual) === path.resolve(expected);
+    this.whisperManager.serverManager.localModelIdForPath = (modelPath) =>
+      Object.keys(modelRegistryData.whisperModels).find((id) =>
+        samePath(modelPath, this.whisperManager.getModelPath(id))
+      );
+    this.parakeetManager.serverManager.wsServer.localModelIdForPath = (modelPath, id) =>
+      modelRegistryData.parakeetModels[id] &&
+      samePath(modelPath, this.parakeetManager.getModelPath(id))
+        ? id
+        : undefined;
+    localLlmManager.serverManager.localModelIdForPath = (modelPath) =>
+      modelRegistryData.localProviders
+        .flatMap((provider) => provider.models)
+        .find((model) =>
+          samePath(modelPath, path.join(localLlmManager.getModelsDir(), model.fileName))
+        )?.id;
+  }
+
+  // Called once a cookie session has had its bearer migration: before that, a
+  // session with no bearer would read as a proven guest.
+  loadLocalModelPolicy() {
+    void this._localModelPolicy.resolve().catch(() => {});
+  }
+
   _handleAuthTokenChange({ generation, token }) {
-    this._localModelPolicy?.invalidate();
     // A new bearer may belong to another account, so its policy is fetched
     // before new work; only a sign-out ends the work already running. A real
     // account switch is cancelled once set-active-account-scope learns it.
     if (token) {
+      this._localModelPolicy?.invalidate();
       this._audioFeaturePolicy?.invalidate();
     } else {
+      this._localModelPolicy?.cancelJobs();
+      this._localModelPolicy?.invalidate(guestAudioPolicy(generation));
       this._audioFeaturePolicy?.invalidate(guestAudioPolicy(generation));
       this._audioFeaturePolicy?.cancelJobs();
       this._stopMeetingForPolicy?.("accountChanged");
@@ -2783,11 +2797,17 @@ class IPCHandlers {
       const accountChanged = this.databaseManager.activeAccountId !== accountId;
       const guestPolicy =
         accountId === null && !state.token ? guestAudioPolicy(state.generation) : null;
+      const scopeChanged =
+        accountChanged || (accountId !== null && previousScope?.accountId !== accountId);
+      // Local work a guest started needs no account's leave to go on: the new
+      // verdict decides it when it lands. Leaving an account does end its work.
+      if (accountChanged && typeof this.databaseManager.activeAccountId === "string") {
+        this._localModelPolicy?.cancelJobs();
+      }
       // A rotated bearer no longer matches the stored binding, so this also
       // holds for the same account: that only re-scopes the policy, and only a
       // different account ends the work and meeting already running.
-      if (accountChanged || (accountId !== null && previousScope?.accountId !== accountId)) {
-        this._localModelPolicy?.invalidate();
+      if (scopeChanged) {
         this._audioFeaturePolicy?.invalidate(guestPolicy);
         if (accountChanged) {
           this._audioFeaturePolicy?.cancelJobs();
@@ -2800,9 +2820,12 @@ class IPCHandlers {
         this._audioFeaturePolicy?.update(guestPolicy);
       }
       this.databaseManager.setActiveAccountId(accountId);
-      if (guestPolicy) this._localModelPolicy?.update(guestPolicy);
       if (accountId !== null) accountScopeBinding.persist(accountId, state.token);
       else accountScopeBinding.clear();
+      // After the scope moved: the verdict this fetches is stamped with the
+      // account and cached under the binding, so neither may still be the old one.
+      if (scopeChanged) this._localModelPolicy?.invalidate(guestPolicy);
+      else if (guestPolicy) this._localModelPolicy?.update(guestPolicy);
       broadcastToWindows(
         "active-account-scope-changed",
         accountId !== null ? { accountId, authGeneration: state.generation } : null
@@ -6938,6 +6961,12 @@ class IPCHandlers {
       getAppVersion: () => app.getVersion(),
       proxyFetch,
       tokenStore,
+      // Only the binding main validated may hand a verdict to a rotated credential.
+      getValidatedAccountId: () =>
+        accountScopeBinding.resolveActiveAccountScope({
+          ...tokenStore.getState(),
+          binding: accountScopeBinding.read(),
+        })?.accountId ?? null,
       broadcast: (snapshot) => {
         if (snapshot.authGeneration === tokenStore.getState().generation) {
           this._audioFeaturePolicy?.update(snapshot);
@@ -6955,30 +6984,37 @@ class IPCHandlers {
         : await getAuthHeaderFromWindow(
             [this.windowManager.controlPanelWindow, this.windowManager.mainWindow].find(
               (win) => win && !win.isDestroyed()
-            )
+            ) ??
+              // With no window yet, no bearer doesn't prove a guest: a cookie
+              // session may still be waiting for its bearer migration.
+              (session.defaultSession && { webContents: { session: session.defaultSession } })
           );
       if (generation !== tokenStore.getState().generation) return { success: false };
-      if (!authHeaders.Authorization && !authHeaders.Cookie) {
+      // Other cookies in the jar say nothing about who this is.
+      if (!authHeaders.Authorization && !SESSION_COOKIE_PATTERN.test(authHeaders.Cookie ?? "")) {
         return typeof this.databaseManager.activeAccountId === "string"
           ? { success: false }
           : guestAudioPolicy(generation);
       }
-      return workspacePolicyManager.getPolicy({
+      const policy = await workspacePolicyManager.getPolicy({
         accountId: this.databaseManager.activeAccountId,
         expectedAuthGeneration: generation,
         authHeaders,
         refresh,
       });
+      // A session cookie the API rejects has expired: with no bearer and no
+      // account this is a guest, not an identity waiting on its policy.
+      const isExpiredSession =
+        !authHeaders.Authorization &&
+        typeof this.databaseManager.activeAccountId !== "string" &&
+        policy.httpStatus === 401;
+      return isExpiredSession ? guestAudioPolicy(generation) : policy;
     };
     this._getMainModelPolicy = getMainPolicy;
     // CLI and tray-only sessions also refresh while a native server stays loaded.
-    this._localModelPolicyRefreshTimer = setInterval(
-      () => {
-        void this._localModelPolicy?.resolve().catch(() => {});
-      },
+    this._localModelPolicyRefreshTimer = this._localModelPolicy?.startPeriodicRefresh(
       5 * 60 * 1000
     );
-    this._localModelPolicyRefreshTimer.unref();
     this._audioFeaturePolicy = createAudioFeaturePolicy({
       getPolicy: getMainPolicy,
       onBlocked: (purpose, code) => {
@@ -6987,9 +7023,6 @@ class IPCHandlers {
       onChange: () => this._syncMeetingDetectorPolicy?.(),
       logger: debugLogger,
     });
-    void getMainPolicy()
-      .then((snapshot) => this._localModelPolicy.update(snapshot))
-      .catch(() => {});
     this.windowManager.getMeetingRecordingRefusal = () =>
       this._audioFeaturePolicy.failure("meeting");
     this.windowManager.resolveMeetingRecordingRefusal = () =>
@@ -9371,26 +9404,31 @@ class IPCHandlers {
 
       const wav = pcm16ToWav(pcm16k);
 
-      try {
-        let result;
+      const transcribeChunk = () => {
         if (isSherpaLocalProvider(meetingLocalProvider)) {
-          result = await this.parakeetManager.transcribeLocalParakeet(wav, {
+          return this.parakeetManager.transcribeLocalParakeet(wav, {
             model: meetingLocalModel,
             language: meetingLocalLanguage,
-          });
-        } else {
-          const vadOptions = this._resolveWhisperVadOptions("meeting");
-          result = await this.whisperManager.transcribeLocalWhisper(wav, {
-            model: meetingLocalModel,
-            language: meetingLocalLanguage,
-            // Keep whisper.cpp's default decoder thresholds on this continuous
-            // load: the raised #1458 values multiply temperature-fallback
-            // re-decodes, and meeting chunks already have RMS-gate, VAD, and
-            // holdback/dedup hallucination protection.
-            skipDecoderThresholds: true,
-            ...vadOptions,
           });
         }
+        return this.whisperManager.transcribeLocalWhisper(wav, {
+          model: meetingLocalModel,
+          language: meetingLocalLanguage,
+          // Keep whisper.cpp's default decoder thresholds on this continuous
+          // load: the raised #1458 values multiply temperature-fallback
+          // re-decodes, and meeting chunks already have RMS-gate, VAD, and
+          // holdback/dedup hallucination protection.
+          skipDecoderThresholds: true,
+          ...this._resolveWhisperVadOptions("meeting"),
+        });
+      };
+
+      try {
+        // Chunks belong to the meeting's lease, so a token rotation can't refuse
+        // one and end the meeting while its verdict is still being re-resolved.
+        const result = await (this._activeLocalMeetingLease
+          ? this._localModelPolicy.runWithLease(this._activeLocalMeetingLease, transcribeChunk)
+          : transcribeChunk());
         // A decode that outlives a revocation must not deliver its text, as
         // the streaming path's uncommitted disconnect does not.
         if (this._audioFeaturePolicy.activeFailure("meeting")) return;

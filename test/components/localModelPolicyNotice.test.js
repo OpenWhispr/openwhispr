@@ -35,4 +35,37 @@ test("policy notices distinguish empty, unknown-only, and mixed approvals", asyn
     });
     assert.equal(notice.props.children, fixture.message);
   }
+
+  const managed = (transcription) => ({
+    status: "managed",
+    appVersion: "1.11.1",
+    policy: { transcription, minAppVersion: null },
+  });
+  const render = (hasSupportedModel = true) =>
+    LocalModelPolicyNotice({ scope: "transcription", hasSupportedModel });
+
+  // Nothing is restricted, so there is no approved model to tell the member to choose.
+  setPolicy(managed({ allowedModes: ["local"], allowedLocalModels: null }));
+  assert.equal(render(), null);
+  assert.equal(render(false), null);
+
+  // A policy on its way is not a failure to resolve one.
+  setPolicy({ status: "loading", appVersion: null, policy: null });
+  assert.equal(render(), null);
+
+  setPolicy({ status: "error", appVersion: null, policy: null });
+  assert.equal(render().props.children, "models.policy.unresolved");
+
+  setPolicy(managed({ allowedModes: [], allowedLocalModels: ["base"] }));
+  assert.equal(render().props.children, "models.policy.modeBlocked");
+
+  setPolicy({
+    status: "managed",
+    appVersion: "1.0.0",
+    policy: {
+      transcription: { allowedModes: ["local"], allowedLocalModels: null },
+      minAppVersion: "1.11.1",
+    },
+  });
+  assert.equal(render().props.children, "models.policy.versionBlocked");
 });

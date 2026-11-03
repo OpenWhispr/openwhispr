@@ -3,6 +3,7 @@ const {
   isLocalModelPolicyRefusal,
   assertLocalModelOperation,
   localModelOperationSignal,
+  bindLocalModelDownload,
 } = require("./localModelPolicyGate");
 const fs = require("fs");
 const fsPromises = require("fs").promises;
@@ -265,6 +266,72 @@ class WhisperManager {
     return vadModelPath;
   }
 
+  async _preWarmServer(settings) {
+    // Pre-warm whisper-server if local mode enabled (eliminates 2-5s cold-start delay)
+    const { localTranscriptionProvider, whisperModel } = settings;
+    const gpuOptions = this.resolveGpuStartOptions();
+    const { useCuda, useVulkan } = gpuOptions;
+
+    if (
+      localTranscriptionProvider === "whisper" &&
+      whisperModel &&
+      this.serverManager.isAvailable()
+    ) {
+      const modelPath = this.getModelPath(whisperModel);
+
+      if (fs.existsSync(modelPath)) {
+        this._warnIfGpuFallback();
+        debugLogger.info("Pre-warming whisper-server", {
+          model: whisperModel,
+          modelPath,
+          cuda: useCuda,
+          vulkan: useVulkan,
+        });
+
+        try {
+          const serverStartTime = Date.now();
+          await this.serverManager.start(modelPath, { ...gpuOptions, policyMemoryOnly: true });
+          this.currentServerModel = whisperModel;
+
+          debugLogger.info("whisper-server pre-warmed successfully", {
+            model: whisperModel,
+            startupTimeMs: Date.now() - serverStartTime,
+            port: this.serverManager.port,
+          });
+        } catch (err) {
+          debugLogger.warn("Server pre-warm failed (will start on first use)", {
+            error: err.message,
+            model: whisperModel,
+          });
+          // Non-fatal: server will start on first transcription
+          if (err.code === "POLICY_UNRESOLVABLE") {
+            this.localModelPolicy?.runOnceVerdictSettles(() => {
+              // A dictation in the meantime already started what it needs.
+              if (this.serverManager.ready || this.serverManager.startupPromise) return;
+              this._preWarmServer(settings).catch((error) => {
+                debugLogger.warn("Resumed server pre-warm failed", { error: error.message });
+              });
+            });
+          }
+        }
+      } else {
+        debugLogger.debug("Skipping server pre-warm: model not downloaded", {
+          model: whisperModel,
+          modelPath,
+        });
+      }
+    } else {
+      debugLogger.debug("Skipping server pre-warm", {
+        reason:
+          localTranscriptionProvider !== "whisper"
+            ? "provider not whisper"
+            : !whisperModel
+              ? "no model selected"
+              : "server binary not available",
+      });
+    }
+  }
+
   async initializeAtStartup(settings = {}) {
     const startTime = Date.now();
 
@@ -273,60 +340,7 @@ class WhisperManager {
 
       await cleanupStaleDownloads(this.getModelsDir());
 
-      // Pre-warm whisper-server if local mode enabled (eliminates 2-5s cold-start delay)
-      const { localTranscriptionProvider, whisperModel } = settings;
-      const gpuOptions = this.resolveGpuStartOptions();
-      const { useCuda, useVulkan } = gpuOptions;
-
-      if (
-        localTranscriptionProvider === "whisper" &&
-        whisperModel &&
-        this.serverManager.isAvailable()
-      ) {
-        const modelPath = this.getModelPath(whisperModel);
-
-        if (fs.existsSync(modelPath)) {
-          this._warnIfGpuFallback();
-          debugLogger.info("Pre-warming whisper-server", {
-            model: whisperModel,
-            modelPath,
-            cuda: useCuda,
-            vulkan: useVulkan,
-          });
-
-          try {
-            const serverStartTime = Date.now();
-            await this.serverManager.start(modelPath, { ...gpuOptions, policyMemoryOnly: true });
-            this.currentServerModel = whisperModel;
-
-            debugLogger.info("whisper-server pre-warmed successfully", {
-              model: whisperModel,
-              startupTimeMs: Date.now() - serverStartTime,
-              port: this.serverManager.port,
-            });
-          } catch (err) {
-            debugLogger.warn("Server pre-warm failed (will start on first use)", {
-              error: err.message,
-              model: whisperModel,
-            });
-            // Non-fatal: server will start on first transcription
-          }
-        } else {
-          debugLogger.debug("Skipping server pre-warm: model not downloaded", {
-            model: whisperModel,
-            modelPath,
-          });
-        }
-      } else {
-        debugLogger.debug("Skipping server pre-warm", {
-          reason:
-            localTranscriptionProvider !== "whisper"
-              ? "provider not whisper"
-              : !whisperModel
-                ? "no model selected"
-                : "server binary not available",
-        });
-      }
+      await this._preWarmServer(settings);
     } catch (error) {
       debugLogger.warn("Whisper initialization error", {
         error: error.message,
@@ -501,7 +515,7 @@ class WhisperManager {
     return runLocalModelOperation(
       this,
       "transcription",
-      options.model ?? (this.localModelPolicy ? "" : "base"),
+      options.model ?? "",
       () => this._policyAllowedTranscribeLocalWhisper(audioBlob, options),
       { onAbort: () => this.stopServer() }
     );
@@ -752,12 +766,8 @@ class WhisperManager {
   }
 
   async downloadWhisperModel(modelName, progressCallback = null) {
-    return runLocalModelOperation(
-      this,
-      "transcription",
-      modelName,
-      () => this._policyAllowedDownloadWhisperModel(modelName, progressCallback),
-      { onAbort: () => this.cancelDownload() }
+    return runLocalModelOperation(this, "transcription", modelName, () =>
+      this._policyAllowedDownloadWhisperModel(modelName, progressCallback)
     );
   }
 
@@ -784,8 +794,8 @@ class WhisperManager {
       throw createDownloadInProgressError(modelName, this.currentDownloadProcess.model);
     }
 
-    const { signal: downloadSignal, abort } = createDownloadSignal();
-    const signal = localModelOperationSignal(this, downloadSignal);
+    const { signal, abort } = createDownloadSignal();
+    const unbindPolicy = bindLocalModelDownload(this, abort);
     const downloadProcess = {
       abort,
       model: modelName,
@@ -854,6 +864,7 @@ class WhisperManager {
       }
       throw error;
     } finally {
+      unbindPolicy();
       if (this.currentDownloadProcess === downloadProcess) {
         this.currentDownloadProcess = null;
       }

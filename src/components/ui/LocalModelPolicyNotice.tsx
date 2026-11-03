@@ -12,20 +12,25 @@ export function LocalModelPolicyNotice({
 }): React.JSX.Element | null {
   const { t } = useTranslation();
   const policy = usePolicySnapshot();
-  if (policy.status === "idle" || policy.status === "unmanaged") return null;
-  const unresolved = policy.status === "loading" || policy.status === "error";
+  // Nothing to say yet: a policy on its way hasn't failed to resolve.
+  if (policy.status === "idle" || policy.status === "unmanaged" || policy.status === "loading")
+    return null;
   const approvedIds = policy.policy?.[scope].allowedLocalModels;
-  const message = unresolved
-    ? "models.policy.unresolved"
-    : !isPolicyActionAllowed(policy)
-      ? "models.policy.versionBlocked"
-      : !isModeAllowedByPolicy(policy, scope, "local")
-        ? "models.policy.modeBlocked"
-        : approvedIds?.length === 0
-          ? "models.policy.emptyIntersection"
-          : !hasSupportedModel
-            ? "models.policy.noneSupported"
-            : "models.policy.guidance";
+  const message =
+    policy.status === "error"
+      ? "models.policy.unresolved"
+      : !isPolicyActionAllowed(policy)
+        ? "models.policy.versionBlocked"
+        : !isModeAllowedByPolicy(policy, scope, "local")
+          ? "models.policy.modeBlocked"
+          : approvedIds == null
+            ? null
+            : approvedIds.length === 0
+              ? "models.policy.emptyIntersection"
+              : !hasSupportedModel
+                ? "models.policy.noneSupported"
+                : "models.policy.guidance";
+  if (!message) return null;
 
   return <p className="mt-2 text-xs text-muted-foreground">{t(message)}</p>;
 }

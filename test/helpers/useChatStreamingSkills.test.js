@@ -199,7 +199,7 @@ const BYOK = {
 const LOCAL_SMALL = {
   chatAgentMode: "local",
   chatAgentProvider: "qwen",
-  chatAgentModel: "qwen3-1.7b-q8_0",
+  chatAgentModel: "qwen3-1.7b-q4_k_m",
 };
 
 const userMessage = (id, content) => ({ id, role: "user", content, isStreaming: false });

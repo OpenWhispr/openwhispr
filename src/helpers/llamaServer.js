@@ -752,6 +752,9 @@ class LlamaServerManager {
   }
 
   async inference(messages, options = {}) {
+    // Nothing to authorize once stopped, which clears the model: that's the
+    // ordinary not-running error, not a refusal of a model nobody named.
+    if (!this.ready || !this.process) return this._policyAllowedInference(messages, options);
     return runLocalModelOperation(
       this,
       "llm",

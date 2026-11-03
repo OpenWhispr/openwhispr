@@ -134,6 +134,75 @@ test("local streams reject buffered old-policy and old-identity deltas on both t
   }
 });
 
+test("a same-account token rotation never ends a running stream, whatever its transport", async (t) => {
+  const { reasoningService, vite } = await loadReasoningService(
+    t,
+    "openwhispr-rotation-stream-test-",
+    {
+      window: {
+        electronAPI: {
+          llamaServerStart: async () => ({ success: true, port: 11434 }),
+          // A rotated credential's verdict is still on its way.
+          getWorkspacePolicy: () => new Promise(() => {}),
+          getAppVersion: async () => ({ version: "1.11.1" }),
+        },
+      },
+    }
+  );
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  let generation = 1;
+  for (const sdk of [false, true]) {
+    for (const [label, provider, lanUrl] of [
+      ["local", "local", undefined],
+      ["LAN", "lan", "http://192.168.1.20:8080"],
+      ["BYOK", "custom", undefined],
+    ]) {
+      await t.test(`${sdk ? "SDK" : "raw"} ${label}`, async () => {
+        usePolicyStore.setState({
+          status: "unmanaged",
+          policy: null,
+          accountId: "same",
+          authGeneration: generation,
+        });
+        globalThis.fetch = async () =>
+          sdk
+            ? createOpenAiSseResponse(["first", "second"])
+            : createRawSseResponse(["first", "second"]);
+        const args = [
+          [{ role: "user", content: "hi" }],
+          "qwen3-4b-q4_k_m",
+          provider,
+          {
+            systemPrompt: "s",
+            disableThinking: true,
+            ...(lanUrl ? { lanUrl } : {}),
+            ...(provider === "custom"
+              ? { baseUrl: "http://192.168.1.20:8080/v1", customApiKey: "k" }
+              : {}),
+          },
+        ];
+        const stream = sdk
+          ? reasoningService.processTextStreamingAI(...args, {})
+          : reasoningService.processTextStreaming(...args);
+        t.after(() => stream.return());
+        const first = await stream.next();
+        assert.equal(sdk ? first.value.text : first.value, "first");
+
+        generation += 1;
+        void usePolicyStore.getState().fetchPolicy("same", generation);
+        assert.equal(usePolicyStore.getState().authGeneration, generation);
+        assert.equal(usePolicyStore.getState().status, "unmanaged");
+        const second = await stream.next();
+        assert.equal(sdk ? second.value.text : second.value, "second");
+      });
+    }
+  }
+});
+
 test("local streaming transport shutdown retains a newly learned policy refusal", async (t) => {
   const { reasoningService, vite } = await loadReasoningService(
     t,
@@ -541,7 +610,7 @@ test("cancelling tool-ineligible local setup prevents raw streaming", async (t) 
 
   const stream = reasoningService.processTextStreamingAI(
     [{ role: "user", content: "hello" }],
-    "qwen3-1.7b-q8_0",
+    "qwen3-1.7b-q4_k_m",
     "local",
     { systemPrompt: "Answer the user.", disableThinking: true },
     undefined
@@ -589,7 +658,7 @@ test("cancelling a raw stream after its reader starts ends normally", async (t) 
 
   const stream = reasoningService.processTextStreamingAI(
     [{ role: "user", content: "hello" }],
-    "qwen3-1.7b-q8_0",
+    "qwen3-1.7b-q4_k_m",
     "lan",
     {
       systemPrompt: "Answer the user.",
@@ -637,7 +706,7 @@ test("a timeout-owned abort during raw response reading remains a timeout error"
 
   const stream = reasoningService.processTextStreamingAI(
     [{ role: "user", content: "hello" }],
-    "qwen3-1.7b-q8_0",
+    "qwen3-1.7b-q4_k_m",
     "lan",
     {
       systemPrompt: "Answer the user.",

@@ -584,7 +584,8 @@
       "queued": "In coda",
       "failed": {
         "title": "Un download non è stato completato",
-        "description": "Controlla la connessione e lo spazio libero su disco, poi riprova. Se continua a fallire, contatta il tuo amministratore."
+        "description": "Controlla la connessione e lo spazio libero su disco, poi riprova. Se continua a fallire, contatta il tuo amministratore.",
+        "notApproved": "La tua organizzazione non approva questo modello. Puoi continuare senza di esso."
       }
     },
     "permissionGuide": {

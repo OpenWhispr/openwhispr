@@ -271,15 +271,74 @@ export function allowedLocalModelIds(
   });
 }
 
+/**
+ * Only a managed policy judges the id: a guest's or unmanaged user's blank model
+ * takes the engine's default, and an unknown one fails as any bad id does, so
+ * neither is an organization's refusal.
+ */
 export function isLocalModelAllowedByPolicy(
   state: PolicyDecisionSnapshot,
   scope: PolicyScope,
   modelId: string
 ): boolean {
-  if (!isKnownLocalModelId(scope, modelId)) return false;
-  if (!isModeAllowedByPolicy(state, scope, "local")) return false;
-  const ids = allowedLocalModelIds(state, scope);
-  return ids === null || ids.includes(modelId);
+  return managedPolicyDecision(state, (policy) => {
+    if (!isKnownLocalModelId(scope, modelId)) return false;
+    if (!policy[scope].allowedModes.includes("local")) return false;
+    const ids = allowedLocalModelIds(state, scope);
+    return ids === null || ids.includes(modelId);
+  });
+}
+
+export interface LocalModelRefusal {
+  code:
+    | "POLICY_UNRESOLVABLE"
+    | "POLICY_APP_VERSION_BLOCKED"
+    | "POLICY_LOCAL_MODE_BLOCKED"
+    | "POLICY_MODEL_BLOCKED";
+  messageKey: string;
+  settingsTarget: "speechToText" | "llms";
+}
+
+/** Why the policy refuses a local selection in this scope. Call once it has refused. */
+export function localModelRefusal(
+  state: PolicyDecisionSnapshot,
+  scope: PolicyScope
+): LocalModelRefusal {
+  const settingsTarget = scope === "llm" ? "llms" : "speechToText";
+  if (
+    state.status === "loading" ||
+    state.status === "error" ||
+    (state.status === "managed" && !state.policy)
+  ) {
+    return { code: "POLICY_UNRESOLVABLE", messageKey: "models.policy.unresolved", settingsTarget };
+  }
+  if (!isPolicyActionAllowed(state)) {
+    return {
+      code: "POLICY_APP_VERSION_BLOCKED",
+      messageKey: "models.policy.versionBlocked",
+      settingsTarget,
+    };
+  }
+  return isModeAllowedByPolicy(state, scope, "local")
+    ? { code: "POLICY_MODEL_BLOCKED", messageKey: "models.policy.modelBlocked", settingsTarget }
+    : {
+        code: "POLICY_LOCAL_MODE_BLOCKED",
+        messageKey: "models.policy.modeBlocked",
+        settingsTarget,
+      };
+}
+
+export function isLocalChoiceRefusal(code: unknown): boolean {
+  return code === "POLICY_MODEL_BLOCKED" || code === "POLICY_LOCAL_MODE_BLOCKED";
+}
+
+/** A refusal the member can fix by choosing again in Settings; null for any other. */
+export function localChoiceRefusal(
+  state: PolicyDecisionSnapshot,
+  scope: PolicyScope
+): LocalModelRefusal | null {
+  const refusal = localModelRefusal(state, scope);
+  return isLocalChoiceRefusal(refusal.code) ? refusal : null;
 }
 
 export function filterLocalModelOptionsByPolicy<T extends { id: string }>(
@@ -500,6 +559,18 @@ export function isTranscriptionContextAllowed(
     isAudioFeatureAllowed(state, context) &&
     isTranscriptionSelectionAllowed(state, getTranscriptionSelection(settings, context))
   );
+}
+
+/** Why a transcription context is refused, when choosing another local model would fix it. */
+export function transcriptionChoiceRefusal(
+  state: PolicyDecisionSnapshot,
+  settings: SettingsState,
+  context: TranscriptionPolicyContext
+): LocalModelRefusal | null {
+  if (!isAudioFeatureAllowed(state, context)) return null;
+  const selection = getTranscriptionSelection(settings, context);
+  if (selection.mode !== "local" || isTranscriptionSelectionAllowed(state, selection)) return null;
+  return localChoiceRefusal(state, "transcription");
 }
 
 export function isAudioFeatureAllowed(

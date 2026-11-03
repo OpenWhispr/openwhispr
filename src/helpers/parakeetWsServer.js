@@ -308,7 +308,11 @@ class ParakeetWsServer {
   }
 
   // signal is optional; dictation and warm-up flows never pass one.
-  transcribe(samplesBuffer, sampleRate, { signal } = {}) {
+  async transcribe(samplesBuffer, sampleRate, { signal } = {}) {
+    // Nothing to authorize once stopped, which clears the model: that's the
+    // ordinary not-running error, not a refusal of a model nobody named.
+    if (!this.ready || !this.process)
+      return this._policyAllowedTranscribe(samplesBuffer, sampleRate, { signal });
     return runLocalModelOperation(
       this,
       "transcription",

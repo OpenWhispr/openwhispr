@@ -128,10 +128,10 @@ function createAgentStreamPolicyCheck(
   mode: InferenceMode,
   model: string
 ): () => void {
-  const { accountId, authGeneration } = usePolicyStore.getState();
+  const { accountId } = usePolicyStore.getState();
   return (): void => {
-    const current = usePolicyStore.getState();
-    if (current.accountId !== accountId || current.authGeneration !== authGeneration) {
+    // By account, not credential: a rotated token keeps the account's verdict.
+    if (usePolicyStore.getState().accountId !== accountId) {
       throw Object.assign(new Error("The account changed during streaming."), {
         code: "POLICY_UNRESOLVABLE",
       });

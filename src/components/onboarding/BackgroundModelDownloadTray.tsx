@@ -17,6 +17,7 @@ import {
   getPendingLocalModelAvailability,
   hasPendingLocalModels,
   readPendingLocalModels,
+  type PendingLocalModelInventory,
   type PendingLocalModelKind,
   type PendingLocalModelSelection,
 } from "./pendingLocalModels";
@@ -67,6 +68,15 @@ function downloadDisplay(download: ActiveDownload) {
     name: localModel?.model.name ?? download.id,
     provider: localModel?.provider.id ?? "local",
   };
+}
+
+async function readLocalModelInventory(): Promise<PendingLocalModelInventory> {
+  const [whisper, parakeet, llm] = await Promise.all([
+    window.electronAPI?.listWhisperModels?.().catch(() => undefined),
+    window.electronAPI?.listParakeetModels?.().catch(() => undefined),
+    window.electronAPI?.modelGetAll?.().catch(() => undefined),
+  ]);
+  return { whisper: whisper?.models, parakeet: parakeet?.models, llm };
 }
 
 function activatePendingLocalModel(kind: PendingLocalModelKind, modelId: string) {
@@ -165,6 +175,32 @@ export default function BackgroundModelDownloadTray({
   // later re-download of the same model renders — and errors — normally.
   const cancelledKeys = useRef<Map<string, number>>(new Map());
 
+  // A download that finished while the policy was unresolved kept its selection;
+  // the verdict that settles it is what activates it (or drops it).
+  const policyResolution = usePolicyStore((state) => `${state.status}:${state.accountId}`);
+  useEffect(() => {
+    if (
+      !hydrated ||
+      localStorage.getItem("localSetupPending") !== "true" ||
+      !hasPendingLocalModels()
+    )
+      return;
+    let cancelled = false;
+    void readLocalModelInventory().then((inventory) => {
+      if (cancelled) return;
+      for (const [kind, selection] of Object.entries(readPendingLocalModels()) as [
+        PendingLocalModelKind,
+        PendingLocalModelSelection,
+      ][]) {
+        if (getPendingLocalModelAvailability(kind, selection, inventory) === "downloaded")
+          activatePendingLocalModel(kind, selection.modelId);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, policyResolution]);
+
   useEffect(() => {
     // Hydration only exists to re-surface downloads the onboarding flow kicked
     // off before this mount, and those always travel with the local-setup
@@ -181,15 +217,11 @@ export default function BackgroundModelDownloadTray({
     let cancelled = false;
 
     const hydrate = async () => {
-      const [whisper, parakeet, llm] = await Promise.all([
-        window.electronAPI?.listWhisperModels?.().catch(() => undefined),
-        window.electronAPI?.listParakeetModels?.().catch(() => undefined),
-        window.electronAPI?.modelGetAll?.().catch(() => undefined),
-      ]);
+      const inventory = await readLocalModelInventory();
       if (cancelled) return;
 
       const active: Record<string, ActiveDownload> = {};
-      for (const model of whisper?.models ?? []) {
+      for (const model of inventory.whisper ?? []) {
         if (!model.isDownloading) continue;
         active[downloadKey("whisper", model.model)] = {
           id: model.model,
@@ -198,7 +230,7 @@ export default function BackgroundModelDownloadTray({
           installing: model.isInstalling,
         };
       }
-      for (const model of parakeet?.models ?? []) {
+      for (const model of inventory.parakeet ?? []) {
         if (!model.isDownloading) continue;
         active[downloadKey("parakeet", model.model)] = {
           id: model.model,
@@ -207,7 +239,7 @@ export default function BackgroundModelDownloadTray({
           installing: model.isInstalling,
         };
       }
-      for (const model of llm ?? []) {
+      for (const model of inventory.llm ?? []) {
         if (!model.isDownloading) continue;
         active[downloadKey("llm", model.id)] = {
           id: model.id,
@@ -216,11 +248,6 @@ export default function BackgroundModelDownloadTray({
         };
       }
 
-      const inventory = {
-        whisper: whisper?.models,
-        parakeet: parakeet?.models,
-        llm,
-      };
       const canActivate = localStorage.getItem("localSetupPending") === "true";
       for (const [kind, selection] of Object.entries(readPendingLocalModels()) as [
         PendingLocalModelKind,

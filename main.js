@@ -1233,6 +1233,7 @@ async function startApp() {
   });
 
   await migrateCookieToBearerToken();
+  ipcHandlers.loadLocalModelPolicy();
 
   applyOpenWhisprOriginHeader(session.defaultSession);
 

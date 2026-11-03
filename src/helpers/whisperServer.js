@@ -914,7 +914,10 @@ class WhisperServerManager extends EventEmitter {
   }
 
   async transcribe(audioBuffer, options = {}) {
-    if (this.isRemote) return this._policyAllowedTranscribe(audioBuffer, options);
+    // Nothing to authorize once stopped, which clears the model: that's the
+    // ordinary not-running error, not a refusal of a model nobody named.
+    if (this.isRemote || !this.ready || !this.process)
+      return this._policyAllowedTranscribe(audioBuffer, options);
     return runLocalModelOperation(
       this,
       "transcription",

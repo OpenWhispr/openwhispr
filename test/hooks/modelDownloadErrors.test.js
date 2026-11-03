@@ -438,5 +438,190 @@ test("a required model denied before dispatch records a terminal refusal without
     if (node && typeof node === "object") return textContent(node.props?.children);
     return typeof node === "string" ? node : "";
   };
-  assert.match(textContent(tree), /models.policy.modelBlocked/);
+  assert.match(textContent(tree), /models\.policy\.notApproved/);
+  assert.match(textContent(tree), /onboarding\.requiredModels\.failed\.notApproved/);
+  assert.doesNotMatch(textContent(tree), /models\.policy\.guidance/);
+});
+
+const textOf = (node) => {
+  if (Array.isArray(node)) return node.map(textOf).join("");
+  if (node && typeof node === "object") return textOf(node.props?.children);
+  return typeof node === "string" ? node : "";
+};
+
+function requiredPolicy(allowedLocalModels) {
+  return {
+    status: "managed",
+    appVersion: "1.11.1",
+    accountId: "member",
+    authGeneration: 1,
+    policy: {
+      transcription: { allowedModes: ["local"], allowedLocalModels },
+      requiredLocalModels: ["base"],
+      minAppVersion: null,
+    },
+  };
+}
+
+// The step on the real required-models hook and real policy store, as OnboardingFlow runs it.
+async function renderRequiredStep(t, { policy, download }) {
+  const requests = [];
+  const installed = [];
+  const renderer = await createDownloadRenderer(t, {
+    onWhisperDownloadProgress: () => () => {},
+    onParakeetDownloadProgress: () => () => {},
+    modelGetActiveDownloads: async () => [],
+    listWhisperModels: async () => ({
+      models: installed.map((model) => ({ model, downloaded: true })),
+    }),
+    listParakeetModels: async () => ({ models: [] }),
+    downloadWhisperModel: async (id) => {
+      requests.push(id);
+      const result = await download(id, requests.length);
+      if (result.success) installed.push(id);
+      return result;
+    },
+  });
+  const { usePolicyStore } = await renderer.vite.ssrLoadModule("/stores/policyStore.ts");
+  usePolicyStore.setState(policy);
+  const { RequiredModelDownloadStep } = await renderer.vite.ssrLoadModule(
+    "/components/onboarding/RequiredModelDownloadStep.tsx"
+  );
+  const { useRequiredLocalModels } = await renderer.vite.ssrLoadModule(
+    "/hooks/useRequiredLocalModels.ts"
+  );
+  const { canLeaveRequiredModels } = await renderer.vite.ssrLoadModule(
+    "/components/onboarding/flow.ts"
+  );
+  let tree;
+  let requiredState;
+  let refused = [];
+  let proceeded = 0;
+  const onRefusedChange = (ids) => {
+    refused = ids;
+  };
+  const onProceed = () => {
+    proceeded += 1;
+  };
+  function Harness() {
+    requiredState = useRequiredLocalModels();
+    tree = RequiredModelDownloadStep({ ...requiredState, onProceed, onRefusedChange });
+    return null;
+  }
+  await renderer.render(Harness);
+  return {
+    requests,
+    tree: () => tree,
+    text: () => textOf(tree),
+    retries: () => findRetryButtons(tree),
+    required: () => requiredState.required,
+    proceeded: () => proceeded,
+    canLeave: () =>
+      canLeaveRequiredModels({
+        loading: requiredState.loading,
+        missing: requiredState.missing,
+        refused,
+      }),
+    setPolicy: (next) => React.act(async () => usePolicyStore.setState(next)),
+  };
+}
+
+test("a temporary policy failure keeps Retry and says what happened", async (t) => {
+  const step = await renderRequiredStep(t, {
+    policy: requiredPolicy(["base"]),
+    download: async (_id, attempt) =>
+      attempt === 1
+        ? { success: false, code: "POLICY_UNRESOLVABLE", error: "unresolved" }
+        : { success: true },
+  });
+  assert.equal(step.retries().length, 1);
+  assert.match(step.text(), /models\.policy\.unresolved/);
+  assert.doesNotMatch(step.text(), /models\.policy\.guidance/);
+  assert.equal(step.canLeave(), false, "a temporary failure still waits");
+
+  await React.act(async () => step.retries()[0].props.onClick());
+  assert.deepEqual(step.requests, ["base", "base"]);
+});
+
+for (const [code, message] of [
+  ["POLICY_MODEL_BLOCKED", /onboarding\.requiredModels\.failed\.notApproved/],
+  ["POLICY_LOCAL_MODE_BLOCKED", /models\.policy\.modeBlocked/],
+  ["POLICY_APP_VERSION_BLOCKED", /models\.policy\.versionBlocked/],
+]) {
+  test(`${code} hides Retry and the member can still leave`, async (t) => {
+    const step = await renderRequiredStep(t, {
+      policy: requiredPolicy(["base"]),
+      download: async () => ({ success: false, code, error: "refused" }),
+    });
+    assert.equal(step.retries().length, 0);
+    assert.match(step.text(), message);
+    assert.doesNotMatch(step.text(), /models\.policy\.guidance/);
+    assert.equal(step.canLeave(), true);
+  });
+}
+
+test("an unapproved required model drops off the list without a download", async (t) => {
+  const step = await renderRequiredStep(t, {
+    policy: requiredPolicy(["small"]),
+    download: async () => ({ success: true }),
+  });
+  assert.deepEqual(step.required(), []);
+  assert.deepEqual(step.requests, []);
+  assert.equal(step.canLeave(), true);
+  assert.equal(step.proceeded(), 1);
+});
+
+test("revoking and re-approving a refused model downloads it again", async (t) => {
+  const step = await renderRequiredStep(t, {
+    policy: requiredPolicy(["base"]),
+    download: async (_id, attempt) =>
+      attempt === 1
+        ? { success: false, code: "POLICY_MODEL_BLOCKED", error: "refused" }
+        : new Promise(() => {}),
+  });
+  assert.equal(step.retries().length, 0);
+
+  await step.setPolicy(requiredPolicy([]));
+  assert.deepEqual(step.required(), []);
+  assert.equal(step.canLeave(), true);
+
+  await step.setPolicy(requiredPolicy(["base"]));
+  assert.deepEqual(step.required(), ["base"]);
+  assert.deepEqual(step.requests, ["base", "base"], "the refusal is gone with the old policy");
+  assert.doesNotMatch(step.text(), /notApproved/);
+});
+
+test("a policy refresh that changes nothing keeps a temporary failure waiting for Retry", async (t) => {
+  const step = await renderRequiredStep(t, {
+    policy: requiredPolicy(["base"]),
+    download: async () => ({ success: false, code: "POLICY_UNRESOLVABLE", error: "unresolved" }),
+  });
+  await step.setPolicy({ ...requiredPolicy(["base"]), revision: 9 });
+  assert.deepEqual(step.requests, ["base"]);
+  assert.equal(step.retries().length, 1);
+});
+
+test("a lifted requirement continues on its own once nothing is downloading", async (t) => {
+  const step = await renderRequiredStep(t, {
+    policy: requiredPolicy(["base"]),
+    download: async () => ({ success: false, code: "ENOTFOUND", error: "ENOTFOUND" }),
+  });
+  assert.equal(step.proceeded(), 0);
+  await step.setPolicy({ ...requiredPolicy(["base"]), status: "unmanaged", policy: null });
+  assert.equal(step.proceeded(), 1);
+});
+
+test("a token rotation's unresolved moment does not leave the step", async (t) => {
+  const step = await renderRequiredStep(t, {
+    policy: requiredPolicy(["base"]),
+    download: async () => ({ success: false, code: "ENOTFOUND", error: "ENOTFOUND" }),
+  });
+  await step.setPolicy({
+    status: "loading",
+    accountId: "member",
+    authGeneration: 2,
+    policy: null,
+    appVersion: null,
+  });
+  assert.equal(step.proceeded(), 0);
 });

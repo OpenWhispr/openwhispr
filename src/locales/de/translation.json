@@ -584,7 +584,8 @@
       "queued": "In Warteschlange",
       "failed": {
         "title": "Ein Download wurde nicht abgeschlossen",
-        "description": "Prüfen Sie Ihre Verbindung und den freien Speicherplatz und versuchen Sie es erneut. Wenn der Fehler weiterhin auftritt, wenden Sie sich an Ihren Administrator."
+        "description": "Prüfen Sie Ihre Verbindung und den freien Speicherplatz und versuchen Sie es erneut. Wenn der Fehler weiterhin auftritt, wenden Sie sich an Ihren Administrator.",
+        "notApproved": "Ihre Organisation hat dieses Modell nicht genehmigt. Sie können ohne es fortfahren."
       }
     },
     "permissionGuide": {

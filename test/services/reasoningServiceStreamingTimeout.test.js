@@ -59,7 +59,7 @@ async function startStream(t, provider, { holdHeaders = false, status = 200 } = 
   const outcome = (async () => {
     for await (const chunk of service.processTextStreamingAI(
       [{ role: "user", content: "Give a long answer." }],
-      "qwen3-1.7b-q8_0",
+      "qwen3-1.7b-q4_k_m",
       provider,
       {
         systemPrompt: "Answer the user.",

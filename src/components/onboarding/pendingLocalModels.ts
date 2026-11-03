@@ -14,7 +14,6 @@ export interface PendingLocalModelSelection {
   provider: string;
   modelId: string;
   accountId?: string | null;
-  authGeneration?: number | null;
 }
 
 export type PendingLocalModelSelections = Partial<
@@ -63,23 +62,34 @@ export function isPendingLocalModel(
   return pending?.provider === selection.provider && pending.modelId === selection.modelId;
 }
 
+/**
+ * Hands over the selection for a finished download, or null when it can't be
+ * activated. It is kept for a later try until the verdict is final: another
+ * account or a settled denial drops it, while an unresolved policy leaves it in
+ * place. The account is the identity, since a rotated token changes only the
+ * generation. A blank account while a selection names one is unresolved too:
+ * suspending the policy and a relaunch before its first fetch both blank it.
+ */
 export function consumePendingLocalModel(
   kind: PendingLocalModelKind,
   modelId: string,
-  policy: PolicyDecisionSnapshot & { accountId?: string | null; authGeneration?: number | null }
+  policy: PolicyDecisionSnapshot & { accountId?: string | null }
 ): PendingLocalModelSelection | null {
   const selections = readPendingLocalModels();
   const selection = selections[kind];
   if (!selection || selection.modelId !== modelId) return null;
+  const accountChanged = policy.accountId != null && selection.accountId !== policy.accountId;
+  if (
+    !accountChanged &&
+    (policy.status === "loading" ||
+      policy.status === "error" ||
+      (selection.accountId != null && policy.accountId == null))
+  )
+    return null;
   delete selections[kind];
   writePendingLocalModels(selections);
   if (
-    (policy.accountId != null && selection.accountId !== policy.accountId) ||
-    (selection.accountId !== undefined && selection.accountId !== policy.accountId) ||
-    (selection.authGeneration !== undefined && selection.authGeneration !== policy.authGeneration)
-  )
-    return null;
-  if (
+    accountChanged ||
     !isLocalModelAllowedByPolicy(
       policy,
       kind === "assistant" ? "llm" : "transcription",

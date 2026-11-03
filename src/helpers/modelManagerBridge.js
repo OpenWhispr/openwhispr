@@ -1,7 +1,7 @@
 const {
   runLocalModelOperation,
   assertLocalModelOperation,
-  localModelOperationSignal,
+  bindLocalModelDownload,
   isLocalModelPolicyRefusal,
 } = require("./localModelPolicyGate");
 const path = require("path");
@@ -309,12 +309,8 @@ class ModelManager {
   }
 
   async downloadModel(modelId, onProgress) {
-    return runLocalModelOperation(
-      this,
-      "llm",
-      modelId,
-      () => this._policyAllowedDownloadModel(modelId, onProgress),
-      { onAbort: () => this.cancelDownload(modelId) }
+    return runLocalModelOperation(this, "llm", modelId, () =>
+      this._policyAllowedDownloadModel(modelId, onProgress)
     );
   }
 
@@ -338,10 +334,11 @@ class ModelManager {
       });
     }
 
+    // Binding refuses a revoked lease, so it goes before anything takes the slot.
+    const { signal, abort } = createDownloadSignal();
+    const unbindPolicy = bindLocalModelDownload(this, abort);
     this.activeDownloads.set(modelId, true);
     this.downloadLifecycleVersion += 1;
-    const { signal: downloadSignal, abort } = createDownloadSignal();
-    const signal = localModelOperationSignal(this, downloadSignal);
     this.activeRequests.set(modelId, { abort });
 
     try {
@@ -434,7 +431,7 @@ class ModelManager {
           }
         } catch (draftError) {
           await fsPromises.unlink(draftPath).catch(() => {});
-          if (draftError.isAbort) throw draftError;
+          if (draftError.isAbort || isLocalModelPolicyRefusal(draftError)) throw draftError;
           debugLogger.warn("MTP drafter download failed, keeping model without it", {
             modelId,
             error: draftError.message,
@@ -459,6 +456,7 @@ class ModelManager {
       }
       throw error;
     } finally {
+      unbindPolicy();
       if (this.activeDownloads.delete(modelId)) {
         this.downloadLifecycleVersion += 1;
       }
@@ -926,13 +924,28 @@ class ModelManager {
   }
 
   async prewarmServer(modelId) {
-    return runLocalModelOperation(
-      this,
-      "llm",
-      modelId,
-      () => this._policyAllowedPrewarmServer(modelId),
-      { memoryOnly: true, onAbort: () => this.stopServer() }
-    );
+    try {
+      return await runLocalModelOperation(
+        this,
+        "llm",
+        modelId,
+        () => this._policyAllowedPrewarmServer(modelId),
+        { memoryOnly: true, onAbort: () => this.stopServer() }
+      );
+    } catch (error) {
+      if (error.code === "POLICY_UNRESOLVABLE") {
+        this.localModelPolicy?.runOnceVerdictSettles(() => {
+          // A request in the meantime already started what it needs.
+          if (this.serverManager.ready || this.serverManager.startupPromise) return;
+          this.prewarmServer(modelId).catch((resumeError) => {
+            debugLogger.warn("Resumed llama-server pre-warm failed", {
+              error: resumeError.message,
+            });
+          });
+        });
+      }
+      throw error;
+    }
   }
 
   async _policyAllowedPrewarmServer(modelId) {

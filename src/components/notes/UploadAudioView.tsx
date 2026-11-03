@@ -77,9 +77,17 @@ import { MAX_SPEAKER_COUNT } from "../../constants/speakerDetection.json";
 import BatchQueueView from "./BatchQueueView";
 import { generateNoteTitle } from "../../utils/generateTitle";
 import { getBaseLanguageCode } from "../../utils/languageSupport";
-import { isAudioFeatureAllowed, isTranscriptionContextAllowed } from "../../stores/policyRules";
+import {
+  isAudioFeatureAllowed,
+  isTranscriptionContextAllowed,
+  transcriptionChoiceRefusal,
+} from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
-import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
+import {
+  usePolicySnapshot,
+  useTranscriptionChoiceRefusal,
+  useTranscriptionContextAllowed,
+} from "../../hooks/usePolicy";
 import { byokFileSizeLimit, resolveTranscriptionRoute } from "../../helpers/transcriptionRoute";
 import { saveUploadNote, uploadTitleFallback } from "../../services/uploadNotes";
 import { useManagedScopeResolution } from "../../stores/enterpriseIdentityStore";
@@ -306,6 +314,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     )
   );
   const uploadAllowedByPolicy = useTranscriptionContextAllowed("upload");
+  const uploadChoiceRefusal = useTranscriptionChoiceRefusal("upload");
   // The org's upload switch, which the banner explains and the inputs follow.
   const uploadFeatureAllowed = isAudioFeatureAllowed(policyState, "upload");
   const uploadRestrictionId = useId();
@@ -694,7 +703,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       !isManagedTranscriptionActive() &&
       !isTranscriptionContextAllowed(policy, getSettings(), "upload")
     ) {
-      setError(t("common.managedByOrg"));
+      const refusal = transcriptionChoiceRefusal(policy, getSettings(), "upload");
+      setError(t(refusal?.messageKey ?? "common.managedByOrg"));
+      setState("error");
       return;
     }
     const currentFile = file;
@@ -949,7 +960,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       !isManagedTranscriptionActive() &&
       !isTranscriptionContextAllowed(policy, getSettings(), "upload")
     ) {
-      setSkippedNotice(t("common.managedByOrg"));
+      const refusal = transcriptionChoiceRefusal(policy, getSettings(), "upload");
+      setSkippedNotice(t(refusal?.messageKey ?? "common.managedByOrg"));
       return;
     }
     setSkippedNotice(null);
@@ -1018,7 +1030,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 py-8 shrink-0 my-auto")}
         style={{ animation: "float-up 0.4s ease-out" }}
       >
-        {!uploadFeatureAllowed && (
+        {(!uploadFeatureAllowed || (!uploadAllowedByPolicy && uploadChoiceRefusal)) && (
           <p
             id={uploadRestrictionId}
             role="status"
@@ -1028,7 +1040,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               aria-hidden="true"
               className="w-3.5 h-3.5 shrink-0 text-amber-600 dark:text-warning"
             />
-            {t(uploadRestrictionKey(policyState))}
+            {t(uploadChoiceRefusal?.messageKey ?? uploadRestrictionKey(policyState))}
           </p>
         )}
         {state === "idle" && providerReady === false && (
@@ -1290,7 +1302,17 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         )}
 
         {state === "error" && error && (
-          <ErrorView t={t} error={error} reset={reset} onRetry={handleRetry} />
+          <ErrorView
+            t={t}
+            error={error}
+            reset={reset}
+            onRetry={handleRetry}
+            onOpenSettings={
+              onOpenSettings && !uploadAllowedByPolicy && uploadChoiceRefusal
+                ? () => onOpenSettings("uploadTranscription")
+                : undefined
+            }
+          />
         )}
 
         {(state === "idle" || state === "selected") && (
@@ -1943,9 +1965,10 @@ interface ErrorViewProps {
   error: string;
   reset: () => void;
   onRetry: () => void;
+  onOpenSettings?: () => void;
 }
 
-function ErrorView({ t, error, reset, onRetry }: ErrorViewProps) {
+function ErrorView({ t, error, reset, onRetry, onOpenSettings }: ErrorViewProps) {
   return (
     <div className="flex flex-col gap-4" style={{ animation: "float-up 0.3s ease-out" }}>
       <div className="flex items-start gap-3 rounded-2xl border border-destructive/20 bg-destructive/5 p-4 dark:bg-destructive/10">
@@ -1961,9 +1984,15 @@ function ErrorView({ t, error, reset, onRetry }: ErrorViewProps) {
       </div>
 
       <div className="flex items-center justify-center gap-2">
-        <Button onClick={onRetry} className={PRIMARY_ACTION_CLASS}>
-          {t("notes.upload.retry")}
-        </Button>
+        {onOpenSettings ? (
+          <Button onClick={onOpenSettings} className={PRIMARY_ACTION_CLASS}>
+            {t("notes.upload.noProviderAction")}
+          </Button>
+        ) : (
+          <Button onClick={onRetry} className={PRIMARY_ACTION_CLASS}>
+            {t("notes.upload.retry")}
+          </Button>
+        )}
         <Button variant="ghost" onClick={reset} className={SECONDARY_ACTION_CLASS}>
           {t("notes.upload.startOver")}
         </Button>

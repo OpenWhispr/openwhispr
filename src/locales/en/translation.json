@@ -584,7 +584,8 @@
       "queued": "Queued",
       "failed": {
         "title": "A download didn't finish",
-        "description": "Check your connection and free disk space, then retry. If it keeps failing, contact your administrator."
+        "description": "Check your connection and free disk space, then retry. If it keeps failing, contact your administrator.",
+        "notApproved": "Your organization doesn't approve this model. You can continue without it."
       }
     },
     "permissionGuide": {

@@ -383,5 +383,10 @@ for (const [code, message] of [
     await streamError(code);
     assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
     assert.equal(toasts.at(-1)?.description, message);
+    // Another model fixes the first two; an update fixes the third.
+    assert.equal(
+      toasts.at(-1)?.actions?.some((action) => action.icon === "settings") ?? false,
+      code !== "POLICY_APP_VERSION_BLOCKED"
+    );
   });
 }

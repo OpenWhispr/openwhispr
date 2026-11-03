@@ -127,13 +127,15 @@ export default function SetupChoiceStep({
 }: SetupChoiceStepProps) {
   const { t } = useTranslation();
   const policy = usePolicySnapshot();
-  const [parakeetSupported, setParakeetSupported] = useState(false);
+  // Unknown counts as supported, or a Parakeet-only policy would flash "unavailable"
+  // on every device while the check runs.
+  const [parakeetUnsupported, setParakeetUnsupported] = useState(false);
   useEffect(() => {
     let cancelled = false;
     window.electronAPI
       ?.checkParakeetInstallation?.()
       .then((capability) => {
-        if (!cancelled) setParakeetSupported(capability.supported);
+        if (!cancelled) setParakeetUnsupported(capability.supported === false);
       })
       .catch(() => undefined);
     return () => {
@@ -163,11 +165,8 @@ export default function SetupChoiceStep({
     llmProviders: modelRegistry.getCloudProviders(),
     supportedLocalTranscriptionModels: [
       ...Object.keys(getWhisperModels()),
-      ...(parakeetSupported ? Object.keys(getParakeetModels()) : []),
+      ...(parakeetUnsupported ? [] : Object.keys(getParakeetModels())),
     ].map((id) => ({ id })),
-    supportedLocalLlmModels: modelRegistry
-      .getAllProviders()
-      .flatMap((provider) => provider.models.filter((model) => !model.legacy)),
   });
   const {
     cloud: cloudAllowed,
@@ -183,8 +182,8 @@ export default function SetupChoiceStep({
   };
 
   const confirmPending = () => {
-    if (!pending || !availability[pending === "local" ? "local" : "selfHosted"]) return;
-    onSelect(pending);
+    if (!pending) return;
+    if (availability[pending === "local" ? "local" : "selfHosted"]) onSelect(pending);
     setPending(null);
   };
 

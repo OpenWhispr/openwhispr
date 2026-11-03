@@ -13,7 +13,8 @@ import {
 import { requestMeetingRecordingAutoEnd } from "../helpers/meetingRecordingSession";
 import logger from "../utils/logger";
 import { usePolicySnapshot } from "../hooks/usePolicy";
-import { isAudioFeatureAllowed } from "../stores/policyRules";
+import { isAudioFeatureAllowed, isLocalChoiceRefusal } from "../stores/policyRules";
+import { providerErrorActions } from "../utils/describeProviderError";
 import { requestSignIn } from "../utils/requestSignIn";
 
 const EMA_PREV = 0.5;
@@ -107,7 +108,11 @@ export default function MeetingRecordingMount(): null {
       description: errorKey ? t(errorKey, { provider: argument }) : error,
       variant: "destructive",
       duration: needsSignIn || sentinel === "signInExpired" ? 8000 : undefined,
-      actions: needsSignIn ? [{ label: t("common.signIn"), onClick: requestSignIn }] : undefined,
+      actions: needsSignIn
+        ? [{ label: t("common.signIn"), onClick: requestSignIn }]
+        : isLocalChoiceRefusal(sentinel)
+          ? providerErrorActions({ settingsTarget: "speechToText" }, t)
+          : undefined,
       actionsAlign: needsSignIn ? "end" : undefined,
     });
     // errorNonce re-fires this toast when the same error repeats back-to-back.

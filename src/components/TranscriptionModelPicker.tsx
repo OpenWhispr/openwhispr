@@ -575,9 +575,12 @@ export default function TranscriptionModelPicker({
       )
     )
       setInternalLocalProvider("whisper");
+    // A blocked model stays saved, as policy never rewrites a preference. A blank
+    // one is no choice to preserve (Meeting and Upload default to it).
     if (
       isSherpaLocalProvider(selectedLocalProvider) &&
-      isLocalModelAllowedByPolicy(usePolicyStore.getState(), "transcription", selectedLocalModel)
+      (!selectedLocalModel ||
+        isLocalModelAllowedByPolicy(usePolicyStore.getState(), "transcription", selectedLocalModel))
     )
       onLocalProviderSelect?.("whisper");
   }, [
@@ -629,27 +632,40 @@ export default function TranscriptionModelPicker({
     );
     return filterByokProviderOptionsByPolicy(tabs, "transcription", policyState);
   }, [availableCloudProviders, policyState, streamingOnly, t]);
-  const localProviderTabs = useMemo(
-    () =>
-      LOCAL_PROVIDER_TABS.map((provider) =>
-        usesParakeetManager(provider.id) &&
-        parakeetCapability?.supported === false &&
-        !parakeetModels.some(
-          (model) => model.downloaded && getASRModelOrganization(model.model) === provider.id
-        )
-          ? {
-              ...provider,
-              disabled: true,
-              disabledLabel: parakeetCapability.minimumMacOSVersion
-                ? t("transcription.parakeet.requiresMacOS", {
-                    version: parakeetCapability.minimumMacOSVersion,
-                  })
-                : t("transcription.parakeet.unavailable"),
-            }
-          : provider
-      ),
-    [parakeetCapability, parakeetModels, t]
-  );
+  const policyRestricted = policyState.status === "managed";
+  const localProviderTabs = useMemo(() => {
+    const installedInFamily = (providerId: string): boolean =>
+      usesParakeetManager(providerId)
+        ? parakeetModels.some(
+            (model) => model.downloaded && getASRModelOrganization(model.model) === providerId
+          )
+        : localModels.some((model) => model.downloaded);
+    const approvedInFamily = (providerId: string): boolean =>
+      (usesParakeetManager(providerId)
+        ? Object.keys(PARAKEET_MODEL_INFO).filter(
+            (id) => getASRModelOrganization(id) === providerId
+          )
+        : Object.keys(WHISPER_MODEL_INFO)
+      ).some((id) => isLocalModelAllowedByPolicy(policyState, "transcription", id));
+    return LOCAL_PROVIDER_TABS.filter(
+      (provider) =>
+        !policyRestricted || installedInFamily(provider.id) || approvedInFamily(provider.id)
+    ).map((provider) =>
+      usesParakeetManager(provider.id) &&
+      parakeetCapability?.supported === false &&
+      !installedInFamily(provider.id)
+        ? {
+            ...provider,
+            disabled: true,
+            disabledLabel: parakeetCapability.minimumMacOSVersion
+              ? t("transcription.parakeet.requiresMacOS", {
+                  version: parakeetCapability.minimumMacOSVersion,
+                })
+              : t("transcription.parakeet.unavailable"),
+          }
+        : provider
+    );
+  }, [localModels, parakeetCapability, parakeetModels, policyRestricted, policyState, t]);
 
   useEffect(() => {
     selectedLocalModelRef.current = selectedLocalModel;
@@ -792,6 +808,35 @@ export default function TranscriptionModelPicker({
   useEffect(() => {
     loadParakeetModelsRef.current = loadParakeetModels;
   }, [loadParakeetModels]);
+  // Which tabs a restricted member gets depends on what is installed in every
+  // family, not only the one on screen.
+  const [familyInventoryLoaded, setFamilyInventoryLoaded] = useState(false);
+  useEffect(() => {
+    if (!effectiveLocal || !policyRestricted) return;
+    let cancelled = false;
+    hasLoadedRef.current = true;
+    hasLoadedParakeetRef.current = true;
+    void Promise.all([loadLocalModelsRef.current?.(), loadParakeetModelsRef.current?.()]).then(
+      () => {
+        if (!cancelled) setFamilyInventoryLoaded(true);
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [effectiveLocal, policyRestricted]);
+
+  // Tabs are browse state, so moving off a filtered one saves nothing.
+  const fallbackLocalTab =
+    policyRestricted &&
+    familyInventoryLoaded &&
+    !localProviderTabs.some((provider) => provider.id === internalLocalProvider)
+      ? localProviderTabs.find((provider) => !("disabled" in provider && provider.disabled))?.id
+      : undefined;
+  useEffect(() => {
+    if (fallbackLocalTab) setInternalLocalProvider(fallbackLocalTab);
+  }, [fallbackLocalTab]);
+
   useEffect(() => {
     if (!effectiveLocal) return;
 
@@ -1653,7 +1698,7 @@ export default function TranscriptionModelPicker({
             scope="transcription"
             hasSupportedModel={[
               ...Object.keys(WHISPER_MODEL_INFO),
-              ...(parakeetCapability?.supported ? Object.keys(PARAKEET_MODEL_INFO) : []),
+              ...(parakeetCapability?.supported === false ? [] : Object.keys(PARAKEET_MODEL_INFO)),
             ].some((id) => isLocalModelAllowedByPolicy(policyState, "transcription", id))}
           />
           {progressDisplay}

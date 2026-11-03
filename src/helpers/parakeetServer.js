@@ -115,7 +115,7 @@ class ParakeetServerManager {
     return runLocalModelOperation(
       this,
       "transcription",
-      options.modelName ?? (this.localModelPolicy ? "" : "parakeet-tdt-0.6b-v3"),
+      options.modelName ?? "",
       () =>
         this._policyAllowedTranscribe(audioBuffer, {
           ...options,
