@@ -2886,10 +2886,12 @@ class IPCHandlers {
         binding: accountScopeBinding.read(),
       });
       const accountChanged = this.databaseManager.activeAccountId !== accountId;
+      const scopeChanged =
+        accountChanged || (accountId !== null && previousScope?.accountId !== accountId);
       // A rotated bearer no longer matches the stored binding, so this also
       // holds for the same account: that only re-scopes the policy, and only a
       // different account ends the work and meeting already running.
-      if (accountChanged || (accountId !== null && previousScope?.accountId !== accountId)) {
+      if (scopeChanged) {
         this.updateManager?.invalidatePolicy();
         this._audioFeaturePolicy?.invalidate();
         if (accountChanged) {
@@ -2903,7 +2905,7 @@ class IPCHandlers {
       this.databaseManager.setActiveAccountId(accountId);
       if (accountId !== null) accountScopeBinding.persist(accountId, state.token);
       else accountScopeBinding.clear();
-      this.effectivePolicyManager.invalidate();
+      if (scopeChanged) this.effectivePolicyManager.invalidate();
       void this.refreshEffectivePolicy();
       broadcastToWindows(
         "active-account-scope-changed",

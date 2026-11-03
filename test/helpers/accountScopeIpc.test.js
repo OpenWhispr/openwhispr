@@ -746,3 +746,51 @@ test("account deletion still deletes the note mirrors when the enterprise vault 
   assert.equal(result.success, true);
   assert.deepEqual(mirrored, [11, 12]);
 });
+
+test("repeated validated account scope preserves its settled policy while refreshing", async (t) => {
+  tokenState = { token: "stable-policy-token", generation: 80 };
+  await setScope("stable-policy-account", 80);
+  await new Promise((resolve) => setImmediate(resolve));
+  const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+  policy.dataRetention.audioRetentionMaxDays = 7;
+  const manager = fakeThis.effectivePolicyManager;
+  manager.updateWorkspace({
+    success: true,
+    managed: true,
+    accountId: "stable-policy-account",
+    authGeneration: 80,
+    policy,
+    policyUpdatedAt: "2026-11-03T10:00:00.000Z",
+  });
+  const settled = manager.getCurrent();
+  assert.equal(settled.status, "managed");
+  const refresh = fakeThis.refreshEffectivePolicy;
+  let release;
+  const pending = new Promise((resolve) => {
+    release = resolve;
+  });
+  const refreshes = [];
+  fakeThis.refreshEffectivePolicy = () => {
+    const work = pending.then(() => refresh());
+    refreshes.push(work);
+    return work;
+  };
+  t.after(async () => {
+    fakeThis.refreshEffectivePolicy = refresh;
+    release();
+    await Promise.all(refreshes);
+  });
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    assert.deepEqual(await setScope("stable-policy-account", 80), { success: true });
+    assert.equal(manager.getCurrent().status, "managed");
+    assert.equal(manager.getCurrent().revision, settled.revision);
+    assert.equal(manager.getCurrent().policy.dataRetention.audioRetentionMaxDays, 7);
+  }
+  assert.equal(refreshes.length, 3);
+
+  tokenState = { token: "rotated-policy-token", generation: 81 };
+  await setScope("stable-policy-account", 81);
+  assert.equal(manager.getCurrent().status, "loading");
+  assert.equal(manager.getCurrent().authGeneration, 81);
+});
