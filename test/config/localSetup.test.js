@@ -151,10 +151,15 @@ test("each table machine gets its table labels", async () => {
     [mac({ appleChip: null }), "mac-16-plus", ["fast", "slower", "unavailable"], "tooSlow"],
     [mac({}), "mac-m5-pro", ["fast", "fast", "slower"], undefined],
     [mac({ appleChip: { generation: 1, tier: "" } }), "mac-m1", ["fast", "slower", "unavailable"]],
+    // Gemma's quicker first words (titan#346) bring these three inside 15 s; the M3 Pro stays out.
+    [mac({ appleChip: { generation: 4, tier: "Pro" } }), "mac-m4-pro", ["fast", "fast", "slower"]],
+    [mac({ appleChip: { generation: 1, tier: "Max" } }), "mac-m1-max", ["fast", "fast", "slower"]],
+    [mac({ appleChip: { generation: 2, tier: "Pro" } }), "mac-m2-pro", ["fast", "fast", "slower"]],
     [
-      mac({ appleChip: { generation: 4, tier: "Pro" } }),
-      "mac-m4-pro",
+      mac({ appleChip: { generation: 3, tier: "Pro" } }),
+      "mac-m3-pro",
       ["fast", "fast", "unavailable"],
+      "tooSlow",
     ],
     [mac({ appleChip: { generation: 5, tier: "" } }), "mac-m5", ["fast", "fast", "slower"]],
     [mac({ appleChip: { generation: 5, tier: "Max" } }), "mac-m5-max", ["fast", "fast", "slower"]],
@@ -477,6 +482,13 @@ test("the table is complete and reachable", async () => {
     for (const group of GROUPS) checkEntry(`${key} ${group}`, machine.dictation[group], "seconds");
     checkEntry(`${key} cleanup`, machine.cleanup, "addedSeconds");
     checkEntry(`${key} assistant`, machine.assistant, "firstWordsSeconds");
+    // Design §7: the assistant is offered while its slowest first words stay within 15 s.
+    // Ranges are rounded, so a 15 can sit either side of the line.
+    const firstWords = machine.assistant.firstWordsSeconds;
+    if (firstWords && firstWords[1] !== 15) {
+      const offered = machine.assistant.label !== "unavailable";
+      assert.equal(offered, firstWords[1] < 15, `${key} assistant against the 15 s line`);
+    }
     // A "memory" row must hold for every computer of the type: only an under-16 type,
     // whose memory stays below the band, and only where the band is at most the need.
     for (const rowId of ["cleanup", "assistant"]) {
