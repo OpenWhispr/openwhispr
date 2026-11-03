@@ -176,7 +176,9 @@ function parseXml(src) {
  */
 export function parseDragonWordList(text) {
   const src = String(text ?? "");
-  return src.trimStart().startsWith("<") ? parseXml(src) : parseTxt(src);
+  // Headerless TXT can begin with punctuation such as "<3" or "<=".
+  const isXml = /^\s*<(?:[?!]|[A-Za-z_][\w:.-]*(?:\s[^<>]*)?\/?>)/.test(src);
+  return isXml ? parseXml(src) : parseTxt(src);
 }
 
 // New words in file order, stopping at the dictionary cap.

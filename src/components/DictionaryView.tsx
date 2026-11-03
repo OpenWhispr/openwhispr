@@ -31,6 +31,7 @@ import { useToast } from "./ui/useToast";
 import SnippetsView from "./SnippetsView";
 import DictionaryEmptyIllustration from "./DictionaryEmptyIllustration";
 import { useSettings } from "../hooks/useSettings";
+import { getSettings } from "../stores/settingsStore";
 import { getAgentName } from "../utils/agentName";
 import { parseDictionaryImportText } from "../helpers/dictionaryImport";
 import {
@@ -43,12 +44,9 @@ import {
 import { getDictionaryHintWords } from "../utils/snippets";
 import { WHISPER_DECODER_PROMPT_CHARS } from "../utils/dictionaryPromptCap";
 
-interface DragonPreview {
+interface DragonFile {
   fileName: string;
-  total: number;
-  add: string[];
-  skippedExisting: number;
-  overLimit: number;
+  words: string[];
   unreadableLines: number;
   tooLong: number;
   propertiesIgnored: boolean;
@@ -61,7 +59,7 @@ const DRAGON_ERROR_KEYS: Record<string, string> = {
   FILE_TOO_LARGE: "dictionary.dragonImport.error.fileTooLarge",
 };
 
-export default function DictionaryView() {
+export default function DictionaryView(): ReactNode {
   const { t, i18n } = useTranslation();
   const { customDictionary, updateCustomDictionary, snippets } = useSettings();
   const agentName = getAgentName();
@@ -75,7 +73,16 @@ export default function DictionaryView() {
   const [editValue, setEditValue] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
   const addInputRef = useRef<HTMLInputElement>(null);
-  const [dragonPreview, setDragonPreview] = useState<DragonPreview | null>(null);
+  const [dragonFile, setDragonFile] = useState<DragonFile | null>(null);
+  const dragonPreview = useMemo(
+    () =>
+      dragonFile && {
+        ...dragonFile,
+        total: dragonFile.words.length,
+        ...planDragonImport(dragonFile.words, customDictionary),
+      },
+    [dragonFile, customDictionary]
+  );
   // Guards double-clicks: the handler reads stale closure state, so state
   // alone can't stop a second picker opening in the same frame.
   const dragonPickInFlight = useRef(false);
@@ -172,15 +179,16 @@ export default function DictionaryView() {
     }
   }, [customDictionary, toast, t]);
 
-  const handleDragonImport = useCallback(async () => {
+  const handleDragonImport = useCallback(async (): Promise<void> => {
     if (dragonPickInFlight.current) return;
     dragonPickInFlight.current = true;
-    const showError = (code?: string) =>
+    const showError = (code?: string): void => {
       toast({
         title: t("dictionary.dragonImport.failedTitle"),
         description: t(DRAGON_ERROR_KEYS[code ?? ""] ?? "dictionary.dragonImport.error.generic"),
         variant: "destructive",
       });
+    };
     try {
       const result = await window.electronAPI?.dragonImportPickFile?.();
       if (!result || result.canceled) return;
@@ -193,15 +201,11 @@ export default function DictionaryView() {
         showError(parsed.error.code);
         return;
       }
-      const countWarnings = (...codes: string[]) =>
+      const countWarnings = (...codes: string[]): number =>
         parsed.warnings.filter((w) => codes.includes(w.code)).length;
-      const { add, skippedExisting, overLimit } = planDragonImport(parsed.words, customDictionary);
-      setDragonPreview({
+      setDragonFile({
         fileName: result.fileName ?? "",
-        total: parsed.words.length,
-        add,
-        skippedExisting,
-        overLimit,
+        words: parsed.words,
         unreadableLines: countWarnings("AMBIGUOUS_BACKSLASH", "UNREADABLE_CHARACTERS"),
         tooLong: countWarnings("TOO_LONG"),
         propertiesIgnored: countWarnings("XML_PROPERTIES_IGNORED") > 0,
@@ -211,12 +215,15 @@ export default function DictionaryView() {
     } finally {
       dragonPickInFlight.current = false;
     }
-  }, [customDictionary, toast, t]);
+  }, [toast, t]);
 
-  const confirmDragonImport = useCallback(() => {
-    if (!dragonPreview || dragonPreview.add.length === 0) return;
-    updateCustomDictionary({ add: dragonPreview.add });
-    toast({ title: t("dictionary.dragonImport.done", { count: dragonPreview.add.length }) });
+  const confirmDragonImport = useCallback((): void => {
+    if (!dragonPreview) return;
+    // A sync broadcast may update the store before React renders the new preview.
+    const { add } = planDragonImport(dragonPreview.add, getSettings().customDictionary);
+    if (add.length === 0) return;
+    updateCustomDictionary({ add });
+    toast({ title: t("dictionary.dragonImport.done", { count: add.length }) });
   }, [dragonPreview, updateCustomDictionary, toast, t]);
 
   // All in the description, not children: with children the dialog leaves
@@ -261,7 +268,7 @@ export default function DictionaryView() {
     );
   }, [dragonPreview, t, i18n.language]);
 
-  const renderImportMenu = (trigger: ReactNode, align: "start" | "end") => (
+  const renderImportMenu = (trigger: ReactNode, align: "start" | "end"): ReactNode => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
       <DropdownMenuContent
@@ -294,7 +301,7 @@ export default function DictionaryView() {
   );
 
   const addWordInput = (
-    <div className="relative">
+    <div className="flex min-w-0 items-center gap-2 rounded-full border border-border/70 bg-input pe-3 transition-colors hover:border-border-hover focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10 dark:border-border-subtle/60 dark:bg-surface-1 dark:focus-within:border-border-active dark:focus-within:ring-ring/10">
       <Input
         dir="auto"
         ref={addInputRef}
@@ -306,9 +313,9 @@ export default function DictionaryView() {
           if (e.key === "Enter") handleAdd();
           if (e.key === "Escape" && userWords.length === 0) setShowEmptyInput(false);
         }}
-        className="h-10 w-full rounded-full! pe-40 text-sm placeholder:text-foreground/45"
+        className="input-inline h-10 min-w-0 flex-1 rounded-full! border-0 bg-transparent text-sm placeholder:text-foreground/45 focus-visible:ring-0 dark:bg-transparent"
       />
-      <div className="absolute end-3 top-1/2 flex -translate-y-1/2 items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         <button
           onClick={handleAdd}
           disabled={!newWord.trim()}
@@ -375,7 +382,7 @@ export default function DictionaryView() {
       <ConfirmDialog
         open={dragonPreview !== null}
         onOpenChange={(open) => {
-          if (!open) setDragonPreview(null);
+          if (!open) setDragonFile(null);
         }}
         title={t("dictionary.dragonImport.title")}
         description={dragonDescription}

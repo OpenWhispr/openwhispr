@@ -80,6 +80,17 @@ test("parseDragonWordList splits at the LAST separator and accepts a single back
   assert.deepEqual(r.words, ["C:\\\\temp", "old style", "back\\\\slash"]);
 });
 
+test("parseDragonWordList preserves headerless TXT entries beginning with less-than", async () => {
+  const { parseDragonWordList } = await load();
+  for (const word of ["<3", "<=", "<", "< 3"]) {
+    const result = parseDragonWordList(`  ${word}\\\\spoken form\nAcme\n`);
+    assert.equal(result.ok, true, word);
+    assert.equal(result.format, "txt", word);
+    assert.equal(result.header, null, word);
+    assert.deepEqual(result.words, [word, "Acme"], word);
+  }
+});
+
 test("parseDragonWordList skips a line with no written form and reports it", async () => {
   const { parseDragonWordList } = await load();
   const r = parseDragonWordList("@Version=Plato-UTF8\n\\\\only spoken\nreal word\n");
@@ -241,6 +252,24 @@ test("parseDragonWordList refuses XML that is not a Windows Dragon export", asyn
   const { parseDragonWordList } = await load();
   const mac = '<?xml version="1.0"?><vocabulary><item written="x" spoken="y"/></vocabulary>';
   assert.deepEqual(parseDragonWordList(mac), { ok: false, error: { code: "UNSUPPORTED_XML" } });
+});
+
+test("parseDragonWordList recognizes a Windows XML export without a declaration", async () => {
+  const { parseDragonWordList } = await load();
+  const result = parseDragonWordList('  <WordExport><Word name="Acme"/></WordExport>');
+  assert.equal(result.ok, true);
+  assert.equal(result.format, "xml");
+  assert.deepEqual(result.words, ["Acme"]);
+});
+
+test("parseDragonWordList refuses non-Dragon XML without a declaration", async () => {
+  const { parseDragonWordList } = await load();
+  for (const xml of ['<vocabulary><item written="Acme"/></vocabulary>', "<vocabulary />"]) {
+    assert.deepEqual(parseDragonWordList(xml), {
+      ok: false,
+      error: { code: "UNSUPPORTED_XML" },
+    });
+  }
 });
 
 test("parseDragonWordList treats a WordExport with no words as empty", async () => {
