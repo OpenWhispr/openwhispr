@@ -36,8 +36,6 @@ interface Props {
   initialEmail?: string;
   /** Addresses that can't be invited again; their chips are blocked before anything is sent. */
   knownEmails?: { members: string[]; invited: string[] };
-  /** Called as Upgrade leaves for Plan & Billing, so a dialog holding this one can close too. */
-  onOpeningBilling?: () => void;
 }
 
 interface Roster {
@@ -62,7 +60,6 @@ export default function InviteTeammateDialog({
   spaceIds,
   initialEmail,
   knownEmails,
-  onOpeningBilling,
 }: Props): ReactElement {
   const { t } = useTranslation();
   const [state, setState] = useState<InviteFlowState>(() => createInviteFlow({ initialEmail }));
@@ -294,7 +291,6 @@ export default function InviteTeammateDialog({
     // Closing mid-send would unmount the dialog, which aborts the run and loses its report.
     if (state.phase === "sending") return;
     close();
-    onOpeningBilling?.();
     void window.electronAPI?.openSettingsSection?.("plansBilling");
   };
 

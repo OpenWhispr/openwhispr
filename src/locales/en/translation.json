@@ -2003,7 +2003,7 @@
       },
       "teams": {
         "title": "Groups",
-        "description": "Groups of workspace members that can be given access to team spaces together.",
+        "description": "Groups of workspace members that can be given access to teamspaces together.",
         "new": "New group",
         "empty": "No groups yet.",
         "createFirst": "Create your first group",
@@ -2751,7 +2751,7 @@
     "privacy": {
       "cloudBackup": "Cloud backup",
       "cloudBackupDescription": "Back up your transcriptions and notes to the cloud for seamless access across devices.",
-      "cloudBackupTeamCaveat": "Notes in team spaces and notes you've shared always sync, regardless of this setting.",
+      "cloudBackupTeamCaveat": "Notes in teamspaces and notes you've shared always sync, regardless of this setting.",
       "cloudNotesMigration": "Backing up notes… {{done}} / {{total}}",
       "cloudNotesMigrationDone": "All notes backed up",
       "description": "Control what data leaves your device. Everything is off by default.",
@@ -3297,7 +3297,7 @@
     },
     "create": {
       "title": "Create workspace",
-      "description": "A workspace brings your organization's members and billing together. Create team spaces inside it for shared notes.",
+      "description": "A workspace brings your organization's members and billing together. Create teamspaces inside it for shared notes.",
       "nameLabel": "Workspace name",
       "namePlaceholder": "Acme Corp",
       "submit": "Create workspace",
@@ -3673,7 +3673,7 @@
       "teamSpaces": "Teamspaces",
       "personal": "Personal",
       "privateTooltip": "Only you can see your Personal space",
-      "newSpace": "New team space",
+      "newSpace": "New teamspace",
       "nameAndIconLabel": "Name and icon",
       "changeEmoji": "Change emoji",
       "settings": "Settings",
@@ -3695,9 +3695,9 @@
       "spaceRoot": "Space root",
       "moveConfirm": "Move",
       "confirmMoveInTitle": "Move to {{space}}?",
-      "confirmMoveIn": "Everyone in {{space}} will be able to view and edit this note. Notes can't be moved back out of a team space later.",
-      "confirmMoveInFolder": "Everyone in {{space}} will be able to view and edit this folder and its notes. Folders and notes can't be moved back out of a team space later.",
-      "cantMoveOut": "Notes can't be moved out of a team space.",
+      "confirmMoveIn": "Everyone in {{space}} will be able to view and edit this note. Notes can't be moved back out of a teamspace later.",
+      "confirmMoveInFolder": "Everyone in {{space}} will be able to view and edit this folder and its notes. Folders and notes can't be moved back out of a teamspace later.",
+      "cantMoveOut": "Notes can't be moved out of a teamspace.",
       "cantMoveTeammate": "Only the note's owner or a workspace admin can move it to another space.",
       "moved": "Moved “{{title}}” to {{target}}",
       "couldNotMove": "Couldn't move folder",
@@ -3738,12 +3738,10 @@
         "removeConfirmDescription": "They'll lose access to all notes in this space.",
         "inviteFooter": "Invite {{email}} to workspace…",
         "empty": "No one has been added yet",
-        "viaGroup": "via {{group}}",
-        "managedByGroup": "Added through {{group}}. Remove them there.",
         "roleFromGroup": "Admin through {{group}}. Change it there."
       },
-      "invitedTo_one": "You'll join {{count}} team space",
-      "invitedTo_other": "You'll join {{count}} team spaces",
+      "invitedTo_one": "You'll join {{count}} teamspace",
+      "invitedTo_other": "You'll join {{count}} teamspaces",
       "invitedToSpaces": "You'll join {{spaces}}",
       "teamsMembers": {
         "title": "Members of {{space}}",
@@ -3763,10 +3761,10 @@
       },
       "workspace": {
         "title": "Workspace",
-        "description": "The home for your workspace's members, roles, and team spaces."
+        "description": "The home for your workspace's members, roles, and teamspaces."
       },
       "teamSpace": {
-        "title": "Team space",
+        "title": "Teamspace",
         "description": "A shared area inside a workspace. Add people or groups to give them access."
       },
       "contents": "Each space can contain folders and notes.",
@@ -4253,7 +4251,7 @@
       },
       "banner": {
         "title": {
-          "team": "Your team space",
+          "team": "Your teamspace",
           "private": "Your private space"
         },
         "body": {
@@ -5540,7 +5538,7 @@
         "owner": "Owner",
         "editor": "Can edit",
         "viewer": "Can view",
-        "teamAudience": "Everyone in this team space",
+        "teamAudience": "Everyone in this teamspace",
         "pending": "Pending",
         "accepted": "Has access",
         "resend": "Resend invite",

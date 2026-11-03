@@ -2003,7 +2003,7 @@
       },
       "teams": {
         "title": "Gruppen",
-        "description": "Gruppen von Workspace-Mitgliedern, denen gemeinsam Zugriff auf Team-Spaces gewährt werden kann.",
+        "description": "Gruppen von Workspace-Mitgliedern, denen gemeinsam Zugriff auf Teamspaces gewährt werden kann.",
         "new": "Neue Gruppe",
         "empty": "Noch keine Gruppen.",
         "createFirst": "Erstelle deine erste Gruppe",
@@ -2751,7 +2751,7 @@
     "privacy": {
       "cloudBackup": "Cloud-Backup",
       "cloudBackupDescription": "Sichern Sie Ihre Transkriptionen und Notizen in der Cloud für nahtlosen Zugriff auf allen Geräten.",
-      "cloudBackupTeamCaveat": "Notizen in Team-Bereichen und geteilte Notizen werden unabhängig von dieser Einstellung immer synchronisiert.",
+      "cloudBackupTeamCaveat": "Notizen in Teamspaces und geteilte Notizen werden unabhängig von dieser Einstellung immer synchronisiert.",
       "cloudNotesMigration": "Notizen werden gesichert… {{done}} / {{total}}",
       "cloudNotesMigrationDone": "Alle Notizen gesichert",
       "description": "Steuern Sie, welche Daten Ihr Gerät verlassen. Standardmäßig ist alles deaktiviert.",
@@ -3297,7 +3297,7 @@
     },
     "create": {
       "title": "Workspace erstellen",
-      "description": "Ein Workspace bündelt die Mitglieder und Abrechnung Ihrer Organisation. Darin erstellen Sie Team-Bereiche für gemeinsame Notizen.",
+      "description": "Ein Workspace bündelt die Mitglieder und Abrechnung Ihrer Organisation. Darin erstellen Sie Teamspaces für gemeinsame Notizen.",
       "nameLabel": "Workspace-Name",
       "namePlaceholder": "Acme Corp",
       "submit": "Workspace erstellen",
@@ -3673,7 +3673,7 @@
       "teamSpaces": "Teamspaces",
       "personal": "Persönlich",
       "privateTooltip": "Nur du kannst deinen persönlichen Bereich sehen",
-      "newSpace": "Neuer Team-Bereich",
+      "newSpace": "Neuer Teamspace",
       "nameAndIconLabel": "Name und Symbol",
       "changeEmoji": "Emoji ändern",
       "settings": "Einstellungen",
@@ -3695,9 +3695,9 @@
       "spaceRoot": "Oberste Ebene",
       "moveConfirm": "Verschieben",
       "confirmMoveInTitle": "Nach {{space}} verschieben?",
-      "confirmMoveIn": "Alle in {{space}} können diese Notiz sehen und bearbeiten. Notizen können später nicht wieder aus einem Team-Bereich herausbewegt werden.",
-      "confirmMoveInFolder": "Alle in {{space}} können diesen Ordner und seine Notizen sehen und bearbeiten. Ordner und Notizen können später nicht wieder aus einem Team-Bereich herausbewegt werden.",
-      "cantMoveOut": "Notizen können nicht aus einem Team-Bereich herausbewegt werden.",
+      "confirmMoveIn": "Alle in {{space}} können diese Notiz sehen und bearbeiten. Notizen können später nicht wieder aus einem Teamspace herausbewegt werden.",
+      "confirmMoveInFolder": "Alle in {{space}} können diesen Ordner und seine Notizen sehen und bearbeiten. Ordner und Notizen können später nicht wieder aus einem Teamspace herausbewegt werden.",
+      "cantMoveOut": "Notizen können nicht aus einem Teamspace herausbewegt werden.",
       "cantMoveTeammate": "Nur der Besitzer der Notiz oder ein Workspace-Admin kann sie in einen anderen Bereich verschieben.",
       "moved": "„{{title}}“ nach {{target}} verschoben",
       "couldNotMove": "Ordner konnte nicht verschoben werden",
@@ -3738,12 +3738,10 @@
         "removeConfirmDescription": "Diese Person verliert den Zugriff auf alle Notizen in diesem Bereich.",
         "inviteFooter": "{{email}} in den Workspace einladen…",
         "empty": "Noch niemand hinzugefügt",
-        "viaGroup": "über {{group}}",
-        "managedByGroup": "Über {{group}} hinzugefügt. Entferne die Person dort.",
         "roleFromGroup": "Admin über {{group}}. Ändere es dort."
       },
-      "invitedTo_one": "Sie treten {{count}} Team-Bereich bei",
-      "invitedTo_other": "Sie treten {{count}} Team-Bereichen bei",
+      "invitedTo_one": "Sie treten {{count}} Teamspace bei",
+      "invitedTo_other": "Sie treten {{count}} Teamspaces bei",
       "invitedToSpaces": "Du trittst {{spaces}} bei",
       "teamsMembers": {
         "title": "Mitglieder von {{space}}",
@@ -3763,10 +3761,10 @@
       },
       "workspace": {
         "title": "Workspace",
-        "description": "Hier werden Mitglieder, Rollen und Team-Bereiche Ihres Workspace verwaltet."
+        "description": "Hier werden Mitglieder, Rollen und Teamspaces Ihres Workspace verwaltet."
       },
       "teamSpace": {
-        "title": "Team-Bereich",
+        "title": "Teamspace",
         "description": "Ein gemeinsamer Bereich in einem Workspace. Füge Personen oder Gruppen hinzu, um ihnen Zugriff zu geben."
       },
       "contents": "Jeder Bereich kann Ordner und Notizen enthalten.",
@@ -4253,7 +4251,7 @@
       },
       "banner": {
         "title": {
-          "team": "Dein Team-Space",
+          "team": "Dein Teamspace",
           "private": "Dein privater Space"
         },
         "body": {
@@ -5540,7 +5538,7 @@
         "owner": "Eigentümer",
         "editor": "Kann bearbeiten",
         "viewer": "Kann ansehen",
-        "teamAudience": "Alle in diesem Team-Bereich",
+        "teamAudience": "Alle in diesem Teamspace",
         "pending": "Ausstehend",
         "accepted": "Hat Zugriff",
         "resend": "Einladung erneut senden",

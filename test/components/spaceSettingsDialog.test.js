@@ -698,8 +698,6 @@ test("the Members tab gives the panel its teamspace, and closing for a leave clo
   const { events } = await mount(t, { space, props: { initialTab: "members" } });
 
   assert.equal(globalThis.__panelProps.space, space);
-  // The invite dialog's Upgrade is gone from this tab, so there is nothing to close for.
-  assert.equal("onOpeningBilling" in globalThis.__panelProps, false);
 
   await React.act(async () => globalThis.__panelProps.onLeft());
 

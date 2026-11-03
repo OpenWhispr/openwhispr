@@ -2236,7 +2236,7 @@
     "privacy": {
       "cloudBackup": "クラウドバックアップ",
       "cloudBackupDescription": "文字起こしとノートをクラウドにバックアップして、すべてのデバイスからシームレスにアクセスできます。",
-      "cloudBackupTeamCaveat": "チームスペース内のノートと共有したノートは、この設定に関係なく常に同期されます。",
+      "cloudBackupTeamCaveat": "Teamspace 内のノートと共有したノートは、この設定に関係なく常に同期されます。",
       "cloudNotesMigration": "ノートをバックアップ中… {{done}} / {{total}}",
       "cloudNotesMigrationDone": "すべてのノートがバックアップされました",
       "description": "デバイスからのデータ送信を管理します。初期設定ではすべてオフです。",
@@ -2710,7 +2710,7 @@
         "delete": "ワークスペースを削除",
         "deleting": "削除中…",
         "leaveTitle": "ワークスペースから退出",
-        "leaveDescription": "このワークスペースから退出します。チームスペースにアクセスできなくなります。",
+        "leaveDescription": "このワークスペースから退出します。Teamspace にアクセスできなくなります。",
         "leave": "ワークスペースから退出",
         "leaving": "退出中…"
       },
@@ -2732,7 +2732,7 @@
       },
       "teams": {
         "title": "グループ",
-        "description": "チームスペースへのアクセスをまとめて付与できるワークスペースメンバーのグループ。",
+        "description": "Teamspace へのアクセスをまとめて付与できるワークスペースメンバーのグループ。",
         "new": "新しいグループ",
         "empty": "グループはまだありません。",
         "createFirst": "最初のグループを作成",
@@ -3065,7 +3065,7 @@
       "teamSpaces": "Teamspaces",
       "personal": "個人",
       "privateTooltip": "パーソナルスペースはあなただけが見られます",
-      "newSpace": "新しいチームスペース",
+      "newSpace": "新しい Teamspace",
       "nameAndIconLabel": "名前とアイコン",
       "changeEmoji": "絵文字を変更",
       "settings": "設定",
@@ -3087,9 +3087,9 @@
       "spaceRoot": "スペースのルート",
       "moveConfirm": "移動",
       "confirmMoveInTitle": "{{space}}に移動しますか？",
-      "confirmMoveIn": "{{space}}の全員がこのノートを表示・編集できるようになります。ノートは後からチームスペースの外に移動できません。",
-      "confirmMoveInFolder": "{{space}}の全員がこのフォルダとそのノートを表示・編集できるようになります。フォルダとノートは後からチームスペースの外に移動できません。",
-      "cantMoveOut": "ノートはチームスペースの外に移動できません。",
+      "confirmMoveIn": "{{space}}の全員がこのノートを表示・編集できるようになります。ノートは後から Teamspace の外に移動できません。",
+      "confirmMoveInFolder": "{{space}}の全員がこのフォルダとそのノートを表示・編集できるようになります。フォルダとノートは後から Teamspace の外に移動できません。",
+      "cantMoveOut": "ノートは Teamspace の外に移動できません。",
       "cantMoveTeammate": "ノートを別のスペースに移動できるのは、所有者またはワークスペースの管理者のみです。",
       "moved": "「{{title}}」を{{target}}に移動しました",
       "couldNotMove": "フォルダを移動できませんでした",
@@ -3130,12 +3130,10 @@
         "removeConfirmDescription": "このスペースのすべてのノートにアクセスできなくなります。",
         "inviteFooter": "{{email}} をワークスペースに招待…",
         "empty": "まだ誰も追加されていません",
-        "viaGroup": "{{group}} 経由",
-        "managedByGroup": "{{group}} 経由で追加されています。削除はそのグループで行ってください。",
         "roleFromGroup": "{{group}} 経由の管理者です。変更はそちらで行ってください。"
       },
-      "invitedTo_one": "{{count}} 件のチームスペースに参加します",
-      "invitedTo_other": "{{count}} 件のチームスペースに参加します",
+      "invitedTo_one": "{{count}} 件の Teamspace に参加します",
+      "invitedTo_other": "{{count}} 件の Teamspace に参加します",
       "invitedToSpaces": "{{spaces}} に参加します",
       "teamsMembers": {
         "title": "{{space}} のメンバー",
@@ -3155,10 +3153,10 @@
       },
       "workspace": {
         "title": "ワークスペース",
-        "description": "ワークスペースのメンバー、役割、チームスペースをまとめて管理します。"
+        "description": "ワークスペースのメンバー、役割、Teamspace をまとめて管理します。"
       },
       "teamSpace": {
-        "title": "チームスペース",
+        "title": "Teamspace",
         "description": "ワークスペース内の共有エリア。人やグループを追加してアクセスを付与します。"
       },
       "contents": "各スペースにはフォルダーとノートを作成できます。",
@@ -3645,7 +3643,7 @@
       },
       "banner": {
         "title": {
-          "team": "チームスペース",
+          "team": "Teamspace",
           "private": "プライベートスペース"
         },
         "body": {
@@ -5233,7 +5231,7 @@
         "owner": "オーナー",
         "editor": "編集可能",
         "viewer": "閲覧可能",
-        "teamAudience": "このチームスペースの全員",
+        "teamAudience": "この Teamspace の全員",
         "pending": "保留中",
         "accepted": "アクセス権あり",
         "resend": "招待を再送信",
@@ -5390,7 +5388,7 @@
     },
     "create": {
       "title": "ワークスペースを作成",
-      "description": "ワークスペースには組織のメンバーと請求がまとまります。その中に共有ノート用のチームスペースを作成できます。",
+      "description": "ワークスペースには組織のメンバーと請求がまとまります。その中に共有ノート用の Teamspace を作成できます。",
       "nameLabel": "ワークスペース名",
       "namePlaceholder": "Acme Corp",
       "submit": "ワークスペースを作成",
@@ -5512,7 +5510,7 @@
     "exit": {
       "leave": {
         "title": "{{name}} から退出しますか？",
-        "body": "このワークスペースと、そのチームおよびチームスペースにアクセスできなくなります。ワークスペースの管理者があなたを再び招待できます。",
+        "body": "このワークスペースと、そのチームおよび Teamspace にアクセスできなくなります。ワークスペースの管理者があなたを再び招待できます。",
         "failed": "{{name}} から退出できませんでした。接続を確認して、もう一度お試しください。"
       },
       "left": {
@@ -5522,7 +5520,7 @@
       "chooseWorkspace": "ワークスペースを選択",
       "delete": {
         "title": "{{name}} を削除しますか？",
-        "body": "ワークスペースと、そのノート、ファイル、チーム、チームスペースがすべてのユーザーに対して完全に削除されます。この操作は元に戻せません。"
+        "body": "ワークスペースと、そのノート、ファイル、チーム、Teamspace がすべてのユーザーに対して完全に削除されます。この操作は元に戻せません。"
       },
       "deleting": {
         "title": "{{name}} を削除しています…",
@@ -5539,7 +5537,7 @@
     },
     "removeMember": {
       "title": "{{name}} を {{workspace}} から削除しますか？",
-      "body": "この人は、このワークスペース内のすべてのチームスペースとチームにアクセスできなくなります。いつでももう一度招待できます。",
+      "body": "この人は、このワークスペース内のすべての Teamspace とチームにアクセスできなくなります。いつでももう一度招待できます。",
       "confirm": "削除",
       "removing": "削除中…",
       "failed": "{{name}} の削除を確認できませんでした。接続を確認して、もう一度お試しください。",
@@ -5554,10 +5552,10 @@
       "checking": "確認中…",
       "failed_one": "{{count}} 人のメンバーの削除を確認できませんでした。接続を確認して、もう一度お試しください。",
       "failed_other": "{{count}} 人のメンバーの削除を確認できませんでした。接続を確認して、もう一度お試しください。",
-      "body": "これらのメンバーは、このワークスペースのすべてのチームスペースとチームにアクセスできなくなります。いつでも再度招待できます。",
-      "ownerOne": "{{name}} はこのワークスペースでノートまたはチームスペースを所有しています。",
-      "owners_one": "そのうち {{count}} 人がノートまたはチームスペースを所有しています。",
-      "owners_other": "そのうち {{count}} 人がノートまたはチームスペースを所有しています。",
+      "body": "これらのメンバーは、このワークスペースのすべての Teamspace とチームにアクセスできなくなります。いつでも再度招待できます。",
+      "ownerOne": "{{name}} はこのワークスペースでノートまたは Teamspace を所有しています。",
+      "owners_one": "そのうち {{count}} 人がノートまたは Teamspace を所有しています。",
+      "owners_other": "そのうち {{count}} 人がノートまたは Teamspace を所有しています。",
       "directoryManagedOne": "{{name}} は ID プロバイダーによって割り当てられています。ID プロバイダー側で削除してください。",
       "directoryManaged_one": "そのうち {{count}} 人は ID プロバイダーによって割り当てられています。ID プロバイダー側で削除してください。",
       "directoryManaged_other": "そのうち {{count}} 人は ID プロバイダーによって割り当てられています。ID プロバイダー側で削除してください。",
@@ -5565,8 +5563,8 @@
       "directoryManagedOthers_one": "そのうち {{count}} 人は ID プロバイダーによって割り当てられています。ID プロバイダー側で削除するか、チェックを外して他のメンバーを削除してください。",
       "directoryManagedOthers_other": "そのうち {{count}} 人は ID プロバイダーによって割り当てられています。ID プロバイダー側で削除するか、チェックを外して他のメンバーを削除してください。",
       "transferLabel": "譲渡先",
-      "transferBody": "ノートとチームスペースは新しいオーナーに移動します。削除されたメンバーはこのワークスペースにアクセスできなくなります。",
-      "transferBodyLimited": "ノートとチームスペースは {{name}} に移動します。ただし、{{name}} がアクセスできないチームスペース内のノートはそのまま残ります。削除されたメンバーはこのワークスペースにアクセスできなくなります。",
+      "transferBody": "ノートと Teamspace は新しいオーナーに移動します。削除されたメンバーはこのワークスペースにアクセスできなくなります。",
+      "transferBodyLimited": "ノートと Teamspace は {{name}} に移動します。ただし、{{name}} がアクセスできない Teamspace 内のノートはそのまま残ります。削除されたメンバーはこのワークスペースにアクセスできなくなります。",
       "you": "{{name}}（あなた）",
       "transferConfirm": "譲渡して削除",
       "transferring": "譲渡中…",
@@ -5576,10 +5574,10 @@
       "cannotRemoveSelf": "自分自身は削除できません。「一般」からワークスペースを退出してください。",
       "done_one": "{{count}} 人のメンバーを削除しました",
       "done_other": "{{count}} 人のメンバーを削除しました",
-      "transferDone_one": "ノートとチームスペースを {{name}} に移動し、{{count}} 人のメンバーを削除しました。",
-      "transferDone_other": "ノートとチームスペースを {{name}} に移動し、{{count}} 人のメンバーを削除しました。",
-      "transferPartial_one": "{{count}} 件のノートは、{{name}} がアクセスできないチームスペースに残りました。それ以外はすべて移動しました。",
-      "transferPartial_other": "{{count}} 件のノートは、{{name}} がアクセスできないチームスペースに残りました。それ以外はすべて移動しました。",
+      "transferDone_one": "ノートと Teamspace を {{name}} に移動し、{{count}} 人のメンバーを削除しました。",
+      "transferDone_other": "ノートと Teamspace を {{name}} に移動し、{{count}} 人のメンバーを削除しました。",
+      "transferPartial_one": "{{count}} 件のノートは、{{name}} がアクセスできない Teamspace に残りました。それ以外はすべて移動しました。",
+      "transferPartial_other": "{{count}} 件のノートは、{{name}} がアクセスできない Teamspace に残りました。それ以外はすべて移動しました。",
       "alreadyRemoved_one": "{{count}} 人のメンバーはすでに削除されています",
       "alreadyRemoved_other": "{{count}} 人のメンバーはすでに削除されています"
     },

@@ -2288,7 +2288,7 @@
     "privacy": {
       "cloudBackup": "Respaldo en la nube",
       "cloudBackupDescription": "Respalda tus transcripciones y notas en la nube para acceder desde cualquier dispositivo.",
-      "cloudBackupTeamCaveat": "Las notas en espacios de equipo y las notas que has compartido siempre se sincronizan, independientemente de este ajuste.",
+      "cloudBackupTeamCaveat": "Las notas en teamspaces y las notas que has compartido siempre se sincronizan, independientemente de este ajuste.",
       "cloudNotesMigration": "Respaldando notas… {{done}} / {{total}}",
       "cloudNotesMigrationDone": "Todas las notas respaldadas",
       "description": "Controla qué datos salen de tu dispositivo. Todo está desactivado por defecto.",
@@ -2762,7 +2762,7 @@
         "delete": "Eliminar espacio de trabajo",
         "deleting": "Eliminando…",
         "leaveTitle": "Salir del espacio de trabajo",
-        "leaveDescription": "Sal de este espacio de trabajo. Perderás el acceso a sus espacios de equipo.",
+        "leaveDescription": "Sal de este espacio de trabajo. Perderás el acceso a sus teamspaces.",
         "leave": "Salir del espacio de trabajo",
         "leaving": "Saliendo…"
       },
@@ -2784,7 +2784,7 @@
       },
       "teams": {
         "title": "Grupos",
-        "description": "Grupos de miembros del workspace a los que se puede dar acceso a espacios de equipo de una vez.",
+        "description": "Grupos de miembros del workspace a los que se puede dar acceso a teamspaces de una vez.",
         "new": "Nuevo grupo",
         "empty": "Aún no hay grupos.",
         "createFirst": "Crea tu primer grupo",
@@ -3189,7 +3189,7 @@
       "teamSpaces": "Teamspaces",
       "personal": "Personal",
       "privateTooltip": "Solo tú puedes ver tu espacio personal",
-      "newSpace": "Nuevo espacio de equipo",
+      "newSpace": "Nuevo teamspace",
       "nameAndIconLabel": "Nombre e icono",
       "changeEmoji": "Cambiar emoji",
       "settings": "Ajustes",
@@ -3211,9 +3211,9 @@
       "spaceRoot": "Raíz del espacio",
       "moveConfirm": "Mover",
       "confirmMoveInTitle": "¿Mover a {{space}}?",
-      "confirmMoveIn": "Todos en {{space}} podrán ver y editar esta nota. Las notas no se pueden sacar de un espacio de equipo más tarde.",
-      "confirmMoveInFolder": "Todos en {{space}} podrán ver y editar esta carpeta y sus notas. Las carpetas y notas no se pueden sacar de un espacio de equipo más tarde.",
-      "cantMoveOut": "Las notas no se pueden sacar de un espacio de equipo.",
+      "confirmMoveIn": "Todos en {{space}} podrán ver y editar esta nota. Las notas no se pueden sacar de un teamspace más tarde.",
+      "confirmMoveInFolder": "Todos en {{space}} podrán ver y editar esta carpeta y sus notas. Las carpetas y notas no se pueden sacar de un teamspace más tarde.",
+      "cantMoveOut": "Las notas no se pueden sacar de un teamspace.",
       "cantMoveTeammate": "Solo el propietario de la nota o un administrador del workspace pueden moverla a otro espacio.",
       "moved": "«{{title}}» se movió a {{target}}",
       "couldNotMove": "No se pudo mover la carpeta",
@@ -3254,12 +3254,10 @@
         "removeConfirmDescription": "Perderá el acceso a todas las notas de este espacio.",
         "inviteFooter": "Invitar a {{email}} al espacio de trabajo…",
         "empty": "Aún no se ha añadido a nadie",
-        "viaGroup": "vía {{group}}",
-        "managedByGroup": "Añadido a través de {{group}}. Quítalo desde ahí.",
         "roleFromGroup": "Administrador a través de {{group}}. Cámbialo allí."
       },
-      "invitedTo_one": "Te unirás a {{count}} espacio de equipo",
-      "invitedTo_other": "Te unirás a {{count}} espacios de equipo",
+      "invitedTo_one": "Te unirás a {{count}} teamspace",
+      "invitedTo_other": "Te unirás a {{count}} teamspaces",
       "invitedToSpaces": "Te unirás a {{spaces}}",
       "teamsMembers": {
         "title": "Miembros de {{space}}",
@@ -3279,10 +3277,10 @@
       },
       "workspace": {
         "title": "Espacio de trabajo",
-        "description": "El lugar de los miembros, roles y espacios de equipo de tu espacio de trabajo."
+        "description": "El lugar de los miembros, roles y teamspaces de tu espacio de trabajo."
       },
       "teamSpace": {
-        "title": "Espacio de equipo",
+        "title": "Teamspace",
         "description": "Un área compartida dentro de un workspace. Añade personas o grupos para darles acceso."
       },
       "contents": "Cada espacio puede contener carpetas y notas.",
@@ -3769,7 +3767,7 @@
       },
       "banner": {
         "title": {
-          "team": "Tu espacio de equipo",
+          "team": "Tu teamspace",
           "private": "Tu espacio privado"
         },
         "body": {
@@ -5303,7 +5301,7 @@
         "owner": "Propietario",
         "editor": "Puede editar",
         "viewer": "Puede ver",
-        "teamAudience": "Todos en este espacio de equipo",
+        "teamAudience": "Todos en este teamspace",
         "pending": "Pendiente",
         "accepted": "Tiene acceso",
         "resend": "Reenviar invitación",
@@ -5408,7 +5406,7 @@
     },
     "create": {
       "title": "Crear espacio de trabajo",
-      "description": "Un espacio de trabajo reúne a los miembros y la facturación de tu organización. Crea dentro espacios de equipo para notas compartidas.",
+      "description": "Un espacio de trabajo reúne a los miembros y la facturación de tu organización. Crea dentro teamspaces para notas compartidas.",
       "nameLabel": "Nombre del espacio de trabajo",
       "namePlaceholder": "Acme Corp",
       "submit": "Crear espacio de trabajo",
@@ -5530,7 +5528,7 @@
     "exit": {
       "leave": {
         "title": "¿Salir de {{name}}?",
-        "body": "Perderás el acceso a este espacio de trabajo, a sus equipos y a sus espacios de equipo. Un administrador del espacio de trabajo puede volver a invitarte.",
+        "body": "Perderás el acceso a este espacio de trabajo, a sus equipos y a sus teamspaces. Un administrador del espacio de trabajo puede volver a invitarte.",
         "failed": "No se pudo salir de {{name}}. Comprueba tu conexión e inténtalo de nuevo."
       },
       "left": {
@@ -5540,7 +5538,7 @@
       "chooseWorkspace": "Elegir espacio de trabajo",
       "delete": {
         "title": "¿Eliminar {{name}}?",
-        "body": "Esto elimina de forma permanente el espacio de trabajo, sus notas, archivos, equipos y espacios de equipo para todos. No se puede deshacer."
+        "body": "Esto elimina de forma permanente el espacio de trabajo, sus notas, archivos, equipos y teamspaces para todos. No se puede deshacer."
       },
       "deleting": {
         "title": "Eliminando {{name}}…",
@@ -5557,7 +5555,7 @@
     },
     "removeMember": {
       "title": "¿Quitar a {{name}} de {{workspace}}?",
-      "body": "Perderá el acceso a todos los espacios de equipo y equipos de este espacio de trabajo. Puedes volver a invitarle cuando quieras.",
+      "body": "Perderá el acceso a todos los teamspaces y equipos de este espacio de trabajo. Puedes volver a invitarle cuando quieras.",
       "confirm": "Quitar",
       "removing": "Quitando…",
       "failed": "No se pudo confirmar que se quitó a {{name}}. Comprueba tu conexión e inténtalo de nuevo.",
@@ -5572,10 +5570,10 @@
       "checking": "Comprobando…",
       "failed_one": "No se pudo confirmar que se quitó {{count}} miembro. Comprueba tu conexión e inténtalo de nuevo.",
       "failed_other": "No se pudo confirmar que se quitaron {{count}} miembros. Comprueba tu conexión e inténtalo de nuevo.",
-      "body": "Estas personas perderán el acceso a todos los espacios de equipo y equipos de este espacio de trabajo. Puedes volver a invitarlas cuando quieras.",
-      "ownerOne": "{{name}} es propietario de notas o espacios de equipo en este espacio de trabajo.",
-      "owners_one": "{{count}} de ellos es propietario de notas o espacios de equipo.",
-      "owners_other": "{{count}} de ellos son propietarios de notas o espacios de equipo.",
+      "body": "Estas personas perderán el acceso a todos los teamspaces y equipos de este espacio de trabajo. Puedes volver a invitarlas cuando quieras.",
+      "ownerOne": "{{name}} es propietario de notas o teamspaces en este espacio de trabajo.",
+      "owners_one": "{{count}} de ellos es propietario de notas o teamspaces.",
+      "owners_other": "{{count}} de ellos son propietarios de notas o teamspaces.",
       "directoryManagedOne": "{{name}} está asignado por tu proveedor de identidad. Quítalo allí.",
       "directoryManaged_one": "{{count}} de ellos está asignado por tu proveedor de identidad. Quítalo allí.",
       "directoryManaged_other": "{{count}} de ellos están asignados por tu proveedor de identidad. Quítalos allí.",
@@ -5583,8 +5581,8 @@
       "directoryManagedOthers_one": "{{count}} de ellos está asignado por tu proveedor de identidad. Quítalo allí o desmárcalo para quitar a los demás.",
       "directoryManagedOthers_other": "{{count}} de ellos están asignados por tu proveedor de identidad. Quítalos allí o desmárcalos para quitar a los demás.",
       "transferLabel": "Transferir a",
-      "transferBody": "Sus notas y espacios de equipo pasarán al nuevo propietario. Perderán el acceso a este espacio de trabajo.",
-      "transferBodyLimited": "Sus notas y espacios de equipo pasarán a {{name}}, excepto las notas de espacios de equipo a los que {{name}} no puede acceder, que se quedarán allí. Perderán el acceso a este espacio de trabajo.",
+      "transferBody": "Sus notas y teamspaces pasarán al nuevo propietario. Perderán el acceso a este espacio de trabajo.",
+      "transferBodyLimited": "Sus notas y teamspaces pasarán a {{name}}, excepto las notas de teamspaces a los que {{name}} no puede acceder, que se quedarán allí. Perderán el acceso a este espacio de trabajo.",
       "you": "{{name}} (tú)",
       "transferConfirm": "Transferir y quitar",
       "transferring": "Transfiriendo…",
@@ -5594,10 +5592,10 @@
       "cannotRemoveSelf": "No puedes quitarte a ti mismo. Sal del espacio de trabajo desde General.",
       "done_one": "{{count}} miembro quitado",
       "done_other": "{{count}} miembros quitados",
-      "transferDone_one": "Sus notas y espacios de equipo se movieron a {{name}} y se quitó {{count}} miembro.",
-      "transferDone_other": "Sus notas y espacios de equipo se movieron a {{name}} y se quitaron {{count}} miembros.",
-      "transferPartial_one": "{{count}} nota se quedó en un espacio de equipo al que {{name}} no puede acceder. Todo lo demás se movió.",
-      "transferPartial_other": "{{count}} notas se quedaron en espacios de equipo a los que {{name}} no puede acceder. Todo lo demás se movió.",
+      "transferDone_one": "Sus notas y teamspaces se movieron a {{name}} y se quitó {{count}} miembro.",
+      "transferDone_other": "Sus notas y teamspaces se movieron a {{name}} y se quitaron {{count}} miembros.",
+      "transferPartial_one": "{{count}} nota se quedó en un teamspace al que {{name}} no puede acceder. Todo lo demás se movió.",
+      "transferPartial_other": "{{count}} notas se quedaron en teamspaces a los que {{name}} no puede acceder. Todo lo demás se movió.",
       "alreadyRemoved_one": "{{count}} miembro ya había sido quitado",
       "alreadyRemoved_other": "{{count}} miembros ya habían sido quitados"
     },

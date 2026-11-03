@@ -2236,7 +2236,7 @@
     "privacy": {
       "cloudBackup": "Backup cloud",
       "cloudBackupDescription": "Salva trascrizioni e note nel cloud per un accesso senza interruzioni da tutti i dispositivi.",
-      "cloudBackupTeamCaveat": "Le note negli spazi del team e quelle che hai condiviso vengono sempre sincronizzate, indipendentemente da questa impostazione.",
+      "cloudBackupTeamCaveat": "Le note nei teamspace e quelle che hai condiviso vengono sempre sincronizzate, indipendentemente da questa impostazione.",
       "cloudNotesMigration": "Backup delle note in corso… {{done}} / {{total}}",
       "cloudNotesMigrationDone": "Tutte le note salvate nel cloud",
       "description": "Controlla quali dati escono dal tuo dispositivo. Tutto è disattivato per impostazione predefinita.",
@@ -2732,7 +2732,7 @@
       },
       "teams": {
         "title": "Gruppi",
-        "description": "Gruppi di membri del workspace a cui concedere insieme l'accesso agli spazi di team.",
+        "description": "Gruppi di membri del workspace a cui concedere insieme l'accesso ai teamspace.",
         "new": "Nuovo gruppo",
         "empty": "Ancora nessun gruppo.",
         "createFirst": "Crea il tuo primo gruppo",
@@ -3137,7 +3137,7 @@
       "teamSpaces": "Teamspaces",
       "personal": "Personale",
       "privateTooltip": "Solo tu puoi vedere il tuo spazio personale",
-      "newSpace": "Nuovo spazio del team",
+      "newSpace": "Nuovo teamspace",
       "nameAndIconLabel": "Nome e icona",
       "changeEmoji": "Cambia emoji",
       "settings": "Impostazioni",
@@ -3159,9 +3159,9 @@
       "spaceRoot": "Radice dello spazio",
       "moveConfirm": "Sposta",
       "confirmMoveInTitle": "Spostare in {{space}}?",
-      "confirmMoveIn": "Tutti in {{space}} potranno vedere e modificare questa nota. Le note non potranno più essere spostate fuori da uno spazio del team.",
-      "confirmMoveInFolder": "Tutti in {{space}} potranno vedere e modificare questa cartella e le sue note. Le cartelle e le note non potranno più essere spostate fuori da uno spazio del team.",
-      "cantMoveOut": "Le note non possono essere spostate fuori da uno spazio del team.",
+      "confirmMoveIn": "Tutti in {{space}} potranno vedere e modificare questa nota. Le note non potranno più essere spostate fuori da un teamspace.",
+      "confirmMoveInFolder": "Tutti in {{space}} potranno vedere e modificare questa cartella e le sue note. Le cartelle e le note non potranno più essere spostate fuori da un teamspace.",
+      "cantMoveOut": "Le note non possono essere spostate fuori da un teamspace.",
       "cantMoveTeammate": "Solo il proprietario della nota o un amministratore del workspace può spostarla in un altro spazio.",
       "moved": "“{{title}}” spostata in {{target}}",
       "couldNotMove": "Impossibile spostare la cartella",
@@ -3202,12 +3202,10 @@
         "removeConfirmDescription": "Questa persona perderà l'accesso a tutte le note di questo spazio.",
         "inviteFooter": "Invita {{email}} nell'area di lavoro…",
         "empty": "Nessuno è stato ancora aggiunto",
-        "viaGroup": "tramite {{group}}",
-        "managedByGroup": "Aggiunto tramite {{group}}. Rimuovilo da lì.",
         "roleFromGroup": "Admin tramite {{group}}. Modificalo lì."
       },
-      "invitedTo_one": "Entrerai in {{count}} spazio del team",
-      "invitedTo_other": "Entrerai in {{count}} spazi del team",
+      "invitedTo_one": "Entrerai in {{count}} teamspace",
+      "invitedTo_other": "Entrerai in {{count}} teamspace",
       "invitedToSpaces": "Entrerai in {{spaces}}",
       "teamsMembers": {
         "title": "Membri di {{space}}",
@@ -3227,10 +3225,10 @@
       },
       "workspace": {
         "title": "Area di lavoro",
-        "description": "La sede di membri, ruoli e spazi del team della tua area di lavoro."
+        "description": "La sede di membri, ruoli e teamspace della tua area di lavoro."
       },
       "teamSpace": {
-        "title": "Spazio del team",
+        "title": "Teamspace",
         "description": "Un'area condivisa all'interno di un workspace. Aggiungi persone o gruppi per dare loro accesso."
       },
       "contents": "Ogni spazio può contenere cartelle e note.",
@@ -3717,7 +3715,7 @@
       },
       "banner": {
         "title": {
-          "team": "Il tuo spazio di team",
+          "team": "Il tuo teamspace",
           "private": "Il tuo spazio privato"
         },
         "body": {
@@ -5251,7 +5249,7 @@
         "owner": "Proprietario",
         "editor": "Può modificare",
         "viewer": "Può visualizzare",
-        "teamAudience": "Tutti in questo spazio del team",
+        "teamAudience": "Tutti in questo teamspace",
         "pending": "In attesa",
         "accepted": "Ha accesso",
         "resend": "Reinvia invito",
@@ -5408,7 +5406,7 @@
     },
     "create": {
       "title": "Crea area di lavoro",
-      "description": "Un'area di lavoro riunisce membri e fatturazione della tua organizzazione. Crea al suo interno spazi del team per le note condivise.",
+      "description": "Un'area di lavoro riunisce membri e fatturazione della tua organizzazione. Crea al suo interno dei teamspace per le note condivise.",
       "nameLabel": "Nome dell'area di lavoro",
       "namePlaceholder": "Acme Corp",
       "submit": "Crea area di lavoro",

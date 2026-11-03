@@ -118,16 +118,6 @@ async function listMembers(spaceId: string): Promise<SpaceMemberEntry[]> {
   return res.data;
 }
 
-// The members POST upserts, so re-adding an existing direct member changes
-// their role rather than failing.
-async function addMember(
-  spaceId: string,
-  userId: string,
-  role: TeamRole = "member"
-): Promise<void> {
-  await cloudPost(`/api/spaces/${spaceId}/members`, { user_id: userId, role });
-}
-
 // Promoting someone who is only present via a team creates their direct row.
 async function setMemberRole(spaceId: string, userId: string, role: TeamRole): Promise<void> {
   await cloudPatch(`/api/spaces/${spaceId}/members/${userId}`, { role });
@@ -199,7 +189,6 @@ export const SpacesService = {
   assignTeam,
   unassignTeam,
   listMembers,
-  addMember,
   setMemberRole,
   removeMember,
   listInWorkspace,

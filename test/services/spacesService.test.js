@@ -46,16 +46,12 @@ test("SpacesService direct-member calls hit the members routes with the API's fi
   const requests = installCloudCapture(t, { removed: true, still_via_teams: stillViaTeams });
   const { SpacesService } = require("../../src/services/SpacesService.ts");
 
-  await SpacesService.addMember("space-1", "user-1");
-  await SpacesService.addMember("space-1", "user-2", "admin");
   await SpacesService.setMemberRole("space-1", "user-1", "admin");
   const removal = await SpacesService.removeMember("space-1", "user-1");
 
   assert.deepEqual(
     requests.map(({ method, path, body }) => [method, path, body]),
     [
-      ["POST", "/api/spaces/space-1/members", { user_id: "user-1", role: "member" }],
-      ["POST", "/api/spaces/space-1/members", { user_id: "user-2", role: "admin" }],
       ["PATCH", "/api/spaces/space-1/members/user-1", { role: "admin" }],
       ["DELETE", "/api/spaces/space-1/members/user-1", undefined],
     ]

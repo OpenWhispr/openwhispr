@@ -2236,7 +2236,7 @@
     "privacy": {
       "cloudBackup": "云端备份",
       "cloudBackupDescription": "将转录记录和笔记备份到云端，实现跨设备无缝访问。",
-      "cloudBackupTeamCaveat": "团队空间中的笔记和您已分享的笔记会始终同步，不受此设置影响。",
+      "cloudBackupTeamCaveat": "Teamspace 中的笔记和您已分享的笔记会始终同步，不受此设置影响。",
       "cloudNotesMigration": "正在备份笔记… {{done}} / {{total}}",
       "cloudNotesMigrationDone": "所有笔记已备份",
       "description": "控制哪些数据会离开你的设备。默认全部关闭。",
@@ -2710,7 +2710,7 @@
         "delete": "删除工作区",
         "deleting": "删除中…",
         "leaveTitle": "退出工作区",
-        "leaveDescription": "将自己从此工作区中移除。你将失去对其团队空间的访问权限。",
+        "leaveDescription": "将自己从此工作区中移除。你将失去对其 Teamspace 的访问权限。",
         "leave": "退出工作区",
         "leaving": "退出中…"
       },
@@ -2732,7 +2732,7 @@
       },
       "teams": {
         "title": "群组",
-        "description": "可一次性获得团队空间访问权限的工作区成员群组。",
+        "description": "可一次性获得 Teamspace 访问权限的工作区成员群组。",
         "new": "新建群组",
         "empty": "还没有群组。",
         "createFirst": "创建你的第一个群组",
@@ -3137,7 +3137,7 @@
       "teamSpaces": "Teamspaces",
       "personal": "个人",
       "privateTooltip": "只有你可以看到你的个人空间",
-      "newSpace": "新建团队空间",
+      "newSpace": "新建 Teamspace",
       "nameAndIconLabel": "名称和图标",
       "changeEmoji": "更改表情符号",
       "settings": "设置",
@@ -3159,9 +3159,9 @@
       "spaceRoot": "空间根目录",
       "moveConfirm": "移动",
       "confirmMoveInTitle": "移动到 {{space}}？",
-      "confirmMoveIn": "{{space}} 中的所有人都将能查看和编辑此笔记。此后笔记将无法移出团队空间。",
-      "confirmMoveInFolder": "{{space}} 中的所有人都将能查看和编辑此文件夹及其笔记。此后文件夹及其笔记将无法移出团队空间。",
-      "cantMoveOut": "笔记无法移出团队空间。",
+      "confirmMoveIn": "{{space}} 中的所有人都将能查看和编辑此笔记。此后笔记将无法移出 Teamspace。",
+      "confirmMoveInFolder": "{{space}} 中的所有人都将能查看和编辑此文件夹及其笔记。此后文件夹及其笔记将无法移出 Teamspace。",
+      "cantMoveOut": "笔记无法移出 Teamspace。",
       "cantMoveTeammate": "只有笔记所有者或工作区管理员才能将其移至其他空间。",
       "moved": "已将“{{title}}”移动到 {{target}}",
       "couldNotMove": "无法移动文件夹",
@@ -3202,12 +3202,10 @@
         "removeConfirmDescription": "对方将无法再访问此空间的所有笔记。",
         "inviteFooter": "邀请 {{email}} 加入工作区…",
         "empty": "尚未添加任何成员",
-        "viaGroup": "通过 {{group}}",
-        "managedByGroup": "通过 {{group}} 添加。请在该群组中移除。",
         "roleFromGroup": "通过 {{group}} 获得管理员身份，请在该群组中更改。"
       },
-      "invitedTo_one": "你将加入 {{count}} 个团队空间",
-      "invitedTo_other": "你将加入 {{count}} 个团队空间",
+      "invitedTo_one": "你将加入 {{count}} 个 Teamspace",
+      "invitedTo_other": "你将加入 {{count}} 个 Teamspace",
       "invitedToSpaces": "你将加入 {{spaces}}",
       "teamsMembers": {
         "title": "{{space}} 的成员",
@@ -3227,10 +3225,10 @@
       },
       "workspace": {
         "title": "工作区",
-        "description": "集中管理工作区的成员、角色和团队空间。"
+        "description": "集中管理工作区的成员、角色和 Teamspace。"
       },
       "teamSpace": {
-        "title": "团队空间",
+        "title": "Teamspace",
         "description": "工作区内的共享区域。添加人员或群组以授予访问权限。"
       },
       "contents": "每个空间都可以包含文件夹和笔记。",
@@ -3717,7 +3715,7 @@
       },
       "banner": {
         "title": {
-          "team": "你的团队空间",
+          "team": "你的 Teamspace",
           "private": "你的私人空间"
         },
         "body": {
@@ -5233,7 +5231,7 @@
         "owner": "所有者",
         "editor": "可编辑",
         "viewer": "可查看",
-        "teamAudience": "此团队空间中的所有人",
+        "teamAudience": "此 Teamspace 中的所有人",
         "pending": "待处理",
         "accepted": "已获得访问权限",
         "resend": "重新发送邀请",
@@ -5390,7 +5388,7 @@
     },
     "create": {
       "title": "创建工作区",
-      "description": "工作区集中管理组织的成员和账单。你可以在其中创建团队空间来共享笔记。",
+      "description": "工作区集中管理组织的成员和账单。你可以在其中创建 Teamspace 来共享笔记。",
       "nameLabel": "工作区名称",
       "namePlaceholder": "Acme Corp",
       "submit": "创建工作区",
@@ -5512,7 +5510,7 @@
     "exit": {
       "leave": {
         "title": "退出 {{name}}？",
-        "body": "你将失去对此工作区、其团队和团队空间的访问权限。工作区管理员可以重新邀请你。",
+        "body": "你将失去对此工作区、其团队和 Teamspace 的访问权限。工作区管理员可以重新邀请你。",
         "failed": "无法退出 {{name}}。请检查网络连接后重试。"
       },
       "left": {
@@ -5522,7 +5520,7 @@
       "chooseWorkspace": "选择工作区",
       "delete": {
         "title": "删除 {{name}}？",
-        "body": "这将为所有人永久删除该工作区及其笔记、文件、团队和团队空间，且无法撤销。"
+        "body": "这将为所有人永久删除该工作区及其笔记、文件、团队和 Teamspace，且无法撤销。"
       },
       "deleting": {
         "title": "正在删除 {{name}}…",
@@ -5539,7 +5537,7 @@
     },
     "removeMember": {
       "title": "要将 {{name}} 从 {{workspace}} 移除吗？",
-      "body": "对方将失去此工作区中所有团队空间和团队的访问权限。你可以随时再次邀请对方。",
+      "body": "对方将失去此工作区中所有 Teamspace 和团队的访问权限。你可以随时再次邀请对方。",
       "confirm": "移除",
       "removing": "正在移除…",
       "failed": "无法确认已移除 {{name}}。请检查网络连接后重试。",
@@ -5554,10 +5552,10 @@
       "checking": "正在检查…",
       "failed_one": "无法确认已移除 {{count}} 名成员。请检查网络连接后重试。",
       "failed_other": "无法确认已移除 {{count}} 名成员。请检查网络连接后重试。",
-      "body": "这些人将失去此工作区中所有团队空间和团队的访问权限。你可以随时再次邀请他们。",
-      "ownerOne": "{{name}} 在此工作区中拥有笔记或团队空间。",
-      "owners_one": "其中 {{count}} 人拥有笔记或团队空间。",
-      "owners_other": "其中 {{count}} 人拥有笔记或团队空间。",
+      "body": "这些人将失去此工作区中所有 Teamspace 和团队的访问权限。你可以随时再次邀请他们。",
+      "ownerOne": "{{name}} 在此工作区中拥有笔记或 Teamspace。",
+      "owners_one": "其中 {{count}} 人拥有笔记或 Teamspace。",
+      "owners_other": "其中 {{count}} 人拥有笔记或 Teamspace。",
       "directoryManagedOne": "{{name}} 由身份提供商分配。请改在身份提供商中移除。",
       "directoryManaged_one": "其中 {{count}} 人由身份提供商分配。请改在身份提供商中移除。",
       "directoryManaged_other": "其中 {{count}} 人由身份提供商分配。请改在身份提供商中移除。",
@@ -5565,8 +5563,8 @@
       "directoryManagedOthers_one": "其中 {{count}} 人由身份提供商分配。请在身份提供商中移除，或取消勾选以移除其他人。",
       "directoryManagedOthers_other": "其中 {{count}} 人由身份提供商分配。请在身份提供商中移除，或取消勾选以移除其他人。",
       "transferLabel": "转让给",
-      "transferBody": "他们的笔记和团队空间将转给新所有者。他们将失去此工作区的访问权限。",
-      "transferBodyLimited": "他们的笔记和团队空间将转给 {{name}}，但 {{name}} 无法访问的团队空间中的笔记会留在原处。他们将失去此工作区的访问权限。",
+      "transferBody": "他们的笔记和 Teamspace 将转给新所有者。他们将失去此工作区的访问权限。",
+      "transferBodyLimited": "他们的笔记和 Teamspace 将转给 {{name}}，但 {{name}} 无法访问的 Teamspace 中的笔记会留在原处。他们将失去此工作区的访问权限。",
       "you": "{{name}}（你）",
       "transferConfirm": "转让并移除",
       "transferring": "正在转让…",
@@ -5576,10 +5574,10 @@
       "cannotRemoveSelf": "你不能移除自己。请在“常规”中退出工作区。",
       "done_one": "已移除 {{count}} 名成员",
       "done_other": "已移除 {{count}} 名成员",
-      "transferDone_one": "已将他们的笔记和团队空间移至 {{name}}，并移除了 {{count}} 名成员。",
-      "transferDone_other": "已将他们的笔记和团队空间移至 {{name}}，并移除了 {{count}} 名成员。",
-      "transferPartial_one": "{{count}} 条笔记留在了 {{name}} 无法访问的团队空间中。其余内容已全部移动。",
-      "transferPartial_other": "{{count}} 条笔记留在了 {{name}} 无法访问的团队空间中。其余内容已全部移动。",
+      "transferDone_one": "已将他们的笔记和 Teamspace 移至 {{name}}，并移除了 {{count}} 名成员。",
+      "transferDone_other": "已将他们的笔记和 Teamspace 移至 {{name}}，并移除了 {{count}} 名成员。",
+      "transferPartial_one": "{{count}} 条笔记留在了 {{name}} 无法访问的 Teamspace 中。其余内容已全部移动。",
+      "transferPartial_other": "{{count}} 条笔记留在了 {{name}} 无法访问的 Teamspace 中。其余内容已全部移动。",
       "alreadyRemoved_one": "{{count}} 名成员已被移除",
       "alreadyRemoved_other": "{{count}} 名成员已被移除"
     },

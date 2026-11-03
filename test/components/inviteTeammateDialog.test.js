@@ -512,7 +512,6 @@ test("Upgrade closes the dialog and asks for Plan & Billing", async (t) => {
     {
       initialEmail: "a@x.com",
       onOpenChange: (open) => steps.push(`open:${open}`),
-      onOpeningBilling: () => steps.push("opening billing"),
     },
     { realView: true }
   );
@@ -520,7 +519,7 @@ test("Upgrade closes the dialog and asks for Plan & Billing", async (t) => {
 
   await pressButton(findUpgrade(container));
 
-  assert.deepEqual(steps, ["open:false", "opening billing"]);
+  assert.deepEqual(steps, ["open:false"]);
   assert.deepEqual(globalThis.__settingsRequests, ["plansBilling"]);
 });
 
@@ -586,7 +585,6 @@ test("Upgrade pressed as a send starts leaves the run alone", async (t) => {
   });
   t.after(() => release());
   const opens = [];
-  const billing = [];
   const invited = [];
   const { latest } = await mountWithWorkspace(
     t,
@@ -594,7 +592,6 @@ test("Upgrade pressed as a send starts leaves the run alone", async (t) => {
     {
       initialEmail: "a@x.com",
       onOpenChange: (open) => opens.push(open),
-      onOpeningBilling: () => billing.push(true),
       onInvited: (emails) => invited.push(emails),
     }
   );
@@ -608,7 +605,6 @@ test("Upgrade pressed as a send starts leaves the run alone", async (t) => {
   await React.act(async () => latest().onUpgrade());
 
   assert.deepEqual(opens, []);
-  assert.deepEqual(billing, []);
   assert.equal(globalThis.__settingsRequests, undefined);
   assert.equal(globalThis.__sendCalls[0].signal.aborted, false);
 
