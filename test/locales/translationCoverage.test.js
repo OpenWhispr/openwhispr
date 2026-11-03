@@ -20,7 +20,7 @@ const ARABIC_PLURAL_BASES = [
   "settingsPage.workspace.teams.memberCount",
   "settingsPage.workspace.teams.grantsAccessToSpaces",
   "settingsPage.workspace.teams.deleteConfirmSpaceAccess",
-  "settingsPage.workspace.invites.expiresIn",
+  "settingsPage.workspace.people.invitations.pending",
   "settingsPage.unifiedBilling.seatUpdated",
   "settingsPage.unifiedBilling.confirmSeats.description",
   "settingsPage.privacy.retentionDays",
@@ -29,8 +29,16 @@ const ARABIC_PLURAL_BASES = [
   "settingsPage.privacy.minutesAgo",
   "settingsPage.enterpriseCheckout.seatsHint",
   "workspaces.join.memberCount",
+  "workspaces.invite.submit",
+  "workspaces.invite.sentTitle",
+  "workspaces.invite.sentMany",
+  "workspaces.invite.noEmail",
+  "workspaces.invite.someFailed",
+  "workspaces.invite.seatCostMany",
+  "workspaces.invite.seatCostManyUnpriced",
   "notes.spaces.noteCount",
   "notes.spaces.invitedTo",
+  "notes.spaces.members.invitedMany",
   "notes.addToFolder.addCount",
   "notes.overview.meta.folders",
   "notes.overview.meta.members",
@@ -38,11 +46,27 @@ const ARABIC_PLURAL_BASES = [
   "dictionary.dragonImport.found",
   "dictionary.dragonImport.confirm",
   "dictionary.dragonImport.done",
+  "dictionary.shared.memberCount",
+  "dictionary.shared.deleteManyTitle",
+  "dictionary.shared.deletedManyForEveryone",
+  "dictionary.shared.selection.count",
+  "dictionary.shared.share.titleMany",
+  "dictionary.shared.share.partial",
+  "dictionary.shared.deletedPersonalMany",
+  "dictionary.shared.locked.paused",
+  "dictionary.shared.locked.pausedMember",
+  "dictionary.shared.skipped",
+  "dictionary.shared.locked.wordCount",
+  "dictionary.shared.arrival.title",
   "insights.days",
   "insights.longestStreak",
   "insights.dayTooltip",
   "insights.claimDescription",
   "insights.enableDescription",
+  "skills.pane.seeMore",
+  "skills.toasts.uploaded",
+  "skills.upload.fileCount",
+  "skills.upload.submitCount",
 ];
 const ARABIC_NUMBER_NEUTRAL_TEMPLATES = {
   "workspaces.invite.seatUsage": "المقاعد المستخدمة: {{used}} من أصل {{seats}}",
@@ -207,6 +231,26 @@ test("Arabic defines every CLDR plural category for each counted message", () =>
         `ar/translation is missing ${base}_${category}`
       );
     }
+  }
+});
+
+// CLDR gives es, fr, it and pt a "many" form (1,000,000 and up) and ru "few"
+// and "many"; without them i18next returns the raw key. Checked for the
+// Dictionary page's strings, which all count words or members.
+test("the dictionary's counted strings define every plural form they need", () => {
+  const needed = { es: ["many"], fr: ["many"], it: ["many"], pt: ["many"], ru: ["few", "many"] };
+  const bases = [...flatten(load("en", "translation")).keys()]
+    .filter((key) => key.startsWith("dictionary.") && key.endsWith("_other"))
+    .map(stripPlural);
+  assert.ok(bases.length > 0);
+  for (const [lang, categories] of Object.entries(needed)) {
+    const translated = flatten(load(lang, "translation"));
+    const missing = bases.flatMap((base) =>
+      categories
+        .map((category) => `${base}_${category}`)
+        .filter((key) => typeof translated.get(key) !== "string")
+    );
+    assert.deepEqual(missing, [], `${lang}/translation is missing:\n${missing.join("\n")}`);
   }
 });
 

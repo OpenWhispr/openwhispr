@@ -211,6 +211,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
               mimeType: file.mimeType,
               language: getPreferredTranscriptionLanguage(),
               requestContext: 'file',
+              purpose: 'upload',
               jobId: transcriptId,
               clientTranscriptionId,
             },

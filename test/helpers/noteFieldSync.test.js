@@ -418,6 +418,57 @@ test("creating a note with typed text settles in one request; a clear still foll
   }
 });
 
+for (const metadataOnly of [false, true]) {
+  for (const [creatorKind, attribution, userId, expectedCreator] of [
+    ["explicit creator", { created_by_user_id: "recorder" }, "recorder", "recorder"],
+    ["legacy owner", {}, "owner", "owner"],
+    ["cleared creator", { created_by_user_id: null }, "owner", null],
+  ]) {
+    test(`create attribution keeps the ${creatorKind} after ${metadataOnly ? "metadata-only reconciliation" : "a full receipt"}`, async (t) => {
+      const { resolveCloudNoteCreate } = require("../../src/services/noteCreateAck.ts");
+      const { isNoteRecorder } = require("../../src/utils/noteRecorder.ts");
+      const { ownsNote } = require("../../src/lib/spacePermissions.ts");
+      const db = createDb(t);
+      if (!db) return;
+      const note = db.saveNote("My recording", "Draft", "meeting").note;
+      assert.equal(isNoteRecorder(note, userId), true);
+      const cloud = protocolCloud({
+        ...INITIAL,
+        id: `cloud-${note.id}`,
+        client_note_id: note.client_note_id,
+        title: note.title,
+        content: note.content,
+        enhanced_content: null,
+        user_id: "owner",
+        revision: 1,
+        ...attribution,
+      });
+      const receipt = cloud.row();
+      if (metadataOnly) {
+        delete receipt.content;
+        delete receipt.enhanced_content;
+      }
+      const outcome = await resolveCloudNoteCreate(note, receipt, {
+        acknowledge: (...args) => db.acknowledgeNoteCreate(...args),
+        deleteCloud: () => assert.fail("A live note's create must not be deleted"),
+      });
+      assert.equal(outcome, metadataOnly ? "awaiting-cloud" : "synced");
+      if (metadataOnly) {
+        assert.equal(db.getNote(note.id).created_by_user_id, null);
+        await (await client(t, db, cloud)).pullNotes(false, true);
+      }
+      reopen(db);
+      const after = db.getNote(note.id);
+      assert.equal(after.created_by_user_id, expectedCreator);
+      assert.equal(after.owner_user_id, "owner");
+      assert.equal(isNoteRecorder(after, userId), expectedCreator === userId);
+      assert.equal(ownsNote(after, userId), userId === "owner");
+      assert.equal(after.sync_status, "synced");
+      assert.equal(isCloudNoteNewer(cloud.row(), after), false);
+    });
+  }
+}
+
 test("revisions order same-timestamp pulls and outrank clock skew", () => {
   const local = { cloud_revision: 8, updated_at: INITIAL.updated_at };
   assert.equal(isCloudNoteNewer({ ...INITIAL, revision: 9 }, local), true);

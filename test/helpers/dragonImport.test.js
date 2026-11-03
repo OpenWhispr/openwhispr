@@ -55,6 +55,17 @@ test("parseDragonWordList reads a real-shaped export: header, pairs, CRLF, dupli
   assert.deepEqual(result.warnings, []);
 });
 
+test("parseDragonWordList deduplicates Unicode equivalents while preserving the first spelling", async () => {
+  const { parseDragonWordList } = await load();
+  const result = parseDragonWordList(
+    "@Version=Plato-UTF8\nCafe\u0301\nCAFÉ\nMünchen\nMu\u0308nchen\n"
+  );
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.words, ["Cafe\u0301", "München"]);
+  assert.equal(result.totalEntries, 4);
+  assert.equal(result.duplicatesInFile, 2);
+});
+
 test("parseDragonWordList accepts every header variant and none", async () => {
   const { parseDragonWordList } = await load();
   for (const header of [
@@ -111,6 +122,39 @@ test("planDragonImport drops words already present, case-insensitively, keeping 
   const { planDragonImport } = await load();
   const plan = planDragonImport(["Applas", "ADO", "Zoë"], ["ado", " Zoë "]);
   assert.deepEqual(plan, { add: ["Applas"], skippedExisting: 2, overLimit: 0 });
+});
+
+test("planDragonImport skips existing Unicode equivalents in either normalization form", async () => {
+  const { planDragonImport } = await load();
+  for (const [candidate, existing] of [
+    ["CAFÉ", " Cafe\u0301 "],
+    ["Cafe\u0301", " CAFÉ "],
+  ]) {
+    assert.deepEqual(planDragonImport([candidate, "Acme"], [existing]), {
+      add: ["Acme"],
+      skippedExisting: 1,
+      overLimit: 0,
+    });
+  }
+});
+
+test("planDragonImport counts legacy Unicode-equivalent rows separately toward capacity", async () => {
+  const { planDragonImport, DICTIONARY_MAX_WORDS } = await load();
+  const existing = [
+    ...Array.from({ length: DICTIONARY_MAX_WORDS - 3 }, (_, i) => `old${i}`),
+    "Café",
+    "Cafe\u0301",
+  ];
+  assert.deepEqual(planDragonImport(["CAFÉ", "new1", "new2"], existing), {
+    add: ["new1"],
+    skippedExisting: 1,
+    overLimit: 1,
+  });
+  assert.deepEqual(planDragonImport(["new2"], [...existing, "new1"]), {
+    add: [],
+    skippedExisting: 0,
+    overLimit: 1,
+  });
 });
 
 test("planDragonImport stops at the dictionary cap and counts what did not fit", async () => {

@@ -1,3 +1,5 @@
+import { dictionaryWordKey } from "../utils/dictionaryWordKey.js";
+
 /**
  * Dragon "Export custom word and phrase list" parsing. Pure module: no fs, no
  * Electron. Only the written form of each entry is kept — spoken forms are
@@ -76,7 +78,7 @@ function writtenForm(entry) {
 }
 
 function collect(entries) {
-  const byLower = new Map();
+  const byKey = new Map();
   const warnings = [];
   let duplicatesInFile = 0;
   for (const { value, line } of entries) {
@@ -93,14 +95,14 @@ function collect(entries) {
       warnings.push({ code: "TOO_LONG", line });
       continue;
     }
-    const lower = written.toLowerCase();
-    if (byLower.has(lower)) {
+    const key = dictionaryWordKey(written);
+    if (byKey.has(key)) {
       duplicatesInFile += 1;
       continue;
     }
-    byLower.set(lower, written);
+    byKey.set(key, written);
   }
-  return { words: [...byLower.values()], totalEntries: entries.length, duplicatesInFile, warnings };
+  return { words: [...byKey.values()], totalEntries: entries.length, duplicatesInFile, warnings };
 }
 
 function parseTxt(src) {
@@ -183,9 +185,11 @@ export function parseDragonWordList(text) {
 
 // New words in file order, stopping at the dictionary cap.
 export function planDragonImport(words, existingWords) {
-  const existing = new Set(existingWords.map((w) => w.trim().toLowerCase()));
-  const fresh = words.filter((w) => !existing.has(w.toLowerCase()));
-  const add = fresh.slice(0, Math.max(0, DICTIONARY_MAX_WORDS - existing.size));
+  const existing = new Set(existingWords.map(dictionaryWordKey));
+  // Legacy Unicode-equivalent rows still occupy separate personal dictionary slots.
+  const existingRowCount = new Set(existingWords.map((word) => word.trim().toLowerCase())).size;
+  const fresh = words.filter((word) => !existing.has(dictionaryWordKey(word)));
+  const add = fresh.slice(0, Math.max(0, DICTIONARY_MAX_WORDS - existingRowCount));
   return {
     add,
     skippedExisting: words.length - fresh.length,

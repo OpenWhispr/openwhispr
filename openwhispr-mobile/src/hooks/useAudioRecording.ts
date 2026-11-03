@@ -372,6 +372,8 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
         fileName: retained.audioFileName,
         mimeType: retained.audioMimeType,
         requestContext: 'recording',
+        // Meetings end through stopRecordingRaw and never reach this upload.
+        purpose: 'dictation',
         jobId: retained.id,
         clientTranscriptionId,
       },

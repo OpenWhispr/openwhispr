@@ -42,8 +42,10 @@ for (const source of ["file", "url"]) {
         mockModules: {
           "/lib/auth": "export const withSessionRefresh = (fn) => fn();",
           "./settingsStore": "export const getSettings = () => ({});",
-          "./policyStore": "export const usePolicyStore = { getState: () => ({}) };",
-          "./policyRules": "export const isTranscriptionContextAllowed = () => true;",
+          "./policyStore":
+            "export const usePolicyStore = { getState: () => ({}), subscribe: () => () => {} };",
+          "./policyRules":
+            "export const isTranscriptionContextAllowed = () => true; export const isAudioFeatureAllowed = () => true;",
         },
       });
       const queue = await vite.ssrLoadModule("/stores/batchQueueStore.ts");
@@ -294,6 +296,7 @@ test("upload creation keeps its selected workspace and sends transcript in the r
         },
       };
     },
+    markNoteCreatesAttempted: async (clientNoteIds) => db.markNoteCreatesAttempted(clientNoteIds),
     acknowledgeNoteCreate: async (...args) => db.acknowledgeNoteCreate(...args),
     getNote: async (id) => db.getNote(id),
   });

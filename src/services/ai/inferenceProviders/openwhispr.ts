@@ -3,6 +3,7 @@ import { INFERENCE_SCOPES } from "../../../config/inferenceScopes";
 import { withSessionRefresh } from "../../../lib/auth";
 import { getSettings } from "../../../stores/settingsStore";
 import logger from "../../../utils/logger";
+import { toCloudDictionaryFields } from "../../../utils/snippets";
 
 export const openwhisprProvider: InferenceProvider = {
   id: "openwhispr",
@@ -32,7 +33,7 @@ export const openwhisprProvider: InferenceProvider = {
     const result = await withSessionRefresh(async () => {
       const res = await window.electronAPI?.cloudReason?.(text, {
         agentName,
-        customDictionary: ctx.getCustomDictionary(),
+        ...toCloudDictionaryFields(ctx.getCustomDictionary(), getSettings()),
         customPrompt,
         systemPrompt: config.systemPrompt,
         requestPurpose: config.requiresAgent ? "agent" : undefined,

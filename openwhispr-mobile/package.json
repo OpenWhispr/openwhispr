@@ -32,7 +32,7 @@
     "node": "24.x"
   },
   "dependencies": {
-    "@better-auth/expo": "1.6.22",
+    "@better-auth/expo": "1.7.14",
     "@expo-google-fonts/space-grotesk": "^0.4.1",
     "@hookform/resolvers": "^5.2.2",
     "@react-native-async-storage/async-storage": "^2.2.0",
@@ -41,7 +41,7 @@
     "@react-navigation/native-stack": "^7.14.5",
     "@sentry/react-native": "~7.11.0",
     "@shopify/flash-list": "^2.0.2",
-    "better-auth": "1.6.22",
+    "better-auth": "1.7.14",
     "buffer": "^6.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -136,7 +136,6 @@
       }
     },
     "postcss": "8.5.28",
-    "@better-auth/core": "1.6.22",
     "xcode": {
       "uuid": "11.1.1"
     },

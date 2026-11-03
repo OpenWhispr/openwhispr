@@ -1,5 +1,10 @@
 import type { InferenceProvider } from "./types";
-import { API_ENDPOINTS, TOKEN_LIMITS, buildApiUrl } from "../../../config/constants";
+import {
+  API_ENDPOINTS,
+  TOKEN_LIMITS,
+  buildApiUrl,
+  isGeminiOpenAIBase,
+} from "../../../config/constants";
 import { getCloudModel, getOpenAiApiConfig } from "../../../models/ModelRegistry";
 import { getSettings } from "../../../stores/settingsStore";
 import { withRetry, createApiRetryStrategy } from "../../../utils/retry";
@@ -198,9 +203,9 @@ export const openaiProvider: InferenceProvider = {
       ? API_ENDPOINTS.OPENROUTER_BASE
       : resolveConfiguredOpenAIBase(resolvedProvider, config.baseUrl);
     const dialect = detectEndpointDialect(openAiBase);
-    // OpenRouter and known dialect hosts speak Chat Completions only — no /responses probe needed.
+    // These endpoints speak Chat Completions only — no /responses probe needed.
     let endpointCandidates: Array<{ url: string; type: "responses" | "chat" }>;
-    if (isOpenRouter || dialect) {
+    if (isOpenRouter || dialect || isGeminiOpenAIBase(openAiBase)) {
       endpointCandidates = [{ url: buildApiUrl(openAiBase, "/chat/completions"), type: "chat" }];
     } else {
       await detectServerType(openAiBase);
