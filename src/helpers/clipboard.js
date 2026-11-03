@@ -38,7 +38,8 @@ const FAST_PASTE_TIMEOUT_MS = 3000;
 // Tags the fast-paste binary's transcript item; keep in sync with
 // pasteSessionType in resources/macos-fast-paste.swift.
 const PASTE_SESSION_TYPE = "com.openwhispr.paste-session";
-const PASTE_READ_VERDICT = /^PASTE_(?:READ \d+|NOT_READ|REPLACED)$/m;
+const PASTE_POSTED = /^PASTE_POSTED( typed)?$/m;
+const PASTE_READ_VERDICT = /^PASTE_(?:READ \d+|NOT_READ|REPLACED|TYPED)$/m;
 
 const RESTORE_DELAYS = {
   // macOS restores just after the target reads the transcript, but never sooner
@@ -1090,6 +1091,7 @@ class ClipboardManager {
             ...options,
             expectedClipboardText: text,
           });
+          method = pasteResult?.method || method;
         } catch (firstError) {
           if (firstError?.pasteMayHavePosted) throw firstError;
           this.safeLog("⚠️ First paste attempt failed, retrying...", firstError?.message);
@@ -1099,6 +1101,7 @@ class ClipboardManager {
             ...options,
             expectedClipboardText: text,
           });
+          method = pasteResult?.method || method;
         }
       } else if (platform === "win32") {
         const winFastPaste = this.resolveWindowsFastPasteBinary();
@@ -1176,8 +1179,9 @@ class ClipboardManager {
         let output = "";
         let errorOutput = "";
         let hasTimedOut = false;
-        // Set once the binary reports ⌘V posted. From then on the paste is never
-        // retried or handed to osascript, either of which would paste it twice.
+        // Set once the binary reports the transcript going out (⌘V posted, or typing
+        // begun). From then on it is never retried or handed to osascript, either of
+        // which would paste it twice.
         let settleRead = null;
         // Before that, a failed binary leaves the transcript for the fallback or the user.
         const keepTranscript = () => {
@@ -1192,20 +1196,29 @@ class ClipboardManager {
 
         pasteProcess.stdout.on("data", (data) => {
           output += data.toString();
-          if (session && !settleRead && /^PASTE_POSTED$/m.test(output)) {
-            const read = new Promise((resolveRead) => {
-              settleRead = resolveRead;
-            });
-            resolve({
-              restoreComplete: read.then((verdict) =>
-                this._restoreAfterPasteRead(
-                  originalClipboard,
-                  { session, expectedText: text },
-                  verdict
-                )
-              ),
-            });
-          }
+          const posted = !settleRead && PASTE_POSTED.exec(output);
+          if (!posted) return;
+          const method = posted[1] ? "typed" : "cgevent";
+          const read = new Promise((resolveRead) => {
+            settleRead = resolveRead;
+          });
+          resolve({
+            method,
+            restoreComplete: read.then((verdict) => {
+              debugLogger.debug(
+                "Fast paste finished",
+                { method, verdict: verdict ?? "none" },
+                "clipboard"
+              );
+              return session
+                ? this._restoreAfterPasteRead(
+                    originalClipboard,
+                    { session, expectedText: text },
+                    verdict
+                  )
+                : undefined;
+            }),
+          });
         });
 
         pasteProcess.stderr.on("data", (data) => {
@@ -1297,7 +1310,7 @@ class ClipboardManager {
             const errorMsg =
               "Paste operation timed out. Text is copied to clipboard - please paste manually with Cmd+V.";
             // PASTE_POSTED may be waiting unread in the pipe, so retrying could paste twice.
-            reject(Object.assign(new Error(errorMsg), { pasteMayHavePosted: session != null }));
+            reject(Object.assign(new Error(errorMsg), { pasteMayHavePosted: useFastPaste }));
           },
           session ? PASTE_READ_BUDGET_MS + FAST_PASTE_TIMEOUT_MS : FAST_PASTE_TIMEOUT_MS
         );
@@ -1307,7 +1320,9 @@ class ClipboardManager {
 
   // `PASTE_READ <ms>`: shortly after the read, but no sooner than the plain delay after
   // ⌘V. Nothing read in the budget, or replaced: at once. No verdict: the plain delay.
+  // Typed (a Chromium browser): the pasteboard never left the user's clipboard.
   _restoreAfterPasteRead(originalClipboard, { session, expectedText }, verdict) {
+    if (verdict === "PASTE_TYPED") return Promise.resolve();
     const readMs = /^PASTE_READ (\d+)$/.exec(verdict ?? "")?.[1];
     let delayMs = RESTORE_DELAYS.darwin;
     if (readMs != null) {
@@ -1315,11 +1330,7 @@ class ClipboardManager {
     } else if (verdict) {
       delayMs = 0;
     }
-    debugLogger.debug(
-      "Paste read verdict",
-      { verdict: verdict ?? "none", restoreDelayMs: delayMs },
-      "clipboard"
-    );
+    debugLogger.debug("Clipboard restore scheduled", { restoreDelayMs: delayMs }, "clipboard");
     return this._restoreClipboardAfterDelay(originalClipboard, {
       delayMs,
       expectedSession: session,

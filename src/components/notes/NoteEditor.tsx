@@ -41,7 +41,7 @@ import {
   updateShareCache,
 } from "../../stores/noteStore";
 import { NoteSharingService } from "../../services/NoteSharingService";
-import { fetchSpaceRoster } from "../../hooks/useSpaceRoster";
+import { fetchSpaceRoster, useSpaceRoster } from "../../hooks/useSpaceRoster";
 import { useAuth } from "../../hooks/useAuth";
 import { RichTextEditor } from "../ui/RichTextEditor";
 import type { Editor } from "@tiptap/react";
@@ -75,6 +75,9 @@ import ThemedEmptyIllustration from "../ui/ThemedEmptyIllustration";
 import transcriptsEmptyLight from "../../assets/empty-states/notes-transcripts-light.svg";
 import transcriptsEmptyDark from "../../assets/empty-states/notes-transcripts-dark.svg";
 import { Button } from "../ui/button";
+import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "../ui/BidiInterpolatedText";
+import { useSettingsStore } from "../../stores/settingsStore";
+import { GENERATE_NOTES_KEY } from "../../helpers/builtinActions";
 import EmbeddedChat, { type EmbeddedChatMode } from "./EmbeddedChat";
 import { useEmbeddedChat } from "../../hooks/useEmbeddedChat";
 import ActionChips from "./ActionChips";
@@ -86,6 +89,7 @@ import {
   getActionDescription,
   getActionName,
   initializeActions,
+  resolveDefaultTemplate,
   resolveTemplate,
   useActionsOfKind,
 } from "../../stores/actionStore";
@@ -93,10 +97,18 @@ import { compileChatActionPrompt } from "../../helpers/templatePrompts";
 import type { SlashCommand } from "../chat/slashCommands";
 import { formatNoteDate, formatRelativeTime, formatShortDate } from "../../utils/dateFormatting";
 import { collectKnownPeople, type MeetingIdentity } from "../../utils/llmTranscript";
+import {
+  isNoteRecorder,
+  noteRecorderUserId,
+  recorderTranscriptLabel,
+  resolveNoteRecorder,
+  resolveSpeakerAssignmentName,
+} from "../../utils/noteRecorder";
 import { noteChatTranscript } from "../../utils/transcriptEvidence";
 import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
 import {
   applyTranscriptSpeakerPatch,
+  isYouSpeakerName,
   lockTranscriptSpeaker,
   serializeTranscriptSegments,
 } from "../../utils/transcriptSpeakerState";
@@ -224,7 +236,7 @@ interface NoteEditorProps {
   actionProgress?: NoteActionProgress | null;
   onCancelAction?: () => void;
   diarizationSessionId?: string | null;
-  onLiveSpeakerLock?: (speakerId: string, displayName: string) => void;
+  onLiveSpeakerLock?: (speakerId: string, displayName: string, recorderName?: string) => void;
   sessionDiarizationEnabled?: boolean;
   sessionExpectedCount?: number;
   userTouchedStepper?: boolean;
@@ -473,8 +485,15 @@ export default function NoteEditor({
 
   const templates = useActionsOfKind("template");
   const noteActions = useActionsOfKind("action");
-  // Regenerating keeps the note's template; a first summary uses the default.
+  const defaultSummaryTemplateId = useSettingsStore((state) => state.defaultSummaryTemplateId);
+  const defaultTemplate = resolveDefaultTemplate(templates, defaultSummaryTemplateId);
   const noteTemplate = resolveTemplate(templates, note.enhancement_template_id);
+  const isDefaultAiSummary = defaultTemplate?.translation_key === GENERATE_NOTES_KEY;
+  const summaryCalloutLabel = isDefaultAiSummary
+    ? t("notes.editor.generateSummary")
+    : t("notes.editor.generateWithTemplate", {
+        template: defaultTemplate ? getActionName(defaultTemplate, t) : "",
+      });
   const isActionRunning = actionProcessingState === "processing";
   const hasNoteMaterial = !!note.content.trim() || hasMeetingTranscript;
   const canRunTemplate =
@@ -491,7 +510,8 @@ export default function NoteEditor({
 
   const hasChatSegments = displaySegments.length > 0;
   const showSummaryCallout =
-    canRunTemplate &&
+    !!onRunNoteAction &&
+    !!defaultTemplate &&
     shouldOfferMeetingSummary({
       isRecording,
       hasTranscriptSegments: hasNoteMaterial,
@@ -505,14 +525,23 @@ export default function NoteEditor({
     [displaySegments, speakerMappings, speakerProfiles]
   );
 
-  const meetingIdentity = useMemo<MeetingIdentity>(
-    () => ({
-      selfName: user?.name?.trim() || null,
-      selfEmail: user?.email?.trim() || null,
-      participants: parsedParticipants,
-    }),
-    [user?.name, user?.email, parsedParticipants]
+  const recordedByUser = isNoteRecorder(note, user?.id);
+  const recorderId = noteRecorderUserId(note);
+  const recorderRoster = useSpaceRoster(
+    !recordedByUser && recorderId && isTeamNote ? (space?.cloud_space_id ?? null) : null
   );
+  const noteRecorder = recorderId ? recorderRoster?.get(recorderId) : undefined;
+  const meetingIdentity = useMemo<MeetingIdentity>(
+    () =>
+      resolveNoteRecorder({
+        recordedByUser,
+        user: { name: user?.name, email: user?.email },
+        recorder: noteRecorder,
+        participants: parsedParticipants,
+      }),
+    [recordedByUser, user?.name, user?.email, noteRecorder, parsedParticipants]
+  );
+  const recorderLabel = recorderTranscriptLabel(meetingIdentity, recordedByUser, t);
 
   const mentionPeople = useMemo(
     () => collectKnownPeople(meetingIdentity, speakerMappings, displaySegments),
@@ -523,10 +552,14 @@ export default function NoteEditor({
   // for, and says whether the note taker is the user.
   const chatTranscript = useMemo(
     () =>
-      noteChatTranscript(displaySegments, speakerMappings, ownedByUser ? meetingIdentity : null) ??
+      noteChatTranscript(
+        displaySegments,
+        speakerMappings,
+        recordedByUser ? meetingIdentity : null
+      ) ??
       note.transcript ??
       undefined,
-    [displaySegments, meetingIdentity, note.transcript, ownedByUser, speakerMappings]
+    [displaySegments, meetingIdentity, note.transcript, recordedByUser, speakerMappings]
   );
 
   const embeddedChat = useEmbeddedChat({
@@ -537,7 +570,7 @@ export default function NoteEditor({
     noteTranscript: chatTranscript,
     noteSummary: enhancement?.content,
     noteParticipants: parsedParticipants,
-    noteOwnedByUser: ownedByUser,
+    noteOwnedByUser: recordedByUser,
     selfEmail: user?.email ?? null,
     noteCalendarEventId: note.calendar_event_id,
     onNewChatUnsent: setChatDraft,
@@ -662,14 +695,6 @@ export default function NoteEditor({
     const enriched = completedDiarization.segments;
     if (enriched.length === 0) return;
     setDiarizedSegments(enriched);
-
-    const autoMappings: Record<string, string> = {};
-    for (const s of enriched) {
-      if (s.speakerName && s.speaker) autoMappings[s.speaker] = s.speakerName;
-    }
-    if (Object.keys(autoMappings).length > 0) {
-      setSpeakerMappings((prev) => ({ ...autoMappings, ...prev }));
-    }
   }, [completedDiarization, note.id]);
 
   const persistDisplaySegments = useCallback(
@@ -689,25 +714,40 @@ export default function NoteEditor({
       speakerId: string,
       displayName: string,
       email?: string | null,
-      profileId?: number | null
+      profileId?: number | null,
+      recorderName?: string,
+      profileName = displayName
     ) => {
-      setSpeakerMappings((prev) => ({ ...prev, [speakerId]: displayName }));
-      await window.electronAPI?.setSpeakerMapping?.(
-        note.id,
-        speakerId,
+      const segments = isRecording ? useMeetingRecordingStore.getState().segments : displaySegments;
+      const hasOtherRecorders = segments.some((segment) => segment.recorderName);
+      const scopeSelfSpeaker = speakerId === "you" && hasOtherRecorders;
+      displayName = resolveSpeakerAssignmentName(
         displayName,
-        email,
-        profileId
+        user,
+        recordedByUser && !hasOtherRecorders,
+        t
       );
+      // The reserved self ID is shared by recording sessions. Its corrections
+      // live on those sessions' rows, never in a mapping that renames all of them.
+      if (!scopeSelfSpeaker) {
+        setSpeakerMappings((prev) => ({ ...prev, [speakerId]: displayName }));
+        await window.electronAPI?.setSpeakerMapping?.(
+          note.id,
+          speakerId,
+          profileName,
+          email,
+          profileId
+        );
+      }
 
       if (isRecording) {
-        onLiveSpeakerLock?.(speakerId, displayName);
+        onLiveSpeakerLock?.(speakerId, displayName, recorderName);
         refreshSpeakerProfiles();
         return;
       }
 
       const currentSegments = displaySegments.map((s) =>
-        s.speaker === speakerId
+        s.speaker === speakerId && (!scopeSelfSpeaker || s.recorderName === recorderName)
           ? lockTranscriptSpeaker(s, {
               speakerName: displayName,
               speaker: speakerId,
@@ -724,6 +764,9 @@ export default function NoteEditor({
     [
       diarizedSegments,
       displaySegments,
+      user,
+      recordedByUser,
+      t,
       isRecording,
       note.id,
       onLiveSpeakerLock,
@@ -733,10 +776,13 @@ export default function NoteEditor({
   );
 
   const handleConfirmSuggestion = useCallback(
-    async (speakerId: string, suggestedName: string, profileId: number) => {
-      await handleMapSpeaker(speakerId, suggestedName, null, profileId);
+    async (speakerId: string, suggestedName: string, profileId: number, recorderName?: string) => {
+      const displayName = isYouSpeakerName(suggestedName, t("notes.speaker.you"))
+        ? recorderName || recorderLabel
+        : suggestedName;
+      await handleMapSpeaker(speakerId, displayName, null, profileId, recorderName, suggestedName);
     },
-    [handleMapSpeaker]
+    [handleMapSpeaker, recorderLabel, t]
   );
 
   const handleAttachSpeakerEmail = useCallback(
@@ -796,6 +842,12 @@ export default function NoteEditor({
   const handleBulkAssignName = useCallback(
     async (displayName: string, _email?: string | null, profileId?: number) => {
       if (!selectedSegmentIds.size) return;
+      displayName = resolveSpeakerAssignmentName(
+        displayName,
+        user,
+        recordedByUser && !displaySegments.some((segment) => segment.recorderName),
+        t
+      );
       const nextSegments = displaySegments.map((segment) =>
         selectedSegmentIds.has(segment.id)
           ? lockTranscriptSpeaker(segment, {
@@ -809,7 +861,15 @@ export default function NoteEditor({
       await persistDisplaySegments(nextSegments);
       handleClearSelection();
     },
-    [displaySegments, selectedSegmentIds, persistDisplaySegments, handleClearSelection]
+    [
+      displaySegments,
+      selectedSegmentIds,
+      persistDisplaySegments,
+      handleClearSelection,
+      user,
+      recordedByUser,
+      t,
+    ]
   );
 
   const handleTitleInput = useCallback(() => {
@@ -1399,6 +1459,7 @@ export default function NoteEditor({
             {viewMode === "transcript" && (hasChatSegments || isRecording) ? (
               isRecording ? (
                 <LiveMeetingTranscriptChat
+                  recorderLabel={recorderLabel}
                   contentClassName={PAGE_CONTENT_WIDTH_CLASS}
                   speakerMappings={speakerMappings}
                   speakerProfiles={speakerProfiles}
@@ -1417,6 +1478,7 @@ export default function NoteEditor({
               ) : (
                 <MeetingTranscriptChat
                   contentClassName={PAGE_CONTENT_WIDTH_CLASS}
+                  recorderLabel={recorderLabel}
                   segments={displaySegments}
                   speakerMappings={speakerMappings}
                   speakerProfiles={knownSpeakers}
@@ -1540,14 +1602,27 @@ export default function NoteEditor({
             slashCommands={actionCommands}
             callout={
               showSummaryCallout &&
-              noteTemplate &&
+              defaultTemplate &&
               selectedSegmentIds.size === 0 && (
                 <Button
-                  className="h-9 gap-2 px-4 text-sm"
-                  onClick={() => onRunNoteAction?.(noteTemplate)}
+                  className="h-9 max-w-full min-w-0 gap-2 px-4 text-sm"
+                  aria-label={summaryCalloutLabel}
+                  onClick={() => onRunNoteAction?.(defaultTemplate)}
                 >
-                  <AlignLeft size={16} />
-                  {t("notes.editor.generateSummary")}
+                  <AlignLeft size={16} className="shrink-0" />
+                  <span className="truncate">
+                    {isDefaultAiSummary ? (
+                      summaryCalloutLabel
+                    ) : (
+                      <BidiInterpolatedText
+                        text={t("notes.editor.generateWithTemplate", {
+                          template: BIDI_VALUE_TOKEN,
+                        })}
+                        value={getActionName(defaultTemplate, t)}
+                        dir="auto"
+                      />
+                    )}
+                  </span>
                 </Button>
               )
             }

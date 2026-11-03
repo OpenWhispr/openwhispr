@@ -259,8 +259,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
       transcript
     ),
   getNote: (id) => ipcRenderer.invoke("db-get-note", id),
-  getNotes: (noteType, limit, folderId, spaceId) =>
-    ipcRenderer.invoke("db-get-notes", noteType, limit, folderId, spaceId),
+  getNotes: (noteType, limit, folderId, spaceId, spaceIds) =>
+    ipcRenderer.invoke("db-get-notes", noteType, limit, folderId, spaceId, spaceIds),
   getSpaceNotes: (spaceId, limit) => ipcRenderer.invoke("db-get-space-notes", spaceId, limit),
   updateNote: (id, updates, options) => ipcRenderer.invoke("db-update-note", id, updates, options),
   getNoteUndos: () => ipcRenderer.invoke("db-get-note-undos"),
@@ -271,8 +271,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   exportNote: (noteId, format) => ipcRenderer.invoke("export-note", noteId, format),
   exportTranscript: (noteId, format) => ipcRenderer.invoke("export-transcript", noteId, format),
   exportDictionary: (words) => ipcRenderer.invoke("export-dictionary", words),
-  searchNotes: (query, limit, spaceId, folderId) =>
-    ipcRenderer.invoke("db-search-notes", query, limit, spaceId, folderId),
+  searchNotes: (query, limit, spaceId, folderId, spaceIds) =>
+    ipcRenderer.invoke("db-search-notes", query, limit, spaceId, folderId, spaceIds),
   semanticSearchNotes: (query, limit, spaceId, folderId) =>
     ipcRenderer.invoke("db-semantic-search-notes", query, limit, spaceId, folderId),
   updateNoteCloudId: (id, cloudId) => ipcRenderer.invoke("db-update-note-cloud-id", id, cloudId),
@@ -1223,6 +1223,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getNoteByClientId: (clientNoteId) => ipcRenderer.invoke("db-get-note-by-client-id", clientNoteId),
   upsertNoteFromCloud: (cloudNote, localFolderId, localSpaceId) =>
     ipcRenderer.invoke("db-upsert-note-from-cloud", cloudNote, localFolderId, localSpaceId),
+  markNoteCreatesAttempted: (clientNoteIds) =>
+    ipcRenderer.invoke("db-mark-note-creates-attempted", clientNoteIds),
   acknowledgeNoteCreate: (id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) =>
     ipcRenderer.invoke(
       "db-acknowledge-note-create",
@@ -1302,6 +1304,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-get-conversation-by-client-id", clientId),
   upsertConversationFromCloud: (cloudConv, messages) =>
     ipcRenderer.invoke("db-upsert-conversation-from-cloud", cloudConv, messages),
+  markConversationCreateAttempted: (id) =>
+    ipcRenderer.invoke("db-mark-conversation-create-attempted", id),
   acknowledgeConversationCreate: (id, snapshot, cloudId) =>
     ipcRenderer.invoke("db-acknowledge-conversation-create", id, snapshot, cloudId),
   markConversationSynced: (id, cloudId) =>
@@ -1447,6 +1451,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Contacts
   searchContacts: (query) => ipcRenderer.invoke("search-contacts", query),
+  searchInviteContacts: (query, exclude) =>
+    ipcRenderer.invoke("search-invite-contacts", query, exclude),
   upsertContact: (contact) => ipcRenderer.invoke("upsert-contact", contact),
   getMD5Hash: (text) => ipcRenderer.invoke("get-md5-hash", text),
 

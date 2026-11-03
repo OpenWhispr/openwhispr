@@ -594,6 +594,99 @@ test("Enter adds to Personal through the settings store and to a shared list thr
   );
 });
 
+test("a shared add clears the field before the API answers; a failed one puts its text back", async (t) => {
+  const { container } = await renderView(t);
+  const pending = [];
+  globalThis.__results.addSharedWords = () =>
+    new Promise((resolve) => {
+      pending.push(resolve);
+    });
+  const failed = (words) => ({
+    added: [],
+    alreadyPresent: [],
+    rejected: [],
+    failed: { words, reason: "network" },
+  });
+
+  await openList(container, `space:${ENGINEERING}`);
+  await type(addInput(container), "Grafana");
+  await pressEnter(addInput(container));
+  assert.equal(addInput(container).value, "", "cleared while the request runs");
+
+  // The next word can be typed and sent while the first is still in flight.
+  await type(addInput(container), "Loki");
+  await pressEnter(addInput(container));
+  assert.equal(pending.length, 2);
+
+  await React.act(async () => pending[0](failed(["Grafana"])));
+  assert.equal(addInput(container).value, "Grafana", "an empty field gets the failed text back");
+
+  await type(addInput(container), "Tempo");
+  await React.act(async () => pending[1](failed(["Loki"])));
+  assert.equal(addInput(container).value, "Tempo", "text typed meanwhile is never overwritten");
+  // Loki isn't in the field, so its toast is where the user learns what failed.
+  assert.deepEqual(
+    globalThis.__toasts.slice(-2).map((toast) => [toast.title, toast.description]),
+    [
+      [
+        'dictionary.shared.errors.generic{"list":"Engineering"}',
+        'dictionary.shared.add.notAdded{"count":1,"words":"Grafana"}',
+      ],
+      [
+        'dictionary.shared.errors.generic{"list":"Engineering"}',
+        'dictionary.shared.add.notAdded{"count":1,"words":"Loki"}',
+      ],
+    ]
+  );
+});
+
+test("a failed shared add stays out of a field that now adds to another list", async (t) => {
+  const { container } = await renderView(t);
+  const pending = [];
+  globalThis.__results.addSharedWords = () =>
+    new Promise((resolve) => {
+      pending.push(resolve);
+    });
+  const failed = (words) => ({
+    added: [],
+    alreadyPresent: [],
+    rejected: [],
+    failed: { words, reason: "network" },
+  });
+
+  await openList(container, `space:${ENGINEERING}`);
+  await type(addInput(container), "Grafana");
+  await pressEnter(addInput(container));
+  await openList(container, `space:${SALES}`);
+  await React.act(async () => pending[0](failed(["Grafana"])));
+  assert.equal(addInput(container).value, "", "Enter would send it to Sales");
+  assert.equal(
+    globalThis.__toasts.at(-1).description,
+    'dictionary.shared.add.notAdded{"count":1,"words":"Grafana"}'
+  );
+
+  // Only spaces typed meanwhile still count as an empty field.
+  await type(addInput(container), "Loki");
+  await pressEnter(addInput(container));
+  await type(addInput(container), " ");
+  await React.act(async () => pending[1](failed(["Loki"])));
+  assert.equal(addInput(container).value, "Loki");
+});
+
+test("Enter that commits an IME composition doesn't add", async (t) => {
+  const { container, calls } = await renderView(t);
+  await openList(container, `space:${ENGINEERING}`);
+  await type(addInput(container), "Grafana");
+  await React.act(async () =>
+    addInput(container).dispatchEvent(domEvent("keydown", { key: "Enter", isComposing: true }))
+  );
+  assert.equal(addInput(container).value, "Grafana");
+  assert.deepEqual(
+    calls.filter(([name]) => name === "addSharedWords"),
+    []
+  );
+});
+
 test("a word already in the target is refused inline", async (t) => {
   const { container, calls } = await renderView(t);
   await openList(container, `space:${ENGINEERING}`);

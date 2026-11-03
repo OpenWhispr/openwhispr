@@ -1828,6 +1828,49 @@ test("pasteMacOS reads the binary's report across split chunks", async () => {
   assert.deepEqual(restores[0].options, sessionRestore(350, calls[0]));
 });
 
+// A Chromium browser gets the transcript typed from stdin: the pasteboard still holds
+// the user's clipboard, so nothing writes to it and nothing restores it.
+test("a typed dictation never touches the user's clipboard", async (t) => {
+  withDarwin(t);
+  resetClipboard({ text: "previous clipboard" });
+  const calls = [];
+  const { manager, restores } = loadMacPasteManager(
+    createReadReportingSpawn(calls, { lines: ["PASTE_POSTED typed", "PASTE_TYPED"] })
+  );
+
+  const result = await manager._pasteText("dictated text");
+  await result.restoreComplete;
+
+  assert.equal(calls[0].stdin, "dictated text");
+  assert.equal(result.method, "typed");
+  assert.equal(calls.length, 1);
+  assert.deepEqual(restores, []);
+  assert.deepEqual(fakeClipboard.writes, []);
+  assert.equal(fakeClipboard.text, "previous clipboard");
+});
+
+// With "Keep transcription in clipboard" the binary types what the caller left on
+// the clipboard. It still reports the typing, so a slow or killed run isn't retried.
+test("a typed dictation kept on the clipboard is never typed twice", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const calls = [];
+  const { manager } = loadMacPasteManager(
+    createReadReportingSpawn(calls, { lines: ["PASTE_POSTED typed"], exits: false })
+  );
+
+  const pasting = manager.pasteMacOS(null, { expectedClipboardText: "dictated text" });
+  t.mock.timers.tick(120);
+  await new Promise((resolve) => process.nextTick(resolve));
+  t.mock.timers.tick(3000);
+  const result = await pasting;
+  await result.restoreComplete;
+
+  assert.equal(result.method, "typed");
+  assert.equal(calls[0].stdin, undefined, "no paste session without a restore");
+  assert.equal(calls[0].killedWith, "SIGKILL");
+  assert.equal(calls.length, 1);
+});
+
 test("pasteMacOS settles the paste once ⌘V is out, without waiting for the read", async () => {
   const calls = [];
   const { manager, restores } = loadMacPasteManager(
@@ -1947,6 +1990,27 @@ test("a restored macOS paste leaves the transcript to the binary alone", async (
   assert.deepEqual(fakeClipboard.writes, [], "no plain write for managers or Handoff to see");
   assert.equal(calls[0].stdin, "dictated text");
   assert.notEqual(result.pasted, false);
+});
+
+// Without a restore there is no paste session, but the binary still posts ⌘V or
+// starts typing before it reports it, so a kill before the report is not retried.
+test("a binary killed before reporting is not retried when nothing is restored", async (t) => {
+  withDarwin(t);
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const calls = [];
+  const { manager } = loadMacPasteManager(createReadReportingSpawn(calls, { exits: false }));
+
+  const pasting = manager._pasteText("dictated text", { restoreClipboard: false });
+  const rejected = assert.rejects(pasting, /timed out/);
+  // Long enough for a retry to time out as well, so a retry fails the test.
+  for (let tick = 0; tick < 10; tick++) {
+    await new Promise((resolve) => process.nextTick(resolve));
+    t.mock.timers.tick(1000);
+  }
+  await rejected;
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].stdin, undefined);
 });
 
 test("_pasteText does not retry a paste that may already have been posted", async (t) => {

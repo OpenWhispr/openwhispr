@@ -799,6 +799,11 @@ export interface Workspace {
   has_subscription?: boolean;
 }
 
+export interface MemberTeamRef {
+  id: string;
+  name: string;
+}
+
 export interface WorkspaceMember {
   user_id: string;
   role: WorkspaceRole;
@@ -807,6 +812,7 @@ export interface WorkspaceMember {
   email: string;
   name: string | null;
   image: string | null;
+  teams?: MemberTeamRef[]; // absent from APIs before release 3
 }
 
 export type TeamRole = "admin" | "member";
@@ -1385,6 +1391,10 @@ export interface ConversationPreview {
   message_count: number;
   last_message?: string | null;
   last_message_role?: "user" | "assistant" | "system" | null;
+  /** The note the chat was started from, joined in by the Chat list queries. */
+  note_id?: number | null;
+  note_title?: string | null;
+  note_deleted_at?: string | null;
 }
 
 export interface ConversationCreateSnapshot {
@@ -1858,7 +1868,8 @@ declare global {
         noteType?: string | null,
         limit?: number,
         folderId?: number | null,
-        spaceId?: number | null
+        spaceId?: number | null,
+        spaceIds?: number[] | null
       ) => Promise<NoteItem[]>;
       getSpaceNotes: (spaceId: number, limit?: number) => Promise<NoteItem[]>;
       updateNote: (
@@ -1907,7 +1918,8 @@ declare global {
         query: string,
         limit?: number,
         spaceId?: number | null,
-        folderId?: number | null
+        folderId?: number | null,
+        spaceIds?: number[] | null
       ) => Promise<NoteItem[]>;
       semanticSearchNotes: (
         query: string,
@@ -3179,6 +3191,7 @@ declare global {
       getAgentConversation?: (id: number) => Promise<{
         id: number;
         title: string;
+        note_id?: number | null;
         archived_at?: string;
         cloud_id?: string | null;
         client_conversation_id?: string | null;
@@ -3463,6 +3476,14 @@ declare global {
       searchContacts: (query: string) => Promise<{
         success: boolean;
         contacts: Array<{ email: string; display_name: string | null }>;
+      }>;
+      /** People to invite: the same calendars and contacts the assistant's find_contact reads. */
+      searchInviteContacts: (
+        query: string,
+        exclude: string[]
+      ) => Promise<{
+        success: boolean;
+        contacts: Array<{ email: string; name: string | null }>;
       }>;
       upsertContact: (contact: {
         email: string;
@@ -3848,6 +3869,7 @@ declare global {
         localFolderId: number | null,
         localSpaceId?: number | null
       ) => Promise<NoteItem | null>;
+      markNoteCreatesAttempted?: (clientNoteIds: string[]) => Promise<string[]>;
       acknowledgeNoteCreate?: (
         id: number,
         snapshot: NoteCreateSnapshot,
@@ -3929,6 +3951,7 @@ declare global {
         cloudConv: Record<string, unknown>,
         messages: Array<Record<string, unknown>>
       ) => Promise<void>;
+      markConversationCreateAttempted?: (id: number) => Promise<{ success: boolean }>;
       acknowledgeConversationCreate?: (
         id: number,
         snapshot: ConversationCreateSnapshot,

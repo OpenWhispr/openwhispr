@@ -1273,7 +1273,8 @@
     },
     "welcomeSubtitle": "The power of your voice. On your terms.",
     "welcomeTitle": "Welcome to OpenWhispr",
-    "sessionExpired": "Session expired. Please restart the sign-up process."
+    "sessionExpired": "Session expired. Please restart the sign-up process.",
+    "unconfirmedSession": "We couldn't confirm your sign-in, so nothing was changed. Try again once OpenWhispr can reach its servers."
   },
   "calendar": {
     "title": "Google Calendar",
@@ -1670,7 +1671,7 @@
     "managedAccount": "Managed account",
     "groups": {
       "account": "Account",
-      "app": "App",
+      "workspace": "Workspace",
       "aiModels": "AI Models",
       "system": "System"
     },
@@ -1681,11 +1682,19 @@
       },
       "plansBilling": {
         "description": "Plans, usage & billing",
-        "label": "Plans & Billing"
+        "label": "Plan & Billing"
       },
-      "workspace": {
-        "description": "Members, team spaces & API keys",
-        "label": "Workspace"
+      "workspaceGeneral": {
+        "label": "General",
+        "description": "Workspace name and icon"
+      },
+      "workspacePeople": {
+        "label": "People",
+        "description": "Members and teams"
+      },
+      "workspaceDeveloper": {
+        "label": "Developer",
+        "description": "Workspace API keys"
       },
       "general": {
         "description": "Appearance, sounds & startup",
@@ -1701,11 +1710,11 @@
       },
       "speechToText": {
         "description": "Engines for dictation & note recording",
-        "label": "Speech-to-Text"
+        "label": "Speech to Text"
       },
       "llms": {
         "description": "Models for chat, cleanup & summaries",
-        "label": "Language Models"
+        "label": "Language Model"
       },
       "privacyData": {
         "description": "Privacy, permissions & analytics",
@@ -1736,8 +1745,62 @@
       "tab": {
         "general": "General",
         "members": "Members",
-        "teams": "Groups",
-        "developer": "Developer"
+        "invitations": "Invitations",
+        "teams": "Groups"
+      },
+      "people": {
+        "title": "People",
+        "description": "Manage people in your workspace and their roles.",
+        "subtitleView": "People in your workspace and their roles.",
+        "add": "Add",
+        "addLabel": "Invite people",
+        "columns": {
+          "name": "Name",
+          "team": "Team",
+          "role": "Workspace role",
+          "email": "Email",
+          "status": "Status",
+          "actions": "Actions"
+        },
+        "you": "You",
+        "teamsNone": "None",
+        "teamsMore": "+{{count}}",
+        "loading": {
+          "title": "Loading members…",
+          "body": "Your workspace members will appear here."
+        },
+        "failed": {
+          "title": "Couldn't load members",
+          "body": "Check your connection and try again."
+        },
+        "search": {
+          "placeholder": "Search members",
+          "clear": "Clear search",
+          "noResultsTitle": "No members match “{{query}}”",
+          "noResultsBody": "Check the spelling or search by email."
+        },
+        "roleMenuLabel": "Change {{name}}'s role",
+        "roleDescription": {
+          "member": "Can view and edit notes.",
+          "admin": "Manages members, invites, teams, and settings."
+        },
+        "roleFailed": "Couldn't change {{name}}'s role. Check your connection and try again.",
+        "roleNotAllowed": "You no longer have permission to change roles in {{workspace}}.",
+        "invitations": {
+          "loading": "Loading invitations…",
+          "failedTitle": "Couldn't load invitations",
+          "emptyTitle": "No invitations",
+          "emptyBody": "New invitations appear here until they're accepted.",
+          "pending_one": "Pending · Expires in {{count}} day",
+          "pending_other": "Pending · Expires in {{count}} days",
+          "expired": "Expired",
+          "resend": "Resend invite",
+          "cancel": "Cancel invite",
+          "resendFailed": "Couldn't resend the invitation to {{email}}. Cancel it and invite them again.",
+          "resendNotAllowed": "You no longer have permission to resend invitations in {{workspace}}.",
+          "noLongerPending": "The invitation for {{email}} is no longer pending",
+          "refreshFailed": "Couldn't refresh invitations. This list may be out of date."
+        }
       },
       "role": {
         "owner": "Owner",
@@ -1745,45 +1808,33 @@
         "member": "Member"
       },
       "general": {
+        "title": "General",
+        "subtitleManage": "Manage your workspace name, icons and more",
+        "subtitleView": "Your workspace name and icon.",
         "nameLabel": "Workspace name",
+        "nameHint": "Your workspace name can be up to 65 characters",
+        "iconLabel": "Workspace icon",
+        "iconHint": "This icon appears in your sidebar and notifications.",
+        "roleLabel": "Your role",
         "saved": "Workspace updated",
+        "ownerTitle": "Workspace Owner",
+        "ownerDescription": "Transfer ownership to another workspace member.",
         "dangerTitle": "Delete workspace",
-        "dangerDescription": "All shared notes, folders, and integrations will be deleted. This cannot be undone.",
+        "dangerDescription": "Permanently delete this workspace, including all notes and files.",
         "delete": "Delete workspace",
-        "confirmTitle": "Delete {{name}}?",
-        "confirmDescription": "This cancels the subscription and removes all workspace data permanently.",
         "deleting": "Deleting…",
-        "deleted": "Workspace deleted",
         "leaveTitle": "Leave workspace",
-        "leaveDescription": "You'll lose access to this workspace and its shared notes.",
+        "leaveDescription": "Remove yourself from this workspace. You'll lose access to its teamspaces.",
         "leave": "Leave workspace",
-        "leaving": "Leaving…",
-        "leaveConfirm": {
-          "title": "Leave {{name}}?",
-          "description": "You'll lose access immediately. An admin can invite you back."
-        },
-        "left": "You left {{name}}"
+        "leaving": "Leaving…"
       },
       "members": {
-        "title": "Members",
         "description": "{{count}} of {{seats}} seats used.",
-        "invite": "Invite",
-        "empty": "No members yet.",
         "loadError": "Couldn't load members.",
         "roleUpdated": "Role updated",
         "removed": "Removed {{name}}",
-        "promote": "Make admin",
-        "demote": "Make member",
         "transferOwnership": "Transfer ownership",
-        "remove": "Remove from workspace",
-        "removeConfirm": {
-          "title": "Remove this member?",
-          "description": "{{name}} will lose access to {{workspace}} immediately."
-        },
-        "transferConfirm": {
-          "title": "Transfer ownership?",
-          "description": "{{name}} becomes the owner of {{workspace}}. Your role changes to admin and only the new owner can transfer it back."
-        }
+        "remove": "Remove from workspace"
       },
       "joinRequests": {
         "title": "Requests to join",
@@ -1824,22 +1875,9 @@
         }
       },
       "invites": {
-        "title": "Pending invitations",
-        "expiresIn_one": "Expires in {{count}} day",
-        "expiresIn_other": "Expires in {{count}} days",
-        "expired": "Expired",
-        "loadError": "Couldn't load invitations.",
-        "resend": "Resend",
         "resending": "Resending…",
-        "revoke": "Revoke",
         "resent": "Invitation resent",
-        "resentNoEmail": "Invitation updated, but the email couldn't be delivered.",
-        "revoked": "Invitation revoked",
-        "revokeFailed": "Could not revoke invitation",
-        "revokeConfirm": {
-          "title": "Revoke this invitation?",
-          "description": "The invitation link for {{email}} will stop working."
-        }
+        "resentNoEmail": "Invitation updated, but the email couldn't be delivered."
       },
       "billing": {
         "plan": "Plan",
@@ -1976,6 +2014,10 @@
       "notSignedIn": "Not signed in",
       "notSignedInDescription": "Create an account to unlock premium features.",
       "offline": "Offline",
+      "offlineAccount": {
+        "title": "Showing your last sign-in",
+        "description": "Sync and account changes are paused until OpenWhispr can reach its servers."
+      },
       "pastDue": {
         "description": "You're on the free plan for now. Update your payment method to get back to Pro.",
         "title": "We couldn't process your payment"
@@ -2594,7 +2636,7 @@
       "title": "Prompt Studio"
     },
     "speechToText": {
-      "title": "Speech-to-Text",
+      "title": "Speech to Text",
       "description": "Pick an engine for dictation and note recording",
       "tabs": {
         "dictation": "Dictation",
@@ -2604,7 +2646,7 @@
       "selfHostedStreamingNote": "Requires a server that supports streaming transcription."
     },
     "llms": {
-      "title": "Language Models",
+      "title": "Language Model",
       "description": "Configure models for cleanup, note formatting, and chat",
       "tabs": {
         "dictationCleanup": "Dictation Cleanup",
@@ -3093,7 +3135,6 @@
   "workspaces": {
     "switcher": {
       "workspaces": "Workspaces",
-      "create": "Create workspace…",
       "add": "Add workspace",
       "invitePeople": "Invite people"
     },
@@ -3111,27 +3152,53 @@
       "description": "You're now the owner of {{name}}."
     },
     "invite": {
-      "title": "Invite to {{workspace}}",
-      "description": "Add teammates by email. They'll get a link to join.",
-      "emailLabel": "Email",
-      "emailPlaceholder": "teammate@example.com",
-      "roleLabel": "Role",
+      "title": "Invite people",
+      "description": "They'll get an email link to join {{workspace}}.",
+      "emailLabel": "Email addresses",
+      "emailHint": "Separate emails with commas. Everyone gets the same role.",
+      "emailPlaceholder": "Search email",
+      "removeRecipient": "Remove {{email}}",
+      "suggestions": "Suggestions",
+      "roleLabel": "Workspace role",
       "seatUsage": "Using {{used}} of {{seats}} seats",
       "seatCost": "If accepted, adds a seat to your plan · estimated prorated charge {{amount}}.",
-      "submit": "Send invite",
-      "submitting": "Sending…",
-      "sentTitle": "Invite sent",
-      "sentDescription": "We sent an invitation to {{email}}.",
-      "sentNoEmailTitle": "Invite created, but not emailed",
-      "sentNoEmailDescription": "{{email}} was invited, but the email couldn't be delivered. Resend it later or share the invite link another way.",
-      "errorTitle": "Couldn't send invitation",
+      "seatCostMany_one": "If all are accepted, adds {{count}} seat to your plan · estimated prorated charge {{amount}}.",
+      "seatCostMany_other": "If all are accepted, adds {{count}} seats to your plan · estimated prorated charge {{amount}}.",
+      "seatCostManyUnpriced_one": "If all are accepted, adds {{count}} seat to your plan.",
+      "seatCostManyUnpriced_other": "If all are accepted, adds {{count}} seats to your plan.",
+      "submit_one": "Send {{count}} invitation",
+      "submit_other": "Send {{count}} invitations",
+      "submitting": "Inviting…",
+      "sentTitle_one": "{{count}} invitation sent",
+      "sentTitle_other": "{{count}} invitations sent",
+      "sentOne": "Invited {{email}} to {{workspace}}",
+      "sentMany_one": "Invited {{count}} person to {{workspace}}",
+      "sentMany_other": "Invited {{count}} people to {{workspace}}",
+      "noEmail_one": "{{count}} invitation was created, but its email couldn't be delivered. Resend it from Invitations.",
+      "noEmail_other": "{{count}} invitations were created, but their emails couldn't be delivered. Resend them from Invitations.",
+      "someFailed_one": "{{count}} couldn't be invited. Fix or remove it to try again.",
+      "someFailed_other": "{{count}} couldn't be invited. Fix or remove them to try again.",
+      "tooMany": "You can invite up to 20 people at a time.",
+      "done": "Done",
       "role": {
-        "admin": "Admin",
-        "member": "Member"
+        "admin": "Workspace Admin",
+        "member": "Workspace Member"
       },
       "roleDescription": {
-        "admin": "Manages members and billing",
-        "member": "Uses the workspace"
+        "admin": "Manages members, invites, teams, and settings.",
+        "member": "Can view and edit notes."
+      },
+      "errors": {
+        "invalid": "{{email}} isn't a valid email address",
+        "alreadyMember": "{{email}} is already a member",
+        "alreadyInvited": "{{email}} already has a pending invitation. Resend it from Invitations.",
+        "seatLimit": "This workspace has reached its seat limit.",
+        "directoryRequired": "Assign {{email}} in your identity provider first.",
+        "notAllowed": "You can no longer invite people to {{workspace}}.",
+        "ssoRequired": "Sign in with your company's single sign-on to invite people to {{workspace}}.",
+        "sessionExpired": "Couldn't invite {{email}}: your sign-in expired or changed. Sign in again, then try again.",
+        "requestFailed": "Couldn't invite {{email}}. Check your connection and try again.",
+        "refused": "Couldn't invite {{email}}: {{reason}}"
       }
     },
     "join": {
@@ -3166,6 +3233,85 @@
       "errorTitle": "Couldn't accept invitation",
       "sentTo": "Invitation sent to {{email}}",
       "wrongAccount": "This invitation was sent to {{email}}. You're signed in as {{current}}."
+    },
+    "exit": {
+      "leave": {
+        "title": "Leave {{name}}?",
+        "body": "You'll lose access to this workspace, its teams, and its teamspaces. A workspace admin can invite you back.",
+        "failed": "Couldn't leave {{name}}. Check your connection and try again."
+      },
+      "left": {
+        "title": "You left {{name}}"
+      },
+      "chooseAnother": "Choose another workspace to continue.",
+      "chooseWorkspace": "Choose workspace",
+      "delete": {
+        "title": "Delete {{name}}?",
+        "body": "This permanently deletes the workspace, its notes, files, teams, and teamspaces for everyone. This can't be undone."
+      },
+      "deleting": {
+        "title": "Deleting {{name}}…",
+        "body": "Keep this window open while the workspace is deleted."
+      },
+      "deleteFailed": {
+        "title": "Couldn't delete workspace",
+        "body": "{{name}} is still available. Check your connection and try again."
+      },
+      "deleted": {
+        "title": "{{name}} was deleted"
+      },
+      "tryAgain": "Try again"
+    },
+    "removeMember": {
+      "title": "Remove {{name}} from {{workspace}}?",
+      "body": "They'll lose access to every teamspace and team in this workspace. You can invite them again anytime.",
+      "confirm": "Remove",
+      "removing": "Removing…",
+      "failed": "Couldn't remove {{name}}. Check your connection and try again.",
+      "notAllowed": "You no longer have permission to remove people from {{workspace}}.",
+      "alreadyRemoved": "{{name}} was already removed"
+    },
+    "cancelInvitation": {
+      "title": "Cancel the invitation for {{email}}?",
+      "body": "They won't be able to join with this invitation. Current members keep their access.",
+      "keep": "Keep invitation",
+      "canceling": "Canceling…",
+      "done": "Invitation canceled",
+      "failed": "Couldn't cancel the invitation. Check your connection and try again.",
+      "notAllowed": "You no longer have permission to cancel invitations in {{workspace}}."
+    },
+    "ssoRequired": "Sign in with your company's single sign-on to manage people in {{workspace}}.",
+    "transfer": {
+      "title": "Choose a new Owner",
+      "body": "Choose an existing workspace member. You'll become an Admin after the transfer.",
+      "newOwner": "New Owner",
+      "placeholder": "Choose a workspace member",
+      "candidate": "{{name}} · {{role}}",
+      "confirmTitle": "Transfer ownership to {{name}}?",
+      "confirmBody": "{{name}} will become the Owner of {{workspace}}. You'll become an Admin.",
+      "submit": "Transfer ownership",
+      "transferringTitle": "Transferring ownership…",
+      "transferringBody": "Keep this window open. Ownership will change when the transfer completes.",
+      "transferring": "Transferring…",
+      "failed": "Couldn't transfer ownership. You're still the Owner. Try again.",
+      "noCandidates": "Invite someone to {{workspace}} before transferring ownership.",
+      "done": "Workspace ownership transferred to {{name}}. You're now an Admin."
+    },
+    "intro": {
+      "workspace": {
+        "title": "Your workspace is home base",
+        "body": "Everyone at your company works here. Your private notes stay private until you share them."
+      },
+      "teamspaces": {
+        "title": "Share notes in teamspaces",
+        "body": "Within a workspace, create a teamspace for a project or topic, like Customer Calls. Everyone you add can read and edit its notes."
+      },
+      "teams": {
+        "title": "Add a whole team at once",
+        "body": "Group people into a team, like Sales, then add the team to any teamspace in one step."
+      },
+      "getStarted": "Get started",
+      "progress": "Step {{current}} of {{total}}"
     }
   },
   "chat": {
@@ -3191,6 +3337,13 @@
     "searchTitle": "Search conversations",
     "searchDescription": "Search across all your conversations",
     "inputPlaceholder": "Ask anything...",
+    "sourceNote": {
+      "from": "From",
+      "open": "Open note",
+      "deleted": "This note was deleted",
+      "deletedShort": "Deleted",
+      "askAbout": "Ask about {{title}}..."
+    },
     "starters": {
       "todos": "List my recent to-dos",
       "meeting": "Prepare me for my next meeting",
@@ -3292,7 +3445,6 @@
       "personal": "Personal",
       "privateTooltip": "Only you can see your Personal space",
       "newSpace": "New team space",
-      "newSpaceInWorkspace": "New team space in {{workspace}}",
       "createTitle": "Create team space",
       "createDescription": "A shared area inside a workspace for the people and groups you add.",
       "nameAndIconLabel": "Name and icon",
@@ -3378,7 +3530,9 @@
         "viaGroup": "via {{group}}",
         "managedByGroup": "Added through {{group}}. Remove them there.",
         "roleFromGroup": "Admin through {{group}}. Change it there.",
-        "invited": "Invitation sent to {{email}}"
+        "invited": "Invitation sent to {{email}}",
+        "invitedMany_one": "Invitation sent to {{count}} person",
+        "invitedMany_other": "Invitations sent to {{count}} people"
       },
       "invitedTo_one": "You'll join {{count}} team space",
       "invitedTo_other": "You'll join {{count}} team spaces",
@@ -3480,6 +3634,7 @@
       "transcriptEmptyDescription": "Start a recording and everything said will appear here.",
       "startRecording": "Start recording",
       "generateSummary": "Generate AI Summary",
+      "generateWithTemplate": "Generate with {{template}}",
       "startWriting": "Start writing...",
       "staleIndicator": "Content has changed since enhancement",
       "live": "Live",
@@ -3774,9 +3929,9 @@
         "actionFailed": "Action failed",
         "noEndpoint": "No self-hosted server URL set. Configure one in Settings.",
         "outputTruncated": "The AI model ran out of room before it finished, so the note was left as it was.",
-        "outputSpentThinking": "The AI model spent its whole output limit thinking and wrote no notes, so the note was left as it was. Turn on \"Disable thinking output\" or choose a model that thinks less in Settings → Language Models → Note Formatting, then try again.",
-        "outputSpentThinkingDisabled": "The AI model spent its whole output limit thinking and wrote no notes, even with \"Disable thinking output\" on, so the note was left as it was. Choose another model in Settings → Language Models → Note Formatting.",
-        "outputSpentThinkingOtherModel": "The AI model spent its whole output limit thinking and wrote no notes, so the note was left as it was. Choose a model that thinks less in Settings → Language Models → Note Formatting.",
+        "outputSpentThinking": "The AI model spent its whole output limit thinking and wrote no notes, so the note was left as it was. Turn on \"Disable thinking output\" or choose a model that thinks less in Settings → Language Model → Note Formatting, then try again.",
+        "outputSpentThinkingDisabled": "The AI model spent its whole output limit thinking and wrote no notes, even with \"Disable thinking output\" on, so the note was left as it was. Choose another model in Settings → Language Model → Note Formatting.",
+        "outputSpentThinkingOtherModel": "The AI model spent its whole output limit thinking and wrote no notes, so the note was left as it was. Choose a model that thinks less in Settings → Language Model → Note Formatting.",
         "nothingToSummarize": "There's nothing to summarize in this note yet, so the AI summary was left as it was.",
         "saveFailed": "Couldn't save. Check that nothing is too long and try again."
       },
@@ -3790,6 +3945,11 @@
       "applied": "AI summary updated with {{name}}"
     },
     "templates": {
+      "defaultLabel": "Default summary template",
+      "defaultHint": "Use this template for the summary button after a meeting.",
+      "defaultBadge": "Default",
+      "saveBeforeDefault": "Save this template to set it as your default.",
+      "defaultSaveFailed": "Couldn't update the default template. Try again.",
       "tab": "Templates",
       "managerTitle": "Templates & Actions",
       "manage": "Manage Templates...",
@@ -3844,6 +4004,7 @@
     },
     "speaker": {
       "you": "You",
+      "noteTaker": "Note taker",
       "them": "Them",
       "unknown": "Unknown Speaker",
       "label": "Speaker {{n}}",
@@ -3995,7 +4156,9 @@
         "placeholder": "Add words separated by commas",
         "to": "to {{list}}",
         "chooseList": "Choose the list to add to",
-        "hiddenForYou": "Hidden for you in {{list}}"
+        "hiddenForYou": "Hidden for you in {{list}}",
+        "notAdded_one": "{{count}} word wasn't added: {{words}}",
+        "notAdded_other": "{{count}} words weren't added: {{words}}"
       },
       "alreadyIn": "Already in {{list}}",
       "importTo": "Import to {{list}}",
@@ -5367,7 +5530,7 @@
     "unreachable": "Couldn't reach {{provider}}. Check your connection.",
     "noResponse": "Couldn't get a response from {{provider}}. Check your API key and connection.",
     "unknown": "{{provider}} returned an unexpected error.",
-    "keyMissing": "No API key is set for {{provider}}. Add it in Settings → Language Models.",
+    "keyMissing": "No API key is set for {{provider}}. Add it in Settings → Language Model.",
     "selfHosted": {
       "authFailed": "Your server rejected the API key.",
       "accessDenied": "Your server denied access. The key may not include this model.",

@@ -264,6 +264,17 @@ function contactSource(provider, accountEmail = null) {
   return accountEmail ? `${provider}:${accountEmail}` : provider;
 }
 
+// Limits a note query to a list of space ids (the spaces the active workspace
+// shows). Without a list nothing is filtered; an empty list matches nothing.
+function noteSpaceListCondition(column, spaceIds) {
+  if (!Array.isArray(spaceIds)) return null;
+  const ids = spaceIds.filter((id) => Number.isInteger(id));
+  return {
+    sql: `${column} IN (SELECT value FROM json_each(?))`,
+    param: JSON.stringify(ids),
+  };
+}
+
 class DatabaseManager {
   constructor() {
     this.db = null;
@@ -1299,6 +1310,27 @@ class DatabaseManager {
         this.db.exec("ALTER TABLE agent_conversations ADD COLUMN deleted_at TEXT");
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
+      }
+
+      // Set just before a create request is sent, so a create whose reply never
+      // arrives still counts as one the server may hold. A create that failed
+      // before this column existed counts too.
+      let addedCreateAttempts = false;
+      for (const table of ["notes", "agent_conversations"]) {
+        try {
+          this.db.exec(
+            `ALTER TABLE ${table} ADD COLUMN cloud_create_attempted INTEGER NOT NULL DEFAULT 0`
+          );
+          addedCreateAttempts = true;
+        } catch (err) {
+          if (!err.message.includes("duplicate column")) throw err;
+        }
+      }
+      if (addedCreateAttempts) {
+        this.db.exec(
+          "UPDATE notes SET cloud_create_attempted = 1 WHERE cloud_id IS NULL AND sync_status = 'error'"
+        );
+        this._removeNeverSyncedTombstones();
       }
 
       // Sync columns for transcriptions
@@ -4117,7 +4149,7 @@ class DatabaseManager {
     }
   }
 
-  getNotes(noteType = null, limit = 100, folderId = null, spaceId = null) {
+  getNotes(noteType = null, limit = 100, folderId = null, spaceId = null, spaceIds = null) {
     try {
       if (!this.db) {
         throw new Error("Database not initialized");
@@ -4141,6 +4173,11 @@ class DatabaseManager {
       if (spaceId != null) {
         conditions.push("space_id = ?");
         params.push(spaceId);
+      }
+      const spaceList = noteSpaceListCondition("space_id", spaceIds);
+      if (spaceList) {
+        conditions.push(spaceList.sql);
+        params.push(spaceList.param);
       }
       const where = `WHERE ${conditions.join(" AND ")}`;
       const stmt = this.db.prepare(`SELECT * FROM notes ${where} ORDER BY updated_at DESC LIMIT ?`);
@@ -4286,14 +4323,17 @@ class DatabaseManager {
       delete updates.cloud_revision;
       delete updates.cloud_create_rejected;
       delete updates.cloud_create_pending;
-      if (
-        updates.cloud_id === null ||
-        (updates.client_note_id && updates.client_note_id !== previous.client_note_id)
-      ) {
+      delete updates.cloud_create_attempted;
+      const newIdentity =
+        updates.client_note_id && updates.client_note_id !== previous.client_note_id;
+      if (updates.cloud_id === null || newIdentity) {
         updates.cloud_revision = null;
         updates.cloud_create_rejected = 0;
         updates.cloud_create_pending = null;
       }
+      // A new identity has never been sent. A note that only lost its cloud link
+      // keeps its identity, which an earlier create may have stored.
+      if (newIdentity) updates.cloud_create_attempted = 0;
       if (updates.folder_id != null) {
         // D2: a note's space always follows its folder's space.
         const folder = this._getFolderInAccountScope(updates.folder_id);
@@ -4333,6 +4373,7 @@ class DatabaseManager {
         "cloud_revision",
         "cloud_create_rejected",
         "cloud_create_pending",
+        "cloud_create_attempted",
         "title",
         "content",
         "enhanced_content",
@@ -5033,7 +5074,9 @@ class DatabaseManager {
   // the next push retires the cloud copy; a hard local delete would let the
   // next pull resurrect the conversation. Irreversible purge/revocation
   // callers also scrub their messages, while an optimistic ordinary delete
-  // retains synced messages until the server accepts it. Never-synced rows
+  // retains synced messages until the server accepts it. A row whose create
+  // request may have reached the server tombstones too, so its late receipt
+  // links it to a cloud delete. Rows no create request has carried
   // hard-delete: there is no server row to retire, and a bare tombstone would
   // linger forever (getPendingConversationDeletes requires a cloud_id).
   _retireConversationsWhere(
@@ -5041,18 +5084,17 @@ class DatabaseManager {
     params,
     { scrubSyncedMessages = false, syncedTombstoneStatus = "pending" } = {}
   ) {
-    const messageFilter = scrubSyncedMessages ? filter : `cloud_id IS NULL AND (${filter})`;
+    const neverSent = `cloud_id IS NULL AND cloud_create_attempted = 0 AND (${filter})`;
+    const messageFilter = scrubSyncedMessages ? filter : neverSent;
     this.db
       .prepare(
         `DELETE FROM agent_messages WHERE conversation_id IN (SELECT id FROM agent_conversations WHERE ${messageFilter})`
       )
       .run(...params);
-    this.db
-      .prepare(`DELETE FROM agent_conversations WHERE cloud_id IS NULL AND (${filter})`)
-      .run(...params);
+    this.db.prepare(`DELETE FROM agent_conversations WHERE ${neverSent}`).run(...params);
     this.db
       .prepare(
-        `UPDATE agent_conversations SET deleted_at = datetime('now'), sync_status = ?, updated_at = datetime('now') WHERE cloud_id IS NOT NULL AND deleted_at IS NULL AND (${filter})`
+        `UPDATE agent_conversations SET deleted_at = datetime('now'), sync_status = ?, updated_at = datetime('now') WHERE (cloud_id IS NOT NULL OR cloud_create_attempted = 1) AND deleted_at IS NULL AND (${filter})`
       )
       .run(syncedTombstoneStatus, ...params);
   }
@@ -5128,7 +5170,7 @@ class DatabaseManager {
             .map((row) => row.id);
           if (preservedIds.length > 0) {
             const relocateNote = this.db.prepare(
-              "UPDATE notes SET space_id = ?, folder_id = NULL, client_note_id = ?, cloud_id = NULL, cloud_updated_at = NULL, cloud_revision = NULL, cloud_create_rejected = 0, cloud_create_pending = NULL, owner_user_id = NULL, updated_by_user_id = NULL, sync_status = 'pending', left_team = 0, is_shared = 0, share_token = NULL, updated_at = datetime('now') WHERE id = ?"
+              "UPDATE notes SET space_id = ?, folder_id = NULL, client_note_id = ?, cloud_id = NULL, cloud_updated_at = NULL, cloud_revision = NULL, cloud_create_rejected = 0, cloud_create_pending = NULL, cloud_create_attempted = 0, owner_user_id = NULL, updated_by_user_id = NULL, sync_status = 'pending', left_team = 0, is_shared = 0, share_token = NULL, updated_at = datetime('now') WHERE id = ?"
             );
             const detachNoteConversation = this.db.prepare(
               "UPDATE agent_conversations SET space_id = NULL, folder_id = NULL WHERE note_id = ?"
@@ -5443,6 +5485,17 @@ class DatabaseManager {
         throw new Error("Database not initialized");
       }
       const accountScope = this._accountScopeCondition("notes");
+      const note = this.db
+        .prepare(
+          `SELECT cloud_id, cloud_create_attempted FROM notes
+           WHERE id = ? AND deleted_at IS NULL AND ${accountScope.sql}`
+        )
+        .get(id, ...accountScope.params);
+      // No create request has carried this note, so the server cannot hold it:
+      // it leaves the device now, with its chats and speaker rows. Any other
+      // note stays a tombstone until its cloud delete lands or a late create
+      // receipt links it.
+      if (note && !note.cloud_id && !note.cloud_create_attempted) return this.hardDeleteNote(id);
       const stmt = this.db.prepare(
         `UPDATE notes
          SET deleted_at = datetime('now'), sync_status = 'pending', updated_at = datetime('now')
@@ -5606,6 +5659,15 @@ class DatabaseManager {
   deleteAgentConversation(id) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      // No create request has carried this chat, so it leaves the device now
+      // with its messages. A chat held by a pending folder delete is already a
+      // tombstone and stays one, so a denied folder delete can still restore it.
+      const neverSent = this.db
+        .prepare(
+          "SELECT 1 FROM agent_conversations WHERE id = ? AND deleted_at IS NULL AND cloud_id IS NULL AND cloud_create_attempted = 0"
+        )
+        .get(id);
+      if (neverSent) return this.hardDeleteConversation(id);
       const result = this.db
         .prepare(
           "UPDATE agent_conversations SET deleted_at = datetime('now'), sync_status = 'pending', updated_at = datetime('now') WHERE id = ?"
@@ -5932,7 +5994,7 @@ class DatabaseManager {
     }
   }
 
-  searchNotes(query, limit = 50, spaceId = null, folderId = null) {
+  searchNotes(query, limit = 50, spaceId = null, folderId = null, spaceIds = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const ftsQuery = buildNoteSearchQuery(query);
@@ -5947,6 +6009,11 @@ class DatabaseManager {
       if (folderId != null) {
         scopeFilter += " AND n.folder_id = ?";
         params.push(folderId);
+      }
+      const spaceList = noteSpaceListCondition("n.space_id", spaceIds);
+      if (spaceList) {
+        scopeFilter += ` AND ${spaceList.sql}`;
+        params.push(spaceList.param);
       }
       params.push(limit);
       return this.db
@@ -6874,20 +6941,24 @@ class DatabaseManager {
       const archiveFilter = includeArchived
         ? "WHERE c.archived_at IS NOT NULL AND c.deleted_at IS NULL AND c.space_id IS NULL AND c.folder_id IS NULL"
         : "WHERE c.archived_at IS NULL AND c.deleted_at IS NULL AND c.space_id IS NULL AND c.folder_id IS NULL";
+      // Only a note the active account can open names a chat's source.
+      const noteScope = this._accountScopeCondition("n");
       return this.db
         .prepare(
           `SELECT c.id, c.title, c.created_at, c.updated_at, c.archived_at, c.cloud_id,
+            c.note_id, n.title AS note_title, n.deleted_at AS note_deleted_at,
             COUNT(m.id) AS message_count,
             (SELECT content FROM agent_messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_message,
             (SELECT role FROM agent_messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_message_role
           FROM agent_conversations c
           LEFT JOIN agent_messages m ON m.conversation_id = c.id
+          LEFT JOIN notes n ON n.id = c.note_id AND ${noteScope.sql}
           ${archiveFilter}
           GROUP BY c.id
           ORDER BY c.updated_at DESC
           LIMIT ? OFFSET ?`
         )
-        .all(limit, offset);
+        .all(...noteScope.params, limit, offset);
     } catch (error) {
       debugLogger.error(
         "Error getting agent conversations with preview",
@@ -6902,15 +6973,18 @@ class DatabaseManager {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const pattern = `%${query}%`;
+      const noteScope = this._accountScopeCondition("n");
       return this.db
         .prepare(
           `SELECT DISTINCT c.id, c.title, c.created_at, c.updated_at, c.archived_at, c.cloud_id,
+            c.note_id, n.title AS note_title, n.deleted_at AS note_deleted_at,
             COUNT(m.id) AS message_count,
             (SELECT content FROM agent_messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_message,
             (SELECT role FROM agent_messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_message_role
           FROM agent_conversations c
           LEFT JOIN agent_messages m ON m.conversation_id = c.id
           LEFT JOIN agent_messages ms ON ms.conversation_id = c.id
+          LEFT JOIN notes n ON n.id = c.note_id AND ${noteScope.sql}
           WHERE c.archived_at IS NULL AND c.deleted_at IS NULL
             AND c.space_id IS NULL AND c.folder_id IS NULL
             AND (c.title LIKE ? OR ms.content LIKE ?)
@@ -6918,7 +6992,7 @@ class DatabaseManager {
           ORDER BY c.updated_at DESC
           LIMIT ?`
         )
-        .all(pattern, pattern, limit);
+        .all(...noteScope.params, pattern, pattern, limit);
     } catch (error) {
       debugLogger.error(
         "Error searching agent conversations",
@@ -7478,6 +7552,28 @@ class DatabaseManager {
       : 0;
   }
 
+  // Runs just before a create request is sent. Returns the client ids that still
+  // name a note, so a note deleted or given a new identity since the push read
+  // it is left out of the request.
+  markNoteCreatesAttempted(clientNoteIds) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const mark = this.db.prepare(
+        "UPDATE notes SET cloud_create_attempted = 1 WHERE client_note_id = ?"
+      );
+      return this.db.transaction(() =>
+        clientNoteIds.filter((clientNoteId) => mark.run(clientNoteId).changes > 0)
+      )();
+    } catch (error) {
+      debugLogger.error(
+        "Error marking note creates attempted",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
   // A create response arrives after an arbitrary network delay. Adopt it only
   // for the exact local identity that issued the request, and settle only when
   // every pushed field still matches that request's snapshot. A newer edit
@@ -7627,6 +7723,14 @@ class DatabaseManager {
         // POST never delivers a deliberate clear; it still owes a PATCH.
         if (cloudNote && !writeRejected) {
           const adopted = acknowledgedCreateTextUpdates(current, snapshot, cloudNote);
+          const hasExplicitCreator = Object.prototype.hasOwnProperty.call(
+            cloudNote,
+            "created_by_user_id"
+          );
+          if (hasExplicitCreator || Object.prototype.hasOwnProperty.call(cloudNote, "user_id")) {
+            adopted.created_by_user_id =
+              (hasExplicitCreator ? cloudNote.created_by_user_id : cloudNote.user_id) ?? null;
+          }
           noteUndo.preserveUnchangedUndo(this, id, Object.keys(adopted), () => {
             this._setNoteColumns(id, adopted);
           });
@@ -7973,6 +8077,22 @@ class DatabaseManager {
         const summary = typedTextOperation(row.enhanced_content);
         if (content || summary) mark.run(content, summary, row.id);
       }
+    })();
+  }
+
+  // Runs once, when the create attempt columns are added. Earlier versions
+  // only marked a deleted note or chat as deleted, so one that never synced
+  // stayed on the device. This removes those rows with their speaker rows and
+  // messages. Rows a pending folder delete holds stay, so a refused folder
+  // delete can still restore them, and so do live chats about a removed note.
+  _removeNeverSyncedTombstones() {
+    const neverSynced = `deleted_at IS NOT NULL AND cloud_id IS NULL AND cloud_create_attempted = 0
+      AND id NOT IN (SELECT entity_id FROM optimistic_folder_delete_rows WHERE entity_type = ?)`;
+    const notes = `SELECT id FROM notes WHERE ${neverSynced}`;
+    this.db.transaction(() => {
+      this._deleteSpeakerRowsForNotes(notes, "note");
+      this.db.prepare(`DELETE FROM notes WHERE id IN (${notes})`).run("note");
+      this._hardDeleteConversationsWhere(neverSynced, ["conversation"]);
     })();
   }
 
@@ -8340,7 +8460,7 @@ class DatabaseManager {
         this._deleteSpeakerRowsForNotes(serverOwnedChildren, id);
         this.db.prepare(`DELETE FROM notes WHERE id IN (${serverOwnedChildren})`).run(id);
         const relocateNote = this.db.prepare(
-          "UPDATE notes SET space_id = ?, folder_id = ?, client_note_id = ?, cloud_id = NULL, cloud_updated_at = NULL, cloud_revision = NULL, cloud_create_rejected = 0, cloud_create_pending = NULL, owner_user_id = NULL, updated_by_user_id = NULL, sync_status = 'pending', left_team = 0, is_shared = 0, share_token = NULL, updated_at = datetime('now') WHERE id = ?"
+          "UPDATE notes SET space_id = ?, folder_id = ?, client_note_id = ?, cloud_id = NULL, cloud_updated_at = NULL, cloud_revision = NULL, cloud_create_rejected = 0, cloud_create_pending = NULL, cloud_create_attempted = 0, owner_user_id = NULL, updated_by_user_id = NULL, sync_status = 'pending', left_team = 0, is_shared = 0, share_token = NULL, updated_at = datetime('now') WHERE id = ?"
         );
         const detachNoteConversation = this.db.prepare(
           "UPDATE agent_conversations SET space_id = NULL, folder_id = NULL WHERE note_id = ?"
@@ -8776,7 +8896,8 @@ class DatabaseManager {
           ON CONFLICT(client_conversation_id) DO UPDATE SET
             cloud_id = excluded.cloud_id,
             title = excluded.title,
-            note_id = excluded.note_id,
+            -- The cloud has no note column, so its copy never says which note a chat came from.
+            note_id = COALESCE(excluded.note_id, agent_conversations.note_id),
             sync_status = 'synced',
             updated_at = excluded.updated_at
         `);
@@ -8833,6 +8954,25 @@ class DatabaseManager {
       return { success: result.changes > 0 };
     } catch (error) {
       debugLogger.error("Error marking conversation synced", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  // Runs just before a create request is sent; a chat deleted since the push
+  // read it reports no success and is not sent.
+  markConversationCreateAttempted(id) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const result = this.db
+        .prepare("UPDATE agent_conversations SET cloud_create_attempted = 1 WHERE id = ?")
+        .run(id);
+      return { success: result.changes > 0 };
+    } catch (error) {
+      debugLogger.error(
+        "Error marking conversation create attempted",
+        { error: error.message },
+        "database"
+      );
       throw error;
     }
   }

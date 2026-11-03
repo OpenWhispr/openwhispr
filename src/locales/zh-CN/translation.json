@@ -1273,7 +1273,8 @@
     },
     "welcomeSubtitle": "你的声音，由你掌控。",
     "welcomeTitle": "欢迎使用 OpenWhispr",
-    "sessionExpired": "会话已过期，请重新登录。"
+    "sessionExpired": "会话已过期，请重新登录。",
+    "unconfirmedSession": "无法确认你的登录状态，因此未做任何更改。请在 OpenWhispr 能连接到服务器后重试。"
   },
   "cleanupPrompt": "文本整理",
   "developerSection": {
@@ -1576,7 +1577,7 @@
     "managedAccount": "受管理的账户",
     "groups": {
       "account": "账户",
-      "app": "应用",
+      "workspace": "工作区",
       "aiModels": "AI 模型",
       "system": "系统"
     },
@@ -1588,6 +1589,18 @@
       "plansBilling": {
         "description": "套餐、用量与账单",
         "label": "套餐与账单"
+      },
+      "workspaceGeneral": {
+        "label": "常规",
+        "description": "工作区名称和图标"
+      },
+      "workspacePeople": {
+        "label": "人员",
+        "description": "成员和团队"
+      },
+      "workspaceDeveloper": {
+        "label": "开发者",
+        "description": "工作区 API 密钥"
       },
       "general": {
         "description": "外观、声音与启动",
@@ -1616,10 +1629,6 @@
       "system": {
         "description": "更新、存储与开发者工具",
         "label": "系统"
-      },
-      "workspace": {
-        "description": "成员、团队空间和 API 密钥",
-        "label": "工作区"
       }
     },
     "title": "设置"
@@ -1681,6 +1690,10 @@
       "notSignedIn": "未登录",
       "notSignedInDescription": "创建账户以解锁高级功能。",
       "offline": "离线",
+      "offlineAccount": {
+        "title": "显示上次登录时的信息",
+        "description": "在 OpenWhispr 能连接到服务器之前，同步和账户更改将暂停。"
+      },
       "pastDue": {
         "description": "你目前使用的是免费版。更新支付方式即可恢复 Pro 版。",
         "title": "我们无法处理你的付款"
@@ -2461,8 +2474,62 @@
       "tab": {
         "general": "常规",
         "members": "成员",
-        "teams": "群组",
-        "developer": "开发者"
+        "invitations": "邀请",
+        "teams": "群组"
+      },
+      "people": {
+        "title": "人员",
+        "description": "管理工作区中的人员及其角色。",
+        "subtitleView": "工作区中的人员及其角色。",
+        "add": "添加",
+        "addLabel": "邀请成员",
+        "columns": {
+          "name": "名称",
+          "team": "群组",
+          "role": "工作区角色",
+          "email": "电子邮件",
+          "status": "状态",
+          "actions": "操作"
+        },
+        "you": "你",
+        "teamsNone": "无",
+        "teamsMore": "+{{count}}",
+        "loading": {
+          "title": "正在加载成员…",
+          "body": "工作区成员将显示在这里。"
+        },
+        "failed": {
+          "title": "无法加载成员",
+          "body": "请检查网络连接后重试。"
+        },
+        "search": {
+          "placeholder": "搜索成员",
+          "clear": "清除搜索",
+          "noResultsTitle": "没有与“{{query}}”匹配的成员",
+          "noResultsBody": "请检查拼写，或按电子邮件地址搜索。"
+        },
+        "roleMenuLabel": "更改 {{name}} 的角色",
+        "roleDescription": {
+          "member": "可以查看和编辑笔记。",
+          "admin": "管理成员、邀请、群组和设置。"
+        },
+        "roleFailed": "无法更改 {{name}} 的角色。请检查网络连接后重试。",
+        "roleNotAllowed": "你已无权更改 {{workspace}} 中的角色。",
+        "invitations": {
+          "loading": "正在加载邀请…",
+          "failedTitle": "无法加载邀请",
+          "emptyTitle": "没有邀请",
+          "emptyBody": "新邀请会显示在这里，直到被接受。",
+          "pending_one": "待处理 · {{count}} 天后过期",
+          "pending_other": "待处理 · {{count}} 天后过期",
+          "expired": "已过期",
+          "resend": "重新发送邀请",
+          "cancel": "取消邀请",
+          "resendFailed": "无法向 {{email}} 重新发送邀请。请取消该邀请，然后重新邀请。",
+          "resendNotAllowed": "你已无权在 {{workspace}} 中重新发送邀请。",
+          "noLongerPending": "{{email}} 的邀请已不再处于待处理状态",
+          "refreshFailed": "无法刷新邀请。此列表可能不是最新的。"
+        }
       },
       "role": {
         "owner": "所有者",
@@ -2470,45 +2537,33 @@
         "member": "成员"
       },
       "general": {
+        "title": "常规",
+        "subtitleManage": "管理工作区名称、图标等",
+        "subtitleView": "你的工作区名称和图标。",
         "nameLabel": "工作区名称",
+        "nameHint": "工作区名称最多可包含 65 个字符",
+        "iconLabel": "工作区图标",
+        "iconHint": "此图标会显示在你的侧边栏和通知中。",
+        "roleLabel": "你的角色",
         "saved": "工作区已更新",
+        "ownerTitle": "工作区所有者",
+        "ownerDescription": "将所有权转让给另一位工作区成员。",
         "dangerTitle": "删除工作区",
-        "dangerDescription": "所有共享笔记、文件夹和集成都将被删除。此操作无法撤销。",
+        "dangerDescription": "永久删除此工作区，包括所有笔记和文件。",
         "delete": "删除工作区",
-        "confirmTitle": "删除 {{name}}？",
-        "confirmDescription": "这将取消订阅并永久删除工作区的所有数据。",
         "deleting": "删除中…",
-        "deleted": "工作区已删除",
         "leaveTitle": "退出工作区",
-        "leaveDescription": "你将失去对此工作区及其共享笔记的访问权限。",
+        "leaveDescription": "将自己从此工作区中移除。你将失去对其团队空间的访问权限。",
         "leave": "退出工作区",
-        "leaving": "退出中…",
-        "leaveConfirm": {
-          "title": "退出 {{name}}？",
-          "description": "你将立即失去访问权限。管理员可以重新邀请你。"
-        },
-        "left": "你已退出 {{name}}"
+        "leaving": "退出中…"
       },
       "members": {
-        "title": "成员",
         "description": "已使用 {{count}}/{{seats}} 个席位。",
-        "invite": "邀请",
-        "empty": "暂无成员。",
         "loadError": "无法加载成员。",
         "roleUpdated": "角色已更新",
         "removed": "已移除 {{name}}",
-        "promote": "设为管理员",
-        "demote": "设为成员",
         "transferOwnership": "转让所有权",
-        "remove": "从工作区移除",
-        "removeConfirm": {
-          "title": "移除此成员？",
-          "description": "{{name}} 将立即失去对 {{workspace}} 的访问权限。"
-        },
-        "transferConfirm": {
-          "title": "转让所有权？",
-          "description": "{{name}} 将成为 {{workspace}} 的所有者。你的角色将变为管理员，只有新所有者才能转回所有权。"
-        }
+        "remove": "从工作区移除"
       },
       "joinRequests": {
         "title": "加入申请",
@@ -2549,22 +2604,9 @@
         }
       },
       "invites": {
-        "title": "待处理的邀请",
-        "expiresIn_one": "{{count}} 天后过期",
-        "expiresIn_other": "{{count}} 天后过期",
-        "expired": "已过期",
-        "loadError": "无法加载邀请。",
-        "resend": "重新发送",
         "resending": "重新发送中…",
-        "revoke": "撤销",
         "resent": "邀请已重新发送",
-        "resentNoEmail": "邀请已更新，但邮件无法送达。",
-        "revoked": "邀请已撤销",
-        "revokeFailed": "无法撤销邀请",
-        "revokeConfirm": {
-          "title": "撤销此邀请？",
-          "description": "发送给 {{email}} 的邀请链接将失效。"
-        }
+        "resentNoEmail": "邀请已更新，但邮件无法送达。"
       },
       "billing": {
         "plan": "套餐",
@@ -2939,7 +2981,6 @@
       "personal": "个人",
       "privateTooltip": "只有你可以看到你的个人空间",
       "newSpace": "新建团队空间",
-      "newSpaceInWorkspace": "在 {{workspace}} 中新建团队空间",
       "createTitle": "创建团队空间",
       "createDescription": "工作区内的共享区域，供你添加的人员和群组访问。",
       "nameAndIconLabel": "名称和图标",
@@ -3025,7 +3066,9 @@
         "viaGroup": "通过 {{group}}",
         "managedByGroup": "通过 {{group}} 添加。请在该群组中移除。",
         "roleFromGroup": "通过 {{group}} 获得管理员身份，请在该群组中更改。",
-        "invited": "已向 {{email}} 发送邀请"
+        "invited": "已向 {{email}} 发送邀请",
+        "invitedMany_one": "已向 {{count}} 人发送邀请",
+        "invitedMany_other": "已向 {{count}} 人发送邀请"
       },
       "invitedTo_one": "你将加入 {{count}} 个团队空间",
       "invitedTo_other": "你将加入 {{count}} 个团队空间",
@@ -3127,6 +3170,7 @@
       "transcriptEmptyDescription": "开始录音后，所说的一切都会显示在这里。",
       "startRecording": "开始录制",
       "generateSummary": "生成 AI 摘要",
+      "generateWithTemplate": "使用{{template}}生成",
       "startWriting": "开始书写...",
       "staleIndicator": "内容在增强后已更改",
       "live": "实时",
@@ -3421,6 +3465,11 @@
       "applied": "已使用 {{name}} 更新 AI 摘要"
     },
     "templates": {
+      "defaultLabel": "默认摘要模板",
+      "defaultHint": "会议结束后的摘要按钮将使用此模板。",
+      "defaultBadge": "默认",
+      "saveBeforeDefault": "保存此模板后即可将其设为默认模板。",
+      "defaultSaveFailed": "无法更新默认模板，请重试。",
       "tab": "模板",
       "managerTitle": "模板和操作",
       "manage": "管理模板...",
@@ -3491,6 +3540,7 @@
     },
     "speaker": {
       "you": "你",
+      "noteTaker": "记录者",
       "them": "对方",
       "unknown": "未知发言者",
       "label": "发言者 {{n}}",
@@ -3642,7 +3692,9 @@
         "placeholder": "用逗号分隔添加多个词",
         "to": "添加到 {{list}}",
         "chooseList": "选择要添加到的列表",
-        "hiddenForYou": "在 {{list}} 中已对你隐藏"
+        "hiddenForYou": "在 {{list}} 中已对你隐藏",
+        "notAdded_one": "{{count}} 个词语未添加：{{words}}",
+        "notAdded_other": "{{count}} 个词语未添加：{{words}}"
       },
       "alreadyIn": "已在 {{list}} 中",
       "importTo": "导入到 {{list}}",
@@ -3952,6 +4004,13 @@
     "searchTitle": "搜索对话",
     "searchDescription": "搜索所有对话",
     "inputPlaceholder": "随便问点什么...",
+    "sourceNote": {
+      "from": "来自",
+      "open": "打开笔记",
+      "deleted": "此笔记已删除",
+      "deletedShort": "已删除",
+      "askAbout": "询问关于{{title}}的问题..."
+    },
     "starters": {
       "todos": "列出我最近的待办事项",
       "meeting": "帮我准备下一场会议",
@@ -5207,7 +5266,6 @@
   "workspaces": {
     "switcher": {
       "workspaces": "工作区",
-      "create": "创建工作区…",
       "add": "添加工作区",
       "invitePeople": "邀请成员"
     },
@@ -5225,27 +5283,53 @@
       "description": "你现在是 {{name}} 的所有者。"
     },
     "invite": {
-      "title": "邀请加入 {{workspace}}",
-      "description": "通过电子邮件添加同事。他们将收到加入链接。",
-      "emailLabel": "电子邮件",
-      "emailPlaceholder": "teammate@example.com",
-      "roleLabel": "角色",
+      "title": "邀请他人",
+      "description": "他们将收到一封电子邮件，通过其中的链接加入 {{workspace}}。",
+      "emailLabel": "电子邮件地址",
+      "emailHint": "用逗号分隔多个邮箱地址。所有人将获得相同的角色。",
+      "emailPlaceholder": "搜索邮箱",
+      "removeRecipient": "移除 {{email}}",
+      "suggestions": "建议",
+      "roleLabel": "工作区角色",
       "seatUsage": "已使用 {{used}}/{{seats}} 个席位",
       "seatCost": "接受邀请后将为你的方案增加一个席位 · 预计按比例收取 {{amount}}。",
-      "submit": "发送邀请",
-      "submitting": "发送中…",
-      "sentTitle": "邀请已发送",
-      "sentDescription": "我们已向 {{email}} 发送邀请。",
-      "sentNoEmailTitle": "邀请已创建，但未发送邮件",
-      "sentNoEmailDescription": "已邀请 {{email}}，但邮件无法送达。请稍后重新发送，或通过其他方式分享邀请链接。",
-      "errorTitle": "无法发送邀请",
+      "seatCostMany_one": "全部接受后将为你的方案增加 {{count}} 个席位 · 预计按比例收取 {{amount}}。",
+      "seatCostMany_other": "全部接受后将为你的方案增加 {{count}} 个席位 · 预计按比例收取 {{amount}}。",
+      "seatCostManyUnpriced_one": "全部接受后将为你的方案增加 {{count}} 个席位。",
+      "seatCostManyUnpriced_other": "全部接受后将为你的方案增加 {{count}} 个席位。",
+      "submit_one": "发送 {{count}} 份邀请",
+      "submit_other": "发送 {{count}} 份邀请",
+      "submitting": "正在邀请…",
+      "sentTitle_one": "已发送 {{count}} 份邀请",
+      "sentTitle_other": "已发送 {{count}} 份邀请",
+      "sentOne": "已邀请 {{email}} 加入 {{workspace}}",
+      "sentMany_one": "已邀请 {{count}} 人加入 {{workspace}}",
+      "sentMany_other": "已邀请 {{count}} 人加入 {{workspace}}",
+      "noEmail_one": "已创建 {{count}} 份邀请，但邮件未能送达。请在“邀请”中重新发送。",
+      "noEmail_other": "已创建 {{count}} 份邀请，但邮件未能送达。请在“邀请”中重新发送。",
+      "someFailed_one": "{{count}} 个地址未能邀请。请修正或移除后重试。",
+      "someFailed_other": "{{count}} 个地址未能邀请。请修正或移除后重试。",
+      "tooMany": "一次最多可邀请 20 人。",
+      "done": "完成",
       "role": {
-        "admin": "管理员",
-        "member": "成员"
+        "admin": "工作区管理员",
+        "member": "工作区成员"
       },
       "roleDescription": {
-        "admin": "管理成员和账单",
-        "member": "使用工作区"
+        "admin": "管理成员、邀请、群组和设置。",
+        "member": "可以查看和编辑笔记。"
+      },
+      "errors": {
+        "invalid": "{{email}} 不是有效的电子邮件地址",
+        "alreadyMember": "{{email}} 已是成员",
+        "alreadyInvited": "{{email}} 已有待处理的邀请。请在“邀请”中重新发送。",
+        "seatLimit": "此工作区已达到席位上限。",
+        "directoryRequired": "请先在身份提供商中分配 {{email}}。",
+        "notAllowed": "你已无法再邀请他人加入 {{workspace}}。",
+        "ssoRequired": "请先使用公司的单点登录 (SSO) 登录，再邀请他人加入 {{workspace}}。",
+        "sessionExpired": "无法邀请 {{email}}：你的登录已过期或已更改。请重新登录后再试。",
+        "requestFailed": "无法邀请 {{email}}。请检查网络连接后重试。",
+        "refused": "无法邀请 {{email}}：{{reason}}"
       }
     },
     "join": {
@@ -5280,6 +5364,85 @@
       "errorTitle": "无法接受邀请",
       "sentTo": "邀请已发送至 {{email}}",
       "wrongAccount": "此邀请发送给了 {{email}}，而你当前登录的是 {{current}}。"
+    },
+    "exit": {
+      "leave": {
+        "title": "退出 {{name}}？",
+        "body": "你将失去对此工作区、其团队和团队空间的访问权限。工作区管理员可以重新邀请你。",
+        "failed": "无法退出 {{name}}。请检查网络连接后重试。"
+      },
+      "left": {
+        "title": "你已退出 {{name}}"
+      },
+      "chooseAnother": "选择另一个工作区以继续。",
+      "chooseWorkspace": "选择工作区",
+      "delete": {
+        "title": "删除 {{name}}？",
+        "body": "这将为所有人永久删除该工作区及其笔记、文件、团队和团队空间，且无法撤销。"
+      },
+      "deleting": {
+        "title": "正在删除 {{name}}…",
+        "body": "工作区删除期间请保持此窗口打开。"
+      },
+      "deleteFailed": {
+        "title": "无法删除工作区",
+        "body": "{{name}} 仍然可用。请检查网络连接后重试。"
+      },
+      "deleted": {
+        "title": "{{name}} 已删除"
+      },
+      "tryAgain": "重试"
+    },
+    "removeMember": {
+      "title": "要将 {{name}} 从 {{workspace}} 移除吗？",
+      "body": "对方将失去此工作区中所有团队空间和团队的访问权限。你可以随时再次邀请对方。",
+      "confirm": "移除",
+      "removing": "正在移除…",
+      "failed": "无法移除 {{name}}。请检查网络连接后重试。",
+      "notAllowed": "你已无权从 {{workspace}} 中移除成员。",
+      "alreadyRemoved": "{{name}} 已被移除"
+    },
+    "cancelInvitation": {
+      "title": "取消发给 {{email}} 的邀请？",
+      "body": "对方将无法通过此邀请加入。现有成员仍保留访问权限。",
+      "keep": "保留邀请",
+      "canceling": "正在取消…",
+      "done": "邀请已取消",
+      "failed": "无法取消邀请。请检查网络连接后重试。",
+      "notAllowed": "你已无权取消 {{workspace}} 中的邀请。"
+    },
+    "ssoRequired": "请先使用公司的单点登录 (SSO) 登录，再管理 {{workspace}} 的成员。",
+    "transfer": {
+      "title": "选择新的所有者",
+      "body": "选择一位现有的工作区成员。转让后你将成为管理员。",
+      "newOwner": "新所有者",
+      "placeholder": "选择工作区成员",
+      "candidate": "{{name}} · {{role}}",
+      "confirmTitle": "将所有权转让给 {{name}}？",
+      "confirmBody": "{{name}} 将成为 {{workspace}} 的所有者，你将成为管理员。",
+      "submit": "转让所有权",
+      "transferringTitle": "正在转让所有权…",
+      "transferringBody": "请保持此窗口打开。转让完成后，所有权才会变更。",
+      "transferring": "正在转让…",
+      "failed": "无法转让所有权。你仍是所有者，请重试。",
+      "noCandidates": "转让所有权之前，请先邀请其他人加入 {{workspace}}。",
+      "done": "工作区所有权已转让给 {{name}}。你现在是管理员。"
+    },
+    "intro": {
+      "workspace": {
+        "title": "工作区是你的大本营",
+        "body": "公司里的每个人都在这里工作。你的私人笔记在你分享之前始终保持私密。"
+      },
+      "teamspaces": {
+        "title": "在 Teamspace 中共享笔记",
+        "body": "在工作区中，为项目或主题（例如“客户通话”）创建 Teamspace。你添加的每个人都可以阅读和编辑其中的笔记。"
+      },
+      "teams": {
+        "title": "一次添加整个团队",
+        "body": "将成员归入一个团队（例如“销售”），然后一步将该团队添加到任意 Teamspace。"
+      },
+      "getStarted": "开始使用",
+      "progress": "第 {{current}} 步，共 {{total}} 步"
     }
   },
   "dictationTranslation": {

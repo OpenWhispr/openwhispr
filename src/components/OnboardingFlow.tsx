@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertCircle } from "./icons";
 import { CompactAuthenticationFlow } from "./CompactAuthenticationFlow";
 import UseCaseStep from "./onboarding/UseCaseStep";
 import { hasUseCaseIntent } from "./onboarding/useCases";
@@ -23,6 +22,7 @@ import { localSetupComputerName, localSetupLanguageLabel } from "./onboarding/lo
 import { useLocalSetupSpace } from "./onboarding/useLocalSetupSpace";
 import { RequiredModelDownloadStep } from "./onboarding/RequiredModelDownloadStep";
 import { AlertDialog } from "./ui/dialog";
+import { useToast } from "./ui/useToast";
 import { useAuth } from "../hooks/useAuth";
 import { usePermissions } from "../hooks/usePermissions";
 import { useClipboard } from "../hooks/useClipboard";
@@ -164,7 +164,21 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const assistantDemoSuccess = session.resume.assistantDemoCompleted;
   const [stageReady, setStageReady] = useState(false);
   const [isFinishing, setIsFinishing] = useState(false);
-  const [fatalError, setFatalError] = useState<string | null>(null);
+  const { toast, dismiss } = useToast();
+  const dismissRef = useRef(dismiss);
+  dismissRef.current = dismiss;
+  const fatalErrorToastRef = useRef<string | null>(null);
+  // An error stays up until the next attempt replaces or clears it.
+  const showFatalError = useCallback(
+    (message: string | null) => {
+      if (fatalErrorToastRef.current) dismissRef.current(fatalErrorToastRef.current);
+      fatalErrorToastRef.current = message
+        ? toast({ description: message, variant: "destructive", duration: 0 })
+        : null;
+    },
+    [toast]
+  );
+  useEffect(() => () => showFatalError(null), [showFatalError]);
   const [permissionAlert, setPermissionAlert] = useState<{
     title: string;
     description: string;
@@ -668,18 +682,18 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     async (mode: OnboardingCompletionMode, beforeComplete?: () => void) => {
       if (isFinishing) return;
       setIsFinishing(true);
-      setFatalError(null);
+      showFatalError(null);
       try {
         const registered = await registerHotkey(withExtraDictationHotkeys(dictationHotkey));
         if (!registered) {
-          setFatalError(t("onboarding.hotkey.couldNotRegisterDescription"));
+          showFatalError(t("onboarding.hotkey.couldNotRegisterDescription"));
           return;
         }
 
         if (mode === "cloud") {
           const health = await window.electronAPI?.cloudHealthCheck?.();
           if (health && !health.ok && health.status === undefined) {
-            setFatalError(t(health.messageKey || "streaming.errors.cloudUnreachable.generic"));
+            showFatalError(t(health.messageKey || "streaming.errors.cloudUnreachable.generic"));
             return;
           }
         }
@@ -701,7 +715,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         onComplete();
       } catch (error) {
         logger.error("Failed to finish onboarding", { error }, "onboarding");
-        setFatalError(t("common.unknownError"));
+        showFatalError(t("common.unknownError"));
       } finally {
         setIsFinishing(false);
       }
@@ -713,6 +727,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       onComplete,
       registerHotkey,
       session.authPath,
+      showFatalError,
       t,
       withExtraDictationHotkeys,
     ]
@@ -817,8 +832,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   );
 
   const continueFromCurrentStep = useCallback(async () => {
-    // A banner from an earlier failed attempt must not outlive the retry.
-    setFatalError(null);
+    // An error from an earlier failed attempt must not outlive the retry.
+    showFatalError(null);
     if (setupDecisionPending) return;
     if (currentStepId === "permissions") {
       if (platform === "darwin" && !permissions.accessibilityPermissionGranted) {
@@ -833,7 +848,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     } else if (currentStepId === "dictation-hotkey") {
       const registered = await registerHotkey(withExtraDictationHotkeys(dictationHotkey));
       if (!registered) {
-        setFatalError(t("onboarding.hotkey.couldNotRegisterDescription"));
+        showFatalError(t("onboarding.hotkey.couldNotRegisterDescription"));
         return;
       }
       setDictationHotkeyConfirmed(true);
@@ -846,7 +861,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           ])
         );
         if (!result.success) {
-          setFatalError(result.message || t("onboarding.rehaul.hotkey.inUse"));
+          showFatalError(result.message || t("onboarding.rehaul.hotkey.inUse"));
           return;
         }
       }
@@ -892,6 +907,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     setDictationHotkeyConfirmed,
     settings,
     settingsStore,
+    showFatalError,
     syncUseCases,
     t,
     withExtraDictationHotkeys,
@@ -1377,15 +1393,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         // commit, this branch also has demo Skip, so Back stays icon-only there.
         showBackLabel={!showsContinue && !showsSkip}
       >
-        {fatalError && (
-          <div
-            role="alert"
-            className="fixed left-1/2 top-14 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-destructive/20 bg-card px-4 py-2 text-sm text-destructive shadow-lg"
-          >
-            <AlertCircle className="size-4" />
-            {fatalError}
-          </div>
-        )}
         {renderStep()}
       </OnboardingShell>
 
