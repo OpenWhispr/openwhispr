@@ -166,7 +166,7 @@ test("a dropped connection fails the chunk, retryable", async () => {
     Array(2).fill({ ok: false, kind: "requestFailed" })
   );
   const { isRetryableFailure } = await import("../../src/lib/inviteFlow.ts");
-  assert.equal(isRetryableFailure("requestFailed"), true);
+  assert.equal(isRetryableFailure({ kind: "requestFailed" }), true);
 });
 
 test("a rate limit answers for every address and is retryable", async () => {
@@ -179,7 +179,7 @@ test("a rate limit answers for every address and is retryable", async () => {
   assert.equal(results.length, 3);
   assert.ok(results.every(([, outcome]) => !outcome.ok && outcome.kind === "rateLimited"));
   const { isRetryableFailure } = await import("../../src/lib/inviteFlow.ts");
-  assert.equal(isRetryableFailure("rateLimited"), true);
+  assert.equal(isRetryableFailure({ kind: "rateLimited" }), true);
 });
 
 test("abort before sending sends nothing", async () => {

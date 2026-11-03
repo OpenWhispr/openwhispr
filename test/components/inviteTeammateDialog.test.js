@@ -554,6 +554,10 @@ test("without a roster, a seat refusal still allows a valid mixed retry after tr
   await pressButton(send());
   assert.deepEqual(globalThis.__refreshCalls, [...OPENING_REFRESH, { fresh: true }]);
   await rerender();
+  assert.match(
+    findNode(container, (node) => node.getAttribute("role") === "alert")?.textContent ?? "",
+    /workspaces\.invite\.errors\.seatLimit/
+  );
   const removeExtra = findNode(
     container,
     (node) =>
@@ -629,6 +633,10 @@ test("a roster lost during sending cannot leave a blocking ceiling after refusal
   await React.act(async () => release());
 
   assert.deepEqual(globalThis.__refreshCalls, [...OPENING_REFRESH, { fresh: true }]);
+  assert.match(
+    findNode(container, (node) => node.getAttribute("role") === "alert")?.textContent ?? "",
+    /workspaces\.invite\.errors\.seatLimit/
+  );
   assert.equal(send().hasAttribute("disabled"), false);
   globalThis.__sendOutcome = { ok: true, emailSent: true };
   await pressButton(send());

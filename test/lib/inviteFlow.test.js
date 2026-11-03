@@ -102,16 +102,32 @@ test("a pending invitation is flagged before sending", () => {
   assert.equal(inviteSummary(state).skipped.length, 1);
 });
 
-test("the roster arriving later flags chips already added", () => {
+test("the roster arriving later skips existing addresses, including after a seat refusal", () => {
   const added = commitText(fresh(), "sam@acme.test pat@acme.test new@acme.test");
-  assert.deepEqual(statuses(added), ["draft", "draft", "draft"]);
-  const state = run(added, {
-    type: "roster",
-    memberEmails: ["SAM@acme.test"],
-    invitedEmails: ["pat@acme.test"],
-  });
-  assert.deepEqual(statuses(state), ["blocked", "blocked", "draft"]);
-  assert.deepEqual(state.memberEmails, ["sam@acme.test"]);
+  const refused = run(
+    added,
+    { type: "send" },
+    ...emails(added).map((email) => ({
+      type: "result",
+      email,
+      outcome: { ok: false, kind: "seatLimit", available: 1 },
+    })),
+    { type: "finished" }
+  );
+  for (const initial of [added, refused]) {
+    const state = run(
+      initial,
+      {
+        type: "roster",
+        memberEmails: ["SAM@acme.test"],
+        invitedEmails: ["pat@acme.test"],
+      },
+      { type: "seats", purchasedLeft: null, ceilingLeft: 1 }
+    );
+    assert.deepEqual(inviteSummary(state).sendable, ["new@acme.test"]);
+    assert.equal(inviteSummary(state).canSend, true);
+    assert.deepEqual(state.memberEmails, ["sam@acme.test"]);
+  }
 });
 
 test("more than the cap in recipients blocks sending", () => {

@@ -1,4 +1,4 @@
-import type { InviteErrorKind, InviteFailure } from "./workspaceErrors";
+import type { InviteFailure } from "./workspaceErrors";
 import type { InviteOutcome } from "../services/invitePeople";
 import { parseAddressList } from "../utils/emailApprovalFields";
 import { EMAIL_REGEX } from "../utils/validation";
@@ -203,9 +203,8 @@ function resolveResult(
     };
   }
 
-  // A seat refusal means the batch went past the ceiling and created nothing. Its count is the room
-  // that is left, and the chips go back to drafts so the user can trim the excess and send the
-  // rest. Without a count there is nothing to trim to, so the chip stays failed rather than loop.
+  // A seat refusal created nothing. With a complete roster, its count lets the user trim to the
+  // ceiling. Otherwise the failed chips keep the refusal visible without blocking a mixed retry.
   const seatRoom =
     outcome.kind === "seatLimit" && typeof outcome.available === "number"
       ? outcome.available
@@ -220,13 +219,20 @@ function resolveResult(
       : null;
 
   let next: RecipientState;
-  if (seatRoom !== null || rateRoom !== null) next = { status: "draft" };
-  else if (outcome.kind === "invalid") next = { status: "invalid" };
+  if ((seatRoom !== null && state.seats.ceilingLeft !== null) || rateRoom !== null) {
+    next = { status: "draft" };
+  } else if (outcome.kind === "invalid") next = { status: "invalid" };
   else if (outcome.kind === "alreadyMember" || outcome.kind === "alreadyInvited") {
     next = { status: "blocked", reason: outcome.kind };
   } else if (outcome.kind === "refused") {
     next = { status: "failed", kind: "refused", message: outcome.message };
-  } else next = { status: "failed", kind: outcome.kind };
+  } else {
+    next = {
+      status: "failed",
+      kind: outcome.kind,
+      ...(seatRoom !== null ? { available: seatRoom } : {}),
+    };
+  }
 
   // Without a complete roster, the count can't exclude existing members and invitations.
   const seats =
@@ -273,19 +279,21 @@ export function createInviteFlow(input: { initialEmail?: string }): InviteFlowSt
     : { ...base, draft: initialEmail };
 }
 
-/**
- * Whether sending the same request again can succeed. Every other failure is the server's
- * answer for this address or this workspace, so its chip waits to be removed.
- */
-export function isRetryableFailure(kind: InviteErrorKind): boolean {
-  return kind === "requestFailed" || kind === "sessionExpired" || kind === "rateLimited";
+// A counted seat refusal can be retried after trimming; other fixed refusals need removal.
+export function isRetryableFailure(failure: InviteFailure): boolean {
+  return (
+    failure.kind === "requestFailed" ||
+    failure.kind === "sessionExpired" ||
+    failure.kind === "rateLimited" ||
+    (failure.kind === "seatLimit" && typeof failure.available === "number")
+  );
 }
 
 export function inviteSummary(state: InviteFlowState): InviteSummary {
   const sendable = state.recipients
     .filter(
       ({ state: chip }) =>
-        chip.status === "draft" || (chip.status === "failed" && isRetryableFailure(chip.kind))
+        chip.status === "draft" || (chip.status === "failed" && isRetryableFailure(chip))
     )
     .map((recipient) => recipient.email);
   const draftText = normalize(state.draft);
@@ -389,15 +397,18 @@ export function inviteReducer(state: InviteFlowState, event: InviteFlowEvent): I
         ...state,
         memberEmails,
         invitedEmails,
-        // Only untouched chips are re-judged; a server verdict on a failed or blocked chip stands.
-        recipients: state.recipients.map((recipient) =>
-          recipient.state.status === "draft"
-            ? {
-                email: recipient.email,
-                state: classify(recipient.email, memberEmails, invitedEmails),
-              }
-            : recipient
-        ),
+        // A batch seat refusal did not judge individual addresses, so a later roster can skip them.
+        recipients: state.recipients.map((recipient) => {
+          const chip = recipient.state;
+          const classified = classify(recipient.email, memberEmails, invitedEmails);
+          return chip.status === "draft" ||
+            (chip.status === "failed" &&
+              chip.kind === "seatLimit" &&
+              typeof chip.available === "number" &&
+              classified.status === "blocked")
+            ? { email: recipient.email, state: classified }
+            : recipient;
+        }),
       };
     }
     case "seats":
