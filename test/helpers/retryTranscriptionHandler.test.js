@@ -247,6 +247,7 @@ test.before(async () => {
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
   fakeThis = buildFakeThis();
+  fakeThis.transcribeLocalFile = Ctor.prototype.transcribeLocalFile.bind(fakeThis);
   fakeThis._retireDisallowedProductWork =
     Ctor.prototype._retireDisallowedProductWork.bind(fakeThis);
   Ctor.prototype.setupHandlers.call(withDevicePolicy(fakeThis));
@@ -1630,5 +1631,57 @@ test("fresh local dictation forwards the trusted policy signal to both decoders"
     assert.ok(decoderSignal instanceof AbortSignal);
     assert.equal(decoderSignal.aborted, true);
     assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
+  }
+});
+
+test("shared local file decoding refuses forbidden inference modes and minimum versions", async (t) => {
+  const previousWhisper = whisperBehavior;
+  let decoded = false;
+  whisperBehavior = async () => {
+    decoded = true;
+    return { success: true, text: "forbidden" };
+  };
+  t.after(async () => {
+    whisperBehavior = previousWhisper;
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+  });
+  for (const restriction of ["mode", "version"]) {
+    const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+    if (restriction === "mode") policy.transcription.allowedModes = ["openwhispr"];
+    else policy.minAppVersion = "99.0.0";
+    policySnapshot = { success: true, managed: true, policy };
+    await fakeThis.refreshEffectivePolicy();
+    const result = await fakeThis.transcribeLocalFile(__filename, { provider: "whisper" });
+    assert.equal(result.code, "DEVICE_POLICY_BLOCKED", restriction);
+  }
+  assert.equal(decoded, false);
+});
+
+test("shared local file decoding aborts both native decoders when local inference is revoked", async (t) => {
+  const previousWhisper = whisperBehavior;
+  const previousParakeet = parakeetBehavior;
+  t.after(async () => {
+    whisperBehavior = previousWhisper;
+    parakeetBehavior = previousParakeet;
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+  });
+  for (const provider of ["whisper", "nvidia"]) {
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+    const decode = async (_buffer, { signal }) => {
+      const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+      policy.transcription.allowedModes = ["openwhispr"];
+      policySnapshot = { success: true, managed: true, policy };
+      await fakeThis.refreshEffectivePolicy();
+      assert.equal(signal.aborted, true, provider);
+      return { success: true, text: "late transcript" };
+    };
+    whisperBehavior = decode;
+    parakeetBehavior = decode;
+    const result = await fakeThis.transcribeLocalFile(__filename, { provider });
+    assert.equal(result.code, "DEVICE_POLICY_BLOCKED", provider);
+    assert.equal(fakeThis._productRequests.size, 0);
   }
 });

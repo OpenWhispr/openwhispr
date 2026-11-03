@@ -1126,3 +1126,23 @@ test("valid local-only policy refreshes retain permitted local work", () => {
   target._productRequests.delete(local);
   target._productRequests.delete(remote);
 });
+
+test("provider connection revocation aborts its probe and prevents fallback transmission", async (t) => {
+  const requests = [];
+  const probe = async (url, init) => {
+    requests.push({ url, signal: init.signal });
+    setDeviceValues({ RequireSignIn: false });
+    return Response.json({}, { status: 404 });
+  };
+  t.mock.method(globalThis, "fetch", probe);
+  t.mock.method(electron.net, "fetch", probe);
+  const result = await invoke("test-provider-connection", {
+    scope: "transcription",
+    provider: "custom",
+    baseUrl: "https://revoked-speech.example.test",
+    apiKey: "saved-key",
+  });
+  assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].signal.aborted, true);
+});

@@ -209,3 +209,24 @@ test("upload revocation aborts CLI inference and suppresses a late result", asyn
   finish.resolve();
   await assert.rejects(pending, { code: "POLICY_AUDIO_UPLOAD_DISABLED" });
 });
+
+test("CLI inference-mode refusals return 403", async () => {
+  const { bridge } = createBridge();
+  bridge.ipcHandlers.transcribeLocalFile = async () => ({
+    success: false,
+    code: "DEVICE_POLICY_BLOCKED",
+    error: "Local inference is forbidden",
+  });
+  const { file } = audioFile();
+  const response = {
+    writeHead(status) {
+      this.status = status;
+    },
+    end() {},
+  };
+  await assert.rejects(call(bridge, "POST", "/v1/transcribe", { path: file }), (error) => {
+    bridge._sendError(response, error);
+    return error.code === "DEVICE_POLICY_BLOCKED";
+  });
+  assert.equal(response.status, 403);
+});

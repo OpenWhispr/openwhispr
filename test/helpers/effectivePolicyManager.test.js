@@ -10,14 +10,15 @@ const {
   resolveEffectivePolicy,
 } = require("../../src/helpers/effectivePolicyManager");
 const { devicePolicyNetworkAllowed } = require("../../src/helpers/devicePolicyNetwork");
+const { productOperationAllowed } = require("../../src/helpers/productPolicy");
 const guest = { accountId: null, authGeneration: 0, authenticated: false };
 
-test("effective merge intersects permissions and rejects disjoint modes without granting local", () => {
+test("effective merge intersects permissions without granting disjoint modes", () => {
   const device = defaultDevicePolicy();
   const workspace = defaultDevicePolicy();
   device.transcription.allowedModes = ["local"];
   workspace.transcription.allowedModes = ["providers"];
-  assert.throws(() => mergePolicies([device, workspace]), /no common/);
+  assert.deepEqual(mergePolicies([device, workspace]).transcription.allowedModes, []);
   workspace.transcription.allowedModes = ["local"];
   device.transcription.allowedByokProviders = [];
   device.features.meetingRecordingEnabled = false;
@@ -34,6 +35,22 @@ test("effective merge intersects permissions and rejects disjoint modes without 
   assert.equal(result.dataRetention.localHistoryMode, "always_off");
   assert.deepEqual(result.requiredLocalModels, ["base", "tiny"]);
   assert.equal(result.updates.mode, "it_managed");
+});
+
+test("an empty LLM scope leaves permitted transcription and update policy available", () => {
+  const policy = defaultDevicePolicy();
+  policy.llm.allowedModes = [];
+  policy.updates.mode = "always_on";
+  const snapshot = resolveEffectivePolicy(
+    normalizeDeviceValues({}),
+    { success: true, managed: true, policy },
+    { accountId: "member", authGeneration: 1, authenticated: true }
+  );
+  assert.equal(snapshot.success, true);
+  assert.equal(productOperationAllowed(snapshot, "1.11.1", "transcribe-local-whisper"), true);
+  assert.equal(productOperationAllowed(snapshot, "1.11.1", "process-local-reasoning"), false);
+  assert.equal(productOperationAllowed(snapshot, "1.11.1", "cloud-reason"), false);
+  assert.equal(snapshot.policy.updates.mode, "always_on");
 });
 
 test("device-only guests are managed; required sign-in and invalid policies deny actions", () => {

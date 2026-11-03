@@ -7,11 +7,7 @@ function mergePolicies(policies) {
     throw new Error("Invalid policy source");
   const intersect = (lists) =>
     lists.reduce((result, list) => result.filter((item) => list.includes(item)));
-  const modes = (scope) => {
-    const result = intersect(policies.map((policy) => policy[scope].allowedModes));
-    if (!result.length) throw new Error("Policy sources have no common inference mode");
-    return result;
-  };
+  const modes = (scope) => intersect(policies.map((policy) => policy[scope].allowedModes));
   const restrictive = (values, order) => order.find((value) => values.includes(value));
   const caps = policies
     .map((policy) => policy.dataRetention.audioRetentionMaxDays)

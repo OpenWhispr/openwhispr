@@ -1108,14 +1108,46 @@ class IPCHandlers {
   // Shared by the upload IPC handler and the CLI bridge. `filePath` must
   // already have passed resolveAllowedAudioPath (or approveAudioPath).
   async transcribeLocalFile(filePath, options = {}) {
-    const audioBuffer = fs.readFileSync(filePath);
-    if (isSherpaLocalProvider(options.provider)) {
-      return this.parakeetManager.transcribeLocalParakeet(audioBuffer, options);
-    }
-    return this.whisperManager.transcribeLocalWhisper(audioBuffer, {
-      ...options,
-      ...this._resolveWhisperVadOptions("noteRecording"),
+    const failure = () => ({
+      success: false,
+      code: "DEVICE_POLICY_BLOCKED",
+      error: i18nMain.t("common.policyUnresolved"),
     });
+    void this.refreshEffectivePolicy();
+    if (
+      !productOperationAllowed(
+        this.effectivePolicyManager.getCurrent(),
+        app.getVersion(),
+        "transcribe-audio-file"
+      )
+    )
+      return failure();
+    const controller = new AbortController();
+    this._productRequests.set(controller, {
+      channel: "transcribe-audio-file",
+      args: [],
+      remote: false,
+    });
+    const signal = options.signal
+      ? AbortSignal.any([options.signal, controller.signal])
+      : controller.signal;
+    try {
+      signal.throwIfAborted();
+      const audioBuffer = fs.readFileSync(filePath);
+      const result = isSherpaLocalProvider(options.provider)
+        ? await this.parakeetManager.transcribeLocalParakeet(audioBuffer, { ...options, signal })
+        : await this.whisperManager.transcribeLocalWhisper(audioBuffer, {
+            ...options,
+            ...this._resolveWhisperVadOptions("noteRecording"),
+            signal,
+          });
+      return controller.signal.aborted ? failure() : result;
+    } catch (error) {
+      if (controller.signal.aborted) return failure();
+      throw error;
+    } finally {
+      this._productRequests.delete(controller);
+    }
   }
 
   approveAudioPath(filePath) {
@@ -1945,7 +1977,7 @@ class IPCHandlers {
           return describeCortiTokenFailure(error);
         }
       }
-      return testProviderConnection(config, fetch, runPaidKeyCheck);
+      return testProviderConnection(config, proxyFetch, runPaidKeyCheck);
     };
     handleRemoteProduct("test-provider-connection", (_event, config) =>
       cachedConnectionCheck(config, () => checkProviderConnection(config))
@@ -3659,7 +3691,7 @@ class IPCHandlers {
       }
     });
 
-    handleProduct("transcribe-audio-file", async (event, filePath, options = {}) => {
+    ipcMain.handle("transcribe-audio-file", async (event, filePath, options = {}) => {
       // Uploads pass a requestId so cancel-upload-transcription can abort the
       // local decode; flows without one (voice drafts) register nothing.
       const purpose = audioFilePurpose(filePath, options.purpose);

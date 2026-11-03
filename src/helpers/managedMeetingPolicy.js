@@ -1,5 +1,3 @@
-const DISABLE_MEETING_RECORDING_KEY = "DisableMeetingRecording";
-
 function createManagedMeetingPolicy({ getSnapshot }) {
   return {
     isMeetingRecordingDisabled() {
@@ -13,4 +11,4 @@ function createManagedMeetingPolicy({ getSnapshot }) {
   };
 }
 
-module.exports = { createManagedMeetingPolicy, DISABLE_MEETING_RECORDING_KEY };
+module.exports = { createManagedMeetingPolicy };
