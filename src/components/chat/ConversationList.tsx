@@ -167,6 +167,10 @@ export default function ConversationList({
     count: flatItems.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: (index) => (flatItems[index].type === "header" ? 28 : 52),
+    getItemKey: (index) => {
+      const item = flatItems[index];
+      return item.type === "conversation" ? `conversation:${item.data.id}` : `header:${item.label}`;
+    },
     overscan: 5,
   });
 

@@ -131,3 +131,91 @@ test("a background refresh keeps the rows and buttons in place", async (t) => {
     await held.promise;
   });
 });
+
+test("a background reorder keeps an open menu attached to its conversation", async (t) => {
+  const { Window } = await import("happy-dom");
+  const dom = new Window();
+  const globals = {
+    window: dom,
+    localStorage: dom.localStorage,
+    IS_REACT_ACT_ENVIRONMENT: true,
+    requestAnimationFrame: dom.requestAnimationFrame.bind(dom),
+    cancelAnimationFrame: dom.cancelAnimationFrame.bind(dom),
+  };
+  for (const name of [
+    "document",
+    "navigator",
+    "Node",
+    "Element",
+    "HTMLElement",
+    "MutationObserver",
+    "getComputedStyle",
+    "CustomEvent",
+    "HTMLInputElement",
+  ]) {
+    globals[name] = dom[name];
+  }
+  const originals = Object.fromEntries(
+    Object.keys(globals).map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)])
+  );
+  let root;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+    await dom.happyDOM.close();
+    for (const [name, descriptor] of Object.entries(originals)) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+      else delete globalThis[name];
+    }
+  });
+  for (const [name, value] of Object.entries(globals)) {
+    Object.defineProperty(globalThis, name, { value, configurable: true, writable: true });
+  }
+  Object.defineProperty(dom.HTMLElement.prototype, "offsetHeight", { get: () => 600 });
+  Object.defineProperty(dom.HTMLElement.prototype, "offsetWidth", { get: () => 300 });
+
+  let rows = [
+    { ...ARCHIVED_CHAT, id: 1, title: "Chat A", archived_at: null },
+    { ...ARCHIVED_CHAT, id: 2, title: "Chat B", archived_at: null },
+  ];
+  dom.electronAPI = {
+    getAgentConversationsWithPreview: async (_limit, _offset, isArchived) =>
+      isArchived ? [] : rows,
+  };
+  const vite = await createRendererServer(t);
+  const { useChatTurnStore } = await vite.ssrLoadModule("/stores/chatTurnStore.ts");
+  const { default: ConversationList } = await vite.ssrLoadModule(
+    "/components/chat/ConversationList.tsx"
+  );
+  const container = dom.document.createElement("div");
+  dom.document.body.append(container);
+  root = createRoot(container);
+  const deleted = [];
+  const noop = () => {};
+  await React.act(async () =>
+    root.render(
+      React.createElement(ConversationList, {
+        activeConversationId: null,
+        onSelectConversation: noop,
+        onNewChat: noop,
+        onOpenSearch: noop,
+        onArchive: noop,
+        onDelete: (id) => deleted.push(id),
+        refreshKey: 0,
+      })
+    )
+  );
+  const trigger = container.querySelector('[aria-haspopup="menu"]');
+  await React.act(async () =>
+    trigger.dispatchEvent(new dom.KeyboardEvent("keydown", { key: "Enter", bubbles: true }))
+  );
+
+  rows = [rows[1], rows[0]];
+  await React.act(async () =>
+    useChatTurnStore.setState((state) => ({ listRevision: state.listRevision + 1 }))
+  );
+  const deleteItem = [...dom.document.querySelectorAll('[role="menuitem"]')].find(
+    (item) => item.textContent === chat.delete
+  );
+  await React.act(async () => deleteItem.click());
+  assert.deepEqual(deleted, [1]);
+});
