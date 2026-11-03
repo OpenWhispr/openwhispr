@@ -9796,13 +9796,16 @@ class IPCHandlers {
     };
 
     // A session being replaced must go quiet: a late final or socket error from
-    // it would land in the renderer as if it came from the live session.
+    // it would land in the renderer as if it came from the live session. One
+    // retired before its socket exists is closed when the connect delivers it.
     const retireDictationStreaming = (streaming) => {
+      streaming.retired = true;
       streaming.onPartialTranscript = null;
       streaming.onFinalTranscript = null;
       streaming.onError = null;
       streaming.onSessionEnd = null;
       streaming.disconnect({ commit: false }).catch(() => {});
+      if (this._dictationStreaming === streaming) this._dictationStreaming = null;
     };
 
     const DICTATION_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
@@ -9887,7 +9890,6 @@ class IPCHandlers {
           carriedAudio = [...(this._dictationStreaming.coldStartBuffer ?? [])];
         }
         retireDictationStreaming(this._dictationStreaming);
-        this._dictationStreaming = null;
       }
 
       const connectInner = async () => {
@@ -9957,6 +9959,9 @@ class IPCHandlers {
               preconfigured: isCloud,
             });
           }
+          // Retired while it was still dialling (a token fetch or socket build
+          // leaves no socket for disconnect to close): nothing owns it now.
+          if (streaming.retired) await streaming.disconnect({ commit: false });
           return streaming;
         } catch (err) {
           if (provider === "orukeet") await streaming.disconnect().catch(() => {});
@@ -10751,15 +10756,10 @@ class IPCHandlers {
     // Hold that full window at the worklet's 16kHz rate (960KB).
     const DICTATION_START_AUDIO_MAX = 30 * 16000 * 2;
 
-    const retireDictationSession = (streaming) => {
-      retireDictationStreaming(streaming);
-      if (this._dictationStreaming === streaming) this._dictationStreaming = null;
-    };
-
     // Ends the recording before its start settles: the start fails at once, its
     // queued audio is dropped, and nothing is committed. The current session is
-    // the start's own or the one it was replacing; a session the connect has yet
-    // to deliver is retired when it arrives.
+    // the start's own or the one it was replacing; one still dialling is closed
+    // when its connect delivers it.
     const abandonDictationStart = (error) => {
       const start = dictationStart;
       if (start && !start.failure) {
@@ -10768,7 +10768,7 @@ class IPCHandlers {
         start.audio = [];
         start.abandon(error);
       }
-      if (this._dictationStreaming) retireDictationSession(this._dictationStreaming);
+      if (this._dictationStreaming) retireDictationStreaming(this._dictationStreaming);
     };
 
     ipcMain.handle("dictation-realtime-start", async (event, options = {}) => {
@@ -10791,7 +10791,6 @@ class IPCHandlers {
         abandon,
       };
       dictationStart = start;
-      let connecting = null;
       try {
         clearDictationIdleTimer();
         this._dictationPreviewEnabled = !!options.preview;
@@ -10800,15 +10799,16 @@ class IPCHandlers {
           !streaming?.isConnected ||
           streaming.connectionKey !== dictationConnectionKey(options)
         ) {
-          connecting = connectDictationStreaming(event, options, start);
-          streaming = await Promise.race([connecting, abandoned]);
+          streaming = await Promise.race([
+            connectDictationStreaming(event, options, start),
+            abandoned,
+          ]);
         }
         // Claimed until its stop or cancel, so a queued re-warm leaves it alone.
         streaming.claimed = true;
         for (const buffer of start.audio) streaming.sendAudio(buffer);
         return { success: true };
       } catch (err) {
-        if (start.failure) connecting?.then(retireDictationSession, () => {});
         return streamingStartFailure(start.failure || err);
       } finally {
         if (dictationStart === start) dictationStart = null;

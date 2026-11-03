@@ -426,4 +426,26 @@ for (const provider of ["openai-realtime", "tinfoil-realtime"]) {
     gate.resolve();
     assert.equal((await first).success, true);
   });
+
+  for (const ending of ["cancel", "overflow"]) {
+    test(`${provider} ${ending} while a re-warm is still dialling leaves no socket open`, async (t) => {
+      const s = scenario(t);
+      const options = optionsFor(provider);
+      // The re-warm is building its socket, so its session has none to close yet.
+      const gate = deferConnection();
+      const warmup = s.invoke("warmup", { ...options, model: "previous-model" });
+      await new Promise(setImmediate);
+      const started = s.invoke("start", options);
+      if (ending === "cancel") await s.invoke("cancel");
+      else for (const frame of frames(31)) s.send(frame);
+      assert.equal((await started).success, false);
+      gate.resolve();
+      await warmup;
+      await settle();
+      const warmed = instances[0];
+      assert.equal(warmed.isConnected, false, "the re-warm's late socket is still connected");
+      assert.equal(warmed.testSocket.readyState, WS.CLOSED);
+      assert.equal(s.target._dictationStreaming, null);
+    });
+  }
 }

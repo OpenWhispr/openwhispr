@@ -1274,8 +1274,23 @@ test("a stop that left turns untranscribed uses the fallback recording instead o
 });
 
 test("an incomplete stop whose fallback upload fails still keeps the partial text", async (t) => {
-  const AudioManager = await loadManagerClass(t);
+  const AudioManager = await loadManagerClass(t, {
+    "/config/prompts": "export const resolvePrompt = () => 'agent prompt';",
+  });
+  Object.assign(globalThis.__streamingFinalizationSettings, {
+    useDictationAgent: true,
+    dictationAgentMode: "local",
+    dictationAgentModel: "local-model",
+  });
   const { manager } = createFinalizingManager(AudioManager);
+  // The kept text takes the same reasoning path as any streamed text.
+  manager.voiceAgentRequested = true;
+  manager.consumeScreenContext = async () => null;
+  const commands = [];
+  manager.processAgentCommand = async (text) => {
+    commands.push(text);
+    return "agent reply";
+  };
   manager.recordingStartTime = Date.now() - 20000;
   manager.streamingFinalText = "first turn";
   manager.mergeRecordedSegments = async () => new Blob(["whole recording"]);
@@ -1292,7 +1307,37 @@ test("an incomplete stop whose fallback upload fails still keeps the partial tex
 
   await manager.stopStreamingRecording();
 
-  assert.equal(completions.at(-1)?.text, "first turn");
+  assert.deepEqual(commands, ["first turn"]);
+  assert.equal(completions.at(-1)?.text, "agent reply");
+  assert.equal(completions.at(-1)?.rawText, "first turn");
+});
+
+test("a managed Orukeet start answered after a cancel is not counted as an outage", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  useManagedOrukeetSettings();
+  installCapture(t);
+  let cancelling;
+  const provider = startingOrukeetProvider({
+    cancel: async () => ({ success: true }),
+    // Main fails a start the user cancelled while it connected.
+    start: async () => {
+      cancelling = manager.cancelStreamingRecording();
+      return { success: false, code: "DICTATION_CANCELLED", error: "Dictation cancelled" };
+    },
+  });
+  const { manager, errors, uploads } = createStartingManager(AudioManager, {
+    providerName: "orukeet",
+    provider,
+  });
+  manager.cleanupPreview = async () => null;
+
+  assert.equal(await manager.startStreamingRecording(), false);
+  await cancelling;
+
+  assert.equal(manager.streamingFallbackReason, null);
+  assert.equal(manager._streamingFailoverReason, null);
+  assert.deepEqual(uploads, []);
+  assert.deepEqual(errors, []);
 });
 
 test("a stop pressed while a refused managed Orukeet start settles uploads once", async (t) => {

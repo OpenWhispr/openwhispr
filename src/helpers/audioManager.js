@@ -5520,6 +5520,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         // switch before stop cannot move its words in or out of Cloud usage.
         this._streamingMeteredByCloud = isCloudMeteredStream(sessionOptions);
         const res = await provider.start(sessionOptions);
+        // A start the user cancelled meanwhile failed for that reason alone, not
+        // as an outage to fall back from.
+        if (startWasCancelled()) return res;
 
         return this.classifyStreamingStartResult(res, { useLocalWhisper });
       });
@@ -6012,20 +6015,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       );
     }
 
-    // A stop that ran out of time with turns still transcribing holds only part
-    // of the recording, so the fallback recording is transcribed instead. The
-    // partial text is kept for the case where that fails.
-    const streamIncomplete = stopResult?.incomplete === true && fallbackBlob?.size > 0;
-    const incompleteText = streamIncomplete ? finalText : "";
-    if (streamIncomplete) {
-      logger.info(
-        "Streaming stop was incomplete, using the fallback recording",
-        { textLength: finalText.length },
-        "streaming"
-      );
-      finalText = "";
-    }
-
     this.cleanupStreamingListeners(sessionId);
     if (wasCancelled()) return true;
 
@@ -6167,6 +6156,52 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       } catch (languageFallbackErr) {
         if (wasCancelled()) return true;
         failLanguageFallback(languageFallbackErr);
+      }
+    }
+
+    // Cloud records usage server-side via /api/transcribe; BYOK has no metering.
+    const transcribeFallbackRecording = (target, cloudMetadata = {}) =>
+      target === "cloud"
+        ? this.processWithOpenWhisprCloud(
+            fallbackBlob,
+            {
+              durationSeconds,
+              analyticsOccurredAt: analyticsOccurredAt.toISOString(),
+              ...cloudMetadata,
+            },
+            wasCancelled
+          )
+        : this.processWithOpenAIAPI(fallbackBlob, { durationSeconds }, wasCancelled);
+
+    // A stop that ran out of time with turns still transcribing holds only part
+    // of the recording, so the fallback recording is transcribed in its place.
+    // If that gives nothing, the partial text goes on like any streamed text.
+    const streamIncomplete = stopResult?.incomplete === true && fallbackBlob?.size > 0;
+    if (streamIncomplete && !usedBatchFallback) {
+      const target = resolveStreamingFallbackTarget(stSettings);
+      logger.info(
+        "Streaming stop was incomplete, transcribing the fallback recording",
+        { textLength: finalText.length, target },
+        "streaming"
+      );
+      if (target !== "skip") {
+        try {
+          const batchResult = await transcribeFallbackRecording(target);
+          if (wasCancelled()) return true;
+          if (batchResult?.text) {
+            finalText = batchResult.text;
+            usedBatchFallback = true;
+            batchFallbackResult = batchResult;
+            batchWarning = batchResult.warning || null;
+          }
+        } catch (incompleteFallbackErr) {
+          if (wasCancelled()) return true;
+          logger.warn(
+            "Fallback for an incomplete stream failed, keeping the partial text",
+            { error: incompleteFallbackErr.message },
+            "streaming"
+          );
+        }
       }
     }
 
@@ -6386,7 +6421,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       !finalText &&
       (failoverReason
         ? !failoverSilent
-        : streamIncomplete || (!finalAcknowledged && durationSeconds > 2)) &&
+        : !streamIncomplete && !finalAcknowledged && durationSeconds > 2) &&
       fallbackBlob?.size > 0
     ) {
       const target = resolveStreamingFallbackTarget(getSettings());
@@ -6404,25 +6439,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           "streaming"
         );
         try {
-          // Cloud records usage server-side via /api/transcribe; BYOK has no metering.
-          const batchResult =
-            target === "cloud"
-              ? await this.processWithOpenWhisprCloud(
-                  fallbackBlob,
-                  {
-                    durationSeconds,
-                    analyticsOccurredAt: analyticsOccurredAt.toISOString(),
-                    // The tag feeds the Orukeet rollout's fallback rate; other
-                    // providers, a failed-over realtime start included, fall
-                    // back untagged. An Orukeet failover's reason outlives the
-                    // cached config a refused start drops.
-                    ...(isOrukeetStream
-                      ? { streamingFallbackReason: failoverReason || "stream_no_final" }
-                      : {}),
-                  },
-                  wasCancelled
-                )
-              : await this.processWithOpenAIAPI(fallbackBlob, { durationSeconds }, wasCancelled);
+          const batchResult = await transcribeFallbackRecording(
+            target,
+            // The tag feeds the Orukeet rollout's fallback rate; other
+            // providers, a failed-over realtime start included, fall back
+            // untagged. An Orukeet failover's reason outlives the cached config
+            // a refused start drops.
+            isOrukeetStream ? { streamingFallbackReason: failoverReason || "stream_no_final" } : {}
+          );
           if (wasCancelled()) return true;
           if (batchResult?.text) {
             finalText = batchResult.text;
@@ -6439,9 +6463,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
       }
     }
-
-    // The fallback recording gave nothing to replace the partial stream with.
-    if (!finalText && incompleteText && !failureReport) finalText = incompleteText;
 
     if (finalText) {
       // The batch fallback routes through processTranscription, which already
