@@ -699,6 +699,8 @@ test("navigation failure retains committed note and retries without duplicate wr
   const c = ownedNotification(t);
   if (!c) return;
   let calls = 0;
+  let promptResets = 0;
+  c.engine.audioActivityDetector.resetPrompt = () => (promptResets += 1);
   c.windowManager.queueMeetingNoteNavigation = async (payload) => {
     calls++;
     return calls === 1
@@ -706,6 +708,7 @@ test("navigation failure retains committed note and retries without duplicate wr
       : { success: true, value: c.db.getNote(payload.noteId) };
   };
   assert.equal((await c.respond()).code, "START_FAILED");
+  assert.equal(promptResets, 0, "the same live call must not prompt again");
   c.engine.handleCalendarReminder({ id: "next" });
   assert.equal(c.shown.length, 1, "a failed Start must not leave prompts suppressed");
   assert.equal(c.db.getNotes().length, 1);
@@ -863,5 +866,95 @@ test("closing a note-only meeting preserves the current audio prompt until a lat
   await detector._check();
   await detector._check();
   assert.equal(shown.length, 2, "a later call still prompts without a dismissal cooldown");
+  engine.stop();
+});
+
+test("a failed navigation keeps the prompt identity; a closed note's start resets it", async () => {
+  const { engine } = createEngine();
+  let promptResets = 0;
+  engine.audioActivityDetector.resetPrompt = () => (promptResets += 1);
+  let id = engine._beginMeetingNoteSession(41, null);
+  engine._meetingModeActive = true;
+  engine.abandonMeetingNote(id);
+  assert.equal(engine._meetingModeActive, false);
+  assert.equal(promptResets, 0, "the note never opened, so the mic was never ours");
+  id = engine._beginMeetingNoteSession(42, null);
+  engine._meetingModeActive = true;
+  engine.closeMeetingNote(id);
+  assert.equal(engine._meetingModeActive, false);
+  assert.equal(promptResets, 1);
+  engine.stop();
+});
+
+test("a replaced document keeps a session whose navigation is still queued", async () => {
+  const { engine, windowManager } = createEngine();
+  const id = engine._beginMeetingNoteSession(41, null);
+  engine._meetingModeActive = true;
+  windowManager.isMeetingNoteNavigationPending = (sessionId) => sessionId === id;
+  engine.closeCurrentMeetingNote();
+  assert.equal(engine._meetingModeActive, true);
+  assert.equal(engine._meetingNoteSession.id, id);
+  windowManager.isMeetingNoteNavigationPending = () => false;
+  engine.closeCurrentMeetingNote();
+  assert.equal(engine._meetingModeActive, false);
+  engine.stop();
+});
+
+test("a detection queued before its note opened doesn't prompt when the queue flushes", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const { engine, meetingNavigations, shown } = createEngine();
+  engine.databaseManager = createJoinDatabase({ id: 41, folder_id: 7 }).databaseManager;
+  engine.databaseManager.getCalendarEventById = (id) => ({
+    id,
+    end_time: new Date(Date.now() + 60_000).toISOString(),
+  });
+  engine.setUserRecording(true);
+  engine.handleCalendarReminder({ id: "event", summary: "Joined" });
+  engine.setUserRecording(false);
+  await engine.joinCalendarMeeting("event");
+  engine.markMeetingNoteOnly(meetingNavigations[0].noteSessionId);
+  t.mock.timers.tick(2500);
+  assert.equal(shown.length, 0);
+  assert.equal(engine.activeDetections.has("calendar:event"), false);
+  engine.stop();
+});
+
+test("the rest of the queue still prompts past a detection its note claims", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const { engine, meetingNavigations, shown } = createEngine();
+  engine.databaseManager = createJoinDatabase({ id: 41, folder_id: 7 }).databaseManager;
+  engine.databaseManager.getCalendarEventById = (id) => ({
+    id,
+    end_time: new Date(Date.now() + 60_000).toISOString(),
+  });
+  engine.setUserRecording(true);
+  engine.handleCalendarReminder({ id: "event", summary: "Joined" });
+  engine.handleCalendarReminder({ id: "other", summary: "Other" });
+  engine.setUserRecording(false);
+  await engine.joinCalendarMeeting("event");
+  engine.markMeetingNoteOnly(meetingNavigations[0].noteSessionId);
+  t.mock.timers.tick(2500);
+  assert.equal(shown.length, 1);
+  engine.stop();
+});
+
+test("a mic detection queued before its note opened doesn't prompt either", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const { engine, meetingNavigations, shown } = createEngine();
+  engine.preferences.audioDetection = true;
+  engine.databaseManager = createJoinDatabase({ id: 41, folder_id: 7 }).databaseManager;
+  engine.databaseManager.getCalendarEventById = (id) => ({
+    id,
+    end_time: new Date(Date.now() + 60_000).toISOString(),
+  });
+  engine.setUserRecording(true);
+  // The real detector marks itself prompted before it emits.
+  engine.audioActivityDetector.hasPrompted = true;
+  engine._handleDetection("audio", "sustained-audio", { attributed: true });
+  engine.setUserRecording(false);
+  await engine.joinCalendarMeeting("event");
+  engine.markMeetingNoteOnly(meetingNavigations[0].noteSessionId);
+  t.mock.timers.tick(2500);
+  assert.equal(shown.length, 0);
   engine.stop();
 });

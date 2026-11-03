@@ -37,6 +37,7 @@ const {
 } = require("./dictationLifecycle");
 const { DEV_SERVER_PORT } = DevServerManager;
 const DRAG_MOVE_TOLERANCE_PX = 2;
+const ERR_ABORTED = -3;
 const {
   MAIN_WINDOW_CONFIG,
   CONTROL_PANEL_CONFIG,
@@ -1576,15 +1577,13 @@ class WindowManager {
     MenuManager.setupControlPanelMenu(this.controlPanelWindow, () => this.openSettings());
 
     // The initial load may already own a queued note; only release a replaced document's session.
+    // On commit, not on start: a navigation will-navigate blocks leaves the document in place.
     let controlPanelDocumentLoaded = false;
-    this.controlPanelWindow.webContents.on(
-      "did-start-navigation",
-      ({ isMainFrame, isSameDocument }) => {
-        if (!controlPanelDocumentLoaded || !isMainFrame || isSameDocument) return;
-        controlPanelDocumentLoaded = false;
-        this.meetingDetectionEngine?.closeCurrentMeetingNote?.();
-      }
-    );
+    this.controlPanelWindow.webContents.on("did-navigate", () => {
+      if (!controlPanelDocumentLoaded) return;
+      controlPanelDocumentLoaded = false;
+      this.meetingDetectionEngine?.closeCurrentMeetingNote?.();
+    });
     this.controlPanelWindow.webContents.on("did-finish-load", () => {
       controlPanelDocumentLoaded = true;
       // Every fresh document starts unresolved. AppRouter releases the gate
@@ -1601,6 +1600,8 @@ class WindowManager {
         if (!isMainFrame) {
           return;
         }
+        // An aborted navigation leaves the document in place; any other failure replaced it.
+        if (errorCode !== ERR_ABORTED) this.meetingDetectionEngine?.closeCurrentMeetingNote?.();
         if (process.env.NODE_ENV !== "development") {
           this.showLoadFailureDialog("Control panel", errorCode, errorDescription, validatedURL);
         }
@@ -2574,7 +2575,7 @@ class WindowManager {
       } catch (error) {
         if (this._pendingMeetingNoteNavigation === payload)
           this._pendingMeetingNoteNavigation = null;
-        this.meetingDetectionEngine?.closeMeetingNote?.(payload.noteSessionId);
+        this.meetingDetectionEngine?.abandonMeetingNote?.(payload.noteSessionId);
         throw error;
       }
       return;
@@ -2641,10 +2642,19 @@ class WindowManager {
     return result;
   }
 
+  isMeetingNoteNavigationPending(noteSessionId) {
+    if (noteSessionId == null) return false;
+    return (
+      this._pendingMeetingNoteNavigation?.noteSessionId === noteSessionId ||
+      // A navigation still waiting for a reloading panel isn't pending yet.
+      this._meetingNavigationOperation?.payload.noteSessionId === noteSessionId
+    );
+  }
+
   _settleMeetingNavigation(operation, result) {
     if (this._meetingNavigationOperation !== operation) return;
     if (!result.success)
-      this.meetingDetectionEngine?.closeMeetingNote?.(operation.payload.noteSessionId);
+      this.meetingDetectionEngine?.abandonMeetingNote?.(operation.payload.noteSessionId);
     this._meetingNavigationOperation = null;
     clearTimeout(operation.timer);
     operation.panel?.removeListener("closed", operation.onClose);

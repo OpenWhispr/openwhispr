@@ -569,7 +569,7 @@ class MeetingDetectionEngine {
       { owner, activate: action !== "join" }
     );
     if (!navigation.success) {
-      this.closeMeetingNote(noteSessionId);
+      this.abandonMeetingNote(noteSessionId);
       return navigation;
     }
     this.activeDetections.delete(owner.prompt.detectionId);
@@ -771,8 +771,16 @@ class MeetingDetectionEngine {
       "meeting"
     );
 
-    const [best, ...discarded] = this._notificationQueue;
+    const queued = this._notificationQueue;
     this._notificationQueue = [];
+    // Queued before its note opened, so the check on arrival couldn't catch it.
+    const pending = queued.filter(({ source, key }) => {
+      const belongs = this._belongsToMeetingNote(source, key);
+      if (belongs) this.activeDetections.delete(`${source}:${key}`);
+      return !belongs;
+    });
+    if (pending.length === 0) return;
+    const [best, ...discarded] = pending;
     // This flush coalesces the batch into one prompt. Entries it discards must
     // not keep suppressing future microphone detections after that prompt ends.
     for (const { source, key, data } of discarded) {
@@ -798,7 +806,11 @@ class MeetingDetectionEngine {
       eventId: event?.id ?? null,
       endsAt,
       // Joining an event turns the mic on next; that call has no prompt of its own yet.
-      awaitingMic: Number.isFinite(endsAt) && !this.audioActivityDetector.hasPrompted,
+      // The detector marks itself prompted before a queued detection has shown.
+      awaitingMic:
+        Number.isFinite(endsAt) &&
+        (!this.audioActivityDetector.hasPrompted ||
+          this._notificationQueue.some(({ source }) => source === "audio")),
       noteOnly: false,
     };
     return id;
@@ -828,29 +840,37 @@ class MeetingDetectionEngine {
     session.noteOnly = true;
     this._meetingModeActive = false;
     debugLogger.info("Meeting note opened without recording", {}, "meeting");
-    this._flushNotificationQueue();
   }
 
-  closeMeetingNote(id) {
+  closeMeetingNote(id, { resetAudioPrompt = true } = {}) {
     if (!this._meetingNoteSession || this._meetingNoteSession.id !== id) return;
     const noteOnly = this._meetingNoteSession.noteOnly;
     this._clearMeetingNoteSession();
     if (noteOnly || this._recordingSession) return;
-    this.setMeetingModeActive(false);
+    this.setMeetingModeActive(false, { resetAudioPrompt });
     this._flushNotificationQueue();
   }
 
-  closeCurrentMeetingNote() {
-    this.closeMeetingNote(this._meetingNoteSession?.id);
+  // The note never opened, so the mic was never ours: the call it was opened for
+  // keeps its prompt identity and doesn't prompt again.
+  abandonMeetingNote(id) {
+    this.closeMeetingNote(id, { resetAudioPrompt: false });
   }
 
-  setMeetingModeActive(active) {
+  closeCurrentMeetingNote() {
+    const id = this._meetingNoteSession?.id;
+    // A queued navigation replays into the next document, which takes the session over.
+    if (this.windowManager.isMeetingNoteNavigationPending?.(id)) return;
+    this.closeMeetingNote(id);
+  }
+
+  setMeetingModeActive(active, { resetAudioPrompt = true } = {}) {
     this._meetingModeActive = active;
     debugLogger.info("Meeting mode active state changed", { active }, "meeting");
     if (!active) {
       this._clearMeetingNoteSession();
       // Own mic usage during meeting mode sets hasPrompted=true; reset so future detections work
-      this.audioActivityDetector.resetPrompt();
+      if (resetAudioPrompt) this.audioActivityDetector.resetPrompt();
     }
   }
 

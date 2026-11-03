@@ -1186,7 +1186,7 @@ test("release preserves macOS stacking while Windows and Linux still blur", asyn
 test("failed calendar panel creation releases only its pending note session", async () => {
   const f = await navigationFixture();
   const closed = [];
-  f.manager.meetingDetectionEngine.closeMeetingNote = (id) => closed.push(id);
+  f.manager.meetingDetectionEngine.abandonMeetingNote = (id) => closed.push(id);
   f.manager.createControlPanelWindow = async () => {
     throw new Error("Panel unavailable");
   };
@@ -1202,7 +1202,7 @@ test("cancelled notification navigation releases its note session", async () => 
   const f = await navigationFixture();
   const closed = [];
   f.payload.noteSessionId = "notification-session";
-  f.manager.meetingDetectionEngine.closeMeetingNote = (id) => closed.push(id);
+  f.manager.meetingDetectionEngine.abandonMeetingNote = (id) => closed.push(id);
   const pending = f.start();
   await new Promise(setImmediate);
   f.manager._cancelMeetingNavigation("START_FAILED");
@@ -1222,16 +1222,35 @@ test("control panel reload releases note ownership without consuming initial nav
   t.after(() => manager._clearControlPanelVisibilityTimer());
   const panel = manager.controlPanelWindow;
   panel.setTitle = () => {};
-  const navigate = (isInPlace, isMainFrame) =>
-    panel.webContents.emit("did-start-navigation", { isSameDocument: isInPlace, isMainFrame });
-  navigate(false, true);
+  panel.webContents.emit("did-navigate");
   panel.webContents.emit("did-finish-load");
   assert.equal(closes, 0, "initial load must retain the pending meeting navigation");
-  navigate(true, true);
-  navigate(false, false);
-  assert.equal(closes, 0, "same-document and subframe navigation retain the session");
-  navigate(false, true);
+  panel.webContents.emit("did-start-navigation", { isSameDocument: false, isMainFrame: true });
+  assert.equal(closes, 0, "a navigation will-navigate blocks leaves the document in place");
+  panel.webContents.emit("did-navigate");
   assert.equal(closes, 1, "a replacement document must release the outgoing note session");
   panel.webContents.emit("did-finish-load");
   assert.equal(closes, 1, "load completion must not close a newer pending session");
+  manager.showLoadFailureDialog = () => {};
+  manager._showControlPanel = () => {};
+  panel.webContents.emit("did-fail-load", {}, -3, "ERR_ABORTED", "file:///app", true);
+  assert.equal(closes, 1, "an aborted navigation leaves the document in place");
+  panel.webContents.emit("did-fail-load", {}, -6, "ERR_FILE_NOT_FOUND", "file:///app", false);
+  assert.equal(closes, 1, "a subframe failure leaves the document in place");
+  panel.webContents.emit("did-fail-load", {}, -6, "ERR_FILE_NOT_FOUND", "file:///app", true);
+  assert.equal(closes, 2, "a failed reload has already replaced the document");
+});
+
+test("a queued or undelivered navigation keeps its note session pending", async () => {
+  const f = await navigationFixture();
+  const { manager } = f;
+  assert.equal(manager.isMeetingNoteNavigationPending(undefined), false);
+  assert.equal(manager.isMeetingNoteNavigationPending("queued"), false);
+  manager._pendingMeetingNoteNavigation = { noteSessionId: "queued" };
+  assert.equal(manager.isMeetingNoteNavigationPending("queued"), true);
+  manager._pendingMeetingNoteNavigation = null;
+  manager._meetingNavigationOperation = { payload: { noteSessionId: "delivering" } };
+  assert.equal(manager.isMeetingNoteNavigationPending("delivering"), true);
+  assert.equal(manager.isMeetingNoteNavigationPending("other"), false);
+  manager._meetingNavigationOperation = null;
 });
