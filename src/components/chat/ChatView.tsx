@@ -232,6 +232,11 @@ export default function ChatView({
     [activeConversationId, handleNewChat]
   );
 
+  const handleUnarchive = useCallback(async (id: number) => {
+    await window.electronAPI?.unarchiveAgentConversation?.(id);
+    setRefreshKey((k) => k + 1);
+  }, []);
+
   const handleDelete = useCallback(
     (id: number) => {
       showConfirmDialog({
@@ -300,6 +305,7 @@ export default function ChatView({
               onNewChat={startNewChat}
               onOpenSearch={() => setShowSearch(true)}
               onArchive={handleArchive}
+              onUnarchive={handleUnarchive}
               onDelete={handleDelete}
               refreshKey={refreshKey}
             />
