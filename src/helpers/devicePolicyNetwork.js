@@ -15,7 +15,9 @@ function devicePolicyNetworkAllowed(snapshot, target, controlOrigins = []) {
   if (!snapshot.success) {
     return (
       controlOrigins.includes(url.origin) &&
-      (url.pathname.startsWith("/api/auth/") || url.pathname === "/api/workspace-policy")
+      (url.pathname.startsWith("/api/auth/") ||
+        url.pathname === "/api/check-user" ||
+        url.pathname === "/api/workspace-policy")
     );
   }
   return true;

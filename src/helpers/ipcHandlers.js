@@ -3959,6 +3959,7 @@ class IPCHandlers {
         const result = await this.whisperManager.transcribeLocalWhisper(audioBlob, {
           ...requestOptions,
           ...vadOptions,
+          signal: this._productRequestContext.getStore().signal,
         });
 
         debugLogger.log("Whisper result", {
@@ -4341,7 +4342,10 @@ class IPCHandlers {
       });
 
       try {
-        const result = await this.parakeetManager.transcribeLocalParakeet(audioBlob, options);
+        const result = await this.parakeetManager.transcribeLocalParakeet(audioBlob, {
+          ...options,
+          signal: this._productRequestContext.getStore().signal,
+        });
 
         debugLogger.log("Parakeet result", {
           success: result.success,

@@ -1599,3 +1599,36 @@ test("local transcription retry propagates policy retirement to both native deco
     assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
   }
 });
+
+test("fresh local dictation forwards the trusted policy signal to both decoders", async (t) => {
+  const previousWhisper = whisperBehavior,
+    previousParakeet = parakeetBehavior;
+  t.after(async () => {
+    whisperBehavior = previousWhisper;
+    parakeetBehavior = previousParakeet;
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+  });
+  for (const provider of ["whisper", "parakeet"]) {
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+    let decoderSignal;
+    const decode = async (_buffer, options) => {
+      decoderSignal = options.signal;
+      const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+      policy.transcription.allowedModes = ["providers"];
+      policySnapshot = { success: true, managed: true, policy };
+      await fakeThis.refreshEffectivePolicy();
+      return { success: true, text: "late output" };
+    };
+    whisperBehavior = decode;
+    parakeetBehavior = decode;
+    const result = await handlers.get(`transcribe-local-${provider}`)({ sender: {} }, WAV_BUFFER, {
+      model: "tiny",
+      signal: "untrusted",
+    });
+    assert.ok(decoderSignal instanceof AbortSignal);
+    assert.equal(decoderSignal.aborted, true);
+    assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
+  }
+});

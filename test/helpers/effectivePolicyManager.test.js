@@ -135,3 +135,30 @@ test("network boundary blocks direct renderer, public, WebSocket and credentiale
     false
   );
 });
+
+test("required sign-in permits email discovery only on configured control origins", () => {
+  const pending = { deviceReady: true, success: false, code: "POLICY_SIGN_IN_REQUIRED" };
+  const origins = ["https://auth.example"];
+  assert.equal(
+    devicePolicyNetworkAllowed(pending, "https://auth.example/api/check-user", origins),
+    true
+  );
+  assert.equal(
+    devicePolicyNetworkAllowed(pending, "https://other.example/api/check-user", origins),
+    false
+  );
+  assert.equal(
+    devicePolicyNetworkAllowed(pending, "https://auth.example/api/reason", origins),
+    false
+  );
+  for (const denied of [
+    { ...pending, localOnly: true },
+    { ...pending, code: "DEVICE_POLICY_INVALID" },
+    { ...pending, deviceReady: false },
+  ]) {
+    assert.equal(
+      devicePolicyNetworkAllowed(denied, "https://auth.example/api/check-user", origins),
+      false
+    );
+  }
+});

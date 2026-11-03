@@ -223,3 +223,41 @@ test("renderer model revocation aborts pending generation and an open stream", a
   await rejectedRead;
   assert.equal(cancelled, true);
 });
+
+test("required-sign-in renderer can discover email without allowing unrelated API traffic", async (t) => {
+  const { store, vite } = await boot(t, async () =>
+    snapshot({
+      success: false,
+      status: "error",
+      deviceManaged: true,
+      managed: true,
+      requireSignIn: true,
+      code: "POLICY_SIGN_IN_REQUIRED",
+    })
+  );
+  const requests = [];
+  globalThis.window.fetch = async (url) => {
+    requests.push(String(url));
+    return Response.json({ exists: true });
+  };
+  const { installPolicyNetworkGuard } = await vite.ssrLoadModule("/lib/policyNetwork.ts");
+  t.after(installPolicyNetworkGuard());
+  assert.deepEqual(
+    await (
+      await window.fetch("https://auth.openwhispr.com/api/check-user", { method: "POST" })
+    ).json(),
+    { exists: true }
+  );
+  for (const url of [
+    "https://other.example/api/check-user",
+    "https://api.openwhispr.com/api/reason",
+  ]) {
+    await assert.rejects(window.fetch(url), /Blocked by device policy/);
+  }
+  store.setState({ localOnly: true });
+  await assert.rejects(
+    window.fetch("https://auth.openwhispr.com/api/check-user"),
+    /Blocked by device policy/
+  );
+  assert.equal(requests.length, 1);
+});

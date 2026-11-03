@@ -17,7 +17,9 @@ function allowed(target: string): boolean {
   ].map((value) => new URL(value).origin);
   return (
     origins.includes(url.origin) &&
-    (url.pathname.startsWith("/api/auth/") || url.pathname === "/api/workspace-policy")
+    (url.pathname.startsWith("/api/auth/") ||
+      url.pathname === "/api/check-user" ||
+      url.pathname === "/api/workspace-policy")
   );
 }
 
