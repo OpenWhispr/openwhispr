@@ -6023,6 +6023,7 @@ class IPCHandlers {
     // resolved to invocable IDs (bare on-demand or geo-scoped profile IDs).
     handleRemoteProduct("bedrock-list-models", async (event, config) => {
       const { mapEnterpriseError } = require("./enterpriseProviderErrors");
+      const signal = this._productRequestContext.getStore().signal;
       try {
         const runtime = await resolveEnterpriseRuntime(
           event,
@@ -6030,6 +6031,7 @@ class IPCHandlers {
           config?.model || "test",
           config
         );
+        signal.throwIfAborted();
         const {
           BedrockClient,
           ListFoundationModelsCommand,
@@ -6057,12 +6059,15 @@ class IPCHandlers {
         const client = new BedrockClient({ region, ...(credentials ? { credentials } : {}) });
 
         const [foundationModels, profileSummaries] = await Promise.all([
-          client.send(new ListFoundationModelsCommand({ byOutputModality: "TEXT" })),
+          client.send(new ListFoundationModelsCommand({ byOutputModality: "TEXT" }), {
+            abortSignal: signal,
+          }),
           (async () => {
             const summaries = [];
             const paginator = paginateListInferenceProfiles(
               { client },
-              { typeEquals: "SYSTEM_DEFINED" }
+              { typeEquals: "SYSTEM_DEFINED" },
+              { abortSignal: signal }
             );
             for await (const page of paginator) {
               summaries.push(...(page.inferenceProfileSummaries || []));
