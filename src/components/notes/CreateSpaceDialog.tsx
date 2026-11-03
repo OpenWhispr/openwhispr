@@ -61,12 +61,10 @@ interface CreateSpaceDialogProps {
   revealOnCreate?: boolean;
 }
 
-// An invitation that can't come out of an address someone is already part of, or has already
-// been asked to join, loses nothing: the person is on their way into the workspace either way.
-const NOT_A_FAILURE = new Set(["alreadyMember", "alreadyInvited"]);
-
 // The teamspace exists by now, so this never throws: whatever goes wrong here is a count of
-// people to invite from Members, never a failed create.
+// people to invite from Members, never a failed create. Every address that didn't come back
+// invited counts, an existing member or a pending invitation included: the API refuses those two
+// outright and attaches no teamspace to them, so they are not in it.
 async function inviteIntoTeamspace(
   workspaceId: string,
   cloudSpaceId: string | null,
@@ -83,8 +81,7 @@ async function inviteIntoTeamspace(
       spaceIds: [cloudSpaceId],
       onResult: (_email, outcome) => {
         // `=== true`: src compiles without strictNullChecks, where a bare `ok` doesn't narrow.
-        if (outcome.ok === true) return;
-        if (!NOT_A_FAILURE.has(outcome.kind)) failed += 1;
+        if (outcome.ok !== true) failed += 1;
       },
     });
   } catch {
@@ -317,6 +314,13 @@ export default function CreateSpaceDialog({
       );
     } catch (error) {
       const classified = classifySpaceError(error);
+      if (classified.kind === "notWorkspaceMembers") {
+        // They left the workspace since the roster loaded, so the same ids would be refused again.
+        const left = new Set(classified.userIds);
+        setPicked((current) =>
+          current.filter((recipient) => recipient.kind !== "member" || !left.has(recipient.userId))
+        );
+      }
       if (classified.kind === "nameTaken") {
         setTakenName(trimmedName);
         setRefocus("name");
@@ -338,21 +342,27 @@ export default function CreateSpaceDialog({
       space?.cloud_space_id ?? null,
       emails.map(({ email }) => email)
     );
-    if (revealOnCreate && space) {
-      revealContainer(space.id, null);
-      setActiveContext(space.id, null);
+    try {
+      if (revealOnCreate && space) {
+        revealContainer(space.id, null);
+        setActiveContext(space.id, null);
+      }
+      const spaceName = isolate(trimmedName);
+      toast({
+        title:
+          failedInvitations > 0
+            ? t("settingsPage.workspace.teamspaces.form.createdInviteFailed", {
+                space: spaceName,
+                count: failedInvitations,
+              })
+            : t("settingsPage.workspace.teamspaces.form.created", { space: spaceName }),
+      });
+    } catch (error) {
+      // The teamspace is made; a failed reveal or toast must not leave Creating blocking every way out.
+      console.error("Create teamspace follow-up failed:", error);
+    } finally {
+      closeDialog();
     }
-    const spaceName = isolate(trimmedName);
-    toast({
-      title:
-        failedInvitations > 0
-          ? t("settingsPage.workspace.teamspaces.form.createdInviteFailed", {
-              space: spaceName,
-              count: failedInvitations,
-            })
-          : t("settingsPage.workspace.teamspaces.form.created", { space: spaceName }),
-    });
-    closeDialog();
   };
 
   const primaryLabel = isCreating
@@ -376,7 +386,7 @@ export default function CreateSpaceDialog({
       <Dialog open={open && !needsWorkspace} onOpenChange={handleOpenChange}>
         <DialogContent
           hideCloseButton
-          className="w-[420px] max-w-[calc(100vw-32px)] items-stretch gap-6 rounded-[28px] p-5 sm:max-w-[420px]"
+          className="max-h-[calc(100vh-32px)] w-[420px] max-w-[calc(100vw-32px)] grid-cols-1 items-stretch gap-6 overflow-y-auto rounded-[28px] p-5 sm:max-w-[420px]"
         >
           <DialogHeader className="items-center gap-3 space-y-0 text-center sm:text-center">
             <div className="flex size-[42px] items-center justify-center rounded-full bg-surface-3 text-foreground">

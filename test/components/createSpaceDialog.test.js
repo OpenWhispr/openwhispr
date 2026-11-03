@@ -139,7 +139,10 @@ test.before(async (t) => {
       "/services/TeamsService":
         "export const TeamsService = { list: (id) => globalThis.__listGroups(id) };",
       "/stores/noteStore": `
-        export const revealContainer = (...args) => globalThis.__navigation.push(["reveal", ...args]);
+        export const revealContainer = (...args) => {
+          if (globalThis.__revealThrows) throw new Error("store unavailable");
+          globalThis.__navigation.push(["reveal", ...args]);
+        };
         export const setActiveContext = (...args) => globalThis.__navigation.push(["context", ...args]);
       `,
       "/CreateWorkspaceDialog": `
@@ -359,6 +362,9 @@ test("Default and Open start off and travel in the request", async (t) => {
   );
   assert.match(text(dialog()), /Add new workspace members automatically\./);
   assert.match(text(dialog()), /Let workspace members join\./);
+  // A short window scrolls the form instead of pushing Create off the screen.
+  assert.match(dialog().className, /max-h-\[calc\(100vh-32px\)\]/);
+  assert.match(dialog().className, /overflow-y-auto/);
 
   await type(nameInput(), "Customer Calls");
   await click(createButton());
@@ -617,12 +623,44 @@ test("a refusal shows the server's own message in the bar", async (t) => {
   );
 });
 
-test("failed invitations still report the teamspace as created", async (t) => {
+test("someone who left the workspace is dropped, so Try again can succeed", async (t) => {
+  let attempts = 0;
+  const { callsTo, closes } = await mount(t, {
+    createSpace: async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw new CloudApiError("Not workspace members", 400, "not_workspace_members", {
+          user_ids: ["saket"],
+        });
+      }
+      return localSpace();
+    },
+  });
+  await type(nameInput(), "Customer Calls");
+  await pickPerson("Saket");
+  await pickPerson("Ethan");
+  await addAddress("newcomer@example.com");
+  await click(createButton());
+
+  assert.deepEqual(closes, []);
+  assert.deepEqual(chipTexts(), ["Ethan", "newcomer@example.com"], "only the one who left goes");
+  assert.equal(
+    text(dialog().querySelector('[role="alert"]')),
+    "Couldn't create teamspace. Your details are saved. Try again."
+  );
+  assert.ok(retryButton());
+
+  await click(retryButton());
+  assert.deepEqual(callsTo("createSpace")[1][3], { memberIds: ["ethan"], teamIds: [] });
+  assert.deepEqual(closes, [false]);
+});
+
+test("failed invitations still report the teamspace as created, refused ones included", async (t) => {
   const outcomes = {
     "ok@example.com": { ok: true, emailSent: true },
     "broken@example.com": { ok: false, kind: "requestFailed" },
     "full@example.com": { ok: false, kind: "seatLimit" },
-    // Already in, or already invited: nothing was lost, so nothing is reported.
+    // The API refuses these two outright and attaches no teamspace, so neither person is in it.
     "member@example.com": { ok: false, kind: "alreadyMember" },
     "waiting@example.com": { ok: false, kind: "alreadyInvited" },
   };
@@ -637,7 +675,7 @@ test("failed invitations still report the teamspace as created", async (t) => {
 
   assert.equal(
     readable(toasts()[0].title),
-    "Created Customer Calls. Couldn't invite 2 people. Invite them from Members."
+    "Created Customer Calls. Couldn't invite 4 people. Invite them from Members."
   );
   assert.equal(toasts().length, 1, "one message, not a success and an error");
   assert.deepEqual(closes, [false], "the teamspace exists, so the dialog closes");
@@ -645,6 +683,19 @@ test("failed invitations still report the teamspace as created", async (t) => {
     ["reveal", 7, null],
     ["context", 7, null],
   ]);
+});
+
+test("a reveal that throws doesn't leave the dialog stuck on Creating", async (t) => {
+  const errors = [];
+  t.mock.method(console, "error", (...args) => errors.push(args));
+  const { closes } = await mount(t);
+  globalThis.__revealThrows = true;
+  t.after(() => delete globalThis.__revealThrows);
+  await type(nameInput(), "Customer Calls");
+  await click(createButton());
+
+  assert.deepEqual(closes, [false], "the teamspace exists, so the way out stays open");
+  assert.equal(errors.length, 1);
 });
 
 test("one failed invitation reads in the singular", async (t) => {
@@ -727,10 +778,18 @@ test("Creating blocks closing", async (t) => {
 });
 
 test("a dialog that isn't creating closes on Escape and Cancel", async (t) => {
-  const { closes, callsTo } = await mount(t);
+  const { closes, callsTo, reopen } = await mount(t);
   await type(nameInput(), "Customer Calls");
   await press(nameInput(), "Escape");
   assert.deepEqual(closes, [false]);
+  assert.ok(dialog() === null);
+
+  await reopen();
+  await settle();
+  assert.ok(dialog(), "the dialog is back");
+  await click(buttonNamed("Cancel"));
+  assert.deepEqual(closes, [false, false]);
+  assert.ok(dialog() === null);
   assert.equal(callsTo("createSpace").length, 0);
 });
 
