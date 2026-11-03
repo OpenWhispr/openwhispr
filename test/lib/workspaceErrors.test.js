@@ -229,3 +229,16 @@ test("other removal failures fall back to row action kinds", () => {
   });
   assert.deepEqual(classifyRemovalError(new CloudApiError("Network", 0)), { kind: "failed" });
 });
+
+test("a rate-limited invite keeps how many fit and the daily limit", () => {
+  const message = "Too many invitations right now. Try again later.";
+  const limited = (details) => new CloudApiError(message, 429, "rate_limited", details);
+
+  assert.deepEqual(classifyInviteError(limited({ limit: 50, available: 20, requested: 60 })), {
+    kind: "rateLimited",
+    available: 20,
+    limit: 50,
+  });
+  // An older answer without the numbers has nothing to trim to.
+  assert.deepEqual(classifyInviteError(limited(undefined)), { kind: "rateLimited" });
+});

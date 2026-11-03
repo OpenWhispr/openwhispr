@@ -21,7 +21,12 @@ const invitation = (id) => ({
   revoked_at: null,
 });
 const INVITATIONS = [invitation("a"), invitation("b"), invitation("c")];
-const outcome = ({ done = [], failed = [] } = {}) => ({ done, noEmail: [], failed });
+const outcome = ({ done = [], gone = [], failed = [] } = {}) => ({
+  done,
+  noEmail: [],
+  gone,
+  failed,
+});
 const failure = (id, kind = "failed") => ({ id, error: { kind } });
 
 const GLOBALS = ["__actionDialogProps", "__toasts", "__cancelCalls", "__cancelImpl"];
@@ -90,6 +95,7 @@ async function loadDialog(t) {
   const mount = async (initial) => {
     const events = [];
     const canceled = [];
+    const goneReports = [];
     let send;
     function Harness() {
       const [state, dispatch] = React.useReducer(confirmActionReducer, initial);
@@ -102,7 +108,10 @@ async function loadDialog(t) {
         workspace: WORKSPACE,
         state,
         dispatch: record,
-        onCanceled: (ids) => canceled.push(ids),
+        onCanceled: (ids, anyGone) => {
+          canceled.push(ids);
+          goneReports.push(anyGone);
+        },
       });
     }
     const container = installHostDom(t);
@@ -112,6 +121,7 @@ async function loadDialog(t) {
     return {
       events,
       canceled,
+      goneReports,
       text: () => textOf(container),
       send: (event) => React.act(async () => send(event)),
       clickPrimary: () => React.act(async () => globalThis.__actionDialogProps.primary.onClick()),
@@ -263,6 +273,55 @@ test("a rate limit says so, even after some were canceled", async (t) => {
   globalThis.__cancelImpl = async (ids) => outcome({ done: ids });
   await partial.clickPrimary();
   assert.deepEqual(globalThis.__cancelCalls.at(-1)[1], ["b", "c"]);
+});
+
+test("an invitation no longer pending isn't counted as canceled", async (t) => {
+  const { mount, confirming } = await loadDialog(t);
+  globalThis.__cancelImpl = async () => outcome({ done: ["a", "b"], gone: ["c"] });
+  const view = await mount(confirming());
+
+  await view.clickPrimary();
+
+  assert.deepEqual(globalThis.__toasts, [
+    {
+      title: 'workspaces.cancelInvitations.done|{"count":2}',
+      description: 'settingsPage.workspace.people.invitations.noLongerPendingMany|{"count":1}',
+    },
+  ]);
+  assert.deepEqual(view.canceled, [["a", "b", "c"]]);
+  assert.deepEqual(view.goneReports, [true]);
+});
+
+test("when all were already gone, nothing claims to have canceled them", async (t) => {
+  const { mount, confirming } = await loadDialog(t);
+  globalThis.__cancelImpl = async () => outcome({ gone: ["a", "b", "c"] });
+  const view = await mount(confirming());
+
+  await view.clickPrimary();
+
+  assert.deepEqual(globalThis.__toasts, [
+    { title: 'settingsPage.workspace.people.invitations.noLongerPendingMany|{"count":3}' },
+  ]);
+  assert.deepEqual(view.goneReports, [true]);
+});
+
+test("a retry counts what went earlier", async (t) => {
+  const { mount, confirming } = await loadDialog(t);
+  globalThis.__cancelImpl = async () =>
+    outcome({ gone: ["a"], failed: [failure("b"), failure("c")] });
+  const view = await mount(confirming());
+  await view.clickPrimary();
+  globalThis.__cancelImpl = async (ids) => outcome({ done: ids });
+
+  await view.clickPrimary();
+
+  assert.deepEqual(globalThis.__toasts, [
+    {
+      title: 'workspaces.cancelInvitations.done|{"count":2}',
+      description: 'settingsPage.workspace.people.invitations.noLongerPendingMany|{"count":1}',
+    },
+  ]);
+  assert.deepEqual(view.goneReports, [true, false]);
 });
 
 test("a dialog opened again starts from its own selection", async (t) => {

@@ -4,6 +4,8 @@ import { parseAddressList } from "../utils/emailApprovalFields";
 import { EMAIL_REGEX } from "../utils/validation";
 
 export const MAX_INVITE_RECIPIENTS = 100;
+// The server refuses the whole batch over one longer address, so it's caught here, on its chip.
+const MAX_EMAIL_LENGTH = 320;
 
 export type RecipientState =
   | { status: "draft" }
@@ -29,6 +31,8 @@ export interface InviteFlowState {
   invitedEmails: string[];
   /** Invitations the workspace can still take; null while unknown, which never warns or blocks. */
   seats: InviteSeats;
+  /** From the last rate-limit refusal that left room; a send that goes through clears it. */
+  rateLimit: { available: number; limit: number } | null;
 }
 
 export interface InviteSeats {
@@ -43,6 +47,7 @@ export type InviteFlowEvent =
   | { type: "commit" }
   | { type: "add"; email: string }
   | { type: "remove"; email: string }
+  | { type: "removeLast"; count: number }
   | { type: "role"; role: "admin" | "member" }
   | { type: "roster"; memberEmails: string[]; invitedEmails: string[] }
   | ({ type: "seats" } & InviteSeats)
@@ -59,12 +64,19 @@ export interface InviteSummary {
   sendable: string[];
   canSend: boolean;
   tooMany: boolean;
+  /** How many to remove to fit one send. */
+  tooManyBy: number;
   invalid: InviteRecipient[];
   /** Members and pending invitations: never sent, and they never block sending. */
   skipped: InviteRecipient[];
   /** A warning only. */
   overSeats: SeatShortfall | null;
   overCeiling: SeatShortfall | null;
+  /**
+   * More than the last rate-limit refusal had room for. Never blocks Send: only the server knows
+   * whether its window has moved on, and a refused batch costs nothing.
+   */
+  overRateLimit: (SeatShortfall & { limit: number }) | null;
   failed: InviteRecipient[];
   noEmailCount: number;
 }
@@ -83,7 +95,7 @@ function normalize(email: string): string {
 
 // Deliberately loose: the server has the final say on what an address is.
 function isValidEmail(email: string): boolean {
-  return EMAIL_REGEX.test(email);
+  return email.length <= MAX_EMAIL_LENGTH && EMAIL_REGEX.test(email);
 }
 
 /** The addresses in pasted or typed text, with any "Name <address>" reduced to its address. */
@@ -187,6 +199,7 @@ function resolveResult(
       ...state,
       recipients: state.recipients.filter((recipient) => recipient !== chip),
       sent: [...state.sent, { email: target, emailSent: outcome.emailSent }],
+      rateLimit: null,
     };
   }
 
@@ -198,8 +211,16 @@ function resolveResult(
       ? outcome.available
       : null;
 
+  // A rate limit that left room is the same: the batch was all or nothing, so trimming to the room
+  // lets the rest go. With no room there is nothing to trim to, and the chips wait to be retried.
+  const rateLimited = outcome.kind === "rateLimited";
+  const rateRoom =
+    rateLimited && outcome.available > 0
+      ? { available: outcome.available, limit: outcome.limit }
+      : null;
+
   let next: RecipientState;
-  if (seatRoom !== null) next = { status: "draft" };
+  if (seatRoom !== null || rateRoom !== null) next = { status: "draft" };
   else if (outcome.kind === "invalid") next = { status: "invalid" };
   else if (outcome.kind === "alreadyMember" || outcome.kind === "alreadyInvited") {
     next = { status: "blocked", reason: outcome.kind };
@@ -212,10 +233,19 @@ function resolveResult(
   return {
     ...state,
     seats,
+    rateLimit: rateLimited ? rateRoom : state.rateLimit,
     recipients: state.recipients.map((recipient) =>
       recipient === chip ? { email: recipient.email, state: next } : recipient
     ),
   };
+}
+
+// Removing the last chip that needed attention must still confirm the invitations that went out,
+// and warn about any whose email wasn't delivered.
+function withRecipients(state: InviteFlowState, recipients: InviteRecipient[]): InviteFlowState {
+  const settled =
+    state.phase === "editing" && isSettled(recipients, state.sent) && state.draft === "";
+  return { ...state, recipients, phase: settled ? "done" : state.phase };
 }
 
 export function createInviteFlow(input: { initialEmail?: string }): InviteFlowState {
@@ -228,6 +258,7 @@ export function createInviteFlow(input: { initialEmail?: string }): InviteFlowSt
     memberEmails: [],
     invitedEmails: [],
     seats: { purchasedLeft: null, ceilingLeft: null },
+    rateLimit: null,
   };
   const initialEmail = input.initialEmail?.trim() ?? "";
   if (!initialEmail) return base;
@@ -268,10 +299,14 @@ export function inviteSummary(state: InviteFlowState): InviteSummary {
   const invalid = state.recipients.filter(({ state: chip }) => chip.status === "invalid");
   const skipped = state.recipients.filter(({ state: chip }) => chip.status === "blocked");
   const failed = state.recipients.filter(({ state: chip }) => chip.status === "failed");
-  const tooMany =
-    state.recipients.length - skipped.length + (draftAddsChip ? 1 : 0) > MAX_INVITE_RECIPIENTS;
+  const tooManyBy = Math.max(
+    0,
+    state.recipients.length - skipped.length + (draftAddsChip ? 1 : 0) - MAX_INVITE_RECIPIENTS
+  );
+  const tooMany = tooManyBy > 0;
   const overSeats = shortfall(state.seats.purchasedLeft, sendable.length);
   const overCeiling = shortfall(state.seats.ceilingLeft, sendable.length);
+  const overRateRoom = state.rateLimit && shortfall(state.rateLimit.available, sendable.length);
 
   return {
     sendable,
@@ -283,10 +318,12 @@ export function inviteSummary(state: InviteFlowState): InviteSummary {
       overCeiling === null &&
       draftAllowsSend,
     tooMany,
+    tooManyBy,
     invalid,
     skipped,
     overSeats,
     overCeiling,
+    overRateLimit: overRateRoom && { ...overRateRoom, limit: state.rateLimit.limit },
     failed,
     noEmailCount: state.sent.filter((entry) => !entry.emailSent).length,
   };
@@ -321,12 +358,23 @@ export function inviteReducer(state: InviteFlowState, event: InviteFlowEvent): I
     case "remove": {
       const target = normalize(event.email);
       if (!state.recipients.some((recipient) => recipient.email === target)) return state;
-      const recipients = state.recipients.filter((recipient) => recipient.email !== target);
-      // Removing the last failed chip of a partial send must still confirm the invitations that
-      // went out, and warn about any whose email wasn't delivered.
-      const settled =
-        state.phase === "editing" && isSettled(recipients, state.sent) && state.draft === "";
-      return { ...state, recipients, phase: settled ? "done" : state.phase };
+      return withRecipients(
+        state,
+        state.recipients.filter((recipient) => recipient.email !== target)
+      );
+    }
+    case "removeLast": {
+      // Skipped chips are never sent, so removing them wouldn't bring the send any closer to fitting.
+      const committed = commitDraft(state);
+      const removing = new Set(
+        committed.recipients
+          .filter((recipient) => recipient.state.status !== "blocked")
+          .slice(-event.count)
+      );
+      return withRecipients(
+        committed,
+        committed.recipients.filter((recipient) => !removing.has(recipient))
+      );
     }
     case "role":
       return { ...state, role: event.role };

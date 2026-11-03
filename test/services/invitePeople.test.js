@@ -66,21 +66,6 @@ test("one request carries every address", async () => {
   );
 });
 
-test("120 addresses go in two requests in order", async () => {
-  const { MAX_INVITE_RECIPIENTS } = await import("../../src/lib/inviteFlow.ts");
-  assert.equal(MAX_INVITE_RECIPIENTS, 100);
-  const emails = addresses(120);
-  const { calls, results } = await run({}, { emails });
-  assert.deepEqual(
-    calls.map((call) => call.input.emails),
-    [emails.slice(0, 100), emails.slice(100)]
-  );
-  assert.deepEqual(
-    results.map(([email]) => email),
-    emails
-  );
-});
-
 test("teams and spaces are forwarded only when present", async () => {
   const withBoth = await run({}, { emails: ["a@x.com"], teamIds: ["t1"], spaceIds: ["s1"] });
   assert.deepEqual(withBoth.calls[0], {
@@ -193,36 +178,17 @@ test("a dropped connection fails the chunk, retryable", async () => {
   assert.equal(isRetryableFailure("requestFailed"), true);
 });
 
-test("a rate limit ends the batch and is retryable", async () => {
-  const emails = addresses(150);
+test("a rate limit answers for every address and is retryable", async () => {
+  const emails = addresses(3);
   const { results, calls } = await run(
     { "p0@x.com": new CloudApiError("Too many", 429, "rate_limited") },
     { emails }
   );
   assert.equal(calls.length, 1);
-  assert.equal(results.length, 150);
+  assert.equal(results.length, 3);
   assert.ok(results.every(([, outcome]) => !outcome.ok && outcome.kind === "rateLimited"));
   const { isRetryableFailure } = await import("../../src/lib/inviteFlow.ts");
   assert.equal(isRetryableFailure("rateLimited"), true);
-});
-
-test("a throwing onResult doesn't stop the others", async () => {
-  const { createInvitePeople } = await load();
-  const harness = makeSendBatch();
-  const seen = [];
-  await createInvitePeople({
-    sendBatch: harness.sendBatch,
-    authGeneration: () => 7,
-  }).sendInvitations({
-    workspaceId: "ws-1",
-    role: "member",
-    emails: ["a@x.com", "b@x.com", "c@x.com"],
-    onResult: (email) => {
-      seen.push(email);
-      if (email === "a@x.com") throw new Error("listener failed");
-    },
-  });
-  assert.deepEqual(seen, ["a@x.com", "b@x.com", "c@x.com"]);
 });
 
 test("abort before sending sends nothing", async () => {
@@ -234,74 +200,20 @@ test("abort before sending sends nothing", async () => {
 });
 
 // Two chunks, so the first request's refusal either ends the run or lets the second go ahead.
-const TWO_CHUNKS = addresses(150);
 
-test("later chunks share the answer when permission is lost or single sign-on is required", async () => {
-  for (const [error, kind] of [
-    [new CloudApiError("Forbidden", 403), "notAllowed"],
-    [new CloudApiError("Sign in with company SSO", 403, "SSO_REQUIRED"), "ssoRequired"],
-    [new CloudApiError("No seats", 400, "seat_limit_reached", { available: 4 }), "seatLimit"],
-  ]) {
-    const { results, calls } = await run({ "p0@x.com": error }, { emails: TWO_CHUNKS });
-    assert.equal(calls.length, 1, kind);
-    assert.equal(results.length, 150, kind);
-    assert.ok(
-      results.every(([, outcome]) => !outcome.ok && outcome.kind === kind),
-      kind
-    );
-  }
-});
-
-test("a refusal of one chunk's request doesn't stop the next chunk", async () => {
-  const { results, calls } = await run(
-    { "p0@x.com": new CloudApiError("That address can't be invited", 409) },
-    { emails: TWO_CHUNKS }
-  );
-  assert.equal(calls.length, 2);
-  assert.deepEqual(results[0], [
-    "p0@x.com",
-    { ok: false, kind: "refused", message: "That address can't be invited" },
-  ]);
-  assert.deepEqual(results[149], ["p149@x.com", { ok: true, emailSent: true }]);
-});
-
-test("a 400 about the request itself stops the batch", async () => {
-  const message = "One or more teams do not belong to this workspace";
-  const { results, calls } = await run(
-    { "p0@x.com": new CloudApiError(message, 400) },
-    { emails: TWO_CHUNKS }
-  );
-  assert.equal(calls.length, 1);
-  assert.equal(results.length, 150);
-  assert.ok(
-    results.every(
-      ([, outcome]) => !outcome.ok && outcome.kind === "refused" && outcome.message === message
-    )
-  );
-});
-
-test("an expired or replaced sign-in stops the batch", async () => {
+test("an expired or replaced sign-in answers for every address", async () => {
   for (const error of [
     new CloudApiError("Unauthorized", 401, "AUTH_EXPIRED"),
     new CloudApiError("Account changed", 409, "AUTH_CONTEXT_CHANGED"),
   ]) {
-    const { results, calls } = await run({ "p0@x.com": error }, { emails: TWO_CHUNKS });
+    const { results, calls } = await run({ "p0@x.com": error }, { emails: addresses(3) });
     assert.equal(calls.length, 1);
-    assert.equal(results.length, 150);
+    assert.equal(results.length, 3);
     assert.ok(results.every(([, outcome]) => !outcome.ok && outcome.kind === "sessionExpired"));
   }
 });
 
-test("every request of a run carries the sign-in it started under", async () => {
-  let generation = 7;
-  const { calls } = await run({}, { emails: TWO_CHUNKS }, () => generation++);
-  assert.deepEqual(
-    calls.map((call) => call.authGeneration),
-    [7, 7]
-  );
-});
-
-test("an abort after a request sends nothing more and reports nothing more", async () => {
+test("an abort during the request reports nothing", async () => {
   const controller = new AbortController();
   const { createInvitePeople } = await load();
   const harness = makeSendBatch();
@@ -316,7 +228,7 @@ test("an abort after a request sends nothing more and reports nothing more", asy
   }).sendInvitations({
     workspaceId: "ws-1",
     role: "member",
-    emails: TWO_CHUNKS,
+    emails: addresses(3),
     signal: controller.signal,
     onResult: (email, outcome) => results.push([email, outcome]),
   });

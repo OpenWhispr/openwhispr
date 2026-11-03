@@ -2,12 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
-const { createRoot } = require("react-dom/client");
-const {
-  createRendererServer,
-  installBrowserGlobals,
-  installHostDom,
-} = require("../lib/rendererTestHarness");
+const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 
 async function loadBar(t) {
   installBrowserGlobals(t);
@@ -34,7 +29,7 @@ test("renders nothing with no selection", async (t) => {
     React.createElement(SelectionBar, {
       count: 0,
       onClear: () => {},
-      actions: [{ label: "Remove", onClick: () => {} }],
+      actions: [{ id: "Remove", label: "Remove", onClick: () => {} }],
     })
   );
 
@@ -49,8 +44,8 @@ test("shows the count, Clear and the actions", async (t) => {
       count: 3,
       onClear: () => {},
       actions: [
-        { label: "Resend invites", onClick: () => {} },
-        { label: "Cancel invites", onClick: () => {}, tone: "destructive" },
+        { id: "Resend invites", label: "Resend invites", onClick: () => {} },
+        { id: "Cancel invites", label: "Cancel invites", onClick: () => {}, tone: "destructive" },
       ],
     })
   );
@@ -82,52 +77,39 @@ test("a busy action disables every action", async (t) => {
       count: 2,
       onClear: () => {},
       actions: [
-        { label: "Resending…", onClick: () => {}, busy: true },
-        { label: "Cancel invites", onClick: () => {}, tone: "destructive" },
+        { id: "Resending…", label: "Resending…", onClick: () => {}, busy: true },
+        { id: "Cancel invites", label: "Cancel invites", onClick: () => {}, tone: "destructive" },
       ],
     })
   );
 
   const [, busy, other] = buttons(markup);
-  assert.match(busy, /disabled=""/);
+  // Not `disabled`, which would drop focus from the button that was just pressed.
+  assert.match(busy, /aria-disabled="true"/);
+  assert.doesNotMatch(busy, /\sdisabled=""/);
   assert.match(busy, /animate-spin/);
-  assert.match(other, /disabled=""/);
+  assert.match(other, /aria-disabled="true"/);
   assert.doesNotMatch(other, /animate-spin/);
 });
 
-function findNode(node, predicate) {
-  if (node.nodeType === 1 && predicate(node)) return node;
-  for (const child of node.childNodes ?? []) {
-    const found = findNode(child, predicate);
-    if (found) return found;
-  }
-  return null;
-}
-
-test("the mixed checkbox is indeterminate", async (t) => {
-  let root;
-  // Registered first so it runs before the browser globals are taken down.
-  t.after(async () => React.act(async () => root?.unmount()));
-  const { RowCheckbox } = await loadBar(t);
-  const container = installHostDom(t);
-  root = createRoot(container);
+test("the mixed checkbox announces itself and draws a dash", async (t) => {
+  installBrowserGlobals(t);
+  const vite = await createRendererServer(t, { cachePrefix: "openwhispr-row-checkbox-" });
+  const { RowCheckbox } = await vite.ssrLoadModule("/components/dictionary/RowCheckbox.tsx");
   const render = (checked) =>
-    React.act(async () =>
-      root.render(
-        React.createElement(RowCheckbox, { checked, onChange: () => {}, label: "Select all" })
-      )
+    renderToStaticMarkup(
+      React.createElement(RowCheckbox, { checked, onToggle: () => {}, label: "Select all" })
     );
 
-  await render("mixed");
-  const input = findNode(container, (node) => node.localName === "input");
-  assert.ok(input, "native checkbox");
-  assert.equal(input.type, "checkbox");
-  assert.equal(input.getAttribute("aria-label"), "Select all");
-  assert.equal(input.indeterminate, true);
+  assert.match(render("mixed"), /role="checkbox"/);
+  assert.match(render("mixed"), /aria-checked="mixed"/);
+  assert.match(render("mixed"), /aria-label="Select all"/);
+  assert.match(render("mixed"), /d="M4 8H12"/);
 
-  await render(true);
-  assert.equal(input.indeterminate, false);
-  assert.equal(input.checked, true);
+  assert.match(render(true), /aria-checked="true"/);
+  assert.doesNotMatch(render(true), /M4 8H12/);
+  assert.match(render(false), /aria-checked="false"/);
+  assert.doesNotMatch(render(false), /<svg/);
 });
 
 test("the bar wraps inside a narrow pane and its labels never truncate", async (t) => {
@@ -137,7 +119,9 @@ test("the bar wraps inside a narrow pane and its labels never truncate", async (
     React.createElement(SelectionBar, {
       count: 2,
       onClear: () => {},
-      actions: [{ label: "Einladungen erneut senden", onClick: () => {} }],
+      actions: [
+        { id: "Einladungen erneut senden", label: "Einladungen erneut senden", onClick: () => {} },
+      ],
     })
   );
 

@@ -313,10 +313,12 @@ test("closing the page mid-send stops the rest of the run", async (t) => {
   release();
   await sending;
   assert.deepEqual(invited, []);
-  assert.equal(globalThis.__refreshCalls, undefined);
+  assert.deepEqual(globalThis.__refreshCalls, OPENING_REFRESH);
 });
 
 const WORKSPACE = { id: "w1", name: "Acme", role: "admin", seats: 20, seat_limit: 500 };
+
+const OPENING_REFRESH = [{ fresh: true }];
 
 async function mountWithWorkspace(t, workspace, props = {}, options) {
   globalThis.__workspaces = [workspace];
@@ -420,20 +422,6 @@ test("a subscribed workspace with no count to show hides the line and reads no m
   await React.act(async () => {});
 
   assert.equal(latest().seatLine, null);
-  assert.equal(globalThis.__memberListCalls, undefined);
-});
-
-test("an older API's preview still fills the seat line", async (t) => {
-  globalThis.__seatPreview = {
-    seats_used: 9,
-    current_quantity: 20,
-    amount_due: 1200,
-    currency: "usd",
-  };
-  const { latest } = await mountWithWorkspace(t, { ...WORKSPACE, has_subscription: true });
-  await React.act(async () => {});
-
-  assert.equal(latest().seatLine, 'workspaces.invite.seatUsage|{"used":9,"seats":20}');
   assert.equal(globalThis.__memberListCalls, undefined);
 });
 
@@ -631,6 +619,24 @@ test("Upgrade pressed as a send starts leaves the run alone", async (t) => {
   assert.deepEqual(invited, [["a@x.com"]]);
 });
 
+test("opening reads the workspace list, since canceled invitations free seats", async (t) => {
+  await mountWithWorkspace(t, WORKSPACE, {});
+
+  assert.deepEqual(globalThis.__refreshCalls, OPENING_REFRESH);
+});
+
+test("a team or teamspace invite tells the view skipped people aren't added", async (t) => {
+  const { latest } = await mountWithWorkspace(t, WORKSPACE, { spaceIds: ["s1"] });
+
+  assert.equal(latest().addsToContainer, true);
+});
+
+test("a workspace invite doesn't", async (t) => {
+  const { latest } = await mountWithWorkspace(t, WORKSPACE, { teamIds: [] });
+
+  assert.equal(latest().addsToContainer, false);
+});
+
 test("a ceiling refusal refreshes the workspace list so the seats catch up", async (t) => {
   globalThis.__sendOutcome = { ok: false, kind: "seatLimit", available: 0 };
   const { latest } = await mountWithWorkspace(
@@ -643,7 +649,7 @@ test("a ceiling refusal refreshes the workspace list so the seats catch up", asy
 
   await React.act(async () => latest().onSend());
 
-  assert.deepEqual(globalThis.__refreshCalls, [{ fresh: true }]);
+  assert.deepEqual(globalThis.__refreshCalls, [...OPENING_REFRESH, { fresh: true }]);
   assert.equal(latest().state.seats.ceilingLeft, 0);
 });
 
@@ -652,7 +658,7 @@ test("a run that invited someone refreshes the workspace list so the seats count
 
   await React.act(async () => latest().onSend());
 
-  assert.deepEqual(globalThis.__refreshCalls, [{ fresh: true }]);
+  assert.deepEqual(globalThis.__refreshCalls, [...OPENING_REFRESH, { fresh: true }]);
 });
 
 test("a run that invited nobody and met no seat refusal leaves the workspace list alone", async (t) => {
@@ -661,7 +667,7 @@ test("a run that invited nobody and met no seat refusal leaves the workspace lis
 
   await React.act(async () => latest().onSend());
 
-  assert.equal(globalThis.__refreshCalls, undefined);
+  assert.deepEqual(globalThis.__refreshCalls, OPENING_REFRESH);
 });
 
 test("an already-member refusal from the switcher invites nobody and says so", async (t) => {
@@ -681,7 +687,7 @@ test("an already-member refusal from the switcher invites nobody and says so", a
     { email: "m@x.com", state: { status: "blocked", reason: "alreadyMember" } },
   ]);
   assert.deepEqual(invited, []);
-  assert.equal(globalThis.__refreshCalls, undefined);
+  assert.deepEqual(globalThis.__refreshCalls, OPENING_REFRESH);
 });
 
 test("a run answered already invited refreshes the workspace list so the seats count them", async (t) => {
@@ -691,7 +697,7 @@ test("a run answered already invited refreshes the workspace list so the seats c
   await React.act(async () => latest().onSend());
 
   assert.equal(latest().state.phase, "editing");
-  assert.deepEqual(globalThis.__refreshCalls, [{ fresh: true }]);
+  assert.deepEqual(globalThis.__refreshCalls, [...OPENING_REFRESH, { fresh: true }]);
 });
 
 test("an already-invited answer asks the caller to reload", async (t) => {

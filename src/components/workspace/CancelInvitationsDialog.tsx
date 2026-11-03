@@ -12,8 +12,11 @@ interface CancelInvitationsDialogProps {
   workspace: Workspace;
   state: ConfirmActionState<WorkspaceInvitation[]>;
   dispatch: (event: ConfirmActionEvent<WorkspaceInvitation[]>) => void;
-  /** Invitations no longer pending, reported as each run ends so the tab can reload and deselect. */
-  onCanceled: (canceledIds: string[]) => void;
+  /**
+   * Invitations no longer pending, reported as each run ends so the tab can reload and deselect.
+   * `anyGone` means some left on their own, and one of those may have been accepted.
+   */
+  onCanceled: (settledIds: string[], anyGone: boolean) => void;
 }
 
 export function CancelInvitationsDialog({
@@ -28,6 +31,7 @@ export function CancelInvitationsDialog({
   const [stillFailing, setStillFailing] = useState<string[] | null>(null);
   // Across tries, so the toast counts everything canceled since the dialog opened.
   const canceledTotalRef = useRef(0);
+  const goneTotalRef = useRef(0);
   const runningRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -48,6 +52,7 @@ export function CancelInvitationsDialog({
     runningRef.current = true;
     if (state.kind === "confirm") {
       canceledTotalRef.current = 0;
+      goneTotalRef.current = 0;
       setStillFailing(null);
     }
     const controller = new AbortController();
@@ -61,11 +66,22 @@ export function CancelInvitationsDialog({
       );
       if (controller.signal.aborted) return;
       canceledTotalRef.current += outcome.done.length;
+      goneTotalRef.current += outcome.gone.length;
 
       if (outcome.failed.length === 0) {
-        toast({
-          title: t("workspaces.cancelInvitations.done", { count: canceledTotalRef.current }),
+        const goneLine = t("settingsPage.workspace.people.invitations.noLongerPendingMany", {
+          count: goneTotalRef.current,
         });
+        toast(
+          canceledTotalRef.current === 0
+            ? { title: goneLine }
+            : {
+                title: t("workspaces.cancelInvitations.done", {
+                  count: canceledTotalRef.current,
+                }),
+                ...(goneTotalRef.current > 0 ? { description: goneLine } : {}),
+              }
+        );
         dispatch({ type: "succeeded" });
       } else {
         setStillFailing(outcome.failed.map(({ id }) => id));
@@ -79,7 +95,8 @@ export function CancelInvitationsDialog({
         );
         dispatch({ type: "failed", error: ended?.error ?? { kind: "failed" } });
       }
-      if (outcome.done.length > 0) onCanceled(outcome.done);
+      const settled = [...outcome.done, ...outcome.gone];
+      if (settled.length > 0) onCanceled(settled, outcome.gone.length > 0);
     } finally {
       runningRef.current = false;
     }

@@ -18,7 +18,7 @@ async function loadView(t) {
       "/ui/dialog": `
         import React from "react";
         export const Dialog = ({ children }) => React.createElement("div", null, children);
-        export const DialogContent = ({ children }) => React.createElement("div", null, children);
+        export const DialogContent = ({ children, className }) => React.createElement("div", { className }, children);
         export const DialogTitle = ({ children }) => React.createElement("h2", null, children);
         export const DialogDescription = ({ children }) => React.createElement("p", null, children);
       `,
@@ -329,12 +329,15 @@ test("done shows the sent count and Done", async (t) => {
   assert.doesNotMatch(markup, /workspaces\.invite\.noEmail/);
   assert.doesNotMatch(markup, /workspaces\.invite\.emailLabel/);
 
-  const undelivered = render({ phase: "done", sent: [{ email: "a@x.com", emailSent: false }] });
-  assert.match(undelivered, /workspaces\.invite\.sentOne/);
-  assert.match(
-    undelivered,
-    /role="alert"[\s\S]*workspaces\.invite\.noEmail\|\{&quot;count&quot;:1\}/
-  );
+  const partly = render({
+    phase: "done",
+    sent: [
+      { email: "a@x.com", emailSent: true },
+      { email: "b@x.com", emailSent: false },
+    ],
+  });
+  assert.match(partly, /workspaces\.invite\.sentTitle\|\{&quot;count&quot;:2\}/);
+  assert.match(partly, /role="alert"[\s\S]*workspaces\.invite\.noEmail\|\{&quot;count&quot;:1\}/);
 });
 
 test("suggestions render as a listbox while typing", async (t) => {
@@ -583,6 +586,140 @@ test("a rate-limited send offers Try resending", async (t) => {
   assert.doesNotMatch(bar.body, /someFailed/);
   assert.equal(bar.action, "workspaces.invite.tryResending");
   assert.doesNotMatch(primaryButton(markup), /disabled=""/);
+});
+
+test("a rate limit that left room says how many fit and how many to remove", async (t) => {
+  const { render } = await loadView(t);
+
+  const markup = render({ recipients: drafts(30), rateLimit: { available: 20, limit: 50 } });
+
+  const [bar] = bars(markup);
+  assert.equal(bar.tone, "error");
+  assert.match(
+    bar.body,
+    /workspaces\.invite\.rateLimitedLeft\|\{&quot;count&quot;:20,&quot;excess&quot;:10\}/
+  );
+  assert.doesNotMatch(primaryButton(markup), /disabled=""/);
+});
+
+test("a batch past the daily limit names the limit, since waiting can't help", async (t) => {
+  const { render } = await loadView(t);
+
+  const [bar] = bars(render({ recipients: drafts(60), rateLimit: { available: 50, limit: 50 } }));
+
+  assert.match(
+    bar.body,
+    /workspaces\.invite\.rateLimitedDaily\|\{&quot;limit&quot;:50,&quot;excess&quot;:10\}/
+  );
+});
+
+test("trimmed to the room, the rate limit says nothing more", async (t) => {
+  const { render } = await loadView(t);
+
+  const markup = render({ recipients: drafts(20), rateLimit: { available: 20, limit: 50 } });
+
+  assert.deepEqual(bars(markup), []);
+});
+
+test("the Done screen says who was skipped", async (t) => {
+  const { render } = await loadView(t);
+  const skipped = (email) => chip(email, { status: "blocked", reason: "alreadyMember" });
+  const done = (recipients, overrides) =>
+    render({ phase: "done", sent: [{ email: "a@x.com", emailSent: true }], recipients }, overrides);
+
+  const one = done([skipped("m@x.com")]);
+  assert.match(one, /role="alert"[\s\S]*workspaces\.invite\.errors\.alreadyMember/);
+  assert.doesNotMatch(one, /<ul/);
+
+  const many = done([skipped("m@x.com"), skipped("n@x.com")]);
+  assert.match(many, /workspaces\.invite\.skippedMany\|\{&quot;count&quot;:2\}/);
+  assert.match(many, /<bdi dir="ltr">m@x\.com<\/bdi>/);
+  assert.match(many, /<bdi dir="ltr">n@x\.com<\/bdi>/);
+
+  assert.doesNotMatch(done([]), /role="alert"/);
+});
+
+test("when no email was delivered, Done doesn't read as a success", async (t) => {
+  const { render } = await loadView(t);
+
+  const markup = render({
+    phase: "done",
+    sent: [
+      { email: "a@x.com", emailSent: false },
+      { email: "b@x.com", emailSent: false },
+    ],
+  });
+
+  assert.match(markup, /workspaces\.invite\.createdTitle\|\{&quot;count&quot;:2\}/);
+  assert.match(markup, /workspaces\.invite\.noEmail\|\{&quot;count&quot;:2\}/);
+  assert.doesNotMatch(markup, /sentTitle|sentMany|text-success/);
+  assert.match(markup, /text-warning/);
+  // In the description, not again in a bar beside it.
+  assert.deepEqual(bars(markup), []);
+});
+
+test("a partial send says what went out while chips still need attention", async (t) => {
+  const { render } = await loadView(t);
+
+  const markup = render({
+    sent: [
+      { email: "a@x.com", emailSent: true },
+      { email: "b@x.com", emailSent: false },
+    ],
+    recipients: [chip("c@x.com", { status: "invalid" })],
+  });
+
+  assert.match(markup, /role="status"[^>]*>workspaces\.invite\.sentTitle\|\{&quot;count&quot;:2\}/);
+  assert.ok(bars(markup).some((bar) => /workspaces\.invite\.noEmail/.test(bar.body)));
+  assert.doesNotMatch(render(), /role="status"/);
+});
+
+test("a send that's too big offers to remove the excess", async (t) => {
+  const { render } = await loadView(t);
+
+  const tooMany = bars(render({ recipients: drafts(103) }))[0];
+  assert.match(tooMany.action, /workspaces\.invite\.removeLast\|\{&quot;count&quot;:3\}/);
+
+  const ceiling = bars(
+    render({ recipients: drafts(30), seats: { purchasedLeft: null, ceilingLeft: 20 } })
+  )[0];
+  assert.match(ceiling.action, /removeLast\|\{&quot;count&quot;:10\}/);
+
+  const limited = bars(
+    render({ recipients: drafts(30), rateLimit: { available: 20, limit: 50 } })
+  )[0];
+  assert.match(limited.action, /removeLast\|\{&quot;count&quot;:10\}/);
+
+  // Removing everyone is no way forward.
+  const full = bars(
+    render({ recipients: drafts(3), seats: { purchasedLeft: null, ceilingLeft: 0 } })
+  )[0];
+  assert.equal(full.action, null);
+});
+
+test("the dialog scrolls rather than pushing its buttons off a short window", async (t) => {
+  const { render } = await loadView(t);
+
+  const markup = render();
+
+  assert.match(markup, /max-h-\[calc\(100vh-32px\)\]/);
+  assert.match(markup, /overflow-y-auto/);
+});
+
+test("a team or teamspace invite says skipped people weren't added", async (t) => {
+  const { render } = await loadView(t);
+  const member = chip("m@x.com", { status: "blocked", reason: "alreadyMember" });
+
+  const done = render(
+    { phase: "done", sent: [{ email: "a@x.com", emailSent: true }], recipients: [member] },
+    { addsToContainer: true }
+  );
+  assert.match(done, /workspaces\.invite\.skippedNotAdded\|\{&quot;count&quot;:1\}/);
+  assert.match(done, /<bdi dir="ltr">m@x\.com<\/bdi>/);
+
+  const [bar] = bars(render({ recipients: [member] }, { addsToContainer: true }));
+  assert.equal(bar.tone, "warning");
+  assert.match(bar.body, /workspaces\.invite\.skippedNotAdded/);
 });
 
 test("Add more appears once there are chips", async (t) => {

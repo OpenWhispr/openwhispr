@@ -286,6 +286,28 @@ test("a refused removal changes nothing locally", async () => {
   assert.deepEqual(names(calls), ["removeMembers"]);
 });
 
+test("a removal with no answer reads the roster and list again, since it may have gone through", async () => {
+  const { createWorkspaceActions } = await load();
+  const input = { userIds: ["user-2"], transferTo: "user-1" };
+  const { calls, deps } = makeHarness({ lost: { removeMembers: new Error("timed out") } });
+
+  await assert.rejects(createWorkspaceActions(deps).removeMembers("ws-1", input), /timed out/);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(names(calls), ["removeMembers", "refreshMembers", "refresh", "requestSyncAll"]);
+});
+
+test("a removal with no answer doesn't wait on those reads to report the failure", async () => {
+  const { createWorkspaceActions } = await load();
+  const { deps } = makeHarness({ lost: { removeMembers: new Error("timed out") } });
+  deps.store.refreshMembers = () => new Promise(() => {});
+
+  await assert.rejects(
+    createWorkspaceActions(deps).removeMembers("ws-1", { userIds: ["user-2"] }),
+    /timed out/
+  );
+});
+
 test("a removal succeeds even when the refreshes fail", async () => {
   const { createWorkspaceActions } = await load();
   const { calls, deps } = makeHarness({

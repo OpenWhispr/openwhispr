@@ -824,8 +824,6 @@ export type InvitationBatchStatus =
 
 export interface InvitationBatchResult {
   results: Array<{ email: string; status: InvitationBatchStatus; email_sent?: boolean }>;
-  seats_used: number;
-  seat_limit: number;
 }
 
 export interface MemberTeamRef {

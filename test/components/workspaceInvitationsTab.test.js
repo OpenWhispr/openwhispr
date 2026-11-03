@@ -108,6 +108,9 @@ async function loadTab(t) {
             refreshMembers: async (workspaceId) => {
               globalThis.__memberRefreshes.push(workspaceId);
             },
+            refresh: async (options) => {
+              (globalThis.__seatRefreshes ??= []).push(options);
+            },
           }),
         };
       `,
@@ -115,6 +118,7 @@ async function loadTab(t) {
         import React from "react";
         export function CancelInvitationDialog(props) {
           globalThis.__cancelState = props.state;
+          globalThis.__cancelProps = props;
           return null;
         }
       `,
@@ -225,7 +229,7 @@ test("a narrow table keeps every email whole, with role and status under it", as
   assert.ok(classes.includes("@xl:truncate"));
   assert.match(
     markup,
-    /<p class="[^"]*@xl:hidden[^"]*text-muted-foreground[^"]*">settingsPage\.workspace\.role\.member · settingsPage\.workspace\.people\.invitations\.pending#3<\/p>/
+    /<p class="[^"]*@xl:hidden[^"]*text-muted-foreground[^"]*">settingsPage\.workspace\.role\.member · <span>settingsPage\.workspace\.people\.invitations\.pending#3<\/span><\/p>/
   );
 });
 
@@ -263,7 +267,7 @@ test("expired keeps its colour in the wide column and reads muted under the emai
   );
   assert.match(
     markup,
-    /<p class="[^"]*@xl:hidden[^"]*text-muted-foreground[^"]*">settingsPage\.workspace\.role\.member · settingsPage\.workspace\.people\.invitations\.expired<\/p>/
+    /<p class="[^"]*@xl:hidden[^"]*text-muted-foreground[^"]*">settingsPage\.workspace\.role\.member · <span class="text-destructive">settingsPage\.workspace\.people\.invitations\.expired<\/span><\/p>/
   );
 });
 
@@ -651,7 +655,6 @@ test("narrow column headers don't wrap", async (t) => {
 const ADA = "\u2068ada@example.com\u2069";
 const SELECT_ROW = "settingsPage.workspace.people.selection.selectRow#";
 const SELECT_ALL = "settingsPage.workspace.people.selection.selectAllInvitations";
-const SELECTION_COUNT = "settingsPage.workspace.people.selection.count#";
 const INVITATIONS = "settingsPage.workspace.people.invitations.";
 
 const twoRows = () => [
@@ -661,14 +664,21 @@ const twoRows = () => [
 const checkbox = (container, label) =>
   findNode(
     container,
-    (node) => node.localName === "input" && node.getAttribute("aria-label") === label
+    (node) => node.getAttribute("role") === "checkbox" && node.getAttribute("aria-label") === label
   );
-const check = async (container, label, checked = true) =>
-  React.act(async () => propsOf(checkbox(container, label)).onChange({ target: { checked } }));
+const check = async (container, label) =>
+  React.act(async () => propsOf(checkbox(container, label)).onClick());
+const ariaChecked = (container, label) => checkbox(container, label).getAttribute("aria-checked");
 const barButton = (container, labelKey) =>
   findNode(
     container,
     (node) => node.localName === "button" && textOf(node).includes(`${INVITATIONS}${labelKey}`)
+  );
+// One selected invitation reads singular, in words the row menu uses too.
+const barAction = (container, labelKey) =>
+  findNode(
+    findNode(container, (node) => node.getAttribute("role") === "region"),
+    (node) => node.localName === "button" && textOf(node) === `${INVITATIONS}${labelKey}`
   );
 const selectedCount = (container) => {
   const match = textOf(container).match(/selection\.count#(\d+)/);
@@ -681,10 +691,9 @@ test("selecting invitations shows Cancel invites and Resend invites", async (t) 
   const container = await mount(t, Tab, ready(rows));
   assert.doesNotMatch(textOf(container), /cancelSelected/);
 
-  await check(container, `${SELECT_ROW}\u2068bob@example.com\u2069`);
+  await check(container, SELECT_ALL);
 
-  assert.equal(selectedCount(container), 1);
-  assert.ok(barButton(container, "cancelSelected"));
+  assert.equal(selectedCount(container), 2);
   assert.ok(barButton(container, "resendSelected"));
   assert.match(
     barButton(container, "cancelSelected").getAttribute("class"),
@@ -693,7 +702,38 @@ test("selecting invitations shows Cancel invites and Resend invites", async (t) 
   );
 
   await React.act(async () => propsOf(barButton(container, "cancelSelected")).onClick());
-  assert.deepEqual(globalThis.__cancelManyProps.state, { kind: "confirm", subject: [rows[1]] });
+  assert.deepEqual(globalThis.__cancelManyProps.state, { kind: "confirm", subject: rows });
+});
+
+test("one selected invitation reads singular and uses its own dialog", async (t) => {
+  const { Tab } = await loadTab(t);
+  const rows = twoRows();
+  const container = await mount(t, Tab, ready(rows));
+
+  await check(container, `${SELECT_ROW}\u2068bob@example.com\u2069`);
+
+  assert.equal(selectedCount(container), 1);
+  assert.doesNotMatch(textOf(container), /cancelSelected|resendSelected/);
+  await React.act(async () => propsOf(barAction(container, "cancel")).onClick());
+
+  assert.deepEqual(globalThis.__cancelProps.state, { kind: "confirm", subject: rows[1] });
+  assert.equal(globalThis.__cancelManyProps.state.kind, "closed");
+});
+
+test("a canceled or renewed invitation re-reads the seats", async (t) => {
+  const { Tab } = await loadTab(t);
+  const container = await mount(t, Tab, ready(twoRows()));
+  globalThis.__seatRefreshes = [];
+  const refreshes = () => globalThis.__seatRefreshes.length;
+
+  await React.act(async () => globalThis.__cancelManyProps.onCanceled(["i1"], false));
+  assert.equal(refreshes(), 1);
+
+  await React.act(async () => globalThis.__cancelProps.onCanceled("canceled"));
+  assert.equal(refreshes(), 2);
+
+  await React.act(async () => propsOf(menuItem(container, "invitations.resend")).onClick());
+  assert.equal(refreshes(), 3);
 });
 
 test("the header checkbox selects every invitation and a second press clears them", async (t) => {
@@ -702,9 +742,9 @@ test("the header checkbox selects every invitation and a second press clears the
 
   await check(container, SELECT_ALL);
   assert.equal(selectedCount(container), 2);
-  assert.equal(checkbox(container, SELECT_ALL).checked, true);
+  assert.equal(ariaChecked(container, SELECT_ALL), "true");
 
-  await check(container, SELECT_ALL, false);
+  await check(container, SELECT_ALL);
   assert.equal(selectedCount(container), 0);
 });
 
@@ -775,12 +815,12 @@ test("a partial resend keeps the failed row selected and names it", async (t) =>
     },
   ]);
   assert.equal(selectedCount(container), 1);
-  assert.equal(checkbox(container, `${SELECT_ROW}\u2068bob@example.com\u2069`).checked, true);
-  assert.equal(checkbox(container, `${SELECT_ROW}${ADA}`).checked, false);
+  assert.equal(ariaChecked(container, `${SELECT_ROW}\u2068bob@example.com\u2069`), "true");
+  assert.equal(ariaChecked(container, `${SELECT_ROW}${ADA}`), "false");
 
   // Resend invites again retries only the failed one.
   globalThis.__bulkResendImpl = async (ids) => ({ done: ids, noEmail: [], failed: [] });
-  await React.act(async () => propsOf(barButton(container, "resendSelected")).onClick());
+  await React.act(async () => propsOf(barAction(container, "resend")).onClick());
   assert.deepEqual(globalThis.__bulkResendCalls.at(-1), ["w1", ["i2"]]);
   assert.equal(selectedCount(container), 0);
 });
@@ -799,8 +839,9 @@ test("resending disables the bar and the row menus", async (t) => {
 
   const resending = barButton(container, "resendingSelected");
   assert.ok(resending, "the bar shows the busy label");
-  assert.ok(resending.hasAttribute("disabled"));
-  assert.ok(barButton(container, "cancelSelected").hasAttribute("disabled"));
+  assert.equal(resending.getAttribute("aria-disabled"), "true");
+  assert.equal(barButton(container, "cancelSelected").getAttribute("aria-disabled"), "true");
+  assert.equal(propsOf(barButton(container, "cancelSelected")).onClick, undefined);
   assert.ok(rowTriggers(container).every((trigger) => trigger.hasAttribute("disabled")));
   assert.doesNotMatch(
     textOf(rowTriggers(container)[0]),
@@ -814,7 +855,7 @@ test("resending disables the bar and the row menus", async (t) => {
 test("resending freezes the checkboxes until it reports", async (t) => {
   const { Tab } = await loadTab(t);
   let finish;
-  globalThis.__bulkResendImpl = (ids) =>
+  globalThis.__bulkResendImpl = () =>
     new Promise((resolve) => (finish = () => resolve({ done: [], noEmail: [], failed: [] })));
   const container = await mount(t, Tab, ready(twoRows()));
   await check(container, SELECT_ALL);
@@ -881,21 +922,7 @@ test("a reload that drops an invitation drops it from the selection", async (t) 
   await React.act(async () => mountedRoots.get(t).render(tabElement(Tab, ready([rows[1]]))));
 
   assert.equal(selectedCount(container), 1);
-  await React.act(async () => propsOf(barButton(container, "cancelSelected")).onClick());
-  assert.deepEqual(globalThis.__cancelManyProps.state.subject, [rows[1]]);
-});
-
-test("the selection clears when the workspace changes", async (t) => {
-  const { Tab } = await loadTab(t);
-  const rows = twoRows();
-  const container = await mount(t, Tab, ready(rows));
-  await check(container, SELECT_ALL);
-
-  await React.act(async () =>
-    mountedRoots.get(t).render(tabElement(Tab, ready(rows), { ...WORKSPACE, id: "w2" }))
-  );
-
-  assert.equal(selectedCount(container), 0);
+  assert.equal(ariaChecked(container, `${SELECT_ROW}\u2068bob@example.com\u2069`), "true");
 });
 
 test("canceled invitations reload the list and leave the selection", async (t) => {
@@ -910,14 +937,14 @@ test("canceled invitations reload the list and leave the selection", async (t) =
   );
   await check(container, SELECT_ALL);
 
-  await React.act(async () => globalThis.__cancelManyProps.onCanceled(["i1"]));
+  await React.act(async () => globalThis.__cancelManyProps.onCanceled(["i1"], false));
 
   assert.equal(reloads, 1);
   assert.equal(selectedCount(container), 1);
-  assert.equal(checkbox(container, `${SELECT_ROW}${ADA}`).checked, false);
+  assert.equal(ariaChecked(container, `${SELECT_ROW}${ADA}`), "false");
 
   // A retry reports only its own ids, so each report is additive.
-  await React.act(async () => globalThis.__cancelManyProps.onCanceled(["i2"]));
+  await React.act(async () => globalThis.__cancelManyProps.onCanceled(["i2"], false));
   assert.equal(reloads, 2);
   assert.equal(selectedCount(container), 0);
 });
@@ -967,7 +994,7 @@ test("a resend that sent nothing says so, or names the lost permission", async (
   ]);
 });
 
-test("a resend whose emails were not delivered adds a warning", async (t) => {
+test("an email that wasn't delivered isn't counted as resent, and its row stays selected", async (t) => {
   const { Tab } = await loadTab(t);
   globalThis.__bulkResendImpl = async (ids) => ({ done: ids, noEmail: ["i1"], failed: [] });
   const container = await mount(t, Tab, ready(twoRows()));
@@ -976,9 +1003,101 @@ test("a resend whose emails were not delivered adds a warning", async (t) => {
   await React.act(async () => propsOf(barButton(container, "resendSelected")).onClick());
 
   assert.deepEqual(globalThis.__toasts, [
-    { title: `${INVITATIONS}resentMany#2` },
-    { title: "settingsPage.workspace.invites.resentNoEmail", variant: "destructive" },
+    { title: `${INVITATIONS}resentMany#1` },
+    { title: `${INVITATIONS}resentNoEmailOne#${ADA}`, variant: "destructive" },
   ]);
+  assert.equal(selectedCount(container), 1);
+  assert.equal(ariaChecked(container, `${SELECT_ROW}${ADA}`), "true");
+});
+
+test("when no email was delivered, nothing claims a resend", async (t) => {
+  const { Tab } = await loadTab(t);
+  globalThis.__bulkResendImpl = async (ids) => ({ done: ids, noEmail: ids, failed: [] });
+  const container = await mount(t, Tab, ready(twoRows()));
+  await check(container, SELECT_ALL);
+
+  await React.act(async () => propsOf(barButton(container, "resendSelected")).onClick());
+
+  assert.deepEqual(globalThis.__toasts, [
+    { title: `${INVITATIONS}resentNoEmailMany#2`, variant: "destructive" },
+  ]);
+  assert.equal(selectedCount(container), 2);
+});
+
+test("an expired invitation the server won't renew says to cancel it, not to retry", async (t) => {
+  const { Tab } = await loadTab(t);
+  globalThis.__bulkResendImpl = async () => ({
+    done: [],
+    noEmail: [],
+    failed: [
+      { id: "i1", error: { kind: "gone" } },
+      { id: "i2", error: { kind: "gone" } },
+    ],
+  });
+  // Both stay listed, which is what tells them apart from an accepted invitation.
+  const container = await mount(
+    t,
+    Tab,
+    ready(twoRows(), async () => twoRows())
+  );
+  await check(container, SELECT_ALL);
+
+  await React.act(async () => propsOf(barButton(container, "resendSelected")).onClick());
+
+  assert.deepEqual(globalThis.__toasts, [
+    { title: `${INVITATIONS}resendUnrenewable#2`, variant: "destructive" },
+  ]);
+  // Still selected, so Cancel invites is one press away.
+  assert.equal(selectedCount(container), 2);
+});
+
+test("a partial resend says why the rest failed when the server did", async (t) => {
+  const { Tab } = await loadTab(t);
+  const container = await mount(
+    t,
+    Tab,
+    ready(twoRows(), async () => twoRows())
+  );
+  await check(container, SELECT_ALL);
+
+  for (const [error, description] of [
+    [{ kind: "gone" }, `${INVITATIONS}resendUnrenewable#1`],
+    [{ kind: "refused", message: "Seat limit reached" }, "Seat limit reached"],
+    [{ kind: "notAllowed" }, `${INVITATIONS}resendNotAllowed`],
+  ]) {
+    globalThis.__toasts.length = 0;
+    globalThis.__bulkResendImpl = async () => ({
+      done: [],
+      noEmail: [],
+      failed: [{ id: "i2", error }],
+    });
+    await React.act(async () => propsOf(barButton(container, "resendSelected")).onClick());
+    assert.equal(globalThis.__toasts[0].title, description);
+
+    globalThis.__toasts.length = 0;
+    globalThis.__bulkResendImpl = async () => ({
+      done: ["i1"],
+      noEmail: [],
+      failed: [{ id: "i2", error }],
+    });
+    await React.act(async () => propsOf(barButton(container, "resendSelected")).onClick());
+    assert.deepEqual(globalThis.__toasts, [
+      { title: `${INVITATIONS}resentPartial#1`, description },
+    ]);
+    await check(container, SELECT_ALL);
+  }
+});
+
+test("a bulk cancel that found invitations already gone refreshes the members", async (t) => {
+  const { Tab } = await loadTab(t);
+  const container = await mount(t, Tab, ready(twoRows()));
+  await check(container, SELECT_ALL);
+
+  await React.act(async () => globalThis.__cancelManyProps.onCanceled(["i1"], false));
+  assert.deepEqual(globalThis.__memberRefreshes, []);
+
+  await React.act(async () => globalThis.__cancelManyProps.onCanceled(["i2"], true));
+  assert.deepEqual(globalThis.__memberRefreshes, [WORKSPACE.id]);
 });
 
 test("a failed resend of an invitation that left the list refreshes the members", async (t) => {
@@ -1095,7 +1214,7 @@ test("a listed failure keeps its toast and selection beside a row that left", as
     },
     { title: `${INVITATIONS}noLongerPending#${CLEO}` },
   ]);
-  assert.equal(checkbox(container, `${SELECT_ROW}${BOB}`).checked, true);
+  assert.equal(ariaChecked(container, `${SELECT_ROW}${BOB}`), "true");
 });
 
 test("everything still listed failing keeps the failure toast beside a row that left", async (t) => {

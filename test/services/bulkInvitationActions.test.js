@@ -51,7 +51,7 @@ test("resends one at a time in order", async () => {
     ["resend", "ws-1", "c"],
   ]);
   assert.equal(overlapped(), false);
-  assert.deepEqual(outcome, { done: ["a", "b", "c"], noEmail: [], failed: [] });
+  assert.deepEqual(outcome, { done: ["a", "b", "c"], noEmail: [], gone: [], failed: [] });
 });
 
 test("email not delivered is done and listed in noEmail", async () => {
@@ -59,15 +59,16 @@ test("email not delivered is done and listed in noEmail", async () => {
 
   const outcome = await bulk.resendInvitations("ws-1", ["a", "b"]);
 
-  assert.deepEqual(outcome, { done: ["a", "b"], noEmail: ["b"], failed: [] });
+  assert.deepEqual(outcome, { done: ["a", "b"], noEmail: ["b"], gone: [], failed: [] });
 });
 
-test("a canceled invitation already gone counts as canceled", async () => {
+test("a canceled invitation already gone is settled but not counted as canceled", async () => {
   const { actions: bulk } = await actions({ a: notFound() });
 
   const outcome = await bulk.cancelInvitations("ws-1", ["a", "b"]);
 
-  assert.deepEqual(outcome, { done: ["a", "b"], noEmail: [], failed: [] });
+  // The API answers the same for one canceled elsewhere and one already accepted.
+  assert.deepEqual(outcome, { done: ["b"], noEmail: [], gone: ["a"], failed: [] });
 });
 
 test("a resent invitation already gone is a failure", async () => {
@@ -78,6 +79,7 @@ test("a resent invitation already gone is a failure", async () => {
   assert.deepEqual(outcome, {
     done: ["b"],
     noEmail: [],
+    gone: [],
     failed: [{ id: "a", error: { kind: "gone" } }],
   });
 });
@@ -185,7 +187,7 @@ test("an abort stops before the next request", async () => {
   const outcome = await bulk.resendInvitations("ws-1", ["a", "b"], controller.signal);
 
   assert.deepEqual(asked, ["a"]);
-  assert.deepEqual(outcome, { done: ["a"], noEmail: [], failed: [] });
+  assert.deepEqual(outcome, { done: ["a"], noEmail: [], gone: [], failed: [] });
 });
 
 test("a sign-in change during the run ends it", async () => {

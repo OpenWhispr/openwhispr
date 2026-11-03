@@ -68,7 +68,6 @@ export default function InviteTeammateDialog({
   const [state, setState] = useState<InviteFlowState>(() => createInviteFlow({ initialEmail }));
   const [wasOpen, setWasOpen] = useState(open);
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [seatsUsed, setSeatsUsed] = useState<number | null>(null);
   const [seatPreview, setSeatPreview] = useState<SeatPreview | null>(null);
   // Prices for adding more than one seat, by seat count.
   const [batchPreviews, setBatchPreviews] = useState<ReadonlyMap<number, SeatPreview>>(
@@ -77,7 +76,6 @@ export default function InviteTeammateDialog({
   const running = useRef(false);
   const runController = useRef<AbortController | null>(null);
   const workspace = useWorkspaceStore((s) => s.workspaces.find((w) => w.id === workspaceId));
-  const seats = workspace?.seats ?? null;
   const canManageBilling = workspaceCan(workspace, "manage_billing");
   const billingManager = workspace?.billing_manager ?? null;
 
@@ -125,21 +123,24 @@ export default function InviteTeammateDialog({
     if (open) dispatch({ type: "seats", purchasedLeft, ceilingLeft });
   }, [open, purchasedLeft, ceilingLeft, dispatch]);
 
+  // The seat line, the warning and the ceiling all read the list's seats_used, which canceled
+  // invitations and other admins change without this device reading it again.
+  useEffect(() => {
+    if (open) void useWorkspaceStore.getState().refresh({ fresh: true });
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     WorkspacesService.previewSeats(workspaceId, 1)
       .then((preview) => {
-        if (cancelled) return;
-        setSeatPreview(preview);
-        setSeatsUsed(preview.seats_used);
+        if (!cancelled) setSeatPreview(preview);
       })
       // A free workspace, or an admin: the preview needs a subscription and the owner. The seat
       // line reads the workspace list's count instead.
       .catch(() => undefined);
     return () => {
       cancelled = true;
-      setSeatsUsed(null);
       setSeatPreview(null);
       setBatchPreviews(new Map());
     };
@@ -211,12 +212,11 @@ export default function InviteTeammateDialog({
     };
   }, [open, workspaceId, billedSeats, batchPreviews]);
 
-  // The list's count includes pending invitations, as the seat warning's does.
-  const seatLineUsed = typeof workspaceSeatsUsed === "number" ? workspaceSeatsUsed : seatsUsed;
-  // A free workspace's `seats` is a placeholder, so "Using 12 of 1 seats" would read wrong.
+  // The list's count includes pending invitations, as the seat warning's does. A free workspace's
+  // `seats` is a placeholder, so "Using 12 of 1 seats" would read wrong.
   const seatLine =
-    workspace?.has_subscription === true && seatLineUsed !== null && seats !== null
-      ? t("workspaces.invite.seatUsage", { used: seatLineUsed, seats })
+    purchasedLeft !== null
+      ? t("workspaces.invite.seatUsage", { used: workspaceSeatsUsed, seats: workspace?.seats })
       : null;
   // The opening preview prices one added seat; more come from their own preview.
   const batchPreview = billedSeats > 1 ? batchPreviews.get(billedSeats) : undefined;
@@ -316,6 +316,7 @@ export default function InviteTeammateDialog({
         canManageBilling={canManageBilling}
         billingManager={billingManager}
         onUpgrade={handleUpgrade}
+        addsToContainer={Boolean(teamIds?.length || spaceIds?.length)}
         cancelLabel={cancelLabel ?? t("common.cancel")}
         onCancel={close}
         onSend={() => void handleSend()}

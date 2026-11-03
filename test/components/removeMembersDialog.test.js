@@ -211,7 +211,7 @@ test("two members without content show the plain confirm", async (t) => {
       `workspaces\\.removeMembers\\.title\\|\\{"count":2,"workspace":"${isolated("Acme")}"\\}`
     )
   );
-  assert.match(text, /workspaces\.removeMember\.body/);
+  assert.match(text, /workspaces\.removeMembers\.body/);
   assert.match(text, /workspaces\.removeMembers\.confirm\|\{"count":2\}/);
   assert.equal(globalThis.__triggerProps, undefined);
   const props = globalThis.__actionDialogProps;
@@ -324,7 +324,7 @@ test("checking shows a disabled primary", async (t) => {
   assert.equal(props.primary.label, "workspaces.removeMembers.checking");
   assert.equal(props.primary.disabled, true);
   assert.equal(props.primary.pending, true);
-  assert.match(view.text(), /workspaces\.removeMember\.body/);
+  assert.match(view.text(), /workspaces\.removeMembers\.body/);
 });
 
 test("a failed preview offers the plain confirm", async (t) => {
@@ -352,6 +352,95 @@ test("a malformed preview offers the plain confirm", async (t) => {
     );
     assert.equal(view.events.at(-1).type, "previewFailed");
   }
+});
+
+test("notes the new owner can't reach stay put, and the toast says so", async (t) => {
+  const { mount, opened } = await loadDialog(t);
+  globalThis.__previewImpl = async () => preview([owns("u-liam", 3), owns("u-alex", 2)]);
+  globalThis.__removeImpl = async () => ({
+    removed: ["u-liam", "u-alex"],
+    already_removed: [],
+    transferred: { to: "u-zoe", notes: 1, spaces: 0 },
+  });
+  const view = await mount(opened([LIAM, ALEX]));
+
+  await view.act(() => globalThis.__menuItems[2]());
+  await view.clickPrimary();
+
+  assert.deepEqual(globalThis.__toasts, [
+    {
+      title: 'workspaces.removeMembers.done|{"count":2}',
+      description: `workspaces.removeMembers.transferPartial|{"count":4,"name":"${isolated("Zoe")}"}`,
+    },
+  ]);
+});
+
+test("nothing moved reads the same, never as a move", async (t) => {
+  const { mount, opened } = await loadDialog(t);
+  globalThis.__previewImpl = async () => preview([owns("u-liam", 3)]);
+  globalThis.__removeImpl = async () => ({
+    removed: ["u-liam"],
+    already_removed: [],
+    transferred: { to: "u-zoe", notes: 0, spaces: 0 },
+  });
+  const view = await mount(opened([LIAM]));
+
+  await view.act(() => globalThis.__menuItems[2]());
+  await view.clickPrimary();
+
+  assert.doesNotMatch(globalThis.__toasts[0].title, /transferDone/);
+  assert.match(globalThis.__toasts[0].description, /transferPartial\|\{"count":3/);
+});
+
+test("someone removed since the preview doesn't count as notes left behind", async (t) => {
+  const { mount, opened } = await loadDialog(t);
+  globalThis.__previewImpl = async () => preview([owns("u-liam", 3), owns("u-alex", 2)]);
+  globalThis.__removeImpl = async () => ({
+    removed: ["u-liam"],
+    already_removed: ["u-alex"],
+    transferred: { to: "u-zoe", notes: 3, spaces: 0 },
+  });
+  const view = await mount(opened([LIAM, ALEX]));
+
+  await view.act(() => globalThis.__menuItems[2]());
+  await view.clickPrimary();
+
+  assert.deepEqual(globalThis.__toasts, [
+    { title: `workspaces.removeMembers.transferDone|{"name":"${isolated("Zoe")}","count":2}` },
+  ]);
+});
+
+test("people an identity provider assigns are named, so they can be unticked", async (t) => {
+  const { mount, opened, CloudApiError } = await loadDialog(t);
+  globalThis.__previewImpl = async () => {
+    throw directoryManaged(CloudApiError, { user_ids: ["u-liam", "u-alex"] });
+  };
+
+  const view = await mount(opened([LIAM, ALEX, ZOE]));
+
+  assert.match(view.text(), /directoryManagedOthers/);
+  assert.match(view.text(), new RegExp(isolated("Liam")));
+  assert.match(view.text(), new RegExp(isolated("Alex")));
+  assert.doesNotMatch(view.text(), new RegExp(isolated("Zoe")));
+});
+
+test("a member as new owner warns that some notes may stay; an admin doesn't", async (t) => {
+  const { mount, opened } = await loadDialog(t);
+  globalThis.__previewImpl = async () => preview([owns("u-liam")]);
+  const view = await mount(opened([LIAM]));
+
+  // You, an admin, by default.
+  assert.match(view.text(), /workspaces\.removeMembers\.transferBody(?!Limited)/);
+
+  // Candidates: you, Bea, Alex, Zoe.
+  await view.act(() => globalThis.__menuItems[3]());
+
+  assert.match(
+    view.text(),
+    new RegExp(
+      `workspaces\\.removeMembers\\.transferBodyLimited\\|\\{"name":"${isolated("Zoe")}"\\}`
+    )
+  );
 });
 
 test("a transfer sends the new owner and toasts the transfer", async (t) => {

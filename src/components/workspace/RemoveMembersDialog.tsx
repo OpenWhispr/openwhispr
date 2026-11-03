@@ -97,6 +97,10 @@ export function RemoveMembersDialog({
   const transferring = needsTransfer(state);
   const busy = state.kind === "running";
   const managedRefusal = state.kind === "failed" && state.error?.kind === "directoryManaged";
+  // "Untick them" is no use without saying who: the table doesn't mark them.
+  const managedIds =
+    state.kind === "failed" && state.error?.kind === "directoryManaged" ? state.error.userIds : [];
+  const managedSubjects = subjects.filter((subject) => managedIds.includes(subject.user_id));
   const candidates = ownerCandidates(roster, state);
   const newOwner = roster.find((member) => member.user_id === transferTo) ?? null;
 
@@ -105,19 +109,39 @@ export function RemoveMembersDialog({
       ? t("workspaces.removeMembers.you", { name: isolate(memberName(member)) })
       : isolate(memberName(member));
 
-  const doneTitle = (result: MemberRemovalResult, ownerName: string): string => {
+  const doneToast = (
+    result: MemberRemovalResult,
+    ownerName: string
+  ): { title: string; description?: string } => {
     const gone = result.removed.length + result.already_removed.length;
     if (result.removed.length === 0 && result.already_removed.length > 0) {
-      return count === 1
-        ? t("workspaces.removeMember.alreadyRemoved", { name: firstName })
-        : t("workspaces.removeMembers.alreadyRemoved", { count: result.already_removed.length });
+      return {
+        title:
+          count === 1
+            ? t("workspaces.removeMember.alreadyRemoved", { name: firstName })
+            : t("workspaces.removeMembers.alreadyRemoved", {
+                count: result.already_removed.length,
+              }),
+      };
     }
-    if (result.transferred) {
-      return t("workspaces.removeMembers.transferDone", { name: isolate(ownerName), count: gone });
-    }
-    return count === 1
-      ? t("settingsPage.workspace.members.removed", { name: firstName })
-      : t("workspaces.removeMembers.done", { count: gone });
+    const removedTitle =
+      count === 1
+        ? t("settingsPage.workspace.members.removed", { name: firstName })
+        : t("workspaces.removeMembers.done", { count: gone });
+    if (!result.transferred) return { title: removedTitle };
+    const name = isolate(ownerName);
+    // The server leaves a note where it is when the new owner can't reach its teamspace. Anyone
+    // removed since the preview had their content dealt with then, so only this run counts.
+    const ownedNotes = owners
+      .filter((owner) => result.removed.includes(owner.user_id))
+      .reduce((total, owner) => total + owner.owned_notes, 0);
+    const stayed = ownedNotes - result.transferred.notes;
+    return stayed > 0
+      ? {
+          title: removedTitle,
+          description: t("workspaces.removeMembers.transferPartial", { count: stayed, name }),
+        }
+      : { title: t("workspaces.removeMembers.transferDone", { name, count: gone }) };
   };
 
   const run = async (): Promise<void> => {
@@ -132,7 +156,7 @@ export function RemoveMembersDialog({
         userIds: subjects.map((subject) => subject.user_id),
         ...(transferring && transferTo ? { transferTo } : {}),
       });
-      toast({ title: doneTitle(result, ownerName) });
+      toast(doneToast(result, ownerName));
       dispatch({ type: "succeeded" });
       onRemoved([...result.removed, ...result.already_removed]);
     } catch (error) {
@@ -195,7 +219,7 @@ export function RemoveMembersDialog({
       ? t("workspaces.removeMember.title", { name: firstName, workspace: workspaceName })
       : t("workspaces.removeMembers.title", { count, workspace: workspaceName });
 
-  let body = t("workspaces.removeMember.body");
+  let body = count === 1 ? t("workspaces.removeMember.body") : t("workspaces.removeMembers.body");
   if (transferring) {
     body =
       count === 1
@@ -296,9 +320,23 @@ export function RemoveMembersDialog({
             </DropdownMenuContent>
           </DropdownMenu>
           <p className="text-xs text-muted-foreground">
-            {t("workspaces.removeMembers.transferBody")}
+            {/* An admin reaches every teamspace; a member only those they belong to. */}
+            {newOwner?.role === "member"
+              ? t("workspaces.removeMembers.transferBodyLimited", {
+                  name: isolate(memberName(newOwner)),
+                })
+              : t("workspaces.removeMembers.transferBody")}
           </p>
         </div>
+      ) : null}
+      {managedSubjects.length > 1 ? (
+        <ul className="max-h-24 overflow-y-auto text-xs text-muted-foreground">
+          {managedSubjects.map((subject) => (
+            <li key={subject.user_id} className="truncate">
+              {isolate(memberName(subject))}
+            </li>
+          ))}
+        </ul>
       ) : null}
     </WorkspaceActionDialog>
   );

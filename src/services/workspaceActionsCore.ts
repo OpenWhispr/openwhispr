@@ -1,3 +1,4 @@
+import { classifyRemovalError } from "../lib/workspaceErrors";
 import logger from "../utils/logger";
 import type { MemberRemovalResult, WorkspaceMember } from "../types/electron";
 
@@ -113,19 +114,32 @@ export function createWorkspaceActions(deps: WorkspaceActionsDependencies): Work
     await refreshQuietly("members", () => deps.store.refreshMembers(workspaceId));
   }
 
-  // People already gone come back in `already_removed`, so any failure means nothing changed and
-  // the roster is left alone. Removals free seats, so the workspace list is read again too, and
-  // content moved to a new owner reaches this device through a sync. That sync follows any run
-  // that named a new owner: a retry after a lost answer reports no transfer although the first
-  // attempt moved the content.
+  // Removals free seats, so the workspace list is read again too, and content moved to a new owner
+  // reaches this device through a sync. That sync follows any run that named a new owner: a retry
+  // after a lost answer reports no transfer although the first attempt moved the content.
+  async function afterRemoval(workspaceId: string, transferTo: string | undefined): Promise<void> {
+    await refreshQuietly("members", () => deps.store.refreshMembers(workspaceId));
+    await refreshQuietly("list", () => deps.store.refresh({ fresh: true }));
+    if (transferTo) deps.sync.requestSyncAll("manual");
+  }
+
   async function removeMembers(
     workspaceId: string,
     input: { userIds: string[]; transferTo?: string }
   ): Promise<MemberRemovalResult> {
-    const result = await deps.api.removeMembers(workspaceId, input);
-    await refreshQuietly("members", () => deps.store.refreshMembers(workspaceId));
-    await refreshQuietly("list", () => deps.store.refresh({ fresh: true }));
-    if (input.transferTo) deps.sync.requestSyncAll("manual");
+    let result: MemberRemovalResult;
+    try {
+      result = await deps.api.removeMembers(workspaceId, input);
+    } catch (error) {
+      // A refusal changed nothing, but with no answer the removal may still have gone through, so
+      // what's listed is read again. Not awaited: the failure shows without waiting on the network
+      // that just failed.
+      if (classifyRemovalError(error).kind === "failed") {
+        void afterRemoval(workspaceId, input.transferTo);
+      }
+      throw error;
+    }
+    await afterRemoval(workspaceId, input.transferTo);
     return result;
   }
 

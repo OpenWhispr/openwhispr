@@ -27,7 +27,8 @@ import { membersView, rosterFor, rosterHasTeams, teamSummary } from "../../lib/p
 import { classifyRowActionError, type RowActionError } from "../../lib/workspaceErrors";
 import { transferReducer } from "../../lib/workspaceTransferFlow";
 import { RemoveMembersDialog } from "../workspace/RemoveMembersDialog";
-import { RowCheckbox, SelectionBar } from "../workspace/SelectionBar";
+import { RowCheckbox } from "../dictionary/RowCheckbox";
+import { SelectionBar } from "../workspace/SelectionBar";
 import { TransferOwnershipDialog } from "../workspace/TransferOwnershipDialog";
 import { MemberRoleMenu } from "./MemberRoleMenu";
 
@@ -45,6 +46,8 @@ const HEADER_CELL =
   "sticky top-0 z-10 h-9 bg-background dark:bg-surface-1 text-xs font-normal text-muted-foreground first:rounded-ss-xl last:rounded-se-xl";
 const SKELETON_ROWS = 3;
 const HEADER_CHECKED = { none: false, some: "mixed", all: true } as const;
+// A bigger target than the box, without moving it.
+const ROW_CHECKBOX = "-m-1 p-1 focus-visible:ring-primary/50";
 
 export default function WorkspaceMembersTab({
   workspace,
@@ -126,7 +129,6 @@ export default function WorkspaceMembersTab({
 
   useEffect(() => {
     void loadMembers();
-    setSelection((current) => (current.size === 0 ? current : new Set()));
     if (canManage) void refreshJoinRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace.id]);
@@ -229,6 +231,7 @@ export default function WorkspaceMembersTab({
     canManage && member.role !== "owner" && member.user_id !== user?.id;
   const selectableMembers = view.kind === "rows" ? view.rows.filter(isSelectable) : [];
   const selectableIds = selectableMembers.map((member) => member.user_id);
+  const headerChecked = HEADER_CHECKED[headerCheckState(selectableIds, selection)];
   const selectedMembers = selectableMembers.filter((member) => selection.has(member.user_id));
   const selectableKey = selectableIds.join(",");
 
@@ -330,7 +333,8 @@ export default function WorkspaceMembersTab({
         {canManage && (view.kind === "rows" || view.kind === "noResults") && (
           <p className="ms-auto text-xs text-muted-foreground/80">
             {t("settingsPage.workspace.members.description", {
-              count: members.length,
+              // Pending invitations hold seats too, as the invite dialog counts them.
+              count: workspace.seats_used ?? members.length,
               seats: workspace.seats,
             })}
           </p>
@@ -407,9 +411,12 @@ export default function WorkspaceMembersTab({
                     {selectableIds.length > 0 && (
                       <RowCheckbox
                         label={t("settingsPage.workspace.people.selection.selectAllMembers")}
-                        checked={HEADER_CHECKED[headerCheckState(selectableIds, selection)]}
-                        onChange={(checked) =>
-                          setSelection((current) => setRows(current, selectableIds, checked))
+                        checked={headerChecked}
+                        className={ROW_CHECKBOX}
+                        onToggle={() =>
+                          setSelection((current) =>
+                            setRows(current, selectableIds, headerChecked !== true)
+                          )
                         }
                       />
                     )}
@@ -444,7 +451,8 @@ export default function WorkspaceMembersTab({
                               name: isolate(member.name || member.email),
                             })}
                             checked={selection.has(member.user_id)}
-                            onChange={() =>
+                            className={ROW_CHECKBOX}
+                            onToggle={() =>
                               setSelection((current) => toggleRow(current, member.user_id))
                             }
                           />
@@ -512,6 +520,7 @@ export default function WorkspaceMembersTab({
         onClear={() => setSelection(new Set())}
         actions={[
           {
+            id: "remove",
             label: t("settingsPage.workspace.people.selection.remove"),
             tone: "destructive",
             onClick: () => openRemoval(selectedMembers),

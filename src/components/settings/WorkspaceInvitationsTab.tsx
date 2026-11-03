@@ -27,7 +27,8 @@ import { useWorkspaceStore } from "../../stores/workspaceStore";
 import type { Workspace, WorkspaceInvitation } from "../../types/electron";
 import { CancelInvitationDialog } from "../workspace/CancelInvitationDialog";
 import { CancelInvitationsDialog } from "../workspace/CancelInvitationsDialog";
-import { RowCheckbox, SelectionBar } from "../workspace/SelectionBar";
+import { RowCheckbox } from "../dictionary/RowCheckbox";
+import { SelectionBar } from "../workspace/SelectionBar";
 import type { WorkspaceInvitationsState } from "./useWorkspaceInvitations";
 
 interface WorkspaceInvitationsTabProps {
@@ -44,6 +45,9 @@ const HEADER_CELL =
 const WIDE_ONLY = "hidden @xl:table-cell";
 const SKELETON_ROWS = 3;
 const HEADER_CHECKED = { none: false, some: "mixed", all: true } as const;
+// A bigger target than the box, without moving it; the important cursor beats the global button rule.
+const ROW_CHECKBOX =
+  "-m-1 p-1 focus-visible:ring-primary/50 disabled:opacity-50 disabled:cursor-default!";
 
 export default function WorkspaceInvitationsTab({
   workspace,
@@ -71,10 +75,8 @@ export default function WorkspaceInvitationsTab({
   const rowIds = rows.map((invitation) => invitation.id);
   const rowKey = rowIds.join(",");
   const selectedInvitations = rows.filter((invitation) => selection.has(invitation.id));
-
-  useEffect(() => {
-    setSelection((current) => (current.size === 0 ? current : new Set()));
-  }, [workspace.id]);
+  const oneSelected = selectedInvitations.length === 1;
+  const headerChecked = HEADER_CHECKED[headerCheckState(rowIds, selection)];
 
   // Cancel and Resend act on what is listed, so a reload that drops an invitation drops it here.
   useEffect(() => {
@@ -90,6 +92,12 @@ export default function WorkspaceInvitationsTab({
       .catch(() => undefined);
   }
 
+  // A canceled invitation frees its seat and a renewed one can take it back, and the seat counts
+  // on this page come from the workspace list.
+  function refreshSeatsQuietly(): void {
+    void useWorkspaceStore.getState().refresh({ fresh: true });
+  }
+
   function setResending(invitationId: string, resending: boolean): void {
     if (resending) resendingRef.current.add(invitationId);
     else resendingRef.current.delete(invitationId);
@@ -102,6 +110,7 @@ export default function WorkspaceInvitationsTab({
     try {
       const { email_sent } = await InvitationsService.resend(workspace.id, invitation.id);
       await reload();
+      refreshSeatsQuietly();
       toast(
         email_sent
           ? { title: t("settingsPage.workspace.invites.resent") }
@@ -171,20 +180,50 @@ export default function WorkspaceInvitationsTab({
         selectedInvitations.map(({ id }) => id)
       );
       const listed = await reload();
+      refreshSeatsQuietly();
       const listedIds = listed && new Set(listed.map(({ id }) => id));
       // A failure that left the list was accepted or canceled meanwhile, so it has no Actions to
       // retry from and may have added a member. A failed reload says nothing about any of them.
       const gone = listedIds ? outcome.failed.filter(({ id }) => !listedIds.has(id)) : [];
       const failed = outcome.failed.filter((failure) => !gone.includes(failure));
       if (gone.length > 0) refreshMembersQuietly();
-      // Failed invitations stay selected, so Resend invites again retries only those.
-      setSelection((current) => setRows(current, outcome.done, false));
-
       const { done, noEmail } = outcome;
-      const ended = failed.find(
-        ({ error }) => error.kind === "notAllowed" || error.kind === "ssoRequired"
-      );
-      const rateLimited = failed.some(({ error }) => error.kind === "rateLimited");
+      // Updated but not emailed: the old link no longer works and the new one reached nobody. Those
+      // stay selected along with the failures, so Resend invites again retries only these.
+      const delivered = done.filter((id) => !noEmail.includes(id));
+      setSelection((current) => setRows(current, delivered, false));
+
+      // Why the failures failed, when something other than the connection can say.
+      const failureReason = (): string | null => {
+        const ended = failed.find(
+          ({ error }) => error.kind === "notAllowed" || error.kind === "ssoRequired"
+        );
+        if (ended?.error.kind === "ssoRequired") {
+          return t("workspaces.ssoRequired", { workspace: isolate(workspace.name) });
+        }
+        if (ended) {
+          return t("settingsPage.workspace.people.invitations.resendNotAllowed", {
+            workspace: isolate(workspace.name),
+          });
+        }
+        if (failed.some(({ error }) => error.kind === "rateLimited")) {
+          return t("workspaces.invite.errors.rateLimited");
+        }
+        for (const { error } of failed) {
+          if (error.kind === "refused") return error.message;
+        }
+        // Still listed, so this is an expired invitation the server won't renew. Trying again can't
+        // help, unlike the connection failures below. A failed reload can't tell.
+        const unrenewable = listedIds
+          ? failed.filter(({ error }) => error.kind === "gone").length
+          : 0;
+        return unrenewable > 0
+          ? t("settingsPage.workspace.people.invitations.resendUnrenewable", {
+              count: unrenewable,
+            })
+          : null;
+      };
+
       let goneLine: string | null = null;
       if (gone.length === 1) {
         goneLine = t("settingsPage.workspace.people.invitations.noLongerPending", {
@@ -195,55 +234,54 @@ export default function WorkspaceInvitationsTab({
           count: gone.length,
         });
       }
-      if (failed.length === 0 && done.length === 0 && goneLine) {
-        toast({ title: goneLine });
+      if (failed.length === 0 && delivered.length === 0) {
+        if (goneLine) toast({ title: goneLine });
       } else if (failed.length === 0) {
         toast({
-          title: t("settingsPage.workspace.people.invitations.resentMany", { count: done.length }),
+          title: t("settingsPage.workspace.people.invitations.resentMany", {
+            count: delivered.length,
+          }),
           ...(goneLine ? { description: goneLine } : {}),
         });
-      } else if (done.length > 0) {
+      } else if (delivered.length > 0) {
         toast({
           title: t("settingsPage.workspace.people.invitations.resentPartial", {
-            count: done.length,
+            count: delivered.length,
           }),
-          description: rateLimited
-            ? t("workspaces.invite.errors.rateLimited")
-            : failed.length === 1
+          description:
+            failureReason() ??
+            (failed.length === 1
               ? t("settingsPage.workspace.people.invitations.resendFailedOne", {
                   email: isolate(emailsById.get(failed[0].id) ?? ""),
                 })
               : t("settingsPage.workspace.people.invitations.resendFailedSome", {
                   count: failed.length,
-                }),
+                })),
         });
-      } else if (ended?.error.kind === "ssoRequired") {
-        toast({
-          title: t("workspaces.ssoRequired", { workspace: isolate(workspace.name) }),
-          variant: "destructive",
-        });
-      } else if (ended) {
-        toast({
-          title: t("settingsPage.workspace.people.invitations.resendNotAllowed", {
-            workspace: isolate(workspace.name),
-          }),
-          variant: "destructive",
-        });
-      } else if (rateLimited) {
-        toast({ title: t("workspaces.invite.errors.rateLimited"), variant: "destructive" });
       } else {
         toast({
-          title: t("settingsPage.workspace.people.invitations.resendFailedAll", {
-            count: failed.length,
-          }),
+          title:
+            failureReason() ??
+            t("settingsPage.workspace.people.invitations.resendFailedAll", {
+              count: failed.length,
+            }),
           variant: "destructive",
         });
       }
       // Neutral news, so it stays out from under a failure's text.
       if (failed.length > 0 && goneLine) toast({ title: goneLine });
-      if (noEmail.length > 0) {
+      if (noEmail.length === 1) {
         toast({
-          title: t("settingsPage.workspace.invites.resentNoEmail"),
+          title: t("settingsPage.workspace.people.invitations.resentNoEmailOne", {
+            email: isolate(emailsById.get(noEmail[0]) ?? ""),
+          }),
+          variant: "destructive",
+        });
+      } else if (noEmail.length > 1) {
+        toast({
+          title: t("settingsPage.workspace.people.invitations.resentNoEmailMany", {
+            count: noEmail.length,
+          }),
           variant: "destructive",
         });
       }
@@ -318,10 +356,11 @@ export default function WorkspaceInvitationsTab({
                 <th scope="col" className={cn(HEADER_CELL, "w-10 ps-4 pe-0 text-start")}>
                   <RowCheckbox
                     label={t("settingsPage.workspace.people.selection.selectAllInvitations")}
-                    checked={HEADER_CHECKED[headerCheckState(rowIds, selection)]}
+                    checked={headerChecked}
                     disabled={bulkResending}
-                    onChange={(checked) =>
-                      setSelection((current) => setRows(current, rowIds, checked))
+                    className={ROW_CHECKBOX}
+                    onToggle={() =>
+                      setSelection((current) => setRows(current, rowIds, headerChecked !== true))
                     }
                   />
                 </th>
@@ -364,7 +403,8 @@ export default function WorkspaceInvitationsTab({
                         })}
                         checked={selection.has(invitation.id)}
                         disabled={bulkResending}
-                        onChange={() =>
+                        className={ROW_CHECKBOX}
+                        onToggle={() =>
                           setSelection((current) => toggleRow(current, invitation.id))
                         }
                       />
@@ -375,7 +415,8 @@ export default function WorkspaceInvitationsTab({
                         <bdi dir="ltr">{invitation.email}</bdi>
                       </p>
                       <p className="@xl:hidden mt-0.5 text-xs text-muted-foreground">
-                        {role} · {status}
+                        {role} ·{" "}
+                        <span className={expired ? "text-destructive" : undefined}>{status}</span>
                       </p>
                     </td>
                     <td className={cn(WIDE_ONLY, "px-3 whitespace-nowrap text-xs text-foreground")}>
@@ -436,14 +477,24 @@ export default function WorkspaceInvitationsTab({
         onClear={() => setSelection(new Set())}
         actions={[
           {
-            label: t("settingsPage.workspace.people.invitations.cancelSelected"),
+            id: "cancel",
+            // One invitation goes through its own dialog, which can name who it's for.
+            label: t(
+              `settingsPage.workspace.people.invitations.${oneSelected ? "cancel" : "cancelSelected"}`
+            ),
             tone: "destructive",
-            onClick: () => dispatchCancelMany({ type: "open", subject: selectedInvitations }),
+            onClick: () =>
+              oneSelected
+                ? dispatchCancel({ type: "open", subject: selectedInvitations[0] })
+                : dispatchCancelMany({ type: "open", subject: selectedInvitations }),
           },
           {
+            id: "resend",
             label: bulkResending
               ? t("settingsPage.workspace.people.invitations.resendingSelected")
-              : t("settingsPage.workspace.people.invitations.resendSelected"),
+              : t(
+                  `settingsPage.workspace.people.invitations.${oneSelected ? "resend" : "resendSelected"}`
+                ),
             busy: bulkResending,
             onClick: () => void handleResendSelected(),
           },
@@ -454,9 +505,11 @@ export default function WorkspaceInvitationsTab({
         workspace={workspace}
         state={cancelManyState}
         dispatch={dispatchCancelMany}
-        onCanceled={(canceledIds) => {
+        onCanceled={(settledIds, anyGone) => {
           void reload();
-          setSelection((current) => setRows(current, canceledIds, false));
+          refreshSeatsQuietly();
+          if (anyGone) refreshMembersQuietly();
+          setSelection((current) => setRows(current, settledIds, false));
         }}
       />
 
@@ -467,6 +520,7 @@ export default function WorkspaceInvitationsTab({
         dispatch={dispatchCancel}
         onCanceled={(outcome) => {
           void reload();
+          refreshSeatsQuietly();
           if (outcome === "gone") refreshMembersQuietly();
         }}
       />

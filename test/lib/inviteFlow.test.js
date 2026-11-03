@@ -683,3 +683,118 @@ test("removing the last unsettled chip with only skipped ones left shows the out
   assert.equal(state.phase, "editing");
   assert.equal(run(state, { type: "remove", email: "b@y.io" }).phase, "done");
 });
+
+const refusedByRateLimit = (addresses, outcome) => {
+  let state = run(commitText(fresh(), addresses), { type: "send" });
+  for (const email of emails(state)) {
+    state = run(state, { type: "result", email, outcome: { ok: false, ...outcome } });
+  }
+  return run(state, { type: "finished" });
+};
+
+test("a rate limit that left room lets the user trim to it", () => {
+  const state = refusedByRateLimit("a@x.com b@x.com c@x.com", {
+    kind: "rateLimited",
+    available: 2,
+    limit: 50,
+  });
+
+  assert.equal(state.phase, "editing");
+  assert.deepEqual(statuses(state), ["draft", "draft", "draft"]);
+  assert.deepEqual(inviteSummary(state).overRateLimit, { available: 2, excess: 1, limit: 50 });
+  // Only the server knows whether its window has moved on, so sending again stays possible.
+  assert.equal(inviteSummary(state).canSend, true);
+
+  const trimmed = run(state, { type: "remove", email: "c@x.com" });
+  assert.equal(inviteSummary(trimmed).overRateLimit, null);
+  assert.equal(inviteSummary(trimmed).canSend, true);
+});
+
+test("a rate limit with no room keeps the chips failed and retryable", () => {
+  const state = refusedByRateLimit("a@x.com b@x.com", {
+    kind: "rateLimited",
+    available: 0,
+    limit: 50,
+  });
+
+  assert.deepEqual(statuses(state), ["failed", "failed"]);
+  assert.equal(inviteSummary(state).overRateLimit, null);
+  assert.deepEqual(inviteSummary(state).sendable, ["a@x.com", "b@x.com"]);
+});
+
+test("a later refusal replaces the room, and a send that went through clears it", () => {
+  const refused = refusedByRateLimit("a@x.com b@x.com c@x.com", {
+    kind: "rateLimited",
+    available: 2,
+    limit: 50,
+  });
+
+  let again = run(refused, { type: "send" });
+  for (const email of emails(again)) {
+    again = run(again, {
+      type: "result",
+      email,
+      outcome: { ok: false, kind: "rateLimited", available: 0, limit: 50 },
+    });
+  }
+  assert.equal(run(again, { type: "finished" }).rateLimit, null);
+
+  const trimmed = run(refused, { type: "remove", email: "c@x.com" }, { type: "send" });
+  const sent = run(trimmed, {
+    type: "result",
+    email: "a@x.com",
+    outcome: { ok: true, emailSent: true },
+  });
+  assert.equal(sent.rateLimit, null);
+});
+
+test("an address too long for the server is invalid on its own chip", () => {
+  const long = `${"a".repeat(320)}@x.com`;
+  const state = commitText(fresh(), `ok@x.com ${long}`);
+
+  assert.deepEqual(statuses(state), ["draft", "invalid"]);
+  assert.equal(inviteSummary(state).canSend, false);
+  assert.deepEqual(statuses(commitText(fresh(), `${"a".repeat(314)}@x.com`)), ["draft"]);
+});
+
+test("Remove the last N takes the newest chips and leaves skipped ones", () => {
+  const known = run(fresh(), { type: "roster", memberEmails: ["m@x.com"], invitedEmails: [] });
+  const state = commitText(known, "a@x.com m@x.com b@x.com c@x.com");
+
+  const trimmed = run(state, { type: "removeLast", count: 2 });
+
+  assert.deepEqual(emails(trimmed), ["a@x.com", "m@x.com"]);
+});
+
+test("Remove the last N counts an address still in the field", () => {
+  const state = run(commitText(fresh(), "a@x.com b@x.com"), { type: "draft", text: "c@x.com" });
+
+  const trimmed = run(state, { type: "removeLast", count: 1 });
+
+  assert.deepEqual(emails(trimmed), ["a@x.com", "b@x.com"]);
+  assert.equal(trimmed.draft, "");
+});
+
+test("over the send limit says by how many", () => {
+  const addresses = Array.from({ length: 103 }, (_, index) => `p${index}@x.com`).join(" ");
+  const state = commitText(fresh(), addresses);
+
+  assert.equal(inviteSummary(state).tooMany, true);
+  assert.equal(inviteSummary(state).tooManyBy, 3);
+
+  const trimmed = run(state, { type: "removeLast", count: 3 });
+  assert.equal(inviteSummary(trimmed).tooMany, false);
+  assert.equal(inviteSummary(trimmed).tooManyBy, 0);
+});
+
+test("removing the last chip after a partial send still reaches Done", () => {
+  let state = run(commitText(fresh(), "a@x.com b@x.com"), { type: "send" });
+  state = run(
+    state,
+    { type: "result", email: "a@x.com", outcome: { ok: true, emailSent: true } },
+    { type: "result", email: "b@x.com", outcome: { ok: false, kind: "requestFailed" } },
+    { type: "finished" }
+  );
+
+  assert.equal(run(state, { type: "removeLast", count: 1 }).phase, "done");
+});

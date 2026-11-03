@@ -16,16 +16,20 @@ export type InviteErrorKind =
 
 /** A failed invitation: `refused` carries the server's own reason, every other kind its copy. */
 export type InviteFailure =
-  | { kind: Exclude<InviteErrorKind, "refused" | "seatLimit"> }
+  | { kind: Exclude<InviteErrorKind, "refused" | "seatLimit" | "rateLimited"> }
   | { kind: "refused"; message: string }
   // `available` is how many addresses fit, when the server said.
-  | { kind: "seatLimit"; available?: number };
+  | { kind: "seatLimit"; available?: number }
+  // `available` is how many fit right now and `limit` the daily allowance, when the server said.
+  | { kind: "rateLimited"; available?: number; limit?: number };
 
-const INVITE_ERROR_CODES: Record<string, Exclude<InviteErrorKind, "refused" | "seatLimit">> = {
+const INVITE_ERROR_CODES: Record<
+  string,
+  Exclude<InviteErrorKind, "refused" | "seatLimit" | "rateLimited">
+> = {
   invalid_email: "invalid",
   already_member: "alreadyMember",
   already_invited: "alreadyInvited",
-  rate_limited: "rateLimited",
   DIRECTORY_ASSIGNMENT_REQUIRED: "directoryRequired",
   SSO_REQUIRED: "ssoRequired",
   // Main's codes for a session that expired or was replaced by another account's.
@@ -51,6 +55,12 @@ export function classifyInviteError(error: unknown): InviteFailure {
   if (code === "seat_limit_reached") {
     const available = detailsRecord(error.details)?.available;
     return typeof available === "number" ? { kind: "seatLimit", available } : { kind: "seatLimit" };
+  }
+  if (code === "rate_limited") {
+    const details = detailsRecord(error.details);
+    return typeof details?.available === "number" && typeof details.limit === "number"
+      ? { kind: "rateLimited", available: details.available, limit: details.limit }
+      : { kind: "rateLimited" };
   }
   const byCode = code ? INVITE_ERROR_CODES[code] : undefined;
   if (byCode) return { kind: byCode };

@@ -1,15 +1,16 @@
-import { useEffect, useRef, type ReactElement } from "react";
+import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2 } from "../icons";
 import { cn } from "../lib/utils";
 import { Button } from "../ui/button";
 
 export interface SelectionAction {
+  /** Stable across label changes, so a busy label doesn't remount the button and drop its focus. */
+  id: string;
   label: string;
   onClick: () => void;
-  tone?: "default" | "destructive";
+  tone?: "destructive";
   busy?: boolean;
-  disabled?: boolean;
 }
 
 interface SelectionBarProps {
@@ -18,12 +19,9 @@ interface SelectionBarProps {
   actions: SelectionAction[];
 }
 
-interface RowCheckboxProps {
-  checked: boolean | "mixed";
-  onChange: (checked: boolean) => void;
-  label: string;
-  disabled?: boolean;
-}
+// aria-disabled rather than disabled: disabling the focused button would drop keyboard focus to the
+// page, and whoever pressed Resend invites would have to find their way back to retry.
+const WHILE_BUSY = "aria-disabled:pointer-events-none aria-disabled:opacity-50";
 
 export function SelectionBar({ count, onClear, actions }: SelectionBarProps): ReactElement | null {
   const { t } = useTranslation();
@@ -43,18 +41,26 @@ export function SelectionBar({ count, onClear, actions }: SelectionBarProps): Re
           {t("settingsPage.workspace.people.selection.count", { count })}
         </span>
         <span aria-hidden="true" className="mx-2 h-4 w-px bg-border" />
-        <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={onClear}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-disabled={busy || undefined}
+          onClick={busy ? undefined : onClear}
+          className={WHILE_BUSY}
+        >
           {t("settingsPage.workspace.people.selection.clear")}
         </Button>
         {actions.map((action) => (
           <Button
-            key={action.label}
+            key={action.id}
             type="button"
             variant="ghost"
             size="sm"
-            disabled={busy || action.disabled}
-            onClick={action.onClick}
+            aria-disabled={busy || undefined}
+            onClick={busy ? undefined : action.onClick}
             className={cn(
+              WHILE_BUSY,
               action.tone === "destructive" &&
                 "text-destructive hover:bg-destructive/10 dark:text-destructive dark:hover:bg-destructive/15"
             )}
@@ -65,33 +71,5 @@ export function SelectionBar({ count, onClear, actions }: SelectionBarProps): Re
         ))}
       </div>
     </div>
-  );
-}
-
-/** A native checkbox, so the browser draws the mixed state and announces it. */
-export function RowCheckbox({
-  checked,
-  onChange,
-  label,
-  disabled,
-}: RowCheckboxProps): ReactElement {
-  const ref = useRef<HTMLInputElement>(null);
-  const mixed = checked === "mixed";
-
-  // `indeterminate` has no attribute, so React can't set it.
-  useEffect(() => {
-    if (ref.current) ref.current.indeterminate = mixed;
-  }, [mixed]);
-
-  return (
-    <input
-      ref={ref}
-      type="checkbox"
-      aria-label={label}
-      checked={checked === true}
-      disabled={disabled}
-      onChange={(event) => onChange(event.target.checked)}
-      className="size-4 shrink-0 cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-50"
-    />
   );
 }

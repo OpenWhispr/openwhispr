@@ -8,6 +8,11 @@ export interface BulkInvitationOutcome {
   done: string[];
   /** Resent, but the email was not delivered (a subset of `done`). */
   noEmail: string[];
+  /**
+   * Canceling only: no longer pending. The API answers the same for one canceled elsewhere and one
+   * already accepted, so these can't be counted as canceled.
+   */
+  gone: string[];
   failed: Array<{ id: string; error: RowActionError }>;
 }
 
@@ -54,9 +59,9 @@ export function createBulkInvitationActions(
     // Resolves false when the invitation was acted on but its email was not delivered.
     perform: (id: string) => Promise<boolean>,
     // Canceling wants the invitation to stop being pending, which "gone" already says.
-    goneIsDone: boolean
+    goneIsSettled: boolean
   ): Promise<BulkInvitationOutcome> {
-    const outcome: BulkInvitationOutcome = { done: [], noEmail: [], failed: [] };
+    const outcome: BulkInvitationOutcome = { done: [], noEmail: [], gone: [], failed: [] };
     const authGeneration = deps.authGeneration?.();
     let stopped: RowActionError | null = null;
 
@@ -75,8 +80,8 @@ export function createBulkInvitationActions(
         if (!delivered) outcome.noEmail.push(id);
       } catch (error) {
         const classified = classifyRowActionError(error);
-        if (goneIsDone && classified.kind === "gone") {
-          outcome.done.push(id);
+        if (goneIsSettled && classified.kind === "gone") {
+          outcome.gone.push(id);
           continue;
         }
         outcome.failed.push({ id, error: classified });

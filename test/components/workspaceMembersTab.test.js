@@ -483,6 +483,12 @@ test("seat usage stays when a search matches nobody", async (t) => {
   assert.match(markup, /settingsPage\.workspace\.members\.description#3/);
 });
 
+test("seat usage counts pending invitations, as the invite dialog does", async (t) => {
+  const WorkspaceMembersTab = await loadMembersTab(t);
+  const markup = render(WorkspaceMembersTab, { ...WORKSPACE, role: "admin", seats_used: 9 });
+  assert.match(markup, /settingsPage\.workspace\.members\.description#9/);
+});
+
 test("seat usage shows with the rows", async (t) => {
   const WorkspaceMembersTab = await loadMembersTab(t);
   const markup = render(WorkspaceMembersTab, { ...WORKSPACE, role: "admin" });
@@ -589,10 +595,10 @@ const bodyRows = (container) => findAll(container, (node) => node.localName === 
 const checkboxLabeled = (container, label) =>
   checkboxes(container).find((node) => node.getAttribute("aria-label") === label);
 
-async function setChecked(container, label, checked) {
+async function toggle(container, label) {
   const box = checkboxLabeled(container, label);
   assert.ok(box, `checkbox ${label}`);
-  await React.act(async () => propsOf(box).onChange({ target: { checked } }));
+  await React.act(async () => propsOf(box).onClick());
 }
 
 const SELECT_ROW = "settingsPage.workspace.people.selection.selectRow";
@@ -634,8 +640,8 @@ test("selecting two rows shows 2 selected with Remove", async (t) => {
   assert.doesNotMatch(barText(container), /selection\.count/);
 
   const boxes = checkboxes(container).slice(1);
-  await React.act(async () => propsOf(boxes[0]).onChange({ target: { checked: true } }));
-  await React.act(async () => propsOf(boxes[1]).onChange({ target: { checked: true } }));
+  await React.act(async () => propsOf(boxes[0]).onClick());
+  await React.act(async () => propsOf(boxes[1]).onClick());
 
   const text = barText(container);
   assert.match(text, /settingsPage\.workspace\.people\.selection\.count#2/);
@@ -647,12 +653,12 @@ test("select all picks only visible selectable rows", async (t) => {
   // "m" keeps the owner, you (Adam) and some members, so select all has rows to skip.
   const visible = bodyRows(container).length;
   assert.ok(visible > 0);
-  await setChecked(container, SELECT_ALL, true);
+  await toggle(container, SELECT_ALL);
 
   const selectable = checkboxes(container).length - 1;
   assert.match(barText(container), new RegExp(`selection\\.count#${selectable}(?!\\d)`));
   assert.ok(selectable < visible, "the owner and your own row stay unselected");
-  assert.ok(checkboxes(container).every((node) => node.checked));
+  assert.ok(checkboxes(container).every((node) => node.getAttribute("aria-checked") === "true"));
 });
 
 test("a search drops selected rows it hides", async (t) => {
@@ -661,8 +667,8 @@ test("a search drops selected rows it hides", async (t) => {
   const names = PEOPLE.filter((m) => m.role === "member");
   assert.equal(boxes.length, names.length);
   // Mia, Oliver, Mason in order: select Oliver and Mason.
-  await React.act(async () => propsOf(boxes[1]).onChange({ target: { checked: true } }));
-  await React.act(async () => propsOf(boxes[2]).onChange({ target: { checked: true } }));
+  await React.act(async () => propsOf(boxes[1]).onClick());
+  await React.act(async () => propsOf(boxes[2]).onClick());
   assert.match(barText(container), /selection\.count#2/);
 
   await React.act(async () =>
@@ -675,9 +681,7 @@ test("a search drops selected rows it hides", async (t) => {
 
 test("changing workspace clears the selection", async (t) => {
   const { WorkspaceMembersTab, container } = await mountPeople(t);
-  await React.act(async () =>
-    propsOf(checkboxes(container)[1]).onChange({ target: { checked: true } })
-  );
+  await React.act(async () => propsOf(checkboxes(container)[1]).onClick());
   assert.match(barText(container), /selection\.count#1/);
 
   await React.act(async () =>
@@ -689,8 +693,8 @@ test("changing workspace clears the selection", async (t) => {
 test("Remove from the bar opens the dialog with the selection", async (t) => {
   const { container } = await mountPeople(t);
   const boxes = checkboxes(container).slice(1);
-  await React.act(async () => propsOf(boxes[0]).onChange({ target: { checked: true } }));
-  await React.act(async () => propsOf(boxes[2]).onChange({ target: { checked: true } }));
+  await React.act(async () => propsOf(boxes[0]).onClick());
+  await React.act(async () => propsOf(boxes[2]).onClick());
 
   const remove = findNode(
     container,
@@ -712,8 +716,8 @@ test("Remove from the bar opens the dialog with the selection", async (t) => {
 test("a removal drops the removed people from the selection", async (t) => {
   const { container } = await mountPeople(t);
   const boxes = checkboxes(container).slice(1);
-  await React.act(async () => propsOf(boxes[0]).onChange({ target: { checked: true } }));
-  await React.act(async () => propsOf(boxes[1]).onChange({ target: { checked: true } }));
+  await React.act(async () => propsOf(boxes[0]).onClick());
+  await React.act(async () => propsOf(boxes[1]).onClick());
 
   await React.act(async () => globalThis.__removeDialog.onRemoved(["u-member"]));
   assert.match(barText(container), /selection\.count#1/);
@@ -722,8 +726,8 @@ test("a removal drops the removed people from the selection", async (t) => {
 test("Cancel on a refused removal keeps the selection, so one person can be unticked", async (t) => {
   const { container } = await mountPeople(t);
   const boxes = checkboxes(container).slice(1);
-  await React.act(async () => propsOf(boxes[0]).onChange({ target: { checked: true } }));
-  await React.act(async () => propsOf(boxes[1]).onChange({ target: { checked: true } }));
+  await React.act(async () => propsOf(boxes[0]).onClick());
+  await React.act(async () => propsOf(boxes[1]).onClick());
   const pressRemove = () =>
     React.act(async () =>
       propsOf(
@@ -749,9 +753,7 @@ test("Cancel on a refused removal keeps the selection, so one person can be unti
   assert.equal(globalThis.__removeDialog.state.kind, "closed");
   assert.match(barText(container), /selection\.count#2/);
 
-  await React.act(async () =>
-    propsOf(checkboxes(container).slice(1)[0]).onChange({ target: { checked: false } })
-  );
+  await React.act(async () => propsOf(checkboxes(container).slice(1)[0]).onClick());
   assert.match(barText(container), /selection\.count#1/);
 
   await pressRemove();

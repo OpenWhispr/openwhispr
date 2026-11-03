@@ -125,8 +125,6 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/settings/ProfileSection.tsx": ["inherit"],
   // Email addresses are Latin-script identifiers.
   "src/components/workspace/InvitePeopleView.tsx": ["ltr"],
-  // The row and select-all checkbox: no text to lay out.
-  "src/components/workspace/SelectionBar.tsx": ["inherit"],
   // A skill's description is prose; the file pickers are hidden.
   "src/components/skills/CreateSkillScreen.tsx": ["auto", "inherit"],
   "src/components/skills/UploadSkillsScreen.tsx": ["inherit"],
