@@ -452,3 +452,63 @@ test("another conversation's streaming doesn't re-render the one on screen", asy
   assert.equal(mounted.session().toolStatus, ".");
   assert.equal(mounted.session().skills, skills, "skills aren't read back on every chunk");
 });
+
+for (const [event, changedNoteId] of [
+  ["onNoteUpdated", 2],
+  ["onNoteUpdated", 1],
+  ["onNoteDeleted", 1],
+]) {
+  test(`background note context follows ${event} for note ${changedNoteId} while setup waits`, async (t) => {
+    const listeners = new Set();
+    const skills = deferred();
+    let readingSkills = false;
+    const fixture = await setupChatTurns(t, {
+      getAgentConversation: async (id) => ({ id, note_id: id, messages: [] }),
+      getNote: async (id) => ({
+        id,
+        title: `Note ${id}`,
+        content: `Source content ${id}`,
+        transcript: "",
+        folder_id: null,
+        space_id: null,
+      }),
+      getSpeakerMappings: async () => [],
+      [event]: (listener) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      skillsList: () => {
+        readingSkills = true;
+        return skills.promise;
+      },
+    });
+    const mounted = await mountSession(t, fixture);
+    await React.act(async () => {
+      await mounted.session().openConversation(1, "sidebar");
+      await flush();
+    });
+    await React.act(async () => {
+      assert.equal(mounted.session().send("What does my source note say?"), true);
+      await until(() => readingSkills);
+    });
+    await React.act(async () => {
+      await mounted.session().openConversation(2, "sidebar");
+      await flush();
+    });
+    await React.act(async () => {
+      for (const listener of listeners) listener({ id: changedNoteId });
+      await flush();
+    });
+    await React.act(async () => {
+      skills.resolve({ skills: [] });
+      await until(() => fixture.streams.length === 1);
+    });
+    const prompt = fixture.streams[0].messages[0].content;
+    assert.equal(prompt.includes("Source content 1"), changedNoteId !== 1);
+    assert.doesNotMatch(prompt, /Source content 2/);
+    await React.act(async () => {
+      fixture.streams[0].resolve("Answer");
+      await until(() => !fixture.state().entries["conversation:1"]?.running);
+    });
+  });
+}
