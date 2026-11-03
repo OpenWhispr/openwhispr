@@ -32,20 +32,20 @@
 
 ## File and ownership map
 
-| File | Responsibility |
-| --- | --- |
-| `src/services/ReasoningService.ts` | Independent cancellation for raw, AI SDK, and cloud streams; renderer-wide shutdown remains explicit. |
-| New `src/components/chat/chatTurnEngine.ts` | Existing context/tool/stream/persistence pipeline, its types, timers, and cancellation; no React imports. |
-| `src/components/chat/useChatStreaming.ts` | Thin React adapter retaining the existing public API and other surfaces' behavior. |
-| New `src/components/chat/chatPersistence.ts` | Shared message decoding and explicit-ID IPC reads/writes. |
-| `src/components/chat/useChatPersistence.ts` | Existing surfaces' state/session behavior, reusing the shared decoder. |
-| New `src/stores/chatTurnStore.ts` | Main-chat pending submissions, turns, drafts, selection, skills, account generation, and sidebar revision. Engine handles stay in a module-local map. |
-| New `src/components/chat/useMainChatSession.ts` | Validated selection, completed-entry takeover, and the view's ordinary loaded message snapshot. |
-| `src/hooks/useAuth.ts`, `src/hooks/useSignOut.ts` | Reset before account scope changes and before confirmed sign-out starts awaiting work. |
-| `src/components/ControlPanel.tsx` | Policy lifecycle cancellation while main Chat is unmounted. |
-| `src/components/chat/ChatView.tsx` | Store-backed selection, send/stop, drafts, skills, archive/delete, and existing skill-entry actions. |
-| `src/components/chat/ConversationList.tsx`, `ConversationItem.tsx` | Refresh after background creation/save; per-row answering indicator. |
-| `src/locales/{en,es,fr,de,pt,it,ru,ja,ar,zh-CN,zh-TW}/translation.json` | New translated state labels/errors. |
+| File                                                                    | Responsibility                                                                                                                                        |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/services/ReasoningService.ts`                                      | Independent cancellation for raw, AI SDK, and cloud streams; renderer-wide shutdown remains explicit.                                                 |
+| New `src/components/chat/chatTurnEngine.ts`                             | Existing context/tool/stream/persistence pipeline, its types, timers, and cancellation; no React imports.                                             |
+| `src/components/chat/useChatStreaming.ts`                               | Thin React adapter retaining the existing public API and other surfaces' behavior.                                                                    |
+| New `src/components/chat/chatPersistence.ts`                            | Shared message decoding and explicit-ID IPC reads/writes.                                                                                             |
+| `src/components/chat/useChatPersistence.ts`                             | Existing surfaces' state/session behavior, reusing the shared decoder.                                                                                |
+| New `src/stores/chatTurnStore.ts`                                       | Main-chat pending submissions, turns, drafts, selection, skills, account generation, and sidebar revision. Engine handles stay in a module-local map. |
+| New `src/components/chat/useMainChatSession.ts`                         | Validated selection, completed-entry takeover, and the view's ordinary loaded message snapshot.                                                       |
+| `src/hooks/useAuth.ts`, `src/hooks/useSignOut.ts`                       | Reset before account scope changes and before confirmed sign-out starts awaiting work.                                                                |
+| `src/components/ControlPanel.tsx`                                       | Policy lifecycle cancellation while main Chat is unmounted.                                                                                           |
+| `src/components/chat/ChatView.tsx`                                      | Store-backed selection, send/stop, drafts, skills, archive/delete, and existing skill-entry actions.                                                  |
+| `src/components/chat/ConversationList.tsx`, `ConversationItem.tsx`      | Refresh after background creation/save; per-row answering indicator.                                                                                  |
+| `src/locales/{en,es,fr,de,pt,it,ru,ja,ar,zh-CN,zh-TW}/translation.json` | New translated state labels/errors.                                                                                                                   |
 
 Leave `chatStore.ts` unchanged: its `activeConversationId` cannot represent a pending submission. Use one authoritative selection in `chatTurnStore`, rather than synchronizing two stores. Main Chat stops using `useChatMessageSender`; embedded surfaces keep it unchanged.
 
@@ -180,6 +180,7 @@ The decoder reuses existing metadata parsing; the new main-chat writer awaits `a
   ```
 
   Add failures with an existing New chat draft: append the failed question separated by `\n\n`, once per failed submission, in completion order. Cover two failures, cancellation before creation returns, `onSkillPicked` after navigation, a rejected user-message write, a held assistant-message write, and Stop→new send→old completion. Persistence tests assert exact IDs/metadata and that its returned promise remains pending until IPC settles.
+
 - [ ] **Step 2: Run the new suites.** `node --import tsx --test test/stores/chatTurnStore.test.js test/helpers/chatPersistence.test.js`. Expected: missing modules/exports followed by failing ownership assertions.
 - [ ] **Step 3: Implement reservation and migration.** `startChatSend` returns acceptance synchronously, reserves the submission before any await, snapshots options/history/skills, and starts an internally handled async operation. Existing completed entries supply their own history; otherwise use the session's validated snapshot. Reject stale selections and locked entries. Create new conversations directly through IPC, preserving the existing 50-character title truncation. Migrate selection only if it still names the submission. New chat resets its current draft/skills without touching submitted operations. For an existing conversation, preserve its identity throughout preparation and streaming. Create its engine with main-chat connectors/skills enabled, the captured signed-in user's name, and the account-generation ownership getter; it must not retain a dependency on a mounted view.
 - [ ] **Step 4: Implement persistence and finalization.** Await the user's write before inference. Capture the bound conversation ID and account generation in every callback. Track assistant-write promises so the turn remains owned until durable writes settle; persistence failure produces a translated in-memory failure, never an unhandled rejection or success-only final state. Keep final entries until consumed; `takeCompletedChatTurn` atomically returns/deletes only a non-running entry. Increment `listRevision` after acknowledged creation/message writes. Main-chat cancellation releases its UI lock synchronously; old finalizers cannot release a newer lock.
@@ -256,6 +257,7 @@ retryLoad: () => void;
   ```
 
   Expected: zero failures/errors and a successful renderer build. Run the existing installed Prettier binary with `--check` on the changed source/test files. Record pre-existing failures separately; do not change unrelated code to satisfy them. Avoid the full packaged build, whose prebuild downloads native assets unrelated to this change.
+
 - [ ] **Step 4: Perform the desktop smoke check.** In an existing dev app, send in A, leave for Notes, send in B, return while both run, and verify independent live replies/Stop. Verify drafts in A/B/New chat, an approval while away, archived restoration, deletion, and sign-out. Check keyboard Esc/New chat and the loader/menu with a non-English locale and Arabic RTL. Use an already configured cloud or BYOK/local route; do not install a model or alter credentials for the smoke check. Automated transport coverage must cover routes unavailable locally.
 - [ ] **Step 5: Review against the spec and report evidence.** Apply code-quality review to changed files, trace every cancellation/persistence caller, and confirm no renderer-global chat cancellation remains. Report tests, any unavailable manual/provider checks, and the final diff. Leave changes uncommitted unless the user explicitly requests a commit.
 

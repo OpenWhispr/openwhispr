@@ -103,15 +103,15 @@ A turn is cancelled only by:
 - a new send superseding it (cannot happen in the UI: the composer is locked
   while the conversation answers);
 - an account change (see "Account changes" below);
-- *(my call)* the organisation turning the agent off — every running
+- _(my call)_ the organisation turning the agent off — every running
   main-chat turn is cancelled, since the Chat view itself can no longer be
   shown.
 
-Archiving a conversation does not cancel its turn *(my call)*; the answer
+Archiving a conversation does not cancel its turn _(my call)_; the answer
 saves into the archived conversation.
 
 Delete and policy-off discard the partial answer, the same as an explicit
-Stop *(my call)*. A late save into a deleted conversation is already a no-op
+Stop _(my call)_. A late save into a deleted conversation is already a no-op
 in `db-add-agent-message`.
 
 ### Account changes
@@ -188,17 +188,18 @@ send again, while every other conversation can.
   builder should remove the orphaned row if main still allows it, otherwise it
   stays as a row of the old account.
 - If creation fails, the entry goes away and the question isn't lost: it returns
-  to the New chat draft, after whatever is already there *(my call)*. Today this
+  to the New chat draft, after whatever is already there _(my call)_. Today this
   failure surfaces nowhere.
 
 **Writes use the bound conversation id.** `saveUserMessage` currently reads
 `conversationIdRef`, the view's current conversation, so with a quick switch it
 would save the question into the wrong one. It must take the bound id, as
 `persistAssistantMessage` already does. The answer is persisted the same way.
+
 - Everything a send writes back belongs to the send's own conversation, not
   to whatever is on screen. In particular `onSkillPicked` (the app picking a
   skill for a model without tools) writes that conversation's skill chip,
-  not the one on screen *(my call)*.
+  not the one on screen _(my call)_.
 
 ### What the view shows
 
@@ -233,11 +234,11 @@ outlives the view (the existing but unused `activeConversationId` in
 - The composer's unsent text is kept per conversation (and for New chat)
   and restored when the user returns to that conversation, whether by
   leaving and re-entering the view or by switching conversations in the
-  sidebar *(my call: per conversation, not one shared draft; this follows
+  sidebar _(my call: per conversation, not one shared draft; this follows
   from the user's answer and keeps a draft from following them into the
-  wrong conversation)*. Sending, or the conversation being deleted, clears
+  wrong conversation)_. Sending, or the conversation being deleted, clears
   its draft.
-- *(my call)* This memory lasts for the app session only: in memory, not
+- _(my call)_ This memory lasts for the app session only: in memory, not
   persisted across launches. After a relaunch the Chat view opens as it does
   today. Attached skills already persist per conversation in localStorage
   (`chatSkillMemory.ts`) and keep doing so.
@@ -251,13 +252,13 @@ outlives the view (the existing but unused `activeConversationId` in
 - **Deleted:** `getAgentConversation` returns `null` (it filters on
   `deleted_at`). The view falls back to New chat, the entry is dropped and any
   turn is cancelled.
-- **Archived:** `getAgentConversation` does *not* filter archived rows and
+- **Archived:** `getAgentConversation` does _not_ filter archived rows and
   `loadConversation` accepts them, so the restore checks `archived_at`
   explicitly. If it's set, the view falls back to New chat and leaves the entry
-  and any running turn alone, since archiving doesn't cancel. *(My call: this
+  and any running turn alone, since archiving doesn't cancel. _(My call: this
   also applies if the user had deliberately opened an archived conversation
   before leaving. Keeping it open would mean remembering how it was opened, for
-  little gain.)* Opening an archived conversation from the sidebar's Archived
+  little gain.)_ Opening an archived conversation from the sidebar's Archived
   list keeps working as it does today.
 
 ### Approval cards
