@@ -450,3 +450,40 @@ for (const [language, youLabel] of [
     });
   });
 }
+
+test("formatSrt ensures cue end time is strictly greater than start time for simultaneous segments", () => {
+  const output = formatSrt(
+    [
+      { speaker: "speaker_0", timestamp: 10, text: "Simultaneous one." },
+      { speaker: "speaker_1", timestamp: 10, text: "Simultaneous two." },
+    ],
+    {}
+  );
+
+  assert.match(output, /^1\n00:00:10,000 --> 00:00:11,000\nSpeaker 1: Simultaneous one\./);
+  assert.match(output, /\n2\n00:00:10,000 --> 00:00:13,000\nSpeaker 2: Simultaneous two\./);
+});
+
+test("formatSrt respects explicit endTimestamp on segments", () => {
+  const output = formatSrt(
+    [
+      { speaker: "speaker_0", timestamp: 2, endTimestamp: 5, text: "Explicit duration." },
+      { speaker: "speaker_1", timestamp: 2, endTimestamp: 4, text: "Concurrent speech." },
+    ],
+    {}
+  );
+
+  assert.match(output, /^1\n00:00:02,000 --> 00:00:05,000\nSpeaker 1: Explicit duration\./);
+  assert.match(output, /\n2\n00:00:02,000 --> 00:00:07,000\nSpeaker 2: Concurrent speech\./);
+});
+
+test("formatJson duration reflects explicit endTimestamp on the last segment", () => {
+  const json = JSON.parse(
+    formatJson(
+      { title: "Test", created_at: "2026-01-01T00:00:00Z" },
+      [{ speaker: "speaker_0", timestamp: 10, endTimestamp: 25.4, text: "Ending statement." }],
+      {}
+    )
+  );
+  assert.equal(json.metadata.duration_seconds, 25);
+});

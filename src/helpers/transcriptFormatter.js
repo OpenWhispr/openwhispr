@@ -92,12 +92,16 @@ function mergeSegments(segments) {
   for (const seg of segments) {
     if (!seg.text?.trim()) continue;
     const ts = seg.timestamp || 0;
+    const endTs =
+      typeof seg.endTimestamp === "number" && Number.isFinite(seg.endTimestamp)
+        ? Math.max(seg.endTimestamp, ts)
+        : ts;
     const last = merged[merged.length - 1];
     if (last && speakerKey(last) === speakerKey(seg) && ts - lastTimestamp < 2) {
       last.text = last.text + " " + seg.text.trim();
-      last.endTimestamp = ts;
+      last.endTimestamp = Math.max(last.endTimestamp, endTs);
     } else {
-      merged.push({ ...seg, timestamp: ts, endTimestamp: ts, text: seg.text.trim() });
+      merged.push({ ...seg, timestamp: ts, endTimestamp: endTs, text: seg.text.trim() });
     }
     lastTimestamp = ts;
   }
@@ -183,8 +187,12 @@ function formatSrt(segments, speakerMappings, note = {}) {
   const entries = [];
   for (let i = 0; i < merged.length; i++) {
     const seg = merged[i];
-    const nextTs =
+    const defaultEnd = seg.endTimestamp > seg.timestamp ? seg.endTimestamp : seg.timestamp + 1;
+    let nextTs =
       i + 1 < merged.length ? merged[i + 1].timestamp : (lastEnd ?? seg.endTimestamp + 3);
+    if (nextTs <= seg.timestamp) {
+      nextTs = defaultEnd;
+    }
     entries.push(`${i + 1}`);
     entries.push(`${formatSrtTimestamp(seg.timestamp)} --> ${formatSrtTimestamp(nextTs)}`);
     entries.push(
