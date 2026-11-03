@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
 const http = require("node:http");
+const { once } = require("node:events");
 const { BYOK_API_KEYS } = require("../../src/config/secretKeys");
 const { deferred } = require("./harness/deferred");
 
@@ -279,6 +280,56 @@ test.before(async () => {
   await target.refreshEffectivePolicy();
 });
 const invoke = (channel, ...args) => handlers.get(channel)({ sender: editor }, ...args);
+
+for (const restriction of ["local-only", "provider"]) {
+  test(`native ${restriction} retirement closes realtime without committing buffered audio`, async (t) => {
+    const { WebSocket, WebSocketServer } = require("ws");
+    const Streaming = require("../../src/helpers/openaiRealtimeStreaming");
+    const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+    await once(server, "listening");
+    const frames = [];
+    const audio = deferred();
+    const closed = deferred();
+    t.after(() => {
+      for (const client of server.clients) client.terminate();
+      server.close();
+    });
+    server.on("connection", (socket) => {
+      socket.on("close", () => closed.resolve());
+      socket.on("message", (message) => {
+        const frame = JSON.parse(message);
+        frames.push(frame.type);
+        if (frame.type === "session.update")
+          socket.send(JSON.stringify({ type: "session.updated" }));
+        if (frame.type === "input_audio_buffer.append") audio.resolve();
+        if (frame.type === "input_audio_buffer.commit") socket.close();
+      });
+      socket.send(JSON.stringify({ type: "session.created" }));
+    });
+    const streaming = new Streaming();
+    t.after(() => streaming.cleanup());
+    await streaming.connect({
+      model: "test-model",
+      createSocket: () => new WebSocket(`ws://127.0.0.1:${server.address().port}`),
+    });
+    streaming.sendAudio(Buffer.alloc(960));
+    await audio.promise;
+    target._dictationStreaming = streaming;
+    target._remoteStreamPolicies.set("_dictationStreaming", {
+      channel: "dictation-realtime-start",
+      args: [{ mode: "byok", provider: "tinfoil-realtime" }],
+    });
+    if (restriction === "local-only") setDeviceValues({ RequireSignIn: false });
+    else {
+      const policy = defaultDevicePolicy();
+      policy.transcription.allowedByokProviders = ["openai"];
+      setDeviceValues({ Policy: JSON.stringify(policy) });
+    }
+    await closed.promise;
+    assert.ok(frames.includes("input_audio_buffer.append"));
+    assert.equal(frames.includes("input_audio_buffer.commit"), false);
+  });
+}
 
 for (const restriction of ["local-only", "provider"]) {
   test(

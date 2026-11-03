@@ -1713,7 +1713,7 @@ class IPCHandlers {
     ]) {
       if (this[key]?.cleanupAll) this[key].cleanupAll();
       else this[key]?.cleanupWarmConnection?.();
-      void this[key]?.disconnect().catch(() => {});
+      void this[key]?.disconnect({ commit: false }).catch(() => {});
       this[key] = null;
     }
     this.connectorManager?.accountChanged();
@@ -1729,7 +1729,7 @@ class IPCHandlers {
         continue;
       if (this[property]?.cleanupAll) this[property].cleanupAll();
       else this[property]?.cleanupWarmConnection?.();
-      void this[property]?.disconnect().catch(() => {});
+      void this[property]?.disconnect({ commit: false }).catch(() => {});
       this[property] = null;
       this._remoteStreamPolicies.delete(property);
     }

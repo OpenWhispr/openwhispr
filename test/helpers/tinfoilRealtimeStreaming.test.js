@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { EventEmitter } = require("node:events");
 const WS = require("ws");
+const { setTimeout: delay } = require("node:timers/promises");
 
 const load = () => import("../../src/helpers/tinfoilRealtimeStreaming.js");
 const COMPLETED_EVENT = "conversation.item.input_audio_transcription.completed";
@@ -62,6 +63,25 @@ async function makeConnected() {
   streaming.ws = makeFakeSocket(WS.OPEN);
   streaming._markConnected();
   return streaming;
+}
+
+for (const committed of [false, true]) {
+  test(`policy cancellation drops ${committed ? "committed" : "buffered"} audio without another commit`, async (t) => {
+    const streaming = await makeConnected();
+    t.after(() => streaming.cleanup());
+    streaming.sendAudio(speechPcm());
+    if (committed) streaming._sendCommit();
+    const priorCommits = sentEvents(streaming.ws, "input_audio_buffer.commit").length;
+    const socket = streaming.ws;
+    const stopped = streaming.disconnect({ commit: false });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(sentEvents(socket, "input_audio_buffer.commit").length, priorCommits);
+    assert.equal(
+      await Promise.race([stopped.then(() => true), delay(100).then(() => false)]),
+      true
+    );
+    assert.equal(socket.readyState, WS.CLOSED);
+  });
 }
 
 async function finishConnect(streaming, socket, preconfigured = false) {
