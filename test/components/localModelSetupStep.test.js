@@ -302,6 +302,15 @@ async function createSetupHarness(
       const button = actionButton("common.skip");
       return Boolean(button && !button.props.disabled);
     },
+    cohereLanguagePicker: () =>
+      findElement(tree, (node) => Array.isArray(node.props?.options) && node.props?.onChange),
+    chooseCohereLanguage: async (code) => {
+      const picker = findElement(
+        tree,
+        (node) => Array.isArray(node.props?.options) && node.props?.onChange
+      );
+      await React.act(async () => picker.props.onChange(code));
+    },
     providerListed: (providerId) =>
       Boolean(
         findElement(tree, (node) => node.key === providerId && node.props?.value === providerId)
@@ -751,6 +760,7 @@ test("Cohere-only approvals stay reachable from a saved Whisper family and prese
   });
   assert.equal(setup.providerListed("cohere"), true);
   assert.equal(setup.store.getState().whisperModel, "base");
+  setup.store.getState().setPreferredLanguage("en");
   await setup.chooseProvider("cohere");
   await setup.click(modelId, "onboarding.rehaul.local.use");
   assert.equal(setup.store.getState().localTranscriptionProvider, "cohere");
@@ -763,6 +773,7 @@ test("Cohere-only approvals stay reachable from a saved Whisper family and prese
 test("a Cohere download activates its own model field through the background tray", async (t) => {
   const modelId = "cohere-transcribe-03-2026";
   const setup = await createSetupHarness(t, { policy: localPolicy([modelId]) });
+  setup.store.getState().setPreferredLanguage("en");
   await setup.chooseProvider("cohere");
   await setup.click(modelId, "onboarding.rehaul.local.download");
   assert.deepEqual(setup.pending.readPendingLocalModels().dictation, {
@@ -974,4 +985,72 @@ test("with AI text blocked the assistant step shows why and offers only Skip", a
   assert.equal(setup.skipped(), true);
   assert.equal(setup.pending.hasPendingLocalModels(), false);
   assert.equal(setup.store.getState().chatAgentModel, "");
+});
+
+const COHERE = "cohere-transcribe-03-2026";
+const cohereSetup = (t) =>
+  createSetupHarness(t, {
+    provider: "cohere",
+    selectedModel: COHERE,
+    installed: { parakeet: [COHERE] },
+    policy: localPolicy([COHERE]),
+  });
+
+test("Cohere asks for a language, since it can't detect one, and waits for it", async (t) => {
+  const setup = await cohereSetup(t);
+  await setup.chooseProvider("cohere");
+  await setup.click(COHERE, "onboarding.rehaul.local.use");
+  assert.equal(setup.store.getState().preferredLanguage, "auto");
+  assert.equal(setup.canProceed(), false);
+  assert.equal(setup.ready(), false);
+
+  const offered = setup.cohereLanguagePicker().props.options.map((option) => option.value);
+  assert.ok(offered.includes("de"));
+  assert.ok(offered.includes("zh-CN"));
+  assert.ok(!offered.includes("auto"));
+  assert.ok(!offered.includes("ru"), "Cohere has no Russian");
+
+  await setup.chooseCohereLanguage("de");
+  assert.equal(setup.store.getState().preferredLanguage, "de");
+  assert.equal(setup.canProceed(), true);
+  assert.equal(setup.ready(), true);
+});
+
+test("Cohere asks again when the saved language is one it doesn't support", async (t) => {
+  const setup = await cohereSetup(t);
+  setup.store.getState().setPreferredLanguage("ru");
+  await setup.chooseProvider("cohere");
+  await setup.click(COHERE, "onboarding.rehaul.local.use");
+  assert.equal(setup.canProceed(), false);
+  assert.equal(setup.cohereLanguagePicker().props.value, "");
+});
+
+test("Cohere keeps a supported language, including a regional variant", async (t) => {
+  const setup = await cohereSetup(t);
+  setup.store.getState().setPreferredLanguage("zh-TW");
+  await setup.chooseProvider("cohere");
+  await setup.click(COHERE, "onboarding.rehaul.local.use");
+  assert.equal(setup.canProceed(), true);
+  assert.equal(setup.cohereLanguagePicker().props.value, "zh-TW");
+});
+
+test("a Cohere download can't be left in the background without a language", async (t) => {
+  const setup = await createSetupHarness(t, { policy: localPolicy([COHERE]) });
+  await setup.chooseProvider("cohere");
+  await setup.click(COHERE, "onboarding.rehaul.local.download");
+  assert.equal(setup.canProceed(), false);
+  assert.equal(setup.canSkip(), false);
+  await setup.chooseCohereLanguage("en");
+  assert.equal(setup.canProceed(), true);
+  assert.equal(setup.canSkip(), true);
+});
+
+test("other speech models never ask for a language", async (t) => {
+  const setup = await createSetupHarness(t, {
+    provider: "whisper",
+    selectedModel: "base",
+    installed: { whisper: ["base"] },
+  });
+  assert.equal(setup.store.getState().preferredLanguage, "auto");
+  assert.equal(setup.cohereLanguagePicker(), null);
 });

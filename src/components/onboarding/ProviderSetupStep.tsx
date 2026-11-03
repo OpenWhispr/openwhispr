@@ -23,6 +23,9 @@ import { useModelDownload } from "../../hooks/useModelDownload";
 import type { ParakeetCheckResult } from "../../types/electron";
 import { usePolicyStore } from "../../stores/policyStore";
 import { useSettingsStore } from "../../stores/settingsStore";
+import LanguageSelector, { type LanguageOption } from "../ui/LanguageSelector";
+import languageRegistry from "../../config/languageRegistry.json";
+import { getBaseLanguageCode } from "../../utils/languageSupport";
 import { normalizeBaseUrl } from "../../config/constants";
 import { withHttpsScheme } from "../../utils/urlUtils";
 import { usePolicySnapshot } from "../../hooks/usePolicy";
@@ -265,6 +268,14 @@ function isSameEndpoint(baseUrl: string, savedBaseUrl: string): boolean {
   const saved = endpointIdentity(savedBaseUrl);
   return Boolean(saved) && endpointIdentity(baseUrl) === saved;
 }
+
+const COHERE_LANGUAGES = new Set(
+  speechFamilyModelIds("cohere").flatMap((id) => getParakeetModels()[id].supportedLanguages)
+);
+
+const COHERE_LANGUAGE_OPTIONS: LanguageOption[] = languageRegistry.languages
+  .filter(({ code }) => COHERE_LANGUAGES.has(getBaseLanguageCode(code) ?? ""))
+  .map(({ code, label, flag }) => ({ value: code, label, flag }));
 
 function speechFamilyModelIds(familyId: string): string[] {
   return usesParakeetManager(familyId)
@@ -1107,11 +1118,19 @@ export function LocalModelSetupStep({
     }
   }, [approvedFamily]);
 
+  // Cohere can't detect a language, and an unsupported one silently means English.
+  const asksCohereLanguage = !assistant && selectedProvider === "cohere";
+  const cohereLanguage = COHERE_LANGUAGES.has(getBaseLanguageCode(store.preferredLanguage) ?? "")
+    ? store.preferredLanguage
+    : "";
+  const cohereLanguageMissing = asksCohereLanguage && !cohereLanguage;
+
   const selectedReady = Boolean(
     selectedModel &&
     modelAllowed(selectedModel) &&
     downloadedModels.has(selectedModel) &&
-    !(parakeetUnavailable && usesParakeetManager(selectedProvider))
+    !(parakeetUnavailable && usesParakeetManager(selectedProvider)) &&
+    !cohereLanguageMissing
   );
 
   useEffect(() => {
@@ -1233,7 +1252,11 @@ export function LocalModelSetupStep({
     const restoresSaved = providerId === saved.provider && keptModelId !== "";
     setSelectedProvider(providerId);
     setSelectedModel(restoresSaved ? keptModelId : "");
-    onReadinessChange(restoresSaved && modelAllowed(keptModelId));
+    onReadinessChange(
+      restoresSaved &&
+        modelAllowed(keptModelId) &&
+        (assistant || providerId !== "cohere" || Boolean(cohereLanguage))
+    );
   };
 
   const anyDownloadActive = isLocalStageDownloadActive(assistant ? "assistant" : "dictation", {
@@ -1254,8 +1277,8 @@ export function LocalModelSetupStep({
     modelAllowed(pendingSelection.modelId) &&
     pendingDownload.isDownloadingModel(pendingSelection.modelId)
   );
-  const canProceed = selectedReady || hasPendingDownload;
-  const showSkip = anyDownloadActive || (assistant && !selectedReady);
+  const canProceed = selectedReady || (hasPendingDownload && !cohereLanguageMissing);
+  const showSkip = (anyDownloadActive && !cohereLanguageMissing) || (assistant && !selectedReady);
 
   const proceed = () => {
     // Leaving mid-download is the same situation as "download in background":
@@ -1317,6 +1340,21 @@ export function LocalModelSetupStep({
             </p>
           )}
         </div>
+
+        {asksCohereLanguage && (
+          <div className="mt-6">
+            <FieldLabel>{t("onboarding.rehaul.local.cohereLanguageLabel")}</FieldLabel>
+            <LanguageSelector
+              value={cohereLanguage}
+              onChange={store.setPreferredLanguage}
+              options={COHERE_LANGUAGE_OPTIONS}
+              placeholder={t("onboarding.rehaul.local.cohereLanguagePlaceholder")}
+            />
+            <p className="mt-2 text-xs text-[var(--onboarding-text-secondary)]">
+              {t("onboarding.rehaul.local.cohereLanguageHint")}
+            </p>
+          </div>
+        )}
 
         <LocalModelPolicyNotice
           scope={scope}
