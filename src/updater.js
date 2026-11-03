@@ -1,5 +1,5 @@
 const { autoUpdater } = require("electron-updater");
-const { getNetSession } = require("electron-updater/out/electronHttpExecutor");
+const UpdateHttpExecutor = require("./helpers/updateHttpExecutor");
 
 // electron-updater can only replace an AppImage on Linux; deb, rpm and tar.gz
 // installs are updated by the package manager instead.
@@ -46,6 +46,11 @@ class UpdateManager {
     if (process.env.NODE_ENV === "development") {
       return;
     }
+
+    this.httpExecutor = new UpdateHttpExecutor((info, callback) =>
+      autoUpdater.emit("login", info, callback)
+    );
+    autoUpdater.httpExecutor = this.httpExecutor;
 
     autoUpdater.setFeedURL({
       provider: "github",
@@ -204,6 +209,7 @@ class UpdateManager {
 
       if (this.checkPromise) return this.checkPromise;
 
+      this.httpExecutor.resumeRequests();
       const epoch = this.policyEpoch;
       this.checkEpoch = epoch;
       this.checkPromise = this._checkForUpdates(epoch);
@@ -286,6 +292,7 @@ class UpdateManager {
 
       this.isDownloading = true;
       started = true;
+      this.httpExecutor.resumeRequests();
       const epoch = this.policyEpoch;
       this.downloadToken = this.updateCancellationToken;
       this.downloadEpoch = epoch;
@@ -456,15 +463,9 @@ class UpdateManager {
     this.downloadToken?.cancel();
     this.updateCancellationToken?.cancel();
     if (this.checkPromise || this.downloadPromise) {
-      // The updater's cancellation token rejects its promise without aborting
-      // the HTTP request. Close only its dedicated network session.
-      this.requestCleanup = Promise.allSettled([
-        this.checkPromise,
-        this.downloadPromise,
-        Promise.resolve()
-          .then(() => getNetSession().closeAllConnections())
-          .catch((error) => console.error("Failed to close update connections:", error)),
-      ]);
+      // Cancelling the updater promise alone leaves its download request open.
+      this.httpExecutor.abortRequests();
+      this.requestCleanup = Promise.allSettled([this.checkPromise, this.downloadPromise]);
     }
     this.updateAvailable = false;
     if (!this.updateDownloaded) this.lastUpdateInfo = null;
@@ -564,6 +565,7 @@ class UpdateManager {
     }
     this.downloadToken?.cancel();
     this.updateCancellationToken?.cancel();
+    this.httpExecutor?.abortRequests();
     if (this.updateCheckInterval) {
       clearInterval(this.updateCheckInterval);
       this.updateCheckInterval = null;
