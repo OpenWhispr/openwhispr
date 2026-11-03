@@ -1,32 +1,11 @@
+import { acceptsCorrectionEdit, retainsCorrectionContext } from './correctionPolicy';
+
 const MIN_WORD_LENGTH = 3;
 const MAX_DISTANCE_RATIO = 0.65;
 const WORD_TOKEN_REGEX = /\p{L}[\p{L}'-]*/gu;
 
 function tokenize(text: string): string[] {
   return text.match(WORD_TOKEN_REGEX) ?? [];
-}
-
-function retainsCorrectionContext(original: string[], edited: string[]): boolean {
-  // A one-word dictation has no surrounding context to retain.
-  if (original.length === 1 && edited.length === 1) return true;
-
-  const remaining = new Map<string, number>();
-  for (const word of original) {
-    const key = word.toLowerCase();
-    remaining.set(key, (remaining.get(key) ?? 0) + 1);
-  }
-  let retained = 0;
-  for (const word of edited) {
-    const key = word.toLowerCase();
-    const count = remaining.get(key) ?? 0;
-    if (count > 0) {
-      retained += 1;
-      remaining.set(key, count - 1);
-    }
-  }
-  // Replacing most of a note is a rewrite, not reliable evidence that similar
-  // words anywhere in the old and new bodies are spelling corrections.
-  return retained >= Math.max(original.length, edited.length) / 2;
 }
 
 function levenshtein(a: string, b: string): number {
@@ -59,7 +38,7 @@ export function extractCorrections(
   if (!originalText || !newText || originalText === newText) return [];
   // Autosave can observe a word halfway through typing or backspacing. Pure
   // tail edits are not evidence of a deliberate transcription correction.
-  if (newText.startsWith(originalText) || originalText.startsWith(newText)) return [];
+  if (!acceptsCorrectionEdit(originalText, newText)) return [];
 
   const originalWords = tokenize(originalText);
   const newWords = tokenize(newText);
