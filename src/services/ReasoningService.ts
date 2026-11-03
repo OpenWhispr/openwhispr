@@ -10,6 +10,7 @@ import { BaseReasoningService, ReasoningConfig } from "./BaseReasoningService";
 import { SecureCache } from "../utils/SecureCache";
 import { withRetry, createApiRetryStrategy, httpError } from "../utils/retry";
 import { API_ENDPOINTS, TOKEN_LIMITS, buildApiUrl, ensureV1Suffix } from "../config/constants";
+import { resolveRetiredCloudModel } from "../config/retiredCloudModelPolicy.js";
 import logger from "../utils/logger";
 import { assertValidCleanupOutput } from "../utils/cleanupOutput";
 import { getSettings, isCloudCleanupMode } from "../stores/settingsStore";
@@ -991,6 +992,9 @@ class ReasoningService extends BaseReasoningService {
     }
     assertStreamAllowed();
     const aiProvider = isLocalProvider || isLanChat ? "local" : provider;
+    if (aiProvider === "tinfoil") {
+      model = resolveRetiredCloudModel("tinfoil", model);
+    }
     // OpenRouter ids are never in the local registry, so the supportsThinking
     // exemption below can't apply — honor the toggle directly.
     const openrouterDisableThinking = provider === "openrouter" && config.disableThinking === true;

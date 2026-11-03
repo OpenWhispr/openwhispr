@@ -38,6 +38,7 @@ async function loadMembersTab(t) {
       `,
       "/ui/useToast": "export const useToast = () => ({ toast: () => {} });",
       "/ui/dialog": "export const ConfirmDialog = () => null;",
+      "/TransferOwnershipDialog": "export const TransferOwnershipDialog = () => null;",
       "/InviteTeammateDialog": "export default function Mock() { return null; }",
       "/MemberAvatar": "export default function Mock() { return null; }",
       "/ui/dropdown-menu": `
