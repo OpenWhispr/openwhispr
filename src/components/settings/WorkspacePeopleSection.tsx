@@ -179,7 +179,11 @@ function PeopleBody({
           workspaceName={workspace.name}
           onInvited={handleInvited}
           onInvitationsChanged={reload}
-          knownEmails={knownEmails}
+          knownEmails={
+            rosterIsOurs && invitations.status === "ready" && !invitations.stale
+              ? knownEmails
+              : undefined
+          }
         />
       )}
     </>
