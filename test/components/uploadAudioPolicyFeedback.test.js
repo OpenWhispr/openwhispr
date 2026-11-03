@@ -52,6 +52,7 @@ test("upload policy feedback names the disabled feature independently of recordi
   const vite = await createRendererServer(t, {
     cachePrefix: "ow-upload-policy-feedback-",
     mockModules: {
+      "/ui/useToast": "export const useToast = () => ({ toast: () => {} });",
       // Signed in to OpenWhispr Cloud, so the provider is ready and the inputs render.
       "/hooks/useAuth": `export const useAuth = () => ({ isSignedIn: true, user: null });`,
       "/hooks/useUsage": `export const useUsage = () => null;`,

@@ -3315,6 +3315,8 @@
     "mutationErrors": {
       "folderNameRequired": "Saisissez un nom de dossier.",
       "folderAlreadyExists": "Un dossier portant ce nom existe déjà.",
+      "folderNameTakenIn": "« {{name}} » est déjà utilisé dans « {{parent}} ». Un nom de dossier ne peut être utilisé qu'une seule fois par espace.",
+      "folderNameTakenTopLevel": "« {{name}} » est déjà utilisé au niveau supérieur. Un nom de dossier ne peut être utilisé qu'une seule fois par espace.",
       "folderNotFound": "Ce dossier est introuvable.",
       "defaultFolderImmutable": "Les dossiers par défaut ne peuvent pas être modifiés.",
       "spaceNameRequired": "Saisissez un nom d’espace.",
@@ -5417,7 +5419,7 @@
         "FOLDER_UNAVAILABLE": "Cette destination est indisponible. Choisissez un autre dossier.",
         "SPACE_UNAVAILABLE": "Cette destination est indisponible. Choisissez un autre dossier.",
         "FOLDER_NAME_REQUIRED": "Saisissez un nom de dossier.",
-        "FOLDER_NAME_TAKEN": "Un dossier porte déjà ce nom à cet emplacement.",
+        "FOLDER_NAME_TAKEN": "Un dossier porte déjà ce nom dans cet espace.",
         "CREATE_FAILED": "Impossible de terminer. Réessayez.",
         "LINKED_NOTE_CHANGED": "Vérifiez la destination, puis rejoignez à nouveau.",
         "NOTE_UNAVAILABLE": "Cette note est indisponible. Réessayez sans en créer une autre.",

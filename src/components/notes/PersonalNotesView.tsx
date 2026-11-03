@@ -79,7 +79,12 @@ import { useTeamSpacesCapability } from "../../hooks/useTeamSpacesCapability";
 import { useAuth } from "../../hooks/useAuth";
 import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
 import NotesOnboarding from "./NotesOnboarding";
-import { folderPathLabel, notesEmptyTitleKey, orderFoldersAsTree } from "./shared";
+import {
+  folderMutationErrorDescription,
+  folderPathLabel,
+  notesEmptyTitleKey,
+  orderFoldersAsTree,
+} from "./shared";
 import { isRegenerableNoteTitle } from "../../helpers/regenerableNoteTitle";
 import { isMeetingAutoEndEligible } from "../../helpers/meetingRecordingSession";
 import { handleMeetingRecordingRequest } from "../../helpers/meetingRecordingRequest";
@@ -676,12 +681,15 @@ export default function PersonalNotesView({
       } else if (result.error) {
         toast({
           title: t("notes.folders.couldNotCreate"),
-          description: result.error,
+          description: folderMutationErrorDescription(result, folders, t, {
+            name: folderName,
+            nested: false,
+          }),
           variant: "destructive",
         });
       }
     },
-    [privateSpaceId, handleMoveToFolder, toast, t]
+    [privateSpaceId, handleMoveToFolder, toast, t, folders]
   );
 
   const {

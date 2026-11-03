@@ -2825,6 +2825,8 @@
     "mutationErrors": {
       "folderNameRequired": "フォルダ名を入力してください。",
       "folderAlreadyExists": "同じ名前のフォルダが既に存在します。",
+      "folderNameTakenIn": "「{{name}}」は「{{parent}}」で既に使われています。フォルダ名は各スペースで一度しか使えません。",
+      "folderNameTakenTopLevel": "「{{name}}」は最上位で既に使われています。フォルダ名は各スペースで一度しか使えません。",
       "folderNotFound": "そのフォルダが見つかりませんでした。",
       "defaultFolderImmutable": "デフォルトフォルダは変更できません。",
       "spaceNameRequired": "スペース名を入力してください。",
@@ -5399,7 +5401,7 @@
         "FOLDER_UNAVAILABLE": "この保存先は利用できません。別のフォルダーを選択してください。",
         "SPACE_UNAVAILABLE": "この保存先は利用できません。別のフォルダーを選択してください。",
         "FOLDER_NAME_REQUIRED": "フォルダー名を入力してください。",
-        "FOLDER_NAME_TAKEN": "この保存先には同名のフォルダーがあります。",
+        "FOLDER_NAME_TAKEN": "このスペースには同名のフォルダーがあります。",
         "CREATE_FAILED": "完了できませんでした。再試行してください。",
         "LINKED_NOTE_CHANGED": "保存先を確認し、もう一度参加してください。",
         "NOTE_UNAVAILABLE": "このノートは利用できません。新規作成せずに再試行してください。",

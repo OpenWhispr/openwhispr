@@ -2897,6 +2897,8 @@
     "mutationErrors": {
       "folderNameRequired": "請輸入資料夾名稱。",
       "folderAlreadyExists": "已存在同名資料夾。",
+      "folderNameTakenIn": "「{{name}}」已在「{{parent}}」中使用。每個空間中的資料夾名稱只能使用一次。",
+      "folderNameTakenTopLevel": "「{{name}}」已在最上層使用。每個空間中的資料夾名稱只能使用一次。",
       "folderNotFound": "找不到該資料夾。",
       "defaultFolderImmutable": "無法變更預設資料夾。",
       "spaceNameRequired": "請輸入空間名稱。",
@@ -5399,7 +5401,7 @@
         "FOLDER_UNAVAILABLE": "此儲存位置無法使用。請選擇其他資料夾。",
         "SPACE_UNAVAILABLE": "此儲存位置無法使用。請選擇其他資料夾。",
         "FOLDER_NAME_REQUIRED": "請輸入資料夾名稱。",
-        "FOLDER_NAME_TAKEN": "此位置已有同名資料夾。",
+        "FOLDER_NAME_TAKEN": "此空間已有同名資料夾。",
         "CREATE_FAILED": "無法完成，請重試。",
         "LINKED_NOTE_CHANGED": "請檢查儲存位置，然後重新加入。",
         "NOTE_UNAVAILABLE": "此筆記無法使用。請重試，不要建立替代筆記。",

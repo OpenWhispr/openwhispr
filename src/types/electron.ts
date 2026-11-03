@@ -449,6 +449,13 @@ export interface Leaderboard {
   refreshAfterSeconds: number;
 }
 
+// Where a folder name is already used in the space: a parent's id, or null at the
+// top level.
+export interface FolderNameClash {
+  takenName?: string;
+  takenInFolderId?: number | null;
+}
+
 export interface NoteItem {
   id: number;
   title: string;
@@ -1910,16 +1917,23 @@ declare global {
         name: string,
         spaceId?: number | null,
         parentFolderId?: number | null
-      ) => Promise<{ success: boolean; folder?: FolderItem; error?: string }>;
+      ) => Promise<{ success: boolean; folder?: FolderItem; error?: string } & FolderNameClash>;
       deleteFolder: (id: number) => Promise<{ success: boolean; error?: string }>;
       renameFolder: (
         id: number,
         name: string
-      ) => Promise<{ success: boolean; folder?: FolderItem; error?: string }>;
+      ) => Promise<{ success: boolean; folder?: FolderItem; error?: string } & FolderNameClash>;
       moveFolderToSpace: (
         id: number,
         spaceId: number
-      ) => Promise<{ success: boolean; folder?: FolderItem; notes?: NoteItem[]; error?: string }>;
+      ) => Promise<
+        {
+          success: boolean;
+          folder?: FolderItem;
+          notes?: NoteItem[];
+          error?: string;
+        } & FolderNameClash
+      >;
       setFolderParent: (
         id: number,
         parentFolderId: number | null

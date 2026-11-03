@@ -89,6 +89,7 @@ const NOTE_STORE = `
   export const loadContainerNotes = async () => [];
   const record = (name) => async (...args) => {
     globalThis.__calls.push([name, ...args]);
+    if (globalThis.__folderResult) return globalThis.__folderResult;
     return { success: true };
   };
   export const createFolder = record("createFolder");
@@ -446,6 +447,37 @@ test("Move to folder offers Top level and the space's top-level folders, the cur
       ["Top level", false, false],
       ["Work", true, true],
     ]
+  );
+});
+
+test("a new subfolder's name clash says which folder already uses the name", async (t) => {
+  const rows = await mountTree(t, WITH_SUBFOLDERS);
+  t.after(() => delete globalThis.__folderResult);
+  globalThis.__folderResult = {
+    success: false,
+    error: "A folder with that name already exists",
+    takenName: "Q1",
+    takenInFolderId: 11,
+  };
+
+  await click(menuItem(rowTitled(rows, "Work"), "New subfolder"));
+  const input = globalThis.document.querySelector('input[placeholder="Folder name"]');
+  await React.act(async () => {
+    Object.getOwnPropertyDescriptor(globalThis.window.HTMLInputElement.prototype, "value").set.call(
+      input,
+      "Q1"
+    );
+    input.dispatchEvent(new globalThis.window.Event("input", { bubbles: true }));
+  });
+  await React.act(async () => {
+    input.dispatchEvent(new globalThis.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  });
+
+  const toast = globalThis.__toasts.at(-1);
+  assert.equal(toast.title, "Couldn't create folder");
+  assert.equal(
+    toast.description,
+    "\u201cQ1\u201d is already used in \u201cWork\u201d. A folder name can only be used once in each space."
   );
 });
 

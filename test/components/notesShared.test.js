@@ -79,6 +79,40 @@ test("a subfolder whose parent isn't loaded in its space shows as top level", as
   );
 });
 
+test("a folder name clash says where the name is used, unless it's right beside this folder", async () => {
+  const { folderMutationErrorDescription } = await load();
+  const t = (key, options) => (options ? `${key} ${JSON.stringify(options)}` : key);
+  const meetings = folder(1, { name: "Meetings", is_default: 1 });
+  const taken = "A folder with that name already exists";
+  const plain = "notes.mutationErrors.folderAlreadyExists";
+  const describe = (result, attempt) =>
+    folderMutationErrorDescription({ error: taken, ...result }, [meetings], t, attempt);
+  const atTopLevel = { takenName: "Q1", takenInFolderId: null };
+
+  assert.match(
+    describe({ takenName: "Q1", takenInFolderId: 1 }, { name: "Q1", nested: false }),
+    /^notes\.mutationErrors\.folderNameTakenIn .*"name":"Q1".*"parent":"notes\.folders\.defaults\.meetings"/
+  );
+  assert.match(
+    describe(atTopLevel, { name: "Q1", nested: true }),
+    /^notes\.mutationErrors\.folderNameTakenTopLevel/
+  );
+  assert.match(
+    describe(atTopLevel, { name: "Work", nested: false }),
+    /^notes\.mutationErrors\.folderNameTakenTopLevel/
+  );
+  assert.equal(describe(atTopLevel, { name: "Q1", nested: false }), plain);
+  assert.equal(
+    describe({ takenName: "Q1", takenInFolderId: 99 }, { name: "Q1", nested: false }),
+    plain
+  );
+  assert.equal(describe({}, undefined), plain);
+  assert.equal(
+    folderMutationErrorDescription({ error: "Folder not found" }, [], t),
+    "notes.mutationErrors.folderNotFound"
+  );
+});
+
 test("path labels name the parent and localize default folder segments", async () => {
   const { folderPathLabel } = await load();
   const meetings = folder(1, { name: "Meetings", is_default: 1 });

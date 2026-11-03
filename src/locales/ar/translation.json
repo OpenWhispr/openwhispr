@@ -2489,6 +2489,8 @@
     "mutationErrors": {
       "folderNameRequired": "أدخل اسم مجلد.",
       "folderAlreadyExists": "يوجد مجلد بهذا الاسم بالفعل.",
+      "folderNameTakenIn": "الاسم “{{name}}” مستخدم بالفعل في “{{parent}}”. لا يمكن استخدام اسم المجلد إلا مرة واحدة في كل مساحة.",
+      "folderNameTakenTopLevel": "الاسم “{{name}}” مستخدم بالفعل في المستوى الأعلى. لا يمكن استخدام اسم المجلد إلا مرة واحدة في كل مساحة.",
       "folderNotFound": "تعذر العثور على ذلك المجلد.",
       "defaultFolderImmutable": "لا يمكن تغيير المجلدات الافتراضية.",
       "spaceNameRequired": "أدخل اسم مساحة.",
@@ -5613,7 +5615,7 @@
         "FOLDER_UNAVAILABLE": "هذا الموقع غير متاح. اختر مجلدًا آخر.",
         "SPACE_UNAVAILABLE": "هذا الموقع غير متاح. اختر مجلدًا آخر.",
         "FOLDER_NAME_REQUIRED": "أدخل اسم المجلد.",
-        "FOLDER_NAME_TAKEN": "يوجد مجلد بهذا الاسم في هذا الموقع.",
+        "FOLDER_NAME_TAKEN": "يوجد مجلد بهذا الاسم في هذه المساحة.",
         "CREATE_FAILED": "تعذر الإكمال. حاول مجددًا.",
         "LINKED_NOTE_CHANGED": "راجع الموقع، ثم انضم مجددًا.",
         "NOTE_UNAVAILABLE": "هذه الملاحظة غير متاحة. أعد المحاولة دون إنشاء بديل.",

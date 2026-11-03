@@ -3315,6 +3315,8 @@
     "mutationErrors": {
       "folderNameRequired": "Gib einen Ordnernamen ein.",
       "folderAlreadyExists": "Ein Ordner mit diesem Namen existiert bereits.",
+      "folderNameTakenIn": "„{{name}}“ wird bereits in „{{parent}}“ verwendet. Ein Ordnername kann pro Bereich nur einmal verwendet werden.",
+      "folderNameTakenTopLevel": "„{{name}}“ wird bereits auf oberster Ebene verwendet. Ein Ordnername kann pro Bereich nur einmal verwendet werden.",
       "folderNotFound": "Dieser Ordner wurde nicht gefunden.",
       "defaultFolderImmutable": "Standardordner können nicht geändert werden.",
       "spaceNameRequired": "Gib einen Bereichsnamen ein.",
@@ -5399,7 +5401,7 @@
         "FOLDER_UNAVAILABLE": "Dieser Speicherort ist nicht verfügbar. Wähle einen anderen Ordner.",
         "SPACE_UNAVAILABLE": "Dieser Speicherort ist nicht verfügbar. Wähle einen anderen Ordner.",
         "FOLDER_NAME_REQUIRED": "Gib einen Ordnernamen ein.",
-        "FOLDER_NAME_TAKEN": "An diesem Speicherort existiert bereits ein Ordner mit diesem Namen.",
+        "FOLDER_NAME_TAKEN": "In diesem Bereich existiert bereits ein Ordner mit diesem Namen.",
         "CREATE_FAILED": "Vorgang fehlgeschlagen. Bitte erneut versuchen.",
         "LINKED_NOTE_CHANGED": "Prüfe den Speicherort und tritt erneut bei.",
         "NOTE_UNAVAILABLE": "Diese Notiz ist nicht verfügbar. Versuche es erneut, ohne eine neue zu erstellen.",

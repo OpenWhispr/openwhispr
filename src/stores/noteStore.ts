@@ -31,6 +31,7 @@ import type {
   NoteShareInvitation,
   ShareSettings,
   SpaceItem,
+  FolderNameClash,
 } from "../types/electron";
 
 export interface NoteShareCacheEntry {
@@ -890,7 +891,7 @@ export async function createFolder(
   name: string,
   spaceId: number,
   parentFolderId: number | null = null
-): Promise<{ success: boolean; folder?: FolderItem; error?: string }> {
+): Promise<{ success: boolean; folder?: FolderItem; error?: string } & FolderNameClash> {
   const result = await window.electronAPI.createFolder(name, spaceId, parentFolderId);
   if (result.success && result.folder) {
     await loadFolders();
@@ -902,7 +903,7 @@ export async function createFolder(
 export async function renameFolder(
   id: number,
   name: string
-): Promise<{ success: boolean; folder?: FolderItem; error?: string }> {
+): Promise<{ success: boolean; folder?: FolderItem; error?: string } & FolderNameClash> {
   const result = await window.electronAPI.renameFolder(id, name);
   if (result.success) {
     await loadFolders();
@@ -965,7 +966,7 @@ export async function deleteFolder(id: number): Promise<{ success: boolean; erro
 export async function moveFolderToSpace(
   folderId: number,
   spaceId: number
-): Promise<{ success: boolean; folder?: FolderItem; error?: string }> {
+): Promise<{ success: boolean; folder?: FolderItem; error?: string } & FolderNameClash> {
   const result = await window.electronAPI.moveFolderToSpace(folderId, spaceId);
   if (!result.success) return result;
 

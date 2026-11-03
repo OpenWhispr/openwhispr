@@ -70,8 +70,15 @@ import {
   folderPathLabel,
   folderTree,
   orderFoldersAsTree,
+  folderMutationErrorDescription,
 } from "./shared";
-import type { FolderItem, NoteItem, SpaceItem, Workspace } from "../../types/electron";
+import type {
+  FolderItem,
+  FolderNameClash,
+  NoteItem,
+  SpaceItem,
+  Workspace,
+} from "../../types/electron";
 import {
   folderContainerKey,
   spaceContainerKey,
@@ -1539,7 +1546,8 @@ export default function SpacesTree({
   };
 
   const moveFolderSafely = async (
-    move: () => Promise<{ success: boolean; error?: string }>
+    folder: FolderItem,
+    move: () => Promise<{ success: boolean; error?: string } & FolderNameClash>
   ): Promise<{ success: boolean; error?: string }> => {
     const result = await move().catch((err: unknown) => ({
       success: false,
@@ -1548,7 +1556,10 @@ export default function SpacesTree({
     if (!result.success) {
       toast({
         title: t("notes.spaces.couldNotMove"),
-        description: t(localMutationErrorKey(result.error)),
+        description: folderMutationErrorDescription(result, folders, t, {
+          name: folder.name,
+          nested: false,
+        }),
         variant: "destructive",
       });
     }
@@ -1557,7 +1568,7 @@ export default function SpacesTree({
 
   const commitMoveFolder = async (folder: FolderItem, space: SpaceItem): Promise<void> => {
     const prevSpaceId = folder.space_id;
-    const result = await moveFolderSafely(() => moveFolderToSpace(folder.id, space.id));
+    const result = await moveFolderSafely(folder, () => moveFolderToSpace(folder.id, space.id));
     if (!result.success) return;
     revealContainer(space.id, null);
     // A subfolder moved on its own becomes top-level there, and moving it back
@@ -1572,7 +1583,7 @@ export default function SpacesTree({
         toast({ title: t("notes.spaces.couldNotMove"), variant: "destructive" });
         return;
       }
-      void moveFolderSafely(() => moveFolderToSpace(folder.id, prevSpaceId));
+      void moveFolderSafely(folder, () => moveFolderToSpace(folder.id, prevSpaceId));
     });
   };
 
@@ -1581,13 +1592,13 @@ export default function SpacesTree({
     parentFolderId: number | null
   ): Promise<void> => {
     const prevParentId = folder.parent_folder_id;
-    const result = await moveFolderSafely(() => setFolderParent(folder.id, parentFolderId));
+    const result = await moveFolderSafely(folder, () => setFolderParent(folder.id, parentFolderId));
     if (!result.success) return;
     revealContainer(folder.space_id, parentFolderId);
     const parent = folders.find((f) => f.id === parentFolderId);
     const target = parent ? defaultFolderDisplayName(parent, t) : t("notes.folders.topLevel");
     showUndoToast(folder.name, target, () => {
-      void moveFolderSafely(() => setFolderParent(folder.id, prevParentId));
+      void moveFolderSafely(folder, () => setFolderParent(folder.id, prevParentId));
     });
   };
 
@@ -1879,7 +1890,10 @@ export default function SpacesTree({
     if (result.error) {
       toast({
         title: t("notes.folders.couldNotCreate"),
-        description: t(localMutationErrorKey(result.error)),
+        description: folderMutationErrorDescription(result, folders, t, {
+          name: trimmed,
+          nested: target.parentFolderId != null,
+        }),
         variant: "destructive",
       });
     }
@@ -1896,7 +1910,10 @@ export default function SpacesTree({
     if (!result.success && result.error) {
       toast({
         title: t("notes.folders.couldNotRename"),
-        description: t(localMutationErrorKey(result.error)),
+        description: folderMutationErrorDescription(result, folders, t, {
+          name: trimmed,
+          nested: folders.find((folder) => folder.id === folderId)?.parent_folder_id != null,
+        }),
         variant: "destructive",
       });
     }

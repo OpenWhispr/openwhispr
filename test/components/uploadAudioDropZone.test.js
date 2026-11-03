@@ -8,6 +8,7 @@ const { findElement, installInteractiveDom } = require("../lib/interactiveDom");
 // Upload audio, with the stores and services it reads at mount stood in for: a managed
 // transcription scope makes the provider ready, so the idle drop zone shows.
 const MOCKS = {
+  "/ui/useToast": "export const useToast = () => ({ toast: () => {} });",
   "react-i18next": `
     const t = (key, values) => (values ? key + JSON.stringify(values) : key);
     export const useTranslation = () => ({ t, i18n: { language: "en" } });

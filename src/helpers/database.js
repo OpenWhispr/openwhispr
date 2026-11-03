@@ -334,6 +334,18 @@ class DatabaseManager {
     );
   }
 
+  // Names are unique per space across both levels, so the clash can sit somewhere
+  // the user isn't looking; the UI says where. Released desktops collapse two
+  // same-named folders in a space into one row, so this rule protects them too.
+  _folderNameTaken(existing) {
+    return {
+      success: false,
+      error: "A folder with that name already exists",
+      takenName: existing.name,
+      takenInFolderId: existing.parent_folder_id,
+    };
+  }
+
   // Subfolders go one level deep: the parent is a live top-level folder in the
   // same space, and the folder being nested is neither a default nor a parent.
   _folderParentError(folder, parentFolderId, spaceId) {
@@ -4533,12 +4545,12 @@ class DatabaseManager {
       const accountScope = this._accountScopeCondition("folders");
       const existing = this.db
         .prepare(
-          `SELECT id FROM folders
+          `SELECT name, parent_folder_id FROM folders
            WHERE name = ? AND space_id = ? AND ${FOLDER_NAME_TAKEN_FILTER}
              AND ${accountScope.sql}`
         )
         .get(trimmed, spaceId, ...accountScope.params);
-      if (existing) return { success: false, error: "A folder with that name already exists" };
+      if (existing) return this._folderNameTaken(existing);
       const maxOrder = this.db
         .prepare("SELECT MAX(sort_order) as max_order FROM folders WHERE space_id = ?")
         .get(spaceId);
@@ -4822,12 +4834,12 @@ class DatabaseManager {
       const folderScope = this._accountScopeCondition("folders");
       const existing = this.db
         .prepare(
-          `SELECT id FROM folders
+          `SELECT name, parent_folder_id FROM folders
            WHERE name = ? AND space_id = ? AND id != ? AND ${FOLDER_NAME_TAKEN_FILTER}
              AND ${folderScope.sql}`
         )
         .get(trimmed, folder.space_id, id, ...folderScope.params);
-      if (existing) return { success: false, error: "A folder with that name already exists" };
+      if (existing) return this._folderNameTaken(existing);
       this.db
         .prepare(
           "UPDATE folders SET name = ?, sync_status = 'pending', updated_at = datetime('now') WHERE id = ?"
@@ -4860,12 +4872,12 @@ class DatabaseManager {
       const placeholders = (values) => values.map(() => "?").join(", ");
       const existing = this.db
         .prepare(
-          `SELECT id FROM folders
+          `SELECT name, parent_folder_id FROM folders
            WHERE name IN (${placeholders(names)}) AND space_id = ? AND ${FOLDER_NAME_TAKEN_FILTER}
              AND ${folderScope.sql}`
         )
         .get(...names, spaceId, ...folderScope.params);
-      if (existing) return { success: false, error: "A folder with that name already exists" };
+      if (existing) return this._folderNameTaken(existing);
       // D6: cloud-backed rows leaving a team must keep pushing their scope
       // retraction even in the backup-off team-only pass (left_team).
       const oldKind = this.db

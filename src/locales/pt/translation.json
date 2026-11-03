@@ -2897,6 +2897,8 @@
     "mutationErrors": {
       "folderNameRequired": "Insira um nome para a pasta.",
       "folderAlreadyExists": "Já existe uma pasta com esse nome.",
+      "folderNameTakenIn": "“{{name}}” já é usado em “{{parent}}”. Um nome de pasta só pode ser usado uma vez em cada espaço.",
+      "folderNameTakenTopLevel": "“{{name}}” já é usado no nível superior. Um nome de pasta só pode ser usado uma vez em cada espaço.",
       "folderNotFound": "Não foi possível encontrar essa pasta.",
       "defaultFolderImmutable": "As pastas padrão não podem ser alteradas.",
       "spaceNameRequired": "Insira um nome para o espaço.",
@@ -5417,7 +5419,7 @@
         "FOLDER_UNAVAILABLE": "Este destino não está disponível. Escolha outra pasta.",
         "SPACE_UNAVAILABLE": "Este destino não está disponível. Escolha outra pasta.",
         "FOLDER_NAME_REQUIRED": "Digite um nome para a pasta.",
-        "FOLDER_NAME_TAKEN": "Já existe uma pasta com esse nome neste local.",
+        "FOLDER_NAME_TAKEN": "Já existe uma pasta com esse nome neste espaço.",
         "CREATE_FAILED": "Não foi possível concluir. Tente novamente.",
         "LINKED_NOTE_CHANGED": "Confira o destino e entre novamente.",
         "NOTE_UNAVAILABLE": "Esta nota não está disponível. Tente novamente sem criar outra.",

@@ -2949,6 +2949,8 @@
     "mutationErrors": {
       "folderNameRequired": "Introduce un nombre para la carpeta.",
       "folderAlreadyExists": "Ya existe una carpeta con ese nombre.",
+      "folderNameTakenIn": "“{{name}}” ya se usa en “{{parent}}”. Un nombre de carpeta solo se puede usar una vez en cada espacio.",
+      "folderNameTakenTopLevel": "“{{name}}” ya se usa en el nivel superior. Un nombre de carpeta solo se puede usar una vez en cada espacio.",
       "folderNotFound": "No se pudo encontrar esa carpeta.",
       "defaultFolderImmutable": "Las carpetas predeterminadas no se pueden modificar.",
       "spaceNameRequired": "Introduce un nombre para el espacio.",
@@ -5417,7 +5419,7 @@
         "FOLDER_UNAVAILABLE": "Este destino no está disponible. Elige otra carpeta.",
         "SPACE_UNAVAILABLE": "Este destino no está disponible. Elige otra carpeta.",
         "FOLDER_NAME_REQUIRED": "Introduce un nombre de carpeta.",
-        "FOLDER_NAME_TAKEN": "Ya existe una carpeta con ese nombre en esta ubicación.",
+        "FOLDER_NAME_TAKEN": "Ya existe una carpeta con ese nombre en este espacio.",
         "CREATE_FAILED": "No se pudo completar. Vuelve a intentarlo.",
         "LINKED_NOTE_CHANGED": "Revisa el destino y vuelve a unirte.",
         "NOTE_UNAVAILABLE": "Esta nota no está disponible. Reintenta sin crear otra.",

@@ -1,5 +1,6 @@
 import { cn } from "../lib/utils";
-import type { FolderItem } from "../../types/electron";
+import { localMutationErrorKey } from "../../lib/localMutationError";
+import type { FolderItem, FolderNameClash } from "../../types/electron";
 import type { MeetingRecordingRefusal, PolicyDecisionSnapshot } from "../../stores/policyRules";
 
 export const DEFAULT_FOLDER_NAME = "Personal";
@@ -91,6 +92,29 @@ export function folderPathLabel(
   const parent = loadedParent(folder, folders);
   const name = defaultFolderDisplayName(folder, t);
   return parent ? joinFolderPath(defaultFolderDisplayName(parent, t), name) : name;
+}
+
+// Why a folder change failed. A name clash says where the name is used, unless
+// it's a folder right beside this one, where the plain message is already clear.
+export function folderMutationErrorDescription(
+  result: { error?: string } & FolderNameClash,
+  folders: FolderItem[],
+  t: (key: string, options?: Record<string, string>) => string,
+  attempt?: { name: string; nested: boolean }
+): string {
+  const { takenName, takenInFolderId } = result;
+  if (takenName && takenInFolderId != null) {
+    const parent = folders.find((folder) => folder.id === takenInFolderId);
+    if (parent) {
+      return t("notes.mutationErrors.folderNameTakenIn", {
+        name: takenName,
+        parent: defaultFolderDisplayName(parent, t),
+      });
+    }
+  } else if (takenName && attempt && (attempt.nested || attempt.name !== takenName)) {
+    return t("notes.mutationErrors.folderNameTakenTopLevel", { name: takenName });
+  }
+  return t(localMutationErrorKey(result.error));
 }
 
 export function findDefaultFolder(folders: FolderItem[]): FolderItem | undefined {

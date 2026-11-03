@@ -3315,6 +3315,8 @@
     "mutationErrors": {
       "folderNameRequired": "Enter a folder name.",
       "folderAlreadyExists": "A folder with that name already exists.",
+      "folderNameTakenIn": "“{{name}}” is already used in “{{parent}}”. A folder name can only be used once in each space.",
+      "folderNameTakenTopLevel": "“{{name}}” is already used at the top level. A folder name can only be used once in each space.",
       "folderNotFound": "That folder could not be found.",
       "defaultFolderImmutable": "Default folders cannot be changed.",
       "spaceNameRequired": "Enter a space name.",
@@ -5399,7 +5401,7 @@
         "FOLDER_UNAVAILABLE": "This destination is unavailable. Choose another folder.",
         "SPACE_UNAVAILABLE": "This destination is unavailable. Choose another folder.",
         "FOLDER_NAME_REQUIRED": "Enter a folder name.",
-        "FOLDER_NAME_TAKEN": "A folder with that name already exists in this location.",
+        "FOLDER_NAME_TAKEN": "A folder with that name already exists in this space.",
         "CREATE_FAILED": "Could not finish. Please retry.",
         "LINKED_NOTE_CHANGED": "Review the destination, then join again.",
         "NOTE_UNAVAILABLE": "This note is unavailable. Retry without creating a replacement.",

@@ -2572,6 +2572,40 @@ test("a restart with a parent's delete pending keeps the unsynced subfolder rest
   assert.equal(reopened.getAgentConversation(chat.id).deleted_at, null);
 });
 
+test("a name clash says where the name is already used", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const team = createTestTeamSpace(db, { name: "Growth" }).space;
+  const client = db.createFolder("Client A").folder;
+  const quarter = db.createFolder("2024", null, client.id).folder;
+  const other = db.createFolder("Client B").folder;
+  const plans = db.createFolder("Plans").folder;
+  const notes = db.createFolder("Notes", null, plans.id).folder;
+  db.createFolder("Notes", team.id);
+
+  const nestedClash = {
+    success: false,
+    error: "A folder with that name already exists",
+    takenName: "2024",
+    takenInFolderId: client.id,
+  };
+  assert.deepEqual(db.createFolder("2024", null, other.id), nestedClash);
+  assert.deepEqual(db.createFolder("2024"), nestedClash);
+  assert.deepEqual(db.renameFolder(other.id, "2024"), nestedClash);
+  assert.deepEqual(db.createFolder("Client A", null, other.id), {
+    success: false,
+    error: "A folder with that name already exists",
+    takenName: "Client A",
+    takenInFolderId: null,
+  });
+  // The clash is with the subfolder a parent would bring along.
+  const moved = db.moveFolderToSpace(plans.id, team.id);
+  assert.equal(moved.success, false);
+  assert.equal(moved.takenName, notes.name);
+  assert.equal(moved.takenInFolderId, null);
+  assert.equal(quarter.parent_folder_id, client.id);
+});
+
 test("a subfolder name taken meanwhile restores it under a free name, with its parent", (t) => {
   const db = createDb(t);
   if (!db) return;

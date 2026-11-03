@@ -2897,6 +2897,8 @@
     "mutationErrors": {
       "folderNameRequired": "请输入文件夹名称。",
       "folderAlreadyExists": "已存在同名文件夹。",
+      "folderNameTakenIn": "“{{name}}”已在“{{parent}}”中使用。每个空间中的文件夹名称只能使用一次。",
+      "folderNameTakenTopLevel": "“{{name}}”已在顶层使用。每个空间中的文件夹名称只能使用一次。",
       "folderNotFound": "找不到该文件夹。",
       "defaultFolderImmutable": "无法更改默认文件夹。",
       "spaceNameRequired": "请输入空间名称。",
@@ -5399,7 +5401,7 @@
         "FOLDER_UNAVAILABLE": "此保存位置不可用。请选择其他文件夹。",
         "SPACE_UNAVAILABLE": "此保存位置不可用。请选择其他文件夹。",
         "FOLDER_NAME_REQUIRED": "请输入文件夹名称。",
-        "FOLDER_NAME_TAKEN": "此位置已存在同名文件夹。",
+        "FOLDER_NAME_TAKEN": "此空间已存在同名文件夹。",
         "CREATE_FAILED": "无法完成，请重试。",
         "LINKED_NOTE_CHANGED": "请检查保存位置，然后重新加入。",
         "NOTE_UNAVAILABLE": "此笔记不可用。请重试，不要创建替代笔记。",
