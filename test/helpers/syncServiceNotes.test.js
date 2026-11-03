@@ -949,6 +949,468 @@ test("a synced copy with no revision stops forcing a snapshot pull once it is ma
   assert.equal(noteCount(db), 1);
 });
 
+test("merging keeps the newest clean copy and moves chats and speakers onto it", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const older = insertCloudCopy(db, {
+    client_note_id: "older",
+    cloud_id: "cloud-1",
+    content: "old",
+    cloud_revision: 2,
+  });
+  const newest = insertCloudCopy(db, {
+    client_note_id: "cloud-1",
+    cloud_id: "cloud-1",
+    content: "new",
+    cloud_revision: 5,
+  });
+  const chat = db.createAgentConversation("Chat", older);
+  db.db
+    .prepare("INSERT INTO speaker_mappings (note_id, speaker_id, display_name) VALUES (?, ?, ?)")
+    .run(older, "speaker-1", "Ada");
+  db.db
+    .prepare("INSERT INTO speaker_mappings (note_id, speaker_id, display_name) VALUES (?, ?, ?)")
+    .run(newest, "speaker-1", "Kept");
+  db.db
+    .prepare("INSERT INTO speaker_mappings (note_id, speaker_id, display_name) VALUES (?, ?, ?)")
+    .run(older, "speaker-2", "Moved");
+  db.db
+    .prepare(
+      "INSERT INTO note_speaker_embeddings (note_id, speaker_id, embedding) VALUES (?, ?, ?)"
+    )
+    .run(older, "speaker-2", Buffer.from([1]));
+
+  db.initDatabase();
+
+  assert.deepEqual(
+    copiesOf(db, "cloud-1").map((note) => note.id),
+    [newest]
+  );
+  assert.equal(
+    db.db.prepare("SELECT note_id FROM agent_conversations WHERE id = ?").get(chat.id).note_id,
+    newest
+  );
+  assert.deepEqual(
+    db.db
+      .prepare("SELECT note_id, speaker_id, display_name FROM speaker_mappings ORDER BY speaker_id")
+      .all(),
+    [
+      { note_id: newest, speaker_id: "speaker-1", display_name: "Kept" },
+      { note_id: newest, speaker_id: "speaker-2", display_name: "Moved" },
+    ]
+  );
+  assert.deepEqual(db.db.prepare("SELECT note_id FROM note_speaker_embeddings").all(), [
+    { note_id: newest },
+  ]);
+
+  db.mergeDuplicateCloudNotes();
+  assert.equal(noteCount(db), 1, "merging again changes nothing");
+});
+
+test("merging keeps the copy nearest the cloud and gives other unpushed text its own note", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const current = insertCloudCopy(db, {
+    client_note_id: "current",
+    cloud_id: "cloud-1",
+    content: "newest in cloud",
+    cloud_revision: 9,
+  });
+  const dirty = insertCloudCopy(db, {
+    client_note_id: "dirty",
+    cloud_id: "cloud-1",
+    content: "unpushed",
+    sync_status: "pending",
+    cloud_revision: 3,
+  });
+  const sameText = insertCloudCopy(db, {
+    client_note_id: "same-text",
+    cloud_id: "cloud-1",
+    content: "unpushed",
+    sync_status: "pending",
+    cloud_revision: 2,
+  });
+  const otherText = insertCloudCopy(db, {
+    client_note_id: "other-text",
+    cloud_id: "cloud-1",
+    content: "different unpushed",
+    sync_status: "error",
+    cloud_revision: 1,
+    is_shared: 1,
+    share_token: "token",
+  });
+
+  db.mergeDuplicateCloudNotes();
+
+  assert.deepEqual(
+    copiesOf(db, "cloud-1").map((note) => [note.id, note.content, note.cloud_revision]),
+    [[current, "newest in cloud", 9]]
+  );
+  assert.equal(db.getNote(current).share_token, "token", "the share stays with the cloud note");
+  assert.equal(db.getNote(sameText), null, "two copies of one edit make one note");
+  for (const id of [dirty, otherText]) {
+    const detached = db.getNote(id);
+    assert.equal(detached.cloud_id, null);
+    assert.equal(detached.sync_status, "pending");
+    assert.equal(detached.is_shared, 0);
+    assert.equal(detached.cloud_revision, null);
+  }
+  assert.equal(db.getNote(otherText).content, "different unpushed");
+  assert.notEqual(db.getNote(otherText).client_note_id, "other-text");
+});
+
+test("merging keeps an unpushed edit made on the current cloud revision", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  insertCloudCopy(db, { client_note_id: "clean", cloud_id: "cloud-1", cloud_revision: 5 });
+  const edited = insertCloudCopy(db, {
+    client_note_id: "edited",
+    cloud_id: "cloud-1",
+    content: "edited on current",
+    sync_status: "pending",
+    cloud_revision: 5,
+  });
+
+  db.mergeDuplicateCloudNotes();
+
+  assert.deepEqual(
+    copiesOf(db, "cloud-1").map((note) => [note.id, note.sync_status]),
+    [[edited, "pending"]]
+  );
+  assert.equal(noteCount(db), 1);
+});
+
+test("a queued delete of one copy no longer deletes the note everywhere", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+
+  const row = cloud.seedNote({ client_note_id: "cloud-key", title: "Keyed", content: "body" });
+  await service.syncAll(true);
+  insertCloudCopy(db, {
+    client_note_id: "stale-copy",
+    cloud_id: row.id,
+    sync_status: "pending",
+    deleted_at: LOCAL_LATE,
+  });
+
+  db.mergeDuplicateCloudNotes();
+  await service.syncAll(true);
+
+  assert.equal(cloud.logFor("/api/notes/delete").length, 0);
+  assert.deepEqual(
+    copiesOf(db, row.id).map((note) => [note.client_note_id, note.deleted_at]),
+    [["cloud-key", null]]
+  );
+});
+
+test("when every copy is deleted, merging leaves one delete to push", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+
+  const row = cloud.seedNote({ client_note_id: "cloud-key", title: "Keyed", content: "body" });
+  for (const key of ["first", "second"]) {
+    insertCloudCopy(db, {
+      client_note_id: key,
+      cloud_id: row.id,
+      sync_status: "pending",
+      deleted_at: LOCAL_LATE,
+    });
+  }
+
+  db.mergeDuplicateCloudNotes();
+  assert.equal(copiesOf(db, row.id).length, 1);
+
+  await service.syncAll(true);
+  assert.equal(cloud.logFor("/api/notes/delete").length, 1);
+  assert.equal(noteCount(db), 0);
+});
+
+test("merging leaves copies alone while another owner or flow still holds them", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  insertCloudCopy(db, { client_note_id: "account-a", cloud_id: "cloud-a", account_id: "a" });
+  insertCloudCopy(db, { client_note_id: "account-b", cloud_id: "cloud-a", account_id: "b" });
+  insertCloudCopy(db, { client_note_id: "plain", cloud_id: "cloud-b" });
+  insertCloudCopy(db, {
+    client_note_id: "create-pending",
+    cloud_id: "cloud-b",
+    cloud_create_pending: "{}",
+  });
+  insertCloudCopy(db, { client_note_id: "plain-2", cloud_id: "cloud-c" });
+  const journaled = insertCloudCopy(db, { client_note_id: "journaled", cloud_id: "cloud-c" });
+  db.db
+    .prepare(
+      `INSERT INTO optimistic_folder_delete_rows
+         (folder_id, entity_type, entity_id, original_sync_status)
+       VALUES (1, 'note', ?, 'synced')`
+    )
+    .run(journaled);
+
+  db.mergeDuplicateCloudNotes();
+
+  assert.equal(copiesOf(db, "cloud-a").length, 2, "another account's row is not ours");
+  assert.equal(copiesOf(db, "cloud-b").length, 2, "an unresolved create keeps its row");
+  assert.equal(copiesOf(db, "cloud-c").length, 2, "a pending folder delete owns its row");
+});
+
+test("a kept copy that is blank neither loses the other copy's text nor takes it in", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const fuller = insertCloudCopy(db, {
+    client_note_id: "fuller",
+    cloud_id: "cloud-1",
+    content: "only copy of the body",
+    enhanced_content: "summary",
+    transcript: "transcript",
+    is_shared: 1,
+    share_token: "token",
+    cloud_revision: 3,
+  });
+  const blank = insertCloudCopy(db, {
+    client_note_id: "blank",
+    cloud_id: "cloud-1",
+    content: "",
+    cloud_revision: 4,
+  });
+
+  db.mergeDuplicateCloudNotes();
+
+  // The blank may be a deliberate clear: filling it would republish cleared text
+  // under a current base. Its own note can't overwrite anything.
+  const kept = db.getNote(blank);
+  assert.equal(kept.content, "");
+  assert.equal(kept.enhanced_content, null);
+  assert.equal(kept.cloud_revision, 4);
+  assert.equal(kept.sync_status, "synced");
+  assert.equal(kept.share_token, "token");
+  assert.equal(kept.is_shared, 1);
+  const detached = db.getNote(fuller);
+  assert.equal(detached.content, "only copy of the body");
+  assert.equal(detached.transcript, "transcript");
+  assert.equal(detached.cloud_id, null);
+  assert.equal(detached.sync_status, "pending");
+});
+
+test("merging does not undo the kept copy's own pending clear", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  insertCloudCopy(db, { client_note_id: "clean", cloud_id: "cloud-1", content: "old text" });
+  const cleared = insertCloudCopy(db, {
+    client_note_id: "cleared",
+    cloud_id: "cloud-1",
+    content: "",
+    content_sync_operation: "clear",
+    sync_status: "pending",
+  });
+
+  db.mergeDuplicateCloudNotes();
+
+  assert.equal(db.getNote(cleared).content, "");
+  assert.equal(noteCount(db), 1);
+});
+
+test("merging folds a copy with no account into the one account holding the note", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  insertCloudCopy(db, { client_note_id: "legacy", cloud_id: "cloud-1" });
+  insertCloudCopy(db, { client_note_id: "attributed", cloud_id: "cloud-1", account_id: "a" });
+  insertCloudCopy(db, { client_note_id: "legacy-2", cloud_id: "cloud-2" });
+  insertCloudCopy(db, { client_note_id: "a-1", cloud_id: "cloud-2", account_id: "a" });
+  insertCloudCopy(db, { client_note_id: "a-2", cloud_id: "cloud-2", account_id: "a" });
+  insertCloudCopy(db, { client_note_id: "b-1", cloud_id: "cloud-2", account_id: "b" });
+
+  db.mergeDuplicateCloudNotes();
+
+  assert.deepEqual(
+    copiesOf(db, "cloud-1").map((note) => note.account_id),
+    ["a"]
+  );
+  assert.deepEqual(
+    copiesOf(db, "cloud-2")
+      .map((note) => note.account_id ?? "none")
+      .sort(),
+    ["a", "b", "none"],
+    "with two accounts each keeps its own and the unowned row stays out"
+  );
+});
+
+test("a copy with no base never overwrites the cloud note through a current sibling", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const current = insertCloudCopy(db, {
+    client_note_id: "current",
+    cloud_id: "cloud-1",
+    content: "newest text",
+    cloud_revision: 7,
+    cloud_updated_at: "2026-07-20T12:00:00.000Z",
+  });
+  const stale = insertCloudCopy(db, {
+    client_note_id: "stale",
+    cloud_id: "cloud-1",
+    content: "stale text",
+    sync_status: "pending",
+    cloud_updated_at: null,
+  });
+
+  db.mergeDuplicateCloudNotes();
+
+  const kept = db.getNote(current);
+  assert.equal(kept.content, "newest text");
+  assert.equal(kept.sync_status, "synced", "nothing to push over the newest text");
+  assert.equal(db.getNote(stale).cloud_id, null);
+  assert.equal(db.getNote(stale).content, "stale text");
+});
+
+test("unpushed text that differs reaches the cloud as a note of its own", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+
+  const row = cloud.seedNote({ client_note_id: "cloud-key", title: "Keyed", content: "cloud" });
+  await service.syncAll(true);
+  const [keyed] = copiesOf(db, row.id);
+  updateNote(db, keyed.id, { sync_status: "pending", updated_at: LOCAL_LATE });
+  const other = insertCloudCopy(db, {
+    client_note_id: "edited-copy",
+    cloud_id: row.id,
+    title: "Keyed",
+    content: "only here",
+    sync_status: "pending",
+    cloud_create_attempted: 1,
+  });
+  // A difference only in surrounding blanks isn't an edit.
+  insertCloudCopy(db, {
+    client_note_id: "same-copy",
+    cloud_id: row.id,
+    title: "Keyed",
+    content: "cloud\n",
+    sync_status: "pending",
+  });
+
+  db.mergeDuplicateCloudNotes();
+  assert.deepEqual(
+    copiesOf(db, row.id).map((note) => note.id),
+    [keyed.id]
+  );
+
+  await service.syncAll(true);
+
+  const detached = db.getNote(other);
+  assert.equal(detached.sync_status, "synced");
+  assert.ok(detached.cloud_id);
+  assert.notEqual(detached.cloud_id, row.id);
+  assert.equal(detached.content, "only here");
+  assert.equal(noteCount(db), 2, "a blank difference made no note of its own");
+});
+
+test("a detached team copy moves to Personal rather than publish old text to the team", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const teamSpace = db.db
+    .prepare("INSERT INTO spaces (name, kind) VALUES ('Team', 'team')")
+    .run().lastInsertRowid;
+  const kept = insertCloudCopy(db, {
+    client_note_id: "kept",
+    cloud_id: "cloud-1",
+    space_id: teamSpace,
+    sync_status: "pending",
+    updated_at: LOCAL_LATE,
+  });
+  const draft = insertCloudCopy(db, {
+    client_note_id: "draft",
+    cloud_id: "cloud-1",
+    content: "old draft",
+    space_id: teamSpace,
+    sync_status: "error",
+  });
+  const chat = db.db
+    .prepare("INSERT INTO agent_conversations (title, note_id, space_id) VALUES ('Chat', ?, ?)")
+    .run(draft, teamSpace).lastInsertRowid;
+
+  db.mergeDuplicateCloudNotes();
+
+  assert.deepEqual(
+    copiesOf(db, "cloud-1").map((note) => note.id),
+    [kept]
+  );
+  const moved = db.getNote(draft);
+  assert.equal(moved.content, "old draft");
+  assert.equal(moved.space_id, db.getPrivateSpaceId());
+  assert.equal(moved.folder_id, null);
+  const movedChat = db.db
+    .prepare("SELECT note_id, space_id FROM agent_conversations WHERE id = ?")
+    .get(chat);
+  assert.equal(movedChat.note_id, draft);
+  assert.equal(movedChat.space_id, null);
+});
+
+test("a kept tombstone is queued so the delete still reaches the cloud", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+
+  const row = cloud.seedNote({ client_note_id: "cloud-key", title: "Keyed", content: "body" });
+  for (const key of ["first", "second"]) {
+    insertCloudCopy(db, {
+      client_note_id: key,
+      cloud_id: row.id,
+      sync_status: "error",
+      deleted_at: LOCAL_LATE,
+    });
+  }
+
+  db.mergeDuplicateCloudNotes();
+  await service.syncAll(true);
+
+  assert.equal(cloud.logFor("/api/notes/delete").length, 1);
+});
+
+test("merging compares timestamps as instants and survives one failing group", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  insertCloudCopy(db, {
+    client_note_id: "iso",
+    cloud_id: "cloud-1",
+    updated_at: "2026-07-20T11:00:00.000Z",
+  });
+  const later = insertCloudCopy(db, {
+    client_note_id: "later",
+    cloud_id: "cloud-1",
+    updated_at: "2026-07-20 12:00:00",
+  });
+  insertCloudCopy(db, { client_note_id: "boom", cloud_id: "cloud-0", cloud_revision: 1 });
+  insertCloudCopy(db, { client_note_id: "goes-first", cloud_id: "cloud-0", cloud_revision: 5 });
+  insertCloudCopy(db, { client_note_id: "keeper", cloud_id: "cloud-0", cloud_revision: 9 });
+  db.db.exec(`CREATE TRIGGER block_merge BEFORE DELETE ON notes WHEN OLD.client_note_id = 'boom'
+    BEGIN SELECT RAISE(ABORT, 'boom'); END`);
+
+  db.mergeDuplicateCloudNotes();
+
+  assert.deepEqual(
+    copiesOf(db, "cloud-1").map((note) => note.id),
+    [later]
+  );
+  assert.equal(copiesOf(db, "cloud-0").length, 3, "the failing group rolls back whole");
+});
+
+test("a rejected create holds its group, and the merge reports what it removed", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  insertCloudCopy(db, { client_note_id: "plain", cloud_id: "cloud-1" });
+  insertCloudCopy(db, {
+    client_note_id: "rejected",
+    cloud_id: "cloud-1",
+    cloud_create_rejected: 1,
+  });
+  const removed = insertCloudCopy(db, { client_note_id: "older", cloud_id: "cloud-2" });
+  insertCloudCopy(db, { client_note_id: "newer", cloud_id: "cloud-2", cloud_revision: 2 });
+
+  assert.deepEqual(db.mergeDuplicateCloudNotes(), [removed]);
+  assert.equal(copiesOf(db, "cloud-1").length, 2);
+});
+
 test("cloud-id matching stays inside the active account", (t) => {
   const db = createDb(t);
   if (!db) return;
@@ -1050,4 +1512,153 @@ test("a skipped upsert leaves another row's conflict alone", async (t) => {
 
   assert.ok(readNoteConflictIds().has("held-key"));
   assert.equal(copiesOf(db, row.id)[0].client_note_id, "local-key");
+});
+
+test("clean past versions leave one note of their own, and a blank copy leaves none", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const kept = insertCloudCopy(db, {
+    client_note_id: "kept",
+    cloud_id: "cloud-1",
+    content: "",
+    cloud_revision: 6,
+  });
+  const newestVersion = insertCloudCopy(db, {
+    client_note_id: "v3",
+    cloud_id: "cloud-1",
+    content: "version 3",
+    cloud_revision: 3,
+  });
+  for (const revision of [2, 1]) {
+    insertCloudCopy(db, {
+      client_note_id: `v${revision}`,
+      cloud_id: "cloud-1",
+      content: `version ${revision}`,
+      cloud_revision: revision,
+    });
+  }
+  insertCloudCopy(db, {
+    client_note_id: "pending-clear",
+    cloud_id: "cloud-1",
+    title: "Copy",
+    content: "",
+    content_sync_operation: "clear",
+    sync_status: "pending",
+    cloud_revision: 1,
+  });
+
+  db.mergeDuplicateCloudNotes();
+
+  assert.deepEqual(db.db.prepare("SELECT id, content FROM notes ORDER BY id").all(), [
+    { id: kept, content: "" },
+    { id: newestVersion, content: "version 3" },
+  ]);
+});
+
+test("a pending clear on a copy leaves no note of its own", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const kept = insertCloudCopy(db, {
+    client_note_id: "kept",
+    cloud_id: "cloud-1",
+    content: "cloud text",
+    cloud_revision: 6,
+  });
+  insertCloudCopy(db, {
+    client_note_id: "pending-clear",
+    cloud_id: "cloud-1",
+    content: "",
+    content_sync_operation: "clear",
+    sync_status: "pending",
+    cloud_revision: 1,
+  });
+
+  db.mergeDuplicateCloudNotes();
+
+  assert.deepEqual(
+    db.db
+      .prepare("SELECT id FROM notes")
+      .all()
+      .map((note) => note.id),
+    [kept]
+  );
+});
+
+test("a detached team copy takes the account that can see it", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const insertSpace = db.db.prepare("INSERT INTO spaces (name, kind) VALUES (?, 'team')");
+  const insertMember = db.db.prepare(
+    "INSERT INTO space_accounts (space_id, account_id) VALUES (?, ?)"
+  );
+  const solo = insertSpace.run("Solo").lastInsertRowid;
+  insertMember.run(solo, "account-a");
+  const shared = insertSpace.run("Shared").lastInsertRowid;
+  insertMember.run(shared, "account-a");
+  insertMember.run(shared, "account-b");
+  const owned = insertSpace.run("Owned").lastInsertRowid;
+
+  const detached = [
+    ["solo", solo, null],
+    ["shared", shared, null],
+    ["owned", owned, "account-c"],
+  ].map(([name, space, account]) => {
+    insertCloudCopy(db, {
+      client_note_id: `${name}-kept`,
+      cloud_id: `cloud-${name}`,
+      space_id: space,
+      sync_status: "pending",
+      updated_at: LOCAL_LATE,
+    });
+    return insertCloudCopy(db, {
+      client_note_id: `${name}-draft`,
+      cloud_id: `cloud-${name}`,
+      content: `${name} draft`,
+      space_id: space,
+      account_id: null,
+      sync_status: "error",
+    });
+  });
+  db.db
+    .prepare("UPDATE notes SET account_id = 'account-c' WHERE client_note_id = 'owned-kept'")
+    .run();
+
+  db.mergeDuplicateCloudNotes();
+
+  assert.deepEqual(
+    detached.map(
+      (id) => db.db.prepare("SELECT account_id FROM notes WHERE id = ?").get(id).account_id
+    ),
+    ["account-a", null, "account-c"],
+    "a space two accounts share has no one owner to pick"
+  );
+});
+
+test("a chat that follows its note into another space drops the old scope", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const teamSpace = db.db
+    .prepare("INSERT INTO spaces (name, kind) VALUES ('Team', 'team')")
+    .run().lastInsertRowid;
+  const teamCopy = insertCloudCopy(db, {
+    client_note_id: "team-copy",
+    cloud_id: "cloud-1",
+    space_id: teamSpace,
+    cloud_revision: 1,
+  });
+  const kept = insertCloudCopy(db, {
+    client_note_id: "private-copy",
+    cloud_id: "cloud-1",
+    cloud_revision: 2,
+  });
+  const chat = db.db
+    .prepare("INSERT INTO agent_conversations (title, note_id, space_id) VALUES ('Chat', ?, ?)")
+    .run(teamCopy, teamSpace).lastInsertRowid;
+
+  db.mergeDuplicateCloudNotes();
+
+  assert.deepEqual(
+    db.db.prepare("SELECT note_id, space_id FROM agent_conversations WHERE id = ?").get(chat),
+    { note_id: kept, space_id: null }
+  );
 });

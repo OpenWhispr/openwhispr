@@ -13489,6 +13489,10 @@ class IPCHandlers {
         } else {
           this._rebuildMirror(basePath);
         }
+        // A rebuild never prunes, so copies merged at launch would keep their files.
+        for (const noteId of this.databaseManager.mergedNoteIds.splice(0)) {
+          require("./markdownMirror").deleteNote(noteId);
+        }
         return { success: true };
       } catch (error) {
         debugLogger.error(
