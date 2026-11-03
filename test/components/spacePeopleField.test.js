@@ -132,6 +132,12 @@ const text = (node) => {
   return readable(parts.join(" "));
 };
 const optionTexts = () => options().map(text);
+const selected = () => options().map((option) => option.getAttribute("aria-selected"));
+// The row the arrow keys are on, which the field names with aria-activedescendant.
+const highlighted = () =>
+  options().findIndex((option) => option.id === input().getAttribute("aria-activedescendant"));
+// A picked row ends in a check; a member's or group's row has no other drawn icon.
+const checked = () => options().map((option) => option.querySelector("svg") !== null);
 const chipTexts = () => chips().map(text);
 
 const act = (fn) => React.act(async () => fn());
@@ -242,19 +248,21 @@ test("picking adds a chip and clears the query", async (t) => {
   assert.equal(input().value, "", "the query is cleared");
   assert.deepEqual(chipTexts(), ["Saket"]);
   assert.equal(input().closest("[data-chip]"), null, "chips sit under the field, never inside it");
-  // The field keeps focus and the list steps aside; Saket is not offered again once it is back.
+  // The field keeps focus and the list stays open: Saket is still there, with a check.
   assert.equal(doc().activeElement, input());
-  assert.equal(listbox(), null);
-  await press(input(), "ArrowDown");
+  assert.ok(listbox(), "the list stays open after a pick");
   assert.deepEqual(optionTexts(), [
     "Ethan ethan@openronnie.com",
+    "Saket saket@openronnie.com",
     "Bob bov@openronnie.com",
     "Sales 5 people",
     "Design Team 2 people",
   ]);
+  assert.deepEqual(selected(), ["false", "true", "false", "false", "false"]);
+  assert.deepEqual(checked(), [false, true, false, false, false]);
 
   // A group becomes a chip with its size.
-  await click(options()[2]);
+  await click(options()[3]);
   assert.deepEqual(lastChange().at(-1), {
     kind: "group",
     teamId: "sales",
@@ -262,6 +270,47 @@ test("picking adds a chip and clears the query", async (t) => {
     memberCount: 5,
   });
   assert.deepEqual(chipTexts(), ["Saket", "Sales · 5 people"]);
+  assert.deepEqual(selected(), ["false", "true", "false", "true", "false"]);
+});
+
+test("picking a checked row removes its chip", async (t) => {
+  const { changes, lastChange } = await mount(t);
+  await focus(input());
+  await click(options()[1]);
+  await click(options()[3]);
+  assert.deepEqual(chipTexts(), ["Saket", "Sales · 5 people"]);
+
+  // Pressing the row takes the person out again, and the check goes with the chip. The query
+  // clears for this as for any pick.
+  await type(input(), "sa");
+  assert.deepEqual(selected(), ["true", "true"]);
+  await click(options()[0]);
+  assert.equal(input().value, "");
+  assert.deepEqual(
+    lastChange().map((recipient) => recipient.kind),
+    ["group"]
+  );
+  assert.deepEqual(chipTexts(), ["Sales · 5 people"]);
+  assert.deepEqual(selected(), ["false", "false", "false", "true", "false"]);
+  assert.deepEqual(checked(), [false, false, false, true, false]);
+  assert.ok(listbox(), "the list stays open");
+
+  // So does Enter on the highlighted row; a group is taken out the same way.
+  await type(input(), "sal");
+  await press(input(), "ArrowDown");
+  assert.equal(highlighted(), 0, "Sales is the only row, and it is checked");
+  await press(input(), "Enter");
+  assert.deepEqual(lastChange(), []);
+  assert.deepEqual(chipTexts(), []);
+  assert.equal(input().value, "", "the query clears as after any pick");
+  assert.deepEqual(selected(), ["false", "false", "false", "false", "false"]);
+
+  // Picking it once more stages it again: the row toggles.
+  await click(options()[0]);
+  assert.deepEqual(lastChange(), [
+    { kind: "member", userId: "ethan", label: "Ethan", email: "ethan@openronnie.com" },
+  ]);
+  assert.equal(changes.length, 5);
 });
 
 test("chips show who they are: a name, a group's glyph, an address", async (t) => {
@@ -318,22 +367,23 @@ test("a chip's × takes the person out again", async (t) => {
 test("arrow keys move over the rows that can be picked and Enter picks", async (t) => {
   const { lastChange } = await mount(t, { accessUserIds: new Set(["saket"]) });
   await focus(input());
-  const rows = () => options().map((option) => option.getAttribute("aria-selected"));
-  assert.deepEqual(rows(), ["false", "false", "false", "false", "false"]);
+  assert.equal(highlighted(), -1, "nothing is highlighted until an arrow key");
 
   await press(input(), "ArrowDown");
-  assert.deepEqual(rows(), ["true", "false", "false", "false", "false"]);
-  assert.equal(input().getAttribute("aria-activedescendant"), options()[0].id);
+  assert.equal(highlighted(), 0);
   // Saket already has access: the arrow steps over him.
   await press(input(), "ArrowDown");
-  assert.deepEqual(rows(), ["false", "false", "true", "false", "false"]);
+  assert.equal(highlighted(), 2);
   await press(input(), "ArrowUp");
   await press(input(), "ArrowUp");
-  assert.equal(options().at(-1).getAttribute("aria-selected"), "true", "wraps around");
+  assert.equal(highlighted(), 4, "wraps around");
+  // Highlighting is not picking: aria-selected says who is picked.
+  assert.deepEqual(selected(), ["false", "false", "false", "false", "false"]);
 
   await press(input(), "Enter");
   assert.equal(lastChange()[0].kind, "group");
   assert.equal(lastChange()[0].teamId, "design");
+  assert.deepEqual(selected(), ["false", "false", "false", "false", "true"]);
 });
 
 test("someone with access shows disabled and can't be picked", async (t) => {

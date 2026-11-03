@@ -92,24 +92,49 @@ test("an empty query lists the first of each, at most eight", () => {
   }
 });
 
-test("picked and hidden people don't show again", () => {
+test("picked people stay listed with a check, and hidden people don't show", () => {
   const picked = [
     { kind: "member", userId: "ethan", label: "Ethan", email: "ethan@openronnie.com" },
     { kind: "group", teamId: "sales", label: "Sales", memberCount: 5 },
   ];
-  assert.deepEqual(names(search("", { picked })), {
-    members: ["Saket", "Bob", "ghost@openronnie.com"],
-    groups: ["Design Team"],
+  const results = search("", { picked });
+  // Nobody leaves the list for being picked; the row says so, so choosing it again can take it back.
+  assert.deepEqual(names(results), {
+    members: ["Ethan", "Saket", "Bob", "ghost@openronnie.com"],
+    groups: ["Sales", "Design Team"],
   });
+  assert.deepEqual(
+    results.members.map((row) => row.picked),
+    [true, false, false, false]
+  );
+  assert.deepEqual(
+    results.groups.map((row) => row.picked),
+    [true, false]
+  );
+  // A query keeps them too, and nothing is picked without a chip.
+  assert.deepEqual(
+    search("sa", { picked }).groups.map((row) => [row.group.name, row.picked]),
+    [["Sales", true]]
+  );
+  assert.ok(search("").members.every((row) => row.picked === false));
+  // Only an address staged as a chip is picked; the same person typed by email is a member row.
+  assert.equal(search("ethan", { picked }).members[0].picked, true);
+
   assert.deepEqual(names(search("", { hiddenUserIds: new Set(["saket"]) })).members, [
     "Ethan",
+    "Bob",
+    "ghost@openronnie.com",
+  ]);
+  // A hidden person is gone even when picked.
+  assert.deepEqual(names(search("", { picked, hiddenUserIds: new Set(["ethan"]) })).members, [
+    "Saket",
     "Bob",
     "ghost@openronnie.com",
   ]);
 
   // The ones left out don't use up a place in the eight.
   const crowd = Array.from({ length: 9 }, (_, index) => member(`m${index}`, `Person ${index}`));
-  const results = pickerResults({
+  const crowded = pickerResults({
     query: "",
     roster: crowd,
     groups: [],
@@ -118,8 +143,8 @@ test("picked and hidden people don't show again", () => {
     canInvite: false,
     ...NO_ACCESS,
   });
-  assert.equal(results.members.length, 8);
-  assert.equal(results.members[0].member.user_id, "m1");
+  assert.equal(crowded.members.length, 8);
+  assert.equal(crowded.members[0].member.user_id, "m1");
 });
 
 test("someone with access shows disabled, a group with its count", () => {

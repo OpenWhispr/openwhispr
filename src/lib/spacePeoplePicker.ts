@@ -8,8 +8,9 @@ export type PickedRecipient =
   | { kind: "email"; email: string; role: "admin" | "member"; valid: boolean };
 
 export interface PickerResults {
-  members: { member: WorkspaceMember; hasAccess: boolean }[];
-  groups: { group: Team; hasAccess: boolean }[];
+  /** `picked` rows stay listed, checked, so choosing one again takes it back out. */
+  members: { member: WorkspaceMember; hasAccess: boolean; picked: boolean }[];
+  groups: { group: Team; hasAccess: boolean; picked: boolean }[];
   /** The query reads as an address and nobody matches: offer to invite. */
   inviteEmail: string | null;
   noResults: boolean;
@@ -67,19 +68,24 @@ export function pickerResults(input: {
   const pickedKeys = new Set(picked.map(recipientKey));
   const needle = query.trim().toLowerCase();
 
-  // Left out before the cap, so a hidden or picked person never takes one of the eight places.
-  const candidates = roster.filter(
-    (member) => !hiddenUserIds?.has(member.user_id) && !pickedKeys.has(`member:${member.user_id}`)
-  );
+  // Left out before the cap, so a hidden person never takes one of the eight places.
+  const candidates = roster.filter((member) => !hiddenUserIds?.has(member.user_id));
   const members = filterMemberCandidates(candidates, needle)
     .slice(0, PICKER_MAX_PER_KIND)
-    .map((member) => ({ member, hasAccess: accessUserIds.has(member.user_id) }));
+    .map((member) => ({
+      member,
+      hasAccess: accessUserIds.has(member.user_id),
+      picked: pickedKeys.has(`member:${member.user_id}`),
+    }));
 
   const matchingGroups = groups
-    .filter((group) => !pickedKeys.has(`group:${group.id}`))
     .filter((group) => group.name.toLowerCase().includes(needle))
     .slice(0, PICKER_MAX_PER_KIND)
-    .map((group) => ({ group, hasAccess: accessGroupIds.has(group.id) }));
+    .map((group) => ({
+      group,
+      hasAccess: accessGroupIds.has(group.id),
+      picked: pickedKeys.has(`group:${group.id}`),
+    }));
 
   const typed = query.trim();
   // A roster address is that member, listed above, so it is never someone to invite.

@@ -20,7 +20,7 @@ import {
 } from "../../lib/spacePeoplePicker";
 import type { Team, WorkspaceMember } from "../../types/electron";
 import { isolate } from "../../utils/bidiIsolate";
-import { ChevronDown, Mail, X } from "../icons";
+import { Check, ChevronDown, Mail, X } from "../icons";
 import { cn } from "../lib/utils";
 import MemberAvatar from "../MemberAvatar";
 import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "../ui/BidiInterpolatedText";
@@ -59,8 +59,8 @@ export interface SpacePeopleFieldProps {
 }
 
 type PickerRow =
-  | { kind: "member"; member: WorkspaceMember; hasAccess: boolean }
-  | { kind: "group"; group: Team; hasAccess: boolean }
+  | { kind: "member"; member: WorkspaceMember; hasAccess: boolean; picked: boolean }
+  | { kind: "group"; group: Team; hasAccess: boolean; picked: boolean }
   | { kind: "invite"; email: string };
 
 const NO_IDS: ReadonlySet<string> = new Set();
@@ -132,15 +132,17 @@ export function SpacePeopleField({
     canInvite,
   });
   const rows: PickerRow[] = [
-    ...results.members.map(({ member, hasAccess }): PickerRow => ({
+    ...results.members.map(({ member, hasAccess, picked }): PickerRow => ({
       kind: "member",
       member,
       hasAccess,
+      picked,
     })),
-    ...results.groups.map(({ group, hasAccess }): PickerRow => ({
+    ...results.groups.map(({ group, hasAccess, picked }): PickerRow => ({
       kind: "group",
       group,
       hasAccess,
+      picked,
     })),
     ...(results.inviteEmail ? [{ kind: "invite", email: results.inviteEmail } as const] : []),
   ];
@@ -177,18 +179,28 @@ export function SpacePeopleField({
     if (query.includes("@")) setQuery(stageText(query));
   };
 
+  const unstage = (recipient: PickedRecipient): void => {
+    onChange(picked.filter((entry) => recipientKey(entry) !== recipientKey(recipient)));
+  };
+
+  // A picked row stays listed with a check, and choosing it again takes the chip back out.
   const pick = (row: PickerRow): void => {
     if (!isPickable(row)) return;
-    if (row.kind === "member") stage([memberRecipient(row.member)]);
-    else if (row.kind === "group") stage([groupRecipient(row.group)]);
-    else {
+    if (row.kind === "member") {
+      const recipient = memberRecipient(row.member);
+      if (row.picked) unstage(recipient);
+      else stage([recipient]);
+    } else if (row.kind === "group") {
+      const recipient = groupRecipient(row.group);
+      if (row.picked) unstage(recipient);
+      else stage([recipient]);
+    } else {
       stage([emailRecipient(row.email.toLowerCase(), inviteRoleChoice ? inviteRole : "member")]);
       // Never carried to the next address: an admin invitation is a choice made each time.
       setInviteRole("member");
     }
     setQuery("");
     setActiveIndex(-1);
-    setDismissed(true);
   };
 
   const move = (step: 1 | -1): void => {
@@ -310,7 +322,8 @@ export function SpacePeopleField({
                     key={rowKey(row)}
                     id={`${listId}-${index}`}
                     role="option"
-                    aria-selected={index === active}
+                    // Who is picked; the row the arrow keys are on is aria-activedescendant.
+                    aria-selected={row.kind !== "invite" && row.picked}
                     aria-disabled={disabledRow || undefined}
                     onMouseEnter={() => {
                       if (!disabledRow) setActiveIndex(index);
@@ -411,6 +424,7 @@ function RowContent({
           }
           secondary={secondary}
         />
+        {row.picked ? <PickedCheck /> : null}
       </>
     );
   }
@@ -431,6 +445,7 @@ function RowContent({
               : t("settingsPage.workspace.teamspaces.picker.groupPeople", { count })
           }
         />
+        {row.picked ? <PickedCheck /> : null}
       </>
     );
   }
@@ -469,6 +484,10 @@ function RowContent({
       )}
     </>
   );
+}
+
+function PickedCheck(): ReactElement {
+  return <Check className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />;
 }
 
 function RowText({
