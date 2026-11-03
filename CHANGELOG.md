@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Tinfoil GLM-5.3 Flash selections now move to GLM-5.3.** Flash is removed from saved and live model lists, and existing selections recover even offline. Your own Tinfoil key remains in use. GLM-5.3 has higher provider API prices and is text-only; choose another available model in AI Models settings if preferred. Tinfoil screenshot input remains unsupported in OpenWhispr.
+
 ## [1.11.0] - 2026-10-29
 
 Business and Enterprise teams now share a dictionary, the assistant can follow skills you keep for recurring work, and the workspace you're in moves to the bottom of the sidebar with your account in the top bar. Whisper checks that GPU acceleration really started and falls back to Vulkan, and organizations can turn off meeting recording and audio upload separately. This release also fixes a launch crash on devices used by two accounts, the macOS paste that could insert your previous clipboard, and dictionary words lost on a new device.

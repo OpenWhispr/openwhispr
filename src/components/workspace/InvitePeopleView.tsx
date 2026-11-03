@@ -234,6 +234,7 @@ export function InvitePeopleView({
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
+    if (event.nativeEvent.isComposing) return;
     if (listOpen && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
       event.preventDefault();
       const step = event.key === "ArrowDown" ? 1 : -1;
@@ -278,7 +279,7 @@ export function InvitePeopleView({
       onOpenAutoFocus={focusField}
       onEscapeKeyDown={handleEscapeKeyDown}
       onInteractOutside={blockWhileSending}
-      className="w-[440px] max-w-[calc(100vw-32px)] items-stretch gap-6 rounded-[28px] p-5 sm:max-w-[440px]"
+      className="w-[440px] max-w-[calc(100vw-32px)] grid-cols-1 items-stretch gap-6 rounded-[28px] p-5 sm:max-w-[440px]"
     >
       {state.phase === "done" ? (
         <InviteDoneContent
@@ -345,6 +346,17 @@ export function InvitePeopleView({
                         : t("workspaces.invite.addMore")
                     }
                     onChange={(event) => changeDraft(event.target.value)}
+                    onPaste={(event) => {
+                      const text = event.clipboardData.getData("text/plain");
+                      if (!/[\r\n]/.test(text)) return;
+                      event.preventDefault();
+                      const { value, selectionStart, selectionEnd } = event.currentTarget;
+                      changeDraft(
+                        value.slice(0, selectionStart ?? value.length) +
+                          text +
+                          value.slice(selectionEnd ?? value.length)
+                      );
+                    }}
                     onKeyDown={handleKeyDown}
                     onBlur={() => dispatch({ type: "commit" })}
                     className="h-7 min-w-[8rem] flex-1 bg-transparent px-1 text-sm text-foreground outline-none placeholder:text-muted-foreground"

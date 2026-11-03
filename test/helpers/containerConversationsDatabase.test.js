@@ -1183,6 +1183,74 @@ test("relocateRevokedFolder moves or retires the folder's conversations", (t) =>
   );
 });
 
+test("the chat list and chat search say which note a chat came from", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const note = db.saveNote("Q3 planning sync", "body").note;
+  const fromNote = db.createAgentConversation("Onboarding decisions · Q3 planning sync", note.id);
+  const plain = db.createAgentConversation("Summarize my week");
+  db.addAgentMessage(fromNote.id, "user", "What did we decide?");
+
+  const rows = (list) => Object.fromEntries(list.map((row) => [row.id, row]));
+  for (const list of [
+    db.getAgentConversationsWithPreview(),
+    db.searchAgentConversations("decid"),
+  ]) {
+    const byId = rows(list);
+    assert.equal(byId[fromNote.id].note_id, note.id);
+    assert.equal(byId[fromNote.id].note_title, "Q3 planning sync");
+    assert.equal(byId[fromNote.id].note_deleted_at, null);
+  }
+  assert.equal(rows(db.getAgentConversationsWithPreview())[plain.id].note_id, null);
+
+  db.markNoteSynced(note.id, "cloud-source-note");
+  db.deleteNote(note.id);
+  const afterDelete = rows(db.getAgentConversationsWithPreview())[fromNote.id];
+  assert.equal(afterDelete.note_title, "Q3 planning sync", "a soft-deleted note keeps its title");
+  assert.ok(afterDelete.note_deleted_at);
+});
+
+test("a cloud pull keeps the note a chat came from", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const note = db.saveNote("Q3 planning sync", "body").note;
+  const chat = db.createAgentConversation("Onboarding decisions", note.id);
+  db.markConversationSynced(chat.id, "cloud-conv-note");
+
+  // The cloud's conversations carry no note_id.
+  db.upsertConversationFromCloud(
+    {
+      id: "cloud-conv-note",
+      client_conversation_id: chat.client_conversation_id,
+      title: "Onboarding decisions (renamed)",
+      updated_at: "2099-01-01T00:00:00.000Z",
+    },
+    [{ role: "user", content: "What did we decide?" }]
+  );
+  const pulled = db.db.prepare("SELECT * FROM agent_conversations WHERE id = ?").get(chat.id);
+  assert.equal(pulled.title, "Onboarding decisions (renamed)");
+  assert.equal(pulled.note_id, note.id);
+  assert.equal(db.getConversationsForNote(note.id).length, 1);
+});
+
+test("a chat's source note shows only to the account that can open it", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const note = db.saveNote("Board-only plan", "body").note;
+  const chat = db.createAgentConversation("Question", note.id);
+
+  db.setActiveAccountId("other-account");
+  assert.equal(db.getNote(note.id), null);
+  const row = db.getAgentConversationsWithPreview().find((c) => c.id === chat.id);
+  assert.equal(row.note_title, null, "another account doesn't see the note's title");
+  const found = db.searchAgentConversations("Question").find((c) => c.id === chat.id);
+  assert.equal(found.note_title, null);
+
+  db.setActiveAccountId("test-account");
+  const own = db.getAgentConversationsWithPreview().find((c) => c.id === chat.id);
+  assert.equal(own.note_title, "Board-only plan");
+});
+
 test("deleting a never-synced chat removes it with every message", (t) => {
   const db = createDb(t);
   if (!db) return;

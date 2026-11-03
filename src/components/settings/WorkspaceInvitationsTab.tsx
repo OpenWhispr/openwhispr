@@ -299,7 +299,7 @@ export default function WorkspaceInvitationsTab({
         </div>
       )}
 
-      {rows.length > 0 && invitations.stale && (
+      {invitations.stale && (
         <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
           <p>{t("settingsPage.workspace.people.invitations.refreshFailed")}</p>
           <Button variant="outline" size="sm" onClick={() => void reload()}>

@@ -1,3 +1,4 @@
+import { RETIRED_TINFOIL_MODEL_NAMES } from "../config/retiredCloudModelPolicy.js";
 import { create } from "zustand";
 import { GENERATE_NOTES_KEY } from "../helpers/builtinActions";
 import { API_ENDPOINTS } from "../config/constants";
@@ -960,10 +961,12 @@ if (Object.keys(healedMeetingFollowModes).length > 0) {
   );
 }
 
-// Resolved offline, so a retired model's name survives only in Tinfoil's
-// catalog cache, and a replacement's only if the registry lists it. The raw-id
-// fallback is what the live-catalog reconcile shows too.
+// Resolve names offline, including retired models already removed from the cache.
+// Unseeded replacements fall back to their id, as the live reconcile does.
 function sweptModelName(providerId: RetiredModelProvider, modelId: string): string {
+  if (providerId === "tinfoil" && RETIRED_TINFOIL_MODEL_NAMES[modelId]) {
+    return RETIRED_TINFOIL_MODEL_NAMES[modelId];
+  }
   const cached = providerId === "tinfoil" ? readCachedTinfoilModels().models : [];
   const named =
     cached.find((model) => model.id === modelId) ??

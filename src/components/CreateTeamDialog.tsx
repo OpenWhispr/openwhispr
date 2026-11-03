@@ -35,8 +35,16 @@ export default function CreateTeamDialog({
   const { t } = useTranslation();
   const { toast } = useToast();
   const { user } = useAuth();
-  const { members: roster, refreshMembers } = useWorkspaceStore(
-    useShallow((s) => ({ members: rosterFor(s, workspaceId), refreshMembers: s.refreshMembers }))
+  const {
+    members: roster,
+    rosterIsOurs,
+    refreshMembers,
+  } = useWorkspaceStore(
+    useShallow((s) => ({
+      members: rosterFor(s, workspaceId),
+      rosterIsOurs: s.membersWorkspaceId === workspaceId,
+      refreshMembers: s.refreshMembers,
+    }))
   );
   const [name, setName] = useState("");
   const [memberSearch, setMemberSearch] = useState("");
@@ -66,6 +74,7 @@ export default function CreateTeamDialog({
     () => (rosterLoaded ? orderMemberCandidates(roster, user?.id) : []),
     [roster, rosterLoaded, user?.id]
   );
+  const rosterError = membersError || (rosterLoaded && !rosterIsOurs);
   const handleOpenChange = (nextOpen: boolean) => {
     onOpenChange(nextOpen);
     if (!nextOpen) {
@@ -149,7 +158,7 @@ export default function CreateTeamDialog({
             <label className="text-xs font-medium text-foreground/50">
               {t("settingsPage.workspace.teams.addMembersLabel")}
             </label>
-            {membersError ? (
+            {rosterError ? (
               <div className="rounded border border-border/70 dark:border-border-subtle/60 px-3 py-2.5 flex items-center justify-between gap-2">
                 <p className="text-xs text-muted-foreground">
                   {t("settingsPage.workspace.members.loadError")}

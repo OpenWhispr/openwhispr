@@ -7,6 +7,7 @@ const SKILLS_MOCKS = {
   "react-i18next": `
     const t = (key, values) => (values ? key + JSON.stringify(values) : key);
     export const useTranslation = () => ({ t, i18n: { language: "en" } });
+    export const initReactI18next = { type: "3rdParty", init() {} };
   `,
   // Radix's contract without its portal, items always shown: picking one focuses it and runs
   // onSelect while the open menu keeps focus inside, then the menu closes, calling the content's

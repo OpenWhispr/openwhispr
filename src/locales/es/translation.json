@@ -4061,6 +4061,13 @@
     "searchTitle": "Buscar conversaciones",
     "searchDescription": "Buscar en todas tus conversaciones",
     "inputPlaceholder": "Pregunta algo...",
+    "sourceNote": {
+      "from": "De la nota",
+      "open": "Abrir nota",
+      "deleted": "Esta nota se eliminó",
+      "deletedShort": "Eliminada",
+      "askAbout": "Pregunta sobre {{title}}..."
+    },
     "starters": {
       "todos": "Enumera mis tareas recientes",
       "meeting": "Prepárame para mi próxima reunión",
