@@ -877,6 +877,7 @@
       }
     },
     "modelRetiredTitle": "Model no longer available",
+    "modelRetiredByProvider": "{{provider}} retired {{from}}. Switched to {{to}}.",
     "groq": {
       "modelRetired": "Groq retired {{from}}. Switched to {{to}}."
     },
@@ -2564,6 +2565,8 @@
       "title": "Privacy",
       "usageAnalytics": "Usage analytics",
       "usageAnalyticsDescription": "Help us improve OpenWhispr by sharing anonymous performance metrics. We never send transcription content — only timing and error data.",
+      "modelListUpdates": "Model list updates",
+      "modelListUpdatesDescription": "Check OpenWhispr's public model list on GitHub every 15 minutes for new and retired models. Changes take full effect after restart.",
       "insightsSync": "Sync personal Insights",
       "insightsSyncDescription": "Sync word counts, the date and exact time of each dictation, durations, and model types across your devices. Transcript content is never included. When you're signed in, clearing history also removes these counters from this device and your account.",
       "insightsSyncRequiresAccount": "Sign in to sync content-free Insights data across your devices.",

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePolicySnapshot } from "./usePolicy";
+import { useRegistryVersion } from "./useRegistryVersion";
 import { LOCAL_MODELS_CHANGED_EVENT } from "./useModelDownload";
 import { missingRequiredLocalModels, requiredLocalModelIds } from "../stores/policyRules";
 
@@ -23,9 +24,10 @@ export interface RequiredLocalModelsState {
  */
 export function useRequiredLocalModels(): RequiredLocalModelsState {
   const snapshot = usePolicySnapshot();
+  useRegistryVersion();
   // Key on content: policy refreshes swap object identities every few minutes
   // without changing the list, and the disk fan-out shouldn't rerun for that.
-  const requiredKey = useMemo(() => requiredLocalModelIds(snapshot).join("\n"), [snapshot]);
+  const requiredKey = requiredLocalModelIds(snapshot).join("\n");
   const required = useMemo(() => (requiredKey ? requiredKey.split("\n") : []), [requiredKey]);
   const [installed, setInstalled] = useState<string[] | null>(null);
 

@@ -918,8 +918,8 @@ class ReasoningService extends BaseReasoningService {
       ({ apiKey, baseURL } = await this.resolveByokAccess(provider, config));
     }
     const aiProvider = isLocalProvider || isLanChat ? "local" : provider;
-    if (aiProvider === "tinfoil") {
-      model = resolveRetiredCloudModel("tinfoil", model);
+    if (!isEnterprise && aiProvider !== "local") {
+      model = resolveRetiredCloudModel(aiProvider, model);
     }
     // OpenRouter ids are never in the local registry, so the supportsThinking
     // exemption below can't apply — honor the toggle directly.

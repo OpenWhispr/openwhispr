@@ -1,4 +1,6 @@
 // Pure policy shared by main-process catalogue filtering and renderer requests.
+import { retiredReplacement } from "../models/modelLifecycle.js";
+
 export const RETIRED_CLOUD_MODELS = {
   // qwen3-32b and both Llamas (retired 2026-08-16) were swept under the
   // original key, which predates this table. Groq shut down both Compound
@@ -43,7 +45,9 @@ export const RETIRED_CLOUD_MODELS = {
 
 export function resolveRetiredCloudModel(provider, model) {
   const models = RETIRED_CLOUD_MODELS[provider]?.models;
-  return models && Object.hasOwn(models, model) ? models[model] : model;
+  if (models && Object.hasOwn(models, model)) return models[model];
+  // Retirements published in the model catalog, so a stale selection never 404s.
+  return retiredReplacement("cloudProviders", provider, model) ?? model;
 }
 
 export function isSelectableTinfoilModel(model) {

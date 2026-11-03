@@ -856,6 +856,7 @@
       }
     },
     "modelRetiredTitle": "Modelo não disponível",
+    "modelRetiredByProvider": "{{provider}} descontinuou {{from}}. Alterado para {{to}}.",
     "groq": {
       "modelRetired": "A Groq descontinuou {{from}}. Alterado para {{to}}."
     },
@@ -2226,6 +2227,8 @@
       "leaderboardRequiresHistory": "Ative a retenção de dados antes de participar das classificações.",
       "usageAnalytics": "Análise de uso",
       "usageAnalyticsDescription": "Ajude-nos a melhorar o OpenWhispr compartilhando métricas anônimas de desempenho. Nunca enviamos conteúdo de transcrição — apenas dados de tempo e erros.",
+      "modelListUpdates": "Atualizações da lista de modelos",
+      "modelListUpdatesDescription": "Verifica a cada 15 minutos a lista pública de modelos do OpenWhispr no GitHub para encontrar modelos novos e descontinuados. As alterações entram totalmente em vigor após reiniciar.",
       "dataRetention": "Retenção de dados",
       "dataRetentionDescription": "Armazenar transcrições e áudio localmente no seu histórico. Quando desativado, as transcrições são coladas mas não salvas.",
       "transcriptRetention": "Retenção de transcrições",

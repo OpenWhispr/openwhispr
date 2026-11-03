@@ -877,6 +877,7 @@
       }
     },
     "modelRetiredTitle": "模型已無法使用",
+    "modelRetiredByProvider": "{{provider}} 已停用 {{from}}。已切換至 {{to}}。",
     "groq": {
       "modelRetired": "Groq 已停用 {{from}}，已切換至 {{to}}。"
     },
@@ -2247,6 +2248,8 @@
       "leaderboardRequiresHistory": "加入排行榜前，請先開啟資料保留。",
       "usageAnalytics": "使用分析",
       "usageAnalyticsDescription": "分享匿名的效能指標，協助我們改善 OpenWhispr。我們絕不會傳送轉錄內容——只有計時和錯誤資料。",
+      "modelListUpdates": "模型清單更新",
+      "modelListUpdatesDescription": "每 15 分鐘檢查 GitHub 上 OpenWhispr 的公開模型清單，取得新增和已停用的模型。變更會在重新啟動後完全生效。",
       "dataRetention": "資料保留",
       "dataRetentionDescription": "將轉錄和音訊本地儲存至歷史記錄。停用後，轉錄內容會被貼上但不會被儲存。",
       "transcriptRetention": "轉錄保留",

@@ -131,7 +131,11 @@ const HyprlandShortcutManager = require("./hyprlandShortcut");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
 const { i18nMain, changeLanguage } = require("./i18nMain");
 const DeepgramStreaming = require("./deepgramStreaming");
-const { GeminiLiveStreaming, GEMINI_LIVE_MODEL } = require("./geminiLiveStreaming");
+const {
+  GeminiLiveStreaming,
+  GEMINI_LIVE_MODEL,
+  resolveGeminiLiveModel,
+} = require("./geminiLiveStreaming");
 const CortiStreaming = require("./cortiStreaming");
 const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
 const { getCortiToken } = require("./cortiAuth");
@@ -12101,6 +12105,21 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle(
+      "get-model-registry-updates",
+      () => process.env.OPENWHISPR_MODEL_REGISTRY_MODE !== "bundled"
+    );
+
+    ipcMain.handle("set-model-registry-updates", async (event, enabled) => {
+      try {
+        await this.environmentManager.saveModelRegistryUpdates(enabled === true);
+        return { success: true };
+      } catch (error) {
+        debugLogger.error("Failed to save model catalog updates setting:", error);
+        return { success: false, error: error.message };
+      }
+    });
+
     ipcMain.handle("open-logs-folder", async () => {
       try {
         const logsDir = path.join(app.getPath("userData"), "logs");
@@ -12707,6 +12726,11 @@ class IPCHandlers {
 
     let geminiStreamingStartInProgress = false;
     let geminiSendDropCount = 0;
+    let geminiStartAudio = [];
+    let geminiStartAudioBytes = 0;
+    // Match the client's three-second cold-start bound. A model-changing start
+    // owns these frames, even while a previous warm handshake is finishing.
+    const GEMINI_START_AUDIO_MAX = 3 * 16000 * 2;
     // One handshake at a time. A start that raced an in-flight warmup used to
     // clear the cold-start buffer, spend a second single-use managed token and
     // report success while the warmup's handshake (and its failure) were still
@@ -12731,10 +12755,15 @@ class IPCHandlers {
       return streaming;
     };
 
-    // What a Gemini connection authenticated with: a managed one never serves a
-    // BYOK start or the reverse, and a BYOK one is not reused after a key save.
+    // Managed tokens are constrained to the server's existing model. BYOK can
+    // select newly published compatible models, each requiring its own socket.
+    const geminiConnectionModel = resolveGeminiLiveModel;
+    // A warm socket cannot cross credentials, modes, or selected models.
     const geminiConnectionKey = (options) =>
-      options.mode === "byok" ? `byok:${credentialGeneration}` : "managed";
+      JSON.stringify([
+        options.mode === "byok" ? `byok:${credentialGeneration}` : "managed",
+        geminiConnectionModel(options),
+      ]);
 
     const connectGeminiStreaming = (event, options) => {
       if (geminiConnectInFlight) return geminiConnectInFlight;
@@ -12754,6 +12783,7 @@ class IPCHandlers {
         const token = await fetchRealtimeToken(event, tokenOptions);
         await streaming.connect({
           ...options,
+          model: geminiConnectionModel(options),
           token,
           refreshToken: () => fetchRealtimeToken(event, tokenOptions),
         });
@@ -12785,6 +12815,8 @@ class IPCHandlers {
       }
 
       geminiStreamingStartInProgress = true;
+      geminiStartAudio = [];
+      geminiStartAudioBytes = 0;
       try {
         const streaming = ensureGeminiStreaming(event);
         if (geminiConnectInFlight) await geminiConnectInFlight;
@@ -12796,6 +12828,7 @@ class IPCHandlers {
           if (streaming.isConnected) await streaming.disconnect(false);
           await connectGeminiStreaming(event, options);
         }
+        for (const buffer of geminiStartAudio) streaming.sendAudio(buffer);
         geminiSendDropCount = 0;
         debugLogger.debug("Gemini streaming started", { usedWarmConnection }, "streaming");
         return { success: true, usedWarmConnection };
@@ -12807,11 +12840,30 @@ class IPCHandlers {
         return streamingStartFailure(error);
       } finally {
         geminiStreamingStartInProgress = false;
+        geminiStartAudio = [];
+        geminiStartAudioBytes = 0;
       }
     });
 
     ipcMain.on("gemini-streaming-send", (_event, audioBuffer) => {
       try {
+        if (geminiStreamingStartInProgress) {
+          const buffer = Buffer.from(audioBuffer);
+          if (geminiStartAudioBytes + buffer.length <= GEMINI_START_AUDIO_MAX) {
+            geminiStartAudio.push(buffer);
+            geminiStartAudioBytes += buffer.length;
+          } else {
+            // Same accounting as a dropped live send, so a slow start is visible in logs.
+            geminiSendDropCount++;
+            if (geminiSendDropCount <= 3 || geminiSendDropCount % 50 === 0)
+              debugLogger.warn(
+                "Gemini start audio dropped past the 3 s buffer",
+                { dropCount: geminiSendDropCount },
+                "streaming"
+              );
+          }
+          return;
+        }
         if (!this.geminiStreaming) return;
         const sent = this.geminiStreaming.sendAudio(Buffer.from(audioBuffer));
         if (!sent) {

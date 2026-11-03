@@ -24,6 +24,7 @@ const EMA_NEXT = 0.5;
 // `managedConfig:<key>` carries a managed-setup translation key as its argument.
 // Anything that is not a sentinel reaches the toast unchanged.
 const MEETING_ERROR_KEYS: Record<string, string> = {
+  publishedModelUnavailable: "onboarding.rehaul.provider.errors.modelNotFound",
   policyRestricted: "notes.meeting.restrictedByOrg",
   // Org-policy refusal codes, from the main process or the server.
   POLICY_MEETING_RECORDING_DISABLED: "notes.meeting.recordingDisabledByOrg",

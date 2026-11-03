@@ -8,11 +8,12 @@ import {
 } from "../stores/retiredModelSwitchStore";
 import { isDictationPanelWindow } from "../utils/windowContext";
 
-const RETIRED_MESSAGE_KEYS: Record<RetiredModelProvider, string> = {
-  groq: "reasoning.groq.modelRetired",
-  tinfoil: "reasoning.tinfoil.modelRetired",
-  openai: "reasoning.openai.modelRetired",
-};
+const RETIRED_MESSAGE_KEYS: Partial<Record<string, string>> & Record<RetiredModelProvider, string> =
+  {
+    groq: "reasoning.groq.modelRetired",
+    tinfoil: "reasoning.tinfoil.modelRetired",
+    openai: "reasoning.openai.modelRetired",
+  };
 
 /** Alerts the user when a retired cloud model was switched out from under them. */
 export default function RetiredModelSwitchToastListener() {
@@ -30,7 +31,11 @@ export default function RetiredModelSwitchToastListener() {
     for (const event of consumeRetiredModelSwitches()) {
       toast({
         title: t("reasoning.modelRetiredTitle"),
-        description: t(RETIRED_MESSAGE_KEYS[event.provider], { from: event.from, to: event.to }),
+        description: t(RETIRED_MESSAGE_KEYS[event.provider] ?? "reasoning.modelRetiredByProvider", {
+          provider: event.providerName ?? event.provider,
+          from: event.from,
+          to: event.to,
+        }),
       });
     }
   }, [switchCount, toast, t]);

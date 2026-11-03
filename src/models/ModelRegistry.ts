@@ -1,7 +1,7 @@
-import modelDataRaw from "./modelRegistryData.json";
+import { registryData as modelData, subscribeRegistry } from "./registryData.js";
 import { isCloudCleanupMode, getSettings } from "../stores/settingsStore";
 import { isSelectableTinfoilModel } from "../config/retiredCloudModelPolicy.js";
-import { readCachedTinfoilModels } from "./tinfoilModelCache";
+import { getCloudModelProviders, setTinfoilModelOverlay } from "./cloudModelCatalog";
 import { filterMeetingStreamingProviders } from "../helpers/meetingTranscriptionRouting";
 import type { InferenceMode } from "../types/electron";
 
@@ -12,18 +12,23 @@ export interface ModelDefinition {
   sizeBytes: number;
   description: string;
   descriptionKey?: string;
+  minAppVersion?: string;
   fileName: string;
+  sha256?: string;
   quantization: string;
   contextLength: number;
   hfRepo: string;
+  revision?: string;
   recommended?: boolean;
   supportsThinking?: boolean;
   /** Superseded: kept so existing selections keep working; see isListedModel. */
   legacy?: boolean;
   // Optional MTP speculative-decoding drafter downloaded alongside the main GGUF.
   draftHfRepo?: string;
+  draftRevision?: string;
   draftFileName?: string;
   draftSizeBytes?: number;
+  draftSha256?: string;
 }
 
 export interface LocalProviderData {
@@ -46,6 +51,7 @@ export interface CloudModelDefinition {
   name: string;
   description: string;
   descriptionKey?: string;
+  minAppVersion?: string;
   disableThinking?: boolean;
   supportsThinking?: boolean;
   supportsVision?: boolean;
@@ -77,6 +83,7 @@ export interface TranscriptionModelDefinition {
   name: string;
   description: string;
   descriptionKey?: string;
+  minAppVersion?: string;
   streaming?: boolean;
   legacy?: boolean;
 }
@@ -94,9 +101,11 @@ export interface WhisperModelInfo {
   name: string;
   description: string;
   descriptionKey?: string;
+  minAppVersion?: string;
   size: string;
   sizeMb: number;
   fileName: string;
+  sha256?: string;
   downloadUrl: string;
   recommended?: boolean;
 }
@@ -105,6 +114,7 @@ export interface WhisperModelConfig {
   url: string;
   size: number;
   fileName: string;
+  sha256?: string;
 }
 
 export type WhisperModelsMap = Record<string, WhisperModelInfo>;
@@ -129,11 +139,13 @@ export interface ParakeetModelInfo {
   recommended?: boolean;
   downloadUrl: string;
   extractDir: string;
+  sha256?: string;
+  minAppVersion?: string;
 }
 
 export type ParakeetModelsMap = Record<string, ParakeetModelInfo>;
 
-interface ModelRegistryData {
+export interface ModelRegistryData {
   parakeetModels: ParakeetModelsMap;
   whisperModels: WhisperModelsMap;
   transcriptionProviders: TranscriptionProviderData[];
@@ -142,18 +154,8 @@ interface ModelRegistryData {
   localProviders: LocalProviderData[];
 }
 
-const modelData: ModelRegistryData = modelDataRaw as ModelRegistryData;
-
 function getTinfoilCloudProvider(): CloudProviderData | undefined {
-  return modelData.cloudProviders.find((provider) => provider.id === "tinfoil");
-}
-
-const cachedTinfoilModels = readCachedTinfoilModels().models;
-if (cachedTinfoilModels.length > 0) {
-  const tinfoilProvider = getTinfoilCloudProvider();
-  if (tinfoilProvider) {
-    tinfoilProvider.models = cachedTinfoilModels;
-  }
+  return modelRegistry.getCloudProviders().find((provider) => provider.id === "tinfoil");
 }
 
 class ModelRegistry {
@@ -162,6 +164,7 @@ class ModelRegistry {
 
   private constructor() {
     this.registerProvidersFromData();
+    subscribeRegistry(() => this.registerProvidersFromData());
   }
 
   static getInstance(): ModelRegistry {
@@ -204,7 +207,7 @@ class ModelRegistry {
   }
 
   getCloudProviders(): CloudProviderData[] {
-    return modelData.cloudProviders;
+    return getCloudModelProviders();
   }
 
   getEnterpriseProviders(): EnterpriseProviderData[] {
@@ -225,7 +228,7 @@ class ModelRegistry {
         baseUrl: providerData.baseUrl,
         models: providerData.models,
         getDownloadUrl(model: ModelDefinition): string {
-          return `${providerData.baseUrl}/${model.hfRepo}/resolve/main/${model.fileName}`;
+          return `${providerData.baseUrl}/${model.hfRepo}/resolve/${model.revision || "main"}/${model.fileName}`;
         },
       });
     }
@@ -330,10 +333,7 @@ export function getCloudProviderDefaultModelId(providerId: string): string | und
 export function applyTinfoilModels(models: CloudModelDefinition[]): void {
   models = models.filter(isSelectableTinfoilModel);
   if (models.length === 0) return;
-  const provider = getTinfoilCloudProvider();
-  if (provider) {
-    provider.models = models;
-  }
+  setTinfoilModelOverlay(models);
   const reasoningProvider = REASONING_PROVIDERS.tinfoil;
   if (reasoningProvider) {
     reasoningProvider.models = models.map(toReasoningModel);
@@ -484,13 +484,13 @@ export function getWhisperModelInfo(modelId: string): WhisperModelInfo | undefin
   return modelData.whisperModels[modelId];
 }
 
-export const WHISPER_MODEL_INFO = modelData.whisperModels;
+export const WHISPER_MODEL_INFO = { ...modelData.whisperModels };
 
 export function getCloudModel(
   modelId: string,
   providerId?: string
 ): CloudModelDefinition | undefined {
-  for (const provider of modelData.cloudProviders) {
+  for (const provider of modelRegistry.getCloudProviders()) {
     const model = provider.models.find((m) => m.id === modelId);
     if (model) return model;
   }
@@ -576,7 +576,7 @@ export function isSherpaLocalProvider(provider: string): boolean {
   return provider === "nvidia" || provider === "cohere";
 }
 
-export const PARAKEET_MODEL_INFO = modelData.parakeetModels;
+export const PARAKEET_MODEL_INFO = { ...modelData.parakeetModels };
 
 export function getWhisperModelConfig(modelId: string): WhisperModelConfig | null {
   const modelInfo = modelData.whisperModels[modelId];
@@ -591,3 +591,11 @@ export function getWhisperModelConfig(modelId: string): WhisperModelConfig | nul
 export function getValidWhisperModelNames(): string[] {
   return Object.keys(modelData.whisperModels);
 }
+
+// Maintain stable exported objects for existing consumers while rebuilding all
+// derived lists after the canonical snapshot changes. Tinfoil stays an overlay.
+subscribeRegistry(() => {
+  Object.assign(REASONING_PROVIDERS, buildReasoningProviders());
+  Object.assign(WHISPER_MODEL_INFO, modelData.whisperModels);
+  Object.assign(PARAKEET_MODEL_INFO, modelData.parakeetModels);
+});

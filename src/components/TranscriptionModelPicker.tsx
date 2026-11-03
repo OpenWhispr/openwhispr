@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
+import { useRegistryVersion } from "../hooks/useRegistryVersion";
+import { isUnknownModel } from "../models/modelLifecycle.js";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
@@ -448,6 +450,7 @@ export default function TranscriptionModelPicker({
   mode,
   streamingOnly = false,
 }: TranscriptionModelPickerProps) {
+  const registryVersion = useRegistryVersion();
   const { t } = useTranslation();
   const switchCloudTranscriptionProvider = useSettingsStore(
     (s) => s.switchCloudTranscriptionProvider
@@ -576,7 +579,8 @@ export default function TranscriptionModelPicker({
     const providers = getTranscriptionProviders();
     if (transcriptionContext !== "upload") return providers;
     return providers.filter((provider) => !STREAMING_ONLY_PROVIDERS.has(provider.id));
-  }, [streamingOnly, transcriptionContext]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the catalog changes in place; its version is the signal
+  }, [streamingOnly, transcriptionContext, registryVersion]);
   const cloudProviders = useMemo(
     () => filterByokProviderOptionsByPolicy(availableCloudProviders, "transcription", policyState),
     [availableCloudProviders, policyState]
@@ -685,6 +689,15 @@ export default function TranscriptionModelPicker({
     // Reconcile null means the input needs no correction — echo the browsed
     // input, not the committed pair, or browsing to the Custom tab (always
     // reconciled as valid) would never display it.
+    // A model the catalog does not know yet (a remote addition before its catalog
+    // loads) stays chosen; a known model this scope filters out is still reconciled.
+    if (
+      !browsedCloudProvider &&
+      cloudProviders.some((provider) => provider.id === selectedCloudProvider) &&
+      isUnknownModel("transcriptionProviders", selectedCloudModel)
+    ) {
+      return { provider: selectedCloudProvider, model: selectedCloudModel };
+    }
     return (
       reconcileCloudProviderSelection({
         selectedProvider: browsedCloudProvider ?? selectedCloudProvider,
@@ -744,6 +757,11 @@ export default function TranscriptionModelPicker({
     loadParakeetModelsRef.current = loadParakeetModels;
   }, [loadParakeetModels]);
   useEffect(() => {
+    hasLoadedRef.current = false;
+    hasLoadedParakeetRef.current = false;
+  }, [registryVersion]);
+
+  useEffect(() => {
     if (!effectiveLocal) return;
 
     if (internalLocalProvider === "whisper" && !hasLoadedRef.current) {
@@ -753,7 +771,7 @@ export default function TranscriptionModelPicker({
       hasLoadedParakeetRef.current = true;
       loadParakeetModelsRef.current?.();
     }
-  }, [effectiveLocal, internalLocalProvider]);
+  }, [effectiveLocal, internalLocalProvider, registryVersion]);
 
   useEffect(() => {
     if (effectiveLocal) return;

@@ -1,3 +1,4 @@
+import { useRegistryVersion } from "../hooks/useRegistryVersion";
 import { useCallback } from "react";
 import { ProviderTabs } from "./ui/ProviderTabs";
 import EnterpriseProviderConfig from "./EnterpriseProviderConfig";
@@ -29,6 +30,7 @@ export default function EnterpriseSection({
   setReasoningModel,
   setLocalReasoningProvider,
 }: EnterpriseSectionProps) {
+  useRegistryVersion();
   const azureDeploymentName = useSettingsStore((s) => s.azureDeploymentName);
   const bedrockRegion = useSettingsStore((s) => s.bedrockRegion);
   const policyState = usePolicySnapshot();

@@ -18,6 +18,16 @@ onboarding).
 | `auth.openwhispr.com`                         | HTTPS    | 443  | Account sign-in and session refresh (Better Auth).                                 |
 | `github.com`, `objects.githubusercontent.com` | HTTPS    | 443  | Application auto-update (release artifacts via electron-updater, GitHub provider). |
 
+## Model catalog updates (on by default)
+
+Contacted by every install unless turned off in Settings → Privacy → Model list
+updates, or with `OPENWHISPR_MODEL_REGISTRY_MODE=bundled` in the app's `.env`.
+Blocking it is safe: the app keeps its bundled and last verified model list.
+
+| Host                        | Protocol | Port | Purpose                                                                                                                    |
+| --------------------------- | -------- | ---- | -------------------------------------------------------------------------------------------------------------------------- |
+| `raw.githubusercontent.com` | HTTPS    | 443  | Signed model list (`OpenWhispr/model-registry`), checked every 15 minutes; unchanged lists answer 304 with no body (ETag). |
+
 ## Required for streaming transcription
 
 OpenWhispr Cloud routes streaming sessions through one of four providers.

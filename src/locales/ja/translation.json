@@ -877,6 +877,7 @@
       }
     },
     "modelRetiredTitle": "モデルが利用できません",
+    "modelRetiredByProvider": "{{provider}} は {{from}} の提供を終了しました。{{to}} に切り替えました。",
     "groq": {
       "modelRetired": "Groq は {{from}} を提供終了しました。{{to}} に切り替えました。"
     },
@@ -2247,6 +2248,8 @@
       "leaderboardRequiresHistory": "リーダーボードに参加する前にデータ保持を有効にしてください。",
       "usageAnalytics": "使用状況の分析",
       "usageAnalyticsDescription": "匿名のパフォーマンスデータを共有して OpenWhispr の改善にご協力ください。文字起こしの内容は送信されません。タイミングとエラーデータのみです。",
+      "modelListUpdates": "モデル一覧の更新",
+      "modelListUpdatesDescription": "15分ごとにGitHub上のOpenWhispr公開モデル一覧を確認し、新しいモデルと提供終了したモデルを反映します。変更は再起動後に完全に反映されます。",
       "dataRetention": "データ保持",
       "dataRetentionDescription": "文字起こしと音声を履歴にローカル保存します。無効にすると、文字起こしは貼り付けられますが保存されません。",
       "transcriptRetention": "文字起こしの保持",

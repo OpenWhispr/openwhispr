@@ -877,6 +877,7 @@
       }
     },
     "modelRetiredTitle": "Modèle non disponible",
+    "modelRetiredByProvider": "{{provider}} a retiré {{from}}. Passage à {{to}}.",
     "groq": {
       "modelRetired": "Groq a retiré {{from}}. Basculé vers {{to}}."
     },
@@ -2571,6 +2572,8 @@
       "leaderboardRequiresHistory": "Activez la conservation des données avant de rejoindre les classements.",
       "usageAnalytics": "Analyse d'utilisation",
       "usageAnalyticsDescription": "Aidez-nous à améliorer OpenWhispr en partageant des métriques de performance anonymes. Nous n'envoyons jamais le contenu de vos transcriptions — uniquement des données de performance et d'erreurs.",
+      "modelListUpdates": "Mises à jour de la liste des modèles",
+      "modelListUpdatesDescription": "Consulte toutes les 15 minutes la liste publique des modèles d'OpenWhispr sur GitHub pour repérer les modèles nouveaux et retirés. Les changements prennent pleinement effet après un redémarrage.",
       "audioRetention": "Conservation de l'audio",
       "audioRetentionDescription": "Stocke l'audio de dictée localement pour la retranscription et le téléchargement. Les fichiers sont automatiquement supprimés après la période de conservation. L'audio des réunions n'est jamais stocké.",
       "audioRetentionDisabled": "Désactivé",

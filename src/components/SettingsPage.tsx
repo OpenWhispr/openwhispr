@@ -1,4 +1,5 @@
 import { EnterpriseAudioSettings } from "./settings/EnterpriseAudioSettings";
+import { useRegistryVersion } from "../hooks/useRegistryVersion";
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
@@ -1149,6 +1150,7 @@ export default function SettingsPage({
   initialSubTab,
   onChooseWorkspace,
 }: SettingsPageProps) {
+  useRegistryVersion();
   const { isCompact } = useSettingsLayout();
   const {
     confirmDialog,
@@ -1554,6 +1556,22 @@ export default function SettingsPage({
   const [linuxPttAvailable, setLinuxPttAvailable] = useState(true);
 
   const platform = getCachedPlatform();
+
+  const [modelListUpdates, setModelListUpdates] = useState(true);
+  useEffect(() => {
+    window.electronAPI
+      ?.getModelRegistryUpdates?.()
+      .then(setModelListUpdates)
+      .catch(() => {});
+  }, []);
+  const updateModelListUpdates = async (enabled: boolean) => {
+    setModelListUpdates(enabled);
+    const result = await window.electronAPI?.setModelRegistryUpdates?.(enabled);
+    if (result && !result.success) {
+      setModelListUpdates(!enabled);
+      logger.error("Failed to save model list updates", { error: result.error }, "settings");
+    }
+  };
 
   const [autoStartEnabled, setAutoStartEnabled] = useState(false);
   const [autoStartNeedsApproval, setAutoStartNeedsApproval] = useState(false);
@@ -4340,6 +4358,17 @@ EOF`,
                     description={t("settingsPage.privacy.usageAnalyticsDescription")}
                   >
                     <Toggle checked={telemetryEnabled} onChange={setTelemetryEnabled} />
+                  </SettingsRow>
+                </SettingsPanelRow>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.privacy.modelListUpdates")}
+                    description={t("settingsPage.privacy.modelListUpdatesDescription")}
+                  >
+                    <Toggle
+                      checked={modelListUpdates}
+                      onChange={(enabled) => void updateModelListUpdates(enabled)}
+                    />
                   </SettingsRow>
                 </SettingsPanelRow>
               </SettingsPanel>

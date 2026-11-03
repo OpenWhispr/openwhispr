@@ -4,7 +4,7 @@
 // policy as "allow everything" — so a managed response must carry a
 // structurally valid policy or the whole response is malformed.
 const { isCanonicalAppVersion } = require("./appVersion");
-const modelRegistryData = require("../models/modelRegistryData.json");
+const { registryData: modelRegistryData } = require("../models/registryData.js");
 
 const POLICY_SCOPES = ["transcription", "llm"];
 const TRANSCRIPTION_MODES = new Set([

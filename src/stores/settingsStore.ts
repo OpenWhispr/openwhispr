@@ -1,3 +1,4 @@
+import "../models/registryBootstrap.js";
 import { RETIRED_TINFOIL_MODEL_NAMES } from "../config/retiredCloudModelPolicy.js";
 import { create } from "zustand";
 import { GENERATE_NOTES_KEY } from "../helpers/builtinActions";
@@ -42,7 +43,13 @@ import {
   resolveChineseScriptTarget,
 } from "../utils/chineseScript";
 import { adjustBedrockModelForRegion } from "../utils/bedrockRegions";
-import modelRegistryData from "../models/modelRegistryData.json";
+import {
+  getRetiredModel,
+  registryData as modelRegistryData,
+  subscribeRegistry,
+} from "../models/registryData.js";
+import { isUnknownModel, retiredReplacement } from "../models/modelLifecycle.js";
+import { getCloudModelProviders } from "../models/cloudModelCatalog";
 import { pickDefaultModelId } from "../models/providerDefaultModel";
 // Both are leaves: tinfoilModelCache imports only a type from ModelRegistry and
 // the switch store only zustand and a type, so neither reopens the ModelRegistry
@@ -177,13 +184,23 @@ function canonicalTranscriptionBaseUrl(providerId: string): string | null {
   );
 }
 
+// No catalog offers or has retired this ID, so it may be a remote addition whose catalog
+// has not loaded yet. A local or enterprise ID is known, so it never passes as cloud.
+function isUnknownLlmModel(modelId: string): boolean {
+  return (
+    isUnknownModel("cloudProviders", modelId, getCloudModelProviders()) &&
+    isUnknownModel("enterpriseProviders", modelId) &&
+    isUnknownModel("localProviders", modelId)
+  );
+}
+
 export function reasoningModelBelongsToProvider(providerId: string, modelId: string): boolean {
   if (!modelId) return false;
   // Custom and OpenRouter ids are free-form; any remembered id is valid.
-  // Tinfoil's registry entry is refreshed in place from its live catalog.
+  // Tinfoil's separate live overlay is shared with the picker and policy defaults.
   if (providerId === "custom" || providerId === "openrouter") return true;
   return (
-    modelRegistryData.cloudProviders
+    getCloudModelProviders()
       .find((provider) => provider.id === providerId)
       ?.models.some((model) => model.id === modelId) ?? false
   );
@@ -195,7 +212,7 @@ function defaultLlmModel(mode: InferenceMode, providerId: string, bedrockRegion:
       ? modelRegistryData.localProviders
       : mode === "enterprise"
         ? modelRegistryData.enterpriseProviders
-        : modelRegistryData.cloudProviders;
+        : getCloudModelProviders();
   const defaultModel = pickDefaultModelId(providers.find(({ id }) => id === providerId));
   return mode === "enterprise" && providerId === "bedrock"
     ? adjustBedrockModelForRegion(defaultModel, bedrockRegion)
@@ -2214,7 +2231,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     setStringSetting(keys.provider, providerId);
     setStringSetting(
       keys.model,
-      remembered && transcriptionModelBelongsToProvider(providerId, remembered, context)
+      remembered &&
+        (transcriptionModelBelongsToProvider(providerId, remembered, context) ||
+          isUnknownModel("transcriptionProviders", remembered))
         ? remembered
         : defaultTranscriptionModel(providerId, context)
     );
@@ -2242,7 +2261,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     setResolvedLLMConfig(scope, {
       provider: providerId,
       model:
-        remembered && reasoningModelBelongsToProvider(providerId, remembered)
+        remembered &&
+        (reasoningModelBelongsToProvider(providerId, remembered) || isUnknownLlmModel(remembered))
           ? remembered
           : fallbackModel,
     });
@@ -3304,15 +3324,20 @@ export function selectPolicyEffectiveSettings(
     if (selection.mode === "providers") {
       const providerChanged = selection.provider !== rawSelection.provider;
       writable[keys.provider] = selection.provider;
+      const model = state[keys.model] as string;
       if (
         providerChanged ||
-        !transcriptionModelBelongsToProvider(
-          selection.provider,
-          state[keys.model] as string,
-          keys.context
-        )
+        (!transcriptionModelBelongsToProvider(selection.provider, model, keys.context) &&
+          !isUnknownModel("transcriptionProviders", model))
       ) {
-        writable[keys.model] = defaultTranscriptionModel(selection.provider, keys.context);
+        const replacement =
+          !providerChanged &&
+          retiredReplacement("transcriptionProviders", selection.provider, model);
+        writable[keys.model] =
+          replacement &&
+          transcriptionModelBelongsToProvider(selection.provider, replacement, keys.context)
+            ? replacement
+            : defaultTranscriptionModel(selection.provider, keys.context);
       }
 
       const canonicalBaseUrl = canonicalTranscriptionBaseUrl(selection.provider);
@@ -3433,29 +3458,59 @@ export async function reconcileLocalModelSelections(): Promise<void> {
 }
 
 /**
- * Repoints any scope still selecting a cloud model the registry no longer ships
- * (e.g. a retired Groq id) at that provider's current default — otherwise every
- * request 404s with an error the user can't act on. Custom, OpenRouter and
- * Tinfoil ids are skipped: they're free-form or reconciled from the live
- * catalog in tinfoilModels.ts.
+ * Repoints every scope still selecting a model the catalog has retired at its
+ * replacement (or the provider's default), and tells the user once per model;
+ * otherwise every request fails with an error they can't act on. A cloud model that
+ * belongs to another provider is repointed to this provider's default. An ID the
+ * catalog does not know at all is left alone: it may be a remote addition whose
+ * catalog has not loaded yet. Custom, OpenRouter and Tinfoil ids are skipped: they're
+ * free-form or reconciled from the live catalog in tinfoilModels.ts.
  */
 export function reconcileRetiredCloudModelSelections(): void {
   const state = useSettingsStore.getState() as unknown as Record<string, unknown>;
+  const announced = new Set<string>();
+  const repoint = (
+    section: "cloudProviders" | "transcriptionProviders",
+    storeKey: string,
+    provider: string,
+    from: string,
+    to: string
+  ) => {
+    setStringSetting(storeKey as keyof SettingsState, to);
+    logger.info("Repointed retired model selection", { scope: storeKey, from, to }, "settings");
+    const retired = getRetiredModel(section, provider, from);
+    if (!retired || announced.has(`${section}:${provider}:${from}`)) return;
+    announced.add(`${section}:${provider}:${from}`);
+    const providerDef = modelRegistryData[section].find((p) => p.id === provider);
+    recordRetiredModelSwitch({
+      provider,
+      providerName: providerDef?.name ?? provider,
+      from: retired.name,
+      to: providerDef?.models.find((model) => model.id === to)?.name ?? to,
+    });
+  };
+  const cloudProviders = getCloudModelProviders();
   for (const scope of Object.values(INFERENCE_SCOPES)) {
     if (!usesCloudModelCatalog(state[scope.storeKeys.mode])) continue;
     const provider = state[scope.storeKeys.provider] as string;
     const model = state[scope.storeKeys.model] as string;
     if (!provider || !model || provider === "tinfoil") continue;
-    const providerDef = modelRegistryData.cloudProviders.find((p) => p.id === provider);
+    const providerDef = cloudProviders.find((p) => p.id === provider);
     if (!providerDef || reasoningModelBelongsToProvider(provider, model)) continue;
-    const replacement = pickDefaultModelId(providerDef);
-    if (!replacement) continue;
-    setStringSetting(scope.storeKeys.model as keyof SettingsState, replacement);
-    logger.info(
-      "Repointed retired cloud model selection",
-      { scope: scope.storeKeys.model, from: model, to: replacement },
-      "settings"
-    );
+    const replacement =
+      retiredReplacement("cloudProviders", provider, model, cloudProviders) ??
+      (isUnknownModel("cloudProviders", model, cloudProviders)
+        ? null
+        : pickDefaultModelId(providerDef));
+    if (replacement) repoint("cloudProviders", scope.storeKeys.model, provider, model, replacement);
+  }
+  for (const keys of TRANSCRIPTION_CONTEXT_KEYS) {
+    if (state[keys.mode] !== "providers") continue;
+    const provider = state[keys.provider] as string;
+    const model = state[keys.model] as string;
+    const replacement =
+      provider && model && retiredReplacement("transcriptionProviders", provider, model);
+    if (replacement) repoint("transcriptionProviders", keys.model, provider, model, replacement);
   }
 }
 
@@ -3956,6 +4011,8 @@ export async function initializeSettings(): Promise<void> {
     }
 
     reconcileRetiredCloudModelSelections();
+    // A publication that retires a model mid-session moves its selections at once.
+    subscribeRegistry(reconcileRetiredCloudModelSelections);
 
     try {
       await reconcileLocalModelSelections();

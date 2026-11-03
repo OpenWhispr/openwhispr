@@ -1,6 +1,7 @@
 import { useManagedScopeResolution } from "../../stores/enterpriseIdentityStore";
 import { ShieldCheck } from "../icons";
 import { EnterpriseAudioSettings } from "./EnterpriseAudioSettings";
+import { useRegistryVersion } from "../../hooks/useRegistryVersion";
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Cloud, Key, Cpu, Network } from "../icons";
@@ -56,6 +57,7 @@ function MeetingEchoCancellationRow() {
 const noop = () => {};
 
 export function MeetingTranscriptionPanel() {
+  useRegistryVersion();
   const { t } = useTranslation();
   const policySnapshot = usePolicySnapshot();
   const enterprise = useManagedScopeResolution("transcription", "managed", "realtime");

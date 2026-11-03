@@ -19,7 +19,7 @@ const {
   pathHasProblematicChars,
 } = require("./modelDirUtils");
 
-const modelRegistryData = require("../models/modelRegistryData.json");
+const { registryData: modelRegistryData } = require("../models/registryData.js");
 
 const CACHE_TTL_MS = 30000;
 
@@ -28,6 +28,7 @@ function getWhisperModelConfig(modelName) {
   if (!modelInfo) return null;
   return {
     url: modelInfo.downloadUrl,
+    sha256: modelInfo.sha256,
     size: modelInfo.expectedSizeBytes || modelInfo.sizeMb * 1_000_000,
     fileName: modelInfo.fileName,
   };
@@ -748,6 +749,7 @@ class WhisperManager {
         timeout: 600000,
         signal,
         expectedSize: modelConfig.size,
+        expectedSha256: modelConfig.sha256,
         onProgress: (downloadedBytes, totalBytes) => {
           downloadProcess.percentage =
             totalBytes > 0 ? Math.round((downloadedBytes / totalBytes) * 100) : 0;

@@ -541,6 +541,7 @@
       }
     },
     "modelRetiredTitle": "النموذج لم يعد متاحًا",
+    "modelRetiredByProvider": "أوقف {{provider}} النموذج {{from}}. تم التبديل إلى {{to}}.",
     "groq": {
       "modelRetired": "قام Groq بإيقاف {{from}}. تم التبديل إلى {{to}}."
     },
@@ -4548,6 +4549,8 @@
       "title": "الخصوصية",
       "usageAnalytics": "تحليلات الاستخدام",
       "usageAnalyticsDescription": "ساعدنا في تحسين OpenWhispr من خلال مشاركة مقاييس الأداء المجهولة. لا نرسل أبدًا محتوى التفريغ — فقط بيانات التوقيت والأخطاء.",
+      "modelListUpdates": "تحديثات قائمة النماذج",
+      "modelListUpdatesDescription": "يتحقق كل 15 دقيقة من قائمة نماذج OpenWhispr العامة على GitHub بحثًا عن النماذج الجديدة والمتوقفة. تسري التغييرات بالكامل بعد إعادة التشغيل.",
       "audioRetention": "الاحتفاظ بالصوت",
       "audioRetentionDescription": "تخزين صوت الإملاء محليًا لإعادة التفريغ والتنزيل. يتم حذف الملفات تلقائيًا بعد فترة الاحتفاظ. لا يتم تخزين صوت الاجتماعات أبدًا.",
       "audioRetentionDisabled": "معطل",
