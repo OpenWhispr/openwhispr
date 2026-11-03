@@ -368,6 +368,66 @@ test("automatic consent stays live while both prewarm and microphone selection a
   assert.equal(store.useMeetingRecordingStore.getState().error, null);
 });
 
+for (const nativeCapture of [false, true]) {
+  test(`main setup ${nativeCapture ? "with" : "without"} native capture preserves the first capture boundary`, async (t) => {
+    const selecting = Promise.withResolvers();
+    const devices = Promise.withResolvers();
+    const mainRequested = Promise.withResolvers();
+    let store;
+    let starting;
+    t.after(async () => {
+      devices.resolve([]);
+      await starting;
+      await store?.stopRecording();
+    });
+    let allowed = true;
+    let microphoneCalls = 0;
+    let mainStops = 0;
+    installMicCaptureGlobals(t);
+    const acquire = navigator.mediaDevices.getUserMedia;
+    navigator.mediaDevices.enumerateDevices = () => {
+      selecting.resolve();
+      return devices.promise;
+    };
+    navigator.mediaDevices.getUserMedia = async (...args) => {
+      microphoneCalls++;
+      return acquire(...args);
+    };
+    const strategy = nativeCapture ? "native" : "unsupported";
+    installBrowserGlobals(t, {
+      window: {
+        electronAPI: {
+          checkSystemAudioAccess: async () => ({
+            mode: strategy,
+            strategy,
+            status: nativeCapture ? "granted" : "unsupported",
+            granted: nativeCapture,
+          }),
+          meetingTranscriptionStart: async () => {
+            mainRequested.resolve();
+            return { success: true, systemAudioMode: strategy, systemAudioStrategy: strategy };
+          },
+          meetingTranscriptionStop: async () => {
+            mainStops++;
+            return { success: true };
+          },
+        },
+      },
+    });
+    const vite = await createRendererServer(t, { cachePrefix: "meeting-main-capture-consent-" });
+    store = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
+    starting = store.startRecording({ ...START_ARGS, canAutoStart: () => allowed });
+    await Promise.all([selecting.promise, mainRequested.promise]);
+    allowed = false;
+    devices.resolve([]);
+    assert.equal(await starting, nativeCapture);
+    assert.equal(microphoneCalls, nativeCapture ? 1 : 0);
+    assert.equal(store.useMeetingRecordingStore.getState().isRecording, nativeCapture);
+    assert.equal(store.useMeetingRecordingStore.getState().error, null);
+    if (!nativeCapture) assert.equal(mainStops, 1, "the suppressed main setup is torn down");
+  });
+}
+
 test("policy changes after capture begins do not interrupt pending connection or live audio", async (t) => {
   let allowed = true;
   const session = await pendingStartup(t, { prewarm: true, canAutoStart: () => allowed });

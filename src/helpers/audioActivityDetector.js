@@ -143,6 +143,7 @@ class AudioActivityDetector extends EventEmitter {
       this.consecutiveChecks = 0;
       this.audioActiveStart = null;
       this._clearSustainedTimer();
+      this._clearResetTimer();
     } else {
       this._reevaluateAfterGate();
     }
@@ -159,6 +160,7 @@ class AudioActivityDetector extends EventEmitter {
     this.consecutiveChecks = 0;
     this.audioActiveStart = null;
     this._clearSustainedTimer();
+    if (active) this._clearResetTimer();
     if (!active) {
       this._reevaluateAfterGate();
     }

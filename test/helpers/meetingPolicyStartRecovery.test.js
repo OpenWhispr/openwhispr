@@ -2,7 +2,11 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { EventEmitter } = require("node:events");
 const Module = require("node:module");
-const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const {
+  createRendererServer,
+  installBrowserGlobals,
+  installMicCaptureGlobals,
+} = require("../lib/rendererTestHarness");
 
 test("suppressed automatic requests finish once without restoring layout; only hotkey bypasses", async () => {
   const { handleMeetingRecordingRequest } =
@@ -211,6 +215,90 @@ test("a repeated policy denial re-notifies the toast effect", async (t) => {
     first.errorNonce + 1,
     "an identical repeated denial must still produce a distinct notification"
   );
+});
+
+test("overlapping automatic joins each release their note when the pending start is suppressed", async (t) => {
+  const MeetingDetectionEngine = loadMeetingDetectionEngine();
+  const checking = Promise.withResolvers();
+  const access = Promise.withResolvers();
+  let allowed = true;
+  let captures = 0;
+  installMicCaptureGlobals(t);
+  navigator.mediaDevices.getUserMedia = async () => {
+    captures++;
+    throw new Error("unexpected microphone capture");
+  };
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        checkSystemAudioAccess: () => {
+          checking.resolve();
+          return access.promise;
+        },
+        meetingTranscriptionStart: async () => {
+          captures++;
+          throw new Error("unexpected main capture");
+        },
+      },
+    },
+  });
+  const navigations = [];
+  const shown = [];
+  const engine = new MeetingDetectionEngine(
+    { getActiveMeetingState: () => ({}) },
+    Object.assign(new EventEmitter(), { stop() {} }),
+    Object.assign(new EventEmitter(), { stop() {}, resetPrompt() {} }),
+    {
+      notificationPrefs: {},
+      queueMeetingNoteNavigation: async (payload) => navigations.push(payload),
+      showMeetingNotification: (payload) => shown.push(payload),
+    },
+    {
+      getCalendarEventById: (id) => ({ id, summary: id }),
+      getOwnNoteByCalendarEventId: (id) => ({ id: id === "first" ? 1 : 2, folder_id: 7 }),
+    }
+  );
+  t.after(() => engine.stop());
+  const vite = await createRendererServer(t, { cachePrefix: "meeting-overlapping-start-" });
+  const { startRecording, useMeetingRecordingStore } = await vite.ssrLoadModule(
+    "/stores/meetingRecordingStore.ts"
+  );
+  const { handleMeetingRecordingRequest } = await vite.ssrLoadModule(
+    "/helpers/meetingRecordingRequest.ts"
+  );
+  const handled = [];
+  const request = (note) =>
+    handleMeetingRecordingRequest({
+      args: { noteId: note.noteId, noteTitle: "Meeting", folderId: 7, autoEndEligible: true },
+      trigger: "calendar-join",
+      canAutoStart: () => allowed,
+      startRecording,
+      onSuppressed: () => engine.markMeetingNoteOnly(note.noteSessionId),
+      onHandled: () => handled.push(note.noteSessionId),
+      restoreFromMeetingMode: () => assert.fail("suppression must preserve the layout"),
+    });
+  await engine.joinCalendarMeeting("first");
+  const first = request(navigations[0]);
+  await checking.promise;
+  await engine.joinCalendarMeeting("second");
+  const second = request(navigations[1]);
+  allowed = false;
+  access.resolve({
+    mode: "unsupported",
+    strategy: "unsupported",
+    status: "unsupported",
+    granted: false,
+  });
+  await Promise.all([first, second]);
+  assert.equal(captures, 0);
+  assert.equal(useMeetingRecordingStore.getState().isRecording, false);
+  assert.equal(engine._meetingModeActive, false);
+  assert.equal(engine._meetingNoteSession.id, navigations[1].noteSessionId);
+  assert.equal(engine._meetingNoteSession.noteOnly, true);
+  assert.deepEqual(new Set(handled), new Set(navigations.map((note) => note.noteSessionId)));
+  assert.equal(handled.length, 2);
+  engine.handleCalendarReminder({ id: "third", summary: "Third" });
+  assert.equal(shown.length, 1, "a later meeting prompts with the second note still open");
 });
 
 test("a suppressed request is consumed before delayed IPC so remount cannot replay it", async () => {

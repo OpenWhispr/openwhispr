@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef } from "react";
-import { hasUsableCredential } from "../lib/authRequestContext";
+import { getAuthRequestContextSnapshot, hasUsableCredential } from "../lib/authRequestContext";
 import { useShallow } from "zustand/react/shallow";
 import { usePolicyStore } from "../stores/policyStore";
 import {
@@ -56,7 +56,14 @@ export function useMeetingAutoTranscriptionCheck({
     if (!isTranscriptionContextAllowed(policy, getSettings(), "meeting")) return true;
     // A sign-in in progress or a stale offline profile also reads as a guest, but
     // holds a credential whose policy hasn't resolved yet.
-    const hasAccount = auth.current.isSignedIn || hasUsableCredential();
+    const hasCredential = hasUsableCredential();
+    if (
+      hasCredential &&
+      (!policy.accountId ||
+        policy.authGeneration !== getAuthRequestContextSnapshot().observedGeneration)
+    )
+      return false;
+    const hasAccount = auth.current.isSignedIn || hasCredential;
     return (
       (auth.current.isLoaded || settledGuest.current) &&
       isMeetingAutoTranscriptionAllowed(policy, hasAccount)

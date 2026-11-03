@@ -6,6 +6,7 @@ const {
   createRendererServer,
   installBrowserGlobals,
   installHookDom,
+  installMicCaptureGlobals,
 } = require("../lib/rendererTestHarness");
 
 const managedPolicy = (overrides) => ({
@@ -89,20 +90,99 @@ test("an account switch still blocks automatic starts until it settles", async (
 });
 
 test("a credential holder shown as a guest waits for its policy", async (t) => {
-  globalThis.__hasCredential = false;
-  t.after(() => delete globalThis.__hasCredential);
-  const { render, check } = await mountCheck(t, "meeting-auto-credential-", {
-    "/lib/authRequestContext":
-      "export const hasUsableCredential = () => globalThis.__hasCredential;",
-  });
+  const { vite, render, check } = await mountCheck(t, "meeting-auto-credential-");
+  const { observeAuthTokenStateEvent } = await vite.ssrLoadModule("/lib/authRequestContext.ts");
   await render({ isLoaded: true, isSignedIn: false });
   assert.equal(check()(), true, "a real guest has no policy to wait for");
-  globalThis.__hasCredential = true;
+  observeAuthTokenStateEvent({ generation: 1, hasToken: true });
   assert.equal(check()(), false, "a token not yet bound to a session, or a stale offline profile");
   await render({ isLoaded: false, isSignedIn: false });
   assert.equal(check()(), false, "a sign-in in progress is not a guest's refetch");
-  globalThis.__hasCredential = false;
+  observeAuthTokenStateEvent({ generation: 2, hasToken: false });
   assert.equal(check()(), true, "a guest's refetch stays settled");
+});
+
+for (const status of ["unmanaged", "managed"]) {
+  test(`credential rotation cannot reuse an old ${status} automatic-start policy`, async (t) => {
+    const { vite, usePolicyStore, render, check } = await mountCheck(
+      t,
+      "meeting-auto-policy-identity-"
+    );
+    const { observeAuthTokenStateEvent } = await vite.ssrLoadModule("/lib/authRequestContext.ts");
+    observeAuthTokenStateEvent({ generation: 1, hasToken: true });
+    usePolicyStore.setState({
+      status,
+      policy: status === "managed" ? managedPolicy({}) : null,
+      accountId: "previous-account",
+      authGeneration: 1,
+    });
+    await render({ isLoaded: true, isSignedIn: true });
+    assert.equal(check()(), true);
+    observeAuthTokenStateEvent({ generation: 2, hasToken: true });
+    assert.equal(check()(), false, "the outgoing document sees the new credential immediately");
+    await render({ isLoaded: true, isSignedIn: false });
+    assert.equal(check()(), false, "an unbound session is not a guest");
+    await render({ isLoaded: false, isSignedIn: false });
+    assert.equal(check()(), false, "a session refetch cannot restore the old permission");
+    usePolicyStore.setState({ accountId: "current-account", authGeneration: 2 });
+    await render({ isLoaded: true, isSignedIn: true });
+    assert.equal(check()(), true, "the policy bound to the current credential permits a start");
+  });
+}
+
+test("credential rotation suppresses a pending automatic start before capture", async (t) => {
+  const { vite, usePolicyStore, render, check } = await mountCheck(
+    t,
+    "meeting-auto-credential-capture-"
+  );
+  installMicCaptureGlobals(t);
+  const checking = Promise.withResolvers();
+  const access = Promise.withResolvers();
+  let captures = 0;
+  navigator.mediaDevices.getUserMedia = async () => {
+    captures++;
+    throw new Error("unexpected microphone capture");
+  };
+  Object.assign(globalThis.window.electronAPI, {
+    checkSystemAudioAccess: () => {
+      checking.resolve();
+      return access.promise;
+    },
+    meetingTranscriptionStart: async () => {
+      captures++;
+      return { success: false, error: "unresolved policy" };
+    },
+  });
+  const { observeAuthTokenStateEvent } = await vite.ssrLoadModule("/lib/authRequestContext.ts");
+  observeAuthTokenStateEvent({ generation: 1, hasToken: true });
+  usePolicyStore.setState({
+    status: "unmanaged",
+    accountId: "previous-account",
+    authGeneration: 1,
+  });
+  await render({ isLoaded: true, isSignedIn: true });
+  const { startRecording, useMeetingRecordingStore } = await vite.ssrLoadModule(
+    "/stores/meetingRecordingStore.ts"
+  );
+  const starting = startRecording({
+    noteId: 1,
+    noteTitle: "Meeting",
+    folderId: null,
+    autoEndEligible: true,
+    canAutoStart: check(),
+  });
+  await checking.promise;
+  observeAuthTokenStateEvent({ generation: 2, hasToken: true });
+  access.resolve({
+    mode: "unsupported",
+    strategy: "unsupported",
+    status: "unsupported",
+    granted: false,
+  });
+  assert.equal(await starting, false);
+  assert.equal(captures, 0);
+  assert.equal(useMeetingRecordingStore.getState().isRecording, false);
+  assert.equal(useMeetingRecordingStore.getState().error, null);
 });
 
 test("a recording policy refuses still reports why under automatic policy", async (t) => {

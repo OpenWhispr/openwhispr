@@ -1785,3 +1785,31 @@ test("polling keeps a call's identity while a gate hides whether it came back", 
   assert.equal(detector.hasPrompted, false, "the next inactive check restarts the timer");
   detector.stop();
 });
+
+for (const gate of ["setUserRecording", "setMicWarmHold"]) {
+  test(`polling preserves prompt identity when ${gate} engages just before the reset deadline`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+    const AudioActivityDetector = require("../../src/helpers/audioActivityDetector");
+    const detector = new AudioActivityDetector(() => []);
+    t.after(() => detector.stop());
+    let active = false;
+    let prompts = 0;
+    detector._isMicActive = async () => active;
+    detector.on("sustained-audio-detected", () => prompts++);
+    detector._markPrompted();
+    await detector._check();
+    t.mock.timers.tick(59000);
+    detector[gate](true);
+    t.mock.timers.tick(1000);
+    assert.equal(detector.hasPrompted, true, "the gate cancels the pending inactivity deadline");
+    active = true;
+    detector[gate](false);
+    await detector._check();
+    await detector._check();
+    assert.equal(prompts, 0, "the returning call keeps its existing prompt identity");
+    active = false;
+    await detector._check();
+    t.mock.timers.tick(60000);
+    assert.equal(detector.hasPrompted, false, "a later inactive period still rearms detection");
+  });
+}

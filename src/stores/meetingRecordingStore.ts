@@ -897,7 +897,10 @@ export interface StartRecordingArgs {
 // start loses its consent; every other outcome (including setup failures, which are
 // reported through the store) is "accepted" so callers don't roll back UI they didn't own.
 export async function startRecording(args: StartRecordingArgs): Promise<boolean> {
-  if (isRecordingFlag || isStartingFlag) return true;
+  if (isRecordingFlag && !isStartingFlag) return true;
+  // An automatic request must observe a pending start's outcome before its own
+  // note session can be released. Live recordings and explicit starts stay accepted.
+  if (isStartingFlag && !args.canAutoStart) return true;
   if (args.canAutoStart && !args.canAutoStart()) return false;
   const policy = usePolicyStore.getState();
   if (!isTranscriptionContextAllowed(policy, getSettings(), "meeting")) {
@@ -942,10 +945,13 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
     let captureStarted = false;
     // Native, display and mic capture can each be first. Consent remains live
     // through their preparation waits, then stays latched for this recording.
-    const beginCapture = (): boolean => {
+    const canContinueStart = (): boolean => {
       if (!captureStarted && args.canAutoStart && !args.canAutoStart())
         automaticStartSuppressed = true;
-      if (automaticStartSuppressed || !isCurrentStart()) return false;
+      return !automaticStartSuppressed && isCurrentStart();
+    };
+    const beginCapture = (): boolean => {
+      if (!canContinueStart()) return false;
       captureStarted = true;
       return true;
     };
@@ -1122,7 +1128,10 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
           logger.debug("Waiting for in-flight prepare to finish...", {}, "meeting");
           await preparePromise;
         }
-        if (!beginCapture()) return;
+        const mainCapturesSystemAudio =
+          initialSystemAudioStrategy !== "unsupported" &&
+          !isRendererSystemAudioStrategy(initialSystemAudioStrategy);
+        if (!(mainCapturesSystemAudio ? beginCapture() : canContinueStart())) return;
         startOperation.markMainStartAttempted();
         return window.electronAPI?.meetingTranscriptionStart?.({
           ...getMeetingTranscriptionOptions(),
