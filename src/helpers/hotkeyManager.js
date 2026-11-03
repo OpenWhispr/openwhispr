@@ -10,6 +10,7 @@ const { createHotkeyRepeatGate } = require("./hotkeyRepeatGate");
 
 // Delay to ensure localStorage is accessible after window load
 const HOTKEY_REGISTRATION_DELAY_MS = 1000;
+const EXCLUSIVE_RELEASE_MS = 10000;
 
 // Fallback hotkeys tried when primary hotkey registration fails on startup
 const FALLBACK_HOTKEYS = ["F8", "F9", "Control+Shift+Space"];
@@ -118,6 +119,7 @@ class HotkeyManager extends EventEmitter {
     this.slots.set("dictation", { hotkeys: [defaultDictation], callback: null, accelerators: [] });
     this.isInitialized = false;
     this.isListeningMode = false;
+    this._exclusiveTail = Promise.resolve();
     this.gnomeManager = null;
     this.useGnome = false;
     this.hyprlandManager = null;
@@ -1549,6 +1551,21 @@ class HotkeyManager extends EventEmitter {
         suggestions: result?.suggestions || ["F8", "F9", "Control+Shift+Space"],
       });
     }
+  }
+
+  // A hotkey change and leaving capture mode each unregister and re-register the
+  // same bindings, and the field fires both without waiting; interleaved, the
+  // stale re-registration wins and the change is rolled back.
+  runExclusive(task) {
+    const run = this._exclusiveTail.then(() => task());
+    const settled = run.catch(() => {});
+    // kglobalaccel calls have no timeout; one that never answers must not freeze
+    // every later hotkey change.
+    const released = this._exclusiveTail.then(
+      () => new Promise((resolve) => setTimeout(resolve, EXCLUSIVE_RELEASE_MS).unref?.())
+    );
+    this._exclusiveTail = Promise.race([settled, released]);
+    return run;
   }
 
   async updateHotkey(hotkeyInput, callback) {

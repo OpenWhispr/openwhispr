@@ -1243,24 +1243,27 @@ async function startApp() {
   let activationModeChangeQueue = Promise.resolve();
   ipcMain.on("activation-mode-changed", (_event, mode) => {
     activationModeChangeQueue = activationModeChangeQueue
-      .then(async () => {
-        const success = await windowManager.setActivationModeCache(mode);
-        const effectiveMode = windowManager.getActivationMode();
-        if (success) {
-          environmentManager.saveActivationMode(effectiveMode);
-        } else {
-          for (const browserWindow of BrowserWindow.getAllWindows()) {
-            if (!browserWindow.isDestroyed()) {
-              browserWindow.webContents.send("setting-updated", {
-                key: "activationMode",
-                value: effectiveMode,
-              });
+      // Re-registers the dictation binding on DE backends, like a hotkey change.
+      .then(() =>
+        hotkeyManager.runExclusive(async () => {
+          const success = await windowManager.setActivationModeCache(mode);
+          const effectiveMode = windowManager.getActivationMode();
+          if (success) {
+            environmentManager.saveActivationMode(effectiveMode);
+          } else {
+            for (const browserWindow of BrowserWindow.getAllWindows()) {
+              if (!browserWindow.isDestroyed()) {
+                browserWindow.webContents.send("setting-updated", {
+                  key: "activationMode",
+                  value: effectiveMode,
+                });
+              }
             }
           }
-        }
-        windowManager.resetWindowsPushState();
-        windowManager.reconcileNativeKeyListeners();
-      })
+          windowManager.resetWindowsPushState();
+          windowManager.reconcileNativeKeyListeners();
+        })
+      )
       .catch((err) => {
         debugLogger.error("Failed to change activation mode", { error: err.message }, "hotkey");
       });
@@ -1404,7 +1407,7 @@ async function startApp() {
     hotkeyManager.notifyRestoreFailures(savedMeetingKey, result);
   }
 
-  ipcMain.handle("register-meeting-hotkey", async (_event, hotkey) => {
+  const registerMeetingHotkey = async (hotkey) => {
     if (hotkey) {
       const result = await hotkeyManager.registerSlot("meeting", hotkey, meetingHotkeyCallback, {
         atomic: true,
@@ -1422,7 +1425,10 @@ async function startApp() {
       windowManager.reconcileNativeKeyListeners();
       return { success: true };
     }
-  });
+  };
+  ipcMain.handle("register-meeting-hotkey", (_event, hotkey) =>
+    hotkeyManager.runExclusive(() => registerMeetingHotkey(hotkey))
+  );
 
   // Phase 2: Initialize remaining managers after windows are visible
   initializeDeferredManagers();
