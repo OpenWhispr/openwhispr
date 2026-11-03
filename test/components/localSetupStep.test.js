@@ -14,7 +14,7 @@ const {
 const K = "onboarding.rehaul.localSetup.";
 const DICTATION = "parakeet-unified-en-0.6b";
 const CLEANUP = "qwen3.5-2b-q4_k_m";
-const ASSISTANT = "qwen3.5-4b-q4_k_m";
+const ASSISTANT = "gemma-4-e2b-it-qat-q4_0";
 const FACTORS = { whisper: 1.2, parakeet: 2.5, llm: 1.2, llamaVulkan: 2.5 };
 const PLENTY = 200e9;
 const UNMANAGED = { status: "unmanaged", policy: null, appVersion: null };
@@ -377,7 +377,7 @@ test("Windows 16 GB: the assistant reads as not enough memory, cleanup starts of
   assert.ok(assistant.textContent.includes(`${K}unavailable.notEnoughMemory`));
   assert.ok(assistant.textContent.includes(`${K}unavailable.exceedsMemory`), "no figures quoted");
   assert.ok(!assistant.textContent.includes(`${K}description.`));
-  assert.ok(!assistant.textContent.includes("2.7 GB"), "an unavailable row shows no size");
+  assert.ok(!assistant.textContent.includes("3.4 GB"), "an unavailable row shows no size");
   const leaf = (text) => (n) =>
     n.textContent === text && n.childNodes.every((child) => child.nodeType === 3);
   const [heading] = elements(assistant, leaf(`${K}unavailable.notEnoughMemory`));

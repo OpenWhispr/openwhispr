@@ -1092,6 +1092,7 @@
           "quantization": "q4_k_m",
           "contextLength": 262144,
           "hfRepo": "bartowski/Qwen_Qwen3.5-9B-GGUF",
+          "supportsTools": true,
           "recommended": true,
           "supportsThinking": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen3_5_9b_q4_k_m"
@@ -1106,6 +1107,7 @@
           "quantization": "q4_k_m",
           "contextLength": 262144,
           "hfRepo": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+          "supportsTools": true,
           "supportsThinking": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen3_5_4b_q4_k_m"
         },
@@ -1145,6 +1147,7 @@
           "quantization": "q4_k_m",
           "contextLength": 262144,
           "hfRepo": "bartowski/Qwen3.8-27B-GGUF",
+          "supportsTools": true,
           "supportsThinking": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen3_8_27b_q4_k_m"
         },
@@ -1158,6 +1161,7 @@
           "quantization": "q4_k_m",
           "contextLength": 262144,
           "hfRepo": "ggml-org/Qwen3.6-35B-A3B-GGUF",
+          "supportsTools": true,
           "supportsThinking": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen3_6_35b_a3b_q4_k_m"
         },
@@ -1171,6 +1175,7 @@
           "quantization": "q4_k_m",
           "contextLength": 131072,
           "hfRepo": "Qwen/Qwen3-8B-GGUF",
+          "supportsTools": true,
           "legacy": true,
           "supportsThinking": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen3_8b_q4_k_m"
@@ -1185,6 +1190,7 @@
           "quantization": "q5_k_m",
           "contextLength": 131072,
           "hfRepo": "Qwen/Qwen3-8B-GGUF",
+          "supportsTools": true,
           "legacy": true,
           "supportsThinking": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen3_8b_q5_k_m"
@@ -1199,6 +1205,7 @@
           "quantization": "q4_k_m",
           "contextLength": 131072,
           "hfRepo": "Qwen/Qwen3-4B-GGUF",
+          "supportsTools": true,
           "legacy": true,
           "supportsThinking": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen3_4b_q4_k_m"
@@ -1227,6 +1234,7 @@
           "quantization": "q4_k_m",
           "contextLength": 131072,
           "hfRepo": "Qwen/Qwen3-32B-GGUF",
+          "supportsTools": true,
           "legacy": true,
           "supportsThinking": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen3_32b_q4_k_m"
@@ -1267,6 +1275,7 @@
           "quantization": "q4_k_m",
           "contextLength": 128000,
           "hfRepo": "bartowski/Qwen2.5-7B-Instruct-GGUF",
+          "supportsTools": true,
           "legacy": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen2_5_7b_instruct_q4_k_m"
         },
@@ -1280,6 +1289,7 @@
           "quantization": "q5_k_m",
           "contextLength": 128000,
           "hfRepo": "bartowski/Qwen2.5-7B-Instruct-GGUF",
+          "supportsTools": true,
           "legacy": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen2_5_7b_instruct_q5_k_m"
         }
@@ -1300,6 +1310,7 @@
           "quantization": "q4_k_m",
           "contextLength": 262144,
           "hfRepo": "mistralai/Ministral-3-8B-Instruct-2512-GGUF",
+          "supportsTools": true,
           "recommended": true,
           "descriptionKey": "models.descriptions.local.mistral_ministral_3_8b_instruct_2512_q4_k_m"
         },
@@ -1313,6 +1324,7 @@
           "quantization": "q4_k_m",
           "contextLength": 262144,
           "hfRepo": "mistralai/Ministral-3-14B-Instruct-2512-GGUF",
+          "supportsTools": true,
           "descriptionKey": "models.descriptions.local.mistral_ministral_3_14b_instruct_2512_q4_k_m"
         },
         {
@@ -1337,6 +1349,7 @@
           "quantization": "q4_k_m",
           "contextLength": 131072,
           "hfRepo": "mradermacher/Mistral-Nemo-12B-Instruct-GGUF",
+          "supportsTools": true,
           "legacy": true,
           "descriptionKey": "models.descriptions.local.mistral_nemo_12b_instruct_q4_k_m"
         },
@@ -1350,6 +1363,7 @@
           "quantization": "q4_k_m",
           "contextLength": 32768,
           "hfRepo": "bartowski/Mistral-7B-Instruct-v0.3-GGUF",
+          "supportsTools": true,
           "legacy": true,
           "descriptionKey": "models.descriptions.local.mistral_mistral_7b_instruct_v0_3_q4_k_m"
         },
@@ -1363,6 +1377,7 @@
           "quantization": "q5_k_m",
           "contextLength": 32768,
           "hfRepo": "bartowski/Mistral-7B-Instruct-v0.3-GGUF",
+          "supportsTools": true,
           "legacy": true,
           "descriptionKey": "models.descriptions.local.mistral_mistral_7b_instruct_v0_3_q5_k_m"
         }
@@ -1409,6 +1424,7 @@
           "quantization": "q4_k_m",
           "contextLength": 131072,
           "hfRepo": "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF",
+          "supportsTools": true,
           "legacy": true,
           "descriptionKey": "models.descriptions.local.llama_llama_3_1_8b_instruct_q4_k_m"
         }
@@ -1429,6 +1445,7 @@
           "quantization": "mxfp4",
           "contextLength": 128000,
           "hfRepo": "ggml-org/gpt-oss-20b-GGUF",
+          "supportsTools": true,
           "recommended": true,
           "supportsThinking": true,
           "descriptionKey": "models.descriptions.local.openai_oss_gpt_oss_20b_mxfp4"
@@ -1450,6 +1467,8 @@
           "quantization": "q4_k_m",
           "contextLength": 262144,
           "hfRepo": "bartowski/google_gemma-4-31B-it-GGUF",
+          "supportsThinking": true,
+          "supportsTools": true,
           "descriptionKey": "models.descriptions.local.gemma_gemma_4_31b_it_q4_k_m"
         },
         {
@@ -1462,6 +1481,8 @@
           "quantization": "q4_0",
           "contextLength": 262144,
           "hfRepo": "google/gemma-4-31B-it-qat-q4_0-gguf",
+          "supportsThinking": true,
+          "supportsTools": true,
           "draftHfRepo": "unsloth/gemma-4-31B-it-qat-GGUF",
           "draftFileName": "mtp-gemma-4-31B-it.gguf",
           "draftSizeBytes": 279955968,
@@ -1477,6 +1498,8 @@
           "quantization": "q4_k_m",
           "contextLength": 262144,
           "hfRepo": "bartowski/google_gemma-4-26B-A4B-it-GGUF",
+          "supportsThinking": true,
+          "supportsTools": true,
           "descriptionKey": "models.descriptions.local.gemma_gemma_4_26b_a4b_it_q4_k_m"
         },
         {
@@ -1489,6 +1512,8 @@
           "quantization": "q4_0",
           "contextLength": 262144,
           "hfRepo": "google/gemma-4-26B-A4B-it-qat-q4_0-gguf",
+          "supportsThinking": true,
+          "supportsTools": true,
           "draftHfRepo": "unsloth/gemma-4-26B-A4B-it-qat-GGUF",
           "draftFileName": "mtp-gemma-4-26B-A4B-it.gguf",
           "draftSizeBytes": 251939328,
@@ -1504,6 +1529,8 @@
           "quantization": "q4_0",
           "contextLength": 262144,
           "hfRepo": "google/gemma-4-12B-it-qat-q4_0-gguf",
+          "supportsThinking": true,
+          "supportsTools": true,
           "draftHfRepo": "unsloth/gemma-4-12B-it-qat-GGUF",
           "draftFileName": "mtp-gemma-4-12B-it.gguf",
           "draftSizeBytes": 253708800,
@@ -1519,6 +1546,8 @@
           "quantization": "q4_k_m",
           "contextLength": 262144,
           "hfRepo": "bartowski/google_gemma-4-E4B-it-GGUF",
+          "supportsThinking": true,
+          "supportsTools": true,
           "descriptionKey": "models.descriptions.local.gemma_gemma_4_e4b_it_q4_k_m"
         },
         {
@@ -1531,6 +1560,8 @@
           "quantization": "q4_0",
           "contextLength": 262144,
           "hfRepo": "google/gemma-4-E4B-it-qat-q4_0-gguf",
+          "supportsThinking": true,
+          "supportsTools": true,
           "draftHfRepo": "unsloth/gemma-4-E4B-it-qat-GGUF",
           "draftFileName": "mtp-gemma-4-E4B-it.gguf",
           "draftSizeBytes": 59678016,
@@ -1547,6 +1578,8 @@
           "quantization": "q4_k_m",
           "contextLength": 262144,
           "hfRepo": "bartowski/google_gemma-4-E2B-it-GGUF",
+          "supportsThinking": true,
+          "supportsTools": true,
           "descriptionKey": "models.descriptions.local.gemma_gemma_4_e2b_it_q4_k_m"
         },
         {
@@ -1559,6 +1592,8 @@
           "quantization": "q4_0",
           "contextLength": 262144,
           "hfRepo": "google/gemma-4-E2B-it-qat-q4_0-gguf",
+          "supportsThinking": true,
+          "supportsTools": true,
           "draftHfRepo": "unsloth/gemma-4-E2B-it-qat-GGUF",
           "draftFileName": "mtp-gemma-4-E2B-it.gguf",
           "draftSizeBytes": 59235648,
@@ -1633,6 +1668,7 @@
           "quantization": "q4_k_m",
           "contextLength": 32768,
           "hfRepo": "LiquidAI/LFM2.5-8B-A1B-GGUF",
+          "supportsTools": true,
           "descriptionKey": "models.descriptions.local.liquidai_lfm2_5_8b_a1b_q4_k_m"
         },
         {

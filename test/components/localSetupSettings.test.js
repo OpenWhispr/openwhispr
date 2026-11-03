@@ -3,6 +3,11 @@ const assert = require("node:assert/strict");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 
 const table = require("../../src/models/localSetupTable.json");
+const registry = require("../../src/models/modelRegistryData.json");
+
+// The local provider whose list carries the model: qwen for cleanup, gemma for the assistant.
+const providerOf = (modelId) =>
+  registry.localProviders.find((p) => p.models.some((m) => m.id === modelId))?.id;
 
 // Josh's must-have: a switched-off, unavailable or policy-hidden feature ends up
 // off, on this device with no model — never on OpenWhispr Cloud, even for a
@@ -106,7 +111,7 @@ function assertRow(store, scopes, on, modelId, label) {
   for (const scope of scopes) {
     const cfg = store.selectResolvedLLMConfig(state, scope);
     assert.equal(cfg.model, on ? modelId : "", `${label}: ${scope} model`);
-    assert.equal(cfg.provider, on ? "qwen" : "", `${label}: ${scope} provider`);
+    assert.equal(cfg.provider, on ? providerOf(modelId) : "", `${label}: ${scope} provider`);
   }
 }
 
@@ -141,7 +146,7 @@ test("Proceed drops an older build's pending pick, so it cannot switch the assis
     "pendingLocalModelSelectionsV1",
     JSON.stringify({
       dictation: { provider: "whisper", modelId: "base" },
-      assistant: { provider: "qwen", modelId: table.models.assistant },
+      assistant: { provider: providerOf(table.models.assistant), modelId: table.models.assistant },
     })
   );
   storage.setItem("localSetupPending", "true");

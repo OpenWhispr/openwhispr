@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "basis": "Design §8 as tightened 2026-10-26 (Titan 7f688d9e3; Part A report, 'Tightening pass'), Macs keyed by chip (Titan f794efae2; Part A report, 'Macs by chip'). M = measured on Josh's M5 Pro, P = predicted. graphicsPackBytes are the llama.cpp b9763 Vulkan release asset sizes.",
+  "basis": "Design §8 as tightened 2026-10-26 (Titan 7f688d9e3; Part A report, 'Tightening pass'), Macs keyed by chip (Titan f794efae2; Part A report, 'Macs by chip'). M = measured on Josh's M5 Pro, P = predicted. graphicsPackBytes are the llama.cpp b9763 Vulkan release asset sizes. The assistant is Gemma 4 E2B QAT since 2026-11-03 (Titan exam 2026-11-02, titan#346: about 30% quicker than Qwen3.5 4B, never sent anything unasked); its rows keep Qwen3.5 4B's measured seconds, which err slow.",
   "models": {
     "dictation": {
       "english": "parakeet-unified-en-0.6b",
@@ -10,7 +10,7 @@
       "olderMac": "small"
     },
     "cleanup": "qwen3.5-2b-q4_k_m",
-    "assistant": "qwen3.5-4b-q4_k_m"
+    "assistant": "gemma-4-e2b-it-qat-q4_0"
   },
   "classification": {
     "nvidiaMinVramMb": 6000,

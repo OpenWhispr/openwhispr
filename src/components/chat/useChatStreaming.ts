@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import ReasoningService, { type AgentStreamChunk } from "../../services/ReasoningService";
-import { isEnterpriseProvider } from "../../models/ModelRegistry";
+import { getLocalModel, isEnterpriseProvider } from "../../models/ModelRegistry";
 import { providerSupportsImages } from "../../services/ai/inferenceProviders";
 import { getSettings, useSettingsStore } from "../../stores/settingsStore";
 import { resolveChatStreamingInference } from "../../helpers/dictationAgentInference.js";
@@ -81,8 +81,6 @@ const RAG_NOTE_LIMIT = 5;
 const RAG_NOTE_SNIPPET_LENGTH = 500;
 const STREAM_FLUSH_INTERVAL_MS = 32;
 
-const LOCAL_TOOL_MIN_PARAMS_B = 4;
-
 // The tool reads the DB mirror over IPC (not the control panel's store), so it
 // also works from the dictation window, for the workspace every window uses now.
 async function readAppliedSharedWords(): Promise<SharedDictionaryWord[]> {
@@ -107,11 +105,6 @@ async function hideAppliedSharedWords(ids: string[]): Promise<void> {
   const workspaceId = readActiveWorkspaceId();
   if (!workspaceId) throw new Error("No active workspace");
   await setSharedWordsHidden(workspaceId, ids, true);
-}
-
-function estimateModelSizeB(modelId: string): number {
-  const match = modelId.match(/-([\d.]+)[bB]/);
-  return match ? parseFloat(match[1]) : 0;
 }
 
 // Main adds the note's identified speakers and its calendar event's
@@ -474,8 +467,10 @@ export function useChatStreaming({
             "openrouter",
             "corti",
           ].includes(llmConfig.provider);
+        // The model list marks which local models call tools reliably; a size read from
+        // the name gave tools to Gemma 3, which acts them out in text, and none to Gemma 4 E2B.
         const localModelCanUseTool =
-          isLocalProvider && estimateModelSizeB(llmConfig.model) >= LOCAL_TOOL_MIN_PARAMS_B;
+          isLocalProvider && !!getLocalModel(llmConfig.model)?.supportsTools;
         const supportsTools = isCloudAgent || !isLocalProvider || localModelCanUseTool;
         // A local or LAN model may have a 16k context; hosted models have room to spare.
         const contextTier =

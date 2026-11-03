@@ -86,6 +86,10 @@ const MATRIX = [
     { max_tokens: MAX_TOKENS, temperature: 0, reasoning: { effort: "low" }, chat_template_kwargs: { enable_thinking: false } }],
   ["local llama.cpp gets think false plus chat_template_kwargs (#783)", "local", "qwen3.5-4b-gguf", null, CLEANUP_NO_THINK,
     { max_tokens: MAX_TOKENS, temperature: 0, think: false, chat_template_kwargs: { enable_thinking: false } }],
+  ["local gemma 4 honors the assistant's thinking-off (its template drops <|think|>)", "local", "gemma-4-e2b-it-qat-q4_0", null, AGENT_NO_THINK,
+    { max_tokens: MAX_TOKENS, temperature: 0.3, think: false, chat_template_kwargs: { enable_thinking: false } }],
+  ["local gemma 3 can't think, so it gets no thinking params", "local", "gemma-3-4b-it-q4_k_m", null, AGENT_NO_THINK,
+    { max_tokens: MAX_TOKENS, temperature: 0.3 }],
 
   // --- Corti (registry max_tokens; legacy set keeps unknown ids stable) ---
   ["corti keeps the legacy chat-completions shape", "Corti", "corti-s1", null, AGENT,

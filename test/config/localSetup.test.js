@@ -396,7 +396,7 @@ test("sizes match what Settings shows", async () => {
   assert.equal(await size(mac({}), ["hi"]), "650 MB");
   const p = await plan(pc({ nvidia: rtx }));
   assert.equal(rowSizeLabel(row(p, "cleanup"), null), "1.3 GB");
-  assert.equal(rowSizeLabel(row(p, "assistant"), null), "2.7 GB");
+  assert.equal(rowSizeLabel(row(p, "assistant"), null), "3.4 GB");
   assert.equal(rowSizeLabel(row(p, "cleanup"), p.graphicsPack), "1.3 GB");
   // The real pack hides in the rounding; a larger one shows it is folded in.
   const bigPack = { ...p.graphicsPack, bytes: 0.5 * 2 ** 30 };
@@ -423,11 +423,11 @@ test("enabledDownloads folds the graphics pack into the first switched-on text r
   assert.deepEqual(ids(enabledDownloads(p, { cleanup: true, assistant: true })), [
     parakeet,
     ["cleanup", ["qwen3.5-2b-q4_k_m", "llama-vulkan"]],
-    ["assistant", ["qwen3.5-4b-q4_k_m"]],
+    ["assistant", ["gemma-4-e2b-it-qat-q4_0"]],
   ]);
   assert.deepEqual(ids(enabledDownloads(p, { cleanup: false, assistant: true })), [
     parakeet,
-    ["assistant", ["qwen3.5-4b-q4_k_m", "llama-vulkan"]],
+    ["assistant", ["gemma-4-e2b-it-qat-q4_0", "llama-vulkan"]],
   ]);
   assert.deepEqual(ids(enabledDownloads(p, { cleanup: false, assistant: false })), [parakeet]);
 
@@ -519,12 +519,16 @@ test("the machine-type cut-offs come from the table", async () => {
 const GB = 1e9;
 const factors = { whisper: 1.2, parakeet: 2.5, llm: 1.2, llamaVulkan: 1.5 };
 const space = (gb) => ({ availableBytes: gb * GB, factors });
-const llmBytes = (id) =>
-  registry.localProviders.flatMap((p) => p.models).find((m) => m.id === id).sizeBytes;
-// mac-m5-pro English: Parakeet EN 631 MB ×2.5, Qwen 2B ×1.2, Qwen 4B ×1.2 ≈ 6.62 GB in all.
+// A text model downloads with its speed-up drafter, when it has one.
+const llmBytes = (id) => {
+  const model = registry.localProviders.flatMap((p) => p.models).find((m) => m.id === id);
+  return model.sizeBytes + (model.draftSizeBytes ?? 0);
+};
+// mac-m5-pro English: Parakeet EN 631 MB ×2.5, Qwen 2B ×1.2, Gemma 4 E2B and its drafter ×1.2
+// ≈ 7.26 GB in all.
 const DICTATION_NEED = 631e6 * 2.5;
 const CLEANUP_NEED = llmBytes("qwen3.5-2b-q4_k_m") * 1.2;
-const ASSISTANT_NEED = llmBytes("qwen3.5-4b-q4_k_m") * 1.2;
+const ASSISTANT_NEED = llmBytes("gemma-4-e2b-it-qat-q4_0") * 1.2;
 
 test("required bytes apply each download's reserve factor", async () => {
   const { localSetupRequiredBytes, enabledDownloads } = await load();
@@ -532,7 +536,7 @@ test("required bytes apply each download's reserve factor", async () => {
   const items = enabledDownloads(p, { cleanup: true, assistant: true }).flatMap((r) => r.items);
   const total = DICTATION_NEED + CLEANUP_NEED + ASSISTANT_NEED;
   assert.ok(Math.abs(localSetupRequiredBytes(items, factors) - total) < 1);
-  assert.ok(Math.abs(total / GB - 6.62) < 0.01);
+  assert.ok(Math.abs(total / GB - 7.26) < 0.01);
 
   const nv = await plan(pc({ nvidia: rtx }));
   const nvItems = enabledDownloads(nv, { cleanup: true, assistant: false }).flatMap((r) => r.items);
