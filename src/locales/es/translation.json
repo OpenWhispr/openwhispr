@@ -612,6 +612,10 @@
         "timeout": "Se agotó el tiempo de la red: VPN, portal cautivo o conexión inestable.",
         "tls": "Falló el handshake TLS: revisa el reloj del sistema o un proxy corporativo.",
         "fallback": "Cloud no disponible: usando el motor local para esta grabación."
+      },
+      "slowStart": {
+        "title": "La transcripción en vivo no se conectó",
+        "description": "La conexión de transcripción en vivo tardó demasiado en abrirse. Inténtalo de nuevo."
       }
     }
   },

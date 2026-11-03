@@ -1025,6 +1025,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   dictationRealtimeSend: (buffer) => ipcRenderer.send("dictation-realtime-send", buffer),
   dictationRealtimeFinalize: () => ipcRenderer.invoke("dictation-realtime-finalize"),
   dictationRealtimeStop: () => ipcRenderer.invoke("dictation-realtime-stop"),
+  dictationRealtimeCancel: () => ipcRenderer.invoke("dictation-realtime-cancel"),
   onDictationRealtimePartial: registerListener(
     "dictation-realtime-partial",
     (callback) => (_event, data) => callback(data)

@@ -612,6 +612,10 @@
         "timeout": "Netzwerk-Zeitüberschreitung — VPN, Captive Portal oder instabile Verbindung.",
         "tls": "TLS-Handshake fehlgeschlagen — prüfen Sie Ihre Systemuhr oder einen Unternehmens-Proxy.",
         "fallback": "Cloud nicht erreichbar — lokale Engine wird für diese Aufnahme verwendet."
+      },
+      "slowStart": {
+        "title": "Live-Transkription nicht verbunden",
+        "description": "Die Verbindung für die Live-Transkription hat zu lange gebraucht. Bitte versuchen Sie es erneut."
       }
     }
   },

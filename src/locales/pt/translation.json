@@ -591,6 +591,10 @@
         "timeout": "Tempo limite da rede esgotado — VPN, portal cativo ou conexão instável.",
         "tls": "Falha no handshake TLS — verifique o relógio do sistema ou um proxy corporativo.",
         "fallback": "Cloud indisponível — usando o motor local para esta gravação."
+      },
+      "slowStart": {
+        "title": "A transcrição ao vivo não se conectou",
+        "description": "A conexão da transcrição ao vivo demorou demais para abrir. Tente novamente."
       }
     }
   },

@@ -657,6 +657,10 @@ class OpenAIRealtimeStreaming {
       return result;
     }
 
+    // Set when the wait below ends before every turn is transcribed: the text
+    // then covers only part of the audio, which the caller must not take as the
+    // whole recording.
+    let incomplete = false;
     if (this.ws.readyState === WebSocket.OPEN) {
       if (commit && this.audioBytesSent > 0) {
         const prevOnError = this.onError;
@@ -664,20 +668,20 @@ class OpenAIRealtimeStreaming {
           ? LIVE_TRANSCRIBE_COMMIT_TIMEOUT_MS
           : DISCONNECT_TIMEOUT_MS;
 
-        await new Promise((resolve) => {
-          const done = () => {
+        incomplete = await new Promise((resolve) => {
+          const done = (settled) => {
             clearTimeout(tid);
             this._onTurnSettled = null;
             this.onError = prevOnError;
-            resolve();
+            resolve(!settled);
           };
 
           const tid = setTimeout(() => {
             debugLogger.debug(
               `${this.providerLabel} commit timeout, using accumulated text`,
-              this._logContext()
+              this._logContext({ pendingTurns: this.pendingTranscriptions.size })
             );
-            done();
+            done(false);
           }, timeoutMs);
 
           // VAD can have several committed turns still transcribing. A terminal
@@ -689,9 +693,8 @@ class OpenAIRealtimeStreaming {
           this._onTurnSettled = (reason) => {
             if (reason === "committed") commitAcknowledged = true;
             const acknowledged = commitAcknowledged || !this.serverAcksCommits;
-            if (reason === "closed" || (acknowledged && !this.pendingTranscriptions.size)) {
-              done();
-            }
+            if (acknowledged && !this.pendingTranscriptions.size) done(true);
+            else if (reason === "closed") done(false);
           };
 
           this.onError = (err) => {
@@ -708,7 +711,7 @@ class OpenAIRealtimeStreaming {
           try {
             this.ws.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
           } catch {
-            done();
+            done(false);
           }
         });
       }
@@ -717,6 +720,7 @@ class OpenAIRealtimeStreaming {
     }
 
     const result = { text: this.getFullTranscript() };
+    if (incomplete) result.incomplete = true;
     this.cleanup();
     this.isDisconnecting = false;
     return result;

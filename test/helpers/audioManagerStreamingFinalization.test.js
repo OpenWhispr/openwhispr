@@ -368,6 +368,48 @@ test("streaming discard waits for an in-progress provider start before disconnec
   assert.equal(manager.isProcessing, false);
 });
 
+test("discarding a recording tells main to cancel before its provider start settles", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const { manager } = createFinalizingManager(AudioManager);
+  const calls = [];
+  manager.streamingStartInProgress = true;
+  manager.cleanupPreview = async () => null;
+  manager.getStreamingProvider = () => ({
+    cancel: async () => {
+      calls.push("cancel");
+      return { success: true };
+    },
+    stop: async () => {
+      calls.push("stop");
+      return { success: true };
+    },
+  });
+
+  const cancel = manager.cancelStreamingRecording();
+  assert.deepEqual(calls, ["cancel"], "main hears of the cancel while the connect is pending");
+  assert.equal(manager.isProcessing, true);
+
+  manager._settleStreamingStart();
+  assert.equal(await cancel, true);
+  // Cancelled again for a session the start may have opened meanwhile; never
+  // stopped, which would commit whatever the session holds.
+  assert.deepEqual(calls, ["cancel", "cancel"]);
+  assert.equal(manager.isProcessing, false);
+});
+
+test("realtime dictation providers cancel over their own IPC", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  let cancels = 0;
+  globalThis.window.electronAPI.dictationRealtimeCancel = async () => {
+    cancels += 1;
+    return { success: true };
+  };
+  for (const name of ["openai-realtime", "tinfoil-realtime"]) {
+    await AudioManager.prototype.getStreamingProvider(name).cancel();
+  }
+  assert.equal(cancels, 2);
+});
+
 test("cancelling while the streaming microphone opens never enters recording", async (t) => {
   const AudioManager = await loadManagerClass(t);
   const states = [];
@@ -484,6 +526,7 @@ async function startManagedOrukeetRecording(t, AudioManager) {
       language: "fr",
     }),
     dictationRealtimeStop: record("realtime:stop", { success: true }),
+    dictationRealtimeCancel: record("realtime:cancel", { success: true }),
     onDictationRealtimePartial: listen,
     onDictationRealtimeFinal: listen,
     onDictationRealtimeError: (listener) => {
@@ -538,7 +581,11 @@ test("stop finalizes the Orukeet stream after an STT config refresh reroutes whi
 
 test("cancel and cleanup disconnect the Orukeet stream after an STT config refresh reroutes while the mic opens", async (t) => {
   const AudioManager = await loadManagerClass(t);
-  for (const teardown of ["cancelStreamingRecording", "cleanup"]) {
+  const disconnects = {
+    cancelStreamingRecording: ["realtime:cancel", "realtime:cancel"],
+    cleanup: ["realtime:stop"],
+  };
+  for (const [teardown, disconnect] of Object.entries(disconnects)) {
     await t.test(teardown, async (t) => {
       const { manager, calls, completions, errors, raiseStreamError } =
         await startManagedOrukeetRecording(t, AudioManager);
@@ -549,7 +596,7 @@ test("cancel and cleanup disconnect the Orukeet stream after an STT config refre
 
       await manager[teardown]();
 
-      assert.deepEqual(calls, ["orukeet:start:orukeet-v0.1.0", "realtime:stop"]);
+      assert.deepEqual(calls, ["orukeet:start:orukeet-v0.1.0", ...disconnect]);
       assert.deepEqual(completions, []);
       assert.deepEqual(errors, []);
       assert.equal(manager._activeStreamingProviderName, null);
@@ -1117,6 +1164,135 @@ test("a refused managed Orukeet start without a fallback recorder records in bat
   assert.equal(batchStarts, 1);
   assert.equal(manager._streamingFailoverReason, null);
   assert.deepEqual(uploads, []);
+});
+
+// Main's answer when the opening audio outgrew its queue before the realtime
+// connection opened.
+const startAudioOverflow = {
+  success: false,
+  code: "REALTIME_START_AUDIO_OVERFLOW",
+  messageKey: "streaming.errors.slowStart.description",
+  error: "Realtime connection took too long to open",
+};
+
+function overflowedRealtimeProvider() {
+  return startingOrukeetProvider({
+    start: async () => startAudioOverflow,
+    finalizeAcknowledged: false,
+    awaitsFinalTranscript: true,
+    finalize: undefined,
+  });
+}
+
+test("a realtime start whose opening audio overflowed keeps recording and uploads through BYOK", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  installCapture(t);
+  const provider = overflowedRealtimeProvider();
+  const { manager, errors, uploads } = createStartingManager(AudioManager, {
+    providerName: "openai-realtime",
+    provider,
+  });
+  const byokUploads = [];
+  manager.processWithOpenAIAPI = async (blob) => {
+    byokUploads.push(await blob.text());
+    return { text: "" };
+  };
+
+  assert.equal(await manager.startStreamingRecording(), true);
+  assert.equal(manager.isRecording, true);
+  manager.streamingProcessor.port.onmessage({ data: speechPcm() });
+  assert.deepEqual(provider.sent, [], "the abandoned session gets no more audio");
+  await manager.stopStreamingRecording();
+
+  assert.deepEqual(byokUploads, ["opening words"]);
+  assert.deepEqual(uploads, []);
+  assert.deepEqual(errors, []);
+});
+
+test("an overflowed Cloud realtime start uploads through Cloud, untagged", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  useManagedOrukeetSettings();
+  installCapture(t);
+  const { manager, errors, uploads } = createStartingManager(AudioManager, {
+    providerName: "openai-realtime",
+    provider: overflowedRealtimeProvider(),
+  });
+
+  assert.equal(await manager.startStreamingRecording(), true);
+  manager.streamingProcessor.port.onmessage({ data: speechPcm() });
+  await manager.stopStreamingRecording();
+
+  // The fallback-reason tag feeds the Orukeet rollout's metric only.
+  assert.deepEqual(uploads, [{ audio: "opening words", reason: undefined }]);
+  assert.deepEqual(errors, []);
+});
+
+test("an overflowed realtime start with nothing recording the audio shows a translated error", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  installCapture(t);
+  globalThis.MediaRecorder = class {
+    constructor() {
+      throw new Error("MediaRecorder unavailable");
+    }
+  };
+  const { manager, errors } = createStartingManager(AudioManager, {
+    providerName: "openai-realtime",
+    provider: overflowedRealtimeProvider(),
+  });
+  manager.cleanupStreaming = async () => {};
+
+  assert.equal(await manager.startStreamingRecording(), false);
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0].code, "REALTIME_START_AUDIO_OVERFLOW");
+  assert.equal(errors[0].messageKey, "streaming.errors.slowStart.description");
+  assert.equal(errors[0].title, "streaming.errors.slowStart.title");
+});
+
+test("a stop that left turns untranscribed uses the fallback recording instead of the partial text", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const { manager } = createFinalizingManager(AudioManager);
+  manager.recordingStartTime = Date.now() - 20000;
+  manager.streamingFinalText = "first turn";
+  manager.mergeRecordedSegments = async () => new Blob(["whole recording"]);
+  manager.getStreamingProvider = () => ({
+    awaitsFinalTranscript: true,
+    finalize() {},
+    stop: async () => ({ success: true, text: "first turn", incomplete: true }),
+  });
+  const uploads = [];
+  manager.processWithOpenAIAPI = async (blob) => {
+    uploads.push(await blob.text());
+    return { text: "first turn second turn" };
+  };
+  const completions = [];
+  manager.onTranscriptionComplete = (result) => completions.push(result);
+
+  await manager.stopStreamingRecording();
+
+  assert.deepEqual(uploads, ["whole recording"]);
+  assert.equal(completions.at(-1)?.text, "first turn second turn");
+});
+
+test("an incomplete stop whose fallback upload fails still keeps the partial text", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const { manager } = createFinalizingManager(AudioManager);
+  manager.recordingStartTime = Date.now() - 20000;
+  manager.streamingFinalText = "first turn";
+  manager.mergeRecordedSegments = async () => new Blob(["whole recording"]);
+  manager.getStreamingProvider = () => ({
+    awaitsFinalTranscript: true,
+    finalize() {},
+    stop: async () => ({ success: true, text: "first turn", incomplete: true }),
+  });
+  manager.processWithOpenAIAPI = async () => {
+    throw Object.assign(new Error("Network request failed"), { code: "NETWORK_ERROR" });
+  };
+  const completions = [];
+  manager.onTranscriptionComplete = (result) => completions.push(result);
+
+  await manager.stopStreamingRecording();
+
+  assert.equal(completions.at(-1)?.text, "first turn");
 });
 
 test("a stop pressed while a refused managed Orukeet start settles uploads once", async (t) => {

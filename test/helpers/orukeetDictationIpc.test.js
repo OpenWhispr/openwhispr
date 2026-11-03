@@ -551,7 +551,8 @@ test("a warmup never reuses a socket that has already carried audio", async () =
     return Response.json(cloudSession);
   };
 
-  await handlers.get("dictation-realtime-start")(event, managedOptions);
+  await handlers.get("dictation-realtime-warmup")(event, managedOptions);
+  // Frames the renderer sends before its start reaches main.
   handlers.get("dictation-realtime-send")(event, Buffer.alloc(640));
   const used = target._dictationStreaming;
   const warmup = await handlers.get("dictation-realtime-warmup")(event, managedOptions);
@@ -560,6 +561,26 @@ test("a warmup never reuses a socket that has already carried audio", async () =
   assert.equal(warmup.alreadyWarm, undefined);
   assert.equal(mints, 2);
   assert.notEqual(target._dictationStreaming, used);
+  await handlers.get("dictation-realtime-stop")();
+});
+
+test("a warmup leaves the socket of a recording in progress alone", async () => {
+  await handlers.get("dictation-realtime-stop")();
+  let mints = 0;
+  backendResponse = async () => {
+    mints += 1;
+    return Response.json(cloudSession);
+  };
+
+  await handlers.get("dictation-realtime-start")(event, managedOptions);
+  handlers.get("dictation-realtime-send")(event, Buffer.alloc(640));
+  const recording = target._dictationStreaming;
+  const warmup = await handlers.get("dictation-realtime-warmup")(event, managedOptions);
+
+  assert.equal(warmup.success, true);
+  assert.equal(mints, 1);
+  assert.equal(target._dictationStreaming, recording);
+  assert.equal(recording.isConnected, true);
   await handlers.get("dictation-realtime-stop")();
 });
 

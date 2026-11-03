@@ -612,6 +612,10 @@
         "timeout": "Délai réseau dépassé — VPN, portail captif ou connexion instable.",
         "tls": "Échec du handshake TLS — vérifiez l'horloge système ou un proxy d'entreprise.",
         "fallback": "Cloud injoignable — utilisation du moteur local pour cet enregistrement."
+      },
+      "slowStart": {
+        "title": "La transcription en direct ne s'est pas connectée",
+        "description": "La connexion de transcription en direct a mis trop de temps à s'ouvrir. Veuillez réessayer."
       }
     }
   },

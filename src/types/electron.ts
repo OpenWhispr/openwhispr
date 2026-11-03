@@ -3675,7 +3675,13 @@ declare global {
           error?: string;
         } & Partial<DictationLanguageMetadata>
       >;
-      dictationRealtimeStop?: () => Promise<{ success: boolean; text: string }>;
+      dictationRealtimeStop?: () => Promise<{
+        success: boolean;
+        text: string;
+        /** The stop ran out of time before every turn was transcribed. */
+        incomplete?: boolean;
+      }>;
+      dictationRealtimeCancel?: () => Promise<{ success: boolean }>;
       onDictationRealtimePartial?: (callback: (text: string) => void) => () => void;
       onDictationRealtimeFinal?: (callback: (text: string) => void) => () => void;
       onDictationRealtimeLanguage?: (

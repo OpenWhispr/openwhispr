@@ -9815,8 +9815,14 @@ class IPCHandlers {
       }
     };
 
+    // The start that owns the opening audio while its session connects (see
+    // dictation-realtime-start).
+    let dictationStart = null;
+
     const startDictationIdleTimer = () => {
       clearDictationIdleTimer();
+      // A recording's session is closed by its stop or cancel, never as idle.
+      if (dictationStart || this._dictationStreaming?.claimed) return;
       const idleTimeoutMs =
         this._dictationStreaming instanceof OrukeetStreaming
           ? ORUKEET_IDLE_TIMEOUT_MS
@@ -9851,7 +9857,7 @@ class IPCHandlers {
       ]);
     };
 
-    const connectDictationStreaming = async (event, options) => {
+    const connectDictationStreaming = async (event, options, start = null) => {
       // Older renderers did not label the OpenAI dictation adapter. Dictation
       // realtime was OpenAI-only before Tinfoil support, so preserve that
       // established default while requiring new adapters to be explicit.
@@ -9863,6 +9869,8 @@ class IPCHandlers {
       if (this._dictationConnectPromise) {
         await this._dictationConnectPromise.catch(() => {});
       }
+      // A start cancelled or overflowed while it waited must not dial at all.
+      if (start?.failure) throw start.failure;
 
       clearDictationIdleTimer();
       this._dictationPreviewEnabled = !!options.preview;
@@ -9871,8 +9879,13 @@ class IPCHandlers {
       // the worklet before calling start), so the old session is retired without
       // a wait, and without a commit where the client supports skipping it: a
       // commit would only surface its head as a final from the wrong session.
-      // Frames that reached the old session before the start are dropped with it.
+      // Frames an unused session still holds in its cold-start buffer were never
+      // sent, so they open the new session; frames it already sent are lost.
+      let carriedAudio = [];
       if (this._dictationStreaming) {
+        if (!this._dictationStreaming.claimed) {
+          carriedAudio = [...(this._dictationStreaming.coldStartBuffer ?? [])];
+        }
         retireDictationStreaming(this._dictationStreaming);
         this._dictationStreaming = null;
       }
@@ -9897,6 +9910,7 @@ class IPCHandlers {
         streaming.beginConnecting();
         streaming.connectionKey = dictationConnectionKey(options);
         this._dictationStreaming = streaming;
+        for (const buffer of carriedAudio) streaming.sendAudio(buffer);
         try {
           if (provider === "orukeet") {
             if (isCloud) {
@@ -9914,7 +9928,7 @@ class IPCHandlers {
                 baseUrl: options.baseUrl,
               });
             }
-            return;
+            return streaming;
           }
           const apiKey = await fetchRealtimeToken(event, {
             mode: options.mode,
@@ -9943,6 +9957,7 @@ class IPCHandlers {
               preconfigured: isCloud,
             });
           }
+          return streaming;
         } catch (err) {
           if (provider === "orukeet") await streaming.disconnect().catch(() => {});
           if (this._dictationStreaming === streaming) this._dictationStreaming = null;
@@ -9952,7 +9967,7 @@ class IPCHandlers {
 
       this._dictationConnectPromise = connectInner();
       try {
-        await this._dictationConnectPromise;
+        return await this._dictationConnectPromise;
       } finally {
         this._dictationConnectPromise = null;
       }
@@ -10708,6 +10723,12 @@ class IPCHandlers {
 
     const warmupDictationStreaming = async (event, options) => {
       await this._dictationConnectPromise?.catch(() => {});
+      // Post-dictation re-warms queue behind one another, so one can run after a
+      // start has opened its session; redialing then would retire the session
+      // the recording's audio goes to while the start reports success.
+      if (dictationStart || this._dictationStreaming?.claimed) {
+        return { success: true, alreadyWarm: true };
+      }
       if (!isUnusedOrukeetConnection(this._dictationStreaming, options)) {
         await connectDictationStreaming(event, options);
         startDictationIdleTimer();
@@ -10726,24 +10747,116 @@ class IPCHandlers {
       return warmup;
     });
 
+    // A socket factory and its session handshake can each take 15 seconds.
+    // Hold that full window at the worklet's 16kHz rate (960KB).
+    const DICTATION_START_AUDIO_MAX = 30 * 16000 * 2;
+
+    const retireDictationSession = (streaming) => {
+      retireDictationStreaming(streaming);
+      if (this._dictationStreaming === streaming) this._dictationStreaming = null;
+    };
+
+    // Ends the recording before its start settles: the start fails at once, its
+    // queued audio is dropped, and nothing is committed. The current session is
+    // the start's own or the one it was replacing; a session the connect has yet
+    // to deliver is retired when it arrives.
+    const abandonDictationStart = (error) => {
+      const start = dictationStart;
+      if (start && !start.failure) {
+        start.failure = error;
+        start.buffering = false;
+        start.audio = [];
+        start.abandon(error);
+      }
+      if (this._dictationStreaming) retireDictationSession(this._dictationStreaming);
+    };
+
     ipcMain.handle("dictation-realtime-start", async (event, options = {}) => {
+      if (dictationStart) {
+        return { success: false, code: "OPERATION_IN_PROGRESS", error: "Operation in progress" };
+      }
+      let abandon;
+      const abandoned = new Promise((_resolve, reject) => {
+        abandon = reject;
+      });
+      abandoned.catch(() => {});
+      // OpenAI and Tinfoil finish setup without audio, so their first frames
+      // wait here, away from an older warmup a different model is replacing,
+      // and go to the selected session once it is ready.
+      const start = {
+        buffering: options.provider !== "orukeet",
+        audio: [],
+        bytes: 0,
+        failure: null,
+        abandon,
+      };
+      dictationStart = start;
+      let connecting = null;
       try {
         clearDictationIdleTimer();
         this._dictationPreviewEnabled = !!options.preview;
+        let streaming = this._dictationStreaming;
         if (
-          !this._dictationStreaming?.isConnected ||
-          this._dictationStreaming.connectionKey !== dictationConnectionKey(options)
+          !streaming?.isConnected ||
+          streaming.connectionKey !== dictationConnectionKey(options)
         ) {
-          await connectDictationStreaming(event, options);
+          connecting = connectDictationStreaming(event, options, start);
+          streaming = await Promise.race([connecting, abandoned]);
         }
+        // Claimed until its stop or cancel, so a queued re-warm leaves it alone.
+        streaming.claimed = true;
+        for (const buffer of start.audio) streaming.sendAudio(buffer);
         return { success: true };
       } catch (err) {
-        return streamingStartFailure(err);
+        if (start.failure) connecting?.then(retireDictationSession, () => {});
+        return streamingStartFailure(start.failure || err);
+      } finally {
+        if (dictationStart === start) dictationStart = null;
+        start.buffering = false;
+        start.audio = [];
       }
     });
 
     ipcMain.on("dictation-realtime-send", (_event, buffer) => {
+      const start = dictationStart;
+      if (start?.buffering) {
+        const bytes = Buffer.from(buffer);
+        if (start.bytes + bytes.length > DICTATION_START_AUDIO_MAX) {
+          // Fail now rather than when the connect settles: the renderer keeps
+          // the whole capture in its fallback recording and transcribes that.
+          abandonDictationStart(
+            Object.assign(
+              new Error(
+                "Realtime connection took too long to open; the opening audio buffer is full"
+              ),
+              {
+                code: "REALTIME_START_AUDIO_OVERFLOW",
+                messageKey: "streaming.errors.slowStart.description",
+              }
+            )
+          );
+          return;
+        }
+        start.audio.push(bytes);
+        start.bytes += bytes.length;
+        return;
+      }
       this._dictationStreaming?.sendAudio(Buffer.from(buffer));
+    });
+
+    // Sent the moment the user cancels, before the renderer waits for its start
+    // to settle: a start still connecting must not flush the cancelled audio,
+    // and a stop would commit it.
+    ipcMain.handle("dictation-realtime-cancel", async () => {
+      clearDictationIdleTimer();
+      abandonDictationStart(
+        Object.assign(new Error("Dictation cancelled"), { code: "DICTATION_CANCELLED" })
+      );
+      if (this._dictationPreviewEnabled) {
+        this.windowManager.hideTranscriptionPreview();
+        this._dictationPreviewEnabled = false;
+      }
+      return { success: true };
     });
 
     ipcMain.handle("dictation-realtime-finalize", async () => {
@@ -10758,6 +10871,9 @@ class IPCHandlers {
     });
 
     ipcMain.handle("dictation-realtime-stop", async () => {
+      // The renderer holds its stop until the start settles; one that arrives
+      // earlier has nothing it could finish, so the queued audio is dropped.
+      if (dictationStart) abandonDictationStart(new Error("Dictation stopped during startup."));
       clearDictationIdleTimer();
       if (!this._dictationStreaming) {
         return { success: true, text: "" };

@@ -612,6 +612,10 @@
         "timeout": "Timeout di rete — VPN, captive portal o connessione instabile.",
         "tls": "Handshake TLS fallito — controlla l'orologio di sistema o un proxy aziendale.",
         "fallback": "Cloud non raggiungibile — uso del motore locale per questa registrazione."
+      },
+      "slowStart": {
+        "title": "La trascrizione dal vivo non si è connessa",
+        "description": "La connessione per la trascrizione dal vivo ha impiegato troppo tempo ad aprirsi. Riprova."
       }
     }
   },

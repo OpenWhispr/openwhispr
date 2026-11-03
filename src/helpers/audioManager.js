@@ -454,6 +454,7 @@ const makeDictationRealtimeProvider = (id) => ({
   start: (opts) => window.electronAPI.dictationRealtimeStart({ ...opts, provider: id }),
   send: (buf) => window.electronAPI.dictationRealtimeSend(buf),
   stop: () => window.electronAPI.dictationRealtimeStop(),
+  cancel: () => window.electronAPI.dictationRealtimeCancel(),
   onPartial: (cb) => window.electronAPI.onDictationRealtimePartial(cb),
   onFinal: (cb) => window.electronAPI.onDictationRealtimeFinal(cb),
   onError: (cb) => window.electronAPI.onDictationRealtimeError(cb),
@@ -5197,6 +5198,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       });
       return { needsFallback: true };
     }
+    // Main gave up holding the opening audio for a realtime connect that never
+    // opened. The fallback recorder has held it since the mic opened, so the
+    // recording carries on and stop transcribes that capture through batch.
+    if (res.code === "REALTIME_START_AUDIO_OVERFLOW" && this.streamingFallbackRecorder) {
+      this.streamingFallbackReason = "start_audio_overflow";
+      logger.warn(
+        "Realtime connection too slow for the opening audio, falling back to batch recording",
+        { error: res.error },
+        "streaming"
+      );
+      return { needsFallback: true };
+    }
     const fallbackReason = resolveStreamingStartFallback({
       providerName: this.getActiveStreamingProviderName(),
       cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
@@ -5514,14 +5527,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this._settleStreamingStart();
       if (startWasCancelled()) return false;
 
-      // A managed Orukeet start failure (refused socket, account cap, outage)
-      // keeps this capture: the fallback recorder has held the audio since the
-      // mic opened, and reopening the mic for a batch recording would lose it.
+      // A managed Orukeet start failure (refused socket, account cap, outage),
+      // or a realtime start whose opening audio overflowed, keeps this capture:
+      // the fallback recorder has held the audio since the mic opened, and
+      // reopening the mic for a batch recording would lose it.
       if (result.needsFallback && this.streamingFallbackReason && this.streamingFallbackRecorder) {
         this._streamingFailoverReason = this.streamingFallbackReason;
         this.streamingFallbackReason = null;
         logger.info(
-          "Managed Orukeet unavailable, recording for the Cloud upload",
+          "Streaming session unavailable, recording for the batch upload",
           { reason: this._streamingFailoverReason },
           "streaming"
         );
@@ -5621,6 +5635,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       } else if (error.code === "NETWORK_ERROR") {
         errorTitle = "streaming.errors.cloudUnreachable.title";
         errorDescription = error.messageKey || "streaming.errors.cloudUnreachable.generic";
+      } else if (error.code === "REALTIME_START_AUDIO_OVERFLOW") {
+        // Described by its messageKey.
+        errorTitle = "streaming.errors.slowStart.title";
       } else if (error.code === "LIMIT_REACHED") {
         // Titled by getRecordingErrorTitle, like the batch upload's limit error.
         errorDescription = error.message;
@@ -5745,6 +5762,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const spool = this._takeRecordingSpool();
     const providerName = this.getActiveStreamingProviderName();
     const cancelPromise = (async () => {
+      // Main hears of the cancel before this waits for the start to settle: a
+      // start still connecting would otherwise send it the cancelled audio, and
+      // a stop would commit it.
+      const provider = this.getStreamingProvider(providerName);
+      // A failure here is reported by the second cancel below.
+      const providerCancel = provider?.cancel
+        ? Promise.resolve(provider.cancel()).catch(() => {})
+        : null;
       this._requestStreamingCancellation();
       this.stopRequestedDuringStreamingStart = false;
       this.recordingStartTime = null;
@@ -5765,7 +5790,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           this.micRecovery.stop();
           this.cleanupStreamingAudio();
           this.cleanupStreamingListeners(sessionId);
-          return this.getStreamingProvider(providerName).stop?.();
+          if (!providerCancel) return provider?.stop?.();
+          // Again once the start has settled: one that reached main after the
+          // first cancel (it awaits mic recovery and a session refresh after its
+          // last cancellation check) has opened a session since.
+          return providerCancel.then(() => provider.cancel());
         })
         .catch((error) => {
           logger.debug(
@@ -5981,6 +6010,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         { textLength: finalText.length },
         "streaming"
       );
+    }
+
+    // A stop that ran out of time with turns still transcribing holds only part
+    // of the recording, so the fallback recording is transcribed instead. The
+    // partial text is kept for the case where that fails.
+    const streamIncomplete = stopResult?.incomplete === true && fallbackBlob?.size > 0;
+    const incompleteText = streamIncomplete ? finalText : "";
+    if (streamIncomplete) {
+      logger.info(
+        "Streaming stop was incomplete, using the fallback recording",
+        { textLength: finalText.length },
+        "streaming"
+      );
+      finalText = "";
     }
 
     this.cleanupStreamingListeners(sessionId);
@@ -6341,7 +6384,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     };
     if (
       !finalText &&
-      (failoverReason ? !failoverSilent : !finalAcknowledged && durationSeconds > 2) &&
+      (failoverReason
+        ? !failoverSilent
+        : streamIncomplete || (!finalAcknowledged && durationSeconds > 2)) &&
       fallbackBlob?.size > 0
     ) {
       const target = resolveStreamingFallbackTarget(getSettings());
@@ -6368,10 +6413,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                     durationSeconds,
                     analyticsOccurredAt: analyticsOccurredAt.toISOString(),
                     // The tag feeds the Orukeet rollout's fallback rate; other
-                    // providers still fall back, just untagged. Only managed
-                    // Orukeet fails over, and its reason outlives the cached
-                    // config a refused start drops.
-                    ...(failoverReason || isOrukeetStream
+                    // providers, a failed-over realtime start included, fall
+                    // back untagged. An Orukeet failover's reason outlives the
+                    // cached config a refused start drops.
+                    ...(isOrukeetStream
                       ? { streamingFallbackReason: failoverReason || "stream_no_final" }
                       : {}),
                   },
@@ -6394,6 +6439,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
       }
     }
+
+    // The fallback recording gave nothing to replace the partial stream with.
+    if (!finalText && incompleteText && !failureReport) finalText = incompleteText;
 
     if (finalText) {
       // The batch fallback routes through processTranscription, which already

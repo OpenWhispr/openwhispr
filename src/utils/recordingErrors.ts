@@ -21,7 +21,9 @@ export function getRecordingErrorTitle(error: RecordingError, t: TFunction): str
   if (error.selectionEditFatal) {
     return t("hooks.audioRecording.selectionEditing.notAppliedTitle");
   }
-  if (error.code === "NETWORK_ERROR") return t(error.title);
+  if (error.code === "NETWORK_ERROR" || error.code === "REALTIME_START_AUDIO_OVERFLOW") {
+    return t(error.title);
+  }
   if (error.code === "AUTH_EXPIRED" || error.code === "AUTH_REQUIRED") {
     return t("hooks.audioRecording.errorTitles.sessionExpired");
   }

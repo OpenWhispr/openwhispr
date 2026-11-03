@@ -612,6 +612,10 @@
         "timeout": "Network timed out — VPN, captive portal, or unstable connection.",
         "tls": "TLS handshake failed — check your system clock or for a corporate proxy.",
         "fallback": "Cloud unreachable — using local engine for this recording."
+      },
+      "slowStart": {
+        "title": "Live transcription didn't connect",
+        "description": "The live transcription connection took too long to open. Please try again."
       }
     }
   },
