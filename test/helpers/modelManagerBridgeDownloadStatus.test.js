@@ -313,6 +313,7 @@ test("downloadModel permits distinct local models to download concurrently", asy
     continueDownloads = resolve;
   });
   const modelManager = loadModelManager({
+    checkDiskSpace: async () => ({ ok: true, availableBytes: Infinity }),
     downloadFile: async (_url, destination, options) => {
       started.push(destination);
       options.onProgress?.(1, 2);

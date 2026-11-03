@@ -1,12 +1,23 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Calendar, ChevronDown, Users, X } from "../icons";
+import { Calendar, ChevronDown, ExternalLink, Users, Video, X } from "../icons";
 import { cn } from "../lib/utils";
 import { NOTE_META_CHIP_CLASS } from "./shared";
+import NoteEventPicker, { EventDot } from "./NoteEventPicker";
 import { Popover, PopoverTrigger, PopoverContent } from "../ui/popover";
 import PersonAvatar from "../ui/PersonAvatar";
-import type { CalendarAttendee } from "../../types/calendar";
+import type { CalendarAttendee, CalendarEvent, LinkableCalendarEvent } from "../../types/calendar";
+import { getMeetingJoinUrl } from "../../helpers/meetingJoinUrl";
+import { useUiLocale } from "../../hooks/useUiLocale";
 import { syncSessionExpectedCountFromParticipants } from "../../stores/meetingRecordingStore";
+import { useSettingsStore } from "../../stores/settingsStore";
+import { parseAttendees } from "../../utils/calendarAttendees";
+import { formatEventWhen, normalizeDbDate } from "../../utils/dateFormatting";
+import {
+  attendeesForUser,
+  mergeEventAttendees,
+  removeEventAttendees,
+} from "../../utils/noteAttendees";
 
 const MAX_STACKED_AVATARS = 2;
 
@@ -16,25 +27,84 @@ interface NoteParticipantsProps {
   /** When present the capsule leads with the note's date, so date and people read as one fact. */
   dateLabel?: string;
   dateTitle?: string;
+  noteCreatedAt: string;
+  /** The note's calendar_event_id; "" or null when no event is linked. */
+  linkedEventId: string | null;
+  /**
+   * The linked event's stored row: null when this device doesn't have it,
+   * undefined while the lookup is still running.
+   */
+  linkedEvent: CalendarEvent | null | undefined;
+  /** Viewers see the linked event and can join it, but not change it. */
+  canEdit: boolean;
+  /** Whether the note is the user's own, so their calendar's `self` flag may mark them on it. */
+  ownedByUser: boolean;
 }
+
+const EVENT_ACTION_CLASS =
+  "flex flex-1 items-center justify-center gap-1.5 px-2 py-1.5 rounded-full border border-border/70 text-xs text-foreground/70 hover:bg-foreground/5 transition-colors cursor-pointer";
 
 export default function NoteParticipants({
   noteId,
   participants,
   dateLabel,
   dateTitle,
+  noteCreatedAt,
+  linkedEventId,
+  linkedEvent,
+  canEdit,
+  ownedByUser,
 }: NoteParticipantsProps) {
   const { t } = useTranslation();
+  const locale = useUiLocale();
+  const calendarConnected = useSettingsStore(
+    (s) => s.gcalConnected || s.mcalConnected || s.appleCalendarConnected
+  );
   const [localParticipants, setLocalParticipants] = useState(participants);
   const [search, setSearch] = useState("");
   const [suggestions, setSuggestions] = useState<
     Array<{ email: string; display_name: string | null }>
   >([]);
   const [open, setOpen] = useState(false);
+  const [view, setView] = useState<"people" | "events">("people");
+  // Read by the popover's Escape handler, which can run with a stale closure.
+  const viewRef = useRef(view);
+  const [events, setEvents] = useState<LinkableCalendarEvent[] | null>(null);
+  const [eventsFailed, setEventsFailed] = useState(false);
+  const [localLinkedId, setLocalLinkedId] = useState(linkedEventId || null);
 
   useEffect(() => {
     setLocalParticipants(participants);
   }, [participants]);
+
+  useEffect(() => {
+    setLocalLinkedId(linkedEventId || null);
+  }, [linkedEventId]);
+
+  useEffect(() => {
+    viewRef.current = view;
+  }, [view]);
+
+  const noteDay = useMemo(() => normalizeDbDate(noteCreatedAt), [noteCreatedAt]);
+
+  // Edit rights can resolve after the dropdown opened (a shared note's role
+  // loads from the network); a viewer never keeps the event list.
+  useEffect(() => {
+    if (!canEdit) setView("people");
+  }, [canEdit]);
+
+  useEffect(() => {
+    if (!open || !canEdit) return;
+    let cancelled = false;
+    window.electronAPI.calendarGetLinkableEvents?.().then((result) => {
+      if (cancelled) return;
+      setEvents(result?.success ? result.events : []);
+      setEventsFailed(!result?.success);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, canEdit]);
 
   useEffect(() => {
     if (!open) return;
@@ -48,14 +118,62 @@ export default function NoteParticipants({
   }, [search, open, localParticipants]);
 
   const saveParticipants = useCallback(
-    (updated: CalendarAttendee[]) => {
+    (updated: CalendarAttendee[], extra: { calendar_event_id?: string } = {}) => {
       syncSessionExpectedCountFromParticipants(noteId, updated);
       window.electronAPI.updateNote(noteId, {
         participants: JSON.stringify(updated),
+        ...extra,
       });
     },
     [noteId]
   );
+
+  const linkEvent = useCallback(
+    (event: LinkableCalendarEvent) => {
+      setView("people");
+      // Re-picking the linked event must not re-add guests the user removed.
+      if (event.id === localLinkedId) return;
+      // Switching events swaps the previous event's guests for this one's.
+      const kept = localLinkedId
+        ? removeEventAttendees(localParticipants, localLinkedId)
+        : localParticipants;
+      // The guests come from this user's copy of the event, whose `self` is
+      // them; on someone else's note `self` stays with whoever recorded it.
+      const guests = attendeesForUser(parseAttendees(event), ownedByUser);
+      const merged = mergeEventAttendees(kept, guests, event.id);
+      setLocalParticipants(merged);
+      setLocalLinkedId(event.id);
+      saveParticipants(merged, { calendar_event_id: event.id });
+    },
+    [localLinkedId, localParticipants, ownedByUser, saveParticipants]
+  );
+
+  const unlinkEvent = useCallback(() => {
+    setView("people");
+    const kept = localLinkedId
+      ? removeEventAttendees(localParticipants, localLinkedId)
+      : localParticipants;
+    setLocalParticipants(kept);
+    setLocalLinkedId(null);
+    // "" (not NULL) so the unlink syncs: the cloud keeps a NULL as "unchanged".
+    saveParticipants(kept, { calendar_event_id: "" });
+  }, [localLinkedId, localParticipants, saveParticipants]);
+
+  const resolvedEvent: (CalendarEvent & { calendar_color?: string | null }) | null = localLinkedId
+    ? (events?.find((event) => event.id === localLinkedId) ??
+      (linkedEvent?.id === localLinkedId ? linkedEvent : null))
+    : null;
+  const joinUrl = getMeetingJoinUrl(resolvedEvent);
+  const calendarUrl =
+    resolvedEvent?.web_link?.startsWith("https://") &&
+    (resolvedEvent.provider === "google" || resolvedEvent.provider === "microsoft")
+      ? resolvedEvent.web_link
+      : null;
+  const linkLookupDone = linkedEvent !== undefined && (!canEdit || events !== null);
+  const openInCalendarLabel =
+    resolvedEvent?.provider === "microsoft"
+      ? t("notes.eventLink.openInOutlook")
+      : t("notes.eventLink.openInGoogle");
 
   const addParticipant = useCallback(
     (email: string, displayName?: string | null) => {
@@ -112,7 +230,10 @@ export default function NoteParticipants({
       open={open}
       onOpenChange={(o) => {
         setOpen(o);
-        if (!o) setSearch("");
+        if (!o) {
+          setSearch("");
+          setView("people");
+        }
       }}
     >
       <PopoverTrigger asChild>
@@ -155,82 +276,204 @@ export default function NoteParticipants({
           <ChevronDown size={14} className="shrink-0 text-foreground/50" />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-72 p-0">
-        <div className="p-2 border-b border-border/70">
-          <input
-            dir="auto"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={t("notes.participants.addPlaceholder", "Add attendees...")}
-            className="w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground placeholder:text-foreground/45 outline-none border-none appearance-none"
-            autoFocus
+      <PopoverContent
+        className="w-72 p-0"
+        // The popover takes Escape on document capture, before the list's own
+        // input sees it, so step back from the event list here instead.
+        onEscapeKeyDown={(event) => {
+          if (viewRef.current !== "events") return;
+          event.preventDefault();
+          setView("people");
+        }}
+      >
+        {view === "events" && canEdit ? (
+          <NoteEventPicker
+            events={events}
+            loadFailed={eventsFailed}
+            calendarConnected={calendarConnected}
+            noteDay={noteDay}
+            linkedEventId={localLinkedId}
+            onSelect={linkEvent}
+            onRemove={unlinkEvent}
+            onBack={() => setView("people")}
           />
-        </div>
-
-        <div className="max-h-64 overflow-y-auto">
-          {search && suggestions.length > 0 && (
-            <div className="p-1 border-b border-border/70">
-              {suggestions.slice(0, 5).map((contact) => (
-                <button
-                  key={contact.email}
-                  onClick={() => addParticipant(contact.email, contact.display_name)}
-                  className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-foreground/70 hover:bg-foreground/5 transition-colors cursor-pointer"
-                >
-                  <PersonAvatar email={contact.email} displayName={contact.display_name} />
-                  <span dir="auto" className="truncate">
-                    {contact.display_name || contact.email}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {search && !search.includes("@") && suggestions.length === 0 && (
-            <div className="px-3 py-2 text-[11px] text-foreground/45">
-              {t("notes.participants.typeEmail", "Type an email to add...")}
-            </div>
-          )}
-
-          {grouped.map(([domain, members]) => (
-            <div key={domain} className="p-1">
-              <div dir="ltr" className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
-                {domain}
-              </div>
-              {members.map((p) => (
-                <div
-                  key={p.email}
-                  className="group flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-foreground/5 transition-colors"
-                >
-                  <PersonAvatar email={p.email} displayName={p.displayName} />
-
-                  <span dir="auto" className="flex-1 min-w-0 truncate text-xs text-foreground/70">
-                    {p.displayName || p.email.split("@")[0]}
-                    {p.self && (
-                      <span className="ms-1 text-foreground/45">
-                        {t("notes.participants.me", "(me)")}
+        ) : (
+          <>
+            {(canEdit || localLinkedId) && (
+              <div className="p-1 border-b border-border/70">
+                <EventHeaderRow canEdit={canEdit} onOpenEvents={() => setView("events")}>
+                  {resolvedEvent ? (
+                    <>
+                      <EventDot color={resolvedEvent.calendar_color ?? null} />
+                      <span className="flex-1 min-w-0">
+                        <span dir="auto" className="block truncate text-foreground/80">
+                          {resolvedEvent.summary || t("upcoming.untitledEvent")}
+                        </span>
+                        <span className="block truncate text-[11px] text-foreground/45">
+                          {formatEventWhen(resolvedEvent, locale, t("notes.eventLink.allDay"))}
+                        </span>
                       </span>
+                    </>
+                  ) : localLinkedId ? (
+                    <span className="flex-1 min-w-0">
+                      <span className="block truncate text-foreground/70">
+                        {t("notes.eventLink.linkedEvent")}
+                      </span>
+                      {linkLookupDone && (
+                        <span className="block text-[11px] text-foreground/45">
+                          {t("notes.eventLink.unavailable")}
+                        </span>
+                      )}
+                    </span>
+                  ) : (
+                    <span className="flex-1 min-w-0">
+                      <span className="block truncate text-foreground/80">
+                        {t("notes.eventLink.selectEvent")}
+                      </span>
+                      {dateTitle && (
+                        <span className="block truncate text-[11px] text-foreground/45">
+                          {dateTitle}
+                        </span>
+                      )}
+                    </span>
+                  )}
+                </EventHeaderRow>
+                {(joinUrl || calendarUrl) && (
+                  <div className="flex gap-2 px-2 pt-1 pb-1.5">
+                    {joinUrl && (
+                      <button
+                        type="button"
+                        onClick={() => window.electronAPI.openExternal(joinUrl)}
+                        className={EVENT_ACTION_CLASS}
+                      >
+                        <Video size={14} className="shrink-0" />
+                        {t("notes.eventLink.join")}
+                      </button>
                     )}
-                  </span>
+                    {calendarUrl && (
+                      <button
+                        type="button"
+                        onClick={() => window.electronAPI.openExternal(calendarUrl)}
+                        // The short label keeps its own accessible name; the
+                        // tooltip says where it opens.
+                        title={joinUrl ? openInCalendarLabel : undefined}
+                        className={EVENT_ACTION_CLASS}
+                      >
+                        <ExternalLink size={14} className="shrink-0" />
+                        {joinUrl ? t("notes.eventLink.calendar") : openInCalendarLabel}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
-                  <button
-                    onClick={() => removeParticipant(p.email)}
-                    className="shrink-0 opacity-0 group-hover:opacity-100 p-0.5 rounded text-foreground/45 hover:text-foreground/60 transition-opacity cursor-pointer"
+            <div className="p-2 border-b border-border/70">
+              <input
+                dir="auto"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={t("notes.participants.addPlaceholder", "Add attendees...")}
+                className="w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground placeholder:text-foreground/45 outline-none border-none appearance-none"
+                autoFocus
+              />
+            </div>
+
+            <div className="max-h-64 overflow-y-auto">
+              {search && suggestions.length > 0 && (
+                <div className="p-1 border-b border-border/70">
+                  {suggestions.slice(0, 5).map((contact) => (
+                    <button
+                      key={contact.email}
+                      onClick={() => addParticipant(contact.email, contact.display_name)}
+                      className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-foreground/70 hover:bg-foreground/5 transition-colors cursor-pointer"
+                    >
+                      <PersonAvatar email={contact.email} displayName={contact.display_name} />
+                      <span dir="auto" className="truncate">
+                        {contact.display_name || contact.email}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {search && !search.includes("@") && suggestions.length === 0 && (
+                <div className="px-3 py-2 text-[11px] text-foreground/45">
+                  {t("notes.participants.typeEmail", "Type an email to add...")}
+                </div>
+              )}
+
+              {grouped.map(([domain, members]) => (
+                <div key={domain} className="p-1">
+                  <div
+                    dir="ltr"
+                    className="px-2 py-1 text-[11px] font-medium text-muted-foreground"
                   >
-                    <X size={12} />
-                  </button>
+                    {domain}
+                  </div>
+                  {members.map((p) => (
+                    <div
+                      key={p.email}
+                      className="group flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-foreground/5 transition-colors"
+                    >
+                      <PersonAvatar email={p.email} displayName={p.displayName} />
+
+                      <span
+                        dir="auto"
+                        className="flex-1 min-w-0 truncate text-xs text-foreground/70"
+                      >
+                        {p.displayName || p.email.split("@")[0]}
+                        {p.self && (
+                          <span className="ms-1 text-foreground/45">
+                            {t("notes.participants.me", "(me)")}
+                          </span>
+                        )}
+                      </span>
+
+                      <button
+                        onClick={() => removeParticipant(p.email)}
+                        className="shrink-0 opacity-0 group-hover:opacity-100 p-0.5 rounded text-foreground/45 hover:text-foreground/60 transition-opacity cursor-pointer"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               ))}
-            </div>
-          ))}
 
-          {localParticipants.length === 0 && !search && (
-            <div className="px-3 py-4 text-center text-[11px] text-foreground/45">
-              {t("notes.participants.typeEmail", "Type an email to add...")}
+              {localParticipants.length === 0 && !search && (
+                <div className="px-3 py-4 text-center text-[11px] text-foreground/45">
+                  {t("notes.participants.typeEmail", "Type an email to add...")}
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </>
+        )}
       </PopoverContent>
     </Popover>
+  );
+}
+
+function EventHeaderRow({
+  canEdit,
+  onOpenEvents,
+  children,
+}: {
+  canEdit: boolean;
+  onOpenEvents: () => void;
+  children: ReactNode;
+}) {
+  const className = "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-start text-xs";
+  if (!canEdit) return <div className={className}>{children}</div>;
+  return (
+    <button
+      type="button"
+      onClick={onOpenEvents}
+      className={cn(className, "hover:bg-foreground/5 transition-colors cursor-pointer")}
+    >
+      {children}
+      <ChevronDown size={14} className="shrink-0 text-foreground/50" />
+    </button>
   );
 }

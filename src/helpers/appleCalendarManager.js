@@ -3,6 +3,7 @@ const { app } = require("electron");
 const debugLogger = require("./debugLogger");
 const { resolveBundledBinary } = require("./binaryResolver");
 const { extractMeetingUrl } = require("./meetingJoinUrl");
+const { CALENDAR_LOOKBACK_MS } = require("./calendarCacheWindow");
 const { broadcastToWindows } = require("./windowBroadcast");
 const { FOCUS_SYNC_THROTTLE_MS } = require("./calendarSyncInterval");
 
@@ -106,6 +107,14 @@ class AppleCalendarManager {
     }
   }
 
+  _helperArgs(requestAccess) {
+    return [
+      "--lookback-seconds",
+      String(CALENDAR_LOOKBACK_MS / 1000),
+      ...(requestAccess ? ["--request"] : []),
+    ];
+  }
+
   _spawnHelper(requestAccess) {
     if (this._restartTimer) {
       clearTimeout(this._restartTimer);
@@ -120,7 +129,7 @@ class AppleCalendarManager {
     }
 
     let command = binaryPath;
-    let args = requestAccess ? ["--request"] : [];
+    let args = this._helperArgs(requestAccess);
     if (!app.isPackaged) {
       // A terminal-launched dev app makes the terminal the helper's TCC
       // "responsible process", and its missing calendar usage strings abort

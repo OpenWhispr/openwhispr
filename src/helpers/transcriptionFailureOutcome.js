@@ -23,5 +23,7 @@ export const transcriptionFailureOutcome = (error) => {
   for (const key of IPC_ERROR_FIELDS) {
     if (error[key] !== undefined) report[key] = error[key];
   }
+  // A transcript that outlived a later failure gets the pill's View Transcript.
+  if (error.transcript) report.transcript = error.transcript;
   return { noAudio: false, keepAudio: true, report };
 };

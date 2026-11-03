@@ -43,13 +43,15 @@ const PROVIDERS = [
     base: "https://api.openai.com/v1",
     // Registry models only — a non-registry id skips the suppression gate and
     // draws a 400 from OpenAI's strict parser that no app user ever hits.
-    models: ["gpt-4.1-mini", "gpt-5-mini"],
+    // gpt-4.1-mini is the last registry model that takes temperature (legacy,
+    // shut down 2027-01-14); gpt-6-luna is where retired small models land.
+    models: ["gpt-4.1-mini", "gpt-6-luna"],
   },
   {
     id: "groq",
     keyEnv: "LLM_CANARY_GROQ_KEY",
     base: "https://api.groq.com/openai/v1",
-    models: ["openai/gpt-oss-120b", "openai/gpt-oss-20b"],
+    models: ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"],
   },
   {
     id: "tinfoil",
@@ -161,7 +163,7 @@ const NOTE_PROBES = [
   {
     id: "gemini",
     keyEnv: "LLM_CANARY_GEMINI_KEY",
-    model: "gemini-3.5-flash",
+    model: "gemini-3.6-flash",
     provider: geminiProvider,
     config: {},
   },

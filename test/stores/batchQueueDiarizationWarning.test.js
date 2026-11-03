@@ -32,6 +32,8 @@ test("batch uploads retain diarization warnings separately from transcription wa
       "/components/notes/shared": `
         export const DOWNLOAD_ERROR_KEYS = {};
         export function transcriptionErrorKey() { return null; }
+        export function isUploadPolicyRefusal() { return false; }
+        export function uploadRestrictionKey() { return ""; }
       `,
       "/services/uploadNotes": `
         export async function saveUploadNote() {
@@ -40,9 +42,10 @@ test("batch uploads retain diarization warnings separately from transcription wa
         export function uploadTitleFallback() { return "Uploaded note"; }
       `,
       "/stores/settingsStore": "export function getSettings() { return {}; }",
-      "/stores/policyRules": "export function isTranscriptionContextAllowed() { return true; }",
+      "/stores/policyRules":
+        "export function isTranscriptionContextAllowed() { return true; } export function isAudioFeatureAllowed() { return true; }",
       "/stores/policyStore": `
-        export const usePolicyStore = { getState() { return {}; } };
+        export const usePolicyStore = { getState() { return {}; }, subscribe() { return () => {}; } };
       `,
     },
   });

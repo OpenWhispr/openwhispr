@@ -4,6 +4,7 @@ const { createHash } = require("crypto");
 const path = require("path");
 const { app } = require("electron");
 const debugLogger = require("./debugLogger");
+const { warnGpuFallback } = require("./gpuFallbackLog");
 const {
   downloadFile,
   fetchJson,
@@ -85,7 +86,16 @@ class GpuBinaryManager {
     const binaryPath = path.join(this.binDir, assetConfig.outputName);
     try {
       if (!fs.existsSync(binaryPath)) return null;
-      if (getMissingRequiredLibraries(this.binDir, assetConfig).length === 0) return binaryPath;
+      const missing = getMissingRequiredLibraries(this.binDir, assetConfig);
+      if (missing.length === 0) return binaryPath;
+      if (this._lastLoggedMissingLibraries !== missing.join(",")) {
+        this._lastLoggedMissingLibraries = missing.join(",");
+        warnGpuFallback("GPU pack binary present but missing required runtime libraries", {
+          pack: this.config.name,
+          binaryPath,
+          missingLibraries: missing,
+        });
+      }
     } catch {}
     return null;
   }

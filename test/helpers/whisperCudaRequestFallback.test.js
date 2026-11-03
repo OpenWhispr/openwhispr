@@ -98,7 +98,7 @@ function createDeferred() {
   return { promise, resolve, reject };
 }
 
-function createManager(port, { useCuda, useVulkan = false }) {
+function createManager(port, { useCuda, useVulkan = false, fallbackToVulkan = false }) {
   const manager = new WhisperServerManager();
   manager.ready = true;
   manager.hostname = "127.0.0.1";
@@ -109,7 +109,7 @@ function createManager(port, { useCuda, useVulkan = false }) {
   manager.process = {};
   manager._lastProcessInfo = () => ({ stderr: "", exitCode: null, signal: null });
   manager.modelPath = "/tmp/model.bin";
-  manager.lastStartOptions = { useCuda, useVulkan };
+  manager.lastStartOptions = { useCuda, useVulkan, fallbackToVulkan };
   manager._convertToWav = async (buffer) => buffer;
   return manager;
 }
@@ -154,6 +154,49 @@ test("falls back to CPU and retries once when the CUDA server dies mid-request",
   assert.equal(startCalls[0].modelPath, "/tmp/model.bin");
   assert.equal(startCalls[0].options.useCuda, false);
   assert.equal(startCalls[0].options.useVulkan, false);
+});
+
+test("falls back to an available Vulkan pack when CUDA dies mid-request", async (t) => {
+  let manager;
+  let requestCount = 0;
+
+  const { server, port } = await startServer((req, res) => {
+    requestCount += 1;
+    if (requestCount === 1) {
+      manager.process = null;
+      req.socket.destroy();
+      return;
+    }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ text: "hello" }));
+  });
+  t.after(() => server.close());
+
+  manager = createManager(port, { useCuda: true, fallbackToVulkan: true });
+
+  const startCalls = [];
+  manager.start = async (modelPath, options) => {
+    startCalls.push({ modelPath, options });
+    manager.useCuda = false;
+    manager.useVulkan = true;
+    manager.ready = true;
+  };
+
+  let fallbackBackend = null;
+  manager.on("cuda-fallback", (details) => {
+    fallbackBackend = details.fallbackBackend;
+  });
+
+  const result = await manager.transcribe(Buffer.from("audio"));
+
+  assert.equal(result.text, "hello");
+  assert.equal(requestCount, 2);
+  assert.equal(fallbackBackend, "vulkan");
+  assert.equal(startCalls.length, 1);
+  assert.equal(startCalls[0].options.useCuda, false);
+  assert.equal(startCalls[0].options.useVulkan, true);
+  assert.equal(Object.hasOwn(startCalls[0].options, "fallbackToVulkan"), false);
+  assert.equal(manager.gpuFallbackActive, false);
 });
 
 test("falls back to CPU and emits gpu-fallback when a Vulkan server dies mid-request", async (t) => {
@@ -231,7 +274,10 @@ test("the mid-transcription fallback carries the crashed server's error line", a
 
   assert.equal(result.text, "hello");
   assert.deepEqual(events, [
-    { reason: "CUDA error: no kernel image is available for execution on the device" },
+    {
+      reason: "CUDA error: no kernel image is available for execution on the device",
+      fallbackBackend: "cpu",
+    },
   ]);
 });
 
@@ -268,7 +314,7 @@ test("the mid-transcription reason ignores what earlier requests printed", async
 
   await manager.transcribe(Buffer.from("audio"));
 
-  assert.deepEqual(events, [{ reason: "exit code 0xC0000005" }]);
+  assert.deepEqual(events, [{ reason: "exit code 0xC0000005", fallbackBackend: "cpu" }]);
 });
 
 test("falls back to CPU when a peer's replacement is another doomed CUDA server", async (t) => {
@@ -322,7 +368,10 @@ test("falls back to CPU when a peer's replacement is another doomed CUDA server"
   assert.equal(result.text, "hello");
   assert.equal(requestCount, 3);
   assert.deepEqual(fallbackEvents, [
-    { reason: "CUDA error: no kernel image is available for execution on the device" },
+    {
+      reason: "CUDA error: no kernel image is available for execution on the device",
+      fallbackBackend: "cpu",
+    },
   ]);
   assert.equal(startCalls.length, 1);
   assert.equal(startCalls[0].options.useCuda, false);

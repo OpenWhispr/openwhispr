@@ -245,3 +245,66 @@ test("upsertNoteFromCloud: a cloud copy from an API without template ids keeps t
     "a cloud copy that carries a template id brings its own"
   );
 });
+
+test("upsertNoteFromCloud: a cloud blank calendar_event_id clears the local link", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const before = seedEditedMeetingNote(db);
+  db.updateNote(before.id, { calendar_event_id: "cal-ev-1" });
+
+  db.upsertNoteFromCloud({ ...emptyCloudShell(before), calendar_event_id: "" }, null);
+
+  assert.equal(db.getNote(before.id).calendar_event_id, "");
+});
+
+test("upsertNoteFromCloud: a cloud null calendar_event_id keeps the local link", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const before = seedEditedMeetingNote(db);
+  db.updateNote(before.id, { calendar_event_id: "cal-ev-1" });
+
+  db.upsertNoteFromCloud({ ...emptyCloudShell(before), calendar_event_id: null }, null);
+
+  assert.equal(db.getNote(before.id).calendar_event_id, "cal-ev-1");
+});
+
+test("linking or unlinking an event retires an outstanding assistant Undo", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  for (const [initial, next] of [
+    [null, "evt-1"],
+    ["evt-1", ""],
+  ]) {
+    const note = db.saveNote("Meeting", "", "meeting").note;
+    if (initial) db.updateNote(note.id, { calendar_event_id: initial });
+    db.updateNote(
+      note.id,
+      { title: "Assistant title" },
+      { undoable: true, expected: db.getNote(note.id) }
+    );
+    assert.equal(db.getNoteUndos().length, 1);
+
+    db.updateNote(note.id, { calendar_event_id: next });
+
+    assert.equal(db.getNoteUndos().length, 0);
+  }
+});
+
+test("clearing a linked note's event with null stores the synced blank", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const linked = db.saveNote("Meeting", "", "meeting").note;
+  db.updateNote(linked.id, { calendar_event_id: "evt-1" });
+  const unlinked = db.saveNote("Notes", "", "personal").note;
+
+  // The local API and other non-UI callers may unlink with null.
+  db.updateNote(linked.id, { calendar_event_id: null });
+  db.updateNote(unlinked.id, { calendar_event_id: null });
+
+  assert.equal(db.getNote(linked.id).calendar_event_id, "");
+  assert.equal(db.getNote(unlinked.id).calendar_event_id, null, "a never-linked note stays NULL");
+
+  // A null arriving while that unlink still waits to sync keeps it.
+  db.updateNote(linked.id, { calendar_event_id: null });
+  assert.equal(db.getNote(linked.id).calendar_event_id, "");
+});

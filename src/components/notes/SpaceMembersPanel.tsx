@@ -21,7 +21,8 @@ import { useToast } from "../ui/useToast";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { formatList } from "../../lib/formatList";
 import { orderMemberCandidates } from "../../lib/memberCandidates";
-import { canManageSpace, canManageWorkspace } from "../../lib/spacePermissions";
+import { rosterFor } from "../../lib/peopleRoster";
+import { spaceCan, workspaceCan } from "../../lib/capabilities";
 import type { SpaceItem, TeamRole, WorkspaceMember } from "../../types/electron";
 
 interface SpaceMembersPanelProps {
@@ -43,20 +44,20 @@ export default function SpaceMembersPanel({ space }: SpaceMembersPanelProps) {
   } = useWorkspaceStore(
     useShallow((s) => ({
       workspace: s.workspaces.find((w) => w.id === space.workspace_id),
-      members: s.members,
+      members: rosterFor(s, space.workspace_id),
       refreshMembers: s.refreshMembers,
     }))
   );
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState<string | undefined>(undefined);
-  // Invitees don't appear in the roster until they accept, so the last sent
-  // invite stays visible under the add block.
-  const [invitedEmail, setInvitedEmail] = useState<string | null>(null);
+  // Invitees don't appear in the roster until they accept, so the last send's
+  // invitations stay visible under the add block.
+  const [invitedEmails, setInvitedEmails] = useState<string[]>([]);
   const [groupsOpen, setGroupsOpen] = useState(false);
 
-  const canManage = canManageSpace(space, workspace?.role ?? null);
-  // Workspace invites are 403'd below workspace admin.
-  const isWorkspaceAdmin = canManageWorkspace(workspace?.role);
+  const canManage = spaceCan(space, "manage_members") || workspaceCan(workspace, "manage_settings");
+  // Workspace invites are 403'd without manage_members.
+  const canInviteToWorkspace = workspaceCan(workspace, "manage_members");
   const spaceId = space.cloud_space_id;
 
   const load = useCallback(
@@ -164,7 +165,7 @@ export default function SpaceMembersPanel({ space }: SpaceMembersPanelProps) {
           addCandidates={addCandidates}
           onAdd={handleAdd}
           onInvite={
-            isWorkspaceAdmin
+            canInviteToWorkspace
               ? (email) => {
                   setInviteEmail(email);
                   setInviteOpen(true);
@@ -173,12 +174,17 @@ export default function SpaceMembersPanel({ space }: SpaceMembersPanelProps) {
           }
         />
 
-        {invitedEmail && (
+        {invitedEmails.length === 1 && (
           <p className="text-[11px] text-muted-foreground">
             <BidiInterpolatedText
               text={t("notes.spaces.members.invited", { email: BIDI_VALUE_TOKEN })}
-              value={invitedEmail}
+              value={invitedEmails[0]}
             />
+          </p>
+        )}
+        {invitedEmails.length > 1 && (
+          <p className="text-[11px] text-muted-foreground">
+            {t("notes.spaces.members.invitedMany", { count: invitedEmails.length })}
           </p>
         )}
 
@@ -223,7 +229,7 @@ export default function SpaceMembersPanel({ space }: SpaceMembersPanelProps) {
           workspaceName={workspace.name}
           spaceIds={[spaceId]}
           initialEmail={inviteEmail}
-          onInvited={setInvitedEmail}
+          onInvited={setInvitedEmails}
         />
       )}
 

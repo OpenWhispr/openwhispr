@@ -13,19 +13,7 @@ export interface ActionMenuItemsProps {
   onManageActions: () => void;
 }
 
-/** Where an action's output goes: the note's chat or its AI summary. */
-export function ActionOutputBadge({ action }: { action: ActionItem }) {
-  const { t } = useTranslation();
-  return (
-    <span className="text-[10px] font-medium px-1 py-px rounded bg-foreground/5 dark:bg-white/6 text-muted-foreground/70 shrink-0">
-      {t(
-        action.output === "summary" ? "notes.actions.output.summary" : "notes.actions.output.chat"
-      )}
-    </span>
-  );
-}
-
-/** Every action with where its output goes, then Manage Actions, as a dropdown's items. */
+/** Every action, then Manage Actions, as a dropdown's items. */
 export default function ActionMenuItems({
   actions,
   canRun,
@@ -47,11 +35,8 @@ export default function ActionMenuItems({
           >
             <Icon size={14} className="shrink-0 text-primary" />
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5">
-                <span dir="auto" className="font-medium truncate">
-                  {getActionName(action, t)}
-                </span>
-                <ActionOutputBadge action={action} />
+              <div className="font-medium truncate">
+                <span dir="auto">{getActionName(action, t)}</span>
               </div>
               <div className="text-xs text-muted-foreground/70 truncate">
                 {getActionDescription(action, t)}

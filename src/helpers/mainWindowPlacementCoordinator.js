@@ -13,6 +13,10 @@ class MainWindowPlacementCoordinator {
     this.cancelPending();
   }
 
+  hasManualPosition() {
+    return this._hasManualPosition;
+  }
+
   resetManualPosition() {
     this._hasManualPosition = false;
     this.cancelPending();
