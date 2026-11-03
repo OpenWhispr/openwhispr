@@ -65,7 +65,8 @@ function readerHashes(files) {
 }
 
 async function writeVendored({ files, data, bundle, metadata }) {
-  for (const [key, [name]] of Object.entries(READER)) await fs.writeFile(path.join(output, name), files[key]);
+  for (const [key, [name]] of Object.entries(READER))
+    await fs.writeFile(path.join(output, name), files[key]);
   const catalog = json(data);
   await fs.writeFile(path.join(output, "modelRegistryData.json"), catalog);
   const bundlePath = path.join(output, "registryBundle.json");
@@ -83,15 +84,15 @@ async function syncPublication(revision) {
   const files = {};
   for (const [key, [, sourceName]] of Object.entries(READER))
     files[key] = await fetchText(`${at}/${sourceName}`);
-  // The signature is checked with the app's current code and pinned keys, never with
-  // code that arrived in the same download.
+  // The signature is checked with the app's current code and pinned keys, and the
+  // downloaded reader must match the signed hashes before any of it runs.
   const payload = verifyEnvelope(bytes, pinnedKeys);
-  const reader = await loadReader(files);
-  const manifest = reader.validateManifest(payload);
   const hashes = readerHashes(files);
   for (const key of Object.keys(READER))
-    if (hashes[key] !== manifest.contractHashes[key])
+    if (hashes[key] !== payload?.contractHashes?.[key])
       throw new Error(`Reader file ${key} does not match the signed publication`);
+  const reader = await loadReader(files);
+  const manifest = reader.validateManifest(payload);
   const data = reader.validateCatalog(manifest.data);
   await writeVendored({
     files,
@@ -117,7 +118,10 @@ async function syncSource(sourceCommit) {
   const reader = await loadReader(files);
   const read = async (name) => JSON.parse(await fetchText(`${at}/registry/${name}.json`));
   const legacy = await read("legacy");
-  const catalog = { diarizationModels: legacy.diarizationModels, openwhisprCloudModels: legacy.openwhisprCloudModels };
+  const catalog = {
+    diarizationModels: legacy.diarizationModels,
+    openwhisprCloudModels: legacy.openwhisprCloudModels,
+  };
   for (const [section, name] of Object.entries(SECTIONS)) catalog[section] = await read(name);
   const data = reader.validateCatalog(catalog);
   const hashes = readerHashes(files);
@@ -170,12 +174,15 @@ export async function check(dir = output) {
       fail("The vendored catalog does not match its signed publication.");
     return `signed publication ${metadata.manifestVersion}`;
   }
-  if (bundle || metadata.manifestVersion !== 0) fail("An unpublished snapshot has version 0 and no bundle.");
+  if (bundle || metadata.manifestVersion !== 0)
+    fail("An unpublished snapshot has version 0 and no bundle.");
   return `UNPUBLISHED source ${metadata.sourceCommit}`;
 }
 
 async function status() {
-  const metadata = JSON.parse(await fs.readFile(path.join(output, "registryMetadata.json"), "utf8"));
+  const metadata = JSON.parse(
+    await fs.readFile(path.join(output, "registryMetadata.json"), "utf8")
+  );
   const reader = require(path.join(output, "registrySchema.cjs"));
   const manifest = reader.validateManifest(
     verifyEnvelope(await fetchText(`${BASE}/published/v2/manifest.json`), pinnedKeys)
@@ -200,7 +207,9 @@ async function main() {
   const source = argument("--source");
   if (isCommit(revision)) return `Vendored ${await syncPublication(revision)}`;
   if (isCommit(source)) return `Vendored ${await syncSource(source)}`;
-  throw new Error("Pass --revision <publication commit>, --source <source commit>, --check or --status");
+  throw new Error(
+    "Pass --revision <publication commit>, --source <source commit>, --check or --status"
+  );
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

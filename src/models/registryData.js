@@ -47,6 +47,7 @@ export const registryData = { ...freeze(initial.visible) };
 let retired = initial.retired;
 let snapshotData = bundled;
 let version = -1;
+let pending = false;
 const listeners = new Set();
 export const getRegistryData = () => registryData;
 export const getRegistryVersion = () => version;
@@ -54,7 +55,10 @@ export const getRegistryVersion = () => version;
 export const getRegistrySnapshot = () => ({
   data: structuredClone(snapshotData),
   manifestVersion: version,
+  pending,
 });
+// A catalog this app accepted before could not be loaded yet (see registryLoader).
+export const isCatalogPending = () => pending;
 export const getRetiredModel = (section, providerId, modelId) =>
   retired.get(retiredKey(section, providerId ?? "", modelId));
 export function subscribeRegistry(listener) {
@@ -74,6 +78,7 @@ export function replaceRegistryData(snapshot) {
   retired = next.retired;
   Object.assign(registryData, freeze(next.visible));
   version = snapshot.manifestVersion;
+  pending = snapshot.pending === true;
   for (const listener of listeners) {
     try {
       listener();

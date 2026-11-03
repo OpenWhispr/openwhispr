@@ -10,7 +10,7 @@ export function retiredReplacement(
   modelId: string,
   providers?: ProviderList
 ): string | null;
-export function isUnknownModel(
+export function isAwaitingCatalog(
   section: Exclude<RegistrySection, "whisperModels" | "parakeetModels">,
   modelId: string,
   providers?: ProviderList

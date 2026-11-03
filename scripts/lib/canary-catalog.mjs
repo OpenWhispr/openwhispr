@@ -9,6 +9,7 @@ const { verifyEnvelope } = require("../../src/models/registryEnvelope.cjs");
 const { validateManifest, acceptCatalog } = require("../../src/models/registrySchema.cjs");
 const { REGISTRY_URL } = require("../../src/helpers/registryLoader.js");
 const trustedKeys = require("../../src/models/registryTrustedKeys.json");
+const { clientContract } = require("../../src/models/registryMetadata.json");
 const { version: appVersion } = require("../../package.json");
 
 function withoutRetired(catalog) {
@@ -34,6 +35,11 @@ export async function loadCanaryCatalog(argv = process.argv) {
   const manifest = validateManifest(
     verifyEnvelope(Buffer.from(await response.arrayBuffer()), trustedKeys)
   );
+  // The app would refuse this catalog, so probing it would test something users never get.
+  if (!manifest.testedClientContracts.includes(clientContract))
+    throw new Error(
+      `Published catalog ${manifest.manifestVersion} was not tested with this app's reader`
+    );
   console.log(
     `Probing published catalog ${manifest.manifestVersion} (source ${manifest.sourceCommit})`
   );

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { useRegistryVersion } from "../hooks/useRegistryVersion";
-import { isUnknownModel } from "../models/modelLifecycle.js";
+import { isAwaitingCatalog } from "../models/modelLifecycle.js";
 import { getRegistryData } from "../models/registryData.js";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
@@ -690,12 +690,12 @@ export default function TranscriptionModelPicker({
     // Reconcile null means the input needs no correction — echo the browsed
     // input, not the committed pair, or browsing to the Custom tab (always
     // reconciled as valid) would never display it.
-    // A model the catalog does not know yet (a remote addition before its catalog
-    // loads) stays chosen; a known model this scope filters out is still reconciled.
+    // A model a pending catalog may still supply stays chosen (see isAwaitingCatalog); a
+    // known model this scope filters out is still reconciled.
     if (
       !browsedCloudProvider &&
       cloudProviders.some((provider) => provider.id === selectedCloudProvider) &&
-      isUnknownModel("transcriptionProviders", selectedCloudModel)
+      isAwaitingCatalog("transcriptionProviders", selectedCloudModel)
     ) {
       return { provider: selectedCloudProvider, model: selectedCloudModel };
     }
@@ -1272,6 +1272,7 @@ export default function TranscriptionModelPicker({
                 totalBytes: status.totalBytes,
               }}
               isInstalling={status.phase === "installing"}
+              isVerifying={status.phase === "verifying"}
             />
           );
         })}

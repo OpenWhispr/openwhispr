@@ -154,8 +154,15 @@ test("a remote selection survives a launch whose catalog has not loaded it yet",
   storage.setItem("chatAgentMode", "local");
   storage.setItem("chatAgentProvider", data.localProviders[0].id);
   storage.setItem("chatAgentModel", "remote-local-saved");
-  // Recreate the renderer with no verified main cache. Only local preferences survive.
+  // Recreate the renderer as main does when its cache exists but cannot be loaded yet:
+  // only the bundle, marked pending. Only local preferences survive.
   vite.moduleGraph.invalidateAll();
+  const bundleOnly = await vite.ssrLoadModule("/models/registryData.js");
+  bundleOnly.replaceRegistryData({
+    data: structuredClone(seed),
+    manifestVersion: bundleOnly.getRegistryVersion() + 1,
+    pending: true,
+  });
   settings = await vite.ssrLoadModule("/stores/settingsStore.ts");
   settings.reconcileRetiredCloudModelSelections();
   // Installed models are listed from their install record, not from the catalog.

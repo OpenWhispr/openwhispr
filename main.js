@@ -301,10 +301,7 @@ const CliBridge = require("./src/helpers/cliBridge");
 const { createRegistryLoader } = require("./src/helpers/registryLoader");
 const { registerRegistryIpc } = require("./src/helpers/registryIpc");
 const { replaceRegistryData } = require("./src/models/registryData.js");
-const {
-  configureInstalledModels,
-  withInstalledModels,
-} = require("./src/helpers/installedModels");
+const { configureInstalledModels, withInstalledModels } = require("./src/helpers/installedModels");
 const registryTrustedKeys = require("./src/models/registryTrustedKeys.json");
 let registryLoader = null;
 let disposeRegistryIpc = null;
@@ -1246,7 +1243,10 @@ async function startApp() {
     trustedKeys: registryTrustedKeys,
     appVersion: app.getVersion(),
     applySnapshot: (snapshot) =>
-      replaceRegistryData({ ...snapshot, data: withInstalledModels(snapshot.data) }),
+      replaceRegistryData({
+        ...snapshot,
+        data: withInstalledModels(snapshot.data, app.getVersion()),
+      }),
     fetch: (...args) => net.fetch(...args),
     onError: (error) =>
       debugLogger.warn("Model registry update unavailable", { error: error.message }),

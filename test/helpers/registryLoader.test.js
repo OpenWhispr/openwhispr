@@ -259,3 +259,15 @@ test("timeouts and failing reporters are recoverable", async (t) => {
   await x.loader.refresh();
   assert.equal(x.loader.getSnapshot().manifestVersion, 2);
 });
+
+test("a cache that exists but cannot be used marks the catalog pending until one loads", async (t) => {
+  const x = setup(t);
+  fs.writeFileSync(x.config.cachePath, "{");
+  await x.loader.start();
+  assert.equal(x.applied[0].pending, true);
+  await x.loader.refresh();
+  assert.equal(x.applied.at(-1).pending, false);
+  const fresh = setup(t);
+  await fresh.loader.start();
+  assert.equal(fresh.applied[0].pending, false, "a fresh install has nothing pending");
+});

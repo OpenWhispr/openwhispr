@@ -314,6 +314,7 @@ class ModelManager {
     const modelPath = path.join(this.modelsDir, model.fileName);
 
     if (await this.checkModelValid(modelPath)) {
+      rememberInstalledModel("localProviders", provider.id, modelId);
       return modelPath;
     }
 
@@ -438,7 +439,9 @@ class ModelManager {
         });
       }
       if (error.code === "ERR_MODEL_INTEGRITY") {
-        throw new ModelError(error.message, "INTEGRITY_ERROR", { error: error.message });
+        throw new ModelError(`Download corrupted: ${error.message}`, "INTEGRITY_ERROR", {
+          error: error.message,
+        });
       }
       if (!(error instanceof ModelError)) {
         throw new ModelError(`Network error: ${error.message}`, "NETWORK_ERROR", {

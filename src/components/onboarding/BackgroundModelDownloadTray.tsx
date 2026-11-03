@@ -295,7 +295,7 @@ export default function BackgroundModelDownloadTray({
             id: event.id,
             kind: event.kind,
             percentage: clampPercentage(event.percentage),
-            installing: event.type === "installing" || event.type === "verifying",
+            installing: event.type === "installing",
             error: event.type === "error" ? event.error : undefined,
           },
         };

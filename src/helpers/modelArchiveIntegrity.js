@@ -23,7 +23,7 @@ function assertSafeModelArchiveEntry(entry, expectedRoot) {
   return name.replace(/\/$/, "").toLowerCase();
 }
 
-function runArchiveWorker(task, signal) {
+function runArchiveWorker(task, signal, onProgress) {
   if (signal?.aborted)
     return Promise.reject(
       Object.assign(new Error("Archive verification cancelled"), { isAbort: true })
@@ -40,7 +40,8 @@ function runArchiveWorker(task, signal) {
     if (signal) signal.onAbort = abort;
     let completed = false;
     let failure;
-    worker.once("message", (result) => {
+    worker.on("message", (result) => {
+      if (result.bytesRead !== undefined) return onProgress?.(result.bytesRead);
       completed = result.success === true;
       if (result.error) failure = new Error(result.error);
     });
@@ -65,9 +66,13 @@ function runArchiveWorker(task, signal) {
 // bounds a decompression bomb by what the catalog said it would be.
 const MAX_UNPACK_RATIO = 4;
 
-function validateModelArchive(archivePath, expectedRoot, signal, declaredBytes) {
+function validateModelArchive(archivePath, expectedRoot, signal, declaredBytes, onProgress) {
   const maxBytes = declaredBytes > 0 ? declaredBytes * MAX_UNPACK_RATIO : 200 * 1024 ** 3;
-  return runArchiveWorker({ operation: "validate", archivePath, expectedRoot, maxBytes }, signal);
+  return runArchiveWorker(
+    { operation: "validate", archivePath, expectedRoot, maxBytes },
+    signal,
+    onProgress
+  );
 }
 
 function extractModelArchive(archivePath, extractDir) {

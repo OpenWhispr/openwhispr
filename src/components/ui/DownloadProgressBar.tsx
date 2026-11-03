@@ -5,6 +5,8 @@ interface DownloadProgressBarProps {
   modelName: string;
   progress: DownloadProgress;
   isInstalling?: boolean;
+  /** Checking a downloaded archive: shows its progress and can still be cancelled. */
+  isVerifying?: boolean;
 }
 
 function formatBytes(bytes: number): string {
@@ -17,6 +19,7 @@ export function DownloadProgressBar({
   modelName,
   progress,
   isInstalling,
+  isVerifying,
 }: DownloadProgressBarProps) {
   const { percentage, downloadedBytes, totalBytes, speed, eta } = progress;
   const pct = Math.round(percentage);
@@ -41,7 +44,11 @@ export function DownloadProgressBar({
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-xs font-medium text-foreground truncate">
-            {isInstalling ? `Installing ${modelName}` : `Downloading ${modelName}`}
+            {isInstalling
+              ? `Installing ${modelName}`
+              : isVerifying
+                ? `Verifying ${modelName}`
+                : `Downloading ${modelName}`}
           </p>
           {!isInstalling && (indeterminate || speedText || etaText) && (
             <div className="flex items-center gap-1.5 mt-0.5">

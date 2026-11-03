@@ -527,11 +527,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         : cloudTranscriptionProvider.charAt(0).toUpperCase() + cloudTranscriptionProvider.slice(1);
     // Same rule as the upload itself: the batch model replaces only a streaming selection.
     const batchModel = getBatchTranscriptionModel(cloudTranscriptionProvider);
+    const selectedId = cloudTranscriptionModel?.trim();
     const selected = getTranscriptionProvider(cloudTranscriptionProvider)?.models.find(
-      (option) => option.id === cloudTranscriptionModel
+      (option) => option.id === selectedId
     );
-    const model =
-      batchModel && (!selected || selected.streaming) ? batchModel : cloudTranscriptionModel;
+    const model = batchModel && (!selected || selected.streaming) ? batchModel : selectedId;
     return `${name} · ${model}`;
   };
 

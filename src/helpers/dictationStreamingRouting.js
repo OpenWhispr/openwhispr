@@ -9,8 +9,9 @@ import { STREAMING_ONLY_PROVIDERS } from "./transcriptionRoute.ts";
 import { registryData as modelRegistryData, subscribeRegistry } from "../models/registryData.js";
 
 export const ORUKEET_MODEL = "orukeet-v0.1.0";
+// Read at module load: a catalog that retired the model must not stop windows loading.
 const ORUKEET_LANGUAGES = new Set(
-  modelRegistryData.parakeetModels[ORUKEET_MODEL].supportedLanguages
+  modelRegistryData.parakeetModels[ORUKEET_MODEL]?.supportedLanguages ?? []
 );
 
 // Existing default retained during the opt-in group-score rollout. Scores are

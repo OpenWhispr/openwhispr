@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { getRegistryData } = require("../models/registryData.js");
+const { isModelSupported } = require("../models/registrySelection.js");
 
 // The catalog entry of each local model this app installed. Main merges entries a catalog
 // does not list at all back into it, so an installed model keeps working and can be
@@ -53,29 +54,47 @@ function rememberInstalledModel(section, providerId, modelId) {
   writeRecord({ ...readRecord(), [keyOf(section, providerId, modelId)]: entry });
 }
 
+function parseKey(key) {
+  try {
+    const [section, providerId, modelId] = JSON.parse(key);
+    return { section, providerId, modelId };
+  } catch {
+    return null;
+  }
+}
+
 function forgetInstalledModels(section, providerId, modelId) {
   const record = readRecord();
   for (const key of Object.keys(record)) {
-    const [entrySection, entryProvider, entryModel] = JSON.parse(key);
+    const entry = parseKey(key);
     if (
-      entrySection === section &&
-      (providerId === undefined || entryProvider === providerId) &&
-      (modelId === undefined || entryModel === modelId)
+      entry?.section === section &&
+      (providerId === undefined || entry.providerId === providerId) &&
+      (modelId === undefined || entry.modelId === modelId)
     )
       delete record[key];
   }
   writeRecord(record);
 }
 
-function withInstalledModels(data) {
+// After a bulk delete, keep only the models whose files survived it (a file held open
+// by a running server cannot be removed on Windows).
+function pruneInstalledModels(section, isStillInstalled) {
+  const record = readRecord();
+  for (const [key, model] of Object.entries(record)) {
+    const entry = parseKey(key);
+    if (entry?.section === section && !isStillInstalled(entry.modelId, model)) delete record[key];
+  }
+  writeRecord(record);
+}
+
+// A model needing a newer app (after a downgrade) stays out, as the catalog keeps it out.
+function withInstalledModels(data, appVersion) {
   const merged = structuredClone(data);
   for (const [key, entry] of Object.entries(readRecord())) {
-    let section, providerId, modelId;
-    try {
-      [section, providerId, modelId] = JSON.parse(key);
-    } catch {
-      continue;
-    }
+    const parsed = parseKey(key);
+    if (!parsed || !isModelSupported(entry, appVersion)) continue;
+    const { section, providerId, modelId } = parsed;
     if (providerId) {
       const provider = merged[section]?.find((item) => item.id === providerId);
       if (provider && !provider.models.some((model) => model.id === modelId))
@@ -91,5 +110,6 @@ module.exports = {
   configureInstalledModels,
   rememberInstalledModel,
   forgetInstalledModels,
+  pruneInstalledModels,
   withInstalledModels,
 };

@@ -83,6 +83,15 @@ const lifecycle = {
   replacement: id.optional(),
 };
 const effortLevel = z.enum(["none", "minimal", "low", "medium", "high", "xhigh", "max"]);
+// Nested objects are built per reading (see buildSchemas) so they follow the same
+// strict-to-write, lenient-to-read split as the entries that hold them.
+const reasoningEffortShape = {
+  options: z.array(effortLevel).min(1).max(10),
+  defaultValue: effortLevel.optional(),
+};
+const thinkingLevelShape = { level: z.enum(["minimal", "low"]) };
+const thinkingBudgetShape = { budget: z.number().int().min(0).max(1000000) };
+const organizationShape = { id: z.enum(["oruk", "nvidia", "cohere"]), name: text };
 const cloudModel = {
   ...lifecycle,
   id,
@@ -91,15 +100,6 @@ const cloudModel = {
   supportsVision: z.boolean().optional(),
   tokenParam: z.enum(["max_tokens", "max_completion_tokens"]).optional(),
   supportsTemperature: z.boolean().optional(),
-  reasoningEffort: z
-    .object({ options: z.array(effortLevel).min(1).max(10), defaultValue: effortLevel.optional() })
-    .optional(),
-  thinkingFloor: z
-    .union([
-      z.object({ level: z.enum(["minimal", "low"]) }),
-      z.object({ budget: z.number().int().min(0).max(1000000) }),
-    ])
-    .optional(),
 };
 const transcriptionModel = { ...lifecycle, id, streaming: z.boolean().optional() };
 const localModel = {
@@ -154,10 +154,6 @@ const parakeetModel = {
   recommended: z.boolean().optional(),
   sha256: sha256.optional(),
   license: text.optional(),
-  organization: z
-    .object({ id: z.enum(["oruk", "nvidia", "cohere"]), name: text })
-    .strict()
-    .optional(),
   modelCardUrl: z
     .string()
     .url()
@@ -178,11 +174,15 @@ const providerShape = (extra, model) => ({
 function buildSchemas(strict) {
   const object = (shape) => (strict ? z.strictObject(shape) : z.object(shape));
   const models = {
-    cloud: object(cloudModel),
+    cloud: object({
+      ...cloudModel,
+      reasoningEffort: object(reasoningEffortShape).optional(),
+      thinkingFloor: z.union([object(thinkingLevelShape), object(thinkingBudgetShape)]).optional(),
+    }),
     transcription: object(transcriptionModel),
     local: object(localModel).refine(completeDraft, "Incomplete draft artifact"),
     whisper: object(whisperModel),
-    parakeet: object(parakeetModel),
+    parakeet: object({ ...parakeetModel, organization: object(organizationShape).optional() }),
   };
   const providers = {
     cloudProviders: object(providerShape({}, models.cloud)),
@@ -265,6 +265,7 @@ function validateCatalog(input) {
   const data = authoring.catalog.parse(input);
   const byId = new Map();
   for (const section of PROVIDER_SECTIONS) {
+    const sectionIds = new Map();
     const providers = new Set();
     for (const provider of data[section]) {
       requireCondition(!providers.has(provider.id), `Duplicate provider ${provider.id}`);
@@ -282,6 +283,15 @@ function validateCatalog(input) {
             model.supportsTemperature !== undefined,
             `${label} sets tokenParam without supportsTemperature`
           );
+        // Local and transcription models are found by ID alone (a download, a route), so
+        // an ID belongs to one provider. Cloud models are handled below.
+        if (section === "localProviders" || section === "transcriptionProviders") {
+          requireCondition(
+            !sectionIds.has(model.id),
+            `Ambiguous model ID ${model.id} in ${sectionIds.get(model.id)} and ${provider.id}`
+          );
+          sectionIds.set(model.id, provider.id);
+        }
         if (section === "cloudProviders" || section === "enterpriseProviders") {
           // The app looks cloud models up by ID alone and takes the first match, so a
           // repeated ID either declares no request settings (it inherits the first
@@ -532,12 +542,17 @@ function acceptProviders(section, input, bundled) {
   return bundled.map((shipped) => {
     const found = remote.find((item) => item && item.id === shipped.id);
     const models = [];
+    const seen = new Set();
+    const add = (model) => {
+      if (seen.has(model.id)) return;
+      seen.add(model.id);
+      models.push(model);
+    };
     for (const raw of Array.isArray(found?.models) ? found.models : []) {
       const model = readEntry(reading.providers[section].shape.models.element, raw);
-      if (model && !models.some((item) => item.id === model.id)) models.push(model);
+      if (model) add(model);
     }
-    for (const model of shipped.models)
-      if (!models.some((item) => item.id === model.id)) models.push(structuredClone(model));
+    for (const model of shipped.models) add(structuredClone(model));
     const defaultModel = [found?.defaultModel, shipped.defaultModel].find((candidate) =>
       models.some((model) => model.id === candidate && isActive(model))
     );
@@ -550,7 +565,7 @@ function acceptMap(section, input, bundled) {
   const result = {};
   const remote = input && typeof input === "object" && !Array.isArray(input) ? input : {};
   for (const [modelId, raw] of Object.entries(remote)) {
-    if (!readEntry(safeName, modelId) || Object.hasOwn(result, modelId)) continue;
+    if (!safeName.safeParse(modelId).success || Object.hasOwn(result, modelId)) continue;
     const model = readEntry(reading.maps[section], raw);
     if (model) result[modelId] = model;
   }
@@ -635,13 +650,14 @@ function contractId(hashes) {
 
 module.exports = {
   SCHEMA_VERSION,
-  CAPABILITY_FIELDS,
+  PROVIDER_SECTIONS,
+  MAP_SECTIONS,
+  isActive,
   validateCatalog,
   assertCompatibleCatalog,
   capabilityChanges,
   acceptCatalog,
+  settleReferences,
   validateManifest,
   contractId,
-  isModelUrl,
-  isPinnedUrl,
 };

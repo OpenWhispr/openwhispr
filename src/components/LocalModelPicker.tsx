@@ -225,6 +225,7 @@ export default function LocalModelPicker({
                   totalBytes: status.totalBytes,
                 }}
                 isInstalling={status.phase === "installing"}
+                isVerifying={status.phase === "verifying"}
               />
             );
           })}

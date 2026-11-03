@@ -219,8 +219,7 @@ export function useModelDownload({
       if (data.type !== "progress" && data.type !== "verifying" && data.type !== "installing")
         return;
 
-      // Verifying shows like installing but, unlike installing, can still be cancelled.
-      const isInstalling = data.type !== "progress";
+      const isInstalling = data.type === "installing";
       if (!isInstalling) {
         const now = Date.now();
         const lastUpdate = lastProgressUpdateRef.current[data.model] || 0;
@@ -500,7 +499,8 @@ export function useModelDownload({
     },
     downloadError: errorMessages[errorMessages.length - 1] || null,
     isDownloading: downloadingModel !== null,
-    isInstalling: activeDownload?.phase === "installing" || activeDownload?.phase === "verifying",
+    isInstalling: activeDownload?.phase === "installing",
+    isVerifying: activeDownload?.phase === "verifying",
     isCancelling: downloadingModel ? cancellingModels.has(downloadingModel) : false,
     isDownloadingModel: (modelId: string) => !!downloads[modelId],
     isCancellingModel: (modelId: string) => cancellingModels.has(modelId),

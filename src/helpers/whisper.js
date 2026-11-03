@@ -20,7 +20,11 @@ const {
 } = require("./modelDirUtils");
 
 const { registryData: modelRegistryData } = require("../models/registryData.js");
-const { rememberInstalledModel, forgetInstalledModels } = require("./installedModels");
+const {
+  rememberInstalledModel,
+  forgetInstalledModels,
+  pruneInstalledModels,
+} = require("./installedModels");
 
 const CACHE_TTL_MS = 30000;
 
@@ -710,6 +714,7 @@ class WhisperManager {
 
     if (fs.existsSync(modelPath)) {
       const stats = await fsPromises.stat(modelPath);
+      rememberInstalledModel("whisperModels", "", modelName);
       return {
         model: modelName,
         downloaded: true,
@@ -895,7 +900,9 @@ class WhisperManager {
         }
       }
 
-      forgetInstalledModels("whisperModels");
+      pruneInstalledModels("whisperModels", (_id, model) =>
+        fs.existsSync(path.join(modelsDir, model.fileName))
+      );
       return {
         success: true,
         deleted_count: deletedCount,

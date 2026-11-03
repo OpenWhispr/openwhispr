@@ -551,7 +551,8 @@ class ReasoningService extends BaseReasoningService {
     try {
       const result = await handler.call({
         text,
-        model: trimmedModel,
+        // A saved selection the catalog has retired must not reach the provider.
+        model: resolveRetiredCloudModel(providerId, trimmedModel),
         agentName,
         config: dispatchConfig,
         ctx: this.providerContext,

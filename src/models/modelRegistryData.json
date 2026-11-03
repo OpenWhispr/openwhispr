@@ -261,11 +261,11 @@
       "sherpaModelType": "nemo_transducer",
       "recommended": true,
       "license": "CC-BY-SA-4.0",
+      "modelCardUrl": "https://huggingface.co/oruk/orukeet",
       "organization": {
         "id": "oruk",
         "name": "Oruk"
-      },
-      "modelCardUrl": "https://huggingface.co/oruk/orukeet"
+      }
     }
   },
   "cloudProviders": [

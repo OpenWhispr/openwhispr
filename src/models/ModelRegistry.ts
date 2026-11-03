@@ -599,8 +599,14 @@ export function getValidWhisperModelNames(): string[] {
 
 // Maintain stable exported objects for existing consumers while rebuilding all
 // derived lists after the canonical snapshot changes. Tinfoil stays an overlay.
+// Replaces the contents in place, so a model the catalog retired also leaves the list.
+function refill<T extends object>(target: T, source: T): void {
+  for (const key of Object.keys(target)) delete (target as Record<string, unknown>)[key];
+  Object.assign(target, source);
+}
+
 subscribeRegistry(() => {
-  Object.assign(REASONING_PROVIDERS, buildReasoningProviders());
-  Object.assign(WHISPER_MODEL_INFO, modelData.whisperModels);
-  Object.assign(PARAKEET_MODEL_INFO, modelData.parakeetModels);
+  refill(REASONING_PROVIDERS, buildReasoningProviders());
+  refill(WHISPER_MODEL_INFO, modelData.whisperModels);
+  refill(PARAKEET_MODEL_INFO, modelData.parakeetModels);
 });

@@ -153,3 +153,25 @@ test("screenshots remain attached but are never included in request logs", async
   });
   assert.equal(JSON.stringify(logs).includes("private-base64"), false);
 });
+
+test("a Gemini model added through the catalog brings its own thinking floor", async (t) => {
+  const store = require("../../src/models/registryData.js");
+  const old = store.getRegistrySnapshot();
+  const data = structuredClone(old.data);
+  const gemini = data.cloudProviders.find((p) => p.id === "gemini");
+  gemini.models.push({
+    id: "gemini-9-flash",
+    name: "Gemini 9 Flash",
+    description: "Fixture",
+    supportsThinking: true,
+    thinkingFloor: { level: "low" },
+  });
+  store.replaceRegistryData({ data, manifestVersion: old.manifestVersion + 1 });
+  t.after(() => store.replaceRegistryData({ data: old.data, manifestVersion: old.manifestVersion + 2 }));
+  const { requests, call } = await setup(t);
+  await call({ model: "gemini-9-flash" });
+  assert.deepEqual(requests.at(-1).generationConfig.thinkingConfig, {
+    thinkingLevel: "low",
+    includeThoughts: false,
+  });
+});

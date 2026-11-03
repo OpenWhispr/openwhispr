@@ -77,6 +77,7 @@ export function RequiredModelsBanner() {
                 modelName={activeModelName}
                 progress={activeDownload.downloadProgress}
                 isInstalling={activeDownload.isInstalling}
+                isVerifying={activeDownload.isVerifying}
               />
             ) : (
               <Button

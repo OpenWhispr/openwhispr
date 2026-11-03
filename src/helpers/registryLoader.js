@@ -67,6 +67,10 @@ function createRegistryLoader({
     manifestVersion: bundledSnapshot.manifestVersion,
   };
   let etag = null;
+  let applied = false;
+  // True while a catalog this app accepted before (its cache exists) cannot be used yet:
+  // until one loads, a saved model the bundle does not know may be one of its additions.
+  let pending = false;
   let inFlight = null;
   let controller = null;
   let startupTimer = null;
@@ -83,8 +87,9 @@ function createRegistryLoader({
   }
 
   function apply(next) {
+    applied = true;
     try {
-      applySnapshot(next);
+      applySnapshot({ ...next, pending });
     } catch (error) {
       reportError(error);
     }
@@ -100,6 +105,7 @@ function createRegistryLoader({
     if (stopped || manifest.manifestVersion <= snapshot.manifestVersion) return false;
     if (manifest.manifestVersion > snapshot.manifestVersion + MAX_VERSION_STEP)
       throw new Error(`Catalog version ${manifest.manifestVersion} is implausibly far ahead`);
+    pending = false;
     apply({
       data: acceptCatalog(manifest.data, bundledSnapshot.data, appVersion),
       manifestVersion: manifest.manifestVersion,
@@ -166,27 +172,32 @@ function createRegistryLoader({
     return inFlight;
   }
 
+  // True when a cached copy was usable; `pending` when copies exist but none was.
   async function restoreCache() {
+    let found = false;
     for (const file of [cachePath, backupPath]) {
       try {
         accept(await readBoundedCache(file));
         return true;
       } catch (error) {
-        if (error.code !== "ENOENT") reportError(error);
+        if (error.code !== "ENOENT") {
+          found = true;
+          reportError(error);
+        }
       }
     }
+    pending = found;
     return false;
   }
 
   async function start() {
     if (started || stopped) return;
     started = true;
-    apply(snapshot);
-    if (!isEnabled()) return;
+    const restored = isEnabled() ? await restoreCache() : true;
+    if (!applied) apply(snapshot);
+    if (!isEnabled() || stopped) return;
     // With no usable cached copy, fetch at once rather than leave remote additions
     // missing for the first minutes of the session.
-    const restored = await restoreCache();
-    if (stopped) return;
     startupTimer = setTimeout(
       () => {
         void refresh();

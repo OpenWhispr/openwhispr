@@ -48,7 +48,7 @@ import {
   registryData as modelRegistryData,
   subscribeRegistry,
 } from "../models/registryData.js";
-import { isUnknownModel, retiredReplacement } from "../models/modelLifecycle.js";
+import { isAwaitingCatalog, retiredReplacement } from "../models/modelLifecycle.js";
 import { getCloudModelProviders } from "../models/cloudModelCatalog";
 import { pickDefaultModelId } from "../models/providerDefaultModel";
 // Both are leaves: tinfoilModelCache imports only a type from ModelRegistry and
@@ -56,6 +56,7 @@ import { pickDefaultModelId } from "../models/providerDefaultModel";
 // cycle.
 import { readCachedTinfoilModels } from "../models/tinfoilModelCache";
 import { recordRetiredModelSwitch } from "./retiredModelSwitchStore";
+import { isDictationPanelWindow } from "../utils/windowContext";
 import { MEETING_STREAMING_PROVIDER_IDS } from "../helpers/meetingTranscriptionRouting";
 import { STREAMING_ONLY_PROVIDERS } from "../helpers/transcriptionRoute";
 import {
@@ -192,13 +193,12 @@ function canonicalTranscriptionBaseUrl(providerId: string): string | null {
   );
 }
 
-// No catalog offers or has retired this ID, so it may be a remote addition whose catalog
-// has not loaded yet. A local or enterprise ID is known, so it never passes as cloud.
-function isUnknownLlmModel(modelId: string): boolean {
+// See isAwaitingCatalog. A local or enterprise ID is known, so it never passes as cloud.
+function isAwaitingLlmCatalog(modelId: string): boolean {
   return (
-    isUnknownModel("cloudProviders", modelId, getCloudModelProviders()) &&
-    isUnknownModel("enterpriseProviders", modelId) &&
-    isUnknownModel("localProviders", modelId)
+    isAwaitingCatalog("cloudProviders", modelId, getCloudModelProviders()) &&
+    isAwaitingCatalog("enterpriseProviders", modelId) &&
+    isAwaitingCatalog("localProviders", modelId)
   );
 }
 
@@ -2241,7 +2241,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       keys.model,
       remembered &&
         (transcriptionModelBelongsToProvider(providerId, remembered, context) ||
-          isUnknownModel("transcriptionProviders", remembered))
+          isAwaitingCatalog("transcriptionProviders", remembered))
         ? remembered
         : defaultTranscriptionModel(providerId, context)
     );
@@ -2270,7 +2270,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       provider: providerId,
       model:
         remembered &&
-        (reasoningModelBelongsToProvider(providerId, remembered) || isUnknownLlmModel(remembered))
+        (reasoningModelBelongsToProvider(providerId, remembered) ||
+          isAwaitingLlmCatalog(remembered))
           ? remembered
           : fallbackModel,
     });
@@ -3336,7 +3337,7 @@ export function selectPolicyEffectiveSettings(
       if (
         providerChanged ||
         (!transcriptionModelBelongsToProvider(selection.provider, model, keys.context) &&
-          !isUnknownModel("transcriptionProviders", model))
+          !isAwaitingCatalog("transcriptionProviders", model))
       ) {
         const replacement =
           !providerChanged &&
@@ -3487,7 +3488,9 @@ export function reconcileRetiredCloudModelSelections(): void {
     setStringSetting(storeKey as keyof SettingsState, to);
     logger.info("Repointed retired model selection", { scope: storeKey, from, to }, "settings");
     const retired = getRetiredModel(section, provider, from);
-    if (!retired || announced.has(`${section}:${provider}:${from}`)) return;
+    // Every window reconciles its own store; only one announces it.
+    if (!retired || isDictationPanelWindow() || announced.has(`${section}:${provider}:${from}`))
+      return;
     announced.add(`${section}:${provider}:${from}`);
     const providerDef = modelRegistryData[section].find((p) => p.id === provider);
     recordRetiredModelSwitch({
@@ -3507,9 +3510,7 @@ export function reconcileRetiredCloudModelSelections(): void {
     if (!providerDef || reasoningModelBelongsToProvider(provider, model)) continue;
     const replacement =
       retiredReplacement("cloudProviders", provider, model, cloudProviders) ??
-      (isUnknownModel("cloudProviders", model, cloudProviders)
-        ? null
-        : pickDefaultModelId(providerDef));
+      (isAwaitingLlmCatalog(model) ? null : pickDefaultModelId(providerDef));
     if (replacement) repoint("cloudProviders", scope.storeKeys.model, provider, model, replacement);
   }
   for (const keys of TRANSCRIPTION_CONTEXT_KEYS) {

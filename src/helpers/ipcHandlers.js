@@ -1072,10 +1072,10 @@ class IPCHandlers {
       return this.localModelDownloadStatus.finish(modelType, modelId);
     }
 
-    if (progressData.type === "installing") {
+    if (progressData.type === "installing" || progressData.type === "verifying") {
       return this.localModelDownloadStatus.update(modelType, modelId, {
-        phase: "installing",
-        progress: progressData.percentage || 100,
+        phase: progressData.type,
+        progress: progressData.percentage ?? 100,
       });
     }
 

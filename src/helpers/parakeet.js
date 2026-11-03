@@ -14,7 +14,11 @@ const {
 } = require("./downloadUtils");
 const { validateModelArchive, extractModelArchive } = require("./modelArchiveIntegrity");
 const ParakeetServerManager = require("./parakeetServer");
-const { rememberInstalledModel, forgetInstalledModels } = require("./installedModels");
+const {
+  rememberInstalledModel,
+  forgetInstalledModels,
+  pruneInstalledModels,
+} = require("./installedModels");
 const { getModelsDirForService } = require("./modelDirUtils");
 const { assertParakeetSupported, getParakeetCapability } = require("./parakeetCapability");
 
@@ -336,6 +340,7 @@ class ParakeetManager {
     const modelsDir = this.getModelsDir();
 
     if (this.serverManager.isModelDownloaded(modelName)) {
+      rememberInstalledModel("parakeetModels", "", modelName);
       return { model: modelName, downloaded: true, path: modelPath, success: true };
     }
 
@@ -408,13 +413,21 @@ class ParakeetManager {
       }
 
       if (modelConfig.sha256) {
-        // Checking a large archive takes minutes; say so instead of sitting at 100%.
-        progressCallback?.({ type: "verifying", model: modelName, percentage: 100 });
+        // Checking a large archive takes minutes; show its progress, still cancellable.
+        const archiveBytes = (await fsPromises.stat(archivePath)).size;
+        const verifying = (bytesRead) =>
+          progressCallback?.({
+            type: "verifying",
+            model: modelName,
+            percentage: Math.min(100, Math.round((bytesRead / archiveBytes) * 100)),
+          });
+        verifying(0);
         await validateModelArchive(
           archivePath,
           modelConfig.extractDir,
           signal,
-          modelConfig.expectedSizeBytes || modelConfig.sizeMb * 1024 * 1024
+          modelConfig.size,
+          verifying
         );
       }
       if (signal.aborted) throw Object.assign(new Error("Download cancelled"), { isAbort: true });
@@ -716,7 +729,7 @@ class ParakeetManager {
         }
       }
 
-      forgetInstalledModels("parakeetModels");
+      pruneInstalledModels("parakeetModels", (id) => fs.existsSync(path.join(modelsDir, id)));
       return {
         success: true,
         deleted_count: deletedCount,

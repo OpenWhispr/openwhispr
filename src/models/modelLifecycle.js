@@ -1,4 +1,4 @@
-import { getRegistryData, getRetiredModel } from "./registryData.js";
+import { getRegistryData, getRetiredModel, isCatalogPending } from "./registryData.js";
 
 // The model a retired selection moves to: its named replacement while that is still
 // offered, otherwise the provider's default. Null when the selection is not retired.
@@ -12,10 +12,12 @@ export function retiredReplacement(section, providerId, modelId, providers) {
   return (models.find((model) => model.id === provider?.defaultModel) ?? models[0])?.id ?? null;
 }
 
-// An ID no provider in the section offers or has retired. It may be a model added
-// remotely whose catalog has not loaded yet, so a saved choice of it is left alone
-// rather than swapped for a default.
-export function isUnknownModel(section, modelId, providers) {
+// While a catalog this app accepted before cannot be loaded (see isCatalogPending), a
+// saved ID that no provider in the section offers or has retired may be one of its
+// additions, so it is left alone rather than swapped for a default. Otherwise an unknown
+// ID gets the usual repairs.
+export function isAwaitingCatalog(section, modelId, providers) {
+  if (!modelId || !isCatalogPending()) return false;
   const list = providers ?? getRegistryData()[section];
   return (
     !list.some((provider) => provider.models.some((model) => model.id === modelId)) &&

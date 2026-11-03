@@ -11,7 +11,9 @@ function retire(data, section, providerId, modelId, replacement) {
 
 test("retired models leave every list but stay resolvable to their replacement", async () => {
   const store = await import("../../src/models/registryData.js");
-  const { retiredReplacement, isUnknownModel } = await import("../../src/models/modelLifecycle.js");
+  const { retiredReplacement, isAwaitingCatalog } = await import(
+    "../../src/models/modelLifecycle.js"
+  );
   const { resolveRetiredCloudModel } = await import("../../src/config/retiredCloudModelPolicy.js");
   const { resolveByokModel } = await import("../../src/helpers/transcriptionRoute.ts");
   const data = structuredClone(seed);
@@ -33,8 +35,11 @@ test("retired models leave every list but stay resolvable to their replacement",
     .transcriptionProviders.find((p) => p.id === "assemblyai").defaultModel;
   assert.equal(resolveByokModel("assemblyai", "universal-3-5-pro"), assemblyDefault);
 
-  assert.equal(isUnknownModel("cloudProviders", "gpt-5.5"), false, "retired is known");
-  assert.equal(isUnknownModel("cloudProviders", "remote-not-loaded-yet"), true);
+  assert.equal(isAwaitingCatalog("cloudProviders", "remote-not-loaded-yet"), false, "not pending");
+  store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1, pending: true });
+  assert.equal(isAwaitingCatalog("cloudProviders", "gpt-5.5"), false, "retired is known");
+  assert.equal(isAwaitingCatalog("cloudProviders", ""), false, "an empty choice is not awaited");
+  assert.equal(isAwaitingCatalog("cloudProviders", "remote-not-loaded-yet"), true);
 });
 
 test("startup and live retirements move saved selections and tell the user once", async (t) => {
@@ -55,6 +60,7 @@ test("startup and live retirements move saved selections and tell the user once"
       cloudTranscriptionProvider: "assemblyai",
       cloudTranscriptionModel: "universal-3-5-pro",
     },
+    window: { location: { search: "?panel=true" } },
   });
   const vite = await createRendererServer(t, { cachePrefix: "model-lifecycle-" });
   const settings = await vite.ssrLoadModule("/stores/settingsStore.ts");
@@ -63,13 +69,13 @@ test("startup and live retirements move saved selections and tell the user once"
   const data = structuredClone(seed);
   retire(data, "cloudProviders", "openai", "gpt-5.5", "gpt-6-luna");
   retire(data, "transcriptionProviders", "assemblyai", "universal-3-5-pro");
-  store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1 });
+  store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1, pending: true });
   settings.reconcileRetiredCloudModelSelections();
 
   const state = settings.useSettingsStore.getState();
   assert.equal(state.cleanupModel, "gpt-6-luna");
   assert.equal(state.dictationAgentModel, "gpt-6-luna");
-  assert.equal(state.chatAgentModel, "remote-not-loaded-yet", "unknown IDs are left alone");
+  assert.equal(state.chatAgentModel, "remote-not-loaded-yet", "kept while the catalog is pending");
   assert.notEqual(state.cloudTranscriptionModel, "universal-3-5-pro");
   const events = toasts.consumeRetiredModelSwitches();
   assert.deepEqual(
@@ -81,4 +87,51 @@ test("startup and live retirements move saved selections and tell the user once"
   );
   assert.equal(events[0].providerName, "OpenAI");
   assert.equal(events[0].to, "GPT-6 Luna");
+});
+
+test("without a pending catalog an unknown cloud ID is repaired, as on main", async (t) => {
+  installBrowserGlobals(t, {
+    initialStorage: {
+      _llmScopeKeysMigrated: "1",
+      _providerSettingsMigrated: "1",
+      cleanupMode: "providers",
+      cleanupProvider: "openai",
+      cleanupModel: "qwen3.5-9b-q4_k_m",
+      chatAgentMode: "providers",
+      chatAgentProvider: "openai",
+      chatAgentModel: "my-self-hosted-model",
+    },
+  });
+  const vite = await createRendererServer(t, { cachePrefix: "model-lifecycle-repair-" });
+  const settings = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const store = await vite.ssrLoadModule("/models/registryData.js");
+  store.replaceRegistryData({ data: structuredClone(seed), manifestVersion: store.getRegistryVersion() + 1 });
+  settings.reconcileRetiredCloudModelSelections();
+  const state = settings.useSettingsStore.getState();
+  const openaiDefault = store.getRegistryData().cloudProviders.find((p) => p.id === "openai").defaultModel;
+  assert.equal(state.cleanupModel, openaiDefault, "a local model in a cloud slot");
+  assert.equal(state.chatAgentModel, openaiDefault, "a self-hosted name in a cloud slot");
+});
+
+test("the dictation panel moves its own selections without a second toast", async (t) => {
+  installBrowserGlobals(t, {
+    initialStorage: {
+      _llmScopeKeysMigrated: "1",
+      _providerSettingsMigrated: "1",
+      cleanupMode: "providers",
+      cleanupProvider: "openai",
+      cleanupModel: "gpt-5.5",
+    },
+    window: { location: { search: "" } },
+  });
+  const vite = await createRendererServer(t, { cachePrefix: "model-lifecycle-panel-" });
+  const settings = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const store = await vite.ssrLoadModule("/models/registryData.js");
+  const toasts = await vite.ssrLoadModule("/stores/retiredModelSwitchStore.ts");
+  const data = structuredClone(seed);
+  retire(data, "cloudProviders", "openai", "gpt-5.5", "gpt-6-luna");
+  store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1 });
+  settings.reconcileRetiredCloudModelSelections();
+  assert.equal(settings.useSettingsStore.getState().cleanupModel, "gpt-6-luna");
+  assert.deepEqual(toasts.consumeRetiredModelSwitches(), []);
 });

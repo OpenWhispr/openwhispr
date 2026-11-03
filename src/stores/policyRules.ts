@@ -655,5 +655,5 @@ export function reconcileCloudProviderSelection({
   if (!first) {
     return customAllowed ? { provider: "custom", model: selectedModel || "whisper-1" } : null;
   }
-  return { provider: first.id, model: first.models?.[0]?.id ?? "" };
+  return { provider: first.id, model: pickDefaultModelId(first) };
 }
