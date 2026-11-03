@@ -3,6 +3,7 @@ import { createGroq } from "@ai-sdk/groq";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import type { LanguageModel } from "ai";
+import type { InferenceMode } from "../../types/electron";
 import { getTinfoilLanguageModel } from "./tinfoilClient";
 import { API_ENDPOINTS } from "../../config/constants";
 import { openCodeSessionHeaders } from "./openCodeSession";
@@ -34,9 +35,12 @@ export async function getAIModel(
   model: string,
   apiKey: string,
   baseURL?: string,
-  opts?: { disableThinking?: boolean; reasoningEffort?: string }
+  opts?: { disableThinking?: boolean; reasoningEffort?: string; mode?: InferenceMode }
 ): Promise<LanguageModel> {
-  assertReasoningAllowedByPolicy(provider, provider === "local" ? "local" : "providers");
+  assertReasoningAllowedByPolicy(
+    provider,
+    opts?.mode ?? (provider === "local" ? "local" : "providers")
+  );
   switch (provider) {
     case "openai":
       return createOpenAI({ apiKey })(model);

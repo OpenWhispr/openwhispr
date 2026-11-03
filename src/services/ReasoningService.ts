@@ -930,6 +930,7 @@ class ReasoningService extends BaseReasoningService {
     const aiModel = isEnterprise
       ? createEnterpriseChatModel(provider as EnterpriseProvider, model, config.inferenceScope)
       : await getAIModel(aiProvider, model, apiKey, baseURL, {
+          mode,
           disableThinking: openrouterDisableThinking,
           reasoningEffort: provider === "openrouter" ? reasoningEffort : undefined,
         });

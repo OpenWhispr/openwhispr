@@ -1,6 +1,8 @@
 const AgentStreamRequestRegistry = require("../../../src/helpers/agentStreamRequestRegistry");
 
 function withDevicePolicy(context) {
+  const { session } = require("electron");
+  session.defaultSession ??= { cookies: { get: async () => [] } };
   context.managedDevicePolicy = {
     getSnapshot: () => ({ status: "absent", managed: false, policy: null }),
     subscribe: () => () => {},

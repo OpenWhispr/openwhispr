@@ -75,6 +75,7 @@ function anything() {
 function buildFakeThis() {
   const target = {
     sessionId: "test-session",
+    windowManager: { controlPanelWindow: null, mainWindow: null },
     environmentManager: {
       getAnthropicKey: () => "sk-ant-test-key",
     },
@@ -136,6 +137,7 @@ test("an Anthropic HTTP failure resolves with classified IPC fields", async () =
 test("an already-classified failure (missing key) passes through unchanged", async () => {
   const noKeyThis = {
     sessionId: "test-session",
+    windowManager: { controlPanelWindow: null, mainWindow: null },
     environmentManager: { getAnthropicKey: () => "" },
   };
   const proxiedThis = new Proxy(noKeyThis, {

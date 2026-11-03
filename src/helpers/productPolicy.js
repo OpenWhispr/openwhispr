@@ -23,6 +23,34 @@ function realtimeSelection(options = {}, provider = options.provider ?? "openai-
 function productOperationAllowed(snapshot, appVersion, channel, args = []) {
   const state = productPolicyState(snapshot, appVersion);
   if (!rules.isPolicyActionAllowed(state)) return false;
+  if (channel === "cloud-api-request") {
+    let path;
+    try {
+      path = new URL(args[0]?.path, "https://api.example.test").pathname.replace(/\/+$/, "");
+    } catch {
+      return false;
+    }
+    const operation =
+      path === "/api/reason"
+        ? "cloud-reason"
+        : path === "/api/agent/stream" || /^\/api\/shared\/notes\/[^/]+\/chat$/.test(path)
+          ? "cloud-agent-stream-start"
+          : path === "/api/agent/web-search"
+            ? "agent-web-search"
+            : [
+                  "/api/transcribe",
+                  "/api/v1/transcribe",
+                  "/api/streaming-token",
+                  "/api/deepgram-streaming-token",
+                  "/api/gemini-live-token",
+                  "/api/openai-realtime-token",
+                  "/api/stt/orukeet/session",
+                  "/api/stt/orukeet/pipeline-session",
+                ].includes(path)
+              ? "cloud-transcribe"
+              : null;
+    if (operation) return productOperationAllowed(snapshot, appVersion, operation);
+  }
   const transcription = (selection) => rules.isTranscriptionSelectionAllowed(state, selection);
   const llm = (mode, provider = "") => rules.isLlmSelectionAllowed(state, { mode, provider });
   if (["cloud-transcribe", "transcribe-audio-file-cloud"].includes(channel))
@@ -33,6 +61,10 @@ function productOperationAllowed(snapshot, appVersion, channel, args = []) {
     )
   )
     return transcription({ mode: "local", provider: "" });
+  const proxy = /^proxy-(xai|mistral|corti|tinfoil|gemini)-transcription$/.exec(channel);
+  if (proxy) return transcription({ mode: "providers", provider: proxy[1] });
+  if (channel === "cloud-agent-stream-start")
+    return rules.isAgentAllowed(state) && llm("openwhispr");
   if (channel === "cloud-reason") return llm("openwhispr");
   if (channel === "process-local-reasoning") return llm("local");
   if (channel === "process-anthropic-reasoning") return llm("providers", "anthropic");
@@ -43,6 +75,7 @@ function productOperationAllowed(snapshot, appVersion, channel, args = []) {
   if (channel === "get-tinfoil-chat-models") return llm("providers", "tinfoil");
   if (channel === "agent-web-search")
     return rules.isAgentAllowed(state) && rules.isWebSearchAllowed(state);
+  if (channel === "meeting-transcription") return transcription(realtimeSelection(args[0]));
   if (channel.startsWith("dictation-realtime-")) return transcription(realtimeSelection(args[0]));
   const stream = /^(assemblyai|deepgram|gemini|corti)-streaming-(start|warmup)$/.exec(channel);
   if (stream) {

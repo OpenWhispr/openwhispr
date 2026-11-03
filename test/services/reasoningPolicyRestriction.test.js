@@ -54,3 +54,23 @@ test("reasoning policy asserts throw messages localized to the active UI languag
     message: enTranslations.common.policyAgentRestricted,
   });
 });
+
+test("the model factory preserves a permitted self-hosted route without granting local or BYOK", async (t) => {
+  installBrowserGlobals(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-self-hosted-policy-test-",
+  });
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const { getAIModel } = await vite.ssrLoadModule("/services/ai/providers.ts");
+  const { defaultDevicePolicy } = require("../../src/helpers/managedDevicePolicy");
+  const policy = defaultDevicePolicy();
+  policy.llm.allowedModes = ["self-hosted"];
+  usePolicyStore.setState({ status: "managed", policy, appVersion: "1.11.1" });
+  assert.ok(
+    await getAIModel("local", "local-model", "", "https://lan.example.test/v1", {
+      mode: "self-hosted",
+    })
+  );
+  await assert.rejects(getAIModel("local", "local-model", "", "http://127.0.0.1:9999/v1"));
+  await assert.rejects(getAIModel("openai", "gpt-test", "saved-key"));
+});

@@ -12,6 +12,7 @@ const originalLoad = Module._load;
 // registered handler closures can be invoked directly against a fake `this`.
 const handlers = new Map();
 const fetches = [];
+let tinfoilBehavior = async () => ({ text: "tinfoil text", model: "tinfoil-model" });
 let policySnapshot = { success: true, managed: false };
 let fetchResponse = () => ({
   ok: true,
@@ -109,7 +110,7 @@ Module._load = function loadWithMocks(request, parent, isMain) {
       return {
         transcribeWithTinfoil: async (opts) => {
           tinfoilCalls.push(opts);
-          return { text: "tinfoil text", model: "tinfoil-model" };
+          return tinfoilBehavior(opts);
         },
         getTinfoilChatModels: () => [],
       };
@@ -226,6 +227,8 @@ test.before(async () => {
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
   fakeThis = buildFakeThis();
+  fakeThis._retireDisallowedProductWork =
+    Ctor.prototype._retireDisallowedProductWork.bind(fakeThis);
   Ctor.prototype.setupHandlers.call(withDevicePolicy(fakeThis));
   await fakeThis.refreshEffectivePolicy();
   retryHandler = handlers.get("retry-transcription");
@@ -1299,4 +1302,37 @@ test("main enterprise audio resolution honors provider and mode policy before HT
   await assert.rejects(fakeThis.enterpriseAudioRuntime.resolve({}, "realtime"), {
     code: "POLICY_UNRESOLVABLE",
   });
+});
+
+test("a valid provider restriction aborts an attested batch request and discards its late result", async (t) => {
+  const { deferred } = require("./harness/deferred");
+  const started = deferred();
+  const finish = deferred();
+  const previous = tinfoilBehavior;
+  let signal;
+  t.after(() => {
+    tinfoilBehavior = previous;
+    policySnapshot = { success: true, managed: false };
+    finish.resolve();
+  });
+  policySnapshot = { success: true, managed: false };
+  await fakeThis.refreshEffectivePolicy();
+  tinfoilBehavior = async (options) => {
+    signal = options.signal;
+    started.resolve();
+    await finish.promise;
+    return { text: "late" };
+  };
+  const pending = handlers.get("proxy-tinfoil-transcription")(
+    { sender: {} },
+    { audioBuffer: new Uint8Array([1]) }
+  );
+  await started.promise;
+  const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+  policy.transcription.allowedByokProviders = ["openai"];
+  policySnapshot = { success: true, managed: true, policy };
+  await fakeThis.refreshEffectivePolicy();
+  assert.equal(signal.aborted, true);
+  finish.resolve();
+  assert.equal((await pending).code, "DEVICE_POLICY_BLOCKED");
 });

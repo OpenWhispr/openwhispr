@@ -24,6 +24,7 @@ const bindings = [
   })),
 ];
 const handlers = new Map();
+const listeners = new Map();
 const keys = new Map();
 const notifications = [];
 const editor = { id: 1 };
@@ -135,7 +136,11 @@ const electron = {
     on() {},
     isPackaged: false,
   },
-  ipcMain: { handle: (name, fn) => handlers.set(name, fn), on() {}, removeHandler() {} },
+  ipcMain: {
+    handle: (name, fn) => handlers.set(name, fn),
+    on: (name, fn) => listeners.set(name, fn),
+    removeHandler() {},
+  },
   BrowserWindow: {
     getAllWindows: () => windows,
     fromWebContents: () => windows[1],
@@ -260,8 +265,11 @@ test.beforeEach(() => {
 
 test.before(async () => {
   const IPCHandlers = require(modulePath);
+  target._agentStreamRequests = new (require("../../src/helpers/agentStreamRequestRegistry"))();
   target._stopRemoteProductWork = IPCHandlers.prototype._stopRemoteProductWork.bind(handlersThis);
   target._startRemoteProductWork = IPCHandlers.prototype._startRemoteProductWork.bind(handlersThis);
+  target._retireDisallowedProductWork =
+    IPCHandlers.prototype._retireDisallowedProductWork.bind(handlersThis);
   IPCHandlers.prototype.setupHandlers.call(handlersThis);
   await target.refreshEffectivePolicy();
 });
@@ -289,6 +297,11 @@ test("local-only device policy refuses direct remote IPC despite saved keys and 
     "process-anthropic-reasoning",
     "process-enterprise-reasoning",
     "gcal-start-oauth",
+    "proxy-tinfoil-transcription",
+    "proxy-corti-transcription",
+    "proxy-gemini-transcription",
+    "proxy-xai-transcription",
+    "proxy-mistral-transcription",
   ]) {
     assert.equal((await invoke(channel, {})).code, "DEVICE_POLICY_BLOCKED", channel);
   }
@@ -1021,4 +1034,60 @@ test("a sign-out or account switch during a meeting prepare leaves no warm conne
     assert.equal(result.code, "AUDIO_OPERATION_CANCELLED");
     assert.ok(meetingStreams().every((stream) => !stream?.isConnected));
   }
+});
+
+test("valid inference restrictions retire active provider streams without disabling independent remote features", async () => {
+  invoke("save-assemblyai-key", "saved-provider-key");
+  assert.equal((await invoke("assemblyai-streaming-start", { mode: "byok" })).success, true);
+  const streaming = target.assemblyAiStreaming;
+  const policy = defaultDevicePolicy();
+  policy.transcription.allowedModes = ["local"];
+  policy.llm.allowedModes = ["local"];
+  setDeviceValues({ Policy: JSON.stringify(policy) });
+  assert.ok(streaming.disconnects > 0);
+  assert.equal(target.assemblyAiStreaming, null);
+  const current = target.effectivePolicyManager.getCurrent();
+  assert.equal(current.success, true);
+  assert.equal(current.localOnly, false);
+  assert.equal(current.policy.features.webSearchEnabled, true);
+  assert.equal(current.policy.features.connectorsEnabled, true);
+  assert.equal(current.policy.dataRetention.cloudBackupAllowed, true);
+  for (const channel of [
+    "proxy-xai-transcription",
+    "proxy-mistral-transcription",
+    "proxy-corti-transcription",
+    "proxy-tinfoil-transcription",
+    "proxy-gemini-transcription",
+  ])
+    assert.equal((await invoke(channel, {})).code, "DEVICE_POLICY_BLOCKED");
+  for (const path of [
+    "/api/reason",
+    "/api/transcribe",
+    "/api/agent/stream",
+    "/api/stt/orukeet/session",
+  ])
+    assert.equal(
+      (
+        await invoke("cloud-api-request", {
+          path,
+          method: "POST",
+          expectedAuthGeneration: 1,
+          body: { text: "private" },
+        })
+      ).code,
+      "DEVICE_POLICY_BLOCKED"
+    );
+  const messages = [];
+  const sender = {
+    id: 1,
+    isDestroyed: () => false,
+    send: (...args) => messages.push(args),
+    once() {},
+    removeListener() {},
+  };
+  await listeners.get("cloud-agent-stream-start")({ sender }, "blocked-agent", [
+    { role: "user", content: "private" },
+  ]);
+  assert.equal(messages[0][0], "cloud-agent-stream-error");
+  assert.equal(messages[0][1].code, "DEVICE_POLICY_BLOCKED");
 });
