@@ -2523,7 +2523,8 @@
           "selectAllMembers": "选择所有成员",
           "selectAllInvitations": "选择所有邀请",
           "selectRow": "选择 {{name}}",
-          "remove": "移除"
+          "remove": "移除",
+          "addToTeamspace": "添加到 Teamspace"
         }
       },
       "teamspaces": {
@@ -2670,6 +2671,20 @@
           "deleteFailedTitle": "无法删除 {{space}}",
           "deleteFailedBody": "该 Teamspace 仍可使用。请检查网络连接后重试。",
           "deleted": "{{space}} 已被删除。"
+        },
+        "addPeople": {
+          "loading": "正在加载 Teamspace…",
+          "failed": "无法加载 Teamspace",
+          "none": "还没有 Teamspace",
+          "addingTitle_one": "正在添加 {{count}} 人…",
+          "addingTitle_other": "正在添加 {{count}} 人…",
+          "addingBody": "将他们添加到 {{space}} 期间，请保持此窗口打开。",
+          "addingAction": "正在添加…",
+          "failedTitle_one": "无法添加 {{count}} 人",
+          "failedTitle_other": "无法添加 {{count}} 人",
+          "failedBody": "他们尚未添加到 {{space}}。你的选择已保留。请检查网络连接后重试。",
+          "done_one": "已将 {{count}} 人添加到 {{space}}",
+          "done_other": "已将 {{count}} 人添加到 {{space}}"
         }
       },
       "role": {

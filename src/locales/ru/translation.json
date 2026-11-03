@@ -2547,7 +2547,8 @@
           "selectAllMembers": "Выбрать всех участников",
           "selectAllInvitations": "Выбрать все приглашения",
           "selectRow": "Выбрать {{name}}",
-          "remove": "Удалить"
+          "remove": "Удалить",
+          "addToTeamspace": "Добавить в teamspace"
         }
       },
       "teamspaces": {
@@ -2710,6 +2711,26 @@
           "deleteFailedTitle": "Не удалось удалить {{space}}",
           "deleteFailedBody": "Teamspace по-прежнему доступен. Проверьте подключение и повторите попытку.",
           "deleted": "{{space}} удалён."
+        },
+        "addPeople": {
+          "loading": "Загрузка teamspaces…",
+          "failed": "Не удалось загрузить teamspaces",
+          "none": "Пока нет teamspaces",
+          "addingTitle_one": "Добавление {{count}} человека…",
+          "addingTitle_few": "Добавление {{count}} человек…",
+          "addingTitle_many": "Добавление {{count}} человек…",
+          "addingTitle_other": "Добавление {{count}} человека…",
+          "addingBody": "Не закрывайте это окно, пока их добавляют в {{space}}.",
+          "addingAction": "Добавление…",
+          "failedTitle_one": "Не удалось добавить {{count}} человека",
+          "failedTitle_few": "Не удалось добавить {{count}} человека",
+          "failedTitle_many": "Не удалось добавить {{count}} человек",
+          "failedTitle_other": "Не удалось добавить {{count}} человека",
+          "failedBody": "Они не были добавлены в {{space}}. Ваш выбор сохранён. Проверьте подключение и повторите попытку.",
+          "done_one": "В {{space}} добавлен {{count}} человек",
+          "done_few": "В {{space}} добавлено {{count}} человека",
+          "done_many": "В {{space}} добавлено {{count}} человек",
+          "done_other": "В {{space}} добавлено {{count}} человека"
         }
       },
       "role": {

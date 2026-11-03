@@ -235,6 +235,14 @@ test("Add appears only with manage_members", async (t) => {
   assert.equal(globalThis.__dialogProps, undefined);
 });
 
+test("the Members tab is told where Open teamspace goes", async (t) => {
+  const Section = await loadSection(t);
+  const onOpenTeamspace = () => {};
+
+  render(Section, ADMIN, { onOpenTeamspace });
+  assert.equal(globalThis.__membersProps.onOpenTeamspace, onOpenTeamspace);
+});
+
 test("Add hands the roster and pending invitations to the invite dialog", async (t) => {
   const Section = await loadSection(t);
   render(Section, ADMIN);

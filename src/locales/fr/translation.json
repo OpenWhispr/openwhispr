@@ -1794,7 +1794,8 @@
           "selectAllMembers": "Sélectionner tous les membres",
           "selectAllInvitations": "Sélectionner toutes les invitations",
           "selectRow": "Sélectionner {{name}}",
-          "remove": "Retirer"
+          "remove": "Retirer",
+          "addToTeamspace": "Ajouter au teamspace"
         }
       },
       "teamspaces": {
@@ -1941,6 +1942,20 @@
           "deleteFailedTitle": "Impossible de supprimer {{space}}",
           "deleteFailedBody": "Le teamspace est toujours disponible. Vérifiez votre connexion et réessayez.",
           "deleted": "{{space}} a été supprimé."
+        },
+        "addPeople": {
+          "loading": "Chargement des teamspaces…",
+          "failed": "Impossible de charger les teamspaces",
+          "none": "Aucun teamspace pour l'instant",
+          "addingTitle_one": "Ajout de {{count}} personne…",
+          "addingTitle_other": "Ajout de {{count}} personnes…",
+          "addingBody": "Gardez cette fenêtre ouverte pendant leur ajout à {{space}}.",
+          "addingAction": "Ajout…",
+          "failedTitle_one": "Impossible d'ajouter {{count}} personne",
+          "failedTitle_other": "Impossible d'ajouter {{count}} personnes",
+          "failedBody": "Ces personnes n'ont pas été ajoutées à {{space}}. Votre sélection est conservée. Vérifiez votre connexion et réessayez.",
+          "done_one": "{{count}} personne ajoutée à {{space}}",
+          "done_other": "{{count}} personnes ajoutées à {{space}}"
         }
       },
       "role": {

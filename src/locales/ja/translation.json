@@ -2523,7 +2523,8 @@
           "selectAllMembers": "すべてのメンバーを選択",
           "selectAllInvitations": "すべての招待を選択",
           "selectRow": "{{name}} を選択",
-          "remove": "削除"
+          "remove": "削除",
+          "addToTeamspace": "Teamspace に追加"
         }
       },
       "teamspaces": {
@@ -2670,6 +2671,20 @@
           "deleteFailedTitle": "{{space}} を削除できませんでした",
           "deleteFailedBody": "Teamspace はまだ利用できます。接続を確認して、もう一度お試しください。",
           "deleted": "{{space}} を削除しました。"
+        },
+        "addPeople": {
+          "loading": "Teamspace を読み込んでいます…",
+          "failed": "Teamspace を読み込めませんでした",
+          "none": "Teamspace はまだありません",
+          "addingTitle_one": "{{count}}人を追加しています…",
+          "addingTitle_other": "{{count}}人を追加しています…",
+          "addingBody": "{{space}} への追加が完了するまで、このウィンドウを開いたままにしてください。",
+          "addingAction": "追加中…",
+          "failedTitle_one": "{{count}}人を追加できませんでした",
+          "failedTitle_other": "{{count}}人を追加できませんでした",
+          "failedBody": "{{space}} に追加されていません。選択内容は保持されています。接続を確認して、もう一度お試しください。",
+          "done_one": "{{count}}人を {{space}} に追加しました",
+          "done_other": "{{count}}人を {{space}} に追加しました"
         }
       },
       "role": {

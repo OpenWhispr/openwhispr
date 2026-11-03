@@ -39,6 +39,7 @@ function legacyPeopleTab(): PeopleTab | null {
 
 interface Props {
   initialSubTab?: string;
+  onOpenTeamspace?: (localSpaceId: number) => void;
 }
 
 interface BodyProps {
@@ -47,6 +48,7 @@ interface BodyProps {
   onSelectTab: (tab: PeopleTab) => void;
   searchQuery: string;
   onSearchQueryChange: (query: string) => void;
+  onOpenTeamspace?: (localSpaceId: number) => void;
 }
 
 function PeopleBody({
@@ -55,6 +57,7 @@ function PeopleBody({
   onSelectTab,
   searchQuery,
   onSearchQueryChange,
+  onOpenTeamspace,
 }: BodyProps): React.ReactElement {
   const { t } = useTranslation();
   const canManage = workspaceCan(workspace, "manage_members");
@@ -163,6 +166,7 @@ function PeopleBody({
             workspace={workspace}
             searchQuery={searchQuery}
             onSearchQueryChange={onSearchQueryChange}
+            onOpenTeamspace={onOpenTeamspace}
           />
         )}
         {tab === "invitations" && (
@@ -188,6 +192,7 @@ function PeopleBody({
 
 export default function WorkspacePeopleSection({
   initialSubTab,
+  onOpenTeamspace,
 }: Props): React.ReactElement | null {
   const state = useSettingsWorkspace();
   const [storedTab, setStoredTab] = useLocalStorage<string>(
@@ -216,6 +221,7 @@ export default function WorkspacePeopleSection({
           onSelectTab={setStoredTab}
           searchQuery={searchQuery}
           onSearchQueryChange={setSearchQuery}
+          onOpenTeamspace={onOpenTeamspace}
         />
       )}
     </SettingsWorkspaceFrame>

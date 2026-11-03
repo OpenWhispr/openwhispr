@@ -1794,7 +1794,8 @@
           "selectAllMembers": "Select all members",
           "selectAllInvitations": "Select all invitations",
           "selectRow": "Select {{name}}",
-          "remove": "Remove"
+          "remove": "Remove",
+          "addToTeamspace": "Add to teamspace"
         }
       },
       "teamspaces": {
@@ -1941,6 +1942,20 @@
           "deleteFailedTitle": "Couldn't delete {{space}}",
           "deleteFailedBody": "The teamspace is still available. Check your connection and try again.",
           "deleted": "{{space}} was deleted."
+        },
+        "addPeople": {
+          "loading": "Loading teamspaces…",
+          "failed": "Couldn't load teamspaces",
+          "none": "No teamspaces yet",
+          "addingTitle_one": "Adding {{count}} person…",
+          "addingTitle_other": "Adding {{count}} people…",
+          "addingBody": "Keep this window open while they're added to {{space}}.",
+          "addingAction": "Adding…",
+          "failedTitle_one": "Couldn't add {{count}} person",
+          "failedTitle_other": "Couldn't add {{count}} people",
+          "failedBody": "They haven't been added to {{space}}. Your selection is kept. Check your connection and try again.",
+          "done_one": "Added {{count}} person to {{space}}",
+          "done_other": "Added {{count}} people to {{space}}"
         }
       },
       "role": {

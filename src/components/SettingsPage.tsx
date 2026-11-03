@@ -3036,7 +3036,9 @@ export default function SettingsPage({
         );
 
       case "workspacePeople":
-        return <WorkspacePeopleSection initialSubTab={initialSubTab} />;
+        return (
+          <WorkspacePeopleSection initialSubTab={initialSubTab} onOpenTeamspace={onOpenTeamspace} />
+        );
 
       case "workspaceTeamspaces":
         return <WorkspaceTeamspacesSection onOpenTeamspace={onOpenTeamspace} />;

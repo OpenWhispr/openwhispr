@@ -28,6 +28,7 @@ import { classifyRowActionError, type RowActionError } from "../../lib/workspace
 import { transferReducer } from "../../lib/workspaceTransferFlow";
 import { RemoveMembersDialog } from "../workspace/RemoveMembersDialog";
 import { RowCheckbox } from "../dictionary/RowCheckbox";
+import { AddToTeamspaceMenu } from "../workspace/AddToTeamspaceMenu";
 import { SelectionBar } from "../workspace/SelectionBar";
 import { TransferOwnershipDialog } from "../workspace/TransferOwnershipDialog";
 import { MemberRoleMenu } from "./MemberRoleMenu";
@@ -38,6 +39,8 @@ interface WorkspaceMembersTabProps {
   /** Filters the table by name or email. */
   searchQuery: string;
   onSearchQueryChange: (query: string) => void;
+  /** Where "Open teamspace" in the toast after an add goes; omitted, the toast has no such action. */
+  onOpenTeamspace?: (localSpaceId: number) => void;
 }
 
 const SKELETON_ROWS = 3;
@@ -49,6 +52,7 @@ export default function WorkspaceMembersTab({
   workspace,
   searchQuery,
   onSearchQueryChange,
+  onOpenTeamspace,
 }: WorkspaceMembersTabProps): React.ReactElement {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -522,6 +526,15 @@ export default function WorkspaceMembersTab({
             onClick: () => openRemoval(selectedMembers),
           },
         ]}
+        // Only whoever manages members can select anyone, so the bar and this menu share that check.
+        trailing={
+          <AddToTeamspaceMenu
+            workspace={workspace}
+            people={selectedMembers}
+            onAdded={() => setSelection(new Set())}
+            onOpenTeamspace={onOpenTeamspace}
+          />
+        }
       />
 
       <TransferOwnershipDialog
