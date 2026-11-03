@@ -10504,14 +10504,13 @@ class IPCHandlers {
     };
 
     const sendMeetingAudio = (audioBuffer, source, synthetic = false, capturedAt = null) => {
+      const effective = this.effectivePolicyManager.getCurrent();
       if (
         this._audioFeaturePolicy.activeFailure("meeting") ||
-        !productOperationAllowed(
-          this.effectivePolicyManager.getCurrent(),
-          app.getVersion(),
-          "meeting-transcription",
-          [meetingConnectionOptions ?? {}]
-        )
+        (effective.success &&
+          !productOperationAllowed(effective, app.getVersion(), "meeting-transcription", [
+            meetingConnectionOptions ?? {},
+          ]))
       )
         return;
       const outboundBuffer = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
