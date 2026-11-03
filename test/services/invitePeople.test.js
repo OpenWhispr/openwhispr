@@ -190,8 +190,6 @@ test("abort before sending sends nothing", async () => {
   assert.deepEqual(results, []);
 });
 
-// Two chunks, so the first request's refusal either ends the run or lets the second go ahead.
-
 test("an expired or replaced sign-in answers for every address", async () => {
   for (const error of [
     new CloudApiError("Unauthorized", 401, "AUTH_EXPIRED"),
