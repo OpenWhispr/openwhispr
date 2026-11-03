@@ -292,6 +292,41 @@ test("an aborted manual feed check returns the new policy denial", async () => {
   assert.equal((await checking).code, "UPDATES_MANAGED_BY_ORG");
 });
 
+for (const mode of ["user_choice", "always_on"]) {
+  test(`an aborted check and its joined caller explain restored ${mode} policy`, async () => {
+    let rejectCheck;
+    const { manager, setPolicy } = setup({
+      check: () => new Promise((_resolve, reject) => (rejectCheck = reject)),
+      onAbort: () => rejectCheck(new Error("cancelled")),
+    });
+    const checking = manager.checkForUpdates();
+    await flush();
+    const joined = manager.checkForUpdates();
+    await flush();
+    setPolicy(managed("it_managed"));
+    setPolicy(managed(mode));
+    for (const result of await Promise.all([checking, joined])) {
+      assert.equal(result.code, "UPDATE_POLICY_CHANGED");
+      assert.equal(result.updateAvailable, false);
+    }
+  });
+
+  test(`an aborted download explains restored ${mode} policy`, async () => {
+    let rejectDownload;
+    const { manager, setPolicy } = setup({
+      download: () => new Promise((_resolve, reject) => (rejectDownload = reject)),
+      onAbort: () => rejectDownload(new Error("cancelled")),
+    });
+    manager.setAutoUpdatesEnabled(false);
+    await manager.checkForUpdates();
+    const downloading = manager.downloadUpdate();
+    await flush();
+    setPolicy(managed("it_managed"));
+    setPolicy(managed(mode));
+    assert.equal((await downloading).code, "UPDATE_POLICY_CHANGED");
+  });
+}
+
 test("an old credential's late policy lookup cannot replace the new scope", async () => {
   let resolve;
   const pending = new Promise((done) => {
