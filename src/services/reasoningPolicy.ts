@@ -14,3 +14,13 @@ export function assertAgentAllowedByPolicy(): void {
     throw new Error(i18n.t("common.policyAgentRestricted"));
   }
 }
+
+export function onPolicyRestriction(assertAllowed: () => void, stop: (error: unknown) => void) {
+  return usePolicyStore.subscribe(() => {
+    try {
+      assertAllowed();
+    } catch (error) {
+      stop(error);
+    }
+  });
+}

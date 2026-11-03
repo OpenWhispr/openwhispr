@@ -3,11 +3,13 @@ import { createGroq } from "@ai-sdk/groq";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import type { LanguageModel } from "ai";
+import type { LanguageModelV3 } from "@ai-sdk/provider";
 import type { InferenceMode } from "../../types/electron";
 import { getTinfoilLanguageModel } from "./tinfoilClient";
 import { API_ENDPOINTS } from "../../config/constants";
 import { openCodeSessionHeaders } from "./openCodeSession";
-import { assertReasoningAllowedByPolicy } from "../reasoningPolicy";
+import { assertAgentAllowedByPolicy, assertReasoningAllowedByPolicy } from "../reasoningPolicy";
+import { guardLanguageModel } from "./policyModel";
 
 // Renderer-side AI SDK factory. Cloud + local only — enterprise providers
 // (bedrock/azure/vertex) run in the main process via the
@@ -30,17 +32,18 @@ const withReasoning =
     return fetch(input, init);
   };
 
-export async function getAIModel(
+async function createAIModel(
   provider: string,
   model: string,
   apiKey: string,
   baseURL?: string,
-  opts?: { disableThinking?: boolean; reasoningEffort?: string; mode?: InferenceMode }
+  opts?: {
+    disableThinking?: boolean;
+    reasoningEffort?: string;
+    mode?: InferenceMode;
+    requiresAgent?: boolean;
+  }
 ): Promise<LanguageModel> {
-  assertReasoningAllowedByPolicy(
-    provider,
-    opts?.mode ?? (provider === "local" ? "local" : "providers")
-  );
   switch (provider) {
     case "openai":
       return createOpenAI({ apiKey })(model);
@@ -88,4 +91,17 @@ export async function getAIModel(
     default:
       throw new Error(`Unsupported AI SDK provider for renderer: ${provider}`);
   }
+}
+
+export async function getAIModel(
+  ...args: Parameters<typeof createAIModel>
+): Promise<LanguageModel> {
+  const [provider, , , , opts] = args;
+  const mode = opts?.mode ?? (provider === "local" ? "local" : "providers");
+  const assertAllowed = () => {
+    assertReasoningAllowedByPolicy(provider, mode);
+    if (opts?.requiresAgent) assertAgentAllowedByPolicy();
+  };
+  assertAllowed();
+  return guardLanguageModel((await createAIModel(...args)) as LanguageModelV3, assertAllowed);
 }

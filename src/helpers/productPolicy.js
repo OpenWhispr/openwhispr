@@ -49,10 +49,27 @@ function productOperationAllowed(snapshot, appVersion, channel, args = []) {
                 ].includes(path)
               ? "cloud-transcribe"
               : null;
-    if (operation) return productOperationAllowed(snapshot, appVersion, operation);
+    if (operation)
+      return productOperationAllowed(
+        snapshot,
+        appVersion,
+        operation,
+        operation === "cloud-reason" ? [undefined, args[0]?.body] : []
+      );
   }
+  const requiresAgent =
+    channel === "enterprise-stream-start" ||
+    (channel === "cloud-reason" && args[1]?.requestPurpose === "agent") ||
+    ([
+      "process-local-reasoning",
+      "process-anthropic-reasoning",
+      "process-enterprise-reasoning",
+    ].includes(channel) &&
+      args[3]?.requiresAgent === true);
+  if (requiresAgent && !rules.isAgentAllowed(state)) return false;
   const transcription = (selection) => rules.isTranscriptionSelectionAllowed(state, selection);
   const llm = (mode, provider = "") => rules.isLlmSelectionAllowed(state, { mode, provider });
+  if (channel === "batch-transcription") return transcription(args[0]);
   if (["cloud-transcribe", "transcribe-audio-file-cloud"].includes(channel))
     return transcription({ mode: "openwhispr", provider: "" });
   if (

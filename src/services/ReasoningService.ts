@@ -44,7 +44,14 @@ import {
 } from "./ai/chatRequestBody";
 import { getModelFamilyConstraints } from "./ai/modelFamilyConstraints";
 import { detectEndpointDialect } from "./ai/thinkingSuppressionDialects";
-import { abortOnCancel, isRequestCancelled, requestCancelledError } from "./ai/requestCancellation";
+import {
+  abortOnCancel,
+  cancelRequest,
+  isRequestCancelled,
+  requestCancelledError,
+  requestSignal,
+  trackRequest,
+} from "./ai/requestCancellation";
 import { openCodeSessionHeaders } from "./ai/openCodeSession";
 import { createStreamingThinkFilter } from "./ai/streamingThinkFilter";
 import { extractApiErrorMessage } from "./ai/apiErrorMessage";
@@ -57,7 +64,11 @@ import {
 } from "../helpers/providerHttpErrors.js";
 import { clearTinfoilClientCache } from "./ai/tinfoilClient";
 import { resolveChatRoute } from "../helpers/chatRouting";
-import { assertAgentAllowedByPolicy, assertReasoningAllowedByPolicy } from "./reasoningPolicy";
+import {
+  assertAgentAllowedByPolicy,
+  assertReasoningAllowedByPolicy,
+  onPolicyRestriction,
+} from "./reasoningPolicy";
 import type { InferenceMode } from "../types/electron";
 
 export type ToolMetadata = Record<string, unknown> | Array<Record<string, unknown>>;
@@ -527,8 +538,14 @@ class ReasoningService extends BaseReasoningService {
     if (!providerId) {
       throw new Error("No reasoning provider selected");
     }
-    if (dispatchConfig.requiresAgent) assertAgentAllowedByPolicy();
-    assertReasoningAllowedByPolicy(providerId, resolveLlmDispatchMode(providerId, dispatchConfig));
+    const assertAllowed = () => {
+      if (dispatchConfig.requiresAgent) assertAgentAllowedByPolicy();
+      assertReasoningAllowedByPolicy(
+        providerId,
+        resolveLlmDispatchMode(providerId, dispatchConfig)
+      );
+    };
+    assertAllowed();
 
     if (!trimmedModel && providerId !== "openwhispr" && providerId !== "lan") {
       throw new Error("No reasoning model selected");
@@ -548,14 +565,19 @@ class ReasoningService extends BaseReasoningService {
     }
 
     const startTime = Date.now();
+    const requestId = dispatchConfig.requestId ?? crypto.randomUUID();
+    const release = requestSignal(requestId) ? () => {} : trackRequest(requestId);
+    const unsubscribe = onPolicyRestriction(assertAllowed, () => cancelRequest(requestId));
     try {
       const result = await handler.call({
         text,
         model: trimmedModel,
         agentName,
-        config: dispatchConfig,
+        config: { ...dispatchConfig, requestId },
         ctx: this.providerContext,
       });
+      if (isRequestCancelled(requestId)) throw requestCancelledError();
+      assertAllowed();
 
       if (validateCleanup) assertValidCleanupOutput(text, result);
 
@@ -574,6 +596,9 @@ class ReasoningService extends BaseReasoningService {
         error: (error as Error).message,
       });
       throw error;
+    } finally {
+      unsubscribe();
+      release();
     }
   }
 
@@ -608,7 +633,34 @@ class ReasoningService extends BaseReasoningService {
     });
     const mode: InferenceMode =
       route.kind === "self-hosted" ? "self-hosted" : route.kind === "local" ? "local" : "providers";
-    assertAgentSessionAllowedByPolicy(provider, mode);
+    const assertAllowed = () => assertAgentSessionAllowedByPolicy(provider, mode);
+    assertAllowed();
+    const unsubscribe = onPolicyRestriction(assertAllowed, () => abortController.abort());
+    try {
+      for await (const chunk of this.streamTextFromEndpoint(
+        messages,
+        model,
+        provider,
+        config,
+        abortController,
+        route
+      )) {
+        assertAllowed();
+        yield chunk;
+      }
+    } finally {
+      unsubscribe();
+    }
+  }
+
+  private async *streamTextFromEndpoint(
+    messages: Array<{ role: string; content: string }>,
+    model: string,
+    provider: string,
+    config: ReasoningConfig & { systemPrompt: string },
+    abortController: AbortController,
+    route: ReturnType<typeof resolveChatRoute>
+  ): AsyncGenerator<string, void, unknown> {
     const isLocalProvider = route.kind === "local";
     const isLanChat = route.kind === "self-hosted";
 
@@ -931,6 +983,7 @@ class ReasoningService extends BaseReasoningService {
       ? createEnterpriseChatModel(provider as EnterpriseProvider, model, config.inferenceScope)
       : await getAIModel(aiProvider, model, apiKey, baseURL, {
           mode,
+          requiresAgent: true,
           disableThinking: openrouterDisableThinking,
           reasoningEffort: provider === "openrouter" ? reasoningEffort : undefined,
         });

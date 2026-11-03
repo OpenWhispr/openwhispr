@@ -553,6 +553,7 @@ class ModelManager {
     ceilingFor,
     startServer,
   }) {
+    options.signal?.throwIfAborted();
     const reserveTokens = reserveFor(maxTokens);
     const running = this.serverManager.contextSize || contextFloor;
 
@@ -561,9 +562,11 @@ class ModelManager {
     if ((estimatedTokens + reserveTokens) * PREFLIGHT_MEASURE_FACTOR <= running) return maxTokens;
 
     const usable = (await this.serverManager.usableContextSize()) ?? running;
+    options.signal?.throwIfAborted();
     const exactTokens = await this.serverManager.countPromptTokens(messages, {
       disableThinking: options.disableThinking,
     });
+    options.signal?.throwIfAborted();
 
     // A measurement we could not take must never fail the request; the
     // estimate already sized the window, and an overflow would still surface
@@ -580,6 +583,7 @@ class ModelManager {
     if (neededTokens <= usable) return maxTokens;
 
     const { ceiling: maxContext } = await ceilingFor();
+    options.signal?.throwIfAborted();
     const grown = resolveContextSize({
       needed: neededTokens,
       floor: contextFloor,
@@ -587,6 +591,7 @@ class ModelManager {
     });
 
     if (grown > usable) await startServer(grown);
+    options.signal?.throwIfAborted();
 
     const nowUsable =
       (await this.serverManager.usableContextSize()) ?? this.serverManager.contextSize ?? grown;
@@ -637,6 +642,7 @@ class ModelManager {
   }
 
   async runInference(modelId, prompt, options = {}) {
+    options.signal?.throwIfAborted();
     this.ensureInitialized();
     const startTime = Date.now();
     debugLogger.logReasoning("INFERENCE_START", {
@@ -675,6 +681,8 @@ class ModelManager {
         { modelId }
       );
     }
+
+    options.signal?.throwIfAborted();
 
     // Build messages for chat completion
     const messages = [
@@ -719,6 +727,7 @@ class ModelManager {
     };
 
     const startServer = async (contextSize) => {
+      options.signal?.throwIfAborted();
       if (this.serverManager.ready && contextSize >= smallestRefusedContextSize) return;
 
       const { cacheRamMiB } = ceiling ?? {};
@@ -732,11 +741,14 @@ class ModelManager {
         this.currentServerModelId === modelId
           ? this.serverManager.contextSize
           : null;
-      const startAt = async (size) =>
-        this.serverManager.start(
-          modelPath,
-          await this.serverStartOptions(modelInfo, { contextSize: size, cacheRamMiB })
-        );
+      const startAt = async (size) => {
+        const startOptions = await this.serverStartOptions(modelInfo, {
+          contextSize: size,
+          cacheRamMiB,
+        });
+        options.signal?.throwIfAborted();
+        return this.serverManager.start(modelPath, startOptions);
+      };
       // llama.cpp's startup dump is the diagnostic, so it goes to the log here
       // and nowhere else: details crosses IPC to the renderer, which neither
       // reads it nor should carry a stderr blob and absolute model paths.
@@ -761,6 +773,7 @@ class ModelManager {
         // be stepped down again.
         if (this.serverManager.contextSize < contextSize) refuse(contextSize);
       } catch (error) {
+        options.signal?.throwIfAborted();
         refuse(contextSize);
         // start() stops the running server before it spawns, so a grow that
         // dies has already taken a working window with it. Come back at the
@@ -799,6 +812,7 @@ class ModelManager {
       });
 
       await startServer(targetContextSize);
+      options.signal?.throwIfAborted();
 
       debugLogger.logReasoning("INFERENCE_SERVER_STARTED", {
         port: this.serverManager.port,
@@ -817,6 +831,7 @@ class ModelManager {
       ceilingFor,
       startServer,
     });
+    options.signal?.throwIfAborted();
 
     // The preflight shrank the reply to make room for the prompt. A reply that
     // fills that allowance was cut short by the window, not by the caller's cap,

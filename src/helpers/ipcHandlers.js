@@ -1743,11 +1743,12 @@ class IPCHandlers {
     this._enterpriseStreamProviders = new Map();
     const handleProduct = (channel, handler, remote = false) =>
       ipcMain.handle(channel, async (event, ...args) => {
+        const operation = { channel, args, remote };
         const allowed = () => {
           const policy = this.effectivePolicyManager.getCurrent();
           return (
-            (!remote || !policy.localOnly) &&
-            productOperationAllowed(policy, app.getVersion(), channel, args)
+            (!operation.remote || !policy.localOnly) &&
+            productOperationAllowed(policy, app.getVersion(), operation.channel, operation.args)
           );
         };
         const failure = () => ({
@@ -1769,7 +1770,7 @@ class IPCHandlers {
             : null;
         if (streamProperty) this._remoteStreamPolicies.set(streamProperty, { channel, args });
         const controller = new AbortController();
-        const operation = { channel, args, remote, signal: controller.signal };
+        operation.signal = controller.signal;
         this._productRequests.set(controller, operation);
         let result;
         try {
@@ -1784,6 +1785,24 @@ class IPCHandlers {
         return failure();
       });
     const handleRemoteProduct = (channel, handler) => handleProduct(channel, handler, true);
+    const trackTranscriptionRoute = (route, selectedMode) => {
+      if (route.transport === "error") return this._productRequestContext.getStore().signal;
+      const mode =
+        route.transport === "local"
+          ? "local"
+          : route.transport === "managed"
+            ? "enterprise"
+            : route.transport === "cloud"
+              ? "openwhispr"
+              : route.provider === "self-hosted" || selectedMode === "self-hosted"
+                ? "self-hosted"
+                : "providers";
+      const operation = this._productRequestContext.getStore();
+      operation.channel = "batch-transcription";
+      operation.args = [{ mode, provider: route.provider ?? "" }];
+      operation.remote = mode !== "local";
+      return operation.signal;
+    };
     const handleProviderTranscription = (channel, handler) =>
       handleRemoteProduct(channel, (event, options) =>
         handler(event, options, this._productRequestContext.getStore().signal)
@@ -5750,6 +5769,7 @@ class IPCHandlers {
               runAbortableOperation(async () => {
                 runtime = await resolveEnterpriseRuntime(event, provider, modelId, config || {});
                 abortSignal?.throwIfAborted();
+                this._productRequestContext.getStore().signal.throwIfAborted();
                 if (!runtime.model) throw new Error("No model specified for enterprise reasoning");
                 validateEnterpriseEndpoint(runtime.enterprise.azureEndpoint);
                 return getEnterpriseAIModel(
@@ -5882,6 +5902,7 @@ class IPCHandlers {
           runtime.apiKey,
           runtime.enterprise
         );
+        abortController.signal.throwIfAborted();
 
         const { stream } = await model.doStream({
           ...options,
@@ -5891,6 +5912,7 @@ class IPCHandlers {
         try {
           for (;;) {
             const { done, value } = await reader.read();
+            abortController.signal.throwIfAborted();
             if (done) break;
             if (event.sender.isDestroyed()) {
               abortController.abort();
@@ -6129,9 +6151,19 @@ class IPCHandlers {
     });
 
     handleProduct("process-local-reasoning", async (event, text, modelId, _agentName, config) => {
+      const LocalReasoningService = require("../services/localReasoningBridge").default;
+      const signal = this._productRequestContext.getStore().signal;
+      const requestId = config?.requestId ?? crypto.randomUUID();
+      const cancel = () => LocalReasoningService.cancel(requestId);
+      signal.addEventListener("abort", cancel, { once: true });
       try {
-        const LocalReasoningService = require("../services/localReasoningBridge").default;
-        const result = await LocalReasoningService.processText(text, modelId, config);
+        signal.throwIfAborted();
+        const result = await LocalReasoningService.processText(text, modelId, {
+          ...config,
+          requestId,
+          signal,
+        });
+        signal.throwIfAborted();
         return { success: true, text: result };
       } catch (error) {
         // code/details carry the machine-readable failure across to the
@@ -6143,6 +6175,8 @@ class IPCHandlers {
           code: error.code,
           details: error.details,
         };
+      } finally {
+        signal.removeEventListener("abort", cancel);
       }
     });
 
@@ -7792,6 +7826,15 @@ class IPCHandlers {
           managed: settings?.managed,
           request: { effectiveLanguage: language },
         });
+        const usesCloud =
+          route.transport !== "managed" &&
+          route.transport !== "local" &&
+          route.provider !== "self-hosted" &&
+          settings?.cloudTranscriptionMode === "openwhispr";
+        const signal = trackTranscriptionRoute(
+          usesCloud ? { transport: "cloud" } : route,
+          settings?.transcriptionMode
+        );
 
         // An error route is fatal unless OpenWhispr cloud is selected — a
         // leftover BYOK misconfiguration must not block the cloud pipeline.
@@ -7807,8 +7850,7 @@ class IPCHandlers {
         }
 
         if (
-          settings?.cloudTranscriptionMode === "openwhispr" &&
-          settings?.transcriptionMode !== "self-hosted" &&
+          usesCloud &&
           !productOperationAllowed(
             this.effectivePolicyManager.getCurrent(),
             app.getVersion(),
@@ -7839,6 +7881,7 @@ class IPCHandlers {
 
         if (route.transport === "managed") {
           const transcription = await transcribeManagedAudio(event, route, {
+            signal,
             audioBuffer: buffer,
             fileName: "audio.webm",
             contentType: "audio/webm",
@@ -7892,6 +7935,7 @@ class IPCHandlers {
             result = await this.parakeetManager.transcribeLocalParakeet(buffer, {
               model,
               language,
+              signal,
             });
           } else if (this.whisperManager?.serverManager?.isAvailable?.()) {
             const vadOptions = this._resolveWhisperVadOptions("noteRecording");
@@ -7899,9 +7943,10 @@ class IPCHandlers {
               model: settings.whisperModel,
               language,
               ...vadOptions,
+              signal,
             });
           }
-        } else if (settings?.cloudTranscriptionMode === "openwhispr") {
+        } else if (usesCloud) {
           const win = BrowserWindow.fromWebContents(event.sender);
           if (win) {
             const authHeader = await getAuthHeaderFromWindow(win);
@@ -7917,6 +7962,7 @@ class IPCHandlers {
                 };
                 if (buffer.length > CLOUD_INLINE_LIMIT) {
                   const { text, warning } = await chunkedCloudTranscribe({
+                    signal,
                     buffer,
                     apiUrl,
                     policyHeaders: withPolicyHeaders(authHeader),
@@ -7937,7 +7983,9 @@ class IPCHandlers {
                     boundary,
                     withPolicyHeaders(authHeader),
                     {
-                      signal: AbortSignal.timeout(CLOUD_UPLOAD_TIMEOUT_MS),
+                      signal: AbortSignal.any(
+                        [signal, AbortSignal.timeout(CLOUD_UPLOAD_TIMEOUT_MS)].filter(Boolean)
+                      ),
                       session: getInlineCloudUploadSession(),
                     }
                   );
@@ -7954,6 +8002,7 @@ class IPCHandlers {
         } else if (route.transport === "proxied" && route.provider === "tinfoil") {
           // Attested transport, so this can't reuse the generic fetch below.
           const { text, model } = await transcribeWithTinfoil({
+            signal,
             audioBuffer: buffer,
             fileName: "audio.webm",
             contentType: "audio/webm",
@@ -7974,6 +8023,7 @@ class IPCHandlers {
           }
           const { transcribeAudio } = require("./cortiTranscription");
           const { text } = await transcribeAudio({
+            signal,
             environment: route.cortiEnvironment,
             tenant: route.cortiTenant,
             clientId,
@@ -7987,6 +8037,7 @@ class IPCHandlers {
             throw new Error(byokSizeCapError(route.sizeCapBytes));
           }
           const { text } = await transcribeWithGemini({
+            signal,
             audioBuffer: buffer,
             model: route.model,
             contentType: "audio/webm",
@@ -8031,7 +8082,7 @@ class IPCHandlers {
           let uploadName = "audio.webm";
           if (provider === "custom" && buffer.length && !isWavFormat(buffer)) {
             try {
-              const wavBuffer = await convertBufferToWav(buffer);
+              const wavBuffer = await convertBufferToWav(buffer, { signal });
               // Match fresh dictation: PCM expansion must not break an upload
               // that the endpoint could accept in its original container.
               if (wavBuffer.length <= route.sizeCapBytes) {
@@ -8102,6 +8153,19 @@ class IPCHandlers {
           });
         }
 
+        const operation = this._productRequestContext.getStore();
+        operation.signal.throwIfAborted();
+        if (
+          !productOperationAllowed(
+            this.effectivePolicyManager.getCurrent(),
+            app.getVersion(),
+            operation.channel,
+            operation.args
+          )
+        )
+          throw Object.assign(new Error("Blocked by device policy"), {
+            code: "DEVICE_POLICY_BLOCKED",
+          });
         this.databaseManager.updateTranscriptionText(id, result.text, result.text);
         this.databaseManager.updateTranscriptionStatus(id, "completed");
         const providerName = result.source || "local";
@@ -12022,6 +12086,8 @@ class IPCHandlers {
               };
             }
 
+            trackTranscriptionRoute(route, transcriptionMode);
+
             if (route.transport === "managed") {
               const result = await transcribeManagedAudio(event, route, {
                 filePath: sourcePath,
@@ -12034,6 +12100,7 @@ class IPCHandlers {
 
             const upload = await prepareProviderUpload(sourcePath, { signal });
             cleanupUpload = upload.cleanup;
+            signal.throwIfAborted();
             const realByok = upload.path;
 
             // Every branch below calls a BYOK provider or the user's own server.

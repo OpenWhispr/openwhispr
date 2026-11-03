@@ -130,3 +130,96 @@ test("renderer transport refuses saved credentials and retires a response when p
   await local.body.cancel();
   assert.equal(calls.length, 2);
 });
+
+test("an existing renderer model cannot send a later tool step after policy revocation", async (t) => {
+  for (const restriction of ["mode", "provider", "agent"]) {
+    await t.test(restriction, async (t) => {
+      const { vite, emit } = await boot(t);
+      const calls = [];
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async (url) => {
+        calls.push(String(url));
+        return Response.json({
+          id: "chat-1",
+          created: 1,
+          model: "chat-model",
+          choices: [
+            { index: 0, message: { role: "assistant", content: "allowed" }, finish_reason: "stop" },
+          ],
+          usage: { prompt_tokens: 1, completion_tokens: 1 },
+        });
+      };
+      t.after(() => {
+        globalThis.fetch = originalFetch;
+      });
+      const { getAIModel } = await vite.ssrLoadModule("/services/ai/providers.ts");
+      const model = await getAIModel(
+        "custom",
+        "chat-model",
+        "saved-key",
+        "https://provider.example.test/v1",
+        { requiresAgent: true }
+      );
+      const options = {
+        prompt: [{ role: "user", content: [{ type: "text", text: "private tool output" }] }],
+      };
+      await model.doGenerate(options);
+      assert.equal(calls.length, 1);
+      const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+      if (restriction === "mode") policy.llm.allowedModes = ["local"];
+      else if (restriction === "provider") policy.llm.allowedByokProviders = ["openai"];
+      else policy.features.agentEnabled = false;
+      await emit(snapshot({ revision: 2, status: "managed", managed: true, policy }));
+      await assert.rejects(model.doGenerate(options));
+      assert.equal(calls.length, 1);
+    });
+  }
+});
+
+test("renderer model revocation aborts pending generation and an open stream", async (t) => {
+  const { vite, emit } = await boot(t);
+  const { guardLanguageModel } = await vite.ssrLoadModule("/services/ai/policyModel.ts");
+  const { assertReasoningAllowedByPolicy } = await vite.ssrLoadModule(
+    "/services/reasoningPolicy.ts"
+  );
+  const { MockLanguageModelV3 } = require("ai/test");
+  let generateSignal;
+  let streamSignal;
+  let finish;
+  let cancelled = false;
+  const model = guardLanguageModel(
+    new MockLanguageModelV3({
+      doGenerate: async (options) => {
+        generateSignal = options.abortSignal;
+        return new Promise((resolve) => {
+          finish = resolve;
+        });
+      },
+      doStream: async (options) => {
+        streamSignal = options.abortSignal;
+        return {
+          stream: new ReadableStream({
+            cancel() {
+              cancelled = true;
+            },
+          }),
+        };
+      },
+    }),
+    () => assertReasoningAllowedByPolicy("custom", "providers")
+  );
+  const generating = model.doGenerate({ prompt: [] });
+  const { stream } = await model.doStream({ prompt: [] });
+  const reading = stream.getReader().read();
+  const rejectedGeneration = assert.rejects(generating);
+  const rejectedRead = assert.rejects(reading);
+  const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+  policy.llm.allowedByokProviders = ["openai"];
+  await emit(snapshot({ revision: 2, status: "managed", managed: true, policy }));
+  assert.equal(generateSignal.aborted, true);
+  assert.equal(streamSignal.aborted, true);
+  finish({ content: [{ type: "text", text: "late private output" }], warnings: [] });
+  await rejectedGeneration;
+  await rejectedRead;
+  assert.equal(cancelled, true);
+});

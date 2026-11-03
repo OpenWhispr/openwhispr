@@ -45,3 +45,41 @@ test("direct operations enforce provider allowlists and the minimum app version"
     false
   );
 });
+
+test("agent-only revocation gates IPC agent work without disabling ordinary cleanup", () => {
+  const policy = defaultDevicePolicy();
+  policy.features.agentEnabled = false;
+  const snapshot = { success: true, managed: true, policy };
+  const channels = [
+    ["cloud-reason", ["private", { requestPurpose: "agent" }]],
+    ["cloud-api-request", [{ path: "/api/reason", body: { requestPurpose: "agent" } }]],
+    ["process-local-reasoning", ["private", "model", null, { requiresAgent: true }]],
+    ["process-anthropic-reasoning", ["private", "model", null, { requiresAgent: true }]],
+    [
+      "process-enterprise-reasoning",
+      ["private", "model", null, { provider: "bedrock", requiresAgent: true }],
+    ],
+    ["enterprise-stream-start", [{ provider: "bedrock" }]],
+  ];
+  for (const [channel, args] of channels)
+    assert.equal(productOperationAllowed(snapshot, "1.11.1", channel, args), false, channel);
+  assert.equal(productOperationAllowed(snapshot, "1.11.1", "cloud-reason", ["private", {}]), true);
+  assert.equal(
+    productOperationAllowed(snapshot, "1.11.1", "process-anthropic-reasoning", [
+      "private",
+      "model",
+      null,
+      {},
+    ]),
+    true
+  );
+  assert.equal(
+    productOperationAllowed(snapshot, "1.11.1", "process-enterprise-reasoning", [
+      "private",
+      "model",
+      null,
+      { provider: "bedrock" },
+    ]),
+    true
+  );
+});
