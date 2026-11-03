@@ -70,7 +70,10 @@ for (const unresolvedPolicy of [false, true]) {
   });
 }
 
-async function pendingStartup(t, { prewarm = false, loopback = false, canAutoStart } = {}) {
+async function pendingStartup(
+  t,
+  { prewarm = false, loopback = false, canAutoStart, onDisplayRequest } = {}
+) {
   const ready = Promise.withResolvers();
   const requested = Promise.withResolvers();
   const captured = Promise.withResolvers();
@@ -130,7 +133,10 @@ async function pendingStartup(t, { prewarm = false, loopback = false, canAutoSta
     captured.resolve();
     return stream;
   };
-  navigator.mediaDevices.getDisplayMedia = async (...args) => acquire(...args);
+  navigator.mediaDevices.getDisplayMedia = async (...args) => {
+    onDisplayRequest?.();
+    return acquire(...args);
+  };
   const Context = global.AudioContext;
   global.AudioContext = class extends Context {
     async close() {
@@ -362,4 +368,39 @@ test("policy changes after capture begins do not interrupt pending connection or
     [300, 400],
   ]);
   await session.store.stopRecording();
+});
+
+test("display capture latches consent while the prewarm still holds main's start", async (t) => {
+  let allowed = true;
+  const session = await pendingStartup(t, {
+    prewarm: true,
+    loopback: true,
+    canAutoStart: () => allowed,
+    onDisplayRequest: () => (allowed = false),
+  });
+  session.availability.resolve({ success: true });
+  await session.finish();
+  assert.equal(await session.starting, true);
+  assert.equal(session.store.useMeetingRecordingStore.getState().isRecording, true);
+  await session.store.stopRecording();
+});
+
+test("consent lost before capture preparation never shows a recording state", async (t) => {
+  installMicCaptureGlobals(t);
+  installBrowserGlobals(t, { window: { electronAPI: {} } });
+  const vite = await createRendererServer(t, { cachePrefix: "meeting-auto-no-flash-" });
+  const { startRecording, useMeetingRecordingStore } = await vite.ssrLoadModule(
+    "/stores/meetingRecordingStore.ts"
+  );
+  const states = [];
+  const unsubscribe = useMeetingRecordingStore.subscribe((state) => states.push(state.isRecording));
+  t.after(unsubscribe);
+  let checks = 0;
+  const started = await startRecording({
+    ...START_ARGS,
+    // Allowed at the first check, gone by the second, past the previous recording's stop.
+    canAutoStart: () => (checks += 1) === 1,
+  });
+  assert.equal(started, false);
+  assert.equal(states.includes(true), false);
 });
