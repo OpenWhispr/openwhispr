@@ -493,7 +493,8 @@ export interface NoteItem {
   created_at: string;
   updated_at: string;
   client_note_id: string;
-  sync_status: "synced" | "pending" | "error";
+  // folder_link_pending: nothing changed but the folder link still to send.
+  sync_status: "synced" | "pending" | "error" | "folder_link_pending";
   deleted_at: string | null;
   // Computed by getNoteByClientId while a parent folder DELETE awaits its
   // server result. Held notes stay hidden and must not be pulled/queued alone.
@@ -651,6 +652,7 @@ export interface FolderItem {
   is_default: number;
   sort_order: number;
   space_id: number;
+  parent_folder_id: number | null;
   created_at: string;
   updated_at: string;
   client_folder_id: string;
@@ -669,6 +671,7 @@ export type FolderPushSnapshot = Pick<
   | "is_default"
   | "sort_order"
   | "space_id"
+  | "parent_folder_id"
   | "created_at"
   | "updated_at"
   | "sync_status"
@@ -1905,7 +1908,8 @@ declare global {
       getFolders: (spaceId?: number | null) => Promise<FolderItem[]>;
       createFolder: (
         name: string,
-        spaceId?: number | null
+        spaceId?: number | null,
+        parentFolderId?: number | null
       ) => Promise<{ success: boolean; folder?: FolderItem; error?: string }>;
       deleteFolder: (id: number) => Promise<{ success: boolean; error?: string }>;
       renameFolder: (
@@ -1916,6 +1920,10 @@ declare global {
         id: number,
         spaceId: number
       ) => Promise<{ success: boolean; folder?: FolderItem; notes?: NoteItem[]; error?: string }>;
+      setFolderParent: (
+        id: number,
+        parentFolderId: number | null
+      ) => Promise<{ success: boolean; folder?: FolderItem; error?: string }>;
       getFolderNoteCounts: () => Promise<
         Array<{ space_id: number; folder_id: number | null; count: number }>
       >;
@@ -2005,7 +2013,7 @@ declare global {
         errors?: Array<{ clientNoteId: string; error: string }>;
       }>;
       showNoteFile?: (noteId: number) => Promise<{ success: boolean }>;
-      showFolderInExplorer?: (folderName: string) => Promise<{ success: boolean }>;
+      showFolderInExplorer?: (folderId: number) => Promise<{ success: boolean }>;
 
       // Action operations
       getActions: () => Promise<ActionItem[]>;
@@ -3878,17 +3886,37 @@ declare global {
         expectedCloudId: string
       ) => Promise<FolderAckResult>;
       getFolderIdMap?: () => Promise<FolderItem[]>;
+      applyCloudFolderParents?: (
+        links: Array<{
+          cloudId: string;
+          parentCloudId: string | null;
+          snapshot: FolderPushSnapshot;
+          adoptIfPending?: boolean;
+        }>
+      ) => Promise<void>;
       getPendingFolderDeletes?: () => Promise<FolderItem[]>;
       restoreFolderAfterDeniedDelete?: (id: number) => Promise<{
         success: boolean;
         id: number;
         folder?: FolderItem;
         notes?: NoteItem[];
+        subfolders?: FolderItem[];
         conversationIds?: number[];
         reason?: "name-taken";
         error?: string;
       }>;
-      hardDeleteFolder?: (id: number) => Promise<{ success: boolean; id: number }>;
+      hardDeleteFolder?: (
+        id: number,
+        options?: { preserveDirtyNotes?: boolean }
+      ) => Promise<{
+        success: boolean;
+        id: number;
+        noteIds?: number[];
+        relocatedNotes?: NoteItem[];
+        preservedNotes?: NoteItem[];
+        unfiledNotes?: NoteItem[];
+        error?: string;
+      }>;
       relocateRevokedFolder?: (
         id: number,
         privateSpaceId: number,
@@ -3896,7 +3924,6 @@ declare global {
       ) => Promise<{
         success: boolean;
         folder?: FolderItem | null;
-        folderName?: string;
         relocatedNotes?: NoteItem[];
         deletedNoteIds?: number[];
         error?: string;

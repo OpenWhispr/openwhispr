@@ -105,6 +105,7 @@ function createElectronApi(db, options = {}) {
     getPendingFolders: async (spaceKind) => db.getPendingFolders(spaceKind),
     getPendingFolderDeletes: async () => db.getPendingFolderDeletes(),
     getFolderByClientId: async (clientFolderId) => db.getFolderByClientId(clientFolderId),
+    setFolderParent: async (id, parentFolderId) => db.setFolderParent(id, parentFolderId),
     upsertFolderFromCloud: async (cloudFolder, localSpaceId) =>
       db.upsertFolderFromCloud(cloudFolder, localSpaceId),
     acknowledgeFolderCreate: async (
@@ -129,7 +130,10 @@ function createElectronApi(db, options = {}) {
     relocateRevokedFolder: async (id, privateSpaceId, preserveFolder) =>
       db.relocateRevokedFolder(id, privateSpaceId, preserveFolder),
     getFolderIdMap: async () => db.getFolderIdMap(),
-    hardDeleteFolder: async (id) => db.hardDeleteFolder(id),
+    applyCloudFolderParents: async (links) => {
+      db.applyCloudFolderParents(links);
+    },
+    hardDeleteFolder: async (id, options) => db.hardDeleteFolder(id, options),
 
     // Spaces
     getSpaces: async () => db.getSpaces(),

@@ -3372,6 +3372,8 @@
       "confirmMoveInTitle": "Move to {{space}}?",
       "confirmMoveIn": "Everyone in {{space}} will be able to view and edit this note. Notes can't be moved back out of a team space later.",
       "confirmMoveInFolder": "Everyone in {{space}} will be able to view and edit this folder and its notes. Folders and notes can't be moved back out of a team space later.",
+      "confirmMoveInFolderSubfolders": "Everyone in {{space}} will be able to view and edit this folder, including {{subfolders}} and {{notes}}. Folders and notes can't be moved back out of a team space later.",
+      "confirmMoveInSubfolder": "Everyone in {{space}} will be able to view and edit this subfolder and its notes. It will become a top-level folder in {{space}}, and this move can't be undone.",
       "cantMoveOut": "Notes can't be moved out of a team space.",
       "cantMoveTeammate": "Only the note's owner or a workspace admin can move it to another space.",
       "moved": "Moved “{{title}}” to {{target}}",
@@ -3463,7 +3465,7 @@
         "title": "Team space",
         "description": "A shared area inside a workspace. Add people or groups to give them access."
       },
-      "contents": "Each space can contain folders and notes.",
+      "contents": "Each space can contain folders and notes, and each folder can have subfolders.",
       "done": "Got it",
       "reopen": "Learn how spaces are organized"
     },
@@ -3476,12 +3478,16 @@
       "title": "Folders",
       "soon": "Soon",
       "folderName": "Folder name",
+      "topLevel": "Top level",
       "couldNotCreate": "Couldn't create folder",
       "couldNotRename": "Couldn't rename folder",
       "couldNotDelete": "Couldn't delete folder",
       "deleteTitle": "Delete folder?",
       "deleteDescription": "This will permanently delete \"{{name}}\" and its {{count}} note(s). This cannot be undone.",
       "deleteDescriptionEmpty": "This will permanently delete \"{{name}}\". This cannot be undone.",
+      "deleteDescriptionSubfolders": "This will permanently delete \"{{name}}\", including {{subfolders}} and {{notes}}. This cannot be undone.",
+      "subfolderCount_one": "{{count}} subfolder",
+      "subfolderCount_other": "{{count}} subfolders",
       "deleteConfirm": "Delete folder and notes"
     },
     "list": {
@@ -3729,6 +3735,7 @@
       "searchFolders": "Search folders...",
       "noResults": "No folders found",
       "newFolder": "New folder",
+      "newSubfolder": "New subfolder",
       "showInFileManager": "Show in {{manager}}"
     },
     "actions": {
@@ -3945,6 +3952,7 @@
         "members_one": "{{count}} member",
         "members_other": "{{count}} members"
       },
+      "subfolders": "Subfolders",
       "banner": {
         "title": {
           "team": "Your team space",

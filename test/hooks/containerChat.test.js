@@ -13,7 +13,8 @@ const {
 // Every call that matters to ordering lands in globalThis.__calls.
 const MOCKS = {
   "/chat/useChatStreaming": `
-    export function useChatStreaming() {
+    export function useChatStreaming({ noteContext }) {
+      globalThis.__noteContext = noteContext;
       return {
         agentState: "idle",
         sendToAI: () => new Promise((resolve) => { globalThis.__finishSend = resolve; }),
@@ -43,6 +44,7 @@ async function renderContainerChat(t) {
     if (root) await React.act(async () => root.unmount());
     delete globalThis.__finishSend;
     delete globalThis.__calls;
+    delete globalThis.__noteContext;
   });
   installBrowserGlobals(t);
   const container = installHookDom(t);
@@ -55,13 +57,20 @@ async function renderContainerChat(t) {
   const notes = [];
   const handle = { current: null };
   function Harness() {
-    handle.current = useContainerChat({ space, folder: null, notes });
+    handle.current = useContainerChat({ space, folder: null, notes, noteCount: 120 });
     return null;
   }
   root = createRoot(container);
   await React.act(async () => root.render(React.createElement(Harness)));
   return handle;
 }
+
+test("a container chat tells the model the container's real note total", async (t) => {
+  await renderContainerChat(t);
+
+  // The loaded notes are at most a page of each container.
+  assert.match(globalThis.__noteContext, /"Research" \(120 notes\)/);
+});
 
 test("switching container conversations cancels the running reply before loading the next", async (t) => {
   const chat = await renderContainerChat(t);

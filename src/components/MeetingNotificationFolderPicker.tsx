@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, ChevronDown, Folder, Plus, Search, Users, X } from "./icons";
-import { defaultFolderDisplayName, folderMatchesQuery } from "./notes/shared";
+import { folderMatchesQuery, folderPathLabel, orderFoldersAsTree } from "./notes/shared";
 import type { MeetingDestinationContext, MeetingError, MeetingFolderRef } from "../types/electron";
 
 const key = (name: string) => `meetingNotification.folders.${name}`;
@@ -49,7 +49,7 @@ export function MeetingNotificationFolderPicker({
   const commitKey = useRef(false);
   const createRequest = useRef<{ key: string; id: string } | null>(null);
   const priorMode = useRef(mode);
-  const folders = useMemo(() => context?.folders ?? [], [context]);
+  const folders = useMemo(() => orderFoldersAsTree(context?.folders ?? []), [context]);
   const selected = context?.selectedDestination ?? context?.defaultDestination;
   const matchingFolders = useMemo(
     () =>
@@ -159,7 +159,7 @@ export function MeetingNotificationFolderPicker({
         linked.shared,
         linked.spaceName,
         linked.folderName &&
-          (linkedFolder ? defaultFolderDisplayName(linkedFolder, t) : linked.folderName),
+          (linkedFolder ? folderPathLabel(linkedFolder, folders, t) : linked.folderName),
         t
       )
     : "";
@@ -345,7 +345,7 @@ export function MeetingNotificationFolderPicker({
                           <Folder className="size-3.5 shrink-0" />
                           <span className="min-w-0 flex-1">
                             <span className="meeting-folder-name">
-                              {defaultFolderDisplayName(folder, t)}
+                              {folderPathLabel(folder, folders, t)}
                             </span>
                             <span className="meeting-folder-space">
                               {meetingLocationLabel(

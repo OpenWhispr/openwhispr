@@ -2954,6 +2954,8 @@
       "confirmMoveInTitle": "移动到 {{space}}？",
       "confirmMoveIn": "{{space}} 中的所有人都将能查看和编辑此笔记。此后笔记将无法移出团队空间。",
       "confirmMoveInFolder": "{{space}} 中的所有人都将能查看和编辑此文件夹及其笔记。此后文件夹及其笔记将无法移出团队空间。",
+      "confirmMoveInFolderSubfolders": "{{space}} 中的所有人都将能查看和编辑此文件夹，包括其中的 {{subfolders}}和 {{notes}}。此后文件夹及其笔记将无法移出团队空间。",
+      "confirmMoveInSubfolder": "{{space}} 中的所有人都将能查看和编辑此子文件夹及其笔记。它将成为 {{space}} 中的顶层文件夹，此移动无法撤销。",
       "cantMoveOut": "笔记无法移出团队空间。",
       "cantMoveTeammate": "只有笔记所有者或工作区管理员才能将其移至其他空间。",
       "moved": "已将“{{title}}”移动到 {{target}}",
@@ -3045,7 +3047,7 @@
         "title": "团队空间",
         "description": "工作区内的共享区域。添加人员或群组以授予访问权限。"
       },
-      "contents": "每个空间都可以包含文件夹和笔记。",
+      "contents": "每个空间都可以包含文件夹和笔记，每个文件夹还可以包含子文件夹。",
       "done": "知道了",
       "reopen": "了解空间的组织方式"
     },
@@ -3058,12 +3060,16 @@
       "title": "文件夹",
       "soon": "即将推出",
       "folderName": "文件夹名称",
+      "topLevel": "顶层",
       "couldNotCreate": "无法创建文件夹",
       "couldNotRename": "无法重命名文件夹",
       "couldNotDelete": "无法删除文件夹",
       "deleteTitle": "删除文件夹？",
       "deleteDescription": "这将永久删除「{{name}}」及其 {{count}} 条笔记。此操作无法撤销。",
       "deleteDescriptionEmpty": "这将永久删除「{{name}}」。此操作无法撤销。",
+      "deleteDescriptionSubfolders": "这将永久删除「{{name}}」，包括其中的 {{subfolders}}和 {{notes}}。此操作无法撤销。",
+      "subfolderCount_one": "{{count}} 个子文件夹",
+      "subfolderCount_other": "{{count}} 个子文件夹",
       "deleteConfirm": "删除文件夹和笔记"
     },
     "list": {
@@ -3295,6 +3301,7 @@
       "searchFolders": "搜索文件夹...",
       "noResults": "未找到文件夹",
       "newFolder": "新建文件夹",
+      "newSubfolder": "新建子文件夹",
       "showInFileManager": "在{{manager}}中显示"
     },
     "actions": {
@@ -3527,6 +3534,7 @@
         "members_one": "{{count}} 位成员",
         "members_other": "{{count}} 位成员"
       },
+      "subfolders": "子文件夹",
       "banner": {
         "title": {
           "team": "你的团队空间",

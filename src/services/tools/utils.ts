@@ -1,8 +1,34 @@
-import type { SpaceItem } from "../../types/electron";
+import { joinFolderPath, splitFolderPath } from "../../components/notes/shared";
+import type { FolderItem, SpaceItem } from "../../types/electron";
 
 type ResolveFolderResult =
   | { folderId: number; created: boolean; error?: undefined }
   | { folderId?: undefined; created?: undefined; error: string };
+
+const sameFolderName = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
+
+// The label list_folders shows, so a model can pass back what it was given.
+function folderLabels(folders: FolderItem[]): Array<{ folder: FolderItem; label: string }> {
+  const nameById = new Map(folders.map((f) => [f.id, f.name]));
+  return folders.map((folder) => {
+    const parentName =
+      folder.parent_folder_id == null ? null : nameById.get(folder.parent_folder_id);
+    return { folder, label: parentName ? joinFolderPath(parentName, folder.name) : folder.name };
+  });
+}
+
+// A folder may literally be named "A / B", so its name wins over a label.
+function findFolder(folders: FolderItem[], name: string): FolderItem | undefined {
+  return (
+    folders.find((f) => sameFolderName(f.name, name)) ??
+    folderLabels(folders).find(({ label }) => sameFolderName(label, name))?.folder
+  );
+}
+
+const availableFolders = (folders: FolderItem[]): string =>
+  `Available folders: ${folderLabels(folders)
+    .map(({ label }) => label)
+    .join(", ")}`;
 
 export async function resolveFolderId(
   folderName: string,
@@ -15,24 +41,34 @@ export async function resolveFolderId(
   }
 
   const folders = await window.electronAPI.getFolders(spaceId);
-  const match = folders.find((f) => f.name.toLowerCase() === normalized.toLowerCase());
+  const match = findFolder(folders, normalized);
   if (match) return { folderId: match.id, created: false };
 
-  if (!options.createIfMissing) {
-    const available = folders.map((f) => f.name).join(", ");
-    return { error: `Folder "${normalized}" not found. Available folders: ${available}` };
-  }
+  const notFound = `Folder "${normalized}" not found. ${availableFolders(folders)}`;
+  if (!options.createIfMissing) return { error: notFound };
 
-  const result = await window.electronAPI.createFolder(normalized, spaceId);
+  // A label names a subfolder, so it never becomes a top-level folder with a
+  // slash in its name. Only a top-level folder can hold subfolders.
+  const path = splitFolderPath(normalized);
+  const parent =
+    path &&
+    folders.find((f) => f.parent_folder_id == null && sameFolderName(f.name, path.parentName));
+  if (path && !parent) return { error: notFound };
+
+  const result =
+    path && parent
+      ? await window.electronAPI.createFolder(path.name, parent.space_id, parent.id)
+      : await window.electronAPI.createFolder(normalized, spaceId);
   if (result.success && result.folder) {
     return { folderId: result.folder.id, created: true };
   }
 
   const retry = await window.electronAPI.getFolders(spaceId);
-  const reMatch = retry.find((f) => f.name.toLowerCase() === normalized.toLowerCase());
+  const reMatch = findFolder(retry, normalized);
   if (reMatch) return { folderId: reMatch.id, created: false };
 
-  return { error: result.error || `Failed to create folder "${normalized}"` };
+  const reason = result.error || `Failed to create folder "${normalized}"`;
+  return { error: `${reason}. ${availableFolders(retry)}` };
 }
 
 type ResolveSpaceResult =

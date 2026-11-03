@@ -9,14 +9,15 @@ import { formatRelativeTime } from "../../utils/dateFormatting";
 import { folderContainerKey, loadContainerNotes } from "../../stores/noteStore";
 import { cn } from "../lib/utils";
 import type { FolderItem, NoteItem } from "../../types/electron";
-import type { RowA11yProps } from "./SpacesTree";
+import type { RowA11yProps, TreeLevel } from "./SpacesTree";
 
 interface Props {
   folder: FolderItem;
   total: number;
   hiddenCount: number;
   activeNoteId: number | null;
-  level: 2 | 3;
+  level: TreeLevel;
+  indentClassName: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   a11y: RowA11yProps;
@@ -30,6 +31,7 @@ export function FolderNotesPopover({
   hiddenCount,
   activeNoteId,
   level,
+  indentClassName,
   open,
   onOpenChange,
   a11y,
@@ -120,7 +122,7 @@ export function FolderNotesPopover({
           onFocus={a11y.onFocus}
           className={cn(
             "flex h-7 items-center gap-2 rounded-md pe-2 text-xs cursor-pointer select-none outline-none transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-ring/30",
-            level === 2 ? "ps-8" : "ps-[42px]",
+            indentClassName,
             open
               ? "bg-foreground/8 text-foreground dark:bg-white/10"
               : "text-foreground/55 hover:bg-foreground/5 hover:text-foreground dark:hover:bg-white/5"

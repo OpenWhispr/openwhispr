@@ -3006,6 +3006,8 @@
       "confirmMoveInTitle": "¿Mover a {{space}}?",
       "confirmMoveIn": "Todos en {{space}} podrán ver y editar esta nota. Las notas no se pueden sacar de un espacio de equipo más tarde.",
       "confirmMoveInFolder": "Todos en {{space}} podrán ver y editar esta carpeta y sus notas. Las carpetas y notas no se pueden sacar de un espacio de equipo más tarde.",
+      "confirmMoveInFolderSubfolders": "Todos en {{space}} podrán ver y editar esta carpeta, incluidas {{subfolders}} y {{notes}}. Las carpetas y notas no se pueden sacar de un espacio de equipo más tarde.",
+      "confirmMoveInSubfolder": "Todos en {{space}} podrán ver y editar esta subcarpeta y sus notas. Pasará a ser una carpeta de nivel superior en {{space}} y este movimiento no se puede deshacer.",
       "cantMoveOut": "Las notas no se pueden sacar de un espacio de equipo.",
       "cantMoveTeammate": "Solo el propietario de la nota o un administrador del workspace pueden moverla a otro espacio.",
       "moved": "«{{title}}» se movió a {{target}}",
@@ -3097,7 +3099,7 @@
         "title": "Espacio de equipo",
         "description": "Un área compartida dentro de un workspace. Añade personas o grupos para darles acceso."
       },
-      "contents": "Cada espacio puede contener carpetas y notas.",
+      "contents": "Cada espacio puede contener carpetas y notas, y cada carpeta puede tener subcarpetas.",
       "done": "Entendido",
       "reopen": "Cómo se organizan los espacios"
     },
@@ -3110,12 +3112,16 @@
       "title": "Carpetas",
       "soon": "Próximamente",
       "folderName": "Nombre de la carpeta",
+      "topLevel": "Nivel superior",
       "couldNotCreate": "No se pudo crear la carpeta",
       "couldNotRename": "No se pudo renombrar la carpeta",
       "couldNotDelete": "No se pudo eliminar la carpeta",
       "deleteTitle": "¿Eliminar carpeta?",
       "deleteDescription": "Esto eliminará permanentemente \"{{name}}\" y sus {{count}} nota(s). Esta acción no se puede deshacer.",
       "deleteDescriptionEmpty": "Esto eliminará permanentemente \"{{name}}\". Esta acción no se puede deshacer.",
+      "deleteDescriptionSubfolders": "Esto eliminará permanentemente \"{{name}}\" junto con {{subfolders}} y {{notes}}. Esta acción no se puede deshacer.",
+      "subfolderCount_one": "{{count}} subcarpeta",
+      "subfolderCount_other": "{{count}} subcarpetas",
       "deleteConfirm": "Eliminar carpeta y notas"
     },
     "list": {
@@ -3347,6 +3353,7 @@
       "searchFolders": "Buscar carpetas...",
       "noResults": "No se encontraron carpetas",
       "newFolder": "Nueva carpeta",
+      "newSubfolder": "Nueva subcarpeta",
       "showInFileManager": "Mostrar en {{manager}}"
     },
     "actions": {
@@ -3579,6 +3586,7 @@
         "members_one": "{{count}} miembro",
         "members_other": "{{count}} miembros"
       },
+      "subfolders": "Subcarpetas",
       "banner": {
         "title": {
           "team": "Tu espacio de equipo",

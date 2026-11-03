@@ -3372,6 +3372,8 @@
       "confirmMoveInTitle": "Déplacer vers {{space}} ?",
       "confirmMoveIn": "Tous les membres de {{space}} pourront voir et modifier cette note. Les notes ne pourront plus être retirées d'un espace d'équipe par la suite.",
       "confirmMoveInFolder": "Tous les membres de {{space}} pourront voir et modifier ce dossier et ses notes. Les dossiers et les notes ne pourront plus être retirés d'un espace d'équipe par la suite.",
+      "confirmMoveInFolderSubfolders": "Tous les membres de {{space}} pourront voir et modifier ce dossier, y compris {{subfolders}} et {{notes}}. Les dossiers et les notes ne pourront plus être retirés d'un espace d'équipe par la suite.",
+      "confirmMoveInSubfolder": "Tous les membres de {{space}} pourront voir et modifier ce sous-dossier et ses notes. Il deviendra un dossier de niveau supérieur dans {{space}}, et ce déplacement est irréversible.",
       "cantMoveOut": "Les notes ne peuvent pas être retirées d'un espace d'équipe.",
       "cantMoveTeammate": "Seul le propriétaire de la note ou un administrateur du workspace peut la déplacer vers un autre espace.",
       "moved": "« {{title}} » déplacée vers {{target}}",
@@ -3463,7 +3465,7 @@
         "title": "Espace d'équipe",
         "description": "Un espace partagé au sein d'un workspace. Ajoutez des personnes ou des groupes pour leur donner accès."
       },
-      "contents": "Chaque espace peut contenir des dossiers et des notes.",
+      "contents": "Chaque espace peut contenir des dossiers et des notes, et chaque dossier peut avoir des sous-dossiers.",
       "done": "Compris",
       "reopen": "Comprendre l'organisation des espaces"
     },
@@ -3476,12 +3478,16 @@
       "title": "Dossiers",
       "soon": "Bientôt",
       "folderName": "Nom du dossier",
+      "topLevel": "Niveau supérieur",
       "couldNotCreate": "Impossible de créer le dossier",
       "couldNotRename": "Impossible de renommer le dossier",
       "couldNotDelete": "Impossible de supprimer le dossier",
       "deleteTitle": "Supprimer le dossier ?",
       "deleteDescription": "Cette action supprimera définitivement \"{{name}}\" et ses {{count}} note(s). Cette action est irréversible.",
       "deleteDescriptionEmpty": "Cette action supprimera définitivement \"{{name}}\". Cette action est irréversible.",
+      "deleteDescriptionSubfolders": "Cette action supprimera définitivement \"{{name}}\", y compris {{subfolders}} et {{notes}}. Cette action est irréversible.",
+      "subfolderCount_one": "{{count}} sous-dossier",
+      "subfolderCount_other": "{{count}} sous-dossiers",
       "deleteConfirm": "Supprimer le dossier et les notes"
     },
     "list": {
@@ -3729,6 +3735,7 @@
       "searchFolders": "Rechercher des dossiers...",
       "noResults": "Aucun dossier trouvé",
       "newFolder": "Nouveau dossier",
+      "newSubfolder": "Nouveau sous-dossier",
       "showInFileManager": "Afficher dans {{manager}}"
     },
     "actions": {
@@ -3945,6 +3952,7 @@
         "members_one": "{{count}} membre",
         "members_other": "{{count}} membres"
       },
+      "subfolders": "Sous-dossiers",
       "banner": {
         "title": {
           "team": "Votre espace d'équipe",

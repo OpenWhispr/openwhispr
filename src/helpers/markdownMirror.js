@@ -10,6 +10,14 @@ class MarkdownMirror {
   constructor() {
     this._basePath = null;
     this._baseRealPath = null;
+    this._subfolderResolver = null;
+  }
+
+  // Supplies every subfolder on the device as [parent, name]: all the second
+  // level of the mirror that belongs to the app. Without one, only top-level
+  // directories are scanned for a note's files.
+  setSubfolderResolver(resolver) {
+    this._subfolderResolver = resolver;
   }
 
   init(basePath) {
@@ -55,9 +63,12 @@ class MarkdownMirror {
     );
   }
 
+  // A folder is its name, or [parent, name] for a subfolder, whose directory
+  // sits inside its parent's.
   _folderCandidatePath(folderName) {
     if (!this._baseRealPath) return null;
-    return path.join(this._baseRealPath, this._safeFolderName(folderName));
+    const segments = Array.isArray(folderName) ? folderName : [folderName];
+    return path.join(this._baseRealPath, ...segments.map((name) => this._safeFolderName(name)));
   }
 
   _displayPath(canonicalPath) {
@@ -79,6 +90,11 @@ class MarkdownMirror {
   }
 
   _resolveFolderPath(folderName, { create = false } = {}) {
+    // A subfolder's parent is checked first, so a parent directory that is a
+    // link out of the mirror is never created in or written through.
+    if (Array.isArray(folderName) && !this._resolveFolderPath(folderName[0], { create })) {
+      return null;
+    }
     const candidatePath = this._folderCandidatePath(folderName);
     if (!candidatePath) return null;
 
@@ -161,7 +177,10 @@ class MarkdownMirror {
         }
       }
 
-      const frontmatter = this._buildFrontmatter(note, folderName || "Personal");
+      const frontmatter = this._buildFrontmatter(
+        note,
+        [].concat(folderName || "Personal").join("/")
+      );
       const body = note.enhanced_content || note.content || "";
       fs.writeFileSync(newFilePath, `${frontmatter}\n\n${body}`, "utf-8");
     } catch (err) {
@@ -211,22 +230,24 @@ class MarkdownMirror {
     if (!this._baseRealPath) return;
     try {
       const files = [...this._globNoteFiles(noteId), ...this._globTranscriptFiles(noteId)];
-      for (const f of files) {
-        // Isolate each unlink like writeNote/writeTranscript do: a single file we
-        // can't remove (e.g. locked by an external editor) must not orphan the
-        // note's other mirrored files.
-        try {
-          fs.unlinkSync(f);
-        } catch (err) {
-          debugLogger.error(
-            "Failed to delete note file",
-            { noteId, file: f, error: err.message },
-            "note-files"
-          );
-        }
-      }
+      for (const f of files) this._unlinkNoteFile(f);
     } catch (err) {
       debugLogger.error("Failed to delete note file", { noteId, error: err.message }, "note-files");
+    }
+  }
+
+  // Isolate each unlink like writeNote/writeTranscript do: a single file we
+  // can't remove (e.g. locked by an external editor) must not orphan the
+  // note's other mirrored files.
+  _unlinkNoteFile(filePath) {
+    try {
+      fs.unlinkSync(filePath);
+    } catch (err) {
+      debugLogger.error(
+        "Failed to delete note file",
+        { file: filePath, error: err.message },
+        "note-files"
+      );
     }
   }
 
@@ -243,29 +264,43 @@ class MarkdownMirror {
     }
   }
 
+  // Returns true once the whole directory has moved. False leaves whatever
+  // couldn't move at the old path, and the caller rewrites the notes.
   renameFolder(oldName, newName) {
-    if (!this._baseRealPath) return;
+    if (!this._baseRealPath) return false;
     try {
       const oldPath = this._resolveFolderPath(oldName);
-      if (!oldPath) return;
+      if (!oldPath) return false;
       const newPath = this._folderCandidatePath(newName);
-      if (!newPath || oldPath === newPath) return;
-      if (fs.existsSync(newPath)) this._resolveExistingFolderPath(newPath);
+      if (!newPath || oldPath === newPath) return false;
+      if (Array.isArray(newName)) this._resolveFolderPath(newName[0], { create: true });
+      const existingPath = fs.existsSync(newPath) ? this._resolveExistingFolderPath(newPath) : null;
+      // A same-named folder in another space shares the directory, so move in
+      // beside it; a case-only rename finds the folder itself there.
+      if (existingPath && this._directoryId(existingPath) !== this._directoryId(oldPath)) {
+        return this._mergeDirectory(oldPath, existingPath);
+      }
       fs.renameSync(oldPath, newPath);
+      return true;
     } catch (err) {
       debugLogger.error(
         "Failed to rename folder",
         { oldName, newName, error: err.message },
         "note-files"
       );
+      return false;
     }
   }
 
-  deleteFolder(folderName) {
+  // The folder may hold files that aren't the app's, so this only takes the
+  // given notes' files and then whichever directories that left empty.
+  deleteFolder(folderName, noteIds = []) {
     if (!this._baseRealPath) return;
     try {
       const dirPath = this._resolveFolderPath(folderName);
-      if (dirPath) fs.rmSync(dirPath, { recursive: true, force: true });
+      if (!dirPath) return;
+      this._deleteNoteFilesIn(dirPath, noteIds);
+      this._removeEmptyDirectories(dirPath);
     } catch (err) {
       debugLogger.error(
         "Failed to delete folder",
@@ -273,6 +308,61 @@ class MarkdownMirror {
         "note-files"
       );
     }
+  }
+
+  _deleteNoteFilesIn(dirPath, noteIds) {
+    const ids = new Set(noteIds.map(String));
+    for (const file of fs.readdirSync(dirPath)) {
+      const filePath = path.join(dirPath, file);
+      if (
+        ids.has(file.split("-", 1)[0]) &&
+        (this._isNoteFile(file, filePath) || this._isTranscriptFile(file, filePath))
+      ) {
+        this._unlinkNoteFile(filePath);
+      }
+    }
+  }
+
+  _removeEmptyDirectories(dirPath) {
+    try {
+      for (const entry of fs.readdirSync(dirPath, { withFileTypes: true })) {
+        // A symlink isn't a directory here: it counts as content and stays.
+        if (entry.isDirectory()) this._removeEmptyDirectories(path.join(dirPath, entry.name));
+      }
+      fs.rmdirSync(dirPath);
+    } catch {
+      // Not empty or in use, which is normal: the directory stays.
+    }
+  }
+
+  // Moves each entry that has nothing at its name in the target and leaves the
+  // rest, so neither side's files are replaced. Returns whether the source is gone.
+  _mergeDirectory(sourcePath, targetPath) {
+    let moved = true;
+    for (const name of fs.readdirSync(sourcePath)) {
+      const sourceEntry = path.join(sourcePath, name);
+      const targetEntry = path.join(targetPath, name);
+      try {
+        const targetStats = fs.lstatSync(targetEntry, { throwIfNoEntry: false });
+        if (!targetStats) {
+          fs.renameSync(sourceEntry, targetEntry);
+        } else if (targetStats.isDirectory() && fs.lstatSync(sourceEntry).isDirectory()) {
+          moved = this._mergeDirectory(sourceEntry, targetEntry) && moved;
+        } else {
+          moved = false;
+        }
+      } catch (err) {
+        moved = false;
+        debugLogger.debug(
+          "Left a file behind in a folder merge",
+          { file: sourceEntry, error: err.message },
+          "note-files"
+        );
+      }
+    }
+    if (!moved) return false;
+    fs.rmdirSync(sourcePath);
+    return true;
   }
 
   rebuildAll(notes, folderMap, speakerMappingsMap) {
@@ -326,29 +416,81 @@ class MarkdownMirror {
     }
   }
 
-  _globNoteFiles(noteId) {
+  _isNoteFile(file, filePath) {
+    return file.endsWith(".md") && this._isNoteMarkdownFile(filePath);
+  }
+
+  _isTranscriptFile(file, filePath) {
+    if (!file.endsWith("-transcript.txt") && !file.endsWith("-transcript.md")) return false;
+    try {
+      if (!fs.lstatSync(filePath).isFile()) return false;
+    } catch {
+      return false;
+    }
+    return file.endsWith(".txt") || !this._isNoteMarkdownFile(filePath);
+  }
+
+  // Which directory a path is. Only the file system can say whether two names
+  // are one directory (APFS folds Straße and STRASSE together); bigint because
+  // a Windows file index doesn't fit a double.
+  _directoryId(dirPath) {
+    const { dev, ino } = fs.statSync(dirPath, { bigint: true });
+    // Some network and FUSE file systems report no inode for every directory.
+    return ino === 0n ? fs.realpathSync(dirPath) : `${dev}:${ino}`;
+  }
+
+  // Null while the folder has no directory.
+  folderDirectoryId(folderName) {
+    const candidatePath = this._folderCandidatePath(folderName);
+    if (!candidatePath) return null;
+    try {
+      return this._directoryId(candidatePath);
+    } catch {
+      return null;
+    }
+  }
+
+  _knownSubfolders() {
+    try {
+      return this._subfolderResolver?.() ?? [];
+    } catch {
+      return [];
+    }
+  }
+
+  // Every top-level directory and every known subfolder's. Any other directory
+  // at the second level is the user's, so copies of notes kept there aren't
+  // mistaken for the notes' own files.
+  _folderDirs() {
+    const dirs = new Map();
+    const add = (resolveDir) => {
+      try {
+        const dirPath = resolveDir();
+        if (!dirPath) return;
+        const directoryId = this._directoryId(dirPath);
+        if (!dirs.has(directoryId)) dirs.set(directoryId, dirPath);
+      } catch {}
+    };
+    for (const entry of fs.readdirSync(this._baseRealPath, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        add(() => this._resolveExistingFolderPath(path.join(this._baseRealPath, entry.name)));
+      }
+    }
+    for (const subfolder of this._knownSubfolders()) {
+      add(() => this._resolveFolderPath(subfolder));
+    }
+    return [...dirs.values()];
+  }
+
+  _globFiles(noteId, matches) {
     if (!this._baseRealPath) return [];
     const results = [];
     try {
       const prefix = `${noteId}-`;
-      const dirs = fs.readdirSync(this._baseRealPath, { withFileTypes: true });
-      for (const dir of dirs) {
-        if (!dir.isDirectory() || dir.isSymbolicLink()) continue;
-        let dirPath;
-        try {
-          dirPath = this._resolveExistingFolderPath(path.join(this._baseRealPath, dir.name));
-        } catch {
-          continue;
-        }
-        const files = fs.readdirSync(dirPath);
-        for (const file of files) {
-          const filePath = path.join(dirPath, file);
-          if (
-            file.startsWith(prefix) &&
-            file.endsWith(".md") &&
-            this._isNoteMarkdownFile(filePath)
-          ) {
-            results.push(filePath);
+      for (const dirPath of this._folderDirs()) {
+        for (const file of fs.readdirSync(dirPath)) {
+          if (file.startsWith(prefix) && matches(file, path.join(dirPath, file))) {
+            results.push(path.join(dirPath, file));
           }
         }
       }
@@ -356,40 +498,12 @@ class MarkdownMirror {
     return results;
   }
 
+  _globNoteFiles(noteId) {
+    return this._globFiles(noteId, (file, filePath) => this._isNoteFile(file, filePath));
+  }
+
   _globTranscriptFiles(noteId) {
-    if (!this._baseRealPath) return [];
-    const results = [];
-    try {
-      const prefix = `${noteId}-`;
-      const dirs = fs.readdirSync(this._baseRealPath, { withFileTypes: true });
-      for (const dir of dirs) {
-        if (!dir.isDirectory() || dir.isSymbolicLink()) continue;
-        let dirPath;
-        try {
-          dirPath = this._resolveExistingFolderPath(path.join(this._baseRealPath, dir.name));
-        } catch {
-          continue;
-        }
-        const files = fs.readdirSync(dirPath);
-        for (const file of files) {
-          const filePath = path.join(dirPath, file);
-          let isRegularFile = false;
-          try {
-            const stats = fs.lstatSync(filePath);
-            isRegularFile = stats.isFile() && !stats.isSymbolicLink();
-          } catch {}
-          if (
-            isRegularFile &&
-            file.startsWith(prefix) &&
-            (file.endsWith("-transcript.txt") ||
-              (file.endsWith("-transcript.md") && !this._isNoteMarkdownFile(filePath)))
-          ) {
-            results.push(filePath);
-          }
-        }
-      }
-    } catch {}
-    return results;
+    return this._globFiles(noteId, (file, filePath) => this._isTranscriptFile(file, filePath));
   }
 }
 

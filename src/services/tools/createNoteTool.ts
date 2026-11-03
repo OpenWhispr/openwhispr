@@ -20,7 +20,7 @@ export const createNoteTool: ToolDefinition = {
       folder: {
         type: "string",
         description:
-          "Folder name for the note, resolved within the target space. Created automatically if it does not exist.",
+          'Folder for the note, resolved within the target space: a plain folder name, or the "Parent / Child" label list_folders shows for a subfolder. Created automatically if it does not exist; a new subfolder needs an existing parent.',
       },
       space: {
         type: "string",

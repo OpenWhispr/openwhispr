@@ -2954,6 +2954,8 @@
       "confirmMoveInTitle": "Mover para {{space}}?",
       "confirmMoveIn": "Todos em {{space}} poderão ver e editar esta nota. As notas não podem ser retiradas de um espaço de equipe depois.",
       "confirmMoveInFolder": "Todos em {{space}} poderão ver e editar esta pasta e suas notas. As pastas e notas não podem ser retiradas de um espaço de equipe depois.",
+      "confirmMoveInFolderSubfolders": "Todos em {{space}} poderão ver e editar esta pasta, incluindo {{subfolders}} e {{notes}}. As pastas e notas não podem ser retiradas de um espaço de equipe depois.",
+      "confirmMoveInSubfolder": "Todos em {{space}} poderão ver e editar esta subpasta e suas notas. Ela se tornará uma pasta de nível superior em {{space}}, e esta movimentação não pode ser desfeita.",
       "cantMoveOut": "As notas não podem ser retiradas de um espaço de equipe.",
       "cantMoveTeammate": "Apenas o proprietário da nota ou um administrador do workspace pode movê-la para outro espaço.",
       "moved": "“{{title}}” movida para {{target}}",
@@ -3045,7 +3047,7 @@
         "title": "Espaço de equipe",
         "description": "Uma área compartilhada dentro de um workspace. Adicione pessoas ou grupos para dar acesso a elas."
       },
-      "contents": "Cada espaço pode conter pastas e notas.",
+      "contents": "Cada espaço pode conter pastas e notas, e cada pasta pode ter subpastas.",
       "done": "Entendi",
       "reopen": "Entenda como os espaços são organizados"
     },
@@ -3058,12 +3060,16 @@
       "title": "Pastas",
       "soon": "Em breve",
       "folderName": "Nome da pasta",
+      "topLevel": "Nível superior",
       "couldNotCreate": "Não foi possível criar a pasta",
       "couldNotRename": "Não foi possível renomear a pasta",
       "couldNotDelete": "Não foi possível excluir a pasta",
       "deleteTitle": "Excluir pasta?",
       "deleteDescription": "Isso excluirá permanentemente \"{{name}}\" e suas {{count}} nota(s). Esta ação não pode ser desfeita.",
       "deleteDescriptionEmpty": "Isso excluirá permanentemente \"{{name}}\". Esta ação não pode ser desfeita.",
+      "deleteDescriptionSubfolders": "Isso excluirá permanentemente \"{{name}}\", incluindo {{subfolders}} e {{notes}}. Esta ação não pode ser desfeita.",
+      "subfolderCount_one": "{{count}} subpasta",
+      "subfolderCount_other": "{{count}} subpastas",
       "deleteConfirm": "Excluir pasta e notas"
     },
     "list": {
@@ -3295,6 +3301,7 @@
       "searchFolders": "Pesquisar pastas...",
       "noResults": "Nenhuma pasta encontrada",
       "newFolder": "Nova pasta",
+      "newSubfolder": "Nova subpasta",
       "showInFileManager": "Mostrar no {{manager}}"
     },
     "actions": {
@@ -3527,6 +3534,7 @@
         "members_one": "{{count}} membro",
         "members_other": "{{count}} membros"
       },
+      "subfolders": "Subpastas",
       "banner": {
         "title": {
           "team": "Seu espaço de equipe",

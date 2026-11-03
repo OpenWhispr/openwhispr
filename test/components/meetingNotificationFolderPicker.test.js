@@ -235,6 +235,29 @@ test("two recents fill with three fallbacks and an outside selection remains vis
   assert.equal(c.container.querySelectorAll('[role="option"]').length, 6);
 });
 
+test("subfolders follow their parent and carry its name", async (t) => {
+  const c = await mount(t);
+  const base = contexts();
+  c.setContext({
+    ...base,
+    folders: [
+      { id: 20, space_id: 1, name: "Q1", is_default: 0, parent_folder_id: 2 },
+      ...base.folders,
+    ],
+  });
+  await c.click(c.byLabel("Choose meeting folder"));
+  assert.deepEqual(
+    [...c.container.querySelectorAll('[role="option"]')].map((o) => o.getAttribute("aria-label")),
+    [
+      "Private / Meetings",
+      "Private / Calls 1",
+      "Private / Calls 1 / Q1",
+      "Private / Calls 2",
+      "Private / Calls 3",
+    ]
+  );
+});
+
 test("a successful create with a failed selection retries only selection", async (t) => {
   const c = await mount(t);
   let selections = 0;

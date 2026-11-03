@@ -118,8 +118,8 @@ import { observeFloatingChatLayout } from "./floatingChatLayout";
 import {
   MEETING_RECORDING_REFUSAL_KEYS,
   NOTE_META_CHIP_CLASS,
-  defaultFolderDisplayName,
   folderMatchesQuery,
+  folderPathLabel,
   shouldOfferMeetingSummary,
 } from "./shared";
 
@@ -473,7 +473,11 @@ export default function NoteEditor({
   const filteredFolders = useMemo(
     () =>
       folderSearch && folders
-        ? folders.filter((f) => folderMatchesQuery(f, t, folderSearch))
+        ? folders.filter(
+            (f) =>
+              folderMatchesQuery(f, t, folderSearch) ||
+              folderPathLabel(f, folders, t).toLowerCase().includes(folderSearch.toLowerCase())
+          )
         : (folders ?? []),
     [folders, folderSearch, t]
   );
@@ -1201,7 +1205,7 @@ export default function NoteEditor({
                         >
                           <FolderOpen size={11} className="text-foreground/45 shrink-0" />
                           <span dir="auto" className="truncate flex-1">
-                            {defaultFolderDisplayName(folder, t)}
+                            {folderPathLabel(folder, folders, t)}
                           </span>
                           {isCurrent && <Check size={9} className="text-primary shrink-0" />}
                         </DropdownMenuItem>

@@ -11,7 +11,7 @@ import {
 } from "../ui/dropdown-menu";
 import { cn } from "../lib/utils";
 import ShareVisibilityMenu from "./ShareVisibilityMenu";
-import { notesInputClass } from "./shared";
+import { folderPathLabel, notesInputClass } from "./shared";
 import {
   canManageAccessGrant,
   currentShareToken,
@@ -31,6 +31,7 @@ import {
   getShareCacheEntry,
   persistNoteShareState,
   updateShareCache,
+  useFolders,
   useSpaces,
   useShareCacheEntry,
 } from "../../stores/noteStore";
@@ -46,7 +47,9 @@ import { usePolicySnapshot } from "../../hooks/usePolicy";
 import { emailDomain, isPersonalEmailDomain } from "../../utils/personalEmailDomains";
 import { EMAIL_REGEX } from "../../utils/validation";
 import type {
+  FolderItem,
   NoteAccessGrant,
+  NoteAccessPrincipal,
   NoteAccessState,
   NoteItem,
   NoteShareInvitation,
@@ -89,6 +92,7 @@ export default function ShareNoteDialog({
   const { t } = useTranslation();
   const { toast } = useToast();
   const spaces = useSpaces();
+  const folders = useFolders();
   const space = useMemo(
     () => spaces.find((candidate) => candidate.id === note.space_id) ?? null,
     [spaces, note.space_id]
@@ -839,7 +843,7 @@ export default function ShareNoteDialog({
                             )}
                             <span className="min-w-0 flex-1">
                               <span dir="auto" className="block text-xs text-foreground truncate">
-                                {principal.name || principal.email}
+                                {principalLabel(principal, folders, t)}
                               </span>
                               {principal.name && principal.email && (
                                 <span
@@ -1104,6 +1108,19 @@ function MemberRow({
   );
 }
 
+// A folder principal names a cloud folder; one synced here shows its parent too.
+function principalLabel(
+  principal: NoteAccessPrincipal,
+  folders: FolderItem[],
+  t: (key: string) => string
+): string {
+  const folder =
+    principal.type === "folder" && principal.id
+      ? folders.find((f) => f.cloud_id === principal.id)
+      : undefined;
+  return folder ? folderPathLabel(folder, folders, t) : principal.name || principal.email || "";
+}
+
 function AudienceIcon() {
   return (
     <span className="w-7 h-7 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
@@ -1130,10 +1147,11 @@ function AccessGrantRow({
   onRemove: () => void;
 }) {
   const { t } = useTranslation();
+  const folders = useFolders();
   const principal = grant.principal;
   const isGroup =
     principal.type === "team" || principal.type === "folder" || principal.type === "workspace";
-  const primary = principal.name || principal.email || "";
+  const primary = principalLabel(principal, folders, t);
   const secondary = grant.pending
     ? t("noteEditor.share.dialog.pending")
     : principal.type === "team"
