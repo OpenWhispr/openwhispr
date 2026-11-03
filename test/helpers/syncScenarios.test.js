@@ -639,6 +639,8 @@ test("S5 a tombstone as the last row of a delta page still hands the next page a
   cloud.setClock(() => new Date().toISOString());
 
   device.storage["lastSyncedAt.notes"] = cursor;
+  // Only the delta's pages count here, not the one-time read of the whole feed.
+  device.storage["noteFeedReplay.v1"] = "3";
   const before = snapshotNotes(db);
   await syncOnce(device);
 

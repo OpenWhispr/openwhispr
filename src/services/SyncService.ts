@@ -198,6 +198,10 @@ const PURGED_SPACE_GUARD_LOCK = "openwhispr-purged-spaces";
 // disambiguating it (see recordUpdate404), keyed by client id. Read-modify-
 // written only inside the SYNC_ALL_LOCK pass, so it needs no lock of its own.
 const NOTE_UPDATE_404_KEY = "noteUpdate404Counts";
+// Attempts at replaying the note feed from its start (see replayNoteFeed).
+const NOTE_FEED_REPLAY_KEY = "noteFeedReplay.v1";
+const NOTE_FEED_REPLAY_ATTEMPTS = 3;
+const NOTE_FEED_START = "1970-01-01T00:00:00.000Z";
 const FOLDER_UPDATE_404_KEY = "folderUpdate404Counts";
 
 const SHARED_DICTIONARY_PAGE_LIMIT = 200;
@@ -454,6 +458,7 @@ export class SyncService {
   // Incomplete pulls retry on a later ordinary pass.
   private unrevisionedClearPullDone = false;
   private revisionBackfillChecked = false;
+  private noteFeedReplayTried = new Set<string>();
   private pushTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private teamSpacesRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private teamSpacesRetryAttempt = 0;
@@ -2012,9 +2017,15 @@ export class SyncService {
     if (!teamOnly && this.teamCursorLagging("notes")) {
       await this.pullNotes(true);
     }
+    const replayKey = teamOnly ? `${NOTE_FEED_REPLAY_KEY}.team` : NOTE_FEED_REPLAY_KEY;
+    const cursorKey = teamOnly ? "lastSyncedAt.notes.team" : "lastSyncedAt.notes";
+    // A first sync has no old copies to reconcile.
+    if (!localStorage.getItem(cursorKey)) {
+      localStorage.setItem(replayKey, String(NOTE_FEED_REPLAY_ATTEMPTS));
+    }
     // A parked pull left its cursors in place, so the next pass re-sees the
     // parked rows — typically after syncSpaces has mirrored the missing team.
-    await this.pullNotes(teamOnly);
+    if (await this.pullNotes(teamOnly)) await this.replayNoteFeed(teamOnly, replayKey);
     // After the delta pull, which usually shows whether the server keeps
     // revisions without a probe.
     await this.backfillNoteRevisions(teamOnly);
@@ -2044,6 +2055,23 @@ export class SyncService {
   // session applies them (pullNotes takes a clean pre-revision row whole),
   // and only against a server that keeps revisions: an older API would
   // otherwise repeat it every session for nothing.
+  // Pulls used to match a cloud row only by client id, so a delete never found a
+  // copy stored under another key, and the cursor has since moved past it. One
+  // read of the whole feed brings those deletes back, for the normal path to
+  // apply. A note the feed no longer returns stays: the API purges deletes after
+  // 30 days, but absence can also mean the row exists and this account can't read
+  // it. A row that stays parked must not make every session a full read, so this
+  // runs once a session and stops after a few attempts.
+  private async replayNoteFeed(teamOnly: boolean, replayKey: string): Promise<void> {
+    const attempts = Number(localStorage.getItem(replayKey)) || 0;
+    if (attempts >= NOTE_FEED_REPLAY_ATTEMPTS || this.noteFeedReplayTried.has(replayKey)) return;
+    this.noteFeedReplayTried.add(replayKey);
+    localStorage.setItem(replayKey, String(attempts + 1));
+    if (await this.pullNotes(teamOnly, false, true)) {
+      localStorage.setItem(replayKey, String(NOTE_FEED_REPLAY_ATTEMPTS));
+    }
+  }
+
   private async backfillNoteRevisions(teamOnly: boolean): Promise<void> {
     if (this.revisionBackfillChecked) return;
     try {
@@ -2247,10 +2275,18 @@ export class SyncService {
     if (denied) await this.restoreDeniedRows("note");
   }
 
-  private async pullNotes(teamOnly = false, snapshot = false): Promise<boolean> {
+  private async pullNotes(
+    teamOnly = false,
+    snapshot = false,
+    replayFeed = false
+  ): Promise<boolean> {
     try {
       const cursorKey = teamOnly ? "lastSyncedAt.notes.team" : "lastSyncedAt.notes";
-      const since = snapshot ? undefined : (localStorage.getItem(cursorKey) ?? undefined);
+      const since = snapshot
+        ? undefined
+        : replayFeed
+          ? NOTE_FEED_START
+          : (localStorage.getItem(cursorKey) ?? undefined);
       const syncStartedAt = new Date().toISOString();
       const ctx = await this.buildSpaceContext();
       const { cloudToLocal, defaultFolderId } = await this.buildCloudToLocalFolderMap(
@@ -2278,6 +2314,12 @@ export class SyncService {
               cloudNote.client_note_id,
               cloudNote.id
             );
+
+            // An old delete must not take text this device hasn't pushed. Its
+            // push gets a 404 and forks it into a note of its own.
+            if (replayFeed && cloudNote.deleted_at && local?.sync_status !== "synced") {
+              continue;
+            }
 
             // A parent folder DELETE owns this note until its server result is
             // known. Do not turn a newer live row into a conflict or apply a

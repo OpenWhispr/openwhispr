@@ -1663,6 +1663,129 @@ test("a chat that follows its note into another space drops the old scope", (t) 
   );
 });
 
+// A desktop that synced before pulls matched by cloud id: its cursor has passed
+// the delete, and nothing since has shown the copy that delete was for.
+function syncedPastTheFeed(service) {
+  localStorageStub.setItem("lastSyncedAt.notes", new Date(Date.now() + 1000).toISOString());
+  localStorageStub.removeItem("noteFeedReplay.v1");
+  service.noteFeedReplayTried.clear();
+}
+
+test("replaying the feed once retires a copy whose delete the cursor had passed", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+
+  const row = cloud.seedNote({ client_note_id: "cloud-key", title: "Gone", content: "body" });
+  await service.syncAll(true);
+  updateNote(db, copiesOf(db, row.id)[0].id, { client_note_id: "local-key" });
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  await cloud.request({ method: "DELETE", path: "/api/notes/delete", body: { id: row.id } });
+  syncedPastTheFeed(service);
+  assert.equal(noteCount(db), 1, "the ghost is there before the replay");
+
+  await service.syncAll(true);
+
+  assert.equal(noteCount(db), 0);
+  const replays = () =>
+    cloud.logFor("/api/notes/list").filter((call) => call.path.includes("1970-01-01")).length;
+  assert.equal(replays(), 1);
+
+  const fresh = new SyncService();
+  t.after(() => stopSyncTimers(fresh));
+  await fresh.syncAll(true);
+  assert.equal(replays(), 1, "once per install, not per session");
+});
+
+test("the replay leaves a copy with unpushed text to its push", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+
+  const row = cloud.seedNote({ client_note_id: "cloud-key", title: "Gone", content: "body" });
+  await service.syncAll(true);
+  const [copy] = copiesOf(db, row.id);
+  updateNote(db, copy.id, { client_note_id: "local-key" });
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  await cloud.request({ method: "DELETE", path: "/api/notes/delete", body: { id: row.id } });
+  syncedPastTheFeed(service);
+  updateNote(db, copy.id, { content: "unpushed", sync_status: "pending" });
+
+  await service.syncAll(true);
+
+  assert.equal(db.getNote(copy.id).content, "unpushed");
+});
+
+test("a note the feed no longer returns stays, as it may exist and be unreadable", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+
+  cloud.seedNote({ client_note_id: "live", title: "Live", content: "body" });
+  await service.syncAll(true);
+  const absent = insertCloudCopy(db, {
+    client_note_id: "absent",
+    cloud_id: "absent-cloud",
+    cloud_updated_at: "2020-01-01T00:00:00.000Z",
+  });
+  syncedPastTheFeed(service);
+
+  await service.syncAll(true);
+
+  assert.ok(db.getNote(absent));
+});
+
+test("a failed replay is retried next session, and stops after a few attempts", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  silenceConsoleErrors(t);
+
+  const row = cloud.seedNote({ client_note_id: "cloud-key", title: "Gone", content: "body" });
+  await service.syncAll(true);
+  updateNote(db, copiesOf(db, row.id)[0].id, { client_note_id: "local-key" });
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  await cloud.request({ method: "DELETE", path: "/api/notes/delete", body: { id: row.id } });
+  syncedPastTheFeed(service);
+  const isReplay = (call) => call.path.includes("1970-01-01");
+  const replays = () => cloud.logFor("/api/notes/list").filter(isReplay).length;
+  cloud.failWith((call) => call.path.includes("/api/notes/list") && isReplay(call), {
+    status: 500,
+  });
+
+  await service.syncAll(true);
+  await service.syncAll(true);
+  assert.equal(noteCount(db), 1, "a failed replay applies nothing");
+  assert.equal(replays(), 1, "once a session");
+
+  for (const expected of [2, 3, 3]) {
+    const session = new SyncService();
+    t.after(() => stopSyncTimers(session));
+    await session.syncAll(true);
+    assert.equal(replays(), expected);
+  }
+
+  localStorageStub.setItem("noteFeedReplay.v1", "2");
+  cloud.clearFailures();
+  const last = new SyncService();
+  t.after(() => stopSyncTimers(last));
+  await last.syncAll(true);
+  assert.equal(noteCount(db), 0, "a later attempt succeeds");
+  assert.equal(localStorageStub.getItem("noteFeedReplay.v1"), "3");
+});
+
+test("a first sync doesn't replay the feed", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { cloud, service } = ctx;
+
+  cloud.seedNote({ client_note_id: "live", title: "Live", content: "body" });
+  await service.syncAll(true);
+
+  assert.equal(localStorageStub.getItem("noteFeedReplay.v1"), "3");
+  assert.ok(!cloud.logFor("/api/notes/list").some((call) => call.path.includes("1970-01-01")));
+});
+
 test("a pull landing on a just-deleted note keeps its delete queued", (t) => {
   const db = createDb(t);
   if (!db) return;

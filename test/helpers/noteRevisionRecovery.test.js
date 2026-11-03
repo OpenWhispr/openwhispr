@@ -115,6 +115,8 @@ async function client(t, db, cloud) {
   windowStub.electronAPI = createElectronApi(db, { cloud });
   await establishValidatedAuth();
   localStorageStub.setItem("lastSyncedAt.notes", "2026-06-01T00:00:00.000Z");
+  // These tests count list requests; the one-time feed read isn't one they mean.
+  localStorageStub.setItem("noteFeedReplay.v1", "3");
   const service = new SyncService();
   t.after(() => stopSyncTimers(service));
   return service;
