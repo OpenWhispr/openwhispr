@@ -15,23 +15,25 @@ import { openCodeSessionHeaders } from "./openCodeSession";
 
 // OpenRouter's reasoning control is a top-level request field the AI SDK
 // can't emit — inject it at the fetch boundary.
-const withDisabledReasoning: typeof fetch = (input, init) => {
-  if (typeof init?.body === "string") {
-    try {
-      const body = JSON.parse(init.body);
-      body.reasoning = { enabled: false };
-      init = { ...init, body: JSON.stringify(body) };
-    } catch {}
-  }
-  return fetch(input, init);
-};
+const withReasoning =
+  (reasoning: Record<string, unknown>): typeof fetch =>
+  (input, init) => {
+    if (typeof init?.body === "string") {
+      try {
+        const body = JSON.parse(init.body);
+        body.reasoning = reasoning;
+        init = { ...init, body: JSON.stringify(body) };
+      } catch {}
+    }
+    return fetch(input, init);
+  };
 
 export async function getAIModel(
   provider: string,
   model: string,
   apiKey: string,
   baseURL?: string,
-  opts?: { disableThinking?: boolean }
+  opts?: { disableThinking?: boolean; reasoningEffort?: string }
 ): Promise<LanguageModel> {
   switch (provider) {
     case "openai":
@@ -62,13 +64,19 @@ export async function getAIModel(
         baseURL,
         headers: openCodeSessionHeaders(baseURL),
       }).chat(model);
-    case "openrouter":
+    case "openrouter": {
+      const reasoning = opts?.disableThinking
+        ? { enabled: false }
+        : opts?.reasoningEffort
+          ? { effort: opts.reasoningEffort }
+          : null;
       // OpenRouter implements Chat Completions, not the OpenAI Responses API.
       return createOpenAI({
         apiKey,
         baseURL,
-        ...(opts?.disableThinking ? { fetch: withDisabledReasoning } : {}),
+        ...(reasoning ? { fetch: withReasoning(reasoning) } : {}),
       }).chat(model);
+    }
     case "local":
       return createOpenAI({ apiKey: apiKey || "no-key", baseURL }).chat(model);
     default:

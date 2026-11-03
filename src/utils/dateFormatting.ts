@@ -11,6 +11,28 @@ export function parseEventDate(value: string): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+export function formatTimeRange(locale: string, startTime: string, endTime: string): string {
+  const format = (value: string) =>
+    new Date(value).toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
+  return `${format(startTime)} – ${format(endTime)}`;
+}
+
+/** "Tue, Oct 20 · 14:15 – 15:15", or "Tue, Oct 20 · All day". */
+export function formatEventWhen(
+  event: { start_time: string; end_time: string; is_all_day: number | boolean },
+  locale: string,
+  allDayLabel: string
+): string {
+  const start = parseEventDate(event.start_time);
+  const day = start
+    ? start.toLocaleDateString(locale, { weekday: "short", month: "short", day: "numeric" })
+    : "";
+  const time = event.is_all_day
+    ? allDayLabel
+    : formatTimeRange(locale, event.start_time, event.end_time);
+  return day ? `${day} · ${time}` : time;
+}
+
 export function normalizeDbDate(dateStr: string): Date {
   if (typeof dateStr !== "string" || !dateStr.trim()) return new Date(NaN);
   const trimmed = dateStr.trim();

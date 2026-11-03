@@ -717,3 +717,37 @@ test("an AUTH_EXPIRED envelope surfaces as a 401 CloudApiError and nothing is ma
   assert.equal(cloud.note(cloudRow.id).deleted_at, null);
   assertNoContentRegression(before, snapshotNotes(db), cloud.notes());
 });
+
+test("an unlinked calendar event reaches the cloud as a blank and clears a stale copy on pull", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+
+  const note = db.saveNote("Weekly sync", "", "meeting").note;
+  db.updateNote(note.id, { calendar_event_id: "evt-1" });
+  await service.syncAll(true);
+  const cloudId = db.getNote(note.id).cloud_id;
+  assert.equal(cloud.note(cloudId).calendar_event_id, "evt-1");
+
+  db.updateNote(note.id, { calendar_event_id: "" });
+  await service.syncAll(true);
+  assert.equal(cloud.note(cloudId).calendar_event_id, "");
+
+  // Model a second device that still holds the link, then a newer edit from
+  // elsewhere that does not mention the event.
+  updateNote(db, note.id, {
+    calendar_event_id: "evt-1",
+    sync_status: "synced",
+    updated_at: LOCAL_EARLY,
+  });
+  await cloud.request({
+    method: "PATCH",
+    path: "/api/notes/update",
+    body: { id: cloudId, title: "Renamed elsewhere" },
+  });
+  await service.syncAll(true);
+
+  const local = db.getNote(note.id);
+  assert.equal(local.title, "Renamed elsewhere");
+  assert.equal(local.calendar_event_id, "");
+});

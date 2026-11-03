@@ -191,7 +191,8 @@ export default function HomeScreen() {
       }
       Alert.alert('Error', error.message);
     },
-    onLocalModelMissing: promptLocalModelFallback,
+    // A declined cloud retry keeps the recording, which the failed history row holds for a retry.
+    onLocalModelMissing: (retryWithCloud) => promptLocalModelFallback(retryWithCloud),
     onUsageLimitReached: handleUsageLimitReached,
   });
 
@@ -206,7 +207,7 @@ export default function HomeScreen() {
       }
     },
     onError: (error) => Alert.alert('Error', error.message),
-    onLocalModelMissing: promptLocalModelFallback,
+    onLocalModelMissing: (retryWithCloud) => promptLocalModelFallback(retryWithCloud),
     onUsageLimitReached: handleUsageLimitReached,
   });
 
@@ -523,12 +524,12 @@ export default function HomeScreen() {
             <Pressable
               onPress={() => router.push('/(account)/ai-models')}
               accessibilityRole="button"
-              accessibilityLabel="Private mode is on"
+              accessibilityLabel="Local Mode is on"
               accessibilityHint="Opens AI Models."
               className="h-9 flex-row items-center gap-1.5 rounded-full bg-tertiarySystemFill px-3 active:opacity-70"
             >
               <SystemIcon name="lock.fill" mdName="Lock" size={13} color="secondaryLabel" />
-              <Text className="text-xs font-bold text-secondaryLabel">Private</Text>
+              <Text className="text-xs font-bold text-secondaryLabel">Local</Text>
             </Pressable>
           ) : (
             <View />

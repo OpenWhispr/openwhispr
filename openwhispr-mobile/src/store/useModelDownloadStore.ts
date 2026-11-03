@@ -94,7 +94,7 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => {
         {
           status: 'error',
           error:
-            'Local Whisper is not available. Build the app with `npx expo run:ios` to enable private mode.',
+            'Local Whisper is not available. Build the app with `npx expo run:ios` to enable Local Mode.',
         },
         requestId,
       );

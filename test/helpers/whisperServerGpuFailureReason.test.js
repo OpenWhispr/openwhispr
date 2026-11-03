@@ -29,6 +29,8 @@ const BINARY = {
 // Binary path -> how its fake process behaves
 const behaviours = new Map();
 const warnings = [];
+// Every spawn's arguments and environment, newest last
+const spawns = [];
 
 function fakeWhisperServer({ stderr = "", exit = null, launchError = null, healthy = false } = {}) {
   const child = new EventEmitter();
@@ -77,7 +79,15 @@ Module._load = function loadWithFakeProcess(request, parent, isMain) {
   }
   if (parent?.filename === serverModulePath) {
     if (request === "child_process") {
-      return { ...childProcess, spawn: (binary) => fakeWhisperServer(behaviours.get(binary)) };
+      return {
+        ...childProcess,
+        spawn: (binary, args, options) => {
+          spawns.push({ binary, args, env: options.env });
+          // A behaviour can depend on the arguments (e.g. a --device pin)
+          const behaviour = behaviours.get(binary);
+          return fakeWhisperServer(typeof behaviour === "function" ? behaviour(args) : behaviour);
+        },
+      };
     }
     if (request === "./debugLogger") {
       const ignore = () => {};
@@ -101,6 +111,7 @@ try {
 function createManager(t) {
   behaviours.clear();
   warnings.length = 0;
+  spawns.length = 0;
   behaviours.set(BINARY.cpu, { healthy: true });
   const manager = new WhisperServerManager();
   manager.getServerBinaryPath = (options = {}) =>
@@ -110,6 +121,14 @@ function createManager(t) {
   manager.checkHealth = async () => Boolean(manager.process?.healthy);
   t.after(() => manager.stop());
   return manager;
+}
+
+// Like the real server, it answers only once the model (and its log) has loaded
+function answerAfterOutput(manager) {
+  manager.checkHealth = async () => {
+    await new Promise((resolve) => setImmediate(resolve));
+    return Boolean(manager.process?.healthy);
+  };
 }
 
 function fallbackWarning() {
@@ -127,7 +146,9 @@ test("#1340: a Vulkan server that dies at startup reports the createDevice error
   await manager.start(modelPath, { useVulkan: true });
 
   assert.equal(manager.useVulkan, false, "the CPU server took over");
-  assert.deepEqual(events, [{ reason: "vk::PhysicalDevice::createDevice: ErrorDeviceLost" }]);
+  assert.deepEqual(events, [
+    { reason: "vk::PhysicalDevice::createDevice: ErrorDeviceLost", fallbackBackend: "cpu" },
+  ]);
   const warning = fallbackWarning();
   assert.equal(warning.meta.reason, "vk::PhysicalDevice::createDevice: ErrorDeviceLost");
 });
@@ -145,8 +166,139 @@ test("a CUDA server that runs out of memory at startup reports the failed alloca
     {
       reason:
         "ggml_backend_cuda_buffer_type_alloc_buffer: allocating 1533.14 MiB on device 0: cudaMalloc failed: out of memory",
+      fallbackBackend: "cpu",
     },
   ]);
+});
+
+test("a CUDA server that comes up without its GPU reports why, not a startup timeout", async (t) => {
+  const cases = [
+    [
+      "ggml_cuda_init: failed to initialize CUDA: no CUDA-capable device is detected\n" +
+        "whisper_backend_init_gpu: no GPU found\n",
+      "ggml_cuda_init: failed to initialize CUDA: no CUDA-capable device is detected",
+    ],
+    [
+      "whisper_backend_init_gpu: no GPU found\n",
+      "server started without initializing its GPU backend",
+    ],
+  ];
+  for (const [stderr, reason] of cases) {
+    const manager = createManager(t);
+    behaviours.set(BINARY.cuda, { stderr, healthy: true });
+    answerAfterOutput(manager);
+    const events = [];
+    manager.on("cuda-fallback", (payload) => events.push(payload));
+
+    await manager.start(modelPath, { useCuda: true });
+
+    assert.equal(manager.useCuda, false);
+    assert.deepEqual(events, [{ reason, fallbackBackend: "cpu" }]);
+    await manager.stop();
+  }
+});
+
+test("a bundled whisper-server built for CUDA reports the GPU it runs on (#2168)", async (t) => {
+  const manager = createManager(t);
+  behaviours.set(BINARY.cpu, {
+    stderr: "whisper_backend_init_gpu: using CUDA0 backend\n",
+    healthy: true,
+  });
+  answerAfterOutput(manager);
+  let bundledGpuEvents = 0;
+  manager.on("bundled-gpu", () => bundledGpuEvents++);
+
+  await manager.start(modelPath, {});
+
+  assert.equal(manager.useCuda, false);
+  assert.equal(manager.getStatus().gpuBackend, "cuda");
+  assert.equal(manager.getStatus().gpuAccelerated, true);
+  assert.equal(bundledGpuEvents, 1);
+});
+
+const VULKAN_DEVICE =
+  "ggml_vulkan: 0 = NVIDIA GeForce RTX 3060 (NVIDIA) | uma: 0 | fp16: 1 | warp size: 32\n";
+const USING_VULKAN = "whisper_backend_init_gpu: using Vulkan0 backend\n";
+const LOADER_ERROR =
+  "whisper-server-cuda: error while loading shared libraries: libcudart.so.12: cannot open shared object file: No such file or directory\n";
+
+test("a CUDA server that fails at startup moves to an installed Vulkan pack", async (t) => {
+  const manager = createManager(t);
+  answerAfterOutput(manager);
+  behaviours.set(BINARY.cuda, { stderr: LOADER_ERROR, exit: { code: 127 } });
+  behaviours.set(BINARY.vulkan, { stderr: VULKAN_DEVICE + USING_VULKAN, healthy: true });
+  const events = [];
+  manager.on("cuda-fallback", (payload) => events.push(["cuda", payload]));
+  manager.on("gpu-fallback", (payload) => events.push(["vulkan", payload]));
+
+  await manager.start(modelPath, { useCuda: true, fallbackToVulkan: true });
+
+  assert.equal(manager.useVulkan, true);
+  assert.equal(manager.getStatus().gpuBackend, "vulkan");
+  assert.equal(manager.gpuFallbackActive, false);
+  assert.deepEqual(events, [["cuda", { reason: LOADER_ERROR.trim(), fallbackBackend: "vulkan" }]]);
+});
+
+test("a CUDA pack that fails lands on a bundled CUDA build: the GPU stays on (#2168)", async (t) => {
+  const manager = createManager(t);
+  answerAfterOutput(manager);
+  behaviours.set(BINARY.cuda, { stderr: LOADER_ERROR, exit: { code: 127 } });
+  behaviours.set(BINARY.cpu, {
+    stderr: "whisper_backend_init_gpu: using CUDA0 backend\n",
+    healthy: true,
+  });
+  const events = [];
+  manager.on("cuda-fallback", (payload) => events.push(payload));
+
+  await manager.start(modelPath, { useCuda: true });
+
+  assert.equal(manager.useCuda, false);
+  assert.deepEqual(events, [{ reason: LOADER_ERROR.trim(), fallbackBackend: "cuda" }]);
+});
+
+test("a Vulkan pin to a device that is gone is cleared, not saved as a GPU failure (#1606)", async (t) => {
+  const manager = createManager(t);
+  answerAfterOutput(manager);
+  // ggml finds no device 1, so whisper.cpp runs on the CPU
+  behaviours.set(BINARY.vulkan, (args) => ({
+    stderr:
+      VULKAN_DEVICE +
+      (args.includes("--device") ? "whisper_backend_init_gpu: no GPU found\n" : USING_VULKAN),
+    healthy: true,
+  }));
+  const events = [];
+  manager.on("gpu-fallback", (payload) => events.push(["gpu-fallback", payload]));
+  manager.on("vulkan-device-pin-cleared", () => events.push(["pin-cleared"]));
+
+  await manager.start(modelPath, { useVulkan: true, vulkanDeviceIndex: 1 });
+
+  assert.deepEqual(events, [["pin-cleared"]]);
+  assert.equal(manager.useVulkan, true);
+  assert.equal(manager.getStatus().gpuBackend, "vulkan");
+  assert.equal(spawns.at(-1).args.includes("--device"), false);
+});
+
+test("a Linux CUDA start puts the pack's own folder first on the library path", async (t) => {
+  const platform = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "linux" });
+  const libraryPath = process.env.LD_LIBRARY_PATH;
+  process.env.LD_LIBRARY_PATH = "/opt/cuda/lib64";
+  t.after(() => {
+    Object.defineProperty(process, "platform", platform);
+    if (libraryPath === undefined) delete process.env.LD_LIBRARY_PATH;
+    else process.env.LD_LIBRARY_PATH = libraryPath;
+  });
+  const manager = createManager(t);
+  answerAfterOutput(manager);
+  behaviours.set(BINARY.cuda, {
+    stderr: "whisper_backend_init_gpu: using CUDA0 backend\n",
+    healthy: true,
+  });
+
+  await manager.start(modelPath, { useCuda: true });
+
+  assert.equal(spawns.at(-1).env.LD_LIBRARY_PATH, `${path.dirname(BINARY.cuda)}:/opt/cuda/lib64`);
+  assert.equal(manager.getStatus().gpuBackend, "cuda");
 });
 
 test("a GPU server that never answers is reported as a startup timeout", async (t) => {
@@ -166,7 +318,7 @@ test("a GPU server that never answers is reported as a startup timeout", async (
 
   await manager.start(modelPath, { useVulkan: true });
 
-  assert.deepEqual(events, [{ reason: "startup timed out after 120 s" }]);
+  assert.deepEqual(events, [{ reason: "startup timed out after 120 s", fallbackBackend: "cpu" }]);
 });
 
 test("a GPU binary that cannot be launched reports its error, not exit code -2", async (t) => {
@@ -179,7 +331,7 @@ test("a GPU binary that cannot be launched reports its error, not exit code -2",
   await manager.start(modelPath, { useCuda: true });
 
   assert.equal(manager.useCuda, false, "the CPU server took over");
-  assert.deepEqual(events, [{ reason: "could not launch (ENOENT)" }]);
+  assert.deepEqual(events, [{ reason: "could not launch (ENOENT)", fallbackBackend: "cpu" }]);
 });
 
 test("a Vulkan server that crashes on Windows reports the status code in hex", async (t) => {
@@ -194,5 +346,5 @@ test("a Vulkan server that crashes on Windows reports the status code in hex", a
 
   await manager.start(modelPath, { useVulkan: true });
 
-  assert.deepEqual(events, [{ reason: "exit code 0xC0000005" }]);
+  assert.deepEqual(events, [{ reason: "exit code 0xC0000005", fallbackBackend: "cpu" }]);
 });

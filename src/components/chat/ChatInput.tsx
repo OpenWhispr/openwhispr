@@ -21,6 +21,8 @@ interface ChatInputProps {
   agentState: AgentState;
   partialTranscript: string;
   onTextSubmit?: (text: string) => void;
+  /** Keeps drafting available while the host prepares the conversation. */
+  sendDisabled?: boolean;
   onCancel?: () => void;
   autoFocus?: boolean;
   placeholder?: string;
@@ -42,6 +44,11 @@ interface ChatInputProps {
   slashCommands?: SlashCommand[];
   /** The menu fills the host above the composer, so the host hides what it would cover. */
   onSlashMenuOpenChange?: (open: boolean) => void;
+  /**
+   * A row inside the composer, above the text field (the skill chip). While it shows, the
+   * composer keeps its resting height: the focus expansion is off.
+   */
+  leadingRow?: React.ReactNode;
 }
 
 function RecordingIndicator() {
@@ -76,6 +83,7 @@ export function ChatInput({
   agentState,
   partialTranscript,
   onTextSubmit,
+  sendDisabled = false,
   onCancel,
   autoFocus = false,
   placeholder,
@@ -92,6 +100,7 @@ export function ChatInput({
   expandOnFocusSize = "standard",
   slashCommands,
   onSlashMenuOpenChange,
+  leadingRow,
 }: ChatInputProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -130,6 +139,7 @@ export function ChatInput({
   // center on the first line: the outlined note composer, and the docked one until it expands.
   const centersFirstLine = outlined || variant === "sidebar";
   const rowCenter = centersFirstLine && "mb-0.5";
+  const expands = expandOnFocus && !leadingRow;
 
   const isIdle = agentState === "idle";
   const isListening = agentState === "listening";
@@ -163,12 +173,12 @@ export function ChatInput({
 
   const handleSubmit = useCallback(() => {
     const text = inputText.trim();
-    if (!text || !onTextSubmit || isBusy) return;
+    if (!text || !onTextSubmit || isBusy || sendDisabled) return;
     // Cleared first, so a host that can't send yet can write the draft back.
     setInputText("");
     onTextSubmit(text);
     focusAfterFrame();
-  }, [inputText, onTextSubmit, setInputText, isBusy, focusAfterFrame]);
+  }, [inputText, onTextSubmit, setInputText, isBusy, sendDisabled, focusAfterFrame]);
 
   // The Cancel button unmounts once the reply stops, which would drop its focus to the page.
   const handleCancel = useCallback(() => {
@@ -217,7 +227,7 @@ export function ChatInput({
     const input = inputRef.current;
     if (!input) return;
     const composer = composerRef.current;
-    if (expandOnFocus && composer) {
+    if (expands && composer) {
       // The focused composer opens at half its maximum height and grows with the
       // draft up to that maximum (see --composer-fit-height below).
       input.style.height = "100%";
@@ -232,7 +242,7 @@ export function ChatInput({
       input.style.height = "auto";
       input.style.height = `${input.scrollHeight}px`;
     }
-  }, [inputText, isVoiceRecording, isVoiceTranscribing, expandOnFocus, variant, isCompactNote]);
+  }, [inputText, isVoiceRecording, isVoiceTranscribing, expands, variant, isCompactNote]);
 
   useEffect(() => {
     if (!isIdle || !focusOnIdle) return;
@@ -261,6 +271,7 @@ export function ChatInput({
         ref={composerRef}
         className={cn(
           "flex items-center gap-2 min-h-11",
+          leadingRow && "flex-wrap",
           variant === "sidebar"
             ? "h-12 items-end rounded-2xl bg-background ps-3.5 pe-2 py-1.5 focus-within:h-40 dark:bg-surface-1"
             : "rounded-3xl ps-4 pe-1.5 py-1.5",
@@ -283,7 +294,7 @@ export function ChatInput({
               : "border border-black/10 dark:border-white/14",
           variant === "sidebar"
             ? "transition-[height,border-color,box-shadow] duration-300 ease-out motion-reduce:transition-none"
-            : expandOnFocus
+            : expands
               ? cn(
                   "h-12 items-end pe-2.25 transition-[height,border-color,box-shadow] duration-300 ease-out motion-reduce:transition-none",
                   expandOnFocusSize === "compact"
@@ -302,6 +313,8 @@ export function ChatInput({
                   : "focus-within:border-black/15 dark:focus-within:border-white/22 focus-within:ring-[3px] focus-within:ring-primary/8")
         )}
       >
+        {leadingRow && <div className="flex min-w-0 basis-full">{leadingRow}</div>}
+
         {isListening && (
           <>
             <RecordingIndicator />
@@ -379,7 +392,7 @@ export function ChatInput({
             className={cn(
               "flex gap-2 w-full",
               isCompactNote ? "items-center" : "items-end",
-              (expandOnFocus || variant === "sidebar" || isCompactNote) && "h-full"
+              (expands || variant === "sidebar" || isCompactNote) && "h-full"
             )}
           >
             <textarea
@@ -414,7 +427,7 @@ export function ChatInput({
                 "min-w-0 min-h-8 max-h-32 resize-none overflow-y-auto border-0 px-0 py-1.5 leading-5",
                 // One line fills the 36px row, as the bare note composer's does.
                 outlined && "min-h-9",
-                (expandOnFocus || variant === "sidebar" || isCompactNote) && "min-h-0 max-h-none",
+                (expands || variant === "sidebar" || isCompactNote) && "min-h-0 max-h-none",
                 isBusy && "text-muted-foreground/70 cursor-not-allowed"
               )}
             />
@@ -426,7 +439,7 @@ export function ChatInput({
                 title={t("common.cancel")}
                 className={cn(
                   "flex items-center justify-center w-7 h-7 rounded-full shrink-0",
-                  expandOnFocus && COLLAPSED_ROW_CENTER,
+                  expands && COLLAPSED_ROW_CENTER,
                   // The 28px stop's share of the same centering.
                   centersFirstLine && "mb-1",
                   "text-muted-foreground/70 hover:text-foreground hover:bg-foreground/8",
@@ -443,7 +456,7 @@ export function ChatInput({
               <button
                 key="send"
                 onClick={handleSubmit}
-                disabled={!inputText.trim()}
+                disabled={!inputText.trim() || sendDisabled}
                 aria-label={t("agentMode.input.send")}
                 className={cn(
                   "rounded-full shrink-0",
@@ -451,7 +464,7 @@ export function ChatInput({
                   voiceDraft && "animate-[scale-in_0.15s_ease-out_backwards]",
                   "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
                   "transition-all duration-100",
-                  inputText.trim()
+                  inputText.trim() && !sendDisabled
                     ? "hover:brightness-110 active:scale-95"
                     : hasRoundSend
                       ? "cursor-default"
@@ -462,7 +475,9 @@ export function ChatInput({
                   <span
                     className={cn(
                       "flex size-8 items-center justify-center rounded-full",
-                      inputText.trim() ? GRADIENT_CIRCLE : "bg-muted text-muted-foreground"
+                      inputText.trim() && !sendDisabled
+                        ? GRADIENT_CIRCLE
+                        : "bg-muted text-muted-foreground"
                     )}
                   >
                     <ArrowRight size={18} className="-rotate-90" />
@@ -484,7 +499,7 @@ export function ChatInput({
                 }
                 className={cn(
                   "flex items-center justify-center rounded-full shrink-0",
-                  hasRoundSend ? "size-8" : cn("w-7 h-7", expandOnFocus && COLLAPSED_ROW_CENTER),
+                  hasRoundSend ? "size-8" : cn("w-7 h-7", expands && COLLAPSED_ROW_CENTER),
                   rowCenter,
                   "animate-[scale-in_0.15s_ease-out_backwards]",
                   GRADIENT_CIRCLE,

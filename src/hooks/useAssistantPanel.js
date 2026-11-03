@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import {
   getAssistantFooterTransitionTimeline,
   resolveAssistantThinkingTransition,
+  shouldBeginAssistantFollowUpThinking,
 } from "../helpers/voicePillPresentation";
 import {
   closeAssistantSessionState,
@@ -10,6 +11,8 @@ import {
 
 const ASSISTANT_TRANSITION_MS = 320;
 const ASSISTANT_CONTENT_FADE_FALLBACK_MS = 260;
+
+const NO_SKILL_CHOICE = { picked: null, pickOff: false };
 
 /**
  * Owns the assistant panel lifecycle: open/close choreography, the thinking
@@ -34,6 +37,12 @@ export function useAssistantPanel({
   const [footerPhase, setFooterPhase] = useState("pill");
   const [pendingCommand, setPendingCommand] = useState(null);
   const [conversationId, setConversationId] = useState(null);
+  // The conversation's picked skill and whether the user turned picking off: they outlive the
+  // panel, which unmounts on close while the conversation carries on.
+  const [skillChoice, setSkillChoice] = useState(NO_SKILL_CHOICE);
+  // Whether Paste into app has somewhere to go: the app the panel's voice command was spoken
+  // over. Main holds that app; a panel opened from the tray or the pill menu has none.
+  const [canPasteIntoApp, setCanPasteIntoApp] = useState(false);
 
   const openRef = useRef(open);
   const closingRef = useRef(false);
@@ -45,6 +54,14 @@ export function useAssistantPanel({
   const openGenerationRef = useRef(0);
   const commandIdRef = useRef(0);
   const conversationIdRef = useRef(conversationId);
+  // A conversation that is gone (deleted, or it failed to load) takes its skill choice with it.
+  if (
+    conversationId == null &&
+    conversationIdRef.current != null &&
+    skillChoice !== NO_SKILL_CHOICE
+  ) {
+    setSkillChoice(NO_SKILL_CHOICE);
+  }
   const selectionContextRef = useRef(null);
   const hasContentRef = useRef(false);
   const errorDownplayRequestedRef = useRef(false);
@@ -139,6 +156,15 @@ export function useAssistantPanel({
       // already streaming into a visible conversation, and delivering it to
       // the external caret would snap that surface away mid-read.
       const delivery = openRef.current ? null : (command.delivery ?? null);
+      // A command's paste goes to the app it was spoken over. A follow-up spoken over the panel
+      // itself keeps the conversation's app, so its Paste stays offered while main decides.
+      const id = commandIdRef.current;
+      if (!openRef.current) setCanPasteIntoApp(false);
+      void Promise.resolve(window.electronAPI?.assistantPasteTarget?.("adopt"))
+        .catch(() => false)
+        .then((available) => {
+          if (id === commandIdRef.current) setCanPasteIntoApp(available === true);
+        });
       beginThinking();
       setPendingCommand({
         id: commandIdRef.current,
@@ -159,6 +185,7 @@ export function useAssistantPanel({
 
   const handleConversationReset = useCallback(() => {
     hasContentRef.current = false;
+    setSkillChoice(NO_SKILL_CHOICE);
     errorDownplayRequestedRef.current = false;
     setResponseReady(false);
   }, []);
@@ -225,6 +252,8 @@ export function useAssistantPanel({
     setBusy(closeState.busy);
     setPendingCommand(closeState.pendingCommand);
     setConversationId(closeState.conversationId);
+    if (closeState.conversationId == null) setSkillChoice(NO_SKILL_CHOICE);
+    setCanPasteIntoApp(false);
     selectionContextRef.current = null;
     hasContentRef.current = false;
     clearTimeout(closeTimerRef.current);
@@ -271,6 +300,16 @@ export function useAssistantPanel({
   const handleClose = useCallback(() => {
     beginClose(false);
   }, [beginClose]);
+
+  // The tray's and the pill menu's Ask assistant: no command, so no app to paste into. One
+  // pressed while a command is still thinking leaves that command's app alone.
+  const openPanelWithoutCommand = useCallback(() => {
+    if (!openRef.current && !mountedRef.current) {
+      setCanPasteIntoApp(false);
+      void window.electronAPI?.assistantPasteTarget?.("forget")?.catch?.(() => {});
+    }
+    return openPanel();
+  }, [openPanel]);
 
   useEffect(() => {
     if (dictationErrorActionCount > 0) {
@@ -319,11 +358,14 @@ export function useAssistantPanel({
     footerPhase,
     pendingCommand,
     conversationId,
+    skillChoice,
+    setSkillChoice,
+    canPasteIntoApp,
     openRef,
     setBusy,
     setResponseReady,
     setConversationId,
-    openPanel,
+    openPanel: openPanelWithoutCommand,
     beginThinking,
     handleCommand,
     handleResponseContent,
@@ -337,4 +379,28 @@ export function useAssistantPanel({
     completeContentFade,
     noteDictationError,
   };
+}
+
+/**
+ * Starts the open panel's thinking when a voice-assistant follow-up spoken into
+ * it is processed. `recording` is the `useAudioRecording` result and
+ * `assistant` the `useAssistantPanel` result.
+ */
+export function useAssistantFollowUpThinking(recording, assistant) {
+  const { isAssistantVoice, isProcessing, cancellingRef } = recording;
+  const { openRef, beginThinking } = assistant;
+  // A layout effect reads the cancel flag in the processing commit itself; a
+  // passive one runs after a paint, when the teardown may already have cleared it.
+  useLayoutEffect(() => {
+    if (
+      shouldBeginAssistantFollowUpThinking({
+        isAssistantVoice,
+        isProcessing,
+        isCancelling: cancellingRef.current,
+        panelOpen: openRef.current,
+      })
+    ) {
+      beginThinking();
+    }
+  }, [isAssistantVoice, isProcessing, cancellingRef, openRef, beginThinking]);
 }

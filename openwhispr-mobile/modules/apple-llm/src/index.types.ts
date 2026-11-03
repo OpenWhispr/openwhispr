@@ -10,6 +10,11 @@ export interface AppleLLMAvailability {
   status: AppleLLMAvailabilityStatus;
   contextSize?: number;
   tokenCounting?: boolean;
+  // Whether Apple Intelligence supports the iPhone's language, and that language's English name.
+  // Missing from binaries built before they shipped, and localeSupported also while the model
+  // lists no languages.
+  localeSupported?: boolean;
+  deviceLanguage?: string;
 }
 
 export interface AppleLLMTokenCountRequest {

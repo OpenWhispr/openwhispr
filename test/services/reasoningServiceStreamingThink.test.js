@@ -445,6 +445,8 @@ test("a timeout-owned abort during raw response reading remains a timeout error"
   globalThis.fetch = async (_input, init) => {
     const body = new ReadableStream({
       start(controller) {
+        // The first bytes switch from the startup allowance to the idle timeout.
+        controller.enqueue(new TextEncoder().encode(": keepalive\n\n"));
         init?.signal?.addEventListener(
           "abort",
           () => controller.error(new DOMException("aborted", "AbortError")),
@@ -654,7 +656,6 @@ test("cloud action requests supply source fidelity once through every tool step"
       systemPrompt,
       tools: [{ name: "get_note", description: "Read a note", parameters: {} }],
       executeToolCall: async () => ({ data: "Not yet approved.", displayText: "Read note" }),
-      noteChat: true,
     })
   );
   await waitForMicrotasks();
@@ -676,7 +677,6 @@ test("cloud action requests supply source fidelity once through every tool step"
     const effective = [{ role: "system", content: config.systemPrompt }, ...sent];
     assert.equal(JSON.stringify(effective).split(SOURCE_FIDELITY_RULE).length - 1, 1);
     assert.equal(config.systemPrompt, systemPrompt);
-    assert.equal(config.noteChat, true);
     assert.equal(sent[0].content, action);
   }
   assert.deepEqual(
@@ -754,19 +754,26 @@ test("cloud agent streaming correlates events to the initiating request", async 
   assert.deepEqual(bridge.cleanupCounts, { chunk: 1, error: 1, end: 1 });
 });
 
-test("a note chat's cloud stream tells main it is a note chat", async (t) => {
+test("a cloud stream sends main only the options the API request carries", async (t) => {
   const bridge = createAgentStreamBridge();
-  const { reasoningService } = await loadReasoningService(t, "openwhispr-cloud-agent-note-chat-", {
+  const { reasoningService } = await loadReasoningService(t, "openwhispr-cloud-agent-options-", {
     window: { electronAPI: bridge.electronAPI },
   });
   const stream = reasoningService.processTextStreamingCloud([{ role: "user", content: "hello" }], {
     systemPrompt: "Answer the user.",
+    tools: [{ name: "get_note", description: "Read a note", parameters: {} }],
+    screenContext: { data: "aGVsbG8=", mediaType: "image/jpeg" },
+    // Retired with assistant memory (openwhispr-api#243); must not reach main.
     noteChat: true,
   });
   const pending = stream.next();
   await waitForMicrotasks();
 
-  assert.equal(bridge.startCalls[0][2].noteChat, true);
+  assert.deepEqual(Object.keys(bridge.startCalls[0][2]).sort(), [
+    "screenContext",
+    "systemPrompt",
+    "tools",
+  ]);
   reasoningService.cancelActiveStream();
   await pending;
 });

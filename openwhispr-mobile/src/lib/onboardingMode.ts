@@ -4,7 +4,7 @@ import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { hasRealAccountHistory } from '@/sync/syncIdentity';
 import type { UserConfig } from '@/types';
-import { dictationModeConfig } from './inferenceModes';
+import { dictationModeConfig, holdOnDeviceConfig } from './inferenceModes';
 import { OnboardingError } from './onboardingErrors';
 
 // updateConfig reports persistence errors in its store instead of rejecting.
@@ -30,14 +30,14 @@ export async function chooseOnboardingMode(
       if (from !== 'private-download')
         throw new OnboardingError(
           auth.isGuest
-            ? 'Cloud needs an account. Use Local for now, or sign in after setup.'
-            : 'Cloud needs you signed in. Use Local for now, or sign in after setup.',
+            ? 'Cloud needs an account. Use Local Mode for now, or sign in after setup.'
+            : 'Cloud needs you signed in. Use Local Mode for now, or sign in after setup.',
         );
     } else {
       await auth.ensureAnonymousSession();
       if (!useAuthStore.getState().user) {
         throw new OnboardingError(
-          'Cloud needs a connection to set up. Try again or use Local for now.',
+          'Cloud needs a connection to set up. Try again or use Local Mode for now.',
         );
       }
     }
@@ -50,7 +50,13 @@ export async function chooseOnboardingMode(
     pinnedInference: config?.pinnedInference,
   };
   // The dictation route moves with the mode, so a replayed pick also leaves a Providers route.
-  await saveOnboardingConfig(dictationModeConfig(config, mode));
+  // Choosing Local in setup also keeps uploads and cleanup on this iPhone; choosing Cloud releases
+  // them. The other workflows follow the picked mode until a Dictation change in AI Models holds
+  // them where they ran.
+  const next = dictationModeConfig(config, mode);
+  await saveOnboardingConfig(
+    mode === 'private' ? { ...next, ...holdOnDeviceConfig({ ...config, ...next }) } : next,
+  );
   useProcessingModeStore.getState().resetToDefault(mode);
   try {
     await useOnboardingStore.getState().chooseMode(mode, from);

@@ -3,7 +3,6 @@ import { View, ScrollView, TextInput, Pressable, ActivityIndicator, Alert } from
 import { Text } from '@/components/ui/Text';
 import * as Clipboard from 'expo-clipboard';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { TabScreenHeader } from '@/components/ui/TabScreenHeader';
 import { Button } from '@/components/ui/Button';
 import { GradientGlassSurface } from '@/components/ui/GradientGlassSurface';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -86,8 +85,10 @@ function GuestReferralEmptyState() {
 
   return (
     <View className="flex-1 bg-systemBackground">
-      <TabScreenHeader title="Referral" />
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={{ paddingBottom: 40 }}
+      >
         <View className="items-center px-6 pt-7">
           <View
             style={{ borderCurve: 'continuous' }}
@@ -239,7 +240,6 @@ export default function ReferralScreen() {
   if (loading) {
     return (
       <View className="flex-1 bg-systemBackground">
-        <TabScreenHeader title="Referral" />
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" />
         </View>
@@ -250,7 +250,6 @@ export default function ReferralScreen() {
   if (error || !stats) {
     return (
       <View className="flex-1 bg-systemBackground">
-        <TabScreenHeader title="Referral" />
         <View className="flex-1 items-center justify-center p-8">
           <Text className="mb-4 text-center text-sm text-secondaryLabel">
             {error || 'Unable to load referral data'}
@@ -269,8 +268,10 @@ export default function ReferralScreen() {
 
   return (
     <View className="flex-1 bg-systemBackground">
-      <TabScreenHeader title="Referral" />
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={{ paddingBottom: 40 }}
+      >
         <View className="mt-2 px-4">
           <View
             style={{ borderCurve: 'continuous' }}

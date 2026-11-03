@@ -10,9 +10,11 @@
  *   INITIAL_VALUE_B64:<base64> - Initial text field value (multiline)
  *   CHANGED:<text>        - Text field value after a change
  *   CHANGED_B64:<base64>  - Text field value after a change (multiline)
- *   EDITABLE              - Focused element is writable with no live selection (--probe-editable)
+ *   EDITABLE              - Focused element in the active window of <pid> is
+ *                           writable with no live selection (--probe-editable <pid>)
  *   NOT_EDITABLE          - Focused element is not safely writable
- *   NO_ELEMENT            - Could not get focused element
+ *   NO_ELEMENT            - Could not get focused element (with --probe-editable,
+ *                           also a missing or invalid pid, or no accessible app for it)
  *   NO_VALUE              - Focused element has no text value
  *
  * Input (stdin):
@@ -38,6 +40,10 @@
 #define TIMEOUT_SECONDS 30
 #define POLL_INTERVAL_MS 500
 #define MAX_OUTPUT_CHARS 10240
+/* libatspi gives every application it hasn't seen yet 15s to answer, so one
+ * peer that stops answering (#1944) would hold the probe past the caller's
+ * 1.6s kill. linux-fast-paste bounds its calls the same way. */
+#define PROBE_ATSPI_CALL_TIMEOUT_MS 500
 
 static volatile sig_atomic_t running = 1;
 static const char BASE64_TABLE[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -130,6 +136,45 @@ static AtspiAccessible *find_focused(AtspiAccessible *accessible) {
     return NULL;
 }
 
+/* The editable probe vouches for the app a paste will reach, so it looks only
+ * inside that process's first ACTIVE window. A FOCUSED state left behind in
+ * another app must not count, even when the target window has nothing focused
+ * or exposes no accessibility at all. */
+static AtspiAccessible *find_focused_in_active_window(AtspiAccessible *desktop, gint target_pid) {
+    int app_count = atspi_accessible_get_child_count(desktop, NULL);
+    for (int i = 0; i < app_count; i++) {
+        AtspiAccessible *app = atspi_accessible_get_child_at_index(desktop, i, NULL);
+        if (!app) continue;
+        GError *pid_error = NULL;
+        gint pid = atspi_accessible_get_process_id(app, &pid_error);
+        if (pid_error) {
+            g_error_free(pid_error);
+            pid = 0;
+        }
+        if (pid != target_pid) {
+            g_object_unref(app);
+            continue;
+        }
+        int window_count = atspi_accessible_get_child_count(app, NULL);
+        for (int j = 0; j < window_count; j++) {
+            AtspiAccessible *win = atspi_accessible_get_child_at_index(app, j, NULL);
+            if (!win) continue;
+            AtspiStateSet *states = atspi_accessible_get_state_set(win);
+            int active = states && atspi_state_set_contains(states, ATSPI_STATE_ACTIVE);
+            if (states) g_object_unref(states);
+            if (active) {
+                AtspiAccessible *focused = find_focused(win);
+                g_object_unref(win);
+                g_object_unref(app);
+                return focused;
+            }
+            g_object_unref(win);
+        }
+        g_object_unref(app);
+    }
+    return NULL;
+}
+
 static char *read_text_value(AtspiText *text_iface) {
     GError *error = NULL;
 
@@ -151,10 +196,26 @@ static char *read_text_value(AtspiText *text_iface) {
 }
 
 int main(int argc, char **argv) {
-    signal(SIGTERM, signal_handler);
-    signal(SIGINT, signal_handler);
-
     int probe_editable = argc >= 2 && strcmp(argv[1], "--probe-editable") == 0;
+    /* The probe never reads `running`, so it keeps the default action and the
+     * caller's kill at its give-up stops a slow walk. */
+    if (!probe_editable) {
+        signal(SIGTERM, signal_handler);
+        signal(SIGINT, signal_handler);
+    }
+    gint target_pid = 0;
+    if (probe_editable && argc >= 3) {
+        char *end = NULL;
+        long parsed = strtol(argv[2], &end, 10);
+        if (end != argv[2] && *end == '\0' && parsed > 0 && parsed <= G_MAXINT) {
+            target_pid = (gint)parsed;
+        }
+    }
+    if (probe_editable && !target_pid) {
+        printf("NO_ELEMENT\n");
+        fflush(stdout);
+        return 1;
+    }
 
     /* Read original text from stdin (consume but don't use) */
     char stdin_buf[4096];
@@ -168,6 +229,7 @@ int main(int argc, char **argv) {
         fflush(stdout);
         return 1;
     }
+    if (probe_editable) atspi_set_timeout(PROBE_ATSPI_CALL_TIMEOUT_MS, -1);
 
     GError *error = NULL;
     AtspiAccessible *desktop = atspi_get_desktop(0);
@@ -177,26 +239,30 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    /* Search for focused element across all applications */
     AtspiAccessible *focused = NULL;
-    int app_count = atspi_accessible_get_child_count(desktop, &error);
-    if (error) {
-        g_error_free(error);
-        error = NULL;
-        app_count = 0;
-    }
-
-    for (int i = 0; i < app_count && !focused; i++) {
-        AtspiAccessible *app = atspi_accessible_get_child_at_index(desktop, i, &error);
+    if (probe_editable) {
+        focused = find_focused_in_active_window(desktop, target_pid);
+    } else {
+        /* Search for focused element across all applications */
+        int app_count = atspi_accessible_get_child_count(desktop, &error);
         if (error) {
             g_error_free(error);
             error = NULL;
-            continue;
+            app_count = 0;
         }
-        if (!app) continue;
 
-        focused = find_focused(app);
-        g_object_unref(app);
+        for (int i = 0; i < app_count && !focused; i++) {
+            AtspiAccessible *app = atspi_accessible_get_child_at_index(desktop, i, &error);
+            if (error) {
+                g_error_free(error);
+                error = NULL;
+                continue;
+            }
+            if (!app) continue;
+
+            focused = find_focused(app);
+            g_object_unref(app);
+        }
     }
 
     g_object_unref(desktop);
@@ -208,36 +274,64 @@ int main(int argc, char **argv) {
     }
 
     if (probe_editable) {
+        /* GTK4 reports a usable field as SENSITIVE without ENABLED; a
+         * disabled one has neither. */
         AtspiStateSet *states = atspi_accessible_get_state_set(focused);
         int editable = states &&
             atspi_state_set_contains(states, ATSPI_STATE_EDITABLE) &&
-            atspi_state_set_contains(states, ATSPI_STATE_ENABLED) &&
-            atspi_state_set_contains(states, ATSPI_STATE_FOCUSABLE) &&
-            !atspi_state_set_contains(states, ATSPI_STATE_PROTECTED);
+            (atspi_state_set_contains(states, ATSPI_STATE_ENABLED) ||
+             atspi_state_set_contains(states, ATSPI_STATE_SENSITIVE)) &&
+            atspi_state_set_contains(states, ATSPI_STATE_FOCUSABLE);
         if (states) g_object_unref(states);
-        /* A shell prompt must never read as a writable caret: pasted newlines
-         * execute. VTE and Qt terminals expose ATSPI_ROLE_TERMINAL; the caller
-         * separately refuses terminals by executable name. */
-        if (editable &&
-            atspi_accessible_get_role(focused, NULL) == ATSPI_ROLE_TERMINAL) {
-            editable = 0;
+        /* AT-SPI has no "protected" state; a secure field is known only by
+         * its role (GTK, Qt, Chromium and Firefox all report PASSWORD_TEXT),
+         * and generated text must never be pasted into one. A shell prompt
+         * must never read as a writable caret either: pasted newlines
+         * execute. VTE and Qt terminals expose ATSPI_ROLE_TERMINAL; the
+         * caller separately refuses terminals by executable name. A role
+         * that cannot be read could be either, so it is not editable. */
+        if (editable) {
+            GError *role_error = NULL;
+            AtspiRole role = atspi_accessible_get_role(focused, &role_error);
+            if (role_error) {
+                g_error_free(role_error);
+                editable = 0;
+            } else if (role == ATSPI_ROLE_PASSWORD_TEXT || role == ATSPI_ROLE_TERMINAL) {
+                editable = 0;
+            }
         }
         /* A live selection means an EDITABLE verdict would let generated text
          * paste over the user's highlighted text. This is the authoritative
          * check: the caller's clipboard-based capture cannot see a selection
          * whose text already matches the clipboard. */
         if (editable) {
+            /* A selection that cannot be read could be live, so it is not
+             * editable. That includes a Text interface that cannot be read:
+             * libatspi returns none when its GetInterfaces call fails. */
             AtspiText *probe_text = atspi_accessible_get_text_iface(focused);
             if (probe_text) {
-                gint n_selections = atspi_text_get_n_selections(probe_text, NULL);
+                GError *selection_error = NULL;
+                gint n_selections = atspi_text_get_n_selections(probe_text, &selection_error);
+                if (selection_error) {
+                    g_error_free(selection_error);
+                    selection_error = NULL;
+                    editable = 0;
+                }
                 for (gint i = 0; i < n_selections && editable; i++) {
-                    AtspiRange *selection = atspi_text_get_selection(probe_text, i, NULL);
-                    if (selection) {
-                        if (selection->end_offset > selection->start_offset) editable = 0;
-                        g_free(selection);
+                    AtspiRange *selection =
+                        atspi_text_get_selection(probe_text, i, &selection_error);
+                    if (selection_error) {
+                        g_error_free(selection_error);
+                        selection_error = NULL;
+                        editable = 0;
+                    } else if (selection && selection->end_offset > selection->start_offset) {
+                        editable = 0;
                     }
+                    if (selection) g_free(selection);
                 }
                 g_object_unref(probe_text);
+            } else {
+                editable = 0;
             }
         }
         printf("%s\n", editable ? "EDITABLE" : "NOT_EDITABLE");

@@ -1,6 +1,15 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 
+function isKeyboardFocus(target: EventTarget): boolean {
+  try {
+    return target instanceof Element && target.matches(":focus-visible");
+  } catch {
+    // An engine that can't parse the selector shows no tooltip on focus.
+    return false;
+  }
+}
+
 interface TooltipProps {
   children: React.ReactNode;
   content: string;
@@ -51,6 +60,15 @@ export const Tooltip = ({ children, content }: TooltipProps) => {
         className="relative inline-flex"
         onMouseEnter={() => setIsVisible(true)}
         onMouseLeave={() => setIsVisible(false)}
+        // Keyboard focus only: the focus a dialog or menu hands back when it
+        // closes isn't :focus-visible, so it doesn't pop a tooltip.
+        onFocus={(event) => {
+          if (isKeyboardFocus(event.target)) setIsVisible(true);
+        }}
+        onBlur={() => setIsVisible(false)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") setIsVisible(false);
+        }}
       >
         {children}
       </div>

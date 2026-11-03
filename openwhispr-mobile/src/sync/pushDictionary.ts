@@ -8,6 +8,7 @@ import {
   deleteDictionaryEntry,
   updateDictionaryEntry,
   type DictionaryPushInput,
+  type DictionaryUpdateInput,
 } from '@/data/remote/dictionaryApi';
 
 const PUSH_BATCH_SIZE = 200;
@@ -45,17 +46,27 @@ function getPending(): Entry[] {
   return db.select().from(dictionaryEntries).where(eq(dictionaryEntries.pendingSync, 1)).all();
 }
 
+// Mobile never moves a word itself, so shared_at goes out only to take a moved
+// word back (null); otherwise it is left out and the server keeps its value.
+function sharedAtPayload(entry: Entry): { shared_at?: null } {
+  return entry.sharedAtCleared ? { shared_at: null } : {};
+}
+
 function markPushed(pushed: Entry, remoteId: string, serverUpdatedAt: string): void {
   const unchanged = and(
     eq(dictionaryEntries.word, pushed.word),
     eq(dictionaryEntries.source, pushed.source),
     isNull(dictionaryEntries.deletedAt),
+    // updated_at has second precision, so a take-back made during the request
+    // can share it; the flag itself must match too.
+    eq(dictionaryEntries.sharedAtCleared, pushed.sharedAtCleared),
     sql`${dictionaryEntries.updatedAt} IS ${pushed.updatedAt}`,
   );
   db.update(dictionaryEntries)
     .set({
       remoteId,
       pendingSync: sql`CASE WHEN ${unchanged} THEN 0 ELSE ${dictionaryEntries.pendingSync} END`,
+      sharedAtCleared: sql`CASE WHEN ${unchanged} THEN 0 ELSE ${dictionaryEntries.sharedAtCleared} END`,
       updatedAt: sql`CASE WHEN ${unchanged} THEN ${serverUpdatedAt} ELSE ${dictionaryEntries.updatedAt} END`,
     })
     .where(
@@ -100,7 +111,7 @@ export async function pushDictionary(checkpoint: SyncCheckpoint = uncheckedSync)
     pushed: Entry;
     localId: number;
     remoteId: string;
-    payload: { word: string; source: 'manual' | 'learned' };
+    payload: DictionaryUpdateInput;
   }[] = [];
   const deletes: { localId: number; remoteId: string }[] = [];
   let failed = 0;
@@ -131,6 +142,7 @@ export async function pushDictionary(checkpoint: SyncCheckpoint = uncheckedSync)
           source: entry.source,
           created_at: entry.createdAt ?? undefined,
           updated_at: entry.updatedAt ?? undefined,
+          ...sharedAtPayload(entry),
         },
       });
       continue;
@@ -140,7 +152,7 @@ export async function pushDictionary(checkpoint: SyncCheckpoint = uncheckedSync)
       pushed: entry,
       localId: entry.id,
       remoteId: entry.remoteId,
-      payload: { word: entry.word, source: entry.source },
+      payload: { word: entry.word, source: entry.source, ...sharedAtPayload(entry) },
     });
   }
 
