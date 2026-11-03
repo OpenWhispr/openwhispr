@@ -31,6 +31,7 @@ import { RowCheckbox } from "../dictionary/RowCheckbox";
 import { SelectionBar } from "../workspace/SelectionBar";
 import { TransferOwnershipDialog } from "../workspace/TransferOwnershipDialog";
 import { MemberRoleMenu } from "./MemberRoleMenu";
+import { HEADER_CELL, ROW_DIVIDER, TABLE_FRAME } from "./tableTokens";
 
 interface WorkspaceMembersTabProps {
   workspace: Workspace;
@@ -39,11 +40,6 @@ interface WorkspaceMembersTabProps {
   onSearchQueryChange: (query: string) => void;
 }
 
-const TABLE_FRAME = "rounded-xl border border-border/70 dark:border-border-subtle/70";
-const ROW_DIVIDER = "border-t border-border/60 dark:border-border-subtle/50";
-// The header sticks over the rows on the settings pane's own background.
-const HEADER_CELL =
-  "sticky top-0 z-10 h-9 bg-background dark:bg-surface-1 text-xs font-normal text-muted-foreground first:rounded-ss-xl last:rounded-se-xl";
 const SKELETON_ROWS = 3;
 const HEADER_CHECKED = { none: false, some: "mixed", all: true } as const;
 // A bigger target than the box, without moving it.

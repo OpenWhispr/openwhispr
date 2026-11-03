@@ -395,6 +395,34 @@ test("one admin shows inline", async (t) => {
   assert.doesNotMatch(markup, /data-popover/);
 });
 
+test("a person with no name is shown by address, isolated left to right", async (t) => {
+  const { Section } = await loadSection(t, {
+    workspace: MEMBER,
+    spaces: [
+      space("s1", "Alpha", {
+        my_role: "member",
+        admins: [contact("a1", null, "solo@example.com")],
+      }),
+      space("s2", "Bravo", {
+        admins: [contact("b1", null, "one@example.com"), contact("b2", "Named", "two@example.com")],
+      }),
+    ],
+  });
+  globalThis.__authUser = { id: "me", name: null, email: "me@example.com", image: null };
+
+  const markup = render(Section);
+  // Your own row, the inline admin, and a list entry: each address sits in a <bdi>.
+  const alpha = rowMarkup(markup, "Alpha");
+  assert.equal(alpha.match(/<bdi dir="ltr">solo@example\.com<\/bdi>/g)?.length, 1);
+  assert.equal(alpha.match(/<bdi dir="ltr">me@example\.com<\/bdi>/g)?.length, 1);
+  const bravo = rowMarkup(markup, "Bravo");
+  assert.match(bravo, /<p dir="auto"[^>]*><bdi dir="ltr">one@example\.com<\/bdi><\/p>/);
+  // A named contact keeps the name on top and the address beneath, as before.
+  assert.match(bravo, />Named<\/p>/);
+  assert.match(bravo, /<bdi dir="ltr">two@example\.com<\/bdi>/);
+  assert.doesNotMatch(bravo, /dir="auto"[^>]*>one@example\.com/);
+});
+
 test("no admins lists the workspace's admins, read fresh when it opens", async (t) => {
   const { Section } = await loadSection(t, { spaces: [space("s1", "Orphan", { admins: [] })] });
   globalThis.__roster = [
@@ -532,6 +560,23 @@ test("a closed teamspace's refusal says so and reloads", async (t) => {
 
   assert.equal(globalThis.__toasts.length, 1);
   assert.match(globalThis.__toasts[0].title, new RegExp(`^${KEY}\\.joinClosed\\|space=.*Bravo`));
+  assert.equal(globalThis.__reloads, 1);
+});
+
+test("a teamspace archived meanwhile leaves the list quietly, like one that is gone", async (t) => {
+  const { Section, CloudApiError } = await loadSection(t, {
+    workspace: MEMBER,
+    spaces: [space("s1", "Bravo", { is_open: true, can_join: true })],
+  });
+  // A member is told 410 space_archived; only an outsider gets 404 space_not_found.
+  globalThis.__joinSpace = async () => {
+    throw new CloudApiError("Archived", 410, "space_archived");
+  };
+
+  const container = await mount(t, Section);
+  await React.act(async () => propsOf(buttonWithText(container, `${KEY}.join`)).onClick());
+
+  assert.deepEqual(globalThis.__toasts, []);
   assert.equal(globalThis.__reloads, 1);
 });
 

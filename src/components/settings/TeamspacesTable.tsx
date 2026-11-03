@@ -14,12 +14,8 @@ import { TileGlyph } from "../notes/SpaceNameField";
 import { cn } from "../lib/utils";
 import type { WorkspaceSpacesState } from "../../hooks/useWorkspaceSpaces";
 import type { SpaceAdminContact, WorkspaceSpace } from "../../types/electron";
+import { HEADER_CELL, ROW_DIVIDER, TABLE_FRAME } from "./tableTokens";
 
-const TABLE_FRAME = "rounded-xl border border-border/70 dark:border-border-subtle/70";
-const ROW_DIVIDER = "border-t border-border/60 dark:border-border-subtle/50";
-// The header sticks over the rows on the settings pane's own background.
-const HEADER_CELL =
-  "sticky top-0 z-10 h-9 bg-background dark:bg-surface-1 text-xs font-normal text-muted-foreground first:rounded-ss-xl last:rounded-se-xl";
 const NAME_TILE =
   "flex size-7 shrink-0 items-center justify-center rounded-sm bg-foreground/5 dark:bg-white/6";
 const CONTACTS_TRIGGER =
@@ -184,6 +180,19 @@ function EmptyTeamspaces({
   );
 }
 
+// A person without a name is shown by address, which keeps its own left-to-right order inside a
+// dir="auto" element.
+function PersonLabel({
+  name,
+  email,
+}: {
+  name?: string | null;
+  email?: string | null;
+}): React.ReactElement | null {
+  if (name) return <>{name}</>;
+  return email ? <bdi dir="ltr">{email}</bdi> : null;
+}
+
 interface TeamspaceRowProps {
   space: WorkspaceSpace;
   canCreate: boolean;
@@ -218,7 +227,6 @@ function TeamspaceRow({
   const opensSettings = !canCreate && belongs;
   // The cells that hold their own controls must not also count as a click on the row.
   const stopRowClick = (event: React.MouseEvent): void => event.stopPropagation();
-  const userName = currentUser?.name || currentUser?.email || "";
 
   return (
     <tr
@@ -295,7 +303,7 @@ function TeamspaceRow({
                 size="sm"
               />
               <span dir="auto" className="min-w-0 truncate text-xs text-foreground">
-                {userName}
+                <PersonLabel name={currentUser?.name} email={currentUser?.email} />
               </span>
               <span className={YOU_CHIP}>{t("settingsPage.workspace.teamspaces.you")}</span>
             </div>
@@ -342,7 +350,7 @@ function AdminsCell({
       <div className="flex min-w-0 items-center gap-2">
         <MemberAvatar name={admin.name} email={admin.email} image={admin.image} size="sm" />
         <span dir="auto" className="min-w-0 truncate text-xs text-foreground">
-          {admin.name || admin.email}
+          <PersonLabel name={admin.name} email={admin.email} />
         </span>
       </div>
     );
@@ -407,7 +415,7 @@ function ContactsMenu({
                   />
                   <div className="min-w-0">
                     <p dir="auto" className="truncate text-xs font-medium text-foreground">
-                      {contact.name || contact.email}
+                      <PersonLabel name={contact.name} email={contact.email} />
                     </p>
                     {contact.name && (
                       <p className="truncate text-[11px] text-muted-foreground">

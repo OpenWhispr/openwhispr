@@ -200,8 +200,9 @@ function TeamspacesPage({ workspace, onOpenTeamspace }: PageProps): React.ReactE
           variant: "destructive",
         });
         await reload();
-      } else if (failure.kind === "gone") {
-        // It was deleted meanwhile; the list showing that is the answer.
+      } else if (failure.kind === "gone" || failure.kind === "archived") {
+        // It was deleted meanwhile (a member is told it's archived; only outsiders get not found);
+        // the list showing that is the answer.
         await reload();
       } else {
         toast({
