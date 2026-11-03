@@ -1,4 +1,9 @@
-import { cloudGet, cloudPost, cloudPatch, cloudDelete } from "./cloudApi.js";
+import {
+  cloudGet,
+  cloudPatchForAuthGeneration,
+  cloudPostForAuthGeneration,
+  cloudDeleteForAuthGeneration,
+} from "./cloudApi.js";
 
 interface SnippetEntryInput {
   trigger: string;
@@ -20,9 +25,9 @@ export interface CloudSnippetEntry {
 
 async function batchCreate(
   entries: SnippetEntryInput[],
-  authGeneration?: number
+  authGeneration: number
 ): Promise<{ created: CloudSnippetEntry[] }> {
-  return cloudPost<{ created: CloudSnippetEntry[] }>(
+  return cloudPostForAuthGeneration<{ created: CloudSnippetEntry[] }>(
     "/api/snippets/batch-create",
     { entries },
     authGeneration
@@ -32,13 +37,17 @@ async function batchCreate(
 async function update(
   id: string,
   updates: { trigger?: string; replacement?: string },
-  authGeneration?: number
+  authGeneration: number
 ): Promise<CloudSnippetEntry> {
-  return cloudPatch<CloudSnippetEntry>("/api/snippets/update", { id, ...updates }, authGeneration);
+  return cloudPatchForAuthGeneration<CloudSnippetEntry>(
+    "/api/snippets/update",
+    { id, ...updates },
+    authGeneration
+  );
 }
 
-async function deleteEntry(id: string, authGeneration?: number): Promise<void> {
-  await cloudDelete("/api/snippets/delete", { id }, authGeneration);
+async function deleteEntry(id: string, authGeneration: number): Promise<void> {
+  await cloudDeleteForAuthGeneration("/api/snippets/delete", { id }, authGeneration);
 }
 
 async function listSnapshot(

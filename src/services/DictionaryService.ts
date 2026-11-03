@@ -1,4 +1,9 @@
-import { cloudGet, cloudPost, cloudPatch, cloudDelete } from "./cloudApi.js";
+import {
+  cloudGet,
+  cloudPatchForAuthGeneration,
+  cloudPostForAuthGeneration,
+  cloudDeleteForAuthGeneration,
+} from "./cloudApi.js";
 
 export type DictionarySource = "manual" | "learned";
 
@@ -27,9 +32,9 @@ export interface CloudDictionaryEntry {
 
 async function batchCreate(
   entries: DictionaryEntryInput[],
-  authGeneration?: number
+  authGeneration: number
 ): Promise<{ created: CloudDictionaryEntry[] }> {
-  return cloudPost<{ created: CloudDictionaryEntry[] }>(
+  return cloudPostForAuthGeneration<{ created: CloudDictionaryEntry[] }>(
     "/api/dictionary/batch-create",
     { entries },
     authGeneration
@@ -40,17 +45,17 @@ async function update(
   id: string,
   // shared_at as for batchCreate: absent keeps, null clears.
   updates: { word?: string; source?: DictionarySource; shared_at?: string | null },
-  authGeneration?: number
+  authGeneration: number
 ): Promise<CloudDictionaryEntry> {
-  return cloudPatch<CloudDictionaryEntry>(
+  return cloudPatchForAuthGeneration<CloudDictionaryEntry>(
     "/api/dictionary/update",
     { id, ...updates },
     authGeneration
   );
 }
 
-async function deleteEntry(id: string, authGeneration?: number): Promise<void> {
-  await cloudDelete("/api/dictionary/delete", { id }, authGeneration);
+async function deleteEntry(id: string, authGeneration: number): Promise<void> {
+  await cloudDeleteForAuthGeneration("/api/dictionary/delete", { id }, authGeneration);
 }
 
 async function listSnapshot(

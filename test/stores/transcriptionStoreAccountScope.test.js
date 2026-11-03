@@ -66,3 +66,46 @@ test("account changes clear cached history and older loads cannot restore it", a
   });
   assert.deepEqual(visibleHistory, accountB, "superseded reads cannot expose the old account");
 });
+
+test("the same account's token rotation keeps the loaded history", async (t) => {
+  let root;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  let onScopeChanged;
+  let reads = 0;
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        getActiveAccountScope: async () => ({ accountId: "account-a", authGeneration: 1 }),
+        getTranscriptions: async () => {
+          reads += 1;
+          return [{ id: 1, text: "A's history" }];
+        },
+        onActiveAccountScopeChanged: (callback) => {
+          onScopeChanged = callback;
+          return () => {};
+        },
+      },
+    },
+  });
+  const container = installHookDom(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-transcription-account-rotation-test-",
+  });
+  const store = await vite.ssrLoadModule("/stores/transcriptionStore.ts");
+  let visibleHistory;
+  function History() {
+    visibleHistory = store.useTranscriptions();
+    return null;
+  }
+  root = require("react-dom/client").createRoot(container);
+  await React.act(async () => {
+    root.render(React.createElement(History));
+    await store.initializeTranscriptions(100, true);
+  });
+  const readsBefore = reads;
+  await React.act(async () => onScopeChanged({ accountId: "account-a", authGeneration: 2 }));
+  assert.equal(visibleHistory.length, 1, "nothing flashes empty");
+  assert.equal(reads, readsBefore);
+});

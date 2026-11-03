@@ -139,7 +139,18 @@ export function AssistantPanel({
   const voiceAgentKey = useSettingsStore((state) => state.voiceAgentKey);
   const readableVoiceHotkey = formatHotkeyListLabel(voiceAgentKey);
 
-  const persistence = useChatPersistence({ conversationId: initialConversationId });
+  const persistence = useChatPersistence({
+    conversationId: initialConversationId,
+    onAccountChange: () => {
+      streaming.cancelStream();
+      onConversationIdChange(null);
+      clearSelectedContext();
+      displayedMessageRef.current = undefined;
+      if (pendingCommand) onCommandDiscarded(pendingCommand.id);
+      onConversationReset();
+      onClose();
+    },
+  });
   const { messages, setMessages } = persistence;
 
   const streaming = useChatStreaming({

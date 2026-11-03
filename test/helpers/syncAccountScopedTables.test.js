@@ -26,23 +26,10 @@ const { createFakeCloud } = require("./harness/fakeCloud.js");
 const { createCloudApiRequestHandler } = require("../../src/helpers/cloudApiRequest.js");
 const { SyncService } = require("../../src/services/SyncService.ts");
 
-const CURSOR_KEYS = [
-  "lastSyncedAt.folders",
-  "lastSyncedAt.notes",
-  "lastSyncedAt.conversations",
-  "lastSyncedAt.transcriptions",
-  "lastSyncedAt.dictionary",
-  "lastSyncedAt.dictionary.id",
-  "lastSyncedAt.snippets",
-  "lastSyncedAt.snippets.id",
-];
-
 // What useAuth leaves behind on an account boundary: the main process scopes
 // the local rows to the account and the renderer holds a validated session
-// for it. Cursors are dropped as #2892's per-account cursors do for an account
-// with none saved, so each account's first pass reads its whole history.
+// for it.
 async function signInAs(t, db, cloud, accountId) {
-  for (const key of CURSOR_KEYS) localStorageStub.removeItem(key);
   db.setActiveAccountId(accountId);
   windowStub.electronAPI = createElectronApi(db, { cloud, snippets: true });
   await establishValidatedAuth(accountId);
@@ -230,6 +217,68 @@ test("chats another account pulled or started stay out of the next account's lis
   );
 });
 
+test("a chat's create attempt and another account's moved words stay out of this account's writes", (t) => {
+  const db = setup(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  db.applyDictionaryChanges({ add: ["Kubernetes"] });
+  db.markDictionaryWordsShared(["Kubernetes"], "2026-10-01T00:00:00.000Z");
+  const chat = db.createAgentConversation("A's chat");
+
+  db.setActiveAccountId("account-b");
+  assert.deepEqual(db.getMovedDictionaryWords(), []);
+  assert.deepEqual(db.getDictionaryEntriesByWords(["Kubernetes"]), []);
+  assert.deepEqual(db.markDictionaryWordsShared(["Kubernetes"], "2026-10-02T00:00:00.000Z"), {
+    marked: [],
+  });
+  assert.deepEqual(db.retireMovedDictionaryWords(["Kubernetes"]), { retired: [] });
+  assert.deepEqual(db.markConversationCreateAttempted(chat.id), { success: false });
+
+  db.setActiveAccountId("account-a");
+  assert.deepEqual(db.getMovedDictionaryWords(), ["Kubernetes"]);
+  assert.deepEqual(db.retireMovedDictionaryWords(["Kubernetes"]), { retired: ["Kubernetes"] });
+
+  db.setActiveAccountId("account-b");
+  assert.deepEqual(db.reviveRetiredDictionaryWords(["Kubernetes"]), { revived: [] });
+  db.setActiveAccountId("account-a");
+  assert.deepEqual(db.reviveRetiredDictionaryWords(["Kubernetes"]), { revived: ["Kubernetes"] });
+});
+
+test("a legacy row's claim still takes the cloud's shared_at and revives a retired fallback", (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const at = "2026-10-01T10:00:00.000Z";
+  db.db
+    .prepare(
+      `INSERT INTO custom_dictionary (word, client_dict_id, cloud_id, sync_status, updated_at, deleted_at, fallback_retired)
+       VALUES ('Moved', 'moved-dict', 'moved-cloud', 'synced', ?, NULL, 0),
+              ('Retired', 'retired-dict', 'retired-cloud', 'synced', ?, ?, 1),
+              ('Deleted', 'deleted-dict', 'deleted-cloud', 'pending', ?, ?, 0)`
+    )
+    .run(at, at, at, at, at);
+  db.setActiveAccountId("account-a");
+  const pull = (id, word) =>
+    db.upsertDictionaryFromCloud({
+      id: `${id}-cloud`,
+      client_dict_id: `${id}-dict`,
+      word,
+      source: "manual",
+      shared_at: id === "moved" ? "2026-10-20T10:00:00.000Z" : null,
+      created_at: at,
+      updated_at: at,
+    });
+
+  const moved = pull("moved", "Moved");
+  assert.equal(moved.account_id, "account-a");
+  assert.equal(moved.shared_at, "2026-10-20T10:00:00.000Z");
+  const retired = pull("retired", "Retired");
+  assert.equal(retired.account_id, "account-a");
+  assert.equal(retired.deleted_at, null, "a live cloud row wins over this device's guess");
+  const deleted = pull("deleted", "Deleted");
+  assert.equal(deleted.account_id, "account-a");
+  assert.notEqual(deleted.deleted_at, null, "a user's own delete still stands");
+});
+
 test("rows written before account attribution stay visible to every account", async (t) => {
   const db = setup(t);
   if (!db) return;
@@ -299,6 +348,8 @@ test("an unattributed word whose cloud row 404s is never re-created, and its own
        VALUES ('KUBERNETES', 'manual', ?, ?, 'pending', datetime('now'))`
     )
     .run(bWord.client_dict_id, bWord.id);
+  // B's dictation from the same time is what shows another account used this device.
+  db.db.prepare("INSERT INTO transcriptions (text, account_id) VALUES ('b', 'account-b')").run();
 
   const accountA = await signInAs(t, db, cloudA, "account-a");
   await accountA.syncAll(true);
@@ -831,7 +882,15 @@ for (const kind of ["conversations", "transcriptions", "dictionary"]) {
             [kind === "dictionary" ? "entries" : kind]:
               boundary === "empty-page"
                 ? []
-                : [{ id: "cloud-a", [clientKey]: row[clientKey], deleted_at: since }],
+                : // Newer than any pending local edit, which a tombstone must not outrun.
+                  [
+                    {
+                      id: "cloud-a",
+                      [clientKey]: row[clientKey],
+                      deleted_at: since,
+                      updated_at: "2099-01-01T00:00:00.000Z",
+                    },
+                  ],
             hasMore: false,
           },
         };
@@ -1009,6 +1068,8 @@ test("an unattributed row whose PATCH 404s waits for an edit, and the account's 
        VALUES ('Terraform', 'a-dict', 'purged', 'pending', 'account-a')`
     )
     .run();
+  // Another account has used this device, so a null row's cloud id may be theirs.
+  db.db.prepare("INSERT INTO transcriptions (text, account_id) VALUES ('b', 'account-b')").run();
 
   const accountA = await signInAs(t, db, cloudA, "account-a");
   await accountA.syncAll(true);

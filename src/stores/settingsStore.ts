@@ -328,6 +328,8 @@ function sharedWordsReachingPrompt(settings: PromptDictionarySettings): SharedHi
 // The last list this window sent; every dictionary edit re-derives it, and
 // most change nothing in it.
 let lastSentSharedHints: string | null = null;
+// Whose dictionary and snippets this window shows; undefined until first read.
+let listsAccountId: string | null | undefined;
 
 // Main keeps the hints in memory only, for auto-learn; a failed send just
 // leaves its previous copy in place.
@@ -2299,7 +2301,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (isBrowser) localStorage.setItem("customDictionary", JSON.stringify(words));
     set({ customDictionary: words });
     window.electronAPI
-      ?.setDictionary(words)
+      ?.setDictionary(words, listsAccountId)
       .then(() => syncAfterLocalWrite("syncDictionaryNow"))
       .catch((err) => {
         logger.warn(
@@ -2329,7 +2331,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     // Older preloads have no delta channel; fall back rather than drop the edit.
     const written = api.applyDictionaryChanges
       ? api.applyDictionaryChanges({ add, remove })
-      : api.setDictionary(optimistic);
+      : api.setDictionary(optimistic, listsAccountId);
 
     written
       .then(async () => {
@@ -2360,7 +2362,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (isBrowser) localStorage.setItem("snippets", JSON.stringify(snippets));
     set({ snippets });
     window.electronAPI
-      ?.setSnippets?.(snippets)
+      ?.setSnippets?.(snippets, listsAccountId)
       .then(() => syncAfterLocalWrite("syncSnippetsNow"))
       .catch((err) => {
         logger.warn(
@@ -4059,6 +4061,22 @@ export async function initializeSettings(): Promise<void> {
     if (key === "uiLanguage" && typeof value === "string") {
       void i18n.changeLanguage(value);
     }
+  });
+
+  void window.electronAPI
+    ?.getActiveAccountScope?.()
+    .then((scope) => {
+      if (listsAccountId === undefined) listsAccountId = scope?.accountId ?? null;
+    })
+    .catch((error) => {
+      logger.warn(
+        "Failed to read the lists' account scope",
+        { error: (error as Error).message },
+        "settings"
+      );
+    });
+  window.electronAPI?.onActiveAccountScopeChanged?.((scope) => {
+    listsAccountId = scope?.accountId ?? null;
   });
 
   // Active hotkey updates from backend — display state, never persisted.

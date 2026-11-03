@@ -1778,7 +1778,10 @@ declare global {
       // Dictionary operations
       getDictionary: () => Promise<string[]>;
       /** Replaces the whole dictionary — omitted words are deleted. Prefer applyDictionaryChanges. */
-      setDictionary: (words: string[]) => Promise<{ success: boolean }>;
+      setDictionary: (
+        words: string[],
+        listsAccountId?: string | null
+      ) => Promise<{ success: boolean; stale?: boolean }>;
       /** Writes the cached list only into a database that has never held one. */
       seedDictionary?: (words: string[]) => Promise<{ success: boolean; seeded: boolean }>;
       applyDictionaryChanges?: (changes: {
@@ -1788,8 +1791,9 @@ declare global {
       onDictionaryUpdated?: (callback: (words: string[]) => void) => () => void;
       getSnippets?: () => Promise<Array<{ trigger: string; replacement: string }>>;
       setSnippets?: (
-        snippets: Array<{ trigger: string; replacement: string }>
-      ) => Promise<{ success: boolean }>;
+        snippets: Array<{ trigger: string; replacement: string }>,
+        listsAccountId?: string | null
+      ) => Promise<{ success: boolean; stale?: boolean }>;
       seedSnippets?: (
         snippets: Array<{ trigger: string; replacement: string }>
       ) => Promise<{ success: boolean; seeded: boolean }>;
@@ -1945,6 +1949,8 @@ declare global {
 
       // Space operations
       getSpaces?: () => Promise<SpaceItem[]>;
+      hasOtherAccountRows?: () => Promise<boolean>;
+      hasUnclaimedLegacyRows?: () => Promise<boolean>;
       setActiveAccountScope?: (
         accountId: string | null,
         expectedAuthGeneration?: number
@@ -3939,9 +3945,13 @@ declare global {
       upsertConversationFromCloud?: (
         cloudConv: Record<string, unknown>,
         messages: Array<Record<string, unknown>>,
-        expectedAuthGeneration?: number
+        expectedAuthGeneration: number
       ) => Promise<ConversationPreview | StaleSyncWrite | null>;
-      markConversationCreateAttempted?: (id: number) => Promise<{ success: boolean }>;
+      markConversationCreateAttempted?: (
+        id: number,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean; stale?: boolean }>;
+      clearConversationCreateAttempted?: (id: number) => Promise<void>;
       acknowledgeConversationCreate?: (
         id: number,
         snapshot: ConversationCreateSnapshot,
@@ -3957,24 +3967,24 @@ declare global {
       ) => Promise<{ success: boolean } | undefined>;
       hardDeleteConversation?: (
         id: number,
-        expectedAuthGeneration?: number
+        expectedAuthGeneration: number
       ) => Promise<{ success: boolean } | StaleSyncWrite>;
 
       getPendingTranscriptions?: () => Promise<TranscriptionItem[]>;
       getTranscriptionByClientId?: (clientId: string) => Promise<TranscriptionItem | null>;
       upsertTranscriptionFromCloud?: (
         cloudTranscription: Record<string, unknown>,
-        expectedAuthGeneration?: number
+        expectedAuthGeneration: number
       ) => Promise<TranscriptionItem | StaleSyncWrite | null>;
       markTranscriptionSynced?: (
         id: number,
         cloudId: string,
-        expectedAuthGeneration?: number
-      ) => Promise<{ success: boolean; orphaned?: boolean; stale?: boolean }>;
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean; stale?: boolean }>;
       getPendingTranscriptionDeletes?: () => Promise<TranscriptionItem[]>;
       hardDeleteTranscription?: (
         id: number,
-        expectedAuthGeneration?: number
+        expectedAuthGeneration: number
       ) => Promise<{ success: boolean; id: number } | StaleSyncWrite>;
 
       getPendingDictionary?: () => Promise<DictionaryEntryItem[]>;
@@ -3982,22 +3992,22 @@ declare global {
       getDictionaryByClientId?: (clientDictId: string) => Promise<DictionaryEntryItem | null>;
       upsertDictionaryFromCloud?: (
         cloudEntry: Record<string, unknown>,
-        expectedAuthGeneration?: number
+        expectedAuthGeneration: number
       ) => Promise<DictionaryEntryItem | StaleSyncWrite | null>;
       /** `pushed` (the row as pushed) keeps a row edited since then pending. */
       markDictionarySynced?: (
         id: number,
         cloudId: string,
-        serverUpdatedAt?: string,
-        expectedWord?: string,
-        expectedSource?: DictionaryEntryItem["source"],
-        serverSource?: DictionaryEntryItem["source"],
-        pushed?: Pick<DictionaryEntryItem, "word" | "shared_at" | "updated_at">,
-        expectedAuthGeneration?: number
+        serverUpdatedAt: string | undefined,
+        expectedWord: string | undefined,
+        expectedSource: DictionaryEntryItem["source"] | undefined,
+        serverSource: DictionaryEntryItem["source"] | undefined,
+        pushed: Pick<DictionaryEntryItem, "word" | "shared_at" | "updated_at"> | undefined,
+        expectedAuthGeneration: number
       ) => Promise<{ success: boolean; changes: number; stale?: boolean }>;
       hardDeleteDictionary?: (
         id: number,
-        expectedAuthGeneration?: number
+        expectedAuthGeneration: number
       ) => Promise<{ success: boolean; id: number } | StaleSyncWrite>;
       clearDictionaryCloudId?: (id: number) => Promise<{ success: boolean }>;
       broadcastDictionaryUpdated?: () => Promise<{ success: boolean }>;
@@ -4012,18 +4022,21 @@ declare global {
       markDictionaryWordsShared?: (
         words: string[],
         sharedAt: string,
-        options?: { pendingWords?: string[] }
-      ) => Promise<{ marked: string[] }>;
+        options: { pendingWords?: string[]; expectedAuthGeneration: number | null }
+      ) => Promise<{ marked: string[]; stale?: boolean }>;
       /** Live personal words that were shared into a team list. */
       getMovedDictionaryWords?: () => Promise<string[]>;
       /** Removes moved personal words whose shared copy is gone for the sharer. */
       /** `includeSynced: false` leaves rows the cloud has to the personal pull. */
       retireMovedDictionaryWords?: (
         words: string[],
-        options?: { includeSynced?: boolean }
-      ) => Promise<{ retired: string[] }>;
+        options: { includeSynced?: boolean; expectedAuthGeneration: number | null }
+      ) => Promise<{ retired: string[]; stale?: boolean }>;
       /** Brings back fallbacks retired for these words, once their shared copy returns. */
-      reviveRetiredDictionaryWords?: (words: string[]) => Promise<{ revived: string[] }>;
+      reviveRetiredDictionaryWords?: (
+        words: string[],
+        options: { expectedAuthGeneration: number | null }
+      ) => Promise<{ revived: string[]; stale?: boolean }>;
 
       getSharedDictionary?: (workspaceId: string) => Promise<SharedDictionarySnapshot>;
       applySharedDictionaryPull?: (
@@ -4054,23 +4067,23 @@ declare global {
       getPendingSnippetDeletes?: () => Promise<SnippetEntryItem[]>;
       getSnippetForCloudMerge?: (
         cloudEntry: Record<string, unknown>,
-        expectedAuthGeneration?: number
+        expectedAuthGeneration: number
       ) => Promise<SnippetEntryItem | StaleSyncWrite | null>;
       upsertSnippetFromCloud?: (
         cloudEntry: Record<string, unknown>,
-        expectedAuthGeneration?: number
+        expectedAuthGeneration: number
       ) => Promise<SnippetEntryItem | StaleSyncWrite | null>;
       markSnippetSynced?: (
         id: number,
         cloudId: string,
-        serverUpdatedAt?: string,
-        expectedTrigger?: string,
-        expectedReplacement?: string,
-        expectedAuthGeneration?: number
+        serverUpdatedAt: string | undefined,
+        expectedTrigger: string | undefined,
+        expectedReplacement: string | undefined,
+        expectedAuthGeneration: number
       ) => Promise<{ success: boolean; changes: number; stale?: boolean }>;
       hardDeleteSnippet?: (
         id: number,
-        expectedAuthGeneration?: number
+        expectedAuthGeneration: number
       ) => Promise<{ success: boolean; id: number } | StaleSyncWrite>;
       clearSnippetCloudId?: (id: number) => Promise<{ success: boolean }>;
       broadcastSnippetsUpdated?: () => Promise<{ success: boolean }>;

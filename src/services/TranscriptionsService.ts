@@ -1,4 +1,4 @@
-import { cloudGet, cloudPost, cloudDelete } from "./cloudApi.js";
+import { cloudGet, cloudPostForAuthGeneration, cloudDeleteForAuthGeneration } from "./cloudApi.js";
 
 interface TranscriptionInput {
   client_transcription_id?: string;
@@ -31,16 +31,20 @@ interface CloudTranscription {
 
 async function create(
   transcription: TranscriptionInput,
-  authGeneration?: number
+  authGeneration: number
 ): Promise<CloudTranscription> {
-  return cloudPost<CloudTranscription>("/api/transcriptions/create", transcription, authGeneration);
+  return cloudPostForAuthGeneration<CloudTranscription>(
+    "/api/transcriptions/create",
+    transcription,
+    authGeneration
+  );
 }
 
 async function batchCreate(
   transcriptions: TranscriptionInput[],
-  authGeneration?: number
+  authGeneration: number
 ): Promise<{ created: CloudTranscription[] }> {
-  return cloudPost<{ created: CloudTranscription[] }>(
+  return cloudPostForAuthGeneration<{ created: CloudTranscription[] }>(
     "/api/transcriptions/batch-create",
     { transcriptions },
     authGeneration
@@ -62,12 +66,12 @@ async function list(
   );
 }
 
-async function deleteTranscription(id: string, authGeneration?: number): Promise<void> {
-  await cloudDelete("/api/transcriptions/delete", { id }, authGeneration);
+async function deleteTranscription(id: string, authGeneration: number): Promise<void> {
+  await cloudDeleteForAuthGeneration("/api/transcriptions/delete", { id }, authGeneration);
 }
 
-async function batchDelete(ids: string[], authGeneration?: number): Promise<{ deleted: string[] }> {
-  return cloudPost<{ deleted: string[] }>(
+async function batchDelete(ids: string[], authGeneration: number): Promise<{ deleted: string[] }> {
+  return cloudPostForAuthGeneration<{ deleted: string[] }>(
     "/api/transcriptions/batch-delete",
     { ids },
     authGeneration

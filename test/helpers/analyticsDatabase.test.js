@@ -673,11 +673,14 @@ test("clearing history tombstones only the counters the cloud actually holds", (
 
   db.clearTranscriptions();
 
+  assert.equal(db.getAnalyticsSummary().totalDictations, 0, "account-a's counters are gone");
+  db.setActiveAccountId(null);
   assert.equal(
     db.getAnalyticsSummary().totalDictations,
     1,
     "only account-b's counter is left in the device summary"
   );
+  db.setActiveAccountId("account-a");
   assert.deepEqual(db.getPendingAnalyticsEvents(), []);
   assert.equal(db.countUnclaimedAnalyticsEvents(), 0);
   assert.deepEqual(
@@ -715,7 +718,7 @@ test("clearing history tombstones only the counters the cloud actually holds", (
 
   // A delayed producer for the same dictation must not revive a tombstone.
   recordEvent(db, "pending-1", { wordCount: 99 });
-  assert.equal(db.getAnalyticsSummary().totalDictations, 1);
+  assert.equal(db.getAnalyticsSummary().totalDictations, 0);
   assert.deepEqual(
     db
       .getPendingAnalyticsDeletes()
@@ -729,7 +732,7 @@ test("clearing history tombstones only the counters the cloud actually holds", (
   recordEvent(db, "late-pre-clear", {
     occurredAt: new Date(Date.parse(pendingClear.cleared_through) - 1).toISOString(),
   });
-  assert.equal(db.getAnalyticsSummary().totalDictations, 1);
+  assert.equal(db.getAnalyticsSummary().totalDictations, 0);
 
   db.setActiveAccountId("account-b");
   assert.equal(db.getPendingAnalyticsClear(), null, "the clear belongs to the active account");
@@ -756,7 +759,7 @@ test("clearing history tombstones only the counters the cloud actually holds", (
   recordEvent(db, "later-pre-clear", {
     occurredAt: new Date(Date.parse(pendingClear.cleared_through) - 1).toISOString(),
   });
-  assert.equal(db.getAnalyticsSummary().totalDictations, 1);
+  assert.equal(db.getAnalyticsSummary().totalDictations, 0);
   assert.deepEqual(db.getPendingAnalyticsDeletes(), [{ event_id: "newer-retention" }]);
 });
 

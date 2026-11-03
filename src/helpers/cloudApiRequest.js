@@ -110,7 +110,6 @@ function createCloudApiRequestHandler({
         fetchOptions.body = JSON.stringify(opts.body);
       }
 
-      fence?.assertCurrent();
       const response =
         fence && !isConversationCreate
           ? await fence.awaitBound(() => proxyFetch(requestUrl, fetchOptions))

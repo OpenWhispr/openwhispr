@@ -44,7 +44,7 @@ const electronStub = {
       return null;
     }
   },
-  shell: {},
+  shell: { showItemInFolder: (filePath) => revealedAudio.push(filePath) },
   dialog: {},
   screen: { getPrimaryDisplay: () => ({ workAreaSize: { width: 0, height: 0 } }) },
   systemPreferences: { getMediaAccessStatus: () => "granted" },
@@ -85,15 +85,26 @@ function anything() {
 }
 
 const deletedAudio = [];
+const readAudio = [];
+const revealedAudio = [];
+const audioStorageStub = {
+  getAudioPath: (id) => {
+    readAudio.push(id);
+    return `audio-${id}.webm`;
+  },
+  getAudioBuffer: (id) => {
+    readAudio.push(id);
+    return Buffer.from("recording");
+  },
+  deleteAudio: (id) => {
+    deletedAudio.push(id);
+    return { success: true };
+  },
+};
 const target = {
   sessionId: "test-session",
   databaseManager: null,
-  audioStorageManager: {
-    deleteAudio: (id) => {
-      deletedAudio.push(id);
-      return { success: true };
-    },
-  },
+  audioStorageManager: audioStorageStub,
 };
 let handleAuthTokenChange;
 
@@ -118,9 +129,12 @@ function setup(t) {
   const db = createDb(t);
   if (!db) return null;
   target.databaseManager = db;
+  target.audioStorageManager = audioStorageStub;
   tokenState = { token: "token-a", generation: 3 };
   broadcasts.length = 0;
   deletedAudio.length = 0;
+  readAudio.length = 0;
+  revealedAudio.length = 0;
   return db;
 }
 
@@ -181,7 +195,7 @@ test("a push ack or pulled row from a replaced sign-in is refused", async (t) =>
       stale
     ),
     await invoke("db-mark-transcription-synced", 1, "t-1", stale),
-    await invoke("db-mark-dictionary-synced", 1, "dict-1", null, null, null, null, stale),
+    await invoke("db-mark-dictionary-synced", 1, "dict-1", null, null, null, null, null, stale),
     await invoke("db-mark-snippet-synced", 1, "snip-1", null, null, null, stale),
     await invoke("db-get-snippet-for-cloud-merge", { trigger: "addr" }, stale),
     await invoke("db-hard-delete-snippet", snippet.id, stale),
@@ -253,6 +267,164 @@ test("a recording is deleted only for a dictation the active account can see", a
   assert.deepEqual(deletedAudio, [id]);
 });
 
+test("another account cannot read, reveal, or retry a cached history recording", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  const { id } = db.saveTranscription("A dictated this");
+  db.setActiveAccountId("account-b");
+
+  assert.equal(await invoke("get-audio-path", id), null);
+  assert.equal(await invoke("get-audio-buffer", id), null);
+  assert.equal((await invoke("show-audio-in-folder", id)).success, false);
+  assert.equal((await invoke("retry-transcription", id, {})).success, false);
+  assert.deepEqual(readAudio, [], "the other account never reaches the recording");
+  assert.deepEqual(revealedAudio, []);
+
+  db.setActiveAccountId("account-a");
+  assert.equal(await invoke("get-audio-path", id), `audio-${id}.webm`);
+  assert.ok((await invoke("get-audio-buffer", id)) instanceof ArrayBuffer);
+  assert.equal((await invoke("show-audio-in-folder", id)).success, true);
+  assert.deepEqual(revealedAudio, [`audio-${id}.webm`]);
+});
+
+test("a sync write that names no sign-in is refused like a stale one", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  const { id } = db.saveTranscription("A dictated this");
+
+  for (const [channel, ...args] of [
+    ["db-upsert-dictionary-from-cloud", { id: "d", word: "Word", client_dict_id: "d" }],
+    ["db-mark-transcription-synced", id, "cloud"],
+    ["db-mark-dictionary-synced", 1, "cloud"],
+    ["db-hard-delete-transcription", id],
+    ["db-hard-delete-conversation", 1],
+    ["db-hard-delete-dictionary", 1],
+    ["db-hard-delete-snippet", 1],
+  ]) {
+    assert.equal((await invoke(channel, ...args))?.stale, true, channel);
+  }
+  assert.ok(db.getTranscriptionById(id));
+  assert.deepEqual(db.getDictionary(), []);
+});
+
+test("the shared dictionary's writes and a whole-list save are refused for a replaced sign-in", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  db.applyDictionaryChanges({ add: ["Word"] });
+  db.setSnippets([{ trigger: "addr", replacement: "home" }]);
+  const stale = tokenState.generation - 1;
+  const current = tokenState.generation;
+
+  const at = "2026-10-20T12:00:00.000Z";
+  assert.equal((await invoke("db-mark-dictionary-words-shared", ["Word"], at, {}))?.stale, true);
+  assert.equal(
+    (
+      await invoke("db-mark-dictionary-words-shared", ["Word"], at, {
+        expectedAuthGeneration: stale,
+      })
+    )?.stale,
+    true
+  );
+  assert.deepEqual(db.getMovedDictionaryWords(), []);
+  await invoke("db-mark-dictionary-words-shared", ["Word"], at, {
+    expectedAuthGeneration: current,
+  });
+  assert.deepEqual(db.getMovedDictionaryWords(), ["Word"]);
+
+  const retire = { expectedAuthGeneration: stale };
+  assert.equal((await invoke("db-retire-moved-dictionary-words", ["Word"], retire))?.stale, true);
+  assert.deepEqual(db.getDictionary(), ["Word"]);
+  retire.expectedAuthGeneration = current;
+  await invoke("db-retire-moved-dictionary-words", ["Word"], retire);
+  assert.deepEqual(db.getDictionary(), []);
+  assert.equal(
+    (
+      await invoke("db-revive-retired-dictionary-words", ["Word"], {
+        expectedAuthGeneration: stale,
+      })
+    )?.stale,
+    true
+  );
+  assert.deepEqual(db.getDictionary(), []);
+  await invoke("db-revive-retired-dictionary-words", ["Word"], { expectedAuthGeneration: current });
+  assert.deepEqual(db.getDictionary(), ["Word"]);
+
+  // A window still showing another account's lists can't save them over this one's.
+  assert.equal((await invoke("db-set-dictionary", ["Stale"], "account-b"))?.stale, true);
+  assert.equal((await invoke("db-set-snippets", [], "account-b"))?.stale, true);
+  assert.deepEqual(db.getDictionary(), ["Word"]);
+  assert.equal(db.getSnippets().length, 1);
+  await invoke("db-set-dictionary", ["Fresh"], "account-a");
+  assert.deepEqual(db.getDictionary(), ["Fresh"]);
+});
+
+test("another account can't edit a dictation's text", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  const { id } = db.saveTranscription("A dictated this");
+  db.setActiveAccountId("account-b");
+  assert.equal((await invoke("update-transcription-text", id, "B wrote this")).success, false);
+  db.setActiveAccountId("account-a");
+  assert.equal(db.getTranscriptionById(id).text, "A dictated this");
+  assert.equal((await invoke("update-transcription-text", id, "A edited this")).success, true);
+  assert.equal(db.getTranscriptionById(id).text, "A edited this");
+});
+
+test("deleting all audio and its storage count leave another account's recordings out", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const AudioStorageManager = require("../../src/helpers/audioStorage");
+  const audio = new AudioStorageManager();
+  target.audioStorageManager = audio;
+  const record = (accountId, text) => {
+    db.setActiveAccountId(accountId);
+    const { id } = db.saveTranscription(text);
+    const { path: filePath } = audio.saveAudio(id, Buffer.from(text));
+    db.updateTranscriptionAudio(id, { hasAudio: 1 });
+    return { id, filePath };
+  };
+  const a = record("account-a", "A's recording");
+  const b = record("account-b", "B's recording");
+  const orphan = audio.saveAudio(9999, Buffer.from("no row")).path;
+
+  assert.equal((await invoke("get-audio-storage-usage")).fileCount, 2, "B's and the orphan");
+  await invoke("delete-all-audio");
+  assert.equal(fs.existsSync(a.filePath), true, "A's recording stays");
+  assert.equal(fs.existsSync(b.filePath), false);
+  assert.equal(fs.existsSync(orphan), false);
+  assert.equal(db.getTranscriptionById(b.id).has_audio, 0);
+  db.setActiveAccountId("account-a");
+  assert.equal(db.getTranscriptionById(a.id).has_audio, 1);
+  assert.equal((await invoke("get-audio-storage-usage")).fileCount, 1);
+});
+
+test("a scoped cloud hard-delete removes the row and its recording", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const AudioStorageManager = require("../../src/helpers/audioStorage");
+  const audio = new AudioStorageManager();
+  target.audioStorageManager = audio;
+  db.setActiveAccountId("account-a");
+  const { id: aId } = db.saveTranscription("A's recording");
+  const aPath = audio.saveAudio(aId, Buffer.from("A's recording")).path;
+  db.setActiveAccountId("account-b");
+  const { id: bId } = db.saveTranscription("B's recording");
+  const bPath = audio.saveAudio(bId, Buffer.from("B's recording")).path;
+
+  const signIn = tokenState.generation;
+  assert.equal((await invoke("db-hard-delete-transcription", aId, signIn)).success, false);
+  assert.equal(fs.existsSync(aPath), true, "another account's deletion is refused");
+  db.setActiveAccountId("account-a");
+  assert.equal((await invoke("db-hard-delete-transcription", aId, signIn)).success, true);
+  assert.equal(db.getTranscriptionById(aId), null);
+  assert.equal(fs.existsSync(aPath), false, "the remote deletion leaves no orphaned recording");
+  assert.equal(fs.existsSync(bPath), true, "the other account's recording stays");
+});
+
 test("an account change sends every window the new account's dictionary and snippets, once", async (t) => {
   const db = setup(t);
   if (!db) return;
@@ -274,10 +446,19 @@ test("an account change sends every window the new account's dictionary and snip
 
   await invoke("set-active-account-scope", "account-a", tokenState.generation);
   assert.equal(scopedLists().length, 2, "the same account again sends nothing");
+  db.setActiveAccountId(null);
+  const guestChat = db.createAgentConversation("container chat", null, 1);
+  await invoke("set-active-account-scope", "account-a", tokenState.generation);
+  assert.equal(
+    db.getAgentConversation(guestChat.id)?.account_id,
+    "account-a",
+    "signing in takes the signed-out chats that never sync"
+  );
+  broadcasts.length = 0;
 
   tokenState = { token: null, generation: tokenState.generation + 1 };
   handleAuthTokenChange(tokenState);
-  assert.deepEqual(scopedLists().slice(2), [
+  assert.deepEqual(scopedLists(), [
     ["dictionary-updated", []],
     ["snippets-updated", []],
   ]);

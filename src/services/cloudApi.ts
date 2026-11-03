@@ -63,7 +63,11 @@ async function cloudRequest<T = unknown>(
   if (!result?.success) {
     if (result?.code === "AUTH_CONTEXT_CHANGED" || result?.code === "AUTH_CONTEXT_UNVALIDATED") {
       await readAuthTokenState().catch(() => undefined);
-      invalidateValidatedAuthContext();
+      // A request pinned to a replaced sign-in says nothing about the sign-in
+      // that replaced it.
+      if (expectedAuthGeneration === getValidatedAuthGeneration()) {
+        invalidateValidatedAuthContext();
+      }
     }
     throw new CloudApiError(
       // Main's own wording is for logs; this one reaches error toasts.
@@ -107,14 +111,8 @@ export async function cloudGetPublic<T = unknown>(path: string): Promise<T> {
   return cloudRequest<T>("GET", path, undefined, true);
 }
 
-// `authGeneration` pins the request to the sign-in that read the data it
-// carries; a replacement session's token is then refused, not used.
-export async function cloudPost<T = unknown>(
-  path: string,
-  body?: unknown,
-  authGeneration?: number
-): Promise<T> {
-  return cloudRequest<T>("POST", path, body, undefined, authGeneration);
+export async function cloudPost<T = unknown>(path: string, body?: unknown): Promise<T> {
+  return cloudRequest<T>("POST", path, body);
 }
 
 export async function cloudPostForAuthGeneration<T = unknown>(
@@ -125,12 +123,8 @@ export async function cloudPostForAuthGeneration<T = unknown>(
   return cloudRequest<T>("POST", path, body, false, authGeneration);
 }
 
-export async function cloudPatch<T = unknown>(
-  path: string,
-  body?: unknown,
-  authGeneration?: number
-): Promise<T> {
-  return cloudRequest<T>("PATCH", path, body, undefined, authGeneration);
+export async function cloudPatch<T = unknown>(path: string, body?: unknown): Promise<T> {
+  return cloudRequest<T>("PATCH", path, body);
 }
 
 export async function cloudPatchForAuthGeneration<T = unknown>(
@@ -141,12 +135,8 @@ export async function cloudPatchForAuthGeneration<T = unknown>(
   return cloudRequest<T>("PATCH", path, body, false, authGeneration);
 }
 
-export async function cloudDelete<T = unknown>(
-  path: string,
-  body?: unknown,
-  authGeneration?: number
-): Promise<T> {
-  return cloudRequest<T>("DELETE", path, body, undefined, authGeneration);
+export async function cloudDelete<T = unknown>(path: string, body?: unknown): Promise<T> {
+  return cloudRequest<T>("DELETE", path, body);
 }
 
 export async function cloudDeleteForAuthGeneration<T = unknown>(

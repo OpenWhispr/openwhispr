@@ -85,7 +85,7 @@ function createElectronApi(db, options = {}) {
   // account switch while a pass is in flight.
   const authState = {
     generation: AUTH_GENERATION,
-    isStale: (expected) => expected !== undefined && expected !== authState.generation,
+    isStale: (expected) => expected !== authState.generation,
   };
 
   return {
@@ -185,6 +185,8 @@ function createElectronApi(db, options = {}) {
 
     // Spaces
     getSpaces: async () => db.getSpaces(),
+    hasOtherAccountRows: async () => db.hasOtherAccountRows(),
+    hasUnclaimedLegacyRows: async () => db.hasUnclaimedLegacyRows(),
     upsertSpaceFromCloud: async (cloudSpace) => db.upsertSpaceFromCloud(cloudSpace),
     setSpaceSyncStatus: async (id, status) => db.setSpaceSyncStatus(id, status),
     purgeSpace: async (id, purgeOptions) => {
@@ -211,7 +213,11 @@ function createElectronApi(db, options = {}) {
       authState.isStale(expectedAuthGeneration)
         ? STALE_SYNC_ACK
         : db.upsertConversationFromCloud(cloudConv, messages),
-    markConversationCreateAttempted: async (id) => db.markConversationCreateAttempted(id),
+    markConversationCreateAttempted: async (id, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : db.markConversationCreateAttempted(id),
+    clearConversationCreateAttempted: async (id) => db.clearConversationCreateAttempted(id),
     acknowledgeConversationCreate: async (id, snapshot, cloudId, accountId) =>
       db.acknowledgeConversationCreate(id, snapshot, cloudId, accountId || undefined),
     markConversationSynced: async (id, cloudId, accountId) =>
@@ -250,6 +256,7 @@ function createElectronApi(db, options = {}) {
       expectedWord,
       expectedSource,
       serverSource,
+      pushed,
       expectedAuthGeneration
     ) =>
       authState.isStale(expectedAuthGeneration)
@@ -260,7 +267,8 @@ function createElectronApi(db, options = {}) {
             serverUpdatedAt,
             expectedWord,
             expectedSource,
-            serverSource
+            serverSource,
+            pushed
           ),
     hardDeleteDictionary: async (id, expectedAuthGeneration) =>
       authState.isStale(expectedAuthGeneration) ? STALE_SYNC_ACK : db.hardDeleteDictionaryEntry(id),

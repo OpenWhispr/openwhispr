@@ -82,7 +82,7 @@ test("sync writes forward the sign-in that read them and the account a chat was 
   await api.hardDeleteDictionary(1, 7);
   await api.upsertConversationFromCloud({ id: "c" }, [], 7);
   await api.markTranscriptionSynced(1, "t", 7);
-  await api.markDictionarySynced(1, "d", "now", "word", "manual", "manual", 7);
+  await api.markDictionarySynced(1, "d", "now", "word", "manual", "manual", null, 7);
   await api.markSnippetSynced(1, "s", "now", "addr", "home", 7);
   await api.acknowledgeConversationCreate(1, { title: "Chat" }, "c", "account-a", 7);
   await api.markConversationSynced(1, "c", "account-a", 7);
@@ -98,7 +98,7 @@ test("sync writes forward the sign-in that read them and the account a chat was 
     ["db-hard-delete-dictionary", 1, 7],
     ["db-upsert-conversation-from-cloud", { id: "c" }, [], 7],
     ["db-mark-transcription-synced", 1, "t", 7],
-    ["db-mark-dictionary-synced", 1, "d", "now", "word", "manual", "manual", 7],
+    ["db-mark-dictionary-synced", 1, "d", "now", "word", "manual", "manual", null, 7],
     ["db-mark-snippet-synced", 1, "s", "now", "addr", "home", 7],
     ["db-acknowledge-conversation-create", 1, { title: "Chat" }, "c", "account-a", 7],
     ["db-mark-conversation-synced", 1, "c", "account-a", 7],

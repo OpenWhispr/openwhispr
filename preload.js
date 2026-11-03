@@ -201,7 +201,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Dictionary functions
   getDictionary: () => ipcRenderer.invoke("db-get-dictionary"),
-  setDictionary: (words) => ipcRenderer.invoke("db-set-dictionary", words),
+  setDictionary: (words, listsAccountId) =>
+    ipcRenderer.invoke("db-set-dictionary", words, listsAccountId),
   seedDictionary: (words) => ipcRenderer.invoke("db-seed-dictionary", words),
   applyDictionaryChanges: (changes) => ipcRenderer.invoke("db-apply-dictionary-changes", changes),
   onDictionaryUpdated: (callback) => {
@@ -210,7 +211,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () => ipcRenderer.removeListener("dictionary-updated", listener);
   },
   getSnippets: () => ipcRenderer.invoke("db-get-snippets"),
-  setSnippets: (snippets) => ipcRenderer.invoke("db-set-snippets", snippets),
+  setSnippets: (snippets, listsAccountId) =>
+    ipcRenderer.invoke("db-set-snippets", snippets, listsAccountId),
   seedSnippets: (snippets) => ipcRenderer.invoke("db-seed-snippets", snippets),
   onSnippetsUpdated: (callback) => {
     const listener = (_event, snippets) => callback?.(snippets);
@@ -290,6 +292,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Space functions
   getSpaces: () => ipcRenderer.invoke("db-get-spaces"),
+  hasOtherAccountRows: () => ipcRenderer.invoke("db-has-other-account-rows"),
+  hasUnclaimedLegacyRows: () => ipcRenderer.invoke("db-has-unclaimed-legacy-rows"),
   setActiveAccountScope: (accountId, expectedAuthGeneration) =>
     ipcRenderer.invoke("set-active-account-scope", accountId, expectedAuthGeneration),
   getActiveAccountScope: () => ipcRenderer.invoke("get-active-account-scope"),
@@ -1309,8 +1313,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
       messages,
       expectedAuthGeneration
     ),
-  markConversationCreateAttempted: (id) =>
-    ipcRenderer.invoke("db-mark-conversation-create-attempted", id),
+  markConversationCreateAttempted: (id, expectedAuthGeneration) =>
+    ipcRenderer.invoke("db-mark-conversation-create-attempted", id, expectedAuthGeneration),
+  clearConversationCreateAttempted: (id) =>
+    ipcRenderer.invoke("db-clear-conversation-create-attempted", id),
   acknowledgeConversationCreate: (id, snapshot, cloudId, accountId, authGeneration) =>
     ipcRenderer.invoke(
       "db-acknowledge-conversation-create",
@@ -1378,8 +1384,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getMovedDictionaryWords: () => ipcRenderer.invoke("db-get-moved-dictionary-words"),
   retireMovedDictionaryWords: (words, options) =>
     ipcRenderer.invoke("db-retire-moved-dictionary-words", words, options),
-  reviveRetiredDictionaryWords: (words) =>
-    ipcRenderer.invoke("db-revive-retired-dictionary-words", words),
+  reviveRetiredDictionaryWords: (words, options) =>
+    ipcRenderer.invoke("db-revive-retired-dictionary-words", words, options),
 
   getSharedDictionary: (workspaceId) => ipcRenderer.invoke("db-shared-dictionary-get", workspaceId),
   applySharedDictionaryPull: (workspaceId, change) =>

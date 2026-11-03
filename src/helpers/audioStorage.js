@@ -138,7 +138,12 @@ class AudioStorageManager {
   cleanupExpiredAudio(retentionDays, databaseManager) {
     try {
       const cutoffMs = Date.now() - retentionDays * 86400000;
-      const files = fs.readdirSync(this.audioDir).filter((f) => f.endsWith(".webm"));
+      const otherAccounts = new Set(
+        (databaseManager?.getOtherAccountTranscriptionIds() ?? []).map(String)
+      );
+      const files = fs
+        .readdirSync(this.audioDir)
+        .filter((f) => f.endsWith(".webm") && !otherAccounts.has(transcriptionIdFromFile(f)));
       const expiredIds = [];
       let kept = 0;
 
@@ -177,9 +182,12 @@ class AudioStorageManager {
     }
   }
 
-  deleteAllAudio() {
+  deleteAllAudio({ exceptTranscriptionIds = [] } = {}) {
     try {
-      const files = fs.readdirSync(this.audioDir).filter((f) => f.endsWith(".webm"));
+      const except = new Set(exceptTranscriptionIds.map(String));
+      const files = fs
+        .readdirSync(this.audioDir)
+        .filter((f) => f.endsWith(".webm") && !except.has(transcriptionIdFromFile(f)));
       for (const file of files) {
         try {
           fs.unlinkSync(path.join(this.audioDir, file));
@@ -199,9 +207,12 @@ class AudioStorageManager {
     }
   }
 
-  getStorageUsage() {
+  getStorageUsage({ exceptTranscriptionIds = [] } = {}) {
     try {
-      const files = fs.readdirSync(this.audioDir).filter((f) => f.endsWith(".webm"));
+      const except = new Set(exceptTranscriptionIds.map(String));
+      const files = fs
+        .readdirSync(this.audioDir)
+        .filter((f) => f.endsWith(".webm") && !except.has(transcriptionIdFromFile(f)));
       let totalBytes = 0;
       for (const file of files) {
         try {

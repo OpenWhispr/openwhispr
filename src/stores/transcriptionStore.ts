@@ -64,7 +64,22 @@ function ensureIpcListeners() {
   }
 
   if (window.electronAPI?.onActiveAccountScopeChanged) {
-    const dispose = window.electronAPI.onActiveAccountScopeChanged(() => {
+    // Main announces every re-scope, and a token rotation keeps the account.
+    let accountId: string | null | undefined;
+    let broadcastReceived = false;
+    void window.electronAPI
+      .getActiveAccountScope?.()
+      .then((scope) => {
+        if (!broadcastReceived) accountId = scope?.accountId ?? null;
+      })
+      .catch((error) => {
+        console.error("Failed to read the history's account scope:", error);
+      });
+    const dispose = window.electronAPI.onActiveAccountScopeChanged((scope) => {
+      broadcastReceived = true;
+      const nextAccountId = scope?.accountId ?? null;
+      if (nextAccountId === accountId) return;
+      accountId = nextAccountId;
       clearTranscriptions();
       void initializeTranscriptions().catch((error) => {
         console.error("Failed to reload transcription history after an account change:", error);
