@@ -229,7 +229,10 @@ class UpdateManager {
 
   async _checkForUpdates(epoch) {
     console.log("🔍 Checking for updates...");
-    const result = await autoUpdater.checkForUpdates();
+    const result = await autoUpdater.checkForUpdates().catch((error) => {
+      if (epoch !== this.policyEpoch) return null;
+      throw error;
+    });
     if (epoch !== this.policyEpoch || this._policyFailure()) {
       result?.cancellationToken?.cancel();
       return { ...(this._policyFailure() ?? this._policyChanged()), updateAvailable: false };
@@ -308,6 +311,7 @@ class UpdateManager {
     } catch (error) {
       this.isDownloading = false;
       if (this._policyFailure()) return this._policyFailure();
+      if (started && this.downloadEpoch !== this.policyEpoch) return this._policyChanged();
       console.error("❌ Update download error:", error);
       throw error;
     } finally {
