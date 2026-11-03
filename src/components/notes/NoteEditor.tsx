@@ -1031,7 +1031,11 @@ export default function NoteEditor({
     clearNoteConflict(note.client_note_id);
     // With no save pending, the owner's external-update resync applies the
     // fresh copy to the visible editor buffer.
-    if (fresh) updateNoteInStore(fresh);
+    if (fresh) {
+      // The row may have adopted the cloud copy's key; nothing may wait under it.
+      clearNoteConflict(fresh.client_note_id);
+      updateNoteInStore(fresh);
+    }
   }, [conflict, note.client_note_id, note.folder_id, note.id, note.space_id, onCancelPendingSaves]);
 
   // Keep the local edits, overwriting the cloud revision the user just saw.

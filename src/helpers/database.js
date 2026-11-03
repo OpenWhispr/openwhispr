@@ -58,6 +58,11 @@ function typedTextOperation(text) {
   return typeof text === "string" && text.trim() ? "set" : null;
 }
 
+const NOTE_FOLDER_DELETE_PENDING_SQL = `EXISTS (
+  SELECT 1 FROM optimistic_folder_delete_rows r
+  WHERE r.entity_type = 'note' AND r.entity_id = n.id
+) AS folder_delete_pending`;
+
 // Every local field a note create (POST) carries; the acknowledgement compares
 // these atomically against the pushed snapshot. Must mirror NotePushSnapshot
 // in src/types/electron.ts.
@@ -1703,6 +1708,7 @@ class DatabaseManager {
         if (!err.message.includes("duplicate column")) throw err;
       }
       this.db.exec("CREATE INDEX IF NOT EXISTS idx_notes_account_id ON notes(account_id)");
+      this.db.exec("CREATE INDEX IF NOT EXISTS idx_notes_cloud_id ON notes(cloud_id)");
       this.db.exec("CREATE INDEX IF NOT EXISTS idx_folders_account_id ON folders(account_id)");
       // Builds before per-account folders kept names unique per space alone,
       // which fails once two accounts' default folders share a space; never
@@ -1794,7 +1800,6 @@ class DatabaseManager {
         // opening. Without it, assistant edits save as plain updates.
         debugLogger.error("Assistant note Undo unavailable", { error: error.message }, "database");
       }
-
       return true;
     } catch (error) {
       debugLogger.error("Database initialization failed", { error: error.message }, "database");
@@ -7348,11 +7353,7 @@ class DatabaseManager {
       return (
         this.db
           .prepare(
-            `SELECT n.*,
-               EXISTS (
-                 SELECT 1 FROM optimistic_folder_delete_rows r
-                 WHERE r.entity_type = 'note' AND r.entity_id = n.id
-               ) AS folder_delete_pending
+            `SELECT n.*, ${NOTE_FOLDER_DELETE_PENDING_SQL}
              FROM notes n
              WHERE n.client_note_id = ? AND ${accountScope.sql}`
           )
@@ -7364,14 +7365,47 @@ class DatabaseManager {
     }
   }
 
+  // A copy of a cloud row that had no client id when it was pulled sits under a
+  // key of its own, so the cloud id finds what the key misses. A key held for
+  // another cloud row is not a match: acting on it would delete the wrong note.
+  getNoteForCloudRow(clientNoteId, cloudId) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const byKey = clientNoteId ? this.getNoteByClientId(clientNoteId) : null;
+      if (byKey && (!byKey.cloud_id || byKey.cloud_id === cloudId)) return byKey;
+      return this._getNoteByCloudId(cloudId);
+    } catch (error) {
+      debugLogger.error("Error getting note for cloud row", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  _getNoteByCloudId(cloudId) {
+    const accountScope = this._accountScopeCondition("n");
+    return (
+      this.db
+        .prepare(
+          `SELECT n.*, ${NOTE_FOLDER_DELETE_PENDING_SQL}
+           FROM notes n
+           WHERE n.cloud_id = ? AND ${accountScope.sql}
+           ORDER BY n.deleted_at IS NOT NULL, n.id
+           LIMIT 1`
+        )
+        .get(cloudId, ...accountScope.params) || null
+    );
+  }
+
   upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const spaceId = localSpaceId ?? this.getPrivateSpaceId();
       const accountId = this._accountIdForSpace(spaceId);
-      const existing = this.db
-        .prepare("SELECT * FROM notes WHERE client_note_id = ?")
-        .get(cloudNote.client_note_id);
+      const existing =
+        (cloudNote.client_note_id &&
+          this.db
+            .prepare("SELECT * FROM notes WHERE client_note_id = ?")
+            .get(cloudNote.client_note_id)) ||
+        this._getNoteByCloudId(cloudNote.id);
       // Rows without an account (created signed out or before attribution) and
       // personal<->team moves are adopted as before; only another account's
       // row or another cloud row is left alone. Never throw: one bad row would
@@ -7401,6 +7435,11 @@ class DatabaseManager {
       const clearsContent = cleared.includes("content");
       const clearsSummary = cleared.includes("enhanced_content");
       cloudNote = { ...cloudNote };
+      // Until the cloud row has a client id the local copy keeps its own, and a
+      // new copy needs one: a row without a key can't be matched or conflict-gated.
+      if (!cloudNote.client_note_id) {
+        cloudNote.client_note_id = existing?.client_note_id ?? randomUUID();
+      }
       // A note created through the public API without a title has none in the
       // cloud; the local column requires one.
       if (cloudNote.title == null) cloudNote.title = "Untitled Note";
@@ -7486,6 +7525,12 @@ class DatabaseManager {
           content_sync_operation = NULL,
           enhanced_content_sync_operation = NULL
       `);
+      // The cloud row's client id wins, so the next pull matches by key.
+      if (existing && existing.client_note_id !== cloudNote.client_note_id) {
+        this.db
+          .prepare("UPDATE notes SET client_note_id = ? WHERE id = ?")
+          .run(cloudNote.client_note_id, existing.id);
+      }
       stmt.run(
         cloudNote.client_note_id,
         cloudNote.id,

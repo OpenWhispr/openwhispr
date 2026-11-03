@@ -2274,8 +2274,9 @@ export class SyncService {
 
         for (const cloudNote of cloudNotes) {
           try {
-            const local = await window.electronAPI.getNoteByClientId?.(
-              cloudNote.client_note_id ?? ""
+            const local = await window.electronAPI.getNoteForCloudRow?.(
+              cloudNote.client_note_id,
+              cloudNote.id
             );
 
             // A parent folder DELETE owns this note until its server result is
@@ -2462,14 +2463,19 @@ export class SyncService {
                 console.warn(`Parking note ${cloudNote.id}: unknown folder ${cloudNote.folder_id}`);
                 continue;
               }
-              await window.electronAPI.upsertNoteFromCloud?.(
+              const applied = await window.electronAPI.upsertNoteFromCloud?.(
                 cloudNote as unknown as Record<string, unknown>,
                 resolvePulledNoteFolderId(cloudNote, space.id, cloudToLocal, defaultFolderId),
                 space.id
               );
               if (local) {
-                // Applying cloud over a clean row settles any stale conflict.
+                // Applying cloud over a clean row settles any stale conflict,
+                // including one left under the key this row just adopted. A
+                // skipped upsert adopted nothing, and that key is another row's.
                 await this.settleNoteConflict(local.client_note_id);
+                if (applied && applied.client_note_id !== local.client_note_id) {
+                  await this.settleNoteConflict(applied.client_note_id);
+                }
               }
             }
           } catch (err) {

@@ -23,6 +23,7 @@ const { assertNoContentRegression, snapshotNotes } = require("./harness/invarian
 const { SyncService } = require("../../src/services/SyncService.ts");
 const { NotesService } = require("../../src/services/NotesService.ts");
 const { CloudApiError } = require("../../src/services/cloudApi.ts");
+const { addNoteConflict, readNoteConflictIds } = require("../../src/lib/noteConflictRegistry.ts");
 
 // Mirrors SYNC_ALL_LOCK in SyncService.ts.
 const SYNC_ALL_LOCK = "openwhispr-sync-all";
@@ -832,4 +833,221 @@ test("an unlinked calendar event reaches the cloud as a blank and clears a stale
   const local = db.getNote(note.id);
   assert.equal(local.title, "Renamed elsewhere");
   assert.equal(local.calendar_event_id, "");
+});
+
+// A local row as older releases left them: another key for the same cloud row.
+function insertCloudCopy(db, fields) {
+  const row = {
+    title: "Copy",
+    content: "body",
+    space_id: db.getPrivateSpaceId(),
+    sync_status: "synced",
+    cloud_updated_at: "2026-07-20T09:00:00.000Z",
+    updated_at: LOCAL_EARLY,
+    ...fields,
+  };
+  const keys = Object.keys(row);
+  return db.db
+    .prepare(`INSERT INTO notes (${keys.join(", ")}) VALUES (${keys.map(() => "?").join(", ")})`)
+    .run(...keys.map((key) => row[key])).lastInsertRowid;
+}
+
+function copiesOf(db, cloudId) {
+  return db.db.prepare("SELECT * FROM notes WHERE cloud_id = ? ORDER BY id").all(cloudId);
+}
+
+async function editInCloud(cloud, id, fields) {
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  await cloud.request({
+    method: "PATCH",
+    path: "/api/notes/update",
+    body: { id, ...fields },
+  });
+}
+
+test("a cloud note with no client id keeps one local copy through edits and a delete", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+
+  const row = cloud.seedUnkeyedNote({ title: "Unkeyed", content: "first" });
+  await service.syncAll(true);
+  const [copy] = copiesOf(db, row.id);
+  assert.ok(copy.client_note_id, "the copy gets a local key");
+
+  await editInCloud(cloud, row.id, { content: "second" });
+  await service.syncAll(true);
+  assert.deepEqual(
+    copiesOf(db, row.id).map((note) => [note.id, note.client_note_id, note.content]),
+    [[copy.id, copy.client_note_id, "second"]]
+  );
+
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  await cloud.request({ method: "DELETE", path: "/api/notes/delete", body: { id: row.id } });
+  await service.syncAll(true);
+  assert.equal(noteCount(db), 0, "the cloud delete reaches the copy");
+});
+
+test("a local copy adopts the client id its cloud row gains, without a second copy", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+
+  const row = cloud.seedUnkeyedNote({ title: "Unkeyed", content: "first" });
+  await service.syncAll(true);
+  const [copy] = copiesOf(db, row.id);
+
+  cloud.backfillNoteKey(row.id);
+  await editInCloud(cloud, row.id, { content: "after the backfill" });
+  await service.syncAll(true);
+
+  assert.deepEqual(
+    copiesOf(db, row.id).map((note) => [note.id, note.client_note_id, note.content]),
+    [[copy.id, row.id, "after the backfill"]]
+  );
+  assert.equal(noteCount(db), 1);
+});
+
+test("Refresh on a conflicted copy settles it even when the cloud row has another key", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+
+  const row = cloud.seedUnkeyedNote({ title: "Unkeyed", content: "cloud" });
+  await service.syncAll(true);
+  const [copy] = copiesOf(db, row.id);
+  cloud.backfillNoteKey(row.id);
+  await editInCloud(cloud, row.id, { content: "cloud edit" });
+  updateNote(db, copy.id, { content: "stale edit", sync_status: "pending" });
+  await service.syncAll(true);
+
+  // What NoteEditor's Refresh sends: the cloud copy held by the conflict.
+  const [fresh] = (await cloud.request({ method: "GET", path: "/api/notes/list" })).data.notes;
+  const refreshed = db.upsertNoteFromCloud(fresh, copy.folder_id, copy.space_id);
+  assert.equal(refreshed.id, copy.id);
+  assert.equal(refreshed.sync_status, "synced");
+  assert.equal(refreshed.content, "cloud edit");
+
+  const patchesBefore = cloud.logFor("/api/notes/update").length;
+  await service.syncAll(true);
+  assert.equal(cloud.logFor("/api/notes/update").length, patchesBefore, "nothing left to push");
+  assert.equal(noteCount(db), 1);
+});
+
+test("a synced copy with no revision stops forcing a snapshot pull once it is matched", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+
+  const row = cloud.seedNote({ client_note_id: "cloud-key", title: "Keyed", content: "body" });
+  cloud.setNoteRevision(row.id, 3);
+  insertCloudCopy(db, { client_note_id: "local-key", cloud_id: row.id });
+  await service.syncAll(true);
+
+  assert.equal(db.countNotesMissingRevision(), 0);
+  assert.equal(copiesOf(db, row.id)[0].client_note_id, "cloud-key");
+  assert.equal(noteCount(db), 1);
+});
+
+test("cloud-id matching stays inside the active account", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  const theirs = insertCloudCopy(db, {
+    client_note_id: "theirs",
+    cloud_id: "cloud-1",
+    account_id: "account-b",
+    content: "their unpushed work",
+    sync_status: "pending",
+  });
+
+  assert.equal(db.getNoteForCloudRow("cloud-key", "cloud-1"), null);
+  const mine = db.upsertNoteFromCloud(
+    {
+      id: "cloud-1",
+      client_note_id: "cloud-key",
+      title: "Shared",
+      content: "cloud",
+      created_at: "2026-07-20T09:00:00.000Z",
+      updated_at: "2026-07-20T09:00:00.000Z",
+    },
+    null,
+    db.getPrivateSpaceId()
+  );
+
+  assert.notEqual(mine.id, theirs);
+  const untouched = db.db.prepare("SELECT * FROM notes WHERE id = ?").get(theirs);
+  assert.equal(untouched.content, "their unpushed work");
+  assert.equal(untouched.client_note_id, "theirs");
+});
+
+test("cloud-id lookup reports a held copy, prefers a live one, ignores another row's key", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  insertCloudCopy(db, {
+    client_note_id: "tombstone",
+    cloud_id: "cloud-1",
+    deleted_at: LOCAL_LATE,
+  });
+  const live = insertCloudCopy(db, { client_note_id: "live", cloud_id: "cloud-1" });
+  assert.equal(db.getNoteForCloudRow(null, "cloud-1").id, live);
+
+  const journaled = insertCloudCopy(db, { client_note_id: "journaled", cloud_id: "cloud-2" });
+  db.db
+    .prepare(
+      `INSERT INTO optimistic_folder_delete_rows
+         (folder_id, entity_type, entity_id, original_sync_status)
+       VALUES (1, 'note', ?, 'synced')`
+    )
+    .run(journaled);
+  assert.equal(db.getNoteForCloudRow("no-such-key", "cloud-2").folder_delete_pending, 1);
+
+  const other = insertCloudCopy(db, { client_note_id: "shared-key", cloud_id: "cloud-3" });
+  assert.equal(db.getNoteForCloudRow("shared-key", "cloud-4"), null);
+  assert.equal(db.getNoteForCloudRow("shared-key", "cloud-3").id, other);
+});
+
+test("adopting a key settles a conflict left under it", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+
+  const row = cloud.seedNote({ client_note_id: "cloud-key", title: "Keyed", content: "fresh" });
+  insertCloudCopy(db, {
+    client_note_id: "local-key",
+    cloud_id: row.id,
+    content: "old",
+    cloud_updated_at: "2020-01-01T00:00:00.000Z",
+    updated_at: "2020-01-01 00:00:00",
+  });
+  addNoteConflict("cloud-key", row);
+
+  await service.syncAll(true);
+
+  assert.equal(copiesOf(db, row.id)[0].client_note_id, "cloud-key");
+  assert.ok(!readNoteConflictIds().has("cloud-key"));
+});
+
+test("a skipped upsert leaves another row's conflict alone", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+
+  const row = cloud.seedNote({ client_note_id: "held-key", title: "Cloud", content: "fresh" });
+  // The local row for this cloud note has its own key, and another local row
+  // already holds the cloud row's key for a different cloud note.
+  insertCloudCopy(db, {
+    client_note_id: "local-key",
+    cloud_id: row.id,
+    content: "old",
+    cloud_updated_at: "2020-01-01T00:00:00.000Z",
+    updated_at: "2020-01-01 00:00:00",
+  });
+  insertCloudCopy(db, { client_note_id: "held-key", cloud_id: "another-cloud-note" });
+  addNoteConflict("held-key", row);
+
+  await service.syncAll(true);
+
+  assert.ok(readNoteConflictIds().has("held-key"));
+  assert.equal(copiesOf(db, row.id)[0].client_note_id, "local-key");
 });

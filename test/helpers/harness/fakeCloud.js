@@ -495,6 +495,19 @@ function createFakeCloud(config = {}) {
       clock = fn;
     },
     seedNote: (input) => structuredClone(insertRow(noteCollection, input)),
+    // A row the public API stored without a client id, and the server backfill
+    // that later keys it by its own id without moving updated_at.
+    seedUnkeyedNote: (input) => {
+      const row = insertRow(noteCollection, input);
+      row.client_note_id = null;
+      return structuredClone(row);
+    },
+    backfillNoteKey: (id) => {
+      notes.get(id).client_note_id = id;
+    },
+    setNoteRevision: (id, revision) => {
+      notes.get(id).revision = revision;
+    },
     seedFolder: (input) => structuredClone(insertRow(folderCollection, input)),
     // Conversation deletes are echo-stubs, so a tombstone has to be seeded here
     // rather than produced by the DELETE route.
