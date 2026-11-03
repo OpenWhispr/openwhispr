@@ -56,8 +56,10 @@ const ROW_KIND_KEYS: Record<LocalSetupRowId, string> = {
   cleanup: "onboarding.rehaul.localSetup.rows.cleanup",
   assistant: "onboarding.rehaul.localSetup.rows.assistant",
 };
+// A row too slow for this computer reads as memory too (Josh, 2026-11-03): its line
+// says the model exceeds what the computer can carry, with no figures to quote.
 const UNAVAILABLE_HEADING_KEYS: Record<NonNullable<LocalSetupRow["reason"]>, string> = {
-  tooSlow: "onboarding.rehaul.localSetup.unavailable.tooSlow",
+  tooSlow: "onboarding.rehaul.localSetup.unavailable.notEnoughMemory",
   memory: "onboarding.rehaul.localSetup.unavailable.notEnoughMemory",
   memoryUnread: "onboarding.rehaul.localSetup.unavailable.memoryUnread",
 };
@@ -256,7 +258,6 @@ function SetupRow({
   const done = active && progress.status === "done";
   const failed = active && progress.status === "failed";
   const dim = !unavailable && !on;
-  const heading = unavailable ? t(UNAVAILABLE_HEADING_KEYS[row.reason ?? "tooSlow"]) : null;
 
   const badge = failed ? (
     <button
@@ -267,9 +268,9 @@ function SetupRow({
     >
       {t("onboarding.rehaul.localSetup.retry")}
     </button>
-  ) : switchable && !unavailable ? (
+  ) : unavailable || switchable ? (
     <span className={`ms-1.5 shrink-0 ${BADGE_CLASS}`}>
-      {t("onboarding.rehaul.localSetup.badge.optional")}
+      {t(`onboarding.rehaul.localSetup.badge.${unavailable ? "cloud" : "optional"}`)}
     </span>
   ) : null;
 
@@ -310,8 +311,8 @@ function SetupRow({
         </span>
         <span className="mt-0.5 flex min-w-0 items-center whitespace-nowrap text-base font-medium leading-6 text-[var(--onboarding-text-primary)]">
           {/* Only the name gives way to a long translation; size and badge stay whole. */}
-          <span className="min-w-0 truncate" title={unavailable ? heading : undefined}>
-            {unavailable ? heading : row.modelName}
+          <span className="min-w-0 truncate">
+            {unavailable ? t(UNAVAILABLE_HEADING_KEYS[row.reason ?? "tooSlow"]) : row.modelName}
           </span>
           {!unavailable && (
             <span className="ms-1 shrink-0 text-sm font-normal tabular-nums text-[var(--onboarding-text-secondary)]">
@@ -331,20 +332,14 @@ function SetupRow({
         </span>
       </div>
 
-      {/* An unavailable row has no switch: its badge takes that place, so the
-          heading keeps the line to itself. Otherwise fixed width, so a row reads the
-          same with or without its switch. Dictation can't be switched off and has
-          none, which leaves its name more room. */}
-      {unavailable ? (
-        <span className={`shrink-0 whitespace-nowrap ${BADGE_CLASS}`}>
-          {t("onboarding.rehaul.localSetup.badge.cloud")}
-        </span>
-      ) : (
-        switchable && (
-          <span className="flex w-12 shrink-0 justify-end">
+      {/* Fixed width, so a row reads the same with or without its switch. Dictation
+          can't be switched off and has none, which leaves its name more room. */}
+      {switchable && (
+        <span className="flex w-12 shrink-0 justify-end">
+          {!unavailable && (
             <SetupSwitch checked={on} disabled={started} label={kind} onToggle={onToggle} />
-          </span>
-        )
+          )}
+        </span>
       )}
     </div>
   );
@@ -462,8 +457,10 @@ export function LocalSetupStep({
       return t("onboarding.rehaul.localSetup.line.offToFit");
     }
     if (row.line) return lineText(row.line, onMac, t);
+    if (row.label === "unavailable")
+      return t("onboarding.rehaul.localSetup.unavailable.exceedsMemory");
     // A switched-off row still says what it does: the switch shows it's off.
-    return row.label === "unavailable" ? null : t(DESCRIPTION_KEYS[row.id]);
+    return t(DESCRIPTION_KEYS[row.id]);
   };
 
   return (

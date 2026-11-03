@@ -371,19 +371,20 @@ test("rows keep one fixed height class from idle to finished", async (t) => {
   assert.deepEqual(heights(), fixed, "finished");
 });
 
-test("Windows 16 GB: the assistant is Too slow with Cloud recommended, cleanup starts off", async (t) => {
+test("Windows 16 GB: the assistant reads as not enough memory, cleanup starts off", async (t) => {
   const s = await mount(t, { profile: pc() });
   const assistant = s.row("assistant");
-  assert.ok(assistant.textContent.includes(`${K}unavailable.tooSlow`));
-  assert.ok(!assistant.textContent.includes(`${K}description.`), "the heading says it all");
+  assert.ok(assistant.textContent.includes(`${K}unavailable.notEnoughMemory`));
+  assert.ok(assistant.textContent.includes(`${K}unavailable.exceedsMemory`), "no figures quoted");
+  assert.ok(!assistant.textContent.includes(`${K}description.`));
   assert.ok(!assistant.textContent.includes("2.7 GB"), "an unavailable row shows no size");
   const leaf = (text) => (n) =>
     n.textContent === text && n.childNodes.every((child) => child.nodeType === 3);
-  const [heading] = elements(assistant, leaf(`${K}unavailable.tooSlow`));
-  assert.match(cls(heading.parentNode), /whitespace-nowrap/, "the heading keeps one line");
+  const [heading] = elements(assistant, leaf(`${K}unavailable.notEnoughMemory`));
   const [badge] = elements(assistant, leaf(`${K}badge.cloud`));
   assert.ok(badge, "Cloud recommended");
-  assert.notEqual(badge.parentNode, heading.parentNode, "the badge takes the switch's place");
+  assert.equal(badge.parentNode, heading.parentNode, "the badge sits beside the heading");
+  assert.match(cls(heading.parentNode), /whitespace-nowrap/, "the heading keeps one line");
   assert.equal(s.switchOf("assistant"), undefined);
   assert.ok(elements(assistant, (n) => n.textContent === "–").length, "a dash tile");
 
@@ -732,13 +733,13 @@ test("memory that couldn't be read says so, never that there is too little", asy
   }
 });
 
-test("a cleanup too slow for this computer has a heading and no line", async (t) => {
+test("a cleanup too slow for this computer reads as exceeding its memory", async (t) => {
   const tooSlow = (row) =>
     row.id !== "cleanup" ? row : { ...row, label: "unavailable", reason: "tooSlow", line: null };
   const s = await mount(t, { mapPlan: (p) => ({ ...p, rows: p.rows.map(tooSlow) }) });
   const text = s.row("cleanup").textContent;
-  assert.ok(text.includes(`${K}unavailable.tooSlow`));
-  assert.ok(!text.includes(`${K}description.`), text);
+  assert.ok(text.includes(`${K}unavailable.notEnoughMemory`));
+  assert.ok(text.includes(`${K}unavailable.exceedsMemory`), text);
   assert.equal(s.switchOf("cleanup"), undefined);
 });
 

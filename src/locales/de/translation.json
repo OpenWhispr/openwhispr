@@ -457,8 +457,8 @@
           "failed": "Download fehlgeschlagen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut"
         },
         "unavailable": {
-          "tooSlow": "Zu langsam auf diesem Computer",
           "notEnoughMemory": "Nicht genug Arbeitsspeicher",
+          "exceedsMemory": "Übersteigt den Arbeitsspeicher dieses Computers",
           "memoryUnread": "Arbeitsspeicher nicht erkannt",
           "memoryMac": "{{model}} braucht {{needed}} GB Arbeitsspeicher, dieser Mac hat {{have}} GB",
           "memoryComputer": "{{model}} braucht {{needed}} GB Arbeitsspeicher, dieser Computer hat {{have}} GB",

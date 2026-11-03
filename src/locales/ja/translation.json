@@ -457,8 +457,8 @@
           "failed": "ダウンロードできませんでした。接続を確認して再試行してください"
         },
         "unavailable": {
-          "tooSlow": "このコンピュータでは遅すぎます",
           "notEnoughMemory": "メモリが不足しています",
+          "exceedsMemory": "このコンピュータのメモリの上限を超えています",
           "memoryUnread": "メモリを確認できませんでした",
           "memoryMac": "{{model}} には {{needed}} GB のメモリが必要です。この Mac は {{have}} GB です",
           "memoryComputer": "{{model}} には {{needed}} GB のメモリが必要です。このコンピュータは {{have}} GB です",

@@ -457,8 +457,8 @@
           "failed": "無法下載。請檢查網路連線後重試"
         },
         "unavailable": {
-          "tooSlow": "在這台電腦上太慢",
           "notEnoughMemory": "記憶體不足",
+          "exceedsMemory": "超出這台電腦的記憶體上限",
           "memoryUnread": "無法偵測記憶體",
           "memoryMac": "{{model}} 需要 {{needed}} GB 記憶體，這台 Mac 只有 {{have}} GB",
           "memoryComputer": "{{model}} 需要 {{needed}} GB 記憶體，這台電腦只有 {{have}} GB",

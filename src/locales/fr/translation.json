@@ -457,8 +457,8 @@
           "failed": "Téléchargement impossible. Vérifiez votre connexion et réessayez"
         },
         "unavailable": {
-          "tooSlow": "Trop lent sur cet ordinateur",
           "notEnoughMemory": "Mémoire insuffisante",
+          "exceedsMemory": "Dépasse les limites de mémoire de cet ordinateur",
           "memoryUnread": "Mémoire non vérifiée",
           "memoryMac": "{{model}} nécessite {{needed}} Go de mémoire, ce Mac en a {{have}} Go",
           "memoryComputer": "{{model}} nécessite {{needed}} Go de mémoire, cet ordinateur en a {{have}} Go",

@@ -457,8 +457,8 @@
           "failed": "Couldn't download. Check your connection and retry"
         },
         "unavailable": {
-          "tooSlow": "Too slow on this computer",
           "notEnoughMemory": "Not enough memory",
+          "exceedsMemory": "Exceeds the memory limits of this computer",
           "memoryUnread": "Couldn't check memory",
           "memoryMac": "{{model}} needs {{needed}} GB of memory, this Mac has {{have}} GB",
           "memoryComputer": "{{model}} needs {{needed}} GB of memory, this computer has {{have}} GB",

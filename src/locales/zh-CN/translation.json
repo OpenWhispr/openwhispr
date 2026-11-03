@@ -457,8 +457,8 @@
           "failed": "无法下载。请检查网络连接后重试"
         },
         "unavailable": {
-          "tooSlow": "在这台电脑上太慢",
           "notEnoughMemory": "内存不足",
+          "exceedsMemory": "超出这台电脑的内存上限",
           "memoryUnread": "无法检测内存",
           "memoryMac": "{{model}} 需要 {{needed}} GB 内存，这台 Mac 只有 {{have}} GB",
           "memoryComputer": "{{model}} 需要 {{needed}} GB 内存，这台电脑只有 {{have}} GB",

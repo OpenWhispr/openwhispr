@@ -457,8 +457,8 @@
           "failed": "Download non riuscito. Controlla la connessione e riprova"
         },
         "unavailable": {
-          "tooSlow": "Troppo lento su questo computer",
           "notEnoughMemory": "Memoria insufficiente",
+          "exceedsMemory": "Supera i limiti di memoria di questo computer",
           "memoryUnread": "Impossibile verificare la memoria",
           "memoryMac": "{{model}} richiede {{needed}} GB di memoria, questo Mac ne ha {{have}} GB",
           "memoryComputer": "{{model}} richiede {{needed}} GB di memoria, questo computer ne ha {{have}} GB",
