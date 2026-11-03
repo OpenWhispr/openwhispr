@@ -1794,6 +1794,7 @@ class IPCHandlers {
         });
         void this.refreshEffectivePolicy(event);
         if (!allowed()) return failure();
+        const startedPolicy = this.effectivePolicyManager.getCurrent();
         const streamProperty = channel.startsWith("dictation-realtime-")
           ? "_dictationStreaming"
           : /^(assemblyai|deepgram|gemini|corti)-streaming-(start|warmup)$/.test(channel)
@@ -1808,17 +1809,31 @@ class IPCHandlers {
         const controller = new AbortController();
         operation.signal = controller.signal;
         this._productRequests.set(controller, operation);
-        let result;
         try {
-          result = await this._productRequestContext.run(operation, () => handler(event, ...args));
+          const result = await this._productRequestContext.run(operation, () =>
+            handler(event, ...args)
+          );
+          let snapshot = this.effectivePolicyManager.getCurrent();
+          if (
+            !controller.signal.aborted &&
+            snapshot.status === "loading" &&
+            snapshot.deviceReady &&
+            snapshot.accountId === startedPolicy.accountId &&
+            snapshot.authGeneration !== startedPolicy.authGeneration
+          ) {
+            await this.refreshEffectivePolicy(event);
+            snapshot = this.effectivePolicyManager.getCurrent();
+          }
+          if (controller.signal.aborted || snapshot.accountId !== startedPolicy.accountId)
+            return failure();
+          if (allowed()) return result;
+          if ((!snapshot.success && snapshot.status !== "loading") || snapshot.localOnly)
+            this._stopRemoteProductWork();
+          else if (snapshot.success) this._retireDisallowedProductWork(snapshot);
+          return failure();
         } finally {
           this._productRequests.delete(controller);
         }
-        if (allowed()) return result;
-        const snapshot = this.effectivePolicyManager.getCurrent();
-        if (!snapshot.success || snapshot.localOnly) this._stopRemoteProductWork();
-        else this._retireDisallowedProductWork(snapshot);
-        return failure();
       });
     const handleRemoteProduct = (channel, handler) => handleProduct(channel, handler, true);
     const trackTranscriptionRoute = (route, selectedMode) => {

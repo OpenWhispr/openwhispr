@@ -631,6 +631,110 @@ test("a token rotation keeps the account's running jobs and meeting; another acc
   }
 });
 
+for (const outcome of [
+  "allowed",
+  "revoked",
+  "revoked then restored",
+  "signed out",
+  "account switched",
+]) {
+  test(`dictation finishing during token rotation: ${outcome}`, async (t) => {
+    const { deferred } = require("./harness/deferred");
+    const IPCHandlers = require(handlersModulePath);
+    const previous = {
+      whisperManager: fakeThis.whisperManager,
+      refreshEffectivePolicy: fakeThis.refreshEffectivePolicy,
+      _stopRemoteProductWork: fakeThis._stopRemoteProductWork,
+      _retireDisallowedProductWork: fakeThis._retireDisallowedProductWork,
+      _stopMeetingForPolicy: fakeThis._stopMeetingForPolicy,
+      _meetingMicStreaming: fakeThis._meetingMicStreaming,
+    };
+    const previousTokenState = tokenState;
+    const previousAccount = databaseManager.activeAccountId;
+    const previousApiUrl = process.env.OPENWHISPR_API_URL;
+    const entered = deferred();
+    const finish = deferred();
+    const refreshed = deferred();
+    let pending;
+    t.after(async () => {
+      finish.resolve({ success: true, text: "completed dictation" });
+      refreshed.resolve();
+      await pending;
+      Object.assign(fakeThis, previous);
+      tokenState = previousTokenState;
+      databaseManager.activeAccountId = previousAccount;
+      if (previousApiUrl === undefined) delete process.env.OPENWHISPR_API_URL;
+      else process.env.OPENWHISPR_API_URL = previousApiUrl;
+      await fakeThis.refreshEffectivePolicy();
+    });
+
+    process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
+    const generation = tokenState.generation + 1;
+    tokenState = { token: `completion-token-${generation}`, generation };
+    await setScope("completion-account", generation);
+    await fakeThis.refreshEffectivePolicy();
+    fakeThis.refreshEffectivePolicy = () => refreshed.promise;
+    fakeThis._stopRemoteProductWork = IPCHandlers.prototype._stopRemoteProductWork.bind(fakeThis);
+    fakeThis._retireDisallowedProductWork =
+      IPCHandlers.prototype._retireDisallowedProductWork.bind(fakeThis);
+    const stops = [];
+    fakeThis._stopMeetingForPolicy = (reason) => {
+      stops.push(reason);
+      fakeThis._meetingMicStreaming = null;
+    };
+    const meeting = { disconnect: async () => {} };
+    fakeThis._meetingMicStreaming = meeting;
+    fakeThis.whisperManager = {
+      transcribeLocalWhisper: async () => {
+        entered.resolve();
+        return finish.promise;
+      },
+    };
+    pending = handlers.get("transcribe-local-whisper")({ sender: {} }, new Uint8Array([1]));
+    await entered.promise;
+    handleAuthTokenChange({
+      token: `completion-token-${generation + 1}`,
+      generation: generation + 1,
+    });
+    await setScope("completion-account", generation + 1);
+    finish.resolve({ success: true, text: "completed dictation" });
+    await new Promise(setImmediate);
+    assert.deepEqual(stops, []);
+    assert.equal(fakeThis._meetingMicStreaming, meeting);
+
+    if (outcome === "signed out") {
+      handleAuthTokenChange({ token: null, generation: generation + 2 });
+    } else {
+      if (outcome === "account switched") {
+        await setScope("replacement-account", generation + 1);
+        fakeThis._meetingMicStreaming = meeting;
+      }
+      const snapshot = {
+        success: true,
+        managed: false,
+        accountId: databaseManager.activeAccountId,
+        authGeneration: generation + 1,
+      };
+      if (outcome.startsWith("revoked")) {
+        const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+        policy.transcription.allowedModes = ["providers"];
+        fakeThis.effectivePolicyManager.updateWorkspace({ ...snapshot, managed: true, policy });
+      }
+      if (outcome !== "revoked") fakeThis.effectivePolicyManager.updateWorkspace(snapshot);
+    }
+    refreshed.resolve();
+    const result = await pending;
+    if (outcome === "allowed") assert.equal(result.text, "completed dictation");
+    else assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
+    assert.deepEqual(
+      stops,
+      ["signed out", "account switched"].includes(outcome) ? ["accountChanged"] : []
+    );
+    if (outcome === "allowed" || outcome === "account switched")
+      assert.equal(fakeThis._meetingMicStreaming, meeting);
+  });
+}
+
 // Runs an enterprise meeting under `workspace-a`, owned by main, and reports every stop.
 async function enterpriseMeeting(t, generation) {
   const originalStop = fakeThis._stopMeetingForPolicy;
