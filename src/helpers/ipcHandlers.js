@@ -7692,7 +7692,7 @@ class IPCHandlers {
       };
     };
 
-    ipcMain.handle(
+    handleRemoteProduct(
       "managed-transcribe",
       serializeIpcError(
         async (event, { audioBuffer, fileName, mimeType, language, prompt, managed }) => {
@@ -7704,6 +7704,7 @@ class IPCHandlers {
               fileName: fileName || "audio.webm",
               contentType: mimeType || "audio/webm",
               prompt,
+              signal: trackTranscriptionRoute({ transport: "managed", provider: managed.provider }),
             }
           );
         }

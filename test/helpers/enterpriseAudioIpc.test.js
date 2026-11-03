@@ -2,6 +2,12 @@ const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const https = require("node:https");
+const { once } = require("node:events");
+const { execFileSync, spawnSync } = require("node:child_process");
 
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
@@ -12,6 +18,12 @@ const handlers = new Map();
 const fetches = [];
 let identityOptions;
 let configSnapshot;
+const unmanagedWorkspace = ({ accountId, expectedAuthGeneration }) => ({
+  success: true,
+  managed: false,
+  accountId,
+  authGeneration: expectedAuthGeneration,
+});
 
 const electronStub = {
   app: {
@@ -90,7 +102,8 @@ Module._load = function loadWithMocks(request, parent, isMain) {
       return {
         ...real(),
         createWorkspacePolicyManager: () => ({
-          getPolicy: async () => ({ success: true, managed: false }),
+          getPolicy: unmanagedWorkspace,
+          getCachedPolicy: unmanagedWorkspace,
         }),
       };
     if (request === "./windowBroadcast") return { broadcastToWindows: () => {} };
@@ -110,6 +123,7 @@ function anything() {
 }
 
 let fakeThis;
+let audioCredentials;
 let stops = 0;
 test.before(() => {
   delete require.cache[handlersModulePath];
@@ -118,6 +132,7 @@ test.before(() => {
   const target = {};
   fakeThis = new Proxy(target, { get: (t, prop) => (prop in t ? t[prop] : anything()) });
   Ctor.prototype.setupHandlers.call(withDevicePolicy(fakeThis));
+  audioCredentials = fakeThis.enterpriseAudioCredentials;
   fakeThis.effectivePolicyManager.updateWorkspace({
     success: true,
     managed: false,
@@ -126,6 +141,7 @@ test.before(() => {
   });
   target._stopMeetingForPolicy = () => stops++;
   target._audioFeaturePolicy = {
+    update: () => {},
     run: (_event, _purpose, fn) => fn(new AbortController().signal),
     failure: () => null,
     activeFailure: () => null,
@@ -239,3 +255,163 @@ test("token exchanges whose network Electron can express stay on Electron's stac
     ["https://login.microsoftonline.com/tenant/oauth2/v2.0/token"]
   );
 });
+
+test(
+  "managed dictation uploads follow native transcription policy",
+  {
+    skip: spawnSync("openssl", ["version"], { stdio: "ignore" }).status !== 0,
+    timeout: 15_000,
+  },
+  async (t) => {
+    const { normalizeDeviceValues } = require("../../src/helpers/managedDevicePolicy");
+    const Ctor = require(handlersModulePath);
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "managed-upload-tls-"));
+    t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+    const key = path.join(directory, "key.pem");
+    const certificate = path.join(directory, "certificate.pem");
+    execFileSync(
+      "openssl",
+      [
+        "req",
+        "-x509",
+        "-newkey",
+        "rsa:2048",
+        "-nodes",
+        "-days",
+        "1",
+        "-subj",
+        "/CN=localhost",
+        "-addext",
+        "subjectAltName=IP:127.0.0.1",
+        "-keyout",
+        key,
+        "-out",
+        certificate,
+      ],
+      { stdio: "ignore" }
+    );
+    const cert = fs.readFileSync(certificate, "utf8");
+    for (const name of [
+      "_stopRemoteProductWork",
+      "_retireDisallowedProductWork",
+      "_startRemoteProductWork",
+    ])
+      fakeThis[name] = Ctor.prototype[name].bind(fakeThis);
+    fakeThis._remoteCalendarsReady = false;
+    fakeThis.enterpriseAudioCredentials = audioCredentials;
+    audioCredentials.read = async () => "synthetic-test-key";
+    const transportRequest = fakeThis.enterpriseAudioTransport.request;
+    for (const change of ["local-only", "provider-removed", "allowed", "llm-only"]) {
+      await t.test(change, async (t) => {
+        let received = 0;
+        let incoming, requestSignal, closedBeforeEnd;
+        let { promise: started, resolve: firstData } = Promise.withResolvers();
+        const { promise: closed, resolve: requestClosed } = Promise.withResolvers();
+        const server = https.createServer({ key: fs.readFileSync(key), cert }, (req, res) => {
+          incoming = req;
+          req.on("data", (chunk) => {
+            received += chunk.length;
+            if (firstData) {
+              req.pause();
+              firstData();
+              firstData = null;
+            }
+          });
+          req.on("end", () => res.end(JSON.stringify({ text: "synthetic transcript" })));
+          req.on("close", () => {
+            closedBeforeEnd = !req.complete;
+            requestClosed();
+          });
+          req.on("error", () => {});
+        });
+        t.after(() => {
+          server.closeAllConnections();
+          return new Promise((resolve) => server.close(resolve));
+        });
+        server.listen(0, "127.0.0.1");
+        await once(server, "listening");
+        let device = normalizeDeviceValues({ RequireSignIn: true });
+        fakeThis.managedDevicePolicy.getSnapshot = () => device;
+        fakeThis.effectivePolicyManager.getCurrent();
+        fakeThis._enterpriseAudioScopeRevision = 0;
+        fakeThis._enterpriseAudioBinding = {
+          accountId: "account-a",
+          workspaceId: "workspace-a",
+          authGeneration: 1,
+          generation: 1,
+        };
+        fakeThis.enterpriseIdentityManager.resolveProvider = async () => ({
+          managed: true,
+          provider: "openai-compatible",
+          generation: 1,
+          version: 1,
+          identity: { accountId: "account-a", workspaceId: "workspace-a" },
+          certificateBundles: [{ id: "test-ca", pem: cert }],
+          config: {
+            generation: 1,
+            batch: {
+              endpoint: `https://127.0.0.1:${server.address().port}/transcribe`,
+              defaultDeployment: "speech",
+              maxUploadBytes: 32 * 1024 * 1024,
+              authentication: { type: "bearer", credentialSlot: "synthetic-key" },
+            },
+            network: { caBundleId: "test-ca", proxy: { mode: "direct" }, httpTimeoutMs: 10_000 },
+          },
+        });
+        fakeThis.enterpriseAudioTransport.request = (url, init) => {
+          requestSignal = init.signal;
+          return transportRequest(url, init);
+        };
+        const audioBuffer = Buffer.alloc(16 * 1024 * 1024, 97);
+        const pending = handlers.get("managed-transcribe")(event, {
+          audioBuffer,
+          fileName: "audio.wav",
+          mimeType: "audio/wav",
+          managed: {
+            provider: "openai-compatible",
+            context: {
+              accountId: "account-a",
+              workspaceId: "workspace-a",
+              authGeneration: 1,
+              generation: 1,
+              provider: "openai-compatible",
+              providerVersion: 1,
+              inferenceScope: "transcription",
+            },
+          },
+        });
+        await started;
+        const bytesBefore = received;
+        if (change === "local-only") device = normalizeDeviceValues({ RequireSignIn: false });
+        if (change === "provider-removed")
+          device.policy.transcription.allowedEnterpriseProviders = [];
+        if (change === "llm-only") device.policy.llm.allowedEnterpriseProviders = [];
+        fakeThis.effectivePolicyManager.getCurrent();
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        incoming.resume();
+        const [result] = await Promise.all([pending, closed]);
+        t.diagnostic(
+          JSON.stringify({
+            change,
+            bytesBefore,
+            received,
+            aborted: requestSignal.aborted,
+            closedBeforeEnd,
+            result,
+          })
+        );
+        const revoked = ["local-only", "provider-removed"].includes(change);
+        assert.equal(requestSignal.aborted, revoked);
+        assert.equal(closedBeforeEnd, revoked);
+        if (revoked) {
+          assert.ok(received < audioBuffer.length, "connection closes before the full upload");
+          assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
+          assert.equal(result.text, undefined);
+        } else {
+          assert.ok(received > audioBuffer.length, "the complete multipart upload arrives");
+          assert.deepEqual(result, { text: "synthetic transcript" });
+        }
+      });
+    }
+  }
+);
