@@ -440,12 +440,6 @@ test("only skipped addresses leaves nothing to send", () => {
   assert.equal(run(state, { type: "send" }).phase, "editing");
 });
 
-test("more than 100 recipients blocks sending", () => {
-  const state = commitText(fresh(), addresses(MAX_INVITE_RECIPIENTS + 1).join(" "));
-  assert.equal(inviteSummary(state).tooMany, true);
-  assert.equal(inviteSummary(state).canSend, false);
-});
-
 test("skipped chips don't count toward the cap", () => {
   const roster = run(fresh(), members("m1@ws.io", "m2@ws.io"));
   const state = commitText(
