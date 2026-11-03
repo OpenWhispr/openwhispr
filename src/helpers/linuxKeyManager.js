@@ -114,7 +114,8 @@ class LinuxKeyManager extends EventEmitter {
       this.reportError(error);
     });
 
-    child.on("exit", (code, signal) => {
+    // exit can precede the final KEY_UP on stdout; close waits for the pipe to drain.
+    child.on("close", (code, signal) => {
       const trailingLine = lineBuffer.trim();
       if (trailingLine && this.listeners.get(key) === entry) {
         this.handleOutputLine(trailingLine, key);

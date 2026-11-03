@@ -60,6 +60,7 @@ for (const platform of ["linux", "win32"]) {
       old.stdout.emit("data", "\nREADY\nNO_PERMISSION\nKEY_UP\nKEY_DOWN");
       old.emit("error", new Error("late error"));
       old.emit("exit", 1, null);
+      old.emit("close", 1, null);
       assert.deepEqual(events, [], "retired listeners cannot dispatch or report failures");
       assert.equal(manager.listeners.get(key), replacement, "the replacement stays tracked");
 
@@ -81,7 +82,47 @@ for (const platform of ["linux", "win32"]) {
     const { manager, children, events } = fixture(platform);
     children[0].stdout.emit("data", "KEY_UP");
     children[0].emit("exit", null, "SIGSEGV");
+    assert.deepEqual(events, [], "wait for stdout to finish before flushing its last line");
+    children[0].emit("close", null, "SIGSEGV");
     assert.deepEqual(events, ["key-up", "error"]);
+    assert.equal(manager.listeners.size, 0);
+  });
+
+  test(`${platform} delivers a final release split across process exit`, () => {
+    const { manager, children, events } = fixture(platform);
+    children[0].stdout.emit("data", "KEY_DOWN\nKEY_");
+    children[0].emit("exit", 0, null);
+    children[0].stdout.emit("data", "UP\n");
+    children[0].emit("close", 0, null);
+
+    assert.deepEqual(events, ["key-down", "key-up"]);
+    assert.equal(manager.listeners.size, 0);
+  });
+
+  test(`${platform} ignores a retired listener's close after replacing it during drain`, () => {
+    const { manager, children, events, key } = fixture(platform);
+    const old = children[0];
+    old.stdout.emit("data", "KEY_");
+    old.emit("exit", 1, null);
+    manager.stop();
+    manager.setKeys([key]);
+    const replacement = manager.listeners.get(key);
+
+    old.stdout.emit("data", "UP\nKEY_DOWN");
+    old.emit("close", 1, null);
+    assert.deepEqual(events, []);
+    assert.equal(manager.listeners.get(key), replacement);
+
+    children[1].stdout.emit("data", "KEY_DOWN\nKEY_UP\n");
+    assert.deepEqual(events, ["key-down", "key-up"]);
+  });
+
+  test(`${platform} reports a current-listener error only once when close follows`, () => {
+    const { manager, children, events } = fixture(platform);
+    children[0].emit("error", new Error("spawn failed"));
+    children[0].emit("close", -2, null);
+
+    assert.deepEqual(events, ["error"]);
     assert.equal(manager.listeners.size, 0);
   });
 }
