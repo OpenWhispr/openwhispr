@@ -65,7 +65,6 @@ async function renderChatView(t, { noteId, note, user = null, api = {} }) {
   let currentNote = note;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
-    delete globalThis.__noteId;
     delete globalThis.__user;
     delete globalThis.__chatInput;
     delete globalThis.__chatTurnOpenNote;
@@ -74,7 +73,6 @@ async function renderChatView(t, { noteId, note, user = null, api = {} }) {
     delete globalThis.__conversationList;
     delete globalThis.__sentContexts;
   });
-  globalThis.__noteId = noteId;
   globalThis.__user = user;
   const sent = [];
   globalThis.__sentContexts = sent;

@@ -10,8 +10,8 @@ const {
 const { installInteractiveDom } = require("../lib/interactiveDom");
 const { SKILLS_MOCKS, ariaLabel, click, findAll, settle } = require("../lib/skillsHarness");
 
-// ChatView with its real message sender. The streaming hook records each send and its
-// options; the composer renders its leading row, so the chip is real and clickable.
+// The engine records each send and its options; the composer renders its leading row,
+// so the chip is real and clickable.
 const MOCKS = {
   "react-i18next": SKILLS_MOCKS["react-i18next"],
   ...SIGNED_OUT_AUTH_MOCK,
@@ -68,12 +68,10 @@ async function renderChatView(t, skillRequest = null) {
     if (root) await React.act(async () => root.unmount());
     for (const key of [
       "__sends",
-      "__newChats",
       "__chatInput",
       "__conversationList",
       "__chatStreamingOptions",
       "__skillChatActions",
-      "__agentState",
     ]) {
       delete globalThis[key];
     }
@@ -90,7 +88,6 @@ async function renderChatView(t, skillRequest = null) {
   });
   const container = installInteractiveDom(t);
   globalThis.__sends = [];
-  globalThis.__newChats = 0;
   const { createRoot } = require("react-dom/client");
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-chat-view-skills-test-",
@@ -323,8 +320,7 @@ test("a request is handled once, however often the chat re-renders", async (t) =
   assert.equal(chip(), undefined);
 });
 
-// React's development build mounts, unmounts and remounts once; the real persistence ends a
-// session on unmount, which would drop a send started during the first mount.
+// React's development build mounts, unmounts and remounts once.
 test("Draft with assistant sends once under React's development double mount", async (t) => {
   let root = null;
   const created = [];
