@@ -84,6 +84,7 @@ function setup({ snapshot = managed("user_choice"), getPolicy, download, check }
   return {
     manager,
     autoUpdater,
+    nativeUpdater,
     events,
     token,
     setPolicy(value) {
@@ -248,6 +249,22 @@ test("managed mode reports an earlier macOS staged update without offering insta
   assert.equal(autoUpdater.installs, 0);
 });
 
+test("late native staging broadcasts status even while IT policy blocks update events", async () => {
+  const { manager, autoUpdater, nativeUpdater, events } = setup({
+    snapshot: managed("it_managed"),
+  });
+  await manager.refreshPolicy();
+  await flush();
+  events.length = 0;
+  autoUpdater.squirrelDownloadedUpdate = true;
+  nativeUpdater.emit("update-downloaded");
+  await flush();
+  assert.deepEqual(events, ["update-status-changed"]);
+  assert.equal((await manager.getUpdateStatus()).stagedUpdate, true);
+  manager.cleanup();
+  assert.equal(nativeUpdater.listenerCount("update-downloaded"), 0);
+});
+
 for (const platform of ["win32", "linux"]) {
   test(`${platform} supported installer obeys IT and always-on policy`, async () => {
     Object.defineProperty(process, "platform", { value: platform, configurable: true });
@@ -286,6 +303,14 @@ test("Linux package-manager installs remain unsupported even under always-on", a
   assert.equal((await manager.getUpdateStatus()).isSupported, false);
   assert.equal((await manager.getUpdateStatus()).effectiveAutoUpdatesEnabled, false);
   assert.equal(autoUpdater.checks + autoUpdater.downloads + autoUpdater.installs, 0);
+});
+
+test("manual checks explain IT policy on Linux package-manager installations", async () => {
+  Object.defineProperty(process, "platform", { value: "linux", configurable: true });
+  delete process.env.APPIMAGE;
+  const { manager, autoUpdater } = setup({ snapshot: managed("it_managed") });
+  assert.equal((await manager.checkForUpdates()).code, "UPDATES_MANAGED_BY_ORG");
+  assert.equal(autoUpdater.checks, 0);
 });
 
 test("cleanup cancels a queued startup check", async (t) => {

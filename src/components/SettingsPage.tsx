@@ -4770,7 +4770,8 @@ EOF`,
                       const result = await checkForUpdates();
                       if (
                         result?.code === "UPDATES_MANAGED_BY_ORG" ||
-                        result?.code === "UPDATE_POLICY_UNAVAILABLE"
+                        result?.code === "UPDATE_POLICY_UNAVAILABLE" ||
+                        result?.code === "UPDATE_POLICY_CHANGED"
                       ) {
                         toast({
                           title: t(

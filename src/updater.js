@@ -13,6 +13,7 @@ class UpdateManager {
     this.isDownloading = false;
     this.isQuittingForUpdate = false;
     this.handleBeforeQuitForUpdate = null;
+    this.handleNativeUpdateDownloaded = null;
     this.eventListeners = [];
     this.updateCheckInterval = null;
     this.windowManager = null;
@@ -159,7 +160,12 @@ class UpdateManager {
         this.windowManager.hotkeyManager.unregisterAll();
       }
     };
-    require("electron").autoUpdater.on("before-quit-for-update", this.handleBeforeQuitForUpdate);
+    const nativeUpdater = require("electron").autoUpdater;
+    nativeUpdater.on("before-quit-for-update", this.handleBeforeQuitForUpdate);
+    if (process.platform === "darwin") {
+      this.handleNativeUpdateDownloaded = () => this._notifyStatus();
+      nativeUpdater.on("update-downloaded", this.handleNativeUpdateDownloaded);
+    }
   }
 
   notifyRenderers(channel, data) {
@@ -175,6 +181,9 @@ class UpdateManager {
 
   async checkForUpdates() {
     try {
+      if (this.getPolicy) await this.refreshPolicy();
+      const failure = this._policyFailure();
+      if (failure) return { ...failure, updateAvailable: false };
       if (process.env.NODE_ENV === "development") {
         return {
           updateAvailable: false,
@@ -189,9 +198,6 @@ class UpdateManager {
         };
       }
 
-      if (this.getPolicy) await this.refreshPolicy();
-      const failure = this._policyFailure();
-      if (failure) return { ...failure, updateAvailable: false };
       if (this.checkPromise) return this.checkPromise;
 
       const epoch = this.policyEpoch;
@@ -552,6 +558,13 @@ class UpdateManager {
         this.handleBeforeQuitForUpdate
       );
       this.handleBeforeQuitForUpdate = null;
+    }
+    if (this.handleNativeUpdateDownloaded) {
+      require("electron").autoUpdater.removeListener(
+        "update-downloaded",
+        this.handleNativeUpdateDownloaded
+      );
+      this.handleNativeUpdateDownloaded = null;
     }
   }
 }
