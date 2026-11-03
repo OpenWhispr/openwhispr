@@ -1127,6 +1127,48 @@ test("valid local-only policy refreshes retain permitted local work", () => {
   target._productRequests.delete(remote);
 });
 
+for (const [provider, property] of [
+  ["AssemblyAI", "assemblyAiStreaming"],
+  ["Deepgram", "deepgramStreaming"],
+  ["Corti", "cortiStreaming"],
+]) {
+  for (const restriction of ["mode", "local-only"]) {
+    test(`policy retirement closes real warm ${provider} clients under ${restriction}`, (t) => {
+      const Streaming = require(`../../src/helpers/${property}`);
+      const streaming = new Streaming();
+      const close = t.mock.fn();
+      streaming.warmConnection = { readyState: 1, close, ping() {}, send() {} };
+      streaming.warmConnectionReady = true;
+      streaming.warmConnectionOptions = { mode: "byok" };
+      streaming.cacheToken?.("test-token");
+      streaming.startKeepAlive();
+      streaming.scheduleRewarm?.();
+      streaming.scheduleProactiveRefresh?.();
+      t.after(() => {
+        if (streaming.cleanupAll) streaming.cleanupAll();
+        else streaming.cleanupWarmConnection();
+      });
+      target[property] = streaming;
+      target._remoteStreamPolicies.set(property, {
+        channel: `${provider.toLowerCase()}-streaming-warmup`,
+        args: [{ mode: "byok" }],
+      });
+      const policy = defaultDevicePolicy();
+      policy.transcription.allowedModes = ["local"];
+      setDeviceValues({
+        Policy: JSON.stringify(policy),
+        ...(restriction === "local-only" ? { RequireSignIn: false } : {}),
+      });
+      assert.equal(target[property], null);
+      assert.equal(close.mock.callCount(), 1);
+      assert.equal(streaming.warmConnection, null);
+      assert.equal(streaming.keepAliveInterval, null);
+      assert.equal(streaming.rewarmTimer ?? null, null);
+      assert.equal(streaming.proactiveRefreshTimer ?? null, null);
+    });
+  }
+}
+
 test("provider connection revocation aborts its probe and prevents fallback transmission", async (t) => {
   const requests = [];
   const probe = async (url, init) => {

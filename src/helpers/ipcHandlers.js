@@ -1709,6 +1709,8 @@ class IPCHandlers {
       "_meetingMicStreaming",
       "_meetingSystemStreaming",
     ]) {
+      if (this[key]?.cleanupAll) this[key].cleanupAll();
+      else this[key]?.cleanupWarmConnection?.();
       void this[key]?.disconnect().catch(() => {});
       this[key] = null;
     }
@@ -1721,6 +1723,8 @@ class IPCHandlers {
     for (const [property, operation] of this._remoteStreamPolicies) {
       if (productOperationAllowed(snapshot, app.getVersion(), operation.channel, operation.args))
         continue;
+      if (this[property]?.cleanupAll) this[property].cleanupAll();
+      else this[property]?.cleanupWarmConnection?.();
       void this[property]?.disconnect().catch(() => {});
       this[property] = null;
       this._remoteStreamPolicies.delete(property);
@@ -5699,12 +5703,13 @@ class IPCHandlers {
         runBedrockRequest,
         validateEnterpriseEndpoint,
       } = require("./enterpriseProviderErrors");
+      const signal = this._productRequestContext.getStore().signal;
       let runtime;
       try {
         const { generateText } = require("ai");
         const { getEnterpriseAIModel } = require("./enterpriseAiProviders");
 
-        const resolveModel = (abortSignal) =>
+        const resolveModel = (abortSignal = signal) =>
           runAbortableOperation(async () => {
             runtime = await resolveEnterpriseRuntime(
               event,
@@ -5723,23 +5728,30 @@ class IPCHandlers {
           }, abortSignal);
 
         if (provider === "bedrock") {
-          await runBedrockRequest(async () => {
-            const abortSignal = AbortSignal.timeout(config?.timeoutMs || 30_000);
-            const model = await resolveModel(abortSignal);
-            return generateText({
-              model,
-              prompt: "Say hello in one word.",
-              maxOutputTokens: CONNECTION_TEST_MAX_OUTPUT_TOKENS,
-              abortSignal,
-              maxRetries: 0,
-            });
-          });
+          await runBedrockRequest(
+            async () => {
+              const abortSignal = AbortSignal.any([
+                signal,
+                AbortSignal.timeout(config?.timeoutMs || 30_000),
+              ]);
+              const model = await resolveModel(abortSignal);
+              return generateText({
+                model,
+                prompt: "Say hello in one word.",
+                maxOutputTokens: CONNECTION_TEST_MAX_OUTPUT_TOKENS,
+                abortSignal,
+                maxRetries: 0,
+              });
+            },
+            { signal }
+          );
         } else {
           const model = await resolveModel();
           await generateText({
             model,
             prompt: "Say hello in one word.",
             maxOutputTokens: CONNECTION_TEST_MAX_OUTPUT_TOKENS,
+            abortSignal: signal,
           });
         }
 

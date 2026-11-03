@@ -77,8 +77,6 @@ function localOnlyPolicy(policy) {
     result[scope].allowedModes = result[scope].allowedModes.filter((mode) => mode === "local");
     result[scope].allowedByokProviders = [];
     result[scope].allowedEnterpriseProviders = [];
-    if (!result[scope].allowedModes.length)
-      throw new Error("Local-only policy has no permitted local mode");
   }
   result.features.webSearchEnabled = false;
   result.features.connectorsEnabled = false;

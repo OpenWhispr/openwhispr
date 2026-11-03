@@ -2,6 +2,7 @@ const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
+const { deferred } = require("./harness/deferred");
 
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
@@ -198,6 +199,69 @@ test.beforeEach(() => {
   generateCalls.length = 0;
   resolveManagedRuntime = async () => ({ managed: false });
 });
+
+for (const [provider, stage] of [
+  ["bedrock", "runtime"],
+  ["azure", "runtime"],
+  ["bedrock", "credentials"],
+  ["bedrock", "generation"],
+  ["azure", "generation"],
+]) {
+  test(`enterprise probe policy revocation during ${provider} ${stage} prevents transmission and retries`, async (t) => {
+    const started = deferred();
+    const finish = deferred();
+    const manager = handlerContext.effectivePolicyManager;
+    const refresh = handlerContext.refreshEffectivePolicy;
+    const generate = generateBehavior;
+    let snapshot = { success: true, managed: false };
+    handlerContext.effectivePolicyManager = { getCurrent: () => snapshot };
+    handlerContext.refreshEffectivePolicy = async () => snapshot;
+    t.after(() => {
+      finish.resolve();
+      handlerContext.effectivePolicyManager = manager;
+      handlerContext.refreshEffectivePolicy = refresh;
+      generateBehavior = generate;
+    });
+    t.mock.method(Math, "random", () => 0);
+    const runtime = managedBedrockRuntime({
+      provider,
+      ...(provider === "azure" ? { config: { endpoint: "https://example.openai.azure.com" } } : {}),
+    });
+    const credentials = runtime.credentialProvider;
+    if (stage === "credentials") {
+      runtime.credentialProvider = async () => {
+        started.resolve();
+        await finish.promise;
+        return credentials();
+      };
+    }
+    resolveManagedRuntime = async () => {
+      if (stage === "runtime") {
+        started.resolve();
+        await finish.promise;
+      }
+      return runtime;
+    };
+    generateBehavior = async () => {
+      started.resolve();
+      await finish.promise;
+      throw retryable503();
+    };
+    const pending = handlers.get("test-enterprise-connection")({ sender: sender(99) }, provider, {
+      model: "test-model",
+      managedContext: { ...managedContext(), provider },
+    });
+    await started.promise;
+    const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+    policy.llm.allowedModes = ["local"];
+    snapshot = { success: true, managed: true, policy, localOnly: true };
+    require(handlersModulePath).prototype._stopRemoteProductWork.call(handlerContext);
+    finish.resolve();
+    assert.equal((await pending).code, "DEVICE_POLICY_BLOCKED");
+    assert.equal(generateCalls.length, stage === "generation" ? 1 : 0);
+    if (stage === "generation") assert.equal(generateCalls[0].abortSignal?.aborted, true);
+  });
+}
 
 test("Check connection asks for at least 16 output tokens, the Azure Responses API minimum", async () => {
   // Live 2026-09-07: Azure rejected the probe with "Invalid 'max_output_tokens':

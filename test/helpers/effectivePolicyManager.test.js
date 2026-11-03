@@ -53,6 +53,25 @@ test("an empty LLM scope leaves permitted transcription and update policy availa
   assert.equal(snapshot.policy.updates.mode, "always_on");
 });
 
+test("local-only filtering preserves independent transcription and updates", () => {
+  const policy = defaultDevicePolicy();
+  policy.transcription.allowedModes = ["local"];
+  policy.llm.allowedModes = ["providers"];
+  policy.llm.allowedByokProviders = ["openai"];
+  policy.updates.mode = "always_on";
+  const device = normalizeDeviceValues({
+    Policy: JSON.stringify(policy),
+    RequireSignIn: false,
+  });
+  const snapshot = resolveEffectivePolicy(device, null, guest);
+  assert.equal(snapshot.success, true);
+  assert.deepEqual(snapshot.policy.llm.allowedModes, []);
+  assert.equal(productOperationAllowed(snapshot, "1.11.1", "transcribe-local-whisper"), true);
+  assert.equal(productOperationAllowed(snapshot, "1.11.1", "process-local-reasoning"), false);
+  assert.equal(productOperationAllowed(snapshot, "1.11.1", "cloud-reason"), false);
+  assert.equal(snapshot.policy.updates.mode, "always_on");
+});
+
 test("device-only guests are managed; required sign-in and invalid policies deny actions", () => {
   const valid = normalizeDeviceValues({
     Policy: JSON.stringify(defaultDevicePolicy()),
