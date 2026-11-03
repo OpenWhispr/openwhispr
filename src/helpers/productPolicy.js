@@ -73,9 +73,12 @@ function productOperationAllowed(snapshot, appVersion, channel, args = []) {
   if (["cloud-transcribe", "transcribe-audio-file-cloud"].includes(channel))
     return transcription({ mode: "openwhispr", provider: "" });
   if (
-    ["transcribe-local-whisper", "transcribe-local-parakeet", "transcribe-audio-file"].includes(
-      channel
-    )
+    [
+      "transcribe-local-whisper",
+      "transcribe-local-parakeet",
+      "transcribe-audio-file",
+      "start-dictation-preview",
+    ].includes(channel)
   )
     return transcription({ mode: "local", provider: "" });
   const proxy = /^proxy-(xai|mistral|corti|tinfoil|gemini)-transcription$/.exec(channel);

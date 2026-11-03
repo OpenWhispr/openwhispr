@@ -2,6 +2,7 @@ const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
+const { defaultDevicePolicy } = require("../../src/helpers/managedDevicePolicy");
 
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
@@ -84,7 +85,8 @@ function scenario(t, { decode, stream, online = false } = {}) {
   const target = {
     parakeetManager: {
       supportsOnlineStreaming: () => online,
-      createOnlineStream: async () => {
+      createOnlineStream: async (_model, options) => {
+        calls.streamOptions = options;
         if (stream instanceof Error) throw stream;
         return stream;
       },
@@ -110,6 +112,9 @@ function scenario(t, { decode, stream, online = false } = {}) {
       })
     )
   );
+  target._stopRemoteProductWork = IPCHandlers.prototype._stopRemoteProductWork.bind(target);
+  target._retireDisallowedProductWork =
+    IPCHandlers.prototype._retireDisallowedProductWork.bind(target);
   const invoke = (channel, ...args) => handlers.get(channel)({}, ...args);
   const start = (model = "orukeet-v0.1.0") =>
     invoke("start-dictation-preview", {
@@ -129,6 +134,15 @@ function scenario(t, { decode, stream, online = false } = {}) {
     invoke,
     start,
     audio,
+    setPolicy(change) {
+      const policy = defaultDevicePolicy();
+      policy.transcription.allowedModes = change === "local revoked" ? ["providers"] : ["local"];
+      target.managedDevicePolicy.getSnapshot = () =>
+        change === "invalid"
+          ? { status: "invalid", managed: true, policy: null, code: "DEVICE_POLICY_INVALID" }
+          : { status: "valid", managed: true, policy, localOnly: change === "allowed update" };
+      target.effectivePolicyManager.getCurrent();
+    },
     tick: () => Promise.all([...timers.values()].map((callback) => callback())),
   };
 }
@@ -154,19 +168,29 @@ test("offline stop skips pending preview audio while final audio still reaches t
   assert.strictEqual(s.calls.decode[0].audio, finalAudio);
 });
 
-test("regular offline previews still decode, but an in-flight result cannot append after stop", async (t) => {
-  const pending = deferred();
-  const s = scenario(t, { decode: () => pending.promise });
-  await s.start();
-  s.audio();
-  const ticking = s.tick();
-  assert.equal(s.calls.decode.length, 1);
-  await s.invoke("stop-dictation-preview");
-  pending.resolve({ success: true, text: "late preview" });
-  await ticking;
-  assert.deepEqual(s.calls.appended, []);
-  assert.equal(s.calls.held.length, 1);
-});
+for (const change of ["stop", "invalid", "local revoked"]) {
+  test(`offline preview discards late output after ${change}`, async (t) => {
+    const pending = deferred();
+    const s = scenario(t, { decode: () => pending.promise });
+    await s.start();
+    s.audio();
+    const ticking = s.tick();
+    assert.equal(s.calls.decode.length, 1);
+    if (change === "stop") await s.invoke("stop-dictation-preview");
+    else s.setPolicy(change);
+    pending.resolve({ success: true, text: "late preview" });
+    await ticking;
+    s.audio();
+    await s.tick();
+    assert.equal(s.calls.decode.length, 1);
+    assert.deepEqual(s.calls.appended, []);
+    if (change === "stop") assert.equal(s.calls.held.length, 1);
+    else {
+      assert.equal(s.calls.hidden, 1);
+      assert.equal((await s.start()).code, "DEVICE_POLICY_BLOCKED");
+    }
+  });
+}
 
 test("a cancelled preview cannot append or release the next session's in-flight guard", async (t) => {
   const old = deferred();
@@ -195,31 +219,60 @@ test("a cancelled preview cannot append or release the next session's in-flight 
   );
 });
 
-test("online stop still flushes the stream and commits a complete result", async (t) => {
-  const sent = [];
-  let finishes = 0;
-  const s = scenario(t, {
-    online: true,
-    stream: {
-      sendPcm16: (pcm) => sent.push(pcm),
-      finish: async () => {
-        finishes++;
-        return { text: "complete stream" };
+for (const change of ["stop", "invalid", "local revoked", "allowed update"]) {
+  test(`online preview handles ${change}`, async (t) => {
+    const sent = [];
+    let finishes = 0;
+    let aborts = 0;
+    const s = scenario(t, {
+      online: true,
+      stream: {
+        sendPcm16: (pcm) => sent.push(pcm),
+        finish: async () => {
+          finishes++;
+          return { text: "complete stream" };
+        },
+        abort() {
+          aborts++;
+        },
       },
-      abort() {},
-    },
+    });
+    await s.start("online-model");
+    s.audio();
+    const blocked = change === "invalid" || change === "local revoked";
+    if (change !== "stop") {
+      s.setPolicy(change);
+      s.audio();
+      s.calls.streamOptions.onUpdate("later preview");
+    }
+    const result = await s.invoke("stop-dictation-preview", { flushed: true });
+    assert.equal(result.streamed, !blocked);
+    assert.equal(result.text, blocked ? "" : "complete stream");
+    assert.equal(finishes, blocked ? 0 : 1);
+    assert.equal(aborts, blocked ? 1 : 0);
+    assert.equal(sent.length, change === "allowed update" ? 2 : 1);
+    assert.equal(s.calls.decode.length, 0);
+    assert.deepEqual(
+      s.calls.shown,
+      blocked
+        ? [""]
+        : change === "stop"
+          ? ["", "complete stream"]
+          : ["", "later preview", "complete stream"]
+    );
+    if (blocked) {
+      assert.equal(s.calls.hidden, 1);
+      assert.equal((await s.start("online-model")).code, "DEVICE_POLICY_BLOCKED");
+    }
   });
-  await s.start("online-model");
-  s.audio();
-  assert.deepEqual(await s.invoke("stop-dictation-preview", { flushed: true }), {
-    success: true,
-    streamed: true,
-    text: "complete stream",
-  });
-  assert.equal(finishes, 1);
-  assert.equal(sent.length, 1);
-  assert.equal(s.calls.decode.length, 0);
-  assert.deepEqual(s.calls.shown, ["", "complete stream"]);
+}
+
+test("local-mode revocation preserves a remote dictation preview", async (t) => {
+  const s = scenario(t);
+  await s.invoke("update-dictation-preview", "remote partial");
+  s.setPolicy("local revoked");
+  assert.deepEqual(s.calls.shown, ["remote partial"]);
+  assert.equal(s.calls.hidden, 0);
 });
 
 for (const [label, flushed, result] of [

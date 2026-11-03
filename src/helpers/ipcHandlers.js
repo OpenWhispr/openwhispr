@@ -1683,6 +1683,8 @@ class IPCHandlers {
     for (const controller of this.activeUrlDownloads?.values() ?? []) controller.abort();
     this._remoteCalendarsStarted = false;
     const snapshot = this.effectivePolicyManager.getCurrent();
+    if (!productOperationAllowed(snapshot, app.getVersion(), "start-dictation-preview"))
+      this._stopLocalDictationPreview?.();
     for (const [controller, operation] of this._productRequests ?? []) {
       if (
         operation.remote ||
@@ -1720,6 +1722,8 @@ class IPCHandlers {
   }
 
   _retireDisallowedProductWork(snapshot) {
+    if (!productOperationAllowed(snapshot, app.getVersion(), "start-dictation-preview"))
+      this._stopLocalDictationPreview?.();
     for (const [property, operation] of this._remoteStreamPolicies) {
       if (productOperationAllowed(snapshot, app.getVersion(), operation.channel, operation.args))
         continue;
@@ -9999,6 +10003,12 @@ class IPCHandlers {
       dictationPreviewDisplay = true;
     };
 
+    this._stopLocalDictationPreview = () => {
+      if (!dictationPreviewMode) return;
+      resetDictationPreviewState();
+      this.windowManager.hideTranscriptionPreview();
+    };
+
     const startDictationPreviewTimer = () => {
       if (!dictationPreviewTimer) {
         dictationPreviewTimer = setInterval(() => transcribeDictationPreviewChunk(), 1500);
@@ -11216,7 +11226,7 @@ class IPCHandlers {
       return { success: true, ...result, text: result.text || "" };
     });
 
-    ipcMain.handle(
+    handleProduct(
       "start-dictation-preview",
       async (_event, { provider, model, language, display = true }) => {
         resetDictationPreviewState();
