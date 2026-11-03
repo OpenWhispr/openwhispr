@@ -1,4 +1,4 @@
-import { pickDefaultModelId } from "../models/providerDefaultModel";
+import { pickDefaultModelId } from "../models/providerDefaultModel.ts";
 import type { InferenceMode, ShareVisibility } from "../types/electron";
 import type { OrgPolicy, PolicyScope } from "../types/policy";
 import type { SettingsState } from "./settingsStore";

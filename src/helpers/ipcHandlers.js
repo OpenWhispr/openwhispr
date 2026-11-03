@@ -12105,6 +12105,17 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("open-logs-folder", async () => {
+      try {
+        const logsDir = path.join(app.getPath("userData"), "logs");
+        await shell.openPath(logsDir);
+        return { success: true };
+      } catch (error) {
+        debugLogger.error("Failed to open logs folder:", error);
+        return { success: false, error: error.message };
+      }
+    });
+
     ipcMain.handle(
       "get-model-registry-updates",
       () => process.env.OPENWHISPR_MODEL_REGISTRY_MODE !== "bundled"
@@ -12116,17 +12127,6 @@ class IPCHandlers {
         return { success: true };
       } catch (error) {
         debugLogger.error("Failed to save model catalog updates setting:", error);
-        return { success: false, error: error.message };
-      }
-    });
-
-    ipcMain.handle("open-logs-folder", async () => {
-      try {
-        const logsDir = path.join(app.getPath("userData"), "logs");
-        await shell.openPath(logsDir);
-        return { success: true };
-      } catch (error) {
-        debugLogger.error("Failed to open logs folder:", error);
         return { success: false, error: error.message };
       }
     });
