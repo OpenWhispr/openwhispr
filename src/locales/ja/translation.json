@@ -618,7 +618,8 @@
   "controlPanel": {
     "updateRequiredByOrg": {
       "title": "アップデートが必要です",
-      "description": "組織では OpenWhispr {{version}} 以降が必要です。アプリを更新してください。"
+      "description": "組織では OpenWhispr {{version}} 以降が必要です。アプリを更新してください。",
+      "contactIT": "組織では OpenWhispr {{version}} 以降が必要です。承認済みのバージョンのインストールについて IT 部門にお問い合わせください。"
     },
     "update": {
       "readyTitle": "アップデートの準備完了",
@@ -2201,7 +2202,13 @@
         "restarting": "再起動中...",
         "title": "アップデート",
         "versionPlaceholder": "—",
-        "whatsNew": "v{{version}} の新機能"
+        "whatsNew": "v{{version}} の新機能",
+        "managedByOrganization": "組織によって管理されています。",
+        "itManaged": "更新は組織によって管理されています。",
+        "policyLoading": "更新設定を読み込み中…",
+        "policyUnavailable": "更新ポリシーを取得できません。接続後にもう一度お試しください。",
+        "managedBadge": "管理対象",
+        "stagedBeforePolicy": "このポリシーの適用前に更新の準備が完了しており、アプリの終了時にインストールされる可能性があります。終了または再起動する前に IT 部門にお問い合わせください。"
       },
       "translationHotkey": {
         "title": "翻訳ホットキー",
