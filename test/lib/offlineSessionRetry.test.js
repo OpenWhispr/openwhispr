@@ -282,8 +282,8 @@ for (const contentType of ["application/octet-stream", "application/json", "text
   test(`a valid session delivered as ${contentType} retains the account and token rotation`, async (t) => {
     const { authContext, session } = await createValidatedSession(t);
     let tokenState = { token: "token-a", generation: 4 };
-    t.mock.method(window.electronAPI, "authGetTokenState", async () => ({ ...tokenState }));
-    window.electronAPI.authSetToken = async (token, expectedGeneration) => {
+    t.mock.method(globalThis.window.electronAPI, "authGetTokenState", async () => ({ ...tokenState }));
+    globalThis.window.electronAPI.authSetToken = async (token, expectedGeneration) => {
       assert.equal(expectedGeneration, 4);
       tokenState = { token, generation: 5 };
       return { success: true, ...tokenState };
