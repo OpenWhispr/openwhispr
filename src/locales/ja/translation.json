@@ -442,30 +442,24 @@
           "cleanup": "クリーンアップ",
           "assistant": "アシスタント"
         },
+        "description": {
+          "dictation": "どのアプリでも音声をテキストに変換します",
+          "cleanup": "フィラーワードを除去し、文法を整えます",
+          "assistant": "質問に答え、依頼を実行します"
+        },
         "badge": {
-          "fast": "高速・高精度",
-          "slower": "高精度・やや低速",
+          "optional": "任意",
           "cloud": "クラウド推奨"
         },
         "line": {
-          "dictationSeconds": "話し終えてから約 {{seconds}} 秒で文字が表示されます",
-          "dictationFewSeconds": "話し終えてから数秒で文字が表示されます",
-          "cleanupUnderSecond": "1 秒未満でテキストを整えます",
-          "cleanupAddsSeconds": "ディクテーションごとに約 {{seconds}} 秒余分にかかります",
-          "assistantSeconds": "回答が始まるまで約 {{seconds}} 秒",
           "requiredByOrganization": "組織によって必須に設定されています",
-          "off": "オフ。あとで設定からオンにできます",
           "offToFit": "このコンピュータの空き容量に収めるためオフにしています",
           "failed": "ダウンロードできませんでした。接続を確認して再試行してください"
         },
         "unavailable": {
-          "tooSlow": "遅すぎます",
+          "tooSlow": "このコンピュータでは遅すぎます",
           "notEnoughMemory": "メモリが不足しています",
           "memoryUnread": "メモリを確認できませんでした",
-          "tooSlowMinutes": "{{model}} は回答が始まるまでに {{minutes}} 分以上かかります",
-          "tooSlowAboutMinute": "{{model}} は回答が始まるまでに約 1 分かかります",
-          "tooSlowCleanupSeconds": "{{model}} はディクテーションごとの整形に {{seconds}} 秒以上かかります",
-          "tooSlowAssistantSeconds": "{{model}} は回答が始まるまでに約 {{seconds}} 秒かかります",
           "memoryMac": "{{model}} には {{needed}} GB のメモリが必要です。この Mac は {{have}} GB です",
           "memoryComputer": "{{model}} には {{needed}} GB のメモリが必要です。このコンピュータは {{have}} GB です",
           "memoryUnreadLine": "{{model}} には {{needed}} GB のメモリが必要です。このコンピュータにそれだけのメモリがある場合は、あとで設定からオンにしてください"

@@ -442,30 +442,24 @@
           "cleanup": "Cleanup",
           "assistant": "Assistant"
         },
+        "description": {
+          "dictation": "Turns your voice into text in any app",
+          "cleanup": "Removes filler words and fixes grammar",
+          "assistant": "Answers questions and acts on your requests"
+        },
         "badge": {
-          "fast": "Fast, accurate",
-          "slower": "Accurate, slower",
+          "optional": "Optional",
           "cloud": "Cloud recommended"
         },
         "line": {
-          "dictationSeconds": "Text appears about {{seconds}} s after you stop",
-          "dictationFewSeconds": "Text appears a few seconds after you stop",
-          "cleanupUnderSecond": "Tidies your text in under a second",
-          "cleanupAddsSeconds": "Adds about {{seconds}} s to each dictation",
-          "assistantSeconds": "About {{seconds}} s before it starts answering",
           "requiredByOrganization": "Required by your organization",
-          "off": "Off. You can turn it on later in Settings",
           "offToFit": "Off to fit the free space on this computer",
           "failed": "Couldn't download. Check your connection and retry"
         },
         "unavailable": {
-          "tooSlow": "Too slow",
+          "tooSlow": "Too slow on this computer",
           "notEnoughMemory": "Not enough memory",
           "memoryUnread": "Couldn't check memory",
-          "tooSlowMinutes": "{{model}} would take over {{minutes}} minutes to start answering",
-          "tooSlowAboutMinute": "{{model}} would take about a minute to start answering",
-          "tooSlowCleanupSeconds": "{{model}} would take over {{seconds}} s to tidy each dictation",
-          "tooSlowAssistantSeconds": "{{model}} would take about {{seconds}} s to start answering",
           "memoryMac": "{{model}} needs {{needed}} GB of memory, this Mac has {{have}} GB",
           "memoryComputer": "{{model}} needs {{needed}} GB of memory, this computer has {{have}} GB",
           "memoryUnreadLine": "{{model}} needs {{needed}} GB of memory. If this computer has that much, turn it on later in Settings"

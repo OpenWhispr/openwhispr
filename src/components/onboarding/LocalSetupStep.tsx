@@ -1,6 +1,6 @@
 // "We recommend these settings": the local setup card. It shows what the app
 // read about this computer, the three picks (dictation, cleanup, assistant) with
-// how fast each will feel, and one button that downloads them in turn. Proceed
+// what each does, and one button that downloads them in turn. Proceed
 // opens once dictation is on disk; cleanup and the assistant can finish in the
 // background. The page title and subtitle belong to OnboardingFlow, which names
 // the computer and the languages with the same helpers (localSetupLabels.ts).
@@ -11,11 +11,7 @@ import { Button } from "../ui/button";
 import { ProviderIcon } from "../ui/ProviderIcon";
 import { Check, Globe, Laptop, Monitor } from "../icons";
 import { AnimatedEllipsis } from "./AnimatedEllipsis";
-import {
-  formatLocalSetupSeconds,
-  localSetupComputerName,
-  localSetupLanguageLabel,
-} from "./localSetupLabels";
+import { localSetupComputerName, localSetupLanguageLabel } from "./localSetupLabels";
 import {
   enabledDownloads,
   fitLocalSetupToSpace,
@@ -65,53 +61,18 @@ const UNAVAILABLE_HEADING_KEYS: Record<NonNullable<LocalSetupRow["reason"]>, str
   memory: "onboarding.rehaul.localSetup.unavailable.notEnoughMemory",
   memoryUnread: "onboarding.rehaul.localSetup.unavailable.memoryUnread",
 };
-const BADGE_KEYS: Record<NonNullable<LocalSetupRow["label"]>, string> = {
-  fast: "onboarding.rehaul.localSetup.badge.fast",
-  slower: "onboarding.rehaul.localSetup.badge.slower",
-  unavailable: "onboarding.rehaul.localSetup.badge.cloud",
+const DESCRIPTION_KEYS: Record<LocalSetupRowId, string> = {
+  dictation: "onboarding.rehaul.localSetup.description.dictation",
+  cleanup: "onboarding.rehaul.localSetup.description.cleanup",
+  assistant: "onboarding.rehaul.localSetup.description.assistant",
 };
 
 const formatGb = (bytes: number) => (bytes / 1e9).toFixed(1);
 
-function lineText(line: LocalSetupLine, onMac: boolean, t: Translate): string | null {
+function lineText(line: LocalSetupLine, onMac: boolean, t: Translate): string {
   switch (line.key) {
-    case "dictationSeconds":
-      return t("onboarding.rehaul.localSetup.line.dictationSeconds", {
-        seconds: formatLocalSetupSeconds(line.range),
-      });
-    case "dictationFewSeconds":
-      return t("onboarding.rehaul.localSetup.line.dictationFewSeconds");
-    case "cleanupUnderSecond":
-      return t("onboarding.rehaul.localSetup.line.cleanupUnderSecond");
-    case "cleanupAddsSeconds":
-      return t("onboarding.rehaul.localSetup.line.cleanupAddsSeconds", {
-        seconds: formatLocalSetupSeconds(line.range),
-      });
-    case "assistantSeconds":
-      return t("onboarding.rehaul.localSetup.line.assistantSeconds", {
-        seconds: formatLocalSetupSeconds(line.range),
-      });
     case "requiredByOrganization":
       return t("onboarding.rehaul.localSetup.line.requiredByOrganization");
-    case "tooSlowMinutes":
-      return t("onboarding.rehaul.localSetup.unavailable.tooSlowMinutes", {
-        model: line.model,
-        minutes: line.minutes,
-      });
-    case "tooSlowAboutMinute":
-      return t("onboarding.rehaul.localSetup.unavailable.tooSlowAboutMinute", {
-        model: line.model,
-      });
-    case "tooSlowCleanupSeconds":
-      return t("onboarding.rehaul.localSetup.unavailable.tooSlowCleanupSeconds", {
-        model: line.model,
-        seconds: Math.round(line.seconds),
-      });
-    case "tooSlowAssistantSeconds":
-      return t("onboarding.rehaul.localSetup.unavailable.tooSlowAssistantSeconds", {
-        model: line.model,
-        seconds: formatLocalSetupSeconds(line.range),
-      });
     case "notEnoughMemory": {
       const values = { model: line.model, needed: line.neededGb, have: line.haveGb };
       return onMac
@@ -295,6 +256,7 @@ function SetupRow({
   const done = active && progress.status === "done";
   const failed = active && progress.status === "failed";
   const dim = !unavailable && !on;
+  const heading = unavailable ? t(UNAVAILABLE_HEADING_KEYS[row.reason ?? "tooSlow"]) : null;
 
   const badge = failed ? (
     <button
@@ -305,8 +267,10 @@ function SetupRow({
     >
       {t("onboarding.rehaul.localSetup.retry")}
     </button>
-  ) : row.label ? (
-    <span className={`ms-1.5 shrink-0 ${BADGE_CLASS}`}>{t(BADGE_KEYS[row.label])}</span>
+  ) : switchable && !unavailable ? (
+    <span className={`ms-1.5 shrink-0 ${BADGE_CLASS}`}>
+      {t("onboarding.rehaul.localSetup.badge.optional")}
+    </span>
   ) : null;
 
   return (
@@ -346,8 +310,8 @@ function SetupRow({
         </span>
         <span className="mt-0.5 flex min-w-0 items-center whitespace-nowrap text-base font-medium leading-6 text-[var(--onboarding-text-primary)]">
           {/* Only the name gives way to a long translation; size and badge stay whole. */}
-          <span className="min-w-0 truncate">
-            {unavailable ? t(UNAVAILABLE_HEADING_KEYS[row.reason ?? "tooSlow"]) : row.modelName}
+          <span className="min-w-0 truncate" title={unavailable ? heading : undefined}>
+            {unavailable ? heading : row.modelName}
           </span>
           {!unavailable && (
             <span className="ms-1 shrink-0 text-sm font-normal tabular-nums text-[var(--onboarding-text-secondary)]">
@@ -356,7 +320,7 @@ function SetupRow({
           )}
           {badge}
         </span>
-        {/* Two lines, so a reason like "…would take over 3 minutes to start answering"
+        {/* Two lines, so a reason like "…needs 16 GB of memory, this Mac has 8 GB"
             reads in full; the row height is fixed for two. The title catches a
             translation longer than that. */}
         <span
@@ -367,14 +331,20 @@ function SetupRow({
         </span>
       </div>
 
-      {/* Fixed width, so a row reads the same with or without its switch. Dictation
-          can't be switched off and has none, which leaves its name more room. */}
-      {switchable && (
-        <span className="flex w-12 shrink-0 justify-end">
-          {!unavailable && (
-            <SetupSwitch checked={on} disabled={started} label={kind} onToggle={onToggle} />
-          )}
+      {/* An unavailable row has no switch: its badge takes that place, so the
+          heading keeps the line to itself. Otherwise fixed width, so a row reads the
+          same with or without its switch. Dictation can't be switched off and has
+          none, which leaves its name more room. */}
+      {unavailable ? (
+        <span className={`shrink-0 whitespace-nowrap ${BADGE_CLASS}`}>
+          {t("onboarding.rehaul.localSetup.badge.cloud")}
         </span>
+      ) : (
+        switchable && (
+          <span className="flex w-12 shrink-0 justify-end">
+            <SetupSwitch checked={on} disabled={started} label={kind} onToggle={onToggle} />
+          </span>
+        )
       )}
     </div>
   );
@@ -410,7 +380,7 @@ export function LocalSetupStep({
     if (space && inventoryLoaded) return fitLocalSetupToSpace(plan, requested, space, isOnDisk);
     // Not read yet: everything fits until the reads say otherwise.
     return {
-      switches: { cleanup: requested.cleanup ?? true, assistant: requested.assistant ?? true },
+      switches: { ...plan.startingSwitches, ...requested },
       autoOff: [],
       state: "fits",
       requiredBytes: 0,
@@ -488,12 +458,12 @@ export function LocalSetupStep({
     if (on && row.label !== "unavailable" && progress.status === "failed") {
       return progress.error ?? t("onboarding.rehaul.localSetup.line.failed");
     }
-    if (row.label !== "unavailable" && !on) {
-      return offToFit.includes(row.id)
-        ? t("onboarding.rehaul.localSetup.line.offToFit")
-        : t("onboarding.rehaul.localSetup.line.off");
+    if (row.label !== "unavailable" && !on && offToFit.includes(row.id)) {
+      return t("onboarding.rehaul.localSetup.line.offToFit");
     }
-    return lineText(row.line, onMac, t);
+    if (row.line) return lineText(row.line, onMac, t);
+    // A switched-off row still says what it does: the switch shows it's off.
+    return row.label === "unavailable" ? null : t(DESCRIPTION_KEYS[row.id]);
   };
 
   return (

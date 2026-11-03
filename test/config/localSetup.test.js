@@ -217,46 +217,53 @@ test("Whisper Small on a PC reads slower, other languages on a Mac don't", async
   const pcJa = row(await plan(pc({}), ja), "dictation");
   assert.equal(pcJa.modelId, "small");
   assert.equal(pcJa.label, "slower");
-  assert.deepEqual(pcJa.line, { key: "dictationSeconds", range: [3, 4] });
   assert.equal(row(await plan(pc({})), "dictation").label, "fast");
   const macJa = row(await plan(mac({ appleChip: null }), ja), "dictation");
   assert.equal(macJa.label, "fast");
 });
 
-test("lines are built from the table", async () => {
-  const m5 = await plan(mac({}));
-  assert.deepEqual(row(m5, "dictation").line, { key: "dictationSeconds", range: [2, 2] });
-  assert.deepEqual(row(m5, "cleanup").line, { key: "cleanupUnderSecond" });
-  assert.deepEqual(row(m5, "assistant").line, { key: "assistantSeconds", range: [4.8, 4.8] });
+test("rows quote no seconds: only an organisation or memory reason gets a line", async () => {
+  const machines = [
+    mac({}),
+    mac({ appleChip: null }),
+    mac({ appleChip: { generation: 1, tier: "" } }),
+    mac({ parakeetSupported: false }),
+    pc({}),
+    pc({ nvidia: rtx }),
+  ];
+  for (const profile of machines) {
+    for (const r of (await plan(profile)).rows) {
+      assert.equal(r.line, null, `${profile.processorName} ${r.id}`);
+    }
+  }
+  const slow = row(await plan(pc({})), "assistant");
+  assert.equal(slow.label, "unavailable");
+  assert.equal(slow.reason, "tooSlow");
+});
 
-  assert.deepEqual(row(await plan(pc({})), "assistant").line, {
-    key: "tooSlowMinutes",
-    model: "Qwen3.5 4B",
-    minutes: 3,
+test("cleanup starts off on processor-only PCs and on everywhere else", async () => {
+  const starts = async (profile) => (await plan(profile)).startingSwitches;
+  assert.deepEqual(await starts(pc({})), { cleanup: false, assistant: true });
+  assert.deepEqual(await starts(pc({ memoryGb: 8 })), { cleanup: false, assistant: true });
+  assert.deepEqual(await starts(pc({ nvidia: rtx })), { cleanup: true, assistant: true });
+  assert.deepEqual(await starts(mac({})), { cleanup: true, assistant: true });
+  assert.deepEqual(await starts(mac({ appleChip: { generation: 2, tier: "" } })), {
+    cleanup: true,
+    assistant: true,
   });
+  // Off is a start, not a block: the row is still offered.
+  assert.equal(row(await plan(pc({})), "cleanup").label, "slower");
 
-  const cautious = await plan(mac({ appleChip: null }));
-  assert.deepEqual(row(cautious, "assistant").line, {
-    key: "tooSlowAboutMinute",
-    model: "Qwen3.5 4B",
+  const { fitLocalSetupToSpace } = await load();
+  const p = await plan(pc({}));
+  assert.deepEqual(fitLocalSetupToSpace(p, {}, space(100)).switches, {
+    cleanup: false,
+    assistant: true,
   });
-  assert.deepEqual(row(cautious, "cleanup").line, { key: "cleanupAddsSeconds", range: [1.6, 2.7] });
-
-  const m4pro = await plan(mac({ appleChip: { generation: 4, tier: "Pro" } }));
-  assert.deepEqual(row(m4pro, "assistant").line, {
-    key: "tooSlowAssistantSeconds",
-    model: "Qwen3.5 4B",
-    range: [14, 17],
+  assert.deepEqual(fitLocalSetupToSpace(p, { cleanup: true }, space(100)).switches, {
+    cleanup: true,
+    assistant: true,
   });
-  const m1 = await plan(mac({ appleChip: { generation: 1, tier: "" } }));
-  assert.deepEqual(row(m1, "assistant").line, { key: "tooSlowAboutMinute", model: "Qwen3.5 4B" });
-  const m4max = await plan(mac({ appleChip: { generation: 4, tier: "Max" } }));
-  assert.deepEqual(row(m4max, "assistant").line, { key: "assistantSeconds", range: [7, 9] });
-
-  const older = row(await plan(mac({ parakeetSupported: false })), "dictation");
-  assert.equal(older.modelId, "small");
-  assert.equal(older.label, "slower");
-  assert.deepEqual(older.line, { key: "dictationFewSeconds" });
 });
 
 test("rows carry the registry name, icon and download", async () => {
@@ -567,11 +574,15 @@ test("short space turns the assistant off first, then cleanup", async () => {
   assert.ok(Math.abs(two.requiredBytes - DICTATION_NEED) < 1);
 
   // A row the computer can't run is never "turned off to fit".
-  const pc16 = await plan(pc({}));
-  assert.equal(row(pc16, "assistant").label, "unavailable");
-  const pcTwo = fitLocalSetupToSpace(pc16, {}, space(2));
-  assert.deepEqual(pcTwo.autoOff, ["cleanup"]);
-  assert.equal(pcTwo.state, "trimmed");
+  const m1 = await plan(mac({ appleChip: { generation: 1, tier: "" } }));
+  assert.equal(row(m1, "assistant").label, "unavailable");
+  const m1Two = fitLocalSetupToSpace(m1, {}, space(2));
+  assert.deepEqual(m1Two.autoOff, ["cleanup"]);
+  assert.equal(m1Two.state, "trimmed");
+  // Nor is one that started off: a processor-only PC's cleanup.
+  const pcTwo = fitLocalSetupToSpace(await plan(pc({})), {}, space(2));
+  assert.deepEqual(pcTwo.autoOff, []);
+  assert.equal(pcTwo.state, "fits");
 
   // A row the user switched off stays off and is not reported as trimmed.
   const userOff = fitLocalSetupToSpace(p, { cleanup: false }, space(4));

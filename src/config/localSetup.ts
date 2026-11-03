@@ -1,6 +1,7 @@
 // Onboarding's "We recommend these settings" pick: which local models suit this
-// computer and these languages, and how fast each will feel. Every number and
-// label comes from localSetupTable.json; this module only looks them up.
+// computer and these languages. The table's speeds decide which rows are offered
+// and which start on; the screen never quotes them. Every number and label comes
+// from localSetupTable.json; this module only looks them up.
 import type {
   ComputerProfile,
   InferenceMode,
@@ -32,16 +33,7 @@ export interface LocalSetupDownload {
   bytes: number;
 }
 export type LocalSetupLine =
-  | { key: "dictationSeconds"; range: [number, number] }
-  | { key: "dictationFewSeconds" }
-  | { key: "cleanupUnderSecond" }
-  | { key: "cleanupAddsSeconds"; range: [number, number] }
-  | { key: "assistantSeconds"; range: [number, number] }
   | { key: "requiredByOrganization" }
-  | { key: "tooSlowMinutes"; model: string; minutes: number }
-  | { key: "tooSlowAboutMinute"; model: string }
-  | { key: "tooSlowCleanupSeconds"; model: string; seconds: number }
-  | { key: "tooSlowAssistantSeconds"; model: string; range: [number, number] }
   | { key: "notEnoughMemory"; model: string; neededGb: number; haveGb: number }
   | { key: "memoryUnread"; model: string; neededGb: number };
 export interface LocalSetupRow {
@@ -52,7 +44,8 @@ export interface LocalSetupRow {
   download: LocalSetupDownload;
   label: LocalSetupLabel | null; // null only for an organisation-required model
   reason?: "tooSlow" | "memory" | "memoryUnread";
-  line: LocalSetupLine;
+  /** null: the row says what it does, or nothing under a "Too slow" heading. */
+  line: LocalSetupLine | null;
 }
 export interface LocalSetupPlan {
   machineType: MachineType;
@@ -61,6 +54,8 @@ export interface LocalSetupPlan {
   languageTags: string[]; // the same languages to name on screen; Chinese keeps its script
   rows: LocalSetupRow[]; // policy-hidden rows are absent; order dictation, cleanup, assistant
   graphicsPack: LocalSetupDownload | null;
+  /** How the switches start before the user or the space fit touches them. */
+  startingSwitches: LocalSetupSwitches;
   /** The organization keeps AI models off this device, so chat and notes run where it chose. */
   organizationRunsText: boolean;
 }
@@ -75,7 +70,13 @@ interface DictationEntry {
 }
 interface MachineEntry {
   dictation: Record<LanguageGroup, DictationEntry>;
-  cleanup: { label: LocalSetupLabel; reason?: UnavailableReason; addedSeconds: Range | null };
+  cleanup: {
+    label: LocalSetupLabel;
+    reason?: UnavailableReason;
+    addedSeconds: Range | null;
+    /** false: offered, but starts switched off (processor-only PCs, decided 2026-11-02). */
+    startsOn?: boolean;
+  };
   assistant: {
     label: LocalSetupLabel;
     reason?: UnavailableReason;
@@ -267,13 +268,7 @@ function dictationRow(
   }
   const { modelId, group } = pickDictationModel(languages, profile);
   const entry = group === "olderMac" ? table.olderMacDictation : machine.dictation[group];
-  return {
-    ...speechRowBase(modelId),
-    label: entry.label,
-    line: entry.seconds
-      ? { key: "dictationSeconds", range: entry.seconds as [number, number] }
-      : { key: "dictationFewSeconds" },
-  };
+  return { ...speechRowBase(modelId), label: entry.label, line: null };
 }
 
 function textRow(
@@ -284,8 +279,6 @@ function textRow(
   const modelId = table.models[id];
   const { providerId, model } = textModels.get(modelId);
   const entry = machine[id];
-  const range =
-    id === "cleanup" ? machine.cleanup.addedSeconds : machine.assistant.firstWordsSeconds;
   const neededGb = table.memoryNeededGb[id][profile.platform === "darwin" ? "mac" : "pc"];
 
   let label = entry.label;
@@ -297,30 +290,12 @@ function textRow(
   // Memory that couldn't be read keeps the row off, but the row says so rather than "too little".
   if (reason === "memory" && !(profile.memoryGb > 0)) reason = "memoryUnread";
 
-  let line: LocalSetupLine;
-  if (reason === "memoryUnread") {
-    line = { key: "memoryUnread", model: model.name, neededGb };
-  } else if (reason === "memory") {
-    line = { key: "notEnoughMemory", model: model.name, neededGb, haveGb: profile.memoryGb };
-  } else if (label === "unavailable") {
-    const [low, high] = range;
-    if (id === "cleanup") {
-      line = { key: "tooSlowCleanupSeconds", model: model.name, seconds: low };
-    } else if (high === null || high >= 120) {
-      line = { key: "tooSlowMinutes", model: model.name, minutes: Math.floor(low / 60) };
-    } else if (high >= 45) {
-      line = { key: "tooSlowAboutMinute", model: model.name };
-    } else {
-      line = { key: "tooSlowAssistantSeconds", model: model.name, range: [low, high] };
-    }
-  } else if (id === "cleanup") {
-    line =
-      range[1] < 1
-        ? { key: "cleanupUnderSecond" }
-        : { key: "cleanupAddsSeconds", range: range as [number, number] };
-  } else {
-    line = { key: "assistantSeconds", range: range as [number, number] };
-  }
+  const line: LocalSetupLine | null =
+    reason === "memoryUnread"
+      ? { key: "memoryUnread", model: model.name, neededGb }
+      : reason === "memory"
+        ? { key: "notEnoughMemory", model: model.name, neededGb, haveGb: profile.memoryGb }
+        : null;
 
   return {
     id,
@@ -383,6 +358,7 @@ export function buildLocalSetupPlan(input: {
     languageTags,
     rows,
     graphicsPack,
+    startingSwitches: { cleanup: machine.cleanup.startsOn !== false, assistant: true },
     organizationRunsText,
   };
 }
@@ -426,7 +402,8 @@ const TRIM_ORDER: Array<keyof LocalSetupSwitches> = ["assistant", "cleanup"];
 
 /**
  * Fits the switched-on rows to the free space. A switch the user set in
- * `requested` is kept as set; one left out starts on and may be turned off to fit,
+ * `requested` is kept as set; one left out starts as the plan says and, if on, may
+ * be turned off to fit,
  * the assistant first, then cleanup. When the user's own switches don't fit, the
  * state is "overflow" and the download stays locked instead of re-trimming them;
  * no other row is turned off then, since that would still not fit.
@@ -454,10 +431,7 @@ export function fitLocalSetupToSpace(
     );
   const fits = (bytes: number) => bytes <= space.availableBytes;
 
-  const switches: LocalSetupSwitches = {
-    cleanup: requested.cleanup ?? true,
-    assistant: requested.assistant ?? true,
-  };
+  const switches: LocalSetupSwitches = { ...plan.startingSwitches, ...requested };
   const autoOff: LocalSetupRowId[] = [];
   const trimmable = (id: keyof LocalSetupSwitches) => {
     const row = plan.rows.find((r) => r.id === id);

@@ -313,11 +313,11 @@ test("idle M5 English shows three rows, both switches on, Download models", asyn
   assert.match(s.button().textContent, /button\.download$/);
   assert.equal(isDisabled(s.button()), false);
 
-  assert.match(s.row("dictation").textContent, /line\.dictationSeconds \{"seconds":"2"\}/);
-  assert.match(s.row("cleanup").textContent, /line\.cleanupUnderSecond/);
-  assert.match(s.row("assistant").textContent, /line\.assistantSeconds \{"seconds":"5"\}/);
-  assert.match(s.row("dictation").textContent, /badge\.fast/);
-  assert.match(s.row("assistant").textContent, /badge\.slower/);
+  for (const id of ["dictation", "cleanup", "assistant"]) {
+    assert.ok(s.row(id).textContent.includes(`${K}description.${id}`), `${id} says what it does`);
+    assert.ok(!/ s\b|\{"seconds"/.test(s.row(id).textContent), `${id} quotes no seconds`);
+  }
+  assert.ok(!s.row("dictation").textContent.includes(`${K}badge.`), "dictation has no badge");
 
   const text = s.container.textContent;
   for (const piece of ["MacBook Pro", "Apple M5 Pro", "English", `${K}computer.chip`]) {
@@ -330,9 +330,9 @@ test("idle M5 English shows three rows, both switches on, Download models", asyn
   assert.equal(pieRings(s.container).length, 0, "no pie before the download starts");
 });
 
-test("badge sits on the model line and never wraps", async (t) => {
+test("the optional rows' badge sits on the model line and never wraps", async (t) => {
   const s = await mount(t);
-  for (const id of ["dictation", "cleanup", "assistant"]) {
+  for (const id of ["cleanup", "assistant"]) {
     const row = s.row(id);
     const planRow = s.plan.rows.find((r) => r.id === id);
     const [badge] = elements(
@@ -342,6 +342,7 @@ test("badge sits on the model line and never wraps", async (t) => {
         node.childNodes.every((child) => child.nodeType === 3)
     );
     assert.ok(badge, `${id} has a badge`);
+    assert.equal(badge.textContent, `${K}badge.optional`);
     assert.match(cls(badge), /rounded-\[47px\]/);
     assert.match(cls(badge), /bg-\[var\(--onboarding-surface-tertiary\)\]/);
     const line = badge.parentNode;
@@ -370,26 +371,29 @@ test("rows keep one fixed height class from idle to finished", async (t) => {
   assert.deepEqual(heights(), fixed, "finished");
 });
 
-test("Windows 16 GB shows the assistant as Too slow with Cloud recommended and no switch", async (t) => {
+test("Windows 16 GB: the assistant is Too slow with Cloud recommended, cleanup starts off", async (t) => {
   const s = await mount(t, { profile: pc() });
-  const assistant = s.row("assistant").textContent;
-  assert.ok(assistant.includes(`${K}unavailable.tooSlow`));
-  assert.ok(assistant.includes(`${K}badge.cloud`));
-  assert.ok(
-    assistant.includes(`${K}unavailable.tooSlowMinutes {"model":"Qwen3.5 4B","minutes":3}`),
-    assistant
-  );
-  assert.ok(!assistant.includes("2.7 GB"), "an unavailable row shows no size");
-  const [reason] = elements(s.row("assistant"), (n) =>
-    n.textContent.startsWith(`${K}unavailable.tooSlowMinutes`)
-  );
-  assert.match(cls(reason), /\bline-clamp-2\b/, "the reason may take two lines");
-  assert.doesNotMatch(cls(reason), /\btruncate\b/);
+  const assistant = s.row("assistant");
+  assert.ok(assistant.textContent.includes(`${K}unavailable.tooSlow`));
+  assert.ok(!assistant.textContent.includes(`${K}description.`), "the heading says it all");
+  assert.ok(!assistant.textContent.includes("2.7 GB"), "an unavailable row shows no size");
+  const leaf = (text) => (n) =>
+    n.textContent === text && n.childNodes.every((child) => child.nodeType === 3);
+  const [heading] = elements(assistant, leaf(`${K}unavailable.tooSlow`));
+  assert.match(cls(heading.parentNode), /whitespace-nowrap/, "the heading keeps one line");
+  const [badge] = elements(assistant, leaf(`${K}badge.cloud`));
+  assert.ok(badge, "Cloud recommended");
+  assert.notEqual(badge.parentNode, heading.parentNode, "the badge takes the switch's place");
   assert.equal(s.switchOf("assistant"), undefined);
-  assert.ok(elements(s.row("assistant"), (n) => n.textContent === "–").length, "a dash tile");
-  assert.equal(s.switchOf("cleanup").attributes["aria-checked"], "true");
-  assert.match(s.row("cleanup").textContent, /line\.cleanupAddsSeconds \{"seconds":"5–10"\}/);
-  assert.match(s.row("cleanup").textContent, /badge\.slower/);
+  assert.ok(elements(assistant, (n) => n.textContent === "–").length, "a dash tile");
+
+  // Processor-only PCs: cleanup is offered but starts off, still saying what it does.
+  assert.equal(s.switchOf("cleanup").attributes["aria-checked"], "false");
+  assert.ok(s.row("cleanup").textContent.includes(`${K}description.cleanup`));
+  assert.ok(s.row("cleanup").textContent.includes(`${K}badge.optional`));
+  await s.click(s.button());
+  await s.finish(DICTATION);
+  assert.deepEqual(s.calls.llm, [], "nothing but dictation downloads");
 
   const text = s.container.textContent;
   assert.ok(text.includes(`${K}computer.windowsLaptop`));
@@ -399,7 +403,7 @@ test("Windows 16 GB shows the assistant as Too slow with Cloud recommended and n
   assert.ok(!text.includes(`${K}computer.chip`));
 });
 
-test("switching cleanup off dims it, swaps its line, drops it from the download", async (t) => {
+test("switching cleanup off dims it, keeps its line, drops it from the download", async (t) => {
   const s = await mount(t);
   const planRow = s.plan.rows.find((r) => r.id === "cleanup");
   await s.click(s.switchOf("cleanup"));
@@ -407,8 +411,7 @@ test("switching cleanup off dims it, swaps its line, drops it from the download"
   assert.equal(s.switchOf("cleanup").attributes["aria-checked"], "false");
   const row = s.row("cleanup");
   assert.ok(elements(row, (n) => /\bopacity-55\b/.test(cls(n))).length, "the row dims");
-  assert.ok(row.textContent.includes(`${K}line.off`));
-  assert.ok(!row.textContent.includes(`${K}line.cleanupUnderSecond`));
+  assert.ok(row.textContent.includes(`${K}description.cleanup`), "still says what it does");
   assert.ok(row.textContent.includes(planRow.modelName), "keeps its name");
   assert.ok(row.textContent.includes(s.setup.rowSizeLabel(planRow, null)), "keeps its size");
 
@@ -515,7 +518,7 @@ test("a failed optional row says why, offers Retry, and stays off at Proceed", a
     (n) => n.localName === "button" && n.textContent === `${K}retry`
   );
   assert.ok(retry, "the failed row offers Retry");
-  assert.ok(!s.row("cleanup").textContent.includes(`${K}badge.fast`), "Retry takes the badge slot");
+  assert.ok(!s.row("cleanup").textContent.includes(`${K}badge.`), "Retry takes the badge slot");
   assert.ok(
     s.row("cleanup").textContent.includes("hooks.modelDownload.errors.notFound"),
     "the row says why it failed"
@@ -711,7 +714,7 @@ test("Retry, the pie and the tick name what they show", async (t) => {
   assert.equal(retry.attributes["aria-label"], `${K}retryRow {"row":"${K}rows.cleanup"}`);
 });
 
-test("an organisation-required speech model shows its line and no speed badge", async (t) => {
+test("an organisation-required speech model shows its line and no badge", async (t) => {
   const s = await mount(t, { requiredSpeechModelId: "parakeet-tdt-0.6b-v3" });
   const row = s.row("dictation");
   assert.ok(row.textContent.includes(`${K}line.requiredByOrganization`));
@@ -729,23 +732,13 @@ test("memory that couldn't be read says so, never that there is too little", asy
   }
 });
 
-test("a cleanup too slow for this computer quotes its whole seconds", async (t) => {
+test("a cleanup too slow for this computer has a heading and no line", async (t) => {
   const tooSlow = (row) =>
-    row.id !== "cleanup"
-      ? row
-      : {
-          ...row,
-          label: "unavailable",
-          reason: "tooSlow",
-          line: { key: "tooSlowCleanupSeconds", model: row.modelName, seconds: 12.4 },
-        };
+    row.id !== "cleanup" ? row : { ...row, label: "unavailable", reason: "tooSlow", line: null };
   const s = await mount(t, { mapPlan: (p) => ({ ...p, rows: p.rows.map(tooSlow) }) });
   const text = s.row("cleanup").textContent;
   assert.ok(text.includes(`${K}unavailable.tooSlow`));
-  assert.ok(
-    text.includes(`${K}unavailable.tooSlowCleanupSeconds {"model":"Qwen3.5 2B","seconds":12}`),
-    text
-  );
+  assert.ok(!text.includes(`${K}description.`), text);
   assert.equal(s.switchOf("cleanup"), undefined);
 });
 
@@ -758,7 +751,7 @@ test("a row turned off to fit keeps its line when the other switch is flipped", 
   await s.click(s.switchOf("cleanup"));
   assert.equal(s.switchOf("assistant").attributes["aria-checked"], "false");
   assert.ok(s.row("assistant").textContent.includes(`${K}line.offToFit`), "still off to fit");
-  assert.ok(s.row("cleanup").textContent.includes(`${K}line.off`));
+  assert.ok(s.row("cleanup").textContent.includes(`${K}description.cleanup`), "the user's own off");
   assert.ok(!s.row("cleanup").textContent.includes(`${K}line.offToFit`), "the user's own off");
 });
 
@@ -869,8 +862,4 @@ test("header helpers name the computer and join the languages", async (t) => {
   // Chinese keeps its script.
   assert.equal(step.localSetupLanguageLabel(["zh-Hant"], "en"), "Traditional Chinese");
   assert.equal(step.localSetupLanguageLabel(["zh-Hant"], "zh-TW"), "繁體中文");
-  assert.equal(step.formatLocalSetupSeconds([1.6, 2.7]), "2–3");
-  assert.equal(step.formatLocalSetupSeconds([4.8, 4.8]), "5");
-  assert.equal(step.formatLocalSetupSeconds([2.4, 2.6]), "2–3");
-  assert.equal(step.formatLocalSetupSeconds([2.6, 3.4]), "3");
 });

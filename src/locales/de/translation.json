@@ -442,30 +442,24 @@
           "cleanup": "Textbereinigung",
           "assistant": "Assistent"
         },
+        "description": {
+          "dictation": "Wandelt Ihre Stimme in jeder App in Text um",
+          "cleanup": "Entfernt Füllwörter und korrigiert die Grammatik",
+          "assistant": "Beantwortet Fragen und erledigt Ihre Anfragen"
+        },
         "badge": {
-          "fast": "Schnell, präzise",
-          "slower": "Präzise, langsamer",
+          "optional": "Optional",
           "cloud": "Cloud empfohlen"
         },
         "line": {
-          "dictationSeconds": "Text erscheint etwa {{seconds}} s, nachdem Sie aufhören",
-          "dictationFewSeconds": "Text erscheint wenige Sekunden, nachdem Sie aufhören",
-          "cleanupUnderSecond": "Überarbeitet Ihren Text in unter einer Sekunde",
-          "cleanupAddsSeconds": "Verlängert jedes Diktat um etwa {{seconds}} s",
-          "assistantSeconds": "Etwa {{seconds}} s, bis die Antwort beginnt",
           "requiredByOrganization": "Von Ihrer Organisation vorgeschrieben",
-          "off": "Aus. Sie können es später in den Einstellungen einschalten",
           "offToFit": "Aus, damit es in den freien Speicherplatz dieses Computers passt",
           "failed": "Download fehlgeschlagen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut"
         },
         "unavailable": {
-          "tooSlow": "Zu langsam",
+          "tooSlow": "Zu langsam auf diesem Computer",
           "notEnoughMemory": "Nicht genug Arbeitsspeicher",
           "memoryUnread": "Arbeitsspeicher nicht erkannt",
-          "tooSlowMinutes": "{{model}} bräuchte über {{minutes}} Minuten, bis die Antwort beginnt",
-          "tooSlowAboutMinute": "{{model}} bräuchte etwa eine Minute, bis die Antwort beginnt",
-          "tooSlowCleanupSeconds": "{{model}} bräuchte über {{seconds}} s, um jedes Diktat zu überarbeiten",
-          "tooSlowAssistantSeconds": "{{model}} bräuchte etwa {{seconds}} s, bis die Antwort beginnt",
           "memoryMac": "{{model}} braucht {{needed}} GB Arbeitsspeicher, dieser Mac hat {{have}} GB",
           "memoryComputer": "{{model}} braucht {{needed}} GB Arbeitsspeicher, dieser Computer hat {{have}} GB",
           "memoryUnreadLine": "{{model}} braucht {{needed}} GB Arbeitsspeicher. Wenn dieser Computer so viel hat, schalten Sie es später in den Einstellungen ein"

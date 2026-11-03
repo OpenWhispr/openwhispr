@@ -1,5 +1,5 @@
-// Names the "We recommend these settings" page and card share: the computer,
-// the languages the pick was made for, and the seconds a row quotes.
+// Names the "We recommend these settings" page and card share: the computer
+// and the languages the pick was made for.
 import { displayOnboardingLanguageLabel, getOnboardingLanguageByCode } from "./languageOptions";
 import languageRegistry from "../../config/languageRegistry.json";
 import type { ComputerProfile } from "../../types/electron";
@@ -45,11 +45,4 @@ export function localSetupLanguageLabel(languageTags: string[], i18nLanguage: st
   } catch {
     return labels.join(", ");
   }
-}
-
-/** "2–3" for a range, or one whole number when both ends round to it. */
-export function formatLocalSetupSeconds([low, high]: [number, number]): string {
-  const from = Math.max(1, Math.round(low));
-  const to = Math.max(1, Math.round(high));
-  return from === to ? String(from) : `${from}–${to}`;
 }

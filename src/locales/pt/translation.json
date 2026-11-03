@@ -421,30 +421,24 @@
           "cleanup": "Limpeza",
           "assistant": "Assistente"
         },
+        "description": {
+          "dictation": "Transforma sua voz em texto em qualquer app",
+          "cleanup": "Remove palavras de preenchimento e corrige a gramática",
+          "assistant": "Responde perguntas e executa seus pedidos"
+        },
         "badge": {
-          "fast": "Rápido, preciso",
-          "slower": "Preciso, mais lento",
+          "optional": "Opcional",
           "cloud": "Nuvem recomendada"
         },
         "line": {
-          "dictationSeconds": "O texto aparece cerca de {{seconds}} s depois que você para de falar",
-          "dictationFewSeconds": "O texto aparece alguns segundos depois que você para de falar",
-          "cleanupUnderSecond": "Ajusta seu texto em menos de um segundo",
-          "cleanupAddsSeconds": "Adiciona cerca de {{seconds}} s a cada ditado",
-          "assistantSeconds": "Cerca de {{seconds}} s até começar a responder",
           "requiredByOrganization": "Exigido pela sua organização",
-          "off": "Desativado. Você pode ativar depois em Configurações",
           "offToFit": "Desativado para caber no espaço livre deste computador",
           "failed": "Não foi possível baixar. Verifique sua conexão e tente novamente"
         },
         "unavailable": {
-          "tooSlow": "Lento demais",
+          "tooSlow": "Lento demais neste computador",
           "notEnoughMemory": "Memória insuficiente",
           "memoryUnread": "Não foi possível verificar a memória",
-          "tooSlowMinutes": "{{model}} levaria mais de {{minutes}} minutos para começar a responder",
-          "tooSlowAboutMinute": "{{model}} levaria cerca de um minuto para começar a responder",
-          "tooSlowCleanupSeconds": "{{model}} levaria mais de {{seconds}} s para ajustar cada ditado",
-          "tooSlowAssistantSeconds": "{{model}} levaria cerca de {{seconds}} s para começar a responder",
           "memoryMac": "{{model}} precisa de {{needed}} GB de memória, este Mac tem {{have}} GB",
           "memoryComputer": "{{model}} precisa de {{needed}} GB de memória, este computador tem {{have}} GB",
           "memoryUnreadLine": "{{model}} precisa de {{needed}} GB de memória. Se este computador tiver isso, você pode ativar depois em Configurações"
