@@ -2,11 +2,11 @@
 
 > **For agentic workers:** Use `superpowers:executing-plans` after approval, task by task. Track checkboxes. Do not commit or push unless separately authorized.
 
-**Execution status (2026-11-02):** All three tasks are implemented on `feat/local-model-allow-list` in the isolated admin worktree and passed task/final review. Browser run: 101 passed, two flag-dependent skips, one locator failure subsequently fixed and verified by four targeted tests. TypeScript, lint and changed-file formatting pass. The reviewed floor is **1.11.1**; `NEXT_PUBLIC_LOCAL_MODEL_POLICY_ENABLED` defaults off until the release is qualified. Staging/native-device QA and deployment remain separate.
+**Execution status (2026-11-02):** All three tasks are implemented on `feat/local-model-allow-list` in the isolated admin worktree and passed task/final review. Browser run: 101 passed, two flag-dependent skips, one locator failure subsequently fixed and verified by four targeted tests. TypeScript, lint and changed-file formatting pass. The reviewed floor is **1.11.1**; approvals are editable only while the API returns `localModelPolicyVersion`, which it does once `LOCAL_MODEL_RESTRICTIONS_ENABLED` is on. Staging/native-device QA and deployment remain separate.
 
 **Goal:** Let admins approve local speech/AI text models and require approved speech downloads in one safe save.
 
-**Architecture:** Replace the required-model card with a combined approval card, retain existing full-document optimistic saves, and give each card exclusive ownership of its fields. Gate editing on explicit API support and a released enforcing desktop.
+**Architecture:** Replace the required-model card with a combined approval card, retain existing full-document optimistic saves, and give each card exclusive ownership of its fields. Gate editing on the capability the API returns; Allow all can lift a saved list without it.
 
 **Tech stack:** Next.js/React, TypeScript, Zod, TanStack Query, existing UI components and Playwright mocked-API tests.
 

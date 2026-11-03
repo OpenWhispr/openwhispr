@@ -185,3 +185,32 @@ test("a refused model's row only names the organization for a refusal it made", 
     "POLICY_MODEL_BLOCKED"
   );
 });
+
+test("only a settled verdict denies an audio feature; an unresolved one stops nothing", async () => {
+  const { isAudioFeatureAllowed, isAudioFeatureDenied } =
+    await import("../../src/stores/policyRules.ts");
+  const managed = (features, minAppVersion = "1.0.0") => ({
+    status: "managed",
+    appVersion: "1.11.1",
+    policy: { ...managedPolicy({}), minAppVersion, features },
+  });
+
+  for (const unresolved of [
+    { status: "error", policy: null, appVersion: null },
+    { status: "loading", policy: null, appVersion: null },
+    { status: "idle", policy: null, appVersion: null },
+    { status: "unmanaged", policy: null, appVersion: null },
+  ]) {
+    assert.equal(isAudioFeatureDenied(unresolved, "meeting"), false, unresolved.status);
+    assert.equal(isAudioFeatureDenied(unresolved, "upload"), false, unresolved.status);
+  }
+  assert.equal(
+    isAudioFeatureAllowed({ status: "error", policy: null, appVersion: null }, "meeting"),
+    false,
+    "new work still waits for a verdict"
+  );
+  assert.equal(isAudioFeatureDenied(managed({ meetingRecordingEnabled: false }), "meeting"), true);
+  assert.equal(isAudioFeatureDenied(managed({ audioUploadEnabled: false }), "meeting"), false);
+  assert.equal(isAudioFeatureDenied(managed({ audioUploadEnabled: false }), "upload"), true);
+  assert.equal(isAudioFeatureDenied(managed({}, "9.9.9"), "meeting"), true);
+});

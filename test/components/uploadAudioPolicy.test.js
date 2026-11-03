@@ -57,6 +57,7 @@ for (const phase of ["title", "save"]) {
       batch: { isProcessing: false },
       usePolicyStore: { getState: () => ({ allowed: true }) },
       isAudioFeatureAllowed: (policy) => policy.allowed,
+      isAudioFeatureDenied: (policy) => !policy.allowed,
       uploadRestrictionKey,
       isManagedTranscriptionActive: () => false,
       isTranscriptionContextAllowed: () => true,

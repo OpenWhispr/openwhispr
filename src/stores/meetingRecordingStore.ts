@@ -554,18 +554,15 @@ const MEETING_MAIN_STOPS = new Set([
 // from this window doesn't explain it a second time.
 let mainStoppedSessionId: string | null = null;
 
-// A recording ended because the policy could not be checked. Unlike
+// Main ended a recording because the policy could not be checked. Unlike
 // POLICY_UNRESOLVABLE at start, there is nothing to try again in a moment.
 const POLICY_UNRESOLVED_STOP = "policyUnresolvedStop";
 
 // The sentinel explaining a meeting policy refuses, for a start or a stop.
-function meetingPolicyRefusalError(
-  policy: PolicyDecisionSnapshot,
-  phase: "start" | "stop"
-): string {
+function meetingPolicyRefusalError(policy: PolicyDecisionSnapshot): string {
   switch (meetingRecordingRefusal(policy)) {
     case "unresolved":
-      return phase === "stop" ? POLICY_UNRESOLVED_STOP : "POLICY_UNRESOLVABLE";
+      return "POLICY_UNRESOLVABLE";
     case "disabled":
       return "POLICY_MEETING_RECORDING_DISABLED";
     default:
@@ -914,7 +911,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
     reportMeetingError(
       isAudioFeatureAllowed(policy, "meeting")
         ? (transcriptionChoiceRefusal(policy, getSettings(), "meeting")?.code ?? "policyRestricted")
-        : meetingPolicyRefusalError(policy, "start")
+        : meetingPolicyRefusalError(policy)
     );
     return false;
   }
@@ -1948,7 +1945,7 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
  */
 export async function stopRecordingForPolicy(): Promise<void> {
   const sessionId = activeRecordingSessionId;
-  const reason = meetingPolicyRefusalError(usePolicyStore.getState(), "stop");
+  const reason = meetingPolicyRefusalError(usePolicyStore.getState());
   const { stopped, cancelledStart } = await stopRecording();
   if ((stopped || cancelledStart) && sessionId && mainStoppedSessionId !== sessionId) {
     reportMeetingError(reason);

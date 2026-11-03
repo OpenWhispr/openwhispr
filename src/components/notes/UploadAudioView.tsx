@@ -79,6 +79,7 @@ import { generateNoteTitle } from "../../utils/generateTitle";
 import { getBaseLanguageCode } from "../../utils/languageSupport";
 import {
   isAudioFeatureAllowed,
+  isAudioFeatureDenied,
   isTranscriptionContextAllowed,
   transcriptionChoiceRefusal,
 } from "../../stores/policyRules";
@@ -674,7 +675,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   };
   useEffect(() => {
     return usePolicyStore.subscribe((policy) => {
-      if (isAudioFeatureAllowed(policy, "upload")) return;
+      if (!isAudioFeatureDenied(policy, "upload")) return;
       const active = activeRequestIdRef.current || singleDownloadIdRef.current;
       runIdRef.current++;
       if (active) {

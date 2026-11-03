@@ -14,7 +14,7 @@ import { requestMeetingRecordingAutoEnd } from "../helpers/meetingRecordingSessi
 import logger from "../utils/logger";
 import { usePolicySnapshot } from "../hooks/usePolicy";
 import {
-  isAudioFeatureAllowed,
+  isAudioFeatureDenied,
   isLocalChoiceRefusal,
   LOCAL_MODEL_REFUSAL_MESSAGE_KEYS,
 } from "../stores/policyRules";
@@ -37,7 +37,7 @@ const MEETING_ERROR_KEYS: Record<string, string> = {
   POLICY_MODEL_BLOCKED: LOCAL_MODEL_REFUSAL_MESSAGE_KEYS.POLICY_MODEL_BLOCKED,
   POLICY_LOCAL_MODE_BLOCKED: LOCAL_MODEL_REFUSAL_MESSAGE_KEYS.POLICY_LOCAL_MODE_BLOCKED,
   POLICY_APP_VERSION_BLOCKED: LOCAL_MODEL_REFUSAL_MESSAGE_KEYS.POLICY_APP_VERSION_BLOCKED,
-  // A running recording stopped because the policy couldn't be checked.
+  // Main ended a running recording because the policy couldn't be checked.
   policyUnresolvedStop: "notes.meeting.stoppedPolicyUnresolved",
   // The main process ended the recording because it belonged to the previous account.
   accountChanged: "notes.meeting.stoppedAccountChanged",
@@ -55,7 +55,7 @@ export default function MeetingRecordingMount(): null {
   const { t } = useTranslation();
   const { toast, dismiss } = useToast();
   const policy = usePolicySnapshot();
-  const meetingAllowed = isAudioFeatureAllowed(policy, "meeting");
+  const meetingDenied = isAudioFeatureDenied(policy, "meeting");
   const isRecording = useMeetingRecordingStore((s) => s.isRecording);
   const isTranscribing = useMeetingRecordingStore((s) => s.isTranscribing);
   const error = useMeetingRecordingStore((s) => s.error);
@@ -67,8 +67,8 @@ export default function MeetingRecordingMount(): null {
   );
   const micCaptureStatus = useMeetingRecordingStore((s) => s.micCaptureStatus);
   useEffect(() => {
-    if (isRecording && !meetingAllowed) void stopRecordingForPolicy();
-  }, [isRecording, meetingAllowed]);
+    if (isRecording && meetingDenied) void stopRecordingForPolicy();
+  }, [isRecording, meetingDenied]);
   const wasMicUnavailable = useRef(false);
   const wasSystemAudioSilent = useRef(false);
 

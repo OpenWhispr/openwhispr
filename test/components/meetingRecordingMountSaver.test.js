@@ -271,20 +271,22 @@ test("an org's meeting switch refuses a start with its own reason", async (t) =>
   assert.equal(toasts.at(-1)?.description, "Meeting recording is disabled by your organization.");
 });
 
-test("a policy this window can't resolve mid-meeting stops the recording and says so once", async (t) => {
-  const { start, store, toasts, setPolicy } = await setup(t);
-  await start();
-  const before = toasts.length;
+for (const [label, unresolved] of [
+  ["an error", { status: "error", policy: null }],
+  ["a reload", { status: "loading", policy: null }],
+]) {
+  test(`${label} in this window's policy leaves a running meeting recording`, async (t) => {
+    const { start, store, toasts, setPolicy } = await setup(t);
+    await start();
+    const before = toasts.length;
 
-  await setPolicy({ status: "error", policy: null });
-  await settle(store);
+    await setPolicy(unresolved);
+    await settle(store);
 
-  assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
-  assert.deepEqual(
-    toasts.slice(before).map((toast) => toast.description),
-    ["Recording stopped because your organization's settings couldn't be checked."]
-  );
-});
+    assert.equal(store.useMeetingRecordingStore.getState().isRecording, true);
+    assert.equal(toasts.length, before);
+  });
+}
 
 test("main's refusal and this window's policy stop explain the same recording once", async (t) => {
   const { start, store, streamError, toasts, setPolicy } = await setup(t);
@@ -357,16 +359,38 @@ test("a policy flip that cancels a start still in progress says why", async (t) 
     "the start is under way"
   );
 
-  await setPolicy({ status: "error", policy: null });
+  await setPolicy(managedPolicy({ meetingRecordingEnabled: false }));
   reply.resolve();
   await React.act(() => starting);
   await settle(store);
 
   assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
-  assert.equal(
-    toasts.at(-1)?.description,
-    "Recording stopped because your organization's settings couldn't be checked."
-  );
+  assert.equal(toasts.at(-1)?.description, "Meeting recording is disabled by your organization.");
+});
+
+test("a policy that can't be checked during a start leaves that start running", async (t) => {
+  const { store, api, setPolicy } = await setup(t);
+  const reply = deferred();
+  const startMain = api.meetingTranscriptionStart;
+  api.meetingTranscriptionStart = async (...args) => {
+    await reply.promise;
+    return startMain(...args);
+  };
+  t.after(() => reply.resolve());
+  let starting;
+  await React.act(async () => {
+    starting = store.startRecording(START_ARGS);
+    for (let i = 0; i < 20 && !store.useMeetingRecordingStore.getState().isRecording; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+  });
+
+  await setPolicy({ status: "error", policy: null });
+  reply.resolve();
+  await React.act(() => starting);
+  await settle(store);
+
+  assert.equal(store.useMeetingRecordingStore.getState().isRecording, true);
 });
 
 for (const [code, message] of [

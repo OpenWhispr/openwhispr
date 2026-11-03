@@ -605,6 +605,18 @@ export function transcriptionChoiceRefusal(
   return localChoiceRefusal(state, "transcription");
 }
 
+/**
+ * Whether a settled verdict refuses this feature, which is what stops work
+ * already running. New work also waits on an unresolved verdict
+ * (isAudioFeatureAllowed), but one says nothing new about what's running.
+ */
+export function isAudioFeatureDenied(
+  state: PolicyDecisionSnapshot,
+  context: TranscriptionPolicyContext
+): boolean {
+  return state.status === "managed" && !!state.policy && !isAudioFeatureAllowed(state, context);
+}
+
 export function isAudioFeatureAllowed(
   state: PolicyDecisionSnapshot,
   context: TranscriptionPolicyContext

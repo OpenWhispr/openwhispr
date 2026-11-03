@@ -12,6 +12,7 @@ import { saveUploadNote, uploadTitleFallback } from "../services/uploadNotes";
 import { getSettings } from "./settingsStore";
 import {
   isAudioFeatureAllowed,
+  isAudioFeatureDenied,
   isTranscriptionContextAllowed,
   transcriptionChoiceRefusal,
 } from "./policyRules";
@@ -350,7 +351,7 @@ export function processBatchQueue(
   })();
 }
 
-// Policy refusing uploads stops the run: the item in flight shows the same
+// A settled verdict refusing uploads stops the run: the item in flight shows the same
 // reason as the page banner, and Transcribe retries it with the rest once allowed.
 usePolicyStore.subscribe((policy) => {
   if (!useBatchQueueStore.getState().isProcessing) return;
@@ -359,7 +360,7 @@ usePolicyStore.subscribe((policy) => {
     policy.status === "managed" &&
     !isManagedTranscriptionActive() &&
     !isTranscriptionContextAllowed(policy, getSettings(), "upload");
-  if (isAudioFeatureAllowed(policy, "upload") && !localRefused) return;
+  if (!isAudioFeatureDenied(policy, "upload") && !localRefused) return;
   abortRun();
   const error = i18n.t(
     (localRefused && transcriptionChoiceRefusal(policy, getSettings(), "upload")?.messageKey) ||
