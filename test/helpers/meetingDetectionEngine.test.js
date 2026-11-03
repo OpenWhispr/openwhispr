@@ -555,7 +555,7 @@ test("disabling notifications preserves active auto-end and releases both detect
   assert.equal(processDetector.running, false);
 });
 
-function ownedNotification(t) {
+function ownedNotification(t, detectionOverrides = {}) {
   const ctx = createEngine();
   const { createDb } = require("./harness/db");
   const db = createDb(t);
@@ -565,10 +565,12 @@ function ownedNotification(t) {
     source: "calendar",
     key: "event",
     event: { id: "event", calendar_id: "test-calendar", summary: "Weekly" },
+    ...detectionOverrides,
   };
-  ctx.engine.activeDetections.set("calendar:event", detection);
+  const detectionId = `${detection.source}:${detection.key}`;
+  ctx.engine.activeDetections.set(detectionId, detection);
   const owner = {
-    prompt: { detectionId: "calendar:event" },
+    prompt: { detectionId },
     detection,
     selectedDestination: null,
   };
@@ -590,7 +592,7 @@ function ownedNotification(t) {
     db,
     owner,
     respond: (options) =>
-      ctx.engine.handleNotificationResponse("calendar:event", "start", options, owner),
+      ctx.engine.handleNotificationResponse(detectionId, "start", options, owner),
   };
 }
 
@@ -717,6 +719,77 @@ test("navigation failure retains committed note and retries without duplicate wr
   assert.equal(calls, 2);
 });
 
+const eventEndingIn = (ms) => ({
+  id: "event",
+  calendar_id: "test-calendar",
+  summary: "Weekly",
+  end_time: new Date(Date.now() + ms).toISOString(),
+});
+
+test("Take notes on a reminder keeps that event quiet and later meetings prompting", async (t) => {
+  const c = ownedNotification(t, { event: eventEndingIn(3_600_000) });
+  if (!c) return;
+  t.after(() => c.engine.stop());
+  c.engine.preferences.audioDetection = true;
+  assert.equal((await c.respond()).success, true);
+  c.engine.markMeetingNoteOnly(c.meetingNavigations[0].noteSessionId);
+  assert.equal(c.engine._meetingModeActive, false);
+
+  c.engine.handleCalendarReminder({ id: "event", summary: "Weekly" });
+  assert.equal(c.shown.length, 0, "the note's own event is not a new meeting");
+  c.engine._handleDetection("audio", "sustained-audio", { attributed: true });
+  assert.equal(c.shown.length, 0, "the call it was opened for is not a new meeting");
+
+  c.engine.handleCalendarReminder({ id: "next", summary: "Next" });
+  assert.equal(c.shown.length, 1);
+});
+
+test("Take notes on a mic prompt claims no later call", async (t) => {
+  const c = ownedNotification(t, {
+    source: "audio",
+    key: "sustained-audio",
+    event: eventEndingIn(3_600_000),
+  });
+  if (!c) return;
+  t.after(() => c.engine.stop());
+  c.engine.preferences.audioDetection = true;
+  c.engine.audioActivityDetector.hasPrompted = true;
+  assert.equal((await c.respond()).success, true);
+  c.engine.markMeetingNoteOnly(c.meetingNavigations[0].noteSessionId);
+  c.engine._handleDetection("audio", "sustained-audio", { attributed: true });
+  assert.equal(c.shown.length, 1, "the prompted call is already this note's; a new one prompts");
+});
+
+test("Take notes on a mic prompt doesn't prompt that live call again", async (t) => {
+  const c = ownedNotification(t, { source: "audio", key: "sustained-audio" });
+  if (!c) return;
+  t.after(() => c.engine.stop());
+  const AudioActivityDetector = require("../../src/helpers/audioActivityDetector");
+  const detector = new AudioActivityDetector(() => []);
+  detector._isMicActive = async () => true;
+  detector.on("sustained-audio-detected", (data) =>
+    c.engine._handleDetection("audio", "sustained-audio", data)
+  );
+  c.engine.audioActivityDetector = detector;
+  c.engine.preferences.audioDetection = true;
+  c.engine.activeDetections.clear();
+  await detector._check();
+  await detector._check();
+  assert.equal(c.shown.length, 1);
+  c.owner.detection = c.engine.activeDetections.get(c.owner.prompt.detectionId);
+
+  assert.equal((await c.respond()).success, true);
+  const id = c.meetingNavigations[0].noteSessionId;
+  c.engine.markMeetingNoteOnly(id);
+  await detector._check();
+  await detector._check();
+  assert.equal(c.shown.length, 1, "accepting the prompt must not re-arm it");
+  c.engine.closeMeetingNote(id);
+  await detector._check();
+  await detector._check();
+  assert.equal(c.shown.length, 1, "nor closing the note it opened");
+});
+
 test("Join opens the link and suppresses new prompts while navigation is pending", async (t) => {
   const c = ownedNotification(t);
   if (!c) return;
@@ -794,6 +867,65 @@ test("a card closing on its own during a dictation holds the queue until the dic
   t.mock.timers.tick(2500);
   assert.equal(shown.length, 2);
 });
+
+test("a live recording keeps detection held whatever a note opened beside it reports", async () => {
+  const { engine, meetingNavigations } = createEngine();
+  engine.databaseManager = createJoinDatabase({ id: 41, folder_id: 7 }).databaseManager;
+  await engine.beginRecordingSession({ sessionId: "live", autoEndEligible: false, noteId: 40 });
+  await engine.joinCalendarMeeting("other");
+  const id = meetingNavigations[0].noteSessionId;
+  engine.markMeetingNoteOnly(id);
+  assert.equal(engine._meetingModeActive, true, "the note opened, but the recording still runs");
+  engine.closeMeetingNote(id);
+  assert.equal(engine._meetingModeActive, true, "closing it doesn't end the recording's hold");
+  assert.equal(engine._recordingSession.sessionId, "live");
+  engine.stop();
+});
+
+// The earlier call's prompt can outlive it, so it says nothing about the joined event's call.
+for (const [order, joinWhileEarlierCallLive] of [
+  ["after the earlier call ended", false],
+  ["while the earlier call was still on", true],
+]) {
+  test(`a back-to-back meeting joined ${order} stays quiet`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+    const AudioActivityDetector = require("../../src/helpers/audioActivityDetector");
+    const detector = new AudioActivityDetector(() => []);
+    let micOn = true;
+    detector._isMicActive = async () => micOn;
+    const { engine, meetingNavigations, shown } = createEngine();
+    engine.preferences.audioDetection = true;
+    engine.audioActivityDetector = detector;
+    engine.databaseManager = createJoinDatabase({ id: 41, folder_id: 7 }).databaseManager;
+    engine.databaseManager.getCalendarEventById = (id) => ({
+      id,
+      end_time: new Date(Date.now() + 3_600_000).toISOString(),
+    });
+    detector.on("sustained-audio-detected", (data) =>
+      engine._handleDetection("audio", "sustained-audio", data)
+    );
+    await detector._check();
+    await detector._check();
+    assert.equal(shown.length, 1, "the earlier call prompted");
+    engine.handleNotificationTimeout();
+
+    const joinNextMeeting = async () => {
+      await engine.joinCalendarMeeting("next");
+      engine.markMeetingNoteOnly(meetingNavigations[0].noteSessionId);
+    };
+    if (joinWhileEarlierCallLive) await joinNextMeeting();
+    micOn = false;
+    await detector._check();
+    if (!joinWhileEarlierCallLive) await joinNextMeeting();
+    t.mock.timers.tick(60000);
+
+    micOn = true;
+    await detector._check();
+    await detector._check();
+    assert.equal(shown.length, 1, "the joined meeting's own call is not a new meeting");
+    engine.stop();
+  });
+}
 
 test("recording ownership outlives a note-only event's end and stale closes", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });

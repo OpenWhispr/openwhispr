@@ -562,7 +562,8 @@ class MeetingDetectionEngine {
     // behind it instead of covering the call.
     const noteSessionId = this._beginMeetingNoteSession(
       note.id,
-      eventId ? owner.detection.event : null
+      eventId ? owner.detection.event : null,
+      { acceptedMicPrompt: owner.detection.source === "audio" }
     );
     const navigation = await this.windowManager.queueMeetingNoteNavigation(
       { ...owner.authorizedNote, navigationId: randomUUID(), noteSessionId },
@@ -796,7 +797,7 @@ class MeetingDetectionEngine {
     this.audioActivityDetector.dismiss();
   }
 
-  _beginMeetingNoteSession(noteId, event) {
+  _beginMeetingNoteSession(noteId, event, { acceptedMicPrompt = false } = {}) {
     this._clearMeetingNoteSession();
     const id = randomUUID();
     const endsAt = Date.parse(event?.end_time);
@@ -805,12 +806,9 @@ class MeetingDetectionEngine {
       noteId,
       eventId: event?.id ?? null,
       endsAt,
-      // Joining an event turns the mic on next; that call has no prompt of its own yet.
-      // The detector marks itself prompted before a queued detection has shown.
-      awaitingMic:
-        Number.isFinite(endsAt) &&
-        (!this.audioActivityDetector.hasPrompted ||
-          this._notificationQueue.some(({ source }) => source === "audio")),
+      // Joining an event turns the mic on next. Only a mic prompt means that call is
+      // already here: the detector's own prompted state can belong to an earlier call.
+      awaitingMic: Number.isFinite(endsAt) && !acceptedMicPrompt,
       noteOnly: false,
     };
     return id;
