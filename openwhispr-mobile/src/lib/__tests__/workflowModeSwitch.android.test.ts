@@ -42,7 +42,7 @@ jest.mock('@/services/providers/ProviderCredentials', () => ({
   getProviderCredentialStatus: (reference: string) => mockKeyStatus(reference),
 }));
 
-import { setPrivateMode } from '../workflowModeSwitch';
+import { setPrivateMode } from '../workflowModeSwitch.android';
 
 let alert: jest.SpyInstance;
 

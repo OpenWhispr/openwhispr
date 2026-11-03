@@ -1,7 +1,32 @@
-import { fireEvent, render } from '@testing-library/react-native';
+import { cleanupAsync, fireEvent, render } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 import { NoteRow } from '../NoteRow';
 import type { Note } from '@/data';
+
+jest.mock('../NoteRow', () => ({
+  NoteRow: (props: React.ComponentProps<typeof import('../NoteRow').NoteRow>) =>
+    require('react').createElement(
+      jest.requireActual(
+        require('react-native').Platform.OS === 'android' ? '../NoteRow.android' : '../NoteRow',
+      ).NoteRow,
+      props,
+    ),
+}));
+
+jest.mock('../GroupedList', () => {
+  const select = () =>
+    jest.requireActual(
+      require('react-native').Platform.OS === 'android'
+        ? '../GroupedList.android'
+        : '../GroupedList',
+    ).GroupedList;
+  const GroupedList = (props: React.ComponentProps<typeof import('../GroupedList').GroupedList>) =>
+    require('react').createElement(select(), props);
+  GroupedList.Row = (
+    props: React.ComponentProps<typeof import('../GroupedList').GroupedList.Row>,
+  ) => require('react').createElement(select().Row, props);
+  return { GroupedList };
+});
 
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
@@ -17,7 +42,8 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 const originalOS = Platform.OS;
-afterEach(() => {
+afterEach(async () => {
+  await cleanupAsync();
   Platform.OS = originalOS;
 });
 const note = {

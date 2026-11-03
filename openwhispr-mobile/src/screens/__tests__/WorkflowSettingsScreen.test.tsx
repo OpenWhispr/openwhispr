@@ -7,13 +7,44 @@ import { Alert, AppState, Keyboard, ScrollView, Platform } from 'react-native';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import {
   act,
+  cleanupAsync,
   fireEvent,
   render as renderScreen,
   screen,
   waitFor,
 } from '@testing-library/react-native';
 
+jest.mock('@/lib/aiWorkflows', () => {
+  const { Platform: runtimePlatform } = require('react-native') as typeof import('react-native');
+  const defaults = jest.requireActual('@/lib/aiWorkflows') as typeof import('@/lib/aiWorkflows');
+  const android = jest.requireActual(
+    '@/lib/aiWorkflows.android',
+  ) as typeof import('@/lib/aiWorkflows.android');
+  return new Proxy(defaults, {
+    get: (_target, name) =>
+      Reflect.get(runtimePlatform.OS === 'android' ? android : defaults, name),
+  });
+});
+
+jest.mock('@/lib/workflowModeRestrictions', () => {
+  const { Platform: runtimePlatform } = require('react-native') as typeof import('react-native');
+  const defaults = jest.requireActual(
+    '@/lib/workflowModeRestrictions',
+  ) as typeof import('@/lib/workflowModeRestrictions');
+  const android = jest.requireActual(
+    '@/lib/workflowModeRestrictions.android',
+  ) as typeof import('@/lib/workflowModeRestrictions.android');
+  return new Proxy(defaults, {
+    get: (_target, name) =>
+      Reflect.get(runtimePlatform.OS === 'android' ? android : defaults, name),
+  });
+});
+
+// Metro selects one platform adapter for the lifetime of a mounted screen.
+let mockWorkflowPlatform = Platform.OS;
+
 function render(element: React.ReactElement) {
+  mockWorkflowPlatform = Platform.OS;
   return renderScreen(element, {
     wrapper: ({ children }) => (
       <SafeAreaInsetsContext.Provider value={{ top: 24, right: 0, bottom: 24, left: 0 }}>
@@ -1825,6 +1856,7 @@ it('localizes Android provider controls without changing an unsaved endpoint, mo
     });
     expect(JSON.stringify(mockUpdateConfig.mock.calls)).not.toContain('synthetic-provider-key');
   } finally {
+    await cleanupAsync();
     Platform.OS = originalOS;
     await act(async () => {
       await workflowI18n.changeLanguage('en');
@@ -1850,6 +1882,7 @@ describe('Arabic workflow guidance and diagnostics', () => {
     };
   });
   afterEach(async () => {
+    await cleanupAsync();
     Platform.OS = originalOS;
     await act(async () => {
       await workflowI18n.changeLanguage('en');
@@ -2000,4 +2033,80 @@ it('lists a legacy model only while it is the saved selection', async () => {
   expect(screen.queryByText('GPT-5 Mini')).toBeNull();
   expect(screen.getByText('GPT-6 Luna')).toBeTruthy();
   await waitFor(() => expect(mockCredentialStatus).toHaveBeenCalled());
+});
+
+jest.mock('../workflowSettingsPlatform', () => ({
+  workflowSettingsPlatform: new Proxy(
+    {} as (typeof import('../workflowSettingsPlatform'))['workflowSettingsPlatform'],
+    {
+      get: (_target, name) => {
+        const os = mockWorkflowPlatform;
+        const selected =
+          os === 'android'
+            ? jest.requireActual<typeof import('../workflowSettingsPlatform.android')>(
+                '../workflowSettingsPlatform.android',
+              )
+            : jest.requireActual<typeof import('../workflowSettingsPlatform')>(
+                '../workflowSettingsPlatform',
+              );
+        return Reflect.get(selected.workflowSettingsPlatform, name);
+      },
+    },
+  ),
+}));
+
+describe('upstream iOS workflow boundary', () => {
+  it('keeps the provider screen outside an Android keyboard-avoidance container', async () => {
+    expect(Platform.OS).toBe('ios');
+    render(<WorkflowSettingsScreen />);
+    enableProviders();
+    await waitFor(() => expect(mockCredentialStatus).toHaveBeenCalled());
+    const { KeyboardAvoidingView } =
+      jest.requireActual<typeof import('react-native')>('react-native');
+    expect(screen.UNSAFE_queryByType(KeyboardAvoidingView)).toBeNull();
+  });
+
+  it('retains the upstream iPhone server-address guidance', async () => {
+    expect(Platform.OS).toBe('ios');
+    mockScope = 'cleanup';
+    mockConfig = {
+      inference: {
+        cleanup: {
+          mode: 'providers',
+          providerId: 'custom',
+          modelId: 'fixture-model',
+          endpoint: 'https://fixture.invalid/v1',
+        },
+      },
+    };
+    render(<WorkflowSettingsScreen />);
+    expect(
+      await screen.findByText(
+        "On iPhone, localhost is this iPhone. Use your server's network address.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it('passes the original iOS discard-confirmation options', async () => {
+    expect(Platform.OS).toBe('ios');
+    const alerts = jest.requireActual<typeof import('@/lib/alerts')>('@/lib/alerts');
+    const confirm = jest.spyOn(alerts, 'confirmDestructive').mockImplementation(() => {});
+    try {
+      render(<WorkflowSettingsScreen />);
+      enableProviders();
+      fireEvent.changeText(screen.getByLabelText('API key'), 'synthetic-unsaved-key');
+      await waitFor(() => expect(mockPreventRemove.mock.calls.at(-1)?.[0]).toBe(true));
+      act(() => {
+        mockPreventRemove.mock.calls.at(-1)?.[1]({ data: { action: { type: 'GO_BACK' } } });
+      });
+      expect(confirm).toHaveBeenCalledWith(
+        'Discard unsaved changes?',
+        'Your selection and any key you entered have not been saved.',
+        expect.any(Function),
+        { destructiveLabel: 'Discard' },
+      );
+    } finally {
+      confirm.mockRestore();
+    }
+  });
 });

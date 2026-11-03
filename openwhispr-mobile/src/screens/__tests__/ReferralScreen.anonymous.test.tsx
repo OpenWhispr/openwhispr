@@ -1,6 +1,6 @@
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
-import { Alert, Share } from 'react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Alert, Platform, Share } from 'react-native';
 
 const mockSignOut = jest.fn();
 const mockPush = jest.fn();
@@ -52,7 +52,14 @@ jest.mock('@/components/ui/Button', () => {
   };
 });
 
-describe('signed-in referral actions', () => {
+describe('Android signed-in referral actions', () => {
+  const originalPlatform = Platform.OS;
+  beforeEach(() => {
+    Platform.OS = 'android';
+  });
+  afterEach(() => {
+    Platform.OS = originalPlatform;
+  });
   beforeEach(() => {
     mockAuthState = {
       user: { id: 'member', email: 'member@example.com', isAnonymous: false },
@@ -136,5 +143,53 @@ describe('ReferralScreen with an anonymous session', () => {
 
     expect(mockSignOut).toHaveBeenCalledTimes(1);
     expect(mockPush).not.toHaveBeenCalled();
+  });
+});
+
+describe('upstream iOS referral behavior', () => {
+  const originalPlatform = Platform.OS;
+  beforeEach(() => {
+    Platform.OS = 'ios';
+    mockAuthState = {
+      user: { id: 'member', email: 'member@example.com', isAnonymous: false },
+      sessionCookie: 'session=member',
+      signOut: mockSignOut,
+    };
+    mockFetchReferralStats.mockResolvedValue({
+      referralCode: 'test',
+      referralLink: 'https://openwhispr.com/r/test',
+      totalReferrals: 0,
+      completedReferrals: 0,
+      totalMonthsEarned: 0,
+      referrals: [],
+    });
+  });
+  afterEach(() => {
+    Platform.OS = originalPlatform;
+  });
+
+  it('keeps the original single-line link without the Android share action', async () => {
+    const view = render(<ReferralScreen />);
+    expect((await view.findByText('https://openwhispr.com/r/test')).props.numberOfLines).toBe(1);
+    expect(view.queryByText('Share referral link')).toBeNull();
+  });
+
+  it('retains the upstream rejected-invite promise and busy-state limitation', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    mockSendInvite.mockRejectedValueOnce(new Error('offline'));
+    try {
+      const view = render(<ReferralScreen />);
+      const input = await view.findByPlaceholderText('friend@example.com');
+      fireEvent.changeText(input, 'friend@example.com');
+      await act(async () => {
+        await expect(
+          view.getByPlaceholderText('friend@example.com').props.onSubmitEditing(),
+        ).rejects.toThrow('offline');
+      });
+      expect(view.getByPlaceholderText('friend@example.com').props.editable).toBe(false);
+      expect(alert).not.toHaveBeenCalled();
+    } finally {
+      alert.mockRestore();
+    }
   });
 });

@@ -17,7 +17,7 @@ import { useConfigStore } from '@/store/useConfigStore';
 import { useInsights, refreshInsights } from '@/android/insights';
 import { Practice } from '@/android/Practice';
 import { applyHistoryRetention } from '@/android/pipeline';
-import { useFileUpload } from '@/hooks/useFileUpload';
+import { useFileUpload } from '@/hooks/useFileUpload.android';
 import { getTranscriptionProvider } from '@/lib/inferenceRouting';
 import { accountRequiredForCloud, showAccountRequiredAlert } from '@/lib/accountAccess';
 import { useAuthStore } from '@/store/useAuthStore';

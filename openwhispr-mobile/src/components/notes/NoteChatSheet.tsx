@@ -142,7 +142,7 @@ export function NoteChatSheet({
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
             onContentSizeChange={() => {
-              if (hasMessages) scrollRef.current?.scrollToEnd({ animated: true });
+              if (!isAndroid || hasMessages) scrollRef.current?.scrollToEnd({ animated: true });
             }}
           >
             {isAndroid ? (

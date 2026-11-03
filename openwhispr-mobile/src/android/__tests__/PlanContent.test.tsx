@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Alert, Linking } from 'react-native';
 import { router } from 'expo-router';
-import { useUsageStore } from '@/store/useUsageStore';
+import { useUsageStore } from '@/store/useUsageStore.android';
 import { restoreAndroidPurchases, useAndroidBillingStatus } from '../billing';
 import { PlanContent } from '../PlanContent';
 
@@ -25,7 +25,7 @@ jest.mock('react-i18next', () => ({
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: require('zustand').create(() => ({ user: { id: 'a', isAnonymous: false } })),
 }));
-jest.mock('@/store/useUsageStore', () => ({
+jest.mock('@/store/useUsageStore.android', () => ({
   useUsageStore: require('zustand').create(() => ({
     usage: null,
     isLoading: false,

@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { Platform, ScrollView } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 import type { Speaker } from '@/data/types';
 import type { TranscriptBlock } from '@/lib/diarization/transcriptDisplay';
@@ -315,5 +315,49 @@ it('keeps a suggested speaker name literal and only confirms through the transla
   } finally {
     Platform.OS = original;
     mockLanguage = 'en';
+  }
+});
+
+jest.mock('../speakerRenameLayout', () => ({
+  useSpeakerRenameLayout() {
+    const implementation =
+      require('react-native').Platform.OS === 'android'
+        ? jest.requireActual('../speakerRenameLayout.android')
+        : jest.requireActual('../speakerRenameLayout');
+    return implementation.useSpeakerRenameLayout();
+  },
+}));
+
+it.each(['ios', 'android'] as const)('preserves the %s speaker form structure', (platform) => {
+  const originalPlatform = Platform.OS;
+  Platform.OS = platform;
+  try {
+    const view = render(
+      <SpeakerRenameSheet visible initialName="Alice" onCancel={() => {}} onSave={() => {}} />,
+    );
+    if (platform === 'android') {
+      expect(view.UNSAFE_getByType(ScrollView).props.contentContainerStyle).toEqual({ gap: 16 });
+    } else {
+      type Node = { props?: { testID?: string }; children?: (Node | string)[] };
+      const findSheet = (node: Node): Node | undefined => {
+        if (node.props?.testID === 'speaker-rename-sheet') return node;
+        for (const child of node.children ?? []) {
+          if (typeof child !== 'string') {
+            const found = findSheet(child);
+            if (found) return found;
+          }
+        }
+        return undefined;
+      };
+      const sheet = findSheet(view.toJSON() as Node);
+      expect(
+        sheet?.children?.some(
+          (child) => typeof child !== 'string' && child.props?.testID === 'speaker-rename-input',
+        ),
+      ).toBe(true);
+      expect(view.UNSAFE_queryByType(ScrollView)).toBeNull();
+    }
+  } finally {
+    Platform.OS = originalPlatform;
   }
 });

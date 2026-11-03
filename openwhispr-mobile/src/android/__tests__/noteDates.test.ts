@@ -1,5 +1,7 @@
 import { groupNotesByDate } from '@/lib/groupNotesByDate';
 import { formatNoteRowTime } from '@/lib/formatNoteRowTime';
+import { groupNotesByDate as groupAndroidNotesByDate } from '@/lib/groupNotesByDate.android';
+import { formatNoteRowTime as formatAndroidNoteRowTime } from '@/lib/formatNoteRowTime.android';
 import type { Note } from '@/data';
 
 const now = new Date(2026, 9, 16, 12);
@@ -16,7 +18,7 @@ it('localizes every bucket without changing membership, ordering, or the input',
   ];
   const original = JSON.stringify(notes);
   const english = groupNotesByDate(notes, now);
-  const arabic = groupNotesByDate(notes, now, { language: 'ar', labels });
+  const arabic = groupAndroidNotesByDate(notes, now, { language: 'ar', labels });
   expect(arabic.map(({ key, notes: rows }) => [key, rows.map((n) => n.id)])).toEqual(
     english.map(({ key, notes: rows }) => [key, rows.map((n) => n.id)]),
   );
@@ -38,18 +40,18 @@ it('formats Android row times in the app locale and keeps the existing iOS defau
   const date = new Date(2026, 9, 15, 14, 5);
   expect(formatNoteRowTime(date, 'today')).toBe('14:05');
   expect(formatNoteRowTime(date, 'yesterday')).toBe('Yesterday');
-  expect(formatNoteRowTime(date, 'yesterday', 'ar', 'أمس')).toBe('أمس');
-  expect(formatNoteRowTime(date, 'today', 'de')).toBe(
+  expect(formatAndroidNoteRowTime(date, 'yesterday', 'ar', 'أمس')).toBe('أمس');
+  expect(formatAndroidNoteRowTime(date, 'today', 'de')).toBe(
     date.toLocaleTimeString('de', { hour: '2-digit', minute: '2-digit' }),
   );
-  expect(formatNoteRowTime(date, 'prev7', 'ar')).toBe(
+  expect(formatAndroidNoteRowTime(date, 'prev7', 'ar')).toBe(
     date.toLocaleDateString('ar', { weekday: 'long' }),
   );
-  expect(formatNoteRowTime(date, 'prev30', 'ja')).toBe(
+  expect(formatAndroidNoteRowTime(date, 'prev30', 'ja')).toBe(
     date.toLocaleDateString('ja', { month: 'numeric', day: 'numeric', year: 'numeric' }),
   );
-  expect(formatNoteRowTime('2026-10-15 14:05:00', 'today', 'ar')).toBe(
-    formatNoteRowTime('2026-10-15T14:05:00Z', 'today', 'ar'),
+  expect(formatAndroidNoteRowTime('2026-10-15 14:05:00', 'today', 'ar')).toBe(
+    formatAndroidNoteRowTime('2026-10-15T14:05:00Z', 'today', 'ar'),
   );
-  expect(formatNoteRowTime('invalid', 'today', 'ar')).toBe('');
+  expect(formatAndroidNoteRowTime('invalid', 'today', 'ar')).toBe('');
 });

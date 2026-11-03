@@ -1,8 +1,34 @@
 import { Platform } from 'react-native';
-import { fireEvent, render } from '@testing-library/react-native';
+import { cleanupAsync, fireEvent, render } from '@testing-library/react-native';
 import type { CalendarParticipant } from '@/data/calendarTypes';
 import { NoteMetaRow } from '../NoteMetaRow';
 import { AttendeesSheet } from '../AttendeesSheet';
+
+jest.mock('../NoteMetaRow', () => ({
+  NoteMetaRow: (props: React.ComponentProps<typeof import('../NoteMetaRow').NoteMetaRow>) =>
+    require('react').createElement(
+      jest.requireActual(
+        require('react-native').Platform.OS === 'android'
+          ? '../NoteMetaRow.android'
+          : '../NoteMetaRow',
+      ).NoteMetaRow,
+      props,
+    ),
+}));
+
+jest.mock('../AttendeesSheet', () => ({
+  AttendeesSheet: (
+    props: React.ComponentProps<typeof import('../AttendeesSheet').AttendeesSheet>,
+  ) =>
+    require('react').createElement(
+      jest.requireActual(
+        require('react-native').Platform.OS === 'android'
+          ? '../AttendeesSheet.android'
+          : '../AttendeesSheet',
+      ).AttendeesSheet,
+      props,
+    ),
+}));
 
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
@@ -154,7 +180,7 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 
-it('localizes attendee roles while preserving names, addresses and organizer ordering', () => {
+it('localizes attendee roles while preserving names, addresses and organizer ordering', async () => {
   const original = Platform.OS;
   Platform.OS = 'android';
   mockLanguage = 'ar';
@@ -182,12 +208,13 @@ it('localizes attendee roles while preserving names, addresses and organizer ord
     fireEvent.press(view.getByLabelText('إغلاق'));
     expect(close).toHaveBeenCalledTimes(1);
   } finally {
+    await cleanupAsync();
     Platform.OS = original;
     mockLanguage = 'en';
   }
 });
 
-it('localizes metadata actions without renaming the selected folder or attendees', () => {
+it('localizes metadata actions without renaming the selected folder or attendees', async () => {
   const original = Platform.OS;
   Platform.OS = 'android';
   mockLanguage = 'ar';
@@ -210,6 +237,7 @@ it('localizes metadata actions without renaming the selected folder or attendees
     view.rerender(<NoteMetaRow {...props} folderLabel={null} />);
     expect(view.getByText('إضافة إلى مجلد')).toBeTruthy();
   } finally {
+    await cleanupAsync();
     Platform.OS = original;
     mockLanguage = 'en';
   }

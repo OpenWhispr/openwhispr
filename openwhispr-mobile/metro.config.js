@@ -1,4 +1,4 @@
-const { withNativeWind } = require('nativewind/metro');
+const { withPlatformNativeWind } = require('./config/platform-styles');
 const { getSentryExpoConfig } = require('@sentry/react-native/metro');
 
 const config = getSentryExpoConfig(__dirname);
@@ -9,7 +9,7 @@ config.resolver.assetExts.push(
   'mil', // Core ML model files (iOS)
 );
 
-const platformConfig = withNativeWind(config, { input: './global.css' });
+const platformConfig = withPlatformNativeWind(config, { input: './global.css' });
 const resolveRequest = platformConfig.resolver.resolveRequest;
 const iosRouterContext = require.resolve('expo-router/_ctx.ios.js');
 const isolatedIosRouterContext = require.resolve('./config/router-context.ios.js');

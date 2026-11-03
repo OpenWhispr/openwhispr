@@ -11,7 +11,7 @@ jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: (selector: (state: { activeMode: string }) => unknown) =>
     selector({ activeMode: mockActiveMode }),
 }));
-jest.mock('@/lib/workflowModeSwitch', () => ({ setPrivateMode: jest.fn() }));
+jest.mock('@/lib/workflowModeSwitch.android', () => ({ setPrivateMode: jest.fn() }));
 let mockReady = false;
 let mockProgress: Record<string, number> = {};
 const mockDownload = jest.fn(async (_id: string) => {
@@ -56,7 +56,7 @@ jest.mock('../ui', () => {
 });
 
 import { ModelsContent } from '../ModelsScreen';
-import { setPrivateMode } from '@/lib/workflowModeSwitch';
+import { setPrivateMode } from '@/lib/workflowModeSwitch.android';
 
 beforeEach(() => {
   jest.clearAllMocks();

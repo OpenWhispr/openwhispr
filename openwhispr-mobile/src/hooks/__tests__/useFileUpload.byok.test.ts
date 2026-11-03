@@ -53,7 +53,7 @@ jest.mock('../../lib/transcriptAudio', () => ({
     mockDeleteManagedTranscriptAudio(...args),
 }));
 
-import { useFileUpload } from '../useFileUpload';
+import { useFileUpload } from '../useFileUpload.android';
 import * as transcriptionErrors from '@/lib/transcriptionErrors';
 import { toFriendlyTranscriptionErrorMessage as androidMessage } from '@/lib/transcriptionErrors.android';
 

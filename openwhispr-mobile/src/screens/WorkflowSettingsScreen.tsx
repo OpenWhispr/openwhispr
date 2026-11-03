@@ -1,18 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  AppState,
-  Keyboard,
-  KeyboardAvoidingView,
-  Linking,
-  Platform,
-  Pressable,
-  View,
-} from 'react-native';
+import { ActivityIndicator, AppState, Keyboard, Linking, Pressable, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useNavigation, usePreventRemove } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SettingsScreen } from '@/components/ui/SettingsScreen';
 import {
   SettingsRow,
@@ -21,13 +11,12 @@ import {
 } from '@/components/ui/SettingsSection';
 import { Text } from '@/components/ui/Text';
 import { Toast } from '@/components/ui/Toast';
-import { useAndroidCopy } from '@/hooks/useAndroidCopy';
+import { workflowSettingsPlatform } from './workflowSettingsPlatform';
 import { useToast } from '@/hooks/useToast';
 import { confirmDestructive } from '@/lib/alerts';
 import { SettingsSwitch } from '@/components/ui/SettingsSwitch';
 import { OnDeviceModelSection } from '@/components/settings/OnDeviceModelSection';
 import { useConfigToggle } from '@/hooks/useConfigToggle';
-import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 import { useCustomPromptsStore } from '@/store/useCustomPromptsStore';
 import { resolveCustomPrompt } from '@/config/prompts/registry';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -42,21 +31,12 @@ import {
   removeProviderCredential,
   setProviderCredential,
 } from '@/services/providers/ProviderCredentials';
-import { MODE_LABELS, workflowSaveConfig } from '@/lib/inferenceModes';
-import { getProviderErrorCopyKey } from '@/lib/providerErrorCopy';
+import { workflowSaveConfig } from '@/lib/inferenceModes';
 import { InferenceModePicker } from '@/components/settings/InferenceModePicker';
 import {
-  ANDROID_LOCAL_MODE_LOCKED,
-  CLOUD_CLEANUP_NEEDS_ACCOUNT_NOTE,
-  LOCAL_MODE_DICTATION_NOTES,
-  ON_DEVICE_MODE_NOTES,
-  ON_DEVICE_CLEANUP_UNSUPPORTED_NOTE,
-  PRIVATE_MODE_LOCKED_REASON,
-  UNSET_PROVIDER_NOTES,
   WORKFLOW_LABELS,
   WORKFLOWS,
   cloudAccessFor,
-  cloudCleanupNeedsAccount,
   parseWorkflow,
   workflowSelection,
   workflowSwitchedOff,
@@ -68,7 +48,6 @@ import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import { type ModeSwitchResult, switchWorkflowMode } from '@/lib/workflowModeSwitch';
 import { getPrivateModeReadiness } from '@/lib/privateMode';
 import {
-  getLocalReasoningLanguageNote,
   getLocalReasoningReadiness,
   getLocalReasoningUnavailableMessage,
   isLocalReasoningUnsupported,
@@ -76,7 +55,6 @@ import {
 import {
   discoverProviderModels,
   testProviderConnection,
-  ProviderExecutionError,
 } from '@/services/providers/ProviderExecution';
 import { getProviderPolicy } from '@/services/providers/ProviderPolicy';
 import {
@@ -95,7 +73,6 @@ import {
 } from '@/lib/mobileProviders';
 
 type Picker = 'provider' | 'model';
-const PROVIDER_IDENTIFIER_STYLE = { writingDirection: 'ltr', textAlign: 'left' } as const;
 // How often an open page checks whether Apple Intelligence finished downloading its model.
 const APPLE_INTELLIGENCE_POLL_MS = 10_000;
 // Shown on the On-Device row while iOS Settings has Apple Intelligence to finish.
@@ -155,12 +132,12 @@ function WorkflowSwitchCard({
           mdIcon={mdIcon}
           title={title}
           description={description}
-          disabled={disabled}
+          {...workflowSettingsPlatform.disabledProps(disabled)}
           rightElement={
             <SettingsSwitch
               accessibilityLabel={label}
               value={enabled}
-              disabled={disabled}
+              {...workflowSettingsPlatform.disabledProps(disabled)}
               onValueChange={onToggle}
             />
           }
@@ -174,7 +151,7 @@ function WorkflowSwitchCard({
 }
 
 function CleanupSettings({ enabled }: { enabled: boolean }): React.JSX.Element {
-  const { copy } = useAndroidCopy();
+  const { copy } = workflowSettingsPlatform.useCopy();
   const toggleCleanup = useConfigToggle('cleanupEnabled');
   const hasCustomPrompt = useCustomPromptsStore(
     (state) => resolveCustomPrompt(state.customPrompts.cleanup) !== undefined,
@@ -213,7 +190,7 @@ function CleanupSettings({ enabled }: { enabled: boolean }): React.JSX.Element {
 }
 
 function NoteChatSettings({ enabled }: { enabled: boolean }): React.JSX.Element {
-  const { copy } = useAndroidCopy();
+  const { copy } = workflowSettingsPlatform.useCopy();
   const toggleNoteChat = useConfigToggle('noteChatEnabled');
   return (
     <WorkflowSwitchCard
@@ -236,21 +213,19 @@ function NoteChatSettings({ enabled }: { enabled: boolean }): React.JSX.Element 
 }
 
 function VoiceAssistantSettings({ enabled }: { enabled: boolean }): React.JSX.Element {
-  const { copy } = useAndroidCopy();
+  const { copy } = workflowSettingsPlatform.useCopy();
   const updateConfig = useConfigStore((state) => state.updateConfig);
   const agentName = useConfigStore((state) =>
     state.config ? getDictationAgentName(state.config) : undefined,
   );
-  const privateMode = useProcessingModeStore(
-    (state) => Platform.OS === 'android' && state.activeMode === 'private',
-  );
+  const privateMode = workflowSettingsPlatform.useVoiceAssistantPrivateMode();
   return (
     <WorkflowSwitchCard
       title={copy('workflowSettings.enableAgent', 'Enable Voice Assistant')}
       label={copy('workflowSettings.agent', 'Voice Assistant')}
       description={
         privateMode
-          ? copy('workflowSettings.localLocked', PRIVATE_MODE_LOCKED_REASON)
+          ? copy('workflowSettings.localLocked', workflowSettingsPlatform.lockedReason)
           : copy(
               'workflowSettings.agentBody',
               'Tap the wand on the OpenWhispr keyboard and say what to write.',
@@ -279,7 +254,7 @@ function VoiceAssistantSettings({ enabled }: { enabled: boolean }): React.JSX.El
 }
 
 function NoteTitleSettings(): React.JSX.Element {
-  const { copy } = useAndroidCopy();
+  const { copy } = workflowSettingsPlatform.useCopy();
   const autoTitle = useConfigStore((state) => state.config?.autoGenerateNoteTitle ?? true);
   const toggleAutoTitle = useConfigToggle('autoGenerateNoteTitle');
   return (
@@ -295,7 +270,9 @@ function NoteTitleSettings(): React.JSX.Element {
         )}
         rightElement={
           <SettingsSwitch
-            accessibilityLabel={copy('workflowSettings.autoTitle', 'Auto-generate Note Titles')}
+            {...workflowSettingsPlatform.labelProps(
+              copy('workflowSettings.autoTitle', 'Auto-generate Note Titles'),
+            )}
             value={autoTitle}
             onValueChange={toggleAutoTitle}
           />
@@ -307,7 +284,7 @@ function NoteTitleSettings(): React.JSX.Element {
 }
 
 export function WorkflowSettingsScreen(): React.JSX.Element {
-  const { copy } = useAndroidCopy();
+  const { copy } = workflowSettingsPlatform.useCopy();
   const scope = parseWorkflow(useLocalSearchParams<{ scope?: string }>().scope);
   if (!scope) {
     return (
@@ -340,7 +317,8 @@ function providerSelection(
 }
 
 function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX.Element {
-  const { copy } = useAndroidCopy();
+  const LocalModelSettings = workflowSettingsPlatform.LocalModelSettings;
+  const { copy } = workflowSettingsPlatform.useCopy();
   const config = useConfigStore((state) => state.config);
   const updateConfig = useConfigStore((state) => state.updateConfig);
   const setActiveMode = useProcessingModeStore((state) => state.setActiveMode);
@@ -349,11 +327,11 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
   const storedSelection = workflowSelection(config, scope, activeMode, cloudAccess);
   // Local Mode runs dictation on this phone whatever is saved, so a saved Cloud dictation (a guest
   // held in Local Mode) shows as On-Device (Automatic), which is what runs.
-  const lockedByPrivateMode =
-    activeMode === 'private' &&
-    (Platform.OS === 'android'
-      ? !!ANDROID_LOCAL_MODE_LOCKED[scope]?.includes(storedSelection.mode)
-      : scope === 'dictation' && storedSelection.mode === 'openwhispr');
+  const lockedByPrivateMode = workflowSettingsPlatform.isModeLocked(
+    scope,
+    activeMode,
+    storedSelection.mode,
+  );
   const savedSelection: InferenceSelection = lockedByPrivateMode
     ? { mode: 'local' }
     : storedSelection;
@@ -362,7 +340,9 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
   const remembered = useRef<Record<string, InferenceSelection>>({});
   const [picker, setPicker] = useState<Picker | null>(null);
   const [apiKey, setApiKey] = useState('');
-  const [configured, setConfigured] = useState<boolean | null>(null);
+  const [configured, setConfigured] = useState<boolean | null>(
+    workflowSettingsPlatform.initialConfigured,
+  );
   const [busy, setBusy] = useState(false);
   const [checking, setChecking] = useState<'test' | 'discover' | null>(null);
   // Set when On-Device was tapped with no model on this phone and the model list opened, or
@@ -371,8 +351,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
   const [discoveredModels, setDiscoveredModels] = useState<{ id: string; name: string }[]>([]);
   const { toast, showToast } = useToast();
   const headerHeight = useHeaderHeight();
-  const keyboardHeight = useKeyboardHeight();
-  const insets = useSafeAreaInsets();
+  const { Container, containerProps, screenProps } = workflowSettingsPlatform.useLayout();
   const navigation = useNavigation();
   const diagnosticController = useRef<AbortController | null>(null);
   useEffect(
@@ -420,76 +399,33 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
         getLocalReasoningUnavailableMessage(appleIntelligence ?? undefined),
       )
     : null;
-  const onDeviceStatus =
-    Platform.OS === 'android'
-      ? appleIntelligence && appleIntelligence.status !== 'ready'
-        ? copy(
-            'workflowSettings.localModelNeeded',
-            getLocalReasoningUnavailableMessage(appleIntelligence),
-          )
-        : undefined
-      : appleIntelligence?.status === 'unsupportedLanguage'
-        ? getLocalReasoningLanguageNote(appleIntelligence)
-        : appleIntelligence && APPLE_INTELLIGENCE_STATUSES[appleIntelligence.status];
+  const onDeviceStatus = workflowSettingsPlatform.onDeviceStatus(
+    appleIntelligence,
+    copy,
+    APPLE_INTELLIGENCE_STATUSES,
+  );
   // Nothing is shown as picked when the On-Device text workflow can never run on this iPhone.
   const pickedMode =
     !speechScope && onDeviceUnsupported && selection.mode === 'local' ? null : selection.mode;
-  const localNote = ON_DEVICE_MODE_NOTES[scope]
-    ? copy(`workflowSettings.localMode_${scope}`, ON_DEVICE_MODE_NOTES[scope])
-    : undefined;
-  const storedModeLabel = copy(
-    `workflowSettings.${storedSelection.mode === 'providers' ? 'byok' : storedSelection.mode === 'openwhispr' ? 'cloud' : 'local'}`,
-    MODE_LABELS[storedSelection.mode],
+  const modeNote = workflowSettingsPlatform.modeNote(
+    {
+      scope,
+      config,
+      activeMode,
+      cloudAccess,
+      selection,
+      savedSelection,
+      storedSelection,
+      speechScope,
+      onDeviceWanted,
+      onDeviceUnsupported,
+      lockedByPrivateMode,
+    },
+    copy,
   );
-  const modeNote =
-    (Platform.OS === 'ios' && onDeviceWanted && !speechScope
-      ? 'Switches to On-Device once Apple Intelligence is ready, while this page stays open.'
-      : undefined) ??
-    (scope === 'cleanup' && selection.mode === 'local' && onDeviceUnsupported
-      ? copy('workflowSettings.localUnavailable', ON_DEVICE_CLEANUP_UNSUPPORTED_NOTE)
-      : undefined) ??
-    (Platform.OS === 'android' && lockedByPrivateMode && ON_DEVICE_MODE_NOTES[scope]
-      ? copy(
-          'workflowSettings.modeRestored',
-          `${ON_DEVICE_MODE_NOTES[scope]} Your ${MODE_LABELS[storedSelection.mode]} choice applies again when Local Mode is off.`,
-          { note: localNote, mode: storedModeLabel },
-        )
-      : undefined) ??
-    (scope === 'cleanup' &&
-    selection.mode === 'openwhispr' &&
-    cloudCleanupNeedsAccount(config, activeMode, cloudAccess)
-      ? CLOUD_CLEANUP_NEEDS_ACCOUNT_NOTE
-      : undefined) ??
-    (activeMode === 'private' ? localNote : undefined) ??
-    (activeMode === 'providers' && !config?.inference?.[scope] && UNSET_PROVIDER_NOTES[scope]
-      ? copy(`workflowSettings.unsaved_${scope}`, UNSET_PROVIDER_NOTES[scope])
-      : undefined) ??
-    (selection.mode === 'providers' && savedSelection.mode !== 'providers'
-      ? activeMode === 'private' && scope === 'dictation'
-        ? copy(
-            'workflowSettings.switchProviderLocal',
-            'Save to switch to Bring Your Own Key. This turns Local Mode off.',
-          )
-        : copy('workflowSettings.switchProvider', 'Save to switch to Bring Your Own Key.')
-      : undefined) ??
-    (scope === 'dictation'
-      ? copy(
-          activeMode === 'private'
-            ? 'workflowSettings.localDictationOn'
-            : 'workflowSettings.localDictationOff',
-          LOCAL_MODE_DICTATION_NOTES[activeMode === 'private' ? 'on' : 'off'],
-        )
-      : undefined);
   const modeUnavailable: Partial<Record<InferenceMode, string>> = {
     ...(onDeviceUnsupported ? { local: onDeviceUnsupported } : {}),
-    ...(Platform.OS === 'android' && activeMode === 'private'
-      ? Object.fromEntries(
-          (ANDROID_LOCAL_MODE_LOCKED[scope] ?? []).map((mode) => [
-            mode,
-            copy('workflowSettings.localLocked', PRIVATE_MODE_LOCKED_REASON),
-          ]),
-        )
-      : {}),
+    ...workflowSettingsPlatform.unavailableModes(scope, activeMode, copy),
   };
   const modeStatuses: Partial<Record<InferenceMode, string>> = onDeviceStatus
     ? { local: onDeviceStatus }
@@ -501,7 +437,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
   // A switched-off workflow uses no key.
   const usesKey = (workflow: MobileInferenceScope): boolean =>
     !workflowSwitchedOff(config, workflow) &&
-    !(Platform.OS === 'android' && activeMode === 'private' && workflow === 'agent');
+    workflowSettingsPlatform.usesKey(workflow, activeMode);
   const sharedWith = WORKFLOWS.filter((other) => {
     const saved = config?.inference?.[other];
     return (
@@ -513,7 +449,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
         normalizeBaseUrl(saved.endpoint) === normalizeBaseUrl(selection.endpoint))
     );
   }).map((other) => copy(`workflowSettings.${other}`, WORKFLOW_LABELS[other]));
-  const deviceLabel = Platform.OS === 'android' ? 'phone' : 'iPhone';
+  const deviceLabel = workflowSettingsPlatform.deviceLabel;
   const keyFooter = sharedWith.length
     ? copy(
         'workflowSettings.sharedKey',
@@ -540,12 +476,12 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
         modelId !== savedSelection.modelId ||
         (selection.endpoint ?? '') !== (savedSelection.endpoint ?? '')));
   // Removing a key does not silently opt a saved server into anonymous requests.
-  const canSaveWithoutRemovedKey =
-    Platform.OS === 'android' &&
-    selection.mode === 'providers' &&
-    provider?.id === 'custom' &&
-    configured === false &&
-    !!savedSelection.credentialRef;
+  const canSaveWithoutRemovedKey = workflowSettingsPlatform.canSaveWithoutRemovedKey(
+    selection,
+    provider?.id,
+    configured,
+    savedSelection,
+  );
   const canSave = (hasUnsavedChanges || canSaveWithoutRemovedKey) && !busy;
   usePreventRemove(hasUnsavedChanges, ({ data }) =>
     confirmDestructive(
@@ -555,10 +491,10 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
         'Your selection and any key you entered have not been saved.',
       ),
       () => navigation.dispatch(data.action),
-      {
-        destructiveLabel: copy('workflowSettings.discardAction', 'Discard'),
-        cancelLabel: copy('cancel', 'Cancel'),
-      },
+      workflowSettingsPlatform.confirmationOptions(
+        copy('workflowSettings.discardAction', 'Discard'),
+        copy,
+      ),
     ),
   );
 
@@ -568,9 +504,9 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
 
   useEffect(() => {
     let cancelled = false;
-    setConfigured(null);
+    setConfigured(workflowSettingsPlatform.initialConfigured);
     if (
-      (Platform.OS === 'ios' || Platform.OS === 'android') &&
+      workflowSettingsPlatform.supportsCredentials &&
       selection.mode === 'providers' &&
       providerId
     ) {
@@ -913,17 +849,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
       }
     } catch (failure: unknown) {
       if (!controller.signal.aborted) {
-        const providerFailure = failure instanceof ProviderExecutionError ? failure : undefined;
-        const key = providerFailure && getProviderErrorCopyKey(providerFailure);
-        const fallback =
-          'Unable to check this provider. Check the endpoint and connection, then try again.';
-        showError(
-          Platform.OS !== 'android' && providerFailure
-            ? providerFailure.message
-            : copy(key ?? 'workflowSettings.checkFailed', fallback, {
-                status: providerFailure?.status,
-              }),
-        );
+        showError(workflowSettingsPlatform.diagnosticFailure(failure, copy));
       }
     } finally {
       diagnosticController.current = null;
@@ -977,10 +903,10 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
           setBusy(false);
         }
       },
-      {
-        destructiveLabel: copy('workflowSettings.removeAction', 'Remove'),
-        cancelLabel: copy('cancel', 'Cancel'),
-      },
+      workflowSettingsPlatform.confirmationOptions(
+        copy('workflowSettings.removeAction', 'Remove'),
+        copy,
+      ),
     );
   }
 
@@ -1013,15 +939,9 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
   }
 
   return (
-    <KeyboardAvoidingView
-      className="flex-1 bg-systemBackground"
-      behavior={Platform.OS === 'android' ? 'padding' : undefined}
-      // Android's hidden keyboard frame includes system bars; do not retain that inset.
-      enabled={Platform.OS === 'android' && keyboardHeight > 0}
-    >
+    <Container className="flex-1 bg-systemBackground" {...containerProps}>
       <SettingsScreen
-        // TalkBack scrolls focused controls to the viewport edge, past content padding.
-        style={Platform.OS === 'android' ? { marginBottom: insets.bottom } : undefined}
+        {...screenProps}
         automaticallyAdjustKeyboardInsets
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
@@ -1039,19 +959,8 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
               statuses={modeStatuses}
             />
             {modeNote ? <SectionFooter>{modeNote}</SectionFooter> : null}
-            {selection.mode === 'local' && Platform.OS === 'android' ? (
-              <SettingsSection title={copy('workflowSettings.onDeviceModels', 'On-device models')}>
-                <SettingsRow
-                  icon="arrow.down.circle"
-                  mdIcon="Download"
-                  title={copy('workflowSettings.chooseModels', 'Choose or download models')}
-                  description={copy(
-                    'workflowSettings.chooseModelsBody',
-                    'Choose speech and text models for this phone.',
-                  )}
-                  onPress={() => router.push('/(account)/ai-models')}
-                />
-              </SettingsSection>
+            {selection.mode === 'local' && LocalModelSettings ? (
+              <LocalModelSettings copy={copy} />
             ) : selection.mode === 'local' && speechScope ? (
               <OnDeviceModelSection
                 scope={speechScope}
@@ -1062,14 +971,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
               />
             ) : null}
             {selection.mode === 'local' && !speechScope && !onDeviceUnsupported ? (
-              <SectionFooter>
-                {Platform.OS === 'android'
-                  ? copy(
-                      'workflowSettings.localModelBody',
-                      'Runs on your downloaded text model on this phone.',
-                    )
-                  : 'Runs on Apple Intelligence on this iPhone.'}
-              </SectionFooter>
+              <SectionFooter>{workflowSettingsPlatform.textModelFooter(copy)}</SectionFooter>
             ) : null}
             {selection.mode === 'providers' && provider ? (
               <>
@@ -1120,7 +1022,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
                       label={copy('workflowSettings.server', 'Server')}
                       accessibilityLabel={copy('workflowSettings.serverUrl', 'Server URL')}
                       value={selection.endpoint ?? ''}
-                      style={Platform.OS === 'android' ? PROVIDER_IDENTIFIER_STYLE : undefined}
+                      {...workflowSettingsPlatform.fieldProps}
                       onChangeText={(endpoint) => {
                         setSelection({ ...selection, endpoint });
                         clearInputs();
@@ -1138,7 +1040,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
                       label={copy('workflowSettings.modelId', 'Model ID')}
                       accessibilityLabel={copy('workflowSettings.modelId', 'Model ID')}
                       value={modelId}
-                      style={Platform.OS === 'android' ? PROVIDER_IDENTIFIER_STYLE : undefined}
+                      {...workflowSettingsPlatform.fieldProps}
                       onChangeText={(nextModel) =>
                         setSelection({ ...selection, modelId: nextModel })
                       }
@@ -1150,10 +1052,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
                 </SettingsSection>
                 {provider.id === 'custom' ? (
                   <SectionFooter>
-                    {copy(
-                      'workflowSettings.serverHint',
-                      "On this phone, localhost is this phone. Use your server's network address.",
-                    )}
+                    {copy('workflowSettings.serverHint', workflowSettingsPlatform.serverHint)}
                   </SectionFooter>
                 ) : null}
                 <SettingsSection title={copy('workflowSettings.apiKeyTitle', 'API Key')}>
@@ -1162,11 +1061,14 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
                     mdIcon="KeyRound"
                     accessibilityLabel={copy('workflowSettings.apiKey', 'API key')}
                     value={apiKey}
-                    style={Platform.OS === 'android' ? PROVIDER_IDENTIFIER_STYLE : undefined}
+                    {...workflowSettingsPlatform.fieldProps}
                     onChangeText={(next) => {
                       // Android can batch typed characters; dismissing here can move the
                       // remaining keystrokes into another field. Explicit actions dismiss it.
-                      if (Platform.OS !== 'android' && next.length - apiKey.length > 1) {
+                      if (
+                        workflowSettingsPlatform.dismissKeyboardOnPaste &&
+                        next.length - apiKey.length > 1
+                      ) {
                         Keyboard.dismiss();
                       }
                       setApiKey(next);
@@ -1261,7 +1163,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
                 <View className="mx-4 mb-7">
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel={copy('save', 'Save')}
+                    {...workflowSettingsPlatform.labelProps(copy('save', 'Save'))}
                     accessibilityState={{ disabled: !canSave, busy }}
                     onPress={save}
                     disabled={!canSave}
@@ -1290,6 +1192,6 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
         )}
       </SettingsScreen>
       <Toast {...toast} topOffset={headerHeight + 8} />
-    </KeyboardAvoidingView>
+    </Container>
   );
 }

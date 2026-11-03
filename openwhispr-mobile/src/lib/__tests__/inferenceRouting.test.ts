@@ -20,6 +20,28 @@ jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ user: mockUser }) },
 }));
 
+jest.mock('../inferenceRouting', () => {
+  const defaultRouting =
+    jest.requireActual<typeof import('../inferenceRouting')>('../inferenceRouting');
+  const androidRouting = jest.requireActual<typeof import('../inferenceRouting.android')>(
+    '../inferenceRouting.android',
+  );
+  const { Platform: mockPlatform } = jest.requireActual(
+    'react-native',
+  ) as typeof import('react-native');
+  return new Proxy(
+    {},
+    {
+      get:
+        (_target, key: keyof typeof defaultRouting) =>
+        (...args: unknown[]) => {
+          const routing = mockPlatform.OS === 'android' ? androidRouting : defaultRouting;
+          return (routing[key] as (...values: unknown[]) => unknown)(...args);
+        },
+    },
+  );
+});
+
 // A keyboard recording also snapshots the voice assistant's route for a wand job.
 const KEYBOARD_TEXT_SCOPES = ['cleanup', 'agent'] as const;
 
