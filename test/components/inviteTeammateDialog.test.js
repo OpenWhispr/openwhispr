@@ -336,24 +336,32 @@ async function mountWithWorkspace(t, workspace, props = {}, options) {
 }
 
 test("seats left come from the workspace list", async (t) => {
-  const { latest } = await mountWithWorkspace(t, {
-    ...WORKSPACE,
-    has_subscription: true,
-    seats: 20,
-    seats_used: 10,
-    seat_limit: 500,
-  });
+  const { latest } = await mountWithWorkspace(
+    t,
+    {
+      ...WORKSPACE,
+      has_subscription: true,
+      seats: 20,
+      seats_used: 10,
+      seat_limit: 500,
+    },
+    { knownEmails: { members: [], invited: [] } }
+  );
 
   assert.deepEqual(latest().state.seats, { purchasedLeft: 10, ceilingLeft: 490 });
 });
 
 test("the seat line and the seat warning count the same seats", async (t) => {
   // An admin: the owner-only preview refuses, and seats_used counts pending invitations too.
-  const { latest } = await mountWithWorkspace(t, {
-    ...WORKSPACE,
-    has_subscription: true,
-    seats_used: 10,
-  });
+  const { latest } = await mountWithWorkspace(
+    t,
+    {
+      ...WORKSPACE,
+      has_subscription: true,
+      seats_used: 10,
+    },
+    { knownEmails: { members: [], invited: [] } }
+  );
   await React.act(async () => {});
 
   assert.equal(latest().seatLine, 'workspaces.invite.seatUsage|{"used":10,"seats":20}');
@@ -427,12 +435,16 @@ test("a subscribed workspace with no count to show hides the line and reads no m
 
 test("a free workspace gets no seat warning", async (t) => {
   // A free workspace's seats is a placeholder 1, so it says nothing about room left.
-  const { latest } = await mountWithWorkspace(t, {
-    ...WORKSPACE,
-    has_subscription: false,
-    seats: 1,
-    seats_used: 3,
-  });
+  const { latest } = await mountWithWorkspace(
+    t,
+    {
+      ...WORKSPACE,
+      has_subscription: false,
+      seats: 1,
+      seats_used: 3,
+    },
+    { knownEmails: { members: [], invited: [] } }
+  );
 
   assert.deepEqual(latest().state.seats, { purchasedLeft: null, ceilingLeft: 497 });
 });
@@ -491,6 +503,29 @@ const findUpgrade = (container) =>
 const propsOf = (node) => node[Object.keys(node).find((name) => name.startsWith("__reactProps$"))];
 
 const pressButton = (button) => React.act(async () => propsOf(button).onClick());
+
+test("without a roster, an existing address cannot block a valid batch near the ceiling", async (t) => {
+  const { container } = await mountWithWorkspace(
+    t,
+    { ...WORKSPACE, seats_used: 499, seat_limit: 500 },
+    {},
+    { realView: true }
+  );
+  const input = findNode(container, (node) => node.getAttribute("role") === "combobox");
+  await React.act(async () => {
+    propsOf(input).onChange({ target: { value: "existing@example.com, new@example.com," } });
+  });
+  const send = findNode(
+    container,
+    (node) =>
+      node.localName === "button" && node.textContent.startsWith("workspaces.invite.submit|")
+  );
+
+  assert.ok(send, container.textContent);
+  assert.equal(send.hasAttribute("disabled"), false);
+  await pressButton(send);
+  assert.deepEqual(globalThis.__sendCalls[0].emails, ["existing@example.com", "new@example.com"]);
+});
 
 test("Upgrade shows from every entry point", async (t) => {
   const { container } = await mountWithWorkspace(

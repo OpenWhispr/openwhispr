@@ -88,7 +88,10 @@ export default function InviteTeammateDialog({
       ? workspace.seats - workspaceSeatsUsed
       : null;
   const ceilingLeft =
-    typeof workspace?.seat_limit === "number" && typeof workspaceSeatsUsed === "number"
+    // Without the roster, only the server can exclude existing members and invitations.
+    knownEmails !== undefined &&
+    typeof workspace?.seat_limit === "number" &&
+    typeof workspaceSeatsUsed === "number"
       ? workspace.seat_limit - workspaceSeatsUsed
       : null;
 
