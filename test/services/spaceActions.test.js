@@ -44,6 +44,14 @@ function makeHarness() {
         calls.push(["space.removeMember", spaceId, userId]);
         return { removed: true, still_via_teams: [] };
       },
+      join: async (spaceId) => {
+        calls.push(["space.join", spaceId]);
+        return { joined: true };
+      },
+      addMembers: async (spaceId, userIds) => {
+        calls.push(["space.addMembers", spaceId, userIds]);
+        return { added: userIds, already_members: [] };
+      },
     },
     local: {
       upsertSpaceFromCloud: async (space) => {
@@ -60,6 +68,10 @@ function makeHarness() {
         return { success: true };
       },
       loadSpaces: async () => calls.push(["local.load"]),
+      getSpaces: async () => {
+        calls.push(["local.getSpaces"]);
+        return [localSpace];
+      },
     },
     mirror: {
       upsertCloudSpaces: async (spaces) =>
@@ -228,6 +240,7 @@ test("deleteSpace archives and guards cloud rows before local purge", async () =
   assert.deepEqual(await actions.deleteSpace(localSpace), {
     success: false,
     error: "forbidden",
+    failure: { kind: "failed" },
   });
   assert.equal(
     calls.some(([name]) => name === "local.purge"),
@@ -355,4 +368,322 @@ test("team assignment rejects local-only spaces before making a cloud request", 
   await assert.rejects(actions.addSpaceMembers(localOnly, ["user-1"]), /Not a cloud space/);
   await assert.rejects(actions.leaveSpace(localOnly, "me"), /Not a cloud space/);
   assert.equal(calls.length, 0);
+});
+
+const minutesAgo = (minutes) => new Date(Date.now() - minutes * 60_000).toISOString();
+
+// What GET /api/me/spaces lists for a teamspace the caller just created.
+const ownCreate = (overrides = {}) => ({
+  id: "cloud-space-9",
+  workspace_id: "workspace-1",
+  name: "Roadmap",
+  my_role: "admin",
+  my_direct_role: "admin",
+  created_at: minutesAgo(1),
+  ...overrides,
+});
+
+test("createSpace sends the description and both flags when given", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps } = makeHarness();
+  const actions = createSpaceActions(deps);
+
+  await actions.createSpace(
+    "workspace-1",
+    { name: "Roadmap", description: "Plans", is_default: true, is_open: false },
+    { memberIds: [], teamIds: [] }
+  );
+
+  assert.deepEqual(calls[0], [
+    "space.create",
+    "workspace-1",
+    {
+      name: "Roadmap",
+      description: "Plans",
+      is_default: true,
+      is_open: false,
+      member_ids: [],
+      team_ids: [],
+    },
+  ]);
+});
+
+test("joining refreshes the mirror and asks for a sync", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps } = makeHarness();
+  const actions = createSpaceActions(deps);
+
+  assert.deepEqual(await actions.joinSpace("cloud-space-1"), { joined: true });
+
+  assert.deepEqual(calls, [
+    ["space.join", "cloud-space-1"],
+    ["roster.invalidate", undefined],
+    ["space.mySpaces"],
+    ["mirror.upsert", ["cloud-space-1"]],
+    ["local.load"],
+    ["sync", "manual"],
+  ]);
+});
+
+test("joining reports a space the caller was already in", async () => {
+  const { createSpaceActions } = await load();
+  const { deps } = makeHarness();
+  deps.spaces.join = async () => ({ joined: false });
+  const actions = createSpaceActions(deps);
+
+  assert.deepEqual(await actions.joinSpace("cloud-space-1"), { joined: false });
+});
+
+test("a refused join changes nothing locally", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { calls, deps } = makeHarness();
+  const refusal = new CloudApiError("Space is not open", 403, "space_not_open");
+  deps.spaces.join = async () => {
+    throw refusal;
+  };
+  const actions = createSpaceActions(deps);
+
+  await assert.rejects(actions.joinSpace("cloud-space-1"), refusal);
+  assert.equal(calls.length, 0);
+});
+
+test("adding people refreshes the mirror once and returns the server's lists", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps } = makeHarness();
+  deps.spaces.addMembers = async (spaceId, userIds) => {
+    calls.push(["space.addMembers", spaceId, userIds]);
+    return { added: ["user-1"], already_members: ["user-2"] };
+  };
+  const actions = createSpaceActions(deps);
+
+  const result = await actions.addPeopleToSpace("cloud-space-1", ["user-1", "user-2"]);
+
+  assert.deepEqual(result, { added: ["user-1"], already_members: ["user-2"] });
+  assert.deepEqual(calls, [
+    ["space.addMembers", "cloud-space-1", ["user-1", "user-2"]],
+    ["roster.invalidate", undefined],
+    ["space.mySpaces"],
+    ["mirror.upsert", ["cloud-space-1"]],
+    ["local.load"],
+    ["sync", "manual"],
+  ]);
+});
+
+test("a retried delete that finds it archived reports success", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { calls, deps, localSpace } = makeHarness();
+  // The first delete went through but its answer was lost, so the retry meets an archived space.
+  deps.spaces.remove = async (spaceId) => {
+    calls.push(["space.remove", spaceId]);
+    throw new CloudApiError("Space archived", 410, "space_archived");
+  };
+  const actions = createSpaceActions(deps);
+
+  assert.deepEqual(await actions.deleteSpace(localSpace), { success: true });
+  assert.deepEqual(calls, [
+    ["space.remove", "cloud-space-1"],
+    ["roster.invalidate", "cloud-space-1"],
+    ["guard", "cloud-space-1", "deleted"],
+    ["local.purge", 7],
+  ]);
+});
+
+test("a failed delete carries its kind", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { calls, deps, localSpace } = makeHarness();
+  deps.spaces.remove = async () => {
+    throw new CloudApiError("Insufficient role", 403);
+  };
+  const actions = createSpaceActions(deps);
+
+  assert.deepEqual(await actions.deleteSpace(localSpace), {
+    success: false,
+    error: "Insufficient role",
+    failure: { kind: "notAllowed" },
+  });
+  assert.deepEqual(calls, [], "a refused delete leaves the roster, the guard and the mirror alone");
+});
+
+test("a retried create that finds its own teamspace reports success", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { calls, deps, localSpace } = makeHarness();
+  const found = ownCreate();
+  deps.spaces.create = async () => {
+    throw new CloudApiError("Cloud API request failed", 0);
+  };
+  deps.spaces.mySpaces = async () => {
+    calls.push(["space.mySpaces"]);
+    return [ownCreate({ id: "cloud-space-8", name: "Other" }), found];
+  };
+  deps.local.upsertSpaceFromCloud = async (space) => {
+    calls.push(["local.upsert", space.id]);
+    return localSpace;
+  };
+  const actions = createSpaceActions(deps);
+
+  const space = await actions.createSpace(
+    "workspace-1",
+    { name: "  Roadmap " },
+    { memberIds: [], teamIds: [] }
+  );
+
+  assert.equal(space, localSpace);
+  assert.deepEqual(calls, [
+    ["space.mySpaces"],
+    ["local.upsert", "cloud-space-9"],
+    ["local.setStatus", 7, "synced"],
+    ["local.load"],
+    ["sync", "manual"],
+  ]);
+});
+
+test("a lost create with no matching teamspace rethrows", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { calls, deps } = makeHarness();
+  const lost = new CloudApiError("Cloud API request failed", 0);
+  deps.spaces.create = async () => {
+    throw lost;
+  };
+  // Each of these fails one of the four tests a teamspace of the caller's own has to pass.
+  deps.spaces.mySpaces = async () => [
+    ownCreate({ name: "Roadmaps" }),
+    ownCreate({ workspace_id: "workspace-2" }),
+    ownCreate({ my_direct_role: "member" }),
+    ownCreate({ my_direct_role: null, my_role: "admin" }),
+  ];
+  const actions = createSpaceActions(deps);
+
+  await assert.rejects(
+    actions.createSpace("workspace-1", { name: "Roadmap" }, { memberIds: [], teamIds: [] }),
+    (error) => error === lost
+  );
+  assert.equal(calls.filter(([name]) => name.startsWith("local.")).length, 0);
+});
+
+test("a lost create whose lookup fails too rethrows the create's error", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { deps } = makeHarness();
+  const lost = new CloudApiError("Cloud API request failed", 0);
+  deps.spaces.create = async () => {
+    throw lost;
+  };
+  deps.spaces.mySpaces = async () => {
+    throw new CloudApiError("Cloud API request failed", 0);
+  };
+  const actions = createSpaceActions(deps);
+
+  await assert.rejects(
+    actions.createSpace("workspace-1", { name: "Roadmap" }, { memberIds: [], teamIds: [] }),
+    (error) => error === lost
+  );
+});
+
+test("an old same-name teamspace doesn't count", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { deps } = makeHarness();
+  const lost = new CloudApiError("Cloud API request failed", 0);
+  deps.spaces.create = async () => {
+    throw lost;
+  };
+  deps.spaces.mySpaces = async () => [ownCreate({ created_at: minutesAgo(6) })];
+  const actions = createSpaceActions(deps);
+
+  await assert.rejects(
+    actions.createSpace("workspace-1", { name: "Roadmap" }, { memberIds: [], teamIds: [] }),
+    (error) => error === lost
+  );
+});
+
+test("a name-taken refusal never looks", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+
+  // The server answered, so there is nothing lost to find; a same-name space of the caller's
+  // would be the very one that made the name taken.
+  for (const refusal of [
+    new CloudApiError("Name taken", 409, "space_name_taken"),
+    new CloudApiError("Name taken", 409),
+    new CloudApiError("Server error", 500),
+  ]) {
+    const { calls, deps } = makeHarness();
+    deps.spaces.create = async () => {
+      throw refusal;
+    };
+    deps.spaces.mySpaces = async () => {
+      calls.push(["space.mySpaces"]);
+      return [ownCreate()];
+    };
+    const actions = createSpaceActions(deps);
+
+    await assert.rejects(
+      actions.createSpace("workspace-1", { name: "Roadmap" }, { memberIds: [], teamIds: [] }),
+      (error) => error === refusal
+    );
+    assert.equal(calls.length, 0);
+  }
+});
+
+test("flags go through update and refresh the mirror", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps } = makeHarness();
+  const actions = createSpaceActions(deps);
+
+  await actions.setSpaceAccessFlags("cloud-space-1", { is_open: true });
+
+  assert.deepEqual(calls, [
+    ["space.update", "cloud-space-1", { is_open: true }],
+    ["roster.invalidate", undefined],
+    ["space.mySpaces"],
+    ["mirror.upsert", ["cloud-space-1"]],
+    ["local.load"],
+  ]);
+});
+
+test("localSpaceIdFor refreshes once on a miss", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps, localSpace } = makeHarness();
+  let mirrored = false;
+  deps.mirror.upsertCloudSpaces = async () => {
+    mirrored = true;
+  };
+  deps.local.getSpaces = async () => {
+    calls.push(["local.getSpaces"]);
+    return mirrored ? [localSpace] : [];
+  };
+  const actions = createSpaceActions(deps);
+
+  assert.equal(await actions.localSpaceIdFor("cloud-space-1"), 7);
+  assert.deepEqual(
+    calls.filter(([name]) => name === "space.mySpaces" || name === "local.getSpaces"),
+    [["local.getSpaces"], ["space.mySpaces"], ["local.getSpaces"]]
+  );
+});
+
+test("localSpaceIdFor reads the mirror alone when the space is there", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps } = makeHarness();
+  const actions = createSpaceActions(deps);
+
+  assert.equal(await actions.localSpaceIdFor("cloud-space-1"), 7);
+  assert.deepEqual(calls, [["local.getSpaces"]]);
+});
+
+test("localSpaceIdFor gives null when a refreshed mirror still lacks the space", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps } = makeHarness();
+  deps.local.getSpaces = async () => {
+    calls.push(["local.getSpaces"]);
+    return [];
+  };
+  const actions = createSpaceActions(deps);
+
+  assert.equal(await actions.localSpaceIdFor("cloud-space-1"), null);
+  assert.equal(calls.filter(([name]) => name === "space.mySpaces").length, 1);
 });

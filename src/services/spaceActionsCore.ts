@@ -1,10 +1,26 @@
+import { classifySpaceError, type SpaceActionError } from "../lib/workspaceErrors";
 import type { SpaceItem, TeamRole } from "../types/electron";
-import type { MySpace, SpaceMemberRemoval, SpaceRecord } from "./SpacesService";
+import { CloudApiError } from "./cloudApi";
+import type { MySpace, SpaceMemberRemoval, SpaceRecord, SpacesService } from "./SpacesService";
 
 interface MutationResult {
   success: boolean;
   error?: string;
 }
+
+type SpaceUpdatePatch = Parameters<typeof SpacesService.update>[1];
+
+export interface CreateSpaceInput {
+  name: string;
+  emoji?: string | null;
+  description?: string;
+  is_default?: boolean;
+  is_open?: boolean;
+}
+
+// A create whose answer never arrived can still have happened. Past this age a same-name space
+// of the caller's is far more likely an earlier teamspace than the one this attempt made.
+const LOST_CREATE_WINDOW_MS = 5 * 60_000;
 
 export interface SpaceActionsDependencies {
   teams: {
@@ -16,18 +32,20 @@ export interface SpaceActionsDependencies {
     mySpaces: () => Promise<MySpace[]>;
     create: (
       workspaceId: string,
-      input: { name: string; emoji?: string | null; member_ids: string[]; team_ids: string[] }
+      input: CreateSpaceInput & { member_ids: string[]; team_ids: string[] }
     ) => Promise<MySpace>;
-    update: (
-      spaceId: string,
-      updates: { name: string; emoji: string | null }
-    ) => Promise<SpaceRecord>;
+    update: (spaceId: string, updates: SpaceUpdatePatch) => Promise<SpaceRecord>;
     remove: (spaceId: string) => Promise<void>;
     assignTeam: (spaceId: string, teamId: string, access?: "admin" | "member") => Promise<void>;
     unassignTeam: (spaceId: string, teamId: string) => Promise<void>;
     addMember: (spaceId: string, userId: string, role?: TeamRole) => Promise<void>;
     setMemberRole: (spaceId: string, userId: string, role: TeamRole) => Promise<void>;
     removeMember: (spaceId: string, userId: string) => Promise<SpaceMemberRemoval>;
+    join: (spaceId: string) => Promise<{ joined: boolean }>;
+    addMembers: (
+      spaceId: string,
+      userIds: string[]
+    ) => Promise<{ added: string[]; already_members: string[] }>;
   };
   local: {
     upsertSpaceFromCloud: (space: Record<string, unknown>) => Promise<SpaceItem | null>;
@@ -38,6 +56,7 @@ export interface SpaceActionsDependencies {
     ) => Promise<MutationResult>;
     purgeSpace: (id: number) => Promise<MutationResult>;
     loadSpaces: () => Promise<unknown>;
+    getSpaces: () => Promise<SpaceItem[]>;
   };
   mirror: {
     upsertCloudSpaces: (spaces: MySpace[]) => Promise<unknown>;
@@ -56,6 +75,11 @@ function requireCloudSpaceId(space: SpaceItem): string {
 
 function errorMessage(err: unknown): string | undefined {
   return err instanceof Error ? err.message : undefined;
+}
+
+// No response at all (status 0): the request may have been carried out before the answer was lost.
+function isLostAnswer(err: unknown): boolean {
+  return err instanceof CloudApiError && !err.status;
 }
 
 export function createSpaceActions(deps: SpaceActionsDependencies) {
@@ -79,19 +103,50 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     await deps.local.loadSpaces();
   }
 
+  // After a lost answer the server may still have created the teamspace. It is the caller's own
+  // when it is in this workspace under the name sent, the caller is its direct admin (the creator
+  // always is) and it is new; any other same-name space was there before this attempt.
+  async function findLostCreate(workspaceId: string, name: string): Promise<MySpace | null> {
+    const wanted = name.trim();
+    try {
+      const cloudSpaces = await deps.spaces.mySpaces();
+      const now = Date.now();
+      return (
+        cloudSpaces.find(
+          (cloudSpace) =>
+            cloudSpace.workspace_id === workspaceId &&
+            cloudSpace.name.trim() === wanted &&
+            cloudSpace.my_direct_role === "admin" &&
+            // Either side of now: this clock and the server's can disagree.
+            Math.abs(now - Date.parse(cloudSpace.created_at)) <= LOST_CREATE_WINDOW_MS
+        ) ?? null
+      );
+    } catch {
+      // The create's own error is the one worth reporting.
+      return null;
+    }
+  }
+
   // Members and teams travel in the create body, so the server grants them
   // atomically with the space; there is no partial-failure state to report.
   async function createSpace(
     workspaceId: string,
-    input: { name: string; emoji?: string | null },
+    input: CreateSpaceInput,
     access: { memberIds: string[]; teamIds: string[] }
   ): Promise<SpaceItem | null> {
-    const cloudSpace = await deps.spaces.create(workspaceId, {
-      name: input.name,
-      emoji: input.emoji,
-      member_ids: access.memberIds,
-      team_ids: access.teamIds,
-    });
+    let cloudSpace: MySpace;
+    try {
+      cloudSpace = await deps.spaces.create(workspaceId, {
+        ...input,
+        member_ids: access.memberIds,
+        team_ids: access.teamIds,
+      });
+    } catch (err) {
+      // A retry of a create that went through would only meet its own name taken.
+      const created = isLostAnswer(err) ? await findLostCreate(workspaceId, input.name) : null;
+      if (!created) throw err;
+      cloudSpace = created;
+    }
     const space = await deps.local.upsertSpaceFromCloud(
       cloudSpace as unknown as Record<string, unknown>
     );
@@ -148,12 +203,18 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     return { success: true };
   }
 
-  async function deleteSpace(space: SpaceItem): Promise<{ success: boolean; error?: string }> {
+  async function deleteSpace(
+    space: SpaceItem
+  ): Promise<{ success: boolean; error?: string; failure?: SpaceActionError }> {
     if (space.cloud_space_id) {
       try {
         await deps.spaces.remove(space.cloud_space_id);
       } catch (err) {
-        return { success: false, error: errorMessage(err) };
+        const failure = classifySpaceError(err);
+        // An archived space is gone: an earlier delete went through and its answer was lost.
+        if (failure.kind !== "archived") {
+          return { success: false, error: errorMessage(err), failure };
+        }
       }
       deps.invalidateSpaceRoster(space.cloud_space_id);
       await deps.markSpacePurged(space.cloud_space_id, "deleted");
@@ -191,6 +252,47 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     );
     await refreshSpaceMirror();
     return { failures };
+  }
+
+  // A newly reachable space inserts as pending in the mirror; the sync pass backfills its content.
+  async function joinSpace(cloudSpaceId: string): Promise<{ joined: boolean }> {
+    const result = await deps.spaces.join(cloudSpaceId);
+    await refreshSpaceMirror();
+    deps.sync.requestSyncAll("manual");
+    return result;
+  }
+
+  // The server leaves people already in the space as they are, so a retry only reports them.
+  async function addPeopleToSpace(
+    cloudSpaceId: string,
+    userIds: string[]
+  ): Promise<{ added: string[]; already_members: string[] }> {
+    const result = await deps.spaces.addMembers(cloudSpaceId, userIds);
+    await refreshSpaceMirror();
+    deps.sync.requestSyncAll("manual");
+    return result;
+  }
+
+  // The flags aren't mirrored (the pages read them from the directory); the refresh follows like
+  // every other space change, so the mirror never trails the server.
+  async function setSpaceAccessFlags(
+    cloudSpaceId: string,
+    flags: { is_default?: boolean; is_open?: boolean }
+  ): Promise<void> {
+    await deps.spaces.update(cloudSpaceId, flags);
+    await refreshSpaceMirror();
+  }
+
+  // A space reached through a join or an add is mirrored by then; a miss means the mirror is stale.
+  async function localSpaceIdFor(cloudSpaceId: string): Promise<number | null> {
+    const findLocalId = async (): Promise<number | null> => {
+      const spaces = await deps.local.getSpaces();
+      return spaces.find((space) => space.cloud_space_id === cloudSpaceId)?.id ?? null;
+    };
+    const known = await findLocalId();
+    if (known != null) return known;
+    await refreshSpaceMirror();
+    return findLocalId();
   }
 
   async function setSpaceMemberRole(
@@ -257,6 +359,10 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     setSpaceTeamAccess,
     unassignTeamFromSpace,
     addSpaceMembers,
+    joinSpace,
+    addPeopleToSpace,
+    setSpaceAccessFlags,
+    localSpaceIdFor,
     setSpaceMemberRole,
     removeSpaceMember,
     leaveSpace,
