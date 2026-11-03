@@ -1799,7 +1799,38 @@
         }
       },
       "teamspaces": {
-        "title": "Teamspaces"
+        "title": "Teamspaces",
+        "subtitleManage": "Manage teamspaces in this workspace.",
+        "subtitleView": "Teamspaces in this workspace.",
+        "create": "Create teamspace",
+        "columns": {
+          "name": "Name",
+          "admins": "Admins",
+          "actions": "Actions",
+          "members": "Members"
+        },
+        "loadingTitle": "Loading teamspaces…",
+        "loadingBody": "Your workspace teamspaces will appear here.",
+        "failedTitle": "Couldn't load teamspaces",
+        "failedBody": "Check your connection and try again.",
+        "retry": "Try again",
+        "emptyTitle": "No teamspaces yet",
+        "emptyBody": "A teamspace is a shared area for a team's notes. Add people or groups, and everyone in it can read and edit.",
+        "emptyBodyMember": "Your workspace admins haven't created one yet.",
+        "adminCount_one": "{{count}} admin",
+        "adminCount_other": "{{count}} admins",
+        "noAdmins": "Workspace admins",
+        "you": "You",
+        "join": "Join",
+        "joining": "Joining…",
+        "joined": "Joined {{space}}",
+        "joinFailed": "Couldn't join {{space}}. Try again.",
+        "joinClosed": "{{space}} no longer takes new members. Ask an admin to add you.",
+        "openTeamspace": "Open teamspace",
+        "rowMenu": {
+          "settings": "Settings",
+          "delete": "Delete teamspace"
+        }
       },
       "role": {
         "owner": "Owner",

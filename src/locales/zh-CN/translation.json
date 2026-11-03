@@ -2528,7 +2528,38 @@
         }
       },
       "teamspaces": {
-        "title": "Teamspace"
+        "title": "Teamspace",
+        "subtitleManage": "管理此工作区中的 Teamspace。",
+        "subtitleView": "此工作区中的 Teamspace。",
+        "create": "创建 Teamspace",
+        "columns": {
+          "name": "名称",
+          "admins": "管理员",
+          "actions": "操作",
+          "members": "成员"
+        },
+        "loadingTitle": "正在加载 Teamspace…",
+        "loadingBody": "工作区的 Teamspace 将显示在这里。",
+        "failedTitle": "无法加载 Teamspace",
+        "failedBody": "请检查网络连接后重试。",
+        "retry": "重试",
+        "emptyTitle": "还没有 Teamspace",
+        "emptyBody": "Teamspace 是团队笔记的共享区域。添加成员或群组后，其中的每个人都可以阅读和编辑。",
+        "emptyBodyMember": "工作区管理员尚未创建任何 Teamspace。",
+        "adminCount_one": "{{count}} 位管理员",
+        "adminCount_other": "{{count}} 位管理员",
+        "noAdmins": "工作区管理员",
+        "you": "你",
+        "join": "加入",
+        "joining": "正在加入…",
+        "joined": "已加入 {{space}}",
+        "joinFailed": "无法加入 {{space}}，请重试。",
+        "joinClosed": "{{space}} 不再接受新成员。请联系管理员将你添加进去。",
+        "openTeamspace": "打开 Teamspace",
+        "rowMenu": {
+          "settings": "设置",
+          "delete": "删除 Teamspace"
+        }
       },
       "role": {
         "owner": "所有者",

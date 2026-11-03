@@ -20,6 +20,7 @@ const ARABIC_PLURAL_BASES = [
   "settingsPage.workspace.teams.memberCount",
   "settingsPage.workspace.teams.grantsAccessToSpaces",
   "settingsPage.workspace.teams.deleteConfirmSpaceAccess",
+  "settingsPage.workspace.teamspaces.adminCount",
   "settingsPage.workspace.people.invitations.pending",
   "settingsPage.workspace.people.selection.count",
   "settingsPage.workspace.people.invitations.resentMany",

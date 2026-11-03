@@ -1799,7 +1799,38 @@
         }
       },
       "teamspaces": {
-        "title": "Teamspaces"
+        "title": "Teamspaces",
+        "subtitleManage": "Verwalten Sie die Teamspaces in diesem Workspace.",
+        "subtitleView": "Teamspaces in diesem Workspace.",
+        "create": "Teamspace erstellen",
+        "columns": {
+          "name": "Name",
+          "admins": "Administratoren",
+          "actions": "Aktionen",
+          "members": "Mitglieder"
+        },
+        "loadingTitle": "Teamspaces werden geladen…",
+        "loadingBody": "Die Teamspaces Ihres Workspace werden hier angezeigt.",
+        "failedTitle": "Teamspaces konnten nicht geladen werden",
+        "failedBody": "Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+        "retry": "Erneut versuchen",
+        "emptyTitle": "Noch keine Teamspaces",
+        "emptyBody": "Ein Teamspace ist ein gemeinsamer Bereich für die Notizen eines Teams. Fügen Sie Personen oder Gruppen hinzu, und alle darin können lesen und bearbeiten.",
+        "emptyBodyMember": "Die Administratoren Ihres Workspace haben noch keinen erstellt.",
+        "adminCount_one": "{{count}} Administrator",
+        "adminCount_other": "{{count}} Administratoren",
+        "noAdmins": "Workspace-Administratoren",
+        "you": "Sie",
+        "join": "Beitreten",
+        "joining": "Wird beigetreten…",
+        "joined": "{{space}} beigetreten",
+        "joinFailed": "{{space}} konnte nicht beigetreten werden. Versuchen Sie es erneut.",
+        "joinClosed": "{{space}} nimmt keine neuen Mitglieder mehr auf. Bitten Sie einen Administrator, Sie hinzuzufügen.",
+        "openTeamspace": "Teamspace öffnen",
+        "rowMenu": {
+          "settings": "Einstellungen",
+          "delete": "Teamspace löschen"
+        }
       },
       "role": {
         "owner": "Inhaber",

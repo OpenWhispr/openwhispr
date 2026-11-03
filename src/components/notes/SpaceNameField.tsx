@@ -26,7 +26,8 @@ function initialOf(name: string): string | null {
   return null;
 }
 
-function TileGlyph({ emoji, name }: { emoji: string | null; name: string }) {
+// Also the tile in the Settings Teamspaces table, so a row and this field draw a teamspace alike.
+export function TileGlyph({ emoji, name }: { emoji: string | null; name: string }) {
   if (emoji) return <span className="font-emoji text-lg leading-none">{emoji}</span>;
   const initial = initialOf(name);
   if (initial) return <span className="text-sm font-medium text-foreground/70">{initial}</span>;

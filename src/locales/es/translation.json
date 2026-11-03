@@ -2580,7 +2580,38 @@
         }
       },
       "teamspaces": {
-        "title": "Teamspaces"
+        "title": "Teamspaces",
+        "subtitleManage": "Administra los teamspaces de este espacio de trabajo.",
+        "subtitleView": "Teamspaces de este espacio de trabajo.",
+        "create": "Crear teamspace",
+        "columns": {
+          "name": "Nombre",
+          "admins": "Administradores",
+          "actions": "Acciones",
+          "members": "Miembros"
+        },
+        "loadingTitle": "Cargando teamspaces…",
+        "loadingBody": "Los teamspaces de tu espacio de trabajo aparecerán aquí.",
+        "failedTitle": "No se pudieron cargar los teamspaces",
+        "failedBody": "Comprueba tu conexión e inténtalo de nuevo.",
+        "retry": "Intentar de nuevo",
+        "emptyTitle": "Aún no hay teamspaces",
+        "emptyBody": "Un teamspace es un área compartida para las notas de un equipo. Añade personas o grupos, y todos los que estén en él podrán leer y editar.",
+        "emptyBodyMember": "Los administradores de tu espacio de trabajo aún no han creado ninguno.",
+        "adminCount_one": "{{count}} administrador",
+        "adminCount_other": "{{count}} administradores",
+        "noAdmins": "Administradores del espacio de trabajo",
+        "you": "Tú",
+        "join": "Unirse",
+        "joining": "Uniéndose…",
+        "joined": "Te has unido a {{space}}",
+        "joinFailed": "No pudimos unirte a {{space}}. Inténtalo de nuevo.",
+        "joinClosed": "{{space}} ya no admite nuevos miembros. Pide a un administrador que te añada.",
+        "openTeamspace": "Abrir teamspace",
+        "rowMenu": {
+          "settings": "Ajustes",
+          "delete": "Eliminar teamspace"
+        }
       },
       "role": {
         "owner": "Propietario",

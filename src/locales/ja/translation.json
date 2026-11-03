@@ -2528,7 +2528,38 @@
         }
       },
       "teamspaces": {
-        "title": "Teamspace"
+        "title": "Teamspace",
+        "subtitleManage": "このワークスペースの Teamspace を管理します。",
+        "subtitleView": "このワークスペースの Teamspace です。",
+        "create": "Teamspace を作成",
+        "columns": {
+          "name": "名前",
+          "admins": "管理者",
+          "actions": "操作",
+          "members": "メンバー"
+        },
+        "loadingTitle": "Teamspace を読み込んでいます…",
+        "loadingBody": "ワークスペースの Teamspace がここに表示されます。",
+        "failedTitle": "Teamspace を読み込めませんでした",
+        "failedBody": "接続を確認して、もう一度お試しください。",
+        "retry": "もう一度試す",
+        "emptyTitle": "Teamspace はまだありません",
+        "emptyBody": "Teamspace は、チームのノートを共有するための場所です。メンバーやグループを追加すると、参加している全員が閲覧・編集できます。",
+        "emptyBodyMember": "ワークスペースの管理者がまだ作成していません。",
+        "adminCount_one": "管理者 {{count}} 人",
+        "adminCount_other": "管理者 {{count}} 人",
+        "noAdmins": "ワークスペースの管理者",
+        "you": "あなた",
+        "join": "参加",
+        "joining": "参加しています…",
+        "joined": "{{space}} に参加しました",
+        "joinFailed": "{{space}} に参加できませんでした。もう一度お試しください。",
+        "joinClosed": "{{space}} は新しいメンバーを受け付けていません。管理者に追加を依頼してください。",
+        "openTeamspace": "Teamspace を開く",
+        "rowMenu": {
+          "settings": "設定",
+          "delete": "Teamspace を削除"
+        }
       },
       "role": {
         "owner": "オーナー",

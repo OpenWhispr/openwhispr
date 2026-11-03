@@ -2552,7 +2552,40 @@
         }
       },
       "teamspaces": {
-        "title": "Teamspaces"
+        "title": "Teamspaces",
+        "subtitleManage": "Управляйте teamspaces в этом рабочем пространстве.",
+        "subtitleView": "Teamspaces в этом рабочем пространстве.",
+        "create": "Создать teamspace",
+        "columns": {
+          "name": "Имя",
+          "admins": "Администраторы",
+          "actions": "Действия",
+          "members": "Участники"
+        },
+        "loadingTitle": "Загрузка teamspaces…",
+        "loadingBody": "Здесь появятся teamspaces вашего рабочего пространства.",
+        "failedTitle": "Не удалось загрузить teamspaces",
+        "failedBody": "Проверьте подключение и повторите попытку.",
+        "retry": "Повторить",
+        "emptyTitle": "Пока нет teamspaces",
+        "emptyBody": "Teamspace — общая область для заметок команды. Добавьте людей или группы, и все участники смогут читать и редактировать.",
+        "emptyBodyMember": "Администраторы вашего рабочего пространства ещё не создали ни одного.",
+        "adminCount_one": "{{count}} администратор",
+        "adminCount_few": "{{count}} администратора",
+        "adminCount_many": "{{count}} администраторов",
+        "adminCount_other": "{{count}} администратора",
+        "noAdmins": "Администраторы рабочего пространства",
+        "you": "Вы",
+        "join": "Присоединиться",
+        "joining": "Присоединение…",
+        "joined": "Вы присоединились к {{space}}",
+        "joinFailed": "Не удалось присоединиться к {{space}}. Повторите попытку.",
+        "joinClosed": "{{space}} больше не принимает новых участников. Попросите администратора добавить вас.",
+        "openTeamspace": "Открыть teamspace",
+        "rowMenu": {
+          "settings": "Настройки",
+          "delete": "Удалить teamspace"
+        }
       },
       "role": {
         "owner": "Владелец",
