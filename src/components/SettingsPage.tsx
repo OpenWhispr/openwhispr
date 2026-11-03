@@ -75,6 +75,7 @@ import { usePermissions } from "../hooks/usePermissions";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import { useClipboard } from "../hooks/useClipboard";
 import { useUpdater } from "../hooks/useUpdater";
+import { updatePolicyMessageKey } from "../utils/updatePolicyMessage";
 
 import PromptStudio from "./ui/PromptStudio";
 import { ProviderTabs } from "./ui/ProviderTabs";
@@ -4654,7 +4655,12 @@ EOF`,
                             onClick={async () => {
                               try {
                                 await downloadUpdate();
-                              } catch {
+                              } catch (error) {
+                                const policyMessage = updatePolicyMessageKey(error);
+                                if (policyMessage) {
+                                  toast({ title: t(policyMessage) });
+                                  return;
+                                }
                                 showAlertDialog({
                                   title: t(
                                     "settingsPage.general.updates.dialogs.downloadFailed.title"
@@ -4711,7 +4717,12 @@ EOF`,
                               onConfirm: async () => {
                                 try {
                                   await installUpdateAction();
-                                } catch {
+                                } catch (error) {
+                                  const policyMessage = updatePolicyMessageKey(error);
+                                  if (policyMessage) {
+                                    toast({ title: t(policyMessage) });
+                                    return;
+                                  }
                                   showAlertDialog({
                                     title: t(
                                       "settingsPage.general.updates.dialogs.installFailed.title"
@@ -4768,18 +4779,9 @@ EOF`,
                   onClick={async () => {
                     try {
                       const result = await checkForUpdates();
-                      if (
-                        result?.code === "UPDATES_MANAGED_BY_ORG" ||
-                        result?.code === "UPDATE_POLICY_UNAVAILABLE" ||
-                        result?.code === "UPDATE_POLICY_CHANGED"
-                      ) {
-                        toast({
-                          title: t(
-                            result.code === "UPDATES_MANAGED_BY_ORG"
-                              ? "settingsPage.general.updates.itManaged"
-                              : "settingsPage.general.updates.policyUnavailable"
-                          ),
-                        });
+                      const policyMessage = updatePolicyMessageKey(result);
+                      if (policyMessage) {
+                        toast({ title: t(policyMessage) });
                       } else if (result && !result.updateAvailable) {
                         toast({
                           title: t("settingsPage.general.updates.dialogs.noUpdates.title"),

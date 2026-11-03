@@ -30,11 +30,24 @@ afterEach(() => {
   else process.env.APPIMAGE = originalAppImage;
 });
 
-function setup({ snapshot = managed("user_choice"), getPolicy, download, check } = {}) {
+function setup({
+  snapshot = managed("user_choice"),
+  getPolicy,
+  download,
+  check,
+  closeConnections,
+} = {}) {
   let current = snapshot;
   const events = [];
   const autoUpdater = new EventEmitter();
   const nativeUpdater = new EventEmitter();
+  const networkSession = {
+    closures: 0,
+    async closeAllConnections() {
+      this.closures++;
+      await closeConnections?.();
+    },
+  };
   const token = {
     cancelled: false,
     cancel() {
@@ -68,6 +81,9 @@ function setup({ snapshot = managed("user_choice"), getPolicy, download, check }
   delete require.cache[modulePath];
   Module._load = function (request, parent, isMain) {
     if (request === "electron-updater") return { autoUpdater };
+    if (request === "electron-updater/out/electronHttpExecutor") {
+      return { getNetSession: () => networkSession };
+    }
     if (request === "electron") return { autoUpdater: nativeUpdater };
     if (request === "child_process") return { execSync: () => "0" };
     return originalLoad.call(this, request, parent, isMain);
@@ -85,6 +101,7 @@ function setup({ snapshot = managed("user_choice"), getPolicy, download, check }
     manager,
     autoUpdater,
     nativeUpdater,
+    networkSession,
     events,
     token,
     setPolicy(value) {
@@ -179,7 +196,9 @@ test("policy changes cancel the active download and reject late completion event
   const pending = new Promise((done) => {
     finish = done;
   });
-  const { manager, autoUpdater, token, events, setPolicy } = setup({ download: () => pending });
+  const { manager, autoUpdater, networkSession, token, events, setPolicy } = setup({
+    download: () => pending,
+  });
   manager.setAutoUpdatesEnabled(false);
   await manager.checkForUpdates();
   const downloading = manager.downloadUpdate();
@@ -190,12 +209,134 @@ test("policy changes cancel the active download and reject late completion event
   assert.equal(manager.isDownloading, true);
   setPolicy(managed("it_managed"));
   assert.equal(token.cancelled, true);
+  await flush();
+  assert.equal(networkSession.closures, 1);
   assert.equal(autoUpdater.autoInstallOnAppQuit, false);
   autoUpdater.emit("update-downloaded", { version: "99.0.0" });
   finish([]);
   assert.equal((await downloading).code, "UPDATES_MANAGED_BY_ORG");
   assert.equal(events.includes("update-downloaded"), false);
   assert.equal((await manager.installUpdate()).success, false);
+});
+
+test("restored update permission waits for cancelled transport to close", async () => {
+  let finishDownload;
+  let finishClosing;
+  const { manager, autoUpdater, setPolicy } = setup({
+    download: () => new Promise((resolve) => (finishDownload = resolve)),
+    closeConnections: () => new Promise((resolve) => (finishClosing = resolve)),
+  });
+  manager.setAutoUpdatesEnabled(false);
+  await manager.checkForUpdates();
+  const downloading = manager.downloadUpdate();
+  await flush();
+  setPolicy(managed("it_managed"));
+  let denial;
+  void manager.checkForUpdates().then((result) => (denial = result));
+  await flush();
+  assert.equal(denial?.code, "UPDATES_MANAGED_BY_ORG");
+  finishDownload([]);
+  assert.equal((await downloading).code, "UPDATES_MANAGED_BY_ORG");
+  setPolicy(managed("user_choice"));
+  const checking = manager.checkForUpdates();
+  await flush();
+  assert.equal(autoUpdater.checks, 1);
+  finishClosing();
+  assert.equal((await checking).updateAvailable, true);
+  assert.equal(autoUpdater.checks, 2);
+});
+
+for (const mode of ["user_choice", "always_on"]) {
+  test(`${mode} waits for cancelled download cleanup before discovering the next update`, async () => {
+    let finishDownload;
+    let downloads = 0;
+    const { manager, autoUpdater, setPolicy } = setup({
+      download: () =>
+        downloads++ === 0
+          ? new Promise((resolve) => (finishDownload = resolve))
+          : Promise.resolve([]),
+    });
+    manager.setAutoUpdatesEnabled(false);
+    await manager.checkForUpdates();
+    const downloading = manager.downloadUpdate();
+    await flush();
+    setPolicy(managed("it_managed"));
+    await flush();
+    setPolicy(managed(mode));
+    const checking = manager.checkForUpdates();
+    await flush();
+    assert.equal(autoUpdater.checks, 1);
+    finishDownload([]);
+    assert.equal((await downloading).code, "UPDATE_POLICY_CHANGED");
+    assert.equal((await checking).updateAvailable, true);
+    await flush();
+    assert.equal((await manager.getUpdateStatus()).updateAvailable, true);
+    assert.equal(autoUpdater.downloads, mode === "always_on" ? 2 : 1);
+  });
+}
+
+test("idle policy changes leave unrelated network sessions alone", async () => {
+  const { manager, networkSession, setPolicy } = setup();
+  await manager.refreshPolicy();
+  setPolicy(managed("it_managed"));
+  assert.equal(networkSession.closures, 0);
+});
+
+test("a downloaded event does not release an operation still preparing its native handoff", async () => {
+  let finish;
+  const { manager, autoUpdater, networkSession, setPolicy } = setup({
+    download: () => new Promise((resolve) => (finish = resolve)),
+  });
+  manager.setAutoUpdatesEnabled(false);
+  await manager.checkForUpdates();
+  const downloading = manager.downloadUpdate();
+  await flush();
+  autoUpdater.emit("update-downloaded", { version: "99.0.0" });
+  assert.equal(manager.isDownloading, false);
+  setPolicy(managed("it_managed"));
+  await flush();
+  assert.equal(networkSession.closures, 1);
+  setPolicy(managed("user_choice"));
+  const checking = manager.checkForUpdates();
+  await flush();
+  assert.equal(autoUpdater.checks, 1);
+  finish([]);
+  await downloading;
+  await checking;
+  assert.equal((await manager.getUpdateStatus()).updateAvailable, true);
+});
+
+test("an aborted manual feed check returns the new policy denial", async () => {
+  let rejectCheck;
+  const { manager, networkSession, setPolicy } = setup({
+    check: () => new Promise((_resolve, reject) => (rejectCheck = reject)),
+    closeConnections: () => rejectCheck(new Error("net::ERR_CONNECTION_CLOSED")),
+  });
+  const checking = manager.checkForUpdates();
+  await flush();
+  setPolicy(managed("it_managed"));
+  await flush();
+  assert.equal(networkSession.closures, 1);
+  assert.equal((await checking).code, "UPDATES_MANAGED_BY_ORG");
+});
+
+test("failed connection cleanup cannot undo the IT verdict or block later policy checks", async () => {
+  let finish;
+  const { manager, autoUpdater, setPolicy } = setup({
+    download: () => new Promise((resolve) => (finish = resolve)),
+    closeConnections: () => {
+      throw new Error("Session unavailable");
+    },
+  });
+  manager.setAutoUpdatesEnabled(false);
+  await manager.checkForUpdates();
+  const downloading = manager.downloadUpdate();
+  await flush();
+  setPolicy(managed("it_managed"));
+  finish([]);
+  assert.equal((await downloading).code, "UPDATES_MANAGED_BY_ORG");
+  assert.equal((await manager.checkForUpdates()).code, "UPDATES_MANAGED_BY_ORG");
+  assert.equal(autoUpdater.autoInstallOnAppQuit, false);
 });
 
 test("an old credential's late policy lookup cannot replace the new scope", async () => {

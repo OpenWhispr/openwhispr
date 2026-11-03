@@ -15,6 +15,7 @@ import { useSignOut } from "../hooks/useSignOut";
 import { useHotkey } from "../hooks/useHotkey";
 import { useToast } from "./ui/useToast";
 import { useUpdater } from "../hooks/useUpdater";
+import { updatePolicyMessageKey } from "../utils/updatePolicyMessage";
 import { useSettings } from "../hooks/useSettings";
 import { recordingRecorderName } from "../utils/noteRecorder";
 import { useAuth } from "../hooks/useAuth";
@@ -953,6 +954,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           try {
             await installUpdate();
           } catch (error) {
+            const policyMessage = updatePolicyMessageKey(error);
+            if (policyMessage) {
+              toast({ title: t(policyMessage) });
+              return;
+            }
             toast({
               title: t("controlPanel.update.couldNotInstallTitle"),
               description: t("controlPanel.update.couldNotInstallDescription"),
@@ -965,6 +971,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       try {
         await downloadUpdate();
       } catch (error) {
+        const policyMessage = updatePolicyMessageKey(error);
+        if (policyMessage) {
+          toast({ title: t(policyMessage) });
+          return;
+        }
         toast({
           title: t("controlPanel.update.couldNotDownloadTitle"),
           description: t("controlPanel.update.couldNotDownloadDescription"),
