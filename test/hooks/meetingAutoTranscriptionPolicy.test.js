@@ -92,7 +92,8 @@ test("a credential holder shown as a guest waits for its policy", async (t) => {
   globalThis.__hasCredential = false;
   t.after(() => delete globalThis.__hasCredential);
   const { render, check } = await mountCheck(t, "meeting-auto-credential-", {
-    "/lib/authRequestContext": "export const hasUsableCredential = () => globalThis.__hasCredential;",
+    "/lib/authRequestContext":
+      "export const hasUsableCredential = () => globalThis.__hasCredential;",
   });
   await render({ isLoaded: true, isSignedIn: false });
   assert.equal(check()(), true, "a real guest has no policy to wait for");
@@ -138,5 +139,61 @@ test("a recording policy refuses still reports why under automatic policy", asyn
     });
     assert.deepEqual(calls, ["restore", "handled"], snapshot.status);
     assert.ok(store.useMeetingRecordingStore.getState().error, snapshot.status);
+  }
+});
+
+test("manual policy opens the note silently even when a recording would be refused", async (t) => {
+  const { vite, usePolicyStore, render, check } = await mountCheck(t, "meeting-manual-refusal-");
+  await render({ isLoaded: true, isSignedIn: true });
+  const store = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
+  const { handleMeetingRecordingRequest } = await vite.ssrLoadModule(
+    "/helpers/meetingRecordingRequest.ts"
+  );
+  const { isTranscriptionContextAllowed } = await vite.ssrLoadModule("/stores/policyRules.ts");
+  const { getSettings } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const meetings = { transcriptionStart: "manual" };
+  const snapshots = {
+    "below the minimum version": {
+      appVersion: "1.0.0",
+      policy: managedPolicy({ meetings, minAppVersion: "9.0.0" }),
+    },
+    "meeting recording turned off": {
+      appVersion: "9.0.0",
+      policy: managedPolicy({ meetings, features: { meetingRecordingEnabled: false } }),
+    },
+    "a disallowed transcription selection": {
+      appVersion: "9.0.0",
+      policy: managedPolicy({
+        meetings,
+        transcription: { allowedModes: [], allowedByokProviders: [] },
+      }),
+    },
+    "a start mode this build doesn't know": {
+      appVersion: "1.0.0",
+      policy: managedPolicy({
+        meetings: { transcriptionStart: "future" },
+        minAppVersion: "9.0.0",
+      }),
+    },
+  };
+  for (const [name, snapshot] of Object.entries(snapshots)) {
+    await React.act(async () => usePolicyStore.setState({ status: "managed", ...snapshot }));
+    assert.equal(
+      isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "meeting"),
+      false,
+      `${name} must be a recording policy refuses`
+    );
+    store.useMeetingRecordingStore.setState({ error: null });
+    const calls = [];
+    await handleMeetingRecordingRequest({
+      args: { noteId: 1, noteTitle: "Meeting", folderId: null, autoEndEligible: true },
+      canAutoStart: check(),
+      startRecording: store.startRecording,
+      restoreFromMeetingMode: () => calls.push("restore"),
+      onSuppressed: () => calls.push("note-only"),
+      onHandled: () => calls.push("handled"),
+    });
+    assert.deepEqual(calls, ["handled", "note-only"], name);
+    assert.equal(store.useMeetingRecordingStore.getState().error, null, name);
   }
 });

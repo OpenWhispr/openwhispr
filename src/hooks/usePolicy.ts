@@ -14,6 +14,7 @@ import {
   isTranscriptionSelectionAllowed,
   isAudioFeatureAllowed,
   isMeetingAutoTranscriptionAllowed,
+  isMeetingTranscriptionStartManual,
   isTranscriptionContextAllowed,
   reconcilePolicyModeSelection,
   type PolicyDecisionSnapshot,
@@ -48,6 +49,8 @@ export function useMeetingAutoTranscriptionCheck({
   auth.current = { isLoaded, isSignedIn };
   return useCallback(() => {
     const policy = usePolicyStore.getState();
+    // Nobody asked for this recording, so there is no refusal to explain.
+    if (isMeetingTranscriptionStartManual(policy)) return false;
     // A recording these checks refuse never captures. Let it reach startRecording,
     // which tells the member why and restores the layout.
     if (!isTranscriptionContextAllowed(policy, getSettings(), "meeting")) return true;
