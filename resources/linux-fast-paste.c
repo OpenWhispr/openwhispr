@@ -452,12 +452,14 @@ static int detect_terminal_atspi(void) {
                 g_free(name);
                 g_object_unref(win);
                 g_object_unref(app);
+                g_object_unref(desktop);
                 return result;
             }
             g_object_unref(win);
         }
         g_object_unref(app);
     }
+    g_object_unref(desktop);
     return -1;
 }
 

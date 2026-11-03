@@ -15,7 +15,7 @@ static int finalized;
 static int fixture_atspi_init(void) { return 0; }
 static void fixture_atspi_set_timeout(gint timeout, gint startup_timeout) {}
 static AtspiAccessible *fixture_atspi_get_desktop(gint index) {
-  return (AtspiAccessible *)desktop;
+  return (AtspiAccessible *)g_object_ref(desktop);
 }
 static gint fixture_child_count(AtspiAccessible *object, GError **error) {
   return (GObject *)object == desktop ? 1 : 2;
