@@ -1663,3 +1663,125 @@ test("linux: a listing with no attributable stream falls through to the unfilter
   );
   assert.equal(detector._pidScopedCapability, false);
 });
+
+test("a call that ended behind a gate still lets the next call prompt", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const AudioActivityDetector = require("../../src/helpers/audioActivityDetector");
+  for (const [engage, release] of [
+    [(detector) => detector.setUserRecording(true), (detector) => detector.setUserRecording(false)],
+    [(detector) => detector.setMicWarmHold(true), (detector) => detector.setMicWarmHold(false)],
+  ]) {
+    const detector = new AudioActivityDetector(() => []);
+    detector._running = true;
+    detector._eventDriven = true;
+    detector._lastKnownMicState = true;
+    detector._markPrompted();
+    engage(detector);
+    detector._onMicStateChanged(false);
+    release(detector);
+    assert.equal(detector.hasPrompted, true, "the reset still waits out the inactive period");
+    t.mock.timers.tick(60000);
+    assert.equal(detector.hasPrompted, false);
+  }
+});
+
+test("a live call keeps its prompt identity when a gate lifts", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const AudioActivityDetector = require("../../src/helpers/audioActivityDetector");
+  const detector = new AudioActivityDetector(() => []);
+  detector._running = true;
+  detector._eventDriven = true;
+  detector._lastKnownMicState = true;
+  detector._markPrompted();
+  detector.setUserRecording(true);
+  detector.setUserRecording(false);
+  t.mock.timers.tick(60000);
+  assert.equal(detector.hasPrompted, true);
+  detector.stop();
+});
+
+test("the reset timer waits for every gate to lift", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const AudioActivityDetector = require("../../src/helpers/audioActivityDetector");
+  const detector = new AudioActivityDetector(() => []);
+  detector._running = true;
+  detector._eventDriven = true;
+  detector._markPrompted();
+  detector.setUserRecording(true);
+  detector.setMicWarmHold(true);
+  detector._onMicStateChanged(false);
+  detector.setUserRecording(false);
+  t.mock.timers.tick(60000);
+  assert.equal(detector.hasPrompted, true, "a warm hold is still up");
+  detector.setMicWarmHold(false);
+  t.mock.timers.tick(60000);
+  assert.equal(detector.hasPrompted, false);
+  detector.stop();
+});
+
+test("a call that returns behind a gate keeps its prompt identity", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const AudioActivityDetector = require("../../src/helpers/audioActivityDetector");
+  const detector = new AudioActivityDetector(() => []);
+  detector._running = true;
+  detector._eventDriven = true;
+  detector._markPrompted();
+  detector._onMicStateChanged(false);
+  detector.setUserRecording(true);
+  detector._onMicStateChanged(true);
+  t.mock.timers.tick(60000);
+  assert.equal(detector.hasPrompted, true);
+  detector.stop();
+});
+
+test("polling lets a prompted call's identity expire across repeated inactive checks", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const AudioActivityDetector = require("../../src/helpers/audioActivityDetector");
+  const detector = new AudioActivityDetector(() => []);
+  detector._isMicActive = async () => false;
+  detector._markPrompted();
+  for (let check = 0; check < 3; check += 1) {
+    await detector._check();
+    t.mock.timers.tick(15000);
+  }
+  await detector._check();
+  assert.equal(detector.hasPrompted, true, "inactive for less than the reset period");
+  t.mock.timers.tick(15000);
+  assert.equal(detector.hasPrompted, false);
+  detector.stop();
+});
+
+test("device activity with no meeting app doesn't hold a prompted call's identity", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const AudioActivityDetector = require("../../src/helpers/audioActivityDetector");
+  const detector = new AudioActivityDetector(
+    () => [],
+    () => false
+  );
+  detector._running = true;
+  detector._eventDriven = true;
+  detector._markPrompted();
+  detector._onMicStateChanged(false);
+  detector._onMicStateChanged(true, false);
+  t.mock.timers.tick(60000);
+  assert.equal(detector.hasPrompted, false);
+  detector.stop();
+});
+
+test("polling keeps a call's identity while a gate hides whether it came back", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const AudioActivityDetector = require("../../src/helpers/audioActivityDetector");
+  const detector = new AudioActivityDetector(() => []);
+  detector._isMicActive = async () => false;
+  detector._markPrompted();
+  await detector._check();
+  detector.setUserRecording(true);
+  await detector._check();
+  t.mock.timers.tick(60000);
+  assert.equal(detector.hasPrompted, true);
+  detector.setUserRecording(false);
+  await detector._check();
+  t.mock.timers.tick(60000);
+  assert.equal(detector.hasPrompted, false, "the next inactive check restarts the timer");
+  detector.stop();
+});
