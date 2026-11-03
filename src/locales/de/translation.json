@@ -1655,6 +1655,10 @@
         "label": "Personen",
         "description": "Mitglieder und Teams"
       },
+      "workspaceTeamspaces": {
+        "label": "Teamspaces",
+        "description": "Gemeinsame Notizen"
+      },
       "workspaceDeveloper": {
         "label": "Entwickler",
         "description": "API-Schlüssel des Workspace"
@@ -1793,6 +1797,9 @@
           "selectRow": "{{name}} auswählen",
           "remove": "Entfernen"
         }
+      },
+      "teamspaces": {
+        "title": "Teamspaces"
       },
       "role": {
         "owner": "Inhaber",

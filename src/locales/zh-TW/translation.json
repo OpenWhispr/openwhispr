@@ -1561,6 +1561,10 @@
         "label": "人員",
         "description": "成員與團隊"
       },
+      "workspaceTeamspaces": {
+        "label": "Teamspace",
+        "description": "共享筆記"
+      },
       "workspaceDeveloper": {
         "label": "開發者",
         "description": "工作區 API 金鑰"
@@ -2522,6 +2526,9 @@
           "selectRow": "選取 {{name}}",
           "remove": "移除"
         }
+      },
+      "teamspaces": {
+        "title": "Teamspace"
       },
       "role": {
         "owner": "擁有者",

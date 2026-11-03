@@ -1561,6 +1561,10 @@
         "label": "ユーザー",
         "description": "メンバーとチーム"
       },
+      "workspaceTeamspaces": {
+        "label": "Teamspace",
+        "description": "共有ノート"
+      },
       "workspaceDeveloper": {
         "label": "開発者",
         "description": "ワークスペースの API キー"
@@ -2522,6 +2526,9 @@
           "selectRow": "{{name}} を選択",
           "remove": "削除"
         }
+      },
+      "teamspaces": {
+        "title": "Teamspace"
       },
       "role": {
         "owner": "オーナー",

@@ -1561,6 +1561,10 @@
         "label": "Persone",
         "description": "Membri e team"
       },
+      "workspaceTeamspaces": {
+        "label": "Teamspace",
+        "description": "Note condivise"
+      },
       "workspaceDeveloper": {
         "label": "Sviluppatore",
         "description": "Chiavi API dell'area di lavoro"
@@ -2522,6 +2526,9 @@
           "selectRow": "Seleziona {{name}}",
           "remove": "Rimuovi"
         }
+      },
+      "teamspaces": {
+        "title": "Teamspace"
       },
       "role": {
         "owner": "Proprietario",

@@ -3945,6 +3945,9 @@
           "remove": "إزالة"
         }
       },
+      "teamspaces": {
+        "title": "مساحات الفريق"
+      },
       "role": {
         "owner": "مالك",
         "admin": "مسؤول",
@@ -5462,6 +5465,10 @@
       "workspacePeople": {
         "label": "الأشخاص",
         "description": "الأعضاء والفرق"
+      },
+      "workspaceTeamspaces": {
+        "label": "مساحات الفريق",
+        "description": "ملاحظات مشتركة"
       },
       "workspaceDeveloper": {
         "label": "للمطورين",

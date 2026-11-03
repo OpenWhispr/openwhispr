@@ -1561,6 +1561,10 @@
         "label": "人员",
         "description": "成员和团队"
       },
+      "workspaceTeamspaces": {
+        "label": "Teamspace",
+        "description": "共享笔记"
+      },
       "workspaceDeveloper": {
         "label": "开发者",
         "description": "工作区 API 密钥"
@@ -2522,6 +2526,9 @@
           "selectRow": "选择 {{name}}",
           "remove": "移除"
         }
+      },
+      "teamspaces": {
+        "title": "Teamspace"
       },
       "role": {
         "owner": "所有者",

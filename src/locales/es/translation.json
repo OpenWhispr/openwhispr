@@ -1613,6 +1613,10 @@
         "label": "Personas",
         "description": "Miembros y equipos"
       },
+      "workspaceTeamspaces": {
+        "label": "Teamspaces",
+        "description": "Notas compartidas"
+      },
       "workspaceDeveloper": {
         "label": "Desarrollador",
         "description": "Claves API del espacio de trabajo"
@@ -2574,6 +2578,9 @@
           "selectRow": "Seleccionar {{name}}",
           "remove": "Quitar"
         }
+      },
+      "teamspaces": {
+        "title": "Teamspaces"
       },
       "role": {
         "owner": "Propietario",

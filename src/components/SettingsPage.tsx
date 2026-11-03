@@ -158,6 +158,7 @@ import { requestSignIn } from "../utils/requestSignIn";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import WorkspaceGeneralSection from "./settings/WorkspaceGeneralSection";
 import WorkspacePeopleSection from "./settings/WorkspacePeopleSection";
+import WorkspaceTeamspacesSection from "./settings/WorkspaceTeamspacesSection";
 import WorkspaceDeveloperSection from "./settings/WorkspaceDeveloperSection";
 import type { SettingsSectionType } from "../lib/settingsNav";
 import { enterpriseTileCta, type EnterpriseTileCta } from "../lib/workspaceBilling";
@@ -180,6 +181,8 @@ interface SettingsPageProps {
   initialSubTab?: string;
   /** Opens the workspace picker in the Settings nav (owned by SettingsModal). */
   onChooseWorkspace?: () => void;
+  /** Takes the user to a teamspace in Notes (owned by the control panel, which closes Settings). */
+  onOpenTeamspace?: (localSpaceId: number) => void;
 }
 
 const UI_LANGUAGE_OPTIONS: import("./ui/LanguageSelector").LanguageOption[] = [
@@ -1148,6 +1151,7 @@ export default function SettingsPage({
   onNavigateToSection,
   initialSubTab,
   onChooseWorkspace,
+  onOpenTeamspace,
 }: SettingsPageProps) {
   const { isCompact } = useSettingsLayout();
   const {
@@ -3033,6 +3037,9 @@ export default function SettingsPage({
 
       case "workspacePeople":
         return <WorkspacePeopleSection initialSubTab={initialSubTab} />;
+
+      case "workspaceTeamspaces":
+        return <WorkspaceTeamspacesSection onOpenTeamspace={onOpenTeamspace} />;
 
       case "workspaceDeveloper":
         return <WorkspaceDeveloperSection />;

@@ -1561,6 +1561,10 @@
         "label": "Люди",
         "description": "Участники и команды"
       },
+      "workspaceTeamspaces": {
+        "label": "Teamspaces",
+        "description": "Общие заметки"
+      },
       "workspaceDeveloper": {
         "label": "Разработчик",
         "description": "API-ключи рабочего пространства"
@@ -2546,6 +2550,9 @@
           "selectRow": "Выбрать {{name}}",
           "remove": "Удалить"
         }
+      },
+      "teamspaces": {
+        "title": "Teamspaces"
       },
       "role": {
         "owner": "Владелец",
