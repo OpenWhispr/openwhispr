@@ -43,20 +43,36 @@ jobs:
         run: npm run i18n:check
       - name: Audit dependencies
         run: npm audit --audit-level=high
+
+  test:
+    # Apart from quality, so drift in its gates (a format nit, a missing locale
+    # key, a fresh advisory) never leaves main untested (#1735).
+    needs: changes
+    if: needs.changes.outputs.desktop == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
       - name: Build better-sqlite3 for the runner's node
         # --ignore-scripts skips the native build; DB-backed tests silently
         # skip without it. This job is the only test gate on push to main.
-        # Guarded like the test step below, or the rebuild is skipped and the
-        # suite then fails REQUIRE_DB_TESTS on a missing binding instead.
-        if: ${{ !cancelled() }}
         run: npm rebuild better-sqlite3
-      - name: Run tests
-        # The gates above fail on drift that has nothing to do with the suite —
-        # a stray format nit, a missing locale key, a fresh advisory. Without
-        # this, main goes untested for as long as the drift stands (#1735).
-        if: ${{ !cancelled() }}
+      - name: Run tests (shard ${{ matrix.shard }}/${{ strategy.job-total }})
         run: npm test
         env:
+          # npm test -- --test-shard would land after the file glob, where node ignores it
+          NODE_OPTIONS: --test-shard=${{ matrix.shard }}/${{ strategy.job-total }}
           # keeps require("electron") from throwing when postinstall was skipped
           ELECTRON_OVERRIDE_DIST_PATH: /tmp
           # a skipped DB test here means the rebuild step above is gone: fail instead
@@ -144,7 +160,8 @@ jobs:
           resources/bin/linux-system-audio-helper probe | grep '"supportsNativeCapture":true'
 
       - name: Build Application
-        run: npm run build:linux -- --publish never
+        # PRs package only the AppImage; pushes and manual runs build every Linux target.
+        run: npm run build:linux -- ${{ github.event_name == 'pull_request' && 'AppImage' || '' }} --publish never
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
           # Forks and Dependabot get no GH_TOKEN; github.token can't read the private font release.
@@ -438,7 +455,7 @@ jobs:
 
   desktop-status:
     name: Desktop CI
-    needs: [changes, quality, build-linux, build-windows, build-macos]
+    needs: [changes, quality, test, build-linux, build-windows, build-macos]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -449,6 +466,7 @@ jobs:
           CHANGES_RESULT: ${{ needs.changes.result }}
           DESKTOP: ${{ needs.changes.outputs.desktop }}
           QUALITY_RESULT: ${{ needs.quality.result }}
+          TEST_RESULT: ${{ needs.test.result }}
           BUILD: ${{ needs.quality.outputs.build }}
           LINUX_RESULT: ${{ needs.build-linux.result }}
           WINDOWS_RESULT: ${{ needs.build-windows.result }}
@@ -457,6 +475,7 @@ jobs:
           test "$CHANGES_RESULT" = success
           if [ "$DESKTOP" = true ]; then
             test "$QUALITY_RESULT" = success
+            test "$TEST_RESULT" = success
             if [ "$BUILD" = true ]; then
               test "$LINUX_RESULT" = success
               test "$WINDOWS_RESULT" = success
