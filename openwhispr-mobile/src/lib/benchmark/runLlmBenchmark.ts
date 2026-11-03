@@ -13,24 +13,114 @@ import {
   CLEANUP_LONG_FIXTURE,
   CLEANUP_SHORT_FIXTURE,
   SYNTHETIC_MEETING_LINES,
-} from '@/lib/benchmark/qwenBenchmarkFixtures';
+} from '@/lib/benchmark/llmBenchmarkFixtures';
 
-// Dev-only spike (docs/superpowers/plans/2026-10-07-mobile-local-llm-qwen.md, Phase 0): runs
-// Qwen3.5-2B through llama.rn on this iPhone with the app's real cleanup and meeting-notes prompts,
-// and records what decides Phase 1: peak phys_footprint (what Jetsam meters), load time, prefill and
-// decode speed, whether thinking stays off, whether JSON-schema output parses, and whether a run
-// survives the app being backgrounded. Never shipped to users; reached only by route.
+// Dev-only spike (docs/superpowers/plans/2026-10-07-mobile-local-llm-qwen.md, Phase 0): runs the
+// candidate on-device LLMs through llama.rn on this iPhone with the app's real cleanup and
+// meeting-notes prompts, and records what decides Phase 1: peak phys_footprint (what Jetsam
+// meters), load time, prefill and decode speed, whether thinking stays off, whether JSON-schema
+// output parses, and whether a run survives the app being backgrounded. Never shipped to users;
+// reached only by route.
 
-export const QWEN_SPIKE_MODEL = {
-  repo: 'bartowski/Qwen_Qwen3.5-2B-GGUF',
-  fileName: 'Qwen_Qwen3.5-2B-Q4_K_M.gguf',
-  // Below this the file is a partial or an error page, not the ~1.3 GB model.
-  minBytes: 1_000_000_000,
-} as const;
+export type SpikeModelId = 'qwen3.5-2b' | 'minicpm5-2b';
 
-const MODEL_DIR = `${FileSystem.documentDirectory}qwen-bench/`;
-const MODEL_PATH = `${MODEL_DIR}${QWEN_SPIKE_MODEL.fileName}`;
-const MODEL_URL = `https://huggingface.co/${QWEN_SPIKE_MODEL.repo}/resolve/main/${QWEN_SPIKE_MODEL.fileName}`;
+export interface SpikeModel {
+  id: SpikeModelId;
+  label: string;
+  repo: string;
+  /** Picks the Q4_K_M file from the repo listing, since uploaders name it differently. */
+  filePattern: RegExp;
+  approxSize: string;
+}
+
+export const SPIKE_MODELS: readonly SpikeModel[] = [
+  {
+    id: 'qwen3.5-2b',
+    label: 'Qwen3.5 2B',
+    repo: 'bartowski/Qwen_Qwen3.5-2B-GGUF',
+    filePattern: /Q4_K_M\.gguf$/i,
+    approxSize: '1.3 GB',
+  },
+  {
+    id: 'minicpm5-2b',
+    label: 'MiniCPM5 2B',
+    repo: 'bartowski/MiniCPM5-2B-GGUF',
+    filePattern: /Q4_K_M\.gguf$/i,
+    approxSize: '1.6 GB',
+  },
+];
+
+export function spikeModel(id: SpikeModelId): SpikeModel {
+  const model = SPIKE_MODELS.find((candidate) => candidate.id === id);
+  if (!model) throw new Error(`Unknown model ${id}`);
+  return model;
+}
+
+const BENCH_DIR = `${FileSystem.documentDirectory}llm-bench/`;
+const modelPath = (id: SpikeModelId): string => `${BENCH_DIR}${id}.gguf`;
+
+export interface HubTreeEntry {
+  type: string;
+  path: string;
+  size?: number;
+  lfs?: { size?: number };
+}
+
+// One file from a Hugging Face repo listing, with its exact size so the download can be checked.
+export function pickModelFile(
+  entries: HubTreeEntry[],
+  pattern: RegExp,
+): { path: string; size: number } | null {
+  const file = entries.find((entry) => entry.type === 'file' && pattern.test(entry.path));
+  const size = file?.lfs?.size ?? file?.size;
+  return file && size ? { path: file.path, size } : null;
+}
+
+async function resolveModelFile(model: SpikeModel): Promise<{ url: string; size: number }> {
+  const response = await fetch(`https://huggingface.co/api/models/${model.repo}/tree/main`);
+  if (!response.ok) throw new Error(`Could not list ${model.repo} (HTTP ${response.status}).`);
+  const file = pickModelFile((await response.json()) as HubTreeEntry[], model.filePattern);
+  if (!file) throw new Error(`No Q4_K_M file in ${model.repo}.`);
+  const path = file.path.split('/').map(encodeURIComponent).join('/');
+  return { url: `https://huggingface.co/${model.repo}/resolve/main/${path}`, size: file.size };
+}
+
+export async function getSpikeModelSize(id: SpikeModelId): Promise<number | null> {
+  const info = await FileSystem.getInfoAsync(modelPath(id));
+  return info.exists && !info.isDirectory ? info.size : null;
+}
+
+// The file only reaches its final path after its size matched the listing, so a file there is
+// always complete.
+export async function downloadSpikeModel(
+  id: SpikeModelId,
+  onProgress: (fraction: number) => void,
+): Promise<void> {
+  const { url, size } = await resolveModelFile(spikeModel(id));
+  await FileSystem.makeDirectoryAsync(BENCH_DIR, { intermediates: true }).catch(() => undefined);
+  const partial = `${modelPath(id)}.partial`;
+  await FileSystem.deleteAsync(partial, { idempotent: true });
+  const download = FileSystem.createDownloadResumable(url, partial, {}, (event) => {
+    onProgress(event.totalBytesWritten / size);
+  });
+  const result = await download.downloadAsync();
+  if (!result || result.status < 200 || result.status >= 300) {
+    await FileSystem.deleteAsync(partial, { idempotent: true });
+    throw new Error(`Model download failed (HTTP ${result?.status ?? 'none'}).`);
+  }
+  const info = await FileSystem.getInfoAsync(partial);
+  if (!info.exists || info.isDirectory || info.size !== size) {
+    await FileSystem.deleteAsync(partial, { idempotent: true });
+    throw new Error('The downloaded file is not the expected size.');
+  }
+  await FileSystem.deleteAsync(modelPath(id), { idempotent: true });
+  await FileSystem.moveAsync({ from: partial, to: modelPath(id) });
+}
+
+export async function deleteSpikeModel(id: SpikeModelId): Promise<void> {
+  await FileSystem.deleteAsync(modelPath(id), { idempotent: true });
+  await FileSystem.deleteAsync(`${modelPath(id)}.partial`, { idempotent: true });
+}
 
 // Room left in the context for the meeting-notes reply and the chat template around the prompt.
 const NOTES_OUTPUT_TOKENS = 1024;
@@ -60,10 +150,10 @@ export const MEETING_NOTES_JSON_SCHEMA = {
   required: ['summary', 'keyDiscussionPoints', 'decisions', 'actionItems', 'followUps'],
 } as const;
 
-export type QwenScenarioName = 'cleanup-short' | 'cleanup-long' | 'meeting-notes';
+export type LlmScenarioName = 'cleanup-short' | 'cleanup-long' | 'meeting-notes';
 
-export interface QwenScenarioResult {
-  name: QwenScenarioName;
+export interface LlmScenarioResult {
+  name: LlmScenarioName;
   ok: boolean;
   error?: string;
   /** Where the meeting transcript came from: the longest meeting note on this phone, or the fixture. */
@@ -84,15 +174,16 @@ export interface QwenScenarioResult {
   output?: string;
 }
 
-export interface QwenRunConfig {
+export interface LlmRunConfig {
+  modelId: SpikeModelId;
   nCtx: number;
   gpu: boolean;
   /** Wait this long before loading, so the tester can background the app first. */
   startDelayMs: number;
 }
 
-export interface QwenRunResult {
-  config: QwenRunConfig;
+export interface LlmRunResult {
+  config: LlmRunConfig;
   device: DeviceInfo | null;
   ok: boolean;
   error?: string;
@@ -107,46 +198,7 @@ export interface QwenRunResult {
   appStateAtEnd?: AppStateStatus;
   /** The app left the foreground at some point during the run. */
   backgroundedDuringRun: boolean;
-  scenarios: QwenScenarioResult[];
-}
-
-export function qwenSpikeModelPath(): string {
-  return MODEL_PATH;
-}
-
-export async function getQwenSpikeModelSize(): Promise<number | null> {
-  const info = await FileSystem.getInfoAsync(MODEL_PATH);
-  if (!info.exists || info.isDirectory) return null;
-  return info.size >= QWEN_SPIKE_MODEL.minBytes ? info.size : null;
-}
-
-export async function downloadQwenSpikeModel(
-  onProgress: (fraction: number) => void,
-): Promise<void> {
-  await FileSystem.makeDirectoryAsync(MODEL_DIR, { intermediates: true }).catch(() => undefined);
-  const partial = `${MODEL_PATH}.partial`;
-  await FileSystem.deleteAsync(partial, { idempotent: true });
-  const download = FileSystem.createDownloadResumable(MODEL_URL, partial, {}, (event) => {
-    if (event.totalBytesExpectedToWrite > 0) {
-      onProgress(event.totalBytesWritten / event.totalBytesExpectedToWrite);
-    }
-  });
-  const result = await download.downloadAsync();
-  if (!result || result.status < 200 || result.status >= 300) {
-    await FileSystem.deleteAsync(partial, { idempotent: true });
-    throw new Error(`Model download failed (HTTP ${result?.status ?? 'none'}).`);
-  }
-  const info = await FileSystem.getInfoAsync(partial);
-  if (!info.exists || info.isDirectory || info.size < QWEN_SPIKE_MODEL.minBytes) {
-    await FileSystem.deleteAsync(partial, { idempotent: true });
-    throw new Error('Downloaded file is too small to be the model.');
-  }
-  await FileSystem.deleteAsync(MODEL_PATH, { idempotent: true });
-  await FileSystem.moveAsync({ from: partial, to: MODEL_PATH });
-}
-
-export async function deleteQwenSpikeModel(): Promise<void> {
-  await FileSystem.deleteAsync(MODEL_DIR, { idempotent: true });
+  scenarios: LlmScenarioResult[];
 }
 
 export function thinkingLeaked(
@@ -277,12 +329,12 @@ async function promptTokenCount(
 }
 
 function summarize(
-  name: QwenScenarioName,
+  name: LlmScenarioName,
   result: NativeCompletionResult,
   startedAt: number,
   promptTokens: number,
   maxTokens: number,
-): QwenScenarioResult {
+): LlmScenarioResult {
   const output = stripThinkingTags(result.content || result.text || '');
   return {
     name,
@@ -303,7 +355,7 @@ async function runCleanup(
   context: LlamaContext,
   name: 'cleanup-short' | 'cleanup-long',
   text: string,
-): Promise<QwenScenarioResult> {
+): Promise<LlmScenarioResult> {
   const prompt = buildProviderPrompt({ text });
   const promptTokens = await promptTokenCount(context, prompt.systemPrompt, prompt.text);
   const startedAt = Date.now();
@@ -315,7 +367,7 @@ async function runCleanup(
   return summarize(name, result, startedAt, promptTokens, CLEANUP_OUTPUT_TOKENS);
 }
 
-async function runMeetingNotes(context: LlamaContext, nCtx: number): Promise<QwenScenarioResult> {
+async function runMeetingNotes(context: LlamaContext, nCtx: number): Promise<LlmScenarioResult> {
   const system = buildActionSystemPrompt({
     actionPrompt: 'Transform this meeting transcript into concise, actionable meeting notes.',
     inputKind: 'meeting-transcript',
@@ -360,9 +412,9 @@ async function runMeetingNotes(context: LlamaContext, nCtx: number): Promise<Qwe
 }
 
 async function runScenario(
-  name: QwenScenarioName,
-  run: () => Promise<QwenScenarioResult>,
-): Promise<QwenScenarioResult> {
+  name: LlmScenarioName,
+  run: () => Promise<LlmScenarioResult>,
+): Promise<LlmScenarioResult> {
   try {
     return await run();
   } catch (error) {
@@ -370,11 +422,11 @@ async function runScenario(
   }
 }
 
-export async function runQwenBenchmark(
-  config: QwenRunConfig,
+export async function runLlmBenchmark(
+  config: LlmRunConfig,
   onProgress: (message: string) => void,
-): Promise<QwenRunResult> {
-  const result: QwenRunResult = {
+): Promise<LlmRunResult> {
+  const result: LlmRunResult = {
     config,
     device: await ParakeetASR.deviceInfo().catch(() => null),
     ok: false,
@@ -403,10 +455,15 @@ export async function runQwenBenchmark(
     await ParakeetASR.startMemorySampling();
     sampling = true;
 
-    onProgress(`Loading model (${config.gpu ? 'Metal' : 'CPU'}, n_ctx ${config.nCtx})…`);
+    if ((await getSpikeModelSize(config.modelId)) == null) {
+      throw new Error(`${spikeModel(config.modelId).label} is not downloaded.`);
+    }
+    onProgress(
+      `Loading ${spikeModel(config.modelId).label} (${config.gpu ? 'Metal' : 'CPU'}, n_ctx ${config.nCtx})…`,
+    );
     const loadStartedAt = Date.now();
     context = await initLlama({
-      model: MODEL_PATH.replace(/^file:\/\//, ''),
+      model: modelPath(config.modelId).replace(/^file:\/\//, ''),
       n_ctx: config.nCtx,
       n_batch: 512,
       n_ubatch: 512,
@@ -436,7 +493,7 @@ export async function runQwenBenchmark(
         runCleanup(loaded, 'cleanup-long', CLEANUP_LONG_FIXTURE),
       ),
     );
-    // Qwen3.5 is a hybrid (recurrent + attention) model, so its state can only be cleared whole.
+    // Hybrid (recurrent + attention) models such as Qwen3.5 can only clear their state whole.
     await loaded.clearCache();
 
     onProgress('Meeting notes…');
@@ -464,7 +521,7 @@ export async function runQwenBenchmark(
 
 // What the tester copies back to the team: every measurement, but no model output, since the
 // meeting-notes input can be one of the tester's own meetings.
-export function resultsForSharing(results: QwenRunResult[]): string {
+export function resultsForSharing(results: LlmRunResult[]): string {
   return JSON.stringify(
     results.map((run) => ({
       ...run,

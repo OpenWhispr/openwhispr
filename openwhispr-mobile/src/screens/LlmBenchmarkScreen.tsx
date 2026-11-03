@@ -8,19 +8,23 @@ import { confirmDestructive } from '@/lib/alerts';
 import { Sentry } from '@/lib/sentry';
 import { ParakeetASR, type DeviceInfo } from '../../modules/parakeet-asr/src';
 import {
-  deleteQwenSpikeModel,
-  downloadQwenSpikeModel,
-  getQwenSpikeModelSize,
+  deleteSpikeModel,
+  downloadSpikeModel,
+  getSpikeModelSize,
   resultsForSharing,
-  runQwenBenchmark,
-  type QwenRunConfig,
-  type QwenRunResult,
-  type QwenScenarioResult,
-} from '@/lib/benchmark/runQwenBenchmark';
+  runLlmBenchmark,
+  spikeModel,
+  SPIKE_MODELS,
+  type LlmRunConfig,
+  type LlmRunResult,
+  type LlmScenarioResult,
+  type SpikeModel,
+  type SpikeModelId,
+} from '@/lib/benchmark/runLlmBenchmark';
 
-// Dev-only spike screen for Qwen3.5-2B through llama.rn (Phase 0 of
+// Dev-only spike screen for the candidate on-device LLMs through llama.rn (Phase 0 of
 // docs/superpowers/plans/2026-10-07-mobile-local-llm-qwen.md). Reached by the
-// /(account)/qwen-benchmark route only.
+// /(account)/llm-benchmark route only.
 
 const CONTEXT_SIZES = [4096, 16384] as const;
 const BACKGROUND_TEST_DELAY_MS = 15_000;
@@ -30,60 +34,81 @@ const ms = (value?: number) => (value == null ? '—' : `${(value / 1000).toFixe
 const tps = (value?: number) => (value == null ? '—' : `${value.toFixed(1)} tok/s`);
 const yesNo = (value?: boolean) => (value == null ? '—' : value ? 'Yes' : 'No');
 
-function runLabel(config: QwenRunConfig): string {
+function runLabel(config: LlmRunConfig): string {
   const delay = config.startDelayMs > 0 ? ' · background test' : '';
-  return `${config.gpu ? 'Metal' : 'CPU'} · n_ctx ${config.nCtx}${delay}`;
+  return `${spikeModel(config.modelId).label} · ${config.gpu ? 'Metal' : 'CPU'} · n_ctx ${config.nCtx}${delay}`;
 }
 
-export default function QwenBenchmarkScreen() {
+interface ModelState {
+  size: number | null;
+  progress: number | null;
+  error?: string;
+}
+
+const EMPTY_MODEL: ModelState = { size: null, progress: null };
+
+export default function LlmBenchmarkScreen() {
   const available = ParakeetASR.isAvailable();
   const [device, setDevice] = useState<DeviceInfo | null>(null);
-  const [modelSize, setModelSize] = useState<number | null>(null);
-  const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
+  const [models, setModels] = useState<Partial<Record<SpikeModelId, ModelState>>>({});
+  const [modelId, setModelId] = useState<SpikeModelId>(SPIKE_MODELS[0].id);
   const [gpu, setGpu] = useState(true);
   const [nCtx, setNCtx] = useState<number>(16384);
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState('');
-  const [results, setResults] = useState<QwenRunResult[]>([]);
+  const [results, setResults] = useState<LlmRunResult[]>([]);
 
-  const refreshModel = useCallback(async () => {
-    setModelSize(await getQwenSpikeModelSize().catch(() => null));
+  const updateModel = useCallback((id: SpikeModelId, patch: Partial<ModelState>) => {
+    setModels((prev) => ({ ...prev, [id]: { ...(prev[id] ?? EMPTY_MODEL), ...patch } }));
   }, []);
+
+  const refreshModel = useCallback(
+    async (id: SpikeModelId) => {
+      updateModel(id, { size: await getSpikeModelSize(id).catch(() => null) });
+    },
+    [updateModel],
+  );
 
   useEffect(() => {
     if (!available) return;
     ParakeetASR.deviceInfo()
       .then(setDevice)
       .catch(() => setDevice(null));
-    refreshModel();
+    SPIKE_MODELS.forEach((model) => refreshModel(model.id));
   }, [available, refreshModel]);
 
-  const handleDownload = useCallback(async () => {
-    safeHaptics('light');
-    setDownloadProgress(0);
-    try {
-      await downloadQwenSpikeModel(setDownloadProgress);
-      safeHaptics('success');
-    } catch (error) {
-      Sentry.captureException(error, { tags: { feature: 'qwen-benchmark' } });
-      setProgress(error instanceof Error ? error.message : 'Download failed');
-    } finally {
-      setDownloadProgress(null);
-      await refreshModel();
-    }
-  }, [refreshModel]);
+  const handleDownload = useCallback(
+    async (id: SpikeModelId) => {
+      safeHaptics('light');
+      updateModel(id, { progress: 0, error: undefined });
+      try {
+        await downloadSpikeModel(id, (fraction) => updateModel(id, { progress: fraction }));
+        safeHaptics('success');
+      } catch (error) {
+        Sentry.captureException(error, { tags: { feature: 'llm-benchmark' } });
+        updateModel(id, { error: error instanceof Error ? error.message : 'Download failed' });
+      } finally {
+        updateModel(id, { progress: null });
+        await refreshModel(id);
+      }
+    },
+    [refreshModel, updateModel],
+  );
 
-  const handleDelete = useCallback(() => {
-    confirmDestructive(
-      'Delete model',
-      'Remove the Qwen3.5 2B weights from this device?',
-      async () => {
-        await deleteQwenSpikeModel().catch(() => undefined);
-        safeHaptics('warning');
-        await refreshModel();
-      },
-    );
-  }, [refreshModel]);
+  const handleDelete = useCallback(
+    (id: SpikeModelId) => {
+      confirmDestructive(
+        'Delete model',
+        `Remove the ${spikeModel(id).label} weights from this device?`,
+        async () => {
+          await deleteSpikeModel(id).catch(() => undefined);
+          safeHaptics('warning');
+          await refreshModel(id);
+        },
+      );
+    },
+    [refreshModel],
+  );
 
   const handleRun = useCallback(
     async (startDelayMs: number) => {
@@ -91,17 +116,17 @@ export default function QwenBenchmarkScreen() {
       setRunning(true);
       setProgress('');
       try {
-        const result = await runQwenBenchmark({ nCtx, gpu, startDelayMs }, setProgress);
+        const result = await runLlmBenchmark({ modelId, nCtx, gpu, startDelayMs }, setProgress);
         setResults((prev) => [result, ...prev]);
         safeHaptics(result.ok ? 'success' : 'warning');
       } catch (error) {
-        Sentry.captureException(error, { tags: { feature: 'qwen-benchmark' } });
+        Sentry.captureException(error, { tags: { feature: 'llm-benchmark' } });
       } finally {
         setRunning(false);
         setProgress('');
       }
     },
-    [gpu, nCtx],
+    [gpu, modelId, nCtx],
   );
 
   const handleCopy = useCallback(async () => {
@@ -113,13 +138,14 @@ export default function QwenBenchmarkScreen() {
     return (
       <View className="flex-1 items-center justify-center bg-systemBackground px-6">
         <Text className="text-center text-sm text-secondaryLabel">
-          The Qwen benchmark needs a native iOS build on a physical device.
+          The on-device LLM benchmark needs a native iOS build on a physical device.
         </Text>
       </View>
     );
   }
 
-  const canRun = modelSize != null && !running && downloadProgress == null;
+  const downloading = SPIKE_MODELS.some((model) => models[model.id]?.progress != null);
+  const canRun = models[modelId]?.size != null && !running && !downloading;
 
   return (
     <ScrollView
@@ -142,44 +168,31 @@ export default function QwenBenchmarkScreen() {
         </Text>
       </Card>
 
-      <SectionTitle>Model</SectionTitle>
-      <Card>
-        <View className="flex-row items-center justify-between">
-          <View className="flex-1 pr-3">
-            <Text className="text-[15px] text-label">Qwen3.5 2B (Q4_K_M)</Text>
-            <Text className="mt-0.5 text-xs text-tertiaryLabel">
-              {downloadProgress != null
-                ? `Downloading · ${Math.round(downloadProgress * 100)}%`
-                : modelSize != null
-                  ? `Downloaded · ${mb(modelSize)}`
-                  : 'Not downloaded · about 1.3 GB'}
-            </Text>
-          </View>
-          {downloadProgress != null ? (
-            <ActivityIndicator size="small" />
-          ) : modelSize != null ? (
-            <Pressable
-              onPress={handleDelete}
-              disabled={running}
-              style={{ borderCurve: 'continuous' }}
-              className="h-9 w-9 items-center justify-center rounded-lg bg-systemRed/15"
-            >
-              <SystemIcon name="trash" mdName="Trash2" size={17} color="systemRed" />
-            </Pressable>
-          ) : (
-            <Pressable
-              onPress={handleDownload}
-              style={{ borderCurve: 'continuous' }}
-              className="h-9 w-9 items-center justify-center rounded-lg bg-brand"
-            >
-              <SystemIcon name="arrow.down.circle.fill" mdName="Download" size={18} color="#FFF" />
-            </Pressable>
-          )}
-        </View>
-      </Card>
+      <SectionTitle>Models</SectionTitle>
+      {SPIKE_MODELS.map((model) => (
+        <ModelRow
+          key={model.id}
+          model={model}
+          state={models[model.id] ?? EMPTY_MODEL}
+          disabled={running || downloading}
+          onDownload={() => handleDownload(model.id)}
+          onDelete={() => handleDelete(model.id)}
+        />
+      ))}
 
       <SectionTitle>Settings</SectionTitle>
       <Card>
+        <Text className="mb-2 text-xs text-secondaryLabel">Model</Text>
+        <View className="mb-3 flex-row flex-wrap gap-2">
+          {SPIKE_MODELS.map((model) => (
+            <Chip
+              key={model.id}
+              label={model.label}
+              on={modelId === model.id}
+              onPress={() => setModelId(model.id)}
+            />
+          ))}
+        </View>
         <Text className="mb-2 text-xs text-secondaryLabel">Backend</Text>
         <View className="mb-3 flex-row gap-2">
           <Chip label="Metal" on={gpu} onPress={() => setGpu(true)} />
@@ -241,7 +254,62 @@ export default function QwenBenchmarkScreen() {
   );
 }
 
-function RunCard({ result }: { result: QwenRunResult }) {
+function ModelRow({
+  model,
+  state,
+  disabled,
+  onDownload,
+  onDelete,
+}: {
+  model: SpikeModel;
+  state: ModelState;
+  disabled: boolean;
+  onDownload: () => void;
+  onDelete: () => void;
+}) {
+  const status =
+    state.progress != null
+      ? `Downloading · ${Math.round(state.progress * 100)}%`
+      : state.size != null
+        ? `Downloaded · ${mb(state.size)}`
+        : `Not downloaded · about ${model.approxSize}`;
+  return (
+    <Card>
+      <View className="flex-row items-center justify-between">
+        <View className="flex-1 pr-3">
+          <Text className="text-[15px] text-label">{model.label} (Q4_K_M)</Text>
+          <Text className="mt-0.5 text-xs text-tertiaryLabel">{status}</Text>
+          {state.error ? (
+            <Text className="mt-0.5 text-xs text-systemRed">{state.error}</Text>
+          ) : null}
+        </View>
+        {state.progress != null ? (
+          <ActivityIndicator size="small" />
+        ) : state.size != null ? (
+          <Pressable
+            onPress={onDelete}
+            disabled={disabled}
+            style={{ borderCurve: 'continuous' }}
+            className="h-9 w-9 items-center justify-center rounded-lg bg-systemRed/15"
+          >
+            <SystemIcon name="trash" mdName="Trash2" size={17} color="systemRed" />
+          </Pressable>
+        ) : (
+          <Pressable
+            onPress={onDownload}
+            disabled={disabled}
+            style={{ borderCurve: 'continuous', opacity: disabled ? 0.4 : 1 }}
+            className="h-9 w-9 items-center justify-center rounded-lg bg-brand"
+          >
+            <SystemIcon name="arrow.down.circle.fill" mdName="Download" size={18} color="#FFF" />
+          </Pressable>
+        )}
+      </View>
+    </Card>
+  );
+}
+
+function RunCard({ result }: { result: LlmRunResult }) {
   return (
     <Card>
       <Text className="text-[15px] font-semibold text-label">{runLabel(result.config)}</Text>
@@ -264,7 +332,7 @@ function RunCard({ result }: { result: QwenRunResult }) {
   );
 }
 
-function ScenarioRow({ scenario }: { scenario: QwenScenarioResult }) {
+function ScenarioRow({ scenario }: { scenario: LlmScenarioResult }) {
   const [expanded, setExpanded] = useState(false);
   return (
     <View className="mt-3 border-t border-separator pt-3">

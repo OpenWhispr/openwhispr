@@ -6,12 +6,14 @@ jest.mock('@/services/transcription/LocalWhisperService', () => ({ LocalWhisperS
 jest.mock('@/services/transcription/LocalParakeetService', () => ({ LocalParakeetService: {} }));
 
 import {
+  pickModelFile,
   resultsForSharing,
+  SPIKE_MODELS,
   takeLinesWithinChars,
   thinkingLeaked,
   validateMeetingNotesJson,
-  type QwenRunResult,
-} from '@/lib/benchmark/runQwenBenchmark';
+  type LlmRunResult,
+} from '@/lib/benchmark/runLlmBenchmark';
 
 const validNotes = {
   summary: 'Agreed the Q4 roadmap.',
@@ -74,8 +76,8 @@ describe('takeLinesWithinChars', () => {
 
 describe('resultsForSharing', () => {
   it('keeps measurements and drops model output', () => {
-    const run: QwenRunResult = {
-      config: { nCtx: 16384, gpu: true, startDelayMs: 0 },
+    const run: LlmRunResult = {
+      config: { modelId: 'qwen3.5-2b', nCtx: 16384, gpu: true, startDelayMs: 0 },
       device: null,
       ok: true,
       startedAt: '2026-10-07T00:00:00.000Z',
@@ -89,5 +91,58 @@ describe('resultsForSharing', () => {
     const shared = JSON.parse(resultsForSharing([run]));
     expect(shared[0].peakBytes).toBe(2_000_000_000);
     expect(shared[0].scenarios[0]).toEqual({ name: 'meeting-notes', ok: true, totalMs: 1234 });
+  });
+});
+
+describe('pickModelFile', () => {
+  const pattern = /Q4_K_M\.gguf$/i;
+
+  it('takes the LFS size of the matching file, skipping other quants and the vision projector', () => {
+    expect(
+      pickModelFile(
+        [
+          { type: 'file', path: 'README.md', size: 4000 },
+          {
+            type: 'file',
+            path: 'mmproj-Qwen_Qwen3.5-2B-f16.gguf',
+            size: 9,
+            lfs: { size: 668_000_000 },
+          },
+          {
+            type: 'file',
+            path: 'Qwen_Qwen3.5-2B-Q8_0.gguf',
+            size: 9,
+            lfs: { size: 2_200_000_000 },
+          },
+          {
+            type: 'file',
+            path: 'Qwen_Qwen3.5-2B-Q4_K_M.gguf',
+            size: 9,
+            lfs: { size: 1_300_000_000 },
+          },
+        ],
+        pattern,
+      ),
+    ).toEqual({ path: 'Qwen_Qwen3.5-2B-Q4_K_M.gguf', size: 1_300_000_000 });
+  });
+
+  it('matches whatever case the uploader used', () => {
+    expect(
+      pickModelFile(
+        [{ type: 'file', path: 'minicpm5-2b-q4_k_m.gguf', size: 1_560_000_000 }],
+        pattern,
+      ),
+    ).toEqual({ path: 'minicpm5-2b-q4_k_m.gguf', size: 1_560_000_000 });
+  });
+
+  it('returns null when the repo has no such file', () => {
+    expect(pickModelFile([{ type: 'directory', path: 'Q4_K_M.gguf' }], pattern)).toBeNull();
+  });
+});
+
+describe('SPIKE_MODELS', () => {
+  it('has unique ids', () => {
+    const ids = SPIKE_MODELS.map((model) => model.id);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });

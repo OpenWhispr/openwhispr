@@ -1,4 +1,4 @@
-// Inputs for the Qwen spike benchmark (runQwenBenchmark.ts). The dictations keep the fillers,
+// Inputs for the on-device LLM spike benchmark (runLlmBenchmark.ts). The dictations keep the fillers,
 // self-corrections and missing punctuation real dictation has, so cleanup has work to do. The
 // meeting is used only when the phone has no meeting note of its own.
 
