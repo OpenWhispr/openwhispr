@@ -912,7 +912,6 @@ class IPCHandlers {
       this._audioFeaturePolicy?.cancelJobs();
       this._stopMeetingForPolicy?.("accountChanged");
     }
-    void this.updateManager?.refreshPolicy();
     this.windowManager.retireMeetingNotificationScope();
     // Like the jobs above, enterprise audio outlives a token rotation; a
     // different account or workspace retires it once it is learned.
@@ -931,6 +930,7 @@ class IPCHandlers {
       // As set-active-account-scope does: a connect can't outlive its account.
       this.connectorManager?.accountChanged();
     }
+    void this.updateManager?.refreshPolicy();
     broadcastToWindows("auth-token-state-changed", {
       generation,
       hasToken: Boolean(token),
@@ -6687,10 +6687,15 @@ class IPCHandlers {
           this.metaActivation?.close(),
           new Promise((resolve) => setTimeout(resolve, 1500)),
         ]).catch(() => {});
-        const tokenState = tokenStore.clear();
-        const win = BrowserWindow.fromWebContents(event.sender);
-        if (win) {
-          await win.webContents.session.clearStorageData({ storages: ["cookies"] });
+        let tokenState;
+        try {
+          const win = BrowserWindow.fromWebContents(event.sender);
+          if (win) {
+            await win.webContents.session.clearStorageData({ storages: ["cookies"] });
+          }
+        } finally {
+          // Retire cookie-authorized requests after cookie storage has settled.
+          tokenState = tokenStore.clear();
         }
         return {
           success: tokenState.success,
