@@ -132,6 +132,9 @@ const text = (node) => {
   return readable(parts.join(" "));
 };
 const optionTexts = () => options().map(text);
+// Compared as a boolean: a failed assert.equal on DOM nodes spends minutes printing the document.
+const assertFocused = (message = "focus is in the field") =>
+  assert.ok(doc().activeElement === input(), message);
 const selected = () => options().map((option) => option.getAttribute("aria-selected"));
 // The row the arrow keys are on, which the field names with aria-activedescendant.
 const highlighted = () =>
@@ -167,6 +170,12 @@ const leaveField = (element, relatedTarget = null) =>
   act(() =>
     element.dispatchEvent(new happyWindow.FocusEvent("focusout", { bubbles: true, relatedTarget }))
   );
+// Focusing the focused field is a no-op in a browser as it is here, so a field that was left
+// (see leaveField) is left for real before it is entered again.
+const refocus = async () => {
+  await act(() => input().blur());
+  await focus(input());
+};
 // Resolves to whether the field took the paste over from the browser.
 const paste = async (element, pasted) => {
   const event = new happyWindow.Event("paste", { bubbles: true, cancelable: true });
@@ -223,7 +232,7 @@ async function mount(t, props = {}, { dialog = false, onDialogOpenChange = () =>
 
 test("focusing the empty field lists people and groups, with a group's count", async (t) => {
   await mount(t);
-  assert.equal(listbox(), null, "closed until the field has focus");
+  assert.ok(listbox() === null, "closed until the field has focus");
   await focus(input());
   assert.deepEqual(optionTexts(), [
     "Ethan ethan@openronnie.com",
@@ -247,9 +256,9 @@ test("picking adds a chip and clears the query", async (t) => {
   ]);
   assert.equal(input().value, "", "the query is cleared");
   assert.deepEqual(chipTexts(), ["Saket"]);
-  assert.equal(input().closest("[data-chip]"), null, "chips sit under the field, never inside it");
+  assert.ok(input().closest("[data-chip]") === null, "chips sit under the field, never inside it");
   // The field keeps focus and the list stays open: Saket is still there, with a check.
-  assert.equal(doc().activeElement, input());
+  assertFocused();
   assert.ok(listbox(), "the list stays open after a pick");
   assert.deepEqual(optionTexts(), [
     "Ethan ethan@openronnie.com",
@@ -533,10 +542,10 @@ test("Escape closes the list and keeps the dialog", async (t) => {
   assert.ok(listbox(), "the list is open");
 
   await press(input(), "Escape");
-  assert.equal(listbox(), null, "the list closed");
+  assert.ok(listbox() === null, "the list closed");
   assert.ok(doc().querySelector('[role="dialog"]'), "the dialog is still there");
   assert.deepEqual(dialogChanges, [], "the dialog was not asked to close");
-  assert.equal(doc().activeElement, input(), "focus stays in the field");
+  assertFocused("focus stays in the field");
 
   // With the list closed, Escape is the dialog's again.
   await press(input(), "Escape");
@@ -547,11 +556,11 @@ test("typing or an arrow key brings the list back after Escape", async (t) => {
   await mount(t, {}, { dialog: true });
   await focus(input());
   await press(input(), "Escape");
-  assert.equal(listbox(), null);
+  assert.ok(listbox() === null, "the list is closed");
   await type(input(), "e");
   assert.ok(listbox(), "typing reopens it");
   await press(input(), "Escape");
-  assert.equal(listbox(), null);
+  assert.ok(listbox() === null, "the list is closed");
   await press(input(), "ArrowDown");
   assert.ok(listbox(), "so does an arrow key");
 });
@@ -576,7 +585,7 @@ test("an invalid address marks the field", async (t) => {
   // Taking it out clears the mark.
   await click(chip.querySelector("button"));
   assert.equal(input().getAttribute("aria-invalid"), null);
-  assert.deepEqual(chips(), []);
+  assert.equal(chips().length, 0);
 });
 
 test("a valid chip leaves the field unmarked, and a name is never chipped on blur", async (t) => {
@@ -646,4 +655,249 @@ test("the placeholder and id reach the input", async (t) => {
   await mount(t, { id: "create-people", placeholder: "Names, emails, or groups" });
   assert.equal(input().id, "create-people");
   assert.equal(input().getAttribute("placeholder"), "Names, emails, or groups");
+});
+
+// Resolves to whether the field kept the key from the browser's own handling of it.
+const pressKey = async (element, key) => {
+  const event = new happyWindow.KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+  await act(() => element.dispatchEvent(event));
+  return event.defaultPrevented;
+};
+const roleText = () => doc().querySelector('[role="option"] [aria-live="polite"]')?.textContent;
+const roleMenuTrigger = () => doc().querySelector('[role="option"] [aria-haspopup="menu"]');
+const chooseRole = async (label) => {
+  await press(roleMenuTrigger(), "ArrowDown");
+  const item = [...doc().querySelectorAll('[role="menuitemradio"]')].find((entry) =>
+    text(entry).startsWith(label)
+  );
+  await click(item);
+  // Radix returns focus from a timer once the menu has unmounted.
+  await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+};
+
+test("the list can be wheel-scrolled inside a modal dialog", async (t) => {
+  await mount(t, {}, { dialog: true });
+  await focus(input());
+  const wheel = async (target) => {
+    const event = new happyWindow.WheelEvent("wheel", {
+      deltaY: 40,
+      bubbles: true,
+      cancelable: true,
+    });
+    await act(() => target.dispatchEvent(event));
+    return event.defaultPrevented;
+  };
+  // The dialog's scroll lock is on: it stops the wheel anywhere outside the dialog itself.
+  assert.equal(await wheel(doc().body), true, "the lock is active");
+  // The list sits in the body, outside the dialog, and must still scroll.
+  assert.equal(await wheel(listbox()), false);
+  assert.equal(await wheel(options()[0]), false);
+});
+
+test("the highlighted row is scrolled into view", async (t) => {
+  const calls = [];
+  const proto = happyWindow.Element.prototype;
+  const original = Object.getOwnPropertyDescriptor(proto, "scrollIntoView");
+  Object.defineProperty(proto, "scrollIntoView", {
+    configurable: true,
+    writable: true,
+    value(argument) {
+      calls.push({ id: this.id, argument });
+    },
+  });
+  t.after(() => {
+    if (original) Object.defineProperty(proto, "scrollIntoView", original);
+    else delete proto.scrollIntoView;
+  });
+
+  await mount(t);
+  await focus(input());
+  assert.deepEqual(calls, [], "nothing is highlighted, so nothing scrolls");
+  await press(input(), "ArrowDown");
+  assert.deepEqual(calls.at(-1), { id: options()[0].id, argument: { block: "nearest" } });
+  await press(input(), "ArrowDown");
+  assert.equal(calls.at(-1).id, options()[1].id);
+  // Wrapping to the last row, which may be below the fold, scrolls to it too.
+  await press(input(), "ArrowUp");
+  await press(input(), "ArrowUp");
+  assert.equal(calls.at(-1).id, options().at(-1).id);
+});
+
+test("the role of an invitation is chosen from the keyboard, and read out", async (t) => {
+  const { lastChange } = await mount(t, { inviteRoleChoice: true });
+  await focus(input());
+  await type(input(), "alex@example.com");
+  assert.equal(roleText(), "Member");
+  assert.equal(
+    doc().querySelector('[role="option"] [aria-live="polite"]').getAttribute("aria-live"),
+    "polite"
+  );
+
+  // Left and right belong to the field until the invite row is the highlighted one.
+  assert.equal(await pressKey(input(), "ArrowRight"), false);
+  await press(input(), "ArrowDown");
+  assert.equal(highlighted(), 0);
+  assert.equal(await pressKey(input(), "ArrowRight"), true);
+  assert.equal(roleText(), "Admin");
+  assert.equal(await pressKey(input(), "ArrowLeft"), true);
+  assert.equal(roleText(), "Member");
+  await press(input(), "ArrowRight");
+  assert.equal(roleText(), "Admin");
+  assert.equal(input().value, "alex@example.com", "nothing is staged by choosing a role");
+
+  await press(input(), "Enter");
+  assert.deepEqual(lastChange(), [
+    { kind: "email", email: "alex@example.com", role: "admin", valid: true },
+  ]);
+  assert.deepEqual(chipTexts(), ["alex@example.com · Admin"]);
+});
+
+test("left and right leave the field alone on any other row, and without a role choice", async (t) => {
+  await mount(t, { inviteRoleChoice: true });
+  await focus(input());
+  await press(input(), "ArrowDown");
+  assert.equal(highlighted(), 0, "Ethan is highlighted");
+  assert.equal(await pressKey(input(), "ArrowRight"), false);
+  assert.equal(await pressKey(input(), "ArrowLeft"), false);
+});
+
+test("without a role choice left and right don't touch the invite row", async (t) => {
+  await mount(t, { inviteRoleChoice: false });
+  await focus(input());
+  await type(input(), "alex@example.com");
+  await press(input(), "ArrowDown");
+  assert.equal(await pressKey(input(), "ArrowRight"), false);
+});
+
+test("the field keeps focus after a role is chosen and after Select", async (t) => {
+  await mount(t, { inviteRoleChoice: true });
+  await focus(input());
+  await type(input(), "alex@example.com");
+  await chooseRole("Workspace Admin");
+  assert.equal(roleText(), "Admin");
+  assertFocused("the menu hands focus back to the field");
+
+  const select = [...doc().querySelectorAll("button")].find((button) => text(button) === "Select");
+  // A button takes focus from the field when it is pressed with the keyboard or a touch.
+  await act(() => select.focus());
+  await click(select);
+  assert.deepEqual(chipTexts(), ["alex@example.com · Admin"]);
+  assertFocused("the row is gone, and focus did not go with it");
+});
+
+test("the role shown is the role Enter, blur and a pasted list stage", async (t) => {
+  const { lastChange } = await mount(t, { inviteRoleChoice: true });
+  await focus(input());
+
+  // Enter with no highlighted row.
+  await type(input(), "alex@example.com");
+  await chooseRole("Workspace Admin");
+  await press(input(), "Enter");
+  assert.deepEqual(chipTexts(), ["alex@example.com · Admin"]);
+  // It was for that address: the next one starts as Member.
+  await type(input(), "kim@example.com");
+  assert.equal(roleText(), "Member");
+
+  // Blur.
+  await chooseRole("Workspace Admin");
+  await leaveField(input());
+  assert.deepEqual(chipTexts(), ["alex@example.com · Admin", "kim@example.com · Admin"]);
+
+  // A typed separator.
+  await refocus();
+  await type(input(), "lee@example.com");
+  await chooseRole("Workspace Admin");
+  await type(input(), "lee@example.com,");
+  assert.equal(chipTexts().at(-1), "lee@example.com · Admin");
+
+  // A pasted list: everyone in it gets the role shown, and the typed address stays to be staged.
+  await type(input(), "max@example.com");
+  await chooseRole("Workspace Admin");
+  await paste(input(), "p@x.io, q@x.io");
+  assert.deepEqual(chipTexts().slice(-2), ["p@x.io · Admin", "q@x.io · Admin"]);
+  assert.equal(input().value, "max@example.com");
+  assert.equal(roleText(), "Admin", "still the choice for the address that is left");
+
+  // A member's address and the role: members have no workspace role to choose.
+  await type(input(), "ethan@openronnie.com");
+  await press(input(), "Enter");
+  assert.equal(lastChange().at(-1).kind, "member");
+});
+
+test("typing an address again never downgrades its role; choosing its row does", async (t) => {
+  await mount(t, { inviteRoleChoice: true });
+  await focus(input());
+  await type(input(), "alex@example.com");
+  await chooseRole("Workspace Admin");
+  await press(input(), "Enter");
+  assert.deepEqual(chipTexts(), ["alex@example.com · Admin"]);
+
+  // Typed again with the role showing Member: the chip is left as it was.
+  await type(input(), "alex@example.com");
+  await press(input(), "Enter");
+  assert.deepEqual(chipTexts(), ["alex@example.com · Admin"]);
+  await type(input(), "alex@example.com");
+  await leaveField(input());
+  assert.deepEqual(chipTexts(), ["alex@example.com · Admin"]);
+  assert.equal(input().value, "", "the address is consumed, not left behind");
+  await paste(input(), "alex@example.com, kim@example.com");
+  assert.deepEqual(chipTexts(), ["alex@example.com · Admin", "kim@example.com · Member"]);
+
+  // Choosing the invite row is a decision about this address's role.
+  await refocus();
+  await type(input(), "alex@example.com");
+  await press(input(), "ArrowDown");
+  await press(input(), "Enter");
+  assert.deepEqual(chipTexts(), ["alex@example.com · Member", "kim@example.com · Member"]);
+});
+
+test("the list says several rows can be selected", async (t) => {
+  await mount(t);
+  await focus(input());
+  assert.equal(listbox().getAttribute("aria-multiselectable"), "true");
+});
+
+test("an address with an invitation pending shows as pending and stages nothing", async (t) => {
+  const { changes } = await mount(t, {
+    inviteRoleChoice: true,
+    pendingEmails: new Set(["clark@gmail.com"]),
+  });
+  await focus(input());
+  await type(input(), "Clark@Gmail.com");
+  // A disabled row, with no invite and no role to choose.
+  assert.deepEqual(optionTexts(), ["Clark@Gmail.com Invitation pending"]);
+  assert.equal(options()[0].getAttribute("aria-disabled"), "true");
+  assert.ok(roleMenuTrigger() === null, "no role to choose");
+  assert.ok(doc().querySelector('[role="status"]') === null, "it is not an empty result");
+
+  await press(input(), "ArrowDown");
+  assert.equal(highlighted(), -1, "the arrow keys step over it");
+  await click(options()[0]);
+  await press(input(), "Enter");
+  await leaveField(input());
+  assert.equal(changes.length, 0, "typing the address stages nothing");
+  // Left in the field, so it is clear it was not taken; addresses are kept in lower case.
+  assert.equal(input().value, "clark@gmail.com");
+
+  // A separator after it, and a pasted list that has it in.
+  await refocus();
+  await type(input(), "clark@gmail.com,");
+  assert.equal(changes.length, 0);
+  assert.equal(input().value, "clark@gmail.com");
+  await paste(input(), "a@x.io, clark@gmail.com");
+  assert.deepEqual(chipTexts(), ["a@x.io · Member"]);
+  assert.equal(input().value, "clark@gmail.com");
+
+  // An address nobody invited yet is still offered.
+  await type(input(), "alex@example.com");
+  assert.deepEqual(optionTexts(), [
+    "alex@example.com New to workspace Workspace role Member Select",
+  ]);
+});
+
+test("a pending address reads as pending to someone who can't invite too", async (t) => {
+  await mount(t, { canInvite: false, pendingEmails: new Set(["clark@gmail.com"]) });
+  await focus(input());
+  await type(input(), "clark@gmail.com");
+  assert.deepEqual(optionTexts(), ["clark@gmail.com Invitation pending"]);
 });

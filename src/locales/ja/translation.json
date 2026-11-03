@@ -2576,6 +2576,9 @@
           "hasAccess": "すでにアクセス権があります",
           "groupHasAccess_one": "すでにアクセス権があります · {{count}}人",
           "groupHasAccess_other": "すでにアクセス権があります · {{count}}人"
+        },
+        "members": {
+          "invitationPending": "招待は保留中"
         }
       },
       "role": {

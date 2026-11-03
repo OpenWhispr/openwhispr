@@ -2628,6 +2628,9 @@
           "hasAccess": "Ya tiene acceso",
           "groupHasAccess_one": "Ya tiene acceso · {{count}} persona",
           "groupHasAccess_other": "Ya tiene acceso · {{count}} personas"
+        },
+        "members": {
+          "invitationPending": "Invitación pendiente"
         }
       },
       "role": {

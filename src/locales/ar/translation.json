@@ -4010,6 +4010,9 @@
           "groupHasAccess_few": "لديه صلاحية الوصول بالفعل · {{count}} أشخاص",
           "groupHasAccess_many": "لديه صلاحية الوصول بالفعل · {{count}} شخصًا",
           "groupHasAccess_other": "لديه صلاحية الوصول بالفعل · {{count}} شخص"
+        },
+        "members": {
+          "invitationPending": "الدعوة قيد الانتظار"
         }
       },
       "role": {

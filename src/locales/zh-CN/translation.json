@@ -2576,6 +2576,9 @@
           "hasAccess": "已有权限",
           "groupHasAccess_one": "已有权限 · {{count}} 人",
           "groupHasAccess_other": "已有权限 · {{count}} 人"
+        },
+        "members": {
+          "invitationPending": "邀请待处理"
         }
       },
       "role": {

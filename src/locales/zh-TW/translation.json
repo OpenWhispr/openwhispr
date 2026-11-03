@@ -2576,6 +2576,9 @@
           "hasAccess": "已有存取權",
           "groupHasAccess_one": "已有存取權 · {{count}} 人",
           "groupHasAccess_other": "已有存取權 · {{count}} 人"
+        },
+        "members": {
+          "invitationPending": "邀請待處理"
         }
       },
       "role": {

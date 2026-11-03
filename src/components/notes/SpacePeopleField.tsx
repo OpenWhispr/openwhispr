@@ -1,5 +1,7 @@
 import {
+  useEffect,
   useId,
+  useRef,
   useState,
   type ClipboardEvent,
   type FocusEvent,
@@ -49,6 +51,8 @@ export interface SpacePeopleFieldProps {
   accessUserIds?: ReadonlySet<string>;
   accessGroupIds?: ReadonlySet<string>;
   hiddenUserIds?: ReadonlySet<string>;
+  /** Addresses with an invitation waiting, lowercased: shown as pending, never offered again. */
+  pendingEmails?: ReadonlySet<string>;
   canInvite: boolean;
   /** Members tab: the invite row offers a role menu and Select. Create: Invite to workspace. */
   inviteRoleChoice: boolean;
@@ -61,7 +65,8 @@ export interface SpacePeopleFieldProps {
 type PickerRow =
   | { kind: "member"; member: WorkspaceMember; hasAccess: boolean; picked: boolean }
   | { kind: "group"; group: Team; hasAccess: boolean; picked: boolean }
-  | { kind: "invite"; email: string };
+  | { kind: "invite"; email: string }
+  | { kind: "pending"; email: string };
 
 const NO_IDS: ReadonlySet<string> = new Set();
 
@@ -94,7 +99,8 @@ const GROUP_TILE = cn(TILE, "[&>span]:text-xs");
 const ACTION_PILL =
   "shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-primary/15";
 
-const isPickable = (row: PickerRow): boolean => row.kind === "invite" || !row.hasAccess;
+const isPickable = (row: PickerRow): boolean =>
+  row.kind === "invite" || (row.kind !== "pending" && !row.hasAccess);
 
 export function SpacePeopleField({
   id,
@@ -103,6 +109,7 @@ export function SpacePeopleField({
   accessUserIds = NO_IDS,
   accessGroupIds = NO_IDS,
   hiddenUserIds,
+  pendingEmails,
   canInvite,
   inviteRoleChoice,
   picked,
@@ -112,6 +119,7 @@ export function SpacePeopleField({
 }: SpacePeopleFieldProps): ReactElement {
   const { t } = useTranslation();
   const listId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
   // Escape closes the list until the person types, arrows or clicks the field again.
@@ -129,6 +137,7 @@ export function SpacePeopleField({
     accessUserIds,
     accessGroupIds,
     hiddenUserIds,
+    pendingEmails,
     canInvite,
   });
   const rows: PickerRow[] = [
@@ -145,6 +154,7 @@ export function SpacePeopleField({
       picked,
     })),
     ...(results.inviteEmail ? [{ kind: "invite", email: results.inviteEmail } as const] : []),
+    ...(results.pendingInvite ? [{ kind: "pending", email: results.pendingInvite } as const] : []),
   ];
   // An empty field with nobody left to list has nothing to say.
   const showEmptyState = results.noResults && query.trim() !== "";
@@ -154,18 +164,28 @@ export function SpacePeopleField({
       ? activeIndex
       : -1;
   const hasInvalid = picked.some((recipient) => recipient.kind === "email" && !recipient.valid);
+  // The role the invite row shows is the one every address typed or pasted here is staged with.
+  const shownRole: InviteRole = inviteRoleChoice ? inviteRole : "member";
+  const stagingRules = { accessUserIds, hiddenUserIds, pendingEmails };
 
-  const stage = (incoming: PickedRecipient[]): void => {
-    const next = addRecipients(picked, incoming, { accessUserIds, hiddenUserIds });
+  // Highlighting with the arrow keys must never leave the row out of sight, or Enter picks blind.
+  useEffect(() => {
+    if (active >= 0) {
+      document.getElementById(`${listId}-${active}`)?.scrollIntoView({ block: "nearest" });
+    }
+  }, [active, listId]);
+
+  const stage = (incoming: PickedRecipient[], replaceRole = false): void => {
+    const next = addRecipients(picked, incoming, { ...stagingRules, replaceRole });
     if (next !== picked) onChange(next);
   };
 
   // Stages every address in the text and returns what couldn't be staged, to leave in the field:
   // an address nobody here may invite, or a member who already has access.
   const stageText = (text: string): string => {
-    const parsed = recipientsFromText(text, roster);
+    const parsed = recipientsFromText(text, roster, shownRole);
     const allowed = canInvite ? parsed : parsed.filter((recipient) => recipient.kind === "member");
-    const next = addRecipients(picked, allowed, { accessUserIds, hiddenUserIds });
+    const next = addRecipients(picked, allowed, stagingRules);
     if (next !== picked) onChange(next);
     const stagedKeys = new Set(next.map(recipientKey));
     return parsed
@@ -174,9 +194,16 @@ export function SpacePeopleField({
       .join(", ");
   };
 
+  // The field's own text is used up when nothing of it is left; the role shown was for it.
+  const consume = (text: string): void => {
+    const leftover = stageText(text);
+    setQuery(leftover);
+    if (leftover === "") setInviteRole("member");
+  };
+
   // Half a name is a search; only text that reads as an address is chipped.
   const commitQuery = (): void => {
-    if (query.includes("@")) setQuery(stageText(query));
+    if (query.includes("@")) consume(query);
   };
 
   const unstage = (recipient: PickedRecipient): void => {
@@ -195,9 +222,12 @@ export function SpacePeopleField({
       if (row.picked) unstage(recipient);
       else stage([recipient]);
     } else {
-      stage([emailRecipient(row.email.toLowerCase(), inviteRoleChoice ? inviteRole : "member")]);
+      // The only place a role replaces one already staged: the row is a choice made on purpose.
+      stage([emailRecipient(row.email.toLowerCase(), shownRole)], true);
       // Never carried to the next address: an admin invitation is a choice made each time.
       setInviteRole("member");
+      // The row is about to unmount, and focus must not go with it.
+      inputRef.current?.focus();
     }
     setQuery("");
     setActiveIndex(-1);
@@ -219,7 +249,8 @@ export function SpacePeopleField({
   const handleChange = (value: string): void => {
     setActiveIndex(-1);
     setDismissed(false);
-    setQuery(value.includes("@") && FINISHED_LIST.test(value) ? stageText(value) : value);
+    if (value.includes("@") && FINISHED_LIST.test(value)) consume(value);
+    else setQuery(value);
   };
 
   const handlePaste = (event: ClipboardEvent<HTMLInputElement>): void => {
@@ -237,6 +268,16 @@ export function SpacePeopleField({
       event.preventDefault();
       if (listOpen) move(event.key === "ArrowDown" ? 1 : -1);
       else setDismissed(false);
+    } else if (
+      (event.key === "ArrowLeft" || event.key === "ArrowRight") &&
+      inviteRoleChoice &&
+      active >= 0 &&
+      rows[active].kind === "invite"
+    ) {
+      // Tab would leave the field and close the list, so the role of the highlighted invitation
+      // is chosen here; the caret keeps left and right on every other row.
+      event.preventDefault();
+      setInviteRole((current) => (current === "member" ? "admin" : "member"));
     } else if (event.key === "Enter") {
       // Enter belongs to the field: the dialog around it is not submitted from here.
       event.preventDefault();
@@ -270,6 +311,7 @@ export function SpacePeopleField({
         <PopoverAnchor asChild>
           <div ref={setFieldElement}>
             <Input
+              ref={inputRef}
               id={id}
               dir="auto"
               type="text"
@@ -306,12 +348,16 @@ export function SpacePeopleField({
             }
           }}
           onMouseDown={(event) => event.preventDefault()}
+          // The dialog's scroll lock cancels the wheel anywhere outside the dialog, and this list
+          // sits in the body; the wheel stops here, so the lock never sees it.
+          onWheel={(event) => event.stopPropagation()}
           className="max-h-[min(18rem,var(--radix-popover-content-available-height))] w-[var(--radix-popover-trigger-width)] min-w-0 overflow-y-auto rounded-xl p-1.5"
         >
           {rows.length > 0 ? (
             <div
               id={listId}
               role="listbox"
+              aria-multiselectable="true"
               aria-label={t("workspaces.invite.suggestions")}
               className="flex flex-col gap-0.5"
             >
@@ -323,7 +369,7 @@ export function SpacePeopleField({
                     id={`${listId}-${index}`}
                     role="option"
                     // Who is picked; the row the arrow keys are on is aria-activedescendant.
-                    aria-selected={row.kind !== "invite" && row.picked}
+                    aria-selected={(row.kind === "member" || row.kind === "group") && row.picked}
                     aria-disabled={disabledRow || undefined}
                     onMouseEnter={() => {
                       if (!disabledRow) setActiveIndex(index);
@@ -340,6 +386,7 @@ export function SpacePeopleField({
                       inviteRoleChoice={inviteRoleChoice}
                       inviteRole={inviteRole}
                       onInviteRoleChange={setInviteRole}
+                      onMenuClosed={() => inputRef.current?.focus()}
                       menuContainer={listElement}
                     />
                   </div>
@@ -372,9 +419,7 @@ export function SpacePeopleField({
               }
               showRole={inviteRoleChoice}
               disabled={disabled}
-              onRemove={() =>
-                onChange(picked.filter((entry) => recipientKey(entry) !== recipientKey(recipient)))
-              }
+              onRemove={() => unstage(recipient)}
             />
           ))}
         </ul>
@@ -386,7 +431,7 @@ export function SpacePeopleField({
 function rowKey(row: PickerRow): string {
   if (row.kind === "member") return `member:${row.member.user_id}`;
   if (row.kind === "group") return `group:${row.group.id}`;
-  return "invite";
+  return row.kind;
 }
 
 function RowContent({
@@ -394,12 +439,14 @@ function RowContent({
   inviteRoleChoice,
   inviteRole,
   onInviteRoleChange,
+  onMenuClosed,
   menuContainer,
 }: {
   row: PickerRow;
   inviteRoleChoice: boolean;
   inviteRole: InviteRole;
   onInviteRoleChange: (role: InviteRole) => void;
+  onMenuClosed: () => void;
   menuContainer: HTMLElement | null;
 }): ReactElement {
   const { t } = useTranslation();
@@ -450,11 +497,21 @@ function RowContent({
     );
   }
 
+  if (row.kind === "pending") {
+    return (
+      <>
+        <MailTile />
+        <RowText
+          primary={<bdi dir="ltr">{row.email}</bdi>}
+          secondary={t("settingsPage.workspace.teamspaces.members.invitationPending")}
+        />
+      </>
+    );
+  }
+
   return (
     <>
-      <span aria-hidden="true" className={cn(TILE, "text-muted-foreground")}>
-        <Mail className="size-3" aria-hidden="true" />
-      </span>
+      <MailTile />
       <RowText
         primary={<bdi dir="ltr">{row.email}</bdi>}
         secondary={
@@ -470,6 +527,7 @@ function RowContent({
             <InviteRoleMenu
               role={inviteRole}
               onRoleChange={onInviteRoleChange}
+              onClosed={onMenuClosed}
               container={menuContainer}
             />
           </div>
@@ -483,6 +541,14 @@ function RowContent({
         </span>
       )}
     </>
+  );
+}
+
+function MailTile(): ReactElement {
+  return (
+    <span aria-hidden="true" className={cn(TILE, "text-muted-foreground")}>
+      <Mail className="size-3" aria-hidden="true" />
+    </span>
   );
 }
 
@@ -510,10 +576,13 @@ function RowText({
 function InviteRoleMenu({
   role,
   onRoleChange,
+  onClosed,
   container,
 }: {
   role: InviteRole;
   onRoleChange: (role: InviteRole) => void;
+  /** Where focus goes when the menu closes: back to the field, not to this trigger. */
+  onClosed: () => void;
   container: HTMLElement | null;
 }): ReactElement {
   const { t } = useTranslation();
@@ -523,7 +592,8 @@ function InviteRoleMenu({
     <DropdownMenu>
       <DropdownMenuTrigger className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-xs text-foreground outline-none transition-colors hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-foreground/5">
         <span className="sr-only">{t("workspaces.invite.roleLabel")}</span>
-        <span>
+        {/* Announced when the arrow keys change it, as the menu isn't open for that. */}
+        <span aria-live="polite">
           {role === "admin"
             ? t("notes.spaces.members.roleAdmin")
             : t("notes.spaces.members.roleMember")}
@@ -531,7 +601,15 @@ function InviteRoleMenu({
         <ChevronDown className="size-3 shrink-0" aria-hidden="true" />
       </DropdownMenuTrigger>
       {/* In the list's own element, so moving focus into the menu is not leaving the field. */}
-      <DropdownMenuContent align="end" container={container} className="w-64">
+      <DropdownMenuContent
+        align="end"
+        container={container}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          onClosed();
+        }}
+        className="w-64"
+      >
         <DropdownMenuRadioGroup
           value={role}
           onValueChange={(value) => onRoleChange(value === "admin" ? "admin" : "member")}
@@ -597,11 +675,7 @@ function RecipientChip({
     );
     removeName = recipient.label;
   } else {
-    leading = (
-      <span aria-hidden="true" className={cn(TILE, "text-muted-foreground")}>
-        <Mail className="size-3" aria-hidden="true" />
-      </span>
-    );
+    leading = <MailTile />;
     label = showRole ? (
       <BidiInterpolatedText
         text={t("settingsPage.workspace.teamspaces.picker.emailChip", {

@@ -1847,6 +1847,9 @@
           "hasAccess": "A déjà accès",
           "groupHasAccess_one": "A déjà accès · {{count}} personne",
           "groupHasAccess_other": "A déjà accès · {{count}} personnes"
+        },
+        "members": {
+          "invitationPending": "Invitation en attente"
         }
       },
       "role": {

@@ -2608,6 +2608,9 @@
           "groupHasAccess_few": "Уже есть доступ · {{count}} человека",
           "groupHasAccess_many": "Уже есть доступ · {{count}} человек",
           "groupHasAccess_other": "Уже есть доступ · {{count}} человека"
+        },
+        "members": {
+          "invitationPending": "Приглашение ожидает ответа"
         }
       },
       "role": {

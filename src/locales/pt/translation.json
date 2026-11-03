@@ -2555,6 +2555,9 @@
           "hasAccess": "Já tem acesso",
           "groupHasAccess_one": "Já tem acesso · {{count}} pessoa",
           "groupHasAccess_other": "Já tem acesso · {{count}} pessoas"
+        },
+        "members": {
+          "invitationPending": "Convite pendente"
         }
       },
       "role": {

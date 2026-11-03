@@ -2576,6 +2576,9 @@
           "hasAccess": "Ha già accesso",
           "groupHasAccess_one": "Ha già accesso · {{count}} persona",
           "groupHasAccess_other": "Ha già accesso · {{count}} persone"
+        },
+        "members": {
+          "invitationPending": "Invito in sospeso"
         }
       },
       "role": {

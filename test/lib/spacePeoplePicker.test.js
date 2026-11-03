@@ -177,6 +177,34 @@ test("an address with no match offers an invite only to those who can", () => {
   assert.equal(search("alex").inviteEmail, null);
 });
 
+test("an address with a pending invitation is shown as pending, not offered again", () => {
+  const pendingEmails = new Set(["clark@gmail.com"]);
+  const pending = search("clark@gmail.com", { pendingEmails });
+  assert.equal(pending.inviteEmail, null);
+  assert.equal(pending.pendingInvite, "clark@gmail.com");
+  assert.equal(pending.noResults, false, "there is a row to show");
+  assert.deepEqual(names(pending), { members: [], groups: [] });
+
+  // As typed, in any capitalisation and with spaces around it.
+  assert.equal(search("  Clark@Gmail.com ", { pendingEmails }).pendingInvite, "Clark@Gmail.com");
+  // Whoever can't invite still sees that the invitation is there.
+  const cannotInvite = search("clark@gmail.com", { pendingEmails, canInvite: false });
+  assert.equal(cannotInvite.pendingInvite, "clark@gmail.com");
+  // Other addresses are unaffected, and so is a list that has no pending set.
+  assert.equal(search("alex@example.com", { pendingEmails }).pendingInvite, null);
+  assert.equal(search("alex@example.com", { pendingEmails }).inviteEmail, "alex@example.com");
+  assert.equal(search("clark@gmail.com").pendingInvite, null);
+  assert.equal(search("clark@gmail.com").inviteEmail, "clark@gmail.com");
+  // A roster member is that member, whatever else is pending for the address.
+  const member = search("ethan@openronnie.com", {
+    pendingEmails: new Set(["ethan@openronnie.com"]),
+  });
+  assert.equal(member.pendingInvite, null);
+  assert.deepEqual(names(member).members, ["Ethan"]);
+  // Half an address is nobody's invitation.
+  assert.equal(search("clark@gmail", { pendingEmails }).pendingInvite, null);
+});
+
 test("no results tell the inviter they can enter an address, and others they can't", () => {
   for (const canInvite of [true, false]) {
     const results = search("Research", { canInvite });
@@ -273,13 +301,9 @@ test("pickedSummary splits the three kinds, keeps roles and flags invalid ones",
 test("adding recipients keeps each one once and skips those who can't be staged", () => {
   const ethan = { kind: "member", userId: "ethan", label: "Ethan", email: "ethan@openronnie.com" };
   const sales = { kind: "group", teamId: "sales", label: "Sales", memberCount: 5 };
-  const alex = { kind: "email", email: "alex@x.io", role: "member", valid: true };
+  const alex = { kind: "email", email: "alex@x.io", role: "admin", valid: true };
 
   assert.deepEqual(addRecipients([ethan], [ethan, sales, sales]), [ethan, sales]);
-  // Staging an address again with another role is a change of mind, not a second chip.
-  assert.deepEqual(addRecipients([alex], [{ ...alex, role: "admin" }]), [
-    { ...alex, role: "admin" },
-  ]);
   // Someone who already has access, or is hidden, can't be added by typing their address.
   assert.deepEqual(addRecipients([], [ethan, sales], { accessUserIds: new Set(["ethan"]) }), [
     sales,
@@ -287,6 +311,38 @@ test("adding recipients keeps each one once and skips those who can't be staged"
   assert.deepEqual(addRecipients([], [ethan], { hiddenUserIds: new Set(["ethan"]) }), []);
   const same = [ethan];
   assert.equal(addRecipients(same, [ethan]), same, "nothing new keeps the list as it was");
+});
+
+test("an address already staged keeps its role unless the role is chosen again on purpose", () => {
+  const admin = { kind: "email", email: "alex@x.io", role: "admin", valid: true };
+  const member = { ...admin, role: "member" };
+
+  // Typing it again, or pasting it, is not a change of mind: it never downgrades an admin.
+  const same = [admin];
+  assert.equal(addRecipients(same, [member]), same);
+  // Choosing a role for it on its row is.
+  assert.deepEqual(addRecipients(same, [member], { replaceRole: true }), [member]);
+  assert.deepEqual(addRecipients([member], [admin], { replaceRole: true }), [admin]);
+  // The same role changes nothing, even when asked to replace.
+  assert.equal(addRecipients(same, [admin], { replaceRole: true }), same);
+});
+
+test("an address with a pending invitation is never staged again", () => {
+  const pending = new Set(["clark@gmail.com"]);
+  const clark = { kind: "email", email: "clark@gmail.com", role: "member", valid: true };
+  const alex = { kind: "email", email: "alex@x.io", role: "member", valid: true };
+  assert.deepEqual(addRecipients([], [clark, alex], { pendingEmails: pending }), [alex]);
+  // A member is not held back by an unrelated pending address.
+  const ethan = { kind: "member", userId: "ethan", label: "Ethan", email: "ethan@openronnie.com" };
+  assert.deepEqual(addRecipients([], [ethan], { pendingEmails: pending }), [ethan]);
+});
+
+test("recipientsFromText gives every new address the role shown, never a member's", () => {
+  assert.deepEqual(recipientsFromText("a@x.io; ethan@openronnie.com", ROSTER, "admin"), [
+    { kind: "email", email: "a@x.io", role: "admin", valid: true },
+    { kind: "member", userId: "ethan", label: "Ethan", email: "ethan@openronnie.com" },
+  ]);
+  assert.equal(recipientsFromText("a@x.io", ROSTER)[0].role, "member", "Member by default");
 });
 
 test("each kind of recipient has a key of its own", () => {

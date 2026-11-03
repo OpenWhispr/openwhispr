@@ -13,6 +13,8 @@ export interface PickerResults {
   groups: { group: Team; hasAccess: boolean; picked: boolean }[];
   /** The query reads as an address and nobody matches: offer to invite. */
   inviteEmail: string | null;
+  /** The query is an address that already has an invitation waiting: shown, never offered again. */
+  pendingInvite: string | null;
   noResults: boolean;
 }
 
@@ -62,6 +64,8 @@ export function pickerResults(input: {
   accessGroupIds: ReadonlySet<string>;
   /** The creator, who gets a direct admin row anyway. */
   hiddenUserIds?: ReadonlySet<string>;
+  /** Addresses with an invitation still waiting, lowercased. They aren't on the roster yet. */
+  pendingEmails?: ReadonlySet<string>;
   canInvite: boolean;
 }): PickerResults {
   const { query, roster, groups, picked, accessUserIds, accessGroupIds, hiddenUserIds } = input;
@@ -89,39 +93,52 @@ export function pickerResults(input: {
 
   const typed = query.trim();
   // A roster address is that member, listed above, so it is never someone to invite.
+  const isMember = roster.some((member) => member.email?.toLowerCase() === typed.toLowerCase());
+  const pendingInvite = !isMember && input.pendingEmails?.has(typed.toLowerCase()) ? typed : null;
   const inviteEmail =
-    input.canInvite &&
-    isValidEmail(typed) &&
-    !roster.some((member) => member.email?.toLowerCase() === typed.toLowerCase())
-      ? typed
-      : null;
+    input.canInvite && isValidEmail(typed) && !isMember && pendingInvite === null ? typed : null;
 
   return {
     members,
     groups: matchingGroups,
     inviteEmail,
-    noResults: members.length === 0 && matchingGroups.length === 0 && inviteEmail === null,
+    pendingInvite,
+    noResults:
+      members.length === 0 &&
+      matchingGroups.length === 0 &&
+      inviteEmail === null &&
+      pendingInvite === null,
   };
 }
 
+export interface AddRecipientsOptions {
+  accessUserIds?: ReadonlySet<string>;
+  hiddenUserIds?: ReadonlySet<string>;
+  pendingEmails?: ReadonlySet<string>;
+  /** An address staged already takes the incoming role: only for a role chosen on purpose. */
+  replaceRole?: boolean;
+}
+
 /**
- * Adds recipients to the staged ones, each once. An address staged again takes the new role, since
- * the person chose it a second time. Members who already have access, or are hidden, can't be
- * staged by typing their address any more than by picking their row.
+ * Adds recipients to the staged ones, each once. Members who already have access, or are hidden,
+ * and addresses with an invitation waiting can't be staged by typing any more than by picking.
+ * An address staged already keeps its role unless `replaceRole` says the person chose a new one,
+ * so typing or pasting it again never downgrades an admin.
  */
 export function addRecipients(
   picked: PickedRecipient[],
   incoming: PickedRecipient[],
-  skip: { accessUserIds?: ReadonlySet<string>; hiddenUserIds?: ReadonlySet<string> } = {}
+  options: AddRecipientsOptions = {}
 ): PickedRecipient[] {
   let next = picked;
   for (const recipient of incoming) {
     if (
       recipient.kind === "member" &&
-      (skip.accessUserIds?.has(recipient.userId) || skip.hiddenUserIds?.has(recipient.userId))
+      (options.accessUserIds?.has(recipient.userId) || options.hiddenUserIds?.has(recipient.userId))
     ) {
       continue;
     }
+    if (recipient.kind === "email" && options.pendingEmails?.has(recipient.email)) continue;
     const key = recipientKey(recipient);
     const index = next.findIndex((existing) => recipientKey(existing) === key);
     if (index === -1) {
@@ -130,6 +147,7 @@ export function addRecipients(
     }
     const existing = next[index];
     if (
+      options.replaceRole &&
       existing.kind === "email" &&
       recipient.kind === "email" &&
       existing.role !== recipient.role
@@ -140,15 +158,22 @@ export function addRecipients(
   return next;
 }
 
-/** Splits pasted text through parseAddressList and returns one recipient per address, members resolved by email. */
-export function recipientsFromText(text: string, roster: WorkspaceMember[]): PickedRecipient[] {
+/**
+ * Splits pasted text through parseAddressList and returns one recipient per address, members
+ * resolved by email. New addresses get `role`, the one the field shows.
+ */
+export function recipientsFromText(
+  text: string,
+  roster: WorkspaceMember[],
+  role: "admin" | "member" = "member"
+): PickedRecipient[] {
   const membersByEmail = new Map<string, WorkspaceMember>();
   for (const member of roster) {
     if (member.email) membersByEmail.set(member.email.toLowerCase(), member);
   }
   const recipients = parseEmails(text).map((address): PickedRecipient => {
     const member = membersByEmail.get(address);
-    return member ? memberRecipient(member) : emailRecipient(address, "member");
+    return member ? memberRecipient(member) : emailRecipient(address, role);
   });
   return addRecipients([], recipients);
 }
