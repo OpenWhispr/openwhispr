@@ -252,7 +252,7 @@ export default function BackgroundModelDownloadTray({
     const applyProgress = (event: {
       kind: DownloadKind;
       id: string;
-      type: "progress" | "installing" | "complete" | "error";
+      type: "progress" | "verifying" | "installing" | "complete" | "error";
       percentage: number | undefined;
       error?: string;
     }) => {
@@ -295,7 +295,7 @@ export default function BackgroundModelDownloadTray({
             id: event.id,
             kind: event.kind,
             percentage: clampPercentage(event.percentage),
-            installing: event.type === "installing",
+            installing: event.type === "installing" || event.type === "verifying",
             error: event.type === "error" ? event.error : undefined,
           },
         };

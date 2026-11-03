@@ -165,7 +165,15 @@ function defaultTranscriptionModel(
   providerId: string,
   context: TranscriptionPolicyContext
 ): string {
-  return transcriptionProviderModels(providerId, context)[0]?.id ?? "whisper-1";
+  const named = modelRegistryData.transcriptionProviders.find(
+    (p) => p.id === providerId
+  )?.defaultModel;
+  return (
+    pickDefaultModelId({
+      models: transcriptionProviderModels(providerId, context),
+      defaultModel: named,
+    }) || "whisper-1"
+  );
 }
 
 function transcriptionModelBelongsToProvider(

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { useRegistryVersion } from "../hooks/useRegistryVersion";
 import { isUnknownModel } from "../models/modelLifecycle.js";
+import { getRegistryData } from "../models/registryData.js";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
@@ -1029,7 +1030,12 @@ export default function TranscriptionModelPicker({
   const handleParakeetModelSelect = useCallback(
     (modelId: string) => {
       const organization = getASRModelOrganization(modelId);
-      const provider = organization === "cohere" ? "cohere" : "nvidia";
+      // The engine, not the publisher, decides the route: a streaming model published by
+      // Cohere still runs on the NVIDIA/sherpa streaming path.
+      const provider =
+        getRegistryData().parakeetModels[modelId]?.modelType === "cohere-transcribe"
+          ? "cohere"
+          : "nvidia";
       setInternalLocalProvider(organization);
       onLocalProviderSelect?.(provider);
       onLocalModelSelect(modelId, provider);

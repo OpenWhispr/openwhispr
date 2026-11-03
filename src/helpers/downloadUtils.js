@@ -320,12 +320,17 @@ async function downloadFile(url, destPath, options = {}) {
     }
 
     try {
-      await downloadAttempt(url, tempPath, {
-        onProgress,
-        signal,
-        startOffset,
-        expectedSize,
-      });
+      // A complete temp file (the app quit while hashing it) only needs its hash checked:
+      // a Range request past its end would be refused with 416. The hash proves it whole.
+      const alreadyComplete =
+        options.expectedSha256 && expectedSize > 0 && startOffset >= expectedSize;
+      if (!alreadyComplete)
+        await downloadAttempt(url, tempPath, {
+          onProgress,
+          signal,
+          startOffset,
+          expectedSize,
+        });
 
       await verifyFileSha256(tempPath, options.expectedSha256, signal);
       if (signal?.aborted) throw Object.assign(new Error("Download cancelled"), { isAbort: true });

@@ -138,13 +138,13 @@ async function syncSource(sourceCommit) {
   return `UNPUBLISHED source ${sourceCommit}; re-sync from its publication before release`;
 }
 
-async function check() {
-  const read = (name) => fs.readFile(path.join(output, name), "utf8");
+export async function check(dir = output) {
+  const read = (name) => fs.readFile(path.join(dir, name), "utf8");
   const metadata = JSON.parse(await read("registryMetadata.json"));
   const files = {};
   for (const [key, [name]] of Object.entries(READER)) files[key] = await read(name);
   const hashes = readerHashes(files);
-  const reader = require(path.join(output, "registrySchema.cjs"));
+  const reader = require(path.join(dir, "registrySchema.cjs"));
   const catalog = await read("modelRegistryData.json");
   const fail = (message) => {
     throw new Error(`${message}\n${HOW_TO_ADD}`);

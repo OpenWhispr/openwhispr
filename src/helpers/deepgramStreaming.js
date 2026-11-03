@@ -74,6 +74,8 @@ const SILENCE_FRAME = Buffer.alloc((SAMPLE_RATE / 10) * 2);
 const authorizationHeader = (mode, token) => `${mode === "byok" ? "Token" : "Bearer"} ${token}`;
 
 function resolveModel(options) {
+  // A reconnect keeps the model its session started with, even if the catalog changed since.
+  if (options.resolvedModel) return options.resolvedModel;
   const selected = typeof options.model === "string" ? options.model.trim() : "";
   if (
     options.mode === "byok" &&
@@ -632,6 +634,7 @@ class DeepgramStreaming {
       keyterms: options.keyterms,
       mode: options.mode,
       model: options.model,
+      resolvedModel: resolveModel(options),
     };
     this.accumulatedText = "";
     this.finalSegments = [];

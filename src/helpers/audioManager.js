@@ -626,6 +626,11 @@ const SELECTION_EDIT_FAILURE_COPY = {
   [TRUNCATED_OUTPUT_MESSAGE_KEY]: "truncatedResponse",
 };
 
+// A local model the app does not know is a setup problem, never a reason to send a
+// local-mode user's audio to a cloud provider.
+const isUnknownLocalModelError = (error) =>
+  /Invalid (model name|Parakeet model):/.test(error?.message ?? "");
+
 class AudioManager {
   constructor() {
     this.mediaRecorder = null;
@@ -2619,7 +2624,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         provider: cloudTranscriptionProvider || "openai",
       });
 
-      if (allowOpenAIFallback && isLocalMode && fallbackAllowedByPolicy) {
+      if (
+        allowOpenAIFallback &&
+        isLocalMode &&
+        fallbackAllowedByPolicy &&
+        !isUnknownLocalModelError(error)
+      ) {
         try {
           const fallbackResult = await this.processWithOpenAIAPI(audioBlob, metadata, wasCancelled);
           return { ...fallbackResult, source: "openai-fallback" };
@@ -2730,7 +2740,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         provider: cloudTranscriptionProvider || "openai",
       });
 
-      if (allowOpenAIFallback && isLocalMode && fallbackAllowedByPolicy) {
+      if (
+        allowOpenAIFallback &&
+        isLocalMode &&
+        fallbackAllowedByPolicy &&
+        !isUnknownLocalModelError(error)
+      ) {
         try {
           const fallbackResult = await this.processWithOpenAIAPI(audioBlob, metadata, wasCancelled);
           return { ...fallbackResult, source: "openai-fallback" };

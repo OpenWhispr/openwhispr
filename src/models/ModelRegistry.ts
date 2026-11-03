@@ -2,6 +2,7 @@ import { registryData as modelData, subscribeRegistry } from "./registryData.js"
 import { isCloudCleanupMode, getSettings } from "../stores/settingsStore";
 import { isSelectableTinfoilModel } from "../config/retiredCloudModelPolicy.js";
 import { getCloudModelProviders, setTinfoilModelOverlay } from "./cloudModelCatalog";
+import { pickDefaultModelId } from "./providerDefaultModel";
 import { filterMeetingStreamingProviders } from "../helpers/meetingTranscriptionRouting";
 import type { InferenceMode } from "../types/electron";
 
@@ -21,6 +22,7 @@ export interface ModelDefinition {
   revision?: string;
   recommended?: boolean;
   supportsThinking?: boolean;
+  supportsTools?: boolean;
   /** Superseded: kept so existing selections keep working; see isListedModel. */
   legacy?: boolean;
   // Optional MTP speculative-decoding drafter downloaded alongside the main GGUF.
@@ -35,6 +37,7 @@ export interface LocalProviderData {
   id: string;
   name: string;
   baseUrl: string;
+  defaultModel?: string;
   models: ModelDefinition[];
 }
 
@@ -58,6 +61,8 @@ export interface CloudModelDefinition {
   tokenParam?: "max_tokens" | "max_completion_tokens";
   supportsTemperature?: boolean;
   reasoningEffort?: ReasoningEffortCapability;
+  /** Lowest thinking setting the model accepts; the registry's data form of the table in gemini.ts. */
+  thinkingFloor?: { level: "minimal" | "low" } | { budget: number };
   legacy?: boolean;
 }
 
@@ -69,7 +74,7 @@ export interface ReasoningEffortCapability {
 export interface CloudProviderData {
   id: string;
   name: string;
-  /** Named default for providers whose list order isn't ours — see pickProviderDefaultModel. */
+  /** The provider's default; list order is display order only. See pickProviderDefaultModel. */
   defaultModel?: string;
   models: CloudModelDefinition[];
 }
@@ -92,6 +97,7 @@ export interface TranscriptionProviderData {
   id: string;
   name: string;
   baseUrl: string;
+  defaultModel?: string;
   models: TranscriptionModelDefinition[];
   /** Allows for a stream/batch split */
   batchModel?: string;
@@ -472,8 +478,7 @@ export function getBatchTranscriptionModel(providerId: string): string | undefin
 }
 
 export function getDefaultTranscriptionModel(providerId: string): string {
-  const models = getTranscriptionModels(providerId);
-  return models[0]?.id || "gpt-transcribe";
+  return pickDefaultModelId(getTranscriptionProvider(providerId)) || "gpt-transcribe";
 }
 
 export function getWhisperModels(): WhisperModelsMap {

@@ -87,7 +87,7 @@ test("live BYOK models keep their selection across warm sockets and reconnects",
       streaming: true,
     });
   t.after(() =>
-    store.replaceRegistryData({ data: old.data, manifestVersion: old.manifestVersion + 2 })
+    store.replaceRegistryData({ data: old.data, manifestVersion: old.manifestVersion + 5 })
   );
   store.replaceRegistryData({ data: next, manifestVersion: old.manifestVersion + 1 });
   await withMetadataServer(async (url, connections) => {
@@ -105,6 +105,14 @@ test("live BYOK models keep their selection across warm sockets and reconnects",
       assert.match(connections[1], /model=registry-deepgram-new/);
       assert.equal(streaming.currentModel, "registry-deepgram-new");
       assert.equal(streaming.connectionOptions.model, "registry-deepgram-new");
+      // A catalog update mid-session must not switch a liveness reconnect's model.
+      store.replaceRegistryData({ data: old.data, manifestVersion: old.manifestVersion + 3 });
+      const reconnect = structuredClone(streaming.connectionOptions);
+      assert.equal(
+        new URL(streaming.buildWebSocketUrl(reconnect)).searchParams.get("model"),
+        "registry-deepgram-new"
+      );
+      store.replaceRegistryData({ data: next, manifestVersion: old.manifestVersion + 4 });
     } finally {
       streaming.cleanupAll();
     }

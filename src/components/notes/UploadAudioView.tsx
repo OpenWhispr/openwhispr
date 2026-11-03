@@ -49,6 +49,7 @@ import { describeProviderError } from "../../utils/describeProviderError";
 import {
   getAllReasoningModels,
   getBatchTranscriptionModel,
+  getTranscriptionProvider,
   getParakeetModelInfo,
   getTranscriptionProviders,
   isSherpaLocalProvider,
@@ -524,7 +525,13 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       cloudTranscriptionProvider === "custom"
         ? t("notes.upload.custom")
         : cloudTranscriptionProvider.charAt(0).toUpperCase() + cloudTranscriptionProvider.slice(1);
-    const model = getBatchTranscriptionModel(cloudTranscriptionProvider) ?? cloudTranscriptionModel;
+    // Same rule as the upload itself: the batch model replaces only a streaming selection.
+    const batchModel = getBatchTranscriptionModel(cloudTranscriptionProvider);
+    const selected = getTranscriptionProvider(cloudTranscriptionProvider)?.models.find(
+      (option) => option.id === cloudTranscriptionModel
+    );
+    const model =
+      batchModel && (!selected || selected.streaming) ? batchModel : cloudTranscriptionModel;
     return `${name} · ${model}`;
   };
 

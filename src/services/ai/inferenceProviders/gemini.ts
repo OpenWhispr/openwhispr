@@ -9,6 +9,7 @@ import { extractGeminiText } from "../../../helpers/geminiResponse.js";
 import { wrapCleanupTranscript } from "../../../config/prompts";
 import { chosenReasoningEffort, emptyOutputError, truncatedOutputError } from "../chatRequestBody";
 import logger from "../../../utils/logger";
+import { getCloudModel } from "../../../models/ModelRegistry";
 import {
   asProviderError,
   providerHttpError,
@@ -53,6 +54,16 @@ const minimalThinking: Record<string, GeminiGenerationConfig["thinkingConfig"]> 
   "gemini-2.5-pro": { thinkingBudget: 128, includeThoughts: false },
 };
 
+// The catalog's thinkingFloor lets a model added through the registry carry its own
+// floor; the table covers models published before that field existed.
+function thinkingFloor(model: string): GeminiGenerationConfig["thinkingConfig"] {
+  const floor = getCloudModel(model)?.thinkingFloor;
+  if (!floor) return minimalThinking[model];
+  return "level" in floor
+    ? { thinkingLevel: floor.level, includeThoughts: false }
+    : { thinkingBudget: floor.budget, includeThoughts: false };
+}
+
 export const geminiProvider: InferenceProvider = {
   id: "gemini",
   supportsImages: true,
@@ -82,8 +93,8 @@ export const geminiProvider: InferenceProvider = {
     const thinkingLevel = chosenReasoningEffort("gemini", model, config);
     if (thinkingLevel) {
       generationConfig.thinkingConfig = { thinkingLevel, includeThoughts: false };
-    } else if (config.disableThinking === true && minimalThinking[model]) {
-      generationConfig.thinkingConfig = minimalThinking[model];
+    } else if (config.disableThinking === true && thinkingFloor(model)) {
+      generationConfig.thinkingConfig = thinkingFloor(model);
     }
 
     const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [

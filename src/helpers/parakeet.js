@@ -14,6 +14,7 @@ const {
 } = require("./downloadUtils");
 const { validateModelArchive, extractModelArchive } = require("./modelArchiveIntegrity");
 const ParakeetServerManager = require("./parakeetServer");
+const { rememberInstalledModel, forgetInstalledModels } = require("./installedModels");
 const { getModelsDirForService } = require("./modelDirUtils");
 const { assertParakeetSupported, getParakeetCapability } = require("./parakeetCapability");
 
@@ -234,6 +235,8 @@ class ParakeetManager {
   async transcribeLocalParakeet(audioBlob, options = {}) {
     const model = options.model || "parakeet-tdt-0.6b-v3";
     assertParakeetSupported();
+    // An unknown model has no engine metadata; guessing one could run the wrong decoder.
+    this.validateModelName(model);
     const serverAvailable = this.serverManager.isAvailable(getModelRuntime(model));
 
     debugLogger.logSTTPipeline("transcribeLocalParakeet - start", {
@@ -404,8 +407,16 @@ class ParakeetManager {
         });
       }
 
-      if (modelConfig.sha256)
-        await validateModelArchive(archivePath, modelConfig.extractDir, signal);
+      if (modelConfig.sha256) {
+        // Checking a large archive takes minutes; say so instead of sitting at 100%.
+        progressCallback?.({ type: "verifying", model: modelName, percentage: 100 });
+        await validateModelArchive(
+          archivePath,
+          modelConfig.extractDir,
+          signal,
+          modelConfig.expectedSizeBytes || modelConfig.sizeMb * 1024 * 1024
+        );
+      }
       if (signal.aborted) throw Object.assign(new Error("Download cancelled"), { isAbort: true });
       downloadProcess.phase = "installing";
       downloadProcess.percentage = 100;
@@ -466,10 +477,12 @@ class ParakeetManager {
         });
       }
 
+      rememberInstalledModel("parakeetModels", "", modelName);
       return { model: modelName, downloaded: true, path: modelPath, success: true };
     } catch (error) {
+      // A cancelled, unverifiable or unextractable archive is never reused.
+      await fsPromises.unlink(archivePath).catch(() => {});
       if (error.isAbort || signal.aborted) {
-        await fsPromises.unlink(archivePath).catch(() => {});
         throw Object.assign(new Error("Download interrupted by user"), {
           code: "DOWNLOAD_CANCELLED",
         });
@@ -663,6 +676,7 @@ class ParakeetManager {
         const freedBytes = this._getModelWeightsSize(modelPath);
 
         fs.rmSync(modelPath, { recursive: true, force: true });
+        forgetInstalledModels("parakeetModels", "", modelName);
 
         return {
           model: modelName,
@@ -702,6 +716,7 @@ class ParakeetManager {
         }
       }
 
+      forgetInstalledModels("parakeetModels");
       return {
         success: true,
         deleted_count: deletedCount,

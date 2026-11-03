@@ -301,6 +301,10 @@ const CliBridge = require("./src/helpers/cliBridge");
 const { createRegistryLoader } = require("./src/helpers/registryLoader");
 const { registerRegistryIpc } = require("./src/helpers/registryIpc");
 const { replaceRegistryData } = require("./src/models/registryData.js");
+const {
+  configureInstalledModels,
+  withInstalledModels,
+} = require("./src/helpers/installedModels");
 const registryTrustedKeys = require("./src/models/registryTrustedKeys.json");
 let registryLoader = null;
 let disposeRegistryIpc = null;
@@ -1231,6 +1235,7 @@ async function startApp() {
   // Only local signature/cache verification is awaited. Remote refresh starts
   // later, so offline startup and settings migrations see a usable catalog.
   const registryMetadata = require("./src/models/registryMetadata.json");
+  configureInstalledModels(path.join(app.getPath("userData"), "installed-models.json"));
   registryLoader = createRegistryLoader({
     cachePath: path.join(app.getPath("userData"), "model-registry.json"),
     bundledSnapshot: {
@@ -1240,7 +1245,8 @@ async function startApp() {
     clientContract: registryMetadata.clientContract,
     trustedKeys: registryTrustedKeys,
     appVersion: app.getVersion(),
-    applySnapshot: replaceRegistryData,
+    applySnapshot: (snapshot) =>
+      replaceRegistryData({ ...snapshot, data: withInstalledModels(snapshot.data) }),
     fetch: (...args) => net.fetch(...args),
     onError: (error) =>
       debugLogger.warn("Model registry update unavailable", { error: error.message }),

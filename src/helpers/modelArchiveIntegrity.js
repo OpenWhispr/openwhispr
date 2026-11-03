@@ -8,10 +8,19 @@ function assertSafeModelArchiveEntry(entry, expectedRoot) {
     !["File", "Directory"].includes(entry.type) ||
     /[\\:\x00-\x1f]/.test(name) ||
     parts[0] !== expectedRoot ||
-    parts.some((part) => part === ".." || part === "." || /[. ]$/.test(part)) ||
+    parts.some(
+      (part) =>
+        part === ".." ||
+        part === "." ||
+        /[. ]$/.test(part) ||
+        // Windows cannot create these names, whatever the extension.
+        /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i.test(part)
+    ) ||
     parts.slice(0, -1).includes("")
   )
     throw new Error("Unsafe model archive entry");
+  // Entries that differ only by case overwrite each other on macOS and Windows.
+  return name.replace(/\/$/, "").toLowerCase();
 }
 
 function runArchiveWorker(task, signal) {
@@ -52,8 +61,13 @@ function runArchiveWorker(task, signal) {
   });
 }
 
-function validateModelArchive(archivePath, expectedRoot, signal) {
-  return runArchiveWorker({ operation: "validate", archivePath, expectedRoot }, signal);
+// Unpacked contents may be at most this many times the declared download size, which
+// bounds a decompression bomb by what the catalog said it would be.
+const MAX_UNPACK_RATIO = 4;
+
+function validateModelArchive(archivePath, expectedRoot, signal, declaredBytes) {
+  const maxBytes = declaredBytes > 0 ? declaredBytes * MAX_UNPACK_RATIO : 200 * 1024 ** 3;
+  return runArchiveWorker({ operation: "validate", archivePath, expectedRoot, maxBytes }, signal);
 }
 
 function extractModelArchive(archivePath, extractDir) {

@@ -1,3 +1,4 @@
+import { pickDefaultModelId } from "../models/providerDefaultModel";
 import type { InferenceMode, ShareVisibility } from "../types/electron";
 import type { OrgPolicy, PolicyScope } from "../types/policy";
 import type { SettingsState } from "./settingsStore";
@@ -622,6 +623,7 @@ export function reconcileProviderSelection<T extends { id: string; disabled?: bo
 
 interface CloudProviderOption {
   id: string;
+  defaultModel?: string;
   models?: ReadonlyArray<{ id: string }>;
 }
 
@@ -644,7 +646,7 @@ export function reconcileCloudProviderSelection({
     if (!selected.models?.length || selected.models.some((model) => model.id === selectedModel)) {
       return null;
     }
-    return { provider: selected.id, model: selected.models[0].id };
+    return { provider: selected.id, model: pickDefaultModelId(selected) };
   }
   if (hasCustomUrl && customAllowed) {
     return { provider: "custom", model: selectedModel || "whisper-1" };

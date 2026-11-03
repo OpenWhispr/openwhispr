@@ -59,7 +59,9 @@ function resolveModelLanguage(modelName, language) {
       ? language.trim().replace(/_/g, "-").split("-")[0].toLowerCase()
       : "";
   const supported = getModelInfo(modelName)?.supportedLanguages || [];
-  return supported.includes(base) ? base : "en";
+  if (supported.includes(base)) return base;
+  // English when the model offers it, otherwise a language the model can actually run.
+  return supported.length === 0 || supported.includes("en") ? "en" : supported[0];
 }
 
 module.exports = {

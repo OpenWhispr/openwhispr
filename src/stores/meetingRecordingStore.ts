@@ -1067,6 +1067,9 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         await teardownStart();
         return;
       }
+      // Resolved before any capture starts: a selection that cannot transcribe must fail
+      // here, not after the user has already shared a screen that would stay live.
+      const meetingTranscriptionOptions = getMeetingTranscriptionOptions();
       const { initialSystemAudioStrategy, initialDisplayCaptureStrategy, systemCapturePromise } =
         prepareMeetingSystemAudioCapture(initialSystemAudioAccess);
 
@@ -1086,7 +1089,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
 
         startOperation.markMainStartAttempted();
         return window.electronAPI?.meetingTranscriptionStart?.({
-          ...getMeetingTranscriptionOptions(),
+          ...meetingTranscriptionOptions,
           noteId: args.noteId ?? null,
           sessionId,
           autoEndEligible: args.autoEndEligible,

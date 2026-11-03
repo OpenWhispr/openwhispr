@@ -12,6 +12,7 @@ const {
 const { registryData: modelRegistryData } = require("../models/registryData.js");
 const LlamaServerManager = require("./llamaServer");
 const debugLogger = require("./debugLogger");
+const { rememberInstalledModel, forgetInstalledModels } = require("./installedModels");
 const { readGgufMetadataFromFile } = require("./ggufMetadata");
 const {
   estimateTokens,
@@ -425,6 +426,7 @@ class ModelManager {
         }
       }
 
+      rememberInstalledModel("localProviders", provider.id, modelId);
       return modelPath;
     } catch (error) {
       if (error.isAbort) {
@@ -434,6 +436,9 @@ class ModelManager {
         throw new ModelError(`Download failed with status ${error.statusCode}`, "DOWNLOAD_FAILED", {
           statusCode: error.statusCode,
         });
+      }
+      if (error.code === "ERR_MODEL_INTEGRITY") {
+        throw new ModelError(error.message, "INTEGRITY_ERROR", { error: error.message });
       }
       if (!(error instanceof ModelError)) {
         throw new ModelError(`Network error: ${error.message}`, "NETWORK_ERROR", {
@@ -503,6 +508,7 @@ class ModelManager {
       const draftPath = path.join(this.modelsDir, modelInfo.model.draftFileName);
       await fsPromises.unlink(draftPath).catch(() => {});
     }
+    forgetInstalledModels("localProviders", modelInfo.provider.id, modelId);
   }
 
   async deleteAllModels() {
@@ -523,6 +529,7 @@ class ModelManager {
           }
         }
       }
+      forgetInstalledModels("localProviders");
     } catch (error) {
       throw new ModelError(
         `Failed to delete models directory: ${error.message}`,
