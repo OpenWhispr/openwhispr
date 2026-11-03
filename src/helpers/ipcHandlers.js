@@ -3198,8 +3198,8 @@ class IPCHandlers {
     ipcMain.handle("db-get-conversation-by-client-id", (_, clientId) =>
       this.databaseManager.getConversationByClientId(clientId)
     );
-    ipcMain.handle("db-upsert-conversation-from-cloud", (_, cloudConv, messages) =>
-      this.databaseManager.upsertConversationFromCloud(cloudConv, messages)
+    ipcMain.handle("db-upsert-conversation-from-cloud", (_, cloudConv, messages, snapshot) =>
+      this.databaseManager.upsertConversationFromCloud(cloudConv, messages, snapshot)
     );
     ipcMain.handle("db-mark-conversation-create-attempted", (_, id) =>
       this.databaseManager.markConversationCreateAttempted(id)

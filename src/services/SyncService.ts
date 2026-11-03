@@ -2663,7 +2663,8 @@ export class SyncService {
           ) {
             await window.electronAPI.upsertConversationFromCloud?.(
               cloudConv as unknown as Record<string, unknown>,
-              (cloudConv.messages ?? []) as unknown as Array<Record<string, unknown>>
+              (cloudConv.messages ?? []) as unknown as Array<Record<string, unknown>>,
+              local ?? null
             );
           }
         }

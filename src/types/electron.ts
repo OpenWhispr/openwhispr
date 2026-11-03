@@ -3922,7 +3922,8 @@ declare global {
       getConversationByClientId?: (clientId: string) => Promise<ConversationPreview | null>;
       upsertConversationFromCloud?: (
         cloudConv: Record<string, unknown>,
-        messages: Array<Record<string, unknown>>
+        messages: Array<Record<string, unknown>>,
+        snapshot?: ConversationPreview | null
       ) => Promise<void>;
       markConversationCreateAttempted?: (id: number) => Promise<{ success: boolean }>;
       acknowledgeConversationCreate?: (

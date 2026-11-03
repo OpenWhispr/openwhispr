@@ -574,6 +574,53 @@ test("a pull never replaces a chat with a shorter cloud copy", async (t) => {
   assert.equal(db.getAgentConversation(local.id).messages.length, 2);
 });
 
+for (const cloudMessageCount of [1, 3]) {
+  test(`a message saved after the pull lookup survives a ${cloudMessageCount}-message cloud copy`, async (t) => {
+    const ctx = await setup(t);
+    if (!ctx) return;
+    const { db, cloud, api, service } = ctx;
+    const cloudRow = cloud.seedConversation({
+      client_conversation_id: `client-pull-race-${cloudMessageCount}`,
+      title: "Cloud title",
+      created_at: "2026-07-20T08:00:00.000Z",
+      updated_at: "2026-07-20T12:00:00.000Z",
+      messages: [
+        { role: "user", content: "first message" },
+        ...Array.from({ length: cloudMessageCount - 1 }, (_, index) => ({
+          role: "assistant",
+          content: `cloud message ${index + 1}`,
+        })),
+      ],
+    });
+    const local = db.createAgentConversation("Local title");
+    db.addAgentMessage(local.id, "user", "first message");
+    updateConversation(db, local.id, {
+      client_conversation_id: cloudRow.client_conversation_id,
+      cloud_id: cloudRow.id,
+      sync_status: "synced",
+      updated_at: LOCAL_EARLY,
+    });
+
+    const upsert = api.upsertConversationFromCloud;
+    let savedDuringPull;
+    api.upsertConversationFromCloud = async (...args) => {
+      db.addAgentMessage(local.id, "assistant", "saved during sync", {
+        toolCalls: [{ id: "saved-tool-call" }],
+      });
+      // Same-second writes cannot rely on updated_at changing to detect the race.
+      updateConversation(db, local.id, { updated_at: LOCAL_EARLY });
+      savedDuringPull = db.getAgentConversation(local.id);
+      api.upsertConversationFromCloud = upsert;
+      return upsert(...args);
+    };
+
+    await service.syncAll(true);
+
+    assert.ok(savedDuringPull, "the message is saved after the renderer's pull check");
+    assert.deepEqual(db.getAgentConversation(local.id), savedDuringPull);
+  });
+}
+
 test("a pull leaves a linked chat alone until its unsent edit is pushed", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;

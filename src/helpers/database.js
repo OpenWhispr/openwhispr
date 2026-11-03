@@ -8870,7 +8870,7 @@ class DatabaseManager {
     }
   }
 
-  upsertConversationFromCloud(cloudConv, messages) {
+  upsertConversationFromCloud(cloudConv, messages, snapshot) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const transaction = this.db.transaction(() => {
@@ -8890,6 +8890,26 @@ class DatabaseManager {
             .get(cloudConv.id);
         }
         if (existing?.deleted_at) return existing;
+
+        // The renderer's lookup can go stale while this IPC waits behind a local
+        // save. Check the same snapshot inside the transaction that replaces messages.
+        if (snapshot !== undefined) {
+          const current = existing ? this._conversationWithMessageCount(existing.id) : null;
+          if (
+            snapshot === null
+              ? current !== null
+              : !current ||
+                !rowMatchesSnapshot(current, snapshot, [
+                  "id",
+                  "client_conversation_id",
+                  "cloud_id",
+                  "sync_status",
+                ]) ||
+                !this._conversationMatchesSnapshot(current, snapshot)
+          ) {
+            return existing;
+          }
+        }
 
         const convStmt = this.db.prepare(`
           INSERT INTO agent_conversations (client_conversation_id, cloud_id, title, note_id, sync_status, created_at, updated_at)

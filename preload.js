@@ -1300,8 +1300,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getPendingConversationDeletes: () => ipcRenderer.invoke("db-get-pending-conversation-deletes"),
   getConversationByClientId: (clientId) =>
     ipcRenderer.invoke("db-get-conversation-by-client-id", clientId),
-  upsertConversationFromCloud: (cloudConv, messages) =>
-    ipcRenderer.invoke("db-upsert-conversation-from-cloud", cloudConv, messages),
+  upsertConversationFromCloud: (cloudConv, messages, snapshot) =>
+    ipcRenderer.invoke("db-upsert-conversation-from-cloud", cloudConv, messages, snapshot),
   markConversationCreateAttempted: (id) =>
     ipcRenderer.invoke("db-mark-conversation-create-attempted", id),
   acknowledgeConversationCreate: (id, snapshot, cloudId) =>
