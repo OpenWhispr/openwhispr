@@ -1,5 +1,5 @@
 import * as FileSystem from 'expo-file-system/legacy';
-import { Platform } from 'react-native';
+import { providerFailureMessages } from './providerFailureMessages';
 import { createProviderCredentialScope } from './ProviderCredentialScope';
 import { ProviderExecutionError } from './ProviderExecutionError';
 export { ProviderExecutionError } from './ProviderExecutionError';
@@ -274,10 +274,7 @@ function normalizeTransportFailure(error: unknown, providerId: string): Error {
   if (nativeCode === 'PROVIDER_CANCELLED') return abortError();
   if (nativeCode === 'PROVIDER_AUDIO_TOO_LARGE') return audioTooLargeError();
   if (typeof nativeCode === 'string' && FINAL_NATIVE_FAILURES[nativeCode]) {
-    const message =
-      nativeCode === 'PROVIDER_CERTIFICATE_UNTRUSTED' && Platform.OS === 'android'
-        ? "Couldn't connect securely to this server. Check that its certificate is valid and trusted by Android."
-        : FINAL_NATIVE_FAILURES[nativeCode];
+    const message = providerFailureMessages[nativeCode] ?? FINAL_NATIVE_FAILURES[nativeCode];
     return new ProviderExecutionError(nativeCode, message);
   }
   if (nativeCode === 'PROVIDER_LOCAL_NETWORK_ERROR') {
