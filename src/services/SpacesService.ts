@@ -6,7 +6,14 @@ import {
   cloudDelete,
   type DataWrap,
 } from "./cloudApi.js";
-import type { SpaceCapabilities, SpaceTeamRef, TeamMember, TeamRole } from "../types/electron";
+import type {
+  SpaceCapabilities,
+  SpaceInvitation,
+  SpaceTeamRef,
+  TeamMember,
+  TeamRole,
+  WorkspaceSpace,
+} from "../types/electron";
 
 export interface MySpace {
   id: string;
@@ -65,6 +72,8 @@ async function create(
     name: string;
     emoji?: string | null;
     description?: string;
+    is_default?: boolean;
+    is_open?: boolean;
     member_ids: string[];
     team_ids: string[];
   }
@@ -75,7 +84,13 @@ async function create(
 
 async function update(
   spaceId: string,
-  patch: { name?: string; description?: string; emoji?: string | null }
+  patch: {
+    name?: string;
+    description?: string | null;
+    emoji?: string | null;
+    is_default?: boolean;
+    is_open?: boolean;
+  }
 ): Promise<SpaceRecord> {
   const res = await cloudPatch<DataWrap<SpaceRecord>>(`/api/spaces/${spaceId}`, patch);
   return res.data;
@@ -132,6 +147,49 @@ async function removeMember(spaceId: string, userId: string): Promise<SpaceMembe
   return res.data;
 }
 
+// The workspace's space directory: spaces the caller is not in appear too, with can_join and the
+// admins to ask, so the pages can offer to join or request access.
+async function listInWorkspace(workspaceId: string): Promise<WorkspaceSpace[]> {
+  const res = await cloudGet<DataWrap<WorkspaceSpace[]>>(`/api/workspaces/${workspaceId}/spaces`);
+  return res.data;
+}
+
+// How many of the given people are already in each space, for the Add people picker.
+async function coverage(
+  workspaceId: string,
+  userIds: string[]
+): Promise<{ space_id: string; count: number }[]> {
+  const res = await cloudPost<DataWrap<{ space_id: string; count: number }[]>>(
+    `/api/workspaces/${workspaceId}/spaces/coverage`,
+    { user_ids: userIds }
+  );
+  return res.data;
+}
+
+// Only an open space can be joined by the caller; joined is false when they were already in.
+async function join(spaceId: string): Promise<{ joined: boolean }> {
+  const res = await cloudPost<DataWrap<{ joined: boolean }>>(`/api/spaces/${spaceId}/join`);
+  return res.data;
+}
+
+// Unlike addMember this never changes someone's role: people already in the space come back
+// as already_members.
+async function addMembers(
+  spaceId: string,
+  userIds: string[]
+): Promise<{ added: string[]; already_members: string[] }> {
+  const res = await cloudPost<DataWrap<{ added: string[]; already_members: string[] }>>(
+    `/api/spaces/${spaceId}/members/batch`,
+    { user_ids: userIds }
+  );
+  return res.data;
+}
+
+async function listInvitations(spaceId: string): Promise<SpaceInvitation[]> {
+  const res = await cloudGet<DataWrap<SpaceInvitation[]>>(`/api/spaces/${spaceId}/invitations`);
+  return res.data;
+}
+
 export const SpacesService = {
   mySpaces,
   mySpacesForAuthValidation,
@@ -144,4 +202,9 @@ export const SpacesService = {
   addMember,
   setMemberRole,
   removeMember,
+  listInWorkspace,
+  coverage,
+  join,
+  addMembers,
+  listInvitations,
 };

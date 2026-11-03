@@ -774,6 +774,43 @@ export interface SpaceCapabilities {
   leave: boolean;
 }
 
+// Who to ask for access to a space: its admins, as GET /api/workspaces/:id/spaces lists them.
+export interface SpaceAdminContact {
+  user_id: string;
+  name: string | null;
+  email: string;
+  image: string | null;
+}
+
+// A row of the workspace's space directory, which lists spaces the caller may not be in (yet).
+export interface WorkspaceSpace {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string | null;
+  emoji: string | null;
+  member_count: number;
+  teams: { id: string; name: string; access?: TeamRole }[];
+  // Everything below is absent from an older API.
+  is_default?: boolean;
+  is_open?: boolean;
+  admins?: SpaceAdminContact[];
+  my_role?: TeamRole | null;
+  my_direct_role?: TeamRole | null;
+  capabilities?: SpaceCapabilities | null;
+  can_join?: boolean;
+  // The caller is the only admin, so leaving or demoting themselves is refused.
+  sole_admin?: boolean;
+}
+
+export interface SpaceInvitation {
+  id: string;
+  email: string;
+  role: TeamRole;
+  expires_at: string;
+  created_at: string;
+}
+
 export interface Workspace {
   id: string;
   name: string;
