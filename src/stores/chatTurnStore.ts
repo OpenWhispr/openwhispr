@@ -3,6 +3,7 @@ import i18n from "../i18n";
 import type {
   ChatTurnEngine,
   ChatTurnOptions,
+  OpenNoteContext,
   SendToAIOptions,
 } from "../components/chat/chatTurnEngine";
 import { appendChatMessage } from "../components/chat/chatPersistence";
@@ -276,6 +277,18 @@ export function startChatSend(input: StartChatSendInput): boolean {
     }));
   const run = async (): Promise<void> => {
     const writes: Promise<void>[] = [];
+    const openNote = input.openNote;
+    let noteAvailable = true;
+    const invalidateNote = (): void => {
+      noteAvailable = false;
+    };
+    // Container revocation must reach this send after its source-note hook unmounts.
+    const noteDisposers = openNote
+      ? [
+          window.electronAPI?.onSpacePurged?.(invalidateNote),
+          window.electronAPI?.onFolderDeleted?.(invalidateNote),
+        ]
+      : [];
     try {
       if (operation.conversationId === null) {
         const title = input.text.length > 50 ? `${input.text.slice(0, 50)}...` : input.text;
@@ -319,7 +332,14 @@ export function startChatSend(input: StartChatSendInput): boolean {
       operation.engine = createChatTurnEngine(
         () => ({
           userName: input.userName,
-          openNote: input.openNote,
+          openNote: openNote
+            ? (maxTranscriptTokens): OpenNoteContext => {
+                if (!noteAvailable) return { text: "", transcriptPreview: false };
+                return typeof openNote === "function"
+                  ? openNote(maxTranscriptTokens)
+                  : { text: openNote, transcriptPreview: false };
+              }
+            : undefined,
           allowConnectors: true,
           skillsEnabled: true,
           isOwnerCurrent: ownerCurrent,
@@ -383,6 +403,7 @@ export function startChatSend(input: StartChatSendInput): boolean {
         });
       } else showSaveError();
     } finally {
+      noteDisposers.forEach((dispose) => dispose?.());
       patch(() => ({ running: false, agentState: "idle", toolStatus: "", activeToolName: "" }));
       patchEntry(ownerCurrent, () => ({ settling: false }));
       submissions.delete(submissionId);

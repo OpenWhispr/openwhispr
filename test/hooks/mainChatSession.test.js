@@ -453,12 +453,16 @@ test("another conversation's streaming doesn't re-render the one on screen", asy
   assert.equal(mounted.session().skills, skills, "skills aren't read back on every chunk");
 });
 
-for (const [event, changedNoteId] of [
+for (const [event, changedId, unmount = false] of [
   ["onNoteUpdated", 2],
   ["onNoteUpdated", 1],
   ["onNoteDeleted", 1],
+  ["onSpacePurged", 2],
+  ["onFolderDeleted", 9],
+  ["onSpacePurged", 2, true],
+  ["onFolderDeleted", 9, true],
 ]) {
-  test(`background note context follows ${event} for note ${changedNoteId} while setup waits`, async (t) => {
+  test(`background note context follows ${event} for ${changedId} ${unmount ? "after leaving Chat" : "while setup waits"}`, async (t) => {
     const listeners = new Set();
     const skills = deferred();
     let readingSkills = false;
@@ -469,8 +473,8 @@ for (const [event, changedNoteId] of [
         title: `Note ${id}`,
         content: `Source content ${id}`,
         transcript: "",
-        folder_id: null,
-        space_id: null,
+        folder_id: 9,
+        space_id: 2,
       }),
       getSpeakerMappings: async () => [],
       [event]: (listener) => {
@@ -491,12 +495,15 @@ for (const [event, changedNoteId] of [
       assert.equal(mounted.session().send("What does my source note say?"), true);
       await until(() => readingSkills);
     });
+    if (unmount) await mounted.unmount();
+    else
+      await React.act(async () => {
+        await mounted.session().openConversation(2, "sidebar");
+        await flush();
+      });
     await React.act(async () => {
-      await mounted.session().openConversation(2, "sidebar");
-      await flush();
-    });
-    await React.act(async () => {
-      for (const listener of listeners) listener({ id: changedNoteId });
+      const payload = event === "onSpacePurged" ? { spaceId: changedId } : { id: changedId };
+      for (const listener of listeners) listener(payload);
       await flush();
     });
     await React.act(async () => {
@@ -504,11 +511,12 @@ for (const [event, changedNoteId] of [
       await until(() => fixture.streams.length === 1);
     });
     const prompt = fixture.streams[0].messages[0].content;
-    assert.equal(prompt.includes("Source content 1"), changedNoteId !== 1);
+    assert.equal(prompt.includes("Source content 1"), event === "onNoteUpdated" && changedId !== 1);
     assert.doesNotMatch(prompt, /Source content 2/);
     await React.act(async () => {
       fixture.streams[0].resolve("Answer");
       await until(() => !fixture.state().entries["conversation:1"]?.running);
     });
+    assert.equal(listeners.size, unmount ? 0 : 1);
   });
 }
