@@ -214,10 +214,23 @@ export async function authContextFetch(
     // Fetch resolves at headers; a broken session body must fence the lease too.
     if (isGetSessionRequest((init ?? {}) as AuthRequest)) {
       const body = await response.clone().text();
-      if (response.ok && !isSessionAnswer(body)) {
-        throw Object.assign(new Error("get-session answered with something other than a session"), {
-          code: "AUTH_SESSION_UNREADABLE",
+      if (response.ok) {
+        if (!isSessionAnswer(body)) {
+          throw Object.assign(
+            new Error("get-session answered with something other than a session"),
+            {
+              code: "AUTH_SESSION_UNREADABLE",
+            }
+          );
+        }
+        // Better-fetch otherwise decodes JSON served as binary into a Blob,
+        // which its success handler would mistake for a signed-out answer.
+        response = new Response(body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers,
         });
+        response.headers.set("Content-Type", "application/json");
       }
     }
     await assertAuthRequestCurrent(init);
@@ -251,16 +264,23 @@ function isGetSessionRequest(request: AuthRequest): boolean {
   }
 }
 
-/**
- * Better Auth encodes "no session" as JSON null or an object with no user.
- * Better-fetch hands onSuccess any other 200 too (a proxy's HTML page arrives
- * as a string), and reading that as "no user" would sign the account out and
- * purge its content.
- */
+// Only an explicit no-session answer may clear the account. Proxy error
+// objects and incomplete session envelopes say nothing about the credential.
 function isSessionAnswer(body: string): boolean {
   try {
     const parsed: unknown = JSON.parse(body);
-    return parsed === null || (typeof parsed === "object" && !Array.isArray(parsed));
+    if (parsed === null) return true;
+    if (typeof parsed !== "object" || Array.isArray(parsed)) return false;
+    const answer = parsed as { session?: unknown; user?: unknown };
+    if (answer.session === null && answer.user === null) {
+      return Object.keys(parsed).every((key) => key === "session" || key === "user");
+    }
+    return (
+      Boolean(resolvedUserId(parsed)) &&
+      answer.session != null &&
+      typeof answer.session === "object" &&
+      !Array.isArray(answer.session)
+    );
   } catch {
     return false;
   }

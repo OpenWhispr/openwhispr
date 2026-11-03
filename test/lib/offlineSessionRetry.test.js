@@ -203,6 +203,15 @@ const nonAnswers = [
   ["a JSON value that is no session", "true", "application/json"],
   ["a JSON array", "[]", "application/json"],
   ["a binary body", "\u0000\u0001", "application/octet-stream"],
+  ["a proxy error object", '{"error":"blocked"}', "application/json"],
+  ["an empty object", "{}", "application/json"],
+  ["a malformed user", '{"session":{},"user":{"id":42}}', "application/json"],
+  ["an incomplete signed-out answer", '{"user":null}', "application/json"],
+  [
+    "a proxy error with null fields",
+    '{"error":"blocked","session":null,"user":null}',
+    "application/json",
+  ],
 ];
 
 for (const [name, body, contentType] of nonAnswers) {
@@ -249,7 +258,6 @@ test("an HTML block page on launch presents the bound account offline", async (t
 const signedOutAnswers = [
   ["null", "null"],
   ["an object with no user", '{"session":null,"user":null}'],
-  ["an empty object", "{}"],
 ];
 
 for (const [name, body] of signedOutAnswers) {
@@ -269,6 +277,44 @@ for (const [name, body] of signedOutAnswers) {
     assert.equal(authContext.getValidatedAuthGeneration(), null);
   });
 }
+
+for (const contentType of ["application/octet-stream", "application/json", "text/plain"]) {
+  test(`a valid session delivered as ${contentType} retains the account and token rotation`, async (t) => {
+    const { authContext, session } = await createValidatedSession(t);
+    let tokenState = { token: "token-a", generation: 4 };
+    t.mock.method(window.electronAPI, "authGetTokenState", async () => ({ ...tokenState }));
+    window.electronAPI.authSetToken = async (token, expectedGeneration) => {
+      assert.equal(expectedGeneration, 4);
+      tokenState = { token, generation: 5 };
+      return { success: true, ...tokenState };
+    };
+    globalThis.fetch = async () =>
+      new Response(JSON.stringify({ user: { id: "user-a" }, session: { id: "session-a" } }), {
+        headers: { "Content-Type": contentType, "set-auth-token": "token-rotated" },
+      });
+
+    await session.value.refetch();
+
+    assert.equal(session.value.error, null);
+    assert.equal(session.value.data.user.id, "user-a");
+    assert.equal(authContext.getBoundSessionGeneration("user-a"), 5);
+    assert.equal(authContext.commitValidatedAuthContext(5, "user-a"), true);
+  });
+}
+
+test("JSON null delivered as binary still records a genuine sign-out", async (t) => {
+  const { authContext, session } = await createValidatedSession(t);
+  globalThis.fetch = async () =>
+    new Response("null", {
+      headers: { "Content-Type": "application/octet-stream" },
+    });
+
+  await session.value.refetch();
+
+  assert.equal(session.value.error, null);
+  assert.equal(session.value.data, null);
+  assert.equal(authContext.getAuthRequestContextSnapshot().sessionRejectedGeneration, 4);
+});
 
 test("a 401 with an HTML body is still a rejected credential", async (t) => {
   const { authContext, session } = await createValidatedSession(t);
