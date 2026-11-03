@@ -6996,13 +6996,34 @@ class IPCHandlers {
     });
     this.refreshEffectivePolicy = async (event, { refresh = false } = {}) => {
       const scope = getScope();
-      const authHeaders = event?.sender
-        ? await getAuthHeader(event)
-        : await getAuthHeaderFromWindow(
-            [this.windowManager.controlPanelWindow, this.windowManager.mainWindow].find(
-              (win) => win && !win.isDestroyed()
-            )
-          );
+      const device = this.managedDevicePolicy.getSnapshot();
+      if (device.localOnly || device.status === "loading" || device.status === "invalid")
+        return this.effectivePolicyManager.getPolicy({
+          accountId: scope.accountId,
+          expectedAuthGeneration: scope.authGeneration,
+        });
+      let authHeaders;
+      try {
+        authHeaders = event?.sender
+          ? await getAuthHeader(event)
+          : await getAuthHeaderFromWindow(
+              [this.windowManager.controlPanelWindow, this.windowManager.mainWindow].find(
+                (win) => win && !win.isDestroyed()
+              )
+            );
+      } catch (error) {
+        debugLogger.warn("Policy credentials could not be read", { error: error.message });
+        if (scope.authGeneration !== tokenStore.getState().generation)
+          return this.effectivePolicyManager.getCurrent();
+        cookieGeneration = scope.authGeneration;
+        this.effectivePolicyManager.updateWorkspace({
+          success: false,
+          code: "POLICY_UNRESOLVABLE",
+          accountId: scope.accountId,
+          authGeneration: scope.authGeneration,
+        });
+        return this.effectivePolicyManager.getCurrent();
+      }
       if (scope.authGeneration !== tokenStore.getState().generation)
         return this.effectivePolicyManager.getCurrent();
       cookieGeneration = authHeaders.Cookie ? scope.authGeneration : null;
