@@ -166,6 +166,9 @@ const press = (element, key) =>
       new happyWindow.KeyboardEvent("keydown", { key, bubbles: true, cancelable: true })
     )
   );
+// React derives onMouseEnter from mouseover, so this is a pointer arriving on the element.
+const hover = (element) =>
+  act(() => element.dispatchEvent(new happyWindow.MouseEvent("mouseover", { bubbles: true })));
 const leaveField = (element, relatedTarget = null) =>
   act(() =>
     element.dispatchEvent(new happyWindow.FocusEvent("focusout", { bubbles: true, relatedTarget }))
@@ -721,6 +724,76 @@ test("the highlighted row is scrolled into view", async (t) => {
   await press(input(), "ArrowUp");
   await press(input(), "ArrowUp");
   assert.equal(calls.at(-1).id, options().at(-1).id);
+});
+
+test("a pointer resting on a row highlights it without scrolling the list", async (t) => {
+  const calls = [];
+  const proto = happyWindow.Element.prototype;
+  const original = Object.getOwnPropertyDescriptor(proto, "scrollIntoView");
+  Object.defineProperty(proto, "scrollIntoView", {
+    configurable: true,
+    writable: true,
+    value() {
+      calls.push(this.id);
+    },
+  });
+  t.after(() => {
+    if (original) Object.defineProperty(proto, "scrollIntoView", original);
+    else delete proto.scrollIntoView;
+  });
+
+  await mount(t);
+  await focus(input());
+  await hover(options()[2]);
+  assert.equal(highlighted(), 2, "the hovered row is the highlighted one");
+  assert.deepEqual(calls, [], "it is under the pointer already, so the list stays put");
+
+  // The keyboard takes over from wherever the pointer left the highlight, and does scroll.
+  await press(input(), "ArrowDown");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0], options()[highlighted()].id);
+  await hover(options()[0]);
+  assert.equal(calls.length, 1, "hovering after the keyboard doesn't scroll either");
+});
+
+test("left and right stay with the caret while the invite row is only under the pointer", async (t) => {
+  await mount(t, { inviteRoleChoice: true });
+  await focus(input());
+  await type(input(), "alex@example.com");
+  await hover(options()[0]);
+  assert.equal(highlighted(), 0, "the invitation is highlighted by the pointer alone");
+
+  // Fixing a typo with the arrow keys must not turn the invitation into an Admin one.
+  assert.equal(await pressKey(input(), "ArrowLeft"), false);
+  assert.equal(await pressKey(input(), "ArrowRight"), false);
+  assert.equal(roleText(), "Member");
+
+  // The keyboard highlighting it is a choice to use left and right on it.
+  await press(input(), "ArrowDown");
+  assert.equal(highlighted(), 0);
+  assert.equal(await pressKey(input(), "ArrowRight"), true);
+  assert.equal(roleText(), "Admin");
+
+  // And the pointer arriving again hands them back to the caret.
+  await hover(options()[0]);
+  assert.equal(await pressKey(input(), "ArrowLeft"), false);
+  assert.equal(roleText(), "Admin", "the role is left as it was");
+});
+
+test("an Admin chosen for an address is forgotten once the address is deleted", async (t) => {
+  const { lastChange } = await mount(t, { inviteRoleChoice: true });
+  await focus(input());
+  await type(input(), "alex@example.com");
+  await chooseRole("Workspace Admin");
+  assert.equal(roleText(), "Admin");
+
+  await type(input(), "");
+  await paste(input(), "p@x.io, q@x.io");
+  assert.deepEqual(chipTexts(), ["p@x.io · Member", "q@x.io · Member"]);
+  assert.ok(lastChange().every((recipient) => recipient.role === "member"));
+
+  await type(input(), "kim@example.com");
+  assert.equal(roleText(), "Member", "the next address starts as Member too");
 });
 
 test("the role of an invitation is chosen from the keyboard, and read out", async (t) => {

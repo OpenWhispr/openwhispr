@@ -81,6 +81,7 @@ export function AddToTeamspaceMenu({
   const coverageRequestRef = useRef(0);
   const [state, dispatch] = useReducer(confirmActionReducer<AddSubject>, { kind: "closed" });
   const inFlightRef = useRef(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   async function readCoverage(userIds: string[]): Promise<void> {
     const request = ++coverageRequestRef.current;
@@ -182,7 +183,7 @@ export function AddToTeamspaceMenu({
     <>
       <DropdownMenu onOpenChange={handleOpenChange}>
         <DropdownMenuTrigger asChild>
-          <Button type="button" variant="ghost" size="sm">
+          <Button ref={triggerRef} type="button" variant="ghost" size="sm">
             <Plus className="size-3.5" aria-hidden="true" />
             {t("settingsPage.workspace.people.selection.addToTeamspace")}
             <ChevronDown className="size-3 text-muted-foreground" aria-hidden="true" />
@@ -274,7 +275,12 @@ export function AddToTeamspaceMenu({
           }}
           cancelLabel={t("common.cancel")}
           busy={!failed}
-          onDismiss={() => dispatch({ type: "dismiss" })}
+          onDismiss={() => {
+            dispatch({ type: "dismiss" });
+            // The menu item that opened this is gone, so nothing hands focus back and it would
+            // drop to the page; the frame lets the dialog finish closing first.
+            requestAnimationFrame(() => triggerRef.current?.focus());
+          }}
         />
       ) : null}
     </>

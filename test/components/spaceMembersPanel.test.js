@@ -193,6 +193,7 @@ async function mount(
   {
     canManage = true,
     canInvite = true,
+    workspaceAdmin = false,
     members = MEMBERS,
     invitations = INVITATIONS,
     groups = GROUPS,
@@ -208,7 +209,7 @@ async function mount(
   const state = { members: [...members], invitations: [...invitations] };
   const space = spaceFor(canManage, spaceTeams ? { teams: spaceTeams } : {});
   const store = {
-    workspaces: [workspaceWith({ manage_members: canInvite })],
+    workspaces: [workspaceWith({ manage_members: canInvite, manage_settings: workspaceAdmin })],
     members: ROSTER,
     membersWorkspaceId: "w1",
     refreshMembers: async (workspaceId) => {
@@ -1513,6 +1514,22 @@ test("removing your own row leaves the teamspace and closes the settings", async
   assert.deepEqual(toastTitles(), ["You left Customer Calls."]);
   assert.deepEqual(lefts, [true], "the settings close, as after Leave");
   assert.equal(dialogs().length, 0);
+});
+
+test("a workspace admin removing their own row is a plain removal: they keep implicit access", async (t) => {
+  const { callsTo, space, lefts } = await mount(t, { workspaceAdmin: true });
+
+  await openMenu(roleTrigger(rowFor("Ronnie")));
+  await ui.click(menuItem("Remove from teamspace"));
+  await ui.click(dialogButton("Remove member"));
+  await ui.settle();
+
+  assert.equal(callsTo("leaveSpace").length, 0, "nothing is left, so nothing is purged");
+  assert.deepEqual(callsTo("removeSpaceMember"), [["removeSpaceMember", space, "me"]]);
+  assert.deepEqual(toastTitles(), ["Ronnie's direct membership in Customer Calls was removed."]);
+  assert.deepEqual(lefts, [], "they can still open it, so the settings stay");
+  assert.equal(dialogs().length, 0);
+  assert.ok(!rowFor("Ronnie"), "the direct row is gone");
 });
 
 test("removing your own row while a group still reaches you stays open and says so", async (t) => {

@@ -2710,7 +2710,7 @@
         "delete": "Elimina area di lavoro",
         "deleting": "Eliminazione…",
         "leaveTitle": "Abbandona area di lavoro",
-        "leaveDescription": "Esci da questa area di lavoro. Perderai l'accesso ai suoi spazi team.",
+        "leaveDescription": "Esci da questa area di lavoro. Perderai l'accesso ai suoi teamspace.",
         "leave": "Abbandona area di lavoro",
         "leaving": "Uscita…"
       },
@@ -5528,7 +5528,7 @@
     "exit": {
       "leave": {
         "title": "Abbandonare {{name}}?",
-        "body": "Perderai l'accesso a questa area di lavoro, ai suoi team e ai suoi spazi team. Un amministratore dell'area di lavoro può invitarti di nuovo.",
+        "body": "Perderai l'accesso a questa area di lavoro, ai suoi team e ai suoi teamspace. Un amministratore dell'area di lavoro può invitarti di nuovo.",
         "failed": "Impossibile abbandonare {{name}}. Controlla la connessione e riprova."
       },
       "left": {
@@ -5538,7 +5538,7 @@
       "chooseWorkspace": "Scegli area di lavoro",
       "delete": {
         "title": "Eliminare {{name}}?",
-        "body": "Questo elimina definitivamente l'area di lavoro, le sue note, i file, i team e gli spazi team per tutti. Non può essere annullato."
+        "body": "Questo elimina definitivamente l'area di lavoro, le sue note, i file, i team e i teamspace per tutti. Non può essere annullato."
       },
       "deleting": {
         "title": "Eliminazione di {{name}}…",
@@ -5555,7 +5555,7 @@
     },
     "removeMember": {
       "title": "Rimuovere {{name}} da {{workspace}}?",
-      "body": "Perderà l'accesso a tutti gli spazi team e a tutti i team di quest'area di lavoro. Puoi invitarla di nuovo in qualsiasi momento.",
+      "body": "Perderà l'accesso a tutti i teamspace e a tutti i team di quest'area di lavoro. Puoi invitarla di nuovo in qualsiasi momento.",
       "confirm": "Rimuovi",
       "removing": "Rimozione…",
       "failed": "Impossibile confermare la rimozione di {{name}}. Controlla la connessione e riprova.",
@@ -5570,10 +5570,10 @@
       "checking": "Verifica in corso…",
       "failed_one": "Impossibile confermare la rimozione di {{count}} membro. Controlla la connessione e riprova.",
       "failed_other": "Impossibile confermare la rimozione di {{count}} membri. Controlla la connessione e riprova.",
-      "body": "Queste persone perderanno l'accesso a tutti gli spazi team e a tutti i team di quest'area di lavoro. Puoi invitarle di nuovo in qualsiasi momento.",
-      "ownerOne": "{{name}} possiede note o spazi team in quest'area di lavoro.",
-      "owners_one": "{{count}} di loro possiede note o spazi team.",
-      "owners_other": "{{count}} di loro possiedono note o spazi team.",
+      "body": "Queste persone perderanno l'accesso a tutti i teamspace e a tutti i team di quest'area di lavoro. Puoi invitarle di nuovo in qualsiasi momento.",
+      "ownerOne": "{{name}} possiede note o teamspace in quest'area di lavoro.",
+      "owners_one": "{{count}} di loro possiede note o teamspace.",
+      "owners_other": "{{count}} di loro possiedono note o teamspace.",
       "directoryManagedOne": "{{name}} è assegnato dal tuo provider di identità. Rimuovilo da lì.",
       "directoryManaged_one": "{{count}} di loro è assegnato dal tuo provider di identità. Rimuovilo da lì.",
       "directoryManaged_other": "{{count}} di loro sono assegnati dal tuo provider di identità. Rimuovili da lì.",
@@ -5581,8 +5581,8 @@
       "directoryManagedOthers_one": "{{count}} di loro è assegnato dal tuo provider di identità. Rimuovilo da lì o deselezionalo per rimuovere gli altri.",
       "directoryManagedOthers_other": "{{count}} di loro sono assegnati dal tuo provider di identità. Rimuovili da lì o deselezionali per rimuovere gli altri.",
       "transferLabel": "Trasferisci a",
-      "transferBody": "Le loro note e i loro spazi team passeranno al nuovo proprietario. Perderanno l'accesso a quest'area di lavoro.",
-      "transferBodyLimited": "Le loro note e i loro spazi team passeranno a {{name}}, tranne le note negli spazi team a cui {{name}} non può accedere, che resteranno lì. Perderanno l'accesso a quest'area di lavoro.",
+      "transferBody": "Le loro note e i loro teamspace passeranno al nuovo proprietario. Perderanno l'accesso a quest'area di lavoro.",
+      "transferBodyLimited": "Le loro note e i loro teamspace passeranno a {{name}}, tranne le note nei teamspace a cui {{name}} non può accedere, che resteranno lì. Perderanno l'accesso a quest'area di lavoro.",
       "you": "{{name}} (tu)",
       "transferConfirm": "Trasferisci e rimuovi",
       "transferring": "Trasferimento in corso…",
@@ -5592,10 +5592,10 @@
       "cannotRemoveSelf": "Non puoi rimuovere te stesso. Esci dall'area di lavoro da Generale.",
       "done_one": "{{count}} membro rimosso",
       "done_other": "{{count}} membri rimossi",
-      "transferDone_one": "Le loro note e i loro spazi team sono stati spostati a {{name}} ed è stato rimosso {{count}} membro.",
-      "transferDone_other": "Le loro note e i loro spazi team sono stati spostati a {{name}} e sono stati rimossi {{count}} membri.",
-      "transferPartial_one": "{{count}} nota è rimasta in uno spazio team a cui {{name}} non può accedere. Tutto il resto è stato spostato.",
-      "transferPartial_other": "{{count}} note sono rimaste in spazi team a cui {{name}} non può accedere. Tutto il resto è stato spostato.",
+      "transferDone_one": "Le loro note e i loro teamspace sono stati spostati a {{name}} ed è stato rimosso {{count}} membro.",
+      "transferDone_other": "Le loro note e i loro teamspace sono stati spostati a {{name}} e sono stati rimossi {{count}} membri.",
+      "transferPartial_one": "{{count}} nota è rimasta in un teamspace a cui {{name}} non può accedere. Tutto il resto è stato spostato.",
+      "transferPartial_other": "{{count}} note sono rimaste in teamspace a cui {{name}} non può accedere. Tutto il resto è stato spostato.",
       "alreadyRemoved_one": "{{count}} membro era già stato rimosso",
       "alreadyRemoved_other": "{{count}} membri erano già stati rimossi"
     },

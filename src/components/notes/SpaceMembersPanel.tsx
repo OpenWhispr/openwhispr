@@ -578,7 +578,13 @@ export default function SpaceMembersPanel({
             i18n.language,
             teams.map((team) => isolate(team.name))
           );
-        if (user?.id && subject.member.user_id === user.id) {
+        // A workspace admin keeps implicit access to every teamspace, so removing their own direct
+        // row leaves nothing: it is a plain removal, with nothing to purge and no panel to close.
+        if (
+          user?.id &&
+          subject.member.user_id === user.id &&
+          !workspaceCan(workspace, "manage_settings")
+        ) {
           // Dropping your own grant can revoke access to what the device holds, which Leave's sync
           // purges; a removal of someone else's has nothing of the kind to do.
           const { still_via_teams } = await leaveSpace(space, user.id);

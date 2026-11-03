@@ -101,6 +101,8 @@ function TeamspacesPage({ workspace, onOpenTeamspace }: PageProps): React.ReactE
   const [settingsSpaceId, setSettingsSpaceId] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<SpaceItem | null>(null);
+  // The row button the delete was started from, which focus goes back to if it is called off.
+  const deleteOriginRef = useRef<HTMLElement | null>(null);
   const [joiningIds, setJoiningIds] = useState<ReadonlySet<string>>(() => new Set());
   const [adminsLoading, setAdminsLoading] = useState(false);
   // A second press before the button has re-rendered as disabled must not join twice.
@@ -163,9 +165,24 @@ function TeamspacesPage({ workspace, onOpenTeamspace }: PageProps): React.ReactE
     setSettingsOpen(true);
   }
 
-  async function requestDelete(space: WorkspaceSpace): Promise<void> {
+  async function requestDelete(
+    space: WorkspaceSpace,
+    actionsButton: HTMLElement | null
+  ): Promise<void> {
     const local = await resolveLocalSpace(space);
-    if (local) setDeleteTarget(local);
+    if (!local) return;
+    deleteOriginRef.current = actionsButton;
+    setDeleteTarget(local);
+  }
+
+  function closeDelete(): void {
+    setDeleteTarget(null);
+    const origin = deleteOriginRef.current;
+    deleteOriginRef.current = null;
+    // The menu item that started the delete is gone, so nothing hands focus back and it would drop
+    // to the page; the frame lets the dialog finish closing first. A deleted row's button is gone
+    // too, and focusing it does nothing.
+    requestAnimationFrame(() => origin?.focus());
   }
 
   function setJoining(spaceId: string, joining: boolean): void {
@@ -252,7 +269,7 @@ function TeamspacesPage({ workspace, onOpenTeamspace }: PageProps): React.ReactE
         onJoin={(space) => void handleJoin(space)}
         onOpen={(space) => void openTeamspace(space)}
         onSettings={(space) => void openSettings(space)}
-        onDelete={(space) => void requestDelete(space)}
+        onDelete={(space, actionsButton) => void requestDelete(space, actionsButton)}
       />
 
       <CreateSpaceDialog
@@ -277,7 +294,7 @@ function TeamspacesPage({ workspace, onOpenTeamspace }: PageProps): React.ReactE
         />
       )}
 
-      <DeleteSpaceDialog space={deleteTarget} onClose={() => setDeleteTarget(null)} />
+      <DeleteSpaceDialog space={deleteTarget} onClose={closeDelete} />
     </>
   );
 }

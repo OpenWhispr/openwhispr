@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, FolderRounded, Loader2, MoreHorizontal, Plus, Trash2, Users } from "../icons";
 import { Button } from "../ui/button";
@@ -46,7 +46,8 @@ interface TeamspacesTableProps {
   onJoin: (space: WorkspaceSpace) => void;
   onOpen: (space: WorkspaceSpace) => void;
   onSettings: (space: WorkspaceSpace) => void;
-  onDelete: (space: WorkspaceSpace) => void;
+  /** `actionsButton`: the row's menu button, where focus goes back if the delete is cancelled. */
+  onDelete: (space: WorkspaceSpace, actionsButton: HTMLElement | null) => void;
 }
 
 export default function TeamspacesTable({
@@ -204,7 +205,7 @@ interface TeamspaceRowProps {
   onJoin: (space: WorkspaceSpace) => void;
   onOpen: (space: WorkspaceSpace) => void;
   onSettings: (space: WorkspaceSpace) => void;
-  onDelete: (space: WorkspaceSpace) => void;
+  onDelete: (space: WorkspaceSpace, actionsButton: HTMLElement | null) => void;
 }
 
 function TeamspaceRow({
@@ -221,6 +222,7 @@ function TeamspaceRow({
   onDelete,
 }: TeamspaceRowProps): React.ReactElement {
   const { t } = useTranslation();
+  const actionsButtonRef = useRef<HTMLButtonElement>(null);
   // A directory from before release 5 sends no my_role, which reads as no access.
   const belongs = space.my_role != null;
   // The Members cell is where a member's own row lives, so that layout opens its settings.
@@ -270,6 +272,7 @@ function TeamspaceRow({
         <td className="ps-3 pe-4" onClick={stopRowClick}>
           <DropdownMenu>
             <DropdownMenuTrigger
+              ref={actionsButtonRef}
               aria-label={t("settingsPage.workspace.teamspaces.columns.actions")}
               className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:ring-1 focus-visible:ring-primary/30 data-[state=open]:bg-foreground/5 dark:hover:bg-white/5"
             >
@@ -284,7 +287,7 @@ function TeamspaceRow({
               </DropdownMenuItem>
               <DropdownMenuItem
                 className="text-xs text-destructive focus:text-destructive"
-                onSelect={() => onDelete(space)}
+                onSelect={() => onDelete(space, actionsButtonRef.current)}
               >
                 <Trash2 className="me-1.5 h-3.5 w-3.5" aria-hidden="true" />
                 {t("settingsPage.workspace.teamspaces.rowMenu.delete")}

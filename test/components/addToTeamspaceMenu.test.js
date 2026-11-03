@@ -396,6 +396,26 @@ test("choosing sends one request with everyone", async (t) => {
   assert.equal(dialogs().length, 0);
 });
 
+test("a double click sends one request", async (t) => {
+  const request = deferred();
+  const { callsTo } = await mount(t, { api: { addPeopleToSpace: () => request.promise } });
+
+  await openMenu();
+  const row = rowFor("Customer Calls");
+  // Both clicks land before React has rendered the dialog that would cover the menu.
+  await React.act(async () => {
+    row.click();
+    row.click();
+  });
+  await ui.settle();
+
+  assert.deepEqual(callsTo("add"), [["add", "cloud-calls", ["lucas", "mason"]]]);
+
+  await React.act(async () => request.resolve({ added: ["lucas", "mason"], already_members: [] }));
+  await ui.settle();
+  assert.deepEqual(callsTo("add").length, 1, "finishing the first never sends a second");
+});
+
 test("success clears the selection and offers Open teamspace", async (t) => {
   const { added, opened, callsTo } = await mount(t, {
     localIds: { "cloud-calls": 7 },
@@ -512,6 +532,29 @@ test("Cancel on a failure leaves the selection as it was", async (t) => {
   // The menu still works for another try.
   await openMenu();
   assert.equal(rows().length, 3);
+});
+
+test("Cancel on a failure hands focus back to the menu button", async (t) => {
+  await mount(t, {
+    api: {
+      addPeopleToSpace: async () => {
+        throw new CloudApiError("Cloud API request failed", 0);
+      },
+    },
+  });
+
+  await openMenu();
+  await choose("Customer Calls");
+  await ui.click(dialogButton("Cancel"));
+  await ui.settle();
+  // Focus returns on the next frame.
+  await React.act(async () => {
+    await new Promise((resolve) => happyWindow.requestAnimationFrame(resolve));
+  });
+
+  assert.equal(dialogs().length, 0);
+  // Compared as a boolean: a failed assert.equal on DOM nodes spends minutes printing the document.
+  assert.ok(doc().activeElement === trigger(), "focus is on Add to teamspace, not on the page");
 });
 
 test("a retry after a lost answer succeeds", async (t) => {

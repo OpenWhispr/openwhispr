@@ -166,8 +166,8 @@ async function loadSection(
         const passThrough = ({ children }) => h(React.Fragment, null, children);
         export const DropdownMenu = passThrough;
         export const DropdownMenuContent = passThrough;
-        export const DropdownMenuTrigger = ({ children }) =>
-          h("button", { "data-row-actions": "" }, children);
+        export const DropdownMenuTrigger = ({ children, ref }) =>
+          h("button", { "data-row-actions": "", ref }, children);
         export const DropdownMenuItem = ({ children, onSelect }) =>
           h("div", { role: "menuitem", onClick: onSelect }, children);
       `,
@@ -693,6 +693,44 @@ test("a row's menu opens, configures and deletes through its local teamspace", a
   assert.equal(globalThis.__deleteDialog.space, null);
 
   assert.deepEqual(globalThis.__localLookups, ["s1", "s1", "s1"]);
+});
+
+test("a cancelled delete puts focus back on the row's menu button on the next frame", async (t) => {
+  const mirror = [{ id: 9, cloud_space_id: "s1", name: "Alpha" }];
+  const { Section } = await loadSection(t, {
+    spaces: [space("s1", "Alpha", { my_role: "admin" }), space("s2", "Beta", { my_role: "admin" })],
+    localIds: { s1: 9 },
+    mirror,
+  });
+  const container = await mount(t, Section);
+  const actionsButton = (name) =>
+    findNode(rowNode(container, name), (node) => node.getAttribute("data-row-actions") !== null);
+  const focused = [];
+  for (const name of ["Alpha", "Beta"]) {
+    const button = actionsButton(name);
+    button.focus = () => focused.push(name);
+  }
+  const frames = [];
+  const originalFrame = globalThis.requestAnimationFrame;
+  globalThis.requestAnimationFrame = (callback) => frames.push(callback);
+  t.after(() => {
+    globalThis.requestAnimationFrame = originalFrame;
+  });
+
+  const deleteItem = findNodes(
+    rowNode(container, "Alpha"),
+    (node) => node.getAttribute("role") === "menuitem"
+  ).at(-1);
+  await React.act(async () => propsOf(deleteItem).onClick());
+  assert.equal(globalThis.__deleteDialog.space, mirror[0]);
+  assert.deepEqual(focused, [], "the dialog is open, so focus stays where the dialog put it");
+
+  await React.act(async () => globalThis.__deleteDialog.onClose());
+  assert.equal(globalThis.__deleteDialog.space, null);
+  assert.deepEqual(focused, [], "not before the dialog has finished closing");
+  assert.equal(frames.length, 1);
+  frames[0]();
+  assert.deepEqual(focused, ["Alpha"], "the button of the row the delete was started from");
 });
 
 test("a teamspace with no local copy says so instead of doing nothing", async (t) => {

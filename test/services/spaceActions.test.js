@@ -562,6 +562,27 @@ test("a delete that finds the teamspace gone reports success and drops the mirro
   ]);
 });
 
+test("a bare 404 with no space code is not proof the teamspace is gone, so nothing is purged", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { calls, deps, localSpace } = makeHarness();
+  // A proxy or a wrong route answers like this; only the server's own space_not_found means gone.
+  deps.spaces.remove = async () => {
+    throw new CloudApiError("API error: 404", 404);
+  };
+  const actions = createSpaceActions(deps);
+
+  const result = await actions.deleteSpace(localSpace);
+
+  assert.equal(result.success, false);
+  assert.deepEqual(
+    calls.filter(([name]) => name === "local.purge" || name === "guard"),
+    [],
+    "the local copy and its notes are kept"
+  );
+  assert.deepEqual(calls, [], "the roster and the mirror are left alone too");
+});
+
 test("a failed delete carries its kind", async () => {
   const { createSpaceActions } = await load();
   const { CloudApiError } = await import("../../src/services/cloudApi.ts");

@@ -162,8 +162,7 @@ async function join(spaceId: string): Promise<{ joined: boolean }> {
   return res.data;
 }
 
-// Unlike addMember this never changes someone's role: people already in the space come back
-// as already_members.
+// Adding never changes someone's role: people already in the space come back as already_members.
 async function addMembers(
   spaceId: string,
   userIds: string[]

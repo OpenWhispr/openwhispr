@@ -133,7 +133,12 @@ export function SpacePeopleField({
   const [focused, setFocused] = useState(false);
   // Escape closes the list until the person types, arrows or clicks the field again.
   const [dismissed, setDismissed] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(-1);
+  // Who set the highlight matters: a resting pointer highlights a row too, and only the keyboard
+  // may scroll to it or use left and right on it.
+  const [highlight, setHighlight] = useState<{ index: number; byKeyboard: boolean }>({
+    index: -1,
+    byKeyboard: false,
+  });
   const [inviteRole, setInviteRole] = useState<InviteRole>("member");
   const [fieldElement, setFieldElement] = useState<HTMLDivElement | null>(null);
   const [listElement, setListElement] = useState<HTMLDivElement | null>(null);
@@ -169,8 +174,11 @@ export function SpacePeopleField({
   const showEmptyState = results.noResults && query.trim() !== "";
   const listOpen = focused && !dismissed && !disabled && (rows.length > 0 || showEmptyState);
   const active =
-    listOpen && activeIndex >= 0 && activeIndex < rows.length && isPickable(rows[activeIndex])
-      ? activeIndex
+    listOpen &&
+    highlight.index >= 0 &&
+    highlight.index < rows.length &&
+    isPickable(rows[highlight.index])
+      ? highlight.index
       : -1;
   const hasInvalid = picked.some((recipient) => recipient.kind === "email" && !recipient.valid);
   // The role the invite row shows is the one every address typed or pasted here is staged with.
@@ -178,11 +186,13 @@ export function SpacePeopleField({
   const stagingRules = { accessUserIds, hiddenUserIds, pendingEmails };
 
   // Highlighting with the arrow keys must never leave the row out of sight, or Enter picks blind.
+  // A pointer's row is already under it, and scrolling to it would move the list while it is used.
+  const scrollTarget = highlight.byKeyboard ? active : -1;
   useEffect(() => {
-    if (active >= 0) {
-      document.getElementById(`${listId}-${active}`)?.scrollIntoView({ block: "nearest" });
+    if (scrollTarget >= 0) {
+      document.getElementById(`${listId}-${scrollTarget}`)?.scrollIntoView({ block: "nearest" });
     }
-  }, [active, listId]);
+  }, [scrollTarget, listId]);
 
   useEffect(() => {
     if (focusRequest === 0) return;
@@ -246,7 +256,7 @@ export function SpacePeopleField({
       inputRef.current?.focus();
     }
     setQuery("");
-    setActiveIndex(-1);
+    setHighlight({ index: -1, byKeyboard: false });
   };
 
   const move = (step: 1 | -1): void => {
@@ -259,12 +269,15 @@ export function SpacePeopleField({
           ? 0
           : pickable.length - 1
         : (position + step + pickable.length) % pickable.length;
-    setActiveIndex(pickable[next]);
+    setHighlight({ index: pickable[next], byKeyboard: true });
   };
 
   const handleChange = (value: string): void => {
-    setActiveIndex(-1);
+    setHighlight({ index: -1, byKeyboard: false });
     setDismissed(false);
+    // Without an address the invite row is gone and so is the role chosen on it; keeping it would
+    // stage the next address, or a whole pasted list, as Admin.
+    if (!value.includes("@")) setInviteRole("member");
     if (value.includes("@") && FINISHED_LIST.test(value)) consume(value);
     else setQuery(value);
   };
@@ -287,11 +300,13 @@ export function SpacePeopleField({
     } else if (
       (event.key === "ArrowLeft" || event.key === "ArrowRight") &&
       inviteRoleChoice &&
+      highlight.byKeyboard &&
       active >= 0 &&
       rows[active].kind === "invite"
     ) {
       // Tab would leave the field and close the list, so the role of the highlighted invitation
-      // is chosen here; the caret keeps left and right on every other row.
+      // is chosen here; the caret keeps left and right on every other row, and whenever the row is
+      // only under the pointer, since an Admin invitation must be a choice made on purpose.
       event.preventDefault();
       setInviteRole((current) => (current === "member" ? "admin" : "member"));
     } else if (event.key === "Enter") {
@@ -393,7 +408,7 @@ export function SpacePeopleField({
                     aria-selected={(row.kind === "member" || row.kind === "group") && row.picked}
                     aria-disabled={disabledRow || undefined}
                     onMouseEnter={() => {
-                      if (!disabledRow) setActiveIndex(index);
+                      if (!disabledRow) setHighlight({ index, byKeyboard: false });
                     }}
                     onClick={() => pick(row)}
                     className={cn(
