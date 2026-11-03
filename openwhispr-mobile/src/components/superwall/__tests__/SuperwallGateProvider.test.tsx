@@ -89,10 +89,12 @@ jest.mock('@/lib/billingReconciliation', () => ({
   reconcileStoreBilling: () => mockReconcileStoreBilling(),
 }));
 
+const mockIdentifyRevenueCatUser = jest.fn();
 const mockRecordRevenueCatPurchase = jest.fn();
 
 jest.mock('@/lib/revenuecat', () => ({
-  recordRevenueCatPurchase: (...args: unknown[]) => mockRecordRevenueCatPurchase(...args),
+  identifyRevenueCatUser: (userId: string) => mockIdentifyRevenueCatUser(userId),
+  recordRevenueCatPurchase: (productId: string) => mockRecordRevenueCatPurchase(productId),
 }));
 
 jest.mock('@/lib/sentry', () => ({
@@ -129,14 +131,7 @@ jest.mock('@/store/useUsageStore', () => {
   mockUseUsageStore.setState = (patch: Partial<typeof state>) => {
     state = { ...state, ...patch };
   };
-  return {
-    useUsageStore: mockUseUsageStore,
-    getUsageOwnerKey: () => {
-      const { useAuthStore: auth } = require('@/store/useAuthStore');
-      const { user, sessionCookie, isGuest } = auth.getState();
-      return user && sessionCookie && !isGuest ? `${user.id}:${sessionCookie}` : null;
-    },
-  };
+  return { useUsageStore: mockUseUsageStore };
 });
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
@@ -222,6 +217,7 @@ describe('SuperwallGateProvider', () => {
     mockConfigurationError = null;
     mockCreatorCodesEnabled = false;
     mockReconcileStoreBilling.mockResolvedValue(usage);
+    mockIdentifyRevenueCatUser.mockResolvedValue(true);
     mockRecordRevenueCatPurchase.mockResolvedValue(true);
     useAuthStore.setState({
       user: {
@@ -411,11 +407,7 @@ describe('SuperwallGateProvider', () => {
     );
     await act(async () => {});
 
-    expect(mockRecordRevenueCatPurchase).toHaveBeenCalledWith(
-      'pro.monthly',
-      usage.billingUserId,
-      expect.any(Function),
-    );
+    expect(mockRecordRevenueCatPurchase).toHaveBeenCalledWith('pro.monthly');
     expect(screen.getByTestId('result').props.children).toBe('pending');
     expect(feature).not.toHaveBeenCalled();
     expect(mockReconcileStoreBilling).not.toHaveBeenCalled();
@@ -473,6 +465,7 @@ describe('SuperwallGateProvider', () => {
     await act(async () => {});
 
     expect(mockLogSubscription).toHaveBeenCalledTimes(1);
+    expect(mockIdentifyRevenueCatUser).toHaveBeenCalledTimes(1);
     expect(mockRecordRevenueCatPurchase).toHaveBeenCalledTimes(1);
     expect(mockReconcileStoreBilling).not.toHaveBeenCalled();
     expect(screen.getByTestId('result').props.children).toBe('pending');
@@ -483,7 +476,9 @@ describe('SuperwallGateProvider', () => {
     expect(mockReconcileStoreBilling).toHaveBeenCalledTimes(1);
   });
 
-  it('pins the billing identity for the serialized purchase recording', async () => {
+  it('identifies RevenueCat with the billing user before recording the purchase', async () => {
+    const identify = deferred<boolean>();
+    mockIdentifyRevenueCatUser.mockReturnValue(identify.promise);
     const screen = render(
       <EnabledSuperwallGateProvider>
         <GateConsumer placement={SUPERWALL_PLACEMENTS.accountBillingOpen} />
@@ -496,17 +491,16 @@ describe('SuperwallGateProvider', () => {
     );
     await act(async () => {});
 
-    await waitFor(() =>
-      expect(mockRecordRevenueCatPurchase).toHaveBeenCalledWith(
-        'pro.monthly',
-        usage.billingUserId,
-        expect.any(Function),
-      ),
-    );
+    expect(mockIdentifyRevenueCatUser).toHaveBeenCalledWith(usage.billingUserId);
+    expect(mockRecordRevenueCatPurchase).not.toHaveBeenCalled();
+
+    await act(async () => identify.resolve(true));
+
+    await waitFor(() => expect(mockRecordRevenueCatPurchase).toHaveBeenCalledWith('pro.monthly'));
     await waitFor(() => expect(mockReconcileStoreBilling).toHaveBeenCalled());
   });
 
-  it('does not attribute a purchase to an unknown billing identity', async () => {
+  it('records the purchase without identifying when billing usage is unavailable', async () => {
     useUsageStore.setState({ usage: null });
     const screen = render(
       <EnabledSuperwallGateProvider>
@@ -519,8 +513,8 @@ describe('SuperwallGateProvider', () => {
       mockPlacementCallbacks.onDismiss?.({}, { type: 'purchased', productId: 'pro.monthly' }),
     );
 
-    await act(async () => {});
-    expect(mockRecordRevenueCatPurchase).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockRecordRevenueCatPurchase).toHaveBeenCalledWith('pro.monthly'));
+    expect(mockIdentifyRevenueCatUser).not.toHaveBeenCalled();
   });
 
   it('releases the gate when recording does not settle in time', async () => {

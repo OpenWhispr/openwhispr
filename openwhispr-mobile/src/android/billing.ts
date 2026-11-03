@@ -6,7 +6,7 @@ import type { CustomPurchaseControllerContext } from 'expo-superwall';
 import type { UsageInfo } from '@/data/remote/usageApi';
 import { useAuthStore } from '@/store/useAuthStore';
 import { getUsageOwnerKey, useUsageStore } from '@/store/useUsageStore';
-import { withRevenueCatUser } from '@/lib/revenuecat';
+import { withRevenueCatUser } from '@/lib/revenuecat.android';
 import { reconcileStoreBilling } from '@/lib/billingReconciliation';
 import { Sentry } from '@/lib/sentry';
 

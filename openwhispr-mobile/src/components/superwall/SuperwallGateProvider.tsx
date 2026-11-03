@@ -10,7 +10,7 @@ import type {
 } from '@/hooks/useSuperwallGate';
 import { useAuthStore } from '@/store/useAuthStore';
 import { requiresRealAccount } from '@/lib/accountAccess';
-import { getUsageOwnerKey, useUsageStore } from '@/store/useUsageStore';
+import { useUsageStore } from '@/store/useUsageStore';
 import {
   isTransactionalSuperwallPlacement,
   resolveSuperwallPlacementName,
@@ -20,7 +20,7 @@ import {
 import { Sentry } from '@/lib/sentry';
 import { reconcileStoreBilling } from '@/lib/billingReconciliation';
 import { logPaywallViewed, logSubscription } from '@/lib/appsflyer';
-import { recordRevenueCatPurchase } from '@/lib/revenuecat';
+import { recordPurchaseForBilling } from './recordPurchaseForBilling';
 import { createAffiliatePaywallSession } from '@/lib/affiliatePaywall';
 
 type Props = {
@@ -194,23 +194,6 @@ function reportPurchaseCompletion(
       extra: { placement: gate.placement, completion },
     });
   }
-}
-
-// Reconciliation asks the backend to ask RevenueCat, which is not guaranteed to
-// have seen a Superwall-completed StoreKit 2 purchase until it is recorded.
-// Identify first so the receipt posts under the billing user, not an anonymous
-// id. Never rejects; the lib reports its own failures.
-async function recordPurchaseForBilling(productId: string): Promise<void> {
-  const billingUserId = useUsageStore.getState().usage?.billingUserId;
-  const owner = getUsageOwnerKey();
-  if (!billingUserId || !owner) return;
-  await recordRevenueCatPurchase(productId, billingUserId, () => {
-    if (
-      getUsageOwnerKey() !== owner ||
-      useUsageStore.getState().usage?.billingUserId !== billingUserId
-    )
-      throw new Error('Billing account changed.');
-  });
 }
 
 // The gate stays open while the purchase is recorded, so a hung native call must

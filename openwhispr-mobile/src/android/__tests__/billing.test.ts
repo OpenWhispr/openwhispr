@@ -20,7 +20,7 @@ jest.mock('@/store/useUsageStore', () => ({
     subscribe: jest.fn(() => jest.fn()),
   },
 }));
-jest.mock('@/lib/revenuecat', () => ({
+jest.mock('@/lib/revenuecat.android', () => ({
   withRevenueCatUser: jest.fn(async (_id, action, check) => {
     check?.();
     return action();

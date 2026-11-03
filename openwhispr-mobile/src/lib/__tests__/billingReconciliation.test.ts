@@ -1,6 +1,7 @@
 import { reconcileStoreBilling } from '../billingReconciliation';
 import { reconcileStoreBilling as reconcileAndroidStoreBilling } from '../billingReconciliation.android';
-import { reconcileRevenueCatPurchases, withRevenueCatUser } from '../revenuecat';
+import { reconcileRevenueCatPurchases } from '../revenuecat';
+import { withRevenueCatUser } from '../revenuecat.android';
 import { reconcileMobileBilling } from '@/data/remote/billingApi';
 
 let mockAuth = { user: { id: 'a' }, sessionCookie: 'cookie-a' };
@@ -11,8 +12,8 @@ jest.mock('@/store/useUsageStore', () => ({
 }));
 jest.mock('../revenuecat', () => ({
   reconcileRevenueCatPurchases: jest.fn(),
-  withRevenueCatUser: jest.fn(),
 }));
+jest.mock('../revenuecat.android', () => ({ withRevenueCatUser: jest.fn() }));
 jest.mock('@/data/remote/billingApi', () => ({ reconcileMobileBilling: jest.fn() }));
 
 beforeEach(() => {

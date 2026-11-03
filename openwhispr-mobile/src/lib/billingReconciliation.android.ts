@@ -22,7 +22,8 @@ export function reconcileStoreBilling(): Promise<UsageInfo> {
 async function performReconciliation(identity: BillingIdentity): Promise<UsageInfo> {
   const { reconcileMobileBilling } =
     require('@/data/remote/billingApi') as typeof import('@/data/remote/billingApi');
-  const { withRevenueCatUser } = require('@/lib/revenuecat') as typeof import('@/lib/revenuecat');
+  const { withRevenueCatUser } =
+    require('@/lib/revenuecat.android') as typeof import('@/lib/revenuecat.android');
   const checkIdentity = () => {
     if (!isBillingIdentityCurrent(identity)) throw new Error('Billing account changed');
   };

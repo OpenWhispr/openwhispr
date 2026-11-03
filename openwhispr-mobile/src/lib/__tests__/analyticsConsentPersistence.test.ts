@@ -122,3 +122,5 @@ it.each(['resolve', 'reject'] as const)(
     expect(mockSentryInit).toHaveBeenCalledTimes(1);
   },
 );
+
+jest.mock('../appsFlyerLifecycle', () => jest.requireActual('../appsFlyerLifecycle.android'));
