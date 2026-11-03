@@ -21,6 +21,7 @@ const ARABIC_PLURAL_BASES = [
   "settingsPage.workspace.teams.grantsAccessToSpaces",
   "settingsPage.workspace.teams.deleteConfirmSpaceAccess",
   "settingsPage.workspace.teamspaces.adminCount",
+  "settingsPage.workspace.teamspaces.form.createdInviteFailed",
   "settingsPage.workspace.teamspaces.picker.groupPeople",
   "settingsPage.workspace.teamspaces.picker.groupChip",
   "settingsPage.workspace.teamspaces.picker.groupHasAccess",

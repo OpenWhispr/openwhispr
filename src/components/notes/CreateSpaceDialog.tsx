@@ -1,49 +1,104 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactElement } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
-import { Check, ChevronRight, Loader2 } from "../icons";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "../ui/dialog";
+import { FolderRounded, Loader2, LogIn, Plus, UserPlus, type IconComponent } from "../icons";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { Textarea } from "../ui/textarea";
+import { Toggle } from "../ui/toggle";
 import { useToast } from "../ui/useToast";
 import CreateWorkspaceDialog from "../CreateWorkspaceDialog";
-import MemberPickList from "../MemberPickList";
+import { WorkspaceErrorBar } from "../workspace/WorkspaceErrorBar";
 import { createSpace } from "../../services/spaceActions";
+import { invitePeople } from "../../services/invitePeople";
 import { TeamsService } from "../../services/TeamsService";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { useAuth } from "../../hooks/useAuth";
 import { useDelayedFlag } from "../../hooks/useDelayedFlag";
 import SpaceNameField from "./SpaceNameField";
+import { SpacePeopleField } from "./SpacePeopleField";
 import { workspaceCan } from "../../lib/capabilities";
 import { rosterFor } from "../../lib/peopleRoster";
+import { pickedSummary, type PickedRecipient } from "../../lib/spacePeoplePicker";
+import { classifySpaceError } from "../../lib/workspaceErrors";
 import {
   manageableWorkspaces as findManageableWorkspaces,
   selectWorkspaceForSpaceCreation,
 } from "../../lib/workspaceSelection";
 import { revealContainer, setActiveContext } from "../../stores/noteStore";
+import { isolate } from "../../utils/bidiIsolate";
 import { cn } from "../lib/utils";
-import type { Team, WorkspaceMember } from "../../types/electron";
+import type { SpaceItem, Team, WorkspaceMember } from "../../types/electron";
+
+const DESCRIPTION_MAX_LENGTH = 280;
+const NO_MEMBERS: WorkspaceMember[] = [];
+const NO_TEAMS: Team[] = [];
+
+// The footer's buttons share one look with the other workspace dialogs: two equal capsules.
+const BUTTON_BASE =
+  "flex h-10 flex-1 items-center justify-center gap-2 rounded-full px-4 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50";
+const PRIMARY_BUTTON = cn(BUTTON_BASE, "bg-primary text-primary-foreground hover:bg-primary/90");
+const SECONDARY_BUTTON = cn(
+  BUTTON_BASE,
+  "bg-surface-1 text-muted-foreground hover:bg-surface-3 hover:text-foreground"
+);
+
+// What the footer is told about a create that failed and left the dialog open. A taken name is
+// not here: it belongs to the name field.
+type CreateFailure = { kind: "general" } | { kind: "refused"; message: string };
 
 interface CreateSpaceDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Workspace preselected by the opener (e.g. a sidebar workspace row's + button). */
   initialWorkspaceId?: string | null;
+  /**
+   * Opens the new teamspace in Notes. Off where the dialog sits over another page (Settings),
+   * since moving the notes view behind the modal would change what the person returns to.
+   */
+  revealOnCreate?: boolean;
+}
+
+// An invitation that can't come out of an address someone is already part of, or has already
+// been asked to join, loses nothing: the person is on their way into the workspace either way.
+const NOT_A_FAILURE = new Set(["alreadyMember", "alreadyInvited"]);
+
+// The teamspace exists by now, so this never throws: whatever goes wrong here is a count of
+// people to invite from Members, never a failed create.
+async function inviteIntoTeamspace(
+  workspaceId: string,
+  cloudSpaceId: string | null,
+  addresses: string[]
+): Promise<number> {
+  if (addresses.length === 0) return 0;
+  if (!cloudSpaceId) return addresses.length;
+  let failed = 0;
+  try {
+    await invitePeople.sendInvitations({
+      workspaceId,
+      emails: addresses,
+      role: "member",
+      spaceIds: [cloudSpaceId],
+      onResult: (_email, outcome) => {
+        // `=== true`: src compiles without strictNullChecks, where a bare `ok` doesn't narrow.
+        if (outcome.ok === true) return;
+        if (!NOT_A_FAILURE.has(outcome.kind)) failed += 1;
+      },
+    });
+  } catch {
+    return addresses.length;
+  }
+  return failed;
 }
 
 export default function CreateSpaceDialog({
   open,
   onOpenChange,
   initialWorkspaceId = null,
-}: CreateSpaceDialogProps) {
+  revealOnCreate = true,
+}: CreateSpaceDialogProps): ReactElement {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -63,18 +118,26 @@ export default function CreateSpaceDialog({
       refreshMembers: s.refreshMembers,
     }))
   );
+  const nameErrorId = useId();
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const primaryRef = useRef<HTMLButtonElement>(null);
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState<string | null>(null);
-  const [memberSearch, setMemberSearch] = useState("");
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [description, setDescription] = useState("");
+  const [picked, setPicked] = useState<PickedRecipient[]>([]);
+  const [isDefault, setIsDefault] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
   const [membersError, setMembersError] = useState(false);
   const [rosterWorkspaceId, setRosterWorkspaceId] = useState<string | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
   const [teamsError, setTeamsError] = useState(false);
   const [teamsWorkspaceId, setTeamsWorkspaceId] = useState<string | null>(null);
-  const [selectedTeamIds, setSelectedTeamIds] = useState<Set<string>>(new Set());
-  const [groupsOpen, setGroupsOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [failure, setFailure] = useState<CreateFailure | null>(null);
+  // The name the server refused, so the message keeps saying it while the field is edited.
+  const [takenName, setTakenName] = useState<string | null>(null);
+  // Where focus goes once a failed create hands the form back: a disabled button loses it.
+  const [refocus, setRefocus] = useState<"name" | "primary" | null>(null);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
   const showSpinner = useDelayedFlag(isCreating);
 
@@ -132,45 +195,84 @@ export default function CreateSpaceDialog({
     });
   }, [open, manageableWorkspaces, defaultWorkspace?.id, initialWorkspaceId]);
 
-  // The creator becomes the space's admin on the server, so they are not a
-  // pick-list candidate.
-  const candidates = useMemo(
-    () =>
-      rosterWorkspaceId === workspace?.id
-        ? rosterFor({ members: roster, membersWorkspaceId }, workspace?.id).filter(
-            (member) => member.user_id !== user?.id
-          )
-        : [],
-    [roster, membersWorkspaceId, rosterWorkspaceId, user?.id, workspace?.id]
-  );
-  const workspaceTeams = teamsWorkspaceId === workspace?.id ? teams : [];
-  const peopleError =
+  useEffect(() => {
+    if (!refocus || isCreating) return;
+    (refocus === "name" ? nameInputRef.current : primaryRef.current)?.focus();
+    setRefocus(null);
+  }, [refocus, isCreating]);
+
+  const workspaceRoster =
+    rosterWorkspaceId === workspace?.id
+      ? rosterFor({ members: roster, membersWorkspaceId }, workspace?.id)
+      : NO_MEMBERS;
+  const workspaceTeams = teamsWorkspaceId === workspace?.id ? teams : NO_TEAMS;
+  // The creator becomes the teamspace's admin on the server, so the field never offers them.
+  const hiddenUserIds = useMemo(() => new Set(user?.id ? [user.id] : []), [user?.id]);
+  // Only workspace admins can invite; anyone else who may create picks from who is here.
+  const canInvite = workspaceCan(workspace, "manage_members");
+
+  const rosterFailed =
     membersError ||
     (workspace != null &&
       rosterWorkspaceId === workspace.id &&
       membersWorkspaceId !== workspace.id);
-  // Hold the section's place while the roster loads so the footer doesn't jump.
-  const peopleLoading = workspace != null && rosterWorkspaceId !== workspace.id && !peopleError;
-  const handleOpenChange = (nextOpen: boolean) => {
+  const peopleFailed = rosterFailed || teamsError;
+  // Hold the section's place while the lists load so the footer doesn't jump, and so an address
+  // of a member can't be taken for a stranger before the roster says who is here.
+  const peopleLoading =
+    workspace != null &&
+    !peopleFailed &&
+    (rosterWorkspaceId !== workspace.id || teamsWorkspaceId !== workspace.id);
+  // A workspace of one, where nobody may be invited, has nobody to add.
+  const showPeople =
+    peopleLoading ||
+    peopleFailed ||
+    canInvite ||
+    workspaceTeams.length > 0 ||
+    workspaceRoster.some((member) => member.user_id !== user?.id);
+
+  const { memberIds, teamIds, emails, hasInvalid } = useMemo(() => pickedSummary(picked), [picked]);
+  const canCreate = name.trim() !== "" && !hasInvalid && workspace != null && !isCreating;
+
+  const retryPeople = (): void => {
+    if (!workspace) return;
+    if (rosterFailed) void loadMembers(workspace.id);
+    if (teamsError) void loadTeams(workspace.id);
+  };
+
+  const reset = (): void => {
+    setName("");
+    setEmoji(null);
+    setDescription("");
+    setPicked([]);
+    setIsDefault(false);
+    setIsOpen(false);
+    setRosterWorkspaceId(null);
+    setTeams([]);
+    setTeamsWorkspaceId(null);
+    setIsCreating(false);
+    setFailure(null);
+    setTakenName(null);
+    setRefocus(null);
+    setSelectedWorkspaceId(null);
+  };
+
+  const closeDialog = (): void => {
+    onOpenChange(false);
+    reset();
+  };
+
+  const handleOpenChange = (nextOpen: boolean): void => {
+    // A create under way can't be taken back, so Esc and an overlay click wait for its answer.
+    if (!nextOpen && isCreating) return;
     onOpenChange(nextOpen);
-    if (!nextOpen) {
-      setName("");
-      setEmoji(null);
-      setMemberSearch("");
-      setSelectedIds(new Set());
-      setRosterWorkspaceId(null);
-      setTeams([]);
-      setTeamsWorkspaceId(null);
-      setSelectedTeamIds(new Set());
-      setGroupsOpen(false);
-      setSelectedWorkspaceId(null);
-    }
+    if (!nextOpen) reset();
   };
 
   // Chained CreateWorkspaceDialog: closing after a successful create keeps the
   // flow alive (the space dialog renders once the store has the workspace);
   // cancelling closes everything.
-  const handleWorkspaceDialogChange = (nextOpen: boolean) => {
+  const handleWorkspaceDialogChange = (nextOpen: boolean): void => {
     if (nextOpen) return;
     const created = useWorkspaceStore
       .getState()
@@ -178,66 +280,116 @@ export default function CreateSpaceDialog({
     if (!created) onOpenChange(false);
   };
 
-  const toggleMember = (member: WorkspaceMember) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (!next.delete(member.user_id)) next.add(member.user_id);
-      return next;
-    });
+  const handleNameChange = (next: string): void => {
+    setName(next);
+    setTakenName(null);
   };
 
-  const toggleTeam = (teamId: string) => {
-    setSelectedTeamIds((prev) => {
-      const next = new Set(prev);
-      if (!next.delete(teamId)) next.add(teamId);
-      return next;
-    });
-  };
-
-  const handleWorkspaceChange = (workspaceId: string) => {
+  const handleWorkspaceChange = (workspaceId: string): void => {
     setSelectedWorkspaceId(workspaceId);
-    setSelectedIds(new Set());
-    setMemberSearch("");
+    setPicked([]);
     setMembersError(false);
-    setSelectedTeamIds(new Set());
+    setFailure(null);
+    // Names are unique per workspace, so the one the last workspace refused may be free here.
+    setTakenName(null);
   };
 
-  const handleCreate = async () => {
-    const trimmed = name.trim();
-    if (!trimmed || isCreating || !workspace) return;
+  const handleCreate = async (): Promise<void> => {
+    if (!canCreate || !workspace) return;
+    const trimmedName = name.trim();
+    const trimmedDescription = description.trim();
     setIsCreating(true);
+    setFailure(null);
+    setTakenName(null);
+
+    let space: SpaceItem | null;
     try {
-      const space = await createSpace(
+      space = await createSpace(
         workspace.id,
-        { name: trimmed, emoji },
-        { memberIds: [...selectedIds], teamIds: [...selectedTeamIds] }
+        {
+          name: trimmedName,
+          emoji,
+          ...(trimmedDescription ? { description: trimmedDescription } : {}),
+          is_default: isDefault,
+          is_open: isOpen,
+        },
+        { memberIds, teamIds }
       );
-      if (space) {
-        revealContainer(space.id, null);
-        setActiveContext(space.id, null);
-        toast({ title: t("notes.spaces.created", { space: trimmed }) });
+    } catch (error) {
+      const classified = classifySpaceError(error);
+      if (classified.kind === "nameTaken") {
+        setTakenName(trimmedName);
+        setRefocus("name");
+      } else {
+        setFailure(
+          classified.kind === "refused"
+            ? { kind: "refused", message: classified.message }
+            : { kind: "general" }
+        );
+        setRefocus("primary");
       }
-      handleOpenChange(false);
-    } catch (err) {
-      toast({
-        title: t("notes.spaces.couldNotCreate"),
-        description: err instanceof Error ? err.message : t("common.unknownError"),
-        variant: "destructive",
-      });
-    } finally {
       setIsCreating(false);
+      return;
     }
+
+    // The teamspace exists from here on, so nothing below may leave it looking uncreated.
+    const failedInvitations = await inviteIntoTeamspace(
+      workspace.id,
+      space?.cloud_space_id ?? null,
+      emails.map(({ email }) => email)
+    );
+    if (revealOnCreate && space) {
+      revealContainer(space.id, null);
+      setActiveContext(space.id, null);
+    }
+    const spaceName = isolate(trimmedName);
+    toast({
+      title:
+        failedInvitations > 0
+          ? t("settingsPage.workspace.teamspaces.form.createdInviteFailed", {
+              space: spaceName,
+              count: failedInvitations,
+            })
+          : t("settingsPage.workspace.teamspaces.form.created", { space: spaceName }),
+    });
+    closeDialog();
   };
+
+  const primaryLabel = isCreating
+    ? t("settingsPage.workspace.teamspaces.form.creating")
+    : failure?.kind === "general"
+      ? t("settingsPage.workspace.teamspaces.members.retry")
+      : t("settingsPage.workspace.teamspaces.create");
+  const topBar = hasInvalid ? (
+    <WorkspaceErrorBar
+      tone="error"
+      message={t("settingsPage.workspace.teamspaces.form.invalidEmail")}
+    />
+  ) : failure?.kind === "refused" ? (
+    <WorkspaceErrorBar tone="error" message={failure.message} />
+  ) : null;
 
   return (
     <>
       <CreateWorkspaceDialog open={needsWorkspace} onOpenChange={handleWorkspaceDialogChange} />
 
       <Dialog open={open && !needsWorkspace} onOpenChange={handleOpenChange}>
-        <DialogContent className="sm:max-w-95 p-6 gap-5">
-          <DialogHeader>
-            <DialogTitle>{t("notes.spaces.createTitle")}</DialogTitle>
-            <DialogDescription>{t("notes.spaces.createDescription")}</DialogDescription>
+        <DialogContent
+          hideCloseButton
+          className="w-[420px] max-w-[calc(100vw-32px)] items-stretch gap-6 rounded-[28px] p-5 sm:max-w-[420px]"
+        >
+          <DialogHeader className="items-center gap-3 space-y-0 text-center sm:text-center">
+            <div className="flex size-[42px] items-center justify-center rounded-full bg-surface-3 text-foreground">
+              <FolderRounded className="size-3.5" aria-hidden="true" />
+            </div>
+            <div className="flex flex-col items-center gap-1.5">
+              <DialogTitle className="text-lg font-medium tracking-normal leading-snug">
+                {t("settingsPage.workspace.teamspaces.form.title")}
+              </DialogTitle>
+              <DialogDescription className="text-sm leading-normal">
+                {t("settingsPage.workspace.teamspaces.form.description")}
+              </DialogDescription>
+            </div>
           </DialogHeader>
 
           {workspacesFailed ? (
@@ -263,6 +415,8 @@ export default function CreateSpaceDialog({
             </div>
           ) : (
             <>
+              {topBar}
+
               {/* Anyone in several workspaces sees the target workspace, even
                   when only one of them is manageable (no picker to infer from).
                   Opening from a workspace row's + already chose the target, so
@@ -277,7 +431,11 @@ export default function CreateSpaceDialog({
                       >
                         {t("settingsPage.workspace.title")}
                       </label>
-                      <Select value={workspace.id} onValueChange={handleWorkspaceChange}>
+                      <Select
+                        value={workspace.id}
+                        onValueChange={handleWorkspaceChange}
+                        disabled={isCreating}
+                      >
                         <SelectTrigger id="create-space-workspace">
                           <SelectValue />
                         </SelectTrigger>
@@ -303,162 +461,184 @@ export default function CreateSpaceDialog({
                 </div>
               )}
 
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <label
                   htmlFor="create-space-name"
                   className="text-xs font-medium text-foreground/50"
                 >
-                  {t("notes.spaces.nameAndIconLabel")}
+                  {t("settingsPage.workspace.teamspaces.form.nameAndIcon")}
                 </label>
                 <SpaceNameField
                   id="create-space-name"
                   name={name}
                   emoji={emoji}
                   autoFocus
-                  onNameChange={setName}
+                  readOnly={isCreating}
+                  invalid={takenName !== null}
+                  describedBy={takenName !== null ? nameErrorId : undefined}
+                  inputRef={nameInputRef}
+                  onNameChange={handleNameChange}
                   onEmojiChange={setEmoji}
-                  onEnter={() => handleCreate()}
+                  onEnter={() => void handleCreate()}
+                />
+                {takenName !== null && (
+                  <p id={nameErrorId} role="alert" className="text-xs text-destructive">
+                    {t("settingsPage.workspace.teamspaces.form.nameTaken", {
+                      name: isolate(takenName),
+                    })}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label
+                  htmlFor="create-space-description"
+                  className="text-xs font-medium text-foreground/50"
+                >
+                  {t("settingsPage.workspace.teamspaces.form.descriptionLabel")}
+                </label>
+                <Textarea
+                  id="create-space-description"
+                  dir="auto"
+                  value={description}
+                  maxLength={DESCRIPTION_MAX_LENGTH}
+                  rows={3}
+                  readOnly={isCreating}
+                  placeholder={t("settingsPage.workspace.teamspaces.form.descriptionPlaceholder")}
+                  onChange={(event) => setDescription(event.target.value)}
+                  className="min-h-20 resize-none text-sm"
                 />
               </div>
 
-              {/* A workspace of one has nobody to add; the section only
-                  appears once the roster shows other people (or failed). */}
-              {(peopleLoading || peopleError || candidates.length > 0) && (
-                <div className="space-y-1.5">
-                  <p className="text-xs font-medium text-foreground/50">
-                    {t("notes.spaces.members.addPeople")}
-                  </p>
+              {showPeople && (
+                <div className="space-y-2">
+                  <label
+                    htmlFor="create-space-people"
+                    className="text-xs font-medium text-foreground/50"
+                  >
+                    {t("settingsPage.workspace.teamspaces.form.people")}
+                  </label>
                   {peopleLoading ? (
-                    <div className="h-24 rounded-lg bg-foreground/5 dark:bg-white/5 animate-pulse" />
-                  ) : peopleError ? (
+                    <div className="h-10 rounded-lg bg-foreground/5 dark:bg-white/5 animate-pulse" />
+                  ) : peopleFailed ? (
                     <div className="rounded border border-border/70 dark:border-border-subtle/60 px-3 py-2.5 flex items-center justify-between gap-2">
                       <p className="text-xs text-muted-foreground">
-                        {t("settingsPage.workspace.members.loadError")}
+                        {rosterFailed
+                          ? t("settingsPage.workspace.members.loadError")
+                          : t("notes.spaces.teams.loadError")}
                       </p>
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => {
-                          if (workspace) void loadMembers(workspace.id);
-                        }}
+                        onClick={retryPeople}
                         className="h-6 px-2 text-xs shrink-0"
                       >
                         {t("settingsPage.workspace.loadError.retry")}
                       </Button>
                     </div>
                   ) : (
-                    <MemberPickList
-                      members={candidates}
-                      search={memberSearch}
-                      onSearchChange={setMemberSearch}
-                      onSelect={toggleMember}
-                      selectedIds={selectedIds}
-                      currentUserId={user?.id}
+                    <SpacePeopleField
+                      id="create-space-people"
+                      roster={workspaceRoster}
+                      groups={workspaceTeams}
+                      hiddenUserIds={hiddenUserIds}
+                      canInvite={canInvite}
+                      inviteRoleChoice={false}
+                      picked={picked}
+                      onChange={setPicked}
+                      disabled={isCreating}
+                      placeholder={t("settingsPage.workspace.teamspaces.form.peoplePlaceholder")}
                     />
                   )}
                 </div>
               )}
 
-              {(teamsError || workspaceTeams.length > 0) && (
-                <div className="space-y-1.5">
-                  <div className="-mx-1">
-                    <button
-                      type="button"
-                      aria-expanded={groupsOpen}
-                      onClick={() => setGroupsOpen((open) => !open)}
-                      className={cn(
-                        "flex w-full min-w-0 items-center gap-1.5 h-8 px-1.5 rounded-md",
-                        "transition-colors duration-150 outline-none",
-                        "hover:bg-foreground/4 dark:hover:bg-white/4",
-                        "focus-visible:ring-1 focus-visible:ring-ring/30"
-                      )}
-                    >
-                      <ChevronRight
-                        size={12}
-                        aria-hidden="true"
-                        className={cn(
-                          "shrink-0 text-foreground/45 transition-transform duration-150",
-                          groupsOpen ? "rotate-90" : "rtl:rotate-180"
-                        )}
-                      />
-                      <span className="text-xs font-medium text-foreground/50 truncate">
-                        {t("notes.spaces.groups.optional")}
-                      </span>
-                      {selectedTeamIds.size > 0 && (
-                        <span className="ms-auto text-[10px] text-foreground/45 shrink-0">
-                          {selectedTeamIds.size}
-                        </span>
-                      )}
-                    </button>
-                  </div>
-                  {groupsOpen &&
-                    (teamsError ? (
-                      <div className="rounded border border-border/70 dark:border-border-subtle/60 px-3 py-2.5 flex items-center justify-between gap-2">
-                        <p className="text-xs text-muted-foreground">
-                          {t("notes.spaces.teams.loadError")}
-                        </p>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            if (workspace) void loadTeams(workspace.id);
-                          }}
-                          className="h-6 px-2 text-xs shrink-0"
-                        >
-                          {t("settingsPage.workspace.loadError.retry")}
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="rounded border border-border/70 dark:border-border-subtle/60 overflow-y-auto max-h-36 p-1">
-                        {workspaceTeams.map((team) => {
-                          const isSelected = selectedTeamIds.has(team.id);
-                          return (
-                            <button
-                              key={team.id}
-                              type="button"
-                              aria-pressed={isSelected}
-                              onClick={() => toggleTeam(team.id)}
-                              className={cn(
-                                "flex items-center gap-2 w-full px-2 h-8 rounded-md text-start",
-                                "transition-colors duration-150 outline-none",
-                                "hover:bg-foreground/4 dark:hover:bg-white/4",
-                                "focus-visible:ring-1 focus-visible:ring-ring/30"
-                              )}
-                            >
-                              <span dir="auto" className="text-xs text-foreground truncate flex-1">
-                                {team.name}
-                              </span>
-                              <span className="text-[10px] text-foreground/45 shrink-0">
-                                {t("settingsPage.workspace.teams.memberCount", {
-                                  count: team.member_count ?? 0,
-                                })}
-                              </span>
-                              {isSelected && <Check size={11} className="text-primary shrink-0" />}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ))}
-                </div>
+              {failure?.kind === "general" && (
+                <p role="alert" className="text-center text-sm text-destructive">
+                  {t("settingsPage.workspace.teamspaces.form.failed")}
+                </p>
               )}
 
-              <DialogFooter>
-                <Button
-                  variant="ghost"
-                  onClick={() => handleOpenChange(false)}
+              <div className="divide-y divide-border/60 overflow-hidden rounded-xl bg-surface-1">
+                <FlagRow
+                  icon={UserPlus}
+                  title={t("settingsPage.workspace.teamspaces.form.defaultTitle")}
+                  body={t("settingsPage.workspace.teamspaces.form.defaultBody")}
+                  checked={isDefault}
                   disabled={isCreating}
-                >
-                  {t("common.cancel")}
-                </Button>
-                <Button onClick={handleCreate} disabled={!name.trim() || isCreating || !workspace}>
-                  {showSpinner && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
-                  {t("notes.spaces.create")}
-                </Button>
-              </DialogFooter>
+                  onChange={setIsDefault}
+                />
+                <FlagRow
+                  icon={LogIn}
+                  title={t("settingsPage.workspace.teamspaces.form.openTitle")}
+                  body={t("settingsPage.workspace.teamspaces.form.openBody")}
+                  checked={isOpen}
+                  disabled={isCreating}
+                  onChange={setIsOpen}
+                />
+              </div>
             </>
           )}
+
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => handleOpenChange(false)}
+              disabled={isCreating}
+              className={SECONDARY_BUTTON}
+            >
+              {t("common.cancel")}
+            </button>
+            {!workspacesFailed && (
+              <button
+                ref={primaryRef}
+                type="button"
+                onClick={() => void handleCreate()}
+                disabled={!canCreate}
+                className={PRIMARY_BUTTON}
+              >
+                {isCreating ? (
+                  showSpinner && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                ) : failure?.kind === "general" ? null : (
+                  <Plus className="size-3.5" aria-hidden="true" />
+                )}
+                {primaryLabel}
+              </button>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+interface FlagRowProps {
+  icon: IconComponent;
+  title: string;
+  body: string;
+  checked: boolean;
+  disabled: boolean;
+  onChange: (checked: boolean) => void;
+}
+
+function FlagRow({
+  icon: Icon,
+  title,
+  body,
+  checked,
+  disabled,
+  onChange,
+}: FlagRowProps): ReactElement {
+  return (
+    <div className="flex items-center gap-3 px-3.5 py-3">
+      <div className="min-w-0 flex-1">
+        <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+          <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span className="truncate">{title}</span>
+        </p>
+        <p className="mt-0.5 ps-[22px] text-xs text-muted-foreground">{body}</p>
+      </div>
+      <Toggle checked={checked} onChange={onChange} disabled={disabled} ariaLabel={title} />
+    </div>
   );
 }

@@ -1831,6 +1831,26 @@
           "settings": "Einstellungen",
           "delete": "Teamspace löschen"
         },
+        "form": {
+          "title": "Teamspace erstellen",
+          "description": "Ein gemeinsamer Bereich für die Notizen eines Teams. Alle, die Sie hinzufügen, können lesen und bearbeiten.",
+          "nameAndIcon": "Name und Symbol",
+          "descriptionLabel": "Beschreibung",
+          "people": "Personen",
+          "descriptionPlaceholder": "Aufnahmen und Zusammenfassungen von Vertriebs- und Support-Gesprächen, eine Notiz pro Gespräch.",
+          "peoplePlaceholder": "Namen, E-Mail-Adressen oder Gruppen",
+          "defaultTitle": "Standard-Teamspace",
+          "defaultBody": "Neue Workspace-Mitglieder automatisch hinzufügen.",
+          "openTitle": "Offener Teamspace",
+          "openBody": "Workspace-Mitgliedern den Beitritt erlauben.",
+          "invalidEmail": "Ungültige E-Mail-Adresse",
+          "nameTaken": "Ein Teamspace namens {{name}} existiert bereits",
+          "failed": "Der Teamspace konnte nicht erstellt werden. Ihre Angaben bleiben erhalten. Versuchen Sie es erneut.",
+          "creating": "Wird erstellt",
+          "created": "{{space}} erstellt",
+          "createdInviteFailed_one": "{{space}} erstellt. {{count}} Person konnte nicht eingeladen werden. Laden Sie sie unter Mitglieder ein.",
+          "createdInviteFailed_other": "{{space}} erstellt. {{count}} Personen konnten nicht eingeladen werden. Laden Sie sie unter Mitglieder ein."
+        },
         "picker": {
           "groupPeople_one": "{{count}} Person",
           "groupPeople_other": "{{count}} Personen",
@@ -1849,7 +1869,8 @@
           "groupHasAccess_other": "Hat bereits Zugriff · {{count}} Personen"
         },
         "members": {
-          "invitationPending": "Einladung ausstehend"
+          "invitationPending": "Einladung ausstehend",
+          "retry": "Erneut versuchen"
         }
       },
       "role": {
@@ -3567,12 +3588,7 @@
       "personal": "Persönlich",
       "privateTooltip": "Nur du kannst deinen persönlichen Bereich sehen",
       "newSpace": "Neuer Team-Bereich",
-      "createTitle": "Team-Bereich erstellen",
-      "createDescription": "Ein gemeinsamer Bereich in einem Workspace für die Personen und Gruppen, die du hinzufügst.",
       "nameAndIconLabel": "Name und Symbol",
-      "create": "Erstellen",
-      "couldNotCreate": "Bereich konnte nicht erstellt werden",
-      "created": "{{space}} erstellt",
       "changeEmoji": "Emoji ändern",
       "settings": "Einstellungen",
       "settingsTitle": "Space-Einstellungen",
@@ -3680,8 +3696,7 @@
         "loadError": "Gruppen konnten nicht geladen werden."
       },
       "groups": {
-        "title": "Gruppen mit Zugriff",
-        "optional": "Gruppen (optional)"
+        "title": "Gruppen mit Zugriff"
       }
     },
     "structureIntro": {

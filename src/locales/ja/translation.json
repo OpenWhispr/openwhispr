@@ -2560,6 +2560,26 @@
           "settings": "設定",
           "delete": "Teamspace を削除"
         },
+        "form": {
+          "title": "Teamspace を作成",
+          "description": "チームのノートを共有する場所です。追加した全員が閲覧・編集できます。",
+          "nameAndIcon": "名前とアイコン",
+          "descriptionLabel": "説明",
+          "people": "ユーザー",
+          "descriptionPlaceholder": "営業・サポート通話の録音と要約。通話ごとに 1 つのノート。",
+          "peoplePlaceholder": "名前、メールアドレス、またはグループ",
+          "defaultTitle": "デフォルトの Teamspace",
+          "defaultBody": "新しいワークスペースメンバーを自動的に追加します。",
+          "openTitle": "オープンな Teamspace",
+          "openBody": "ワークスペースのメンバーが参加できるようにします。",
+          "invalidEmail": "メールアドレスが無効です",
+          "nameTaken": "{{name}} という名前の Teamspace はすでにあります",
+          "failed": "Teamspace を作成できませんでした。入力内容は保存されています。もう一度お試しください。",
+          "creating": "作成中",
+          "created": "{{space}} を作成しました",
+          "createdInviteFailed_one": "{{space}} を作成しました。{{count}}人を招待できませんでした。「メンバー」から招待してください。",
+          "createdInviteFailed_other": "{{space}} を作成しました。{{count}}人を招待できませんでした。「メンバー」から招待してください。"
+        },
         "picker": {
           "groupPeople_one": "{{count}}人",
           "groupPeople_other": "{{count}}人",
@@ -2578,7 +2598,8 @@
           "groupHasAccess_other": "すでにアクセス権があります · {{count}}人"
         },
         "members": {
-          "invitationPending": "招待は保留中"
+          "invitationPending": "招待は保留中",
+          "retry": "もう一度試す"
         }
       },
       "role": {
@@ -2959,12 +2980,7 @@
       "personal": "個人",
       "privateTooltip": "パーソナルスペースはあなただけが見られます",
       "newSpace": "新しいチームスペース",
-      "createTitle": "チームスペースを作成",
-      "createDescription": "ワークスペース内の共有エリアです。追加した人やグループがアクセスできます。",
       "nameAndIconLabel": "名前とアイコン",
-      "create": "作成",
-      "couldNotCreate": "スペースを作成できませんでした",
-      "created": "{{space}} を作成しました",
       "changeEmoji": "絵文字を変更",
       "settings": "設定",
       "settingsTitle": "スペースの設定",
@@ -3072,8 +3088,7 @@
         "loadError": "グループを読み込めませんでした。"
       },
       "groups": {
-        "title": "アクセスできるグループ",
-        "optional": "グループ（任意）"
+        "title": "アクセスできるグループ"
       }
     },
     "structureIntro": {

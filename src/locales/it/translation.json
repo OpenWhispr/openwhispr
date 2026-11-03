@@ -2560,6 +2560,26 @@
           "settings": "Impostazioni",
           "delete": "Elimina teamspace"
         },
+        "form": {
+          "title": "Crea teamspace",
+          "description": "Un'area condivisa per le note di un team. Tutti quelli che aggiungi potranno leggere e modificare.",
+          "nameAndIcon": "Nome e icona",
+          "descriptionLabel": "Descrizione",
+          "people": "Persone",
+          "descriptionPlaceholder": "Registrazioni e riepiloghi delle chiamate di vendita e supporto, una nota per chiamata.",
+          "peoplePlaceholder": "Nomi, email o gruppi",
+          "defaultTitle": "Teamspace predefinito",
+          "defaultBody": "Aggiungi automaticamente i nuovi membri dell'area di lavoro.",
+          "openTitle": "Teamspace aperto",
+          "openBody": "Consenti ai membri dell'area di lavoro di unirsi.",
+          "invalidEmail": "Email non valida",
+          "nameTaken": "Esiste già un teamspace chiamato {{name}}",
+          "failed": "Impossibile creare il teamspace. I tuoi dati sono stati conservati. Riprova.",
+          "creating": "Creazione",
+          "created": "{{space}} creato",
+          "createdInviteFailed_one": "{{space}} è stato creato. Impossibile invitare {{count}} persona. Invitala da Membri.",
+          "createdInviteFailed_other": "{{space}} è stato creato. Impossibile invitare {{count}} persone. Invitale da Membri."
+        },
         "picker": {
           "groupPeople_one": "{{count}} persona",
           "groupPeople_other": "{{count}} persone",
@@ -2578,7 +2598,8 @@
           "groupHasAccess_other": "Ha già accesso · {{count}} persone"
         },
         "members": {
-          "invitationPending": "Invito in sospeso"
+          "invitationPending": "Invito in sospeso",
+          "retry": "Riprova"
         }
       },
       "role": {
@@ -3031,12 +3052,7 @@
       "personal": "Personale",
       "privateTooltip": "Solo tu puoi vedere il tuo spazio personale",
       "newSpace": "Nuovo spazio del team",
-      "createTitle": "Crea spazio del team",
-      "createDescription": "Un'area condivisa all'interno di un workspace per le persone e i gruppi che aggiungi.",
       "nameAndIconLabel": "Nome e icona",
-      "create": "Crea",
-      "couldNotCreate": "Impossibile creare lo spazio",
-      "created": "{{space}} creato",
       "changeEmoji": "Cambia emoji",
       "settings": "Impostazioni",
       "settingsTitle": "Impostazioni spazio",
@@ -3144,8 +3160,7 @@
         "loadError": "Impossibile caricare i gruppi."
       },
       "groups": {
-        "title": "Gruppi con accesso",
-        "optional": "Gruppi (facoltativo)"
+        "title": "Gruppi con accesso"
       }
     },
     "structureIntro": {

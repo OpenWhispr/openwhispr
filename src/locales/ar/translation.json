@@ -2741,12 +2741,7 @@
       "personal": "شخصي",
       "privateTooltip": "أنت فقط من يمكنه رؤية مساحتك الشخصية",
       "newSpace": "مساحة فريق جديدة",
-      "createTitle": "إنشاء مساحة فريق",
-      "createDescription": "منطقة مشتركة داخل مساحة عمل للأشخاص والمجموعات الذين تضيفهم.",
       "nameAndIconLabel": "الاسم والأيقونة",
-      "create": "إنشاء",
-      "couldNotCreate": "تعذر إنشاء المساحة",
-      "created": "تم إنشاء {{space}}",
       "changeEmoji": "تغيير الرمز التعبيري",
       "settings": "الإعدادات",
       "settingsTitle": "إعدادات المساحة",
@@ -2866,8 +2861,7 @@
         "loadError": "تعذر تحميل المجموعات."
       },
       "groups": {
-        "title": "المجموعات التي لديها وصول",
-        "optional": "المجموعات (اختياري)"
+        "title": "المجموعات التي لديها وصول"
       }
     },
     "structureIntro": {
@@ -3982,6 +3976,30 @@
           "settings": "الإعدادات",
           "delete": "حذف مساحة الفريق"
         },
+        "form": {
+          "title": "إنشاء مساحة فريق",
+          "description": "منطقة مشتركة لملاحظات الفريق. يمكن لكل من تضيفه القراءة والتعديل.",
+          "nameAndIcon": "الاسم والأيقونة",
+          "descriptionLabel": "الوصف",
+          "people": "الأشخاص",
+          "descriptionPlaceholder": "تسجيلات وملخصات لمكالمات المبيعات والدعم، ملاحظة واحدة لكل مكالمة.",
+          "peoplePlaceholder": "الأسماء أو البريد الإلكتروني أو المجموعات",
+          "defaultTitle": "مساحة فريق افتراضية",
+          "defaultBody": "أضف أعضاء مساحة العمل الجدد تلقائيًا.",
+          "openTitle": "مساحة فريق مفتوحة",
+          "openBody": "اسمح لأعضاء مساحة العمل بالانضمام.",
+          "invalidEmail": "بريد إلكتروني غير صالح",
+          "nameTaken": "توجد مساحة فريق باسم {{name}} بالفعل",
+          "failed": "تعذر إنشاء مساحة الفريق. تم حفظ بياناتك. حاول مرة أخرى.",
+          "creating": "جارٍ الإنشاء",
+          "created": "تم إنشاء {{space}}",
+          "createdInviteFailed_zero": "تم إنشاء {{space}}. تعذرت دعوة {{count}} أشخاص. ادعهم من «الأعضاء».",
+          "createdInviteFailed_one": "تم إنشاء {{space}}. تعذرت دعوة {{count}} شخص. ادعه من «الأعضاء».",
+          "createdInviteFailed_two": "تم إنشاء {{space}}. تعذرت دعوة {{count}} شخصين. ادعهما من «الأعضاء».",
+          "createdInviteFailed_few": "تم إنشاء {{space}}. تعذرت دعوة {{count}} أشخاص. ادعهم من «الأعضاء».",
+          "createdInviteFailed_many": "تم إنشاء {{space}}. تعذرت دعوة {{count}} شخصًا. ادعهم من «الأعضاء».",
+          "createdInviteFailed_other": "تم إنشاء {{space}}. تعذرت دعوة {{count}} شخص. ادعهم من «الأعضاء»."
+        },
         "picker": {
           "groupPeople_zero": "{{count}} أشخاص",
           "groupPeople_one": "{{count}} شخص",
@@ -4012,7 +4030,8 @@
           "groupHasAccess_other": "لديه صلاحية الوصول بالفعل · {{count}} شخص"
         },
         "members": {
-          "invitationPending": "الدعوة قيد الانتظار"
+          "invitationPending": "الدعوة قيد الانتظار",
+          "retry": "حاول مرة أخرى"
         }
       },
       "role": {

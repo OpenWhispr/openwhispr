@@ -262,6 +262,7 @@ function TeamspacesPage({ workspace, onOpenTeamspace }: PageProps): React.ReactE
           if (!open) void reload();
         }}
         initialWorkspaceId={workspace.id}
+        revealOnCreate={false}
       />
 
       {settingsSpace && (

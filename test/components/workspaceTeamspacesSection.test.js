@@ -652,6 +652,8 @@ test("the Create button opens the dialog for this workspace and reloads when it 
   const container = await mount(t, Section);
   assert.equal(globalThis.__createDialog.open, false);
   assert.equal(globalThis.__createDialog.initialWorkspaceId, "w1");
+  // The page sits behind the modal, so a new teamspace must not move the notes view.
+  assert.equal(globalThis.__createDialog.revealOnCreate, false);
 
   await React.act(async () => propsOf(buttonWithText(container, `${KEY}.create`)).onClick());
   assert.equal(globalThis.__createDialog.open, true);

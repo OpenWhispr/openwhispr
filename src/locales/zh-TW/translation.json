@@ -2560,6 +2560,26 @@
           "settings": "設定",
           "delete": "刪除 Teamspace"
         },
+        "form": {
+          "title": "建立 Teamspace",
+          "description": "團隊筆記的共享區域。你新增的每個人都可以閱讀和編輯。",
+          "nameAndIcon": "名稱與圖示",
+          "descriptionLabel": "描述",
+          "people": "人員",
+          "descriptionPlaceholder": "銷售與支援通話的錄音和摘要，每通電話一則筆記。",
+          "peoplePlaceholder": "姓名、電子郵件或群組",
+          "defaultTitle": "預設 Teamspace",
+          "defaultBody": "自動加入新的工作區成員。",
+          "openTitle": "開放 Teamspace",
+          "openBody": "允許工作區成員加入。",
+          "invalidEmail": "電子郵件無效",
+          "nameTaken": "已有名為 {{name}} 的 Teamspace",
+          "failed": "無法建立 Teamspace。你填寫的內容已保留。請重試。",
+          "creating": "建立中",
+          "created": "已建立 {{space}}",
+          "createdInviteFailed_one": "已建立 {{space}}。無法邀請 {{count}} 人。請在「成員」中邀請。",
+          "createdInviteFailed_other": "已建立 {{space}}。無法邀請 {{count}} 人。請在「成員」中邀請。"
+        },
         "picker": {
           "groupPeople_one": "{{count}} 人",
           "groupPeople_other": "{{count}} 人",
@@ -2578,7 +2598,8 @@
           "groupHasAccess_other": "已有存取權 · {{count}} 人"
         },
         "members": {
-          "invitationPending": "邀請待處理"
+          "invitationPending": "邀請待處理",
+          "retry": "重試"
         }
       },
       "role": {
@@ -3031,12 +3052,7 @@
       "personal": "個人",
       "privateTooltip": "只有你可以看到你的個人空間",
       "newSpace": "新增團隊空間",
-      "createTitle": "建立團隊空間",
-      "createDescription": "工作區內的共享區域，供你加入的人員和群組存取。",
       "nameAndIconLabel": "名稱與圖示",
-      "create": "建立",
-      "couldNotCreate": "無法建立空間",
-      "created": "已建立 {{space}}",
       "changeEmoji": "變更表情符號",
       "settings": "設定",
       "settingsTitle": "空間設定",
@@ -3144,8 +3160,7 @@
         "loadError": "無法載入群組。"
       },
       "groups": {
-        "title": "有存取權的群組",
-        "optional": "群組（選填）"
+        "title": "有存取權的群組"
       }
     },
     "structureIntro": {

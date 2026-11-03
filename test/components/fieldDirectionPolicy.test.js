@@ -70,6 +70,8 @@ const EXPECTED_SHARED_FIELD_DIRECTIONS = {
   "src/components/dictionary/DictionaryToolbar.tsx": ["auto"],
   "src/components/dictionary/DictionaryWordList.tsx": ["auto"],
   "src/components/notes/ActionManagerDialog.tsx": ["auto", "auto", "auto"],
+  // A teamspace's description is prose in any script.
+  "src/components/notes/CreateSpaceDialog.tsx": ["auto"],
   "src/components/notes/DeleteSpaceDialog.tsx": ["auto"],
   "src/components/notes/FolderNotesPopover.tsx": ["auto"],
   // Names, emails and groups typed in one field: a name may be in any script.

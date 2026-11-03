@@ -1831,6 +1831,26 @@
           "settings": "Settings",
           "delete": "Delete teamspace"
         },
+        "form": {
+          "title": "Create teamspace",
+          "description": "A shared area for a team's notes. Everyone you add can read and edit.",
+          "nameAndIcon": "Name & icon",
+          "descriptionLabel": "Description",
+          "people": "People",
+          "descriptionPlaceholder": "Recordings and summaries from sales and support calls, one note per call.",
+          "peoplePlaceholder": "Names, emails, or groups",
+          "defaultTitle": "Default teamspace",
+          "defaultBody": "Add new workspace members automatically.",
+          "openTitle": "Open teamspace",
+          "openBody": "Let workspace members join.",
+          "invalidEmail": "Invalid email",
+          "nameTaken": "A teamspace called {{name}} already exists",
+          "failed": "Couldn't create teamspace. Your details are saved. Try again.",
+          "creating": "Creating",
+          "created": "Created {{space}}",
+          "createdInviteFailed_one": "Created {{space}}. Couldn't invite {{count}} person. Invite them from Members.",
+          "createdInviteFailed_other": "Created {{space}}. Couldn't invite {{count}} people. Invite them from Members."
+        },
         "picker": {
           "groupPeople_one": "{{count}} person",
           "groupPeople_other": "{{count}} people",
@@ -1849,7 +1869,8 @@
           "groupHasAccess_other": "Already has access · {{count}} people"
         },
         "members": {
-          "invitationPending": "Invitation pending"
+          "invitationPending": "Invitation pending",
+          "retry": "Try again"
         }
       },
       "role": {
@@ -3567,12 +3588,7 @@
       "personal": "Personal",
       "privateTooltip": "Only you can see your Personal space",
       "newSpace": "New team space",
-      "createTitle": "Create team space",
-      "createDescription": "A shared area inside a workspace for the people and groups you add.",
       "nameAndIconLabel": "Name and icon",
-      "create": "Create",
-      "couldNotCreate": "Couldn't create space",
-      "created": "Created {{space}}",
       "changeEmoji": "Change emoji",
       "settings": "Settings",
       "settingsTitle": "Space settings",
@@ -3680,8 +3696,7 @@
         "loadError": "Couldn't load groups."
       },
       "groups": {
-        "title": "Groups with access",
-        "optional": "Groups (optional)"
+        "title": "Groups with access"
       }
     },
     "structureIntro": {
