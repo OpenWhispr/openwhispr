@@ -24,6 +24,7 @@ export interface ModelCardOption {
   // Shown grayed out and can't be picked; a downloaded one can still be deleted.
   legacy?: boolean;
   policyBlocked?: boolean;
+  policyRefusal?: { labelKey: string; hintKey: string };
 }
 
 const COLOR_CONFIG: Record<
@@ -110,7 +111,11 @@ export function ModelCard({
     <div
       onClick={handleCardClick}
       title={
-        isBlocked ? t("models.policy.modelBlocked") : isLegacy ? t("models.legacyHint") : undefined
+        isBlocked
+          ? t(model.policyRefusal?.hintKey ?? "models.policy.modelBlocked")
+          : isLegacy
+            ? t("models.legacyHint")
+            : undefined
       }
       aria-disabled={isLegacy || isBlocked || undefined}
       className={`relative w-full p-2 rounded-md border text-start transition-colors duration-200 group overflow-hidden ${
@@ -181,7 +186,9 @@ export function ModelCard({
           </span>
         )}
         {isBlocked && (
-          <span className="text-xs text-muted-foreground">{t("models.policy.notApproved")}</span>
+          <span className="text-xs text-muted-foreground">
+            {t(model.policyRefusal?.labelKey ?? "models.policy.notApproved")}
+          </span>
         )}
         {isLegacy && (
           <span className="text-xs font-medium text-muted-foreground px-1.5 py-0.5 bg-muted rounded-sm shrink-0">
@@ -207,7 +214,7 @@ export function ModelCard({
                   aria-label={t("common.delete")}
                   size="icon"
                   variant="ghost"
-                  className="size-6 text-muted-foreground/70 hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,opacity,transform] active:scale-95"
+                  className={`size-6 text-muted-foreground/70 hover:text-destructive ${isBlocked ? "" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"} transition-[color,opacity,transform] active:scale-95`}
                 >
                   <Trash2 size={12} />
                 </Button>

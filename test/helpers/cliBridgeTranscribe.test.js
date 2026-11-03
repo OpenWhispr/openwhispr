@@ -93,6 +93,21 @@ test("CLI filters approvals and refuses a blocked default without switching mode
   assert.equal(calls.transcribed.length, 0);
 });
 
+test("with Local off, the CLI refuses a transcription and lists no local models", async () => {
+  const { bridge, calls } = createBridge(MODELS, {
+    success: true,
+    managed: true,
+    policy: managedPolicy({ transcription: { allowedModes: ["openwhispr"] } }),
+  });
+  const { file } = audioFile();
+
+  await assert.rejects(call(bridge, "POST", "/v1/transcribe", { path: file }), {
+    code: "POLICY_LOCAL_MODE_BLOCKED",
+  });
+  assert.deepEqual((await call(bridge, "GET", "/v1/transcribe/models")).data, []);
+  assert.equal(calls.transcribed.length, 0);
+});
+
 test("POST /v1/transcribe approves the real path and runs the app's default model", async () => {
   const { bridge, calls } = createBridge();
   const { file } = audioFile();

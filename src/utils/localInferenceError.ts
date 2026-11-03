@@ -10,6 +10,7 @@
  */
 
 import { TRUNCATED_OUTPUT_MESSAGE_KEY } from "../services/ai/chatRequestBody";
+import { isLocalChoiceRefusal, LOCAL_MODEL_REFUSAL_MESSAGE_KEYS } from "../stores/policyRules";
 
 export interface LocalInferenceFailure {
   error?: string;
@@ -21,6 +22,7 @@ export interface LocalInferenceError extends Error {
   code?: string;
   messageKey?: string;
   messageParams?: Record<string, string | number>;
+  settingsTarget?: string;
 }
 
 const asPositiveInteger = (value: unknown): number | null =>
@@ -49,13 +51,9 @@ export function buildLocalInferenceError(result: LocalInferenceFailure): LocalIn
   const error: LocalInferenceError = new Error(result.error || "Local inference failed");
   if (result.code) error.code = result.code;
 
-  const policyKeys: Record<string, string> = {
-    POLICY_MODEL_BLOCKED: "models.policy.modelBlocked",
-    POLICY_LOCAL_MODE_BLOCKED: "models.policy.modeBlocked",
-    POLICY_UNRESOLVABLE: "models.policy.unresolved",
-    POLICY_APP_VERSION_BLOCKED: "models.policy.versionBlocked",
-  };
-  if (result.code && policyKeys[result.code]) error.messageKey = policyKeys[result.code];
+  const policyKey = (LOCAL_MODEL_REFUSAL_MESSAGE_KEYS as Record<string, string>)[result.code ?? ""];
+  if (policyKey) error.messageKey = policyKey;
+  if (isLocalChoiceRefusal(result.code)) error.settingsTarget = "llms";
   const details = result.details ?? {};
   if (result.code === "CONTEXT_TOO_LARGE") {
     Object.assign(error, contextTooLarge(details));

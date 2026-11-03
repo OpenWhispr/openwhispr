@@ -148,3 +148,40 @@ test("blocked effective local selections stay inert across inheritance without a
   );
   assert.ok(browser);
 });
+
+test("a refused model's row only names the organization for a refusal it made", async () => {
+  const { localModelRowRefusal, localModelRefusal } =
+    await import("../../src/stores/policyRules.ts");
+  const managed = (transcription, minAppVersion = "1.0.0") => ({
+    status: "managed",
+    appVersion: "1.11.1",
+    policy: {
+      ...managedPolicy({ transcription: { allowedModes: ["local"], ...transcription } }),
+      minAppVersion,
+    },
+  });
+
+  assert.deepEqual(
+    localModelRowRefusal(managed({ allowedLocalModels: ["base"] }), "transcription"),
+    {
+      labelKey: "models.policy.notApproved",
+      hintKey: "models.policy.modelBlocked",
+    }
+  );
+  assert.deepEqual(localModelRowRefusal(managed({ allowedLocalModels: [] }), "transcription"), {
+    labelKey: "models.policy.notApproved",
+    hintKey: "models.policy.emptyIntersection",
+  });
+  assert.deepEqual(
+    localModelRowRefusal({ status: "error", policy: null, appVersion: null }, "transcription"),
+    { labelKey: "models.policy.unavailable", hintKey: "models.policy.unresolved" }
+  );
+  assert.deepEqual(
+    localModelRowRefusal(managed({ allowedLocalModels: null }, "9.9.9"), "transcription"),
+    { labelKey: "models.policy.updateRequired", hintKey: "models.policy.versionBlocked" }
+  );
+  assert.equal(
+    localModelRefusal(managed({ allowedLocalModels: [] }), "transcription").code,
+    "POLICY_MODEL_BLOCKED"
+  );
+});

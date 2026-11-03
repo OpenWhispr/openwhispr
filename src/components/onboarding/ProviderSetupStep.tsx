@@ -34,6 +34,7 @@ import {
   filterByokProviderOptionsByPolicy,
   isModeAllowedByPolicy,
   isLocalModelAllowedByPolicy,
+  localModelRowRefusal,
   type PolicyDecisionSnapshot,
   isProviderAllowedByPolicy,
 } from "../../stores/policyRules";
@@ -1011,9 +1012,8 @@ export function LocalModelSetupStep({
       ...(downloadedWhisper.size > 0 ? ["whisper"] : []),
     ]);
     return LOCAL_ASR_ORGANIZATIONS.filter(({ id }) => {
-      if (id === selectedProvider || id === saved.provider || installedFamilies.has(id)) {
-        return true;
-      }
+      if (id === selectedProvider || installedFamilies.has(id)) return true;
+      if (!restricted && id === saved.provider) return true;
       // Cohere has no automatic language detection, so it is only ever an opt-in.
       if (id === "cohere") return approvedCohereOffered;
       return !restricted || speechFamilyModelIds(id).some(modelAllowed);
@@ -1119,7 +1119,25 @@ export function LocalModelSetupStep({
   }, [approvedFamily]);
 
   // Cohere can't detect a language, and an unsupported one silently means English.
-  const asksCohereLanguage = !assistant && selectedProvider === "cohere";
+  const pendingSelection = readPendingLocalModels()[assistant ? "assistant" : "dictation"];
+  const pendingDownload = assistant
+    ? llmDownload
+    : usesParakeetManager(pendingSelection?.provider ?? "")
+      ? parakeetDownload
+      : whisperDownload;
+  // Only the pending selection will activate in the background. Other transfers
+  // can outlive it when the user cancels the newest of several downloads.
+  const hasPendingDownload = Boolean(
+    pendingSelection &&
+    modelAllowed(pendingSelection.modelId) &&
+    pendingDownload.isDownloadingModel(pendingSelection.modelId)
+  );
+  // A Cohere download keeps going after the member moves to another family, and
+  // activates in the background, so it needs its language until it ends.
+  const asksCohereLanguage =
+    !assistant &&
+    (selectedProvider === "cohere" ||
+      (hasPendingDownload && pendingSelection?.provider === "cohere"));
   const cohereLanguage = COHERE_LANGUAGES.has(getBaseLanguageCode(store.preferredLanguage) ?? "")
     ? store.preferredLanguage
     : "";
@@ -1264,19 +1282,6 @@ export function LocalModelSetupStep({
     parakeet: parakeetDownload.isDownloading,
     llm: llmDownload.isDownloading,
   });
-  const pendingSelection = readPendingLocalModels()[assistant ? "assistant" : "dictation"];
-  const pendingDownload = assistant
-    ? llmDownload
-    : usesParakeetManager(pendingSelection?.provider ?? "")
-      ? parakeetDownload
-      : whisperDownload;
-  // Only the pending selection will activate in the background. Other transfers
-  // can outlive it when the user cancels the newest of several downloads.
-  const hasPendingDownload = Boolean(
-    pendingSelection &&
-    modelAllowed(pendingSelection.modelId) &&
-    pendingDownload.isDownloadingModel(pendingSelection.modelId)
-  );
   const canProceed = selectedReady || (hasPendingDownload && !cohereLanguageMissing);
   const showSkip = (anyDownloadActive && !cohereLanguageMissing) || (assistant && !selectedReady);
 
@@ -1380,6 +1385,10 @@ export function LocalModelSetupStep({
             const download = activeDownload.downloads[model.id];
             const isDownloading = Boolean(download);
             const policyBlocked = !modelAllowed(model.id);
+            const rowRefusal = localModelRowRefusal(
+              usePolicyStore.getState(),
+              assistant ? "llm" : "transcription"
+            );
             const unavailable = parakeetUnavailable && usesParakeetManager(selectedProvider);
             const isSelected =
               !policyBlocked && !unavailable && selectedModel === model.id && isDownloaded;
@@ -1389,7 +1398,7 @@ export function LocalModelSetupStep({
                 key={model.id}
                 title={
                   policyBlocked
-                    ? t("models.policy.modelBlocked")
+                    ? t(rowRefusal.hintKey)
                     : model.legacy
                       ? t("models.legacyHint")
                       : undefined
@@ -1420,8 +1429,11 @@ export function LocalModelSetupStep({
                   </span>
                   <span className="mt-1 block truncate text-sm text-[var(--onboarding-text-secondary)]">
                     {model.size}
-                    {policyBlocked && ` - ${t("models.policy.notApproved")}`}
-                    {!assistant && model.recommended && ` - ${t("common.recommended")}`}
+                    {policyBlocked && ` - ${t(rowRefusal.labelKey)}`}
+                    {!assistant &&
+                      model.recommended &&
+                      !policyBlocked &&
+                      ` - ${t("common.recommended")}`}
                     {model.legacy && ` - ${t("models.legacy")}`}
                   </span>
                 </button>

@@ -1174,3 +1174,51 @@ test("a rotated credential keeps the account's fail-closed marker", async (t) =>
   assert.equal(rotated.success, false);
   assert.equal(rotated.code, "POLICY_UNRESOLVABLE");
 });
+
+test("the held verdict comes from disk without touching the network", async (t) => {
+  const context = rotationSetup();
+  t.after(context.cleanup);
+  await context.manager.getPolicy({ accountId: "account-a", expectedAuthGeneration: 1 });
+  const restarted = createWorkspacePolicyManager({
+    cachePath: context.cachePath,
+    getApiUrl: () => "https://api.openwhispr.test",
+    getAppVersion: () => "1.8.1",
+    proxyFetch: async () => {
+      throw new Error("a held verdict needs no request");
+    },
+    tokenStore: { getState: () => ({ token: "token-a", generation: 1 }) },
+    getValidatedAccountId: () => "account-a",
+    logger: { error() {}, warn() {} },
+  });
+
+  const held = restarted.heldPolicy({ accountId: "account-a", expectedAuthGeneration: 1 });
+
+  assert.equal(held.success, true);
+  assert.equal(held.managed, true);
+  assert.equal(held.authGeneration, 1);
+});
+
+test("a rotated credential holds its account's verdict, and another account holds nothing", async (t) => {
+  const context = rotationSetup();
+  t.after(context.cleanup);
+  await context.manager.getPolicy({ accountId: "account-a", expectedAuthGeneration: 1 });
+  context.rotate("token-b", 2);
+
+  assert.equal(
+    context.manager.heldPolicy({ accountId: "account-a", expectedAuthGeneration: 2 }).managed,
+    true
+  );
+
+  context.rotate("token-c", 3);
+  context.validated.accountId = "account-b";
+  assert.equal(
+    context.manager.heldPolicy({ accountId: "account-b", expectedAuthGeneration: 3 }),
+    null
+  );
+});
+
+test("nothing is held for an identity that never fetched a policy", () => {
+  const { manager } = setup(async () => response(500, {}));
+
+  assert.equal(manager.heldPolicy({ accountId: "account-a", expectedAuthGeneration: 1 }), null);
+});

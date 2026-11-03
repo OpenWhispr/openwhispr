@@ -125,6 +125,7 @@ function scenario(t, { decode, stream, online = false } = {}) {
   t.after(() => invoke("dismiss-dictation-preview"));
   return {
     calls,
+    parakeet: target.parakeetManager,
     invoke,
     start,
     audio,
@@ -294,3 +295,40 @@ for (const stage of ["start", "send", "finish", "callback", "chunk"]) {
     assert.deepEqual(s.calls.appended, []);
   });
 }
+
+test("a refusal landing after the preview ended never reaches a later dictation", async (t) => {
+  const refusal = deferred();
+  const s = scenario(t, {
+    online: true,
+    stream: {
+      sendPcm16() {},
+      finish: async () => ({ text: "", truncated: false }),
+      abort() {},
+    },
+  });
+  const manager = s.parakeet;
+  manager.createOnlineStream = () => refusal.promise;
+
+  const starting = s.start("online-model");
+  await s.invoke("hide-dictation-preview");
+  refusal.resolve(Promise.reject(blockedModel()));
+  await starting;
+
+  assert.deepEqual(await s.invoke("stop-dictation-preview"), {
+    success: true,
+    streamed: false,
+    text: "",
+  });
+});
+
+test("a preview refusal is reported by one stop only", async (t) => {
+  const s = scenario(t, { online: true, stream: blockedModel() });
+  await s.start("online-model");
+
+  assert.equal((await s.invoke("stop-dictation-preview")).code, blockedModel().code);
+  assert.deepEqual(await s.invoke("stop-dictation-preview"), {
+    success: true,
+    streamed: false,
+    text: "",
+  });
+});

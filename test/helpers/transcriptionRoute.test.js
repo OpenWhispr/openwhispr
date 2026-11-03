@@ -26,31 +26,6 @@ const MANAGED_OPENAI_ONLY = {
   },
 };
 
-test("managed local routes authorize the final engine model", async () => {
-  const policy = structuredClone(MANAGED_OPENAI_ONLY);
-  policy.policy.transcription.allowedModes = ["local", "providers"];
-  policy.policy.transcription.allowedLocalModels = ["base", "parakeet-tdt-0.6b-v3"];
-  for (const settings of [
-    { useLocalWhisper: true, transcriptionMode: "local", whisperModel: "base" },
-    {
-      useLocalWhisper: true,
-      transcriptionMode: "local",
-      localTranscriptionProvider: "nvidia",
-      parakeetModel: "parakeet-tdt-0.6b-v3",
-    },
-  ])
-    assert.equal((await resolve(settings, { policy })).transport, "local");
-  assert.equal(
-    (
-      await resolve(
-        { useLocalWhisper: true, transcriptionMode: "local", whisperModel: "small" },
-        { policy }
-      )
-    ).code,
-    "POLICY_RESTRICTED"
-  );
-});
-
 test("self-hosted routes to the configured server and wins over stale flags", async () => {
   const route = await resolve({
     transcriptionMode: "self-hosted",

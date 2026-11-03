@@ -319,6 +319,21 @@ test("switching accounts cancels old-account work before the new verdict, which 
   assert.equal(app.whisperServer.stops, 1);
 });
 
+test("clearing a session that never existed leaves a guest's running work alone", async (t) => {
+  tokenState = { token: null, generation: 40 };
+  const app = build();
+  t.after(() => app.teardown());
+  await settle();
+  const job = await app.gate.authorize("transcription", "base");
+
+  app.tokenChanged({ token: null, generation: 41 });
+
+  assert.equal(job.signal.aborted, false);
+  assert.equal(app.gate.failure("transcription", "base"), null);
+  assert.deepEqual(app.stoppedMeetings, [], "a guest's meeting keeps recording");
+  app.gate.release(job);
+});
+
 test("signing out cancels running work; the guest it leaves can start new work", async (t) => {
   const app = await signedIn(t, {
     policy: () => managed(["base", "parakeet-tdt-0.6b-v3"]),

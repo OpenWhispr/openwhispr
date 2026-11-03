@@ -75,7 +75,7 @@ const WHISPER_BODY = Buffer.alloc(256 * 1024, 3);
 const routes = new Map();
 const server = http.createServer((request, response) => {
   const route = routes.get(request.url);
-  if (route) route(request, response);
+  if (typeof route === "function") route(request, response);
   else {
     response.writeHead(404);
     response.end();

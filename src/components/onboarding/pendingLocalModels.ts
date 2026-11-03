@@ -78,7 +78,12 @@ export function consumePendingLocalModel(
   const selections = readPendingLocalModels();
   const selection = selections[kind];
   if (!selection || selection.modelId !== modelId) return null;
-  const accountChanged = policy.accountId != null && selection.accountId !== policy.accountId;
+  // A selection naming no account was a guest's: signing in moves it to the new
+  // account, whose settled verdict judges it below.
+  const accountChanged =
+    policy.accountId != null &&
+    selection.accountId != null &&
+    selection.accountId !== policy.accountId;
   if (
     !accountChanged &&
     (policy.status === "loading" ||

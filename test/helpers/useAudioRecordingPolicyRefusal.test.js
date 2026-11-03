@@ -96,7 +96,7 @@ for (const [label, transcription, title] of [
   [
     "an unapproved model",
     { allowedModes: ["local"], allowedLocalModels: ["base"] },
-    "Your organization does not approve this local model. Choose an approved model.",
+    "Choose a local model your organization has approved.",
   ],
   [
     "Local off with nowhere to move",

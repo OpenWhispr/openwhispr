@@ -210,6 +210,7 @@
     "skip": "Überspringen",
     "policyAiProcessingRestricted": "Die KI-Verarbeitung ist durch Ihre Organisation eingeschränkt.",
     "policyAgentRestricted": "Die Nutzung des KI-Assistenten ist durch Ihre Organisation eingeschränkt.",
+    "policyAccountChanged": "Ihr Konto hat sich geändert, daher wurde diese Antwort abgebrochen.",
     "policyTranscriptionRestricted": "Die Transkription ist durch Ihre Organisation eingeschränkt.",
     "policyUnresolved": "Die Einstellungen Ihrer Organisation wurden noch nicht geladen. Versuchen Sie es gleich noch einmal.",
     "managedConfigLoading": "Die verwaltete Einrichtung Ihrer Organisation wird überprüft. Versuchen Sie es gleich noch einmal.",
@@ -443,7 +444,7 @@
         "descriptionLineTwo": "auf Ihrem Gerät laufen sollen.",
         "providerLabel": "Anbieter",
         "cohereLanguageLabel": "Diktiersprache",
-        "cohereLanguageHint": "Cohere erkennt deine Sprache nicht automatisch. Wähle die Sprache, in der du diktierst.",
+        "cohereLanguageHint": "Cohere erkennt Ihre Sprache nicht automatisch. Wählen Sie die Sprache, in der Sie diktieren.",
         "cohereLanguagePlaceholder": "Sprache auswählen",
         "download": "Herunterladen",
         "downloadingShort": "Wird geladen",
@@ -2919,14 +2920,19 @@
       "localModelBusy": "Das lokale Modell bearbeitet noch eine andere Anfrage. Warten Sie, bis sie abgeschlossen ist, und versuchen Sie es dann erneut."
     },
     "policy": {
-      "guidance": "Wähle ein von deiner Organisation genehmigtes lokales Modell.",
-      "notApproved": "Nicht genehmigt",
-      "noneSupported": "Diese App-Version oder dieses Gerät unterstützt kein genehmigtes lokales Modell. Aktualisiere OpenWhispr oder kontaktiere deine Administration.",
-      "emptyIntersection": "Für diese Aufgabe gibt es in deinem Arbeitsbereich keine genehmigten lokalen Modelle.",
-      "modelBlocked": "Deine Organisation hat dieses lokale Modell nicht genehmigt. Wähle ein genehmigtes Modell.",
-      "modeBlocked": "Deine Organisation hat die lokale Verarbeitung deaktiviert.",
-      "unresolved": "Die Arbeitsbereichsrichtlinie konnte nicht ermittelt werden. Stelle eine Verbindung her und versuche es erneut.",
-      "versionBlocked": "Aktualisiere OpenWhispr, um die genehmigten Modelle deiner Organisation zu nutzen."
+      "guidance": "Ihre Organisation hat diese Modelle genehmigt. Wählen Sie eines, das zu Ihrem Computer passt.",
+      "notApproved": "Von Ihrer Organisation nicht genehmigt",
+      "noneSupported": "Ihre Organisation hat kein lokales Modell genehmigt, das diese App-Version unterstützt. Aktualisieren Sie OpenWhispr oder wenden Sie sich an Ihre Administration.",
+      "emptyIntersection": "Ihre Arbeitsbereiche haben kein gemeinsames genehmigtes lokales Modell. Wenden Sie sich an Ihre Administration.",
+      "modelBlocked": "Wählen Sie ein von Ihrer Organisation genehmigtes lokales Modell.",
+      "modeBlocked": "Ihre Organisation hat die lokale Verarbeitung deaktiviert.",
+      "unresolved": "Die Arbeitsbereichsrichtlinie konnte nicht ermittelt werden. Stellen Sie eine Verbindung her und versuchen Sie es erneut.",
+      "versionBlocked": "Aktualisieren Sie OpenWhispr, um die genehmigten Modelle Ihrer Organisation zu nutzen.",
+      "updateRequired": "Update erforderlich",
+      "unavailable": "Derzeit nicht verfügbar",
+      "installedTitle": "Installierte lokale Modelle",
+      "installedHint": "Ihre Organisation hat die lokale Verarbeitung deaktiviert, daher können diese Modelle nicht ausgeführt werden. Sie bleiben auf Ihrem Computer, bis Sie sie löschen.",
+      "chooseModel": "Lokales Modell auswählen"
     }
   },
   "insights": {

@@ -1314,7 +1314,7 @@ for (const [label, policy, content] of [
   [
     "a blocked model",
     { allowedModes: ["local", "providers"], allowedLocalModels: ["qwen3-1.7b-q8_0"] },
-    "Your organization does not approve this local model. Choose an approved model.",
+    "Choose a local model your organization has approved.",
   ],
   [
     "Local turned off with nowhere to move",
@@ -1382,9 +1382,6 @@ test("a blocked Voice Assistant answers with the refusal, not on the remote Chat
   await captured.sendToAI("What's on my calendar?", []);
   assert.equal(sentMessages.length, 0, "nothing reached any model");
   const reply = getMessages().at(-1);
-  assert.equal(
-    reply.content,
-    "Your organization does not approve this local model. Choose an approved model."
-  );
+  assert.equal(reply.content, "Choose a local model your organization has approved.");
   assert.deepEqual(reply.error, { settingsTarget: "llms" });
 });

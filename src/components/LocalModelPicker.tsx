@@ -11,7 +11,7 @@ import { MODEL_PICKER_COLORS, type ColorScheme } from "../utils/modelPickerStyle
 import { getProviderIcon, isMonochromeProvider } from "../utils/providerIcons";
 import { usePolicySnapshot } from "../hooks/usePolicy";
 import { usePolicyStore } from "../stores/policyStore";
-import { isLocalModelAllowedByPolicy } from "../stores/policyRules";
+import { isLocalModelAllowedByPolicy, localModelRowRefusal } from "../stores/policyRules";
 import { isListedModel } from "../models/legacyModels";
 
 export interface LocalModel {
@@ -162,7 +162,6 @@ export default function LocalModelPicker({
 
   const handleDownload = useCallback(
     (modelId: string) => {
-      if (!isLocalModelAllowedByPolicy(usePolicyStore.getState(), scope, modelId)) return;
       const selectedWhenStarted = selectionStateRef.current.selectedModel;
 
       downloadModel(modelId, (downloadedId) => {
@@ -268,6 +267,7 @@ export default function LocalModelPicker({
               recommended: model.recommended,
               legacy: model.legacy,
               policyBlocked: !modelAllowed(model.id),
+              policyRefusal: localModelRowRefusal(usePolicyStore.getState(), scope),
               isDownloaded: isModelDownloaded(model),
               isDownloading: isDownloadingModel(model.id),
               isCancelling: isCancellingModel(model.id),

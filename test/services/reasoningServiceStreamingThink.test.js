@@ -203,6 +203,78 @@ test("a same-account token rotation never ends a running stream, whatever its tr
   }
 });
 
+test("a stream ends only on a settled denial or a lost account, and then closes its request", async (t) => {
+  const { reasoningService, vite } = await loadReasoningService(
+    t,
+    "openwhispr-stream-unresolved-test-",
+    {
+      window: {
+        electronAPI: {
+          llamaServerStart: async () => ({ success: true, port: 11434 }),
+          getAppVersion: async () => ({ version: "1.11.1" }),
+        },
+      },
+    }
+  );
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  for (const sdk of [false, true]) {
+    for (const [label, change, ending] of [
+      ["an unresolved verdict keeps it", () => ({ status: "error" }), null],
+      ["a suspended policy keeps it", () => ({ status: "loading", accountId: null }), null],
+      ["signing in from a guest keeps it", () => ({ accountId: "new" }), null],
+      ["signing out ends it", () => ({ status: "idle", accountId: null }), "POLICY_UNRESOLVABLE"],
+      ["another account ends it", () => ({ accountId: "other" }), "POLICY_UNRESOLVABLE"],
+    ]) {
+      await t.test(`${sdk ? "SDK" : "raw"}: ${label}`, async () => {
+        const startsAsGuest = label.startsWith("signing in");
+        usePolicyStore.setState({
+          status: startsAsGuest ? "idle" : "unmanaged",
+          managed: false,
+          policy: null,
+          accountId: startsAsGuest ? null : "same",
+          authGeneration: 1,
+        });
+        let requestSignal;
+        globalThis.fetch = async (_url, init) => {
+          requestSignal = init?.signal;
+          return sdk
+            ? createOpenAiSseResponse(["first", "second"])
+            : createRawSseResponse(["first", "second"]);
+        };
+        const args = [
+          [{ role: "user", content: "hi" }],
+          "m",
+          "lan",
+          { systemPrompt: "s", disableThinking: true, lanUrl: "http://192.168.1.20:8080" },
+        ];
+        const stream = sdk
+          ? reasoningService.processTextStreamingAI(...args, {})
+          : reasoningService.processTextStreaming(...args);
+        t.after(() => stream.return());
+        const first = await stream.next();
+        assert.equal(sdk ? first.value.text : first.value, "first");
+
+        usePolicyStore.setState(change());
+        if (ending) {
+          await assert.rejects(stream.next(), (error) => {
+            assert.equal(error.code, ending);
+            assert.equal(error.messageKey, "common.policyAccountChanged");
+            return true;
+          });
+          assert.equal(requestSignal?.aborted, true);
+        } else {
+          const second = await stream.next();
+          assert.equal(sdk ? second.value.text : second.value, "second");
+        }
+      });
+    }
+  }
+});
+
 test("local streaming transport shutdown retains a newly learned policy refusal", async (t) => {
   const { reasoningService, vite } = await loadReasoningService(
     t,

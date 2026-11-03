@@ -114,7 +114,9 @@ export function RequiredModelDownloadStep({
       ? t("models.policy.notApproved")
       : failedModels[modelId];
   const hasFailures = required.some((modelId): boolean => !!failedModels[modelId]);
-  const policyFailure = required.find((modelId) => failureCodes[modelId]?.startsWith("POLICY_"));
+  const policyFailure = required.find(
+    (modelId) => failureCodes[modelId]?.startsWith("POLICY_") || isRefused(modelId)
+  );
 
   return (
     <section className={`mt-5 ${SETUP_CARD_CLASS}`}>

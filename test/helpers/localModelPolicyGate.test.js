@@ -460,3 +460,71 @@ test("work run under a running lease keeps its verdict across a rotation with no
   );
   gate.release(lease);
 });
+
+test("a verdict held on disk answers at once, and the refresh behind it can still revoke", async () => {
+  const { createLocalModelPolicyGate } = require("../../src/helpers/localModelPolicyGate");
+  let answer;
+  let lookups = 0;
+  const gate = createLocalModelPolicyGate({
+    getPolicy: () => {
+      lookups++;
+      return new Promise((done) => {
+        answer = done;
+      });
+    },
+    getHeldPolicy: async () => state(["base"], 1),
+    getIdentity: () => 1,
+    getAppVersion: () => "1.11.1",
+  });
+
+  const lease = await gate.authorize("transcription", "base");
+  assert.equal(lookups, 1, "the refresh still goes out");
+
+  answer(state(["small"], 2));
+  await settle();
+  assert.equal(lease.signal.reason?.code, "POLICY_MODEL_BLOCKED");
+});
+
+test("with nothing held on disk, an identity still waits for the lookup", async () => {
+  const { createLocalModelPolicyGate } = require("../../src/helpers/localModelPolicyGate");
+  let answer;
+  const gate = createLocalModelPolicyGate({
+    getPolicy: () =>
+      new Promise((done) => {
+        answer = done;
+      }),
+    getHeldPolicy: async () => ({ success: false }),
+    getIdentity: () => 1,
+    getAppVersion: () => "1.11.1",
+  });
+  let settled = false;
+  const pending = gate.authorize("transcription", "base").finally(() => {
+    settled = true;
+  });
+  await settle();
+  assert.equal(settled, false);
+  answer({ success: true, managed: false, authGeneration: 1 });
+  gate.release(await pending);
+});
+
+test("a held verdict read for a previous identity never lands", async () => {
+  const { createLocalModelPolicyGate } = require("../../src/helpers/localModelPolicyGate");
+  let identity = 1;
+  let answerHeld;
+  const gate = createLocalModelPolicyGate({
+    getPolicy: async () => ({ success: false }),
+    getHeldPolicy: () =>
+      new Promise((done) => {
+        answerHeld = done;
+      }),
+    getIdentity: () => identity,
+    getAppVersion: () => "1.11.1",
+  });
+
+  const pending = gate.authorize("transcription", "base");
+  await settle();
+  identity = 2;
+  answerHeld({ success: true, managed: false });
+
+  await assert.rejects(pending, { code: "POLICY_UNRESOLVABLE" });
+});

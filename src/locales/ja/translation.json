@@ -210,6 +210,7 @@
     "skip": "スキップ",
     "policyAiProcessingRestricted": "AI処理は組織によって制限されています。",
     "policyAgentRestricted": "AIアシスタントの使用は組織によって制限されています。",
+    "policyAccountChanged": "アカウントが変更されたため、この回答を停止しました。",
     "policyTranscriptionRestricted": "文字起こしは組織によって制限されています。",
     "policyUnresolved": "組織の設定がまだ読み込まれていません。しばらくしてからもう一度お試しください。",
     "managedConfigLoading": "組織のマネージド設定を確認しています。しばらくしてからもう一度お試しください。",
@@ -2825,14 +2826,19 @@
       "localModelBusy": "ローカルモデルはまだ別のリクエストを処理しています。完了を待ってから、もう一度お試しください。"
     },
     "policy": {
-      "guidance": "組織が承認したローカルモデルを選択してください。",
-      "notApproved": "未承認",
-      "noneSupported": "このアプリのバージョンまたはデバイスでは、承認済みローカルモデルを利用できません。OpenWhisprを更新するか、管理者にお問い合わせください。",
-      "emptyIntersection": "このタスクに使える承認済みローカルモデルがワークスペースにありません。",
-      "modelBlocked": "このローカルモデルは組織に承認されていません。承認済みモデルを選択してください。",
+      "guidance": "組織がこれらのモデルを承認しています。お使いのコンピューターに合うものを選択してください。",
+      "notApproved": "組織に承認されていません",
+      "noneSupported": "このアプリのバージョンで使えるローカルモデルは、組織に承認されていません。OpenWhisprを更新するか、管理者にお問い合わせください。",
+      "emptyIntersection": "ワークスペース間で共通の承認済みローカルモデルがありません。管理者にお問い合わせください。",
+      "modelBlocked": "組織が承認したローカルモデルを選択してください。",
       "modeBlocked": "組織がローカル処理を無効にしています。",
       "unresolved": "ワークスペースのポリシーを確認できませんでした。接続して再試行してください。",
-      "versionBlocked": "組織の承認済みモデルを使うには、OpenWhisprを更新してください。"
+      "versionBlocked": "組織の承認済みモデルを使うには、OpenWhisprを更新してください。",
+      "updateRequired": "更新が必要です",
+      "unavailable": "現在利用できません",
+      "installedTitle": "インストール済みのローカルモデル",
+      "installedHint": "組織がローカル処理を無効にしているため、これらのモデルは実行できません。削除するまでコンピューターに残ります。",
+      "chooseModel": "ローカルモデルを選択"
     }
   },
   "notes": {

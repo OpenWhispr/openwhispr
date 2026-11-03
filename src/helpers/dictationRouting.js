@@ -232,10 +232,7 @@ export function cleanupUnconfiguredNotice(shownKey, { skipped, cleanupReachable,
         "hooks.audioRecording.cleanupSignedOut",
       ]
     : policyBlocked
-      ? [
-          "Your organization does not approve this local model. Choose an approved model.",
-          "models.policy.modelBlocked",
-        ]
+      ? ["Choose a local model your organization has approved.", "models.policy.modelBlocked"]
       : [
           "AI cleanup is on, but no cleanup model is set up.",
           "hooks.audioRecording.cleanupUnconfigured",

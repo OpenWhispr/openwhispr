@@ -29,6 +29,7 @@ import {
   filterByokProviderOptionsByPolicy,
   isProviderAllowedByPolicy,
   isLocalModelAllowedByPolicy,
+  localModelRowRefusal,
   reconcileCloudProviderSelection,
   shouldPersistProviderFallback,
   type TranscriptionPolicyContext,
@@ -80,6 +81,7 @@ interface LocalModelCardProps {
   isCancelling: boolean;
   isInstalling: boolean;
   policyBlocked?: boolean;
+  policyRefusal?: { labelKey: string; hintKey: string };
   unavailable?: boolean;
   recommended?: boolean;
   provider: string;
@@ -104,6 +106,7 @@ function LocalModelCard({
   isCancelling,
   isInstalling,
   policyBlocked = false,
+  policyRefusal,
   unavailable = false,
   recommended,
   provider,
@@ -128,7 +131,7 @@ function LocalModelCard({
       aria-disabled={policyBlocked || unavailable || undefined}
       title={
         policyBlocked
-          ? t("models.policy.modelBlocked")
+          ? t(policyRefusal?.hintKey ?? "models.policy.modelBlocked")
           : unavailable
             ? t("transcription.parakeet.unavailable")
             : undefined
@@ -166,7 +169,9 @@ function LocalModelCard({
             <span className={cardStyles.badges.recommended}>{t("common.recommended")}</span>
           )}
           {policyBlocked && (
-            <span className="text-xs text-muted-foreground">{t("models.policy.notApproved")}</span>
+            <span className="text-xs text-muted-foreground">
+              {t(policyRefusal?.labelKey ?? "models.policy.notApproved")}
+            </span>
           )}
           {languageLabel && (
             <span className="text-xs text-muted-foreground/70 font-medium shrink-0">
@@ -191,7 +196,7 @@ function LocalModelCard({
                 aria-label={t("common.delete")}
                 size="icon"
                 variant="ghost"
-                className="size-6 text-muted-foreground/70 hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,opacity,transform] active:scale-95"
+                className={`size-6 text-muted-foreground/70 hover:text-destructive ${policyBlocked ? "" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"} transition-[color,opacity,transform] active:scale-95`}
               >
                 <Trash2 size={12} />
               </Button>
@@ -1395,6 +1400,7 @@ export default function TranscriptionModelPicker({
                   isLocalModelAllowedByPolicy(policyState, "transcription", modelId)
                 }
                 policyBlocked={!isLocalModelAllowedByPolicy(policyState, "transcription", modelId)}
+                policyRefusal={localModelRowRefusal(policyState, "transcription")}
                 isDownloaded={model.downloaded ?? false}
                 isDownloading={isDownloadingModel(modelId)}
                 isCancelling={isCancellingModel(modelId)}
@@ -1483,6 +1489,7 @@ export default function TranscriptionModelPicker({
                   isLocalModelAllowedByPolicy(policyState, "transcription", modelId)
                 }
                 policyBlocked={!isLocalModelAllowedByPolicy(policyState, "transcription", modelId)}
+                policyRefusal={localModelRowRefusal(policyState, "transcription")}
                 unavailable={parakeetCapability?.supported === false}
                 isDownloaded={model.downloaded ?? false}
                 isDownloading={isDownloadingParakeetModel(modelId)}

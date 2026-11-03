@@ -365,7 +365,7 @@ test("point-of-use refusals name a blocked model or Local-off and leave other re
   );
   assert.deepEqual(localChoiceRefusal(snapshot({ llm: [] }), "llm"), {
     code: "POLICY_MODEL_BLOCKED",
-    messageKey: "models.policy.modelBlocked",
+    messageKey: "models.policy.emptyIntersection",
     settingsTarget: "llms",
   });
 
@@ -476,4 +476,20 @@ test("the recording and upload gates agree with the start: managed audio outrank
   assert.equal(seen.upload, true);
   await React.act(async () => root.unmount());
   root = null;
+});
+
+test("a blank local AI model under a managed policy stays blank", async (t) => {
+  installBrowserGlobals(t);
+  const { useSettingsStore, selectPolicyEffectiveSettings, selectResolvedLLMConfig } =
+    await loadStores(t, "blank-llm");
+  const raw = {
+    ...useSettingsStore.getState(),
+    cleanupMode: "local",
+    cleanupProvider: "qwen",
+    cleanupModel: "",
+  };
+
+  const managed = selectPolicyEffectiveSettings(raw, snapshot({ llm: null }));
+  assert.equal(selectResolvedLLMConfig(managed, "dictationCleanup").model, "");
+  assert.ok(managed.policyBlockedLocalScopes.includes("dictationCleanup"));
 });

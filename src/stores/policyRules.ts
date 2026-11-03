@@ -319,14 +319,46 @@ export function localModelRefusal(
       settingsTarget,
     };
   }
-  return isModeAllowedByPolicy(state, scope, "local")
-    ? { code: "POLICY_MODEL_BLOCKED", messageKey: "models.policy.modelBlocked", settingsTarget }
-    : {
-        code: "POLICY_LOCAL_MODE_BLOCKED",
-        messageKey: "models.policy.modeBlocked",
-        settingsTarget,
-      };
+  if (!isModeAllowedByPolicy(state, scope, "local")) {
+    return {
+      code: "POLICY_LOCAL_MODE_BLOCKED",
+      messageKey: "models.policy.modeBlocked",
+      settingsTarget,
+    };
+  }
+  return {
+    code: "POLICY_MODEL_BLOCKED",
+    messageKey:
+      allowedLocalModelIds(state, scope)?.length === 0
+        ? "models.policy.emptyIntersection"
+        : "models.policy.modelBlocked",
+    settingsTarget,
+  };
 }
+
+/** What a refused model's row says: only a refusal the organization made names it. */
+export function localModelRowRefusal(
+  state: PolicyDecisionSnapshot,
+  scope: PolicyScope
+): { labelKey: string; hintKey: string } {
+  const { code, messageKey } = localModelRefusal(state, scope);
+  return {
+    labelKey: isLocalChoiceRefusal(code)
+      ? "models.policy.notApproved"
+      : code === "POLICY_APP_VERSION_BLOCKED"
+        ? "models.policy.updateRequired"
+        : "models.policy.unavailable",
+    hintKey: messageKey,
+  };
+}
+
+/** The message for a local-model refusal that arrives as a code alone, as main sends it. */
+export const LOCAL_MODEL_REFUSAL_MESSAGE_KEYS: Record<LocalModelRefusal["code"], string> = {
+  POLICY_MODEL_BLOCKED: "models.policy.modelBlocked",
+  POLICY_LOCAL_MODE_BLOCKED: "models.policy.modeBlocked",
+  POLICY_UNRESOLVABLE: "models.policy.unresolved",
+  POLICY_APP_VERSION_BLOCKED: "models.policy.versionBlocked",
+};
 
 export function isLocalChoiceRefusal(code: unknown): boolean {
   return code === "POLICY_MODEL_BLOCKED" || code === "POLICY_LOCAL_MODE_BLOCKED";

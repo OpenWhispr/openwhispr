@@ -908,6 +908,7 @@ class IPCHandlers {
   }
 
   _initLocalModelPolicy(localLlmManager) {
+    this._authTokenHeld = Boolean(tokenStore.get());
     const { createLocalModelPolicyGate } = require("./localModelPolicyGate");
     const localServers = [
       [
@@ -934,6 +935,7 @@ class IPCHandlers {
     ];
     this._localModelPolicy = createLocalModelPolicyGate({
       getPolicy: (options) => this._getMainModelPolicy?.({}, options) ?? { success: false },
+      getHeldPolicy: () => this._getMainModelPolicy?.({}, { held: true }) ?? { success: false },
       getIdentity: () => tokenStore.getState().generation,
       getAppVersion: () => app.getVersion(),
       isSnapshotCurrent: (snapshot) =>
@@ -998,15 +1000,22 @@ class IPCHandlers {
     // A new bearer may belong to another account, so its policy is fetched
     // before new work; only a sign-out ends the work already running. A real
     // account switch is cancelled once set-active-account-scope learns it.
+    // Clearing a session that never existed changes no one's identity, so a
+    // guest's running work carries on.
+    const provenGuest =
+      this._authTokenHeld === false && typeof this.databaseManager.activeAccountId !== "string";
+    this._authTokenHeld = Boolean(token);
     if (token) {
       this._localModelPolicy?.invalidate();
       this._audioFeaturePolicy?.invalidate();
     } else {
-      this._localModelPolicy?.cancelJobs();
+      if (!provenGuest) this._localModelPolicy?.cancelJobs();
       this._localModelPolicy?.invalidate(guestAudioPolicy(generation));
       this._audioFeaturePolicy?.invalidate(guestAudioPolicy(generation));
-      this._audioFeaturePolicy?.cancelJobs();
-      this._stopMeetingForPolicy?.("accountChanged");
+      if (!provenGuest) {
+        this._audioFeaturePolicy?.cancelJobs();
+        this._stopMeetingForPolicy?.("accountChanged");
+      }
     }
     this.windowManager.retireMeetingNotificationScope();
     // Like the jobs above, enterprise audio outlives a token rotation; a
@@ -6996,7 +7005,7 @@ class IPCHandlers {
       logger: debugLogger,
     });
     const { createAudioFeaturePolicy } = require("./audioFeaturePolicy");
-    const getMainPolicy = async (event = {}, { refresh = false } = {}) => {
+    const getMainPolicy = async (event = {}, { refresh = false, held = false } = {}) => {
       const generation = tokenStore.getState().generation;
       const authHeaders = event.sender
         ? await getAuthHeader(event)
@@ -7014,6 +7023,15 @@ class IPCHandlers {
         return typeof this.databaseManager.activeAccountId === "string"
           ? { success: false }
           : guestAudioPolicy(generation);
+      }
+      if (held) {
+        return (
+          workspacePolicyManager.heldPolicy({
+            accountId: this.databaseManager.activeAccountId,
+            expectedAuthGeneration: generation,
+            authHeaders,
+          }) ?? { success: false }
+        );
       }
       const policy = await workspacePolicyManager.getPolicy({
         accountId: this.databaseManager.activeAccountId,
@@ -9391,6 +9409,7 @@ class IPCHandlers {
     const transcribeLocalMeetingChunk = async (source) => {
       const chunks = meetingLocalBuffers[source];
       if (!chunks.length) return;
+      const lease = this._activeLocalMeetingLease;
 
       const pcm24k = Buffer.concat(chunks);
       meetingLocalBuffers[source] = [];
@@ -9452,8 +9471,6 @@ class IPCHandlers {
         // the streaming path's uncommitted disconnect does not.
         if (this._audioFeaturePolicy.activeFailure("meeting")) return;
         assertMeetingAllowed();
-        if (isLocalModelPolicyRefusal(result))
-          throw Object.assign(new Error(result.error), { code: result.code });
 
         if (result?.success && result.text?.trim()) {
           const text = result.text.trim();
@@ -9574,6 +9591,8 @@ class IPCHandlers {
           source,
           error: error.message,
         });
+        // The revocation that cut it off has already stopped the meeting, with its reason.
+        if (lease?.signal.aborted) return;
         if (meetingLocalWin && !meetingLocalWin.isDestroyed()) {
           meetingLocalWin.webContents.send(
             "meeting-transcription-error",
@@ -11007,6 +11026,7 @@ class IPCHandlers {
             dictationPreviewBuffer = [];
             return { success: true };
           } catch (error) {
+            if (gen !== dictationPreviewGen) return { success: true };
             if (isLocalModelPolicyRefusal(error)) return stopDictationPreviewForPolicy(error);
             debugLogger.warn("Online preview stream unavailable, falling back to chunked preview", {
               model,
@@ -11097,8 +11117,12 @@ class IPCHandlers {
     );
 
     ipcMain.handle("stop-dictation-preview", async (_event, options = {}) => {
-      if (dictationPreviewPolicyError)
-        return stopDictationPreviewForPolicy(dictationPreviewPolicyError);
+      if (dictationPreviewPolicyError) {
+        const refusal = stopDictationPreviewForPolicy(dictationPreviewPolicyError);
+        // Reported once: this stop's dictation carries it from here.
+        dictationPreviewPolicyError = null;
+        return refusal;
+      }
       if (!dictationPreviewMode && !dictationPreviewSessionActive) {
         return { success: true, streamed: false, text: "" };
       }
@@ -11117,7 +11141,11 @@ class IPCHandlers {
         try {
           result = await stream.finish();
         } catch (error) {
-          if (isLocalModelPolicyRefusal(error)) return stopDictationPreviewForPolicy(error);
+          if (isLocalModelPolicyRefusal(error)) {
+            const refusal = stopDictationPreviewForPolicy(error);
+            dictationPreviewPolicyError = null;
+            return refusal;
+          }
           result = null;
         }
         if (gen !== dictationPreviewGen) {

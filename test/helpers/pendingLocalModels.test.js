@@ -282,3 +282,43 @@ test("a guest's pending selection activates without a policy", async () => {
     guest
   );
 });
+
+test("a guest who signs in keeps a pending selection until the new account's verdict settles", async () => {
+  global.localStorage = createStorage();
+  const pending = await import("../../src/components/onboarding/pendingLocalModels.ts");
+  const guest = { provider: "whisper", modelId: "base" };
+  pending.rememberPendingLocalModel("dictation", guest);
+  const signedIn = { policy: null, appVersion: null, accountId: "new", authGeneration: 7 };
+
+  assert.equal(
+    pending.consumePendingLocalModel("dictation", "base", { ...signedIn, status: "loading" }),
+    null
+  );
+  assert.equal(pending.hasPendingLocalModels(), true);
+
+  assert.deepEqual(
+    pending.consumePendingLocalModel("dictation", "base", { ...signedIn, status: "unmanaged" }),
+    guest
+  );
+});
+
+test("a guest's pending selection the new account's policy refuses is dropped", async () => {
+  global.localStorage = createStorage();
+  const { managedPolicy } = require("./harness/policyFixtures");
+  const pending = await import("../../src/components/onboarding/pendingLocalModels.ts");
+  pending.rememberPendingLocalModel("dictation", { provider: "whisper", modelId: "base" });
+
+  assert.equal(
+    pending.consumePendingLocalModel("dictation", "base", {
+      status: "managed",
+      policy: managedPolicy({
+        transcription: { allowedModes: ["local"], allowedLocalModels: ["small"] },
+      }),
+      appVersion: "1.11.1",
+      accountId: "new",
+      authGeneration: 7,
+    }),
+    null
+  );
+  assert.equal(pending.hasPendingLocalModels(), false);
+});

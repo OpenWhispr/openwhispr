@@ -1,6 +1,7 @@
 import { EnterpriseAudioSettings } from "./settings/EnterpriseAudioSettings";
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { LocalOffInstalledModels } from "./settings/LocalOffInstalledModels";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
@@ -1014,6 +1015,7 @@ function SpeechToTextTabs({
       <TabPanel active={tab === "dictation"}>{renderDictation()}</TabPanel>
       <TabPanel active={tab === "noteRecording"}>{renderNoteRecording()}</TabPanel>
       <TabPanel active={tab === "upload"}>{renderUpload()}</TabPanel>
+      <LocalOffInstalledModels scope="transcription" />
     </div>
   );
 }
@@ -1075,6 +1077,7 @@ function LlmsTabs({
       {agentAllowed && (
         <TabPanel active={tab === "chatIntelligence"}>{renderChatIntelligence()}</TabPanel>
       )}
+      <LocalOffInstalledModels scope="llm" />
     </div>
   );
 }

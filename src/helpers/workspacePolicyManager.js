@@ -435,7 +435,25 @@ function createWorkspacePolicyManager({
     return publicSnapshot(identity, current.data, "cached", current.revision);
   }
 
-  return { getPolicy, peekPolicy };
+  // What this identity last had, in memory or on disk, for a caller that can't
+  // wait on the network. It decides nothing about freshness: the caller refreshes.
+  function heldPolicy(request) {
+    let identity;
+    try {
+      identity = captureIdentity(request ?? {});
+    } catch {
+      return null;
+    }
+    const managedOnly = requiresManagedPolicy(identity);
+    const current = snapshots.get(identityKey(identity));
+    if (current && (!managedOnly || current.data.managed)) {
+      return publicSnapshot(identity, current.data, "cached", current.revision);
+    }
+    const cached = cachedData(identity);
+    return cached && (!managedOnly || cached.managed) ? accept(identity, cached, "cached") : null;
+  }
+
+  return { getPolicy, peekPolicy, heldPolicy };
 }
 
 // Main-process capture gate: block an explicit managed denial or an

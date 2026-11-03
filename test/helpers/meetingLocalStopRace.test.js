@@ -15,8 +15,12 @@ const sliceBetween = (startMarker, endMarker) => {
 
 const deferred = () => {
   let resolve;
-  const promise = new Promise((done) => (resolve = done));
-  return { promise, resolve };
+  let reject;
+  const promise = new Promise((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
+  return { promise, resolve, reject };
 };
 
 // Arrays made inside the vm context have another realm's prototype.
@@ -376,12 +380,23 @@ test("a typed local chunk refusal stops the meeting and sends its code", async (
   context.isLocalModelPolicyRefusal = (error) => error?.code === "POLICY_MODEL_BLOCKED";
   context._stopMeetingForPolicy = (code) => stopped.push(code);
   const pending = context.transcribe();
-  decode.resolve({ success: false, error: "blocked", code: "POLICY_MODEL_BLOCKED" });
+  decode.reject(Object.assign(new Error("blocked"), { code: "POLICY_MODEL_BLOCKED" }));
   await pending;
   assert.deepEqual(stopped, ["POLICY_MODEL_BLOCKED"]);
   assert.deepEqual(plain(finals), [
     { channel: "meeting-transcription-error", payload: "POLICY_MODEL_BLOCKED" },
   ]);
+});
+
+test("a chunk cut off by the meeting's revocation adds nothing raw after the stop's own reason", async () => {
+  const { context, decode, finals } = chunkHarness();
+  context._activeLocalMeetingLease = { signal: { aborted: false } };
+  context._localModelPolicy = { assertCurrent() {}, runWithLease: (_lease, run) => run() };
+  const pending = context.transcribe();
+  context._activeLocalMeetingLease.signal.aborted = true;
+  decode.reject(new Error("whisper-server request cancelled"));
+  await pending;
+  assert.deepEqual(plain(finals), []);
 });
 
 test("a local meeting lease invalidated during admission is released before returning", async () => {

@@ -10,7 +10,11 @@ import {
 } from "../components/notes/shared";
 import { saveUploadNote, uploadTitleFallback } from "../services/uploadNotes";
 import { getSettings } from "./settingsStore";
-import { isAudioFeatureAllowed, isTranscriptionContextAllowed } from "./policyRules";
+import {
+  isAudioFeatureAllowed,
+  isTranscriptionContextAllowed,
+  transcriptionChoiceRefusal,
+} from "./policyRules";
 import { usePolicyStore } from "./policyStore";
 import { isManagedTranscriptionActive } from "../services/managedTranscription";
 import { describeProviderError } from "../utils/describeProviderError";
@@ -349,10 +353,18 @@ export function processBatchQueue(
 // Policy refusing uploads stops the run: the item in flight shows the same
 // reason as the page banner, and Transcribe retries it with the rest once allowed.
 usePolicyStore.subscribe((policy) => {
-  if (!useBatchQueueStore.getState().isProcessing || isAudioFeatureAllowed(policy, "upload"))
-    return;
+  if (!useBatchQueueStore.getState().isProcessing) return;
+  // Only a settled verdict stops a local run; managed enterprise transcription isn't one.
+  const localRefused =
+    policy.status === "managed" &&
+    !isManagedTranscriptionActive() &&
+    !isTranscriptionContextAllowed(policy, getSettings(), "upload");
+  if (isAudioFeatureAllowed(policy, "upload") && !localRefused) return;
   abortRun();
-  const error = i18n.t(uploadRestrictionKey(policy));
+  const error = i18n.t(
+    (localRefused && transcriptionChoiceRefusal(policy, getSettings(), "upload")?.messageKey) ||
+      uploadRestrictionKey(policy)
+  );
   useBatchQueueStore.setState((s) => ({
     isProcessing: false,
     queue: s.queue.map((item) =>

@@ -13,7 +13,11 @@ import {
 import { requestMeetingRecordingAutoEnd } from "../helpers/meetingRecordingSession";
 import logger from "../utils/logger";
 import { usePolicySnapshot } from "../hooks/usePolicy";
-import { isAudioFeatureAllowed, isLocalChoiceRefusal } from "../stores/policyRules";
+import {
+  isAudioFeatureAllowed,
+  isLocalChoiceRefusal,
+  LOCAL_MODEL_REFUSAL_MESSAGE_KEYS,
+} from "../stores/policyRules";
 import { providerErrorActions } from "../utils/describeProviderError";
 import { requestSignIn } from "../utils/requestSignIn";
 
@@ -30,9 +34,9 @@ const MEETING_ERROR_KEYS: Record<string, string> = {
   POLICY_MEETING_RECORDING_DISABLED: "notes.meeting.recordingDisabledByOrg",
   AUDIO_PURPOSE_REQUIRED: "notes.meeting.restrictedByOrg",
   POLICY_UNRESOLVABLE: "common.policyUnresolved",
-  POLICY_MODEL_BLOCKED: "models.policy.modelBlocked",
-  POLICY_LOCAL_MODE_BLOCKED: "models.policy.modeBlocked",
-  POLICY_APP_VERSION_BLOCKED: "models.policy.versionBlocked",
+  POLICY_MODEL_BLOCKED: LOCAL_MODEL_REFUSAL_MESSAGE_KEYS.POLICY_MODEL_BLOCKED,
+  POLICY_LOCAL_MODE_BLOCKED: LOCAL_MODEL_REFUSAL_MESSAGE_KEYS.POLICY_LOCAL_MODE_BLOCKED,
+  POLICY_APP_VERSION_BLOCKED: LOCAL_MODEL_REFUSAL_MESSAGE_KEYS.POLICY_APP_VERSION_BLOCKED,
   // A running recording stopped because the policy couldn't be checked.
   policyUnresolvedStop: "notes.meeting.stoppedPolicyUnresolved",
   // The main process ended the recording because it belonged to the previous account.
@@ -111,7 +115,7 @@ export default function MeetingRecordingMount(): null {
       actions: needsSignIn
         ? [{ label: t("common.signIn"), onClick: requestSignIn }]
         : isLocalChoiceRefusal(sentinel)
-          ? providerErrorActions({ settingsTarget: "speechToText" }, t)
+          ? providerErrorActions({ settingsTarget: "noteRecording" }, t)
           : undefined,
     });
     // errorNonce re-fires this toast when the same error repeats back-to-back.

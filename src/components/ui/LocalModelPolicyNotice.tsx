@@ -32,5 +32,9 @@ export function LocalModelPolicyNotice({
                 : "models.policy.guidance";
   if (!message) return null;
 
-  return <p className="mt-2 text-xs text-muted-foreground">{t(message)}</p>;
+  return (
+    <p role="status" className="mt-2 text-xs text-muted-foreground">
+      {t(message)}
+    </p>
+  );
 }

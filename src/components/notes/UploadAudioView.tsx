@@ -518,6 +518,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       return `${enterpriseProviderName(managed.provider)} · ${managed.model}`;
     if (isOpenWhisprCloud) return t("notes.upload.openwhisprCloud");
     if (useLocalWhisper) {
+      if (uploadChoiceRefusal) return t("models.policy.chooseModel");
       if (localTranscriptionProvider === "nvidia")
         return getParakeetModelInfo(parakeetModel)?.name ?? parakeetModel;
       if (localTranscriptionProvider === "cohere") return `Cohere · ${cohereModel || "default"}`;

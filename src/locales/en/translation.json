@@ -210,6 +210,7 @@
     "skip": "Skip",
     "policyAiProcessingRestricted": "AI processing is restricted by your organization.",
     "policyAgentRestricted": "AI assistant use is restricted by your organization.",
+    "policyAccountChanged": "Your account changed, so this answer was stopped.",
     "policyTranscriptionRestricted": "Transcription is restricted by your organization.",
     "policyUnresolved": "Your organization's settings haven't loaded yet. Try again in a moment.",
     "managedConfigLoading": "Checking your organization's managed setup. Try again in a moment.",
@@ -2919,14 +2920,19 @@
       "localModelBusy": "The local model is still working on another request. Wait for it to finish, then try again."
     },
     "policy": {
-      "guidance": "Choose a local model approved by your organization.",
-      "notApproved": "Not approved",
-      "noneSupported": "This app version or device does not support any approved local model. Update OpenWhispr or contact your administrator.",
-      "emptyIntersection": "Your workspace has no approved local models for this task.",
-      "modelBlocked": "Your organization does not approve this local model. Choose an approved model.",
+      "guidance": "Your organization approved these models. Pick one that suits your computer.",
+      "notApproved": "Not approved by your organization",
+      "noneSupported": "Your organization hasn't approved any on-device models this app version supports. Update OpenWhispr or contact your administrator.",
+      "emptyIntersection": "Your workspaces have no approved local model in common. Contact your administrator.",
+      "modelBlocked": "Choose a local model your organization has approved.",
       "modeBlocked": "Your organization has disabled local processing.",
       "unresolved": "Workspace policy could not be resolved. Connect and try again.",
-      "versionBlocked": "Update OpenWhispr to use your organization’s approved models."
+      "versionBlocked": "Update OpenWhispr to use your organization’s approved models.",
+      "updateRequired": "Update required",
+      "unavailable": "Unavailable right now",
+      "installedTitle": "Installed local models",
+      "installedHint": "Your organization has disabled local processing, so these can't run. They stay on your computer until you delete them.",
+      "chooseModel": "Choose a local model"
     }
   },
   "sidebar": {

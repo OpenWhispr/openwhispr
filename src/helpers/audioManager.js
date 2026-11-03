@@ -291,6 +291,12 @@ function translationChainReachable(settings) {
   }).reachable;
 }
 
+function isAgentScopeBlocked(settings) {
+  return (
+    !!settings.useDictationAgent && !!settings.policyBlockedLocalScopes?.includes("dictationAgent")
+  );
+}
+
 function resolveReasoningRoute(
   text,
   settings,
@@ -319,7 +325,9 @@ function resolveReasoningRoute(
 
   const kind = resolveDictationRouteKind({
     cleanupReachable,
-    agentReachable: agent.reachable,
+    // A blocked assistant still takes its own commands, and refuses them by name
+    // in the panel: one never falls back to cleanup and gets pasted as text.
+    agentReachable: agent.reachable || isAgentScopeBlocked(settings),
     // A translation recording ignores the wake word, so skip the scan.
     agentInvoked:
       !translationRequested &&
@@ -1450,6 +1458,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
+  // Managed enterprise STT outranks the local lane, so the local engine never
+  // sees this recording, and its refusal must not stop the enterprise route.
+  _runsLocalPreview() {
+    return Boolean(getSettings().useLocalWhisper) && !getManagedTranscriptionResolution();
+  }
+
   // Offline local engines decode a renderer-captured 16 kHz WAV as-is, so the
   // batch recorder gets a PCM shadow (PcmTap). Online models commit their own
   // stream and every cloud lane wants the smaller WebM, so those get none.
@@ -1723,7 +1737,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // Online models stream+commit during capture, so PCM runs even with preview off.
       const streamingCommit = useLocalWhisper && isNvidia && isOnlineParakeetModel(parakeetModel);
       this._streamingCommitActive = false;
-      if (useLocalWhisper && (showTranscriptionPreview || streamingCommit)) {
+      if (this._runsLocalPreview() && (showTranscriptionPreview || streamingCommit)) {
         try {
           this._previewAudioContext = new AudioContext({ sampleRate: 16000 });
           this._previewSource = this._previewAudioContext.createMediaStreamSource(micStream);
@@ -2290,9 +2304,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     try {
       const useLocalWhisper = settings.useLocalWhisper;
-      if (isTranscriptionPolicyRefusal(metadata.localPolicyRefusal)) {
-        throw errorFromIpcResult(metadata.localPolicyRefusal);
-      }
       const localProvider = settings.localTranscriptionProvider;
       const whisperModel = settings.whisperModel;
       const parakeetModel = settings.parakeetModel || "parakeet-tdt-0.6b-v3";
@@ -2320,6 +2331,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           managedTranscription.kind === "managed" ? managedTranscription.deployment : null;
         result = await this.processWithOpenAIAPI(audioBlob, metadata, wasCancelled);
       } else if (useLocalWhisper) {
+        if (isTranscriptionPolicyRefusal(metadata.localPolicyRefusal)) {
+          throw errorFromIpcResult(metadata.localPolicyRefusal);
+        }
         // Judges the saved model, not parakeetModel: its default is for guests and
         // unmanaged users, and a blank under a managed policy must never reach it.
         const savedLocalModel =
@@ -3403,7 +3417,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // decision used. The notice reaches the user through the result extras.
   _noteCleanupRoute(settings, { kind, cleanupReachable }) {
     const { forget, notice } = cleanupUnconfiguredNotice(this._shownCleanupSetupKey, {
-      skipped: kind === "skip",
+      // A translation runs its cleanup step first, so a blocked one is skipped too.
+      skipped:
+        kind === "skip" ||
+        (kind === "translation" &&
+          !!settings.policyBlockedLocalScopes?.includes("dictationCleanup")),
       cleanupReachable,
       settings,
     });
@@ -3469,9 +3487,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const agentReachable = dictationAgentReachable(settings);
     const agentName =
       typeof window !== "undefined" && window.localStorage ? getAgentName() : "OpenWhispr";
+    const blockedAgentCommand =
+      isAgentScopeBlocked(settings) &&
+      !this.translationRequested &&
+      !!agentName &&
+      detectAgentName(
+        normalizedText,
+        agentName,
+        resolveWakeWordLanguage(settings, undefined, normalizedText),
+        settings.snippets
+      );
     if (
       !cleanupReachable &&
       !agentReachable &&
+      !blockedAgentCommand &&
       !(this.translationRequested && translationChainReachable(settings)) &&
       // A voice-assistant command always routes: standalone commands stream
       // in the panel, which reports a missing model in-conversation.
@@ -3484,7 +3513,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return normalizedText;
     }
 
-    const useReasoning = this.voiceAgentRequested || (await this.isReasoningAvailable());
+    const useReasoning =
+      this.voiceAgentRequested || blockedAgentCommand || (await this.isReasoningAvailable());
     if (wasCancelled()) return normalizedText;
 
     logger.logReasoning("REASONING_CHECK", {

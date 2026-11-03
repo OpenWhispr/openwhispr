@@ -255,6 +255,7 @@ async function renderSetupChoice(t, policy, capability) {
     warningOpen: () =>
       has(tree, (node) => node.props?.open === true && "onOpenChange" in node.props),
     unavailable: () => has(tree, (node) => node.props?.role === "alert"),
+    explainsLocal: () => has(tree, (node) => node.type?.name === "LocalModelPolicyNotice"),
     localCard: () =>
       has(tree, (node) => node.props?.children === "onboarding.rehaul.setupChoice.local.download"),
   };
@@ -287,6 +288,34 @@ test("a device that can't run Parakeet then loses a Parakeet-only Local", async 
   await React.act(async () => answer({ supported: false }));
   assert.equal(step.localCard(), false);
   assert.equal(step.unavailable(), true);
+  assert.equal(step.explainsLocal(), true, "the member learns why no setup is left");
+});
+
+test("a Local card the policy took away is explained beside the setups that remain", async (t) => {
+  const step = await renderSetupChoice(
+    t,
+    managedPolicy({
+      transcription: { allowedModes: ["local", "openwhispr"], allowedLocalModels: [] },
+      llm: { allowedModes: ["openwhispr"] },
+    }),
+    Promise.resolve({ supported: true })
+  );
+  assert.equal(step.localCard(), false);
+  assert.equal(step.unavailable(), false);
+  assert.equal(step.explainsLocal(), true);
+});
+
+test("a member with Local available gets no explanation", async (t) => {
+  const step = await renderSetupChoice(
+    t,
+    managedPolicy({
+      transcription: { allowedModes: ["local", "openwhispr"], allowedLocalModels: ["base"] },
+      llm: { allowedModes: ["openwhispr"] },
+    }),
+    Promise.resolve({ supported: true })
+  );
+  assert.equal(step.localCard(), true);
+  assert.equal(step.explainsLocal(), false);
 });
 
 test("a warning opened before the device check can't start a setup that check ruled out", async (t) => {

@@ -33,6 +33,7 @@ function isResolvedVerdict(verdict) {
 /** Main owns identity and policy lookup; renderer arguments never establish unmanaged status. */
 function createLocalModelPolicyGate({
   getPolicy,
+  getHeldPolicy,
   getIdentity,
   getAppVersion,
   isSnapshotCurrent = () => true,
@@ -159,6 +160,19 @@ function createLocalModelPolicyGate({
     return pending;
   }
 
+  // A verdict kept on disk is still a held verdict; the network only refreshes it.
+  async function adoptHeldVerdict() {
+    if (!getHeldPolicy) return;
+    const startedEpoch = epoch;
+    const identity = getIdentity();
+    try {
+      const held = await getHeldPolicy();
+      if (epoch === startedEpoch && identity === getIdentity()) update(held);
+    } catch {
+      // Nothing held: the lookup decides.
+    }
+  }
+
   function assertCurrent(lease) {
     lease.signal.throwIfAborted();
     const denied = verdictFailure(activeVerdict(), lease.scope, lease.modelId);
@@ -212,6 +226,7 @@ function createLocalModelPolicyGate({
       const identity = getIdentity();
       await loadRules();
       if (!memoryOnly) {
+        if (!hasCurrentVerdict() && !refresh) await adoptHeldVerdict();
         if (hasCurrentVerdict() && !refresh) void lookup();
         else {
           const startedEpoch = epoch;

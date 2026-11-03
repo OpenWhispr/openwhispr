@@ -919,3 +919,52 @@ test("a policy refusal from cloud setup is terminal even when local fallback is 
   });
   assert.equal(nativeCalls, 0);
 });
+
+test("a local preview refusal never stops a dictation going to the enterprise route", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-managed-preview-refusal-test-",
+    settingsKey: "__managedPreviewRefusalSettings",
+    mockModules: {
+      "/services/managedTranscription.ts": `
+        export const getManagedTranscriptionResolution = () => ({
+          kind: "managed",
+          provider: "azure",
+          deployment: "enterprise-stt",
+          context: { accountId: "account", workspaceId: "workspace", authGeneration: 1 },
+        });
+        export const isManagedTranscriptionActive = () => true;
+      `,
+    },
+  });
+  setSettings({
+    useLocalWhisper: true,
+    localTranscriptionProvider: "whisper",
+    whisperModel: "",
+    policyBlockedLocalScopes: ["dictation"],
+  });
+  let reported;
+  let completed;
+  window.electronAPI.managedTranscribe = async () => ({ text: "enterprise transcript" });
+  const manager = createManager({
+    isProcessing: true,
+    _startProcessingPipeline: () => ({}),
+    _shouldAbandonProcessingPipeline: () => false,
+    _settleProcessingPipeline: () => true,
+    _completeActivationCapture: async () => {},
+    _takePendingResultExtras: () => ({}),
+    getCustomDictionaryPromptTiers: () => [],
+    onError: (error) => {
+      reported = error;
+    },
+    onTranscriptionComplete: (result) => {
+      completed = result;
+    },
+  });
+
+  await manager.processAudio(new Blob(["audio"], { type: "audio/webm" }), {
+    localPolicyRefusal: { success: false, code: "POLICY_MODEL_BLOCKED", error: "blocked" },
+  });
+
+  assert.equal(reported, undefined);
+  assert.equal(completed.text, "enterprise transcript");
+});

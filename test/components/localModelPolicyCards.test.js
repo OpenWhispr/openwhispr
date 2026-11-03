@@ -66,3 +66,45 @@ test("local model cards only select approved installed choices and keep Delete a
     assert.equal(deleted.length, Number(fixture.downloaded));
   }
 });
+
+test("a refused card says what its refusal says, and its Delete can be reached", async (t) => {
+  installBrowserGlobals(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-policy-model-card-copy-",
+    noExternal: ["react-i18next"],
+    mockModules: {
+      "react-i18next": `export function useTranslation() { return { t: (key) => key }; }`,
+    },
+  });
+  const { ModelCard } = await vite.ssrLoadModule("/components/ui/ModelCardList.tsx");
+  const text = (node) =>
+    Array.isArray(node)
+      ? node.map(text).join("")
+      : typeof node === "string"
+        ? node
+        : node?.props
+          ? text(node.props.children)
+          : "";
+  const tree = ModelCard({
+    model: {
+      value: "base",
+      label: "Base",
+      isDownloaded: true,
+      policyBlocked: true,
+      policyRefusal: {
+        labelKey: "models.policy.updateRequired",
+        hintKey: "models.policy.versionBlocked",
+      },
+    },
+    isSelected: false,
+    onSelect() {},
+    onDownload() {},
+    onDelete() {},
+  });
+
+  assert.equal(tree.props.title, "models.policy.versionBlocked");
+  assert.match(text(tree), /models\.policy\.updateRequired/);
+  assert.doesNotMatch(text(tree), /models\.policy\.notApproved/);
+  const remove = findElement(tree, (node) => node.props?.["aria-label"] === "common.delete");
+  assert.doesNotMatch(remove.props.className, /opacity-0/);
+});

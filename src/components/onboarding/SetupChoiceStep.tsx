@@ -26,6 +26,7 @@ import {
 import type { OnboardingSetupMode } from "./flow";
 import { getOnboardingSetupAvailability, hasAvailableOnboardingSetup } from "./setupEligibility";
 import { BrandMark } from "./OnboardingShell";
+import { LocalModelPolicyNotice } from "../ui/LocalModelPolicyNotice";
 import { LOCAL_ASR_ORGANIZATIONS } from "../../helpers/localASROrganization";
 import { getProviderIcon, isMonochromeProvider } from "@/utils/providerIcons";
 import { cn } from "../lib/utils";
@@ -234,6 +235,7 @@ export default function SetupChoiceStep({
         <p className="mt-2 text-sm leading-5 text-[var(--onboarding-text-secondary)]">
           {t("onboarding.rehaul.setupChoice.unavailable.description")}
         </p>
+        <LocalModelPolicyNotice scope="transcription" hasSupportedModel={false} />
       </div>
     );
   }
@@ -242,6 +244,7 @@ export default function SetupChoiceStep({
     // Figma "Frame 2147259042": column, gap 32, centred — the card row above the
     // Show More Options pill.
     <div className="mx-auto mt-5 flex w-full flex-col items-center gap-4">
+      {!localAllowed && <LocalModelPolicyNotice scope="transcription" hasSupportedModel={false} />}
       {/* Frame 60: row, gap 16. */}
       <div className="onboarding-stagger flex items-start justify-center gap-3">
         {localAllowed && (

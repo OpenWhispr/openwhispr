@@ -1460,7 +1460,7 @@ export default function NoteEditor({
                 {recordingChoiceRefusal && (
                   <button
                     type="button"
-                    onClick={() => openProviderSettings(recordingChoiceRefusal.settingsTarget)}
+                    onClick={() => openProviderSettings("noteRecording")}
                     className="shrink-0 rounded-sm text-[11px] font-medium text-amber-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 dark:text-warning/90"
                   >
                     {t("providerErrors.openSettings")}

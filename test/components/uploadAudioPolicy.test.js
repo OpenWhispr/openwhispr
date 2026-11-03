@@ -19,7 +19,13 @@ const source = ts.createSourceFile(
 );
 let transcribe;
 let policyChanged;
+let activeModelLabel;
 function visit(node) {
+  if (ts.isVariableDeclaration(node) && node.name.getText(source) === "getActiveModelLabel") {
+    activeModelLabel = ts.transpileModule(`(${node.initializer.getText(source)})`, {
+      compilerOptions: { target: ts.ScriptTarget.ES2022 },
+    }).outputText;
+  }
   if (ts.isVariableDeclaration(node) && node.name.getText(source) === "handleTranscribe") {
     transcribe = node.initializer.getText(source);
   }
@@ -239,4 +245,29 @@ test("an upload refused for its local model shows the reason instead of nothing"
     assert.deepEqual(errors, [expected]);
     assert.deepEqual(states, ["error"], "the error view only renders in the error state");
   }
+});
+
+test("the upload label never names a model the policy won't run", () => {
+  const label = (uploadChoiceRefusal, overrides = {}) =>
+    vm.runInNewContext(activeModelLabel, {
+      managed: { kind: "none" },
+      isOpenWhisprCloud: false,
+      useLocalWhisper: true,
+      localTranscriptionProvider: "whisper",
+      whisperModel: "",
+      parakeetModel: "",
+      cohereModel: "",
+      isSelfHosted: false,
+      uploadChoiceRefusal,
+      t: (key) => key,
+      ...overrides,
+    })();
+
+  assert.equal(label({ code: "POLICY_MODEL_BLOCKED" }), "models.policy.chooseModel");
+  assert.equal(
+    label({ code: "POLICY_MODEL_BLOCKED" }, { localTranscriptionProvider: "nvidia" }),
+    "models.policy.chooseModel"
+  );
+  assert.equal(label(null, { whisperModel: "small" }), "Whisper · small");
+  assert.equal(label(null), "Whisper · base", "a guest's blank still means the engine default");
 });

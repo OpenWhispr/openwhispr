@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
-import { useDialogs } from "./useDialogs";
 import { useToast } from "../components/ui/useToast";
 import type {
   LocalLLMDownloadProgressEvent,
@@ -14,6 +13,8 @@ import {
   isLocalModelAllowedByPolicy,
   isModeAllowedByPolicy,
   isPolicyActionAllowed,
+  LOCAL_MODEL_REFUSAL_MESSAGE_KEYS,
+  localModelRefusal,
   type PolicyDecisionSnapshot,
 } from "../stores/policyRules";
 import type { PolicyScope } from "../types/policy";
@@ -64,11 +65,13 @@ export function formatETA(seconds: number): string {
   return `${minutes}m ${Math.round(seconds % 60)}s`;
 }
 
-// Retrying can't change these answers; POLICY_UNRESOLVABLE can clear by itself, so it isn't one.
+// Retrying can't change these answers; POLICY_UNRESOLVABLE can clear by itself, so
+// it isn't one. A device that can't run the model answers the same way every time.
 const TERMINAL_POLICY_ERROR_CODES: ReadonlySet<string> = new Set([
   "POLICY_MODEL_BLOCKED",
   "POLICY_LOCAL_MODE_BLOCKED",
   "POLICY_APP_VERSION_BLOCKED",
+  "PARAKEET_UNSUPPORTED_OS",
 ]);
 
 function isPolicyErrorCode(code: string | undefined): boolean {
@@ -90,13 +93,9 @@ function localModelVerdictKey(
 }
 
 export function getDownloadErrorMessage(t: TFunction, error: string, code?: string): string {
-  const policyMessage = {
-    POLICY_MODEL_BLOCKED: "models.policy.modelBlocked",
-    POLICY_LOCAL_MODE_BLOCKED: "models.policy.modeBlocked",
-    POLICY_UNRESOLVABLE: "models.policy.unresolved",
-    POLICY_APP_VERSION_BLOCKED: "models.policy.versionBlocked",
-  }[code ?? ""];
+  const policyMessage = (LOCAL_MODEL_REFUSAL_MESSAGE_KEYS as Record<string, string>)[code ?? ""];
   if (policyMessage) return t(policyMessage);
+  if (code === "PARAKEET_UNSUPPORTED_OS") return t("transcription.parakeet.unavailable");
   if (code === "EXTRACTION_FAILED" || error.includes("installation failed")) {
     return t("hooks.modelDownload.errors.extractionFailed");
   }
@@ -137,7 +136,6 @@ export function useModelDownload({
   onModelsCleared,
 }: UseModelDownloadOptions) {
   const { t } = useTranslation();
-  const { showAlertDialog } = useDialogs();
   const { toast } = useToast();
   const [downloads, setDownloads] = useState<Record<string, LocalModelDownloadStatus>>({});
   const [cancellingModels, setCancellingModels] = useState<Set<string>>(new Set());
@@ -260,17 +258,18 @@ export function useModelDownload({
         );
         setDownloadErrors((current) => ({ ...current, [modelId]: message }));
         setDownloadErrorCodes((current) => ({ ...current, [modelId]: code }));
-        showAlertDialog({
+        toast({
           title:
             code === "EXTRACTION_FAILED"
               ? t("hooks.modelDownload.installationFailed.title")
               : t("hooks.modelDownload.downloadFailed.title"),
           description: message,
+          variant: "destructive",
         });
       }
       await settleDownload(modelId, sequence);
     },
-    [settleDownload, showAlertDialog, t]
+    [settleDownload, t, toast]
   );
 
   const handleNativeProgress = useCallback(
@@ -359,20 +358,14 @@ export function useModelDownload({
     async (modelId: string, onSelectAfterDownload?: (id: string) => void) => {
       const policy = usePolicyStore.getState();
       if (!isLocalModelAllowedByPolicy(policy, policyScope, modelId)) {
-        const code =
-          policy.status === "loading" || policy.status === "error"
-            ? "POLICY_UNRESOLVABLE"
-            : !isPolicyActionAllowed(policy)
-              ? "POLICY_APP_VERSION_BLOCKED"
-              : !isModeAllowedByPolicy(policy, policyScope, "local")
-                ? "POLICY_LOCAL_MODE_BLOCKED"
-                : "POLICY_MODEL_BLOCKED";
-        const message = getDownloadErrorMessage(t, "", code);
+        const { code, messageKey } = localModelRefusal(policy, policyScope);
+        const message = t(messageKey);
         setDownloadErrors((current) => ({ ...current, [modelId]: message }));
         setDownloadErrorCodes((current) => ({ ...current, [modelId]: code }));
-        showAlertDialog({
+        toast({
           title: t("hooks.modelDownload.downloadFailed.title"),
           description: message,
+          variant: "destructive",
         });
         return;
       }
@@ -451,12 +444,13 @@ export function useModelDownload({
           );
           setDownloadErrors((current) => ({ ...current, [modelId]: message }));
           setDownloadErrorCodes((current) => ({ ...current, [modelId]: result?.code }));
-          showAlertDialog({
+          toast({
             title:
               result?.code === "EXTRACTION_FAILED"
                 ? t("hooks.modelDownload.installationFailed.title")
                 : t("hooks.modelDownload.downloadFailed.title"),
             description: message,
+            variant: "destructive",
           });
         }
       } catch (error: unknown) {
@@ -467,9 +461,10 @@ export function useModelDownload({
           const message = getDownloadErrorMessage(t, errorMessage, code);
           setDownloadErrors((current) => ({ ...current, [modelId]: message }));
           setDownloadErrorCodes((current) => ({ ...current, [modelId]: code }));
-          showAlertDialog({
+          toast({
             title: t("hooks.modelDownload.downloadFailed.title"),
             description: message,
+            variant: "destructive",
           });
         }
       } finally {
@@ -495,7 +490,6 @@ export function useModelDownload({
       policyScope,
       modelType,
       settleDownload,
-      showAlertDialog,
       t,
       toast,
       updateDownload,
@@ -540,13 +534,14 @@ export function useModelDownload({
         onComplete?.();
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        showAlertDialog({
+        toast({
           title: t("hooks.modelDownload.deleteFailed.title"),
           description: t("hooks.modelDownload.deleteFailed.description", { error: errorMessage }),
+          variant: "destructive",
         });
       }
     },
-    [modelType, showAlertDialog, t, toast]
+    [modelType, t, toast]
   );
 
   const cancelDownload = useCallback(

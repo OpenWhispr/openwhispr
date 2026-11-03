@@ -210,6 +210,7 @@
     "skip": "Salta",
     "policyAiProcessingRestricted": "L’elaborazione con IA è limitata dalla tua organizzazione.",
     "policyAgentRestricted": "L’uso dell’assistente IA è limitato dalla tua organizzazione.",
+    "policyAccountChanged": "Il tuo account è cambiato, quindi questa risposta è stata interrotta.",
     "policyTranscriptionRestricted": "La trascrizione è limitata dalla tua organizzazione.",
     "policyUnresolved": "Le impostazioni della tua organizzazione non sono ancora state caricate. Riprova tra un momento.",
     "managedConfigLoading": "Verifica della configurazione gestita della tua organizzazione in corso. Riprova tra un momento.",
@@ -2825,14 +2826,19 @@
       "localModelBusy": "Il modello locale sta ancora elaborando un'altra richiesta. Attendi che finisca, poi riprova."
     },
     "policy": {
-      "guidance": "Scegli un modello locale approvato dalla tua organizzazione.",
-      "notApproved": "Non approvato",
-      "noneSupported": "Questa versione dell’app o questo dispositivo non supporta alcun modello locale approvato. Aggiorna OpenWhispr o contatta l’amministratore.",
-      "emptyIntersection": "Il tuo spazio di lavoro non ha modelli locali approvati per questa attività.",
-      "modelBlocked": "La tua organizzazione non approva questo modello locale. Scegline uno approvato.",
+      "guidance": "La tua organizzazione ha approvato questi modelli. Scegli quello più adatto al tuo computer.",
+      "notApproved": "Non approvato dalla tua organizzazione",
+      "noneSupported": "La tua organizzazione non ha approvato alcun modello locale supportato da questa versione dell’app. Aggiorna OpenWhispr o contatta l’amministratore.",
+      "emptyIntersection": "I tuoi spazi di lavoro non hanno alcun modello locale approvato in comune. Contatta l’amministratore.",
+      "modelBlocked": "Scegli un modello locale approvato dalla tua organizzazione.",
       "modeBlocked": "La tua organizzazione ha disattivato l’elaborazione locale.",
       "unresolved": "Impossibile determinare i criteri dello spazio di lavoro. Connettiti e riprova.",
-      "versionBlocked": "Aggiorna OpenWhispr per usare i modelli approvati dalla tua organizzazione."
+      "versionBlocked": "Aggiorna OpenWhispr per usare i modelli approvati dalla tua organizzazione.",
+      "updateRequired": "Aggiornamento richiesto",
+      "unavailable": "Non disponibile al momento",
+      "installedTitle": "Modelli locali installati",
+      "installedHint": "La tua organizzazione ha disattivato l’elaborazione locale, quindi questi modelli non possono essere eseguiti. Restano sul tuo computer finché non li elimini.",
+      "chooseModel": "Scegli un modello locale"
     }
   },
   "referral": {

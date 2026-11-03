@@ -60,6 +60,7 @@ import { resolveChatRoute } from "../helpers/chatRouting";
 import { assertAgentAllowedByPolicy, assertReasoningAllowedByPolicy } from "./reasoningPolicy";
 import type { InferenceMode } from "../types/electron";
 import { usePolicyStore } from "../stores/policyStore";
+import i18n from "../i18n";
 
 export type ToolMetadata = Record<string, unknown> | Array<Record<string, unknown>>;
 
@@ -127,17 +128,37 @@ function assertAgentSessionAllowedByPolicy(
 function createAgentStreamPolicyCheck(
   provider: string,
   mode: InferenceMode,
-  model: string
+  model: string,
+  abortController: AbortController
 ): () => void {
   const { accountId } = usePolicyStore.getState();
-  return (): void => {
+  let running = false;
+  const assertAllowed = (): void => {
+    const state = usePolicyStore.getState();
+    const unresolved =
+      state.status === "error" || state.status === "loading" || state.status === "idle";
     // By account, not credential: a rotated token keeps the account's verdict.
-    if (usePolicyStore.getState().accountId !== accountId) {
-      throw Object.assign(new Error("The account changed during streaming."), {
+    // A suspended policy blanks the account without naming another one, and a
+    // guest who signs in had no account to lose: its verdict decides from here.
+    const suspended = state.accountId === null && state.status === "loading";
+    if (accountId !== null && state.accountId !== accountId && !suspended) {
+      throw Object.assign(new Error(i18n.t("common.policyAccountChanged")), {
         code: "POLICY_UNRESOLVABLE",
+        messageKey: "common.policyAccountChanged",
       });
     }
+    // An unresolved verdict says nothing new about work already running.
+    if (running && unresolved) return;
     assertAgentSessionAllowedByPolicy(provider, mode, model);
+    running = true;
+  };
+  return (): void => {
+    try {
+      assertAllowed();
+    } catch (error) {
+      abortController.abort();
+      throw error;
+    }
   };
 }
 
@@ -650,7 +671,12 @@ class ReasoningService extends BaseReasoningService {
     });
     const mode: InferenceMode =
       route.kind === "self-hosted" ? "self-hosted" : route.kind === "local" ? "local" : "providers";
-    const assertStreamAllowed = createAgentStreamPolicyCheck(provider, mode, model);
+    const assertStreamAllowed = createAgentStreamPolicyCheck(
+      provider,
+      mode,
+      model,
+      abortController
+    );
     assertStreamAllowed();
     const isLocalProvider = route.kind === "local";
     const isLanChat = route.kind === "self-hosted";
@@ -923,11 +949,16 @@ class ReasoningService extends BaseReasoningService {
           : route.kind === "local"
             ? "local"
             : "providers";
-    const assertStreamAllowed = createAgentStreamPolicyCheck(provider, mode, model);
-    assertStreamAllowed();
     // Both streaming transports share this owner so cancellation survives
     // asynchronous server, key, and model setup.
     const abortController = new AbortController();
+    const assertStreamAllowed = createAgentStreamPolicyCheck(
+      provider,
+      mode,
+      model,
+      abortController
+    );
+    assertStreamAllowed();
     this.streamAbortController = abortController;
     const isEnterprise = route.kind === "enterprise";
     const isLocalProvider = route.kind === "local";

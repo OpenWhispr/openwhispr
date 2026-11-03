@@ -34,7 +34,7 @@ async function createDownloadRenderer(t, electronAPI) {
         export function useTranslation() { return { t }; }
       `,
       "/components/ui/useToast": `
-        const context = { toast() {} };
+        const context = { toast: (toast) => globalThis.__modelDownloadToasts?.push(toast) };
         export function useToast() { return context; }
       `,
       "/stores/settingsStore": `
@@ -547,6 +547,7 @@ for (const [code, message] of [
   ["POLICY_MODEL_BLOCKED", /onboarding\.requiredModels\.failed\.notApproved/],
   ["POLICY_LOCAL_MODE_BLOCKED", /models\.policy\.modeBlocked/],
   ["POLICY_APP_VERSION_BLOCKED", /models\.policy\.versionBlocked/],
+  ["PARAKEET_UNSUPPORTED_OS", /transcription\.parakeet\.unavailable/],
 ]) {
   test(`${code} hides Retry and the member can still leave`, async (t) => {
     const step = await renderRequiredStep(t, {
@@ -556,6 +557,7 @@ for (const [code, message] of [
     assert.equal(step.retries().length, 0);
     assert.match(step.text(), message);
     assert.doesNotMatch(step.text(), /models\.policy\.guidance/);
+    assert.doesNotMatch(step.text(), /requiredModels\.failed\.description/);
     assert.equal(step.canLeave(), true);
   });
 }
@@ -625,3 +627,49 @@ test("a token rotation's unresolved moment does not leave the step", async (t) =
   });
   assert.equal(step.proceeded(), 0);
 });
+
+for (const [label, api, run, expected] of [
+  [
+    "a refusal main returns",
+    { downloadWhisperModel: async () => ({ success: false, code: "POLICY_MODEL_BLOCKED" }) },
+    (download) => download.downloadModel("base"),
+    "hooks.modelDownload.downloadFailed.title",
+  ],
+  [
+    "a failed delete",
+    {
+      deleteWhisperModel: async () => {
+        throw new Error("locked");
+      },
+    },
+    (download) => download.deleteModel("base", () => {}),
+    "hooks.modelDownload.deleteFailed.title",
+  ],
+]) {
+  test(`${label} tells the member`, async (t) => {
+    globalThis.__modelDownloadToasts = [];
+    t.after(() => delete globalThis.__modelDownloadToasts);
+    const subscribe = () => () => {};
+    const renderer = await createDownloadRenderer(t, {
+      onWhisperDownloadProgress: subscribe,
+      onParakeetDownloadProgress: subscribe,
+      onModelDownloadProgress: subscribe,
+      modelGetActiveDownloads: async () => [],
+      ...api,
+    });
+    const { useModelDownload } = await renderer.vite.ssrLoadModule("/hooks/useModelDownload.ts");
+    let download;
+    function Harness() {
+      download = useModelDownload({ modelType: "whisper" });
+      return null;
+    }
+    await renderer.render(Harness);
+
+    await React.act(async () => run(download));
+
+    assert.ok(
+      globalThis.__modelDownloadToasts.some((toast) => toast.title === expected),
+      JSON.stringify(globalThis.__modelDownloadToasts)
+    );
+  });
+}

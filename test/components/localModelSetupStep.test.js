@@ -244,6 +244,11 @@ async function createSetupHarness(
       request.resolve({ success: true });
     });
   };
+  const fail = async (modelId) => {
+    const request = requests.get(modelId);
+    assert.ok(request, `download ${modelId} started`);
+    await React.act(async () => request.resolve({ success: false, error: "network" }));
+  };
   const trayRow = (key) => {
     const element = findElement(trayTree, (node) => node.type === "div" && node.key === key);
     assert.ok(element, `tray row ${key} is visible`);
@@ -256,6 +261,7 @@ async function createSetupHarness(
     );
   return {
     store: useSettingsStore,
+    fail,
     setPolicy: async (policy) => {
       await React.act(async () => usePolicyStore.setState(policy));
     },
@@ -785,6 +791,60 @@ test("a Cohere download activates its own model field through the background tra
   assert.equal(setup.store.getState().localTranscriptionProvider, "cohere");
   assert.equal(setup.store.getState().cohereModel, modelId);
   assert.equal(setup.ready(), true);
+});
+
+test("a Cohere download still asks for its language after the member moves to another family", async (t) => {
+  const modelId = "cohere-transcribe-03-2026";
+  const setup = await createSetupHarness(t, { policy: localPolicy([modelId, "base"]) });
+  setup.store.getState().setPreferredLanguage("auto");
+  await setup.chooseProvider("cohere");
+  await setup.click(modelId, "onboarding.rehaul.local.download");
+
+  await setup.chooseProvider("whisper");
+
+  assert.ok(setup.cohereLanguagePicker());
+  assert.equal(setup.canProceed(), false);
+  assert.equal(setup.canSkip(), false);
+
+  await setup.chooseCohereLanguage("en");
+  assert.equal(setup.canProceed(), true);
+});
+
+test("a Cohere download that failed stops asking for a language once the member moved on", async (t) => {
+  const modelId = "cohere-transcribe-03-2026";
+  const setup = await createSetupHarness(t, {
+    installed: { whisper: ["base"] },
+    selectedModel: "base",
+    policy: localPolicy([modelId, "base"]),
+  });
+  setup.store.getState().setPreferredLanguage("auto");
+  assert.equal(setup.canProceed(), true);
+  await setup.chooseProvider("cohere");
+  await setup.click(modelId, "onboarding.rehaul.local.download");
+
+  await setup.fail(modelId);
+  await setup.chooseProvider("whisper");
+
+  assert.equal(setup.cohereLanguagePicker(), null);
+  assert.equal(setup.canProceed(), true);
+});
+
+test("a saved family with nothing approved isn't offered to a restricted member", async (t) => {
+  const setup = await createSetupHarness(t, { policy: localPolicy(["parakeet-tdt-0.6b-v3"]) });
+
+  assert.equal(setup.providerListed("whisper"), false);
+  assert.equal(setup.providerListed("nvidia"), true);
+});
+
+test("an installed model the organization blocks isn't called recommended", async (t) => {
+  const modelId = "orukeet-v0.1.0";
+  const setup = await createSetupHarness(t, {
+    installed: { parakeet: [modelId] },
+    policy: localPolicy(["base"]),
+  });
+  await setup.chooseProvider("oruk");
+
+  assert.doesNotMatch(textContent(setup.row(modelId)), /common\.recommended/);
 });
 
 test("a member approved only for Gemma opens on Gemma despite the default chat model", async (t) => {

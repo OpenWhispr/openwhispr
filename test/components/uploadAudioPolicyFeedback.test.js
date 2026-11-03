@@ -145,7 +145,7 @@ test("upload policy feedback names the disabled feature independently of recordi
       });
     });
     assert.deepEqual(statusMessages(tree), [
-      "Your organization does not approve this local model. Choose an approved model.",
+      "Choose a local model your organization has approved.",
     ]);
     await React.act(async () => usePolicyStore.setState({ status: "unmanaged", policy: null }));
     assert.deepEqual(statusMessages(tree), []);

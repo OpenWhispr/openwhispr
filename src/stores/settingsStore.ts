@@ -3460,10 +3460,14 @@ export function selectPolicyEffectiveSettings(
         // A repointed override is no longer the user's choice: inert until they pick again.
         writable[definition.storeKeys.model] = "";
       } else {
+        // A blank model stays blank under a managed policy: the default may not
+        // be installed, and only the member chooses what runs.
         writable[definition.storeKeys.model] =
           !providerChanged && config.model
             ? config.model
-            : defaultLlmModel(selection.mode, provider, state.bedrockRegion);
+            : !providerChanged && selection.mode === "local"
+              ? ""
+              : defaultLlmModel(selection.mode, provider, state.bedrockRegion);
       }
     }
 
