@@ -14,6 +14,7 @@ const { SKILLS_MOCKS, ariaLabel, click, findAll, settle } = require("../lib/skil
 const MOCKS = {
   ...SIGNED_OUT_AUTH_MOCK,
   "react-i18next": SKILLS_MOCKS["react-i18next"],
+  "/ui/useToast": `export const useToast = () => ({ toast: () => {} });`,
   "/useChatStreaming": `
     import { useCallback } from "react";
     export function useChatStreaming(options) {

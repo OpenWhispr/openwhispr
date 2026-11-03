@@ -8,6 +8,7 @@ const { click, findAll, label, settle } = require("../lib/skillsHarness");
 // ChatView with a conversation already open: persistence reports the note it was
 // started from, and the note comes from a faked getNote.
 const MOCKS = {
+  "/ui/useToast": `export const useToast = () => ({ toast: () => {} });`,
   "/hooks/useAuth": `export const useAuth = () => ({ isLoaded: true, isSignedIn: !!globalThis.__user, user: globalThis.__user ?? null });`,
   "/useChatStreaming": `
     import { useCallback } from "react";

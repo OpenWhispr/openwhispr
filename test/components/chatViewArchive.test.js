@@ -14,6 +14,7 @@ const { SKILLS_MOCKS, click, findAll, label, settle } = require("../lib/skillsHa
 const MOCKS = {
   ...SIGNED_OUT_AUTH_MOCK,
   "react-i18next": SKILLS_MOCKS["react-i18next"],
+  "/ui/useToast": `export const useToast = () => ({ toast: (props) => globalThis.__chatToasts.push(props) });`,
   "/useChatStreaming": `
     const cancelStream = () => {};
     export function useChatStreaming() {
@@ -69,9 +70,12 @@ const chat = (id, title, archived_at = null) => ({
 
 async function renderChatView(t, rows) {
   let root = null;
+  const toasts = [];
+  globalThis.__chatToasts = toasts;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
     delete globalThis.__openConversationId;
+    delete globalThis.__chatToasts;
   });
   const setArchivedAt = (id, archivedAt) => {
     rows = rows.map((row) => (row.id === id ? { ...row, archived_at: archivedAt } : row));
@@ -106,6 +110,7 @@ async function renderChatView(t, rows) {
   const row = (title) => buttons((node) => node.textContent.includes(title))[0];
   const toggle = () => buttons((node) => label(node) === "chat.archived")[0];
   return {
+    toasts,
     toggle,
     showing: (title) => !!row(title),
     toggleArchivedView: async () => {
@@ -173,6 +178,37 @@ test("An open archived chat stays open when it is unarchived", async (t) => {
   await list.pickFromMenu("Trip planning", "chat.unarchive");
 
   assert.equal(globalThis.__openConversationId, 2);
+});
+
+test("A failed Unarchive shows an error and leaves the chat archived and open for retry", async (t) => {
+  const list = await renderChatView(t, [
+    chat(1, "Standup recap"),
+    chat(2, "Trip planning", "2026-10-30T09:00:00.000Z"),
+  ]);
+  await list.toggleArchivedView();
+  await list.open("Trip planning");
+  t.mock.method(console, "error", () => {});
+  t.mock.method(
+    globalThis.window.electronAPI,
+    "unarchiveAgentConversation",
+    async () => {
+      throw new Error("SQLITE_READONLY");
+    },
+    { times: 1 }
+  );
+
+  await list.pickFromMenu("Trip planning", "chat.unarchive");
+
+  assert.deepEqual(list.toasts, [{ title: "common.error", variant: "destructive" }]);
+  assert.ok(list.showing("Trip planning"), "the chat remains in the Archived list");
+  assert.equal(globalThis.__openConversationId, 2);
+
+  await list.pickFromMenu("Trip planning", "chat.unarchive");
+
+  assert.ok(!list.toggle(), "retry restored the last archived chat");
+  assert.ok(list.showing("Trip planning"));
+  assert.equal(globalThis.__openConversationId, 2);
+  assert.equal(list.toasts.length, 1);
 });
 
 test("Archive moves the chat to the Archived list and closes it when open", async (t) => {

@@ -13,6 +13,7 @@ const { installInteractiveDom } = require("../lib/interactiveDom");
 // settles it: a turn still waiting on a tool when the user starts a new chat.
 const MOCKS = {
   ...SIGNED_OUT_AUTH_MOCK,
+  "/ui/useToast": `export const useToast = () => ({ toast: () => {} });`,
   "/useChatStreaming": `
     import { useCallback, useState } from "react";
     export function useChatStreaming(options) {
