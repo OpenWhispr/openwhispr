@@ -1,3 +1,35 @@
+jest.mock('../dictationLifecycle', () => ({
+  get cleanupToneForRequest() {
+    return jest.requireActual(
+      require('react-native').Platform.OS === 'android'
+        ? '../dictationLifecycle.android'
+        : '../dictationLifecycle',
+    ).cleanupToneForRequest;
+  },
+  get prepareDictation() {
+    return jest.requireActual(
+      require('react-native').Platform.OS === 'android'
+        ? '../dictationLifecycle.android'
+        : '../dictationLifecycle',
+    ).prepareDictation;
+  },
+  get transcriptionOnly() {
+    return jest.requireActual(
+      require('react-native').Platform.OS === 'android'
+        ? '../dictationLifecycle.android'
+        : '../dictationLifecycle',
+    ).transcriptionOnly;
+  },
+}));
+jest.mock('@/services/transcription/transcriptionLifecycle', () => ({
+  get transcriptionLifecycle() {
+    return jest.requireActual(
+      require('react-native').Platform.OS === 'android'
+        ? '@/services/transcription/transcriptionLifecycle.android'
+        : '@/services/transcription/transcriptionLifecycle',
+    ).transcriptionLifecycle;
+  },
+}));
 import { TranscriptionService } from '@/services/transcription/TranscriptionService';
 import { transcribeAndCleanup } from '@/lib/transcribeAndCleanup';
 import { cleanupTranscript } from '@/lib/cleanupTranscript';
@@ -75,8 +107,9 @@ const mockFused = TranscriptionService.transcribeWithCloudCleanup as jest.Mock;
 const mockCleanup = cleanupTranscript as jest.Mock;
 
 it.each(['serial', 'fused'] as const)(
-  'cancels an in-flight %s transcription before cleanup or a late result',
+  'cancels an in-flight Android %s transcription before cleanup or a late result',
   async (path) => {
+    Platform.OS = 'android';
     const controller = new AbortController();
     let started!: () => void;
     const ready = new Promise<void>((resolve) => {
@@ -112,6 +145,11 @@ it.each(['serial', 'fused'] as const)(
     expect(mockCleanup).not.toHaveBeenCalled();
   },
 );
+
+const initialPlatform = Platform.OS;
+afterEach(() => {
+  Platform.OS = initialPlatform;
+});
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -300,4 +338,26 @@ describe('transcribeAndCleanup tone', () => {
       expect.objectContaining({ tone: 'formal', inferenceRoute: PROVIDER_ROUTE }),
     );
   });
+});
+
+it('keeps iOS cleanup when the Android transcription-only option is supplied', async () => {
+  Platform.OS = 'ios';
+  const result = await transcribeAndCleanup(
+    { audioUri: 'file:///ios.wav', provider: 'cloud', cleanupRoute: PROVIDER_ROUTE },
+    { transcriptionOnly: true },
+  );
+  expect(mockCleanup).toHaveBeenCalledTimes(1);
+  expect(result.text).toBe('cleaned:hello world');
+});
+
+it('keeps iOS request fields without injecting a lifecycle signal', async () => {
+  Platform.OS = 'ios';
+  const request = {
+    audioUri: 'file:///ios.wav',
+    provider: 'cloud' as const,
+    cleanupRoute: PROVIDER_ROUTE,
+  };
+  await transcribeAndCleanup(request, { signal: new AbortController().signal });
+  expect(mockTranscribe.mock.calls[0][0]).toEqual({ ...request, cleanupUnavailable: undefined });
+  expect(mockCleanup.mock.calls[0][1]).not.toHaveProperty('signal');
 });
