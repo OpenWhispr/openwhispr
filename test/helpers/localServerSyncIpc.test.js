@@ -15,10 +15,14 @@ const modelManager = {
   currentServerModelId: null,
   stops: 0,
   getServerStatus: () => ({ running: true }),
-  stopServer: async () => {
+  stopServerWhenIdle: async () => {
     modelManager.stops += 1;
   },
   serverManager: {
+    cancelledStops: 0,
+    cancelDeferredStop: () => {
+      modelManager.serverManager.cancelledStops += 1;
+    },
     keepResident: null,
     setKeepResident: (keepResident) => {
       modelManager.serverManager.keepResident = keepResident;
@@ -131,8 +135,14 @@ function sync({ loaded, signedIn = false, policySettled = true, ...scopes }) {
 }
 
 test("a window sync keeps the server while another scope still needs its model", async () => {
+  const cancelled = modelManager.serverManager.cancelledStops;
   await sync({ loaded: MODEL, chatAgentMode: "local", chatAgentModel: MODEL });
   assert.equal(modelManager.stops, 0);
+  assert.equal(
+    modelManager.serverManager.cancelledStops,
+    cancelled + 1,
+    "a stop deferred by an earlier sync no longer applies"
+  );
 });
 
 test("a window sync stops the server once no scope needs its model", async () => {

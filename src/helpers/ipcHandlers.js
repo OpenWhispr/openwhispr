@@ -5945,9 +5945,12 @@ class IPCHandlers {
               neededModels: localServer.models,
             });
           }
-          modelManager.stopServer().catch((err) => {
+          // A background chat answer may still be streaming from it.
+          modelManager.stopServerWhenIdle().catch((err) => {
             debugLogger.error("Failed to stop llama-server", { error: err.message });
           });
+        } else {
+          modelManager.serverManager.cancelDeferredStop();
         }
       }
 

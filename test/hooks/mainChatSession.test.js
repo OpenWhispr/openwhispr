@@ -313,3 +313,106 @@ test("a row that survives failed deletion can send again without reviving its di
   );
   assert.notEqual(mounted.session().agentState, "idle");
 });
+
+test("a conversation created from New chat stays on screen while its row validates", async (t) => {
+  const creation = deferred();
+  const row = deferred();
+  const fixture = await setupChatTurns(t, {
+    createAgentConversation: () => creation.promise,
+    getAgentConversation: () => row.promise,
+  });
+  const mounted = await mountSession(t, fixture);
+  await React.act(async () => mounted.session().send("first question"));
+  const messageId = mounted.session().messages[0].id;
+  await React.act(async () => {
+    creation.resolve({ id: 8 });
+    await until(() => fixture.state().selection.kind === "conversation");
+    await flush();
+  });
+  assert.deepEqual(mounted.session().selection, { kind: "conversation", conversationId: 8 });
+  assert.equal(mounted.session().loading, false);
+  assert.equal(mounted.session().sourceNoteLoading, false);
+  assert.equal(mounted.session().messages[0].id, messageId);
+  await until(() => fixture.streams.length === 1);
+  await React.act(async () => {
+    row.resolve({ id: 8, messages: [], note_id: null });
+    await flush();
+  });
+  assert.equal(mounted.session().messages[0].id, messageId);
+  assert.equal(mounted.session().error, null);
+});
+
+test("a new conversation deleted while it validates still falls back to New chat", async (t) => {
+  const row = deferred();
+  const fixture = await setupChatTurns(t, { getAgentConversation: () => row.promise });
+  const mounted = await mountSession(t, fixture);
+  await React.act(async () => mounted.session().send("first question"));
+  await until(() => fixture.state().selection.kind === "conversation");
+  await until(() => fixture.streams.length === 1);
+  await React.act(async () => {
+    row.resolve(null);
+    await flush();
+  });
+  assert.deepEqual(mounted.session().selection, { kind: "new-chat" });
+  assert.equal(fixture.streams[0].signal.aborted, true);
+});
+
+test("clicking the open conversation leaves it alone, unsaved error included", async (t) => {
+  let reads = 0;
+  const fixture = await setupChatTurns(t, {
+    getAgentConversation: async (id) => {
+      reads += 1;
+      return { id, messages: [], note_id: null };
+    },
+  });
+  const mounted = await mountSession(t, fixture);
+  await React.act(async () => mounted.session().openConversation(2, "sidebar"));
+  await React.act(async () => mounted.session().send("question"));
+  await until(() => fixture.streams.length === 1);
+  await React.act(async () => {
+    fixture.streams[0].reject(new Error("boom"));
+    await until(() => mounted.session().messages.at(-1)?.content.includes("boom"));
+  });
+  const before = mounted.session().messages;
+  const readsBefore = reads;
+  const revision = fixture.state().selectionRevision;
+  await React.act(async () => mounted.session().openConversation(2, "sidebar"));
+  assert.equal(fixture.state().selectionRevision, revision);
+  assert.equal(reads, readsBefore);
+  assert.equal(mounted.session().loading, false);
+  assert.equal(mounted.session().messages, before);
+});
+
+test("clicking the open conversation retries a load that failed", async (t) => {
+  let reads = 0;
+  const fixture = await setupChatTurns(t, {
+    getAgentConversation: async (id) => {
+      reads += 1;
+      if (reads === 1) throw new Error("offline");
+      return { id, messages: [], note_id: null };
+    },
+  });
+  const mounted = await mountSession(t, fixture);
+  await React.act(async () => mounted.session().openConversation(2, "sidebar"));
+  assert.ok(mounted.session().error);
+  await React.act(async () => mounted.session().openConversation(2, "sidebar"));
+  assert.equal(mounted.session().error, null);
+});
+
+test("a stale load error doesn't show on a pending submission", async (t) => {
+  const creation = deferred();
+  const fixture = await setupChatTurns(t, {
+    createAgentConversation: () => creation.promise,
+    getAgentConversation: async () => {
+      throw new Error("offline");
+    },
+  });
+  const mounted = await mountSession(t, fixture);
+  await React.act(async () => mounted.session().openConversation(2, "sidebar"));
+  assert.ok(mounted.session().error);
+  await React.act(async () => mounted.session().newChat());
+  await React.act(async () => mounted.session().send("question"));
+  assert.equal(mounted.session().selection.kind, "submission");
+  assert.equal(mounted.session().error, null);
+  assert.equal(mounted.session().messages.length, 1);
+});

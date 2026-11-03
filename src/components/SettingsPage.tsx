@@ -40,6 +40,7 @@ import {
   Languages,
 } from "./icons";
 import { useAuth } from "../hooks/useAuth";
+import { resetForAccountChange as resetChatForAccountChange } from "../stores/chatTurnStore";
 import { AUTH_URL, signOut } from "../lib/auth";
 import { deleteAccount } from "../lib/accountDeletionRequest";
 import { executeAccountDeletion } from "../lib/accountDeletionFlow";
@@ -1954,6 +1955,8 @@ export default function SettingsPage({
       return;
     }
 
+    // A background answer must not write under an account whose data is about to go.
+    resetChatForAccountChange();
     setIsDeletingAccount(true);
     try {
       const result = await executeAccountDeletion({
@@ -4830,6 +4833,7 @@ EOF`,
                             title: t("settingsPage.developer.resetAll.title"),
                             description: t("settingsPage.developer.resetAll.description"),
                             onConfirm: async () => {
+                              resetChatForAccountChange();
                               try {
                                 try {
                                   await signOut();

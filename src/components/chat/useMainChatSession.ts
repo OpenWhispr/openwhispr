@@ -4,6 +4,7 @@ import { useAuth } from "../../hooks/useAuth";
 import {
   useChatTurnStore,
   chatSelectionKey,
+  chatSelectionToken,
   selectChat,
   startNewChat,
   startChatSend,
@@ -51,8 +52,7 @@ export interface MainChatSession {
 }
 
 function selectionToken(): string {
-  const state = useChatTurnStore.getState();
-  return `${state.accountGeneration}:${state.selectionRevision}:${chatSelectionKey(state.selection)}`;
+  return chatSelectionToken(useChatTurnStore.getState());
 }
 
 const EMPTY_MESSAGES: Message[] = [];
@@ -96,12 +96,16 @@ export function useMainChatSession(): MainChatSession {
       }
       acceptChatConversation(id);
       const entry = useChatTurnStore.getState().entries[`conversation:${id}`];
-      setLoaded({
+      setLoaded((previous) => ({
         token: expectedToken,
-        messages: entry?.messages ?? decodeChatMessages(row),
+        // A turn that ended while this validated already handed its messages over, ids included.
+        messages:
+          previous?.token === expectedToken
+            ? previous.messages
+            : (entry?.messages ?? decodeChatMessages(row)),
         error: null,
         noteId: row.note_id ?? null,
-      });
+      }));
     } catch {
       if (current())
         setLoaded({
@@ -119,17 +123,30 @@ export function useMainChatSession(): MainChatSession {
   }, [selection, token, validate]);
 
   const entry = state.entries[chatSelectionKey(selection)];
-  const validated = selection.kind !== "conversation" || loaded?.token === token;
+  // A row this store just created still validates, in the background: it has nothing to load.
+  const justCreated = state.createdSelectionToken === token;
+  const validated = selection.kind !== "conversation" || loaded?.token === token || justCreated;
   const error =
-    selection.kind === "new-chat" ? state.newChatError : validated ? (loaded?.error ?? null) : null;
+    selection.kind === "new-chat"
+      ? state.newChatError
+      : loaded?.token === token
+        ? loaded.error
+        : null;
   const ready = validated && !error;
   // Unknown while a conversation validates, so the last chat's note never grounds a send.
   const noteId =
-    selection.kind !== "conversation" ? null : loaded?.token === token ? loaded.noteId : undefined;
+    selection.kind !== "conversation"
+      ? null
+      : loaded?.token === token
+        ? loaded.noteId
+        : justCreated
+          ? null
+          : undefined;
   const source = useSourceNote(noteId);
 
   useLayoutEffect(() => {
-    if (selection.kind !== "conversation" || !ready || !entry || entry.running) return;
+    if (selection.kind !== "conversation" || !ready || !entry || entry.running || entry.settling)
+      return;
     // Preserve the original IDs before dropping the unseen entry, so approvals remain attached.
     setLoaded((previous) => ({
       token,
@@ -142,11 +159,20 @@ export function useMainChatSession(): MainChatSession {
 
   const openConversation = useCallback(
     async (id: number, source: "sidebar" | "restore"): Promise<void> => {
+      const current = useChatTurnStore.getState().selection;
+      // Reloading the open conversation would blank it and lose an outcome that was never saved.
+      if (
+        current.kind === "conversation" &&
+        current.conversationId === id &&
+        startedLoad.current === selectionToken() &&
+        !error
+      )
+        return;
       loadSource.current = source;
       selectChat({ kind: "conversation", conversationId: id });
       await validate(id, source);
     },
-    [validate]
+    [validate, error]
   );
 
   const newChat = useCallback((): void => {

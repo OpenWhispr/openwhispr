@@ -35,7 +35,7 @@ import {
   selectPolicyEffectiveSettings,
   useSettingsStore,
 } from "../stores/settingsStore";
-import { subscribeChatPolicy } from "../stores/chatTurnStore";
+import { subscribeChatAccountScope, subscribeChatPolicy } from "../stores/chatTurnStore";
 import { usePolicyStore } from "../stores/policyStore";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import type { EnterpriseAudioTestLink } from "../types/enterpriseAudio";
@@ -262,6 +262,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
 
   const agentAllowedByPolicy = usePolicyStore(isAgentAllowed);
   useEffect(subscribeChatPolicy, []);
+  useEffect(subscribeChatAccountScope, []);
   const { createNote } = useCreateNote();
   // The note is created before the view switches so Notes mounts with it already open.
   const handleNewNote = useCallback(async () => {

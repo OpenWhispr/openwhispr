@@ -63,3 +63,71 @@ test("with no chats at all, the list shows its empty state", async (t) => {
   const container = await renderConversationList(t, { active: [], archived: [] });
   assert.ok(container.textContent.includes(chat.noConversations));
 });
+
+test("a background refresh keeps the rows and buttons in place", async (t) => {
+  let root;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  const ROW = { ...ARCHIVED_CHAT, title: "Budget review", archived_at: null };
+  let held = null;
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        getAgentConversationsWithPreview: (_limit, _offset, isArchived) =>
+          held ? held.promise : Promise.resolve(isArchived ? [] : [ROW]),
+      },
+    },
+  });
+  const container = installInteractiveDom(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-conversation-list-empty-test-",
+  });
+  const { useChatTurnStore, resetForAccountChange } = await vite.ssrLoadModule(
+    "/stores/chatTurnStore.ts"
+  );
+  const { default: ConversationList } = await vite.ssrLoadModule(
+    "/components/chat/ConversationList.tsx"
+  );
+  root = createRoot(container);
+  const noop = () => {};
+  await React.act(async () =>
+    root.render(
+      React.createElement(ConversationList, {
+        activeConversationId: null,
+        onSelectConversation: noop,
+        onNewChat: noop,
+        onOpenSearch: noop,
+        onArchive: noop,
+        onDelete: noop,
+        refreshKey: 0,
+      })
+    )
+  );
+  const newChatLabel = chat.newChat;
+  const before = container.textContent;
+  assert.ok(before.includes(newChatLabel), "the list has rendered");
+
+  let release;
+  held = { promise: new Promise((resolve) => (release = resolve)) };
+  await React.act(async () =>
+    useChatTurnStore.setState((state) => ({ listRevision: state.listRevision + 1 }))
+  );
+  assert.equal(container.textContent, before, "nothing leaves the screen during the refresh");
+  await React.act(async () => {
+    release([]);
+    await held.promise;
+  });
+
+  held = { promise: new Promise((resolve) => (release = resolve)) };
+  await React.act(async () => resetForAccountChange());
+  assert.equal(
+    container.textContent.includes(newChatLabel),
+    false,
+    "another account's first load still shows its loading state"
+  );
+  await React.act(async () => {
+    release([]);
+    await held.promise;
+  });
+});

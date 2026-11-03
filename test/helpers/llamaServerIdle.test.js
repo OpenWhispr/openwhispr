@@ -224,3 +224,119 @@ test("resyncing an unchanged residency setting leaves the idle countdown alone",
 
   assert.equal(stops.length, 1);
 });
+
+// A background chat answer talks to the port directly, so only /slots shows it is running.
+test("switching models waits for an answer still being generated", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  const { manager, stops } = makeManager();
+  await manager.start("/models/chat.gguf");
+  manager.processing = true;
+
+  let started = false;
+  const restart = manager.start("/models/summary.gguf").then(() => (started = true));
+  await settle();
+  assert.equal(stops.length, 0, "the running answer keeps its server");
+
+  t.mock.timers.tick(5000);
+  await settle();
+  assert.equal(stops.length, 0);
+
+  manager.processing = false;
+  t.mock.timers.tick(1000);
+  await settle();
+  await settle();
+  await restart;
+  assert.equal(stops.length, 1);
+  assert.equal(started, true);
+  assert.equal(manager.modelPath, "/models/summary.gguf");
+});
+
+test("switching models doesn't wait for an answer forever", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  const { manager, stops } = makeManager();
+  await manager.start("/models/chat.gguf");
+  manager.processing = true;
+  const restart = manager.start("/models/summary.gguf");
+  for (let elapsed = 0; elapsed <= 31_000; elapsed += 1000) {
+    await settle();
+    t.mock.timers.tick(1000);
+  }
+  await settle();
+  await settle();
+  await restart;
+  assert.equal(stops.length, 1, "the request that is waiting wins in the end");
+  assert.equal(manager.modelPath, "/models/summary.gguf");
+});
+
+test("an idle server switches models without waiting", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  const { manager, stops } = makeManager();
+  await manager.start("/models/chat.gguf");
+  await manager.start("/models/summary.gguf");
+  assert.equal(stops.length, 1);
+  assert.equal(manager.modelPath, "/models/summary.gguf");
+});
+
+test("requests that arrive during the wait share one restart", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  const { manager, stops } = makeManager();
+  let spawns = 0;
+  const doStart = manager._doStart;
+  manager._doStart = async (...args) => {
+    spawns += 1;
+    return doStart(...args);
+  };
+  await manager.start("/models/chat.gguf");
+  spawns = 0;
+  manager.processing = true;
+  const first = manager.start("/models/summary.gguf");
+  await settle();
+  const second = manager.start("/models/summary.gguf");
+  await settle();
+  manager.processing = false;
+  t.mock.timers.tick(1000);
+  await settle();
+  await settle();
+  await Promise.all([first, second]);
+  assert.equal(stops.length, 1);
+  assert.equal(spawns, 1);
+});
+
+test("a deferred stop waits for the answer and a later need cancels it", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  const { manager, stops } = makeManager();
+  await manager.start("/models/chat.gguf");
+  manager.processing = true;
+
+  const cancelled = manager.stopWhenIdle();
+  await settle();
+  assert.equal(stops.length, 0);
+  manager.cancelDeferredStop();
+  t.mock.timers.tick(1000);
+  await settle();
+  assert.equal(await cancelled, false);
+  assert.equal(stops.length, 0);
+
+  const deferredStop = manager.stopWhenIdle();
+  await settle();
+  manager.processing = false;
+  t.mock.timers.tick(1000);
+  await settle();
+  assert.equal(await deferredStop, true);
+  assert.equal(stops.length, 1);
+});
+
+test("asking for the running server cancels a deferred stop", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  const { manager, stops } = makeManager();
+  await manager.start("/models/chat.gguf");
+  manager.processing = true;
+  const deferredStop = manager.stopWhenIdle();
+  await settle();
+  await manager.start("/models/chat.gguf");
+  manager.processing = false;
+  t.mock.timers.tick(1000);
+  await settle();
+  assert.equal(await deferredStop, false);
+  assert.equal(stops.length, 0);
+});

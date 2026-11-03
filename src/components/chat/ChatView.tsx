@@ -297,50 +297,49 @@ export default function ChatView({
               ref={composerRef}
               className="pointer-events-none absolute inset-x-0 bottom-0 z-10 px-3 pb-5 pt-1"
             >
-              <fieldset
-                disabled={session.loading || (!isNewChat && Boolean(session.error))}
-                className="contents"
-              >
-                <ChatInput
-                  className="pointer-events-auto mx-auto w-full max-w-2xl"
-                  agentState={session.agentState}
-                  draftText={session.draft}
-                  onDraftChange={session.setDraft}
-                  partialTranscript=""
-                  sendDisabled={session.sourceNoteLoading}
-                  onTextSubmit={(text) => {
-                    if (!session.sourceNoteLoading) void sendWithSkill(text, attachedSkill);
-                  }}
-                  onCancel={session.cancel}
-                  voiceDraft
-                  focusOnIdle={false}
-                  placeholder={
-                    attachedSkill && !attachedSkill.ref.builtin
-                      ? t("skills.chat.placeholderWith", { name: attachedSkill.displayName })
-                      : session.sourceNoteGrounds && sourceNote
-                        ? t("chat.sourceNote.askAbout", {
-                            // The placeholder is one line and clips; its own "..." ends a shortened title.
-                            title: deriveConversationTitle(
-                              sourceNote.title,
-                              t("notes.list.untitledNote"),
-                              ""
-                            ),
-                          })
-                        : t("chat.inputPlaceholder")
-                  }
-                  variant="assistant"
-                  expandOnFocus
-                  leadingRow={
-                    attachedSkill && (
-                      <SkillChip
-                        key={attachedSkill.ref.name}
-                        name={attachedSkill.displayName}
-                        onRemove={removeSkill}
-                      />
-                    )
-                  }
-                />
-              </fieldset>
+              <ChatInput
+                className="pointer-events-auto mx-auto w-full max-w-2xl"
+                agentState={session.agentState}
+                draftText={session.draft}
+                onDraftChange={session.setDraft}
+                partialTranscript=""
+                sendDisabled={
+                  session.loading ||
+                  session.sourceNoteLoading ||
+                  (!isNewChat && Boolean(session.error))
+                }
+                onTextSubmit={(text) => {
+                  if (!session.sourceNoteLoading) void sendWithSkill(text, attachedSkill);
+                }}
+                onCancel={session.cancel}
+                voiceDraft
+                focusOnIdle={false}
+                placeholder={
+                  attachedSkill && !attachedSkill.ref.builtin
+                    ? t("skills.chat.placeholderWith", { name: attachedSkill.displayName })
+                    : session.sourceNoteGrounds && sourceNote
+                      ? t("chat.sourceNote.askAbout", {
+                          // The placeholder is one line and clips; its own "..." ends a shortened title.
+                          title: deriveConversationTitle(
+                            sourceNote.title,
+                            t("notes.list.untitledNote"),
+                            ""
+                          ),
+                        })
+                      : t("chat.inputPlaceholder")
+                }
+                variant="assistant"
+                expandOnFocus
+                leadingRow={
+                  attachedSkill && (
+                    <SkillChip
+                      key={attachedSkill.ref.name}
+                      name={attachedSkill.displayName}
+                      onRemove={removeSkill}
+                    />
+                  )
+                }
+              />
             </div>
           </div>
         </div>

@@ -80,6 +80,8 @@ export default function ConversationList({
   const showSkeletonTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showSkeleton, setShowSkeleton] = useState(false);
 
+  // A refresh of a shown list stays silent: the rows, an open menu and the scroll position stay.
+  const shownGeneration = useRef<number | null>(null);
   const loadConversations = useCallback(async () => {
     const version = ++requestVersion.current;
     const generation = useChatTurnStore.getState().accountGeneration;
@@ -113,6 +115,7 @@ export default function ConversationList({
       if (current()) setLoadError(true);
     } finally {
       if (current()) {
+        shownGeneration.current = generation;
         setIsLoading(false);
         setShowSkeleton(false);
         if (showSkeletonTimer.current) {
@@ -124,8 +127,10 @@ export default function ConversationList({
   }, []);
 
   useEffect(() => {
-    setIsLoading(true);
-    showSkeletonTimer.current = setTimeout(() => setShowSkeleton(true), 150);
+    if (shownGeneration.current !== accountGeneration) {
+      setIsLoading(true);
+      showSkeletonTimer.current = setTimeout(() => setShowSkeleton(true), 150);
+    }
     loadConversations();
     return () => {
       requestVersion.current += 1;

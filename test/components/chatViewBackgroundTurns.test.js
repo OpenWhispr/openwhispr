@@ -76,3 +76,26 @@ test("main Chat keeps per-conversation drafts and restores rejected text", async
   });
   assert.equal(fixture.input().draftText, "rejected question");
 });
+test("while a conversation validates the composer can still be typed in, but can't send", async (t) => {
+  const { deferred } = require("../lib/chatTurnHarness");
+  const row = deferred();
+  const fixture = await setupChatTurns(t, { getAgentConversation: () => row.promise }, mocks);
+  const container = installInteractiveDom(t);
+  const { default: ChatView } = await fixture.vite.ssrLoadModule("/components/chat/ChatView.tsx");
+  const root = createRoot(container);
+  fixture.unmounts.push(async () => React.act(async () => root.unmount()));
+  await React.act(async () => root.render(React.createElement(ChatView)));
+  await React.act(async () => {
+    void globalThis.__backgroundList.onSelectConversation(2);
+    await flush();
+  });
+  assert.equal(container.querySelector("fieldset"), null, "a disabled fieldset would drop focus");
+  assert.equal(globalThis.__backgroundInput.sendDisabled, true);
+  await React.act(async () => globalThis.__backgroundInput.onDraftChange("typed early"));
+  assert.equal(globalThis.__backgroundInput.draftText, "typed early");
+  await React.act(async () => {
+    row.resolve({ id: 2, messages: [], note_id: null });
+    await flush();
+  });
+  assert.equal(globalThis.__backgroundInput.sendDisabled, false);
+});

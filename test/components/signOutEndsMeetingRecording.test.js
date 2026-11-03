@@ -128,6 +128,7 @@ test("switching account from an invitation ends a live meeting before signing ou
   await handleSwitchAccount();
 
   assert.deepEqual(calls, [
+    "chat reset",
     "invitation kept",
     "meeting stopped",
     "team spaces purged",

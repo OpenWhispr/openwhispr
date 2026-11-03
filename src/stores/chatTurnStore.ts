@@ -31,6 +31,8 @@ export interface ChatTurnEntry {
   toolStatus: string;
   activeToolName: string;
   running: boolean;
+  /** Stopped, but a tool that had already gone out may still report its result. */
+  settling: boolean;
   skills: ChatSkills;
 }
 
@@ -49,6 +51,8 @@ interface ChatTurnState {
   entries: Record<string, ChatTurnEntry>;
   selection: ChatSelection;
   selectionRevision: number;
+  /** The selection this store just created its row for, so it needn't blank while validating. */
+  createdSelectionToken: string | null;
   accountGeneration: number;
   listRevision: number;
   drafts: Record<number, string>;
@@ -62,6 +66,7 @@ export const useChatTurnStore = create<ChatTurnState>(() => ({
   entries: {},
   selection: { kind: "new-chat" },
   selectionRevision: 0,
+  createdSelectionToken: null,
   accountGeneration: 0,
   listRevision: 0,
   drafts: {},
@@ -89,6 +94,10 @@ export function chatSelectionKey(selection: ChatSelection): string {
   return "new-chat";
 }
 
+export function chatSelectionToken(state: ChatTurnState): string {
+  return `${state.accountGeneration}:${state.selectionRevision}:${chatSelectionKey(state.selection)}`;
+}
+
 export function selectChat(selection: ChatSelection): void {
   useChatTurnStore.setState((state) => ({
     selection,
@@ -100,8 +109,6 @@ export function startNewChat(): void {
   useChatTurnStore.setState((state) => ({
     selection: { kind: "new-chat" },
     selectionRevision: state.selectionRevision + 1,
-    newChatDraft: state.newChatError ? state.newChatDraft : "",
-    newChatError: state.newChatError,
     newChatSkills: NO_CHAT_SKILLS,
   }));
 }
@@ -150,6 +157,19 @@ function bumpListRevision(): void {
   useChatTurnStore.setState((state) => ({ listRevision: state.listRevision + 1 }));
 }
 
+function withQuestionReturned(newChatDraft: string, question: string): string {
+  return [newChatDraft, question].filter(Boolean).join("\n\n");
+}
+
+// A row whose send was stopped before it could hold anything would otherwise stay as an empty chat.
+function removeAbandonedConversation(id: number, generation: number): void {
+  void Promise.resolve(window.electronAPI?.deleteAgentConversation?.(id))
+    .catch(() => {})
+    .then(() => {
+      if (useChatTurnStore.getState().accountGeneration === generation) bumpListRevision();
+    });
+}
+
 export function startChatSend(input: StartChatSendInput): boolean {
   const state = useChatTurnStore.getState();
   const selectionKey = chatSelectionKey(input.selection);
@@ -187,6 +207,7 @@ export function startChatSend(input: StartChatSendInput): boolean {
     toolStatus: "",
     activeToolName: "",
     running: true,
+    settling: false,
     skills: input.skills,
   };
   const operation: Submission = {
@@ -211,14 +232,19 @@ export function startChatSend(input: StartChatSendInput): boolean {
       (!deletedConversations.has(operation.conversationId) &&
         (conversationRevisions.get(operation.conversationId) ?? 0) === conversationRevision));
   const active = (): boolean => ownerCurrent() && !operation.cancelled;
-  const patch = (update: (current: ChatTurnEntry) => Partial<ChatTurnEntry>): void => {
-    if (!active()) return;
+  const patchEntry = (
+    allowed: () => boolean,
+    update: (current: ChatTurnEntry) => Partial<ChatTurnEntry>
+  ): void => {
+    if (!allowed()) return;
     useChatTurnStore.setState((current) => {
       const target = current.entries[operation.key];
       if (target?.submissionId !== submissionId) return current;
       return { entries: { ...current.entries, [operation.key]: { ...target, ...update(target) } } };
     });
   };
+  const patch = (update: (current: ChatTurnEntry) => Partial<ChatTurnEntry>): void =>
+    patchEntry(active, update);
   const showSaveError = (): void =>
     patch((current) => ({
       messages: [
@@ -237,7 +263,10 @@ export function startChatSend(input: StartChatSendInput): boolean {
       if (operation.conversationId === null) {
         const title = input.text.length > 50 ? `${input.text.slice(0, 50)}...` : input.text;
         const row = await window.electronAPI?.createAgentConversation?.(title);
-        if (!active()) return;
+        if (!active()) {
+          if (row) removeAbandonedConversation(row.id, operation.generation);
+          return;
+        }
         if (!row) throw new Error("Conversation creation failed");
         operation.conversationId = row.id;
         const previousKey = operation.key;
@@ -254,7 +283,10 @@ export function startChatSend(input: StartChatSendInput): boolean {
             entries,
             listRevision: current.listRevision + 1,
             ...(stillSelected
-              ? { selection: { kind: "conversation" as const, conversationId: row.id } }
+              ? {
+                  selection: { kind: "conversation" as const, conversationId: row.id },
+                  createdSelectionToken: `${current.accountGeneration}:${current.selectionRevision}:${operation.key}`,
+                }
               : {}),
           };
         });
@@ -276,7 +308,9 @@ export function startChatSend(input: StartChatSendInput): boolean {
           isOwnerCurrent: ownerCurrent,
         }),
         {
-          setMessages: (update) => patch((current) => ({ messages: update(current.messages) })),
+          // Stop only fences the turn's status: what it did still belongs on its message.
+          setMessages: (update) =>
+            patchEntry(ownerCurrent, (current) => ({ messages: update(current.messages) })),
           setAgentState: (agentState) => patch(() => ({ agentState })),
           setToolStatus: (toolStatus) => patch(() => ({ toolStatus })),
           setActiveToolName: (activeToolName) => patch(() => ({ activeToolName })),
@@ -319,7 +353,7 @@ export function startChatSend(input: StartChatSendInput): boolean {
           const stillSelected = chatSelectionKey(current.selection) === operation.key;
           return {
             entries,
-            newChatDraft: [current.newChatDraft, input.text].filter(Boolean).join("\n\n"),
+            newChatDraft: withQuestionReturned(current.newChatDraft, input.text),
             newChatError: i18n.t("chat.conversationCreateFailed"),
             ...(stillSelected
               ? {
@@ -333,6 +367,7 @@ export function startChatSend(input: StartChatSendInput): boolean {
       } else showSaveError();
     } finally {
       patch(() => ({ running: false, agentState: "idle", toolStatus: "", activeToolName: "" }));
+      patchEntry(ownerCurrent, () => ({ settling: false }));
       submissions.delete(submissionId);
     }
   };
@@ -351,24 +386,31 @@ export function cancelChatTurn(selection: ChatSelection): void {
   }
   useChatTurnStore.setState((state) => {
     const entries = { ...state.entries };
+    const current = entries[key] ?? entry;
     if (entry.conversationId === null) delete entries[key];
     else
       entries[key] = {
-        ...entry,
+        ...current,
         running: false,
+        settling: Boolean(operation),
         agentState: "idle",
         toolStatus: "",
         activeToolName: "",
-        messages: entry.messages.filter((message) => !message.isStreaming),
+        // Stop discards the save, not what the user already saw or what its tools already did.
+        messages: current.messages
+          .filter((message) => !message.isStreaming || message.content || message.toolCalls?.length)
+          .map((message) => ({ ...message, isStreaming: false })),
       };
-    const selectedSubmission =
-      entry.conversationId === null && chatSelectionKey(state.selection) === key;
+    if (entry.conversationId !== null) return { entries };
+    const selected = chatSelectionKey(state.selection) === key;
     return {
       entries,
-      ...(selectedSubmission
+      newChatDraft: withQuestionReturned(state.newChatDraft, entry.messages.at(-1)?.content ?? ""),
+      ...(selected
         ? {
             selection: { kind: "new-chat" as const },
             selectionRevision: state.selectionRevision + 1,
+            newChatSkills: entry.skills,
           }
         : {}),
     };
@@ -412,7 +454,7 @@ export function acceptChatConversation(conversationId: number): void {
 export function takeCompletedChatTurn(conversationId: number): ChatTurnEntry | null {
   const key = `conversation:${conversationId}`;
   const entry = useChatTurnStore.getState().entries[key];
-  if (!entry || entry.running) return null;
+  if (!entry || entry.running || entry.settling) return null;
   useChatTurnStore.setState((state) => {
     const entries = { ...state.entries };
     delete entries[key];
@@ -463,6 +505,18 @@ export function prepareChatAccountScope(userId: string | null): void {
 export function useIsConversationAnswering(conversationId: number): boolean {
   return useChatTurnStore(
     (state) => state.entries[`conversation:${conversationId}`]?.running ?? false
+  );
+}
+
+// Main can clear the scope on its own (the token going away), with no session answer to follow.
+export function subscribeChatAccountScope(): () => void {
+  void Promise.resolve(window.electronAPI?.getActiveAccountScope?.()).then((scope) => {
+    if (accountId === undefined && scope) accountId = scope.accountId;
+  });
+  return (
+    window.electronAPI?.onActiveAccountScopeChanged?.((scope) =>
+      prepareChatAccountScope(scope?.accountId ?? null)
+    ) ?? ((): void => {})
   );
 }
 

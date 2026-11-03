@@ -68,7 +68,9 @@ async function setup(
     req.on("end", () => {
       let status = 200;
       let payload;
-      if (req.url === "/props") {
+      if (req.url === "/slots") {
+        payload = [];
+      } else if (req.url === "/props") {
         calls.props += 1;
         payload = { default_generation_settings: { n_ctx: serverManager.contextSize } };
       } else if (req.url === "/apply-template") {

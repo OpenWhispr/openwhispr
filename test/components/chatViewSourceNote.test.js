@@ -118,9 +118,11 @@ async function renderChatView(t, { noteId, note, user = null, api = {} }) {
   const { default: ChatView } = await vite.ssrLoadModule("/components/chat/ChatView.tsx");
   const { createRoot } = require("react-dom/client");
   root = createRoot(container);
-  const render = async () => {
+  const render = async (props = {}) => {
     await React.act(async () =>
-      root.render(React.createElement(ChatView, { onOpenNote: (target) => opened.push(target) }))
+      root.render(
+        React.createElement(ChatView, { onOpenNote: (target) => opened.push(target), ...props })
+      )
     );
     await settle();
   };
@@ -139,6 +141,7 @@ async function renderChatView(t, { noteId, note, user = null, api = {} }) {
       await render();
     },
     submit: submitAndSettle,
+    render,
     // Another conversation opens: undefined while it loads, then its note (or none).
     setNoteId: async (id) => {
       if (id === undefined) {
@@ -467,4 +470,21 @@ test("a turn keeps its note when the user switches chat right after sending", as
   await settle();
   assert.equal(chat.sent.length, 1);
   assert.match(chat.sent[0].context.text, /three-step flow/);
+});
+
+test("a skill draft sent from a note's chat starts a new chat without that note", async (t) => {
+  const chat = await renderChatView(t, {
+    noteId: NOTE.id,
+    note: NOTE,
+    api: { createAgentConversation: async (title) => ({ id: 40, title, messages: [] }) },
+  });
+  await chat.render({
+    skillRequest: {
+      id: 1,
+      kind: "create",
+      draft: { title: "Standup", description: "Daily notes", instructions: "", fileNames: [] },
+    },
+  });
+  await until(() => chat.sent.length === 1);
+  assert.equal(chat.sent[0].context, undefined);
 });

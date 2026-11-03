@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const vm = require("node:vm");
 const ts = require("typescript");
-const { setupChatTurns, until } = require("../lib/chatTurnHarness");
+const { setupChatTurns, until, flush } = require("../lib/chatTurnHarness");
 
 test("repeated account preparation preserves a turn but replacement clears all account state", async (t) => {
   const { store, state, send, streams } = await setupChatTurns(t);
@@ -75,3 +75,67 @@ test("auth reconciliation prepares chat ownership before changing main's account
   await assert.rejects(run());
   assert.deepEqual(calls, ["chat prepared", "scope changed"]);
 });
+
+test("main clearing the account scope stops turns even when the session never answers", async (t) => {
+  let scopeChanged;
+  const { store, state, send, streams } = await setupChatTurns(t, {
+    getActiveAccountScope: async () => ({ accountId: "alice", authGeneration: 1 }),
+    onActiveAccountScopeChanged: (listener) => {
+      scopeChanged = listener;
+      return () => {};
+    },
+  });
+  t.after(store.subscribeChatAccountScope());
+  await flush();
+  store.selectChat({ kind: "conversation", conversationId: 2 });
+  send();
+  await until(() => streams.length === 1);
+  scopeChanged(null);
+  assert.equal(streams[0].signal.aborted, true);
+  assert.deepEqual(state().entries, {});
+});
+
+test("a guest's repeated null scope never touches their turn or draft", async (t) => {
+  let scopeChanged;
+  const { store, state, send, streams } = await setupChatTurns(t, {
+    getActiveAccountScope: async () => null,
+    onActiveAccountScopeChanged: (listener) => {
+      scopeChanged = listener;
+      return () => {};
+    },
+  });
+  t.after(store.subscribeChatAccountScope());
+  await flush();
+  store.setChatDraft({ kind: "new-chat" }, "keep me");
+  store.selectChat({ kind: "conversation", conversationId: 2 });
+  send();
+  await until(() => streams.length === 1);
+  scopeChanged(null);
+  scopeChanged(null);
+  assert.equal(streams[0].signal.aborted, false);
+  assert.equal(state().newChatDraft, "keep me");
+});
+
+for (const [file, anchor, first] of [
+  ["src/components/SettingsPage.tsx", "const confirmDeleteAccount", "executeAccountDeletion("],
+  [
+    "src/components/SettingsPage.tsx",
+    'title: t("settingsPage.developer.resetAll.title")',
+    "signOut()",
+  ],
+  [
+    "src/components/AcceptInvitationModal.tsx",
+    "async function handleSwitchAccount",
+    "stopRecording()",
+  ],
+]) {
+  test(`chat stops before ${first} after ${anchor}`, () => {
+    const source = fs.readFileSync(require.resolve(`../../${file}`), "utf8");
+    const start = source.indexOf(anchor);
+    assert.ok(start >= 0);
+    const reset = source.indexOf("resetChatForAccountChange()", start);
+    const next = source.indexOf(first, start);
+    assert.ok(next > start);
+    assert.ok(reset > start && reset < next);
+  });
+}

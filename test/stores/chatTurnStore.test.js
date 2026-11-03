@@ -144,3 +144,177 @@ test("New chat exposes a failed background creation's recovered question", async
   assert.equal(fixture.state().newChatDraft, "recover this question");
   assert.ok(fixture.state().newChatError);
 });
+
+// A stream that shows text and a tool step, then holds until released, ignoring the abort like a
+// tool that has already gone out.
+function holdAfter(fixture, chunks) {
+  const release = deferred();
+  fixture.reasoning.processTextStreamingAI.mock.mockImplementation(async function* () {
+    for (const chunk of chunks.before) yield chunk;
+    await release.promise;
+    for (const chunk of chunks.after ?? []) yield chunk;
+  });
+  return release;
+}
+const TEXT = { type: "content", text: "partial answer" };
+const STEP = { id: "c1", name: "email_draft", arguments: "{}" };
+const assistantOf = (fixture, id) =>
+  fixture.state().entries[`conversation:${id}`].messages.find((m) => m.role === "assistant");
+
+test("Stop keeps the partial answer and its finished tool step on screen, unsaved", async (t) => {
+  const fixture = await setupChatTurns(t);
+  holdAfter(fixture, {
+    before: [
+      TEXT,
+      { type: "tool_calls", calls: [STEP] },
+      {
+        type: "tool_result",
+        callId: "c1",
+        displayText: "Draft opened",
+        metadata: { status: "sent" },
+      },
+    ],
+  });
+  const { store, state, send, writes } = fixture;
+  store.selectChat({ kind: "conversation", conversationId: 2 });
+  send();
+  await until(() => assistantOf(fixture, 2)?.toolCalls?.[0]?.status === "completed");
+  store.cancelChatTurn({ kind: "conversation", conversationId: 2 });
+  const entry = state().entries["conversation:2"];
+  assert.equal(entry.running, false);
+  const kept = assistantOf(fixture, 2);
+  assert.equal(kept.content, "partial answer");
+  assert.equal(kept.isStreaming, false);
+  assert.equal(kept.toolCalls[0].status, "completed");
+  assert.deepEqual(
+    writes.map((write) => write.role),
+    ["user"]
+  );
+});
+
+test("Stop before any text leaves no empty reply behind", async (t) => {
+  const fixture = await setupChatTurns(t);
+  const { store, state, send, streams } = fixture;
+  store.selectChat({ kind: "conversation", conversationId: 2 });
+  send();
+  await until(() => streams.length === 1);
+  store.cancelChatTurn({ kind: "conversation", conversationId: 2 });
+  assert.deepEqual(
+    state().entries["conversation:2"].messages.map((m) => m.role),
+    ["user"]
+  );
+});
+
+test("a stopped turn settles before the view takes it, its unfinished tool still on the message", async (t) => {
+  const fixture = await setupChatTurns(t);
+  const release = holdAfter(fixture, {
+    before: [TEXT, { type: "tool_calls", calls: [STEP] }],
+  });
+  const { store, state, send, writes } = fixture;
+  store.selectChat({ kind: "conversation", conversationId: 2 });
+  send();
+  await until(() => assistantOf(fixture, 2)?.toolCalls?.[0]?.status === "executing");
+  store.cancelChatTurn({ kind: "conversation", conversationId: 2 });
+  assert.equal(store.takeCompletedChatTurn(2), null, "the stopped turn is still settling");
+  release.resolve();
+  await until(() => state().entries["conversation:2"].settling === false);
+  // Its side effect may still land, so the next turn's history says the outcome isn't recorded.
+  assert.equal(assistantOf(fixture, 2).toolCalls[0].status, "executing");
+  assert.equal(assistantOf(fixture, 2).isStreaming, false);
+  assert.equal(store.takeCompletedChatTurn(2).running, false);
+  assert.deepEqual(
+    writes.map((write) => write.role),
+    ["user"]
+  );
+});
+
+test("a send right after Stop isn't overwritten by the stopped turn's late result", async (t) => {
+  const fixture = await setupChatTurns(t);
+  const release = holdAfter(fixture, {
+    before: [TEXT, { type: "tool_calls", calls: [STEP] }],
+    after: [{ type: "tool_result", callId: "c1", displayText: "late" }],
+  });
+  const { store, state, send } = fixture;
+  store.selectChat({ kind: "conversation", conversationId: 2 });
+  send("first");
+  await until(() => assistantOf(fixture, 2)?.toolCalls?.[0]?.status === "executing");
+  store.cancelChatTurn({ kind: "conversation", conversationId: 2 });
+  assert.equal(send("second"), true);
+  const submissionId = state().entries["conversation:2"].submissionId;
+  release.resolve();
+  await flush();
+  await flush();
+  const entry = state().entries["conversation:2"];
+  assert.equal(entry.submissionId, submissionId);
+  assert.equal(entry.messages.find((m) => m.role === "assistant").toolCalls[0].status, "executing");
+});
+
+test("New chat keeps the unsent New chat text when the user comes back to it", async (t) => {
+  const { store, state } = await setupChatTurns(t);
+  store.setChatDraft({ kind: "new-chat" }, "half a thought");
+  store.setChatSkills(
+    { kind: "new-chat" },
+    {
+      attached: { ref: { name: "x" }, displayName: "X" },
+      pickOff: false,
+      removed: [],
+    }
+  );
+  store.selectChat({ kind: "conversation", conversationId: 2 });
+  store.startNewChat();
+  assert.equal(state().newChatDraft, "half a thought");
+  assert.equal(state().newChatSkills.attached, null, "New chat still starts without a skill");
+  store.startNewChat();
+  assert.equal(state().newChatDraft, "half a thought");
+});
+
+test("Stop while creating returns the question and removes the row it no longer needs", async (t) => {
+  const creation = deferred();
+  const deleted = [];
+  const fixture = await setupChatTurns(t, {
+    createAgentConversation: () => creation.promise,
+    deleteAgentConversation: async (id) => {
+      deleted.push(id);
+      return { success: true };
+    },
+  });
+  const { store, state, send, writes } = fixture;
+  const skills = {
+    attached: { ref: { name: "x" }, displayName: "X" },
+    pickOff: false,
+    removed: [],
+  };
+  store.setChatDraft({ kind: "new-chat" }, "the question");
+  send("the question", { skills });
+  store.setChatDraft({ kind: "new-chat" }, "ignored");
+  store.cancelChatTurn(state().selection);
+  assert.deepEqual(state().selection, { kind: "new-chat" });
+  assert.equal(state().newChatDraft, "ignored\n\nthe question");
+  assert.deepEqual(state().newChatSkills, skills);
+  const revision = state().listRevision;
+  creation.resolve({ id: 31 });
+  await until(() => deleted.length === 1);
+  assert.deepEqual(deleted, [31]);
+  await until(() => state().listRevision > revision);
+  assert.deepEqual(writes, []);
+  assert.deepEqual(state().entries, {});
+});
+
+test("an account reset during creation removes the row without restoring the question", async (t) => {
+  const creation = deferred();
+  const deleted = [];
+  const { store, state, send, writes } = await setupChatTurns(t, {
+    createAgentConversation: () => creation.promise,
+    deleteAgentConversation: async (id) => {
+      deleted.push(id);
+      throw new Error("a failed cleanup stays quiet");
+    },
+  });
+  send("private question");
+  store.resetForAccountChange();
+  creation.resolve({ id: 32 });
+  await until(() => deleted.length === 1);
+  await flush();
+  assert.equal(state().newChatDraft, "");
+  assert.deepEqual(writes, []);
+});
