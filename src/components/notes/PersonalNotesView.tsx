@@ -23,7 +23,11 @@ import {
 } from "../../stores/settingsStore";
 import { cn } from "../lib/utils";
 import logger from "../../utils/logger";
-import { parseSeedSegments, parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
+import {
+  parseSeedSegments,
+  parseTranscriptSegments,
+  speakerlessTranscriptText,
+} from "../../utils/parseTranscriptSegments";
 import { isExplicitSpeakerCount, resolveExpectedSpeakerCount } from "../../utils/participants";
 import {
   buildLlmTranscript,
@@ -31,6 +35,14 @@ import {
   collectKnownPeople,
   type MeetingIdentity,
 } from "../../utils/llmTranscript";
+import {
+  isNoteRecorder,
+  noteRecorderUserId,
+  recorderLlmLabel,
+  resolveNoteRecorder,
+  recordingRecorderName,
+} from "../../utils/noteRecorder";
+import { fetchSpaceRoster } from "../../hooks/useSpaceRoster";
 import type { MentionPerson } from "../../utils/mentionMarkdown";
 import type { CalendarAttendee, CalendarEvent } from "../../types/calendar";
 import {
@@ -72,6 +84,8 @@ import { isRegenerableNoteTitle } from "../../helpers/regenerableNoteTitle";
 import { isMeetingAutoEndEligible } from "../../helpers/meetingRecordingSession";
 import { handleMeetingRecordingRequest } from "../../helpers/meetingRecordingRequest";
 import { markIntroSeen, NOTES_STRUCTURE_INTRO, shouldShowIntro } from "../../lib/versionedIntro";
+import { useModalGate } from "../../stores/modalGateStore";
+import type { InvitationNotesEntry } from "../../hooks/useInvitationNotesEntry";
 import {
   applyNoteDraftMutation,
   collectPendingNoteWrites,
@@ -126,8 +140,11 @@ interface PersonalNotesViewProps {
     event: any;
   } | null;
   onMeetingRecordingRequestHandled?: () => void;
-  invitationEntry?: { workspaceId: string; teamIds: string[]; spaceIds: string[] } | null;
+  invitationEntry?: InvitationNotesEntry | null;
   onInvitationEntryHandled?: () => void;
+  /** ControlPanel holds the workspace intro until this view has mounted after a join. */
+  notesHandOff?: boolean;
+  onNotesHandOffDone?: () => void;
 }
 
 // The list's CSS cap: 30% of the view it shares with the note.
@@ -142,6 +159,8 @@ export default function PersonalNotesView({
   onMeetingRecordingRequestHandled,
   invitationEntry,
   onInvitationEntryHandled,
+  notesHandOff = false,
+  onNotesHandOffDone,
 }: PersonalNotesViewProps) {
   const isMeetingMode = useIsMeetingMode();
   const isNarrowWindow = useIsNarrowWindow();
@@ -306,32 +325,38 @@ export default function PersonalNotesView({
     initializeNotesTree();
   }, []);
 
-  useEffect(() => {
-    if (
-      structureIntroPending &&
-      isOnboardingComplete &&
-      isSignedIn &&
-      teamSpacesAvailable &&
-      !isTreeLoading &&
-      !isSidePanelLayout
-    ) {
-      setShowStructureIntro(true);
-    }
-  }, [
-    structureIntroPending,
-    isOnboardingComplete,
-    isSignedIn,
-    teamSpacesAvailable,
-    isTreeLoading,
-    isSidePanelLayout,
-  ]);
-
+  // Due once only the notes tree is still loading; the workspace intro waits for it from then on.
+  const structureIntroDue =
+    structureIntroPending &&
+    isOnboardingComplete &&
+    isSignedIn &&
+    teamSpacesAvailable &&
+    !isSidePanelLayout;
   // Arriving via an accepted invitation reopens the structure intro even when
   // this device has already seen it, and even before notes onboarding is done
-  // (the dialog also renders in the onboarding branch below).
+  // (the dialog also renders in the onboarding branch below). It opens once per
+  // invitation, when no side panel is in the way, and holds the gate until then.
+  const [invitationIntroShownFor, setInvitationIntroShownFor] =
+    useState<PersonalNotesViewProps["invitationEntry"]>(null);
+  const invitationIntroDue =
+    invitationEntry != null && !isSidePanelLayout && invitationIntroShownFor !== invitationEntry;
+  useModalGate("notesStructureIntroPending", structureIntroDue || invitationIntroDue);
+
   useEffect(() => {
-    if (invitationEntry && !isSidePanelLayout) setShowStructureIntro(true);
-  }, [invitationEntry, isSidePanelLayout]);
+    if (structureIntroDue && !isTreeLoading) setShowStructureIntro(true);
+  }, [structureIntroDue, isTreeLoading]);
+
+  useEffect(() => {
+    if (!invitationIntroDue) return;
+    setShowStructureIntro(true);
+    setInvitationIntroShownFor(invitationEntry);
+  }, [invitationIntroDue, invitationEntry]);
+
+  // Releases ControlPanel's hand-off gate in the same render that opens the structure intro just
+  // above; a due intro already holds its own gate, so the workspace intro never slips in between.
+  useEffect(() => {
+    if (notesHandOff) onNotesHandOffDone?.();
+  }, [notesHandOff, onNotesHandOffDone]);
 
   // The acceptance modal starts a sync before navigating here. Once the first
   // space the invitation granted (directly or via a team) appears in the local
@@ -410,9 +435,12 @@ export default function PersonalNotesView({
     : linkedEventLookup?.id === linkedEventId
       ? linkedEventLookup.event
       : undefined;
-  const calendarEventName = linkedEvent?.summary ?? null;
 
-  const startRecording = useCallback(() => startRecordingForNote(activeNote ?? null), [activeNote]);
+  const startRecording = useCallback(
+    () =>
+      startRecordingForNote(activeNote ?? null, recordingRecorderName(activeNote ?? null, user, t)),
+    [activeNote, user, t]
+  );
 
   const stopRecording = useCallback(async () => {
     await storeStopRecording();
@@ -712,6 +740,7 @@ export default function PersonalNotesView({
         noteTitle: note?.title ?? null,
         folderId: note ? note.folder_id : (meetingRecordingRequest.folderId ?? null),
         seedSegments,
+        recorderName: recordingRecorderName(note, user, t),
         diarizationEnabled:
           note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
         expectedCount: resolveExpectedSpeakerCount(note),
@@ -732,7 +761,14 @@ export default function PersonalNotesView({
         "meeting"
       );
     });
-  }, [meetingRecordingRequest, activeNoteId, activeNote, onMeetingRecordingRequestHandled]);
+  }, [
+    meetingRecordingRequest,
+    activeNoteId,
+    activeNote,
+    onMeetingRecordingRequestHandled,
+    user,
+    t,
+  ]);
 
   // Final and periodic transcript persistence live in MeetingRecordingMount /
   // the store — this view can be unmounted when an auto-end stop fires.
@@ -751,10 +787,14 @@ export default function PersonalNotesView({
     const noteContent = editorNote.content;
     const hasNotes = !!noteContent.trim();
     if (!hasNotes && !rawTranscript) return;
-    // An upload whose provider returned no segments saved its transcript as the
-    // note's text and left the transcript empty (#2666).
+    // Uploads made before their text moved into the transcript keep it as the
+    // note's text with no transcript; newer ones whose provider named no
+    // speakers store it as segments without any. Either way nothing shows who
+    // speaks, so it runs as a plain transcript (#2666).
     const transcriptInContent = !rawTranscript && editorNote.note_type === "upload";
-    const transcriptText = transcriptInContent ? noteContent : rawTranscript;
+    const segments = parseTranscriptSegments(rawTranscript);
+    const speakerlessText = speakerlessTranscriptText(segments);
+    const transcriptText = transcriptInContent ? noteContent : (speakerlessText ?? rawTranscript);
 
     let formattedTranscript = "";
     let meetingContext = "";
@@ -762,22 +802,38 @@ export default function PersonalNotesView({
     let hasPlainTranscript = false;
     let knownPeople: MentionPerson[] = [];
     if (transcriptText) {
-      const identity: MeetingIdentity = {
-        selfName: user?.name?.trim() || null,
-        selfEmail: user?.email?.trim() || null,
+      const recordedByUser = isNoteRecorder(editorNote, user?.id);
+      const noteSpace = spaces.find((s) => s.id === editorNote.space_id);
+      const recorderId = noteRecorderUserId(editorNote);
+      const recorder =
+        !recordedByUser && recorderId && noteSpace?.kind === "team" && noteSpace.cloud_space_id
+          ? ((await fetchSpaceRoster(noteSpace.cloud_space_id).catch(() => [])).find(
+              (member) => member.user_id === recorderId
+            ) ?? null)
+          : null;
+      const identity: MeetingIdentity = resolveNoteRecorder({
+        recordedByUser,
+        user,
+        recorder,
         participants: parseNoteParticipants(editorNote.participants),
-      };
-      const segments = parseTranscriptSegments(rawTranscript);
-      if (segments.length > 0) {
+      });
+      if (segments.length > 0 && speakerlessText === null) {
         isMeetingNote = true;
         const mappingRows =
           (await window.electronAPI?.getSpeakerMappings?.(editorNote.id).catch(() => [])) || [];
         const speakerMappings: Record<string, string> = {};
         for (const m of mappingRows) speakerMappings[m.speaker_id] = m.display_name;
 
-        const selfLabel = identity.selfName || t("notes.speaker.you");
+        const selfLabel = recorderLlmLabel(identity, recordedByUser, t);
+        const viewerLabel = user?.name?.trim() || user?.email?.trim() || t("notes.speaker.you");
         meetingContext = buildMeetingContext(identity, selfLabel);
-        formattedTranscript = buildLlmTranscript(segments, speakerMappings, selfLabel, t);
+        formattedTranscript = buildLlmTranscript(
+          segments,
+          speakerMappings,
+          selfLabel,
+          t,
+          viewerLabel
+        );
         knownPeople = collectKnownPeople(identity, speakerMappings, segments);
       } else {
         // Plain text shows no speakers, so the run gets no Meeting Context: the model
@@ -805,11 +861,11 @@ export default function PersonalNotesView({
       knownPeople,
       fromSummary,
       material,
-      allowTitleGeneration: isRegenerableNoteTitle(
-        editorNote.title,
-        [t("notes.list.untitledNote"), t("notes.list.newNote"), t("notes.sidebar.newNote")],
-        calendarEventName
-      ),
+      allowTitleGeneration: isRegenerableNoteTitle(editorNote.title, [
+        t("notes.list.untitledNote"),
+        t("notes.list.newNote"),
+        t("notes.sidebar.newNote"),
+      ]),
     });
   };
 

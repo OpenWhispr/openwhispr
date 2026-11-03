@@ -1,5 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { randomUUID } = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -112,6 +113,81 @@ test("spaces migration is idempotent across launches", (t) => {
     .prepare("SELECT COUNT(*) as count FROM spaces WHERE kind = 'private'")
     .get();
   assert.equal(privates.count, 1);
+});
+
+function folderIndexNames(sqlite) {
+  return sqlite
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'folders'")
+    .all()
+    .map((row) => row.name);
+}
+
+test("relaunch succeeds when two accounts have same-named folders in one space", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const privateId = db.getPrivateSpaceId();
+  const insertFolder = db.db.prepare(
+    "INSERT INTO folders (name, space_id, account_id, client_folder_id) VALUES (?, ?, ?, ?)"
+  );
+  for (const accountId of ["account-a", "account-b"]) {
+    for (const name of ["Personal", "Meetings", "Videos"]) {
+      insertFolder.run(name, privateId, accountId, `${accountId}-${name}`);
+    }
+  }
+  db.db.close();
+
+  const db2 = new DatabaseManager();
+  t.after(() => db2.db.close());
+  assert.ok(!folderIndexNames(db2.db).includes("idx_folders_space_name"));
+  const personalCount = db2.db
+    .prepare("SELECT COUNT(*) AS count FROM folders WHERE space_id = ? AND name = 'Personal'")
+    .get(privateId).count;
+  assert.equal(personalCount, 3, "legacy row plus one per account");
+});
+
+test("an old database with globally unique folder names migrates to per-account indexes", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.db.close();
+  const dbPath = path.join(userDataDir, "transcriptions.db");
+  fs.rmSync(dbPath, { force: true });
+
+  const BetterSqlite = require("better-sqlite3");
+  const legacy = new BetterSqlite(dbPath);
+  legacy.exec(`
+    CREATE TABLE folders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      is_default INTEGER NOT NULL DEFAULT 0,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    INSERT INTO folders (name, is_default, sort_order) VALUES ('Personal', 1, 0), ('Work', 0, 1);
+  `);
+  legacy.close();
+
+  const migrated = new DatabaseManager();
+  t.after(() => migrated.db.close());
+  const foldersSql = migrated.db
+    .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'folders'")
+    .get().sql;
+  assert.ok(!foldersSql.includes("UNIQUE"));
+  const indexes = folderIndexNames(migrated.db);
+  assert.ok(!indexes.includes("idx_folders_space_name"));
+  assert.ok(indexes.includes("idx_folders_space_legacy_name"));
+  assert.ok(indexes.includes("idx_folders_space_account_name"));
+
+  const privateId = migrated.getPrivateSpaceId();
+  const work = migrated.db.prepare("SELECT * FROM folders WHERE name = 'Work'").get();
+  assert.equal(work.space_id, privateId);
+  assert.equal(work.account_id, null);
+  assert.throws(
+    () =>
+      migrated.db.prepare("INSERT INTO folders (name, space_id) VALUES ('Work', ?)").run(privateId),
+    /UNIQUE constraint failed/,
+    "legacy folder names stay unique per space"
+  );
 });
 
 test("pre-migration rows are backfilled into the private space", (t) => {
@@ -1442,6 +1518,7 @@ test("getFolderNoteCounts attributes space-root notes per space", (t) => {
   db.saveNote("Root A", "body", "personal", null, null, null, team.id);
   db.saveNote("Root B", "body", "personal", null, null, null, team.id);
   const tombstoned = db.saveNote("Gone", "body", "personal", null, null, null, team.id).note;
+  db.markNoteSynced(tombstoned.id, "cloud-note-gone");
   db.deleteNote(tombstoned.id);
 
   const counts = db.getFolderNoteCounts();
@@ -1699,6 +1776,68 @@ test("upsertSpaceFromCloud mirrors the direct role and clears it when the grant 
   assert.equal(updated.my_direct_role, null);
 });
 
+test("upsertSpaceFromCloud stores and returns capabilities", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const capabilities = {
+    edit_notes: true,
+    manage_members: false,
+    manage_settings: false,
+    leave: true,
+  };
+  const created = db.upsertSpaceFromCloud({
+    id: "space-1",
+    name: "Design space",
+    workspace_id: "ws-1",
+    teams: [],
+    capabilities,
+  });
+  assert.deepEqual(created.capabilities, capabilities);
+  assert.deepEqual(db.getSpaceByCloudSpaceId("space-1").capabilities, capabilities);
+
+  // A later pass replaces the stored object.
+  const promoted = { edit_notes: true, manage_members: true, manage_settings: true, leave: true };
+  const updated = db.upsertSpaceFromCloud({
+    id: "space-1",
+    name: "Design space",
+    workspace_id: "ws-1",
+    teams: [],
+    capabilities: promoted,
+  });
+  assert.equal(updated.id, created.id);
+  assert.deepEqual(updated.capabilities, promoted);
+});
+
+test("space rows without capabilities read as null", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  // An older API sends no capabilities at all.
+  const created = db.upsertSpaceFromCloud({
+    id: "space-1",
+    name: "Design space",
+    workspace_id: "ws-1",
+    teams: [],
+  });
+  assert.equal(created.capabilities, null);
+
+  const capabilities = {
+    edit_notes: true,
+    manage_members: false,
+    manage_settings: false,
+    leave: false,
+  };
+  db.upsertSpaceFromCloud({ id: "space-1", name: "Design space", teams: [], capabilities });
+  // Dropping the field on the next pass must not leave stale capabilities behind.
+  assert.equal(
+    db.upsertSpaceFromCloud({ id: "space-1", name: "Design space", teams: [] }).capabilities,
+    null
+  );
+
+  // A corrupt column degrades to null, never throws.
+  db.db.prepare("UPDATE spaces SET capabilities = 'not json' WHERE id = ?").run(created.id);
+  assert.equal(db.getSpaces().find((s) => s.id === created.id).capabilities, null);
+});
+
 test("upsertSpaceFromCloud adopts a pre-spaces row via its single backfilled team", (t) => {
   const db = createDb(t);
   if (!db) return;
@@ -1766,4 +1905,59 @@ test("a deferred create receipt retains team retraction while personal backup is
   assert.equal(ack.outcome, "awaiting-cloud");
   assert.equal(db.getNote(note.id).left_team, 1);
   assert.ok(db.getPendingNotes("team").some((candidate) => candidate.id === note.id));
+});
+
+const noteRows = (db, id) =>
+  db.db.prepare("SELECT COUNT(*) AS n FROM notes WHERE id = ?").get(id).n;
+
+test("a draft a space purge moves to Personal after a create attempt is removed on delete", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const team = createTestTeamSpace(db, { name: "Ops" }).space;
+  const draft = db.saveNote("Draft", "never uploaded", "personal", null, null, null, team.id).note;
+  db.markNoteCreatesAttempted([draft.client_note_id]);
+
+  assert.equal(db.purgeSpace(team.id).success, true);
+  assert.notEqual(db.getNote(draft.id).client_note_id, draft.client_note_id);
+
+  assert.deepEqual(db.deleteNote(draft.id), { success: true, id: draft.id });
+  assert.equal(noteRows(db, draft.id), 0);
+});
+
+test("a draft moved out of a revoked folder after a create attempt is removed on delete", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const team = createTestTeamSpace(db, { name: "Ops" }).space;
+  const folder = db.createFolder("Calls", team.id).folder;
+  db.markFolderSynced(folder.id, "cloud-folder-revoked");
+  const draft = db.saveNote("Draft", "never uploaded", "personal", null, null, folder.id).note;
+  db.markNoteCreatesAttempted([draft.client_note_id]);
+
+  assert.ok(db.relocateRevokedFolder(folder.id, db.getPrivateSpaceId(), true).success);
+  assert.notEqual(db.getNote(draft.id).client_note_id, draft.client_note_id);
+
+  assert.deepEqual(db.deleteNote(draft.id), { success: true, id: draft.id });
+  assert.equal(noteRows(db, draft.id), 0);
+});
+
+test("a note given a new identity after a create attempt is removed on delete", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const note = db.saveNote("Forked", "body").note;
+  db.markNoteCreatesAttempted([note.client_note_id]);
+  db.updateNote(note.id, { client_note_id: randomUUID(), cloud_id: null });
+
+  assert.deepEqual(db.deleteNote(note.id), { success: true, id: note.id });
+  assert.equal(noteRows(db, note.id), 0);
+});
+
+test("a note that loses its cloud link but keeps its identity stays a tombstone on delete", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const note = db.saveNote("Refused", "body").note;
+  db.markNoteCreatesAttempted([note.client_note_id]);
+  db.updateNote(note.id, { cloud_id: null, cloud_updated_at: null });
+
+  assert.deepEqual(db.deleteNote(note.id), { success: true, id: note.id });
+  assert.ok(db.getNote(note.id).deleted_at);
 });

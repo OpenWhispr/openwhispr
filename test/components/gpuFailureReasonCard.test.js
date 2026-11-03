@@ -82,7 +82,7 @@ function settle() {
   });
 }
 
-async function mountPicker(t, vulkanStatus, cudaStatus = cudaPack(), gpuAccelerated = false) {
+async function mountPicker(t, vulkanStatus, cudaStatus = cudaPack(), gpuBackend = null) {
   installBrowserGlobals(t, {
     window: { location: { search: "" }, electronAPI: { getPlatform: () => "win32" } },
   });
@@ -95,7 +95,7 @@ async function mountPicker(t, vulkanStatus, cudaStatus = cudaPack(), gpuAccelera
   const pack = {
     status: vulkanStatus,
     cuda: cudaStatus,
-    gpuAccelerated,
+    gpuBackend,
     failReads: false,
   };
   const calls = [];
@@ -120,7 +120,10 @@ async function mountPicker(t, vulkanStatus, cudaStatus = cudaPack(), gpuAccelera
     onParakeetDownloadProgress: () => noop,
     getCudaWhisperStatus: read(() => pack.cuda),
     getVulkanWhisperStatus: read(() => pack.status),
-    whisperServerStatus: async () => ({ gpuAccelerated: pack.gpuAccelerated }),
+    whisperServerStatus: async () => ({
+      gpuAccelerated: pack.gpuBackend !== null,
+      gpuBackend: pack.gpuBackend,
+    }),
     onCudaFallbackNotification: listen(listeners.cuda),
     onGpuFallbackNotification: listen(listeners.vulkan),
     onWhisperGpuStatusChanged: listen(listeners.changed),
@@ -154,7 +157,7 @@ async function mountPicker(t, vulkanStatus, cudaStatus = cudaPack(), gpuAccelera
   });
   await settle();
   // Main has already saved the change when it sends any of these events.
-  // `next` replaces what the status IPCs answer: { status, cuda, gpuAccelerated }.
+  // `next` replaces what the status IPCs answer: { status, cuda, gpuBackend }.
   const fire = async (event, next = {}) => {
     Object.assign(pack, next);
     await React.act(async () => {
@@ -259,7 +262,8 @@ for (const [name, packs, reason, removes] of [
     const picker = await mountPicker(t, packs.vulkan, packs.cuda);
     try {
       assert.equal(picker.shows(isFailedCard), !!reason);
-      assert.ok(picker.shows(hasText(reason ?? "GPU acceleration ready")));
+      const ready = `${removes === "delete-cuda" ? "CUDA" : "Vulkan"} acceleration ready`;
+      assert.ok(picker.shows(hasText(reason ?? ready)));
       assert.deepEqual(await picker.click("Remove"), [removes]);
     } finally {
       await picker.unmount();
@@ -267,14 +271,14 @@ for (const [name, packs, reason, removes] of [
   });
 }
 
-for (const [name, gpuInfo, downloads] of [
-  ["an NVIDIA GPU", NVIDIA, "download-cuda"],
-  ["another GPU", { hasNvidiaGpu: false }, "download-vulkan"],
+for (const [name, gpuInfo, label, downloads] of [
+  ["an NVIDIA GPU", NVIDIA, "Enable CUDA", "download-cuda"],
+  ["another GPU", { hasNvidiaGpu: false }, "Enable Vulkan", "download-vulkan"],
 ]) {
   test(`no pack on ${name}: the card offers the pack that GPU can run`, async (t) => {
     const picker = await mountPicker(t, vulkanPack({ downloaded: false }), cudaPack({ gpuInfo }));
     try {
-      assert.deepEqual(await picker.click("Enable GPU"), [downloads]);
+      assert.deepEqual(await picker.click(label), [downloads]);
     } finally {
       await picker.unmount();
     }
@@ -313,7 +317,8 @@ for (const [name, packs, reason, removes] of [
     const picker = await mountPicker(t, packs.vulkan, packs.cuda);
     try {
       assert.equal(picker.shows(isFailedCard), !!reason);
-      assert.ok(picker.shows(hasText(reason ?? "GPU acceleration ready")));
+      const ready = `${removes === "delete-cuda" ? "CUDA" : "Vulkan"} acceleration ready`;
+      assert.ok(picker.shows(hasText(reason ?? ready)));
       for (const other of [KERNEL_IMAGE, DEVICE_LOST].filter((line) => line !== reason)) {
         assert.equal(picker.shows(hasText(other)), false, "no other pack's reason");
       }
@@ -352,7 +357,24 @@ test("both packs: after a CUDA fallback the card follows main to the Vulkan pack
     await picker.fire("cuda", { status: after.vulkan, cuda: after.cuda });
 
     assert.equal(picker.shows(isFailedCard), false);
-    assert.ok(picker.shows(hasText("GPU acceleration ready")));
+    assert.ok(picker.shows(hasText("Vulkan acceleration ready")));
+    assert.deepEqual(await picker.click("Remove"), ["delete-vulkan"]);
+  } finally {
+    await picker.unmount();
+  }
+});
+
+test("a failed pack keeps its card while a bundled GPU build of whisper-server runs (#2168)", async (t) => {
+  // The Vulkan pack failed, and the bundled server it fell back to is a distro CUDA build
+  const picker = await mountPicker(
+    t,
+    vulkanPack({ inUse: true, ...failedWith(DEVICE_LOST) }),
+    cudaPack({ gpuInfo: NVIDIA }),
+    "cuda"
+  );
+  try {
+    assert.ok(picker.shows(isFailedCard));
+    assert.ok(picker.shows(hasText(DEVICE_LOST)));
     assert.deepEqual(await picker.click("Remove"), ["delete-vulkan"]);
   } finally {
     await picker.unmount();
@@ -385,7 +407,7 @@ test("the card re-reads when main says the GPU state changed, without remounting
 
     assert.equal(picker.shows(isFailedCard), false);
     assert.equal(picker.shows(hasText(DEVICE_LOST)), false, "the old reason is gone");
-    assert.ok(picker.shows(hasText("GPU acceleration ready")));
+    assert.ok(picker.shows(hasText("Vulkan acceleration ready")));
   } finally {
     await picker.unmount();
   }
@@ -393,19 +415,19 @@ test("the card re-reads when main says the GPU state changed, without remounting
 
 test("a card that switches packs reads the server again, not the old pack's state", async (t) => {
   const vulkanRunning = bothPacks({ inUse: "vulkan" });
-  const picker = await mountPicker(t, vulkanRunning.vulkan, vulkanRunning.cuda, true);
+  const picker = await mountPicker(t, vulkanRunning.vulkan, vulkanRunning.cuda, "vulkan");
   try {
-    assert.ok(picker.shows(hasText("GPU acceleration active")));
+    assert.ok(picker.shows(hasText("Vulkan acceleration active")));
 
     // CUDA is opted out: Remove on another tab deleted Vulkan, so the server restarts on CPU
     const cudaLeft = onlyCuda({ inUse: false });
     await picker.fire("changed", {
       status: cudaLeft.vulkan,
       cuda: cudaLeft.cuda,
-      gpuAccelerated: false,
+      gpuBackend: null,
     });
 
-    assert.ok(picker.shows(hasText("GPU acceleration ready")), "without waiting for the 5 s poll");
+    assert.ok(picker.shows(hasText("CUDA acceleration ready")), "without waiting for the 5 s poll");
   } finally {
     await picker.unmount();
   }

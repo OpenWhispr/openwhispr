@@ -72,7 +72,8 @@ test("deduplicates config and Azure token refreshes while keeping cloud tokens o
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
   t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
   const calls = { config: 0, assertion: 0, azure: 0 };
-  const proxyFetch = async (url) => {
+  let configHeaders;
+  const proxyFetch = async (url, init) => {
     if (url.includes("/enterprise-providers/azure/assertion")) {
       calls.assertion += 1;
       return jsonResponse({ data: { assertion: "signed-openwhispr-assertion" } });
@@ -82,6 +83,7 @@ test("deduplicates config and Azure token refreshes while keeping cloud tokens o
       return jsonResponse({ access_token: "azure-bearer-token", expires_in: 3600 });
     }
     calls.config += 1;
+    configHeaders = init.headers;
     return jsonResponse({ data: managedConfig() });
   };
   const tokenState = { token: "openwhispr-session", generation: 4 };
@@ -100,12 +102,16 @@ test("deduplicates config and Azure token refreshes while keeping cloud tokens o
   assert.equal(left.success, true);
   assert.equal(right.success, true);
   assert.equal(calls.config, 1);
+  // Without the audio capability the server narrows the envelope to the 1.10 contract.
+  assert.match(configHeaders["x-openwhispr-capabilities"], /(^|,)enterprise-audio-v1(,|$)/);
   assert.equal(JSON.stringify(left).includes("azure-bearer-token"), false);
   assert.equal(JSON.stringify(left).includes("signed-openwhispr-assertion"), false);
 
   const runtime = await manager.resolveProvider(request());
   assert.equal(runtime.managed, true);
   assert.equal(runtime.provider, "azure");
+  assert.equal(runtime.mode, "managed_default");
+  assert.equal(runtime.allowManualSetup, true);
   assert.equal(runtime.model, "deployment-a");
   assert.equal(await runtime.tokenProvider(), "azure-bearer-token");
   assert.equal(await runtime.tokenProvider(), "azure-bearer-token");
@@ -138,6 +144,63 @@ test("authorization failures evict cached config while server failures use it tr
   assert.equal(denied.code, "SSO_REQUIRED");
   assert.equal(denied.enforcementRequired, true);
   assert.deepEqual(JSON.parse(fs.readFileSync(cachePath, "utf8")).entries, []);
+});
+
+test("a rotated credential's cache drops the old credential's entries", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  const cachePath = path.join(tempDir, "config.json");
+  const otherWorkspaceId = "44444444-4444-4444-8444-444444444444";
+  const manager = createEnterpriseIdentityManager({
+    cachePath,
+    getApiUrl: () => "https://api.example.com",
+    getAppVersion: () => "1.8.1",
+    proxyFetch: async (url) => {
+      const config = managedConfig();
+      if (url.includes(otherWorkspaceId)) {
+        config.workspaceId = otherWorkspaceId;
+        config.identity.subject = `workspace:${otherWorkspaceId}`;
+      }
+      return jsonResponse({ data: config });
+    },
+    tokenStore: { getState: () => ({ token: "session", generation: 4 }) },
+  });
+  const rotated = { Authorization: "Bearer rotated-session" };
+  const cachedWorkspaces = () =>
+    JSON.parse(fs.readFileSync(cachePath, "utf8")).entries.map((entry) => entry.workspaceId);
+
+  for (const overrides of [
+    {},
+    { authHeaders: rotated },
+    { authHeaders: rotated, workspaceId: otherWorkspaceId },
+  ]) {
+    assert.equal((await manager.getConfig(request(overrides))).status, "network");
+  }
+
+  // Only the rotated credential's entries remain, one per workspace.
+  assert.deepEqual(cachedWorkspaces(), [workspaceId, otherWorkspaceId]);
+});
+
+test("another API origin's cache entries survive a rotated credential", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  const cachePath = path.join(tempDir, "config.json");
+  let apiUrl = "https://api.example.com";
+  const manager = createEnterpriseIdentityManager({
+    cachePath,
+    getApiUrl: () => apiUrl,
+    getAppVersion: () => "1.8.1",
+    proxyFetch: async () => jsonResponse({ data: managedConfig() }),
+    tokenStore: { getState: () => ({ token: "session", generation: 4 }) },
+  });
+  const cachedOrigins = () =>
+    JSON.parse(fs.readFileSync(cachePath, "utf8")).entries.map((entry) => entry.key.split("\n")[0]);
+
+  await manager.getConfig(request());
+  apiUrl = "https://staging.example.com";
+  await manager.getConfig(request({ authHeaders: { Authorization: "Bearer rotated-session" } }));
+
+  assert.deepEqual(cachedOrigins(), ["https://api.example.com", "https://staging.example.com"]);
 });
 
 test("an Enterprise-plan downgrade clears prior managed enforcement", async (t) => {
@@ -585,4 +648,113 @@ test("an Azure token body that stalls after headers times out and frees the shar
 
   assert.equal(await resolved.tokenProvider(), "entra");
   assert.equal(azureCalls, 2);
+});
+
+test("only transcription token exchanges use the audio network profile and requesting identity", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-network-"));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  const config = managedConfig();
+  const network = { proxy: { mode: "fixed", url: "http://proxy.example.com:8080/" } };
+  config.providers[0].config.network = network;
+  config.providers[0].config.transcription = {
+    allowedDeployments: ["gpt-4o-transcribe"],
+    defaultDeployment: "gpt-4o-transcribe",
+  };
+  const routes = [];
+  const respond = (url) => {
+    if (url.includes("/assertion")) return jsonResponse({ data: { assertion: "signed" } });
+    if (url.startsWith("https://login.microsoftonline.com/"))
+      return jsonResponse({ access_token: "entra", expires_in: 3600 });
+    return jsonResponse({ data: config });
+  };
+  const manager = createEnterpriseIdentityManager({
+    cachePath: path.join(tempDir, "cache.json"),
+    getApiUrl: () => "https://api.example.com",
+    getAppVersion: () => "1.10.0",
+    proxyFetch: async (url) => {
+      if (url.startsWith("https://login.microsoftonline.com/")) routes.push(["electron"]);
+      return respond(url);
+    },
+    enterpriseFetch: async (url, _init, usedNetwork, _bundles, identity) => {
+      routes.push(["audio", usedNetwork, identity]);
+      return respond(url);
+    },
+    tokenStore: { getState: () => ({ generation: 4, token: "openwhispr-session" }) },
+  });
+  await (await manager.resolveProvider(request())).tokenProvider();
+  assert.deepEqual(routes, [["electron"]]);
+  await (
+    await manager.resolveProvider(request({ inferenceScope: "transcription" }))
+  ).tokenProvider();
+  assert.deepEqual(routes[1], ["audio", network, { accountId, workspaceId }]);
+  assert.equal(routes.length, 2);
+});
+
+function requiredAudioConfig(audio) {
+  const config = managedConfig();
+  const [record] = config.providers;
+  record.mode = "managed_required";
+  record.allowManualSetup = false;
+  delete record.config.allowedDeployments;
+  delete record.config.scopeDefaults;
+  Object.assign(record.config, audio);
+  return config;
+}
+
+const BATCH_ONLY = {
+  transcription: { allowedDeployments: ["stt"], defaultDeployment: "stt" },
+};
+const REALTIME = {
+  realtime: {
+    allowedDeployments: ["rt"],
+    defaultDeployment: "rt",
+    protocol: "openai-transcription-ga",
+    sampleRate: 24000,
+    apiVersion: "v1",
+  },
+};
+
+test("managed resolution errors carry their translation key across the main process", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  const manager = createEnterpriseIdentityManager({
+    cachePath: path.join(tempDir, "config.json"),
+    getApiUrl: () => "https://api.example.com",
+    getAppVersion: () => "1.11.0",
+    proxyFetch: async () => jsonResponse({ data: requiredAudioConfig(REALTIME) }),
+    tokenStore: { getState: () => ({ token: "session", generation: 4 }) },
+  });
+  await assert.rejects(
+    manager.resolveProvider(request({ inferenceScope: "transcription", operation: "batch" })),
+    {
+      code: "MANAGED_OPERATION_UNAVAILABLE",
+      messageKey: "enterprise.audio.operationUnavailable",
+    }
+  );
+});
+
+test("eviction reports which audio operations a required record enforced", async (t) => {
+  for (const [audio, operations] of [
+    [BATCH_ONLY, ["batch"]],
+    [{ ...BATCH_ONLY, ...REALTIME }, ["batch", "realtime"]],
+  ]) {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+    t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+    const snapshots = [];
+    let response = jsonResponse({ data: requiredAudioConfig(audio) });
+    const manager = createEnterpriseIdentityManager({
+      cachePath: path.join(tempDir, "config.json"),
+      getApiUrl: () => "https://api.example.com",
+      getAppVersion: () => "1.11.0",
+      proxyFetch: async () => response,
+      tokenStore: { getState: () => ({ token: "session", generation: 4 }) },
+      broadcast: (snapshot) => snapshots.push(snapshot),
+    });
+    assert.equal((await manager.getConfig(request())).success, true);
+    response = jsonResponse({ error: "Sign in with company SSO", code: "SSO_REQUIRED" }, 403);
+    const denied = await manager.getConfig({ ...request(), forceRefresh: true });
+    assert.deepEqual(denied.enforcedScopes, ["transcription"]);
+    assert.deepEqual(denied.enforcedAudioOperations, operations);
+    assert.deepEqual(snapshots.at(-1).enforcedAudioOperations, operations);
+  }
 });

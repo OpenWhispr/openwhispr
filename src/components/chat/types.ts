@@ -7,6 +7,8 @@ export interface ToolCallInfo {
   arguments: string;
   status: "executing" | "completed" | "error";
   result?: string;
+  /** Set when the call ran but didn't do what was asked; result then says why. */
+  failed?: boolean;
   // Single object for note tools; search_notes attaches its result array.
   metadata?: Record<string, unknown> | Array<Record<string, unknown>>;
 }

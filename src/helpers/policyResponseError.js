@@ -36,6 +36,9 @@ function toPolicyFailure(error) {
     ...(Number.isInteger(error?.status) ? { status: error.status } : {}),
     ...(error?.minAppVersion ? { minAppVersion: error.minAppVersion } : {}),
     ...(error?.details !== undefined ? { details: error.details } : {}),
+    ...(error?.messageKey
+      ? { messageKey: error.messageKey, messageParams: error.messageParams }
+      : {}),
   };
 }
 

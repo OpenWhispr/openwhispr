@@ -158,6 +158,8 @@ async function setupAssistantPanel(
     onResponseContent: noop,
     onConversationReset: noop,
     onSelectionContextChange: noop,
+    skillChoice: { picked: null, pickOff: false },
+    onSkillChoiceChange: noop,
   };
   return { AssistantPanel, props };
 }
@@ -342,6 +344,8 @@ test("starting a new conversation clears the displayed response and parent conte
         assistant.handleConversationReset();
       },
       onSelectionContextChange: (context) => lifecycleEvents.push(`selection:${context}`),
+      skillChoice: assistant.skillChoice,
+      onSkillChoiceChange: assistant.setSkillChoice,
     });
   }
 
@@ -419,6 +423,20 @@ test("the Assistant localizes the active registered tool name", async (t) => {
 
   assert.match(markup, />Buscar notas</);
   assert.doesNotMatch(markup, />Search notes</);
+});
+
+test("the Assistant names the skill tools in the user's language", async (t) => {
+  const names = {
+    load_skill: "Cargar habilidad",
+    propose_skill: "Proponer habilidad",
+    update_skill: "Actualizar habilidad",
+  };
+  for (const [activeToolName, name] of Object.entries(names)) {
+    const markup = await renderAssistantPanel(t, [], { activeToolName, locale: "es" });
+
+    assert.match(markup, new RegExp(`>${name}<`), activeToolName);
+    assert.doesNotMatch(markup, />Herramienta</, activeToolName);
+  }
 });
 
 test("the Assistant uses its localized fallback for an unknown active tool", async (t) => {
@@ -987,6 +1005,8 @@ test("only a plain-text caret delivery asks the model for plain prose", async (t
       onResponseContent: noop,
       onConversationReset: noop,
       onSelectionContextChange: noop,
+      skillChoice: { picked: null, pickOff: false },
+      onSkillChoiceChange: noop,
     });
 
   root = createRoot(container);
@@ -1110,7 +1130,7 @@ test("voice help sources stay with the answer on screen while a follow-up runs",
   const answered = {
     id: "answered",
     role: "assistant",
-    content: "Open Settings → App → Hotkeys.",
+    content: "Open Settings → Account → Hotkeys.",
     isStreaming: false,
     toolCalls: [helpCall("first", "/help/dictation/hotkeys")],
   };
@@ -1142,7 +1162,7 @@ test("voice help sources stay with the answer on screen while a follow-up runs",
         element.tagName === "A" &&
         element.getAttribute("href") === `https://docs.openwhispr.com${path}`
     );
-  assert.match(container.textContent, /Open Settings → App → Hotkeys/);
+  assert.match(container.textContent, /Open Settings → Account → Hotkeys/);
   assert.ok(link("/help/dictation/hotkeys"), "the answer on screen keeps its own source");
   assert.equal(link("/guides/local-models"), null, "the pending answer's source waits for it");
 });

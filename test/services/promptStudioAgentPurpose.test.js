@@ -186,7 +186,7 @@ test("Prompt Studio labels dictation-agent runs for policy enforcement", async (
             return `export function getLanguageLabel(value) { return value; }`;
           }
           if (id === "\0prompt-studio-snippets") {
-            return `export function getDictionaryHintWords() { return []; }`;
+            return `export function getLlmDictionaryWords() { return []; }`;
           }
           if (id === "\0prompt-studio-agent-inference") {
             return `
