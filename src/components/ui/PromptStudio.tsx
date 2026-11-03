@@ -42,6 +42,8 @@ const PROVIDER_CONFIG: Record<string, ProviderConfig> = {
   gemini: { label: "Gemini", apiKeyStorageKey: "geminiApiKey" },
   groq: { label: "Groq", apiKeyStorageKey: "groqApiKey" },
   openrouter: { label: "OpenRouter", apiKeyStorageKey: "openrouterApiKey" },
+  "opencode-go": { label: "OpenCode Go", apiKeyStorageKey: "opencodeGoApiKey" },
+  "opencode-zen": { label: "OpenCode Zen", apiKeyStorageKey: "opencodeZenApiKey" },
   tinfoil: { label: "Tinfoil", apiKeyStorageKey: "tinfoilApiKey" },
   openwhispr: { label: "OpenWhispr Cloud" },
   custom: {

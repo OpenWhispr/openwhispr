@@ -7,6 +7,8 @@ const CLOUD_CHAT_PROVIDERS = new Set([
   "custom",
   "openrouter",
   "corti",
+  "opencode-go",
+  "opencode-zen",
 ]);
 
 // Resolve Chat from Chat-owned settings only. In particular, this must never

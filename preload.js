@@ -14,6 +14,8 @@ const BYOK_KEY_BRIDGES = [
   { base: "openrouter", get: "getOpenrouterKey", save: "saveOpenrouterKey" },
   { base: "tinfoil", get: "getTinfoilKey", save: "saveTinfoilKey" },
   { base: "corti", get: "getCortiKey", save: "saveCortiKey" },
+  { base: "opencode-go", get: "getOpencodeGoKey", save: "saveOpencodeGoKey" },
+  { base: "opencode-zen", get: "getOpencodeZenKey", save: "saveOpencodeZenKey" },
   { base: "deepgram", get: "getDeepgramKey", save: "saveDeepgramKey" },
   { base: "assemblyai", get: "getAssemblyAIKey", save: "saveAssemblyAIKey" },
   {
@@ -757,6 +759,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
   enterpriseStreamCancel: (streamId) => ipcRenderer.invoke("enterprise-stream-cancel", streamId),
   onEnterpriseStreamPart: registerListener(
     "enterprise-stream-part",
+    (callback) => (_event, payload) => callback(payload)
+  ),
+  processOpencodeReasoning: (provider, text, modelId, agentName, config) =>
+    ipcRenderer.invoke("process-opencode-reasoning", provider, text, modelId, agentName, config),
+  opencodeStreamStart: (payload) => ipcRenderer.invoke("opencode-stream-start", payload),
+  opencodeStreamCancel: (streamId) => ipcRenderer.invoke("opencode-stream-cancel", streamId),
+  onOpencodeStreamPart: registerListener(
+    "opencode-stream-part",
     (callback) => (_event, payload) => callback(payload)
   ),
   listBedrockModels: (config) => ipcRenderer.invoke("bedrock-list-models", config),

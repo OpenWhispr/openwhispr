@@ -64,6 +64,8 @@ const CLOUD_PROVIDER_IDS = [
   OPENROUTER_TAB,
   "tinfoil",
   "corti",
+  "opencode-go",
+  "opencode-zen",
   "custom",
 ];
 
@@ -371,6 +373,10 @@ export default function ReasoningModelSelector({
   const setTinfoilApiKey = useSettingsStore((s) => s.setTinfoilApiKey);
   const cortiApiKey = useSettingsStore((s) => s.cortiApiKey);
   const setCortiApiKey = useSettingsStore((s) => s.setCortiApiKey);
+  const opencodeGoApiKey = useSettingsStore((s) => s.opencodeGoApiKey);
+  const setOpencodeGoApiKey = useSettingsStore((s) => s.setOpencodeGoApiKey);
+  const opencodeZenApiKey = useSettingsStore((s) => s.opencodeZenApiKey);
+  const setOpencodeZenApiKey = useSettingsStore((s) => s.setOpencodeZenApiKey);
   const [selectedMode, setSelectedMode] = useState<"cloud" | "local">(mode || "cloud");
   const [selectedCloudProvider, setSelectedCloudProvider] = useState("openai");
   const [selectedLocalProvider, setSelectedLocalProvider] = useState("qwen");
@@ -449,6 +455,17 @@ export default function ReasoningModelSelector({
       value: cortiApiKey,
       set: setCortiApiKey,
       url: "https://www.corti.ai/?utm_source=referral&utm_campaign=openwhispr",
+    },
+    // Separate subscriptions, so separate keys, both issued at opencode.ai/auth.
+    "opencode-go": {
+      value: opencodeGoApiKey,
+      set: setOpencodeGoApiKey,
+      url: "https://opencode.ai/auth",
+    },
+    "opencode-zen": {
+      value: opencodeZenApiKey,
+      set: setOpencodeZenApiKey,
+      url: "https://opencode.ai/auth",
     },
   };
   const hostedKey = hostedKeys[displayedCloudProvider];

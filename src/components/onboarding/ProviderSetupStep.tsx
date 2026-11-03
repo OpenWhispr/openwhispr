@@ -185,6 +185,10 @@ function providerCredential(provider: string, store: ReturnType<typeof useSettin
       return { value: store.tinfoilApiKey, set: store.setTinfoilApiKey };
     case "corti":
       return { value: store.cortiApiKey, set: store.setCortiApiKey };
+    case "opencode-go":
+      return { value: store.opencodeGoApiKey, set: store.setOpencodeGoApiKey };
+    case "opencode-zen":
+      return { value: store.opencodeZenApiKey, set: store.setOpencodeZenApiKey };
     case "deepgram":
       return { value: store.deepgramApiKey, set: store.setDeepgramApiKey };
     case "assemblyai":

@@ -18,7 +18,15 @@ import { applyThinkingSuppression, isThinkingSuppressed } from "./thinkingSuppre
  * catalog is dynamic (models outside the registry must not fall through to
  * `max_completion_tokens`); local/lan are llama.cpp-style servers.
  */
-const LEGACY_CHAT_COMPLETIONS_PROVIDERS = new Set(["local", "lan", "groq", "tinfoil", "corti"]);
+const LEGACY_CHAT_COMPLETIONS_PROVIDERS = new Set([
+  "local",
+  "lan",
+  "groq",
+  "tinfoil",
+  "corti",
+  "opencode-go",
+  "opencode-zen",
+]);
 
 /**
  * Single place that turns (model, provider, endpoint, config) into the

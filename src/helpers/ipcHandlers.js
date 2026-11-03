@@ -32,6 +32,7 @@ const { resolveFailedGpuBackends } = require("./whisper");
 const { WHISPER_GPU_FAILURE_REASON_KEYS } = require("./whisperGpuFailureReason");
 const { BYOK_API_KEYS } = require("../config/secretKeys");
 const { dictionaryWordKey } = require("../utils/dictionaryWordKey");
+const { getOpencodeProvider, opencodeHeaders } = require("./opencodeProviderConfig");
 const tokenStore = require("./tokenStore");
 const accountScopeBinding = require("./accountScopeBinding");
 const { registerProductHelpIpc, remoteHelpPolicyState } = require("./productHelp");
@@ -6603,6 +6604,156 @@ class IPCHandlers {
         }
       }
     );
+
+    // OpenCode Go/Zen reasoning. Both run here because opencode.ai answers no
+    // CORS preflight, so the renderer's fetch could not reach them; the AI SDK
+    // client is built in main on net.fetch, the way the enterprise providers
+    // are. Go carries a per-conversation session header, Zen does not.
+    ipcMain.handle(
+      "process-opencode-reasoning",
+      async (_event, providerId, text, modelId, _agentName, config) => {
+        let label = "OpenCode";
+        try {
+          const provider = getOpencodeProvider(providerId);
+          label = provider.label;
+          const apiKey = this.environmentManager[provider.keyGetter]();
+
+          if (!apiKey) {
+            throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
+              provider: provider.label,
+              surface: "llm",
+            });
+          }
+          if (!modelId) {
+            throw new Error(`No model specified for ${provider.label} API call`);
+          }
+
+          const { generateText } = require("ai");
+          const { createOpenAI } = require("@ai-sdk/openai");
+          const client = createOpenAI({
+            apiKey,
+            baseURL: provider.baseUrl,
+            headers: opencodeHeaders(provider.id),
+            fetch: (url, init) => net.fetch(url, { ...init, useSessionCookies: false }),
+          });
+
+          // Registry entries state whether a model takes `temperature`; unknown
+          // models default to sending it, which Chat Completions accepts.
+          const useTemperature = config?.supportsTemperature !== false;
+          const result = await generateText({
+            model: client.chat(modelId),
+            system: config?.systemPrompt || "",
+            prompt: text,
+            maxOutputTokens: config?.maxTokens || Math.max(100, Math.min(text.length * 2, 4096)),
+            ...(useTemperature ? { temperature: config?.temperature ?? 0.3 } : {}),
+            abortSignal: AbortSignal.timeout(config?.timeoutMs || 60000),
+            maxRetries: 0,
+          });
+
+          if (
+            config?.requireCompleteOutput &&
+            ["length", "max-tokens", "max_tokens"].includes(result.finishReason)
+          ) {
+            throw Object.assign(new Error("Model output was truncated"), {
+              messageKey: CLEANUP_TRUNCATED_MESSAGE_KEY,
+            });
+          }
+          const outputText = (result.text || "").trim();
+          if (!outputText) {
+            throw Object.assign(new Error(`${provider.label} returned no text`), {
+              messageKey: CLEANUP_EMPTY_REPLY_MESSAGE_KEY,
+            });
+          }
+          return { success: true, text: outputText };
+        } catch (error) {
+          debugLogger.error("OpenCode reasoning error:", error);
+          return {
+            success: false,
+            ...ipcErrorFields(
+              asProviderError(error, { provider: label, model: modelId, surface: "llm" })
+            ),
+          };
+        }
+      }
+    );
+
+    // Runs doStream for the renderer's OpenCode chat model shim; parts are
+    // relayed verbatim over opencode-stream-part, ending with {done}/{error}.
+    this.opencodeStreamAborts = new Map();
+    ipcMain.handle("opencode-stream-start", async (event, payload) => {
+      const { streamId, provider: providerId, modelId, options } = payload || {};
+      let label = "OpenCode";
+      const send = (message) => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send("opencode-stream-part", { streamId, ...message });
+        }
+      };
+      const abortController = new AbortController();
+      this.opencodeStreamAborts.set(streamId, abortController);
+      const abortOnGone = (_event, _url, isInPlace, isMainFrame) => {
+        if (isMainFrame && !isInPlace) abortController.abort();
+      };
+      const abortOnDestroyed = () => abortController.abort();
+      event.sender.on("did-start-navigation", abortOnGone);
+      event.sender.once("destroyed", abortOnDestroyed);
+      try {
+        if (!streamId) throw new Error("No stream id for OpenCode streaming");
+        const provider = getOpencodeProvider(providerId);
+        label = provider.label;
+        const apiKey = this.environmentManager[provider.keyGetter]();
+        if (!apiKey) {
+          throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
+            provider: provider.label,
+            surface: "llm",
+          });
+        }
+
+        const { createOpenAI } = require("@ai-sdk/openai");
+        const client = createOpenAI({
+          apiKey,
+          baseURL: provider.baseUrl,
+          headers: opencodeHeaders(provider.id),
+          fetch: (url, init) => net.fetch(url, { ...init, useSessionCookies: false }),
+        });
+        const model = client.chat(modelId);
+        const { stream } = await model.doStream({
+          ...options,
+          abortSignal: abortController.signal,
+        });
+        const reader = stream.getReader();
+        try {
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (event.sender.isDestroyed()) {
+              abortController.abort();
+              break;
+            }
+            send({ part: value });
+          }
+        } finally {
+          reader.releaseLock();
+        }
+        send({ done: true });
+        return { success: true };
+      } catch (err) {
+        debugLogger.error("OpenCode stream error:", err);
+        const mapped = asProviderError(err, { provider: label, model: modelId, surface: "llm" });
+        send({ error: mapped.message });
+        return { success: false, error: mapped.message };
+      } finally {
+        this.opencodeStreamAborts.delete(streamId);
+        if (!event.sender.isDestroyed()) {
+          event.sender.removeListener("did-start-navigation", abortOnGone);
+          event.sender.removeListener("destroyed", abortOnDestroyed);
+        }
+      }
+    });
+
+    ipcMain.handle("opencode-stream-cancel", async (_event, streamId) => {
+      this.opencodeStreamAborts.get(streamId)?.abort();
+      this.opencodeStreamAborts.delete(streamId);
+    });
 
     ipcMain.handle("check-local-reasoning-available", async () => {
       try {

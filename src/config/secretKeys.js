@@ -64,6 +64,23 @@ const BYOK_API_KEYS = [
     save: "saveCortiKey",
     storeKey: "cortiApiKey",
   },
+  // OpenCode sells two products on one host: Go (flat-rate subscription,
+  // /zen/go/v1) and Zen (pay-as-you-go, /zen/v1). They are separate
+  // subscriptions, so each keeps its own key, the way Hermes names them.
+  {
+    base: "opencode-go",
+    env: "OPENCODE_GO_API_KEY",
+    get: "getOpencodeGoKey",
+    save: "saveOpencodeGoKey",
+    storeKey: "opencodeGoApiKey",
+  },
+  {
+    base: "opencode-zen",
+    env: "OPENCODE_ZEN_API_KEY",
+    get: "getOpencodeZenKey",
+    save: "saveOpencodeZenKey",
+    storeKey: "opencodeZenApiKey",
+  },
   // `get`/`save` are taken verbatim, never derived from `base`, so these keep
   // the capitalisation realtimeTokenProviders.js already calls them by.
   {
