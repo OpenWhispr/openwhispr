@@ -244,7 +244,7 @@ test("required-sign-in renderer can discover email without allowing unrelated AP
   t.after(installPolicyNetworkGuard());
   assert.deepEqual(
     await (
-      await window.fetch("https://auth.openwhispr.com/api/check-user", { method: "POST" })
+      await globalThis.window.fetch("https://auth.openwhispr.com/api/check-user", { method: "POST" })
     ).json(),
     { exists: true }
   );
@@ -252,11 +252,11 @@ test("required-sign-in renderer can discover email without allowing unrelated AP
     "https://other.example/api/check-user",
     "https://api.openwhispr.com/api/reason",
   ]) {
-    await assert.rejects(window.fetch(url), /Blocked by device policy/);
+    await assert.rejects(globalThis.window.fetch(url), /Blocked by device policy/);
   }
   store.setState({ localOnly: true });
   await assert.rejects(
-    window.fetch("https://auth.openwhispr.com/api/check-user"),
+    globalThis.window.fetch("https://auth.openwhispr.com/api/check-user"),
     /Blocked by device policy/
   );
   assert.equal(requests.length, 1);
