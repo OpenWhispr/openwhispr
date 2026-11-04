@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { loadAudioManager } = require("./harness/audioManager");
+const { installMicCaptureGlobals } = require("../lib/rendererTestHarness");
 const {
   createSystemDefaultMicrophoneResolver,
 } = require("../../src/helpers/systemDefaultMicrophone");
@@ -33,7 +34,7 @@ function controlledLookup() {
 }
 
 async function setup(t, run) {
-  const { window, AudioManager, createManager } = await loadAudioManager(t, {
+  const { window, AudioManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-mic-constraints-test-",
     settingsKey: "__micConstraintsSettings",
     settings: { microphoneSelectionMode: "system" },
@@ -41,48 +42,16 @@ async function setup(t, run) {
   const resolve = createSystemDefaultMicrophoneResolver({ platform: "win32", run });
   window.electronAPI = { getSystemDefaultMicrophone: (options) => resolve(options) };
   const opened = [];
-  Object.defineProperty(globalThis.navigator, "mediaDevices", {
-    configurable: true,
-    value: {
-      enumerateDevices: async () => DEVICES,
-      getUserMedia: async (constraints) => {
-        opened.push(constraints);
-        return {};
-      },
-      addEventListener() {},
-      removeEventListener() {},
-    },
-  });
-  t.after(() => {
-    delete globalThis.navigator.mediaDevices;
-  });
-  return {
-    AudioManager,
-    opened,
-    manager: createManager({ cachedMicDeviceId: null, rejectedMicDeviceId: null }),
+  installMicCaptureGlobals(t);
+  navigator.mediaDevices.enumerateDevices = async () => DEVICES;
+  navigator.mediaDevices.getUserMedia = async (constraints) => {
+    opened.push(constraints);
+    return {};
   };
+  return { AudioManager, opened };
 }
 
 const deviceId = (constraints) => constraints.audio.deviceId?.exact;
-
-test("a press opens the default device while the lookup is still running", TIMEOUT, async (t) => {
-  const { manager } = await setup(t, never);
-
-  assert.equal(deviceId(await manager.getAudioConstraints()), "default");
-  assert.equal(manager.cachedMicDeviceId, null, "the alias is never pinned");
-});
-
-test("the default-mic fallback doesn't wait for its forced lookup", TIMEOUT, async (t) => {
-  let lookups = 0;
-  const { manager } = await setup(t, () => {
-    lookups += 1;
-    return lookups === 1 ? Promise.resolve(NATIVE_ANSWER) : never();
-  });
-  await manager.cacheMicrophoneDeviceId();
-
-  assert.equal(deviceId(await manager.getAudioConstraints(true)), "default");
-  assert.equal(lookups, 2, "the valid cache doesn't stand in for the forced lookup");
-});
 
 test("no way of starting a dictation waits for the lookup", TIMEOUT, async (t) => {
   const { AudioManager, opened } = await setup(t, never);
@@ -143,11 +112,13 @@ test("the silent-device hop doesn't wait for its forced lookup", TIMEOUT, async 
 
   assert.deepEqual(opened.map(deviceId), ["desk-id", "desk-id", "default"]);
   assert.equal(manager.rejectedMicDeviceId, "desk-id");
+  assert.equal(lookups, 2, "the valid cache doesn't stand in for the forced lookup");
 });
 
 test("the press after the lookup finishes pins the physical device", TIMEOUT, async (t) => {
   const lookup = controlledLookup();
-  const { manager } = await setup(t, lookup.run);
+  const { AudioManager } = await setup(t, lookup.run);
+  const manager = new AudioManager();
 
   assert.equal(deviceId(await manager.getAudioConstraints()), "default");
 
@@ -175,7 +146,8 @@ test("a press during a device-change refresh never opens the old mic", TIMEOUT, 
 
 test("the startup pre-cache waits for the lookup a press doesn't", TIMEOUT, async (t) => {
   const lookup = controlledLookup();
-  const { manager } = await setup(t, lookup.run);
+  const { AudioManager } = await setup(t, lookup.run);
+  const manager = new AudioManager();
 
   const preCache = manager.cacheMicrophoneDeviceId();
   assert.equal(deviceId(await manager.getAudioConstraints()), "default");
