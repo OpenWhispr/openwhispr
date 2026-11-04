@@ -1,5 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { deferred } = require("./harness/deferred");
 
 const helper = require("../../src/helpers/systemDefaultMicrophone");
 
@@ -96,18 +97,13 @@ const settle = () => new Promise((done) => setImmediate(done));
 const TIMEOUT = { timeout: 5000 };
 
 test("wait: false gets no answer during the first lookup, then the result", TIMEOUT, async () => {
-  let release;
-  const { resolve, calls } = wpctlResolver({
-    respond: () =>
-      new Promise((done) => {
-        release = () => done('node.description = "Desk Microphone"');
-      }),
-  });
+  const lookup = deferred();
+  const { resolve, calls } = wpctlResolver({ respond: () => lookup.promise });
 
   assert.equal((await resolve({ wait: false })).source, "unavailable");
   assert.equal(calls(), 1, "the lookup started in the background");
 
-  release();
+  lookup.resolve('node.description = "Desk Microphone"');
   await settle();
 
   assert.equal((await resolve({ wait: false })).name, "Desk Microphone");
@@ -116,17 +112,14 @@ test("wait: false gets no answer during the first lookup, then the result", TIME
 
 test("wait: false doesn't sit behind the retry of a failed lookup", TIMEOUT, async () => {
   let clock = 0;
-  let release;
   let calls = 0;
+  const retry = deferred();
   const resolve = helper.createSystemDefaultMicrophoneResolver({
     platform: "win32",
     now: () => clock,
     run: () => {
       calls += 1;
-      if (calls === 1) return Promise.reject(new Error("Add-Type is not allowed"));
-      return new Promise((done) => {
-        release = () => done('{"name":"Desk Microphone","id":"1"}');
-      });
+      return calls === 1 ? Promise.reject(new Error("Add-Type is not allowed")) : retry.promise;
     },
   });
 
@@ -140,22 +133,15 @@ test("wait: false doesn't sit behind the retry of a failed lookup", TIMEOUT, asy
   assert.equal((await resolve({ wait: false })).source, "unavailable");
   assert.equal(calls, 2, "the retry runs without holding the caller");
 
-  release();
+  retry.resolve('{"name":"Desk Microphone","id":"1"}');
   await settle();
   assert.equal((await resolve({ wait: false })).name, "Desk Microphone");
 });
 
 test("wait: false never gets the old answer while a refresh runs", TIMEOUT, async () => {
-  let release;
-  let calls = 0;
-  const { resolve } = wpctlResolver({
-    respond: () => {
-      calls += 1;
-      if (calls === 1) return 'node.description = "Old Microphone"';
-      return new Promise((done) => {
-        release = () => done('node.description = "New Microphone"');
-      });
-    },
+  const refresh = deferred();
+  const { resolve, calls } = wpctlResolver({
+    respond: () => (calls() === 1 ? 'node.description = "Old Microphone"' : refresh.promise),
   });
 
   assert.equal((await resolve()).name, "Old Microphone");
@@ -163,7 +149,7 @@ test("wait: false never gets the old answer while a refresh runs", TIMEOUT, asyn
 
   assert.equal((await resolve({ wait: false })).source, "unavailable");
 
-  release();
+  refresh.resolve('node.description = "New Microphone"');
   assert.equal((await refreshing).name, "New Microphone");
   assert.equal((await resolve({ wait: false })).name, "New Microphone");
 });
