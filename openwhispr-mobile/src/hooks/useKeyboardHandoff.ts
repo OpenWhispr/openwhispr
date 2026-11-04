@@ -30,6 +30,8 @@ import {
 } from '@/lib/keyboardAgentSync';
 import { generateForJob, handleAgentAction } from '@/services/agent/AgentComposerService';
 import { expandSnippets } from '@/lib/snippets';
+import { recordDictationCompleted } from '@/lib/productEvents';
+import { countSpokenWords } from '@/lib/wordCount';
 import { useSnippetsStore } from '@/store/useSnippetsStore';
 import { analyzeSpeechActivity, serializeSpeechActivityMetrics } from '@/lib/speechActivity';
 import { getPreferredTranscriptionLanguage } from '@/lib/transcriptionLanguage';
@@ -1051,6 +1053,15 @@ export function useKeyboardHandoff() {
             return;
           }
           const delivered = writePendingTranscript(finalText, jobId);
+          if (delivered) {
+            recordDictationCompleted({
+              captureId: jobId,
+              words: countSpokenWords(processed.originalText),
+              provider: processed.transcription.provider,
+              source: 'keyboard',
+              retranscribe: false,
+            });
+          }
           await Clipboard.setStringAsync(finalText);
 
           // Once the keyboard has the text, a failed history save must not keep the
