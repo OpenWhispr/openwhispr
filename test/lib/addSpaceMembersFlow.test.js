@@ -2,8 +2,10 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   attemptSummary,
+  canRetry,
   remainingAfter,
   settleListedInvites,
+  spaceAccessEnd,
 } = require("../../src/lib/addSpaceMembersFlow.ts");
 
 const ethan = { kind: "member", userId: "ethan", label: "Ethan", email: "ethan@openronnie.com" };
@@ -20,6 +22,7 @@ const outcome = (overrides = {}) => ({
   failedGroups: [],
   invited: [],
   failedInvites: [],
+  refusedInvites: [],
   skippedInvites: [],
   leftMembers: [],
   ...overrides,
@@ -128,4 +131,83 @@ test("nothing is listed, nothing changes", () => {
   const before = outcome({ skippedInvites: [alex] });
 
   assert.deepEqual(settleListedInvites(before, new Set()), before);
+});
+
+const refused = (recipient, failure) => ({ recipient, failure });
+
+test("a refused address stays staged only when a second try or a trim can get it through", () => {
+  const picked = [alex, noor];
+  const stays = (failure) =>
+    remainingAfter(picked, outcome({ refusedInvites: [refused(alex, failure)] }));
+
+  for (const failure of [
+    { kind: "rateLimited" },
+    { kind: "rateLimited", available: 1, limit: 5 },
+    { kind: "sessionExpired" },
+    { kind: "seatLimit", available: 1 },
+  ]) {
+    assert.deepEqual(stays(failure), [alex], failure.kind);
+  }
+  for (const failure of [
+    { kind: "seatLimit" },
+    { kind: "seatLimit", available: 0 },
+    { kind: "notAllowed" },
+    { kind: "ssoRequired" },
+    { kind: "directoryRequired" },
+    { kind: "invalid" },
+    { kind: "refused", message: "Nope" },
+  ]) {
+    assert.deepEqual(stays(failure), [], failure.kind);
+  }
+});
+
+test("Try again is offered only for what could go through as it stands", () => {
+  assert.equal(canRetry(outcome()), false);
+  assert.equal(canRetry(outcome({ failedMembers: [ethan] })), true);
+  assert.equal(canRetry(outcome({ failedGroups: [sales] })), true);
+  assert.equal(canRetry(outcome({ failedInvites: [alex] })), true);
+  assert.equal(
+    canRetry(outcome({ refusedInvites: [refused(alex, { kind: "rateLimited" })] })),
+    true
+  );
+  assert.equal(
+    canRetry(outcome({ refusedInvites: [refused(alex, { kind: "notAllowed" })] })),
+    false
+  );
+  assert.equal(
+    canRetry(outcome({ refusedInvites: [refused(alex, { kind: "seatLimit", available: 1 })] })),
+    false,
+    "the same addresses would be refused again until some are removed"
+  );
+});
+
+test("a refusal beside nothing else doesn't read as a failure to add", () => {
+  const alone = outcome({ refusedInvites: [refused(alex, { kind: "notAllowed" })] });
+  assert.equal(attemptSummary(alone).kind, "allDone", "it has its own line");
+  assert.equal(
+    attemptSummary(
+      outcome({
+        failedMembers: [ethan],
+        refusedInvites: [refused(alex, { kind: "notAllowed" })],
+      })
+    ).kind,
+    "partial",
+    "and beside a failure each is said on its own"
+  );
+});
+
+test("a teamspace's own refusals end the attempt; anything else is about this try", () => {
+  assert.equal(spaceAccessEnd({ kind: "archived" }), "deleted");
+  assert.equal(spaceAccessEnd({ kind: "gone" }), "gone");
+  assert.equal(spaceAccessEnd({ kind: "notAllowed" }), "notAllowed");
+  assert.equal(spaceAccessEnd({ kind: "ssoRequired" }), "ssoRequired");
+  for (const failure of [
+    { kind: "failed" },
+    { kind: "rateLimited" },
+    { kind: "lastAdmin" },
+    { kind: "refused", message: "Nope" },
+    { kind: "notWorkspaceMembers", userIds: [] },
+  ]) {
+    assert.equal(spaceAccessEnd(failure), null, failure.kind);
+  }
 });

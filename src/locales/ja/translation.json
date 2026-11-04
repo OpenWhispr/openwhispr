@@ -2557,6 +2557,7 @@
         "joinClosed": "{{space}} は新しいメンバーを受け付けていません。管理者に追加を依頼してください。",
         "openTeamspace": "Teamspace を開く",
         "rowMenu": {
+          "label": "{{name}} の操作",
           "settings": "設定",
           "delete": "Teamspace を削除"
         },
@@ -2640,6 +2641,9 @@
           "partialInviteFailedMany": "{{names}} への招待を送信できませんでした。もう一度お試しください。",
           "partialAddFailed": "{{names}} を追加できませんでした。もう一度お試しください。",
           "partialLeft": "{{names}} はワークスペースを退出したため、追加されませんでした。",
+          "notAllowed": "{{space}} のメンバーを管理する権限がなくなりました。",
+          "notInvited": "{{names}} は招待されませんでした。",
+          "notInvitedMany": "{{names}} は招待されませんでした。",
           "skippedInvited": "{{names}} にはすでにワークスペースへの招待があるため、この Teamspace には追加されませんでした。",
           "skippedInvitedMany": "{{names}} にはすでにワークスペースへの招待があるため、この Teamspace には追加されませんでした。"
         },

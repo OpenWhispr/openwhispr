@@ -56,6 +56,7 @@ test.before(async (t) => {
         export const setSpaceMemberRole = call("setSpaceMemberRole");
         export const removeSpaceMember = call("removeSpaceMember");
         export const leaveSpace = call("leaveSpace");
+        export const requestSpacesResync = call("requestSpacesResync");
       `,
       "/services/invitePeople": `
         export const invitePeople = {
@@ -271,6 +272,9 @@ async function mount(
       if (actions.leaveSpace) return actions.leaveSpace(spaceArg, userId, state);
       state.members = state.members.filter((member) => member.user_id !== userId);
       return { removed: true, still_via_teams: [] };
+    },
+    requestSpacesResync: () => {
+      calls.push(["requestSpacesResync"]);
     },
     sendInvitations: async (input) => {
       calls.push(["sendInvitations", input]);
@@ -1003,6 +1007,54 @@ test("an address that already has an invitation isn't done: it is dropped and sa
   assert.ok(callsTo("invitations").length > 1, "the invitations are read again");
 });
 
+test("an address whose invitation took the teamspace counts as invited", async (t) => {
+  await mount(t, {
+    actions: {
+      sendInvitations: async ({ emails, onResult }) => {
+        for (const email of emails) {
+          onResult(email, { ok: false, kind: "alreadyInvited", grantsAdded: true });
+        }
+      },
+    },
+  });
+
+  await addAddress("alex@example.com");
+  await ui.click(addButton());
+  await ui.settle();
+
+  assert.deepEqual(chipTexts(), [], "nothing is left to retry");
+  assert.equal(lineText(), "Sent alex@example.com a workspace invitation.");
+  assert.equal(lineElement().getAttribute("role"), "status");
+});
+
+test("beside one that took the teamspace, an older API's answer is still said", async (t) => {
+  await mount(t, {
+    actions: {
+      sendInvitations: async ({ emails, onResult }) => {
+        for (const email of emails) {
+          onResult(
+            email,
+            email === "alex@example.com"
+              ? { ok: false, kind: "alreadyInvited", grantsAdded: true }
+              : { ok: false, kind: "alreadyInvited" }
+          );
+        }
+      },
+    },
+  });
+
+  await addAddress("alex@example.com");
+  await addAddress("kim@example.com");
+  await ui.click(addButton());
+  await ui.settle();
+
+  assert.equal(
+    lineText(),
+    "Sent alex@example.com a workspace invitation. " +
+      "kim@example.com already has a workspace invitation, so they weren't added to this teamspace."
+  );
+});
+
 test("several addresses with invitations are named together", async (t) => {
   await mount(t, {
     actions: {
@@ -1058,6 +1110,356 @@ test("a send that throws leaves its addresses failed", async (t) => {
 
   assert.deepEqual(chipTexts(), ["alex@example.com · Member"]);
   assert.equal(text(addButton()), "Try again");
+});
+
+// ---- refusals a second try can't change
+
+// How a refused batch comes back: the same answer for every address in it.
+const refuseInvites =
+  (failure) =>
+  async ({ emails, onResult }) => {
+    for (const email of emails) onResult(email, { ok: false, ...failure });
+  };
+
+const DROPPED_REFUSALS = [
+  {
+    name: "a seat limit with no room left",
+    failure: { kind: "seatLimit", available: 0 },
+    line: "This workspace has reached its seat limit. alex@example.com wasn't invited.",
+  },
+  {
+    name: "a seat limit that doesn't say how much room is left",
+    failure: { kind: "seatLimit" },
+    line: "This workspace has reached its seat limit. alex@example.com wasn't invited.",
+  },
+  {
+    name: "single sign-on",
+    failure: { kind: "ssoRequired" },
+    line:
+      "Sign in with your company's single sign-on to invite people to Acme. " +
+      "alex@example.com wasn't invited.",
+  },
+  {
+    name: "no permission",
+    failure: { kind: "notAllowed" },
+    line: "You can no longer invite people to Acme. alex@example.com wasn't invited.",
+  },
+  {
+    name: "the directory",
+    failure: { kind: "directoryRequired" },
+    line: "Assign alex@example.com in your identity provider first.",
+  },
+  {
+    name: "an address the server calls invalid",
+    failure: { kind: "invalid" },
+    line: "alex@example.com isn't a valid email",
+  },
+  {
+    name: "the server's own reason",
+    failure: { kind: "refused", message: "Nope" },
+    line: "Couldn't invite alex@example.com: Nope",
+  },
+];
+
+for (const { name, failure, line } of DROPPED_REFUSALS) {
+  test(`${name} drops the address and says why, with no Try again`, async (t) => {
+    const { callsTo } = await mount(t, {
+      actions: { sendInvitations: refuseInvites(failure) },
+    });
+
+    await addAddress("alex@example.com");
+    await ui.click(addButton());
+    await ui.settle();
+
+    assert.equal(lineText(), line);
+    assert.equal(lineElement().getAttribute("role"), "alert");
+    assert.deepEqual(chipTexts(), [], "nothing is held for a retry that would be refused again");
+    assert.equal(text(addButton()), "Add members");
+    assert.equal(addButton().disabled, true);
+    assert.equal(callsTo("sendInvitations").length, 1);
+  });
+}
+
+const KEPT_REFUSALS = [
+  {
+    name: "a rate limit",
+    failure: { kind: "rateLimited" },
+    line: "Too many invitations right now. Try again later.",
+  },
+  {
+    name: "an expired sign-in",
+    failure: { kind: "sessionExpired" },
+    line:
+      "Couldn't invite alex@example.com: your sign-in expired or changed. " +
+      "Sign in again, then try again.",
+  },
+];
+
+for (const { name, failure, line } of KEPT_REFUSALS) {
+  test(`${name} keeps the address and can be tried again`, async (t) => {
+    const { callsTo } = await mount(t, {
+      actions: { sendInvitations: refuseInvites(failure) },
+    });
+
+    await addAddress("alex@example.com");
+    await ui.click(addButton());
+    await ui.settle();
+
+    assert.equal(lineText(), line);
+    assert.equal(lineElement().getAttribute("role"), "alert");
+    assert.deepEqual(chipTexts(), ["alex@example.com · Member"]);
+    assert.equal(text(addButton()), "Try again");
+
+    await ui.click(addButton());
+    await ui.settle();
+    assert.equal(callsTo("sendInvitations").length, 2);
+  });
+}
+
+test("a seat limit with room left keeps the addresses to trim, without Try again", async (t) => {
+  await mount(t, {
+    actions: { sendInvitations: refuseInvites({ kind: "seatLimit", available: 1 }) },
+  });
+
+  await addAddress("alex@example.com");
+  await addAddress("noor@example.com");
+  await ui.click(addButton());
+  await ui.settle();
+
+  assert.equal(lineText(), "You can invite 1 more person. Remove 1 to continue.");
+  assert.equal(lineElement().getAttribute("role"), "alert");
+  assert.deepEqual(chipTexts(), ["alex@example.com · Member", "noor@example.com · Member"]);
+  assert.equal(text(addButton()), "Add members");
+  assert.equal(addButton().disabled, false, "trimming is what lets the rest go");
+});
+
+test("a batch's refusal is said once and names everyone in it", async (t) => {
+  await mount(t, {
+    actions: { sendInvitations: refuseInvites({ kind: "seatLimit", available: 0 }) },
+  });
+
+  await addAddress("alex@example.com");
+  await addAddress("noor@example.com");
+  await ui.click(addButton());
+  await ui.settle();
+
+  assert.equal(
+    lineText(),
+    "This workspace has reached its seat limit. alex@example.com and noor@example.com weren't invited."
+  );
+});
+
+test("what went is still said beside a refusal", async (t) => {
+  await mount(t, {
+    actions: { sendInvitations: refuseInvites({ kind: "seatLimit", available: 0 }) },
+  });
+
+  await pickPerson("Ethan");
+  await addAddress("alex@example.com");
+  await ui.click(addButton());
+  await ui.settle();
+
+  assert.equal(
+    lineText(),
+    "Added Ethan. This workspace has reached its seat limit. alex@example.com wasn't invited."
+  );
+  assert.equal(lineElement().getAttribute("role"), "alert");
+  assert.deepEqual(chipTexts(), []);
+});
+
+test("Try again is only for what can go: a refused address beside a failed person isn't sent again", async (t) => {
+  let attempts = 0;
+  const { callsTo } = await mount(t, {
+    actions: {
+      addPeopleToSpace: async (cloudSpaceId, userIds) => {
+        attempts += 1;
+        if (attempts === 1) throw new Error("offline");
+        return { added: userIds, already_members: [] };
+      },
+      sendInvitations: refuseInvites({ kind: "notAllowed" }),
+    },
+  });
+
+  await pickPerson("Ethan");
+  await addAddress("alex@example.com");
+  await ui.click(addButton());
+  await ui.settle();
+
+  assert.equal(
+    lineText(),
+    "Couldn't add Ethan. Try again. You can no longer invite people to Acme. " +
+      "alex@example.com wasn't invited."
+  );
+  assert.deepEqual(chipTexts(), ["Ethan"]);
+  assert.equal(text(addButton()), "Try again");
+
+  await ui.click(addButton());
+  await ui.settle();
+  assert.equal(callsTo("sendInvitations").length, 1, "the refused address isn't sent again");
+  assert.equal(lineText(), "Added Ethan.");
+});
+
+test("two different refusals each say their own reason", async (t) => {
+  const { callsTo } = await mount(t, {
+    actions: {
+      sendInvitations: async ({ emails, role, onResult }) => {
+        const failure =
+          role === "admin" ? { kind: "directoryRequired" } : { kind: "seatLimit", available: 0 };
+        for (const email of emails) onResult(email, { ok: false, ...failure });
+      },
+    },
+  });
+
+  await addAddress("alex@example.com");
+  // The other address is made an admin from the invite row's role menu, so it goes on its own.
+  await ui.focus(peopleInput());
+  await ui.type(peopleInput(), "noor@example.com");
+  await ui.press(doc().querySelector('[role="option"] [aria-haspopup="menu"]'), "ArrowDown");
+  await ui.click(
+    [...doc().querySelectorAll('[role="menuitemradio"]')].find((item) =>
+      text(item).startsWith("Workspace Admin")
+    )
+  );
+  await ui.click(buttonNamed("Select"));
+  await ui.click(addButton());
+  await ui.settle();
+
+  assert.equal(callsTo("sendInvitations").length, 2);
+  assert.equal(
+    lineText(),
+    "This workspace has reached its seat limit. alex@example.com wasn't invited. " +
+      "Assign noor@example.com in your identity provider first."
+  );
+});
+
+// ---- a teamspace deleted or closed to this user while adding
+
+const ARCHIVED = () => new CloudApiError("Space archived", 410, "space_archived");
+const REVOKED = () => new CloudApiError("Space access revoked", 403, "space_access_revoked");
+const NOT_FOUND = () => new CloudApiError("Space not found", 404, "space_not_found");
+const NO_ROLE = () => new CloudApiError("Insufficient role", 403);
+const SSO = () => new CloudApiError("Sign in with SSO", 403, "SSO_REQUIRED");
+
+const throwing = (makeError) => async () => {
+  throw makeError();
+};
+
+test("a teamspace deleted meanwhile closes the panel, says so, and catches the mirror up", async (t) => {
+  const { callsTo, lefts } = await mount(t, {
+    actions: { addPeopleToSpace: throwing(ARCHIVED) },
+  });
+
+  await pickPerson("Ethan");
+  await pickPerson("Design Team");
+  await addAddress("alex@example.com");
+  await ui.click(addButton());
+  await ui.settle();
+
+  assert.deepEqual(lefts, [true], "what hosts the panel closes");
+  assert.deepEqual(toastTitles(), ["Customer Calls was deleted."]);
+  assert.equal(globalThis.__toasts[0].variant, "destructive");
+  assert.equal(callsTo("requestSpacesResync").length, 1);
+  assert.equal(callsTo("assignTeamToSpace").length, 0, "nothing else is tried");
+  assert.equal(callsTo("sendInvitations").length, 0);
+});
+
+test("a group finding the teamspace deleted ends the attempt the same way", async (t) => {
+  const { callsTo, lefts } = await mount(t, {
+    spaceTeams: [],
+    actions: { assignTeamToSpace: throwing(ARCHIVED) },
+  });
+
+  await pickPerson("Sales");
+  await pickPerson("Design Team");
+  await addAddress("alex@example.com");
+  await ui.click(addButton());
+  await ui.settle();
+
+  assert.deepEqual(lefts, [true]);
+  assert.deepEqual(toastTitles(), ["Customer Calls was deleted."]);
+  assert.equal(callsTo("assignTeamToSpace").length, 1, "the next group isn't tried");
+  assert.equal(callsTo("sendInvitations").length, 0);
+});
+
+test("a teamspace the server can't find for this user closes too, without claiming it was deleted", async (t) => {
+  const { callsTo, lefts } = await mount(t, {
+    actions: { addPeopleToSpace: throwing(NOT_FOUND) },
+  });
+
+  await pickPerson("Ethan");
+  await ui.click(addButton());
+  await ui.settle();
+
+  assert.deepEqual(lefts, [true]);
+  assert.deepEqual(toastTitles(), ["You no longer have access to Customer Calls"]);
+  assert.equal(callsTo("requestSpacesResync").length, 1);
+});
+
+const ADD_DEAD_ENDS = [
+  {
+    name: "access revoked",
+    makeError: REVOKED,
+    line: "You no longer have permission to manage members of Customer Calls.",
+  },
+  {
+    name: "a role that no longer lets them",
+    makeError: NO_ROLE,
+    line: "You no longer have permission to manage members of Customer Calls.",
+  },
+  {
+    name: "single sign-on",
+    makeError: SSO,
+    line: "Sign in with your company's single sign-on to manage people in Acme.",
+  },
+];
+
+for (const { name, makeError, line } of ADD_DEAD_ENDS) {
+  test(`${name} ends an add with a line and no Try again, and the panel stays`, async (t) => {
+    const { callsTo, lefts } = await mount(t, {
+      actions: { addPeopleToSpace: throwing(makeError) },
+    });
+
+    await pickPerson("Ethan");
+    await pickPerson("Design Team");
+    await addAddress("alex@example.com");
+    await ui.click(addButton());
+    await ui.settle();
+
+    assert.equal(lineText(), line);
+    assert.equal(lineElement().getAttribute("role"), "alert");
+    assert.deepEqual(chipTexts(), [], "nothing is held for a retry that can't work");
+    assert.equal(text(addButton()), "Add members");
+    assert.equal(addButton().disabled, true);
+    assert.deepEqual(lefts, []);
+    assert.deepEqual(toastTitles(), []);
+    assert.equal(callsTo("assignTeamToSpace").length, 0, "nothing else is tried");
+    assert.equal(callsTo("sendInvitations").length, 0);
+  });
+}
+
+test("access revoked partway keeps what was said about what went, and drops the rest", async (t) => {
+  await mount(t, {
+    spaceTeams: [],
+    actions: {
+      assignTeamToSpace: async (space, teamId) => {
+        if (teamId === "sales") throw new Error("offline");
+        if (teamId === "design") throw REVOKED();
+      },
+    },
+  });
+
+  await pickPerson("Ethan");
+  await pickPerson("Sales");
+  await pickPerson("Design Team");
+  await ui.click(addButton());
+  await ui.settle();
+
+  assert.equal(
+    lineText(),
+    "Added Ethan. You no longer have permission to manage members of Customer Calls."
+  );
+  assert.deepEqual(chipTexts(), [], "the group that failed first can't go either");
+  assert.equal(text(addButton()), "Add members");
 });
 
 test("people already in come back as already members and count as added", async (t) => {
@@ -1499,6 +1901,94 @@ test("the only admin removing themselves is told why, and can still try again", 
   );
   assert.deepEqual(lefts, []);
 });
+
+test("removing from a teamspace deleted meanwhile closes everything and says so", async (t) => {
+  const { callsTo, lefts } = await mount(t, {
+    actions: { removeSpaceMember: throwing(ARCHIVED) },
+  });
+
+  await openMenu(roleTrigger(rowFor("Lila")));
+  await ui.click(menuItem("Remove from teamspace"));
+  await ui.click(dialogButton("Remove member"));
+  await ui.settle();
+
+  assert.equal(dialogs().length, 0, "no Try again to offer");
+  assert.deepEqual(toastTitles(), ["Customer Calls was deleted."]);
+  assert.deepEqual(lefts, [true]);
+  assert.equal(callsTo("requestSpacesResync").length, 1);
+});
+
+test("leaving a teamspace deleted meanwhile closes the same way", async (t) => {
+  const { lefts } = await mount(t, {
+    actions: { leaveSpace: throwing(ARCHIVED) },
+  });
+
+  await openMenu(roleTrigger(rowFor("Ronnie")));
+  await ui.click(menuItem("Remove from teamspace"));
+  await ui.click(dialogButton("Remove member"));
+  await ui.settle();
+
+  assert.equal(dialogs().length, 0);
+  assert.deepEqual(toastTitles(), ["Customer Calls was deleted."]);
+  assert.deepEqual(lefts, [true]);
+});
+
+test("removing a group from a teamspace deleted meanwhile closes the same way", async (t) => {
+  const { lefts } = await mount(t, {
+    actions: { unassignTeamFromSpace: throwing(ARCHIVED) },
+  });
+
+  await openMenu(roleTrigger(rowFor("Sales")));
+  await ui.click(menuItem("Remove from teamspace"));
+  await ui.click(dialogButton("Remove from teamspace"));
+  await ui.settle();
+
+  assert.equal(dialogs().length, 0);
+  assert.deepEqual(toastTitles(), ["Customer Calls was deleted."]);
+  assert.deepEqual(lefts, [true]);
+});
+
+const REMOVAL_DEAD_ENDS = [
+  {
+    name: "access revoked",
+    makeError: REVOKED,
+    line: "You no longer have permission to manage members of Customer Calls.",
+  },
+  {
+    name: "a role that no longer lets them",
+    makeError: NO_ROLE,
+    line: "You no longer have permission to manage members of Customer Calls.",
+  },
+  {
+    name: "single sign-on",
+    makeError: SSO,
+    line: "Sign in with your company's single sign-on to manage people in Acme.",
+  },
+];
+
+for (const { name, makeError, line } of REMOVAL_DEAD_ENDS) {
+  test(`${name} ends a removal with a line and Close, never Try again`, async (t) => {
+    const { callsTo, lefts } = await mount(t, {
+      actions: { removeSpaceMember: throwing(makeError) },
+    });
+
+    await openMenu(roleTrigger(rowFor("Lila")));
+    await ui.click(menuItem("Remove from teamspace"));
+    await ui.click(dialogButton("Remove member"));
+    await ui.settle();
+
+    assert.equal(dialogText(), `Couldn't remove Lila ${line} Close`);
+    assert.equal(dialogButton("Try again"), undefined);
+    assert.deepEqual(lefts, []);
+    assert.equal(callsTo("removeSpaceMember").length, 1);
+
+    await ui.click(dialogButton("Close"));
+    await ui.settle();
+    assert.equal(dialogs().length, 0);
+    assert.equal(callsTo("removeSpaceMember").length, 1, "Close doesn't run it again");
+    assert.ok(rowFor("Lila"), "she is still listed");
+  });
+}
 
 test("removing your own row leaves the teamspace and closes the settings", async (t) => {
   const { callsTo, space, lefts } = await mount(t);

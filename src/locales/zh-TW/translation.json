@@ -2557,6 +2557,7 @@
         "joinClosed": "{{space}} 不再接受新成員。請聯絡管理員將你加入。",
         "openTeamspace": "開啟 Teamspace",
         "rowMenu": {
+          "label": "{{name}} 的操作",
           "settings": "設定",
           "delete": "刪除 Teamspace"
         },
@@ -2640,6 +2641,9 @@
           "partialInviteFailedMany": "無法向 {{names}} 發送邀請。請重試。",
           "partialAddFailed": "無法加入 {{names}}。請重試。",
           "partialLeft": "{{names}} 已離開工作區，因此未被加入。",
+          "notAllowed": "你已無權管理 {{space}} 的成員。",
+          "notInvited": "{{names}} 未獲邀請。",
+          "notInvitedMany": "{{names}} 未獲邀請。",
           "skippedInvited": "{{names}} 已有工作區邀請，因此未被加入此 Teamspace。",
           "skippedInvitedMany": "{{names}} 已有工作區邀請，因此未被加入此 Teamspace。"
         },

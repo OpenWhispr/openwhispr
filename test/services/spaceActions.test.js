@@ -545,6 +545,16 @@ test("a refused join leaves the guard alone", async () => {
   assert.equal(calls.length, 0);
 });
 
+test("a space found gone asks the sync pass to catch the mirror up", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps } = makeHarness();
+  const actions = createSpaceActions(deps);
+
+  actions.requestSpacesResync();
+
+  assert.deepEqual(calls, [["sync", "manual"]]);
+});
+
 test("adding people refreshes the mirror once and returns the server's lists", async () => {
   const { createSpaceActions } = await load();
   const { calls, deps } = makeHarness();

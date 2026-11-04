@@ -3,7 +3,10 @@ import { classifyInviteError, type InviteFailure } from "../lib/workspaceErrors"
 import { InvitationsService } from "./InvitationsService";
 import type { InvitationBatchResult, InvitationBatchStatus } from "../types/electron";
 
-export type InviteOutcome = { ok: true; emailSent: boolean } | ({ ok: false } & InviteFailure);
+// `grantsAdded` comes with alreadyInvited: no new invitation went out, but the one already there now
+// carries the teams and teamspaces this request named. An older API attaches nothing to it.
+export type InviteOutcome =
+  { ok: true; emailSent: boolean } | ({ ok: false; grantsAdded?: boolean } & InviteFailure);
 
 export interface InvitePeopleDependencies {
   sendBatch(
@@ -42,14 +45,17 @@ const SKIPPED_OUTCOMES: Record<Exclude<InvitationBatchStatus, "invited">, Invite
 // An address the answer leaves out was not processed, so it can be sent again.
 const MISSING_OUTCOME: InviteOutcome = { ok: false, kind: "requestFailed" };
 
+function outcomeOf(result: InvitationBatchResult["results"][number]): InviteOutcome {
+  if (result.status === "invited") return { ok: true, emailSent: result.email_sent === true };
+  if (result.status === "already_invited" && result.grants_added === true) {
+    return { ok: false, kind: "alreadyInvited", grantsAdded: true };
+  }
+  return SKIPPED_OUTCOMES[result.status];
+}
+
 function outcomesByEmail(answer: InvitationBatchResult): Map<string, InviteOutcome> {
   const outcomes = new Map<string, InviteOutcome>();
-  for (const { email, status, email_sent } of answer.results) {
-    outcomes.set(
-      email.toLowerCase(),
-      status === "invited" ? { ok: true, emailSent: email_sent === true } : SKIPPED_OUTCOMES[status]
-    );
-  }
+  for (const result of answer.results) outcomes.set(result.email.toLowerCase(), outcomeOf(result));
   return outcomes;
 }
 

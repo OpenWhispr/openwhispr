@@ -860,7 +860,13 @@ export type InvitationBatchStatus =
   "invited" | "invalid_email" | "already_member" | "already_invited" | "directory_required";
 
 export interface InvitationBatchResult {
-  results: Array<{ email: string; status: InvitationBatchStatus; email_sent?: boolean }>;
+  results: Array<{
+    email: string;
+    status: InvitationBatchStatus;
+    email_sent?: boolean;
+    /** With already_invited: that invitation now carries what the request named. Older APIs leave it out. */
+    grants_added?: boolean;
+  }>;
 }
 
 export interface MemberTeamRef {

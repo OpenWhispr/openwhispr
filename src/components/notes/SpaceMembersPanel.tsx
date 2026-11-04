@@ -22,9 +22,14 @@ import { formatList } from "../../lib/formatList";
 import { rosterFor } from "../../lib/peopleRoster";
 import {
   attemptSummary,
+  canRetry,
   remainingAfter,
+  seatRoomLeft,
   settleListedInvites,
+  spaceAccessEnd,
   type AddAttemptOutcome,
+  type InviteRefusal,
+  type SpaceAccessEnd,
 } from "../../lib/addSpaceMembersFlow";
 import { buildSpaceMemberRows, type SpaceMemberRow } from "../../lib/spaceMemberRows";
 import {
@@ -41,6 +46,7 @@ import {
   assignTeamToSpace,
   leaveSpace,
   removeSpaceMember,
+  requestSpacesResync,
   setSpaceMemberRole,
   setSpaceTeamAccess,
   unassignTeamFromSpace,
@@ -58,7 +64,7 @@ const NO_TEAMS: Team[] = [];
 
 interface SpaceMembersPanelProps {
   space: SpaceItem;
-  /** The signed-in user removed their own last direct access: whatever hosts this can close. */
+  /** The signed-in user's access ended (they left, or it's gone): whatever hosts this can close. */
   onLeft?: () => void;
 }
 
@@ -128,6 +134,7 @@ function emptyOutcome(): AddAttemptOutcome {
     failedGroups: [],
     invited: [],
     failedInvites: [],
+    refusedInvites: [],
     skippedInvites: [],
     leftMembers: [],
   };
@@ -139,12 +146,24 @@ async function runAddAttempt(input: {
   space: SpaceItem;
   cloudSpaceId: string;
   picked: PickedRecipient[];
-}): Promise<{ outcome: AddAttemptOutcome; rosterStale: boolean; knownAddresses: string[] }> {
+}): Promise<{
+  outcome: AddAttemptOutcome;
+  rosterStale: boolean;
+  knownAddresses: string[];
+  ended: SpaceAccessEnd | null;
+}> {
   const { space, cloudSpaceId, picked } = input;
   const outcome = emptyOutcome();
   let rosterStale = false;
   // Addresses the server says belong to a workspace member, which the roster should now resolve.
   const knownAddresses: string[] = [];
+  // Nothing else can go either, and nothing is held for a retry that can't work. Addresses come
+  // last, so none has been tried yet.
+  const stoppedBy = (ended: SpaceAccessEnd) => {
+    outcome.failedMembers = [];
+    outcome.failedGroups = [];
+    return { outcome, rosterStale, knownAddresses, ended };
+  };
 
   const people = picked.filter(isMember);
   if (people.length > 0) {
@@ -157,6 +176,8 @@ async function runAddAttempt(input: {
       outcome.addedMembers = people;
     } catch (error) {
       const failure = classifySpaceError(error);
+      const ended = spaceAccessEnd(failure);
+      if (ended) return stoppedBy(ended);
       const gone =
         failure.kind === "notWorkspaceMembers" ? new Set(failure.userIds) : new Set<string>();
       // One person who left must not hold everyone else back, nor be sent again and refused again.
@@ -170,7 +191,9 @@ async function runAddAttempt(input: {
     try {
       await assignTeamToSpace(space, recipient.teamId);
       outcome.addedGroups.push(recipient);
-    } catch {
+    } catch (error) {
+      const ended = spaceAccessEnd(classifySpaceError(error));
+      if (ended) return stoppedBy(ended);
       outcome.failedGroups.push(recipient);
     }
   }
@@ -192,18 +215,17 @@ async function runAddAttempt(input: {
           const recipient = byAddress.get(key);
           if (!recipient) return;
           reported.add(key);
-          if (result.ok === true) outcome.invited.push(recipient);
-          // The API attaches no teamspace to an invitation that already exists, so this address
-          // isn't in the teamspace, and sending it again wouldn't change that.
+          if (result.ok === true || result.grantsAdded === true) outcome.invited.push(recipient);
+          // An older API attaches no teamspace to an invitation that already exists, so this
+          // address isn't in the teamspace, and sending it again wouldn't change that.
           else if (result.kind === "alreadyInvited") outcome.skippedInvites.push(recipient);
-          else {
-            outcome.failedInvites.push(recipient);
+          else if (result.kind === "alreadyMember") {
             // They are a workspace member after all: the roster this field offered from is stale.
-            if (result.kind === "alreadyMember") {
-              rosterStale = true;
-              knownAddresses.push(key);
-            }
-          }
+            outcome.failedInvites.push(recipient);
+            rosterStale = true;
+            knownAddresses.push(key);
+          } else if (result.kind === "requestFailed") outcome.failedInvites.push(recipient);
+          else outcome.refusedInvites.push({ recipient, failure: result });
         },
       });
     } catch {
@@ -214,7 +236,7 @@ async function runAddAttempt(input: {
     }
   }
 
-  return { outcome, rosterStale, knownAddresses };
+  return { outcome, rosterStale, knownAddresses, ended: null };
 }
 
 interface StatusLine {
@@ -222,7 +244,12 @@ interface StatusLine {
   tone: "info" | "error";
 }
 
-function describeAttempt(t: TFunction, language: string, outcome: AddAttemptOutcome): StatusLine {
+function describeAttempt(
+  t: TFunction,
+  language: string,
+  outcome: AddAttemptOutcome,
+  workspaceName: string
+): StatusLine {
   const names = (recipients: PickedRecipient[]): string =>
     formatList(
       language,
@@ -230,6 +257,40 @@ function describeAttempt(t: TFunction, language: string, outcome: AddAttemptOutc
     );
   const sentences: string[] = [];
   const kind = attemptSummary(outcome).kind;
+
+  // What the invite dialog says about each kind. Some of its lines name nobody, and a refused
+  // address leaves the field, so they are followed by who wasn't invited.
+  const refusalSentences = (refusals: InviteRefusal[]): string[] => {
+    const { failure } = refusals[0];
+    const recipients = refusals.map(({ recipient }) => recipient);
+    const notInvited = t(
+      recipients.length === 1 ? `${COPY}.notInvited` : `${COPY}.notInvitedMany`,
+      { names: names(recipients) }
+    );
+    switch (failure.kind) {
+      case "seatLimit": {
+        const room = seatRoomLeft(failure);
+        return room > 0
+          ? [t("workspaces.invite.ceilingLeft", { count: room, excess: recipients.length - room })]
+          : [t("workspaces.invite.errors.seatLimit"), notInvited];
+      }
+      case "notAllowed":
+      case "ssoRequired":
+        return [
+          t(`workspaces.invite.errors.${failure.kind}`, { workspace: isolate(workspaceName) }),
+          notInvited,
+        ];
+      case "refused":
+        return [
+          t("workspaces.invite.errors.refused", {
+            email: names(recipients),
+            reason: isolate(failure.message),
+          }),
+        ];
+      default:
+        return [t(`workspaces.invite.errors.${failure.kind}`, { email: names(recipients) })];
+    }
+  };
 
   if (kind === "allDone") {
     if (outcome.addedMembers.length > 0) {
@@ -273,6 +334,15 @@ function describeAttempt(t: TFunction, language: string, outcome: AddAttemptOutc
     }
   }
 
+  // A batch's refusal answers for every address in it, so each reason is said once.
+  const byReason = new Map<string, InviteRefusal[]>();
+  for (const refusal of outcome.refusedInvites) {
+    const { failure } = refusal;
+    const reason = failure.kind === "refused" ? `refused:${failure.message}` : failure.kind;
+    byReason.set(reason, [...(byReason.get(reason) ?? []), refusal]);
+  }
+  for (const refusals of byReason.values()) sentences.push(...refusalSentences(refusals));
+
   if (outcome.leftMembers.length > 0) {
     sentences.push(t(`${COPY}.partialLeft`, { names: names(outcome.leftMembers) }));
   }
@@ -286,7 +356,10 @@ function describeAttempt(t: TFunction, language: string, outcome: AddAttemptOutc
       )
     );
   }
-  return { text: sentences.join(" "), tone: kind === "allDone" ? "info" : "error" };
+  return {
+    text: sentences.join(" "),
+    tone: kind === "allDone" && outcome.refusedInvites.length === 0 ? "info" : "error",
+  };
 }
 
 type RemovalSubject =
@@ -420,6 +493,28 @@ export default function SpaceMembersPanel({
 
   const summary = useMemo(() => pickedSummary(picked), [picked]);
   const spaceName = isolate(space.name);
+  const workspaceName = workspace?.name ?? "";
+
+  // Why this user can't manage the teamspace any more, which trying again won't change.
+  const accessEndLine = (ended: "notAllowed" | "ssoRequired"): string =>
+    ended === "notAllowed"
+      ? t(`${COPY}.notAllowed`, { space: spaceName })
+      : t("workspaces.ssoRequired", { workspace: isolate(workspaceName) });
+
+  // The panel can do nothing for a teamspace that is gone, so it says so and goes with it. A toast
+  // outlives the dialog this sits in. Not found proves less than deleted: the caller may simply
+  // have been removed from the workspace.
+  const closeLostTeamspace = (ended: "deleted" | "gone"): void => {
+    toast({
+      title:
+        ended === "deleted"
+          ? t("settingsPage.workspace.teamspaces.exit.deleted", { space: spaceName })
+          : t("notes.spaces.accessRevoked", { space: spaceName }),
+      variant: "destructive",
+    });
+    requestSpacesResync();
+    onLeft?.();
+  };
 
   useEffect(() => {
     if (!refocusButton || adding) return;
@@ -479,6 +574,10 @@ export default function SpaceMembersPanel({
     setProgress(describeProgress(staged));
     try {
       const ran = await runAddAttempt({ space, cloudSpaceId: spaceId, picked: staged });
+      if (ran.ended === "deleted" || ran.ended === "gone") {
+        closeLostTeamspace(ran.ended);
+        return;
+      }
       const invitationsRead = reloadInvitations();
       let outcome = ran.outcome;
       if (outcome.skippedInvites.length > 0) {
@@ -493,9 +592,17 @@ export default function SpaceMembersPanel({
         }
       }
       const remaining = remainingAfter(staged, outcome);
+      const said = describeAttempt(t, i18n.language, outcome, workspaceName);
       setPicked(remaining);
-      setAttempt(describeAttempt(t, i18n.language, outcome));
-      setNeedsRetry(remaining.length > 0);
+      setAttempt(
+        ran.ended
+          ? {
+              text: [said.text, accessEndLine(ran.ended)].filter(Boolean).join(" "),
+              tone: "error",
+            }
+          : said
+      );
+      setNeedsRetry(canRetry(outcome));
       if (remaining.length === 0) setFieldFocusRequest((count) => count + 1);
       else setRefocusButton(true);
 
@@ -621,6 +728,11 @@ export default function SpaceMembersPanel({
         void reloadMembers();
         return;
       }
+      if (failure.kind === "archived") {
+        dispatchRemoval({ type: "succeeded" });
+        closeLostTeamspace("deleted");
+        return;
+      }
       dispatchRemoval({
         type: "failed",
         error:
@@ -681,6 +793,12 @@ export default function SpaceMembersPanel({
 
   const confirmSubject = removal.kind === "closed" ? null : removal.subject;
   const removalFailed = removal.kind === "failed";
+  // No connection to check and nothing to try again: this user can't do this any more.
+  const removalEnded =
+    removal.kind === "failed" &&
+    (removal.error.kind === "notAllowed" || removal.error.kind === "ssoRequired")
+      ? removal.error.kind
+      : null;
   const subjectName =
     confirmSubject?.kind === "person"
       ? isolate(confirmSubject.member.name || confirmSubject.member.email)
@@ -776,30 +894,40 @@ export default function SpaceMembersPanel({
                 : t(`${COPY}.removeGroupTitle`, { group: subjectName, space: spaceName })
           }
           body={
-            removalFailed
-              ? t(`${COPY}.removeFailedBody`, { name: subjectName, space: spaceName })
-              : confirmSubject.kind === "person"
-                ? t(`${COPY}.removeBody`, { name: subjectName })
-                : confirmSubject.team.memberCount != null
-                  ? t(`${COPY}.removeGroupBody`, { count: confirmSubject.team.memberCount })
-                  : t(`${COPY}.removeGroupBodyNoCount`)
+            removalEnded
+              ? accessEndLine(removalEnded)
+              : removalFailed
+                ? t(`${COPY}.removeFailedBody`, { name: subjectName, space: spaceName })
+                : confirmSubject.kind === "person"
+                  ? t(`${COPY}.removeBody`, { name: subjectName })
+                  : confirmSubject.team.memberCount != null
+                    ? t(`${COPY}.removeGroupBody`, { count: confirmSubject.team.memberCount })
+                    : t(`${COPY}.removeGroupBodyNoCount`)
           }
           error={
             removal.kind === "failed" && removal.error.kind === "refused"
               ? removal.error.message
               : null
           }
-          primary={{
-            label: removalFailed
-              ? t(`${COPY}.retry`)
-              : confirmSubject.kind === "person"
-                ? t(`${COPY}.removeConfirm`)
-                : t(`${COPY}.removeItem`),
-            onClick: () => void runRemoval(confirmSubject),
-            tone: removalFailed ? "primary" : "destructive",
-            pending: removal.kind === "running",
-          }}
-          cancelLabel={t("common.cancel")}
+          primary={
+            removalEnded
+              ? {
+                  label: t("common.close"),
+                  onClick: () => dispatchRemoval({ type: "dismiss" }),
+                  tone: "primary",
+                }
+              : {
+                  label: removalFailed
+                    ? t(`${COPY}.retry`)
+                    : confirmSubject.kind === "person"
+                      ? t(`${COPY}.removeConfirm`)
+                      : t(`${COPY}.removeItem`),
+                  onClick: () => void runRemoval(confirmSubject),
+                  tone: removalFailed ? "primary" : "destructive",
+                  pending: removal.kind === "running",
+                }
+          }
+          cancelLabel={removalEnded ? undefined : t("common.cancel")}
           busy={removal.kind === "running"}
           onDismiss={() => dispatchRemoval({ type: "dismiss" })}
         />

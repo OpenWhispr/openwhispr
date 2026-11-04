@@ -2557,6 +2557,7 @@
         "joinClosed": "{{space}} non accetta più nuovi membri. Chiedi a un amministratore di aggiungerti.",
         "openTeamspace": "Apri teamspace",
         "rowMenu": {
+          "label": "Azioni per {{name}}",
           "settings": "Impostazioni",
           "delete": "Elimina teamspace"
         },
@@ -2640,6 +2641,9 @@
           "partialInviteFailedMany": "Gli inviti a {{names}} non sono stati inviati. Riprova.",
           "partialAddFailed": "Impossibile aggiungere {{names}}. Riprova.",
           "partialLeft": "Hanno lasciato l'area di lavoro, quindi non sono stati aggiunti: {{names}}.",
+          "notAllowed": "Non hai più l'autorizzazione per gestire i membri di {{space}}.",
+          "notInvited": "{{names}} non ha ricevuto l'invito.",
+          "notInvitedMany": "{{names}} non hanno ricevuto l'invito.",
           "skippedInvited": "{{names}} ha già un invito all'area di lavoro, quindi non è stato aggiunto a questo teamspace.",
           "skippedInvitedMany": "{{names}} hanno già inviti all'area di lavoro, quindi non sono stati aggiunti a questo teamspace."
         },

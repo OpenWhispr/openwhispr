@@ -14,6 +14,7 @@ import { TileGlyph } from "../notes/SpaceNameField";
 import { cn } from "../lib/utils";
 import type { WorkspaceSpacesState } from "../../hooks/useWorkspaceSpaces";
 import type { SpaceAdminContact, WorkspaceSpace } from "../../types/electron";
+import { isolate } from "../../utils/bidiIsolate";
 import { HEADER_CELL, ROW_DIVIDER, TABLE_FRAME } from "./tableTokens";
 
 const NAME_TILE =
@@ -273,7 +274,9 @@ function TeamspaceRow({
           <DropdownMenu>
             <DropdownMenuTrigger
               ref={actionsButtonRef}
-              aria-label={t("settingsPage.workspace.teamspaces.columns.actions")}
+              aria-label={t("settingsPage.workspace.teamspaces.rowMenu.label", {
+                name: isolate(space.name),
+              })}
               className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:ring-1 focus-visible:ring-primary/30 data-[state=open]:bg-foreground/5 dark:hover:bg-white/5"
             >
               <MoreHorizontal className="size-4" aria-hidden="true" />

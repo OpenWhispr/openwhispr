@@ -45,6 +45,7 @@ export const {
   setSpaceMemberRole,
   removeSpaceMember,
   leaveSpace,
+  requestSpacesResync,
   addTeamMembers,
   removeTeamMember,
   setTeamMemberRole,

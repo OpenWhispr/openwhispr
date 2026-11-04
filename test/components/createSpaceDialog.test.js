@@ -660,7 +660,8 @@ test("failed invitations still report the teamspace as created, refused ones inc
     "ok@example.com": { ok: true, emailSent: true },
     "broken@example.com": { ok: false, kind: "requestFailed" },
     "full@example.com": { ok: false, kind: "seatLimit" },
-    // The API refuses these two outright and attaches no teamspace, so neither person is in it.
+    // Neither person is in it: a member is refused outright, and an older API attaches no
+    // teamspace to an invitation that already exists.
     "member@example.com": { ok: false, kind: "alreadyMember" },
     "waiting@example.com": { ok: false, kind: "alreadyInvited" },
   };
@@ -683,6 +684,41 @@ test("failed invitations still report the teamspace as created, refused ones inc
     ["reveal", 7, null],
     ["context", 7, null],
   ]);
+});
+
+test("an address whose invitation took the teamspace counts as invited", async (t) => {
+  const { toasts } = await mount(t, {
+    sendInvitations: async ({ emails, onResult }) => {
+      for (const email of emails) {
+        onResult(email, { ok: false, kind: "alreadyInvited", grantsAdded: true });
+      }
+    },
+  });
+  await type(nameInput(), "Customer Calls");
+  await addAddress("waiting@example.com");
+  await click(createButton());
+
+  assert.equal(readable(toasts()[0].title), "Created Customer Calls");
+});
+
+test("only the invitations that didn't take the teamspace are counted as not invited", async (t) => {
+  const outcomes = {
+    "added@example.com": { ok: false, kind: "alreadyInvited", grantsAdded: true },
+    "waiting@example.com": { ok: false, kind: "alreadyInvited" },
+  };
+  const { toasts } = await mount(t, {
+    sendInvitations: async ({ emails, onResult }) => {
+      for (const email of emails) onResult(email, outcomes[email]);
+    },
+  });
+  await type(nameInput(), "Customer Calls");
+  for (const address of Object.keys(outcomes)) await addAddress(address);
+  await click(createButton());
+
+  assert.equal(
+    readable(toasts()[0].title),
+    "Created Customer Calls. Couldn't invite 1 person. Invite them from Members."
+  );
 });
 
 test("a reveal that throws doesn't leave the dialog stuck on Creating", async (t) => {

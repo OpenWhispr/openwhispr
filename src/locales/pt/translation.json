@@ -2536,6 +2536,7 @@
         "joinClosed": "{{space}} não aceita mais novos membros. Peça a um administrador que adicione você.",
         "openTeamspace": "Abrir teamspace",
         "rowMenu": {
+          "label": "Ações de {{name}}",
           "settings": "Configurações",
           "delete": "Excluir teamspace"
         },
@@ -2619,6 +2620,9 @@
           "partialInviteFailedMany": "Os convites para {{names}} não foram enviados. Tente novamente.",
           "partialAddFailed": "Não foi possível adicionar {{names}}. Tente novamente.",
           "partialLeft": "Saíram do espaço de trabalho e não foram adicionados: {{names}}.",
+          "notAllowed": "Você não tem mais permissão para gerenciar os membros de {{space}}.",
+          "notInvited": "{{names}} não recebeu convite.",
+          "notInvitedMany": "{{names}} não receberam convite.",
           "skippedInvited": "{{names}} já tem um convite para o espaço de trabalho, então não foi adicionado a este teamspace.",
           "skippedInvitedMany": "{{names}} já têm convites para o espaço de trabalho, então não foram adicionados a este teamspace."
         },

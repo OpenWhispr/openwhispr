@@ -258,6 +258,12 @@ test("space refusals map to their kinds by code", () => {
   }
 });
 
+test("access revoked reads as not allowed, which no retry changes", () => {
+  assert.deepEqual(classifySpaceError(new CloudApiError("x", 403, "space_access_revoked")), {
+    kind: "notAllowed",
+  });
+});
+
 test("not_workspace_members names the people who are not in the workspace", () => {
   assert.deepEqual(
     classifySpaceError(

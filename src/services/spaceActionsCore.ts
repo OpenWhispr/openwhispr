@@ -348,6 +348,12 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     return result;
   }
 
+  // A write found a space gone, which the mirror doesn't know yet. The sync pass drops what it no
+  // longer lists and says what became of any notes that hadn't synced.
+  function requestSpacesResync(): void {
+    deps.sync.requestSyncAll("manual");
+  }
+
   async function addTeamMembers(
     teamId: string,
     userIds: string[]
@@ -401,6 +407,7 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     setSpaceMemberRole,
     removeSpaceMember,
     leaveSpace,
+    requestSpacesResync,
     addTeamMembers,
     removeTeamMember,
     setTeamMemberRole,

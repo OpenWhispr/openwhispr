@@ -63,8 +63,8 @@ interface CreateSpaceDialogProps {
 
 // The teamspace exists by now, so this never throws: whatever goes wrong here is a count of
 // people to invite from Members, never a failed create. Every address that didn't come back
-// invited counts, an existing member or a pending invitation included: the API refuses those two
-// outright and attaches no teamspace to them, so they are not in it.
+// invited counts, an existing member included. A pending invitation counts only when it didn't
+// take the teamspace, which is an older API's answer: that person is not in it.
 async function inviteIntoTeamspace(
   workspaceId: string,
   cloudSpaceId: string | null,
@@ -81,7 +81,7 @@ async function inviteIntoTeamspace(
       spaceIds: [cloudSpaceId],
       onResult: (_email, outcome) => {
         // `=== true`: src compiles without strictNullChecks, where a bare `ok` doesn't narrow.
-        if (outcome.ok !== true) failed += 1;
+        if (outcome.ok !== true && outcome.grantsAdded !== true) failed += 1;
       },
     });
   } catch {

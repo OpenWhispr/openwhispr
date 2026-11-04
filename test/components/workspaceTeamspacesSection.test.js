@@ -166,8 +166,8 @@ async function loadSection(
         const passThrough = ({ children }) => h(React.Fragment, null, children);
         export const DropdownMenu = passThrough;
         export const DropdownMenuContent = passThrough;
-        export const DropdownMenuTrigger = ({ children, ref }) =>
-          h("button", { "data-row-actions": "", ref }, children);
+        export const DropdownMenuTrigger = ({ children, ref, "aria-label": label }) =>
+          h("button", { "data-row-actions": "", "aria-label": label, ref }, children);
         export const DropdownMenuItem = ({ children, onSelect }) =>
           h("div", { role: "menuitem", onClick: onSelect }, children);
       `,
@@ -381,6 +381,22 @@ test("two admins open a list with names and emails", async (t) => {
   assert.match(markup, /<bdi dir="ltr">rav@openronnie\.com<\/bdi>/);
   assert.match(markup, />Anita</);
   assert.match(markup, /<bdi dir="ltr">anita@example\.com<\/bdi>/);
+});
+
+test("each row's menu names its teamspace, isolated", async (t) => {
+  const { Section } = await loadSection(t, {
+    spaces: [space("s1", "Alpha"), space("s2", "ألفا")],
+  });
+  const markup = render(Section);
+
+  assert.match(
+    rowMarkup(markup, "Alpha"),
+    new RegExp(`aria-label="${KEY}\\.rowMenu\\.label\\|name=\u2068Alpha\u2069"`)
+  );
+  assert.match(
+    rowMarkup(markup, "ألفا"),
+    new RegExp(`aria-label="${KEY}\\.rowMenu\\.label\\|name=\u2068ألفا\u2069"`)
+  );
 });
 
 test("one admin shows inline", async (t) => {
