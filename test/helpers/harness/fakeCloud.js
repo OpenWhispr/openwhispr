@@ -55,8 +55,8 @@ const NOTE_FIELDS = [
 
 const FOLDER_FIELDS = ["name", "is_default", "sort_order"];
 
-// `messages` rides along as a stored field; the list route is the only one that
-// returns it, as api/conversations/list.ts does.
+// `messages` rides along as a stored field; of the routes returning a conversation,
+// only the list includes it, as api/conversations/list.ts does.
 const CONVERSATION_FIELDS = ["title", "archived_at", "messages"];
 
 const DICTIONARY_FIELDS = ["word", "source"];

@@ -1250,8 +1250,8 @@ export class SyncService {
     }
   }
 
-  // A create can't carry these, since it inserts its messages again on a chat
-  // already in the cloud. Each attempt reads the copy first, so a retry after a
+  // A create can't carry what's missing, since it inserts its messages again on a
+  // chat already in the cloud. Each attempt reads the copy first, so a retry after a
   // failure part way through sends nothing twice. The chat stays pending until
   // the cloud holds what this pass read, so a later edit gets its own attempt.
   private async sendMissingConversationContent(localId: number, cloudId: string): Promise<void> {
