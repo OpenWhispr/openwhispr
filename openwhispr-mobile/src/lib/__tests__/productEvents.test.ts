@@ -36,8 +36,15 @@ function rig(storage = memoryStorage()) {
     defer: new Set<string>(),
     // Runs after the server answered, before the client reads the answer.
     afterAnswer: null as (() => void) | null,
+    // Holds the next batch request open until it settles.
+    hold: null as Promise<void> | null,
   };
   const request = async (path: string, body: unknown, cookie: string) => {
+    if (server.hold && path.endsWith('/batch')) {
+      const hold = server.hold;
+      server.hold = null;
+      await hold;
+    }
     calls.push({
       path,
       body: structuredClone(body) as Call['body'],
@@ -245,6 +252,8 @@ describe('mobile product events', () => {
     await r.events.recordOnboardingCompleted({ ...COMPLETION, mode: 'cloud' });
     r.server.batchStatus = 200;
 
+    // Every binding is its own server-made id.
+    r.server.bindingId = '7a1c2e3d-4b5f-4a6e-8c7d-9e0f1a2b3c4d';
     await r.signInAs(OTHER);
     const asB = r.batches().filter((call) => call.cookie === 'c-b1');
     expect(asB.flatMap((call) => call.body.events ?? []).map((event) => event.event_name)).toEqual([
@@ -323,6 +332,42 @@ describe('mobile product events', () => {
     await r.events.recordOnboardingCompleted(COMPLETION);
 
     expect(r.calls).toEqual([]);
+    expect(r.queued()).toEqual([]);
+  });
+
+  it('a sign-in the server took is not uploaded again when a relaunch restores the session', async () => {
+    const storage = memoryStorage();
+    const first = rig(storage);
+    await first.signInAs(ACCOUNT);
+    expect(first.sentEvents().map((event) => event.event_id)).toEqual([BINDING]);
+
+    const relaunched = rig(storage);
+    await relaunched.signInAs(ACCOUNT);
+    expect(relaunched.calls.filter((call) => call.path.endsWith('/app-session'))).toHaveLength(1);
+    expect(relaunched.sentEvents()).toEqual([]);
+    expect(relaunched.queued()).toEqual([]);
+  });
+
+  it('an event queued while an upload is in flight goes in a follow-up pass', async () => {
+    const r = rig();
+    let release!: () => void;
+    r.server.hold = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    // The session's coverage call is still in flight when onboarding completes.
+    r.setIdentityQuietly(ANONYMOUS);
+    const observing = r.events.observeIdentity();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const completing = r.events.recordOnboardingCompleted(COMPLETION);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    release();
+    await Promise.all([observing, completing]);
+    // Nothing else asks for a pass: the follow-up has to start on its own.
+    for (let tick = 0; tick < 5; tick += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(
+      r.batches().map((call) => (call.body.events ?? []).map((event) => event.event_name)),
+    ).toEqual([[], ['onboarding_completed']]);
     expect(r.queued()).toEqual([]);
   });
 

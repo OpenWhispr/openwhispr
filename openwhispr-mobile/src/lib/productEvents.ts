@@ -16,6 +16,9 @@ const BATCH_SIZE = 50;
 const MAX_QUEUED_EVENTS = 200;
 const MAX_EVENT_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const RETRY_DELAYS_MS = [60_000, 5 * 60_000, 30 * 60_000];
+// Sign-ins the server already took. A relaunch restores the same session and
+// gets the same binding back, which then needs no second upload.
+const MAX_ACKNOWLEDGED_BINDINGS = 50;
 
 // Mobile's processing modes in the vocabulary every client reports.
 const SETUP_MODES: Record<ProcessingMode, 'cloud' | 'byok' | 'local'> = {
@@ -56,6 +59,7 @@ interface State {
    * on the account's session; no other account ever sends them.
    */
   links: Record<string, string>;
+  acknowledgedBindings: string[];
 }
 
 export interface ProductEventsStorage {
@@ -92,6 +96,7 @@ function emptyState(): State {
     generation: 0,
     events: [],
     links: {},
+    acknowledgedBindings: [],
   };
 }
 
@@ -116,6 +121,7 @@ export function createProductEvents({
   // Every read-modify-write runs here in turn, so two writers never race.
   let chain: Promise<unknown> = Promise.resolve();
   let running: Promise<void> | null = null;
+  let flushAgain = false;
   let retryPending = false;
   let retryAttempt = 0;
   let lastIdentity: ProductEventsIdentity | null = null;
@@ -154,7 +160,10 @@ export function createProductEvents({
 
   function enqueue(event: Omit<QueuedEvent, 'identity_generation'>): Promise<void> {
     return withState((current) => {
-      if (current.events.some((queued) => queued.event_id === event.event_id)) {
+      if (
+        current.events.some((queued) => queued.event_id === event.event_id) ||
+        current.acknowledgedBindings.includes(event.event_id.toLowerCase())
+      ) {
         return { result: undefined };
       }
       const events = [...current.events, { ...event, identity_generation: current.generation }];
@@ -294,11 +303,17 @@ export function createProductEvents({
   }
 
   function flush(): Promise<void> {
-    if (running) return running;
+    if (running) {
+      // The running pass read the queue before whatever asked for this one.
+      flushAgain = true;
+      return running;
+    }
+    flushAgain = false;
     running = runPass()
       .catch(() => scheduleRetry())
       .finally(() => {
         running = null;
+        if (flushAgain) flush().catch(() => undefined);
       });
     return running;
   }
@@ -383,9 +398,19 @@ export function createProductEvents({
       (Array.isArray(body.accepted) ? body.accepted : []).map((id) => String(id).toLowerCase()),
     );
     if (accepted.size > 0) {
+      const bindings = pending
+        .filter(
+          (event) =>
+            event.event_name === 'app_session_authenticated' &&
+            accepted.has(event.event_id.toLowerCase()),
+        )
+        .map((event) => event.event_id.toLowerCase());
       await withState((current) => ({
         next: {
           ...current,
+          acknowledgedBindings: [...current.acknowledgedBindings, ...bindings].slice(
+            -MAX_ACKNOWLEDGED_BINDINGS,
+          ),
           events: current.events.filter((event) => !accepted.has(event.event_id.toLowerCase())),
         },
         result: undefined,
