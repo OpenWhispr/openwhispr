@@ -64,6 +64,7 @@ const params = {
 beforeEach(() => {
   jest.clearAllMocks();
   mockOwner = 'account:a';
+  mockUsage.billingUserId = 'billing-a';
   mockUsage.isSubscribed = false;
   mockUsage.entitlementSources = {
     provider: false,
@@ -418,4 +419,41 @@ it('retries a completion update that arrives during an older inactive store resp
   expect(Purchases.getCustomerInfo).toHaveBeenCalledTimes(2);
   expect(reconcileStoreBilling).toHaveBeenCalledTimes(1);
   stop();
+});
+
+it('checks a newly signed-in account after the previous account’s pending check settles', async () => {
+  useAndroidBillingStatus.setState({
+    accounts: { 'billing-a': 'access-pending', 'billing-b': 'access-pending' },
+  });
+  let release!: (info: never) => void;
+  jest.mocked(Purchases.getCustomerInfo).mockReturnValueOnce(
+    new Promise((resolve) => {
+      release = resolve;
+    }),
+  );
+  const stop = observeAndroidPurchaseUpdates();
+  try {
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    const previous = { ...useUsageStore.getState(), usage: { ...mockUsage } };
+    mockOwner = 'account:b';
+    mockUsage.billingUserId = 'billing-b';
+    jest.mocked(reconcileStoreBilling).mockImplementationOnce(async () => {
+      mockUsage.isSubscribed = true;
+      mockUsage.entitlementSources.provider = true;
+      mockUsage.entitlementSources.providerStore = 'play_store';
+      return {} as never;
+    });
+    const listener = jest.mocked(useUsageStore.subscribe).mock.calls.at(-1)![0];
+    listener(useUsageStore.getState(), previous as ReturnType<typeof useUsageStore.getState>);
+    release(playInfo as never);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(useAndroidBillingStatus.getState().accounts).toEqual({
+      'billing-a': 'access-pending',
+      'billing-b': 'idle',
+    });
+    expect(Purchases.purchaseSubscriptionOption).not.toHaveBeenCalled();
+    expect(Purchases.restorePurchases).not.toHaveBeenCalled();
+  } finally {
+    stop();
+  }
 });

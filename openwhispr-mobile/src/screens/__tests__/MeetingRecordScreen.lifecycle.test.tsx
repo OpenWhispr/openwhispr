@@ -2,7 +2,8 @@ import React from 'react';
 import { Platform, Alert, PermissionsAndroid } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { MeetingRecordScreen as IOSMeetingRecordScreen } from '../MeetingRecordScreen';
-import { MeetingRecordScreen as AndroidMeetingRecordScreen } from '../MeetingRecordScreen.android';
+import { MeetingRecordScreen as AndroidMeetingRecordScreen } from '@/android/MeetingRecordScreen';
+// Exercise each platform lifecycle directly; the Android dispatcher has separate routing tests.
 const MeetingRecordScreen = () =>
   Platform.OS === 'android' ? <AndroidMeetingRecordScreen /> : <IOSMeetingRecordScreen />;
 import { CloudMeetingFinishError } from '@/hooks/useCloudMeeting.android';
