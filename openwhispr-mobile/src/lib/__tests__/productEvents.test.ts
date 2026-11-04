@@ -22,8 +22,9 @@ interface Call {
   delivered: boolean;
 }
 
-function rig(storage = memoryStorage()) {
+function rig(storage = memoryStorage(), { allowed: initiallyAllowed = true } = {}) {
   let identity: ProductEventsIdentity | null = null;
+  let allowed = initiallyAllowed;
   let now = Date.parse('2026-11-04T08:00:05.000Z');
   const calls: Call[] = [];
   const timers: (() => void)[] = [];
@@ -76,6 +77,7 @@ function rig(storage = memoryStorage()) {
   const events = createProductEvents({
     storage,
     getIdentity: () => identity,
+    isAllowed: () => allowed,
     request,
     os: 'ios',
     appVersion: '1.2.6',
@@ -96,6 +98,13 @@ function rig(storage = memoryStorage()) {
     },
     setIdentityQuietly: (next: ProductEventsIdentity | null) => {
       identity = next;
+    },
+    setUsageAnalytics: async (next: boolean) => {
+      allowed = next;
+      await events.observeConsent();
+    },
+    setUsageAnalyticsQuietly: (next: boolean) => {
+      allowed = next;
     },
     advance: (ms: number) => {
       now += ms;
@@ -325,6 +334,56 @@ describe('mobile product events', () => {
     await r.events.flush();
 
     expect(r.batches().map((call) => call.body.events)).toEqual([[]]);
+  });
+
+  it('with Usage Analytics off, a sign-in and an onboarding send and keep nothing', async () => {
+    const r = rig(memoryStorage(), { allowed: false });
+    await r.signInAs(ANONYMOUS);
+    await r.events.recordOnboardingCompleted(COMPLETION);
+    await r.signInAs(ACCOUNT);
+    await r.events.flush();
+
+    // No binding, no upload and no coverage: the account reads as unobserved.
+    expect(r.calls).toEqual([]);
+    expect(r.queued()).toEqual([]);
+  });
+
+  it('turning Usage Analytics off drops what is still queued', async () => {
+    const r = rig();
+    await r.signInAs(ACCOUNT);
+    r.server.offline = true;
+    await r.events.recordOnboardingCompleted(COMPLETION);
+    expect(r.queued()).toHaveLength(1);
+
+    await r.setUsageAnalytics(false);
+    r.server.offline = false;
+    await r.events.flush();
+
+    expect(r.queued()).toEqual([]);
+    expect(r.sentEvents().map((event) => event.event_name)).toEqual(['app_session_authenticated']);
+  });
+
+  it('turned on later (or once the saved config loads), the session held then is observed', async () => {
+    const r = rig(memoryStorage(), { allowed: false });
+    await r.signInAs(ACCOUNT);
+    expect(r.calls).toEqual([]);
+
+    await r.setUsageAnalytics(true);
+
+    expect(r.calls.map((call) => call.path)).toEqual([
+      '/api/product-events/app-session',
+      '/api/product-events/batch',
+    ]);
+    expect(r.sentEvents().map((event) => event.event_id)).toEqual([BINDING]);
+  });
+
+  it('a binding answer that arrives after Usage Analytics went off is not queued', async () => {
+    const r = rig();
+    r.server.afterAnswer = () => r.setUsageAnalyticsQuietly(false);
+    await r.signInAs(ACCOUNT);
+
+    expect(r.queued()).toEqual([]);
+    expect(r.batches()).toEqual([]);
   });
 
   it('a guest without a session records nothing', async () => {

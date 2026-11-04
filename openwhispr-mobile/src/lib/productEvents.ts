@@ -82,6 +82,12 @@ export type ProductEventsRequest = (
 interface Dependencies {
   storage: ProductEventsStorage;
   getIdentity: () => ProductEventsIdentity | null;
+  /**
+   * The Usage Analytics switch ("app-session analytics"). While it is off
+   * nothing is recorded, bound, uploaded or reported, so the account reads as
+   * unobserved.
+   */
+  isAllowed: () => boolean;
   request: ProductEventsRequest;
   os: string;
   appVersion: string | null;
@@ -111,6 +117,7 @@ function asRecord(value: unknown): Record<string, unknown> {
 export function createProductEvents({
   storage,
   getIdentity,
+  isAllowed,
   request,
   os,
   appVersion,
@@ -125,6 +132,7 @@ export function createProductEvents({
   let retryPending = false;
   let retryAttempt = 0;
   let lastIdentity: ProductEventsIdentity | null = null;
+  let lastAllowed = isAllowed();
   // Per process run: the sessions bound and the sessions whose coverage was reported.
   const boundSessions = new Set<string>();
   const reportedSessions = new Set<string>();
@@ -219,12 +227,35 @@ export function createProductEvents({
   }
 
   /**
+   * The Usage Analytics switch changed, or the saved config loaded. Turned off,
+   * whatever is still queued is dropped. Turned on, the session held now is
+   * observed from then on.
+   */
+  async function observeConsent(): Promise<void> {
+    const allowed = isAllowed();
+    if (allowed === lastAllowed) return;
+    lastAllowed = allowed;
+    if (!allowed) {
+      await withState((current) => ({
+        next: current.events.length > 0 ? { ...current, events: [] } : undefined,
+        result: undefined,
+      }));
+      return;
+    }
+    const identity = getIdentity();
+    if (identity && !identity.isAnonymous) await bindAppSession(identity);
+    else await flush();
+  }
+
+  /**
    * App sign-in: a real account's session the store accepted (a sign-in, a
    * sign-up or a session restored at launch). The server records when it
    * first validated this session on this installation and the event is timed
    * by that, so a session that can't be validated (offline) records nothing.
    */
   async function bindAppSession(identity: ProductEventsIdentity): Promise<void> {
+    // The binding itself is a server record, so it waits for the switch too.
+    if (!isAllowed()) return;
     const key = identityKey(identity) as string;
     if (boundSessions.has(key)) return flush();
     boundSessions.add(key);
@@ -254,7 +285,7 @@ export function createProductEvents({
       if (!response || response.status >= 500) boundSessions.delete(key);
       return flush();
     }
-    if (!stillCurrent(identity)) return;
+    if (!stillCurrent(identity) || !isAllowed()) return;
     await enqueue({
       // One binding is one event: relaunches resend the same id.
       event_id: body.binding_id,
@@ -286,7 +317,7 @@ export function createProductEvents({
     flowVersion: string;
   }): Promise<void> {
     const identity = getIdentity();
-    if (!identity) return;
+    if (!identity || !isAllowed()) return;
     const occurredAt = new Date(now()).toISOString();
     await enqueue({
       event_id: randomUUID(),
@@ -320,7 +351,7 @@ export function createProductEvents({
 
   async function runPass(): Promise<void> {
     const identity = getIdentity();
-    if (!identity) return;
+    if (!identity || !isAllowed()) return;
     const key = identityKey(identity) as string;
     if (blockedSessions.has(key)) return;
 
@@ -419,7 +450,13 @@ export function createProductEvents({
     if (pending.length === BATCH_SIZE && accepted.size === pending.length) await runPass();
   }
 
-  return { observeIdentity, recordOnboardingCompleted: recordOnboarding, flush, installationId };
+  return {
+    observeIdentity,
+    observeConsent,
+    recordOnboardingCompleted: recordOnboarding,
+    flush,
+    installationId,
+  };
 }
 
 export type ProductEvents = ReturnType<typeof createProductEvents>;
@@ -438,6 +475,10 @@ export function initProductEvents(): void {
   const { BASE_URL, getClientVersionHeader } =
     require('@/lib/apiClient') as typeof import('@/lib/apiClient');
   const { useAuthStore } = require('@/store/useAuthStore') as typeof import('@/store/useAuthStore');
+  const { useConfigStore } =
+    require('@/store/useConfigStore') as typeof import('@/store/useConfigStore');
+  const { isUsageAnalyticsAllowed } =
+    require('@/lib/usageAnalytics') as typeof import('@/lib/usageAnalytics');
 
   const instance = createProductEvents({
     storage: AsyncStorage,
@@ -447,6 +488,7 @@ export function initProductEvents(): void {
         ? { userId: user.id, isAnonymous: user.isAnonymous, cookie: sessionCookie }
         : null;
     },
+    isAllowed: () => isUsageAnalyticsAllowed(useConfigStore.getState().config),
     request: async (path, body, cookie) => {
       const response = await fetch(`${BASE_URL}${path}`, {
         method: 'POST',
@@ -468,6 +510,9 @@ export function initProductEvents(): void {
     instance.observeIdentity().catch(() => undefined);
   };
   useAuthStore.subscribe(observe);
+  useConfigStore.subscribe(() => {
+    instance.observeConsent().catch(() => undefined);
+  });
   observe();
 }
 
