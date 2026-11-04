@@ -6,7 +6,11 @@ import MeetingNotificationOverlay from "./components/MeetingNotificationOverlay.
 import { PermissionGuideOverlay } from "./components/onboarding/PermissionGuideOverlay";
 import ReauthenticationScreen from "./components/ReauthenticationScreen.tsx";
 import BackgroundModelDownloadTray from "./components/onboarding/BackgroundModelDownloadTray.tsx";
-import { LEGACY_ONBOARDING_STEP_KEY, ONBOARDING_SESSION_KEY } from "./components/onboarding/flow";
+import {
+  LEGACY_ONBOARDING_STEP_KEY,
+  ONBOARDING_FLOW_VERSION,
+  ONBOARDING_SESSION_KEY,
+} from "./components/onboarding/flow";
 import { useAuth } from "./hooks/useAuth";
 import { useControlPanelWindowDrag } from "./hooks/useControlPanelWindowDrag";
 import { useTheme } from "./hooks/useTheme";
@@ -193,6 +197,12 @@ function MainApp() {
     }
     setShowOnboarding(false);
     localStorage.setItem("onboardingCompleted", "true");
+    // The onboarding milestone: only this real completion records it, never the
+    // returning-user assignment above or a resumed session.
+    void window.electronAPI?.recordOnboardingCompleted?.({
+      setupMode: options?.setupMode ?? null,
+      flowVersion: `desktop-onboarding-${ONBOARDING_FLOW_VERSION}`,
+    });
   };
 
   // isLoading clears once the onboarding effect has run, which itself waits

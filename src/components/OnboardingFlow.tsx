@@ -75,7 +75,7 @@ import { ActivationModeSelector } from "./ui/ActivationModeSelector";
 import LinuxPttSetupInfo from "./ui/LinuxPttSetupInfo";
 
 interface OnboardingFlowProps {
-  onComplete: (options?: { openSettings?: boolean }) => void;
+  onComplete: (options?: { openSettings?: boolean; setupMode?: OnboardingCompletionMode }) => void;
 }
 
 type OnboardingCompletionMode = Exclude<OnboardingSetupMode, null> | "managed";
@@ -677,7 +677,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         localStorage.setItem("skipAuth", String(skippedAuth));
         clearSession();
         localStorage.setItem("onboardingCompleted", "true");
-        onComplete();
+        onComplete({ setupMode: mode });
       } catch (error) {
         logger.error("Failed to finish onboarding", { error }, "onboarding");
         showFatalError(t("common.unknownError"));
