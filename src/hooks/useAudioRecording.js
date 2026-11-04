@@ -64,6 +64,7 @@ export const useAudioRecording = (toast, options = {}) => {
   const audioManagerRef = useRef(null);
   const startLockRef = useRef(false);
   const stopRequestedDuringStartRef = useRef(false);
+  const startCuePendingRef = useRef(false);
   const pushForceStoppedRef = useRef(false);
   const stopLockRef = useRef(false);
   const preparationGenerationRef = useRef(0);
@@ -250,6 +251,7 @@ export const useAudioRecording = (toast, options = {}) => {
           }
         }
 
+        startCuePendingRef.current = true;
         const didStart = audioManagerRef.current.shouldUseStreaming()
           ? await audioManagerRef.current.startStreamingRecording()
           : await audioManagerRef.current.startRecording();
@@ -275,19 +277,10 @@ export const useAudioRecording = (toast, options = {}) => {
           return didStart;
         }
 
-        // A quick tap can end the recording inside the start call itself (deferred
-        // streaming stop) — don't pause media for a recording that already ended. See #1060.
-        if (didStart && audioManagerRef.current.getState().isRecording) {
-          if (getSettings().pauseMediaOnDictation) {
-            window.electronAPI?.pauseMediaPlayback?.();
-          }
-          window.electronAPI?.registerCancelHotkey?.("Escape");
-          void playStartCue();
-        }
-
         return didStart;
       } finally {
         startLockRef.current = false;
+        startCuePendingRef.current = false;
         // A stop that landed mid-start set isStopping expecting the started
         // recording's state change to clear it; if the recording never began,
         // no state change will ever arrive.
@@ -516,6 +509,25 @@ export const useAudioRecording = (toast, options = {}) => {
     audioManagerRef.current.setCallbacks({
       onStateChange: ({ isRecording, isProcessing, isStreaming, micCaptureStatus }) => {
         reportLifecycle(isRecording ? "recording" : isProcessing ? "processing" : "idle");
+        // Act with the pill, not when the start resolves: a streaming start stays
+        // pending on its provider connect (seconds on a cold socket) while audio
+        // already buffers. A fallback to batch reports recording again after its
+        // not-recording report released these, so only the cue is once per start.
+        if (
+          isRecording &&
+          !wasRecordingRef.current &&
+          startLockRef.current &&
+          !stopRequestedDuringStartRef.current
+        ) {
+          if (getSettings().pauseMediaOnDictation) {
+            window.electronAPI?.pauseMediaPlayback?.();
+          }
+          window.electronAPI?.registerCancelHotkey?.("Escape");
+          if (startCuePendingRef.current) {
+            startCuePendingRef.current = false;
+            void playStartCue();
+          }
+        }
         if (isRecording) {
           onDemoEventRef.current?.({ kind: demoKindRef.current, status: "listening" });
         } else if (isProcessing) {
