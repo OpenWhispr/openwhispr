@@ -1,5 +1,9 @@
 import { getValidatedAuthGeneration } from "../lib/authRequestContext";
-import { classifyRowActionError, type RowActionError } from "../lib/workspaceErrors";
+import {
+  classifyInviteError,
+  classifyRowActionError,
+  type RowActionError,
+} from "../lib/workspaceErrors";
 import { CloudApiError } from "./cloudApi";
 import { InvitationsService } from "./InvitationsService";
 
@@ -42,6 +46,7 @@ function endsTheRun(error: unknown, classified: RowActionError): boolean {
     classified.kind === "notAllowed" ||
     classified.kind === "ssoRequired" ||
     classified.kind === "rateLimited" ||
+    classifyInviteError(error).kind === "sessionExpired" ||
     // A 429 from an answer with no code limits the rest just the same.
     (error instanceof CloudApiError && error.status === 429)
   );

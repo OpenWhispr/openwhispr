@@ -872,6 +872,57 @@ test("resending freezes the checkboxes until it reports", async (t) => {
   assert.ok(checkboxes().every((box) => !box.hasAttribute("disabled")));
 });
 
+test("a bulk resend stays busy when Settings remounts its invitations panel", async (t) => {
+  const { Tab } = await loadTab(t);
+  let finish;
+  globalThis.__bulkResendImpl = (ids) =>
+    new Promise((resolve) => (finish = () => resolve({ done: ids, noEmail: [], failed: [] })));
+  const original = await mount(t, Tab, ready(twoRows()));
+  await check(original, SELECT_ALL);
+  await React.act(async () => propsOf(barButton(original, "resendSelected")).onClick());
+
+  await React.act(async () => mountedRoots.get(t).unmount());
+  mountedRoots.delete(t);
+  const reopened = await mount(t, Tab, ready(twoRows()));
+
+  assert.ok(checkbox(reopened, SELECT_ALL).hasAttribute("disabled"));
+  assert.ok(rowTriggers(reopened).every((trigger) => trigger.hasAttribute("disabled")));
+  await React.act(async () => propsOf(menuItem(reopened, "invitations.resend")).onClick());
+  assert.deepEqual(globalThis.__resendCalls, []);
+  assert.equal(globalThis.__bulkResendCalls.length, 1);
+
+  await React.act(async () => finish());
+  assert.equal(checkbox(reopened, SELECT_ALL).hasAttribute("disabled"), false);
+  assert.ok(rowTriggers(reopened).every((trigger) => !trigger.hasAttribute("disabled")));
+  globalThis.__bulkResendImpl = async (ids) => ({ done: ids, noEmail: [], failed: [] });
+  await check(reopened, SELECT_ALL);
+  await React.act(async () => propsOf(barButton(reopened, "resendSelected")).onClick());
+  assert.equal(globalThis.__bulkResendCalls.length, 2);
+});
+
+test("a pending row resend blocks bulk resend before rendering and until it settles", async (t) => {
+  const { Tab } = await loadTab(t);
+  let finish;
+  globalThis.__resendImpl = () =>
+    new Promise((resolve) => (finish = () => resolve({ email_sent: true })));
+  const container = await mount(t, Tab, ready(twoRows()));
+  await check(container, SELECT_ALL);
+  const resendSelected = propsOf(barButton(container, "resendSelected")).onClick;
+
+  await React.act(async () => {
+    propsOf(menuItem(container, "invitations.resend")).onClick();
+    resendSelected();
+  });
+
+  assert.equal(globalThis.__resendCalls.length, 1);
+  assert.equal(globalThis.__bulkResendCalls.length, 0);
+  assert.equal(barButton(container, "resendingSelected").getAttribute("aria-disabled"), "true");
+
+  await React.act(async () => finish());
+  await React.act(async () => propsOf(barButton(container, "resendSelected")).onClick());
+  assert.equal(globalThis.__bulkResendCalls.length, 1);
+});
+
 test("leaving the tab mid-resend still resends the rest and reports", async (t) => {
   const { Tab } = await loadTab(t);
   let release;

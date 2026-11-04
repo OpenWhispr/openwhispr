@@ -1,5 +1,6 @@
-import React, { useEffect, useReducer, useRef, useState } from "react";
+import React, { useEffect, useReducer, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { create } from "zustand";
 import { Loader2, MoreHorizontal, Trash2 } from "../icons";
 import { Button } from "../ui/button";
 import {
@@ -37,6 +38,26 @@ interface WorkspaceInvitationsTabProps {
   invitations: WorkspaceInvitationsState;
 }
 
+interface InvitationResends {
+  bulk: boolean;
+  ids: ReadonlySet<string>;
+}
+
+const IDLE_RESENDS: InvitationResends = { bulk: false, ids: new Set() };
+// Requests continue when Settings closes, so their guards must survive its next mount.
+const useInvitationResends = create<ReadonlyMap<string, InvitationResends>>(() => new Map());
+const getResends = (workspaceId: string): InvitationResends =>
+  useInvitationResends.getState().get(workspaceId) ?? IDLE_RESENDS;
+
+function setResends(workspaceId: string, next: InvitationResends): void {
+  useInvitationResends.setState((current) => {
+    const updated = new Map(current);
+    if (next.bulk || next.ids.size > 0) updated.set(workspaceId, next);
+    else updated.delete(workspaceId);
+    return updated;
+  }, true);
+}
+
 // Display none, so these and their copy under the email are never announced at the same width.
 const WIDE_ONLY = "hidden @xl:table-cell";
 const SKELETON_ROWS = 3;
@@ -59,11 +80,9 @@ export default function WorkspaceInvitationsTab({
     { kind: "closed" }
   );
   const [selection, setSelection] = useState<RowSelection>(() => new Set());
-  const [bulkResending, setBulkResending] = useState(false);
-  const bulkResendingRef = useRef(false);
-  const [resendingIds, setResendingIds] = useState<ReadonlySet<string>>(() => new Set());
-  // Read synchronously, so a second Resend on a row still sending is ignored before any render.
-  const resendingRef = useRef(new Set<string>());
+  const { bulk: bulkResending, ids: resendingIds } = useInvitationResends(
+    (state) => state.get(workspace.id) ?? IDLE_RESENDS
+  );
   const { reload } = invitations;
   // One reading of the clock per render, so the order, the status and the day count agree.
   const now = Date.now();
@@ -95,13 +114,16 @@ export default function WorkspaceInvitationsTab({
   }
 
   function setResending(invitationId: string, resending: boolean): void {
-    if (resending) resendingRef.current.add(invitationId);
-    else resendingRef.current.delete(invitationId);
-    setResendingIds(new Set(resendingRef.current));
+    const current = getResends(workspace.id);
+    const ids = new Set(current.ids);
+    if (resending) ids.add(invitationId);
+    else ids.delete(invitationId);
+    setResends(workspace.id, { ...current, ids });
   }
 
   async function handleResend(invitation: WorkspaceInvitation): Promise<void> {
-    if (resendingRef.current.has(invitation.id)) return;
+    const current = getResends(workspace.id);
+    if (current.bulk || current.ids.has(invitation.id)) return;
     setResending(invitation.id, true);
     try {
       const { email_sent } = await InvitationsService.resend(workspace.id, invitation.id);
@@ -163,12 +185,11 @@ export default function WorkspaceInvitationsTab({
   }
 
   async function handleResendSelected(): Promise<void> {
-    if (bulkResendingRef.current) return;
-    bulkResendingRef.current = true;
-    setBulkResending(true);
+    const current = getResends(workspace.id);
+    if (current.bulk || current.ids.size > 0) return;
+    setResends(workspace.id, { ...current, bulk: true });
     const emailsById = new Map(selectedInvitations.map(({ id, email }) => [id, email]));
-    // Not stopped when the tab unmounts (every People tab change does): the run finishes and
-    // still reports, since the toast and the invitations list outlive the tab. A sign-in change
+    // The run still reports if People closes, since its toast outlives the tab. A sign-in change
     // ends it through the auth generation.
     try {
       const outcome = await bulkInvitationActions.resendInvitations(
@@ -282,8 +303,7 @@ export default function WorkspaceInvitationsTab({
         });
       }
     } finally {
-      bulkResendingRef.current = false;
-      setBulkResending(false);
+      setResends(workspace.id, { ...getResends(workspace.id), bulk: false });
     }
   }
 
@@ -486,12 +506,13 @@ export default function WorkspaceInvitationsTab({
           },
           {
             id: "resend",
-            label: bulkResending
-              ? t("settingsPage.workspace.people.invitations.resendingSelected")
-              : t(
-                  `settingsPage.workspace.people.invitations.${oneSelected ? "resend" : "resendSelected"}`
-                ),
-            busy: bulkResending,
+            label:
+              bulkResending || resendingIds.size > 0
+                ? t("settingsPage.workspace.people.invitations.resendingSelected")
+                : t(
+                    `settingsPage.workspace.people.invitations.${oneSelected ? "resend" : "resendSelected"}`
+                  ),
+            busy: bulkResending || resendingIds.size > 0,
             onClick: () => void handleResendSelected(),
           },
         ]}

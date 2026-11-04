@@ -184,7 +184,7 @@ export function InvitePeopleView({
     if (summary.failed.length === 0) return null;
     // Try resending resends exactly these, so the count and the button agree with Send.
     const retryable = summary.failed.filter(
-      ({ state: chip }) => chip.status === "failed" && isRetryableFailure(chip.kind)
+      ({ state: chip }) => chip.status === "failed" && isRetryableFailure(chip)
     );
     if (retryable.length === 0) return { message: recipientMessage(summary.failed[0]) };
     const resend = { label: t("workspaces.invite.tryResending"), onClick: onSend };
@@ -193,6 +193,10 @@ export function InvitePeopleView({
       ({ state: chip }) => chip.status === "failed" && chip.kind === "rateLimited"
     );
     if (rateLimited) return { message: t("workspaces.invite.errors.rateLimited"), action: resend };
+    const seatLimited = retryable.find(
+      ({ state: chip }) => chip.status === "failed" && chip.kind === "seatLimit"
+    );
+    if (seatLimited) return { message: recipientMessage(seatLimited), action: resend };
     return {
       message: t("workspaces.invite.someFailed", { count: retryable.length }),
       action: resend,

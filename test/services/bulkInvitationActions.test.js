@@ -210,3 +210,27 @@ test("a sign-in change during the run ends it", async () => {
   assert.deepEqual(outcome.done, ["a"]);
   assert.deepEqual(outcome.failed, [{ id: "b", error: { kind: "failed" } }]);
 });
+
+test("expired authentication stops both actions even when its generation has not changed", async () => {
+  const { createBulkInvitationActions } = await load();
+  for (const action of ["resendInvitations", "cancelInvitations"]) {
+    for (const [status, code] of [
+      [401, undefined],
+      [0, "AUTH_EXPIRED"],
+      [0, "AUTH_CONTEXT_CHANGED"],
+      [0, "AUTH_CONTEXT_UNVALIDATED"],
+    ]) {
+      const harness = makeDeps({ a: new CloudApiError("Session expired", status, code) });
+      const bulk = createBulkInvitationActions({ ...harness.deps, authGeneration: () => 7 });
+
+      const outcome = await bulk[action]("ws-1", ["a", "b", "c"]);
+
+      assert.equal(harness.calls.length, 1, `${action}: ${code ?? status}`);
+      assert.deepEqual(outcome.done, []);
+      assert.deepEqual(
+        outcome.failed.map(({ id }) => id),
+        ["a", "b", "c"]
+      );
+    }
+  }
+});

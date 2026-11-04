@@ -4,14 +4,6 @@ const assert = require("node:assert/strict");
 const load = () => import("../../src/services/invitePeople.ts");
 const { CloudApiError } = require("../../src/services/cloudApi.ts");
 
-const BATCH_STATUSES = [
-  "invited",
-  "invalid_email",
-  "already_member",
-  "already_invited",
-  "directory_required",
-];
-
 // Records every batch request; an answer per address (a status, or an Error to reject the
 // whole request) defaults to a sent invitation.
 function makeSendBatch(answers = {}) {
@@ -103,7 +95,6 @@ test("each address gets its own outcome", async () => {
       { ok: false, kind: "directoryRequired" },
     ]
   );
-  assert.equal(BATCH_STATUSES.length, 5);
 });
 
 test("results match addresses regardless of case", async () => {
@@ -175,7 +166,7 @@ test("a dropped connection fails the chunk, retryable", async () => {
     Array(2).fill({ ok: false, kind: "requestFailed" })
   );
   const { isRetryableFailure } = await import("../../src/lib/inviteFlow.ts");
-  assert.equal(isRetryableFailure("requestFailed"), true);
+  assert.equal(isRetryableFailure({ kind: "requestFailed" }), true);
 });
 
 test("a rate limit answers for every address and is retryable", async () => {
@@ -188,7 +179,7 @@ test("a rate limit answers for every address and is retryable", async () => {
   assert.equal(results.length, 3);
   assert.ok(results.every(([, outcome]) => !outcome.ok && outcome.kind === "rateLimited"));
   const { isRetryableFailure } = await import("../../src/lib/inviteFlow.ts");
-  assert.equal(isRetryableFailure("rateLimited"), true);
+  assert.equal(isRetryableFailure({ kind: "rateLimited" }), true);
 });
 
 test("abort before sending sends nothing", async () => {
@@ -198,8 +189,6 @@ test("abort before sending sends nothing", async () => {
   assert.equal(calls.length, 0);
   assert.deepEqual(results, []);
 });
-
-// Two chunks, so the first request's refusal either ends the run or lets the second go ahead.
 
 test("an expired or replaced sign-in answers for every address", async () => {
   for (const error of [
