@@ -3617,7 +3617,7 @@ class IPCHandlers {
             return { success: false, error: "Cancelled", code: "UPLOAD_CANCELLED" };
           }
           debugLogger.error("Audio file transcription error", { error: error.message });
-          return { success: false, error: error.message };
+          return { success: false, error: error.message, code: error.code };
         }
       });
     });

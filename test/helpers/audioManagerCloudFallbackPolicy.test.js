@@ -816,6 +816,48 @@ test("guests and unmanaged users keep the engine defaults and ordinary errors fo
   }
 });
 
+test("final dictation leaves a policy still loading to main, and an unresolved one refuses in its own words", async (t) => {
+  const en = require("../../src/locales/en/translation.json");
+  const { vite, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-final-policy-loading-test-",
+    settingsKey: "__policyLoadingSettings",
+  });
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  setSettings({
+    useLocalWhisper: true,
+    localTranscriptionProvider: "whisper",
+    whisperModel: "base",
+  });
+  let nativeCalls = 0;
+  let reported = null;
+  const manager = createManager({
+    isProcessing: true,
+    _startProcessingPipeline: () => ({}),
+    _shouldAbandonProcessingPipeline: () => false,
+    _settleProcessingPipeline: () => true,
+    _completeActivationCapture: async () => {},
+    _takePendingResultExtras: () => ({}),
+    onError: (error) => {
+      reported = error;
+    },
+    processWithLocalWhisper: async () => {
+      nativeCalls++;
+      return { success: true, text: "whisper" };
+    },
+  });
+
+  usePolicyStore.setState({ status: "loading", managed: false, policy: null });
+  await manager.processAudio(new Blob(["audio"]));
+  assert.equal(nativeCalls, 1);
+  assert.equal(reported, null);
+
+  usePolicyStore.setState({ status: "error", managed: false, policy: null });
+  await manager.processAudio(new Blob(["audio"]));
+  assert.equal(nativeCalls, 1);
+  assert.equal(reported.code, "POLICY_UNRESOLVABLE");
+  assert.equal(reported.description, en.models.policy.unresolved);
+});
+
 test("managed enterprise dictation outranks a blocked saved personal local selection", async (t) => {
   const { window, setSettings, createManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-managed-before-local-guard-test-",

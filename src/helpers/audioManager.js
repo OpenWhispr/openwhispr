@@ -1,3 +1,4 @@
+import i18n from "../i18n";
 import ReasoningService from "../services/ReasoningService";
 import {
   EMPTY_OUTPUT_MESSAGE_KEY,
@@ -2345,16 +2346,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const policyState = usePolicyStore.getState();
         if (
           settings.policyBlockedLocalScopes?.includes("dictation") ||
-          !isLocalModelAllowedByPolicy(policyState, "transcription", savedLocalModel ?? "")
+          // A lookup in flight decides nothing here: main's gate holds its own verdict.
+          (policyState.status !== "loading" &&
+            !isLocalModelAllowedByPolicy(policyState, "transcription", savedLocalModel ?? ""))
         ) {
           const { code, messageKey, settingsTarget } = localModelRefusal(
             policyState,
             "transcription"
           );
-          throw Object.assign(
-            new Error("Selected local model is restricted by your organization."),
-            { code, messageKey, ...(isLocalChoiceRefusal(code) ? { settingsTarget } : {}) }
-          );
+          throw Object.assign(new Error(i18n.t(messageKey)), {
+            code,
+            messageKey,
+            ...(isLocalChoiceRefusal(code) ? { settingsTarget } : {}),
+          });
         }
         if (isSherpaLocalProvider(localProvider)) {
           activeModel = localProvider === "cohere" ? settings.cohereModel : parakeetModel;

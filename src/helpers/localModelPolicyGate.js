@@ -180,7 +180,14 @@ function createLocalModelPolicyGate({
   }
 
   function authorizeCached(scope, modelId) {
-    const denied = failure(scope, modelId);
+    // What running work opens for itself, like a stream after its server's cold
+    // start, is still that work: it keeps the verdict across a token rotation.
+    const running = operationContext.getStore()?.lease;
+    const continuesRunningWork =
+      leases.has(running) && running.scope === scope && running.modelId === modelId;
+    const denied = continuesRunningWork
+      ? verdictFailure(activeVerdict(), scope, modelId)
+      : failure(scope, modelId);
     if (denied) throw denied;
     const controller = new AbortController();
     const lease = { scope, modelId, controller, signal: controller.signal };

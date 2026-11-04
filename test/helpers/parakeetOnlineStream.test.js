@@ -105,6 +105,54 @@ test("model revocation closes an online stream, blocks later frames, and suppres
   }
 });
 
+test("a token rotation between server start and stream creation keeps the operation's verdict", async (t) => {
+  const {
+    createLocalModelPolicyGate,
+    runLocalModelOperation,
+  } = require("../../src/helpers/localModelPolicyGate");
+  const { deferred } = require("./harness/deferred");
+  const { managedPolicy } = require("./harness/policyFixtures");
+  const modelName = "nemotron-speech-streaming-en-0.6b";
+  const firstFrame = deferred();
+  const mock = await startMockOnlineServer({ onBinary: () => firstFrame.resolve() });
+  let stream;
+  t.after(async () => {
+    stream?.abort();
+    await mock.close();
+  });
+  const rotatedAnswer = deferred();
+  let identity = 1;
+  const gate = createLocalModelPolicyGate({
+    getPolicy: () =>
+      identity === 1 ? Promise.resolve({ success: true, managed: false }) : rotatedAnswer.promise,
+    getIdentity: () => identity,
+    getAppVersion: () => "1.11.1",
+  });
+  const server = onlineWsServerAt(mock.port);
+  server.modelName = modelName;
+  server.localModelPolicy = gate;
+  const refusal = deferred();
+
+  stream = await runLocalModelOperation(server, "transcription", modelName, () => {
+    identity = 2;
+    gate.invalidate();
+    return server.createOnlineStream({ onError: refusal.resolve });
+  });
+
+  assert.throws(() => gate.authorizeCached("transcription", modelName), {
+    code: "POLICY_UNRESOLVABLE",
+  });
+  stream.sendPcm16(Buffer.alloc(3200));
+  await firstFrame.promise;
+
+  rotatedAnswer.resolve({
+    success: true,
+    managed: true,
+    policy: managedPolicy({ transcription: { allowedModes: ["local"], allowedLocalModels: [] } }),
+  });
+  assert.equal((await refusal.promise).code, "POLICY_MODEL_BLOCKED");
+});
+
 test("online stream emits live updates and finish resolves with the final text", async () => {
   const mock = await startMockOnlineServer({
     onBinary: (socket, _data, frameCount) => {
