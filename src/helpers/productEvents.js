@@ -279,9 +279,10 @@ class ProductEvents {
     // the same account, or the answer belongs to a session that is gone.
     if (!sameScope(this.getScope(), scope)) return;
 
-    if (result?.status === 403 && result.code === "POLICY_CLOUD_BACKUP_BLOCKED") {
-      // The organization keeps this account unobserved. What it queued is
-      // not collected later either.
+    if (result?.status === 403 && String(result.code ?? "").startsWith("POLICY_")) {
+      // The organization keeps this account unobserved (cloud backup off, or
+      // a policy that can't be resolved, which fails closed). What it queued
+      // is not collected later either.
       this.blockedScopes.add(key);
       const sent = new Set(pending.map((event) => event.event_id));
       this.persist((state) => ({
