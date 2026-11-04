@@ -59,7 +59,6 @@ async function setup(t, run) {
   return {
     AudioManager,
     opened,
-    resolve,
     manager: createManager({ cachedMicDeviceId: null, rejectedMicDeviceId: null }),
   };
 }
@@ -74,9 +73,76 @@ test("a press opens the default device while the lookup is still running", TIMEO
 });
 
 test("the default-mic fallback doesn't wait for its forced lookup", TIMEOUT, async (t) => {
-  const { manager } = await setup(t, never);
+  let lookups = 0;
+  const { manager } = await setup(t, () => {
+    lookups += 1;
+    return lookups === 1 ? Promise.resolve(NATIVE_ANSWER) : never();
+  });
+  await manager.cacheMicrophoneDeviceId();
 
   assert.equal(deviceId(await manager.getAudioConstraints(true)), "default");
+  assert.equal(lookups, 2, "the valid cache doesn't stand in for the forced lookup");
+});
+
+test("no way of starting a dictation waits for the lookup", TIMEOUT, async (t) => {
+  const { AudioManager, opened } = await setup(t, never);
+  // Refusing the open ends each path right there, so nothing after it needs a stub.
+  navigator.mediaDevices.getUserMedia = async (constraints) => {
+    opened.push(constraints);
+    throw Object.assign(new Error("denied"), { name: "NotAllowedError" });
+  };
+  const manager = new AudioManager();
+
+  await manager.prepareMicCapture();
+  await manager.startRecording();
+  await manager.startStreamingRecording();
+
+  assert.deepEqual(opened.map(deviceId), ["default", "default", "default"]);
+});
+
+test("the stale-device retry doesn't wait for its forced lookup", TIMEOUT, async (t) => {
+  const { AudioManager, opened } = await setup(t, never);
+  navigator.mediaDevices.getUserMedia = async (constraints) => {
+    opened.push(constraints);
+    throw Object.assign(new Error("gone"), {
+      name: "OverconstrainedError",
+      constraint: "deviceId",
+    });
+  };
+
+  for (const start of ["startRecording", "startStreamingRecording"]) {
+    opened.length = 0;
+    const manager = new AudioManager();
+    manager.cachedMicDeviceId = "desk-id";
+
+    await manager[start]();
+
+    assert.deepEqual(opened.map(deviceId), ["desk-id", "default"], start);
+  }
+});
+
+test("the silent-device hop doesn't wait for its forced lookup", TIMEOUT, async (t) => {
+  let lookups = 0;
+  const { AudioManager, opened } = await setup(t, () => {
+    lookups += 1;
+    return lookups === 1 ? Promise.resolve(NATIVE_ANSWER) : never();
+  });
+  navigator.mediaDevices.getUserMedia = async (constraints) => {
+    opened.push(constraints);
+    const track = {
+      readyState: deviceId(constraints) === "default" ? "live" : "ended",
+      stop() {},
+    };
+    return { getAudioTracks: () => [track], getTracks: () => [track] };
+  };
+  const manager = new AudioManager();
+  await manager.cacheMicrophoneDeviceId();
+
+  await manager.prepareMicCapture();
+  manager.cancelPreparedMicCapture();
+
+  assert.deepEqual(opened.map(deviceId), ["desk-id", "desk-id", "default"]);
+  assert.equal(manager.rejectedMicDeviceId, "desk-id");
 });
 
 test("the press after the lookup finishes pins the physical device", TIMEOUT, async (t) => {
@@ -94,16 +160,15 @@ test("the press after the lookup finishes pins the physical device", TIMEOUT, as
 
 test("a press during a device-change refresh never opens the old mic", TIMEOUT, async (t) => {
   let lookups = 0;
-  const { manager, resolve } = await setup(t, () => {
+  const { AudioManager } = await setup(t, () => {
     lookups += 1;
     return lookups === 1 ? Promise.resolve(NATIVE_ANSWER) : never();
   });
+  const manager = new AudioManager();
   await manager.cacheMicrophoneDeviceId();
   assert.equal(manager.cachedMicDeviceId, "desk-id");
 
-  // What the devicechange handler does.
-  manager.cachedMicDeviceId = null;
-  void resolve({ refresh: true });
+  manager._onDeviceChange();
 
   assert.equal(deviceId(await manager.getAudioConstraints()), "default");
 });
