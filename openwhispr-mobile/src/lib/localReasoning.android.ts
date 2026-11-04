@@ -22,11 +22,13 @@ export const {
   isLocalOutputLimitError,
 } = upstream;
 
-export const getLocalReasoningReadiness: typeof upstream.getLocalReasoningReadiness = async () => {
+export const getLocalReasoningReadiness: typeof upstream.getLocalReasoningReadiness = async (
+  options,
+) => {
   // Resolve lazily to keep LocalTextModel's error-helper import cycle safe.
   const { androidTextReadiness } =
     require('@/android/LocalTextModel') as typeof import('@/android/LocalTextModel');
-  return androidTextReadiness();
+  return androidTextReadiness(options?.localModelPurpose);
 };
 
 export function isLocalReasoningRequired(options: ReasoningRoutingOptions = {}): boolean {
@@ -64,10 +66,13 @@ export async function fitsLocalCleanupOutput(text: string): Promise<boolean> {
   return estimateLocalTokens(text) <= LOCAL_CLEANUP_MAX_TRANSCRIPT_TOKENS;
 }
 
-export function getLocalReasoningUnavailableMessage(_readiness?: LocalReasoningReadiness): string {
-  return androidCopy(
-    'workflowSettings.localModelNeeded',
-    'Download a local text model in Account → Models to use on-device AI.',
+export function getLocalReasoningUnavailableMessage(readiness?: LocalReasoningReadiness): string {
+  return (
+    readiness?.unavailableMessage ??
+    androidCopy(
+      'workflowSettings.localModelNeeded',
+      'Download a local text model in Account → Models to use on-device AI.',
+    )
   );
 }
 

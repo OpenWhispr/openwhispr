@@ -8,7 +8,10 @@ import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { ProviderExecutionError } from '@/services/providers/ProviderExecution';
 import { getProviderErrorCopyKey } from '@/lib/providerErrorCopy';
-import { getLocalReasoningUnavailableMessage } from '@/lib/localReasoning';
+import {
+  getLocalReasoningReadiness,
+  getLocalReasoningUnavailableMessage,
+} from '@/lib/localReasoning';
 import { MODE_LABELS } from '@/lib/inferenceModes';
 import {
   CLOUD_CLEANUP_NEEDS_ACCOUNT_NOTE,
@@ -41,6 +44,11 @@ function LocalModelSettings({ copy }: { copy: WorkflowCopy }): React.JSX.Element
 }
 
 export const workflowSettingsPlatform: WorkflowSettingsPlatform = {
+  getTextReadiness: (scope) =>
+    getLocalReasoningReadiness({
+      refresh: true,
+      ...(scope === 'cleanup' ? { localModelPurpose: 'cleanup' as const } : {}),
+    }),
   useCopy: useAndroidCopy,
   useVoiceAssistantPrivateMode: () =>
     useProcessingModeStore((state) => state.activeMode === 'private'),
@@ -145,9 +153,9 @@ export const workflowSettingsPlatform: WorkflowSettingsPlatform = {
     providerId === 'custom' &&
     configured === false &&
     !!savedSelection.credentialRef,
-  onDeviceStatus: (readiness, copy) =>
+  onDeviceStatus: (readiness) =>
     readiness && readiness.status !== 'ready'
-      ? copy('workflowSettings.localModelNeeded', getLocalReasoningUnavailableMessage(readiness))
+      ? getLocalReasoningUnavailableMessage(readiness)
       : undefined,
   textModelFooter: (copy) =>
     copy('workflowSettings.localModelBody', 'Runs on your downloaded text model on this phone.'),

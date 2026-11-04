@@ -89,7 +89,6 @@ export function ModelsContent({ onNavigate }: { onNavigate?: () => void } = {}) 
   };
   return (
     <>
-      <Text style={styles.body}>{t('modelIntro')}</Text>
       <Row
         title={t('deviceCheck')}
         detail={t('deviceCheckSummary')}
@@ -167,23 +166,23 @@ export function ModelsContent({ onNavigate }: { onNavigate?: () => void } = {}) 
                 <Card key={id}>
                   <Row
                     title={model.title}
-                    detail={`${Math.round(model.bytes / 1000000)} MB${chosen ? ` · ${t('selected')}` : ''}${ready[id] ? ` · ${t('downloaded')}` : ''}`}
+                    detail={`${Math.round(model.bytes / 1000000)} MB${id === 'qwen-cleanup' ? ` · ${t('cleanup')}` : ''}${chosen ? ` · ${t('selected')}` : ''}${ready[id] ? ` · ${t('downloaded')}` : ''}`}
                     onPress={() => setExpandedModel(expandedModel === id ? null : id)}
                   />
                   {(expandedModel === id || progress[id] !== undefined) && (
                     <>
                       <Text style={styles.caption}>
-                        {t(
-                          kind === 'diarization'
-                            ? 'meetingSpeakerModelBody'
-                            : id === 'qwen-small'
-                              ? 'modelLight'
-                              : id === 'parakeet-v3'
-                                ? 'modelParakeet'
-                                : id.startsWith('moonshine-')
-                                  ? 'modelMoonshine'
-                                  : 'modelBalanced',
-                        )}
+                        {kind === 'text' && id !== 'qwen-cleanup'
+                          ? [t('notes'), t('assistant'), t('translate'), t('edit')].join(' · ')
+                          : t(
+                              kind === 'diarization'
+                                ? 'meetingSpeakerModelBody'
+                                : id === 'qwen-cleanup'
+                                  ? 'cleanup'
+                                  : id === 'parakeet-v3'
+                                    ? 'modelParakeet'
+                                    : 'modelMoonshine',
+                            )}
                       </Text>
                       {!languageSupported && (
                         <Text style={styles.body}>
@@ -205,7 +204,7 @@ export function ModelsContent({ onNavigate }: { onNavigate?: () => void } = {}) 
                         </>
                       ) : ready[id] ? (
                         <>
-                          {kind !== 'diarization' && (
+                          {kind !== 'diarization' && id !== 'qwen-cleanup' && (
                             <Button
                               secondary
                               disabled={chosen || removing || saving || !languageSupported}

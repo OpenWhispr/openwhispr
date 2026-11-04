@@ -3,6 +3,7 @@ import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { workflowSaveConfig } from '@/lib/inferenceModes';
 import { androidCopy } from '@/lib/androidCopy';
+import { getLocalReasoningReadiness } from '@/lib/localReasoning';
 import { resolveMobileInferenceRoute, type InferenceSelection } from '@/lib/mobileProviders';
 import type { UserConfig } from '@/types';
 import type {
@@ -23,6 +24,11 @@ export const androidWorkflowSwitchPolicy: WorkflowModeSwitchPolicy = {
   modelDownloadRoute: '/(account)/ai-models',
   refuseUnavailableText: true,
   skipNoteFormattingOffer: true,
+  getTextReadiness: (scope) =>
+    getLocalReasoningReadiness({
+      refresh: true,
+      ...(scope === 'cleanup' ? { localModelPurpose: 'cleanup' as const } : {}),
+    }),
 };
 
 // The provider turning Private mode off returns dictation to: the one dictation is saved to, or

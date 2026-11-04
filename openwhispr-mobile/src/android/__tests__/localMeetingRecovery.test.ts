@@ -29,6 +29,28 @@ jest.doMock('@/lib/localReasoning', () => ({
     tokenCounting: true,
   })),
 }));
+jest.doMock('@/lib/notes/localMeetingNotesPlatform', () => {
+  const selected =
+    (): (typeof import('@/lib/notes/localMeetingNotesPlatform'))['localMeetingNotesPlatform'] =>
+      Platform.OS === 'android'
+        ? jest.requireActual<typeof import('@/lib/notes/localMeetingNotesPlatform.android')>(
+            '@/lib/notes/localMeetingNotesPlatform.android',
+          ).localMeetingNotesPlatform
+        : jest.requireActual<typeof import('@/lib/notes/localMeetingNotesPlatform')>(
+            '@/lib/notes/localMeetingNotesPlatform',
+          ).localMeetingNotesPlatform;
+  return {
+    localMeetingNotesPlatform: {
+      get modelName() {
+        return selected().modelName;
+      },
+      buildInstructions: (actionPrompt: string) => selected().buildInstructions(actionPrompt),
+      generateNotes: (input: { instructions: string; prompt: string }) =>
+        selected().generateNotes(input),
+      getCheckpoint: (options: { checkpoint?: () => void }) => selected().getCheckpoint(options),
+    },
+  };
+});
 
 import { AppleLLM } from '@/lib/appleLLM';
 import { LocalTextModel } from '@/android/LocalTextModel';
@@ -132,7 +154,7 @@ describe('iOS recovery isolation', () => {
     Platform.OS = 'ios';
   });
 
-  it('keeps the baseline checkpoint order around Apple split and merge recovery', async () => {
+  it('keeps Android checkpoints out of upstream Apple split and merge recovery', async () => {
     const events: string[] = [];
     apple.mockImplementation(async () => {
       events.push('generate');
@@ -141,21 +163,11 @@ describe('iOS recovery isolation', () => {
     });
     const text = await generateLocalMeetingNotes(7, { checkpoint: () => events.push('check') });
     expect(text).toBe('Supported notes');
-    expect(events).toEqual([
-      'check',
-      'check',
-      'check',
-      'generate',
-      'generate',
-      'generate',
-      'check',
-      'generate',
-      'check',
-    ]);
+    expect(events).toEqual(['generate', 'generate', 'generate', 'generate']);
     expect(android).not.toHaveBeenCalled();
   });
 
-  it('preserves baseline Apple cancellation timing during recursive recovery', async () => {
+  it('preserves upstream Apple recovery when an Android checkpoint would cancel', async () => {
     let cancelled = false;
     apple.mockImplementation(async () => {
       if (apple.mock.calls.length === 1) {
@@ -164,14 +176,12 @@ describe('iOS recovery isolation', () => {
       }
       return partial('Supported notes');
     });
-    await expect(
-      generateLocalMeetingNotes(7, {
-        checkpoint: () => {
-          if (cancelled) throw Object.assign(new Error('Cancelled'), { name: 'AbortError' });
-        },
-      }),
-    ).rejects.toMatchObject({ name: 'AbortError' });
-    expect(apple).toHaveBeenCalledTimes(3);
+    const checkpoint = jest.fn(() => {
+      if (cancelled) throw Object.assign(new Error('Cancelled'), { name: 'AbortError' });
+    });
+    await expect(generateLocalMeetingNotes(7, { checkpoint })).resolves.toBe('Supported notes');
+    expect(checkpoint).not.toHaveBeenCalled();
+    expect(apple).toHaveBeenCalledTimes(4);
     expect(android).not.toHaveBeenCalled();
   });
 

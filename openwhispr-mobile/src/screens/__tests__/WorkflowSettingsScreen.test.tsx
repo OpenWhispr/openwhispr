@@ -108,6 +108,14 @@ const mockLocalReadiness = jest.fn();
 jest.mock('@/lib/localReasoning', () => ({
   ...jest.requireActual('@/lib/localReasoning'),
   getLocalReasoningReadiness: (...args: unknown[]) => mockLocalReadiness(...args),
+  getLocalReasoningUnavailableMessage: (readiness: import('@/types').LocalReasoningReadiness) =>
+    jest
+      .requireActual(
+        mockWorkflowPlatform === 'android'
+          ? '@/lib/localReasoning.android'
+          : '@/lib/localReasoning',
+      )
+      .getLocalReasoningUnavailableMessage(readiness),
 }));
 jest.mock('@/lib/privateMode', () => ({
   getPrivateModeReadiness: () => mockPrivateReadiness(),
@@ -2109,4 +2117,60 @@ describe('upstream iOS workflow boundary', () => {
       confirm.mockRestore();
     }
   });
+});
+
+it('tracks the Android cleanup artifact when changing workflow scope on the same screen', async () => {
+  const original = Platform.OS;
+  Platform.OS = 'android';
+  mockWorkflowPlatform = 'android';
+  mockScope = 'cleanup';
+  mockConfig = { inference: { cleanup: { mode: 'local' }, notes: { mode: 'local' } } };
+  mockLocalReadiness.mockImplementation(async (options) =>
+    options?.localModelPurpose === 'cleanup'
+      ? { status: 'ready' }
+      : { status: 'modelNotReady', unavailableMessage: 'Qwen3 1.7B: Download the local model.' },
+  );
+  try {
+    const view = render(<WorkflowSettingsScreen />);
+    await act(async () => undefined);
+    expect(
+      screen.queryByText('Download a local text model in Account → Models to use on-device AI.'),
+    ).toBeNull();
+    mockScope = 'notes';
+    view.rerender(<WorkflowSettingsScreen />);
+    expect(await screen.findByText('Qwen3 1.7B: Download the local model.')).toBeTruthy();
+    mockScope = 'cleanup';
+    view.rerender(<WorkflowSettingsScreen />);
+    await act(async () => undefined);
+    expect(screen.queryByText('Qwen3 1.7B: Download the local model.')).toBeNull();
+  } finally {
+    Platform.OS = original;
+  }
+});
+
+it('names the absent cleanup artifact and refreshes its status after returning from downloads', async () => {
+  const original = Platform.OS;
+  Platform.OS = 'android';
+  mockWorkflowPlatform = 'android';
+  mockScope = 'cleanup';
+  mockConfig = { inference: { cleanup: { mode: 'local' } } };
+  const listeners: ((state: string) => void)[] = [];
+  jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, listener) => {
+    listeners.push(listener as (state: string) => void);
+    return { remove: jest.fn() };
+  });
+  let installed = false;
+  mockLocalReadiness.mockImplementation(async (options) => ({
+    status: options?.localModelPurpose !== 'cleanup' || installed ? 'ready' : 'modelNotReady',
+    unavailableMessage: 'Qwen3 4B: Download the local model.',
+  }));
+  try {
+    render(<WorkflowSettingsScreen />);
+    expect(await screen.findByText('Qwen3 4B: Download the local model.')).toBeTruthy();
+    installed = true;
+    await act(async () => listeners.forEach((listener) => listener('active')));
+    expect(screen.queryByText('Qwen3 4B: Download the local model.')).toBeNull();
+  } finally {
+    Platform.OS = original;
+  }
 });

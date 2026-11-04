@@ -16,6 +16,7 @@ import {
   getLocalReasoningUnavailableMessage,
 } from '@/lib/localReasoning';
 import type { LocalModelKey } from '@/lib/localModelCatalog';
+import type { LocalReasoningReadiness } from '@/types';
 import { type InferenceSelection, type MobileInferenceScope } from '@/lib/mobileProviders';
 import { getPrivateModeReadiness, getPrivateModeUnavailableMessage } from '@/lib/privateMode';
 
@@ -31,6 +32,7 @@ export interface WorkflowModeSwitchPolicy {
   modelDownloadRoute: Parameters<typeof router.push>[0];
   refuseUnavailableText: boolean;
   skipNoteFormattingOffer: boolean;
+  getTextReadiness?: (scope: MobileInferenceScope) => Promise<LocalReasoningReadiness>;
 }
 
 export function createWorkflowModeSwitch(policy?: WorkflowModeSwitchPolicy) {
@@ -64,8 +66,11 @@ export function createWorkflowModeSwitch(policy?: WorkflowModeSwitchPolicy) {
     return null;
   }
 
-  async function appleIntelligenceReady(): Promise<ModeSwitchResult | null> {
-    const readiness = await getLocalReasoningReadiness({ refresh: true });
+  async function appleIntelligenceReady(
+    scope: MobileInferenceScope,
+  ): Promise<ModeSwitchResult | null> {
+    const readiness = await (policy?.getTextReadiness?.(scope) ??
+      getLocalReasoningReadiness({ refresh: true }));
     if (readiness.status === 'ready') return null;
     const message = getLocalReasoningUnavailableMessage(readiness);
     if (policy?.refuseUnavailableText) {
@@ -135,7 +140,7 @@ export function createWorkflowModeSwitch(policy?: WorkflowModeSwitchPolicy) {
     if (mode === 'local') {
       const blocked = isSpeechScope(scope)
         ? await transcriptionModelReady()
-        : await appleIntelligenceReady();
+        : await appleIntelligenceReady(scope);
       if (blocked) return blocked;
     }
 

@@ -48,7 +48,6 @@ import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import { type ModeSwitchResult, switchWorkflowMode } from '@/lib/workflowModeSwitch';
 import { getPrivateModeReadiness } from '@/lib/privateMode';
 import {
-  getLocalReasoningReadiness,
   getLocalReasoningUnavailableMessage,
   isLocalReasoningUnsupported,
 } from '@/lib/localReasoning';
@@ -378,7 +377,8 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
     if (speechScope) return undefined;
     let cancelled = false;
     const check = (): void => {
-      getLocalReasoningReadiness({ refresh: true })
+      workflowSettingsPlatform
+        .getTextReadiness(scope)
         .then((readiness) => {
           if (!cancelled) setAppleIntelligence(readiness);
         })
@@ -392,7 +392,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
       cancelled = true;
       appStateSubscription.remove();
     };
-  }, [speechScope]);
+  }, [scope, speechScope]);
   const onDeviceUnsupported = isLocalReasoningUnsupported(appleIntelligence)
     ? copy(
         'workflowSettings.localModelNeeded',
@@ -546,7 +546,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
         if (speechScope) {
           ready = (await getPrivateModeReadiness()).status === 'ready';
         } else {
-          const readiness = await getLocalReasoningReadiness({ refresh: true });
+          const readiness = await workflowSettingsPlatform.getTextReadiness(scope);
           if (!cancelled) setAppleIntelligence(readiness);
           ready = readiness.status === 'ready';
         }

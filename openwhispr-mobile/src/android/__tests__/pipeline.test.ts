@@ -27,7 +27,11 @@ jest.mock('@/services/transcription/LocalTranscriptionService', () => ({
   LocalTranscriptionService: { cancelTranscription: jest.fn(async () => undefined) },
 }));
 jest.mock('@/android/models', () => ({ modelReady: jest.fn(async () => true) }));
-jest.mock('@/android/LocalTextModel', () => ({ selectedTextModel: () => 'qwen-small' }));
+jest.mock('@/android/LocalTextModel', () => ({
+  textModelDownloadMessage: (id: string) =>
+    `${id}: Download a local text model in Account → Models to use on-device AI.`,
+  selectedTextModel: (purpose?: string) => (purpose === 'cleanup' ? 'qwen-cleanup' : 'qwen-small'),
+}));
 jest.mock('@/store/useConfigStore', () => ({ useConfigStore: { getState: jest.fn() } }));
 jest.mock('@/store/useTranscriptStore', () => ({ useTranscriptStore: { getState: jest.fn() } }));
 
@@ -196,4 +200,28 @@ it('does not expire the next account history when a retention load finishes late
   });
   await applyHistoryRetention();
   expect(history.deleteTranscript).not.toHaveBeenCalled();
+});
+
+it.each([
+  ['dictate', 'qwen-cleanup'],
+  ['write', 'qwen-small'],
+  ['translate', 'qwen-small'],
+  ['edit', 'qwen-small'],
+] as const)('checks the artifact for %s before processing', async (mode, expected) => {
+  jest.mocked(modelReady).mockImplementation(async (id) => id === 'parakeet-v3' || id === expected);
+  await expect(ensureAndroidModels(createAndroidJob(mode))).resolves.toBeUndefined();
+  expect(modelReady).toHaveBeenCalledWith(expected);
+});
+
+it('refuses dictate cleanup when only the legacy text model is installed', async () => {
+  jest.mocked(modelReady).mockImplementation(async (id) => id !== 'qwen-cleanup');
+  await expect(ensureAndroidModels(createAndroidJob())).rejects.toThrow('Download');
+});
+
+it.each([
+  ['dictate', 'qwen-cleanup'],
+  ['edit', 'qwen-small'],
+] as const)('names the artifact needed for %s', async (mode, expected) => {
+  jest.mocked(modelReady).mockImplementation(async (id) => id === 'parakeet-v3');
+  await expect(ensureAndroidModels(createAndroidJob(mode))).rejects.toThrow(expected);
 });

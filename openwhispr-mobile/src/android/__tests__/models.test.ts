@@ -372,3 +372,18 @@ it('preserves an unrelated filesystem error rather than claiming storage is exha
   } as never);
   await expect(downloadAndroidModel(id)).rejects.toBe(error);
 });
+
+it('recognizes the exact cleanup artifact independently of the installed legacy artifact', async () => {
+  jest.mocked(FileSystem.getInfoAsync).mockImplementation(async (uri) => ({
+    exists: true,
+    isDirectory: false,
+    size: 2497281120,
+    modificationTime: modified,
+    uri,
+  }));
+  jest
+    .mocked(AndroidDictation!.sha256)
+    .mockResolvedValue('3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597');
+  await expect(modelReady('qwen-cleanup')).resolves.toBe(true);
+  await expect(modelReady('qwen-balanced')).resolves.toBe(false);
+});

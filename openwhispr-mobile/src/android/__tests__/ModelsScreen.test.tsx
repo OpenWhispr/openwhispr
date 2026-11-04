@@ -24,6 +24,8 @@ const mockCancel = jest.fn(async (_id: string) => undefined);
 jest.mock('../models', () => ({
   ANDROID_MODELS: {
     'meeting-speakers': { kind: 'diarization', title: 'Meeting speakers', bytes: 41797789 },
+    'qwen-cleanup': { kind: 'text', title: 'Qwen3 4B', bytes: 2497281120 },
+    'qwen-balanced': { kind: 'text', title: 'Qwen3 1.7B', bytes: 1107409472 },
   },
   useModelDownloads: (selector: (state: unknown) => unknown) =>
     selector({ progress: mockProgress }),
@@ -131,4 +133,27 @@ it('allows cancelling the speaker-model download', async () => {
   const view = render(<ModelsContent />);
   await act(async () => fireEvent.press(view.getByText('cancel')));
   expect(mockCancel).toHaveBeenCalledWith('meeting-speakers');
+});
+
+it('manages the fixed cleanup model without offering it as a global text selection', async () => {
+  jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  const view = render(<ModelsContent />);
+  await act(async () => undefined);
+  expect(view.getByText('2497 MB · cleanup')).toBeTruthy();
+  fireEvent.press(view.getByText('Qwen3 4B'));
+  await act(async () => fireEvent.press(view.getByText('download')));
+  expect(mockDownload).toHaveBeenCalledWith('qwen-cleanup');
+  expect(view.queryByText('choose')).toBeNull();
+  fireEvent.press(view.getByText('removeModel'));
+  const buttons = jest.mocked(Alert.alert).mock.calls.at(-1)?.[2];
+  await act(async () => buttons?.find((button) => button.style === 'destructive')?.onPress?.());
+  expect(mockRemove).toHaveBeenCalledWith('qwen-cleanup');
+});
+
+it('labels legacy text choices by their roles rather than recommending them for cleanup', async () => {
+  const view = render(<ModelsContent />);
+  await act(async () => undefined);
+  fireEvent.press(view.getByText('Qwen3 1.7B'));
+  expect(view.getByText('notes · assistant · translate · edit')).toBeTruthy();
+  expect(view.queryByText('modelIntro')).toBeNull();
 });

@@ -1,5 +1,6 @@
 import { DEFAULT_CLEANUP_PROMPT } from '@/config/prompts/registry';
 import type { ReasoningRequest } from '@/types';
+import cleanupPrompt from './cleanupPrompt.json';
 
 // Small CPU models spend most of a short dictation evaluating instructions.
 // Condense only the built-in cleanup template; keep explicit prompts and the
@@ -14,7 +15,14 @@ export function buildLocalReasoningInstructions(request: ReasoningRequest): stri
     /\{\{agentName\}\}/g,
     () => request.agentName?.trim() ?? '',
   );
+  const cleanup =
+    request.localModelPurpose === 'cleanup'
+      ? cleanupPrompt.instructions.replace(
+          /\{\{agentName\}\}/g,
+          () => request.agentName?.trim() || 'assistant',
+        )
+      : CLEANUP;
   return instructions.startsWith(original)
-    ? CLEANUP + instructions.slice(original.length)
+    ? cleanup + instructions.slice(original.length)
     : instructions;
 }

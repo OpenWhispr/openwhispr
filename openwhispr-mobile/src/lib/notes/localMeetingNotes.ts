@@ -1,4 +1,5 @@
 import { localMeetingNotesPlatform } from './localMeetingNotesPlatform';
+import { Platform } from 'react-native';
 import { notesRepository } from '@/data';
 import type { Note, Segment, Speaker } from '@/data/types';
 import {
@@ -245,9 +246,9 @@ async function mapChunkWithRetry(input: {
   instructions: string;
   previousSummary?: string;
   outputLimitSplitsLeft?: number;
-  checkpoint: () => void;
+  checkpoint?: () => void;
 }): Promise<StructuredMeetingNotes[]> {
-  if (Platform.OS === 'android') input.checkpoint();
+  input.checkpoint?.();
   const outputLimitSplitsLeft = input.outputLimitSplitsLeft ?? MAX_OUTPUT_LIMIT_SPLITS;
   const chunkInput = buildChunkInput({
     note: input.note,
@@ -315,9 +316,9 @@ async function reduceStructuredNotes(input: {
   notes: StructuredMeetingNotes[];
   instructions: string;
   budget: number;
-  checkpoint: () => void;
+  checkpoint?: () => void;
 }): Promise<StructuredMeetingNotes> {
-  if (Platform.OS === 'android') input.checkpoint();
+  input.checkpoint?.();
   if (input.notes.length === 0) return emptyMeetingNotes();
   if (input.notes.length === 1) return normalizeMeetingNotes(input.notes[0]);
 
@@ -329,7 +330,7 @@ async function reduceStructuredNotes(input: {
       budget: input.budget,
     })
   ) {
-    if (Platform.OS === 'android') input.checkpoint();
+    input.checkpoint?.();
     try {
       return await generateStructuredNotes({
         instructions: input.instructions,

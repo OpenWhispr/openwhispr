@@ -13,6 +13,8 @@ const mockStop = jest.fn(async () => {});
 const mockLogEvent = jest.fn(async () => {});
 
 jest.mock('react-native', () => ({ Platform: { OS: 'android' } }));
+jest.mock('@/store/useConfigStore', () => jest.requireActual('@/store/useConfigStore.android'));
+jest.mock('@/store/useAuthStore', () => jest.requireActual('@/store/useAuthStore.android'));
 jest.mock('expo-tracking-transparency', () => ({ isAvailable: () => false }));
 jest.mock('expo-secure-store', () => ({
   getItemAsync: async () => null,

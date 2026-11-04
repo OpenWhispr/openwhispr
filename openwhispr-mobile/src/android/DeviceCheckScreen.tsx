@@ -8,6 +8,7 @@ import { Text } from '@/components/ui/Text';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { ANDROID_MODELS } from './models';
+import { selectedTextModel } from './LocalTextModel';
 import { Button, Card, Page, Row, styles, palette } from './ui';
 import {
   deviceGuidance,
@@ -42,7 +43,7 @@ export default function DeviceCheckScreen() {
   const { t } = useTranslation();
   const config = useConfigStore((state) => state.config);
   const speechModel = config?.androidSpeechModel ?? 'parakeet-v3';
-  const textModel = config?.androidTextModel ?? 'qwen-balanced';
+  const textModel = selectedTextModel('cleanup');
   const [profile, setProfile] = useState(readDeviceProfile);
   const [result, setResult] = useState<LocalBenchmark | null>(null);
   const [busy, setBusy] = useState(false);

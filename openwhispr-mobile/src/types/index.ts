@@ -114,6 +114,9 @@ export interface Transcript extends CleanupInferenceSnapshot {
 export interface ReasoningRequest {
   inferenceScope?: InferenceScope;
   inferenceRoute?: InferenceRoute;
+  // Android's cleanup route also serves write/edit/translate. Only transcript
+  // cleanup uses its dedicated local model; unspecified callers keep their selection.
+  localModelPurpose?: 'cleanup';
   text: string;
   model?: string;
   systemPrompt?: string;
@@ -177,6 +180,8 @@ export interface LocalReasoningReadiness {
   status: LocalReasoningStatus;
   contextSize?: number;
   tokenCounting?: boolean;
+  // Android identifies the particular artifact needed for this operation.
+  unavailableMessage?: string;
   // The iPhone's language, named for unsupportedLanguage.
   deviceLanguage?: string;
 }

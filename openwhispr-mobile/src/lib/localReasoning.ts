@@ -2,6 +2,7 @@ import { AppleLLM, type AppleLLMAvailability } from '@/lib/appleLLM';
 import type {
   LocalReasoningErrorCode,
   LocalReasoningReadiness,
+  ReasoningRequest,
   ReasoningRoutingOptions,
   UserConfig,
 } from '@/types';
@@ -50,6 +51,7 @@ export function clearLocalReasoningReadinessCache(): void {
 
 export async function getLocalReasoningReadiness(options?: {
   refresh?: boolean;
+  localModelPurpose?: ReasoningRequest['localModelPurpose'];
 }): Promise<LocalReasoningReadiness> {
   if (!isAppleLocalIntelligenceEnabled()) {
     return { status: 'disabled', tokenCounting: false };

@@ -1,6 +1,6 @@
 import { initLlama, type LlamaContext } from 'llama.rn';
 import Constants from 'expo-constants';
-import { modelPath, modelReady } from './models';
+import { ANDROID_MODELS, modelPath, modelReady } from './models';
 import type { ReasoningRequest, ReasoningResponse, LocalReasoningReadiness } from '@/types';
 import { useConfigStore } from '@/store/useConfigStore';
 import { AndroidDictation } from '../../modules/android-dictation/src';
@@ -17,30 +17,41 @@ function exclusive<T>(work: () => Promise<T>): Promise<T> {
   queue = result.catch(() => undefined);
   return result;
 }
-export type AndroidTextModelId = 'qwen-small' | 'qwen-balanced';
-export function selectedTextModel(): AndroidTextModelId {
+export type AndroidTextModelId = 'qwen-small' | 'qwen-balanced' | 'qwen-cleanup';
+export function selectedTextModel(
+  purpose?: ReasoningRequest['localModelPurpose'],
+): AndroidTextModelId {
+  if (purpose === 'cleanup') return 'qwen-cleanup';
   return useConfigStore.getState().config?.androidTextModel === 'qwen-small'
     ? 'qwen-small'
     : 'qwen-balanced';
 }
-export async function androidTextReadiness(): Promise<LocalReasoningReadiness> {
+export function textModelDownloadMessage(model: AndroidTextModelId): string {
+  return `${ANDROID_MODELS[model].title}: ${i18n.t('workflowSettings.localModelNeeded')}`;
+}
+export async function androidTextReadiness(
+  purpose?: ReasoningRequest['localModelPurpose'],
+): Promise<LocalReasoningReadiness> {
+  const model = selectedTextModel(purpose);
+  const ready = await modelReady(model);
   return {
-    status: (await modelReady(selectedTextModel())) ? 'ready' : 'modelNotReady',
+    status: ready ? 'ready' : 'modelNotReady',
     contextSize: 4096,
     tokenCounting: false,
+    ...(!ready ? { unavailableMessage: textModelDownloadMessage(model) } : {}),
   };
 }
 export const LocalTextModel = {
   async processText(
     request: ReasoningRequest & { responseSchema?: object },
-    model: AndroidTextModelId = selectedTextModel(),
+    model: AndroidTextModelId = selectedTextModel(request.localModelPurpose),
   ): Promise<ReasoningResponse> {
     return withAndroidInference(() =>
       exclusive(async () => {
         if (request.signal?.aborted) throw new Error(i18n.t('generationCancelled'));
         await AndroidDictation!.releaseParakeet();
         await AndroidDictation!.releaseMoonshine();
-        if (!(await modelReady(model))) throw new Error(i18n.t('textDownloadNeeded'));
+        if (!(await modelReady(model))) throw new Error(textModelDownloadMessage(model));
         if (!context || loaded !== model) {
           const loadStartedAt = Date.now();
           if (diagnostics) console.info('[android-reasoning] loading', model);
@@ -53,6 +64,7 @@ export const LocalTextModel = {
             cpu_strict: false,
             n_gpu_layers: 0,
             use_mlock: false,
+            ...(model === 'qwen-cleanup' ? { n_threads: 4, no_extra_bufts: true } : {}),
           });
           loaded = model;
           if (diagnostics)
@@ -100,11 +112,27 @@ export const LocalTextModel = {
                   penalty_present: 1.5,
                 }
               : {}),
-            n_predict: Math.min(request.maxTokens ?? 384, 900),
-            temperature: request.temperature ?? 0,
+            ...(model === 'qwen-cleanup'
+              ? {
+                  jinja: true,
+                  reasoning_format: 'auto' as const,
+                  top_k: 20,
+                  top_p: 0.8,
+                  min_p: 0,
+                  penalty_present: 0,
+                  penalty_freq: 0,
+                  penalty_repeat: 1,
+                  penalty_last_n: 4096,
+                  seed: 196,
+                  n_threads: 4,
+                }
+              : {}),
+            n_predict: Math.min(request.maxTokens ?? (model === 'qwen-cleanup' ? 900 : 384), 900),
+            temperature: request.temperature ?? (model === 'qwen-cleanup' ? 0.7 : 0),
             stop: ['<|im_end|>', '<|endoftext|>'],
           });
-          if (request.signal?.aborted) throw new Error(i18n.t('generationCancelled'));
+          if (request.signal?.aborted || result.interrupted)
+            throw new Error(i18n.t('generationCancelled'));
           if (result.context_full || result.truncated) {
             throw Object.assign(new Error('Local model context is full.'), {
               code: 'LOCAL_CONTEXT_LIMIT',
@@ -122,7 +150,7 @@ export const LocalTextModel = {
               Date.now() - startedAt,
               JSON.stringify(result.timings),
             );
-          const text = (model === 'qwen-balanced' ? result.content : result.text)?.trim();
+          const text = (model === 'qwen-small' ? result.text : result.content)?.trim();
           if (!text) throw new Error(i18n.t('emptyResponse'));
           return { text, model };
         } finally {

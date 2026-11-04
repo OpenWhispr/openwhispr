@@ -16,7 +16,7 @@ import type {
   MobileInferenceScope,
 } from '@/lib/mobileProviders';
 import { ProviderExecutionError } from '@/services/providers/ProviderExecution';
-import { getLocalReasoningLanguageNote } from '@/lib/localReasoning';
+import { getLocalReasoningLanguageNote, getLocalReasoningReadiness } from '@/lib/localReasoning';
 import {
   CLOUD_CLEANUP_NEEDS_ACCOUNT_NOTE,
   LOCAL_MODE_DICTATION_NOTES,
@@ -41,6 +41,7 @@ export interface WorkflowModeContext {
   lockedByPrivateMode: boolean;
 }
 export interface WorkflowSettingsPlatform {
+  getTextReadiness(scope: MobileInferenceScope): Promise<LocalReasoningReadiness>;
   useCopy(): { copy: WorkflowCopy };
   useVoiceAssistantPrivateMode(): boolean;
   useLayout(): {
@@ -92,6 +93,7 @@ export interface WorkflowSettingsPlatform {
 const fallbackCopy: WorkflowCopy = (_key, fallback) => fallback;
 
 export const workflowSettingsPlatform: WorkflowSettingsPlatform = {
+  getTextReadiness: () => getLocalReasoningReadiness({ refresh: true }),
   useCopy: () => ({ copy: fallbackCopy }),
   useVoiceAssistantPrivateMode: () => false,
   useLayout: () => ({ Container: View, containerProps: {}, screenProps: {} }),
