@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { loadAudioManager } = require("./harness/audioManager");
+const { deferred } = require("./harness/deferred");
 const { installMicCaptureGlobals } = require("../lib/rendererTestHarness");
 const {
   createSystemDefaultMicrophoneResolver,
@@ -22,17 +23,6 @@ const DEVICES = [
 
 const never = () => new Promise(() => {});
 
-function controlledLookup() {
-  const lookup = {
-    release: null,
-    run: () =>
-      new Promise((done) => {
-        lookup.release = () => done(NATIVE_ANSWER);
-      }),
-  };
-  return lookup;
-}
-
 async function setup(t, run) {
   const { window, AudioManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-mic-constraints-test-",
@@ -40,7 +30,7 @@ async function setup(t, run) {
     settings: { microphoneSelectionMode: "system" },
   });
   const resolve = createSystemDefaultMicrophoneResolver({ platform: "win32", run });
-  window.electronAPI = { getSystemDefaultMicrophone: (options) => resolve(options) };
+  window.electronAPI = { getSystemDefaultMicrophone: resolve };
   const opened = [];
   installMicCaptureGlobals(t);
   navigator.mediaDevices.enumerateDevices = async () => DEVICES;
@@ -116,13 +106,13 @@ test("the silent-device hop doesn't wait for its forced lookup", TIMEOUT, async 
 });
 
 test("the press after the lookup finishes pins the physical device", TIMEOUT, async (t) => {
-  const lookup = controlledLookup();
-  const { AudioManager } = await setup(t, lookup.run);
+  const lookup = deferred();
+  const { AudioManager } = await setup(t, () => lookup.promise);
   const manager = new AudioManager();
 
   assert.equal(deviceId(await manager.getAudioConstraints()), "default");
 
-  lookup.release();
+  lookup.resolve(NATIVE_ANSWER);
   await new Promise((done) => setImmediate(done));
 
   assert.equal(deviceId(await manager.getAudioConstraints()), "desk-id");
@@ -145,22 +135,22 @@ test("a press during a device-change refresh never opens the old mic", TIMEOUT, 
 });
 
 test("the startup pre-cache waits for the lookup a press doesn't", TIMEOUT, async (t) => {
-  const lookup = controlledLookup();
-  const { AudioManager } = await setup(t, lookup.run);
+  const lookup = deferred();
+  const { AudioManager } = await setup(t, () => lookup.promise);
   const manager = new AudioManager();
 
   const preCache = manager.cacheMicrophoneDeviceId();
   assert.equal(deviceId(await manager.getAudioConstraints()), "default");
 
-  lookup.release();
+  lookup.resolve(NATIVE_ANSWER);
   await preCache;
 
   assert.equal(manager.cachedMicDeviceId, "desk-id");
 });
 
 test("mid-recording recovery waits for the lookup a press doesn't", TIMEOUT, async (t) => {
-  const lookup = controlledLookup();
-  const { AudioManager, opened } = await setup(t, lookup.run);
+  const lookup = deferred();
+  const { AudioManager, opened } = await setup(t, () => lookup.promise);
   const manager = new AudioManager();
 
   const acquiring = manager.micRecovery.acquire("devicechange");
@@ -168,18 +158,18 @@ test("mid-recording recovery waits for the lookup a press doesn't", TIMEOUT, asy
   await new Promise((done) => setImmediate(done));
   assert.equal(opened.length, 0, "recovery hasn't opened a device yet");
 
-  lookup.release();
+  lookup.resolve(NATIVE_ANSWER);
   await acquiring;
 
   assert.equal(deviceId(opened[0]), "desk-id");
 });
 
 test("recovery's fallback waits for the lookup a start's fallback doesn't", TIMEOUT, async (t) => {
-  const refresh = controlledLookup();
+  const refresh = deferred();
   let lookups = 0;
   const { AudioManager, opened } = await setup(t, () => {
     lookups += 1;
-    return lookups === 1 ? Promise.resolve(NATIVE_ANSWER) : refresh.run();
+    return lookups === 1 ? Promise.resolve(NATIVE_ANSWER) : refresh.promise;
   });
   const manager = new AudioManager();
   const open = navigator.mediaDevices.getUserMedia;
@@ -196,7 +186,7 @@ test("recovery's fallback waits for the lookup a start's fallback doesn't", TIME
   await new Promise((done) => setImmediate(done));
   assert.equal(opened.length, 1, "recovery's fallback hasn't opened a device yet");
 
-  refresh.release();
+  refresh.resolve(NATIVE_ANSWER);
   await acquiring;
 
   assert.equal(deviceId(opened[1]), "desk-id");

@@ -52,7 +52,6 @@ Module._load = function loadWithElectronStub(request, parent, isMain) {
     return {
       resolveSystemDefaultMicrophone: (options) => {
         defaultMicLookups.push(options);
-        return { name: "", platform: "win32", source: "unavailable" };
       },
     };
   }

@@ -224,13 +224,13 @@ function createSystemDefaultMicrophoneResolver({
 
   // A successful lookup stays valid until a renderer sees a devicechange and
   // asks for a refresh: on Windows each lookup is a PowerShell process compiling
-  // C# (~2s), far too slow to sit on the hotkey path. Every caller joins an
-  // in-flight lookup so all windows share one process and see the same answer.
-  // Dictation's mic open passes wait: false and never sits behind a lookup,
-  // including the retry after a failure (#2765). It gets no answer, so it opens
-  // Chromium's default device, and the lookup finishes in the background for the
-  // next press. The cache isn't offered while a lookup runs: after a devicechange
-  // it can still name the previous default.
+  // C# (~2s), far too slow to sit on the hotkey path. Every caller shares an
+  // in-flight lookup, so all windows use one process and those that wait see the
+  // same answer. Dictation's mic open passes wait: false and never sits behind a
+  // lookup, including the retry after a failure (#2765). It gets no answer, so it
+  // opens Chromium's default device, and the lookup finishes in the background
+  // for the next press. The cache isn't offered while a lookup runs: after a
+  // devicechange it can still name the previous default.
   return async ({ refresh = false, wait = true } = {}) => {
     if (!inflight) {
       if (!refresh && cache && (cache.source === "system" || now() - cachedAt < FAILURE_RETRY_MS)) {
