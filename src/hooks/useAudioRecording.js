@@ -1150,6 +1150,15 @@ export const useAudioRecording = (toast, options = {}) => {
       if (audioManagerRef.current) {
         audioManagerRef.current.cleanup();
       }
+      // cleanup() ends a recording without reporting it, so nothing else releases
+      // these, and the next start would read as a repeat of this recording.
+      if (wasRecordingRef.current) {
+        wasRecordingRef.current = false;
+        window.electronAPI?.unregisterCancelHotkey?.();
+        if (getSettings().pauseMediaOnDictation) {
+          window.electronAPI?.resumeMediaPlayback?.();
+        }
+      }
     };
   }, [
     toast,

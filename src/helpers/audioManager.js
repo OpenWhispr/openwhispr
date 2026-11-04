@@ -5477,12 +5477,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           this.toneStylePromise,
           new Promise((resolve) => setTimeout(() => resolve(null), waitMs)),
         ]);
-        if (startWasCancelled()) {
-          // cancelStreamingRecording waits for this settlement before it
-          // releases the capture; minting a session now would only waste one.
-          this._settleStreamingStart();
-          return false;
-        }
+      }
+      if (startWasCancelled()) {
+        // cancelStreamingRecording waits for this settlement before it
+        // releases the capture; minting a session now would only waste one.
+        this._settleStreamingStart();
+        return false;
       }
       this._activePipelineOptions =
         pipelineSettings.toneStyleEnabled && !this.lastToneAppCategory
@@ -5507,6 +5507,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         // switch before stop cannot move its words in or out of Cloud usage.
         this._streamingMeteredByCloud = isCloudMeteredStream(sessionOptions);
         const res = await provider.start(sessionOptions);
+        // The user is gone: no upgrade prompt, session refresh or retry for this answer.
+        if (startWasCancelled()) return res;
 
         return this.classifyStreamingStartResult(res, { useLocalWhisper });
       });
@@ -5756,6 +5758,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.cleanupStreamingListeners(sessionId);
       this._streamingFallbackSegments = [];
       this.onStateChange?.({ isRecording: false, isProcessing: true, isStreaming: false });
+
+      // Esc is live during managed Orukeet's cold connect, which can take seconds.
+      // Stopping aborts its mint and socket, so the start settles now and the pill
+      // doesn't sit busy until the connect times out.
+      if (
+        this.streamingStartInProgress &&
+        isManagedOrukeetStream({
+          providerName,
+          cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
+        })
+      ) {
+        void Promise.resolve(this.getStreamingProvider(providerName).stop?.()).catch(() => {});
+      }
 
       const providerStop = this._waitForStreamingStartSettlement()
         .then(() => {

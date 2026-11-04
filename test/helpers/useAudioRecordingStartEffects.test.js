@@ -140,10 +140,11 @@ async function mountHook(t, route = MANAGED_ORUKEET) {
   const { useAudioRecording } = await vite.ssrLoadModule("/hooks/useAudioRecording.js");
 
   // Stable identities: the hook rebuilds its AudioManager when these change.
-  const toast = () => {};
   const options = { onDemoEvent: () => {} };
   const hook = {};
   function Harness() {
+    const [toast, setToast] = React.useState(() => () => {});
+    hook.rebuildManager = () => setToast(() => () => {});
     hook.api = useAudioRecording(toast, options);
     return null;
   }
@@ -343,3 +344,25 @@ for (const [name, route] of [
     assert.deepEqual(globalThis.__startEvents, STARTED);
   });
 }
+
+test("a manager rebuilt mid-recording releases Escape and media, and the next start acts again", async (t) => {
+  const hook = await mountHook(t);
+  globalThis.__startOnStart = (manager) => {
+    manager.report(RECORDING);
+    manager.finishStart(true);
+  };
+  await React.act(async () => {
+    await hook.api.startRecording();
+  });
+  globalThis.__startEvents.length = 0;
+
+  // cleanup() ends the recording without a report, as a language change does.
+  await React.act(async () => hook.rebuildManager());
+  assert.deepEqual(globalThis.__startEvents, ["unregister", "resume"]);
+  globalThis.__startEvents.length = 0;
+
+  await React.act(async () => {
+    await hook.api.startRecording();
+  });
+  assert.deepEqual(globalThis.__startEvents, STARTED);
+});
