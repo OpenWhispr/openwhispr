@@ -30,7 +30,7 @@ jest.mock('@/lib/privateMode', () => ({
   getPrivateModeUnavailableMessage: () => 'Native modules are missing.',
 }));
 jest.mock('@/lib/localReasoning', () => ({
-  getLocalReasoningReadiness: () => mockLocalReasoningReadiness(),
+  getLocalReasoningReadiness: (...args: unknown[]) => mockLocalReasoningReadiness(...args),
   getLocalReasoningUnavailableMessage: () => 'Apple Intelligence is turned off.',
 }));
 jest.mock('@/services/providers/ProviderPolicy', () => ({
@@ -40,7 +40,7 @@ jest.mock('@/services/providers/ProviderCredentials', () => ({
   getProviderCredentialStatus: (reference: string) => mockKeyStatus(reference),
 }));
 
-import { setPrivateMode } from '../workflowModeSwitch';
+import { setPrivateMode, switchWorkflowMode } from '../workflowModeSwitch';
 
 let alert: jest.SpyInstance;
 
@@ -262,5 +262,30 @@ describe('Android Local Mode switch', () => {
       expect.any(Array),
     );
     expect(mockSetActiveMode).not.toHaveBeenCalled();
+  });
+});
+
+describe('Android cleanup model availability', () => {
+  const original = Platform.OS;
+  beforeEach(() => {
+    Platform.OS = 'android';
+  });
+  afterEach(() => {
+    Platform.OS = original;
+  });
+  it.each([
+    [true, 'cleanup', 'switched'],
+    [false, 'cleanup', 'refused'],
+    [true, 'notes', 'refused'],
+    [false, 'notes', 'switched'],
+  ] as const)('uses cleanupInstalled=%s for %s: %s', async (cleanupInstalled, scope, expected) => {
+    mockLocalReasoningReadiness.mockImplementation(async (options) => ({
+      status: (options?.localModelPurpose === 'cleanup' ? cleanupInstalled : !cleanupInstalled)
+        ? 'ready'
+        : 'modelNotReady',
+    }));
+    await expect(switchWorkflowMode(scope, 'local')).resolves.toBe(expected);
+    if (expected === 'refused') expect(mockUpdateConfig).not.toHaveBeenCalled();
+    else expect(mockUpdateConfig.mock.calls[0][0].inference[scope]).toEqual({ mode: 'local' });
   });
 });

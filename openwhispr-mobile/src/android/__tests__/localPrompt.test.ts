@@ -30,3 +30,25 @@ it('preserves explicit editing and translation instructions', () => {
   };
   expect(buildLocalReasoningInstructions(request)).toBe(request.systemPrompt);
 });
+
+it('preserves cleanup customizations and shared language, dictionary and tone suffixes', () => {
+  const request = {
+    text: 'a message',
+    localModelPurpose: 'cleanup' as const,
+    agentName: 'Echo',
+    language: 'fr',
+    customDictionary: ['Piha'],
+    sharedDictionary: ['Acme'],
+    tone: 'formal' as const,
+  };
+  const prepared = { ...request, ...buildProviderPrompt(request) };
+  const instructions = buildLocalReasoningInstructions(prepared);
+  expect(instructions).toContain('Mentions of "Echo"');
+  expect(instructions).toContain('Preserve existing paragraph breaks and topic order.');
+  expect(instructions.slice(instructions.indexOf('Custom Dictionary'))).toBe(
+    prepared.systemPrompt.slice(prepared.systemPrompt.indexOf('Custom Dictionary')),
+  );
+  const custom = { ...request, customPrompt: 'Use uppercase for {{agentName}}.' };
+  const customPrepared = { ...custom, ...buildProviderPrompt(custom) };
+  expect(buildLocalReasoningInstructions(customPrepared)).toBe(customPrepared.systemPrompt);
+});

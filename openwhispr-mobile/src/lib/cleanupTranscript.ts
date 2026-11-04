@@ -86,7 +86,9 @@ const TOO_LONG_FOR_ON_DEVICE = 'This transcript is too long for On-Device cleanu
 async function prepareLocalRun(
   text: string,
 ): Promise<{ skipReason: string } | { tokens?: number; readiness?: LocalReasoningReadiness }> {
-  if (Platform.OS === 'android') return {};
+  if (Platform.OS === 'android') {
+    return { readiness: await getLocalReasoningReadiness({ localModelPurpose: 'cleanup' }) };
+  }
   let readiness = await getLocalReasoningReadiness();
   // The cached answer outlives a fix in iOS Settings, so check again before refusing.
   if (readiness.status !== 'ready') readiness = await getLocalReasoningReadiness({ refresh: true });
@@ -196,6 +198,7 @@ export async function cleanupTranscript(
     text: rawText,
     inferenceRoute,
     inferenceScope: 'cleanup',
+    ...(Platform.OS === 'android' ? { localModelPurpose: 'cleanup' as const } : {}),
     ...(routing ? { routing } : {}),
     language: lang,
     locale: lang,

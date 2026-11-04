@@ -15,7 +15,7 @@ import { LocalTranscriptionService } from '@/services/transcription/LocalTranscr
 import { useConfigStore } from '@/store/useConfigStore';
 import { useTranscriptStore } from '@/store/useTranscriptStore';
 import { modelReady } from './models';
-import { selectedTextModel } from './LocalTextModel';
+import { selectedTextModel, textModelDownloadMessage } from './LocalTextModel';
 import { selectedSpeechModel } from './speechSelection';
 import { speechModelSupportsLanguages } from './speechCapabilities';
 import type { Recording } from '../../modules/android-dictation/src';
@@ -88,12 +88,13 @@ export async function ensureAndroidModels(job: AndroidJob): Promise<void> {
   const cleanupRuns =
     config?.cleanupEnabled !== false &&
     (job.route.provider !== 'local' || cleanupSavedOnDevice(config));
+  const textModel = selectedTextModel(job.mode === 'dictate' ? 'cleanup' : undefined);
   if (
     job.route.cleanupRoute?.mode === 'local' &&
     (job.mode !== 'dictate' || cleanupRuns) &&
-    !(await modelReady(selectedTextModel()))
+    !(await modelReady(textModel))
   )
-    throw new Error(i18n.t('textDownloadNeeded'));
+    throw new Error(textModelDownloadMessage(textModel));
 }
 export async function applyHistoryRetention(): Promise<void> {
   const days = useConfigStore.getState().config?.androidHistoryDays ?? -1;

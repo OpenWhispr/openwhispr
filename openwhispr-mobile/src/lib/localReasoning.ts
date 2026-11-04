@@ -5,6 +5,7 @@ import type {
   LocalReasoningErrorCode,
   LocalReasoningReadiness,
   ProcessingMode,
+  ReasoningRequest,
   ReasoningRoutingOptions,
   UserConfig,
 } from '@/types';
@@ -53,10 +54,12 @@ export function clearLocalReasoningReadinessCache(): void {
 
 export async function getLocalReasoningReadiness(options?: {
   refresh?: boolean;
+  localModelPurpose?: ReasoningRequest['localModelPurpose'];
 }): Promise<LocalReasoningReadiness> {
   if (Platform.OS === 'android') {
-    const { androidTextReadiness } = await import('@/android/LocalTextModel');
-    return androidTextReadiness();
+    const { androidTextReadiness } =
+      require('@/android/LocalTextModel') as typeof import('@/android/LocalTextModel');
+    return androidTextReadiness(options?.localModelPurpose);
   }
   if (!isAppleLocalIntelligenceEnabled()) {
     return { status: 'disabled', tokenCounting: false };
@@ -258,9 +261,12 @@ export function getLocalReasoningLanguageNote(readiness: LocalReasoningReadiness
 
 export function getLocalReasoningUnavailableMessage(readiness?: LocalReasoningReadiness): string {
   if (Platform.OS === 'android')
-    return androidCopy(
-      'workflowSettings.localModelNeeded',
-      'Download a local text model in Account → Models to use on-device AI.',
+    return (
+      readiness?.unavailableMessage ??
+      androidCopy(
+        'workflowSettings.localModelNeeded',
+        'Download a local text model in Account → Models to use on-device AI.',
+      )
     );
   switch (readiness?.status) {
     case 'unsupportedDevice':

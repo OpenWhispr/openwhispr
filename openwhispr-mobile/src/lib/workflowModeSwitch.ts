@@ -63,8 +63,13 @@ async function transcriptionModelReady(): Promise<ModeSwitchResult | null> {
   return null;
 }
 
-async function localTextModelReady(): Promise<ModeSwitchResult | null> {
-  const readiness = await getLocalReasoningReadiness({ refresh: true });
+async function localTextModelReady(scope: MobileInferenceScope): Promise<ModeSwitchResult | null> {
+  const readiness = await getLocalReasoningReadiness({
+    refresh: true,
+    ...(Platform.OS === 'android' && scope === 'cleanup'
+      ? { localModelPurpose: 'cleanup' as const }
+      : {}),
+  });
   if (readiness.status === 'ready') return null;
   const message = getLocalReasoningUnavailableMessage(readiness);
   if (Platform.OS === 'android') {
@@ -134,7 +139,7 @@ export async function switchWorkflowMode(
   if (mode === 'local') {
     const blocked = isSpeechScope(scope)
       ? await transcriptionModelReady()
-      : await localTextModelReady();
+      : await localTextModelReady(scope);
     if (blocked) return blocked;
   }
 

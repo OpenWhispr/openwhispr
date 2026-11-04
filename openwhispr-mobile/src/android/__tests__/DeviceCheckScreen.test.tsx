@@ -26,7 +26,15 @@ jest.mock('expo-file-system/legacy', () => ({
   deleteAsync: jest.fn(async () => {}),
 }));
 jest.mock('../models', () => ({
-  ANDROID_MODELS: { 'parakeet-v3': { title: 'Parakeet' }, 'qwen-balanced': { title: 'Qwen' } },
+  ANDROID_MODELS: {
+    'parakeet-v3': { title: 'Parakeet' },
+    'qwen-balanced': { title: 'Qwen' },
+    'qwen-cleanup': { title: 'Qwen3 4B' },
+  },
+}));
+jest.mock('../LocalTextModel', () => ({
+  selectedTextModel: (purpose?: string) =>
+    purpose === 'cleanup' ? 'qwen-cleanup' : 'qwen-balanced',
 }));
 jest.mock('../deviceCheck', () => ({
   readDeviceProfile: () => null,
@@ -126,4 +134,9 @@ it('does not delete an original file returned outside app cache', async () => {
     fireEvent.press(screen.getByRole('button', { name: 'benchmarkStart' }));
   });
   expect(FileSystem.deleteAsync).not.toHaveBeenCalled();
+});
+
+it('labels the cleanup model rather than the general text selection', () => {
+  render(<DeviceCheckScreen />);
+  expect(screen.getByText('Parakeet + Qwen3 4B')).toBeTruthy();
 });

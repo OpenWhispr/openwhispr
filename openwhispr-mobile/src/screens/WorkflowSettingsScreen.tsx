@@ -399,7 +399,12 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
     if (speechScope) return undefined;
     let cancelled = false;
     const check = (): void => {
-      getLocalReasoningReadiness({ refresh: true })
+      getLocalReasoningReadiness({
+        refresh: true,
+        ...(Platform.OS === 'android' && scope === 'cleanup'
+          ? { localModelPurpose: 'cleanup' as const }
+          : {}),
+      })
         .then((readiness) => {
           if (!cancelled) setAppleIntelligence(readiness);
         })
@@ -413,7 +418,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
       cancelled = true;
       appStateSubscription.remove();
     };
-  }, [speechScope]);
+  }, [scope, speechScope]);
   const onDeviceUnsupported = isLocalReasoningUnsupported(appleIntelligence)
     ? copy(
         'workflowSettings.localModelNeeded',
@@ -423,10 +428,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
   const onDeviceStatus =
     Platform.OS === 'android'
       ? appleIntelligence && appleIntelligence.status !== 'ready'
-        ? copy(
-            'workflowSettings.localModelNeeded',
-            getLocalReasoningUnavailableMessage(appleIntelligence),
-          )
+        ? getLocalReasoningUnavailableMessage(appleIntelligence)
         : undefined
       : appleIntelligence?.status === 'unsupportedLanguage'
         ? getLocalReasoningLanguageNote(appleIntelligence)
@@ -610,7 +612,12 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
         if (speechScope) {
           ready = (await getPrivateModeReadiness()).status === 'ready';
         } else {
-          const readiness = await getLocalReasoningReadiness({ refresh: true });
+          const readiness = await getLocalReasoningReadiness({
+            refresh: true,
+            ...(Platform.OS === 'android' && scope === 'cleanup'
+              ? { localModelPurpose: 'cleanup' as const }
+              : {}),
+          });
           if (!cancelled) setAppleIntelligence(readiness);
           ready = readiness.status === 'ready';
         }

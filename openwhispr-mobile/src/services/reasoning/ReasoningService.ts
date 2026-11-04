@@ -209,7 +209,11 @@ export class ReasoningService {
       }
 
       if (localRequest.systemPrompt) {
-        const readiness = await getLocalReasoningReadiness();
+        const readiness = await getLocalReasoningReadiness(
+          Platform.OS === 'android'
+            ? { localModelPurpose: localRequest.localModelPurpose }
+            : undefined,
+        );
         if (readiness.status === 'ready') {
           const instructions = buildLocalReasoningInstructions(localRequest);
           const fits =
