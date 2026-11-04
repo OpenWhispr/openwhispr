@@ -206,3 +206,23 @@ test("a blocked local meeting with no managed route is refused by name, and the 
   );
   assert.equal(calls.start.length, 0);
 });
+
+test("a model revoked during a meeting start reaches main blank for it to refuse, not as a default", async (t) => {
+  const { calls, store, usePolicyStore, useSettingsStore } = await setup(t);
+  useSettingsStore.setState({
+    meetingLocalTranscriptionProvider: "whisper",
+    whisperModel: "small",
+    meetingWhisperModel: "",
+  });
+  usePolicyStore.setState(managedSnapshot(["local"], ["small", "base"]));
+  const { electronAPI } = globalThis.window;
+  const { checkSystemAudioAccess } = electronAPI;
+  electronAPI.checkSystemAudioAccess = () => {
+    usePolicyStore.setState(managedSnapshot(["local"], ["base"]));
+    return checkSystemAudioAccess();
+  };
+
+  assert.equal(await store.startRecording(START_ARGS), true);
+  assert.equal(calls.start.at(-1)?.provider, "local");
+  assert.equal(calls.start.at(-1).localModel, "");
+});
