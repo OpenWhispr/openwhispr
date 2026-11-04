@@ -6890,6 +6890,14 @@ class IPCHandlers {
     ipcMain.handle("product-events-record-onboarding-completed", (_event, completion) =>
       this.productEvents?.recordOnboardingCompleted(completion)
     );
+    ipcMain.handle("product-events-record-dictation", (_event, dictation) =>
+      this.productEvents?.recordDictationCompleted({
+        ...dictation,
+        // While onboarding holds the app only its try-it dictation can run,
+        // and it holds the app from startup until the normal app is committed.
+        practice: this.windowManager?.isOnboardingActive() !== false,
+      })
+    );
     ipcMain.handle("activation-close", async () => {
       await Promise.race([
         this.metaActivation?.close(),

@@ -1,19 +1,35 @@
 const { randomUUID } = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
+const { ANALYTICS_COUNTER_VERSION } = require("./analytics");
 
 // Dashboard funnel milestones this build can report. Sent with every upload as
 // coverage, which is what tells a stage nobody could observe apart from one
 // that never happened.
-const CAPABILITIES = ["app_session_authenticated", "onboarding_completed"];
+const CAPABILITIES = ["app_session_authenticated", "onboarding_completed", "dictation_completed"];
 const SCHEMA_VERSION = 1;
 const BATCH_SIZE = 50;
-// The queue only ever holds a handful of milestones; these bound what a server
-// that never acknowledges (deferring an event forever, or unreachable) leaves behind.
+// The queue only ever holds a handful of milestones and the dictations of the
+// first 200 words; these bound what a server that never acknowledges
+// (deferring an event forever, or unreachable) leaves behind.
 const MAX_QUEUED_EVENTS = 200;
 const MAX_EVENT_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const RETRY_DELAYS_MS = [60_000, 5 * 60_000, 30 * 60_000];
 const ONBOARDING_SETUP_MODES = new Set(["cloud", "byok", "local", "managed"]);
+// The funnel's last stage. Once one installation has recorded this many
+// counted words for an account, none of its later dictations can be the one
+// that crosses, for the account or for its platform, so none is recorded.
+const DICTATION_WORDS_NEEDED = 200;
+// The modes the API's analytics ledger knows (resolveAnalyticsMode's values).
+const DICTATION_MODES = new Set([
+  "local",
+  "openwhispr_cloud",
+  "byok",
+  "self_hosted",
+  "enterprise",
+  "unknown",
+]);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Sign-ins the server already took. A relaunch validates the same session and
 // gets the same binding back, which then needs no second upload.
 const MAX_ACKNOWLEDGED_BINDINGS = 50;
@@ -27,6 +43,8 @@ function emptyState() {
     installationId: null,
     onboardingCompletions: 0,
     acknowledgedBindings: [],
+    // Counted dictation words recorded here, per account.
+    dictationWords: {},
     events: [],
   };
 }
@@ -207,12 +225,65 @@ class ProductEvents {
     void this.flush();
   }
 
+  /**
+   * An original dictation finished (audioManager, beside the activation
+   * capture): its word count, never its text. `practice` is onboarding's
+   * try-it dictation, recorded as such and never counted.
+   */
+  recordDictationCompleted({ captureId, words, mode, practice }) {
+    const scope = this.getScope();
+    if (!scope || !UUID_PATTERN.test(String(captureId)) || !Number.isSafeInteger(words)) return;
+    const counted = this.state.dictationWords[scope.accountId] ?? 0;
+    if (
+      words < 1 ||
+      // An organization that keeps the account unobserved gets nothing queued for later.
+      this.blockedScopes.has(this.scopeKey(scope)) ||
+      counted >= DICTATION_WORDS_NEEDED ||
+      this.state.events.some((event) => event.event_id === captureId)
+    ) {
+      return;
+    }
+    const occurredAt = new Date(this.now()).toISOString();
+    this.enqueue({
+      // One recording is one event: its capture id, which its Insights row
+      // and its cloud transcription carry too.
+      event_id: captureId,
+      event_name: "dictation_completed",
+      occurred_at: occurredAt,
+      account_id: scope.accountId,
+      identity_generation: scope.authGeneration,
+      app_version: this.getAppVersion(),
+      flow_version: null,
+      properties: {
+        word_count: words,
+        counter_version: ANALYTICS_COUNTER_VERSION,
+        mode: DICTATION_MODES.has(mode) ? mode : "unknown",
+        source: "dictation",
+        is_practice: Boolean(practice),
+        // A history retry runs in the main process and never reaches here.
+        is_retranscribe: false,
+      },
+      captured_at: occurredAt,
+    });
+    if (!practice) {
+      this.persist((state) => ({
+        ...state,
+        dictationWords: { ...state.dictationWords, [scope.accountId]: counted + words },
+      }));
+    }
+    void this.flush();
+  }
+
   /** Drops what an erased account left queued here. */
   purge(accountId) {
-    this.persist((state) => ({
-      ...state,
-      events: state.events.filter((event) => event.account_id !== accountId),
-    }));
+    this.persist((state) => {
+      const { [accountId]: _erased, ...dictationWords } = state.dictationWords;
+      return {
+        ...state,
+        dictationWords,
+        events: state.events.filter((event) => event.account_id !== accountId),
+      };
+    });
   }
 
   async flush() {
