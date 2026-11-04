@@ -80,6 +80,26 @@ test("ReasoningService entry points enforce the org policy", async (t) => {
     assert.equal(dispatch.mock.callCount(), 0);
   });
 
+  await t.test("a finished answer ends only on a settled denial", async () => {
+    const finishUnder = (change) => {
+      setPolicy({ llmModes: ["local"] });
+      global.window.electronAPI.processLocalReasoning = async () => {
+        usePolicyStore.setState(change);
+        return { success: true, text: "answer" };
+      };
+      return reasoningService.processText("hi", "qwen3.5-0.8b-q4_k_m", null, {
+        provider: "qwen",
+        systemPrompt: "s",
+      });
+    };
+    for (const status of ["loading", "error"]) {
+      assert.equal(await finishUnder({ status, policy: null }), "answer");
+    }
+    const denied = buildPolicy({ llmModes: ["local"] });
+    denied.llm.allowedLocalModels = [];
+    await assert.rejects(finishUnder({ policy: denied }), { code: "POLICY_MODEL_BLOCKED" });
+  });
+
   // A custom endpoint's 400 body ("expected test stop") now classifies as a
   // provider bad-request error; its original text survives on
   // technicalDetails.underlyingError rather than as the top-level message.

@@ -173,6 +173,10 @@ test("a refused model's row only names the organization for a refusal it made", 
     hintKey: "models.policy.emptyIntersection",
   });
   assert.deepEqual(
+    localModelRowRefusal(managed({ allowedLocalModels: ["future-id"] }), "transcription"),
+    { labelKey: "models.policy.notApproved", hintKey: "models.policy.noneSupported" }
+  );
+  assert.deepEqual(
     localModelRowRefusal({ status: "error", policy: null, appVersion: null }, "transcription"),
     { labelKey: "models.policy.unavailable", hintKey: "models.policy.unresolved" }
   );

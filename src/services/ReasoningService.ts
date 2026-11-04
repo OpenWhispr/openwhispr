@@ -615,11 +615,14 @@ class ReasoningService extends BaseReasoningService {
         ctx: this.providerContext,
       });
 
-      assertReasoningAllowedByPolicy(
-        providerId,
-        resolveLlmDispatchMode(providerId, dispatchConfig),
-        trimmedModel
-      );
+      // An unresolved verdict says nothing new about an answer that has finished.
+      if (usePolicyStore.getState().status === "managed") {
+        assertReasoningAllowedByPolicy(
+          providerId,
+          resolveLlmDispatchMode(providerId, dispatchConfig),
+          trimmedModel
+        );
+      }
       if (validateCleanup) assertValidCleanupOutput(text, result);
 
       logger.logReasoning("PROVIDER_SUCCESS", {

@@ -329,9 +329,11 @@ export function localModelRefusal(
   return {
     code: "POLICY_MODEL_BLOCKED",
     messageKey:
-      allowedLocalModelIds(state, scope)?.length === 0
+      managedPolicy(state)?.[scope].allowedLocalModels?.length === 0
         ? "models.policy.emptyIntersection"
-        : "models.policy.modelBlocked",
+        : allowedLocalModelIds(state, scope)?.length === 0
+          ? "models.policy.noneSupported"
+          : "models.policy.modelBlocked",
     settingsTarget,
   };
 }
