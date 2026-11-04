@@ -2,7 +2,7 @@ import type { MouseEvent, ReactElement, ReactNode } from "react";
 import { cn } from "../lib/utils";
 
 interface RowCheckboxProps {
-  checked: boolean;
+  checked: boolean | "mixed";
   // The click event carries shiftKey, which a list uses to tick a range.
   onToggle: (event: MouseEvent<HTMLButtonElement>) => void;
   // The accessible name when the checkbox has no visible label of its own.
@@ -13,13 +13,13 @@ interface RowCheckboxProps {
   children?: ReactNode;
 }
 
-function CheckboxBox({ checked }: { checked: boolean }): ReactElement {
+function CheckboxBox({ checked }: { checked: boolean | "mixed" }): ReactElement {
   if (checked) {
     return (
       <svg className="size-3.5 shrink-0" viewBox="0 0 16 16" fill="none" aria-hidden="true">
         <rect width="16" height="16" rx="4" className="fill-primary" />
         <path
-          d="M12 5L6.5 10.5L4 8"
+          d={checked === "mixed" ? "M4 8H12" : "M12 5L6.5 10.5L4 8"}
           stroke="white"
           strokeWidth="1.6"
           strokeLinecap="round"

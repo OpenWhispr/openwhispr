@@ -49,12 +49,15 @@ async function loadSection(t, { storedTab } = {}) {
         export const useTranslation = () => ({ t: (key) => key });
       `,
       "/stores/workspaceStore": `
-        export const useWorkspaceStore = (selector) =>
-          selector({
-            members: globalThis.__roster,
-            membersWorkspaceId: globalThis.__rosterWorkspaceId,
-            refreshMembers: globalThis.__refreshMembers,
-          });
+        const state = () => ({
+          workspaces: [globalThis.__workspace],
+          members: globalThis.__roster,
+          membersWorkspaceId: globalThis.__rosterWorkspaceId,
+          refreshMembers: globalThis.__refreshMembers,
+          refresh: async () => {},
+        });
+        export const useWorkspaceStore = (selector) => selector(state());
+        useWorkspaceStore.getState = state;
       `,
       "/SettingsWorkspaceFrame": `
         export default function Frame({ children }) {
@@ -97,10 +100,33 @@ async function loadSection(t, { storedTab } = {}) {
       `,
       "/InviteTeammateDialog": `
         import React from "react";
+        import InviteTeammateDialog from "/components/InviteTeammateDialog.tsx";
         export default function Mock(props) {
           globalThis.__dialogProps = props;
-          return React.createElement("div", { "data-invite-dialog": String(props.open) });
+          return React.createElement(InviteTeammateDialog, props);
         }
+      `,
+      "/InvitePeopleView": `
+        export function InvitePeopleView(props) {
+          globalThis.__inviteViewProps = props;
+          return null;
+        }
+      `,
+      "/ui/dialog": `
+        export const Dialog = ({ children }) => children;
+      `,
+      "/services/WorkspacesService": `
+        export const WorkspacesService = { previewSeats: async () => null };
+      `,
+      "/services/invitePeople": `
+        export const invitePeople = {
+          sendInvitations: async (input) => {
+            globalThis.__sendCalls.push(input.emails);
+            for (const email of input.emails) {
+              input.onResult(email, { ok: true, emailSent: true });
+            }
+          },
+        };
       `,
     },
   });
@@ -120,6 +146,8 @@ async function loadSection(t, { storedTab } = {}) {
       "__membersProps",
       "__invitationsTabProps",
       "__dialogProps",
+      "__inviteViewProps",
+      "__sendCalls",
       "__reloadCalls",
     ]) {
       delete globalThis[key];
@@ -132,6 +160,7 @@ async function loadSection(t, { storedTab } = {}) {
     globalThis.__refreshMembersCalls.push(workspaceId);
   };
   globalThis.__reloadCalls = 0;
+  globalThis.__sendCalls = [];
   globalThis.__invitationsState = {
     status: "ready",
     invitations: INVITATIONS,
@@ -163,13 +192,13 @@ function propsOf(node) {
   return key ? node[key] : {};
 }
 
-async function mount(t, WorkspacePeopleSection, workspace) {
+async function mount(t, WorkspacePeopleSection, workspace, props = {}) {
   globalThis.__workspace = workspace;
   const container = installHostDom(t);
   const root = createRoot(container);
   mountedRoots.set(t, root);
   await React.act(async () => {
-    root.render(React.createElement(WorkspacePeopleSection));
+    root.render(React.createElement(WorkspacePeopleSection, props));
   });
   return container;
 }
@@ -260,12 +289,33 @@ test("inviting reloads the list and closing the dialog afterwards opens Invitati
   await React.act(async () => propsOf(addButton).onClick());
   assert.equal(globalThis.__dialogProps.open, true);
 
-  await React.act(async () => globalThis.__dialogProps.onInvited(["new@example.com"]));
+  await React.act(async () => {
+    globalThis.__dialogProps.onInvited(["new@example.com"]);
+    globalThis.__dialogProps.onInvitationsChanged();
+  });
   assert.equal(globalThis.__reloadCalls, 1);
   await React.act(async () => globalThis.__dialogProps.onOpenChange(false));
 
   assert.ok(findNode(container, (node) => node.getAttribute?.("data-tab-panel") === "invitations"));
   assert.equal(localStorage.getItem("settings.workspacePeopleTab"), '"invitations"');
+});
+
+test("a send that found invitations already there reloads the list and keeps the current tab", async (t) => {
+  const Section = await loadSection(t);
+  const container = await mount(t, Section, ADMIN);
+
+  const addButton = findNode(
+    container,
+    (node) => node.getAttribute?.("title") === "settingsPage.workspace.people.addLabel"
+  );
+  await React.act(async () => propsOf(addButton).onClick());
+
+  await React.act(async () => globalThis.__dialogProps.onInvitationsChanged());
+  assert.equal(globalThis.__reloadCalls, 1);
+  await React.act(async () => globalThis.__dialogProps.onOpenChange(false));
+
+  assert.ok(findNode(container, (node) => node.getAttribute?.("data-tab-panel") === "members"));
+  assert.equal(localStorage.getItem("settings.workspacePeopleTab"), '"members"');
 });
 
 test("closing the dialog without inviting anyone keeps the current tab", async (t) => {
@@ -291,7 +341,7 @@ test("a roster the store holds for another workspace isn't handed to the invite 
   globalThis.__rosterWorkspaceId = "w-previous";
   render(Section, ADMIN);
 
-  assert.deepEqual(globalThis.__dialogProps.knownEmails.members, []);
+  assert.equal(globalThis.__dialogProps.knownEmails, undefined);
 });
 
 async function openAdd(container) {
@@ -301,6 +351,58 @@ async function openAdd(container) {
   );
   await React.act(async () => propsOf(addButton).onClick());
 }
+
+for (const [name, rosterWorkspaceId, status, stale, existing] of [
+  ["unloaded members", null, "ready", false, "mia@example.com"],
+  ["another workspace's members", "w-previous", "ready", false, "mia@example.com"],
+  ["loading invitations", "w1", "loading", false, "pending@example.com"],
+  ["failed invitations", "w1", "failed", false, "pending@example.com"],
+  ["stale invitations", "w1", "ready", true, "pending@example.com"],
+]) {
+  test(`a valid mixed batch near the ceiling sends with ${name}`, async (t) => {
+    const Section = await loadSection(t, { storedTab: "invitations" });
+    globalThis.__rosterWorkspaceId = rosterWorkspaceId;
+    globalThis.__invitationsState = {
+      ...globalThis.__invitationsState,
+      status,
+      stale,
+      invitations: status === "ready" && !stale ? INVITATIONS : [],
+    };
+    const container = await mount(t, Section, { ...ADMIN, seats_used: 499, seat_limit: 500 });
+    await openAdd(container);
+    await React.act(async () =>
+      globalThis.__inviteViewProps.dispatch({
+        type: "draft",
+        text: `${existing}, new@example.com,`,
+      })
+    );
+
+    await React.act(async () => globalThis.__inviteViewProps.onSend());
+
+    assert.deepEqual(globalThis.__sendCalls, [[existing, "new@example.com"]]);
+  });
+}
+
+test("complete rosters skip existing addresses and enforce the ceiling for new ones", async (t) => {
+  const Section = await loadSection(t);
+  const container = await mount(t, Section, { ...ADMIN, seats_used: 499, seat_limit: 500 });
+  await openAdd(container);
+  await React.act(async () =>
+    globalThis.__inviteViewProps.dispatch({
+      type: "draft",
+      text: "mia@example.com, new@example.com, extra@example.com,",
+    })
+  );
+  await React.act(async () => globalThis.__inviteViewProps.onSend());
+  assert.deepEqual(globalThis.__sendCalls, []);
+
+  await React.act(async () =>
+    globalThis.__inviteViewProps.dispatch({ type: "remove", email: "extra@example.com" })
+  );
+  await React.act(async () => globalThis.__inviteViewProps.onSend());
+
+  assert.deepEqual(globalThis.__sendCalls, [["new@example.com"]]);
+});
 
 test("opening Add reads the roster when the store doesn't hold this workspace's", async (t) => {
   const Section = await loadSection(t, { storedTab: "invitations" });
@@ -336,4 +438,13 @@ test("Add sits beside the tab list, not inside it", async (t) => {
   assert.match(markup, /title="settingsPage\.workspace\.people\.addLabel"/);
   // The visible "Add" is the button's accessible name, as voice control users say it.
   assert.doesNotMatch(markup, /aria-label="settingsPage\.workspace\.people\.addLabel"/);
+});
+
+test("Add wraps under the tabs rather than scroll a narrow pane sideways", async (t) => {
+  const Section = await loadSection(t);
+  const markup = render(Section, ADMIN);
+
+  const row = markup.match(/<div class="([^"]*)"><div role="tablist"/);
+  assert.ok(row, "the row holding the tab list and Add");
+  assert.ok(row[1].split(" ").includes("flex-wrap"));
 });

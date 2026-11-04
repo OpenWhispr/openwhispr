@@ -1821,7 +1821,9 @@ class IPCHandlers {
     });
 
     ipcMain.handle("open-settings-section", async (_event, section) => {
-      if (!isProviderSettingsTarget(section)) return { success: false };
+      if (!isProviderSettingsTarget(section) && section !== "plansBilling") {
+        return { success: false };
+      }
       await this.windowManager.openSettings(section);
       return { success: true };
     });

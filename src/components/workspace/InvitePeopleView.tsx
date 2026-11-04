@@ -9,6 +9,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  MAX_INVITE_RECIPIENTS,
   inviteSummary,
   isRetryableFailure,
   type InviteFlowEvent,
@@ -16,7 +17,7 @@ import {
   type InviteRecipient,
 } from "../../lib/inviteFlow";
 import type { InviteErrorKind } from "../../lib/workspaceErrors";
-import { CheckCircle2, ChevronDown, Loader2, X } from "../icons";
+import { AlertCircle, CheckCircle2, ChevronDown, Loader2, X } from "../icons";
 import { cn } from "../lib/utils";
 import { isolate } from "../../utils/bidiIsolate";
 import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "../ui/BidiInterpolatedText";
@@ -42,6 +43,13 @@ export interface InvitePeopleViewProps {
   suggestions: InviteSuggestion[];
   seatLine: string | null;
   seatCostLine: string | null;
+  canManageBilling: boolean;
+  /** Who to ask for more seats, for admins who can't buy them. */
+  billingManager: string | null;
+  /** Opens Plan & Billing from the seats warning, for those who can manage billing. */
+  onUpgrade: () => void;
+  /** Accepting adds the invitee to a team or teamspace too, which a skipped address misses. */
+  addsToContainer: boolean;
   cancelLabel: string;
   onCancel: () => void;
   onSend: () => void;
@@ -82,7 +90,7 @@ function recipientErrorKind(recipient: InviteRecipient): InviteErrorKind | null 
   return null;
 }
 
-interface ErrorBarContent {
+interface BarContent {
   message: ReactNode;
   action?: { label: string; onClick: () => void };
 }
@@ -94,6 +102,10 @@ export function InvitePeopleView({
   suggestions,
   seatLine,
   seatCostLine,
+  canManageBilling,
+  billingManager,
+  onUpgrade,
+  addsToContainer,
   cancelLabel,
   onCancel,
   onSend,
@@ -130,22 +142,119 @@ export function InvitePeopleView({
     />
   );
 
-  const errorBarContent = (): ErrorBarContent | null => {
-    if (summary.tooMany) return { message: t("workspaces.invite.tooMany") };
-    const refused = summary.invalid[0] ?? summary.blocked[0];
-    if (refused) return { message: recipientMessage(refused) };
+  const removeLast = (count: number): BarContent["action"] => ({
+    label: t("workspaces.invite.removeLast", { count }),
+    onClick: () => {
+      dispatch({ type: "removeLast", count });
+      // The button goes away with the excess.
+      inputRef.current?.focus();
+    },
+  });
+
+  // At most one error, the first that applies.
+  const errorBarContent = (): BarContent | null => {
+    if (summary.tooMany) {
+      return {
+        message: t("workspaces.invite.tooMany", { count: MAX_INVITE_RECIPIENTS }),
+        action: removeLast(summary.tooManyBy),
+      };
+    }
+    if (summary.invalid[0]) return { message: recipientMessage(summary.invalid[0]) };
+    if (summary.overCeiling) {
+      const { available, excess } = summary.overCeiling;
+      return available === 0
+        ? { message: t("workspaces.invite.errors.seatLimit") }
+        : {
+            message: t("workspaces.invite.ceilingLeft", { count: available, excess }),
+            action: removeLast(excess),
+          };
+    }
+    if (summary.overRateLimit) {
+      const { available, excess, limit } = summary.overRateLimit;
+      // Past the daily allowance, waiting can't make this batch fit.
+      return {
+        message:
+          summary.sendable.length > limit
+            ? t("workspaces.invite.rateLimitedDaily", { limit, excess })
+            : t("workspaces.invite.rateLimitedLeft", { count: available, excess }),
+        action: removeLast(excess),
+      };
+    }
     if (summary.failed.length === 0) return null;
-    // Try again resends exactly these, so the count and the button agree with Send.
+    // Try resending resends exactly these, so the count and the button agree with Send.
     const retryable = summary.failed.filter(
-      ({ state: chip }) => chip.status === "failed" && isRetryableFailure(chip.kind)
+      ({ state: chip }) => chip.status === "failed" && isRetryableFailure(chip)
     );
     if (retryable.length === 0) return { message: recipientMessage(summary.failed[0]) };
+    const resend = { label: t("workspaces.invite.tryResending"), onClick: onSend };
+    // A 429 answers for the whole batch, so the server's "try later" says more than a count.
+    const rateLimited = retryable.some(
+      ({ state: chip }) => chip.status === "failed" && chip.kind === "rateLimited"
+    );
+    if (rateLimited) return { message: t("workspaces.invite.errors.rateLimited"), action: resend };
+    const seatLimited = retryable.find(
+      ({ state: chip }) => chip.status === "failed" && chip.kind === "seatLimit"
+    );
+    if (seatLimited) return { message: recipientMessage(seatLimited), action: resend };
     return {
       message: t("workspaces.invite.someFailed", { count: retryable.length }),
-      action: { label: t("workspaces.exit.tryAgain"), onClick: onSend },
+      action: resend,
     };
   };
   const errorBar = errorBarContent();
+
+  // Warnings never block Send: the server bills a seat only when an invitation is accepted, and
+  // skipped addresses are left out of the send.
+  const warningBars: Array<BarContent & { key: string }> = [];
+  // Over the ceiling, its blocking bar already says how many to remove; a seats count beside it
+  // would name a different number.
+  if (summary.overSeats && !summary.overCeiling) {
+    const { available: count, excess } = summary.overSeats;
+    const askOwner = !canManageBilling && billingManager;
+    // With no seats left, removing the excess would mean removing everyone.
+    let message: string;
+    if (count === 0) {
+      message = askOwner
+        ? t("workspaces.invite.seatsNoneAskOwner", { owner: isolate(askOwner) })
+        : t("workspaces.invite.seatsNone");
+    } else {
+      message = askOwner
+        ? t("workspaces.invite.seatsLeftAskOwner", { count, excess, owner: isolate(askOwner) })
+        : t("workspaces.invite.seatsLeft", { count, excess });
+    }
+    warningBars.push({
+      key: "seats",
+      message,
+      action:
+        canManageBilling && !sending
+          ? { label: t("workspaces.invite.upgrade"), onClick: onUpgrade }
+          : undefined,
+    });
+  }
+  // On a team or teamspace, "skipped" alone would read as if they were added anyway.
+  const namesSkippedAddress = summary.skipped.length === 1 && !addsToContainer;
+  const skippedMessage: ReactNode = namesSkippedAddress
+    ? recipientMessage(summary.skipped[0])
+    : t(addsToContainer ? "workspaces.invite.skippedNotAdded" : "workspaces.invite.skippedMany", {
+        count: summary.skipped.length,
+      });
+  if (summary.skipped.length > 0) warningBars.push({ key: "skipped", message: skippedMessage });
+  // Part of a send went out while other chips still need attention; Cancel from here must not hide
+  // that the rest got their invitations, or that some emails never arrived.
+  const undelivered = summary.noEmailCount > 0 && summary.noEmailCount === state.sent.length;
+  const sentHeadline = t(
+    undelivered ? "workspaces.invite.createdTitle" : "workspaces.invite.sentTitle",
+    { count: state.sent.length }
+  );
+  if (summary.noEmailCount > 0) {
+    warningBars.push({
+      key: "noEmail",
+      message: t("workspaces.invite.noEmail", { count: summary.noEmailCount }),
+    });
+  }
+  const sendingCount = state.recipients.filter(
+    (recipient) => recipient.state.status === "sending"
+  ).length;
 
   // The field and Send are disabled while sending, which drops focus to the page; a run that
   // leaves chips to fix returns it to the field (the Done screen focuses its own button).
@@ -213,13 +322,20 @@ export function InvitePeopleView({
       onOpenAutoFocus={focusField}
       onEscapeKeyDown={handleEscapeKeyDown}
       onInteractOutside={blockWhileSending}
-      className="w-[440px] max-w-[calc(100vw-32px)] grid-cols-1 items-stretch gap-6 rounded-[28px] p-5 sm:max-w-[440px]"
+      className="max-h-[calc(100vh-32px)] w-[440px] max-w-[calc(100vw-32px)] grid-cols-1 items-stretch gap-6 overflow-y-auto rounded-[28px] p-5 sm:max-w-[440px]"
     >
       {state.phase === "done" ? (
         <InviteDoneContent
           workspaceName={workspaceName}
           sent={state.sent}
+          headline={sentHeadline}
+          undelivered={undelivered}
           noEmailCount={summary.noEmailCount}
+          skippedMessage={summary.skipped.length > 0 ? skippedMessage : null}
+          // Their chips are gone on this screen, so this is the only place that says who.
+          skippedEmails={
+            namesSkippedAddress ? [] : summary.skipped.map((recipient) => recipient.email)
+          }
           onDone={onDone}
         />
       ) : (
@@ -233,6 +349,11 @@ export function InvitePeopleView({
             </DialogDescription>
             {seatLine ? <p className="text-xs text-muted-foreground">{seatLine}</p> : null}
             {seatCostLine ? <p className="text-xs text-muted-foreground">{seatCostLine}</p> : null}
+            {state.sent.length > 0 ? (
+              <p role="status" className="text-xs font-medium text-foreground">
+                {sentHeadline}
+              </p>
+            ) : null}
           </div>
 
           <div className="flex flex-col gap-4">
@@ -244,7 +365,7 @@ export function InvitePeopleView({
                 <div
                   onClick={() => inputRef.current?.focus()}
                   className={cn(
-                    "flex max-h-32 min-h-10 cursor-text flex-wrap items-center gap-1.5 overflow-y-auto rounded-xl border border-border/70 bg-surface-1 px-2 py-1.5 transition-colors",
+                    "flex max-h-40 min-h-10 cursor-text flex-wrap items-center gap-1.5 overflow-y-auto rounded-xl border border-border/70 bg-surface-1 px-2 py-1.5 transition-colors",
                     "focus-within:border-border focus-within:ring-2 focus-within:ring-ring/40",
                     sending && "opacity-60"
                   )}
@@ -277,7 +398,7 @@ export function InvitePeopleView({
                     placeholder={
                       state.recipients.length === 0
                         ? t("workspaces.invite.emailPlaceholder")
-                        : undefined
+                        : t("workspaces.invite.addMore")
                     }
                     onChange={(event) => changeDraft(event.target.value)}
                     onPaste={(event) => {
@@ -398,6 +519,14 @@ export function InvitePeopleView({
                 action={errorBar.action}
               />
             ) : null}
+            {warningBars.map((bar) => (
+              <WorkspaceErrorBar
+                key={bar.key}
+                tone="warning"
+                message={bar.message}
+                action={bar.action}
+              />
+            ))}
           </div>
 
           <div className="flex flex-col gap-3">
@@ -410,15 +539,25 @@ export function InvitePeopleView({
               {sending ? (
                 <>
                   <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                  {t("workspaces.invite.submitting")}
+                  {t("workspaces.invite.submitting", { count: sendingCount })}
                 </>
+              ) : summary.sendable.length > 1 ? (
+                t("workspaces.invite.submit", { count: summary.sendable.length })
               ) : (
-                // The empty field still reads "Send invitation" rather than "Send 0 invitations".
-                t("workspaces.invite.submit", { count: Math.max(1, summary.sendable.length) })
+                // One address, and the empty field, read "Send invite". A plural form can't say
+                // that: fr, pt and ru reuse "one" for other counts, so it must carry the number.
+                t("workspaces.invite.submitOne")
               )}
             </button>
             {sending ? null : (
-              <button type="button" onClick={onCancel} className={SECONDARY_BUTTON}>
+              <button
+                type="button"
+                // Keeps focus in the field: its blur would chip a half-typed address, and the error
+                // bar that can raise moves this button out from under the click.
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={onCancel}
+                className={SECONDARY_BUTTON}
+              >
                 {cancelLabel}
               </button>
             )}
@@ -478,12 +617,21 @@ function RecipientChip({
 function InviteDoneContent({
   workspaceName,
   sent,
+  headline,
+  undelivered,
   noEmailCount,
+  skippedMessage,
+  skippedEmails,
   onDone,
 }: {
   workspaceName: string;
   sent: InviteFlowState["sent"];
+  headline: string;
+  /** Every invitation exists, but no email reached anyone, so this is no success to confirm. */
+  undelivered: boolean;
   noEmailCount: number;
+  skippedMessage: ReactNode;
+  skippedEmails: string[];
   onDone: () => void;
 }): ReactElement {
   const { t } = useTranslation();
@@ -491,14 +639,25 @@ function InviteDoneContent({
   return (
     <>
       <div className="flex flex-col items-center gap-3 text-center">
-        <div className="flex size-[42px] items-center justify-center rounded-full bg-success/10 text-success">
-          <CheckCircle2 className="size-4" aria-hidden="true" />
+        <div
+          className={cn(
+            "flex size-[42px] items-center justify-center rounded-full",
+            undelivered ? "bg-warning/10 text-warning" : "bg-success/10 text-success"
+          )}
+        >
+          {undelivered ? (
+            <AlertCircle className="size-4" aria-hidden="true" />
+          ) : (
+            <CheckCircle2 className="size-4" aria-hidden="true" />
+          )}
         </div>
         <DialogTitle className="text-lg font-medium leading-snug tracking-normal">
-          {t("workspaces.invite.sentTitle", { count: sent.length })}
+          {headline}
         </DialogTitle>
         <DialogDescription className="text-sm leading-normal">
-          {sent.length === 1 ? (
+          {undelivered ? (
+            t("workspaces.invite.noEmail", { count: noEmailCount })
+          ) : sent.length === 1 ? (
             <BidiInterpolatedText
               text={t("workspaces.invite.sentOne", {
                 email: BIDI_VALUE_TOKEN,
@@ -514,11 +673,21 @@ function InviteDoneContent({
           )}
         </DialogDescription>
       </div>
-      {noEmailCount > 0 ? (
+      {noEmailCount > 0 && !undelivered ? (
         <WorkspaceErrorBar
           tone="warning"
           message={t("workspaces.invite.noEmail", { count: noEmailCount })}
         />
+      ) : null}
+      {skippedMessage ? <WorkspaceErrorBar tone="warning" message={skippedMessage} /> : null}
+      {skippedEmails.length > 0 ? (
+        <ul className="max-h-24 overflow-y-auto text-xs text-muted-foreground">
+          {skippedEmails.map((email) => (
+            <li key={email} className="truncate">
+              <bdi dir="ltr">{email}</bdi>
+            </li>
+          ))}
+        </ul>
       ) : null}
       {/* The send button that had focus is gone, so focus would otherwise fall to the page. */}
       <button type="button" autoFocus onClick={onDone} className={PRIMARY_BUTTON}>

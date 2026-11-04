@@ -71,6 +71,8 @@ export function CancelInvitationDialog({
         return t("workspaces.cancelInvitation.notAllowed", { workspace });
       case "ssoRequired":
         return t("workspaces.ssoRequired", { workspace });
+      case "rateLimited":
+        return t("workspaces.invite.errors.rateLimited");
       default:
         return t("workspaces.cancelInvitation.failed");
     }
