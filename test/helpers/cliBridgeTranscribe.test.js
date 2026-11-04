@@ -170,7 +170,7 @@ test("POST /v1/transcribe refuses models that are unknown or not downloaded", as
   });
   await assert.rejects(call(bridge, "POST", "/v1/transcribe", { path: file, model: "nope" }), {
     code: "VALIDATION",
-    message: /Unknown model 'nope'. Available: base, large, parakeet-tdt-0.6b-v3/,
+    message: /Unknown model 'nope'. Known models: base, large, parakeet-tdt-0.6b-v3/,
   });
   assert.equal(calls.approved.length, 0);
 });

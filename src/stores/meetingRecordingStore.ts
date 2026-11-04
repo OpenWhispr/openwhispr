@@ -1940,8 +1940,8 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
 
 /**
  * Ends a recording this window's policy now refuses, which main may still allow
- * (an unresolved policy, a minimum app version). Says why only when this call
- * ended it, so not for a stop the user or main already had under way.
+ * (a minimum app version). Says why only when this call ended it, so not for a
+ * stop the user or main already had under way.
  */
 export async function stopRecordingForPolicy(): Promise<void> {
   const sessionId = activeRecordingSessionId;

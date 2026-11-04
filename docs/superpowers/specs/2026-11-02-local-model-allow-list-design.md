@@ -10,13 +10,13 @@ The acceptance comments are the product basis: [desktop journey](https://github.
 
 GitHub `main` heads were checked on 2026-11-02. Source inspection used these exact revisions:
 
-| Repository | Revision                                   | Inspection                                                                                             |
-| ---------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| Desktop    | `7155b905dddd593e4577cf254eefb64ec7cc55d0` | Current clean task checkout; package version 1.11.0                                                    |
-| API        | `11121f11a82388f990543347eb7b6223ecdeb8e2` | Read-only `git show origin/main` and GitHub schema                                                     |
-| Admin      | `b06de60423e8508a874bbcd3969cd9b5a2dbc7f1` | Read-only `git show origin/main` and GitHub schema; local working copy is older and dirty, so excluded |
+| Repository | Revision                                   | Inspection                                         |
+| ---------- | ------------------------------------------ | -------------------------------------------------- |
+| Desktop    | `7155b905dddd593e4577cf254eefb64ec7cc55d0` | Package version 1.11.0                             |
+| API        | `11121f11a82388f990543347eb7b6223ecdeb8e2` | Read-only `git show origin/main` and GitHub schema |
+| Admin      | `b06de60423e8508a874bbcd3969cd9b5a2dbc7f1` | Read-only `git show origin/main` and GitHub schema |
 
-112 existing desktop tests passed: `test/helpers/{policyRules,policyValidation,localTranscriptionModels,workspacePolicyManager}.test.js` and `test/components/setupEligibility.test.js`. The task checkout has no dependencies; the run used the existing primary checkout's `tsx` loader and `NODE_PATH`, without installing packages. These are baseline tests, not tests of this proposed feature. API/admin runtime tests and real managed-device journeys have not been run.
+112 existing desktop tests passed: `test/helpers/{policyRules,policyValidation,localTranscriptionModels,workspacePolicyManager}.test.js` and `test/components/setupEligibility.test.js`. These are baseline tests, not tests of this proposed feature. API/admin runtime tests and real managed-device journeys have not been run.
 
 ### Verified corrections to the earlier draft
 
@@ -176,8 +176,6 @@ The API deployment must explicitly set `LOCAL_MODEL_RESTRICTIONS_ENABLED=true` o
 
 Implementation decisions recorded during execution:
 
-- Use Git to create the authorized API/admin worktrees because the app worktree tool could not target those repositories. Their terminal paths and branch names were verified; they remain separate checkouts.
-- Reuse installed dependencies through symlinks. This avoids installing packages but requires runtime-aware native tests; no shared native dependency was rebuilt.
 - Derive `policyBlockedLocalScopes` without persisting it. This distinguishes a deliberately blocked selection from an empty preference that normally inherits defaults; every final dispatch must honor that distinction.
 - Carry main-process authorization through nested native calls using `AsyncLocalStorage` leases. Production managers receive the gate before startup; future managers must be added to that initialization, or could miss enforcement.
 - Delegate independent admin/UI work with separate reviews while retaining the main-process work in the primary task. This adds coordination but keeps ownership and verification distinct.

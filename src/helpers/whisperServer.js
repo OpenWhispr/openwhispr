@@ -533,6 +533,7 @@ class WhisperServerManager extends EventEmitter {
     // Remember the options so a wake re-warm can reload with the same VAD/thread
     // signature and survive start()'s no-op guard on the next dictation. See #766.
     this.lastStartOptions = { ...options };
+    delete this.lastStartOptions.policyMemoryOnly;
 
     const threadResolution = resolveWhisperThreads(options);
     const nextThreadSignature = getThreadSignature(threadResolution);

@@ -2336,7 +2336,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           throw errorFromIpcResult(metadata.localPolicyRefusal);
         }
         // Judges the saved model, not parakeetModel: its default is for guests and
-        // unmanaged users, and a blank under a managed policy must never reach it.
+        // unmanaged users, so a settled managed policy refuses a blank here.
         const savedLocalModel =
           localProvider === "cohere"
             ? settings.cohereModel

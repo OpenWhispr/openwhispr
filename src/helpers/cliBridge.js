@@ -378,7 +378,7 @@ class CliBridge {
       if (!match) {
         const err = new Error(
           requested
-            ? `Unknown model '${requested}'. Available: ${models.map((m) => m.model).join(", ")}`
+            ? `Unknown model '${requested}'. Known models: ${models.map((m) => m.model).join(", ")}`
             : "No local transcription model is selected. Choose one in OpenWhispr under Settings → Speech to Text, or pass 'model'."
         );
         err.code = "VALIDATION";
