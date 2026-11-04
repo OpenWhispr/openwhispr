@@ -10,13 +10,18 @@ const VENDORED = [
   "registrySchema.cjs",
   "registryEnvelope.cjs",
   "registrySelection.js",
+  "registryBundle.json",
 ];
 
 // A copy beside the repo's node_modules, so the vendored reader's `zod` import resolves.
 function vendoredCopy(t) {
   const dir = fs.mkdtempSync(path.join(__dirname, "../../node_modules/.cache-sync-check-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  for (const name of VENDORED) fs.copyFileSync(path.join(models, name), path.join(dir, name));
+  for (const name of VENDORED) {
+    // registryBundle.json exists only once the app pins a signed publication.
+    if (fs.existsSync(path.join(models, name)))
+      fs.copyFileSync(path.join(models, name), path.join(dir, name));
+  }
   return dir;
 }
 
