@@ -194,19 +194,28 @@ export function createProductEvents({
     return run;
   }
 
-  function enqueue(event: Omit<QueuedEvent, 'identity_generation'>): Promise<void> {
+  /**
+   * Queues an event once. `admit` decides, in the same write, whether it is
+   * still wanted and what else changes with it; null leaves it unqueued.
+   */
+  function enqueue(
+    event: Omit<QueuedEvent, 'identity_generation'>,
+    admit: (current: State) => Partial<State> | null = () => ({}),
+  ): Promise<boolean> {
     return withState((current) => {
       if (
         current.events.some((queued) => queued.event_id === event.event_id) ||
         current.acknowledgedBindings.includes(event.event_id.toLowerCase())
       ) {
-        return { result: undefined };
+        return { result: false };
       }
+      const changes = admit(current);
+      if (!changes) return { result: false };
       const events = [...current.events, { ...event, identity_generation: current.generation }];
       return {
         // Oldest first out when full.
-        next: { ...current, events: events.slice(-MAX_QUEUED_EVENTS) },
-        result: undefined,
+        next: { ...current, ...changes, events: events.slice(-MAX_QUEUED_EVENTS) },
+        result: true,
       };
     });
   }
@@ -386,28 +395,15 @@ export function createProductEvents({
     if (blockedSessions.has(identityKey(identity) as string)) return;
     const practice = isOnboarding();
     const counts = !practice && !retranscribe;
-    // One recording is one event, however often a path reports it.
-    const eventId = await uuidFromKey(`dictation_completed:${captureId}`);
     const occurredAt = new Date(now()).toISOString();
-    const recorded = await withState((current) => {
-      const counted = current.dictationWords[identity.userId] ?? 0;
-      if (
-        // Usage Analytics is read as the event is written: it may go off while
-        // the id is derived.
-        !isAllowed() ||
-        counted >= DICTATION_WORDS_NEEDED ||
-        current.events.some((queued) => queued.event_id === eventId) ||
-        (counts && words === null && current.uncountedDictations.includes(identity.userId))
-      ) {
-        return { result: false };
-      }
-      const event: QueuedEvent = {
-        event_id: eventId,
+    const queued = await enqueue(
+      {
+        // One recording is one event, however often a path reports it.
+        event_id: await uuidFromKey(`dictation_completed:${captureId}`),
         event_name: 'dictation_completed',
         occurred_at: occurredAt,
         owner_user_id: identity.userId,
         owner_is_anonymous: false,
-        identity_generation: current.generation,
         app_version: appVersion,
         flow_version: null,
         properties: {
@@ -419,24 +415,25 @@ export function createProductEvents({
           is_retranscribe: retranscribe,
         },
         captured_at: occurredAt,
-      };
-      return {
-        next: {
-          ...current,
-          events: [...current.events, event].slice(-MAX_QUEUED_EVENTS),
-          dictationWords:
-            counts && words !== null
-              ? { ...current.dictationWords, [identity.userId]: counted + words }
-              : current.dictationWords,
-          uncountedDictations:
-            counts && words === null
-              ? [...current.uncountedDictations, identity.userId]
-              : current.uncountedDictations,
-        },
-        result: true,
-      };
-    });
-    if (recorded) await flush();
+      },
+      (current) => {
+        const counted = current.dictationWords[identity.userId] ?? 0;
+        if (
+          // Usage Analytics is read as the event is written: it may go off
+          // while the id is derived.
+          !isAllowed() ||
+          counted >= DICTATION_WORDS_NEEDED ||
+          (counts && words === null && current.uncountedDictations.includes(identity.userId))
+        ) {
+          return null;
+        }
+        if (!counts) return {};
+        return words === null
+          ? { uncountedDictations: [...current.uncountedDictations, identity.userId] }
+          : { dictationWords: { ...current.dictationWords, [identity.userId]: counted + words } };
+      },
+    );
+    if (queued) await flush();
   }
 
   function flush(): Promise<void> {
