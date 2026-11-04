@@ -34,6 +34,7 @@ export const {
   createSpace,
   renameSpace,
   deleteSpace,
+  restoreSpace,
   assignTeamToSpace,
   setSpaceTeamAccess,
   unassignTeamFromSpace,

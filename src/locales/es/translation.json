@@ -2723,7 +2723,10 @@
           "deletingAction": "Eliminando…",
           "deleteFailedTitle": "No se pudo eliminar {{space}}",
           "deleteFailedBody": "El teamspace sigue disponible. Comprueba tu conexión e inténtalo de nuevo.",
-          "deleted": "{{space}} se eliminó."
+          "deleted": "{{space}} se eliminó.",
+          "restored": "Se restauró {{space}}",
+          "restoreFailed": "No se pudo restaurar {{space}}. Inténtalo de nuevo.",
+          "restoreNameTaken": "No se pudo restaurar {{space}}. Otro teamspace tiene ese nombre."
         },
         "addPeople": {
           "loading": "Cargando teamspaces…",

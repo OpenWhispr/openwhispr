@@ -100,6 +100,10 @@ async function remove(spaceId: string): Promise<void> {
   await cloudDelete(`/api/spaces/${spaceId}`);
 }
 
+async function restore(spaceId: string): Promise<void> {
+  await cloudPatch(`/api/spaces/${spaceId}`, { archived: false });
+}
+
 // The teams POST upserts: with access it also updates an existing
 // assignment's cap; without it the server keeps the current value.
 async function assignTeam(spaceId: string, teamId: string, access?: TeamRole): Promise<void> {
@@ -185,6 +189,7 @@ export const SpacesService = {
   create,
   update,
   remove,
+  restore,
   assignTeam,
   unassignTeam,
   listMembers,

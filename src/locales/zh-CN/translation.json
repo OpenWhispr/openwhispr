@@ -2671,7 +2671,10 @@
           "deletingAction": "正在删除…",
           "deleteFailedTitle": "无法删除 {{space}}",
           "deleteFailedBody": "该 Teamspace 仍可使用。请检查网络连接后重试。",
-          "deleted": "{{space}} 已被删除。"
+          "deleted": "{{space}} 已被删除。",
+          "restored": "{{space}} 已恢复",
+          "restoreFailed": "无法恢复 {{space}}。请重试。",
+          "restoreNameTaken": "无法恢复 {{space}}。已有其他 Teamspace 使用此名称。"
         },
         "addPeople": {
           "loading": "正在加载 Teamspace…",

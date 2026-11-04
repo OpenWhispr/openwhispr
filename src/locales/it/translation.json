@@ -2671,7 +2671,10 @@
           "deletingAction": "Eliminazione…",
           "deleteFailedTitle": "Impossibile eliminare {{space}}",
           "deleteFailedBody": "Il teamspace è ancora disponibile. Controlla la connessione e riprova.",
-          "deleted": "{{space}} è stato eliminato."
+          "deleted": "{{space}} è stato eliminato.",
+          "restored": "{{space}} è stato ripristinato",
+          "restoreFailed": "Impossibile ripristinare {{space}}. Riprova.",
+          "restoreNameTaken": "Impossibile ripristinare {{space}}. Un altro teamspace ha questo nome."
         },
         "addPeople": {
           "loading": "Caricamento dei teamspace…",

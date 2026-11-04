@@ -36,6 +36,7 @@ export interface SpaceActionsDependencies {
     ) => Promise<MySpace>;
     update: (spaceId: string, updates: SpaceUpdatePatch) => Promise<SpaceRecord>;
     remove: (spaceId: string) => Promise<void>;
+    restore: (spaceId: string) => Promise<void>;
     assignTeam: (spaceId: string, teamId: string, access?: "admin" | "member") => Promise<void>;
     unassignTeam: (spaceId: string, teamId: string) => Promise<void>;
     setMemberRole: (spaceId: string, userId: string, role: TeamRole) => Promise<void>;
@@ -228,6 +229,20 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     return deps.local.purgeSpace(space.id);
   }
 
+  async function restoreSpace(cloudSpaceId: string): Promise<void> {
+    await deps.spaces.restore(cloudSpaceId);
+    // The delete's guard would keep a live space out of the mirror for its whole TTL.
+    await deps.releasePurgedSpace(cloudSpaceId);
+    try {
+      await refreshSpaceMirror();
+    } catch (err) {
+      // The server has it back, so this isn't a failed restore: the sync pass mirrors it instead.
+      console.error("Space restore mirror refresh failed:", err);
+    }
+    // The purge dropped the space's notes from this device; the sync pass backfills them.
+    deps.sync.requestSyncAll("manual");
+  }
+
   async function assignTeamToSpace(space: SpaceItem, teamId: string): Promise<void> {
     await deps.spaces.assignTeam(requireCloudSpaceId(space), teamId);
     await refreshSpaceMirror();
@@ -375,6 +390,7 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     createSpace,
     renameSpace,
     deleteSpace,
+    restoreSpace,
     assignTeamToSpace,
     setSpaceTeamAccess,
     unassignTeamFromSpace,

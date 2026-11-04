@@ -2671,7 +2671,10 @@
           "deletingAction": "正在刪除…",
           "deleteFailedTitle": "無法刪除 {{space}}",
           "deleteFailedBody": "該 Teamspace 仍可使用。請檢查網路連線後再試一次。",
-          "deleted": "{{space}} 已被刪除。"
+          "deleted": "{{space}} 已被刪除。",
+          "restored": "{{space}} 已還原",
+          "restoreFailed": "無法還原 {{space}}。請再試一次。",
+          "restoreNameTaken": "無法還原 {{space}}。已有其他 Teamspace 使用此名稱。"
         },
         "addPeople": {
           "loading": "正在載入 Teamspace…",

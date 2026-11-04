@@ -29,9 +29,9 @@ test.before(async (t) => {
       // The API client reads the language from here, and the real one starts i18next.
       "/i18n": "export default { t: (key) => key, language: 'en' };",
       "/ui/useToast":
-        "export const useToast = () => ({ toast: (toast) => globalThis.__toasts.push(toast) });",
+        "export const useToast = () => ({ toast: (toast) => `toast-${globalThis.__toasts.push(toast)}`, dismiss: (id) => globalThis.__dismissed.push(id) });",
       "/services/spaceActions":
-        "export const deleteSpace = (...args) => globalThis.__deleteSpace(...args);",
+        "export const deleteSpace = (...args) => globalThis.__deleteSpace(...args); export const restoreSpace = (...args) => globalThis.__restoreSpace(...args);",
     },
   });
   ({ default: DeleteSpaceDialog } = await vite.ssrLoadModule(
@@ -77,11 +77,20 @@ function deferred() {
 
 async function mount(
   t,
-  { space = CLOUD_SPACE, deleteSpace = async () => ({ success: true }) } = {}
+  {
+    space = CLOUD_SPACE,
+    deleteSpace = async () => ({ success: true }),
+    restoreSpace = async () => {},
+  } = {}
 ) {
   const calls = [];
   const events = [];
   globalThis.__toasts = [];
+  globalThis.__dismissed = [];
+  globalThis.__restoreSpace = async (cloudSpaceId) => {
+    calls.push(["restoreSpace", cloudSpaceId]);
+    return restoreSpace(cloudSpaceId);
+  };
   globalThis.__deleteSpace = async (target) => {
     calls.push(["deleteSpace", target]);
     return deleteSpace(target);
@@ -103,7 +112,9 @@ async function mount(
   t.after(async () => {
     await React.act(async () => root.unmount());
     container.remove();
-    for (const name of ["__toasts", "__deleteSpace"]) delete globalThis[name];
+    for (const name of ["__toasts", "__dismissed", "__deleteSpace", "__restoreSpace"]) {
+      delete globalThis[name];
+    }
   });
   await React.act(async () => {
     root.render(h(Host));
@@ -140,6 +151,80 @@ test("deleting a cloud teamspace has no type-the-name, and blocks Esc while runn
   assert.deepEqual(toastTitles(), ["Customer Calls was deleted."]);
   assert.deepEqual(events, [["deleted"], ["close"]]);
   assert.equal(dialog(), null);
+});
+
+async function deleteAndGetUndo(t, options) {
+  const mounted = await mount(t, options);
+  await ui.click(buttonNamed("Delete teamspace"));
+  await ui.settle();
+  const [deleted] = toasts();
+  return { ...mounted, deleted, undo: deleted.actions[0] };
+}
+
+test("the delete toast offers Undo for ten seconds and stays up while it runs", async (t) => {
+  const { deleted, undo } = await deleteAndGetUndo(t);
+
+  assert.equal(deleted.duration, 10_000);
+  assert.equal(undo.label, "Undo");
+  assert.equal(undo.dismissOnClick, false, "a failed restore keeps it up for another try");
+});
+
+test("Undo restores the teamspace and says so", async (t) => {
+  const { calls, undo } = await deleteAndGetUndo(t);
+
+  await undo.onClick();
+
+  assert.deepEqual(calls.at(-1), ["restoreSpace", "cloud-1"]);
+  assert.deepEqual(globalThis.__dismissed, ["toast-1"]);
+  assert.equal(readable(toasts()[1].title), "Customer Calls restored");
+});
+
+test("a failed Undo keeps the toast up and says so", async (t) => {
+  const { undo } = await deleteAndGetUndo(t, {
+    restoreSpace: async () => {
+      throw new Error("offline");
+    },
+  });
+
+  await undo.onClick();
+
+  assert.deepEqual(globalThis.__dismissed, []);
+  assert.equal(readable(toasts()[1].title), "Couldn't restore Customer Calls. Try again.");
+  assert.equal(toasts()[1].variant, "destructive");
+});
+
+test("Undo into a taken name says why", async (t) => {
+  const { CloudApiError } = await vite.ssrLoadModule("/services/cloudApi.ts");
+  const { undo } = await deleteAndGetUndo(t, {
+    restoreSpace: async () => {
+      throw new CloudApiError(
+        "A teamspace called Customer Calls already exists",
+        409,
+        "space_name_taken"
+      );
+    },
+  });
+
+  await undo.onClick();
+
+  assert.deepEqual(globalThis.__dismissed, []);
+  assert.equal(
+    readable(toasts()[1].title),
+    "Couldn't restore Customer Calls. Another teamspace has that name."
+  );
+});
+
+test("pressing Undo twice restores once", async (t) => {
+  const answer = deferred();
+  const { calls, undo } = await deleteAndGetUndo(t, { restoreSpace: () => answer.promise });
+
+  const first = undo.onClick();
+  await undo.onClick();
+  answer.resolve();
+  await first;
+
+  assert.equal(calls.filter((call) => call[0] === "restoreSpace").length, 1);
+  assert.equal(toasts().length, 2, "one delete toast, one restored toast");
 });
 
 test("a failed delete offers Try again and keeps the teamspace", async (t) => {

@@ -2650,7 +2650,10 @@
           "deletingAction": "Excluindo…",
           "deleteFailedTitle": "Não foi possível excluir {{space}}",
           "deleteFailedBody": "O teamspace continua disponível. Verifique sua conexão e tente novamente.",
-          "deleted": "{{space}} foi excluído."
+          "deleted": "{{space}} foi excluído.",
+          "restored": "{{space}} foi restaurado",
+          "restoreFailed": "Não foi possível restaurar {{space}}. Tente novamente.",
+          "restoreNameTaken": "Não foi possível restaurar {{space}}. Outro teamspace tem esse nome."
         },
         "addPeople": {
           "loading": "Carregando teamspaces…",

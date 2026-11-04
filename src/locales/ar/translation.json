@@ -4079,7 +4079,10 @@
           "deletingAction": "جارٍ الحذف…",
           "deleteFailedTitle": "تعذّر حذف {{space}}",
           "deleteFailedBody": "لا تزال مساحة الفريق متاحة. تحقق من اتصالك وحاول مرة أخرى.",
-          "deleted": "تم حذف {{space}}."
+          "deleted": "تم حذف {{space}}.",
+          "restored": "تمت استعادة {{space}}",
+          "restoreFailed": "تعذّرت استعادة {{space}}. حاول مرة أخرى.",
+          "restoreNameTaken": "تعذّرت استعادة {{space}}. توجد مساحة فريق أخرى بهذا الاسم."
         },
         "addPeople": {
           "loading": "جارٍ تحميل مساحات الفريق…",

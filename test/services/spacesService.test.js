@@ -176,6 +176,17 @@ test("SpacesService.coverage posts user_ids and unwraps the per-space counts", a
   assert.deepEqual(coverage, counts);
 });
 
+test("SpacesService.restore patches archived off", async (t) => {
+  const requests = installCloudCapture(t, { id: "space-1" });
+  const { SpacesService } = require("../../src/services/SpacesService.ts");
+
+  await SpacesService.restore("space-1");
+
+  assert.equal(requests[0].method, "PATCH");
+  assert.equal(requests[0].path, "/api/spaces/space-1");
+  assert.deepEqual(requests[0].body, { archived: false });
+});
+
 test("SpacesService.join posts to the join route and unwraps the outcome", async (t) => {
   const requests = installCloudCapture(t, { joined: true });
   const { SpacesService } = require("../../src/services/SpacesService.ts");

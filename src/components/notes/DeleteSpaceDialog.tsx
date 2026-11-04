@@ -6,10 +6,14 @@ import { useToast } from "../ui/useToast";
 import { WorkspaceActionDialog } from "../workspace/WorkspaceActionDialog";
 import { confirmActionReducer } from "../../lib/confirmActionFlow";
 import { localMutationErrorKey } from "../../lib/localMutationError";
-import { rowActionErrorOf } from "../../lib/workspaceErrors";
-import { deleteSpace } from "../../services/spaceActions";
+import { classifySpaceError, rowActionErrorOf } from "../../lib/workspaceErrors";
+import { deleteSpace, restoreSpace } from "../../services/spaceActions";
 import { isolate } from "../../utils/bidiIsolate";
 import type { SpaceItem } from "../../types/electron";
+
+// Longer than a note edit's Undo: this delete removes the teamspace for everyone, and the plain
+// confirm asks for no name, so the toast is what catches a slip.
+const DELETE_UNDO_WINDOW_MS = 10_000;
 
 interface DeleteSpaceDialogProps {
   space: SpaceItem | null;
@@ -36,6 +40,7 @@ export default function DeleteSpaceDialog({
       <CloudDeleteSpaceDialog
         key={space.id}
         space={space}
+        cloudSpaceId={space.cloud_space_id}
         onClose={onClose}
         onDeleted={onDeleted}
       />
@@ -46,6 +51,7 @@ export default function DeleteSpaceDialog({
 
 interface CloudDeleteSpaceDialogProps {
   space: SpaceItem;
+  cloudSpaceId: string;
   onClose: () => void;
   onDeleted?: () => void;
 }
@@ -54,11 +60,12 @@ interface CloudDeleteSpaceDialogProps {
 // the dialog stays only to report how it went.
 function CloudDeleteSpaceDialog({
   space,
+  cloudSpaceId,
   onClose,
   onDeleted,
 }: CloudDeleteSpaceDialogProps): ReactElement {
   const { t } = useTranslation();
-  const { toast } = useToast();
+  const { toast, dismiss } = useToast();
   const [state, dispatch] = useReducer(confirmActionReducer<SpaceItem>, {
     kind: "confirm",
     subject: space,
@@ -66,6 +73,41 @@ function CloudDeleteSpaceDialog({
   const name = isolate(space.name);
   const busy = state.kind === "running";
   const failed = state.kind === "failed";
+
+  // Runs from the toast, which outlives this dialog.
+  const offerUndo = (cloudSpaceId: string): void => {
+    let restoring = false;
+    const toastId = toast({
+      title: t("settingsPage.workspace.teamspaces.exit.deleted", { space: name }),
+      duration: DELETE_UNDO_WINDOW_MS,
+      actions: [
+        {
+          label: t("app.toasts.undo"),
+          // A failed restore keeps the toast up for another try.
+          dismissOnClick: false,
+          onClick: async () => {
+            if (restoring) return;
+            restoring = true;
+            try {
+              await restoreSpace(cloudSpaceId);
+              dismiss(toastId);
+              toast({
+                title: t("settingsPage.workspace.teamspaces.exit.restored", { space: name }),
+              });
+            } catch (error) {
+              const copy =
+                classifySpaceError(error).kind === "nameTaken"
+                  ? "settingsPage.workspace.teamspaces.exit.restoreNameTaken"
+                  : "settingsPage.workspace.teamspaces.exit.restoreFailed";
+              toast({ title: t(copy, { space: name }), variant: "destructive" });
+            } finally {
+              restoring = false;
+            }
+          },
+        },
+      ],
+    });
+  };
 
   const run = async (): Promise<void> => {
     dispatch({ type: "confirm" });
@@ -79,7 +121,7 @@ function CloudDeleteSpaceDialog({
       dispatch({ type: "failed", error: { kind: "failed" } });
       return;
     }
-    toast({ title: t("settingsPage.workspace.teamspaces.exit.deleted", { space: name }) });
+    offerUndo(cloudSpaceId);
     dispatch({ type: "succeeded" });
     onDeleted?.();
     onClose();

@@ -1942,7 +1942,10 @@
           "deletingAction": "Wird gelöscht…",
           "deleteFailedTitle": "{{space}} konnte nicht gelöscht werden",
           "deleteFailedBody": "Der Teamspace ist weiterhin verfügbar. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
-          "deleted": "{{space}} wurde gelöscht."
+          "deleted": "{{space}} wurde gelöscht.",
+          "restored": "{{space}} wurde wiederhergestellt",
+          "restoreFailed": "{{space}} konnte nicht wiederhergestellt werden. Versuchen Sie es erneut.",
+          "restoreNameTaken": "{{space}} konnte nicht wiederhergestellt werden. Ein anderer Teamspace hat diesen Namen."
         },
         "addPeople": {
           "loading": "Teamspaces werden geladen…",

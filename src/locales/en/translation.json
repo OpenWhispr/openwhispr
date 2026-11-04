@@ -1942,7 +1942,10 @@
           "deletingAction": "Deleting…",
           "deleteFailedTitle": "Couldn't delete {{space}}",
           "deleteFailedBody": "The teamspace is still available. Check your connection and try again.",
-          "deleted": "{{space}} was deleted."
+          "deleted": "{{space}} was deleted.",
+          "restored": "{{space}} restored",
+          "restoreFailed": "Couldn't restore {{space}}. Try again.",
+          "restoreNameTaken": "Couldn't restore {{space}}. Another teamspace has that name."
         },
         "addPeople": {
           "loading": "Loading teamspaces…",

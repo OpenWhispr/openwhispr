@@ -2711,7 +2711,10 @@
           "deletingAction": "Удаление…",
           "deleteFailedTitle": "Не удалось удалить {{space}}",
           "deleteFailedBody": "Teamspace по-прежнему доступен. Проверьте подключение и повторите попытку.",
-          "deleted": "{{space}} удалён."
+          "deleted": "{{space}} удалён.",
+          "restored": "{{space}} восстановлен",
+          "restoreFailed": "Не удалось восстановить {{space}}. Повторите попытку.",
+          "restoreNameTaken": "Не удалось восстановить {{space}}. Другой Teamspace уже использует это название."
         },
         "addPeople": {
           "loading": "Загрузка teamspaces…",

@@ -42,6 +42,9 @@ function makeHarness() {
         calls.push(["space.removeMember", spaceId, userId]);
         return { removed: true, still_via_teams: [] };
       },
+      restore: async (spaceId) => {
+        calls.push(["space.restore", spaceId]);
+      },
       join: async (spaceId) => {
         calls.push(["space.join", spaceId]);
         return { joined: true };
@@ -436,6 +439,48 @@ test("createSpace sends the description and both flags when given", async () => 
       team_ids: [],
     },
   ]);
+});
+
+test("a restore clears the purge guard before refreshing, so the teamspace comes straight back", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps } = makeHarness();
+  const actions = createSpaceActions(deps);
+
+  await actions.restoreSpace("cloud-space-1");
+
+  const order = calls.map((call) => call[0]);
+  assert.deepEqual(calls[0], ["space.restore", "cloud-space-1"]);
+  assert.deepEqual(calls[1], ["releasePurgedSpace", "cloud-space-1"]);
+  assert.ok(order.indexOf("releasePurgedSpace") < order.indexOf("space.mySpaces"));
+  assert.ok(order.indexOf("releasePurgedSpace") < order.indexOf("mirror.upsert"));
+  assert.deepEqual(calls.at(-1), ["sync", "manual"]);
+});
+
+test("a refused restore leaves the guard and the mirror alone", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps } = makeHarness();
+  const failure = new Error("name taken");
+  deps.spaces.restore = async () => {
+    throw failure;
+  };
+  const actions = createSpaceActions(deps);
+
+  await assert.rejects(actions.restoreSpace("cloud-space-1"), failure);
+  assert.deepEqual(calls, []);
+});
+
+test("a failed mirror refresh after a restore isn't a failed restore", async (t) => {
+  const { createSpaceActions } = await load();
+  const { calls, deps } = makeHarness();
+  deps.spaces.mySpaces = async () => {
+    throw new Error("offline");
+  };
+  t.mock.method(console, "error", () => {});
+  const actions = createSpaceActions(deps);
+
+  await actions.restoreSpace("cloud-space-1");
+
+  assert.deepEqual(calls.at(-1), ["sync", "manual"]);
 });
 
 test("joining refreshes the mirror and asks for a sync", async () => {

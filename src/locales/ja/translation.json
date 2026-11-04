@@ -2671,7 +2671,10 @@
           "deletingAction": "削除中…",
           "deleteFailedTitle": "{{space}} を削除できませんでした",
           "deleteFailedBody": "Teamspace はまだ利用できます。接続を確認して、もう一度お試しください。",
-          "deleted": "{{space}} を削除しました。"
+          "deleted": "{{space}} を削除しました。",
+          "restored": "{{space}} を復元しました",
+          "restoreFailed": "{{space}} を復元できませんでした。もう一度お試しください。",
+          "restoreNameTaken": "{{space}} を復元できませんでした。同じ名前の Teamspace がすでにあります。"
         },
         "addPeople": {
           "loading": "Teamspace を読み込んでいます…",
