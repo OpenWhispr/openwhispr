@@ -11,6 +11,7 @@ const mockSentryClose = jest.fn(() => Promise.resolve(true));
 let mockSessionReady: (() => void) | undefined;
 
 jest.mock('react-native', () => ({ Platform: { OS: 'android' } }));
+jest.mock('@/store/useConfigStore', () => jest.requireActual('@/store/useConfigStore.android'));
 jest.mock('@/services/storage/StorageService', () => ({
   StorageService: {
     saveConfig: (config: unknown) => mockSaveConfig(config),
@@ -122,3 +123,5 @@ it.each(['resolve', 'reject'] as const)(
     expect(mockSentryInit).toHaveBeenCalledTimes(1);
   },
 );
+
+jest.mock('../appsFlyerLifecycle', () => jest.requireActual('../appsFlyerLifecycle.android'));

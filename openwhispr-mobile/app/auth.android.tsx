@@ -3,7 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import AuthScreen from '@/screens/AuthScreen';
 import { requiresRealAccount } from '@/lib/accountAccess';
 import { useAuthStore } from '@/store/useAuthStore';
-import { useUsageStore } from '@/store/useUsageStore';
+import { useUsageStore } from '@/store/useUsageStore.android';
 
 export default function AuthRoute() {
   const params = useLocalSearchParams<{ returnTo?: string; superwallPlacement?: string }>();

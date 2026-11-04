@@ -4,6 +4,8 @@ import { Alert, Platform, Text } from 'react-native';
 import { SwipeableCard } from '../SwipeableCard';
 import { confirmDestructive } from '@/lib/alerts';
 
+jest.mock('../SwipeableCard', () => jest.requireActual('../SwipeableCard.android'));
+
 let mockPan: { update?: (event: { translationX: number }) => void; end?: () => void } = {};
 const mockValues: { value: number }[] = [];
 jest.mock('react-native-gesture-handler', () => ({

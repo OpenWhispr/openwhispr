@@ -1,3 +1,15 @@
+jest.mock('../NotesListScreen', () => {
+  const Default = jest.requireActual('../NotesListScreen').default;
+  const Android = jest.requireActual('../NotesListScreen.android').default;
+  return {
+    __esModule: true,
+    default: function NotesListScreenFixture() {
+      return require('react').createElement(
+        require('react-native').Platform.OS === 'android' ? Android : Default,
+      );
+    },
+  };
+});
 import { act, render } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
@@ -95,6 +107,7 @@ beforeEach(() => {
   mockState.folders = [];
   mockState.activeFolderId = null;
   mockState.activeSpaceId = null;
+  mockState.isInitialized = true;
   mockState.setActiveFolderId.mockImplementation((id: number | null) => {
     mockState.activeFolderId = id;
     mockState.activeSpaceId = null;
@@ -156,6 +169,7 @@ describe('NotesListScreen Record meeting', () => {
   it.each([{ folderId: '5' }, { spaceId: '3' }, {}])(
     'pins import context %j in its route',
     (params) => {
+      Platform.OS = 'android';
       mockParams = params as Record<string, string>;
       render(<NotesListScreen />);
       mockFabActionPress?.('import');

@@ -1,3 +1,7 @@
+jest.mock('@/services/storage/StorageService.android', () =>
+  jest.requireMock('@/services/storage/StorageService'),
+);
+jest.mock('@/lib/transcriptAudio.android', () => jest.requireMock('@/lib/transcriptAudio'));
 let mockHistoryScope: { owner: string; key: string; revision: number } | null = null;
 jest.mock('@/lib/transcriptScope', () => ({
   captureTranscriptScope: () => mockHistoryScope,
@@ -92,6 +96,8 @@ import type { Transcript } from '@/types';
 import { withActiveProviderJob } from '@/lib/providerJobActivity';
 
 const { useTranscriptStore } =
+  require('../useTranscriptStore.android') as typeof import('../useTranscriptStore.android');
+const { useTranscriptStore: iosTranscriptStore } =
   require('../useTranscriptStore') as typeof import('../useTranscriptStore');
 
 const failedTranscript = (overrides: Partial<Transcript> = {}): Transcript => ({
@@ -578,15 +584,22 @@ it('retries a Cloud recording on-device after switching to private mode', async 
 
 // Local Mode keeps dictation on this phone, but an upload follows what is chosen for uploads.
 it('retries an upload in Local Mode on the route chosen for uploads', async () => {
+  iosTranscriptStore.setState({
+    transcripts: [],
+    currentTranscript: null,
+    isLoading: false,
+    isLoaded: true,
+    error: null,
+  });
   mockProcessingModeState.activeMode = 'private';
   mockSnapshotTranscriptionJob.mockReturnValueOnce({
     provider: 'cloud',
     cleanupRoute: { mode: 'openwhispr', scope: 'cleanup' },
   });
-  useTranscriptStore.setState({
+  iosTranscriptStore.setState({
     transcripts: [failedTranscript({ provider: 'local', requestContext: 'file' })],
   });
-  await useTranscriptStore.getState().retryTranscript('t1');
+  await iosTranscriptStore.getState().retryTranscript('t1');
   expect(mockSnapshotTranscriptionJob).toHaveBeenCalledWith('upload');
   expect(mockTranscribeAndCleanup).toHaveBeenCalledWith(
     expect.objectContaining({ provider: 'cloud' }),

@@ -34,7 +34,7 @@ import { CLEANUP_TIMEOUT_MS } from '../../lib/cleanupTranscript';
 import { withRetry } from '../../lib/retry';
 import { wordLimitErrorFromBody } from './wordLimit';
 import { transcriptionPolicyErrorFromResponse } from './policyErrors';
-import { abortError } from '../providers/NativeProviderTransport';
+import { transcriptionLifecycle } from './transcriptionLifecycle';
 import { uploadTranscriptionAudio } from './uploadTranscriptionAudio';
 
 const TRANSCRIBE_ENDPOINT = '/api/transcribe';
@@ -266,9 +266,9 @@ const uploadWithRetry = async (
   try {
     return await withRetry(
       async () => {
-        if (signal?.aborted) throw abortError('Transcription cancelled.');
+        transcriptionLifecycle.assertCurrent({ signal });
         const response = await upload();
-        if (signal?.aborted) throw abortError('Transcription cancelled.');
+        transcriptionLifecycle.assertCurrent({ signal });
         if (isTransientUploadStatus(response.status)) {
           throw new TranscriptionApiError(label, response.status, response.body);
         }
@@ -277,8 +277,7 @@ const uploadWithRetry = async (
       {
         maxRetries: UPLOAD_MAX_RETRIES,
         initialDelay: UPLOAD_INITIAL_RETRY_DELAY_MS,
-        shouldRetry: (error) =>
-          !signal?.aborted && !(error instanceof Error && error.name === 'AbortError'),
+        ...transcriptionLifecycle.uploadRetryOptions(signal),
         onRetry: (attempt, error, delayMs) => {
           if (__DEV__) {
             console.warn(
@@ -420,7 +419,7 @@ export class TranscriptionService {
     error: unknown,
   ): boolean {
     return (
-      !request.signal?.aborted &&
+      !transcriptionLifecycle.cancellationRequested(request) &&
       request.requestContext === 'keyboard' &&
       request.provider === 'cloud' &&
       !isWavAudio(request) &&
@@ -488,7 +487,7 @@ export class TranscriptionService {
       signal?: AbortSignal;
     } = {},
   ): Promise<TranscriptionResponse> {
-    if (options.signal?.aborted) throw abortError('Transcription cancelled.');
+    transcriptionLifecycle.assertCurrent(options);
     const sessionCookie = useAuthStore.getState().sessionCookie;
     if (!sessionCookie) {
       throw new Error('Not authenticated. Please sign in to use cloud transcription.');
@@ -532,7 +531,7 @@ export class TranscriptionService {
     }
     if (options.requestContext) {
       parameters.requestContext = options.requestContext;
-      if (options.requestContext === 'file') parameters.source = 'file_upload';
+      Object.assign(parameters, transcriptionLifecycle.uploadParameters(options.requestContext));
     }
     if (options.purpose) {
       parameters.purpose = options.purpose;
@@ -576,7 +575,7 @@ export class TranscriptionService {
     };
 
     const fileSizeBytes = await getFileSizeBytes(audioUri);
-    if (options.signal?.aborted) throw abortError('Transcription cancelled.');
+    transcriptionLifecycle.assertCurrent(options);
 
     // The gateway rejects bodies over ~4.5MB and the cloud only detects certain
     // container formats, so large or undecodable audio is split and uploaded as
@@ -600,7 +599,7 @@ export class TranscriptionService {
           'audio/ogg',
           parameters,
           sessionCookie,
-          options.signal,
+          transcriptionLifecycle.signalOptions(options).signal,
           durationMs,
         );
       }
@@ -608,14 +607,14 @@ export class TranscriptionService {
         const { chunks, durationMs } = await AudioTools.splitToChunks(
           audioUri,
           CLOUD_CHUNK_SECONDS,
-          options.signal,
+          ...transcriptionLifecycle.signalArguments(options),
         );
         return this.transcribeChunked(
           chunks,
           'audio/wav',
           parameters,
           sessionCookie,
-          options.signal,
+          transcriptionLifecycle.signalOptions(options).signal,
           durationMs,
         );
       }
@@ -662,10 +661,10 @@ export class TranscriptionService {
                 parameters,
                 headers,
               },
-              options.signal,
+              ...transcriptionLifecycle.signalArguments(options),
             ),
       endpointLabel,
-      options.signal,
+      ...transcriptionLifecycle.signalArguments(options),
     );
     const uploadMs = Date.now() - uploadStartedAt;
 
@@ -836,8 +835,9 @@ export class TranscriptionService {
 
       const worker = async (): Promise<void> => {
         while (firstError === null) {
-          if (signal?.aborted) {
-            firstError = abortError('Transcription cancelled.');
+          const cancellation = transcriptionLifecycle.cancellationError(signal);
+          if (cancellation) {
+            firstError = cancellation;
             return;
           }
           const index = nextIndex++;
@@ -878,7 +878,11 @@ export class TranscriptionService {
       if (firstError !== null) throw firstError;
       const text = stitchChunkTexts(texts);
       if (Platform.OS === 'android' && !text) throw new Error('No speech detected');
-      return { text, duration: durationMs / 1000, provider: 'cloud' };
+      return {
+        text,
+        duration: transcriptionLifecycle.chunkDuration(durationMs),
+        provider: 'cloud',
+      };
     } finally {
       await AudioTools.cleanup(chunkUris);
     }
@@ -919,7 +923,7 @@ export class TranscriptionService {
         parameters,
         headers: { Cookie: sessionCookie, ...getClientVersionHeader() },
       },
-      signal,
+      ...transcriptionLifecycle.signalArguments({ signal }),
     );
   }
 
@@ -954,7 +958,7 @@ export class TranscriptionService {
     const { getPickedLocalModel } =
       require('@/lib/inferenceRouting') as typeof import('@/lib/inferenceRouting');
     const response = await LocalTranscriptionService.transcribe(audioUri, {
-      signal,
+      ...transcriptionLifecycle.signalOptions({ signal }),
       language,
       prompt: prompt || undefined,
       model: getPickedLocalModel(requestContext === 'file' ? 'upload' : 'dictation'),
@@ -978,7 +982,7 @@ export class TranscriptionService {
   static async transcribeWithCloudCleanup(
     request: TranscriptionRequest,
   ): Promise<TranscriptionResponse> {
-    if (request.signal?.aborted) throw abortError('Transcription cancelled.');
+    transcriptionLifecycle.assertCurrent(request);
     if (fusedCleanupEndpointUnavailable) {
       throw new FusedCleanupUnavailableError('Fused cleanup endpoint already marked unavailable');
     }
@@ -1025,7 +1029,7 @@ export class TranscriptionService {
           purpose: candidate.purpose,
           clientTranscriptionId: candidate.clientTranscriptionId,
           fusedCleanup: true,
-          signal: candidate.signal,
+          ...transcriptionLifecycle.signalOptions(candidate),
           extraHeaders: {
             'X-OpenWhispr-Cleanup-Timeout-Ms': String(CLEANUP_TIMEOUT_MS),
           },
@@ -1053,7 +1057,7 @@ export class TranscriptionService {
   }
 
   static async transcribe(request: TranscriptionRequest): Promise<TranscriptionResponse> {
-    if (request.signal?.aborted) throw abortError('Transcription cancelled.');
+    transcriptionLifecycle.assertCurrent(request);
     const { audioUri, provider, language } = request;
 
     const runCloud = (candidate: TranscriptionRequest) =>
@@ -1068,7 +1072,7 @@ export class TranscriptionService {
           purpose: candidate.purpose,
           clientTranscriptionId: candidate.clientTranscriptionId,
           timeoutSeconds: candidate.timeoutSeconds,
-          signal: candidate.signal,
+          ...transcriptionLifecycle.signalOptions(candidate),
         },
       );
 
@@ -1087,7 +1091,7 @@ export class TranscriptionService {
           false,
           scope === 'upload' && Platform.OS !== 'android',
         );
-        if (request.signal?.aborted) throw abortError('Transcription cancelled.');
+        transcriptionLifecycle.assertCurrent(request);
         const recoveryJobId = request.jobId ?? request.clientTranscriptionId;
         const routeSnapshot = recoveryJobId
           ? JSON.stringify({
@@ -1119,7 +1123,7 @@ export class TranscriptionService {
           language,
           prompt: prompt || undefined,
           routeSnapshot,
-          signal: request.signal,
+          ...transcriptionLifecycle.signalOptions(request),
         }).catch((error: unknown) => {
           // Silence leaves nothing to recover, and every caller discards the audio.
           if (recoveryJobId && (error as { code?: unknown })?.code === 'NO_SPEECH') {
@@ -1140,7 +1144,7 @@ export class TranscriptionService {
           audioUri,
           language,
           request.requestContext,
-          request.signal,
+          ...transcriptionLifecycle.signalArguments(request),
         );
 
       case 'cloud':

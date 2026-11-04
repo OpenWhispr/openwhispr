@@ -2,6 +2,7 @@ import { Platform, TextInput } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 import { NoteChatSheet } from '../NoteChatSheet';
 import { getNoteChatSuggestions } from '@/lib/notes/noteChatSuggestions';
+import { getNoteChatSuggestions as getAndroidSuggestions } from '@/lib/notes/noteChatSuggestions.android';
 import type { ChatOverNoteMessage } from '@/lib/notes/chatOverNote';
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -28,7 +29,7 @@ const renderSheet = (overrides: Partial<React.ComponentProps<typeof NoteChatShee
     isProcessing: false,
     error: null,
     canSend: true,
-    suggestions: meetingSuggestions,
+    suggestions: Platform.OS === 'android' ? getAndroidSuggestions(true) : meetingSuggestions,
     onDraftChange: jest.fn(),
     onSend: jest.fn(),
     onSuggestion: jest.fn(),
@@ -103,7 +104,7 @@ it('preserves an Android draft through language changes and retains send/shortcu
   const original = Platform.OS;
   Platform.OS = 'android';
   try {
-    const view = renderSheet({ draft: 'Literal draft', error: 'Literal provider error' });
+    let view = renderSheet({ draft: 'Literal draft', error: 'Literal provider error' });
     mockLanguage = 'ar';
     view.rerender(<NoteChatSheet {...view.props} />);
     expect(view.UNSAFE_getByType(TextInput).props.value).toBe('Literal draft');
@@ -127,11 +128,31 @@ it('preserves an Android draft through language changes and retains send/shortcu
     view.rerender(<NoteChatSheet {...view.props} draft="" canSend={false} />);
     fireEvent.press(view.getByLabelText('سرد المهام'));
     expect(view.props.onSuggestion).toHaveBeenCalledTimes(1);
+    view.unmount();
     Platform.OS = 'ios';
-    view.rerender(<NoteChatSheet {...view.props} />);
+    view = renderSheet(view.props);
     expect(view.getByLabelText('Send question')).toBeTruthy();
   } finally {
     Platform.OS = original;
     mockLanguage = 'en';
+  }
+});
+
+import { ScrollView } from 'react-native';
+
+it.each(['ios', 'android'] as const)('preserves %s empty-chat scroll behavior', (platform) => {
+  const originalPlatform = Platform.OS;
+  Platform.OS = platform;
+  const scroll = jest.spyOn(ScrollView.prototype, 'scrollToEnd').mockImplementation(() => {});
+  try {
+    const view = renderSheet();
+    const messages = view
+      .UNSAFE_getAllByType(ScrollView)
+      .find((node) => node.props.onContentSizeChange);
+    fireEvent(messages!, 'contentSizeChange', 100, 200);
+    expect(scroll).toHaveBeenCalledTimes(platform === 'ios' ? 1 : 0);
+  } finally {
+    scroll.mockRestore();
+    Platform.OS = originalPlatform;
   }
 });

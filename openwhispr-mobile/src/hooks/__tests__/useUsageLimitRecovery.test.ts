@@ -1,9 +1,10 @@
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import type { UsageInfo } from '@/data/remote/usageApi';
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
 import { UsageLimitError } from '@/lib/usageLimitError';
 import { useUsageLimitRecovery } from '../useUsageLimitRecovery';
+import { useUsageLimitRecovery as useAndroidUsageLimitRecovery } from '../useUsageLimitRecovery.android';
 
 const mockRegisterSuperwallGate = jest.fn();
 const mockLoadUsage = jest.fn();
@@ -67,7 +68,12 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 }
 
 describe('useUsageLimitRecovery', () => {
+  const originalPlatform = Platform.OS;
+  afterAll(() => {
+    Platform.OS = originalPlatform;
+  });
   beforeEach(() => {
+    Platform.OS = 'ios';
     jest.clearAllMocks();
     mockRegisterSuperwallGate.mockReset();
     mockLoadUsage.mockReset();
@@ -190,5 +196,22 @@ describe('useUsageLimitRecovery', () => {
 
     expectQuotaGuidance();
     expect(retryWithCloud).not.toHaveBeenCalled();
+  });
+
+  it('keeps Android fallback guidance on Local Mode', async () => {
+    Platform.OS = 'android';
+    mockRegisterSuperwallGate.mockResolvedValue(false);
+    const { result } = renderHook(() => useAndroidUsageLimitRecovery());
+    await act(async () =>
+      result.current.handleUsageLimitReached(
+        new UsageLimitError('Fixture limit', { source: 'transcription' }),
+        jest.fn(),
+      ),
+    );
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Weekly Limit Reached',
+      expect.stringContaining('Turn on Local Mode in Account → AI Models'),
+      expect.any(Array),
+    );
   });
 });

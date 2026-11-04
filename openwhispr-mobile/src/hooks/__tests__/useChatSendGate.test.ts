@@ -44,6 +44,7 @@ jest.mock('@/lib/alerts', () => ({
 }));
 
 import { useChatSendGate } from '../useChatSendGate';
+import { useChatSendGate as useAndroidChatSendGate } from '../useChatSendGate.android';
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -139,7 +140,7 @@ describe('useChatSendGate', () => {
       Platform.OS = 'android';
       mockConfirmCloudOnce.mockImplementation(() => {});
       const run = jest.fn();
-      const { result } = renderHook(() => useChatSendGate());
+      const { result } = renderHook(() => useAndroidChatSendGate());
       result.current.gate(run, { consentMessage: 'Send this?', source: 'chat_tab' });
       if (change === 'account') mockUser = { id: 'b', isAnonymous: false };
       if (change === 'session') mockSessionCookie = 'session-b';
@@ -156,10 +157,104 @@ describe('useChatSendGate', () => {
     Platform.OS = 'android';
     mockRegister.mockResolvedValue(true);
     const run = jest.fn();
-    const { result } = renderHook(() => useChatSendGate());
+    const { result } = renderHook(() => useAndroidChatSendGate());
     result.current.gate(run, { consentMessage: null, source: 'chat_tab' });
     mockUser = { id: 'b', isAnonymous: false };
     mockRegister.mock.calls[0][0].feature();
     expect(run).not.toHaveBeenCalled();
   });
+});
+
+it('preserves the upstream iOS gate when Chat is disabled', () => {
+  mockConfig = { noteChatEnabled: false };
+  const run = jest.fn();
+  const { result } = renderHook(() => useChatSendGate());
+  result.current.gate(run, { consentMessage: null, source: 'chat_tab' });
+  expect(run).toHaveBeenCalledWith(false);
+});
+
+it.each(['before', 'consent', 'paywall'])(
+  'preserves upstream iOS caller-current handling at %s',
+  (stage) => {
+    let current = stage !== 'before';
+    const run = jest.fn();
+    mockRegister.mockResolvedValue(true);
+    mockConfirmCloudOnce.mockImplementation(() => {});
+    const { result } = renderHook(() => useChatSendGate());
+    const options = {
+      source: 'chat_tab' as const,
+      consentMessage: stage === 'consent' ? 'Fixture consent' : null,
+      isCurrent: () => current,
+    };
+    result.current.gate(run, options);
+    current = false;
+    if (stage === 'consent') mockConfirmCloudOnce.mock.calls[0][1]();
+    mockRegister.mock.calls[0][0].feature();
+    expect(run).toHaveBeenCalledWith(stage === 'consent');
+  },
+);
+
+it('keeps the upstream iOS consent argument contract', () => {
+  const { result } = renderHook(() => useChatSendGate());
+  const options = {
+    source: 'note_chat' as const,
+    consentMessage: 'Fixture consent',
+    consentLabels: { title: 'Fixture', cancel: 'No', confirm: 'Yes' },
+  };
+  result.current.gate(jest.fn(), options);
+  expect(mockConfirmCloudOnce).toHaveBeenCalledWith('Fixture consent', expect.any(Function));
+});
+
+it('keeps the default callback stable when only Chat enablement changes', () => {
+  const { result, rerender } = renderHook(() => useChatSendGate());
+  const before = result.current.gate;
+  mockConfig = { ...mockConfig, noteChatEnabled: false };
+  rerender({});
+  expect(result.current.gate).toBe(before);
+});
+
+it('keeps Android disabled-Chat enforcement', () => {
+  Platform.OS = 'android';
+  mockConfig = { noteChatEnabled: false };
+  const run = jest.fn();
+  const { result } = renderHook(() => useAndroidChatSendGate());
+  result.current.gate(run, { consentMessage: null, source: 'chat_tab' });
+  expect(run).not.toHaveBeenCalled();
+  expect(mockRegister).not.toHaveBeenCalled();
+});
+
+it('keeps Android consent labels', () => {
+  Platform.OS = 'android';
+  const { result } = renderHook(() => useAndroidChatSendGate());
+  const consentLabels = { title: 'Fixture', cancel: 'No', confirm: 'Yes' };
+  const options = {
+    source: 'note_chat' as const,
+    consentMessage: 'Fixture consent',
+    consentLabels,
+  };
+  result.current.gate(jest.fn(), options);
+  expect(mockConfirmCloudOnce).toHaveBeenCalledWith(
+    'Fixture consent',
+    expect.any(Function),
+    consentLabels,
+  );
+});
+
+it('keeps Android caller-current enforcement', () => {
+  Platform.OS = 'android';
+  const run = jest.fn();
+  const { result } = renderHook(() => useAndroidChatSendGate());
+  const options = { source: 'chat_tab' as const, consentMessage: null, isCurrent: () => false };
+  result.current.gate(run, options);
+  expect(run).not.toHaveBeenCalled();
+  expect(mockRegister).not.toHaveBeenCalled();
+});
+
+it('updates the Android callback when Chat enablement changes', () => {
+  Platform.OS = 'android';
+  const { result, rerender } = renderHook(() => useAndroidChatSendGate());
+  const before = result.current.gate;
+  mockConfig = { ...mockConfig, noteChatEnabled: false };
+  rerender({});
+  expect(result.current.gate).not.toBe(before);
 });

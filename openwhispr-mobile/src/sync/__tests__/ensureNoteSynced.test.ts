@@ -45,7 +45,8 @@ import { useNotesStore } from '@/store/useNotesStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { requestSync } from '../syncEngine';
 import { useSyncStore } from '../useSyncStore';
-import { ensureNoteSynced } from '../ensureNoteSynced';
+import { ensureNoteSynced } from '../ensureNoteSynced.android';
+import { ensureNoteSynced as ensureDefaultNoteSynced } from '../ensureNoteSynced';
 
 let note: Note;
 let controller: AbortController;
@@ -350,4 +351,27 @@ it('requires Android backup opt-in before sharing a personal note already on the
   } finally {
     backup.mockRestore();
   }
+});
+
+it.each(['anonymous', 'private', 'aborted'] as const)(
+  'preserves an ordinary upstream Error for default sharing when %s',
+  async (reason) => {
+    if (reason === 'anonymous') useAuthStore.setState({ user: null });
+    if (reason === 'private') note = { ...note, isPrivate: 1 };
+    if (reason === 'aborted') controller.abort();
+    const error = await ensureDefaultNoteSynced(1, { signal: controller.signal }).catch(
+      (failure: unknown) => failure,
+    );
+    expect(error).toBeInstanceOf(Error);
+    expect(error).toHaveProperty('name', 'Error');
+    expect(error).not.toHaveProperty('code');
+  },
+);
+
+it('preserves the default backup behavior when the setting is absent', async () => {
+  useConfigStore.setState({
+    config: {} as NonNullable<ReturnType<typeof useConfigStore.getState>['config']>,
+  });
+  note = { ...note, remoteId: 'remote', pendingSync: 0 };
+  await expect(ensureDefaultNoteSynced(1, { signal: controller.signal })).resolves.toBe('remote');
 });

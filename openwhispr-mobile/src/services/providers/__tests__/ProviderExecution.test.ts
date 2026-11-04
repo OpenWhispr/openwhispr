@@ -1,3 +1,12 @@
+jest.mock('../providerFailureMessages', () => ({
+  get providerFailureMessages() {
+    return jest.requireActual(
+      jest.requireActual('react-native').Platform.OS === 'android'
+        ? '../providerFailureMessages.android'
+        : '../providerFailureMessages',
+    ).providerFailureMessages;
+  },
+}));
 const mockCredentialListeners = new Set<(reference: string | null) => void>();
 jest.mock('../ProviderCredentials', () => ({
   getProviderCredential: jest.fn(),

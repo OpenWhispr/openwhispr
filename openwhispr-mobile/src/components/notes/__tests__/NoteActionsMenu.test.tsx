@@ -87,21 +87,27 @@ describe('NoteActionsMenu', () => {
   });
 });
 
-it('ignores stale native menu events while recording is processing', () => {
-  const onDelete = jest.fn();
-  const onManageActions = jest.fn();
-  const { getByTestId } = render(
-    <NoteActionsMenu
-      {...baseProps}
-      processing
-      onDelete={onDelete}
-      onManageActions={onManageActions}
-    />,
-  );
-  fireEvent.press(getByTestId('menu-__delete'));
-  fireEvent.press(getByTestId('menu-__manage'));
-  expect(onDelete).not.toHaveBeenCalled();
-  expect(onManageActions).not.toHaveBeenCalled();
+it('ignores Android stale native menu events while recording is processing', () => {
+  const originalPlatform = Platform.OS;
+  Platform.OS = 'android';
+  try {
+    const onDelete = jest.fn();
+    const onManageActions = jest.fn();
+    const { getByTestId } = render(
+      <NoteActionsMenu
+        {...baseProps}
+        processing
+        onDelete={onDelete}
+        onManageActions={onManageActions}
+      />,
+    );
+    fireEvent.press(getByTestId('menu-__delete'));
+    fireEvent.press(getByTestId('menu-__manage'));
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(onManageActions).not.toHaveBeenCalled();
+  } finally {
+    Platform.OS = originalPlatform;
+  }
 });
 
 jest.mock('react-i18next', () => ({
@@ -136,5 +142,18 @@ it('translates Android menu controls while preserving custom action identity and
     expect(remove).toHaveBeenCalledTimes(1);
   } finally {
     Platform.OS = original;
+  }
+});
+
+it('retains upstream iOS dispatch for an already-delivered native menu event', () => {
+  const originalPlatform = Platform.OS;
+  Platform.OS = 'ios';
+  try {
+    const onDelete = jest.fn();
+    const view = render(<NoteActionsMenu {...baseProps} processing onDelete={onDelete} />);
+    fireEvent.press(view.getByTestId('menu-__delete'));
+    expect(onDelete).toHaveBeenCalledTimes(1);
+  } finally {
+    Platform.OS = originalPlatform;
   }
 });

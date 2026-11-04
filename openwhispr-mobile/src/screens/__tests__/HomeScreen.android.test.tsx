@@ -1,5 +1,8 @@
+jest.mock('@/store/useTranscriptStore.android', () =>
+  jest.requireMock('@/store/useTranscriptStore'),
+);
 const mockUnassignedHistory = jest.fn(async () => []);
-jest.mock('@/services/storage/StorageService', () => ({
+jest.mock('@/services/storage/StorageService.android', () => ({
   StorageService: { getUnassignedTranscripts: () => mockUnassignedHistory() },
 }));
 import React from 'react';

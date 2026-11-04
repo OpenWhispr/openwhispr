@@ -1,3 +1,35 @@
+// Match Metro's entry selection when one test file changes platforms.
+jest.mock('@/screens/NoteEditorScreen', () => {
+  const ios = jest.requireActual<typeof import('@/screens/NoteEditorScreen')>(
+    '@/screens/NoteEditorScreen',
+  );
+  const android = jest.requireActual<typeof import('@/screens/NoteEditorScreen.android')>(
+    '@/screens/NoteEditorScreen.android',
+  );
+  return {
+    ...ios,
+    __esModule: true,
+    default: function PlatformNoteEditor(props: React.ComponentProps<typeof ios.default>) {
+      const Screen =
+        require('react-native').Platform.OS === 'android' ? android.default : ios.default;
+      return require('react').createElement(Screen, props);
+    },
+  };
+});
+
+jest.mock('@/hooks/useChatSendGate', () => {
+  const ios =
+    jest.requireActual<typeof import('@/hooks/useChatSendGate')>('@/hooks/useChatSendGate');
+  const android = jest.requireActual<typeof import('@/hooks/useChatSendGate.android')>(
+    '@/hooks/useChatSendGate.android',
+  );
+  return {
+    useChatSendGate: () =>
+      require('react-native').Platform.OS === 'android'
+        ? android.useChatSendGate()
+        : ios.useChatSendGate(),
+  };
+});
 jest.mock('@/android/NoteRecordingControls', () => ({ NoteRecordingControls: () => null }));
 import React from 'react';
 import { ProviderExecutionError } from '@/services/providers/ProviderExecutionError';
@@ -17,6 +49,7 @@ import type { UserConfig } from '@/types';
 
 let mockRecordingFlags: { isStarting?: boolean; isProcessing?: boolean } = {};
 let mockMenuProcessing = false;
+const mockStartRecording = jest.fn(async () => undefined);
 const mockUpdateNote = jest.fn();
 const mockDeleteNote = jest.fn();
 const mockRetryMeetingTranscription = jest.fn();
@@ -181,7 +214,7 @@ jest.mock('@/hooks/useAudioRecording', () => ({
     isRecording: false,
     isProcessing: false,
     currentText: '',
-    startRecording: jest.fn(),
+    startRecording: mockStartRecording,
     stopRecording: jest.fn(),
     ...mockRecordingFlags,
   }),
@@ -1373,17 +1406,23 @@ describe('NoteEditorScreen body tabs', () => {
   it.each([true, false])(
     'shows captured text and an incomplete warning with retry only when audio exists (%s)',
     (hasAudio) => {
-      mockNote = note({
-        transcriptionStatus: 'failed',
-        sourceFile: hasAudio ? 'managed://meeting-7.wav' : null,
-      });
-      mockNotesState.notes = [mockNote];
-      const { getByText, getByTestId, queryByText } = render(<NoteEditorScreen />);
-      fireEvent.press(getByTestId('note-tab-transcript'));
-      expect(getByText('Transcript incomplete')).toBeTruthy();
-      expect(getByText(mockSegments[0].text)).toBeTruthy();
-      if (hasAudio) expect(getByText('Retry transcription')).toBeTruthy();
-      else expect(queryByText('Retry transcription')).toBeNull();
+      const originalPlatform = Platform.OS;
+      Platform.OS = 'android';
+      try {
+        mockNote = note({
+          transcriptionStatus: 'failed',
+          sourceFile: hasAudio ? 'managed://meeting-7.wav' : null,
+        });
+        mockNotesState.notes = [mockNote];
+        const { getByText, getByTestId, queryByText } = render(<NoteEditorScreen />);
+        fireEvent.press(getByTestId('note-tab-transcript'));
+        expect(getByText('Transcript incomplete')).toBeTruthy();
+        expect(getByText(mockSegments[0].text)).toBeTruthy();
+        if (hasAudio) expect(getByText('Retry transcription')).toBeTruthy();
+        else expect(queryByText('Retry transcription')).toBeNull();
+      } finally {
+        Platform.OS = originalPlatform;
+      }
     },
   );
 
@@ -2656,5 +2695,90 @@ describe('NoteEditorScreen provider failure localization', () => {
       'Existing local error',
       [{ text: 'إغلاق' }],
     ]);
+  });
+});
+
+// Match Metro's platform entry selection while preserving the consumer assertions.
+jest.mock('@/hooks/useActionProcessing', () => ({
+  useActionProcessing: (
+    ...args: Parameters<(typeof import('@/hooks/useActionProcessing'))['useActionProcessing']>
+  ) => {
+    const platform = jest.requireActual<typeof import('react-native')>('react-native').Platform.OS;
+    const selected =
+      platform === 'android'
+        ? jest.requireActual<typeof import('@/hooks/useActionProcessing.android')>(
+            '@/hooks/useActionProcessing.android',
+          )
+        : jest.requireActual<typeof import('@/hooks/useActionProcessing')>(
+            '@/hooks/useActionProcessing',
+          );
+    return selected.useActionProcessing(...args);
+  },
+}));
+
+jest.mock('@/utils/generateTitle.android', () => jest.requireMock('@/utils/generateTitle'));
+
+describe('iOS platform boundary', () => {
+  const originalPlatform = Platform.OS;
+  beforeEach(() => {
+    Platform.OS = 'ios';
+  });
+  afterEach(() => {
+    Platform.OS = originalPlatform;
+  });
+
+  it('keeps the original keyboard wrapper and does not subscribe to Android focus', () => {
+    const view = render(<NoteEditorScreen />);
+    expect(view.UNSAFE_getAllByType(require('react-native').KeyboardAvoidingView)).toHaveLength(1);
+    expect(jest.requireMock('expo-router').useFocusEffect).not.toHaveBeenCalled();
+  });
+
+  it.each(['meeting', 'upload'] as const)(
+    'keeps partial failed %s transcripts visible without the Android retry panel',
+    (noteType) => {
+      mockNote = note({
+        noteType,
+        transcriptionStatus: 'failed',
+        sourceFile: 'managed://meeting-7.wav',
+      });
+      mockNotesState.notes = [mockNote];
+      const view = render(<NoteEditorScreen />);
+      fireEvent.press(view.getByTestId('note-tab-transcript'));
+      expect(view.getByText(mockSegments[0].text)).toBeTruthy();
+      expect(view.queryByText('Transcript incomplete')).toBeNull();
+      expect(view.queryByText('Retry transcription')).toBeNull();
+    },
+  );
+
+  it('preserves upstream delayed dictation feature delivery after unmount', async () => {
+    mockNote = note({ noteType: 'personal', diarizationEnabled: 0, calendarEventId: null });
+    mockNotesState.notes = [mockNote];
+    mockSegments = [];
+    mockRegisterSuperwallGate.mockImplementationOnce(async () => true);
+    const view = render(<NoteEditorScreen />);
+    await act(async () => {
+      fireEvent.press(view.getByLabelText('Start dictation'));
+    });
+    const feature = mockRegisterSuperwallGate.mock.calls[0][0].feature;
+    expect(feature).toEqual(expect.any(Function));
+    view.unmount();
+    await act(async () => {
+      feature?.();
+    });
+    expect(mockStartRecording).toHaveBeenCalledTimes(1);
+  });
+
+  it('retains the upstream on-device failure wording', async () => {
+    mockConfigState.config.inference = { notes: { mode: 'local' } };
+    mockAppleAvailability = 'deviceNotEligible';
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    try {
+      const view = render(<NoteEditorScreen />);
+      fireEvent.press(view.getByTestId('run-action-1'));
+      await waitFor(() => expect(alert).toHaveBeenCalled());
+      expect(alert.mock.calls[0][1]).toContain('this note stays on your iPhone.');
+    } finally {
+      alert.mockRestore();
+    }
   });
 });

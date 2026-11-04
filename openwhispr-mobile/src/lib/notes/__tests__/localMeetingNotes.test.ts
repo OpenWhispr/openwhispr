@@ -408,3 +408,48 @@ describe('Android local meeting formatting', () => {
     }
   });
 });
+
+jest.mock('../generateNotesPrompt', () => ({
+  ...jest.requireActual<typeof import('../generateNotesPrompt')>('../generateNotesPrompt'),
+  buildActionSystemPrompt: (
+    input: Parameters<
+      (typeof import('../generateNotesPrompt.android'))['buildActionSystemPrompt']
+    >[0],
+  ) => {
+    const os = jest.requireActual<typeof import('react-native')>('react-native').Platform.OS;
+    return os === 'android'
+      ? jest
+          .requireActual<
+            typeof import('../generateNotesPrompt.android')
+          >('../generateNotesPrompt.android')
+          .buildActionSystemPrompt(input)
+      : jest
+          .requireActual<typeof import('../generateNotesPrompt')>('../generateNotesPrompt')
+          .buildActionSystemPrompt(input);
+  },
+}));
+
+jest.mock('../localMeetingNotesPlatform', () => {
+  const selected =
+    (): (typeof import('../localMeetingNotesPlatform'))['localMeetingNotesPlatform'] => {
+      const os = jest.requireActual<typeof import('react-native')>('react-native').Platform.OS;
+      return os === 'android'
+        ? jest.requireActual<typeof import('../localMeetingNotesPlatform.android')>(
+            '../localMeetingNotesPlatform.android',
+          ).localMeetingNotesPlatform
+        : jest.requireActual<typeof import('../localMeetingNotesPlatform')>(
+            '../localMeetingNotesPlatform',
+          ).localMeetingNotesPlatform;
+    };
+  return {
+    localMeetingNotesPlatform: {
+      get modelName() {
+        return selected().modelName;
+      },
+      buildInstructions: (actionPrompt: string) => selected().buildInstructions(actionPrompt),
+      generateNotes: (input: { instructions: string; prompt: string }) =>
+        selected().generateNotes(input),
+      getCheckpoint: (options: { checkpoint?: () => void }) => selected().getCheckpoint(options),
+    },
+  };
+});

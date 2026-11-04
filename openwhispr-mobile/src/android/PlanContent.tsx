@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
 import { useAuthStore } from '@/store/useAuthStore';
-import { useUsageStore } from '@/store/useUsageStore';
+import { useUsageStore } from '@/store/useUsageStore.android';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
 import { createStripeBillingPortalSession } from '@/data/remote/billingApi';

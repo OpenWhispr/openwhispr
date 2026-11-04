@@ -187,6 +187,7 @@ function GuestReferralEmptyState() {
 }
 
 export default function ReferralScreen() {
+  const isAndroid = Platform.OS === 'android';
   const { user, sessionCookie } = useAuthStore();
   const [stats, setStats] = useState<ReferralStats | null>(null);
   const [invites, setInvites] = useState<ReferralInvite[]>([]);
@@ -232,10 +233,11 @@ export default function ReferralScreen() {
       safeHaptics('success');
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {
+    } catch (copyError) {
+      if (!isAndroid) throw copyError;
       Alert.alert('Could not copy link', 'Please try again.');
     }
-  }, [stats]);
+  }, [stats, isAndroid]);
 
   const handleShareLink = useCallback(async () => {
     if (!stats?.referralLink) return;
@@ -257,16 +259,22 @@ export default function ReferralScreen() {
     setSendingInvite(true);
     try {
       const ok = await sendReferralInvite(trimmed, sessionCookie);
-      if (!ok) throw new Error('Invite rejected');
-      setEmailInput('');
-      safeHaptics('success');
-      void loadData();
-    } catch {
+      if (!ok && isAndroid) throw new Error('Invite rejected');
+      if (!isAndroid) setSendingInvite(false);
+      if (ok) {
+        setEmailInput('');
+        safeHaptics('success');
+        void loadData();
+      } else {
+        Alert.alert('Failed', 'Could not send invite. Please try again.');
+      }
+    } catch (inviteError) {
+      if (!isAndroid) throw inviteError;
       Alert.alert('Failed', 'Could not send invite. Please try again.');
     } finally {
-      setSendingInvite(false);
+      if (isAndroid) setSendingInvite(false);
     }
-  }, [emailInput, sendingInvite, sessionCookie, loadData]);
+  }, [emailInput, sendingInvite, sessionCookie, loadData, isAndroid]);
 
   // Referrals are account-gated on the API, so an anonymous session lands on
   // the same empty state a guest does rather than loading stats it refuses.
@@ -369,6 +377,7 @@ export default function ReferralScreen() {
               <View className="flex-1 flex-row items-center gap-2 px-3.5 py-3">
                 <SystemIcon name="link" mdName="Link" size={13} color="secondaryLabel" />
                 <Text
+                  {...(isAndroid ? {} : { numberOfLines: 1 })}
                   selectable
                   style={{ fontFamily: 'monospace' }}
                   className="flex-1 text-[13px] text-label"
@@ -378,8 +387,12 @@ export default function ReferralScreen() {
               </View>
               <Pressable
                 onPress={handleCopyLink}
-                accessibilityRole="button"
-                accessibilityLabel={copied ? 'Link copied' : 'Copy referral link'}
+                {...(isAndroid
+                  ? {
+                      accessibilityRole: 'button' as const,
+                      accessibilityLabel: copied ? 'Link copied' : 'Copy referral link',
+                    }
+                  : {})}
                 style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
                 className="w-[68px] items-center justify-center border-l border-separator"
               >
@@ -391,13 +404,15 @@ export default function ReferralScreen() {
                 />
               </Pressable>
             </View>
-            <Pressable
-              onPress={handleShareLink}
-              accessibilityRole="button"
-              className="min-h-12 items-center justify-center border-t border-separator px-4 py-3"
-            >
-              <Text className="text-[15px] text-link">Share referral link</Text>
-            </Pressable>
+            {isAndroid && (
+              <Pressable
+                onPress={handleShareLink}
+                accessibilityRole="button"
+                className="min-h-12 items-center justify-center border-t border-separator px-4 py-3"
+              >
+                <Text className="text-[15px] text-link">Share referral link</Text>
+              </Pressable>
+            )}
             <View className="h-px bg-separator" />
             <View className="flex-row items-stretch">
               <View className="flex-1 flex-row items-center gap-2 px-3.5">

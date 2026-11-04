@@ -18,7 +18,7 @@ jest.mock('expo-router', () => ({
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: (selector: (state: MockAuthState) => unknown) => selector(mockAuthState),
 }));
-jest.mock('@/store/useUsageStore', () => ({
+jest.mock('@/store/useUsageStore.android', () => ({
   useUsageStore: (selector: (state: { sessionRejected: boolean }) => unknown) =>
     selector({ sessionRejected: mockSessionRejected }),
 }));
