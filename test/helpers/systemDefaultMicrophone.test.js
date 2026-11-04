@@ -90,3 +90,80 @@ test("concurrent lookups share one process", async () => {
   assert.equal((await second).name, "Desk Microphone");
   assert.equal(calls(), 1);
 });
+
+const settle = () => new Promise((done) => setImmediate(done));
+// A regression here waits forever on a lookup that never ends: fail, don't hang.
+const TIMEOUT = { timeout: 5000 };
+
+test("wait: false gets no answer during the first lookup, then the result", TIMEOUT, async () => {
+  let release;
+  const { resolve, calls } = wpctlResolver({
+    respond: () =>
+      new Promise((done) => {
+        release = () => done('node.description = "Desk Microphone"');
+      }),
+  });
+
+  assert.equal((await resolve({ wait: false })).source, "unavailable");
+  assert.equal(calls(), 1, "the lookup started in the background");
+
+  release();
+  await settle();
+
+  assert.equal((await resolve({ wait: false })).name, "Desk Microphone");
+  assert.equal(calls(), 1, "the cached result needs no new process");
+});
+
+test("wait: false doesn't sit behind the retry of a failed lookup", TIMEOUT, async () => {
+  let clock = 0;
+  let release;
+  let calls = 0;
+  const resolve = helper.createSystemDefaultMicrophoneResolver({
+    platform: "win32",
+    now: () => clock,
+    run: () => {
+      calls += 1;
+      if (calls === 1) return Promise.reject(new Error("Add-Type is not allowed"));
+      return new Promise((done) => {
+        release = () => done('{"name":"Desk Microphone","id":"1"}');
+      });
+    },
+  });
+
+  assert.equal((await resolve()).source, "unavailable");
+
+  clock = 1000;
+  assert.equal((await resolve({ wait: false })).source, "unavailable");
+  assert.equal(calls, 1, "no new process inside the back-off");
+
+  clock = 31000;
+  assert.equal((await resolve({ wait: false })).source, "unavailable");
+  assert.equal(calls, 2, "the retry runs without holding the caller");
+
+  release();
+  await settle();
+  assert.equal((await resolve({ wait: false })).name, "Desk Microphone");
+});
+
+test("wait: false never gets the old answer while a refresh runs", TIMEOUT, async () => {
+  let release;
+  let calls = 0;
+  const { resolve } = wpctlResolver({
+    respond: () => {
+      calls += 1;
+      if (calls === 1) return 'node.description = "Old Microphone"';
+      return new Promise((done) => {
+        release = () => done('node.description = "New Microphone"');
+      });
+    },
+  });
+
+  assert.equal((await resolve()).name, "Old Microphone");
+  const refreshing = resolve({ refresh: true });
+
+  assert.equal((await resolve({ wait: false })).source, "unavailable");
+
+  release();
+  assert.equal((await refreshing).name, "New Microphone");
+  assert.equal((await resolve({ wait: false })).name, "New Microphone");
+});
