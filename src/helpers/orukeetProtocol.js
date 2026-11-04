@@ -1,5 +1,6 @@
 // Shared main-process wire contract. Managed destinations remain an exact allowlist.
 const ORUKEET_BASE_URL = "https://orukeet.gizmovoice.ai";
+const ORUKEET_MANAGED_ORIGINS = Object.freeze([ORUKEET_BASE_URL, "https://orukeet.openwhispr.com"]);
 const ORUKEET_MODEL = "orukeet-v0.1.0";
 const ORUKEET_PCM_PROTOCOL = "orukeet.pcm.v1";
 const ORUKEET_PIPELINE_PROTOCOL = "orukeet.pipeline.v2";
@@ -10,13 +11,16 @@ const ORUKEET_CLEANUP_RUNTIME_MODELS = Object.freeze([ORUKEET_CLEANUP_MODEL, "ge
 const ORUKEET_SESSION_PATH = "/api/stt/orukeet/session";
 const ORUKEET_PIPELINE_SESSION_PATH = "/api/stt/orukeet/pipeline-session";
 const ORUKEET_PIPELINE_USAGE_PATH = "/api/stt/orukeet/pipeline-usage";
-const ORUKEET_LANGUAGE_PREVIEW_URL = `${ORUKEET_BASE_URL}/preview/language-routing`;
-const ORUKEET_PIPELINE_BASES = [
-  "preview",
-  "regions/us-west1",
-  "regions/europe-west4",
-  "regions/asia-southeast1",
-].map((path) => `${ORUKEET_BASE_URL}/${path}/${ORUKEET_CLEANUP_VARIANT}`);
+const ORUKEET_ASR_BASES = Object.freeze(
+  ORUKEET_MANAGED_ORIGINS.flatMap((origin) => [origin, `${origin}/preview/language-routing`])
+);
+const ORUKEET_PIPELINE_BASES = Object.freeze(
+  ORUKEET_MANAGED_ORIGINS.flatMap((origin) =>
+    ["preview", "regions/us-west1", "regions/europe-west4", "regions/asia-southeast1"].map(
+      (path) => `${origin}/${path}/${ORUKEET_CLEANUP_VARIANT}`
+    )
+  )
+);
 function isOrukeetClientToken(value, pipeline = false) {
   return (
     typeof value === "string" &&
@@ -35,7 +39,7 @@ module.exports = {
   ORUKEET_SESSION_PATH,
   ORUKEET_PIPELINE_SESSION_PATH,
   ORUKEET_PIPELINE_USAGE_PATH,
-  ORUKEET_LANGUAGE_PREVIEW_URL,
+  ORUKEET_ASR_BASES,
   ORUKEET_PIPELINE_BASES,
   isOrukeetClientToken,
 };
