@@ -189,3 +189,16 @@ test("a group assigned before the API sent access reads as admin, as it always h
 
   assert.equal(row.team.access, "admin");
 });
+
+test("someone who comes through a group takes a role only when promoteInherited says so", () => {
+  const members = [
+    person("jin", "Jin", {
+      direct_role: null,
+      via_teams: [{ team_id: "sales", name: "Sales", role: "member", access: "member" }],
+    }),
+  ];
+
+  assert.equal(build({ members })[0].promotable, false);
+  assert.equal(build({ members, promoteInherited: true })[0].promotable, true);
+  assert.equal(build({ members, promoteInherited: true, canManage: false })[0].promotable, false);
+});

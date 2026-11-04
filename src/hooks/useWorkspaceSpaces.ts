@@ -1,10 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { heldCloudSpaceIds, subscribeHeldSpaces } from "../lib/heldSpaceDeletes";
 import { SpacesService } from "../services/SpacesService";
 import type { WorkspaceSpace } from "../types/electron";
 
 export interface WorkspaceSpacesState {
   status: "idle" | "loading" | "failed" | "ready";
-  /** As the directory returned them. Fields an older API leaves out stay missing. */
+  /**
+   * As the directory returned them, less any whose delete is waiting out its Undo window. Fields an
+   * older API leaves out stay missing.
+   */
   spaces: WorkspaceSpace[];
   /** The last reload failed, so the list on screen may be out of date. */
   stale: boolean;
@@ -98,7 +102,12 @@ export function useWorkspaceSpaces(
 
   // A slot left over from another workspace is invisible until its own load lands.
   const own = slot && slot.workspaceId === workspaceId ? slot : null;
-  const spaces = own?.spaces ?? NO_SPACES;
+  const held = useSyncExternalStore(subscribeHeldSpaces, heldCloudSpaceIds);
+  const listed = own?.spaces ?? NO_SPACES;
+  const spaces = useMemo(
+    () => (held.size > 0 ? listed.filter((space) => !held.has(space.id)) : listed),
+    [listed, held]
+  );
   let status: WorkspaceSpacesState["status"];
   if (!enabled || !workspaceId) status = "idle";
   else if (own?.spaces) status = "ready";

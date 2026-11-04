@@ -634,7 +634,7 @@ test("an invalid address blocks Add members and says the rest are kept", async (
   await ui.type(peopleInput(), "alex@");
   await ui.press(peopleInput(), "Enter");
 
-  assert.deepEqual(chipTexts(), ["Ethan", "alex@ · Member"]);
+  assert.deepEqual(chipTexts(), ["Ethan", "alex@ · Workspace Member"]);
   assert.equal(lineText(), "Enter a valid email address. Your selected people are kept.");
   assert.equal(lineElement().getAttribute("role"), "alert");
   assert.match(lineElement().className, /text-destructive/);
@@ -653,7 +653,7 @@ test("success clears the chips and says who went", async (t) => {
 
   await pickPerson("Ethan");
   await addAddress("alex@example.com");
-  assert.deepEqual(chipTexts(), ["Ethan", "alex@example.com · Member"]);
+  assert.deepEqual(chipTexts(), ["Ethan", "alex@example.com · Workspace Member"]);
   const rowsBefore = callsTo("members").length;
 
   // A real press moves focus to the button, which then waits (disabled) while it runs.
@@ -792,9 +792,9 @@ test("addresses go out once per role", async (t) => {
   );
   await ui.click(buttonNamed("Select"));
   assert.deepEqual(chipTexts(), [
-    "alex@example.com · Member",
-    "kim@example.com · Member",
-    "noor@example.com · Admin",
+    "alex@example.com · Workspace Member",
+    "kim@example.com · Workspace Member",
+    "noor@example.com · Workspace Admin",
   ]);
 
   await ui.click(addButton());
@@ -831,7 +831,11 @@ test("a partial failure keeps only what failed", async (t) => {
   await ui.click(addButton());
   await ui.settle();
 
-  assert.deepEqual(chipTexts(), ["alex@example.com · Member"], "Ethan went, so only Alex stays");
+  assert.deepEqual(
+    chipTexts(),
+    ["alex@example.com · Workspace Member"],
+    "Ethan went, so only Alex stays"
+  );
   assert.equal(
     lineText(),
     "Ethan was added. alex@example.com's invitation didn't send. Try again."
@@ -871,7 +875,10 @@ test("several that went and several that didn't read in the plural", async (t) =
   await ui.click(addButton());
   await ui.settle();
 
-  assert.deepEqual(chipTexts(), ["alex@example.com · Member", "kim@example.com · Member"]);
+  assert.deepEqual(chipTexts(), [
+    "alex@example.com · Workspace Member",
+    "kim@example.com · Workspace Member",
+  ]);
   assert.equal(
     lineText(),
     "Ethan and Saket were added. " +
@@ -938,7 +945,7 @@ test("a full failure keeps everything and offers Try again", async (t) => {
   await ui.click(addButton());
   await ui.settle();
 
-  assert.deepEqual(chipTexts(), ["Ethan", "alex@example.com · Member"]);
+  assert.deepEqual(chipTexts(), ["Ethan", "alex@example.com · Workspace Member"]);
   assert.equal(lineText(), "Couldn't add members. Your selections are kept. Try again.");
   assert.equal(lineElement().getAttribute("role"), "alert");
   assert.equal(text(addButton()), "Try again");
@@ -1090,7 +1097,7 @@ test("an address that is already a member means the roster was stale: it is read
   await ui.click(addButton());
   await ui.settle();
 
-  assert.deepEqual(chipTexts(), ["alex@example.com · Member"]);
+  assert.deepEqual(chipTexts(), ["alex@example.com · Workspace Member"]);
   assert.equal(lineText(), "Couldn't add members. Your selections are kept. Try again.");
   assert.equal(callsTo("roster").length, rosterReads + 1, "the roster is reloaded");
 });
@@ -1108,7 +1115,7 @@ test("a send that throws leaves its addresses failed", async (t) => {
   await ui.click(addButton());
   await ui.settle();
 
-  assert.deepEqual(chipTexts(), ["alex@example.com · Member"]);
+  assert.deepEqual(chipTexts(), ["alex@example.com · Workspace Member"]);
   assert.equal(text(addButton()), "Try again");
 });
 
@@ -1207,7 +1214,7 @@ for (const { name, failure, line } of KEPT_REFUSALS) {
 
     assert.equal(lineText(), line);
     assert.equal(lineElement().getAttribute("role"), "alert");
-    assert.deepEqual(chipTexts(), ["alex@example.com · Member"]);
+    assert.deepEqual(chipTexts(), ["alex@example.com · Workspace Member"]);
     assert.equal(text(addButton()), "Try again");
 
     await ui.click(addButton());
@@ -1228,7 +1235,10 @@ test("a seat limit with room left keeps the addresses to trim, without Try again
 
   assert.equal(lineText(), "You can invite 1 more person. Remove 1 to continue.");
   assert.equal(lineElement().getAttribute("role"), "alert");
-  assert.deepEqual(chipTexts(), ["alex@example.com · Member", "noor@example.com · Member"]);
+  assert.deepEqual(chipTexts(), [
+    "alex@example.com · Workspace Member",
+    "noor@example.com · Workspace Member",
+  ]);
   assert.equal(text(addButton()), "Add members");
   assert.equal(addButton().disabled, false, "trimming is what lets the rest go");
 });
@@ -1602,7 +1612,7 @@ test("an address the roster still doesn't know stays an address chip", async (t)
   await ui.click(addButton());
   await ui.settle();
 
-  assert.deepEqual(chipTexts(), ["alex@example.com · Member"]);
+  assert.deepEqual(chipTexts(), ["alex@example.com · Workspace Member"]);
 });
 
 test("an invitation whose answer was lost counts as sent when this teamspace lists it", async (t) => {
@@ -1742,6 +1752,173 @@ test("a failed role change says so and leaves the role", async (t) => {
   assert.equal(text(rowFor("Misa")).endsWith("Member"), true);
 });
 
+test("stepping down asks first, and Cancel changes nothing", async (t) => {
+  const { callsTo } = await mount(t);
+
+  await openMenu(roleTrigger(rowFor("Ronnie")));
+  await ui.click(menuItem("Teamspace Member"));
+  await ui.settle();
+
+  assert.match(dialogText(), /^Step down as admin of Customer Calls\?/);
+  assert.equal(callsTo("setSpaceMemberRole").length, 0);
+
+  await ui.click(dialogButton("Cancel"));
+  await ui.settle();
+
+  assert.equal(callsTo("setSpaceMemberRole").length, 0);
+});
+
+test("confirming steps down", async (t) => {
+  const { callsTo } = await mount(t);
+
+  await openMenu(roleTrigger(rowFor("Ronnie")));
+  await ui.click(menuItem("Teamspace Member"));
+  await ui.settle();
+  await ui.click(dialogButton("Step down"));
+  await ui.settle();
+
+  assert.equal(callsTo("setSpaceMemberRole").length, 1);
+  assert.equal(callsTo("setSpaceMemberRole")[0][2], "me");
+  assert.equal(callsTo("setSpaceMemberRole")[0][3], "member");
+});
+
+test("a workspace admin changes their own row without being asked", async (t) => {
+  const { callsTo } = await mount(t, { workspaceAdmin: true });
+
+  await openMenu(roleTrigger(rowFor("Ronnie")));
+  await ui.click(menuItem("Teamspace Member"));
+  await ui.settle();
+
+  assert.equal(callsTo("setSpaceMemberRole").length, 1);
+});
+
+test("someone else's demotion isn't asked about", async (t) => {
+  const { callsTo } = await mount(t, {
+    members: [
+      entry("me", "Ronnie", { role: "admin", direct_role: "admin" }),
+      entry("misa", "Misa", { role: "admin", direct_role: "admin" }),
+    ],
+  });
+
+  await openMenu(roleTrigger(rowFor("Misa")));
+  await ui.click(menuItem("Teamspace Member"));
+  await ui.settle();
+
+  assert.equal(callsTo("setSpaceMemberRole").length, 1);
+});
+
+const VIA_SALES = [{ team_id: "sales", name: "Sales", role: "member", access: "member" }];
+
+test("the only admin with everyone else in a group can make one of them an admin", async (t) => {
+  const { callsTo } = await mount(t, {
+    members: [
+      entry("me", "Ronnie", { role: "admin", direct_role: "admin" }),
+      entry("jin", "Jin", { direct_role: null, via_teams: VIA_SALES }),
+    ],
+  });
+
+  await openMenu(roleTrigger(rowFor("Jin")));
+  assert.equal(menuItem("Remove"), undefined, "there is no direct grant of theirs to remove");
+  await ui.click(menuItem("Teamspace Admin"));
+  await ui.settle();
+
+  assert.equal(callsTo("setSpaceMemberRole").length, 1);
+  assert.equal(callsTo("setSpaceMemberRole")[0][2], "jin");
+  assert.equal(callsTo("setSpaceMemberRole")[0][3], "admin");
+});
+
+test("a workspace admin isn't blocked from leaving, so group people stay read-only", async (t) => {
+  await mount(t, {
+    workspaceAdmin: true,
+    members: [
+      entry("me", "Ronnie", { role: "admin", direct_role: "admin" }),
+      entry("jin", "Jin", { direct_role: null, via_teams: VIA_SALES }),
+    ],
+  });
+
+  assert.equal(roleTrigger(rowFor("Jin")), null);
+});
+
+test("group people stay read-only while someone direct could be made an admin", async (t) => {
+  await mount(t);
+
+  assert.equal(roleTrigger(rowFor("Jin")), null);
+});
+
+test("group people stay read-only when another admin can carry on", async (t) => {
+  await mount(t, {
+    members: [
+      entry("me", "Ronnie", { role: "admin", direct_role: "admin" }),
+      entry("jin", "Jin", { direct_role: null, via_teams: VIA_SALES }),
+      entry("kim", "Kim", {
+        role: "admin",
+        direct_role: null,
+        via_teams: [{ team_id: "ops", name: "Ops", role: "admin", access: "admin" }],
+      }),
+    ],
+  });
+
+  assert.equal(roleTrigger(rowFor("Jin")), null);
+});
+
+test("removing someone a group also reaches says that access stays", async (t) => {
+  await mount(t, {
+    members: [
+      entry("me", "Ronnie", { role: "admin", direct_role: "admin" }),
+      entry("lila", "Lila", { via_teams: VIA_SALES }),
+    ],
+  });
+
+  await openMenu(roleTrigger(rowFor("Lila")));
+  await ui.click(menuItem("Remove"));
+  await ui.settle();
+
+  assert.match(dialogText(), /Access through a group will remain\./);
+});
+
+test("an invitation whose email didn't arrive says so, and who", async (t) => {
+  await mount(t, {
+    actions: {
+      sendInvitations: async ({ emails, onResult }) => {
+        for (const email of emails) {
+          onResult(email, { ok: true, emailSent: email !== "alex@example.com" });
+        }
+      },
+    },
+  });
+
+  await addAddress("alex@example.com");
+  await addAddress("kim@example.com");
+  await ui.click(addButton());
+  await ui.settle();
+
+  assert.equal(
+    lineText(),
+    "Sent kim@example.com a workspace invitation. Created invitations for alex@example.com, but the email couldn't be delivered. Resend it from Invitations."
+  );
+  assert.equal(lineElement().getAttribute("role"), "alert");
+});
+
+test("more addresses than one invitation batch takes blocks Add members and says why", async (t) => {
+  await mount(t);
+  await ui.focus(peopleInput());
+  const addresses = Array.from({ length: 101 }, (_, index) => `p${index}@example.com`);
+  await ui.type(peopleInput(), `${addresses.join(", ")},`);
+  await ui.settle();
+
+  assert.equal(chips().length, 101);
+  assert.equal(lineText(), "You can invite up to 100 people at a time.");
+  assert.equal(addButton().disabled, true);
+});
+
+test("a pending invitation for a workspace admin says so", async (t) => {
+  await mount(t, {
+    invitations: [{ ...invitation("inv-2", "boss@example.com"), workspace_role: "admin" }],
+  });
+
+  assert.match(text(rowFor("boss@example.com")), /Invitation pending · Workspace Admin/);
+});
+
 test("the only admin stepping down is told why", async (t) => {
   await mount(t, {
     actions: {
@@ -1753,6 +1930,8 @@ test("the only admin stepping down is told why", async (t) => {
 
   await openMenu(roleTrigger(rowFor("Ronnie")));
   await ui.click(menuItem("Teamspace Member"));
+  await ui.settle();
+  await ui.click(dialogButton("Step down"));
   await ui.settle();
 
   assert.deepEqual(toastTitles(), [
@@ -1797,7 +1976,7 @@ test("removal asks, runs, fails with Try again, and toasts", async (t) => {
   assert.equal(
     dialogText(),
     "Remove Lila from Customer Calls? " +
-      "This removes Lila's direct membership. Access through a group will remain. They'll stay in the workspace. " +
+      "Lila will lose access to this teamspace and its notes. They'll stay in the workspace. " +
       "Remove member Cancel"
   );
   assert.equal(callsTo("removeSpaceMember").length, 0, "asking removes nothing");

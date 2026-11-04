@@ -29,6 +29,8 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [toasts, setToasts] = React.useState<ToastState[]>([]);
   const toastsRef = React.useRef<ToastState[]>([]);
   const timersRef = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  // A toast can start leaving twice (its timer, then a dismiss during the exit animation).
+  const settledRef = React.useRef(new Set<string>());
 
   React.useEffect(() => {
     toastsRef.current = toasts;
@@ -43,9 +45,15 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const startExitAnimation = React.useCallback((id: string) => {
+    const leaving = toastsRef.current.find((item) => item.id === id);
+    if (leaving?.onSettled && !settledRef.current.has(id)) {
+      settledRef.current.add(id);
+      leaving.onSettled();
+    }
     setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, isExiting: true } : t)));
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
+      settledRef.current.delete(id);
     }, 200);
   }, []);
 

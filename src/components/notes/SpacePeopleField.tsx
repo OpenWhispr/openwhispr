@@ -632,8 +632,8 @@ function InviteRoleMenu({
         {/* Announced when the arrow keys change it, as the menu isn't open for that. */}
         <span aria-live="polite">
           {role === "admin"
-            ? t("notes.spaces.members.roleAdmin")
-            : t("notes.spaces.members.roleMember")}
+            ? t("workspaces.invite.role.admin")
+            : t("workspaces.invite.role.member")}
         </span>
         <ChevronDown className="size-3 shrink-0" aria-hidden="true" />
       </DropdownMenuTrigger>
@@ -717,10 +717,11 @@ function RecipientChip({
       <BidiInterpolatedText
         text={t("settingsPage.workspace.teamspaces.picker.emailChip", {
           email: BIDI_VALUE_TOKEN,
+          // An invitation's role is across the workspace, not this teamspace's.
           role:
             recipient.role === "admin"
-              ? t("notes.spaces.members.roleAdmin")
-              : t("notes.spaces.members.roleMember"),
+              ? t("workspaces.invite.role.admin")
+              : t("workspaces.invite.role.member"),
         })}
         value={recipient.email}
       />

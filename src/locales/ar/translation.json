@@ -4000,7 +4000,10 @@
           "createdInviteFailed_two": "تم إنشاء {{space}}. تعذرت دعوة {{count}} شخصين. ادعهما من «الأعضاء».",
           "createdInviteFailed_few": "تم إنشاء {{space}}. تعذرت دعوة {{count}} أشخاص. ادعهم من «الأعضاء».",
           "createdInviteFailed_many": "تم إنشاء {{space}}. تعذرت دعوة {{count}} شخصًا. ادعهم من «الأعضاء».",
-          "createdInviteFailed_other": "تم إنشاء {{space}}. تعذرت دعوة {{count}} شخص. ادعهم من «الأعضاء»."
+          "createdInviteFailed_other": "تم إنشاء {{space}}. تعذرت دعوة {{count}} شخص. ادعهم من «الأعضاء».",
+          "inviteFailedWho": "لم تتم دعوتهم: {{names}}.",
+          "copyAddresses": "نسخ العناوين",
+          "groupsGone": "لم يعد {{names}} متاحًا، لذا لم تتم إضافته."
         },
         "picker": {
           "groupPeople_zero": "{{count}} أشخاص",
@@ -4090,7 +4093,13 @@
           "notInvited": "لم تتم دعوة {{names}}.",
           "notInvitedMany": "لم تتم دعوة {{names}}.",
           "skippedInvited": "لدى {{names}} دعوة إلى مساحة العمل بالفعل، لذلك لم تتم إضافته إلى مساحة الفريق هذه.",
-          "skippedInvitedMany": "لدى {{names}} دعوات إلى مساحة العمل بالفعل، لذلك لم تتم إضافتهم إلى مساحة الفريق هذه."
+          "skippedInvitedMany": "لدى {{names}} دعوات إلى مساحة العمل بالفعل، لذلك لم تتم إضافتهم إلى مساحة الفريق هذه.",
+          "removeBodyPlain": "سيفقد {{name}} الوصول إلى مساحة الفريق هذه وملاحظاتها. وسيظل في مساحة العمل.",
+          "invitationPendingAdmin": "الدعوة قيد الانتظار · مسؤول مساحة العمل",
+          "resultInvitedNoEmail": "تم إنشاء دعوات لـ {{names}}، لكن تعذر تسليم البريد الإلكتروني. أعد إرساله من «الدعوات».",
+          "stepDownTitle": "هل تريد التنحي عن دور مسؤول {{space}}؟",
+          "stepDownBody": "لن تتمكن من إدارة مساحة الفريق هذه أو أعضائها. لا يمكن إلا لمسؤول آخر إعادتك مسؤولاً.",
+          "stepDownConfirm": "تنحَّ"
         },
         "settings": {
           "leaveTitle": "مغادرة مساحة الفريق",
@@ -4108,22 +4117,25 @@
           "blockedBody": "أنت المسؤول الوحيد في {{space}}. اجعل عضوًا آخر مسؤولًا قبل أن تغادر.",
           "blockedAction": "إدارة الأعضاء",
           "leaveTitle": "هل تريد مغادرة {{space}}؟",
-          "leaveBody": "ستنتهي عضويتك المباشرة. سيبقى الوصول عبر المجموعة. سيواصل مسؤول آخر إدارة مساحة الفريق هذه.",
-          "leaveBodyPlain": "ستنتهي عضويتك المباشرة.",
           "leaveFailedTitle": "تعذّرت مغادرة {{space}}",
           "leaveFailedBody": "لم تتغير عضويتك. تحقق من اتصالك وحاول مرة أخرى.",
           "left": "غادرت {{space}}.",
           "deleteTitle": "هل تريد حذف {{space}}؟",
           "deleteBody": "سيؤدي هذا إلى إزالة {{space}} من مساحة العمل للجميع.",
-          "deletingTitle": "جارٍ حذف {{space}}…",
-          "deletingBody": "أبقِ هذه النافذة مفتوحة أثناء حذف مساحة الفريق.",
-          "deletingAction": "جارٍ الحذف…",
           "deleteFailedTitle": "تعذّر حذف {{space}}",
           "deleteFailedBody": "لا تزال مساحة الفريق متاحة. تحقق من اتصالك وحاول مرة أخرى.",
           "deleted": "تم حذف {{space}}.",
           "restored": "تمت استعادة {{space}}",
-          "restoreFailed": "تعذّرت استعادة {{space}}. حاول مرة أخرى.",
-          "restoreNameTaken": "تعذّرت استعادة {{space}}. توجد مساحة فريق أخرى بهذا الاسم."
+          "leaveBodyKeeps": "ستنتهي عضويتك المباشرة. سيبقى وصولك عبر {{groups}}.",
+          "leaveBodyLoses": "ستفقد الوصول إلى {{space}} وملاحظاتها.",
+          "leaveBodyAdmins": "سيواصل مسؤول آخر إدارة مساحة الفريق هذه.",
+          "deleteNotAllowed": "ليس لديك إذن لحذف {{space}}.",
+          "movedToPersonal_zero": "تم نقل {{count}} ملاحظة غير متزامنة إلى مساحتك الشخصية.",
+          "movedToPersonal_one": "تم نقل ملاحظة غير متزامنة واحدة ({{count}}) إلى مساحتك الشخصية.",
+          "movedToPersonal_two": "تم نقل ملاحظتين غير متزامنتين ({{count}}) إلى مساحتك الشخصية.",
+          "movedToPersonal_few": "تم نقل {{count}} ملاحظات غير متزامنة إلى مساحتك الشخصية.",
+          "movedToPersonal_many": "تم نقل {{count}} ملاحظة غير متزامنة إلى مساحتك الشخصية.",
+          "movedToPersonal_other": "تم نقل {{count}} ملاحظة غير متزامنة إلى مساحتك الشخصية."
         },
         "addPeople": {
           "loading": "جارٍ تحميل مساحات الفريق…",

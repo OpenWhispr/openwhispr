@@ -1850,7 +1850,10 @@
           "creating": "Création",
           "created": "{{space}} créé",
           "createdInviteFailed_one": "{{space}} a été créé. Impossible d'inviter {{count}} personne. Invitez-la depuis Membres.",
-          "createdInviteFailed_other": "{{space}} a été créé. Impossible d'inviter {{count}} personnes. Invitez-les depuis Membres."
+          "createdInviteFailed_other": "{{space}} a été créé. Impossible d'inviter {{count}} personnes. Invitez-les depuis Membres.",
+          "inviteFailedWho": "Non invités : {{names}}.",
+          "copyAddresses": "Copier les adresses",
+          "groupsGone": "{{names}} n'est plus disponible et n'a donc pas été ajouté."
         },
         "picker": {
           "groupPeople_one": "{{count}} personne",
@@ -1916,7 +1919,13 @@
           "notInvited": "{{names}} n'a pas reçu d'invitation.",
           "notInvitedMany": "{{names}} n'ont pas reçu d'invitation.",
           "skippedInvited": "{{names}} a déjà une invitation à l'espace de travail ; cette personne n'a donc pas été ajoutée à ce teamspace.",
-          "skippedInvitedMany": "{{names}} ont déjà des invitations à l'espace de travail ; ces personnes n'ont donc pas été ajoutées à ce teamspace."
+          "skippedInvitedMany": "{{names}} ont déjà des invitations à l'espace de travail ; ces personnes n'ont donc pas été ajoutées à ce teamspace.",
+          "removeBodyPlain": "{{name}} perdra l'accès à ce Teamspace et à ses notes. Cette personne restera dans l'espace de travail.",
+          "invitationPendingAdmin": "Invitation en attente · Administrateur de l'espace de travail",
+          "resultInvitedNoEmail": "Invitations créées pour {{names}}, mais l'e-mail n'a pas pu être remis. Renvoyez-le depuis Invitations.",
+          "stepDownTitle": "Quitter le rôle d'administrateur de {{space}} ?",
+          "stepDownBody": "Vous ne pourrez plus gérer ce Teamspace ni ses membres. Seul un autre administrateur pourra vous redonner ce rôle.",
+          "stepDownConfirm": "Quitter le rôle"
         },
         "settings": {
           "leaveTitle": "Quitter le teamspace",
@@ -1934,22 +1943,21 @@
           "blockedBody": "Vous êtes le seul administrateur de {{space}}. Nommez un autre membre administrateur avant de partir.",
           "blockedAction": "Gérer les membres",
           "leaveTitle": "Quitter {{space}} ?",
-          "leaveBody": "Votre appartenance directe prendra fin. L'accès via un groupe sera conservé. Un autre administrateur continuera de gérer ce teamspace.",
-          "leaveBodyPlain": "Votre appartenance directe prendra fin.",
           "leaveFailedTitle": "Impossible de quitter {{space}}",
           "leaveFailedBody": "Votre appartenance n'a pas changé. Vérifiez votre connexion et réessayez.",
           "left": "Vous avez quitté {{space}}.",
           "deleteTitle": "Supprimer {{space}} ?",
           "deleteBody": "Cela supprime {{space}} de l'espace de travail pour tout le monde.",
-          "deletingTitle": "Suppression de {{space}}…",
-          "deletingBody": "Gardez cette fenêtre ouverte pendant la suppression du teamspace.",
-          "deletingAction": "Suppression…",
           "deleteFailedTitle": "Impossible de supprimer {{space}}",
           "deleteFailedBody": "Le teamspace est toujours disponible. Vérifiez votre connexion et réessayez.",
           "deleted": "{{space}} a été supprimé.",
           "restored": "{{space}} a été restauré",
-          "restoreFailed": "Impossible de restaurer {{space}}. Réessayez.",
-          "restoreNameTaken": "Impossible de restaurer {{space}}. Un autre teamspace porte ce nom."
+          "leaveBodyKeeps": "Votre adhésion directe prendra fin. Vous conserverez l'accès via {{groups}}.",
+          "leaveBodyLoses": "Vous perdrez l'accès à {{space}} et à ses notes.",
+          "leaveBodyAdmins": "Un autre administrateur continuera de gérer ce Teamspace.",
+          "deleteNotAllowed": "Vous n'êtes pas autorisé à supprimer {{space}}.",
+          "movedToPersonal_one": "{{count}} note non synchronisée a été déplacée vers votre espace personnel.",
+          "movedToPersonal_other": "{{count}} notes non synchronisées ont été déplacées vers votre espace personnel."
         },
         "addPeople": {
           "loading": "Chargement des teamspaces…",

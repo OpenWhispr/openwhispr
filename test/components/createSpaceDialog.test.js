@@ -115,7 +115,7 @@ test.before(async (t) => {
           if (typeof text !== "string") return key;
           return text.replace(/{{\\s*(\\w+)\\s*}}/g, (_, name) => String(values[name] ?? ""));
         };
-        export const useTranslation = () => ({ t });
+        export const useTranslation = () => ({ t, i18n: { language: "en" } });
       `,
       // The API client reads the language from here, and the real one starts i18next.
       "/i18n": "export default { t: (key) => key, language: 'en' };",
@@ -644,15 +644,52 @@ test("someone who left the workspace is dropped, so Try again can succeed", asyn
 
   assert.deepEqual(closes, []);
   assert.deepEqual(chipTexts(), ["Ethan", "newcomer@example.com"], "only the one who left goes");
-  assert.equal(
-    text(dialog().querySelector('[role="alert"]')),
-    "Couldn't create teamspace. Your details are saved. Try again."
-  );
-  assert.ok(retryButton());
+  assert.match(text(dialog()), /Saket left the workspace, so they weren't added\./);
 
-  await click(retryButton());
+  await click(createButton());
   assert.deepEqual(callsTo("createSpace")[1][3], { memberIds: ["ethan"], teamIds: [] });
   assert.deepEqual(closes, [false]);
+});
+
+test("a group deleted since the list loaded is dropped and named", async (t) => {
+  let attempts = 0;
+  const { callsTo, closes } = await mount(t, {
+    createSpace: async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw new CloudApiError("Teams unavailable", 400, "teams_not_available", {
+          team_ids: ["sales"],
+        });
+      }
+      return localSpace();
+    },
+  });
+  await type(nameInput(), "Customer Calls");
+  await pickPerson("Sales");
+  await pickPerson("Ethan");
+  await click(createButton());
+
+  assert.deepEqual(chipTexts(), ["Ethan"]);
+  assert.match(text(dialog()), /Sales is no longer available, so it wasn't added\./);
+
+  await click(createButton());
+  assert.deepEqual(callsTo("createSpace")[1][3], { memberIds: ["ethan"], teamIds: [] });
+  assert.deepEqual(closes, [false]);
+});
+
+test("a refusal naming nobody keeps the general failure and its retry", async (t) => {
+  const { closes } = await mount(t, {
+    createSpace: async () => {
+      throw new CloudApiError("Not workspace members", 400, "not_workspace_members", {});
+    },
+  });
+  await type(nameInput(), "Customer Calls");
+  await pickPerson("Saket");
+  await click(createButton());
+
+  assert.deepEqual(closes, []);
+  assert.deepEqual(chipTexts(), ["Saket"]);
+  assert.ok(retryButton());
 });
 
 test("failed invitations still report the teamspace as created, refused ones included", async (t) => {
@@ -732,6 +769,64 @@ test("a reveal that throws doesn't leave the dialog stuck on Creating", async (t
 
   assert.deepEqual(closes, [false], "the teamspace exists, so the way out stays open");
   assert.equal(errors.length, 1);
+});
+
+test("the toast names who wasn't invited, and can copy them all", async (t) => {
+  const writes = [];
+  Object.defineProperty(globalThis.navigator, "clipboard", {
+    configurable: true,
+    value: { writeText: async (value) => writes.push(value) },
+  });
+  t.after(() => delete globalThis.navigator.clipboard);
+  const addresses = Array.from({ length: 7 }, (_, index) => `p${index}@example.com`);
+  const { toasts } = await mount(t, {
+    sendInvitations: async ({ emails, onResult }) => {
+      for (const email of emails) onResult(email, { ok: false, kind: "requestFailed" });
+    },
+  });
+  await type(nameInput(), "Customer Calls");
+  for (const address of addresses) await addAddress(address);
+  await click(createButton());
+
+  assert.match(
+    readable(toasts()[0].description),
+    /^Not invited: p0@example\.com.*p4@example\.com +\+2\.$/
+  );
+  assert.equal(toasts()[0].actions[0].label, "Copy addresses");
+  assert.equal(toasts()[0].actions[0].dismissOnClick, false);
+
+  assert.equal(await toasts()[0].actions[0].onClick(), true);
+  assert.deepEqual(writes, [addresses.join("\n")]);
+});
+
+test("an invitation whose email didn't arrive isn't reported as a plain success", async (t) => {
+  const { toasts } = await mount(t, {
+    sendInvitations: async ({ emails, onResult }) => {
+      for (const email of emails) onResult(email, { ok: true, emailSent: false });
+    },
+  });
+  await type(nameInput(), "Customer Calls");
+  await addAddress("alex@example.com");
+  await click(createButton());
+
+  assert.equal(readable(toasts()[0].title), "Created Customer Calls");
+  assert.equal(
+    readable(toasts()[0].description),
+    "1 invitation was created, but its email couldn't be delivered. Resend it from Invitations."
+  );
+});
+
+test("more addresses than one invitation batch takes blocks Create and says why", async (t) => {
+  const { callsTo } = await mount(t);
+  await type(nameInput(), "Customer Calls");
+  await focus(peopleInput());
+  const addresses = Array.from({ length: 101 }, (_, index) => `p${index}@example.com`);
+  await type(peopleInput(), `${addresses.join(", ")},`);
+
+  assert.equal(chips().length, 101);
+  assert.match(text(dialog()), /You can invite up to 100 people at a time\./);
+  assert.equal(createButton().disabled, true);
+  assert.equal(callsTo("createSpace").length, 0);
 });
 
 test("one failed invitation reads in the singular", async (t) => {

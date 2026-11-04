@@ -12,13 +12,15 @@ export type SpaceMemberRow =
       editable: boolean;
       adminVia: string[];
     }
-  // Reaches the teamspace only through a group, so the change belongs to that group.
+  // Reaches the teamspace only through a group, so the change belongs to that group. `promotable`
+  // is the one exception: see promoteInherited.
   | {
       kind: "inherited";
       id: string;
       member: SpaceMemberEntry;
       groupName: string;
       asAdmin: boolean;
+      promotable: boolean;
     }
   | { kind: "invitation"; id: string; invitation: SpaceInvitation }
   | {
@@ -33,6 +35,11 @@ export interface SpaceMemberRowsInput {
   teams: SpaceTeamRef[];
   teamCounts: ReadonlyMap<string, number>;
   canManage: boolean;
+  /**
+   * The viewer is the only admin, can't leave until there is another, and everyone else comes
+   * through a group. Making one of them an admin is the only way out, so those rows take a role.
+   */
+  promoteInherited?: boolean;
   /** Joins the names of the groups an inherited person comes through, in the reader's language. */
   formatNames?: (names: string[]) => string;
 }
@@ -49,6 +56,7 @@ export function buildSpaceMemberRows({
   teams,
   teamCounts,
   canManage,
+  promoteInherited = false,
   formatNames = joinNames,
 }: SpaceMemberRowsInput): SpaceMemberRow[] {
   const toRow = (member: SpaceMemberEntry): SpaceMemberRow => {
@@ -72,6 +80,7 @@ export function buildSpaceMemberRows({
       groupName: formatNames(member.via_teams.map((team) => team.name)),
       // With no direct role, an admin is one through a group.
       asAdmin: member.role === "admin",
+      promotable: canManage && promoteInherited,
     };
   };
 

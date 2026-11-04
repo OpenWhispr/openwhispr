@@ -1850,7 +1850,10 @@
           "creating": "Wird erstellt",
           "created": "{{space}} erstellt",
           "createdInviteFailed_one": "{{space}} erstellt. {{count}} Person konnte nicht eingeladen werden. Laden Sie sie unter Mitglieder ein.",
-          "createdInviteFailed_other": "{{space}} erstellt. {{count}} Personen konnten nicht eingeladen werden. Laden Sie sie unter Mitglieder ein."
+          "createdInviteFailed_other": "{{space}} erstellt. {{count}} Personen konnten nicht eingeladen werden. Laden Sie sie unter Mitglieder ein.",
+          "inviteFailedWho": "Nicht eingeladen: {{names}}.",
+          "copyAddresses": "Adressen kopieren",
+          "groupsGone": "{{names}} ist nicht mehr verfügbar und wurde daher nicht hinzugefügt."
         },
         "picker": {
           "groupPeople_one": "{{count}} Person",
@@ -1916,7 +1919,13 @@
           "notInvited": "{{names}} wurde nicht eingeladen.",
           "notInvitedMany": "{{names}} wurden nicht eingeladen.",
           "skippedInvited": "{{names}} hat bereits eine Workspace-Einladung und wurde deshalb nicht zu diesem Teamspace hinzugefügt.",
-          "skippedInvitedMany": "{{names}} haben bereits Workspace-Einladungen und wurden deshalb nicht zu diesem Teamspace hinzugefügt."
+          "skippedInvitedMany": "{{names}} haben bereits Workspace-Einladungen und wurden deshalb nicht zu diesem Teamspace hinzugefügt.",
+          "removeBodyPlain": "{{name}} verliert den Zugriff auf diesen Teamspace und seine Notizen. Die Person bleibt im Workspace.",
+          "invitationPendingAdmin": "Einladung ausstehend · Workspace-Admin",
+          "resultInvitedNoEmail": "Einladungen für {{names}} wurden erstellt, aber die E-Mail konnte nicht zugestellt werden. Senden Sie sie unter Einladungen erneut.",
+          "stepDownTitle": "Als Admin von {{space}} zurücktreten?",
+          "stepDownBody": "Sie können diesen Teamspace und seine Mitglieder dann nicht mehr verwalten. Nur ein anderer Admin kann Sie wieder zum Admin machen.",
+          "stepDownConfirm": "Zurücktreten"
         },
         "settings": {
           "leaveTitle": "Teamspace verlassen",
@@ -1934,22 +1943,21 @@
           "blockedBody": "Sie sind der einzige Admin von {{space}}. Machen Sie ein anderes Mitglied zum Admin, bevor Sie gehen.",
           "blockedAction": "Mitglieder verwalten",
           "leaveTitle": "{{space}} verlassen?",
-          "leaveBody": "Ihre direkte Mitgliedschaft endet. Der Zugriff über eine Gruppe bleibt bestehen. Ein anderer Admin verwaltet diesen Teamspace weiter.",
-          "leaveBodyPlain": "Ihre direkte Mitgliedschaft endet.",
           "leaveFailedTitle": "{{space}} konnte nicht verlassen werden",
           "leaveFailedBody": "Ihre Mitgliedschaft ist unverändert. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
           "left": "Sie haben {{space}} verlassen.",
           "deleteTitle": "{{space}} löschen?",
           "deleteBody": "Dadurch wird {{space}} für alle aus dem Workspace entfernt.",
-          "deletingTitle": "{{space}} wird gelöscht…",
-          "deletingBody": "Lassen Sie dieses Fenster geöffnet, während der Teamspace gelöscht wird.",
-          "deletingAction": "Wird gelöscht…",
           "deleteFailedTitle": "{{space}} konnte nicht gelöscht werden",
           "deleteFailedBody": "Der Teamspace ist weiterhin verfügbar. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
           "deleted": "{{space}} wurde gelöscht.",
           "restored": "{{space}} wurde wiederhergestellt",
-          "restoreFailed": "{{space}} konnte nicht wiederhergestellt werden. Versuchen Sie es erneut.",
-          "restoreNameTaken": "{{space}} konnte nicht wiederhergestellt werden. Ein anderer Teamspace hat diesen Namen."
+          "leaveBodyKeeps": "Ihre direkte Mitgliedschaft endet. Der Zugriff über {{groups}} bleibt bestehen.",
+          "leaveBodyLoses": "Sie verlieren den Zugriff auf {{space}} und seine Notizen.",
+          "leaveBodyAdmins": "Ein anderer Admin verwaltet diesen Teamspace weiter.",
+          "deleteNotAllowed": "Sie haben keine Berechtigung, {{space}} zu löschen.",
+          "movedToPersonal_one": "{{count}} nicht synchronisierte Notiz wurde in Ihren persönlichen Bereich verschoben.",
+          "movedToPersonal_other": "{{count}} nicht synchronisierte Notizen wurden in Ihren persönlichen Bereich verschoben."
         },
         "addPeople": {
           "loading": "Teamspaces werden geladen…",

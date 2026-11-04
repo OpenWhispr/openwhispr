@@ -2558,7 +2558,10 @@
           "creating": "Criando",
           "created": "{{space}} criado",
           "createdInviteFailed_one": "{{space}} foi criado. Não foi possível convidar {{count}} pessoa. Convide-a em Membros.",
-          "createdInviteFailed_other": "{{space}} foi criado. Não foi possível convidar {{count}} pessoas. Convide-as em Membros."
+          "createdInviteFailed_other": "{{space}} foi criado. Não foi possível convidar {{count}} pessoas. Convide-as em Membros.",
+          "inviteFailedWho": "Não convidados: {{names}}.",
+          "copyAddresses": "Copiar endereços",
+          "groupsGone": "{{names}} não está mais disponível, por isso não foi adicionado."
         },
         "picker": {
           "groupPeople_one": "{{count}} pessoa",
@@ -2624,7 +2627,13 @@
           "notInvited": "{{names}} não recebeu convite.",
           "notInvitedMany": "{{names}} não receberam convite.",
           "skippedInvited": "{{names}} já tem um convite para o espaço de trabalho, então não foi adicionado a este teamspace.",
-          "skippedInvitedMany": "{{names}} já têm convites para o espaço de trabalho, então não foram adicionados a este teamspace."
+          "skippedInvitedMany": "{{names}} já têm convites para o espaço de trabalho, então não foram adicionados a este teamspace.",
+          "removeBodyPlain": "{{name}} perderá o acesso a este Teamspace e às notas dele. A pessoa continuará no workspace.",
+          "invitationPendingAdmin": "Convite pendente · Administrador do workspace",
+          "resultInvitedNoEmail": "Convites criados para {{names}}, mas não foi possível entregar o e-mail. Reenvie em Convites.",
+          "stepDownTitle": "Deixar de ser administrador de {{space}}?",
+          "stepDownBody": "Você não poderá mais gerenciar este Teamspace nem os membros dele. Só outro administrador poderá torná-lo administrador novamente.",
+          "stepDownConfirm": "Deixar o cargo"
         },
         "settings": {
           "leaveTitle": "Sair do teamspace",
@@ -2642,22 +2651,21 @@
           "blockedBody": "Você é o único administrador de {{space}}. Torne outro membro administrador antes de sair.",
           "blockedAction": "Gerenciar membros",
           "leaveTitle": "Sair de {{space}}?",
-          "leaveBody": "Sua participação direta será encerrada. O acesso por meio de um grupo continuará. Outro administrador continuará gerenciando este teamspace.",
-          "leaveBodyPlain": "Sua participação direta será encerrada.",
           "leaveFailedTitle": "Não foi possível sair de {{space}}",
           "leaveFailedBody": "Sua participação não foi alterada. Verifique sua conexão e tente novamente.",
           "left": "Você saiu de {{space}}.",
           "deleteTitle": "Excluir {{space}}?",
           "deleteBody": "Isso remove {{space}} do espaço de trabalho para todos.",
-          "deletingTitle": "Excluindo {{space}}…",
-          "deletingBody": "Mantenha esta janela aberta enquanto o teamspace é excluído.",
-          "deletingAction": "Excluindo…",
           "deleteFailedTitle": "Não foi possível excluir {{space}}",
           "deleteFailedBody": "O teamspace continua disponível. Verifique sua conexão e tente novamente.",
           "deleted": "{{space}} foi excluído.",
           "restored": "{{space}} foi restaurado",
-          "restoreFailed": "Não foi possível restaurar {{space}}. Tente novamente.",
-          "restoreNameTaken": "Não foi possível restaurar {{space}}. Outro teamspace tem esse nome."
+          "leaveBodyKeeps": "Sua associação direta terminará. Você manterá o acesso por meio de {{groups}}.",
+          "leaveBodyLoses": "Você perderá o acesso a {{space}} e às notas dele.",
+          "leaveBodyAdmins": "Outro administrador continuará gerenciando este Teamspace.",
+          "deleteNotAllowed": "Você não tem permissão para excluir {{space}}.",
+          "movedToPersonal_one": "{{count}} nota não sincronizada foi movida para seu espaço pessoal.",
+          "movedToPersonal_other": "{{count}} notas não sincronizadas foram movidas para seu espaço pessoal."
         },
         "addPeople": {
           "loading": "Carregando teamspaces…",

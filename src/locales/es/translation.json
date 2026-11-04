@@ -2631,7 +2631,10 @@
           "creating": "Creando",
           "created": "Se creó {{space}}",
           "createdInviteFailed_one": "Se creó {{space}}. No se pudo invitar a {{count}} persona. Invítala desde Miembros.",
-          "createdInviteFailed_other": "Se creó {{space}}. No se pudo invitar a {{count}} personas. Invítalas desde Miembros."
+          "createdInviteFailed_other": "Se creó {{space}}. No se pudo invitar a {{count}} personas. Invítalas desde Miembros.",
+          "inviteFailedWho": "Sin invitar: {{names}}.",
+          "copyAddresses": "Copiar direcciones",
+          "groupsGone": "{{names}} ya no está disponible, así que no se añadió."
         },
         "picker": {
           "groupPeople_one": "{{count}} persona",
@@ -2697,7 +2700,13 @@
           "notInvited": "No se invitó a {{names}}.",
           "notInvitedMany": "No se invitó a {{names}}.",
           "skippedInvited": "{{names}} ya tiene una invitación al espacio de trabajo, así que no se añadió a este teamspace.",
-          "skippedInvitedMany": "{{names}} ya tienen invitaciones al espacio de trabajo, así que no se añadieron a este teamspace."
+          "skippedInvitedMany": "{{names}} ya tienen invitaciones al espacio de trabajo, así que no se añadieron a este teamspace.",
+          "removeBodyPlain": "{{name}} perderá el acceso a este Teamspace y a sus notas. Seguirá en el espacio de trabajo.",
+          "invitationPendingAdmin": "Invitación pendiente · Administrador del espacio de trabajo",
+          "resultInvitedNoEmail": "Se crearon invitaciones para {{names}}, pero no se pudo entregar el correo. Reenvíalo desde Invitaciones.",
+          "stepDownTitle": "¿Dejar de ser administrador de {{space}}?",
+          "stepDownBody": "Ya no podrás gestionar este Teamspace ni a sus miembros. Solo otro administrador podrá volver a hacerte administrador.",
+          "stepDownConfirm": "Dejar el cargo"
         },
         "settings": {
           "leaveTitle": "Salir del teamspace",
@@ -2715,22 +2724,21 @@
           "blockedBody": "Eres el único administrador de {{space}}. Haz administrador a otro miembro antes de salir.",
           "blockedAction": "Administrar miembros",
           "leaveTitle": "¿Salir de {{space}}?",
-          "leaveBody": "Tu membresía directa terminará. El acceso a través de un grupo se mantendrá. Otro administrador seguirá gestionando este teamspace.",
-          "leaveBodyPlain": "Tu membresía directa terminará.",
           "leaveFailedTitle": "No se pudo salir de {{space}}",
           "leaveFailedBody": "Tu membresía no ha cambiado. Comprueba tu conexión e inténtalo de nuevo.",
           "left": "Saliste de {{space}}.",
           "deleteTitle": "¿Eliminar {{space}}?",
           "deleteBody": "Esto elimina {{space}} del espacio de trabajo para todos.",
-          "deletingTitle": "Eliminando {{space}}…",
-          "deletingBody": "Mantén esta ventana abierta mientras se elimina el teamspace.",
-          "deletingAction": "Eliminando…",
           "deleteFailedTitle": "No se pudo eliminar {{space}}",
           "deleteFailedBody": "El teamspace sigue disponible. Comprueba tu conexión e inténtalo de nuevo.",
           "deleted": "{{space}} se eliminó.",
           "restored": "Se restauró {{space}}",
-          "restoreFailed": "No se pudo restaurar {{space}}. Inténtalo de nuevo.",
-          "restoreNameTaken": "No se pudo restaurar {{space}}. Otro teamspace tiene ese nombre."
+          "leaveBodyKeeps": "Tu membresía directa terminará. Conservarás el acceso a través de {{groups}}.",
+          "leaveBodyLoses": "Perderás el acceso a {{space}} y a sus notas.",
+          "leaveBodyAdmins": "Otro administrador seguirá gestionando este Teamspace.",
+          "deleteNotAllowed": "No tienes permiso para eliminar {{space}}.",
+          "movedToPersonal_one": "{{count}} nota sin sincronizar se movió a tu espacio personal.",
+          "movedToPersonal_other": "{{count}} notas sin sincronizar se movieron a tu espacio personal."
         },
         "addPeople": {
           "loading": "Cargando teamspaces…",

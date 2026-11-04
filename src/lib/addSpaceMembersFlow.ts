@@ -15,6 +15,8 @@ export interface AddAttemptOutcome {
   addedGroups: PickedRecipient[];
   failedGroups: PickedRecipient[];
   invited: PickedRecipient[];
+  /** The invited whose invitation exists but whose email couldn't be delivered. */
+  undeliveredInvites: PickedRecipient[];
   failedInvites: PickedRecipient[];
   refusedInvites: InviteRefusal[];
   /**
@@ -67,8 +69,7 @@ function hasFailures(outcome: AddAttemptOutcome): boolean {
 /** Whether what stays staged could go through as it is, which is what Try again promises. */
 export function canRetry(outcome: AddAttemptOutcome): boolean {
   return (
-    hasFailures(outcome) ||
-    outcome.refusedInvites.some(({ failure }) => retriesAsItStands(failure))
+    hasFailures(outcome) || outcome.refusedInvites.some(({ failure }) => retriesAsItStands(failure))
   );
 }
 

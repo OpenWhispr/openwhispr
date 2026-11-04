@@ -48,6 +48,7 @@ test.before(async (t) => {
         export const leaveSpace = (...args) => globalThis.__actions.leaveSpace(...args);
         export const leaveTeam = (...args) => globalThis.__actions.leaveTeam(...args);
         export const deleteSpace = (...args) => globalThis.__actions.deleteSpace(...args);
+        export const holdSpaceDelete = (...args) => globalThis.__actions.holdSpaceDelete(...args);
       `,
       // The real picker loads emoji data; the dialog only needs to be handed a choice.
       "/ui/EmojiPicker": `
@@ -221,6 +222,14 @@ async function mount(
     leaveSpace: answer("leaveSpace", async () => ({ removed: true, still_via_teams: [] })),
     leaveTeam: answer("leaveTeam", async () => {}),
     deleteSpace: answer("deleteSpace", async () => ({ success: true })),
+    holdSpaceDelete: (...args) => {
+      calls.push(["holdSpaceDelete", ...args]);
+      return {
+        undo: async () => true,
+        commit: async () => ({ success: true }),
+        again: () => null,
+      };
+    },
   };
 
   function Host() {
@@ -610,7 +619,7 @@ test("leaving asks first, and closes the settings once it's done", async (t) => 
   assert.equal(dialogs().length, 0);
 });
 
-test("an admin the directory lists alone reads the plain leave wording", async (t) => {
+test("an admin the directory lists alone is told they lose access, and nothing about others", async (t) => {
   await mount(t, {
     workspace: workspaceWith({ manage_settings: false }),
     listInWorkspace: async () => [directoryRow({ admins: [admin("me", "Ronnie")] })],
@@ -619,7 +628,7 @@ test("an admin the directory lists alone reads the plain leave wording", async (
   await ui.click(settingsButton("Leave teamspace"));
 
   assert.equal(heading(), "Leave Customer Calls?");
-  assert.match(text(top()), /Your direct membership will end\./);
+  assert.match(text(top()), /You'll lose access to Customer Calls and its notes\./);
   assert.doesNotMatch(text(top()), /Another admin will continue managing this teamspace/);
 });
 
@@ -640,26 +649,53 @@ test("deleting a cloud teamspace stacks over the settings, and a delete closes b
   await ui.click(topButton("Delete teamspace"));
   await ui.settle();
 
-  assert.equal(callsTo("deleteSpace").length, 1);
+  assert.equal(callsTo("holdSpaceDelete").length, 1);
+  assert.equal(callsTo("deleteSpace").length, 0, "the delete waits for its Undo window");
   assert.deepEqual(toastTitles(), ["Customer Calls was deleted."]);
   assert.deepEqual(events, [false]);
   assert.equal(dialogs().length, 0);
 });
 
-test("a delete that fails keeps the settings open behind its Try again", async (t) => {
-  const { events } = await mount(t, {
+test("a rename to a taken name says so and leaves the name in the field", async (t) => {
+  const { callsTo } = await mount(t, {
     actions: {
-      deleteSpace: async () => ({ success: false, error: "offline", failure: { kind: "failed" } }),
+      renameSpace: async () => ({
+        success: false,
+        error: "A teamspace with this name already exists",
+        failure: { kind: "nameTaken" },
+      }),
     },
   });
 
-  await ui.click(settingsButton("Delete teamspace"));
-  await ui.click(topButton("Delete teamspace"));
+  await ui.type(nameInput(), "Sales");
+  await ui.press(nameInput(), "Enter");
   await ui.settle();
 
-  assert.equal(heading(), "Couldn't delete Customer Calls");
-  assert.deepEqual(events, []);
-  assert.equal(dialogs().length, 2);
+  assert.equal(
+    readable(globalThis.__toasts.at(-1).description),
+    "A teamspace called Sales already exists"
+  );
+  assert.equal(nameInput().value, "Sales");
+
+  // Leaving the field again, or closing, doesn't send what was just refused.
+  const refused = callsTo("renameSpace").length;
+  await ui.press(nameInput(), "Enter");
+  await ui.settle();
+  assert.equal(callsTo("renameSpace").length, refused);
+});
+
+test("a rename that fails for another reason goes back to the saved name", async (t) => {
+  await mount(t, {
+    actions: {
+      renameSpace: async () => ({ success: false, error: "offline", failure: { kind: "failed" } }),
+    },
+  });
+
+  await ui.type(nameInput(), "Sales");
+  await ui.press(nameInput(), "Enter");
+  await ui.settle();
+
+  assert.equal(nameInput().value, "Customer Calls");
 });
 
 test("a local teamspace steps aside for the dialog that asks for its name", async (t) => {
@@ -763,7 +799,7 @@ test("Leave shows it's busy while it reads, and a failed read leaves the decisio
   // The earlier read said sole admin, but it is the one that can no longer be trusted.
   assert.equal(heading(), "Leave Customer Calls?");
   assert.equal(settingsButton("Leave teamspace").disabled, false);
-  assert.match(text(top()), /Your direct membership will end\./);
+  assert.match(text(top()), /You'll lose access to Customer Calls and its notes\./);
   assert.doesNotMatch(text(top()), /Another admin will continue managing/);
 
   await ui.click(topButton("Leave teamspace"));

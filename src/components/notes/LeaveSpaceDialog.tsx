@@ -151,17 +151,23 @@ export function LeaveSpaceDialog({
     );
   }
 
-  // Leaving through a group names the groups; a direct grant says what stays.
-  const body = !direct
-    ? t("notes.spaces.leaveConfirmDescription", {
-        teams: formatList(
-          i18n.language,
-          leaveTeams.map((team) => isolate(team.name))
-        ),
-      })
-    : space.my_direct_role === "admin" && otherAdmins
-      ? t("settingsPage.workspace.teamspaces.exit.leaveBody")
-      : t("settingsPage.workspace.teamspaces.exit.leaveBodyPlain");
+  const groupNames = formatList(
+    i18n.language,
+    leaveTeams.map((team) => isolate(team.name))
+  );
+  // Leaving through a group names the groups; a direct grant says what stays, and what goes.
+  let body: string;
+  if (!direct) {
+    body = t("notes.spaces.leaveConfirmDescription", { teams: groupNames });
+  } else {
+    body =
+      leaveTeams.length > 0
+        ? t("settingsPage.workspace.teamspaces.exit.leaveBodyKeeps", { groups: groupNames })
+        : t("settingsPage.workspace.teamspaces.exit.leaveBodyLoses", { space: name });
+    if (space.my_direct_role === "admin" && otherAdmins) {
+      body += ` ${t("settingsPage.workspace.teamspaces.exit.leaveBodyAdmins")}`;
+    }
+  }
 
   return (
     <WorkspaceActionDialog

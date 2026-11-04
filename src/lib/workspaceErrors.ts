@@ -150,6 +150,8 @@ export type SpaceActionError =
   // 410: the space was archived, so it no longer takes joins or members.
   | { kind: "archived" }
   | { kind: "notWorkspaceMembers"; userIds: string[] }
+  // Groups a create named that were deleted or moved since the list loaded.
+  | { kind: "groupsUnavailable"; teamIds: string[] }
   | RowActionError;
 
 /** Maps a failed space action; codes come first, then the row action kinds. */
@@ -172,6 +174,15 @@ export function classifySpaceError(error: unknown): SpaceActionError {
           kind: "notWorkspaceMembers",
           userIds: Array.isArray(userIds)
             ? userIds.filter((id): id is string => typeof id === "string")
+            : [],
+        };
+      }
+      case "teams_not_available": {
+        const teamIds = detailsRecord(error.details)?.team_ids;
+        return {
+          kind: "groupsUnavailable",
+          teamIds: Array.isArray(teamIds)
+            ? teamIds.filter((id): id is string => typeof id === "string")
             : [],
         };
       }

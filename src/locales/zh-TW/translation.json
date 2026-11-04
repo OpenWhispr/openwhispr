@@ -2579,7 +2579,10 @@
           "creating": "建立中",
           "created": "已建立 {{space}}",
           "createdInviteFailed_one": "已建立 {{space}}。無法邀請 {{count}} 人。請在「成員」中邀請。",
-          "createdInviteFailed_other": "已建立 {{space}}。無法邀請 {{count}} 人。請在「成員」中邀請。"
+          "createdInviteFailed_other": "已建立 {{space}}。無法邀請 {{count}} 人。請在「成員」中邀請。",
+          "inviteFailedWho": "未邀請：{{names}}。",
+          "copyAddresses": "複製地址",
+          "groupsGone": "{{names}} 已無法使用，因此未新增。"
         },
         "picker": {
           "groupPeople_one": "{{count}} 人",
@@ -2645,7 +2648,13 @@
           "notInvited": "{{names}} 未獲邀請。",
           "notInvitedMany": "{{names}} 未獲邀請。",
           "skippedInvited": "{{names}} 已有工作區邀請，因此未被加入此 Teamspace。",
-          "skippedInvitedMany": "{{names}} 已有工作區邀請，因此未被加入此 Teamspace。"
+          "skippedInvitedMany": "{{names}} 已有工作區邀請，因此未被加入此 Teamspace。",
+          "removeBodyPlain": "{{name}} 將無法再存取此 Teamspace 及其筆記，但仍留在工作區中。",
+          "invitationPendingAdmin": "邀請待接受 · 工作區管理員",
+          "resultInvitedNoEmail": "已為 {{names}} 建立邀請，但郵件未能送達。請在「邀請」中重新傳送。",
+          "stepDownTitle": "要卸任 {{space}} 的管理員嗎？",
+          "stepDownBody": "你將無法再管理此 Teamspace 及其成員。只有其他管理員才能讓你重新成為管理員。",
+          "stepDownConfirm": "卸任"
         },
         "settings": {
           "leaveTitle": "離開 Teamspace",
@@ -2663,22 +2672,21 @@
           "blockedBody": "你是 {{space}} 的唯一管理員。離開前，請先將另一位成員設為管理員。",
           "blockedAction": "管理成員",
           "leaveTitle": "要離開 {{space}} 嗎？",
-          "leaveBody": "你的直接成員身分將結束。透過群組取得的存取權將保留。其他管理員將繼續管理此 Teamspace。",
-          "leaveBodyPlain": "你的直接成員身分將結束。",
           "leaveFailedTitle": "無法離開 {{space}}",
           "leaveFailedBody": "你的成員身分未變更。請檢查網路連線後再試一次。",
           "left": "你已離開 {{space}}。",
           "deleteTitle": "要刪除 {{space}} 嗎？",
           "deleteBody": "這將為所有人從工作區中移除 {{space}}。",
-          "deletingTitle": "正在刪除 {{space}}…",
-          "deletingBody": "刪除 Teamspace 期間，請保持此視窗開啟。",
-          "deletingAction": "正在刪除…",
           "deleteFailedTitle": "無法刪除 {{space}}",
           "deleteFailedBody": "該 Teamspace 仍可使用。請檢查網路連線後再試一次。",
           "deleted": "{{space}} 已被刪除。",
           "restored": "{{space}} 已還原",
-          "restoreFailed": "無法還原 {{space}}。請再試一次。",
-          "restoreNameTaken": "無法還原 {{space}}。已有其他 Teamspace 使用此名稱。"
+          "leaveBodyKeeps": "你的直接成員身分將結束。你仍可透過 {{groups}} 存取。",
+          "leaveBodyLoses": "你將無法再存取 {{space}} 及其筆記。",
+          "leaveBodyAdmins": "其他管理員將繼續管理此 Teamspace。",
+          "deleteNotAllowed": "你沒有刪除 {{space}} 的權限。",
+          "movedToPersonal_one": "{{count}} 則未同步的筆記已移至你的個人空間。",
+          "movedToPersonal_other": "{{count}} 則未同步的筆記已移至你的個人空間。"
         },
         "addPeople": {
           "loading": "正在載入 Teamspace…",

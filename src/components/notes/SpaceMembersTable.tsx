@@ -177,7 +177,16 @@ function MemberRow({
         }
       />
     );
-    if (row.kind === "inherited") {
+    if (row.kind === "inherited" && row.promotable) {
+      role = (
+        <SpaceRoleMenu
+          role={member.role}
+          subject={displayName}
+          pending={pending}
+          onRoleChange={(next) => onRoleChange(row, next)}
+        />
+      );
+    } else if (row.kind === "inherited") {
       role = (
         <span className="text-xs text-muted-foreground">
           {t(
@@ -215,7 +224,11 @@ function MemberRow({
           </span>
         }
         primary={<bdi dir="ltr">{row.invitation.email}</bdi>}
-        secondary={t("settingsPage.workspace.teamspaces.members.invitationPending")}
+        secondary={
+          row.invitation.workspace_role === "admin"
+            ? t("settingsPage.workspace.teamspaces.members.invitationPendingAdmin")
+            : t("settingsPage.workspace.teamspaces.members.invitationPending")
+        }
       />
     );
     role = <RoleText>{roleLabel(row.invitation.role)}</RoleText>;

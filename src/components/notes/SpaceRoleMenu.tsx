@@ -55,7 +55,8 @@ interface SpaceRoleMenuProps {
   /** A change for this row is in flight. */
   pending: boolean;
   onRoleChange: (role: TeamRole) => void;
-  onRemove: () => void;
+  /** Left out for someone with no direct grant here, as there is nothing of theirs to remove. */
+  onRemove?: () => void;
   /**
    * The groups (already named for reading aloud) that make this person an admin. While there are
    * some, Member is not on offer: a direct Member role wouldn't lower them, and the row would go
@@ -135,14 +136,18 @@ export function SpaceRoleMenu({
             );
           })}
         </DropdownMenuRadioGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          className="gap-2.5 text-sm text-destructive focus:bg-destructive/10 focus:text-destructive"
-          onSelect={onRemove}
-        >
-          <Trash2 className="size-3.5 shrink-0" aria-hidden="true" />
-          {t("settingsPage.workspace.teamspaces.members.removeItem")}
-        </DropdownMenuItem>
+        {onRemove ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="gap-2.5 text-sm text-destructive focus:bg-destructive/10 focus:text-destructive"
+              onSelect={onRemove}
+            >
+              <Trash2 className="size-3.5 shrink-0" aria-hidden="true" />
+              {t("settingsPage.workspace.teamspaces.members.removeItem")}
+            </DropdownMenuItem>
+          </>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -1,7 +1,14 @@
 import { TeamsService } from "./TeamsService";
 import { SpacesService } from "./SpacesService";
 import { markSpacePurged, releasePurgedSpace, syncService, upsertCloudSpaces } from "./SyncService";
-import { loadSpaces, purgeSpace, updateSpaceMeta } from "../stores/noteStore";
+import {
+  getAccountGeneration,
+  hideSpaceInView,
+  loadSpaces,
+  purgeSpace,
+  updateSpaceMeta,
+} from "../stores/noteStore";
+import { holdSpace, markHeldSpaceDeleted, releaseSpace } from "../lib/heldSpaceDeletes";
 import { invalidateSpaceRoster } from "../lib/spaceRosterCache";
 import { createSpaceActions } from "./spaceActionsCore";
 
@@ -28,13 +35,22 @@ const actions = createSpaceActions({
   markSpacePurged,
   releasePurgedSpace,
   invalidateSpaceRoster,
+  deleteHold: {
+    accountGeneration: getAccountGeneration,
+    hide: (space, cloudSpaceId) => {
+      holdSpace(space.id, cloudSpaceId);
+      return hideSpaceInView(space.id);
+    },
+    release: (space, cloudSpaceId) => releaseSpace(space.id, cloudSpaceId),
+    markDeleted: (space) => markHeldSpaceDeleted(space.id),
+  },
 });
 
 export const {
   createSpace,
   renameSpace,
   deleteSpace,
-  restoreSpace,
+  holdSpaceDelete,
   assignTeamToSpace,
   setSpaceTeamAccess,
   unassignTeamFromSpace,

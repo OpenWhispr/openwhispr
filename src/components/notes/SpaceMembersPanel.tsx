@@ -31,6 +31,7 @@ import {
   type InviteRefusal,
   type SpaceAccessEnd,
 } from "../../lib/addSpaceMembersFlow";
+import { MAX_INVITE_RECIPIENTS } from "../../lib/inviteFlow";
 import { buildSpaceMemberRows, type SpaceMemberRow } from "../../lib/spaceMemberRows";
 import {
   addRecipients,
@@ -133,6 +134,7 @@ function emptyOutcome(): AddAttemptOutcome {
     addedGroups: [],
     failedGroups: [],
     invited: [],
+    undeliveredInvites: [],
     failedInvites: [],
     refusedInvites: [],
     skippedInvites: [],
@@ -215,7 +217,10 @@ async function runAddAttempt(input: {
           const recipient = byAddress.get(key);
           if (!recipient) return;
           reported.add(key);
-          if (result.ok === true || result.grantsAdded === true) outcome.invited.push(recipient);
+          if (result.ok === true || result.grantsAdded === true) {
+            outcome.invited.push(recipient);
+            if (result.ok === true && !result.emailSent) outcome.undeliveredInvites.push(recipient);
+          }
           // An older API attaches no teamspace to an invitation that already exists, so this
           // address isn't in the teamspace, and sending it again wouldn't change that.
           else if (result.kind === "alreadyInvited") outcome.skippedInvites.push(recipient);
@@ -257,6 +262,17 @@ function describeAttempt(
     );
   const sentences: string[] = [];
   const kind = attemptSummary(outcome).kind;
+  const delivered = outcome.invited.filter(
+    (recipient) => !outcome.undeliveredInvites.includes(recipient)
+  );
+  const undelivered = outcome.undeliveredInvites;
+  // Their invitation is there, but nobody told them: Invitations is where it can be sent again.
+  const invitedSentences = (): string[] => [
+    ...(delivered.length > 0 ? [t(`${COPY}.resultInvited`, { names: names(delivered) })] : []),
+    ...(undelivered.length > 0
+      ? [t(`${COPY}.resultInvitedNoEmail`, { names: names(undelivered) })]
+      : []),
+  ];
 
   // What the invite dialog says about each kind. Some of its lines name nobody, and a refused
   // address leaves the field, so they are followed by who wasn't invited.
@@ -296,9 +312,7 @@ function describeAttempt(
     if (outcome.addedMembers.length > 0) {
       sentences.push(t(`${COPY}.resultAdded`, { names: names(outcome.addedMembers) }));
     }
-    if (outcome.invited.length > 0) {
-      sentences.push(t(`${COPY}.resultInvited`, { names: names(outcome.invited) }));
-    }
+    sentences.push(...invitedSentences());
     if (outcome.addedGroups.length === 1) {
       sentences.push(t(`${COPY}.resultGroup`, { group: names(outcome.addedGroups) }));
     } else if (outcome.addedGroups.length > 1) {
@@ -315,9 +329,7 @@ function describeAttempt(
         })
       );
     }
-    if (outcome.invited.length > 0) {
-      sentences.push(t(`${COPY}.resultInvited`, { names: names(outcome.invited) }));
-    }
+    sentences.push(...invitedSentences());
     if (outcome.failedInvites.length > 0) {
       sentences.push(
         t(
@@ -358,7 +370,10 @@ function describeAttempt(
   }
   return {
     text: sentences.join(" "),
-    tone: kind === "allDone" && outcome.refusedInvites.length === 0 ? "info" : "error",
+    tone:
+      kind === "allDone" && outcome.refusedInvites.length === 0 && undelivered.length === 0
+        ? "info"
+        : "error",
   };
 }
 
@@ -407,6 +422,8 @@ export default function SpaceMembersPanel({
   const [removal, dispatchRemoval] = useReducer(confirmActionReducer<RemovalSubject>, {
     kind: "closed",
   });
+  // The user's own row, while they confirm giving up admin.
+  const [steppingDown, setSteppingDown] = useState<SpaceMemberRow | null>(null);
 
   const loadMembers = useCallback(
     () => (spaceId ? SpacesService.listMembers(spaceId) : Promise.resolve<SpaceMemberEntry[]>([])),
@@ -460,6 +477,16 @@ export default function SpaceMembersPanel({
     if (teamsFailed) void teamsLoad.reload();
   };
 
+  const isWorkspaceAdmin = workspaceCan(workspace, "manage_settings");
+  const admins = members.filter((member) => member.role === "admin");
+  // Leave blocks this user until there is another admin, and nobody here can be made one.
+  const nobodyToPromote =
+    !isWorkspaceAdmin &&
+    admins.length === 1 &&
+    admins[0].user_id === user?.id &&
+    admins[0].direct_role === "admin" &&
+    members.every((member) => member.user_id === user?.id || member.direct_role == null);
+
   const rows = useMemo(
     () =>
       buildSpaceMemberRows({
@@ -472,9 +499,10 @@ export default function SpaceMembersPanel({
             .map((team): [string, number] => [team.id, team.member_count])
         ),
         canManage,
+        promoteInherited: nobodyToPromote,
         formatNames: (names) => formatList(i18n.language, names),
       }),
-    [members, invitations, space.teams, workspaceTeams, canManage, i18n.language]
+    [members, invitations, space.teams, workspaceTeams, canManage, nobodyToPromote, i18n.language]
   );
   const groupEmoji = useMemo(
     () =>
@@ -645,13 +673,31 @@ export default function SpaceMembersPanel({
     }
   };
 
+  const changePersonRole = (row: SpaceMemberRow, role: TeamRole): void => {
+    if (row.kind !== "person" && row.kind !== "inherited") return;
+    void runPending(row.id, async () => {
+      await setSpaceMemberRole(space, row.member.user_id, role);
+      toast({ title: t("notes.spaces.members.roleUpdated") });
+      await reloadMembers();
+    });
+  };
+
   const handleRoleChange = (row: SpaceMemberRow, role: TeamRole): void => {
     if (row.kind === "person") {
-      void runPending(row.id, async () => {
-        await setSpaceMemberRole(space, row.member.user_id, role);
-        toast({ title: t("notes.spaces.members.roleUpdated") });
-        await reloadMembers();
-      });
+      // Whoever steps down can't take it back, since managing roles is what they give up. A
+      // workspace admin stays an admin here whatever this row says.
+      if (
+        role === "member" &&
+        row.member.user_id === user?.id &&
+        row.member.direct_role === "admin" &&
+        !isWorkspaceAdmin
+      ) {
+        setSteppingDown(row);
+        return;
+      }
+      changePersonRole(row, role);
+    } else if (row.kind === "inherited") {
+      if (row.promotable) changePersonRole(row, role);
     } else if (row.kind === "group") {
       // Downgrading the only group that makes someone an admin is allowed here, as unassigning
       // it is: any workspace admin can reverse it, and it never touches note access.
@@ -687,11 +733,7 @@ export default function SpaceMembersPanel({
           );
         // A workspace admin keeps implicit access to every teamspace, so removing their own direct
         // row leaves nothing: it is a plain removal, with nothing to purge and no panel to close.
-        if (
-          user?.id &&
-          subject.member.user_id === user.id &&
-          !workspaceCan(workspace, "manage_settings")
-        ) {
+        if (user?.id && subject.member.user_id === user.id && !isWorkspaceAdmin) {
           // Dropping your own grant can revoke access to what the device holds, which Leave's sync
           // purges; a removal of someone else's has nothing of the kind to do.
           const { still_via_teams } = await leaveSpace(space, user.id);
@@ -773,6 +815,14 @@ export default function SpaceMembersPanel({
   else if (attempt && attempt.text !== "") line = attempt;
   else if (stagedSentences.length > 0) line = { text: stagedSentences.join(" "), tone: "info" };
 
+  const tooManyInvites = summary.emails.length > MAX_INVITE_RECIPIENTS;
+  if (!adding && !summary.hasInvalid && tooManyInvites) {
+    line = {
+      text: t("workspaces.invite.tooMany", { count: MAX_INVITE_RECIPIENTS }),
+      tone: "error",
+    };
+  }
+
   const addLabel = adding
     ? t(`${COPY}.adding`)
     : needsRetry
@@ -784,7 +834,9 @@ export default function SpaceMembersPanel({
       ref={addButtonRef}
       type="button"
       onClick={() => void handleAdd()}
-      disabled={adding || !peopleReady || picked.length === 0 || summary.hasInvalid}
+      disabled={
+        adding || !peopleReady || picked.length === 0 || summary.hasInvalid || tooManyInvites
+      }
       className="h-10 shrink-0 rounded-lg px-4"
     >
       {addLabel}
@@ -882,6 +934,25 @@ export default function SpaceMembersPanel({
         onRemove={handleRemove}
       />
 
+      {steppingDown && (
+        <WorkspaceActionDialog
+          open
+          icon="info"
+          title={t(`${COPY}.stepDownTitle`, { space: spaceName })}
+          body={t(`${COPY}.stepDownBody`)}
+          primary={{
+            label: t(`${COPY}.stepDownConfirm`),
+            onClick: () => {
+              changePersonRole(steppingDown, "member");
+              setSteppingDown(null);
+            },
+            tone: "destructive",
+          }}
+          cancelLabel={t("common.cancel")}
+          onDismiss={() => setSteppingDown(null)}
+        />
+      )}
+
       {confirmSubject && (
         <WorkspaceActionDialog
           open
@@ -899,7 +970,12 @@ export default function SpaceMembersPanel({
               : removalFailed
                 ? t(`${COPY}.removeFailedBody`, { name: subjectName, space: spaceName })
                 : confirmSubject.kind === "person"
-                  ? t(`${COPY}.removeBody`, { name: subjectName })
+                  ? t(
+                      confirmSubject.member.via_teams.length > 0
+                        ? `${COPY}.removeBody`
+                        : `${COPY}.removeBodyPlain`,
+                      { name: subjectName }
+                    )
                   : confirmSubject.team.memberCount != null
                     ? t(`${COPY}.removeGroupBody`, { count: confirmSubject.team.memberCount })
                     : t(`${COPY}.removeGroupBodyNoCount`)

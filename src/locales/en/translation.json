@@ -1850,7 +1850,10 @@
           "creating": "Creating",
           "created": "Created {{space}}",
           "createdInviteFailed_one": "Created {{space}}. Couldn't invite {{count}} person. Invite them from Members.",
-          "createdInviteFailed_other": "Created {{space}}. Couldn't invite {{count}} people. Invite them from Members."
+          "createdInviteFailed_other": "Created {{space}}. Couldn't invite {{count}} people. Invite them from Members.",
+          "inviteFailedWho": "Not invited: {{names}}.",
+          "copyAddresses": "Copy addresses",
+          "groupsGone": "{{names}} is no longer available, so it wasn't added."
         },
         "picker": {
           "groupPeople_one": "{{count}} person",
@@ -1916,7 +1919,13 @@
           "notInvited": "{{names}} wasn't invited.",
           "notInvitedMany": "{{names}} weren't invited.",
           "skippedInvited": "{{names}} already has a workspace invitation, so they weren't added to this teamspace.",
-          "skippedInvitedMany": "{{names}} already have workspace invitations, so they weren't added to this teamspace."
+          "skippedInvitedMany": "{{names}} already have workspace invitations, so they weren't added to this teamspace.",
+          "removeBodyPlain": "{{name}} will lose access to this teamspace and its notes. They'll stay in the workspace.",
+          "invitationPendingAdmin": "Invitation pending · Workspace Admin",
+          "resultInvitedNoEmail": "Created invitations for {{names}}, but the email couldn't be delivered. Resend it from Invitations.",
+          "stepDownTitle": "Step down as admin of {{space}}?",
+          "stepDownBody": "You won't be able to manage this teamspace or its members. Only another admin can make you an admin again.",
+          "stepDownConfirm": "Step down"
         },
         "settings": {
           "leaveTitle": "Leave teamspace",
@@ -1934,22 +1943,21 @@
           "blockedBody": "You're the only admin of {{space}}. Make another member an admin before you leave.",
           "blockedAction": "Manage members",
           "leaveTitle": "Leave {{space}}?",
-          "leaveBody": "Your direct membership will end. Access through a group will remain. Another admin will continue managing this teamspace.",
-          "leaveBodyPlain": "Your direct membership will end.",
           "leaveFailedTitle": "Couldn't leave {{space}}",
           "leaveFailedBody": "Your membership is unchanged. Check your connection and try again.",
           "left": "You left {{space}}.",
           "deleteTitle": "Delete {{space}}?",
           "deleteBody": "This removes {{space}} from the workspace for everyone.",
-          "deletingTitle": "Deleting {{space}}…",
-          "deletingBody": "Keep this window open while the teamspace is deleted.",
-          "deletingAction": "Deleting…",
           "deleteFailedTitle": "Couldn't delete {{space}}",
           "deleteFailedBody": "The teamspace is still available. Check your connection and try again.",
           "deleted": "{{space}} was deleted.",
           "restored": "{{space}} restored",
-          "restoreFailed": "Couldn't restore {{space}}. Try again.",
-          "restoreNameTaken": "Couldn't restore {{space}}. Another teamspace has that name."
+          "leaveBodyKeeps": "Your direct membership will end. You'll keep access through {{groups}}.",
+          "leaveBodyLoses": "You'll lose access to {{space}} and its notes.",
+          "leaveBodyAdmins": "Another admin will continue managing this teamspace.",
+          "deleteNotAllowed": "You don't have permission to delete {{space}}.",
+          "movedToPersonal_one": "{{count}} note that hadn't synced was moved to your Personal space.",
+          "movedToPersonal_other": "{{count}} notes that hadn't synced were moved to your Personal space."
         },
         "addPeople": {
           "loading": "Loading teamspaces…",

@@ -42,9 +42,6 @@ function makeHarness() {
         calls.push(["space.removeMember", spaceId, userId]);
         return { removed: true, still_via_teams: [] };
       },
-      restore: async (spaceId) => {
-        calls.push(["space.restore", spaceId]);
-      },
       join: async (spaceId) => {
         calls.push(["space.join", spaceId]);
         return { joined: true };
@@ -80,6 +77,15 @@ function makeHarness() {
     },
     sync: {
       requestSyncAll: (reason) => calls.push(["sync", reason]),
+    },
+    deleteHold: {
+      accountGeneration: () => 1,
+      hide: (space, cloudSpaceId) => {
+        calls.push(["hold.hide", space.id, cloudSpaceId]);
+        return async (reopen) => calls.push(["hold.bringBack", reopen]);
+      },
+      release: (space, cloudSpaceId) => calls.push(["hold.release", space.id, cloudSpaceId]),
+      markDeleted: (space) => calls.push(["hold.markDeleted", space.id]),
     },
     markSpacePurged: async (spaceId, reason) => calls.push(["guard", spaceId, reason]),
     releasePurgedSpace: async (spaceId) => calls.push(["releasePurgedSpace", spaceId]),
@@ -186,6 +192,22 @@ test("renameSpace without a description leaves it out of the request", async () 
   );
 });
 
+test("renameSpace says when the name is taken", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { deps, localSpace } = makeHarness();
+  deps.spaces.update = async () => {
+    throw new CloudApiError("Name taken", 409, "space_name_taken");
+  };
+
+  const result = await createSpaceActions(deps).renameSpace(localSpace, {
+    name: "Taken",
+    emoji: null,
+  });
+
+  assert.deepEqual(result.failure, { kind: "nameTaken" });
+});
+
 test("renameSpace rolls back a rejected cloud rename", async () => {
   const { createSpaceActions } = await load();
   const { calls, deps, localSpace } = makeHarness();
@@ -196,7 +218,7 @@ test("renameSpace rolls back a rejected cloud rename", async () => {
 
   const result = await actions.renameSpace(localSpace, { name: "New name", emoji: "✨" });
 
-  assert.deepEqual(result, { success: false, error: "offline" });
+  assert.deepEqual(result, { success: false, error: "offline", failure: { kind: "failed" } });
   assert.deepEqual(
     calls.filter(([name]) => name === "local.update"),
     [
@@ -441,46 +463,220 @@ test("createSpace sends the description and both flags when given", async () => 
   ]);
 });
 
-test("a restore clears the purge guard before refreshing, so the teamspace comes straight back", async () => {
+const namesOf = (calls) => calls.map((call) => call[0]);
+
+test("a held delete only hides the teamspace: nothing is sent, guarded or purged", async () => {
   const { createSpaceActions } = await load();
-  const { calls, deps } = makeHarness();
-  const actions = createSpaceActions(deps);
+  const { calls, deps, localSpace } = makeHarness();
 
-  await actions.restoreSpace("cloud-space-1");
+  createSpaceActions(deps).holdSpaceDelete(localSpace);
 
-  const order = calls.map((call) => call[0]);
-  assert.deepEqual(calls[0], ["space.restore", "cloud-space-1"]);
-  assert.deepEqual(calls[1], ["releasePurgedSpace", "cloud-space-1"]);
-  assert.ok(order.indexOf("releasePurgedSpace") < order.indexOf("space.mySpaces"));
-  assert.ok(order.indexOf("releasePurgedSpace") < order.indexOf("mirror.upsert"));
-  assert.deepEqual(calls.at(-1), ["sync", "manual"]);
+  assert.deepEqual(calls, [["hold.hide", 7, "cloud-space-1"]]);
 });
 
-test("a refused restore leaves the guard and the mirror alone", async () => {
+test("Undo releases the hold and returns to the view, and the delete never goes", async () => {
   const { createSpaceActions } = await load();
-  const { calls, deps } = makeHarness();
-  const failure = new Error("name taken");
-  deps.spaces.restore = async () => {
-    throw failure;
+  const { calls, deps, localSpace } = makeHarness();
+  const hold = createSpaceActions(deps).holdSpaceDelete(localSpace);
+
+  assert.equal(await hold.undo(), true);
+  assert.equal(await hold.commit(), null);
+  assert.equal(await hold.undo(), false, "a second press has nothing to do");
+
+  assert.deepEqual(
+    calls.slice(1).filter(([name]) => name !== "local.getSpaces"),
+    [
+      ["hold.release", 7, "cloud-space-1"],
+      ["hold.bringBack", true],
+    ]
+  );
+});
+
+test("commit sends the delete once, purges, and Undo no longer applies", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps, localSpace } = makeHarness();
+  const hold = createSpaceActions(deps).holdSpaceDelete(localSpace);
+
+  assert.deepEqual(await hold.commit(), { success: true });
+  assert.equal(await hold.undo(), false);
+  assert.equal(await hold.commit(), null);
+
+  const order = namesOf(calls);
+  assert.equal(order.filter((name) => name === "space.remove").length, 1);
+  assert.ok(order.indexOf("space.remove") < order.indexOf("guard"));
+  assert.ok(order.indexOf("guard") < order.indexOf("local.purge"));
+  assert.ok(order.indexOf("local.purge") < order.indexOf("hold.markDeleted"));
+  assert.equal(order.includes("hold.release"), false, "a deleted teamspace stays out of the lists");
+  assert.equal(order.includes("hold.bringBack"), false);
+});
+
+test("a commit the server refuses brings the teamspace back where it stands", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { calls, deps, localSpace } = makeHarness();
+  deps.spaces.remove = async () => {
+    throw new CloudApiError("Nope", 403);
   };
-  const actions = createSpaceActions(deps);
+  const hold = createSpaceActions(deps).holdSpaceDelete(localSpace);
 
-  await assert.rejects(actions.restoreSpace("cloud-space-1"), failure);
-  assert.deepEqual(calls, []);
+  const result = await hold.commit();
+
+  assert.equal(result.success, false);
+  assert.deepEqual(result.failure, { kind: "notAllowed" });
+  assert.equal(namesOf(calls).includes("local.purge"), false);
+  assert.deepEqual(calls.slice(-2), [
+    ["hold.release", 7, "cloud-space-1"],
+    ["hold.bringBack", false],
+  ]);
 });
 
-test("a failed mirror refresh after a restore isn't a failed restore", async (t) => {
+test("a commit that throws reads as a failure and still lets go of the hold", async () => {
   const { createSpaceActions } = await load();
-  const { calls, deps } = makeHarness();
-  deps.spaces.mySpaces = async () => {
+  const { calls, deps, localSpace } = makeHarness();
+  deps.local.purgeSpace = async () => {
+    throw new Error("disk");
+  };
+  const hold = createSpaceActions(deps).holdSpaceDelete(localSpace);
+
+  const result = await hold.commit();
+
+  assert.deepEqual(result, { success: false, error: "disk", failure: { kind: "failed" } });
+  assert.deepEqual(calls.at(-1), ["hold.bringBack", false]);
+});
+
+test("a commit after another account signed in sends nothing", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps, localSpace } = makeHarness();
+  let generation = 1;
+  deps.deleteHold.accountGeneration = () => generation;
+  const hold = createSpaceActions(deps).holdSpaceDelete(localSpace);
+  generation = 2;
+
+  assert.equal(await hold.commit(), null);
+
+  assert.equal(namesOf(calls).includes("space.remove"), false);
+  assert.equal(namesOf(calls).includes("local.purge"), false);
+});
+
+test("Try again holds for the same account, and not after another signed in", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps, localSpace } = makeHarness();
+  let generation = 1;
+  deps.deleteHold.accountGeneration = () => generation;
+  deps.spaces.remove = async () => {
     throw new Error("offline");
   };
+  const hold = createSpaceActions(deps).holdSpaceDelete(localSpace);
+  await hold.commit();
+
+  const retry = hold.again();
+  assert.ok(retry);
+  deps.spaces.remove = async (spaceId) => calls.push(["space.remove", spaceId]);
+  assert.equal((await retry.commit()).success, true);
+
+  generation = 2;
+  assert.equal(hold.again(), null);
+});
+
+test("Undo after someone else's delete reached this device claims nothing", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps, localSpace } = makeHarness();
+  const hold = createSpaceActions(deps).holdSpaceDelete(localSpace);
+  deps.local.getSpaces = async () => [];
+
+  assert.equal(await hold.undo(), false);
+
+  assert.equal(namesOf(calls).includes("hold.bringBack"), false);
+});
+
+test("a view that can't be brought back doesn't lose the outcome", async (t) => {
+  const { createSpaceActions } = await load();
   t.mock.method(console, "error", () => {});
-  const actions = createSpaceActions(deps);
+  const { deps, localSpace } = makeHarness();
+  deps.deleteHold.hide = () => async () => {
+    throw new Error("disk");
+  };
 
-  await actions.restoreSpace("cloud-space-1");
+  assert.equal(await createSpaceActions(deps).holdSpaceDelete(localSpace).undo(), true);
 
-  assert.deepEqual(calls.at(-1), ["sync", "manual"]);
+  deps.spaces.remove = async () => {
+    throw new Error("offline");
+  };
+  const failed = await createSpaceActions(deps).holdSpaceDelete(localSpace).commit();
+  assert.equal(failed.success, false);
+});
+
+test("a delete reports how many notes moved to Personal", async () => {
+  const { createSpaceActions } = await load();
+  const { deps, localSpace } = makeHarness();
+  deps.local.purgeSpace = async () => ({ success: true, relocatedCount: 4 });
+
+  const result = await createSpaceActions(deps).deleteSpace(localSpace);
+
+  assert.equal(result.relocatedCount, 4);
+});
+
+test("a space a sync pass purged first counts as deleted", async () => {
+  const { createSpaceActions } = await load();
+  const { deps, localSpace } = makeHarness();
+  deps.local.purgeSpace = async () => ({ success: false, error: "Space not found" });
+  deps.local.getSpaces = async () => [];
+
+  assert.deepEqual(await createSpaceActions(deps).deleteSpace(localSpace), { success: true });
+});
+
+test("a purge that failed on a space still here is reported", async () => {
+  const { createSpaceActions } = await load();
+  const { deps, localSpace } = makeHarness();
+  deps.local.purgeSpace = async () => ({ success: false, error: "disk" });
+
+  const result = await createSpaceActions(deps).deleteSpace(localSpace);
+
+  assert.deepEqual(result, { success: false, error: "disk" });
+});
+
+test("a write the server accepted isn't failed by a refresh that fails", async (t) => {
+  const { createSpaceActions } = await load();
+  t.mock.method(console, "error", () => {});
+  const writes = {
+    joinSpace: (actions) => actions.joinSpace("cloud-space-1"),
+    addPeopleToSpace: (actions) => actions.addPeopleToSpace("cloud-space-1", ["user-1"]),
+    leaveSpace: (actions, space) => actions.leaveSpace(space, "me"),
+    setSpaceMemberRole: (actions, space) => actions.setSpaceMemberRole(space, "user-1", "admin"),
+    removeSpaceMember: (actions, space) => actions.removeSpaceMember(space, "user-1"),
+    assignTeamToSpace: (actions, space) => actions.assignTeamToSpace(space, "team-1"),
+    setSpaceTeamAccess: (actions, space) => actions.setSpaceTeamAccess(space, "team-1", "admin"),
+    unassignTeamFromSpace: (actions, space) => actions.unassignTeamFromSpace(space, "team-1"),
+    setSpaceAccessFlags: (actions) =>
+      actions.setSpaceAccessFlags("cloud-space-1", { is_open: true }),
+    leaveTeam: (actions) => actions.leaveTeam("team-1", "me"),
+    removeTeamMember: (actions) => actions.removeTeamMember("team-1", "user-1"),
+    setTeamMemberRole: (actions) => actions.setTeamMemberRole("team-1", "user-1", "admin"),
+    deleteTeam: (actions) => actions.deleteTeam("team-1"),
+  };
+  for (const [name, write] of Object.entries(writes)) {
+    const { calls, deps, localSpace } = makeHarness();
+    deps.spaces.mySpaces = async () => {
+      throw new Error("offline");
+    };
+    await write(createSpaceActions(deps), localSpace);
+    assert.deepEqual(
+      calls.at(-1),
+      ["sync", "manual"],
+      `${name} leaves the mirror to the sync pass`
+    );
+  }
+});
+
+test("a refused write still rejects", async () => {
+  const { createSpaceActions } = await load();
+  const { deps } = makeHarness();
+  const refusal = new Error("Nope");
+  deps.spaces.join = async () => {
+    throw refusal;
+  };
+
+  await assert.rejects(createSpaceActions(deps).joinSpace("cloud-space-1"), refusal);
 });
 
 test("joining refreshes the mirror and asks for a sync", async () => {
@@ -771,6 +967,132 @@ test("an old same-name teamspace doesn't count", async () => {
   );
 });
 
+test("a gateway error can hide a create that went through, so it looks", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { deps, localSpace } = makeHarness();
+  deps.spaces.create = async () => {
+    throw new CloudApiError("Gateway timeout", 504);
+  };
+  deps.spaces.mySpaces = async () => [ownCreate()];
+
+  const space = await createSpaceActions(deps).createSpace(
+    "workspace-1",
+    { name: "Roadmap" },
+    { memberIds: [], teamIds: [] }
+  );
+
+  assert.equal(space, localSpace);
+});
+
+test("a lost create the lookup couldn't settle is settled by the retry's taken name", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { deps, localSpace } = makeHarness();
+  const lost = new CloudApiError("Network error", 0);
+  deps.spaces.create = async () => {
+    throw lost;
+  };
+  deps.spaces.mySpaces = async () => {
+    throw new Error("still offline");
+  };
+  const actions = createSpaceActions(deps);
+  const input = { name: "Roadmap" };
+  const access = { memberIds: [], teamIds: [] };
+
+  await assert.rejects(actions.createSpace("workspace-1", input, access), lost);
+
+  // Back online: the first attempt had gone through, so its name is now taken, by itself.
+  deps.spaces.create = async () => {
+    throw new CloudApiError("Name taken", 409, "space_name_taken");
+  };
+  deps.spaces.mySpaces = async () => [ownCreate()];
+
+  assert.equal(await actions.createSpace("workspace-1", input, access), localSpace);
+});
+
+test("the retry matches its lost create as the server compares names", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { deps, localSpace } = makeHarness();
+  deps.spaces.create = async () => {
+    throw new CloudApiError("Network error", 0);
+  };
+  deps.spaces.mySpaces = async () => {
+    throw new Error("still offline");
+  };
+  const actions = createSpaceActions(deps);
+  const access = { memberIds: [], teamIds: [] };
+  await assert.rejects(actions.createSpace("workspace-1", { name: "Roadmap" }, access));
+
+  deps.spaces.create = async () => {
+    throw new CloudApiError("Name taken", 409, "space_name_taken");
+  };
+  deps.spaces.mySpaces = async () => [ownCreate()];
+
+  const space = await actions.createSpace("workspace-1", { name: "  ROADMAP " }, access);
+  assert.equal(space, localSpace);
+});
+
+test("an unsettled create expires, so a much later taken name is a real one", async (t) => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { deps } = makeHarness();
+  t.mock.timers.enable({ apis: ["Date"], now: Date.now() });
+  deps.spaces.create = async () => {
+    throw new CloudApiError("Network error", 0);
+  };
+  deps.spaces.mySpaces = async () => {
+    throw new Error("still offline");
+  };
+  const actions = createSpaceActions(deps);
+  const access = { memberIds: [], teamIds: [] };
+  await assert.rejects(actions.createSpace("workspace-1", { name: "Roadmap" }, access));
+
+  t.mock.timers.tick(61 * 60_000);
+  const taken = new CloudApiError("Name taken", 409, "space_name_taken");
+  deps.spaces.create = async () => {
+    throw taken;
+  };
+  let looked = false;
+  deps.spaces.mySpaces = async () => {
+    looked = true;
+    return [ownCreate()];
+  };
+
+  await assert.rejects(actions.createSpace("workspace-1", { name: "Roadmap" }, access), taken);
+  assert.equal(looked, false);
+});
+
+test("a lookup that answered settles it: a later taken name is a real one", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { deps } = makeHarness();
+  const lost = new CloudApiError("Network error", 0);
+  deps.spaces.create = async () => {
+    throw lost;
+  };
+  deps.spaces.mySpaces = async () => [];
+  const actions = createSpaceActions(deps);
+  const input = { name: "Roadmap" };
+  const access = { memberIds: [], teamIds: [] };
+
+  await assert.rejects(actions.createSpace("workspace-1", input, access), lost);
+
+  const taken = new CloudApiError("Name taken", 409, "space_name_taken");
+  deps.spaces.create = async () => {
+    throw taken;
+  };
+  let looked = false;
+  deps.spaces.mySpaces = async () => {
+    looked = true;
+    return [ownCreate()];
+  };
+
+  await assert.rejects(actions.createSpace("workspace-1", input, access), taken);
+  assert.equal(looked, false);
+});
+
 test("a name-taken refusal never looks", async () => {
   const { createSpaceActions } = await load();
   const { CloudApiError } = await import("../../src/services/cloudApi.ts");
@@ -780,7 +1102,7 @@ test("a name-taken refusal never looks", async () => {
   for (const refusal of [
     new CloudApiError("Name taken", 409, "space_name_taken"),
     new CloudApiError("Name taken", 409),
-    new CloudApiError("Server error", 500),
+    new CloudApiError("Bad request", 400),
   ]) {
     const { calls, deps } = makeHarness();
     deps.spaces.create = async () => {

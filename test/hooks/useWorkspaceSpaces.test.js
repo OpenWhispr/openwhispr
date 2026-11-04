@@ -71,6 +71,7 @@ async function loadHook(t) {
     },
   });
   const { useWorkspaceSpaces } = await vite.ssrLoadModule("/hooks/useWorkspaceSpaces.ts");
+  const held = await vite.ssrLoadModule("/lib/heldSpaceDeletes.ts");
   function Harness({ workspaceId, enabled }) {
     globalThis.__latestSpaces = useWorkspaceSpaces(workspaceId, enabled);
     return null;
@@ -81,8 +82,45 @@ async function loadHook(t) {
     React.act(async () => {
       root.render(React.createElement(Harness, { workspaceId, enabled }));
     });
-  return { mount, state: () => globalThis.__latestSpaces };
+  return { mount, held, state: () => globalThis.__latestSpaces };
 }
+
+test("a teamspace whose delete is held leaves the list until it is released", async (t) => {
+  const { mount, held, state } = await loadHook(t);
+  globalThis.__spaceListImpl = async () => [currentRow("s1"), currentRow("s2")];
+  const ids = () => state().spaces.map((space) => space.id);
+
+  await mount("w1", true);
+  assert.deepEqual(ids(), ["s1", "s2"]);
+
+  await React.act(async () => held.holdSpace(7, "s1"));
+  assert.deepEqual(ids(), ["s2"]);
+
+  // The server still lists it, so a reload mustn't bring it back.
+  await React.act(async () => state().reload());
+  assert.deepEqual(ids(), ["s2"]);
+
+  await React.act(async () => held.releaseSpace(7, "s1"));
+  assert.deepEqual(ids(), ["s1", "s2"]);
+});
+
+test("a teamspace whose delete went through stays out of a list read before it", async (t) => {
+  const { mount, held, state } = await loadHook(t);
+  globalThis.__spaceListImpl = async () => [currentRow("s1"), currentRow("s2")];
+
+  await mount("w1", true);
+  await React.act(async () => held.holdSpace(7, "s1"));
+  await React.act(async () => held.markHeldSpaceDeleted(7));
+
+  assert.deepEqual(
+    state().spaces.map((space) => space.id),
+    ["s2"]
+  );
+  assert.equal(held.isSpaceHeld(7), false);
+
+  await React.act(async () => held.forgetHeldSpaces());
+  assert.equal(state().spaces.length, 2);
+});
 
 test("the hook loads, then reloads", async (t) => {
   const { mount, state } = await loadHook(t);

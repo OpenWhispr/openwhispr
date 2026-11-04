@@ -2579,7 +2579,10 @@
           "creating": "作成中",
           "created": "{{space}} を作成しました",
           "createdInviteFailed_one": "{{space}} を作成しました。{{count}}人を招待できませんでした。「メンバー」から招待してください。",
-          "createdInviteFailed_other": "{{space}} を作成しました。{{count}}人を招待できませんでした。「メンバー」から招待してください。"
+          "createdInviteFailed_other": "{{space}} を作成しました。{{count}}人を招待できませんでした。「メンバー」から招待してください。",
+          "inviteFailedWho": "招待されていない人：{{names}}。",
+          "copyAddresses": "アドレスをコピー",
+          "groupsGone": "{{names}} は利用できなくなったため、追加されませんでした。"
         },
         "picker": {
           "groupPeople_one": "{{count}}人",
@@ -2645,7 +2648,13 @@
           "notInvited": "{{names}} は招待されませんでした。",
           "notInvitedMany": "{{names}} は招待されませんでした。",
           "skippedInvited": "{{names}} にはすでにワークスペースへの招待があるため、この Teamspace には追加されませんでした。",
-          "skippedInvitedMany": "{{names}} にはすでにワークスペースへの招待があるため、この Teamspace には追加されませんでした。"
+          "skippedInvitedMany": "{{names}} にはすでにワークスペースへの招待があるため、この Teamspace には追加されませんでした。",
+          "removeBodyPlain": "{{name}} はこの Teamspace とそのノートにアクセスできなくなります。ワークスペースには残ります。",
+          "invitationPendingAdmin": "招待の承諾待ち · ワークスペース管理者",
+          "resultInvitedNoEmail": "{{names}} の招待を作成しましたが、メールを配信できませんでした。「招待」から再送してください。",
+          "stepDownTitle": "{{space}} の管理者を辞めますか？",
+          "stepDownBody": "この Teamspace とメンバーを管理できなくなります。再び管理者になるには、別の管理者による変更が必要です。",
+          "stepDownConfirm": "辞める"
         },
         "settings": {
           "leaveTitle": "Teamspace から退出",
@@ -2663,22 +2672,21 @@
           "blockedBody": "あなたは {{space}} の唯一の管理者です。退出する前に、別のメンバーを管理者にしてください。",
           "blockedAction": "メンバーを管理",
           "leaveTitle": "{{space}} から退出しますか？",
-          "leaveBody": "直接のメンバーシップは終了します。グループ経由のアクセスは維持されます。別の管理者がこの Teamspace の管理を続けます。",
-          "leaveBodyPlain": "直接のメンバーシップは終了します。",
           "leaveFailedTitle": "{{space}} から退出できませんでした",
           "leaveFailedBody": "メンバーシップは変更されていません。接続を確認して、もう一度お試しください。",
           "left": "{{space}} から退出しました。",
           "deleteTitle": "{{space}} を削除しますか？",
           "deleteBody": "{{space}} をワークスペースから全員に対して削除します。",
-          "deletingTitle": "{{space}} を削除しています…",
-          "deletingBody": "Teamspace の削除が完了するまで、このウィンドウを開いたままにしてください。",
-          "deletingAction": "削除中…",
           "deleteFailedTitle": "{{space}} を削除できませんでした",
           "deleteFailedBody": "Teamspace はまだ利用できます。接続を確認して、もう一度お試しください。",
           "deleted": "{{space}} を削除しました。",
           "restored": "{{space}} を復元しました",
-          "restoreFailed": "{{space}} を復元できませんでした。もう一度お試しください。",
-          "restoreNameTaken": "{{space}} を復元できませんでした。同じ名前の Teamspace がすでにあります。"
+          "leaveBodyKeeps": "直接のメンバーシップは終了します。{{groups}} 経由のアクセスは維持されます。",
+          "leaveBodyLoses": "{{space}} とそのノートにアクセスできなくなります。",
+          "leaveBodyAdmins": "別の管理者がこの Teamspace の管理を続けます。",
+          "deleteNotAllowed": "{{space}} を削除する権限がありません。",
+          "movedToPersonal_one": "同期されていない {{count}} 件のノートを個人スペースに移動しました。",
+          "movedToPersonal_other": "同期されていない {{count}} 件のノートを個人スペースに移動しました。"
         },
         "addPeople": {
           "loading": "Teamspace を読み込んでいます…",

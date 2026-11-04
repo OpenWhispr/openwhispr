@@ -205,7 +205,7 @@ test("leaving asks, runs, fails with Try again, and succeeds with a toast", asyn
   assert.equal(heading(), "Leave Customer Calls?");
   assert.equal(
     body(),
-    "Your direct membership will end. Access through a group will remain. Another admin will continue managing this teamspace."
+    "You'll lose access to Customer Calls and its notes. Another admin will continue managing this teamspace."
   );
   assert.deepEqual(buttons().map(text), ["Leave teamspace", "Cancel"]);
   assert.equal(callsTo("leaveSpace").length, 0, "pressing Leave only asks");
@@ -236,16 +236,28 @@ test("leaving asks, runs, fails with Try again, and succeeds with a toast", asyn
   assert.equal(dialog(), null);
 });
 
-test("a direct member, or an admin with nobody to carry on, reads the plain wording", async (t) => {
+test("a direct member, or an admin with nobody to carry on, is told they lose access", async (t) => {
   await mount(t, { otherAdmins: false });
 
-  assert.equal(body(), "Your direct membership will end.");
+  assert.equal(body(), "You'll lose access to Customer Calls and its notes.");
 });
 
-test("a member who isn't an admin reads the plain wording even when others are", async (t) => {
+test("a direct grant beside a group names the group that keeps access", async (t) => {
+  await mount(t, {
+    otherAdmins: true,
+    space: { ...SPACE, teams: [{ id: "g1", name: "Sales", my_role: "member" }] },
+  });
+
+  assert.equal(
+    body(),
+    "Your direct membership will end. You'll keep access through Sales. Another admin will continue managing this teamspace."
+  );
+});
+
+test("a member who isn't an admin hears nothing about who manages it", async (t) => {
   await mount(t, { space: { ...SPACE, my_role: "member", my_direct_role: "member" } });
 
-  assert.equal(body(), "Your direct membership will end.");
+  assert.equal(body(), "You'll lose access to Customer Calls and its notes.");
 });
 
 test("someone with a group keeps the group-access wording", async (t) => {

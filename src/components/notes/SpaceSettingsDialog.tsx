@@ -27,6 +27,7 @@ import DeleteSpaceDialog from "./DeleteSpaceDialog";
 import { LeaveSpaceDialog } from "./LeaveSpaceDialog";
 import SpaceMembersPanel from "./SpaceMembersPanel";
 import { TileGlyph } from "./SpaceNameField";
+import { isolate } from "../../utils/bidiIsolate";
 import type { SpaceItem } from "../../types/electron";
 
 const TAB_TRIGGER_CLASS = "h-6 gap-1.5 px-2.5 text-xs rounded-[5px]";
@@ -127,6 +128,8 @@ export default function SpaceSettingsDialog({
   const saveChain = useRef(Promise.resolve());
   // The texts being saved right now, so Enter and the blur that follows it are one edit.
   const namesInFlight = useRef(new Set<string>());
+  // A name the server just refused, which closing or leaving the field shouldn't send again.
+  const refusedName = useRef<string | null>(null);
   const descriptionsInFlight = useRef(new Set<string>());
   const latestSpace = useRef(space);
   const isOpen = useRef(open);
@@ -166,7 +169,7 @@ export default function SpaceSettingsDialog({
   const save = (
     updates: { name?: string; emoji?: string | null; description?: string | null },
     failureTitle: string
-  ): Promise<boolean> => {
+  ): Promise<"saved" | "nameTaken" | "failed"> => {
     const run = saveChain.current.then(async () => {
       const latest = latestSpace.current;
       const result = await renameSpace(latest, {
@@ -174,14 +177,18 @@ export default function SpaceSettingsDialog({
         emoji: latest.emoji ?? null,
         ...updates,
       });
-      if (!result.success) {
-        toast({
-          title: failureTitle,
-          description: t(localMutationErrorKey(result.error)),
-          variant: "destructive",
-        });
-      }
-      return result.success;
+      if (result.success) return "saved";
+      const nameTaken = result.failure?.kind === "nameTaken";
+      toast({
+        title: failureTitle,
+        description: nameTaken
+          ? t("settingsPage.workspace.teamspaces.form.nameTaken", {
+              name: isolate(updates.name ?? latest.name),
+            })
+          : t(localMutationErrorKey(result.error)),
+        variant: "destructive",
+      });
+      return nameTaken ? "nameTaken" : "failed";
     });
     saveChain.current = run.then(
       () => undefined,
@@ -198,11 +205,14 @@ export default function SpaceSettingsDialog({
       setDraftName(nameBaseline);
       return;
     }
-    if (namesInFlight.current.has(name)) return;
+    if (namesInFlight.current.has(name) || name === refusedName.current) return;
     namesInFlight.current.add(name);
     try {
-      if (await save({ name }, t("notes.spaces.couldNotRename"))) setNameBaseline(name);
-      else setDraftName(nameBaseline);
+      const saved = await save({ name }, t("notes.spaces.couldNotRename"));
+      if (saved === "saved") setNameBaseline(name);
+      // A taken name stays in the field, so the user can change it rather than type it again.
+      else if (saved === "failed") setDraftName(nameBaseline);
+      else refusedName.current = name;
     } finally {
       namesInFlight.current.delete(name);
     }
@@ -216,10 +226,10 @@ export default function SpaceSettingsDialog({
     descriptionsInFlight.current.add(description);
     try {
       if (
-        await save(
+        (await save(
           { description: description || null },
           t("settingsPage.workspace.teamspaces.settings.flagSaveFailed")
-        )
+        )) === "saved"
       ) {
         setDescriptionBaseline(description);
         setDraftDescription(description);
@@ -241,6 +251,7 @@ export default function SpaceSettingsDialog({
   const close = (): void => {
     void commitName();
     void commitDescription();
+    refusedName.current = null;
     onOpenChange(false);
   };
 

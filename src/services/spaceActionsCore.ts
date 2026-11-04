@@ -18,9 +18,29 @@ export interface CreateSpaceInput {
   is_open?: boolean;
 }
 
-// A create whose answer never arrived can still have happened. Past this age a same-name space
-// of the caller's is far more likely an earlier teamspace than the one this attempt made.
+// A create whose answer never arrived can still have happened. Further than this from the attempt,
+// a same-name space of the caller's is far more likely an earlier teamspace than the one it made.
 const LOST_CREATE_WINDOW_MS = 5 * 60_000;
+// How long a retry may still be the same attempt, while the connection comes back.
+const UNSETTLED_CREATE_TTL_MS = 60 * 60_000;
+
+export interface SpaceDeleteResult {
+  success: boolean;
+  error?: string;
+  failure?: SpaceActionError;
+  /** Notes that hadn't synced, which moved to Personal rather than go with the teamspace. */
+  relocatedCount?: number;
+}
+
+/** A delete waiting out its Undo window: the teamspace is out of view and otherwise untouched. */
+export interface SpaceDeleteHold {
+  /** Brings the teamspace back as it was. False once the delete has gone ahead. */
+  undo: () => Promise<boolean>;
+  /** Sends the delete. Null when there's nothing to report: it was undone, or the account changed. */
+  commit: () => Promise<SpaceDeleteResult | null>;
+  /** Holds it again for a retry, or null when the account that asked has gone. */
+  again: () => SpaceDeleteHold | null;
+}
 
 export interface SpaceActionsDependencies {
   teams: {
@@ -36,7 +56,6 @@ export interface SpaceActionsDependencies {
     ) => Promise<MySpace>;
     update: (spaceId: string, updates: SpaceUpdatePatch) => Promise<SpaceRecord>;
     remove: (spaceId: string) => Promise<void>;
-    restore: (spaceId: string) => Promise<void>;
     assignTeam: (spaceId: string, teamId: string, access?: "admin" | "member") => Promise<void>;
     unassignTeam: (spaceId: string, teamId: string) => Promise<void>;
     setMemberRole: (spaceId: string, userId: string, role: TeamRole) => Promise<void>;
@@ -54,7 +73,7 @@ export interface SpaceActionsDependencies {
       id: number,
       updates: { name: string; emoji: string | null }
     ) => Promise<MutationResult>;
-    purgeSpace: (id: number) => Promise<MutationResult>;
+    purgeSpace: (id: number) => Promise<MutationResult & { relocatedCount?: number }>;
     loadSpaces: () => Promise<unknown>;
     getSpaces: () => Promise<SpaceItem[]>;
   };
@@ -67,6 +86,14 @@ export interface SpaceActionsDependencies {
   markSpacePurged: (cloudSpaceId: string, reason: "deleted") => Promise<void>;
   releasePurgedSpace: (cloudSpaceId: string) => Promise<void>;
   invalidateSpaceRoster: (cloudSpaceId?: string) => void;
+  deleteHold: {
+    /** Moves only when another account signs in, unlike the session's token. */
+    accountGeneration: () => number;
+    /** The result brings the teamspace back into view; true also returns to where the user was. */
+    hide: (space: SpaceItem, cloudSpaceId: string) => (reopen: boolean) => Promise<void>;
+    release: (space: SpaceItem, cloudSpaceId: string) => void;
+    markDeleted: (space: SpaceItem) => void;
+  };
 }
 
 function requireCloudSpaceId(space: SpaceItem): string {
@@ -78,13 +105,21 @@ function errorMessage(err: unknown): string | undefined {
   return err instanceof Error ? err.message : undefined;
 }
 
-// No response at all: the request may have been carried out before the answer was lost. A status
-// 0 with a code is main refusing the request itself (a changed session), which never went out.
+// No usable response: the request may have been carried out before the answer was lost, which a
+// gateway's 5xx can't rule out either. A status 0 with a code is main refusing the request itself
+// (a changed session), which never went out.
 function isLostAnswer(err: unknown): boolean {
-  return err instanceof CloudApiError && !err.status && !err.code;
+  return err instanceof CloudApiError && !err.code && (!err.status || err.status >= 500);
 }
 
 export function createSpaceActions(deps: SpaceActionsDependencies) {
+  // Creates whose answer was lost and which the follow-up read couldn't settle, by when they were
+  // tried. A dropped connection usually takes that read down too, so the retry settles it instead.
+  const unsettledCreates = new Map<string, number>();
+  const normalizedName = (name: string): string => name.trim().toLowerCase();
+  const createKey = (workspaceId: string, name: string): string =>
+    `${workspaceId}\0${normalizedName(name)}`;
+
   // One failed add must not abort the rest; callers report the failures.
   async function settleAddMembers(
     userIds: string[],
@@ -105,27 +140,41 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     await deps.local.loadSpaces();
   }
 
+  // After a write the server accepted. A failed refresh doesn't make that write a failure, so the
+  // sync pass catches the mirror up instead.
+  async function refreshMirrorAfterWrite(): Promise<void> {
+    try {
+      await refreshSpaceMirror();
+    } catch (err) {
+      console.error("Space mirror refresh failed after a write:", err);
+      deps.sync.requestSyncAll("manual");
+    }
+  }
+
   // After a lost answer the server may still have created the teamspace. It is the caller's own
   // when it is in this workspace under the name sent, the caller is its direct admin (the creator
   // always is) and it is new; any other same-name space was there before this attempt.
-  async function findLostCreate(workspaceId: string, name: string): Promise<MySpace | null> {
-    const wanted = name.trim();
+  async function findLostCreate(
+    workspaceId: string,
+    name: string,
+    triedAt: number
+  ): Promise<MySpace | null | undefined> {
+    const wanted = normalizedName(name);
     try {
       const cloudSpaces = await deps.spaces.mySpaces();
-      const now = Date.now();
       return (
         cloudSpaces.find(
           (cloudSpace) =>
             cloudSpace.workspace_id === workspaceId &&
-            cloudSpace.name.trim() === wanted &&
+            normalizedName(cloudSpace.name) === wanted &&
             cloudSpace.my_direct_role === "admin" &&
-            // Either side of now: this clock and the server's can disagree.
-            Math.abs(now - Date.parse(cloudSpace.created_at)) <= LOST_CREATE_WINDOW_MS
+            // Either side of the attempt: this clock and the server's can disagree.
+            Math.abs(triedAt - Date.parse(cloudSpace.created_at)) <= LOST_CREATE_WINDOW_MS
         ) ?? null
       );
     } catch {
-      // The create's own error is the one worth reporting.
-      return null;
+      // Undefined: the read failed, so the create is still unsettled. Its own error is reported.
+      return undefined;
     }
   }
 
@@ -136,6 +185,8 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     input: CreateSpaceInput,
     access: { memberIds: string[]; teamIds: string[] }
   ): Promise<SpaceItem | null> {
+    const key = createKey(workspaceId, input.name);
+    const triedAt = Date.now();
     let cloudSpace: MySpace;
     try {
       cloudSpace = await deps.spaces.create(workspaceId, {
@@ -144,11 +195,24 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
         team_ids: access.teamIds,
       });
     } catch (err) {
-      // A retry of a create that went through would only meet its own name taken.
-      const created = isLostAnswer(err) ? await findLostCreate(workspaceId, input.name) : null;
+      const lastTry = unsettledCreates.get(key);
+      const unsettledAt =
+        lastTry !== undefined && triedAt - lastTry <= UNSETTLED_CREATE_TTL_MS ? lastTry : undefined;
+      // The name is taken by this user's own lost create, if an earlier try is still unsettled.
+      const mayBeOurs =
+        isLostAnswer(err) ||
+        (unsettledAt !== undefined && classifySpaceError(err).kind === "nameTaken");
+      if (!mayBeOurs) {
+        unsettledCreates.delete(key);
+        throw err;
+      }
+      const created = await findLostCreate(workspaceId, input.name, unsettledAt ?? triedAt);
+      if (created === undefined) unsettledCreates.set(key, unsettledAt ?? triedAt);
+      else unsettledCreates.delete(key);
       if (!created) throw err;
       cloudSpace = created;
     }
+    unsettledCreates.delete(key);
     const space = await deps.local.upsertSpaceFromCloud(
       cloudSpace as unknown as Record<string, unknown>
     );
@@ -161,7 +225,7 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
   async function renameSpace(
     space: SpaceItem,
     updates: { name: string; emoji: string | null; description?: string | null }
-  ): Promise<{ success: boolean; error?: string }> {
+  ): Promise<{ success: boolean; error?: string; failure?: SpaceActionError }> {
     // The mirror has no description column, so the local row only ever gets the name and emoji.
     const local = await deps.local.updateSpaceMeta(space.id, {
       name: updates.name,
@@ -184,7 +248,7 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
       });
       await deps.local.setSpaceSyncStatus(space.id, "synced");
       await deps.local.loadSpaces();
-      return { success: false, error: errorMessage(err) };
+      return { success: false, error: errorMessage(err), failure: classifySpaceError(err) };
     }
 
     try {
@@ -209,9 +273,7 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     return { success: true };
   }
 
-  async function deleteSpace(
-    space: SpaceItem
-  ): Promise<{ success: boolean; error?: string; failure?: SpaceActionError }> {
+  async function deleteSpace(space: SpaceItem): Promise<SpaceDeleteResult> {
     if (space.cloud_space_id) {
       try {
         await deps.spaces.remove(space.cloud_space_id);
@@ -226,26 +288,73 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
       deps.invalidateSpaceRoster(space.cloud_space_id);
       await deps.markSpacePurged(space.cloud_space_id, "deleted");
     }
-    return deps.local.purgeSpace(space.id);
+    const purged = await deps.local.purgeSpace(space.id);
+    if (!purged.success) {
+      // A sync pass that saw the space gone may have purged it first.
+      const spaces = await deps.local.getSpaces();
+      return spaces.some((candidate) => candidate.id === space.id) ? purged : { success: true };
+    }
+    return purged;
   }
 
-  async function restoreSpace(cloudSpaceId: string): Promise<void> {
-    await deps.spaces.restore(cloudSpaceId);
-    // The delete's guard would keep a live space out of the mirror for its whole TTL.
-    await deps.releasePurgedSpace(cloudSpaceId);
-    try {
-      await refreshSpaceMirror();
-    } catch (err) {
-      // The server has it back, so this isn't a failed restore: the sync pass mirrors it instead.
-      console.error("Space restore mirror refresh failed:", err);
-    }
-    // The purge dropped the space's notes from this device; the sync pass backfills them.
-    deps.sync.requestSyncAll("manual");
+  // Nothing is sent or removed until the Undo window ends: the purge can't be taken back (it scrubs
+  // note chats, and unsynced notes fork into Personal), and every member's next sync pass runs the
+  // same purge once the server says the teamspace is gone. Until then only this view changes.
+  function holdSpaceDelete(space: SpaceItem): SpaceDeleteHold {
+    return holdForAccount(space, deps.deleteHold.accountGeneration());
+  }
+
+  function holdForAccount(space: SpaceItem, accountGeneration: number): SpaceDeleteHold {
+    const cloudSpaceId = requireCloudSpaceId(space);
+    const accountChanged = (): boolean => deps.deleteHold.accountGeneration() !== accountGeneration;
+    const bringBack = deps.deleteHold.hide(space, cloudSpaceId);
+    const bringBackSafely = async (reopen: boolean): Promise<void> => {
+      try {
+        await bringBack(reopen);
+      } catch (err) {
+        // The next load shows it anyway, and the outcome still has to reach the user.
+        console.error("Space could not be brought back into view:", err);
+      }
+    };
+    let settled = false;
+    return {
+      async undo() {
+        if (settled) return false;
+        settled = true;
+        deps.deleteHold.release(space, cloudSpaceId);
+        // Someone else's delete may have reached this device meanwhile, so nothing is back.
+        const spaces = await deps.local.getSpaces().catch(() => [space]);
+        if (!spaces.some((candidate) => candidate.id === space.id)) return false;
+        await bringBackSafely(true);
+        return true;
+      },
+      async commit() {
+        if (settled) return null;
+        settled = true;
+        // The account reset has dropped the hold and everything it hid. This one's delete must not
+        // go out as the next account.
+        if (accountChanged()) return null;
+        let result: SpaceDeleteResult;
+        try {
+          result = await deleteSpace(space);
+        } catch (err) {
+          result = { success: false, error: errorMessage(err), failure: { kind: "failed" } };
+        }
+        if (result.success) {
+          deps.deleteHold.markDeleted(space);
+        } else {
+          deps.deleteHold.release(space, cloudSpaceId);
+          await bringBackSafely(false);
+        }
+        return result;
+      },
+      again: () => (accountChanged() ? null : holdForAccount(space, accountGeneration)),
+    };
   }
 
   async function assignTeamToSpace(space: SpaceItem, teamId: string): Promise<void> {
     await deps.spaces.assignTeam(requireCloudSpaceId(space), teamId);
-    await refreshSpaceMirror();
+    await refreshMirrorAfterWrite();
   }
 
   async function setSpaceTeamAccess(
@@ -254,12 +363,12 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     access: "admin" | "member"
   ): Promise<void> {
     await deps.spaces.assignTeam(requireCloudSpaceId(space), teamId, access);
-    await refreshSpaceMirror();
+    await refreshMirrorAfterWrite();
   }
 
   async function unassignTeamFromSpace(space: SpaceItem, teamId: string): Promise<void> {
     await deps.spaces.unassignTeam(requireCloudSpaceId(space), teamId);
-    await refreshSpaceMirror();
+    await refreshMirrorAfterWrite();
     deps.sync.requestSyncAll("manual");
   }
 
@@ -270,7 +379,7 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     // TTL is skipped by the refresh, so the guard is released on this answer; the refresh itself
     // must not release from its own listing, which can be stale.
     await deps.releasePurgedSpace(cloudSpaceId);
-    await refreshSpaceMirror();
+    await refreshMirrorAfterWrite();
     deps.sync.requestSyncAll("manual");
     return result;
   }
@@ -281,7 +390,7 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     userIds: string[]
   ): Promise<{ added: string[]; already_members: string[] }> {
     const result = await deps.spaces.addMembers(cloudSpaceId, userIds);
-    await refreshSpaceMirror();
+    await refreshMirrorAfterWrite();
     deps.sync.requestSyncAll("manual");
     return result;
   }
@@ -293,14 +402,7 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     flags: { is_default?: boolean; is_open?: boolean }
   ): Promise<void> {
     await deps.spaces.update(cloudSpaceId, flags);
-    try {
-      await refreshSpaceMirror();
-    } catch (err) {
-      // The server has the change, so this is not a failed save: the sync pass catches the
-      // mirror up instead.
-      console.error("Space flags mirror refresh failed:", err);
-      deps.sync.requestSyncAll("manual");
-    }
+    await refreshMirrorAfterWrite();
   }
 
   // A space reached through a join or an add is mirrored by then; a miss means the mirror is stale.
@@ -321,12 +423,12 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     role: TeamRole
   ): Promise<void> {
     await deps.spaces.setMemberRole(requireCloudSpaceId(space), userId, role);
-    await refreshSpaceMirror();
+    await refreshMirrorAfterWrite();
   }
 
   async function removeSpaceMember(space: SpaceItem, userId: string): Promise<SpaceMemberRemoval> {
     const result = await deps.spaces.removeMember(requireCloudSpaceId(space), userId);
-    await refreshSpaceMirror();
+    await refreshMirrorAfterWrite();
     return result;
   }
 
@@ -343,7 +445,7 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
       if (classifySpaceError(err).kind !== "gone") throw err;
       result = { removed: false, still_via_teams: [] };
     }
-    await refreshSpaceMirror();
+    await refreshMirrorAfterWrite();
     deps.sync.requestSyncAll("manual");
     return result;
   }
@@ -361,18 +463,18 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     const failures = await settleAddMembers(userIds, (userId) =>
       deps.teams.addMember(teamId, userId)
     );
-    await refreshSpaceMirror();
+    await refreshMirrorAfterWrite();
     return { failures };
   }
 
   async function removeTeamMember(teamId: string, userId: string): Promise<void> {
     await deps.teams.removeMember(teamId, userId);
-    await refreshSpaceMirror();
+    await refreshMirrorAfterWrite();
   }
 
   async function setTeamMemberRole(teamId: string, userId: string, role: TeamRole): Promise<void> {
     await deps.teams.addMember(teamId, userId, role);
-    await refreshSpaceMirror();
+    await refreshMirrorAfterWrite();
   }
 
   async function leaveTeam(teamId: string, userId: string): Promise<void> {
@@ -382,13 +484,13 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
       // Already out of the group, as after a leave that got partway: the mirror is what's left.
       if (classifySpaceError(err).kind !== "gone") throw err;
     }
-    await refreshSpaceMirror();
+    await refreshMirrorAfterWrite();
     deps.sync.requestSyncAll("manual");
   }
 
   async function deleteTeam(teamId: string): Promise<void> {
     await deps.teams.remove(teamId);
-    await refreshSpaceMirror();
+    await refreshMirrorAfterWrite();
     deps.sync.requestSyncAll("manual");
   }
 
@@ -396,7 +498,7 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     createSpace,
     renameSpace,
     deleteSpace,
-    restoreSpace,
+    holdSpaceDelete,
     assignTeamToSpace,
     setSpaceTeamAccess,
     unassignTeamFromSpace,

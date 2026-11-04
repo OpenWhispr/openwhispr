@@ -337,7 +337,7 @@ test("chips show who they are: a name, a group's glyph, an address", async (t) =
   assert.deepEqual(chipTexts(), [
     "Design Team · 2 people",
     "Sales · 5 people",
-    "alex@example.com · Admin",
+    "alex@example.com · Workspace Admin",
   ]);
   // The group's own emoji, else its initial, and a mail glyph for an address.
   const glyphs = chips().map((chip) => chip.querySelector('[aria-hidden="true"]'));
@@ -455,7 +455,7 @@ test("Select stages the address with its chosen role", async (t) => {
   await focus(input());
   await type(input(), "alex@example.com");
   assert.deepEqual(optionTexts(), [
-    "alex@example.com New to workspace Workspace role Member Select",
+    "alex@example.com New to workspace Workspace role Workspace Member Select",
   ]);
 
   // The role menu opens in the list, and opening it keeps the list and the typed address.
@@ -472,7 +472,7 @@ test("Select stages the address with its chosen role", async (t) => {
   assert.equal(input().value, "alex@example.com", "choosing a role stages nothing");
   assert.equal(doc().querySelectorAll('[role="menuitemradio"]').length, 0);
   assert.deepEqual(optionTexts(), [
-    "alex@example.com New to workspace Workspace role Admin Select",
+    "alex@example.com New to workspace Workspace role Workspace Admin Select",
   ]);
 
   const select = [...doc().querySelectorAll("button")].find((button) => text(button) === "Select");
@@ -480,12 +480,12 @@ test("Select stages the address with its chosen role", async (t) => {
   assert.deepEqual(lastChange(), [
     { kind: "email", email: "alex@example.com", role: "admin", valid: true },
   ]);
-  assert.deepEqual(chipTexts(), ["alex@example.com · Admin"]);
+  assert.deepEqual(chipTexts(), ["alex@example.com · Workspace Admin"]);
 
   // The next address starts from Member again, so an admin is never invited by carry-over.
   await type(input(), "kim@example.com");
   assert.deepEqual(optionTexts(), [
-    "kim@example.com New to workspace Workspace role Member Select",
+    "kim@example.com New to workspace Workspace role Workspace Member Select",
   ]);
 });
 
@@ -581,7 +581,7 @@ test("an invalid address marks the field", async (t) => {
   assert.equal(input().value, "", "chipped on blur, as the invite dialog does");
   assert.equal(input().getAttribute("aria-invalid"), "true");
   const [chip] = chips();
-  assert.equal(text(chip), "saket@ · Member");
+  assert.equal(text(chip), "saket@ · Workspace Member");
   assert.match(chip.className, /destructive/);
   assert.equal(readable(chip.getAttribute("title")), "saket@ isn't a valid email");
 
@@ -766,18 +766,18 @@ test("left and right stay with the caret while the invite row is only under the 
   // Fixing a typo with the arrow keys must not turn the invitation into an Admin one.
   assert.equal(await pressKey(input(), "ArrowLeft"), false);
   assert.equal(await pressKey(input(), "ArrowRight"), false);
-  assert.equal(roleText(), "Member");
+  assert.equal(roleText(), "Workspace Member");
 
   // The keyboard highlighting it is a choice to use left and right on it.
   await press(input(), "ArrowDown");
   assert.equal(highlighted(), 0);
   assert.equal(await pressKey(input(), "ArrowRight"), true);
-  assert.equal(roleText(), "Admin");
+  assert.equal(roleText(), "Workspace Admin");
 
   // And the pointer arriving again hands them back to the caret.
   await hover(options()[0]);
   assert.equal(await pressKey(input(), "ArrowLeft"), false);
-  assert.equal(roleText(), "Admin", "the role is left as it was");
+  assert.equal(roleText(), "Workspace Admin", "the role is left as it was");
 });
 
 test("an Admin chosen for an address is forgotten once the address is deleted", async (t) => {
@@ -785,22 +785,22 @@ test("an Admin chosen for an address is forgotten once the address is deleted", 
   await focus(input());
   await type(input(), "alex@example.com");
   await chooseRole("Workspace Admin");
-  assert.equal(roleText(), "Admin");
+  assert.equal(roleText(), "Workspace Admin");
 
   await type(input(), "");
   await paste(input(), "p@x.io, q@x.io");
-  assert.deepEqual(chipTexts(), ["p@x.io · Member", "q@x.io · Member"]);
+  assert.deepEqual(chipTexts(), ["p@x.io · Workspace Member", "q@x.io · Workspace Member"]);
   assert.ok(lastChange().every((recipient) => recipient.role === "member"));
 
   await type(input(), "kim@example.com");
-  assert.equal(roleText(), "Member", "the next address starts as Member too");
+  assert.equal(roleText(), "Workspace Member", "the next address starts as Member too");
 });
 
 test("the role of an invitation is chosen from the keyboard, and read out", async (t) => {
   const { lastChange } = await mount(t, { inviteRoleChoice: true });
   await focus(input());
   await type(input(), "alex@example.com");
-  assert.equal(roleText(), "Member");
+  assert.equal(roleText(), "Workspace Member");
   assert.equal(
     doc().querySelector('[role="option"] [aria-live="polite"]').getAttribute("aria-live"),
     "polite"
@@ -811,18 +811,18 @@ test("the role of an invitation is chosen from the keyboard, and read out", asyn
   await press(input(), "ArrowDown");
   assert.equal(highlighted(), 0);
   assert.equal(await pressKey(input(), "ArrowRight"), true);
-  assert.equal(roleText(), "Admin");
+  assert.equal(roleText(), "Workspace Admin");
   assert.equal(await pressKey(input(), "ArrowLeft"), true);
-  assert.equal(roleText(), "Member");
+  assert.equal(roleText(), "Workspace Member");
   await press(input(), "ArrowRight");
-  assert.equal(roleText(), "Admin");
+  assert.equal(roleText(), "Workspace Admin");
   assert.equal(input().value, "alex@example.com", "nothing is staged by choosing a role");
 
   await press(input(), "Enter");
   assert.deepEqual(lastChange(), [
     { kind: "email", email: "alex@example.com", role: "admin", valid: true },
   ]);
-  assert.deepEqual(chipTexts(), ["alex@example.com · Admin"]);
+  assert.deepEqual(chipTexts(), ["alex@example.com · Workspace Admin"]);
 });
 
 test("left and right leave the field alone on any other row, and without a role choice", async (t) => {
@@ -847,14 +847,14 @@ test("the field keeps focus after a role is chosen and after Select", async (t) 
   await focus(input());
   await type(input(), "alex@example.com");
   await chooseRole("Workspace Admin");
-  assert.equal(roleText(), "Admin");
+  assert.equal(roleText(), "Workspace Admin");
   assertFocused("the menu hands focus back to the field");
 
   const select = [...doc().querySelectorAll("button")].find((button) => text(button) === "Select");
   // A button takes focus from the field when it is pressed with the keyboard or a touch.
   await act(() => select.focus());
   await click(select);
-  assert.deepEqual(chipTexts(), ["alex@example.com · Admin"]);
+  assert.deepEqual(chipTexts(), ["alex@example.com · Workspace Admin"]);
   assertFocused("the row is gone, and focus did not go with it");
 });
 
@@ -866,30 +866,33 @@ test("the role shown is the role Enter, blur and a pasted list stage", async (t)
   await type(input(), "alex@example.com");
   await chooseRole("Workspace Admin");
   await press(input(), "Enter");
-  assert.deepEqual(chipTexts(), ["alex@example.com · Admin"]);
+  assert.deepEqual(chipTexts(), ["alex@example.com · Workspace Admin"]);
   // It was for that address: the next one starts as Member.
   await type(input(), "kim@example.com");
-  assert.equal(roleText(), "Member");
+  assert.equal(roleText(), "Workspace Member");
 
   // Blur.
   await chooseRole("Workspace Admin");
   await leaveField(input());
-  assert.deepEqual(chipTexts(), ["alex@example.com · Admin", "kim@example.com · Admin"]);
+  assert.deepEqual(chipTexts(), [
+    "alex@example.com · Workspace Admin",
+    "kim@example.com · Workspace Admin",
+  ]);
 
   // A typed separator.
   await refocus();
   await type(input(), "lee@example.com");
   await chooseRole("Workspace Admin");
   await type(input(), "lee@example.com,");
-  assert.equal(chipTexts().at(-1), "lee@example.com · Admin");
+  assert.equal(chipTexts().at(-1), "lee@example.com · Workspace Admin");
 
   // A pasted list: everyone in it gets the role shown, and the typed address stays to be staged.
   await type(input(), "max@example.com");
   await chooseRole("Workspace Admin");
   await paste(input(), "p@x.io, q@x.io");
-  assert.deepEqual(chipTexts().slice(-2), ["p@x.io · Admin", "q@x.io · Admin"]);
+  assert.deepEqual(chipTexts().slice(-2), ["p@x.io · Workspace Admin", "q@x.io · Workspace Admin"]);
   assert.equal(input().value, "max@example.com");
-  assert.equal(roleText(), "Admin", "still the choice for the address that is left");
+  assert.equal(roleText(), "Workspace Admin", "still the choice for the address that is left");
 
   // A member's address and the role: members have no workspace role to choose.
   await type(input(), "ethan@openronnie.com");
@@ -903,25 +906,31 @@ test("typing an address again never downgrades its role; choosing its row does",
   await type(input(), "alex@example.com");
   await chooseRole("Workspace Admin");
   await press(input(), "Enter");
-  assert.deepEqual(chipTexts(), ["alex@example.com · Admin"]);
+  assert.deepEqual(chipTexts(), ["alex@example.com · Workspace Admin"]);
 
   // Typed again with the role showing Member: the chip is left as it was.
   await type(input(), "alex@example.com");
   await press(input(), "Enter");
-  assert.deepEqual(chipTexts(), ["alex@example.com · Admin"]);
+  assert.deepEqual(chipTexts(), ["alex@example.com · Workspace Admin"]);
   await type(input(), "alex@example.com");
   await leaveField(input());
-  assert.deepEqual(chipTexts(), ["alex@example.com · Admin"]);
+  assert.deepEqual(chipTexts(), ["alex@example.com · Workspace Admin"]);
   assert.equal(input().value, "", "the address is consumed, not left behind");
   await paste(input(), "alex@example.com, kim@example.com");
-  assert.deepEqual(chipTexts(), ["alex@example.com · Admin", "kim@example.com · Member"]);
+  assert.deepEqual(chipTexts(), [
+    "alex@example.com · Workspace Admin",
+    "kim@example.com · Workspace Member",
+  ]);
 
   // Choosing the invite row is a decision about this address's role.
   await refocus();
   await type(input(), "alex@example.com");
   await press(input(), "ArrowDown");
   await press(input(), "Enter");
-  assert.deepEqual(chipTexts(), ["alex@example.com · Member", "kim@example.com · Member"]);
+  assert.deepEqual(chipTexts(), [
+    "alex@example.com · Workspace Member",
+    "kim@example.com · Workspace Member",
+  ]);
 });
 
 test("the list says several rows can be selected", async (t) => {
@@ -958,13 +967,13 @@ test("an address with an invitation pending shows as pending and stages nothing"
   assert.equal(changes.length, 0);
   assert.equal(input().value, "clark@gmail.com");
   await paste(input(), "a@x.io, clark@gmail.com");
-  assert.deepEqual(chipTexts(), ["a@x.io · Member"]);
+  assert.deepEqual(chipTexts(), ["a@x.io · Workspace Member"]);
   assert.equal(input().value, "clark@gmail.com");
 
   // An address nobody invited yet is still offered.
   await type(input(), "alex@example.com");
   assert.deepEqual(optionTexts(), [
-    "alex@example.com New to workspace Workspace role Member Select",
+    "alex@example.com New to workspace Workspace role Workspace Member Select",
   ]);
 });
 

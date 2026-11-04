@@ -20,6 +20,8 @@ import { useDelayedFlag } from "../../hooks/useDelayedFlag";
 import SpaceNameField from "./SpaceNameField";
 import { SpacePeopleField } from "./SpacePeopleField";
 import { workspaceCan } from "../../lib/capabilities";
+import { formatList } from "../../lib/formatList";
+import { MAX_INVITE_RECIPIENTS } from "../../lib/inviteFlow";
 import { rosterFor } from "../../lib/peopleRoster";
 import { pickedSummary, type PickedRecipient } from "../../lib/spacePeoplePicker";
 import { classifySpaceError } from "../../lib/workspaceErrors";
@@ -35,6 +37,10 @@ import type { SpaceItem, Team, WorkspaceMember } from "../../types/electron";
 const DESCRIPTION_MAX_LENGTH = 280;
 const NO_MEMBERS: WorkspaceMember[] = [];
 const NO_TEAMS: Team[] = [];
+// How many refused addresses the toast names; Copy addresses has them all.
+const FAILED_INVITES_NAMED = 5;
+// The toast is the only place left that says who wasn't invited, so it stays long enough to act on.
+const INVITE_FAILED_TOAST_MS = 15_000;
 
 // The footer's buttons share one look with the other workspace dialogs: two equal capsules.
 const BUTTON_BASE =
@@ -61,7 +67,7 @@ interface CreateSpaceDialogProps {
   revealOnCreate?: boolean;
 }
 
-// The teamspace exists by now, so this never throws: whatever goes wrong here is a count of
+// The teamspace exists by now, so this never throws: whatever goes wrong here is a list of
 // people to invite from Members, never a failed create. Every address that didn't come back
 // invited counts, an existing member included. A pending invitation counts only when it didn't
 // take the teamspace, which is an older API's answer: that person is not in it.
@@ -69,25 +75,28 @@ async function inviteIntoTeamspace(
   workspaceId: string,
   cloudSpaceId: string | null,
   addresses: string[]
-): Promise<number> {
-  if (addresses.length === 0) return 0;
-  if (!cloudSpaceId) return addresses.length;
-  let failed = 0;
+): Promise<{ failed: string[]; undelivered: number }> {
+  if (addresses.length === 0) return { failed: [], undelivered: 0 };
+  if (!cloudSpaceId) return { failed: addresses, undelivered: 0 };
+  const failed: string[] = [];
+  let undelivered = 0;
   try {
     await invitePeople.sendInvitations({
       workspaceId,
       emails: addresses,
       role: "member",
       spaceIds: [cloudSpaceId],
-      onResult: (_email, outcome) => {
+      onResult: (email, outcome) => {
         // `=== true`: src compiles without strictNullChecks, where a bare `ok` doesn't narrow.
-        if (outcome.ok !== true && outcome.grantsAdded !== true) failed += 1;
+        if (outcome.ok === true) {
+          if (!outcome.emailSent) undelivered += 1;
+        } else if (outcome.grantsAdded !== true) failed.push(email);
       },
     });
   } catch {
-    return addresses.length;
+    return { failed: addresses, undelivered: 0 };
   }
-  return failed;
+  return { failed, undelivered };
 }
 
 export default function CreateSpaceDialog({
@@ -96,7 +105,7 @@ export default function CreateSpaceDialog({
   initialWorkspaceId = null,
   revealOnCreate = true,
 }: CreateSpaceDialogProps): ReactElement {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const { user } = useAuth();
   const { workspaces, active, loaded, refresh } = useWorkspace();
@@ -229,7 +238,9 @@ export default function CreateSpaceDialog({
     workspaceRoster.some((member) => member.user_id !== user?.id);
 
   const { memberIds, teamIds, emails, hasInvalid } = useMemo(() => pickedSummary(picked), [picked]);
-  const canCreate = name.trim() !== "" && !hasInvalid && workspace != null && !isCreating;
+  const tooManyInvites = emails.length > MAX_INVITE_RECIPIENTS;
+  const canCreate =
+    name.trim() !== "" && !hasInvalid && !tooManyInvites && workspace != null && !isCreating;
 
   const retryPeople = (): void => {
     if (!workspace) return;
@@ -314,16 +325,39 @@ export default function CreateSpaceDialog({
       );
     } catch (error) {
       const classified = classifySpaceError(error);
-      if (classified.kind === "notWorkspaceMembers") {
-        // They left the workspace since the roster loaded, so the same ids would be refused again.
-        const left = new Set(classified.userIds);
-        setPicked((current) =>
-          current.filter((recipient) => recipient.kind !== "member" || !left.has(recipient.userId))
-        );
-      }
+      // Picks that left since the lists loaded would be refused again, so they come off the field,
+      // and the bar says whose. An answer naming nobody falls through to the general failure.
+      const gone = new Set(
+        classified.kind === "notWorkspaceMembers"
+          ? classified.userIds
+          : classified.kind === "groupsUnavailable"
+            ? classified.teamIds
+            : []
+      );
+      const goneRecipients = picked.filter(
+        (recipient) =>
+          (recipient.kind === "member" && gone.has(recipient.userId)) ||
+          (recipient.kind === "group" && gone.has(recipient.teamId))
+      );
       if (classified.kind === "nameTaken") {
         setTakenName(trimmedName);
         setRefocus("name");
+      } else if (goneRecipients.length > 0) {
+        const names = formatList(
+          i18n.language,
+          goneRecipients.map((recipient) =>
+            isolate(recipient.kind === "email" ? recipient.email : recipient.label)
+          )
+        );
+        setPicked((current) => current.filter((recipient) => !goneRecipients.includes(recipient)));
+        setFailure({
+          kind: "refused",
+          message:
+            classified.kind === "notWorkspaceMembers"
+              ? t("settingsPage.workspace.teamspaces.members.partialLeft", { names })
+              : t("settingsPage.workspace.teamspaces.form.groupsGone", { names }),
+        });
+        setRefocus("primary");
       } else {
         setFailure(
           classified.kind === "refused"
@@ -337,7 +371,7 @@ export default function CreateSpaceDialog({
     }
 
     // The teamspace exists from here on, so nothing below may leave it looking uncreated.
-    const failedInvitations = await inviteIntoTeamspace(
+    const invited = await inviteIntoTeamspace(
       workspace.id,
       space?.cloud_space_id ?? null,
       emails.map(({ email }) => email)
@@ -348,14 +382,48 @@ export default function CreateSpaceDialog({
         setActiveContext(space.id, null);
       }
       const spaceName = isolate(trimmedName);
+      const { failed, undelivered } = invited;
+      const named = failed.slice(0, FAILED_INVITES_NAMED).map(isolate);
+      const descriptions = [
+        ...(failed.length > 0
+          ? [
+              t("settingsPage.workspace.teamspaces.form.inviteFailedWho", {
+                names:
+                  formatList(i18n.language, named) +
+                  (failed.length > named.length ? ` +${failed.length - named.length}` : ""),
+              }),
+            ]
+          : []),
+        ...(undelivered > 0 ? [t("workspaces.invite.noEmail", { count: undelivered })] : []),
+      ];
       toast({
         title:
-          failedInvitations > 0
+          failed.length > 0
             ? t("settingsPage.workspace.teamspaces.form.createdInviteFailed", {
                 space: spaceName,
-                count: failedInvitations,
+                count: failed.length,
               })
             : t("settingsPage.workspace.teamspaces.form.created", { space: spaceName }),
+        description: descriptions.length > 0 ? descriptions.join(" ") : undefined,
+        duration: descriptions.length > 0 ? INVITE_FAILED_TOAST_MS : undefined,
+        actions:
+          failed.length > 0
+            ? [
+                {
+                  label: t("settingsPage.workspace.teamspaces.form.copyAddresses"),
+                  icon: "copy",
+                  dismissOnClick: false,
+                  feedback: {
+                    successLabel: t("common.copied"),
+                    failureLabel: t("hooks.audioRecording.pastePermission.copyFailed"),
+                  },
+                  onClick: async () => {
+                    await navigator.clipboard.writeText(failed.join("\n"));
+                    return true;
+                  },
+                },
+              ]
+            : undefined,
       });
     } catch (error) {
       // The teamspace is made; a failed reveal or toast must not leave Creating blocking every way out.
@@ -374,6 +442,11 @@ export default function CreateSpaceDialog({
     <WorkspaceErrorBar
       tone="error"
       message={t("settingsPage.workspace.teamspaces.form.invalidEmail")}
+    />
+  ) : tooManyInvites ? (
+    <WorkspaceErrorBar
+      tone="error"
+      message={t("workspaces.invite.tooMany", { count: MAX_INVITE_RECIPIENTS })}
     />
   ) : failure?.kind === "refused" ? (
     <WorkspaceErrorBar tone="error" message={failure.message} />

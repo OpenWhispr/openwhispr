@@ -2579,7 +2579,10 @@
           "creating": "Creazione",
           "created": "{{space}} creato",
           "createdInviteFailed_one": "{{space}} è stato creato. Impossibile invitare {{count}} persona. Invitala da Membri.",
-          "createdInviteFailed_other": "{{space}} è stato creato. Impossibile invitare {{count}} persone. Invitale da Membri."
+          "createdInviteFailed_other": "{{space}} è stato creato. Impossibile invitare {{count}} persone. Invitale da Membri.",
+          "inviteFailedWho": "Non invitati: {{names}}.",
+          "copyAddresses": "Copia indirizzi",
+          "groupsGone": "{{names}} non è più disponibile, quindi non è stato aggiunto."
         },
         "picker": {
           "groupPeople_one": "{{count}} persona",
@@ -2645,7 +2648,13 @@
           "notInvited": "{{names}} non ha ricevuto l'invito.",
           "notInvitedMany": "{{names}} non hanno ricevuto l'invito.",
           "skippedInvited": "{{names}} ha già un invito all'area di lavoro, quindi non è stato aggiunto a questo teamspace.",
-          "skippedInvitedMany": "{{names}} hanno già inviti all'area di lavoro, quindi non sono stati aggiunti a questo teamspace."
+          "skippedInvitedMany": "{{names}} hanno già inviti all'area di lavoro, quindi non sono stati aggiunti a questo teamspace.",
+          "removeBodyPlain": "{{name}} perderà l'accesso a questo Teamspace e alle sue note. Resterà nell'area di lavoro.",
+          "invitationPendingAdmin": "Invito in sospeso · Amministratore dell'area di lavoro",
+          "resultInvitedNoEmail": "Inviti creati per {{names}}, ma non è stato possibile recapitare l'email. Inviala di nuovo da Inviti.",
+          "stepDownTitle": "Lasciare il ruolo di amministratore di {{space}}?",
+          "stepDownBody": "Non potrai più gestire questo Teamspace né i suoi membri. Solo un altro amministratore potrà renderti di nuovo amministratore.",
+          "stepDownConfirm": "Lascia il ruolo"
         },
         "settings": {
           "leaveTitle": "Lascia il teamspace",
@@ -2663,22 +2672,21 @@
           "blockedBody": "Sei l'unico amministratore di {{space}}. Rendi amministratore un altro membro prima di andartene.",
           "blockedAction": "Gestisci membri",
           "leaveTitle": "Lasciare {{space}}?",
-          "leaveBody": "La tua appartenenza diretta terminerà. L'accesso tramite un gruppo rimarrà. Un altro amministratore continuerà a gestire questo teamspace.",
-          "leaveBodyPlain": "La tua appartenenza diretta terminerà.",
           "leaveFailedTitle": "Impossibile lasciare {{space}}",
           "leaveFailedBody": "La tua appartenenza non è cambiata. Controlla la connessione e riprova.",
           "left": "Hai lasciato {{space}}.",
           "deleteTitle": "Eliminare {{space}}?",
           "deleteBody": "Questo rimuove {{space}} dall'area di lavoro per tutti.",
-          "deletingTitle": "Eliminazione di {{space}}…",
-          "deletingBody": "Tieni aperta questa finestra mentre il teamspace viene eliminato.",
-          "deletingAction": "Eliminazione…",
           "deleteFailedTitle": "Impossibile eliminare {{space}}",
           "deleteFailedBody": "Il teamspace è ancora disponibile. Controlla la connessione e riprova.",
           "deleted": "{{space}} è stato eliminato.",
           "restored": "{{space}} è stato ripristinato",
-          "restoreFailed": "Impossibile ripristinare {{space}}. Riprova.",
-          "restoreNameTaken": "Impossibile ripristinare {{space}}. Un altro teamspace ha questo nome."
+          "leaveBodyKeeps": "La tua appartenenza diretta terminerà. Manterrai l'accesso tramite {{groups}}.",
+          "leaveBodyLoses": "Perderai l'accesso a {{space}} e alle sue note.",
+          "leaveBodyAdmins": "Un altro amministratore continuerà a gestire questo Teamspace.",
+          "deleteNotAllowed": "Non hai l'autorizzazione per eliminare {{space}}.",
+          "movedToPersonal_one": "{{count}} nota non sincronizzata è stata spostata nel tuo spazio personale.",
+          "movedToPersonal_other": "{{count}} note non sincronizzate sono state spostate nel tuo spazio personale."
         },
         "addPeople": {
           "loading": "Caricamento dei teamspace…",

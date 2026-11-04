@@ -807,6 +807,8 @@ export interface SpaceInvitation {
   id: string;
   email: string;
   role: TeamRole;
+  /** The role accepting gives across the workspace. An older API leaves it out. */
+  workspace_role?: TeamRole;
   expires_at: string;
   created_at: string;
 }

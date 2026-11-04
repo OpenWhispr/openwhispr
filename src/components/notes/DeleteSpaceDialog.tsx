@@ -1,19 +1,21 @@
-import { useReducer, useState, type ReactElement } from "react";
+import { useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { ConfirmDialog } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { useToast } from "../ui/useToast";
 import { WorkspaceActionDialog } from "../workspace/WorkspaceActionDialog";
-import { confirmActionReducer } from "../../lib/confirmActionFlow";
 import { localMutationErrorKey } from "../../lib/localMutationError";
-import { classifySpaceError, rowActionErrorOf } from "../../lib/workspaceErrors";
-import { deleteSpace, restoreSpace } from "../../services/spaceActions";
+import { rowActionErrorOf } from "../../lib/workspaceErrors";
+import { deleteSpace, holdSpaceDelete } from "../../services/spaceActions";
+import type { SpaceDeleteHold } from "../../services/spaceActionsCore";
 import { isolate } from "../../utils/bidiIsolate";
 import type { SpaceItem } from "../../types/electron";
 
 // Longer than a note edit's Undo: this delete removes the teamspace for everyone, and the plain
 // confirm asks for no name, so the toast is what catches a slip.
 const DELETE_UNDO_WINDOW_MS = 10_000;
+// Long enough to read why, and to reach Try again.
+const DELETE_FAILED_TOAST_MS = 8_000;
 
 interface DeleteSpaceDialogProps {
   space: SpaceItem | null;
@@ -26,8 +28,8 @@ interface DeleteSpaceDialogProps {
 }
 
 /**
- * Deletes a (team) space. A teamspace on the server asks once and shows the delete running; one
- * that only exists on this device asks for its name, since nothing restores it.
+ * Deletes a (team) space. A teamspace on the server asks once, then goes when its Undo window ends;
+ * one that only exists on this device asks for its name, since nothing restores it.
  */
 export default function DeleteSpaceDialog({
   space,
@@ -40,7 +42,6 @@ export default function DeleteSpaceDialog({
       <CloudDeleteSpaceDialog
         key={space.id}
         space={space}
-        cloudSpaceId={space.cloud_space_id}
         onClose={onClose}
         onDeleted={onDeleted}
       />
@@ -51,109 +52,97 @@ export default function DeleteSpaceDialog({
 
 interface CloudDeleteSpaceDialogProps {
   space: SpaceItem;
-  cloudSpaceId: string;
   onClose: () => void;
   onDeleted?: () => void;
 }
 
-// The server finishes the delete even if this window goes away, as any single request does, so
-// the dialog stays only to report how it went.
+// The dialog only asks. The delete itself waits in the toast, which outlives this dialog, and
+// reports how it went from there.
 function CloudDeleteSpaceDialog({
   space,
-  cloudSpaceId,
   onClose,
   onDeleted,
 }: CloudDeleteSpaceDialogProps): ReactElement {
   const { t } = useTranslation();
   const { toast, dismiss } = useToast();
-  const [state, dispatch] = useReducer(confirmActionReducer<SpaceItem>, {
-    kind: "confirm",
-    subject: space,
-  });
   const name = isolate(space.name);
-  const busy = state.kind === "running";
-  const failed = state.kind === "failed";
 
-  // Runs from the toast, which outlives this dialog.
-  const offerUndo = (cloudSpaceId: string): void => {
-    let restoring = false;
+  const finishDelete = async (hold: SpaceDeleteHold): Promise<void> => {
+    const result = await hold.commit();
+    if (!result) return;
+    if (result.success) {
+      if (result.relocatedCount) {
+        toast({
+          title: t("settingsPage.workspace.teamspaces.exit.movedToPersonal", {
+            count: result.relocatedCount,
+          }),
+        });
+      }
+      return;
+    }
+    const error = rowActionErrorOf(result.failure);
+    const mayRetry = error.kind !== "notAllowed" && error.kind !== "ssoRequired";
+    let description = t("settingsPage.workspace.teamspaces.exit.deleteFailedBody");
+    if (error.kind === "refused") description = error.message;
+    else if (!mayRetry) {
+      description = t("settingsPage.workspace.teamspaces.exit.deleteNotAllowed", { space: name });
+    }
+    toast({
+      title: t("settingsPage.workspace.teamspaces.exit.deleteFailedTitle", { space: name }),
+      description,
+      variant: "destructive",
+      duration: DELETE_FAILED_TOAST_MS,
+      actions: mayRetry
+        ? [
+            {
+              label: t("workspaces.exit.tryAgain"),
+              onClick: () => {
+                const retry = hold.again();
+                if (retry) void finishDelete(retry);
+              },
+            },
+          ]
+        : undefined,
+    });
+  };
+
+  const confirm = (): void => {
+    const hold = holdSpaceDelete(space);
     const toastId = toast({
       title: t("settingsPage.workspace.teamspaces.exit.deleted", { space: name }),
       duration: DELETE_UNDO_WINDOW_MS,
+      // However the toast goes, the window is over; after an Undo this does nothing.
+      onSettled: () => void finishDelete(hold),
       actions: [
         {
           label: t("app.toasts.undo"),
-          // A failed restore keeps the toast up for another try.
+          // Undo first: dismissing the toast is what lets the delete go ahead.
           dismissOnClick: false,
           onClick: async () => {
-            if (restoring) return;
-            restoring = true;
-            try {
-              await restoreSpace(cloudSpaceId);
-              dismiss(toastId);
-              toast({
-                title: t("settingsPage.workspace.teamspaces.exit.restored", { space: name }),
-              });
-            } catch (error) {
-              const copy =
-                classifySpaceError(error).kind === "nameTaken"
-                  ? "settingsPage.workspace.teamspaces.exit.restoreNameTaken"
-                  : "settingsPage.workspace.teamspaces.exit.restoreFailed";
-              toast({ title: t(copy, { space: name }), variant: "destructive" });
-            } finally {
-              restoring = false;
-            }
+            const restored = await hold.undo();
+            dismiss(toastId);
+            if (!restored) return;
+            toast({ title: t("settingsPage.workspace.teamspaces.exit.restored", { space: name }) });
           },
         },
       ],
     });
-  };
-
-  const run = async (): Promise<void> => {
-    dispatch({ type: "confirm" });
-    try {
-      const result = await deleteSpace(space);
-      if (!result.success) {
-        dispatch({ type: "failed", error: rowActionErrorOf(result.failure) });
-        return;
-      }
-    } catch {
-      dispatch({ type: "failed", error: { kind: "failed" } });
-      return;
-    }
-    offerUndo(cloudSpaceId);
-    dispatch({ type: "succeeded" });
     onDeleted?.();
     onClose();
   };
-
-  let title = t("settingsPage.workspace.teamspaces.exit.deleteTitle", { space: name });
-  let body = t("settingsPage.workspace.teamspaces.exit.deleteBody", { space: name });
-  let action = t("settingsPage.workspace.teamspaces.settings.deleteAction");
-  if (busy) {
-    title = t("settingsPage.workspace.teamspaces.exit.deletingTitle", { space: name });
-    body = t("settingsPage.workspace.teamspaces.exit.deletingBody");
-    action = t("settingsPage.workspace.teamspaces.exit.deletingAction");
-  } else if (failed) {
-    title = t("settingsPage.workspace.teamspaces.exit.deleteFailedTitle", { space: name });
-    body = t("settingsPage.workspace.teamspaces.exit.deleteFailedBody");
-    action = t("workspaces.exit.tryAgain");
-  }
 
   return (
     <WorkspaceActionDialog
       open
       icon="trash"
-      title={title}
-      body={body}
-      error={state.kind === "failed" && state.error.kind === "refused" ? state.error.message : null}
+      title={t("settingsPage.workspace.teamspaces.exit.deleteTitle", { space: name })}
+      body={t("settingsPage.workspace.teamspaces.exit.deleteBody", { space: name })}
       primary={{
-        label: action,
-        onClick: () => void run(),
-        tone: failed ? "primary" : "destructive",
+        label: t("settingsPage.workspace.teamspaces.settings.deleteAction"),
+        onClick: confirm,
+        tone: "destructive",
       }}
       cancelLabel={t("common.cancel")}
-      busy={busy}
       onDismiss={onClose}
     />
   );
@@ -189,6 +178,13 @@ function LocalDeleteSpaceDialog({
       return;
     }
     toast({ title: t("notes.spaces.deleted", { space: target.name }) });
+    if (result.relocatedCount) {
+      toast({
+        title: t("settingsPage.workspace.teamspaces.exit.movedToPersonal", {
+          count: result.relocatedCount,
+        }),
+      });
+    }
   };
 
   return (
