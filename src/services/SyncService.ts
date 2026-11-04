@@ -2574,14 +2574,14 @@ export class SyncService {
     const pending = (await window.electronAPI.getPendingConversations?.()) ?? [];
     if (pending.length === 0) return;
 
-    const migration = pending.filter((c) => c.cloud_id);
+    const linked = pending.filter((c) => c.cloud_id);
     const fresh = pending.filter((c) => !c.cloud_id);
 
-    for (const conv of migration) {
+    for (const conv of linked) {
       try {
         await this.sendMissingConversationContent(conv.id, conv.cloud_id!);
       } catch (err) {
-        console.error("Conversation migration sync failed:", err);
+        console.error("Linked conversation sync failed:", err);
       }
     }
 

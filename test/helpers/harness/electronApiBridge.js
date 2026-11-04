@@ -162,8 +162,8 @@ function createElectronApi(db, options = {}) {
       db.acknowledgeConversationCreate(id, snapshot, cloudId),
     markConversationSynced: async (id, cloudId, snapshot) =>
       db.markConversationSynced(id, cloudId, snapshot),
-    replaceConversationClientId: async (id, clientId) =>
-      db.replaceConversationClientId(id, clientId),
+    replaceConversationClientId: async (id, expectedClientId) =>
+      db.replaceConversationClientId(id, expectedClientId),
     hardDeleteConversation: async (id) => db.hardDeleteConversation(id),
 
     // Transcriptions

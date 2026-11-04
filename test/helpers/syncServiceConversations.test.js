@@ -1,8 +1,8 @@
 // Conversation half of SyncService: the real service drives the real
 // ConversationsService/cloudApi stack over a real DatabaseManager, with only the
-// HTTP boundary faked. The pull gate is the target — local rows carry SQLite's
-// "YYYY-MM-DD HH:MM:SS" while the cloud answers in ISO, and on the same UTC day
-// a raw string compare hands every cloud copy the win.
+// HTTP boundary faked. Covers the push, its follow-up and the pull gate, where
+// local rows carry SQLite's "YYYY-MM-DD HH:MM:SS" while the cloud answers in ISO,
+// and on the same UTC day a raw string compare hands every cloud copy the win.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

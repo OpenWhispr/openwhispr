@@ -8893,22 +8893,20 @@ class DatabaseManager {
 
         // The renderer's lookup can go stale while this IPC waits behind a local
         // save. Check the same snapshot inside the transaction that replaces messages.
-        if (snapshot !== undefined) {
-          const current = existing ? this._conversationWithMessageCount(existing.id) : null;
-          if (
-            snapshot === null
-              ? current !== null
-              : !current ||
-                !rowMatchesSnapshot(current, snapshot, [
-                  "id",
-                  "client_conversation_id",
-                  "cloud_id",
-                  "sync_status",
-                ]) ||
-                !this._conversationMatchesSnapshot(current, snapshot)
-          ) {
-            return existing;
-          }
+        const current = existing ? this._conversationWithMessageCount(existing.id) : null;
+        if (
+          snapshot === null
+            ? current !== null
+            : !current ||
+              !rowMatchesSnapshot(current, snapshot, [
+                "id",
+                "client_conversation_id",
+                "cloud_id",
+                "sync_status",
+              ]) ||
+              !this._conversationMatchesSnapshot(current, snapshot)
+        ) {
+          return existing;
         }
 
         const convStmt = this.db.prepare(`
@@ -9083,21 +9081,10 @@ class DatabaseManager {
           return { success: true, outcome: "already-linked", cloud_id: current.cloud_id };
         }
 
-        if (current.deleted_at) {
-          this.db
-            .prepare(
-              `UPDATE agent_conversations
-               SET cloud_id = ?, sync_status = 'pending'
-               WHERE id = ? AND cloud_id IS NULL`
-            )
-            .run(cloudId, id);
-          return { success: true, outcome: "delete-pending", cloud_id: cloudId };
-        }
-
         // Linked at once, so a failure from here on can't lead to a second create,
         // which would insert this request's messages again. Still pending until
-        // the cloud has the rest.
-        if (!this._conversationMatchesSnapshot(current, snapshot)) {
+        // the cloud has the rest, or the delete goes through.
+        if (current.deleted_at || !this._conversationMatchesSnapshot(current, snapshot)) {
           this.db
             .prepare(
               `UPDATE agent_conversations
@@ -9105,7 +9092,11 @@ class DatabaseManager {
                WHERE id = ? AND cloud_id IS NULL`
             )
             .run(cloudId, id);
-          return { success: true, outcome: "changed", cloud_id: cloudId };
+          return {
+            success: true,
+            outcome: current.deleted_at ? "delete-pending" : "changed",
+            cloud_id: cloudId,
+          };
         }
 
         this.db
