@@ -180,7 +180,7 @@ class LlamaServerManager {
       "llm",
       this.localModelIdForPath?.(modelPath),
       () => this._policyAllowedStart(modelPath, options),
-      { memoryOnly: options.policyMemoryOnly === true, onAbort: () => this.stop() }
+      { onAbort: () => this.stop() }
     );
   }
 
