@@ -41,6 +41,22 @@ test("analytics segments Chinese and Japanese speech without requiring spaces", 
   assert.equal(countSpokenWords("OpenWhisprで音声入力を試します"), 7);
 });
 
+// The same fixture is asserted against the API's countAnalyticsWords and the
+// mobile app's countSpokenWords, so every client and the server count a
+// Chinese, Japanese or Korean dictation alike.
+test("analytics counts the word fixture the API and the mobile app share", () => {
+  for (const [text, words] of [
+    ["Send the report to Dana by Friday.", 7],
+    ["我今天很高兴", 4],
+    ["東京タワーに行きました。", 5],
+    ["안녕하세요 반갑습니다", 2],
+    ["OpenWhispr 很好用", 3],
+    ["   ", 0],
+  ]) {
+    assert.equal(countSpokenWords(text), words, text);
+  }
+});
+
 test("analytics resolves local, cloud, and BYOK modes", () => {
   assert.equal(resolveAnalyticsMode({ useLocalWhisper: true }, "local-whisper"), "local");
   assert.equal(

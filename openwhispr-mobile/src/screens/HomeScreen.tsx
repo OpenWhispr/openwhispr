@@ -194,6 +194,7 @@ export default function HomeScreen() {
     // A declined cloud retry keeps the recording, which the failed history row holds for a retry.
     onLocalModelMissing: (retryWithCloud) => promptLocalModelFallback(retryWithCloud),
     onUsageLimitReached: handleUsageLimitReached,
+    recordsDictation: true,
   });
 
   const { currentAmplitude, waveformData } = useAudioWaveform(audioRecorder, isRecording);

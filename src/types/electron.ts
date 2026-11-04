@@ -1974,6 +1974,12 @@ declare global {
         setupMode: string | null;
         flowVersion: string;
       }) => Promise<void>;
+      /** Dashboard funnel: an original dictation finished, as its word count only. */
+      recordDictationCompleted?: (dictation: {
+        captureId: string;
+        words: number;
+        mode: string;
+      }) => Promise<void>;
       onActiveAccountScopeChanged?: (
         callback: (scope: ActiveAccountScope | null) => void
       ) => () => void;

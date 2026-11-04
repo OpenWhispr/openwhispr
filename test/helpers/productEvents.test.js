@@ -452,6 +452,215 @@ test("erasing an account purges only its queued events", async () => {
   );
 });
 
+// F4 — dictation
+
+function captureId(n) {
+  return `7c9e6679-7425-40de-944b-${String(n).padStart(12, "0")}`;
+}
+
+function dictate(r, n, words, overrides = {}) {
+  r.events.recordDictationCompleted({
+    captureId: captureId(n),
+    words,
+    mode: "local",
+    practice: false,
+    ...overrides,
+  });
+}
+
+function queuedDictation(r) {
+  return r
+    .queued()
+    .filter((event) => event.event_name === "dictation_completed")
+    .map((event) => [event.event_id, event.properties.word_count, event.properties.is_practice]);
+}
+
+test("a finished dictation goes up as its word count under the account, never its text", async () => {
+  const r = rig();
+  dictate(r, 1, 12);
+  await r.events.flush();
+
+  const [upload] = r.batches();
+  assert.ok(CAPABILITIES.includes("dictation_completed"));
+  assert.deepEqual(upload.body.collector.capabilities, CAPABILITIES);
+  assert.equal(upload.expectedAuthGeneration, 1);
+  assert.deepEqual(upload.body.events, [
+    {
+      event_id: captureId(1),
+      event_name: "dictation_completed",
+      schema_version: 1,
+      occurred_at: "2026-11-04T08:00:05.000Z",
+      app_version: "1.12.0",
+      flow_version: null,
+      identity_generation: 1,
+      properties: {
+        word_count: 12,
+        counter_version: 2,
+        mode: "local",
+        source: "dictation",
+        is_practice: false,
+        is_retranscribe: false,
+      },
+    },
+  ]);
+  assert.deepEqual(r.queued(), []);
+});
+
+test("199 and then 1 word are both recorded, and nothing after this device's first 200", async () => {
+  const r = rig();
+  r.server.batchStatus = 503;
+  dictate(r, 1, 199);
+  dictate(r, 2, 1);
+  dictate(r, 3, 40);
+
+  assert.deepEqual(queuedDictation(r), [
+    [captureId(1), 199, false],
+    [captureId(2), 1, false],
+  ]);
+});
+
+test("150 and then 75 words are both recorded, the later ones not", async () => {
+  const r = rig();
+  r.server.batchStatus = 503;
+  dictate(r, 1, 150);
+  dictate(r, 2, 75);
+  dictate(r, 3, 10);
+
+  assert.deepEqual(queuedDictation(r), [
+    [captureId(1), 150, false],
+    [captureId(2), 75, false],
+  ]);
+});
+
+test("onboarding practice is recorded as practice and never brings the 200 closer", async () => {
+  const r = rig();
+  r.server.batchStatus = 503;
+  dictate(r, 1, 180, { practice: true });
+  dictate(r, 2, 150);
+  dictate(r, 3, 49);
+  dictate(r, 4, 1);
+  dictate(r, 5, 1);
+
+  assert.deepEqual(queuedDictation(r), [
+    [captureId(1), 180, true],
+    [captureId(2), 150, false],
+    [captureId(3), 49, false],
+    [captureId(4), 1, false],
+  ]);
+});
+
+test("one capture reported twice is one event and counts once", async () => {
+  const r = rig();
+  r.server.batchStatus = 503;
+  dictate(r, 1, 150);
+  dictate(r, 1, 150);
+  dictate(r, 2, 49);
+
+  assert.deepEqual(queuedDictation(r), [
+    [captureId(1), 150, false],
+    [captureId(2), 49, false],
+  ]);
+  assert.deepEqual(r.events.state.dictationWords, { a: 199 });
+});
+
+test("a dictation without a capture id or words records nothing, and an odd mode reads unknown", async () => {
+  const r = rig();
+  r.server.batchStatus = 503;
+  dictate(r, 1, 0);
+  dictate(r, 2, 1.5);
+  dictate(r, 3, Number.NaN);
+  r.events.recordDictationCompleted({ captureId: "recording-1", words: 5, practice: false });
+  r.events.recordDictationCompleted({ captureId: null, words: 5, practice: false });
+  dictate(r, 4, 5, { mode: "telepathy" });
+
+  assert.deepEqual(
+    r.queued().map((event) => [event.event_id, event.properties.mode]),
+    [[captureId(4), "unknown"]]
+  );
+});
+
+test("a guest's dictation has no identity to report and is not recorded", async () => {
+  const r = rig({ scope: null });
+  dictate(r, 1, 50);
+  await r.events.flush();
+
+  assert.deepEqual(r.queued(), []);
+  assert.deepEqual(r.events.state.dictationWords, {});
+  assert.equal(r.calls.length, 0);
+});
+
+test("dictation keeps its account through a switch, and each account counts its own 200", async () => {
+  const r = rig();
+  r.server.batchStatus = 503;
+  dictate(r, 1, 150);
+  r.setScope({ accountId: "b", authGeneration: 2 });
+  dictate(r, 2, 199);
+  dictate(r, 3, 5);
+  dictate(r, 4, 1);
+  r.server.batchStatus = 200;
+  await r.events.flush();
+
+  // B's session sends only B's dictation; A's waits for A.
+  assert.deepEqual(
+    r
+      .batches()
+      .at(-1)
+      .body.events.map((event) => event.event_id),
+    [captureId(2), captureId(3)]
+  );
+  assert.deepEqual(
+    r.queued().map((event) => [event.account_id, event.event_id]),
+    [["a", captureId(1)]]
+  );
+  assert.deepEqual(r.events.state.dictationWords, { a: 150, b: 204 });
+});
+
+test("a dictation recorded offline goes up later with its own completion time", async () => {
+  const r = rig();
+  r.server.batchStatus = 503;
+  dictate(r, 1, 30);
+  await r.events.flush();
+  assert.equal(r.timers.length, 1);
+
+  r.advance(2 * 60 * 60_000);
+  r.server.batchStatus = 200;
+  await r.timers[0].fn();
+  await r.events.running;
+
+  const upload = r.batches().at(-1);
+  assert.equal(upload.body.events[0].occurred_at, "2026-11-04T08:00:05.000Z");
+  assert.equal(upload.body.collector.sent_at, "2026-11-04T10:00:05.000Z");
+  assert.deepEqual(r.queued(), []);
+});
+
+test("a policy block drops queued dictation and queues none while it lasts", async () => {
+  const r = rig();
+  r.server.batchStatus = 403;
+  r.server.batchCode = "POLICY_CLOUD_BACKUP_BLOCKED";
+  dictate(r, 1, 30);
+  await r.events.flush();
+  assert.deepEqual(r.queued(), []);
+
+  dictate(r, 2, 60);
+  assert.deepEqual(r.queued(), []);
+  assert.deepEqual(r.events.state.dictationWords, { a: 30 });
+});
+
+test("erasing an account purges its dictation and its word count, and only its own", async () => {
+  const r = rig();
+  r.server.batchStatus = 503;
+  dictate(r, 1, 150);
+  r.setScope({ accountId: "b", authGeneration: 2 });
+  dictate(r, 2, 120);
+
+  r.events.purge("a");
+  assert.deepEqual(
+    r.queued().map((event) => event.account_id),
+    ["b"]
+  );
+  assert.deepEqual(r.events.state.dictationWords, { b: 120 });
+});
+
 test("the file store writes atomically and starts fresh from an unreadable file", (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "product-events-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -472,6 +681,7 @@ test("the file store writes atomically and starts fresh from an unreadable file"
     installationId: null,
     onboardingCompletions: 0,
     acknowledgedBindings: [],
+    dictationWords: {},
     events: [],
   });
 });

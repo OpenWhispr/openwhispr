@@ -5,6 +5,14 @@ import {
   type ProductEventsResponse,
 } from '../productEvents';
 
+// jest-expo implements neither generator; dictation ids are a SHA-256 of the capture id.
+jest.mock('expo-crypto', () => ({
+  CryptoDigestAlgorithm: { SHA256: 'SHA-256' },
+  digestStringAsync: async (_algorithm: string, value: string): Promise<string> =>
+    jest.requireActual('node:crypto').createHash('sha256').update(value).digest('hex'),
+  randomUUID: jest.requireActual('node:crypto').randomUUID,
+}));
+
 const BINDING = '0d6b9a52-7a3c-4c8e-9f1d-2b4a6c8e0f13';
 const AUTHENTICATED_AT = '2026-11-04T08:00:00.000Z';
 const ANONYMOUS: ProductEventsIdentity = { userId: 'anon-1', isAnonymous: true, cookie: 'c-anon' };
@@ -25,6 +33,7 @@ interface Call {
 function rig(storage = memoryStorage(), { allowed: initiallyAllowed = true } = {}) {
   let identity: ProductEventsIdentity | null = null;
   let allowed = initiallyAllowed;
+  let onboarding = false;
   let now = Date.parse('2026-11-04T08:00:05.000Z');
   const calls: Call[] = [];
   const timers: (() => void)[] = [];
@@ -78,6 +87,7 @@ function rig(storage = memoryStorage(), { allowed: initiallyAllowed = true } = {
     storage,
     getIdentity: () => identity,
     isAllowed: () => allowed,
+    isOnboarding: () => onboarding,
     request,
     os: 'ios',
     appVersion: '1.2.6',
@@ -106,6 +116,9 @@ function rig(storage = memoryStorage(), { allowed: initiallyAllowed = true } = {
     setUsageAnalyticsQuietly: (next: boolean) => {
       allowed = next;
     },
+    setOnboarding: (value: boolean) => {
+      onboarding = value;
+    },
     advance: (ms: number) => {
       now += ms;
     },
@@ -130,7 +143,12 @@ function memoryStorage() {
     queued: () =>
       (
         JSON.parse(items.get('openwhispr_product_events') ?? '{"events":[]}') as {
-          events: { event_id: string; owner_user_id: string }[];
+          events: {
+            event_id: string;
+            event_name: string;
+            owner_user_id: string;
+            properties: Record<string, unknown>;
+          }[];
         }
       ).events,
   };
@@ -446,5 +464,211 @@ describe('mobile product events', () => {
     await relaunched.signInAs(ANONYMOUS);
     expect(relaunched.sentEvents()).toEqual([]);
     expect(relaunched.queued()).toEqual([]);
+  });
+});
+
+const UUID_V8 = /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+function dictation(
+  n: number,
+  words: number | null,
+  overrides: Partial<
+    Parameters<ReturnType<typeof rig>['events']['recordDictationCompleted']>[0]
+  > = {},
+) {
+  return {
+    captureId: `recording-${n}`,
+    words,
+    provider: 'cloud' as const,
+    source: 'dictation' as const,
+    retranscribe: false,
+    ...overrides,
+  };
+}
+
+function queuedDictation(r: ReturnType<typeof rig>) {
+  return r
+    .queued()
+    .filter((event) => event.event_name === 'dictation_completed')
+    .map((event) => [
+      event.properties.word_count,
+      event.properties.is_practice,
+      event.properties.is_retranscribe,
+    ]);
+}
+
+describe('mobile dictation', () => {
+  it('uploads a finished dictation as its word count under the account, never its text', async () => {
+    const r = rig();
+    await r.signInAs(ACCOUNT);
+    await r.events.recordDictationCompleted(dictation(1, 12, { provider: 'local' }));
+
+    const sent = r.sentEvents().filter((event) => event.event_name === 'dictation_completed');
+    expect(sent).toEqual([
+      {
+        event_id: expect.stringMatching(UUID_V8),
+        event_name: 'dictation_completed',
+        schema_version: 1,
+        occurred_at: '2026-11-04T08:00:05.000Z',
+        app_version: '1.2.6',
+        flow_version: null,
+        identity_generation: 1,
+        properties: {
+          word_count: 12,
+          counter_version: 2,
+          mode: 'local',
+          source: 'dictation',
+          is_practice: false,
+          is_retranscribe: false,
+        },
+        cookie: 'c-a1',
+      },
+    ]);
+    expect(PRODUCT_EVENT_CAPABILITIES).toContain('dictation_completed');
+    expect(r.batches().at(-1)?.body.collector?.capabilities).toEqual(PRODUCT_EVENT_CAPABILITIES);
+    expect(r.queued()).toEqual([]);
+  });
+
+  it('one recording is one event, however often and on whichever device run it is reported', async () => {
+    const storage = memoryStorage();
+    const first = rig(storage);
+    await first.signInAs(ACCOUNT);
+    first.server.offline = true;
+    await first.events.recordDictationCompleted(dictation(1, 150, { source: 'keyboard' }));
+    await first.events.recordDictationCompleted(dictation(1, 150, { source: 'keyboard' }));
+    expect(queuedDictation(first)).toEqual([[150, false, false]]);
+
+    // The id comes from the capture alone, so a relaunch reporting it again names it the same.
+    const relaunched = rig(memoryStorage());
+    await relaunched.signInAs(ACCOUNT);
+    relaunched.server.offline = true;
+    await relaunched.events.recordDictationCompleted(dictation(1, 150));
+    expect(relaunched.queued()[0].event_id).toBe(first.queued()[0].event_id);
+  });
+
+  it('an anonymous onboarding session records no dictation: words before sign-up never count', async () => {
+    const r = rig();
+    await r.signInAs(ANONYMOUS);
+    await r.events.recordDictationCompleted(dictation(1, 250));
+
+    expect(r.queued()).toEqual([]);
+    expect(r.sentEvents()).toEqual([]);
+  });
+
+  it('a guest without a session records no dictation', async () => {
+    const r = rig();
+    await r.events.recordDictationCompleted(dictation(1, 250));
+
+    expect(r.calls).toEqual([]);
+    expect(r.queued()).toEqual([]);
+  });
+
+  it("199 and then 1 word are both recorded, and nothing after this device's first 200", async () => {
+    const r = rig();
+    await r.signInAs(ACCOUNT);
+    r.server.offline = true;
+    await r.events.recordDictationCompleted(dictation(4, 0));
+    await r.events.recordDictationCompleted(dictation(1, 199));
+    await r.events.recordDictationCompleted(dictation(2, 1));
+    await r.events.recordDictationCompleted(dictation(3, 40));
+
+    expect(queuedDictation(r)).toEqual([
+      [199, false, false],
+      [1, false, false],
+    ]);
+  });
+
+  it('onboarding practice and a re-transcription are recorded as such and never bring the 200 closer', async () => {
+    const r = rig();
+    await r.signInAs(ACCOUNT);
+    r.server.offline = true;
+    r.setOnboarding(true);
+    await r.events.recordDictationCompleted(dictation(1, 180, { source: 'keyboard' }));
+    r.setOnboarding(false);
+    await r.events.recordDictationCompleted(dictation(2, 150, { retranscribe: true }));
+    await r.events.recordDictationCompleted(dictation(3, 150));
+    await r.events.recordDictationCompleted(dictation(4, 50));
+    await r.events.recordDictationCompleted(dictation(5, 1));
+
+    expect(queuedDictation(r)).toEqual([
+      [180, true, false],
+      [150, false, true],
+      [150, false, false],
+      [50, false, false],
+    ]);
+  });
+
+  it("a dictation this device can't count goes up once per account, marking its 200 words uncertain", async () => {
+    const r = rig();
+    await r.signInAs(ACCOUNT);
+    r.server.offline = true;
+    r.setOnboarding(true);
+    await r.events.recordDictationCompleted(dictation(1, null));
+    r.setOnboarding(false);
+    await r.events.recordDictationCompleted(dictation(2, null));
+    await r.events.recordDictationCompleted(dictation(3, null));
+    await r.events.recordDictationCompleted(dictation(4, 120));
+
+    expect(queuedDictation(r)).toEqual([
+      [null, true, false],
+      [null, false, false],
+      [120, false, false],
+    ]);
+  });
+
+  it("dictation keeps its account through a switch, and goes only under that account's session", async () => {
+    const r = rig();
+    await r.signInAs(ACCOUNT);
+    r.server.offline = true;
+    await r.events.recordDictationCompleted(dictation(1, 150));
+    r.server.offline = false;
+    r.server.batchStatus = 503;
+    await r.signInAs(OTHER);
+    await r.events.recordDictationCompleted(dictation(2, 120));
+    r.server.batchStatus = 200;
+    await r.events.flush();
+
+    // Sent twice, the first answered 503: always B's own, always on B's session.
+    const sent = r.sentEvents().filter((event) => event.event_name === 'dictation_completed');
+    expect([
+      ...new Set(
+        sent.map(
+          (event) => `${(event.properties as { word_count: number }).word_count} ${event.cookie}`,
+        ),
+      ),
+    ]).toEqual(['120 c-b1']);
+    expect(r.queued().map((event) => event.owner_user_id)).toEqual(['acct-a']);
+  });
+
+  it('with Usage Analytics off, no dictation is recorded, even one that finished as it went off', async () => {
+    const r = rig(memoryStorage(), { allowed: false });
+    await r.signInAs(ACCOUNT);
+    await r.events.recordDictationCompleted(dictation(1, 120));
+    expect(r.queued()).toEqual([]);
+
+    await r.setUsageAnalytics(true);
+    r.server.offline = true;
+    const finishing = r.events.recordDictationCompleted(dictation(2, 60));
+    r.setUsageAnalyticsQuietly(false);
+    await finishing;
+    expect(r.queued()).toEqual([]);
+    expect(r.sentEvents().filter((event) => event.event_name === 'dictation_completed')).toEqual(
+      [],
+    );
+  });
+
+  it('a policy block drops queued dictation and queues none while the session lasts', async () => {
+    const r = rig();
+    await r.signInAs(ACCOUNT);
+    r.server.offline = true;
+    await r.events.recordDictationCompleted(dictation(1, 120));
+    r.server.offline = false;
+    r.server.batchStatus = 403;
+    r.server.batchCode = 'POLICY_CLOUD_BACKUP_BLOCKED';
+    await r.events.flush();
+    expect(r.queued()).toEqual([]);
+
+    await r.events.recordDictationCompleted(dictation(2, 60));
+    expect(r.queued()).toEqual([]);
   });
 });

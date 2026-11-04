@@ -295,6 +295,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("product-events-record-app-session", context),
   recordOnboardingCompleted: (completion) =>
     ipcRenderer.invoke("product-events-record-onboarding-completed", completion),
+  recordDictationCompleted: (dictation) =>
+    ipcRenderer.invoke("product-events-record-dictation", dictation),
   onActiveAccountScopeChanged: registerListener(
     "active-account-scope-changed",
     (callback) => (_event, scope) => callback(scope)

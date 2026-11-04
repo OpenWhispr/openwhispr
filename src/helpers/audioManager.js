@@ -2356,6 +2356,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       result = {
         ...result,
+        // Every lane's recording names its capture, as OpenWhispr Cloud's
+        // already do, so its Insights row and its funnel fact share one id.
+        clientTranscriptionId: result?.clientTranscriptionId || crypto.randomUUID(),
         ...(metadata.analyticsOccurredAt
           ? { analyticsOccurredAt: metadata.analyticsOccurredAt }
           : {}),
@@ -2366,6 +2369,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // can't take the audio with it.
       await this._completeActivationCapture(pipeline.activationCapture, result);
       if (wasCancelled()) return;
+      this._recordDictationCompleted(result);
       pipeline.resultHandled = this.onTranscriptionComplete?.(result);
 
       if (result?.source === "openwhispr") {
@@ -4619,6 +4623,29 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
+  // The dashboard's first-200-words fact, by the activation capture's rule:
+  // the original words before cleanup, never an assistant command or a
+  // selection edit. Neither awaited nor allowed to throw, so it can't hold up
+  // or break the paste.
+  _recordDictationCompleted(result) {
+    try {
+      const words =
+        result?.success && !result.assistantConversation && !result.selectionEdit
+          ? countSpokenWords(result.rawText)
+          : 0;
+      if (words === 0 || !result.clientTranscriptionId) return;
+      void window.electronAPI
+        ?.recordDictationCompleted?.({
+          captureId: result.clientTranscriptionId,
+          words,
+          mode: resolveAnalyticsMode(getSettings(), this.lastAudioMetadata?.provider),
+        })
+        .catch(() => {});
+    } catch {
+      // Measurement must never interrupt dictation.
+    }
+  }
+
   async saveTranscription(
     text,
     rawText = null,
@@ -6416,13 +6443,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         model: batchFallbackResult ? null : streamingSttModel || null,
       };
       if (wasCancelled()) return true;
-      await this._completeActivationCapture(delivery.activationCapture, {
+      const completion = {
         success: true,
         rawText: batchFallbackResult?.rawText ?? rawStreamingText,
         assistantConversation: this.pendingAssistantConversation,
         selectionEdit: this.pendingSelectionEdit,
-      });
+      };
+      await this._completeActivationCapture(delivery.activationCapture, completion);
       if (wasCancelled()) return true;
+      this._recordDictationCompleted({ ...completion, clientTranscriptionId });
       delivery.resultHandled = this.onTranscriptionComplete?.({
         success: true,
         text: finalText,

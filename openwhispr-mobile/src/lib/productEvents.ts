@@ -1,18 +1,24 @@
-import { randomUUID } from '@/lib/uuid';
-import type { ProcessingMode } from '@/types';
+import { randomUUID, uuidFromKey } from '@/lib/uuid';
+import { WORD_COUNTER_VERSION } from '@/lib/wordCount';
+import type { ProcessingMode, TranscriptionProvider } from '@/types';
 
 // Dashboard funnel milestones (/api/product-events/batch). Content-free: never
 // transcripts, audio, titles or provider details. Sent with every upload as
 // coverage, which tells a stage nobody could observe apart from one that never
 // happened.
-export const PRODUCT_EVENT_CAPABILITIES = ['app_session_authenticated', 'onboarding_completed'];
+export const PRODUCT_EVENT_CAPABILITIES = [
+  'app_session_authenticated',
+  'onboarding_completed',
+  'dictation_completed',
+];
 
 const STORAGE_KEY = 'openwhispr_product_events';
 const STATE_VERSION = 1;
 const SCHEMA_VERSION = 1;
 const BATCH_SIZE = 50;
-// The queue only ever holds a handful of milestones; these bound what a server
-// that never acknowledges (deferring an event forever, or unreachable) leaves behind.
+// The queue only ever holds a handful of milestones and the dictations of the
+// first 200 words; these bound what a server that never acknowledges
+// (deferring an event forever, or unreachable) leaves behind.
 const MAX_QUEUED_EVENTS = 200;
 const MAX_EVENT_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const RETRY_DELAYS_MS = [60_000, 5 * 60_000, 30 * 60_000];
@@ -26,6 +32,16 @@ const SETUP_MODES: Record<ProcessingMode, 'cloud' | 'byok' | 'local'> = {
   private: 'local',
   providers: 'byok',
 };
+// The transcription that ran, in the analytics ledger's modes.
+const DICTATION_MODES: Record<TranscriptionProvider, 'openwhispr_cloud' | 'local' | 'byok'> = {
+  cloud: 'openwhispr_cloud',
+  local: 'local',
+  byok: 'byok',
+};
+// The funnel's last stage. Once this installation has recorded this many
+// counted words for an account, none of its later dictations can be the one
+// that crosses, for the account or for this platform, so none is recorded.
+const DICTATION_WORDS_NEEDED = 200;
 
 /** The session the auth store holds: its user and cookie always change together. */
 export interface ProductEventsIdentity {
@@ -60,6 +76,13 @@ interface State {
    */
   links: Record<string, string>;
   acknowledgedBindings: string[];
+  /** Counted dictation words recorded here, per account. */
+  dictationWords: Record<string, number>;
+  /**
+   * Accounts that sent a dictation this device couldn't count. One is enough
+   * to mark the account's 200 words uncertain, so no second is sent.
+   */
+  uncountedDictations: string[];
 }
 
 export interface ProductEventsStorage {
@@ -88,6 +111,8 @@ interface Dependencies {
    * unobserved.
    */
   isAllowed: () => boolean;
+  /** Onboarding is running or hasn't loaded: a dictation now is its practice. */
+  isOnboarding: () => boolean;
   request: ProductEventsRequest;
   os: string;
   appVersion: string | null;
@@ -103,6 +128,8 @@ function emptyState(): State {
     events: [],
     links: {},
     acknowledgedBindings: [],
+    dictationWords: {},
+    uncountedDictations: [],
   };
 }
 
@@ -118,6 +145,7 @@ export function createProductEvents({
   storage,
   getIdentity,
   isAllowed,
+  isOnboarding,
   request,
   os,
   appVersion,
@@ -166,19 +194,28 @@ export function createProductEvents({
     return run;
   }
 
-  function enqueue(event: Omit<QueuedEvent, 'identity_generation'>): Promise<void> {
+  /**
+   * Queues an event once. `admit` decides, in the same write, whether it is
+   * still wanted and what else changes with it; null leaves it unqueued.
+   */
+  function enqueue(
+    event: Omit<QueuedEvent, 'identity_generation'>,
+    admit: (current: State) => Partial<State> | null = () => ({}),
+  ): Promise<boolean> {
     return withState((current) => {
       if (
         current.events.some((queued) => queued.event_id === event.event_id) ||
         current.acknowledgedBindings.includes(event.event_id.toLowerCase())
       ) {
-        return { result: undefined };
+        return { result: false };
       }
+      const changes = admit(current);
+      if (!changes) return { result: false };
       const events = [...current.events, { ...event, identity_generation: current.generation }];
       return {
         // Oldest first out when full.
-        next: { ...current, events: events.slice(-MAX_QUEUED_EVENTS) },
-        result: undefined,
+        next: { ...current, ...changes, events: events.slice(-MAX_QUEUED_EVENTS) },
+        result: true,
       };
     });
   }
@@ -333,6 +370,72 @@ export function createProductEvents({
     await flush();
   }
 
+  /**
+   * An original dictation finished: its word count, never its words. Only an
+   * account records one; words spoken before sign-up never count.
+   * `retranscribe` is a recording transcribed again after its first attempt
+   * failed, recorded as such and never counted.
+   */
+  async function recordDictation({
+    captureId,
+    words,
+    provider,
+    source,
+    retranscribe,
+  }: {
+    captureId: string;
+    words: number | null;
+    provider: TranscriptionProvider;
+    source: 'dictation' | 'keyboard';
+    retranscribe: boolean;
+  }): Promise<void> {
+    const identity = getIdentity();
+    if (!identity || identity.isAnonymous || words === 0) return;
+    // An organization that keeps the account unobserved gets nothing queued for later.
+    if (blockedSessions.has(identityKey(identity) as string)) return;
+    const practice = isOnboarding();
+    const counts = !practice && !retranscribe;
+    const occurredAt = new Date(now()).toISOString();
+    const queued = await enqueue(
+      {
+        // One recording is one event, however often a path reports it.
+        event_id: await uuidFromKey(`dictation_completed:${captureId}`),
+        event_name: 'dictation_completed',
+        occurred_at: occurredAt,
+        owner_user_id: identity.userId,
+        owner_is_anonymous: false,
+        app_version: appVersion,
+        flow_version: null,
+        properties: {
+          word_count: words,
+          counter_version: WORD_COUNTER_VERSION,
+          mode: DICTATION_MODES[provider],
+          source,
+          is_practice: practice,
+          is_retranscribe: retranscribe,
+        },
+        captured_at: occurredAt,
+      },
+      (current) => {
+        const counted = current.dictationWords[identity.userId] ?? 0;
+        if (
+          // Usage Analytics is read as the event is written: it may go off
+          // while the id is derived.
+          !isAllowed() ||
+          counted >= DICTATION_WORDS_NEEDED ||
+          (counts && words === null && current.uncountedDictations.includes(identity.userId))
+        ) {
+          return null;
+        }
+        if (!counts) return {};
+        return words === null
+          ? { uncountedDictations: [...current.uncountedDictations, identity.userId] }
+          : { dictationWords: { ...current.dictationWords, [identity.userId]: counted + words } };
+      },
+    );
+    if (queued) await flush();
+  }
+
   function flush(): Promise<void> {
     if (running) {
       // The running pass read the queue before whatever asked for this one.
@@ -454,6 +557,7 @@ export function createProductEvents({
     observeIdentity,
     observeConsent,
     recordOnboardingCompleted: recordOnboarding,
+    recordDictationCompleted: recordDictation,
     flush,
     installationId,
   };
@@ -479,6 +583,8 @@ export function initProductEvents(): void {
     require('@/store/useConfigStore') as typeof import('@/store/useConfigStore');
   const { isUsageAnalyticsAllowed } =
     require('@/lib/usageAnalytics') as typeof import('@/lib/usageAnalytics');
+  const { useOnboardingStore } =
+    require('@/store/useOnboardingStore') as typeof import('@/store/useOnboardingStore');
 
   const instance = createProductEvents({
     storage: AsyncStorage,
@@ -489,6 +595,10 @@ export function initProductEvents(): void {
         : null;
     },
     isAllowed: () => isUsageAnalyticsAllowed(useConfigStore.getState().config),
+    isOnboarding: () => {
+      const { hydrated, finished } = useOnboardingStore.getState();
+      return !(hydrated && finished);
+    },
     request: async (path, body, cookie) => {
       const response = await fetch(`${BASE_URL}${path}`, {
         method: 'POST',
@@ -514,6 +624,21 @@ export function initProductEvents(): void {
     instance.observeConsent().catch(() => undefined);
   });
   observe();
+}
+
+/**
+ * dictation_completed, from a dictation that delivered its text: the app's
+ * own recorder (useAudioRecording) and the keyboard (useKeyboardHandoff).
+ * Fire-and-forget, so it never holds up or breaks the dictation.
+ */
+export function recordDictationCompleted(dictation: {
+  captureId: string;
+  words: number | null;
+  provider: TranscriptionProvider;
+  source: 'dictation' | 'keyboard';
+  retranscribe: boolean;
+}): void {
+  runtime?.recordDictationCompleted(dictation).catch(() => undefined);
 }
 
 /** onboarding_completed, from useOnboardingStore.finish() once completion is persisted. */

@@ -21,6 +21,8 @@ import { toFriendlyTranscriptionErrorMessage } from '../lib/transcriptionErrors'
 import { deleteManagedTranscriptAudio, retainTranscriptAudio } from '../lib/transcriptAudio';
 import { isUsageLimitError, type UsageLimitError } from '../lib/usageLimitError';
 import { randomUUID } from '../lib/uuid';
+import { recordDictationCompleted } from '../lib/productEvents';
+import { countSpokenWords } from '../lib/wordCount';
 import type { TranscriptionProvider } from '../types';
 import {
   getExpoAudioModule,
@@ -55,6 +57,10 @@ export interface UseAudioRecordingOptions {
   // Polled from the moment the recording stops. Once it returns true, transcription retries and
   // cleanup stop and the recording is discarded without reaching history, onComplete or onError.
   shouldCancel?: () => boolean;
+  // Defaults to false. True for original dictation (the home screen, a note), which reports its
+  // word count, never its words, toward the dashboard's first 200 words. A question to the chat,
+  // a meeting or a voice sample is not dictation.
+  recordsDictation?: boolean;
 }
 
 type RetainedRecordingAudio = {
@@ -243,7 +249,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
       sourceUriToDiscard = null;
       const transcriptionProvider = jobRouteRef.current.provider;
       try {
-        await finalizeRecording(retained, transcriptionProvider, clientTranscriptionId);
+        await finalizeRecording(retained, transcriptionProvider, clientTranscriptionId, false);
       } catch (transcribeError) {
         if (isCancelled()) {
           await discardRetainedAudio(retained);
@@ -355,6 +361,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
     retained: RetainedRecordingAudio,
     provider: TranscriptionProvider,
     clientTranscriptionId: string,
+    retranscribe: boolean,
   ) => {
     if (isCancelled()) {
       await discardRetainedAudio(retained);
@@ -391,6 +398,15 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
     const finalText = cleanup ? processedResult.text : processedResult.originalText;
     if (!finalText.trim()) {
       throw new Error(NO_SPEECH_ERROR_MESSAGE);
+    }
+    if (options.recordsDictation) {
+      recordDictationCompleted({
+        captureId: clientTranscriptionId,
+        words: countSpokenWords(processedResult.originalText),
+        provider: processedResult.transcription.provider,
+        source: 'dictation',
+        retranscribe,
+      });
     }
 
     if (!saveToHistory) {
@@ -438,7 +454,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
       jobRouteRef.current = cleanup
         ? { provider: 'cloud', ...snapshotTextInference('cloud') }
         : { provider: 'cloud', cleanupUnavailable: CLEANUP_OFF };
-      await finalizeRecording(retained, 'cloud', clientTranscriptionId);
+      await finalizeRecording(retained, 'cloud', clientTranscriptionId, true);
     } catch (error) {
       if (isCancelled()) {
         await discardRetainedAudio(retained);
