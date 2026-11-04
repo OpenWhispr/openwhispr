@@ -5571,7 +5571,7 @@ class DatabaseManager {
           LEFT JOIN agent_messages m ON m.conversation_id = c.id
           WHERE c.note_id = ? AND c.deleted_at IS NULL
           GROUP BY c.id
-          ORDER BY c.updated_at DESC
+          ORDER BY datetime(c.updated_at) DESC
           LIMIT ?`
         )
         .all(noteId, limit);
@@ -5611,7 +5611,7 @@ class DatabaseManager {
           LEFT JOIN agent_messages m ON m.conversation_id = c.id
           WHERE ${scopeFilter} AND c.deleted_at IS NULL
           GROUP BY c.id
-          ORDER BY c.updated_at DESC
+          ORDER BY datetime(c.updated_at) DESC
           LIMIT ?`
         )
         .all(...params);
@@ -5630,7 +5630,7 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       return this.db
         .prepare(
-          "SELECT * FROM agent_conversations WHERE deleted_at IS NULL AND space_id IS NULL AND folder_id IS NULL ORDER BY updated_at DESC LIMIT ?"
+          "SELECT * FROM agent_conversations WHERE deleted_at IS NULL AND space_id IS NULL AND folder_id IS NULL ORDER BY datetime(updated_at) DESC LIMIT ?"
         )
         .all(limit);
     } catch (error) {
@@ -5647,7 +5647,7 @@ class DatabaseManager {
         .get(id);
       if (!conversation) return null;
       const messages = this.db
-        .prepare("SELECT * FROM agent_messages WHERE conversation_id = ? ORDER BY created_at ASC")
+        .prepare("SELECT * FROM agent_messages WHERE conversation_id = ? ORDER BY id ASC")
         .all(id);
       return { ...conversation, messages };
     } catch (error) {
@@ -5917,7 +5917,7 @@ class DatabaseManager {
     try {
       if (!this.db) throw new Error("Database not initialized");
       return this.db
-        .prepare("SELECT * FROM agent_messages WHERE conversation_id = ? ORDER BY created_at ASC")
+        .prepare("SELECT * FROM agent_messages WHERE conversation_id = ? ORDER BY id ASC")
         .all(conversationId);
     } catch (error) {
       debugLogger.error("Error getting agent messages", { error: error.message }, "database");
@@ -6948,14 +6948,14 @@ class DatabaseManager {
           `SELECT c.id, c.title, c.created_at, c.updated_at, c.archived_at, c.cloud_id,
             c.note_id, n.title AS note_title, n.deleted_at AS note_deleted_at,
             COUNT(m.id) AS message_count,
-            (SELECT content FROM agent_messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_message,
-            (SELECT role FROM agent_messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_message_role
+            (SELECT content FROM agent_messages WHERE conversation_id = c.id ORDER BY id DESC LIMIT 1) AS last_message,
+            (SELECT role FROM agent_messages WHERE conversation_id = c.id ORDER BY id DESC LIMIT 1) AS last_message_role
           FROM agent_conversations c
           LEFT JOIN agent_messages m ON m.conversation_id = c.id
           LEFT JOIN notes n ON n.id = c.note_id AND ${noteScope.sql}
           ${archiveFilter}
           GROUP BY c.id
-          ORDER BY c.updated_at DESC
+          ORDER BY datetime(c.updated_at) DESC
           LIMIT ? OFFSET ?`
         )
         .all(...noteScope.params, limit, offset);
@@ -6979,8 +6979,8 @@ class DatabaseManager {
           `SELECT DISTINCT c.id, c.title, c.created_at, c.updated_at, c.archived_at, c.cloud_id,
             c.note_id, n.title AS note_title, n.deleted_at AS note_deleted_at,
             COUNT(m.id) AS message_count,
-            (SELECT content FROM agent_messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_message,
-            (SELECT role FROM agent_messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_message_role
+            (SELECT content FROM agent_messages WHERE conversation_id = c.id ORDER BY id DESC LIMIT 1) AS last_message,
+            (SELECT role FROM agent_messages WHERE conversation_id = c.id ORDER BY id DESC LIMIT 1) AS last_message_role
           FROM agent_conversations c
           LEFT JOIN agent_messages m ON m.conversation_id = c.id
           LEFT JOIN agent_messages ms ON ms.conversation_id = c.id
@@ -6989,7 +6989,7 @@ class DatabaseManager {
             AND c.space_id IS NULL AND c.folder_id IS NULL
             AND (c.title LIKE ? OR ms.content LIKE ?)
           GROUP BY c.id
-          ORDER BY c.updated_at DESC
+          ORDER BY datetime(c.updated_at) DESC
           LIMIT ?`
         )
         .all(...noteScope.params, pattern, pattern, limit);

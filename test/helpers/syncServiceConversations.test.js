@@ -319,7 +319,7 @@ test("an edit during the follow-up keeps the chat pending until the cloud has it
   assertOneLiveCopy(cloud, clientId, ["first message", "second message", "third message"]);
 });
 
-test("a chat deleted during the follow-up is not brought back", async (t) => {
+test("a chat deleted during its create is not brought back", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
   const { db, cloud, api, service } = ctx;
@@ -337,6 +337,70 @@ test("a chat deleted during the follow-up is not brought back", async (t) => {
 
   assert.equal(db.getConversationByClientId(clientId), null);
   assert.ok(cloud.conversation(clientId).deleted_at, "the delete reaches the cloud");
+});
+
+test("a chat deleted during the follow-up is not brought back", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, api, service } = ctx;
+  await establishCursor(service);
+  const conversation = db.createAgentConversation("Deleted in the follow-up");
+  db.addAgentMessage(conversation.id, "user", "first message");
+  const clientId = db.getAgentConversation(conversation.id).client_conversation_id;
+  const gate = pauseNextConversationCreate(api);
+
+  let deleted = false;
+  cloud.failWith((call) => {
+    if (!deleted && call.method === "PATCH" && call.path === "/api/conversations/update") {
+      deleted = true;
+      db.deleteAgentConversation(conversation.id);
+    }
+    return false;
+  });
+  const sync = service.syncAll(true);
+  await gate.started;
+  db.addAgentMessage(conversation.id, "assistant", "second message");
+  gate.resume();
+  await sync;
+
+  assert.ok(deleted);
+  assert.equal(db.getConversationByClientId(clientId), null);
+  assert.ok(cloud.conversation(clientId).deleted_at, "the delete reaches the cloud");
+});
+
+test("a title update that keeps failing leaves the messages sent and the chat pending", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, api, service } = ctx;
+  await establishCursor(service);
+  const conversation = db.createAgentConversation("Old title");
+  db.addAgentMessage(conversation.id, "user", "first message");
+  const clientId = db.getAgentConversation(conversation.id).client_conversation_id;
+  const gate = pauseNextConversationCreate(api);
+
+  cloud.failWith("/api/conversations/update", { status: 500 });
+  const sync = service.syncAll(true);
+  await gate.started;
+  db.addAgentMessage(conversation.id, "assistant", "second message");
+  db.updateAgentConversationTitle(conversation.id, "New title");
+  gate.resume();
+  await sync;
+  await service.syncAll(true);
+  await service.syncAll(true);
+
+  const pending = db.getAgentConversation(conversation.id);
+  assert.equal(pending.sync_status, "pending");
+  assert.equal(pending.title, "New title", "the pull must skip a chat still pending");
+  assert.equal(pending.messages.length, 2);
+  assert.equal(cloud.logFor("/api/conversations/create").length, 1);
+  assertOneLiveCopy(cloud, clientId, ["first message", "second message"]);
+  assert.equal(cloud.conversation(clientId).title, "Old title");
+
+  cloud.clearFailures();
+  await service.syncAll(true);
+  assert.equal(db.getAgentConversation(conversation.id).sync_status, "synced");
+  assert.equal(cloud.conversation(clientId).title, "New title");
+  assertOneLiveCopy(cloud, clientId, ["first message", "second message"]);
 });
 
 test("a create answered with a tombstone starts a new cloud copy instead of linking it", async (t) => {
@@ -366,6 +430,7 @@ test("a create answered with a tombstone starts a new cloud copy instead of link
   const synced = db.getAgentConversation(conversation.id);
   assert.equal(synced.sync_status, "synced");
   assertOneLiveCopy(cloud, synced.client_conversation_id, ["first message"]);
+  assert.equal(cloud.logFor("/api/conversations/create").at(-1).body.messages.length, 1);
   assert.ok(cloud.conversation(oldClientId).deleted_at);
 });
 
@@ -662,11 +727,15 @@ test("a chat already linked and still pending gets what the cloud is missing", a
     title: "Old title",
     created_at: "2026-07-20T08:00:00.000Z",
     updated_at: "2026-07-20T09:00:00.000Z",
-    messages: [{ role: "user", content: "same text" }],
+    messages: [
+      { role: "user", content: "same text" },
+      { role: "assistant", content: "other role" },
+    ],
   });
   const local = db.createAgentConversation("New title");
   db.addAgentMessage(local.id, "user", "same text");
   db.addAgentMessage(local.id, "user", "same text");
+  db.addAgentMessage(local.id, "user", "other role");
   updateConversation(db, local.id, {
     client_conversation_id: cloudRow.client_conversation_id,
     cloud_id: cloudRow.id,
@@ -676,7 +745,96 @@ test("a chat already linked and still pending gets what the cloud is missing", a
   await service.syncAll(true);
 
   assert.equal(cloud.logFor("/api/conversations/create").length, 0);
-  assertOneLiveCopy(cloud, "client-linked", ["same text", "same text"]);
+  assertOneLiveCopy(cloud, "client-linked", ["same text", "other role", "same text", "other role"]);
   assert.equal(cloud.conversation("client-linked").title, "New title");
   assert.equal(db.getAgentConversation(local.id).sync_status, "synced");
+});
+
+test("a chat linked to another copy, or deleted, keeps its identity", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db } = ctx;
+  const linked = db.createAgentConversation("Linked");
+  const clientId = db.getAgentConversation(linked.id).client_conversation_id;
+  const row = updateConversation(db, linked.id, {
+    cloud_id: "cloud-winner",
+    sync_status: "pending",
+  });
+  const snapshot = { title: row.title, updated_at: row.updated_at, message_count: 0 };
+
+  assert.equal(db.markConversationSynced(linked.id, "cloud-loser", snapshot).success, false);
+  assert.equal(db.getAgentConversation(linked.id).sync_status, "pending");
+  assert.equal(db.replaceConversationClientId(linked.id, clientId).success, false);
+  assert.equal(db.getAgentConversation(linked.id).client_conversation_id, clientId);
+
+  const deleted = db.createAgentConversation("Deleted");
+  const deletedClientId = db.getAgentConversation(deleted.id).client_conversation_id;
+  db.markConversationCreateAttempted(deleted.id);
+  db.deleteAgentConversation(deleted.id);
+  assert.equal(db.replaceConversationClientId(deleted.id, deletedClientId).success, false);
+  assert.ok(db.getConversationByClientId(deletedClientId));
+});
+
+test("a pull lookup gone stale never replaces the chat", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db } = ctx;
+  const local = db.createAgentConversation("Local title");
+  db.addAgentMessage(local.id, "user", "local message");
+  const clientId = db.getAgentConversation(local.id).client_conversation_id;
+  const cloudCopy = {
+    id: "cloud-copy",
+    client_conversation_id: clientId,
+    title: "Cloud title",
+    updated_at: "2026-07-20T12:00:00.000Z",
+  };
+  const snapshot = db.getConversationByClientId(clientId);
+
+  // The lookup found no chat, and one exists now.
+  db.upsertConversationFromCloud(cloudCopy, [], null);
+  // Title, updated_at and message count still match; only the link moved.
+  updateConversation(db, local.id, { cloud_id: "another-copy" });
+  db.upsertConversationFromCloud(cloudCopy, [], snapshot);
+
+  const row = db.getAgentConversation(local.id);
+  assert.equal(row.title, "Local title");
+  assert.equal(row.messages.length, 1);
+});
+
+test("a pulled chat keeps its message and list order beside local timestamps", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  cloud.seedConversation({
+    client_conversation_id: "client-pulled",
+    title: "Pulled",
+    updated_at: "2026-07-20T09:00:00.000Z",
+    messages: [
+      { role: "user", content: "q1", created_at: "2026-07-20T09:00:00.000Z" },
+      { role: "assistant", content: "a1", created_at: "2026-07-20T09:00:01.000Z" },
+    ],
+  });
+  await service.syncAll(true);
+  const pulled = db.getConversationByClientId("client-pulled");
+
+  // Same UTC day in SQLite's format, which as a raw string sorts before the ISO rows.
+  const next = db.addAgentMessage(pulled.id, "user", "q2");
+  db.db.prepare("UPDATE agent_messages SET created_at = ? WHERE id = ?").run(LOCAL_EARLY, next.id);
+  const local = db.createAgentConversation("Local");
+  updateConversation(db, pulled.id, { updated_at: "2026-07-20T09:00:00.000Z" });
+  updateConversation(db, local.id, { updated_at: LOCAL_EARLY });
+
+  const contents = (messages) => messages.map((message) => message.content);
+  assert.deepEqual(contents(db.getAgentConversation(pulled.id).messages), ["q1", "a1", "q2"]);
+  assert.deepEqual(contents(db.getAgentMessages(pulled.id)), ["q1", "a1", "q2"]);
+
+  const list = db.getAgentConversationsWithPreview();
+  assert.deepEqual(
+    list.map((conversation) => conversation.title),
+    ["Local", "Pulled"]
+  );
+  for (const row of [list[1], db.searchAgentConversations("Pulled")[0]]) {
+    assert.equal(row.last_message, "q2");
+    assert.equal(row.last_message_role, "user");
+  }
 });
