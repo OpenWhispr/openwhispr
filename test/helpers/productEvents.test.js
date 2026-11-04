@@ -159,7 +159,10 @@ test("a binding refused or unanswered takes no client time; an outage binds on t
   offline.server.throwBind = false;
   await offline.events.recordAppSession({ accountId: "a", authGeneration: 1 });
   assert.deepEqual(
-    offline.batches().at(-1).body.events.map((event) => event.event_id),
+    offline
+      .batches()
+      .at(-1)
+      .body.events.map((event) => event.event_id),
     [BINDING]
   );
 });
@@ -350,7 +353,10 @@ test("a queue survives a restart, and an event too old to matter is dropped", as
   const store = memoryStore();
   const first = rig({ store });
   first.server.batchStatus = 503;
-  first.events.recordOnboardingCompleted({ setupMode: "cloud", flowVersion: "desktop-onboarding-2" });
+  first.events.recordOnboardingCompleted({
+    setupMode: "cloud",
+    flowVersion: "desktop-onboarding-2",
+  });
   await first.events.flush();
   const installation = first.events.installationId();
 
@@ -374,7 +380,10 @@ test("a sign-in resent after a relaunch is the same event id", async () => {
   const restarted = rig({ store });
   await restarted.events.recordAppSession({ accountId: "a", authGeneration: 1 });
   assert.deepEqual(
-    restarted.batches().at(-1).body.events.map((event) => event.event_id),
+    restarted
+      .batches()
+      .at(-1)
+      .body.events.map((event) => event.event_id),
     [BINDING]
   );
 
@@ -382,9 +391,50 @@ test("a sign-in resent after a relaunch is the same event id", async () => {
   restarted.setScope({ accountId: "a", authGeneration: 2 });
   await restarted.events.recordAppSession({ accountId: "a", authGeneration: 2 });
   assert.deepEqual(
-    restarted.batches().at(-1).body.events.map((event) => event.event_id),
+    restarted
+      .batches()
+      .at(-1)
+      .body.events.map((event) => event.event_id),
     [SECOND_BINDING]
   );
+
+  // Once the server has taken a sign-in, relaunching into the same session
+  // binds it again but sends nothing more for it (the credential generation
+  // starts over on every launch).
+  const again = rig({ store, scope: { accountId: "a", authGeneration: 0 } });
+  again.server.bindingId = BINDING;
+  await again.events.recordAppSession({ accountId: "a", authGeneration: 0 });
+  assert.equal(again.calls.filter((call) => call.route.endsWith("/app-session")).length, 1);
+  assert.deepEqual(
+    again.batches().flatMap((call) => call.body.events),
+    []
+  );
+});
+
+test("an event queued while an upload is in flight goes in a follow-up pass", async () => {
+  const r = rig();
+  const original = r.events.request;
+  let release;
+  const held = new Promise((resolve) => {
+    release = resolve;
+  });
+  r.events.request = async (opts) => {
+    if (opts.path.endsWith("/batch") && opts.body.events.length === 0) await held;
+    return original(opts);
+  };
+  // The scope's coverage call is in flight when the sign-in is bound.
+  const coverage = r.events.flush();
+  const signIn = r.events.recordAppSession({ accountId: "a", authGeneration: 1 });
+  await new Promise((resolve) => setImmediate(resolve));
+  release();
+  await Promise.all([coverage, signIn]);
+  while (r.events.running) await r.events.running;
+
+  assert.deepEqual(
+    r.batches().map((call) => call.body.events.map((event) => event.event_name)),
+    [[], ["app_session_authenticated"]]
+  );
+  assert.deepEqual(r.queued(), []);
 });
 
 test("erasing an account purges only its queued events", async () => {
@@ -421,6 +471,7 @@ test("the file store writes atomically and starts fresh from an unreadable file"
     version: 1,
     installationId: null,
     onboardingCompletions: 0,
+    acknowledgedBindings: [],
     events: [],
   });
 });

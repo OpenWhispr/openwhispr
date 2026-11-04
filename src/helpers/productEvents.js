@@ -14,12 +14,21 @@ const MAX_QUEUED_EVENTS = 200;
 const MAX_EVENT_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const RETRY_DELAYS_MS = [60_000, 5 * 60_000, 30 * 60_000];
 const ONBOARDING_SETUP_MODES = new Set(["cloud", "byok", "local", "managed"]);
+// Sign-ins the server already took. A relaunch validates the same session and
+// gets the same binding back, which then needs no second upload.
+const MAX_ACKNOWLEDGED_BINDINGS = 50;
 const STATE_VERSION = 1;
 
 const OS_BY_PLATFORM = { darwin: "macos", win32: "windows", linux: "linux" };
 
 function emptyState() {
-  return { version: STATE_VERSION, installationId: null, onboardingCompletions: 0, events: [] };
+  return {
+    version: STATE_VERSION,
+    installationId: null,
+    onboardingCompletions: 0,
+    acknowledgedBindings: [],
+    events: [],
+  };
 }
 
 /**
@@ -82,7 +91,7 @@ class ProductEvents {
     this.setTimer = setTimer;
     this.clearTimer = clearTimer;
     this.logger = logger;
-    this.state = store.load();
+    this.state = { ...emptyState(), ...store.load() };
     this.running = null;
     this.retryTimer = null;
     this.retryAttempt = 0;
@@ -93,6 +102,7 @@ class ProductEvents {
     // Scopes whose organization refused cloud records; left alone until the
     // scope changes or the app restarts.
     this.blockedScopes = new Set();
+    this.flushAgain = false;
   }
 
   persist(update) {
@@ -158,6 +168,7 @@ class ProductEvents {
       return;
     }
     if (!sameScope(this.getScope(), scope)) return;
+    if (this.state.acknowledgedBindings.includes(bindingId.toLowerCase())) return;
     this.enqueue({
       // One binding is one event: retries and relaunches resend the same id.
       event_id: bindingId,
@@ -205,7 +216,12 @@ class ProductEvents {
   }
 
   async flush() {
-    if (this.running) return this.running;
+    if (this.running) {
+      // The running pass read the queue before whatever asked for this one.
+      this.flushAgain = true;
+      return this.running;
+    }
+    this.flushAgain = false;
     this.running = this.runPass()
       .catch((error) => {
         this.logger?.debug?.("Product events upload failed", { error: error?.message });
@@ -213,6 +229,7 @@ class ProductEvents {
       })
       .finally(() => {
         this.running = null;
+        if (this.flushAgain) void this.flush();
       });
     return this.running;
   }
@@ -307,8 +324,18 @@ class ProductEvents {
       )
     );
     if (accepted.size > 0) {
+      const bindings = pending
+        .filter(
+          (event) =>
+            event.event_name === "app_session_authenticated" &&
+            accepted.has(event.event_id.toLowerCase())
+        )
+        .map((event) => event.event_id.toLowerCase());
       this.persist((state) => ({
         ...state,
+        acknowledgedBindings: [...state.acknowledgedBindings, ...bindings].slice(
+          -MAX_ACKNOWLEDGED_BINDINGS
+        ),
         events: state.events.filter((event) => !accepted.has(event.event_id.toLowerCase())),
       }));
     }
