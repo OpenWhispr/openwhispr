@@ -9,6 +9,7 @@ import { getRecordingErrorTitle, getRecordingErrorDescription } from "../utils/r
 import { providerErrorActions } from "../utils/describeProviderError";
 import { isAccessibilitySkipped } from "../utils/permissions";
 import { needsSttConfigBeforeStart } from "../helpers/sttConfigPolicy";
+import { isManagedOrukeetStream } from "../helpers/transcriptionFallback";
 import {
   isAgentAllowed,
   isScreenContextAllowed,
@@ -64,6 +65,7 @@ export const useAudioRecording = (toast, options = {}) => {
   const audioManagerRef = useRef(null);
   const startLockRef = useRef(false);
   const stopRequestedDuringStartRef = useRef(false);
+  const startEffectsOnReportRef = useRef(false);
   const startCuePendingRef = useRef(false);
   const pushForceStoppedRef = useRef(false);
   const stopLockRef = useRef(false);
@@ -251,8 +253,16 @@ export const useAudioRecording = (toast, options = {}) => {
           }
         }
 
-        startCuePendingRef.current = true;
-        const didStart = audioManagerRef.current.shouldUseStreaming()
+        const usesStreaming = audioManagerRef.current.shouldUseStreaming();
+        const managedOrukeet =
+          usesStreaming &&
+          isManagedOrukeetStream({
+            providerName: audioManagerRef.current.getStreamingProviderName?.(),
+            cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
+          });
+        startEffectsOnReportRef.current = managedOrukeet;
+        startCuePendingRef.current = managedOrukeet;
+        const didStart = usesStreaming
           ? await audioManagerRef.current.startStreamingRecording()
           : await audioManagerRef.current.startRecording();
         recordingStarted = didStart;
@@ -277,9 +287,24 @@ export const useAudioRecording = (toast, options = {}) => {
           return didStart;
         }
 
+        // A quick tap can end the recording inside the start call itself (deferred
+        // streaming stop) — don't pause media for a recording that already ended. See #1060.
+        if (
+          !startEffectsOnReportRef.current &&
+          didStart &&
+          audioManagerRef.current.getState().isRecording
+        ) {
+          if (getSettings().pauseMediaOnDictation) {
+            window.electronAPI?.pauseMediaPlayback?.();
+          }
+          window.electronAPI?.registerCancelHotkey?.("Escape");
+          void playStartCue();
+        }
+
         return didStart;
       } finally {
         startLockRef.current = false;
+        startEffectsOnReportRef.current = false;
         startCuePendingRef.current = false;
         // A stop that landed mid-start set isStopping expecting the started
         // recording's state change to clear it; if the recording never began,
@@ -509,14 +534,14 @@ export const useAudioRecording = (toast, options = {}) => {
     audioManagerRef.current.setCallbacks({
       onStateChange: ({ isRecording, isProcessing, isStreaming, micCaptureStatus }) => {
         reportLifecycle(isRecording ? "recording" : isProcessing ? "processing" : "idle");
-        // Act with the pill, not when the start resolves: a streaming start stays
-        // pending on its provider connect (seconds on a cold socket) while audio
-        // already buffers. A fallback to batch reports recording again after its
-        // not-recording report released these, so only the cue is once per start.
+        // Managed Orukeet acts with the pill, not when the start resolves: its start
+        // stays pending on a cold connect for seconds while audio already buffers.
+        // A fallback to batch reports recording again after its not-recording report
+        // released these, so only the cue is once per start.
         if (
           isRecording &&
           !wasRecordingRef.current &&
-          startLockRef.current &&
+          startEffectsOnReportRef.current &&
           !stopRequestedDuringStartRef.current
         ) {
           if (getSettings().pauseMediaOnDictation) {

@@ -33,7 +33,10 @@ export default class FakeAudioManager {
     this.translationRequested = value;
   }
   shouldUseStreaming() {
-    return true;
+    return globalThis.__startRoute.streaming;
+  }
+  getStreamingProviderName() {
+    return globalThis.__startRoute.provider;
   }
   isSttConfigStale() {
     return false;
@@ -50,6 +53,12 @@ export default class FakeAudioManager {
     this.callbacks.onStateChange?.(state);
   }
   startStreamingRecording() {
+    return new Promise((resolve) => {
+      this.finishStart = resolve;
+      globalThis.__startOnStart?.(this);
+    });
+  }
+  startRecording() {
     return new Promise((resolve) => {
       this.finishStart = resolve;
       globalThis.__startOnStart?.(this);
@@ -79,7 +88,9 @@ export const resumeContextIfNeeded = async () => null;
 const RECORDING = { isRecording: true, isProcessing: false, isStreaming: true };
 const IDLE = { isRecording: false, isProcessing: false, isStreaming: false };
 
-async function mountHook(t) {
+const MANAGED_ORUKEET = { streaming: true, provider: "orukeet", mode: "openwhispr" };
+
+async function mountHook(t, route = MANAGED_ORUKEET) {
   let root = null;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
@@ -110,9 +121,11 @@ async function mountHook(t) {
   };
   globalThis.__startEvents = [];
   globalThis.__startOnStart = null;
+  globalThis.__startRoute = route;
   t.after(() => {
     delete globalThis.__startEvents;
     delete globalThis.__startOnStart;
+    delete globalThis.__startRoute;
   });
 
   const vite = await createRendererServer(t, {
@@ -123,7 +136,7 @@ async function mountHook(t) {
     },
   });
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
-  useSettingsStore.setState({ pauseMediaOnDictation: true });
+  useSettingsStore.setState({ pauseMediaOnDictation: true, cloudTranscriptionMode: route.mode });
   const { useAudioRecording } = await vite.ssrLoadModule("/hooks/useAudioRecording.js");
 
   // Stable identities: the hook rebuilds its AudioManager when these change.
@@ -301,3 +314,32 @@ test("recording state outside a start, such as mic recovery, changes nothing", a
   });
   assert.deepEqual(globalThis.__startEvents, ["unregister", "resume"]);
 });
+
+for (const [name, route] of [
+  ["another streaming provider", { streaming: true, provider: "deepgram", mode: "openwhispr" }],
+  ["Orukeet with the user's own key", { streaming: true, provider: "orukeet", mode: "byok" }],
+  ["batch recording", { streaming: false, provider: "deepgram", mode: "openwhispr" }],
+]) {
+  test(`${name} keeps acting when the start resolves`, async (t) => {
+    const hook = await mountHook(t, route);
+    let activeManager;
+    globalThis.__startOnStart = (manager) => {
+      activeManager = manager;
+      manager.report({ ...RECORDING, isStreaming: route.streaming });
+    };
+
+    let started;
+    await React.act(async () => {
+      started = hook.api.startRecording();
+      await new Promise((resolve) => setImmediate(resolve));
+    });
+    await settle();
+    assert.deepEqual(globalThis.__startEvents, [], "must still wait for the start");
+
+    await React.act(async () => {
+      activeManager.finishStart(true);
+      await started;
+    });
+    assert.deepEqual(globalThis.__startEvents, STARTED);
+  });
+}
