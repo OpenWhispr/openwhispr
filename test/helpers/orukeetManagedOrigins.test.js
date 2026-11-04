@@ -3,7 +3,11 @@ const assert = require("node:assert/strict");
 const { EventEmitter } = require("node:events");
 const { OrukeetStreaming } = require("../../src/helpers/orukeetStreaming");
 const { connectManagedOrukeet, validateSession } = require("../../src/helpers/orukeetCloudSession");
-const { ORUKEET_BASE_URL } = require("../../src/helpers/orukeetProtocol");
+const {
+  ORUKEET_ASR_BASES,
+  ORUKEET_BASE_URL,
+  ORUKEET_PIPELINE_BASES,
+} = require("../../src/helpers/orukeetProtocol");
 
 const ORIGINS = ["https://orukeet.gizmovoice.ai", "https://orukeet.openwhispr.com"];
 const ASR_PATHS = ["", "/preview/language-routing"];
@@ -31,6 +35,18 @@ function grant(baseUrl, pipeline) {
 
 test("managed hostname support preserves the existing default", () => {
   assert.equal(ORUKEET_BASE_URL, "https://orukeet.gizmovoice.ai");
+});
+
+// Managed credentials go only to these. A new destination has to be added here on purpose.
+test("the managed destinations are exactly the two origins' known routes", () => {
+  assert.deepEqual(
+    [...ORUKEET_ASR_BASES],
+    ORIGINS.flatMap((origin) => ASR_PATHS.map((path) => origin + path))
+  );
+  assert.deepEqual(
+    [...ORUKEET_PIPELINE_BASES],
+    ORIGINS.flatMap((origin) => PIPELINE_PATHS.map((path) => origin + path))
+  );
 });
 
 for (const origin of ORIGINS) {
