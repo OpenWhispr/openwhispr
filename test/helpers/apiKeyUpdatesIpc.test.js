@@ -871,7 +871,12 @@ test("a sign-out or account switch during a meeting prepare leaves no warm conne
         token: null,
         generation: authGeneration,
       }),
-    () => handlers.get("set-active-account-scope")({}, "another-account", authGeneration),
+    async () => {
+      // A switch leaves a real account; a guest signing in keeps its work.
+      target.databaseManager = { activeAccountId: "personal-account", setActiveAccountId() {} };
+      await handlers.get("set-active-account-scope")({}, "another-account", authGeneration);
+      delete target.databaseManager;
+    },
   ]) {
     resetMeeting(t);
     setWorkspacePolicy(UNMANAGED_POLICY);

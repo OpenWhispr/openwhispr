@@ -957,7 +957,8 @@ class IPCHandlers {
           try {
             this._localModelPolicy.assertCurrent(this._activeLocalMeetingLease);
           } catch (error) {
-            this._stopMeetingForPolicy?.(error.code);
+            // cancelJobs' abort: its callers stop the meeting themselves, as an account change.
+            if (error.code !== "POLICY_UNRESOLVABLE") this._stopMeetingForPolicy?.(error.code);
           }
         }
       },
@@ -2817,19 +2818,21 @@ class IPCHandlers {
         accountId === null && !state.token ? guestAudioPolicy(state.generation) : null;
       const scopeChanged =
         accountChanged || (accountId !== null && previousScope?.accountId !== accountId);
-      // Local work a guest started needs no account's leave to go on: the new
-      // verdict decides it when it lands. Leaving an account does end its work.
-      if (accountChanged && typeof this.databaseManager.activeAccountId === "string") {
-        this._localModelPolicy?.cancelJobs();
-      }
+      // Work a guest started needs no account's leave to go on: the new verdict
+      // decides it when it lands. Leaving an account does end its work.
+      const leftAccount =
+        accountChanged && typeof this.databaseManager.activeAccountId === "string";
+      if (leftAccount) this._localModelPolicy?.cancelJobs();
       // A rotated bearer no longer matches the stored binding, so this also
       // holds for the same account: that only re-scopes the policy, and only a
       // different account ends the work and meeting already running.
       if (scopeChanged) {
         this._audioFeaturePolicy?.invalidate(guestPolicy);
-        if (accountChanged) {
+        if (leftAccount) {
           this._audioFeaturePolicy?.cancelJobs();
           this._stopMeetingForPolicy?.("accountChanged");
+        }
+        if (accountChanged) {
           this._retireEnterpriseAudio?.(false, "accountChanged");
           this._enterpriseAudioOwner = null;
         }

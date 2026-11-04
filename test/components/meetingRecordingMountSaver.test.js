@@ -368,8 +368,8 @@ test("a policy flip that cancels a start still in progress says why", async (t) 
   assert.equal(toasts.at(-1)?.description, "Meeting recording is disabled by your organization.");
 });
 
-test("a policy that can't be checked during a start leaves that start running", async (t) => {
-  const { store, api, setPolicy } = await setup(t);
+// A start waiting on main's reply, so the policy can change while it is under way.
+const startHeldAtMain = async (t, store, api) => {
   const reply = deferred();
   const startMain = api.meetingTranscriptionStart;
   api.meetingTranscriptionStart = async (...args) => {
@@ -384,13 +384,63 @@ test("a policy that can't be checked during a start leaves that start running", 
       await new Promise((resolve) => setTimeout(resolve, 5));
     }
   });
+  return () => {
+    reply.resolve();
+    return React.act(() => starting);
+  };
+};
 
-  await setPolicy({ status: "error", policy: null });
-  reply.resolve();
-  await React.act(() => starting);
+for (const [label, unresolved] of [
+  ["an error", { status: "error", policy: null }],
+  ["a reload", { status: "loading", policy: null }],
+]) {
+  test(`${label} in this window's policy during a start leaves that start running`, async (t) => {
+    const { store, api, setPolicy } = await setup(t);
+    let mainStops = 0;
+    const stopMain = api.meetingTranscriptionStop;
+    api.meetingTranscriptionStop = async (...args) => {
+      mainStops++;
+      return stopMain(...args);
+    };
+    const finishStart = await startHeldAtMain(t, store, api);
+
+    await setPolicy(unresolved);
+    await finishStart();
+
+    assert.equal(mainStops, 0);
+    assert.ok(store.getActiveRecordingSessionId(), "the session is still live");
+
+    let stop;
+    await React.act(async () => {
+      stop = await store.stopRecording();
+    });
+    assert.equal(stop.stopped, true, "the user's Stop ends it");
+    assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
+  });
+}
+
+test("a model refused during a start ends it with main's reason", async (t) => {
+  const { store, api, toasts, setPolicy } = await setup(t);
+  api.meetingTranscriptionStart = async () => ({
+    success: false,
+    error: "raw server text",
+    code: "POLICY_MODEL_BLOCKED",
+  });
+  const finishStart = await startHeldAtMain(t, store, api);
+
+  const allowed = managedPolicy({ meetingRecordingEnabled: true });
+  await setPolicy({
+    ...allowed,
+    policy: {
+      ...allowed.policy,
+      transcription: { ...MANAGED_SCOPE, allowedModes: ["local"], allowedLocalModels: [] },
+    },
+  });
+  await finishStart();
   await settle(store);
 
-  assert.equal(store.useMeetingRecordingStore.getState().isRecording, true);
+  assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
+  assert.equal(toasts.at(-1)?.description, "Choose a local model your organization has approved.");
 });
 
 for (const [code, message] of [

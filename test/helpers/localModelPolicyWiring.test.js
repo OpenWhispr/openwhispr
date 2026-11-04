@@ -339,6 +339,7 @@ test("signing out cancels running work; the guest it leaves can start new work",
     policy: () => managed(["base", "parakeet-tdt-0.6b-v3"]),
   });
   const job = await app.gate.authorize("transcription", "base");
+  app.target._activeLocalMeetingLease = await app.gate.authorize("transcription", "base");
   policyFetch = async () => {
     throw new Error("a guest makes no policy request");
   };
@@ -370,6 +371,7 @@ test("a guest signing in keeps running work until the account's verdict decides 
   await settle();
   assert.equal(guestJob.signal.aborted, false);
   assert.equal(app.stops(), 0);
+  assert.deepEqual(app.stoppedMeetings, [], "a guest's meeting keeps recording");
 
   answer.resolve(managed([]));
   await settle();
