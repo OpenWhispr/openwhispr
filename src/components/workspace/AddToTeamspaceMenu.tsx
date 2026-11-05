@@ -1,4 +1,4 @@
-import { useReducer, useRef, useState, type ReactElement, type RefObject } from "react";
+import { useEffect, useReducer, useRef, useState, type ReactElement, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { useWorkspaceSpaces } from "../../hooks/useWorkspaceSpaces";
 import { confirmActionReducer } from "../../lib/confirmActionFlow";
@@ -87,6 +87,11 @@ export function useAddToTeamspace({
   const [state, dispatch] = useReducer(confirmActionReducer<AddSubject>, { kind: "closed" });
   const inFlightRef = useRef(false);
   const [boundary, setBoundary] = useState<Element | null>(null);
+
+  // The same shape as Add to team: a failed dialog's Try again belongs to the workspace it failed in.
+  useEffect(() => {
+    dispatch({ type: "dismiss" });
+  }, [workspace.id]);
 
   async function readCoverage(userIds: string[]): Promise<void> {
     const request = ++coverageRequestRef.current;

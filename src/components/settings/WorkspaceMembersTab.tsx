@@ -90,6 +90,16 @@ export default function WorkspaceMembersTab({
   const [createOpen, setCreateOpen] = useState(false);
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [createPeople, setCreatePeople] = useState<WorkspaceMember[]>([]);
+  // A dialog and a selection belong to the workspace they were made in: the page can re-point at
+  // another one under them, and Create would then send the old people to the new workspace's teams.
+  const [dialogWorkspaceId, setDialogWorkspaceId] = useState(workspace.id);
+  if (workspace.id !== dialogWorkspaceId) {
+    setDialogWorkspaceId(workspace.id);
+    setCreateOpen(false);
+    setPaywallOpen(false);
+    setCreatePeople([]);
+    setSelection(new Set());
+  }
   const teamCreation = teamCreationFor(workspace);
   const canTransferOwnership = workspaceCan(workspace, "transfer_ownership");
 

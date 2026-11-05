@@ -92,6 +92,12 @@ export function useAddPeopleToTeam(workspace: Workspace): PeopleTeamAdd {
     };
   }, []);
 
+  // A failed dialog's Try again would add to the old workspace's team once the page has moved to
+  // another. A running one can't be taken back and finishes for the team it started on.
+  useEffect(() => {
+    dispatch({ type: "dismiss" });
+  }, [workspace.id]);
+
   function namesOf(subject: AddSubject, userIds: string[]): string {
     return formatList(
       i18n.language,

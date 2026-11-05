@@ -534,3 +534,22 @@ test("a dialog opened in one workspace doesn't come back when switching away and
 
   assert.equal(globalThis.__teamDialog, undefined);
 });
+
+test("Create and the paywall opened in one workspace close when the workspace changes under them", async (t) => {
+  const { Tab, workspace } = await loadTab(t, { teams: [] });
+  const container = await mount(t, Tab, workspace);
+  await React.act(async () => propsOf(buttonWithText(container, `${KEY}.create`)).onClick());
+  await React.act(async () => globalThis.__createDialog.onPlanRequired());
+  await React.act(async () => propsOf(buttonWithText(container, `${KEY}.create`)).onClick());
+  assert.equal(globalThis.__createDialog.open, true);
+  assert.equal(globalThis.__paywallDialog.open, true);
+
+  const root = mountedRoots.get(t);
+  await React.act(async () => root.render(tabElement(Tab, { ...workspace, id: "w2" })));
+  assert.equal(globalThis.__createDialog.open, false);
+  assert.equal(globalThis.__paywallDialog.open, false);
+
+  await React.act(async () => root.render(tabElement(Tab, workspace)));
+  assert.equal(globalThis.__createDialog.open, false);
+  assert.equal(globalThis.__paywallDialog.open, false);
+});

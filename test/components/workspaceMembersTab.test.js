@@ -1057,3 +1057,25 @@ test("a refusal on plan from the form hands over to the paywall", async (t) => {
   assert.equal(globalThis.__paywall.open, true);
   assert.match(barText(container), /selection\.count#2/);
 });
+
+test("Create team and the paywall close when the workspace changes under them", async (t) => {
+  const { WorkspaceMembersTab, container } = await mountPeople(t);
+  await selectTwo(container);
+  await React.act(async () => globalThis.__addMenu.onCreateTeam());
+  await React.act(async () => globalThis.__createDialog.onPlanRequired());
+  await React.act(async () => globalThis.__addMenu.onCreateTeam());
+  assert.equal(globalThis.__createDialog.open, true);
+  assert.equal(globalThis.__paywall.open, true);
+
+  const root = mountedRoots.get(t);
+  await React.act(async () =>
+    root.render(tabElement(WorkspaceMembersTab, { ...ADMIN_WORKSPACE, id: "w2" }))
+  );
+  assert.equal(globalThis.__createDialog.open, false);
+  assert.equal(globalThis.__paywall.open, false);
+  assert.deepEqual(globalThis.__createDialog.initialPeople, []);
+
+  await React.act(async () => root.render(tabElement(WorkspaceMembersTab, ADMIN_WORKSPACE)));
+  assert.equal(globalThis.__createDialog.open, false);
+  assert.equal(globalThis.__paywall.open, false);
+});

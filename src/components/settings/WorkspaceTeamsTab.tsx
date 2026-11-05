@@ -34,6 +34,9 @@ export default function WorkspaceTeamsTab({
   if (workspace.id !== dialogWorkspaceId) {
     setDialogWorkspaceId(workspace.id);
     setOpenTeamId(null);
+    // Create would otherwise send the people of the old workspace to the new one's teams route.
+    setCreateOpen(false);
+    setPaywallOpen(false);
   }
   // Read from the list, so a rename or a reload reaches the open dialog; a team the list no
   // longer has (deleted, left) takes its dialog with it.
