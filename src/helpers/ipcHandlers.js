@@ -2998,6 +2998,9 @@ class IPCHandlers {
     ipcMain.handle("db-get-note-by-client-id", (_, clientNoteId) =>
       this.databaseManager.getNoteByClientId(clientNoteId)
     );
+    ipcMain.handle("db-get-note-for-cloud-row", (_, clientNoteId, cloudId) =>
+      this.databaseManager.getNoteForCloudRow(clientNoteId, cloudId)
+    );
     ipcMain.handle("db-upsert-note-from-cloud", (_, cloudNote, localFolderId, localSpaceId) => {
       const note = this.databaseManager.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId);
       if (note) {
@@ -13508,6 +13511,10 @@ class IPCHandlers {
           require("./markdownMirror").init(basePath);
         } else {
           this._rebuildMirror(basePath);
+        }
+        // A rebuild never prunes, so copies merged at launch would keep their files.
+        for (const noteId of this.databaseManager.mergedNoteIds.splice(0)) {
+          require("./markdownMirror").deleteNote(noteId);
         }
         return { success: true };
       } catch (error) {
