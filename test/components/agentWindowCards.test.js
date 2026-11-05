@@ -1752,7 +1752,7 @@ for (const verb of ["email", "slackPost"]) {
   }
 }
 
-test("each assistant request gets a fresh screenshot, including a spoken follow-up inside the window", async (t) => {
+test("a typed follow-up captures no screen; only a voice take does", async (t) => {
   const view = await mountWindow(t);
   const settings = await view.vite.ssrLoadModule("/stores/settingsStore.ts");
   settings.useSettingsStore.setState({ voiceAgentScreenContext: true });
@@ -1769,7 +1769,8 @@ test("each assistant request gets a fresh screenshot, including a spoken follow-
   await React.act(async () => view.main.handlers.open({ layout: "typing" }));
   await view.settle();
   await write(view, "What else is on screen?");
-  assert.equal(globalThis.__chat.sentOptions[1].attachment?.image, "screen-2");
+  assert.equal(globalThis.__chat.sentOptions[1].attachment, undefined);
+  assert.equal(captures, 1);
 });
 test("New chat drops the previous press capture", async (t) => {
   const view = await mountWindow(t);

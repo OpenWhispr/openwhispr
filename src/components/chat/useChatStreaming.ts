@@ -70,6 +70,10 @@ import { getLlmDictionaryWords } from "../../utils/snippets";
 import { noteAttendeesContext, withoutAttendeesFence } from "../../utils/noteAttendees";
 import { FULL_TRANSCRIPT_MAX_TOKENS } from "../../utils/transcriptEvidence";
 import { createToolRegistry } from "../../services/tools";
+import {
+  createLookAtScreenTool,
+  LOOK_AT_SCREEN_PROMPT,
+} from "../../services/tools/lookAtScreenTool";
 import type { SharedDictionaryWord } from "../../services/tools/dictionaryTool";
 import { setSharedWordsHidden } from "../../services/sharedDictionaryActions";
 import { readActiveWorkspaceId } from "../../stores/workspaceStore";
@@ -887,13 +891,28 @@ export function useChatStreaming({
             : !isCloudAgent && (isLocalProvider || isLanAgent || isCustomAgent)
               ? "text"
               : "parts";
-        // An already captured screenshot rides on the first request; asking a
-        // text model to request it would add two model calls before an answer.
+        // In the agent window, a Cloud screenshot is read through look_at_screen
+        // instead of riding with the request: the API sends any request with an
+        // image to its vision model, so small talk would switch models and see
+        // the screen.
         const cloudScreen =
           requestedAttachment && isCloudAgent
             ? { data: requestedAttachment.image, mediaType: requestedAttachment.mediaType }
             : null;
-        const offeredTools = registry?.getAll();
+        const lookAtScreen =
+          cloudScreen && registry && allowInteractions
+            ? createLookAtScreenTool((question) =>
+                ReasoningService.askAboutScreen(
+                  question,
+                  cloudScreen,
+                  LOOK_AT_SCREEN_PROMPT,
+                  toolScope.signal
+                )
+              )
+            : null;
+        const offeredTools = registry
+          ? [...registry.getAll(), ...(lookAtScreen ? [lookAtScreen] : [])]
+          : undefined;
         // The user's dictionary rides on every conversation so replies use their
         // jargon — same suffix the dictation prompts carry.
         let systemPrompt = appendDictionarySuffix(
@@ -961,12 +980,13 @@ export function useChatStreaming({
         );
 
         // A screenshot the resolver kept rides with the command it came with:
-        // BYOK models get it as an image part, the cloud agent as a dedicated
-        // field the server vision-routes. A dropped one costs nothing but the image — the
+        // BYOK models get it as an image part, the cloud agent (outside the
+        // agent window's look_at_screen) as a dedicated field the server
+        // vision-routes. A dropped one costs nothing but the image — the
         // command still runs.
         const attachment = requestedAttachment && !isCloudAgent ? requestedAttachment : null;
-        const cloudScreenContext = cloudScreen;
-        if (requestedAttachment) {
+        const cloudScreenContext = lookAtScreen ? null : cloudScreen;
+        if (requestedAttachment && !lookAtScreen) {
           // Either way it needs its grounding instruction, as the dictation path
           // pairs the suffix with an attached image.
           systemPrompt = appendScreenContextSuffix(systemPrompt, settings.uiLanguage);
@@ -1235,7 +1255,8 @@ export function useChatStreaming({
           if (isCloudAgent) {
             const executeToolCall = registry
               ? async (name: string, argsJson: string, toolCallId: string) => {
-                  const tool = registry.get(name);
+                  const tool =
+                    registry.get(name) ?? (name === lookAtScreen?.name ? lookAtScreen : undefined);
                   if (!tool)
                     return {
                       data: `Unknown tool: ${name}`,
@@ -1374,7 +1395,8 @@ export function useChatStreaming({
                   {
                     id: currentToolCallId(call.id),
                     name: call.name,
-                    arguments: call.arguments,
+                    // A question to look_at_screen can quote an earlier read.
+                    arguments: call.name === lookAtScreen?.name ? "{}" : call.arguments,
                     status: "executing",
                     startedAt: Date.now(),
                     textOffset: fullContent.length,

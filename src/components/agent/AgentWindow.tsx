@@ -408,9 +408,6 @@ export default function AgentWindow() {
         dispatch({ type: "notice", notice: "chat.sendNotStarted" });
       };
       void (async () => {
-        const image =
-          typed || !extras ? ((await captureRequestScreen()) ?? attachment) : attachment;
-        if (press !== pressRef.current) return true;
         dispatch({
           type: "submitted",
           typed,
@@ -420,7 +417,7 @@ export default function AgentWindow() {
         });
         return sendRef.current(text, {
           ...(selectedContext ? { selectedContext } : {}),
-          ...(image ? { attachment: image } : {}),
+          ...(attachment ? { attachment } : {}),
         });
       })().then((sent) => {
         if (!sent) restoreUnsent();
