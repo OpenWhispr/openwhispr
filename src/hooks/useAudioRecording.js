@@ -7,7 +7,11 @@ import { getSettings } from "../stores/settingsStore";
 import { expandSnippets } from "../utils/snippets";
 import { getRecordingErrorTitle, getRecordingErrorDescription } from "../utils/recordingErrors";
 import { providerErrorActions } from "../utils/describeProviderError";
-import { isAccessibilitySkipped } from "../utils/permissions";
+import {
+  isAccessibilitySkipped,
+  isPastePermissionNoticeDismissed,
+  dismissPastePermissionNotice,
+} from "../utils/permissions";
 import { needsSttConfigBeforeStart } from "../helpers/sttConfigPolicy";
 import {
   isAgentAllowed,
@@ -72,6 +76,7 @@ export const useAudioRecording = (toast, options = {}) => {
   const dictationErrorGenerationRef = useRef(0);
   const wasRecordingRef = useRef(false);
   const pastesInFlightRef = useRef(0);
+  const clipboardNoticeShownRef = useRef(false);
   const cancellingRef = useRef(false);
   const wasMicUnavailableRef = useRef(false);
   const demoKindRef = useRef("dictation");
@@ -391,6 +396,7 @@ export const useAudioRecording = (toast, options = {}) => {
       duration,
       code,
       settingsLaunchFailed = false,
+      clipboardFallback = false,
       onRetry,
       settingsTarget,
       technicalDetails,
@@ -427,12 +433,18 @@ export const useAudioRecording = (toast, options = {}) => {
                   transcript,
                   code,
                   settingsLaunchFailed: true,
+                  clipboardFallback,
                 });
               }
             },
           },
         ];
-        if (transcript.trim()) {
+        if (clipboardFallback) {
+          actions.push({
+            label: t("hooks.audioRecording.pastePermission.dontShowAgain"),
+            onClick: dismissPastePermissionNotice,
+          });
+        } else if (transcript.trim()) {
           actions.push({
             label: t("hooks.audioRecording.pastePermission.copyToClipboard"),
             icon: "copy",
@@ -460,14 +472,15 @@ export const useAudioRecording = (toast, options = {}) => {
             settingsLaunchFailed
               ? t("hooks.audioRecording.pastePermission.settingsFailed")
               : description,
-            transcript.trim()
+            clipboardFallback && settingsLaunchFailed ? description : "",
+            transcript.trim() && !clipboardFallback
               ? t("hooks.audioRecording.pastePermission.manualPaste", { shortcut: "Cmd+V" })
               : "",
           ]
             .filter(Boolean)
             .join(" "),
           descriptionHotkey: transcript.trim() ? "Cmd+V" : undefined,
-          variant: "destructive",
+          variant: clipboardFallback ? "default" : "destructive",
           presentation: "dictation-error",
           duration: 0,
           dismissible: true,
@@ -845,7 +858,27 @@ export const useAudioRecording = (toast, options = {}) => {
                 ...pasteOptions,
               })
             );
-            if (pasteOutcome.reason === "modifiers-held") {
+            if (
+              pasteOutcome.reason === "accessibility-missing" &&
+              generation === dictationErrorGenerationRef.current &&
+              !startLockRef.current &&
+              !clipboardNoticeShownRef.current &&
+              !isPastePermissionNoticeDismissed()
+            ) {
+              // Once per launch: clipboard-only can be deliberate, and the card
+              // would otherwise cover the screen after every dictation.
+              clipboardNoticeShownRef.current = true;
+              window.electronAPI?.hideDictationPreview?.();
+              showDictationError({
+                title: t("hooks.audioRecording.pastePermission.copiedTitle"),
+                description: t("hooks.audioRecording.pastePermission.copiedDescription", {
+                  shortcut: "Cmd+V",
+                }),
+                transcript: result.text,
+                code: "ACCESSIBILITY_PERMISSION_REQUIRED",
+                clipboardFallback: true,
+              });
+            } else if (pasteOutcome.reason === "modifiers-held") {
               await reportHeldBackPaste(
                 "modifiers-held",
                 {

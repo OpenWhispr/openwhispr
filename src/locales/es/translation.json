@@ -989,9 +989,9 @@
       },
       "translationFallback": {
         "unreachableTitle": "Traducción no disponible",
-        "unreachableDescription": "Tu dictado se pegó sin traducir. Revisa los ajustes de traducción.",
+        "unreachableDescription": "Tu dictado se quedó en su idioma original. Revisa los ajustes de traducción.",
         "failedTitle": "La traducción falló",
-        "failedDescription": "Se pegó el texto original. Puedes reintentarlo desde el Historial."
+        "failedDescription": "Tu dictado se quedó en su idioma original. Puedes reintentarlo desde el Historial."
       },
       "pushForceStopped": {
         "title": "Transcripción no pegada",
@@ -1026,7 +1026,10 @@
         "manualPaste": "Copia tu texto abajo y pulsa {{shortcut}} para pegarlo.",
         "openSettings": "Abrir ajustes",
         "copyToClipboard": "Copiar al portapapeles",
-        "copyFailed": "Error al copiar"
+        "copyFailed": "Error al copiar",
+        "copiedTitle": "Copiado, sin pegar",
+        "copiedDescription": "Tu texto está en el portapapeles. El pegado automático necesita permiso de Accesibilidad. Pulsa {{shortcut}} para pegarlo manualmente.",
+        "dontShowAgain": "No volver a mostrar"
       },
       "pasteFailed": {
         "title": "No se pudo pegar automáticamente"

@@ -203,11 +203,12 @@ const ToastViewport: React.FC<{
 
   return (
     <div
+      data-toast-stack
       className={cn(
         "fixed z-[100] flex flex-col gap-2 pointer-events-none",
         isDictationPanel
           ? hasDictationError
-            ? "inset-x-3 bottom-3"
+            ? "inset-x-3 bottom-3 [&>*]:w-full [&>*]:max-w-none"
             : "top-4 bottom-20 end-6 justify-end-safe"
           : "bottom-5 end-5",
         isDictationPanel &&
@@ -343,7 +344,8 @@ const Toast: React.FC<
           onDismiss={dismissible ? onClose : undefined}
           actions={actions ?? []}
           onAction={handleStructuredAction}
-          tone="error"
+          role={isDestructive ? "alert" : "status"}
+          tone={isDestructive ? "error" : undefined}
           onPreferredHeightChange={handleErrorHeightChange}
           progressDuration={!isExiting ? duration : 0}
           progressPaused={timerPaused}

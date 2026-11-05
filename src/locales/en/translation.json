@@ -989,9 +989,9 @@
       },
       "translationFallback": {
         "unreachableTitle": "Translation unavailable",
-        "unreachableDescription": "Your dictation was pasted untranslated. Check the translation settings.",
+        "unreachableDescription": "Your dictation stayed in its original language. Check the translation settings.",
         "failedTitle": "Translation failed",
-        "failedDescription": "The original text was pasted. You can retry it from History."
+        "failedDescription": "Your dictation stayed in its original language. You can retry it from History."
       },
       "pushForceStopped": {
         "title": "Transcription not pasted",
@@ -1026,7 +1026,10 @@
         "manualPaste": "Copy your text below, then press {{shortcut}} to paste it.",
         "openSettings": "Open Settings",
         "copyToClipboard": "Copy to clipboard",
-        "copyFailed": "Copy failed"
+        "copyFailed": "Copy failed",
+        "copiedTitle": "Copied, not pasted",
+        "copiedDescription": "Your text is on the clipboard. Automatic pasting needs Accessibility permission. Press {{shortcut}} to paste manually.",
+        "dontShowAgain": "Don't show again"
       },
       "pasteFailed": {
         "title": "Couldn't paste automatically"

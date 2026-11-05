@@ -989,9 +989,9 @@
       },
       "translationFallback": {
         "unreachableTitle": "翻訳を利用できません",
-        "unreachableDescription": "口述内容は翻訳されずに貼り付けられました。翻訳設定を確認してください。",
+        "unreachableDescription": "口述内容は元の言語のままです。翻訳設定を確認してください。",
         "failedTitle": "翻訳に失敗しました",
-        "failedDescription": "元のテキストが貼り付けられました。履歴から再試行できます。"
+        "failedDescription": "口述内容は元の言語のままです。履歴から再試行できます。"
       },
       "pushForceStopped": {
         "title": "文字起こしは貼り付けられませんでした",
@@ -1026,7 +1026,10 @@
         "manualPaste": "下のボタンでテキストをコピーし、{{shortcut}}を押して貼り付けてください。",
         "openSettings": "設定を開く",
         "copyToClipboard": "テキストをコピー",
-        "copyFailed": "コピーに失敗しました"
+        "copyFailed": "コピーに失敗しました",
+        "copiedTitle": "コピー済み・未貼り付け",
+        "copiedDescription": "テキストはクリップボードにコピーされました。自動貼り付けにはアクセシビリティの権限が必要です。{{shortcut}} で手動で貼り付けられます。",
+        "dontShowAgain": "今後表示しない"
       },
       "pasteFailed": {
         "title": "自動貼り付けに失敗しました"

@@ -989,9 +989,9 @@
       },
       "translationFallback": {
         "unreachableTitle": "翻译不可用",
-        "unreachableDescription": "你的口述内容已按原文粘贴，未经翻译。请检查翻译设置。",
+        "unreachableDescription": "你的口述内容保持原语言，未经翻译。请检查翻译设置。",
         "failedTitle": "翻译失败",
-        "failedDescription": "已粘贴原始文本。你可以在历史记录中重试。"
+        "failedDescription": "你的口述内容保持原语言，未经翻译。你可以在历史记录中重试。"
       },
       "pushForceStopped": {
         "title": "转录内容未粘贴",
@@ -1026,7 +1026,10 @@
         "manualPaste": "点击下方按钮复制文本，然后按 {{shortcut}} 粘贴。",
         "openSettings": "打开设置",
         "copyToClipboard": "复制到剪贴板",
-        "copyFailed": "复制失败"
+        "copyFailed": "复制失败",
+        "copiedTitle": "已复制，未粘贴",
+        "copiedDescription": "文本已复制到剪贴板。自动粘贴需要辅助功能权限。按 {{shortcut}} 可手动粘贴。",
+        "dontShowAgain": "不再提示"
       },
       "pasteFailed": {
         "title": "无法自动粘贴"

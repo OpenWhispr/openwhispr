@@ -989,9 +989,9 @@
       },
       "translationFallback": {
         "unreachableTitle": "Traduction indisponible",
-        "unreachableDescription": "Votre dictée a été collée sans traduction. Vérifiez les paramètres de traduction.",
+        "unreachableDescription": "Votre dictée est restée dans sa langue d'origine. Vérifiez les paramètres de traduction.",
         "failedTitle": "Échec de la traduction",
-        "failedDescription": "Le texte original a été collé. Vous pouvez réessayer depuis l'Historique."
+        "failedDescription": "Votre dictée est restée dans sa langue d'origine. Vous pouvez réessayer depuis l'Historique."
       },
       "pushForceStopped": {
         "title": "Transcription non collée",
@@ -1026,7 +1026,10 @@
         "manualPaste": "Copiez votre texte ci-dessous, puis appuyez sur {{shortcut}} pour le coller.",
         "openSettings": "Ouvrir les réglages",
         "copyToClipboard": "Copier le texte",
-        "copyFailed": "Échec de la copie"
+        "copyFailed": "Échec de la copie",
+        "copiedTitle": "Copié, pas collé",
+        "copiedDescription": "Votre texte est dans le presse-papiers. Le collage automatique nécessite l’autorisation Accessibilité. Appuyez sur {{shortcut}} pour le coller manuellement.",
+        "dontShowAgain": "Ne plus afficher"
       },
       "pasteFailed": {
         "title": "Collage automatique impossible"

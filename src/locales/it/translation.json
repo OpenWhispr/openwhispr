@@ -989,9 +989,9 @@
       },
       "translationFallback": {
         "unreachableTitle": "Traduzione non disponibile",
-        "unreachableDescription": "La dettatura è stata incollata senza traduzione. Controlla le impostazioni di traduzione.",
+        "unreachableDescription": "La dettatura è rimasta nella lingua originale. Controlla le impostazioni di traduzione.",
         "failedTitle": "Traduzione non riuscita",
-        "failedDescription": "È stato incollato il testo originale. Puoi riprovare dalla History."
+        "failedDescription": "La dettatura è rimasta nella lingua originale. Puoi riprovare dalla History."
       },
       "pushForceStopped": {
         "title": "Trascrizione non incollata",
@@ -1026,7 +1026,10 @@
         "manualPaste": "Copia il testo qui sotto, poi premi {{shortcut}} per incollarlo.",
         "openSettings": "Apri impostazioni",
         "copyToClipboard": "Copia negli appunti",
-        "copyFailed": "Copia non riuscita"
+        "copyFailed": "Copia non riuscita",
+        "copiedTitle": "Copiato, non incollato",
+        "copiedDescription": "Il testo è negli appunti. Per incollare automaticamente serve il permesso di Accessibilità. Premi {{shortcut}} per incollarlo manualmente.",
+        "dontShowAgain": "Non mostrare più"
       },
       "pasteFailed": {
         "title": "Impossibile incollare automaticamente"

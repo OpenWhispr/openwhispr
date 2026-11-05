@@ -989,9 +989,9 @@
       },
       "translationFallback": {
         "unreachableTitle": "Übersetzung nicht verfügbar",
-        "unreachableDescription": "Dein Diktat wurde unübersetzt eingefügt. Überprüfe die Übersetzungseinstellungen.",
+        "unreachableDescription": "Dein Diktat bleibt in der Originalsprache. Überprüfe die Übersetzungseinstellungen.",
         "failedTitle": "Übersetzung fehlgeschlagen",
-        "failedDescription": "Der Originaltext wurde eingefügt. Du kannst es im Verlauf erneut versuchen."
+        "failedDescription": "Dein Diktat bleibt in der Originalsprache. Du kannst es im Verlauf erneut versuchen."
       },
       "pushForceStopped": {
         "title": "Transkription nicht eingefügt",
@@ -1026,7 +1026,10 @@
         "manualPaste": "Kopiere deinen Text unten und drücke dann {{shortcut}}, um ihn einzufügen.",
         "openSettings": "Einstellungen öffnen",
         "copyToClipboard": "Text kopieren",
-        "copyFailed": "Kopieren fehlgeschlagen"
+        "copyFailed": "Kopieren fehlgeschlagen",
+        "copiedTitle": "Kopiert, nicht eingefügt",
+        "copiedDescription": "Dein Text ist in der Zwischenablage. Automatisches Einfügen benötigt die Bedienungshilfen-Berechtigung. Drücke {{shortcut}}, um manuell einzufügen.",
+        "dontShowAgain": "Nicht mehr anzeigen"
       },
       "pasteFailed": {
         "title": "Automatisches Einfügen fehlgeschlagen"

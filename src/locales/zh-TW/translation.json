@@ -989,9 +989,9 @@
       },
       "translationFallback": {
         "unreachableTitle": "翻譯無法使用",
-        "unreachableDescription": "你的口述內容已按原文貼上，未經翻譯。請檢查翻譯設定。",
+        "unreachableDescription": "你的口述內容維持原語言，未經翻譯。請檢查翻譯設定。",
         "failedTitle": "翻譯失敗",
-        "failedDescription": "已貼上原始文字。你可以在歷史記錄中重試。"
+        "failedDescription": "你的口述內容維持原語言，未經翻譯。你可以在歷史記錄中重試。"
       },
       "pushForceStopped": {
         "title": "轉錄內容未貼上",
@@ -1026,7 +1026,10 @@
         "manualPaste": "點擊下方按鈕複製文字，然後按 {{shortcut}} 貼上。",
         "openSettings": "開啟設定",
         "copyToClipboard": "複製到剪貼板",
-        "copyFailed": "複製失敗"
+        "copyFailed": "複製失敗",
+        "copiedTitle": "已複製，未貼上",
+        "copiedDescription": "文字已複製到剪貼簿。自動貼上需要輔助使用權限。按 {{shortcut}} 可手動貼上。",
+        "dontShowAgain": "不再提示"
       },
       "pasteFailed": {
         "title": "無法自動貼上"

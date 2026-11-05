@@ -58,9 +58,9 @@
       },
       "translationFallback": {
         "unreachableTitle": "الترجمة غير متاحة",
-        "unreachableDescription": "تم لصق الإملاء الخاص بك بدون ترجمة. تحقق من إعدادات الترجمة.",
+        "unreachableDescription": "بقي إملاؤك بلغته الأصلية. تحقق من إعدادات الترجمة.",
         "failedTitle": "فشلت الترجمة",
-        "failedDescription": "تم لصق النص الأصلي. يمكنك المحاولة مرة أخرى من السجل."
+        "failedDescription": "بقي إملاؤك بلغته الأصلية. يمكنك إعادة المحاولة من السجل."
       },
       "selectionEditing": {
         "notAppliedTitle": "لم يتم تطبيق تعديل التحديد",
@@ -95,7 +95,10 @@
         "manualPaste": "انسخ النص أدناه، ثم اضغط على {{shortcut}} للصقه.",
         "openSettings": "فتح الإعدادات",
         "copyToClipboard": "نسخ إلى الحافظة",
-        "copyFailed": "تعذّر النسخ"
+        "copyFailed": "تعذّر النسخ",
+        "copiedTitle": "تم النسخ، ولم يتم اللصق",
+        "copiedDescription": "النص موجود في الحافظة. يتطلب اللصق التلقائي إذن تسهيلات الاستخدام. اضغط على {{shortcut}} للصق يدويًا.",
+        "dontShowAgain": "عدم الإظهار مجددًا"
       },
       "pasteFailed": {
         "title": "تعذّر اللصق تلقائيًا"
