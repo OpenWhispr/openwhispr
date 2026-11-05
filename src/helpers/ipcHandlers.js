@@ -12099,6 +12099,8 @@ class IPCHandlers {
         await this.environmentManager.saveDebugLogging(enabled);
 
         debugLogger.refreshLogLevel();
+        // Each window caches its level on first log, so tell them all to re-read it.
+        broadcastToWindows("log-level-changed");
 
         return {
           success: true,
