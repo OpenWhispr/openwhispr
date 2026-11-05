@@ -5350,13 +5350,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // cannot change how this session's stream errors are handled. Only a
       // session whose fallback recorder started has a capture to fail over
       // to; stop finishes that recorder before a refused commit can arrive.
-      const failsOver =
-        Boolean(this.streamingFallbackRecorder) &&
-        isManagedOrukeetStream({
-          providerName,
-          cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
-        });
-      let heldFrames = null;
+      const managedOrukeet = isManagedOrukeetStream({
+        providerName,
+        cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
+      });
+      const failsOver = Boolean(this.streamingFallbackRecorder) && managedOrukeet;
+      // Managed Orukeet cues the user before its session exists, and main can drop
+      // what reaches a connection it replaces (a warmup for another route, a failed
+      // one, a session retry). So its audio waits here until the session has started.
+      let heldFrames = managedOrukeet ? [] : null;
 
       this.streamingProcessor.port.onmessage = (event) => {
         // The worklet posts its remaining PCM followed by a "flushed" sentinel
@@ -5471,7 +5473,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         pipelineSettings.toneStyleEnabled &&
         this.getPipelineCleanupOptions(pipelineSettings)
       ) {
-        heldFrames = [];
+        heldFrames ??= [];
         const waitMs = Math.max(0, this.toneStyleStartDeadline - performance.now());
         this.lastToneAppCategory = await Promise.race([
           this.toneStylePromise,
@@ -5522,6 +5524,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (result.needsFallback && this.streamingFallbackReason && this.streamingFallbackRecorder) {
         this._streamingFailoverReason = this.streamingFallbackReason;
         this.streamingFallbackReason = null;
+        heldFrames = null;
         logger.info(
           "Managed Orukeet unavailable, recording for the Cloud upload",
           { reason: this._streamingFailoverReason },

@@ -36,7 +36,7 @@ async function load(t, { providerName = "orukeet", stopAbortsStart = true } = {}
 
   const audioNode = { connect() {} };
   const connect = deferred();
-  const calls = { starts: 0, stops: 0, limitPrompts: 0, errors: 0, states: [] };
+  const calls = { starts: 0, stops: 0, limitPrompts: 0, errors: 0, states: [], sent: [] };
   window.electronAPI.notifyLimitReached = () => calls.limitPrompts++;
   const manager = Object.assign(Object.create(AudioManager.prototype), {
     sttConfig: {},
@@ -63,7 +63,7 @@ async function load(t, { providerName = "orukeet", stopAbortsStart = true } = {}
       onFinal: () => () => {},
       onError: () => () => {},
       onSessionEnd: () => () => {},
-      send() {},
+      send: (frame) => calls.sent.push(frame),
       start: () => {
         calls.starts++;
         return connect.promise;
@@ -187,4 +187,72 @@ test("a limit answer with no cancel still opens the upgrade prompt", async (t) =
   assert.equal(await starting, false);
   assert.equal(calls.limitPrompts, 1);
   assert.equal(calls.errors, 1);
+});
+
+const speak = (manager, ...frames) => {
+  for (const frame of frames) manager.streamingProcessor.port.onmessage({ data: frame });
+};
+const pcmFrame = () => new Int16Array(160).buffer;
+
+test("managed Orukeet holds audio until its session has started, in order", async (t) => {
+  const { manager, connect, calls } = await load(t);
+  const starting = manager.startStreamingRecording();
+  await tick();
+
+  const [first, second, third] = [pcmFrame(), pcmFrame(), pcmFrame()];
+  speak(manager, first, second);
+  assert.deepEqual(calls.sent, []);
+
+  connect.resolve({ success: true });
+  assert.equal(await starting, true);
+  speak(manager, third);
+  assert.equal(calls.sent.length, 3);
+  assert.equal(calls.sent[0], first);
+  assert.equal(calls.sent[1], second);
+  assert.equal(calls.sent[2], third);
+});
+
+test("managed Orukeet holds audio from before recording is reported", async (t) => {
+  const { manager, connect, calls } = await load(t);
+  const early = pcmFrame();
+  const reportRecording = manager.onStateChange;
+  manager.onStateChange = (state) => {
+    speak(manager, early);
+    reportRecording(state);
+  };
+  const starting = manager.startStreamingRecording();
+  await tick();
+  assert.deepEqual(calls.sent, []);
+
+  connect.resolve({ success: true });
+  assert.equal(await starting, true);
+  assert.equal(calls.sent[0], early);
+});
+
+test("a managed Orukeet start that fails over sends none of the audio it held", async (t) => {
+  const { manager, connect, calls } = await load(t);
+  manager.startStreamingFallbackRecorder = () => {
+    manager.streamingFallbackRecorder = {};
+  };
+  const starting = manager.startStreamingRecording();
+  await tick();
+  speak(manager, pcmFrame());
+
+  connect.resolve({ success: false, error: "refused" });
+  assert.equal(await starting, true);
+  speak(manager, pcmFrame());
+  assert.deepEqual(calls.sent, []);
+});
+
+test("another provider's audio still goes to main as it is captured", async (t) => {
+  const { manager, connect, calls } = await load(t, { providerName: "openai-realtime" });
+  const starting = manager.startStreamingRecording();
+  await tick();
+
+  const frame = pcmFrame();
+  speak(manager, frame);
+  assert.equal(calls.sent[0], frame);
+  connect.resolve({ success: true });
+  assert.equal(await starting, true);
+  assert.equal(calls.sent.length, 1);
 });

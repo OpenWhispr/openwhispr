@@ -25,7 +25,7 @@ The response contains `baseUrl`, `websocketUrl`, `clientToken`, `protocol`, `exp
 
 ## Recording lifecycle
 
-The main process creates the adapter before requesting the session so initial PCM is buffered. The existing AudioWorklet emits mono PCM16 at 16 kHz. On release it sends its final PCM and a flush acknowledgement; only then does the desktop commit. Final acknowledgement replaces fixed settling delays. Successful silence is accepted without a second transcription. A flush failure closes the incomplete stream and preserves the existing recording fallback.
+The renderer holds PCM on the managed route until the session has started, because the start cue plays before then and main can replace a connection that is still warming up. On other routes the main process creates the adapter before requesting the session so initial PCM is buffered there. The existing AudioWorklet emits mono PCM16 at 16 kHz. On release it sends its final PCM and a flush acknowledgement; only then does the desktop commit. Final acknowledgement replaces fixed settling delays. Successful silence is accepted without a second transcription. A flush failure closes the incomplete stream and preserves the existing recording fallback.
 
 The desktop closes the used adapter after each recording and creates a new warm connection; it only reuses a socket that has carried no audio. An unused Orukeet connection closes after 60 seconds; recording startup cancels that timer. Cancellation closes without commit. Pending audio is bounded to 2 MiB; setup and final waits are bounded. Application heartbeats run every 15 seconds. The server allows at most 600 seconds of audio and uses overlapped windows above 60 seconds; an individual socket has a 20-minute lifetime.
 
