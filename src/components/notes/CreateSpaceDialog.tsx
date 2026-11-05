@@ -366,7 +366,12 @@ export default function CreateSpaceDialog({
         setFailure(
           classified.kind === "refused"
             ? { kind: "refused", message: classified.message }
-            : { kind: "general" }
+            : classified.kind === "ssoRequired"
+              ? {
+                  kind: "refused",
+                  message: t("workspaces.ssoRequired", { workspace: isolate(workspace.name) }),
+                }
+              : { kind: "general" }
         );
         setRefocus("primary");
       }

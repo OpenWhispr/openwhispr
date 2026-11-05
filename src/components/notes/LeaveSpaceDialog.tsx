@@ -13,6 +13,8 @@ import type { SpaceItem } from "../../types/electron";
 interface LeaveSpaceDialogProps {
   space: SpaceItem;
   userId: string;
+  /** Named by the line for a session that needs single sign-on. */
+  workspaceName: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** undefined: the directory row isn't loaded, so the server is asked by trying. */
@@ -31,6 +33,7 @@ interface LeaveSpaceDialogProps {
 export function LeaveSpaceDialog({
   space,
   userId,
+  workspaceName,
   open,
   onOpenChange,
   soleAdmin,
@@ -133,19 +136,31 @@ export function LeaveSpaceDialog({
   }
 
   if (state.kind === "failed") {
+    // No connection to check and nothing to try again: this user can't do this any more.
+    const ended = state.error.kind === "notAllowed" || state.error.kind === "ssoRequired";
     return (
       <WorkspaceActionDialog
         open
         icon="info"
         title={t("settingsPage.workspace.teamspaces.exit.leaveFailedTitle", { space: name })}
-        body={t("settingsPage.workspace.teamspaces.exit.leaveFailedBody")}
+        body={
+          state.error.kind === "notAllowed"
+            ? t("settingsPage.workspace.teamspaces.members.notAllowed", { space: name })
+            : state.error.kind === "ssoRequired"
+              ? t("workspaces.ssoRequired", { workspace: isolate(workspaceName) })
+              : t("settingsPage.workspace.teamspaces.exit.leaveFailedBody")
+        }
         error={state.error.kind === "refused" ? state.error.message : null}
-        primary={{
-          label: t("workspaces.exit.tryAgain"),
-          onClick: () => void run(),
-          tone: "primary",
-        }}
-        cancelLabel={t("common.cancel")}
+        primary={
+          ended
+            ? { label: t("common.close"), onClick: dismiss, tone: "primary" }
+            : {
+                label: t("workspaces.exit.tryAgain"),
+                onClick: () => void run(),
+                tone: "primary",
+              }
+        }
+        cancelLabel={ended ? undefined : t("common.cancel")}
         onDismiss={dismiss}
       />
     );

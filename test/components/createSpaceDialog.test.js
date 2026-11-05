@@ -744,6 +744,24 @@ test("a refusal naming nobody keeps the general failure and its retry", async (t
   assert.ok(retryButton());
 });
 
+test("needing SSO says so, with nothing to try again", async (t) => {
+  const { closes } = await mount(t, {
+    createSpace: async () => {
+      throw new CloudApiError("SSO required", 403, "SSO_REQUIRED");
+    },
+  });
+  await type(nameInput(), "Customer Calls");
+  await click(createButton());
+
+  assert.deepEqual(closes, []);
+  assert.match(
+    text(dialog()),
+    /Sign in with your company's single sign-on to manage people in Acme\./
+  );
+  assert.ok(!retryButton());
+  assert.ok(createButton());
+});
+
 test("failed invitations still report the teamspace as created, refused ones included", async (t) => {
   const outcomes = {
     "ok@example.com": { ok: true, emailSent: true },

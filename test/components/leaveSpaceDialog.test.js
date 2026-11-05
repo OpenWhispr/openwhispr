@@ -99,6 +99,7 @@ async function mount(
     return h(LeaveSpaceDialog, {
       space,
       userId: "me",
+      workspaceName: "Acme",
       open,
       onOpenChange: (next) => {
         events.push(["open", next]);
@@ -235,6 +236,38 @@ test("leaving asks, runs, fails with Try again, and succeeds with a toast", asyn
   assert.deepEqual(events, [["open", false], ["left"]]);
   assert.equal(dialog(), null);
 });
+
+for (const [refusal, answer, line] of [
+  [
+    "losing permission",
+    ["Space access revoked", 403, "space_access_revoked"],
+    "You no longer have permission to manage members of Customer Calls.",
+  ],
+  [
+    "needing SSO",
+    ["SSO required", 403, "SSO_REQUIRED"],
+    "Sign in with your company's single sign-on to manage people in Acme.",
+  ],
+]) {
+  test(`${refusal} says so, with nothing to try again`, async (t) => {
+    const { callsTo, events } = await mount(t, {
+      leaveSpace: async () => {
+        throw new CloudApiError(...answer);
+      },
+    });
+
+    await ui.click(buttonNamed("Leave teamspace"));
+    await ui.settle();
+
+    assert.equal(heading(), "Couldn't leave Customer Calls");
+    assert.equal(body(), line);
+    assert.deepEqual(buttons().map(text), ["Close"]);
+
+    await ui.click(buttonNamed("Close"));
+    assert.deepEqual(events, [["open", false]]);
+    assert.equal(callsTo("leaveSpace").length, 1);
+  });
+}
 
 test("a direct member, or an admin with nobody to carry on, is told they lose access", async (t) => {
   await mount(t, { otherAdmins: false });

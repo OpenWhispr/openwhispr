@@ -1,5 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 
 const load = () => import("../../src/services/spaceActionsCore.ts");
 
@@ -513,6 +514,50 @@ test("quit can wait for what's still held: the promise ends once the delete has 
   answer();
   await committing;
   assert.ok(namesOf(calls).includes("local.purge"));
+});
+
+test("the app's own actions send what's held at quit and at unload, and never refuse the unload", async (t) => {
+  const listeners = {};
+  installBrowserGlobals(t, {
+    window: { addEventListener: (name, listener) => (listeners[name] = listener) },
+  });
+  const removed = [];
+  globalThis.__spaceRemoved = (id) => removed.push(id);
+  t.after(() => delete globalThis.__spaceRemoved);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-space-actions-",
+    mockModules: {
+      // The API client reads the language from here, and the real one starts i18next.
+      "/i18n": "export default { t: (key) => key, language: 'en' };",
+      "/TeamsService": "export const TeamsService = {};",
+      "/SpacesService": `
+        export const SpacesService = { remove: async (id) => globalThis.__spaceRemoved(id) };
+      `,
+      "/SyncService": `
+        export const syncService = {};
+        export const upsertCloudSpaces = async () => [];
+        export const markSpacePurged = async () => {};
+        export const releasePurgedSpace = async () => {};
+      `,
+      "/stores/noteStore": `
+        export const getAccountGeneration = () => 0;
+        export const hideSpaceInView = () => async () => {};
+        export const loadSpaces = async () => [];
+        export const updateSpaceMeta = async () => ({ success: true });
+        export const purgeSpace = async () => ({ success: true });
+      `,
+    },
+  });
+  const { holdSpaceDelete } = await vite.ssrLoadModule("/services/spaceActions.ts");
+
+  holdSpaceDelete({ id: 7, cloud_space_id: "cloud-7", name: "Roadmap" });
+  await globalThis.window.commitHeldSpaceDeletes();
+  assert.deepEqual(removed, ["cloud-7"]);
+
+  holdSpaceDelete({ id: 8, cloud_space_id: "cloud-8", name: "Plans" });
+  // Electron takes a returned value as refusing the unload.
+  assert.equal(listeners.beforeunload(), undefined);
+  assert.deepEqual(removed, ["cloud-7", "cloud-8"]);
 });
 
 test("Undo releases the hold and returns to the view, and the delete never goes", async () => {
