@@ -887,7 +887,7 @@ test("on a free plan, the model still writes the email and then says a paid plan
   const prompt = systemPromptOf(sentMessages[0]);
   assert.match(
     prompt,
-    /still write it in full in your reply, then end with one short sentence on how they can have you send it for them[^\n]*\n- Integrations \(Email, Slack, Linear, GitHub\): needs a paid OpenWhispr plan in Settings → Plans & Billing\./
+    /still write it in full in your reply, then end with one short sentence on how they can have you send it for them[^\n]*\n- Integrations \(Email, Slack, Linear, GitHub\): needs a paid OpenWhispr plan in Settings → Plan & Billing\./
   );
   assert.doesNotMatch(prompt, /- Web search: (needs|turned|not)/);
 });
@@ -976,7 +976,7 @@ test("a local model too small for tools is told so, with no tool notes in its hi
   const [system, ...history] = sentMessages[0];
   assert.match(
     system.content,
-    /- Tools \(web search, calendar, searching or changing notes, integrations\): the selected model runs without tools .* in Settings → Language Models\..* You can still use anything already in this prompt, such as note text/
+    /- Tools \(web search, calendar, searching or changing notes, integrations\): the selected model runs without tools .* in Settings → Language Model\..* You can still use anything already in this prompt, such as note text/
   );
   assert.doesNotMatch(system.content, /Tools used/);
   assert.equal(history[1].content, "Sunny.");
@@ -1308,4 +1308,80 @@ test("without Tone & Style no send carries a writing style", async (t) => {
   });
   await captured.sendToAI("Tell them it's shipped", [], { destinationAppCategory: "work" });
   assert.doesNotMatch(sentMessages[0][0].content, /WRITING STYLE/);
+});
+
+for (const [label, policy, content] of [
+  [
+    "a blocked model",
+    { allowedModes: ["local", "providers"], allowedLocalModels: ["qwen3-1.7b-q8_0"] },
+    "Choose a local model your organization has approved.",
+  ],
+  [
+    "Local turned off with nowhere to move",
+    { allowedModes: [], allowedLocalModels: null },
+    "Your organization has disabled local processing.",
+  ],
+]) {
+  test(`a chat refused for ${label} says so and links to Settings, without streaming`, async (t) => {
+    const { captured, sentMessages, usePolicyStore, getMessages } = await renderChatStreaming(
+      t,
+      {},
+      {
+        settings: {
+          chatAgentMode: "local",
+          chatAgentProvider: "qwen",
+          chatAgentModel: "qwen3.5-0.8b-q4_k_m",
+        },
+      }
+    );
+    usePolicyStore.setState({
+      status: "managed",
+      appVersion: "1.10.0",
+      policy: {
+        ...MANAGED_POLICY,
+        llm: { ...MANAGED_POLICY.llm, allowedByokProviders: ["openai"], ...policy },
+        features: { ...MANAGED_POLICY.features, agentEnabled: true },
+      },
+    });
+    await captured.sendToAI("Summarize this", []);
+    assert.equal(sentMessages.length, 0);
+    const reply = getMessages().at(-1);
+    assert.equal(reply.content, content);
+    assert.deepEqual(reply.error, { settingsTarget: "llms" });
+  });
+}
+
+test("a blocked Voice Assistant answers with the refusal, not on the remote Chat scope", async (t) => {
+  const { captured, sentMessages, usePolicyStore, getMessages } = await renderChatStreaming(
+    t,
+    { inferenceScope: "dictationAgent" },
+    {
+      settings: {
+        ...BYOK_SETTINGS,
+        useDictationAgent: true,
+        dictationAgentMode: "local",
+        dictationAgentProvider: "qwen",
+        dictationAgentModel: "qwen3.5-0.8b-q4_k_m",
+      },
+    }
+  );
+  usePolicyStore.setState({
+    status: "managed",
+    appVersion: "1.10.0",
+    policy: {
+      ...MANAGED_POLICY,
+      llm: {
+        ...MANAGED_POLICY.llm,
+        allowedModes: ["local", "providers"],
+        allowedByokProviders: ["openai"],
+        allowedLocalModels: ["qwen3-1.7b-q8_0"],
+      },
+      features: { ...MANAGED_POLICY.features, agentEnabled: true },
+    },
+  });
+  await captured.sendToAI("What's on my calendar?", []);
+  assert.equal(sentMessages.length, 0, "nothing reached any model");
+  const reply = getMessages().at(-1);
+  assert.equal(reply.content, "Choose a local model your organization has approved.");
+  assert.deepEqual(reply.error, { settingsTarget: "llms" });
 });

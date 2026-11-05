@@ -22,8 +22,14 @@ export const PROVIDER_ERROR_CODES = Object.freeze({
 
 const C = PROVIDER_ERROR_CODES;
 
-// "noteFormatting" opens Language Models on its Note Formatting tab.
-const PROVIDER_SETTINGS_TARGETS = Object.freeze(["speechToText", "llms", "noteFormatting"]);
+// "noteFormatting" opens Language Models on its Note Formatting tab, and
+// "noteRecording" opens Speech-to-Text on its Note Recording tab.
+const PROVIDER_SETTINGS_TARGETS = Object.freeze([
+  "speechToText",
+  "llms",
+  "noteFormatting",
+  "noteRecording",
+]);
 
 export const isProviderSettingsTarget = (value) => PROVIDER_SETTINGS_TARGETS.includes(value);
 
@@ -76,7 +82,7 @@ const ENGLISH = {
     "Couldn't get a response from {{provider}}. Check your API key and connection.",
   "providerErrors.unknown": "{{provider}} returned an unexpected error.",
   "providerErrors.keyMissing":
-    "No API key is set for {{provider}}. Add it in Settings → Language Models.",
+    "No API key is set for {{provider}}. Add it in Settings → Language Model.",
   "providerErrors.selfHosted.authFailed": "Your server rejected the API key.",
   "providerErrors.selfHosted.accessDenied":
     "Your server denied access. The key may not include this model.",

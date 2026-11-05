@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { LocalModelPolicyNotice } from "./ui/LocalModelPolicyNotice";
 import { ProviderTabs } from "./ui/ProviderTabs";
 import { DownloadProgressBar } from "./ui/DownloadProgressBar";
 import { ConfirmDialog } from "./ui/dialog";
@@ -8,6 +9,9 @@ import { useDialogs } from "../hooks/useDialogs";
 import { useModelDownload, type ModelType } from "../hooks/useModelDownload";
 import { MODEL_PICKER_COLORS, type ColorScheme } from "../utils/modelPickerStyles";
 import { getProviderIcon, isMonochromeProvider } from "../utils/providerIcons";
+import { usePolicySnapshot } from "../hooks/usePolicy";
+import { usePolicyStore } from "../stores/policyStore";
+import { isLocalModelAllowedByPolicy, localModelRowRefusal } from "../stores/policyRules";
 import { isListedModel } from "../models/legacyModels";
 
 export interface LocalModel {
@@ -54,6 +58,10 @@ export default function LocalModelPicker({
   onDownloadComplete,
 }: LocalModelPickerProps) {
   const { t } = useTranslation();
+  const policy = usePolicySnapshot();
+  const scope = modelType === "llm" ? "llm" : "transcription";
+  const modelAllowed = (modelId: string): boolean =>
+    isLocalModelAllowedByPolicy(policy, scope, modelId);
   const [downloadedModels, setDownloadedModels] = useState<Set<string>>(new Set());
   const loadDownloadedModelsRequestRef = useRef(0);
 
@@ -117,6 +125,7 @@ export default function LocalModelPicker({
       if (
         downloaded &&
         selectedModel &&
+        isLocalModelAllowedByPolicy(usePolicyStore.getState(), scope, selectedModel) &&
         knownModelIds.has(selectedModel) &&
         !downloaded.has(selectedModel)
       ) {
@@ -124,7 +133,7 @@ export default function LocalModelPicker({
       }
     };
     initAndValidate();
-  }, [loadDownloadedModels, selectedModel, onModelSelect, knownModelIds]);
+  }, [loadDownloadedModels, selectedModel, onModelSelect, knownModelIds, scope]);
 
   const handleDownloadComplete = useCallback(async () => {
     await loadDownloadedModels();
@@ -161,7 +170,12 @@ export default function LocalModelPicker({
           downloadedModels: downloaded,
           knownModelIds: known,
         } = selectionStateRef.current;
-        if (current !== selectedWhenStarted) return;
+        if (
+          current !== selectedWhenStarted ||
+          !isLocalModelAllowedByPolicy(usePolicyStore.getState(), scope, downloadedId) ||
+          (current && !isLocalModelAllowedByPolicy(usePolicyStore.getState(), scope, current))
+        )
+          return;
 
         const selectionGone = known.has(current) && !downloaded.has(current);
         if (!current || selectionGone) {
@@ -169,7 +183,7 @@ export default function LocalModelPicker({
         }
       });
     },
-    [downloadModel, onModelSelect]
+    [downloadModel, onModelSelect, scope]
   );
 
   const handleDelete = useCallback(
@@ -188,8 +202,10 @@ export default function LocalModelPicker({
   const isModelDownloaded = (model: LocalModel) =>
     downloadedModels.has(model.id) || model.isDownloaded || model.downloaded;
   const listedProviders = providers.filter((provider) =>
-    provider.models.some((model) =>
-      isListedModel(model, model.id === selectedModel, isModelDownloaded(model))
+    provider.models.some(
+      (model) =>
+        (modelAllowed(model.id) || isModelDownloaded(model)) &&
+        isListedModel(model, model.id === selectedModel, isModelDownloaded(model))
     )
   );
   // A provider left with nothing to list (its selected legacy model was deleted)
@@ -231,25 +247,36 @@ export default function LocalModelPicker({
         </div>
       )}
 
+      <LocalModelPolicyNotice
+        scope={scope}
+        hasSupportedModel={allModels.some((model) => modelAllowed(model.id))}
+      />
       <div className="mt-2">
         <h5 className={`${styles.header} mb-2`}>{t("common.availableModels")}</h5>
 
         <ModelCardList
-          models={models.map((model): ModelCardOption => ({
-            value: model.id,
-            label: model.name,
-            description: model.size,
-            specUrl: model.specUrl,
-            icon: getProviderIcon(displayedProviderId),
-            invertInDark: isMonochromeProvider(displayedProviderId),
-            recommended: model.recommended,
-            legacy: model.legacy,
-            isDownloaded: isModelDownloaded(model),
-            isDownloading: isDownloadingModel(model.id),
-            isCancelling: isCancellingModel(model.id),
-          }))}
+          models={models
+            .filter((model) => modelAllowed(model.id) || isModelDownloaded(model))
+            .map((model): ModelCardOption => ({
+              value: model.id,
+              label: model.name,
+              description: model.size,
+              specUrl: model.specUrl,
+              icon: getProviderIcon(displayedProviderId),
+              invertInDark: isMonochromeProvider(displayedProviderId),
+              recommended: model.recommended,
+              legacy: model.legacy,
+              policyBlocked: !modelAllowed(model.id),
+              policyRefusal: localModelRowRefusal(usePolicyStore.getState(), scope),
+              isDownloaded: isModelDownloaded(model),
+              isDownloading: isDownloadingModel(model.id),
+              isCancelling: isCancellingModel(model.id),
+            }))}
           selectedModel={selectedModel}
-          onModelSelect={onModelSelect}
+          onModelSelect={(modelId) => {
+            if (isLocalModelAllowedByPolicy(usePolicyStore.getState(), scope, modelId))
+              onModelSelect(modelId);
+          }}
           onDownload={handleDownload}
           onDelete={handleDelete}
           onCancelDownload={cancelDownload}

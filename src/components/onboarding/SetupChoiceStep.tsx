@@ -1,4 +1,4 @@
-import { Fragment, forwardRef, useRef, useState } from "react";
+import { Fragment, forwardRef, useRef, useState, useEffect } from "react";
 import {
   AlertCircle,
   BanknoteCheck,
@@ -18,12 +18,15 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dia
 import { usePolicySnapshot } from "../../hooks/usePolicy";
 import {
   getParakeetModelInfo,
+  getParakeetModels,
+  getWhisperModels,
   getTranscriptionProviders,
   modelRegistry,
 } from "../../models/ModelRegistry";
 import type { OnboardingSetupMode } from "./flow";
 import { getOnboardingSetupAvailability, hasAvailableOnboardingSetup } from "./setupEligibility";
 import { BrandMark } from "./OnboardingShell";
+import { LocalModelPolicyNotice } from "../ui/LocalModelPolicyNotice";
 import { LOCAL_ASR_ORGANIZATIONS } from "../../helpers/localASROrganization";
 import { getProviderIcon, isMonochromeProvider } from "@/utils/providerIcons";
 import { cn } from "../lib/utils";
@@ -125,6 +128,21 @@ export default function SetupChoiceStep({
 }: SetupChoiceStepProps) {
   const { t } = useTranslation();
   const policy = usePolicySnapshot();
+  // Unknown counts as supported, or a Parakeet-only policy would flash "unavailable"
+  // on every device while the check runs.
+  const [parakeetUnsupported, setParakeetUnsupported] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    window.electronAPI
+      ?.checkParakeetInstallation?.()
+      .then((capability) => {
+        if (!cancelled) setParakeetUnsupported(capability.supported === false);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [pending, setPending] = useState<WarningSetupMode | null>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
   const [showMore, setShowMore] = useState(false);
@@ -146,6 +164,10 @@ export default function SetupChoiceStep({
     agentAllowed,
     transcriptionProviders: getTranscriptionProviders(),
     llmProviders: modelRegistry.getCloudProviders(),
+    supportedLocalTranscriptionModels: [
+      ...Object.keys(getWhisperModels()),
+      ...(parakeetUnsupported ? [] : Object.keys(getParakeetModels())),
+    ].map((id) => ({ id })),
   });
   const {
     cloud: cloudAllowed,
@@ -162,7 +184,7 @@ export default function SetupChoiceStep({
 
   const confirmPending = () => {
     if (!pending) return;
-    onSelect(pending);
+    if (availability[pending === "local" ? "local" : "selfHosted"]) onSelect(pending);
     setPending(null);
   };
 
@@ -213,6 +235,7 @@ export default function SetupChoiceStep({
         <p className="mt-2 text-sm leading-5 text-[var(--onboarding-text-secondary)]">
           {t("onboarding.rehaul.setupChoice.unavailable.description")}
         </p>
+        <LocalModelPolicyNotice scope="transcription" hasSupportedModel={false} />
       </div>
     );
   }
@@ -221,6 +244,7 @@ export default function SetupChoiceStep({
     // Figma "Frame 2147259042": column, gap 32, centred — the card row above the
     // Show More Options pill.
     <div className="mx-auto mt-5 flex w-full flex-col items-center gap-4">
+      {!localAllowed && <LocalModelPolicyNotice scope="transcription" hasSupportedModel={false} />}
       {/* Frame 60: row, gap 16. */}
       <div className="onboarding-stagger flex items-start justify-center gap-3">
         {localAllowed && (

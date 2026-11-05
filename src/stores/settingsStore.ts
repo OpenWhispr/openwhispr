@@ -1,4 +1,6 @@
+import { RETIRED_TINFOIL_MODEL_NAMES } from "../config/retiredCloudModelPolicy.js";
 import { create } from "zustand";
+import { GENERATE_NOTES_KEY } from "../helpers/builtinActions";
 import { API_ENDPOINTS } from "../config/constants";
 import i18n, { normalizeUiLanguage } from "../i18n";
 import { ensureAgentNameInDictionary } from "../utils/agentName";
@@ -52,6 +54,7 @@ import { MEETING_STREAMING_PROVIDER_IDS } from "../helpers/meetingTranscriptionR
 import { STREAMING_ONLY_PROVIDERS } from "../helpers/transcriptionRoute";
 import {
   getTranscriptionSelection,
+  isLocalModelAllowedByPolicy,
   isScreenContextAllowed,
   resolveEffectivePolicySelection,
   type PolicyDecisionSnapshot,
@@ -960,10 +963,12 @@ if (Object.keys(healedMeetingFollowModes).length > 0) {
   );
 }
 
-// Resolved offline, so a retired model's name survives only in Tinfoil's
-// catalog cache, and a replacement's only if the registry lists it. The raw-id
-// fallback is what the live-catalog reconcile shows too.
+// Resolve names offline, including retired models already removed from the cache.
+// Unseeded replacements fall back to their id, as the live reconcile does.
 function sweptModelName(providerId: RetiredModelProvider, modelId: string): string {
+  if (providerId === "tinfoil" && RETIRED_TINFOIL_MODEL_NAMES[modelId]) {
+    return RETIRED_TINFOIL_MODEL_NAMES[modelId];
+  }
   const cached = providerId === "tinfoil" ? readCachedTinfoilModels().models : [];
   const named =
     cached.find((model) => model.id === modelId) ??
@@ -1026,6 +1031,8 @@ export interface SettingsState
     PrivacySettings,
     ThemeSettings,
     ChatAgentSettings {
+  /** Derived only: preserve a denied blank instead of inheriting a different saved model. */
+  policyBlockedLocalScopes?: readonly (TranscriptionPolicyContext | InferenceScope)[];
   isSignedIn: boolean;
   audioCuesEnabled: boolean;
   pauseMediaOnDictation: boolean;
@@ -1136,6 +1143,7 @@ export interface SettingsState
   // dedicated model used only when a screenshot is attached.
   voiceAgentScreenContext: boolean;
   emailDraftTarget: EmailDraftTargetSetting;
+  defaultSummaryTemplateId: string;
   toneStyleEnabled: boolean;
   toneStyles: ToneStyles;
   useDictationAgentVisionModel: boolean;
@@ -1172,6 +1180,7 @@ export interface SettingsState
   setToneStyleEnabled: (value: boolean) => void;
   setToneStyles: (styles: ToneStyles) => void;
   setEmailDraftTarget: (value: EmailDraftTargetSetting) => void;
+  setDefaultSummaryTemplateId: (clientId: string) => void;
   setUseDictationAgentVisionModel: (value: boolean) => void;
   setDictationAgentVisionProvider: (value: string) => void;
   setDictationAgentVisionModel: (value: string) => void;
@@ -2169,6 +2178,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   voiceAgentScreenContext: readBoolean("voiceAgentScreenContext", false),
   emailDraftTarget: normalizeEmailDraftTarget(readString("emailDraftTarget", "auto")),
+  defaultSummaryTemplateId: readString("defaultSummaryTemplateId", GENERATE_NOTES_KEY),
   toneStyleEnabled: readBoolean("toneStyleEnabled", false),
   toneStyles: normalizeToneStyles(readString("toneStyles", "")),
   useDictationAgentVisionModel: readBoolean("useDictationAgentVisionModel", false),
@@ -2216,6 +2226,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   setVoiceAgentScreenContext: createBooleanSetter("voiceAgentScreenContext"),
   setEmailDraftTarget: createStringSetter("emailDraftTarget"),
+  setDefaultSummaryTemplateId: createStringSetter("defaultSummaryTemplateId"),
   setToneStyleEnabled: createBooleanSetter("toneStyleEnabled"),
   setToneStyles: (styles) => {
     if (isBrowser) localStorage.setItem("toneStyles", JSON.stringify(styles));
@@ -3112,10 +3123,16 @@ export const selectResolvedMeetingTranscription = (
   state: SettingsState
 ): ResolvedMeetingTranscription => ({
   useLocalWhisper: state.meetingUseLocalWhisper,
-  whisperModel: state.meetingWhisperModel || state.whisperModel,
+  whisperModel: state.policyBlockedLocalScopes?.includes("meeting")
+    ? ""
+    : state.meetingWhisperModel || state.whisperModel,
   localTranscriptionProvider: state.meetingLocalTranscriptionProvider,
-  parakeetModel: state.meetingParakeetModel || state.parakeetModel,
-  cohereModel: state.meetingCohereModel || state.cohereModel,
+  parakeetModel: state.policyBlockedLocalScopes?.includes("meeting")
+    ? ""
+    : state.meetingParakeetModel || state.parakeetModel,
+  cohereModel: state.policyBlockedLocalScopes?.includes("meeting")
+    ? ""
+    : state.meetingCohereModel || state.cohereModel,
   cloudTranscriptionProvider:
     state.meetingCloudTranscriptionProvider || state.cloudTranscriptionProvider,
   cloudTranscriptionModel: state.meetingCloudTranscriptionModel || state.cloudTranscriptionModel,
@@ -3156,10 +3173,16 @@ export const selectResolvedUploadTranscription = (
   const inheritsDictationProvider = !STREAMING_ONLY_PROVIDERS.has(state.cloudTranscriptionProvider);
   return {
     useLocalWhisper: state.uploadUseLocalWhisper,
-    whisperModel: state.uploadWhisperModel || state.whisperModel,
+    whisperModel: state.policyBlockedLocalScopes?.includes("upload")
+      ? ""
+      : state.uploadWhisperModel || state.whisperModel,
     localTranscriptionProvider: state.uploadLocalTranscriptionProvider,
-    parakeetModel: state.uploadParakeetModel || state.parakeetModel,
-    cohereModel: state.uploadCohereModel || state.cohereModel,
+    parakeetModel: state.policyBlockedLocalScopes?.includes("upload")
+      ? ""
+      : state.uploadParakeetModel || state.parakeetModel,
+    cohereModel: state.policyBlockedLocalScopes?.includes("upload")
+      ? ""
+      : state.uploadCohereModel || state.cohereModel,
     cloudTranscriptionProvider:
       state.uploadCloudTranscriptionProvider ||
       (inheritsDictationProvider
@@ -3246,7 +3269,9 @@ export const selectResolvedLLMConfig = (
     scope,
     mode: state[def.storeKeys.mode] as InferenceMode,
     provider: read("provider") || fallback?.provider || "",
-    model: read("model") || fallback?.model || "",
+    model: state.policyBlockedLocalScopes?.includes(scope)
+      ? ""
+      : read("model") || fallback?.model || "",
     cloudMode: read("cloudMode") || fallback?.cloudMode,
     cloudBaseUrl: read("cloudBaseUrl") || fallback?.cloudBaseUrl,
     remoteUrl: read("remoteUrl") || fallback?.remoteUrl,
@@ -3385,6 +3410,38 @@ const TRANSCRIPTION_CONTEXT_KEYS: readonly TranscriptionContextKeys[] = [
   },
 ];
 
+const LOCAL_TRANSCRIPTION_MODEL_FIELDS = ["whisperModel", "parakeetModel", "cohereModel"] as const;
+
+function transcriptionModelKey(
+  context: TranscriptionPolicyContext,
+  field: (typeof LOCAL_TRANSCRIPTION_MODEL_FIELDS)[number]
+): keyof SettingsState {
+  return (
+    context === "dictation" ? field : `${context}${field[0].toUpperCase()}${field.slice(1)}`
+  ) as keyof SettingsState;
+}
+
+type PolicyBlockedLocalScope = TranscriptionPolicyContext | InferenceScope;
+
+const NO_BLOCKED_LOCAL_SCOPES: readonly PolicyBlockedLocalScope[] = Object.freeze([]);
+const internedBlockedLocalScopes = new Map<string, readonly PolicyBlockedLocalScope[]>();
+
+// Selectors compare the overlay field by field (useShallow), so equal contents
+// must be the same array or a mounted component re-renders without end. Scopes
+// are pushed in a fixed order, which bounds this map to the subsets of them.
+function internBlockedLocalScopes(
+  scopes: PolicyBlockedLocalScope[]
+): readonly PolicyBlockedLocalScope[] {
+  if (scopes.length === 0) return NO_BLOCKED_LOCAL_SCOPES;
+  const key = scopes.join("\0");
+  let interned = internedBlockedLocalScopes.get(key);
+  if (!interned) {
+    interned = Object.freeze([...scopes]);
+    internedBlockedLocalScopes.set(key, interned);
+  }
+  return interned;
+}
+
 /**
  * Overlay managed policy choices for rendering and future requests while
  * leaving Zustand/localStorage preferences untouched for policy removal.
@@ -3398,6 +3455,7 @@ export function selectPolicyEffectiveSettings(
 
   const effective = { ...state };
   const writable = effective as unknown as Record<string, unknown>;
+  const blockedLocalScopes: PolicyBlockedLocalScope[] = [];
 
   if (!isScreenContextAllowed(policyState)) writable.voiceAgentScreenContext = false;
 
@@ -3443,6 +3501,25 @@ export function selectPolicyEffectiveSettings(
       // enterpriseIdentityStore; the provider id here only needs to satisfy
       // the policy gate (isTranscriptionContextAllowed).
       writable[keys.provider] = selection.provider;
+    }
+
+    // Judged after the clamp: only a member left on Local goes inert. One whose
+    // workspace turned Local off has already moved to an allowed mode.
+    if (
+      selection.mode === "local" &&
+      !isLocalModelAllowedByPolicy(policyState, "transcription", rawSelection.model ?? "")
+    ) {
+      blockedLocalScopes.push(keys.context);
+      for (const field of LOCAL_TRANSCRIPTION_MODEL_FIELDS) {
+        writable[transcriptionModelKey(keys.context, field)] = "";
+      }
+    } else if (keys.context !== "dictation" && blockedLocalScopes.includes("dictation")) {
+      // Dictation's blanked models are the ones this context inherits, and its
+      // own raw selection already passed.
+      for (const field of LOCAL_TRANSCRIPTION_MODEL_FIELDS) {
+        const key = transcriptionModelKey(keys.context, field);
+        writable[key] = state[key] || state[field];
+      }
     }
   }
 
@@ -3506,14 +3583,29 @@ export function selectPolicyEffectiveSettings(
         // A repointed override is no longer the user's choice: inert until they pick again.
         writable[definition.storeKeys.model] = "";
       } else {
+        // A blank model stays blank under a managed policy: the default may not
+        // be installed, and only the member chooses what runs.
         writable[definition.storeKeys.model] =
           !providerChanged && config.model
             ? config.model
-            : defaultLlmModel(selection.mode, provider, state.bedrockRegion);
+            : !providerChanged && selection.mode === "local"
+              ? ""
+              : defaultLlmModel(selection.mode, provider, state.bedrockRegion);
       }
+    }
+
+    const model = writable[definition.storeKeys.model] as string;
+    if (
+      selection.mode === "local" &&
+      (model || !definition.optional) &&
+      !isLocalModelAllowedByPolicy(policyState, "llm", model)
+    ) {
+      blockedLocalScopes.push(scope);
+      writable[definition.storeKeys.model] = "";
     }
   }
 
+  effective.policyBlockedLocalScopes = internBlockedLocalScopes(blockedLocalScopes);
   return effective;
 }
 

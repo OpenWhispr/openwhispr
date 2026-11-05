@@ -262,6 +262,22 @@ export function getOnboardingRoute(context: OnboardingRouteContext): OnboardingS
 }
 
 /**
+ * The required-models step holds the member only while a model can still arrive.
+ * One the organization refused never will, so it no longer counts as missing.
+ */
+export function canLeaveRequiredModels({
+  loading,
+  missing,
+  refused,
+}: {
+  loading: boolean;
+  missing: string[];
+  refused: string[];
+}): boolean {
+  return !loading && missing.every((modelId) => refused.includes(modelId));
+}
+
+/**
  * The Notes step's forward action. Calendar connections are optional, so the step
  * offers Skip until one connects and Continue afterwards. "loading" is its own
  * state rather than an absence: while the setup decision is pending there is

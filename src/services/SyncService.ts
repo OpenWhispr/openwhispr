@@ -75,7 +75,11 @@ import {
   isCloudNoteNewer,
   normalizeTimestamp,
 } from "../helpers/cloudSyncGuards.js";
-import { resolveRendererCloudNoteCreate, type CloudNoteCreateResult } from "./noteCreateAck";
+import {
+  recordNoteCreateAttempts,
+  resolveRendererCloudNoteCreate,
+  type CloudNoteCreateResult,
+} from "./noteCreateAck";
 import {
   clearUpdate404,
   isPermissionDenialCode,
@@ -194,6 +198,10 @@ const PURGED_SPACE_GUARD_LOCK = "openwhispr-purged-spaces";
 // disambiguating it (see recordUpdate404), keyed by client id. Read-modify-
 // written only inside the SYNC_ALL_LOCK pass, so it needs no lock of its own.
 const NOTE_UPDATE_404_KEY = "noteUpdate404Counts";
+// Attempts at replaying the note feed from its start (see replayNoteFeed).
+const NOTE_FEED_REPLAY_KEY = "noteFeedReplay.v1";
+const NOTE_FEED_REPLAY_ATTEMPTS = 3;
+const NOTE_FEED_START = "1970-01-01T00:00:00.000Z";
 const FOLDER_UPDATE_404_KEY = "folderUpdate404Counts";
 
 const SHARED_DICTIONARY_PAGE_LIMIT = 200;
@@ -358,6 +366,10 @@ interface ConversationCreateSource {
   messages: readonly unknown[];
 }
 
+type LocalConversation = NonNullable<
+  Awaited<ReturnType<NonNullable<Window["electronAPI"]["getAgentConversation"]>>>
+>;
+
 function conversationCreateSnapshot(
   conversation: ConversationCreateSource
 ): ConversationCreateSnapshot {
@@ -446,6 +458,7 @@ export class SyncService {
   // Incomplete pulls retry on a later ordinary pass.
   private unrevisionedClearPullDone = false;
   private revisionBackfillChecked = false;
+  private noteFeedReplayTried = new Set<string>();
   private pushTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private teamSpacesRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private teamSpacesRetryAttempt = 0;
@@ -1142,6 +1155,8 @@ export class SyncService {
     cloudFolderId: string | null,
     scope: PushScopeFields
   ): Promise<void> {
+    const recorded = await recordNoteCreateAttempts([note.client_note_id]);
+    if (!recorded.has(note.client_note_id)) return;
     const cloud = await NotesService.create({
       client_note_id: note.client_note_id,
       ...buildNoteCreatePayload(note, cloudFolderId),
@@ -1206,6 +1221,31 @@ export class SyncService {
     }
   }
 
+  // Recorded before the request is sent, so a chat deleted while it is in
+  // flight stays a tombstone its late receipt can link. A chat deleted since it
+  // was read is not sent.
+  private async createCloudConversation(full: LocalConversation): Promise<void> {
+    const recorded = await window.electronAPI.markConversationCreateAttempted?.(full.id);
+    if (!recorded?.success) return;
+    const snapshot = conversationCreateSnapshot(full);
+    const cloud = await ConversationsService.create({
+      client_conversation_id: full.client_conversation_id ?? String(full.id),
+      title: full.title,
+      created_at: full.created_at,
+      updated_at: full.updated_at,
+      messages: full.messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+        metadata: m.metadata
+          ? typeof m.metadata === "string"
+            ? JSON.parse(m.metadata)
+            : m.metadata
+          : null,
+      })),
+    });
+    await this.acknowledgeConversationCreate(full.id, snapshot, cloud.id);
+  }
+
   private async pushConversation(id: number): Promise<void> {
     const full = await window.electronAPI.getAgentConversation?.(id);
     if (!full) return;
@@ -1213,23 +1253,7 @@ export class SyncService {
     if (full.cloud_id) {
       await ConversationsService.update(full.cloud_id, { title: full.title });
     } else {
-      const snapshot = conversationCreateSnapshot(full);
-      const cloud = await ConversationsService.create({
-        client_conversation_id: full.client_conversation_id ?? String(full.id),
-        title: full.title,
-        created_at: full.created_at,
-        updated_at: full.updated_at,
-        messages: full.messages.map((m) => ({
-          role: m.role,
-          content: m.content,
-          metadata: m.metadata
-            ? typeof m.metadata === "string"
-              ? JSON.parse(m.metadata)
-              : m.metadata
-            : null,
-        })),
-      });
-      await this.acknowledgeConversationCreate(full.id, snapshot, cloud.id);
+      await this.createCloudConversation(full);
     }
   }
 
@@ -1993,9 +2017,28 @@ export class SyncService {
     if (!teamOnly && this.teamCursorLagging("notes")) {
       await this.pullNotes(true);
     }
+    const replayKey = teamOnly ? `${NOTE_FEED_REPLAY_KEY}.team` : NOTE_FEED_REPLAY_KEY;
+    const cursorKey = teamOnly ? "lastSyncedAt.notes.team" : "lastSyncedAt.notes";
+    const fromStart = !localStorage.getItem(cursorKey);
+    // A missing cursor can follow a partial legacy pull. Read tombstones too,
+    // so its saved copies are repaired without a second full traversal.
     // A parked pull left its cursors in place, so the next pass re-sees the
     // parked rows — typically after syncSpaces has mirrored the missing team.
-    await this.pullNotes(teamOnly);
+    if (await this.pullNotes(teamOnly, false, fromStart)) {
+      const teamCapable = this.canSyncTeamSpaces() && this.hasTeamSpacesCapability();
+      const uncoveredTeams =
+        !teamCapable &&
+        ((await window.electronAPI.getSpaces?.()) ?? []).some((space) => space.kind === "team");
+      // Personal deltas still run during an outage, but cannot complete a
+      // repair of existing team copies or spend its bounded retry attempts.
+      if (!uncoveredTeams) {
+        if (fromStart) {
+          localStorage.setItem(replayKey, String(NOTE_FEED_REPLAY_ATTEMPTS));
+        } else {
+          await this.replayNoteFeed(teamOnly, replayKey);
+        }
+      }
+    }
     // After the delta pull, which usually shows whether the server keeps
     // revisions without a probe.
     await this.backfillNoteRevisions(teamOnly);
@@ -2016,6 +2059,23 @@ export class SyncService {
       if (missing > 0) await this.pullNotes(teamOnly, true);
     } catch (err) {
       console.error("Note owner backfill failed:", err);
+    }
+  }
+
+  // Pulls used to match a cloud row only by client id, so a delete never found a
+  // copy stored under another key, and the cursor has since moved past it. One
+  // read of the whole feed brings those deletes back, for the normal path to
+  // apply. A note the feed no longer returns stays: the API purges deletes after
+  // 30 days, but absence can also mean the row exists and this account can't read
+  // it. A row that stays parked must not make every session a full read, so this
+  // runs once a session and stops after a few attempts.
+  private async replayNoteFeed(teamOnly: boolean, replayKey: string): Promise<void> {
+    const attempts = Number(localStorage.getItem(replayKey)) || 0;
+    if (attempts >= NOTE_FEED_REPLAY_ATTEMPTS || this.noteFeedReplayTried.has(replayKey)) return;
+    this.noteFeedReplayTried.add(replayKey);
+    localStorage.setItem(replayKey, String(attempts + 1));
+    if (await this.pullNotes(teamOnly, false, true)) {
+      localStorage.setItem(replayKey, String(NOTE_FEED_REPLAY_ATTEMPTS));
     }
   }
 
@@ -2157,7 +2217,10 @@ export class SyncService {
     if (denied) await this.restoreDeniedRows("note");
 
     for (let i = 0; i < fresh.length; i += BATCH_SIZE) {
-      const chunk = fresh.slice(i, i + BATCH_SIZE);
+      const batch = fresh.slice(i, i + BATCH_SIZE);
+      const recorded = await recordNoteCreateAttempts(batch.map(({ note }) => note.client_note_id));
+      const chunk = batch.filter(({ note }) => recorded.has(note.client_note_id));
+      if (chunk.length === 0) continue;
       try {
         const { created } = await NotesService.batchCreate(
           chunk.map(({ note: n, scope }) => ({
@@ -2225,10 +2288,18 @@ export class SyncService {
     if (denied) await this.restoreDeniedRows("note");
   }
 
-  private async pullNotes(teamOnly = false, snapshot = false): Promise<boolean> {
+  private async pullNotes(
+    teamOnly = false,
+    snapshot = false,
+    replayFeed = false
+  ): Promise<boolean> {
     try {
       const cursorKey = teamOnly ? "lastSyncedAt.notes.team" : "lastSyncedAt.notes";
-      const since = snapshot ? undefined : (localStorage.getItem(cursorKey) ?? undefined);
+      const since = snapshot
+        ? undefined
+        : replayFeed
+          ? NOTE_FEED_START
+          : (localStorage.getItem(cursorKey) ?? undefined);
       const syncStartedAt = new Date().toISOString();
       const ctx = await this.buildSpaceContext();
       const { cloudToLocal, defaultFolderId } = await this.buildCloudToLocalFolderMap(
@@ -2251,203 +2322,222 @@ export class SyncService {
         this.teamPassMovedWork = true;
 
         for (const cloudNote of cloudNotes) {
-          const local = await window.electronAPI.getNoteByClientId?.(
-            cloudNote.client_note_id ?? ""
-          );
+          try {
+            const local = await window.electronAPI.getNoteForCloudRow?.(
+              cloudNote.client_note_id,
+              cloudNote.id
+            );
 
-          // A parent folder DELETE owns this note until its server result is
-          // known. Do not turn a newer live row into a conflict or apply a
-          // per-note tombstone; denial restores the journaled row in place,
-          // while confirmation removes it with the folder cascade.
-          if (local?.folder_delete_pending) continue;
-          if (!cloudNote.access_removed) {
-            this.noteRevisionsKnown = hasNoteRevision(cloudNote.revision);
-          }
-
-          // Copy the cloud owner before any last-write-wins decision: an
-          // unchanged note skips the upsert but must still gain its owner
-          // (the owner_user_id backfill relies on this).
-          if (local && shouldSetOwnerFromCloud(cloudNote, local)) {
-            await window.electronAPI.setNoteOwnerFromCloud?.(local.id, cloudNote.user_id!);
-          }
-
-          // Redacted stub: the note moved out of one of our teams. Clean local
-          // copies are no longer ours to keep; dirty ones ('pending' or
-          // 'error') move to the private space so unpushed work survives
-          // (plan §7.2).
-          if (cloudNote.access_removed) {
-            if (!local) continue;
-            if (local.sync_status !== "synced" && !local.deleted_at && ctx.privateSpace) {
-              await this.forkNoteToPrivate(
-                local,
-                ctx.privateSpace,
-                "pull",
-                ctx.byCloudSpaceId.get(cloudNote.previous_space_id ?? "")?.name
-              );
-            } else {
-              await window.electronAPI.hardDeleteNote?.(local.id);
+            // An old delete must not take text this device hasn't pushed. Its
+            // push gets a 404 and forks it into a note of its own.
+            if (replayFeed && cloudNote.deleted_at && local?.sync_status !== "synced") {
+              continue;
             }
-            // The pull disambiguated a 404'd push as a revocation and resolved
-            // it, so the fallback fork must stand down. Any unresolved
-            // conflict is moot too — its cloud copy is no longer ours to
-            // resolve — and settling drops the full snapshot the durable
-            // registry keeps in localStorage.
-            this.clear404(NOTE_UPDATE_404_KEY, local.client_note_id);
-            await this.settleNoteConflict(local.client_note_id);
-            continue;
-          }
 
-          // Rejected create retries must be resolved against the actual row,
-          // even when its timestamp predates the local offline snapshot.
-          if (local?.cloud_create_rejected && !cloudNote.deleted_at) {
-            await this.surfaceNoteConflict(local.client_note_id, cloudNote);
-            continue;
-          }
+            // A parent folder DELETE owns this note until its server result is
+            // known. Do not turn a newer live row into a conflict or apply a
+            // per-note tombstone; denial restores the journaled row in place,
+            // while confirmation removes it with the folder cascade.
+            if (local?.folder_delete_pending) continue;
+            if (!cloudNote.access_removed) {
+              this.noteRevisionsKnown = hasNoteRevision(cloudNote.revision);
+            }
 
-          if (teamOnly && !cloudNote.space_id && !local?.cloud_create_pending) {
-            // A personal row whose local copy still sits in a team space
-            // announces a team→personal transition — apply it, or a later
-            // edit's push would re-team the privatized note.
-            if (local && !local.deleted_at && ctx.byId.get(local.space_id)?.kind === "team") {
-              if (cloudNote.deleted_at) {
+            // Copy the cloud owner before any last-write-wins decision: an
+            // unchanged note skips the upsert but must still gain its owner
+            // (the owner_user_id backfill relies on this).
+            if (local && shouldSetOwnerFromCloud(cloudNote, local)) {
+              await window.electronAPI.setNoteOwnerFromCloud?.(local.id, cloudNote.user_id!);
+            }
+
+            // Redacted stub: the note moved out of one of our teams. Clean local
+            // copies are no longer ours to keep; dirty ones ('pending' or
+            // 'error') move to the private space so unpushed work survives
+            // (plan §7.2).
+            if (cloudNote.access_removed) {
+              if (!local) continue;
+              if (local.sync_status !== "synced" && !local.deleted_at && ctx.privateSpace) {
+                await this.forkNoteToPrivate(
+                  local,
+                  ctx.privateSpace,
+                  "pull",
+                  ctx.byCloudSpaceId.get(cloudNote.previous_space_id ?? "")?.name
+                );
+              } else {
                 await window.electronAPI.hardDeleteNote?.(local.id);
+              }
+              // The pull disambiguated a 404'd push as a revocation and resolved
+              // it, so the fallback fork must stand down. Any unresolved
+              // conflict is moot too — its cloud copy is no longer ours to
+              // resolve — and settling drops the full snapshot the durable
+              // registry keeps in localStorage.
+              this.clear404(NOTE_UPDATE_404_KEY, local.client_note_id);
+              await this.settleNoteConflict(local.client_note_id);
+              continue;
+            }
+
+            // Rejected create retries must be resolved against the actual row,
+            // even when its timestamp predates the local offline snapshot.
+            if (local?.cloud_create_rejected && !cloudNote.deleted_at) {
+              await this.surfaceNoteConflict(local.client_note_id, cloudNote);
+              continue;
+            }
+
+            if (teamOnly && !cloudNote.space_id && !local?.cloud_create_pending) {
+              // A personal row whose local copy still sits in a team space
+              // announces a team→personal transition — apply it, or a later
+              // edit's push would re-team the privatized note.
+              if (local && !local.deleted_at && ctx.byId.get(local.space_id)?.kind === "team") {
+                if (cloudNote.deleted_at) {
+                  await window.electronAPI.hardDeleteNote?.(local.id);
+                  await this.settleNoteConflict(local.client_note_id);
+                } else if (isCloudNoteNewer(cloudNote, local)) {
+                  // 'error' rows carry unpushed work just like 'pending' ones.
+                  if (local.sync_status !== "synced") {
+                    await this.surfaceNoteConflict(local.client_note_id, cloudNote);
+                  } else if (cloudNote.folder_id && !cloudToLocal.has(cloudNote.folder_id)) {
+                    // Filing to the fallback would stick (the advanced cursor
+                    // never re-pulls this row) — park until the folder arrives.
+                    parkedRows++;
+                    console.warn(
+                      `Parking note ${cloudNote.id}: unknown folder ${cloudNote.folder_id}`
+                    );
+                  } else if (ctx.privateSpace) {
+                    await window.electronAPI.upsertNoteFromCloud?.(
+                      cloudNote as unknown as Record<string, unknown>,
+                      resolvePulledNoteFolderId(
+                        cloudNote,
+                        ctx.privateSpace.id,
+                        cloudToLocal,
+                        defaultFolderId
+                      ),
+                      ctx.privateSpace.id
+                    );
+                  }
+                }
+              }
+              continue;
+            }
+
+            if (cloudNote.deleted_at) {
+              if (local) {
+                await window.electronAPI.hardDeleteNote?.(local.id);
+                // A tombstone disambiguates a 404'd push as a genuine delete;
+                // drop any streak so it can't resurrect the note in Personal,
+                // and settle any conflict so the registry doesn't keep the
+                // deleted note's full cloud snapshot forever.
+                this.clear404(NOTE_UPDATE_404_KEY, local.client_note_id);
                 await this.settleNoteConflict(local.client_note_id);
-              } else if (isCloudNoteNewer(cloudNote, local)) {
-                // 'error' rows carry unpushed work just like 'pending' ones.
-                if (local.sync_status !== "synced") {
-                  await this.surfaceNoteConflict(local.client_note_id, cloudNote);
-                } else if (cloudNote.folder_id && !cloudToLocal.has(cloudNote.folder_id)) {
-                  // Filing to the fallback would stick (the advanced cursor
-                  // never re-pulls this row) — park until the folder arrives.
-                  parkedRows++;
-                  console.warn(
-                    `Parking note ${cloudNote.id}: unknown folder ${cloudNote.folder_id}`
-                  );
-                } else if (ctx.privateSpace) {
-                  await window.electronAPI.upsertNoteFromCloud?.(
-                    cloudNote as unknown as Record<string, unknown>,
-                    resolvePulledNoteFolderId(
-                      cloudNote,
-                      ctx.privateSpace.id,
-                      cloudToLocal,
-                      defaultFolderId
-                    ),
-                    ctx.privateSpace.id
-                  );
+              }
+              continue;
+            }
+
+            const space = await this.resolveSpaceForCloudRow(cloudNote.space_id, ctx);
+            if (!space) {
+              parkedRows++;
+              console.warn(`Parking note ${cloudNote.id}: unknown space ${cloudNote.space_id}`);
+              continue;
+            }
+
+            if (local?.deleted_at) continue;
+            if (local?.cloud_create_pending) {
+              if (cloudNote.folder_id && !cloudToLocal.has(cloudNote.folder_id)) {
+                parkedRows++;
+                continue;
+              }
+              const result = await window.electronAPI.acknowledgeNoteCreate?.(
+                local.id,
+                local,
+                cloudNote.id,
+                cloudNote.updated_at,
+                cloudNote.user_id ?? null,
+                {
+                  reconcilePending: true,
+                  cloudNote,
+                  cloudRevision: cloudNote.revision ?? null,
+                  localFolderId: resolvePulledNoteFolderId(
+                    cloudNote,
+                    space.id,
+                    cloudToLocal,
+                    defaultFolderId
+                  ),
+                  localSpaceId: space.id,
+                }
+              );
+              if (result?.outcome === "conflict") {
+                await this.surfaceNoteConflict(local.client_note_id, cloudNote);
+              } else if (result?.outcome === "synced" || result?.outcome === "pending") {
+                await this.settleNoteConflict(local.client_note_id);
+              } else {
+                parkedRows++;
+              }
+              continue;
+            }
+            const preRevision =
+              local &&
+              !hasNoteRevision(local.cloud_revision) &&
+              hasNoteRevision(cloudNote.revision) &&
+              local.cloud_id === cloudNote.id;
+            if (preRevision && local.sync_status !== "synced") {
+              // Adopt the revision when this device's base is the server's
+              // current row. An unpushed edit on a row acked before timestamp
+              // bases existed pushed last-write-wins until now; it still does.
+              const sameBase =
+                normalizeTimestamp(local.cloud_updated_at) ===
+                normalizeTimestamp(cloudNote.updated_at);
+              if (!sameBase && local.cloud_updated_at) {
+                await this.surfaceNoteConflict(local.client_note_id, cloudNote);
+                continue;
+              }
+              await window.electronAPI.setNoteCloudBase?.(
+                local.id,
+                cloudNote.updated_at,
+                cloudNote.revision
+              );
+              local.cloud_revision = cloudNote.revision;
+            }
+            // A clean row synced before revisions takes the cloud copy whole:
+            // adopting only the revision would mark the copies equal from now
+            // on, so a clear made elsewhere while this device ran a release that
+            // kept the text would never arrive.
+            const cleanPreRevision = preRevision && local.sync_status === "synced";
+            if (!local || cleanPreRevision || isCloudNoteNewer(cloudNote, local)) {
+              if (local && local.sync_status !== "synced") {
+                // A newer cloud copy over unpushed local edits ('pending' or
+                // 'error'): surface the conflict to the editor banner instead
+                // of silently dropping the local edit (plan §7.3).
+                await this.surfaceNoteConflict(local.client_note_id, cloudNote);
+                continue;
+              }
+              if (cloudNote.folder_id && !cloudToLocal.has(cloudNote.folder_id)) {
+                // The note's folder isn't known locally yet (created moments
+                // ago, or its pull failed). Filing it to the fallback would
+                // stick — the advanced cursor never re-pulls the row — so park
+                // it like an unknown space until the folder arrives.
+                parkedRows++;
+                console.warn(`Parking note ${cloudNote.id}: unknown folder ${cloudNote.folder_id}`);
+                continue;
+              }
+              const applied = await window.electronAPI.upsertNoteFromCloud?.(
+                cloudNote as unknown as Record<string, unknown>,
+                resolvePulledNoteFolderId(cloudNote, space.id, cloudToLocal, defaultFolderId),
+                space.id
+              );
+              if (local) {
+                // Applying cloud over a clean row settles any stale conflict,
+                // including one left under the key this row just adopted. A
+                // skipped upsert adopted nothing, and that key is another row's.
+                await this.settleNoteConflict(local.client_note_id);
+                if (applied && applied.client_note_id !== local.client_note_id) {
+                  await this.settleNoteConflict(applied.client_note_id);
                 }
               }
             }
-            continue;
-          }
-
-          if (cloudNote.deleted_at) {
-            if (local) {
-              await window.electronAPI.hardDeleteNote?.(local.id);
-              // A tombstone disambiguates a 404'd push as a genuine delete;
-              // drop any streak so it can't resurrect the note in Personal,
-              // and settle any conflict so the registry doesn't keep the
-              // deleted note's full cloud snapshot forever.
-              this.clear404(NOTE_UPDATE_404_KEY, local.client_note_id);
-              await this.settleNoteConflict(local.client_note_id);
-            }
-            continue;
-          }
-
-          const space = await this.resolveSpaceForCloudRow(cloudNote.space_id, ctx);
-          if (!space) {
+          } catch (err) {
+            // Parked like a row waiting on its folder: the cursor holds so the
+            // next pass retries it, and the rest of the delta still applies.
             parkedRows++;
-            console.warn(`Parking note ${cloudNote.id}: unknown space ${cloudNote.space_id}`);
-            continue;
-          }
-
-          if (local?.deleted_at) continue;
-          if (local?.cloud_create_pending) {
-            if (cloudNote.folder_id && !cloudToLocal.has(cloudNote.folder_id)) {
-              parkedRows++;
-              continue;
-            }
-            const result = await window.electronAPI.acknowledgeNoteCreate?.(
-              local.id,
-              local,
-              cloudNote.id,
-              cloudNote.updated_at,
-              cloudNote.user_id ?? null,
-              {
-                reconcilePending: true,
-                cloudNote,
-                cloudRevision: cloudNote.revision ?? null,
-                localFolderId: resolvePulledNoteFolderId(
-                  cloudNote,
-                  space.id,
-                  cloudToLocal,
-                  defaultFolderId
-                ),
-                localSpaceId: space.id,
-              }
-            );
-            if (result?.outcome === "conflict") {
-              await this.surfaceNoteConflict(local.client_note_id, cloudNote);
-            } else if (result?.outcome === "synced" || result?.outcome === "pending") {
-              await this.settleNoteConflict(local.client_note_id);
-            } else {
-              parkedRows++;
-            }
-            continue;
-          }
-          const preRevision =
-            local &&
-            !hasNoteRevision(local.cloud_revision) &&
-            hasNoteRevision(cloudNote.revision) &&
-            local.cloud_id === cloudNote.id;
-          if (preRevision && local.sync_status !== "synced") {
-            // Adopt the revision when this device's base is the server's
-            // current row. An unpushed edit on a row acked before timestamp
-            // bases existed pushed last-write-wins until now; it still does.
-            const sameBase =
-              normalizeTimestamp(local.cloud_updated_at) ===
-              normalizeTimestamp(cloudNote.updated_at);
-            if (!sameBase && local.cloud_updated_at) {
-              await this.surfaceNoteConflict(local.client_note_id, cloudNote);
-              continue;
-            }
-            await window.electronAPI.setNoteCloudBase?.(
-              local.id,
-              cloudNote.updated_at,
-              cloudNote.revision
-            );
-            local.cloud_revision = cloudNote.revision;
-          }
-          // A clean row synced before revisions takes the cloud copy whole:
-          // adopting only the revision would mark the copies equal from now
-          // on, so a clear made elsewhere while this device ran a release that
-          // kept the text would never arrive.
-          const cleanPreRevision = preRevision && local.sync_status === "synced";
-          if (!local || cleanPreRevision || isCloudNoteNewer(cloudNote, local)) {
-            if (local && local.sync_status !== "synced") {
-              // A newer cloud copy over unpushed local edits ('pending' or
-              // 'error'): surface the conflict to the editor banner instead
-              // of silently dropping the local edit (plan §7.3).
-              await this.surfaceNoteConflict(local.client_note_id, cloudNote);
-              continue;
-            }
-            if (cloudNote.folder_id && !cloudToLocal.has(cloudNote.folder_id)) {
-              // The note's folder isn't known locally yet (created moments
-              // ago, or its pull failed). Filing it to the fallback would
-              // stick — the advanced cursor never re-pulls the row — so park
-              // it like an unknown space until the folder arrives.
-              parkedRows++;
-              console.warn(`Parking note ${cloudNote.id}: unknown folder ${cloudNote.folder_id}`);
-              continue;
-            }
-            await window.electronAPI.upsertNoteFromCloud?.(
-              cloudNote as unknown as Record<string, unknown>,
-              resolvePulledNoteFolderId(cloudNote, space.id, cloudToLocal, defaultFolderId),
-              space.id
-            );
-            if (local) {
-              // Applying cloud over a clean row settles any stale conflict.
-              await this.settleNoteConflict(local.client_note_id);
-            }
+            console.error(`Note pull failed for cloud note ${cloudNote.id}:`, err);
           }
         }
 
@@ -2504,23 +2594,7 @@ export class SyncService {
       try {
         const full = await window.electronAPI.getAgentConversation?.(conv.id);
         if (!full) continue;
-        const snapshot = conversationCreateSnapshot(full);
-        const cloudConv = await ConversationsService.create({
-          client_conversation_id: full.client_conversation_id ?? String(full.id),
-          title: full.title,
-          created_at: full.created_at,
-          updated_at: full.updated_at,
-          messages: full.messages.map((m) => ({
-            role: m.role,
-            content: m.content,
-            metadata: m.metadata
-              ? typeof m.metadata === "string"
-                ? JSON.parse(m.metadata)
-                : m.metadata
-              : null,
-          })),
-        });
-        await this.acknowledgeConversationCreate(full.id, snapshot, cloudConv.id);
+        await this.createCloudConversation(full);
       } catch (err) {
         console.error("Conversation sync failed:", err);
       }

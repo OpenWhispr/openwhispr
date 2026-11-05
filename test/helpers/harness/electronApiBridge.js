@@ -68,8 +68,11 @@ function createElectronApi(db, options = {}) {
     getPendingNotes: async (spaceKind) => db.getPendingNotes(spaceKind),
     getPendingNoteDeletes: async () => db.getPendingNoteDeletes(),
     getNoteByClientId: async (clientNoteId) => db.getNoteByClientId(clientNoteId),
+    getNoteForCloudRow: async (clientNoteId, cloudId) =>
+      db.getNoteForCloudRow(clientNoteId, cloudId),
     upsertNoteFromCloud: async (cloudNote, localFolderId, localSpaceId) =>
       db.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId),
+    markNoteCreatesAttempted: async (clientNoteIds) => db.markNoteCreatesAttempted(clientNoteIds),
     acknowledgeNoteCreate: async (id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) =>
       db.acknowledgeNoteCreate(id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options),
     markNoteSyncedIfUnchanged: async (
@@ -156,6 +159,7 @@ function createElectronApi(db, options = {}) {
     getConversationByClientId: async (clientId) => db.getConversationByClientId(clientId),
     upsertConversationFromCloud: async (cloudConv, messages) =>
       db.upsertConversationFromCloud(cloudConv, messages),
+    markConversationCreateAttempted: async (id) => db.markConversationCreateAttempted(id),
     acknowledgeConversationCreate: async (id, snapshot, cloudId) =>
       db.acknowledgeConversationCreate(id, snapshot, cloudId),
     markConversationSynced: async (id, cloudId) => db.markConversationSynced(id, cloudId),
