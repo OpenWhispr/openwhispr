@@ -1,3 +1,28 @@
+jest.mock('@/lib/snippetClose', () => {
+  const ios = jest.requireActual<typeof import('@/lib/snippetClose')>('@/lib/snippetClose');
+  const android = jest.requireActual<typeof import('@/lib/snippetClose.android')>(
+    '@/lib/snippetClose.android',
+  );
+  return {
+    createSnippetCloseHandler: (options: import('@/lib/snippetClose').SnippetCloseOptions) =>
+      (require('react-native').Platform.OS === 'android' ? android : ios).createSnippetCloseHandler(
+        options,
+      ),
+  };
+});
+jest.mock('../AddSnippetSheet', () => {
+  const ios = jest.requireActual<typeof import('../AddSnippetSheet')>('../AddSnippetSheet');
+  const android = jest.requireActual<typeof import('../AddSnippetSheet.android')>(
+    '../AddSnippetSheet.android',
+  );
+  return {
+    AddSnippetSheet: (props: React.ComponentProps<typeof ios.AddSnippetSheet>) =>
+      require('react').createElement(
+        (require('react-native').Platform.OS === 'android' ? android : ios).AddSnippetSheet,
+        props,
+      ),
+  };
+});
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { Alert, Platform, Pressable, StyleSheet } from 'react-native';
@@ -8,7 +33,7 @@ import en from '@/locales/en/translation.json';
 import ar from '@/locales/ar/translation.json';
 import de from '@/locales/de/translation.json';
 import { AddSnippetSheet } from '../AddSnippetSheet';
-import { AddWordsSheet } from '../AddWordsSheet';
+import { AddWordsSheet } from '../AddWordsSheet.android';
 
 // Use the native className adapter rather than Jest's default web resolution.
 // Otherwise Pressable style callbacks appear to work here but disappear on Android.
@@ -150,7 +175,7 @@ it('keeps the existing English iOS form even with an Arabic provider', async () 
       <AddSnippetSheet visible onClose={jest.fn()} onSubmit={jest.fn()} existingTriggers={[]} />
     </I18nextProvider>,
   );
-  expect(screen.getByLabelText('Trigger')).toBeTruthy();
+  expect(screen.getByPlaceholderText('e.g. signoff')).toBeTruthy();
   expect(screen.getByText('Add snippet')).toBeTruthy();
 });
 

@@ -21,7 +21,13 @@ function load(file, replacements, sourceFile = file) {
   }).outputText;
   const module = { exports: {} };
   vm.runInThisContext(`(function(require,module,exports){${compiled}\n})`, { filename: file })(
-    (name) => (Object.hasOwn(replacements, name) ? replacements[name] : localRequire(name)),
+    (name) => {
+      if (Object.hasOwn(replacements, name)) return replacements[name];
+      if (name.startsWith('.') && fs.existsSync(path.resolve(path.dirname(file), `${name}.ts`))) {
+        return load(path.resolve(path.dirname(file), `${name}.ts`), replacements);
+      }
+      return localRequire(name);
+    },
     module,
     module.exports,
   );
@@ -118,13 +124,16 @@ async function checkFreshLogin({
   };
   const loadAuth = () =>
     load(
-      path.join(root, 'src/lib/authClient.ts'),
+      path.join(
+        root,
+        Platform.OS === 'android' ? 'src/lib/authClient.android.ts' : 'src/lib/authClient.ts',
+      ),
       {
         ...native,
         '@better-auth/expo/client': expo,
         'expo-application': { applicationId: 'com.gizmolabs.openwhispr' },
         'expo-secure-store': storage,
-        './sessionFetch': { sessionFetch: global.fetch },
+        'expo/fetch': { fetch: (...args) => global.fetch(...args) },
         './apiClient': { getClientVersionHeader: () => 'test' },
       },
       process.argv[2],
@@ -141,9 +150,11 @@ async function checkFreshLogin({
     `${flow}: authentication result preserved`,
   );
   assert.equal(result.error, rejected ? 'Fixture rejection' : null);
+  // Upstream iOS uses the SDK's default better-auth cookie prefix.
+  const acceptsCookie = platform === 'android' || cookiePrefix === 'better-auth';
   assert.equal(
     result.sessionCookie,
-    autoSignIn && !rejected ? sessionCookie : null,
+    autoSignIn && !rejected && acceptsCookie ? sessionCookie : null,
     `${flow}: callers receive the resolved session cookie`,
   );
   const warmRequests = sessionRequests;
@@ -187,13 +198,16 @@ async function check(
   global.fetch = async () =>
     new global.Response(body, { status, headers: { 'content-type': contentType } });
   const auth = load(
-    path.join(root, 'src/lib/authClient.ts'),
+    path.join(
+      root,
+      Platform.OS === 'android' ? 'src/lib/authClient.android.ts' : 'src/lib/authClient.ts',
+    ),
     {
       ...native,
       '@better-auth/expo/client': expo,
       'expo-application': { applicationId: 'com.gizmolabs.openwhispr' },
       'expo-secure-store': storage,
-      './sessionFetch': { sessionFetch: global.fetch },
+      'expo/fetch': { fetch: (...args) => global.fetch(...args) },
       './apiClient': { getClientVersionHeader: () => 'test' },
     },
     process.argv[2],
@@ -234,13 +248,16 @@ async function checkChunkedClear({ rejected = false } = {}) {
       headers: { 'content-type': 'application/json' },
     });
   const auth = load(
-    path.join(root, 'src/lib/authClient.ts'),
+    path.join(
+      root,
+      Platform.OS === 'android' ? 'src/lib/authClient.android.ts' : 'src/lib/authClient.ts',
+    ),
     {
       ...native,
       '@better-auth/expo/client': expo,
       'expo-application': { applicationId: 'com.gizmolabs.openwhispr' },
       'expo-secure-store': storage,
-      './sessionFetch': { sessionFetch: global.fetch },
+      'expo/fetch': { fetch: (...args) => global.fetch(...args) },
       './apiClient': { getClientVersionHeader: () => 'test' },
     },
     process.argv[2],

@@ -1,7 +1,21 @@
+jest.mock('../NotesListScreen', () => {
+  const Default = jest.requireActual('../NotesListScreen').default;
+  const Android = jest.requireActual('../NotesListScreen.android').default;
+  return {
+    __esModule: true,
+    default: function NotesListScreenFixture() {
+      return require('react').createElement(
+        require('react-native').Platform.OS === 'android' ? Android : Default,
+      );
+    },
+  };
+});
 import { act, render } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import NotesListScreen from '../NotesListScreen';
+import * as noteRouteOwner from '@/lib/notes/noteRouteOwner';
+import * as androidNoteRouteOwner from '@/lib/notes/noteRouteOwner.android';
 
 let mockParams: Record<string, string> = {};
 let mockDataOwner = 'local';
@@ -93,6 +107,7 @@ beforeEach(() => {
   mockState.folders = [];
   mockState.activeFolderId = null;
   mockState.activeSpaceId = null;
+  mockState.isInitialized = true;
   mockState.setActiveFolderId.mockImplementation((id: number | null) => {
     mockState.activeFolderId = id;
     mockState.activeSpaceId = null;
@@ -104,6 +119,16 @@ beforeEach(() => {
 });
 
 describe('NotesListScreen account-scoped routes', () => {
+  beforeEach(() => {
+    jest
+      .spyOn(noteRouteOwner, 'getNotesRouteOwner')
+      .mockImplementation(androidNoteRouteOwner.getNotesRouteOwner);
+    jest
+      .spyOn(noteRouteOwner, 'withNotesRouteOwner')
+      .mockImplementation(androidNoteRouteOwner.withNotesRouteOwner);
+  });
+  afterEach(() => jest.restoreAllMocks());
+
   it.each(['account:account-a', undefined])(
     'replaces a stale or unbound Android folder route (%s), even when IDs collide',
     (owner) => {
@@ -144,6 +169,7 @@ describe('NotesListScreen Record meeting', () => {
   it.each([{ folderId: '5' }, { spaceId: '3' }, {}])(
     'pins import context %j in its route',
     (params) => {
+      Platform.OS = 'android';
       mockParams = params as Record<string, string>;
       render(<NotesListScreen />);
       mockFabActionPress?.('import');

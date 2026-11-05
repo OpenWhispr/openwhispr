@@ -1,3 +1,16 @@
+jest.mock('../DictionaryScreen', () => {
+  const ios = jest.requireActual<typeof import('../DictionaryScreen')>('../DictionaryScreen');
+  const android = jest.requireActual<typeof import('../DictionaryScreen.android')>(
+    '../DictionaryScreen.android',
+  );
+  return {
+    __esModule: true,
+    default: () =>
+      require('react').createElement(
+        (require('react-native').Platform.OS === 'android' ? android : ios).default,
+      ),
+  };
+});
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { Alert, Platform } from 'react-native';

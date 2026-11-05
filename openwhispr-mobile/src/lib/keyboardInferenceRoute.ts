@@ -1,3 +1,4 @@
+import { attachKeyboardRecoveryOwner } from './keyboardRecoveryOwner';
 import { BackgroundUploader } from '../../modules/background-uploader/src';
 import { AppGroupStorage } from '../../modules/app-group-storage/src';
 import { snapshotTranscriptionJob, type TranscriptionJobRoute } from './inferenceRouting';
@@ -171,11 +172,7 @@ export function listPendingProviderRecoveryJobs(): ProviderRecoveryJob[] {
       const raw =
         AppGroupStorage.getItem(`keyboard_provider_result.${jobId}`) ??
         AppGroupStorage.getItem(`keyboard_upload_route.${jobId}`);
-      const originalRoute = AppGroupStorage.getItem(`keyboard_upload_route.${jobId}`);
-      const historyOwner = originalRoute
-        ? (JSON.parse(originalRoute) as Record<string, unknown>).historyOwner
-        : undefined;
-      if (typeof historyOwner === 'string') job.historyOwner = historyOwner;
+      attachKeyboardRecoveryOwner(job, jobId);
       const context = raw ? (JSON.parse(raw) as Record<string, unknown>).requestContext : undefined;
       job.requestContext =
         context === 'keyboard' || context === 'recording' || context === 'file'

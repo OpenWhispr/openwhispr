@@ -49,3 +49,8 @@ it.each(['deleteNote', 'hardDeleteNote', 'wipeAllSyncableData'] as const)(
     expect(repo.getSyncState(meetingTranscriptionIdKey(note.id))).toBeNull();
   },
 );
+
+// These recovery/retry cases exercise the Android repository policy.
+jest.mock('../notesRepositoryPlatform', () =>
+  jest.requireActual('../notesRepositoryPlatform.android'),
+);

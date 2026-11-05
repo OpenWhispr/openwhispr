@@ -20,7 +20,7 @@ import { selectedSpeechModel } from './speechSelection';
 import { speechModelSupportsLanguages } from './speechCapabilities';
 import type { Recording } from '../../modules/android-dictation/src';
 import type { KeyboardTone } from '@/types';
-import { cleanupSavedOnDevice } from '@/lib/aiWorkflows';
+import { cleanupSavedOnDevice } from '@/lib/aiWorkflows.android';
 import i18n from './strings';
 import * as Crypto from 'expo-crypto';
 import { insightsScope, countSpokenWords, recordInsight } from './insights';

@@ -1,3 +1,4 @@
+import { createAppsFlyerLifecycle } from './appsFlyerLifecycle';
 import { Platform } from 'react-native';
 import { useConfigStore } from '@/store/useConfigStore';
 import {
@@ -36,9 +37,6 @@ const REVENUE_ID_LOOKUP_TIMEOUT_MS = 2_000;
 
 let didSetUp = false;
 let didInit = false;
-// Null means the native state change failed and must be retried when policy is reapplied.
-let stopped: boolean | null = false;
-let sdkStopPending: Promise<boolean> | null = null;
 let sessionReady = false;
 let didStartCurrentSession = false;
 let sdkReady: Promise<boolean> | null = null;
@@ -49,6 +47,19 @@ let pendingEvents: PendingEvent[] = [];
 const attributionListeners = new Set<() => void>();
 let lastPublishedConsent: AppsFlyerAttributionConsent | undefined;
 let revenueId: string | null = null;
+
+const lifecycle = createAppsFlyerLifecycle({
+  isInitialized: () => didInit,
+  updateStopped: updateSdkStoppedState,
+  setReadiness: (readiness) => {
+    sdkReady = readiness;
+  },
+  isCurrentReadiness: (readiness) => sdkReady === readiness,
+  collectionAllowed,
+  startSession: startSessionIfAllowed,
+  flushEvents: flushPendingEvents,
+  publishReady: () => publishAttributionState(true),
+});
 
 // 'revoked' is an explicit opt-out on this device (Usage Analytics off, ATT
 // denied). 'undecided' is a device that has not answered the ATT prompt, or a
@@ -175,8 +186,7 @@ function startSessionIfAllowed(): void {
   if (
     !sessionReady ||
     didStartCurrentSession ||
-    stopped !== false ||
-    sdkStopPending ||
+    !lifecycle.canStartSession() ||
     !collectionAllowed()
   )
     return;
@@ -254,33 +264,7 @@ function updateSdkStoppedState(shouldStop: boolean): Promise<boolean> {
   return result;
 }
 
-function setSdkStopped(shouldStop: boolean): void {
-  if (!didInit || shouldStop === stopped) return;
-
-  stopped = shouldStop;
-  const preferenceChange = updateSdkStoppedState(shouldStop);
-  sdkStopPending = preferenceChange;
-
-  const readiness = preferenceChange.then((updated): boolean => {
-    // An older completion cannot confirm or invalidate a newer consent decision.
-    if (sdkStopPending !== preferenceChange) return false;
-    sdkStopPending = null;
-    if (!updated) {
-      stopped = null;
-      return false;
-    }
-
-    if (shouldStop || !collectionAllowed()) return false;
-    startSessionIfAllowed();
-    flushPendingEvents();
-    return true;
-  });
-  sdkReady = shouldStop ? null : readiness;
-  readiness.then((ready): void => {
-    // A resume can make the identifier readable without starting a new session.
-    if (ready && sdkReady === readiness) publishAttributionState(true);
-  });
-}
+const setSdkStopped = lifecycle.setStopped;
 
 function applyAttributionPolicy(devKey: string): void {
   applyCollectionPolicy(devKey);
@@ -326,7 +310,9 @@ export function setAppsFlyerTrackingAuthorizationStatus(status: TrackingAuthoriz
 
 export async function refreshAppsFlyerTrackingAuthorization(): Promise<void> {
   if (trackingAuthorizationStatus === 'notSupported') {
-    if (didSetUp && DEV_KEY) applyAttributionPolicy(DEV_KEY);
+    if (lifecycle.reapplyPolicyOnUnsupportedRefresh && didSetUp && DEV_KEY) {
+      applyAttributionPolicy(DEV_KEY);
+    }
     startSessionIfAllowed();
     return;
   }

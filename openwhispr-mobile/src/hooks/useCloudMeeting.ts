@@ -7,16 +7,6 @@ import {
 
 export type CloudMeetingStatus = 'connecting' | 'live' | 'reconnecting' | 'error';
 
-export class CloudMeetingFinishError extends Error {
-  constructor(
-    error: unknown,
-    readonly utterances: RealtimeUtterance[],
-  ) {
-    super(error instanceof Error ? error.message : String(error));
-    this.name = 'CloudMeetingFinishError';
-  }
-}
-
 export interface CloudMeeting {
   status: CloudMeetingStatus;
   error: string | null;
@@ -24,9 +14,7 @@ export interface CloudMeeting {
   utterances: RealtimeUtterance[];
   elapsedSeconds: number;
   /** Stops the session and returns the finalized utterances captured so far. */
-  stop: () => Promise<RealtimeUtterance[]>;
-  cancel: () => void;
-  stopRequested: boolean;
+  stop: () => RealtimeUtterance[];
 }
 
 /**
@@ -39,21 +27,16 @@ export interface CloudMeeting {
 export function useCloudMeeting({
   enabled,
   language,
-  noteId,
 }: {
   enabled: boolean;
   language?: string;
-  noteId?: number;
 }): CloudMeeting {
-  const [stopRequested, setStopRequested] = useState(false);
   const [status, setStatus] = useState<CloudMeetingStatus>('connecting');
   const [error, setError] = useState<string | null>(null);
   const [partialText, setPartialText] = useState('');
   const [utterances, setUtterances] = useState<RealtimeUtterance[]>([]);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
-  const controllerRef = useRef<AbortController | null>(null);
-  const finishRef = useRef<Promise<RealtimeUtterance[]> | null>(null);
   const sessionRef = useRef<RealtimeSession | null>(null);
   const startedAtRef = useRef<number | null>(null);
   const stoppedRef = useRef(false);
@@ -61,29 +44,13 @@ export function useCloudMeeting({
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
-    stoppedRef.current = false;
-    finishRef.current = null;
-    startedAtRef.current = null;
-    const controller = new AbortController();
-    controllerRef.current = controller;
-    setStopRequested(false);
-    setUtterances([]);
-    setPartialText('');
-    setError(null);
-    setElapsedSeconds(0);
     setStatus('connecting');
     startRealtimeMeetingWs(
-      { language, noteId, signal: controller.signal },
+      { language },
       {
-        onStopRequested: () => {
-          if (!cancelled) setStopRequested(true);
-        },
-        onPartial: (text) => {
-          if (!cancelled) setPartialText(text);
-        },
-        onUtterances: (captured) => {
-          if (cancelled) return;
-          setUtterances(captured);
+        onPartial: (text) => setPartialText(text),
+        onUtterance: (utterance) => {
+          setUtterances((prev) => [...prev, utterance]);
           setPartialText('');
         },
         onError: (e) => {
@@ -110,7 +77,7 @@ export function useCloudMeeting({
       },
     )
       .then((session) => {
-        if (cancelled || stoppedRef.current) {
+        if (cancelled) {
           session.stop();
           return;
         }
@@ -119,7 +86,7 @@ export function useCloudMeeting({
         setStatus('live');
       })
       .catch((e) => {
-        if (cancelled || stoppedRef.current) return;
+        if (cancelled) return;
         setError(e instanceof Error ? e.message : String(e));
         setStatus('error');
       });
@@ -127,7 +94,6 @@ export function useCloudMeeting({
     return () => {
       cancelled = true;
       stoppedRef.current = true;
-      controller.abort();
       sessionRef.current?.stop();
       sessionRef.current = null;
     };
@@ -148,33 +114,14 @@ export function useCloudMeeting({
     return () => clearInterval(interval);
   }, [status]);
 
-  const stop = useCallback((): Promise<RealtimeUtterance[]> => {
-    if (finishRef.current) return finishRef.current;
+  const stop = useCallback((): RealtimeUtterance[] => {
     stoppedRef.current = true;
-    finishRef.current = (async () => {
-      const session = sessionRef.current;
-      if (!session) {
-        controllerRef.current?.abort();
-        throw new Error('Meeting stopped before recording was ready.');
-      }
-      try {
-        if (session.finish) await session.finish();
-        else session.stop();
-        return session.utterances();
-      } catch (cause) {
-        throw new CloudMeetingFinishError(cause, session.utterances());
-      } finally {
-        sessionRef.current = null;
-      }
-    })();
-    return finishRef.current;
+    const session = sessionRef.current;
+    sessionRef.current = null;
+    if (!session) return [];
+    session.stop();
+    return session.utterances();
   }, []);
 
-  const cancel = useCallback(() => {
-    stoppedRef.current = true;
-    controllerRef.current?.abort();
-    sessionRef.current?.stop();
-    sessionRef.current = null;
-  }, []);
-  return { status, error, partialText, utterances, elapsedSeconds, stop, cancel, stopRequested };
+  return { status, error, partialText, utterances, elapsedSeconds, stop };
 }

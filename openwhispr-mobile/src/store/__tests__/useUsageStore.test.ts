@@ -1,6 +1,7 @@
 import { fetchUsage, type UsageInfo } from '@/data/remote/usageApi';
 import { useAuthStore } from '@/store/useAuthStore';
-import { useUsageStore } from '@/store/useUsageStore';
+import { useUsageStore } from '@/store/useUsageStore.android';
+import { useUsageStore as iosUsageStore } from '@/store/useUsageStore';
 import { ApiError } from '@/lib/apiClient';
 import { Platform } from 'react-native';
 
@@ -294,15 +295,15 @@ describe('useUsageStore', () => {
 
   it('preserves iOS cached-usage behavior when a request is rejected', async () => {
     Object.defineProperty(Platform, 'OS', { value: 'ios', configurable: true });
+    iosUsageStore.getState().reset();
     setSignedInUser('user-a', 'cookie-a');
     mockFetchUsage.mockResolvedValueOnce(usage({ wordsRemaining: 500 }));
-    await useUsageStore.getState().load(true);
+    await iosUsageStore.getState().load(true);
     mockFetchUsage.mockRejectedValueOnce(new ApiError('Invalid session', 401));
-    await useUsageStore.getState().load(true);
+    await iosUsageStore.getState().load(true);
 
-    expect(useUsageStore.getState()).toMatchObject({
+    expect(iosUsageStore.getState()).toMatchObject({
       usage: { wordsRemaining: 500 },
-      sessionRejected: false,
     });
   });
 

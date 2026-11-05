@@ -6,7 +6,7 @@ import type { CustomPurchaseControllerContext } from 'expo-superwall';
 import type { UsageInfo } from '@/data/remote/usageApi';
 import { useAuthStore } from '@/store/useAuthStore';
 import { getUsageOwnerKey, useUsageStore } from '@/store/useUsageStore';
-import { withRevenueCatUser } from '@/lib/revenuecat';
+import { withRevenueCatUser } from '@/lib/revenuecat.android';
 import { reconcileStoreBilling } from '@/lib/billingReconciliation';
 import { Sentry } from '@/lib/sentry';
 
@@ -203,9 +203,13 @@ export function observeAndroidPurchaseUpdates(): () => void {
   let lastSubscriptionSignature = '';
   const retry = () => {
     const billingId = useUsageStore.getState().usage?.billingUserId;
-    if (!billingId || refreshing || disposed) return;
+    if (!billingId || disposed) return;
     const status = useAndroidBillingStatus.getState().accounts[billingId];
     if (status !== 'payment-pending' && status !== 'access-pending') return;
+    if (refreshing) {
+      retryPending = true;
+      return;
+    }
     refreshing = true;
     void (async () => {
       const account = await currentBillingAccount();

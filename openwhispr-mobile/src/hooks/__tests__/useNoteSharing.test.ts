@@ -76,7 +76,8 @@ import { notesRepository } from '@/data';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useNotesStore } from '@/store/useNotesStore';
 import { ensureNoteSynced } from '@/sync/ensureNoteSynced';
-import { useNoteSharing } from '../useNoteSharing';
+import { useNoteSharing } from '../useNoteSharing.android';
+import { useNoteSharing as useDefaultNoteSharing } from '../useNoteSharing';
 
 const share = {
   visibility: 'private' as const,
@@ -1291,4 +1292,24 @@ describe('Android sharing feedback language', () => {
     expect(result.current.message).toBe('تم إرسال الدعوة.');
     expect(sharing.resendNoteInvitation).toHaveBeenCalledTimes(1);
   });
+});
+
+it('keeps the upstream default controller API without an Android error code', async () => {
+  const { result } = renderHook(() => useDefaultNoteSharing(1, flushDraft));
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  expect(result.current).not.toHaveProperty('errorCode');
+  await act(() => result.current.inviteEmail('invalid'));
+  expect(result.current.error).toBe('Enter a valid email address.');
+  expect(result.current).not.toHaveProperty('errorCode');
+});
+
+it('does not initialize Android translation from the default sharing hook', async () => {
+  const translation = jest.spyOn(require('react-i18next'), 'useTranslation');
+  try {
+    const { result } = renderHook(() => useDefaultNoteSharing(1, flushDraft));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(translation).not.toHaveBeenCalled();
+  } finally {
+    translation.mockRestore();
+  }
 });

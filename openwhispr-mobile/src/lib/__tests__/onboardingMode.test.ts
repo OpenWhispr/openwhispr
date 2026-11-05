@@ -48,6 +48,28 @@ jest.mock('@/store/useAuthStore', () => ({
   },
 }));
 
+jest.mock('../onboardingMode', () => {
+  const defaultOnboarding =
+    jest.requireActual<typeof import('../onboardingMode')>('../onboardingMode');
+  const androidOnboarding = jest.requireActual<typeof import('../onboardingMode.android')>(
+    '../onboardingMode.android',
+  );
+  const { Platform: mockPlatform } = jest.requireActual(
+    'react-native',
+  ) as typeof import('react-native');
+  return new Proxy(
+    {},
+    {
+      get:
+        (_target, key: keyof typeof defaultOnboarding) =>
+        (...args: unknown[]) => {
+          const onboarding = mockPlatform.OS === 'android' ? androidOnboarding : defaultOnboarding;
+          return (onboarding[key] as (...values: unknown[]) => unknown)(...args);
+        },
+    },
+  );
+});
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockError = null;

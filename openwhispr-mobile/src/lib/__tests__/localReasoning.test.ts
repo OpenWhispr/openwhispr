@@ -1,4 +1,3 @@
-import { Platform } from 'react-native';
 const mockAuthState: { user: { id: string } | null } = { user: null };
 const mockProcessingState: { activeMode: 'cloud' | 'private' } = { activeMode: 'cloud' };
 const mockConfigState: { config: { appleLocalIntelligenceEnabled?: boolean } | null } = {
@@ -25,8 +24,6 @@ jest.mock('@/store/useConfigStore', () => ({
 }));
 
 import {
-  countLocalReasoningTokens,
-  isLocalReasoningRequired,
   canRunLocalReasoning,
   clearLocalReasoningReadinessCache,
   countLocalInputTokens,
@@ -39,6 +36,11 @@ import {
   toLocalReasoningError,
 } from '../localReasoning';
 import { AppleLLM } from '@/lib/appleLLM';
+import * as AndroidReasoning from '../localReasoning.android';
+
+jest.mock('@/android/LocalTextModel', () => ({
+  androidTextReadiness: jest.fn(async () => ({ status: 'ready', tokenCounting: false })),
+}));
 
 const mockAppleAvailability = AppleLLM.getAvailability as jest.Mock;
 const mockCountTokens = AppleLLM.countTokens as jest.Mock;
@@ -56,16 +58,17 @@ beforeEach(() => {
   mockConfigState.config = {};
 });
 
+it('keeps Android native error codes outside the default Apple error contract', () => {
+  const error = Object.assign(new Error('Native local model failed'), {
+    code: 'LOCAL_REASONING_FAILED',
+  });
+  expect(toLocalReasoningError(error).code).toBe('APPLE_LLM_FAILED');
+});
+
 describe('local reasoning readiness policy', () => {
   it('keeps Android Local Mode notes local even when a note is shared', () => {
-    const original = Platform.OS;
-    Platform.OS = 'android';
     mockProcessingState.activeMode = 'private';
-    try {
-      expect(isLocalReasoningRequired({ isPrivateNote: false })).toBe(true);
-    } finally {
-      Platform.OS = original;
-    }
+    expect(AndroidReasoning.isLocalReasoningRequired({ isPrivateNote: false })).toBe(true);
   });
 
   it('does not use local reasoning for signed-in public cloud-mode content', async () => {
@@ -176,14 +179,15 @@ it.each([
 });
 
 it('never asks the Apple engine to count Android input tokens', async () => {
-  const original = Platform.OS;
-  Platform.OS = 'android';
-  try {
-    await expect(countLocalReasoningTokens({ prompt: 'Private Android note' })).resolves.toBeNull();
-    expect(AppleLLM.countTokens).not.toHaveBeenCalled();
-  } finally {
-    Platform.OS = original;
-  }
+  await expect(
+    AndroidReasoning.countLocalReasoningTokens({ prompt: 'Private Android note' }),
+  ).resolves.toBeNull();
+  await expect(AndroidReasoning.countLocalInputTokens({ prompt: '1234567' })).resolves.toBe(2);
+  await expect(
+    AndroidReasoning.fitsLocalReasoningBudget({ prompt: '1234567', budget: 2 }),
+  ).resolves.toBe(false);
+  await expect(AndroidReasoning.fitsLocalCleanupOutput('1234567')).resolves.toBe(true);
+  expect(AppleLLM.countTokens).not.toHaveBeenCalled();
 });
 
 // iOS reports Apple Intelligence as off when the language keeps it off, so the language explains it.
@@ -370,4 +374,26 @@ describe('fitsLocalCleanupOutput', () => {
     mockCountTokens.mockResolvedValueOnce(null);
     await expect(fitsLocalCleanupOutput('word '.repeat(100))).resolves.toBe(true);
   });
+});
+
+it('uses Android model readiness for private requests without querying Apple', async () => {
+  mockProcessingState.activeMode = 'private';
+  await expect(AndroidReasoning.shouldUseLocalReasoning()).resolves.toBe(true);
+  expect(mockAppleAvailability).not.toHaveBeenCalled();
+});
+
+it('preserves Android native errors and cancellation precedence', () => {
+  for (const code of ['LOCAL_CONTEXT_LIMIT', 'LOCAL_REASONING_FAILED'] as const) {
+    const error = Object.assign(new Error('Native failure'), { code });
+    expect(AndroidReasoning.toLocalReasoningError(error).code).toBe(code);
+    expect(AndroidReasoning.isLocalContextLimitError(error)).toBe(code === 'LOCAL_CONTEXT_LIMIT');
+  }
+  expect(AndroidReasoning.toLocalReasoningError(new Error('Unknown failure')).code).toBe(
+    'LOCAL_REASONING_FAILED',
+  );
+  const cancelled = Object.assign(new Error('Cancelled'), {
+    name: 'AbortError',
+    code: 'LOCAL_CONTEXT_LIMIT',
+  });
+  expect(AndroidReasoning.toLocalReasoningError(cancelled).code).toBe('APPLE_LLM_CANCELLED');
 });

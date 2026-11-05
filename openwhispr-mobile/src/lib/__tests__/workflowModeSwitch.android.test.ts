@@ -1,5 +1,7 @@
 import { Alert, Platform } from 'react-native';
 
+jest.mock('@/lib/inferenceModes', () => jest.requireActual('@/lib/inferenceModes.android'));
+
 const mockUpdateConfig = jest.fn().mockResolvedValue(undefined);
 const mockSetActiveMode = jest.fn();
 const mockPush = jest.fn();
@@ -40,7 +42,7 @@ jest.mock('@/services/providers/ProviderCredentials', () => ({
   getProviderCredentialStatus: (reference: string) => mockKeyStatus(reference),
 }));
 
-import { setPrivateMode } from '../workflowModeSwitch';
+import { setPrivateMode } from '../workflowModeSwitch.android';
 
 let alert: jest.SpyInstance;
 

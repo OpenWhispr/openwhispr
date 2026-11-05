@@ -1,3 +1,21 @@
+jest.mock('../transcriptionLifecycle', () => ({
+  get transcriptionLifecycle() {
+    return jest.requireActual(
+      require('react-native').Platform.OS === 'android'
+        ? '../transcriptionLifecycle.android'
+        : '../transcriptionLifecycle',
+    ).transcriptionLifecycle;
+  },
+}));
+jest.mock('../uploadTranscriptionAudio', () => ({
+  get uploadTranscriptionAudio() {
+    return jest.requireActual(
+      require('react-native').Platform.OS === 'android'
+        ? '../uploadTranscriptionAudio.android'
+        : '../uploadTranscriptionAudio',
+    ).uploadTranscriptionAudio;
+  },
+}));
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { BackgroundUploader } from '../../../../modules/background-uploader/src';
@@ -281,4 +299,36 @@ it('cancels local speech through the service boundary without waiting for a tran
   controller.abort();
   expect(await pending).toMatchObject({ error: { name: 'AbortError' } });
   expect(upload).not.toHaveBeenCalled();
+});
+
+it('preserves iOS uploads even when an Android cancellation signal is already aborted', async () => {
+  Platform.OS = 'ios';
+  const controller = new AbortController();
+  controller.abort();
+  const response = await TranscriptionService.transcribe({
+    ...request(controller.signal),
+    requestContext: 'file',
+  });
+  expect(response.text).toBe('late text');
+  expect(FileSystem.createUploadTask).not.toHaveBeenCalled();
+  expect(jest.mocked(BackgroundUploader.upload).mock.calls[0][0].parameters).not.toHaveProperty(
+    'source',
+  );
+});
+
+it('preserves the upstream iOS zero duration after chunked transcription', async () => {
+  Platform.OS = 'ios';
+  jest.mocked(FileSystem.getInfoAsync).mockResolvedValue({
+    exists: true,
+    isDirectory: false,
+    uri: 'file:///recording.wav',
+    size: 8 * 1024 * 1024,
+    modificationTime: 0,
+  });
+  const response = await TranscriptionService.transcribe(request(new AbortController().signal));
+  expect(response.duration).toBe(0);
+  expect(FileSystem.uploadAsync).toHaveBeenCalledTimes(7);
+  expect(jest.mocked(FileSystem.uploadAsync).mock.calls.every((args) => args.length === 3)).toBe(
+    true,
+  );
 });

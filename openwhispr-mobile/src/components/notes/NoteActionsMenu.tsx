@@ -1,5 +1,5 @@
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
-import { Alert, ActivityIndicator, Pressable, useColorScheme } from 'react-native';
+import { Alert, ActivityIndicator, Platform, Pressable, useColorScheme } from 'react-native';
 import { MenuView, type MenuAction } from '@react-native-menu/menu';
 import * as Sentry from '@sentry/react-native';
 import { SystemIcon } from '@/components/ui/SystemIcon';
@@ -129,7 +129,7 @@ export function NoteActionsMenu({
   ];
 
   const handlePress = ({ nativeEvent }: { nativeEvent: { event: string } }) => {
-    if (disabled) return;
+    if (Platform.OS === 'android' && disabled) return;
     const id = nativeEvent.event;
     safeHaptics('light');
 

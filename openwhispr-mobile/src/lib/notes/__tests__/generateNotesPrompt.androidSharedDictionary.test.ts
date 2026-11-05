@@ -1,4 +1,4 @@
-import { buildActionSystemPrompt } from '../generateNotesPrompt';
+import { buildActionSystemPrompt } from '../generateNotesPrompt.android';
 import { DESKTOP_DEFAULT_NOTE_SYSTEM_PROMPT } from '../desktopDefaultNotesPrompt';
 import { sharedDictionaryHint } from '@/lib/sharedDictionaryHints';
 

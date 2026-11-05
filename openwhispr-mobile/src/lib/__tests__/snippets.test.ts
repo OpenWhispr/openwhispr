@@ -1,3 +1,4 @@
+import { expandSnippets as expandAndroidSnippets } from '../snippets.android';
 import {
   expandSnippets,
   getDictionaryHintTiers,
@@ -35,10 +36,10 @@ describe('expandSnippets', () => {
 
   it('does not duplicate a sentence mark already supplied by the snippet', () => {
     const snippets = [{ trigger: 'review sign off', replacement: 'Thanks for reviewing.' }];
-    expect(expandSnippets('Hello. Review sign off.', snippets)).toBe(
+    expect(expandAndroidSnippets('Hello. Review sign off.', snippets)).toBe(
       'Hello. Thanks for reviewing.',
     );
-    expect(expandSnippets('Review sign off. Review sign off.', snippets)).toBe(
+    expect(expandAndroidSnippets('Review sign off. Review sign off.', snippets)).toBe(
       'Thanks for reviewing. Thanks for reviewing.',
     );
   });

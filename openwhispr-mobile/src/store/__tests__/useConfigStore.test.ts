@@ -14,7 +14,7 @@ jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => ({ resetToDefault: jest.fn() }) },
 }));
 
-let useConfigStore: (typeof import('../useConfigStore'))['useConfigStore'];
+let useConfigStore: (typeof import('../useConfigStore.android'))['useConfigStore'];
 
 function deferredSave() {
   let resolve!: () => void;
@@ -28,7 +28,7 @@ function deferredSave() {
 
 beforeEach(() => {
   jest.resetModules();
-  useConfigStore = require('../useConfigStore').useConfigStore;
+  useConfigStore = require('../useConfigStore.android').useConfigStore;
   jest.clearAllMocks();
   mockSaveConfig.mockResolvedValue(undefined);
   mockClearConfig.mockResolvedValue(undefined);

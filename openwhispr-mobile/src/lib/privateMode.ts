@@ -1,7 +1,6 @@
-import { Alert, Platform } from 'react-native';
+import { Alert } from 'react-native';
 import { router } from 'expo-router';
 import { LocalTranscriptionService } from '@/services/transcription/LocalTranscriptionService';
-import { androidCopy } from '@/lib/androidCopy';
 
 export type PrivateModeStatus = 'ready' | 'missing' | 'unavailable';
 
@@ -30,11 +29,6 @@ export async function getPrivateModeReadiness(
 }
 
 export function getPrivateModeUnavailableMessage(): string {
-  if (Platform.OS === 'android')
-    return androidCopy(
-      'workflowAlerts.speechUnavailable',
-      'On-device transcription is unavailable on this device.',
-    );
   return 'Build OpenWhispr with native modules enabled before using on-device transcription.';
 }
 

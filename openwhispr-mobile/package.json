@@ -26,7 +26,8 @@
     "test:watch": "jest --watch",
     "test:keyboard-capitalization": "sh scripts/test-keyboard-capitalization.sh",
     "postinstall": "patch-package --error-on-fail && npm run test:security && npm run download:brand-fonts",
-    "eas-build-pre-install": "if [ \"$EAS_BUILD_PLATFORM\" = \"ios\" ]; then bundle install; elif [ \"$EAS_BUILD_PLATFORM\" = \"android\" ]; then sdkmanager \"cmake;3.22.1\"; fi"
+    "eas-build-pre-install": "if [ \"$EAS_BUILD_PLATFORM\" = \"ios\" ]; then bundle install; elif [ \"$EAS_BUILD_PLATFORM\" = \"android\" ]; then sdkmanager \"cmake;3.22.1\"; fi",
+    "test:platform-styles": "node --test scripts/__tests__/platform-styles.test.js"
   },
   "engines": {
     "node": "24.x"
@@ -102,7 +103,8 @@
     "tailwindcss": "^3.4.18",
     "whisper.rn": "^0.6.0",
     "zod": "^4.6.7",
-    "zustand": "^5.0.8"
+    "zustand": "^5.0.8",
+    "nativewind-ios": "npm:nativewind@4.2.1"
   },
   "devDependencies": {
     "@react-native/eslint-config": "^0.76.7",
@@ -151,6 +153,9 @@
     },
     "@expo/cli": {
       "zod": "4.6.7"
+    },
+    "react-native-css-interop@0.2.1": {
+      "semver": "7.7.3"
     }
   },
   "private": true

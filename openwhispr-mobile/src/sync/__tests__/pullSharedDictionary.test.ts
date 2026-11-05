@@ -1,3 +1,17 @@
+let mockPersistencePlatform: 'ios' | 'android' = 'ios';
+jest.mock('../dictionaryPersistenceCheckpoint', () => ({
+  get checkpointDictionaryPersistence() {
+    return jest.requireActual(
+      mockPersistencePlatform === 'android'
+        ? '../dictionaryPersistenceCheckpoint.android'
+        : '../dictionaryPersistenceCheckpoint',
+    ).checkpointDictionaryPersistence;
+  },
+}));
+beforeEach(() => {
+  mockPersistencePlatform = 'ios';
+});
+
 const mockSyncState = new Map<string, string>();
 const mockSyncStateWrites: string[] = [];
 jest.mock('@/data', () => ({
@@ -813,7 +827,10 @@ describe('resetAllPullCursors', () => {
   });
 });
 
-describe('pullSharedDictionary account changes during persistence', () => {
+describe('Android pullSharedDictionary account changes during persistence', () => {
+  beforeEach(() => {
+    mockPersistencePlatform = 'android';
+  });
   afterEach(() => {
     jest.restoreAllMocks();
   });
@@ -892,4 +909,23 @@ describe('pullSharedDictionary account changes during persistence', () => {
     await expect(isolated.pull(checkpoint)).resolves.toEqual({ changed: true });
     expect(mockFetchSharedDictionary).toHaveBeenCalledTimes(2);
   });
+});
+
+it('keeps the upstream iOS storage read before the first explicit checkpoint', async () => {
+  const order: string[] = [];
+  const load = jest
+    .spyOn(sharedDictionaryState, 'loadSharedDictionaryState')
+    .mockImplementationOnce(async () => {
+      order.push('load');
+      return null;
+    });
+  try {
+    await pullSharedDictionary(() => {
+      order.push('checkpoint');
+    }, []);
+    expect(order[0]).toBe('load');
+    expect(order.slice(1)).toEqual(['checkpoint']);
+  } finally {
+    load.mockRestore();
+  }
 });

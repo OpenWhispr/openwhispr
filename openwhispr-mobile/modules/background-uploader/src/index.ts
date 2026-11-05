@@ -60,11 +60,7 @@ interface NativeBackgroundUploader {
 }
 
 const NativeModule: NativeBackgroundUploader | null =
-  Platform.OS === 'ios'
-    ? requireNativeModule('BackgroundUploader')
-    : Platform.OS === 'android'
-      ? requireNativeModule('AndroidDictation')
-      : null;
+  Platform.OS === 'ios' ? requireNativeModule('BackgroundUploader') : null;
 
 export const BackgroundUploader = {
   listProviderRecoveryJobIds(): string[] {
@@ -79,7 +75,7 @@ export const BackgroundUploader = {
 
   async requestProvider(options: ProviderRequestOptions): Promise<ProviderRequestResult> {
     if (!NativeModule?.requestProvider)
-      throw Object.assign(new Error('Provider requests require an updated native build'), {
+      throw Object.assign(new Error('Provider requests require an updated iOS native build'), {
         code: 'PROVIDER_TRANSPORT_UNAVAILABLE',
       });
     return NativeModule.requestProvider(options);
@@ -90,11 +86,11 @@ export const BackgroundUploader = {
   },
 
   isAvailable(): boolean {
-    return Platform.OS === 'ios' && NativeModule !== null;
+    return NativeModule !== null;
   },
 
   async upload(options: BackgroundUploadOptions): Promise<BackgroundUploadResult> {
-    if (!NativeModule || Platform.OS !== 'ios') {
+    if (!NativeModule) {
       throw new Error('BackgroundUploader is only available on iOS');
     }
     return NativeModule.upload({

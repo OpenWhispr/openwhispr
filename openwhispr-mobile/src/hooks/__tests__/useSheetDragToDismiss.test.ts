@@ -1,5 +1,6 @@
 import { renderHook, act } from '@testing-library/react-native';
 import { shouldDismissSheetDrag, useSheetDragToDismiss } from '../useSheetDragToDismiss';
+import { useSheetDragToDismiss as useAndroidSheetDragToDismiss } from '../useSheetDragToDismiss.android';
 
 let mockOnEnd: (event: { translationY: number; velocityY: number }) => void;
 let mockAnimationComplete: () => void;
@@ -41,10 +42,20 @@ it.each([
 
 it('restores a dragged form when dismissal requires confirmation', () => {
   const close = jest.fn(() => false);
-  renderHook(() => useSheetDragToDismiss(true, close));
+  renderHook(() => useAndroidSheetDragToDismiss(true, close));
   act(() => mockOnEnd({ translationY: 200, velocityY: 200 }));
   expect(mockTranslate.value).toBeGreaterThan(0);
   act(() => mockAnimationComplete());
   expect(close).toHaveBeenCalledTimes(1);
   expect(mockTranslate.value).toBe(0);
+});
+
+it('preserves upstream iOS dismissal when the callback returns false', () => {
+  const close = jest.fn(() => false);
+  renderHook(() => useSheetDragToDismiss(true, close));
+  act(() => mockOnEnd({ translationY: 200, velocityY: 200 }));
+  const dismissedPosition = mockTranslate.value;
+  act(() => mockAnimationComplete());
+  expect(close).toHaveBeenCalledTimes(1);
+  expect(mockTranslate.value).toBe(dismissedPosition);
 });

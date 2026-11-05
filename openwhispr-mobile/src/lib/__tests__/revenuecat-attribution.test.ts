@@ -313,26 +313,38 @@ it('links once the ID becomes readable instead of clearing', async () => {
   expect(server['billing-a']).toBe('af-device');
 });
 
-it('records an explicitly selected purchase owner with that owner’s attribution', async () => {
-  await rc.recordRevenueCatPurchase('pro.monthly', 'billing-a', () => {});
-  expect(device.user).toBe('billing-a');
-  expect(server['billing-a']).toBe('af-device');
+it('upstream iOS ignores unsupported purchase-owner arguments', async () => {
+  const check = jest.fn(() => {
+    throw new Error('Unsupported owner guard');
+  });
+  await expect(
+    Reflect.apply(rc.recordRevenueCatPurchase, undefined, ['pro.monthly', 'billing-a', check]),
+  ).resolves.toBe(true);
+  expect(check).not.toHaveBeenCalled();
+  expect(device.user).toBe('$RCAnonymousID:device');
+  expect(sdk.logIn).not.toHaveBeenCalled();
   expect(sdk.recordPurchase).toHaveBeenCalledWith('pro.monthly');
 });
 
-it('does not post a purchase after its owner changes during attribution linking', async () => {
+it('upstream iOS records after linking without an Android owner-check argument', async () => {
   let current = true;
   await rc.identifyRevenueCatUser('billing-a');
   sdk.setAttributes.mockImplementation(async (attributes) => {
     if (attributes.$appsflyerId) current = false;
   });
-  const checkIdentity = () => {
+  const check = jest.fn(() => {
     if (!current) throw new Error('Purchase owner changed');
-  };
+  });
   await expect(
-    rc.recordRevenueCatPurchase('pro.monthly', 'billing-a', checkIdentity),
-  ).resolves.toBe(false);
-  expect(sdk.recordPurchase).not.toHaveBeenCalled();
+    Reflect.apply(rc.recordRevenueCatPurchase, undefined, ['pro.monthly', 'billing-a', check]),
+  ).resolves.toBe(true);
+  expect(current).toBe(false);
+  expect(check).not.toHaveBeenCalled();
+  expect(sdk.recordPurchase).toHaveBeenCalledWith('pro.monthly');
+});
+
+it('upstream iOS keeps the Android store-controller API out of its public entry', () => {
+  expect('withRevenueCatUser' in rc).toBe(false);
 });
 
 it('does not restore under an account that changed while linking', async () => {

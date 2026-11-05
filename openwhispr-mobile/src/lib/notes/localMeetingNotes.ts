@@ -1,6 +1,4 @@
-import { Platform } from 'react-native';
-import { z } from 'zod';
-import { AppleLLM } from '@/lib/appleLLM';
+import { localMeetingNotesPlatform } from './localMeetingNotesPlatform';
 import { notesRepository } from '@/data';
 import type { Note, Segment, Speaker } from '@/data/types';
 import {
@@ -10,27 +8,13 @@ import {
   getLocalReasoningReadiness,
   isLocalContextLimitError,
   isLocalOutputLimitError,
-  LOCAL_OUTPUT_TOKEN_RESERVE,
   toLocalReasoningError,
 } from '@/lib/localReasoning';
 import { formatTranscriptForExport } from '@/lib/diarization/transcriptDisplay';
 import { parseCalendarParticipants } from '@/lib/calendar/meetingContext';
 import { buildMeetingNotesInput, type MeetingNotesContext } from '@/lib/notes/meetingNotesInput';
-import {
-  buildActionSystemPrompt,
-  isDefaultGenerateNotesAction,
-} from '@/lib/notes/generateNotesPrompt';
+import { isDefaultGenerateNotesAction } from '@/lib/notes/generateNotesPrompt';
 import type { StructuredMeetingNotes } from '@/types';
-
-const androidMeetingNotesSchema = z.object({
-  summary: z.string(),
-  keyDiscussionPoints: z.array(z.string()),
-  decisions: z.array(z.string()),
-  actionItems: z.array(z.object({ text: z.string(), owner: z.string().nullable() })),
-  followUps: z.array(z.string()),
-});
-const ANDROID_MEETING_FORMAT =
-  'Return only a JSON object with summary (string), keyDiscussionPoints (string array), decisions (string array), actionItems (array of {text: string, owner: string or null}), and followUps (string array). Use empty arrays when no items are supported. Do not use Markdown or code fences.';
 
 const DEFAULT_LOCAL_MEETING_ACTION_PROMPT =
   'Transform this meeting transcript into concise, actionable meeting notes.';
@@ -223,24 +207,7 @@ async function generateStructuredNotes(input: {
   prompt: string;
 }): Promise<StructuredMeetingNotes> {
   try {
-    if (Platform.OS === 'android') {
-      const { LocalTextModel } =
-        require('@/android/LocalTextModel') as typeof import('@/android/LocalTextModel');
-      const result = await LocalTextModel.processText({
-        systemPrompt: input.instructions,
-        text: input.prompt,
-        temperature: 0.2,
-        maxTokens: LOCAL_OUTPUT_TOKEN_RESERVE,
-        responseSchema: z.toJSONSchema(androidMeetingNotesSchema),
-      });
-      return normalizeMeetingNotes(androidMeetingNotesSchema.parse(JSON.parse(result.text)));
-    }
-    const notes = await AppleLLM.generateMeetingNotes({
-      instructions: input.instructions,
-      prompt: input.prompt,
-      temperature: 0.2,
-      maxTokens: LOCAL_OUTPUT_TOKEN_RESERVE,
-    });
+    const notes = await localMeetingNotesPlatform.generateNotes(input);
     return normalizeMeetingNotes(notes);
   } catch (error) {
     throw toLocalReasoningError(error);
@@ -380,8 +347,8 @@ export async function generateLocalMeetingNotes(
   noteId: number,
   options: { actionPrompt?: string; checkpoint?: () => void } = {},
 ): Promise<string> {
-  const checkpoint = options.checkpoint ?? (() => {});
-  checkpoint();
+  const checkpoint = localMeetingNotesPlatform.getCheckpoint(options);
+  checkpoint?.();
   const note = notesRepository.getNoteById(noteId);
   if (!note || note.deletedAt || note.noteType !== 'meeting') return '';
 
@@ -393,16 +360,7 @@ export async function generateLocalMeetingNotes(
     options.actionPrompt ??
     notesRepository.getActions().find(isDefaultGenerateNotesAction)?.prompt ??
     DEFAULT_LOCAL_MEETING_ACTION_PROMPT;
-  const actionInstructions = buildActionSystemPrompt({
-    actionPrompt,
-    inputKind: 'meeting-transcript',
-    isDefaultGenerateNotesAction: true,
-    outputFormat: Platform.OS === 'android' ? 'json' : 'markdown',
-  });
-  const instructions =
-    Platform.OS === 'android'
-      ? `${actionInstructions}\n\n${ANDROID_MEETING_FORMAT}`
-      : actionInstructions;
+  const instructions = localMeetingNotesPlatform.buildInstructions(actionPrompt);
   const readiness = await getLocalReasoningReadiness();
   const budget = getLocalInputTokenBudget(readiness);
   const meetingContext = resolveMeetingContext(note);
@@ -411,7 +369,7 @@ export async function generateLocalMeetingNotes(
     prompt: buildChunkInput({ note, lines: [], meetingContext }),
   });
   const chunkBudget = Math.min(budget, chunkOverhead + LOCAL_MEETING_CHUNK_MAX_TRANSCRIPT_TOKENS);
-  checkpoint();
+  checkpoint?.();
   const lines = transcriptLines(segments, notesRepository.getSpeakers(noteId));
   const chunks = await buildTranscriptChunks({
     note,
@@ -424,7 +382,7 @@ export async function generateLocalMeetingNotes(
 
   const mapped: StructuredMeetingNotes[] = [];
   for (const linesInChunk of chunks) {
-    checkpoint();
+    checkpoint?.();
     const previousSummary = mapped[mapped.length - 1]?.summary;
     mapped.push(
       ...(await mapChunkWithRetry({
@@ -437,18 +395,18 @@ export async function generateLocalMeetingNotes(
     );
   }
 
-  checkpoint();
+  checkpoint?.();
   const reduced = await reduceStructuredNotes({
     notes: mapped,
     instructions,
     budget: Math.min(budget, LOCAL_MEETING_MERGE_MAX_INPUT_TOKENS),
   });
-  checkpoint();
+  checkpoint?.();
   const markdown = renderStructuredMeetingNotesToMarkdown(reduced);
 
   if (__DEV__) {
     console.log(
-      `[reasoning] provider=local model=${Platform.OS === 'android' ? 'android-local' : 'apple-fm'} mode=meeting chunks=${chunks.length} elapsedMs=${Date.now() - startedAt}`,
+      `[reasoning] provider=local model=${localMeetingNotesPlatform.modelName} mode=meeting chunks=${chunks.length} elapsedMs=${Date.now() - startedAt}`,
     );
   }
 

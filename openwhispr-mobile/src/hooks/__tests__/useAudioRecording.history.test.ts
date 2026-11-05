@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useAudioRecording, type UseAudioRecordingOptions } from '../useAudioRecording';
+import { useAudioRecording as useAndroidAudioRecording } from '../useAudioRecording.android';
 import { transcribeAndCleanup } from '@/lib/transcribeAndCleanup';
 import { analyzeSpeechActivity } from '@/lib/speechActivity';
 import { deleteManagedTranscriptAudio, retainTranscriptAudio } from '@/lib/transcriptAudio';
@@ -80,8 +81,11 @@ const transcribed = (text: string): Awaited<ReturnType<typeof transcribeAndClean
     transcription: { duration: 1, provider: 'cloud' },
   }) as Awaited<ReturnType<typeof transcribeAndCleanup>>;
 
-async function recordAndStop(options: UseAudioRecordingOptions): Promise<{ stopError: unknown }> {
-  const { result } = renderHook(() => useAudioRecording(options));
+async function recordAndStop(
+  options: UseAudioRecordingOptions,
+  useRecording: typeof useAudioRecording | typeof useAndroidAudioRecording = useAudioRecording,
+): Promise<{ stopError: unknown }> {
+  const { result } = renderHook(() => useRecording(options));
   await act(async () => {
     await result.current.startRecording();
   });
@@ -103,9 +107,9 @@ beforeEach(() => {
   mockRecorder.isRecording = false;
 });
 
-it('retains the recording request usage ID in failed history', async () => {
+it('retains the Android recording request usage ID in failed history', async () => {
   mockTranscribe.mockRejectedValueOnce(new Error('Response lost'));
-  await recordAndStop({});
+  await recordAndStop({}, useAndroidAudioRecording);
 
   const request = mockTranscribe.mock.calls[0][0];
   expect(request.clientTranscriptionId).toMatch(/^recording-.+/);

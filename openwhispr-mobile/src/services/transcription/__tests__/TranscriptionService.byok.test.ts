@@ -1,3 +1,13 @@
+import { Platform } from 'react-native';
+jest.mock('../transcriptionLifecycle', () => ({
+  get transcriptionLifecycle() {
+    return jest.requireActual(
+      require('react-native').Platform.OS === 'android'
+        ? '../transcriptionLifecycle.android'
+        : '../transcriptionLifecycle',
+    ).transcriptionLifecycle;
+  },
+}));
 import * as FileSystem from 'expo-file-system/legacy';
 import { BackgroundUploader } from '../../../../modules/background-uploader/src';
 import { resolveMobileProviderRoute } from '@/lib/inferenceRouting';
@@ -89,7 +99,13 @@ beforeEach(() => {
   mockResolvedProviderRoute = mockProviderRoute;
 });
 
-test('cancels BYOK transcription through its existing provider execution scope', async () => {
+const originalPlatform = Platform.OS;
+afterEach(() => {
+  Platform.OS = originalPlatform;
+});
+
+test('cancels Android BYOK transcription through its existing provider execution scope', async () => {
+  Platform.OS = 'android';
   const controller = new AbortController();
   let started!: () => void;
   const ready = new Promise<void>((resolve) => {

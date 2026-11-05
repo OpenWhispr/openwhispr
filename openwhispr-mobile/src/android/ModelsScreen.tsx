@@ -6,7 +6,7 @@ import { Text } from '@/components/ui/Text';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { SettingsSwitch } from '@/components/ui/SettingsSwitch';
-import { setPrivateMode } from '@/lib/workflowModeSwitch';
+import { setPrivateMode } from '@/lib/workflowModeSwitch.android';
 import {
   ANDROID_MODELS,
   modelReady,

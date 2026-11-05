@@ -1,8 +1,8 @@
 import 'expo-sqlite/localStorage/install';
 import * as FileSystem from 'expo-file-system/legacy';
 import { create } from 'zustand';
-import { activateAccountDatabase, blockAccountDatabase } from '@/db';
-import { runMigrations } from '@/db/migrate';
+import { activateAccountDatabase, blockAccountDatabase } from './database';
+import { runMigrations } from './migrations';
 import { openApplicationDatabase } from '@/db/connections';
 import { randomUUID } from '@/lib/uuid';
 
@@ -209,7 +209,7 @@ export async function eraseAccountData(userId: string): Promise<void> {
     });
     await Promise.all(audio.map((uri) => FileSystem.deleteAsync(uri, { idempotent: true })));
     const { StorageService } =
-      require('@/services/storage/StorageService') as typeof import('@/services/storage/StorageService');
+      require('@/services/storage/StorageService.android') as typeof import('@/services/storage/StorageService.android');
     await StorageService.eraseTranscriptOwner(`history:${account.audioNamespace || 'original'}`);
     const latest = readManifest();
     const erased = latest.accounts.find((entry) => entry.owner === account.owner);
@@ -257,7 +257,7 @@ export function prepareAccountData(user: User): void {
     useSharedDictionaryStore.getState().reset();
     selectAccountData(user);
     const { useNotesStore } =
-      require('@/store/useNotesStore') as typeof import('@/store/useNotesStore');
+      require('@/store/useNotesStore.android') as typeof import('@/store/useNotesStore.android');
     const { useDictionaryStore } =
       require('@/store/useDictionaryStore') as typeof import('@/store/useDictionaryStore');
     const { useSnippetsStore } =

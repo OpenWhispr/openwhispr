@@ -1,5 +1,5 @@
 import { act, renderHook } from '@testing-library/react-native';
-import { useActionProcessing } from '../useActionProcessing';
+import { useActionProcessing } from '../useActionProcessing.android';
 import { fitDictionaryOnDevice } from '@/lib/onDeviceDictionary';
 import { ReasoningService } from '@/services/reasoning/ReasoningService';
 import type { LlmDictionary } from '@/lib/snippets';

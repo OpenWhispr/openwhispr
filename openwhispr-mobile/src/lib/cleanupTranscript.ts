@@ -17,7 +17,7 @@ import { buildDictationHintTiers } from './dictationHints';
 import { splitLlmDictionary, type LlmDictionary } from './snippets';
 import { fitDictionaryOnDevice } from './onDeviceDictionary';
 import { buildProviderPrompt } from '@/services/reasoning/buildProviderPrompt';
-import { buildLocalReasoningInstructions } from '@/services/reasoning/LocalReasoningService';
+import { createTimeoutSignal, localCleanupInstructions } from './cleanupLifecycle';
 import {
   LOCAL_CLEANUP_MAX_TRANSCRIPT_TOKENS,
   countLocalReasoningTokens,
@@ -47,24 +47,6 @@ interface CleanupOptions
 export const CLEANUP_TIMEOUT_MS = 12_000;
 export const CLEANUP_MAX_RETRIES = 1;
 export const CLEANUP_INITIAL_RETRY_DELAY_MS = 750;
-
-function createTimeoutSignal(
-  timeoutMs: number,
-  parent?: AbortSignal,
-): { signal: AbortSignal; cancel: () => void } {
-  const controller = new AbortController();
-  const abort = () => controller.abort();
-  if (parent?.aborted) abort();
-  else parent?.addEventListener('abort', abort, { once: true });
-  const timeout = setTimeout(abort, timeoutMs);
-  return {
-    signal: controller.signal,
-    cancel: () => {
-      clearTimeout(timeout);
-      parent?.removeEventListener('abort', abort);
-    },
-  };
-}
 
 // Apple Intelligence writes a cleaned copy about as long as the transcript, at roughly 30 tokens a
 // second on an iPhone 15 Pro (Apple's figure), so a long one can't finish in Cloud's 12 s. The rate
@@ -225,7 +207,7 @@ export async function cleanupTranscript(
         const candidateRequest = withDictionary(candidate);
         const prompt = buildProviderPrompt(candidateRequest);
         return {
-          instructions: buildLocalReasoningInstructions({ ...candidateRequest, ...prompt }),
+          instructions: localCleanupInstructions(candidateRequest, prompt),
           prompt: prompt.text,
         };
       },
@@ -239,7 +221,7 @@ export async function cleanupTranscript(
     let retryCount = 0;
     const result = await withRetry(
       async () => {
-        const { signal, cancel } = createTimeoutSignal(timeoutMs, options.signal);
+        const { signal, cancel } = createTimeoutSignal(timeoutMs, options);
         try {
           return await ReasoningService.processText({ ...finalRequest, signal, timeoutMs });
         } finally {

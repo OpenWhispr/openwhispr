@@ -1,8 +1,11 @@
 import React from 'react';
 import { Platform, Alert, PermissionsAndroid } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
-import { MeetingRecordScreen } from '../MeetingRecordScreen';
-import { CloudMeetingFinishError } from '@/hooks/useCloudMeeting';
+import { MeetingRecordScreen as IOSMeetingRecordScreen } from '../MeetingRecordScreen';
+import { MeetingRecordScreen as AndroidMeetingRecordScreen } from '../MeetingRecordScreen.android';
+const MeetingRecordScreen = () =>
+  Platform.OS === 'android' ? <AndroidMeetingRecordScreen /> : <IOSMeetingRecordScreen />;
+import { CloudMeetingFinishError } from '@/hooks/useCloudMeeting.android';
 
 const mockCreateNote = jest.fn(() => ({ id: 7, content: '' }));
 const mockFinalize = jest.fn(async () => undefined);
@@ -10,6 +13,11 @@ const mockReplace = jest.fn();
 const mockLocalStart = jest.fn(async (): Promise<void> => undefined);
 const mockCancelLocal = jest.fn(async () => undefined);
 const mockStopCloud = jest.fn();
+const mockRegisterGate = jest.fn();
+const mockStopLocalRaw = jest.fn(async (): Promise<string | null> => 'file:///temporary.wav');
+const mockCopy = jest.fn<Promise<void>, [{ from: string; to: string }]>(async () => undefined);
+const mockStopIOSCloud = jest.fn(() => mockParts);
+let mockIOSCloudStatus = 'live';
 const mockRealtimeStart = jest.fn();
 let mockUseRealCloudHook = false;
 const mockParts = [{ itemId: 'kept', text: 'Captured meeting text.', startMs: 0, endMs: 1000 }];
@@ -96,7 +104,10 @@ jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) =>
 jest.mock('@react-navigation/native', () => ({ usePreventRemove: jest.fn() }));
 jest.mock('@react-navigation/elements', () => ({ useHeaderHeight: () => 0 }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ bottom: 0 }) }));
-jest.mock('expo-file-system/legacy', () => ({ documentDirectory: 'file:///app/documents/' }));
+jest.mock('expo-file-system/legacy', () => ({
+  documentDirectory: 'file:///app/documents/',
+  copyAsync: (options: { from: string; to: string }) => mockCopy(options),
+}));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/Button', () => ({ Button: require('react-native').Pressable }));
 jest.mock('@/components/features/WaveformVisualizer', () => ({ ProcessingWaveform: () => null }));
@@ -149,14 +160,19 @@ jest.mock('@/lib/calendar/meetingSuggestions', () => ({
 }));
 jest.mock('@/lib/transcriptionLanguage', () => ({ getPreferredTranscriptionLanguage: () => 'en' }));
 jest.mock('@/hooks/useAudioRecording', () => ({
-  useAudioRecording: () => ({ startRecording: mockLocalStart, cancelRecording: mockCancelLocal }),
+  useAudioRecording: () => ({
+    startRecording: mockLocalStart,
+    cancelRecording: mockCancelLocal,
+    stopRecordingRaw: mockStopLocalRaw,
+  }),
 }));
 jest.mock('@/hooks/useKeyboardHeight', () => ({ useKeyboardHeight: () => 0 }));
 jest.mock('@/hooks/useMeetingLiveActivity', () => ({ useMeetingLiveActivity: jest.fn() }));
 jest.mock('@/hooks/useSuperwallGate', () => ({
   useSuperwallGate: () => ({
-    register: async ({ feature }: { feature: () => void }) => {
-      mockFeature = feature;
+    register: async (options: { feature: () => void }) => {
+      mockRegisterGate(options);
+      mockFeature = options.feature;
     },
   }),
 }));
@@ -197,14 +213,22 @@ jest.mock('@/lib/accountAccess', () => ({
 }));
 jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
 jest.mock('@/lib/superwall', () => ({ SUPERWALL_PLACEMENTS: { meetingRecordStart: 'meeting' } }));
-jest.mock('@/services/transcription/RealtimeMeetingWsService', () => ({
+jest.mock('@/services/transcription/RealtimeMeetingWsService.android', () => ({
   startRealtimeMeetingWs: (...args: unknown[]) => mockRealtimeStart(...args),
 }));
 jest.mock('@/hooks/useCloudMeeting', () => ({
-  ...jest.requireActual('@/hooks/useCloudMeeting'),
+  useCloudMeeting: () => ({
+    stop: mockStopIOSCloud,
+    elapsedSeconds: 2,
+    status: mockIOSCloudStatus,
+    utterances: mockParts,
+  }),
+}));
+jest.mock('@/hooks/useCloudMeeting.android', () => ({
+  ...jest.requireActual('@/hooks/useCloudMeeting.android'),
   useCloudMeeting: (options: unknown) =>
     mockUseRealCloudHook
-      ? jest.requireActual('@/hooks/useCloudMeeting').useCloudMeeting(options)
+      ? jest.requireActual('@/hooks/useCloudMeeting.android').useCloudMeeting(options)
       : {
           stop: mockStopCloud,
           cancel: jest.fn(),
@@ -221,6 +245,12 @@ beforeEach(() => {
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   jest.spyOn(PermissionsAndroid, 'request').mockResolvedValue(PermissionsAndroid.RESULTS.GRANTED);
   mockOwnerValid = true;
+  mockIOSCloudStatus = 'live';
+  mockStopIOSCloud.mockReset().mockReturnValue(mockParts);
+  mockStopLocalRaw.mockReset().mockResolvedValue('file:///temporary.wav');
+  mockCopy.mockReset().mockResolvedValue(undefined);
+  mockNotes.isDiarizerAvailable.mockReset().mockResolvedValue(true);
+  mockNotes.isLocalAsrModelReady.mockReset().mockResolvedValue(true);
   mockUseRealLocalContext = false;
   mockAuthListeners.clear();
   mockNotes.transitionStatus.mockReset();
@@ -237,6 +267,9 @@ beforeEach(() => {
   mockMode = 'cloud';
   mockParams = { folderId: '2' };
   mockFeature = undefined;
+  mockBlur = undefined;
+  mockAuthListener = undefined;
+  mockModeListener = undefined;
   mockFinalize.mockReset().mockResolvedValue(undefined);
   mockStopCloud.mockReset().mockResolvedValue(mockParts);
   mockLocalStart.mockReset().mockResolvedValue(undefined);
@@ -380,7 +413,7 @@ it.each([true, false])(
   },
 );
 
-it('cancels local permission preparation after leaving without creating a note', async () => {
+it('retains upstream iOS local startup after a pending recording resolves', async () => {
   Platform.OS = 'ios';
   mockMode = 'private';
   let resolve!: () => void;
@@ -394,10 +427,11 @@ it('cancels local permission preparation after leaving without creating a note',
   await act(async () => fireEvent.press(view.getByTestId('begin')));
   await act(async () => mockFeature?.());
   expect(mockLocalStart).toHaveBeenCalledTimes(1);
+  expect(mockBlur).toBeUndefined();
   act(() => mockBlur?.());
   await act(async () => resolve());
-  expect(mockCancelLocal).toHaveBeenCalled();
-  expect(mockCreateNote).not.toHaveBeenCalled();
+  expect(mockCancelLocal).not.toHaveBeenCalled();
+  expect(mockCreateNote).toHaveBeenCalledTimes(1);
 });
 
 it('retries repeated save failures with the real hook without reopening microphone capture', async () => {
@@ -646,3 +680,200 @@ it('waits for native Stop before recovering after a rapid account return', async
   expect(mockSavedNote.transcriptionStatus).toBe('failed');
   expect(mockNotes.runMeetingPipeline).not.toHaveBeenCalled();
 });
+
+it('starts upstream iOS cloud recording directly without a local model or authorization gate', async () => {
+  Platform.OS = 'ios';
+  const view = render(<MeetingRecordScreen />);
+  await act(async () => fireEvent.press(view.getByTestId('begin')));
+  expect(mockRegisterGate).not.toHaveBeenCalled();
+  expect(mockNotes.isDiarizerAvailable).not.toHaveBeenCalled();
+  expect(mockCreateNote).toHaveBeenCalledWith({
+    folderId: 2,
+    spaceId: undefined,
+    expectedSpeakerCount: undefined,
+    calendarEventId: null,
+    title: null,
+    participants: null,
+    diarizationEnabled: false,
+  });
+  expect(view.getByTestId('stop')).toBeTruthy();
+});
+
+it('finalizes upstream iOS cloud recording with the synchronous utterances and three arguments', async () => {
+  Platform.OS = 'ios';
+  const view = render(<MeetingRecordScreen />);
+  await act(async () => fireEvent.press(view.getByTestId('begin')));
+  await act(async () => fireEvent.press(view.getByTestId('stop')));
+  expect(mockFinalize).toHaveBeenCalledWith(7, mockParts, 2);
+  expect(mockReplace).toHaveBeenCalledWith('/(tabs)/(notes)/7');
+});
+
+it('marks an upstream iOS failed empty cloud recording failed without finalizing', async () => {
+  Platform.OS = 'ios';
+  mockIOSCloudStatus = 'error';
+  mockStopIOSCloud.mockReturnValue([]);
+  const view = render(<MeetingRecordScreen />);
+  await act(async () => fireEvent.press(view.getByTestId('begin')));
+  await act(async () => fireEvent.press(view.getByTestId('stop')));
+  expect(mockFinalize).not.toHaveBeenCalled();
+  expect(mockNotes.transitionStatus).toHaveBeenCalledWith(7, 'failed');
+  expect(view.getByTestId('begin')).toBeTruthy();
+});
+
+it('returns upstream iOS to setup after cloud persistence fails', async () => {
+  Platform.OS = 'ios';
+  mockFinalize.mockRejectedValueOnce(new Error('database full'));
+  const view = render(<MeetingRecordScreen />);
+  await act(async () => fireEvent.press(view.getByTestId('begin')));
+  await act(async () => fireEvent.press(view.getByTestId('stop')));
+  expect(mockNotes.transitionStatus).toHaveBeenCalledWith(7, 'failed');
+  expect(mockReplace).not.toHaveBeenCalled();
+  expect(view.getByTestId('begin')).toBeTruthy();
+  expect(view.queryByText('meetingSaveFailedBody')).toBeNull();
+});
+
+it('preserves the upstream iOS unavailable-device explanation', async () => {
+  Platform.OS = 'ios';
+  mockMode = 'private';
+  mockNotes.isDiarizerAvailable.mockResolvedValueOnce(false);
+  const view = render(<MeetingRecordScreen />);
+  await act(async () => fireEvent.press(view.getByTestId('begin')));
+  expect(
+    view.getByText(
+      'Meeting diarization runs on the Apple Neural Engine and needs iOS 17+ in a development or production build (not Expo Go or other platforms).',
+    ),
+  ).toBeTruthy();
+  expect(mockCreateNote).not.toHaveBeenCalled();
+});
+
+it('shows the upstream iOS speech-model requirement before authorization', async () => {
+  Platform.OS = 'ios';
+  mockMode = 'private';
+  mockNotes.isLocalAsrModelReady.mockResolvedValueOnce(false);
+  const view = render(<MeetingRecordScreen />);
+  await act(async () => fireEvent.press(view.getByTestId('begin')));
+  expect(Alert.alert).toHaveBeenCalledWith(
+    'Speech model needed',
+    'Download a local speech model in Settings → AI Models → Dictation, then try again.',
+  );
+  expect(mockRegisterGate).not.toHaveBeenCalled();
+  expect(mockCreateNote).not.toHaveBeenCalled();
+});
+
+it('preserves upstream iOS start immediately after diarizer download', async () => {
+  Platform.OS = 'ios';
+  mockMode = 'private';
+  mockNotes.isDiarizerModelReady.mockResolvedValueOnce(false);
+  const view = render(<MeetingRecordScreen />);
+  await act(async () => fireEvent.press(view.getByTestId('begin')));
+  await act(async () => fireEvent.press(view.getByTestId('model-download')));
+  expect(mockNotes.downloadDiarizerModel).toHaveBeenCalledTimes(1);
+  expect(mockRegisterGate).not.toHaveBeenCalled();
+  expect(mockLocalStart).toHaveBeenCalledTimes(1);
+  expect(view.getByTestId('meeting-stop')).toBeTruthy();
+});
+
+it('returns upstream iOS to setup after canceling the diarizer prompt', async () => {
+  Platform.OS = 'ios';
+  mockMode = 'private';
+  mockNotes.isDiarizerModelReady.mockResolvedValueOnce(false);
+  const view = render(<MeetingRecordScreen />);
+  await act(async () => fireEvent.press(view.getByTestId('begin')));
+  await act(async () => fireEvent.press(view.getByTestId('model-cancel')));
+  expect(mockLocalStart).not.toHaveBeenCalled();
+  expect(view.getByTestId('begin')).toBeTruthy();
+});
+
+it('does not create an upstream iOS note after a failed recorder start', async () => {
+  Platform.OS = 'ios';
+  mockMode = 'private';
+  mockLocalStart.mockRejectedValueOnce(new Error('permission denied'));
+  const view = render(<MeetingRecordScreen />);
+  await act(async () => fireEvent.press(view.getByTestId('begin')));
+  await act(async () => mockFeature?.());
+  expect(mockCreateNote).not.toHaveBeenCalled();
+  expect(view.getByTestId('begin')).toBeTruthy();
+});
+
+it('cancels the upstream iOS recording when note creation fails', async () => {
+  Platform.OS = 'ios';
+  mockMode = 'private';
+  mockCreateNote.mockImplementationOnce(() => {
+    throw new Error('database full');
+  });
+  const view = render(<MeetingRecordScreen />);
+  await act(async () => fireEvent.press(view.getByTestId('begin')));
+  await act(async () => mockFeature?.());
+  expect(mockCancelLocal).toHaveBeenCalledTimes(1);
+  expect(view.getByTestId('begin')).toBeTruthy();
+});
+
+it.each(['success', 'missing-file', 'copy-error', 'pipeline-error'] as const)(
+  'preserves upstream iOS local completion: %s',
+  async (outcome) => {
+    Platform.OS = 'ios';
+    mockMode = 'private';
+    if (outcome === 'missing-file') mockStopLocalRaw.mockResolvedValueOnce(null);
+    if (outcome === 'copy-error') mockCopy.mockRejectedValueOnce(new Error('copy failed'));
+    if (outcome === 'pipeline-error')
+      mockNotes.runMeetingPipeline.mockRejectedValueOnce(new Error('processing failed'));
+    const view = render(<MeetingRecordScreen />);
+    await act(async () => fireEvent.press(view.getByTestId('begin')));
+    await act(async () => mockFeature?.());
+    fireEvent.changeText(view.getByTestId('meeting-raw-notes'), 'A draft decision');
+    await act(async () => fireEvent.press(view.getByTestId('meeting-stop')));
+    expect(mockNotes.updateNote).toHaveBeenCalledWith(7, { content: 'A draft decision' });
+    if (outcome === 'success') {
+      expect(mockCopy).toHaveBeenCalledWith({
+        from: 'file:///temporary.wav',
+        to: 'file:///app/documents/meeting-7.wav',
+      });
+      expect(mockNotes.runMeetingPipeline).toHaveBeenCalledWith(
+        7,
+        'file:///app/documents/meeting-7.wav',
+        undefined,
+      );
+      expect(mockReplace).toHaveBeenCalledWith('/(tabs)/(notes)/7');
+    } else {
+      expect(mockNotes.transitionStatus).toHaveBeenCalledWith(7, 'failed');
+      expect(mockReplace).not.toHaveBeenCalled();
+      expect(view.getByTestId('begin')).toBeTruthy();
+    }
+  },
+);
+
+it.each(['ios', 'android'] as const)(
+  'retains the %s draft debounce and avoids saving it twice on Stop',
+  async (platform) => {
+    jest.useFakeTimers();
+    Platform.OS = platform;
+    mockMode = 'private';
+    const view = render(<MeetingRecordScreen />);
+    await act(async () => fireEvent.press(view.getByTestId('begin')));
+    await act(async () => mockFeature?.());
+    fireEvent.changeText(view.getByTestId('meeting-raw-notes'), 'A saved decision');
+    act(() => jest.advanceTimersByTime(799));
+    expect(mockNotes.updateNote).not.toHaveBeenCalled();
+    act(() => jest.advanceTimersByTime(1));
+    expect(mockNotes.updateNote).toHaveBeenCalledTimes(1);
+    await act(async () => fireEvent.press(view.getByTestId('meeting-stop')));
+    expect(mockNotes.updateNote).toHaveBeenCalledTimes(1);
+    view.unmount();
+    jest.useRealTimers();
+  },
+);
+
+it('does not persist an Android recording draft after its owner changes', async () => {
+  jest.useFakeTimers();
+  const view = await startPrivateMeeting();
+  fireEvent.changeText(view.getByTestId('meeting-raw-notes'), 'Account A only');
+  mockOwnerValid = false;
+  act(() => jest.advanceTimersByTime(800));
+  expect(mockNotes.updateNote).not.toHaveBeenCalled();
+  view.unmount();
+  jest.useRealTimers();
+});
+
+jest.mock('@/components/notes/CloudMeetingRecording.android', () =>
+  jest.requireMock('@/components/notes/CloudMeetingRecording'),
+);

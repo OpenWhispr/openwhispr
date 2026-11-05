@@ -130,7 +130,6 @@ beforeEach(() => {
   jest.clearAllMocks();
   jest.useFakeTimers();
   mockUseAudioRecording.mockReturnValue({
-    isStarting: false,
     isRecording: false,
     isProcessing: false,
     currentText: '',

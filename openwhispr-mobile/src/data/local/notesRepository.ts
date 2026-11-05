@@ -1,5 +1,5 @@
 import { isManagedMeetingAudioUri } from '@/lib/transcriptAudio';
-import { meetingTranscriptionIdKey } from '@/lib/notes/meetingTranscriptionId';
+import { prepareNoteLocation, prepareNoteDeletion } from './notesRepositoryPlatform';
 import {
   eq,
   ne,
@@ -471,33 +471,16 @@ export class LocalNotesRepository implements NotesRepository {
   }
 
   createNote(title: string, content: string, folderId?: number, spaceId?: number): Note {
-    // Created straight into a space (browsing it with no folder open): the note
-    // sits in the space itself rather than in any folder.
-    const targetSpace =
-      spaceId == null
-        ? null
-        : this.database
-            .select()
-            .from(spaces)
-            .where(and(eq(spaces.id, spaceId), isNull(spaces.deletedAt)))
-            .get();
-    const privateFolders = targetSpace ? [] : this.getPrivateFolders();
-    const targetFolder = targetSpace
-      ? null
-      : (this.getFolders().find((folder) => folder.id === folderId) ??
-        privateFolders.find((folder) => folder.isDefault) ??
-        privateFolders[0] ??
-        null);
-    const targetFolderId = targetFolder?.id ?? null;
+    const location = prepareNoteLocation(this.database, this, folderId, spaceId);
     return this.database
       .insert(notes)
       .values({
         title,
         content,
-        folderId: targetFolderId,
+        folderId: location.folderId,
         // A note always belongs to whatever space holds its folder — filing a
         // team folder's note into the private space would strand it.
-        spaceId: targetFolder?.spaceId ?? targetSpace?.id ?? this.getPrivateSpaceId(),
+        spaceId: location.getSpaceId() ?? this.getPrivateSpaceId(),
         pendingSync: 1,
         updatedAt: sql`datetime('now')`,
       })
@@ -658,7 +641,7 @@ export class LocalNotesRepository implements NotesRepository {
   // meeting WAV must be removed explicitly on EVERY delete path (soft delete, hard delete,
   // remote-delete apply, and full wipe) — otherwise they orphan in the DB and on disk.
   private deleteNoteChildrenAndAudio(id: number): void {
-    this.clearSyncState(meetingTranscriptionIdKey(id));
+    prepareNoteDeletion(this, id);
     const row = this.database
       .select({ sourceFile: notes.sourceFile })
       .from(notes)

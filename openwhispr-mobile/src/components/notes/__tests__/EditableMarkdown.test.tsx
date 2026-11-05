@@ -186,7 +186,7 @@ it('translates editing controls without replacing an open draft or triggering a 
   const onEditingChange = jest.fn();
   const props = { content: '## Saved original', onChange, onEditingChange };
   try {
-    const view = render(<EditableMarkdown {...props} />);
+    let view = render(<EditableMarkdown {...props} />);
     fireEvent.press(view.getByText('Edit'));
     fireEvent.changeText(view.getByTestId('enhanced-editor'), '## Exact unsaved draft');
     onChange.mockClear();
@@ -202,8 +202,9 @@ it('translates editing controls without replacing an open draft or triggering a 
     expect(view.getByText('Bearbeiten')).toBeTruthy();
     expect(onEditingChange).toHaveBeenCalledTimes(1);
     expect(onEditingChange).toHaveBeenCalledWith(false);
+    view.unmount();
     Platform.OS = 'ios';
-    view.rerender(<EditableMarkdown {...props} />);
+    view = render(<EditableMarkdown {...props} />);
     expect(view.getByText('Edit')).toBeTruthy();
   } finally {
     Platform.OS = original;

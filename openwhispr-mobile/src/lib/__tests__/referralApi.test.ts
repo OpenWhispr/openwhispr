@@ -13,6 +13,9 @@ function loadReferralApi(
 } {
   jest.resetModules();
   jest.doMock('react-native', () => ({ Platform: { OS: platform } }));
+  jest.doMock('../sessionFetch', () =>
+    jest.requireActual(platform === 'android' ? '../sessionFetch.android' : '../sessionFetch'),
+  );
   const mockFetch = jest.fn();
   jest.doMock('expo/fetch', () => ({
     __esModule: true,
@@ -32,6 +35,7 @@ function loadReferralApi(
 
 afterEach(() => {
   jest.dontMock('react-native');
+  jest.dontMock('../sessionFetch');
   jest.dontMock('expo/fetch');
   jest.dontMock('expo-constants');
   jest.dontMock('@/store/useAuthStore');

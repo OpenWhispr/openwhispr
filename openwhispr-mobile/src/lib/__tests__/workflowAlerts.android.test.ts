@@ -4,6 +4,14 @@ import { router } from 'expo-router';
 import en from '@/locales/en/translation.json';
 import ar from '@/locales/ar/translation.json';
 
+jest.mock('@/lib/privateMode', () => ({
+  ...jest.requireActual('@/lib/privateMode'),
+  getPrivateModeUnavailableMessage: () =>
+    jest.requireActual('@/lib/privateMode.android').getPrivateModeUnavailableMessage(),
+}));
+
+jest.mock('@/lib/accountAccess', () => jest.requireActual('@/lib/accountAccess.android'));
+
 const mockUpdateConfig = jest.fn();
 const mockSetMode = jest.fn();
 const mockSpeechReady = jest.fn();
@@ -33,10 +41,13 @@ jest.mock('@/services/transcription/LocalTranscriptionService', () => ({
 jest.mock('@/lib/localReasoning', () => ({
   ...jest.requireActual('@/lib/localReasoning'),
   getLocalReasoningReadiness: () => mockTextReadiness(),
+  // Jest uses its default resolver; exercise the implementation Metro selects on Android.
+  getLocalReasoningUnavailableMessage: (...args: unknown[]) =>
+    jest.requireActual('../localReasoning.android').getLocalReasoningUnavailableMessage(...args),
 }));
 
 import { showAccountRequiredAlert } from '../accountAccess';
-import { switchWorkflowMode } from '../workflowModeSwitch';
+import { switchWorkflowMode } from '../workflowModeSwitch.android';
 
 const originalOS = Platform.OS;
 let alert: jest.SpyInstance;

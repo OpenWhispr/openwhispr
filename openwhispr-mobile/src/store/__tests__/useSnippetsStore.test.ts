@@ -11,7 +11,7 @@ jest.mock('@/db', () => ({
 }));
 jest.mock('@/sync/syncEngine', () => ({ requestSync: jest.fn() }));
 jest.mock('@/lib/uuid', () => ({ randomUUID: () => 'test-id' }));
-import { useSnippetsStore } from '../useSnippetsStore';
+import { useSnippetsStore } from '../useSnippetsStore.android';
 
 beforeEach(() => {
   raw = new Database(':memory:');

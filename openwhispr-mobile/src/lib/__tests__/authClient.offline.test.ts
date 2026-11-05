@@ -26,17 +26,11 @@ jest.mock('expo-secure-store', () => ({
 jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 jest.mock('../apiClient', () => ({ getClientVersionHeader: () => 'test' }));
 
-import { Platform } from 'react-native';
-import {
-  getSession,
-  getStoredSession,
-  deleteAccount,
-  initAuthenticatedUser,
-  checkUserExists,
-} from '../authClient';
+import { getSession, getStoredSession, deleteAccount } from '../authClient.android';
+import * as iosAuth from '../authClient';
+import * as androidAuth from '../authClient.android';
 import { fetch } from 'expo/fetch';
 
-const originalPlatform = Platform.OS;
 const user = {
   id: 'saved-user',
   email: 'saved@example.com',
@@ -55,23 +49,21 @@ const cachedSession = () => ({
 
 beforeEach(() => {
   jest.resetAllMocks();
-  Object.defineProperty(Platform, 'OS', { value: 'android', configurable: true });
   mockGetCookie.mockResolvedValue('__Secure-better-auth.session_token=dummy-test-token.signature');
   mockReadCache.mockResolvedValue(JSON.stringify(cachedSession()));
   mockClearCache.mockResolvedValue(undefined);
   mockGetSession.mockRejectedValue(new TypeError('Network request failed'));
 });
-afterAll(() => Object.defineProperty(Platform, 'OS', { value: originalPlatform }));
 
 it.each(['android', 'ios'] as const)(
   'uses only explicit cookies for direct auth requests on %s',
   async (platform) => {
-    Object.defineProperty(Platform, 'OS', { value: platform, configurable: true });
+    const auth = platform === 'android' ? androidAuth : iosAuth;
     const mockFetch = fetch as jest.Mock;
     mockFetch.mockResolvedValue({ ok: true, json: async () => ({ exists: true }) });
-    await deleteAccount();
-    await initAuthenticatedUser({ ...user, name: 'Synthetic' });
-    await expect(checkUserExists(user.email)).resolves.toBe('signin');
+    await auth.deleteAccount();
+    await auth.initAuthenticatedUser({ ...user, name: 'Synthetic' });
+    await expect(auth.checkUserExists(user.email)).resolves.toBe('signin');
 
     for (const [, init] of mockFetch.mock.calls) {
       expect(init.credentials).toBe(platform === 'android' ? 'omit' : undefined);
@@ -134,8 +126,9 @@ it.each([
 
 it('does not use cache for explicit sign-in validation or for iOS', async () => {
   await expect(getSession()).rejects.toThrow('Network request failed');
-  Object.defineProperty(Platform, 'OS', { value: 'ios', configurable: true });
-  await expect(getSession({ allowOfflineCache: true })).rejects.toThrow('Network request failed');
+  await expect(iosAuth.getSession({ allowOfflineCache: true })).rejects.toThrow(
+    'Network request failed',
+  );
   expect(mockReadCache).not.toHaveBeenCalled();
 });
 

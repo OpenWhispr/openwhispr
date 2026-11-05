@@ -40,7 +40,7 @@ function createFakeLocalStorage(): Storage {
   };
 }
 
-describe('runMigrations — spaces', () => {
+describe.each(['ios', 'android'] as const)('runMigrations — spaces (%s)', (platform) => {
   let raw: RawDb;
 
   beforeEach(() => {
@@ -61,8 +61,8 @@ describe('runMigrations — spaces', () => {
     jest.dontMock('expo-sqlite/localStorage/install');
   });
 
-  function loadMigrate(): typeof import('@/db/migrate') {
-    return require('@/db/migrate') as typeof import('@/db/migrate');
+  function loadMigrate(): typeof import('@/db/migrate.android') {
+    return require(platform === 'android' ? '../migrate.android' : '../migrate');
   }
 
   // Mirrors migrate.ts's very first (pre-spaces) CREATE TABLE shape for
@@ -220,119 +220,127 @@ describe('runMigrations — spaces', () => {
     insert.run('Meetings', 1, spaceId, 'remote-meetings', 'client-meetings');
   }
 
-  it('does not reseed defaults after an account switch gives synced folders new local ids', () => {
-    const { runMigrations } = loadMigrate();
-    runMigrations();
-    const spaceId = privateSpaces()[0].id;
-    raw.exec('DELETE FROM folders');
-    insertSyncedDefaults(spaceId);
-    raw.exec("INSERT INTO notes (title, content, folder_id) VALUES ('Retained', 'Keep this', 3)");
-    raw.prepare('INSERT INTO folders (name, space_id) VALUES (?, ?)').run('Personal', spaceId);
+  if (platform === 'android') {
+    it('does not reseed defaults after an account switch gives synced folders new local ids', () => {
+      const { runMigrations } = loadMigrate();
+      runMigrations();
+      const spaceId = privateSpaces()[0].id;
+      raw.exec('DELETE FROM folders');
+      insertSyncedDefaults(spaceId);
+      raw.exec("INSERT INTO notes (title, content, folder_id) VALUES ('Retained', 'Keep this', 3)");
+      raw.prepare('INSERT INTO folders (name, space_id) VALUES (?, ?)').run('Personal', spaceId);
 
-    runMigrations();
-    runMigrations();
+      runMigrations();
+      runMigrations();
 
-    expect(raw.prepare('SELECT id, name, remote_id FROM folders ORDER BY id').all()).toEqual([
-      { id: 3, name: 'Personal', remote_id: 'remote-personal' },
-      { id: 4, name: 'Meetings', remote_id: 'remote-meetings' },
-      { id: 5, name: 'Personal', remote_id: null },
-    ]);
-    expect(
-      raw.prepare("SELECT content, folder_id FROM notes WHERE title = 'Retained'").get(),
-    ).toEqual({
-      content: 'Keep this',
-      folder_id: 3,
+      expect(raw.prepare('SELECT id, name, remote_id FROM folders ORDER BY id').all()).toEqual([
+        { id: 3, name: 'Personal', remote_id: 'remote-personal' },
+        { id: 4, name: 'Meetings', remote_id: 'remote-meetings' },
+        { id: 5, name: 'Personal', remote_id: null },
+      ]);
+      expect(
+        raw.prepare("SELECT content, folder_id FROM notes WHERE title = 'Retained'").get(),
+      ).toEqual({
+        content: 'Keep this',
+        folder_id: 3,
+      });
     });
-  });
 
-  it('removes only empty untouched legacy seeds when a synced private default already exists', () => {
-    const { runMigrations } = loadMigrate();
-    runMigrations();
-    insertSyncedDefaults(privateSpaces()[0].id);
+    it('removes only empty untouched legacy seeds when a synced private default already exists', () => {
+      const { runMigrations } = loadMigrate();
+      runMigrations();
+      insertSyncedDefaults(privateSpaces()[0].id);
 
-    runMigrations();
-    runMigrations();
+      runMigrations();
+      runMigrations();
 
-    expect(
-      raw.prepare('SELECT id, remote_id, client_folder_id FROM folders ORDER BY id').all(),
-    ).toEqual([
-      { id: 3, remote_id: 'remote-personal', client_folder_id: 'client-personal' },
-      { id: 4, remote_id: 'remote-meetings', client_folder_id: 'client-meetings' },
-    ]);
-  });
+      expect(
+        raw.prepare('SELECT id, remote_id, client_folder_id FROM folders ORDER BY id').all(),
+      ).toEqual([
+        { id: 3, remote_id: 'remote-personal', client_folder_id: 'client-personal' },
+        { id: 4, remote_id: 'remote-meetings', client_folder_id: 'client-meetings' },
+      ]);
+    });
 
-  it.each([
-    "INSERT INTO notes (title, folder_id) VALUES ('Local note', 1)",
-    "INSERT INTO notes (title, folder_id, deleted_at) VALUES ('Recoverable note', 1, '2026-10-01')",
-    "UPDATE folders SET name = 'Journal' WHERE id = 1",
-    'UPDATE folders SET sort_order = 9 WHERE id = 1',
-    "UPDATE folders SET client_folder_id = 'existing-client' WHERE id = 1",
-    "UPDATE folders SET remote_id = 'different-remote' WHERE id = 1",
-    'UPDATE folders SET pending_sync = 1 WHERE id = 1',
-    "UPDATE folders SET updated_at = '2026-01-01' WHERE id = 1",
-    "INSERT INTO folder_delete_journal (folder_id, entity_type, entity_id, original_pending_sync) VALUES (1, 'folder', 1, 0)",
-  ])('preserves an existing seed and its references after customization: %s', (change) => {
-    const { runMigrations } = loadMigrate();
-    runMigrations();
-    insertSyncedDefaults(privateSpaces()[0].id);
-    raw.exec(change);
-    raw.prepare('UPDATE notes SET space_id = ? WHERE space_id IS NULL').run(privateSpaces()[0].id);
-    const before = raw.prepare('SELECT * FROM folders WHERE id = 1').get();
-    const notesBefore = raw.prepare('SELECT * FROM notes WHERE folder_id = 1').all();
-
-    runMigrations();
-
-    expect(raw.prepare('SELECT * FROM folders WHERE id = 1').get()).toEqual(before);
-    expect(raw.prepare('SELECT * FROM notes WHERE folder_id = 1').all()).toEqual(notesBefore);
-  });
-
-  it('does not mistake team defaults at legacy ids for the private default folders', () => {
-    const { runMigrations } = loadMigrate();
-    runMigrations();
-    raw.exec("INSERT INTO spaces (client_space_id, kind, name) VALUES ('team', 'team', 'Team')");
-    const teamId = (
-      raw.prepare("SELECT id FROM spaces WHERE kind = 'team'").get() as { id: number }
-    ).id;
-    raw.prepare('UPDATE folders SET space_id = ?, sort_order = 9').run(teamId);
-    const teamBefore = raw.prepare('SELECT * FROM folders WHERE space_id = ?').all(teamId);
-
-    runMigrations();
-
-    expect(
+    it.each([
+      "INSERT INTO notes (title, folder_id) VALUES ('Local note', 1)",
+      "INSERT INTO notes (title, folder_id, deleted_at) VALUES ('Recoverable note', 1, '2026-10-01')",
+      "UPDATE folders SET name = 'Journal' WHERE id = 1",
+      'UPDATE folders SET sort_order = 9 WHERE id = 1',
+      "UPDATE folders SET client_folder_id = 'existing-client' WHERE id = 1",
+      "UPDATE folders SET remote_id = 'different-remote' WHERE id = 1",
+      'UPDATE folders SET pending_sync = 1 WHERE id = 1',
+      "UPDATE folders SET updated_at = '2026-01-01' WHERE id = 1",
+      "INSERT INTO folder_delete_journal (folder_id, entity_type, entity_id, original_pending_sync) VALUES (1, 'folder', 1, 0)",
+    ])('preserves an existing seed and its references after customization: %s', (change) => {
+      const { runMigrations } = loadMigrate();
+      runMigrations();
+      insertSyncedDefaults(privateSpaces()[0].id);
+      raw.exec(change);
       raw
-        .prepare('SELECT name FROM folders WHERE space_id = ? ORDER BY sort_order')
-        .all(privateSpaces()[0].id),
-    ).toEqual([{ name: 'Personal' }, { name: 'Meetings' }]);
-    expect(raw.prepare('SELECT * FROM folders WHERE space_id = ?').all(teamId)).toEqual(teamBefore);
-  });
+        .prepare('UPDATE notes SET space_id = ? WHERE space_id IS NULL')
+        .run(privateSpaces()[0].id);
+      const before = raw.prepare('SELECT * FROM folders WHERE id = 1').get();
+      const notesBefore = raw.prepare('SELECT * FROM notes WHERE folder_id = 1').all();
 
-  it('seeds both defaults when a custom folder already occupies legacy id 1', () => {
-    createLegacyNotesAndFolders();
-    raw.exec("INSERT INTO folders (id, name, is_default, sort_order) VALUES (1, 'Research', 0, 7)");
+      runMigrations();
 
-    loadMigrate().runMigrations();
+      expect(raw.prepare('SELECT * FROM folders WHERE id = 1').get()).toEqual(before);
+      expect(raw.prepare('SELECT * FROM notes WHERE folder_id = 1').all()).toEqual(notesBefore);
+    });
 
-    expect(
-      raw.prepare('SELECT name, is_default, sort_order FROM folders ORDER BY id').all(),
-    ).toEqual([
-      { name: 'Research', is_default: 0, sort_order: 7 },
-      { name: 'Personal', is_default: 1, sort_order: 0 },
-      { name: 'Meetings', is_default: 1, sort_order: 1 },
-    ]);
-  });
+    it('does not mistake team defaults at legacy ids for the private default folders', () => {
+      const { runMigrations } = loadMigrate();
+      runMigrations();
+      raw.exec("INSERT INTO spaces (client_space_id, kind, name) VALUES ('team', 'team', 'Team')");
+      const teamId = (
+        raw.prepare("SELECT id FROM spaces WHERE kind = 'team'").get() as { id: number }
+      ).id;
+      raw.prepare('UPDATE folders SET space_id = ?, sort_order = 9').run(teamId);
+      const teamBefore = raw.prepare('SELECT * FROM folders WHERE space_id = ?').all(teamId);
 
-  it('preserves a deleted synced default rather than resurrecting it on launch', () => {
-    const { runMigrations } = loadMigrate();
-    runMigrations();
-    raw.exec('DELETE FROM folders');
-    insertSyncedDefaults(privateSpaces()[0].id);
-    raw.exec("UPDATE folders SET deleted_at = '2026-10-01' WHERE name = 'Meetings'");
-    const before = raw.prepare('SELECT * FROM folders ORDER BY id').all();
+      runMigrations();
 
-    runMigrations();
+      expect(
+        raw
+          .prepare('SELECT name FROM folders WHERE space_id = ? ORDER BY sort_order')
+          .all(privateSpaces()[0].id),
+      ).toEqual([{ name: 'Personal' }, { name: 'Meetings' }]);
+      expect(raw.prepare('SELECT * FROM folders WHERE space_id = ?').all(teamId)).toEqual(
+        teamBefore,
+      );
+    });
 
-    expect(raw.prepare('SELECT * FROM folders ORDER BY id').all()).toEqual(before);
-  });
+    it('seeds both defaults when a custom folder already occupies legacy id 1', () => {
+      createLegacyNotesAndFolders();
+      raw.exec(
+        "INSERT INTO folders (id, name, is_default, sort_order) VALUES (1, 'Research', 0, 7)",
+      );
+
+      loadMigrate().runMigrations();
+
+      expect(
+        raw.prepare('SELECT name, is_default, sort_order FROM folders ORDER BY id').all(),
+      ).toEqual([
+        { name: 'Research', is_default: 0, sort_order: 7 },
+        { name: 'Personal', is_default: 1, sort_order: 0 },
+        { name: 'Meetings', is_default: 1, sort_order: 1 },
+      ]);
+    });
+
+    it('preserves a deleted synced default rather than resurrecting it on launch', () => {
+      const { runMigrations } = loadMigrate();
+      runMigrations();
+      raw.exec('DELETE FROM folders');
+      insertSyncedDefaults(privateSpaces()[0].id);
+      raw.exec("UPDATE folders SET deleted_at = '2026-10-01' WHERE name = 'Meetings'");
+      const before = raw.prepare('SELECT * FROM folders ORDER BY id').all();
+
+      runMigrations();
+
+      expect(raw.prepare('SELECT * FROM folders ORDER BY id').all()).toEqual(before);
+    });
+  }
 
   it('running the migration twice re-backfills any row a caller nulled out in between', () => {
     const { runMigrations } = loadMigrate();
@@ -393,26 +401,30 @@ describe('runMigrations — spaces', () => {
     expect(conversationColumns).toEqual(['id', 'title', 'created_at', 'updated_at']);
   });
 
-  it('adds shared dictionary columns to each selected account database without changing existing words', () => {
-    const { runMigrations } = loadMigrate();
-    const account = new Database(':memory:');
-    try {
-      account.exec(`CREATE TABLE dictionary_entries (
+  if (platform === 'android') {
+    it('adds shared dictionary columns to each selected account database without changing existing words', () => {
+      const { runMigrations } = loadMigrate();
+      const account = new Database(':memory:');
+      try {
+        account.exec(`CREATE TABLE dictionary_entries (
         id INTEGER PRIMARY KEY AUTOINCREMENT, word TEXT NOT NULL,
         source TEXT NOT NULL DEFAULT 'manual', created_at TEXT DEFAULT (datetime('now')),
         updated_at TEXT DEFAULT (datetime('now'))
       ); INSERT INTO dictionary_entries(word) VALUES ('Amber');`);
-      const db = makeFakeExpoDb(account);
-      runMigrations(db as Parameters<typeof runMigrations>[0], false);
-      runMigrations(db as Parameters<typeof runMigrations>[0], false);
-      expect(
-        account.prepare('SELECT word, shared_at, shared_at_cleared FROM dictionary_entries').all(),
-      ).toEqual([{ word: 'Amber', shared_at: null, shared_at_cleared: 0 }]);
-      expect(
-        raw.prepare("SELECT name FROM sqlite_master WHERE name = 'dictionary_entries'").all(),
-      ).toEqual([]);
-    } finally {
-      account.close();
-    }
-  });
+        const db = makeFakeExpoDb(account);
+        runMigrations(db as Parameters<typeof runMigrations>[0], false);
+        runMigrations(db as Parameters<typeof runMigrations>[0], false);
+        expect(
+          account
+            .prepare('SELECT word, shared_at, shared_at_cleared FROM dictionary_entries')
+            .all(),
+        ).toEqual([{ word: 'Amber', shared_at: null, shared_at_cleared: 0 }]);
+        expect(
+          raw.prepare("SELECT name FROM sqlite_master WHERE name = 'dictionary_entries'").all(),
+        ).toEqual([]);
+      } finally {
+        account.close();
+      }
+    });
+  }
 });
