@@ -250,3 +250,43 @@ test("without a prepared capture the tap is built before the mic opens and attac
   assert.strictEqual(manager._batchPcmTap, tap);
   assert.deepEqual(events, ["tap", "acquire", "recorder", "attach:fresh"]);
 });
+
+for (const [label, resolution, previews] of [
+  ["a personal local setup starts its preview", "null", 1],
+  ["the enterprise route starts none", `{ kind: "managed" }`, 0],
+]) {
+  test(`recording with the preview on: ${label}`, async (t) => {
+    const { AudioManager, window } = await loadWithSettings(
+      t,
+      { ...offlineLocal, localTranscriptionProvider: "whisper", showTranscriptionPreview: true },
+      {
+        "/services/managedTranscription.ts": `
+          export const getManagedTranscriptionResolution = () => (${resolution});
+          export const isManagedTranscriptionActive = () => ${resolution !== "null"};
+        `,
+      }
+    );
+    const started = [];
+    window.electronAPI.startDictationPreview = (options) => started.push(options.model);
+    const originalAudioContext = globalThis.AudioContext;
+    const originalWorkletNode = globalThis.AudioWorkletNode;
+    globalThis.AudioContext = class {
+      createMediaStreamSource = () => ({ connect() {} });
+      audioWorklet = { addModule: async () => {} };
+      close = async () => {};
+    };
+    globalThis.AudioWorkletNode = class {
+      port = {};
+    };
+    t.after(() => {
+      globalThis.AudioContext = originalAudioContext;
+      globalThis.AudioWorkletNode = originalWorkletNode;
+    });
+    const manager = startingManager(AudioManager, { prepared: null, tap: null, events: [] });
+    manager.getWorkletBlobUrl = () => "blob:worklet";
+    t.after(() => manager.teardownSpeechGate());
+
+    assert.equal(await manager.startRecording(), true);
+    assert.equal(started.length, previews);
+  });
+}

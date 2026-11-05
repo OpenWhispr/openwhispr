@@ -189,6 +189,19 @@ export function useAddToTeamspace({
   const subject = state.kind === "running" || state.kind === "failed" ? state.subject : null;
   const failed = state.kind === "failed";
   const spaceName = subject ? isolate(subject.space.name) : "";
+  // No connection to check and nothing to try again: this user can't do this any more.
+  const ended =
+    state.kind === "failed" &&
+    (state.error.kind === "notAllowed" || state.error.kind === "ssoRequired")
+      ? state.error.kind
+      : null;
+
+  const dismiss = (): void => {
+    dispatch({ type: "dismiss" });
+    // The menu item that opened this is gone, so nothing hands focus back and it would drop to the
+    // page; the frame lets the dialog finish closing first.
+    requestAnimationFrame(() => returnFocusRef.current?.focus());
+  };
 
   const submenu = (
     <DropdownMenuSub onOpenChange={handleOpenChange}>
@@ -273,26 +286,29 @@ export function useAddToTeamspace({
             })
       }
       body={
-        failed
-          ? t("settingsPage.workspace.teamspaces.addPeople.failedBody", { space: spaceName })
-          : t("settingsPage.workspace.teamspaces.addPeople.addingBody", { space: spaceName })
+        ended === "notAllowed"
+          ? t("settingsPage.workspace.teamspaces.members.notAllowed", { space: spaceName })
+          : ended === "ssoRequired"
+            ? t("workspaces.ssoRequired", { workspace: isolate(workspace.name) })
+            : failed
+              ? t("settingsPage.workspace.teamspaces.addPeople.failedBody", { space: spaceName })
+              : t("settingsPage.workspace.teamspaces.addPeople.addingBody", { space: spaceName })
       }
       error={state.kind === "failed" && state.error.kind === "refused" ? state.error.message : null}
-      primary={{
-        label: failed
-          ? t("workspaces.exit.tryAgain")
-          : t("settingsPage.workspace.teamspaces.addPeople.addingAction"),
-        onClick: () => void addTo(subject.space),
-        tone: "primary",
-      }}
-      cancelLabel={t("common.cancel")}
+      primary={
+        ended
+          ? { label: t("common.close"), onClick: dismiss, tone: "primary" }
+          : {
+              label: failed
+                ? t("workspaces.exit.tryAgain")
+                : t("settingsPage.workspace.teamspaces.addPeople.addingAction"),
+              onClick: () => void addTo(subject.space),
+              tone: "primary",
+            }
+      }
+      cancelLabel={ended ? undefined : t("common.cancel")}
       busy={!failed}
-      onDismiss={() => {
-        dispatch({ type: "dismiss" });
-        // The menu item that opened this is gone, so nothing hands focus back and it would
-        // drop to the page; the frame lets the dialog finish closing first.
-        requestAnimationFrame(() => returnFocusRef.current?.focus());
-      }}
+      onDismiss={dismiss}
     />
   ) : null;
 

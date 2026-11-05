@@ -1,5 +1,7 @@
+import type { TFunction } from "i18next";
 import type { InviteFailure } from "./workspaceErrors";
 import type { InviteOutcome } from "../services/invitePeople";
+import { isolate } from "../utils/bidiIsolate";
 import { parseAddressList } from "../utils/emailApprovalFields";
 import { EMAIL_REGEX } from "../utils/validation";
 
@@ -180,12 +182,31 @@ function setDraft(state: InviteFlowState, text: string): InviteFlowState {
   return { ...withChips, draft: rest.trimStart() };
 }
 
-function shortfall(left: number | null, requested: number): SeatShortfall | null {
+export function shortfall(left: number | null, requested: number): SeatShortfall | null {
   if (left === null) return null;
   // The room left can be negative, since sends over the purchased seats only warn. With nothing
   // to send, that is still no shortfall.
   const available = Math.max(0, left);
   return requested <= available ? null : { available, excess: requested - available };
+}
+
+/** The warning when invitations would go past the seats a subscription has paid for. */
+export function seatsWarningMessage(
+  t: TFunction,
+  { available: count, excess }: SeatShortfall,
+  canManageBilling: boolean,
+  billingManager: string | null
+): string {
+  const askOwner = !canManageBilling && billingManager;
+  // With no seats left, removing the excess would mean removing everyone.
+  if (count === 0) {
+    return askOwner
+      ? t("workspaces.invite.seatsNoneAskOwner", { owner: isolate(askOwner) })
+      : t("workspaces.invite.seatsNone");
+  }
+  return askOwner
+    ? t("workspaces.invite.seatsLeftAskOwner", { count, excess, owner: isolate(askOwner) })
+    : t("workspaces.invite.seatsLeft", { count, excess });
 }
 
 // Something went out and only blocked chips are left, so there is nothing more to send or fix.

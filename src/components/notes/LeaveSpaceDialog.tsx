@@ -133,19 +133,31 @@ export function LeaveSpaceDialog({
   }
 
   if (state.kind === "failed") {
+    // No connection to check and nothing to try again: this user can't do this any more.
+    const ended = state.error.kind === "notAllowed" || state.error.kind === "ssoRequired";
     return (
       <WorkspaceActionDialog
         open
         icon="info"
         title={t("settingsPage.workspace.teamspaces.exit.leaveFailedTitle", { space: name })}
-        body={t("settingsPage.workspace.teamspaces.exit.leaveFailedBody")}
+        body={
+          state.error.kind === "notAllowed"
+            ? t("notes.spaces.accessRevoked", { space: name })
+            : state.error.kind === "ssoRequired"
+              ? t("enterprise.audio.errors.ssoRequired")
+              : t("settingsPage.workspace.teamspaces.exit.leaveFailedBody")
+        }
         error={state.error.kind === "refused" ? state.error.message : null}
-        primary={{
-          label: t("workspaces.exit.tryAgain"),
-          onClick: () => void run(),
-          tone: "primary",
-        }}
-        cancelLabel={t("common.cancel")}
+        primary={
+          ended
+            ? { label: t("common.close"), onClick: dismiss, tone: "primary" }
+            : {
+                label: t("workspaces.exit.tryAgain"),
+                onClick: () => void run(),
+                tone: "primary",
+              }
+        }
+        cancelLabel={ended ? undefined : t("common.cancel")}
         onDismiss={dismiss}
       />
     );

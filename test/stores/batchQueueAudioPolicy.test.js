@@ -39,7 +39,7 @@ async function setup(t) {
     cachePrefix: "openwhispr-audio-policy-batch-",
     mockModules: {
       "/services/fileTranscription": `export async function transcribeFileWithSpeakers(...args) { globalThis.__audioPolicyBatch.calls.push(args); return globalThis.__audioPolicyBatch.transcribe(); }`,
-      "/services/managedTranscription": `export const isManagedTranscriptionActive = () => true;`,
+      "/services/managedTranscription": `export const isManagedTranscriptionActive = () => !globalThis.__audioPolicyBatch.localRoute;`,
       "/services/uploadNotes": `export async function saveUploadNote(...args) { globalThis.__audioPolicyBatch.saved.push(args); return { success: true, note: { id: 7 } }; } export const uploadTitleFallback = () => "Audio";`,
       "/stores/settingsStore": `export const getSettings = () => ({});`,
     },
@@ -65,7 +65,12 @@ async function setup(t) {
     store.useBatchQueueStore
       .getState()
       .queue.map(({ status, error, stoppedByPolicy }) => ({ status, error, stoppedByPolicy }));
-  return { store, calls, saved, cancelled, results, setPolicy, usePolicyStore, run, items };
+  return { store, vite, calls, saved, cancelled, results, setPolicy, usePolicyStore, run, items };
+}
+
+async function setupShared(t) {
+  installBrowserGlobals(t);
+  return createRendererServer(t, { cachePrefix: "openwhispr-upload-refusal-codes-" });
 }
 
 test("upload restrictions prevent a managed-provider batch from starting", async (t) => {
@@ -102,8 +107,6 @@ test("an upload restriction cancels an active batch and discards late results; m
 
 test("a batch stopped by policy shows the page banner's reason for that policy", async (t) => {
   for (const [policy, expected] of [
-    [{ status: "error", policy: null }, en.common.policyUnresolved],
-    [{ status: "loading", policy: null }, en.common.policyUnresolved],
     [
       {
         status: "managed",
@@ -119,6 +122,18 @@ test("a batch stopped by policy shows the page banner's reason for that policy",
     assert.equal(items()[0].error, expected, policy.status);
   }
 });
+
+for (const status of ["error", "loading"]) {
+  test(`a policy that's ${status} leaves a running batch running`, async (t) => {
+    const { store, cancelled, usePolicyStore, run } = await setup(t);
+    await run();
+
+    usePolicyStore.setState({ status, policy: null });
+
+    assert.equal(store.useBatchQueueStore.getState().isProcessing, true);
+    assert.equal(cancelled.length, 0);
+  });
+}
 
 test("a server's policy refusal ends the run and leaves the rest queued", async (t) => {
   const { store, calls, results, run, items } = await setup(t);
@@ -171,4 +186,66 @@ test("Cancel all still cancels every unfinished item", async (t) => {
       { status: "error", error: "batchCancelled" },
     ]
   );
+});
+
+for (const [label, settings, approved, keeps] of [
+  ["revoking its model stops the run", {}, ["small"], false],
+  ["a list that still approves its model leaves it running", {}, ["base", "small"], true],
+  [
+    "a cloud upload with a stale refused model keeps running",
+    { uploadTranscriptionMode: "openwhispr", uploadUseLocalWhisper: false },
+    ["small"],
+    true,
+  ],
+]) {
+  test(`a batch: ${label}`, async (t) => {
+    const { managedPolicy } = require("../helpers/harness/policyFixtures");
+    const { store, cancelled, usePolicyStore, run, items, vite } = await setup(t);
+    globalThis.__audioPolicyBatch.localRoute = true;
+    const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+    useSettingsStore.setState({
+      uploadTranscriptionMode: "local",
+      uploadUseLocalWhisper: true,
+      uploadLocalTranscriptionProvider: "whisper",
+      uploadWhisperModel: "base",
+      localTranscriptionProvider: "whisper",
+      whisperModel: "base",
+      ...settings,
+    });
+    const approve = (allowedLocalModels) =>
+      usePolicyStore.setState({
+        status: "managed",
+        appVersion: "1.11.1",
+        policy: managedPolicy({
+          transcription: { allowedModes: ["local", "openwhispr"], allowedLocalModels },
+        }),
+      });
+    approve(["base"]);
+    await run();
+
+    approve(approved);
+
+    assert.equal(store.useBatchQueueStore.getState().isProcessing, keeps);
+    assert.equal(cancelled.length, keeps ? 0 : 1);
+    if (!keeps) {
+      assert.deepEqual(items(), [
+        { status: "error", error: en.models.policy.modelBlocked, stoppedByPolicy: true },
+        { status: "queued", error: undefined, stoppedByPolicy: undefined },
+      ]);
+    }
+  });
+}
+
+test("a local model refusal stops a batch, as every later item would meet it too", async (t) => {
+  const { isUploadPolicyRefusal } = await (
+    await setupShared(t)
+  ).ssrLoadModule("/components/notes/shared.ts");
+  for (const code of [
+    "POLICY_MODEL_BLOCKED",
+    "POLICY_LOCAL_MODE_BLOCKED",
+    "POLICY_APP_VERSION_BLOCKED",
+  ]) {
+    assert.equal(isUploadPolicyRefusal({ code }), true, code);
+  }
+  assert.equal(isUploadPolicyRefusal({ code: "NETWORK_ERROR" }), false);
 });

@@ -18,6 +18,7 @@ import { useWorkspace } from "../../hooks/useWorkspace";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { useAuth } from "../../hooks/useAuth";
 import { useDelayedFlag } from "../../hooks/useDelayedFlag";
+import { SpaceInviteSeatNotice } from "./SpaceInviteSeatNotice";
 import SpaceNameField from "./SpaceNameField";
 import { SpacePeopleField } from "./SpacePeopleField";
 import { workspaceCan } from "../../lib/capabilities";
@@ -147,12 +148,15 @@ export default function CreateSpaceDialog({
     }
   }, []);
 
+  // By id: a fresh workspace list replaces the object, and reloading would remount the people
+  // field.
+  const workspaceId = workspace?.id;
   useEffect(() => {
-    if (open && workspace) {
-      void loadMembers(workspace.id);
-      void loadTeams(workspace.id);
+    if (open && workspaceId) {
+      void loadMembers(workspaceId);
+      void loadTeams(workspaceId);
     }
-  }, [open, workspace, loadMembers, loadTeams]);
+  }, [open, workspaceId, loadMembers, loadTeams]);
 
   useEffect(() => {
     if (!open) return;
@@ -266,8 +270,8 @@ export default function CreateSpaceDialog({
     setTakenName(null);
   };
 
-  const handleWorkspaceChange = (workspaceId: string): void => {
-    setSelectedWorkspaceId(workspaceId);
+  const handleWorkspaceChange = (next: string): void => {
+    setSelectedWorkspaceId(next);
     setPicked([]);
     setMembersError(false);
     setFailure(null);
@@ -335,7 +339,9 @@ export default function CreateSpaceDialog({
         setFailure(
           classified.kind === "refused"
             ? { kind: "refused", message: classified.message }
-            : { kind: "general" }
+            : classified.kind === "ssoRequired"
+              ? { kind: "refused", message: t("enterprise.audio.errors.ssoRequired") }
+              : { kind: "general" }
         );
         setRefocus("primary");
       }
@@ -577,6 +583,9 @@ export default function CreateSpaceDialog({
                       disabled={isCreating}
                       placeholder={t("settingsPage.workspace.teamspaces.form.peoplePlaceholder")}
                     />
+                  )}
+                  {workspaceId && emails.length > 0 && !isCreating && (
+                    <SpaceInviteSeatNotice workspaceId={workspaceId} addressCount={emails.length} />
                   )}
                 </div>
               )}

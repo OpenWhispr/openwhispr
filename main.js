@@ -260,6 +260,9 @@ if (!protocolRegistered) {
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
 if (!gotSingleInstanceLock) {
+  console.warn(
+    "[Startup] Could not acquire the single-instance lock; another OpenWhispr instance may already be running. Exiting."
+  );
   app.exit(0);
 }
 
@@ -1233,6 +1236,7 @@ async function startApp() {
   });
 
   await migrateCookieToBearerToken();
+  ipcHandlers.loadLocalModelPolicy();
 
   applyOpenWhisprOriginHeader(session.defaultSession);
 
@@ -2175,6 +2179,15 @@ if (gotSingleInstanceLock) {
       sidecarRegistry.shutdownAll(),
       Promise.race([
         ipcHandlers?.metaActivation?.shutdown(),
+        new Promise((resolve) => setTimeout(resolve, 1500)),
+      ]),
+      // A teamspace delete still in its Undo window, which the toast already reported as done.
+      Promise.race([
+        isLiveWindow(windowManager?.controlPanelWindow)
+          ? windowManager.controlPanelWindow.webContents.executeJavaScript(
+              "window.commitHeldSpaceDeletes?.()"
+            )
+          : undefined,
         new Promise((resolve) => setTimeout(resolve, 1500)),
       ]),
     ]).finally(() => app.exit(0));

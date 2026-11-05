@@ -140,22 +140,40 @@ function errorMessage(err: unknown): string | undefined {
 }
 
 // No usable response: the request may have been carried out before the answer was lost, which a
-// gateway's 5xx can't rule out either. A status 0 with a code is main refusing the request itself
-// (a changed session), which never went out.
+// gateway's 5xx can't rule out either, and main gives every 503 the code SERVER_ERROR. Any other
+// code at status 0 is main refusing the request itself (a changed session), which never went out.
 function isLostAnswer(err: unknown): boolean {
-  return err instanceof CloudApiError && !err.code && (!err.status || err.status >= 500);
+  return (
+    err instanceof CloudApiError &&
+    (!err.code || err.code === "SERVER_ERROR") &&
+    (!err.status || err.status >= 500)
+  );
 }
 
 export function createSpaceActions(deps: SpaceActionsDependencies) {
   const openHolds = new Set<{ commit: () => Promise<unknown> }>();
 
   // Creates whose answer was lost and which the follow-up read couldn't settle, by when they were
-  // tried. A dropped connection usually takes that read down too, so the retry settles it instead.
-  const unsettledCreates = new Map<string, number>();
+  // tried and what they asked for. A dropped connection usually takes that read down too, so the
+  // retry settles it instead.
+  const unsettledCreates = new Map<string, { triedAt: number; request: string }>();
   const normalizedName = (name: string): string => name.trim().toLowerCase();
   // A team and a teamspace may share a name, so one's create never settles the other's.
   const createKey = (kind: "space" | "team", workspaceId: string, name: string): string =>
     `${kind}\0${workspaceId}\0${normalizedName(name)}`;
+  // What a teamspace retry can change since the try it may repeat; the name is in the key.
+  const createRequest = (
+    input: CreateSpaceInput,
+    access: { memberIds: string[]; teamIds: string[] }
+  ): string =>
+    JSON.stringify([
+      input.emoji ?? null,
+      input.description ?? null,
+      input.is_default ?? false,
+      input.is_open ?? false,
+      [...access.memberIds].sort(),
+      [...access.teamIds].sort(),
+    ]);
 
   // Sends a create and, when its answer may have been lost, looks for what it made. A lost answer
   // is no answer at all (see isLostAnswer); a taken name counts as one too while an earlier try of
@@ -167,6 +185,10 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
       send: () => Promise<T>;
       isNameTaken: (err: unknown) => boolean;
       find: (triedAt: number) => Promise<T | null | undefined>;
+      // What this try asked for. An unsettled earlier try that asked for something else is not
+      // adopted, since that would silently drop what this try changed; its answer stands. Omitted
+      // when the caller applies this try's request to whatever it recovers.
+      request?: string;
     }
   ): Promise<T> {
     const triedAt = Date.now();
@@ -176,16 +198,23 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
       return created;
     } catch (err) {
       const lastTry = unsettledCreates.get(key);
-      const unsettledAt =
-        lastTry !== undefined && triedAt - lastTry <= UNSETTLED_CREATE_TTL_MS ? lastTry : undefined;
+      const unsettled =
+        lastTry !== undefined && triedAt - lastTry.triedAt <= UNSETTLED_CREATE_TTL_MS
+          ? lastTry
+          : undefined;
+      const unsettledAt = unsettled?.triedAt;
+      const request = attempt.request ?? "";
+      const changed =
+        attempt.request !== undefined && unsettled !== undefined && unsettled.request !== request;
       const mayBeOurs =
-        isLostAnswer(err) || (unsettledAt !== undefined && attempt.isNameTaken(err));
+        !changed && (isLostAnswer(err) || (unsettledAt !== undefined && attempt.isNameTaken(err)));
       if (!mayBeOurs) {
         unsettledCreates.delete(key);
         throw err;
       }
       const found = await attempt.find(unsettledAt ?? triedAt);
-      if (found === undefined) unsettledCreates.set(key, unsettledAt ?? triedAt);
+      if (found === undefined)
+        unsettledCreates.set(key, { triedAt: unsettledAt ?? triedAt, request });
       else unsettledCreates.delete(key);
       if (!found) throw err;
       return found;
@@ -255,6 +284,7 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
         }),
       isNameTaken: (err) => classifySpaceError(err).kind === "nameTaken",
       find: (triedAt) => findLostCreate(workspaceId, input.name, triedAt),
+      request: createRequest(input, access),
     });
     const space = await deps.local.upsertSpaceFromCloud(
       cloudSpace as unknown as Record<string, unknown>
@@ -323,7 +353,7 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
         // The team is still unreported, so the next try may recover it again. Marked with the
         // original time: a later one would drift out of the lost-create window of the team's
         // creation as retries pile up.
-        unsettledCreates.set(key, originalTryAt ?? Date.now());
+        unsettledCreates.set(key, { triedAt: originalTryAt ?? Date.now(), request: "" });
         throw err;
       }
     }
@@ -428,10 +458,12 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     return holdForAccount(space, deps.deleteHold.accountGeneration());
   }
 
-  // The toast that ends the window goes with the page, and it told the user this was deleted.
-  // Best effort: a request the app quits before sending leaves the teamspace as it was.
-  function commitHeldDeletes(): void {
-    for (const hold of openHolds) void hold.commit();
+  // The toast that ends the window goes with the page or the app, and it told the user this was
+  // deleted. Best effort: quit waits 1.5 s for this (main.js). Offline, on a slower server, or
+  // after a force-quit, a crash or an update install the delete may not land: the teamspace and its
+  // public link stay, and it comes back at the next launch with no notice.
+  async function commitHeldDeletes(): Promise<void> {
+    await Promise.allSettled([...openHolds].map((hold) => hold.commit()));
   }
 
   function holdForAccount(space: SpaceItem, accountGeneration: number): SpaceDeleteHold {

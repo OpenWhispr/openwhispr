@@ -209,6 +209,7 @@
     "skip": "Überspringen",
     "policyAiProcessingRestricted": "Die KI-Verarbeitung ist durch Ihre Organisation eingeschränkt.",
     "policyAgentRestricted": "Die Nutzung des KI-Assistenten ist durch Ihre Organisation eingeschränkt.",
+    "policyAccountChanged": "Ihr Konto hat sich geändert, daher wurde diese Antwort abgebrochen.",
     "policyTranscriptionRestricted": "Die Transkription ist durch Ihre Organisation eingeschränkt.",
     "policyUnresolved": "Die Einstellungen Ihrer Organisation wurden noch nicht geladen. Versuchen Sie es gleich noch einmal.",
     "managedConfigLoading": "Die verwaltete Einrichtung Ihrer Organisation wird überprüft. Versuchen Sie es gleich noch einmal.",
@@ -441,6 +442,9 @@
         "descriptionLineOne": "Wählen Sie die Modelle, die",
         "descriptionLineTwo": "auf Ihrem Gerät laufen sollen.",
         "providerLabel": "Anbieter",
+        "cohereLanguageLabel": "Diktiersprache",
+        "cohereLanguageHint": "Cohere erkennt Ihre Sprache nicht automatisch. Wählen Sie die Sprache, in der Sie diktieren.",
+        "cohereLanguagePlaceholder": "Sprache auswählen",
         "download": "Herunterladen",
         "downloadingShort": "Wird geladen",
         "selected": "Ausgewählt",
@@ -583,7 +587,8 @@
       "queued": "In Warteschlange",
       "failed": {
         "title": "Ein Download wurde nicht abgeschlossen",
-        "description": "Prüfen Sie Ihre Verbindung und den freien Speicherplatz und versuchen Sie es erneut. Wenn der Fehler weiterhin auftritt, wenden Sie sich an Ihren Administrator."
+        "description": "Prüfen Sie Ihre Verbindung und den freien Speicherplatz und versuchen Sie es erneut. Wenn der Fehler weiterhin auftritt, wenden Sie sich an Ihren Administrator.",
+        "notApproved": "Ihre Organisation hat dieses Modell nicht genehmigt. Sie können ohne es fortfahren."
       }
     },
     "permissionGuide": {
@@ -983,9 +988,9 @@
       },
       "translationFallback": {
         "unreachableTitle": "Übersetzung nicht verfügbar",
-        "unreachableDescription": "Dein Diktat wurde unübersetzt eingefügt. Überprüfe die Übersetzungseinstellungen.",
+        "unreachableDescription": "Dein Diktat bleibt in der Originalsprache. Überprüfe die Übersetzungseinstellungen.",
         "failedTitle": "Übersetzung fehlgeschlagen",
-        "failedDescription": "Der Originaltext wurde eingefügt. Du kannst es im Verlauf erneut versuchen."
+        "failedDescription": "Dein Diktat bleibt in der Originalsprache. Du kannst es im Verlauf erneut versuchen."
       },
       "pushForceStopped": {
         "title": "Transkription nicht eingefügt",
@@ -1020,7 +1025,10 @@
         "manualPaste": "Kopiere deinen Text unten und drücke dann {{shortcut}}, um ihn einzufügen.",
         "openSettings": "Einstellungen öffnen",
         "copyToClipboard": "Text kopieren",
-        "copyFailed": "Kopieren fehlgeschlagen"
+        "copyFailed": "Kopieren fehlgeschlagen",
+        "copiedTitle": "Kopiert, nicht eingefügt",
+        "copiedDescription": "Dein Text ist in der Zwischenablage. Automatisches Einfügen benötigt die Bedienungshilfen-Berechtigung. Drücke {{shortcut}}, um manuell einzufügen.",
+        "dontShowAgain": "Nicht mehr anzeigen"
       },
       "pasteFailed": {
         "title": "Automatisches Einfügen fehlgeschlagen"
@@ -2700,10 +2708,10 @@
         "resetToDefault": "Auf {{hotkey}} zurücksetzen",
         "title": "Diktat-Hotkey",
         "linuxPttPermissionTitle": "Gedrückt halten zum Sprechen erfordert zusätzliche Einrichtung",
-        "linuxPttPermissionDescription": "Führen Sie diesen Befehl aus und melden Sie sich ab/an: sudo usermod -aG input $USER",
+        "linuxPttPermissionDescription": "Führen Sie diesen Befehl aus, melden Sie sich dann von Ihrem Linux-Benutzerkonto ab und wieder an: sudo usermod -aG input $USER",
         "linuxPttSetupTitle": "Gedrückt halten zum Sprechen erfordert Einrichtung",
         "linuxPttSetupDescription": "Ihr Benutzer benötigt Zugriff auf die Tastatureingabegeräte.",
-        "linuxPttSetupNote": "Melden Sie sich nach dem Ausführen des Befehls ab und wieder an.",
+        "linuxPttSetupNote": "Melden Sie sich nach dem Ausführen des Befehls von Ihrem Linux-Benutzerkonto ab und dann wieder an.",
         "hyprlandConfigWriteWarningTitle": "Hyprland-Tastenkombinationen werden nicht dauerhaft gespeichert",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr kann nicht in {{path}} schreiben. Deshalb bleiben Tastenkombinationen nach einem Neuladen der Hyprland-Konfiguration nicht erhalten. Stellen Sie sicher, dass die Datei existiert und beschreibbar ist.",
         "hyprlandUnbindDescription": "Unter Hyprland beansprucht OpenWhispr die ausgewählte Tastenkombination. Jede vorhandene Hyprland-Belegung mit derselben Tastenkombination wird aufgehoben, wenn OpenWhispr seine Tastenkombination registriert."
@@ -3307,6 +3315,21 @@
       "contextTooLargeGeneric": "Das ist zu lang, als dass {{model}} es auf diesem Computer lesen könnte. Versuchen Sie ein Cloud-Modell oder führen Sie die Aktion für eine kürzere Auswahl aus.",
       "localServerUnavailable": "{{model}} konnte auf diesem Computer nicht gestartet werden. Versuchen Sie es erneut oder wechseln Sie zu einem Cloud-Modell.",
       "localModelBusy": "Das lokale Modell bearbeitet noch eine andere Anfrage. Warten Sie, bis sie abgeschlossen ist, und versuchen Sie es dann erneut."
+    },
+    "policy": {
+      "guidance": "Ihre Organisation hat diese Modelle genehmigt. Wählen Sie eines, das zu Ihrem Computer passt.",
+      "notApproved": "Von Ihrer Organisation nicht genehmigt",
+      "noneSupported": "Ihre Organisation hat kein lokales Modell genehmigt, das diese App-Version unterstützt. Aktualisieren Sie OpenWhispr oder wenden Sie sich an Ihre Administration.",
+      "emptyIntersection": "Ihre Arbeitsbereiche haben kein gemeinsames genehmigtes lokales Modell. Wenden Sie sich an Ihre Administration.",
+      "modelBlocked": "Wählen Sie ein von Ihrer Organisation genehmigtes lokales Modell.",
+      "modeBlocked": "Ihre Organisation hat die lokale Verarbeitung deaktiviert.",
+      "unresolved": "Die Arbeitsbereichsrichtlinie konnte nicht ermittelt werden. Stellen Sie eine Verbindung her und versuchen Sie es erneut.",
+      "versionBlocked": "Aktualisieren Sie OpenWhispr, um die genehmigten Modelle Ihrer Organisation zu nutzen.",
+      "updateRequired": "Update erforderlich",
+      "unavailable": "Derzeit nicht verfügbar",
+      "installedTitle": "Installierte lokale Modelle",
+      "installedHint": "Ihre Organisation hat die lokale Verarbeitung deaktiviert, daher können diese Modelle nicht ausgeführt werden. Sie bleiben auf Ihrem Computer, bis Sie sie löschen.",
+      "chooseModel": "Lokales Modell auswählen"
     }
   },
   "insights": {

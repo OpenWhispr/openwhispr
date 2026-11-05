@@ -209,6 +209,7 @@
     "skip": "スキップ",
     "policyAiProcessingRestricted": "AI処理は組織によって制限されています。",
     "policyAgentRestricted": "AIアシスタントの使用は組織によって制限されています。",
+    "policyAccountChanged": "アカウントが変更されたため、この回答を停止しました。",
     "policyTranscriptionRestricted": "文字起こしは組織によって制限されています。",
     "policyUnresolved": "組織の設定がまだ読み込まれていません。しばらくしてからもう一度お試しください。",
     "managedConfigLoading": "組織のマネージド設定を確認しています。しばらくしてからもう一度お試しください。",
@@ -441,6 +442,9 @@
         "descriptionLineOne": "デバイス上で実行する",
         "descriptionLineTwo": "モデルを選択してください。",
         "providerLabel": "プロバイダー",
+        "cohereLanguageLabel": "音声入力の言語",
+        "cohereLanguageHint": "Cohere は話している言語を自動検出できません。音声入力に使う言語を選択してください。",
+        "cohereLanguagePlaceholder": "言語を選択",
         "download": "ダウンロード",
         "downloadingShort": "ダウンロード中",
         "selected": "選択済み",
@@ -583,7 +587,8 @@
       "queued": "待機中",
       "failed": {
         "title": "ダウンロードが完了しませんでした",
-        "description": "接続とディスクの空き容量を確認して、再試行してください。それでも失敗する場合は、管理者にお問い合わせください。"
+        "description": "接続とディスクの空き容量を確認して、再試行してください。それでも失敗する場合は、管理者にお問い合わせください。",
+        "notApproved": "組織はこのモデルを承認していません。このモデルなしで続行できます。"
       }
     },
     "permissionGuide": {
@@ -983,9 +988,9 @@
       },
       "translationFallback": {
         "unreachableTitle": "翻訳を利用できません",
-        "unreachableDescription": "口述内容は翻訳されずに貼り付けられました。翻訳設定を確認してください。",
+        "unreachableDescription": "口述内容は元の言語のままです。翻訳設定を確認してください。",
         "failedTitle": "翻訳に失敗しました",
-        "failedDescription": "元のテキストが貼り付けられました。履歴から再試行できます。"
+        "failedDescription": "口述内容は元の言語のままです。履歴から再試行できます。"
       },
       "pushForceStopped": {
         "title": "文字起こしは貼り付けられませんでした",
@@ -1020,7 +1025,10 @@
         "manualPaste": "下のボタンでテキストをコピーし、{{shortcut}}を押して貼り付けてください。",
         "openSettings": "設定を開く",
         "copyToClipboard": "テキストをコピー",
-        "copyFailed": "コピーに失敗しました"
+        "copyFailed": "コピーに失敗しました",
+        "copiedTitle": "コピー済み・未貼り付け",
+        "copiedDescription": "テキストはクリップボードにコピーされました。自動貼り付けにはアクセシビリティの権限が必要です。{{shortcut}} で手動で貼り付けられます。",
+        "dontShowAgain": "今後表示しない"
       },
       "pasteFailed": {
         "title": "自動貼り付けに失敗しました"
@@ -2014,10 +2022,10 @@
         "resetToDefault": "{{hotkey}}にリセット",
         "title": "ディクテーションホットキー",
         "linuxPttPermissionTitle": "長押しして話すには追加の設定が必要です",
-        "linuxPttPermissionDescription": "次のコマンドを実行してログアウト/ログインしてください：sudo usermod -aG input $USER",
+        "linuxPttPermissionDescription": "次のコマンドを実行し、Linux のユーザーアカウントからログアウトして、再度ログインしてください：sudo usermod -aG input $USER",
         "linuxPttSetupTitle": "長押しして話すには設定が必要です",
         "linuxPttSetupDescription": "キーボード入力デバイスへのアクセス権が必要です。",
-        "linuxPttSetupNote": "コマンド実行後、ログアウトして再度ログインしてください。",
+        "linuxPttSetupNote": "コマンド実行後、Linux のユーザーアカウントからログアウトし、再度ログインしてください。",
         "hyprlandConfigWriteWarningTitle": "Hyprland のキーバインドは永続化されません",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr は {{path}} に書き込めないため、Hyprland の設定を再読み込みするとキーバインドは維持されません。ファイルが存在し、書き込み可能であることを確認してください。",
         "hyprlandUnbindDescription": "Hyprland では、OpenWhispr が選択したショートカットを使用します。同じキーの組み合わせを使う既存の Hyprland バインドは、OpenWhispr がショートカットを登録すると解除されます。"
@@ -3213,6 +3221,21 @@
       "contextTooLargeGeneric": "このコンピューターでは長すぎて {{model}} が読み取れません。クラウドモデルを使うか、選択範囲を短くして実行してください。",
       "localServerUnavailable": "このコンピューターでは {{model}} を起動できませんでした。もう一度試すか、クラウドモデルに切り替えてください。",
       "localModelBusy": "ローカルモデルはまだ別のリクエストを処理しています。完了を待ってから、もう一度お試しください。"
+    },
+    "policy": {
+      "guidance": "組織がこれらのモデルを承認しています。お使いのコンピューターに合うものを選択してください。",
+      "notApproved": "組織に承認されていません",
+      "noneSupported": "このアプリのバージョンで使えるローカルモデルは、組織に承認されていません。OpenWhisprを更新するか、管理者にお問い合わせください。",
+      "emptyIntersection": "ワークスペース間で共通の承認済みローカルモデルがありません。管理者にお問い合わせください。",
+      "modelBlocked": "組織が承認したローカルモデルを選択してください。",
+      "modeBlocked": "組織がローカル処理を無効にしています。",
+      "unresolved": "ワークスペースのポリシーを確認できませんでした。接続して再試行してください。",
+      "versionBlocked": "組織の承認済みモデルを使うには、OpenWhisprを更新してください。",
+      "updateRequired": "更新が必要です",
+      "unavailable": "現在利用できません",
+      "installedTitle": "インストール済みのローカルモデル",
+      "installedHint": "組織がローカル処理を無効にしているため、これらのモデルは実行できません。削除するまでコンピューターに残ります。",
+      "chooseModel": "ローカルモデルを選択"
     }
   },
   "notes": {

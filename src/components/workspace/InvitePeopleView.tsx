@@ -12,6 +12,7 @@ import {
   MAX_INVITE_RECIPIENTS,
   inviteSummary,
   isRetryableFailure,
+  seatsWarningMessage,
   type InviteFlowEvent,
   type InviteFlowState,
   type InviteRecipient,
@@ -210,22 +211,9 @@ export function InvitePeopleView({
   // Over the ceiling, its blocking bar already says how many to remove; a seats count beside it
   // would name a different number.
   if (summary.overSeats && !summary.overCeiling) {
-    const { available: count, excess } = summary.overSeats;
-    const askOwner = !canManageBilling && billingManager;
-    // With no seats left, removing the excess would mean removing everyone.
-    let message: string;
-    if (count === 0) {
-      message = askOwner
-        ? t("workspaces.invite.seatsNoneAskOwner", { owner: isolate(askOwner) })
-        : t("workspaces.invite.seatsNone");
-    } else {
-      message = askOwner
-        ? t("workspaces.invite.seatsLeftAskOwner", { count, excess, owner: isolate(askOwner) })
-        : t("workspaces.invite.seatsLeft", { count, excess });
-    }
     warningBars.push({
       key: "seats",
-      message,
+      message: seatsWarningMessage(t, summary.overSeats, canManageBilling, billingManager),
       action:
         canManageBilling && !sending
           ? { label: t("workspaces.invite.upgrade"), onClick: onUpgrade }

@@ -47,6 +47,11 @@ test.before(async (t) => {
       `,
       "/services/TeamsService":
         "export const TeamsService = { list: (id) => globalThis.__spaces.listTeams(id) };",
+      "/services/WorkspacesService": `
+        export const WorkspacesService = {
+          previewSeats: (id, seats) => globalThis.__spaces.previewSeats(id, seats),
+        };
+      `,
       "/services/spaceActions": `
         const call = (name) => (...args) => globalThis.__actions[name](...args);
         export const addPeopleToSpace = call("addPeopleToSpace");
@@ -195,6 +200,9 @@ async function mount(
     canManage = true,
     canInvite = true,
     workspaceAdmin = false,
+    workspaceFields = {},
+    roster = ROSTER,
+    seatPreview = null,
     members = MEMBERS,
     invitations = INVITATIONS,
     teams = TEAMS,
@@ -210,12 +218,20 @@ async function mount(
   const state = { members: [...members], invitations: [...invitations] };
   const space = spaceFor(canManage, spaceTeams ? { teams: spaceTeams } : {});
   const store = {
-    workspaces: [workspaceWith({ manage_members: canInvite, manage_settings: workspaceAdmin })],
-    members: ROSTER,
+    workspaces: [
+      {
+        ...workspaceWith({ manage_members: canInvite, manage_settings: workspaceAdmin }),
+        ...workspaceFields,
+      },
+    ],
+    members: roster,
     membersWorkspaceId: "w1",
     refreshMembers: async (workspaceId) => {
       calls.push(["roster", workspaceId]);
       await refreshMembers?.(workspaceId, store);
+    },
+    refresh: async (options) => {
+      calls.push(["workspaces", options]);
     },
   };
   globalThis.__store = store;
@@ -236,6 +252,10 @@ async function mount(
       calls.push(["teams", id]);
       if (listTeams) return listTeams();
       return teams;
+    },
+    previewSeats: async () => {
+      if (!seatPreview) throw new Error("no subscription");
+      return seatPreview;
     },
   };
   globalThis.__actions = {
@@ -556,6 +576,27 @@ test("the field offers who isn't here yet, and shows who is", async (t) => {
   assert.ok(texts.includes("Design Team 2 people"));
 });
 
+test("workspace admins reach every teamspace, so they aren't offered as people to add", async (t) => {
+  const { callsTo } = await mount(t, {
+    // Few enough that the list's cap keeps everyone.
+    roster: [
+      workspaceMember("ethan", "Ethan"),
+      { ...workspaceMember("wren", "Wren"), role: "admin" },
+      { ...workspaceMember("olive", "Olive"), role: "owner" },
+    ],
+  });
+
+  await ui.focus(peopleInput());
+  const texts = options().map(text);
+  assert.ok(texts.includes("Wren Already has access"));
+  assert.ok(texts.includes("Olive Already has access"));
+
+  await ui.click(options().find((option) => text(option).startsWith("Wren")));
+  await addAddress("olive@openronnie.com");
+  assert.deepEqual(chipTexts(), []);
+  assert.equal(callsTo("addPeopleToSpace").length, 0);
+});
+
 test("an address with an invitation already waiting reads as pending, not offered again", async (t) => {
   await mount(t);
 
@@ -594,6 +635,48 @@ test("Add members sits beside the field, and the chips go under both", async (t)
   assert.ok(fieldRoot.contains(addButton()), "the button is part of the field's row");
   assert.equal(chips()[0].closest("ul").parentElement, fieldRoot);
   assert.ok(!chips()[0].closest("ul").contains(addButton()));
+});
+
+const FULL_SEATS = { has_subscription: true, seats: 8, seats_used: 8 };
+const PANEL_TEXT = () => text(doc().body);
+
+test("a new address says what it costs, as People does, and Add still goes", async (t) => {
+  const { callsTo } = await mount(t, {
+    workspaceFields: { ...FULL_SEATS, billing_manager: "Olivia" },
+    seatPreview: { seats_used: 8, current_quantity: 8, amount_due: 1200, currency: "usd" },
+  });
+  await pickPerson("Ethan");
+  assert.doesNotMatch(PANEL_TEXT(), /Using 8 of 8 seats/, "people take no seat");
+
+  await addAddress("new@example.com");
+  await ui.settle();
+  assert.match(PANEL_TEXT(), /Using 8 of 8 seats/);
+  assert.match(PANEL_TEXT(), /No seats left\. Ask Olivia to add seats\./);
+  assert.match(PANEL_TEXT(), /If accepted, adds a seat to your plan/);
+  assert.deepEqual(callsTo("workspaces").at(-1), ["workspaces", { fresh: true }]);
+  assert.equal(addButton().disabled, false);
+
+  await ui.click(addButton());
+  await ui.settle();
+  assert.equal(callsTo("sendInvitations").length, 1);
+  assert.doesNotMatch(PANEL_TEXT(), /Using 8 of 8 seats/);
+});
+
+test("someone who manages billing gets Upgrade beside the seat warning", async (t) => {
+  await mount(t, {
+    workspaceFields: {
+      ...FULL_SEATS,
+      capabilities: workspaceCapabilities({ manage_billing: true }),
+    },
+  });
+  const sections = [];
+  happyWindow.electronAPI = { openSettingsSection: (section) => sections.push(section) };
+  t.after(() => delete happyWindow.electronAPI);
+
+  await addAddress("new@example.com");
+  await ui.click(buttonNamed("Upgrade"));
+
+  assert.deepEqual(sections, ["plansBilling"]);
 });
 
 test("what is staged is explained under the field", async (t) => {

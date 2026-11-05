@@ -1309,3 +1309,79 @@ test("without Tone & Style no send carries a writing style", async (t) => {
   await captured.sendToAI("Tell them it's shipped", [], { destinationAppCategory: "work" });
   assert.doesNotMatch(sentMessages[0][0].content, /WRITING STYLE/);
 });
+
+for (const [label, policy, content] of [
+  [
+    "a blocked model",
+    { allowedModes: ["local", "providers"], allowedLocalModels: ["qwen3-1.7b-q8_0"] },
+    "Choose a local model your organization has approved.",
+  ],
+  [
+    "Local turned off with nowhere to move",
+    { allowedModes: [], allowedLocalModels: null },
+    "Your organization has disabled local processing.",
+  ],
+]) {
+  test(`a chat refused for ${label} says so and links to Settings, without streaming`, async (t) => {
+    const { captured, sentMessages, usePolicyStore, getMessages } = await renderChatStreaming(
+      t,
+      {},
+      {
+        settings: {
+          chatAgentMode: "local",
+          chatAgentProvider: "qwen",
+          chatAgentModel: "qwen3.5-0.8b-q4_k_m",
+        },
+      }
+    );
+    usePolicyStore.setState({
+      status: "managed",
+      appVersion: "1.10.0",
+      policy: {
+        ...MANAGED_POLICY,
+        llm: { ...MANAGED_POLICY.llm, allowedByokProviders: ["openai"], ...policy },
+        features: { ...MANAGED_POLICY.features, agentEnabled: true },
+      },
+    });
+    await captured.sendToAI("Summarize this", []);
+    assert.equal(sentMessages.length, 0);
+    const reply = getMessages().at(-1);
+    assert.equal(reply.content, content);
+    assert.deepEqual(reply.error, { settingsTarget: "llms" });
+  });
+}
+
+test("a blocked Voice Assistant answers with the refusal, not on the remote Chat scope", async (t) => {
+  const { captured, sentMessages, usePolicyStore, getMessages } = await renderChatStreaming(
+    t,
+    { inferenceScope: "dictationAgent" },
+    {
+      settings: {
+        ...BYOK_SETTINGS,
+        useDictationAgent: true,
+        dictationAgentMode: "local",
+        dictationAgentProvider: "qwen",
+        dictationAgentModel: "qwen3.5-0.8b-q4_k_m",
+      },
+    }
+  );
+  usePolicyStore.setState({
+    status: "managed",
+    appVersion: "1.10.0",
+    policy: {
+      ...MANAGED_POLICY,
+      llm: {
+        ...MANAGED_POLICY.llm,
+        allowedModes: ["local", "providers"],
+        allowedByokProviders: ["openai"],
+        allowedLocalModels: ["qwen3-1.7b-q8_0"],
+      },
+      features: { ...MANAGED_POLICY.features, agentEnabled: true },
+    },
+  });
+  await captured.sendToAI("What's on my calendar?", []);
+  assert.equal(sentMessages.length, 0, "nothing reached any model");
+  const reply = getMessages().at(-1);
+  assert.equal(reply.content, "Choose a local model your organization has approved.");
+  assert.deepEqual(reply.error, { settingsTarget: "llms" });
+});

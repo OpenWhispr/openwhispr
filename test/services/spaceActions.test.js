@@ -1,5 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 
 const load = () => import("../../src/services/spaceActionsCore.ts");
 
@@ -513,6 +514,73 @@ test("leaving the page sends what's still held, but not what was undone or alrea
   assert.equal(await held.commit(), null, "the toast ending later has nothing left to do");
 });
 
+test("quit can wait for what's still held: the promise ends once the delete has gone", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps, localSpace } = makeHarness();
+  let answer;
+  deps.spaces.remove = () =>
+    new Promise((resolve) => {
+      answer = resolve;
+    });
+  const actions = createSpaceActions(deps);
+  actions.holdSpaceDelete(localSpace);
+
+  let finished = false;
+  const committing = Promise.resolve(actions.commitHeldDeletes()).then(() => {
+    finished = true;
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(finished, false);
+
+  answer();
+  await committing;
+  assert.ok(namesOf(calls).includes("local.purge"));
+});
+
+test("the app's own actions send what's held at quit and at unload, and never refuse the unload", async (t) => {
+  const listeners = {};
+  installBrowserGlobals(t, {
+    window: { addEventListener: (name, listener) => (listeners[name] = listener) },
+  });
+  const removed = [];
+  globalThis.__spaceRemoved = (id) => removed.push(id);
+  t.after(() => delete globalThis.__spaceRemoved);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-space-actions-",
+    mockModules: {
+      // The API client reads the language from here, and the real one starts i18next.
+      "/i18n": "export default { t: (key) => key, language: 'en' };",
+      "/TeamsService": "export const TeamsService = {};",
+      "/SpacesService": `
+        export const SpacesService = { remove: async (id) => globalThis.__spaceRemoved(id) };
+      `,
+      "/SyncService": `
+        export const syncService = {};
+        export const upsertCloudSpaces = async () => [];
+        export const markSpacePurged = async () => {};
+        export const releasePurgedSpace = async () => {};
+      `,
+      "/stores/noteStore": `
+        export const getAccountGeneration = () => 0;
+        export const hideSpaceInView = () => async () => {};
+        export const loadSpaces = async () => [];
+        export const updateSpaceMeta = async () => ({ success: true });
+        export const purgeSpace = async () => ({ success: true });
+      `,
+    },
+  });
+  const { holdSpaceDelete } = await vite.ssrLoadModule("/services/spaceActions.ts");
+
+  holdSpaceDelete({ id: 7, cloud_space_id: "cloud-7", name: "Roadmap" });
+  await globalThis.window.commitHeldSpaceDeletes();
+  assert.deepEqual(removed, ["cloud-7"]);
+
+  holdSpaceDelete({ id: 8, cloud_space_id: "cloud-8", name: "Plans" });
+  // Electron takes a returned value as refusing the unload.
+  assert.equal(listeners.beforeunload(), undefined);
+  assert.deepEqual(removed, ["cloud-7", "cloud-8"]);
+});
+
 test("Undo releases the hold and returns to the view, and the delete never goes", async () => {
   const { createSpaceActions } = await load();
   const { calls, deps, localSpace } = makeHarness();
@@ -1023,6 +1091,24 @@ test("a gateway error can hide a create that went through, so it looks", async (
   assert.equal(space, localSpace);
 });
 
+test("main's 503 carries a code and can hide a create that went through too", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { deps, localSpace } = makeHarness();
+  deps.spaces.create = async () => {
+    throw new CloudApiError("Service temporarily unavailable", 503, "SERVER_ERROR");
+  };
+  deps.spaces.mySpaces = async () => [ownCreate()];
+
+  const space = await createSpaceActions(deps).createSpace(
+    "workspace-1",
+    { name: "Roadmap" },
+    { memberIds: [], teamIds: [] }
+  );
+
+  assert.equal(space, localSpace);
+});
+
 test("a lost create the lookup couldn't settle is settled by the retry's taken name", async () => {
   const { createSpaceActions } = await load();
   const { CloudApiError } = await import("../../src/services/cloudApi.ts");
@@ -1047,6 +1133,65 @@ test("a lost create the lookup couldn't settle is settled by the retry's taken n
   deps.spaces.mySpaces = async () => [ownCreate()];
 
   assert.equal(await actions.createSpace("workspace-1", input, access), localSpace);
+});
+
+// The earlier teamspace has none of what the retry changed, so taking it would drop that unseen.
+for (const [change, retryInput, retryAccess] of [
+  ["an extra member", {}, { memberIds: ["user-1", "user-2"], teamIds: [] }],
+  ["a group", {}, { memberIds: ["user-1"], teamIds: ["team-1"] }],
+  ["Open", { is_open: true }, { memberIds: ["user-1"], teamIds: [] }],
+  ["a description", { description: "Plans" }, { memberIds: ["user-1"], teamIds: [] }],
+]) {
+  test(`a retry that adds ${change} doesn't take the earlier teamspace for its own`, async () => {
+    const { createSpaceActions } = await load();
+    const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+    const { deps } = makeHarness();
+    deps.spaces.create = async () => {
+      throw new CloudApiError("Network error", 0);
+    };
+    deps.spaces.mySpaces = async () => {
+      throw new Error("still offline");
+    };
+    const actions = createSpaceActions(deps);
+    const input = { name: "Roadmap" };
+    await assert.rejects(
+      actions.createSpace("workspace-1", input, { memberIds: ["user-1"], teamIds: [] })
+    );
+
+    const taken = new CloudApiError("Name taken", 409, "space_name_taken");
+    deps.spaces.create = async () => {
+      throw taken;
+    };
+    deps.spaces.mySpaces = async () => [ownCreate()];
+
+    await assert.rejects(
+      actions.createSpace("workspace-1", { ...input, ...retryInput }, retryAccess),
+      (error) => error === taken
+    );
+  });
+}
+
+test("a changed retry whose answer is lost too doesn't take the earlier teamspace", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { deps } = makeHarness();
+  const lost = new CloudApiError("Network error", 0);
+  deps.spaces.create = async () => {
+    throw lost;
+  };
+  deps.spaces.mySpaces = async () => {
+    throw new Error("still offline");
+  };
+  const actions = createSpaceActions(deps);
+  const access = { memberIds: [], teamIds: [] };
+  await assert.rejects(actions.createSpace("workspace-1", { name: "Roadmap" }, access));
+
+  deps.spaces.mySpaces = async () => [ownCreate()];
+
+  await assert.rejects(
+    actions.createSpace("workspace-1", { name: "Roadmap", is_open: true }, access),
+    (error) => error === lost
+  );
 });
 
 test("the retry matches its lost create as the server compares names", async () => {

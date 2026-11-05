@@ -138,10 +138,13 @@ interface PersonalNotesViewProps {
     noteId: number;
     folderId: number | null;
     event: any;
+    trigger?: string;
+    noteSessionId?: string;
   } | null;
   onMeetingRecordingRequestHandled?: () => void;
   invitationEntry?: InvitationNotesEntry | null;
   onInvitationEntryHandled?: () => void;
+  canAutoStartMeeting: () => boolean;
   /** ControlPanel holds the workspace intro until this view has mounted after a join. */
   notesHandOff?: boolean;
   onNotesHandOffDone?: () => void;
@@ -159,6 +162,7 @@ export default function PersonalNotesView({
   onMeetingRecordingRequestHandled,
   invitationEntry,
   onInvitationEntryHandled,
+  canAutoStartMeeting,
   notesHandOff = false,
   onNotesHandOffDone,
 }: PersonalNotesViewProps) {
@@ -616,7 +620,7 @@ export default function PersonalNotesView({
     return () => flushPendingSaves("unmount");
   }, [flushPendingSaves]);
 
-  const { createNote, createNoteIn } = useCreateNote();
+  const { createNote, createNoteIn } = useCreateNote(canAutoStartMeeting);
 
   const privateSpaceId = useMemo(
     () => spaces.find((s) => s.kind === "private")?.id ?? null,
@@ -730,8 +734,15 @@ export default function PersonalNotesView({
     [activeNoteId]
   );
 
+  const handledMeetingRequest = useRef<typeof meetingRecordingRequest>(null);
   useEffect(() => {
-    if (!meetingRecordingRequest || activeNoteId !== meetingRecordingRequest.noteId) return;
+    if (
+      !meetingRecordingRequest ||
+      activeNoteId !== meetingRecordingRequest.noteId ||
+      handledMeetingRequest.current === meetingRecordingRequest
+    )
+      return;
+    handledMeetingRequest.current = meetingRecordingRequest;
     const note = activeNote?.id === meetingRecordingRequest.noteId ? activeNote : null;
     const seedSegments = parseSeedSegments(note?.transcript);
     void handleMeetingRecordingRequest({
@@ -749,6 +760,14 @@ export default function PersonalNotesView({
         // yet is still a meeting note.
         autoEndEligible: note ? isMeetingAutoEndEligible(note) : true,
       },
+      trigger: meetingRecordingRequest.trigger,
+      canAutoStart: canAutoStartMeeting,
+      onSuppressed: () =>
+        meetingRecordingRequest.noteSessionId
+          ? window.electronAPI?.meetingNoteOpenedWithoutRecording?.(
+              meetingRecordingRequest.noteSessionId
+            )
+          : undefined,
       startRecording: storeStartRecording,
       restoreFromMeetingMode: async () => {
         await window.electronAPI?.restoreFromMeetingMode?.();
@@ -763,6 +782,7 @@ export default function PersonalNotesView({
     });
   }, [
     meetingRecordingRequest,
+    canAutoStartMeeting,
     activeNoteId,
     activeNote,
     onMeetingRecordingRequestHandled,

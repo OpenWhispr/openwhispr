@@ -522,6 +522,43 @@ test("the toast counts who was added, or everyone when nobody new was", async (t
   assert.deepEqual(toastTitles().at(-1), "Added 2 people to Customer Calls");
 });
 
+for (const [refusal, answer, line] of [
+  [
+    "losing permission",
+    ["Insufficient role", 403],
+    "You no longer have permission to manage members of Customer Calls.",
+  ],
+  [
+    "needing SSO",
+    ["SSO required", 403, "SSO_REQUIRED"],
+    "Sign in with your company's single sign-on to manage people in Acme.",
+  ],
+]) {
+  test(`${refusal} says so, with nothing to try again`, async (t) => {
+    const { callsTo } = await mount(t, {
+      api: {
+        addPeopleToSpace: async () => {
+          throw new CloudApiError(...answer);
+        },
+      },
+    });
+
+    await openMenu();
+    await choose("Customer Calls");
+
+    assert.match(dialogText(), /Couldn't add 2 people/);
+    assert.ok(dialogText().includes(line), dialogText());
+    assert.doesNotMatch(dialogText(), /Check your connection/);
+    assert.equal(dialogButton("Try again"), undefined);
+    assert.equal(dialogButton("Cancel"), undefined);
+
+    await ui.click(dialogButton("Close"));
+    await ui.settle();
+    assert.equal(dialogs().length, 0);
+    assert.equal(callsTo("add").length, 1);
+  });
+}
+
 test("a failure keeps the selection and offers Try again", async (t) => {
   let attempts = 0;
   const { callsTo, added } = await mount(t, {

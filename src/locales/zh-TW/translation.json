@@ -209,6 +209,7 @@
     "skip": "略過",
     "policyAiProcessingRestricted": "AI 處理已被您的組織限制。",
     "policyAgentRestricted": "AI 助理的使用已被您的組織限制。",
+    "policyAccountChanged": "您的帳戶已變更，因此此回答已停止。",
     "policyTranscriptionRestricted": "轉錄已被您的組織限制。",
     "policyUnresolved": "貴組織的設定尚未載入完成。請稍後再試。",
     "managedConfigLoading": "正在檢查您組織的託管設定。請稍候再試。",
@@ -441,6 +442,9 @@
         "descriptionLineOne": "選擇你想在裝置上",
         "descriptionLineTwo": "執行的模型。",
         "providerLabel": "服務商",
+        "cohereLanguageLabel": "聽寫語言",
+        "cohereLanguageHint": "Cohere 無法自動偵測語言，請選擇你要聽寫的語言。",
+        "cohereLanguagePlaceholder": "選擇語言",
         "download": "下載",
         "downloadingShort": "下載中",
         "selected": "已選擇",
@@ -583,7 +587,8 @@
       "queued": "排隊中",
       "failed": {
         "title": "有一項下載未完成",
-        "description": "請檢查網路連線與磁碟剩餘空間，然後重試。如果仍然失敗，請聯絡您的管理員。"
+        "description": "請檢查網路連線與磁碟剩餘空間，然後重試。如果仍然失敗，請聯絡您的管理員。",
+        "notApproved": "你的組織未核准此模型。你可以在沒有它的情況下繼續。"
       }
     },
     "permissionGuide": {
@@ -983,9 +988,9 @@
       },
       "translationFallback": {
         "unreachableTitle": "翻譯無法使用",
-        "unreachableDescription": "你的口述內容已按原文貼上，未經翻譯。請檢查翻譯設定。",
+        "unreachableDescription": "你的口述內容維持原語言，未經翻譯。請檢查翻譯設定。",
         "failedTitle": "翻譯失敗",
-        "failedDescription": "已貼上原始文字。你可以在歷史記錄中重試。"
+        "failedDescription": "你的口述內容維持原語言，未經翻譯。你可以在歷史記錄中重試。"
       },
       "pushForceStopped": {
         "title": "轉錄內容未貼上",
@@ -1020,7 +1025,10 @@
         "manualPaste": "點擊下方按鈕複製文字，然後按 {{shortcut}} 貼上。",
         "openSettings": "開啟設定",
         "copyToClipboard": "複製到剪貼板",
-        "copyFailed": "複製失敗"
+        "copyFailed": "複製失敗",
+        "copiedTitle": "已複製，未貼上",
+        "copiedDescription": "文字已複製到剪貼簿。自動貼上需要輔助使用權限。按 {{shortcut}} 可手動貼上。",
+        "dontShowAgain": "不再提示"
       },
       "pasteFailed": {
         "title": "無法自動貼上"
@@ -2014,10 +2022,10 @@
         "resetToDefault": "重置為 {{hotkey}}",
         "title": "語音輸入快捷鍵",
         "linuxPttPermissionTitle": "按住說話需要額外設定",
-        "linuxPttPermissionDescription": "執行此指令並重新登入：sudo usermod -aG input $USER",
+        "linuxPttPermissionDescription": "執行此指令，然後登出你的 Linux 使用者帳號並重新登入：sudo usermod -aG input $USER",
         "linuxPttSetupTitle": "按住說話需要設定",
         "linuxPttSetupDescription": "您的使用者需要存取鍵盤輸入裝置的權限。",
-        "linuxPttSetupNote": "執行指令後，請登出並重新登入。",
+        "linuxPttSetupNote": "執行指令後，請登出你的 Linux 使用者帳號，然後重新登入。",
         "hyprlandConfigWriteWarningTitle": "Hyprland 按鍵綁定不會保留",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr 無法寫入 {{path}}，因此重新載入 Hyprland 設定後按鍵綁定不會保留。請確認該檔案存在且可寫入。",
         "hyprlandUnbindDescription": "在 Hyprland 上，OpenWhispr 會佔用所選快捷鍵。當 OpenWhispr 註冊該快捷鍵時，任何使用相同按鍵組合的既有 Hyprland 綁定都會被解除。"
@@ -3213,6 +3221,21 @@
       "contextTooLargeGeneric": "內容過長，{{model}} 無法在這台電腦上讀取。請改用雲端模型，或對更短的選取範圍執行該動作。",
       "localServerUnavailable": "無法在這台電腦上啟動 {{model}}。請重試，或改用雲端模型。",
       "localModelBusy": "本機模型仍在處理另一個請求。請等待其完成後再試。"
+    },
+    "policy": {
+      "guidance": "組織已核准這些模型。請選擇適合你電腦的模型。",
+      "notApproved": "未獲組織核准",
+      "noneSupported": "組織未核准此應用程式版本支援的任何本機模型。請更新 OpenWhispr 或聯絡管理員。",
+      "emptyIntersection": "你的工作區沒有共同核准的本機模型。請聯絡管理員。",
+      "modelBlocked": "請選擇組織核准的本機模型。",
+      "modeBlocked": "組織已停用本機處理。",
+      "unresolved": "無法取得工作區原則。請連線後再試一次。",
+      "versionBlocked": "請更新 OpenWhispr 以使用組織核准的模型。",
+      "updateRequired": "需要更新",
+      "unavailable": "暫時無法使用",
+      "installedTitle": "已安裝的本機模型",
+      "installedHint": "組織已停用本機處理，因此這些模型無法執行。它們會保留在你的電腦上，直到你將其刪除。",
+      "chooseModel": "選擇本機模型"
     }
   },
   "referral": {

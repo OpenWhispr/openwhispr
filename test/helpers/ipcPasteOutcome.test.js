@@ -286,6 +286,18 @@ test("Accessibility settings opens the macOS system pane and reports launch fail
   });
 });
 
+test("paste-text identifies a missing-Accessibility fallback without turning it into an error", async () => {
+  target.windowManager = { isOnboardingDemoActive: () => false };
+  target.clipboardManager = {
+    pasteText: async () => ({ pasted: false, reason: "accessibility-missing" }),
+  };
+  assert.deepEqual(await handlers.get("paste-text")({ sender: {} }, "synthetic text"), {
+    success: true,
+    pasted: false,
+    reason: "accessibility-missing",
+  });
+});
+
 test("raw paste skips smart spacing and AutoLearn", async (t) => {
   const originalSetTimeout = global.setTimeout;
   t.after(() => {
