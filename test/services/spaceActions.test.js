@@ -1348,6 +1348,56 @@ test("createTeam sends the founding members in one request", async () => {
 
   assert.equal(team.id, "team-9");
   assert.deepEqual(calls[0], ["team.create", "workspace-1", { name: "Sales", member_ids: ["u1"] }]);
+  assert.equal(
+    namesOf(calls).includes("team.addMembers"),
+    false,
+    "a normal create adds nobody again"
+  );
+});
+
+test("a team recovered after a lost answer gets this try's people through the batch route", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { calls, deps } = makeTeamHarness();
+  deps.teams.create = async () => {
+    throw new CloudApiError("Cloud API request failed", 0);
+  };
+  deps.teams.list = async () => [ownTeam()];
+
+  const team = await createSpaceActions(deps).createTeam("workspace-1", {
+    name: "Sales",
+    memberIds: ["u1", "u2"],
+  });
+
+  assert.equal(team.id, "team-9");
+  assert.deepEqual(
+    calls.find(([name]) => name === "team.addMembers"),
+    ["team.addMembers", "team-9", ["u1", "u2"]]
+  );
+});
+
+test("a failed add on a recovered team throws, and the next try can recover it again", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { deps } = makeTeamHarness();
+  deps.teams.create = async () => {
+    throw new CloudApiError("Cloud API request failed", 0);
+  };
+  deps.teams.list = async () => [ownTeam()];
+  const failure = new Error("offline");
+  deps.teams.addMembers = async () => {
+    throw failure;
+  };
+  const actions = createSpaceActions(deps);
+  await assert.rejects(actions.createTeam("workspace-1", teamInput), (error) => error === failure);
+
+  // The name is now taken by the team the first try made.
+  deps.teams.create = async () => {
+    throw new CloudApiError("Taken", 409, "team_name_taken");
+  };
+  deps.teams.addMembers = async () => ({ added: ["u1"], already_members: [] });
+  const team = await actions.createTeam("workspace-1", teamInput);
+  assert.equal(team.id, "team-9");
 });
 
 test("a retried create that finds its own team reports success", async () => {

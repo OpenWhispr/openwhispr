@@ -16,7 +16,6 @@ interface Props {
   onCreateRequestHandled?: () => void;
   /** Whether the list has loaded with no team in it, so the page can leave Add to this tab. */
   onTeamsEmptyChange?: (empty: boolean) => void;
-  onTeamCreated?: (team: Team, outcome: { memberCount: number }) => void;
 }
 
 export default function WorkspaceTeamsTab({
@@ -24,7 +23,6 @@ export default function WorkspaceTeamsTab({
   openCreateRequested = false,
   onCreateRequestHandled,
   onTeamsEmptyChange,
-  onTeamCreated,
 }: Props): React.ReactElement {
   const { t } = useTranslation();
   const { status, teams, stale, reload } = useWorkspaceTeams(workspace.id);
@@ -80,9 +78,8 @@ export default function WorkspaceTeamsTab({
         workspace={workspace}
         open={createOpen}
         onOpenChange={setCreateOpen}
-        onCreated={async (team, outcome) => {
+        onCreated={async () => {
           await reload();
-          onTeamCreated?.(team, outcome);
         }}
         onPlanRequired={() => {
           setCreateOpen(false);

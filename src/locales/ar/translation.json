@@ -2847,7 +2847,6 @@
         "stillViaTeams": "لا يزال {{name}} يملك الوصول عبر {{teams}}",
         "roleUpdated": "تم تحديث الدور",
         "you": "أنت",
-        "addFailed": "عدد الأشخاص الذين تعذرت إضافتهم: {{failed}} من أصل {{total}}",
         "searchPlaceholder": "البحث عن أشخاص…",
         "noResults": "لم يتم العثور على أشخاص",
         "roleAdmin": "مسؤول",

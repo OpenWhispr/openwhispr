@@ -238,8 +238,10 @@ async function mount(
     return sendInvitations(input);
   };
 
+  let reopen = () => {};
   function Host() {
     const [open, setOpen] = React.useState(true);
+    reopen = () => setOpen(true);
     return h(CreateTeamDialog, {
       workspace,
       open,
@@ -248,7 +250,11 @@ async function mount(
         setOpen(next);
       },
       onCreated: (team, outcome) => calls.push(["created", team.id, outcome]),
-      onPlanRequired: () => calls.push(["planRequired"]),
+      // As the Teams page does: the form closes and the paywall takes its place.
+      onPlanRequired: () => {
+        calls.push(["planRequired"]);
+        setOpen(false);
+      },
       ...props,
     });
   }
@@ -269,6 +275,7 @@ async function mount(
   return {
     calls,
     closes,
+    reopen: () => act(() => reopen()),
     toasts: () => globalThis.__toasts,
     callsTo: (name) => calls.filter(([call]) => call === name),
   };
@@ -448,13 +455,14 @@ test("a failed create keeps everything entered", async (t) => {
   assert.equal(createButton(), undefined);
   assert.deepEqual(closes, []);
 
+  assert.ok(buttonNamed("Try again").querySelector("svg"), "Try again keeps the + mark");
   await click(buttonNamed("Try again"));
   assert.equal(callsTo("createTeam").length, 2);
   assert.deepEqual(closes, [false]);
 });
 
 test("the server's refusal opens the paywall and refreshes", async (t) => {
-  const { callsTo, closes, toasts } = await mount(t, {
+  const { callsTo, closes, toasts, reopen } = await mount(t, {
     createTeam: async () => {
       throw new CloudApiError("Upgrade to create teams", 403, "team_plan_required");
     },
@@ -465,9 +473,14 @@ test("the server's refusal opens the paywall and refreshes", async (t) => {
   assert.equal(callsTo("planRequired").length, 1);
   assert.deepEqual(callsTo("refresh"), [["refresh", { fresh: true }]]);
   assert.deepEqual(toasts(), []);
-  assert.deepEqual(alertTexts(), []);
-  // Closing is the host's call, since it opens the paywall in this dialog's place.
+  // Closing is the Teams page's call, and the form goes with its entries: upgrading takes the
+  // person to another page, so they start again from the Teams page.
   assert.deepEqual(closes, []);
+  assert.equal(dialog(), null);
+  await reopen();
+  await settle();
+  assert.equal(nameInput().value, "");
+  assert.deepEqual(chipTexts(), []);
 });
 
 test("someone who can't invite gets no invite row", async (t) => {
@@ -525,4 +538,101 @@ test("invitations go out one batch per role, never throwing", async () => {
     failed: ["b@example.com"],
     undelivered: 1,
   });
+});
+
+test("a pending create locks the form and ignores a second press", async (t) => {
+  let finish;
+  const { callsTo, closes } = await mount(t, {
+    createTeam: () =>
+      new Promise((resolve) => {
+        finish = () => resolve(createdTeam());
+      }),
+  });
+  await type(nameInput(), "Sales");
+  await addAddress("alex@example.com");
+  await click(createButton());
+
+  assert.equal(nameInput().readOnly, true);
+  assert.equal(peopleInput().disabled, true);
+  assert.equal(buttonNamed("Cancel").disabled, true);
+  assert.equal(
+    doc().querySelector('[role="status"]') && text(doc().querySelector('[role="status"]')),
+    "Creating Sales and sending 1 invitation…"
+  );
+  const creating = buttonNamed("Creating…");
+  assert.ok(creating.disabled && creating.querySelector("svg"), "Creating… is dimmed and keeps +");
+
+  await press(nameInput(), "Enter");
+  await press(nameInput(), "Escape");
+  assert.equal(callsTo("createTeam").length, 1);
+  assert.deepEqual(closes, []);
+  assert.ok(dialog(), "Esc doesn't close a create under way");
+
+  await act(() => finish());
+  await settle();
+  assert.deepEqual(closes, [false]);
+  assert.equal(callsTo("sendInvitations").length, 1);
+});
+
+test("people who left the workspace come off the form, with the server's words", async (t) => {
+  const { closes } = await mount(t, {
+    createTeam: async () => {
+      throw new CloudApiError(
+        "Ethan is no longer in this workspace",
+        400,
+        "not_workspace_members",
+        {
+          user_ids: ["ethan"],
+        }
+      );
+    },
+  });
+  await type(nameInput(), "Sales");
+  await pickPerson("Ethan");
+  await pickPerson("Saket");
+  await click(createButton());
+
+  assert.deepEqual(chipTexts(), ["Saket"]);
+  assert.deepEqual(alertTexts(), ["Ethan is no longer in this workspace"]);
+  assert.deepEqual(closes, []);
+  // The primary stays Create team: what to fix is already off the form.
+  assert.ok(createButton());
+});
+
+test("a failed invitation is reported beside who was added", async (t) => {
+  const { toasts } = await mount(t, {
+    sendInvitations: async ({ emails, onResult }) => {
+      for (const email of emails) onResult(email, { ok: false, kind: "requestFailed" });
+    },
+  });
+  await type(nameInput(), "Sales");
+  await pickPerson("Ethan");
+  await addAddress("alex@example.com");
+  await click(createButton());
+
+  assert.equal(readable(toasts()[0].title), "Created Sales. Couldn't invite 1 person.");
+  assert.equal(toasts()[0].actions.length, 1, "Copy addresses");
+});
+
+test("a second try after a failed one sends the people on the form then, and invites once", async (t) => {
+  let attempts = 0;
+  const { callsTo } = await mount(t, {
+    createTeam: async () => {
+      attempts += 1;
+      if (attempts === 1) throw new Error("socket hang up");
+      return createdTeam();
+    },
+  });
+  await type(nameInput(), "Sales");
+  await pickPerson("Ethan");
+  await addAddress("alex@example.com");
+  await click(createButton());
+  await pickPerson("Saket");
+  await click(buttonNamed("Try again"));
+
+  assert.deepEqual(
+    callsTo("createTeam").map(([, , input]) => input.memberIds),
+    [["ethan"], ["ethan", "saket"]]
+  );
+  assert.equal(callsTo("sendInvitations").length, 1);
 });

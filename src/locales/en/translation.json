@@ -3797,7 +3797,6 @@
         "stillViaTeams": "{{name}} still has access through {{teams}}",
         "roleUpdated": "Role updated",
         "you": "You",
-        "addFailed": "{{failed}} of {{total}} people couldn't be added",
         "searchPlaceholder": "Search people…",
         "noResults": "No people found",
         "roleAdmin": "Admin",

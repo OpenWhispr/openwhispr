@@ -355,23 +355,14 @@ test("the server's refusal swaps the form for the paywall", async (t) => {
   assert.equal(globalThis.__paywallDialog.open, true);
 });
 
-test("a created team reloads the list and reports the outcome to the host", async (t) => {
-  const outcomes = [];
+test("a created team reloads the list", async (t) => {
   const { Tab, workspace } = await loadTab(t, { teams: [] });
-  const element = React.createElement(Tab, {
-    workspace,
-    onTeamCreated: (team, outcome) => outcomes.push([team.id, outcome]),
-  });
-  const container = installHostDom(t);
-  const root = createRoot(container);
-  mountedRoots.set(t, root);
-  await React.act(async () => root.render(element));
+  await mount(t, Tab, workspace);
 
   await React.act(async () =>
     globalThis.__createDialog.onCreated({ id: "t1", name: "Sales" }, { memberCount: 2 })
   );
   assert.equal(globalThis.__reloads, 1);
-  assert.deepEqual(outcomes, [["t1", { memberCount: 2 }]]);
 });
 
 test("a request from People opens the opener once and says it was handled", async (t) => {

@@ -1,4 +1,8 @@
+import type { TFunction } from "i18next";
+import type { ToastProps } from "../components/ui/useToast";
 import { invitePeople } from "../services/invitePeople";
+import { isolate } from "../utils/bidiIsolate";
+import { formatList } from "./formatList";
 
 export type InviteTarget = { spaceIds: string[] } | { teamIds: string[] };
 
@@ -57,4 +61,54 @@ export async function inviteAfterCreate({
     for (const email of emails) if (!reported.has(email)) result.failed.push(email);
   }
   return result;
+}
+
+// How many refused addresses the toast names; Copy addresses has them all.
+const FAILED_INVITES_NAMED = 5;
+// The toast is the only place left that says who wasn't invited, so it stays long enough to act on.
+const INVITE_FAILED_TOAST_MS = 15_000;
+
+/** What a create's toast adds when invitations went wrong: who, undelivered emails, Copy addresses. */
+export function inviteFollowUpToast(input: {
+  t: TFunction;
+  language: string;
+  failed: string[];
+  undelivered: number;
+}): Pick<ToastProps, "description" | "duration" | "actions"> {
+  const { t, language, failed, undelivered } = input;
+  const named = failed.slice(0, FAILED_INVITES_NAMED).map(isolate);
+  const descriptions = [
+    ...(failed.length > 0
+      ? [
+          t("settingsPage.workspace.teamspaces.form.inviteFailedWho", {
+            names:
+              formatList(language, named) +
+              (failed.length > named.length ? ` +${failed.length - named.length}` : ""),
+          }),
+        ]
+      : []),
+    ...(undelivered > 0 ? [t("workspaces.invite.noEmail", { count: undelivered })] : []),
+  ];
+  return {
+    description: descriptions.length > 0 ? descriptions.join(" ") : undefined,
+    duration: descriptions.length > 0 ? INVITE_FAILED_TOAST_MS : undefined,
+    actions:
+      failed.length > 0
+        ? [
+            {
+              label: t("settingsPage.workspace.teamspaces.form.copyAddresses"),
+              icon: "copy",
+              dismissOnClick: false,
+              feedback: {
+                successLabel: t("common.copied"),
+                failureLabel: t("hooks.audioRecording.pastePermission.copyFailed"),
+              },
+              onClick: async () => {
+                await navigator.clipboard.writeText(failed.join("\n"));
+                return true;
+              },
+            },
+          ]
+        : undefined,
+  };
 }

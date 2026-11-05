@@ -3309,7 +3309,6 @@
         "stillViaTeams": "{{name}} sigue teniendo acceso a través de {{teams}}",
         "roleUpdated": "Rol actualizado",
         "you": "Tú",
-        "addFailed": "No se pudo añadir a {{failed}} de {{total}} personas",
         "searchPlaceholder": "Buscar personas…",
         "noResults": "No se encontraron personas",
         "roleAdmin": "Administrador",

@@ -10,8 +10,9 @@ import { Toggle } from "../ui/toggle";
 import { useToast } from "../ui/useToast";
 import CreateWorkspaceDialog from "../CreateWorkspaceDialog";
 import { WorkspaceErrorBar } from "../workspace/WorkspaceErrorBar";
+import { PRIMARY_BUTTON, SECONDARY_BUTTON } from "../workspace/dialogButtons";
 import { createSpace } from "../../services/spaceActions";
-import { inviteAfterCreate } from "../../lib/inviteAfterCreate";
+import { inviteAfterCreate, inviteFollowUpToast } from "../../lib/inviteAfterCreate";
 import { TeamsService } from "../../services/TeamsService";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
@@ -37,19 +38,6 @@ import type { SpaceItem, Team, WorkspaceMember } from "../../types/electron";
 const DESCRIPTION_MAX_LENGTH = 280;
 const NO_MEMBERS: WorkspaceMember[] = [];
 const NO_TEAMS: Team[] = [];
-// How many refused addresses the toast names; Copy addresses has them all.
-const FAILED_INVITES_NAMED = 5;
-// The toast is the only place left that says who wasn't invited, so it stays long enough to act on.
-const INVITE_FAILED_TOAST_MS = 15_000;
-
-// The footer's buttons share one look with the other workspace dialogs: two equal capsules.
-const BUTTON_BASE =
-  "flex h-10 flex-1 items-center justify-center gap-2 rounded-full px-4 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50";
-const PRIMARY_BUTTON = cn(BUTTON_BASE, "bg-primary text-primary-foreground hover:bg-primary/90");
-const SECONDARY_BUTTON = cn(
-  BUTTON_BASE,
-  "bg-surface-1 text-muted-foreground hover:bg-surface-3 hover:text-foreground"
-);
 
 // What the footer is told about a create that failed and left the dialog open. A taken name is
 // not here: it belongs to the name field.
@@ -355,19 +343,6 @@ export default function CreateSpaceDialog({
       }
       const spaceName = isolate(trimmedName);
       const { failed, undelivered } = invited;
-      const named = failed.slice(0, FAILED_INVITES_NAMED).map(isolate);
-      const descriptions = [
-        ...(failed.length > 0
-          ? [
-              t("settingsPage.workspace.teamspaces.form.inviteFailedWho", {
-                names:
-                  formatList(i18n.language, named) +
-                  (failed.length > named.length ? ` +${failed.length - named.length}` : ""),
-              }),
-            ]
-          : []),
-        ...(undelivered > 0 ? [t("workspaces.invite.noEmail", { count: undelivered })] : []),
-      ];
       toast({
         title:
           failed.length > 0
@@ -376,26 +351,7 @@ export default function CreateSpaceDialog({
                 count: failed.length,
               })
             : t("settingsPage.workspace.teamspaces.form.created", { space: spaceName }),
-        description: descriptions.length > 0 ? descriptions.join(" ") : undefined,
-        duration: descriptions.length > 0 ? INVITE_FAILED_TOAST_MS : undefined,
-        actions:
-          failed.length > 0
-            ? [
-                {
-                  label: t("settingsPage.workspace.teamspaces.form.copyAddresses"),
-                  icon: "copy",
-                  dismissOnClick: false,
-                  feedback: {
-                    successLabel: t("common.copied"),
-                    failureLabel: t("hooks.audioRecording.pastePermission.copyFailed"),
-                  },
-                  onClick: async () => {
-                    await navigator.clipboard.writeText(failed.join("\n"));
-                    return true;
-                  },
-                },
-              ]
-            : undefined,
+        ...inviteFollowUpToast({ t, language: i18n.language, failed, undelivered }),
       });
     } catch (error) {
       // The teamspace is made; a failed reveal or toast must not leave Creating blocking every way out.

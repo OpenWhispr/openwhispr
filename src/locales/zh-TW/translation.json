@@ -3257,7 +3257,6 @@
         "stillViaTeams": "{{name}} 仍可透過 {{teams}} 存取",
         "roleUpdated": "角色已更新",
         "you": "你",
-        "addFailed": "{{total}} 人中有 {{failed}} 人無法加入",
         "searchPlaceholder": "搜尋成員…",
         "noResults": "找不到成員",
         "roleAdmin": "管理員",

@@ -2,6 +2,7 @@ import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { Users } from "../icons";
 import { cn } from "../lib/utils";
+import { PRIMARY_BUTTON, SECONDARY_BUTTON } from "./dialogButtons";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
 import { workspaceCan } from "../../lib/capabilities";
 import { isolate } from "../../utils/bidiIsolate";
@@ -12,15 +13,6 @@ export interface TeamPaywallDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
-
-// Two equal capsules, as the other workspace dialogs' footers.
-const BUTTON_BASE =
-  "flex h-10 w-full items-center justify-center rounded-full px-4 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
-const PRIMARY_BUTTON = cn(BUTTON_BASE, "bg-primary text-primary-foreground hover:bg-primary/90");
-const SECONDARY_BUTTON = cn(
-  BUTTON_BASE,
-  "bg-surface-1 text-muted-foreground hover:bg-surface-3 hover:text-foreground"
-);
 
 /**
  * What a workspace below Business sees when it tries to create a team. It never reads a plan
@@ -68,19 +60,27 @@ export default function TeamPaywallDialog({
         <div className="flex flex-col gap-2">
           {canUpgrade ? (
             <>
-              <button type="button" onClick={handleUpgrade} className={PRIMARY_BUTTON}>
+              <button
+                type="button"
+                onClick={handleUpgrade}
+                className={cn(PRIMARY_BUTTON, "flex-none")}
+              >
                 {t("settingsPage.workspace.teams.paywall.upgrade")}
               </button>
               <button
                 type="button"
                 onClick={() => onOpenChange(false)}
-                className={SECONDARY_BUTTON}
+                className={cn(SECONDARY_BUTTON, "flex-none")}
               >
                 {t("settingsPage.workspace.teams.paywall.notNow")}
               </button>
             </>
           ) : (
-            <button type="button" onClick={() => onOpenChange(false)} className={SECONDARY_BUTTON}>
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className={cn(SECONDARY_BUTTON, "flex-none")}
+            >
               {t("common.close")}
             </button>
           )}

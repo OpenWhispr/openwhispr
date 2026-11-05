@@ -3185,7 +3185,6 @@
         "stillViaTeams": "{{name}} は {{teams}} 経由で引き続きアクセスできます",
         "roleUpdated": "役割を更新しました",
         "you": "自分",
-        "addFailed": "{{total}}人中{{failed}}人を追加できませんでした",
         "searchPlaceholder": "メンバーを検索…",
         "noResults": "メンバーが見つかりません",
         "roleAdmin": "管理者",

@@ -298,16 +298,38 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     }
   }
 
-  // Members travel in the create body, so the server adds them with the team or not at all.
+  // Members travel in the create body, so the server adds them with the team or not at all. A team
+  // found after a lost answer was made by an earlier try, with whoever that try sent; this try's
+  // people are added through the batch route, which never changes a role. Someone the person
+  // removed from the form between the tries stays on the team, since no call here takes them off.
   async function createTeam(
     workspaceId: string,
     input: { name: string; memberIds: string[] }
   ): Promise<Team> {
-    return createSettling(createKey("team", workspaceId, input.name), {
-      send: () => deps.teams.create(workspaceId, { name: input.name, member_ids: input.memberIds }),
+    const key = createKey("team", workspaceId, input.name);
+    let sent = false;
+    const team = await createSettling(key, {
+      send: async () => {
+        const created = await deps.teams.create(workspaceId, {
+          name: input.name,
+          member_ids: input.memberIds,
+        });
+        sent = true;
+        return created;
+      },
       isNameTaken: (err) => classifyTeamError(err).kind === "nameTaken",
       find: (triedAt) => findLostTeamCreate(workspaceId, input.name, triedAt),
     });
+    if (!sent && input.memberIds.length > 0) {
+      try {
+        await deps.teams.addMembers(team.id, input.memberIds);
+      } catch (err) {
+        // The team is still unreported, so the next try may recover it again.
+        unsettledCreates.set(key, Date.now());
+        throw err;
+      }
+    }
+    return team;
   }
 
   async function addPeopleToTeam(

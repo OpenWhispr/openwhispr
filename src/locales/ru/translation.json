@@ -3327,7 +3327,6 @@
         "stillViaTeams": "{{name}} по-прежнему имеет доступ через {{teams}}",
         "roleUpdated": "Роль обновлена",
         "you": "Вы",
-        "addFailed": "Не удалось добавить {{failed}} из {{total}} участников",
         "searchPlaceholder": "Поиск людей…",
         "noResults": "Люди не найдены",
         "roleAdmin": "Администратор",

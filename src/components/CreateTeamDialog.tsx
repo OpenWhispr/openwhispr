@@ -2,20 +2,20 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } 
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { Loader2, Plus, Users } from "./icons";
+import { Plus, Users } from "./icons";
 import { cn } from "./lib/utils";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { useToast, type ToastProps } from "./ui/useToast";
 import { WorkspaceErrorBar } from "./workspace/WorkspaceErrorBar";
+import { PRIMARY_BUTTON, SECONDARY_BUTTON } from "./workspace/dialogButtons";
 import { SpacePeopleField } from "./notes/SpacePeopleField";
 import { createTeam } from "../services/spaceActions";
-import { inviteAfterCreate } from "../lib/inviteAfterCreate";
+import { inviteAfterCreate, inviteFollowUpToast } from "../lib/inviteAfterCreate";
 import { serverRefusalMessage } from "../services/cloudApi";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { useAuth } from "../hooks/useAuth";
-import { useDelayedFlag } from "../hooks/useDelayedFlag";
 import { workspaceCan } from "../lib/capabilities";
 import { formatList } from "../lib/formatList";
 import { MAX_INVITE_RECIPIENTS } from "../lib/inviteFlow";
@@ -25,23 +25,11 @@ import { classifyTeamError } from "../lib/workspaceErrors";
 import { isolate } from "../utils/bidiIsolate";
 import type { Team, Workspace, WorkspaceMember } from "../types/electron";
 
-// How many refused addresses the toast names; Copy addresses has them all.
-const FAILED_INVITES_NAMED = 5;
-// The toast is the only place left that says who wasn't invited, so it stays long enough to act on.
-const INVITE_FAILED_TOAST_MS = 15_000;
 // A toast names this many people per list before it falls back to a count.
 const NAMED_PER_LIST = 2;
 const FORM_KEY = "settingsPage.workspace.teams.form";
 
 const NO_TEAMS: Team[] = [];
-
-const BUTTON_BASE =
-  "flex h-10 flex-1 items-center justify-center gap-2 rounded-full px-4 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50";
-const PRIMARY_BUTTON = cn(BUTTON_BASE, "bg-primary text-primary-foreground hover:bg-primary/90");
-const SECONDARY_BUTTON = cn(
-  BUTTON_BASE,
-  "bg-surface-1 text-muted-foreground hover:bg-surface-3 hover:text-foreground"
-);
 
 type NameError = { kind: "required" } | { kind: "taken"; name: string };
 type CreateFailure = { kind: "general" } | { kind: "refused"; message: string };
@@ -137,7 +125,6 @@ function CreateTeamForm({
   const [rosterFailed, setRosterFailed] = useState(false);
   // Where focus goes once a failed create hands the form back: a disabled button loses it.
   const [refocus, setRefocus] = useState<"name" | "primary" | null>(null);
-  const showSpinner = useDelayedFlag(isCreating);
 
   const loadRoster = useCallback(async (): Promise<void> => {
     setRosterFailed(false);
@@ -198,6 +185,8 @@ function CreateTeamForm({
       const classified = classifyTeamError(error);
       if (classified.kind === "planRequired") {
         // The capability the form was opened on is stale, so it catches up before the paywall.
+        // The form unmounts with its entries: upgrading takes the person to another page, and
+        // they start the create again from the Teams page when they come back.
         void useWorkspaceStore
           .getState()
           .refresh({ fresh: true })
@@ -267,9 +256,12 @@ function CreateTeamForm({
           undelivered: invite.undelivered,
         })
       );
-      await onCreated?.(team, { memberCount: addedNames.length + invite.invited.length });
+      // The reload doesn't block the form: the team exists and the toast has said so.
+      void Promise.resolve(
+        onCreated?.(team, { memberCount: addedNames.length + invite.invited.length })
+      ).catch((error) => console.error("Create team follow-up failed:", error));
     } catch (error) {
-      // The team is made; a failed toast or reload must not leave Creating blocking every way out.
+      // The team is made; a failed toast must not leave Creating blocking every way out.
       console.error("Create team follow-up failed:", error);
     } finally {
       onCreatingChange(false);
@@ -401,11 +393,7 @@ function CreateTeamForm({
           // Blank reads as not ready, but stays pressable so the missing name can be named.
           className={cn(PRIMARY_BUTTON, !name.trim() && !isCreating && "opacity-60")}
         >
-          {isCreating ? (
-            showSpinner && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-          ) : failure?.kind === "general" ? null : (
-            <Plus className="size-3.5" aria-hidden="true" />
-          )}
+          <Plus className="size-3.5" aria-hidden="true" />
           {primaryLabel}
         </button>
       </div>
@@ -460,40 +448,8 @@ function createdToast({
     title = t(`${FORM_KEY}.created`, { team: teamName });
   }
 
-  const named = failed.slice(0, FAILED_INVITES_NAMED).map(isolate);
-  const descriptions = [
-    ...(failed.length > 0
-      ? [
-          t("settingsPage.workspace.teamspaces.form.inviteFailedWho", {
-            names:
-              formatList(language, named) +
-              (failed.length > named.length ? ` +${failed.length - named.length}` : ""),
-          }),
-        ]
-      : []),
-    ...(undelivered > 0 ? [t("workspaces.invite.noEmail", { count: undelivered })] : []),
-  ];
   return {
     title,
-    description: descriptions.length > 0 ? descriptions.join(" ") : undefined,
-    duration: descriptions.length > 0 ? INVITE_FAILED_TOAST_MS : undefined,
-    actions:
-      failed.length > 0
-        ? [
-            {
-              label: t("settingsPage.workspace.teamspaces.form.copyAddresses"),
-              icon: "copy",
-              dismissOnClick: false,
-              feedback: {
-                successLabel: t("common.copied"),
-                failureLabel: t("hooks.audioRecording.pastePermission.copyFailed"),
-              },
-              onClick: async () => {
-                await navigator.clipboard.writeText(failed.join("\n"));
-                return true;
-              },
-            },
-          ]
-        : undefined,
+    ...inviteFollowUpToast({ t, language, failed, undelivered }),
   };
 }
