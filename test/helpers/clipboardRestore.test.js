@@ -1103,7 +1103,9 @@ for (const [windowClass, expectedFlag] of [
   ["code", "--shift-insert"],
   [" Code ", "--shift-insert"],
   ["code-insiders", "--shift-insert"],
+  [" Code - Insiders ", "--shift-insert"],
   ["code-oss", "--shift-insert"],
+  ["Code - OSS", "--shift-insert"],
   ["com.microsoft.vscode", "--shift-insert"],
   [" Com.Microsoft.VSCode ", "--shift-insert"],
   ["konsole", "--shift-insert"],
@@ -1112,6 +1114,7 @@ for (const [windowClass, expectedFlag] of [
   ["firefox", null],
   ["my-code-editor", null],
   ["com.microsoft.vscode-other", null],
+  ["code - oss-other", null],
   ["decode", null],
 ]) {
   for (const desktop of ["KDE", "Hyprland"]) {
@@ -1151,23 +1154,78 @@ for (const [windowClass, expectedFlag] of [
   }
 }
 
-test("VS Code uses Shift+Insert through wtype without process metadata", async () => {
+test("Hyprland keeps VS Code's text paste shortcut when wtype fails", async () => {
   const calls = [];
-  const TestClipboardManager = loadClipboardManager({ spawn: createSuccessfulSpawn(calls) });
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSpawn(calls, [1, 0], { stdout: ["", "ok\n"] }),
+    spawnSync: (command, args) => {
+      assert.equal(command, "hyprctl");
+      assert.deepEqual(args, ["activewindow", "-j"]);
+      return { status: 0, stdout: Buffer.from(JSON.stringify({ class: "com.microsoft.vscode" })) };
+    },
+  });
   const manager = new TestClipboardManager();
-  manager.commandExists = (command) => command === "wtype";
+  manager.commandExists = (command) => command === "wtype" || command === "hyprctl";
   manager.resolveLinuxFastPasteBinary = () => null;
-  manager._detectHyprlandWindowClass = () => "code";
 
-  await withWaylandEnvironment("Hyprland", () => manager.pasteLinux(null));
+  const result = await withWaylandEnvironment("Hyprland", () => {
+    assert.equal(manager._detectHyprlandWindowClass(), "com.microsoft.vscode");
+    return manager.pasteLinux(null);
+  });
 
+  assert.equal(result.method, "hyprland-sendshortcut");
   assert.deepEqual(calls, [
     {
       command: "wtype",
       args: ["-M", "shift", "-k", "Insert", "-m", "shift"],
     },
+    {
+      command: "hyprctl",
+      args: [
+        "dispatch",
+        'hl.dsp.send_shortcut({ mods = "SHIFT", key = "Insert", window = "activewindow" })',
+      ],
+    },
   ]);
 });
+
+for (const [windowClass, modeFlags] of [
+  ["com.microsoft.vscode", ["--shift-insert"]],
+  ["firefox", []],
+]) {
+  test(`KDE preserves the target and paste shortcut for ${windowClass} when portal and uinput fail`, async () => {
+    const calls = [];
+    const TestClipboardManager = loadClipboardManager({
+      spawn: createSpawn(calls, [1, 1, 0]),
+      spawnSync: (command, args) => {
+        assert.equal(command, "xdotool");
+        const values = {
+          getactivewindow: "123",
+          getwindowclassname: windowClass,
+          getwindowpid: "",
+        };
+        assert.ok(Object.hasOwn(values, args[0]));
+        return { status: 0, stdout: Buffer.from(values[args[0]]) };
+      },
+    });
+    const manager = new TestClipboardManager();
+    manager.commandExists = (command) => command === "xdotool";
+    manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+    manager._readPortalToken = () => null;
+
+    const result = await withWaylandEnvironment("KDE", () => {
+      process.env.DISPLAY = ":99";
+      return manager.pasteLinux(null);
+    });
+
+    assert.equal(result.method, "xtest-xwayland");
+    assert.deepEqual(calls, [
+      { command: "/tmp/linux-fast-paste", args: ["--portal", "--shift-insert"] },
+      { command: "/tmp/linux-fast-paste", args: ["--uinput", "--shift-insert"] },
+      { command: "/tmp/linux-fast-paste", args: ["--window", "123", ...modeFlags] },
+    ]);
+  });
+}
 
 for (const usePortal of [true, false]) {
   test(`VS Code uses Shift+Insert via ${usePortal ? "portal" : "xdotool"} when /proc metadata is unreadable`, async (t) => {
