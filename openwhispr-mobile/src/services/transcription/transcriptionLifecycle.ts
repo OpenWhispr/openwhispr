@@ -20,7 +20,7 @@ export const transcriptionLifecycle = {
   uploadRetryOptions(_signal?: AbortSignal): Pick<RetryOptions, 'shouldRetry'> {
     return {};
   },
-  uploadParameters(_context?: string): Record<string, string> {
+  uploadParameters(_context?: string, _purpose?: string): Record<string, string> {
     return {};
   },
   chunkDuration(_durationMs: number): number {
