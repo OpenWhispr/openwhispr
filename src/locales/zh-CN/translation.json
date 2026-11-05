@@ -2766,7 +2766,8 @@
           "leave": "退出团队",
           "leftTeam": "你已退出 {{team}}",
           "leaveConfirm": "退出 {{team}}？",
-          "leaveConfirmDescription": "除非你被直接添加或其他团队包含你，否则你将失去通过该团队获得的空间访问权限。"
+          "leaveConfirmDescription": "除非你被直接添加或其他团队包含你，否则你将失去通过该团队获得的空间访问权限。",
+          "gone": "{{team}} 已不存在。"
         },
         "columns": {
           "name": "名称",
@@ -2824,7 +2825,37 @@
           "createdWithMembers_other": "已创建 {{team}}，共 {{count}} 名成员",
           "createdSomeNotInvited_one": "已创建 {{team}}。无法邀请 {{count}} 人。",
           "createdSomeNotInvited_other": "已创建 {{team}}。无法邀请 {{count}} 人。"
-        }
+        },
+        "dialog": {
+          "tabGeneral": "常规",
+          "tabMembers": "成员",
+          "nameLabel": "团队名称",
+          "renameFailed": "无法重命名 {{team}}，请重试。"
+        },
+        "exit": {
+          "leaveTitle": "退出团队",
+          "leaveBody": "退出此团队。",
+          "leaveAction": "退出团队",
+          "deleteTitle": "删除团队",
+          "deleteBody": "为所有人移除此团队。",
+          "deleteAction": "删除团队",
+          "blockedTitle": "请先添加另一位管理员",
+          "blockedBody": "你是 {{team}} 的唯一管理员。退出前请先将另一位成员设为管理员。",
+          "manageMembers": "管理成员",
+          "leaveConfirmTitle": "退出 {{team}}？",
+          "leaveConfirmBody": "你将被移出此团队，并失去通过它获得的访问权限。其他管理员将继续管理该团队。",
+          "leaveConfirmBodyNoOtherAdmin": "你将被移出此团队，并失去通过它获得的访问权限。",
+          "leaveFailedTitle": "无法退出 {{team}}",
+          "leaveFailedBody": "你仍是此团队的成员。请检查网络连接后重试。",
+          "left": "你已退出 {{team}}。",
+          "deleteConfirmTitle": "删除 {{team}}？",
+          "deleteConfirmBody": "该团队将对所有人移除。通过 {{team}} 获得的访问权限将终止。成员、Teamspace 和笔记不会被删除。",
+          "deleted": "已删除 {{team}}。其成员和 Teamspace 仍可使用。",
+          "deleteFailedTitle": "无法删除 {{team}}",
+          "deleteFailedBody": "团队及其访问设置保持不变。请检查网络连接后重试。",
+          "deleteNotAllowed": "你没有删除 {{team}} 的权限。"
+        },
+        "managedByDirectory": "由你的目录管理"
       },
       "invites": {
         "resending": "重新发送中…",

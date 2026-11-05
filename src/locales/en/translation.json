@@ -2037,7 +2037,8 @@
           "leave": "Leave team",
           "leftTeam": "You left {{team}}",
           "leaveConfirm": "Leave {{team}}?",
-          "leaveConfirmDescription": "You'll lose access to the spaces this team is assigned to unless you were added directly or another team includes you."
+          "leaveConfirmDescription": "You'll lose access to the spaces this team is assigned to unless you were added directly or another team includes you.",
+          "gone": "{{team}} no longer exists."
         },
         "columns": {
           "name": "Name",
@@ -2095,7 +2096,37 @@
           "createdWithMembers_other": "Created {{team}} with {{count}} members",
           "createdSomeNotInvited_one": "Created {{team}}. Couldn't invite {{count}} person.",
           "createdSomeNotInvited_other": "Created {{team}}. Couldn't invite {{count}} people."
-        }
+        },
+        "dialog": {
+          "tabGeneral": "General",
+          "tabMembers": "Members",
+          "nameLabel": "Team name",
+          "renameFailed": "Couldn't rename {{team}}. Try again."
+        },
+        "exit": {
+          "leaveTitle": "Leave team",
+          "leaveBody": "Leave this team.",
+          "leaveAction": "Leave team",
+          "deleteTitle": "Delete team",
+          "deleteBody": "Remove this team for everyone.",
+          "deleteAction": "Delete team",
+          "blockedTitle": "Add another admin first",
+          "blockedBody": "You're the only admin of {{team}}. Make another member an admin before you leave.",
+          "manageMembers": "Manage members",
+          "leaveConfirmTitle": "Leave {{team}}?",
+          "leaveConfirmBody": "You'll be removed from this team and lose access granted through it. Another admin will continue managing the team.",
+          "leaveConfirmBodyNoOtherAdmin": "You'll be removed from this team and lose access granted through it.",
+          "leaveFailedTitle": "Couldn't leave {{team}}",
+          "leaveFailedBody": "You're still a member of this team. Check your connection and try again.",
+          "left": "You left {{team}}.",
+          "deleteConfirmTitle": "Delete {{team}}?",
+          "deleteConfirmBody": "The team will be removed for everyone. Access granted through {{team}} will end. People, teamspaces, and notes won't be deleted.",
+          "deleted": "{{team}} was deleted. Its people and teamspaces are still available.",
+          "deleteFailedTitle": "Couldn't delete {{team}}",
+          "deleteFailedBody": "The team and its access settings are unchanged. Check your connection and try again.",
+          "deleteNotAllowed": "You don't have permission to delete {{team}}."
+        },
+        "managedByDirectory": "Managed by your directory"
       },
       "invites": {
         "resending": "Resending…",

@@ -2037,7 +2037,8 @@
           "leave": "Team verlassen",
           "leftTeam": "Du hast {{team}} verlassen",
           "leaveConfirm": "{{team}} verlassen?",
-          "leaveConfirmDescription": "Du verlierst den Zugriff auf die Spaces, denen dieses Team zugewiesen ist, sofern du nicht direkt hinzugefügt wurdest oder ein anderes Team dich einschließt."
+          "leaveConfirmDescription": "Du verlierst den Zugriff auf die Spaces, denen dieses Team zugewiesen ist, sofern du nicht direkt hinzugefügt wurdest oder ein anderes Team dich einschließt.",
+          "gone": "{{team}} existiert nicht mehr."
         },
         "columns": {
           "name": "Name",
@@ -2095,7 +2096,37 @@
           "createdWithMembers_other": "{{team}} mit {{count}} Mitgliedern erstellt",
           "createdSomeNotInvited_one": "{{team}} erstellt. {{count}} Person konnte nicht eingeladen werden.",
           "createdSomeNotInvited_other": "{{team}} erstellt. {{count}} Personen konnten nicht eingeladen werden."
-        }
+        },
+        "dialog": {
+          "tabGeneral": "Allgemein",
+          "tabMembers": "Mitglieder",
+          "nameLabel": "Teamname",
+          "renameFailed": "{{team}} konnte nicht umbenannt werden. Versuchen Sie es erneut."
+        },
+        "exit": {
+          "leaveTitle": "Team verlassen",
+          "leaveBody": "Dieses Team verlassen.",
+          "leaveAction": "Team verlassen",
+          "deleteTitle": "Team löschen",
+          "deleteBody": "Dieses Team für alle entfernen.",
+          "deleteAction": "Team löschen",
+          "blockedTitle": "Fügen Sie zuerst einen weiteren Admin hinzu",
+          "blockedBody": "Sie sind der einzige Admin von {{team}}. Machen Sie ein anderes Mitglied zum Admin, bevor Sie gehen.",
+          "manageMembers": "Mitglieder verwalten",
+          "leaveConfirmTitle": "{{team}} verlassen?",
+          "leaveConfirmBody": "Sie werden aus diesem Team entfernt und verlieren den Zugriff, der darüber gewährt wurde. Ein anderer Admin verwaltet das Team weiter.",
+          "leaveConfirmBodyNoOtherAdmin": "Sie werden aus diesem Team entfernt und verlieren den Zugriff, der darüber gewährt wurde.",
+          "leaveFailedTitle": "{{team}} konnte nicht verlassen werden",
+          "leaveFailedBody": "Sie sind weiterhin Mitglied dieses Teams. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+          "left": "Sie haben {{team}} verlassen.",
+          "deleteConfirmTitle": "{{team}} löschen?",
+          "deleteConfirmBody": "Das Team wird für alle entfernt. Der über {{team}} gewährte Zugriff endet. Personen, Teamspaces und Notizen werden nicht gelöscht.",
+          "deleted": "{{team}} wurde gelöscht. Die zugehörigen Personen und Teamspaces sind weiterhin verfügbar.",
+          "deleteFailedTitle": "{{team}} konnte nicht gelöscht werden",
+          "deleteFailedBody": "Das Team und seine Zugriffseinstellungen sind unverändert. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+          "deleteNotAllowed": "Sie haben keine Berechtigung, {{team}} zu löschen."
+        },
+        "managedByDirectory": "Von Ihrem Verzeichnis verwaltet"
       },
       "invites": {
         "resending": "Sende erneut…",

@@ -2766,7 +2766,8 @@
           "leave": "チームから退出",
           "leftTeam": "{{team}} から退出しました",
           "leaveConfirm": "{{team}} から退出しますか？",
-          "leaveConfirmDescription": "直接追加されているか他のチームに含まれていない限り、このチームが付与するスペースへのアクセスを失います。"
+          "leaveConfirmDescription": "直接追加されているか他のチームに含まれていない限り、このチームが付与するスペースへのアクセスを失います。",
+          "gone": "{{team}} は存在しなくなりました。"
         },
         "columns": {
           "name": "名前",
@@ -2824,7 +2825,37 @@
           "createdWithMembers_other": "{{team}} を作成しました（メンバー {{count}} 人）",
           "createdSomeNotInvited_one": "{{team}} を作成しました。{{count}} 人を招待できませんでした。",
           "createdSomeNotInvited_other": "{{team}} を作成しました。{{count}} 人を招待できませんでした。"
-        }
+        },
+        "dialog": {
+          "tabGeneral": "一般",
+          "tabMembers": "メンバー",
+          "nameLabel": "チーム名",
+          "renameFailed": "{{team}} の名前を変更できませんでした。もう一度お試しください。"
+        },
+        "exit": {
+          "leaveTitle": "チームから退出",
+          "leaveBody": "このチームから退出します。",
+          "leaveAction": "チームから退出",
+          "deleteTitle": "チームを削除",
+          "deleteBody": "このチームを全員に対して削除します。",
+          "deleteAction": "チームを削除",
+          "blockedTitle": "先に別の管理者を追加してください",
+          "blockedBody": "あなたは {{team}} の唯一の管理者です。退出する前に、別のメンバーを管理者にしてください。",
+          "manageMembers": "メンバーを管理",
+          "leaveConfirmTitle": "{{team}} から退出しますか？",
+          "leaveConfirmBody": "このチームから外れ、チーム経由で付与されたアクセスを失います。別の管理者がチームの管理を続けます。",
+          "leaveConfirmBodyNoOtherAdmin": "このチームから外れ、チーム経由で付与されたアクセスを失います。",
+          "leaveFailedTitle": "{{team}} から退出できませんでした",
+          "leaveFailedBody": "このチームのメンバーのままです。接続を確認して、もう一度お試しください。",
+          "left": "{{team}} から退出しました。",
+          "deleteConfirmTitle": "{{team}} を削除しますか？",
+          "deleteConfirmBody": "チームは全員に対して削除されます。{{team}} 経由で付与されたアクセスは終了します。メンバー、Teamspace、ノートは削除されません。",
+          "deleted": "{{team}} を削除しました。メンバーと Teamspace は引き続き利用できます。",
+          "deleteFailedTitle": "{{team}} を削除できませんでした",
+          "deleteFailedBody": "チームとアクセス設定は変更されていません。接続を確認して、もう一度お試しください。",
+          "deleteNotAllowed": "{{team}} を削除する権限がありません。"
+        },
+        "managedByDirectory": "ディレクトリで管理されています"
       },
       "invites": {
         "resending": "再送信中…",

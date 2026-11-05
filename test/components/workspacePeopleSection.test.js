@@ -117,7 +117,7 @@ async function loadSection(t, { storedTab, realTeamsTab = false } = {}) {
                 return null;
               }
             `,
-            "/TeamMembersDialog": "export default function TeamMembersDialog() { return null; }",
+            "/TeamSettingsDialog": "export default function TeamSettingsDialog() { return null; }",
             "/ui/useToast": "export const useToast = () => ({ toast: () => {} });",
           }
         : {

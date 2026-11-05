@@ -2745,7 +2745,8 @@
           "leave": "Sair da equipe",
           "leftTeam": "Você saiu de {{team}}",
           "leaveConfirm": "Sair de {{team}}?",
-          "leaveConfirmDescription": "Você perderá o acesso aos espaços atribuídos a esta equipe, a menos que tenha sido adicionado diretamente ou outra equipe o inclua."
+          "leaveConfirmDescription": "Você perderá o acesso aos espaços atribuídos a esta equipe, a menos que tenha sido adicionado diretamente ou outra equipe o inclua.",
+          "gone": "{{team}} não existe mais."
         },
         "columns": {
           "name": "Nome",
@@ -2803,7 +2804,37 @@
           "createdWithMembers_other": "{{team}} criada com {{count}} membros",
           "createdSomeNotInvited_one": "{{team}} criada. Não foi possível convidar {{count}} pessoa.",
           "createdSomeNotInvited_other": "{{team}} criada. Não foi possível convidar {{count}} pessoas."
-        }
+        },
+        "dialog": {
+          "tabGeneral": "Geral",
+          "tabMembers": "Membros",
+          "nameLabel": "Nome da equipe",
+          "renameFailed": "Não foi possível renomear {{team}}. Tente novamente."
+        },
+        "exit": {
+          "leaveTitle": "Sair da equipe",
+          "leaveBody": "Sair desta equipe.",
+          "leaveAction": "Sair da equipe",
+          "deleteTitle": "Excluir equipe",
+          "deleteBody": "Remover esta equipe para todos.",
+          "deleteAction": "Excluir equipe",
+          "blockedTitle": "Adicione outro administrador primeiro",
+          "blockedBody": "Você é o único administrador de {{team}}. Torne outro membro administrador antes de sair.",
+          "manageMembers": "Gerenciar membros",
+          "leaveConfirmTitle": "Sair de {{team}}?",
+          "leaveConfirmBody": "Você será removido desta equipe e perderá o acesso concedido por ela. Outro administrador continuará gerenciando a equipe.",
+          "leaveConfirmBodyNoOtherAdmin": "Você será removido desta equipe e perderá o acesso concedido por ela.",
+          "leaveFailedTitle": "Não foi possível sair de {{team}}",
+          "leaveFailedBody": "Você ainda é membro desta equipe. Verifique sua conexão e tente novamente.",
+          "left": "Você saiu de {{team}}.",
+          "deleteConfirmTitle": "Excluir {{team}}?",
+          "deleteConfirmBody": "A equipe será removida para todos. O acesso concedido por {{team}} será encerrado. Pessoas, teamspaces e notas não serão excluídos.",
+          "deleted": "{{team}} foi excluída. Suas pessoas e teamspaces continuam disponíveis.",
+          "deleteFailedTitle": "Não foi possível excluir {{team}}",
+          "deleteFailedBody": "A equipe e suas configurações de acesso não foram alteradas. Verifique sua conexão e tente novamente.",
+          "deleteNotAllowed": "Você não tem permissão para excluir {{team}}."
+        },
+        "managedByDirectory": "Gerenciada pelo seu diretório"
       },
       "invites": {
         "resending": "Reenviando…",

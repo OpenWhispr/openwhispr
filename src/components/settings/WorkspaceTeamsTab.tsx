@@ -5,9 +5,9 @@ import { teamCreationFor } from "../../lib/capabilities";
 import { Button } from "../ui/button";
 import CreateTeamDialog from "../CreateTeamDialog";
 import TeamPaywallDialog from "../workspace/TeamPaywallDialog";
-import TeamMembersDialog from "./TeamMembersDialog";
+import TeamSettingsDialog from "./TeamSettingsDialog";
 import TeamsTable from "./TeamsTable";
-import type { Team, Workspace } from "../../types/electron";
+import type { Workspace } from "../../types/electron";
 
 interface Props {
   workspace: Workspace;
@@ -28,7 +28,10 @@ export default function WorkspaceTeamsTab({
   const { status, teams, stale, reload } = useWorkspaceTeams(workspace.id);
   const [createOpen, setCreateOpen] = useState(false);
   const [paywallOpen, setPaywallOpen] = useState(false);
-  const [openTeam, setOpenTeam] = useState<Team | null>(null);
+  const [openTeamId, setOpenTeamId] = useState<string | null>(null);
+  // Read from the list, so a rename or a reload reaches the open dialog; a team the list no
+  // longer has (deleted, left) takes its dialog with it.
+  const openTeam = teams.find((team) => team.id === openTeamId) ?? null;
   // Only whether Create is offered; a workspace below Business still sees it, and the opener
   // decides what pressing it does.
   const canCreate = teamCreationFor(workspace) !== "unavailable";
@@ -71,7 +74,7 @@ export default function WorkspaceTeamsTab({
         canCreate={canCreate}
         onRetry={() => void reload()}
         onCreate={openCreate}
-        onOpen={setOpenTeam}
+        onOpen={(team) => setOpenTeamId(team.id)}
       />
 
       <CreateTeamDialog
@@ -90,15 +93,20 @@ export default function WorkspaceTeamsTab({
       <TeamPaywallDialog workspace={workspace} open={paywallOpen} onOpenChange={setPaywallOpen} />
 
       {openTeam && (
-        <TeamMembersDialog
+        <TeamSettingsDialog
           team={openTeam}
           workspace={workspace}
           open
           onOpenChange={(open) => {
             if (!open) {
-              setOpenTeam(null);
+              setOpenTeamId(null);
               void reload();
             }
+          }}
+          onChanged={() => void reload()}
+          onGone={() => {
+            setOpenTeamId(null);
+            void reload();
           }}
         />
       )}

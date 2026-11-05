@@ -228,9 +228,11 @@ export function classifySpaceError(error: unknown): SpaceActionError {
 /**
  * The row-action kind a confirm dialog can show for a failed space action. The kinds only a space
  * has (a taken name, the last admin, a closed or archived space) have no screen of their own
- * there, so they read as a plain failure.
+ * there, so they read as a plain failure; a team's own kinds read the same way.
  */
-export function rowActionErrorOf(failure: SpaceActionError | undefined): RowActionError {
+export function rowActionErrorOf(
+  failure: SpaceActionError | TeamActionError | undefined
+): RowActionError {
   switch (failure?.kind) {
     case "gone":
     case "notAllowed":

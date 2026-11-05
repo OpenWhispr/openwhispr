@@ -115,9 +115,9 @@ async function loadTab(t, { workspace = ADMIN, status = "ready", teams = [], sta
           return null;
         }
       `,
-      "/TeamMembersDialog": `
-        export default function TeamMembersDialog(props) {
-          globalThis.__membersDialog = props;
+      "/TeamSettingsDialog": `
+        export default function TeamSettingsDialog(props) {
+          globalThis.__teamDialog = props;
           return null;
         }
       `,
@@ -154,7 +154,7 @@ async function loadTab(t, { workspace = ADMIN, status = "ready", teams = [], sta
       "__listMembers",
       "__createDialog",
       "__paywallDialog",
-      "__membersDialog",
+      "__teamDialog",
       "__reloads",
     ]) {
       delete globalThis[name];
@@ -324,13 +324,13 @@ test("a free workspace's table and dialog stay fully working", async (t) => {
   assert.doesNotMatch(markup, /aria-disabled/);
 
   const container = await mount(t, Tab, workspace);
-  assert.equal(globalThis.__membersDialog, undefined);
+  assert.equal(globalThis.__teamDialog, undefined);
   await React.act(async () => propsOf(rowNode(container, "Designers")).onClick());
-  assert.equal(globalThis.__membersDialog.open, true);
-  assert.equal(globalThis.__membersDialog.team.id, "t1");
+  assert.equal(globalThis.__teamDialog.open, true);
+  assert.equal(globalThis.__teamDialog.team.id, "t1");
 
   // Closing reads the list again, since the dialog can change it.
-  await React.act(async () => globalThis.__membersDialog.onOpenChange(false));
+  await React.act(async () => globalThis.__teamDialog.onOpenChange(false));
   assert.equal(globalThis.__reloads, 1);
 });
 
@@ -507,13 +507,13 @@ test("pressing a cell's menu doesn't open the dialog", async (t) => {
     });
     assert.ok(stopped, "the cell keeps its click off the row");
   }
-  assert.equal(globalThis.__membersDialog, undefined);
+  assert.equal(globalThis.__teamDialog, undefined);
 
   // The name is a real button, so the keyboard reaches the row.
   const name = findNode(row, (node) => node.tagName === "BUTTON" && textOf(node) === "Eng");
   assert.ok(name);
   await React.act(async () => propsOf(row).onClick());
-  assert.equal(globalThis.__membersDialog.open, true);
+  assert.equal(globalThis.__teamDialog.open, true);
 });
 
 test("a team with an emoji shows it in its tile", async (t) => {

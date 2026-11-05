@@ -2766,7 +2766,8 @@
           "leave": "退出團隊",
           "leftTeam": "你已退出 {{team}}",
           "leaveConfirm": "退出 {{team}}？",
-          "leaveConfirmDescription": "除非你被直接加入或其他團隊包含你，否則你將失去透過該團隊取得的空間存取權。"
+          "leaveConfirmDescription": "除非你被直接加入或其他團隊包含你，否則你將失去透過該團隊取得的空間存取權。",
+          "gone": "{{team}} 已不存在。"
         },
         "columns": {
           "name": "名稱",
@@ -2824,7 +2825,37 @@
           "createdWithMembers_other": "已建立 {{team}}，共 {{count}} 位成員",
           "createdSomeNotInvited_one": "已建立 {{team}}。無法邀請 {{count}} 人。",
           "createdSomeNotInvited_other": "已建立 {{team}}。無法邀請 {{count}} 人。"
-        }
+        },
+        "dialog": {
+          "tabGeneral": "一般",
+          "tabMembers": "成員",
+          "nameLabel": "團隊名稱",
+          "renameFailed": "無法重新命名 {{team}}，請再試一次。"
+        },
+        "exit": {
+          "leaveTitle": "退出團隊",
+          "leaveBody": "退出此團隊。",
+          "leaveAction": "退出團隊",
+          "deleteTitle": "刪除團隊",
+          "deleteBody": "為所有人移除此團隊。",
+          "deleteAction": "刪除團隊",
+          "blockedTitle": "請先新增另一位管理員",
+          "blockedBody": "你是 {{team}} 的唯一管理員。退出前請先將另一位成員設為管理員。",
+          "manageMembers": "管理成員",
+          "leaveConfirmTitle": "退出 {{team}}？",
+          "leaveConfirmBody": "你將被移出此團隊，並失去透過它取得的存取權限。其他管理員將繼續管理該團隊。",
+          "leaveConfirmBodyNoOtherAdmin": "你將被移出此團隊，並失去透過它取得的存取權限。",
+          "leaveFailedTitle": "無法退出 {{team}}",
+          "leaveFailedBody": "你仍是此團隊的成員。請檢查網路連線後再試一次。",
+          "left": "你已退出 {{team}}。",
+          "deleteConfirmTitle": "刪除 {{team}}？",
+          "deleteConfirmBody": "該團隊將對所有人移除。透過 {{team}} 取得的存取權限將終止。成員、Teamspace 和筆記不會被刪除。",
+          "deleted": "已刪除 {{team}}。其成員和 Teamspace 仍可使用。",
+          "deleteFailedTitle": "無法刪除 {{team}}",
+          "deleteFailedBody": "團隊及其存取設定維持不變。請檢查網路連線後再試一次。",
+          "deleteNotAllowed": "你沒有刪除 {{team}} 的權限。"
+        },
+        "managedByDirectory": "由你的目錄管理"
       },
       "invites": {
         "resending": "重新傳送中…",

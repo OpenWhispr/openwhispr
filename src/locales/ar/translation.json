@@ -4260,7 +4260,8 @@
           "leave": "مغادرة الفريق",
           "leftTeam": "لقد غادرت {{team}}",
           "leaveConfirm": "مغادرة {{team}}؟",
-          "leaveConfirmDescription": "ستفقد إمكانية الوصول إلى المساحات المخصصة لهذا الفريق ما لم تكن مضافًا مباشرةً أو يضمك فريق آخر."
+          "leaveConfirmDescription": "ستفقد إمكانية الوصول إلى المساحات المخصصة لهذا الفريق ما لم تكن مضافًا مباشرةً أو يضمك فريق آخر.",
+          "gone": "لم يعد {{team}} موجودًا."
         },
         "columns": {
           "name": "الاسم",
@@ -4338,7 +4339,37 @@
           "createdSomeNotInvited_few": "تم إنشاء {{team}}. تعذرت دعوة {{count}} أشخاص.",
           "createdSomeNotInvited_many": "تم إنشاء {{team}}. تعذرت دعوة {{count}} شخصًا.",
           "createdSomeNotInvited_other": "تم إنشاء {{team}}. تعذرت دعوة {{count}} شخص."
-        }
+        },
+        "dialog": {
+          "tabGeneral": "عام",
+          "tabMembers": "الأعضاء",
+          "nameLabel": "اسم الفريق",
+          "renameFailed": "تعذّر تغيير اسم {{team}}. حاول مرة أخرى."
+        },
+        "exit": {
+          "leaveTitle": "مغادرة الفريق",
+          "leaveBody": "غادر هذا الفريق.",
+          "leaveAction": "مغادرة الفريق",
+          "deleteTitle": "حذف الفريق",
+          "deleteBody": "أزل هذا الفريق للجميع.",
+          "deleteAction": "حذف الفريق",
+          "blockedTitle": "أضف مسؤولًا آخر أولًا",
+          "blockedBody": "أنت المسؤول الوحيد عن {{team}}. اجعل عضوًا آخر مسؤولًا قبل أن تغادر.",
+          "manageMembers": "إدارة الأعضاء",
+          "leaveConfirmTitle": "هل تريد مغادرة {{team}}؟",
+          "leaveConfirmBody": "ستتم إزالتك من هذا الفريق وستفقد الوصول الممنوح من خلاله. سيواصل مسؤول آخر إدارة الفريق.",
+          "leaveConfirmBodyNoOtherAdmin": "ستتم إزالتك من هذا الفريق وستفقد الوصول الممنوح من خلاله.",
+          "leaveFailedTitle": "تعذّرت مغادرة {{team}}",
+          "leaveFailedBody": "ما زلت عضوًا في هذا الفريق. تحقق من اتصالك وحاول مرة أخرى.",
+          "left": "غادرت {{team}}.",
+          "deleteConfirmTitle": "هل تريد حذف {{team}}؟",
+          "deleteConfirmBody": "ستتم إزالة الفريق للجميع. سينتهي الوصول الممنوح من خلال {{team}}. لن يتم حذف الأشخاص ومساحات الفريق والملاحظات.",
+          "deleted": "تم حذف {{team}}. لا يزال أعضاؤه ومساحات الفريق متاحة.",
+          "deleteFailedTitle": "تعذّر حذف {{team}}",
+          "deleteFailedBody": "لم يتغير الفريق ولا إعدادات الوصول الخاصة به. تحقق من اتصالك وحاول مرة أخرى.",
+          "deleteNotAllowed": "ليس لديك إذن لحذف {{team}}."
+        },
+        "managedByDirectory": "تتم إدارته بواسطة دليلك"
       },
       "invites": {
         "resending": "جاري إعادة الإرسال…",

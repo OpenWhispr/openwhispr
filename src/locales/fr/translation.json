@@ -2037,7 +2037,8 @@
           "leave": "Quitter l'équipe",
           "leftTeam": "Vous avez quitté {{team}}",
           "leaveConfirm": "Quitter {{team}} ?",
-          "leaveConfirmDescription": "Vous perdrez l'accès aux espaces auxquels cette équipe est rattachée, sauf si vous y avez été ajouté directement ou si une autre équipe vous inclut."
+          "leaveConfirmDescription": "Vous perdrez l'accès aux espaces auxquels cette équipe est rattachée, sauf si vous y avez été ajouté directement ou si une autre équipe vous inclut.",
+          "gone": "{{team}} n'existe plus."
         },
         "columns": {
           "name": "Nom",
@@ -2095,7 +2096,37 @@
           "createdWithMembers_other": "{{team}} créée avec {{count}} membres",
           "createdSomeNotInvited_one": "{{team}} créée. Impossible d'inviter {{count}} personne.",
           "createdSomeNotInvited_other": "{{team}} créée. Impossible d'inviter {{count}} personnes."
-        }
+        },
+        "dialog": {
+          "tabGeneral": "Général",
+          "tabMembers": "Membres",
+          "nameLabel": "Nom de l'équipe",
+          "renameFailed": "Impossible de renommer {{team}}. Réessayez."
+        },
+        "exit": {
+          "leaveTitle": "Quitter l'équipe",
+          "leaveBody": "Quitter cette équipe.",
+          "leaveAction": "Quitter l'équipe",
+          "deleteTitle": "Supprimer l'équipe",
+          "deleteBody": "Retirer cette équipe pour tout le monde.",
+          "deleteAction": "Supprimer l'équipe",
+          "blockedTitle": "Ajoutez d'abord un autre administrateur",
+          "blockedBody": "Vous êtes le seul administrateur de {{team}}. Nommez un autre membre administrateur avant de partir.",
+          "manageMembers": "Gérer les membres",
+          "leaveConfirmTitle": "Quitter {{team}} ?",
+          "leaveConfirmBody": "Vous serez retiré de cette équipe et perdrez l'accès qu'elle accorde. Un autre administrateur continuera de gérer l'équipe.",
+          "leaveConfirmBodyNoOtherAdmin": "Vous serez retiré de cette équipe et perdrez l'accès qu'elle accorde.",
+          "leaveFailedTitle": "Impossible de quitter {{team}}",
+          "leaveFailedBody": "Vous êtes toujours membre de cette équipe. Vérifiez votre connexion et réessayez.",
+          "left": "Vous avez quitté {{team}}.",
+          "deleteConfirmTitle": "Supprimer {{team}} ?",
+          "deleteConfirmBody": "L'équipe sera retirée pour tout le monde. L'accès accordé via {{team}} prendra fin. Les personnes, teamspaces et notes ne seront pas supprimés.",
+          "deleted": "{{team}} a été supprimée. Ses personnes et ses teamspaces restent disponibles.",
+          "deleteFailedTitle": "Impossible de supprimer {{team}}",
+          "deleteFailedBody": "L'équipe et ses paramètres d'accès sont inchangés. Vérifiez votre connexion et réessayez.",
+          "deleteNotAllowed": "Vous n'avez pas l'autorisation de supprimer {{team}}."
+        },
+        "managedByDirectory": "Géré par votre annuaire"
       },
       "invites": {
         "resending": "Renvoi…",
