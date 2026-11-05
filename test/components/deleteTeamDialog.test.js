@@ -28,7 +28,7 @@ test.before(async (t) => {
       "react-i18next": ENGLISH_I18N_MOCK,
       "/i18n": "export default { t: (key) => key, language: 'en' };",
       "/ui/useToast":
-        "export const useToast = () => ({ toast: (toast) => `toast-${globalThis.__toasts.push(toast)}`, dismiss: (id) => globalThis.__dismissed.push(id) });",
+        "export const useToast = () => ({ toast: (toast) => `toast-${globalThis.__toasts.push(toast)}`, dismiss: (id) => globalThis.__dismissed(id) });",
       "/services/spaceActions":
         "export const holdTeamDelete = (...args) => globalThis.__holdTeamDelete(...args);",
     },
@@ -69,17 +69,20 @@ async function mount(
   const calls = [];
   const events = [];
   globalThis.__toasts = [];
-  globalThis.__dismissed = [];
+  globalThis.__dismissed = (id) => calls.push(["dismiss", id]);
+  let undone = false;
   globalThis.__holdTeamDelete = (target) => {
     calls.push(["hold", target]);
     return {
       undo: async () => {
         calls.push(["undo"]);
+        undone = true;
         return undo();
       },
+      // As the real hold: nothing is sent once it has been undone.
       commit: async () => {
         calls.push(["commit"]);
-        return commit();
+        return undone ? null : commit();
       },
       again: () => (again ? again() : globalThis.__holdTeamDelete(target)),
     };
@@ -153,13 +156,18 @@ test("Undo sends nothing", async (t) => {
   const { calls, deleted, undo } = await confirmDelete(t);
 
   await undo.onClick();
-  // The real hold does nothing for a commit after an undo; the toast still settles.
+  // Dismissing the toast ends the window, which is what would send the delete.
   deleted.onSettled();
   await ui.settle();
 
-  assert.deepEqual(calls.slice(1, 2), [["undo"]]);
-  assert.deepEqual(globalThis.__dismissed, ["toast-1"]);
+  assert.deepEqual(
+    calls.map(([name]) => name),
+    ["hold", "undo", "dismiss", "commit"],
+    "the hold is undone before the toast goes"
+  );
+  assert.deepEqual(calls[2], ["dismiss", "toast-1"]);
   assert.equal(undo.dismissOnClick, false, "dismissing first would let the delete go ahead");
+  assert.equal(toasts().length, 1, "a commit after an undo reports nothing");
 });
 
 test("the window ending sends the delete once", async (t) => {

@@ -23,6 +23,8 @@ interface LeaveTeamDialogProps {
   onManageMembers: () => void;
   /** The user is out, so whatever hosts the team's settings can react. */
   onLeft: () => void;
+  /** The team no longer exists (deleted, or the user left the workspace). */
+  onGone: () => void;
 }
 
 // Asks, runs, and answers for leaving a team: the confirm, the block for its only admin, and a
@@ -37,6 +39,7 @@ export default function LeaveTeamDialog({
   otherAdmins,
   onManageMembers,
   onLeft,
+  onGone,
 }: LeaveTeamDialogProps): ReactElement | null {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -73,12 +76,21 @@ export default function LeaveTeamDialog({
       await leaveTeam(team.id, userId);
     } catch (error) {
       const failure = classifyTeamError(error);
-      // A team that no longer has this user in it is a team they have left.
-      if (failure.kind !== "gone") {
-        if (failure.kind === "lastAdmin") setBlocked(true);
-        dispatch({ type: "failed", error: rowActionErrorOf(failure) });
+      // Leaving again is idempotent on the server, so a missing team is not "already left": it
+      // was deleted, or the user is no longer in the workspace.
+      if (failure.kind === "gone") {
+        toast({
+          title: t("settingsPage.workspace.teams.members.gone", { team: name }),
+          variant: "destructive",
+        });
+        dispatch({ type: "succeeded" });
+        onOpenChange(false);
+        onGone();
         return;
       }
+      if (failure.kind === "lastAdmin") setBlocked(true);
+      dispatch({ type: "failed", error: rowActionErrorOf(failure) });
+      return;
     }
     toast({ title: t(`${KEY}.left`, { team: name }) });
     dispatch({ type: "succeeded" });

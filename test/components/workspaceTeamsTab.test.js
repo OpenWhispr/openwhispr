@@ -520,3 +520,17 @@ test("a team with an emoji shows it in its tile", async (t) => {
   const { Tab, workspace } = await loadTab(t, { teams: [team("t1", "Sales", { emoji: "💼" })] });
   assert.match(render(Tab, workspace), /data-glyph="💼"/);
 });
+
+test("a dialog opened in one workspace doesn't come back when switching away and back", async (t) => {
+  const { Tab, workspace } = await loadTab(t, { teams: [team("t1", "Designers")] });
+  const container = await mount(t, Tab, workspace);
+  await React.act(async () => propsOf(rowNode(container, "Designers")).onClick());
+  assert.equal(globalThis.__teamDialog.open, true);
+
+  globalThis.__teamDialog = undefined;
+  const root = mountedRoots.get(t);
+  await React.act(async () => root.render(tabElement(Tab, { ...workspace, id: "w2" })));
+  await React.act(async () => root.render(tabElement(Tab, workspace)));
+
+  assert.equal(globalThis.__teamDialog, undefined);
+});

@@ -29,6 +29,12 @@ export default function WorkspaceTeamsTab({
   const [createOpen, setCreateOpen] = useState(false);
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [openTeamId, setOpenTeamId] = useState<string | null>(null);
+  // A dialog belongs to the workspace it was opened in: switching away and back doesn't reopen it.
+  const [dialogWorkspaceId, setDialogWorkspaceId] = useState(workspace.id);
+  if (workspace.id !== dialogWorkspaceId) {
+    setDialogWorkspaceId(workspace.id);
+    setOpenTeamId(null);
+  }
   // Read from the list, so a rename or a reload reaches the open dialog; a team the list no
   // longer has (deleted, left) takes its dialog with it.
   const openTeam = teams.find((team) => team.id === openTeamId) ?? null;

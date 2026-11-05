@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
-import { Loader2, LogOut, Settings, Trash2, UserCircle } from "../icons";
+import { Loader2, Settings, Trash2, User, UserCircle } from "../icons";
 import { ConfirmDialog, Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { useToast } from "../ui/useToast";
@@ -16,7 +16,7 @@ import { TeamsService } from "../../services/TeamsService";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import InviteTeammateDialog from "../InviteTeammateDialog";
 import TeamRosterSection from "../TeamRosterSection";
-import { TileGlyph } from "../notes/SpaceNameField";
+import { TeamGlyph } from "../workspace/TeamGlyph";
 import { SettingRow } from "../workspace/SettingRow";
 import {
   INLINE_FIELD_CLASS,
@@ -93,9 +93,19 @@ export default function TeamSettingsDialog({
   // A name the server just refused, which closing or leaving the field shouldn't send again.
   const refusedName = useRef<string | null>(null);
   const isOpen = useRef(open);
+  // Set once the dialog is closing or gone, so an answer that lands after it can't be shown in
+  // a field that is no longer there.
+  const closing = useRef(false);
+  const mounted = useRef(true);
   useEffect(() => {
     isOpen.current = open;
   }, [open]);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   // Radix keeps the Esc handler it first saw, so the current one is read through a ref.
   const escapeHandler = useRef<(event: KeyboardEvent) => void>(() => {});
 
@@ -123,6 +133,7 @@ export default function TeamSettingsDialog({
     setTab(initialTab);
     setNameTaken(null);
     refusedName.current = null;
+    if (open) closing.current = false;
   }
 
   const commitName = async (): Promise<void> => {
@@ -133,7 +144,12 @@ export default function TeamSettingsDialog({
       setDraftName(nameBaseline);
       return;
     }
-    if (namesInFlight.current.has(name) || name === refusedName.current) return;
+    if (name === refusedName.current) {
+      // Still the refused name: the message stays with it.
+      setNameTaken(name);
+      return;
+    }
+    if (namesInFlight.current.has(name)) return;
     namesInFlight.current.add(name);
     try {
       await renameTeam(team.id, name);
@@ -145,7 +161,14 @@ export default function TeamSettingsDialog({
       if (failure.kind === "nameTaken") {
         // Stays in the field, so the user can change it rather than type it again.
         refusedName.current = name;
-        setNameTaken(name);
+        if (closing.current || !mounted.current) {
+          toast({
+            title: t(`${KEY}.form.nameTaken`, { name: isolate(name) }),
+            variant: "destructive",
+          });
+        } else {
+          setNameTaken(name);
+        }
       } else if (failure.kind === "gone") {
         toast({
           title: t(`${KEY}.members.gone`, { team: isolate(team.name) }),
@@ -180,30 +203,34 @@ export default function TeamSettingsDialog({
   });
 
   const close = (): void => {
+    closing.current = true;
     void commitName();
     onOpenChange(false);
   };
 
-  // Reads the roster afresh before the confirm opens: who else is an admin changes while this
-  // dialog is open (the block sends people to the Members tab to fix exactly that). Only a
-  // workspace admin's answer depends on it, since anyone else who is the only admin is blocked
-  // by the row. A failed read leaves the answer to the server.
+  // Reads the roster afresh before the confirm opens, whatever the row says: who else is an admin
+  // changes while this dialog is open (the block sends people to the Members tab to fix exactly
+  // that), and nothing reloads the row after a roster change. The user is the only admin when the
+  // read shows one admin row and it is theirs; a workspace admin keeps access either way, so
+  // they are never blocked. A failed read falls back to the row, then to the server's refusal.
   const startLeave = async (): Promise<void> => {
-    let otherAdmins = true;
-    if (isWorkspaceAdmin) {
-      setCheckingLeave(true);
-      try {
-        const members = await TeamsService.listMembers(team.id);
-        otherAdmins = members.some(
-          (member) => member.role === "admin" && member.user_id !== userId
-        );
-      } catch {
-        // Unknown: the default wording, and the server decides.
-      }
-      setCheckingLeave(false);
-      if (!isOpen.current) return;
+    if (checkingLeave || deleteOpen) return;
+    setCheckingLeave(true);
+    let facts = { soleAdmin: team.sole_admin, otherAdmins: true };
+    try {
+      const admins = (await TeamsService.listMembers(team.id)).filter(
+        (member) => member.role === "admin"
+      );
+      facts = {
+        soleAdmin: !isWorkspaceAdmin && admins.length === 1 && admins[0].user_id === userId,
+        otherAdmins: admins.some((member) => member.user_id !== userId),
+      };
+    } catch {
+      // Unknown: the row's answer and the default wording, and the server decides.
     }
-    setLeaveFacts({ soleAdmin: team.sole_admin, otherAdmins });
+    setCheckingLeave(false);
+    if (!mounted.current || !isOpen.current) return;
+    setLeaveFacts(facts);
     setLeaveOpen(true);
   };
 
@@ -212,14 +239,14 @@ export default function TeamSettingsDialog({
       <div className="divide-y divide-border/60 overflow-hidden rounded-xl bg-surface-1">
         {canLeave && (
           <SettingRow
-            icon={LogOut}
+            icon={User}
             title={t(`${KEY}.exit.leaveTitle`)}
             body={t(`${KEY}.exit.leaveBody`)}
           >
             <button
               type="button"
               onClick={() => void startLeave()}
-              disabled={checkingLeave}
+              disabled={checkingLeave || deleteOpen}
               aria-busy={checkingLeave}
               className={cn(
                 ROW_BUTTON_CLASS,
@@ -240,6 +267,7 @@ export default function TeamSettingsDialog({
             <button
               type="button"
               onClick={() => setDeleteOpen(true)}
+              disabled={checkingLeave}
               className={cn(
                 ROW_BUTTON_CLASS,
                 "bg-destructive/10 text-destructive hover:bg-destructive/20"
@@ -266,7 +294,7 @@ export default function TeamSettingsDialog({
               className="flex size-[42px] shrink-0 items-center justify-center rounded-full bg-surface-3"
               aria-hidden="true"
             >
-              <TileGlyph emoji={team.emoji ?? null} name={team.name} />
+              <TeamGlyph emoji={team.emoji} name={team.name} />
             </span>
             <div className="w-full min-w-0 space-y-1">
               {canRename ? (
@@ -328,7 +356,12 @@ export default function TeamSettingsDialog({
               {general}
             </TabsContent>
             <TabsContent value="members" className="mt-4">
-              <RosterPanel team={team} workspace={workspace} />
+              <RosterPanel
+                team={team}
+                workspace={workspace}
+                managed={managed}
+                onChanged={onChanged}
+              />
             </TabsContent>
           </Tabs>
         </DialogContent>
@@ -344,18 +377,12 @@ export default function TeamSettingsDialog({
           otherAdmins={leaveFacts.otherAdmins}
           onManageMembers={() => setTab("members")}
           onLeft={isWorkspaceAdmin ? onChanged : onGone}
+          onGone={onGone}
         />
       )}
 
       {deleteOpen && (
-        <DeleteTeamDialog
-          team={team}
-          onClose={() => setDeleteOpen(false)}
-          onDeleted={() => {
-            onOpenChange(false);
-            onGone();
-          }}
-        />
+        <DeleteTeamDialog team={team} onClose={() => setDeleteOpen(false)} onDeleted={onGone} />
       )}
     </>
   );
@@ -364,11 +391,13 @@ export default function TeamSettingsDialog({
 interface RosterPanelProps {
   team: Team;
   workspace: Workspace;
+  managed: boolean;
+  onChanged: () => void;
 }
 
 // The roster as it was before the Members tab was rebuilt: the old section with its remove
 // confirm and the invite for an unknown address.
-function RosterPanel({ team, workspace }: RosterPanelProps): ReactElement {
+function RosterPanel({ team, workspace, managed, onChanged }: RosterPanelProps): ReactElement {
   const { t } = useTranslation();
   const { user } = useAuth();
   const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
@@ -377,6 +406,18 @@ function RosterPanel({ team, workspace }: RosterPanelProps): ReactElement {
   );
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState<string | undefined>(undefined);
+
+  // The roster reports after its first read and after every change. The first is not a change,
+  // and the callback stays the same function, since the roster reads again when it changes.
+  const onChangedRef = useRef(onChanged);
+  useEffect(() => {
+    onChangedRef.current = onChanged;
+  });
+  const rosterReads = useRef(0);
+  const onRosterChange = useCallback((): void => {
+    rosterReads.current += 1;
+    if (rosterReads.current > 1) onChangedRef.current();
+  }, []);
 
   useEffect(() => {
     void refreshMembers(workspace.id).catch(() => {});
@@ -400,7 +441,7 @@ function RosterPanel({ team, workspace }: RosterPanelProps): ReactElement {
       <TeamRosterSection
         teamId={team.id}
         teamName={team.name}
-        canManage={teamCan(team, workspace, "manage_members")}
+        canManage={!managed && teamCan(team, workspace, "manage_members")}
         workspaceMembers={roster}
         currentUserId={user?.id}
         // Workspace invites are 403'd without manage_members.
@@ -412,6 +453,7 @@ function RosterPanel({ team, workspace }: RosterPanelProps): ReactElement {
               }
             : undefined
         }
+        onRosterChange={onRosterChange}
         removeConfirm={confirmRemoveMember}
       />
 

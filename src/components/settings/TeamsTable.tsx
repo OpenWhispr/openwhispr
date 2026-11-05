@@ -4,7 +4,7 @@ import { ChevronDown, FolderRounded, Loader2, Plus, Users } from "../icons";
 import { Button } from "../ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import MemberAvatar from "../MemberAvatar";
-import { TileGlyph } from "../notes/SpaceNameField";
+import { TeamGlyph } from "../workspace/TeamGlyph";
 import { cn } from "../lib/utils";
 import { isolate } from "../../utils/bidiIsolate";
 import { TeamsService } from "../../services/TeamsService";
@@ -146,11 +146,7 @@ function TeamRow({
       <td className="ps-4 pe-3 max-w-0">
         <div className="flex min-w-0 items-center gap-3">
           <span aria-hidden="true" className={NAME_TILE}>
-            {team.emoji ? (
-              <TileGlyph emoji={team.emoji} name={team.name} />
-            ) : (
-              <Users className="size-3.5 text-muted-foreground" />
-            )}
+            <TeamGlyph emoji={team.emoji} name={team.name} />
           </span>
           {/* A real button, so the keyboard reaches the row; its click bubbles to the row. */}
           <button

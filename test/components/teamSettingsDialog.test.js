@@ -72,6 +72,11 @@ test.after(async () => {
 const h = React.createElement;
 const doc = () => happyWindow.document;
 const dialog = () => [...doc().querySelectorAll('[role="dialog"]')][0] ?? null;
+const top = () => [...doc().querySelectorAll('[role="dialog"]')].at(-1) ?? null;
+const topButton = (label) =>
+  [...top().querySelectorAll("button")].find((button) => text(button) === label);
+const tabNamed = (label) =>
+  [...dialog().querySelectorAll('[role="tab"]')].find((tab) => text(tab) === label);
 const buttonTexts = () => [...(dialog()?.querySelectorAll("button") ?? [])].map(text);
 const buttonNamed = (label) =>
   [...dialog().querySelectorAll("button")].find((button) => text(button) === label);
@@ -108,18 +113,36 @@ const team = (capabilities, overrides = {}) => ({
   ...overrides,
 });
 
-async function mount(t, { team: subject, ws = workspace(false), renameTeam } = {}) {
+async function mount(
+  t,
+  {
+    team: subject,
+    ws = workspace(false),
+    renameTeam,
+    listMembers = async () => [],
+    leaveTeam = async () => {},
+  } = {}
+) {
   const calls = [];
   const events = [];
   globalThis.__toasts = [];
-  globalThis.__listMembers = async () => [];
+  globalThis.__listMembers = async (...args) => {
+    calls.push(["listMembers", ...args]);
+    return listMembers(...args);
+  };
   globalThis.__actions = {
     renameTeam: async (...args) => {
       calls.push(["renameTeam", ...args]);
       return renameTeam ? renameTeam(...args) : { ...subject, name: args[1] };
     },
-    leaveTeam: async () => {},
-    holdTeamDelete: () => ({}),
+    leaveTeam: async (...args) => {
+      calls.push(["leaveTeam", ...args]);
+      return leaveTeam(...args);
+    },
+    holdTeamDelete: (target) => {
+      calls.push(["hold", target.id]);
+      return { undo: async () => true, commit: async () => null, again: () => null };
+    },
   };
   function Host() {
     const [open, setOpen] = React.useState(true);
@@ -197,9 +220,10 @@ test("a member reads plain text", async (t) => {
 });
 
 test("a directory team is read-only, with a line saying why", async (t) => {
+  // Every capability on: the directory, not the capabilities, is what makes it read-only.
   await mount(t, {
     team: team(
-      { manage_settings: false, manage_members: false, leave: false },
+      { manage_settings: true, manage_members: true, leave: true },
       { directory_synced: true }
     ),
     ws: workspace(true),
@@ -209,6 +233,9 @@ test("a directory team is read-only, with a line saying why", async (t) => {
   assert.match(text(dialog()), /Managed by your directory/);
   assert.equal(buttonNamed("Leave team"), undefined);
   assert.equal(buttonNamed("Delete team"), undefined);
+
+  await ui.pressTab(tabNamed("Members"));
+  assert.equal(globalThis.__rosterProps.canManage, false);
 });
 
 test("Leave shows only with the capability", async (t) => {
@@ -233,4 +260,211 @@ test("with neither capability there is nothing but the header", async (t) => {
     []
   );
   assert.deepEqual(toastTitles(), []);
+});
+
+const me = (role) => ({ user_id: "me", role });
+const ethan = (role) => ({ user_id: "ethan", role });
+
+test("Manage members switches to the Members tab", async (t) => {
+  await mount(t, {
+    team: team({ leave: true }, { sole_admin: true }),
+    listMembers: async () => [me("admin"), ethan("member")],
+  });
+
+  await ui.click(buttonNamed("Leave team"));
+  await ui.settle();
+  assert.equal(text(top().querySelector("h2")), "Add another admin first");
+
+  await ui.click(topButton("Manage members"));
+
+  assert.equal(tabNamed("Members").getAttribute("aria-selected"), "true");
+  assert.ok(globalThis.__rosterProps, "the roster is showing");
+});
+
+test("after making another admin, Leave opens the confirm instead of the block", async (t) => {
+  let members = [me("admin"), ethan("member")];
+  const { events } = await mount(t, {
+    team: team({ leave: true }, { sole_admin: true }),
+    listMembers: async () => members,
+  });
+
+  await ui.click(buttonNamed("Leave team"));
+  await ui.settle();
+  await ui.click(topButton("Manage members"));
+
+  // The roster's first report is its read; the second is a change.
+  members = [me("admin"), ethan("admin")];
+  await ui.act(() => globalThis.__rosterProps.onRosterChange([]));
+  assert.deepEqual(events, [], "the first report is not a change");
+  await ui.act(() => globalThis.__rosterProps.onRosterChange([]));
+  assert.deepEqual(events, [["changed"]]);
+
+  await ui.pressTab(tabNamed("General"));
+  await ui.click(buttonNamed("Leave team"));
+  await ui.settle();
+
+  assert.equal(text(top().querySelector("h2")), "Leave Sales?");
+});
+
+test("a failed roster read leaves the answer to the row", async (t) => {
+  await mount(t, {
+    team: team({ leave: true }, { sole_admin: true }),
+    listMembers: async () => {
+      throw new Error("offline");
+    },
+  });
+
+  await ui.click(buttonNamed("Leave team"));
+  await ui.settle();
+
+  assert.equal(text(top().querySelector("h2")), "Add another admin first");
+});
+
+test("a workspace admin who leaves stays; anyone else is gone", async (t) => {
+  const admin = await mount(t, {
+    team: team({ leave: true }),
+    ws: workspace(true),
+    listMembers: async () => [me("admin"), ethan("admin")],
+  });
+  await ui.click(buttonNamed("Leave team"));
+  await ui.settle();
+  await ui.click(topButton("Leave team"));
+  await ui.settle();
+  assert.deepEqual(
+    admin.calls.filter(([name]) => name === "leaveTeam"),
+    [["leaveTeam", "t1", "me"]]
+  );
+  assert.deepEqual(admin.events, [["changed"]]);
+});
+
+test("a team member who leaves reports the team gone", async (t) => {
+  const { events } = await mount(t, {
+    team: team({ leave: true }),
+    listMembers: async () => [me("admin"), ethan("admin")],
+  });
+  await ui.click(buttonNamed("Leave team"));
+  await ui.settle();
+  await ui.click(topButton("Leave team"));
+  await ui.settle();
+  assert.deepEqual(events, [["gone"]]);
+});
+
+test("a workspace admin who is the only explicit admin gets the shorter body", async (t) => {
+  await mount(t, {
+    team: team({ leave: true }),
+    ws: workspace(true),
+    listMembers: async () => [me("admin"), ethan("member")],
+  });
+
+  await ui.click(buttonNamed("Leave team"));
+  await ui.settle();
+
+  assert.equal(text(top().querySelector("h2")), "Leave Sales?");
+  assert.equal(
+    text(top().querySelector("p")),
+    "You'll be removed from this team and lose access granted through it."
+  );
+});
+
+test("Delete is off while the roster is being read", async (t) => {
+  let release;
+  await mount(t, {
+    team: team({ leave: true, manage_settings: true }),
+    listMembers: () =>
+      new Promise((resolve) => (release = () => resolve([me("admin"), ethan("admin")]))),
+  });
+
+  await ui.click(buttonNamed("Leave team"));
+  assert.equal(buttonNamed("Delete team").disabled, true);
+  release();
+  await ui.settle();
+  assert.equal(text(top().querySelector("h2")), "Leave Sales?");
+});
+
+test("deleting reports the team gone once", async (t) => {
+  const { calls, events } = await mount(t, { team: team({ manage_settings: true }) });
+
+  await ui.click(buttonNamed("Delete team"));
+  await ui.click(topButton("Delete team"));
+
+  assert.deepEqual(
+    calls.filter(([name]) => name === "hold"),
+    [["hold", "t1"]]
+  );
+  assert.deepEqual(events, [["gone"]], "one signal, so the host reloads once");
+});
+
+test("renaming a team that no longer exists reports it", async (t) => {
+  const { events } = await mount(t, {
+    team: team({ manage_settings: true }),
+    renameTeam: async () => {
+      throw new CloudApiError("Team not found", 404);
+    },
+  });
+
+  await ui.type(nameInput(), "Other");
+  await ui.blur(nameInput());
+  await ui.settle();
+
+  assert.deepEqual(toastTitles(), ["Sales no longer exists."]);
+  assert.deepEqual(events, [["gone"]]);
+});
+
+test("Enter then the blur that follows save once", async (t) => {
+  const { calls } = await mount(t, { team: team({ manage_settings: true }) });
+
+  await ui.type(nameInput(), "Revenue");
+  await ui.press(nameInput(), "Enter");
+  await ui.blur(nameInput());
+  await ui.settle();
+
+  assert.equal(calls.filter(([name]) => name === "renameTeam").length, 1);
+});
+
+test("a refused name keeps its message when the field is left again", async (t) => {
+  await mount(t, {
+    team: team({ manage_settings: true }),
+    renameTeam: async () => {
+      throw new CloudApiError("Taken", 409, "team_name_taken");
+    },
+  });
+
+  await ui.type(nameInput(), "Marketing");
+  await ui.blur(nameInput());
+  await ui.settle();
+  await ui.type(nameInput(), "Other");
+  assert.doesNotMatch(text(dialog()), /already exists/);
+  await ui.type(nameInput(), "Marketing");
+  await ui.blur(nameInput());
+  await ui.settle();
+
+  assert.match(text(dialog()), /A team called Marketing already exists\./);
+});
+
+test("closing while a taken name is saving still says it was refused", async (t) => {
+  const { events } = await mount(t, {
+    team: team({ manage_settings: true }),
+    renameTeam: async () => {
+      throw new CloudApiError("Taken", 409, "team_name_taken");
+    },
+  });
+
+  await ui.type(nameInput(), "Marketing");
+  await ui.click(buttonNamed("Close"));
+  await ui.settle();
+
+  assert.deepEqual(events.at(0), ["open", false]);
+  assert.deepEqual(toastTitles().slice(-1), ["A team called Marketing already exists."]);
+});
+
+test("the second Esc closes", async (t) => {
+  const { events } = await mount(t, { team: team({ manage_settings: true }) });
+
+  await ui.type(nameInput(), "Revenue");
+  await ui.press(nameInput(), "Escape");
+  assert.equal(nameInput().value, "Sales");
+  assert.deepEqual(events, []);
+
+  await ui.press(nameInput(), "Escape");
+  assert.deepEqual(events.at(-1), ["open", false]);
 });

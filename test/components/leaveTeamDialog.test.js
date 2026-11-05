@@ -89,6 +89,7 @@ async function mount(
       otherAdmins,
       onManageMembers: () => events.push(["manageMembers"]),
       onLeft: () => events.push(["left"]),
+      onGone: () => events.push(["gone"]),
     });
   }
   const container = doc().createElement("div");
@@ -208,7 +209,7 @@ test("the server's refusal opens the block when the row never loaded", async (t)
   assert.deepEqual(events, [["open", false], ["manageMembers"]]);
 });
 
-test("a lost answer on a team already left counts as left", async (t) => {
+test("a team that no longer exists is reported, not counted as left", async (t) => {
   const { events } = await mount(t, {
     leaveTeam: async () => {
       throw new CloudApiError("Team not found", 404);
@@ -218,6 +219,6 @@ test("a lost answer on a team already left counts as left", async (t) => {
   await ui.click(buttonNamed("Leave team"));
   await ui.settle();
 
-  assert.deepEqual(toastTitles(), ["You left Sales."]);
-  assert.deepEqual(events, [["open", false], ["left"]]);
+  assert.deepEqual(toastTitles(), ["Sales no longer exists."]);
+  assert.deepEqual(events, [["open", false], ["gone"]]);
 });
