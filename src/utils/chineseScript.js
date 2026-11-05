@@ -103,10 +103,10 @@ export function resolveChineseScriptTarget(preferredLanguage, chineseScriptPrefe
 }
 
 /**
- * Language code passed to cleanup/reasoning prompts. Auto stays auto: specifying
- * zh-CN / zh-TW tells cleanup to write its entire response in Chinese, which is
- * unsafe before the transcription language is known. The deterministic final
- * conversion still applies the selected script to likely-Chinese output.
+ * Language code passed to cleanup/reasoning prompts. Auto stays auto rather than
+ * imposing a Chinese orthography rule before the transcription language is known.
+ * The deterministic final conversion still applies the selected script to
+ * likely-Chinese output.
  *
  * @param {string | null | undefined} preferredLanguage
  * @returns {string}

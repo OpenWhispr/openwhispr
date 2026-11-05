@@ -903,6 +903,11 @@
       "requiresMacOS": "macOS {{version}}+",
       "unavailable": "Nicht verfügbar"
     },
+    "modelCompatibility": {
+      "englishOnly": "Nur Englisch",
+      "unsupported": "Unterstützt {{language}} nicht",
+      "englishFallback": "Verwendet Englisch bei automatischer Erkennung"
+    },
     "apiKeyOptional": "API-Schlüssel (optional)",
     "getKey": "Schlüssel holen ->",
     "endpointUrl": "Endpoint-URL",

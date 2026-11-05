@@ -50,9 +50,9 @@ export abstract class BaseReasoningService {
     return getLlmDictionaryWords(getSettings(), { includeTriggers: true });
   }
 
-  // Auto must remain auto here: zh-CN/zh-TW instructions make cleanup write its
-  // entire response in Chinese before the transcription language is known. The
-  // final deterministic script pass handles likely-Chinese output instead. See #975.
+  // Auto must remain auto here: do not impose Chinese orthography before the
+  // transcription language is known. The final deterministic script pass handles
+  // likely-Chinese output instead. See #975.
   protected getPreferredLanguage(): string {
     return resolveCleanupLanguage(getSettings().preferredLanguage);
   }

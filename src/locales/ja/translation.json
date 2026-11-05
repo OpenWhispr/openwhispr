@@ -903,6 +903,11 @@
       "requiresMacOS": "macOS {{version}}+",
       "unavailable": "利用不可"
     },
+    "modelCompatibility": {
+      "englishOnly": "英語のみ",
+      "unsupported": "{{language}}には対応していません",
+      "englishFallback": "自動検出では英語を使用"
+    },
     "apiKeyOptional": "API キー（任意）",
     "getKey": "キーを取得 ->",
     "endpointUrl": "エンドポイント URL",
