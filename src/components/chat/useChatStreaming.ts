@@ -1222,6 +1222,22 @@ export function useChatStreaming({
         // again (an unbacked claim) can be withdrawn.
         let stepTextStart = 0;
         let unbackedClaim = false;
+        // Where a reply the claim check asked about starts. It stays on screen
+        // until the second answer replaces it: a stop or failure must not lose it.
+        let askedAgainFrom: number | null = null;
+        const replaceAskedReply = () => {
+          if (askedAgainFrom === null) return;
+          rawContent = rawContent.slice(0, askedAgainFrom);
+          fullContent = withoutEchoedToolTrace(rawContent);
+          afterToolCall = true;
+          askedAgainFrom = null;
+        };
+        const keepAskedReply = () => {
+          if (askedAgainFrom === null) return;
+          askedAgainFrom = null;
+          unbackedClaim = true;
+          turn = { ...turn, unbackedClaim: true };
+        };
         // A final answer that says it did something needs a tool result of
         // that kind: this turn's (not one a regenerate carried over), or for a
         // report on what was done, one recorded for an earlier turn.
@@ -1357,6 +1373,7 @@ export function useChatStreaming({
             // Nothing a cancelled turn streams afterwards is shown or kept.
             if (cancelled()) break;
             if (chunk.type === "content") {
+              replaceAskedReply();
               if (afterToolCall && rawContent && !/\s$/.test(rawContent)) rawContent += "\n\n";
               afterToolCall = false;
               rawContent += chunk.text;
@@ -1370,14 +1387,13 @@ export function useChatStreaming({
               scheduleContentFlush();
             } else if (chunk.type === "unbacked_claim") {
               if (chunk.retry) {
-                rawContent = rawContent.slice(0, stepTextStart);
-                fullContent = withoutEchoedToolTrace(rawContent);
-                afterToolCall = true;
+                askedAgainFrom = stepTextStart;
                 flushContentNow();
               } else {
                 unbackedClaim = true;
               }
             } else if (chunk.type === "tool_calls") {
+              replaceAskedReply();
               afterToolCall = true;
               reasoningAfterToolCall = true;
               stepTextStart = rawContent.length;
@@ -1450,9 +1466,13 @@ export function useChatStreaming({
             // waiting on; elsewhere an explicit cancel drops it. The unmount
             // cleanup cancels too, so cancelled() alone cannot tell the two
             // apart. Neither path may run the per-request delivery hook.
+            keepAskedReply();
             finishStoppedReply();
             return;
           }
+
+          // Asked again and nothing came back: the first answer stands, noted.
+          keepAskedReply();
 
           const hasDeliverableContent = fullContent.trim().length > 0;
           // Visible text or a tool call of this stream; one with neither still ends in a reply.
@@ -1503,7 +1523,17 @@ export function useChatStreaming({
             restoreReplaced();
             if (!cancelled()) options?.onReplaceFailed?.();
           } else if (cancelled()) {
+            keepAskedReply();
             finishStoppedReply();
+          } else if (askedAgainFrom !== null) {
+            // The second ask failed: the first answer stands, noted.
+            keepAskedReply();
+            turn = { ...turn, finishedAt: Date.now(), status: "complete" };
+            flushContentNow();
+            setMessages((prev) =>
+              prev.map((m) => (m.id === assistantId ? { ...m, isStreaming: false } : m))
+            );
+            saveReply();
           } else {
             cancelContentFlush();
             const errorContext = {

@@ -417,3 +417,40 @@ test("a Slack DM sent by its id backs a report naming its person, not anyone els
   assert.equal(await unbacked("I sent it to Alice earlier.", { earlierCalls: [toDm] }), true);
   assert.equal(await unbacked("I posted it in #eng earlier.", { earlierCalls: [toDm] }), true);
 });
+
+test("a truthful account of something else is not a claim", async () => {
+  const onlyNotes = { isOffered: (name) => name === "create_note" };
+  for (const [text, overrides] of [
+    ["The lawsuit that was filed in March is still pending.", onlyNotes],
+    ["It was filed in the Northern District.", onlyNotes],
+    ["The statement that was posted on X says otherwise."],
+    ["It was sent to Acme on Monday."],
+    ["Your invoice was sent last week, according to the note."],
+    ["The note says it was sent."],
+    ["Sarah: I sent the contract on Monday."],
+    ["I've created a summary of your notes below.", onlyNotes],
+    ["I've created a table of the open issues.", onlyNotes],
+    ["I said the email was sent, but nothing was actually sent."],
+    ["My earlier reply said it was sent, but no tool ran."],
+    ["Sorry, I claimed it was sent. It wasn't."],
+  ]) {
+    assert.equal(await unbacked(text, overrides), false, text);
+  }
+});
+
+test("a standup or update the user asked for is not the reply's own voice", async () => {
+  const request = { text: "Write my standup" };
+  for (const text of [
+    "Here's an update for your team:\n\nI sent the deck to Sam.",
+    "**Yesterday:** I filed two bugs in Linear.",
+  ]) {
+    assert.equal(await unbacked(text, { request }), false, text);
+  }
+});
+
+test("a report a lookup could be repeating is left alone; a first-person claim is not", async () => {
+  const turnCalls = [call("search_notes")];
+  assert.equal(await unbacked("It was sent to Acme.", { turnCalls }), false);
+  assert.equal(await unbacked("It was sent to Acme."), true);
+  assert.equal(await unbacked("I've sent it to Acme.", { turnCalls }), true);
+});

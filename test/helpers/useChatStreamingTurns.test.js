@@ -271,6 +271,58 @@ test("an answer asked again replaces the claim it made, and one still claiming i
   assert.equal(details.turn.unbackedClaim, true);
 });
 
+test("a reply asked about stays on screen until a second answer replaces it", async (t) => {
+  const harness = await renderChatStreaming(t, { allowInteractions: true });
+  let shownWhileAsking;
+  harness.setStream(() =>
+    (async function* () {
+      yield { type: "content", text: "It's in your notes, I've sent it." };
+      yield { type: "unbacked_claim", retry: true };
+      yield { type: "reasoning", text: "checking" };
+      shownWhileAsking = harness.messages().at(-1).content;
+      yield { type: "content", text: "It isn't sent yet." };
+      yield { type: "done", finishReason: "stop" };
+    })()
+  );
+  await harness.captured.sendToAI("Is it out?", []);
+  assert.equal(shownWhileAsking, "It's in your notes, I've sent it.");
+  assert.equal(harness.completed[0][1], "It isn't sent yet.");
+  assert.equal(harness.completed[0][3].turn.unbackedClaim, undefined);
+});
+
+for (const [outcome, secondAsk] of [
+  [
+    "fails",
+    () => {
+      throw new Error("provider down");
+    },
+  ],
+  [
+    "comes back empty",
+    () => [{ type: "done", finishReason: "stop" }],
+  ],
+]) {
+  test(`a reply asked about is kept and noted when the second ask ${outcome}`, async (t) => {
+    const harness = await renderChatStreaming(t, { allowInteractions: true });
+    harness.setStream(() =>
+      (async function* () {
+        yield { type: "content", text: "I've sent it." };
+        yield { type: "unbacked_claim", retry: true };
+        yield* secondAsk();
+      })()
+    );
+    await harness.captured.sendToAI("Send it", []);
+    assert.equal(harness.completed.length, 1);
+    const [, content, , details] = harness.completed[0];
+    assert.equal(content, "I've sent it.");
+    assert.equal(details.turn.status, "complete");
+    assert.equal(details.turn.unbackedClaim, true);
+    const shown = harness.messages().at(-1);
+    assert.equal(shown.content, "I've sent it.");
+    assert.equal(shown.isStreaming, false);
+  });
+}
+
 test("an answer that claims what its turn's tools did is left alone", async (t) => {
   const harness = await renderChatStreaming(t, { allowInteractions: true });
   const verdicts = [];

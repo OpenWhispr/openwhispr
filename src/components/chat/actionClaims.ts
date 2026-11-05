@@ -61,9 +61,13 @@ const KIND_OF_VERB = new Map(
     KINDS[kind].verbs.split("|").map((verb) => [verb, kind] as const)
   )
 );
-// "Created" counts only with what a tool creates, and "saved" only for a key:
-// "I've created a summary" or "notes are saved" describe no tool's action.
+// "Created" and "filed" count only with what a tool creates, and "saved" only
+// for a key: "I've created a summary", "it was filed in March" or "notes are
+// saved" describe no tool's action. It must be what was made, right after the
+// verb: "a summary of your notes" is a summary.
 const CREATED_OBJECT = /\b(?:notes?|issues?|tickets?|comments?)\b/i;
+const CREATED_AFTER_VERB =
+  /^\s+(?:(?:a|an|the|your|that|this|new)\s+)*(?:\S+\s+)?(?:it|notes?|issues?|tickets?|bugs?|comments?)\b/i;
 const SAVED_OBJECT = /\bkeys?\b/i;
 
 const ALL_VERBS = [...KIND_OF_VERB.keys()];
@@ -75,9 +79,11 @@ const FIRST_PERSON = new RegExp(
   "gi"
 );
 // (b) A result report: "it was sent", "your email to Gabe has been sent",
-// "the issue is now created", "it's been posted".
+// "the issue is now created", "it's been posted". "That" opens the sentence:
+// elsewhere it is a relative clause about something else ("the suit that was
+// filed").
 const REPORT = new RegExp(
-  String.raw`\b(?:it|that|your\s+[\w-]+|the\s+(?:email|message|draft|issue|comment|note))(?:\s+to\s+(?:the\s+)?\S+)?(?:\s+(?:was|has\s+been|is\s+now)|['’]s\s+been)\s+${ADVERBS}(${ALL_VERBS.join("|")})\b`,
+  String.raw`(?:^\W*that|\b(?:it|your\s+[\w-]+|the\s+(?:email|message|draft|issue|comment|note)))(?:\s+to\s+(?:the\s+)?\S+)?(?:\s+(?:was|has\s+been|is\s+now)|['’]s\s+been)\s+${ADVERBS}(${ALL_VERBS.join("|")})\b`,
   "gi"
 );
 // (c) "Sent to Gabe!", "Message posted to #eng".
@@ -86,14 +92,31 @@ const SENT_TO = /^\W*(?:(?:email|message|reply|comment)\s+)?(sent|posted)\s+to\b
 // A clause that is a condition, a plan or someone else's account ("Once it's
 // sent", "According to your notes, …", "saved automatically") claims nothing,
 // nor does the rest of its sentence.
-const NOT_A_CLAIM = /^\W*(?:if|once|when|after|until|unless|according to)\b|\bautomatically\b/i;
+const NOT_A_CLAIM = /^\W*(?:if|once|when|after|until|unless)\b|\baccording to\b|\bautomatically\b/i;
+// A report with its own date is an account of the past, usually from notes
+// ("it was sent to Acme on Monday"), not of what this reply did.
+const DATED =
+  /\b(?:on\s+(?:mon|tues|wednes|thurs|fri|satur|sun)day|last\s+\w+|in\s+(?:january|february|march|april|may|june|july|august|september|october|november|december|\d{4})|yesterday|\d+\s+\w+\s+ago)\b/i;
+// "Sarah: I sent the contract" and "**Yesterday:** I filed two bugs" are a
+// speaker's or a section's words.
+const LABELLED_LINE = /^\W*[A-Z][\w'’-]*(?:\s+[A-Z][\w'’-]*){0,2}\W*:/;
+// What a lookup found, which a report may be repeating.
+const READ_TOOLS = new Set([
+  "search_notes",
+  "get_note",
+  "web_search",
+  "linear_search_issues",
+  "github_search_issues",
+]);
 // A first-person claim in the simple past or about before ("I sent Gabe the
 // roadmap", "I've sent it earlier") reports on what was done, which an
 // earlier turn's recorded result can back; "I've sent it" says this turn did.
 const EARLIER = /\b(?:earlier|already|previously|before|yesterday|ago)\b/i;
 const PERFECT = /['’]ve\b|\bhave\b/i;
-// "I said I sent it" repeats an earlier claim, usually to correct it.
-const REPORTED_SPEECH = /\b(?:said|claimed|told\s+you|mentioned|wrote|stated)\s+(?:that\s+)?$/i;
+// "I said I sent it" repeats an earlier claim, usually to correct it, and "the
+// note says it was sent" is the note's account.
+const REPORTED_SPEECH =
+  /\b(?:said|says|claimed|claims|told\s+you|mentioned|mentions|wrote|stated|states|shows)\s+(?:that\s+)?$/i;
 // "Did you send it?" asks about what was done, so the answer reports on it.
 // A question only, and only about something done: "Have a look and send it"
 // or "Is it possible to post this?" asks for a new action.
@@ -116,7 +139,7 @@ const DRAFT_START = new RegExp(String.raw`^[ \t]*(?:${GREETING}[ \t]*$|subject\s
 const GREETING_START = new RegExp(String.raw`^[ \t]*${GREETING}`, "im");
 const ASKS_TO_WRITE = /\b(?:write|draft|compose|rewrite|reword)\b/i;
 const DRAFT_LEAD_IN =
-  /\b(?:drafts?|repl(?:y|ies)|messages?|emails?|texts?|notes?|versions?|translations?|rewrites?|below|here\s+you\s+go)\b/i;
+  /\b(?:drafts?|repl(?:y|ies)|messages?|emails?|texts?|notes?|versions?|translations?|rewrites?|updates?|standups?|summar(?:y|ies)|recaps?|below|here\s+you\s+go)\b/i;
 
 // A bare English translation can say "I sent" in the source author's voice.
 // Require an actual translation request, and keep checking combined requests
@@ -176,6 +199,8 @@ interface Claim {
   kind: ClaimKind;
   /** A report on what was done, which an earlier turn's result can back. */
   report: boolean;
+  /** Not in the first person, so a lookup this turn may be its source. */
+  thirdPerson: boolean;
   /** The person or channel it names ("to Gabe", "in #eng"), if any. */
   destination: string | null;
   /** The claim with the words after it, to find it in the user's or a tool's text. */
@@ -195,7 +220,7 @@ const FORMS: ReadonlyArray<[RegExp, "first" | "report" | "sentTo"]> = [
 function claimsIn(text: string, askedToWrite: boolean): Claim[] {
   const claims: Claim[] = [];
   for (const sentence of ownWords(text, askedToWrite).split(/(?<=[.!?])\s+|\n+/)) {
-    if (sentence.trim().endsWith("?")) continue;
+    if (sentence.trim().endsWith("?") || LABELLED_LINE.test(sentence)) continue;
     for (const [pattern, form] of FORMS) {
       for (const match of sentence.matchAll(pattern)) {
         const verb = match[1].toLowerCase();
@@ -204,8 +229,15 @@ function claimsIn(text: string, askedToWrite: boolean): Claim[] {
         const clauseEnd = sentence.slice(end).search(/[,;]/);
         const upToClause = sentence.slice(0, clauseEnd === -1 ? undefined : end + clauseEnd);
         if (!kind || upToClause.split(/[,;]/).some((clause) => NOT_A_CLAIM.test(clause))) continue;
-        if (form === "first" && REPORTED_SPEECH.test(sentence.slice(0, match.index))) continue;
-        if (verb === "created" && !CREATED_OBJECT.test(sentence)) continue;
+        if (form !== "sentTo" && REPORTED_SPEECH.test(sentence.slice(0, match.index))) continue;
+        if (form === "report" && DATED.test(sentence)) continue;
+        if (
+          (verb === "created" || verb === "filed") &&
+          !(form === "report"
+            ? CREATED_OBJECT.test(match[0])
+            : CREATED_AFTER_VERB.test(sentence.slice(end)))
+        )
+          continue;
         if (kind === "save" && !SAVED_OBJECT.test(sentence)) continue;
         const after = sentence.slice(end).trim().split(/\s+/);
         const found = DESTINATION.exec(sentence);
@@ -215,6 +247,7 @@ function claimsIn(text: string, askedToWrite: boolean): Claim[] {
           report:
             form === "report" ||
             (form === "first" && (EARLIER.test(sentence) || !PERFECT.test(match[0]))),
+          thirdPerson: form === "report",
           destination: destination && !SERVICE.test(destination) ? destination : null,
           phrase: normalize([match[0], ...after.slice(0, 3)].join(" ")),
         });
@@ -278,10 +311,14 @@ export function isUnbackedClaim(
     [request.text, request.selectedText ?? "", ...turnCalls.flatMap(argumentText)].join("\n")
   );
   const asksIfDone = ASKS_IF_DONE.test(request.text);
+  const lookedUp = turnCalls.some(
+    (call) => call.status === "completed" && READ_TOOLS.has(call.name)
+  );
   return claimsIn(text, ASKS_TO_WRITE.test(request.text)).some(
-    ({ kind, report, destination, phrase }) => {
+    ({ kind, report, thirdPerson, destination, phrase }) => {
       const { tools, did } = KINDS[kind];
       if (!tools.some(isOffered) || theirWords.includes(phrase)) return false;
+      if (thirdPerson && lookedUp) return false;
       if (turnCalls.some((call) => tools.includes(call.name) && did(call))) return false;
       return (
         !(report || asksIfDone) ||

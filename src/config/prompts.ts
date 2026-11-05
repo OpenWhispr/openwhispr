@@ -171,7 +171,7 @@ const GROUNDING_RULE =
 
 /** Asks again, as the user, after a final answer that claims an action no tool result shows. */
 export const CLAIM_CHECK_NOTE =
-  "Automatic check, not from the user: your reply says you did something, but no tool result of this turn shows it. If a tool result from an earlier turn records it, keep the reply. If your text is a draft, a quote or a correction of an earlier reply, keep it. If the user asked for that action and nothing records it, do it with the tool; otherwise correct the reply.";
+  "Automatic check, not from the user: your reply says you did something, but no tool result of this turn shows it. If a tool result from an earlier turn records it, or your text is a draft, a quote, a correction of an earlier reply or an account of what someone else did, write the reply again in full. If the user asked for that action and nothing records it, do it with the tool; otherwise correct the reply.";
 
 /** Asks for the answer, as the user, once a turn has used every tool step it may. */
 export const STEP_LIMIT_NOTE =
