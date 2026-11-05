@@ -1,3 +1,4 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -11,6 +12,7 @@ const originalLoad = Module._load;
 // registered handler closures can be invoked directly against a fake `this`.
 const handlers = new Map();
 const fetches = [];
+let tinfoilBehavior = async () => ({ text: "tinfoil text", model: "tinfoil-model" });
 let policySnapshot = { success: true, managed: false };
 let fetchResponse = () => ({
   ok: true,
@@ -82,6 +84,9 @@ const CLOUD_CHUNKS = ["chunk-000.mp3", "chunk-001.mp3", "chunk-002.mp3", "chunk-
 // make it slow and dependent on the runner having a usable binary.
 const wavConversions = [];
 let convertBehavior = async () => CONVERTED_WAV;
+let prepareUploadBehavior;
+let localReasoningBehavior = async () => "local output";
+let localReasoningCancel = () => {};
 
 const cortiCalls = [];
 const tinfoilCalls = [];
@@ -96,6 +101,23 @@ let cortiBehavior = async () => ({ text: "corti text" });
 Module._load = function loadWithMocks(request, parent, isMain) {
   if (request === "electron") return electronStub;
   if (parent?.filename === handlersModulePath) {
+    if (request === "../services/localReasoningBridge")
+      return {
+        default: {
+          processText: (...args) => localReasoningBehavior(...args),
+          cancel: (id) => localReasoningCancel(id),
+        },
+      };
+    if (request === "./providerUploadAudio") {
+      const real = originalLoad.call(this, request, parent, isMain);
+      return {
+        ...real,
+        prepareProviderUpload: (...args) =>
+          prepareUploadBehavior
+            ? prepareUploadBehavior(...args)
+            : real.prepareProviderUpload(...args),
+      };
+    }
     if (request === "./cortiTranscription") {
       return {
         transcribeAudio: async (opts) => {
@@ -108,7 +130,7 @@ Module._load = function loadWithMocks(request, parent, isMain) {
       return {
         transcribeWithTinfoil: async (opts) => {
           tinfoilCalls.push(opts);
-          return { text: "tinfoil text", model: "tinfoil-model" };
+          return tinfoilBehavior(opts);
         },
         getTinfoilChatModels: () => [],
       };
@@ -117,12 +139,21 @@ Module._load = function loadWithMocks(request, parent, isMain) {
       return {
         ...originalLoad.call(this, request, parent, isMain),
         createWorkspacePolicyManager: () => ({
-          getPolicy: async () => policySnapshot,
+          getPolicy: async () => ({ ...policySnapshot, accountId: "account-a", authGeneration: 1 }),
         }),
       };
     if (request === "./tokenStore") {
-      return { ...originalLoad.call(this, request, parent, isMain), get: () => "test-token" };
+      return {
+        ...originalLoad.call(this, request, parent, isMain),
+        get: () => "test-token",
+        getState: () => ({ token: "test-token", generation: 1 }),
+      };
     }
+    if (request === "./accountScopeBinding")
+      return {
+        ...originalLoad.call(this, request, parent, isMain),
+        resolveActiveAccountScope: () => ({ accountId: "account-a", authGeneration: 1 }),
+      };
     if (request === "./windowBroadcast") {
       return { broadcastToWindows: () => {} };
     }
@@ -211,12 +242,16 @@ function buildFakeThis() {
 
 let retryHandler;
 let fakeThis;
-test.before(() => {
+test.before(async () => {
   delete require.cache[handlersModulePath];
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
   fakeThis = buildFakeThis();
-  Ctor.prototype.setupHandlers.call(fakeThis);
+  fakeThis.transcribeLocalFile = Ctor.prototype.transcribeLocalFile.bind(fakeThis);
+  fakeThis._retireDisallowedProductWork =
+    Ctor.prototype._retireDisallowedProductWork.bind(fakeThis);
+  Ctor.prototype.setupHandlers.call(withDevicePolicy(fakeThis));
+  await fakeThis.refreshEffectivePolicy();
   retryHandler = handlers.get("retry-transcription");
   assert.ok(retryHandler, "retry-transcription must be registered");
 });
@@ -1230,7 +1265,17 @@ test("main enterprise audio resolution honors provider and mode policy before HT
     { allowedModes: ["local"], allowedEnterpriseProviders: [] },
     { allowedModes: ["local", "enterprise"], allowedEnterpriseProviders: ["azure"] },
   ]) {
-    policySnapshot = { success: true, managed: true, policy: { transcription } };
+    policySnapshot = {
+      success: true,
+      managed: true,
+      policy: {
+        ...require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy(),
+        transcription: {
+          ...require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy().transcription,
+          ...transcription,
+        },
+      },
+    };
     for (const operation of ["batch", "realtime"]) {
       resolved.mode = "managed_default";
       resolved.allowManualSetup = true;
@@ -1261,7 +1306,14 @@ test("main enterprise audio resolution honors provider and mode policy before HT
   policySnapshot = {
     success: true,
     managed: true,
-    policy: { transcription: { allowedModes: ["local"], allowedEnterpriseProviders: [] } },
+    policy: {
+      ...require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy(),
+      transcription: {
+        ...require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy().transcription,
+        allowedModes: ["local"],
+        allowedEnterpriseProviders: [],
+      },
+    },
   };
   await assert.rejects(batch.request({}), { code: "MANAGED_CONFIG_CHANGED" });
   await assert.rejects(realtime.createSocket(), { code: "MANAGED_CONFIG_CHANGED" });
@@ -1271,4 +1323,365 @@ test("main enterprise audio resolution honors provider and mode policy before HT
   await assert.rejects(fakeThis.enterpriseAudioRuntime.resolve({}, "realtime"), {
     code: "POLICY_UNRESOLVABLE",
   });
+});
+
+test("a valid provider restriction aborts an attested batch request and discards its late result", async (t) => {
+  const { deferred } = require("./harness/deferred");
+  const started = deferred();
+  const finish = deferred();
+  const previous = tinfoilBehavior;
+  let signal;
+  t.after(() => {
+    tinfoilBehavior = previous;
+    policySnapshot = { success: true, managed: false };
+    finish.resolve();
+  });
+  policySnapshot = { success: true, managed: false };
+  await fakeThis.refreshEffectivePolicy();
+  tinfoilBehavior = async (options) => {
+    signal = options.signal;
+    started.resolve();
+    await finish.promise;
+    return { text: "late" };
+  };
+  const pending = handlers.get("proxy-tinfoil-transcription")(
+    { sender: {} },
+    { audioBuffer: new Uint8Array([1]) }
+  );
+  await started.promise;
+  const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+  policy.transcription.allowedByokProviders = ["openai"];
+  policySnapshot = { success: true, managed: true, policy };
+  await fakeThis.refreshEffectivePolicy();
+  assert.equal(signal.aborted, true);
+  finish.resolve();
+  assert.equal((await pending).code, "DEVICE_POLICY_BLOCKED");
+});
+
+test("policy revocation during retry conversion or upload preparation prevents transmission", async (t) => {
+  const previousConvert = convertBehavior;
+  t.after(async () => {
+    convertBehavior = previousConvert;
+    prepareUploadBehavior = undefined;
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+  });
+  for (const surface of ["retry", "upload"]) {
+    for (const restriction of ["mode", "provider"]) {
+      await t.test(`${surface}: ${restriction}`, async () => {
+        policySnapshot = { success: true, managed: false };
+        await fakeThis.refreshEffectivePolicy();
+        fetches.length = 0;
+        textUpdates.length = 0;
+        const revoke = async () => {
+          const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+          if (restriction === "mode") policy.transcription.allowedModes = ["local"];
+          else policy.transcription.allowedByokProviders = ["openai"];
+          policySnapshot = { success: true, managed: true, policy };
+          await fakeThis.refreshEffectivePolicy();
+        };
+        convertBehavior = async () => {
+          await revoke();
+          return CONVERTED_WAV;
+        };
+        prepareUploadBehavior = async (sourcePath) => {
+          await revoke();
+          return { path: sourcePath, cleanup() {} };
+        };
+        const result =
+          surface === "retry"
+            ? await invoke({
+                transcriptionMode: "providers",
+                cloudTranscriptionMode: "byok",
+                cloudTranscriptionProvider: "custom",
+                cloudTranscriptionBaseUrl: "https://speech.example.test/v1",
+                cloudTranscriptionModel: "speech",
+              })
+            : await invokeUpload({
+                transcriptionMode: "providers",
+                provider: "custom",
+                baseUrl: "https://speech.example.test/v1",
+                model: "speech",
+              });
+        assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
+        assert.equal(fetches.length, 0);
+        assert.equal(textUpdates.length, 0);
+      });
+    }
+  }
+});
+
+test("a revoked retry aborts the provider and cannot save an ignored late result", async (t) => {
+  const previous = tinfoilBehavior;
+  t.after(async () => {
+    tinfoilBehavior = previous;
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+  });
+  policySnapshot = { success: true, managed: false };
+  await fakeThis.refreshEffectivePolicy();
+  textUpdates.length = 0;
+  let signal;
+  tinfoilBehavior = async (options) => {
+    signal = options.signal;
+    const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+    policy.transcription.allowedByokProviders = ["openai"];
+    policySnapshot = { success: true, managed: true, policy };
+    await fakeThis.refreshEffectivePolicy();
+    return { text: "revoked output" };
+  };
+  const result = await invoke({
+    transcriptionMode: "providers",
+    cloudTranscriptionMode: "byok",
+    cloudTranscriptionProvider: "tinfoil",
+  });
+  assert.equal(signal.aborted, true);
+  assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
+  assert.equal(textUpdates.length, 0);
+});
+
+test("a local retry ignores a retained cloud preference when cloud inference is forbidden", async (t) => {
+  t.after(async () => {
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+  });
+  const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+  policy.transcription.allowedModes = ["local"];
+  policySnapshot = { success: true, managed: true, policy };
+  await fakeThis.refreshEffectivePolicy();
+  fetches.length = 0;
+  const result = await invoke({
+    transcriptionMode: "local",
+    useLocalWhisper: true,
+    cloudTranscriptionMode: "openwhispr",
+    localTranscriptionProvider: "whisper",
+  });
+  assert.equal(result.success, true);
+  assert.equal(fetches.length, 0);
+});
+
+test("agent-only revocation retires IPC requests and enterprise chat while retaining cleanup", () => {
+  const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+  policy.features.agentEnabled = false;
+  const snapshot = { success: true, managed: true, policy };
+  const agentRequests = [
+    { channel: "cloud-reason", args: ["private", { requestPurpose: "agent" }] },
+    {
+      channel: "process-anthropic-reasoning",
+      args: ["private", "model", null, { requiresAgent: true }],
+    },
+    {
+      channel: "process-enterprise-reasoning",
+      args: ["private", "model", null, { provider: "bedrock", requiresAgent: true }],
+    },
+  ].map((operation) => [new AbortController(), operation]);
+  const cleanup = new AbortController();
+  const stream = new AbortController();
+  try {
+    for (const [controller, operation] of agentRequests)
+      fakeThis._productRequests.set(controller, operation);
+    fakeThis._productRequests.set(cleanup, { channel: "cloud-reason", args: ["private", {}] });
+    fakeThis._enterpriseStreamProviders.set("agent-stream", "bedrock");
+    fakeThis.enterpriseStreamAborts.set("agent-stream", stream);
+    fakeThis._retireDisallowedProductWork(snapshot);
+    for (const [controller] of agentRequests) assert.equal(controller.signal.aborted, true);
+    assert.equal(stream.signal.aborted, true);
+    assert.equal(cleanup.signal.aborted, false);
+  } finally {
+    for (const [controller] of agentRequests) fakeThis._productRequests.delete(controller);
+    fakeThis._productRequests.delete(cleanup);
+    fakeThis._enterpriseStreamProviders.delete("agent-stream");
+    fakeThis.enterpriseStreamAborts.delete("agent-stream");
+  }
+});
+
+test("self-hosted Custom retries and uploads do not require BYOK permission", async (t) => {
+  t.after(async () => {
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+  });
+  const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+  policy.transcription.allowedModes = ["self-hosted"];
+  policy.transcription.allowedByokProviders = [];
+  policySnapshot = { success: true, managed: true, policy };
+  await fakeThis.refreshEffectivePolicy();
+  fetches.length = 0;
+  const retry = await invoke(
+    {
+      transcriptionMode: "self-hosted",
+      cloudTranscriptionMode: "byok",
+      cloudTranscriptionProvider: "custom",
+      cloudTranscriptionBaseUrl: "https://speech.example.test/v1",
+      cloudTranscriptionModel: "speech",
+    },
+    8
+  );
+  assert.equal(retry.success, true);
+  const upload = await invokeUpload({
+    transcriptionMode: "self-hosted",
+    provider: "custom",
+    baseUrl: "https://speech.example.test/v1",
+    model: "speech",
+  });
+  assert.equal(upload.success, true);
+  assert.equal(fetches.length, 2);
+});
+
+test("revoked local agent inference is cancelled by id and leaves ordinary cleanup available", async (t) => {
+  const { deferred } = require("./harness/deferred");
+  const started = deferred(),
+    finish = deferred();
+  const cancelled = [];
+  t.after(async () => {
+    finish.resolve("late");
+    localReasoningBehavior = async () => "local output";
+    localReasoningCancel = () => {};
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+  });
+  policySnapshot = { success: true, managed: false };
+  await fakeThis.refreshEffectivePolicy();
+  localReasoningBehavior = async (_text, _model, config) => {
+    assert.equal(config.requestId, "agent-job");
+    started.resolve();
+    return finish.promise;
+  };
+  localReasoningCancel = (id) => {
+    cancelled.push(id);
+    finish.resolve("late agent output");
+  };
+  const handler = handlers.get("process-local-reasoning");
+  const pending = handler({ sender: {} }, "private", "local-model", null, {
+    requiresAgent: true,
+    requestId: "agent-job",
+  });
+  await started.promise;
+  const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+  policy.features.agentEnabled = false;
+  policySnapshot = { success: true, managed: true, policy };
+  await fakeThis.refreshEffectivePolicy();
+  assert.deepEqual(cancelled, ["agent-job"]);
+  assert.equal((await pending).code, "DEVICE_POLICY_BLOCKED");
+  localReasoningBehavior = async () => "permitted cleanup";
+  const cleanup = await handler({ sender: {} }, "private", "local-model", null, {
+    requestId: "cleanup-job",
+  });
+  assert.equal(cleanup.success, true);
+  assert.equal(cleanup.text, "permitted cleanup");
+});
+
+test("local transcription retry propagates policy retirement to both native decoders", async (t) => {
+  const previousParakeet = parakeetBehavior,
+    previousWhisper = whisperBehavior;
+  t.after(async () => {
+    parakeetBehavior = previousParakeet;
+    whisperBehavior = previousWhisper;
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+  });
+  for (const provider of ["whisper", "parakeet"]) {
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+    const transcribe = async (_buffer, options) => {
+      const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+      policy.transcription.allowedModes = ["providers"];
+      policySnapshot = { success: true, managed: true, policy };
+      await fakeThis.refreshEffectivePolicy();
+      assert.equal(options.signal.aborted, true);
+      return { success: true, text: "late" };
+    };
+    parakeetBehavior = transcribe;
+    whisperBehavior = transcribe;
+    const result = await invoke({
+      useLocalWhisper: true,
+      transcriptionMode: "local",
+      localTranscriptionProvider: provider,
+    });
+    assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
+  }
+});
+
+test("fresh local dictation forwards the trusted policy signal to both decoders", async (t) => {
+  const previousWhisper = whisperBehavior,
+    previousParakeet = parakeetBehavior;
+  t.after(async () => {
+    whisperBehavior = previousWhisper;
+    parakeetBehavior = previousParakeet;
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+  });
+  for (const provider of ["whisper", "parakeet"]) {
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+    let decoderSignal;
+    const decode = async (_buffer, options) => {
+      decoderSignal = options.signal;
+      const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+      policy.transcription.allowedModes = ["providers"];
+      policySnapshot = { success: true, managed: true, policy };
+      await fakeThis.refreshEffectivePolicy();
+      return { success: true, text: "late output" };
+    };
+    whisperBehavior = decode;
+    parakeetBehavior = decode;
+    const result = await handlers.get(`transcribe-local-${provider}`)({ sender: {} }, WAV_BUFFER, {
+      model: "tiny",
+      signal: "untrusted",
+    });
+    assert.ok(decoderSignal instanceof AbortSignal);
+    assert.equal(decoderSignal.aborted, true);
+    assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
+  }
+});
+
+test("shared local file decoding refuses forbidden inference modes and minimum versions", async (t) => {
+  const previousWhisper = whisperBehavior;
+  let decoded = false;
+  whisperBehavior = async () => {
+    decoded = true;
+    return { success: true, text: "forbidden" };
+  };
+  t.after(async () => {
+    whisperBehavior = previousWhisper;
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+  });
+  for (const restriction of ["mode", "version"]) {
+    const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+    if (restriction === "mode") policy.transcription.allowedModes = ["openwhispr"];
+    else policy.minAppVersion = "99.0.0";
+    policySnapshot = { success: true, managed: true, policy };
+    await fakeThis.refreshEffectivePolicy();
+    const result = await fakeThis.transcribeLocalFile(__filename, { provider: "whisper" });
+    assert.equal(result.code, "DEVICE_POLICY_BLOCKED", restriction);
+  }
+  assert.equal(decoded, false);
+});
+
+test("shared local file decoding aborts both native decoders when local inference is revoked", async (t) => {
+  const previousWhisper = whisperBehavior;
+  const previousParakeet = parakeetBehavior;
+  t.after(async () => {
+    whisperBehavior = previousWhisper;
+    parakeetBehavior = previousParakeet;
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+  });
+  for (const provider of ["whisper", "nvidia"]) {
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+    const decode = async (_buffer, { signal }) => {
+      const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+      policy.transcription.allowedModes = ["openwhispr"];
+      policySnapshot = { success: true, managed: true, policy };
+      await fakeThis.refreshEffectivePolicy();
+      assert.equal(signal.aborted, true, provider);
+      return { success: true, text: "late transcript" };
+    };
+    whisperBehavior = decode;
+    parakeetBehavior = decode;
+    const result = await fakeThis.transcribeLocalFile(__filename, { provider });
+    assert.equal(result.code, "DEVICE_POLICY_BLOCKED", provider);
+    assert.equal(fakeThis._productRequests.size, 0);
+  }
 });

@@ -1,4 +1,5 @@
 import type { InferenceProvider } from "./types";
+import { abortOnCancel, isRequestCancelled, requestCancelledError } from "../requestCancellation";
 import { withRetry, createApiRetryStrategy } from "../../../utils/retry";
 import { API_ENDPOINTS } from "../../../config/constants";
 import {
@@ -105,6 +106,7 @@ export const geminiProvider: InferenceProvider = {
     };
 
     const response = await withRetry(async () => {
+      if (isRequestCancelled(config.requestId)) throw requestCancelledError();
       // Metadata only: body previews can leak transcript text or base64 screenshots.
       logger.logReasoning("GEMINI_REQUEST", {
         endpoint: `${API_ENDPOINTS.GEMINI}/models/${model}:generateContent`,
@@ -116,6 +118,7 @@ export const geminiProvider: InferenceProvider = {
       });
 
       const controller = new AbortController();
+      const unlinkCancel = abortOnCancel(config.requestId, controller);
       const timeoutSeconds = getLlmRequestTimeoutSeconds({ scope: config.inferenceScope });
       const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
       try {
@@ -154,11 +157,13 @@ export const geminiProvider: InferenceProvider = {
         });
         return jsonResponse;
       } catch (error) {
+        if (isRequestCancelled(config.requestId)) throw requestCancelledError();
         if ((error as Error).name === "AbortError") {
           throw llmRequestTimeoutError(timeoutSeconds);
         }
         throw error;
       } finally {
+        unlinkCancel();
         clearTimeout(timeoutId);
       }
     }, createApiRetryStrategy()).catch((error) => {

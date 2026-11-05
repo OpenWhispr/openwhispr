@@ -195,7 +195,13 @@
     "managedConfigUnavailable": "O acesso empresarial gerenciado está indisponível. Entre novamente ou entre em contato com o administrador.",
     "managedConfigAmbiguous": "A configuração gerenciada da sua organização está inconsistente. Entre em contato com o administrador.",
     "managedPolicyConflict": "O acesso gerenciado está bloqueado pela política do seu espaço de trabalho. Entre em contato com o administrador.",
-    "resizePanel": "Redimensionar painel"
+    "resizePanel": "Redimensionar painel",
+    "managedDevice": "Dispositivo gerenciado",
+    "managedDeviceAndWorkspace": "Dispositivo e espaço de trabalho gerenciados",
+    "deviceLocalOnly": "Este dispositivo usa apenas processamento local. Os recursos na nuvem estão indisponíveis, inclusive para contas que já estavam conectadas.",
+    "deviceSignInRequired": "Sua organização exige login neste dispositivo.",
+    "devicePolicyInvalid": "Não foi possível ler a política do dispositivo ou ela é inválida. Contate seu administrador. As ações gerenciadas ficam bloqueadas até a correção da política.",
+    "deviceWorkspaceUnavailable": "Este dispositivo exige processamento local, mas a política do espaço de trabalho da conta salva está indisponível. Saia para continuar sem essa conta ou contate seu administrador."
   },
   "onboarding": {
     "rehaul": {
@@ -597,7 +603,8 @@
   "controlPanel": {
     "updateRequiredByOrg": {
       "title": "Atualização obrigatória",
-      "description": "Sua organização exige o OpenWhispr {{version}} ou mais recente. Atualize o aplicativo."
+      "description": "Sua organização exige o OpenWhispr {{version}} ou mais recente. Atualize o aplicativo.",
+      "contactIT": "A sua organização requer OpenWhispr {{version}} ou posterior. Contacte a equipa de TI para instalar uma versão aprovada."
     },
     "update": {
       "readyTitle": "Atualização pronta para instalar",
@@ -2180,7 +2187,13 @@
         "restarting": "Reiniciando...",
         "title": "Atualizações",
         "versionPlaceholder": "—",
-        "whatsNew": "Novidades na v{{version}}"
+        "whatsNew": "Novidades na v{{version}}",
+        "managedByOrganization": "Gerido pela sua organização.",
+        "itManaged": "A sua organização gere as atualizações.",
+        "policyLoading": "A carregar as definições de atualização…",
+        "policyUnavailable": "A política de atualizações está indisponível. Tente novamente quando tiver ligação.",
+        "managedBadge": "Gerido",
+        "stagedBeforePolicy": "Uma atualização foi preparada antes da aplicação desta política e poderá ser instalada ao fechar a aplicação. Contacte a equipa de TI antes de fechar ou reiniciar."
       },
       "translationHotkey": {
         "title": "Atalho de Tradução",

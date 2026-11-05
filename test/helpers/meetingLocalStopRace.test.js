@@ -46,6 +46,12 @@ function harness({
   };
   const context = {
     events,
+    require: require("node:module").createRequire(
+      path.join(__dirname, "../../src/helpers/ipcHandlers.js")
+    ),
+    app: { getVersion: () => "1.11.1" },
+    effectivePolicyManager: { getCurrent: () => ({ success: true, managed: false }) },
+    ...require("../../src/helpers/productPolicy"),
     _audioFeaturePolicy: { failure: () => null, activeFailure: () => null },
     chunkGates,
     lateStreamingFinals,

@@ -330,6 +330,9 @@ const LinuxPortalAudioManager = require("./src/helpers/linuxPortalAudioManager")
 const WindowsLoopbackAudioManager = require("./src/helpers/windowsLoopbackAudioManager");
 const MeetingAecManager = require("./src/helpers/meetingAecManager");
 const MeetingDetectionEngine = require("./src/helpers/meetingDetectionEngine");
+const { createManagedMeetingPolicy } = require("./src/helpers/managedMeetingPolicy");
+const { createManagedDevicePolicy } = require("./src/helpers/managedDevicePolicy");
+const { installManagedNetworkGuard } = require("./src/helpers/devicePolicyNetwork");
 const { applyOpenWhisprOriginHeader } = require("./src/helpers/sessionHeaders");
 const { i18nMain, changeLanguage } = require("./src/helpers/i18nMain");
 const { ensureYdotool } = require("./src/helpers/ensureYdotool");
@@ -349,6 +352,7 @@ let parakeetManager = null;
 let diarizationManager = null;
 let trayManager = null;
 let updateManager = null;
+let managedDevicePolicy = null;
 let globeKeyManager = null;
 let windowsKeyManager = null;
 let linuxKeyManager = null;
@@ -648,6 +652,10 @@ function initializeCoreManagers() {
   );
   appleCalendarManager = new AppleCalendarManager(databaseManager, calendarReminderScheduler);
   const meetingProcessDetector = new MeetingProcessDetector();
+  managedDevicePolicy = createManagedDevicePolicy();
+  const managedMeetingPolicy = createManagedMeetingPolicy({
+    getSnapshot: () => managedDevicePolicy.getSnapshot(),
+  });
   meetingDetectionEngine = new MeetingDetectionEngine(
     calendarReminderScheduler,
     meetingProcessDetector,
@@ -664,11 +672,14 @@ function initializeCoreManagers() {
       () => meetingProcessDetector.getDetectedProcesses().length > 0
     ),
     windowManager,
-    databaseManager
+    databaseManager,
+    { isMeetingRecordingDisabled: managedMeetingPolicy.isMeetingRecordingDisabled }
   );
   windowManager.meetingDetectionEngine = meetingDetectionEngine;
   calendarReminderScheduler.meetingDetectionEngine = meetingDetectionEngine;
-  updateManager = new UpdateManager();
+  updateManager = new UpdateManager({
+    getPolicy: () => ipcHandlers?.getUpdatePolicy?.() ?? { success: false },
+  });
   updateManager.setWindowManager(windowManager);
   windowsKeyManager = new WindowsKeyManager();
   linuxKeyManager = new LinuxKeyManager();
@@ -719,6 +730,8 @@ function initializeCoreManagers() {
     appleCalendarManager,
     connectorManager,
     meetingDetectionEngine,
+    managedMeetingPolicy,
+    managedDevicePolicy,
     audioTapManager,
     linuxPortalAudioManager,
     windowsLoopbackAudioManager,
@@ -787,8 +800,7 @@ function initializeDeferredManagers() {
     });
   }
 
-  googleCalendarManager.start();
-  microsoftCalendarManager.start();
+  ipcHandlers.startPolicyCalendars();
   appleCalendarManager.start();
   meetingDetectionEngine.start();
 }
@@ -1219,6 +1231,14 @@ async function startApp() {
 
   // Phase 1: Core managers + IPC handlers before windows
   initializeCoreManagers();
+  installManagedNetworkGuard({
+    app,
+    session,
+    isAllowed: (url) => ipcHandlers.isProductNetworkAllowed(url),
+  });
+  await managedDevicePolicy.start();
+  const effectivePolicyReady = ipcHandlers.refreshEffectivePolicy();
+  if (managedDevicePolicy.getSnapshot().localOnly) await effectivePolicyReady;
   await environmentManager.init();
   // After any upgrade the GPU gets one fresh attempt: clear the remembered
   // failure before the whisper pre-warm below resolves its GPU backend.
@@ -1233,6 +1253,7 @@ async function startApp() {
   });
 
   await migrateCookieToBearerToken();
+  void updateManager.refreshPolicy();
 
   applyOpenWhisprOriginHeader(session.defaultSession);
 
@@ -1433,6 +1454,7 @@ async function startApp() {
   }
 
   app.on("browser-window-focus", () => {
+    void managedDevicePolicy.refresh();
     if (googleCalendarManager) googleCalendarManager.syncOnFocus();
     if (microsoftCalendarManager) microsoftCalendarManager.syncOnFocus();
     if (appleCalendarManager) appleCalendarManager.syncOnFocus();
@@ -1440,6 +1462,7 @@ async function startApp() {
 
   const { powerMonitor } = require("electron");
   powerMonitor.on("resume", () => {
+    void managedDevicePolicy.refresh();
     if (calendarReminderScheduler) calendarReminderScheduler.onWakeFromSleep();
     if (googleCalendarManager) {
       googleCalendarManager.onWakeFromSleep();
@@ -2162,6 +2185,7 @@ if (gotSingleInstanceLock) {
   app.on("before-quit", (event) => {
     if (isShuttingDown) return;
     isShuttingDown = true;
+    managedDevicePolicy?.stop();
     if (updateManager && updateManager.isQuittingForUpdate) {
       // Quit must proceed for the installer to run, so no preventDefault;
       // sidecar shutdown is best-effort (the reaper cleans up orphans on relaunch).

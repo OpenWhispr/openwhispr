@@ -1,6 +1,9 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
+const http = require("node:http");
+const { deferred } = require("./harness/deferred");
 
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
@@ -55,7 +58,8 @@ const electronStub = {
 
 Module._load = function loadWithMocks(request, parent, isMain) {
   if (request === "electron") return electronStub;
-  if (request === "./tokenStore") return { get: () => "test-token" };
+  if (request === "./tokenStore")
+    return { get: () => null, getState: () => ({ token: null, generation: 0 }) };
   if (request === "./enterpriseIdentityManager") {
     return {
       createEnterpriseIdentityManager: () => ({
@@ -182,7 +186,7 @@ test.before(() => {
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
   handlerContext = buildFakeThis();
-  Ctor.prototype.setupHandlers.call(handlerContext);
+  Ctor.prototype.setupHandlers.call(withDevicePolicy(handlerContext));
   assert.ok(handlers.get("test-enterprise-connection"));
   assert.ok(handlers.get("process-enterprise-reasoning"));
   assert.ok(listeners.get("enterprise-reasoning-cancel"));
@@ -196,6 +200,162 @@ test.beforeEach(() => {
   generateCalls.length = 0;
   resolveManagedRuntime = async () => ({ managed: false });
 });
+
+for (const stage of ["runtime", "foundation request", "pagination", "normal success"]) {
+  test(`Bedrock catalog handles ${stage} with the real SDK`, { timeout: 5000 }, async (t) => {
+    const { normalizeDeviceValues } = require("../../src/helpers/managedDevicePolicy");
+    const IPCHandlers = require(handlersModulePath);
+    const read = handlerContext.managedDevicePolicy.getSnapshot;
+    const stop = handlerContext._stopRemoteProductWork;
+    const endpoint = process.env.AWS_ENDPOINT_URL_BEDROCK;
+    const entered = deferred(),
+      finish = deferred(),
+      closed = deferred();
+    const requests = [];
+    let held;
+    const payload = {
+      modelSummaries: [
+        {
+          modelId: "test-model",
+          outputModalities: ["TEXT"],
+          inferenceTypesSupported: ["ON_DEMAND"],
+        },
+      ],
+      inferenceProfileSummaries: [],
+    };
+    const server = http.createServer((request, response) => {
+      requests.push(request.url);
+      response.setHeader("Content-Type", "application/json");
+      if (
+        (stage === "foundation request" && request.url.startsWith("/foundation-models")) ||
+        (stage === "pagination" && request.url.includes("nextToken="))
+      ) {
+        held = response;
+        response.once("close", () => closed.resolve(response.writableFinished));
+        entered.resolve();
+      } else
+        response.end(
+          JSON.stringify(
+            stage === "pagination" && request.url.startsWith("/inference-profiles")
+              ? { ...payload, nextToken: "next-page" }
+              : payload
+          )
+        );
+    });
+    t.after(() => {
+      finish.resolve();
+      server.closeAllConnections();
+      server.close();
+      handlerContext.managedDevicePolicy.getSnapshot = read;
+      handlerContext._stopRemoteProductWork = stop;
+      handlerContext.effectivePolicyManager.getCurrent();
+      if (endpoint === undefined) delete process.env.AWS_ENDPOINT_URL_BEDROCK;
+      else process.env.AWS_ENDPOINT_URL_BEDROCK = endpoint;
+    });
+    server.listen(0, "127.0.0.1");
+    await new Promise((resolve) => server.once("listening", resolve));
+    process.env.AWS_ENDPOINT_URL_BEDROCK = `http://127.0.0.1:${server.address().port}`;
+    handlerContext._stopRemoteProductWork =
+      IPCHandlers.prototype._stopRemoteProductWork.bind(handlerContext);
+    resolveManagedRuntime = async () => {
+      if (stage === "runtime") {
+        entered.resolve();
+        await finish.promise;
+      }
+      return managedBedrockRuntime();
+    };
+    const pending = handlers.get("bedrock-list-models")(
+      { sender: sender(99) },
+      { managedContext: managedContext() }
+    );
+    if (stage === "normal success") {
+      assert.deepEqual(await pending, {
+        success: true,
+        models: [{ value: "test-model", label: "test-model", vendor: "" }],
+      });
+      assert.equal(requests.length, 2);
+      return;
+    }
+    await entered.promise;
+    handlerContext.managedDevicePolicy.getSnapshot = () =>
+      normalizeDeviceValues({ RequireSignIn: false });
+    handlerContext.effectivePolicyManager.getCurrent();
+    finish.resolve();
+    const fallback = held && setTimeout(() => held.end(JSON.stringify(payload)), 300);
+    t.after(() => clearTimeout(fallback));
+    assert.equal((await pending).code, "DEVICE_POLICY_BLOCKED");
+    if (stage === "runtime") assert.equal(requests.length, 0);
+    else
+      assert.equal(
+        await closed.promise,
+        false,
+        "policy cancellation closes the active HTTP response"
+      );
+  });
+}
+
+for (const [provider, stage] of [
+  ["bedrock", "runtime"],
+  ["azure", "runtime"],
+  ["bedrock", "credentials"],
+  ["bedrock", "generation"],
+  ["azure", "generation"],
+]) {
+  test(`enterprise probe policy revocation during ${provider} ${stage} prevents transmission and retries`, async (t) => {
+    const started = deferred();
+    const finish = deferred();
+    const manager = handlerContext.effectivePolicyManager;
+    const refresh = handlerContext.refreshEffectivePolicy;
+    const generate = generateBehavior;
+    let snapshot = { success: true, managed: false };
+    handlerContext.effectivePolicyManager = { getCurrent: () => snapshot };
+    handlerContext.refreshEffectivePolicy = async () => snapshot;
+    t.after(() => {
+      finish.resolve();
+      handlerContext.effectivePolicyManager = manager;
+      handlerContext.refreshEffectivePolicy = refresh;
+      generateBehavior = generate;
+    });
+    t.mock.method(Math, "random", () => 0);
+    const runtime = managedBedrockRuntime({
+      provider,
+      ...(provider === "azure" ? { config: { endpoint: "https://example.openai.azure.com" } } : {}),
+    });
+    const credentials = runtime.credentialProvider;
+    if (stage === "credentials") {
+      runtime.credentialProvider = async () => {
+        started.resolve();
+        await finish.promise;
+        return credentials();
+      };
+    }
+    resolveManagedRuntime = async () => {
+      if (stage === "runtime") {
+        started.resolve();
+        await finish.promise;
+      }
+      return runtime;
+    };
+    generateBehavior = async () => {
+      started.resolve();
+      await finish.promise;
+      throw retryable503();
+    };
+    const pending = handlers.get("test-enterprise-connection")({ sender: sender(99) }, provider, {
+      model: "test-model",
+      managedContext: { ...managedContext(), provider },
+    });
+    await started.promise;
+    const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+    policy.llm.allowedModes = ["local"];
+    snapshot = { success: true, managed: true, policy, localOnly: true };
+    require(handlersModulePath).prototype._stopRemoteProductWork.call(handlerContext);
+    finish.resolve();
+    assert.equal((await pending).code, "DEVICE_POLICY_BLOCKED");
+    assert.equal(generateCalls.length, stage === "generation" ? 1 : 0);
+    if (stage === "generation") assert.equal(generateCalls[0].abortSignal?.aborted, true);
+  });
+}
 
 test("Check connection asks for at least 16 output tokens, the Azure Responses API minimum", async () => {
   // Live 2026-09-07: Azure rejected the probe with "Invalid 'max_output_tokens':

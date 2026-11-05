@@ -1,3 +1,4 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -65,6 +66,17 @@ function anything() {
 Module._load = function loadWithMocks(request, parent, isMain) {
   if (request === "electron") return electronStub;
   if (parent?.filename === handlersModulePath) {
+    if (request === "./tokenStore")
+      return { get: () => null, getState: () => ({ token: null, generation: 0 }) };
+    if (
+      [
+        "./effectivePolicyManager",
+        "./productPolicy",
+        "./devicePolicyNetwork",
+        "./workspacePolicyManager",
+      ].includes(request)
+    )
+      return originalLoad.call(this, request, parent, isMain);
     if (request === "./connectionCheckCache" || request === "./paidKeyCheck") {
       return originalLoad.call(this, request, parent, isMain);
     }
@@ -96,7 +108,12 @@ test.before(() => {
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
   Ctor.prototype.setupHandlers.call(
-    new Proxy({}, { get: (value, property) => (property in value ? value[property] : anything()) })
+    withDevicePolicy(
+      new Proxy(
+        {},
+        { get: (value, property) => (property in value ? value[property] : anything()) }
+      )
+    )
   );
   assert.ok(handlers.get("test-provider-connection"));
 });

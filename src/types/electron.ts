@@ -4,7 +4,7 @@ import type { PermissionGuideState, PermissionGuideAction } from "./permissionGu
 import type { TinfoilCatalogModel } from "../models/tinfoilModels";
 import type { UsageResponse } from "../lib/usageStore";
 import type { DictationTone, ToneAppCategory } from "../config/toneStyle";
-import type { OrgPolicy } from "./policy";
+import type { OrgPolicy, EffectivePolicySnapshot } from "./policy";
 import type { EnterpriseAudioSetupContext, EnterpriseAudioTestLink } from "./enterpriseAudio";
 import type { TechnicalErrorDetailsData } from "../components/ui/useToast";
 import type { ProviderSettingsTarget } from "../utils/describeProviderError";
@@ -1170,6 +1170,7 @@ export interface ScreenContextImage {
 }
 
 export interface UpdateCheckResult {
+  code?: string;
   updateAvailable: boolean;
   version?: string;
   releaseDate?: string;
@@ -1179,6 +1180,10 @@ export interface UpdateCheckResult {
 }
 
 export interface UpdateStatusResult {
+  updateMode?: import("./policy").UpdateMode;
+  policyReady?: boolean;
+  effectiveAutoUpdatesEnabled?: boolean;
+  stagedUpdate?: boolean;
   updateAvailable: boolean;
   updateDownloaded: boolean;
   isDevelopment: boolean;
@@ -1193,6 +1198,7 @@ export interface UpdateInfoResult {
 }
 
 export interface UpdateResult {
+  code?: string;
   success: boolean;
   message: string;
 }
@@ -1630,6 +1636,10 @@ declare global {
       >;
 
       // Org policy (see src/types/policy.ts)
+      getEffectivePolicy?: () => Promise<EffectivePolicySnapshot>;
+      onEffectivePolicyChanged?: (
+        callback: (snapshot: EffectivePolicySnapshot) => void
+      ) => () => void;
       getWorkspacePolicy?: (
         accountId?: string,
         expectedAuthGeneration?: number
@@ -2484,6 +2494,7 @@ declare global {
       setAutoUpdatesEnabled: (enabled: boolean) => Promise<{ success: boolean }>;
 
       // Update event listeners
+      onUpdateStatusChanged?: (callback: (status: UpdateStatusResult) => void) => () => void;
       onUpdateAvailable: (callback: (event: any, info: any) => void) => () => void;
       onUpdateNotAvailable: (callback: (event: any, info: any) => void) => () => void;
       onUpdateDownloaded: (callback: (event: any, info: any) => void) => () => void;
@@ -3535,6 +3546,7 @@ declare global {
           speakerIndexBase?: number;
         } & PolicyFailureMetadata
       >;
+      isMeetingRecordingDisabled?: () => Promise<boolean>;
       meetingTranscriptionSend?: (
         buffer: ArrayBuffer,
         source: "mic" | "system",

@@ -1,13 +1,17 @@
 const fs = require("fs");
 const { promises: fsPromises } = require("fs");
 const path = require("path");
-const { net } = require("electron");
+const { net, session } = require("electron");
 const { execFile } = require("child_process");
 const { pipeline } = require("stream");
 const debugLogger = require("./debugLogger");
 const { runSystemTar } = require("./systemTar");
 
 const USER_AGENT = "OpenWhispr/1.0";
+// Only the main-process model/resource download helpers use this partition.
+function getAssetDownloadSession() {
+  return session.fromPartition("local-model-assets", { cache: false });
+}
 const PROGRESS_THROTTLE_MS = 100;
 const DEFAULT_MAX_RETRIES = 3;
 const MAX_BACKOFF_MS = 30000;
@@ -119,7 +123,7 @@ function downloadAttempt(url, tempPath, options) {
       signal.onAbort = onAbort;
     }
 
-    request = net.request({ url, method: "GET" });
+    request = net.request({ url, method: "GET", session: getAssetDownloadSession() });
     for (const [name, value] of Object.entries(headers)) {
       request.setHeader(name, value);
     }
@@ -249,7 +253,7 @@ function downloadAttempt(url, tempPath, options) {
 
 async function fetchJson(url, options = {}) {
   const { headers, ...init } = options;
-  const response = await net.fetch(url, {
+  const response = await getAssetDownloadSession().fetch(url, {
     method: "GET",
     useSessionCookies: false,
     ...init,
@@ -524,6 +528,7 @@ async function findFiles(dir, pattern, maxDepth = 5, depth = 0) {
 }
 
 module.exports = {
+  getAssetDownloadSession,
   downloadFile,
   fetchJson,
   createDownloadSignal,

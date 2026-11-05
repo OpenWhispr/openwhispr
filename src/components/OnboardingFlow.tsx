@@ -101,6 +101,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const { isSignedIn } = useAuth();
   const agentAllowed = usePolicyStore(isAgentAllowed);
   const screenContextAllowed = usePolicyStore(isScreenContextAllowed);
+  const localOnly = usePolicyStore((state) => state.localOnly);
+  const requireSignIn = usePolicyStore((state) => state.requireSignIn);
   const settings = useSettings();
   const settingsStore = useSettingsStore();
   const {
@@ -115,6 +117,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     setPermissionGuide,
     clearSession,
   } = useOnboardingSession();
+
+  useEffect(() => {
+    if (!localOnly || session.currentStepId !== "auth") return;
+    setAuthPath("guest");
+    goTo("permissions");
+  }, [localOnly, session.currentStepId, setAuthPath, goTo]);
 
   const handleLogout = useCallback(async () => {
     await signOut();
@@ -928,14 +936,18 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               onResumeStateChange={updateAuthResumeState}
               autoContinue={!returnedToAuth}
               onSignOut={() => void handleLogout()}
-              onContinueWithoutAccount={() => {
-                // Guests continue onto their route's permissions step — jumping
-                // straight to setup-choice would skip the permission grants and
-                // hotkey the guest route exists to guarantee (see flow.ts).
-                setReturnedToAuth(false);
-                setAuthPath("guest");
-                goTo("permissions");
-              }}
+              onContinueWithoutAccount={
+                requireSignIn
+                  ? undefined
+                  : () => {
+                      // Guests continue onto their route's permissions step — jumping
+                      // straight to setup-choice would skip the permission grants and
+                      // hotkey the guest route exists to guarantee (see flow.ts).
+                      setReturnedToAuth(false);
+                      setAuthPath("guest");
+                      goTo("permissions");
+                    }
+              }
               onAuthComplete={() => {
                 setReturnedToAuth(false);
                 setAuthPath("account");

@@ -1,3 +1,4 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -102,7 +103,7 @@ test.before(() => {
     },
   };
   Ctor.prototype.setupHandlers.call(
-    new Proxy(target, { get: (t, prop) => (prop in t ? t[prop] : anything()) })
+    withDevicePolicy(new Proxy(target, { get: (t, prop) => (prop in t ? t[prop] : anything()) }))
   );
   handler = handlers.get("diarize-audio-file");
   assert.ok(handler, "diarize-audio-file must be registered");

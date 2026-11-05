@@ -19,7 +19,7 @@ export function mirrorActiveAccountScope(): () => void {
   let broadcastReceived = false;
 
   const refreshIdentity = () => {
-    if (!scope) return;
+    if (!scope || usePolicyStore.getState().localOnly) return;
     refreshManagedEnterpriseIdentity(
       scope.accountId,
       scope.authGeneration,

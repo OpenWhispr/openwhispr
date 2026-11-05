@@ -915,6 +915,11 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
     );
     return false;
   }
+  if (await window.electronAPI?.isMeetingRecordingDisabled?.()) {
+    logger.warn("Meeting recording disabled by administrator", {}, "meeting");
+    reportMeetingError("policyRestricted");
+    return false;
+  }
 
   // Resolve the managed route before any capture so a failure never lights the mic indicator.
   const managed = getManagedTranscriptionResolution("realtime");

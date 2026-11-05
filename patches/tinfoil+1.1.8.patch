@@ -1,0 +1,269 @@
+diff --git a/node_modules/tinfoil/dist/ai-sdk-provider.d.ts b/node_modules/tinfoil/dist/ai-sdk-provider.d.ts
+index 407b7e4..a140f99 100644
+--- a/node_modules/tinfoil/dist/ai-sdk-provider.d.ts
++++ b/node_modules/tinfoil/dist/ai-sdk-provider.d.ts
+@@ -11,6 +11,7 @@ export interface CreateTinfoilAIOptions {
+     configRepo?: string;
+     /** URL to fetch the attestation bundle from. */
+     attestationBundleURL?: string;
++    signal?: AbortSignal;
+ }
+ /**
+  * Create a Tinfoil provider for the Vercel AI SDK.
+diff --git a/node_modules/tinfoil/dist/ai-sdk-provider.js b/node_modules/tinfoil/dist/ai-sdk-provider.js
+index d4604e5..808ae0e 100644
+--- a/node_modules/tinfoil/dist/ai-sdk-provider.js
++++ b/node_modules/tinfoil/dist/ai-sdk-provider.js
+@@ -46,7 +46,7 @@ export async function createTinfoilAI(apiKey, options = {}) {
+         configRepo: options.configRepo,
+         attestationBundleURL: options.attestationBundleURL,
+     });
+-    await secureClient.ready();
++    await secureClient.ready(options.signal);
+     return createOpenAICompatible({
+         name: "tinfoil",
+         baseURL: secureClient.getBaseURL(),
+diff --git a/node_modules/tinfoil/dist/atc.d.ts b/node_modules/tinfoil/dist/atc.d.ts
+index 495431c..cbe097a 100644
+--- a/node_modules/tinfoil/dist/atc.d.ts
++++ b/node_modules/tinfoil/dist/atc.d.ts
+@@ -1,6 +1,7 @@
+ import type { AttestationBundle } from "./verifier.js";
+ export interface FetchAttestationBundleOptions {
+     atcBaseUrl?: string;
++    signal?: AbortSignal;
+     enclaveURL?: string;
+     configRepo?: string;
+ }
+diff --git a/node_modules/tinfoil/dist/atc.js b/node_modules/tinfoil/dist/atc.js
+index c34c1ed..ba1d52f 100644
+--- a/node_modules/tinfoil/dist/atc.js
++++ b/node_modules/tinfoil/dist/atc.js
+@@ -20,12 +20,13 @@ export async function fetchAttestationBundle(options = {}) {
+         ? await fetch(url, {
+             method: 'POST',
+             headers: { 'Content-Type': 'application/json' },
++            signal: options.signal,
+             body: JSON.stringify({
+                 enclaveUrl: options.enclaveURL,
+                 repo: options.configRepo,
+             }),
+         })
+-        : await fetch(url);
++        : await fetch(url, { signal: options.signal });
+     if (!response.ok) {
+         throw new FetchError(`Failed to fetch attestation bundle from ${baseUrl}: HTTP ${response.status} ${response.statusText}`);
+     }
+diff --git a/node_modules/tinfoil/dist/secure-client.d.ts b/node_modules/tinfoil/dist/secure-client.d.ts
+index 8bef8f2..62f8a23 100644
+--- a/node_modules/tinfoil/dist/secure-client.d.ts
++++ b/node_modules/tinfoil/dist/secure-client.d.ts
+@@ -95,7 +95,7 @@ export declare class SecureClient {
+      *
+      * @throws Error if verification fails
+      */
+-    ready(): Promise<void>;
++    ready(signal?: AbortSignal): Promise<void>;
+     /**
+      * Clear derived state without touching initPromise (preserves deduplication).
+      */
+diff --git a/node_modules/tinfoil/dist/secure-client.js b/node_modules/tinfoil/dist/secure-client.js
+index 8a87d0b..62f1005 100644
+--- a/node_modules/tinfoil/dist/secure-client.js
++++ b/node_modules/tinfoil/dist/secure-client.js
+@@ -115,14 +115,31 @@ export class SecureClient {
+      *
+      * @throws Error if verification fails
+      */
+-    async ready() {
++    async ready(signal) {
++        signal?.throwIfAborted();
+         if (!this.initPromise) {
+-            this.initPromise = this.initSecureClient().catch(async (err) => {
++            this.initPromise = this.initSecureClient(signal).catch(async (err) => {
++                if (signal?.aborted) {
++                    this.reset();
++                    throw signal.reason;
++                }
+                 // Only try recovery if the error is transient (network I/O, attestation errors)
+                 if (err instanceof FetchError || err instanceof AttestationError) {
+                     this.clearDerivedState(); // Start with a new enclave
+-                    await new Promise(r => setTimeout(r, INIT_RETRY_DELAY_MS));
+-                    return this.initSecureClient().catch(retryErr => {
++                    await new Promise((resolve, reject) => {
++                        const timer = setTimeout(() => {
++                            signal?.removeEventListener('abort', abort);
++                            resolve();
++                        }, INIT_RETRY_DELAY_MS);
++                        const abort = () => {
++                            clearTimeout(timer);
++                            this.reset();
++                            reject(signal.reason);
++                        };
++                        signal?.addEventListener('abort', abort, { once: true });
++                    });
++                    signal?.throwIfAborted();
++                    return this.initSecureClient(signal).catch(retryErr => {
+                         this.reset();
+                         throw retryErr;
+                     });
+@@ -132,7 +149,8 @@ export class SecureClient {
+                 throw err;
+             });
+         }
+-        return this.initPromise;
++        await this.initPromise;
++        signal?.throwIfAborted();
+     }
+     /**
+      * Clear derived state without touching initPromise (preserves deduplication).
+@@ -168,9 +186,11 @@ export class SecureClient {
+         this.initPromise = null;
+         this.clearDerivedState();
+     }
+-    async initSecureClient() {
++    async initSecureClient(signal) {
++        signal?.throwIfAborted();
+         const bundle = await fetchAttestationBundle({
+             atcBaseUrl: this.config.attestationBundleURL,
++            signal,
+             enclaveURL: this.config.enclaveURL,
+             configRepo: this.config.configRepo !== TINFOIL_CONFIG.DEFAULT_ROUTER_REPO
+                 ? this.config.configRepo
+@@ -190,6 +210,7 @@ export class SecureClient {
+         });
+         try {
+             const attestation = await verifier.verifyBundle(bundle);
++            signal?.throwIfAborted();
+             this.attestedTlsPublicKeyFingerprint = attestation.tlsPublicKeyFingerprint;
+             this._transport = await this.createTransport(attestation.hpkePublicKey, attestation.tlsPublicKeyFingerprint);
+         }
+@@ -254,7 +275,8 @@ export class SecureClient {
+      */
+     get fetch() {
+         return async (input, init) => {
+-            await this.ready();
++            const signal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
++            await this.ready(signal);
+             try {
+                 return await this._transport.fetch(input, init);
+             }
+@@ -262,7 +284,7 @@ export class SecureClient {
+                 // Channel recovery: server rotated keys, request was never processed — safe to retry
+                 if (error instanceof KeyConfigMismatchError) {
+                     this.reset();
+-                    await this.ready();
++                    await this.ready(signal);
+                     return await this._transport.fetch(input, init);
+                 }
+                 throw error;
+@@ -337,6 +359,7 @@ export class SecureClient {
+      * ```
+      */
+     async createWebSocket(path, options) {
++        await this.ready(options?.wsOptions?.signal);
+         const fingerprint = await this.requireWebSocketCapability();
+         const enclaveHost = new URL(this.resolvedEnclaveURL).host;
+         const target = new URL(path, this.resolvedEnclaveURL);
+diff --git a/node_modules/tinfoil/dist/tinfoil-ai.d.ts b/node_modules/tinfoil/dist/tinfoil-ai.d.ts
+index c071c57..345c32e 100644
+--- a/node_modules/tinfoil/dist/tinfoil-ai.d.ts
++++ b/node_modules/tinfoil/dist/tinfoil-ai.d.ts
+@@ -96,7 +96,7 @@ export declare class TinfoilAI {
+      * await client.ready(); // Show spinner while verifying
+      * ```
+      */
+-    ready(): Promise<void>;
++    ready(signal?: AbortSignal): Promise<void>;
+     private ensureReady;
+     /**
+      * Get the verification document containing attestation details.
+diff --git a/node_modules/tinfoil/dist/tinfoil-ai.js b/node_modules/tinfoil/dist/tinfoil-ai.js
+index 06f9433..6c75620 100644
+--- a/node_modules/tinfoil/dist/tinfoil-ai.js
++++ b/node_modules/tinfoil/dist/tinfoil-ai.js
+@@ -2,12 +2,12 @@ import OpenAI from "openai";
+ import { SecureClient } from "./secure-client.js";
+ import {} from "./verifier.js";
+ import { isRealBrowser } from "./env.js";
+-function createAsyncProxy(promise) {
++function createAsyncProxy(getReady) {
+     return new Proxy({}, {
+         get(target, prop) {
+             return new Proxy(() => { }, {
+                 get(_, nestedProp) {
+-                    return (...args) => promise.then((obj) => {
++                    return (...args) => getReady(args.at(-1)?.signal).then((obj) => {
+                         const value = obj[prop][nestedProp];
+                         return typeof value === "function"
+                             ? value.apply(obj[prop], args)
+@@ -15,7 +15,7 @@ function createAsyncProxy(promise) {
+                     });
+                 },
+                 apply(_, __, args) {
+-                    return promise.then((obj) => {
++                    return getReady(args.at(-1)?.signal).then((obj) => {
+                         const value = obj[prop];
+                         return typeof value === "function" ? value.apply(obj, args) : value;
+                     });
+@@ -86,11 +86,11 @@ export class TinfoilAI {
+      * await client.ready(); // Show spinner while verifying
+      * ```
+      */
+-    async ready() {
+-        await this.ensureReady();
++    async ready(signal) {
++        await this.ensureReady(signal);
+     }
+-    async ensureReady() {
+-        await this.secureClient.ready();
++    async ensureReady(signal) {
++        await this.secureClient.ready(signal);
+         if (!this.client) {
+             this.client = new OpenAI({
+                 ...this.openAIOptions,
+@@ -144,34 +144,34 @@ export class TinfoilAI {
+         return createPinnedRealtimeWS(props, { apiKey: client.apiKey, baseURL: this.secureClient.getEnclaveBaseURL() }, pinnedOptions);
+     }
+     get chat() {
+-        return createAsyncProxy(this.ensureReady().then((client) => client.chat));
++        return createAsyncProxy((signal) => this.ensureReady(signal).then((client) => client.chat));
+     }
+     get files() {
+-        return createAsyncProxy(this.ensureReady().then((client) => client.files));
++        return createAsyncProxy((signal) => this.ensureReady(signal).then((client) => client.files));
+     }
+     get fineTuning() {
+-        return createAsyncProxy(this.ensureReady().then((client) => client.fineTuning));
++        return createAsyncProxy((signal) => this.ensureReady(signal).then((client) => client.fineTuning));
+     }
+     get images() {
+-        return createAsyncProxy(this.ensureReady().then((client) => client.images));
++        return createAsyncProxy((signal) => this.ensureReady(signal).then((client) => client.images));
+     }
+     get audio() {
+-        return createAsyncProxy(this.ensureReady().then((client) => client.audio));
++        return createAsyncProxy((signal) => this.ensureReady(signal).then((client) => client.audio));
+     }
+     get responses() {
+-        return createAsyncProxy(this.ensureReady().then((client) => client.responses));
++        return createAsyncProxy((signal) => this.ensureReady(signal).then((client) => client.responses));
+     }
+     get embeddings() {
+-        return createAsyncProxy(this.ensureReady().then((client) => client.embeddings));
++        return createAsyncProxy((signal) => this.ensureReady(signal).then((client) => client.embeddings));
+     }
+     get models() {
+-        return createAsyncProxy(this.ensureReady().then((client) => client.models));
++        return createAsyncProxy((signal) => this.ensureReady(signal).then((client) => client.models));
+     }
+     get moderations() {
+-        return createAsyncProxy(this.ensureReady().then((client) => client.moderations));
++        return createAsyncProxy((signal) => this.ensureReady(signal).then((client) => client.moderations));
+     }
+     get beta() {
+-        return createAsyncProxy(this.ensureReady().then((client) => client.beta));
++        return createAsyncProxy((signal) => this.ensureReady(signal).then((client) => client.beta));
+     }
+ }
+ // Namespace declaration merge to add OpenAI types to TinfoilAI

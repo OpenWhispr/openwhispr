@@ -48,8 +48,10 @@ class MeetingDetectionEngine {
       now = Date.now,
       setInterval = global.setInterval,
       clearInterval = global.clearInterval,
+      isMeetingRecordingDisabled = () => false,
     } = {}
   ) {
+    this._isMeetingRecordingDisabled = isMeetingRecordingDisabled;
     this.reminderScheduler = reminderScheduler;
     this.meetingProcessDetector = meetingProcessDetector;
     this.audioActivityDetector = audioActivityDetector;
@@ -173,6 +175,10 @@ class MeetingDetectionEngine {
   }
 
   _syncAudioActivityDetector() {
+    if (this._isMeetingRecordingDisabled()) {
+      this.audioActivityDetector.stop();
+      return undefined;
+    }
     if (this.preferences.audioDetection || this._isAutoEndWanted()) {
       return this.audioActivityDetector.start();
     }
@@ -184,6 +190,10 @@ class MeetingDetectionEngine {
   // The process-exit fast path needs the detector even when the user has turned
   // process detection off for meeting prompts.
   _syncMeetingProcessDetector() {
+    if (this._isMeetingRecordingDisabled()) {
+      this.meetingProcessDetector.stop();
+      return;
+    }
     if (this.preferences.processDetection || this._isAutoEndWanted()) {
       this.meetingProcessDetector.start();
       return;
@@ -345,6 +355,15 @@ class MeetingDetectionEngine {
 
   _handleDetection(source, key, data) {
     const detectionId = `${source}:${key}`;
+
+    if (this._isMeetingRecordingDisabled()) {
+      debugLogger.info(
+        "Meeting recording disabled by administrator, ignoring",
+        { detectionId },
+        "meeting"
+      );
+      return;
+    }
 
     if (source === "audio" && !this.preferences.audioDetection) {
       debugLogger.debug("Audio detection disabled, ignoring", { detectionId }, "meeting");
@@ -586,6 +605,10 @@ class MeetingDetectionEngine {
   }
 
   async startManualMeeting(options) {
+    if (this._isMeetingRecordingDisabled()) {
+      debugLogger.info("Manual meeting ignored — disabled by administrator", {}, "meeting");
+      return;
+    }
     const refusal = await this._meetingStartRefusal();
     if (refusal) {
       this.windowManager.sendMeetingStartRefused(refusal.code);
@@ -662,6 +685,14 @@ class MeetingDetectionEngine {
 
   // Resolves with the org's refusal, if any, for the caller to explain.
   async joinCalendarMeeting(eventId, trigger = "calendar-join", options) {
+    if (this._isMeetingRecordingDisabled()) {
+      debugLogger.info(
+        "Calendar meeting join ignored — disabled by administrator",
+        { eventId },
+        "meeting"
+      );
+      return;
+    }
     const refusal = await this._meetingStartRefusal();
     if (refusal) return refusal;
     this._meetingModeActive = true;

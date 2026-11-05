@@ -56,14 +56,18 @@ export async function getTinfoilChatClient(apiKey: string): Promise<TinfoilAI> {
   return clientPromise;
 }
 
-async function getTinfoilAISDKProvider(apiKey: string): Promise<TinfoilAISDKProvider> {
+async function getTinfoilAISDKProvider(
+  apiKey: string,
+  signal?: AbortSignal
+): Promise<TinfoilAISDKProvider> {
+  signal?.throwIfAborted();
   const key = normalizeApiKey(apiKey);
   syncTinfoilCatalog();
   const cached = aiSdkProviderCache.get(key);
   if (cached) return cached;
 
   const providerPromise = loadTinfoil()
-    .then(({ createTinfoilAI }) => createTinfoilAI(key))
+    .then(({ createTinfoilAI }) => createTinfoilAI(key, { signal }))
     .catch((error) => {
       aiSdkProviderCache.delete(key);
       throw error;
@@ -74,9 +78,10 @@ async function getTinfoilAISDKProvider(apiKey: string): Promise<TinfoilAISDKProv
 
 export async function getTinfoilLanguageModel(
   apiKey: string,
-  model: string
+  model: string,
+  signal?: AbortSignal
 ): Promise<LanguageModel> {
-  const provider = await getTinfoilAISDKProvider(apiKey);
+  const provider = await getTinfoilAISDKProvider(apiKey, signal);
   return provider(resolveRetiredCloudModel("tinfoil", model));
 }
 

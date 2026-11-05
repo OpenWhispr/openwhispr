@@ -1,3 +1,4 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -35,7 +36,7 @@ const electronStub = {
     fetch: async () => ({
       ok: true,
       status: 200,
-      json: async () => ({}),
+      json: async () => ({ data: { managed: false, policy: null, policyUpdatedAt: null } }),
       text: async () => "{}",
     }),
   },
@@ -61,6 +62,7 @@ const electronStub = {
 
 Module._load = function loadWithMocks(request, parent, isMain) {
   if (request === "electron") return electronStub;
+  if (request === "electron-updater") return { autoUpdater: {} };
   if (parent?.filename === handlersModulePath) {
     if (request === "./tokenStore") {
       return {
@@ -68,13 +70,19 @@ Module._load = function loadWithMocks(request, parent, isMain) {
         getState: () => ({ ...tokenState }),
         clear: () => {
           tokenState = { token: null, generation: tokenState.generation + 1 };
+          handleAuthTokenChange(tokenState);
           return { success: true, ...tokenState };
         },
         subscribe: () => () => {},
       };
     }
     if (request === "./windowBroadcast") {
-      return { broadcastToWindows: (channel, data) => broadcasts.push([channel, data]) };
+      return {
+        broadcastToWindows: (channel, data) => {
+          if (!["effective-policy-changed", "workspace-policy-changed"].includes(channel))
+            broadcasts.push([channel, data]);
+        },
+      };
     }
   }
   return originalLoad.call(this, request, parent, isMain);
@@ -105,13 +113,23 @@ function readBinding() {
 
 const databaseScopes = [];
 const databaseManager = new Proxy(
-  { setActiveAccountId: (accountId) => databaseScopes.push(accountId) },
+  {
+    activeAccountId: null,
+    setActiveAccountId(accountId) {
+      this.activeAccountId = accountId;
+      databaseScopes.push(accountId);
+    },
+  },
   { get: (value, property) => (property in value ? value[property] : anything()) }
 );
 
 function buildFakeThis() {
   const target = {
     sessionId: "test-session",
+    windowManager: new Proxy(
+      { controlPanelWindow: null, mainWindow: null },
+      { get: (value, property) => (property in value ? value[property] : anything()) }
+    ),
     connectorManager,
     databaseManager,
     _meetingMicStreaming: null,
@@ -131,8 +149,11 @@ test.before(() => {
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
   fakeThis = buildFakeThis();
-  Ctor.prototype.setupHandlers.call(fakeThis);
-  handleAuthTokenChange = (state) => Ctor.prototype._handleAuthTokenChange.call(fakeThis, state);
+  Ctor.prototype.setupHandlers.call(withDevicePolicy(fakeThis));
+  handleAuthTokenChange = (state) => {
+    tokenState = { ...state };
+    return Ctor.prototype._handleAuthTokenChange.call(fakeThis, state);
+  };
 });
 
 test.after(() => {
@@ -272,6 +293,158 @@ test("activation storage failure cannot prevent clearing the local bearer", asyn
   }
 });
 
+async function signOutUpdater(t, generation) {
+  const previous = {
+    updateManager: fakeThis.updateManager,
+    databaseManager: fakeThis.databaseManager,
+    windowManager: fakeThis.windowManager,
+    metaActivation: fakeThis.metaActivation,
+  };
+  const previousTokenState = tokenState;
+  t.after(() => {
+    fakeThis.updateManager.cleanup();
+    Object.assign(fakeThis, previous);
+    tokenState = previousTokenState;
+  });
+  tokenState = { token: `sign-out-token-${generation}`, generation };
+  fakeThis.databaseManager = {
+    activeAccountId: "departing-account",
+    setActiveAccountId(accountId) {
+      this.activeAccountId = accountId;
+    },
+  };
+  const win = {
+    isDestroyed: () => false,
+    webContents: { session: { cookies: { get: async () => [] } } },
+  };
+  fakeThis.windowManager = { controlPanelWindow: win, retireMeetingNotificationScope() {} };
+  await setScope("departing-account", generation);
+  fakeThis.metaActivation = { close: async () => {} };
+  const previousEnvironment = process.env.NODE_ENV;
+  try {
+    process.env.NODE_ENV = "development";
+    const UpdateManager = require("../../src/updater");
+    fakeThis.updateManager = new UpdateManager({ getPolicy: () => fakeThis.getUpdatePolicy() });
+  } finally {
+    if (previousEnvironment === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousEnvironment;
+  }
+  fakeThis.updateManager.updatePolicy({
+    success: true,
+    managed: true,
+    policy: { updates: { mode: "it_managed" } },
+  });
+  return { manager: fakeThis.updateManager, win };
+}
+
+test("local sign-out restores guest updater readiness without a server or renderer response", async (t) => {
+  const { manager } = await signOutUpdater(t, 100);
+  let requests = 0;
+  t.mock.method(electronStub.net, "fetch", async () => {
+    requests++;
+    throw new Error("offline");
+  });
+  const result = await handlers.get("auth-clear-session")({ sender: {} });
+  await new Promise(setImmediate);
+
+  assert.equal(result.success, true);
+  assert.equal(readBinding(), null);
+  assert.equal(fakeThis.databaseManager.activeAccountId, null);
+  assert.equal((await manager.getUpdateStatus()).policyReady, true);
+  assert.equal((await manager.getUpdateStatus()).updateMode, "user_choice");
+  assert.equal(requests, 0);
+});
+
+test("completed cookie sign-out discards a pending cookie-authorized updater policy", async (t) => {
+  const { deferred } = require("./harness/deferred");
+  const { manager, win } = await signOutUpdater(t, 102);
+  tokenState = { token: null, generation: 102 };
+  const clearing = deferred();
+  const cleared = deferred();
+  const requested = deferred();
+  const reply = deferred();
+  let cookie = "departing-cookie";
+  win.webContents.session.cookies.get = async () =>
+    cookie ? [{ name: "session", value: cookie }] : [];
+  win.webContents.session.clearStorageData = async (options) => {
+    assert.deepEqual(options, { storages: ["cookies"] });
+    clearing.resolve();
+    await cleared.promise;
+    cookie = null;
+  };
+  t.mock.method(electronStub.BrowserWindow, "fromWebContents", () => win);
+  t.mock.method(electronStub.net, "fetch", async (_url, init) => {
+    assert.equal(init.headers.Cookie, "session=departing-cookie");
+    requested.resolve();
+    return reply.promise;
+  });
+  const previousApiUrl = process.env.OPENWHISPR_API_URL;
+  process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
+  const response = {
+    ok: true,
+    status: 200,
+    json: async () => ({
+      data: {
+        managed: true,
+        policy: {
+          version: 1,
+          transcription: { allowedModes: [], allowedByokProviders: [] },
+          llm: { allowedModes: [], allowedByokProviders: [], allowedEnterpriseProviders: [] },
+          features: { agentEnabled: false, webSearchEnabled: false },
+          sharing: { externalLinkSharing: "disabled" },
+          dataRetention: {
+            audioRetentionMaxDays: null,
+            localHistoryMode: "user_choice",
+            cloudBackupAllowed: false,
+          },
+          minAppVersion: null,
+          updates: { mode: "it_managed" },
+        },
+        policyUpdatedAt: "2026-11-03T00:00:00.000Z",
+      },
+    }),
+  };
+  t.after(() => {
+    cleared.resolve();
+    reply.resolve(response);
+    if (previousApiUrl === undefined) delete process.env.OPENWHISPR_API_URL;
+    else process.env.OPENWHISPR_API_URL = previousApiUrl;
+  });
+  broadcasts.length = 0;
+  const signOut = handlers.get("auth-clear-session")({ sender: {} });
+  await clearing.promise;
+  const policy = manager.refreshPolicy();
+  await requested.promise;
+  cleared.resolve();
+  assert.equal((await signOut).success, true);
+  await new Promise(setImmediate);
+  assert.equal((await manager.getUpdateStatus()).policyReady, true);
+  assert.equal((await manager.getUpdateStatus()).updateMode, "user_choice");
+
+  reply.resolve(response);
+  await policy;
+  assert.equal((await manager.getUpdateStatus()).policyReady, true);
+  assert.equal((await manager.getUpdateStatus()).updateMode, "user_choice");
+  assert.equal(
+    broadcasts.some(([channel]) => channel === "workspace-policy-changed"),
+    false
+  );
+});
+
+test("cookie storage failure still clears the local bearer and reports the failure", async (t) => {
+  const { win } = await signOutUpdater(t, 104);
+  win.webContents.session.clearStorageData = async () => {
+    throw new Error("cookie storage unavailable");
+  };
+  t.mock.method(electronStub.BrowserWindow, "fromWebContents", () => win);
+  const result = await handlers.get("auth-clear-session")({ sender: {} });
+
+  assert.deepEqual(result, { success: false, error: "cookie storage unavailable" });
+  assert.deepEqual(tokenState, { token: null, generation: 105 });
+  assert.equal(readBinding(), null);
+  assert.equal(fakeThis.databaseManager.activeAccountId, null);
+});
+
 test("signed-out transitions restore guest meeting detection without granting a replacement bearer guest permissions", async (t) => {
   const { createAudioFeaturePolicy } = require("../../src/helpers/audioFeaturePolicy");
   const originalManager = fakeThis.windowManager;
@@ -400,11 +573,13 @@ test("a token rotation keeps the account's running jobs and meeting; another acc
   const { createAudioFeaturePolicy } = require("../../src/helpers/audioFeaturePolicy");
   const { deferred } = require("./harness/deferred");
   const originalPolicy = fakeThis._audioFeaturePolicy;
+  const originalRefresh = fakeThis.refreshEffectivePolicy;
   const originalStop = fakeThis._stopMeetingForPolicy;
   const originalAccount = databaseManager.activeAccountId;
   const originalTokenState = tokenState;
   t.after(() => {
     fakeThis._audioFeaturePolicy = originalPolicy;
+    fakeThis.refreshEffectivePolicy = originalRefresh;
     fakeThis._stopMeetingForPolicy = originalStop;
     databaseManager.activeAccountId = originalAccount;
     tokenState = originalTokenState;
@@ -419,6 +594,7 @@ test("a token rotation keeps the account's running jobs and meeting; another acc
   ]) {
     stops.length = 0;
     let lookup = deferred();
+    fakeThis.refreshEffectivePolicy = () => lookup.promise;
     fakeThis._audioFeaturePolicy = createAudioFeaturePolicy({ getPolicy: () => lookup.promise });
     tokenState = { token: "rotation-token-a", generation: 60 };
     databaseManager.activeAccountId = "rotation-account";
@@ -454,6 +630,110 @@ test("a token rotation keeps the account's running jobs and meeting; another acc
     assert.equal(fakeThis._audioFeaturePolicy.failure("meeting"), null);
   }
 });
+
+for (const outcome of [
+  "allowed",
+  "revoked",
+  "revoked then restored",
+  "signed out",
+  "account switched",
+]) {
+  test(`dictation finishing during token rotation: ${outcome}`, async (t) => {
+    const { deferred } = require("./harness/deferred");
+    const IPCHandlers = require(handlersModulePath);
+    const previous = {
+      whisperManager: fakeThis.whisperManager,
+      refreshEffectivePolicy: fakeThis.refreshEffectivePolicy,
+      _stopRemoteProductWork: fakeThis._stopRemoteProductWork,
+      _retireDisallowedProductWork: fakeThis._retireDisallowedProductWork,
+      _stopMeetingForPolicy: fakeThis._stopMeetingForPolicy,
+      _meetingMicStreaming: fakeThis._meetingMicStreaming,
+    };
+    const previousTokenState = tokenState;
+    const previousAccount = databaseManager.activeAccountId;
+    const previousApiUrl = process.env.OPENWHISPR_API_URL;
+    const entered = deferred();
+    const finish = deferred();
+    const refreshed = deferred();
+    let pending;
+    t.after(async () => {
+      finish.resolve({ success: true, text: "completed dictation" });
+      refreshed.resolve();
+      await pending;
+      Object.assign(fakeThis, previous);
+      tokenState = previousTokenState;
+      databaseManager.activeAccountId = previousAccount;
+      if (previousApiUrl === undefined) delete process.env.OPENWHISPR_API_URL;
+      else process.env.OPENWHISPR_API_URL = previousApiUrl;
+      await fakeThis.refreshEffectivePolicy();
+    });
+
+    process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
+    const generation = tokenState.generation + 1;
+    tokenState = { token: `completion-token-${generation}`, generation };
+    await setScope("completion-account", generation);
+    await fakeThis.refreshEffectivePolicy();
+    fakeThis.refreshEffectivePolicy = () => refreshed.promise;
+    fakeThis._stopRemoteProductWork = IPCHandlers.prototype._stopRemoteProductWork.bind(fakeThis);
+    fakeThis._retireDisallowedProductWork =
+      IPCHandlers.prototype._retireDisallowedProductWork.bind(fakeThis);
+    const stops = [];
+    fakeThis._stopMeetingForPolicy = (reason) => {
+      stops.push(reason);
+      fakeThis._meetingMicStreaming = null;
+    };
+    const meeting = { disconnect: async () => {} };
+    fakeThis._meetingMicStreaming = meeting;
+    fakeThis.whisperManager = {
+      transcribeLocalWhisper: async () => {
+        entered.resolve();
+        return finish.promise;
+      },
+    };
+    pending = handlers.get("transcribe-local-whisper")({ sender: {} }, new Uint8Array([1]));
+    await entered.promise;
+    handleAuthTokenChange({
+      token: `completion-token-${generation + 1}`,
+      generation: generation + 1,
+    });
+    await setScope("completion-account", generation + 1);
+    finish.resolve({ success: true, text: "completed dictation" });
+    await new Promise(setImmediate);
+    assert.deepEqual(stops, []);
+    assert.equal(fakeThis._meetingMicStreaming, meeting);
+
+    if (outcome === "signed out") {
+      handleAuthTokenChange({ token: null, generation: generation + 2 });
+    } else {
+      if (outcome === "account switched") {
+        await setScope("replacement-account", generation + 1);
+        fakeThis._meetingMicStreaming = meeting;
+      }
+      const snapshot = {
+        success: true,
+        managed: false,
+        accountId: databaseManager.activeAccountId,
+        authGeneration: generation + 1,
+      };
+      if (outcome.startsWith("revoked")) {
+        const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+        policy.transcription.allowedModes = ["providers"];
+        fakeThis.effectivePolicyManager.updateWorkspace({ ...snapshot, managed: true, policy });
+      }
+      if (outcome !== "revoked") fakeThis.effectivePolicyManager.updateWorkspace(snapshot);
+    }
+    refreshed.resolve();
+    const result = await pending;
+    if (outcome === "allowed") assert.equal(result.text, "completed dictation");
+    else assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
+    assert.deepEqual(
+      stops,
+      ["signed out", "account switched"].includes(outcome) ? ["accountChanged"] : []
+    );
+    if (outcome === "allowed" || outcome === "account switched")
+      assert.equal(fakeThis._meetingMicStreaming, meeting);
+  });
+}
 
 // Runs an enterprise meeting under `workspace-a`, owned by main, and reports every stop.
 async function enterpriseMeeting(t, generation) {
@@ -569,4 +849,52 @@ test("account deletion still deletes the note mirrors when the enterprise vault 
   const result = await handlers.get("delete-account-data")({}, "deleted-account", 90);
   assert.equal(result.success, true);
   assert.deepEqual(mirrored, [11, 12]);
+});
+
+test("repeated validated account scope preserves its settled policy while refreshing", async (t) => {
+  tokenState = { token: "stable-policy-token", generation: 80 };
+  await setScope("stable-policy-account", 80);
+  await new Promise((resolve) => setImmediate(resolve));
+  const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+  policy.dataRetention.audioRetentionMaxDays = 7;
+  const manager = fakeThis.effectivePolicyManager;
+  manager.updateWorkspace({
+    success: true,
+    managed: true,
+    accountId: "stable-policy-account",
+    authGeneration: 80,
+    policy,
+    policyUpdatedAt: "2026-11-03T10:00:00.000Z",
+  });
+  const settled = manager.getCurrent();
+  assert.equal(settled.status, "managed");
+  const refresh = fakeThis.refreshEffectivePolicy;
+  let release;
+  const pending = new Promise((resolve) => {
+    release = resolve;
+  });
+  const refreshes = [];
+  fakeThis.refreshEffectivePolicy = () => {
+    const work = pending.then(() => refresh());
+    refreshes.push(work);
+    return work;
+  };
+  t.after(async () => {
+    fakeThis.refreshEffectivePolicy = refresh;
+    release();
+    await Promise.all(refreshes);
+  });
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    assert.deepEqual(await setScope("stable-policy-account", 80), { success: true });
+    assert.equal(manager.getCurrent().status, "managed");
+    assert.equal(manager.getCurrent().revision, settled.revision);
+    assert.equal(manager.getCurrent().policy.dataRetention.audioRetentionMaxDays, 7);
+  }
+  assert.equal(refreshes.length, 3);
+
+  tokenState = { token: "rotated-policy-token", generation: 81 };
+  await setScope("stable-policy-account", 81);
+  assert.equal(manager.getCurrent().status, "loading");
+  assert.equal(manager.getCurrent().authGeneration, 81);
 });
