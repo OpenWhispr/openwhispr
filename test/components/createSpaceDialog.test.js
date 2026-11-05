@@ -138,6 +138,13 @@ test.before(async (t) => {
       `,
       "/services/TeamsService":
         "export const TeamsService = { list: (id) => globalThis.__listGroups(id) };",
+      "/services/WorkspacesService": `
+        export const WorkspacesService = {
+          previewSeats: async () => {
+            throw new Error("no subscription");
+          },
+        };
+      `,
       "/stores/noteStore": `
         export const revealContainer = (...args) => {
           if (globalThis.__revealThrows) throw new Error("store unavailable");
@@ -260,11 +267,13 @@ async function mount(
     },
     rosterFailures = 0,
     groupFailures = 0,
+    workspaceFields = {},
   } = {}
 ) {
   const calls = [];
   const closes = [];
-  const workspace = workspaceWith({ manage_members: canManageMembers });
+  const refreshes = [];
+  const workspace = { ...workspaceWith({ manage_members: canManageMembers }), ...workspaceFields };
   const store = {
     error: null,
     loading: false,
@@ -279,6 +288,9 @@ async function mount(
       }
       store.members = ROSTER;
       store.membersWorkspaceId = workspaceId;
+    },
+    refresh: async (options) => {
+      refreshes.push(options);
     },
   };
   globalThis.__store = store;
@@ -346,12 +358,52 @@ async function mount(
   return {
     calls,
     closes,
+    refreshes,
     reopen: () => act(() => reopen()),
+    rerender: () => act(() => root.render(h(Host))),
     toasts: () => globalThis.__toasts,
     navigation: () => globalThis.__navigation,
     callsTo: (name) => calls.filter(([call]) => call === name),
   };
 }
+
+test("a new address says what it costs before the teamspace is made, and Create still goes", async (t) => {
+  const { refreshes } = await mount(t, {
+    workspaceFields: { has_subscription: true, seats: 8, seats_used: 8, billing_manager: "Olivia" },
+  });
+  await type(nameInput(), "Customer Calls");
+  await pickPerson("Ethan");
+  assert.doesNotMatch(text(dialog()), /Using 8 of 8 seats/, "people take no seat");
+
+  await addAddress("new@example.com");
+  await settle();
+
+  assert.match(text(dialog()), /Using 8 of 8 seats/);
+  assert.match(text(dialog()), /No seats left\. Ask Olivia to add seats\./);
+  assert.deepEqual(refreshes, [{ fresh: true }]);
+  assert.equal(createButton().disabled, false);
+});
+
+test("a fresh workspace list doesn't reload the people field under a typed address", async (t) => {
+  const { callsTo, rerender } = await mount(t);
+  await addAddress("new@example.com");
+  const rosterReads = callsTo("roster").length;
+  const groupReads = callsTo("groups").length;
+
+  const fresh = { ...globalThis.__workspaceHook.active };
+  globalThis.__workspaceHook = {
+    ...globalThis.__workspaceHook,
+    workspaces: [fresh],
+    active: fresh,
+  };
+  globalThis.__store.workspaces = [fresh];
+  await rerender();
+  await settle();
+
+  assert.equal(callsTo("roster").length, rosterReads);
+  assert.equal(callsTo("groups").length, groupReads);
+  assert.ok(peopleInput(), "the field stays");
+});
 
 test("Default and Open start off and travel in the request", async (t) => {
   const { callsTo } = await mount(t);

@@ -106,21 +106,39 @@ function errorMessage(err: unknown): string | undefined {
 }
 
 // No usable response: the request may have been carried out before the answer was lost, which a
-// gateway's 5xx can't rule out either. A status 0 with a code is main refusing the request itself
-// (a changed session), which never went out.
+// gateway's 5xx can't rule out either, and main gives every 503 the code SERVER_ERROR. Any other
+// code at status 0 is main refusing the request itself (a changed session), which never went out.
 function isLostAnswer(err: unknown): boolean {
-  return err instanceof CloudApiError && !err.code && (!err.status || err.status >= 500);
+  return (
+    err instanceof CloudApiError &&
+    (!err.code || err.code === "SERVER_ERROR") &&
+    (!err.status || err.status >= 500)
+  );
 }
 
 export function createSpaceActions(deps: SpaceActionsDependencies) {
   const openHolds = new Set<SpaceDeleteHold>();
 
   // Creates whose answer was lost and which the follow-up read couldn't settle, by when they were
-  // tried. A dropped connection usually takes that read down too, so the retry settles it instead.
-  const unsettledCreates = new Map<string, number>();
+  // tried and what they asked for. A dropped connection usually takes that read down too, so the
+  // retry settles it instead.
+  const unsettledCreates = new Map<string, { triedAt: number; request: string }>();
   const normalizedName = (name: string): string => name.trim().toLowerCase();
   const createKey = (workspaceId: string, name: string): string =>
     `${workspaceId}\0${normalizedName(name)}`;
+  // What a retry can change since the try it may repeat; the name is in the key.
+  const createRequest = (
+    input: CreateSpaceInput,
+    access: { memberIds: string[]; teamIds: string[] }
+  ): string =>
+    JSON.stringify([
+      input.emoji ?? null,
+      input.description ?? null,
+      input.is_default ?? false,
+      input.is_open ?? false,
+      [...access.memberIds].sort(),
+      [...access.teamIds].sort(),
+    ]);
 
   // One failed add must not abort the rest; callers report the failures.
   async function settleAddMembers(
@@ -198,19 +216,30 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
       });
     } catch (err) {
       const lastTry = unsettledCreates.get(key);
-      const unsettledAt =
-        lastTry !== undefined && triedAt - lastTry <= UNSETTLED_CREATE_TTL_MS ? lastTry : undefined;
+      const unsettled =
+        lastTry !== undefined && triedAt - lastTry.triedAt <= UNSETTLED_CREATE_TTL_MS
+          ? lastTry
+          : undefined;
+      const unsettledAt = unsettled?.triedAt;
+      const request = createRequest(input, access);
+      // Adopting the earlier teamspace would silently drop what this try changed, so its answer
+      // stands.
+      const changed = unsettled !== undefined && unsettled.request !== request;
       // The name is taken by this user's own lost create, if an earlier try is still unsettled.
       const mayBeOurs =
-        isLostAnswer(err) ||
-        (unsettledAt !== undefined && classifySpaceError(err).kind === "nameTaken");
+        !changed &&
+        (isLostAnswer(err) ||
+          (unsettledAt !== undefined && classifySpaceError(err).kind === "nameTaken"));
       if (!mayBeOurs) {
         unsettledCreates.delete(key);
         throw err;
       }
       const created = await findLostCreate(workspaceId, input.name, unsettledAt ?? triedAt);
-      if (created === undefined) unsettledCreates.set(key, unsettledAt ?? triedAt);
-      else unsettledCreates.delete(key);
+      if (created === undefined) {
+        unsettledCreates.set(key, { triedAt: unsettledAt ?? triedAt, request });
+      } else {
+        unsettledCreates.delete(key);
+      }
       if (!created) throw err;
       cloudSpace = created;
     }
@@ -306,10 +335,12 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     return holdForAccount(space, deps.deleteHold.accountGeneration());
   }
 
-  // The toast that ends the window goes with the page, and it told the user this was deleted.
-  // Best effort: a request the app quits before sending leaves the teamspace as it was.
-  function commitHeldDeletes(): void {
-    for (const hold of openHolds) void hold.commit();
+  // The toast that ends the window goes with the page or the app, and it told the user this was
+  // deleted. Best effort: quit waits 1.5 s for this (main.js). Offline, on a slower server, or
+  // after a force-quit, a crash or an update install the delete may not land: the teamspace and its
+  // public link stay, and it comes back at the next launch with no notice.
+  async function commitHeldDeletes(): Promise<void> {
+    await Promise.allSettled([...openHolds].map((hold) => hold.commit()));
   }
 
   function holdForAccount(space: SpaceItem, accountGeneration: number): SpaceDeleteHold {

@@ -211,6 +211,7 @@ const ToastViewport: React.FC<{
 
   return (
     <div
+      data-toast-viewport=""
       className={cn(
         "fixed z-[100] flex flex-col gap-2 pointer-events-none",
         isDictationPanel

@@ -2177,6 +2177,15 @@ if (gotSingleInstanceLock) {
         ipcHandlers?.metaActivation?.shutdown(),
         new Promise((resolve) => setTimeout(resolve, 1500)),
       ]),
+      // A teamspace delete still in its Undo window, which the toast already reported as done.
+      Promise.race([
+        isLiveWindow(windowManager?.controlPanelWindow)
+          ? windowManager.controlPanelWindow.webContents.executeJavaScript(
+              "window.commitHeldSpaceDeletes?.()"
+            )
+          : undefined,
+        new Promise((resolve) => setTimeout(resolve, 1500)),
+      ]),
     ]).finally(() => app.exit(0));
   });
 }

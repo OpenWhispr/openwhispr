@@ -56,6 +56,7 @@ import { TeamsService } from "../../services/TeamsService";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import type { SpaceInvitation, SpaceItem, Team, TeamRole } from "../../types/electron";
 import { isolate } from "../../utils/bidiIsolate";
+import { SpaceInviteSeatNotice } from "./SpaceInviteSeatNotice";
 import { SpaceMembersTable, type SpaceMembersStatus } from "./SpaceMembersTable";
 import { SpacePeopleField } from "./SpacePeopleField";
 
@@ -516,7 +517,16 @@ export default function SpaceMembersPanel({
     [workspaceTeams]
   );
 
-  const accessUserIds = useMemo(() => new Set(members.map((member) => member.user_id)), [members]);
+  // Workspace owners and admins reach every teamspace without being listed, and adding them writes
+  // nothing, so they aren't offered as people to add.
+  const accessUserIds = useMemo(
+    () =>
+      new Set([
+        ...members.map((member) => member.user_id),
+        ...roster.filter((member) => member.role !== "member").map((member) => member.user_id),
+      ]),
+    [members, roster]
+  );
   const accessGroupIds = useMemo(() => new Set(space.teams.map((team) => team.id)), [space.teams]);
   // Lowercased, as the field compares: an address waiting for an answer is shown as pending in
   // its list rather than offered a second time.
@@ -924,6 +934,9 @@ export default function SpaceMembersPanel({
             >
               {line.text}
             </p>
+          )}
+          {summary.emails.length > 0 && !adding && (
+            <SpaceInviteSeatNotice workspaceId={workspaceId} addressCount={summary.emails.length} />
           )}
         </div>
       )}

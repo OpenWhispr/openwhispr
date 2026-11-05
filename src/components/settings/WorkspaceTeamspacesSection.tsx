@@ -236,7 +236,8 @@ function TeamspacesPage({ workspace, onOpenTeamspace }: PageProps): React.ReactE
 
   return (
     <>
-      <div className="flex items-start justify-between gap-3">
+      {/* The end padding keeps Create clear of the modal's Close, which sits in this corner. */}
+      <div className="flex items-start justify-between gap-3 pe-8">
         <div>
           <h2 className="text-sm font-semibold text-foreground">
             {t("settingsPage.workspace.teamspaces.title")}

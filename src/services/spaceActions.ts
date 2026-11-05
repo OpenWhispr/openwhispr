@@ -70,4 +70,9 @@ export const {
   deleteTeam,
 } = actions;
 
-window.addEventListener("beforeunload", commitHeldDeletes);
+// Never return a value from this listener: Electron treats one as refusing the unload.
+window.addEventListener("beforeunload", () => {
+  void commitHeldDeletes();
+});
+// Main calls this at quit: its before-quit ends in app.exit, which skips beforeunload.
+window.commitHeldSpaceDeletes = commitHeldDeletes;
