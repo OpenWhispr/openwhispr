@@ -209,8 +209,9 @@ export function resolveDictationRouteKind({
 // broken setup the user was last warned about: the same one warns once, while a
 // different mode or provider, or signing out, warns again. Once cleanup is off or
 // reachable the warning is forgotten (`forget`), so the next broken setup warns.
-// Signed out of OpenWhispr Cloud gets its own message, since the fix is signing in,
-// and so does a model the org blocked, since the fix is choosing an approved one.
+// Signed out of OpenWhispr Cloud gets its own message, since the user can sign in or
+// switch to another kind of model, and so does a model the org blocked, since the fix
+// is choosing an approved one.
 // The "llm" surface gives it the same friendly cleanup toast as a provider failure.
 export function cleanupUnconfiguredNotice(shownKey, { skipped, cleanupReachable, settings }) {
   if (!settings.useCleanupModel || cleanupReachable) return { forget: true, notice: null };
@@ -228,7 +229,7 @@ export function cleanupUnconfiguredNotice(shownKey, { skipped, cleanupReachable,
   if (setupKey === shownKey) return { forget: false, notice: null };
   const [message, messageKey] = signedOut
     ? [
-        "AI cleanup uses OpenWhispr Cloud, but you're signed out.",
+        "Sign in to use OpenWhispr Cloud for AI cleanup, or switch to a local, self-hosted, or API key model in Settings.",
         "hooks.audioRecording.cleanupSignedOut",
       ]
     : policyBlocked

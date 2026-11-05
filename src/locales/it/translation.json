@@ -932,7 +932,7 @@
   },
   "hooks": {
     "audioRecording": {
-      "cleanupSignedOut": "La pulizia IA usa OpenWhispr Cloud, ma non hai effettuato l'accesso.",
+      "cleanupSignedOut": "Accedi per usare OpenWhispr Cloud per la pulizia IA, oppure passa nelle impostazioni a un modello locale, self-hosted o con chiave API.",
       "cleanupUnconfigured": "La pulizia IA è attiva, ma non è configurato alcun modello di pulizia.",
       "errorTitles": {
         "sessionExpired": "Sessione scaduta",

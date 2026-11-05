@@ -932,7 +932,7 @@
   },
   "hooks": {
     "audioRecording": {
-      "cleanupSignedOut": "ИИ-очистка использует OpenWhispr Cloud, но вы не вошли в аккаунт.",
+      "cleanupSignedOut": "Войдите, чтобы использовать OpenWhispr Cloud для ИИ-очистки, или выберите в настройках локальную, самостоятельно размещённую модель или модель с API-ключом.",
       "cleanupUnconfigured": "ИИ-очистка включена, но модель очистки не настроена.",
       "errorTitles": {
         "sessionExpired": "Сессия истекла",
