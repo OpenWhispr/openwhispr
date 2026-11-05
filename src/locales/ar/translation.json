@@ -4301,7 +4301,10 @@
           "removeFailedTitle": "تعذرت إزالة {{name}}",
           "removeFailedBody": "لا يزال {{name}} عضوًا في {{team}}. تحقق من اتصالك وحاول مرة أخرى.",
           "removed": "تمت إزالة {{name}} من {{team}}.",
-          "roleFailed": "تعذّر تغيير دور {{name}}. حاول مرة أخرى."
+          "roleFailed": "تعذّر تغيير دور {{name}}. حاول مرة أخرى.",
+          "notAllowed": "لم يعد بإمكانك إدارة {{team}}.",
+          "invitedNoEmail": "تمت دعوة {{invited}}، لكن البريد لم يُرسل. استخدم «إعادة الإرسال» أدناه.",
+          "skippedInvited": "لم تتم الإضافة إلى {{team}}: {{names}}. توجد دعوة إلى مساحة العمل بالفعل."
         },
         "columns": {
           "name": "الاسم",

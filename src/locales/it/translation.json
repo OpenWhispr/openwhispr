@@ -2799,7 +2799,10 @@
           "removeFailedTitle": "Impossibile rimuovere {{name}}",
           "removeFailedBody": "{{name}} è ancora membro di {{team}}. Controlla la connessione e riprova.",
           "removed": "{{name}} è stato rimosso da {{team}}.",
-          "roleFailed": "Impossibile cambiare il ruolo di {{name}}. Riprova."
+          "roleFailed": "Impossibile cambiare il ruolo di {{name}}. Riprova.",
+          "notAllowed": "Non puoi più gestire {{team}}.",
+          "invitedNoEmail": "{{invited}} invitato, ma l'email non è stata inviata. Usa Reinvia qui sotto.",
+          "skippedInvited": "Non aggiunto a {{team}}: {{names}}. Esiste già un invito all'area di lavoro."
         },
         "columns": {
           "name": "Nome",

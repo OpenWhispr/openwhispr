@@ -2799,7 +2799,10 @@
           "removeFailedTitle": "無法移除 {{name}}",
           "removeFailedBody": "{{name}} 仍是 {{team}} 的成員。請檢查網路連線後再試一次。",
           "removed": "{{name}} 已從 {{team}} 中移除。",
-          "roleFailed": "無法變更 {{name}} 的角色。請再試一次。"
+          "roleFailed": "無法變更 {{name}} 的角色。請再試一次。",
+          "notAllowed": "你已無法管理 {{team}}。",
+          "invitedNoEmail": "已邀請 {{invited}}，但郵件未傳送。請使用下方的「重新傳送」。",
+          "skippedInvited": "未加入 {{team}}：{{names}}。已存在工作區邀請。"
         },
         "columns": {
           "name": "名稱",

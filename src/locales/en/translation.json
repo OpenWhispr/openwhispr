@@ -2070,7 +2070,10 @@
           "removeFailedTitle": "Couldn't remove {{name}}",
           "removeFailedBody": "{{name}} is still a member of {{team}}. Check your connection and try again.",
           "removed": "{{name}} was removed from {{team}}.",
-          "roleFailed": "Couldn't change {{name}}'s role. Try again."
+          "roleFailed": "Couldn't change {{name}}'s role. Try again.",
+          "notAllowed": "You can no longer manage {{team}}.",
+          "invitedNoEmail": "Invited {{invited}}, but the email didn't send. Use Resend below.",
+          "skippedInvited": "Not added to {{team}}: {{names}}. They already have a workspace invitation."
         },
         "columns": {
           "name": "Name",

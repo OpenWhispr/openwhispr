@@ -234,27 +234,42 @@ async function mount(
   const container = doc().createElement("div");
   doc().body.appendChild(container);
   const root = createRoot(container);
-  t.after(async () => {
+  let mounted = true;
+  const unmount = async () => {
+    if (!mounted) return;
+    mounted = false;
     await React.act(async () => root.unmount());
+  };
+  t.after(async () => {
+    await unmount();
     container.remove();
     for (const name of ["__store", "__toasts", "__teams", "__actions"]) delete globalThis[name];
   });
-  await React.act(async () => {
-    root.render(
-      h(TeamMembersPanel, {
-        team,
-        workspace,
-        managed,
-        onChanged: () => events.push(["changed"]),
-        onGone: () => events.push(["gone"]),
-      })
-    );
-  });
+  const render = (props = {}) =>
+    React.act(async () => {
+      root.render(
+        h(TeamMembersPanel, {
+          team,
+          workspace,
+          managed,
+          onChanged: () => events.push(["changed"]),
+          onGone: () => events.push(["gone"]),
+          ...props,
+        })
+      );
+    });
+  await render();
   await ui.settle();
   return {
     state,
     calls,
     events,
+    unmount,
+    // Renders again with another team row, as the host does after `onChanged`.
+    rerender: async (teamChanges) => {
+      await render({ team: { ...team, ...teamChanges } });
+      await ui.settle();
+    },
     callsTo: (name) => calls.filter(([call]) => call === name),
   };
 }
@@ -769,6 +784,7 @@ test("losing permission while changing a role closes through onGone", async (t) 
   await ui.click(menuItem("Team Admin"));
   await ui.settle();
 
+  assert.deepEqual(toastTitles(), ["You can no longer manage Sales."]);
   assert.deepEqual(events, [["gone"]]);
 });
 
@@ -834,12 +850,11 @@ test("you can't remove yourself here", async (t) => {
   assert.equal(menuItem("Remove from team"), undefined, "Leave is how you go");
 });
 
-test("a member who was already removed is just gone from the table", async (t) => {
+test("removing from a team that is gone closes through onGone", async (t) => {
   const { events } = await mount(t, {
     actions: {
-      removeTeamMember: async (_teamId, userId, state) => {
-        state.members = state.members.filter((entry) => entry.user_id !== userId);
-        throw new CloudApiError("Member not found", 404);
+      removeTeamMember: async () => {
+        throw new CloudApiError("Team not found", 404);
       },
     },
   });
@@ -850,9 +865,8 @@ test("a member who was already removed is just gone from the table", async (t) =
   await ui.settle();
 
   assert.equal(dialogs().length, 0);
-  assert.deepEqual(toastTitles(), []);
-  assert.ok(!rowFor("Lila"));
-  assert.deepEqual(events, [["changed"]]);
+  assert.deepEqual(toastTitles(), ["Sales no longer exists."]);
+  assert.deepEqual(events, [["gone"]]);
 });
 
 test("losing permission while removing closes through onGone", async (t) => {
@@ -870,6 +884,7 @@ test("losing permission while removing closes through onGone", async (t) => {
   await ui.settle();
 
   assert.equal(dialogs().length, 0);
+  assert.deepEqual(toastTitles(), ["You can no longer manage Sales."]);
   assert.deepEqual(events, [["gone"]]);
 });
 
@@ -914,4 +929,191 @@ test("an invitation whose email didn't go out is reported as not resent", async 
   await ui.settle();
 
   assert.deepEqual(toastTitles(), ["Couldn't resend the invitation to alex@example.com."]);
+});
+
+// ---- fix round 1
+
+test("an invitation whose email didn't send says so in a line", async (t) => {
+  await mount(t, {
+    actions: {
+      sendInvitations: async (input) => {
+        for (const email of input.emails) input.onResult(email, { ok: true, emailSent: false });
+      },
+    },
+  });
+
+  await addAddress("alex@example.com");
+  await ui.click(addButton());
+  await ui.settle();
+
+  assert.equal(
+    lineText(),
+    "Invited alex@example.com, but the email didn't send. Use Resend below."
+  );
+  assert.equal(lineElement().getAttribute("role"), "alert");
+  assert.deepEqual(toastTitles(), []);
+});
+
+test("a skipped address is said once and nothing is left to try again", async (t) => {
+  await mount(t, {
+    actions: {
+      sendInvitations: async (input) => {
+        for (const email of input.emails) {
+          input.onResult(email, { ok: false, kind: "alreadyInvited" });
+        }
+      },
+    },
+  });
+
+  await addAddress("alex@example.com");
+  await ui.click(addButton());
+  await ui.settle();
+
+  assert.equal(
+    lineText(),
+    "Not added to Sales: alex@example.com. They already have a workspace invitation."
+  );
+  assert.equal(text(addButton()), "Add members", "nothing to retry");
+  assert.deepEqual(chipTexts(), []);
+});
+
+test("the invite note sits under the chips and gives way to the line", async (t) => {
+  await mount(t, {
+    actions: {
+      sendInvitations: async () => {
+        throw new CloudApiError("Server error", 500);
+      },
+    },
+  });
+
+  await addAddress("alex@example.com");
+  const note = [...doc().querySelectorAll("p")].find((p) =>
+    /New people get a workspace invitation/.test(text(p))
+  );
+  assert.ok(note);
+  const list = doc().querySelector("ul");
+  assert.ok(
+    list.compareDocumentPosition(note) & happyWindow.Node.DOCUMENT_POSITION_FOLLOWING,
+    "after the chips"
+  );
+  await ui.click(addButton());
+  await ui.settle();
+  assert.doesNotMatch(doc().body.textContent, /New people get a workspace invitation/);
+  assert.equal(lineText(), "Couldn't finish adding members. Try again.");
+});
+
+test("people added but invitations failing keeps only the addresses staged", async (t) => {
+  const { callsTo } = await mount(t, {
+    actions: {
+      sendInvitations: async () => {
+        throw new CloudApiError("Server error", 500);
+      },
+    },
+  });
+
+  await pickPerson("Ethan");
+  await addAddress("alex@example.com");
+  await ui.click(addButton());
+  await ui.settle();
+  assert.deepEqual(chipTexts().length, 1);
+  assert.match(chipTexts()[0], /alex@example\.com/);
+  await ui.click(addButton());
+  await ui.settle();
+
+  assert.equal(callsTo("addPeopleToTeam").length, 1, "nobody is added twice");
+  assert.equal(callsTo("sendInvitations").length, 2);
+});
+
+test("single sign-on required on an add says so and hands the button focus back", async (t) => {
+  await mount(t, {
+    actions: {
+      addPeopleToTeam: async () => {
+        throw new CloudApiError("SSO", 403, "SSO_REQUIRED");
+      },
+    },
+  });
+
+  await pickPerson("Ethan");
+  await ui.click(addButton());
+  await ui.settle();
+
+  assert.match(lineText(), /single sign-on|sign-on|SSO/i);
+  assert.equal(text(addButton()), "Add members");
+  assert.equal(doc().activeElement, addButton());
+});
+
+test("a closed dialog doesn't let a late answer act for another team", async (t) => {
+  let fail;
+  const { events, unmount } = await mount(t, {
+    actions: {
+      addPeopleToTeam: () =>
+        new Promise((_resolve, reject) => {
+          fail = () => reject(new CloudApiError("Forbidden", 403));
+        }),
+    },
+  });
+
+  await pickPerson("Ethan");
+  await ui.click(addButton());
+  await unmount();
+  await React.act(async () => fail());
+  await ui.settle();
+
+  assert.deepEqual(events, [], "no onGone for a dialog that moved on");
+  assert.deepEqual(toastTitles(), []);
+});
+
+test("closing mid-add still reports a failed batch as a toast", async (t) => {
+  let release;
+  const { unmount } = await mount(t, {
+    actions: {
+      sendInvitations: (input) =>
+        new Promise((resolve) => {
+          release = () => {
+            for (const email of input.emails) input.onResult(email, { ok: false, kind: "invalid" });
+            resolve();
+          };
+        }),
+    },
+  });
+
+  await addAddress("alex@example.com");
+  await ui.click(addButton());
+  await unmount();
+  await React.act(async () => release());
+  await ui.settle();
+
+  assert.equal(toastTitles().length, 1);
+  assert.match(toastTitles()[0], /alex@example\.com/);
+  assert.equal(globalThis.__toasts[0].variant, "destructive");
+});
+
+test("losing manage_members after stepping down removes the field and menus", async (t) => {
+  const { rerender } = await mount(t);
+  assert.ok(peopleInput());
+  assert.ok(roleTriggers().length > 0);
+
+  await rerender({ capabilities: { manage_members: false, manage_settings: false, leave: true } });
+
+  assert.equal(peopleInput(), null);
+  assert.equal(roleTriggers().length, 0);
+  assert.equal(text(rowFor("Misa")), "Misa misa@openronnie.com Member");
+});
+
+test("a Resend answering gone reads the invitations again", async (t) => {
+  const { state, callsTo } = await mount(t, {
+    invitations: [invitation("inv-1", "alex@example.com")],
+    actions: {
+      resend: async () => {
+        throw new CloudApiError("Invitation not found", 404);
+      },
+    },
+  });
+  state.invitations = [];
+
+  await ui.click(buttonNamed("Resend"));
+  await ui.settle();
+
+  assert.equal(callsTo("invitations").length, 2);
+  assert.equal(pendingRows().length, 0, "the stale row goes");
 });

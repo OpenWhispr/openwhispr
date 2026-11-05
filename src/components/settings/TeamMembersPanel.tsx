@@ -30,7 +30,6 @@ import { confirmActionReducer } from "../../lib/confirmActionFlow";
 import { formatList } from "../../lib/formatList";
 import { rosterFor } from "../../lib/peopleRoster";
 import {
-  attemptSummary,
   canRetry,
   remainingAfter,
   seatRoomLeft,
@@ -46,6 +45,7 @@ import {
   type PickedRecipient,
 } from "../../lib/spacePeoplePicker";
 import {
+  classifyRowActionError,
   classifyTeamError,
   rowActionErrorOf,
   type TeamActionError,
@@ -207,7 +207,8 @@ function describeAttempt(
   t: TFunction,
   language: string,
   outcome: AddAttemptOutcome,
-  workspaceName: string
+  workspaceName: string,
+  teamName: string
 ): StatusLine {
   const names = (recipients: PickedRecipient[]): string =>
     formatList(
@@ -215,7 +216,10 @@ function describeAttempt(
       recipients.map((recipient) => isolate(recipientLabel(recipient)))
     );
   const sentences: string[] = [];
-  const { addedMembers: added, invited } = outcome;
+  const { addedMembers: added } = outcome;
+  // Their invitation is there, but nobody told them: Resend is how it goes out again.
+  const undelivered = outcome.undeliveredInvites;
+  const invited = outcome.invited.filter((recipient) => !undelivered.includes(recipient));
   if (added.length > 0 && invited.length > 0) {
     sentences.push(
       t(`${MEMBERS}.addedAndInvited`, { names: names(added), invited: names(invited) })
@@ -226,7 +230,11 @@ function describeAttempt(
     sentences.push(t(`${MEMBERS}.invited`, { invited: names(invited) }));
   }
 
-  const failed = [...outcome.failedMembers, ...outcome.failedInvites, ...outcome.skippedInvites];
+  if (undelivered.length > 0) {
+    sentences.push(t(`${MEMBERS}.invitedNoEmail`, { invited: names(undelivered) }));
+  }
+
+  const failed = [...outcome.failedMembers, ...outcome.failedInvites];
   if (failed.length > 0) sentences.push(t(`${MEMBERS}.addFailed`));
 
   // What the invite dialog says about each kind. Some of its lines name nobody, and a refused
@@ -281,8 +289,22 @@ function describeAttempt(
       })
     );
   }
+  // An older API leaves an existing invitation without this team, and sending it again changes
+  // nothing, so it is said once and not kept staged.
+  if (outcome.skippedInvites.length > 0) {
+    sentences.push(
+      t(`${MEMBERS}.skippedInvited`, {
+        names: names(outcome.skippedInvites),
+        team: teamName,
+      })
+    );
+  }
   const clean =
-    failed.length === 0 && outcome.refusedInvites.length === 0 && outcome.leftMembers.length === 0;
+    failed.length === 0 &&
+    undelivered.length === 0 &&
+    outcome.skippedInvites.length === 0 &&
+    outcome.refusedInvites.length === 0 &&
+    outcome.leftMembers.length === 0;
   return { text: sentences.join(" "), tone: clean ? "info" : "error" };
 }
 
@@ -313,6 +335,14 @@ export default function TeamMembersPanel({
   const userId = user?.id;
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const attemptRunning = useRef(false);
+  // An answer that lands after the dialog moved on to another team must not act for this one.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const { roster, rosterLoaded, refreshMembers } = useWorkspaceStore(
     useShallow((s) => ({
       roster: rosterFor(s, workspace.id),
@@ -398,8 +428,12 @@ export default function TeamMembersPanel({
 
   // The panel can do nothing for a team the viewer is out of, so it says so and goes with it. A
   // toast outlives the dialog this sits in.
-  const closeLostTeam = (): void => {
-    toast({ title: t(`${MEMBERS}.gone`, { team: teamName }), variant: "destructive" });
+  const closeLostTeam = (ended: "gone" | "notAllowed"): void => {
+    if (!mounted.current) return;
+    toast({
+      title: t(ended === "gone" ? `${MEMBERS}.gone` : `${MEMBERS}.notAllowed`, { team: teamName }),
+      variant: "destructive",
+    });
     onGone();
   };
 
@@ -456,10 +490,13 @@ export default function TeamMembersPanel({
     try {
       const ran = await runAddAttempt({ team, picked: staged });
       if (ran.ended === "gone" || ran.ended === "notAllowed") {
-        closeLostTeam();
+        closeLostTeam(ran.ended);
         return;
       }
       if (ran.ended === "ssoRequired") {
+        if (!mounted.current) return;
+        setNeedsRetry(false);
+        setRefocusButton(true);
         setAttempt({
           text: t("workspaces.ssoRequired", { workspace: isolate(workspace.name) }),
           tone: "error",
@@ -480,7 +517,13 @@ export default function TeamMembersPanel({
         }
       }
       const remaining = remainingAfter(staged, outcome);
-      const said = describeAttempt(t, i18n.language, outcome, workspace.name);
+      const said = describeAttempt(t, i18n.language, outcome, workspace.name, teamName);
+      if (!mounted.current) {
+        // Nothing is left to show it in, so the toast says what went and what didn't.
+        toast({ title: said.text, variant: said.tone === "error" ? "destructive" : undefined });
+        if (outcome.addedMembers.length + outcome.invited.length > 0) onChanged();
+        return;
+      }
       setPicked(remaining);
       setNeedsRetry(canRetry(outcome));
       if (said.tone === "info") {
@@ -497,8 +540,10 @@ export default function TeamMembersPanel({
       if (ran.rosterStale) void refreshRoster(ran.knownAddresses);
     } finally {
       attemptRunning.current = false;
-      setProgress(null);
-      setAdding(false);
+      if (mounted.current) {
+        setProgress(null);
+        setAdding(false);
+      }
     }
   };
 
@@ -511,11 +556,13 @@ export default function TeamMembersPanel({
     try {
       await action();
     } finally {
-      setIds((current) => {
-        const next = new Set(current);
-        next.delete(id);
-        return next;
-      });
+      if (mounted.current) {
+        setIds((current) => {
+          const next = new Set(current);
+          next.delete(id);
+          return next;
+        });
+      }
     }
   };
 
@@ -531,7 +578,7 @@ export default function TeamMembersPanel({
             variant: "destructive",
           });
         } else if (failure.kind === "gone" || failure.kind === "notAllowed") {
-          closeLostTeam();
+          closeLostTeam(failure.kind);
         } else if (failure.kind === "ssoRequired") {
           toast({
             title: t("workspaces.ssoRequired", { workspace: isolate(workspace.name) }),
@@ -556,25 +603,13 @@ export default function TeamMembersPanel({
       await removeTeamMember(team.id, member.user_id);
     } catch (error) {
       const failure = classifyTeamError(error);
-      if (failure.kind === "gone") {
-        // Already out, so there is nothing to say; the list just needs to catch up.
+      // Removing someone who is already out succeeds, so the only 404 is for the team itself.
+      if (failure.kind === "gone" || failure.kind === "notAllowed") {
         dispatchRemoval({ type: "succeeded" });
-        void reloadMembers();
-        onChanged();
+        closeLostTeam(failure.kind);
         return;
       }
-      if (failure.kind === "notAllowed") {
-        dispatchRemoval({ type: "succeeded" });
-        closeLostTeam();
-        return;
-      }
-      dispatchRemoval({
-        type: "failed",
-        error:
-          failure.kind === "lastAdmin"
-            ? { kind: "refused", message: t(`${COPY}.exit.blockedBody`, { team: teamName }) }
-            : rowActionErrorOf(failure),
-      });
+      dispatchRemoval({ type: "failed", error: rowActionErrorOf(failure) });
       return;
     }
     toast({
@@ -595,8 +630,10 @@ export default function TeamMembersPanel({
       let sent = false;
       try {
         sent = (await InvitationsService.resend(workspace.id, invitation.id)).email_sent;
-      } catch {
-        // Said below, as for an invitation whose email didn't go out.
+      } catch (error) {
+        // Said below, as for an invitation whose email didn't go out. An invitation that is gone
+        // (accepted or cancelled meanwhile) leaves a stale row, so the list is read again.
+        if (classifyRowActionError(error).kind === "gone") void reloadInvitations();
       }
       toast(
         sent
@@ -655,13 +692,6 @@ export default function TeamMembersPanel({
               placeholder={t(`${MEMBERS}.placeholder`)}
               action={addButton}
               focusRequest={fieldFocusRequest}
-              note={
-                summary.emails.length > 0 ? (
-                  <p className="text-xs leading-snug text-muted-foreground">
-                    {t(`${MEMBERS}.inviteNote`)}
-                  </p>
-                ) : undefined
-              }
             />
           ) : (
             // Nothing to pick from yet, so the button waits beside a stand-in for the field.
@@ -690,6 +720,12 @@ export default function TeamMembersPanel({
               </div>
               {addButton}
             </div>
+          )}
+          {!line && summary.emails.length > 0 && (
+            // Below the chips, and gone once the line has something else to say.
+            <p className="text-xs leading-snug text-muted-foreground">
+              {t(`${MEMBERS}.inviteNote`)}
+            </p>
           )}
           {line && (
             <p
@@ -805,7 +841,7 @@ function MembersTable({
       >
         <table className="w-full table-fixed border-collapse">
           <colgroup>
-            <col className="w-[62%]" />
+            <col className="w-[75%]" />
             <col />
           </colgroup>
           <thead>

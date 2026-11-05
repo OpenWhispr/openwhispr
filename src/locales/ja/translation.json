@@ -2799,7 +2799,10 @@
           "removeFailedTitle": "{{name}} を外せませんでした",
           "removeFailedBody": "{{name}} は引き続き {{team}} のメンバーです。接続を確認して、もう一度お試しください。",
           "removed": "{{name}} を {{team}} から外しました。",
-          "roleFailed": "{{name}} の役割を変更できませんでした。もう一度お試しください。"
+          "roleFailed": "{{name}} の役割を変更できませんでした。もう一度お試しください。",
+          "notAllowed": "{{team}} を管理できなくなりました。",
+          "invitedNoEmail": "{{invited}} を招待しましたが、メールは送信されませんでした。下の「再送信」を使ってください。",
+          "skippedInvited": "{{team}} に追加されませんでした：{{names}}。ワークスペースへの招待がすでにあります。"
         },
         "columns": {
           "name": "名前",

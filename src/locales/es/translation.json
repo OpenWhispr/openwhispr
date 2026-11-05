@@ -2851,7 +2851,10 @@
           "removeFailedTitle": "No se pudo quitar a {{name}}",
           "removeFailedBody": "{{name}} sigue siendo miembro de {{team}}. Comprueba tu conexión e inténtalo de nuevo.",
           "removed": "Se quitó a {{name}} de {{team}}.",
-          "roleFailed": "No se pudo cambiar el rol de {{name}}. Inténtalo de nuevo."
+          "roleFailed": "No se pudo cambiar el rol de {{name}}. Inténtalo de nuevo.",
+          "notAllowed": "Ya no puedes gestionar {{team}}.",
+          "invitedNoEmail": "Se invitó a {{invited}}, pero el correo no se envió. Usa Reenviar más abajo.",
+          "skippedInvited": "No se añadió a {{team}}: {{names}}. Ya tienen una invitación al espacio de trabajo."
         },
         "columns": {
           "name": "Nombre",

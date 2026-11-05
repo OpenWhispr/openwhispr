@@ -2778,7 +2778,10 @@
           "removeFailedTitle": "Não foi possível remover {{name}}",
           "removeFailedBody": "{{name}} ainda é membro de {{team}}. Verifique sua conexão e tente novamente.",
           "removed": "{{name}} foi removido de {{team}}.",
-          "roleFailed": "Não foi possível alterar a função de {{name}}. Tente novamente."
+          "roleFailed": "Não foi possível alterar a função de {{name}}. Tente novamente.",
+          "notAllowed": "Você não pode mais gerenciar {{team}}.",
+          "invitedNoEmail": "{{invited}} convidado, mas o e-mail não foi enviado. Use Reenviar abaixo.",
+          "skippedInvited": "Não foi adicionado a {{team}}: {{names}}. Já existe um convite para o espaço de trabalho."
         },
         "columns": {
           "name": "Nome",

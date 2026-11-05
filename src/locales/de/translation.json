@@ -2070,7 +2070,10 @@
           "removeFailedTitle": "{{name}} konnte nicht entfernt werden",
           "removeFailedBody": "{{name}} ist weiterhin Mitglied von {{team}}. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
           "removed": "{{name}} wurde aus {{team}} entfernt.",
-          "roleFailed": "Die Rolle von {{name}} konnte nicht geändert werden. Versuchen Sie es erneut."
+          "roleFailed": "Die Rolle von {{name}} konnte nicht geändert werden. Versuchen Sie es erneut.",
+          "notAllowed": "Sie können {{team}} nicht mehr verwalten.",
+          "invitedNoEmail": "{{invited}} eingeladen, aber die E-Mail wurde nicht gesendet. Verwenden Sie unten „Erneut senden“.",
+          "skippedInvited": "Nicht zu {{team}} hinzugefügt: {{names}}. Es besteht bereits eine Workspace-Einladung."
         },
         "columns": {
           "name": "Name",

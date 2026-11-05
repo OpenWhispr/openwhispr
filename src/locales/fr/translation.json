@@ -2070,7 +2070,10 @@
           "removeFailedTitle": "Impossible de retirer {{name}}",
           "removeFailedBody": "{{name}} est toujours membre de {{team}}. Vérifiez votre connexion et réessayez.",
           "removed": "{{name}} a été retiré de {{team}}.",
-          "roleFailed": "Impossible de modifier le rôle de {{name}}. Réessayez."
+          "roleFailed": "Impossible de modifier le rôle de {{name}}. Réessayez.",
+          "notAllowed": "Vous ne pouvez plus gérer {{team}}.",
+          "invitedNoEmail": "{{invited}} invité, mais l'e-mail n'a pas été envoyé. Utilisez Renvoyer ci-dessous.",
+          "skippedInvited": "Non ajouté à {{team}} : {{names}}. Une invitation à l'espace de travail existe déjà."
         },
         "columns": {
           "name": "Nom",
