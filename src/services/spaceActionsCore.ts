@@ -151,7 +151,7 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
   // tried. A dropped connection usually takes that read down too, so the retry settles it instead.
   const unsettledCreates = new Map<string, number>();
   const normalizedName = (name: string): string => name.trim().toLowerCase();
-  // Teams and teamspaces share a namespace of names only within their own kind.
+  // A team and a teamspace may share a name, so one's create never settles the other's.
   const createKey = (kind: "space" | "team", workspaceId: string, name: string): string =>
     `${kind}\0${workspaceId}\0${normalizedName(name)}`;
 
@@ -492,10 +492,12 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
         try {
           await deps.teams.remove(team.id);
         } catch (err) {
-          // Someone else deleted it first, or an earlier delete went through and its answer was lost.
-          if (!(err instanceof CloudApiError && err.status === 404)) {
+          // Someone else deleted it first, or an earlier delete went through and its answer was
+          // lost. Only the API's own "Team not found" proves that; a bare 404 proves nothing.
+          const failure = classifyTeamError(err);
+          if (failure.kind !== "gone") {
             deps.teamDeleteHold.release(team.id);
-            return { success: false, error: errorMessage(err), failure: classifyTeamError(err) };
+            return { success: false, error: errorMessage(err), failure };
           }
         }
         await refreshMirrorAfterWrite();

@@ -1368,27 +1368,63 @@ test("a retried create that finds its own team reports success", async () => {
   assert.equal(team, found);
 });
 
-test("a same-name team made by someone else stays a refusal", async () => {
+test("after a lost answer, a same-name team that isn't the caller's own stays a refusal", async () => {
   const { createSpaceActions } = await load();
   const { CloudApiError } = await import("../../src/services/cloudApi.ts");
-  const { deps } = makeTeamHarness();
-  const taken = new CloudApiError("A team with that name exists", 409, "team_name_taken");
+  const { calls, deps } = makeTeamHarness();
+  const lost = new CloudApiError("Cloud API request failed", 0);
   deps.teams.create = async () => {
-    throw taken;
+    throw lost;
   };
-  deps.teams.list = async () => [ownTeam({ my_direct_role: null, my_role: "admin" })];
+  // An admin through the workspace, not through a row of their own: not the creator.
+  deps.teams.list = async () => {
+    calls.push(["team.list.read"]);
+    return [ownTeam({ my_direct_role: null, my_role: "admin" })];
+  };
 
   await assert.rejects(
     createSpaceActions(deps).createTeam("workspace-1", teamInput),
-    (error) => error === taken
+    (error) => error === lost
   );
+  assert.ok(namesOf(calls).includes("team.list.read"), "the lookup ran");
+});
 
-  // And a lost answer next to an old team of the caller's doesn't adopt it either.
+test("on an unsettled retry, a same-name team that isn't the caller's own stays a refusal", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { calls, deps } = makeTeamHarness();
+  const lost = new CloudApiError("Network error", 0);
+  deps.teams.create = async () => {
+    throw lost;
+  };
+  deps.teams.list = async () => {
+    throw new CloudApiError("Network error", 0);
+  };
+  const actions = createSpaceActions(deps);
+  await assert.rejects(actions.createTeam("workspace-1", teamInput), (error) => error === lost);
+
+  const taken = new CloudApiError("Taken", 409, "team_name_taken");
+  deps.teams.create = async () => {
+    throw taken;
+  };
+  deps.teams.list = async () => {
+    calls.push(["team.list.read"]);
+    return [ownTeam({ my_direct_role: null, my_role: "admin" })];
+  };
+  await assert.rejects(actions.createTeam("workspace-1", teamInput), (error) => error === taken);
+  assert.ok(namesOf(calls).includes("team.list.read"), "the lookup ran");
+});
+
+test("a lost answer next to an old team of the caller's doesn't adopt it", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { deps } = makeTeamHarness();
   const lost = new CloudApiError("Cloud API request failed", 0);
   deps.teams.create = async () => {
     throw lost;
   };
   deps.teams.list = async () => [ownTeam({ created_at: minutesAgo(6) })];
+
   await assert.rejects(
     createSpaceActions(deps).createTeam("workspace-1", teamInput),
     (error) => error === lost
@@ -1519,7 +1555,7 @@ test("a committed team delete sends once, refreshes and syncs", async () => {
   assert.equal(order.includes("teamHold.release"), false, "a deleted team stays out of the lists");
 });
 
-test("a 404 on a team delete counts as done", async () => {
+test("a team the server says is gone counts as deleted", async () => {
   const { createSpaceActions } = await load();
   const { CloudApiError } = await import("../../src/services/cloudApi.ts");
   const { calls, deps } = makeTeamHarness();
@@ -1530,6 +1566,23 @@ test("a 404 on a team delete counts as done", async () => {
 
   assert.deepEqual(await hold.commit(), { success: true });
   assert.ok(namesOf(calls).includes("mirror.upsert"));
+  assert.equal(namesOf(calls).includes("teamHold.release"), false);
+});
+
+test("a bare 404 proves nothing: the row comes back and Try again is offered", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { calls, deps } = makeTeamHarness();
+  deps.teams.remove = async () => {
+    throw new CloudApiError("Not found", 404);
+  };
+  const hold = createSpaceActions(deps).holdTeamDelete({ id: "team-9", name: "Sales" });
+
+  const result = await hold.commit();
+
+  assert.equal(result.success, false);
+  assert.deepEqual(calls.at(-1), ["teamHold.release", "team-9"]);
+  assert.ok(hold.again());
 });
 
 test("a failed team delete returns the row and offers again", async () => {
@@ -1576,5 +1629,32 @@ test("leaving the page sends open team holds too", async () => {
   actions.commitHeldDeletes();
   await new Promise((resolve) => setImmediate(resolve));
 
+  assert.equal(namesOf(calls).filter((name) => name === "team.remove").length, 1);
+});
+
+test("a second commit on a team hold sends nothing more", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps } = makeTeamHarness();
+  const hold = createSpaceActions(deps).holdTeamDelete({ id: "team-9", name: "Sales" });
+
+  await hold.commit();
+  assert.equal(await hold.commit(), null);
+
+  assert.equal(namesOf(calls).filter((name) => name === "team.remove").length, 1);
+});
+
+test("leaving the page sends a space hold and a team hold, one request each", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps, localSpace } = makeTeamHarness();
+  const actions = createSpaceActions(deps);
+  actions.holdSpaceDelete(localSpace);
+  actions.holdTeamDelete({ id: "team-9", name: "Sales" });
+
+  actions.commitHeldDeletes();
+  await new Promise((resolve) => setImmediate(resolve));
+  actions.commitHeldDeletes();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(namesOf(calls).filter((name) => name === "space.remove").length, 1);
   assert.equal(namesOf(calls).filter((name) => name === "team.remove").length, 1);
 });

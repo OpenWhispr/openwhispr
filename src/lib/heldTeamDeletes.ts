@@ -9,6 +9,8 @@ function publish(): void {
   for (const listener of listeners) listener();
 }
 
+// A team whose delete went through is deliberately never released: it stays in the set so a
+// directory read from before the delete can't bring it back. Only an account change clears it.
 export function holdTeam(teamId: string): void {
   heldIds = new Set(heldIds).add(teamId);
   publish();
