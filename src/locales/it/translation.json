@@ -2850,6 +2850,12 @@
           "createdAddedInvited": "{{team}} creato. Aggiunti: {{names}}. Invitati: {{invited}}.",
           "createdWithMembers_one": "{{team}} creato con {{count}} membro",
           "createdWithMembers_other": "{{team}} creato con {{count}} membri",
+          "createdInvitedMany_one": "{{team}} creato e {{count}} persona invitata",
+          "createdInvitedMany_other": "{{team}} creato e {{count}} persone invitate",
+          "createdCounts_one": "{{team}} creato. Aggiunti: {{added}}. Invitati: {{count}}.",
+          "createdCounts_other": "{{team}} creato. Aggiunti: {{added}}. Invitati: {{count}}.",
+          "notAllowed": "Non hai il permesso di creare team in {{workspace}}.",
+          "ssoRequired": "Accedi con il Single Sign-On (SSO) della tua azienda per creare team in {{workspace}}.",
           "createdSomeNotInvited_one": "{{team}} creato. Impossibile invitare {{count}} persona.",
           "createdSomeNotInvited_other": "{{team}} creato. Impossibile invitare {{count}} persone."
         },
@@ -2909,6 +2915,7 @@
         "addPeople": {
           "someAdded": "{{team}} · {{covered}} di {{total}} già aggiunti",
           "none": "Ancora nessun team",
+          "noneAddable": "Nessun team a cui puoi aggiungere",
           "addingTitle_one": "Aggiunta di {{count}} persona…",
           "addingTitle_other": "Aggiunta di {{count}} persone…",
           "addingBody": "Tieni aperta questa finestra mentre vengono aggiunte a {{team}}.",

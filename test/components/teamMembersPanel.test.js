@@ -523,6 +523,37 @@ test("people alone are added, and say so", async (t) => {
   assert.deepEqual(toastTitles(), ["Added Ethan."]);
 });
 
+test("someone the server says was already on the team isn't reported as added", async (t) => {
+  await mount(t, {
+    actions: {
+      addPeopleToTeam: async () => ({ added: ["ethan"], already_members: ["saket"] }),
+    },
+  });
+
+  await pickPerson("Ethan");
+  await pickPerson("Saket");
+  await ui.click(addButton());
+  await ui.settle();
+
+  assert.deepEqual(toastTitles(), ["Added Ethan."]);
+  assert.deepEqual(chipTexts(), [], "the one already on the team isn't kept staged");
+});
+
+test("everyone already on the team says that, never that they were added", async (t) => {
+  const { events } = await mount(t, {
+    actions: {
+      addPeopleToTeam: async () => ({ added: [], already_members: ["ethan"] }),
+    },
+  });
+
+  await pickPerson("Ethan");
+  await ui.click(addButton());
+  await ui.settle();
+
+  assert.deepEqual(toastTitles(), ["They're already on Sales."]);
+  assert.deepEqual(events, [], "nothing changed, so the host isn't told");
+});
+
 test("the line says who is going while it runs", async (t) => {
   let release;
   await mount(t, {

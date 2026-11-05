@@ -2121,6 +2121,12 @@
           "createdAddedInvited": "Created {{team}}. Added {{names}} and invited {{invited}}.",
           "createdWithMembers_one": "Created {{team}} with {{count}} member",
           "createdWithMembers_other": "Created {{team}} with {{count}} members",
+          "createdInvitedMany_one": "Created {{team}} and invited {{count}} person",
+          "createdInvitedMany_other": "Created {{team}} and invited {{count}} people",
+          "createdCounts_one": "Created {{team}}. Added {{added}}, invited {{count}}.",
+          "createdCounts_other": "Created {{team}}. Added {{added}}, invited {{count}}.",
+          "notAllowed": "You don't have permission to create teams in {{workspace}}.",
+          "ssoRequired": "Sign in with your company's single sign-on to create teams in {{workspace}}.",
           "createdSomeNotInvited_one": "Created {{team}}. Couldn't invite {{count}} person.",
           "createdSomeNotInvited_other": "Created {{team}}. Couldn't invite {{count}} people."
         },
@@ -2180,6 +2186,7 @@
         "addPeople": {
           "someAdded": "{{team}} · {{covered}} of {{total}} already added",
           "none": "No teams yet",
+          "noneAddable": "No teams you can add to",
           "addingTitle_one": "Adding {{count}} person…",
           "addingTitle_other": "Adding {{count}} people…",
           "addingBody": "Keep this window open while they're added to {{team}}.",

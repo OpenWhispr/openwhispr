@@ -132,11 +132,13 @@ async function runAddAttempt(input: { team: Team; picked: PickedRecipient[] }): 
   if (people.length > 0) {
     try {
       // People who are in already come back as already_members: nothing left to do for them.
-      await addPeopleToTeam(
+      const result = await addPeopleToTeam(
         team.id,
         people.map((recipient) => recipient.userId)
       );
-      outcome.addedMembers = people;
+      const already = new Set(result.already_members);
+      outcome.addedMembers = people.filter((recipient) => !already.has(recipient.userId));
+      outcome.alreadyMembers = people.filter((recipient) => already.has(recipient.userId));
     } catch (error) {
       const failure = classifyTeamError(error);
       const ended = teamAccessEnd(failure);
@@ -228,6 +230,9 @@ function describeAttempt(
     sentences.push(t(`${MEMBERS}.added`, { names: names(added) }));
   } else if (invited.length > 0) {
     sentences.push(t(`${MEMBERS}.invited`, { invited: names(invited) }));
+  } else if ((outcome.alreadyMembers ?? []).length > 0) {
+    // The roster was a step behind: nobody new went in, and saying "Added" would be false.
+    sentences.push(t(`${COPY}.addPeople.allAlready`, { team: teamName }));
   }
 
   if (undelivered.length > 0) {

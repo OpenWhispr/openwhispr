@@ -402,6 +402,22 @@ test("directory teams and teams the caller can't manage aren't offered", async (
   assert.deepEqual(rows().map(text), ["Sales"]);
 });
 
+test("teams that exist but can't be added to don't read as no teams yet", async (t) => {
+  await mount(t, {
+    teams: [team("t-dir", "Directory", { directory_synced: true })],
+  });
+
+  await openLabelMenu();
+
+  const none = items().find((item) => text(item) === "No teams you can add to");
+  assert.ok(none, "the list says nothing can be added to");
+  assert.equal(none.getAttribute("aria-disabled"), "true");
+  assert.equal(
+    items().find((item) => text(item) === "No teams yet"),
+    undefined
+  );
+});
+
 test("a partly covered team says how many are already on it", async (t) => {
   await mount(t, { people: [NOAH, LUCAS] });
 
@@ -553,6 +569,28 @@ test("a failure keeps the selection and offers Try again", async (t) => {
   assert.equal(dialogs().length, 0);
   assert.deepEqual(added, [["lucas", "mason"]]);
   assert.deepEqual(toastTitles(), ["Added 2 members to Design"]);
+});
+
+test("a failed Add's dialog is dismissed when the workspace changes under it", async (t) => {
+  const { callsTo, state } = await mount(t, {
+    api: {
+      addPeopleToTeam: async () => {
+        throw networkError();
+      },
+    },
+  });
+
+  await openLabelMenu();
+  await choose("Design");
+  assert.match(dialogText(), /Couldn't add 2 people/);
+
+  // The page re-points at another workspace; the dialog's team belongs to the old one.
+  state.workspace = { ...WORKSPACE, id: "w2" };
+  await React.act(async () => state.setPeople([...state.people]));
+  await ui.settle();
+
+  assert.equal(dialogs().length, 0);
+  assert.equal(callsTo("addBatch").length, 1);
 });
 
 test("a lost answer on Try again counts the people this action added", async (t) => {

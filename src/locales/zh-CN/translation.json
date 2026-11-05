@@ -2850,6 +2850,12 @@
           "createdAddedInvited": "已创建 {{team}}。已添加 {{names}}，并邀请了 {{invited}}。",
           "createdWithMembers_one": "已创建 {{team}}，共 {{count}} 名成员",
           "createdWithMembers_other": "已创建 {{team}}，共 {{count}} 名成员",
+          "createdInvitedMany_one": "已创建 {{team}}，并邀请了 {{count}} 人",
+          "createdInvitedMany_other": "已创建 {{team}}，并邀请了 {{count}} 人",
+          "createdCounts_one": "已创建 {{team}}。已添加 {{added}} 人，已邀请 {{count}} 人。",
+          "createdCounts_other": "已创建 {{team}}。已添加 {{added}} 人，已邀请 {{count}} 人。",
+          "notAllowed": "你没有在 {{workspace}} 中创建团队的权限。",
+          "ssoRequired": "请先使用公司的单点登录 (SSO) 登录，再在 {{workspace}} 中创建团队。",
           "createdSomeNotInvited_one": "已创建 {{team}}。无法邀请 {{count}} 人。",
           "createdSomeNotInvited_other": "已创建 {{team}}。无法邀请 {{count}} 人。"
         },
@@ -2909,6 +2915,7 @@
         "addPeople": {
           "someAdded": "{{team}} · 已添加 {{covered}}/{{total}} 人",
           "none": "还没有团队",
+          "noneAddable": "没有可添加到的团队",
           "addingTitle_one": "正在添加 {{count}} 人…",
           "addingTitle_other": "正在添加 {{count}} 人…",
           "addingBody": "将他们添加到 {{team}} 期间，请保持此窗口打开。",

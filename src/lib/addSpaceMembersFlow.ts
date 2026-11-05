@@ -11,6 +11,8 @@ export interface InviteRefusal {
 /** What one Add members attempt did with each staged recipient. */
 export interface AddAttemptOutcome {
   addedMembers: PickedRecipient[];
+  /** People the server reported as on the team already, so they were not added. */
+  alreadyMembers?: PickedRecipient[];
   failedMembers: PickedRecipient[];
   addedTeams: PickedRecipient[];
   failedTeams: PickedRecipient[];

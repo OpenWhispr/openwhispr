@@ -2850,6 +2850,12 @@
           "createdAddedInvited": "{{team}} を作成しました。{{names}} を追加し、{{invited}} を招待しました。",
           "createdWithMembers_one": "{{team}} を作成しました（メンバー {{count}} 人）",
           "createdWithMembers_other": "{{team}} を作成しました（メンバー {{count}} 人）",
+          "createdInvitedMany_one": "{{team}} を作成し、{{count}} 人を招待しました",
+          "createdInvitedMany_other": "{{team}} を作成し、{{count}} 人を招待しました",
+          "createdCounts_one": "{{team}} を作成しました。追加 {{added}} 人、招待 {{count}} 人。",
+          "createdCounts_other": "{{team}} を作成しました。追加 {{added}} 人、招待 {{count}} 人。",
+          "notAllowed": "{{workspace}} でチームを作成する権限がありません。",
+          "ssoRequired": "{{workspace}} でチームを作成するには、会社のシングルサインオン (SSO) でサインインしてください。",
           "createdSomeNotInvited_one": "{{team}} を作成しました。{{count}} 人を招待できませんでした。",
           "createdSomeNotInvited_other": "{{team}} を作成しました。{{count}} 人を招待できませんでした。"
         },
@@ -2909,6 +2915,7 @@
         "addPeople": {
           "someAdded": "{{team}} · {{total}}人中{{covered}}人が追加済み",
           "none": "チームはまだありません",
+          "noneAddable": "追加できるチームがありません",
           "addingTitle_one": "{{count}}人を追加しています…",
           "addingTitle_other": "{{count}}人を追加しています…",
           "addingBody": "{{team}} への追加が完了するまで、このウィンドウを開いたままにしてください。",

@@ -32,7 +32,12 @@ const FORM_KEY = "settingsPage.workspace.teams.form";
 const NO_TEAMS: Team[] = [];
 
 type NameError = { kind: "required" } | { kind: "taken"; name: string };
-type CreateFailure = { kind: "general" } | { kind: "refused"; message: string };
+// `notAllowed` and `ssoRequired` can't change with another try, so they get no Try again.
+type CreateFailure =
+  | { kind: "general" }
+  | { kind: "refused"; message: string }
+  | { kind: "notAllowed" }
+  | { kind: "ssoRequired" };
 
 export interface CreateTeamDialogProps {
   workspace: Workspace;
@@ -224,7 +229,9 @@ function CreateTeamForm({
           setFailure(
             classified.kind === "refused"
               ? { kind: "refused", message: classified.message }
-              : { kind: "general" }
+              : classified.kind === "notAllowed" || classified.kind === "ssoRequired"
+                ? { kind: classified.kind }
+                : { kind: "general" }
           );
         }
         setRefocus("primary");
@@ -384,6 +391,8 @@ function CreateTeamForm({
           {peopleError}
           {failure?.kind === "general" && bar(t(`${FORM_KEY}.failed`))}
           {failure?.kind === "refused" && bar(failure.message)}
+          {(failure?.kind === "notAllowed" || failure?.kind === "ssoRequired") &&
+            bar(t(`${FORM_KEY}.${failure.kind}`, { workspace: isolate(workspace.name) }))}
         </div>
       </div>
 
@@ -443,10 +452,18 @@ function createdToast({
     invited.length > NAMED_PER_LIST ||
     (fromSelection && added.length > 0 && invited.length === 0)
   ) {
-    title = t(`${FORM_KEY}.createdWithMembers`, {
-      team: teamName,
-      count: added.length + invited.length,
-    });
+    // Invitees aren't members until they accept, so they are counted apart from the people added.
+    if (invited.length === 0) {
+      title = t(`${FORM_KEY}.createdWithMembers`, { team: teamName, count: added.length });
+    } else if (added.length === 0) {
+      title = t(`${FORM_KEY}.createdInvitedMany`, { team: teamName, count: invited.length });
+    } else {
+      title = t(`${FORM_KEY}.createdCounts`, {
+        team: teamName,
+        added: added.length,
+        count: invited.length,
+      });
+    }
   } else if (added.length > 0 && invited.length > 0) {
     title = t(`${FORM_KEY}.createdAddedInvited`, {
       team: teamName,

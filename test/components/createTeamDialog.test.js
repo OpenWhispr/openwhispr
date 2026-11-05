@@ -387,7 +387,18 @@ test("more than two names fall back to a count", async (t) => {
     await addAddress(address);
   }
   await click(createButton());
-  assert.equal(readable(toasts()[0].title), "Created Sales with 4 members");
+  // Invitees aren't members yet, so they are counted apart from the one added.
+  assert.equal(readable(toasts()[0].title), "Created Sales. Added 1, invited 3.");
+});
+
+test("a crowd of invitations alone says invited, never members", async (t) => {
+  const { toasts } = await mount(t);
+  await type(nameInput(), "Sales");
+  for (const address of ["a@example.com", "b@example.com", "c@example.com"]) {
+    await addAddress(address);
+  }
+  await click(createButton());
+  assert.equal(readable(toasts()[0].title), "Created Sales and invited 3 people");
 });
 
 test("Cancel sends nothing, with an address staged", async (t) => {
@@ -461,6 +472,37 @@ test("a failed create keeps everything entered", async (t) => {
   await click(buttonNamed("Try again"));
   assert.equal(callsTo("createTeam").length, 2);
   assert.deepEqual(closes, [false]);
+});
+
+test("a refusal on permission says so and offers no Try again", async (t) => {
+  const { closes } = await mount(t, {
+    createTeam: async () => {
+      throw new CloudApiError("Forbidden", 403);
+    },
+  });
+  await type(nameInput(), "Sales");
+  await click(createButton());
+
+  assert.deepEqual(alertTexts(), ["You don't have permission to create teams in Acme."]);
+  assert.equal(buttonNamed("Try again"), undefined);
+  assert.ok(createButton(), "the primary stays Create team: another try can't work");
+  assert.deepEqual(closes, []);
+  assert.equal(nameInput().value, "Sales");
+});
+
+test("a session that needs SSO says so and offers no Try again", async (t) => {
+  await mount(t, {
+    createTeam: async () => {
+      throw new CloudApiError("SSO required", 403, "SSO_REQUIRED");
+    },
+  });
+  await type(nameInput(), "Sales");
+  await click(createButton());
+
+  assert.deepEqual(alertTexts(), [
+    "Sign in with your company's single sign-on to create teams in Acme.",
+  ]);
+  assert.equal(buttonNamed("Try again"), undefined);
 });
 
 test("the server's refusal opens the paywall and refreshes", async (t) => {

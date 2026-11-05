@@ -2850,6 +2850,12 @@
           "createdAddedInvited": "已建立 {{team}}。已新增 {{names}}，並邀請了 {{invited}}。",
           "createdWithMembers_one": "已建立 {{team}}，共 {{count}} 位成員",
           "createdWithMembers_other": "已建立 {{team}}，共 {{count}} 位成員",
+          "createdInvitedMany_one": "已建立 {{team}}，並邀請了 {{count}} 人",
+          "createdInvitedMany_other": "已建立 {{team}}，並邀請了 {{count}} 人",
+          "createdCounts_one": "已建立 {{team}}。已加入 {{added}} 人，已邀請 {{count}} 人。",
+          "createdCounts_other": "已建立 {{team}}。已加入 {{added}} 人，已邀請 {{count}} 人。",
+          "notAllowed": "你沒有在 {{workspace}} 中建立團隊的權限。",
+          "ssoRequired": "請先使用公司的單一登入 (SSO) 登入，再在 {{workspace}} 中建立團隊。",
           "createdSomeNotInvited_one": "已建立 {{team}}。無法邀請 {{count}} 人。",
           "createdSomeNotInvited_other": "已建立 {{team}}。無法邀請 {{count}} 人。"
         },
@@ -2909,6 +2915,7 @@
         "addPeople": {
           "someAdded": "{{team}} · 已加入 {{covered}}/{{total}} 人",
           "none": "還沒有團隊",
+          "noneAddable": "沒有可加入的團隊",
           "addingTitle_one": "正在加入 {{count}} 人…",
           "addingTitle_other": "正在加入 {{count}} 人…",
           "addingBody": "將他們加入 {{team}} 期間，請保持此視窗開啟。",

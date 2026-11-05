@@ -92,7 +92,8 @@ export function AddToTeamList({
   if (offered.length === 0) {
     return (
       <DropdownMenuItem disabled className="text-sm text-muted-foreground">
-        {t(`${COPY}.addPeople.none`)}
+        {/* Teams exist but are directory-managed or not the caller's to manage: "yet" would mislead. */}
+        {t(`${COPY}.addPeople.${teams.teams.length === 0 ? "none" : "noneAddable"}`)}
       </DropdownMenuItem>
     );
   }
