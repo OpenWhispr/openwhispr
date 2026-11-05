@@ -9815,8 +9815,10 @@ class IPCHandlers {
     const DICTATION_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
     const ORUKEET_IDLE_TIMEOUT_MS = 60 * 1000;
 
-    // A start owns the connection until its stop. Warmups are for the next
-    // recording, so they neither replace this one's connection nor expire it as idle.
+    // A managed Orukeet start owns the connection until its stop. Warmups are for
+    // the next recording, so they neither replace this one's connection nor expire
+    // it as idle. Other routes cue the user only once connected, so they keep
+    // redialling over a warmup.
     let dictationRecordingActive = false;
     // Only a cancel stops a start in progress: a tap to stop waits for it to settle.
     let dictationStopGeneration = 0;
@@ -10753,15 +10755,18 @@ class IPCHandlers {
     });
 
     ipcMain.handle("dictation-realtime-start", async (event, options = {}) => {
+      const managedOrukeet = options.provider === "orukeet" && options.mode !== "byok";
       const stopGeneration = dictationStopGeneration;
-      dictationRecordingActive = true;
-      releaseRecordingWithRenderer(event.sender);
+      if (managedOrukeet) {
+        dictationRecordingActive = true;
+        releaseRecordingWithRenderer(event.sender);
+      }
       try {
         clearDictationIdleTimer();
         this._dictationPreviewEnabled = !!options.preview;
         // A warmup still connecting may be the connection this start wants. With
         // none, the connection must exist before this tick ends to buffer audio.
-        if (this._dictationConnectPromise) {
+        if (managedOrukeet && this._dictationConnectPromise) {
           await this._dictationConnectPromise.catch(() => {});
           if (stopGeneration !== dictationStopGeneration) {
             throw new Error("Dictation start was cancelled");

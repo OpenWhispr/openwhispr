@@ -837,3 +837,42 @@ test("a stop during a start waiting on a warmup opens no new session", async () 
   assert.equal(opened, socketsBefore);
   assert.equal(target._dictationStreaming, null);
 });
+
+const selfHostedOptions = { ...managedOptions, mode: "byok", baseUrl: cloudSession.baseUrl };
+
+test("self-hosted Orukeet: a start during a warmup still replaces that warmup", async (t) => {
+  await handlers.get("dictation-realtime-stop")();
+  target.environmentManager = { getCustomTranscriptionKey: () => "test-key" };
+  t.after(async () => {
+    delete target.environmentManager;
+    await handlers.get("dictation-realtime-stop")();
+  });
+  const socketsBefore = opened;
+
+  const warmup = handlers.get("dictation-realtime-warmup")(event, selfHostedOptions);
+  await until(() => target._dictationConnectPromise);
+  const warming = target._dictationStreaming;
+  const start = await handlers.get("dictation-realtime-start")(event, selfHostedOptions);
+  await warmup;
+
+  assert.equal(start.success, true);
+  assert.notEqual(target._dictationStreaming, warming);
+  assert.equal(opened, socketsBefore + 2);
+});
+
+test("self-hosted Orukeet: a warmup still replaces a socket that carried audio", async (t) => {
+  await handlers.get("dictation-realtime-stop")();
+  target.environmentManager = { getCustomTranscriptionKey: () => "test-key" };
+  t.after(async () => {
+    delete target.environmentManager;
+    await handlers.get("dictation-realtime-stop")();
+  });
+
+  await handlers.get("dictation-realtime-start")(event, selfHostedOptions);
+  handlers.get("dictation-realtime-send")(event, Buffer.alloc(640));
+  const used = target._dictationStreaming;
+  const warmup = await handlers.get("dictation-realtime-warmup")(event, selfHostedOptions);
+
+  assert.equal(warmup.alreadyWarm, undefined);
+  assert.notEqual(target._dictationStreaming, used);
+});
