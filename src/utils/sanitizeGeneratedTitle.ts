@@ -27,26 +27,66 @@ const CLOSERS: Record<string, string[]> = {
   "《": ["》"],
 };
 
-const isLetter = (char: string | undefined): boolean => !!char && /\p{L}/u.test(char);
+const isWordCharacter = (char: string | undefined): boolean =>
+  !!char && /[\p{L}\p{M}\p{N}]/u.test(char);
 
 // True when the two ends of `text` belong to different quoted phrases
 // (“Dune” vs “Arrival”): the opening quote is closed before the end and a new
-// one of the same kind opens after it. An apostrophe between two letters
+// one of the same kind opens after it. An apostrophe within a word
 // (Don't) closes nothing, and a closing mark with no new quote after it
 // (‘Workin’ late’) still leaves the ends as one wrapper.
 const quotesSeparatePhrases = (text: string): boolean => {
-  const open = text[0];
+  const characters = Array.from(text);
+  const open = characters[0];
   const closers = CLOSERS[open];
   if (!closers) return false;
+  const symmetric = closers.includes(open);
+  const opensPhrase = (index: number, afterClosingQuote = false): boolean => {
+    if (characters[index] !== open) return false;
+    let previousIndex = index - 1;
+    // Consecutive quotes inherit the run's context: stacked openers and
+    // stacked closers must not be mistaken for separate phrases.
+    while (characters[previousIndex] === open) previousIndex -= 1;
+    if (symmetric && isWordCharacter(characters[previousIndex])) return false;
+    let nextIndex = index + 1;
+    while (
+      nextIndex < characters.length &&
+      (WRAPPING_QUOTES.has(characters[nextIndex]) ||
+        (afterClosingQuote && /\s/u.test(characters[nextIndex])))
+    ) {
+      nextIndex += 1;
+    }
+    // Before the first phrase closes, punctuation on both sides marks a
+    // closer ("Dune!"/"Arrival?"), not the start of a nested phrase.
+    return (
+      nextIndex < characters.length &&
+      !/\s/u.test(characters[nextIndex]) &&
+      (!symmetric ||
+        afterClosingQuote ||
+        !/[\p{P}\p{S}]/u.test(characters[previousIndex] ?? "") ||
+        !/\p{P}/u.test(characters[nextIndex]))
+    );
+  };
   let depth = 0;
-  for (let i = 1; i < text.length - 1; i += 1) {
-    const char = text[i];
-    if (closers.includes(char)) {
-      if (APOSTROPHES.has(char) && isLetter(text[i - 1]) && isLetter(text[i + 1])) continue;
-      if (depth === 0) return text.slice(i + 1, -1).includes(open);
-      depth -= 1;
-    } else if (char === open) {
+  for (let i = 1; i < characters.length - 1; i += 1) {
+    const char = characters[i];
+    if (
+      APOSTROPHES.has(char) &&
+      isWordCharacter(characters[i - 1]) &&
+      isWordCharacter(characters[i + 1])
+    ) {
+      continue;
+    }
+    if (char === open && (!symmetric || opensPhrase(i))) {
       depth += 1;
+    } else if (closers.includes(char)) {
+      if (depth === 0) {
+        for (let next = i + 1; next < characters.length - 1; next += 1) {
+          if (opensPhrase(next, true)) return true;
+        }
+        return false;
+      }
+      depth -= 1;
     }
   }
   return false;
@@ -65,6 +105,8 @@ const hasQuoteBesides = (text: string, index: number): boolean => {
 // So do two quoted phrases at the two ends: “Dune” vs “Arrival”.
 export function sanitizeGeneratedTitle(raw: string): string {
   let cleaned = raw.trim();
+  if (!Array.from(cleaned).some((char) => !WRAPPING_QUOTES.has(char) && /\S/u.test(char)))
+    return "";
   while (
     cleaned.length >= 2 &&
     WRAPPING_QUOTES.has(cleaned[0]) &&
@@ -90,6 +132,5 @@ export function sanitizeGeneratedTitle(raw: string): string {
     }
   }
 
-  if (cleaned.length === 1 && WRAPPING_QUOTES.has(cleaned)) return "";
   return cleaned.length > 0 && cleaned.length < 100 ? cleaned : "";
 }
