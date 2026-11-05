@@ -93,7 +93,12 @@ async function loadMembersTab(
           globalThis.__teamAddWorkspace = workspace;
           return teamAdd;
         }
-        export const rowTeamAdd = teamAdd;
+      `,
+      "/AddToTeamspaceMenu": `
+        export function useAddToTeamspace(args) {
+          globalThis.__teamspaceArgs = args;
+          return { submenu: null, dialog: null };
+        }
       `,
       "/RemoveMembersDialog": `
         export function RemoveMembersDialog(props) {
@@ -145,6 +150,7 @@ async function loadMembersTab(
     delete globalThis.__roleMenus;
     delete globalThis.__removeDialog;
     delete globalThis.__addMenu;
+    delete globalThis.__teamspaceArgs;
   });
   globalThis.__workspaceMembers = members;
   globalThis.__membersWorkspaceId = membersWorkspaceId;
@@ -903,7 +909,7 @@ test("adding clears the selection, and Open teamspace goes where the page says",
   await React.act(async () => propsOf(checkboxes(container)[2]).onClick());
   assert.match(barText(container), /selection\.count#2/);
 
-  globalThis.__addMenu.onOpenTeamspace(42);
+  globalThis.__teamspaceArgs.onOpenTeamspace(42);
   assert.deepEqual(opened, [42]);
 
   await React.act(async () => globalThis.__addMenu.onAdded());

@@ -19,6 +19,8 @@ const {
 
 let CloudApiError;
 let PeopleAddMenu;
+let useAddToTeamspace;
+let useAddPeopleToTeam;
 let createRoot;
 let happyWindow;
 let ui;
@@ -56,7 +58,12 @@ test.before(async (t) => {
     },
   });
   ({ CloudApiError } = await vite.ssrLoadModule("/services/cloudApi.ts"));
-  ({ PeopleAddMenu } = await vite.ssrLoadModule("/components/workspace/PeopleAddMenu.tsx"));
+  ({ PeopleAddMenu, useAddPeopleToTeam } = await vite.ssrLoadModule(
+    "/components/workspace/PeopleAddMenu.tsx"
+  ));
+  ({ useAddToTeamspace } = await vite.ssrLoadModule(
+    "/components/workspace/AddToTeamspaceMenu.tsx"
+  ));
 });
 
 test.after(async () => {
@@ -64,6 +71,38 @@ test.after(async () => {
 });
 
 const h = React.createElement;
+
+// What the People page wires: the controllers and their dialogs live in the page, beside the bar.
+function Host({ state }) {
+  const [people, setPeople] = React.useState(state.people);
+  state.setPeople = (next) => {
+    state.people = next;
+    setPeople(next);
+  };
+  const teamAdd = useAddPeopleToTeam(WORKSPACE);
+  const openerRef = React.useRef(null);
+  const teamspace = useAddToTeamspace({
+    workspace: WORKSPACE,
+    people,
+    onAdded: state.onAdded,
+    onOpenTeamspace: state.onOpenTeamspace,
+    returnFocusRef: openerRef,
+  });
+  return h(
+    React.Fragment,
+    null,
+    h(PeopleAddMenu, {
+      workspace: WORKSPACE,
+      people,
+      onAdded: state.onAdded,
+      teamAdd,
+      teamspace,
+      openerRef,
+    }),
+    teamAdd.dialog,
+    teamspace.dialog
+  );
+}
 const doc = () => happyWindow.document;
 
 // ---- fixtures
@@ -165,14 +204,13 @@ async function mount(
     container.remove();
     for (const name of ["__toasts", "__store", "__api"]) delete globalThis[name];
   });
-  const props = {
-    workspace: WORKSPACE,
+  const state = {
     people,
-    onAdded: () => added.push(people.map((member) => member.user_id)),
+    onAdded: () => added.push(state.people.map((member) => member.user_id)),
     onOpenTeamspace: onOpenTeamspace ? (localId) => opened.push(localId) : undefined,
   };
   await React.act(async () => {
-    root.render(h(PeopleAddMenu, props));
+    root.render(h(Host, { state }));
   });
   await ui.settle();
   return {
@@ -185,7 +223,7 @@ async function mount(
       currentSpaces = next;
     },
     rerender: async (nextPeople) => {
-      await React.act(async () => root.render(h(PeopleAddMenu, { ...props, people: nextPeople })));
+      await React.act(async () => state.setPeople(nextPeople));
       await ui.settle();
     },
   };
@@ -193,7 +231,7 @@ async function mount(
 
 // ---- reading the screen
 
-const trigger = () => doc().querySelector("button[aria-label='More options']");
+const trigger = () => doc().querySelector("button[aria-label='More ways to add']");
 const submenuItem = () =>
   [...doc().querySelectorAll('[role="menuitem"]')].find(
     (item) => text(item) === "Add to teamspace"

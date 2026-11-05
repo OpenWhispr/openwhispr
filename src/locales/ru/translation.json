@@ -2549,8 +2549,7 @@
           "remove": "Удалить",
           "addToTeamspace": "Добавить в teamspace",
           "addToTeam": "Добавить в команду",
-          "createTeam": "Создать команду из выбранных",
-          "moreOptions": "Другие действия"
+          "createTeam": "Создать команду из выбранных"
         },
         "teamsCount_one": "{{count}} команда",
         "teamsCount_few": "{{count}} команды",
@@ -3010,7 +3009,9 @@
           "done_many": "В команду {{team}} добавлено {{count}} участников",
           "done_other": "В команду {{team}} добавлено {{count}} участника",
           "someDone": "В команду {{team}} добавлено: {{added}}. {{already}} уже участник.",
-          "someDonePlural": "В команду {{team}} добавлено: {{added}}. {{already}} уже участники."
+          "someDonePlural": "В команду {{team}} добавлено: {{added}}. {{already}} уже участники.",
+          "left": "{{names}} покинул рабочее пространство, поэтому никто не добавлен.",
+          "allAlready": "Они уже в команде {{team}}."
         }
       },
       "invites": {

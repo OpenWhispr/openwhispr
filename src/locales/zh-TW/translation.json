@@ -2525,8 +2525,7 @@
           "remove": "移除",
           "addToTeamspace": "加入 Teamspace",
           "addToTeam": "加入團隊",
-          "createTeam": "以所選人員建立團隊",
-          "moreOptions": "更多選項"
+          "createTeam": "以所選人員建立團隊"
         },
         "teamsCount_one": "{{count}} 個團隊",
         "teamsCount_other": "{{count}} 個團隊",
@@ -2930,7 +2929,9 @@
           "done_one": "已將 {{count}} 名成員加入 {{team}}",
           "done_other": "已將 {{count}} 名成員加入 {{team}}",
           "someDone": "已將 {{added}} 加入 {{team}}。{{already}} 已是成員。",
-          "someDonePlural": "已將 {{added}} 加入 {{team}}。{{already}} 已是成員。"
+          "someDonePlural": "已將 {{added}} 加入 {{team}}。{{already}} 已是成員。",
+          "left": "{{names}} 已離開工作區，因此沒有加入任何人。",
+          "allAlready": "他們已在 {{team}} 中。"
         }
       },
       "invites": {

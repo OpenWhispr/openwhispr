@@ -24,6 +24,7 @@ import {
   DropdownMenuSubTrigger,
 } from "../ui/dropdown-menu";
 import { useToast } from "../ui/useToast";
+import { accessOf, dialogBoundaryOf } from "./AddToTeamList";
 import { WorkspaceActionDialog } from "./WorkspaceActionDialog";
 
 const NO_COVERAGE: ReadonlyMap<string, number> = new Map();
@@ -50,12 +51,6 @@ export interface AddToTeamspace {
   submenu: ReactElement;
   /** Outside the menu, which unmounts its content on close and would take a running dialog with it. */
   dialog: ReactElement | null;
-}
-
-// One box state for the row: nobody, some (a dash) or everyone selected already has access.
-function accessOf(covered: number, total: number): boolean | "indeterminate" {
-  if (total > 0 && covered >= total) return true;
-  return covered > 0 ? "indeterminate" : false;
 }
 
 // The line a failed attempt shows under its explanation. Only the server's own reason has one, and
@@ -91,6 +86,7 @@ export function useAddToTeamspace({
   const coverageRequestRef = useRef(0);
   const [state, dispatch] = useReducer(confirmActionReducer<AddSubject>, { kind: "closed" });
   const inFlightRef = useRef(false);
+  const [boundary, setBoundary] = useState<Element | null>(null);
 
   async function readCoverage(userIds: string[]): Promise<void> {
     const request = ++coverageRequestRef.current;
@@ -108,6 +104,7 @@ export function useAddToTeamspace({
 
   function handleOpenChange(open: boolean): void {
     if (!open) return;
+    setBoundary(dialogBoundaryOf(returnFocusRef.current));
     setOpened(true);
     void readCoverage(people.map((person) => person.user_id));
   }
@@ -197,6 +194,7 @@ export function useAddToTeamspace({
       <DropdownMenuPortal>
         <DropdownMenuSubContent
           sideOffset={6}
+          collisionBoundary={boundary ?? undefined}
           className="w-64 max-w-[calc(100vw-32px)] rounded-xl p-1.5"
         >
           {directory.status === "ready" && directory.spaces.length === 0 ? (

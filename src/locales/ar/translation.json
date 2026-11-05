@@ -3949,8 +3949,7 @@
           "remove": "إزالة",
           "addToTeamspace": "إضافة إلى مساحة الفريق",
           "addToTeam": "إضافة إلى فريق",
-          "createTeam": "إنشاء فريق من المحددين",
-          "moreOptions": "خيارات أخرى"
+          "createTeam": "إنشاء فريق من المحددين"
         },
         "teamsCount_zero": "{{count}} فريق",
         "teamsCount_one": "{{count}} فريق",
@@ -4472,7 +4471,9 @@
           "done_many": "تمت إضافة {{count}} عضوًا إلى {{team}}",
           "done_other": "تمت إضافة {{count}} عضو إلى {{team}}",
           "someDone": "تمت إضافة {{added}} إلى {{team}}. {{already}} عضو بالفعل.",
-          "someDonePlural": "تمت إضافة {{added}} إلى {{team}}. {{already}} أعضاء بالفعل."
+          "someDonePlural": "تمت إضافة {{added}} إلى {{team}}. {{already}} أعضاء بالفعل.",
+          "left": "غادر {{names}} مساحة العمل، لذلك لم تتم إضافة أحد.",
+          "allAlready": "هم موجودون بالفعل في {{team}}."
         }
       },
       "invites": {

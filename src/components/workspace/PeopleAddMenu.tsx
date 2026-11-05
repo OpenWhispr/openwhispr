@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState, type ReactElement } from "react";
+import { useEffect, useReducer, useRef, useState, type ReactElement, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { useWorkspaceTeams, type WorkspaceTeamsState } from "../../hooks/useWorkspaceTeams";
 import { confirmActionReducer } from "../../lib/confirmActionFlow";
@@ -10,7 +10,6 @@ import { useWorkspaceStore } from "../../stores/workspaceStore";
 import type { Team, Workspace, WorkspaceMember } from "../../types/electron";
 import { isolate } from "../../utils/bidiIsolate";
 import { ChevronDown, Plus, UserPlus, Users } from "../icons";
-import { Button } from "../ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,8 +22,8 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { useToast } from "../ui/useToast";
-import { AddToTeamList, teamCoverage } from "./AddToTeamList";
-import { useAddToTeamspace } from "./AddToTeamspaceMenu";
+import { AddToTeamList, dialogBoundaryOf, teamCoverage } from "./AddToTeamList";
+import type { AddToTeamspace } from "./AddToTeamspaceMenu";
 import { WorkspaceActionDialog } from "./WorkspaceActionDialog";
 
 export { teamCoverage };
@@ -102,7 +101,6 @@ export function useAddPeopleToTeam(workspace: Workspace): PeopleTeamAdd {
   // What the toast says, by what the server reported.
   function outcomeTitle(
     subject: AddSubject,
-    userIds: string[],
     result: { added: string[]; already_members: string[] }
   ): string {
     let added = result.added;
@@ -124,31 +122,38 @@ export function useAddPeopleToTeam(workspace: Workspace): PeopleTeamAdd {
       }
       return t(`${COPY}.addPeople.done`, { count: added.length, team });
     }
-    // Nobody new means a retry after a lost answer or a roster a step behind: everyone selected.
-    return t(`${COPY}.addPeople.done`, {
-      count: added.length > 0 ? added.length : userIds.length,
-      team,
-    });
+    // Nobody new: the roster was a step behind. A retry after a lost answer never lands here, since
+    // those people were counted as added above.
+    if (added.length === 0) return t(`${COPY}.addPeople.allAlready`, { team });
+    return t(`${COPY}.addPeople.done`, { count: added.length, team });
   }
 
-  async function run(subject: AddSubject): Promise<void> {
+  function dismiss(subject: AddSubject): void {
+    dispatch({ type: "dismiss" });
+    // The menu item that opened the dialog is gone, so nothing hands focus back and it would drop
+    // to the page; the frame lets the dialog finish closing first.
+    requestAnimationFrame(subject.returnFocus);
+  }
+
+  async function run(first: AddSubject): Promise<void> {
     if (inFlightRef.current) return;
     if (remainingRef.current.length === 0) {
       // Everyone left the workspace, so there is nobody to retry for.
-      dispatch({ type: "dismiss" });
-      requestAnimationFrame(subject.returnFocus);
+      dismiss(first);
       return;
     }
     inFlightRef.current = true;
     attemptsRef.current += 1;
     const userIds = remainingRef.current;
+    // The title counts who this attempt sends, which is fewer after someone left.
+    const subject = { ...first, count: userIds.length };
     dispatch({ type: "open", subject });
     dispatch({ type: "confirm" });
     try {
       const result = await addPeopleToTeam(subject.team.id, userIds);
       // The Team column reads the roster, so it is read again before the selection clears.
-      await refreshMembers(workspace.id).catch(() => undefined);
-      const title = outcomeTitle(subject, userIds, result);
+      if (mountedRef.current) await refreshMembers(workspace.id).catch(() => undefined);
+      const title = outcomeTitle(subject, result);
       if (mountedRef.current) {
         dispatch({ type: "succeeded" });
         subject.onAdded();
@@ -162,7 +167,7 @@ export function useAddPeopleToTeam(workspace: Workspace): PeopleTeamAdd {
         // `failed` first, since a running dialog can't be dismissed.
         if (mountedRef.current) {
           dispatch({ type: "failed", error: { kind: "failed" } });
-          dispatch({ type: "dismiss" });
+          dismiss(subject);
         }
         toast({
           title: t(`${COPY}.members.${failure.kind === "gone" ? "gone" : "notAllowed"}`, {
@@ -186,11 +191,20 @@ export function useAddPeopleToTeam(workspace: Workspace): PeopleTeamAdd {
         const left = new Set(failure.userIds);
         remainingRef.current = userIds.filter((id) => !left.has(id));
         void refreshMembers(workspace.id).catch(() => undefined);
-        const message = serverRefusalMessage(error);
+        // The server's own text names nobody and is English everywhere, so who left is named here.
+        const named = failure.userIds.flatMap((id) => subject.names.get(id) ?? []);
+        const message =
+          named.length > 0 && named.length === failure.userIds.length
+            ? t(`${COPY}.addPeople.left`, { names: formatList(i18n.language, named.map(isolate)) })
+            : serverRefusalMessage(error);
         dispatch({
           type: "failed",
           error: message ? { kind: "refused", message } : { kind: "failed" },
         });
+        return;
+      }
+      if (failure.kind === "ssoRequired") {
+        dispatch({ type: "failed", error: failure });
         return;
       }
       if (failure.kind === "refused") {
@@ -226,6 +240,11 @@ export function useAddPeopleToTeam(workspace: Workspace): PeopleTeamAdd {
   const subject = state.kind === "running" || state.kind === "failed" ? state.subject : null;
   const failed = state.kind === "failed";
   const teamName = subject ? isolate(subject.team.name) : "";
+  // Signing in with the company's SSO is the only way out of that refusal, which a retry can't be.
+  const needsSso = state.kind === "failed" && state.error.kind === "ssoRequired";
+  let errorLine: string | null = null;
+  if (state.kind === "failed" && state.error.kind === "refused") errorLine = state.error.message;
+  if (needsSso) errorLine = t("workspaces.ssoRequired", { workspace: isolate(workspace.name) });
   const dialog = subject ? (
     <WorkspaceActionDialog
       open
@@ -234,24 +253,32 @@ export function useAddPeopleToTeam(workspace: Workspace): PeopleTeamAdd {
         count: subject.count,
       })}
       body={t(`${COPY}.addPeople.${failed ? "failedBody" : "addingBody"}`, { team: teamName })}
-      error={state.kind === "failed" && state.error.kind === "refused" ? state.error.message : null}
-      primary={{
-        label: failed ? t("workspaces.exit.tryAgain") : t(`${COPY}.addPeople.addingAction`),
-        onClick: () => void run(subject),
-        tone: "primary",
-      }}
-      cancelLabel={t("common.cancel")}
+      error={errorLine}
+      primary={
+        needsSso
+          ? { label: t("common.close"), onClick: () => dismiss(subject), tone: "primary" }
+          : {
+              label: failed ? t("workspaces.exit.tryAgain") : t(`${COPY}.addPeople.addingAction`),
+              onClick: () => void run(subject),
+              tone: "primary",
+            }
+      }
+      cancelLabel={needsSso ? undefined : t("common.cancel")}
       busy={!failed}
-      onDismiss={() => {
-        dispatch({ type: "dismiss" });
-        // The menu item that opened this is gone, so nothing hands focus back and it would drop to
-        // the page; the frame lets the dialog finish closing first.
-        requestAnimationFrame(subject.returnFocus);
-      }}
+      onDismiss={() => dismiss(subject)}
     />
   ) : null;
 
-  return { teams, open: () => setActivated(true), add, dialog };
+  // The boxes read the roster and the list, both as they were when the page loaded, so each opening
+  // reads them again: someone else may have changed a team since, and a stale ticked box can't be
+  // picked. The first opening has no list yet, and activating loads it.
+  function open(): void {
+    if (activated) void teams.reload();
+    else setActivated(true);
+    void refreshMembers(workspace.id).catch(() => undefined);
+  }
+
+  return { teams, open, add, dialog };
 }
 
 interface PeopleAddMenuProps {
@@ -259,35 +286,38 @@ interface PeopleAddMenuProps {
   people: WorkspaceMember[];
   /** The people were added, so the caller clears its selection. */
   onAdded: () => void;
-  onOpenTeamspace?: (localSpaceId: number) => void;
+  /**
+   * The page owns both controllers (and their dialogs), since the bar goes away when the roster
+   * refresh empties the selection and a dialog inside it would go with it.
+   */
+  teamAdd: PeopleTeamAdd;
+  teamspace: AddToTeamspace;
+  /** Whichever button opened a menu, which the teamspace controller hands focus back to. */
+  openerRef: RefObject<HTMLElement | null>;
   /** Create team with selected; the item is left out while nothing handles it. */
   onCreateTeam?: () => void;
 }
 
+const PILL_BUTTON =
+  "inline-flex h-7 items-center outline-none transition-colors hover:bg-primary-foreground/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+
 /**
- * The selection bar's split button. The label opens the team list; the chevron opens the menu with
- * Add to team ▸, Add to teamspace ▸ and Create team with selected.
+ * The selection bar's split button, one pill like People's Add. The label opens the team list; the
+ * chevron opens the menu with Add to team ▸, Add to teamspace ▸ and Create team with selected.
  */
 export function PeopleAddMenu({
   workspace,
   people,
   onAdded,
-  onOpenTeamspace,
+  teamAdd,
+  teamspace,
+  openerRef,
   onCreateTeam,
 }: PeopleAddMenuProps): ReactElement {
   const { t } = useTranslation();
-  const teamAdd = useAddPeopleToTeam(workspace);
   const labelRef = useRef<HTMLButtonElement>(null);
   const chevronRef = useRef<HTMLButtonElement>(null);
-  // Whichever of the two buttons opened the menu, so a cancelled dialog hands focus back to it.
-  const openerRef = useRef<HTMLElement | null>(null);
-  const teamspace = useAddToTeamspace({
-    workspace,
-    people,
-    onAdded,
-    onOpenTeamspace,
-    returnFocusRef: openerRef,
-  });
+  const [boundary, setBoundary] = useState<Element | null>(null);
 
   const choose = (team: Team): void =>
     teamAdd.add(team, people, {
@@ -296,80 +326,84 @@ export function PeopleAddMenu({
     });
 
   return (
-    <>
-      <div className="flex items-center">
-        <DropdownMenu
-          onOpenChange={(open) => {
-            if (!open) return;
-            openerRef.current = labelRef.current;
-            teamAdd.open();
-          }}
-        >
-          <DropdownMenuTrigger asChild>
-            <Button ref={labelRef} type="button" variant="ghost" size="sm">
-              <Plus className="size-3.5" aria-hidden="true" />
-              {t("settingsPage.workspace.people.selection.addToTeam")}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="end" className="w-64 max-w-[calc(100vw-32px)]">
-            <AddToTeamList
-              workspace={workspace}
-              teams={teamAdd.teams}
-              people={people}
-              onChoose={choose}
-            />
-          </DropdownMenuContent>
-        </DropdownMenu>
+    <div className="inline-flex h-7 items-center rounded-full bg-primary text-primary-foreground">
+      <DropdownMenu
+        onOpenChange={(open) => {
+          if (!open) return;
+          openerRef.current = labelRef.current;
+          teamAdd.open();
+        }}
+      >
+        <DropdownMenuTrigger asChild>
+          <button
+            ref={labelRef}
+            type="button"
+            className={`${PILL_BUTTON} gap-1.5 rounded-s-full ps-3 pe-2 text-xs font-medium`}
+          >
+            <Plus className="size-3.5" aria-hidden="true" />
+            {t("settingsPage.workspace.people.selection.addToTeam")}
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="top" align="end" className="w-64 max-w-[calc(100vw-32px)]">
+          <AddToTeamList
+            workspace={workspace}
+            teams={teamAdd.teams}
+            people={people}
+            onChoose={choose}
+          />
+        </DropdownMenuContent>
+      </DropdownMenu>
 
-        <DropdownMenu
-          onOpenChange={(open) => {
-            if (open) openerRef.current = chevronRef.current;
-          }}
-        >
-          <DropdownMenuTrigger asChild>
-            <Button
-              ref={chevronRef}
-              type="button"
-              variant="ghost"
-              size="sm"
-              aria-label={t("settingsPage.workspace.people.selection.moreOptions")}
-              className="px-1.5"
-            >
-              <ChevronDown className="size-3 text-muted-foreground" aria-hidden="true" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="end" className="w-60 max-w-[calc(100vw-32px)]">
-            <DropdownMenuSub onOpenChange={(open) => open && teamAdd.open()}>
-              <DropdownMenuSubTrigger className={SUBMENU_TRIGGER_CLASS}>
-                <Users className="size-3.5 text-muted-foreground" aria-hidden="true" />
-                {t("settingsPage.workspace.people.selection.addToTeam")}
-              </DropdownMenuSubTrigger>
-              <DropdownMenuPortal>
-                <DropdownMenuSubContent sideOffset={6} className={SUBMENU_CLASS}>
-                  <AddToTeamList
-                    workspace={workspace}
-                    teams={teamAdd.teams}
-                    people={people}
-                    onChoose={choose}
-                  />
-                </DropdownMenuSubContent>
-              </DropdownMenuPortal>
-            </DropdownMenuSub>
-            {teamspace.submenu}
-            {onCreateTeam ? (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="gap-2 text-sm" onSelect={onCreateTeam}>
-                  <UserPlus className="size-3.5 text-muted-foreground" aria-hidden="true" />
-                  {t("settingsPage.workspace.people.selection.createTeam")}
-                </DropdownMenuItem>
-              </>
-            ) : null}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-      {teamAdd.dialog}
-      {teamspace.dialog}
-    </>
+      <DropdownMenu
+        onOpenChange={(open) => {
+          if (!open) return;
+          openerRef.current = chevronRef.current;
+          setBoundary(dialogBoundaryOf(chevronRef.current));
+        }}
+      >
+        <DropdownMenuTrigger asChild>
+          <button
+            ref={chevronRef}
+            type="button"
+            aria-label={t("settingsPage.workspace.people.addMenu.label")}
+            className={`${PILL_BUTTON} rounded-e-full border-s border-primary-foreground/20 px-1.5`}
+          >
+            <ChevronDown className="size-3.5" aria-hidden="true" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="top" align="end" className="w-60 max-w-[calc(100vw-32px)]">
+          <DropdownMenuSub onOpenChange={(open) => open && teamAdd.open()}>
+            <DropdownMenuSubTrigger className={SUBMENU_TRIGGER_CLASS}>
+              <Users className="size-3.5 text-muted-foreground" aria-hidden="true" />
+              {t("settingsPage.workspace.people.selection.addToTeam")}
+            </DropdownMenuSubTrigger>
+            <DropdownMenuPortal>
+              <DropdownMenuSubContent
+                sideOffset={6}
+                collisionBoundary={boundary ?? undefined}
+                className={SUBMENU_CLASS}
+              >
+                <AddToTeamList
+                  workspace={workspace}
+                  teams={teamAdd.teams}
+                  people={people}
+                  onChoose={choose}
+                />
+              </DropdownMenuSubContent>
+            </DropdownMenuPortal>
+          </DropdownMenuSub>
+          {teamspace.submenu}
+          {onCreateTeam ? (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="gap-2 text-sm" onSelect={onCreateTeam}>
+                <UserPlus className="size-3.5 text-muted-foreground" aria-hidden="true" />
+                {t("settingsPage.workspace.people.selection.createTeam")}
+              </DropdownMenuItem>
+            </>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }

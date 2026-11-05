@@ -2525,8 +2525,7 @@
           "remove": "削除",
           "addToTeamspace": "Teamspace に追加",
           "addToTeam": "チームに追加",
-          "createTeam": "選択した人でチームを作成",
-          "moreOptions": "その他のオプション"
+          "createTeam": "選択した人でチームを作成"
         },
         "teamsCount_one": "{{count}} チーム",
         "teamsCount_other": "{{count}} チーム",
@@ -2930,7 +2929,9 @@
           "done_one": "{{count}}人のメンバーを {{team}} に追加しました",
           "done_other": "{{count}}人のメンバーを {{team}} に追加しました",
           "someDone": "{{added}} を {{team}} に追加しました。{{already}} はすでにメンバーです。",
-          "someDonePlural": "{{added}} を {{team}} に追加しました。{{already}} はすでにメンバーです。"
+          "someDonePlural": "{{added}} を {{team}} に追加しました。{{already}} はすでにメンバーです。",
+          "left": "{{names}} はワークスペースを退出したため、誰も追加されませんでした。",
+          "allAlready": "全員がすでに {{team}} に入っています。"
         }
       },
       "invites": {

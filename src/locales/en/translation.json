@@ -1796,8 +1796,7 @@
           "remove": "Remove",
           "addToTeamspace": "Add to teamspace",
           "addToTeam": "Add to team",
-          "createTeam": "Create team with selected",
-          "moreOptions": "More options"
+          "createTeam": "Create team with selected"
         },
         "teamsCount_one": "{{count}} Team",
         "teamsCount_other": "{{count}} Teams",
@@ -2201,7 +2200,9 @@
           "done_one": "Added {{count}} member to {{team}}",
           "done_other": "Added {{count}} members to {{team}}",
           "someDone": "Added {{added}} to {{team}}. {{already}} was already a member.",
-          "someDonePlural": "Added {{added}} to {{team}}. {{already}} were already members."
+          "someDonePlural": "Added {{added}} to {{team}}. {{already}} were already members.",
+          "left": "{{names}} left the workspace, so nobody was added.",
+          "allAlready": "They're already on {{team}}."
         }
       },
       "invites": {

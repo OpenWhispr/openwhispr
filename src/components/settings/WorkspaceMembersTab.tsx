@@ -29,6 +29,7 @@ import { classifyRowActionError, type RowActionError } from "../../lib/workspace
 import { transferReducer } from "../../lib/workspaceTransferFlow";
 import { RemoveMembersDialog } from "../workspace/RemoveMembersDialog";
 import { RowCheckbox } from "../dictionary/RowCheckbox";
+import { useAddToTeamspace } from "../workspace/AddToTeamspaceMenu";
 import { PeopleAddMenu, useAddPeopleToTeam } from "../workspace/PeopleAddMenu";
 import { SelectionBar } from "../workspace/SelectionBar";
 import { TransferOwnershipDialog } from "../workspace/TransferOwnershipDialog";
@@ -77,8 +78,11 @@ export default function WorkspaceMembersTab({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const rereadRef = useRef(false);
   const canManage = workspaceCan(workspace, "manage_members");
-  // One controller for every row's Add to team, with its dialog beside the table.
-  const rowTeamAdd = useAddPeopleToTeam(workspace);
+  // One controller for Add to team (the bar's and every row's), and one for Add to teamspace, each
+  // with its dialog beside the table: the bar goes away when a roster refresh empties the
+  // selection, and a dialog inside it would go with it.
+  const teamAdd = useAddPeopleToTeam(workspace);
+  const barOpenerRef = useRef<HTMLElement | null>(null);
   const canTransferOwnership = workspaceCan(workspace, "transfer_ownership");
 
   async function loadMembers(): Promise<void> {
@@ -237,6 +241,13 @@ export default function WorkspaceMembersTab({
   const headerChecked = HEADER_CHECKED[headerCheckState(selectableIds, selection)];
   const selectedMembers = selectableMembers.filter((member) => selection.has(member.user_id));
   const selectableKey = selectableIds.join(",");
+  const teamspace = useAddToTeamspace({
+    workspace,
+    people: selectedMembers,
+    onAdded: () => setSelection(new Set()),
+    onOpenTeamspace,
+    returnFocusRef: barOpenerRef,
+  });
 
   // Remove acts on what is on screen, so a search or a roster change drops the rows it hides.
   useEffect(() => {
@@ -509,7 +520,7 @@ export default function WorkspaceMembersTab({
                         }
                         onRemove={() => openRemoval([member])}
                         workspace={canManage ? workspace : undefined}
-                        teamAdd={canManage ? rowTeamAdd : undefined}
+                        teamAdd={canManage ? teamAdd : undefined}
                       />
                     </td>
                   </tr>
@@ -537,12 +548,15 @@ export default function WorkspaceMembersTab({
             workspace={workspace}
             people={selectedMembers}
             onAdded={() => setSelection(new Set())}
-            onOpenTeamspace={onOpenTeamspace}
+            teamAdd={teamAdd}
+            teamspace={teamspace}
+            openerRef={barOpenerRef}
           />
         }
       />
 
-      {rowTeamAdd.dialog}
+      {teamAdd.dialog}
+      {teamspace.dialog}
 
       <TransferOwnershipDialog
         workspace={workspace}

@@ -23,8 +23,16 @@ export function addableTeams(teams: Team[], workspace: Workspace): Team[] {
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
 }
 
-// One box state for the row: nobody, some (a dash) or everyone selected is on the team already.
-function accessOf(covered: number, total: number): boolean | "indeterminate" {
+/**
+ * The settings dialog a menu opens in. A submenu keeps inside it, so one that has no room on the
+ * right opens on the left, as the frames draw.
+ */
+export function dialogBoundaryOf(element: HTMLElement | null): Element | null {
+  return element?.closest('[role="dialog"]') ?? null;
+}
+
+// One box state for the row: nobody, some (a dash) or everyone selected is on the team or teamspace.
+export function accessOf(covered: number, total: number): boolean | "indeterminate" {
   if (total > 0 && covered >= total) return true;
   return covered > 0 ? "indeterminate" : false;
 }
@@ -59,7 +67,12 @@ export function AddToTeamList({
           // Keeps the menu open, so the list can load into it.
           onSelect={(event) => {
             event.preventDefault();
-            void teams.reload();
+            // The item unmounts while the list reloads, which would drop keyboard focus to the
+            // page; the menu itself keeps it, so the arrow keys still work once the list is in.
+            const menu = (event.currentTarget as HTMLElement | null)?.closest<HTMLElement>(
+              '[role="menu"]'
+            );
+            void teams.reload().then(() => requestAnimationFrame(() => menu?.focus()));
           }}
         >
           {t(`${COPY}.retry`)}
@@ -93,6 +106,8 @@ export function AddToTeamList({
           <DropdownMenuCheckboxItem
             key={team.id}
             checked={access}
+            // The label starts with a bidi isolate when partly covered, which typeahead can't match.
+            textValue={team.name}
             // Everyone selected is on it already, so there is nothing to add. It stays at full
             // strength, as the frame draws it: a ticked box, not a dimmed choice.
             disabled={access === true}

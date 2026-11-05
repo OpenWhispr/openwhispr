@@ -16,6 +16,7 @@ const {
 
 let CloudApiError;
 let PeopleAddMenu;
+let useAddToTeamspace;
 let MemberRoleMenu;
 let useAddPeopleToTeam;
 let teamCoverage;
@@ -61,6 +62,9 @@ test.before(async (t) => {
   ({ CloudApiError } = await vite.ssrLoadModule("/services/cloudApi.ts"));
   ({ PeopleAddMenu, useAddPeopleToTeam, teamCoverage } = await vite.ssrLoadModule(
     "/components/workspace/PeopleAddMenu.tsx"
+  ));
+  ({ useAddToTeamspace } = await vite.ssrLoadModule(
+    "/components/workspace/AddToTeamspaceMenu.tsx"
   ));
   ({ MemberRoleMenu } = await vite.ssrLoadModule("/components/settings/MemberRoleMenu.tsx"));
 });
@@ -116,6 +120,41 @@ const deferred = () => {
   return { promise, resolve, reject };
 };
 
+// What the People page wires: the controllers and their dialogs live in the page, and the bar goes
+// away when nobody is selected, as SelectionBar does.
+function Host({ state }) {
+  const [people, setPeople] = React.useState(state.people);
+  state.setPeople = (next) => {
+    state.people = next;
+    setPeople(next);
+  };
+  const teamAdd = useAddPeopleToTeam(WORKSPACE);
+  const openerRef = React.useRef(null);
+  const teamspace = useAddToTeamspace({
+    workspace: WORKSPACE,
+    people,
+    onAdded: state.onAdded,
+    returnFocusRef: openerRef,
+  });
+  return h(
+    React.Fragment,
+    null,
+    people.length > 0
+      ? h(PeopleAddMenu, {
+          workspace: WORKSPACE,
+          people,
+          onAdded: state.onAdded,
+          teamAdd,
+          teamspace,
+          openerRef,
+          onCreateTeam: state.onCreateTeam,
+        })
+      : null,
+    teamAdd.dialog,
+    teamspace.dialog
+  );
+}
+
 const networkError = () => new CloudApiError("Cloud API request failed", 0);
 
 // What a test steers: how the fakes answer. Each test gets its own calls log.
@@ -127,6 +166,8 @@ async function mount(t, options = {}) {
     withCreateTeam = false,
     // A host that goes away mid-run, as the People page does when the selection empties.
     unmountable = false,
+    // Runs when the roster is read; it may change who is selected, as a real refresh does.
+    onRefresh,
   } = options;
   const calls = [];
   const added = [];
@@ -134,6 +175,7 @@ async function mount(t, options = {}) {
   globalThis.__store = {
     refreshMembers: async (workspaceId) => {
       calls.push(["roster", workspaceId]);
+      onRefresh?.(state);
     },
   };
   globalThis.__api = {
@@ -167,25 +209,25 @@ async function mount(t, options = {}) {
     container.remove();
     for (const name of ["__toasts", "__store", "__api"]) delete globalThis[name];
   });
-  const props = {
-    workspace: WORKSPACE,
+  const state = {
     people,
     onAdded: () => {
       calls.push(["cleared"]);
-      added.push(people.map((member) => member.user_id));
+      added.push(state.people.map((member) => member.user_id));
     },
     onCreateTeam: withCreateTeam ? () => calls.push(["createTeam"]) : undefined,
   };
   await React.act(async () => {
-    root.render(h(PeopleAddMenu, props));
+    root.render(h(Host, { state }));
   });
   await ui.settle();
   return {
     calls,
     added,
+    state,
     callsTo: (name) => calls.filter(([call]) => call === name),
     rerender: async (nextPeople) => {
-      await React.act(async () => root.render(h(PeopleAddMenu, { ...props, people: nextPeople })));
+      await React.act(async () => state.setPeople(nextPeople));
       await ui.settle();
     },
     unmount: async () => {
@@ -200,7 +242,7 @@ async function mount(t, options = {}) {
 
 const buttons = () => [...doc().querySelectorAll("button")];
 const labelButton = () => buttons().find((button) => text(button) === "Add to team");
-const chevron = () => doc().querySelector("button[aria-label='More options']");
+const chevron = () => doc().querySelector("button[aria-label='More ways to add']");
 const items = () => [...doc().querySelectorAll('[role="menuitem"]')];
 const itemNamed = (name) => items().find((item) => text(item) === name);
 const rows = () => [...doc().querySelectorAll('[role="menuitemcheckbox"]')];
@@ -407,9 +449,10 @@ test("the roster is read again before the selection clears", async (t) => {
   await openLabelMenu();
   await choose("Design");
 
+  // Once when the menu opened, and once more before the selection clears.
   assert.deepEqual(
     calls.map(([call]) => call).filter((call) => call === "roster" || call === "cleared"),
-    ["roster", "cleared"]
+    ["roster", "roster", "cleared"]
   );
   assert.deepEqual(toastTitles(), ["Added 2 members to Design"]);
 });
@@ -462,7 +505,7 @@ test("several already there reads in the plural, and a crowd falls back to a cou
   assert.deepEqual(toastTitles().at(-1), "Added 3 members to Design");
 });
 
-test("nobody new counts everyone selected", async (t) => {
+test("nobody new says they were already on the team, never that they were added", async (t) => {
   await mount(t, {
     api: { addPeopleToTeam: async () => ({ added: [], already_members: ["lucas", "mason"] }) },
   });
@@ -470,7 +513,7 @@ test("nobody new counts everyone selected", async (t) => {
   await openLabelMenu();
   await choose("Design");
 
-  assert.deepEqual(toastTitles(), ["Added 2 members to Design"]);
+  assert.deepEqual(toastTitles(), ["They're already on Design."]);
 });
 
 test("a failure keeps the selection and offers Try again", async (t) => {
@@ -575,16 +618,16 @@ test("Cancel on a failure keeps the selection and hands focus back to the button
   assert.ok(doc().activeElement === chevron(), "focus is on the button that opened the menu");
 });
 
-test("someone who left is named by the server's text and the roster refreshes", async (t) => {
+// The server's real text names nobody and is English in every locale.
+const NOT_MEMBERS = "One or more users are not members of this workspace";
+
+test("someone who left is named from the selection, and the roster refreshes", async (t) => {
   const { callsTo, added } = await mount(t, {
     api: {
       addPeopleToTeam: async () => {
-        throw new CloudApiError(
-          "Mason is no longer a member of Acme",
-          400,
-          "not_workspace_members",
-          { user_ids: ["mason"] }
-        );
+        throw new CloudApiError(NOT_MEMBERS, 400, "not_workspace_members", {
+          user_ids: ["mason"],
+        });
       },
     },
   });
@@ -593,14 +636,189 @@ test("someone who left is named by the server's text and the roster refreshes", 
   await choose("Design");
 
   assert.match(dialogText(), /Couldn't add 2 people/);
-  assert.match(dialogText(), /Mason is no longer a member of Acme/);
-  assert.deepEqual(callsTo("roster"), [["roster", "w1"]]);
+  assert.match(dialogText(), /Mason left the workspace, so nobody was added\./);
+  assert.doesNotMatch(dialogText(), /One or more users/);
+  // Once when the menu opened, once for the refusal.
+  assert.equal(callsTo("roster").length, 2);
   assert.deepEqual(added, []);
 
-  // Try again adds whoever is left.
+  // Try again adds whoever is left, and says it sends one.
   await ui.click(dialogButton("Try again"));
   await ui.settle();
   assert.deepEqual(callsTo("addBatch").at(-1), ["addBatch", "t-design", ["lucas"]]);
+});
+
+test("someone nobody can name falls back to the server's text", async (t) => {
+  await mount(t, {
+    api: {
+      addPeopleToTeam: async () => {
+        throw new CloudApiError(NOT_MEMBERS, 400, "not_workspace_members", {
+          user_ids: ["stranger"],
+        });
+      },
+    },
+  });
+
+  await openLabelMenu();
+  await choose("Design");
+
+  assert.match(dialogText(), /One or more users are not members of this workspace/);
+});
+
+test("the dialog outlives the bar when the roster refresh empties the selection", async (t) => {
+  let refreshes = 0;
+  await mount(t, {
+    onRefresh: (state) => {
+      // The refusal's refresh is the second read; by then the people have left.
+      refreshes += 1;
+      if (refreshes === 2) state.setPeople([]);
+    },
+    api: {
+      addPeopleToTeam: async () => {
+        throw new CloudApiError(NOT_MEMBERS, 400, "not_workspace_members", {
+          user_ids: ["lucas", "mason"],
+        });
+      },
+    },
+  });
+
+  await openLabelMenu();
+  await choose("Design");
+  await ui.settle();
+
+  assert.equal(labelButton(), undefined, "the bar is gone");
+  assert.match(dialogText(), /Lucas and Mason left the workspace, so nobody was added\./);
+  // Nobody is left to retry for, so Try again just closes.
+  await ui.click(dialogButton("Try again"));
+  await ui.settle();
+  assert.equal(dialogs().length, 0);
+});
+
+test("a team everyone was removed from meanwhile can be picked once the menu reads the roster", async (t) => {
+  // The page loaded with both people on Design; another admin removed them since.
+  const onDesign = { id: "t-design", name: "Design" };
+  const stale = [person("lucas", "Lucas", [onDesign]), person("mason", "Mason", [onDesign])];
+  const { callsTo, state } = await mount(t, {
+    people: stale,
+    onRefresh: (host) => host.setPeople([LUCAS, MASON]),
+  });
+
+  await openLabelMenu();
+  await ui.settle();
+
+  assert.ok(callsTo("roster").length >= 1, "opening reads the roster");
+  assert.equal(rowFor("Design").getAttribute("aria-checked"), "false");
+  assert.equal(rowFor("Design").getAttribute("aria-disabled"), null);
+  assert.deepEqual(
+    state.people.map((member) => member.user_id),
+    ["lucas", "mason"]
+  );
+});
+
+test("opening the menu again reads the team list again", async (t) => {
+  const { callsTo } = await mount(t);
+
+  await openLabelMenu();
+  assert.equal(callsTo("teams").length, 1);
+  await ui.press(doc().querySelector('[role="menu"]'), "Escape");
+  await ui.settle();
+  await openLabelMenu();
+
+  assert.equal(callsTo("teams").length, 2);
+});
+
+test("Try again recounts the dialog's title for who it sends", async (t) => {
+  let attempts = 0;
+  await mount(t, {
+    api: {
+      addPeopleToTeam: async () => {
+        attempts += 1;
+        if (attempts === 1) {
+          throw new CloudApiError(NOT_MEMBERS, 400, "not_workspace_members", {
+            user_ids: ["mason"],
+          });
+        }
+        return new Promise(() => {});
+      },
+    },
+  });
+
+  await openLabelMenu();
+  await choose("Design");
+  await ui.click(dialogButton("Try again"));
+  await ui.settle();
+
+  assert.match(dialogText(), /Adding 1 person…/);
+});
+
+test("losing the team returns focus to the button that opened the menu", async (t) => {
+  await mount(t, {
+    api: {
+      addPeopleToTeam: async () => {
+        throw new CloudApiError("Team not found", 404);
+      },
+    },
+  });
+
+  await openLabelMenu();
+  await choose("Design");
+  await React.act(async () => {
+    await new Promise((resolve) => happyWindow.requestAnimationFrame(resolve));
+  });
+
+  assert.ok(doc().activeElement === labelButton(), "focus is back on Add to team");
+});
+
+test("a session that needs SSO says so and offers no Try again", async (t) => {
+  await mount(t, {
+    api: {
+      addPeopleToTeam: async () => {
+        throw new CloudApiError("SSO required", 403, "SSO_REQUIRED");
+      },
+    },
+  });
+
+  await openLabelMenu();
+  await choose("Design");
+
+  assert.match(dialogText(), /single sign-on to manage people in Acme\./);
+  assert.equal(dialogButton("Try again"), undefined);
+  await ui.click(dialogButton("Close"));
+  await ui.settle();
+  assert.equal(dialogs().length, 0);
+});
+
+test("Try again on a failed list keeps keyboard focus in the menu", async (t) => {
+  let attempts = 0;
+  await mount(t, {
+    api: {
+      listTeams: async () => {
+        attempts += 1;
+        if (attempts === 1) throw networkError();
+        return TEAMS;
+      },
+    },
+  });
+
+  await openChevronMenu();
+  await ui.press(itemNamed("Add to team"), "ArrowRight");
+  await ui.settle();
+  await ui.click(
+    [...doc().querySelectorAll('[role="menuitem"]')].find((i) => text(i) === "Try again")
+  );
+  await ui.settle();
+  await React.act(async () => {
+    await new Promise((resolve) => happyWindow.requestAnimationFrame(resolve));
+  });
+
+  assert.equal(rows().length, 3);
+  const menu = menus().at(-1);
+  assert.ok(menu.contains(doc().activeElement), "focus stayed inside the menu");
+});
+
+test("the split button is one pill whose chevron is named", async (t) => {
+  await mount(t);
+  assert.equal(labelButton().parentElement, chevron().parentElement);
 });
 
 test("a team deleted meanwhile says so and the list is read again", async (t) => {

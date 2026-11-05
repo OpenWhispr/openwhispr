@@ -1796,8 +1796,7 @@
           "remove": "Entfernen",
           "addToTeamspace": "Zu Teamspace hinzufügen",
           "addToTeam": "Zu Team hinzufügen",
-          "createTeam": "Team mit Auswahl erstellen",
-          "moreOptions": "Weitere Optionen"
+          "createTeam": "Team mit Auswahl erstellen"
         },
         "teamsCount_one": "{{count}} Team",
         "teamsCount_other": "{{count}} Teams",
@@ -2201,7 +2200,9 @@
           "done_one": "{{count}} Mitglied zu {{team}} hinzugefügt",
           "done_other": "{{count}} Mitglieder zu {{team}} hinzugefügt",
           "someDone": "{{added}} zu {{team}} hinzugefügt. {{already}} war bereits Mitglied.",
-          "someDonePlural": "{{added}} zu {{team}} hinzugefügt. {{already}} waren bereits Mitglieder."
+          "someDonePlural": "{{added}} zu {{team}} hinzugefügt. {{already}} waren bereits Mitglieder.",
+          "left": "{{names}} hat den Arbeitsbereich verlassen, daher wurde niemand hinzugefügt.",
+          "allAlready": "Sie sind bereits in {{team}}."
         }
       },
       "invites": {
