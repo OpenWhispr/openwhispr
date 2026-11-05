@@ -186,6 +186,9 @@ it('keeps personal and shared dictionary hints when only the cleanup model is re
   expect(instructions).toContain(
     'Never invent facts, promises, approvals, tasks or completed actions.',
   );
+  expect(instructions.indexOf('FINAL EDITING PRIORITIES (')).toBeGreaterThan(
+    instructions.indexOf('Acme'),
+  );
 });
 
 it('preserves the raw transcript when checking the cleanup artifact fails', async () => {
