@@ -6386,8 +6386,9 @@ class IPCHandlers {
           delete process.env.LLAMA_GPU_BACKEND;
           modelManager.serverManager.cachedServerBinaryPaths = null;
           await this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
-          // Stop server so next inference picks up the new Vulkan binary
-          await modelManager.stopServer().catch(() => {});
+          // The next inference picks up the new Vulkan binary. The pack can land in
+          // the background after onboarding, so an answer in progress finishes first.
+          modelManager.stopServerWhenIdle().catch(() => {});
         }
 
         return result;

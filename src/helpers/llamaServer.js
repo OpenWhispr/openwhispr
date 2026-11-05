@@ -22,6 +22,7 @@ const HEALTH_CHECK_TIMEOUT_MS = 2000;
 const STARTUP_POLL_INTERVAL_MS = 500;
 const HEALTH_CHECK_FAILURE_THRESHOLD = 3;
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+const BUSY_POLL_MS = 5000;
 const DEFAULT_CONTEXT_SIZE = 4096;
 const PREFLIGHT_TIMEOUT_MS = 10000;
 
@@ -38,6 +39,17 @@ function withContextSize(args, contextSize) {
   const copy = [...args];
   copy[index + 1] = String(contextSize);
   return copy;
+}
+
+// Whether a server started with `server`'s settings can take `request` without
+// a restart: the same model and drafter, and a context at least as large. The context
+// only grows, so a short request never shrinks a window a long one opened.
+function servesRequest(server, request) {
+  return (
+    server.modelPath === request.modelPath &&
+    server.draftModelPath === request.draftModelPath &&
+    request.contextSize <= (server.contextSize || 0)
+  );
 }
 
 function buildResponseError(statusCode, body) {
@@ -89,6 +101,9 @@ class LlamaServerManager {
     // one just paid to open. See #2142.
     this.contextSize = null;
     this.startupPromise = null;
+    // What the in-flight startup was asked for, so start() can tell whether
+    // joining it would serve another caller's request.
+    this.startingRequest = null;
     this.healthCheckInterval = null;
     this.healthCheckFailures = 0;
     this.cachedServerBinaryPaths = null;
@@ -185,39 +200,47 @@ class LlamaServerManager {
   }
 
   async _policyAllowedStart(modelPath, options = {}) {
-    if (this.startupPromise) return this.startupPromise;
+    const request = {
+      modelPath,
+      // A change in drafter presence for the same model must still restart the
+      // server so the new speculative-decoding flags take effect.
+      draftModelPath: options.draftModelPath || null,
+      contextSize: options.contextSize || DEFAULT_CONTEXT_SIZE,
+    };
 
-    // A change in drafter presence for the same model must still restart the
-    // server so the new speculative-decoding flags take effect.
-    const requestedDraftPath = options.draftModelPath || null;
-    const requestedContextSize = options.contextSize || DEFAULT_CONTEXT_SIZE;
-    if (
-      this.ready &&
-      this.modelPath === modelPath &&
-      this.draftModelPath === requestedDraftPath &&
-      requestedContextSize <= (this.contextSize || 0)
-    ) {
+    // Serialize with any in-flight startup; join it only when it will serve
+    // this request. Callers record the model they asked for as loaded once
+    // this resolves, so it must never resolve on a startup for another one.
+    while (this.startupPromise) {
+      if (servesRequest(this.startingRequest, request)) return this.startupPromise;
+      await this.startupPromise.catch(() => {});
+    }
+
+    if (this.ready && servesRequest(this, request)) {
       // Streaming chat reaches the port directly and never goes through
       // inference(), so asking for the running server is its only activity.
       this.resetIdleTimer();
       return;
     }
 
-    if (this.process) {
-      await this.stop();
-    }
-
-    // Residency may have been turned off while the old server stopped.
-    this.clearIdleTimer();
-    this.startupPromise = this._doStart(modelPath, options);
-    try {
-      await this.startupPromise;
-      // The ladder may have stepped the context down to get a GPU rung to
-      // start; record what loaded, not what was asked for.
-      this.contextSize = this.activeContextSize ?? requestedContextSize;
-    } finally {
-      this.startupPromise = null;
-    }
+    this.startingRequest = request;
+    // Assigned before any await so waiters woken by the same startup cannot
+    // both spawn.
+    this.startupPromise = (async () => {
+      try {
+        if (this.process) await this.stop();
+        // Residency may have been turned off while the old server stopped.
+        this.clearIdleTimer();
+        await this._doStart(modelPath, options);
+        // The ladder may have stepped the context down to get a GPU rung to
+        // start; record what loaded, not what was asked for.
+        this.contextSize = this.activeContextSize ?? request.contextSize;
+      } finally {
+        this.startupPromise = null;
+        this.startingRequest = null;
+      }
+    })();
+    return this.startupPromise;
   }
 
   _buildBaseArgs(modelPath, port, options = {}) {
@@ -656,6 +679,23 @@ class LlamaServerManager {
     // Freeing an idle server is housekeeping; it must never hold the process open.
     timer.unref();
     this.idleTimer = timer;
+  }
+
+  // Stops the running server once nothing is generating, so a binary that landed
+  // in the background takes over without cutting an answer short. True if it stopped.
+  async stopWhenIdle() {
+    await this.startupPromise?.catch(() => {});
+    const server = this.process;
+    while (server && this.process === server) {
+      const slots = await this._requestJson("/slots");
+      if (this.process !== server) return false;
+      if (!(Array.isArray(slots) && slots.some((slot) => slot.is_processing))) {
+        await this.stop();
+        return true;
+      }
+      await new Promise((resolve) => setTimeout(resolve, BUSY_POLL_MS).unref());
+    }
+    return false;
   }
 
   clearIdleTimer() {
