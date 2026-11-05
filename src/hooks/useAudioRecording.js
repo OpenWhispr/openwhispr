@@ -135,7 +135,13 @@ export const useAudioRecording = (toast, options = {}) => {
   }, []);
 
   const reserveRecording = useCallback(() => {
-    if (recordingAttemptRef.current) return recordingAttemptRef.current;
+    if (recordingAttemptRef.current) {
+      // Main keeps a cancelled attempt until its mic open settles and refuses
+      // any other id, so a new press takes it over. The cancelled flow stays
+      // stale through its preparation generation.
+      recordingAttemptRef.current.abandoned = false;
+      return recordingAttemptRef.current;
+    }
     const attempt = { id: crypto.randomUUID(), abandoned: false, admission: null };
     recordingAttemptRef.current = attempt;
     reportedLifecycleRef.current = null;

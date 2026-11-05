@@ -473,3 +473,85 @@ test("Agent ownership refuses dictation even before its broadcast is received", 
   assert.equal(h.fixture.starts, 0);
   assert.equal(h.main.isDictationActive(), false);
 });
+
+const openedMicStream = () => ({ stream: { getTracks: () => [{ stop() {} }] } });
+
+test("a press after a too-short press records while the cancelled mic open settles", async (t) => {
+  const media = deferred();
+  const h = await mountRecording(t, { startResult: true, prepare: () => media.promise });
+  await React.act(async () => {
+    void h.listeners.PrepareDictation();
+    await flush();
+  });
+  await React.act(async () => {
+    h.listeners.CancelDictationPreparation();
+    await flush();
+  });
+  await React.act(async () => {
+    void h.listeners.PrepareDictation();
+    await flush();
+  });
+  let starting;
+  await React.act(async () => {
+    starting = h.api().startRecording();
+    await flush();
+  });
+  await React.act(async () => {
+    media.resolve(openedMicStream());
+    assert.equal(await starting, true);
+  });
+  assert.equal(h.fixture.starts, 1);
+  assert.equal(h.main._dictationLifecycleState, "recording");
+});
+
+test("a press right after Esc records while the cancelled mic open settles", async (t) => {
+  const media = deferred();
+  const target = deferred();
+  const h = await mountRecording(t, { startResult: true, prepare: () => media.promise });
+  globalThis.window.electronAPI.captureDictationTarget = () => target.promise;
+  let starting;
+  await React.act(async () => {
+    starting = h.api().startRecording();
+    await flush();
+  });
+  await React.act(async () => {
+    await h.api().cancelRecording();
+  });
+  await React.act(async () => {
+    target.resolve();
+    await starting;
+  });
+  globalThis.window.electronAPI.captureDictationTarget = async () => {};
+  await React.act(async () => {
+    starting = h.api().startRecording();
+    await flush();
+  });
+  await React.act(async () => {
+    media.resolve(openedMicStream());
+    assert.equal(await starting, true);
+  });
+  assert.equal(h.fixture.starts, 1);
+});
+
+test("a cancelled start stays stale when a new press takes over its attempt", async (t) => {
+  const target = deferred();
+  const h = await mountRecording(t, { startResult: true });
+  globalThis.window.electronAPI.captureDictationTarget = () => target.promise;
+  let stale;
+  await React.act(async () => {
+    stale = h.api().startRecording();
+    await flush();
+  });
+  await React.act(async () => {
+    await h.api().cancelRecording();
+  });
+  await React.act(async () => {
+    void h.listeners.PrepareDictation();
+    await flush();
+  });
+  await React.act(async () => {
+    target.resolve();
+    assert.equal(await stale, false);
+  });
+  assert.equal(h.fixture.starts, 0);
+});
