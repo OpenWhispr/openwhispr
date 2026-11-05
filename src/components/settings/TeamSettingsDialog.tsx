@@ -1,21 +1,15 @@
-import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
-import { useShallow } from "zustand/react/shallow";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2, Settings, Trash2, User, UserCircle } from "../icons";
-import { ConfirmDialog, Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { useToast } from "../ui/useToast";
 import { cn } from "../lib/utils";
 import { useAuth } from "../../hooks/useAuth";
-import { useDialogs } from "../../hooks/useDialogs";
 import { teamCan, workspaceCan } from "../../lib/capabilities";
-import { rosterFor } from "../../lib/peopleRoster";
 import { classifyTeamError } from "../../lib/workspaceErrors";
 import { renameTeam } from "../../services/spaceActions";
 import { TeamsService } from "../../services/TeamsService";
-import { useWorkspaceStore } from "../../stores/workspaceStore";
-import InviteTeammateDialog from "../InviteTeammateDialog";
-import TeamRosterSection from "../TeamRosterSection";
 import { TeamGlyph } from "../workspace/TeamGlyph";
 import { SettingRow } from "../workspace/SettingRow";
 import {
@@ -25,8 +19,9 @@ import {
 } from "../workspace/dialogButtons";
 import DeleteTeamDialog from "./DeleteTeamDialog";
 import LeaveTeamDialog from "./LeaveTeamDialog";
+import TeamMembersPanel from "./TeamMembersPanel";
 import { isolate } from "../../utils/bidiIsolate";
-import type { Team, TeamMember, Workspace } from "../../types/electron";
+import type { Team, Workspace } from "../../types/electron";
 
 const KEY = "settingsPage.workspace.teams";
 const NAME_MAX_LENGTH = 80;
@@ -356,11 +351,12 @@ export default function TeamSettingsDialog({
               {general}
             </TabsContent>
             <TabsContent value="members" className="mt-4">
-              <RosterPanel
+              <TeamMembersPanel
                 team={team}
                 workspace={workspace}
                 managed={managed}
                 onChanged={onChanged}
+                onGone={onGone}
               />
             </TabsContent>
           </Tabs>
@@ -384,98 +380,6 @@ export default function TeamSettingsDialog({
       {deleteOpen && (
         <DeleteTeamDialog team={team} onClose={() => setDeleteOpen(false)} onDeleted={onGone} />
       )}
-    </>
-  );
-}
-
-interface RosterPanelProps {
-  team: Team;
-  workspace: Workspace;
-  managed: boolean;
-  onChanged: () => void;
-}
-
-// The roster as it was before the Members tab was rebuilt: the old section with its remove
-// confirm and the invite for an unknown address.
-function RosterPanel({ team, workspace, managed, onChanged }: RosterPanelProps): ReactElement {
-  const { t } = useTranslation();
-  const { user } = useAuth();
-  const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
-  const { members: roster, refreshMembers } = useWorkspaceStore(
-    useShallow((s) => ({ members: rosterFor(s, workspace.id), refreshMembers: s.refreshMembers }))
-  );
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState<string | undefined>(undefined);
-
-  // The roster reports after its first read and after every change. The first is not a change,
-  // and the callback stays the same function, since the roster reads again when it changes.
-  const onChangedRef = useRef(onChanged);
-  useEffect(() => {
-    onChangedRef.current = onChanged;
-  });
-  const rosterReads = useRef(0);
-  const onRosterChange = useCallback((): void => {
-    rosterReads.current += 1;
-    if (rosterReads.current > 1) onChangedRef.current();
-  }, []);
-
-  useEffect(() => {
-    void refreshMembers(workspace.id).catch(() => {});
-  }, [workspace.id, refreshMembers]);
-
-  const confirmRemoveMember = (member: TeamMember, onConfirm: () => void): void => {
-    showConfirmDialog({
-      title: t(`${KEY}.members.removeConfirm`, {
-        name: member.name || member.email,
-        team: team.name,
-      }),
-      description: t("notes.spaces.members.removeConfirmDescription"),
-      confirmText: t("notes.spaces.members.remove"),
-      variant: "destructive",
-      onConfirm,
-    });
-  };
-
-  return (
-    <>
-      <TeamRosterSection
-        teamId={team.id}
-        teamName={team.name}
-        canManage={!managed && teamCan(team, workspace, "manage_members")}
-        workspaceMembers={roster}
-        currentUserId={user?.id}
-        // Workspace invites are 403'd without manage_members.
-        onInvite={
-          workspaceCan(workspace, "manage_members")
-            ? (email) => {
-                setInviteEmail(email);
-                setInviteOpen(true);
-              }
-            : undefined
-        }
-        onRosterChange={onRosterChange}
-        removeConfirm={confirmRemoveMember}
-      />
-
-      <InviteTeammateDialog
-        open={inviteOpen}
-        onOpenChange={setInviteOpen}
-        workspaceId={workspace.id}
-        workspaceName={workspace.name}
-        teamIds={[team.id]}
-        initialEmail={inviteEmail}
-      />
-
-      <ConfirmDialog
-        open={confirmDialog.open}
-        onOpenChange={(next) => !next && hideConfirmDialog()}
-        title={confirmDialog.title}
-        description={confirmDialog.description}
-        confirmText={confirmDialog.confirmText}
-        cancelText={confirmDialog.cancelText}
-        onConfirm={confirmDialog.onConfirm}
-        variant={confirmDialog.variant}
-      />
     </>
   );
 }

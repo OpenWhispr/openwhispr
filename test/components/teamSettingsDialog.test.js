@@ -43,14 +43,13 @@ test.before(async (t) => {
         export const leaveTeam = (...args) => globalThis.__actions.leaveTeam(...args);
         export const holdTeamDelete = (...args) => globalThis.__actions.holdTeamDelete(...args);
       `,
-      "/TeamRosterSection": `
+      "/TeamMembersPanel": `
         import React from "react";
         export default function Mock(props) {
-          globalThis.__rosterProps = props;
-          return React.createElement("div", { "data-roster": "" }, "Roster");
+          globalThis.__panelProps = props;
+          return React.createElement("div", { "data-members-panel": "" }, "Members panel");
         }
       `,
-      "/InviteTeammateDialog": "export default function Mock() { return null; }",
       "/notes/SpaceNameField": `
         import React from "react";
         export const TileGlyph = ({ emoji, name }) =>
@@ -164,7 +163,7 @@ async function mount(
   t.after(async () => {
     await React.act(async () => root.unmount());
     container.remove();
-    for (const name of ["__toasts", "__listMembers", "__actions", "__rosterProps"]) {
+    for (const name of ["__toasts", "__listMembers", "__actions", "__panelProps"]) {
       delete globalThis[name];
     }
   });
@@ -235,7 +234,7 @@ test("a directory team is read-only, with a line saying why", async (t) => {
   assert.equal(buttonNamed("Delete team"), undefined);
 
   await ui.pressTab(tabNamed("Members"));
-  assert.equal(globalThis.__rosterProps.canManage, false);
+  assert.equal(globalThis.__panelProps.managed, true, "the panel is told the directory owns it");
 });
 
 test("Leave shows only with the capability", async (t) => {
@@ -278,7 +277,7 @@ test("Manage members switches to the Members tab", async (t) => {
   await ui.click(topButton("Manage members"));
 
   assert.equal(tabNamed("Members").getAttribute("aria-selected"), "true");
-  assert.ok(globalThis.__rosterProps, "the roster is showing");
+  assert.ok(globalThis.__panelProps, "the members panel is showing");
 });
 
 test("after making another admin, Leave opens the confirm instead of the block", async (t) => {
@@ -292,11 +291,9 @@ test("after making another admin, Leave opens the confirm instead of the block",
   await ui.settle();
   await ui.click(topButton("Manage members"));
 
-  // The roster's first report is its read; the second is a change.
+  // The panel reports every roster change it makes.
   members = [me("admin"), ethan("admin")];
-  await ui.act(() => globalThis.__rosterProps.onRosterChange([]));
-  assert.deepEqual(events, [], "the first report is not a change");
-  await ui.act(() => globalThis.__rosterProps.onRosterChange([]));
+  await ui.act(() => globalThis.__panelProps.onChanged());
   assert.deepEqual(events, [["changed"]]);
 
   await ui.pressTab(tabNamed("General"));
@@ -304,6 +301,17 @@ test("after making another admin, Leave opens the confirm instead of the block",
   await ui.settle();
 
   assert.equal(text(top().querySelector("h2")), "Leave Sales?");
+});
+
+test("the members panel gets the team and reports a lost team through onGone", async (t) => {
+  const { events } = await mount(t, { team: team({ manage_members: true }) });
+
+  await ui.pressTab(tabNamed("Members"));
+  assert.equal(globalThis.__panelProps.team.id, "t1");
+  assert.equal(globalThis.__panelProps.managed, false);
+  await ui.act(() => globalThis.__panelProps.onGone());
+
+  assert.deepEqual(events, [["gone"]]);
 });
 
 test("a failed roster read leaves the answer to the row", async (t) => {
