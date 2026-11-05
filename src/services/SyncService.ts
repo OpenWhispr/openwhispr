@@ -55,6 +55,7 @@ import {
 import {
   readActiveWorkspaceId,
   useWorkspaceStore,
+  PERSONAL_SELECTED_KEY,
   WORKSPACE_LIST_CACHE_KEY,
 } from "../stores/workspaceStore";
 import { EMPTY_SHARED_HINTS, selectSharedHintWords } from "../utils/sharedDictionaryHints";
@@ -615,6 +616,7 @@ export class SyncService {
     localStorage.removeItem("purgedTeamIds");
     // Both hold account-scoped/local numeric ids that collide across accounts.
     localStorage.removeItem("activeWorkspaceId");
+    localStorage.removeItem(PERSONAL_SELECTED_KEY);
     localStorage.removeItem("notesTree.expanded");
     // Sign-out can happen offline, before the auth reconcile that resets the workspace store.
     localStorage.removeItem(WORKSPACE_LIST_CACHE_KEY);

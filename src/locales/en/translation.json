@@ -1707,6 +1707,10 @@
         "description": "Workspaces let you collaborate with teammates and share notes.",
         "create": "Create workspace"
       },
+      "personal": {
+        "title": "You're in Personal",
+        "description": "Choose a workspace to manage its settings."
+      },
       "loadError": {
         "title": "Couldn't load workspaces",
         "description": "Check your connection and try again.",

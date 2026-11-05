@@ -207,3 +207,144 @@ test("an overtaken read shares the newer read's failure", async (t) => {
   await assert.rejects(first, /offline/);
   await assert.rejects(second, /offline/);
 });
+
+async function loadStoreForPersonal(t, { list, storage: initialStorage = {} }) {
+  const { storage } = installBrowserGlobals(t, { initialStorage });
+  globalThis.__personalList = list;
+  t.after(() => {
+    delete globalThis.__personalList;
+  });
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-workspace-store-personal-",
+    mockModules: {
+      "/services/WorkspacesService": `
+        export const WorkspacesService = { list: async () => globalThis.__personalList };
+      `,
+      "/policyStore": `
+        export const usePolicyStore = {
+          getState: () => ({ accountId: null, authGeneration: null }),
+        };
+      `,
+      "/enterpriseIdentityStore": `
+        export const useEnterpriseIdentityStore = { getState: () => ({ clear() {} }) };
+      `,
+    },
+  });
+  const module = await vite.ssrLoadModule("/stores/workspaceStore.ts");
+  return { ...module, storage };
+}
+
+const businessOnly = [{ id: "business", plan: "business", status: "active" }];
+const withEnterprise = [
+  ...businessOnly,
+  { id: "enterprise", plan: "enterprise", status: "active" },
+];
+
+test("selectPersonal leaves no active workspace and survives a refresh", async (t) => {
+  const { useWorkspaceStore, storage, ACTIVE_WORKSPACE_KEY } = await loadStoreForPersonal(t, {
+    list: businessOnly,
+    storage: { activeWorkspaceId: "business" },
+  });
+  await useWorkspaceStore.getState().refresh();
+
+  useWorkspaceStore.getState().selectPersonal();
+  await useWorkspaceStore.getState().refresh({ fresh: true });
+
+  const state = useWorkspaceStore.getState();
+  assert.equal(state.personalSelected, true);
+  assert.equal(state.activeWorkspaceId, null);
+  assert.equal(storage.getItem(ACTIVE_WORKSPACE_KEY), null);
+});
+
+test("a saved Personal choice is restored on launch", async (t) => {
+  const { useWorkspaceStore, PERSONAL_SELECTED_KEY } = await loadStoreForPersonal(t, {
+    list: businessOnly,
+    storage: { workspacePersonalSelected: "true" },
+  });
+  assert.equal(PERSONAL_SELECTED_KEY, "workspacePersonalSelected");
+
+  await useWorkspaceStore.getState().refresh();
+
+  assert.equal(useWorkspaceStore.getState().personalSelected, true);
+  assert.equal(useWorkspaceStore.getState().activeWorkspaceId, null);
+});
+
+test("choosing a workspace ends the Personal choice", async (t) => {
+  const { useWorkspaceStore, storage, PERSONAL_SELECTED_KEY } = await loadStoreForPersonal(t, {
+    list: businessOnly,
+    storage: { workspacePersonalSelected: "true" },
+  });
+  await useWorkspaceStore.getState().refresh();
+
+  useWorkspaceStore.getState().setActiveWorkspaceId("business");
+
+  assert.equal(useWorkspaceStore.getState().personalSelected, false);
+  assert.equal(storage.getItem(PERSONAL_SELECTED_KEY), null);
+});
+
+test("an entitled Enterprise workspace replaces a saved Personal choice", async (t) => {
+  const { useWorkspaceStore, storage, PERSONAL_SELECTED_KEY } = await loadStoreForPersonal(t, {
+    list: withEnterprise,
+    storage: { workspacePersonalSelected: "true" },
+  });
+
+  await useWorkspaceStore.getState().refresh();
+
+  const state = useWorkspaceStore.getState();
+  assert.equal(state.personalSelected, false);
+  assert.equal(state.activeWorkspaceId, "enterprise");
+  assert.equal(storage.getItem(PERSONAL_SELECTED_KEY), null);
+});
+
+test("selectPersonal does nothing beside an entitled Enterprise workspace", async (t) => {
+  const { useWorkspaceStore } = await loadStoreForPersonal(t, { list: withEnterprise });
+  await useWorkspaceStore.getState().refresh();
+
+  useWorkspaceStore.getState().selectPersonal();
+
+  assert.equal(useWorkspaceStore.getState().personalSelected, false);
+  assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "enterprise");
+});
+
+test("losing the last workspace drops a saved Personal choice", async (t) => {
+  const { useWorkspaceStore, storage, PERSONAL_SELECTED_KEY } = await loadStoreForPersonal(t, {
+    list: [],
+    storage: { workspacePersonalSelected: "true" },
+  });
+
+  await useWorkspaceStore.getState().refresh();
+
+  assert.equal(useWorkspaceStore.getState().personalSelected, false);
+  assert.equal(storage.getItem(PERSONAL_SELECTED_KEY), null);
+});
+
+test("a window that follows another window's Personal choice keeps it on refresh", async (t) => {
+  const { useWorkspaceStore, handleActiveWorkspaceStorage, storage, PERSONAL_SELECTED_KEY } =
+    await loadStoreForPersonal(t, {
+      list: businessOnly,
+      storage: { activeWorkspaceId: "business" },
+    });
+  await useWorkspaceStore.getState().refresh();
+
+  storage.setItem(PERSONAL_SELECTED_KEY, "true");
+  handleActiveWorkspaceStorage({ key: PERSONAL_SELECTED_KEY, newValue: "true" });
+  storage.removeItem("activeWorkspaceId");
+  handleActiveWorkspaceStorage({ key: "activeWorkspaceId", newValue: null });
+  assert.equal(useWorkspaceStore.getState().personalSelected, true);
+
+  await useWorkspaceStore.getState().refresh({ fresh: true });
+
+  assert.equal(useWorkspaceStore.getState().activeWorkspaceId, null);
+});
+
+test("an account change drops the Personal choice", async (t) => {
+  const { useWorkspaceStore, storage, PERSONAL_SELECTED_KEY } = await loadStoreForPersonal(t, {
+    list: businessOnly,
+    storage: { workspacePersonalSelected: "true" },
+  });
+
+  useWorkspaceStore.getState().resetForAccountChange();
+
+  assert.equal(useWorkspaceStore.getState().personalSelected, false);
+  assert.equal(storage.getItem(PERSONAL_SELECTED_KEY), null);
+});

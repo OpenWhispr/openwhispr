@@ -2415,6 +2415,10 @@
         "description": "Espaços de trabalho permitem colaborar com colegas e compartilhar notas.",
         "create": "Criar espaço de trabalho"
       },
+      "personal": {
+        "title": "Você está em Pessoal",
+        "description": "Escolha um espaço de trabalho para gerenciar as configurações dele."
+      },
       "loadError": {
         "title": "Não foi possível carregar os espaços de trabalho",
         "description": "Verifique sua conexão e tente novamente.",

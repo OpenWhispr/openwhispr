@@ -23,6 +23,7 @@ import SettingsPage from "./SettingsPage";
 import WorkspaceSwitcher from "./WorkspaceSwitcher";
 import { useAuth } from "../hooks/useAuth";
 import { workspaceCan } from "../lib/capabilities";
+import { settingsWorkspace } from "../lib/workspaceSwitcher";
 import {
   buildSettingsNav,
   resolveSettingsSection,
@@ -61,15 +62,15 @@ export default function SettingsModal({
   const { t } = useTranslation();
   const { isSignedIn } = useAuth();
   const policyManaged = usePolicyStore((s) => s.managed);
-  const { workspaces, activeWorkspaceId, workspacesLoaded } = useWorkspaceStore(
+  const { workspaces, activeWorkspaceId, personalSelected, workspacesLoaded } = useWorkspaceStore(
     useShallow((s) => ({
       workspaces: s.workspaces,
       activeWorkspaceId: s.activeWorkspaceId,
+      personalSelected: s.personalSelected,
       workspacesLoaded: s.loaded,
     }))
   );
-  const activeWorkspace =
-    workspaces.find((w) => w.id === activeWorkspaceId) ?? workspaces[0] ?? null;
+  const activeWorkspace = settingsWorkspace(workspaces, activeWorkspaceId, personalSelected);
   const hasWorkspace = activeWorkspace !== null;
   const canManageSettings = activeWorkspace
     ? workspaceCan(activeWorkspace, "manage_settings")

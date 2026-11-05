@@ -93,7 +93,7 @@ export default function CommandSearch({
   const [folders, setFolders] = useState<FolderItem[]>([]);
   const [spaces, setSpaces] = useState<SpaceItem[]>([]);
   const [scopeSpaceId, setScopeSpaceId] = useState<number | null>(null);
-  const { workspaces, active: activeWorkspace } = useWorkspace();
+  const { workspaces, active: activeWorkspace, personalSelected } = useWorkspace();
   const [conversations, setConversations] = useState<ConversationResult[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -121,8 +121,8 @@ export default function CommandSearch({
 
   // Other workspaces' spaces and notes stay out of search, as in the tree.
   const visibleSpaces = useMemo(
-    () => spacesInWorkspaceScope(spaces, activeWorkspace?.id ?? null, workspaces),
-    [spaces, activeWorkspace?.id, workspaces]
+    () => spacesInWorkspaceScope(spaces, activeWorkspace?.id ?? null, workspaces, personalSelected),
+    [spaces, activeWorkspace?.id, workspaces, personalSelected]
   );
   // null when nothing is hidden, so the queries stay unscoped.
   const visibleSpaceIds = useMemo(

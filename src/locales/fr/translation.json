@@ -1707,6 +1707,10 @@
         "description": "Les espaces de travail vous permettent de collaborer et partager des notes.",
         "create": "Créer un espace"
       },
+      "personal": {
+        "title": "Vous êtes dans Personnel",
+        "description": "Choisissez un espace de travail pour gérer ses paramètres."
+      },
       "loadError": {
         "title": "Impossible de charger les espaces de travail",
         "description": "Vérifiez votre connexion et réessayez.",

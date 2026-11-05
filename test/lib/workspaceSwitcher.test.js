@@ -120,3 +120,43 @@ test("with none chosen, an entitled Enterprise workspace becomes active, else th
   assert.equal(defaultActiveWorkspaceId([pro, enterprise("canceled")]), "beta");
   assert.equal(defaultActiveWorkspaceId([]), null);
 });
+
+test("Personal is current when chosen, even with workspaces listed", async () => {
+  const { resolveWorkspaceSwitcher } = await load();
+
+  assert.deepEqual(
+    resolveWorkspaceSwitcher({ ...base, workspaces: [workspace("acme")], personalSelected: true }),
+    { kind: "personal" }
+  );
+});
+
+test("Personal can be chosen once there is a workspace to switch away from", async () => {
+  const { canChoosePersonal } = await load();
+
+  assert.equal(canChoosePersonal([]), false);
+  assert.equal(canChoosePersonal([workspace("acme")]), true);
+});
+
+test("Personal isn't offered beside an entitled Enterprise workspace", async () => {
+  const { canChoosePersonal } = await load();
+  const enterprise = { ...workspace("corp"), plan: "enterprise", status: "active" };
+
+  assert.equal(canChoosePersonal([workspace("acme"), enterprise]), false);
+  assert.equal(canChoosePersonal([{ ...enterprise, status: "canceled" }]), true);
+});
+
+test("Settings manages the active workspace, or the first when the active id is gone", async () => {
+  const { settingsWorkspace } = await load();
+  const acme = workspace("acme");
+  const beta = workspace("beta");
+
+  assert.equal(settingsWorkspace([acme, beta], "beta", false), beta);
+  assert.equal(settingsWorkspace([acme, beta], "gone", false), acme);
+  assert.equal(settingsWorkspace([], null, false), null);
+});
+
+test("Settings manages no workspace while Personal is chosen", async () => {
+  const { settingsWorkspace } = await load();
+
+  assert.equal(settingsWorkspace([workspace("acme")], null, true), null);
+});

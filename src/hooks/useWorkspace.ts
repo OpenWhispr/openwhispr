@@ -13,6 +13,8 @@ interface UseWorkspaceResult {
   active: Workspace | null;
   role: WorkspaceRole | null;
   loaded: boolean;
+  personalSelected: boolean;
+  selectPersonal: () => void;
   setActive: (id: string | null) => void;
   refresh: () => Promise<void>;
 }
@@ -25,6 +27,8 @@ export function useWorkspace(): UseWorkspaceResult {
   const error = useWorkspaceStore((s) => s.error);
   const refresh = useWorkspaceStore((s) => s.refresh);
   const setActive = useWorkspaceStore((s) => s.setActiveWorkspaceId);
+  const personalSelected = useWorkspaceStore((s) => s.personalSelected);
+  const selectPersonal = useWorkspaceStore((s) => s.selectPersonal);
 
   useEffect(() => {
     if (isSignedIn && !loaded) {
@@ -60,6 +64,8 @@ export function useWorkspace(): UseWorkspaceResult {
     active,
     role: active?.role ?? null,
     loaded,
+    personalSelected,
+    selectPersonal,
     setActive,
     refresh,
   };

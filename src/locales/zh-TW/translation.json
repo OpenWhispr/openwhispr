@@ -2436,6 +2436,10 @@
         "description": "工作區讓你與團隊成員協作並分享筆記。",
         "create": "建立工作區"
       },
+      "personal": {
+        "title": "你目前在「個人」中",
+        "description": "選擇一個工作區以管理其設定。"
+      },
       "loadError": {
         "title": "無法載入工作區",
         "description": "請檢查網路連線後再試一次。",

@@ -1134,11 +1134,17 @@ export default function SpacesTree({
   const { isSignedIn, user } = useAuth();
   const teamCapability = useTeamSpacesCapability(isSignedIn);
   const canCreateTeamSpace = useCanCreateTeamSpace();
-  const { workspaces, active: activeWorkspace, loaded: workspacesLoaded } = useWorkspace();
+  const {
+    workspaces,
+    active: activeWorkspace,
+    loaded: workspacesLoaded,
+    personalSelected,
+  } = useWorkspace();
   // Other workspaces' teamspaces stay out of the tree until the user switches.
   const spaces = useMemo(
-    () => spacesInWorkspaceScope(allSpaces, activeWorkspace?.id ?? null, workspaces),
-    [allSpaces, activeWorkspace?.id, workspaces]
+    () =>
+      spacesInWorkspaceScope(allSpaces, activeWorkspace?.id ?? null, workspaces, personalSelected),
+    [allSpaces, activeWorkspace?.id, workspaces, personalSelected]
   );
   const noteFilesEnabled = useSettingsStore((s) => s.noteFilesEnabled);
   const shareByCloudId = useShareCache();
@@ -2045,7 +2051,7 @@ export default function SpacesTree({
             </TreeChildren>
           )}
         </div>
-        {teamCapability && (
+        {teamCapability && !(personalSelected && teamSpaces.length === 0) && (
           <div role="none" className="group/section">
             <SectionHeader
               label={t("notes.spaces.teamSpaces")}

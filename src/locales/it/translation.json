@@ -2436,6 +2436,10 @@
         "description": "Le aree di lavoro ti permettono di collaborare con il team e condividere note.",
         "create": "Crea area di lavoro"
       },
+      "personal": {
+        "title": "Sei in Personale",
+        "description": "Scegli un'area di lavoro per gestirne le impostazioni."
+      },
       "loadError": {
         "title": "Impossibile caricare le aree di lavoro",
         "description": "Controlla la connessione e riprova.",

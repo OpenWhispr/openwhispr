@@ -1707,6 +1707,10 @@
         "description": "Workspaces ermöglichen die Zusammenarbeit und das Teilen von Notizen.",
         "create": "Workspace erstellen"
       },
+      "personal": {
+        "title": "Du bist in „Persönlich“",
+        "description": "Wähle einen Workspace aus, um seine Einstellungen zu verwalten."
+      },
       "loadError": {
         "title": "Workspaces konnten nicht geladen werden",
         "description": "Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
