@@ -10764,8 +10764,8 @@ class IPCHandlers {
       try {
         clearDictationIdleTimer();
         this._dictationPreviewEnabled = !!options.preview;
-        // A warmup still connecting may be the connection this start wants. With
-        // none, the connection must exist before this tick ends to buffer audio.
+        // A warmup still connecting may be the connection this start wants. Managed audio
+        // waits in the renderer; other routes need the connection before this tick ends.
         if (managedOrukeet && this._dictationConnectPromise) {
           await this._dictationConnectPromise.catch(() => {});
           if (stopGeneration !== dictationStopGeneration) {

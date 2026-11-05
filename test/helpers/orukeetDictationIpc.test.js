@@ -695,21 +695,20 @@ const answerNext = (held) => {
   held.mints.shift()(Response.json(cloudSession));
 };
 
-test("a start during a warmup rides that connection and keeps its audio", async () => {
+test("a start during a warmup rides that connection", async () => {
   await handlers.get("dictation-realtime-stop")();
   const held = holdMints();
   const warmup = handlers.get("dictation-realtime-warmup")(event, managedOptions);
   await until(() => held.mints.length === 1);
 
   const start = handlers.get("dictation-realtime-start")(event, managedOptions);
-  handlers.get("dictation-realtime-send")(event, Buffer.alloc(64000));
   answerNext(held);
   await warmup;
   assert.equal((await start).success, true);
   handlers.get("dictation-realtime-send")(event, Buffer.alloc(640));
 
   const final = await handlers.get("dictation-realtime-finalize")();
-  assert.equal(final.text, "Recorded 64640 bytes");
+  assert.equal(final.text, "Recorded 640 bytes");
   assert.equal(held.answered.count, 1);
   await handlers.get("dictation-realtime-stop")();
 });

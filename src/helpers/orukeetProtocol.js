@@ -1,6 +1,6 @@
 // Shared main-process wire contract. Managed destinations remain an exact allowlist.
 const ORUKEET_BASE_URL = "https://orukeet.gizmovoice.ai";
-const ORUKEET_MANAGED_ORIGINS = Object.freeze([ORUKEET_BASE_URL, "https://orukeet.openwhispr.com"]);
+const ORUKEET_MANAGED_ORIGINS = [ORUKEET_BASE_URL, "https://orukeet.openwhispr.com"];
 const ORUKEET_MODEL = "orukeet-v0.1.0";
 const ORUKEET_PCM_PROTOCOL = "orukeet.pcm.v1";
 const ORUKEET_PIPELINE_PROTOCOL = "orukeet.pipeline.v2";
