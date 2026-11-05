@@ -107,7 +107,7 @@ function tryCompile() {
       check: { command: "cl", args: [] },
       useShell: true,
       getCommand: () =>
-        `cl /O2 /nologo ${quotePath(cSource)} /Fe:${quotePath(outputBinary)} user32.lib`,
+        `cl /O2 /nologo ${quotePath(cSource)} /Fe:${quotePath(outputBinary)} user32.lib advapi32.lib`,
     },
     // MinGW-w64 - can use shell: false
     {
@@ -116,7 +116,7 @@ function tryCompile() {
       useShell: false,
       command: "gcc",
       // Keep the console subsystem so stdout/stderr remain attached to the parent process.
-      args: ["-O2", cSource, "-o", outputBinary, "-luser32"],
+      args: ["-O2", cSource, "-o", outputBinary, "-luser32", "-ladvapi32"],
     },
     // Clang (LLVM) - can use shell: false
     {
@@ -124,7 +124,7 @@ function tryCompile() {
       check: { command: "clang", args: ["--version"] },
       useShell: false,
       command: "clang",
-      args: ["-O2", cSource, "-o", outputBinary, "-luser32"],
+      args: ["-O2", cSource, "-o", outputBinary, "-luser32", "-ladvapi32"],
     },
   ];
 
