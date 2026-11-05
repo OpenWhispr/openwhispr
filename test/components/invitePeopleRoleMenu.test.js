@@ -86,6 +86,7 @@ async function mountView(t, dispatch = () => {}, draft = "") {
           sent: [],
           memberEmails: [],
           invitedEmails: [],
+          seats: { purchasedLeft: null, ceilingLeft: null },
         },
         dispatch,
         suggestions: [],
@@ -190,3 +191,15 @@ for (const [name, text, draft, start, end] of [
     assert.equal(inviteSummary(state).canSend, true);
   });
 }
+
+test("pressing Cancel leaves focus in the field", async (t) => {
+  const document = await mountView(t);
+  const cancel = [...document.querySelectorAll("button")].at(-1);
+  const press = new happyWindow.Event("mousedown", { bubbles: true, cancelable: true });
+
+  await React.act(async () => cancel.dispatchEvent(press));
+
+  // Its blur would chip a half-typed address, and the error bar that raises moves the button out
+  // from under the click.
+  assert.equal(press.defaultPrevented, true);
+});

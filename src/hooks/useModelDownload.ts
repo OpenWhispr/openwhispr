@@ -1,13 +1,23 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
-import { useDialogs } from "./useDialogs";
 import { useToast } from "../components/ui/useToast";
 import type {
   LocalLLMDownloadProgressEvent,
   LocalModelDownloadStatus,
   WhisperDownloadProgressData,
 } from "../types/electron";
+import { usePolicyStore } from "../stores/policyStore";
+import {
+  allowedLocalModelIds,
+  isLocalModelAllowedByPolicy,
+  isModeAllowedByPolicy,
+  isPolicyActionAllowed,
+  LOCAL_MODEL_REFUSAL_MESSAGE_KEYS,
+  localModelRefusal,
+  type PolicyDecisionSnapshot,
+} from "../stores/policyRules";
+import type { PolicyScope } from "../types/policy";
 import { clearMissingLocalModelSelections } from "../stores/settingsStore";
 import "../types/electron";
 
@@ -60,7 +70,37 @@ export function formatETA(seconds: number): string {
   return `${minutes}m ${Math.round(seconds % 60)}s`;
 }
 
-function getDownloadErrorMessage(t: TFunction, error: string, code?: string): string {
+// Retrying can't change these answers; POLICY_UNRESOLVABLE can clear by itself, so
+// it isn't one. A device that can't run the model answers the same way every time.
+const TERMINAL_POLICY_ERROR_CODES: ReadonlySet<string> = new Set([
+  "POLICY_MODEL_BLOCKED",
+  "POLICY_LOCAL_MODE_BLOCKED",
+  "POLICY_APP_VERSION_BLOCKED",
+  "PARAKEET_UNSUPPORTED_OS",
+]);
+
+function isPolicyErrorCode(code: string | undefined): boolean {
+  return code?.startsWith("POLICY_") ?? false;
+}
+
+// Periodic refreshes replace the policy object, so what it decides is compared instead.
+function localModelVerdictKey(
+  state: PolicyDecisionSnapshot & { accountId: string | null },
+  scope: PolicyScope
+): string {
+  return JSON.stringify([
+    state.status,
+    state.accountId,
+    isPolicyActionAllowed(state),
+    isModeAllowedByPolicy(state, scope, "local"),
+    allowedLocalModelIds(state, scope),
+  ]);
+}
+
+export function getDownloadErrorMessage(t: TFunction, error: string, code?: string): string {
+  const policyMessage = (LOCAL_MODEL_REFUSAL_MESSAGE_KEYS as Record<string, string>)[code ?? ""];
+  if (policyMessage) return t(policyMessage);
+  if (code === "PARAKEET_UNSUPPORTED_OS") return t("transcription.parakeet.unavailable");
   if (code === "EXTRACTION_FAILED" || error.includes("installation failed")) {
     return t("hooks.modelDownload.errors.extractionFailed");
   }
@@ -102,17 +142,37 @@ export function useModelDownload({
   showErrorDialog = true,
 }: UseModelDownloadOptions) {
   const { t } = useTranslation();
-  const { showAlertDialog } = useDialogs();
   const { toast } = useToast();
   const [downloads, setDownloads] = useState<Record<string, LocalModelDownloadStatus>>({});
   const [cancellingModels, setCancellingModels] = useState<Set<string>>(new Set());
   const [downloadErrors, setDownloadErrors] = useState<Record<string, string>>({});
+  const [downloadErrorCodes, setDownloadErrorCodes] = useState<Record<string, string | undefined>>(
+    {}
+  );
+  const policyScope = modelType === "llm" ? "llm" : "transcription";
+  const localModelVerdict = usePolicyStore((state) => localModelVerdictKey(state, policyScope));
   const ownedRequestsRef = useRef(new Map<string, ModelDownloadTerminalEvent | null>());
   const settlingDownloadsRef = useRef(new Set<string>());
   const terminalSequencesRef = useRef<Record<string, number>>({});
   const lastProgressUpdateRef = useRef<Record<string, number>>({});
   const onDownloadCompleteRef = useRef(onDownloadComplete);
   const onModelsClearedRef = useRef(onModelsCleared);
+
+  // A refusal answered the policy it was made under, so a new verdict lets the
+  // model be tried again: revoking and re-approving it mustn't leave it stuck.
+  const lastVerdictRef = useRef(localModelVerdict);
+  useEffect(() => {
+    if (lastVerdictRef.current === localModelVerdict) return;
+    lastVerdictRef.current = localModelVerdict;
+    const refused = Object.keys(downloadErrorCodes).filter((modelId) =>
+      isPolicyErrorCode(downloadErrorCodes[modelId])
+    );
+    if (refused.length === 0) return;
+    const withoutRefused = <T>(record: Record<string, T>): Record<string, T> =>
+      Object.fromEntries(Object.entries(record).filter(([id]) => !refused.includes(id)));
+    setDownloadErrors(withoutRefused);
+    setDownloadErrorCodes(withoutRefused);
+  }, [downloadErrorCodes, localModelVerdict]);
 
   useEffect(() => {
     onDownloadCompleteRef.current = onDownloadComplete;
@@ -189,16 +249,18 @@ export function useModelDownload({
   const reportError = useCallback(
     (modelId: string, message: string, code?: string) => {
       setDownloadErrors((current) => ({ ...current, [modelId]: message }));
+      setDownloadErrorCodes((current) => ({ ...current, [modelId]: code }));
       if (!showErrorDialog) return;
-      showAlertDialog({
+      toast({
         title:
           code === "EXTRACTION_FAILED"
             ? t("hooks.modelDownload.installationFailed.title")
             : t("hooks.modelDownload.downloadFailed.title"),
         description: message,
+        variant: "destructive",
       });
     },
-    [showAlertDialog, showErrorDialog, t]
+    [showErrorDialog, t, toast]
   );
 
   const handleTerminalDownload = useCallback(
@@ -318,6 +380,12 @@ export function useModelDownload({
   // Resolves true only when this request put the model on disk.
   const downloadModel = useCallback(
     async (modelId: string, onSelectAfterDownload?: (id: string) => void): Promise<boolean> => {
+      const policy = usePolicyStore.getState();
+      if (!isLocalModelAllowedByPolicy(policy, policyScope, modelId)) {
+        const { code, messageKey } = localModelRefusal(policy, policyScope);
+        reportError(modelId, t(messageKey), code);
+        return false;
+      }
       if (
         ownedRequestsRef.current.has(modelId) ||
         downloads[modelId] ||
@@ -327,6 +395,7 @@ export function useModelDownload({
         return false;
       }
 
+      setDownloadErrorCodes((current) => ({ ...current, [modelId]: undefined }));
       ownedRequestsRef.current.set(modelId, null);
       setDownloadErrors((current) => {
         if (!(modelId in current)) return current;
@@ -359,7 +428,14 @@ export function useModelDownload({
         if (result?.success) {
           succeeded = true;
           notifyLocalModelsChanged();
-          onSelectAfterDownload?.(modelId);
+          const currentPolicy = usePolicyStore.getState();
+          // Only the account matters: a rotated token is the same member.
+          if (
+            policy.accountId === currentPolicy.accountId &&
+            isLocalModelAllowedByPolicy(currentPolicy, policyScope, modelId)
+          ) {
+            onSelectAfterDownload?.(modelId);
+          }
         } else if (result?.code === "DOWNLOAD_IN_PROGRESS") {
           isDuplicateRequest = true;
           const activeDownloads = await window.electronAPI?.modelGetActiveDownloads?.();
@@ -384,7 +460,9 @@ export function useModelDownload({
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         if (!isCancellation(errorMessage)) {
-          reportError(modelId, getDownloadErrorMessage(t, errorMessage));
+          const code =
+            error && typeof error === "object" && "code" in error ? String(error.code) : undefined;
+          reportError(modelId, getDownloadErrorMessage(t, errorMessage, code), code);
         }
       } finally {
         const terminalEvent = ownedRequestsRef.current.get(modelId);
@@ -407,6 +485,7 @@ export function useModelDownload({
     [
       downloads,
       handleTerminalDownload,
+      policyScope,
       modelType,
       reportError,
       reportInProgress,
@@ -454,13 +533,14 @@ export function useModelDownload({
         onComplete?.();
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        showAlertDialog({
+        toast({
           title: t("hooks.modelDownload.deleteFailed.title"),
           description: t("hooks.modelDownload.deleteFailed.description", { error: errorMessage }),
+          variant: "destructive",
         });
       }
     },
-    [modelType, showAlertDialog, t, toast]
+    [modelType, t, toast]
   );
 
   const cancelDownload = useCallback(
@@ -499,6 +579,9 @@ export function useModelDownload({
   return {
     downloads,
     downloadErrors,
+    downloadErrorCodes,
+    isPolicyBlockedModel: (modelId: string): boolean =>
+      TERMINAL_POLICY_ERROR_CODES.has(downloadErrorCodes[modelId] ?? ""),
     downloadingModel,
     downloadProgress: {
       percentage: activeDownload?.progress || 0,

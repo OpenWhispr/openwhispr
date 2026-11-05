@@ -15,6 +15,7 @@ import {
   isLlmSelectionAllowed,
   isWebSearchAllowed,
   isWebSearchBlockedByOrg,
+  localChoiceRefusal,
 } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
 import { readSkillCardRecord, SKILL_CARD_TOOLS } from "./skillCardRecord";
@@ -416,11 +417,17 @@ export function useChatStreaming({
           if (!options?.suppressResponseContent) onResponseContent?.();
         };
         // Answers the already-appended user message with one line instead of a dead end.
-        const answerWithLine = (content: string) => {
+        const answerWithLine = (content: string, error?: Message["error"]) => {
           announceResponse();
           setMessages((prev) => [
             ...prev,
-            { id: crypto.randomUUID(), role: "assistant", content, isStreaming: false },
+            {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              content,
+              isStreaming: false,
+              ...(error ? { error } : {}),
+            },
           ]);
         };
         const settings = getSettings();
@@ -440,12 +447,20 @@ export function useChatStreaming({
               : llmConfig.provider;
         if (
           !isAgentAllowed(policyState) ||
-          !isLlmSelectionAllowed(policyState, { mode: llmMode, provider: policyProvider })
+          !isLlmSelectionAllowed(policyState, {
+            mode: llmMode,
+            provider: policyProvider,
+            model: llmConfig.model,
+          })
         ) {
+          const agentAllowed = isAgentAllowed(policyState);
+          const refusal =
+            agentAllowed && llmMode === "local" ? localChoiceRefusal(policyState, "llm") : null;
           answerWithLine(
-            !isAgentAllowed(policyState)
+            !agentAllowed
               ? t("common.policyAgentRestricted")
-              : t("common.policyAiProcessingRestricted")
+              : t(refusal?.messageKey ?? "common.policyAiProcessingRestricted"),
+            refusal ? { settingsTarget: refusal.settingsTarget } : undefined
           );
           return;
         }

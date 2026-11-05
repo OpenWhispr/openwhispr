@@ -8,7 +8,12 @@ import type {
   LocalSetupDownloadKind,
   LocalSetupSpace,
 } from "../types/electron";
-import { isAgentAllowed, isModeAllowedByPolicy } from "../stores/policyRules";
+import {
+  allowedLocalModelIds,
+  isAgentAllowed,
+  isLocalModelAllowedByPolicy,
+  isModeAllowedByPolicy,
+} from "../stores/policyRules";
 import type { PolicyDecisionSnapshot } from "../stores/policyRules";
 import { getASRModelOrganization } from "../helpers/localASROrganization";
 import { formatBytes, spaceSizeUnit } from "../utils/formatBytes";
@@ -271,6 +276,22 @@ function dictationRow(
   return { ...speechRowBase(modelId), label: entry.label, line: null };
 }
 
+/** The first model an allow-list approves that this computer can run, for these languages if one fits. */
+function firstApprovedSpeechModel(
+  policy: PolicyDecisionSnapshot,
+  profile: ComputerProfile,
+  languages: string[]
+): string | undefined {
+  const runnable = (allowedLocalModelIds(policy, "transcription") ?? []).filter(
+    (id) => speechInfo(id) && !(parakeetModels[id] && profile.parakeetSupported === false)
+  );
+  const fitsLanguages = (id: string) => {
+    const supported = speechInfo(id)?.supportedLanguages;
+    return !supported || languages.every((language) => supported.includes(language));
+  };
+  return runnable.find(fitsLanguages) ?? runnable[0];
+}
+
 function textRow(
   id: "cleanup" | "assistant",
   profile: ComputerProfile,
@@ -333,12 +354,23 @@ export function buildLocalSetupPlan(input: {
 
   const rows: LocalSetupRow[] = [];
   if (isModeAllowedByPolicy(policy, "transcription", "local")) {
-    rows.push(dictationRow(profile, machine, languages, requiredSpeechModelId));
+    const { modelId } = pickDictationModel(languages, profile);
+    // An allow-list that leaves out the table's pick decides dictation, as a required model does.
+    const organizationModelId =
+      requiredSpeechModelId ??
+      (isLocalModelAllowedByPolicy(policy, "transcription", modelId)
+        ? undefined
+        : firstApprovedSpeechModel(policy, profile, languages));
+    rows.push(dictationRow(profile, machine, languages, organizationModelId));
   }
   const localTextAllowed = isModeAllowedByPolicy(policy, "llm", "local");
+  const textModelApproved = (id: "cleanup" | "assistant") =>
+    isLocalModelAllowedByPolicy(policy, "llm", table.models[id]);
   if (localTextAllowed) {
-    rows.push(textRow("cleanup", profile, machine));
-    if (isAgentAllowed(policy)) rows.push(textRow("assistant", profile, machine));
+    if (textModelApproved("cleanup")) rows.push(textRow("cleanup", profile, machine));
+    if (isAgentAllowed(policy) && textModelApproved("assistant")) {
+      rows.push(textRow("assistant", profile, machine));
+    }
   }
 
   const packBytes = table.graphicsPackBytes[`${profile.platform}-${profile.arch}`];

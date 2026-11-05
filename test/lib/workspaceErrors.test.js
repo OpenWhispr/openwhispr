@@ -1,7 +1,11 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { classifyInviteError, classifyRowActionError } = require("../../src/lib/workspaceErrors.ts");
+const {
+  classifyInviteError,
+  classifyRemovalError,
+  classifyRowActionError,
+} = require("../../src/lib/workspaceErrors.ts");
 const { CloudApiError } = require("../../src/services/cloudApi.ts");
 
 const kindOf = (error) => classifyInviteError(error).kind;
@@ -54,10 +58,6 @@ test("a refusal without a known code keeps the server's reason", () => {
     classifyInviteError(new CloudApiError("Only admins can be invited without a seat", 400)),
     { kind: "refused", message: "Only admins can be invited without a seat" }
   );
-  assert.deepEqual(
-    classifyInviteError(new CloudApiError("Too many invitations", 429, "rate_limited")),
-    { kind: "refused", message: "Too many invitations" }
-  );
   // A bare status carries no reason to show.
   assert.equal(kindOf(new CloudApiError("API error: 400", 400)), "requestFailed");
 });
@@ -79,6 +79,13 @@ test("single sign-on required on a row action is its own kind", () => {
     classifyRowActionError(new CloudApiError("Sign in with company SSO", 403, "SSO_REQUIRED")),
     { kind: "ssoRequired" }
   );
+});
+
+test("a rate limit on a row action is its own kind", () => {
+  const message = "Too many invitations right now. Try again later.";
+  assert.deepEqual(classifyRowActionError(new CloudApiError(message, 429, "rate_limited")), {
+    kind: "rateLimited",
+  });
 });
 
 test("a 404 that doesn't name the row proves nothing about it", () => {
@@ -120,4 +127,118 @@ test("connection and server failures on a row action are failed", () => {
     kind: "failed",
   });
   assert.deepEqual(classifyRowActionError(new Error("boom")), { kind: "failed" });
+});
+
+test("a seat refusal carries how many fit", () => {
+  const error = new CloudApiError("x", 400, "seat_limit_reached", {
+    limit: 500,
+    available: 3,
+    requested: 8,
+  });
+  assert.deepEqual(classifyInviteError(error), { kind: "seatLimit", available: 3 });
+});
+
+test("a seat refusal without details still classifies", () => {
+  assert.deepEqual(classifyInviteError(new CloudApiError("x", 400, "seat_limit_reached")), {
+    kind: "seatLimit",
+  });
+  assert.deepEqual(
+    classifyInviteError(new CloudApiError("x", 400, "seat_limit_reached", { available: "3" })),
+    { kind: "seatLimit" }
+  );
+});
+
+test("rate limited invitations have their own kind", () => {
+  assert.equal(
+    kindOf(
+      new CloudApiError("Too many invitations right now. Try again later.", 429, "rate_limited")
+    ),
+    "rateLimited"
+  );
+});
+
+test("transfer required carries the owners", () => {
+  const members = [
+    { user_id: "u1", owned_notes: 4, owned_spaces: 1 },
+    { user_id: "u2", owned_notes: 0, owned_spaces: 2 },
+  ];
+  assert.deepEqual(
+    classifyRemovalError(
+      new CloudApiError("Transfer required", 409, "transfer_required", { members })
+    ),
+    { kind: "transferRequired", owners: members }
+  );
+});
+
+test("a malformed transfer_required body still asks for a transfer", () => {
+  for (const details of [null, undefined, {}, { members: "u1" }]) {
+    assert.deepEqual(
+      classifyRemovalError(
+        new CloudApiError("Transfer required", 409, "transfer_required", details)
+      ),
+      { kind: "transferRequired", owners: [] }
+    );
+  }
+});
+
+test("removal refusals map to their reasons", () => {
+  assert.deepEqual(classifyRemovalError(new CloudApiError("x", 400, "cannot_remove_owner")), {
+    kind: "cannotRemove",
+    reason: "owner",
+  });
+  assert.deepEqual(classifyRemovalError(new CloudApiError("x", 400, "cannot_remove_self")), {
+    kind: "cannotRemove",
+    reason: "self",
+  });
+  assert.deepEqual(classifyRemovalError(new CloudApiError("x", 400, "invalid_transfer_target")), {
+    kind: "invalidTransferTarget",
+  });
+});
+
+test("directory_managed names who the identity provider assigns", () => {
+  assert.deepEqual(
+    classifyRemovalError(
+      new CloudApiError("Remove them in your identity provider instead", 409, "directory_managed", {
+        user_ids: ["u1", "u2"],
+      })
+    ),
+    { kind: "directoryManaged", userIds: ["u1", "u2"] }
+  );
+});
+
+test("a malformed directory_managed list keeps only string ids", () => {
+  for (const [details, userIds] of [
+    [null, []],
+    [undefined, []],
+    [{}, []],
+    [{ user_ids: "u1" }, []],
+    [{ user_ids: [1, null, { id: "u1" }] }, []],
+    [{ user_ids: ["u1", 2, null, "u3"] }, ["u1", "u3"]],
+  ]) {
+    assert.deepEqual(
+      classifyRemovalError(new CloudApiError("x", 409, "directory_managed", details)),
+      { kind: "directoryManaged", userIds },
+      JSON.stringify(details)
+    );
+  }
+});
+
+test("other removal failures fall back to row action kinds", () => {
+  assert.deepEqual(classifyRemovalError(new CloudApiError("Forbidden", 403)), {
+    kind: "notAllowed",
+  });
+  assert.deepEqual(classifyRemovalError(new CloudApiError("Network", 0)), { kind: "failed" });
+});
+
+test("a rate-limited invite keeps how many fit and the daily limit", () => {
+  const message = "Too many invitations right now. Try again later.";
+  const limited = (details) => new CloudApiError(message, 429, "rate_limited", details);
+
+  assert.deepEqual(classifyInviteError(limited({ limit: 50, available: 20, requested: 60 })), {
+    kind: "rateLimited",
+    available: 20,
+    limit: 50,
+  });
+  // An older answer without the numbers has nothing to trim to.
+  assert.deepEqual(classifyInviteError(limited(undefined)), { kind: "rateLimited" });
 });

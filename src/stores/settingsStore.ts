@@ -53,6 +53,7 @@ import { MEETING_STREAMING_PROVIDER_IDS } from "../helpers/meetingTranscriptionR
 import { STREAMING_ONLY_PROVIDERS } from "../helpers/transcriptionRoute";
 import {
   getTranscriptionSelection,
+  isLocalModelAllowedByPolicy,
   isScreenContextAllowed,
   resolveEffectivePolicySelection,
   type PolicyDecisionSnapshot,
@@ -1029,6 +1030,8 @@ export interface SettingsState
     PrivacySettings,
     ThemeSettings,
     ChatAgentSettings {
+  /** Derived only: preserve a denied blank instead of inheriting a different saved model. */
+  policyBlockedLocalScopes?: readonly (TranscriptionPolicyContext | InferenceScope)[];
   isSignedIn: boolean;
   audioCuesEnabled: boolean;
   pauseMediaOnDictation: boolean;
@@ -2997,10 +3000,16 @@ export const selectResolvedMeetingTranscription = (
   state: SettingsState
 ): ResolvedMeetingTranscription => ({
   useLocalWhisper: state.meetingUseLocalWhisper,
-  whisperModel: state.meetingWhisperModel || state.whisperModel,
+  whisperModel: state.policyBlockedLocalScopes?.includes("meeting")
+    ? ""
+    : state.meetingWhisperModel || state.whisperModel,
   localTranscriptionProvider: state.meetingLocalTranscriptionProvider,
-  parakeetModel: state.meetingParakeetModel || state.parakeetModel,
-  cohereModel: state.meetingCohereModel || state.cohereModel,
+  parakeetModel: state.policyBlockedLocalScopes?.includes("meeting")
+    ? ""
+    : state.meetingParakeetModel || state.parakeetModel,
+  cohereModel: state.policyBlockedLocalScopes?.includes("meeting")
+    ? ""
+    : state.meetingCohereModel || state.cohereModel,
   cloudTranscriptionProvider:
     state.meetingCloudTranscriptionProvider || state.cloudTranscriptionProvider,
   cloudTranscriptionModel: state.meetingCloudTranscriptionModel || state.cloudTranscriptionModel,
@@ -3041,10 +3050,16 @@ export const selectResolvedUploadTranscription = (
   const inheritsDictationProvider = !STREAMING_ONLY_PROVIDERS.has(state.cloudTranscriptionProvider);
   return {
     useLocalWhisper: state.uploadUseLocalWhisper,
-    whisperModel: state.uploadWhisperModel || state.whisperModel,
+    whisperModel: state.policyBlockedLocalScopes?.includes("upload")
+      ? ""
+      : state.uploadWhisperModel || state.whisperModel,
     localTranscriptionProvider: state.uploadLocalTranscriptionProvider,
-    parakeetModel: state.uploadParakeetModel || state.parakeetModel,
-    cohereModel: state.uploadCohereModel || state.cohereModel,
+    parakeetModel: state.policyBlockedLocalScopes?.includes("upload")
+      ? ""
+      : state.uploadParakeetModel || state.parakeetModel,
+    cohereModel: state.policyBlockedLocalScopes?.includes("upload")
+      ? ""
+      : state.uploadCohereModel || state.cohereModel,
     cloudTranscriptionProvider:
       state.uploadCloudTranscriptionProvider ||
       (inheritsDictationProvider
@@ -3134,7 +3149,9 @@ export const selectResolvedLLMConfig = (
     scope,
     mode,
     provider: read("provider") || fallback?.provider || "",
-    model: read("model") || fallback?.model || "",
+    model: state.policyBlockedLocalScopes?.includes(scope)
+      ? ""
+      : read("model") || fallback?.model || "",
     cloudMode: read("cloudMode") || fallback?.cloudMode,
     cloudBaseUrl: read("cloudBaseUrl") || fallback?.cloudBaseUrl,
     remoteUrl: read("remoteUrl") || fallback?.remoteUrl,
@@ -3273,6 +3290,38 @@ const TRANSCRIPTION_CONTEXT_KEYS: readonly TranscriptionContextKeys[] = [
   },
 ];
 
+const LOCAL_TRANSCRIPTION_MODEL_FIELDS = ["whisperModel", "parakeetModel", "cohereModel"] as const;
+
+function transcriptionModelKey(
+  context: TranscriptionPolicyContext,
+  field: (typeof LOCAL_TRANSCRIPTION_MODEL_FIELDS)[number]
+): keyof SettingsState {
+  return (
+    context === "dictation" ? field : `${context}${field[0].toUpperCase()}${field.slice(1)}`
+  ) as keyof SettingsState;
+}
+
+type PolicyBlockedLocalScope = TranscriptionPolicyContext | InferenceScope;
+
+const NO_BLOCKED_LOCAL_SCOPES: readonly PolicyBlockedLocalScope[] = Object.freeze([]);
+const internedBlockedLocalScopes = new Map<string, readonly PolicyBlockedLocalScope[]>();
+
+// Selectors compare the overlay field by field (useShallow), so equal contents
+// must be the same array or a mounted component re-renders without end. Scopes
+// are pushed in a fixed order, which bounds this map to the subsets of them.
+function internBlockedLocalScopes(
+  scopes: PolicyBlockedLocalScope[]
+): readonly PolicyBlockedLocalScope[] {
+  if (scopes.length === 0) return NO_BLOCKED_LOCAL_SCOPES;
+  const key = scopes.join("\0");
+  let interned = internedBlockedLocalScopes.get(key);
+  if (!interned) {
+    interned = Object.freeze([...scopes]);
+    internedBlockedLocalScopes.set(key, interned);
+  }
+  return interned;
+}
+
 /**
  * Overlay managed policy choices for rendering and future requests while
  * leaving Zustand/localStorage preferences untouched for policy removal.
@@ -3286,6 +3335,7 @@ export function selectPolicyEffectiveSettings(
 
   const effective = { ...state };
   const writable = effective as unknown as Record<string, unknown>;
+  const blockedLocalScopes: PolicyBlockedLocalScope[] = [];
 
   if (!isScreenContextAllowed(policyState)) writable.voiceAgentScreenContext = false;
 
@@ -3332,6 +3382,25 @@ export function selectPolicyEffectiveSettings(
       // the policy gate (isTranscriptionContextAllowed).
       writable[keys.provider] = selection.provider;
     }
+
+    // Judged after the clamp: only a member left on Local goes inert. One whose
+    // workspace turned Local off has already moved to an allowed mode.
+    if (
+      selection.mode === "local" &&
+      !isLocalModelAllowedByPolicy(policyState, "transcription", rawSelection.model ?? "")
+    ) {
+      blockedLocalScopes.push(keys.context);
+      for (const field of LOCAL_TRANSCRIPTION_MODEL_FIELDS) {
+        writable[transcriptionModelKey(keys.context, field)] = "";
+      }
+    } else if (keys.context !== "dictation" && blockedLocalScopes.includes("dictation")) {
+      // Dictation's blanked models are the ones this context inherits, and its
+      // own raw selection already passed.
+      for (const field of LOCAL_TRANSCRIPTION_MODEL_FIELDS) {
+        const key = transcriptionModelKey(keys.context, field);
+        writable[key] = state[key] || state[field];
+      }
+    }
   }
 
   const resolvedConfigs = Object.fromEntries(
@@ -3372,6 +3441,8 @@ export function selectPolicyEffectiveSettings(
     if (selection.mode === "local" && config.mode === "local" && !config.model) {
       writable[definition.storeKeys.provider] = config.provider;
       writable[definition.storeKeys.model] = "";
+      // Under an allow-list a blank is a choice still to make, which the refusal explains.
+      if (!isLocalModelAllowedByPolicy(policyState, "llm", "")) blockedLocalScopes.push(scope);
       continue;
     }
 
@@ -3402,14 +3473,29 @@ export function selectPolicyEffectiveSettings(
         // A repointed override is no longer the user's choice: inert until they pick again.
         writable[definition.storeKeys.model] = "";
       } else {
+        // A blank model stays blank under a managed policy: the default may not
+        // be installed, and only the member chooses what runs.
         writable[definition.storeKeys.model] =
           !providerChanged && config.model
             ? config.model
-            : defaultLlmModel(selection.mode, provider, state.bedrockRegion);
+            : !providerChanged && selection.mode === "local"
+              ? ""
+              : defaultLlmModel(selection.mode, provider, state.bedrockRegion);
       }
+    }
+
+    const model = writable[definition.storeKeys.model] as string;
+    if (
+      selection.mode === "local" &&
+      (model || !definition.optional) &&
+      !isLocalModelAllowedByPolicy(policyState, "llm", model)
+    ) {
+      blockedLocalScopes.push(scope);
+      writable[definition.storeKeys.model] = "";
     }
   }
 
+  effective.policyBlockedLocalScopes = internBlockedLocalScopes(blockedLocalScopes);
   return effective;
 }
 

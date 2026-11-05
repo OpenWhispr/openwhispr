@@ -13,6 +13,7 @@ import type {
   LocalSetupSwitches,
 } from "../../config/localSetup";
 import { modelRegistry } from "../../models/ModelRegistry";
+import { usePolicyStore } from "../../stores/policyStore";
 import {
   selectResolvedLLMConfig,
   setResolvedLLMConfig,
@@ -108,7 +109,13 @@ export function rememberPendingLocalSetupRows(plan: LocalSetupPlan, rowIds: Opti
     const row = plan.rows.find((r) => r.id === id);
     const provider = row && modelRegistry.getModel(row.modelId)?.provider.id;
     if (row && provider) {
-      rememberPendingLocalModel(id, { provider, modelId: row.modelId, resumable: true });
+      const { accountId } = usePolicyStore.getState();
+      rememberPendingLocalModel(id, {
+        provider,
+        modelId: row.modelId,
+        resumable: true,
+        ...(accountId != null ? { accountId } : {}),
+      });
     }
   }
 }
@@ -120,7 +127,7 @@ export function rememberPendingLocalSetupRows(plan: LocalSetupPlan, rowIds: Opti
  */
 export function activatePendingLocalSetupModel(modelId: string): void {
   for (const id of ["cleanup", "assistant"] as const) {
-    if (!consumePendingLocalModel(id, modelId)) continue;
+    if (!consumePendingLocalModel(id, modelId, usePolicyStore.getState())) continue;
     const scopes = id === "cleanup" ? CLEANUP_SCOPES : ASSISTANT_SCOPES;
     const state = useSettingsStore.getState();
     const untouched = scopes.filter((scope) => {

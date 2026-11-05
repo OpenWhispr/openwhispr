@@ -27,12 +27,14 @@ import type { SpaceItem, TeamRole, WorkspaceMember } from "../../types/electron"
 
 interface SpaceMembersPanelProps {
   space: SpaceItem;
+  /** The invite dialog's Upgrade is leaving for Settings, where this panel's dialog can't stay. */
+  onOpeningBilling?: () => void;
 }
 
 // Everyone with access to a space — added directly or through a group — as
 // one flat list, with group assignment tucked into a disclosure below.
 // Rendered inside SpaceSettingsDialog's Members tab.
-export default function SpaceMembersPanel({ space }: SpaceMembersPanelProps) {
+export default function SpaceMembersPanel({ space, onOpeningBilling }: SpaceMembersPanelProps) {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -230,6 +232,7 @@ export default function SpaceMembersPanel({ space }: SpaceMembersPanelProps) {
           spaceIds={[spaceId]}
           initialEmail={inviteEmail}
           onInvited={setInvitedEmails}
+          onOpeningBilling={onOpeningBilling}
         />
       )}
 

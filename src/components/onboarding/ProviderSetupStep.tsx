@@ -13,7 +13,7 @@ import { FieldLabel, ProviderCheckField } from "../ui/ProviderCheckField";
 import { ConnectionCheckAnnouncer } from "../ui/ConnectionCheckAnnouncer";
 import { Button } from "../ui/button";
 import { ProviderIcon } from "../ui/ProviderIcon";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "../ui/select";
 import { useConnectionAutoCheck } from "../../hooks/useConnectionAutoCheck";
 import { isWindowSwitchBlur } from "../../hooks/useFocusHold";
 import { useSettingsStore } from "../../stores/settingsStore";

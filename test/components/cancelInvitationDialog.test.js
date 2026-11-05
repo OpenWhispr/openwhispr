@@ -211,6 +211,25 @@ test("lost permission and required single sign-on say so instead of blaming the 
   assert.match(sso, /role="alert"[^>]*>workspaces\.ssoRequired\|/);
 });
 
+test("a rate limit says so instead of blaming the connection", async (t) => {
+  const { render, events, canceled, CloudApiError } = await loadDialog(t);
+  globalThis.__revokeImpl = async () => {
+    throw new CloudApiError("Too many invitations right now.", 429, "rate_limited");
+  };
+  render({ kind: "confirm", subject: INVITATION });
+  await globalThis.__actionDialogProps.primary.onClick();
+
+  assert.deepEqual(events.at(-1), { type: "failed", error: { kind: "rateLimited" } });
+  assert.equal(canceled.length, 0);
+
+  const markup = render({
+    kind: "failed",
+    subject: INVITATION,
+    error: { kind: "rateLimited" },
+  });
+  assert.match(markup, /role="alert"[^>]*>workspaces\.invite\.errors\.rateLimited</);
+});
+
 test("any other rejection dispatches failed and leaves the list alone", async (t) => {
   const { render, events, canceled, CloudApiError } = await loadDialog(t);
   globalThis.__revokeImpl = async () => {

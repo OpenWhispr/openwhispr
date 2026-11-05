@@ -47,7 +47,7 @@ const MOCKS = {
     export const useNotesOnboarding = () => ({ isComplete: true, complete() {} });
   `,
   "/hooks/useTeamSpacesCapability": `export const useTeamSpacesCapability = () => false;`,
-  "/hooks/useAuth": `export const useAuth = () => ({ isSignedIn: false, user: globalThis.__user ?? null });`,
+  "/useAuth": `export const useAuth = () => ({ isLoaded: true, isSignedIn: false, user: globalThis.__user ?? null });`,
   "/hooks/useSpaceRoster": `
     export const fetchSpaceRoster = async () => globalThis.__roster ?? [];
   `,

@@ -1,3 +1,5 @@
+import { usePolicyStore } from "../../stores/policyStore";
+import { getDownloadErrorMessage } from "../../hooks/useModelDownload";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { ProviderIcon } from "../ui/ProviderIcon";
@@ -15,6 +17,7 @@ import {
   getPendingLocalModelAvailability,
   hasPendingLocalModels,
   readPendingLocalModels,
+  type PendingLocalModelInventory,
   type PendingLocalModelKind,
   type PendingLocalModelSelection,
 } from "./pendingLocalModels";
@@ -71,6 +74,15 @@ function downloadDisplay(download: ActiveDownload) {
   };
 }
 
+async function readLocalModelInventory(): Promise<PendingLocalModelInventory> {
+  const [whisper, parakeet, llm] = await Promise.all([
+    window.electronAPI?.listWhisperModels?.().catch(() => undefined),
+    window.electronAPI?.listParakeetModels?.().catch(() => undefined),
+    window.electronAPI?.modelGetAll?.().catch(() => undefined),
+  ]);
+  return { whisper: whisper?.models, parakeet: parakeet?.models, llm };
+}
+
 function activatePendingLocalModel(family: "speech" | "llm", modelId: string) {
   if (localStorage.getItem("localSetupPending") !== "true") return;
   if (family === "llm") {
@@ -78,10 +90,13 @@ function activatePendingLocalModel(family: "speech" | "llm", modelId: string) {
     return;
   }
   // Only an older build's picker leaves a dictation model pending.
-  const selection = consumePendingLocalModel("dictation", modelId);
+  const selection = consumePendingLocalModel("dictation", modelId, usePolicyStore.getState());
   if (!selection) return;
   const store = useSettingsStore.getState();
-  if (selection.provider === "nvidia") {
+  if (selection.provider === "cohere") {
+    store.setLocalTranscriptionProvider("cohere");
+    store.setCohereModel(selection.modelId);
+  } else if (selection.provider === "nvidia") {
     store.setLocalTranscriptionProvider("nvidia");
     store.setParakeetModel(selection.modelId);
   } else {
@@ -136,6 +151,32 @@ export default function BackgroundModelDownloadTray({
   // later re-download of the same model renders — and errors — normally.
   const cancelledKeys = useRef<Map<string, number>>(new Map());
 
+  // A download that finished while the policy was unresolved kept its selection;
+  // the verdict that settles it is what activates it (or drops it).
+  const policyResolution = usePolicyStore((state) => `${state.status}:${state.accountId}`);
+  useEffect(() => {
+    if (
+      !hydrated ||
+      localStorage.getItem("localSetupPending") !== "true" ||
+      !hasPendingLocalModels()
+    )
+      return;
+    let cancelled = false;
+    void readLocalModelInventory().then((inventory) => {
+      if (cancelled) return;
+      for (const [kind, selection] of Object.entries(readPendingLocalModels()) as [
+        PendingLocalModelKind,
+        PendingLocalModelSelection,
+      ][]) {
+        if (getPendingLocalModelAvailability(kind, selection, inventory) === "downloaded")
+          activatePendingLocalModel(kind === "dictation" ? "speech" : "llm", selection.modelId);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, policyResolution]);
+
   useEffect(() => {
     // Hydration only exists to re-surface downloads the onboarding flow kicked
     // off before this mount, and those always travel with the local-setup
@@ -152,15 +193,11 @@ export default function BackgroundModelDownloadTray({
     let cancelled = false;
 
     const hydrate = async () => {
-      const [whisper, parakeet, llm] = await Promise.all([
-        window.electronAPI?.listWhisperModels?.().catch(() => undefined),
-        window.electronAPI?.listParakeetModels?.().catch(() => undefined),
-        window.electronAPI?.modelGetAll?.().catch(() => undefined),
-      ]);
+      const inventory = await readLocalModelInventory();
       if (cancelled) return;
 
       const active: Record<string, ActiveDownload> = {};
-      for (const model of whisper?.models ?? []) {
+      for (const model of inventory.whisper ?? []) {
         if (!model.isDownloading) continue;
         active[downloadKey("whisper", model.model)] = {
           id: model.model,
@@ -169,7 +206,7 @@ export default function BackgroundModelDownloadTray({
           installing: model.isInstalling,
         };
       }
-      for (const model of parakeet?.models ?? []) {
+      for (const model of inventory.parakeet ?? []) {
         if (!model.isDownloading) continue;
         active[downloadKey("parakeet", model.model)] = {
           id: model.model,
@@ -178,7 +215,7 @@ export default function BackgroundModelDownloadTray({
           installing: model.isInstalling,
         };
       }
-      for (const model of llm ?? []) {
+      for (const model of inventory.llm ?? []) {
         if (!model.isDownloading) continue;
         active[downloadKey("llm", model.id)] = {
           id: model.id,
@@ -187,11 +224,6 @@ export default function BackgroundModelDownloadTray({
         };
       }
 
-      const inventory = {
-        whisper: whisper?.models,
-        parakeet: parakeet?.models,
-        llm,
-      };
       const canActivate = localStorage.getItem("localSetupPending") === "true";
       const resume: string[] = [];
       for (const [kind, selection] of Object.entries(readPendingLocalModels()) as [
@@ -237,6 +269,7 @@ export default function BackgroundModelDownloadTray({
       type: "progress" | "installing" | "complete" | "error";
       percentage: number | undefined;
       error?: string;
+      code?: string;
     }) => {
       // The required-models and local-setup onboarding steps own their
       // downloads: each renders its own per-row progress, and a cancel from
@@ -283,7 +316,10 @@ export default function BackgroundModelDownloadTray({
             kind: event.kind,
             percentage: clampPercentage(event.percentage),
             installing: event.type === "installing",
-            error: event.type === "error" ? event.error : undefined,
+            error:
+              event.type === "error"
+                ? getDownloadErrorMessage(t, event.error ?? "", event.code)
+                : undefined,
           },
         };
       });
@@ -299,6 +335,7 @@ export default function BackgroundModelDownloadTray({
         type: data.type,
         percentage: data.percentage,
         error: data.error,
+        code: data.code,
       });
 
     const normalizeLlm = (_event: unknown, data: LocalLLMDownloadProgressEvent) =>
@@ -308,6 +345,7 @@ export default function BackgroundModelDownloadTray({
         type: data.type ?? "progress",
         percentage: data.type === "error" ? 0 : data.progress,
         error: data.type === "error" ? data.error : undefined,
+        code: data.type === "error" ? data.code : undefined,
       });
 
     const disposeWhisper = window.electronAPI?.onWhisperDownloadProgress?.((_event, data) =>
@@ -323,7 +361,7 @@ export default function BackgroundModelDownloadTray({
       disposeParakeet?.();
       disposeLlm?.();
     };
-  }, []);
+  }, [t]);
 
   const cancelDownload = useCallback(async (download: ActiveDownload) => {
     const key = downloadKey(download.kind, download.id);

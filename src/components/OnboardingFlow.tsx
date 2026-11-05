@@ -65,6 +65,7 @@ import {
   getNextOnboardingStep,
   getNotesFooterAction,
   getOnboardingProgress,
+  canLeaveRequiredModels,
   getOnboardingRoute,
   getOnboardingWindowMode,
   isSetupDecisionStep,
@@ -343,6 +344,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   // the disk check is still pending.
   const requiredModelsLatchRef = useRef(session.currentStepId === "required-models");
   const requiredModelsPending = requiredModelsLatchRef.current || requiredModels.missing.length > 0;
+  const [refusedRequiredModels, setRefusedRequiredModels] = useState<string[]>([]);
 
   // The local setup's picks; null until the computer read and the policy have
   // resolved (see planLocalSetup), and the step shows its empty frame meanwhile.
@@ -918,7 +920,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const canContinue = (() => {
     switch (currentStepId) {
       case "required-models":
-        return !requiredModels.loading && requiredModels.missing.length === 0;
+        return canLeaveRequiredModels({
+          loading: requiredModels.loading,
+          missing: requiredModels.missing,
+          refused: refusedRequiredModels,
+        });
       case "permissions":
         return areRequiredPermissionsMet(permissions.micPermissionGranted);
       case "languages":
@@ -987,6 +993,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               loading={requiredModels.loading}
               refresh={requiredModels.refresh}
               onProceed={() => void continueFromCurrentStep()}
+              onRefusedChange={setRefusedRequiredModels}
             />
           </div>
         );

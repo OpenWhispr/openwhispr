@@ -38,13 +38,27 @@ const pc = (o) => ({
 const rtx = { name: "NVIDIA GeForce RTX 4060", vramMb: 8188 };
 
 const UNMANAGED = { status: "unmanaged", policy: null, appVersion: null };
-const managed = ({ llmModes = ["openwhispr", "local"], agentEnabled = true } = {}) => ({
+const managed = ({
+  llmModes = ["openwhispr", "local"],
+  agentEnabled = true,
+  speechModels,
+  textModels,
+} = {}) => ({
   status: "managed",
   appVersion: "1.0.0",
   policy: {
     version: 1,
-    transcription: { allowedModes: ["openwhispr", "local"], allowedByokProviders: [] },
-    llm: { allowedModes: llmModes, allowedByokProviders: [], allowedEnterpriseProviders: [] },
+    transcription: {
+      allowedModes: ["openwhispr", "local"],
+      allowedByokProviders: [],
+      ...(speechModels ? { allowedLocalModels: speechModels } : {}),
+    },
+    llm: {
+      allowedModes: llmModes,
+      allowedByokProviders: [],
+      allowedEnterpriseProviders: [],
+      ...(textModels ? { allowedLocalModels: textModels } : {}),
+    },
     features: { agentEnabled, webSearchEnabled: true },
     sharing: { externalLinkSharing: "allowed" },
     dataRetention: {
@@ -333,6 +347,39 @@ test("policy hides rows", async () => {
     allowed.rows.map((r) => r.id),
     ["dictation", "cleanup", "assistant"]
   );
+});
+
+test("an allow-list leaves out the text rows it doesn't approve", async () => {
+  const p = await plan(mac({}), { policy: managed({ textModels: [table.models.cleanup] }) });
+  assert.deepEqual(
+    p.rows.map((r) => r.id),
+    ["dictation", "cleanup"]
+  );
+});
+
+test("an allow-list that leaves out the table's dictation pick decides dictation", async () => {
+  const approved = await plan(mac({}), {
+    policy: managed({ speechModels: ["parakeet-tdt-0.6b-v3", "small"] }),
+  });
+  assert.equal(row(approved, "dictation").modelId, "parakeet-tdt-0.6b-v3");
+  assert.deepEqual(row(approved, "dictation").line, { key: "requiredByOrganization" });
+
+  // Prefers a model that covers the languages, and one this computer can run.
+  const japanese = await plan(mac({}), {
+    spokenLanguages: ["ja"],
+    policy: managed({ speechModels: ["parakeet-unified-en-0.6b", "small"] }),
+  });
+  assert.equal(row(japanese, "dictation").modelId, "small");
+  const olderMac = await plan(mac({ parakeetSupported: false }), {
+    policy: managed({ speechModels: ["parakeet-tdt-0.6b-v3", "base"] }),
+  });
+  assert.equal(row(olderMac, "dictation").modelId, "base");
+
+  const kept = await plan(mac({}), {
+    policy: managed({ speechModels: [table.models.dictation.english] }),
+  });
+  assert.equal(row(kept, "dictation").modelId, table.models.dictation.english);
+  assert.equal(row(kept, "dictation").line, null);
 });
 
 test("a policy that keeps AI models off the device says chat and notes run where it chose", async () => {
