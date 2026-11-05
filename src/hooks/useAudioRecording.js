@@ -433,7 +433,7 @@ export const useAudioRecording = (toast, options = {}) => {
             },
             onClick: async () => {
               if (!isCurrent()) return;
-              let copied = false;
+              let copied;
               try {
                 const result = await window.electronAPI?.writeClipboard?.(transcript);
                 copied = result?.success === true;
@@ -882,7 +882,7 @@ export const useAudioRecording = (toast, options = {}) => {
             });
           } else if (autoPasteEnabled && !result.assistantConversation) {
             const pasteStart = performance.now();
-            let pasteSucceeded = true;
+            let pasteSucceeded;
             if (result.selectionEdit?.sessionId) {
               const generation = dictationErrorGenerationRef.current;
               const replacement = await whilePasting(() =>
