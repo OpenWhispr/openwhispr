@@ -1,3 +1,4 @@
+const { runLocalModelOperation, assertLocalModelOperation } = require("./localModelPolicyGate");
 const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
@@ -174,6 +175,16 @@ class LlamaServerManager {
   }
 
   async start(modelPath, options = {}) {
+    return runLocalModelOperation(
+      this,
+      "llm",
+      this.localModelIdForPath?.(modelPath),
+      () => this._policyAllowedStart(modelPath, options),
+      { onAbort: () => this.stop() }
+    );
+  }
+
+  async _policyAllowedStart(modelPath, options = {}) {
     if (this.startupPromise) return this.startupPromise;
 
     // A change in drafter presence for the same model must still restart the
@@ -424,6 +435,7 @@ class LlamaServerManager {
     return new Promise((resolve, reject) => {
       debugLogger.debug("Spawning llama-server", { binary: binaryPath, port: this.port, args });
 
+      assertLocalModelOperation(this);
       this.process = spawn(binaryPath, args, {
         stdio: ["ignore", "pipe", "pipe"],
         windowsHide: true,
@@ -730,14 +742,29 @@ class LlamaServerManager {
       payload.chat_template_kwargs = { enable_thinking: false };
     }
 
+    assertLocalModelOperation(this);
     const templated = await this._requestJson("/apply-template", payload);
     if (typeof templated?.prompt !== "string") return null;
 
+    assertLocalModelOperation(this);
     const tokenized = await this._requestJson("/tokenize", { content: templated.prompt });
     return Array.isArray(tokenized?.tokens) ? tokenized.tokens.length : null;
   }
 
   async inference(messages, options = {}) {
+    // Nothing to authorize once stopped, which clears the model: that's the
+    // ordinary not-running error, not a refusal of a model nobody named.
+    if (!this.ready || !this.process) return this._policyAllowedInference(messages, options);
+    return runLocalModelOperation(
+      this,
+      "llm",
+      this.localModelIdForPath?.(this.modelPath),
+      () => this._policyAllowedInference(messages, options),
+      { onAbort: () => this.cancelInference() }
+    );
+  }
+
+  async _policyAllowedInference(messages, options = {}) {
     if (!this.ready || !this.process) {
       throw new Error("llama-server is not running");
     }

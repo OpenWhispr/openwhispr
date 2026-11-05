@@ -5,9 +5,10 @@ const Module = require("node:module");
 const managerModulePath = require.resolve("../../src/helpers/appleCalendarManager.js");
 const originalLoad = Module._load;
 
-function loadManager() {
+function loadManager(mocks = {}) {
   delete require.cache[managerModulePath];
   Module._load = function loadWithElectronMock(request, parent, isMain) {
+    if (request in mocks) return mocks[request];
     if (request === "electron") {
       return { BrowserWindow: { getAllWindows: () => [] } };
     }
@@ -193,4 +194,36 @@ test("Apple RSVP ignores another attendee's decline and follows current-user cha
     });
     assert.equal(mapped.self_response_status, response);
   }
+});
+
+test("the helper is launched with the stored lookback", () => {
+  const { EventEmitter } = require("node:events");
+  const launches = [];
+  const AppleCalendarManager = loadManager({
+    electron: { app: { isPackaged: true }, BrowserWindow: { getAllWindows: () => [] } },
+    child_process: {
+      spawn: (command, args) => {
+        launches.push({ command, args });
+        const child = new EventEmitter();
+        child.stdout = new EventEmitter();
+        child.stderr = new EventEmitter();
+        child.stdin = { write() {} };
+        child.kill = () => {};
+        return child;
+      },
+    },
+    "./binaryResolver": { resolveBundledBinary: () => "/bundle/macos-calendar-listener" },
+  });
+  const manager = new AppleCalendarManager({}, {});
+
+  assert.equal(manager._spawnHelper(false), true);
+  assert.equal(manager._spawnHelper(true), true);
+
+  assert.deepEqual(launches, [
+    { command: "/bundle/macos-calendar-listener", args: ["--lookback-seconds", "259200"] },
+    {
+      command: "/bundle/macos-calendar-listener",
+      args: ["--lookback-seconds", "259200", "--request"],
+    },
+  ]);
 });

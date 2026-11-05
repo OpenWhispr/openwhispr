@@ -790,3 +790,91 @@ test("lifecycle input kind prefers assistant, then translation, then dictation",
   );
   assert.equal(resolveLifecycleInputKind({}), "dictation");
 });
+
+test("an unconfigured cleanup warns once per broken setup, and again once it was fixed", async () => {
+  const { cleanupUnconfiguredNotice } = await load();
+  const settings = {
+    useCleanupModel: true,
+    cleanupMode: "providers",
+    cleanupProvider: "openai",
+    isSignedIn: false,
+  };
+  const skipped = { skipped: true, cleanupReachable: false, settings };
+
+  const first = cleanupUnconfiguredNotice(null, skipped);
+  assert.equal(first.forget, false);
+  assert.equal(first.notice.messageKey, "hooks.audioRecording.cleanupUnconfigured");
+  assert.equal(first.notice.settingsTarget, "llms");
+  assert.equal(first.notice.surface, "llm", "it gets the friendly cleanup toast");
+
+  const shownKey = first.notice.setupKey;
+  assert.equal(cleanupUnconfiguredNotice(shownKey, skipped).notice, null);
+  const otherProvider = cleanupUnconfiguredNotice(shownKey, {
+    ...skipped,
+    settings: { ...settings, cleanupProvider: "anthropic" },
+  });
+  assert.notEqual(otherProvider.notice, null, "a different broken setup warns again");
+
+  // Only a skipped dictation warns; a wake-word command was handled by the agent.
+  assert.deepEqual(cleanupUnconfiguredNotice(null, { ...skipped, skipped: false }), {
+    forget: false,
+    notice: null,
+  });
+
+  for (const fixed of [
+    { ...skipped, cleanupReachable: true },
+    { ...skipped, settings: { ...settings, useCleanupModel: false } },
+  ]) {
+    assert.deepEqual(cleanupUnconfiguredNotice(shownKey, fixed), { forget: true, notice: null });
+  }
+});
+
+test("signed out of OpenWhispr Cloud, the cleanup notice says so", async () => {
+  const { cleanupUnconfiguredNotice } = await load();
+  const cloud = {
+    useCleanupModel: true,
+    cleanupMode: "openwhispr",
+    cleanupCloudMode: "openwhispr",
+    isSignedIn: false,
+  };
+  const { notice } = cleanupUnconfiguredNotice(null, {
+    skipped: true,
+    cleanupReachable: false,
+    settings: cloud,
+  });
+  assert.equal(notice.messageKey, "hooks.audioRecording.cleanupSignedOut");
+  assert.equal(notice.settingsTarget, "llms");
+  assert.equal(notice.surface, "llm");
+
+  const byok = cleanupUnconfiguredNotice(null, {
+    skipped: true,
+    cleanupReachable: false,
+    settings: { ...cloud, cleanupCloudMode: "byok" },
+  });
+  assert.equal(byok.notice.messageKey, "hooks.audioRecording.cleanupUnconfigured");
+});
+
+test("a cleanup model the org blocked says so instead of calling cleanup unconfigured", async () => {
+  const { cleanupUnconfiguredNotice } = await load();
+  const settings = {
+    useCleanupModel: true,
+    cleanupMode: "local",
+    cleanupProvider: "qwen",
+    isSignedIn: true,
+    policyBlockedLocalScopes: ["dictationCleanup"],
+  };
+  const skipped = { skipped: true, cleanupReachable: false, settings };
+
+  const { notice } = cleanupUnconfiguredNotice(null, skipped);
+  assert.equal(notice.messageKey, "models.policy.modelBlocked");
+  assert.equal(notice.settingsTarget, "llms");
+  assert.equal(notice.surface, "llm");
+  assert.equal(cleanupUnconfiguredNotice(notice.setupKey, skipped).notice, null);
+
+  // Lifting the block leaves an ordinary unconfigured setup, which warns as itself.
+  const unconfigured = cleanupUnconfiguredNotice(notice.setupKey, {
+    ...skipped,
+    settings: { ...settings, policyBlockedLocalScopes: [] },
+  });
+  assert.equal(unconfigured.notice.messageKey, "hooks.audioRecording.cleanupUnconfigured");
+});

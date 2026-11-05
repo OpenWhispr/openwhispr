@@ -369,10 +369,12 @@ async function clipboardFallback(t) {
 test("skipped Accessibility reports copied, not pasted after batch and streaming dictation", async (t) => {
   const h = await clipboardFallback(t);
   for (const source of ["local", "streaming"]) {
+    h.toasts.length = 0;
     await h.complete(source);
     const card = h.toasts.at(-1);
     assert.ok(card, "clipboard fallback must be visible");
     assert.equal(card.title, "Copied, not pasted");
+    assert.equal(card.variant, "default");
     assert.match(card.description, /Accessibility/);
     assert.match(card.description, /Cmd\+V/);
     assert.doesNotMatch(card.description, /Copy your text below/);
@@ -383,10 +385,27 @@ test("skipped Accessibility reports copied, not pasted after batch and streaming
       ["Open Settings", "Don't show again"]
     );
     await card.actions[0].onClick();
+    assert.equal(h.manager.saves, 1);
+    h.manager = await h.remount();
+    h.manager.safePaste = async () => ({ pasted: false, reason: "accessibility-missing" });
   }
   assert.equal(h.settingsCalls(), 2);
-  assert.equal(h.manager.saves, 2);
   assert.deepEqual(h.writes, []);
+});
+
+test("the copied notice shows once per launch and every dictation is still saved", async (t) => {
+  const h = await clipboardFallback(t);
+  await h.complete();
+  assert.equal(h.toasts.length, 1);
+  h.toasts.at(-1).onClose();
+  await h.complete();
+  assert.equal(h.toasts.length, 1, "closing the card does not bring it back on the next dictation");
+  assert.equal(h.manager.saves, 2);
+  assert.equal(globalThis.window.localStorage.getItem("pastePermissionNoticeDismissed"), null);
+  h.manager = await h.remount();
+  h.manager.safePaste = async () => ({ pasted: false, reason: "accessibility-missing" });
+  await h.complete();
+  assert.equal(h.toasts.length, 2, "the next launch shows it again until Don't show again");
 });
 
 test("Don't show again persists across hook remounts without changing clipboard fallback", async (t) => {
@@ -395,8 +414,6 @@ test("Don't show again persists across hook remounts without changing clipboard 
   assert.ok(h.toasts.at(-1));
   await h.toasts.at(-1).actions[1].onClick();
   h.toasts.at(-1).onClose();
-  await h.complete();
-  assert.equal(h.toasts.length, 1);
   assert.equal(globalThis.window.localStorage.getItem("accessibilitySkipped"), "true");
   h.manager = await h.remount();
   h.manager.safePaste = async () => ({ pasted: false, reason: "accessibility-missing" });

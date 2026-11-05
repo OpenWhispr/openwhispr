@@ -1,3 +1,4 @@
+const { runLocalModelOperation, localModelOperationSignal } = require("./localModelPolicyGate");
 const fs = require("fs");
 const path = require("path");
 const debugLogger = require("./debugLogger");
@@ -14,6 +15,7 @@ const {
 const { getSafeTempDir } = require("./safeTempDir");
 const { createAbortError } = require("./abortError");
 const ParakeetWsServer = require("./parakeetWsServer");
+const { splitAtPauses } = require("./parakeetSegmentation");
 const {
   getModelRuntime,
   getModelType,
@@ -110,6 +112,20 @@ class ParakeetServerManager {
   }
 
   async transcribe(audioBuffer, options = {}) {
+    return runLocalModelOperation(
+      this,
+      "transcription",
+      options.modelName ?? "",
+      () =>
+        this._policyAllowedTranscribe(audioBuffer, {
+          ...options,
+          signal: localModelOperationSignal(this, options.signal),
+        }),
+      { onAbort: () => this.stopServer() }
+    );
+  }
+
+  async _policyAllowedTranscribe(audioBuffer, options = {}) {
     // signal is optional; only cancellable uploads pass one. Aborting stops
     // scheduling further segments — the in-flight one finishes server-side.
     const { modelName = "parakeet-tdt-0.6b-v3", language, signal } = options;
@@ -158,9 +174,9 @@ class ParakeetServerManager {
           : getModelType(modelName) === "cohere-transcribe"
             ? COHERE_MAX_SEGMENT_SECONDS
             : MAX_SEGMENT_SECONDS;
-      const maxSegmentBytes = maxSegmentSeconds * SAMPLE_RATE * BYTES_PER_SAMPLE;
+      const segments = splitAtPauses(samples, { sampleRate: SAMPLE_RATE, maxSegmentSeconds });
 
-      if (samples.length <= maxSegmentBytes) {
+      if (segments.length === 1) {
         const result = await this.wsServer.transcribe(samples, SAMPLE_RATE, { signal });
         if (result.text?.trim()) return result;
         throwIfAborted();
@@ -175,15 +191,12 @@ class ParakeetServerManager {
         return { ...retry, elapsed: (result.elapsed || 0) + (retry.elapsed || 0) };
       }
 
+      const shortestSegmentBytes = Math.min(...segments.map((segment) => segment.length));
       debugLogger.debug("Parakeet segmenting long audio", {
         durationSeconds,
-        segmentCount: Math.ceil(samples.length / maxSegmentBytes),
+        segmentCount: segments.length,
+        shortestSegmentSeconds: shortestSegmentBytes / BYTES_PER_SAMPLE / SAMPLE_RATE,
       });
-
-      const segments = [];
-      for (let offset = 0; offset < samples.length; offset += maxSegmentBytes) {
-        segments.push(samples.subarray(offset, offset + maxSegmentBytes));
-      }
 
       const decodeSegment = async (segment, segmentIndex) => {
         throwIfAborted();
@@ -266,7 +279,7 @@ class ParakeetServerManager {
       return { success: true, port: this.wsServer.port };
     } catch (error) {
       debugLogger.error("Failed to start parakeet WS server", { error: error.message });
-      return { success: false, reason: error.message };
+      return { success: false, reason: error.message, code: error.code };
     }
   }
 

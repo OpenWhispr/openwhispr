@@ -13,6 +13,7 @@ const HotkeyManager = require("./hotkeyManager");
 const { isGlobeLikeHotkey } = HotkeyManager;
 const DragManager = require("./dragManager");
 const MainWindowPlacementCoordinator = require("./mainWindowPlacementCoordinator");
+const { plasmaWorkAreas } = require("./plasmaWorkAreas");
 const MenuManager = require("./menuManager");
 const DevServerManager = require("./devServerManager");
 const {
@@ -36,6 +37,7 @@ const {
 } = require("./dictationLifecycle");
 const { DEV_SERVER_PORT } = DevServerManager;
 const DRAG_MOVE_TOLERANCE_PX = 2;
+const ERR_ABORTED = -3;
 const {
   MAIN_WINDOW_CONFIG,
   CONTROL_PANEL_CONFIG,
@@ -80,6 +82,12 @@ class WindowManager {
     this.onOnboardingDemoTeardown = null;
     // Set by main.js so the tray's listen item rebuilds with dictation state.
     this.onDictationStateChanged = null;
+    // Set by IPCHandlers: the org-policy refusal of meeting recording, or null.
+    this.getMeetingRecordingRefusal = () => null;
+    // Set by IPCHandlers: the same refusal, fetching the policy if it hasn't loaded.
+    this.resolveMeetingRecordingRefusal = async () => null;
+    // Set by main.js: an app started to the tray creates no control panel.
+    this.startedMinimized = false;
     this.notificationWindow = null;
     this._meetingNotificationOwner = null;
     this.meetingRecentDestinations = [];
@@ -109,6 +117,7 @@ class WindowManager {
     this.loadErrorShown = false;
     this.macCompoundPushState = null;
     this.winPushState = null;
+    this._nativeKeyListenersReady = false;
     this._cachedActivationMode = "tap";
     this._floatingIconAutoHide = false;
     this._panelStartPosition = "bottom-right";
@@ -129,8 +138,12 @@ class WindowManager {
   }
 
   async createMainWindow() {
+    void plasmaWorkAreas.start(() => {
+      this.positionAgentDictationPill();
+      return this._reanchorMainWindow();
+    });
     const cursorPos = screen.getCursorScreenPoint();
-    const display = screen.getDisplayNearestPoint(cursorPos);
+    const display = plasmaWorkAreas.resolve(screen.getDisplayNearestPoint(cursorPos));
     const position = WindowPositionUtil.getMainWindowPosition(
       display,
       null,
@@ -214,6 +227,7 @@ class WindowManager {
     this._assistantPanelOpen = Boolean(open);
     if (!this._assistantPanelOpen) {
       this._assistantPanelBusy = false;
+      this.assistantPasteTarget?.clear();
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       if (this._assistantPanelOpen) {
@@ -231,21 +245,50 @@ class WindowManager {
         if (process.platform !== "darwin") {
           this.mainWindow.focus();
         }
+        // Linux: focusable:false made the pill an override-redirect X11 window,
+        // which no window manager focuses, so focus() can't reach it there.
+        if (process.platform === "linux") this._focusLinuxMainWindow();
       } else {
-        // On Windows/Linux the pill is a normal/toolbar window, so focus()
-        // activated OpenWhispr — blur before dropping focusability to hand
-        // the foreground back to the app the user was in. On macOS nothing
-        // was activated, and blur() would only churn key-window state.
+        // Read before blur(): it clears isFocused() even where X focus stays
+        // on the Linux pill.
+        const hadFocus = this.mainWindow.isFocused();
+        // On Windows the pill is a normal window, so focus() activated
+        // OpenWhispr — blur before dropping focusability to hand the
+        // foreground back to the app the user was in (Linux needs the remap
+        // below). On macOS nothing was activated, and blur() would only churn
+        // key-window state.
         if (process.platform !== "darwin") {
           this.mainWindow.blur();
         }
         this.mainWindow.setFocusable(false);
+        if (process.platform === "linux") {
+          // A click on Close sends its focus request before the panel closes,
+          // and the helper can still be granting it; hand back after it lands.
+          const focusRequest = this._linuxFocusRequest;
+          if (focusRequest) {
+            void focusRequest.then(() => {
+              if (!this._assistantPanelOpen) this.returnLinuxKeyboardFocus();
+            });
+          } else if (hadFocus) {
+            this.returnLinuxKeyboardFocus();
+          }
+        }
       }
       this.enforceMainWindowOnTop();
     }
     if (this._assistantPanelOpen) this.showAgentDictationPill();
     else this.hideAgentDictationPill();
     this._updateMainContentProtection();
+  }
+
+  // blur() leaves X focus on the Linux pill, and GNOME hands focus back to the
+  // previous app only when the focused override-redirect window unmaps. A hidden
+  // pill holds no focus, and remapping it would undo whatever hid it.
+  returnLinuxKeyboardFocus() {
+    const win = this.mainWindow;
+    if (!win || win.isDestroyed() || !win.isVisible()) return;
+    win.hide();
+    win.showInactive();
   }
 
   setAssistantPanelBusy(busy) {
@@ -273,15 +316,31 @@ class WindowManager {
     }
   }
 
-  async setMainWindowInputRegion(region) {
+  _mainWindowInputRegion() {
     const win = this.mainWindow;
-    if (process.platform !== "linux" || !win || win.isDestroyed()) return false;
     if (this._linuxWindowInputRegion?.window !== win) {
       this._linuxWindowInputRegion?.stop();
       this._linuxWindowInputRegion = { window: win, ...createLinuxWindowInputRegion(win) };
     }
+    return this._linuxWindowInputRegion;
+  }
+
+  // The writer logs its own failure.
+  _focusLinuxMainWindow() {
+    const request = this._mainWindowInputRegion()
+      .focus()
+      .catch(() => {});
+    this._linuxFocusRequest = request;
+    void request.then(() => {
+      if (this._linuxFocusRequest === request) this._linuxFocusRequest = null;
+    });
+  }
+
+  async setMainWindowInputRegion(region) {
+    const win = this.mainWindow;
+    if (process.platform !== "linux" || !win || win.isDestroyed()) return false;
     try {
-      await this._linuxWindowInputRegion.set(region);
+      await this._mainWindowInputRegion().set(region);
       return !win.isDestroyed() && win.isVisible() && !win.isMinimized();
     } catch (error) {
       // The writer rejects after its process closes, so an old shape cannot
@@ -527,10 +586,12 @@ class WindowManager {
   // The pill is bottom-anchored, so the display that owns its bottom-center
   // point is the one that must keep it through resizes and repositions.
   _getMainWindowDisplayFor(bounds) {
-    return screen.getDisplayNearestPoint({
-      x: bounds.x + bounds.width / 2,
-      y: bounds.y + bounds.height,
-    });
+    return plasmaWorkAreas.resolve(
+      screen.getDisplayNearestPoint({
+        x: bounds.x + bounds.width / 2,
+        y: bounds.y + bounds.height,
+      })
+    );
   }
 
   _resolveMainWindowSize(sizeKey, workArea, request) {
@@ -801,6 +862,7 @@ class WindowManager {
 
     this.macCompoundPushState = {
       active: true,
+      hotkey,
       downTime,
       isRecording: false,
       requiredModifiers,
@@ -827,6 +889,9 @@ class WindowManager {
     if (!this.macCompoundPushState.requiredModifiers.has(modifier)) {
       return;
     }
+
+    // The press came through globalShortcut, which can't see the release.
+    this.hotkeyManager.logHotkeyEvent("macos-native", "up", this.macCompoundPushState.hotkey);
 
     if (this.macCompoundPushState.safetyTimeoutId) {
       clearTimeout(this.macCompoundPushState.safetyTimeoutId);
@@ -1104,6 +1169,15 @@ class WindowManager {
       return;
     }
 
+    // Each recording may become a voice command the panel answers; the panel takes the app it
+    // was started over as its paste target only then (assistantPasteTarget.js). Follow-ups
+    // spoken while the panel is open count too, so a capture is never an older recording's.
+    if (
+      this._dictationLifecycleState === DICTATION_LIFECYCLE.IDLE &&
+      nextState !== DICTATION_LIFECYCLE.IDLE
+    ) {
+      this.assistantPasteTarget?.noteRecordingStart();
+    }
     this._dictationLifecycleState = nextState;
     this._dictationInputKind = nextInputKind;
     this._isDictatingToggle = isDictationRecording(nextState);
@@ -1162,6 +1236,13 @@ class WindowManager {
 
   sendToggleTranslation() {
     this._sendDictationToggle("toggle-translation", "translation");
+  }
+
+  // The pill explains a refused meeting start the way it explains a refused
+  // tray action: the start may have come from a hotkey with nothing else shown.
+  sendMeetingStartRefused(code) {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+    this.mainWindow.webContents.send("meeting-start-refused", code);
   }
 
   // The tray's Ask assistant. Only the renderer can open the panel, and only it
@@ -1258,12 +1339,21 @@ class WindowManager {
     return true;
   }
 
+  // Called once dispatch handlers and optional slots are installed. Registration
+  // may still be reading the saved dictation key or falling back to another backend.
+  async initializeNativeKeyListeners() {
+    await this.hotkeyManager.registrationReady;
+    this._nativeKeyListenersReady = true;
+    this.reconcileNativeKeyListeners();
+  }
+
   /**
    * Sync the native low-level key listeners (Windows/Linux) so every hotkey slot
    * that needs one is watched. Call after any change to a slot hotkey or the
    * activation mode. No-op during hotkey capture (listeners are stopped then).
    */
   reconcileNativeKeyListeners() {
+    if (this.isQuitting || !this._nativeKeyListenersReady) return;
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     if (this.hotkeyManager.isInListeningMode()) return;
     const activationMode = this.getActivationMode();
@@ -1482,6 +1572,7 @@ class WindowManager {
     });
 
     this.controlPanelWindow.on("closed", () => {
+      this.meetingDetectionEngine?.closeCurrentMeetingNote?.();
       this._clearControlPanelVisibilityTimer();
       this.endOnboardingDemo();
       this.controlPanelWindow = null;
@@ -1495,7 +1586,16 @@ class WindowManager {
 
     MenuManager.setupControlPanelMenu(this.controlPanelWindow, () => this.openSettings());
 
+    // The initial load may already own a queued note; only release a replaced document's session.
+    // On commit, not on start: a navigation will-navigate blocks leaves the document in place.
+    let controlPanelDocumentLoaded = false;
+    this.controlPanelWindow.webContents.on("did-navigate", () => {
+      if (!controlPanelDocumentLoaded) return;
+      controlPanelDocumentLoaded = false;
+      this.meetingDetectionEngine?.closeCurrentMeetingNote?.();
+    });
     this.controlPanelWindow.webContents.on("did-finish-load", () => {
+      controlPanelDocumentLoaded = true;
       // Every fresh document starts unresolved. AppRouter releases the gate
       // only after it commits the normal app, so OAuth/onboarding reloads cannot
       // expose the dictation pill, hotkeys, or popup surfaces in between.
@@ -1510,6 +1610,8 @@ class WindowManager {
         if (!isMainFrame) {
           return;
         }
+        // An aborted navigation leaves the document in place; any other failure replaced it.
+        if (errorCode !== ERR_ABORTED) this.meetingDetectionEngine?.closeCurrentMeetingNote?.();
         if (process.env.NODE_ENV !== "development") {
           this.showLoadFailureDialog("Control panel", errorCode, errorDescription, validatedURL);
         }
@@ -1520,6 +1622,7 @@ class WindowManager {
     );
 
     this.controlPanelWindow.webContents.on("render-process-gone", (_event, details) => {
+      this.meetingDetectionEngine?.closeCurrentMeetingNote?.();
       if (details.reason === "crashed" || details.reason === "killed" || details.reason === "oom") {
         debugLogger.error(
           "Control panel renderer process gone",
@@ -1625,12 +1728,17 @@ class WindowManager {
       }
     }
     const bounds = pid ? await this.textEditMonitor.getTargetWindowBounds(pid) : null;
-    return bounds
-      ? screen.getDisplayMatching(bounds)
-      : screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+    return plasmaWorkAreas.resolve(
+      bounds
+        ? screen.getDisplayMatching(bounds)
+        : screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+    );
   }
 
   _repositionToActiveDisplay(targetPidPromise) {
+    // A panel edit that leaves the root work area unchanged raises no display
+    // event, so look again on every show; a change re-anchors the pill.
+    void plasmaWorkAreas.refresh();
     return this._mainWindowPlacementCoordinator.request(
       () => this._resolveActiveDisplay(targetPidPromise),
       (activeDisplay, isCurrent) =>
@@ -1680,6 +1788,10 @@ class WindowManager {
       { from: currentBounds, to: newPos, displayId: activeDisplay.id },
       "window"
     );
+    return this._moveMainWindowTo(newPos);
+  }
+
+  _moveMainWindowTo(newPos) {
     this._clearRendererResizeMask();
     this.mainWindow.setBounds(newPos);
     // This is an intentional native move, not a drag. Keep resize restoration
@@ -1689,6 +1801,35 @@ class WindowManager {
     this._activeHorizontalDirection = null;
     this._notifyMainWindowHorizontalDirection();
     return { applied: true, bounds: newPos };
+  }
+
+  // Corrected work areas can arrive after the pill was placed: plasmashell
+  // answers after startup, or a panel changed. An auto-placed pill moves to its
+  // display's anchor; one the user dragged stays where they put it.
+  _reanchorMainWindow() {
+    return this._enqueueMainWindowMutation(() => {
+      if (
+        !this.mainWindow ||
+        this.mainWindow.isDestroyed() ||
+        this.dragManager.isDragActive() ||
+        this._mainWindowPlacementCoordinator.hasManualPosition()
+      ) {
+        return;
+      }
+      const currentBounds = this.mainWindow.getBounds();
+      const newPos = WindowPositionUtil.getMainWindowPosition(
+        this._getMainWindowDisplayFor(currentBounds),
+        { width: currentBounds.width, height: currentBounds.height },
+        this._panelStartPosition
+      );
+      if (newPos.x === currentBounds.x && newPos.y === currentBounds.y) return;
+      debugLogger.debug(
+        "[WindowManager] Re-anchoring dictation panel to the corrected work area",
+        { from: currentBounds, to: newPos },
+        "window"
+      );
+      this._moveMainWindowTo(newPos);
+    });
   }
 
   showDictationPanel(options = {}) {
@@ -1790,9 +1931,12 @@ class WindowManager {
     this._controlPanelVisibilityTimer = null;
   }
 
-  _showControlPanel() {
+  _showControlPanel({ onlyBeforeFirstShow = false } = {}) {
     const win = this.controlPanelWindow;
     if (!win || win.isDestroyed()) return;
+    // onlyBeforeFirstShow reveals a new panel only while its visibility timer is pending;
+    // after that, a hidden or minimized panel stays as the user left it.
+    if (onlyBeforeFirstShow && this._controlPanelVisibilityTimer === null) return;
     // Cancel the backstop either way: once the window has been shown on purpose,
     // a later timer firing could pull it back out of the tray.
     this._clearControlPanelVisibilityTimer();
@@ -1881,7 +2025,7 @@ class WindowManager {
       this._onboardingRestoreBounds = null;
       this._onboardingWindowMode = null;
       this._onboardingWindowState = null;
-      this._showControlPanel();
+      this._showControlPanel({ onlyBeforeFirstShow: true });
       return true;
     }
 
@@ -1900,7 +2044,7 @@ class WindowManager {
     this._applyOnboardingWindowChrome(win, mode);
 
     if (this._onboardingWindowMode === mode) {
-      this._showControlPanel();
+      this._showControlPanel({ onlyBeforeFirstShow: true });
       return true;
     }
 
@@ -1914,13 +2058,13 @@ class WindowManager {
       current.height === next.height
     ) {
       this._onboardingWindowMode = mode;
-      this._showControlPanel();
+      this._showControlPanel({ onlyBeforeFirstShow: true });
       return true;
     }
 
     win.setContentBounds(next, true);
     this._onboardingWindowMode = mode;
-    this._showControlPanel();
+    this._showControlPanel({ onlyBeforeFirstShow: true });
     return true;
   }
 
@@ -1964,7 +2108,7 @@ class WindowManager {
     }
 
     const mainBounds = this.mainWindow.getBounds();
-    const display = screen.getDisplayMatching(mainBounds);
+    const display = plasmaWorkAreas.resolve(screen.getDisplayMatching(mainBounds));
     const mainSide = resolveHorizontalWindowDirection(
       mainBounds,
       display,
@@ -1992,7 +2136,7 @@ class WindowManager {
     }
 
     const mainBounds = this.mainWindow.getBounds();
-    const display = screen.getDisplayMatching(mainBounds);
+    const display = plasmaWorkAreas.resolve(screen.getDisplayMatching(mainBounds));
     const nextSize =
       surfaceHeight === null
         ? AGENT_DICTATION_PILL_SIZE
@@ -2148,6 +2292,21 @@ class WindowManager {
           );
         });
       }
+      // A click never focuses the pill, so returning to an open assistant
+      // panel from another app has to take focus again. isFocused() follows X
+      // focus, so this misses a compositor that hands the keyboard to a native
+      // Wayland app without moving X focus off the pill. A request still in
+      // flight already covers the click, and repeats would queue behind it.
+      win.webContents.on("input-event", (_event, input) => {
+        if (
+          input.type === "mouseDown" &&
+          this._assistantPanelOpen &&
+          !win.isFocused() &&
+          !this._linuxFocusRequest
+        ) {
+          this._focusLinuxMainWindow();
+        }
+      });
     }
 
     // Safety timeout: force show the window if ready-to-show doesn't fire within 10 seconds
@@ -2197,7 +2356,16 @@ class WindowManager {
   }
 
   async showMeetingNotification(promptData, { autoDismiss = true } = {}) {
-    if (this._onboardingActive) return false;
+    if (this._onboardingActive) {
+      // No card will settle this detection, and while it stays active the
+      // engine skips every repeat of it.
+      if (promptData?.detectionId) {
+        this.meetingDetectionEngine?.handleDetectionNotificationClosed?.(promptData.detectionId, {
+          flushQueued: false,
+        });
+      }
+      return false;
+    }
     this._cancelMeetingNavigation("STALE_NOTIFICATION");
     const previousOwner = this._meetingNotificationOwner;
     if (
@@ -2336,7 +2504,8 @@ class WindowManager {
     }
     if (this.notificationWindow !== win) return false;
     if (this._onboardingActive) {
-      this.dismissMeetingNotification();
+      // Queued prompts would only reach the same closed gate.
+      this.dismissMeetingNotification({ flushQueued: false });
       return false;
     }
 
@@ -2360,7 +2529,7 @@ class WindowManager {
   // "ready" must not clear the fallback that would force-show its replacement.
   showNotificationWindow(ownerWebContents) {
     if (this._onboardingActive) {
-      this.dismissMeetingNotification();
+      this.dismissMeetingNotification({ flushQueued: false });
       return;
     }
     const win = this.notificationWindow;
@@ -2409,8 +2578,16 @@ class WindowManager {
   async queueMeetingNoteNavigation(payload, options) {
     if (!payload.navigationId) {
       this._pendingMeetingNoteNavigation = payload;
-      await this.createControlPanelWindow(options);
-      this.sendToControlPanel("meeting-note-navigation-pending");
+      try {
+        await this.createControlPanelWindow(options);
+        if (this._pendingMeetingNoteNavigation === payload)
+          this.sendToControlPanel("meeting-note-navigation-pending");
+      } catch (error) {
+        if (this._pendingMeetingNoteNavigation === payload)
+          this._pendingMeetingNoteNavigation = null;
+        this.meetingDetectionEngine?.abandonMeetingNote?.(payload.noteSessionId);
+        throw error;
+      }
       return;
     }
     if (!this.isMeetingNotificationOwner(options.owner))
@@ -2475,8 +2652,19 @@ class WindowManager {
     return result;
   }
 
+  isMeetingNoteNavigationPending(noteSessionId) {
+    if (noteSessionId == null) return false;
+    return (
+      this._pendingMeetingNoteNavigation?.noteSessionId === noteSessionId ||
+      // A navigation still waiting for a reloading panel isn't pending yet.
+      this._meetingNavigationOperation?.payload.noteSessionId === noteSessionId
+    );
+  }
+
   _settleMeetingNavigation(operation, result) {
     if (this._meetingNavigationOperation !== operation) return;
+    if (!result.success)
+      this.meetingDetectionEngine?.abandonMeetingNote?.(operation.payload.noteSessionId);
     this._meetingNavigationOperation = null;
     clearTimeout(operation.timer);
     operation.panel?.removeListener("closed", operation.onClose);

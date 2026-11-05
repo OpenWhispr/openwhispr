@@ -334,8 +334,12 @@ test("the real clipboard fallback card keeps Settings open and dismisses on Don'
   const button = (label) =>
     findElement(h.container, (e) => e.tagName === "BUTTON" && e.textContent.trim() === label);
   const card = findElement(h.container, (e) => e.tagName === "SECTION");
-  assert.equal(card.getAttribute("role"), "alert");
-  assert.equal(card.getAttribute("aria-live"), "assertive");
+  assert.equal(card.getAttribute("role"), "status");
+  assert.equal(card.getAttribute("aria-live"), "polite");
+  const errorIcon = (root) =>
+    findElement(root, (e) => /\btext-destructive\b/.test(e.getAttribute("class") ?? ""));
+  assert.equal(errorIcon(card), null, "a notice carries no error icon");
+  assert.ok(findElement(h.container, (e) => e.getAttribute("data-toast-stack") !== null));
   assert.match(card.getAttribute("class"), /\bbg-surface-0\b/);
   assert.ok(h.container.textContent.includes("Copied, not pasted"));
   assert.ok(button(copy.openSettings));
@@ -346,4 +350,17 @@ test("the real clipboard fallback card keeps Settings open and dismisses on Don'
   await React.act(async () => t.mock.timers.tick(201));
   assert.equal(context.toastCount, 0);
   assert.equal(isPastePermissionNoticeDismissed(), true);
+
+  await React.act(async () =>
+    context.toast({
+      title: "Allow automatic pasting",
+      variant: "destructive",
+      presentation: "dictation-error",
+      duration: 0,
+      actions: [],
+    })
+  );
+  const errorCard = findElement(h.container, (e) => e.tagName === "SECTION");
+  assert.equal(errorCard.getAttribute("role"), "alert");
+  assert.ok(errorIcon(errorCard));
 });

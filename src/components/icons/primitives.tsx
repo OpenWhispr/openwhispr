@@ -176,11 +176,73 @@ const TableMark = glyph(
   </>
 );
 
+// The Dictionary page's "Hide for me": Nucleo has an eye but no crossed-out one,
+// so these are the paths of Lucide's eye-off icon (https://lucide.dev), used
+// under Lucide's ISC License:
+//
+//   Copyright (c) 2026 Lucide Icons and Contributors
+//
+//   Permission to use, copy, modify, and/or distribute this software for any
+//   purpose with or without fee is hereby granted, provided that the above
+//   copyright notice and this permission notice appear in all copies.
+//
+//   THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+//   WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+//   MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+//   ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+//   WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+//   ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+//   OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+const EyeOffMark = glyph(
+  <>
+    <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+    <path d="M6.61 6.61A13.53 13.53 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+    <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+    <path d="m2 2 20 20" />
+  </>
+);
+
+// Settings > Tone & Style, as drawn in the design: a square with a plus and a
+// sparkle at its corner.
+const SquareSparkleMark = glyph(
+  <>
+    <path d="M14 4H7a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-7" />
+    <path d="M12 9.5v5M9.5 12h5" />
+    <path d="M19 2.5v5M16.5 5h5" />
+  </>
+);
+
+// The skill icon: a tile on two layers. Each layer is its own group, drawn bottom first,
+// so skills/SkillIcon.tsx can drop them in one after another.
+const SkillStackMark = glyph(
+  <>
+    <g data-layer="3">
+      <path d="M2.5 16.5 12 21.5l9.5-5" />
+    </g>
+    <g data-layer="2">
+      <path d="M2.5 12 12 17l9.5-5" />
+    </g>
+    <g data-layer="1">
+      <path d="M12 2 2.5 7 12 12l9.5-5L12 2z" />
+    </g>
+  </>
+);
+
+// The sidebar's workspace switcher.
+const ChevronsUpDownMark = glyph(
+  <>
+    <path d="m7 15 5 5 5-5" />
+    <path d="m7 9 5-5 5 5" />
+  </>
+);
+
+export const ChevronsUpDown = createIcon("chevrons-up-down", ChevronsUpDownMark);
 export const Circle = createIcon("circle", CircleMark);
 export const Square = createIcon("square", SquareMark);
 export const SquareSlash = createIcon("square-slash", SquareSlashMark);
 export const Bold = createIcon("bold", BoldMark);
 export const CopyRounded = createIcon("copy-rounded", CopyRoundedMark);
+export const EyeOff = createIcon("eye-off", EyeOffMark);
 export const FolderRounded = createIcon("folder-rounded", FolderRoundedMark);
 export const Heading = createIcon("heading", HeadingMark);
 export const Italic = createIcon("italic", ItalicMark);
@@ -189,5 +251,7 @@ export const ListChecks = createIcon("list-checks", ListChecksMark);
 export const ListEnd = createIcon("list-end", ListEndMark);
 export const ListOrdered = createIcon("list-ordered", ListOrderedMark);
 export const Quote = createIcon("quote", QuoteMark);
+export const SkillStack = createIcon("skill-stack", SkillStackMark);
 export const Strikethrough = createIcon("strikethrough", StrikethroughMark);
 export const Table = createIcon("table", TableMark);
+export const SquareSparkle = createIcon("square-sparkle", SquareSparkleMark);

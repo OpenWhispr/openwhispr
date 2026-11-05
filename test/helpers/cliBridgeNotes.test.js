@@ -41,6 +41,7 @@ test("PATCH /v1/notes/:id is not_found for a deleted note and leaves it unchange
   if (!ctx) return;
 
   const { id } = ctx.db.saveNote("Original", "content").note;
+  ctx.db.markNoteSynced(id, "cloud-note-deleted");
   ctx.db.deleteNote(id);
 
   assert.throws(() => call(ctx.bridge, "PATCH", `/v1/notes/${id}`, { title: "Edited" }), {

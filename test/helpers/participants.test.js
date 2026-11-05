@@ -30,6 +30,22 @@ test("participant rosters derive total speakers from non-self attendees plus the
   assert.equal(resolveParticipantExpectedSpeakerCount([]), null);
 });
 
+test("a room on the note is never counted as a speaker", async () => {
+  const { resolveParticipantExpectedSpeakerCount, resolveExpectedSpeakerCount } = await load();
+  const room = { email: "room@resource.calendar.google.com", self: false, resource: true };
+  const participants = [
+    { email: "recorder@example.com", self: true },
+    { email: "one@example.com" },
+  ];
+
+  assert.equal(resolveParticipantExpectedSpeakerCount([...participants, room]), 2);
+  assert.equal(resolveParticipantExpectedSpeakerCount([room]), null);
+  assert.equal(
+    resolveExpectedSpeakerCount({ participants: JSON.stringify([...participants, room]) }),
+    2
+  );
+});
+
 test("active participant changes synchronize the session count before a manual override", async () => {
   const { resolveParticipantSpeakerCountSync } = await load();
 

@@ -29,6 +29,7 @@ export function resolveDictationAgentInference(settings, { isCloudAgent = false 
         inferenceScope: /** @type {const} */ ("dictationAgent"),
         provider: managed.provider,
         disableThinking: settings.dictationAgentDisableThinking,
+        reasoningEffort: settings.dictationAgentReasoningEffort,
       },
     };
   }
@@ -68,6 +69,7 @@ export function resolveDictationAgentInference(settings, { isCloudAgent = false 
       customApiKey:
         isCustom || isSelfHosted ? settings.dictationAgentCustomApiKey || undefined : undefined,
       disableThinking: settings.dictationAgentDisableThinking,
+      reasoningEffort: settings.dictationAgentReasoningEffort,
     },
   };
 }
@@ -118,6 +120,7 @@ export function resolveDictationAgentVisionInference(settings, { isSignedIn = fa
       baseUrl: isCustom ? resolved.cloudBaseUrl || undefined : undefined,
       customApiKey: isCustom ? customApiKey || undefined : undefined,
       disableThinking: resolved.disableThinking,
+      reasoningEffort: resolved.reasoningEffort,
     },
   };
 }
@@ -131,7 +134,9 @@ export function resolveDictationAgentVisionInference(settings, { isSignedIn = fa
  * (assistant toggled off, a BYOK mode with no model) the panel falls back to
  * Chat, its previous home. Profiles from before onboarding fanned selections out
  * are seeded from Chat on upgrade (settingsStore), so the fallback is not what
- * keeps them off the cloud default.
+ * keeps them off the cloud default. An assistant whose local model the org blocked
+ * is not merely unreachable: it stays on its own scope, and is refused there,
+ * since Chat (or its vision override) could carry the request to a remote model.
  *
  * Screenshots follow the dictation route's rules (resolveAgentImageTarget): a
  * configured vision override is trusted to see images and swapped in; an
@@ -162,18 +167,23 @@ export function resolveChatStreamingInference(
     isProviderImageWired = () => false,
   } = {}
 ) {
-  const onAgentScope =
+  const agentPolicyBlocked =
     inferenceScope === "dictationAgent" &&
-    resolveDictationAgentInference(settings, {
-      isCloudAgent: selectIsCloudDictationAgentMode(settings),
-    }).reachable;
+    !!settings.useDictationAgent &&
+    !!settings.policyBlockedLocalScopes?.includes("dictationAgent");
+  const onAgentScope =
+    agentPolicyBlocked ||
+    (inferenceScope === "dictationAgent" &&
+      resolveDictationAgentInference(settings, {
+        isCloudAgent: selectIsCloudDictationAgentMode(settings),
+      }).reachable);
   const config = selectResolvedLLMConfig(
     settings,
     onAgentScope ? "dictationAgent" : "chatIntelligence"
   );
   const isCloud = !!settings.isSignedIn && config.mode === "openwhispr";
   const vision =
-    onAgentScope && hasScreenContext
+    onAgentScope && !agentPolicyBlocked && hasScreenContext
       ? resolveDictationAgentVisionInference(settings, { isSignedIn: !!settings.isSignedIn })
       : null;
 
@@ -197,6 +207,7 @@ export function resolveChatStreamingInference(
       cloudBaseUrl: vision.config.baseUrl,
       customApiKey: vision.config.customApiKey,
       disableThinking: vision.config.disableThinking,
+      reasoningEffort: vision.config.reasoningEffort,
     },
     attachScreenContext: true,
   };

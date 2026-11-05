@@ -11,6 +11,10 @@ export interface CleanupFailure {
   actionKey?: string;
   copyCommand?: string;
   technicalDetails?: TechnicalErrorDetailsData;
+  /** False when the raw dictation never reached the cursor (held back, clipboard only). */
+  pasted?: boolean;
+  /** Names the broken setup an unconfigured-cleanup notice warns about. */
+  setupKey?: string;
 }
 
 interface CleanupFailureState {

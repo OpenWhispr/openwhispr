@@ -4,6 +4,7 @@ const speakerEmbeddings = require("./speakerEmbeddings");
 const { MAX_EMBEDDING_SECONDS } = speakerEmbeddings;
 const { downsample24kTo16k, pcm16ToFloat32 } = require("../utils/audioUtils");
 const { MAX_SPEAKER_COUNT } = require("../constants/speakerDetection.json");
+const { normalizeSpeakerIndexBase } = require("./speakerIndexBase");
 
 function clampMaxSpeakers(value) {
   const n = Number(value);
@@ -216,6 +217,7 @@ class LiveSpeakerIdentifier {
       getSpeakerProfiles = null,
       maxSpeakers = MAX_SPEAKER_COUNT,
       enabled = true,
+      speakerIndexBase = 0,
     } = resolvedOptions;
 
     this.onSpeakerIdentified =
@@ -224,6 +226,8 @@ class LiveSpeakerIdentifier {
     this.maxSpeakers = clampMaxSpeakers(maxSpeakers);
     this.enabled = enabled !== false;
     this._resetMeetingState();
+    // A resumed note already holds earlier sessions' ids; see speakerIndexBase.js.
+    this.nextLiveIndex = normalizeSpeakerIndexBase(speakerIndexBase);
 
     if (!this.isAvailable()) {
       debugLogger.warn("Live speaker identifier unavailable", {

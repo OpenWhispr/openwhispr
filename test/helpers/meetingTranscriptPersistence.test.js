@@ -16,6 +16,7 @@ test("captured segments are written before the stop is awaited", async () => {
 
   const result = await persistFinalTranscriptAroundStop({
     segments: [segment("a", "hello"), segment("b", "world")],
+    seedLength: 0,
     serializeSegments: serialize,
     persist: async (transcript) => {
       events.push(`persist:${transcript}`);
@@ -40,6 +41,7 @@ test("a segment-less recording writes main's final transcript after the stop", a
 
   await persistFinalTranscriptAroundStop({
     segments: [],
+    seedLength: 0,
     serializeSegments: () => {
       throw new Error("must not serialize an empty segment list");
     },
@@ -64,6 +66,7 @@ test("nothing is written when there are neither segments nor a fallback transcri
 
   await persistFinalTranscriptAroundStop({
     segments: [],
+    seedLength: 0,
     serializeSegments: serialize,
     persist: async () => {
       persisted += 1;
@@ -85,6 +88,7 @@ test("the stop result is only returned once the early write has settled", async 
 
   const pending = persistFinalTranscriptAroundStop({
     segments: [segment("a", "hello")],
+    seedLength: 0,
     serializeSegments: serialize,
     persist: () => write,
     stop: async () => "stopped",

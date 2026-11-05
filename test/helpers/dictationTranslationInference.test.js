@@ -13,6 +13,7 @@ const baseSettings = {
   translationCloudBaseUrl: "",
   translationCustomApiKey: "",
   translationDisableThinking: true,
+  translationReasoningEffort: "low",
 };
 
 test("providers mode keeps its explicit provider and translation settings", async () => {
@@ -25,6 +26,7 @@ test("providers mode keeps its explicit provider and translation settings", asyn
   assert.equal(result.config.provider, "openai");
   assert.equal(result.config.language, "es");
   assert.equal(result.config.disableThinking, true);
+  assert.equal(result.config.reasoningEffort, "low");
 });
 
 test("local mode routes to llama.cpp with an empty stored provider", async () => {
@@ -171,9 +173,8 @@ test("enterprise mode without a provider fails closed", async () => {
 
 test("managed enterprise access supplies the provider and model, ignoring manual settings", async (t) => {
   const { resolveDictationTranslationInference } = await load();
-  const { useEnterpriseIdentityStore } = await import(
-    "../../src/stores/enterpriseIdentityStore.ts"
-  );
+  const { useEnterpriseIdentityStore } =
+    await import("../../src/stores/enterpriseIdentityStore.ts");
 
   const scopes = [
     "dictationCleanup",

@@ -1,18 +1,7 @@
-import type { NoteItem, SpaceItem, SpaceTeamRef, TeamRole, WorkspaceRole } from "../types/electron";
+import type { NoteItem, SpaceItem, SpaceTeamRef, TeamRole, Workspace } from "../types/electron";
+import { spaceCan, workspaceCan } from "./capabilities.ts";
 
-export function canManageWorkspace(workspaceRole: WorkspaceRole | null | undefined): boolean {
-  return workspaceRole === "owner" || workspaceRole === "admin";
-}
-
-/**
- * Whether the current user can manage a team space (rename, delete, assign
- * teams): an explicit space admin (best role across the space's assigned
- * teams, server-computed) or an implicit one via workspace owner/admin.
- * Client checks are cosmetic — the server enforces.
- */
-export function canManageSpace(space: SpaceItem, workspaceRole: WorkspaceRole | null): boolean {
-  return space.my_role === "admin" || canManageWorkspace(workspaceRole);
-}
+type WorkspaceRef = Pick<Workspace, "role" | "capabilities">;
 
 /**
  * Teams the current user can give up to leave a space: those they explicitly
@@ -24,23 +13,14 @@ export function teamsUserCanLeave(space: Pick<SpaceItem, "teams">): SpaceTeamRef
 }
 
 /**
- * Whether the current user holds any grant they can give up: a direct
- * membership or a team they belong to. Workspace owners/admins with implicit
- * access alone have nothing to leave.
- */
-export function canLeaveSpace(space: Pick<SpaceItem, "my_direct_role" | "teams">): boolean {
-  return space.my_direct_role != null || teamsUserCanLeave(space).length > 0;
-}
-
-/**
  * Whether the current user can edit a specific team's roster: an explicit
- * admin of that team, or an implicit one via workspace owner/admin.
+ * admin of that team, or anyone the workspace lets manage teams.
  */
 export function canManageTeamRoster(
   teamMyRole: TeamRole | null | undefined,
-  workspaceRole: WorkspaceRole | null
+  workspace: WorkspaceRef | null | undefined
 ): boolean {
-  return teamMyRole === "admin" || canManageWorkspace(workspaceRole);
+  return teamMyRole === "admin" || workspaceCan(workspace, "manage_teams");
 }
 
 /**
@@ -58,7 +38,10 @@ export function canMoveBetweenSpaces(
 }
 
 type NoteOwnership = Pick<NoteItem, "cloud_id" | "owner_user_id">;
-type SpaceRef = Pick<SpaceItem, "kind" | "cloud_space_id" | "my_role">;
+type SpaceRef = Pick<
+  SpaceItem,
+  "kind" | "cloud_space_id" | "my_role" | "my_direct_role" | "teams" | "capabilities"
+>;
 
 // Only cloud-backed team spaces carry server-enforced roles; private and
 // local-only spaces (no cloud id yet) stay fully manageable by their local
@@ -78,8 +61,9 @@ export function ownsNote(note: NoteOwnership, currentUserId: string | null | und
 }
 
 /**
- * Delete a team-space note: the note's owner, a space admin, or a workspace
- * owner/admin. Mirrors the server rule — client checks are cosmetic.
+ * Delete a team-space note: the note's owner, or someone with manage_settings
+ * on the space or the workspace (owner/admin under the role fallback).
+ * Mirrors the server rule — client checks are cosmetic.
  * Space rules only: a cloud-backed PERSONAL note shared with this user
  * passes here (private space is unenforced) but may still be vetoed by its
  * note-level ACL — compose with sharedNoteBlocksDelete (notePermissions).
@@ -88,38 +72,41 @@ export function canDeleteSpaceNote(
   note: NoteOwnership,
   space: SpaceRef | null | undefined,
   currentUserId: string | null | undefined,
-  workspaceRole: WorkspaceRole | null
+  workspace: WorkspaceRef | null | undefined
 ): boolean {
   if (!isEnforcedTeamSpace(space)) return true;
   return (
-    ownsNote(note, currentUserId) || space.my_role === "admin" || canManageWorkspace(workspaceRole)
+    ownsNote(note, currentUserId) ||
+    spaceCan(space, "manage_settings") ||
+    workspaceCan(workspace, "manage_settings")
   );
 }
 
 /**
  * Change a team-space note's scope (move it to another space): the note's
- * owner or a workspace owner/admin. A space admin who is only a workspace
- * member may delete a teammate's note but not change its audience.
+ * owner or a workspace with manage_settings. Space-level manage_settings alone
+ * may delete a teammate's note but not change its audience.
  */
 export function canChangeSpaceNoteScope(
   note: NoteOwnership,
   space: SpaceRef | null | undefined,
   currentUserId: string | null | undefined,
-  workspaceRole: WorkspaceRole | null
+  workspace: WorkspaceRef | null | undefined
 ): boolean {
   if (!isEnforcedTeamSpace(space)) return true;
-  return ownsNote(note, currentUserId) || canManageWorkspace(workspaceRole);
+  return ownsNote(note, currentUserId) || workspaceCan(workspace, "manage_settings");
 }
 
 /**
- * Move or delete a team-space folder: a space admin or a workspace
- * owner/admin. Members keep creating, renaming, and using folders — only the
- * destructive/scope-changing actions are gated.
+ * Move or delete a team-space folder: manage_settings on the space or the
+ * workspace (admins/owners under the role fallback). Members keep creating,
+ * renaming, and using folders — only the destructive/scope-changing actions
+ * are gated.
  */
 export function canMoveOrDeleteSpaceFolder(
   space: SpaceRef | null | undefined,
-  workspaceRole: WorkspaceRole | null
+  workspace: WorkspaceRef | null | undefined
 ): boolean {
   if (!isEnforcedTeamSpace(space)) return true;
-  return space.my_role === "admin" || canManageWorkspace(workspaceRole);
+  return spaceCan(space, "manage_settings") || workspaceCan(workspace, "manage_settings");
 }
