@@ -253,7 +253,6 @@ it.each([
   expect(native!.cleanupCloudAudio).toHaveBeenCalledWith(chunks);
 });
 
-
 it.each(['meeting', 'dictation'] as const)(
   'preserves Android chunk IDs and opts only %s file uploads into empty-text recovery',
   async (purpose) => {
@@ -261,14 +260,33 @@ it.each(['meeting', 'dictation'] as const)(
     jest.mocked(native!.splitCloudAudio).mockResolvedValueOnce({ chunks, durationMs: 241000 });
     jest.mocked(FileSystem.uploadAsync).mockImplementation(async (_url, uri, options) => {
       if (!options || !('mimeType' in options)) throw new Error('Expected multipart audio upload');
-      expect(options.parameters?.clientTranscriptionId).toBe(`original-root-chunk${chunks.indexOf(uri)}`);
+      expect(options.parameters?.clientTranscriptionId).toBe(
+        `original-root-chunk${chunks.indexOf(uri)}`,
+      );
       expect(options.parameters?.source).toBe('file_upload');
       expect(options.parameters?.purpose).toBe(purpose);
-      expect(options.parameters?.androidMeetingRecovery).toBe(purpose === 'meeting' ? 'short-wav-v1' : undefined);
-      return { status: 200, headers: {}, mimeType: null, body: JSON.stringify({ text: 'Retained speech.' }) };
+      expect(options.parameters?.androidMeetingRecovery).toBe(
+        purpose === 'meeting' ? 'short-wav-v1' : undefined,
+      );
+      return {
+        status: 200,
+        headers: {},
+        mimeType: null,
+        body: JSON.stringify({ text: 'Retained speech.' }),
+      };
     });
-    await TranscriptionService.transcribe({ audioUri: 'file:///large.wav', provider: 'cloud', requestContext: 'file', purpose, clientTranscriptionId: 'original-root' });
+    await TranscriptionService.transcribe({
+      audioUri: 'file:///large.wav',
+      provider: 'cloud',
+      requestContext: 'file',
+      purpose,
+      clientTranscriptionId: 'original-root',
+    });
     expect(FileSystem.uploadAsync).toHaveBeenCalledTimes(2);
-    expect(native!.splitCloudAudio).toHaveBeenCalledWith('file:///large.wav', 120, 'cloud-test-job');
+    expect(native!.splitCloudAudio).toHaveBeenCalledWith(
+      'file:///large.wav',
+      120,
+      'cloud-test-job',
+    );
   },
 );
