@@ -181,6 +181,17 @@ export function truncatedOutputError(
   return Object.assign(new Error(message), { messageKey: TRUNCATED_OUTPUT_MESSAGE_KEY });
 }
 
+/**
+ * Code on the truncated error for a reply cut off before any answer: a reasoning
+ * model spent the whole output cap thinking. Note formatting retries those (#2008).
+ */
+export const OUTPUT_LIMIT_BEFORE_ANSWER_CODE = "OUTPUT_LIMIT_BEFORE_ANSWER";
+
+// A reasoning model's hidden reasoning counts against the output cap; OpenAI
+// recommends reserving at least 25k tokens for reasoning plus output. A cap,
+// not a spend: an unused allowance costs nothing.
+export const REASONING_MODEL_MIN_OUTPUT_TOKENS = 25_000;
+
 /** A reply with no text at all; providers pass their own wording for the logs. */
 export function emptyOutputError(
   message = "Model returned an empty response"
@@ -199,7 +210,10 @@ export function emptyResponseError(
   responseIncomplete: boolean
 ): Error | null {
   if (responseIncomplete) {
-    return truncatedOutputError("Model ran out of output tokens before producing a response");
+    return Object.assign(
+      truncatedOutputError("Model ran out of output tokens before producing a response"),
+      { code: OUTPUT_LIMIT_BEFORE_ANSWER_CODE }
+    );
   }
   if (config.requireCompleteOutput) return emptyOutputError();
   if (config.systemPrompt) return new Error(`${providerName} returned empty response`);

@@ -201,7 +201,25 @@ public class AppleLLMModule: Module {
       payload["status"] = "unavailable"
     }
 
+    // Apple Intelligence runs in only some of the languages an iPhone can be set to, and its
+    // availability has no reason for that, so the iPhone's language is checked beside it. The name
+    // is in English, like the app's own text. Siri's language can't be read without the Siri
+    // entitlement (INPreferences throws), so a mismatch with it is left to the message.
+    let language = Locale(identifier: Locale.preferredLanguages.first ?? Locale.current.identifier)
+    payload["deviceLanguage"] = englishName(of: language)
+    // The list is read from the model, so an empty one says nothing about the language. A region
+    // the model doesn't list (English (India)) can still run, so the language alone decides.
+    if !model.supportedLanguages.isEmpty {
+      let languageOnly = language.language.languageCode.map { Locale(identifier: $0.identifier) }
+      payload["localeSupported"] =
+        model.supportsLocale(language) || languageOnly.map { model.supportsLocale($0) } ?? false
+    }
+
     return payload
+  }
+
+  private static func englishName(of locale: Locale) -> String {
+    Locale(identifier: "en").localizedString(forIdentifier: locale.identifier) ?? locale.identifier
   }
 
   @available(iOS 26.0, *)
@@ -265,7 +283,7 @@ public class AppleLLMModule: Module {
         case .rateLimited(_):
           promise.reject("APPLE_LLM_RATE_LIMITED", modelError.localizedDescription)
         case .unsupportedLanguageOrLocale(_):
-          promise.reject("APPLE_LLM_UNAVAILABLE", modelError.localizedDescription)
+          promise.reject("APPLE_LLM_UNSUPPORTED_LANGUAGE", modelError.localizedDescription)
         default:
           promise.reject("APPLE_LLM_FAILED", modelError.localizedDescription)
         }
@@ -295,8 +313,10 @@ public class AppleLLMModule: Module {
         promise.reject("APPLE_LLM_OUTPUT_LIMIT", generationError.localizedDescription)
       case .rateLimited(_), .concurrentRequests(_):
         promise.reject("APPLE_LLM_RATE_LIMITED", generationError.localizedDescription)
-      case .assetsUnavailable(_), .unsupportedLanguageOrLocale(_):
+      case .assetsUnavailable(_):
         promise.reject("APPLE_LLM_UNAVAILABLE", generationError.localizedDescription)
+      case .unsupportedLanguageOrLocale(_):
+        promise.reject("APPLE_LLM_UNSUPPORTED_LANGUAGE", generationError.localizedDescription)
       default:
         promise.reject("APPLE_LLM_FAILED", generationError.localizedDescription)
       }

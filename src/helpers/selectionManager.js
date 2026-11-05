@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const { execFile, spawn } = require("child_process");
 const debugLogger = require("./debugLogger");
 const { isMarkdownTargetSignature } = require("./markdownTargets");
+const { parseWindowHandle } = require("./windowsPasteTarget");
 
 const SESSION_TTL_MS = 5 * 60 * 1000;
 const MAX_SELECTION_EDIT_CODE_POINTS = 6000;
@@ -118,6 +119,9 @@ class SelectionManager {
     this.now = now;
     this.sessions = new Map();
     this.lastTarget = null;
+    // Window titles sit beside their target, never on it, so a capture
+    // result handed to the renderer can't carry one.
+    this._targetTitles = new WeakMap();
     this._captureTargetPromise = null;
     this._lastTargetCaptureAt = 0;
     this._atspiCooldownUntil = 0;
@@ -154,15 +158,17 @@ class SelectionManager {
       if (!binary) return null;
       const result = await runSpawn(binary, ["--detect-only"], { timeout: 700 });
       const match = result.stdout.match(/TARGET\s+(\S+)/);
-      return result.success && match
-        ? {
-            kind: "win-hwnd",
-            id: match[1],
-            windowClass: result.stdout.match(/^WINDOW_CLASS (.+)$/m)?.[1]?.trim() || null,
-            exeName: result.stdout.match(/^EXE_NAME (.+)$/m)?.[1]?.trim() || null,
-            isTerminal: /^IS_TERMINAL true$/m.test(result.stdout),
-          }
-        : null;
+      if (!result.success || !match) return null;
+      const target = {
+        kind: "win-hwnd",
+        id: match[1],
+        windowClass: result.stdout.match(/^WINDOW_CLASS (.+)$/m)?.[1]?.trim() || null,
+        exeName: result.stdout.match(/^EXE_NAME (.+)$/m)?.[1]?.trim() || null,
+        isTerminal: /^IS_TERMINAL true$/m.test(result.stdout),
+      };
+      const title = result.stdout.match(/^WINDOW_TITLE (.+)$/m)?.[1]?.trim();
+      if (title) this._targetTitles.set(target, title);
+      return target;
     }
     if (this.platform === "linux") {
       return this._getLinuxTarget();
@@ -180,6 +186,59 @@ class SelectionManager {
       await this._captureTargetPromise;
     }
     return this.lastTarget?.kind === "win-hwnd" ? this.lastTarget : null;
+  }
+
+  // Brings a captured Windows window forward and says whether it is in front now. The paste
+  // helper falls back to whatever is in front when its restore fails, so a paste that may
+  // only land in this window asks first. A helper without --restore-window reports the window
+  // in front unchanged, which reads as not restored.
+  async restoreWinTarget(target) {
+    if (target?.kind !== "win-hwnd") return false;
+    const binary = this.clipboardManager.resolveWindowsFastPasteBinary();
+    if (!binary) return false;
+    const result = await runSpawn(binary, ["--restore-window", target.id, "--detect-only"], {
+      timeout: 700,
+    });
+    const front = result.success ? result.stdout.match(/TARGET\s+(\S+)/)?.[1] : null;
+    const wanted = parseWindowHandle(target.id);
+    return wanted !== null && front != null && parseWindowHandle(front) === wanted;
+  }
+
+  // The dictation target as the Tone & Style classifier reads it: the app's
+  // identity, its window title and, for a macOS browser page, the URL's host.
+  // Titles stay in the main process; only the resulting category leaves it.
+  async getTargetAppContext() {
+    if (this.platform === "darwin") {
+      const pid = this.textEditMonitor?.lastTargetPid;
+      const context = pid ? await this.textEditMonitor.getAppContext(pid) : null;
+      if (!context) return null;
+      return {
+        appSignature: `${context.appName || ""} ${context.bundleId || ""}`.trim(),
+        windowTitle: context.windowTitle,
+        urlHost: context.urlHost,
+      };
+    }
+    while (this._captureTargetPromise) {
+      await this._captureTargetPromise;
+    }
+    const target = this.lastTarget;
+    if (!target) return null;
+    return {
+      appSignature:
+        target.kind === "atspi-pid"
+          ? await this._readTargetNames(target.id)
+          : this._targetSignature(target),
+      windowTitle: this._targetTitles.get(target) ?? (await this._readWindowTitle(target)),
+    };
+  }
+
+  // X11 and KDE titles are read on demand rather than at capture, which also
+  // runs before every paste.
+  async _readWindowTitle(target) {
+    const command = { "x11-window": "xdotool", "kde-window": "kdotool" }[target.kind];
+    if (!command) return null;
+    const result = await runFile(command, ["getwindowname", target.id], { timeout: 500 });
+    return (result.success && result.stdout.trim()) || null;
   }
 
   async captureSelectedText(options = {}) {
@@ -743,12 +802,14 @@ class SelectionManager {
         try {
           const active = JSON.parse(result.stdout);
           if (active.address) {
-            return {
+            const target = {
               kind: "hyprland-window",
               id: active.address,
               windowClass: typeof active.class === "string" ? active.class.toLowerCase() : null,
               pid: Number.isInteger(active.pid) && active.pid > 0 ? active.pid : null,
             };
+            if (typeof active.title === "string") this._targetTitles.set(target, active.title);
+            return target;
           }
         } catch {}
       }
@@ -770,7 +831,11 @@ class SelectionManager {
       debugLogger.warn("AT-SPI target probe timed out", { cooldownMs: ATSPI_COOLDOWN_MS });
     }
     const match = result.stdout.match(/^TARGET\s+ATSPI\s+(\d+)$/m);
-    return result.success && match ? { kind: "atspi-pid", id: match[1] } : null;
+    if (!result.success || !match) return null;
+    const target = { kind: "atspi-pid", id: match[1] };
+    const title = result.stdout.match(/^WINDOW_TITLE_B64 ([A-Za-z0-9+/=]+)$/m)?.[1];
+    if (title) this._targetTitles.set(target, Buffer.from(title, "base64").toString("utf8"));
+    return target;
   }
 
   async _captureViaClipboard(sendCopy, expectedTarget) {

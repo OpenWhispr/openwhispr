@@ -1,12 +1,21 @@
-import { useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
+import { getAuthRequestContextSnapshot, hasUsableCredential } from "../lib/authRequestContext";
 import { useShallow } from "zustand/react/shallow";
 import { usePolicyStore } from "../stores/policyStore";
-import { selectPolicyEffectiveSettings, useSettingsStore } from "../stores/settingsStore";
+import {
+  getSettings,
+  selectPolicyEffectiveSettings,
+  useSettingsStore,
+} from "../stores/settingsStore";
 import {
   filterModeOptionsByPolicy,
   getTranscriptionSelection,
   isModeAllowedByPolicy,
   isTranscriptionSelectionAllowed,
+  isAudioFeatureAllowed,
+  isMeetingAutoTranscriptionAllowed,
+  isMeetingTranscriptionStartManual,
+  isTranscriptionContextAllowed,
   reconcilePolicyModeSelection,
   type PolicyDecisionSnapshot,
   type TranscriptionPolicyContext,
@@ -22,6 +31,46 @@ export function usePolicySnapshot(): PolicyDecisionSnapshot {
   return useMemo(() => ({ status, policy, appVersion }), [status, policy, appVersion]);
 }
 
+interface MeetingAutoTranscriptionAuth {
+  isLoaded: boolean;
+  isSignedIn: boolean;
+}
+
+/** Pending navigation must read current policy and auth, not its original render. */
+export function useMeetingAutoTranscriptionCheck({
+  isLoaded,
+  isSignedIn,
+}: MeetingAutoTranscriptionAuth): () => boolean {
+  // A settled guest's session refetch reports not-loaded with nothing having
+  // changed. A signed-in account stays gated, since that is how a switch reads.
+  const settledGuest = useRef(false);
+  if (isLoaded) settledGuest.current = !isSignedIn;
+  const auth = useRef({ isLoaded, isSignedIn });
+  auth.current = { isLoaded, isSignedIn };
+  return useCallback(() => {
+    const policy = usePolicyStore.getState();
+    // Nobody asked for this recording, so there is no refusal to explain.
+    if (isMeetingTranscriptionStartManual(policy)) return false;
+    // A recording these checks refuse never captures. Let it reach startRecording,
+    // which tells the member why and restores the layout.
+    if (!isTranscriptionContextAllowed(policy, getSettings(), "meeting")) return true;
+    // A sign-in in progress or a stale offline profile also reads as a guest, but
+    // holds a credential whose policy hasn't resolved yet.
+    const hasCredential = hasUsableCredential();
+    if (
+      hasCredential &&
+      (!policy.accountId ||
+        policy.authGeneration !== getAuthRequestContextSnapshot().observedGeneration)
+    )
+      return false;
+    const hasAccount = auth.current.isSignedIn || hasCredential;
+    return (
+      (auth.current.isLoaded || settledGuest.current) &&
+      isMeetingAutoTranscriptionAllowed(policy, hasAccount)
+    );
+  }, []);
+}
+
 /** Reactive to both stores — updates when the policy or the relevant settings change. */
 export function useTranscriptionContextAllowed(context: TranscriptionPolicyContext): boolean {
   const snapshot = usePolicySnapshot();
@@ -30,7 +79,9 @@ export function useTranscriptionContextAllowed(context: TranscriptionPolicyConte
       getTranscriptionSelection(selectPolicyEffectiveSettings(settings, snapshot), context)
     )
   );
-  return isTranscriptionSelectionAllowed(snapshot, selection);
+  return (
+    isAudioFeatureAllowed(snapshot, context) && isTranscriptionSelectionAllowed(snapshot, selection)
+  );
 }
 
 interface PolicyModeOptions<T> {

@@ -3,6 +3,7 @@ import {
   invalidateValidatedAuthContext,
   readAuthTokenState,
 } from "../lib/authRequestContext";
+import i18n from "../i18n";
 
 interface CloudApiResponse<T = unknown> {
   success: boolean;
@@ -30,6 +31,17 @@ export class CloudApiError extends Error {
   }
 }
 
+/**
+ * The server's own reason when it refused a request (a 4xx with a message), or null otherwise:
+ * the connection, an expired session, or a bare status the main process filled in.
+ */
+export function serverRefusalMessage(error: unknown): string | null {
+  if (!(error instanceof CloudApiError)) return null;
+  const { status, message } = error;
+  if (status < 400 || status >= 500 || status === 401) return null;
+  return message === `API error: ${status}` ? null : message;
+}
+
 async function cloudRequest<T = unknown>(
   method: string,
   path: string,
@@ -54,7 +66,10 @@ async function cloudRequest<T = unknown>(
       invalidateValidatedAuthContext();
     }
     throw new CloudApiError(
-      result?.error ?? "Cloud API request failed",
+      // Main's own wording is for logs; this one reaches error toasts.
+      result?.code === "AUTH_CONTEXT_UNVALIDATED"
+        ? i18n.t("auth.unconfirmedSession")
+        : (result?.error ?? "Cloud API request failed"),
       result?.status ?? 0,
       result?.code,
       result?.details

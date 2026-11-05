@@ -3,6 +3,39 @@ const assert = require("node:assert/strict");
 
 const load = () => import("../../src/stores/policyRules.ts");
 
+test("automatic meeting start fails closed until signed-in policy resolves", async () => {
+  const { isMeetingAutoTranscriptionAllowed: allowed } = await load();
+  for (const [status, isSignedIn, expected] of [
+    ["idle", false, true],
+    ["idle", true, false],
+    ["unmanaged", true, true],
+    ["loading", true, false],
+    ["error", true, false],
+    ["managed", true, false],
+  ]) {
+    assert.equal(allowed({ status, policy: null, appVersion: null }, isSignedIn), expected);
+  }
+  for (const [meetings, expected] of [
+    [undefined, true],
+    [{}, true],
+    [{ transcriptionStart: "automatic" }, true],
+    [{ transcriptionStart: "manual" }, false],
+    [{ transcriptionStart: "future" }, false],
+  ]) {
+    const snapshot = { status: "managed", policy: { ...policy, meetings }, appVersion: "1.11.1" };
+    assert.equal(allowed(snapshot, true), expected);
+    for (const appVersion of [null, "1.10.0"]) {
+      assert.equal(
+        allowed(
+          { ...snapshot, appVersion, policy: { ...snapshot.policy, minAppVersion: "1.11.1" } },
+          true
+        ),
+        false
+      );
+    }
+  }
+});
+
 const policy = {
   version: 1,
   transcription: {
@@ -1090,4 +1123,37 @@ test("the local-history policy is resolved only once the fetch has settled", asy
   assert.equal(isLocalHistoryPolicyResolved(snapshot("idle")), false);
   assert.equal(isLocalHistoryPolicyResolved(snapshot("loading")), false);
   assert.equal(isLocalHistoryPolicyResolved(snapshot("error")), false);
+});
+
+test("audio controls independently gate every mode while leaving dictation available", async () => {
+  const { isAudioFeatureAllowed, isTranscriptionSelectionAllowed } = await load();
+  for (const meetingRecordingEnabled of [true, false]) {
+    for (const audioUploadEnabled of [true, false]) {
+      const state = {
+        status: "managed",
+        appVersion: "1.11.0",
+        policy: {
+          ...policy,
+          transcription: {
+            allowedModes: ["local", "providers", "self-hosted", "openwhispr", "enterprise"],
+            allowedByokProviders: ["openai"],
+            allowedEnterpriseProviders: ["azure"],
+          },
+          features: { ...policy.features, meetingRecordingEnabled, audioUploadEnabled },
+        },
+      };
+      assert.equal(isAudioFeatureAllowed(state, "meeting"), meetingRecordingEnabled);
+      assert.equal(isAudioFeatureAllowed(state, "upload"), audioUploadEnabled);
+      assert.equal(isAudioFeatureAllowed(state, "dictation"), true);
+      for (const [mode, provider] of [
+        ["local", "whisper"],
+        ["providers", "openai"],
+        ["self-hosted", "custom"],
+        ["openwhispr", "openai"],
+        ["enterprise", "azure"],
+      ]) {
+        assert.equal(isTranscriptionSelectionAllowed(state, { mode, provider }), true);
+      }
+    }
+  }
 });

@@ -19,7 +19,7 @@ let mockUser: { id: string; isAnonymous: boolean } | null = null;
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: (selector: (state: unknown) => unknown) => selector({ user: mockUser }),
 }));
-let mockReadiness: { status: string } = { status: 'ready' };
+let mockReadiness: { status: string; deviceLanguage?: string } = { status: 'ready' };
 jest.mock('@/lib/localReasoning', () => ({
   ...jest.requireActual('@/lib/localReasoning'),
   getLocalReasoningReadiness: async () => mockReadiness,
@@ -102,6 +102,18 @@ describe('cleanup line', () => {
     expect(
       screen.getByText('Starts once it’s on in Settings → Apple Intelligence & Siri.'),
     ).toBeTruthy();
+  });
+
+  it.each([
+    [
+      { status: 'unsupportedLanguage', deviceLanguage: 'Polish (Poland)' },
+      "Apple Intelligence doesn't support Polish (Poland), your iPhone's language. Starts once that's changed in Settings.",
+    ],
+  ])('says cleanup starts once the language is changed (%o)', async (readiness, hint) => {
+    mockReadiness = readiness;
+    const screen = await renderStep();
+    expect(screen.getByText('Cleanup with Apple Intelligence')).toBeTruthy();
+    expect(screen.getByText(hint)).toBeTruthy();
   });
 
   it.each([

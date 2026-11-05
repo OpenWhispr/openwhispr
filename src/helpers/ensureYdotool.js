@@ -205,7 +205,7 @@ function getYdotoolStatus() {
     hasYdotool,
     hasYdotoold,
     hasWtype,
-    hasWlCopy: requiresWlCopy && commandExists("wl-copy"),
+    hasWlCopy: (requiresWlCopy || isKde) && commandExists("wl-copy"),
     daemonRunning,
     hasService,
     hasUinput,

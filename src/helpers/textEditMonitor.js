@@ -19,6 +19,13 @@ const TARGET_CAPTURE_FRESHNESS_MS = 250;
 // killed run's verdict is discarded, so a tighter timeout means the app below is
 // never learned and every read pays the full ladder.
 const SELECTED_TEXT_TIMEOUT_MS = 1600;
+// `--app-context` output keys and the context field each one fills.
+const APP_CONTEXT_FIELDS = {
+  APP_NAME: "appName",
+  BUNDLE_ID: "bundleId",
+  WINDOW_TITLE: "windowTitle",
+  URL_HOST: "urlHost",
+};
 // AXError -25212 (kAXErrorNoValue) on the focused-element read is how
 // Chromium/Electron apps respond while their AX tree is dormant, making the
 // native binary's 5-attempt retry (~1.2s) dead time on every read. A single
@@ -401,6 +408,38 @@ class TextEditMonitor extends EventEmitter {
 
     this._windowBounds = { pid, bounds, at: Date.now() };
     return bounds;
+  }
+
+  /**
+   * macOS: the target app's name and bundle id, its focused window's title and,
+   * for a browser page, the URL's host. Feeds the Tone & Style classifier; any
+   * part the helper can't read is missing, and nothing read resolves to null.
+   * The name comes first, so a run killed while accessibility hangs still
+   * names the app.
+   */
+  async getAppContext(pid, timeoutMs = 1000) {
+    if (process.platform !== "darwin" || !pid) return null;
+    const resolved = this.resolveBinary();
+    if (!resolved) return null;
+
+    return new Promise((resolve) => {
+      execFile(
+        resolved.command,
+        [...resolved.args, "--app-context", String(pid)],
+        { timeout: timeoutMs },
+        (_error, stdout) => {
+          const context = {};
+          for (const line of (stdout || "").split("\n")) {
+            const match = line.match(/^([A-Z_]+?)(_B64)?:(.*)$/);
+            const field = match && APP_CONTEXT_FIELDS[match[1]];
+            if (!field) continue;
+            const value = match[2] ? this._decodeBase64Payload(match[3]) : match[3];
+            if (value) context[field] = value;
+          }
+          resolve(Object.keys(context).length ? context : null);
+        }
+      );
+    });
   }
 
   /**

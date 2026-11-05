@@ -146,8 +146,9 @@ it('shows what each workflow runs while Local Mode is on', async () => {
   // A picked model keeps its name; uploads and cleanup run what is saved for them.
   expect(screen.getByText('Whisper base')).toBeTruthy();
   expect(screen.getByText('OpenAI')).toBeTruthy();
-  // Cleanup and note chat, which is OpenWhispr Cloud when unset.
-  expect(screen.getAllByText('OpenWhispr Cloud')).toHaveLength(2);
+  // Cleanup, plus note formatting, note chat and the voice assistant, which run their own choices
+  // in Local Mode: OpenWhispr Cloud when unset.
+  expect(screen.getAllByText('OpenWhispr Cloud')).toHaveLength(4);
   await screen.findByText(/Status: Ready/);
 });
 
@@ -164,11 +165,11 @@ it('says a saved Cloud cleanup is skipped in Local Mode without an account', asy
 });
 
 // With nothing saved, Local Mode uploads to Cloud with any session and cleans there when signed in.
-// Note chat is always one of the OpenWhispr Cloud rows.
+// Note formatting, note chat and the voice assistant are always OpenWhispr Cloud rows.
 it.each([
-  ['no session', 1, null],
-  ['an anonymous session', 2, { id: 'a', isAnonymous: true }],
-  ['a signed-in account', 3, { id: 'u', isAnonymous: false }],
+  ['no session', 3, null],
+  ['an anonymous session', 4, { id: 'a', isAnonymous: true }],
+  ['a signed-in account', 5, { id: 'u', isAnonymous: false }],
 ])('with nothing saved in Local Mode for %s, shows %d Cloud rows', async (_label, count, user) => {
   mockUser = user;
   mockActiveMode = 'private';
@@ -237,7 +238,6 @@ it('shows provider note chat as On-Device, which answers it on this iPhone first
   };
   render(<AIModelsScreen />);
   expect(screen.queryByText('Groq')).toBeNull();
-  expect(screen.queryByText('OpenWhispr Cloud')).toBeNull();
   await screen.findByText(/Status: Ready/);
 });
 
@@ -272,6 +272,16 @@ it.each([
   expect(await screen.findByText(new RegExp(`Status: ${label}\\s`))).toBeTruthy();
 });
 
+it('says when the iPhone is set to a language Apple Intelligence does not support', async () => {
+  mockReadiness.mockResolvedValue({
+    status: 'unsupportedLanguage',
+    deviceLanguage: 'English (South Africa)',
+    tokenCounting: false,
+  });
+  render(<AIModelsScreen />);
+  expect(await screen.findByText(/Status: Language not supported\s/)).toBeTruthy();
+});
+
 // Dictation owns Local Mode, so AI Models has no switch of its own.
 it('has no Local Mode switch', async () => {
   render(<AIModelsScreen />);
@@ -286,9 +296,9 @@ it('puts the Apple Intelligence status on its own line', async () => {
   );
 });
 
-it('lists Note Chat and Voice Assistant as separate workflows', async () => {
+it('lists Chat and Voice Assistant as separate workflows', async () => {
   render(<AIModelsScreen />);
-  expect(screen.getByText('Note Chat')).toBeTruthy();
+  expect(screen.getByText('Chat')).toBeTruthy();
   expect(screen.getByText('Voice Assistant')).toBeTruthy();
   expect(screen.queryByText('Chat & Voice Assistant')).toBeNull();
   await screen.findByText(/Status: Ready/);

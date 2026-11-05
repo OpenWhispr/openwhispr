@@ -34,6 +34,8 @@ export interface OrgPolicy {
   features: {
     agentEnabled: boolean;
     webSearchEnabled: boolean;
+    meetingRecordingEnabled?: boolean;
+    audioUploadEnabled?: boolean;
     /** Absent on servers that predate the field; absent means allowed. */
     screenContextEnabled?: boolean;
     /**
@@ -48,6 +50,8 @@ export interface OrgPolicy {
      */
     memoryEnabled?: boolean;
   };
+  /** Absent on older servers; absent means automatic. Unknown strings suppress auto-start. */
+  meetings?: { transcriptionStart?: string };
   sharing: {
     externalLinkSharing: ExternalSharingMode;
   };

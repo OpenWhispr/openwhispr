@@ -145,14 +145,15 @@ test("mic mode leaves system segments unlabeled", () => {
 test("mic mode still dedupes bleed-flagged mic echoes of system text first", () => {
   const manager = new DiarizationManager();
 
+  const { kept } = manager.splitMicEchoDuplicates([
+    systemSegment(10, "the quarterly revenue forecast slipped again"),
+    {
+      ...micSegment(10.5, "the quarterly revenue forecast slipped again"),
+      likelyRenderBleed: true,
+    },
+  ]);
   const merged = manager.mergeWithTranscript(
-    [
-      systemSegment(10, "the quarterly revenue forecast slipped again"),
-      {
-        ...micSegment(10.5, "the quarterly revenue forecast slipped again"),
-        likelyRenderBleed: true,
-      },
-    ],
+    kept,
     [
       { start: 0, end: 5, speaker: "speaker_00" },
       { start: 10, end: 20, speaker: "speaker_01" },

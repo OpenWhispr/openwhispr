@@ -6,6 +6,7 @@ const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
 const {
   SIGNED_OUT_AUTH_MOCK,
+  addTeardown,
   createRendererServer,
   installBrowserGlobals,
 } = require("../lib/rendererTestHarness");
@@ -51,7 +52,7 @@ async function renderChatStreaming(
   // The app's i18n module (loaded with the tools) follows the machine's locale.
   await (await vite.ssrLoadModule("/i18n.ts")).default.changeLanguage("en");
   const reasoningService = (await vite.ssrLoadModule("/services/ReasoningService.ts")).default;
-  t.after(() => reasoningService.destroy());
+  addTeardown(t, () => reasoningService.destroy());
 
   const offeredTools = [];
   const sentMessages = [];
@@ -886,7 +887,7 @@ test("on a free plan, the model still writes the email and then says a paid plan
   const prompt = systemPromptOf(sentMessages[0]);
   assert.match(
     prompt,
-    /still write it in full in your reply, then end with one short sentence on how they can have you send it for them[^\n]*\n- Integrations \(Email, Slack, Linear, GitHub\): needs a paid OpenWhispr plan in Settings → Plans & Billing\./
+    /still write it in full in your reply, then end with one short sentence on how they can have you send it for them[^\n]*\n- Integrations \(Email, Slack, Linear, GitHub\): needs a paid OpenWhispr plan in Settings → Plan & Billing\./
   );
   assert.doesNotMatch(prompt, /- Web search: (needs|turned|not)/);
 });
@@ -975,7 +976,7 @@ test("a local model too small for tools is told so, with no tool notes in its hi
   const [system, ...history] = sentMessages[0];
   assert.match(
     system.content,
-    /- Tools \(web search, calendar, searching or changing notes, integrations\): the selected model runs without tools .* in Settings → Language Models\..* You can still use anything already in this prompt, such as note text/
+    /- Tools \(web search, calendar, searching or changing notes, integrations\): the selected model runs without tools .* in Settings → Language Model\..* You can still use anything already in this prompt, such as note text/
   );
   assert.doesNotMatch(system.content, /Tools used/);
   assert.equal(history[1].content, "Sunny.");
@@ -1285,4 +1286,26 @@ test("with no account name the prompt asks for no signature rather than a placeh
   const prompts = await promptsFor(t);
   assert.doesNotMatch(prompts[0], /The user's name is/);
   assert.match(prompts[0], /You don't know the user's name/);
+});
+
+test("Tone & Style gives every send the user's writing style, and a pasted answer its app", async (t) => {
+  const tones = { personal: "very_casual", work: "casual", email: "formal", other: "excited" };
+  const { captured, sentMessages } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
+    settings: { toneStyleEnabled: true, toneStyles: tones },
+  });
+  await captured.sendToAI("Email Josh that I'm in", []);
+  await captured.sendToAI("Tell them it's shipped", [], { destinationAppCategory: "work" });
+
+  const [typed, pasted] = sentMessages.map((messages) => messages[0].content);
+  assert.match(typed, /WRITING STYLE: When you write something the user will send/);
+  assert.match(pasted, /typed at the user's cursor in a work chat app/);
+  assert.match(pasted, /work message style: casual and friendly/);
+});
+
+test("without Tone & Style no send carries a writing style", async (t) => {
+  const { captured, sentMessages } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
+    settings: { toneStyleEnabled: false },
+  });
+  await captured.sendToAI("Tell them it's shipped", [], { destinationAppCategory: "work" });
+  assert.doesNotMatch(sentMessages[0][0].content, /WRITING STYLE/);
 });

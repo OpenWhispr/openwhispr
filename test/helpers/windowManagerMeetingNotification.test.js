@@ -134,7 +134,7 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
   }
   if (request === "./hotkeyManager") return FakeHotkeyManager;
   if (request === "./dragManager") return FakeDragManager;
-  if (request === "./menuManager") return {};
+  if (request === "./menuManager") return { setupControlPanelMenu() {} };
   if (request === "./devServerManager") {
     return {
       DEV_SERVER_PORT: 5173,
@@ -414,6 +414,43 @@ test("window manager starts fail-closed and suppresses normal-app popup surfaces
   assert.equal(await manager.showMeetingNotification({ detectionId: "onboarding" }), false);
   assert.equal(await manager.showTranscriptionPreview("partial transcript"), undefined);
   assert.deepEqual(createdWindows, []);
+});
+
+test("a detection suppressed while onboarding is active is released", async () => {
+  const manager = new WindowManager();
+  const closedDetections = [];
+  manager.meetingDetectionEngine = {
+    handleDetectionNotificationClosed: (detectionId, options) =>
+      closedDetections.push([detectionId, options]),
+  };
+
+  // The gate is also closed at startup and while the control panel reloads;
+  // a detection held active then would block every later prompt for it.
+  assert.equal(
+    await manager.showMeetingNotification({ detectionId: "audio:sustained-audio" }),
+    false
+  );
+  assert.deepEqual(closedDetections, [["audio:sustained-audio", { flushQueued: false }]]);
+});
+
+test("a card the onboarding gate hides mid-load does not replay the queue into the gate", async () => {
+  const manager = createNormalWindowManager();
+  const closedDetections = [];
+  manager.meetingDetectionEngine = {
+    handleDetectionNotificationClosed: (detectionId, options) =>
+      closedDetections.push([detectionId, options]),
+  };
+
+  const showPromise = manager.showMeetingNotification({
+    detectionId: "audio:sustained-audio",
+    source: "audio",
+  });
+  // An onboarding demo closes the gate without hiding the card that is loading.
+  assert.equal(manager.beginOnboardingDemo("dictation"), true);
+  createdWindows[0].loadDeferred.resolve();
+
+  assert.equal(await showPromise, false);
+  assert.deepEqual(closedDetections, [["audio:sustained-audio", { flushQueued: false }]]);
 });
 
 test("window creation uses the notification dimensions and position", async () => {
@@ -1144,4 +1181,76 @@ test("release preserves macOS stacking while Windows and Linux still blur", asyn
   } finally {
     Object.defineProperty(process, "platform", platform);
   }
+});
+
+test("failed calendar panel creation releases only its pending note session", async () => {
+  const f = await navigationFixture();
+  const closed = [];
+  f.manager.meetingDetectionEngine.abandonMeetingNote = (id) => closed.push(id);
+  f.manager.createControlPanelWindow = async () => {
+    throw new Error("Panel unavailable");
+  };
+  await assert.rejects(
+    f.manager.queueMeetingNoteNavigation({ noteId: 9, noteSessionId: "calendar-session" }, {}),
+    /Panel unavailable/
+  );
+  assert.deepEqual(closed, ["calendar-session"]);
+  assert.equal(f.manager._pendingMeetingNoteNavigation, null);
+});
+
+test("cancelled notification navigation releases its note session", async () => {
+  const f = await navigationFixture();
+  const closed = [];
+  f.payload.noteSessionId = "notification-session";
+  f.manager.meetingDetectionEngine.abandonMeetingNote = (id) => closed.push(id);
+  const pending = f.start();
+  await new Promise(setImmediate);
+  f.manager._cancelMeetingNavigation("START_FAILED");
+  assert.equal((await pending).success, false);
+  assert.deepEqual(closed, ["notification-session"]);
+});
+
+test("control panel reload releases note ownership without consuming initial navigation", async (t) => {
+  const manager = createNormalWindowManager();
+  let closes = 0;
+  manager.meetingDetectionEngine = { closeCurrentMeetingNote: () => closes++ };
+  manager.registerExternalLinkHandlers = () => {};
+  manager.loadControlPanel = async () => {};
+  manager._hideNormalAppSurfaces = () => {};
+  manager.endOnboardingDemo = () => {};
+  await manager.createControlPanelWindow();
+  t.after(() => manager._clearControlPanelVisibilityTimer());
+  const panel = manager.controlPanelWindow;
+  panel.setTitle = () => {};
+  panel.webContents.emit("did-navigate");
+  panel.webContents.emit("did-finish-load");
+  assert.equal(closes, 0, "initial load must retain the pending meeting navigation");
+  panel.webContents.emit("did-start-navigation", { isSameDocument: false, isMainFrame: true });
+  assert.equal(closes, 0, "a navigation will-navigate blocks leaves the document in place");
+  panel.webContents.emit("did-navigate");
+  assert.equal(closes, 1, "a replacement document must release the outgoing note session");
+  panel.webContents.emit("did-finish-load");
+  assert.equal(closes, 1, "load completion must not close a newer pending session");
+  manager.showLoadFailureDialog = () => {};
+  manager._showControlPanel = () => {};
+  panel.webContents.emit("did-fail-load", {}, -3, "ERR_ABORTED", "file:///app", true);
+  assert.equal(closes, 1, "an aborted navigation leaves the document in place");
+  panel.webContents.emit("did-fail-load", {}, -6, "ERR_FILE_NOT_FOUND", "file:///app", false);
+  assert.equal(closes, 1, "a subframe failure leaves the document in place");
+  panel.webContents.emit("did-fail-load", {}, -6, "ERR_FILE_NOT_FOUND", "file:///app", true);
+  assert.equal(closes, 2, "a failed reload has already replaced the document");
+});
+
+test("a queued or undelivered navigation keeps its note session pending", async () => {
+  const f = await navigationFixture();
+  const { manager } = f;
+  assert.equal(manager.isMeetingNoteNavigationPending(undefined), false);
+  assert.equal(manager.isMeetingNoteNavigationPending("queued"), false);
+  manager._pendingMeetingNoteNavigation = { noteSessionId: "queued" };
+  assert.equal(manager.isMeetingNoteNavigationPending("queued"), true);
+  manager._pendingMeetingNoteNavigation = null;
+  manager._meetingNavigationOperation = { payload: { noteSessionId: "delivering" } };
+  assert.equal(manager.isMeetingNoteNavigationPending("delivering"), true);
+  assert.equal(manager.isMeetingNoteNavigationPending("other"), false);
+  manager._meetingNavigationOperation = null;
 });

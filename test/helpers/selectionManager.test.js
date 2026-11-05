@@ -860,6 +860,176 @@ test("getWinTarget returns the hex HWND a win32 probe captured (#859)", async ()
   assert.equal((await manager.getWinTarget())?.id, "00001A2B");
 });
 
+// The paste helper pastes into whatever is in front when its restore fails, so a paste
+// that may only land in one window asks first whether that window came forward.
+test("restoreWinTarget is true only when the captured window is in front afterwards", async () => {
+  const spawnCalls = [];
+  let front = "00001A2B";
+  let exitCode = 0;
+  const SpawningSelectionManager = loadSelectionManager({
+    spawn: (command, args) => {
+      spawnCalls.push(args);
+      const probe = new EventEmitter();
+      probe.stdout = new EventEmitter();
+      probe.stderr = new EventEmitter();
+      process.nextTick(() => {
+        probe.stdout.emit("data", `TARGET ${front}\nIS_TERMINAL false\n`);
+        probe.emit("close", exitCode);
+      });
+      return probe;
+    },
+  });
+  let binary = "/tmp/windows-fast-paste.exe";
+  const manager = new SpawningSelectionManager({
+    clipboardManager: { resolveWindowsFastPasteBinary: () => binary },
+    textEditMonitor: {},
+    platform: "win32",
+  });
+  const terminal = { kind: "win-hwnd", id: "0x1a2b" };
+
+  assert.equal(await manager.restoreWinTarget(terminal), true, "same handle, other spelling");
+  assert.deepEqual(spawnCalls[0], ["--restore-window", "0x1a2b", "--detect-only"]);
+
+  front = "00009999";
+  assert.equal(await manager.restoreWinTarget(terminal), false, "another window came forward");
+
+  front = "00001A2B";
+  exitCode = 2;
+  assert.equal(await manager.restoreWinTarget(terminal), false, "the helper failed");
+
+  exitCode = 0;
+  assert.equal(await manager.restoreWinTarget({ kind: "win-hwnd", id: "junk" }), false);
+  assert.equal(await manager.restoreWinTarget({ kind: "x11-window", id: "7" }), false);
+
+  binary = null;
+  assert.equal(await manager.restoreWinTarget(terminal), false, "no helper, no paste");
+});
+
+test("the app context of a win32 target carries its exe, class and window title", async () => {
+  const SpawningSelectionManager = loadSelectionManager({
+    spawn: () => {
+      const probe = new EventEmitter();
+      probe.stdout = new EventEmitter();
+      probe.stderr = new EventEmitter();
+      process.nextTick(() => {
+        probe.stdout.emit(
+          "data",
+          "TARGET 00001A2B\nWINDOW_CLASS Chrome_WidgetWin_1\nEXE_NAME chrome.exe\n" +
+            "WINDOW_TITLE Inbox - Gmail - Google Chrome\nIS_TERMINAL false\n"
+        );
+        probe.emit("close", 0);
+      });
+      return probe;
+    },
+  });
+  const manager = new SpawningSelectionManager({
+    clipboardManager: { resolveWindowsFastPasteBinary: () => "/tmp/windows-fast-paste.exe" },
+    textEditMonitor: {},
+    platform: "win32",
+    now: () => 1000,
+  });
+
+  const capture = manager.captureTarget();
+  const context = manager.getTargetAppContext();
+  await capture;
+
+  assert.deepEqual(await context, {
+    appSignature: "chrome.exe Chrome_WidgetWin_1",
+    windowTitle: "Inbox - Gmail - Google Chrome",
+  });
+  // The title stays in the main process: the target itself never carries it.
+  assert.equal(JSON.stringify(manager.lastTarget).includes("Inbox"), false);
+});
+
+test("the app context of a macOS target names the app from its pid", async () => {
+  const manager = new SelectionManager({
+    clipboardManager: {},
+    textEditMonitor: {
+      lastTargetPid: 42,
+      getAppContext: async (pid) =>
+        pid === 42
+          ? { appName: "Google Chrome", bundleId: "com.google.Chrome", urlHost: "mail.google.com" }
+          : null,
+    },
+    platform: "darwin",
+    now: () => 1000,
+  });
+
+  assert.deepEqual(await manager.getTargetAppContext(), {
+    appSignature: "Google Chrome com.google.Chrome",
+    windowTitle: undefined,
+    urlHost: "mail.google.com",
+  });
+});
+
+test("an X11 target's window title is read only when the app context is asked for", async () => {
+  const calls = [];
+  const ExecSelectionManager = loadSelectionManager({
+    execFile: (command, args, _options, callback) => {
+      calls.push([command, ...args]);
+      callback(null, "Inbox - Gmail - Mozilla Firefox\n", "");
+    },
+  });
+  const manager = new ExecSelectionManager({
+    clipboardManager: {},
+    textEditMonitor: {},
+    platform: "linux",
+    now: () => 1000,
+  });
+  manager.lastTarget = { kind: "x11-window", id: "7", windowClass: "firefox" };
+
+  assert.deepEqual(await manager.getTargetAppContext(), {
+    appSignature: "firefox",
+    windowTitle: "Inbox - Gmail - Mozilla Firefox",
+  });
+  assert.deepEqual(calls, [["xdotool", "getwindowname", "7"]]);
+});
+
+test("an AT-SPI target is named from its pid and titled from its window", async () => {
+  let stdout = "";
+  const SpawningSelectionManager = loadSelectionManager({
+    spawn: () => {
+      const child = new EventEmitter();
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      child.kill = () => {};
+      process.nextTick(() => {
+        child.stdout.emit("data", stdout);
+        child.emit("close", 0);
+      });
+      return child;
+    },
+  });
+  const manager = new SpawningSelectionManager({
+    clipboardManager: { resolveLinuxFastPasteBinary: () => "/tmp/linux-fast-paste" },
+    textEditMonitor: {},
+    platform: "linux",
+    now: () => 1000,
+  });
+  manager._readTargetNames = async (pid) => (pid === "42" ? "chrome" : "");
+  const title = "Inbox - Gmail - Google Chrome";
+
+  stdout = `TARGET ATSPI 42\nWINDOW_TITLE_B64 ${Buffer.from(title).toString("base64")}\n`;
+  manager.lastTarget = await manager._getLinuxAtspiTarget();
+  assert.deepEqual(manager.lastTarget, { kind: "atspi-pid", id: "42" });
+  assert.deepEqual(await manager.getTargetAppContext(), {
+    appSignature: "chrome",
+    windowTitle: title,
+  });
+
+  // An older helper prints no title.
+  stdout = "TARGET ATSPI 42\n";
+  manager.lastTarget = await manager._getLinuxAtspiTarget();
+  assert.deepEqual(await manager.getTargetAppContext(), {
+    appSignature: "chrome",
+    windowTitle: null,
+  });
+  assert.equal(
+    await new SelectionManager({ platform: "linux", textEditMonitor: {} }).getTargetAppContext(),
+    null
+  );
+});
+
 // captureTarget() nulls lastTarget while its probe runs; a paste racing the
 // stop-press probe must wait for the answer instead of restoring nothing.
 test("getWinTarget waits for an in-flight probe before answering", async () => {

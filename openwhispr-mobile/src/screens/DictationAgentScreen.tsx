@@ -8,7 +8,6 @@ import { useConfigStore } from '@/store/useConfigStore';
 import { useConfigToggle } from '@/hooks/useConfigToggle';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { getDictationAgentName, isDictationAgentEnabled } from '@/lib/dictationAgent';
-import { PRIVATE_MODE_LOCKED_REASON } from '@/lib/aiWorkflows';
 import { safeHaptics } from '@/lib/utils';
 import { iosColor } from '@/config/colors';
 import { AppFont } from '@/lib/fonts';
@@ -23,11 +22,9 @@ export function DictationAgentScreen(): React.JSX.Element {
   const agentSelected = !!config?.inference?.agent;
   // Bring Your Own Key skips the assistant until it has a selection of its own.
   const unavailableNotice =
-    activeMode === 'private'
-      ? `${PRIVATE_MODE_LOCKED_REASON} Your settings are saved and apply once Local Mode is off.`
-      : activeMode === 'providers' && !agentSelected
-        ? 'Bring Your Own Key skips the voice assistant until you choose a provider for it in AI Models. Your settings are saved and apply once you do.'
-        : null;
+    activeMode === 'providers' && !agentSelected
+      ? 'Bring Your Own Key skips the voice assistant until you choose a provider for it in AI Models. Your settings are saved and apply once you do.'
+      : null;
   const isAvailable = !unavailableNotice;
   const enabled = config ? isDictationAgentEnabled(config) : true;
   const shareContext = config?.dictationAgentShareContext ?? false;
@@ -61,8 +58,8 @@ export function DictationAgentScreen(): React.JSX.Element {
           <Text className="text-[13px] text-secondaryLabel">
             Tap the wand on the OpenWhispr keyboard and say what to write, like a reply or a rewrite
             of the selected text. Your assistant drafts it for you to insert, regenerate or change.
-            Saying its name while dictating gives no command. Requires Cloud or Bring Your Own Key
-            mode.
+            Saying its name while dictating gives no command. It runs on the AI chosen for the Voice
+            Assistant in AI Models, whatever Dictation uses.
           </Text>
         </View>
 

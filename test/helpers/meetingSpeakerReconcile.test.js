@@ -162,6 +162,14 @@ test("roster changes refresh an auto-derived speaker config", () => {
   assert.deepEqual(broadcasts[0].payload, { enabled: true, expectedCount: 4 });
 });
 
+test("a room on the note doesn't raise the speaker config", () => {
+  const { fakeThis } = refreshConfig(false, {
+    attendees: [...THREE_ATTENDEES, { email: "room@example.com", resource: true }],
+  });
+
+  assert.equal(fakeThis.activeMeetingSpeakerConfig.expectedCount, 4);
+});
+
 test("an explicit stepper count is never overridden by roster changes", () => {
   const { fakeThis, broadcasts } = refreshConfig(true);
 

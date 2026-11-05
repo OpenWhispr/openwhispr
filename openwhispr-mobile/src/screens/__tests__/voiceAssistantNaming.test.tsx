@@ -60,7 +60,7 @@ it('names the voice assistant throughout its settings screen', () => {
   render(<DictationAgentScreen />);
   expect(screen.getByText('Enable Voice Assistant')).toBeTruthy();
   expect(screen.getByText('Assistant Name')).toBeTruthy();
-  expect(screen.getByText(/Off while Local Mode is on/)).toBeTruthy();
+  expect(screen.getByText(/the AI chosen for the Voice Assistant in AI Models/)).toBeTruthy();
   expect(screen.queryByText(/agent/i)).toBeNull();
 });
 

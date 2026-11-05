@@ -130,11 +130,11 @@ export function snapshotTextInference(
         ? unsetSelection('cleanup', activeMode, cloudAccess)
         : selection;
     const cleanupMode = localCleanup?.mode ?? 'local';
+    // The voice assistant runs its own selection, wherever the spoken instruction was transcribed.
     if (
       provider === 'local' &&
-      (scope === 'agent' ||
-        cleanupMode === 'local' ||
-        (cleanupMode === 'openwhispr' && cloudAccess !== 'account'))
+      scope === 'cleanup' &&
+      (cleanupMode === 'local' || (cleanupMode === 'openwhispr' && cloudAccess !== 'account'))
     ) {
       result[routeKey] = { mode: 'local', scope };
     } else if (!selection && provider === 'byok') {

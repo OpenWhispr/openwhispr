@@ -47,14 +47,17 @@ const MOCKS = {
     export const useNotesOnboarding = () => ({ isComplete: true, complete() {} });
   `,
   "/hooks/useTeamSpacesCapability": `export const useTeamSpacesCapability = () => false;`,
-  "/hooks/useAuth": `export const useAuth = () => ({ isSignedIn: false, user: null });`,
+  "/useAuth": `export const useAuth = () => ({ isLoaded: true, isSignedIn: false, user: globalThis.__user ?? null });`,
+  "/hooks/useSpaceRoster": `
+    export const fetchSpaceRoster = async () => globalThis.__roster ?? [];
+  `,
   "/stores/noteStore": `
     const note = () => globalThis.__note;
     export const setActiveNoteId = () => {};
     export const useActiveNoteId = () => note().id;
     export const useActiveNote = () => note();
     export const useNotes = () => [];
-    export const useSpaces = () => [];
+    export const useSpaces = () => globalThis.__spaces ?? [];
     export const useFolders = () => [];
     export const useActiveFolderId = () => null;
     export const useActiveContext = () => null;
@@ -274,3 +277,293 @@ for (const { name, transcribing, liveNoteId, expectLive } of [
     }
   });
 }
+
+const AI_SUMMARY = {
+  id: 2,
+  kind: "template",
+  name: "AI Summary",
+  prompt: "Summarize",
+  sections: null,
+};
+const PARTICIPANTS = JSON.stringify([
+  { email: "sam@example.com", displayName: "Sam Rivera", self: true },
+  { email: "alice@example.com", displayName: "Alice Ng" },
+]);
+const USER_AND_INVITEE = [
+  { name: "Sam Rivera", email: "sam@example.com" },
+  { name: "Alice Ng", email: "alice@example.com" },
+];
+
+async function runSummaryOn(t, note, speakerMappings = [], { user, spaces, roster } = {}) {
+  const calls = await mountView(t);
+  globalThis.window.electronAPI.getSpeakerMappings = async () => speakerMappings;
+  globalThis.__noteActionCalls = [];
+  globalThis.__user = user ?? { name: "Sam Rivera", email: "sam@example.com" };
+  globalThis.__spaces = spaces;
+  globalThis.__roster = roster;
+  t.after(() => {
+    delete globalThis.__noteActionCalls;
+    delete globalThis.__user;
+    delete globalThis.__spaces;
+    delete globalThis.__roster;
+  });
+  globalThis.__note = { ...NOTE, ...note };
+  await calls.rerender();
+  await React.act(async () => {
+    await globalThis.__editorProps.onRunNoteAction(AI_SUMMARY);
+  });
+  assert.equal(globalThis.__noteActionCalls.length, 1);
+  const [, input, , options] = globalThis.__noteActionCalls[0];
+  return { input, options };
+}
+
+test("a calendar-linked summary preserves named titles and only regenerates placeholders", async (t) => {
+  const calls = await mountView(t);
+  const event = { id: "calendar-title-regression", summary: "Weekly Team Sync" };
+  globalThis.window.electronAPI.gcalGetEvent = async () => ({ success: true, event });
+  globalThis.__noteActionCalls = [];
+  t.after(() => {
+    delete globalThis.__noteActionCalls;
+  });
+
+  for (const [title, allowTitleGeneration] of [
+    ["Weekly Team Sync", false],
+    ["My renamed meeting", false],
+    ["New note", true],
+    ["Untitled Note", true],
+    ["", true],
+  ]) {
+    globalThis.__note = { ...NOTE, title, calendar_event_id: event.id };
+    await calls.rerender();
+    // The old rule only renamed the note after its linked event had loaded.
+    assert.equal(globalThis.__editorProps.linkedEvent?.summary, event.summary);
+    globalThis.__noteActionCalls.length = 0;
+    await React.act(async () => {
+      await globalThis.__editorProps.onRunNoteAction(AI_SUMMARY);
+    });
+    assert.equal(globalThis.__noteActionCalls.length, 1);
+    const [, , , options] = globalThis.__noteActionCalls[0];
+    assert.equal(options.allowTitleGeneration, allowTitleGeneration, title);
+  }
+});
+
+test("a transcript stored as plain text runs as one, with the user and the invitees for owner mentions", async (t) => {
+  const transcript = "Alice, can you fix the build by Friday? Sure, I'll do it.";
+  const { input, options } = await runSummaryOn(t, { transcript, participants: PARTICIPANTS });
+  assert.equal(options.hasPlainTranscript, true);
+  assert.equal(options.isMeetingNote, false, "plain text has no speaker lines to split along");
+  assert.deepEqual(options.knownPeople, USER_AND_INVITEE);
+  assert.equal(
+    input,
+    `${NOTE.content}\n\n## Meeting Transcript\n${transcript}`,
+    "no Meeting Context, and the transcript as stored"
+  );
+});
+
+test("a meeting with speakers keeps its Meeting Context, speaker lines and known people", async (t) => {
+  const transcript = JSON.stringify([
+    { source: "mic", timestamp: 100, text: "I'll send the deck." },
+    { source: "system", timestamp: 200, text: "Ship on Friday.", speaker: "speaker_0" },
+  ]);
+  const { input, options } = await runSummaryOn(t, { transcript, participants: PARTICIPANTS }, [
+    { speaker_id: "speaker_0", display_name: "Alice Ng" },
+  ]);
+  assert.equal(options.isMeetingNote, true);
+  assert.ok(!options.hasPlainTranscript);
+  assert.deepEqual(options.knownPeople, USER_AND_INVITEE);
+  assert.ok(
+    input.includes(
+      '## Meeting Context\nThe note taker ("Sam Rivera" in the transcript) is Sam Rivera <sam@example.com>.\nInvited participants: Alice Ng <alice@example.com>.'
+    ),
+    "the owner and the invitee"
+  );
+  assert.ok(input.includes("Sam Rivera: I'll send the deck.\nAlice Ng: Ship on Friday."));
+});
+
+// A teammate opening a note shared into a team space didn't record it: the mic
+// lines are the owner's, and the viewer is at most an invitee (#2820).
+const TEAMMATE = { id: "bob-id", name: "Bob Lee", email: "bob@example.com" };
+const TEAM_NOTE = {
+  cloud_id: "cloud-note",
+  owner_user_id: "sam-id",
+  transcript: JSON.stringify([
+    { source: "mic", timestamp: 100, text: "I'll send the deck." },
+    { source: "system", timestamp: 200, text: "Ship on Friday.", speaker: "speaker_0" },
+  ]),
+};
+const TEAM_SPACE = { id: NOTE.space_id, kind: "team", cloud_space_id: "team-space" };
+
+test("a teammate's note names its owner from the space roster, not the viewer", async (t) => {
+  const { input, options } = await runSummaryOn(
+    t,
+    {
+      ...TEAM_NOTE,
+      participants: JSON.stringify([
+        { email: "alice@example.com", displayName: "Alice Ng" },
+        { email: "bob@example.com", displayName: "Bob Lee" },
+      ]),
+    },
+    [{ speaker_id: "speaker_0", display_name: "Alice Ng" }],
+    {
+      user: TEAMMATE,
+      spaces: [TEAM_SPACE],
+      roster: [{ user_id: "sam-id", name: "Sam Rivera", email: "sam@example.com" }],
+    }
+  );
+  assert.ok(
+    input.includes(
+      '## Meeting Context\nThe note taker ("Sam Rivera" in the transcript) is Sam Rivera <sam@example.com>.\nInvited participants: Alice Ng <alice@example.com>, Bob Lee <bob@example.com>.'
+    ),
+    "the owner recorded it; the viewer is an invitee"
+  );
+  assert.ok(input.includes("Sam Rivera: I'll send the deck.\nAlice Ng: Ship on Friday."));
+  assert.deepEqual(options.knownPeople, [
+    { name: "Sam Rivera", email: "sam@example.com" },
+    { name: "Alice Ng", email: "alice@example.com" },
+    { name: "Bob Lee", email: "bob@example.com" },
+  ]);
+});
+
+test("without a roster, a teammate's note is attributed to the recorder's calendar self", async (t) => {
+  const { input } = await runSummaryOn(t, { ...TEAM_NOTE, participants: PARTICIPANTS }, [], {
+    user: TEAMMATE,
+  });
+  assert.ok(input.includes("Sam Rivera: I'll send the deck."));
+  assert.ok(!input.includes("Bob Lee"));
+});
+
+test("an unknown recorder is the note taker, never the viewer", async (t) => {
+  const { input } = await runSummaryOn(t, TEAM_NOTE, [], { user: TEAMMATE });
+  assert.ok(input.includes("Note taker: I'll send the deck."));
+  assert.ok(!input.includes("Bob Lee"));
+  assert.ok(!input.includes("The note taker"));
+});
+
+test("generation keeps a viewer-local self mapping distinct from the original recorder", async (t) => {
+  const { input } = await runSummaryOn(
+    t,
+    {
+      ...TEAM_NOTE,
+      transcript: JSON.stringify([
+        { source: "mic", speaker: "you", text: "Original words" },
+        { source: "mic", speaker: "speaker_0", text: "My commitment" },
+      ]),
+    },
+    [{ speaker_id: "speaker_0", display_name: "You" }],
+    {
+      user: TEAMMATE,
+      spaces: [TEAM_SPACE],
+      roster: [{ user_id: "sam-id", name: "Sam Rivera", email: "sam@example.com" }],
+    }
+  );
+  assert.ok(input.includes("Sam Rivera: Original words\nBob Lee: My commitment"));
+});
+
+test("generation attributes a custodian's note to its creator", async (t) => {
+  const { input, options } = await runSummaryOn(
+    t,
+    {
+      ...TEAM_NOTE,
+      owner_user_id: TEAMMATE.id,
+      created_by_user_id: "sam-id",
+    },
+    [],
+    {
+      user: TEAMMATE,
+      spaces: [TEAM_SPACE],
+      roster: [{ user_id: "sam-id", name: "Sam Rivera", email: "sam@example.com" }],
+    }
+  );
+  assert.ok(input.includes('The note taker ("Sam Rivera" in the transcript) is Sam Rivera'));
+  assert.ok(input.includes("Sam Rivera: I'll send the deck."));
+  assert.ok(!input.includes("Bob Lee"));
+  assert.deepEqual(options.knownPeople, [{ name: "Sam Rivera", email: "sam@example.com" }]);
+});
+
+for (const [name, participants, label] of [
+  ["calendar self", PARTICIPANTS, "Sam Rivera"],
+  ["neutral fallback", null, "Note taker"],
+]) {
+  test(`a cleared creator keeps the ${name} in generation instead of the custodian`, async (t) => {
+    const { input } = await runSummaryOn(
+      t,
+      {
+        ...TEAM_NOTE,
+        owner_user_id: TEAMMATE.id,
+        created_by_user_id: null,
+        participants,
+      },
+      [],
+      {
+        user: TEAMMATE,
+        spaces: [TEAM_SPACE],
+        roster: [{ user_id: TEAMMATE.id, name: TEAMMATE.name, email: TEAMMATE.email }],
+      }
+    );
+    assert.ok(input.includes(`${label}: I'll send the deck.`));
+    assert.ok(!input.includes("Bob Lee"));
+  });
+}
+
+test("a note without a transcript keeps the personal-note run", async (t) => {
+  const { input, options } = await runSummaryOn(t, { transcript: "", participants: PARTICIPANTS });
+  assert.equal(input, NOTE.content);
+  assert.equal(options.isMeetingNote, false);
+  assert.ok(!options.hasPlainTranscript);
+  assert.deepEqual(options.knownPeople, []);
+});
+
+// Uploads whose provider named no speakers store segments with no speaker or
+// source (and with no timing when it returned no segments): nothing shows who
+// speaks, so they must not run as a meeting with every line given to "Them" (#2666).
+test("an upload stored as untimed segments runs as a plain transcript beside the user's notes", async (t) => {
+  const text = "Alice, can you fix the build by Friday? Sure.";
+  const { input, options } = await runSummaryOn(t, {
+    note_type: "upload",
+    transcript: JSON.stringify([{ text }]),
+    participants: PARTICIPANTS,
+  });
+  assert.equal(options.hasPlainTranscript, true);
+  assert.equal(options.isMeetingNote, false);
+  assert.equal(input, `${NOTE.content}\n\n## Meeting Transcript\n${text}`);
+  assert.deepEqual(options.material, { notes: NOTE.content, meetingContext: "", transcript: text });
+  assert.deepEqual(options.knownPeople, USER_AND_INVITEE);
+});
+
+test("an upload with timed segments but no speakers runs as a plain transcript", async (t) => {
+  const transcript = JSON.stringify([
+    { text: "First part.", timestamp: 1_700_000_000_000 },
+    { text: "Second part.", timestamp: 1_700_000_004_000 },
+  ]);
+  const { input, options } = await runSummaryOn(t, { note_type: "upload", transcript });
+  assert.equal(options.hasPlainTranscript, true);
+  assert.equal(options.isMeetingNote, false);
+  assert.ok(input.endsWith("## Meeting Transcript\nFirst part.\n\nSecond part."));
+});
+
+test("an upload with timed speaker segments still runs as a meeting", async (t) => {
+  const transcript = JSON.stringify([
+    { text: "Ship on Friday.", timestamp: 1_700_000_000_000, speaker: "speaker_0" },
+  ]);
+  const { input, options } = await runSummaryOn(t, { note_type: "upload", transcript });
+  assert.equal(options.isMeetingNote, true);
+  assert.ok(!options.hasPlainTranscript);
+  assert.ok(input.includes("Speaker 1: Ship on Friday."));
+});
+
+// Uploads made before the transcript held their text saved it as the note's
+// text and left the transcript empty, so that text is the transcript.
+test("an upload whose transcript is the note's text runs as a plain transcript", async (t) => {
+  const content = "Alice, can you fix the build by Friday? Sure.";
+  const { input, options } = await runSummaryOn(t, {
+    note_type: "upload",
+    content,
+    transcript: "",
+    participants: null,
+  });
+  assert.equal(options.hasPlainTranscript, true);
+  assert.equal(options.isMeetingNote, false);
+  assert.equal(input, `## Meeting Transcript\n${content}`, "not the user's own notes");
+  assert.deepEqual(options.material, { notes: "", meetingContext: "", transcript: content });
+  assert.deepEqual(options.knownPeople, [{ name: "Sam Rivera", email: "sam@example.com" }]);
+});
