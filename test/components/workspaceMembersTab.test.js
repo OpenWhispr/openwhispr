@@ -94,6 +94,24 @@ async function loadMembersTab(
           return teamAdd;
         }
       `,
+      "/CreateTeamDialog": `
+        import React from "react";
+        export default function CreateTeamDialog(props) {
+          globalThis.__createDialog = props;
+          globalThis.__createDialogRenders = (globalThis.__createDialogRenders ?? 0) + 1;
+          React.useEffect(() => {
+            globalThis.__createDialogMounts = (globalThis.__createDialogMounts ?? 0) + 1;
+            return () => { globalThis.__createDialogMounts -= 1; };
+          }, []);
+          return null;
+        }
+      `,
+      "/TeamPaywallDialog": `
+        export default function TeamPaywallDialog(props) {
+          globalThis.__paywall = props;
+          return null;
+        }
+      `,
       "/AddToTeamspaceMenu": `
         export function useAddToTeamspace(args) {
           globalThis.__teamspaceArgs = args;
@@ -151,6 +169,10 @@ async function loadMembersTab(
     delete globalThis.__removeDialog;
     delete globalThis.__addMenu;
     delete globalThis.__teamspaceArgs;
+    delete globalThis.__createDialog;
+    delete globalThis.__createDialogRenders;
+    delete globalThis.__createDialogMounts;
+    delete globalThis.__paywall;
   });
   globalThis.__workspaceMembers = members;
   globalThis.__membersWorkspaceId = membersWorkspaceId;
@@ -932,4 +954,106 @@ test("the row menus get Add to team only with manage_members", async (t) => {
   const viewer = globalThis.__roleMenus["u-mason"];
   assert.equal(viewer.teamAdd, undefined);
   assert.equal(viewer.workspace, undefined);
+});
+
+const PAYWALL_WORKSPACE = {
+  ...ADMIN_WORKSPACE,
+  capabilities: {
+    manage_members: true,
+    manage_teams: true,
+    create_teams: false,
+    create_spaces: true,
+    manage_settings: true,
+    manage_billing: false,
+    delete_workspace: false,
+    transfer_ownership: false,
+    leave: true,
+  },
+};
+
+async function selectTwo(container) {
+  await React.act(async () => propsOf(checkboxes(container)[1]).onClick());
+  await React.act(async () => propsOf(checkboxes(container)[3]).onClick());
+  assert.match(barText(container), /selection\.count#2/);
+}
+
+test("the selection arrives as chips", async (t) => {
+  const { container } = await mountPeople(t);
+  await selectTwo(container);
+  assert.equal(globalThis.__createDialog.open, false);
+
+  await React.act(async () => globalThis.__addMenu.onCreateTeam());
+
+  assert.equal(globalThis.__createDialog.open, true);
+  assert.equal(globalThis.__paywall.open, false);
+  assert.deepEqual(
+    globalThis.__createDialog.initialPeople.map((member) => member.user_id),
+    ["u-member", "u-mason"]
+  );
+});
+
+test("the selection clears and the Team column updates", async (t) => {
+  let reads = 0;
+  const WorkspaceMembersTab = await loadMembersTab(t, {
+    members: PEOPLE,
+    refreshMembers: async () => {
+      reads += 1;
+    },
+  });
+  globalThis.__authUser = { id: "u-admin" };
+  const container = await mount(t, WorkspaceMembersTab, ADMIN_WORKSPACE);
+  await selectTwo(container);
+  await React.act(async () => globalThis.__addMenu.onCreateTeam());
+  const readsBefore = reads;
+
+  await React.act(async () =>
+    globalThis.__createDialog.onCreated({ id: "t9", name: "Sales" }, { memberCount: 2 })
+  );
+
+  assert.doesNotMatch(barText(container), /selection\.count/);
+  assert.equal(reads, readsBefore + 1, "the roster is read again for the Team column");
+  // The bar is gone, and the dialog is still mounted to finish closing.
+  assert.equal(globalThis.__createDialogMounts, 1);
+  assert.deepEqual(
+    globalThis.__createDialog.initialPeople.map((member) => member.user_id),
+    ["u-member", "u-mason"],
+    "the dialog keeps the people it opened with"
+  );
+});
+
+test("Cancel keeps the selection", async (t) => {
+  const { container } = await mountPeople(t);
+  await selectTwo(container);
+  await React.act(async () => globalThis.__addMenu.onCreateTeam());
+
+  await React.act(async () => globalThis.__createDialog.onOpenChange(false));
+
+  assert.equal(globalThis.__createDialog.open, false);
+  assert.match(barText(container), /selection\.count#2/);
+});
+
+test("below Business the paywall opens instead, and the selection stays", async (t) => {
+  const WorkspaceMembersTab = await loadMembersTab(t, { members: PEOPLE });
+  globalThis.__authUser = { id: "u-admin" };
+  const container = await mount(t, WorkspaceMembersTab, PAYWALL_WORKSPACE);
+  await selectTwo(container);
+
+  await React.act(async () => globalThis.__addMenu.onCreateTeam());
+
+  assert.equal(globalThis.__paywall.open, true);
+  assert.equal(globalThis.__createDialog.open, false);
+  await React.act(async () => globalThis.__paywall.onOpenChange(false));
+  assert.match(barText(container), /selection\.count#2/);
+});
+
+test("a refusal on plan from the form hands over to the paywall", async (t) => {
+  const { container } = await mountPeople(t);
+  await selectTwo(container);
+  await React.act(async () => globalThis.__addMenu.onCreateTeam());
+
+  await React.act(async () => globalThis.__createDialog.onPlanRequired());
+
+  assert.equal(globalThis.__createDialog.open, false);
+  assert.equal(globalThis.__paywall.open, true);
+  assert.match(barText(container), /selection\.count#2/);
 });

@@ -158,6 +158,8 @@ function CreateTeamForm({
   const tooManyInvites = emails.length > MAX_INVITE_RECIPIENTS;
   const blocked = hasInvalid || tooManyInvites;
   const selectionFirst = (initialPeople?.length ?? 0) > 0;
+  // A selection's people are known without the roster; anything typed needs it.
+  const showField = selectionFirst || (rosterLoaded && !loadFailed);
 
   const handleNameChange = (next: string): void => {
     setName(next);
@@ -250,6 +252,7 @@ function CreateTeamForm({
           t,
           language: i18n.language,
           team: trimmedName,
+          fromSelection: selectionFirst,
           added: addedNames,
           invited: invite.invited,
           failed: invite.failed,
@@ -355,9 +358,10 @@ function CreateTeamForm({
                 {t("settingsPage.workspace.loadError.retry")}
               </Button>
             </div>
-          ) : !rosterLoaded ? (
-            <div className="h-10 animate-pulse rounded-lg bg-foreground/5 dark:bg-white/5" />
-          ) : (
+          ) : null}
+          {/* A selection's people are known without the roster, so they show (and are sent) even
+              while it loads or fails; only suggestions need it. */}
+          {showField ? (
             <>
               <SpacePeopleField
                 id="create-team-people"
@@ -374,6 +378,8 @@ function CreateTeamForm({
               />
               {selectionFirst ? null : note}
             </>
+          ) : loadFailed ? null : (
+            <div className="h-10 animate-pulse rounded-lg bg-foreground/5 dark:bg-white/5" />
           )}
           {peopleError}
           {failure?.kind === "general" && bar(t(`${FORM_KEY}.failed`))}
@@ -405,6 +411,8 @@ interface CreatedToastInput {
   t: TFunction;
   language: string;
   team: string;
+  /** People chosen on People are counted, as the frame reads, never named. */
+  fromSelection: boolean;
   added: string[];
   invited: string[];
   failed: string[];
@@ -417,6 +425,7 @@ function createdToast({
   t,
   language,
   team,
+  fromSelection,
   added,
   invited,
   failed,
@@ -429,7 +438,11 @@ function createdToast({
   let title: string;
   if (failed.length > 0) {
     title = t(`${FORM_KEY}.createdSomeNotInvited`, { team: teamName, count: failed.length });
-  } else if (added.length > NAMED_PER_LIST || invited.length > NAMED_PER_LIST) {
+  } else if (
+    added.length > NAMED_PER_LIST ||
+    invited.length > NAMED_PER_LIST ||
+    (fromSelection && added.length > 0 && invited.length === 0)
+  ) {
     title = t(`${FORM_KEY}.createdWithMembers`, {
       team: teamName,
       count: added.length + invited.length,

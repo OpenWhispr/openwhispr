@@ -15,7 +15,7 @@ import type { Workspace, WorkspaceJoinRequest, WorkspaceMember } from "../../typ
 import MemberAvatar from "../MemberAvatar";
 import { cn } from "../lib/utils";
 import { isolate } from "../../utils/bidiIsolate";
-import { workspaceCan } from "../../lib/capabilities";
+import { teamCreationFor, workspaceCan } from "../../lib/capabilities";
 import { memberRemovalReducer } from "../../lib/memberRemovalFlow";
 import {
   headerCheckState,
@@ -27,6 +27,8 @@ import {
 import { membersView, rosterFor, rosterHasTeams } from "../../lib/peopleRoster";
 import { classifyRowActionError, type RowActionError } from "../../lib/workspaceErrors";
 import { transferReducer } from "../../lib/workspaceTransferFlow";
+import CreateTeamDialog from "../CreateTeamDialog";
+import TeamPaywallDialog from "../workspace/TeamPaywallDialog";
 import { RemoveMembersDialog } from "../workspace/RemoveMembersDialog";
 import { RowCheckbox } from "../dictionary/RowCheckbox";
 import { useAddToTeamspace } from "../workspace/AddToTeamspaceMenu";
@@ -83,6 +85,12 @@ export default function WorkspaceMembersTab({
   // selection, and a dialog inside it would go with it.
   const teamAdd = useAddPeopleToTeam(workspace);
   const barOpenerRef = useRef<HTMLElement | null>(null);
+  // Create team lives here for the same reason. The form keeps the people it opened with, since
+  // the selection clears the moment a team is created while the dialog finishes closing.
+  const [createOpen, setCreateOpen] = useState(false);
+  const [paywallOpen, setPaywallOpen] = useState(false);
+  const [createPeople, setCreatePeople] = useState<WorkspaceMember[]>([]);
+  const teamCreation = teamCreationFor(workspace);
   const canTransferOwnership = workspaceCan(workspace, "transfer_ownership");
 
   async function loadMembers(): Promise<void> {
@@ -254,6 +262,15 @@ export default function WorkspaceMembersTab({
     setSelection((current) => keepRows(current, selectableIds));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectableKey]);
+
+  function startCreateTeam(): void {
+    if (teamCreation === "allowed") {
+      setCreatePeople(selectedMembers);
+      setCreateOpen(true);
+    } else if (teamCreation === "paywall") {
+      setPaywallOpen(true);
+    }
+  }
 
   function openRemoval(subjects: WorkspaceMember[]): void {
     dispatchRemove({ type: "open", subjects, defaultOwnerId: user?.id ?? "" });
@@ -551,12 +568,38 @@ export default function WorkspaceMembersTab({
             teamAdd={teamAdd}
             teamspace={teamspace}
             openerRef={barOpenerRef}
+            onCreateTeam={startCreateTeam}
           />
         }
       />
 
       {teamAdd.dialog}
       {teamspace.dialog}
+
+      {teamCreation !== "unavailable" && (
+        <>
+          <CreateTeamDialog
+            workspace={workspace}
+            open={createOpen}
+            onOpenChange={setCreateOpen}
+            initialPeople={createPeople}
+            onCreated={async () => {
+              // The dialog has toasted; the Team column reads the roster.
+              setSelection(new Set());
+              await refreshMembers(workspace.id).catch(() => undefined);
+            }}
+            onPlanRequired={() => {
+              setCreateOpen(false);
+              setPaywallOpen(true);
+            }}
+          />
+          <TeamPaywallDialog
+            workspace={workspace}
+            open={paywallOpen}
+            onOpenChange={setPaywallOpen}
+          />
+        </>
+      )}
 
       <TransferOwnershipDialog
         workspace={workspace}

@@ -1,6 +1,7 @@
 import { useEffect, useReducer, useRef, useState, type ReactElement, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { useWorkspaceTeams, type WorkspaceTeamsState } from "../../hooks/useWorkspaceTeams";
+import { teamCreationFor } from "../../lib/capabilities";
 import { confirmActionReducer } from "../../lib/confirmActionFlow";
 import { formatList } from "../../lib/formatList";
 import { classifyTeamError } from "../../lib/workspaceErrors";
@@ -294,8 +295,8 @@ interface PeopleAddMenuProps {
   teamspace: AddToTeamspace;
   /** Whichever button opened a menu, which the teamspace controller hands focus back to. */
   openerRef: RefObject<HTMLElement | null>;
-  /** Create team with selected; the item is left out while nothing handles it. */
-  onCreateTeam?: () => void;
+  /** Create team with selected, which opens the form or the paywall; the page decides which. */
+  onCreateTeam: () => void;
 }
 
 const PILL_BUTTON =
@@ -393,7 +394,7 @@ export function PeopleAddMenu({
             </DropdownMenuPortal>
           </DropdownMenuSub>
           {teamspace.submenu}
-          {onCreateTeam ? (
+          {teamCreationFor(workspace) !== "unavailable" ? (
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem className="gap-2 text-sm" onSelect={onCreateTeam}>

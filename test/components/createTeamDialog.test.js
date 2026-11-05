@@ -208,6 +208,7 @@ async function mount(
     props = {},
     canManageMembers = true,
     createTeam = async () => createdTeam(),
+    rosterFails = false,
     sendInvitations = async ({ emails, onResult }) => {
       for (const email of emails) onResult(email, { ok: true, emailSent: true });
     },
@@ -220,6 +221,7 @@ async function mount(
     members: [],
     membersWorkspaceId: null,
     refreshMembers: async (workspaceId) => {
+      if (rosterFails) throw new Error("offline");
       store.members = ROSTER;
       store.membersWorkspaceId = workspaceId;
     },
@@ -510,6 +512,65 @@ test("a selection's people start as chips, with the short note ahead of them", a
     name: "Engineering",
     memberIds: ["ethan", "saket"],
   });
+});
+
+test("the selection arrives as chips, whether or not the roster read succeeded", async (t) => {
+  await mount(t, { rosterFails: true, props: { initialPeople: [ROSTER[1], ROSTER[2]] } });
+  assert.deepEqual(chipTexts(), ["Ethan", "Saket"]);
+  assert.match(text(dialog()), /Couldn't load/i);
+  assert.match(text(dialog()), /You're added as the team's admin\./);
+});
+
+test("the creator isn't among them", async (t) => {
+  const { callsTo } = await mount(t, {
+    rosterFails: true,
+    props: { initialPeople: [ROSTER[0], ROSTER[1]] },
+  });
+  assert.deepEqual(chipTexts(), ["Ethan"]);
+  await type(nameInput(), "Engineering");
+  await click(createButton());
+  assert.deepEqual(callsTo("createTeam")[0][2].memberIds, ["ethan"]);
+});
+
+test("Created names the team and counts the people", async (t) => {
+  const { toasts, callsTo } = await mount(t, {
+    createTeam: async () => createdTeam("Engineering"),
+    props: { initialPeople: [ROSTER[0], ROSTER[1], ROSTER[2]] },
+  });
+  await type(nameInput(), "Engineering");
+  await click(createButton());
+
+  assert.equal(toasts().length, 1, "one toast");
+  assert.equal(readable(toasts()[0].title), "Created Engineering with 2 members");
+  assert.deepEqual(callsTo("created")[0][2], { memberCount: 2 });
+});
+
+test("a selection of one is counted too", async (t) => {
+  const { toasts } = await mount(t, { props: { initialPeople: [ROSTER[1]] } });
+  await type(nameInput(), "Sales");
+  await click(createButton());
+  assert.equal(readable(toasts()[0].title), "Created Sales with 1 member");
+});
+
+test("someone who left since the selection comes off, with the server's words", async (t) => {
+  const { closes } = await mount(t, {
+    rosterFails: true,
+    props: { initialPeople: [ROSTER[1], ROSTER[2]] },
+    createTeam: async () => {
+      throw new CloudApiError(
+        "Ethan is no longer in this workspace",
+        400,
+        "not_workspace_members",
+        { user_ids: ["ethan"] }
+      );
+    },
+  });
+  await type(nameInput(), "Sales");
+  await click(createButton());
+
+  assert.deepEqual(chipTexts(), ["Saket"]);
+  assert.deepEqual(alertTexts(), ["Ethan is no longer in this workspace"]);
+  assert.deepEqual(closes, []);
 });
 
 test("invitations go out one batch per role, never throwing", async () => {

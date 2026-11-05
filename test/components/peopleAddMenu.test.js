@@ -128,10 +128,10 @@ function Host({ state }) {
     state.people = next;
     setPeople(next);
   };
-  const teamAdd = useAddPeopleToTeam(WORKSPACE);
+  const teamAdd = useAddPeopleToTeam(state.workspace);
   const openerRef = React.useRef(null);
   const teamspace = useAddToTeamspace({
-    workspace: WORKSPACE,
+    workspace: state.workspace,
     people,
     onAdded: state.onAdded,
     returnFocusRef: openerRef,
@@ -141,7 +141,7 @@ function Host({ state }) {
     null,
     people.length > 0
       ? h(PeopleAddMenu, {
-          workspace: WORKSPACE,
+          workspace: state.workspace,
           people,
           onAdded: state.onAdded,
           teamAdd,
@@ -163,7 +163,7 @@ async function mount(t, options = {}) {
     people = [LUCAS, MASON],
     teams = TEAMS,
     api = {},
-    withCreateTeam = false,
+    workspace = WORKSPACE,
     // A host that goes away mid-run, as the People page does when the selection empties.
     unmountable = false,
     // Runs when the roster is read; it may change who is selected, as a real refresh does.
@@ -215,7 +215,8 @@ async function mount(t, options = {}) {
       calls.push(["cleared"]);
       added.push(state.people.map((member) => member.user_id));
     },
-    onCreateTeam: withCreateTeam ? () => calls.push(["createTeam"]) : undefined,
+    workspace,
+    onCreateTeam: () => calls.push(["createTeam"]),
   };
   await React.act(async () => {
     root.render(h(Host, { state }));
@@ -299,7 +300,7 @@ test("teamCoverage: a roster with no teams field counts zero", () => {
 // ---- the split button and its menus
 
 test("the bar's menu has both submenus", async (t) => {
-  const { callsTo } = await mount(t, { withCreateTeam: true });
+  const { callsTo } = await mount(t);
 
   assert.equal(callsTo("teams").length, 0, "teams are read when a menu first opens");
   await openChevronMenu();
@@ -313,14 +314,27 @@ test("the bar's menu has both submenus", async (t) => {
   assert.equal(itemNamed("Add to teamspace").getAttribute("aria-haspopup"), "menu");
 });
 
-test("Create team with selected is hidden until something handles it", async (t) => {
-  await mount(t);
+test("Create team with selected is hidden when the caller can't create teams", async (t) => {
+  await mount(t, { workspace: { ...WORKSPACE, role: "member" } });
   await openChevronMenu();
   assert.deepEqual(items().map(text), ["Add to team", "Add to teamspace"]);
 });
 
+test("below Business the item stays, since the page opens the paywall", async (t) => {
+  const { callsTo } = await mount(t, {
+    workspace: {
+      ...WORKSPACE,
+      capabilities: { manage_members: true, manage_teams: true, create_teams: false },
+    },
+  });
+  await openChevronMenu();
+  await ui.click(itemNamed("Create team with selected"));
+  await ui.settle();
+  assert.equal(callsTo("createTeam").length, 1);
+});
+
 test("Create team with selected calls the page's handler", async (t) => {
-  const { callsTo } = await mount(t, { withCreateTeam: true });
+  const { callsTo } = await mount(t);
   await openChevronMenu();
   await ui.click(itemNamed("Create team with selected"));
   await ui.settle();
