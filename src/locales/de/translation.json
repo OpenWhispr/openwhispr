@@ -1794,7 +1794,10 @@
           "selectAllInvitations": "Alle Einladungen auswählen",
           "selectRow": "{{name}} auswählen",
           "remove": "Entfernen",
-          "addToTeamspace": "Zu Teamspace hinzufügen"
+          "addToTeamspace": "Zu Teamspace hinzufügen",
+          "addToTeam": "Zu Team hinzufügen",
+          "createTeam": "Team mit Auswahl erstellen",
+          "moreOptions": "Weitere Optionen"
         },
         "teamsCount_one": "{{count}} Team",
         "teamsCount_other": "{{count}} Teams",
@@ -2184,7 +2187,22 @@
           "deleteFailedBody": "Das Team und seine Zugriffseinstellungen sind unverändert. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
           "deleteNotAllowed": "Sie haben keine Berechtigung, {{team}} zu löschen."
         },
-        "managedByDirectory": "Von Ihrem Verzeichnis verwaltet"
+        "managedByDirectory": "Von Ihrem Verzeichnis verwaltet",
+        "addPeople": {
+          "someAdded": "{{team}} · {{covered}} von {{total}} bereits hinzugefügt",
+          "none": "Noch keine Teams",
+          "addingTitle_one": "{{count}} Person wird hinzugefügt…",
+          "addingTitle_other": "{{count}} Personen werden hinzugefügt…",
+          "addingBody": "Lassen Sie dieses Fenster geöffnet, während sie zu {{team}} hinzugefügt werden.",
+          "addingAction": "Wird hinzugefügt…",
+          "failedTitle_one": "{{count}} Person konnte nicht hinzugefügt werden",
+          "failedTitle_other": "{{count}} Personen konnten nicht hinzugefügt werden",
+          "failedBody": "Sie wurden nicht zu {{team}} hinzugefügt. Ihre Auswahl bleibt erhalten.",
+          "done_one": "{{count}} Mitglied zu {{team}} hinzugefügt",
+          "done_other": "{{count}} Mitglieder zu {{team}} hinzugefügt",
+          "someDone": "{{added}} zu {{team}} hinzugefügt. {{already}} war bereits Mitglied.",
+          "someDonePlural": "{{added}} zu {{team}} hinzugefügt. {{already}} waren bereits Mitglieder."
+        }
       },
       "invites": {
         "resending": "Sende erneut…",

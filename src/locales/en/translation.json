@@ -1794,7 +1794,10 @@
           "selectAllInvitations": "Select all invitations",
           "selectRow": "Select {{name}}",
           "remove": "Remove",
-          "addToTeamspace": "Add to teamspace"
+          "addToTeamspace": "Add to teamspace",
+          "addToTeam": "Add to team",
+          "createTeam": "Create team with selected",
+          "moreOptions": "More options"
         },
         "teamsCount_one": "{{count}} Team",
         "teamsCount_other": "{{count}} Teams",
@@ -2184,7 +2187,22 @@
           "deleteFailedBody": "The team and its access settings are unchanged. Check your connection and try again.",
           "deleteNotAllowed": "You don't have permission to delete {{team}}."
         },
-        "managedByDirectory": "Managed by your directory"
+        "managedByDirectory": "Managed by your directory",
+        "addPeople": {
+          "someAdded": "{{team}} · {{covered}} of {{total}} already added",
+          "none": "No teams yet",
+          "addingTitle_one": "Adding {{count}} person…",
+          "addingTitle_other": "Adding {{count}} people…",
+          "addingBody": "Keep this window open while they're added to {{team}}.",
+          "addingAction": "Adding…",
+          "failedTitle_one": "Couldn't add {{count}} person",
+          "failedTitle_other": "Couldn't add {{count}} people",
+          "failedBody": "They haven't been added to {{team}}. Your selection is kept.",
+          "done_one": "Added {{count}} member to {{team}}",
+          "done_other": "Added {{count}} members to {{team}}",
+          "someDone": "Added {{added}} to {{team}}. {{already}} was already a member.",
+          "someDonePlural": "Added {{added}} to {{team}}. {{already}} were already members."
+        }
       },
       "invites": {
         "resending": "Resending…",

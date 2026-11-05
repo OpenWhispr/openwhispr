@@ -2523,7 +2523,10 @@
           "selectAllInvitations": "選取所有邀請",
           "selectRow": "選取 {{name}}",
           "remove": "移除",
-          "addToTeamspace": "加入 Teamspace"
+          "addToTeamspace": "加入 Teamspace",
+          "addToTeam": "加入團隊",
+          "createTeam": "以所選人員建立團隊",
+          "moreOptions": "更多選項"
         },
         "teamsCount_one": "{{count}} 個團隊",
         "teamsCount_other": "{{count}} 個團隊",
@@ -2913,7 +2916,22 @@
           "deleteFailedBody": "團隊及其存取設定維持不變。請檢查網路連線後再試一次。",
           "deleteNotAllowed": "你沒有刪除 {{team}} 的權限。"
         },
-        "managedByDirectory": "由你的目錄管理"
+        "managedByDirectory": "由你的目錄管理",
+        "addPeople": {
+          "someAdded": "{{team}} · 已加入 {{covered}}/{{total}} 人",
+          "none": "還沒有團隊",
+          "addingTitle_one": "正在加入 {{count}} 人…",
+          "addingTitle_other": "正在加入 {{count}} 人…",
+          "addingBody": "將他們加入 {{team}} 期間，請保持此視窗開啟。",
+          "addingAction": "正在加入…",
+          "failedTitle_one": "無法加入 {{count}} 人",
+          "failedTitle_other": "無法加入 {{count}} 人",
+          "failedBody": "他們尚未加入 {{team}}。你的選取內容已保留。",
+          "done_one": "已將 {{count}} 名成員加入 {{team}}",
+          "done_other": "已將 {{count}} 名成員加入 {{team}}",
+          "someDone": "已將 {{added}} 加入 {{team}}。{{already}} 已是成員。",
+          "someDonePlural": "已將 {{added}} 加入 {{team}}。{{already}} 已是成員。"
+        }
       },
       "invites": {
         "resending": "重新傳送中…",

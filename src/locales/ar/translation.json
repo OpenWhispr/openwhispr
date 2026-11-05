@@ -3947,7 +3947,10 @@
           "selectAllInvitations": "تحديد كل الدعوات",
           "selectRow": "تحديد {{name}}",
           "remove": "إزالة",
-          "addToTeamspace": "إضافة إلى مساحة الفريق"
+          "addToTeamspace": "إضافة إلى مساحة الفريق",
+          "addToTeam": "إضافة إلى فريق",
+          "createTeam": "إنشاء فريق من المحددين",
+          "moreOptions": "خيارات أخرى"
         },
         "teamsCount_zero": "{{count}} فريق",
         "teamsCount_one": "{{count}} فريق",
@@ -4443,7 +4446,34 @@
           "deleteFailedBody": "لم يتغير الفريق ولا إعدادات الوصول الخاصة به. تحقق من اتصالك وحاول مرة أخرى.",
           "deleteNotAllowed": "ليس لديك إذن لحذف {{team}}."
         },
-        "managedByDirectory": "تتم إدارته بواسطة دليلك"
+        "managedByDirectory": "تتم إدارته بواسطة دليلك",
+        "addPeople": {
+          "someAdded": "{{team}} · أُضيف {{covered}} من {{total}} بالفعل",
+          "none": "لا توجد فرق بعد",
+          "addingTitle_zero": "جارٍ إضافة {{count}} أشخاص…",
+          "addingTitle_one": "جارٍ إضافة {{count}} شخص…",
+          "addingTitle_two": "جارٍ إضافة {{count}} شخصين…",
+          "addingTitle_few": "جارٍ إضافة {{count}} أشخاص…",
+          "addingTitle_many": "جارٍ إضافة {{count}} شخصًا…",
+          "addingTitle_other": "جارٍ إضافة {{count}} شخص…",
+          "addingBody": "أبقِ هذه النافذة مفتوحة أثناء إضافتهم إلى {{team}}.",
+          "addingAction": "جارٍ الإضافة…",
+          "failedTitle_zero": "تعذرت إضافة {{count}} أشخاص",
+          "failedTitle_one": "تعذرت إضافة {{count}} شخص",
+          "failedTitle_two": "تعذرت إضافة {{count}} شخصين",
+          "failedTitle_few": "تعذرت إضافة {{count}} أشخاص",
+          "failedTitle_many": "تعذرت إضافة {{count}} شخصًا",
+          "failedTitle_other": "تعذرت إضافة {{count}} شخص",
+          "failedBody": "لم تتم إضافتهم إلى {{team}}. تم الاحتفاظ باختيارك.",
+          "done_zero": "تمت إضافة {{count}} أعضاء إلى {{team}}",
+          "done_one": "تمت إضافة {{count}} عضو إلى {{team}}",
+          "done_two": "تمت إضافة {{count}} عضوين إلى {{team}}",
+          "done_few": "تمت إضافة {{count}} أعضاء إلى {{team}}",
+          "done_many": "تمت إضافة {{count}} عضوًا إلى {{team}}",
+          "done_other": "تمت إضافة {{count}} عضو إلى {{team}}",
+          "someDone": "تمت إضافة {{added}} إلى {{team}}. {{already}} عضو بالفعل.",
+          "someDonePlural": "تمت إضافة {{added}} إلى {{team}}. {{already}} أعضاء بالفعل."
+        }
       },
       "invites": {
         "resending": "جاري إعادة الإرسال…",

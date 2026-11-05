@@ -2523,7 +2523,10 @@
           "selectAllInvitations": "すべての招待を選択",
           "selectRow": "{{name}} を選択",
           "remove": "削除",
-          "addToTeamspace": "Teamspace に追加"
+          "addToTeamspace": "Teamspace に追加",
+          "addToTeam": "チームに追加",
+          "createTeam": "選択した人でチームを作成",
+          "moreOptions": "その他のオプション"
         },
         "teamsCount_one": "{{count}} チーム",
         "teamsCount_other": "{{count}} チーム",
@@ -2913,7 +2916,22 @@
           "deleteFailedBody": "チームとアクセス設定は変更されていません。接続を確認して、もう一度お試しください。",
           "deleteNotAllowed": "{{team}} を削除する権限がありません。"
         },
-        "managedByDirectory": "ディレクトリで管理されています"
+        "managedByDirectory": "ディレクトリで管理されています",
+        "addPeople": {
+          "someAdded": "{{team}} · {{total}}人中{{covered}}人が追加済み",
+          "none": "チームはまだありません",
+          "addingTitle_one": "{{count}}人を追加しています…",
+          "addingTitle_other": "{{count}}人を追加しています…",
+          "addingBody": "{{team}} への追加が完了するまで、このウィンドウを開いたままにしてください。",
+          "addingAction": "追加中…",
+          "failedTitle_one": "{{count}}人を追加できませんでした",
+          "failedTitle_other": "{{count}}人を追加できませんでした",
+          "failedBody": "{{team}} に追加されていません。選択内容は保持されています。",
+          "done_one": "{{count}}人のメンバーを {{team}} に追加しました",
+          "done_other": "{{count}}人のメンバーを {{team}} に追加しました",
+          "someDone": "{{added}} を {{team}} に追加しました。{{already}} はすでにメンバーです。",
+          "someDonePlural": "{{added}} を {{team}} に追加しました。{{already}} はすでにメンバーです。"
+        }
       },
       "invites": {
         "resending": "再送信中…",

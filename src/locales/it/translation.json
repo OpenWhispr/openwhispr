@@ -2523,7 +2523,10 @@
           "selectAllInvitations": "Seleziona tutti gli inviti",
           "selectRow": "Seleziona {{name}}",
           "remove": "Rimuovi",
-          "addToTeamspace": "Aggiungi al teamspace"
+          "addToTeamspace": "Aggiungi al teamspace",
+          "addToTeam": "Aggiungi a un team",
+          "createTeam": "Crea team con la selezione",
+          "moreOptions": "Altre opzioni"
         },
         "teamsCount_one": "{{count}} team",
         "teamsCount_other": "{{count}} team",
@@ -2913,7 +2916,22 @@
           "deleteFailedBody": "Il team e le sue impostazioni di accesso sono invariati. Controlla la connessione e riprova.",
           "deleteNotAllowed": "Non hai l'autorizzazione per eliminare {{team}}."
         },
-        "managedByDirectory": "Gestito dalla tua directory"
+        "managedByDirectory": "Gestito dalla tua directory",
+        "addPeople": {
+          "someAdded": "{{team}} · {{covered}} di {{total}} già aggiunti",
+          "none": "Ancora nessun team",
+          "addingTitle_one": "Aggiunta di {{count}} persona…",
+          "addingTitle_other": "Aggiunta di {{count}} persone…",
+          "addingBody": "Tieni aperta questa finestra mentre vengono aggiunte a {{team}}.",
+          "addingAction": "Aggiunta…",
+          "failedTitle_one": "Impossibile aggiungere {{count}} persona",
+          "failedTitle_other": "Impossibile aggiungere {{count}} persone",
+          "failedBody": "Non sono state aggiunte a {{team}}. La selezione è stata mantenuta.",
+          "done_one": "{{count}} membro aggiunto a {{team}}",
+          "done_other": "{{count}} membri aggiunti a {{team}}",
+          "someDone": "{{added}} aggiunto a {{team}}. {{already}} era già un membro.",
+          "someDonePlural": "{{added}} aggiunto a {{team}}. {{already}} erano già membri."
+        }
       },
       "invites": {
         "resending": "Reinvio…",

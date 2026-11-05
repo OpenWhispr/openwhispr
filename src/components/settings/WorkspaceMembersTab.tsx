@@ -29,7 +29,7 @@ import { classifyRowActionError, type RowActionError } from "../../lib/workspace
 import { transferReducer } from "../../lib/workspaceTransferFlow";
 import { RemoveMembersDialog } from "../workspace/RemoveMembersDialog";
 import { RowCheckbox } from "../dictionary/RowCheckbox";
-import { AddToTeamspaceMenu } from "../workspace/AddToTeamspaceMenu";
+import { PeopleAddMenu, useAddPeopleToTeam } from "../workspace/PeopleAddMenu";
 import { SelectionBar } from "../workspace/SelectionBar";
 import { TransferOwnershipDialog } from "../workspace/TransferOwnershipDialog";
 import { MemberRoleMenu } from "./MemberRoleMenu";
@@ -77,6 +77,8 @@ export default function WorkspaceMembersTab({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const rereadRef = useRef(false);
   const canManage = workspaceCan(workspace, "manage_members");
+  // One controller for every row's Add to team, with its dialog beside the table.
+  const rowTeamAdd = useAddPeopleToTeam(workspace);
   const canTransferOwnership = workspaceCan(workspace, "transfer_ownership");
 
   async function loadMembers(): Promise<void> {
@@ -506,6 +508,8 @@ export default function WorkspaceMembersTab({
                           dispatchTransfer({ type: "open", candidateId: member.user_id })
                         }
                         onRemove={() => openRemoval([member])}
+                        workspace={canManage ? workspace : undefined}
+                        teamAdd={canManage ? rowTeamAdd : undefined}
                       />
                     </td>
                   </tr>
@@ -529,7 +533,7 @@ export default function WorkspaceMembersTab({
         ]}
         // Only whoever manages members can select anyone, so the bar and this menu share that check.
         trailing={
-          <AddToTeamspaceMenu
+          <PeopleAddMenu
             workspace={workspace}
             people={selectedMembers}
             onAdded={() => setSelection(new Set())}
@@ -537,6 +541,8 @@ export default function WorkspaceMembersTab({
           />
         }
       />
+
+      {rowTeamAdd.dialog}
 
       <TransferOwnershipDialog
         workspace={workspace}

@@ -82,12 +82,18 @@ async function loadMembersTab(
           }
         : {}),
       "/TransferOwnershipDialog": "export const TransferOwnershipDialog = () => null;",
-      "/AddToTeamspaceMenu": `
+      "/PeopleAddMenu": `
         import React from "react";
-        export function AddToTeamspaceMenu(props) {
+        export function PeopleAddMenu(props) {
           globalThis.__addMenu = props;
           return React.createElement("span", { "data-add-to-teamspace": "" });
         }
+        const teamAdd = { teams: { status: "idle", teams: [] }, open() {}, add() {}, dialog: null };
+        export function useAddPeopleToTeam(workspace) {
+          globalThis.__teamAddWorkspace = workspace;
+          return teamAdd;
+        }
+        export const rowTeamAdd = teamAdd;
       `,
       "/RemoveMembersDialog": `
         export function RemoveMembersDialog(props) {
@@ -115,6 +121,11 @@ async function loadMembersTab(
           h("button", { "data-member-actions": "", disabled });
         export const DropdownMenuRadioItem = ({ children }) =>
           h("div", { role: "menuitemradio" }, children);
+        export const DropdownMenuSub = passThrough;
+        export const DropdownMenuPortal = passThrough;
+        export const DropdownMenuSubContent = passThrough;
+        export const DropdownMenuSubTrigger = ({ children }) =>
+          h("div", { role: "menuitem", "data-add-to-team": "" }, children);
         export const DropdownMenuSeparator = () => null;
         export const DropdownMenuItem = ({ children }) =>
           h("div", { role: "menuitem" }, children);
@@ -815,7 +826,7 @@ test("the row menu's Remove opens the same dialog with one member", async (t) =>
 const addMenuNode = (container) =>
   findNode(container, (node) => node.hasAttribute?.("data-add-to-teamspace"));
 
-test("the bar offers Add to teamspace only with manage_members", async (t) => {
+test("the bar offers its Add menu only with manage_members", async (t) => {
   const WorkspaceMembersTab = await loadMembersTab(t, { members: PEOPLE });
   globalThis.__authUser = { id: "u-admin" };
   const container = await mount(t, WorkspaceMembersTab, ADMIN_WORKSPACE);
@@ -859,7 +870,7 @@ test("the bar offers Add to teamspace only with manage_members", async (t) => {
   assert.ok(addMenuNode(granted));
 });
 
-test("Add to teamspace sits after Remove and gets the selected people", async (t) => {
+test("the Add menu sits after Remove and gets the selected people", async (t) => {
   const { container } = await mountPeople(t);
   const boxes = checkboxes(container).slice(1);
   await React.act(async () => propsOf(boxes[0]).onClick());
@@ -898,4 +909,21 @@ test("adding clears the selection, and Open teamspace goes where the page says",
   await React.act(async () => globalThis.__addMenu.onAdded());
   assert.doesNotMatch(barText(container), /selection\.count/);
   assert.equal(addMenuNode(container), null);
+});
+
+test("the row menus get Add to team only with manage_members", async (t) => {
+  const WorkspaceMembersTab = await loadMembersTab(t, { members: PEOPLE, captureRoleMenus: true });
+  globalThis.__authUser = { id: "u-admin" };
+  await mount(t, WorkspaceMembersTab, ADMIN_WORKSPACE);
+
+  const manager = globalThis.__roleMenus["u-mason"];
+  assert.equal(manager.workspace.id, "w1");
+  assert.ok(manager.teamAdd, "the same controller serves every row");
+  assert.equal(globalThis.__roleMenus["u-member"].teamAdd, manager.teamAdd);
+
+  globalThis.__roleMenus = {};
+  await mount(t, WorkspaceMembersTab, { ...WORKSPACE, role: "member" });
+  const viewer = globalThis.__roleMenus["u-mason"];
+  assert.equal(viewer.teamAdd, undefined);
+  assert.equal(viewer.workspace, undefined);
 });

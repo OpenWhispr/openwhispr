@@ -2547,7 +2547,10 @@
           "selectAllInvitations": "Выбрать все приглашения",
           "selectRow": "Выбрать {{name}}",
           "remove": "Удалить",
-          "addToTeamspace": "Добавить в teamspace"
+          "addToTeamspace": "Добавить в teamspace",
+          "addToTeam": "Добавить в команду",
+          "createTeam": "Создать команду из выбранных",
+          "moreOptions": "Другие действия"
         },
         "teamsCount_one": "{{count}} команда",
         "teamsCount_few": "{{count}} команды",
@@ -2987,7 +2990,28 @@
           "deleteFailedBody": "Команда и её настройки доступа не изменены. Проверьте подключение и повторите попытку.",
           "deleteNotAllowed": "У вас нет прав на удаление {{team}}."
         },
-        "managedByDirectory": "Управляется вашим каталогом"
+        "managedByDirectory": "Управляется вашим каталогом",
+        "addPeople": {
+          "someAdded": "{{team}} · уже добавлено: {{covered}} из {{total}}",
+          "none": "Команд пока нет",
+          "addingTitle_one": "Добавление {{count}} человека…",
+          "addingTitle_few": "Добавление {{count}} человек…",
+          "addingTitle_many": "Добавление {{count}} человек…",
+          "addingTitle_other": "Добавление {{count}} человека…",
+          "addingBody": "Не закрывайте это окно, пока их добавляют в команду {{team}}.",
+          "addingAction": "Добавление…",
+          "failedTitle_one": "Не удалось добавить {{count}} человека",
+          "failedTitle_few": "Не удалось добавить {{count}} человека",
+          "failedTitle_many": "Не удалось добавить {{count}} человек",
+          "failedTitle_other": "Не удалось добавить {{count}} человека",
+          "failedBody": "Они не были добавлены в команду {{team}}. Ваш выбор сохранён.",
+          "done_one": "В команду {{team}} добавлен {{count}} участник",
+          "done_few": "В команду {{team}} добавлено {{count}} участника",
+          "done_many": "В команду {{team}} добавлено {{count}} участников",
+          "done_other": "В команду {{team}} добавлено {{count}} участника",
+          "someDone": "В команду {{team}} добавлено: {{added}}. {{already}} уже участник.",
+          "someDonePlural": "В команду {{team}} добавлено: {{added}}. {{already}} уже участники."
+        }
       },
       "invites": {
         "resending": "Отправка…",

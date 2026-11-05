@@ -2523,7 +2523,10 @@
           "selectAllInvitations": "选择所有邀请",
           "selectRow": "选择 {{name}}",
           "remove": "移除",
-          "addToTeamspace": "添加到 Teamspace"
+          "addToTeamspace": "添加到 Teamspace",
+          "addToTeam": "添加到团队",
+          "createTeam": "用所选人员创建团队",
+          "moreOptions": "更多选项"
         },
         "teamsCount_one": "{{count}} 个团队",
         "teamsCount_other": "{{count}} 个团队",
@@ -2913,7 +2916,22 @@
           "deleteFailedBody": "团队及其访问设置保持不变。请检查网络连接后重试。",
           "deleteNotAllowed": "你没有删除 {{team}} 的权限。"
         },
-        "managedByDirectory": "由你的目录管理"
+        "managedByDirectory": "由你的目录管理",
+        "addPeople": {
+          "someAdded": "{{team}} · 已添加 {{covered}}/{{total}} 人",
+          "none": "还没有团队",
+          "addingTitle_one": "正在添加 {{count}} 人…",
+          "addingTitle_other": "正在添加 {{count}} 人…",
+          "addingBody": "将他们添加到 {{team}} 期间，请保持此窗口打开。",
+          "addingAction": "正在添加…",
+          "failedTitle_one": "无法添加 {{count}} 人",
+          "failedTitle_other": "无法添加 {{count}} 人",
+          "failedBody": "他们尚未添加到 {{team}}。你的选择已保留。",
+          "done_one": "已将 {{count}} 名成员添加到 {{team}}",
+          "done_other": "已将 {{count}} 名成员添加到 {{team}}",
+          "someDone": "已将 {{added}} 添加到 {{team}}。{{already}} 已是成员。",
+          "someDonePlural": "已将 {{added}} 添加到 {{team}}。{{already}} 已是成员。"
+        }
       },
       "invites": {
         "resending": "重新发送中…",

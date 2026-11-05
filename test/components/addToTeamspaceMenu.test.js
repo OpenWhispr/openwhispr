@@ -10,12 +10,15 @@ const {
   text,
 } = require("../lib/happyDomDialog");
 
+// Add to teamspace is a submenu of the selection bar's split button, so these mount that button and
+// open the submenu. They are the tests the standalone menu had.
+//
 // Mounts the real menu with the real Radix dropdown and dialog in happy-dom. The services and the
 // store are fakes the tests steer; strings come from the English file, so a missing key shows up
 // as a missing label.
 
 let CloudApiError;
-let AddToTeamspaceMenu;
+let PeopleAddMenu;
 let createRoot;
 let happyWindow;
 let ui;
@@ -44,16 +47,16 @@ test.before(async (t) => {
           coverage: (id, userIds) => globalThis.__api.coverage(id, userIds),
         };
       `,
+      "/services/TeamsService": "export const TeamsService = { list: async () => [] };",
       "/services/spaceActions": `
+        export const addPeopleToTeam = async () => ({ added: [], already_members: [] });
         export const addPeopleToSpace = (id, userIds) => globalThis.__api.addPeopleToSpace(id, userIds);
         export const localSpaceIdFor = (id) => globalThis.__api.localSpaceIdFor(id);
       `,
     },
   });
   ({ CloudApiError } = await vite.ssrLoadModule("/services/cloudApi.ts"));
-  ({ AddToTeamspaceMenu } = await vite.ssrLoadModule(
-    "/components/workspace/AddToTeamspaceMenu.tsx"
-  ));
+  ({ PeopleAddMenu } = await vite.ssrLoadModule("/components/workspace/PeopleAddMenu.tsx"));
 });
 
 test.after(async () => {
@@ -169,7 +172,7 @@ async function mount(
     onOpenTeamspace: onOpenTeamspace ? (localId) => opened.push(localId) : undefined,
   };
   await React.act(async () => {
-    root.render(h(AddToTeamspaceMenu, props));
+    root.render(h(PeopleAddMenu, props));
   });
   await ui.settle();
   return {
@@ -182,9 +185,7 @@ async function mount(
       currentSpaces = next;
     },
     rerender: async (nextPeople) => {
-      await React.act(async () =>
-        root.render(h(AddToTeamspaceMenu, { ...props, people: nextPeople }))
-      );
+      await React.act(async () => root.render(h(PeopleAddMenu, { ...props, people: nextPeople })));
       await ui.settle();
     },
   };
@@ -192,13 +193,18 @@ async function mount(
 
 // ---- reading the screen
 
-const trigger = () => doc().querySelector("button[aria-haspopup='menu']");
+const trigger = () => doc().querySelector("button[aria-label='More options']");
+const submenuItem = () =>
+  [...doc().querySelectorAll('[role="menuitem"]')].find(
+    (item) => text(item) === "Add to teamspace"
+  );
 const rows = () => [...doc().querySelectorAll('[role="menuitemcheckbox"]')];
 const rowFor = (name) => rows().find((row) => text(row).includes(name));
 // The emoji is decoration beside the name, so `text` leaves it out; this reads it.
 const emojiOf = (row) => row.querySelector(".font-emoji")?.textContent ?? null;
+// The submenu is the last menu open; the parent menu holds only its two items.
 const menuText = () => {
-  const menu = doc().querySelector('[role="menu"]');
+  const menu = [...doc().querySelectorAll('[role="menu"]')].at(-1);
   return menu ? text(menu) : null;
 };
 const dialogs = () => [...doc().querySelectorAll('[role="dialog"]')];
@@ -209,9 +215,11 @@ const dialogButton = (label) =>
   );
 const toastTitles = () => globalThis.__toasts.map((toast) => readable(toast.title ?? ""));
 
-// Radix opens a dropdown on ArrowDown from its trigger.
+// Radix opens a dropdown on ArrowDown from its trigger and a submenu on ArrowRight from its item.
 async function openMenu() {
   await ui.press(trigger(), "ArrowDown");
+  await ui.settle();
+  await ui.press(submenuItem(), "ArrowRight");
   await ui.settle();
 }
 
@@ -225,7 +233,7 @@ async function choose(name) {
 test("the directory is read when the menu first opens, not before", async (t) => {
   const { callsTo } = await mount(t);
 
-  assert.equal(text(trigger()), "Add to teamspace");
+  assert.ok(trigger(), "the chevron is in the bar");
   assert.equal(callsTo("list").length, 0);
   assert.equal(callsTo("coverage").length, 0);
 
@@ -309,7 +317,7 @@ test("the boxes follow the people selected at each opening", async (t) => {
 
   await openMenu();
   assert.equal(rowFor("Planning").getAttribute("aria-checked"), "mixed");
-  await ui.press(doc().querySelector('[role="menu"]'), "Escape");
+  await ui.press([...doc().querySelectorAll('[role="menu"]')].at(-1), "Escape");
   await ui.settle();
 
   await rerender([LUCAS]);
@@ -326,7 +334,7 @@ test("a late answer for an earlier opening never overwrites the current boxes", 
   const [first, second] = [...reads];
 
   await openMenu();
-  await ui.press(doc().querySelector('[role="menu"]'), "Escape");
+  await ui.press([...doc().querySelectorAll('[role="menu"]')].at(-1), "Escape");
   await ui.settle();
   await rerender([LUCAS]);
   await openMenu();
@@ -554,7 +562,10 @@ test("Cancel on a failure hands focus back to the menu button", async (t) => {
 
   assert.equal(dialogs().length, 0);
   // Compared as a boolean: a failed assert.equal on DOM nodes spends minutes printing the document.
-  assert.ok(doc().activeElement === trigger(), "focus is on Add to teamspace, not on the page");
+  assert.ok(
+    doc().activeElement === trigger(),
+    "focus is on the button that opened the menu, not on the page"
+  );
 });
 
 test("a retry after a lost answer succeeds", async (t) => {
