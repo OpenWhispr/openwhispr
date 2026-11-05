@@ -338,19 +338,18 @@ test("team mutations refresh the full mirror and schedule sync only when needed"
   await actions.removeTeamMember("team-1", "user-1");
   await actions.setTeamMemberRole("team-1", "user-1", "admin");
   await actions.leaveTeam("team-1", "user-1");
-  await actions.deleteTeam("team-1");
 
   assert.equal(
     calls.filter(([name]) => name === "roster.invalidate").length,
-    7,
+    6,
     "every membership or assignment change invalidates before refreshing"
   );
-  assert.equal(calls.filter(([name]) => name === "mirror.upsert").length, 7);
-  assert.equal(calls.filter(([name]) => name === "local.load").length, 7);
+  assert.equal(calls.filter(([name]) => name === "mirror.upsert").length, 6);
+  assert.equal(calls.filter(([name]) => name === "local.load").length, 6);
   assert.equal(
     calls.filter(([name]) => name === "sync").length,
-    3,
-    "unassign, leave, and delete can revoke container access"
+    2,
+    "unassign and leave can revoke container access"
   );
   assert.ok(
     calls.some(
@@ -397,21 +396,6 @@ test("direct member mutations refresh the mirror and only leaving schedules sync
     [["sync", "manual"]],
     "only leaving can revoke the caller's own container access"
   );
-});
-
-test("addTeamMembers reports partial failures and still refreshes the mirror", async () => {
-  const { createSpaceActions } = await load();
-  const { calls, deps } = makeHarness();
-  deps.teams.addMember = async (_teamId, userId) => {
-    if (userId === "bad-user") throw new Error("bad member");
-  };
-  const actions = createSpaceActions(deps);
-
-  const { failures } = await actions.addTeamMembers("team-1", ["good-user", "bad-user"]);
-
-  assert.equal(failures.length, 1);
-  assert.match(failures[0].message, /bad member/);
-  assert.ok(calls.some(([name]) => name === "mirror.upsert"));
 });
 
 test("a new assignment sends no access, so an existing one keeps its own", async () => {
@@ -706,7 +690,6 @@ test("a write the server accepted isn't failed by a refresh that fails", async (
     leaveTeam: (actions) => actions.leaveTeam("team-1", "me"),
     removeTeamMember: (actions) => actions.removeTeamMember("team-1", "user-1"),
     setTeamMemberRole: (actions) => actions.setTeamMemberRole("team-1", "user-1", "admin"),
-    deleteTeam: (actions) => actions.deleteTeam("team-1"),
   };
   for (const [name, write] of Object.entries(writes)) {
     const { calls, deps, localSpace } = makeHarness();

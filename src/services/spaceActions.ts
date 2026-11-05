@@ -70,11 +70,9 @@ export const {
   removeSpaceMember,
   leaveSpace,
   requestSpacesResync,
-  addTeamMembers,
   removeTeamMember,
   setTeamMemberRole,
   leaveTeam,
-  deleteTeam,
 } = actions;
 
 window.addEventListener("beforeunload", commitHeldDeletes);

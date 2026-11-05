@@ -155,10 +155,6 @@ test("localized sentences isolate technical interpolations without changing word
       /<BidiInterpolatedText[\s\S]*?updates\.whatsNew[\s\S]*?value=\{updateInfo\.version\}/,
     ],
     [
-      "src/components/MemberRoster.tsx",
-      /<BidiInterpolatedText[\s\S]*?members\.inviteFooter[\s\S]*?value=\{addSearch\.trim\(\)\}/,
-    ],
-    [
       "src/components/integrations/CalendarsPane.tsx",
       /<BidiInterpolatedText[\s\S]*?googleCalendar\.disconnectConfirm[\s\S]*?value=\{confirmDisconnectEmail\}/,
     ],

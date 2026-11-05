@@ -190,17 +190,6 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     }
   }
 
-  // One failed add must not abort the rest; callers report the failures.
-  async function settleAddMembers(
-    userIds: string[],
-    add: (userId: string) => Promise<void>
-  ): Promise<unknown[]> {
-    const results = await Promise.allSettled(userIds.map(add));
-    return results
-      .filter((result): result is PromiseRejectedResult => result.status === "rejected")
-      .map((result) => result.reason);
-  }
-
   async function refreshSpaceMirror(): Promise<void> {
     // Invalidate before fetching: a failed refresh must not preserve stale
     // member attribution in the roster cache.
@@ -655,17 +644,6 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     deps.sync.requestSyncAll("manual");
   }
 
-  async function addTeamMembers(
-    teamId: string,
-    userIds: string[]
-  ): Promise<{ failures: unknown[] }> {
-    const failures = await settleAddMembers(userIds, (userId) =>
-      deps.teams.addMember(teamId, userId)
-    );
-    await refreshMirrorAfterWrite();
-    return { failures };
-  }
-
   async function removeTeamMember(teamId: string, userId: string): Promise<void> {
     await deps.teams.removeMember(teamId, userId);
     await refreshMirrorAfterWrite();
@@ -683,12 +661,6 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
       // Already out of the group, as after a leave that got partway: the mirror is what's left.
       if (classifySpaceError(err).kind !== "gone") throw err;
     }
-    await refreshMirrorAfterWrite();
-    deps.sync.requestSyncAll("manual");
-  }
-
-  async function deleteTeam(teamId: string): Promise<void> {
-    await deps.teams.remove(teamId);
     await refreshMirrorAfterWrite();
     deps.sync.requestSyncAll("manual");
   }
@@ -715,10 +687,8 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     removeSpaceMember,
     leaveSpace,
     requestSpacesResync,
-    addTeamMembers,
     removeTeamMember,
     setTeamMemberRole,
     leaveTeam,
-    deleteTeam,
   };
 }

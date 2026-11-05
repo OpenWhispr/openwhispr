@@ -3,9 +3,8 @@ import { useTranslation } from "react-i18next";
 import { useToast } from "../components/ui/useToast";
 
 // Load state plus per-row mutation tracking for a roster backed by a server
-// list. The team roster (a wrapper around MemberRoster) uses both; the
-// teamspace members panel has its own table and row actions, and takes the
-// load state alone.
+// list. The team and teamspace members panels have their own tables and
+// row actions; both use it for the load state.
 export function useMemberRoster<M>(load: () => Promise<M[]>) {
   const { t } = useTranslation();
   const { toast } = useToast();

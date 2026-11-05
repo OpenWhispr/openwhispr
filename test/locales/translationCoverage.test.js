@@ -17,9 +17,6 @@ const INTERPOLATION = /\{\{\s*([\w.]+)/g;
 const ARABIC_PLURAL_CATEGORIES = ["zero", "one", "two", "few", "many", "other"];
 const ARABIC_PLURAL_BASES = [
   "settingsPage.workspace.members.description",
-  "settingsPage.workspace.teams.memberCount",
-  "settingsPage.workspace.teams.grantsAccessToSpaces",
-  "settingsPage.workspace.teams.deleteConfirmSpaceAccess",
   "settingsPage.workspace.teamspaces.adminCount",
   "settingsPage.workspace.teamspaces.form.createdInviteFailed",
   "settingsPage.workspace.teamspaces.picker.teamPeople",

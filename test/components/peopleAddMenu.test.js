@@ -53,7 +53,6 @@ test.before(async (t) => {
       `,
       "/services/spaceActions": `
         export const addPeopleToTeam = (id, userIds) => globalThis.__api.addPeopleToTeam(id, userIds);
-        export const addTeamMembers = (...args) => globalThis.__api.addTeamMembers(...args);
         export const addPeopleToSpace = (id, userIds) => globalThis.__api.addPeopleToSpace(id, userIds);
         export const localSpaceIdFor = (id) => globalThis.__api.localSpaceIdFor(id);
       `,
@@ -190,11 +189,6 @@ async function mount(t, options = {}) {
       calls.push(["addBatch", teamId, userIds]);
       if (api.addPeopleToTeam) return api.addPeopleToTeam(teamId, userIds);
       return { added: userIds, already_members: [] };
-    },
-    // The single-member route: it lowers an admin to member, so the menu must never reach it.
-    addTeamMembers: async (...args) => {
-      calls.push(["upsert", ...args]);
-      return { added: [], already_members: [] };
     },
     addPeopleToSpace: async () => ({ added: [], already_members: [] }),
     localSpaceIdFor: async () => null,
@@ -436,9 +430,9 @@ test("a team everyone is already on is checked and can't be picked", async (t) =
 
 // ---- adding
 
-test("adding uses the batch, never the upsert", async (t) => {
+test("adding uses the batch", async (t) => {
   const request = deferred();
-  const { callsTo, calls } = await mount(t, { api: { addPeopleToTeam: () => request.promise } });
+  const { callsTo } = await mount(t, { api: { addPeopleToTeam: () => request.promise } });
 
   await openLabelMenu();
   await choose("Sales");
@@ -454,7 +448,6 @@ test("adding uses the batch, never the upsert", async (t) => {
   await React.act(async () => request.resolve({ added: ["lucas", "mason"], already_members: [] }));
   await ui.settle();
   assert.equal(dialogs().length, 0);
-  assert.equal(calls.filter(([call]) => call === "upsert").length, 0);
 });
 
 test("the roster is read again before the selection clears", async (t) => {
@@ -959,10 +952,6 @@ test("the row menu adds one person", async (t) => {
       calls.push(["addBatch", teamId, userIds]);
       return { added: userIds, already_members: [] };
     },
-    addTeamMembers: async () => {
-      calls.push(["upsert"]);
-      return { added: [], already_members: [] };
-    },
   };
   const container = doc().createElement("div");
   doc().body.appendChild(container);
@@ -1011,6 +1000,5 @@ test("the row menu adds one person", async (t) => {
     calls.filter(([call]) => call === "addBatch"),
     [["addBatch", "t-design", ["noah"]]]
   );
-  assert.equal(calls.filter(([call]) => call === "upsert").length, 0);
   assert.deepEqual(toastTitles(), ["Added 1 member to Design"]);
 });
