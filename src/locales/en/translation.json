@@ -1730,7 +1730,6 @@
         },
         "you": "You",
         "teamsNone": "None",
-        "teamsMore": "+{{count}}",
         "loading": {
           "title": "Loading members…",
           "body": "Your workspace members will appear here."
@@ -1796,7 +1795,9 @@
           "selectRow": "Select {{name}}",
           "remove": "Remove",
           "addToTeamspace": "Add to teamspace"
-        }
+        },
+        "teamsCount_one": "{{count}} Team",
+        "teamsCount_other": "{{count}} Teams"
       },
       "teamspaces": {
         "title": "Teamspaces",
@@ -2019,24 +2020,15 @@
         "errorTitle": "Could not update the request"
       },
       "teams": {
-        "title": "Teams",
-        "description": "Teams of workspace members that can be given access to teamspaces together.",
-        "new": "New team",
-        "empty": "No teams yet.",
-        "createFirst": "Create your first team",
         "addMembersLabel": "Add members",
         "createTitle": "Create team",
         "nameLabel": "Team name",
         "memberCount_one": "{{count}} member",
         "memberCount_other": "{{count}} members",
-        "membersButton": "Members",
         "grantsAccessToSpaces_one": "Grants access to {{count}} space",
         "grantsAccessToSpaces_other": "Grants access to {{count}} spaces",
         "couldNotCreate": "Couldn't create team",
         "created": "Created {{team}}",
-        "deleted": "Deleted {{team}}",
-        "deleteConfirmTitle": "Delete {{team}}?",
-        "deleteConfirmDescription": "This archives the team. Its members lose any access it granted.",
         "deleteConfirmSpaceAccess_one": "This team grants access to {{count}} space. Its members will lose that access.",
         "deleteConfirmSpaceAccess_other": "This team grants access to {{count}} spaces. Its members will lose that access.",
         "members": {
@@ -2046,7 +2038,26 @@
           "leftTeam": "You left {{team}}",
           "leaveConfirm": "Leave {{team}}?",
           "leaveConfirmDescription": "You'll lose access to the spaces this team is assigned to unless you were added directly or another team includes you."
-        }
+        },
+        "columns": {
+          "name": "Name",
+          "members": "Members",
+          "teamspaces": "Teamspaces"
+        },
+        "loadingTitle": "Loading teams…",
+        "loadingBody": "Your workspace teams will appear here.",
+        "failedTitle": "Couldn't load teams",
+        "failedBody": "Check your connection and try again.",
+        "retry": "Try again",
+        "emptyTitle": "No teams yet",
+        "emptyBody": "A team is a shortcut for adding several people at once. Add a team to a teamspace and everyone in it gets access.",
+        "emptyBodyMember": "Your workspace admins haven't created one yet.",
+        "create": "Create team",
+        "spacesNone": "None",
+        "people_one": "{{count}} person",
+        "people_other": "{{count}} people",
+        "spaces_one": "{{count}} teamspace",
+        "spaces_other": "{{count}} teamspaces"
       },
       "invites": {
         "resending": "Resending…",

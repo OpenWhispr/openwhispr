@@ -2465,7 +2465,6 @@
         },
         "you": "Вы",
         "teamsNone": "Нет",
-        "teamsMore": "+{{count}}",
         "loading": {
           "title": "Загрузка участников…",
           "body": "Здесь появятся участники рабочего пространства."
@@ -2549,7 +2548,11 @@
           "selectRow": "Выбрать {{name}}",
           "remove": "Удалить",
           "addToTeamspace": "Добавить в teamspace"
-        }
+        },
+        "teamsCount_one": "{{count}} команда",
+        "teamsCount_few": "{{count}} команды",
+        "teamsCount_many": "{{count}} команд",
+        "teamsCount_other": "{{count}} команды"
       },
       "teamspaces": {
         "title": "Teamspaces",
@@ -2796,11 +2799,6 @@
         "errorTitle": "Не удалось обновить запрос"
       },
       "teams": {
-        "title": "Команды",
-        "description": "Команды участников рабочего пространства, которым можно сразу дать доступ к teamspaces.",
-        "new": "Новая команда",
-        "empty": "Команд пока нет.",
-        "createFirst": "Создайте первую команду",
         "addMembersLabel": "Добавить участников",
         "createTitle": "Создать команду",
         "nameLabel": "Название команды",
@@ -2808,16 +2806,12 @@
         "memberCount_few": "{{count}} участника",
         "memberCount_many": "{{count}} участников",
         "memberCount_other": "{{count}} участника",
-        "membersButton": "Участники",
         "grantsAccessToSpaces_one": "Даёт доступ к {{count}} пространству",
         "grantsAccessToSpaces_few": "Даёт доступ к {{count}} пространствам",
         "grantsAccessToSpaces_many": "Даёт доступ к {{count}} пространствам",
         "grantsAccessToSpaces_other": "Даёт доступ к {{count}} пространствам",
         "couldNotCreate": "Не удалось создать команду",
         "created": "{{team}} создана",
-        "deleted": "{{team}} удалена",
-        "deleteConfirmTitle": "Удалить {{team}}?",
-        "deleteConfirmDescription": "Команда будет архивирована. Её участники потеряют предоставленный ею доступ.",
         "deleteConfirmSpaceAccess_one": "Эта команда даёт доступ к {{count}} пространству. Её участники потеряют этот доступ.",
         "deleteConfirmSpaceAccess_few": "Эта команда даёт доступ к {{count}} пространствам. Её участники потеряют этот доступ.",
         "deleteConfirmSpaceAccess_many": "Эта команда даёт доступ к {{count}} пространствам. Её участники потеряют этот доступ.",
@@ -2829,7 +2823,30 @@
           "leftTeam": "Вы покинули {{team}}",
           "leaveConfirm": "Покинуть {{team}}?",
           "leaveConfirmDescription": "Вы потеряете доступ к пространствам, к которым привязана эта команда, если вас не добавили напрямую и не включает другая команда."
-        }
+        },
+        "columns": {
+          "name": "Имя",
+          "members": "Участники",
+          "teamspaces": "Teamspaces"
+        },
+        "loadingTitle": "Загрузка команд…",
+        "loadingBody": "Здесь появятся команды вашего рабочего пространства.",
+        "failedTitle": "Не удалось загрузить команды",
+        "failedBody": "Проверьте подключение и повторите попытку.",
+        "retry": "Повторить",
+        "emptyTitle": "Пока нет команд",
+        "emptyBody": "Команда — это быстрый способ добавить сразу нескольких человек. Добавьте команду в teamspace, и все её участники получат доступ.",
+        "emptyBodyMember": "Администраторы вашего рабочего пространства ещё не создали ни одной.",
+        "create": "Создать команду",
+        "spacesNone": "Нет",
+        "people_one": "{{count}} человек",
+        "people_few": "{{count}} человека",
+        "people_many": "{{count}} человек",
+        "people_other": "{{count}} человека",
+        "spaces_one": "{{count}} teamspace",
+        "spaces_few": "{{count}} teamspace",
+        "spaces_many": "{{count}} teamspace",
+        "spaces_other": "{{count}} teamspace"
       },
       "invites": {
         "resending": "Отправка…",

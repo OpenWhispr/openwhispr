@@ -1730,7 +1730,6 @@
         },
         "you": "Vous",
         "teamsNone": "Aucun",
-        "teamsMore": "+{{count}}",
         "loading": {
           "title": "Chargement des membres…",
           "body": "Les membres de votre espace de travail apparaîtront ici."
@@ -1796,7 +1795,9 @@
           "selectRow": "Sélectionner {{name}}",
           "remove": "Retirer",
           "addToTeamspace": "Ajouter au teamspace"
-        }
+        },
+        "teamsCount_one": "{{count}} équipe",
+        "teamsCount_other": "{{count}} équipes"
       },
       "teamspaces": {
         "title": "Teamspaces",
@@ -2019,24 +2020,15 @@
         "errorTitle": "Impossible de mettre à jour la demande"
       },
       "teams": {
-        "title": "Équipes",
-        "description": "Équipes de membres du workspace auxquelles on peut donner accès aux teamspaces en une fois.",
-        "new": "Nouvelle équipe",
-        "empty": "Pas encore d'équipes.",
-        "createFirst": "Créez votre première équipe",
         "addMembersLabel": "Ajouter des membres",
         "createTitle": "Créer une équipe",
         "nameLabel": "Nom de l'équipe",
         "memberCount_one": "{{count}} membre",
         "memberCount_other": "{{count}} membres",
-        "membersButton": "Membres",
         "grantsAccessToSpaces_one": "Donne accès à {{count}} espace",
         "grantsAccessToSpaces_other": "Donne accès à {{count}} espaces",
         "couldNotCreate": "Impossible de créer l'équipe",
         "created": "{{team}} créée",
-        "deleted": "{{team}} supprimée",
-        "deleteConfirmTitle": "Supprimer {{team}} ?",
-        "deleteConfirmDescription": "Cela archive l'équipe. Ses membres perdent l'accès qu'elle accordait.",
         "deleteConfirmSpaceAccess_one": "Cette équipe donne accès à {{count}} espace. Ses membres perdront cet accès.",
         "deleteConfirmSpaceAccess_other": "Cette équipe donne accès à {{count}} espaces. Ses membres perdront cet accès.",
         "members": {
@@ -2046,7 +2038,26 @@
           "leftTeam": "Vous avez quitté {{team}}",
           "leaveConfirm": "Quitter {{team}} ?",
           "leaveConfirmDescription": "Vous perdrez l'accès aux espaces auxquels cette équipe est rattachée, sauf si vous y avez été ajouté directement ou si une autre équipe vous inclut."
-        }
+        },
+        "columns": {
+          "name": "Nom",
+          "members": "Membres",
+          "teamspaces": "Teamspaces"
+        },
+        "loadingTitle": "Chargement des équipes…",
+        "loadingBody": "Les équipes de votre espace de travail apparaîtront ici.",
+        "failedTitle": "Impossible de charger les équipes",
+        "failedBody": "Vérifiez votre connexion et réessayez.",
+        "retry": "Réessayer",
+        "emptyTitle": "Aucune équipe pour l'instant",
+        "emptyBody": "Une équipe est un raccourci pour ajouter plusieurs personnes à la fois. Ajoutez une équipe à un teamspace et toutes ses personnes y ont accès.",
+        "emptyBodyMember": "Les administrateurs de votre espace de travail n'en ont pas encore créé.",
+        "create": "Créer une équipe",
+        "spacesNone": "Aucun",
+        "people_one": "{{count}} personne",
+        "people_other": "{{count}} personnes",
+        "spaces_one": "{{count}} teamspace",
+        "spaces_other": "{{count}} teamspaces"
       },
       "invites": {
         "resending": "Renvoi…",

@@ -1,189 +1,47 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Users, Trash2, Loader2 } from "../icons";
-import { deleteTeam } from "../../services/spaceActions";
-import { TeamsService } from "../../services/TeamsService";
-import { loadSpaces, useSpaces } from "../../stores/noteStore";
-import { useDialogs } from "../../hooks/useDialogs";
+import { useWorkspaceTeams } from "../../hooks/useWorkspaceTeams";
+import { teamCreationFor } from "../../lib/capabilities";
 import { Button } from "../ui/button";
 import { useToast } from "../ui/useToast";
-import { ConfirmDialog } from "../ui/dialog";
 import CreateTeamDialog from "../CreateTeamDialog";
 import TeamMembersDialog from "./TeamMembersDialog";
-import { workspaceCan } from "../../lib/capabilities";
+import TeamsTable from "./TeamsTable";
 import type { Team, Workspace } from "../../types/electron";
 
 interface Props {
   workspace: Workspace;
 }
 
-export default function WorkspaceTeamsTab({ workspace }: Props) {
+export default function WorkspaceTeamsTab({ workspace }: Props): React.ReactElement {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
-  const spaces = useSpaces();
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [teamsLoaded, setTeamsLoaded] = useState(false);
-  const [loadFailed, setLoadFailed] = useState(false);
+  const { status, teams, stale, reload } = useWorkspaceTeams(workspace.id);
   const [createOpen, setCreateOpen] = useState(false);
-  const [membersTeam, setMembersTeam] = useState<Team | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const canManage = workspaceCan(workspace, "manage_teams");
-
-  const loadTeams = useCallback(async () => {
-    setLoadFailed(false);
-    try {
-      setTeams(await TeamsService.list(workspace.id));
-    } catch {
-      setLoadFailed(true);
-    } finally {
-      setTeamsLoaded(true);
-    }
-  }, [workspace.id]);
-
-  // Spaces feed the "grants access to N spaces" column; the settings surface can open
-  // before the notes tree ever loads them.
-  useEffect(() => {
-    void loadTeams();
-    void loadSpaces();
-  }, [loadTeams]);
-
-  const backedSpacesByTeam = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const space of spaces) {
-      if (space.kind !== "team") continue;
-      for (const teamRef of space.teams) {
-        counts.set(teamRef.id, (counts.get(teamRef.id) ?? 0) + 1);
-      }
-    }
-    return counts;
-  }, [spaces]);
-
-  function confirmDelete(team: Team) {
-    const backedSpaces = backedSpacesByTeam.get(team.id) ?? 0;
-    showConfirmDialog({
-      title: t("settingsPage.workspace.teams.deleteConfirmTitle", { team: team.name }),
-      description:
-        backedSpaces > 0
-          ? t("settingsPage.workspace.teams.deleteConfirmSpaceAccess", { count: backedSpaces })
-          : t("settingsPage.workspace.teams.deleteConfirmDescription"),
-      confirmText: t("common.delete"),
-      variant: "destructive",
-      onConfirm: async () => {
-        setDeletingId(team.id);
-        try {
-          await deleteTeam(team.id);
-          await loadTeams();
-          toast({ title: t("settingsPage.workspace.teams.deleted", { team: team.name }) });
-        } catch (error) {
-          toast({
-            title: t("common.error"),
-            description: error instanceof Error ? error.message : t("common.unknownError"),
-            variant: "destructive",
-          });
-        } finally {
-          setDeletingId(null);
-        }
-      },
-    });
-  }
+  const [openTeam, setOpenTeam] = useState<Team | null>(null);
+  // Only whether Create is offered; a workspace below Business still sees it, and the opener
+  // decides what pressing it does.
+  const canCreate = teamCreationFor(workspace) !== "unavailable";
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-xs font-semibold text-foreground">
-            {t("settingsPage.workspace.teams.title")}
-          </h3>
-          <p className="text-xs text-muted-foreground/80 mt-0.5">
-            {t("settingsPage.workspace.teams.description")}
-          </p>
-        </div>
-        {canManage && (
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="me-1.5 h-3.5 w-3.5" />
-            {t("settingsPage.workspace.teams.new")}
+      {stale && (
+        <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+          <p>{t("settingsPage.workspace.people.invitations.refreshFailed")}</p>
+          <Button variant="outline" size="sm" onClick={() => void reload()}>
+            {t("workspaces.exit.tryAgain")}
           </Button>
-        )}
-      </div>
-
-      {!teamsLoaded ? (
-        <div className="h-24 rounded-lg bg-foreground/5 dark:bg-white/5 animate-pulse" />
-      ) : loadFailed && teams.length === 0 ? (
-        <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 px-4 py-6 flex items-center justify-between gap-2">
-          <p className="text-xs text-muted-foreground">
-            {t("settingsPage.workspace.loadError.description")}
-          </p>
-          <Button variant="outline" size="sm" onClick={() => void loadTeams()}>
-            {t("settingsPage.workspace.loadError.retry")}
-          </Button>
-        </div>
-      ) : (
-        <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 divide-y divide-border/60 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50">
-          {teams.length === 0 && (
-            <div className="py-10 text-center">
-              <Users className="w-5 h-5 text-muted-foreground/70 mx-auto mb-2" />
-              <p className="text-xs text-muted-foreground mb-3">
-                {t("settingsPage.workspace.teams.empty")}
-              </p>
-              {canManage && (
-                <Button size="sm" variant="outline" onClick={() => setCreateOpen(true)}>
-                  {t("settingsPage.workspace.teams.createFirst")}
-                </Button>
-              )}
-            </div>
-          )}
-          {teams.map((team) => {
-            const isDeleting = deletingId === team.id;
-            const backedSpaces = backedSpacesByTeam.get(team.id) ?? 0;
-            return (
-              <div key={team.id} className="flex items-center gap-3 px-4 h-14">
-                <div className="flex-1 min-w-0">
-                  <p dir="auto" className="text-xs font-medium text-foreground truncate">
-                    {team.name}
-                  </p>
-                  {backedSpaces > 0 && (
-                    <p className="text-xs text-muted-foreground/80 truncate">
-                      {t("settingsPage.workspace.teams.grantsAccessToSpaces", {
-                        count: backedSpaces,
-                      })}
-                    </p>
-                  )}
-                </div>
-                <span className="text-xs text-muted-foreground">
-                  {t("settingsPage.workspace.teams.memberCount", {
-                    count: team.member_count ?? 0,
-                  })}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setMembersTeam(team)}
-                  className="h-7 px-2 text-xs"
-                >
-                  <Users className="me-1 h-3 w-3" />
-                  {t("settingsPage.workspace.teams.membersButton")}
-                </Button>
-                {canManage && (
-                  <button
-                    type="button"
-                    onClick={() => confirmDelete(team)}
-                    disabled={isDeleting}
-                    aria-label={t("common.delete")}
-                    className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/8 transition-colors outline-none focus-visible:ring-1 focus-visible:ring-primary/30 disabled:pointer-events-none"
-                  >
-                    {isDeleting ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Trash2 className="w-3.5 h-3.5" />
-                    )}
-                  </button>
-                )}
-              </div>
-            );
-          })}
         </div>
       )}
+
+      <TeamsTable
+        status={status}
+        teams={teams}
+        canCreate={canCreate}
+        onRetry={() => void reload()}
+        onCreate={() => setCreateOpen(true)}
+        onOpen={setOpenTeam}
+      />
 
       <CreateTeamDialog
         workspaceId={workspace.id}
@@ -191,34 +49,23 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
         onOpenChange={setCreateOpen}
         onCreated={(team) => {
           toast({ title: t("settingsPage.workspace.teams.created", { team: team.name }) });
-          return loadTeams();
+          return reload().then(() => undefined);
         }}
       />
 
-      {membersTeam && (
+      {openTeam && (
         <TeamMembersDialog
-          team={membersTeam}
+          team={openTeam}
           workspace={workspace}
-          open={!!membersTeam}
+          open
           onOpenChange={(open) => {
             if (!open) {
-              setMembersTeam(null);
-              void loadTeams();
+              setOpenTeam(null);
+              void reload();
             }
           }}
         />
       )}
-
-      <ConfirmDialog
-        open={confirmDialog.open}
-        onOpenChange={(o) => !o && hideConfirmDialog()}
-        title={confirmDialog.title}
-        description={confirmDialog.description}
-        confirmText={confirmDialog.confirmText}
-        cancelText={confirmDialog.cancelText}
-        onConfirm={confirmDialog.onConfirm}
-        variant={confirmDialog.variant}
-      />
     </div>
   );
 }

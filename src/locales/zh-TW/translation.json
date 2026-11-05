@@ -2459,7 +2459,6 @@
         },
         "you": "你",
         "teamsNone": "無",
-        "teamsMore": "+{{count}}",
         "loading": {
           "title": "正在載入成員…",
           "body": "工作區成員會顯示在這裡。"
@@ -2525,7 +2524,9 @@
           "selectRow": "選取 {{name}}",
           "remove": "移除",
           "addToTeamspace": "加入 Teamspace"
-        }
+        },
+        "teamsCount_one": "{{count}} 個團隊",
+        "teamsCount_other": "{{count}} 個團隊"
       },
       "teamspaces": {
         "title": "Teamspace",
@@ -2748,24 +2749,15 @@
         "errorTitle": "無法更新申請"
       },
       "teams": {
-        "title": "團隊",
-        "description": "可一次取得 Teamspace 存取權的工作區成員團隊。",
-        "new": "新增團隊",
-        "empty": "還沒有團隊。",
-        "createFirst": "建立你的第一個團隊",
         "addMembersLabel": "新增成員",
         "createTitle": "建立團隊",
         "nameLabel": "團隊名稱",
         "memberCount_one": "{{count}} 位成員",
         "memberCount_other": "{{count}} 位成員",
-        "membersButton": "成員",
         "grantsAccessToSpaces_one": "授予 {{count}} 個空間的存取權",
         "grantsAccessToSpaces_other": "授予 {{count}} 個空間的存取權",
         "couldNotCreate": "無法建立團隊",
         "created": "已建立 {{team}}",
-        "deleted": "已刪除 {{team}}",
-        "deleteConfirmTitle": "刪除 {{team}}？",
-        "deleteConfirmDescription": "這將封存該團隊。其成員將失去它授予的存取權。",
         "deleteConfirmSpaceAccess_one": "該團隊授予 {{count}} 個空間的存取權。其成員將失去該存取權。",
         "deleteConfirmSpaceAccess_other": "該團隊授予 {{count}} 個空間的存取權。其成員將失去該存取權。",
         "members": {
@@ -2775,7 +2767,26 @@
           "leftTeam": "你已退出 {{team}}",
           "leaveConfirm": "退出 {{team}}？",
           "leaveConfirmDescription": "除非你被直接加入或其他團隊包含你，否則你將失去透過該團隊取得的空間存取權。"
-        }
+        },
+        "columns": {
+          "name": "名稱",
+          "members": "成員",
+          "teamspaces": "Teamspace"
+        },
+        "loadingTitle": "正在載入團隊…",
+        "loadingBody": "工作區的團隊會顯示在這裡。",
+        "failedTitle": "無法載入團隊",
+        "failedBody": "請檢查網路連線後再試一次。",
+        "retry": "重試",
+        "emptyTitle": "還沒有團隊",
+        "emptyBody": "團隊是一次新增多人的捷徑。將團隊新增到 Teamspace，團隊中的所有人即可取得存取權限。",
+        "emptyBodyMember": "工作區管理員尚未建立任何團隊。",
+        "create": "建立團隊",
+        "spacesNone": "無",
+        "people_one": "{{count}} 人",
+        "people_other": "{{count}} 人",
+        "spaces_one": "{{count}} 個 Teamspace",
+        "spaces_other": "{{count}} 個 Teamspace"
       },
       "invites": {
         "resending": "重新傳送中…",

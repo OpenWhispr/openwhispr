@@ -2459,7 +2459,6 @@
         },
         "you": "あなた",
         "teamsNone": "なし",
-        "teamsMore": "+{{count}}",
         "loading": {
           "title": "メンバーを読み込んでいます…",
           "body": "ワークスペースのメンバーがここに表示されます。"
@@ -2525,7 +2524,9 @@
           "selectRow": "{{name}} を選択",
           "remove": "削除",
           "addToTeamspace": "Teamspace に追加"
-        }
+        },
+        "teamsCount_one": "{{count}} チーム",
+        "teamsCount_other": "{{count}} チーム"
       },
       "teamspaces": {
         "title": "Teamspace",
@@ -2748,24 +2749,15 @@
         "errorTitle": "リクエストを更新できませんでした"
       },
       "teams": {
-        "title": "チーム",
-        "description": "Teamspace へのアクセスをまとめて付与できるワークスペースメンバーのチーム。",
-        "new": "新しいチーム",
-        "empty": "チームはまだありません。",
-        "createFirst": "最初のチームを作成",
         "addMembersLabel": "メンバーを追加",
         "createTitle": "チームを作成",
         "nameLabel": "チーム名",
         "memberCount_one": "{{count}}人のメンバー",
         "memberCount_other": "{{count}}人のメンバー",
-        "membersButton": "メンバー",
         "grantsAccessToSpaces_one": "{{count}} 件のスペースへのアクセスを付与しています",
         "grantsAccessToSpaces_other": "{{count}} 件のスペースへのアクセスを付与しています",
         "couldNotCreate": "チームを作成できませんでした",
         "created": "{{team}} を作成しました",
-        "deleted": "{{team}} を削除しました",
-        "deleteConfirmTitle": "{{team}} を削除しますか？",
-        "deleteConfirmDescription": "チームをアーカイブします。このチームが付与していたアクセスは失われます。",
         "deleteConfirmSpaceAccess_one": "このチームは {{count}} 件のスペースへのアクセスを付与しています。メンバーはそのアクセスを失います。",
         "deleteConfirmSpaceAccess_other": "このチームは {{count}} 件のスペースへのアクセスを付与しています。メンバーはそのアクセスを失います。",
         "members": {
@@ -2775,7 +2767,26 @@
           "leftTeam": "{{team}} から退出しました",
           "leaveConfirm": "{{team}} から退出しますか？",
           "leaveConfirmDescription": "直接追加されているか他のチームに含まれていない限り、このチームが付与するスペースへのアクセスを失います。"
-        }
+        },
+        "columns": {
+          "name": "名前",
+          "members": "メンバー",
+          "teamspaces": "Teamspace"
+        },
+        "loadingTitle": "チームを読み込んでいます…",
+        "loadingBody": "ワークスペースのチームがここに表示されます。",
+        "failedTitle": "チームを読み込めませんでした",
+        "failedBody": "接続を確認して、もう一度お試しください。",
+        "retry": "もう一度試す",
+        "emptyTitle": "チームはまだありません",
+        "emptyBody": "チームは、複数の人を一度に追加するためのショートカットです。チームを Teamspace に追加すると、そのメンバー全員がアクセスできます。",
+        "emptyBodyMember": "ワークスペースの管理者がまだ作成していません。",
+        "create": "チームを作成",
+        "spacesNone": "なし",
+        "people_one": "{{count}} 人",
+        "people_other": "{{count}} 人",
+        "spaces_one": "{{count}} 個の Teamspace",
+        "spaces_other": "{{count}} 個の Teamspace"
       },
       "invites": {
         "resending": "再送信中…",

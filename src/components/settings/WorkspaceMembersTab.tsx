@@ -1,7 +1,7 @@
 import React, { useEffect, useReducer, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
-import { Loader2, Search, X } from "../icons";
+import { ChevronDown, Loader2, Search, Users, X } from "../icons";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { WorkspacesService } from "../../services/WorkspacesService";
 import { useAuth } from "../../hooks/useAuth";
@@ -9,6 +9,7 @@ import { Button } from "../ui/button";
 import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "../ui/BidiInterpolatedText";
 import { ESCAPE_CLEARS_ATTRIBUTE } from "../ui/escapeClears";
 import { Input } from "../ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { useToast } from "../ui/useToast";
 import type { Workspace, WorkspaceJoinRequest, WorkspaceMember } from "../../types/electron";
 import MemberAvatar from "../MemberAvatar";
@@ -23,7 +24,7 @@ import {
   toggleRow,
   type RowSelection,
 } from "../../lib/rowSelection";
-import { membersView, rosterFor, rosterHasTeams, teamSummary } from "../../lib/peopleRoster";
+import { membersView, rosterFor, rosterHasTeams } from "../../lib/peopleRoster";
 import { classifyRowActionError, type RowActionError } from "../../lib/workspaceErrors";
 import { transferReducer } from "../../lib/workspaceTransferFlow";
 import { RemoveMembersDialog } from "../workspace/RemoveMembersDialog";
@@ -32,7 +33,7 @@ import { AddToTeamspaceMenu } from "../workspace/AddToTeamspaceMenu";
 import { SelectionBar } from "../workspace/SelectionBar";
 import { TransferOwnershipDialog } from "../workspace/TransferOwnershipDialog";
 import { MemberRoleMenu } from "./MemberRoleMenu";
-import { HEADER_CELL, ROW_DIVIDER, TABLE_FRAME } from "./tableTokens";
+import { CONTACTS_TRIGGER, HEADER_CELL, ROW_DIVIDER, TABLE_FRAME } from "./tableTokens";
 
 interface WorkspaceMembersTabProps {
   workspace: Workspace;
@@ -558,25 +559,42 @@ export default function WorkspaceMembersTab({
 
 function TeamCell({ teams }: { teams: WorkspaceMember["teams"] }): React.ReactElement {
   const { t } = useTranslation();
-  const { shown, more } = teamSummary(teams);
-  const allNames = (teams ?? []).map((team) => team.name).join(" · ");
+  const list = teams ?? [];
 
   return (
-    <td className="px-3 w-[40%] max-w-0" title={allNames || undefined}>
-      {shown.length === 0 ? (
+    <td className="px-3 w-[40%] max-w-0">
+      {list.length === 0 ? (
         <span className="text-xs text-muted-foreground/70">
           {t("settingsPage.workspace.people.teamsNone")}
         </span>
+      ) : list.length === 1 ? (
+        <div className="flex min-w-0 items-center gap-2 text-xs text-foreground">
+          <Users className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span dir="auto" className="min-w-0 truncate">
+            {list[0].name}
+          </span>
+        </div>
       ) : (
-        <p className="text-xs text-foreground truncate">
-          <span dir="auto">{shown.join(" · ")}</span>
-          {more > 0 && (
-            <span className="text-muted-foreground">
-              {" "}
-              {t("settingsPage.workspace.people.teamsMore", { count: more })}
+        <Popover>
+          <PopoverTrigger className={CONTACTS_TRIGGER}>
+            <span className="truncate">
+              {t("settingsPage.workspace.people.teamsCount", { count: list.length })}
             </span>
-          )}
-        </p>
+            <ChevronDown className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-56 p-1.5">
+            <ul className="flex flex-col">
+              {list.map((team) => (
+                <li key={team.id} className="flex items-center gap-2 px-2 py-1.5">
+                  <Users className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <span dir="auto" className="min-w-0 truncate text-xs text-foreground">
+                    {team.name}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </PopoverContent>
+        </Popover>
       )}
     </td>
   );

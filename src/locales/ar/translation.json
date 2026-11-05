@@ -3848,7 +3848,6 @@
         },
         "you": "أنت",
         "teamsNone": "لا شيء",
-        "teamsMore": "+{{count}}",
         "loading": {
           "title": "جارٍ تحميل الأعضاء…",
           "body": "سيظهر أعضاء مساحة العمل هنا."
@@ -3950,7 +3949,13 @@
           "selectRow": "تحديد {{name}}",
           "remove": "إزالة",
           "addToTeamspace": "إضافة إلى مساحة الفريق"
-        }
+        },
+        "teamsCount_zero": "{{count}} فريق",
+        "teamsCount_one": "{{count}} فريق",
+        "teamsCount_two": "{{count}} فريقان",
+        "teamsCount_few": "{{count}} فرق",
+        "teamsCount_many": "{{count}} فريقًا",
+        "teamsCount_other": "{{count}} فريق"
       },
       "teamspaces": {
         "title": "مساحات الفريق",
@@ -4227,11 +4232,6 @@
         "errorTitle": "تعذر تحديث الطلب"
       },
       "teams": {
-        "title": "الفرق",
-        "description": "فرق من أعضاء مساحة العمل يمكن منحها الوصول إلى مساحات الفريق معًا.",
-        "new": "فريق جديد",
-        "empty": "لا توجد فرق بعد.",
-        "createFirst": "أنشئ فريقك الأول",
         "addMembersLabel": "إضافة أعضاء",
         "createTitle": "إنشاء فريق",
         "nameLabel": "اسم الفريق",
@@ -4241,7 +4241,6 @@
         "memberCount_few": "{{count}} أعضاء",
         "memberCount_many": "{{count}} عضوًا",
         "memberCount_other": "{{count}} عضو",
-        "membersButton": "الأعضاء",
         "grantsAccessToSpaces_zero": "يمنح الوصول إلى {{count}} مساحات",
         "grantsAccessToSpaces_one": "يمنح الوصول إلى {{count}} مساحة",
         "grantsAccessToSpaces_two": "يمنح الوصول إلى {{count}} مساحتين",
@@ -4250,9 +4249,6 @@
         "grantsAccessToSpaces_other": "يمنح الوصول إلى {{count}} مساحة",
         "couldNotCreate": "تعذر إنشاء الفريق",
         "created": "تم إنشاء {{team}}",
-        "deleted": "تم حذف {{team}}",
-        "deleteConfirmTitle": "حذف {{team}}؟",
-        "deleteConfirmDescription": "هذا يؤرشف الفريق. سيفقد أعضاؤه أي وصول منحته إياهم.",
         "deleteConfirmSpaceAccess_zero": "يمنح هذا الفريق الوصول إلى {{count}} مساحات. سيفقد أعضاؤه هذا الوصول.",
         "deleteConfirmSpaceAccess_one": "يمنح هذا الفريق الوصول إلى {{count}} مساحة. سيفقد أعضاؤه هذا الوصول.",
         "deleteConfirmSpaceAccess_two": "يمنح هذا الفريق الوصول إلى {{count}} مساحتين. سيفقد أعضاؤه هذا الوصول.",
@@ -4266,7 +4262,34 @@
           "leftTeam": "لقد غادرت {{team}}",
           "leaveConfirm": "مغادرة {{team}}؟",
           "leaveConfirmDescription": "ستفقد إمكانية الوصول إلى المساحات المخصصة لهذا الفريق ما لم تكن مضافًا مباشرةً أو يضمك فريق آخر."
-        }
+        },
+        "columns": {
+          "name": "الاسم",
+          "members": "الأعضاء",
+          "teamspaces": "مساحات الفريق"
+        },
+        "loadingTitle": "جارٍ تحميل الفرق…",
+        "loadingBody": "ستظهر هنا فرق مساحة عملك.",
+        "failedTitle": "تعذّر تحميل الفرق",
+        "failedBody": "تحقق من اتصالك وحاول مرة أخرى.",
+        "retry": "حاول مرة أخرى",
+        "emptyTitle": "لا توجد فرق بعد",
+        "emptyBody": "الفريق اختصار لإضافة عدة أشخاص دفعة واحدة. أضف فريقًا إلى مساحة فريق ليحصل كل من فيه على إمكانية الوصول.",
+        "emptyBodyMember": "لم ينشئ مسؤولو مساحة العمل أي فريق بعد.",
+        "create": "إنشاء فريق",
+        "spacesNone": "لا شيء",
+        "people_zero": "{{count}} شخص",
+        "people_one": "{{count}} شخص",
+        "people_two": "{{count}} شخصان",
+        "people_few": "{{count}} أشخاص",
+        "people_many": "{{count}} شخصًا",
+        "people_other": "{{count}} شخص",
+        "spaces_zero": "{{count}} مساحة فريق",
+        "spaces_one": "{{count}} مساحة فريق",
+        "spaces_two": "{{count}} مساحتا فريق",
+        "spaces_few": "{{count}} مساحات فريق",
+        "spaces_many": "{{count}} مساحة فريق",
+        "spaces_other": "{{count}} مساحة فريق"
       },
       "invites": {
         "resending": "جاري إعادة الإرسال…",

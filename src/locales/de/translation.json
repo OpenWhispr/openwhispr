@@ -1730,7 +1730,6 @@
         },
         "you": "Sie",
         "teamsNone": "Keine",
-        "teamsMore": "+{{count}}",
         "loading": {
           "title": "Mitglieder werden geladen…",
           "body": "Die Mitglieder Ihres Workspace werden hier angezeigt."
@@ -1796,7 +1795,9 @@
           "selectRow": "{{name}} auswählen",
           "remove": "Entfernen",
           "addToTeamspace": "Zu Teamspace hinzufügen"
-        }
+        },
+        "teamsCount_one": "{{count}} Team",
+        "teamsCount_other": "{{count}} Teams"
       },
       "teamspaces": {
         "title": "Teamspaces",
@@ -2019,24 +2020,15 @@
         "errorTitle": "Anfrage konnte nicht aktualisiert werden"
       },
       "teams": {
-        "title": "Teams",
-        "description": "Teams aus Workspace-Mitgliedern, denen gemeinsam Zugriff auf Teamspaces gewährt werden kann.",
-        "new": "Neues Team",
-        "empty": "Noch keine Teams.",
-        "createFirst": "Erstelle dein erstes Team",
         "addMembersLabel": "Mitglieder hinzufügen",
         "createTitle": "Team erstellen",
         "nameLabel": "Teamname",
         "memberCount_one": "{{count}} Mitglied",
         "memberCount_other": "{{count}} Mitglieder",
-        "membersButton": "Mitglieder",
         "grantsAccessToSpaces_one": "Gewährt Zugriff auf {{count}} Space",
         "grantsAccessToSpaces_other": "Gewährt Zugriff auf {{count}} Spaces",
         "couldNotCreate": "Team konnte nicht erstellt werden",
         "created": "{{team}} erstellt",
-        "deleted": "{{team}} gelöscht",
-        "deleteConfirmTitle": "{{team}} löschen?",
-        "deleteConfirmDescription": "Das Team wird archiviert. Seine Mitglieder verlieren den dadurch gewährten Zugriff.",
         "deleteConfirmSpaceAccess_one": "Dieses Team gewährt Zugriff auf {{count}} Space. Seine Mitglieder verlieren diesen Zugriff.",
         "deleteConfirmSpaceAccess_other": "Dieses Team gewährt Zugriff auf {{count}} Spaces. Seine Mitglieder verlieren diesen Zugriff.",
         "members": {
@@ -2046,7 +2038,26 @@
           "leftTeam": "Du hast {{team}} verlassen",
           "leaveConfirm": "{{team}} verlassen?",
           "leaveConfirmDescription": "Du verlierst den Zugriff auf die Spaces, denen dieses Team zugewiesen ist, sofern du nicht direkt hinzugefügt wurdest oder ein anderes Team dich einschließt."
-        }
+        },
+        "columns": {
+          "name": "Name",
+          "members": "Mitglieder",
+          "teamspaces": "Teamspaces"
+        },
+        "loadingTitle": "Teams werden geladen…",
+        "loadingBody": "Die Teams Ihres Workspace werden hier angezeigt.",
+        "failedTitle": "Teams konnten nicht geladen werden",
+        "failedBody": "Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+        "retry": "Erneut versuchen",
+        "emptyTitle": "Noch keine Teams",
+        "emptyBody": "Ein Team ist eine Abkürzung, um mehrere Personen auf einmal hinzuzufügen. Fügen Sie ein Team zu einem Teamspace hinzu, und alle darin erhalten Zugriff.",
+        "emptyBodyMember": "Die Administratoren Ihres Workspace haben noch keines erstellt.",
+        "create": "Team erstellen",
+        "spacesNone": "Keine",
+        "people_one": "{{count}} Person",
+        "people_other": "{{count}} Personen",
+        "spaces_one": "{{count}} Teamspace",
+        "spaces_other": "{{count}} Teamspaces"
       },
       "invites": {
         "resending": "Sende erneut…",

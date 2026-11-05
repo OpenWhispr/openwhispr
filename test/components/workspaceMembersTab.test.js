@@ -96,6 +96,14 @@ async function loadMembersTab(
         }
       `,
       "/MemberAvatar": "export default function Mock() { return null; }",
+      // The popover renders open, so a test reads its list.
+      "/ui/popover": `
+        import React from "react";
+        const h = React.createElement;
+        export const Popover = ({ children }) => h("div", { "data-popover": "" }, children);
+        export const PopoverTrigger = ({ children }) => h("button", null, children);
+        export const PopoverContent = ({ children }) => h("div", null, children);
+      `,
       "/ui/dropdown-menu": `
         import React from "react";
         const h = React.createElement;
@@ -261,8 +269,9 @@ test("member view shows roles as text and no actions", async (t) => {
   assert.match(markup, /settingsPage\.workspace\.people\.columns\.role/);
 });
 
-test("team column shows two teams and a count", async (t) => {
+test("a person's teams read None, a name, or a count with a list", async (t) => {
   const members = [
+    { ...MEMBERS[0], teams: [team("t5", "Ops")] },
     {
       ...MEMBERS[1],
       teams: [
@@ -279,10 +288,25 @@ test("team column shows two teams and a count", async (t) => {
   const rows = rowsByName(markup, members);
 
   assert.match(markup, /settingsPage\.workspace\.people\.columns\.team/);
-  assert.match(rows.admin, /Sales · Support/);
-  assert.match(rows.admin, /settingsPage\.workspace\.people\.teamsMore#2/);
-  assert.match(rows.admin, /title="Sales · Support · Design · Legal"/);
+  // None.
   assert.match(rows.member, /settingsPage\.workspace\.people\.teamsNone/);
+  // One team: its icon and name, with no list to open.
+  assert.match(rows.owner, /Ops/);
+  assert.doesNotMatch(rows.owner, /data-popover/);
+  assert.doesNotMatch(rows.owner, /settingsPage\.workspace\.people\.teamsCount/);
+  // Two or more: a count, and a list of every team.
+  assert.match(rows.admin, /settingsPage\.workspace\.people\.teamsCount#4/);
+  for (const name of ["Sales", "Support", "Design", "Legal"])
+    assert.match(rows.admin, new RegExp(name));
+  assert.doesNotMatch(markup, /teamsMore/);
+});
+
+test("exactly two teams read as a count", async (t) => {
+  const members = [{ ...MEMBERS[1], teams: [team("t1", "Sales"), team("t2", "Support")] }];
+  const WorkspaceMembersTab = await loadMembersTab(t, { members });
+  const markup = render(WorkspaceMembersTab, { ...WORKSPACE, role: "admin" });
+
+  assert.match(markup, /settingsPage\.workspace\.people\.teamsCount#2/);
 });
 
 test("team column hides when the API sends no teams", async (t) => {
