@@ -1,4 +1,10 @@
-import { cloudGet, cloudPost, cloudPatch, cloudDelete } from "./cloudApi.js";
+import {
+  cloudGet,
+  cloudPost,
+  cloudPatchForAuthGeneration,
+  cloudPostForAuthGeneration,
+  cloudDeleteForAuthGeneration,
+} from "./cloudApi.js";
 
 interface ConversationInput {
   client_conversation_id?: string;
@@ -12,7 +18,7 @@ interface ConversationInput {
   }>;
 }
 
-interface CloudConversation {
+export interface CloudConversation {
   id: string;
   client_conversation_id: string | null;
   title: string;
@@ -35,19 +41,31 @@ interface CloudConversationWithMessages extends CloudConversation {
   messages?: CloudMessage[];
 }
 
-async function create(input: ConversationInput): Promise<CloudConversation> {
-  return cloudPost<CloudConversation>("/api/conversations/create", input);
+async function create(
+  input: ConversationInput,
+  authGeneration: number
+): Promise<CloudConversation> {
+  return cloudPostForAuthGeneration<CloudConversation>(
+    "/api/conversations/create",
+    input,
+    authGeneration
+  );
 }
 
 async function update(
   id: string,
-  updates: { title?: string; archived_at?: string }
+  updates: { title?: string; archived_at?: string },
+  authGeneration: number
 ): Promise<CloudConversation> {
-  return cloudPatch<CloudConversation>("/api/conversations/update", { id, ...updates });
+  return cloudPatchForAuthGeneration<CloudConversation>(
+    "/api/conversations/update",
+    { id, ...updates },
+    authGeneration
+  );
 }
 
-async function deleteConversation(id: string): Promise<void> {
-  await cloudDelete("/api/conversations/delete", { id });
+async function deleteConversation(id: string, authGeneration: number): Promise<void> {
+  await cloudDeleteForAuthGeneration("/api/conversations/delete", { id }, authGeneration);
 }
 
 async function list(

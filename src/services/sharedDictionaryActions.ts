@@ -196,6 +196,7 @@ async function applyHides(workspaceId: string, hides: CloudSharedHide[]): Promis
 // its request is in flight; writing the old account's rows into the cleared
 // tables would publish them, so its local apply is left to the next pass.
 interface ActionScope {
+  authGeneration: number | null;
   isCurrent: () => boolean;
 }
 
@@ -204,6 +205,7 @@ function captureActionScope(): ActionScope {
   const { generation } = useSharedDictionaryStore.getState();
   const workspaceId = readActiveWorkspaceId();
   return {
+    authGeneration,
     isCurrent: () =>
       getValidatedAuthGeneration() === authGeneration &&
       useSharedDictionaryStore.getState().generation === generation &&
@@ -293,6 +295,7 @@ async function retireFallbacks(
       candidates.length > 0
         ? await api.retireMovedDictionaryWords(candidates, {
             includeSynced: !syncService.canSync(),
+            expectedAuthGeneration: scope.authGeneration,
           })
         : { retired: [] };
     await reconcilePersonal(scope, retired.length > 0);
@@ -305,7 +308,9 @@ async function reviveFallbacks(scope: ActionScope, words: string[]): Promise<voi
   if (words.length === 0) return;
   await applyAccepted(scope, "fallback revival", async () => {
     const api = requireApi();
-    const { revived } = (await api.reviveRetiredDictionaryWords?.(words)) ?? { revived: [] };
+    const { revived } = (await api.reviveRetiredDictionaryWords?.(words, {
+      expectedAuthGeneration: scope.authGeneration,
+    })) ?? { revived: [] };
     await reconcilePersonal(scope, revived.length > 0);
   });
 }
@@ -704,6 +709,7 @@ export async function sharePersonalWords(
         await applyAccepted(scope, "share mark", async () => {
           await api.markDictionaryWordsShared?.(accepted, sharedAt, {
             pendingWords: accepted.filter((word) => demotedWords.has(word)),
+            expectedAuthGeneration: scope.authGeneration,
           });
         });
       }

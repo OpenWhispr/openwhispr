@@ -1969,6 +1969,7 @@ export default function SettingsPage({
             if (!cleanup?.success) {
               throw new Error(cleanup?.error ?? "Could not remove local account data");
             }
+            syncService.forgetAccount(accountId);
           },
           clearWorkspaceSessionState: () => syncService.purgeTeamSpacesForSignOut(),
           signOut,

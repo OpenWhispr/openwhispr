@@ -14,6 +14,7 @@ const useTranscriptionStore = create<TranscriptionState>()(() => ({
 let hasBoundIpcListeners = false;
 const DEFAULT_LIMIT = 50;
 let currentLimit = DEFAULT_LIMIT;
+let loadGeneration = 0;
 
 function ensureIpcListeners() {
   if (hasBoundIpcListeners || typeof window === "undefined") {
@@ -62,6 +63,31 @@ function ensureIpcListeners() {
     }
   }
 
+  if (window.electronAPI?.onActiveAccountScopeChanged) {
+    // Main announces every re-scope, and a token rotation keeps the account.
+    let accountId: string | null | undefined;
+    let broadcastReceived = false;
+    void window.electronAPI
+      .getActiveAccountScope?.()
+      .then((scope) => {
+        if (!broadcastReceived) accountId = scope?.accountId ?? null;
+      })
+      .catch((error) => {
+        console.error("Failed to read the history's account scope:", error);
+      });
+    const dispose = window.electronAPI.onActiveAccountScopeChanged((scope) => {
+      broadcastReceived = true;
+      const nextAccountId = scope?.accountId ?? null;
+      if (nextAccountId === accountId) return;
+      accountId = nextAccountId;
+      clearTranscriptions();
+      void initializeTranscriptions().catch((error) => {
+        console.error("Failed to reload transcription history after an account change:", error);
+      });
+    });
+    disposers.push(dispose);
+  }
+
   hasBoundIpcListeners = true;
 
   window.addEventListener("beforeunload", () => {
@@ -75,7 +101,9 @@ export async function initializeTranscriptions(
 ) {
   currentLimit = limit;
   ensureIpcListeners();
+  const gen = ++loadGeneration;
   const items = await window.electronAPI.getTranscriptions(limit, { includeDiscarded });
+  if (gen !== loadGeneration) return items;
   useTranscriptionStore.setState({ transcriptions: items, includeDiscarded });
   return items;
 }

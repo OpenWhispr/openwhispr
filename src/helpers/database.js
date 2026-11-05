@@ -18,6 +18,7 @@ const debugLogger = require("./debugLogger");
 const { buildNoteSearchQuery } = require("./noteSearch");
 const { normalizeStoredSpeakerCount } = require("./speakerCount");
 const { parseEventTime } = require("./calendarAvailability");
+const { isCloudEntryNewer } = require("./cloudSyncGuards");
 // An explicit zone marks an instant this app captured at dictation time. A
 // naive timestamp may instead be a sync artifact: upsertTranscriptionFromCloud
 // keeps the cloud created_at but lets timestamp default to the local pull, so
@@ -50,6 +51,19 @@ const SHARED_DICTIONARY_TABLES = [
   "shared_dictionary_hides",
   "shared_dictionary_meta",
 ];
+// Personal tables whose rows are unique per account by a case-insensitive key.
+const PERSONAL_ROW_KEYS = { custom_dictionary: "word", snippets: "trigger" };
+const PERSONAL_ROW_TABLES = [
+  "transcriptions",
+  "agent_conversations",
+  "custom_dictionary",
+  "snippets",
+];
+// legacy_unattributed: 0 is a row written since attribution; the others are from
+// before it, so nobody knows whose they are. A row this device uploaded for
+// whichever account synced first has a cloud id that says nothing about that.
+const LEGACY_UNATTRIBUTED = 1;
+const LEGACY_UPLOADED_HERE = 2;
 
 // Text a local writer creates is the user's: recording it as a set lets
 // conflict Keep tell it from text this device merely pulled. A blank stays
@@ -279,12 +293,32 @@ class DatabaseManager {
   constructor() {
     this.db = null;
     this.activeAccountId = null;
+    this._accountTrackedSince = Date.now();
+    this._accountChanges = [];
     this.initDatabase();
   }
 
   setActiveAccountId(accountId) {
-    this.activeAccountId =
+    const next =
       typeof accountId === "string" && accountId.trim().length > 0 ? accountId.trim() : null;
+    if (next !== this.activeAccountId) {
+      this._accountChanges.push({ at: Date.now(), previous: this.activeAccountId });
+    }
+    this.activeAccountId = next;
+  }
+
+  // A dictation belongs to whoever was signed in when it was spoken, not whoever
+  // is when its processing finishes. A time from before this launch (a recovered
+  // recording) can't be placed, so it reads as the active account.
+  _accountSpokenUnder(occurredAt) {
+    const spokenAt = Date.parse(occurredAt);
+    if (!(spokenAt >= this._accountTrackedSince)) return this.activeAccountId;
+    const change = this._accountChanges.find(({ at }) => spokenAt < at);
+    return change ? change.previous : this.activeAccountId;
+  }
+
+  accountChangedSince(occurredAt) {
+    return this._accountSpokenUnder(occurredAt) !== this.activeAccountId;
   }
 
   _accountScopeCondition(tableName) {
@@ -309,6 +343,283 @@ class DatabaseManager {
   _accountIdForSpace(spaceId) {
     const space = this.db.prepare("SELECT kind FROM spaces WHERE id = ?").get(spaceId);
     return space?.kind === "team" ? null : this.activeAccountId;
+  }
+
+  // Transcriptions, chats, dictionary words and snippets are personal in every
+  // space: each row belongs to the account that wrote or pulled it. Rows from
+  // before attribution, or written signed out, carry no account and stay
+  // visible to everyone, as they always were. A word or snippet the account
+  // has its own row for hides the unattributed one with the same key (one
+  // added while signed out), so the account never sees, pushes or merges two.
+  _ownedRowScope(tableName, alias = tableName) {
+    if (!PERSONAL_ROW_KEYS[tableName]) {
+      return {
+        sql: `(${alias}.account_id IS NULL OR ${alias}.account_id = ?)`,
+        params: [this.activeAccountId],
+      };
+    }
+    return {
+      sql: `(${tableName}.account_id = ? OR (${tableName}.account_id IS NULL AND NOT ${this._ownedDuplicateSql(tableName)}))`,
+      params: [this.activeAccountId, this.activeAccountId],
+    };
+  }
+
+  _ownedDuplicateSql(tableName) {
+    const key = PERSONAL_ROW_KEYS[tableName];
+    return `EXISTS (SELECT 1 FROM ${tableName} owned WHERE owned.account_id = ? AND lower(owned.${key}) = lower(${tableName}.${key}))`;
+  }
+
+  // Removing or renaming the account's word or snippet takes the hidden
+  // signed-out copy of that key with it. Otherwise the copy would surface as
+  // soon as the owned row is gone, and the next push would upload it to the
+  // account's cloud. Only a copy no cloud has ever held goes.
+  _dropHiddenDuplicates(tableName, keyValue) {
+    if (!this.activeAccountId) return;
+    const key = PERSONAL_ROW_KEYS[tableName];
+    this.db
+      .prepare(
+        `DELETE FROM ${tableName}
+         WHERE account_id IS NULL AND cloud_id IS NULL AND lower(${key}) = lower(?)
+           AND ${this._ownedDuplicateSql(tableName)}`
+      )
+      .run(keyValue, this.activeAccountId);
+  }
+
+  // Hard-deleting the account's word or snippet. A hidden copy someone's cloud
+  // may hold can't be dropped, so a tombstone that nothing pushes keeps hiding
+  // it. A row already tombstoned took the hidden copy with it when it was
+  // removed, so one re-added since is left to surface.
+  _hardDeleteKeyedRow(tableName, id, row) {
+    const key = PERSONAL_ROW_KEYS[tableName];
+    if (!row.deleted_at) this._dropHiddenDuplicates(tableName, row[key]);
+    const hiddenCopy =
+      row.account_id &&
+      this.db
+        .prepare(
+          `SELECT 1 FROM ${tableName} WHERE account_id IS NULL AND cloud_id IS NOT NULL AND lower(${key}) = lower(?) LIMIT 1`
+        )
+        .get(row[key]);
+    if (hiddenCopy) {
+      this.db
+        .prepare(
+          `UPDATE ${tableName} SET deleted_at = COALESCE(deleted_at, datetime('now')), sync_status = 'synced' WHERE id = ?`
+        )
+        .run(id);
+    } else {
+      this.db.prepare(`DELETE FROM ${tableName} WHERE id = ?`).run(id);
+    }
+  }
+
+  // A pull that matches a word or snippet by its key rather than by id may
+  // only merge into an unattributed row nobody has synced yet. One with a cloud
+  // id, or from before attribution, may be another account's, and the merge
+  // would move it into this one.
+  _mergeableByKeySql(tableName) {
+    // Signed out, a merge can only join two unattributed rows.
+    if (!this.activeAccountId) return "1";
+    return `(${tableName}.account_id IS NOT NULL OR (${tableName}.cloud_id IS NULL AND ${tableName}.legacy_unattributed = 0))`;
+  }
+
+  // SET clause that hands an unattributed row to the active account once it
+  // syncs. Uploading a row from before attribution proves nothing about whose
+  // it is on a shared device, so that one is claimed only when the account's
+  // own cloud already holds it (`proven`: matched by client or cloud id). A
+  // duplicate of the account's own word or snippet stays unattributed.
+  _claimUnattributedSql(tableName, { proven = false, accountId = this.activeAccountId } = {}) {
+    const legacy = proven
+      ? ` AND ${tableName}.legacy_unattributed != ${LEGACY_UPLOADED_HERE}`
+      : ` AND ${tableName}.legacy_unattributed = 0`;
+    const duplicate = PERSONAL_ROW_KEYS[tableName]
+      ? ` AND NOT ${this._ownedDuplicateSql(tableName)}`
+      : "";
+    // A push's ack is what makes a legacy row's first cloud id, so a later pull
+    // matching that id proves nothing. An older cloud id still does.
+    const uploaded = proven
+      ? ""
+      : `, legacy_unattributed = CASE WHEN ${tableName}.account_id IS NULL AND ${tableName}.legacy_unattributed = ${LEGACY_UNATTRIBUTED} AND ${tableName}.cloud_id IS NULL THEN ${LEGACY_UPLOADED_HERE} ELSE ${tableName}.legacy_unattributed END`;
+    return {
+      sql: `account_id = CASE WHEN ${tableName}.account_id IS NULL${legacy}${duplicate} THEN ? ELSE ${tableName}.account_id END${uploaded}`,
+      params: PERSONAL_ROW_KEYS[tableName] ? [accountId, accountId] : [accountId],
+    };
+  }
+
+  // Another local account has used this device if it owns anything here.
+  hasOtherAccountRows() {
+    if (!this.activeAccountId) return false;
+    const owned = [
+      "notes",
+      "folders",
+      "transcriptions",
+      "agent_conversations",
+      "custom_dictionary",
+      "snippets",
+      "analytics_events",
+      "space_accounts",
+    ];
+    return Boolean(
+      this.db
+        .prepare(
+          `${owned
+            .map((table) => `SELECT 1 FROM ${table} WHERE account_id != ?`)
+            .join(" UNION ALL ")} LIMIT 1`
+        )
+        .get(...owned.map(() => this.activeAccountId))
+    );
+  }
+
+  // Signed-out rows normally join an account when they sync. These never sync
+  // (failed or empty dictations, container chats), so they join at sign-in or
+  // they'd stay visible to every later account.
+  claimSignedOutLocalRows() {
+    if (!this.activeAccountId) return;
+    this.db
+      .prepare(
+        `UPDATE transcriptions SET account_id = ?
+         WHERE account_id IS NULL AND legacy_unattributed = 0
+           AND (status = 'failed' OR TRIM(COALESCE(text, '')) = '')`
+      )
+      .run(this.activeAccountId);
+    this.db
+      .prepare(
+        `UPDATE agent_conversations SET account_id = ?
+         WHERE account_id IS NULL AND legacy_unattributed = 0
+           AND (space_id IS NOT NULL OR folder_id IS NOT NULL)`
+      )
+      .run(this.activeAccountId);
+  }
+
+  // With nobody else on this device, a row from before attribution that no cloud
+  // holds can only be this account's, and nothing else could ever prove it. A row
+  // with a cloud id waits for its own cloud to prove it, in case another account
+  // left no other trace here. A twin of the account's own word or snippet stays
+  // hidden.
+  claimLegacyRowsOfOnlyAccount() {
+    if (!this.activeAccountId || this.hasOtherAccountRows()) return;
+    this.db.transaction(() => {
+      for (const table of PERSONAL_ROW_TABLES) {
+        const keyed = Boolean(PERSONAL_ROW_KEYS[table]);
+        this.db
+          .prepare(
+            `UPDATE ${table} SET account_id = ?
+             WHERE account_id IS NULL AND legacy_unattributed != 0 AND cloud_id IS NULL
+               ${keyed ? `AND NOT ${this._ownedDuplicateSql(table)}` : ""}`
+          )
+          .run(this.activeAccountId, ...(keyed ? [this.activeAccountId] : []));
+      }
+    })();
+  }
+
+  // Rows from before attribution whose cloud copy could prove their owner.
+  hasUnclaimedLegacyRows() {
+    return Boolean(
+      this.db
+        .prepare(
+          `${PERSONAL_ROW_TABLES.map(
+            (table) =>
+              `SELECT 1 FROM ${table} WHERE account_id IS NULL AND legacy_unattributed = ${LEGACY_UNATTRIBUTED} AND cloud_id IS NOT NULL`
+          ).join(" UNION ALL ")} LIMIT 1`
+        )
+        .get()
+    );
+  }
+
+  // A cloud row may only land on a local row this account can see. Another
+  // account's row with the same client id stays as it is, and the pull skips it.
+  _ownedByOtherAccount(row, accountId = this.activeAccountId) {
+    return Boolean(row?.account_id && row.account_id !== accountId);
+  }
+
+  _initPersonalRowAccounts() {
+    for (const table of PERSONAL_ROW_TABLES) {
+      try {
+        this.db.exec(`ALTER TABLE ${table} ADD COLUMN account_id TEXT`);
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+      try {
+        // One step: a column added without its backfill is never backfilled,
+        // since the next launch sees it and moves on.
+        this.db.transaction(() => {
+          this.db.exec(
+            `ALTER TABLE ${table} ADD COLUMN legacy_unattributed INTEGER NOT NULL DEFAULT 0`
+          );
+          // Every row already here predates attribution, so its owner is unknown.
+          this.db.exec(
+            `UPDATE ${table} SET legacy_unattributed = ${LEGACY_UNATTRIBUTED} WHERE account_id IS NULL`
+          );
+        })();
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+    }
+
+    // custom_dictionary was created with a column-level UNIQUE(word), which
+    // SQLite can only drop by rebuilding the table. Every later column was
+    // appended to the stored CREATE statement, so the copy keeps all of them.
+    const autoIndex = this.db
+      .prepare(
+        "SELECT 1 FROM sqlite_master WHERE type = 'index' AND tbl_name = 'custom_dictionary' AND name LIKE 'sqlite_autoindex_custom_dictionary%'"
+      )
+      .get();
+    if (autoIndex) {
+      const { sql } = this.db
+        .prepare(
+          "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'custom_dictionary'"
+        )
+        .get();
+      const rebuiltSql = sql
+        .replace(/\bword\s+TEXT\s+NOT\s+NULL\s+UNIQUE\b/i, "word TEXT NOT NULL")
+        .replace(
+          /CREATE TABLE\s+(IF NOT EXISTS\s+)?"?custom_dictionary"?/i,
+          "CREATE TABLE custom_dictionary_rebuild"
+        );
+      // An unrecognized schema keeps the device-wide UNIQUE(word) rather than
+      // failing the database open; two accounts then can't share a word.
+      if (rebuiltSql === sql || /\bUNIQUE\b/i.test(rebuiltSql)) {
+        debugLogger.error(
+          "custom_dictionary has an unexpected schema; keeping UNIQUE(word)",
+          {},
+          "database"
+        );
+      } else {
+        this._rebuildDictionaryWithoutWordUnique(rebuiltSql);
+      }
+    }
+    for (const table of PERSONAL_ROW_TABLES) {
+      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_${table}_account_id ON ${table}(account_id)`);
+    }
+    // Every list read checks each unattributed row against the account's own.
+    for (const [table, key] of Object.entries(PERSONAL_ROW_KEYS)) {
+      this.db.exec(
+        `CREATE INDEX IF NOT EXISTS idx_${table}_account_lower_${key} ON ${table}(account_id, lower(${key}))`
+      );
+    }
+    this.db.exec(
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_dictionary_account_word ON custom_dictionary(COALESCE(account_id, ''), word)"
+    );
+  }
+
+  // Drops the table's own trigger and indexes; the caller and initDatabase
+  // recreate them right after.
+  _rebuildDictionaryWithoutWordUnique(rebuiltSql) {
+    const sequence = this.db
+      .prepare("SELECT seq FROM sqlite_sequence WHERE name = 'custom_dictionary'")
+      .get();
+    this.db.transaction(() => {
+      this.db.exec(rebuiltSql);
+      this.db.exec("INSERT INTO custom_dictionary_rebuild SELECT * FROM custom_dictionary");
+      this.db.exec("DROP TABLE custom_dictionary");
+      this.db.exec("ALTER TABLE custom_dictionary_rebuild RENAME TO custom_dictionary");
+      // Keep AUTOINCREMENT from reusing the ids of words deleted before.
+      if (sequence) {
+        this.db.prepare("DELETE FROM sqlite_sequence WHERE name = 'custom_dictionary'").run();
+        this.db
+          .prepare(
+            "INSERT INTO sqlite_sequence (name, seq) VALUES ('custom_dictionary', MAX(?, (SELECT COALESCE(MAX(id), 0) FROM custom_dictionary)))"
+          )
+          .run(sequence.seq);
+      }
+    })();
   }
 
   _getFolderInAccountScope(id) {
@@ -438,7 +749,7 @@ class DatabaseManager {
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS custom_dictionary (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          word TEXT NOT NULL UNIQUE,
+          word TEXT NOT NULL,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `);
@@ -754,15 +1065,6 @@ class DatabaseManager {
       this.db.exec(
         "CREATE INDEX IF NOT EXISTS idx_agent_conversations_container ON agent_conversations(space_id, folder_id)"
       );
-      // The private space is shared by every account on the device, so its
-      // root chats need an owner the way private notes and folders do; note
-      // and folder chats are owned through their parent row.
-      try {
-        this.db.exec("ALTER TABLE agent_conversations ADD COLUMN account_id TEXT");
-      } catch (err) {
-        if (!err.message.includes("duplicate column")) throw err;
-      }
-
       const builtinKeys = [
         ...BUILTIN_ACTIONS.map((action) => action.translationKey),
         LEGACY_DETAILED_NOTES.translationKey,
@@ -1504,6 +1806,10 @@ class DatabaseManager {
           id INTEGER PRIMARY KEY CHECK (id = 1),
           cleared_through TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS analytics_account_clear_state (
+          account_scope TEXT PRIMARY KEY,
+          cleared_through TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS analytics_history_backfill_state (
           id INTEGER PRIMARY KEY CHECK (id = 1),
           version INTEGER NOT NULL,
@@ -1518,6 +1824,7 @@ class DatabaseManager {
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
+      this._initPersonalRowAccounts();
       this.db.exec(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_dictionary_client_id ON custom_dictionary(client_dict_id)"
       );
@@ -1540,8 +1847,20 @@ class DatabaseManager {
       this.db.exec(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_snippets_client_id ON snippets(client_snippet_id) WHERE client_snippet_id IS NOT NULL"
       );
+      // An active trigger is unique per account, not per device: two accounts
+      // on one machine may each keep their own "addr". The index keeps its
+      // device-wide name so an older build's CREATE UNIQUE INDEX IF NOT EXISTS
+      // finds it and skips, instead of failing to open the database.
+      const triggerIndex = this.db
+        .prepare(
+          "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'idx_snippets_trigger_lower_active'"
+        )
+        .get();
+      if (triggerIndex && !triggerIndex.sql.includes("account_id")) {
+        this.db.exec("DROP INDEX idx_snippets_trigger_lower_active");
+      }
       this.db.exec(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_snippets_trigger_lower_active ON snippets(lower(trigger)) WHERE deleted_at IS NULL"
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_snippets_trigger_lower_active ON snippets(COALESCE(account_id, ''), lower(trigger)) WHERE deleted_at IS NULL"
       );
       this.db.exec(
         "CREATE INDEX IF NOT EXISTS idx_snippets_pending_sync ON snippets(sync_status) WHERE sync_status = 'pending'"
@@ -1829,8 +2148,8 @@ class DatabaseManager {
       const stmt = this.db.prepare(
         `INSERT INTO transcriptions (
            text, raw_text, status, error_message, error_code, route_kind,
-           client_transcription_id, timestamp
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))`
+           client_transcription_id, timestamp, account_id
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), ?)`
       );
       const result = stmt.run(
         text,
@@ -1840,7 +2159,8 @@ class DatabaseManager {
         errorCode,
         routeKind,
         clientTranscriptionId,
-        occurredAt
+        occurredAt,
+        this._accountSpokenUnder(analyticsOccurredAt)
       );
 
       const fetchStmt = this.db.prepare("SELECT * FROM transcriptions WHERE id = ?");
@@ -1956,9 +2276,12 @@ class DatabaseManager {
           };
         }
 
-        const clearState = this.db
-          .prepare("SELECT cleared_through FROM analytics_device_clear_state WHERE id = 1")
-          .get();
+        // The latest Clear history covering the row: the account's own, or the
+        // device-wide one older builds recorded.
+        const clearedThroughSql = `NULLIF(MAX(
+          COALESCE(device_clear.cleared_through, ''),
+          COALESCE(account_clear.cleared_through, '')
+        ), '')`;
         // Legacy SQLite timestamps are completion times without an offset. Once
         // the user has cleared Insights, only a client-captured occurrence time
         // can prove that a historical row happened afterward, so an ambiguous
@@ -1969,9 +2292,13 @@ class DatabaseManager {
           .prepare(
             `SELECT transcription.id, transcription.client_transcription_id,
                     transcription.text, transcription.raw_text, transcription.timestamp,
-                    transcription.created_at,
-                    audio_duration_ms, provider, model
+                    transcription.created_at, transcription.account_id,
+                    audio_duration_ms, provider, model,
+                    ${clearedThroughSql} AS cleared_through
              FROM transcriptions transcription
+             LEFT JOIN analytics_device_clear_state device_clear ON device_clear.id = 1
+             LEFT JOIN analytics_account_clear_state account_clear
+               ON account_clear.account_scope = COALESCE(transcription.account_id, '')
              WHERE transcription.id > ?
                AND (? IS NULL OR transcription.id <= ?)
                AND transcription.deleted_at IS NULL
@@ -1982,33 +2309,25 @@ class DatabaseManager {
                  WHERE event.event_id = TRIM(transcription.client_transcription_id)
                )
                AND (
-                 ? IS NULL
+                 ${clearedThroughSql} IS NULL
                  OR (
                    (TRIM(transcription.timestamp) LIKE '%Z'
                     OR SUBSTR(TRIM(transcription.timestamp), -6, 1) IN ('+', '-'))
-                   AND JULIANDAY(transcription.timestamp) > JULIANDAY(?)
+                   AND JULIANDAY(transcription.timestamp) > JULIANDAY(${clearedThroughSql})
                  )
                )
              ORDER BY transcription.id ASC
              LIMIT ?`
           )
-          .all(
-            effectiveAfterId,
-            safeThroughId,
-            safeThroughId,
-            clearState?.cleared_through ?? null,
-            clearState?.cleared_through ?? null,
-            safeLimit
-          );
+          .all(effectiveAfterId, safeThroughId, safeThroughId, safeLimit);
 
         let inserted = 0;
         let skipped = 0;
-        const clearedThrough = clearState ? Date.parse(clearState.cleared_through) : null;
         const insert = this.db.prepare(
           `INSERT INTO analytics_events (
              event_id, account_id, occurred_at, local_date, word_count,
              spoken_duration_ms, mode, provider, model, counter_version, created_at
-           ) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME(?))
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME(?))
            ON CONFLICT(event_id) DO NOTHING`
         );
         const assignClientId = this.db.prepare(
@@ -2043,15 +2362,18 @@ class DatabaseManager {
           // instant actually chosen, which may be created_at. It also catches
           // what the SQL shape test cannot -- a bare YYYY-MM-DD reads as zoned
           // there, its day hyphen sitting six characters from the end.
-          if (clearedThrough !== null && occurredAt.getTime() <= clearedThrough) {
+          if (row.cleared_through && occurredAt.getTime() <= Date.parse(row.cleared_through)) {
             skipped += 1;
             continue;
           }
 
           const eventId = row.client_transcription_id?.trim() || randomUUID();
           if (!row.client_transcription_id?.trim()) assignClientId.run(eventId, row.id);
+          // A counter belongs to whoever dictated it: a claim must never hand
+          // another account's history to the one signed in.
           const result = insert.run(
             eventId,
+            row.account_id ?? null,
             occurredAt.toISOString(),
             localDateKey(occurredAt),
             wordCount,
@@ -2111,12 +2433,15 @@ class DatabaseManager {
     try {
       if (!this.db) throw new Error("Database not initialized");
       if (wordCount === 0) return { success: true, ignored: true };
-      // Clear History is device-wide, so an in-flight recording must stay
-      // cleared even if its account changes before this late write lands.
+      // A recording in flight when any account cleared its history stays
+      // cleared, even if the account changes before this late write lands.
       const cleared = this.db
         .prepare(
-          `SELECT 1 FROM analytics_device_clear_state
-           WHERE id = 1 AND ? <= cleared_through`
+          `SELECT 1 FROM (
+             SELECT cleared_through FROM analytics_device_clear_state
+             UNION ALL
+             SELECT cleared_through FROM analytics_account_clear_state
+           ) WHERE ? <= cleared_through`
         )
         .get(occurredAt);
       if (cleared) return { success: true, ignored: true };
@@ -2144,7 +2469,7 @@ class DatabaseManager {
         )
         .run(
           eventId,
-          this.activeAccountId,
+          this._accountSpokenUnder(occurredAt),
           occurredAt,
           localDate,
           wordCount,
@@ -2166,8 +2491,11 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       // Grouped in SQL so the row count is bounded by distinct days rather than
       // by dictations; summarizeAnalyticsDays still owns every derived figure.
-      // Device-scoped by design: account_id only attributes rows for cloud
-      // sync, so filtering on it here would blank the view on every sign-out.
+      // Whatever the history above it can show: the active account's and
+      // unattributed counters, and signed out only the unattributed ones.
+      const accountFilter = this.activeAccountId
+        ? "AND (account_id IS NULL OR account_id = ?)"
+        : "AND account_id IS NULL";
       const days = this.db
         .prepare(
           `SELECT local_date AS date,
@@ -2178,10 +2506,10 @@ class DatabaseManager {
                   SUM(CASE WHEN spoken_duration_ms > 0 THEN word_count ELSE 0 END)
                     AS coveredWords
            FROM analytics_events
-           WHERE deleted_at IS NULL
+           WHERE deleted_at IS NULL ${accountFilter}
            GROUP BY local_date`
         )
-        .all();
+        .all(...(this.activeAccountId ? [this.activeAccountId] : []));
       return summarizeAnalyticsDays(days);
     } catch (error) {
       debugLogger.error("Error reading analytics summary", { error: error.message }, "database");
@@ -2335,13 +2663,28 @@ class DatabaseManager {
     return { success: true, deleted: complete() };
   }
 
+  // An unattributed counter isn't on offer if its dictation is another
+  // account's, or on a shared device could be: a legacy dictation is claimed only
+  // when the account's own cloud proves it.
+  _claimableAnalyticsSql() {
+    const unproven = this.hasOtherAccountRows()
+      ? "OR (dictation.account_id IS NULL AND dictation.legacy_unattributed != 0)"
+      : "";
+    return `(analytics_events.account_id IS NULL AND NOT EXISTS (
+      SELECT 1 FROM transcriptions dictation
+      WHERE dictation.client_transcription_id = analytics_events.event_id
+        AND ((dictation.account_id IS NOT NULL AND dictation.account_id IS NOT ?) ${unproven})
+    ))`;
+  }
+
   countUnclaimedAnalyticsEvents() {
     if (!this.db) throw new Error("Database not initialized");
     return this.db
       .prepare(
-        "SELECT COUNT(*) AS count FROM analytics_events WHERE account_id IS NULL AND deleted_at IS NULL"
+        `SELECT COUNT(*) AS count FROM analytics_events
+         WHERE deleted_at IS NULL AND ${this._claimableAnalyticsSql()}`
       )
-      .get().count;
+      .get(this.activeAccountId).count;
   }
 
   // Everything turning Insights sync on would upload: this account's queued
@@ -2359,9 +2702,9 @@ class DatabaseManager {
       .prepare(
         `SELECT COUNT(*) AS count FROM analytics_events
          WHERE deleted_at IS NULL AND sync_status <> 'synced'
-           AND (account_id IS NULL OR account_id = ?)`
+           AND (account_id = ? OR ${this._claimableAnalyticsSql()})`
       )
-      .get(accountId).count;
+      .get(accountId, accountId).count;
   }
 
   // Device-local rows stay unattributed until the signed-in user explicitly
@@ -2378,9 +2721,10 @@ class DatabaseManager {
       }
       const result = this.db
         .prepare(
-          "UPDATE analytics_events SET account_id = ? WHERE account_id IS NULL AND deleted_at IS NULL"
+          `UPDATE analytics_events SET account_id = ?
+           WHERE deleted_at IS NULL AND ${this._claimableAnalyticsSql()}`
         )
-        .run(accountId);
+        .run(accountId, accountId);
       return { success: true, claimed: result.changes };
     } catch (error) {
       debugLogger.error("Error claiming analytics events", { error: error.message }, "database");
@@ -2394,10 +2738,11 @@ class DatabaseManager {
         throw new Error("Database not initialized");
       }
       const statusFilter = includeDiscarded ? "" : " AND status != 'discarded'";
+      const scope = this._ownedRowScope("transcriptions");
       const stmt = this.db.prepare(
-        `SELECT * FROM transcriptions WHERE deleted_at IS NULL${statusFilter} ORDER BY timestamp DESC LIMIT ?`
+        `SELECT * FROM transcriptions WHERE deleted_at IS NULL${statusFilter} AND ${scope.sql} ORDER BY timestamp DESC LIMIT ?`
       );
-      const transcriptions = stmt.all(limit);
+      const transcriptions = stmt.all(...scope.params, limit);
       return transcriptions;
     } catch (error) {
       debugLogger.error("Error getting transcriptions", { error: error.message }, "database");
@@ -2410,10 +2755,20 @@ class DatabaseManager {
       if (!this.db) {
         throw new Error("Database not initialized");
       }
-      const tombstone = this.db.prepare(
-        "UPDATE transcriptions SET deleted_at = datetime('now'), sync_status = 'pending' WHERE cloud_id IS NOT NULL AND deleted_at IS NULL"
+      // Clear history clears the active account's history. Another account's
+      // rows, and the cloud copies only its token can delete, stay.
+      const scope = this._ownedRowScope("transcriptions");
+      const clearedIds = this.db.prepare(
+        `SELECT id FROM transcriptions WHERE deleted_at IS NULL AND ${scope.sql}`
       );
-      const hardDelete = this.db.prepare("DELETE FROM transcriptions WHERE cloud_id IS NULL");
+      // A tombstone is the clearing account's to push. Its token can only delete
+      // its own cloud's copy, so a legacy row's copy in another account's stays.
+      const tombstone = this.db.prepare(
+        `UPDATE transcriptions SET deleted_at = datetime('now'), sync_status = 'pending', account_id = COALESCE(account_id, ?) WHERE cloud_id IS NOT NULL AND deleted_at IS NULL AND ${scope.sql}`
+      );
+      const hardDelete = this.db.prepare(
+        `DELETE FROM transcriptions WHERE cloud_id IS NULL AND ${scope.sql}`
+      );
       // One rule decides every row: a counter the cloud never received is
       // erased outright, and only a counter it did receive leaves a tombstone
       // behind for the delete pusher.
@@ -2426,17 +2781,17 @@ class DatabaseManager {
       // it in the cloud with nothing left on the device to erase it, which is
       // what signing out before clearing used to do.
       //
-      // Scope follows the credentials: only the active account can be erased
-      // remotely, so another account's synced rows keep their tombstones until
-      // that account signs in here again.
+      // Like the history itself, only the active account's counters (and
+      // unattributed ones) are cleared; another account's stay with its history.
       const hardDeleteLocalAnalytics = this.db.prepare(
         `DELETE FROM analytics_events
-         WHERE account_id IS NULL OR (sync_status <> 'synced' AND deleted_at IS NULL)`
+         WHERE account_id IS NULL
+            OR (account_id = ? AND sync_status <> 'synced' AND deleted_at IS NULL)`
       );
       const tombstoneSyncedAnalytics = this.db.prepare(
         `UPDATE analytics_events
          SET deleted_at = ?, sync_status = 'pending'
-         WHERE sync_status = 'synced' AND deleted_at IS NULL`
+         WHERE account_id = ? AND sync_status = 'synced' AND deleted_at IS NULL`
       );
       const countSyncedAnalytics = this.db.prepare(
         "SELECT COUNT(*) AS count FROM analytics_events WHERE account_id = ? AND sync_status = 'synced'"
@@ -2448,16 +2803,22 @@ class DatabaseManager {
            cleared_through = MAX(analytics_clear_requests.cleared_through, excluded.cleared_through),
            synced = 0`
       );
-      const updateDeviceClearState = this.db.prepare(
-        `INSERT INTO analytics_device_clear_state (id, cleared_through)
-         VALUES (1, ?)
-         ON CONFLICT(id) DO UPDATE SET
-           cleared_through = MAX(analytics_device_clear_state.cleared_through, excluded.cleared_through)`
+      // The cutoff keeps the history backfill from rebuilding cleared counters.
+      // Unattributed rows were cleared too, so they get one of their own.
+      const updateClearState = this.db.prepare(
+        `INSERT INTO analytics_account_clear_state (account_scope, cleared_through)
+         VALUES (?, ?)
+         ON CONFLICT(account_scope) DO UPDATE SET
+           cleared_through = MAX(analytics_account_clear_state.cleared_through, excluded.cleared_through)`
       );
       const clearedThrough = new Date().toISOString();
       const clearAll = this.db.transaction(() => {
-        const cleared = tombstone.run().changes + hardDelete.run().changes;
-        updateDeviceClearState.run(clearedThrough);
+        const ids = clearedIds.all(...scope.params).map((row) => row.id);
+        const cleared =
+          tombstone.run(this.activeAccountId, ...scope.params).changes +
+          hardDelete.run(...scope.params).changes;
+        updateClearState.run("", clearedThrough);
+        if (this.activeAccountId) updateClearState.run(this.activeAccountId, clearedThrough);
         // The account-wide cutoff is what erases rows this device no longer
         // has — another device's uploads. It is only meaningful once this
         // account has actually put something in the cloud; queueing it for an
@@ -2465,14 +2826,14 @@ class DatabaseManager {
         // API from a user who never opted in.
         const hasSyncedRows =
           this.activeAccountId && countSyncedAnalytics.get(this.activeAccountId).count > 0;
-        tombstoneSyncedAnalytics.run(clearedThrough);
-        hardDeleteLocalAnalytics.run();
+        tombstoneSyncedAnalytics.run(clearedThrough, this.activeAccountId);
+        hardDeleteLocalAnalytics.run(this.activeAccountId);
         if (hasSyncedRows) {
           queueAnalyticsClear.run(this.activeAccountId, clearedThrough);
         }
-        return cleared;
+        return { cleared, ids };
       });
-      return { cleared: clearAll(), success: true };
+      return { ...clearAll(), success: true };
     } catch (error) {
       debugLogger.error("Error clearing transcriptions", { error: error.message }, "database");
       throw error;
@@ -2491,16 +2852,20 @@ class DatabaseManager {
       const cutoff = this.db
         .prepare("SELECT datetime('now', ?) AS cutoff")
         .get(`-${retentionDays} days`).cutoff;
+      // As with Clear history: another account's rows wait for that account.
+      const scope = this._ownedRowScope("transcriptions");
       const expired = this.db
-        .prepare("SELECT id FROM transcriptions WHERE deleted_at IS NULL AND created_at < ?")
-        .all(cutoff)
+        .prepare(
+          `SELECT id FROM transcriptions WHERE deleted_at IS NULL AND created_at < ? AND ${scope.sql}`
+        )
+        .all(cutoff, ...scope.params)
         .map((row) => row.id);
 
       const tombstone = this.db.prepare(
-        "UPDATE transcriptions SET deleted_at = datetime('now'), sync_status = 'pending' WHERE cloud_id IS NOT NULL AND deleted_at IS NULL AND created_at < ?"
+        `UPDATE transcriptions SET deleted_at = datetime('now'), sync_status = 'pending', account_id = COALESCE(account_id, ?) WHERE cloud_id IS NOT NULL AND deleted_at IS NULL AND created_at < ? AND ${scope.sql}`
       );
       const hardDelete = this.db.prepare(
-        "DELETE FROM transcriptions WHERE cloud_id IS NULL AND created_at < ?"
+        `DELETE FROM transcriptions WHERE cloud_id IS NULL AND created_at < ? AND ${scope.sql}`
       );
       // Counters follow the transcripts they describe, on the same cutoff and
       // in the same transaction. Matched on created_at, never occurred_at:
@@ -2514,19 +2879,20 @@ class DatabaseManager {
       const tombstoneSyncedAnalytics = this.db.prepare(
         `UPDATE analytics_events
          SET deleted_at = datetime('now'), sync_status = 'pending'
-         WHERE sync_status = 'synced' AND deleted_at IS NULL AND created_at < ?`
+         WHERE sync_status = 'synced' AND deleted_at IS NULL AND created_at < ? AND account_id = ?`
       );
       const purgeUnsyncedAnalytics = this.db.prepare(
         `DELETE FROM analytics_events
-         WHERE (account_id IS NULL OR sync_status <> 'synced')
+         WHERE (account_id IS NULL OR (account_id = ? AND sync_status <> 'synced'))
            AND deleted_at IS NULL AND created_at < ?`
       );
       let analyticsPurged = 0;
       this.db.transaction(() => {
-        tombstone.run(cutoff);
-        hardDelete.run(cutoff);
+        tombstone.run(this.activeAccountId, cutoff, ...scope.params);
+        hardDelete.run(cutoff, ...scope.params);
         analyticsPurged =
-          tombstoneSyncedAnalytics.run(cutoff).changes + purgeUnsyncedAnalytics.run(cutoff).changes;
+          tombstoneSyncedAnalytics.run(cutoff, this.activeAccountId).changes +
+          purgeUnsyncedAnalytics.run(this.activeAccountId, cutoff).changes;
       })();
       return { ids: expired, analyticsPurged };
     } catch (error) {
@@ -2544,9 +2910,10 @@ class DatabaseManager {
       if (!this.db) {
         throw new Error("Database not initialized");
       }
+      const scope = this._ownedRowScope("transcriptions");
       const row = this.db
-        .prepare("SELECT cloud_id, deleted_at FROM transcriptions WHERE id = ?")
-        .get(id);
+        .prepare(`SELECT cloud_id, deleted_at FROM transcriptions WHERE id = ? AND ${scope.sql}`)
+        .get(id, ...scope.params);
       if (!row || row.deleted_at) return { success: false, id };
       const stmt = row.cloud_id
         ? this.db.prepare(
@@ -2622,10 +2989,49 @@ class DatabaseManager {
   getTranscriptionById(id) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      const stmt = this.db.prepare("SELECT * FROM transcriptions WHERE id = ?");
-      return stmt.get(id) || null;
+      const scope = this._ownedRowScope("transcriptions");
+      const stmt = this.db.prepare(`SELECT * FROM transcriptions WHERE id = ? AND ${scope.sql}`);
+      return stmt.get(id, ...scope.params) || null;
     } catch (error) {
       debugLogger.error("Error getting transcription by id", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  // Recordings are named by transcription id: these belong to someone else.
+  getOtherAccountTranscriptionIds() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return this.db
+        .prepare(
+          "SELECT id FROM transcriptions WHERE account_id IS NOT NULL AND account_id IS NOT ?"
+        )
+        .all(this.activeAccountId)
+        .map((row) => row.id);
+    } catch (error) {
+      debugLogger.error(
+        "Error getting other accounts' transcription ids",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
+  getTranscriptionIdsWithAudio() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const scope = this._ownedRowScope("transcriptions");
+      return this.db
+        .prepare(`SELECT id FROM transcriptions WHERE has_audio = 1 AND ${scope.sql}`)
+        .all(...scope.params)
+        .map((row) => row.id);
+    } catch (error) {
+      debugLogger.error(
+        "Error getting transcription ids with audio",
+        { error: error.message },
+        "database"
+      );
       throw error;
     }
   }
@@ -2653,9 +3059,12 @@ class DatabaseManager {
       if (!this.db) {
         throw new Error("Database not initialized");
       }
+      const scope = this._ownedRowScope("custom_dictionary");
       const rows = this.db
-        .prepare("SELECT word FROM custom_dictionary WHERE deleted_at IS NULL ORDER BY id ASC")
-        .all();
+        .prepare(
+          `SELECT word FROM custom_dictionary WHERE deleted_at IS NULL AND ${scope.sql} ORDER BY id ASC`
+        )
+        .all(...scope.params);
       return rows.map((row) => row.word);
     } catch (error) {
       debugLogger.error("Error getting dictionary", { error: error.message }, "database");
@@ -2689,9 +3098,10 @@ class DatabaseManager {
         "UPDATE custom_dictionary SET word = ?, updated_at = datetime('now'), sync_status = 'pending' WHERE id = ? AND word != ?"
       ),
       // INSERT OR IGNORE in case a legacy case-variant row collides on the
-      // case-sensitive UNIQUE(word) that the lowercase index didn't catch.
+      // case-sensitive per-account UNIQUE(word) that the lowercase lookup
+      // didn't catch.
       insert: this.db.prepare(
-        "INSERT OR IGNORE INTO custom_dictionary (word, source, client_dict_id, sync_status, updated_at) VALUES (?, ?, ?, 'pending', datetime('now'))"
+        "INSERT OR IGNORE INTO custom_dictionary (word, source, client_dict_id, sync_status, updated_at, account_id) VALUES (?, ?, ?, 'pending', datetime('now'), ?)"
       ),
     };
   }
@@ -2711,9 +3121,12 @@ class DatabaseManager {
   }
 
   _dictionaryRows() {
+    const scope = this._ownedRowScope("custom_dictionary");
     const rows = this.db
-      .prepare("SELECT id, word, source, deleted_at, shared_at FROM custom_dictionary")
-      .all();
+      .prepare(
+        `SELECT id, word, source, deleted_at, shared_at FROM custom_dictionary WHERE ${scope.sql}`
+      )
+      .all(...scope.params);
     return { rows, byLower: new Map(rows.map((r) => [r.word.toLowerCase(), r])) };
   }
 
@@ -2724,7 +3137,7 @@ class DatabaseManager {
   // every settings write would undo every share.
   _upsertDictionaryWord(stmts, word, existing, source, { isReAdd = false } = {}) {
     if (!existing) {
-      return stmts.insert.run(word, source, randomUUID()).changes > 0;
+      return stmts.insert.run(word, source, randomUUID(), this.activeAccountId).changes > 0;
     }
     if (existing.deleted_at) {
       stmts.restore.run(source, word, existing.id);
@@ -2743,6 +3156,7 @@ class DatabaseManager {
   // next push tells the server about the deletion.
   _deleteDictionaryRow(stmts, existing) {
     if (!existing || existing.deleted_at) return false;
+    this._dropHiddenDuplicates("custom_dictionary", existing.word);
     const hardResult = stmts.hardDelete.run(existing.id);
     if (hardResult.changes === 0) stmts.tombstone.run(existing.id);
     return true;
@@ -2821,14 +3235,26 @@ class DatabaseManager {
     }
   }
 
+  // First write of a renderer's cached list, for a database that has never
+  // held one. Once any account has rows here, a cache this scope can't see in
+  // SQLite is another scope's, and writing it would copy that list into this one.
+  seedDictionary(words) {
+    if (!this.db) throw new Error("Database not initialized");
+    if (this.db.prepare("SELECT 1 FROM custom_dictionary LIMIT 1").get()) {
+      return { success: true, seeded: false };
+    }
+    return { ...this.setDictionary(words), seeded: true };
+  }
+
   getPendingDictionary() {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const scope = this._ownedRowScope("custom_dictionary");
       return this.db
         .prepare(
-          "SELECT * FROM custom_dictionary WHERE sync_status = 'pending' AND deleted_at IS NULL"
+          `SELECT * FROM custom_dictionary WHERE sync_status = 'pending' AND deleted_at IS NULL AND ${scope.sql}`
         )
-        .all();
+        .all(...scope.params);
     } catch (error) {
       debugLogger.error("Error getting pending dictionary", { error: error.message }, "database");
       throw error;
@@ -2838,11 +3264,12 @@ class DatabaseManager {
   getPendingDictionaryDeletes() {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const scope = this._ownedRowScope("custom_dictionary");
       return this.db
         .prepare(
-          "SELECT * FROM custom_dictionary WHERE deleted_at IS NOT NULL AND cloud_id IS NOT NULL AND sync_status = 'pending'"
+          `SELECT * FROM custom_dictionary WHERE deleted_at IS NOT NULL AND cloud_id IS NOT NULL AND sync_status = 'pending' AND ${scope.sql}`
         )
-        .all();
+        .all(...scope.params);
     } catch (error) {
       debugLogger.error(
         "Error getting pending dictionary deletes",
@@ -2856,8 +3283,17 @@ class DatabaseManager {
   hardDeleteDictionaryEntry(id) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      const result = this.db.prepare("DELETE FROM custom_dictionary WHERE id = ?").run(id);
-      return { success: result.changes > 0, id };
+      const scope = this._ownedRowScope("custom_dictionary");
+      return this.db.transaction(() => {
+        const row = this.db
+          .prepare(
+            `SELECT word, account_id, deleted_at FROM custom_dictionary WHERE id = ? AND ${scope.sql}`
+          )
+          .get(id, ...scope.params);
+        if (!row) return { success: false, id };
+        this._hardDeleteKeyedRow("custom_dictionary", id, row);
+        return { success: true, id };
+      })();
     } catch (error) {
       debugLogger.error(
         "Error hard deleting dictionary entry",
@@ -2871,10 +3307,11 @@ class DatabaseManager {
   getDictionaryEntryByClientId(clientDictId) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const scope = this._ownedRowScope("custom_dictionary");
       return (
         this.db
-          .prepare("SELECT * FROM custom_dictionary WHERE client_dict_id = ?")
-          .get(clientDictId) || null
+          .prepare(`SELECT * FROM custom_dictionary WHERE client_dict_id = ? AND ${scope.sql}`)
+          .get(clientDictId, ...scope.params) || null
       );
     } catch (error) {
       debugLogger.error(
@@ -2920,22 +3357,61 @@ class DatabaseManager {
           : null;
 
       // Resolve the local row deterministically: client_dict_id, then cloud_id,
-      // then word.
+      // then word. Only this account's rows (and unattributed ones) can merge.
+      const scope = this._ownedRowScope("custom_dictionary");
       const byClient = this.db
-        .prepare("SELECT * FROM custom_dictionary WHERE client_dict_id = ? LIMIT 1")
-        .get(clientDictId);
+        .prepare(
+          `SELECT *, ${scope.sql} AS in_scope FROM custom_dictionary WHERE client_dict_id = ? LIMIT 1`
+        )
+        .get(...scope.params, clientDictId);
+      if (byClient && !byClient.in_scope) {
+        debugLogger.warn(
+          "Skipping cloud dictionary entry whose local row this account can't see",
+          {},
+          "database"
+        );
+        return null;
+      }
       const byCloud =
         byClient ||
         this.db
-          .prepare("SELECT * FROM custom_dictionary WHERE cloud_id = ? LIMIT 1")
-          .get(cloudEntry.id);
+          .prepare(`SELECT * FROM custom_dictionary WHERE cloud_id = ? AND ${scope.sql} LIMIT 1`)
+          .get(cloudEntry.id, ...scope.params);
       const existing =
         byCloud ||
         this.db
-          .prepare("SELECT * FROM custom_dictionary WHERE lower(word) = lower(?) LIMIT 1")
-          .get(word);
+          .prepare(
+            `SELECT * FROM custom_dictionary
+             WHERE lower(word) = lower(?) AND ${scope.sql}
+               AND ${this._mergeableByKeySql("custom_dictionary")}
+             ORDER BY account_id IS NULL LIMIT 1`
+          )
+          .get(word, ...scope.params);
 
       if (existing) {
+        const claim = this._claimUnattributedSql("custom_dictionary", {
+          proven: Boolean(byCloud),
+        });
+        // A row at the same version can still owe the cloud its shared_at, and a
+        // fallback retired here is only this device's guess (see pullDictionary).
+        const takesCloudAnyway =
+          (existing.deleted_at && existing.fallback_retired) ||
+          (hasSharedAt &&
+            existing.sync_status !== "pending" &&
+            !isCloudEntryNewer(existing.updated_at, updatedAt) &&
+            Boolean(incomingSharedAt) !== Boolean(existing.shared_at));
+        if (
+          byCloud &&
+          !existing.account_id &&
+          this.activeAccountId &&
+          !takesCloudAnyway &&
+          !isCloudEntryNewer(updatedAt, existing.updated_at)
+        ) {
+          this.db
+            .prepare(`UPDATE custom_dictionary SET ${claim.sql} WHERE id = ?`)
+            .run(...claim.params, existing.id);
+          return this.db.prepare("SELECT * FROM custom_dictionary WHERE id = ?").get(existing.id);
+        }
         // Manual is sticky — a pull never demotes a local manual row to learned.
         const mergedSource =
           existing.source === "manual" || incomingSource === "manual" ? "manual" : "learned";
@@ -2944,10 +3420,25 @@ class DatabaseManager {
         if (existing.sync_status === "pending") {
           this.db
             .prepare(
-              "UPDATE custom_dictionary SET cloud_id = COALESCE(cloud_id, ?), source = ? WHERE id = ?"
+              `UPDATE custom_dictionary SET cloud_id = COALESCE(cloud_id, ?), source = ?, ${claim.sql} WHERE id = ?`
             )
-            .run(cloudEntry.id, mergedSource, existing.id);
+            .run(cloudEntry.id, mergedSource, ...claim.params, existing.id);
           return this.db.prepare("SELECT * FROM custom_dictionary WHERE id = ?").get(existing.id);
+        }
+        if (existing.word.toLowerCase() !== word.toLowerCase()) {
+          this._dropHiddenDuplicates("custom_dictionary", existing.word);
+        }
+        // Renamed onto a word the same account already has: they merge, as the
+        // cloud does, rather than fail the pull on the unique index every pass.
+        const collision = this.db
+          .prepare(
+            `SELECT * FROM custom_dictionary
+             WHERE id != ? AND word = ? AND COALESCE(account_id, '') = COALESCE(?, '')`
+          )
+          .get(existing.id, word, existing.account_id ?? this.activeAccountId);
+        if (collision) {
+          this.db.prepare("DELETE FROM custom_dictionary WHERE id = ?").run(existing.id);
+          return collision;
         }
         const sharedAt = hasSharedAt ? incomingSharedAt : existing.shared_at;
         this.db
@@ -2955,18 +3446,28 @@ class DatabaseManager {
             `UPDATE custom_dictionary
              SET cloud_id = ?, client_dict_id = ?, word = ?, source = ?, shared_at = ?,
                  shared_at_dirty = 0, fallback_retired = 0,
-                 sync_status = 'synced', deleted_at = NULL, updated_at = ?
+                 sync_status = 'synced', deleted_at = NULL, updated_at = ?,
+                 ${claim.sql}
              WHERE id = ?`
           )
-          .run(cloudEntry.id, clientDictId, word, mergedSource, sharedAt, updatedAt, existing.id);
+          .run(
+            cloudEntry.id,
+            clientDictId,
+            word,
+            mergedSource,
+            sharedAt,
+            updatedAt,
+            ...claim.params,
+            existing.id
+          );
         return this.db.prepare("SELECT * FROM custom_dictionary WHERE id = ?").get(existing.id);
       }
 
       this.db
         .prepare(
           `INSERT INTO custom_dictionary
-             (word, source, client_dict_id, cloud_id, shared_at, sync_status, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, 'synced', ?, ?)`
+             (word, source, client_dict_id, cloud_id, shared_at, sync_status, created_at, updated_at, account_id)
+           VALUES (?, ?, ?, ?, ?, 'synced', ?, ?, ?)`
         )
         .run(
           word,
@@ -2975,7 +3476,8 @@ class DatabaseManager {
           cloudEntry.id,
           incomingSharedAt,
           createdAt,
-          updatedAt
+          updatedAt,
+          this.activeAccountId
         );
       return this.db
         .prepare("SELECT * FROM custom_dictionary WHERE client_dict_id = ?")
@@ -3012,6 +3514,7 @@ class DatabaseManager {
             (current.word === pushed.word &&
               current.shared_at === (pushed.shared_at ?? null) &&
               current.updated_at === pushed.updated_at));
+        const claim = this._claimUnattributedSql("custom_dictionary");
         // Edited rows still adopt the cloud identity, so they can PATCH next
         // pass. Only missing/deleted rows authorize orphan cleanup (changes=0).
         const result = this.db
@@ -3019,7 +3522,8 @@ class DatabaseManager {
             `UPDATE custom_dictionary
              SET cloud_id = ?, sync_status = ?, updated_at = COALESCE(?, updated_at),
                  shared_at_dirty = CASE WHEN ? THEN 0 ELSE shared_at_dirty END,
-                 source = CASE WHEN ? = 'manual' THEN 'manual' ELSE source END
+                 source = CASE WHEN ? = 'manual' THEN 'manual' ELSE source END,
+                 ${claim.sql}
              WHERE id = ?`
           )
           .run(
@@ -3028,6 +3532,7 @@ class DatabaseManager {
             unchanged ? serverUpdatedAt : null,
             unchanged ? 1 : 0,
             serverSource,
+            ...claim.params,
             id
           );
         return { success: result.changes > 0, changes: result.changes };
@@ -3043,16 +3548,30 @@ class DatabaseManager {
   }
 
   // Clears cloud_id after a 404 so the next push re-creates the row via
-  // batchCreate instead of retrying the dead PATCH.
+  // batchCreate instead of retrying the dead PATCH. Only for a row this account
+  // owns, or could only own: on a device another account has used, an
+  // unattributed row's cloud id may be that account's, and re-creating it would
+  // copy its word into this one. It stays pending instead, so its owner's next
+  // pass can still deliver the edit.
+  _clearCloudIdOfOwnRow(tableName, id) {
+    const owned = this._ownOrOnlyAccountRowSql(tableName);
+    return this.db
+      .prepare(
+        `UPDATE ${tableName} SET cloud_id = NULL, sync_status = 'pending' WHERE id = ? AND ${owned}`
+      )
+      .run(id, this.activeAccountId).changes;
+  }
+
+  _ownOrOnlyAccountRowSql(tableName) {
+    return this.activeAccountId && !this.hasOtherAccountRows()
+      ? `(${tableName}.account_id = ? OR ${tableName}.account_id IS NULL)`
+      : `${tableName}.account_id = ?`;
+  }
+
   clearDictionaryCloudId(id) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      const result = this.db
-        .prepare(
-          "UPDATE custom_dictionary SET cloud_id = NULL, sync_status = 'pending' WHERE id = ?"
-        )
-        .run(id);
-      return { success: result.changes > 0 };
+      return { success: this._clearCloudIdOfOwnRow("custom_dictionary", id) > 0 };
     } catch (error) {
       debugLogger.error("Error clearing dictionary cloud_id", { error: error.message }, "database");
       throw error;
@@ -3062,9 +3581,12 @@ class DatabaseManager {
   // Live personal rows keyed by JS lowercase, the same folding the write
   // paths dedupe with (SQLite's lower() only folds ASCII).
   _livePersonalRowsByLower() {
+    const scope = this._ownedRowScope("custom_dictionary");
     const rows = this.db
-      .prepare("SELECT id, word, cloud_id FROM custom_dictionary WHERE deleted_at IS NULL")
-      .all();
+      .prepare(
+        `SELECT id, word, cloud_id FROM custom_dictionary WHERE deleted_at IS NULL AND ${scope.sql}`
+      )
+      .all(...scope.params);
     return new Map(rows.map((row) => [row.word.toLowerCase(), row]));
   }
 
@@ -3138,12 +3660,14 @@ class DatabaseManager {
   retireMovedDictionaryWords(words, { includeSynced = true } = {}) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const scope = this._ownedRowScope("custom_dictionary");
       const rows = this.db
         .prepare(
           `SELECT id, word FROM custom_dictionary
-           WHERE deleted_at IS NULL AND shared_at IS NOT NULL ${includeSynced ? "" : "AND cloud_id IS NULL"}`
+           WHERE deleted_at IS NULL AND shared_at IS NOT NULL ${includeSynced ? "" : "AND cloud_id IS NULL"} AND ${scope.sql}
+           ORDER BY id ASC`
         )
-        .all();
+        .all(...scope.params);
       const requested = new Set(
         [...this._normalizeDictionaryWords(words).values()].map(dictionaryWordKey)
       );
@@ -3180,11 +3704,12 @@ class DatabaseManager {
   reviveRetiredDictionaryWords(words) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const scope = this._ownedRowScope("custom_dictionary");
       const rows = this.db
         .prepare(
-          "SELECT id, word FROM custom_dictionary WHERE deleted_at IS NOT NULL AND fallback_retired = 1"
+          `SELECT id, word FROM custom_dictionary WHERE deleted_at IS NOT NULL AND fallback_retired = 1 AND ${scope.sql} ORDER BY id ASC`
         )
-        .all();
+        .all(...scope.params);
       const requested = new Set(
         [...this._normalizeDictionaryWords(words).values()].map(dictionaryWordKey)
       );
@@ -3219,11 +3744,12 @@ class DatabaseManager {
   getMovedDictionaryWords() {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const scope = this._ownedRowScope("custom_dictionary");
       return this.db
         .prepare(
-          "SELECT word FROM custom_dictionary WHERE deleted_at IS NULL AND shared_at IS NOT NULL ORDER BY id ASC"
+          `SELECT word FROM custom_dictionary WHERE deleted_at IS NULL AND shared_at IS NOT NULL AND ${scope.sql} ORDER BY id ASC`
         )
-        .all()
+        .all(...scope.params)
         .map((row) => row.word);
     } catch (error) {
       debugLogger.error(
@@ -3545,11 +4071,12 @@ class DatabaseManager {
       if (!this.db) {
         throw new Error("Database not initialized");
       }
+      const scope = this._ownedRowScope("snippets");
       return this.db
         .prepare(
-          "SELECT trigger, replacement FROM snippets WHERE deleted_at IS NULL ORDER BY id ASC"
+          `SELECT trigger, replacement FROM snippets WHERE deleted_at IS NULL AND ${scope.sql} ORDER BY id ASC`
         )
-        .all();
+        .all(...scope.params);
     } catch (error) {
       debugLogger.error("Error getting snippets", { error: error.message }, "database");
       throw error;
@@ -3575,7 +4102,10 @@ class DatabaseManager {
       const cleaned = Array.from(incomingByLower.values());
       const incomingLower = new Set(incomingByLower.keys());
 
-      const existingRows = this.db.prepare("SELECT * FROM snippets").all();
+      const scope = this._ownedRowScope("snippets");
+      const existingRows = this.db
+        .prepare(`SELECT * FROM snippets WHERE ${scope.sql}`)
+        .all(...scope.params);
       const existingByLower = new Map();
       for (const row of existingRows) {
         const lower = row.trigger.toLowerCase();
@@ -3594,13 +4124,14 @@ class DatabaseManager {
         "UPDATE snippets SET trigger = ?, replacement = ?, updated_at = datetime('now'), sync_status = 'pending' WHERE id = ? AND (trigger != ? OR replacement != ?)"
       );
       const insert = this.db.prepare(
-        "INSERT OR IGNORE INTO snippets (trigger, replacement, client_snippet_id, sync_status, updated_at) VALUES (?, ?, ?, 'pending', datetime('now'))"
+        "INSERT OR IGNORE INTO snippets (trigger, replacement, client_snippet_id, sync_status, updated_at, account_id) VALUES (?, ?, ?, 'pending', datetime('now'), ?)"
       );
 
       this.db.transaction(() => {
         for (const existing of existingRows) {
           if (incomingLower.has(existing.trigger.toLowerCase())) continue;
           if (existing.deleted_at) continue;
+          this._dropHiddenDuplicates("snippets", existing.trigger);
           const hardResult = hardDelete.run(existing.id);
           if (hardResult.changes === 0) tombstone.run(existing.id);
         }
@@ -3621,7 +4152,7 @@ class DatabaseManager {
             }
             continue;
           }
-          insert.run(snippet.trigger, snippet.replacement, randomUUID());
+          insert.run(snippet.trigger, snippet.replacement, randomUUID(), this.activeAccountId);
         }
       })();
 
@@ -3632,12 +4163,24 @@ class DatabaseManager {
     }
   }
 
+  // As seedDictionary.
+  seedSnippets(snippets) {
+    if (!this.db) throw new Error("Database not initialized");
+    if (this.db.prepare("SELECT 1 FROM snippets LIMIT 1").get()) {
+      return { success: true, seeded: false };
+    }
+    return { ...this.setSnippets(snippets), seeded: true };
+  }
+
   getPendingSnippets() {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const scope = this._ownedRowScope("snippets");
       return this.db
-        .prepare("SELECT * FROM snippets WHERE sync_status = 'pending' AND deleted_at IS NULL")
-        .all();
+        .prepare(
+          `SELECT * FROM snippets WHERE sync_status = 'pending' AND deleted_at IS NULL AND ${scope.sql}`
+        )
+        .all(...scope.params);
     } catch (error) {
       debugLogger.error("Error getting pending snippets", { error: error.message }, "database");
       throw error;
@@ -3647,11 +4190,12 @@ class DatabaseManager {
   getPendingSnippetDeletes() {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const scope = this._ownedRowScope("snippets");
       return this.db
         .prepare(
-          "SELECT * FROM snippets WHERE deleted_at IS NOT NULL AND cloud_id IS NOT NULL AND sync_status = 'pending'"
+          `SELECT * FROM snippets WHERE deleted_at IS NOT NULL AND cloud_id IS NOT NULL AND sync_status = 'pending' AND ${scope.sql}`
         )
-        .all();
+        .all(...scope.params);
     } catch (error) {
       debugLogger.error(
         "Error getting pending snippet deletes",
@@ -3665,8 +4209,17 @@ class DatabaseManager {
   hardDeleteSnippet(id) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      const result = this.db.prepare("DELETE FROM snippets WHERE id = ?").run(id);
-      return { success: result.changes > 0, id };
+      const scope = this._ownedRowScope("snippets");
+      return this.db.transaction(() => {
+        const row = this.db
+          .prepare(
+            `SELECT trigger, account_id, deleted_at FROM snippets WHERE id = ? AND ${scope.sql}`
+          )
+          .get(id, ...scope.params);
+        if (!row) return { success: false, id };
+        this._hardDeleteKeyedRow("snippets", id, row);
+        return { success: true, id };
+      })();
     } catch (error) {
       debugLogger.error("Error hard deleting snippet", { error: error.message }, "database");
       throw error;
@@ -3682,35 +4235,34 @@ class DatabaseManager {
         typeof cloudEntry.client_snippet_id === "string" && cloudEntry.client_snippet_id
           ? cloudEntry.client_snippet_id
           : "";
+      // Only this account's rows (and unattributed ones) can merge.
+      const scope = this._ownedRowScope("snippets");
       if (clientSnippetId) {
         const byClient = this.db
-          .prepare("SELECT * FROM snippets WHERE client_snippet_id = ? LIMIT 1")
-          .get(clientSnippetId);
+          .prepare(`SELECT * FROM snippets WHERE client_snippet_id = ? AND ${scope.sql} LIMIT 1`)
+          .get(clientSnippetId, ...scope.params);
         if (byClient) return byClient;
       }
 
       if (typeof cloudEntry.id === "string" && cloudEntry.id) {
         const byCloud = this.db
-          .prepare("SELECT * FROM snippets WHERE cloud_id = ? LIMIT 1")
-          .get(cloudEntry.id);
+          .prepare(`SELECT * FROM snippets WHERE cloud_id = ? AND ${scope.sql} LIMIT 1`)
+          .get(cloudEntry.id, ...scope.params);
         if (byCloud) return byCloud;
       }
 
       const trigger = typeof cloudEntry.trigger === "string" ? cloudEntry.trigger.trim() : "";
       if (!trigger) return null;
-      const byActiveTrigger = this.db
-        .prepare(
-          "SELECT * FROM snippets WHERE lower(trigger) = lower(?) AND deleted_at IS NULL LIMIT 1"
-        )
-        .get(trigger);
-      if (byActiveTrigger) return byActiveTrigger;
-      return (
+      const byTrigger = (deleted) =>
         this.db
           .prepare(
-            "SELECT * FROM snippets WHERE lower(trigger) = lower(?) AND deleted_at IS NOT NULL LIMIT 1"
+            `SELECT * FROM snippets
+             WHERE lower(trigger) = lower(?) AND deleted_at IS ${deleted ? "NOT " : ""}NULL
+               AND ${scope.sql} AND ${this._mergeableByKeySql("snippets")}
+             ORDER BY account_id IS NULL LIMIT 1`
           )
-          .get(trigger) || null
-      );
+          .get(trigger, ...scope.params) || null;
+      return byTrigger(false) || byTrigger(true);
     } catch (error) {
       debugLogger.error(
         "Error getting snippet for cloud merge",
@@ -3747,6 +4299,21 @@ class DatabaseManager {
           ? cloudEntry.created_at
           : updatedAt;
 
+      const scope = this._ownedRowScope("snippets");
+      const sameClientId = this.db
+        .prepare(
+          `SELECT ${scope.sql} AS in_scope FROM snippets WHERE client_snippet_id = ? LIMIT 1`
+        )
+        .get(...scope.params, clientSnippetId);
+      if (sameClientId && !sameClientId.in_scope) {
+        debugLogger.warn(
+          "Skipping cloud snippet whose local row this account can't see",
+          {},
+          "database"
+        );
+        return null;
+      }
+
       const existing = this.getSnippetForCloudMerge({
         ...cloudEntry,
         client_snippet_id: clientSnippetId,
@@ -3754,14 +4321,29 @@ class DatabaseManager {
       });
 
       if (existing) {
+        if (
+          !existing.account_id &&
+          this.activeAccountId &&
+          (existing.client_snippet_id === clientSnippetId || existing.cloud_id === cloudEntry.id) &&
+          !isCloudEntryNewer(updatedAt, existing.updated_at)
+        ) {
+          const claim = this._claimUnattributedSql("snippets", { proven: true });
+          this.db
+            .prepare(`UPDATE snippets SET ${claim.sql} WHERE id = ?`)
+            .run(...claim.params, existing.id);
+          return this.db.prepare("SELECT * FROM snippets WHERE id = ?").get(existing.id);
+        }
         // A different active row may already hold this trigger (cross-device
         // rename); it must yield first or the UPDATE trips the active-trigger
         // unique index and aborts the pull.
         const collidingActive = this.db
           .prepare(
-            "SELECT * FROM snippets WHERE lower(trigger) = lower(?) AND deleted_at IS NULL AND id != ? LIMIT 1"
+            `SELECT * FROM snippets
+             WHERE lower(trigger) = lower(?) AND deleted_at IS NULL AND id != ?
+               AND ${scope.sql} AND ${this._mergeableByKeySql("snippets")}
+             LIMIT 1`
           )
-          .get(trigger, existing.id);
+          .get(trigger, existing.id, ...scope.params);
         // Tombstone existing → keep the active collider; else keep existing and
         // drop the stale collider.
         const target = existing.deleted_at && collidingActive ? collidingActive : existing;
@@ -3769,24 +4351,47 @@ class DatabaseManager {
         if (orphanId) {
           this.db.prepare("DELETE FROM snippets WHERE id = ?").run(orphanId);
         }
+        if (target.trigger.toLowerCase() !== trigger.toLowerCase()) {
+          this._dropHiddenDuplicates("snippets", target.trigger);
+        }
+        const claim = this._claimUnattributedSql("snippets", {
+          proven: target.client_snippet_id === clientSnippetId || target.cloud_id === cloudEntry.id,
+        });
         this.db
           .prepare(
             `UPDATE snippets
              SET cloud_id = ?, client_snippet_id = ?, trigger = ?, replacement = ?,
-                 sync_status = 'synced', deleted_at = NULL, updated_at = ?
+                 sync_status = 'synced', deleted_at = NULL, updated_at = ?,
+                 ${claim.sql}
              WHERE id = ?`
           )
-          .run(cloudEntry.id, clientSnippetId, trigger, replacement, updatedAt, target.id);
+          .run(
+            cloudEntry.id,
+            clientSnippetId,
+            trigger,
+            replacement,
+            updatedAt,
+            ...claim.params,
+            target.id
+          );
         return this.db.prepare("SELECT * FROM snippets WHERE id = ?").get(target.id);
       }
 
       this.db
         .prepare(
           `INSERT INTO snippets
-             (trigger, replacement, client_snippet_id, cloud_id, sync_status, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 'synced', ?, ?)`
+             (trigger, replacement, client_snippet_id, cloud_id, sync_status, created_at, updated_at, account_id)
+           VALUES (?, ?, ?, ?, 'synced', ?, ?, ?)`
         )
-        .run(trigger, replacement, clientSnippetId, cloudEntry.id, createdAt, updatedAt);
+        .run(
+          trigger,
+          replacement,
+          clientSnippetId,
+          cloudEntry.id,
+          createdAt,
+          updatedAt,
+          this.activeAccountId
+        );
       return this.db
         .prepare("SELECT * FROM snippets WHERE client_snippet_id = ?")
         .get(clientSnippetId);
@@ -3807,12 +4412,14 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       // If a user edit landed between push and ack, the row no longer matches
       // what was pushed — leave it 'pending' so the next sync re-pushes it.
+      const claim = this._claimUnattributedSql("snippets");
       const result = this.db
         .prepare(
           `UPDATE snippets
            SET sync_status = 'synced',
                cloud_id = ?,
-               updated_at = COALESCE(?, updated_at)
+               updated_at = COALESCE(?, updated_at),
+               ${claim.sql}
            WHERE id = ? AND deleted_at IS NULL
              AND (? IS NULL OR trigger = ?)
              AND (? IS NULL OR replacement = ?)`
@@ -3820,6 +4427,7 @@ class DatabaseManager {
         .run(
           cloudId,
           serverUpdatedAt,
+          ...claim.params,
           id,
           expectedTrigger,
           expectedTrigger,
@@ -3836,10 +4444,8 @@ class DatabaseManager {
   clearSnippetCloudId(id) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      const result = this.db
-        .prepare("UPDATE snippets SET cloud_id = NULL, sync_status = 'pending' WHERE id = ?")
-        .run(id);
-      return { success: result.changes > 0 };
+      // As with dictionary words.
+      return { success: this._clearCloudIdOfOwnRow("snippets", id) > 0 };
     } catch (error) {
       debugLogger.error("Error clearing snippet cloud_id", { error: error.message }, "database");
       throw error;
@@ -4532,12 +5138,23 @@ class DatabaseManager {
       .all(accountId)
       .map((row) => row.id);
 
+    // The account's own history, chats, words and snippets, in every space. Rows
+    // from before attribution are the account's too if nobody else used this
+    // device; otherwise they may be someone else's, and stay.
+    const legacyRowsAreOwned = !this.hasOtherAccountRows();
+    const owned = (tableName) =>
+      legacyRowsAreOwned
+        ? `(account_id = ? OR (account_id IS NULL AND ${tableName}.legacy_unattributed != 0))`
+        : "account_id = ?";
+    const deletedTranscriptionIds = this.db
+      .prepare(`SELECT id FROM transcriptions WHERE ${owned("transcriptions")} ORDER BY id`)
+      .all(accountId)
+      .map((row) => row.id);
+
     const notePlaceholders = deletedNoteIds.map(() => "?").join(", ");
     const folderPlaceholders = deletedFolderIds.map(() => "?").join(", ");
     const deleteRows = () => {
-      // Only private-space root chats carry an account_id; note and folder
-      // chats go with their parent rows below.
-      const conversationConditions = ["account_id = ?"];
+      const conversationConditions = [owned("agent_conversations")];
       const conversationParams = [accountId];
       if (deletedNoteIds.length > 0) {
         conversationConditions.push(`note_id IN (${notePlaceholders})`);
@@ -4553,6 +5170,13 @@ class DatabaseManager {
         .map((row) => row.id);
       if (conversationIds.length > 0) {
         const conversationPlaceholders = conversationIds.map(() => "?").join(", ");
+        // Chats are personal in every space, so one in a team folder another
+        // account's held delete journaled goes too; its restore can't find it.
+        this.db
+          .prepare(
+            `DELETE FROM optimistic_folder_delete_rows WHERE entity_type = 'conversation' AND entity_id IN (${conversationPlaceholders})`
+          )
+          .run(...conversationIds);
         this.db
           .prepare(
             `DELETE FROM agent_messages WHERE conversation_id IN (${conversationPlaceholders})`
@@ -4584,8 +5208,14 @@ class DatabaseManager {
           .prepare(`DELETE FROM folders WHERE id IN (${folderPlaceholders})`)
           .run(...deletedFolderIds);
       }
+      for (const table of ["transcriptions", "custom_dictionary", "snippets"]) {
+        this.db.prepare(`DELETE FROM ${table} WHERE ${owned(table)}`).run(accountId);
+      }
       this.db.prepare("DELETE FROM analytics_events WHERE account_id = ?").run(accountId);
       this.db.prepare("DELETE FROM analytics_clear_requests WHERE account_id = ?").run(accountId);
+      this.db
+        .prepare("DELETE FROM analytics_account_clear_state WHERE account_scope = ?")
+        .run(accountId);
       this.db.prepare("DELETE FROM connector_actions WHERE account_id = ?").run(accountId);
       this.db.prepare("DELETE FROM space_accounts WHERE account_id = ?").run(accountId);
     };
@@ -4603,7 +5233,7 @@ class DatabaseManager {
       }
     }
 
-    return { deletedNoteIds, deletedFolderIds };
+    return { deletedNoteIds, deletedFolderIds, deletedTranscriptionIds };
   }
 
   deleteFolder(id) {
@@ -5509,6 +6139,17 @@ class DatabaseManager {
     }
   }
 
+  _getOwnedConversation(id) {
+    const scope = this._ownedRowScope("agent_conversations");
+    return (
+      this.db
+        .prepare(
+          `SELECT * FROM agent_conversations WHERE id = ? AND deleted_at IS NULL AND ${scope.sql}`
+        )
+        .get(id, ...scope.params) || null
+    );
+  }
+
   createAgentConversation(title = "Untitled", noteId = null, spaceId = null, folderId = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");
@@ -5540,15 +6181,11 @@ class DatabaseManager {
         if (note && folderId != null && note.folder_id !== folderId) return null;
 
         const clientConversationId = randomUUID();
-        const accountId =
-          spaceId != null && folderId == null && noteId == null
-            ? this._accountIdForSpace(spaceId)
-            : null;
         const result = this.db
           .prepare(
             "INSERT INTO agent_conversations (title, note_id, space_id, folder_id, client_conversation_id, account_id) VALUES (?, ?, ?, ?, ?, ?)"
           )
-          .run(title, noteId, spaceId, folderId, clientConversationId, accountId);
+          .run(title, noteId, spaceId, folderId, clientConversationId, this.activeAccountId);
         return this.db
           .prepare("SELECT * FROM agent_conversations WHERE id = ?")
           .get(result.lastInsertRowid);
@@ -5563,18 +6200,22 @@ class DatabaseManager {
     try {
       if (!this.db) throw new Error("Database not initialized");
       if (!this.getNote(noteId)) return [];
+      // A team note is shared, but each member sees only their own chats about
+      // it. Its delete retires all of them, as it does arriving by pull on each
+      // member's own device, and each tombstone waits for its owner's token.
+      const scope = this._ownedRowScope("agent_conversations", "c");
       return this.db
         .prepare(
           `SELECT c.id, c.title, c.created_at, c.updated_at,
             COUNT(m.id) AS message_count
           FROM agent_conversations c
           LEFT JOIN agent_messages m ON m.conversation_id = c.id
-          WHERE c.note_id = ? AND c.deleted_at IS NULL
+          WHERE c.note_id = ? AND c.deleted_at IS NULL AND ${scope.sql}
           GROUP BY c.id
           ORDER BY c.updated_at DESC
           LIMIT ?`
         )
-        .all(noteId, limit);
+        .all(noteId, ...scope.params, limit);
     } catch (error) {
       debugLogger.error(
         "Error getting conversations for note",
@@ -5596,20 +6237,19 @@ class DatabaseManager {
       } else if (!this.getSpace(spaceId)) {
         return [];
       }
-      // A root chat with no owner is device-owned (a guest's, or one from
-      // before root chats carried an account) and stays visible to everyone.
+      // A chat with no owner is device-owned (a guest's, or one from before
+      // chats carried an account) and stays visible to everyone.
       const scopeFilter =
-        folderId != null
-          ? "c.folder_id = ?"
-          : "c.space_id = ? AND c.folder_id IS NULL AND (c.account_id IS NULL OR c.account_id = ?)";
-      const params = folderId != null ? [folderId, limit] : [spaceId, this.activeAccountId, limit];
+        folderId != null ? "c.folder_id = ?" : "c.space_id = ? AND c.folder_id IS NULL";
+      const accountScope = this._ownedRowScope("agent_conversations", "c");
+      const params = [folderId != null ? folderId : spaceId, ...accountScope.params, limit];
       return this.db
         .prepare(
           `SELECT c.id, c.title, c.created_at, c.updated_at,
             COUNT(m.id) AS message_count
           FROM agent_conversations c
           LEFT JOIN agent_messages m ON m.conversation_id = c.id
-          WHERE ${scopeFilter} AND c.deleted_at IS NULL
+          WHERE ${scopeFilter} AND c.deleted_at IS NULL AND ${accountScope.sql}
           GROUP BY c.id
           ORDER BY c.updated_at DESC
           LIMIT ?`
@@ -5628,11 +6268,12 @@ class DatabaseManager {
   getAgentConversations(limit = 50) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const scope = this._ownedRowScope("agent_conversations");
       return this.db
         .prepare(
-          "SELECT * FROM agent_conversations WHERE deleted_at IS NULL AND space_id IS NULL AND folder_id IS NULL ORDER BY updated_at DESC LIMIT ?"
+          `SELECT * FROM agent_conversations WHERE deleted_at IS NULL AND space_id IS NULL AND folder_id IS NULL AND ${scope.sql} ORDER BY updated_at DESC LIMIT ?`
         )
-        .all(limit);
+        .all(...scope.params, limit);
     } catch (error) {
       debugLogger.error("Error getting agent conversations", { error: error.message }, "database");
       throw error;
@@ -5642,9 +6283,7 @@ class DatabaseManager {
   getAgentConversation(id) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      const conversation = this.db
-        .prepare("SELECT * FROM agent_conversations WHERE id = ? AND deleted_at IS NULL")
-        .get(id);
+      const conversation = this._getOwnedConversation(id);
       if (!conversation) return null;
       const messages = this.db
         .prepare("SELECT * FROM agent_messages WHERE conversation_id = ? ORDER BY created_at ASC")
@@ -5659,20 +6298,21 @@ class DatabaseManager {
   deleteAgentConversation(id) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const scope = this._ownedRowScope("agent_conversations");
       // No create request has carried this chat, so it leaves the device now
       // with its messages. A chat held by a pending folder delete is already a
       // tombstone and stays one, so a denied folder delete can still restore it.
       const neverSent = this.db
         .prepare(
-          "SELECT 1 FROM agent_conversations WHERE id = ? AND deleted_at IS NULL AND cloud_id IS NULL AND cloud_create_attempted = 0"
+          `SELECT 1 FROM agent_conversations WHERE id = ? AND deleted_at IS NULL AND cloud_id IS NULL AND cloud_create_attempted = 0 AND ${scope.sql}`
         )
-        .get(id);
+        .get(id, ...scope.params);
       if (neverSent) return this.hardDeleteConversation(id);
       const result = this.db
         .prepare(
-          "UPDATE agent_conversations SET deleted_at = datetime('now'), sync_status = 'pending', updated_at = datetime('now') WHERE id = ?"
+          `UPDATE agent_conversations SET deleted_at = datetime('now'), sync_status = 'pending', updated_at = datetime('now') WHERE id = ? AND ${scope.sql}`
         )
-        .run(id);
+        .run(id, ...scope.params);
       return { success: result.changes > 0 };
     } catch (error) {
       debugLogger.error("Error deleting agent conversation", { error: error.message }, "database");
@@ -5683,11 +6323,12 @@ class DatabaseManager {
   updateAgentConversationTitle(id, title) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const scope = this._ownedRowScope("agent_conversations");
       const result = this.db
         .prepare(
-          "UPDATE agent_conversations SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL"
+          `UPDATE agent_conversations SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL AND ${scope.sql}`
         )
-        .run(title, id);
+        .run(title, id, ...scope.params);
       return { success: result.changes > 0 };
     } catch (error) {
       debugLogger.error(
@@ -5753,9 +6394,7 @@ class DatabaseManager {
     try {
       if (!this.db) throw new Error("Database not initialized");
       return this.db.transaction(() => {
-        const conversation = this.db
-          .prepare("SELECT id FROM agent_conversations WHERE id = ? AND deleted_at IS NULL")
-          .get(conversationId);
+        const conversation = this._getOwnedConversation(conversationId);
         if (!conversation) return null;
 
         const metadataStr = metadata ? JSON.stringify(metadata) : null;
@@ -5916,6 +6555,13 @@ class DatabaseManager {
   getAgentMessages(conversationId) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      // Tombstoned chats keep their messages until the delete is final, so
+      // only ownership is checked here, not liveness.
+      const scope = this._ownedRowScope("agent_conversations");
+      const owned = this.db
+        .prepare(`SELECT 1 FROM agent_conversations WHERE id = ? AND ${scope.sql}`)
+        .get(conversationId, ...scope.params);
+      if (!owned) return [];
       return this.db
         .prepare("SELECT * FROM agent_messages WHERE conversation_id = ? ORDER BY created_at ASC")
         .all(conversationId);
@@ -6938,9 +7584,10 @@ class DatabaseManager {
   getAgentConversationsWithPreview(limit = 50, offset = 0, includeArchived = false) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const scope = this._ownedRowScope("agent_conversations", "c");
       const archiveFilter = includeArchived
-        ? "WHERE c.archived_at IS NOT NULL AND c.deleted_at IS NULL AND c.space_id IS NULL AND c.folder_id IS NULL"
-        : "WHERE c.archived_at IS NULL AND c.deleted_at IS NULL AND c.space_id IS NULL AND c.folder_id IS NULL";
+        ? `WHERE c.archived_at IS NOT NULL AND c.deleted_at IS NULL AND c.space_id IS NULL AND c.folder_id IS NULL AND ${scope.sql}`
+        : `WHERE c.archived_at IS NULL AND c.deleted_at IS NULL AND c.space_id IS NULL AND c.folder_id IS NULL AND ${scope.sql}`;
       // Only a note the active account can open names a chat's source.
       const noteScope = this._accountScopeCondition("n");
       return this.db
@@ -6958,7 +7605,7 @@ class DatabaseManager {
           ORDER BY c.updated_at DESC
           LIMIT ? OFFSET ?`
         )
-        .all(...noteScope.params, limit, offset);
+        .all(...noteScope.params, ...scope.params, limit, offset);
     } catch (error) {
       debugLogger.error(
         "Error getting agent conversations with preview",
@@ -6973,6 +7620,7 @@ class DatabaseManager {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const pattern = `%${query}%`;
+      const scope = this._ownedRowScope("agent_conversations", "c");
       const noteScope = this._accountScopeCondition("n");
       return this.db
         .prepare(
@@ -6987,12 +7635,13 @@ class DatabaseManager {
           LEFT JOIN notes n ON n.id = c.note_id AND ${noteScope.sql}
           WHERE c.archived_at IS NULL AND c.deleted_at IS NULL
             AND c.space_id IS NULL AND c.folder_id IS NULL
+            AND ${scope.sql}
             AND (c.title LIKE ? OR ms.content LIKE ?)
           GROUP BY c.id
           ORDER BY c.updated_at DESC
           LIMIT ?`
         )
-        .all(...noteScope.params, pattern, pattern, limit);
+        .all(...noteScope.params, ...scope.params, pattern, pattern, limit);
     } catch (error) {
       debugLogger.error(
         "Error searching agent conversations",
@@ -7006,11 +7655,12 @@ class DatabaseManager {
   archiveAgentConversation(id) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const scope = this._ownedRowScope("agent_conversations");
       const result = this.db
         .prepare(
-          "UPDATE agent_conversations SET archived_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL"
+          `UPDATE agent_conversations SET archived_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL AND ${scope.sql}`
         )
-        .run(id);
+        .run(id, ...scope.params);
       return { success: result.changes > 0 };
     } catch (error) {
       debugLogger.error("Error archiving agent conversation", { error: error.message }, "database");
@@ -7021,11 +7671,12 @@ class DatabaseManager {
   unarchiveAgentConversation(id) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const scope = this._ownedRowScope("agent_conversations");
       const result = this.db
         .prepare(
-          "UPDATE agent_conversations SET archived_at = NULL WHERE id = ? AND deleted_at IS NULL"
+          `UPDATE agent_conversations SET archived_at = NULL WHERE id = ? AND deleted_at IS NULL AND ${scope.sql}`
         )
-        .run(id);
+        .run(id, ...scope.params);
       return { success: result.changes > 0 };
     } catch (error) {
       debugLogger.error(
@@ -7040,9 +7691,12 @@ class DatabaseManager {
   updateAgentConversationCloudId(id, cloudId) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const scope = this._ownedRowScope("agent_conversations");
       const result = this.db
-        .prepare("UPDATE agent_conversations SET cloud_id = ? WHERE id = ? AND deleted_at IS NULL")
-        .run(cloudId, id);
+        .prepare(
+          `UPDATE agent_conversations SET cloud_id = ? WHERE id = ? AND deleted_at IS NULL AND ${scope.sql}`
+        )
+        .run(cloudId, id, ...scope.params);
       return { success: result.changes > 0 };
     } catch (error) {
       debugLogger.error(
@@ -8804,11 +9458,14 @@ class DatabaseManager {
       // The cloud conversation contract has no space/folder scope yet.
       // Keep container chats local so another device cannot pull them as
       // global chats. Cloud-backed tombstones still use the delete queue.
+      // Another account's pending chats wait for that account: pushing them
+      // now would upload them with this account's token.
+      const scope = this._ownedRowScope("agent_conversations");
       return this.db
         .prepare(
-          "SELECT * FROM agent_conversations WHERE sync_status = 'pending' AND deleted_at IS NULL AND space_id IS NULL AND folder_id IS NULL"
+          `SELECT * FROM agent_conversations WHERE sync_status = 'pending' AND deleted_at IS NULL AND space_id IS NULL AND folder_id IS NULL AND ${scope.sql}`
         )
-        .all();
+        .all(...scope.params);
     } catch (error) {
       debugLogger.error(
         "Error getting pending conversations",
@@ -8822,17 +9479,19 @@ class DatabaseManager {
   getPendingConversationDeletes() {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const scope = this._ownedRowScope("agent_conversations", "c");
       return this.db
         .prepare(
           `SELECT * FROM agent_conversations c
            WHERE deleted_at IS NOT NULL AND cloud_id IS NOT NULL
              AND sync_status = 'pending'
+             AND ${scope.sql}
              AND NOT EXISTS (
                SELECT 1 FROM optimistic_folder_delete_rows r
                WHERE r.entity_type = 'conversation' AND r.entity_id = c.id
              )`
         )
-        .all();
+        .all(...scope.params);
     } catch (error) {
       debugLogger.error(
         "Error getting pending conversation deletes",
@@ -8846,6 +9505,7 @@ class DatabaseManager {
   getConversationByClientId(clientId) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const scope = this._ownedRowScope("agent_conversations", "c");
       return (
         this.db
           .prepare(
@@ -8855,9 +9515,9 @@ class DatabaseManager {
                  WHERE r.entity_type = 'conversation' AND r.entity_id = c.id
                ) AS folder_delete_pending
              FROM agent_conversations c
-             WHERE c.client_conversation_id = ?`
+             WHERE c.client_conversation_id = ? AND ${scope.sql}`
           )
-          .get(clientId) || null
+          .get(clientId, ...scope.params) || null
       );
     } catch (error) {
       debugLogger.error(
@@ -8888,12 +9548,34 @@ class DatabaseManager {
             .prepare("SELECT * FROM agent_conversations WHERE cloud_id = ?")
             .get(cloudConv.id);
         }
+        // IPC returns the row to the renderer, so a skipped one stays private.
+        if (this._ownedByOtherAccount(existing)) {
+          debugLogger.warn(
+            "Skipping cloud conversation that belongs to another local account",
+            {},
+            "database"
+          );
+          return null;
+        }
+        if (
+          existing &&
+          !existing.account_id &&
+          this.activeAccountId &&
+          (existing.deleted_at || !isCloudEntryNewer(cloudConv.updated_at, existing.updated_at))
+        ) {
+          const claim = this._claimUnattributedSql("agent_conversations", { proven: true });
+          this.db
+            .prepare(`UPDATE agent_conversations SET ${claim.sql} WHERE id = ?`)
+            .run(...claim.params, existing.id);
+          return this.db.prepare("SELECT * FROM agent_conversations WHERE id = ?").get(existing.id);
+        }
         if (existing?.deleted_at) return existing;
 
         const convStmt = this.db.prepare(`
-          INSERT INTO agent_conversations (client_conversation_id, cloud_id, title, note_id, sync_status, created_at, updated_at)
-          VALUES (?, ?, ?, ?, 'synced', ?, ?)
+          INSERT INTO agent_conversations (client_conversation_id, cloud_id, title, note_id, sync_status, created_at, updated_at, account_id)
+          VALUES (?, ?, ?, ?, 'synced', ?, ?, ?)
           ON CONFLICT(client_conversation_id) DO UPDATE SET
+            account_id = COALESCE(excluded.account_id, account_id),
             cloud_id = excluded.cloud_id,
             title = excluded.title,
             -- The cloud has no note column, so its copy never says which note a chat came from.
@@ -8907,7 +9589,8 @@ class DatabaseManager {
           cloudConv.title ?? "Untitled",
           cloudConv.note_id ?? null,
           cloudConv.created_at ?? new Date().toISOString(),
-          cloudConv.updated_at ?? new Date().toISOString()
+          cloudConv.updated_at ?? new Date().toISOString(),
+          this.activeAccountId
         );
         const conv = this.db
           .prepare("SELECT * FROM agent_conversations WHERE client_conversation_id = ?")
@@ -8940,17 +9623,22 @@ class DatabaseManager {
     }
   }
 
-  markConversationSynced(id, cloudId) {
+  // A chat push is acknowledged for the account that sent it (`accountId`),
+  // even when another account became active while the request was in flight:
+  // the cloud copy is that account's, so the row is linked and claimed for it.
+  markConversationSynced(id, cloudId, accountId = this.activeAccountId) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const claim = this._claimUnattributedSql("agent_conversations", { accountId });
       const result = this.db
         .prepare(
           `UPDATE agent_conversations
            SET cloud_id = COALESCE(cloud_id, ?),
+               ${claim.sql},
                sync_status = CASE WHEN deleted_at IS NULL THEN 'synced' ELSE 'pending' END
-           WHERE id = ?`
+           WHERE id = ? AND (account_id IS NULL OR account_id = ?)`
         )
-        .run(cloudId, id);
+        .run(cloudId, ...claim.params, id, accountId);
       return { success: result.changes > 0 };
     } catch (error) {
       debugLogger.error("Error marking conversation synced", { error: error.message }, "database");
@@ -8963,9 +9651,12 @@ class DatabaseManager {
   markConversationCreateAttempted(id) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const scope = this._ownedRowScope("agent_conversations");
       const result = this.db
-        .prepare("UPDATE agent_conversations SET cloud_create_attempted = 1 WHERE id = ?")
-        .run(id);
+        .prepare(
+          `UPDATE agent_conversations SET cloud_create_attempted = 1 WHERE id = ? AND ${scope.sql}`
+        )
+        .run(id, ...scope.params);
       return { success: result.changes > 0 };
     } catch (error) {
       debugLogger.error(
@@ -8977,7 +9668,28 @@ class DatabaseManager {
     }
   }
 
-  acknowledgeConversationCreate(id, snapshot, cloudId) {
+  // Main refused the create before it left, so no cloud copy can exist. The row
+  // may be another account's by now, which is why this isn't scoped.
+  clearConversationCreateAttempted(id) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      this.db
+        .prepare(
+          "UPDATE agent_conversations SET cloud_create_attempted = 0 WHERE id = ? AND cloud_id IS NULL"
+        )
+        .run(id);
+    } catch (error) {
+      debugLogger.error(
+        "Error clearing conversation create attempted",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
+  // As markConversationSynced: acknowledged for the account that sent the create.
+  acknowledgeConversationCreate(id, snapshot, cloudId, accountId = this.activeAccountId) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       if (!snapshot || !cloudId) {
@@ -8996,6 +9708,12 @@ class DatabaseManager {
           .get(id);
         const expectedClientId = snapshot.client_conversation_id ?? null;
 
+        // Another account owns the row now, so the copy just created in the
+        // sender's cloud must go.
+        if (this._ownedByOtherAccount(current, accountId)) {
+          return { success: true, outcome: "orphaned", cloud_id: null };
+        }
+
         if (!current || (current.client_conversation_id ?? null) !== expectedClientId) {
           const identityStillExists = expectedClientId
             ? this.db
@@ -9013,14 +9731,15 @@ class DatabaseManager {
           return { success: true, outcome: "already-linked", cloud_id: current.cloud_id };
         }
 
+        const claim = this._claimUnattributedSql("agent_conversations", { accountId });
         if (current.deleted_at) {
           this.db
             .prepare(
               `UPDATE agent_conversations
-               SET cloud_id = ?, sync_status = 'pending'
+               SET cloud_id = ?, sync_status = 'pending', ${claim.sql}
                WHERE id = ? AND cloud_id IS NULL`
             )
-            .run(cloudId, id);
+            .run(cloudId, ...claim.params, id);
           return { success: true, outcome: "delete-pending", cloud_id: cloudId };
         }
 
@@ -9035,10 +9754,10 @@ class DatabaseManager {
         this.db
           .prepare(
             `UPDATE agent_conversations
-             SET cloud_id = ?, sync_status = 'synced'
+             SET cloud_id = ?, sync_status = 'synced', ${claim.sql}
              WHERE id = ? AND cloud_id IS NULL`
           )
-          .run(cloudId, id);
+          .run(cloudId, ...claim.params, id);
         return { success: true, outcome: "synced", cloud_id: cloudId };
       })();
     } catch (error) {
@@ -9054,6 +9773,11 @@ class DatabaseManager {
   hardDeleteConversation(id) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const scope = this._ownedRowScope("agent_conversations");
+      const owned = this.db
+        .prepare(`SELECT 1 FROM agent_conversations WHERE id = ? AND ${scope.sql}`)
+        .get(id, ...scope.params);
+      if (!owned) return { success: false };
       this.db.prepare("DELETE FROM agent_messages WHERE conversation_id = ?").run(id);
       const result = this.db.prepare("DELETE FROM agent_conversations WHERE id = ?").run(id);
       return { success: result.changes > 0 };
@@ -9066,11 +9790,12 @@ class DatabaseManager {
   getPendingTranscriptions() {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const scope = this._ownedRowScope("transcriptions");
       return this.db
         .prepare(
-          "SELECT * FROM transcriptions WHERE sync_status = 'pending' AND deleted_at IS NULL"
+          `SELECT * FROM transcriptions WHERE sync_status = 'pending' AND deleted_at IS NULL AND ${scope.sql}`
         )
-        .all();
+        .all(...scope.params);
     } catch (error) {
       debugLogger.error(
         "Error getting pending transcriptions",
@@ -9084,11 +9809,12 @@ class DatabaseManager {
   getPendingTranscriptionDeletes() {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const scope = this._ownedRowScope("transcriptions");
       return this.db
         .prepare(
-          "SELECT * FROM transcriptions WHERE deleted_at IS NOT NULL AND cloud_id IS NOT NULL AND sync_status = 'pending'"
+          `SELECT * FROM transcriptions WHERE deleted_at IS NOT NULL AND cloud_id IS NOT NULL AND sync_status = 'pending' AND ${scope.sql}`
         )
-        .all();
+        .all(...scope.params);
     } catch (error) {
       debugLogger.error(
         "Error getting pending transcription deletes",
@@ -9102,7 +9828,10 @@ class DatabaseManager {
   hardDeleteTranscription(id) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      const result = this.db.prepare("DELETE FROM transcriptions WHERE id = ?").run(id);
+      const scope = this._ownedRowScope("transcriptions");
+      const result = this.db
+        .prepare(`DELETE FROM transcriptions WHERE id = ? AND ${scope.sql}`)
+        .run(id, ...scope.params);
       return { success: result.changes > 0, id };
     } catch (error) {
       debugLogger.error("Error hard deleting transcription", { error: error.message }, "database");
@@ -9113,10 +9842,13 @@ class DatabaseManager {
   getTranscriptionByClientId(clientId) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const scope = this._ownedRowScope("transcriptions");
       return (
         this.db
-          .prepare("SELECT * FROM transcriptions WHERE client_transcription_id = ?")
-          .get(clientId) || null
+          .prepare(
+            `SELECT * FROM transcriptions WHERE client_transcription_id = ? AND ${scope.sql}`
+          )
+          .get(clientId, ...scope.params) || null
       );
     } catch (error) {
       debugLogger.error(
@@ -9147,9 +9879,10 @@ class DatabaseManager {
       // local dictation from the same UTC day whatever the hour.
       const cloudOccurredAt = toDbTimestamp(cloudTranscription.created_at);
       const stmt = this.db.prepare(`
-        INSERT INTO transcriptions (client_transcription_id, cloud_id, text, raw_text, status, sync_status, created_at, timestamp)
-        VALUES (?, ?, ?, ?, ?, 'synced', ?, COALESCE(?, CURRENT_TIMESTAMP))
+        INSERT INTO transcriptions (client_transcription_id, cloud_id, text, raw_text, status, sync_status, created_at, timestamp, account_id)
+        VALUES (?, ?, ?, ?, ?, 'synced', ?, COALESCE(?, CURRENT_TIMESTAMP), ?)
         ON CONFLICT(client_transcription_id) DO UPDATE SET
+          account_id = COALESCE(excluded.account_id, account_id),
           cloud_id = excluded.cloud_id,
           text = excluded.text,
           raw_text = excluded.raw_text,
@@ -9159,10 +9892,27 @@ class DatabaseManager {
       return this.db.transaction(() => {
         const existing = this.db
           .prepare(
-            `SELECT id, text, raw_text, status FROM transcriptions
+            `SELECT id, text, raw_text, status, account_id FROM transcriptions
              WHERE client_transcription_id = ?`
           )
           .get(cloudTranscription.client_transcription_id);
+        if (this._ownedByOtherAccount(existing)) {
+          debugLogger.warn(
+            "Skipping cloud transcription that belongs to another local account",
+            {},
+            "database"
+          );
+          return null;
+        }
+        if (existing && !existing.account_id && this.activeAccountId) {
+          // Matching cloud identity proves ownership, without replaying old
+          // cloud text over local edits or reviving a local deletion.
+          const claim = this._claimUnattributedSql("transcriptions", { proven: true });
+          this.db
+            .prepare(`UPDATE transcriptions SET ${claim.sql} WHERE id = ?`)
+            .run(...claim.params, existing.id);
+          return this.getTranscriptionByClientId(cloudTranscription.client_transcription_id);
+        }
         if (
           existing &&
           (existing.text !== text || existing.raw_text !== rawText || existing.status !== status)
@@ -9176,7 +9926,8 @@ class DatabaseManager {
           rawText,
           status,
           cloudTranscription.created_at,
-          cloudOccurredAt
+          cloudOccurredAt,
+          this.activeAccountId
         );
         return this.db
           .prepare("SELECT * FROM transcriptions WHERE client_transcription_id = ?")
@@ -9195,9 +9946,12 @@ class DatabaseManager {
   markTranscriptionSynced(id, cloudId) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const claim = this._claimUnattributedSql("transcriptions");
       this.db
-        .prepare("UPDATE transcriptions SET sync_status = 'synced', cloud_id = ? WHERE id = ?")
-        .run(cloudId, id);
+        .prepare(
+          `UPDATE transcriptions SET sync_status = 'synced', cloud_id = ?, ${claim.sql} WHERE id = ?`
+        )
+        .run(cloudId, ...claim.params, id);
       return { success: true };
     } catch (error) {
       debugLogger.error("Error marking transcription synced", { error: error.message }, "database");

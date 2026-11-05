@@ -101,6 +101,26 @@ function assertAnalyticsSyncContext(context) {
   }
   return context.accountId;
 }
+// A push is acked only under the sign-in that sent it. After an account switch
+// the ack would hand an unattributed row to the new account although the cloud
+// copy is the old one's, so it is dropped and the row stays pending. A pulled
+// row is written only under the sign-in that fetched it, for the same reason.
+function isStaleSyncAck(expectedAuthGeneration) {
+  return tokenStore.getState().generation !== expectedAuthGeneration;
+}
+const STALE_SYNC_ACK = { success: false, changes: 0, stale: true };
+// The account each sign-in (token generation) was scoped to. A chat ack names
+// the account it was sent as, and main accepts that only when it is the one
+// the push's sign-in was scoped to, so a window left over from another sign-in
+// can't move a row. A renderer can only name an account it has scoped to.
+const scopedAccountByGeneration = new Map();
+function syncSenderAccount(accountId, authGeneration) {
+  return typeof accountId === "string" &&
+    accountId &&
+    scopedAccountByGeneration.get(authGeneration) === accountId
+    ? accountId
+    : null;
+}
 // Local engines resolve a failed decode instead of throwing. Retry turns that
 // into a coded error so the toast says what went wrong rather than blaming a
 // missing engine.
@@ -902,6 +922,23 @@ class IPCHandlers {
     }
   }
 
+  // Every window caches the dictionary and snippets in its store and in
+  // localStorage, and a whole-list save writes that cache back. After an
+  // account switch the cache must hold the new account's lists, or the next
+  // save would copy the previous account's words into this one.
+  _broadcastAccountScopedSettings() {
+    try {
+      broadcastToWindows("dictionary-updated", this.databaseManager.getDictionary());
+      broadcastToWindows("snippets-updated", this.databaseManager.getSnippets());
+    } catch (error) {
+      debugLogger.error(
+        "Failed to broadcast account-scoped dictionary and snippets",
+        { error: error.message },
+        "database"
+      );
+    }
+  }
+
   _handleAuthTokenChange({ generation, token }) {
     // A new bearer may belong to another account, so its policy is fetched
     // before new work; only a sign-out ends the work already running. A real
@@ -925,9 +962,11 @@ class IPCHandlers {
     this._enterpriseAudioScopeRevision = (this._enterpriseAudioScopeRevision ?? 0) + 1;
     this.enterpriseIdentityManager?.clear();
     if (!token) {
+      const scopeChanged = this.databaseManager.activeAccountId !== null;
       this.databaseManager.setActiveAccountId(null);
       accountScopeBinding.clear();
       broadcastToWindows("active-account-scope-changed", null);
+      if (scopeChanged) this._broadcastAccountScopedSettings();
       // As set-active-account-scope does: a connect can't outlive its account.
       this.connectorManager?.accountChanged();
     }
@@ -1916,11 +1955,16 @@ class IPCHandlers {
       const result = this.databaseManager.saveTranscription(text, rawText, options);
       if (result?.success && result?.transcription) {
         setImmediate(() => {
-          broadcastToWindows("transcription-added", result.transcription);
+          const transcription = this.databaseManager.getTranscriptionById(result.transcription.id);
+          if (transcription) broadcastToWindows("transcription-added", transcription);
         });
       }
       return result;
     });
+
+    ipcMain.handle("db-account-changed-since", (_event, occurredAt) =>
+      this.databaseManager.accountChangedSince(occurredAt)
+    );
 
     ipcMain.handle("db-get-transcriptions", async (event, limit = 50, options = {}) => {
       return this.databaseManager.getTranscriptions(limit, options);
@@ -2009,9 +2053,10 @@ class IPCHandlers {
     );
 
     ipcMain.handle("db-clear-transcriptions", async (event) => {
-      this.audioStorageManager.deleteAllAudio();
       const result = this.databaseManager.clearTranscriptions();
       if (result?.success) {
+        // Only the cleared history's recordings: another account's stay.
+        this.audioStorageManager.deleteAudioForTranscriptions(result.ids);
         setImmediate(() => {
           broadcastToWindows("transcriptions-cleared", {
             cleared: result.cleared,
@@ -2019,7 +2064,7 @@ class IPCHandlers {
           broadcastToWindows("analytics-changed");
         });
       }
-      return result;
+      return { success: result.success, cleared: result.cleared };
     });
 
     ipcMain.handle("db-delete-transcription", async (event, id) => {
@@ -2071,10 +2116,12 @@ class IPCHandlers {
     });
 
     ipcMain.handle("get-audio-path", async (event, id) => {
+      if (!this.databaseManager.getTranscriptionById(id)) return null;
       return this.audioStorageManager.getAudioPath(id);
     });
 
     ipcMain.handle("show-audio-in-folder", async (event, id) => {
+      if (!this.databaseManager.getTranscriptionById(id)) return { success: false };
       const filePath = this.audioStorageManager.getAudioPath(id);
       if (!filePath) return { success: false };
       shell.showItemInFolder(filePath);
@@ -2082,11 +2129,14 @@ class IPCHandlers {
     });
 
     ipcMain.handle("get-audio-buffer", async (event, id) => {
+      if (!this.databaseManager.getTranscriptionById(id)) return null;
       const buffer = this.audioStorageManager.getAudioBuffer(id);
       return buffer ? buffer.buffer : null;
     });
 
     ipcMain.handle("delete-transcription-audio", async (event, id) => {
+      // Only a recording of a dictation the active account can see.
+      if (!this.databaseManager.getTranscriptionById(id)) return { success: false };
       const result = this.audioStorageManager.deleteAudio(id);
       if (result.success) {
         this.databaseManager.updateTranscriptionAudio(id, {
@@ -2100,7 +2150,9 @@ class IPCHandlers {
     });
 
     ipcMain.handle("get-audio-storage-usage", async () => {
-      return this.audioStorageManager.getStorageUsage();
+      return this.audioStorageManager.getStorageUsage({
+        exceptTranscriptionIds: this.databaseManager.getOtherAccountTranscriptionIds(),
+      });
     });
 
     ipcMain.on(
@@ -2122,14 +2174,12 @@ class IPCHandlers {
     );
 
     ipcMain.handle("delete-all-audio", async () => {
-      const result = this.audioStorageManager.deleteAllAudio();
+      // Another account's recordings stay, as with Clear history.
+      const result = this.audioStorageManager.deleteAllAudio({
+        exceptTranscriptionIds: this.databaseManager.getOtherAccountTranscriptionIds(),
+      });
       try {
-        const rows = this.databaseManager.db
-          .prepare("SELECT id FROM transcriptions WHERE has_audio = 1")
-          .all();
-        if (rows.length > 0) {
-          this.databaseManager.clearAudioFlags(rows.map((r) => r.id));
-        }
+        this.databaseManager.clearAudioFlags(this.databaseManager.getTranscriptionIdsWithAudio());
       } catch (error) {
         debugLogger.error(
           "Failed to clear audio flags after delete-all",
@@ -2222,11 +2272,24 @@ class IPCHandlers {
       return this.databaseManager.getDictionary();
     });
 
-    ipcMain.handle("db-set-dictionary", async (event, words) => {
+    // `listsAccountId`: whose list the sending window shows. Until the account
+    // change reaches it, saving would copy the last account's list into this one.
+    const isListFromOtherAccount = (listsAccountId) =>
+      listsAccountId !== undefined && listsAccountId !== this.databaseManager.activeAccountId;
+
+    ipcMain.handle("db-set-dictionary", async (event, words, listsAccountId) => {
       if (!Array.isArray(words)) {
         throw new Error("words must be an array");
       }
+      if (isListFromOtherAccount(listsAccountId)) return { success: false, stale: true };
       return this.databaseManager.setDictionary(words);
+    });
+
+    ipcMain.handle("db-seed-dictionary", async (_event, words) => {
+      if (!Array.isArray(words)) {
+        throw new Error("words must be an array");
+      }
+      return this.databaseManager.seedDictionary(words);
     });
 
     ipcMain.handle("db-apply-dictionary-changes", async (_event, changes) => {
@@ -2252,9 +2315,13 @@ class IPCHandlers {
       return this.databaseManager.getDictionaryEntryByClientId(clientDictId);
     });
 
-    ipcMain.handle("db-upsert-dictionary-from-cloud", async (_event, cloudEntry) => {
-      return this.databaseManager.upsertDictionaryFromCloud(cloudEntry);
-    });
+    ipcMain.handle(
+      "db-upsert-dictionary-from-cloud",
+      async (_event, cloudEntry, expectedAuthGeneration) => {
+        if (isStaleSyncAck(expectedAuthGeneration)) return STALE_SYNC_ACK;
+        return this.databaseManager.upsertDictionaryFromCloud(cloudEntry);
+      }
+    );
 
     ipcMain.handle(
       "db-mark-dictionary-synced",
@@ -2266,8 +2333,10 @@ class IPCHandlers {
         expectedWord,
         expectedSource,
         serverSource,
-        pushed
+        pushed,
+        expectedAuthGeneration
       ) => {
+        if (isStaleSyncAck(expectedAuthGeneration)) return STALE_SYNC_ACK;
         return this.databaseManager.markDictionaryEntrySynced(
           id,
           cloudId,
@@ -2280,7 +2349,8 @@ class IPCHandlers {
       }
     );
 
-    ipcMain.handle("db-hard-delete-dictionary", async (_event, id) => {
+    ipcMain.handle("db-hard-delete-dictionary", async (_event, id, expectedAuthGeneration) => {
+      if (isStaleSyncAck(expectedAuthGeneration)) return STALE_SYNC_ACK;
       return this.databaseManager.hardDeleteDictionaryEntry(id);
     });
 
@@ -2297,18 +2367,21 @@ class IPCHandlers {
       if (!Array.isArray(words)) throw new Error("words must be an array");
       const pendingWords = options?.pendingWords ?? [];
       if (!Array.isArray(pendingWords)) throw new Error("pendingWords must be an array");
+      if (isStaleSyncAck(options?.expectedAuthGeneration)) return { marked: [], stale: true };
       return this.databaseManager.markDictionaryWordsShared(words, sharedAt, { pendingWords });
     });
 
     ipcMain.handle("db-retire-moved-dictionary-words", async (_event, words, options) => {
       if (!Array.isArray(words)) throw new Error("words must be an array");
+      if (isStaleSyncAck(options?.expectedAuthGeneration)) return { retired: [], stale: true };
       return this.databaseManager.retireMovedDictionaryWords(words, {
         includeSynced: options?.includeSynced !== false,
       });
     });
 
-    ipcMain.handle("db-revive-retired-dictionary-words", async (_event, words) => {
+    ipcMain.handle("db-revive-retired-dictionary-words", async (_event, words, options) => {
       if (!Array.isArray(words)) throw new Error("words must be an array");
+      if (isStaleSyncAck(options?.expectedAuthGeneration)) return { revived: [], stale: true };
       return this.databaseManager.reviveRetiredDictionaryWords(words);
     });
 
@@ -2394,11 +2467,19 @@ class IPCHandlers {
       return this.databaseManager.getSnippets();
     });
 
-    ipcMain.handle("db-set-snippets", async (_event, snippets) => {
+    ipcMain.handle("db-set-snippets", async (_event, snippets, listsAccountId) => {
       if (!Array.isArray(snippets)) {
         throw new Error("snippets must be an array");
       }
+      if (isListFromOtherAccount(listsAccountId)) return { success: false, stale: true };
       return this.databaseManager.setSnippets(snippets);
+    });
+
+    ipcMain.handle("db-seed-snippets", async (_event, snippets) => {
+      if (!Array.isArray(snippets)) {
+        throw new Error("snippets must be an array");
+      }
+      return this.databaseManager.seedSnippets(snippets);
     });
 
     ipcMain.handle("db-get-pending-snippets", async () => {
@@ -2409,17 +2490,34 @@ class IPCHandlers {
       return this.databaseManager.getPendingSnippetDeletes();
     });
 
-    ipcMain.handle("db-get-snippet-for-cloud-merge", async (_event, cloudEntry) => {
-      return this.databaseManager.getSnippetForCloudMerge(cloudEntry);
-    });
+    ipcMain.handle(
+      "db-get-snippet-for-cloud-merge",
+      async (_event, cloudEntry, expectedAuthGeneration) => {
+        if (isStaleSyncAck(expectedAuthGeneration)) return STALE_SYNC_ACK;
+        return this.databaseManager.getSnippetForCloudMerge(cloudEntry);
+      }
+    );
 
-    ipcMain.handle("db-upsert-snippet-from-cloud", async (_event, cloudEntry) => {
-      return this.databaseManager.upsertSnippetFromCloud(cloudEntry);
-    });
+    ipcMain.handle(
+      "db-upsert-snippet-from-cloud",
+      async (_event, cloudEntry, expectedAuthGeneration) => {
+        if (isStaleSyncAck(expectedAuthGeneration)) return STALE_SYNC_ACK;
+        return this.databaseManager.upsertSnippetFromCloud(cloudEntry);
+      }
+    );
 
     ipcMain.handle(
       "db-mark-snippet-synced",
-      async (_event, id, cloudId, serverUpdatedAt, expectedTrigger, expectedReplacement) => {
+      async (
+        _event,
+        id,
+        cloudId,
+        serverUpdatedAt,
+        expectedTrigger,
+        expectedReplacement,
+        expectedAuthGeneration
+      ) => {
+        if (isStaleSyncAck(expectedAuthGeneration)) return STALE_SYNC_ACK;
         return this.databaseManager.markSnippetSynced(
           id,
           cloudId,
@@ -2430,7 +2528,8 @@ class IPCHandlers {
       }
     );
 
-    ipcMain.handle("db-hard-delete-snippet", async (_event, id) => {
+    ipcMain.handle("db-hard-delete-snippet", async (_event, id, expectedAuthGeneration) => {
+      if (isStaleSyncAck(expectedAuthGeneration)) return STALE_SYNC_ACK;
       return this.databaseManager.hardDeleteSnippet(id);
     });
 
@@ -2688,6 +2787,11 @@ class IPCHandlers {
       return this.databaseManager.getSpaces();
     });
 
+    ipcMain.handle("db-has-other-account-rows", () => this.databaseManager.hasOtherAccountRows());
+    ipcMain.handle("db-has-unclaimed-legacy-rows", () =>
+      this.databaseManager.hasUnclaimedLegacyRows()
+    );
+
     ipcMain.handle("set-active-account-scope", async (_event, accountId, expectedGeneration) => {
       const state = tokenStore.getState();
       const verdict = accountScopeBinding.evaluateScopeRequest({
@@ -2729,12 +2833,17 @@ class IPCHandlers {
         this._audioFeaturePolicy?.update(guestPolicy);
       }
       this.databaseManager.setActiveAccountId(accountId);
-      if (accountId !== null) accountScopeBinding.persist(accountId, state.token);
-      else accountScopeBinding.clear();
+      this.databaseManager.claimSignedOutLocalRows();
+      this.databaseManager.claimLegacyRowsOfOnlyAccount();
+      if (accountId !== null) {
+        accountScopeBinding.persist(accountId, state.token);
+        scopedAccountByGeneration.set(state.generation, accountId);
+      } else accountScopeBinding.clear();
       broadcastToWindows(
         "active-account-scope-changed",
         accountId !== null ? { accountId, authGeneration: state.generation } : null
       );
+      if (accountChanged) this._broadcastAccountScopedSettings();
       this.connectorManager?.accountChanged();
       void this.connectorManager?.notifyStatusChanged();
       void this.metaActivation?.flush();
@@ -2773,6 +2882,7 @@ class IPCHandlers {
             erasingDevice: options?.erasingDevice === true,
           });
           const result = this.databaseManager.deleteAccountData(accountId);
+          this.audioStorageManager.deleteAudioForTranscriptions(result.deletedTranscriptionIds);
           this.metaActivation?.purge(accountId);
           this.notifyVectorChanges();
           for (const noteId of result.deletedNoteIds) {
@@ -3200,19 +3310,39 @@ class IPCHandlers {
     ipcMain.handle("db-get-conversation-by-client-id", (_, clientId) =>
       this.databaseManager.getConversationByClientId(clientId)
     );
-    ipcMain.handle("db-upsert-conversation-from-cloud", (_, cloudConv, messages) =>
-      this.databaseManager.upsertConversationFromCloud(cloudConv, messages)
+    ipcMain.handle(
+      "db-upsert-conversation-from-cloud",
+      (_, cloudConv, messages, expectedAuthGeneration) =>
+        isStaleSyncAck(expectedAuthGeneration)
+          ? STALE_SYNC_ACK
+          : this.databaseManager.upsertConversationFromCloud(cloudConv, messages)
     );
-    ipcMain.handle("db-mark-conversation-create-attempted", (_, id) =>
-      this.databaseManager.markConversationCreateAttempted(id)
+    ipcMain.handle("db-mark-conversation-create-attempted", (_, id, expectedAuthGeneration) =>
+      isStaleSyncAck(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : this.databaseManager.markConversationCreateAttempted(id)
     );
-    ipcMain.handle("db-acknowledge-conversation-create", (_, id, snapshot, cloudId) =>
-      this.databaseManager.acknowledgeConversationCreate(id, snapshot, cloudId)
+    ipcMain.handle("db-clear-conversation-create-attempted", (_, id) =>
+      this.databaseManager.clearConversationCreateAttempted(id)
     );
-    ipcMain.handle("db-mark-conversation-synced", (_, id, cloudId) =>
-      this.databaseManager.markConversationSynced(id, cloudId)
+    // A chat create is not idempotent in the cloud (its messages are inserted
+    // again), so its ack is never dropped: it is recorded for the account that
+    // sent it, which may no longer be the active one.
+    ipcMain.handle(
+      "db-acknowledge-conversation-create",
+      (_, id, snapshot, cloudId, accountId, authGeneration) => {
+        const sender = syncSenderAccount(accountId, authGeneration);
+        if (!sender) return { success: false, outcome: "unresolved", cloud_id: null };
+        return this.databaseManager.acknowledgeConversationCreate(id, snapshot, cloudId, sender);
+      }
     );
-    ipcMain.handle("db-hard-delete-conversation", (_, id) => {
+    ipcMain.handle("db-mark-conversation-synced", (_, id, cloudId, accountId, authGeneration) => {
+      const sender = syncSenderAccount(accountId, authGeneration);
+      if (!sender) return { success: false };
+      return this.databaseManager.markConversationSynced(id, cloudId, sender);
+    });
+    ipcMain.handle("db-hard-delete-conversation", (_, id, expectedAuthGeneration) => {
+      if (isStaleSyncAck(expectedAuthGeneration)) return STALE_SYNC_ACK;
       const result = this.databaseManager.hardDeleteConversation(id);
       if (result?.success) {
         setImmediate(() => broadcastToWindows("conversation-deleted", { id }));
@@ -3227,18 +3357,26 @@ class IPCHandlers {
     ipcMain.handle("db-get-transcription-by-client-id", (_, clientId) =>
       this.databaseManager.getTranscriptionByClientId(clientId)
     );
-    ipcMain.handle("db-upsert-transcription-from-cloud", (_, cloudTranscription) => {
-      return this.databaseManager.upsertTranscriptionFromCloud(cloudTranscription);
-    });
-    ipcMain.handle("db-mark-transcription-synced", (_, id, cloudId) =>
-      this.databaseManager.markTranscriptionSynced(id, cloudId)
+    ipcMain.handle(
+      "db-upsert-transcription-from-cloud",
+      (_, cloudTranscription, expectedAuthGeneration) =>
+        isStaleSyncAck(expectedAuthGeneration)
+          ? STALE_SYNC_ACK
+          : this.databaseManager.upsertTranscriptionFromCloud(cloudTranscription)
+    );
+    ipcMain.handle("db-mark-transcription-synced", (_, id, cloudId, expectedAuthGeneration) =>
+      isStaleSyncAck(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : this.databaseManager.markTranscriptionSynced(id, cloudId)
     );
     ipcMain.handle("db-get-pending-transcription-deletes", () =>
       this.databaseManager.getPendingTranscriptionDeletes()
     );
-    ipcMain.handle("db-hard-delete-transcription", (_, id) => {
+    ipcMain.handle("db-hard-delete-transcription", (_, id, expectedAuthGeneration) => {
+      if (isStaleSyncAck(expectedAuthGeneration)) return STALE_SYNC_ACK;
       const result = this.databaseManager.hardDeleteTranscription(id);
       if (result?.success) {
+        this.audioStorageManager.deleteAudio(id);
         setImmediate(() => broadcastToWindows("transcription-deleted", { id }));
       }
       return result;
@@ -7523,6 +7661,21 @@ class IPCHandlers {
     });
 
     ipcMain.handle("retry-transcription", async (event, id, settings) => {
+      const authGeneration = tokenStore.getState().generation;
+      const accountId = this.databaseManager.activeAccountId;
+      const assertRetryCurrent = () => {
+        if (isStaleSyncAck(authGeneration) || this.databaseManager.activeAccountId !== accountId) {
+          throw Object.assign(
+            new Error("Authentication context changed during transcription retry"),
+            {
+              code: "AUTH_CONTEXT_CHANGED",
+            }
+          );
+        }
+      };
+      if (!this.databaseManager.getTranscriptionById(id)) {
+        return { success: false, error: "Audio file not found" };
+      }
       const buffer = this.audioStorageManager.getAudioBuffer(id);
       if (!buffer) return { success: false, error: "Audio file not found" };
       let providerErrorContext = null;
@@ -7534,6 +7687,7 @@ class IPCHandlers {
             ? preferredLanguage.split("-")[0]
             : undefined;
         const { resolveTranscriptionRoute } = await import("./transcriptionRoute.ts");
+        assertRetryCurrent();
         const { convertBufferToWav, isWavFormat } = require("./ffmpegUtils");
         // Renderer pre-flight owns policy; retry re-routes stored audio through
         // whatever is selected NOW.
@@ -7641,6 +7795,7 @@ class IPCHandlers {
           const win = BrowserWindow.fromWebContents(event.sender);
           if (win) {
             const authHeader = await getAuthHeaderFromWindow(win);
+            assertRetryCurrent();
             if (Object.keys(authHeader).length) {
               const apiUrl = getApiUrl();
               if (apiUrl) {
@@ -7784,6 +7939,7 @@ class IPCHandlers {
             }
           }
 
+          assertRetryCurrent();
           const formData = new FormData();
           formData.append("file", new Blob([uploadBuffer], { type: uploadType }), uploadName);
           if (provider === "xai") {
@@ -7826,6 +7982,7 @@ class IPCHandlers {
           result = { text: data?.text, source: provider, model: route.model };
         }
 
+        assertRetryCurrent();
         if (result?.success === false) {
           throw localTranscriptionFailure(result);
         }
@@ -7852,7 +8009,15 @@ class IPCHandlers {
         const updated = this.databaseManager.getTranscriptionById(id);
         if (updated) {
           setImmediate(() => {
-            broadcastToWindows("transcription-updated", updated);
+            if (
+              isStaleSyncAck(authGeneration) ||
+              this.databaseManager.activeAccountId !== accountId
+            ) {
+              return;
+            }
+            const transcription = this.databaseManager.getTranscriptionById(id);
+            if (!transcription) return;
+            broadcastToWindows("transcription-updated", transcription);
             // A row that just reached "completed" is newly eligible.
             void this._ensureAnalyticsHistoryBackfilled();
           });
@@ -10947,6 +11112,9 @@ class IPCHandlers {
 
     ipcMain.handle("update-transcription-text", async (_event, id, text, rawText) => {
       try {
+        if (!this.databaseManager.getTranscriptionById(id)) {
+          return { success: false, error: "Transcription not found" };
+        }
         this.databaseManager.updateTranscriptionText(id, text, rawText);
         const updated = this.databaseManager.getTranscriptionById(id);
         return { success: true, transcription: updated };
@@ -14378,9 +14546,10 @@ class IPCHandlers {
   }
 
   deleteTranscriptionInternal(id) {
-    this.audioStorageManager.deleteAudio(id);
     const result = this.databaseManager.deleteTranscription(id);
     if (result?.success) {
+      // After the scoped delete, so another account's recording is never touched.
+      this.audioStorageManager.deleteAudio(id);
       setImmediate(() => {
         broadcastToWindows("transcription-deleted", { id });
       });

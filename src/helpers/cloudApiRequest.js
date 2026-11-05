@@ -92,6 +92,7 @@ function createCloudApiRequestHandler({
       // no account fence and remain usable while auth is unresolved.
       const fence = opts.public ? null : captureAuthFence(tokenStore, opts.expectedAuthGeneration);
       const method = (opts.method || "GET").toUpperCase();
+      const isConversationCreate = method === "POST" && opts.path === "/api/conversations/create";
       // Public invitation previews are not policy-aware and intentionally stay
       // on the legacy API contract. Authenticated cloud calls opt into policy
       // v1 using the same exact headers as direct main-process request paths.
@@ -109,9 +110,20 @@ function createCloudApiRequestHandler({
         fetchOptions.body = JSON.stringify(opts.body);
       }
 
-      const response = fence
-        ? await fence.awaitBound(() => proxyFetch(requestUrl, fetchOptions))
-        : await proxyFetch(requestUrl, fetchOptions);
+      const response =
+        fence && !isConversationCreate
+          ? await fence.awaitBound(() => proxyFetch(requestUrl, fetchOptions))
+          : await proxyFetch(requestUrl, fetchOptions).catch((error) => {
+              fence?.assertCurrent();
+              throw error;
+            });
+
+      if (isConversationCreate) {
+        // Chat creates append messages: their successful result must reach the
+        // sender-bound acknowledgement even after the active sign-in changes.
+        if (response.ok) return { success: true, data: await response.json().catch(() => null) };
+        fence?.assertCurrent();
+      }
 
       if (response.status === 401) {
         fence?.assertCurrent();

@@ -11,9 +11,10 @@ import type {
   TranscriptionItem,
   ConversationPreview,
   ConversationCreateSnapshot,
+  StaleSyncWrite,
 } from "../types/electron";
 import { NotesService, type CloudNote } from "./NotesService.js";
-import { ConversationsService } from "./ConversationsService.js";
+import { ConversationsService, type CloudConversation } from "./ConversationsService.js";
 import { FoldersService } from "./FoldersService.js";
 import { SpacesService, type MySpace } from "./SpacesService.js";
 import { TranscriptionsService } from "./TranscriptionsService.js";
@@ -168,6 +169,28 @@ const TEAM_SPACES_MAX_RETRY_MS = AUTO_SYNC_INTERVAL_MS;
 // Web Lock name serializing syncAll() across windows (each renderer has its
 // own SyncService instance, but localStorage and the local DB are shared).
 const SYNC_ALL_LOCK = "openwhispr-sync-all";
+// Every pull's delta cursor, and the account whose passes stamped them.
+const SYNC_CURSOR_KEYS = [
+  "lastSyncedAt.folders",
+  "lastSyncedAt.folders.team",
+  "lastSyncedAt.notes",
+  "lastSyncedAt.notes.team",
+  "lastSyncedAt.conversations",
+  "lastSyncedAt.transcriptions",
+  "lastSyncedAt.dictionary",
+  "lastSyncedAt.dictionary.id",
+  "lastSyncedAt.snippets",
+  "lastSyncedAt.snippets.id",
+];
+// Per account: cloud copies of a chat that another account took over while its
+// create was in flight, deleted when the sender is back to do it.
+const ORPHANED_CHAT_CREATES_PREFIX = "orphanedChatCreates.";
+const SYNC_CURSOR_ACCOUNT_KEY = "lastSyncedAt.accountId";
+// Prefix of each signed-out account's saved cursors, restored when it returns.
+const SYNC_CURSOR_SAVED_PREFIX = "lastSyncedAt.byAccount.";
+// The account that claimed cursors stamped before owners were recorded, until
+// backfillUnownedCursors() has checked them.
+const UNOWNED_CURSORS_ACCOUNT_KEY = "syncCursors.unownedClaimedBy";
 // localStorage keys gating what a pass may sync; a change in another window
 // means sync may have just become possible (sign-in, subscription, backup
 // enabled, Insights opt-in).
@@ -199,6 +222,11 @@ const PURGED_SPACE_GUARD_LOCK = "openwhispr-purged-spaces";
 // written only inside the SYNC_ALL_LOCK pass, so it needs no lock of its own.
 const NOTE_UPDATE_404_KEY = "noteUpdate404Counts";
 const FOLDER_UPDATE_404_KEY = "folderUpdate404Counts";
+// Unattributed words and snippets whose PATCH 404'd for an account, keyed by
+// client id with the updated_at that failed. Such a row may be another
+// account's, so it is never re-created; it waits for its owner's pass or a new
+// local edit instead of repeating the dead PATCH every pass.
+const PARKED_UPDATE_404_PREFIX = "parkedUpdate404";
 
 const SHARED_DICTIONARY_PAGE_LIMIT = 200;
 // Writers on different lists can commit out of updated_at order, so every
@@ -375,6 +403,53 @@ function conversationCreateSnapshot(
     updated_at: conversation.updated_at,
     message_count: conversation.messages.length,
   };
+}
+
+function conversationCreateInput(conversation: LocalConversation) {
+  return {
+    client_conversation_id: conversation.client_conversation_id ?? String(conversation.id),
+    title: conversation.title,
+    created_at: conversation.created_at,
+    updated_at: conversation.updated_at,
+    messages: conversation.messages.map((m) => ({
+      role: m.role,
+      content: m.content,
+      metadata: m.metadata
+        ? typeof m.metadata === "string"
+          ? JSON.parse(m.metadata)
+          : m.metadata
+        : null,
+    })),
+  };
+}
+
+interface ChatPushSender {
+  authGeneration: number;
+  accountId: string;
+}
+
+// A chat is pushed under one sign-in and acknowledged for the account it was
+// sent as, so an account switch mid-request neither sends it with the next
+// account's token nor hands it to that account.
+function chatPushSender(): ChatPushSender | null {
+  const authGeneration = getValidatedAuthGeneration();
+  const accountId = getAuthRequestContextSnapshot().sessionUserId;
+  return authGeneration == null || !accountId ? null : { authGeneration, accountId };
+}
+
+// A pull writes rows under the sign-in that fetched them. Once main refuses a
+// write as stale, the rest of the page belongs to the departed account, so the
+// pull stops before its cursor moves.
+function stopIfPullStale<T>(result: T): asserts result is Exclude<T, StaleSyncWrite> {
+  if ((result as StaleSyncWrite | null | undefined)?.stale) {
+    throw Object.assign(new Error("Authentication context changed during pull"), {
+      code: "AUTH_CONTEXT_CHANGED",
+    });
+  }
+}
+
+function parked404Key(kind: "dictionary" | "snippets", accountId: string | null): string {
+  return `${PARKED_UPDATE_404_PREFIX}.${kind}.${accountId ?? ""}`;
 }
 
 function readPurgedSpaceIds(): Record<string, PurgedSpaceEntry> {
@@ -627,6 +702,81 @@ export class SyncService {
     }
   }
 
+  // A deleted account's sync bookkeeping; it holds ids and timestamps only.
+  forgetAccount(accountId: string): void {
+    localStorage.removeItem(`${SYNC_CURSOR_SAVED_PREFIX}${accountId}`);
+    localStorage.removeItem(`${ORPHANED_CHAT_CREATES_PREFIX}${accountId}`);
+    for (const kind of ["dictionary", "snippets"] as const) {
+      localStorage.removeItem(parked404Key(kind, accountId));
+    }
+  }
+
+  // Pulls send their cursor as `since`, so another account's cursors would
+  // skip every row this account changed before them. Each account gets its
+  // own cursors back when it returns: a cursor-less pull lists live rows only
+  // and would miss deletes made meanwhile. Cursors stamped before the
+  // account was recorded stay with whoever syncs first, which then checks
+  // them once in backfillUnownedCursors(). Callers hold SYNC_ALL_LOCK, and a
+  // request that waited out an account switch claims nothing: it would stash
+  // the new account's cursors under the old one.
+  private claimSyncCursors(accountId: string, authGeneration: number): boolean {
+    if (
+      getValidatedAuthGeneration() !== authGeneration ||
+      getAuthRequestContextSnapshot().sessionUserId !== accountId
+    ) {
+      return false;
+    }
+    const owner = localStorage.getItem(SYNC_CURSOR_ACCOUNT_KEY);
+    if (owner === accountId) return true;
+    if (owner !== null) {
+      const ownerCursors: Record<string, string> = {};
+      for (const key of SYNC_CURSOR_KEYS) {
+        const value = localStorage.getItem(key);
+        if (value !== null) ownerCursors[key] = value;
+      }
+      localStorage.setItem(`${SYNC_CURSOR_SAVED_PREFIX}${owner}`, JSON.stringify(ownerCursors));
+      const savedKey = `${SYNC_CURSOR_SAVED_PREFIX}${accountId}`;
+      let saved: Record<string, unknown> = {};
+      try {
+        saved = JSON.parse(localStorage.getItem(savedKey) ?? "{}") ?? {};
+      } catch {
+        // A corrupt entry only costs this account a cursor-less pull.
+      }
+      for (const key of SYNC_CURSOR_KEYS) {
+        const value = saved[key];
+        if (typeof value === "string") localStorage.setItem(key, value);
+        else localStorage.removeItem(key);
+      }
+      localStorage.removeItem(savedKey);
+    } else if (SYNC_CURSOR_KEYS.some((key) => localStorage.getItem(key) !== null)) {
+      localStorage.setItem(UNOWNED_CURSORS_ACCOUNT_KEY, accountId);
+    }
+    localStorage.setItem(SYNC_CURSOR_ACCOUNT_KEY, accountId);
+    return true;
+  }
+
+  // Unowned cursors may be another account's, and they're already past every
+  // row an older build left unattributed, so a delta would never reach those
+  // rows to claim them. One snapshot pull of the account's rows does both;
+  // snapshots leave the cursors alone, so deletes keep arriving through them.
+  private async backfillUnownedCursors(accountId: string): Promise<void> {
+    if (localStorage.getItem(UNOWNED_CURSORS_ACCOUNT_KEY) !== accountId) return;
+    const otherAccount = await window.electronAPI.hasOtherAccountRows?.();
+    if (otherAccount) {
+      if (!(await this.pullFolders(false, true)) || !(await this.pullNotes(false, true))) return;
+    }
+    if (otherAccount || (await window.electronAPI.hasUnclaimedLegacyRows?.())) {
+      const pulled = [
+        await this.pullConversations(true),
+        await this.pullTranscriptions(true),
+        await this.pullDictionary(true),
+        await this.pullSnippets(true),
+      ];
+      if (pulled.includes(false)) return;
+    }
+    localStorage.removeItem(UNOWNED_CURSORS_ACCOUNT_KEY);
+  }
+
   // lastSyncedAt is written only when a syncAll() pass completes, and
   // localStorage is shared across windows, so it doubles as the global
   // "last completed sync" stamp for throttling.
@@ -710,8 +860,9 @@ export class SyncService {
   async syncAll(waitForLock = false): Promise<void> {
     const full = this.canSync();
     if (!full && !this.canSyncTeamSpaces()) return;
+    const accountId = getAuthRequestContextSnapshot().sessionUserId;
     const authGeneration = getValidatedAuthGeneration();
-    if (authGeneration == null) return;
+    if (!accountId || authGeneration == null) return;
     // A pass already running may have synced past the data this request covers,
     // so flag a re-run instead of dropping it.
     if (this.syncing) {
@@ -727,7 +878,7 @@ export class SyncService {
       // reads the same local DB and cloud state, so it covers this request.
       // Manual passes wait so a user action is never silently dropped.
       await navigator.locks.request(SYNC_ALL_LOCK, { ifAvailable: !waitForLock }, async (lock) => {
-        if (!lock) return;
+        if (!lock || !this.claimSyncCursors(accountId, authGeneration)) return;
         teamSpacesReady = await this.syncSpaces(authGeneration);
         if (!hasValidatedAuthContext()) return;
         // Both branches below: shared lists follow membership, not cloud backup.
@@ -736,6 +887,8 @@ export class SyncService {
         let personalSucceeded = true;
         if (!hasValidatedAuthContext()) return;
         if (full) {
+          await this.backfillUnownedCursors(accountId);
+          if (!hasValidatedAuthContext()) return;
           await this.syncFolders();
           if (!hasValidatedAuthContext()) return;
           await this.syncNotes();
@@ -855,31 +1008,52 @@ export class SyncService {
       this.dictionaryDirty = true;
       return "skipped";
     }
+    // Edits sync right away, possibly before this account's first syncAll()
+    // claimed the shared cursors, so they claim them under the same lock.
+    const accountId = getAuthRequestContextSnapshot().sessionUserId;
+    const authGeneration = getValidatedAuthGeneration();
+    if (!accountId || authGeneration == null) return "skipped";
     this.syncing = true;
-    let succeeded = true;
+    let result: DictionarySyncResult = "failed";
     try {
-      do {
-        this.dictionaryDirty = false;
-        if (!(await this.syncDictionary())) succeeded = false;
-      } while (this.dictionaryDirty);
-      return succeeded ? "synced" : "failed";
+      result = await navigator.locks.request(SYNC_ALL_LOCK, async () => {
+        if (!this.claimSyncCursors(accountId, authGeneration)) return "skipped";
+        let succeeded = true;
+        do {
+          this.dictionaryDirty = false;
+          if (!(await this.syncDictionary())) succeeded = false;
+        } while (this.dictionaryDirty);
+        return succeeded ? "synced" : "failed";
+      });
     } catch (err) {
       console.error("Dictionary sync failed:", err);
-      return "failed";
     } finally {
       this.syncing = false;
     }
+    await this.runDeferredSyncAll();
+    return result;
+  }
+
+  // A pass requested while an edit waited for the lock was deferred to it.
+  private async runDeferredSyncAll(): Promise<void> {
+    if (!this.syncAllPending) return;
+    this.syncAllPending = false;
+    await this.syncAll();
   }
 
   // The Dictionary page's Sync button. Waits for the sync lock rather than
   // flagging a re-run: a running syncAll() may already be past its shared pass.
   async syncSharedDictionaryNow(): Promise<DictionarySyncResult> {
     if (!this.canSyncTeamSpaces()) return "skipped";
+    const accountId = getAuthRequestContextSnapshot().sessionUserId;
     const authGeneration = getValidatedAuthGeneration();
-    if (authGeneration == null) return "skipped";
+    if (!accountId || authGeneration == null) return "skipped";
     try {
       return await navigator.locks.request(SYNC_ALL_LOCK, () =>
-        this.syncSharedDictionary(authGeneration)
+        // Its one-time backfill drops the personal dictionary cursor.
+        this.claimSyncCursors(accountId, authGeneration)
+          ? this.syncSharedDictionary(authGeneration)
+          : "skipped"
       );
     } catch (err) {
       if (isAuthContextError(err)) return "skipped";
@@ -894,17 +1068,24 @@ export class SyncService {
       this.snippetsDirty = true;
       return;
     }
+    const accountId = getAuthRequestContextSnapshot().sessionUserId;
+    const authGeneration = getValidatedAuthGeneration();
+    if (!accountId || authGeneration == null) return;
     this.syncing = true;
     try {
-      do {
-        this.snippetsDirty = false;
-        await this.syncSnippets();
-      } while (this.snippetsDirty);
+      await navigator.locks.request(SYNC_ALL_LOCK, async () => {
+        if (!this.claimSyncCursors(accountId, authGeneration)) return;
+        do {
+          this.snippetsDirty = false;
+          await this.syncSnippets();
+        } while (this.snippetsDirty);
+      });
     } catch (err) {
       console.error("Snippets sync failed:", err);
     } finally {
       this.syncing = false;
     }
+    await this.runDeferredSyncAll();
   }
 
   debouncedPush(entityType: string, entityId: number): void {
@@ -1198,12 +1379,15 @@ export class SyncService {
   private async acknowledgeConversationCreate(
     localId: number,
     snapshot: ConversationCreateSnapshot,
-    cloudId: string
+    cloudId: string,
+    sender: ChatPushSender
   ): Promise<void> {
     const result = await window.electronAPI.acknowledgeConversationCreate?.(
       localId,
       snapshot,
-      cloudId
+      cloudId,
+      sender.accountId,
+      sender.authGeneration
     );
     if (!result?.success) return;
 
@@ -1211,63 +1395,116 @@ export class SyncService {
       result.outcome === "changed" ||
       result.outcome === "orphaned" ||
       (result.outcome === "already-linked" && result.cloud_id !== cloudId);
-    if (shouldDeleteCreate) {
-      await ConversationsService.delete(cloudId);
+    if (!shouldDeleteCreate) return;
+    try {
+      await ConversationsService.delete(cloudId, sender.authGeneration);
+    } catch (err) {
+      // Only the sender's token can delete its copy, and it's gone. A changed
+      // chat retries under this cloud id, so only an orphan can wait for it.
+      if (result.outcome !== "orphaned" || !isAuthContextError(err)) throw err;
+      const key = `${ORPHANED_CHAT_CREATES_PREFIX}${sender.accountId}`;
+      const queued = this.readLocalRecord<true>(key);
+      queued[cloudId] = true;
+      this.writeLocalRecord(key, queued);
     }
+  }
+
+  private async deleteOrphanedChatCreates(sender: ChatPushSender): Promise<void> {
+    const key = `${ORPHANED_CHAT_CREATES_PREFIX}${sender.accountId}`;
+    const queued = this.readLocalRecord<true>(key);
+    for (const cloudId of Object.keys(queued)) {
+      try {
+        await ConversationsService.delete(cloudId, sender.authGeneration);
+      } catch (err) {
+        if (!isHttpStatus(err, 404)) {
+          if (!isAuthContextError(err)) console.error("Orphaned chat cleanup failed:", err);
+          continue;
+        }
+      }
+      delete queued[cloudId];
+    }
+    this.writeLocalRecord(key, queued);
   }
 
   // Recorded before the request is sent, so a chat deleted while it is in
   // flight stays a tombstone its late receipt can link. A chat deleted since it
   // was read is not sent.
-  private async createCloudConversation(full: LocalConversation): Promise<void> {
-    const recorded = await window.electronAPI.markConversationCreateAttempted?.(full.id);
+  private async createCloudConversation(
+    full: LocalConversation,
+    sender: ChatPushSender
+  ): Promise<void> {
+    const recorded = await window.electronAPI.markConversationCreateAttempted?.(
+      full.id,
+      sender.authGeneration
+    );
     if (!recorded?.success) return;
     const snapshot = conversationCreateSnapshot(full);
-    const cloud = await ConversationsService.create({
-      client_conversation_id: full.client_conversation_id ?? String(full.id),
-      title: full.title,
-      created_at: full.created_at,
-      updated_at: full.updated_at,
-      messages: full.messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-        metadata: m.metadata
-          ? typeof m.metadata === "string"
-            ? JSON.parse(m.metadata)
-            : m.metadata
-          : null,
-      })),
-    });
-    await this.acknowledgeConversationCreate(full.id, snapshot, cloud.id);
+    let cloud: CloudConversation;
+    try {
+      cloud = await ConversationsService.create(
+        conversationCreateInput(full),
+        sender.authGeneration
+      );
+    } catch (err) {
+      // Main refuses before sending, so a later delete needn't wait for a cloud
+      // copy that can't exist.
+      if (isAuthContextError(err)) {
+        await window.electronAPI.clearConversationCreateAttempted?.(full.id);
+      }
+      throw err;
+    }
+    await this.acknowledgeConversationCreate(full.id, snapshot, cloud.id, sender);
   }
 
   private async pushConversation(id: number): Promise<void> {
+    const sender = chatPushSender();
+    if (!sender) return;
     const full = await window.electronAPI.getAgentConversation?.(id);
     if (!full) return;
 
     if (full.cloud_id) {
-      await ConversationsService.update(full.cloud_id, { title: full.title });
+      await ConversationsService.update(
+        full.cloud_id,
+        { title: full.title },
+        sender.authGeneration
+      );
     } else {
-      await this.createCloudConversation(full);
+      await this.createCloudConversation(full, sender);
     }
   }
 
   private async pushTranscription(id: number): Promise<void> {
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return;
     const t = await window.electronAPI.getTranscriptionById?.(id);
     // A failed entry stays on this device until a retry completes it.
     if (!t || t.cloud_id || t.status === "failed") return;
 
-    const cloud = await TranscriptionsService.create({
-      client_transcription_id: t.client_transcription_id,
-      text: t.text,
-      raw_text: t.raw_text,
-      provider: t.provider,
-      model: t.model,
-      audio_duration_ms: t.audio_duration_ms,
-      status: t.status,
-      created_at: t.created_at,
-    });
-    await window.electronAPI.markTranscriptionSynced?.(t.id, cloud.id);
+    const cloud = await TranscriptionsService.create(
+      {
+        client_transcription_id: t.client_transcription_id,
+        text: t.text,
+        raw_text: t.raw_text,
+        provider: t.provider,
+        model: t.model,
+        audio_duration_ms: t.audio_duration_ms,
+        status: t.status,
+        created_at: t.created_at,
+      },
+      authGeneration
+    );
+    await this.acknowledgeTranscriptionCreate(t.id, cloud.id, authGeneration);
+  }
+
+  // Personal rows are read under one sign-in, so their pushes are pinned to it
+  // (`authGeneration`): after an account switch the request is refused rather
+  // than sent with the next account's token, and the ack is dropped.
+  private async acknowledgeTranscriptionCreate(
+    localId: number,
+    cloudId: string,
+    authGeneration: number
+  ): Promise<void> {
+    await window.electronAPI.markTranscriptionSynced?.(localId, cloudId, authGeneration);
   }
 
   // Runs first in every pass: probes spaces availability, mirrors the caller's
@@ -1441,17 +1678,17 @@ export class SyncService {
     await this.forkNoteToPrivate(note, ctx.privateSpace, "push", spaceName);
   }
 
-  private read404Counts(key: string): Record<string, number> {
+  private readLocalRecord<T = number>(key: string): Record<string, T> {
     try {
       const raw = localStorage.getItem(key);
       const parsed = raw ? JSON.parse(raw) : null;
-      return parsed && typeof parsed === "object" ? (parsed as Record<string, number>) : {};
+      return parsed && typeof parsed === "object" ? (parsed as Record<string, T>) : {};
     } catch {
       return {};
     }
   }
 
-  private write404Counts(key: string, counts: Record<string, number>): void {
+  private writeLocalRecord<T>(key: string, counts: Record<string, T>): void {
     if (Object.keys(counts).length === 0) {
       localStorage.removeItem(key);
     } else {
@@ -1462,9 +1699,9 @@ export class SyncService {
   // Reset a row's consecutive-404 streak: the pull resolved it, a later push
   // settled, or it forked. Skips the write when the row wasn't being tracked.
   private clear404(key: string, clientId: string): void {
-    const counts = this.read404Counts(key);
+    const counts = this.readLocalRecord(key);
     const next = clearUpdate404(counts, clientId);
-    if (next !== counts) this.write404Counts(key, next);
+    if (next !== counts) this.writeLocalRecord(key, next);
   }
 
   // A note update PATCH 404'd. Rather than fork immediately (the 403
@@ -1476,11 +1713,11 @@ export class SyncService {
   // 'error' re-queues it for the next pass's push (and re-count).
   private async handleNoteUpdate404(note: NoteItem, ctx: SpaceSyncContext): Promise<void> {
     const { fork, next } = recordUpdate404(
-      this.read404Counts(NOTE_UPDATE_404_KEY),
+      this.readLocalRecord(NOTE_UPDATE_404_KEY),
       note.client_note_id,
       UPDATE_404_FORK_THRESHOLD
     );
-    this.write404Counts(NOTE_UPDATE_404_KEY, next);
+    this.writeLocalRecord(NOTE_UPDATE_404_KEY, next);
     if (fork) {
       await this.handleRevokedNotePush(note, ctx);
       return;
@@ -1497,11 +1734,11 @@ export class SyncService {
   // getPendingFolders already re-queues, so no explicit re-mark is needed.
   private async handleFolderUpdate404(folder: FolderItem, ctx: SpaceSyncContext): Promise<void> {
     const { fork, next } = recordUpdate404(
-      this.read404Counts(FOLDER_UPDATE_404_KEY),
+      this.readLocalRecord(FOLDER_UPDATE_404_KEY),
       folder.client_folder_id,
       UPDATE_404_FORK_THRESHOLD
     );
-    this.write404Counts(FOLDER_UPDATE_404_KEY, next);
+    this.writeLocalRecord(FOLDER_UPDATE_404_KEY, next);
     if (fork) await this.handleRevokedFolderPush(folder, ctx);
   }
 
@@ -2507,6 +2744,8 @@ export class SyncService {
   }
 
   private async pushPendingConversations(): Promise<void> {
+    const sender = chatPushSender();
+    if (!sender) return;
     const pending = (await window.electronAPI.getPendingConversations?.()) ?? [];
     if (pending.length === 0) return;
 
@@ -2515,10 +2754,19 @@ export class SyncService {
 
     for (const conv of migration) {
       try {
-        await ConversationsService.update(conv.cloud_id!, { title: conv.title });
-        await window.electronAPI.markConversationSynced?.(conv.id, conv.cloud_id!);
+        await ConversationsService.update(
+          conv.cloud_id!,
+          { title: conv.title },
+          sender.authGeneration
+        );
+        await window.electronAPI.markConversationSynced?.(
+          conv.id,
+          conv.cloud_id!,
+          sender.accountId,
+          sender.authGeneration
+        );
       } catch (err) {
-        console.error("Conversation migration sync failed:", err);
+        if (!isAuthContextError(err)) console.error("Conversation migration sync failed:", err);
       }
     }
 
@@ -2526,27 +2774,38 @@ export class SyncService {
       try {
         const full = await window.electronAPI.getAgentConversation?.(conv.id);
         if (!full) continue;
-        await this.createCloudConversation(full);
+        await this.createCloudConversation(full, sender);
       } catch (err) {
-        console.error("Conversation sync failed:", err);
+        if (!isAuthContextError(err)) console.error("Conversation sync failed:", err);
       }
     }
   }
 
   private async pushConversationDeletes(): Promise<void> {
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return;
+    const sender = chatPushSender();
+    if (sender) await this.deleteOrphanedChatCreates(sender);
     const deletes = (await window.electronAPI.getPendingConversationDeletes?.()) ?? [];
     for (const conv of deletes) {
       if (!conv.cloud_id) continue;
       try {
-        await ConversationsService.delete(conv.cloud_id);
-        await window.electronAPI.hardDeleteConversation?.(conv.id);
+        await ConversationsService.delete(conv.cloud_id, authGeneration);
+        await window.electronAPI.hardDeleteConversation?.(conv.id, authGeneration);
       } catch (err) {
-        console.error("Conversation delete sync failed:", err);
+        // 404 means the row is already gone server-side — treat as success.
+        if (isHttpStatus(err, 404)) {
+          await window.electronAPI.hardDeleteConversation?.(conv.id, authGeneration);
+        } else {
+          if (!isAuthContextError(err)) console.error("Conversation delete sync failed:", err);
+        }
       }
     }
   }
 
-  private async pullConversations(snapshot = false): Promise<void> {
+  private async pullConversations(snapshot = false): Promise<boolean> {
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return false;
     try {
       const since = snapshot
         ? undefined
@@ -2571,19 +2830,30 @@ export class SyncService {
           if (local?.folder_delete_pending) continue;
 
           if (cloudConv.deleted_at) {
-            if (local) await window.electronAPI.hardDeleteConversation?.(local.id);
+            if (local) {
+              stopIfPullStale(
+                await window.electronAPI.hardDeleteConversation?.(local.id, authGeneration)
+              );
+            }
             continue;
           }
 
           // A live cloud row cannot override a local pending delete. The
           // tombstone stays queued for push; only the cloud tombstone branch
           // above is authoritative enough to hard-delete it locally.
-          if (local?.deleted_at) continue;
+          if (local?.deleted_at && local.account_id) continue;
 
-          if (!local || isCloudEntryNewer(cloudConv.updated_at, local.updated_at)) {
-            await window.electronAPI.upsertConversationFromCloud?.(
-              cloudConv as unknown as Record<string, unknown>,
-              (cloudConv.messages ?? []) as unknown as Array<Record<string, unknown>>
+          if (
+            !local ||
+            !local.account_id ||
+            isCloudEntryNewer(cloudConv.updated_at, local.updated_at)
+          ) {
+            stopIfPullStale(
+              await window.electronAPI.upsertConversationFromCloud?.(
+                cloudConv as unknown as Record<string, unknown>,
+                (cloudConv.messages ?? []) as unknown as Array<Record<string, unknown>>,
+                authGeneration
+              )
             );
           }
         }
@@ -2595,9 +2865,12 @@ export class SyncService {
         cursor = next;
       }
 
+      await assertAuthGenerationCurrent(authGeneration);
       if (!snapshot) localStorage.setItem("lastSyncedAt.conversations", syncStartedAt);
+      return true;
     } catch (err) {
-      console.error("Conversation pull failed:", err);
+      if (!isAuthContextError(err)) console.error("Conversation pull failed:", err);
+      return false;
     }
   }
 
@@ -2679,6 +2952,8 @@ export class SyncService {
   }
 
   private async pushTranscriptionDeletes(): Promise<void> {
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return;
     const deletes = (await window.electronAPI.getPendingTranscriptionDeletes?.()) ?? [];
     const withCloudId = deletes.filter((t) => t.cloud_id);
     if (withCloudId.length === 0) return;
@@ -2686,18 +2961,24 @@ export class SyncService {
     for (let i = 0; i < withCloudId.length; i += TRANSCRIPTION_BATCH_SIZE) {
       const chunk = withCloudId.slice(i, i + TRANSCRIPTION_BATCH_SIZE);
       try {
-        const { deleted } = await TranscriptionsService.batchDelete(chunk.map((t) => t.cloud_id!));
-        for (const cloudId of deleted) {
-          const local = chunk.find((t) => t.cloud_id === cloudId);
-          if (local) await window.electronAPI.hardDeleteTranscription?.(local.id);
+        await TranscriptionsService.batchDelete(
+          chunk.map((t) => t.cloud_id!),
+          authGeneration
+        );
+        // The response lists only rows this request deleted. One it leaves out
+        // is already gone from this account's cloud, so its retry would never end.
+        for (const local of chunk) {
+          await window.electronAPI.hardDeleteTranscription?.(local.id, authGeneration);
         }
       } catch (err) {
-        console.error("Transcription batch delete failed:", err);
+        if (!isAuthContextError(err)) console.error("Transcription batch delete failed:", err);
       }
     }
   }
 
   private async pushPendingTranscriptions(): Promise<void> {
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return;
     const pending = ((await window.electronAPI.getPendingTranscriptions?.()) ?? []).filter(
       (t) => t.status !== "failed" && !!t.text?.trim()
     );
@@ -2716,23 +2997,28 @@ export class SyncService {
             audio_duration_ms: t.audio_duration_ms,
             status: t.status,
             created_at: t.created_at,
-          }))
+          })),
+          authGeneration
         );
         for (const cloudT of created) {
           const local = chunk.find(
             (t) => t.client_transcription_id === cloudT.client_transcription_id
           );
-          if (local) await window.electronAPI.markTranscriptionSynced?.(local.id, cloudT.id);
+          if (local) await this.acknowledgeTranscriptionCreate(local.id, cloudT.id, authGeneration);
         }
       } catch (err) {
-        console.error("Transcription batch create failed:", err);
+        if (!isAuthContextError(err)) console.error("Transcription batch create failed:", err);
       }
     }
   }
 
-  private async pullTranscriptions(): Promise<void> {
+  private async pullTranscriptions(snapshot = false): Promise<boolean> {
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return false;
     try {
-      const since = localStorage.getItem("lastSyncedAt.transcriptions") ?? undefined;
+      const since = snapshot
+        ? undefined
+        : (localStorage.getItem("lastSyncedAt.transcriptions") ?? undefined);
       const syncStartedAt = new Date().toISOString();
 
       let cursor: string | undefined = since;
@@ -2748,15 +3034,22 @@ export class SyncService {
           );
 
           if (cloudT.deleted_at) {
-            if (local) await window.electronAPI.hardDeleteTranscription?.(local.id);
+            if (local) {
+              stopIfPullStale(
+                await window.electronAPI.hardDeleteTranscription?.(local.id, authGeneration)
+              );
+            }
             continue;
           }
 
           if (!cloudT.text) continue;
 
-          if (!local) {
-            await window.electronAPI.upsertTranscriptionFromCloud?.(
-              cloudT as unknown as Record<string, unknown>
+          if (!local || !local.account_id) {
+            stopIfPullStale(
+              await window.electronAPI.upsertTranscriptionFromCloud?.(
+                cloudT as unknown as Record<string, unknown>,
+                authGeneration
+              )
             );
           }
         }
@@ -2768,9 +3061,12 @@ export class SyncService {
         cursor = next;
       }
 
-      localStorage.setItem("lastSyncedAt.transcriptions", syncStartedAt);
+      await assertAuthGenerationCurrent(authGeneration);
+      if (!snapshot) localStorage.setItem("lastSyncedAt.transcriptions", syncStartedAt);
+      return true;
     } catch (err) {
-      console.error("Transcription pull failed:", err);
+      if (!isAuthContextError(err)) console.error("Transcription pull failed:", err);
+      return false;
     }
   }
 
@@ -2802,6 +3098,9 @@ export class SyncService {
   }
 
   private async pushPendingDictionary(): Promise<boolean> {
+    const accountId = getAuthRequestContextSnapshot().sessionUserId;
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return false;
     const pending = (await window.electronAPI.getPendingDictionary?.()) ?? [];
     if (pending.length === 0) return true;
     let succeeded = true;
@@ -2809,15 +3108,26 @@ export class SyncService {
     const updates = pending.filter((e) => e.cloud_id);
     const creates = pending.filter((e) => !e.cloud_id);
 
+    const parkedKey = parked404Key("dictionary", accountId);
+    const parked = this.readLocalRecord<string>(parkedKey);
+    const stillParked: Record<string, string> = {};
     for (const entry of updates) {
+      if (parked[entry.client_dict_id] === entry.updated_at) {
+        stillParked[entry.client_dict_id] = entry.updated_at;
+        continue;
+      }
       try {
-        const server = await DictionaryService.update(entry.cloud_id!, {
-          word: entry.word,
-          source: entry.source,
-          // Only a local set or clear: an ordinary edit leaves the server's
-          // value alone, which another device may have set meanwhile.
-          ...(entry.shared_at_dirty ? { shared_at: toCloudSharedAt(entry.shared_at) } : {}),
-        });
+        const server = await DictionaryService.update(
+          entry.cloud_id!,
+          {
+            word: entry.word,
+            source: entry.source,
+            // Only a local set or clear: an ordinary edit leaves the server's
+            // value alone, which another device may have set meanwhile.
+            ...(entry.shared_at_dirty ? { shared_at: toCloudSharedAt(entry.shared_at) } : {}),
+          },
+          authGeneration
+        );
         await window.electronAPI.markDictionarySynced?.(
           entry.id,
           server.id,
@@ -2825,19 +3135,23 @@ export class SyncService {
           entry.word,
           entry.source,
           server.source,
-          entry
+          entry,
+          authGeneration
         );
       } catch (err) {
         succeeded = false;
-        // 404: another device purged the cloud row. Clear the stale cloud_id so
-        // the next push re-creates it via batchCreate instead of retrying PATCH.
+        // 404: the cloud row is gone. The account's own row loses its stale
+        // cloud_id, so the next push re-creates it; an unattributed one is
+        // parked instead (see PARKED_UPDATE_404_PREFIX).
         if (isHttpStatus(err, 404)) {
-          await window.electronAPI.clearDictionaryCloudId?.(entry.id);
+          const cleared = await window.electronAPI.clearDictionaryCloudId?.(entry.id);
+          if (!cleared?.success) stillParked[entry.client_dict_id] = entry.updated_at;
         } else {
-          console.error("Dictionary update sync failed:", err);
+          if (!isAuthContextError(err)) console.error("Dictionary update sync failed:", err);
         }
       }
     }
+    this.writeLocalRecord(parkedKey, stillParked);
 
     for (let i = 0; i < creates.length; i += DICTIONARY_BATCH_SIZE) {
       const chunk = creates.slice(i, i + DICTIONARY_BATCH_SIZE);
@@ -2854,7 +3168,8 @@ export class SyncService {
             ...(e.shared_at || e.shared_at_dirty
               ? { shared_at: toCloudSharedAt(e.shared_at) }
               : {}),
-          }))
+          })),
+          authGeneration
         );
         const byClientId = new Map(created.map((c) => [c.client_dict_id, c]));
         let unmatched = 0;
@@ -2865,7 +3180,9 @@ export class SyncService {
             continue;
           }
           // 0 changes means the local row was deleted between snapshot and ack —
-          // delete the freshly-created server row so we don't orphan it.
+          // delete the freshly-created server row so we don't orphan it. A stale
+          // ack (the account changed) never cleans up: the server merges a create
+          // into an existing word, so that row may be the account's own.
           const result = await window.electronAPI.markDictionarySynced?.(
             local.id,
             server.id,
@@ -2873,11 +3190,12 @@ export class SyncService {
             local.word,
             local.source,
             server.source,
-            local
+            local,
+            authGeneration
           );
-          if (result && result.changes === 0) {
+          if (result && result.changes === 0 && !result.stale) {
             try {
-              await DictionaryService.delete(server.id);
+              await DictionaryService.delete(server.id, authGeneration);
             } catch (deleteErr) {
               succeeded = false;
               console.error("Dictionary orphan cleanup failed:", deleteErr);
@@ -2892,39 +3210,48 @@ export class SyncService {
         }
       } catch (err) {
         succeeded = false;
-        console.error("Dictionary batch create failed:", err);
+        if (!isAuthContextError(err)) console.error("Dictionary batch create failed:", err);
       }
     }
     return succeeded;
   }
 
   private async pushDictionaryDeletes(): Promise<boolean> {
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return false;
     let succeeded = true;
     const deletes = (await window.electronAPI.getPendingDictionaryDeletes?.()) ?? [];
     for (const entry of deletes) {
       if (!entry.cloud_id) continue;
       try {
-        await DictionaryService.delete(entry.cloud_id);
-        await window.electronAPI.hardDeleteDictionary?.(entry.id);
+        await DictionaryService.delete(entry.cloud_id, authGeneration);
+        await window.electronAPI.hardDeleteDictionary?.(entry.id, authGeneration);
       } catch (err) {
         // 404 means the row is already gone server-side — treat as success.
         if (isHttpStatus(err, 404)) {
-          await window.electronAPI.hardDeleteDictionary?.(entry.id);
+          await window.electronAPI.hardDeleteDictionary?.(entry.id, authGeneration);
         } else {
           succeeded = false;
-          console.error("Dictionary delete sync failed:", err);
+          if (!isAuthContextError(err)) console.error("Dictionary delete sync failed:", err);
         }
       }
     }
     return succeeded;
   }
 
-  private async pullDictionary(): Promise<boolean> {
+  // A snapshot walks every row from the epoch and leaves the cursors alone.
+  private async pullDictionary(snapshot = false): Promise<boolean> {
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return false;
     let changed = false;
     let succeeded = true;
     try {
-      const since = localStorage.getItem("lastSyncedAt.dictionary") ?? DICTIONARY_PULL_EPOCH;
-      const sinceId = localStorage.getItem("lastSyncedAt.dictionary.id") ?? undefined;
+      const since = snapshot
+        ? DICTIONARY_PULL_EPOCH
+        : (localStorage.getItem("lastSyncedAt.dictionary") ?? DICTIONARY_PULL_EPOCH);
+      const sinceId = snapshot
+        ? undefined
+        : (localStorage.getItem("lastSyncedAt.dictionary.id") ?? undefined);
 
       let cursor: string | undefined = since;
       let cursorId: string | undefined = sinceId;
@@ -2954,19 +3281,25 @@ export class SyncService {
             // A pull from the epoch sees old tombstones too; a newer local
             // edit still waiting to be pushed outlives them.
             if (local && !(local.sync_status === "pending" && localTs > cloudTs)) {
-              await window.electronAPI.hardDeleteDictionary?.(local.id);
+              stopIfPullStale(
+                await window.electronAPI.hardDeleteDictionary?.(local.id, authGeneration)
+              );
               changed = true;
             }
           } else if (
             !local ||
+            !local.account_id ||
             cloudTs > localTs ||
             // A fallback retired here is only this device's guess; a live
             // cloud row means the server kept it.
             (local.deleted_at && local.fallback_retired) ||
             sharedAtOnlyDiffers(cloudEntry, local, cloudTs, localTs)
           ) {
-            await window.electronAPI.upsertDictionaryFromCloud?.(
-              cloudEntry as unknown as Record<string, unknown>
+            stopIfPullStale(
+              await window.electronAPI.upsertDictionaryFromCloud?.(
+                cloudEntry as unknown as Record<string, unknown>,
+                authGeneration
+              )
             );
             changed = true;
           }
@@ -2998,11 +3331,14 @@ export class SyncService {
         cursorId = last.id;
       }
 
-      if (maxUpdatedAt) localStorage.setItem("lastSyncedAt.dictionary", maxUpdatedAt);
-      if (maxId) localStorage.setItem("lastSyncedAt.dictionary.id", maxId);
+      await assertAuthGenerationCurrent(authGeneration);
+      if (!snapshot) {
+        if (maxUpdatedAt) localStorage.setItem("lastSyncedAt.dictionary", maxUpdatedAt);
+        if (maxId) localStorage.setItem("lastSyncedAt.dictionary.id", maxId);
+      }
     } catch (err) {
       succeeded = false;
-      console.error("Dictionary pull failed:", err);
+      if (!isAuthContextError(err)) console.error("Dictionary pull failed:", err);
     }
     // Pages applied before a failure are already in the database.
     if (changed) await window.electronAPI.broadcastDictionaryUpdated?.()?.catch(console.error);
@@ -3380,30 +3716,43 @@ export class SyncService {
   }
 
   private async pushPendingSnippets(): Promise<void> {
+    const accountId = getAuthRequestContextSnapshot().sessionUserId;
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return;
     const pending = (await window.electronAPI.getPendingSnippets?.()) ?? [];
     if (pending.length === 0) return;
 
     const updates = pending.filter((e) => e.cloud_id);
     const creates = pending.filter((e) => !e.cloud_id);
 
+    const parkedKey = parked404Key("snippets", accountId);
+    const parked = this.readLocalRecord<string>(parkedKey);
+    const stillParked: Record<string, string> = {};
     for (const entry of updates) {
+      if (parked[entry.client_snippet_id] === entry.updated_at) {
+        stillParked[entry.client_snippet_id] = entry.updated_at;
+        continue;
+      }
       try {
-        const server = await SnippetService.update(entry.cloud_id!, {
-          trigger: entry.trigger,
-          replacement: entry.replacement,
-        });
+        const server = await SnippetService.update(
+          entry.cloud_id!,
+          { trigger: entry.trigger, replacement: entry.replacement },
+          authGeneration
+        );
         await window.electronAPI.markSnippetSynced?.(
           entry.id,
           server.id,
           server.updated_at,
           entry.trigger,
-          entry.replacement
+          entry.replacement,
+          authGeneration
         );
       } catch (err) {
         if (isHttpStatus(err, 404)) {
-          // Cloud row purged elsewhere — drop the stale cloud_id so the next push
-          // re-creates it via batchCreate.
-          await window.electronAPI.clearSnippetCloudId?.(entry.id);
+          // As with dictionary words: the account's own row is re-created, an
+          // unattributed one is parked.
+          const cleared = await window.electronAPI.clearSnippetCloudId?.(entry.id);
+          if (!cleared?.success) stillParked[entry.client_snippet_id] = entry.updated_at;
         } else if (isHttpStatus(err, 409)) {
           // Another snippet already holds this trigger, so the server keeps
           // rejecting the rename. Mark synced to stop re-pushing the doomed PATCH.
@@ -3412,13 +3761,15 @@ export class SyncService {
             entry.cloud_id!,
             undefined,
             entry.trigger,
-            entry.replacement
+            entry.replacement,
+            authGeneration
           );
         } else {
-          console.error("Snippet update sync failed:", err);
+          if (!isAuthContextError(err)) console.error("Snippet update sync failed:", err);
         }
       }
     }
+    this.writeLocalRecord(parkedKey, stillParked);
 
     for (let i = 0; i < creates.length; i += SNIPPET_BATCH_SIZE) {
       const chunk = creates.slice(i, i + SNIPPET_BATCH_SIZE);
@@ -3430,7 +3781,8 @@ export class SyncService {
             replacement: e.replacement,
             created_at: e.created_at,
             updated_at: e.updated_at,
-          }))
+          })),
+          authGeneration
         );
         const byClientId = new Map(created.map((c) => [c.client_snippet_id, c]));
         let unmatched = 0;
@@ -3440,16 +3792,18 @@ export class SyncService {
             unmatched += 1;
             continue;
           }
+          // As with dictionary words, a stale ack never cleans up.
           const result = await window.electronAPI.markSnippetSynced?.(
             local.id,
             server.id,
             server.updated_at,
             local.trigger,
-            local.replacement
+            local.replacement,
+            authGeneration
           );
-          if (result && result.changes === 0) {
+          if (result && result.changes === 0 && !result.stale) {
             try {
-              await SnippetService.delete(server.id);
+              await SnippetService.delete(server.id, authGeneration);
             } catch (deleteErr) {
               console.error("Snippet orphan cleanup failed:", deleteErr);
             }
@@ -3461,32 +3815,41 @@ export class SyncService {
           );
         }
       } catch (err) {
-        console.error("Snippet batch create failed:", err);
+        if (!isAuthContextError(err)) console.error("Snippet batch create failed:", err);
       }
     }
   }
 
   private async pushSnippetDeletes(): Promise<void> {
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return;
     const deletes = (await window.electronAPI.getPendingSnippetDeletes?.()) ?? [];
     for (const entry of deletes) {
       if (!entry.cloud_id) continue;
       try {
-        await SnippetService.delete(entry.cloud_id);
-        await window.electronAPI.hardDeleteSnippet?.(entry.id);
+        await SnippetService.delete(entry.cloud_id, authGeneration);
+        await window.electronAPI.hardDeleteSnippet?.(entry.id, authGeneration);
       } catch (err) {
         if (isHttpStatus(err, 404)) {
-          await window.electronAPI.hardDeleteSnippet?.(entry.id);
+          await window.electronAPI.hardDeleteSnippet?.(entry.id, authGeneration);
         } else {
-          console.error("Snippet delete sync failed:", err);
+          if (!isAuthContextError(err)) console.error("Snippet delete sync failed:", err);
         }
       }
     }
   }
 
-  private async pullSnippets(): Promise<void> {
+  // As pullDictionary.
+  private async pullSnippets(snapshot = false): Promise<boolean> {
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return false;
     try {
-      const since = localStorage.getItem("lastSyncedAt.snippets") ?? undefined;
-      const sinceId = localStorage.getItem("lastSyncedAt.snippets.id") ?? undefined;
+      const since = snapshot
+        ? undefined
+        : (localStorage.getItem("lastSyncedAt.snippets") ?? undefined);
+      const sinceId = snapshot
+        ? undefined
+        : (localStorage.getItem("lastSyncedAt.snippets.id") ?? undefined);
       let changed = false;
 
       let cursor: string | undefined = since;
@@ -3506,8 +3869,10 @@ export class SyncService {
         for (const cloudEntry of entries) {
           const cloudTs = normalizeTimestamp(cloudEntry.updated_at);
           const local = await window.electronAPI.getSnippetForCloudMerge?.(
-            cloudEntry as unknown as Record<string, unknown>
+            cloudEntry as unknown as Record<string, unknown>,
+            authGeneration
           );
+          stopIfPullStale(local);
 
           if (cloudTs > maxUpdatedAt) {
             maxUpdatedAt = cloudTs;
@@ -3518,7 +3883,9 @@ export class SyncService {
 
           if (cloudEntry.deleted_at) {
             if (local && !(local.sync_status === "pending" && !local.cloud_id)) {
-              await window.electronAPI.hardDeleteSnippet?.(local.id);
+              stopIfPullStale(
+                await window.electronAPI.hardDeleteSnippet?.(local.id, authGeneration)
+              );
               changed = true;
             }
             continue;
@@ -3527,12 +3894,18 @@ export class SyncService {
           const localTs = local ? normalizeTimestamp(local.updated_at) : "";
           const shouldApply =
             !local ||
+            (!local.account_id &&
+              (local.client_snippet_id === cloudEntry.client_snippet_id ||
+                local.cloud_id === cloudEntry.id)) ||
             cloudTs > localTs ||
             (local.sync_status !== "pending" &&
               (!local.cloud_id || local.cloud_id !== cloudEntry.id));
           if (shouldApply) {
-            await window.electronAPI.upsertSnippetFromCloud?.(
-              cloudEntry as unknown as Record<string, unknown>
+            stopIfPullStale(
+              await window.electronAPI.upsertSnippetFromCloud?.(
+                cloudEntry as unknown as Record<string, unknown>,
+                authGeneration
+              )
             );
             changed = true;
           }
@@ -3546,11 +3919,16 @@ export class SyncService {
         cursorId = last.id;
       }
 
-      if (maxUpdatedAt) localStorage.setItem("lastSyncedAt.snippets", maxUpdatedAt);
-      if (maxId) localStorage.setItem("lastSyncedAt.snippets.id", maxId);
+      await assertAuthGenerationCurrent(authGeneration);
+      if (!snapshot) {
+        if (maxUpdatedAt) localStorage.setItem("lastSyncedAt.snippets", maxUpdatedAt);
+        if (maxId) localStorage.setItem("lastSyncedAt.snippets.id", maxId);
+      }
       if (changed) await window.electronAPI.broadcastSnippetsUpdated?.();
+      return true;
     } catch (err) {
-      console.error("Snippet pull failed:", err);
+      if (!isAuthContextError(err)) console.error("Snippet pull failed:", err);
+      return false;
     }
   }
 

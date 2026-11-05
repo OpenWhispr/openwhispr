@@ -63,7 +63,11 @@ async function cloudRequest<T = unknown>(
   if (!result?.success) {
     if (result?.code === "AUTH_CONTEXT_CHANGED" || result?.code === "AUTH_CONTEXT_UNVALIDATED") {
       await readAuthTokenState().catch(() => undefined);
-      invalidateValidatedAuthContext();
+      // A request pinned to a replaced sign-in says nothing about the sign-in
+      // that replaced it.
+      if (expectedAuthGeneration === getValidatedAuthGeneration()) {
+        invalidateValidatedAuthContext();
+      }
     }
     throw new CloudApiError(
       // Main's own wording is for logs; this one reaches error toasts.

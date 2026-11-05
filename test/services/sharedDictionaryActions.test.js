@@ -923,7 +923,7 @@ test("with sync on, a synced fallback is left for the server to retire", async (
 
   await ctx.actions.setSharedWordsHidden(WS, [rows[0].id], true);
 
-  assert.deepEqual(ctx.retireOptions, [{ includeSynced: false }]);
+  assert.deepEqual(ctx.retireOptions, [{ includeSynced: false, expectedAuthGeneration: null }]);
   assert.equal(ctx.counts.personalSyncs, 1, "the pull brings the server's answer");
 });
 

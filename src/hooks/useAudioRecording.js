@@ -659,7 +659,14 @@ export const useAudioRecording = (toast, options = {}) => {
           }
 
           setTranscript(result.text);
-          if (result.assistantConversation) {
+          // Spoken for the account that has since left, so the next one's panel
+          // must not run it.
+          const commandOutlivedAccount =
+            result.assistantConversation &&
+            (await window.electronAPI?.accountChangedSince?.(result.analyticsOccurredAt));
+          if (commandOutlivedAccount) {
+            window.electronAPI?.hideDictationPreview?.();
+          } else if (result.assistantConversation) {
             window.electronAPI?.hideDictationPreview?.();
             const {
               screenContext,
