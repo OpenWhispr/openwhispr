@@ -153,3 +153,11 @@ describe('declared audio purpose', (): void => {
     },
   );
 });
+
+
+it('does not opt iOS meeting uploads into Android empty-text recovery', async () => {
+  await TranscriptionService.transcribe({ audioUri: 'file:///recording.wav', provider: 'cloud', requestContext: 'file', purpose: 'meeting' });
+  expect(BackgroundUploader.upload).toHaveBeenCalled();
+  const options = jest.mocked(BackgroundUploader.upload).mock.calls[0][0];
+  expect(options.parameters?.androidMeetingRecovery).toBeUndefined();
+});

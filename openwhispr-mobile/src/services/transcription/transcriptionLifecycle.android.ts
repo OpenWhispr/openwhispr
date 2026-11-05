@@ -24,8 +24,11 @@ export const transcriptionLifecycle = {
         !signal?.aborted && !(error instanceof Error && error.name === 'AbortError'),
     };
   },
-  uploadParameters(context?: string): Record<string, string> {
-    return context === 'file' ? { source: 'file_upload' } : {};
+  uploadParameters(context?: string, purpose?: string): Record<string, string> {
+    if (context !== 'file') return {};
+    return purpose === 'meeting'
+      ? { source: 'file_upload', androidMeetingRecovery: 'short-wav-v1' }
+      : { source: 'file_upload' };
   },
   chunkDuration(durationMs: number): number {
     return durationMs / 1000;

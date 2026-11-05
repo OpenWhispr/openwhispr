@@ -8,6 +8,7 @@ export interface LocalMeetingNotesPlatform {
   buildInstructions(actionPrompt: string): string;
   generateNotes(input: { instructions: string; prompt: string }): Promise<StructuredMeetingNotes>;
   getCheckpoint(options: { checkpoint?: () => void }): (() => void) | undefined;
+  isOutputLimitError?(error: unknown): boolean;
 }
 
 export const localMeetingNotesPlatform: LocalMeetingNotesPlatform = {

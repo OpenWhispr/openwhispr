@@ -38,7 +38,7 @@ jest.mock('@/lib/localReasoning', () => ({
     error !== null &&
     'code' in error &&
     (error as { code?: unknown }).code === 'APPLE_LLM_OUTPUT_LIMIT',
-  toLocalReasoningError: (error: unknown) => error,
+  toLocalReasoningError: jest.fn((error: unknown) => error),
 }));
 
 import {
@@ -52,6 +52,7 @@ import {
   countLocalInputTokens,
   fitsLocalReasoningBudget,
   getLocalInputTokenBudget,
+  toLocalReasoningError,
 } from '@/lib/localReasoning';
 
 const mockGenerateMeetingNotes = AppleLLM.generateMeetingNotes as jest.Mock;
@@ -407,6 +408,169 @@ describe('Android local meeting formatting', () => {
       Platform.OS = original;
     }
   });
+
+  it('splits a native output-limited chunk and retains both halves in the merge', async () => {
+    const original = Platform.OS;
+    Platform.OS = 'android';
+    mockGetSegments.mockReturnValue(segmentsOf(2));
+    const generate = LocalTextModel.processText as jest.Mock;
+    generate
+      .mockReset()
+      .mockRejectedValueOnce(Object.assign(new Error('Output cap'), { code: 'LOCAL_OUTPUT_LIMIT' }))
+      .mockResolvedValueOnce({ text: JSON.stringify(partialNotes('First half')) })
+      .mockResolvedValueOnce({ text: JSON.stringify(partialNotes('Second half')) })
+      .mockResolvedValueOnce({ text: JSON.stringify(partialNotes('Combined notes')) });
+    try {
+      await expect(generateLocalMeetingNotes(7)).resolves.toBe('Combined notes');
+      expect(generate).toHaveBeenCalledTimes(4);
+      expect(generate.mock.calls[1][0].text).toContain('Line 0');
+      expect(generate.mock.calls[1][0].text).not.toContain('Line 1');
+      expect(generate.mock.calls[2][0].text).toContain('Line 1');
+      expect(generate.mock.calls[3][0].text).toContain('First half');
+      expect(generate.mock.calls[3][0].text).toContain('Second half');
+      expect(mockGenerateMeetingNotes).not.toHaveBeenCalled();
+    } finally {
+      Platform.OS = original;
+    }
+  });
+
+  it('bounds repeated native output-limit splitting', async () => {
+    const original = Platform.OS;
+    Platform.OS = 'android';
+    const failure = Object.assign(new Error('Output cap'), { code: 'LOCAL_OUTPUT_LIMIT' });
+    mockGetSegments.mockReturnValue(segmentsOf(8));
+    const generate = (LocalTextModel.processText as jest.Mock)
+      .mockReset()
+      .mockRejectedValue(failure);
+    try {
+      await expect(generateLocalMeetingNotes(7)).rejects.toBe(failure);
+      expect(generate).toHaveBeenCalledTimes(3);
+    } finally {
+      Platform.OS = original;
+    }
+  });
+
+  it('preserves an unsplittable native output-limit error before generic normalization', async () => {
+    const original = Platform.OS;
+    Platform.OS = 'android';
+    const failure = Object.assign(new Error('Output cap'), { code: 'LOCAL_OUTPUT_LIMIT' });
+    const normalize = toLocalReasoningError as jest.Mock;
+    normalize.mockImplementation(() =>
+      Object.assign(new Error('Normalized'), { code: 'LOCAL_REASONING_FAILED' }),
+    );
+    const generate = (LocalTextModel.processText as jest.Mock)
+      .mockReset()
+      .mockRejectedValue(failure);
+    try {
+      await expect(generateLocalMeetingNotes(7)).rejects.toBe(failure);
+      expect(generate).toHaveBeenCalledTimes(1);
+      expect(normalize).not.toHaveBeenCalled();
+    } finally {
+      normalize.mockImplementation((error: unknown) => error);
+      Platform.OS = original;
+    }
+  });
+
+  it('keeps the completed chunks when native output limits prevent the merge', async () => {
+    const original = Platform.OS;
+    Platform.OS = 'android';
+    mockGetSegments.mockReturnValue(segmentsOf(2));
+    mockFitsBudget.mockImplementation(
+      async ({ prompt }: { prompt: string }) =>
+        prompt.includes('Merge these') || !(prompt.includes('Line 0') && prompt.includes('Line 1')),
+    );
+    const generate = (LocalTextModel.processText as jest.Mock)
+      .mockReset()
+      .mockResolvedValueOnce({
+        text: JSON.stringify(partialNotes('First chunk.', ['Ship Friday.'])),
+      })
+      .mockResolvedValueOnce({
+        text: JSON.stringify(partialNotes('Second chunk.', ['Alice owns QA.'])),
+      })
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Output cap'), { code: 'LOCAL_OUTPUT_LIMIT' }),
+      );
+    try {
+      const markdown = await generateLocalMeetingNotes(7);
+      expect(generate).toHaveBeenCalledTimes(3);
+      expect(markdown).toContain('First chunk. Second chunk.');
+      expect(markdown).toContain('- Ship Friday.\n- Alice owns QA.');
+    } finally {
+      Platform.OS = original;
+    }
+  });
+
+  it('honors cancellation before retrying a native output-limited chunk', async () => {
+    const original = Platform.OS;
+    Platform.OS = 'android';
+    mockGetSegments.mockReturnValue(segmentsOf(2));
+    let cancelled = false;
+    const abort = new Error('Meeting cancelled');
+    const generate = (LocalTextModel.processText as jest.Mock)
+      .mockReset()
+      .mockImplementation(async () => {
+        cancelled = true;
+        throw Object.assign(new Error('Output cap'), { code: 'LOCAL_OUTPUT_LIMIT' });
+      });
+    try {
+      await expect(
+        generateLocalMeetingNotes(7, {
+          checkpoint: () => {
+            if (cancelled) throw abort;
+          },
+        }),
+      ).rejects.toBe(abort);
+      expect(generate).toHaveBeenCalledTimes(1);
+    } finally {
+      Platform.OS = original;
+    }
+  });
+
+  it('honors cancellation while checking the merge budget before starting generation', async () => {
+    const original = Platform.OS;
+    Platform.OS = 'android';
+    mockGetSegments.mockReturnValue(segmentsOf(2));
+    let cancelled = false;
+    const abort = new Error('Meeting cancelled');
+    mockFitsBudget.mockImplementation(async ({ prompt }: { prompt: string }) => {
+      if (prompt.includes('Merge these')) {
+        cancelled = true;
+        return true;
+      }
+      return !(prompt.includes('Line 0') && prompt.includes('Line 1'));
+    });
+    const generate = (LocalTextModel.processText as jest.Mock)
+      .mockReset()
+      .mockResolvedValue({ text: JSON.stringify(partialNotes('A completed chunk')) });
+    try {
+      await expect(
+        generateLocalMeetingNotes(7, {
+          checkpoint: () => {
+            if (cancelled) throw abort;
+          },
+        }),
+      ).rejects.toBe(abort);
+      expect(generate).toHaveBeenCalledTimes(2);
+    } finally {
+      Platform.OS = original;
+    }
+  });
+});
+
+it('does not treat an Android output-limit code as recoverable in the default iOS adapter', async () => {
+  const original = Platform.OS;
+  Platform.OS = 'ios';
+  const failure = Object.assign(new Error('Unexpected native code'), {
+    code: 'LOCAL_OUTPUT_LIMIT',
+  });
+  mockGetSegments.mockReturnValue(segmentsOf(2));
+  mockGenerateMeetingNotes.mockRejectedValue(failure);
+  try {
+    await expect(generateLocalMeetingNotes(7)).rejects.toBe(failure);
+    expect(mockGenerateMeetingNotes).toHaveBeenCalledTimes(1);
+  } finally {
+    Platform.OS = original;
+  }
 });
 
 jest.mock('../generateNotesPrompt', () => ({
@@ -450,6 +614,7 @@ jest.mock('../localMeetingNotesPlatform', () => {
       generateNotes: (input: { instructions: string; prompt: string }) =>
         selected().generateNotes(input),
       getCheckpoint: (options: { checkpoint?: () => void }) => selected().getCheckpoint(options),
+      isOutputLimitError: (error: unknown) => selected().isOutputLimitError?.(error) ?? false,
     },
   };
 });

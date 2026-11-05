@@ -5,6 +5,9 @@ import { getMeetingTranscriptionId } from '@/lib/notes/meetingTranscriptionId';
 import { getPreferredTranscriptionLanguage } from '@/lib/transcriptionLanguage';
 import type { MeetingLifecycle } from '@/store/createNotesStore';
 import { createLocalMeetingContext } from './localMeetingContext';
+import { createCloudMeetingContext } from './cloudMeetingContext';
+
+const latestRetryAttempts = new Map<string, symbol>();
 
 export const androidMeetingLifecycle: MeetingLifecycle = {
   createContext: createLocalMeetingContext,
@@ -19,6 +22,10 @@ export const androidMeetingLifecycle: MeetingLifecycle = {
   async retryTranscription(note, get) {
     const noteId = note.id;
     const user = useAuthStore.getState().user;
+    const attemptKey = JSON.stringify([user?.id ?? null, noteId]);
+    const attempt = Symbol();
+    // A newer Local or Cloud retry invalidates callbacks from older uploads.
+    latestRetryAttempts.set(attemptKey, attempt);
     if (note.isPrivate || useProcessingModeStore.getState().activeMode === 'private') {
       await get().runMeetingPipeline(
         noteId,
@@ -28,7 +35,7 @@ export const androidMeetingLifecycle: MeetingLifecycle = {
       return;
     }
     if (!user || user.isAnonymous) throw new Error('Sign in to retry this meeting with Cloud.');
-    const context = createLocalMeetingContext(noteId);
+    const context = createCloudMeetingContext(noteId);
     try {
       context?.checkpoint();
       get().transitionStatus(noteId, 'transcribing');
@@ -60,11 +67,13 @@ export const androidMeetingLifecycle: MeetingLifecycle = {
         result.duration,
       );
     } catch (error) {
-      if (
-        context?.ownsSavedNote() &&
-        notesRepository.getTranscriptionStatus(noteId) === 'transcribing'
-      )
-        get().transitionStatus(noteId, 'failed');
+      const restoreRetry = () => {
+        if (latestRetryAttempts.get(attemptKey) !== attempt) return;
+        if (notesRepository.getTranscriptionStatus(noteId) === 'transcribing')
+          get().transitionStatus(noteId, 'failed');
+      };
+      if (context.ownsSavedNote()) restoreRetry();
+      else context.recoverInterruptedNoteWhenOwnerReturns(note.sourceFile, restoreRetry);
       throw error;
     } finally {
       context?.dispose();
