@@ -297,8 +297,8 @@ export default function CreateSpaceDialog({
     setTakenName(null);
   };
 
-  const handleWorkspaceChange = (workspaceId: string): void => {
-    setSelectedWorkspaceId(workspaceId);
+  const handleWorkspaceChange = (next: string): void => {
+    setSelectedWorkspaceId(next);
     setPicked([]);
     setMembersError(false);
     setFailure(null);
