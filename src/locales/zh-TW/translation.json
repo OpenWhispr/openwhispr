@@ -2442,11 +2442,91 @@
       "tab": {
         "general": "一般",
         "members": "成員",
+        "invitations": "邀請",
         "teams": "群組"
       },
       "people": {
         "title": "人員",
-        "description": "管理工作區中的人員及其角色。"
+        "description": "管理工作區中的人員及其角色。",
+        "subtitleView": "工作區中的人員及其角色。",
+        "add": "新增",
+        "addLabel": "邀請成員",
+        "columns": {
+          "name": "名稱",
+          "team": "群組",
+          "role": "工作區角色",
+          "email": "電子郵件",
+          "status": "狀態",
+          "actions": "操作"
+        },
+        "you": "你",
+        "teamsNone": "無",
+        "teamsMore": "+{{count}}",
+        "loading": {
+          "title": "正在載入成員…",
+          "body": "工作區成員會顯示在這裡。"
+        },
+        "failed": {
+          "title": "無法載入成員",
+          "body": "請檢查網路連線後再試一次。"
+        },
+        "search": {
+          "placeholder": "搜尋成員",
+          "clear": "清除搜尋",
+          "noResultsTitle": "沒有符合「{{query}}」的成員",
+          "noResultsBody": "請檢查拼字，或依電子郵件地址搜尋。"
+        },
+        "roleMenuLabel": "變更 {{name}} 的角色",
+        "roleDescription": {
+          "member": "可以檢視和編輯筆記。",
+          "admin": "管理成員、邀請、群組和設定。"
+        },
+        "roleFailed": "無法變更 {{name}} 的角色。請檢查網路連線後再試一次。",
+        "roleNotAllowed": "你已無權變更 {{workspace}} 中的角色。",
+        "invitations": {
+          "loading": "正在載入邀請…",
+          "failedTitle": "無法載入邀請",
+          "emptyTitle": "沒有邀請",
+          "emptyBody": "新邀請會顯示在這裡，直到被接受。",
+          "pending_one": "待處理 · {{count}} 天後到期",
+          "pending_other": "待處理 · {{count}} 天後到期",
+          "expired": "已到期",
+          "resend": "重新傳送邀請",
+          "cancel": "取消邀請",
+          "resendFailed": "無法向 {{email}} 重新傳送邀請。請取消該邀請，然後重新邀請。",
+          "resendNotAllowed": "你已無權在 {{workspace}} 中重新傳送邀請。",
+          "noLongerPending": "{{email}} 的邀請已不再處於待處理狀態",
+          "noLongerPendingMany_one": "{{count}} 個邀請已不再處於待處理狀態。",
+          "noLongerPendingMany_other": "{{count}} 個邀請已不再處於待處理狀態。",
+          "refreshFailed": "無法重新整理邀請。此清單可能不是最新的。",
+          "cancelSelected": "取消邀請",
+          "resendSelected": "重新傳送邀請",
+          "resendingSelected": "正在重新傳送…",
+          "resentMany_one": "已重新傳送 {{count}} 個邀請。",
+          "resentMany_other": "已重新傳送 {{count}} 個邀請。",
+          "resentPartial_one": "{{count}} 個邀請已重新傳送。",
+          "resentPartial_other": "{{count}} 個邀請已重新傳送。",
+          "resendFailedOne": "{{email}} 的邀請傳送失敗。請在「操作」中重試。",
+          "resendFailedSome_one": "{{count}} 個邀請傳送失敗。請在「操作」中重試。",
+          "resendFailedSome_other": "{{count}} 個邀請傳送失敗。請在「操作」中重試。",
+          "resendFailedAll_one": "無法重新傳送 {{count}} 個邀請。請檢查網路連線後再試一次。",
+          "resendFailedAll_other": "無法重新傳送 {{count}} 個邀請。請檢查網路連線後再試一次。",
+          "resentNoEmailOne": "{{email}} 的邀請已更新，但電子郵件無法送達，舊連結也已失效。請重新傳送以再次嘗試。",
+          "resentNoEmailMany_one": "{{count}} 封邀請已更新，但電子郵件無法送達，舊連結也已失效。它們仍處於選取狀態，你可以重新傳送。",
+          "resentNoEmailMany_other": "{{count}} 封邀請已更新，但電子郵件無法送達，舊連結也已失效。它們仍處於選取狀態，你可以重新傳送。",
+          "resendUnrenewable_one": "無法續訂 {{count}} 封已過期的邀請。請取消後重新邀請。",
+          "resendUnrenewable_other": "無法續訂 {{count}} 封已過期的邀請。請取消後重新邀請。"
+        },
+        "selection": {
+          "count_one": "已選取 {{count}} 項",
+          "count_other": "已選取 {{count}} 項",
+          "clear": "清除",
+          "label": "已選取的人員",
+          "selectAllMembers": "選取所有成員",
+          "selectAllInvitations": "選取所有邀請",
+          "selectRow": "選取 {{name}}",
+          "remove": "移除"
+        }
       },
       "role": {
         "owner": "擁有者",
@@ -2475,21 +2555,12 @@
         "leaving": "離開中…"
       },
       "members": {
-        "title": "成員",
         "description": "已使用 {{count}} / {{seats}} 個席次。",
-        "invite": "邀請",
-        "empty": "尚無成員。",
         "loadError": "無法載入成員。",
         "roleUpdated": "角色已更新",
         "removed": "已移除 {{name}}",
-        "promote": "設為管理員",
-        "demote": "設為成員",
         "transferOwnership": "轉移擁有權",
-        "remove": "從工作區移除",
-        "removeConfirm": {
-          "title": "要移除這位成員嗎？",
-          "description": "{{name}} 將立即失去 {{workspace}} 的存取權。"
-        }
+        "remove": "從工作區移除"
       },
       "joinRequests": {
         "title": "加入申請",
@@ -2530,22 +2601,9 @@
         }
       },
       "invites": {
-        "title": "待處理的邀請",
-        "expiresIn_one": "{{count}} 天後到期",
-        "expiresIn_other": "{{count}} 天後到期",
-        "expired": "已到期",
-        "loadError": "無法載入邀請。",
-        "resend": "重新傳送",
         "resending": "重新傳送中…",
-        "revoke": "撤銷",
         "resent": "邀請已重新傳送",
-        "resentNoEmail": "邀請已更新，但電子郵件無法送達。",
-        "revoked": "邀請已撤銷",
-        "revokeFailed": "無法撤銷邀請",
-        "revokeConfirm": {
-          "title": "要撤銷此邀請嗎？",
-          "description": "{{email}} 的邀請連結將會失效。"
-        }
+        "resentNoEmail": "邀請已更新，但電子郵件無法送達。"
       },
       "billing": {
         "plan": "方案",
@@ -3020,7 +3078,9 @@
         "viaGroup": "透過 {{group}}",
         "managedByGroup": "透過 {{group}} 加入。請在該群組中移除。",
         "roleFromGroup": "透過 {{group}} 取得管理員身分，請在該群組中變更。",
-        "invited": "已向 {{email}} 傳送邀請"
+        "invited": "已向 {{email}} 傳送邀請",
+        "invitedMany_one": "已向 {{count}} 人傳送邀請",
+        "invitedMany_other": "已向 {{count}} 人傳送邀請"
       },
       "invitedTo_one": "你將加入 {{count}} 個團隊空間",
       "invitedTo_other": "你將加入 {{count}} 個團隊空間",
@@ -3632,6 +3692,31 @@
     "emptyTitle": "將詞語加入字典",
     "emptyDescription": "新增希望{{agentName}}始終辨識正確的詞：名字、工具、縮寫。",
     "addFirstWord": "新增第一個詞",
+    "importList": "匯入清單",
+    "importMenu": "匯入",
+    "importFromDragon": "從 Dragon 匯入",
+    "dragonImport": {
+      "title": "從 Dragon 匯入",
+      "found_one": "在 {{fileName}} 中找到 {{count}} 個詞語。",
+      "found_other": "在 {{fileName}} 中找到 {{count}} 個詞語。",
+      "alreadyPresent": "已在你的詞典中，因此略過：{{count}} 個。",
+      "nothingNew": "此檔案中的所有詞語都已在你的詞典中。",
+      "unreadable": "無法讀取因此略過的行：{{count}} 行。",
+      "tooLong": "超過 {{max}} 個字元因此略過的詞語：{{count}} 個。",
+      "overLimit": "你的詞典最多可容納 {{max}} 個詞語，因此未匯入：{{count}} 個。",
+      "propertiesIgnored": "不會匯入 Dragon 的格式屬性。",
+      "confirm_one": "匯入 {{count}} 個詞語",
+      "confirm_other": "匯入 {{count}} 個詞語",
+      "done_one": "已從 Dragon 匯入 {{count}} 個詞語",
+      "done_other": "已從 Dragon 匯入 {{count}} 個詞語",
+      "failedTitle": "匯入失敗",
+      "error": {
+        "emptyFile": "在該檔案中找不到詞語。",
+        "unsupportedXml": "這看起來不像是 Windows 版 Dragon 的匯出檔案。請在 Dragon 中選擇「Vocabulary → Export custom word and phrase list」，並儲存為 TXT。",
+        "fileTooLarge": "該檔案太大，不像是 Dragon 詞語清單。",
+        "generic": "無法讀取該檔案。"
+      }
+    },
     "agentDefault": "預設加入",
     "shared": {
       "allWords": "全部詞彙",
@@ -5234,27 +5319,78 @@
       "description": "你現在是 {{name}} 的擁有者。"
     },
     "invite": {
-      "title": "邀請加入 {{workspace}}",
-      "description": "透過電子郵件新增團隊成員，他們會收到加入連結。",
-      "emailLabel": "電子郵件",
-      "emailPlaceholder": "teammate@example.com",
-      "roleLabel": "角色",
+      "title": "邀請他人",
+      "description": "他們會收到一封電子郵件，透過其中的連結加入 {{workspace}}。",
+      "emailLabel": "電子郵件地址",
+      "emailHint": "以逗號分隔多個電子郵件地址。所有人都會獲得相同的角色。",
+      "emailPlaceholder": "搜尋電子郵件",
+      "addMore": "新增更多…",
+      "removeRecipient": "移除 {{email}}",
+      "suggestions": "建議",
+      "roleLabel": "工作區角色",
       "seatUsage": "已使用 {{used}} / {{seats}} 個席次",
       "seatCost": "接受邀請後將為你的方案新增一個席位 · 預計按比例收取 {{amount}}。",
-      "submit": "傳送邀請",
-      "submitting": "傳送中…",
-      "sentTitle": "邀請已傳送",
-      "sentDescription": "我們已將邀請傳送至 {{email}}。",
-      "sentNoEmailTitle": "邀請已建立，但未傳送電子郵件",
-      "sentNoEmailDescription": "已邀請 {{email}}，但電子郵件無法送達。請稍後重新傳送，或以其他方式分享邀請連結。",
-      "errorTitle": "無法傳送邀請",
+      "seatCostMany_one": "全部接受後將為你的方案新增 {{count}} 個席位 · 預計按比例收取 {{amount}}。",
+      "seatCostMany_other": "全部接受後將為你的方案新增 {{count}} 個席位 · 預計按比例收取 {{amount}}。",
+      "seatCostManyUnpriced_one": "全部接受後將為你的方案新增 {{count}} 個席位。",
+      "seatCostManyUnpriced_other": "全部接受後將為你的方案新增 {{count}} 個席位。",
+      "submitOne": "傳送邀請",
+      "submit_one": "傳送 {{count}} 份邀請",
+      "submit_other": "傳送 {{count}} 份邀請",
+      "submitting_one": "正在邀請 {{count}} 人…",
+      "submitting_other": "正在邀請 {{count}} 人…",
+      "sentTitle_one": "已傳送 {{count}} 份邀請",
+      "sentTitle_other": "已傳送 {{count}} 份邀請",
+      "createdTitle_one": "已建立 {{count}} 封邀請",
+      "createdTitle_other": "已建立 {{count}} 封邀請",
+      "sentOne": "已邀請 {{email}} 加入 {{workspace}}",
+      "sentMany_one": "已邀請 {{count}} 人加入 {{workspace}}",
+      "sentMany_other": "已邀請 {{count}} 人加入 {{workspace}}",
+      "noEmail_one": "已建立 {{count}} 份邀請，但電子郵件無法送達。請在「邀請」中重新傳送。",
+      "noEmail_other": "已建立 {{count}} 份邀請，但電子郵件無法送達。請在「邀請」中重新傳送。",
+      "someFailed_one": "{{count}} 份邀請未傳送",
+      "someFailed_other": "{{count}} 份邀請未傳送",
+      "tryResending": "重新傳送",
+      "tooMany": "一次最多可邀請 {{count}} 人。",
+      "removeLast_one": "移除最後 {{count}} 個",
+      "removeLast_other": "移除最後 {{count}} 個",
+      "seatsLeft_one": "僅剩 {{count}} 個席次。請移除 {{excess}} 個，或升級方案。",
+      "seatsLeft_other": "僅剩 {{count}} 個席次。請移除 {{excess}} 個，或升級方案。",
+      "seatsLeftAskOwner_one": "僅剩 {{count}} 個席次。請移除 {{excess}} 個，或請 {{owner}} 新增席次。",
+      "seatsLeftAskOwner_other": "僅剩 {{count}} 個席次。請移除 {{excess}} 個，或請 {{owner}} 新增席次。",
+      "seatsNone": "沒有剩餘席次。請升級方案以新增更多席次。",
+      "seatsNoneAskOwner": "沒有剩餘席次。請 {{owner}} 新增席次。",
+      "upgrade": "升級",
+      "ceilingLeft_one": "還可邀請 {{count}} 人。請移除 {{excess}} 個以繼續。",
+      "ceilingLeft_other": "還可邀請 {{count}} 人。請移除 {{excess}} 個以繼續。",
+      "rateLimitedLeft_one": "目前只能再傳送 {{count}} 封邀請。請移除 {{excess}} 個地址後傳送，或稍後再試。",
+      "rateLimitedLeft_other": "目前只能再傳送 {{count}} 封邀請。請移除 {{excess}} 個地址後傳送，或稍後再試。",
+      "rateLimitedDaily": "此工作區每天最多可傳送 {{limit}} 封邀請。請移除 {{excess}} 個地址，立即傳送其餘邀請。",
+      "skippedMany_one": "已略過 {{count}} 個地址：已是成員或已受邀。",
+      "skippedMany_other": "已略過 {{count}} 個地址：已是成員或已受邀。",
+      "skippedNotAdded_one": "已略過 {{count}} 個地址，未新增到此處：已是成員或已受邀。請從成員清單新增現有成員。",
+      "skippedNotAdded_other": "已略過 {{count}} 個地址，未新增到此處：已是成員或已受邀。請從成員清單新增現有成員。",
+      "done": "完成",
       "role": {
-        "admin": "管理員",
-        "member": "成員"
+        "admin": "工作區管理員",
+        "member": "工作區成員"
       },
       "roleDescription": {
-        "admin": "管理成員與帳單",
-        "member": "使用工作區"
+        "admin": "管理成員、邀請、群組和設定。",
+        "member": "可以檢視和編輯筆記。"
+      },
+      "errors": {
+        "invalid": "{{email}} 不是有效的電子郵件地址",
+        "alreadyMember": "{{email}} 已是成員，已略過",
+        "alreadyInvited": "{{email}} 已受邀，已略過。請在「邀請」中重新傳送。",
+        "seatLimit": "此工作區已達席次上限。",
+        "directoryRequired": "請先在身分識別提供者中指派 {{email}}。",
+        "notAllowed": "你已無法再邀請他人加入 {{workspace}}。",
+        "ssoRequired": "請先使用公司的單一登入 (SSO) 登入，再邀請他人加入 {{workspace}}。",
+        "sessionExpired": "無法邀請 {{email}}：你的登入已過期或已變更。請重新登入後再試。",
+        "rateLimited": "目前邀請過多，請稍後再試。",
+        "requestFailed": "無法邀請 {{email}}。請檢查你的網路連線後再試。",
+        "refused": "無法邀請 {{email}}：{{reason}}"
       }
     },
     "join": {
@@ -5318,6 +5454,73 @@
       },
       "tryAgain": "重試"
     },
+    "removeMember": {
+      "title": "要將 {{name}} 從 {{workspace}} 移除嗎？",
+      "body": "對方將失去此工作區中所有團隊空間和團隊的存取權限。你可以隨時再次邀請對方。",
+      "confirm": "移除",
+      "removing": "正在移除…",
+      "failed": "無法確認已移除 {{name}}。請檢查網路連線後再試一次。",
+      "notAllowed": "你已無權從 {{workspace}} 中移除成員。",
+      "alreadyRemoved": "{{name}} 已被移除"
+    },
+    "removeMembers": {
+      "title_one": "要將 {{count}} 名成員從 {{workspace}} 移除嗎？",
+      "title_other": "要將 {{count}} 名成員從 {{workspace}} 移除嗎？",
+      "confirm_one": "移除 {{count}} 名成員",
+      "confirm_other": "移除 {{count}} 名成員",
+      "checking": "正在檢查…",
+      "failed_one": "無法確認已移除 {{count}} 名成員。請檢查網路連線後再試一次。",
+      "failed_other": "無法確認已移除 {{count}} 名成員。請檢查網路連線後再試一次。",
+      "body": "這些人將失去此工作區中所有團隊空間和團隊的存取權限。你可以隨時再次邀請他們。",
+      "ownerOne": "{{name}} 在此工作區中擁有筆記或團隊空間。",
+      "owners_one": "其中 {{count}} 人擁有筆記或團隊空間。",
+      "owners_other": "其中 {{count}} 人擁有筆記或團隊空間。",
+      "directoryManagedOne": "{{name}} 由身分識別提供者指派。請改在身分識別提供者中移除。",
+      "directoryManaged_one": "其中 {{count}} 人由身分識別提供者指派。請改在身分識別提供者中移除。",
+      "directoryManaged_other": "其中 {{count}} 人由身分識別提供者指派。請改在身分識別提供者中移除。",
+      "directoryManagedOneOthers": "{{name}} 由身分識別提供者指派。請在身分識別提供者中移除，或取消勾選以移除其他人。",
+      "directoryManagedOthers_one": "其中 {{count}} 人由身分識別提供者指派。請在身分識別提供者中移除，或取消勾選以移除其他人。",
+      "directoryManagedOthers_other": "其中 {{count}} 人由身分識別提供者指派。請在身分識別提供者中移除，或取消勾選以移除其他人。",
+      "transferLabel": "轉讓給",
+      "transferBody": "他們的筆記和團隊空間將轉給新擁有者。他們將失去此工作區的存取權限。",
+      "transferBodyLimited": "他們的筆記和團隊空間將轉給 {{name}}，但 {{name}} 無法存取的團隊空間中的筆記會留在原處。他們將失去此工作區的存取權限。",
+      "you": "{{name}}（你）",
+      "transferConfirm": "轉讓並移除",
+      "transferring": "正在轉讓…",
+      "transferFailed": "無法確認轉移和移除是否完成。請檢查網路連線後再試一次。",
+      "invalidTarget": "{{name}} 已無法接收擁有權。請選擇其他人。",
+      "cannotRemoveOwner": "無法移除工作區擁有者。",
+      "cannotRemoveSelf": "你無法移除自己。請在「一般」中離開工作區。",
+      "done_one": "已移除 {{count}} 名成員",
+      "done_other": "已移除 {{count}} 名成員",
+      "transferDone_one": "已將他們的筆記和團隊空間移至 {{name}}，並移除了 {{count}} 名成員。",
+      "transferDone_other": "已將他們的筆記和團隊空間移至 {{name}}，並移除了 {{count}} 名成員。",
+      "transferPartial_one": "{{count}} 則筆記留在了 {{name}} 無法存取的團隊空間中。其餘內容已全部移動。",
+      "transferPartial_other": "{{count}} 則筆記留在了 {{name}} 無法存取的團隊空間中。其餘內容已全部移動。",
+      "alreadyRemoved_one": "{{count}} 名成員已被移除",
+      "alreadyRemoved_other": "{{count}} 名成員已被移除"
+    },
+    "cancelInvitation": {
+      "title": "取消寄給 {{email}} 的邀請？",
+      "body": "對方將無法透過此邀請加入。現有成員仍保有存取權。",
+      "keep": "保留邀請",
+      "canceling": "正在取消…",
+      "done": "邀請已取消",
+      "failed": "無法取消邀請。請檢查網路連線後再試一次。",
+      "notAllowed": "你已無權取消 {{workspace}} 中的邀請。"
+    },
+    "cancelInvitations": {
+      "title_one": "要取消 {{count}} 個邀請嗎？",
+      "title_other": "要取消 {{count}} 個邀請嗎？",
+      "body": "對方將無法使用這些邀請加入。現有成員的存取權限不受影響。",
+      "keep": "保留邀請",
+      "confirm": "取消邀請",
+      "done_one": "已取消 {{count}} 個邀請。",
+      "done_other": "已取消 {{count}} 個邀請。",
+      "partial_one": "無法取消 {{count}} 個邀請。請檢查網路連線後再試一次。",
+      "partial_other": "無法取消 {{count}} 個邀請。請檢查網路連線後再試一次。"
+    },
+    "ssoRequired": "請先使用公司的單一登入 (SSO) 登入，再管理 {{workspace}} 的成員。",
     "transfer": {
       "title": "選擇新的擁有者",
       "body": "選擇一位現有的工作區成員。轉讓後你將成為管理員。",

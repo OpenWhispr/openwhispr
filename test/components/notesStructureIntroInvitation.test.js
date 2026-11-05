@@ -41,7 +41,7 @@ const MOCKS = {
     export const useNotesOnboarding = () => ({ isComplete: true, complete() {} });
   `,
   "/hooks/useTeamSpacesCapability": `export const useTeamSpacesCapability = () => false;`,
-  "/hooks/useAuth": `export const useAuth = () => ({ isSignedIn: false, user: null });`,
+  "/useAuth": `export const useAuth = () => ({ isLoaded: true, isSignedIn: false, user: null });`,
   "/stores/noteStore": `
     import { useSyncExternalStore } from "react";
     const state = { activeNoteId: null };

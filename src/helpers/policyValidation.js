@@ -68,6 +68,12 @@ function isValidPolicyShape(policy) {
       typeof policy.features.screenContextEnabled === "boolean") &&
     (policy.features?.connectorsEnabled === undefined ||
       typeof policy.features.connectorsEnabled === "boolean") &&
+    (policy.meetings === undefined ||
+      (policy.meetings !== null &&
+        typeof policy.meetings === "object" &&
+        !Array.isArray(policy.meetings) &&
+        (policy.meetings.transcriptionStart === undefined ||
+          typeof policy.meetings.transcriptionStart === "string"))) &&
     SHARING_MODES.includes(policy.sharing?.externalLinkSharing) &&
     LOCAL_HISTORY_MODES.includes(policy.dataRetention?.localHistoryMode) &&
     typeof policy.dataRetention?.cloudBackupAllowed === "boolean" &&

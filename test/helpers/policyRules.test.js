@@ -3,6 +3,39 @@ const assert = require("node:assert/strict");
 
 const load = () => import("../../src/stores/policyRules.ts");
 
+test("automatic meeting start fails closed until signed-in policy resolves", async () => {
+  const { isMeetingAutoTranscriptionAllowed: allowed } = await load();
+  for (const [status, isSignedIn, expected] of [
+    ["idle", false, true],
+    ["idle", true, false],
+    ["unmanaged", true, true],
+    ["loading", true, false],
+    ["error", true, false],
+    ["managed", true, false],
+  ]) {
+    assert.equal(allowed({ status, policy: null, appVersion: null }, isSignedIn), expected);
+  }
+  for (const [meetings, expected] of [
+    [undefined, true],
+    [{}, true],
+    [{ transcriptionStart: "automatic" }, true],
+    [{ transcriptionStart: "manual" }, false],
+    [{ transcriptionStart: "future" }, false],
+  ]) {
+    const snapshot = { status: "managed", policy: { ...policy, meetings }, appVersion: "1.11.1" };
+    assert.equal(allowed(snapshot, true), expected);
+    for (const appVersion of [null, "1.10.0"]) {
+      assert.equal(
+        allowed(
+          { ...snapshot, appVersion, policy: { ...snapshot.policy, minAppVersion: "1.11.1" } },
+          true
+        ),
+        false
+      );
+    }
+  }
+});
+
 const policy = {
   version: 1,
   transcription: {

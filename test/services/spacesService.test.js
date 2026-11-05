@@ -63,7 +63,7 @@ test("SpacesService direct-member calls hit the members routes with the API's fi
   assert.deepEqual(removal, { removed: true, still_via_teams: stillViaTeams });
 });
 
-test("InvitationsService.send forwards space_ids and accept surfaces the granted space ids", async (t) => {
+test("InvitationsService.sendBatch forwards space_ids and accept surfaces the granted space ids", async (t) => {
   const requests = installCloudCapture(t, {
     workspace_id: "ws-1",
     role: "member",
@@ -72,11 +72,49 @@ test("InvitationsService.send forwards space_ids and accept surfaces the granted
   });
   const { InvitationsService } = require("../../src/services/InvitationsService.ts");
 
-  await InvitationsService.send("ws-1", { email: "new@example.com", space_ids: ["space-1"] });
+  await InvitationsService.sendBatch("ws-1", {
+    emails: ["new@example.com"],
+    role: "member",
+    space_ids: ["space-1"],
+  });
   const accepted = await InvitationsService.accept("tok en");
 
-  assert.equal(requests[0].path, "/api/workspaces/ws-1/invitations");
-  assert.deepEqual(requests[0].body, { email: "new@example.com", space_ids: ["space-1"] });
+  assert.equal(requests[0].path, "/api/workspaces/ws-1/invitations/batch");
+  assert.deepEqual(requests[0].body, {
+    emails: ["new@example.com"],
+    role: "member",
+    space_ids: ["space-1"],
+  });
   assert.equal(requests[1].path, "/api/invitations/tok%20en/accept");
   assert.deepEqual(accepted.space_ids, ["space-1"]);
+});
+
+test("WorkspacesService previews and runs a removal with the API's field names", async (t) => {
+  const requests = installCloudCapture(t, {
+    members: [],
+    already_removed: [],
+    transfer_required: false,
+  });
+  const { WorkspacesService } = require("../../src/services/WorkspacesService.ts");
+
+  await WorkspacesService.previewMemberRemoval("ws-1", ["user-2", "user-3"]);
+  await WorkspacesService.removeMembers("ws-1", { userIds: ["user-2"], transferTo: "user-1" });
+  await WorkspacesService.removeMembers("ws-1", { userIds: ["user-3"] });
+
+  assert.deepEqual(
+    requests.map(({ method, path, body }) => [method, path, body]),
+    [
+      [
+        "POST",
+        "/api/workspaces/ws-1/members/remove",
+        { user_ids: ["user-2", "user-3"], preview: true },
+      ],
+      [
+        "POST",
+        "/api/workspaces/ws-1/members/remove",
+        { user_ids: ["user-2"], transfer_to: "user-1" },
+      ],
+      ["POST", "/api/workspaces/ws-1/members/remove", { user_ids: ["user-3"] }],
+    ]
+  );
 });

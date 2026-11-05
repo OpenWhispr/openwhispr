@@ -321,6 +321,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   noteFilesPickFolder: () => ipcRenderer.invoke("note-files-pick-folder"),
   granolaImportPickAndPreview: () => ipcRenderer.invoke("granola-import-pick-and-preview"),
   granolaImportRun: () => ipcRenderer.invoke("granola-import-run"),
+  dragonImportPickFile: () => ipcRenderer.invoke("dragon-import-pick-file"),
   showNoteFile: (noteId) => ipcRenderer.invoke("show-note-file", noteId),
   showFolderInExplorer: (folderName) => ipcRenderer.invoke("show-folder-in-explorer", folderName),
 
@@ -570,6 +571,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   windowIsMaximized: () => ipcRenderer.invoke("window-is-maximized"),
   snapToMeetingMode: () => ipcRenderer.invoke("snap-to-meeting-mode"),
   restoreFromMeetingMode: () => ipcRenderer.invoke("restore-from-meeting-mode"),
+  meetingNoteOpenedWithoutRecording: (id) =>
+    ipcRenderer.invoke("meeting-note-opened-without-recording", id),
+  meetingNoteClosed: (id) => ipcRenderer.invoke("meeting-note-closed", id),
   getPlatform: () => process.platform,
 
   // Cleanup function
@@ -1449,6 +1453,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Contacts
   searchContacts: (query) => ipcRenderer.invoke("search-contacts", query),
+  searchInviteContacts: (query, exclude) =>
+    ipcRenderer.invoke("search-invite-contacts", query, exclude),
   upsertContact: (contact) => ipcRenderer.invoke("upsert-contact", contact),
   getMD5Hash: (text) => ipcRenderer.invoke("get-md5-hash", text),
 

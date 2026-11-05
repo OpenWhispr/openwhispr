@@ -456,6 +456,11 @@ export function sessionAwaitsVerdict(): boolean {
   return userId != null && getBoundSessionGeneration(userId) != null && !hasValidatedAuthContext();
 }
 
+/** A credential the server hasn't refused: its owner may be signing in or unreachable, not a guest. */
+export function hasUsableCredential(): boolean {
+  return snapshot.hasToken && snapshot.sessionRejectedGeneration !== snapshot.observedGeneration;
+}
+
 export function getSessionAnsweredAt(): number | null {
   return sessionAnsweredAt;
 }

@@ -1,9 +1,14 @@
+import { classifyRemovalError } from "../lib/workspaceErrors";
 import logger from "../utils/logger";
-import type { WorkspaceMember } from "../types/electron";
+import type { MemberRemovalResult, WorkspaceMember } from "../types/electron";
 
 export interface WorkspaceActionsDependencies {
   api: {
     removeMember(workspaceId: string, userId: string): Promise<void>;
+    removeMembers(
+      workspaceId: string,
+      input: { userIds: string[]; transferTo?: string }
+    ): Promise<MemberRemovalResult>;
     remove(workspaceId: string): Promise<void>;
     updateMemberRole(workspaceId: string, userId: string, role: "owner"): Promise<unknown>;
   };
@@ -13,7 +18,8 @@ export interface WorkspaceActionsDependencies {
     refreshMembers(workspaceId: string): Promise<void>;
     /** Ids from the last refresh, or null when it failed. */
     listedWorkspaceIds(): string[] | null;
-    memberRole(userId: string): WorkspaceMember["role"] | null;
+    /** The member's role in `workspaceId`'s last refreshed roster, or null when it isn't held. */
+    memberRole(workspaceId: string, userId: string): WorkspaceMember["role"] | null;
   };
   sync: { requestSyncAll(reason: string): void };
   /** Tells the plan badge and word limit to re-read the entitlement. */
@@ -24,6 +30,10 @@ export interface WorkspaceActions {
   leaveWorkspace(workspaceId: string, userId: string): Promise<void>;
   deleteWorkspace(workspaceId: string): Promise<void>;
   transferOwnership(workspaceId: string, newOwnerId: string): Promise<void>;
+  removeMembers(
+    workspaceId: string,
+    input: { userIds: string[]; transferTo?: string }
+  ): Promise<MemberRemovalResult>;
 }
 
 export function createWorkspaceActions(deps: WorkspaceActionsDependencies): WorkspaceActions {
@@ -97,12 +107,41 @@ export function createWorkspaceActions(deps: WorkspaceActionsDependencies): Work
       () => deps.api.updateMemberRole(workspaceId, newOwnerId, "owner"),
       async () => {
         await deps.store.refreshMembers(workspaceId);
-        return deps.store.memberRole(newOwnerId) === "owner";
+        return deps.store.memberRole(workspaceId, newOwnerId) === "owner";
       }
     );
     await refreshQuietly("list", () => deps.store.refresh({ fresh: true }));
     await refreshQuietly("members", () => deps.store.refreshMembers(workspaceId));
   }
 
-  return { leaveWorkspace, deleteWorkspace, transferOwnership };
+  // Removals free seats, so the workspace list is read again too, and content moved to a new owner
+  // reaches this device through a sync. That sync follows any run that named a new owner: a retry
+  // after a lost answer reports no transfer although the first attempt moved the content.
+  async function afterRemoval(workspaceId: string, transferTo: string | undefined): Promise<void> {
+    await refreshQuietly("members", () => deps.store.refreshMembers(workspaceId));
+    await refreshQuietly("list", () => deps.store.refresh({ fresh: true }));
+    if (transferTo) deps.sync.requestSyncAll("manual");
+  }
+
+  async function removeMembers(
+    workspaceId: string,
+    input: { userIds: string[]; transferTo?: string }
+  ): Promise<MemberRemovalResult> {
+    let result: MemberRemovalResult;
+    try {
+      result = await deps.api.removeMembers(workspaceId, input);
+    } catch (error) {
+      // A refusal changed nothing, but with no answer the removal may still have gone through, so
+      // what's listed is read again. Not awaited: the failure shows without waiting on the network
+      // that just failed.
+      if (classifyRemovalError(error).kind === "failed") {
+        void afterRemoval(workspaceId, input.transferTo);
+      }
+      throw error;
+    }
+    await afterRemoval(workspaceId, input.transferTo);
+    return result;
+  }
+
+  return { leaveWorkspace, deleteWorkspace, transferOwnership, removeMembers };
 }
