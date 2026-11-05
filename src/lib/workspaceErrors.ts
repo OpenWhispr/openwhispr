@@ -142,3 +142,70 @@ export function classifyRemovalError(error: unknown): RemovalError {
   }
   return classifyRowActionError(error);
 }
+
+export type SpaceActionError =
+  | { kind: "nameTaken" }
+  | { kind: "lastAdmin" }
+  | { kind: "notOpen" }
+  // 410: the space was archived, so it no longer takes joins or members.
+  | { kind: "archived" }
+  | { kind: "notWorkspaceMembers"; userIds: string[] }
+  // Groups a create named that were deleted or moved since the list loaded.
+  | { kind: "groupsUnavailable"; teamIds: string[] }
+  | RowActionError;
+
+/** Maps a failed space action; codes come first, then the row action kinds. */
+export function classifySpaceError(error: unknown): SpaceActionError {
+  if (error instanceof CloudApiError) {
+    switch (error.code) {
+      case "space_name_taken":
+        return { kind: "nameTaken" };
+      case "last_space_admin":
+        return { kind: "lastAdmin" };
+      case "space_not_open":
+        return { kind: "notOpen" };
+      case "space_archived":
+        return { kind: "archived" };
+      case "space_not_found":
+        return { kind: "gone" };
+      case "not_workspace_members": {
+        const userIds = detailsRecord(error.details)?.user_ids;
+        return {
+          kind: "notWorkspaceMembers",
+          userIds: Array.isArray(userIds)
+            ? userIds.filter((id): id is string => typeof id === "string")
+            : [],
+        };
+      }
+      case "teams_not_available": {
+        const teamIds = detailsRecord(error.details)?.team_ids;
+        return {
+          kind: "groupsUnavailable",
+          teamIds: Array.isArray(teamIds)
+            ? teamIds.filter((id): id is string => typeof id === "string")
+            : [],
+        };
+      }
+    }
+  }
+  return classifyRowActionError(error);
+}
+
+/**
+ * The row-action kind a confirm dialog can show for a failed space action. The kinds only a space
+ * has (a taken name, the last admin, a closed or archived space) have no screen of their own
+ * there, so they read as a plain failure.
+ */
+export function rowActionErrorOf(failure: SpaceActionError | undefined): RowActionError {
+  switch (failure?.kind) {
+    case "gone":
+    case "notAllowed":
+    case "ssoRequired":
+    case "rateLimited":
+    case "refused":
+    case "failed":
+      return failure;
+    default:
+      return { kind: "failed" };
+  }
+}

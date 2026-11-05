@@ -3,8 +3,9 @@ import { useTranslation } from "react-i18next";
 import { useToast } from "../components/ui/useToast";
 
 // Load state plus per-row mutation tracking for a roster backed by a server
-// list. Shared by the team- and space-backed wrappers around MemberRoster so
-// both reload after every mutation and surface failures the same way.
+// list. The team roster (a wrapper around MemberRoster) uses both; the
+// teamspace members panel has its own table and row actions, and takes the
+// load state alone.
 export function useMemberRoster<M>(load: () => Promise<M[]>) {
   const { t } = useTranslation();
   const { toast } = useToast();

@@ -275,7 +275,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     await createNote();
     setActiveView("personal-notes");
   }, [createNote]);
-  const showDictionary = useCallback(() => setActiveView("dictionary"), []);
+  const showDictionary = useCallback(() => {
+    setShowSettings(false);
+    setSettingsSection(undefined);
+    setActiveView("dictionary");
+  }, []);
   const policyActionsAllowed = usePolicyStore((state) => isPolicyActionAllowed(state));
   useEffect(() => {
     if (!isControlPanelViewAllowed(activeView, agentAllowedByPolicy, policyActionsAllowed)) {
@@ -622,6 +626,13 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     setActiveView("integrations");
   }, []);
   const handleOpenSkillRequestHandled = useCallback(() => setOpenSkillRequest(null), []);
+  // Settings sits over the notes view, so a teamspace opens by closing it and landing the tree there.
+  const openTeamspace = useCallback((spaceId: number) => {
+    setShowSettings(false);
+    setSettingsSection(undefined);
+    navigateToContainer(spaceId, null);
+    setActiveView("personal-notes");
+  }, []);
   const openNoteInNotes = useCallback(
     (noteId: number, folderId: number | null, spaceId?: number | null) => {
       if (folderId != null) setActiveFolderId(folderId);
@@ -1106,6 +1117,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               if (!open) setSettingsSection(undefined);
             }}
             initialSection={settingsSection}
+            onOpenTeamspace={openTeamspace}
           />
         </Suspense>
       )}

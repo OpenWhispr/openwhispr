@@ -1,6 +1,6 @@
 import * as React from "react";
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
-import { Check, ChevronRight, Circle } from "../icons";
+import { Check, ChevronRight, Circle, Minus } from "../icons";
 
 import { cn } from "../lib/utils";
 
@@ -104,9 +104,23 @@ const DropdownMenuCheckboxItem = React.forwardRef<
     checked={checked}
     {...props}
   >
-    <span className="absolute start-2 flex h-3.5 w-3.5 items-center justify-center">
+    {/* A box rather than a bare tick, so an unchecked row still reads as one to tick, and "some" has a
+        mark of its own: a dash in the same filled box. */}
+    <span
+      aria-hidden="true"
+      className={cn(
+        "absolute start-2 flex size-3.5 items-center justify-center rounded-[4px] border",
+        checked
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-foreground/30 dark:border-white/35"
+      )}
+    >
       <DropdownMenuPrimitive.ItemIndicator>
-        <Check className="h-4 w-4" />
+        {checked === "indeterminate" ? (
+          <Minus className="size-3" strokeWidth={2.5} />
+        ) : (
+          <Check className="size-3" strokeWidth={2.5} />
+        )}
       </DropdownMenuPrimitive.ItemIndicator>
     </span>
     {children}
