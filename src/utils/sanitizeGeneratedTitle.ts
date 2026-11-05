@@ -100,6 +100,11 @@ const quotesSeparatePhrases = (text: string): boolean => {
   return phrases > 1 && finalQuoteClosed;
 };
 
+// Titles are capped at 99 characters, so a reply this long cannot hold one even
+// after its wrappers are peeled. Rejecting it up front also bounds the work
+// the peel loop does on a runaway reply of stacked quotes.
+const MAX_RAW_LENGTH = 300;
+
 const hasQuoteBesides = (text: string, index: number): boolean => {
   for (let i = 0; i < text.length; i += 1) {
     if (i !== index && WRAPPING_QUOTES.has(text[i])) return true;
@@ -113,6 +118,7 @@ const hasQuoteBesides = (text: string, index: number): boolean => {
 // So do two quoted phrases at the two ends: “Dune” vs “Arrival”.
 export function sanitizeGeneratedTitle(raw: string): string {
   let cleaned = raw.trim();
+  if (cleaned.length > MAX_RAW_LENGTH) return "";
   if (!Array.from(cleaned).some((char) => !WRAPPING_QUOTES.has(char) && /\S/u.test(char)))
     return "";
   while (

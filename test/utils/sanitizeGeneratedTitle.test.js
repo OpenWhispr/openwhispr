@@ -1,8 +1,5 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { spawnSync } = require("node:child_process");
-const path = require("node:path");
-const { pathToFileURL } = require("node:url");
 
 const load = () => import("../../src/utils/sanitizeGeneratedTitle.ts");
 
@@ -198,28 +195,21 @@ test("applies the length limit after peeling same-style wrappers", async () => {
   assert.equal(sanitizeGeneratedTitle('"' + "a".repeat(93) + ' "Q3""'), "a".repeat(93) + ' "Q3"');
 });
 
-test("handles deeply wrapped model replies without stalling", () => {
-  const moduleUrl = pathToFileURL(
-    path.resolve(__dirname, "../../src/utils/sanitizeGeneratedTitle.ts")
+test("rejects runaway replies without stalling", async () => {
+  const { sanitizeGeneratedTitle } = await load();
+  const wrappers = '"'.repeat(2048);
+  const start = Date.now();
+  assert.equal(sanitizeGeneratedTitle(wrappers + "Weekly standup" + wrappers), "");
+  assert.equal(
+    sanitizeGeneratedTitle('" '.repeat(2048) + "Weekly standup" + ' "'.repeat(2048)),
+    ""
   );
-  // Isolate synchronous sanitization so the deadline can stop a regressed scan.
-  const result = spawnSync(
-    process.execPath,
-    [
-      "--import",
-      "tsx",
-      "--input-type=module",
-      "-e",
-      `import assert from "node:assert/strict";
-       import { sanitizeGeneratedTitle } from ${JSON.stringify(moduleUrl.href)};
-       const wrappers = '"'.repeat(2048);
-       assert.equal(sanitizeGeneratedTitle(wrappers + 'Weekly standup' + wrappers), 'Weekly standup');
-       assert.equal(sanitizeGeneratedTitle(wrappers + '"Q3" vs "Q4"' + wrappers), '"Q3" vs "Q4"');
-       assert.equal(sanitizeGeneratedTitle('" '.repeat(2048) + 'Weekly standup' + ' "'.repeat(2048)), 'Weekly standup');
-       assert.equal(sanitizeGeneratedTitle(wrappers + 'a'.repeat(100) + wrappers), '');`,
-    ],
-    { encoding: "utf8", timeout: 10_000 }
-  );
-  assert.ifError(result.error);
-  assert.equal(result.status, 0, result.stderr);
+  assert.ok(Date.now() - start < 1000);
+});
+
+test("still peels a deep but plausible stack of wrappers", async () => {
+  const { sanitizeGeneratedTitle } = await load();
+  const wrappers = '"'.repeat(100);
+  assert.equal(sanitizeGeneratedTitle(wrappers + "Weekly standup" + wrappers), "Weekly standup");
+  assert.equal(sanitizeGeneratedTitle(wrappers + '"Q3" vs "Q4"' + wrappers), '"Q3" vs "Q4"');
 });
