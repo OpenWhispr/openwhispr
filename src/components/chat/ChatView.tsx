@@ -13,6 +13,9 @@ import { PAGE_CONTENT_WIDTH_CLASS } from "../ui/pageWidth";
 import { NewChatEmptyState } from "./NewChatEmptyState";
 import { CreatorOpening } from "./CreatorOpening";
 import { SkillChip } from "./SkillChip";
+import { SourceNoteBar } from "./SourceNoteBar";
+import { useSourceNote, type SourceNote } from "./useSourceNote";
+import { deriveConversationTitle } from "../../lib/conversationTitle";
 import { SkillChatActionsContext } from "./skillChatActions";
 import { useDialogs } from "../../hooks/useDialogs";
 import { getCachedPlatform } from "../../utils/platform";
@@ -52,6 +55,8 @@ interface ChatViewProps {
   onSkillRequestHandled?: () => void;
   /** Open skill on a saved skill card. */
   onOpenSkill?: (name: string) => void;
+  /** Open note on a chat started from a note. */
+  onOpenNote?: (note: SourceNote) => void;
 }
 export default function ChatView({
   active = true,
@@ -60,6 +65,7 @@ export default function ChatView({
   onSkillRequestHandled,
   onOpenSkill,
   onAttentionChange,
+  onOpenNote,
 }: ChatViewProps) {
   const { t } = useTranslation();
   const [activeConversationId, setActiveConversationId] = useState<number | null>(null);
@@ -98,8 +104,12 @@ export default function ChatView({
     return () => onAttentionChange?.(false);
   }, [onAttentionChange, waiting]);
 
+  // A chat started from a note stays about that note here too, as in the note's own chat.
+  const { sourceNote, openNote, isLoading: sourceNoteLoading } = useSourceNote(persistence.noteId);
+
   const streaming = useChatStreaming({
     setMessages: persistence.setMessages,
+    openNote,
     allowConnectors: true,
     allowInteractions: true,
     onStreamComplete: persistence.saveAssistantMessage,
@@ -172,6 +182,8 @@ export default function ChatView({
   const forkContext = unsentForkContext(forkOrigin, persistence.messages);
   const handleTextSubmit = useCallback(
     async (text: string, options?: SendToAIOptions) => {
+      // A conversation still loading must not ground this send on the wrong note.
+      if (sourceNoteLoading) return false;
       const version = persistence.getSessionVersion?.();
       const sendOptions: SendToAIOptions = {
         attachedSkill: attachedSkill?.ref,
@@ -196,7 +208,17 @@ export default function ChatView({
       }
       return sent;
     },
-    [forkContext, persistence, sendMessage, t, toast, attachedSkill, skillPickOff, removedSkills]
+    [
+      forkContext,
+      persistence,
+      sendMessage,
+      sourceNoteLoading,
+      t,
+      toast,
+      attachedSkill,
+      skillPickOff,
+      removedSkills,
+    ]
   );
   useInterruptedInteractions(persistence, handleTextSubmit);
 
@@ -336,6 +358,14 @@ export default function ChatView({
     [activeConversationId, handleNewChat, showConfirmDialog, t]
   );
 
+  const openSourceNote = useCallback(
+    (note: SourceNote) => {
+      if (onOpenNote) onOpenNote(note);
+      else void window.electronAPI?.agentOpenNote?.(note.id);
+    },
+    [onOpenNote]
+  );
+
   useEffect(() => {
     if (!active) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -397,6 +427,7 @@ export default function ChatView({
             />
           </div>
           <div className="relative flex-1 min-w-80 min-h-0 flex flex-col">
+            {sourceNote && <SourceNoteBar note={sourceNote} onOpen={openSourceNote} />}
             {forkOrigin?.parentTitle && (
               <div className="px-3 pt-2">
                 <button
@@ -419,13 +450,16 @@ export default function ChatView({
               emptyState={
                 <NewChatEmptyState
                   onPrompt={(prompt) => {
+                    if (sourceNoteLoading) return;
                     // The starter card unmounts once the message lands; move focus to the
                     // composer first so it isn't dropped.
                     focusComposer();
                     void sendWithSkill(prompt, attachedSkill);
                   }}
                   showSuggestions={isNewChat}
-                  disabled={submissionInFlight || streaming.agentState !== "idle"}
+                  disabled={
+                    sourceNoteLoading || submissionInFlight || streaming.agentState !== "idle"
+                  }
                 />
               }
               contentClassName={`${PAGE_CONTENT_WIDTH_CLASS} pb-[var(--chat-composer-inset,5rem)]`}
@@ -448,6 +482,7 @@ export default function ChatView({
                 partialTranscript=""
                 draftText={draft}
                 onDraftChange={setDraft}
+                sendDisabled={sourceNoteLoading}
                 onTextSubmit={handleTextSubmit}
                 onCancel={streaming.cancelStream}
                 voiceDraft
@@ -455,7 +490,16 @@ export default function ChatView({
                 placeholder={
                   attachedSkill && !attachedSkill.ref.builtin
                     ? t("skills.chat.placeholderWith", { name: attachedSkill.displayName })
-                    : t("chat.inputPlaceholder")
+                    : openNote && sourceNote
+                      ? t("chat.sourceNote.askAbout", {
+                          // The placeholder is one line and clips; its own "..." ends a shortened title.
+                          title: deriveConversationTitle(
+                            sourceNote.title,
+                            t("notes.list.untitledNote"),
+                            ""
+                          ),
+                        })
+                      : t("chat.inputPlaceholder")
                 }
                 variant="assistant"
                 expandOnFocus

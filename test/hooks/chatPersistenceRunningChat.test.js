@@ -1391,6 +1391,7 @@ test("sync defers both the user-only preparation gap and a held real lookup unti
     uploads.push(input);
     return { id: `cloud-${uploads.length}` };
   };
+  h.db.api.markConversationCreateAttempted = async () => ({ success: true });
   h.db.api.acknowledgeConversationCreate = async () => ({ success: true, outcome: "synced" });
   const sync = new SyncService();
   let sending;

@@ -1,7 +1,11 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const React = require("react");
-const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const {
+  SIGNED_OUT_AUTH_MOCK,
+  createRendererServer,
+  installBrowserGlobals,
+} = require("../lib/rendererTestHarness");
 const { installInteractiveDom } = require("../lib/interactiveDom");
 const { SKILLS_MOCKS, ariaLabel, click, findAll, settle } = require("../lib/skillsHarness");
 
@@ -10,6 +14,7 @@ const { SKILLS_MOCKS, ariaLabel, click, findAll, settle } = require("../lib/skil
 const MOCKS = {
   "/ui/useToast": `export function useToast() { return { toast() {} }; }`,
   "/useInterruptedInteractions": `export function useInterruptedInteractions() {}`,
+  ...SIGNED_OUT_AUTH_MOCK,
   "react-i18next": SKILLS_MOCKS["react-i18next"],
   "/useChatStreaming": `
     import { useCallback } from "react";
@@ -30,6 +35,7 @@ const MOCKS = {
     export function useChatPersistence() {
       return {
         conversationId: null,
+        noteId: null,
         messages: [],
         setMessages() {},
         createConversation: async () => 1,

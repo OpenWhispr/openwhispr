@@ -44,6 +44,8 @@ export interface ChatPersistence {
   conversationId: number | null;
   /** Null for a conversation that isn't a fork. */
   forkOrigin: ForkOrigin | null;
+  /** The note the open conversation was started from; undefined while it loads. */
+  noteId: number | null | undefined;
   createConversation: (
     title: string,
     noteId?: number | null,
@@ -87,6 +89,7 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
   // One save at a time per reply, so a reply saved while it waited is
   // completed in place rather than added twice.
   const savedRowsRef = useRef(new Map<string, Promise<number | null>>());
+  const [noteId, setNoteId] = useState<number | null | undefined>(null);
   const sessionVersionRef = useRef(0);
   const navigationVersionRef = useRef(0);
   const accountVersionRef = useRef(0);
@@ -159,6 +162,7 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
     (conversation: AgentConversationWithMessages, recover = true) => {
       conversationIdRef.current = conversation.id;
       setConversationId(conversation.id);
+      setNoteId(conversation.note_id ?? null);
       setForkOrigin(
         conversation.parent_conversation_id != null
           ? {
@@ -193,6 +197,7 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
       const id = conv.id;
       conversationIdRef.current = id;
       setConversationId(id);
+      setNoteId(noteId ?? null);
       options.onConversationCreated?.(id, title);
       return id;
     },
@@ -214,6 +219,8 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
         beforeOpen();
       }
       const version = ++sessionVersionRef.current;
+      // Unknown up front, so the last conversation's note never grounds a send made while this loads.
+      setNoteId(undefined);
       if (ownedConversationRef.current != null)
         await releaseConversation(ownedConversationRef.current);
       await releasingRef.current;
@@ -251,6 +258,7 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
         conversationIdRef.current = null;
         setConversationId(null);
         setForkOrigin(null);
+        setNoteId(null);
         setMessages([]);
         return null;
       }
@@ -399,6 +407,7 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
     setForkOrigin(null);
     conversationIdRef.current = null;
     setConversationId(null);
+    setNoteId(null);
   }, [releaseConversation]);
 
   useEffect(
@@ -416,6 +425,7 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
     setMessages,
     conversationId,
     forkOrigin,
+    noteId,
     getSessionVersion,
     claimConversation,
     releaseConversation,

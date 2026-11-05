@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useUiLocale } from "../../hooks/useUiLocale";
-import { MoreHorizontal, Archive, ArchiveRestore, Trash2, GitFork } from "../icons";
+import { MoreHorizontal, Archive, ArchiveRestore, Trash2, GitFork, FileText } from "../icons";
 import { Button } from "../ui/button";
 import {
   DropdownMenu,
@@ -11,6 +11,7 @@ import {
 } from "../ui/dropdown-menu";
 import { cn } from "../lib/utils";
 import { formatShortDate, normalizeDbDate } from "../../utils/dateFormatting";
+import { withoutNoteSuffix } from "../../lib/conversationTitle";
 
 export interface ConversationPreview {
   id: number;
@@ -21,6 +22,8 @@ export interface ConversationPreview {
   is_archived?: boolean;
   /** Forked from another chat. */
   is_fork?: boolean;
+  /** The note the chat was started from. */
+  sourceNote?: { title: string; deleted: boolean };
 }
 
 interface ConversationItemProps {
@@ -58,6 +61,10 @@ export default function ConversationItem({
   const { t } = useTranslation();
   const locale = useUiLocale();
   const isArchived = !!conversation.is_archived;
+  const { sourceNote } = conversation;
+  // useEmbeddedChat titled untitled notes' chats "Untitled".
+  const noteTitle = sourceNote ? sourceNote.title || "Untitled" : "";
+  const title = sourceNote ? withoutNoteSuffix(conversation.title, noteTitle) : conversation.title;
 
   return (
     <button
@@ -84,7 +91,7 @@ export default function ConversationItem({
               dir="auto"
               className={cn("text-xs truncate text-foreground", isActive && "font-medium")}
             >
-              {conversation.title}
+              {title}
             </p>
           </div>
           <div className="flex items-center gap-0.5 shrink-0">
@@ -137,10 +144,27 @@ export default function ConversationItem({
             </DropdownMenu>
           </div>
         </div>
-        {conversation.preview && (
-          <p dir="auto" className="text-[11px] text-muted-foreground/70 line-clamp-1 mt-0.5">
-            {conversation.preview}
+        {sourceNote ? (
+          <p
+            className={cn(
+              "flex items-center gap-1 min-w-0 text-[11px] mt-0.5",
+              isActive && !sourceNote.deleted ? "text-primary" : "text-muted-foreground/70"
+            )}
+          >
+            <FileText size={11} className="shrink-0" />
+            <span dir="auto" className={cn("truncate", sourceNote.deleted && "line-through")}>
+              {sourceNote.title || t("notes.list.untitledNote")}
+            </span>
+            {sourceNote.deleted && (
+              <span className="shrink-0">· {t("chat.sourceNote.deletedShort")}</span>
+            )}
           </p>
+        ) : (
+          conversation.preview && (
+            <p dir="auto" className="text-[11px] text-muted-foreground/70 line-clamp-1 mt-0.5">
+              {conversation.preview}
+            </p>
+          )
         )}
       </div>
     </button>

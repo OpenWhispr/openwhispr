@@ -75,6 +75,7 @@ import {
   setActiveNoteId,
   setActiveFolderId,
   navigateToContainer,
+  ensureNoteLoaded,
   useActiveNoteId,
   initializeNotes,
   subscribeMeetingNotificationFolders,
@@ -97,12 +98,14 @@ import { syncService } from "../services/SyncService.js";
 import logger from "../utils/logger";
 import AcceptInvitationModal from "./AcceptInvitationModal";
 import JoinYourTeamModal from "./JoinYourTeamModal";
+import { useModalGate } from "../stores/modalGateStore";
 import { useInvitationNotesEntry } from "../hooks/useInvitationNotesEntry";
 import {
   consumePendingInvitationToken,
   clearPendingInvitationToken,
 } from "../utils/pendingInvitationToken";
 import type { SkillChatRequest, SkillChatStart, SkillOpenRequest } from "../types/skills";
+import type { SourceNote } from "./chat/useSourceNote";
 
 const platform = getCachedPlatform();
 
@@ -133,6 +136,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const [showSettings, setShowSettings] = useState(!!initialSettingsSection);
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   const [showPostMigration, setShowPostMigration] = useState(false);
+  const [postMigrationChecked, setPostMigrationChecked] = useState(platform !== "darwin");
+  useModalGate("postMigrationPending", !postMigrationChecked);
   const [limitData, setLimitData] = useState<{ wordsUsed: number; limit: number } | null>(null);
   const hasShownUpgradePrompt = useRef(false);
   const [settingsSection, setSettingsSection] = useState<string | undefined>(
@@ -155,6 +160,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   if (activeView === "chat" && !chatOpened) setChatOpened(true);
   const [chatNeedsAttention, setChatNeedsAttention] = useState(false);
   const [newChatRequest, setNewChatRequest] = useState(0);
+  useModalGate("invitation", invitationToken !== null);
+  // Accepting an invitation or joining a workspace routes to Notes, which may open its structure
+  // intro. Notes is lazy, so it can mount late; this holds the gate until it has taken over.
+  const [notesHandOff, setNotesHandOff] = useState(false);
+  const finishNotesHandOff = useCallback(() => setNotesHandOff(false), []);
+  useModalGate("notesHandOff", notesHandOff && activeView === "personal-notes");
   const [invitationNotesEntry, setInvitationNotesEntry] = useInvitationNotesEntry(
     activeView === "personal-notes"
   );
@@ -196,9 +207,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   // Suppressed while a deep-linked invitation is open so the two never stack.
   const {
     joinable,
+    pending: joinablePending,
     dismiss: dismissJoinable,
     markRequested,
   } = useJoinableWorkspaces(user?.id ?? null, isSignedIn && !invitationToken);
+  useModalGate("joinYourTeamPending", joinablePending);
   const usage = useUsage();
   const upsell = decideUpsell({
     authLoaded,
@@ -336,9 +349,16 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
 
   useEffect(() => {
     if (platform !== "darwin") return;
-    window.electronAPI?.getPostMigrationState?.().then((state) => {
-      if (state?.justMigrated) setShowPostMigration(true);
-    });
+    const check = window.electronAPI?.getPostMigrationState?.();
+    if (!check) {
+      setPostMigrationChecked(true);
+      return;
+    }
+    check
+      .then((state) => {
+        if (state?.justMigrated) setShowPostMigration(true);
+      })
+      .finally(() => setPostMigrationChecked(true));
   }, []);
 
   const dismissPostMigrationPermanently = useCallback(async () => {
@@ -510,6 +530,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         initializeNotes(null, 50, data.folderId);
       }
       setActiveNoteId(data.noteId);
+      void ensureNoteLoaded(data.noteId);
       setActiveView("personal-notes");
     };
     drain();
@@ -582,6 +603,20 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     setActiveView("integrations");
   }, []);
   const handleOpenSkillRequestHandled = useCallback(() => setOpenSkillRequest(null), []);
+  const openNoteInNotes = useCallback(
+    (noteId: number, folderId: number | null, spaceId?: number | null) => {
+      if (folderId != null) setActiveFolderId(folderId);
+      else if (spaceId != null) navigateToContainer(spaceId, null);
+      setActiveNoteId(noteId);
+      void ensureNoteLoaded(noteId);
+      setActiveView("personal-notes");
+    },
+    []
+  );
+  const openChatSourceNote = useCallback(
+    (note: SourceNote) => openNoteInNotes(note.id, note.folderId, note.spaceId),
+    [openNoteInNotes]
+  );
 
   // The side-panel layout is shared by meeting mode and by a note opened in a
   // narrow window, so leaving it means different things in each case.
@@ -1062,6 +1097,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         onClose={() => setInvitationToken(null)}
         onAccepted={(entry) => {
           setInvitationNotesEntry(entry);
+          setNotesHandOff(true);
           setActiveView("personal-notes");
         }}
       />
@@ -1071,7 +1107,10 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         domain={user?.email?.split("@")[1] ?? null}
         onDismiss={dismissJoinable}
         onRequested={markRequested}
-        onJoined={() => setActiveView("personal-notes")}
+        onJoined={() => {
+          setNotesHandOff(true);
+          setActiveView("personal-notes");
+        }}
       />
 
       {/* Always mounted so the palette chunk is warm and Radix can play its exit animation. */}
@@ -1080,12 +1119,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           open={showSearch}
           onOpenChange={setShowSearch}
           transcriptions={history}
-          onNoteSelect={(id, folderId, spaceId) => {
-            if (folderId != null) setActiveFolderId(folderId);
-            else if (spaceId != null) navigateToContainer(spaceId, null);
-            setActiveNoteId(id);
-            setActiveView("personal-notes");
-          }}
+          onNoteSelect={openNoteInNotes}
           onContainerSelect={(spaceId, folderId) => {
             navigateToContainer(spaceId, folderId);
             setActiveView("personal-notes");
@@ -1130,6 +1164,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             isOverLimit={usage?.isOverLimit ?? false}
             isSignedIn={isSignedIn}
             upsell={upsell}
+            // The side-panel layout (a meeting, or a narrow window with a note open) has no room for it.
+            workspaceIntroAllowed={!showSettings && !isSidePanelLayout}
             updateAction={
               !updateStatus.isDevelopment &&
               (updateStatus.updateAvailable ||
@@ -1337,6 +1373,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                       skillRequest={skillChatRequest}
                       onSkillRequestHandled={handleSkillChatRequestHandled}
                       onOpenSkill={openSkill}
+                      onOpenNote={openChatSourceNote}
                     />
                   </Suspense>
                 </div>
@@ -1352,6 +1389,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                     onMeetingRecordingRequestHandled={handleMeetingRecordingRequestHandled}
                     invitationEntry={invitationNotesEntry}
                     onInvitationEntryHandled={() => setInvitationNotesEntry(null)}
+                    notesHandOff={notesHandOff}
+                    onNotesHandOffDone={finishNotesHandOff}
                   />
                 </Suspense>
               )}

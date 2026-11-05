@@ -1,13 +1,18 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const React = require("react");
-const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const {
+  SIGNED_OUT_AUTH_MOCK,
+  createRendererServer,
+  installBrowserGlobals,
+} = require("../lib/rendererTestHarness");
 const { installInteractiveDom } = require("../lib/interactiveDom");
 
 // ChatView with its real message sender (and its submission lock), the
 // streaming hook replaced by one whose send stays pending until the test
 // settles it: a turn still waiting on a tool when the user starts a new chat.
 const MOCKS = {
+  ...SIGNED_OUT_AUTH_MOCK,
   "/useChatStreaming": `
     import { useCallback, useState } from "react";
     export function useChatStreaming(options) {
@@ -32,6 +37,7 @@ const MOCKS = {
       const version = useRef(0);
       return {
         conversationId: null,
+        noteId: null,
         messages,
         setMessages,
         forkOrigin: globalThis.__forkOrigin ?? null,

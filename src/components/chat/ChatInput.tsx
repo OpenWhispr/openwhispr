@@ -21,6 +21,8 @@ interface ChatInputProps {
   agentState: AgentState;
   partialTranscript: string;
   onTextSubmit?: (text: string) => void;
+  /** Keeps drafting available while the host prepares the conversation. */
+  sendDisabled?: boolean;
   onCancel?: () => void;
   autoFocus?: boolean;
   placeholder?: string;
@@ -83,6 +85,7 @@ export function ChatInput({
   agentState,
   partialTranscript,
   onTextSubmit,
+  sendDisabled = false,
   onCancel,
   autoFocus = false,
   placeholder,
@@ -177,12 +180,12 @@ export function ChatInput({
 
   const handleSubmit = useCallback(() => {
     const text = inputText.trim();
-    if (!text || !onTextSubmit || isBusy) return;
+    if (!text || !onTextSubmit || isBusy || sendDisabled) return;
     // Cleared first, so a host that can't send yet can write the draft back.
     setInputText("");
     onTextSubmit(text);
     focusAfterFrame();
-  }, [inputText, onTextSubmit, setInputText, isBusy, focusAfterFrame]);
+  }, [inputText, onTextSubmit, setInputText, isBusy, sendDisabled, focusAfterFrame]);
 
   // The Cancel button unmounts once the reply stops, which would drop its focus to the page.
   const handleCancel = useCallback(() => {
@@ -460,7 +463,7 @@ export function ChatInput({
               <button
                 key="send"
                 onClick={handleSubmit}
-                disabled={!inputText.trim()}
+                disabled={!inputText.trim() || sendDisabled}
                 aria-label={t("agentMode.input.send")}
                 className={cn(
                   "rounded-full shrink-0",
@@ -468,7 +471,7 @@ export function ChatInput({
                   voiceDraft && "animate-[scale-in_0.15s_ease-out_backwards]",
                   "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
                   "transition-all duration-100",
-                  inputText.trim()
+                  inputText.trim() && !sendDisabled
                     ? "hover:brightness-110 active:scale-95"
                     : hasRoundSend
                       ? "cursor-default"
@@ -479,7 +482,9 @@ export function ChatInput({
                   <span
                     className={cn(
                       "flex size-8 items-center justify-center rounded-full",
-                      inputText.trim() ? GRADIENT_CIRCLE : "bg-muted text-muted-foreground"
+                      inputText.trim() && !sendDisabled
+                        ? GRADIENT_CIRCLE
+                        : "bg-muted text-muted-foreground"
                     )}
                   >
                     <ArrowRight size={18} className="-rotate-90" />

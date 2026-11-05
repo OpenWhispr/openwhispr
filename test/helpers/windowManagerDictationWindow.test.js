@@ -351,6 +351,7 @@ test("native Linux push-to-talk keeps only the dictation low-level listener", as
       },
     };
 
+    manager._nativeKeyListenersReady = true;
     manager.reconcileNativeKeyListeners();
 
     assert.deepEqual(reconciledKeys, ["Control+Space"]);

@@ -106,3 +106,11 @@ test("open-settings-section opens agent and provider error destinations only", a
   assert.deepEqual(await open({}, "system"), { success: false });
   assert.deepEqual(opened, []);
 });
+
+test("Upgrade's Plan & Billing is a section the renderer may ask for", async () => {
+  const open = handlers.get("open-settings-section");
+  opened.length = 0;
+
+  assert.deepEqual(await open({}, "plansBilling"), { success: true });
+  assert.deepEqual(opened, ["plansBilling"]);
+});

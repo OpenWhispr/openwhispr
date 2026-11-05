@@ -790,6 +790,8 @@ export interface Workspace {
   seats: number;
   // Optional: absent from API responses that predate unified billing.
   seats_used?: number;
+  // Absent before API release 4.
+  seat_limit?: number;
   created_at: string;
   updated_at: string;
   role: WorkspaceRole;
@@ -800,6 +802,36 @@ export interface Workspace {
   has_subscription?: boolean;
 }
 
+export interface OwnedMemberContent {
+  user_id: string;
+  owned_notes: number;
+  owned_spaces: number;
+}
+
+export interface MemberRemovalPreview {
+  members: OwnedMemberContent[];
+  already_removed: string[];
+  transfer_required: boolean;
+}
+
+export interface MemberRemovalResult {
+  removed: string[];
+  already_removed: string[];
+  transferred: { to: string; notes: number; spaces: number } | null;
+}
+
+export type InvitationBatchStatus =
+  "invited" | "invalid_email" | "already_member" | "already_invited" | "directory_required";
+
+export interface InvitationBatchResult {
+  results: Array<{ email: string; status: InvitationBatchStatus; email_sent?: boolean }>;
+}
+
+export interface MemberTeamRef {
+  id: string;
+  name: string;
+}
+
 export interface WorkspaceMember {
   user_id: string;
   role: WorkspaceRole;
@@ -808,6 +840,7 @@ export interface WorkspaceMember {
   email: string;
   name: string | null;
   image: string | null;
+  teams?: MemberTeamRef[]; // absent from APIs before release 3
 }
 
 export type TeamRole = "admin" | "member";
@@ -1364,6 +1397,10 @@ export interface ConversationPreview {
   last_message_role?: "user" | "assistant" | "system" | null;
   /** Set on a fork once the chat it was copied from is on this device. */
   parent_conversation_id?: number | null;
+  /** The note the chat was started from, joined in by the Chat list queries. */
+  note_id?: number | null;
+  note_title?: string | null;
+  note_deleted_at?: string | null;
 }
 
 export interface AgentMessageRow {
@@ -1378,6 +1415,7 @@ export interface AgentMessageRow {
 export interface AgentConversationWithMessages {
   id: number;
   title: string;
+  note_id?: number | null;
   /** Main's live ownership claim; never stored or uploaded. */
   has_active_turn?: boolean;
   archived_at?: string;
@@ -1585,7 +1623,7 @@ declare global {
       hideWindow: () => Promise<void>;
       showDictationPanel: () => Promise<void>;
       openSettingsSection?: (
-        section: SettingsTarget | ProviderSettingsTarget
+        section: SettingsTarget | ProviderSettingsTarget | "plansBilling"
       ) => Promise<{ success: boolean }>;
       captureDictationTarget?: () => Promise<{ success: boolean; pid: number | null }>;
       captureDictationAppCategory?: () => Promise<ToneAppCategory>;
@@ -2028,6 +2066,13 @@ declare global {
         imported?: number;
         skipped?: number;
         errors?: Array<{ clientNoteId: string; error: string }>;
+      }>;
+      dragonImportPickFile?: () => Promise<{
+        canceled: boolean;
+        success?: boolean;
+        error?: string;
+        fileName?: string;
+        bytes?: Uint8Array;
       }>;
       showNoteFile?: (noteId: number) => Promise<{ success: boolean }>;
       showFolderInExplorer?: (folderName: string) => Promise<{ success: boolean }>;
@@ -3456,6 +3501,14 @@ declare global {
         success: boolean;
         contacts: Array<{ email: string; display_name: string | null }>;
       }>;
+      /** People to invite: the same calendars and contacts the assistant's find_contact reads. */
+      searchInviteContacts: (
+        query: string,
+        exclude: string[]
+      ) => Promise<{
+        success: boolean;
+        contacts: Array<{ email: string; name: string | null }>;
+      }>;
       upsertContact: (contact: {
         email: string;
         displayName?: string | null;
@@ -3842,6 +3895,7 @@ declare global {
         localFolderId: number | null,
         localSpaceId?: number | null
       ) => Promise<NoteItem | null>;
+      markNoteCreatesAttempted?: (clientNoteIds: string[]) => Promise<string[]>;
       acknowledgeNoteCreate?: (
         id: number,
         snapshot: NoteCreateSnapshot,
@@ -3923,6 +3977,7 @@ declare global {
         cloudConv: Record<string, unknown>,
         messages: Array<Record<string, unknown>>
       ) => Promise<void>;
+      markConversationCreateAttempted?: (id: number) => Promise<{ success: boolean }>;
       acknowledgeConversationCreate?: (
         id: number,
         snapshot: ConversationCreateSnapshot,
