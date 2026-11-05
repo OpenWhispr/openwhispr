@@ -88,7 +88,7 @@ async function load(t, { providerName = "orukeet", stopAbortsStart = true } = {}
   manager._requestStreamingCancellation = () => {
     manager._streamingCancellationGeneration += 1;
   };
-  return { manager, connect, calls };
+  return { manager, connect, calls, vite };
 }
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
@@ -226,6 +226,52 @@ test("managed Orukeet holds audio from before recording is reported", async (t) 
 
   connect.resolve({ success: true });
   assert.equal(await starting, true);
+  assert.equal(calls.sent[0], early);
+});
+
+test("managed Orukeet keeps the audio it held through a session retry", async (t) => {
+  const { manager, calls, vite } = await load(t);
+  (await vite.ssrLoadModule("/lib/auth.ts")).updateLastSignInTime();
+  const frames = [pcmFrame(), pcmFrame()];
+  const answers = [
+    { success: false, code: "AUTH_EXPIRED", error: "Session expired" },
+    { success: true },
+  ];
+  const provider = manager.getStreamingProvider();
+  manager.getStreamingProvider = () => ({
+    ...provider,
+    start: async () => {
+      speak(manager, frames[calls.starts++]);
+      return answers.shift();
+    },
+  });
+
+  assert.equal(await manager.startStreamingRecording(), true);
+  assert.equal(calls.starts, 2);
+  assert.equal(calls.sent.length, 2);
+  assert.equal(calls.sent[0], frames[0]);
+  assert.equal(calls.sent[1], frames[1]);
+});
+
+test("Tone & Style's wait keeps the audio managed Orukeet already held", async (t) => {
+  const { manager, connect, calls, vite } = await load(t);
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  useSettingsStore.setState({ toneStyleEnabled: true });
+  Object.assign(manager, {
+    getPipelineCleanupOptions: () => ({}),
+    toneStylePromise: Promise.resolve("email"),
+    toneStyleStartDeadline: 0,
+  });
+  const early = pcmFrame();
+  const reportRecording = manager.onStateChange;
+  manager.onStateChange = (state) => {
+    speak(manager, early);
+    reportRecording(state);
+  };
+
+  connect.resolve({ success: true });
+  assert.equal(await manager.startStreamingRecording(), true);
+  assert.equal(manager.lastToneAppCategory, "email");
   assert.equal(calls.sent[0], early);
 });
 
