@@ -50,6 +50,7 @@ import {
 } from "../models/registryData.js";
 import {
   isAwaitingCatalog,
+  offeredReplacement,
   retiredLocalSpeechReplacement,
   retiredReplacement,
 } from "../models/modelLifecycle.js";
@@ -3554,7 +3555,7 @@ function moveSelection(storeKey: string, to: string): { alreadyMoved: boolean } 
 function retiredLocalLlm(modelId: string) {
   for (const provider of modelRegistryData.localProviders) {
     const retired = getRetiredModel("localProviders", provider.id, modelId);
-    if (retired) return retired;
+    if (retired) return { retired, providerId: provider.id };
   }
   return undefined;
 }
@@ -3566,9 +3567,9 @@ function retiredLocalLlm(modelId: string) {
 export async function reconcileRetiredLocalLlmSelections(installed?: Set<string>): Promise<void> {
   const state = useSettingsStore.getState() as unknown as Record<string, unknown>;
   const stale = Object.values(INFERENCE_SCOPES).flatMap(({ storeKeys }) => {
-    const retired =
-      state[storeKeys.mode] === "local" ? retiredLocalLlm(state[storeKeys.model] as string) : null;
-    return retired ? [{ storeKey: storeKeys.model, retired }] : [];
+    const modelId = state[storeKeys.model] as string;
+    const found = state[storeKeys.mode] === "local" ? retiredLocalLlm(modelId) : null;
+    return found ? [{ storeKey: storeKeys.model, modelId, ...found }] : [];
   });
   if (stale.length === 0) return;
   const onDisk =
@@ -3578,8 +3579,9 @@ export async function reconcileRetiredLocalLlmSelections(installed?: Set<string>
         .filter((model) => model.isDownloaded)
         .map((model) => model.id)
     );
-  for (const { storeKey, retired } of stale) {
-    const to = retired.replacement && onDisk.has(retired.replacement) ? retired.replacement : "";
+  for (const { storeKey, modelId, retired, providerId } of stale) {
+    const to =
+      offeredReplacement("localProviders", providerId, modelId, (id) => onDisk.has(id)) ?? "";
     const { alreadyMoved } = moveSelection(storeKey, to);
     logger.info("Repointed retired local model", { scope: storeKey, to }, "settings");
     if (alreadyMoved) continue;
@@ -3698,11 +3700,11 @@ export function reconcileRetiredCloudModelSelections(): void {
     const model = state[scope.storeKeys.model] as string;
     if (!provider || !model) continue;
     if (mode === "enterprise") {
-      const named = getRetiredModel("enterpriseProviders", provider, model)?.replacement;
-      const offered = modelRegistryData.enterpriseProviders
-        .find((p) => p.id === provider)
-        ?.models.some((m) => m.id === named);
-      if (named && offered)
+      const offered = modelRegistryData.enterpriseProviders.find((p) => p.id === provider)?.models;
+      const named = offeredReplacement("enterpriseProviders", provider, model, (id) =>
+        Boolean(offered?.some((m) => m.id === id))
+      );
+      if (named)
         repoint("enterpriseProviders", scope.storeKeys.model, provider, model, named, true);
       continue;
     }

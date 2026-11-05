@@ -337,3 +337,49 @@ test("the authorization scheme is exported for the canary to reuse", () => {
   assert.equal(DeepgramStreaming.authorizationHeader("byok", "k"), "Token k");
   assert.equal(DeepgramStreaming.authorizationHeader("openwhispr", "k"), "Bearer k");
 });
+
+test("multilingual mode is only asked of the model known to have it", async () => {
+  const store = await import("../../src/models/registryData.js");
+  const seed = require("../../src/models/modelRegistryData.json");
+  const data = structuredClone(seed);
+  const deepgram = data.transcriptionProviders.find((provider) => provider.id === "deepgram");
+  deepgram.models.push({ ...deepgram.models[0], id: "nova-9", streaming: true });
+  store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1 });
+  const streaming = new DeepgramStreaming();
+  const params = (options) =>
+    new URL(streaming.buildWebSocketUrl({ mode: "byok", ...options })).searchParams;
+
+  assert.equal(params({ model: "nova-9", language: "auto" }).get("model"), "nova-9");
+  assert.equal(params({ model: "nova-9", language: "auto" }).has("language"), false);
+  assert.equal(params({ model: "nova-9", language: "de" }).get("language"), "de");
+  assert.equal(params({ model: "nova-3", language: "auto" }).get("language"), "multi");
+});
+
+test("a warm socket is compared by the model it actually opened on", async () => {
+  const store = await import("../../src/models/registryData.js");
+  const seed = require("../../src/models/modelRegistryData.json");
+  const withModel = (id) => {
+    const data = structuredClone(seed);
+    const deepgram = data.transcriptionProviders.find((provider) => provider.id === "deepgram");
+    if (id) deepgram.models.push({ ...deepgram.models[0], id, streaming: true });
+    store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1 });
+  };
+  const options = { token: "key", mode: "byok", model: "nova-late" };
+
+  await withMetadataServer(async (url, connections) => {
+    const streaming = new DeepgramStreaming();
+    dialLoopback(streaming, url);
+    try {
+      withModel(null);
+      await streaming.warmup(options);
+      assert.equal(connections.length, 1);
+      // The catalog learns the model after the socket opened on the default.
+      withModel("nova-late");
+      await streaming.connect(options);
+      assert.equal(connections.length, 2, "riding it would transcribe on the wrong model");
+    } finally {
+      await streaming.disconnect?.();
+      streaming.cleanupAll?.();
+    }
+  });
+});

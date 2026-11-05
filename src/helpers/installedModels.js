@@ -57,6 +57,13 @@ function rememberInstalledModel(section, providerId, modelId) {
 function parseKey(key) {
   try {
     const [section, providerId, modelId] = JSON.parse(key);
+    // The record is a local file, so nothing in it reaches the catalog on trust.
+    const validPlace =
+      section === "localProviders"
+        ? typeof providerId === "string" && providerId !== ""
+        : (section === "whisperModels" || section === "parakeetModels") && providerId === "";
+    if (!validPlace || typeof modelId !== "string" || !modelId || modelId === "__proto__")
+      return null;
     return { section, providerId, modelId };
   } catch {
     return null;
@@ -93,11 +100,12 @@ function withInstalledModels(data, appVersion) {
   const merged = structuredClone(data);
   for (const [key, entry] of Object.entries(readRecord())) {
     const parsed = parseKey(key);
-    if (!parsed || !isModelSupported(entry, appVersion)) continue;
+    if (!parsed || !entry || typeof entry !== "object" || !isModelSupported(entry, appVersion))
+      continue;
     const { section, providerId, modelId } = parsed;
     if (providerId) {
-      const provider = merged[section]?.find((item) => item.id === providerId);
-      if (provider && !provider.models.some((model) => model.id === modelId))
+      const provider = merged[section]?.find((item) => item?.id === providerId);
+      if (provider?.models && !provider.models.some((model) => model.id === modelId))
         provider.models.push({ ...entry, id: modelId });
     } else if (merged[section] && !Object.hasOwn(merged[section], modelId)) {
       merged[section][modelId] = entry;

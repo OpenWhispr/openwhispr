@@ -355,3 +355,39 @@ test("opting out keeps a saved model from a newer cached catalog, without using 
   await none.loader.start();
   assert.equal(none.applied[0].pending, false, "nothing cached, nothing to wait for");
 });
+
+test("a refused publication is not downloaded again until it changes", async (t) => {
+  let body = signed(9, seed, { tested: ["d".repeat(64)] });
+  let tag = '"untested"';
+  const x = setup(t, {
+    fetch: async (_url, init) => {
+      x.requests.push(init);
+      return init.headers["If-None-Match"] === tag
+        ? new Response(null, { status: 304 })
+        : new Response(body, { headers: { etag: tag } });
+    },
+  });
+  await x.loader.refresh();
+  await x.loader.refresh();
+  await x.loader.refresh();
+  assert.equal(x.requests[0].headers["If-None-Match"], undefined);
+  assert.equal(x.requests[2].headers["If-None-Match"], '"untested"');
+  assert.equal(x.errors.length, 1, "one warning, not one every 15 minutes");
+
+  body = signed(10);
+  tag = '"tested"';
+  await x.loader.refresh();
+  assert.equal(x.loader.getSnapshot().manifestVersion, 10, "the next publication still applies");
+});
+
+test("bytes that fail verification keep no ETag, so the next check downloads again", async (t) => {
+  const x = setup(t, {
+    fetch: async (_url, init) => {
+      x.requests.push(init);
+      return new Response("{", { headers: { etag: '"damaged"' } });
+    },
+  });
+  await x.loader.refresh();
+  await x.loader.refresh();
+  assert.equal(x.requests[1].headers["If-None-Match"], undefined);
+});

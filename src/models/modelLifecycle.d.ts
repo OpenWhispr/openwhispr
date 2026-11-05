@@ -10,6 +10,12 @@ export function retiredReplacement(
   modelId: string,
   providers?: ProviderList
 ): string | null;
+export function offeredReplacement(
+  section: RegistrySection,
+  providerId: string,
+  modelId: string,
+  isOffered: (id: string) => boolean
+): string | null;
 export function retiredLocalSpeechReplacement(
   section: "whisperModels" | "parakeetModels",
   modelId: string

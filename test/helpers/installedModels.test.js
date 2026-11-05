@@ -47,3 +47,41 @@ test("installed local models survive a catalog that lacks them, but retired ones
     false
   );
 });
+
+test("a damaged record can't stop catalog updates or reach the prototype", (t) => {
+  const fs = require("node:fs");
+  const os = require("node:os");
+  const path = require("node:path");
+  const seed = require("../../src/models/modelRegistryData.json");
+  const {
+    configureInstalledModels,
+    withInstalledModels,
+  } = require("../../src/helpers/installedModels");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "installed-damaged-"));
+  t.after(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+    configureInstalledModels(null);
+  });
+  const file = path.join(dir, "installed.json");
+  configureInstalledModels(file);
+  const key = (...parts) => JSON.stringify(parts);
+  fs.writeFileSync(
+    file,
+    JSON.stringify({
+      [key("whisperModels", "", "null-entry")]: null,
+      [key("whisperModels", "", "text-entry")]: "x",
+      [key("whisperModels", "qwen", "wrong-shape")]: { name: "x" },
+      [key("localProviders", "", "no-provider")]: { name: "x" },
+      [key("__proto__", "", "polluted")]: { name: "x" },
+      [key("whisperModels", "", "__proto__")]: { polluted: true },
+      "not json": { name: "x" },
+      [key("whisperModels", "", "kept")]: { name: "Kept" },
+    })
+  );
+  const merged = withInstalledModels(seed, "99.0.0");
+  assert.equal(merged.whisperModels.kept.name, "Kept");
+  for (const id of ["null-entry", "text-entry", "wrong-shape"])
+    assert.equal(Object.hasOwn(merged.whisperModels, id), false, id);
+  assert.equal({}.polluted, undefined);
+  assert.equal(merged.whisperModels.polluted, undefined);
+});

@@ -96,10 +96,13 @@ function createRegistryLoader({
     snapshot = next;
   }
 
-  // Returns true when the bytes hold a newer catalog that is now applied, false when they
-  // hold this or an older version. Throws for anything untrusted or not meant for us.
-  function accept(bytes) {
-    const manifest = validateManifest(verifyEnvelope(bytes, trustedKeys));
+  function readManifest(bytes) {
+    return validateManifest(verifyEnvelope(bytes, trustedKeys));
+  }
+
+  // Returns true when the manifest holds a newer catalog that is now applied, false when it
+  // holds this or an older version. Throws for one not meant for this build.
+  function accept(manifest) {
     // Entries are never deleted, so a catalog in use already holds everything an older one
     // does. That stays true of an older copy cached by a previous app version's reader.
     if (stopped || manifest.manifestVersion <= snapshot.manifestVersion) return false;
@@ -161,7 +164,11 @@ function createRegistryLoader({
         if (response.status === 304) return;
         const bytes = await Promise.race([readBoundedResponse(response), abort]);
         if (stopped || signal.aborted) return;
-        if (accept(bytes)) {
+        const manifest = readManifest(bytes);
+        // Verified bytes get the same answer every time, so even a refused publication
+        // isn't downloaded again until it changes. Unverified bytes may just be damaged.
+        etag = response.headers.get("etag");
+        if (accept(manifest)) {
           await persist(bytes);
         } else if (pending && !stopped) {
           // The newest publication adds nothing to the catalog in use, so nothing is still
@@ -170,7 +177,6 @@ function createRegistryLoader({
           apply(snapshot);
           await persist(bytes);
         }
-        etag = response.headers.get("etag");
       } catch (error) {
         if (!stopped) reportError(error);
       } finally {
@@ -187,7 +193,7 @@ function createRegistryLoader({
     let found = false;
     for (const file of [cachePath, backupPath]) {
       try {
-        accept(await readBoundedCache(file));
+        accept(readManifest(await readBoundedCache(file)));
         return true;
       } catch (error) {
         if (error.code !== "ENOENT") {
@@ -205,9 +211,7 @@ function createRegistryLoader({
   async function cacheHoldsNewerCatalog() {
     for (const file of [cachePath, backupPath]) {
       try {
-        const manifest = validateManifest(
-          verifyEnvelope(await readBoundedCache(file), trustedKeys)
-        );
+        const manifest = readManifest(await readBoundedCache(file));
         if (manifest.manifestVersion > snapshot.manifestVersion) return true;
       } catch (error) {
         if (error.code !== "ENOENT") return true;

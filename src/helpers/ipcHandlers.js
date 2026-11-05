@@ -4822,6 +4822,9 @@ class IPCHandlers {
           "globe-preference-state.json",
           ".system-audio-permission",
           "account-scope-binding.json",
+          "installed-models.json",
+          "model-registry.json",
+          "model-registry.json.backup",
           PAID_KEY_CHECKS_FILE,
         ]) {
           fs.rmSync(path.join(app.getPath("userData"), fileName), { force: true });

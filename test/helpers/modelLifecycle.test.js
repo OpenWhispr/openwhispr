@@ -337,3 +337,42 @@ test("an enterprise scope follows only a named replacement", async (t) => {
   assert.equal(state.chatAgentModel, unnamed.id);
   assert.equal(state.noteFormattingModel, "my-own-deployment");
 });
+
+test("a replacement chain is followed, so skipping publications stays on that line", async () => {
+  const store = await import("../../src/models/registryData.js");
+  const { retiredReplacement, retiredLocalSpeechReplacement, offeredReplacement } =
+    await import("../../src/models/modelLifecycle.js");
+  const { resolveRetiredCloudModel } = await import("../../src/config/retiredCloudModelPolicy.js");
+  const data = structuredClone(seed);
+  retire(data, "cloudProviders", "openai", "gpt-5.5", "gpt-5.6-luna");
+  retire(data, "cloudProviders", "openai", "gpt-5.6-luna", "gpt-6-luna");
+  retire(data, "cloudProviders", "openai", "gpt-6-luna", "gpt-6.1-sol");
+  // A loop must end at the provider's default rather than hang.
+  retire(data, "cloudProviders", "openai", "gpt-5.2", "gpt-5-mini");
+  retire(data, "cloudProviders", "openai", "gpt-5-mini", "gpt-5.2");
+  Object.assign(data.whisperModels.base, { retired: true, replacement: "small" });
+  Object.assign(data.whisperModels.small, { retired: true, replacement: "turbo" });
+  store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1 });
+
+  assert.equal(retiredReplacement("cloudProviders", "openai", "gpt-5.5"), "gpt-6.1-sol");
+  const openaiDefault = data.cloudProviders.find((p) => p.id === "openai").defaultModel;
+  assert.equal(retiredReplacement("cloudProviders", "openai", "gpt-5.2"), openaiDefault);
+  assert.equal(retiredLocalSpeechReplacement("whisperModels", "base"), "turbo");
+  assert.equal(
+    offeredReplacement("cloudProviders", "openai", "gpt-5.5", (id) => id === "gpt-6.1-sol"),
+    "gpt-6.1-sol"
+  );
+  assert.equal(
+    offeredReplacement("cloudProviders", "openai", "gpt-5.5", () => false),
+    null
+  );
+  assert.equal(
+    resolveRetiredCloudModel("openai", "gpt-4.1-nano"),
+    "gpt-6.1-sol",
+    "the static table's target can be retired by the catalog too"
+  );
+  store.replaceRegistryData({
+    data: structuredClone(seed),
+    manifestVersion: store.getRegistryVersion() + 1,
+  });
+});

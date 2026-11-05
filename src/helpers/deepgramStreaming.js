@@ -174,8 +174,11 @@ class DeepgramStreaming {
       interim_results: "true",
     });
     // Deepgram reads a missing language as English, so "auto" asks Nova-3 for
-    // its multilingual mode, which detects and code-switches.
-    params.set("language", lang || "multi");
+    // its multilingual mode, which detects and code-switches. The catalog can publish
+    // other models and says nothing of this mode, and a model without it refuses the
+    // connection, so those keep the English default.
+    if (lang) params.set("language", lang);
+    else if (model === "nova-3") params.set("language", "multi");
     if (Array.isArray(options.keyterms)) {
       // Nova-3 uses "keyterm", Nova-2 uses "keywords"
       const paramName = model.startsWith("nova-2") ? "keywords" : "keyterm";
@@ -279,7 +282,9 @@ class DeepgramStreaming {
       this.cachedToken = token;
       this.tokenFetchedAt = Date.now();
     }
-    this.warmConnectionOptions = options;
+    // Pinned: the catalog can change while this socket is open, and the comparison before
+    // riding it must see the model it opened on.
+    this.warmConnectionOptions = { ...options, resolvedModel: resolveModel(options) };
     this.rewarmAttempts = 0;
 
     const url = this.buildWebSocketUrl(options);

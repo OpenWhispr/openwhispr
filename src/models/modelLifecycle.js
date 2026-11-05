@@ -1,15 +1,30 @@
 import { getRegistryData, getRetiredModel, isCatalogPending } from "./registryData.js";
 
-// The model a retired selection moves to: its named replacement while that is still
+// Follows named replacements to the first one still offered, since someone who skipped
+// several publications can be more than one retirement behind. Null if none is.
+export function offeredReplacement(section, providerId, modelId, isOffered) {
+  const seen = new Set([modelId]);
+  let next = getRetiredModel(section, providerId, modelId)?.replacement;
+  while (next && !seen.has(next)) {
+    if (isOffered(next)) return next;
+    seen.add(next);
+    next = getRetiredModel(section, providerId, next)?.replacement;
+  }
+  return null;
+}
+
+// The model a retired selection moves to: its named replacement while one is still
 // offered, otherwise the provider's default. Null when the selection is not retired.
 export function retiredReplacement(section, providerId, modelId, providers) {
-  const retired = getRetiredModel(section, providerId, modelId);
-  if (!retired) return null;
+  if (!getRetiredModel(section, providerId, modelId)) return null;
   const provider = (providers ?? getRegistryData()[section]).find((p) => p.id === providerId);
   const models = provider?.models ?? [];
-  if (retired.replacement && models.some((model) => model.id === retired.replacement))
-    return retired.replacement;
-  return (models.find((model) => model.id === provider?.defaultModel) ?? models[0])?.id ?? null;
+  const isOffered = (id) => models.some((model) => model.id === id);
+  return (
+    offeredReplacement(section, providerId, modelId, isOffered) ??
+    (models.find((model) => model.id === provider?.defaultModel) ?? models[0])?.id ??
+    null
+  );
 }
 
 // The local speech model a retired selection moves to: its named replacement, otherwise
@@ -21,8 +36,12 @@ export function retiredLocalSpeechReplacement(section, modelId) {
   const models = getRegistryData()[section];
   const engine = (model) => model.modelType === "cohere-transcribe";
   const offered = Object.keys(models).filter((id) => engine(models[id]) === engine(retired));
-  if (offered.includes(retired.replacement)) return retired.replacement;
-  return offered.find((id) => models[id].recommended) ?? offered[0] ?? null;
+  return (
+    offeredReplacement(section, "", modelId, (id) => offered.includes(id)) ??
+    offered.find((id) => models[id].recommended) ??
+    offered[0] ??
+    null
+  );
 }
 
 // While a catalog this app accepted before cannot be loaded (see isCatalogPending), a

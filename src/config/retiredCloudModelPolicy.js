@@ -45,9 +45,10 @@ export const RETIRED_CLOUD_MODELS = {
 
 export function resolveRetiredCloudModel(provider, model) {
   const models = RETIRED_CLOUD_MODELS[provider]?.models;
-  if (models && Object.hasOwn(models, model)) return models[model];
-  // Retirements published in the model catalog, so a stale selection never 404s.
-  return retiredReplacement("cloudProviders", provider, model) ?? model;
+  const mapped = models && Object.hasOwn(models, model) ? models[model] : model;
+  // Retirements published in the model catalog, so a stale selection never 404s. The
+  // table's own target can be one of them.
+  return retiredReplacement("cloudProviders", provider, mapped) ?? mapped;
 }
 
 export function isSelectableTinfoilModel(model) {

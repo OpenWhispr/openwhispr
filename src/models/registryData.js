@@ -23,18 +23,28 @@ const retiredKey = (section, providerId, modelId) => `${section}\0${providerId}\
 function splitRetired(catalog) {
   const visible = structuredClone(catalog);
   const retired = new Map();
-  for (const section of PROVIDER_SECTIONS)
-    for (const provider of visible[section] ?? []) {
-      for (const model of provider.models)
+  // Nothing a catalog holds may stop the app from starting, and every reader expects lists
+  // and maps. Registry CI and model-registry:verify stop these shapes reaching a release.
+  for (const section of PROVIDER_SECTIONS) {
+    if (!Object.hasOwn(visible, section)) continue;
+    const providers = Array.isArray(visible[section]) ? visible[section].filter(Boolean) : [];
+    for (const provider of providers) {
+      const models = Array.isArray(provider.models) ? provider.models : [];
+      for (const model of models)
         if (model.retired) retired.set(retiredKey(section, provider.id, model.id), model);
-      provider.models = provider.models.filter((model) => !model.retired);
+      provider.models = models.filter((model) => !model.retired);
     }
-  for (const section of MAP_SECTIONS)
-    for (const [id, model] of Object.entries(visible[section] ?? {}))
-      if (model.retired) {
+    visible[section] = providers;
+  }
+  for (const section of MAP_SECTIONS) {
+    if (!Object.hasOwn(visible, section)) continue;
+    if (!visible[section] || typeof visible[section] !== "object") visible[section] = {};
+    for (const [id, model] of Object.entries(visible[section]))
+      if (model?.retired) {
         retired.set(retiredKey(section, "", id), model);
         delete visible[section][id];
       }
+  }
   return { visible, retired };
 }
 

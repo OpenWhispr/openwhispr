@@ -128,3 +128,25 @@ test("the same version can clear pending, but never set it or replay an old snap
   assert.equal(store.isCatalogPending(), false);
   unsubscribe();
 });
+
+test("a malformed catalog never throws, and every reader still gets lists", async () => {
+  const store = await import("../../src/models/registryData.js");
+  const data = structuredClone(seed);
+  delete data.localProviders[0].models;
+  data.localProviders.push(null);
+  data.cloudProviders = "not a list";
+  data.whisperModels = "not a map";
+  assert.equal(
+    store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1 }),
+    true
+  );
+  const live = store.getRegistryData();
+  assert.deepEqual(live.localProviders[0].models, []);
+  assert.equal(live.localProviders.includes(null), false);
+  assert.deepEqual(live.cloudProviders, []);
+  assert.deepEqual(live.whisperModels, {});
+  store.replaceRegistryData({
+    data: structuredClone(seed),
+    manifestVersion: store.getRegistryVersion() + 1,
+  });
+});
