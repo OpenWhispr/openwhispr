@@ -814,6 +814,7 @@ test("a note action with no local model answers with the Settings line", async (
     errorEvents.map((event) => [event.noteId, event.message]),
     [[803, "notes.actions.errors.noModel"]]
   );
+  assert.equal(calls.length, 0);
 });
 
 test("a run blocked by policy says why and where to choose, not that no model is set up", async (t) => {
