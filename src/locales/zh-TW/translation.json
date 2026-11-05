@@ -2786,7 +2786,9 @@
         "people_one": "{{count}} 人",
         "people_other": "{{count}} 人",
         "spaces_one": "{{count}} 個 Teamspace",
-        "spaces_other": "{{count}} 個 Teamspace"
+        "spaces_other": "{{count}} 個 Teamspace",
+        "refreshFailed": "無法重新整理團隊。此清單可能不是最新的。",
+        "cellMenuLabel": "{{team}}：{{value}}"
       },
       "invites": {
         "resending": "重新傳送中…",

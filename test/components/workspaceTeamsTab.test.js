@@ -133,7 +133,7 @@ async function loadTab(t, { workspace = ADMIN, status = "ready", teams = [], sta
         const h = React.createElement;
         export const Popover = ({ children, onOpenChange }) =>
           h("div", { "data-popover": "", onToggle: onOpenChange }, children);
-        export const PopoverTrigger = ({ children }) => h("button", { "data-trigger": "" }, children);
+        export const PopoverTrigger = ({ children, "aria-label": label }) => h("button", { "data-trigger": "", "aria-label": label }, children);
         export const PopoverContent = ({ children }) => h("div", { "data-popover-content": "" }, children);
       `,
     },
@@ -251,7 +251,7 @@ test("a failed reload keeps the rows and says the list may be out of date", asyn
   const markup = render(Tab, workspace);
 
   assert.match(markup, /Designers/);
-  assert.match(markup, /settingsPage\.workspace\.people\.invitations\.refreshFailed/);
+  assert.match(markup, /settingsPage\.workspace\.teams\.refreshFailed/);
   assert.match(markup, /workspaces\.exit\.tryAgain/);
 });
 
@@ -401,6 +401,18 @@ test("Teamspaces reads None, a name, or a count", async (t) => {
   assert.doesNotMatch(one, new RegExp(`${KEY}\\.spaces\\|`));
   const many = rowMarkup(markup, "Eng");
   assert.match(many, new RegExp(`${KEY}\\.spaces\\|count=2`));
+  assert.match(
+    many,
+    new RegExp(
+      `aria-label="${KEY}\\.cellMenuLabel\\|team=\u2068Eng\u2069,value=${KEY}\\.spaces\\|count=2"`
+    )
+  );
+  assert.match(
+    rowMarkup(markup, "Designers"),
+    new RegExp(
+      `aria-label="${KEY}\\.cellMenuLabel\\|team=\u2068Designers\u2069,value=${KEY}\\.people\\|count=3"`
+    )
+  );
   assert.match(many, /Roadmap/);
   assert.match(many, /Incidents/);
   assert.match(many, /🗺/);

@@ -2057,7 +2057,9 @@
         "people_one": "{{count}} Person",
         "people_other": "{{count}} Personen",
         "spaces_one": "{{count}} Teamspace",
-        "spaces_other": "{{count}} Teamspaces"
+        "spaces_other": "{{count}} Teamspaces",
+        "refreshFailed": "Teams konnten nicht aktualisiert werden. Die Liste ist möglicherweise veraltet.",
+        "cellMenuLabel": "{{team}}: {{value}}"
       },
       "invites": {
         "resending": "Sende erneut…",

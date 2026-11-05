@@ -2846,7 +2846,9 @@
         "spaces_one": "{{count}} teamspace",
         "spaces_few": "{{count}} teamspace",
         "spaces_many": "{{count}} teamspace",
-        "spaces_other": "{{count}} teamspace"
+        "spaces_other": "{{count}} teamspace",
+        "refreshFailed": "Не удалось обновить команды. Список может быть устаревшим.",
+        "cellMenuLabel": "{{team}}: {{value}}"
       },
       "invites": {
         "resending": "Отправка…",

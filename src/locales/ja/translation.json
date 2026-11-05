@@ -2786,7 +2786,9 @@
         "people_one": "{{count}} 人",
         "people_other": "{{count}} 人",
         "spaces_one": "{{count}} 個の Teamspace",
-        "spaces_other": "{{count}} 個の Teamspace"
+        "spaces_other": "{{count}} 個の Teamspace",
+        "refreshFailed": "チームを更新できませんでした。この一覧は最新ではない可能性があります。",
+        "cellMenuLabel": "{{team}}：{{value}}"
       },
       "invites": {
         "resending": "再送信中…",

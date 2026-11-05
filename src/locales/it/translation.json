@@ -2786,7 +2786,9 @@
         "people_one": "{{count}} persona",
         "people_other": "{{count}} persone",
         "spaces_one": "{{count}} teamspace",
-        "spaces_other": "{{count}} teamspace"
+        "spaces_other": "{{count}} teamspace",
+        "refreshFailed": "Impossibile aggiornare i team. Questo elenco potrebbe non essere aggiornato.",
+        "cellMenuLabel": "{{team}}: {{value}}"
       },
       "invites": {
         "resending": "Reinvio…",

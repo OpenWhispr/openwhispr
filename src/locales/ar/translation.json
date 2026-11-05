@@ -4289,7 +4289,9 @@
         "spaces_two": "{{count}} مساحتا فريق",
         "spaces_few": "{{count}} مساحات فريق",
         "spaces_many": "{{count}} مساحة فريق",
-        "spaces_other": "{{count}} مساحة فريق"
+        "spaces_other": "{{count}} مساحة فريق",
+        "refreshFailed": "تعذّر تحديث الفرق. قد لا تكون هذه القائمة محدّثة.",
+        "cellMenuLabel": "{{team}}: {{value}}"
       },
       "invites": {
         "resending": "جاري إعادة الإرسال…",

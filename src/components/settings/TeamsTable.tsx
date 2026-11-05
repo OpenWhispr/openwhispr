@@ -6,6 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import MemberAvatar from "../MemberAvatar";
 import { TileGlyph } from "../notes/SpaceNameField";
 import { cn } from "../lib/utils";
+import { isolate } from "../../utils/bidiIsolate";
 import { TeamsService } from "../../services/TeamsService";
 import type { WorkspaceTeamsState } from "../../hooks/useWorkspaceTeams";
 import type { Team, TeamMember } from "../../types/electron";
@@ -165,7 +166,7 @@ function TeamRow({
         <MembersCell team={team} />
       </td>
       <td className="ps-3 pe-4 max-w-0" onClick={stopRowClick}>
-        <SpacesCell spaces={team.spaces ?? []} />
+        <SpacesCell teamName={team.name} spaces={team.spaces ?? []} />
       </td>
     </tr>
   );
@@ -203,7 +204,13 @@ function MembersCell({ team }: { team: Team }): React.ReactElement {
 
   return (
     <Popover onOpenChange={(open) => open && void read()}>
-      <PopoverTrigger className={CONTACTS_TRIGGER}>
+      <PopoverTrigger
+        className={CONTACTS_TRIGGER}
+        aria-label={t("settingsPage.workspace.teams.cellMenuLabel", {
+          team: isolate(team.name),
+          value: label,
+        })}
+      >
         <span className="truncate">{label}</span>
         <ChevronDown className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
       </PopoverTrigger>
@@ -262,8 +269,15 @@ function SpaceGlyph({ emoji }: { emoji: string | null }): React.ReactElement {
   );
 }
 
-function SpacesCell({ spaces }: { spaces: TeamSpaces }): React.ReactElement {
+function SpacesCell({
+  teamName,
+  spaces,
+}: {
+  teamName: string;
+  spaces: TeamSpaces;
+}): React.ReactElement {
   const { t } = useTranslation();
+  const label = t("settingsPage.workspace.teams.spaces", { count: spaces.length });
 
   if (spaces.length === 0) {
     return (
@@ -287,10 +301,14 @@ function SpacesCell({ spaces }: { spaces: TeamSpaces }): React.ReactElement {
 
   return (
     <Popover>
-      <PopoverTrigger className={CONTACTS_TRIGGER}>
-        <span className="truncate">
-          {t("settingsPage.workspace.teams.spaces", { count: spaces.length })}
-        </span>
+      <PopoverTrigger
+        className={CONTACTS_TRIGGER}
+        aria-label={t("settingsPage.workspace.teams.cellMenuLabel", {
+          team: isolate(teamName),
+          value: label,
+        })}
+      >
+        <span className="truncate">{label}</span>
         <ChevronDown className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64 p-1.5">

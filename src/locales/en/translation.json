@@ -2057,7 +2057,9 @@
         "people_one": "{{count}} person",
         "people_other": "{{count}} people",
         "spaces_one": "{{count}} teamspace",
-        "spaces_other": "{{count}} teamspaces"
+        "spaces_other": "{{count}} teamspaces",
+        "refreshFailed": "Couldn't refresh teams. This list may be out of date.",
+        "cellMenuLabel": "{{team}}: {{value}}"
       },
       "invites": {
         "resending": "Resending…",

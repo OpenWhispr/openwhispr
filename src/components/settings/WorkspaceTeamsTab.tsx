@@ -27,7 +27,7 @@ export default function WorkspaceTeamsTab({ workspace }: Props): React.ReactElem
     <div className="space-y-4">
       {stale && (
         <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-          <p>{t("settingsPage.workspace.people.invitations.refreshFailed")}</p>
+          <p>{t("settingsPage.workspace.teams.refreshFailed")}</p>
           <Button variant="outline" size="sm" onClick={() => void reload()}>
             {t("workspaces.exit.tryAgain")}
           </Button>
