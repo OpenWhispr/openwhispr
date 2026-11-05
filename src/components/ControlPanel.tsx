@@ -266,7 +266,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     await createNote();
     setActiveView("personal-notes");
   }, [createNote]);
-  const showDictionary = useCallback(() => setActiveView("dictionary"), []);
+  const showDictionary = useCallback(() => {
+    setShowSettings(false);
+    setSettingsSection(undefined);
+    setActiveView("dictionary");
+  }, []);
   const policyActionsAllowed = usePolicyStore((state) => isPolicyActionAllowed(state));
   useEffect(() => {
     if (!isControlPanelViewAllowed(activeView, agentAllowedByPolicy, policyActionsAllowed)) {
