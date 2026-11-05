@@ -1,0 +1,52 @@
+# EAS uploads from the Git repository root. Include the mobile app and its
+# shared font downloader, without desktop sources or local native build output.
+/*
+!/.easignore
+!/openwhispr-mobile
+!/scripts
+/scripts/*
+!/scripts/download-brand-fonts.js
+!/scripts/lib
+/scripts/lib/*
+!/scripts/lib/download-utils.js
+
+# Keep these exclusions aligned with openwhispr-mobile/.gitignore.
+node_modules
+.expo
+dist
+web-build
+expo-env.d.ts
+.kotlin
+*.orig.*
+*.jks
+*.keystore
+*.p8
+*.p12
+*.key
+*.mobileprovision
+.metro-health-check*
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.DS_Store
+*.pem
+.env*
+*.tsbuildinfo
+/openwhispr-mobile/ios
+/openwhispr-mobile/android
+credentials
+credentials.json
+.claude
+.agents
+skills-lock.json
+.superpowers
+build
+coverage
+
+# Licensed fonts remain out of Git; the private EAS archive embeds them in the
+# native app. Fetch all five before building (npm run download:brand-fonts).
+!/openwhispr-mobile/assets/fonts/yowza/yowza-std-regular.otf
+!/openwhispr-mobile/assets/fonts/yowza/yowza-std-medium.otf
+!/openwhispr-mobile/assets/fonts/yowza/yowza-std-bold.otf
+!/openwhispr-mobile/assets/fonts/yowza/yowza-soft-std-regular.otf
+!/openwhispr-mobile/assets/fonts/yowza/yowza-soft-std-medium.otf
