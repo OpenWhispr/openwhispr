@@ -1923,6 +1923,7 @@
           "removeBodyPlain": "{{name}} verliert den Zugriff auf diesen Teamspace und seine Notizen. Die Person bleibt im Workspace.",
           "invitationPendingAdmin": "Einladung ausstehend · Workspace-Admin",
           "resultInvitedNoEmail": "Einladungen für {{names}} wurden erstellt, aber die E-Mail konnte nicht zugestellt werden. Senden Sie sie unter Einladungen erneut.",
+          "resultInvitedPending": "{{names}} hatte bereits eine Workspace-Einladung, daher wurde dieser Teamspace hinzugefügt. Es wurde keine neue E-Mail gesendet, und die Workspace-Rolle in dieser Einladung bleibt unverändert.",
           "stepDownTitle": "Als Admin von {{space}} zurücktreten?",
           "stepDownBody": "Sie können diesen Teamspace und seine Mitglieder dann nicht mehr verwalten. Nur ein anderer Admin kann Sie wieder zum Admin machen.",
           "stepDownConfirm": "Zurücktreten"
@@ -1936,6 +1937,7 @@
           "deleteAction": "Teamspace löschen",
           "flagsFailed": "Diese Einstellungen konnten nicht geladen werden.",
           "flagSaveFailed": "Speichern nicht möglich. Versuchen Sie es erneut.",
+          "deleteDefaultAdminOnly": "Nur Workspace-Admins können einen Standard-Teamspace löschen.",
           "defaultAdminOnly": "Nur Workspace-Administratoren können das ändern."
         },
         "exit": {
@@ -3346,6 +3348,10 @@
       "submitting_other": "{{count}} Personen werden eingeladen…",
       "sentTitle_one": "{{count}} Einladung gesendet",
       "sentTitle_other": "{{count}} Einladungen gesendet",
+      "attachedTitle_one": "{{count}} Einladung aktualisiert",
+      "attachedTitle_other": "{{count}} Einladungen aktualisiert",
+      "attachedBody_one": "{{count}} Adresse hatte bereits eine Workspace-Einladung, daher wurde dies hinzugefügt. Es wurde keine neue E-Mail gesendet.",
+      "attachedBody_other": "{{count}} Adressen hatten bereits Workspace-Einladungen, daher wurde dies hinzugefügt. Es wurde keine neue E-Mail gesendet.",
       "createdTitle_one": "{{count}} Einladung erstellt",
       "createdTitle_other": "{{count}} Einladungen erstellt",
       "sentOne": "{{email}} wurde zu {{workspace}} eingeladen",

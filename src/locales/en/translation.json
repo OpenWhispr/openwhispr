@@ -1923,6 +1923,7 @@
           "removeBodyPlain": "{{name}} will lose access to this teamspace and its notes. They'll stay in the workspace.",
           "invitationPendingAdmin": "Invitation pending · Workspace Admin",
           "resultInvitedNoEmail": "Created invitations for {{names}}, but the email couldn't be delivered. Resend it from Invitations.",
+          "resultInvitedPending": "{{names}} already had a workspace invitation, so this teamspace was added to it. No new email was sent, and the workspace role on that invitation stays as it was.",
           "stepDownTitle": "Step down as admin of {{space}}?",
           "stepDownBody": "You won't be able to manage this teamspace or its members. Only another admin can make you an admin again.",
           "stepDownConfirm": "Step down"
@@ -1936,6 +1937,7 @@
           "deleteAction": "Delete teamspace",
           "flagsFailed": "Couldn't load these settings.",
           "flagSaveFailed": "Couldn't save that. Try again.",
+          "deleteDefaultAdminOnly": "Only workspace admins can delete a Default teamspace.",
           "defaultAdminOnly": "Only workspace admins can change this."
         },
         "exit": {
@@ -3346,6 +3348,10 @@
       "submitting_other": "Inviting {{count}}…",
       "sentTitle_one": "{{count}} invitation sent",
       "sentTitle_other": "{{count}} invitations sent",
+      "attachedTitle_one": "{{count}} invitation updated",
+      "attachedTitle_other": "{{count}} invitations updated",
+      "attachedBody_one": "{{count}} address already had a workspace invitation, so this was added to it. No new email was sent.",
+      "attachedBody_other": "{{count}} addresses already had workspace invitations, so this was added to them. No new email was sent.",
       "createdTitle_one": "{{count}} invitation created",
       "createdTitle_other": "{{count}} invitations created",
       "sentOne": "Invited {{email}} to {{workspace}}",

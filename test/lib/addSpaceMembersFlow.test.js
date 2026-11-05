@@ -23,6 +23,7 @@ const outcome = (overrides = {}) => ({
   invited: [],
   failedInvites: [],
   refusedInvites: [],
+  pendingInvites: [],
   skippedInvites: [],
   leftMembers: [],
   ...overrides,

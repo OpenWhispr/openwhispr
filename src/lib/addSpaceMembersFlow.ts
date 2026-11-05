@@ -17,6 +17,8 @@ export interface AddAttemptOutcome {
   invited: PickedRecipient[];
   /** The invited whose invitation exists but whose email couldn't be delivered. */
   undeliveredInvites: PickedRecipient[];
+  // In `invited` too: the invitation they already had took the teamspace, and no email went out.
+  pendingInvites: PickedRecipient[];
   failedInvites: PickedRecipient[];
   refusedInvites: InviteRefusal[];
   /**

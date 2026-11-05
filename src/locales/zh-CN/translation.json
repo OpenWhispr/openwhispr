@@ -2652,6 +2652,7 @@
           "removeBodyPlain": "{{name}} 将无法再访问此 Teamspace 及其笔记，但仍留在工作区中。",
           "invitationPendingAdmin": "邀请待接受 · 工作区管理员",
           "resultInvitedNoEmail": "已为 {{names}} 创建邀请，但邮件未能送达。请在“邀请”中重新发送。",
+          "resultInvitedPending": "{{names}} 已有工作区邀请，因此已将此团队空间添加到该邀请中。未发送新邮件，该邀请中的工作区角色保持不变。",
           "stepDownTitle": "要卸任 {{space}} 的管理员吗？",
           "stepDownBody": "你将无法再管理此 Teamspace 及其成员。只有其他管理员才能让你重新成为管理员。",
           "stepDownConfirm": "卸任"
@@ -2665,6 +2666,7 @@
           "deleteAction": "删除 Teamspace",
           "flagsFailed": "无法加载这些设置。",
           "flagSaveFailed": "无法保存。请重试。",
+          "deleteDefaultAdminOnly": "只有工作区管理员可以删除默认团队空间。",
           "defaultAdminOnly": "只有工作区管理员可以更改此项。"
         },
         "exit": {
@@ -5462,6 +5464,10 @@
       "submitting_other": "正在邀请 {{count}} 人…",
       "sentTitle_one": "已发送 {{count}} 份邀请",
       "sentTitle_other": "已发送 {{count}} 份邀请",
+      "attachedTitle_one": "已更新 {{count}} 个邀请",
+      "attachedTitle_other": "已更新 {{count}} 个邀请",
+      "attachedBody_one": "{{count}} 个地址已有工作区邀请，因此已添加到这些邀请中。未发送新邮件。",
+      "attachedBody_other": "{{count}} 个地址已有工作区邀请，因此已添加到这些邀请中。未发送新邮件。",
       "createdTitle_one": "已创建 {{count}} 封邀请",
       "createdTitle_other": "已创建 {{count}} 封邀请",
       "sentOne": "已邀请 {{email}} 加入 {{workspace}}",

@@ -2652,6 +2652,7 @@
           "removeBodyPlain": "{{name}} perderà l'accesso a questo Teamspace e alle sue note. Resterà nell'area di lavoro.",
           "invitationPendingAdmin": "Invito in sospeso · Amministratore dell'area di lavoro",
           "resultInvitedNoEmail": "Inviti creati per {{names}}, ma non è stato possibile recapitare l'email. Inviala di nuovo da Inviti.",
+          "resultInvitedPending": "{{names}} aveva già un invito all'area di lavoro, quindi questo teamspace è stato aggiunto all'invito. Non è stata inviata alcuna nuova email e il ruolo nell'area di lavoro resta quello dell'invito.",
           "stepDownTitle": "Lasciare il ruolo di amministratore di {{space}}?",
           "stepDownBody": "Non potrai più gestire questo Teamspace né i suoi membri. Solo un altro amministratore potrà renderti di nuovo amministratore.",
           "stepDownConfirm": "Lascia il ruolo"
@@ -2665,6 +2666,7 @@
           "deleteAction": "Elimina teamspace",
           "flagsFailed": "Impossibile caricare queste impostazioni.",
           "flagSaveFailed": "Impossibile salvare. Riprova.",
+          "deleteDefaultAdminOnly": "Solo gli amministratori dell'area di lavoro possono eliminare un teamspace predefinito.",
           "defaultAdminOnly": "Solo gli amministratori dell'area di lavoro possono modificarlo."
         },
         "exit": {
@@ -5483,6 +5485,10 @@
       "submitting_other": "Invito di {{count}} persone in corso…",
       "sentTitle_one": "{{count}} invito inviato",
       "sentTitle_other": "{{count}} inviti inviati",
+      "attachedTitle_one": "{{count}} invito aggiornato",
+      "attachedTitle_other": "{{count}} inviti aggiornati",
+      "attachedBody_one": "{{count}} indirizzo aveva già un invito all'area di lavoro, quindi questo è stato aggiunto all'invito. Non è stata inviata alcuna nuova email.",
+      "attachedBody_other": "{{count}} indirizzi avevano già inviti all'area di lavoro, quindi questo è stato aggiunto agli inviti. Non è stata inviata alcuna nuova email.",
       "createdTitle_one": "{{count}} invito creato",
       "createdTitle_other": "{{count}} inviti creati",
       "sentOne": "Hai invitato {{email}} in {{workspace}}",

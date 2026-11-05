@@ -51,6 +51,7 @@ export const {
   renameSpace,
   deleteSpace,
   holdSpaceDelete,
+  commitHeldDeletes,
   assignTeamToSpace,
   setSpaceTeamAccess,
   unassignTeamFromSpace,
@@ -68,3 +69,5 @@ export const {
   leaveTeam,
   deleteTeam,
 } = actions;
+
+window.addEventListener("beforeunload", commitHeldDeletes);

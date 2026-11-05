@@ -304,6 +304,7 @@ export default function SpaceSettingsDialog({
   };
 
   const flagsReady = Boolean(row);
+  const deleteLocked = Boolean(cloudSpaceId) && flagValue("is_default") && !isWorkspaceAdmin;
   const flagDisabled = (flag: AccessFlag, allowed: boolean): boolean =>
     !flagsReady || !allowed || savingFlags.has(flag);
 
@@ -388,9 +389,15 @@ export default function SpaceSettingsDialog({
                 ? t("settingsPage.workspace.teamspaces.settings.deleteBody")
                 : t("notes.spaces.deleteHintLocal")
             }
+            hint={
+              deleteLocked
+                ? t("settingsPage.workspace.teamspaces.settings.deleteDefaultAdminOnly")
+                : undefined
+            }
           >
             <button
               type="button"
+              disabled={deleteLocked}
               onClick={() => {
                 // A local teamspace asks for its name in a dialog of its own, so this one steps
                 // aside first. A cloud one asks over this dialog, as the frames show, and a
@@ -400,7 +407,7 @@ export default function SpaceSettingsDialog({
               }}
               className={cn(
                 ROW_BUTTON_CLASS,
-                "bg-destructive/10 text-destructive hover:bg-destructive/20"
+                "bg-destructive/10 text-destructive hover:bg-destructive/20 disabled:cursor-not-allowed disabled:opacity-50"
               )}
             >
               {t("settingsPage.workspace.teamspaces.settings.deleteAction")}

@@ -357,6 +357,13 @@ test("Default is read-only for a teamspace admin without manage_settings", async
   assert.deepEqual(switchStates(), ["true", "false"]);
 });
 
+test("only a workspace admin is offered Delete on a Default teamspace", async (t) => {
+  await mount(t, { workspace: workspaceWith({ manage_settings: false }) });
+
+  assert.match(text(settings()), /Only workspace admins can delete a Default teamspace\./);
+  assert.equal(settingsButton("Delete teamspace").disabled, true);
+});
+
 test("a workspace admin changes Default, and isn't told otherwise", async (t) => {
   await mount(t);
 

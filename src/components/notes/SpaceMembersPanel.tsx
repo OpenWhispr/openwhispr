@@ -135,6 +135,7 @@ function emptyOutcome(): AddAttemptOutcome {
     failedGroups: [],
     invited: [],
     undeliveredInvites: [],
+    pendingInvites: [],
     failedInvites: [],
     refusedInvites: [],
     skippedInvites: [],
@@ -220,6 +221,7 @@ async function runAddAttempt(input: {
           if (result.ok === true || result.grantsAdded === true) {
             outcome.invited.push(recipient);
             if (result.ok === true && !result.emailSent) outcome.undeliveredInvites.push(recipient);
+            if (result.ok !== true) outcome.pendingInvites.push(recipient);
           }
           // An older API attaches no teamspace to an invitation that already exists, so this
           // address isn't in the teamspace, and sending it again wouldn't change that.
@@ -263,15 +265,19 @@ function describeAttempt(
   const sentences: string[] = [];
   const kind = attemptSummary(outcome).kind;
   const delivered = outcome.invited.filter(
-    (recipient) => !outcome.undeliveredInvites.includes(recipient)
+    (recipient) =>
+      !outcome.undeliveredInvites.includes(recipient) && !outcome.pendingInvites.includes(recipient)
   );
   const undelivered = outcome.undeliveredInvites;
+  const pending = outcome.pendingInvites;
   // Their invitation is there, but nobody told them: Invitations is where it can be sent again.
   const invitedSentences = (): string[] => [
     ...(delivered.length > 0 ? [t(`${COPY}.resultInvited`, { names: names(delivered) })] : []),
     ...(undelivered.length > 0
       ? [t(`${COPY}.resultInvitedNoEmail`, { names: names(undelivered) })]
       : []),
+    // No email went out for these: the invitation they already had just gained this teamspace.
+    ...(pending.length > 0 ? [t(`${COPY}.resultInvitedPending`, { names: names(pending) })] : []),
   ];
 
   // What the invite dialog says about each kind. Some of its lines name nobody, and a refused

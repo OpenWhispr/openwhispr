@@ -62,7 +62,10 @@ export default function InviteTeammateDialog({
   knownEmails,
 }: Props): ReactElement {
   const { t } = useTranslation();
-  const [state, setState] = useState<InviteFlowState>(() => createInviteFlow({ initialEmail }));
+  const attachInvited = Boolean(teamIds?.length || spaceIds?.length);
+  const [state, setState] = useState<InviteFlowState>(() =>
+    createInviteFlow({ initialEmail, attachInvited })
+  );
   const [wasOpen, setWasOpen] = useState(open);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [seatPreview, setSeatPreview] = useState<SeatPreview | null>(null);
@@ -96,7 +99,7 @@ export default function InviteTeammateDialog({
   if (open !== wasOpen) {
     setWasOpen(open);
     if (open) {
-      setState(createInviteFlow({ initialEmail }));
+      setState(createInviteFlow({ initialEmail, attachInvited }));
       setContacts([]);
     }
   }
@@ -152,8 +155,9 @@ export default function InviteTeammateDialog({
   const excludedKey = JSON.stringify([
     ...state.recipients.map((recipient) => recipient.email),
     ...state.sent.map((entry) => entry.email),
+    ...state.attached,
     ...roster.memberEmails,
-    ...roster.invitedEmails,
+    ...(attachInvited ? [] : roster.invitedEmails),
   ]);
   const excluded = useMemo((): string[] => JSON.parse(excludedKey) as string[], [excludedKey]);
 
@@ -314,7 +318,7 @@ export default function InviteTeammateDialog({
         canManageBilling={canManageBilling}
         billingManager={billingManager}
         onUpgrade={handleUpgrade}
-        addsToContainer={Boolean(teamIds?.length || spaceIds?.length)}
+        addsToContainer={attachInvited}
         cancelLabel={cancelLabel ?? t("common.cancel")}
         onCancel={close}
         onSend={() => void handleSend()}

@@ -2631,6 +2631,7 @@
           "removeBodyPlain": "{{name}} perderá o acesso a este Teamspace e às notas dele. A pessoa continuará no workspace.",
           "invitationPendingAdmin": "Convite pendente · Administrador do workspace",
           "resultInvitedNoEmail": "Convites criados para {{names}}, mas não foi possível entregar o e-mail. Reenvie em Convites.",
+          "resultInvitedPending": "{{names}} já tinha um convite para o espaço de trabalho, então este teamspace foi adicionado a ele. Nenhum novo e-mail foi enviado e a função no espaço de trabalho desse convite não muda.",
           "stepDownTitle": "Deixar de ser administrador de {{space}}?",
           "stepDownBody": "Você não poderá mais gerenciar este Teamspace nem os membros dele. Só outro administrador poderá torná-lo administrador novamente.",
           "stepDownConfirm": "Deixar o cargo"
@@ -2644,6 +2645,7 @@
           "deleteAction": "Excluir teamspace",
           "flagsFailed": "Não foi possível carregar estas configurações.",
           "flagSaveFailed": "Não foi possível salvar. Tente novamente.",
+          "deleteDefaultAdminOnly": "Somente administradores do espaço de trabalho podem excluir um teamspace padrão.",
           "defaultAdminOnly": "Somente administradores do espaço de trabalho podem alterar isso."
         },
         "exit": {
@@ -5483,6 +5485,10 @@
       "submitting_other": "Convidando {{count}} pessoas…",
       "sentTitle_one": "{{count}} convite enviado",
       "sentTitle_other": "{{count}} convites enviados",
+      "attachedTitle_one": "{{count}} convite atualizado",
+      "attachedTitle_other": "{{count}} convites atualizados",
+      "attachedBody_one": "{{count}} endereço já tinha um convite para o espaço de trabalho, então isto foi adicionado a ele. Nenhum novo e-mail foi enviado.",
+      "attachedBody_other": "{{count}} endereços já tinham convites para o espaço de trabalho, então isto foi adicionado a eles. Nenhum novo e-mail foi enviado.",
       "createdTitle_one": "{{count}} convite criado",
       "createdTitle_other": "{{count}} convites criados",
       "sentOne": "Você convidou {{email}} para {{workspace}}",

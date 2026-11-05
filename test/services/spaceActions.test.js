@@ -474,6 +474,24 @@ test("a held delete only hides the teamspace: nothing is sent, guarded or purged
   assert.deepEqual(calls, [["hold.hide", 7, "cloud-space-1"]]);
 });
 
+test("leaving the page sends what's still held, but not what was undone or already sent", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps, localSpace } = makeHarness();
+  const actions = createSpaceActions(deps);
+  const undone = actions.holdSpaceDelete(localSpace);
+  await undone.undo();
+  calls.length = 0;
+
+  const held = actions.holdSpaceDelete(localSpace);
+  actions.commitHeldDeletes();
+  await new Promise((resolve) => setImmediate(resolve));
+  actions.commitHeldDeletes();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(namesOf(calls).filter((name) => name === "space.remove").length, 1);
+  assert.equal(await held.commit(), null, "the toast ending later has nothing left to do");
+});
+
 test("Undo releases the hold and returns to the view, and the delete never goes", async () => {
   const { createSpaceActions } = await load();
   const { calls, deps, localSpace } = makeHarness();

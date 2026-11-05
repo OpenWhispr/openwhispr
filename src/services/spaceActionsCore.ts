@@ -113,6 +113,8 @@ function isLostAnswer(err: unknown): boolean {
 }
 
 export function createSpaceActions(deps: SpaceActionsDependencies) {
+  const openHolds = new Set<SpaceDeleteHold>();
+
   // Creates whose answer was lost and which the follow-up read couldn't settle, by when they were
   // tried. A dropped connection usually takes that read down too, so the retry settles it instead.
   const unsettledCreates = new Map<string, number>();
@@ -304,6 +306,12 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     return holdForAccount(space, deps.deleteHold.accountGeneration());
   }
 
+  // The toast that ends the window goes with the page, and it told the user this was deleted.
+  // Best effort: a request the app quits before sending leaves the teamspace as it was.
+  function commitHeldDeletes(): void {
+    for (const hold of openHolds) void hold.commit();
+  }
+
   function holdForAccount(space: SpaceItem, accountGeneration: number): SpaceDeleteHold {
     const cloudSpaceId = requireCloudSpaceId(space);
     const accountChanged = (): boolean => deps.deleteHold.accountGeneration() !== accountGeneration;
@@ -317,10 +325,11 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
       }
     };
     let settled = false;
-    return {
+    const hold: SpaceDeleteHold = {
       async undo() {
         if (settled) return false;
         settled = true;
+        openHolds.delete(hold);
         deps.deleteHold.release(space, cloudSpaceId);
         // Someone else's delete may have reached this device meanwhile, so nothing is back.
         const spaces = await deps.local.getSpaces().catch(() => [space]);
@@ -331,6 +340,7 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
       async commit() {
         if (settled) return null;
         settled = true;
+        openHolds.delete(hold);
         // The account reset has dropped the hold and everything it hid. This one's delete must not
         // go out as the next account.
         if (accountChanged()) return null;
@@ -350,6 +360,8 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
       },
       again: () => (accountChanged() ? null : holdForAccount(space, accountGeneration)),
     };
+    openHolds.add(hold);
+    return hold;
   }
 
   async function assignTeamToSpace(space: SpaceItem, teamId: string): Promise<void> {
@@ -499,6 +511,7 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     renameSpace,
     deleteSpace,
     holdSpaceDelete,
+    commitHeldDeletes,
     assignTeamToSpace,
     setSpaceTeamAccess,
     unassignTeamFromSpace,

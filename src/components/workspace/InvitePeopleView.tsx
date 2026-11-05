@@ -329,6 +329,7 @@ export function InvitePeopleView({
         <InviteDoneContent
           workspaceName={workspaceName}
           sent={state.sent}
+          attachedCount={state.attached.length}
           headline={sentHeadline}
           undelivered={undelivered}
           noEmailCount={summary.noEmailCount}
@@ -353,6 +354,11 @@ export function InvitePeopleView({
             {state.sent.length > 0 ? (
               <p role="status" className="text-xs font-medium text-foreground">
                 {sentHeadline}
+              </p>
+            ) : null}
+            {state.attached.length > 0 ? (
+              <p role="status" className="text-xs font-medium text-foreground">
+                {t("workspaces.invite.attachedBody", { count: state.attached.length })}
               </p>
             ) : null}
           </div>
@@ -616,6 +622,7 @@ function RecipientChip({
 function InviteDoneContent({
   workspaceName,
   sent,
+  attachedCount,
   headline,
   undelivered,
   noEmailCount,
@@ -625,6 +632,7 @@ function InviteDoneContent({
 }: {
   workspaceName: string;
   sent: InviteFlowState["sent"];
+  attachedCount: number;
   headline: string;
   /** Every invitation exists, but no email reached anyone, so this is no success to confirm. */
   undelivered: boolean;
@@ -651,10 +659,14 @@ function InviteDoneContent({
           )}
         </div>
         <DialogTitle className="text-lg font-medium leading-snug tracking-normal">
-          {headline}
+          {sent.length === 0
+            ? t("workspaces.invite.attachedTitle", { count: attachedCount })
+            : headline}
         </DialogTitle>
         <DialogDescription className="text-sm leading-normal">
-          {undelivered ? (
+          {sent.length === 0 ? (
+            t("workspaces.invite.attachedBody", { count: attachedCount })
+          ) : undelivered ? (
             t("workspaces.invite.noEmail", { count: noEmailCount })
           ) : sent.length === 1 ? (
             <BidiInterpolatedText
@@ -672,6 +684,11 @@ function InviteDoneContent({
           )}
         </DialogDescription>
       </div>
+      {sent.length > 0 && attachedCount > 0 ? (
+        <p className="text-center text-xs text-muted-foreground">
+          {t("workspaces.invite.attachedBody", { count: attachedCount })}
+        </p>
+      ) : null}
       {noEmailCount > 0 && !undelivered ? (
         <WorkspaceErrorBar
           tone="warning"

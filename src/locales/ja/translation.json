@@ -2652,6 +2652,7 @@
           "removeBodyPlain": "{{name}} はこの Teamspace とそのノートにアクセスできなくなります。ワークスペースには残ります。",
           "invitationPendingAdmin": "招待の承諾待ち · ワークスペース管理者",
           "resultInvitedNoEmail": "{{names}} の招待を作成しましたが、メールを配信できませんでした。「招待」から再送してください。",
+          "resultInvitedPending": "{{names}} にはワークスペースへの招待が既にあるため、このチームスペースをその招待に追加しました。新しいメールは送信されず、招待のワークスペースロールも変更されません。",
           "stepDownTitle": "{{space}} の管理者を辞めますか？",
           "stepDownBody": "この Teamspace とメンバーを管理できなくなります。再び管理者になるには、別の管理者による変更が必要です。",
           "stepDownConfirm": "辞める"
@@ -2665,6 +2666,7 @@
           "deleteAction": "Teamspace を削除",
           "flagsFailed": "これらの設定を読み込めませんでした。",
           "flagSaveFailed": "保存できませんでした。もう一度お試しください。",
+          "deleteDefaultAdminOnly": "デフォルトのチームスペースを削除できるのはワークスペース管理者のみです。",
           "defaultAdminOnly": "これを変更できるのはワークスペースの管理者のみです。"
         },
         "exit": {
@@ -5462,6 +5464,10 @@
       "submitting_other": "{{count}} 人を招待しています…",
       "sentTitle_one": "{{count}} 件の招待を送信しました",
       "sentTitle_other": "{{count}} 件の招待を送信しました",
+      "attachedTitle_one": "{{count}} 件の招待を更新しました",
+      "attachedTitle_other": "{{count}} 件の招待を更新しました",
+      "attachedBody_one": "{{count}} 件のアドレスにはワークスペースへの招待が既にあるため、その招待に追加しました。新しいメールは送信されていません。",
+      "attachedBody_other": "{{count}} 件のアドレスにはワークスペースへの招待が既にあるため、その招待に追加しました。新しいメールは送信されていません。",
       "createdTitle_one": "{{count}} 件の招待を作成しました",
       "createdTitle_other": "{{count}} 件の招待を作成しました",
       "sentOne": "{{email}} を {{workspace}} に招待しました",

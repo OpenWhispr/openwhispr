@@ -1030,7 +1030,10 @@ test("an address whose invitation took the teamspace counts as invited", async (
   await ui.settle();
 
   assert.deepEqual(chipTexts(), [], "nothing is left to retry");
-  assert.equal(lineText(), "Sent alex@example.com a workspace invitation.");
+  assert.equal(
+    lineText(),
+    "alex@example.com already had a workspace invitation, so this teamspace was added to it. No new email was sent, and the workspace role on that invitation stays as it was."
+  );
   assert.equal(lineElement().getAttribute("role"), "status");
 });
 
@@ -1057,7 +1060,7 @@ test("beside one that took the teamspace, an older API's answer is still said", 
 
   assert.equal(
     lineText(),
-    "Sent alex@example.com a workspace invitation. " +
+    "alex@example.com already had a workspace invitation, so this teamspace was added to it. No new email was sent, and the workspace role on that invitation stays as it was. " +
       "kim@example.com already has a workspace invitation, so they weren't added to this teamspace."
   );
 });
