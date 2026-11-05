@@ -139,13 +139,12 @@ async function mountHook(t, route = MANAGED_ORUKEET) {
   useSettingsStore.setState({ pauseMediaOnDictation: true, cloudTranscriptionMode: route.mode });
   const { useAudioRecording } = await vite.ssrLoadModule("/hooks/useAudioRecording.js");
 
-  // Stable identities: the hook rebuilds its AudioManager when these change.
-  const options = { onDemoEvent: () => {} };
   const hook = {};
   function Harness() {
+    // A stable identity: the hook rebuilds its AudioManager when the toast changes.
     const [toast, setToast] = React.useState(() => () => {});
     hook.rebuildManager = () => setToast(() => () => {});
-    hook.api = useAudioRecording(toast, options);
+    hook.api = useAudioRecording(toast);
     return null;
   }
   root = createRoot(container);

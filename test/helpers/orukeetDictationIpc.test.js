@@ -688,10 +688,10 @@ const until = async (condition) => {
 const holdMints = () => {
   const mints = [];
   backendResponse = () => new Promise((resolve) => mints.push(resolve));
-  return { mints, answered: { count: 0 } };
+  return { mints, answered: 0 };
 };
 const answerNext = (held) => {
-  held.answered.count += 1;
+  held.answered += 1;
   held.mints.shift()(Response.json(cloudSession));
 };
 
@@ -709,7 +709,7 @@ test("a start during a warmup rides that connection", async () => {
 
   const final = await handlers.get("dictation-realtime-finalize")();
   assert.equal(final.text, "Recorded 640 bytes");
-  assert.equal(held.answered.count, 1);
+  assert.equal(held.answered, 1);
   await handlers.get("dictation-realtime-stop")();
 });
 
@@ -728,7 +728,7 @@ test("a start redials when the warmup it waited for was opened for another route
   await until(() => held.mints.length === 1);
   answerNext(held);
   assert.equal((await start).success, true);
-  assert.equal(held.answered.count, 2);
+  assert.equal(held.answered, 2);
   await handlers.get("dictation-realtime-stop")();
 });
 
@@ -763,7 +763,7 @@ test("re-warms queued behind a start leave its recording alone", async () => {
 
   assert.equal((await secondWarmup).success, true);
   assert.equal(target._dictationStreaming, recording);
-  assert.equal(held.answered.count, 1);
+  assert.equal(held.answered, 1);
   assert.equal(target._dictationIdleTimer, null, "a recording must not expire as idle");
 
   handlers.get("dictation-realtime-send")(event, Buffer.alloc(640));

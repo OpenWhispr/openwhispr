@@ -9830,8 +9830,8 @@ class IPCHandlers {
       const release = () => {
         dictationRecordingActive = false;
       };
-      sender.on?.("did-start-loading", release);
-      sender.once?.("destroyed", release);
+      sender.on("did-start-loading", release);
+      sender.once("destroyed", release);
     };
 
     const clearDictationIdleTimer = () => {
