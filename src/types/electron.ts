@@ -63,7 +63,25 @@ import type { SharedHintWords } from "../utils/sharedDictionaryHints";
 
 export type { SharedDictionarySnapshot } from "./sharedDictionary";
 
-export type LocalTranscriptionProvider = "whisper" | "nvidia" | "cohere";
+export type LocalTranscriptionProvider = "whisper" | "nvidia" | "cohere" | "qualcomm";
+
+export interface QualcommRuntimeStatus {
+  status: "unknown" | "not_installed" | "installing" | "ready" | "error";
+  error?: string | null;
+  runtimeDir: string;
+  pythonPath?: string | null;
+  ready: boolean;
+  packages: string[];
+}
+
+export interface QualcommTranscriptionResult {
+  success: boolean;
+  text?: string;
+  error?: string;
+  code?: string;
+  message?: string;
+  warning?: string;
+}
 
 export interface MainWindowInputRegion {
   viewportWidth: number;
@@ -1214,7 +1232,7 @@ export interface WhisperDownloadProgressData {
 }
 
 export interface LocalModelDownloadStatus {
-  modelType: "whisper" | "parakeet" | "llm";
+  modelType: "whisper" | "parakeet" | "llm" | "qualcomm";
   modelId: string;
   phase: "downloading" | "installing";
   progress: number;
@@ -1231,6 +1249,9 @@ export interface ParakeetCheckResult {
   code?: string;
   message?: string;
   minimumMacOSVersion?: string;
+  /** Qualcomm only: why the gate failed — "platform" (OS/arch) or "cpu" (not a Snapdragon). */
+  reason?: string | null;
+  cpuName?: string | null;
 }
 
 export interface ParakeetModelResult {
@@ -2279,6 +2300,59 @@ declare global {
       >;
       getParakeetDiagnostics: () => Promise<ParakeetDiagnosticsResult>;
 
+      // Qualcomm NPU operations (Whisper via the QNN execution provider)
+      transcribeLocalQualcomm: (
+        audioBlob: ArrayBuffer,
+        options?: { model?: string; language?: string }
+      ) => Promise<QualcommTranscriptionResult>;
+      checkQualcommInstallation: () => Promise<{
+        installed: boolean;
+        working: boolean;
+        supported: boolean;
+        code?: string;
+        message?: string;
+        /** Why the gate failed: "platform" (OS/arch) or "cpu" (not a Snapdragon). */
+        reason?: string | null;
+        cpuName?: string | null;
+        scriptPath?: string;
+        runtime?: QualcommRuntimeStatus;
+      }>;
+      getQualcommRuntimeStatus: () => Promise<QualcommRuntimeStatus>;
+      installQualcommRuntime: () => Promise<{
+        success: boolean;
+        runtimeDir?: string;
+        error?: string;
+        code?: string;
+      }>;
+      cancelQualcommRuntimeInstall: () => Promise<{ success: boolean; error?: string }>;
+      onQualcommRuntimeProgress: (
+        callback: (data: { phase: string; message?: string }) => void
+      ) => () => void;
+      downloadQualcommModel: (modelName: string) => Promise<ParakeetModelResult>;
+      onQualcommDownloadProgress: (
+        callback: (event: any, data: ParakeetDownloadProgressData) => void
+      ) => () => void;
+      checkQualcommModelStatus: (modelName: string) => Promise<ParakeetModelResult>;
+      listQualcommModels: () => Promise<ParakeetModelsListResult>;
+      deleteQualcommModel: (modelName: string) => Promise<ParakeetModelDeleteResult>;
+      deleteAllQualcommModels: () => Promise<{
+        success: boolean;
+        deleted_count?: number;
+        freed_bytes?: number;
+        freed_mb?: number;
+        error?: string;
+      }>;
+      cancelQualcommDownload: () => Promise<
+        {
+          success: boolean;
+          message?: string;
+        } & PolicyFailureMetadata
+      >;
+      getQualcommDiagnostics: () => Promise<ParakeetDiagnosticsResult>;
+      qualcommServerStart: (modelName: string) => Promise<{ success: boolean; reason?: string }>;
+      qualcommServerStop: () => Promise<{ success: boolean }>;
+      qualcommServerStatus: () => Promise<{ running: boolean; model?: string | null }>;
+
       // Local AI model management
       modelGetAll: () => Promise<LocalLLMModelStatus[]>;
       modelGetActiveDownloads: () => Promise<LocalModelDownloadStatus[]>;
@@ -2327,6 +2401,20 @@ declare global {
         details?: Record<string, unknown>;
       }>;
       checkLocalReasoningAvailable: () => Promise<boolean>;
+      /** Snapdragon gate plus whether the GenieX CLI is installed; badges the Qualcomm (NPU) LLM tab. */
+      checkGeniexStatus: () => Promise<{
+        supported: boolean;
+        platformSupported?: boolean;
+        cpuQualcomm?: boolean;
+        cpuName?: string | null;
+        code?: string;
+        message?: string;
+        installed: boolean;
+        binaryPath?: string | null;
+        installerUrl?: string;
+        docsUrl?: string;
+        error?: string;
+      }>;
       /** The largest context this machine can give a bundled model; drives chunked note generation. */
       getLocalContextBudget: (modelId: string) => Promise<{
         success: boolean;
@@ -2399,7 +2487,13 @@ declare global {
       // llama-server
       llamaServerStart: (
         modelId: string
-      ) => Promise<{ success: boolean; port?: number; error?: string }>;
+      ) => Promise<{
+        success: boolean;
+        port?: number;
+        /** The id the server answers requests for — a GenieX cache ref differs from the registry id. */
+        modelId?: string;
+        error?: string;
+      }>;
       llamaServerStatus: () => Promise<LlamaServerStatus>;
       llamaGpuReset: () => Promise<{ success: boolean; error?: string }>;
       detectVulkanGpu?: () => Promise<VulkanGpuResult>;

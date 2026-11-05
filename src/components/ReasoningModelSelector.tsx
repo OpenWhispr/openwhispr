@@ -8,8 +8,7 @@ import type {
   InferenceMode,
 } from "../types/electron";
 import { Button } from "./ui/button";
-import { CircleAlert, Cloud, Lock, Zap } from "./icons";
-import ModelCardList from "./ui/ModelCardList";
+import { CircleAlert, Cloud, Lock, Zap } from "./icons";import ModelCardList from "./ui/ModelCardList";
 import LocalModelPicker, { type LocalProvider } from "./LocalModelPicker";
 import { ProviderTabs, type ProviderTabItem } from "./ui/ProviderTabs";
 import OpenAICompatiblePanel from "./OpenAICompatiblePanel";
@@ -338,6 +337,90 @@ function GpuStatusBadge() {
   return null;
 }
 
+/**
+ * Status banner for the Qualcomm (NPU) language-model tab. The models are
+ * ordinary GGUF downloads, but serving them on the Hexagon NPU needs Qualcomm's
+ * GenieX CLI installed alongside the app, so the tab explains itself: it is
+ * unavailable off Snapdragon, points at the installer when the CLI is missing,
+ * and confirms NPU inference once it is on PATH.
+ */
+function GeniexStatusBadge() {
+  const { t } = useTranslation();
+  const [status, setStatus] = useState<Awaited<
+    ReturnType<NonNullable<NonNullable<typeof window.electronAPI>["checkGeniexStatus"]>>
+  > | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    window.electronAPI
+      ?.checkGeniexStatus?.()
+      .then((result) => {
+        if (!cancelled) setStatus(result ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!status) return null;
+
+  if (!status.supported) {
+    return (
+      <div className="mt-2 flex items-start gap-2 px-1">
+        <CircleAlert size={13} className="text-muted-foreground shrink-0 mt-0.5" />
+        <p className="text-xs leading-snug text-muted-foreground">
+          {status.message || t("reasoning.geniex.unavailable", { defaultValue: status.message })}
+        </p>
+      </div>
+    );
+  }
+
+  if (!status.installed) {
+    return (
+      <div className="mt-2 rounded-md border border-primary/20 bg-primary/5 p-2.5">
+        <div className="flex items-start gap-2.5">
+          <Zap size={13} className="text-primary shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-foreground">{t("reasoning.geniex.title")}</p>
+            <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
+              {t("reasoning.geniex.description")}
+            </p>
+            <div className="flex items-center gap-2 mt-1.5">
+              <Button
+                type="button"
+                size="sm"
+                variant="default"
+                className="h-6 px-2.5 text-xs"
+                onClick={() => {
+                  if (status.installerUrl) window.open(status.installerUrl, "_blank", "noopener");
+                }}
+              >
+                {t("reasoning.geniex.install")}
+              </Button>
+              <a
+                href={status.docsUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {t("reasoning.geniex.docs")}
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1.5 mt-2 px-1">
+      <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-success" />
+      <span className="text-xs text-muted-foreground">{t("reasoning.geniex.ready")}</span>
+    </div>
+  );
+}
+
 export default function ReasoningModelSelector({
   reasoningModel,
   setReasoningModel,
@@ -368,6 +451,23 @@ export default function ReasoningModelSelector({
   const [selectedMode, setSelectedMode] = useState<"cloud" | "local">(mode || "cloud");
   const [selectedCloudProvider, setSelectedCloudProvider] = useState("openai");
   const [selectedLocalProvider, setSelectedLocalProvider] = useState("qwen");
+  // null until the main process answers; false hides the Qualcomm (NPU) tab.
+  const [geniexSupported, setGeniexSupported] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    window.electronAPI
+      ?.checkGeniexStatus?.()
+      .then((status) => {
+        if (!cancelled) setGeniexSupported(Boolean(status?.supported));
+      })
+      .catch(() => {
+        if (!cancelled) setGeniexSupported(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const policyState = usePolicySnapshot();
   const providerAllowed = useCallback(
     (providerId: string) => isProviderAllowedByPolicy(policyState, "llm", providerId),
@@ -487,6 +587,16 @@ export default function ReasoningModelSelector({
     return modelRegistry.getAllProviders().map((provider) => ({
       id: provider.id,
       name: provider.name,
+      // The Qualcomm (NPU) tab stays visible but disabled off-Snapdragon, the
+      // same treatment the transcription picker gives its Qualcomm tab; a null
+      // status (still loading) leaves it enabled so the banner can explain
+      // itself instead of the tab toggling.
+      disabled: provider.id === "qualcomm" && geniexSupported === false,
+      disabledLabel:
+        provider.id === "qualcomm" ? t("reasoning.geniex.unavailable") : undefined,
+      // On a Snapdragon the NPU tab is the fast path for dictation cleanup —
+      // flag it over the llama.cpp tabs so it reads as the preferred pick.
+      recommended: provider.id === "qualcomm" && geniexSupported === true,
       models: provider.models.map((model) => ({
         id: model.id,
         name: model.name,
@@ -499,7 +609,7 @@ export default function ReasoningModelSelector({
         legacy: model.legacy,
       })),
     }));
-  }, []);
+  }, [geniexSupported, t]);
 
   const openaiModelOptions = useMemo<CloudModelOption[]>(() => {
     const { icon, invertInDark } = getRemoteProviderIcon("openai");
@@ -743,6 +853,7 @@ export default function ReasoningModelSelector({
             modelType="llm"
             colorScheme="purple"
           />
+          {selectedLocalProvider === "qualcomm" && <GeniexStatusBadge />}
           <GpuStatusBadge />
         </>
       )}

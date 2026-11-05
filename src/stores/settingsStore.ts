@@ -211,9 +211,13 @@ function readString(key: string, fallback: string): string {
 // store, so importing back would create a require cycle.
 const DEFAULT_COHERE_MODEL = "cohere-transcribe-03-2026";
 
+// Literal rather than an import from ModelRegistry: ModelRegistry imports this
+// store, so importing back would create a require cycle.
+const DEFAULT_QUALCOMM_MODEL = "whisper-tiny";
+
 function readLocalProvider(key: string): LocalTranscriptionProvider {
   const stored = readString(key, "whisper");
-  return stored === "nvidia" || stored === "cohere" ? stored : "whisper";
+  return stored === "nvidia" || stored === "cohere" || stored === "qualcomm" ? stored : "whisper";
 }
 
 // Meeting/upload keys defaulted to "whisper" even when never stored, so a
@@ -573,6 +577,7 @@ const MEETING_TRANSCRIPTION_PAIRS: ReadonlyArray<[string, string]> = [
   ["localTranscriptionProvider", "meetingLocalTranscriptionProvider"],
   ["parakeetModel", "meetingParakeetModel"],
   ["cohereModel", "meetingCohereModel"],
+  ["qualcommModel", "meetingQualcommModel"],
   ["cloudTranscriptionProvider", "meetingCloudTranscriptionProvider"],
   ["cloudTranscriptionModel", "meetingCloudTranscriptionModel"],
   ["cloudTranscriptionBaseUrl", "meetingCloudTranscriptionBaseUrl"],
@@ -625,6 +630,7 @@ const UPLOAD_TRANSCRIPTION_PAIRS: ReadonlyArray<[string, string]> = [
   ["localTranscriptionProvider", "uploadLocalTranscriptionProvider"],
   ["parakeetModel", "uploadParakeetModel"],
   ["cohereModel", "uploadCohereModel"],
+  ["qualcommModel", "uploadQualcommModel"],
   ["cloudTranscriptionProvider", "uploadCloudTranscriptionProvider"],
   ["cloudTranscriptionModel", "uploadCloudTranscriptionModel"],
   ["cloudTranscriptionBaseUrl", "uploadCloudTranscriptionBaseUrl"],
@@ -1079,6 +1085,7 @@ export interface SettingsState
   meetingLocalTranscriptionProvider: LocalTranscriptionProvider;
   meetingParakeetModel: string;
   meetingCohereModel: string;
+  meetingQualcommModel: string;
   meetingCloudTranscriptionProvider: string;
   meetingCloudTranscriptionModel: string;
   meetingCloudTranscriptionBaseUrl: string;
@@ -1092,6 +1099,7 @@ export interface SettingsState
   uploadLocalTranscriptionProvider: LocalTranscriptionProvider;
   uploadParakeetModel: string;
   uploadCohereModel: string;
+  uploadQualcommModel: string;
   uploadCloudTranscriptionProvider: string;
   uploadCloudTranscriptionModel: string;
   uploadCloudTranscriptionBaseUrl: string;
@@ -1199,6 +1207,7 @@ export interface SettingsState
   setMeetingLocalTranscriptionProvider: (value: LocalTranscriptionProvider) => void;
   setMeetingParakeetModel: (value: string) => void;
   setMeetingCohereModel: (value: string) => void;
+  setMeetingQualcommModel: (value: string) => void;
   setMeetingCloudTranscriptionProvider: (value: string) => void;
   setMeetingCloudTranscriptionModel: (value: string) => void;
   setMeetingCloudTranscriptionBaseUrl: (value: string) => void;
@@ -1212,6 +1221,7 @@ export interface SettingsState
   setUploadLocalTranscriptionProvider: (value: LocalTranscriptionProvider) => void;
   setUploadParakeetModel: (value: string) => void;
   setUploadCohereModel: (value: string) => void;
+  setUploadQualcommModel: (value: string) => void;
   setUploadCloudTranscriptionProvider: (value: string) => void;
   setUploadCloudTranscriptionModel: (value: string) => void;
   setUploadCloudTranscriptionBaseUrl: (value: string) => void;
@@ -1250,6 +1260,7 @@ export interface SettingsState
   setLocalTranscriptionProvider: (value: LocalTranscriptionProvider) => void;
   setParakeetModel: (value: string) => void;
   setCohereModel: (value: string) => void;
+  setQualcommModel: (value: string) => void;
   setAllowOpenAIFallback: (value: boolean) => void;
   setAllowLocalFallback: (value: boolean) => void;
   setFallbackWhisperModel: (value: string) => void;
@@ -1661,6 +1672,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   localTranscriptionProvider: readLocalProvider("localTranscriptionProvider"),
   parakeetModel: readString("parakeetModel", ""),
   cohereModel: readString("cohereModel", DEFAULT_COHERE_MODEL),
+  qualcommModel: readString("qualcommModel", DEFAULT_QUALCOMM_MODEL),
   allowOpenAIFallback: readBoolean("allowOpenAIFallback", false),
   allowLocalFallback: readBoolean("allowLocalFallback", false),
   fallbackWhisperModel: readString("fallbackWhisperModel", "base"),
@@ -1897,6 +1909,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   meetingWhisperModel: readString("meetingWhisperModel", ""),
   meetingLocalTranscriptionProvider: readScopedLocalProvider("meetingLocalTranscriptionProvider"),
   meetingParakeetModel: readString("meetingParakeetModel", ""),
+  meetingQualcommModel: readString("meetingQualcommModel", DEFAULT_QUALCOMM_MODEL),
   meetingCohereModel: readString("meetingCohereModel", ""),
   meetingCloudTranscriptionProvider: readString("meetingCloudTranscriptionProvider", ""),
   meetingCloudTranscriptionModel: readString("meetingCloudTranscriptionModel", ""),
@@ -1917,6 +1930,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   uploadWhisperModel: readString("uploadWhisperModel", ""),
   uploadLocalTranscriptionProvider: readScopedLocalProvider("uploadLocalTranscriptionProvider"),
   uploadParakeetModel: readString("uploadParakeetModel", ""),
+  uploadQualcommModel: readString("uploadQualcommModel", DEFAULT_QUALCOMM_MODEL),
   uploadCohereModel: readString("uploadCohereModel", ""),
   uploadCloudTranscriptionProvider: readString("uploadCloudTranscriptionProvider", ""),
   uploadCloudTranscriptionModel: readString("uploadCloudTranscriptionModel", ""),
@@ -1995,6 +2009,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     useSettingsStore.setState({ meetingLocalTranscriptionProvider: value });
   },
   setMeetingParakeetModel: createStringSetter("meetingParakeetModel"),
+  setMeetingQualcommModel: createStringSetter("meetingQualcommModel"),
   setMeetingCohereModel: createStringSetter("meetingCohereModel"),
   setMeetingCloudTranscriptionProvider: createStringSetter("meetingCloudTranscriptionProvider"),
   setMeetingCloudTranscriptionModel: createStringSetter("meetingCloudTranscriptionModel"),
@@ -2015,6 +2030,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     useSettingsStore.setState({ uploadLocalTranscriptionProvider: value });
   },
   setUploadParakeetModel: createStringSetter("uploadParakeetModel"),
+  setUploadQualcommModel: createStringSetter("uploadQualcommModel"),
   setUploadCohereModel: createStringSetter("uploadCohereModel"),
   setUploadCloudTranscriptionProvider: createStringSetter("uploadCloudTranscriptionProvider"),
   setUploadCloudTranscriptionModel: createStringSetter("uploadCloudTranscriptionModel"),
@@ -2179,6 +2195,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   },
   setParakeetModel: createStringSetter("parakeetModel"),
   setCohereModel: createStringSetter("cohereModel"),
+  setQualcommModel: createStringSetter("qualcommModel"),
   setAllowOpenAIFallback: createBooleanSetter("allowOpenAIFallback"),
   setAllowLocalFallback: createBooleanSetter("allowLocalFallback"),
   setFallbackWhisperModel: createStringSetter("fallbackWhisperModel"),
@@ -2984,6 +3001,7 @@ export interface ResolvedMeetingTranscription {
   localTranscriptionProvider: LocalTranscriptionProvider;
   parakeetModel: string;
   cohereModel: string;
+  qualcommModel: string;
   cloudTranscriptionProvider: string;
   cloudTranscriptionModel: string;
   cloudTranscriptionBaseUrl: string;
@@ -3001,6 +3019,7 @@ export const selectResolvedMeetingTranscription = (
   localTranscriptionProvider: state.meetingLocalTranscriptionProvider,
   parakeetModel: state.meetingParakeetModel || state.parakeetModel,
   cohereModel: state.meetingCohereModel || state.cohereModel,
+  qualcommModel: state.meetingQualcommModel || state.qualcommModel,
   cloudTranscriptionProvider:
     state.meetingCloudTranscriptionProvider || state.cloudTranscriptionProvider,
   cloudTranscriptionModel: state.meetingCloudTranscriptionModel || state.cloudTranscriptionModel,
@@ -3018,6 +3037,7 @@ export interface ResolvedUploadTranscription {
   localTranscriptionProvider: LocalTranscriptionProvider;
   parakeetModel: string;
   cohereModel: string;
+  qualcommModel: string;
   cloudTranscriptionProvider: string;
   cloudTranscriptionModel: string;
   cloudTranscriptionBaseUrl: string;
@@ -3045,6 +3065,7 @@ export const selectResolvedUploadTranscription = (
     localTranscriptionProvider: state.uploadLocalTranscriptionProvider,
     parakeetModel: state.uploadParakeetModel || state.parakeetModel,
     cohereModel: state.uploadCohereModel || state.cohereModel,
+    qualcommModel: state.uploadQualcommModel || state.qualcommModel,
     cloudTranscriptionProvider:
       state.uploadCloudTranscriptionProvider ||
       (inheritsDictationProvider

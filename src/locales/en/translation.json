@@ -889,6 +889,14 @@
     },
     "corti": {
       "euOnly": "Corti's models are only available in the EU region."
+    },
+    "geniex": {
+      "title": "Runs on the Snapdragon NPU",
+      "description": "These models need Qualcomm's GenieX runtime to run on the Hexagon NPU. Install the CLI, then restart OpenWhispr — the installer is an ARM64 .exe from Qualcomm.",
+      "install": "Get GenieX",
+      "docs": "Install guide",
+      "ready": "Snapdragon NPU active (GenieX)",
+      "unavailable": "Qualcomm NPU language models require Windows on Snapdragon with a native ARM64 build."
     }
   },
   "transcription": {
@@ -923,6 +931,18 @@
     "tinfoil": {
       "transportNote": "Tinfoil streams using Voxtral Mini 4B, and batches with Voxtral Small 24B.",
       "docsLink": "Read the docs"
+    },
+    "qualcomm": {
+      "unavailable": "Requires Windows on Snapdragon (ARM64)",
+      "requiresCpu": "Requires a Snapdragon (Qualcomm) processor",
+      "runtime": {
+        "title": "Qualcomm NPU runtime",
+        "description": "Installs the QNN runtime (onnxruntime-qnn, numpy, transformers) into an app-managed Python environment.",
+        "install": "Install runtime",
+        "installing": "Installing…",
+        "preparing": "Preparing…",
+        "failed": "Runtime installation failed."
+      }
     }
   },
   "hooks": {
@@ -2922,6 +2942,12 @@
         "vertex_gemini_4_argon": "Google's frontier reasoning model via Vertex"
       },
       "local": {
+        "qualcomm_qwen3_5_2b_q4_0": "Runs on the Snapdragon NPU via Qualcomm GenieX",
+        "qualcomm_qwen3_5_0_8b_q4_0": "Fastest Snapdragon NPU cleanup",
+        "qualcomm_qwen3_4b_instruct_2507_q4_0": "Highest-quality non-thinking Qwen on the Snapdragon NPU",
+        "qualcomm_qwen3_4b_q4_0": "Qwen3 with thinking mode on the Snapdragon NPU",
+        "qualcomm_qwen3_1_7b_q4_0": "Compact Qwen3 on the Snapdragon NPU",
+        "qualcomm_qwen3_0_6b_q4_0": "Tiny Qwen3, instant NPU cleanup",
         "qwen_qwen3_5_9b_q4_k_m": "Powerful hybrid model",
         "qwen_qwen3_5_4b_q4_k_m": "Balanced Qwen3.5 for general use",
         "qwen_qwen3_5_2b_q4_k_m": "Small Qwen3.5 for quick tasks",
@@ -2964,6 +2990,16 @@
         "mistral_ministral_3_8b_instruct_2512_q4_k_m": "Fast non-thinking model for cleanup and tools",
         "mistral_ministral_3_3b_instruct_2512_q4_k_m": "Small and fast for dictation cleanup",
         "gemma_gemma_4_12b_it_qat_q4_0": "Google's official QAT build, best fit for 16 GB machines"
+      },
+      "qualcomm": {
+        "whisper_tiny": "Fastest Snapdragon NPU transcription",
+        "whisper_base": "Balanced Snapdragon NPU transcription",
+        "whisper_small": "Higher accuracy Snapdragon NPU transcription",
+        "whisper_small_quantized": "Quantized Small for a smaller NPU download",
+        "whisper_medium": "High accuracy Snapdragon NPU transcription",
+        "whisper_medium_quantized": "Quantized Medium for a smaller NPU download",
+        "whisper_large_v3_turbo": "Best Snapdragon NPU accuracy, still fast",
+        "whisper_large_v3_turbo_quantized": "Quantized Large v3 Turbo for a smaller NPU download"
       }
     },
     "errors": {

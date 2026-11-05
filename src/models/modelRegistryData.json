@@ -282,6 +282,105 @@
       "descriptionKey": "models.descriptions.whisper.turbo_q5"
     }
   },
+  "qualcommModels": {
+    "whisper-tiny": {
+      "name": "Whisper Tiny (NPU)",
+      "description": "Fastest Snapdragon NPU transcription",
+      "size": "101MB",
+      "sizeMb": 101,
+      "language": "multilingual",
+      "hfRepo": "qualcomm/Whisper-Tiny",
+      "hfModelSize": "tiny",
+      "organization": { "id": "qualcomm", "name": "Qualcomm" },
+      "recommended": true,
+      "modelCardUrl": "https://huggingface.co/qualcomm/Whisper-Tiny",
+      "descriptionKey": "models.descriptions.qualcomm.whisper_tiny"
+    },
+    "whisper-base": {
+      "name": "Whisper Base (NPU)",
+      "description": "Balanced Snapdragon NPU transcription",
+      "size": "190MB",
+      "sizeMb": 190,
+      "language": "multilingual",
+      "hfRepo": "qualcomm/Whisper-Base",
+      "hfModelSize": "base",
+      "organization": { "id": "qualcomm", "name": "Qualcomm" },
+      "modelCardUrl": "https://huggingface.co/qualcomm/Whisper-Base",
+      "descriptionKey": "models.descriptions.qualcomm.whisper_base"
+    },
+    "whisper-small": {
+      "name": "Whisper Small (NPU)",
+      "description": "Higher accuracy Snapdragon NPU transcription",
+      "size": "600MB",
+      "sizeMb": 600,
+      "language": "multilingual",
+      "hfRepo": "qualcomm/Whisper-Small",
+      "hfModelSize": "small",
+      "organization": { "id": "qualcomm", "name": "Qualcomm" },
+      "modelCardUrl": "https://huggingface.co/qualcomm/Whisper-Small",
+      "descriptionKey": "models.descriptions.qualcomm.whisper_small"
+    },
+    "whisper-small-quantized": {
+      "name": "Whisper Small (NPU, Quantized)",
+      "description": "Quantized Small for a smaller NPU download",
+      "size": "320MB",
+      "sizeMb": 320,
+      "language": "multilingual",
+      "hfRepo": "qualcomm/Whisper-Small-Quantized",
+      "hfModelSize": "small",
+      "organization": { "id": "qualcomm", "name": "Qualcomm" },
+      "modelCardUrl": "https://huggingface.co/qualcomm/Whisper-Small-Quantized",
+      "descriptionKey": "models.descriptions.qualcomm.whisper_small_quantized"
+    },
+    "whisper-medium": {
+      "name": "Whisper Medium (NPU)",
+      "description": "High accuracy Snapdragon NPU transcription",
+      "size": "1.9GB",
+      "sizeMb": 1900,
+      "language": "multilingual",
+      "hfRepo": "qualcomm/Whisper-Medium",
+      "hfModelSize": "medium",
+      "organization": { "id": "qualcomm", "name": "Qualcomm" },
+      "modelCardUrl": "https://huggingface.co/qualcomm/Whisper-Medium",
+      "descriptionKey": "models.descriptions.qualcomm.whisper_medium"
+    },
+    "whisper-medium-quantized": {
+      "name": "Whisper Medium (NPU, Quantized)",
+      "description": "Quantized Medium for a smaller NPU download",
+      "size": "1.0GB",
+      "sizeMb": 1000,
+      "language": "multilingual",
+      "hfRepo": "qualcomm/Whisper-Medium-Quantized",
+      "hfModelSize": "medium",
+      "organization": { "id": "qualcomm", "name": "Qualcomm" },
+      "modelCardUrl": "https://huggingface.co/qualcomm/Whisper-Medium-Quantized",
+      "descriptionKey": "models.descriptions.qualcomm.whisper_medium_quantized"
+    },
+    "whisper-large-v3-turbo": {
+      "name": "Whisper Large v3 Turbo (NPU)",
+      "description": "Best Snapdragon NPU accuracy, still fast",
+      "size": "2.0GB",
+      "sizeMb": 2000,
+      "language": "multilingual",
+      "hfRepo": "qualcomm/Whisper-Large-V3-Turbo",
+      "hfModelSize": "large-v3-turbo",
+      "organization": { "id": "qualcomm", "name": "Qualcomm" },
+      "modelCardUrl": "https://huggingface.co/qualcomm/Whisper-Large-V3-Turbo",
+      "descriptionKey": "models.descriptions.qualcomm.whisper_large_v3_turbo"
+    },
+    "whisper-large-v3-turbo-quantized": {
+      "name": "Whisper Large v3 Turbo (NPU, Quantized)",
+      "description": "Quantized Large v3 Turbo for a smaller NPU download",
+      "size": "1.1GB",
+      "sizeMb": 1100,
+      "language": "multilingual",
+      "hfRepo": "qualcomm/Whisper-Large-V3-Turbo-Quantized",
+      "hfModelSize": "large-v3-turbo",
+      "organization": { "id": "qualcomm", "name": "Qualcomm" },
+      "modelCardUrl": "https://huggingface.co/qualcomm/Whisper-Large-V3-Turbo-Quantized",
+      "descriptionKey": "models.descriptions.qualcomm.whisper_large_v3_turbo_quantized"
+    }
+  },
   "transcriptionProviders": [
     {
       "id": "openai",
@@ -1077,6 +1176,97 @@
     }
   ],
   "localProviders": [
+    {
+      "id": "qualcomm",
+      "name": "Qualcomm (NPU)",
+      "baseUrl": "https://huggingface.co",
+      "models": [
+        {
+          "id": "qualcomm_qwen3_5_2b_q4_0",
+          "name": "Qwen3.5 2B (NPU)",
+          "size": "1.2GB",
+          "sizeBytes": 1216428000,
+          "description": "Runs on the Snapdragon NPU via Qualcomm GenieX",
+          "fileName": "Qwen3.5-2B-Q4_0.gguf",
+          "quantization": "q4_0",
+          "contextLength": 8192,
+          "hfRepo": "unsloth/Qwen3.5-2B-GGUF",
+          "runtime": "geniex",
+          "recommended": true,
+          "supportsThinking": true,
+          "descriptionKey": "models.descriptions.local.qualcomm_qwen3_5_2b_q4_0"
+        },
+        {
+          "id": "qualcomm_qwen3_5_0_8b_q4_0",
+          "name": "Qwen3.5 0.8B (NPU)",
+          "size": "0.6GB",
+          "sizeBytes": 547608600,
+          "description": "Fastest Snapdragon NPU cleanup",
+          "fileName": "Qwen3.5-0.8B-Q4_0.gguf",
+          "quantization": "q4_0",
+          "contextLength": 8192,
+          "hfRepo": "unsloth/Qwen3.5-0.8B-GGUF",
+          "runtime": "geniex",
+          "supportsThinking": true,
+          "descriptionKey": "models.descriptions.local.qualcomm_qwen3_5_0_8b_q4_0"
+        },
+        {
+          "id": "qualcomm_qwen3_4b_instruct_2507_q4_0",
+          "name": "Qwen3 4B Instruct 2507 (NPU)",
+          "size": "2.4GB",
+          "sizeBytes": 2556265000,
+          "description": "Highest-quality non-thinking Qwen on the Snapdragon NPU",
+          "fileName": "Qwen3-4B-Instruct-2507-Q4_0.gguf",
+          "quantization": "q4_0",
+          "contextLength": 8192,
+          "hfRepo": "unsloth/Qwen3-4B-Instruct-2507-GGUF",
+          "runtime": "geniex",
+          "descriptionKey": "models.descriptions.local.qualcomm_qwen3_4b_instruct_2507_q4_0"
+        },
+        {
+          "id": "qualcomm_qwen3_4b_q4_0",
+          "name": "Qwen3 4B (NPU)",
+          "size": "2.4GB",
+          "sizeBytes": 2556265000,
+          "description": "Qwen3 with thinking mode on the Snapdragon NPU",
+          "fileName": "Qwen3-4B-Q4_0.gguf",
+          "quantization": "q4_0",
+          "contextLength": 8192,
+          "hfRepo": "unsloth/Qwen3-4B-GGUF",
+          "runtime": "geniex",
+          "supportsThinking": true,
+          "descriptionKey": "models.descriptions.local.qualcomm_qwen3_4b_q4_0"
+        },
+        {
+          "id": "qualcomm_qwen3_1_7b_q4_0",
+          "name": "Qwen3 1.7B (NPU)",
+          "size": "1.1GB",
+          "sizeBytes": 1138700000,
+          "description": "Compact Qwen3 on the Snapdragon NPU",
+          "fileName": "Qwen3-1.7B-Q4_0.gguf",
+          "quantization": "q4_0",
+          "contextLength": 8192,
+          "hfRepo": "unsloth/Qwen3-1.7B-GGUF",
+          "runtime": "geniex",
+          "supportsThinking": true,
+          "descriptionKey": "models.descriptions.local.qualcomm_qwen3_1_7b_q4_0"
+        },
+        {
+          "id": "qualcomm_qwen3_0_6b_q4_0",
+          "name": "Qwen3 0.6B (NPU)",
+          "size": "0.5GB",
+          "sizeBytes": 462422000,
+          "description": "Tiny Qwen3, instant NPU cleanup",
+          "fileName": "Qwen3-0.6B-Q4_0.gguf",
+          "quantization": "q4_0",
+          "contextLength": 8192,
+          "hfRepo": "ggml-org/Qwen3-0.6B-GGUF",
+          "runtime": "geniex",
+          "supportsThinking": true,
+          "descriptionKey": "models.descriptions.local.qualcomm_qwen3_0_6b_q4_0"
+        }
+      ]
+    },
     {
       "id": "qwen",
       "name": "Qwen",

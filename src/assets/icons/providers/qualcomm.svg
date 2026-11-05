@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Generic Hexagon NPU mark for the Qualcomm (NPU) local-model tab. -->
+  <path d="M16 2.5 27.5 9v14L16 29.5 4.5 23V9L16 2.5Z" fill="none" stroke="#3253DC" stroke-width="2.4" stroke-linejoin="round"/>
+  <path d="M16 9.5 21.5 12.75v6.5L16 22.5l-5.5-3.25v-6.5L16 9.5Z" fill="#3253DC"/>
+</svg>

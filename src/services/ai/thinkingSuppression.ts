@@ -47,5 +47,11 @@ export function applyThinkingSuppression(
   // A known endpoint host wins over the generic provider dialect.
   const providerKey = detectEndpointDialect(baseUrl)?.key ?? provider.toLowerCase();
   suppressThinking(requestBody, providerKey, model);
+  // GenieX (the Snapdragon NPU runtime) ignores llama.cpp's think /
+  // chat_template_kwargs dialect; its own switch is a body field. Sending both
+  // is harmless to llama.cpp and makes suppression reach the NPU server too.
+  if (getLocalModel(model)?.runtime === "geniex") {
+    requestBody.enable_think = false;
+  }
   return true;
 }

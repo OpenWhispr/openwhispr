@@ -28,6 +28,13 @@ export interface LocalProvider {
   id: string;
   name: string;
   models: LocalModel[];
+  /** A provider the device cannot run (e.g. Qualcomm NPU off-Snapdragon) still
+   * lists its tab, disabled, so the requirement is explained where it lives —
+   * the same treatment the transcription picker gives its Qualcomm tab. */
+  disabled?: boolean;
+  disabledLabel?: string;
+  /** Shown as a pill on the tab — the NPU tab earns it when a Snapdragon is present. */
+  recommended?: boolean;
 }
 
 interface LocalModelPickerProps {
@@ -204,7 +211,13 @@ export default function LocalModelPicker({
   return (
     <div className={className}>
       <ProviderTabs
-        providers={listedProviders}
+        providers={listedProviders.map((provider) => ({
+          id: provider.id,
+          name: provider.name,
+          disabled: provider.disabled,
+          disabledLabel: provider.disabledLabel,
+          recommended: provider.recommended,
+        }))}
         selectedId={displayedProviderId}
         onSelect={onProviderSelect}
         colorScheme={colorScheme}

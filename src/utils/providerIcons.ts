@@ -21,6 +21,7 @@ import xaiIcon from "@/assets/icons/providers/xai.svg";
 import cortiIcon from "@/assets/icons/providers/corti.svg";
 import openrouterIcon from "@/assets/icons/providers/openrouter.svg";
 import tinfoilIcon from "@/assets/icons/providers/tinfoil.svg";
+import qualcommIcon from "@/assets/icons/providers/qualcomm.svg";
 import deepgramIcon from "@/assets/icons/providers/deepgram.svg";
 import assemblyaiIcon from "@/assets/icons/providers/assemblyai.svg";
 
@@ -46,6 +47,7 @@ export const PROVIDER_ICONS: Record<string, string> = {
   corti: cortiIcon,
   openrouter: openrouterIcon,
   tinfoil: tinfoilIcon,
+  qualcomm: qualcommIcon,
   deepgram: deepgramIcon,
   assemblyai: assemblyaiIcon,
 };

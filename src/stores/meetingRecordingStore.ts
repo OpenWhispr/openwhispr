@@ -208,6 +208,7 @@ const getMeetingTranscriptionOptions = () => {
       whisperModel: resolved.whisperModel,
       parakeetModel: resolved.parakeetModel,
       cohereModel: resolved.cohereModel,
+      qualcommModel: resolved.qualcommModel,
       selectedProvider: resolved.cloudTranscriptionProvider,
       selectedModel: resolved.cloudTranscriptionModel,
       byokProviders: getMeetingStreamingTranscriptionProviders(),

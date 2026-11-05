@@ -1,6 +1,7 @@
 import {
   resolveInferenceProvider,
   getCloudModel,
+  getLocalModel,
   getOpenAiApiConfig,
   getProviderDisplayName,
   isEnterpriseProvider,
@@ -614,6 +615,7 @@ class ReasoningService extends BaseReasoningService {
 
     let endpoint: string;
     let apiKey = "";
+    let servedModelId = model;
 
     if (isLanChat) {
       const baseUrl = resolveSelfHostedOpenAIBase(route.baseUrl);
@@ -625,6 +627,9 @@ class ReasoningService extends BaseReasoningService {
         throw new Error(serverResult.error || "Failed to start local model server");
       }
       endpoint = `http://127.0.0.1:${serverResult.port}/v1/chat/completions`;
+      // The server's own id for this model — a GenieX cache ref differs from
+      // the registry id, and the request body must carry the served name.
+      servedModelId = serverResult.modelId || model;
     } else {
       const access = await this.resolveByokAccess(provider, config);
       apiKey = access.apiKey;
@@ -651,7 +656,7 @@ class ReasoningService extends BaseReasoningService {
     if (abortController.signal.aborted) return;
 
     const requestBody: Record<string, unknown> = {
-      model,
+      model: servedModelId,
       messages,
       stream: true,
     };
@@ -792,9 +797,12 @@ class ReasoningService extends BaseReasoningService {
 
         for (const line of lines) {
           const trimmed = line.trim();
-          if (!trimmed || !trimmed.startsWith("data: ")) continue;
+          // Tolerate both "data: {...}" and "data:{...}" — OpenAI-style
+          // servers differ (GenieX v0.10+ emits the compact form), and a
+          // space-dependent match silently drops every chunk as no response.
+          if (!trimmed || !trimmed.startsWith("data:")) continue;
 
-          const data = trimmed.slice(6);
+          const data = trimmed.slice(5).trim();
           if (data === "[DONE]") {
             const trailing = filterThinkTags?.finish();
             if (trailing) yield trailing;
@@ -901,6 +909,7 @@ class ReasoningService extends BaseReasoningService {
         : null;
     let apiKey = "";
     let baseURL: string | undefined;
+    let servedModelId = model;
 
     if (isEnterprise) {
       // Enterprise SDKs run in the main process; the model below proxies
@@ -914,6 +923,8 @@ class ReasoningService extends BaseReasoningService {
         throw new Error(serverResult.error || "Failed to start local model server");
       }
       baseURL = `http://127.0.0.1:${serverResult.port}/v1`;
+      // GenieX resolves requests by its cache ref, not the registry id.
+      servedModelId = serverResult.modelId || model;
     } else {
       ({ apiKey, baseURL } = await this.resolveByokAccess(provider, config));
     }
@@ -929,9 +940,13 @@ class ReasoningService extends BaseReasoningService {
     // Resolving a Tinfoil model refreshes the registry, so read model config after it.
     const aiModel = isEnterprise
       ? createEnterpriseChatModel(provider as EnterpriseProvider, model, config.inferenceScope)
-      : await getAIModel(aiProvider, model, apiKey, baseURL, {
+      : await getAIModel(aiProvider, servedModelId, apiKey, baseURL, {
           disableThinking: openrouterDisableThinking,
           reasoningEffort: provider === "openrouter" ? reasoningEffort : undefined,
+          // GenieX (NPU) ignores the llama.cpp suppression dialects and has no
+          // server-side default on v0.7.0 — the SDK transport must send
+          // enable_think itself or thinking models answer with nothing.
+          enableThink: isLocalProvider && getLocalModel(model)?.runtime === "geniex",
         });
 
     if (abortController.signal.aborted) {

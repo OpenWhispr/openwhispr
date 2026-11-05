@@ -11,6 +11,8 @@ const {
 
 const modelRegistryData = require("../models/modelRegistryData.json");
 const LlamaServerManager = require("./llamaServer");
+const { GeniexServerManager } = require("./geniexServer");
+const { getQualcommNpuCapability } = require("./qualcommCapability");
 const debugLogger = require("./debugLogger");
 const { readGgufMetadataFromFile } = require("./ggufMetadata");
 const {
@@ -77,6 +79,8 @@ class ModelManager {
     this.activeRequests = new Map(); // Track HTTP requests for cancellation
     this.downloadLifecycleVersion = 0;
     this.serverManager = new LlamaServerManager();
+    // Created lazily: only a Qualcomm (NPU) registry model ever needs it.
+    this.geniexServerManager = null;
     this.currentServerModelId = null;
     this._initialized = false;
 
@@ -221,6 +225,26 @@ class ModelManager {
       }
     }
     return null;
+  }
+
+  /**
+   * The server a model runs on. Everything in the registry is a plain GGUF for
+   * the bundled llama-server, except models flagged `runtime: "geniex"` —
+   * Qualcomm NPU exports served by the GenieX CLI's OpenAI-compatible server.
+   * Both managers expose the same interface, so runInference is identical.
+   */
+  async _serverFor(model) {
+    if (model?.runtime === "geniex") {
+      // One shared gate with the transcription side: Snapdragon platform AND
+      // a Qualcomm processor behind it.
+      const capability = await getQualcommNpuCapability();
+      if (!capability.supported) {
+        throw new ModelError(capability.message, capability.code);
+      }
+      if (!this.geniexServerManager) this.geniexServerManager = new GeniexServerManager();
+      return this.geniexServerManager;
+    }
+    return this.serverManager;
   }
 
   serverOptions(modelInfo) {
@@ -492,6 +516,12 @@ class ModelManager {
 
     const modelPath = path.join(this.modelsDir, modelInfo.model.fileName);
 
+    // The GenieX cache holds its own copy from registration; drop it too so a
+    // deleted NPU model does not keep doubling its disk footprint.
+    if (modelInfo.model.runtime === "geniex") {
+      await this.geniexServerManager?.removeModel(modelInfo.model.fileName);
+    }
+
     if (await this.checkFileExists(modelPath)) {
       await fsPromises.unlink(modelPath);
     }
@@ -552,16 +582,17 @@ class ModelManager {
     contextFloor,
     ceilingFor,
     startServer,
+    serverManager = this.serverManager,
   }) {
     const reserveTokens = reserveFor(maxTokens);
-    const running = this.serverManager.contextSize || contextFloor;
+    const running = serverManager.contextSize || contextFloor;
 
     // Comfortably inside the window: measuring cannot change the outcome, and
     // every dictation would otherwise pay for two HTTP round trips.
     if ((estimatedTokens + reserveTokens) * PREFLIGHT_MEASURE_FACTOR <= running) return maxTokens;
 
-    const usable = (await this.serverManager.usableContextSize()) ?? running;
-    const exactTokens = await this.serverManager.countPromptTokens(messages, {
+    const usable = (await serverManager.usableContextSize()) ?? running;
+    const exactTokens = await serverManager.countPromptTokens(messages, {
       disableThinking: options.disableThinking,
     });
 
@@ -589,7 +620,7 @@ class ModelManager {
     if (grown > usable) await startServer(grown);
 
     const nowUsable =
-      (await this.serverManager.usableContextSize()) ?? this.serverManager.contextSize ?? grown;
+      (await serverManager.usableContextSize()) ?? serverManager.contextSize ?? grown;
     if (neededTokens <= nowUsable) return maxTokens;
 
     // The window is as big as this machine allows and the prompt still does not
@@ -645,19 +676,32 @@ class ModelManager {
       options: { ...options, systemPrompt: options.systemPrompt ? "[set]" : "[not set]" },
     });
 
-    // Ensure server is available
-    if (!this.serverManager.isAvailable()) {
-      debugLogger.logReasoning("INFERENCE_SERVER_NOT_AVAILABLE", {});
-      throw new ModelError(
-        "llama-server binary not found. Please ensure the app is installed correctly.",
-        "LLAMASERVER_NOT_FOUND"
-      );
-    }
-
     const modelInfo = this.findModelById(modelId);
     if (!modelInfo) {
       debugLogger.logReasoning("INFERENCE_MODEL_NOT_FOUND", { modelId });
       throw new ModelNotFoundError(modelId);
+    }
+
+    // Ensure the server binary for this model's runtime is available
+    const serverManager = await this._serverFor(modelInfo.model);
+    if (!serverManager.isAvailable()) {
+      debugLogger.logReasoning("INFERENCE_SERVER_NOT_AVAILABLE", {});
+      throw new ModelError(
+        modelInfo.model.runtime === "geniex"
+          ? "GenieX CLI not found. Install Qualcomm GenieX to run language models on the NPU."
+          : "llama-server binary not found. Please ensure the app is installed correctly.",
+        "LLAMASERVER_NOT_FOUND"
+      );
+    }
+
+    // Switching runtimes must not leave the previous server resident: a
+    // GenieX (NPU) model holding the NPU while llama-server holds its GGUF
+    // doubles the footprint and neither server is serving the current model.
+    if (serverManager !== this.serverManager && this.serverManager.ready) {
+      await this.serverManager.stop();
+    }
+    if (serverManager === this.serverManager && this.geniexServerManager?.ready) {
+      await this.geniexServerManager.stop();
     }
 
     const modelPath = path.join(this.modelsDir, modelInfo.model.fileName);
@@ -719,7 +763,7 @@ class ModelManager {
     };
 
     const startServer = async (contextSize) => {
-      if (this.serverManager.ready && contextSize >= smallestRefusedContextSize) return;
+      if (serverManager.ready && contextSize >= smallestRefusedContextSize) return;
 
       const { cacheRamMiB } = ceiling ?? {};
       // Only a live server already serving THIS model has a window worth
@@ -727,13 +771,13 @@ class ModelManager {
       // in stop() alone, not when a process dies or a health check trips — and
       // another model's window says nothing about this one.
       const restorableContextSize =
-        this.serverManager.ready &&
-        this.serverManager.process &&
+        serverManager.ready &&
+        serverManager.process &&
         this.currentServerModelId === modelId
-          ? this.serverManager.contextSize
+          ? serverManager.contextSize
           : null;
       const startAt = async (size) =>
-        this.serverManager.start(
+        serverManager.start(
           modelPath,
           await this.serverStartOptions(modelInfo, { contextSize: size, cacheRamMiB })
         );
@@ -741,8 +785,9 @@ class ModelManager {
       // and nowhere else: details crosses IPC to the renderer, which neither
       // reads it nor should carry a stderr blob and absolute model paths.
       const unavailable = (cause) => {
-        debugLogger.error("llama-server could not be started", {
+        debugLogger.error("Local inference server could not be started", {
           model: modelId,
+          runtime: modelInfo.model.runtime || "llama",
           contextSize,
           error: cause.message,
         });
@@ -759,7 +804,7 @@ class ModelManager {
         // without ever throwing. Recording that is what stops the preflight
         // asking for the same window again and paying a second model load to
         // be stepped down again.
-        if (this.serverManager.contextSize < contextSize) refuse(contextSize);
+        if (serverManager.contextSize < contextSize) refuse(contextSize);
       } catch (error) {
         refuse(contextSize);
         // start() stops the running server before it spawns, so a grow that
@@ -787,23 +832,23 @@ class ModelManager {
     // Start/restart the server if needed, if the model changed, or if this
     // request needs a bigger window than the running one has.
     if (
-      !this.serverManager.ready ||
+      !serverManager.ready ||
       this.currentServerModelId !== modelId ||
-      targetContextSize > (this.serverManager.contextSize || SERVER_CONTEXT_SIZE)
+      targetContextSize > (serverManager.contextSize || SERVER_CONTEXT_SIZE)
     ) {
       debugLogger.logReasoning("INFERENCE_STARTING_SERVER", {
         currentModel: this.currentServerModelId,
         requestedModel: modelId,
-        serverReady: this.serverManager.ready,
+        serverReady: serverManager.ready,
         contextSize: targetContextSize,
       });
 
       await startServer(targetContextSize);
 
       debugLogger.logReasoning("INFERENCE_SERVER_STARTED", {
-        port: this.serverManager.port,
+        port: serverManager.port,
         model: modelId,
-        contextSize: this.serverManager.contextSize,
+        contextSize: serverManager.contextSize,
       });
     }
 
@@ -816,6 +861,7 @@ class ModelManager {
       contextFloor,
       ceilingFor,
       startServer,
+      serverManager,
     });
 
     // The preflight shrank the reply to make room for the prompt. A reply that
@@ -830,7 +876,7 @@ class ModelManager {
     });
 
     try {
-      const result = await this.serverManager.inference(messages, {
+      const result = await serverManager.inference(messages, {
         temperature: options.temperature ?? 0.7,
         // The preflight may have traded output room for prompt room; sending
         // the original value would put the request back over the window.
@@ -883,15 +929,76 @@ class ModelManager {
 
   async stopServer() {
     await this.serverManager.stop();
+    if (this.geniexServerManager) await this.geniexServerManager.stop();
     this.currentServerModelId = null;
   }
 
   getServerStatus() {
+    if (this.geniexServerManager?.ready) return this.geniexServerManager.getStatus();
     return this.serverManager.getStatus();
   }
 
   cancelInference() {
     this.serverManager.cancelInference();
+    this.geniexServerManager?.cancelInference();
+  }
+
+  /**
+   * Start (or reuse) the right server for a model and hand back its port —
+   * the seam every direct-streaming client goes through. Chat streams talk to
+   * the port rather than runInference, so this is where a GenieX (NPU) model
+   * must resolve to the GenieX server instead of silently starting the CPU
+   * llama-server with the same GGUF.
+   */
+  async ensureServerForModel(modelId) {
+    this.ensureInitialized();
+
+    const modelInfo = this.findModelById(modelId);
+    if (!modelInfo) {
+      throw new ModelNotFoundError(modelId);
+    }
+
+    const modelPath = path.join(this.modelsDir, modelInfo.model.fileName);
+    if (!(await this.checkModelValid(modelPath))) {
+      throw new ModelError(`Model ${modelId} is not downloaded or is corrupted`, "MODEL_NOT_DOWNLOADED", {
+        modelId,
+      });
+    }
+
+    const serverManager = await this._serverFor(modelInfo.model);
+    if (!serverManager.isAvailable()) {
+      throw new ModelError(
+        modelInfo.model.runtime === "geniex"
+          ? "GenieX CLI not found. Install Qualcomm GenieX to run language models on the NPU."
+          : "llama-server binary not found. Please ensure the app is installed correctly.",
+        "LLAMASERVER_NOT_FOUND"
+      );
+    }
+
+    // Switching runtimes must not leave the previous server resident (see
+    // runInference for the same rule).
+    if (serverManager !== this.serverManager && this.serverManager.ready) {
+      await this.serverManager.stop();
+    }
+    if (serverManager === this.serverManager && this.geniexServerManager?.ready) {
+      await this.geniexServerManager.stop();
+    }
+
+    await serverManager.start(modelPath, await this.serverStartOptions(modelInfo));
+    this.currentServerModelId = modelId;
+    // The id the server actually serves: llama.cpp answers any model string,
+    // but GenieX resolves requests against its cache by the pulled ref (which
+    // may carry a ":PRECISION" suffix) — a streaming client that sends the
+    // bare registry id would get "not found in local cache".
+    const servedModelId =
+      serverManager === this.serverManager ? modelId : serverManager.modelRef || modelId;
+    debugLogger.info("Streaming server ready", {
+      modelId,
+      servedModelId,
+      runtime: modelInfo.model.runtime || "llama",
+      port: serverManager.port,
+    });
+    return { port: serverManager.port, servedModelId, runtime: modelInfo.model.runtime || "llama" };
   }
 
   async prewarmServer(modelId) {
@@ -904,15 +1011,26 @@ class ModelManager {
     const modelPath = path.join(this.modelsDir, modelInfo.model.fileName);
     if (!(await this.checkModelValid(modelPath))) return false;
 
-    if (!this.serverManager.isAvailable()) return false;
+    let serverManager;
+    try {
+      serverManager = await this._serverFor(modelInfo.model);
+    } catch {
+      // Unsupported runtime (e.g. a GenieX model on non-Snapdragon): prewarm
+      // is opportunistic, so the capability error surfaces on real inference.
+      return false;
+    }
+    if (!serverManager.isAvailable()) return false;
 
     try {
-      await this.serverManager.start(modelPath, await this.serverStartOptions(modelInfo));
+      await serverManager.start(modelPath, await this.serverStartOptions(modelInfo));
       this.currentServerModelId = modelId;
-      debugLogger.info("llama-server pre-warmed", { modelId });
+      debugLogger.info("Local inference server pre-warmed", {
+        modelId,
+        runtime: modelInfo.model.runtime || "llama",
+      });
       return true;
     } catch (error) {
-      debugLogger.warn("Failed to pre-warm llama-server", { error: error.message });
+      debugLogger.warn("Failed to pre-warm local inference server", { error: error.message });
       return false;
     }
   }
