@@ -1,4 +1,5 @@
 import { forgetHeldSpaces, isSpaceHeld } from "../lib/heldSpaceDeletes";
+import { forgetHeldTeams } from "../lib/heldTeamDeletes";
 import { create } from "zustand";
 import { syncService } from "../services/SyncService.js";
 import {
@@ -499,6 +500,7 @@ export function resetForAccountChange(): void {
   purgeDisplacedNote = null;
   hiddenSpaces.clear();
   forgetHeldSpaces();
+  forgetHeldTeams();
 
   invalidateKeyedLoadGenerations(containerLoadGenerations);
   containerLoadsInFlight.clear();

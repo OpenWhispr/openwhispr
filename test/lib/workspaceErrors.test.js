@@ -6,6 +6,7 @@ const {
   classifyRemovalError,
   classifyRowActionError,
   classifySpaceError,
+  classifyTeamError,
   rowActionErrorOf,
 } = require("../../src/lib/workspaceErrors.ts");
 const { CloudApiError } = require("../../src/services/cloudApi.ts");
@@ -337,4 +338,35 @@ test("a row action failure passes through a space failure unchanged", () => {
   ]) {
     assert.deepEqual(rowActionErrorOf(failure), failure);
   }
+});
+
+test("each team code has its kind", () => {
+  const cases = [
+    ["team_plan_required", 403, { kind: "planRequired" }],
+    ["team_name_taken", 409, { kind: "nameTaken" }],
+    ["last_team_admin", 409, { kind: "lastAdmin" }],
+  ];
+  for (const [code, status, expected] of cases) {
+    assert.deepEqual(classifyTeamError(new CloudApiError("x", status, code)), expected, code);
+  }
+  assert.deepEqual(
+    classifyTeamError(
+      new CloudApiError("x", 400, "not_workspace_members", { user_ids: ["u1", 7, "u2"] })
+    ),
+    { kind: "notWorkspaceMembers", userIds: ["u1", "u2"] }
+  );
+  assert.deepEqual(classifyTeamError(new CloudApiError("x", 400, "not_workspace_members")), {
+    kind: "notWorkspaceMembers",
+    userIds: [],
+  });
+});
+
+test("a missing team reads as gone", () => {
+  assert.deepEqual(classifyTeamError(new CloudApiError("Team not found", 404)), { kind: "gone" });
+  assert.notDeepEqual(classifyTeamError(new CloudApiError("Not found", 404)), { kind: "gone" });
+});
+
+test("an unknown team failure reads as failed", () => {
+  assert.deepEqual(classifyTeamError(new Error("boom")), { kind: "failed" });
+  assert.deepEqual(classifyTeamError(new CloudApiError("x", 403)), { kind: "notAllowed" });
 });

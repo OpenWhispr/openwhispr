@@ -1,5 +1,10 @@
-import { classifySpaceError, type SpaceActionError } from "../lib/workspaceErrors";
-import type { SpaceItem, TeamRole } from "../types/electron";
+import {
+  classifySpaceError,
+  classifyTeamError,
+  type SpaceActionError,
+  type TeamActionError,
+} from "../lib/workspaceErrors";
+import type { SpaceItem, Team, TeamRole } from "../types/electron";
 import { CloudApiError } from "./cloudApi";
 import type { MySpace, SpaceMemberRemoval, SpaceRecord, SpacesService } from "./SpacesService";
 
@@ -42,8 +47,31 @@ export interface SpaceDeleteHold {
   again: () => SpaceDeleteHold | null;
 }
 
+export interface TeamDeleteResult {
+  success: boolean;
+  error?: string;
+  failure?: TeamActionError;
+}
+
+/** A team delete waiting out its Undo window: the team is out of view and otherwise untouched. */
+export interface TeamDeleteHold {
+  /** Brings the team back as it was. False once the delete has gone ahead. */
+  undo: () => Promise<boolean>;
+  /** Sends the delete. Null when there's nothing to report: it was undone, or the account changed. */
+  commit: () => Promise<TeamDeleteResult | null>;
+  /** Holds it again for a retry, or null when the account that asked has gone. */
+  again: () => TeamDeleteHold | null;
+}
+
 export interface SpaceActionsDependencies {
   teams: {
+    list: (workspaceId: string) => Promise<Team[]>;
+    create: (workspaceId: string, input: { name: string; member_ids: string[] }) => Promise<Team>;
+    update: (teamId: string, updates: { name: string }) => Promise<Team>;
+    addMembers: (
+      teamId: string,
+      userIds: string[]
+    ) => Promise<{ added: string[]; already_members: string[] }>;
     remove: (teamId: string) => Promise<void>;
     addMember: (teamId: string, userId: string, role?: TeamRole) => Promise<void>;
     removeMember: (teamId: string, userId: string) => Promise<void>;
@@ -94,6 +122,10 @@ export interface SpaceActionsDependencies {
     release: (space: SpaceItem, cloudSpaceId: string) => void;
     markDeleted: (space: SpaceItem) => void;
   };
+  teamDeleteHold: {
+    hide: (teamId: string) => void;
+    release: (teamId: string) => void;
+  };
 }
 
 function requireCloudSpaceId(space: SpaceItem): string {
@@ -113,14 +145,50 @@ function isLostAnswer(err: unknown): boolean {
 }
 
 export function createSpaceActions(deps: SpaceActionsDependencies) {
-  const openHolds = new Set<SpaceDeleteHold>();
+  const openHolds = new Set<{ commit: () => Promise<unknown> }>();
 
   // Creates whose answer was lost and which the follow-up read couldn't settle, by when they were
   // tried. A dropped connection usually takes that read down too, so the retry settles it instead.
   const unsettledCreates = new Map<string, number>();
   const normalizedName = (name: string): string => name.trim().toLowerCase();
-  const createKey = (workspaceId: string, name: string): string =>
-    `${workspaceId}\0${normalizedName(name)}`;
+  // Teams and teamspaces share a namespace of names only within their own kind.
+  const createKey = (kind: "space" | "team", workspaceId: string, name: string): string =>
+    `${kind}\0${workspaceId}\0${normalizedName(name)}`;
+
+  // Sends a create and, when its answer may have been lost, looks for what it made. A lost answer
+  // is no answer at all (see isLostAnswer); a taken name counts as one too while an earlier try of
+  // the same create is still unsettled, since that try is the likely owner of the name. `find`
+  // returns the caller's own match, null when there is none and undefined when it couldn't look.
+  async function createSettling<T>(
+    key: string,
+    attempt: {
+      send: () => Promise<T>;
+      isNameTaken: (err: unknown) => boolean;
+      find: (triedAt: number) => Promise<T | null | undefined>;
+    }
+  ): Promise<T> {
+    const triedAt = Date.now();
+    try {
+      const created = await attempt.send();
+      unsettledCreates.delete(key);
+      return created;
+    } catch (err) {
+      const lastTry = unsettledCreates.get(key);
+      const unsettledAt =
+        lastTry !== undefined && triedAt - lastTry <= UNSETTLED_CREATE_TTL_MS ? lastTry : undefined;
+      const mayBeOurs =
+        isLostAnswer(err) || (unsettledAt !== undefined && attempt.isNameTaken(err));
+      if (!mayBeOurs) {
+        unsettledCreates.delete(key);
+        throw err;
+      }
+      const found = await attempt.find(unsettledAt ?? triedAt);
+      if (found === undefined) unsettledCreates.set(key, unsettledAt ?? triedAt);
+      else unsettledCreates.delete(key);
+      if (!found) throw err;
+      return found;
+    }
+  }
 
   // One failed add must not abort the rest; callers report the failures.
   async function settleAddMembers(
@@ -187,34 +255,16 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     input: CreateSpaceInput,
     access: { memberIds: string[]; teamIds: string[] }
   ): Promise<SpaceItem | null> {
-    const key = createKey(workspaceId, input.name);
-    const triedAt = Date.now();
-    let cloudSpace: MySpace;
-    try {
-      cloudSpace = await deps.spaces.create(workspaceId, {
-        ...input,
-        member_ids: access.memberIds,
-        team_ids: access.teamIds,
-      });
-    } catch (err) {
-      const lastTry = unsettledCreates.get(key);
-      const unsettledAt =
-        lastTry !== undefined && triedAt - lastTry <= UNSETTLED_CREATE_TTL_MS ? lastTry : undefined;
-      // The name is taken by this user's own lost create, if an earlier try is still unsettled.
-      const mayBeOurs =
-        isLostAnswer(err) ||
-        (unsettledAt !== undefined && classifySpaceError(err).kind === "nameTaken");
-      if (!mayBeOurs) {
-        unsettledCreates.delete(key);
-        throw err;
-      }
-      const created = await findLostCreate(workspaceId, input.name, unsettledAt ?? triedAt);
-      if (created === undefined) unsettledCreates.set(key, unsettledAt ?? triedAt);
-      else unsettledCreates.delete(key);
-      if (!created) throw err;
-      cloudSpace = created;
-    }
-    unsettledCreates.delete(key);
+    const cloudSpace = await createSettling(createKey("space", workspaceId, input.name), {
+      send: () =>
+        deps.spaces.create(workspaceId, {
+          ...input,
+          member_ids: access.memberIds,
+          team_ids: access.teamIds,
+        }),
+      isNameTaken: (err) => classifySpaceError(err).kind === "nameTaken",
+      find: (triedAt) => findLostCreate(workspaceId, input.name, triedAt),
+    });
     const space = await deps.local.upsertSpaceFromCloud(
       cloudSpace as unknown as Record<string, unknown>
     );
@@ -222,6 +272,58 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     await deps.local.loadSpaces();
     deps.sync.requestSyncAll("manual");
     return space;
+  }
+
+  // The same test for a team, read through the team list: a lost create is the caller's own when
+  // it is in this workspace under the name sent, the caller is its direct admin and it is new.
+  async function findLostTeamCreate(
+    workspaceId: string,
+    name: string,
+    triedAt: number
+  ): Promise<Team | null | undefined> {
+    const wanted = normalizedName(name);
+    try {
+      const teams = await deps.teams.list(workspaceId);
+      return (
+        teams.find(
+          (team) =>
+            team.workspace_id === workspaceId &&
+            normalizedName(team.name) === wanted &&
+            team.my_direct_role === "admin" &&
+            Math.abs(triedAt - Date.parse(team.created_at)) <= LOST_CREATE_WINDOW_MS
+        ) ?? null
+      );
+    } catch {
+      return undefined;
+    }
+  }
+
+  // Members travel in the create body, so the server adds them with the team or not at all.
+  async function createTeam(
+    workspaceId: string,
+    input: { name: string; memberIds: string[] }
+  ): Promise<Team> {
+    return createSettling(createKey("team", workspaceId, input.name), {
+      send: () => deps.teams.create(workspaceId, { name: input.name, member_ids: input.memberIds }),
+      isNameTaken: (err) => classifyTeamError(err).kind === "nameTaken",
+      find: (triedAt) => findLostTeamCreate(workspaceId, input.name, triedAt),
+    });
+  }
+
+  async function addPeopleToTeam(
+    teamId: string,
+    userIds: string[]
+  ): Promise<{ added: string[]; already_members: string[] }> {
+    const result = await deps.teams.addMembers(teamId, userIds);
+    await refreshMirrorAfterWrite();
+    return result;
+  }
+
+  // Spaces list their teams by name, so the mirror follows a rename.
+  async function renameTeam(teamId: string, name: string): Promise<Team> {
+    const team = await deps.teams.update(teamId, { name });
+    await refreshMirrorAfterWrite();
+    return team;
   }
 
   async function renameSpace(
@@ -359,6 +461,48 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
         return result;
       },
       again: () => (accountChanged() ? null : holdForAccount(space, accountGeneration)),
+    };
+    openHolds.add(hold);
+    return hold;
+  }
+
+  // Like holdSpaceDelete, without the mirror and purge work: a team has no local row, and the
+  // spaces that list it are refreshed once the server has dropped it.
+  function holdTeamDelete(team: Team): TeamDeleteHold {
+    return holdTeamForAccount(team, deps.deleteHold.accountGeneration());
+  }
+
+  function holdTeamForAccount(team: Team, accountGeneration: number): TeamDeleteHold {
+    const accountChanged = (): boolean => deps.deleteHold.accountGeneration() !== accountGeneration;
+    deps.teamDeleteHold.hide(team.id);
+    let settled = false;
+    const hold: TeamDeleteHold = {
+      async undo() {
+        if (settled) return false;
+        settled = true;
+        openHolds.delete(hold);
+        deps.teamDeleteHold.release(team.id);
+        return true;
+      },
+      async commit() {
+        if (settled) return null;
+        settled = true;
+        openHolds.delete(hold);
+        if (accountChanged()) return null;
+        try {
+          await deps.teams.remove(team.id);
+        } catch (err) {
+          // Someone else deleted it first, or an earlier delete went through and its answer was lost.
+          if (!(err instanceof CloudApiError && err.status === 404)) {
+            deps.teamDeleteHold.release(team.id);
+            return { success: false, error: errorMessage(err), failure: classifyTeamError(err) };
+          }
+        }
+        await refreshMirrorAfterWrite();
+        deps.sync.requestSyncAll("manual");
+        return { success: true };
+      },
+      again: () => (accountChanged() ? null : holdTeamForAccount(team, accountGeneration)),
     };
     openHolds.add(hold);
     return hold;
@@ -512,6 +656,10 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     deleteSpace,
     holdSpaceDelete,
     commitHeldDeletes,
+    createTeam,
+    addPeopleToTeam,
+    renameTeam,
+    holdTeamDelete,
     assignTeamToSpace,
     setSpaceTeamAccess,
     unassignTeamFromSpace,

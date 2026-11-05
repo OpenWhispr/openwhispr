@@ -9,6 +9,7 @@ import {
   updateSpaceMeta,
 } from "../stores/noteStore";
 import { holdSpace, markHeldSpaceDeleted, releaseSpace } from "../lib/heldSpaceDeletes";
+import { holdTeam, releaseTeam } from "../lib/heldTeamDeletes";
 import { invalidateSpaceRoster } from "../lib/spaceRosterCache";
 import { createSpaceActions } from "./spaceActionsCore";
 
@@ -44,6 +45,7 @@ const actions = createSpaceActions({
     release: (space, cloudSpaceId) => releaseSpace(space.id, cloudSpaceId),
     markDeleted: (space) => markHeldSpaceDeleted(space.id),
   },
+  teamDeleteHold: { hide: holdTeam, release: releaseTeam },
 });
 
 export const {
@@ -52,6 +54,10 @@ export const {
   deleteSpace,
   holdSpaceDelete,
   commitHeldDeletes,
+  createTeam,
+  addPeopleToTeam,
+  renameTeam,
+  holdTeamDelete,
   assignTeamToSpace,
   setSpaceTeamAccess,
   unassignTeamFromSpace,

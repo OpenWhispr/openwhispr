@@ -1,5 +1,5 @@
-import { cloudGet, cloudPost, cloudDelete, type DataWrap } from "./cloudApi.js";
-import type { Team, TeamMember } from "../types/electron";
+import { cloudGet, cloudPost, cloudPatch, cloudDelete, type DataWrap } from "./cloudApi.js";
+import type { Team, TeamInvitation, TeamMember } from "../types/electron";
 
 async function list(workspaceId: string): Promise<Team[]> {
   const res = await cloudGet<DataWrap<Team[]>>(`/api/workspaces/${workspaceId}/teams`);
@@ -8,9 +8,14 @@ async function list(workspaceId: string): Promise<Team[]> {
 
 async function create(
   workspaceId: string,
-  input: { name: string; description?: string }
+  input: { name: string; description?: string; member_ids?: string[] }
 ): Promise<Team> {
   const res = await cloudPost<DataWrap<Team>>(`/api/workspaces/${workspaceId}/teams`, input);
+  return res.data;
+}
+
+async function update(teamId: string, updates: { name: string }): Promise<Team> {
+  const res = await cloudPatch<DataWrap<Team>>(`/api/teams/${teamId}`, updates);
   return res.data;
 }
 
@@ -31,6 +36,22 @@ async function addMember(
   await cloudPost(`/api/teams/${teamId}/members`, { user_id: userId, role });
 }
 
+async function addMembers(
+  teamId: string,
+  userIds: string[]
+): Promise<{ added: string[]; already_members: string[] }> {
+  const res = await cloudPost<DataWrap<{ added: string[]; already_members: string[] }>>(
+    `/api/teams/${teamId}/members/batch`,
+    { user_ids: userIds }
+  );
+  return res.data;
+}
+
+async function listInvitations(teamId: string): Promise<TeamInvitation[]> {
+  const res = await cloudGet<DataWrap<TeamInvitation[]>>(`/api/teams/${teamId}/invitations`);
+  return res.data;
+}
+
 async function removeMember(teamId: string, userId: string): Promise<void> {
   await cloudDelete(`/api/teams/${teamId}/members/${userId}`);
 }
@@ -38,8 +59,11 @@ async function removeMember(teamId: string, userId: string): Promise<void> {
 export const TeamsService = {
   list,
   create,
+  update,
   remove,
   listMembers,
   addMember,
+  addMembers,
+  listInvitations,
   removeMember,
 };

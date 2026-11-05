@@ -107,6 +107,40 @@ export function classifyRowActionError(error: unknown): RowActionError {
   return message ? { kind: "refused", message } : { kind: "failed" };
 }
 
+export type TeamActionError =
+  | { kind: "planRequired" }
+  | { kind: "nameTaken" }
+  | { kind: "lastAdmin" }
+  | { kind: "notWorkspaceMembers"; userIds: string[] }
+  | RowActionError;
+
+const TEAM_GONE_MESSAGE = /^team not found$/i;
+
+/** Maps a failed team action; codes come first, then a missing team, then the row action kinds. */
+export function classifyTeamError(error: unknown): TeamActionError {
+  if (error instanceof CloudApiError) {
+    switch (error.code) {
+      case "team_plan_required":
+        return { kind: "planRequired" };
+      case "team_name_taken":
+        return { kind: "nameTaken" };
+      case "last_team_admin":
+        return { kind: "lastAdmin" };
+      case "not_workspace_members": {
+        const userIds = detailsRecord(error.details)?.user_ids;
+        return {
+          kind: "notWorkspaceMembers",
+          userIds: Array.isArray(userIds)
+            ? userIds.filter((id): id is string => typeof id === "string")
+            : [],
+        };
+      }
+    }
+    if (error.status === 404 && TEAM_GONE_MESSAGE.test(error.message)) return { kind: "gone" };
+  }
+  return classifyRowActionError(error);
+}
+
 export type RemovalError =
   | { kind: "transferRequired"; owners: OwnedMemberContent[] }
   | { kind: "invalidTransferTarget" }
