@@ -2437,11 +2437,91 @@
       "tab": {
         "general": "一般",
         "members": "メンバー",
+        "invitations": "招待",
         "teams": "グループ"
       },
       "people": {
         "title": "ユーザー",
-        "description": "ワークスペースのユーザーとそのロールを管理します。"
+        "description": "ワークスペースのユーザーとそのロールを管理します。",
+        "subtitleView": "ワークスペースのユーザーとそのロール。",
+        "add": "追加",
+        "addLabel": "メンバーを招待",
+        "columns": {
+          "name": "名前",
+          "team": "グループ",
+          "role": "ロール",
+          "email": "メール",
+          "status": "ステータス",
+          "actions": "操作"
+        },
+        "you": "あなた",
+        "teamsNone": "なし",
+        "teamsMore": "+{{count}}",
+        "loading": {
+          "title": "メンバーを読み込んでいます…",
+          "body": "ワークスペースのメンバーがここに表示されます。"
+        },
+        "failed": {
+          "title": "メンバーを読み込めませんでした",
+          "body": "接続を確認して、もう一度お試しください。"
+        },
+        "search": {
+          "placeholder": "メンバーを検索",
+          "clear": "検索をクリア",
+          "noResultsTitle": "「{{query}}」に一致するメンバーはいません",
+          "noResultsBody": "スペルを確認するか、メールアドレスで検索してください。"
+        },
+        "roleMenuLabel": "{{name}} のロールを変更",
+        "roleDescription": {
+          "member": "ノートを閲覧・編集できます。",
+          "admin": "メンバー、招待、グループ、設定を管理します。"
+        },
+        "roleFailed": "{{name}} のロールを変更できませんでした。接続を確認して、もう一度お試しください。",
+        "roleNotAllowed": "{{workspace}} のロールを変更する権限がなくなりました。",
+        "invitations": {
+          "loading": "招待を読み込んでいます…",
+          "failedTitle": "招待を読み込めませんでした",
+          "emptyTitle": "招待はありません",
+          "emptyBody": "新しい招待は、承諾されるまでここに表示されます。",
+          "pending_one": "保留中 · 有効期限まであと{{count}}日",
+          "pending_other": "保留中 · 有効期限まであと{{count}}日",
+          "expired": "期限切れ",
+          "resend": "招待を再送信",
+          "cancel": "招待を取り消す",
+          "resendFailed": "{{email}} への招待を再送信できませんでした。招待を取り消してから、もう一度招待してください。",
+          "resendNotAllowed": "{{workspace}} で招待を再送信する権限がなくなりました。",
+          "noLongerPending": "{{email}} への招待は保留中ではなくなりました",
+          "noLongerPendingMany_one": "{{count}} 件の招待は保留中ではなくなりました。",
+          "noLongerPendingMany_other": "{{count}} 件の招待は保留中ではなくなりました。",
+          "refreshFailed": "招待を更新できませんでした。この一覧は最新ではない可能性があります。",
+          "cancelSelected": "招待を取り消す",
+          "resendSelected": "招待を再送信",
+          "resendingSelected": "再送信しています…",
+          "resentMany_one": "{{count}} 件の招待を再送信しました。",
+          "resentMany_other": "{{count}} 件の招待を再送信しました。",
+          "resentPartial_one": "{{count}} 件を再送信しました。",
+          "resentPartial_other": "{{count}} 件を再送信しました。",
+          "resendFailedOne": "{{email}} への招待が失敗しました。「操作」から再試行してください。",
+          "resendFailedSome_one": "{{count}} 件の招待が失敗しました。「操作」から再試行してください。",
+          "resendFailedSome_other": "{{count}} 件の招待が失敗しました。「操作」から再試行してください。",
+          "resendFailedAll_one": "{{count}} 件の招待を再送信できませんでした。接続を確認して、もう一度お試しください。",
+          "resendFailedAll_other": "{{count}} 件の招待を再送信できませんでした。接続を確認して、もう一度お試しください。",
+          "resentNoEmailOne": "{{email}} の招待は更新されましたが、メールを配信できず、以前のリンクは使用できなくなりました。もう一度再送信してください。",
+          "resentNoEmailMany_one": "{{count}} 件の招待は更新されましたが、メールを配信できず、以前のリンクは使用できなくなりました。選択したままなので、再送信できます。",
+          "resentNoEmailMany_other": "{{count}} 件の招待は更新されましたが、メールを配信できず、以前のリンクは使用できなくなりました。選択したままなので、再送信できます。",
+          "resendUnrenewable_one": "期限切れの招待 {{count}} 件を更新できませんでした。キャンセルしてから、もう一度招待してください。",
+          "resendUnrenewable_other": "期限切れの招待 {{count}} 件を更新できませんでした。キャンセルしてから、もう一度招待してください。"
+        },
+        "selection": {
+          "count_one": "{{count}} 件を選択中",
+          "count_other": "{{count}} 件を選択中",
+          "clear": "クリア",
+          "label": "選択したユーザー",
+          "selectAllMembers": "すべてのメンバーを選択",
+          "selectAllInvitations": "すべての招待を選択",
+          "selectRow": "{{name}} を選択",
+          "remove": "削除"
+        }
       },
       "role": {
         "owner": "オーナー",
@@ -2470,21 +2550,12 @@
         "leaving": "退出中…"
       },
       "members": {
-        "title": "メンバー",
         "description": "{{seats}} シート中 {{count}} シートを使用中。",
-        "invite": "招待",
-        "empty": "まだメンバーがいません。",
         "loadError": "メンバーを読み込めませんでした。",
         "roleUpdated": "役割を更新しました",
         "removed": "{{name}} を削除しました",
-        "promote": "管理者にする",
-        "demote": "メンバーにする",
         "transferOwnership": "オーナー権限を譲渡",
-        "remove": "ワークスペースから削除",
-        "removeConfirm": {
-          "title": "このメンバーを削除しますか？",
-          "description": "{{name}} はすぐに {{workspace}} にアクセスできなくなります。"
-        }
+        "remove": "ワークスペースから削除"
       },
       "joinRequests": {
         "title": "参加リクエスト",
@@ -2525,22 +2596,9 @@
         }
       },
       "invites": {
-        "title": "保留中の招待",
-        "expiresIn_one": "有効期限まであと{{count}}日",
-        "expiresIn_other": "有効期限まであと{{count}}日",
-        "expired": "期限切れ",
-        "loadError": "招待を読み込めませんでした。",
-        "resend": "再送信",
         "resending": "再送信中…",
-        "revoke": "取り消す",
         "resent": "招待を再送信しました",
-        "resentNoEmail": "招待を更新しましたが、メールを配信できませんでした。",
-        "revoked": "招待を取り消しました",
-        "revokeFailed": "招待を取り消せませんでした",
-        "revokeConfirm": {
-          "title": "この招待を取り消しますか？",
-          "description": "{{email}} への招待リンクが無効になります。"
-        }
+        "resentNoEmail": "招待を更新しましたが、メールを配信できませんでした。"
       },
       "billing": {
         "plan": "プラン",
@@ -2928,7 +2986,9 @@
         "viaGroup": "{{group}} 経由",
         "managedByGroup": "{{group}} 経由で追加されています。削除はそのグループで行ってください。",
         "roleFromGroup": "{{group}} 経由の管理者です。変更はそちらで行ってください。",
-        "invited": "{{email}} に招待を送信しました"
+        "invited": "{{email}} に招待を送信しました",
+        "invitedMany_one": "{{count}} 人に招待を送信しました",
+        "invitedMany_other": "{{count}} 人に招待を送信しました"
       },
       "invitedTo_one": "{{count}} 件のチームスペースに参加します",
       "invitedTo_other": "{{count}} 件のチームスペースに参加します",
@@ -3540,6 +3600,31 @@
     "emptyTitle": "辞書に単語を追加しましょう",
     "emptyDescription": "{{agentName}}に正しく認識してほしい言葉を追加しましょう。名前、ツール、略語など。",
     "addFirstWord": "最初の単語を追加",
+    "importList": "リストをインポート",
+    "importMenu": "インポート",
+    "importFromDragon": "Dragon からインポート",
+    "dragonImport": {
+      "title": "Dragon からインポート",
+      "found_one": "{{fileName}} に {{count}} 個の単語が見つかりました。",
+      "found_other": "{{fileName}} に {{count}} 個の単語が見つかりました。",
+      "alreadyPresent": "すでに辞書にあるためスキップ: {{count}} 個。",
+      "nothingNew": "このファイルの単語はすべてすでに辞書にあります。",
+      "unreadable": "読み取れなかったためスキップした行: {{count}} 行。",
+      "tooLong": "{{max}} 文字を超えるためスキップした単語: {{count}} 個。",
+      "overLimit": "辞書に登録できるのは {{max}} 語までのため、インポートしなかった単語: {{count}} 個。",
+      "propertiesIgnored": "Dragon の書式プロパティはインポートされません。",
+      "confirm_one": "{{count}} 個の単語をインポート",
+      "confirm_other": "{{count}} 個の単語をインポート",
+      "done_one": "Dragon から {{count}} 個の単語をインポートしました",
+      "done_other": "Dragon から {{count}} 個の単語をインポートしました",
+      "failedTitle": "インポートに失敗しました",
+      "error": {
+        "emptyFile": "そのファイルに単語が見つかりませんでした。",
+        "unsupportedXml": "Windows 版 Dragon のエクスポートではないようです。Dragon で「Vocabulary → Export custom word and phrase list」を選び、TXT 形式で保存してください。",
+        "fileTooLarge": "そのファイルは Dragon の単語リストとしては大きすぎます。",
+        "generic": "そのファイルを読み取れませんでした。"
+      }
+    },
     "agentDefault": "デフォルトで追加済み",
     "shared": {
       "allWords": "すべての単語",
@@ -5218,27 +5303,78 @@
       "description": "{{name}} のオーナーになりました。"
     },
     "invite": {
-      "title": "{{workspace}} に招待",
-      "description": "メールアドレスでチームメイトを追加します。参加用のリンクが送信されます。",
+      "title": "ユーザーを招待",
+      "description": "{{workspace}} に参加するためのリンクがメールで届きます。",
       "emailLabel": "メールアドレス",
-      "emailPlaceholder": "teammate@example.com",
-      "roleLabel": "役割",
+      "emailHint": "メールアドレスはカンマで区切ります。全員に同じロールが付与されます。",
+      "emailPlaceholder": "メールを検索",
+      "addMore": "さらに追加…",
+      "removeRecipient": "{{email}} を削除",
+      "suggestions": "候補",
+      "roleLabel": "ワークスペースのロール",
       "seatUsage": "{{seats}} シート中 {{used}} シートを使用中",
       "seatCost": "承諾されるとプランに 1 席追加され、日割りの見積額 {{amount}} が請求されます。",
-      "submit": "招待を送信",
-      "submitting": "送信中…",
-      "sentTitle": "招待を送信しました",
-      "sentDescription": "{{email}} に招待を送信しました。",
-      "sentNoEmailTitle": "招待を作成しましたが、メールは送信されませんでした",
-      "sentNoEmailDescription": "{{email}} を招待しましたが、メールを配信できませんでした。後で再送信するか、別の方法で招待リンクを共有してください。",
-      "errorTitle": "招待を送信できませんでした",
+      "seatCostMany_one": "すべて承諾されるとプランに {{count}} 席追加され、日割りの見積額 {{amount}} が請求されます。",
+      "seatCostMany_other": "すべて承諾されるとプランに {{count}} 席追加され、日割りの見積額 {{amount}} が請求されます。",
+      "seatCostManyUnpriced_one": "すべて承諾されるとプランに {{count}} 席追加されます。",
+      "seatCostManyUnpriced_other": "すべて承諾されるとプランに {{count}} 席追加されます。",
+      "submitOne": "招待を送信",
+      "submit_one": "{{count}} 件の招待を送信",
+      "submit_other": "{{count}} 件の招待を送信",
+      "submitting_one": "{{count}} 人を招待しています…",
+      "submitting_other": "{{count}} 人を招待しています…",
+      "sentTitle_one": "{{count}} 件の招待を送信しました",
+      "sentTitle_other": "{{count}} 件の招待を送信しました",
+      "createdTitle_one": "{{count}} 件の招待を作成しました",
+      "createdTitle_other": "{{count}} 件の招待を作成しました",
+      "sentOne": "{{email}} を {{workspace}} に招待しました",
+      "sentMany_one": "{{count}} 人を {{workspace}} に招待しました",
+      "sentMany_other": "{{count}} 人を {{workspace}} に招待しました",
+      "noEmail_one": "{{count}} 件の招待を作成しましたが、メールを配信できませんでした。「招待」から再送信してください。",
+      "noEmail_other": "{{count}} 件の招待を作成しましたが、メールを配信できませんでした。「招待」から再送信してください。",
+      "someFailed_one": "{{count}} 件の招待を送信できませんでした",
+      "someFailed_other": "{{count}} 件の招待を送信できませんでした",
+      "tryResending": "再送信する",
+      "tooMany": "一度に招待できるのは {{count}} 人までです。",
+      "removeLast_one": "最後の {{count}} 件を削除",
+      "removeLast_other": "最後の {{count}} 件を削除",
+      "seatsLeft_one": "残りのシートは {{count}} 席だけです。{{excess}} 件を削除するか、アップグレードしてください。",
+      "seatsLeft_other": "残りのシートは {{count}} 席だけです。{{excess}} 件を削除するか、アップグレードしてください。",
+      "seatsLeftAskOwner_one": "残りのシートは {{count}} 席だけです。{{excess}} 件を削除するか、{{owner}} にシートの追加を依頼してください。",
+      "seatsLeftAskOwner_other": "残りのシートは {{count}} 席だけです。{{excess}} 件を削除するか、{{owner}} にシートの追加を依頼してください。",
+      "seatsNone": "残りのシートはありません。追加するにはアップグレードしてください。",
+      "seatsNoneAskOwner": "残りのシートはありません。{{owner}} にシートの追加を依頼してください。",
+      "upgrade": "アップグレード",
+      "ceilingLeft_one": "あと {{count}} 人を招待できます。続けるには {{excess}} 件を削除してください。",
+      "ceilingLeft_other": "あと {{count}} 人を招待できます。続けるには {{excess}} 件を削除してください。",
+      "rateLimitedLeft_one": "現在送信できる招待はあと {{count}} 件のみです。送信するには {{excess}} 件を削除するか、後でもう一度お試しください。",
+      "rateLimitedLeft_other": "現在送信できる招待はあと {{count}} 件のみです。送信するには {{excess}} 件を削除するか、後でもう一度お試しください。",
+      "rateLimitedDaily": "このワークスペースから送信できる招待は 1 日 {{limit}} 件までです。残りを今すぐ送信するには {{excess}} 件を削除してください。",
+      "skippedMany_one": "{{count}} 件のアドレスをスキップしました（すでにメンバーか、招待済みです）。",
+      "skippedMany_other": "{{count}} 件のアドレスをスキップしました（すでにメンバーか、招待済みです）。",
+      "skippedNotAdded_one": "{{count}} 件のアドレスをスキップしたため、ここには追加されていません（すでにメンバーか、招待済みです）。既存のメンバーはメンバー一覧から追加してください。",
+      "skippedNotAdded_other": "{{count}} 件のアドレスをスキップしたため、ここには追加されていません（すでにメンバーか、招待済みです）。既存のメンバーはメンバー一覧から追加してください。",
+      "done": "完了",
       "role": {
-        "admin": "管理者",
-        "member": "メンバー"
+        "admin": "ワークスペースの管理者",
+        "member": "ワークスペースのメンバー"
       },
       "roleDescription": {
-        "admin": "メンバーと請求を管理できます",
-        "member": "ワークスペースを利用できます"
+        "admin": "メンバー、招待、グループ、設定を管理します。",
+        "member": "ノートを閲覧・編集できます。"
+      },
+      "errors": {
+        "invalid": "{{email}} は有効なメールアドレスではありません",
+        "alreadyMember": "{{email}} はすでにメンバーのため、スキップしました",
+        "alreadyInvited": "{{email}} は招待済みのため、スキップしました。「招待」から再送信してください。",
+        "seatLimit": "このワークスペースはシート数の上限に達しました。",
+        "directoryRequired": "先に ID プロバイダーで {{email}} を割り当ててください。",
+        "notAllowed": "{{workspace}} にユーザーを招待できなくなりました。",
+        "ssoRequired": "{{workspace}} にユーザーを招待するには、会社のシングルサインオン (SSO) でサインインしてください。",
+        "sessionExpired": "{{email}} を招待できませんでした。サインインの有効期限が切れたか、変更されました。もう一度サインインしてから、やり直してください。",
+        "rateLimited": "現在、招待が多すぎます。しばらくしてからもう一度お試しください。",
+        "requestFailed": "{{email}} を招待できませんでした。接続を確認してもう一度お試しください。",
+        "refused": "{{email}} を招待できませんでした：{{reason}}"
       }
     },
     "join": {
@@ -5302,6 +5438,73 @@
       },
       "tryAgain": "もう一度試す"
     },
+    "removeMember": {
+      "title": "{{name}} を {{workspace}} から削除しますか？",
+      "body": "この人は、このワークスペース内のすべてのチームスペースとチームにアクセスできなくなります。いつでももう一度招待できます。",
+      "confirm": "削除",
+      "removing": "削除中…",
+      "failed": "{{name}} の削除を確認できませんでした。接続を確認して、もう一度お試しください。",
+      "notAllowed": "{{workspace}} からユーザーを削除する権限がなくなりました。",
+      "alreadyRemoved": "{{name}} はすでに削除されています"
+    },
+    "removeMembers": {
+      "title_one": "{{count}} 人のメンバーを {{workspace}} から削除しますか？",
+      "title_other": "{{count}} 人のメンバーを {{workspace}} から削除しますか？",
+      "confirm_one": "{{count}} 人のメンバーを削除",
+      "confirm_other": "{{count}} 人のメンバーを削除",
+      "checking": "確認中…",
+      "failed_one": "{{count}} 人のメンバーの削除を確認できませんでした。接続を確認して、もう一度お試しください。",
+      "failed_other": "{{count}} 人のメンバーの削除を確認できませんでした。接続を確認して、もう一度お試しください。",
+      "body": "これらのメンバーは、このワークスペースのすべてのチームスペースとチームにアクセスできなくなります。いつでも再度招待できます。",
+      "ownerOne": "{{name}} はこのワークスペースでノートまたはチームスペースを所有しています。",
+      "owners_one": "そのうち {{count}} 人がノートまたはチームスペースを所有しています。",
+      "owners_other": "そのうち {{count}} 人がノートまたはチームスペースを所有しています。",
+      "directoryManagedOne": "{{name}} は ID プロバイダーによって割り当てられています。ID プロバイダー側で削除してください。",
+      "directoryManaged_one": "そのうち {{count}} 人は ID プロバイダーによって割り当てられています。ID プロバイダー側で削除してください。",
+      "directoryManaged_other": "そのうち {{count}} 人は ID プロバイダーによって割り当てられています。ID プロバイダー側で削除してください。",
+      "directoryManagedOneOthers": "{{name}} は ID プロバイダーによって割り当てられています。ID プロバイダー側で削除するか、チェックを外して他のメンバーを削除してください。",
+      "directoryManagedOthers_one": "そのうち {{count}} 人は ID プロバイダーによって割り当てられています。ID プロバイダー側で削除するか、チェックを外して他のメンバーを削除してください。",
+      "directoryManagedOthers_other": "そのうち {{count}} 人は ID プロバイダーによって割り当てられています。ID プロバイダー側で削除するか、チェックを外して他のメンバーを削除してください。",
+      "transferLabel": "譲渡先",
+      "transferBody": "ノートとチームスペースは新しいオーナーに移動します。削除されたメンバーはこのワークスペースにアクセスできなくなります。",
+      "transferBodyLimited": "ノートとチームスペースは {{name}} に移動します。ただし、{{name}} がアクセスできないチームスペース内のノートはそのまま残ります。削除されたメンバーはこのワークスペースにアクセスできなくなります。",
+      "you": "{{name}}（あなた）",
+      "transferConfirm": "譲渡して削除",
+      "transferring": "譲渡中…",
+      "transferFailed": "譲渡と削除を確認できませんでした。接続を確認して、もう一度お試しください。",
+      "invalidTarget": "{{name}} はオーナー権限を受け取れなくなりました。別の人を選択してください。",
+      "cannotRemoveOwner": "ワークスペースのオーナーは削除できません。",
+      "cannotRemoveSelf": "自分自身は削除できません。「一般」からワークスペースを退出してください。",
+      "done_one": "{{count}} 人のメンバーを削除しました",
+      "done_other": "{{count}} 人のメンバーを削除しました",
+      "transferDone_one": "ノートとチームスペースを {{name}} に移動し、{{count}} 人のメンバーを削除しました。",
+      "transferDone_other": "ノートとチームスペースを {{name}} に移動し、{{count}} 人のメンバーを削除しました。",
+      "transferPartial_one": "{{count}} 件のノートは、{{name}} がアクセスできないチームスペースに残りました。それ以外はすべて移動しました。",
+      "transferPartial_other": "{{count}} 件のノートは、{{name}} がアクセスできないチームスペースに残りました。それ以外はすべて移動しました。",
+      "alreadyRemoved_one": "{{count}} 人のメンバーはすでに削除されています",
+      "alreadyRemoved_other": "{{count}} 人のメンバーはすでに削除されています"
+    },
+    "cancelInvitation": {
+      "title": "{{email}} への招待を取り消しますか？",
+      "body": "この招待では参加できなくなります。現在のメンバーのアクセスは維持されます。",
+      "keep": "招待を残す",
+      "canceling": "取り消しています…",
+      "done": "招待を取り消しました",
+      "failed": "招待を取り消せませんでした。接続を確認して、もう一度お試しください。",
+      "notAllowed": "{{workspace}} の招待を取り消す権限がなくなりました。"
+    },
+    "cancelInvitations": {
+      "title_one": "{{count}} 件の招待を取り消しますか？",
+      "title_other": "{{count}} 件の招待を取り消しますか？",
+      "body": "これらの招待では参加できなくなります。現在のメンバーのアクセスは維持されます。",
+      "keep": "招待を残す",
+      "confirm": "招待を取り消す",
+      "done_one": "{{count}} 件の招待を取り消しました。",
+      "done_other": "{{count}} 件の招待を取り消しました。",
+      "partial_one": "{{count}} 件の招待を取り消せませんでした。接続を確認して、もう一度お試しください。",
+      "partial_other": "{{count}} 件の招待を取り消せませんでした。接続を確認して、もう一度お試しください。"
+    },
+    "ssoRequired": "{{workspace}} のメンバーを管理するには、会社のシングルサインオン (SSO) でサインインしてください。",
     "transfer": {
       "title": "新しいオーナーを選択",
       "body": "既存のワークスペースメンバーを選んでください。譲渡後、あなたは管理者になります。",

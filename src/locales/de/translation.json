@@ -1708,11 +1708,91 @@
       "tab": {
         "general": "Allgemein",
         "members": "Mitglieder",
+        "invitations": "Einladungen",
         "teams": "Gruppen"
       },
       "people": {
         "title": "Personen",
-        "description": "Verwalten Sie die Personen in Ihrem Workspace und ihre Rollen."
+        "description": "Verwalten Sie die Personen in Ihrem Workspace und ihre Rollen.",
+        "subtitleView": "Die Personen in Ihrem Workspace und ihre Rollen.",
+        "add": "Hinzufügen",
+        "addLabel": "Personen einladen",
+        "columns": {
+          "name": "Name",
+          "team": "Gruppe",
+          "role": "Workspace-Rolle",
+          "email": "E-Mail",
+          "status": "Status",
+          "actions": "Aktionen"
+        },
+        "you": "Sie",
+        "teamsNone": "Keine",
+        "teamsMore": "+{{count}}",
+        "loading": {
+          "title": "Mitglieder werden geladen…",
+          "body": "Die Mitglieder Ihres Workspace werden hier angezeigt."
+        },
+        "failed": {
+          "title": "Mitglieder konnten nicht geladen werden",
+          "body": "Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
+        },
+        "search": {
+          "placeholder": "Mitglieder suchen",
+          "clear": "Suche löschen",
+          "noResultsTitle": "Kein Mitglied entspricht „{{query}}“",
+          "noResultsBody": "Prüfen Sie die Schreibweise oder suchen Sie nach der E-Mail-Adresse."
+        },
+        "roleMenuLabel": "Rolle von {{name}} ändern",
+        "roleDescription": {
+          "member": "Kann Notizen ansehen und bearbeiten.",
+          "admin": "Verwaltet Mitglieder, Einladungen, Gruppen und Einstellungen."
+        },
+        "roleFailed": "Die Rolle von {{name}} konnte nicht geändert werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+        "roleNotAllowed": "Sie haben keine Berechtigung mehr, Rollen in {{workspace}} zu ändern.",
+        "invitations": {
+          "loading": "Einladungen werden geladen…",
+          "failedTitle": "Einladungen konnten nicht geladen werden",
+          "emptyTitle": "Keine Einladungen",
+          "emptyBody": "Neue Einladungen erscheinen hier, bis sie angenommen werden.",
+          "pending_one": "Ausstehend · Läuft in {{count}} Tag ab",
+          "pending_other": "Ausstehend · Läuft in {{count}} Tagen ab",
+          "expired": "Abgelaufen",
+          "resend": "Einladung erneut senden",
+          "cancel": "Einladung zurückziehen",
+          "resendFailed": "Die Einladung an {{email}} konnte nicht erneut gesendet werden. Ziehen Sie sie zurück und laden Sie die Person erneut ein.",
+          "resendNotAllowed": "Sie haben keine Berechtigung mehr, Einladungen in {{workspace}} erneut zu senden.",
+          "noLongerPending": "Die Einladung an {{email}} ist nicht mehr offen",
+          "noLongerPendingMany_one": "{{count}} Einladung ist nicht mehr offen.",
+          "noLongerPendingMany_other": "{{count}} Einladungen sind nicht mehr offen.",
+          "refreshFailed": "Einladungen konnten nicht aktualisiert werden. Die Liste ist möglicherweise veraltet.",
+          "cancelSelected": "Einladungen zurückziehen",
+          "resendSelected": "Einladungen erneut senden",
+          "resendingSelected": "Wird erneut gesendet…",
+          "resentMany_one": "Es wurde {{count}} Einladung erneut gesendet.",
+          "resentMany_other": "Es wurden {{count}} Einladungen erneut gesendet.",
+          "resentPartial_one": "{{count}} Einladung erneut gesendet.",
+          "resentPartial_other": "{{count}} Einladungen erneut gesendet.",
+          "resendFailedOne": "Die Einladung an {{email}} ist fehlgeschlagen. Versuchen Sie es erneut über Aktionen.",
+          "resendFailedSome_one": "{{count}} Einladung ist fehlgeschlagen. Versuchen Sie es erneut über Aktionen.",
+          "resendFailedSome_other": "{{count}} Einladungen sind fehlgeschlagen. Versuchen Sie es erneut über Aktionen.",
+          "resendFailedAll_one": "{{count}} Einladung konnte nicht erneut gesendet werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+          "resendFailedAll_other": "{{count}} Einladungen konnten nicht erneut gesendet werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+          "resentNoEmailOne": "Die Einladung für {{email}} wurde aktualisiert, aber die E-Mail konnte nicht zugestellt werden und der alte Link funktioniert nicht mehr. Senden Sie sie erneut, um es noch einmal zu versuchen.",
+          "resentNoEmailMany_one": "{{count}} Einladung wurde aktualisiert, aber die E-Mail konnte nicht zugestellt werden und der alte Link funktioniert nicht mehr. Sie bleibt ausgewählt, damit Sie sie erneut senden können.",
+          "resentNoEmailMany_other": "{{count}} Einladungen wurden aktualisiert, aber die E-Mails konnten nicht zugestellt werden und die alten Links funktionieren nicht mehr. Sie bleiben ausgewählt, damit Sie sie erneut senden können.",
+          "resendUnrenewable_one": "{{count}} abgelaufene Einladung konnte nicht erneuert werden. Widerrufen Sie sie und laden Sie die Person erneut ein.",
+          "resendUnrenewable_other": "{{count}} abgelaufene Einladungen konnten nicht erneuert werden. Widerrufen Sie sie und laden Sie die Personen erneut ein."
+        },
+        "selection": {
+          "count_one": "{{count}} ausgewählt",
+          "count_other": "{{count}} ausgewählt",
+          "clear": "Aufheben",
+          "label": "Ausgewählte Personen",
+          "selectAllMembers": "Alle Mitglieder auswählen",
+          "selectAllInvitations": "Alle Einladungen auswählen",
+          "selectRow": "{{name}} auswählen",
+          "remove": "Entfernen"
+        }
       },
       "role": {
         "owner": "Inhaber",
@@ -1741,21 +1821,12 @@
         "leaving": "Verlasse…"
       },
       "members": {
-        "title": "Mitglieder",
         "description": "{{count}} von {{seats}} Plätzen belegt.",
-        "invite": "Einladen",
-        "empty": "Noch keine Mitglieder.",
         "loadError": "Mitglieder konnten nicht geladen werden.",
         "roleUpdated": "Rolle aktualisiert",
         "removed": "{{name}} entfernt",
-        "promote": "Zum Administrator machen",
-        "demote": "Zum Mitglied machen",
         "transferOwnership": "Eigentum übertragen",
-        "remove": "Aus Workspace entfernen",
-        "removeConfirm": {
-          "title": "Dieses Mitglied entfernen?",
-          "description": "{{name}} verliert sofort den Zugriff auf {{workspace}}."
-        }
+        "remove": "Aus Workspace entfernen"
       },
       "joinRequests": {
         "title": "Beitrittsanfragen",
@@ -1796,22 +1867,9 @@
         }
       },
       "invites": {
-        "title": "Ausstehende Einladungen",
-        "expiresIn_one": "Läuft in {{count}} Tag ab",
-        "expiresIn_other": "Läuft in {{count}} Tagen ab",
-        "expired": "Abgelaufen",
-        "loadError": "Einladungen konnten nicht geladen werden.",
-        "resend": "Erneut senden",
         "resending": "Sende erneut…",
-        "revoke": "Widerrufen",
         "resent": "Einladung erneut gesendet",
-        "resentNoEmail": "Einladung aktualisiert, aber die E-Mail konnte nicht zugestellt werden.",
-        "revoked": "Einladung widerrufen",
-        "revokeFailed": "Einladung konnte nicht widerrufen werden",
-        "revokeConfirm": {
-          "title": "Diese Einladung widerrufen?",
-          "description": "Der Einladungslink für {{email}} funktioniert dann nicht mehr."
-        }
+        "resentNoEmail": "Einladung aktualisiert, aber die E-Mail konnte nicht zugestellt werden."
       },
       "billing": {
         "plan": "Plan",
@@ -3086,27 +3144,78 @@
       "description": "Sie sind nun Inhaber von {{name}}."
     },
     "invite": {
-      "title": "Zu {{workspace}} einladen",
-      "description": "Fügen Sie Teammitglieder per E-Mail hinzu. Sie erhalten einen Beitrittslink.",
-      "emailLabel": "E-Mail",
-      "emailPlaceholder": "teammitglied@example.com",
-      "roleLabel": "Rolle",
+      "title": "Personen einladen",
+      "description": "Die eingeladenen Personen erhalten per E-Mail einen Link, um {{workspace}} beizutreten.",
+      "emailLabel": "E-Mail-Adressen",
+      "emailHint": "Trennen Sie E-Mail-Adressen durch Kommas. Alle erhalten dieselbe Rolle.",
+      "emailPlaceholder": "E-Mail suchen",
+      "addMore": "Weitere hinzufügen…",
+      "removeRecipient": "{{email}} entfernen",
+      "suggestions": "Vorschläge",
+      "roleLabel": "Workspace-Rolle",
       "seatUsage": "{{used}} von {{seats}} Plätzen belegt",
       "seatCost": "Bei Annahme wird deinem Tarif ein Platz hinzugefügt · geschätzte anteilige Kosten: {{amount}}.",
-      "submit": "Einladung senden",
-      "submitting": "Sende…",
-      "sentTitle": "Einladung gesendet",
-      "sentDescription": "Einladung an {{email}} gesendet.",
-      "sentNoEmailTitle": "Einladung erstellt, aber nicht per E-Mail gesendet",
-      "sentNoEmailDescription": "{{email}} wurde eingeladen, aber die E-Mail konnte nicht zugestellt werden. Senden Sie sie später erneut oder teilen Sie den Einladungslink anders.",
-      "errorTitle": "Einladung konnte nicht gesendet werden",
+      "seatCostMany_one": "Wenn alle annehmen, wird Ihrem Tarif {{count}} Platz hinzugefügt · geschätzte anteilige Kosten: {{amount}}.",
+      "seatCostMany_other": "Wenn alle annehmen, werden Ihrem Tarif {{count}} Plätze hinzugefügt · geschätzte anteilige Kosten: {{amount}}.",
+      "seatCostManyUnpriced_one": "Wenn alle annehmen, wird Ihrem Tarif {{count}} Platz hinzugefügt.",
+      "seatCostManyUnpriced_other": "Wenn alle annehmen, werden Ihrem Tarif {{count}} Plätze hinzugefügt.",
+      "submitOne": "Einladung senden",
+      "submit_one": "{{count}} Einladung senden",
+      "submit_other": "{{count}} Einladungen senden",
+      "submitting_one": "{{count}} Person wird eingeladen…",
+      "submitting_other": "{{count}} Personen werden eingeladen…",
+      "sentTitle_one": "{{count}} Einladung gesendet",
+      "sentTitle_other": "{{count}} Einladungen gesendet",
+      "createdTitle_one": "{{count}} Einladung erstellt",
+      "createdTitle_other": "{{count}} Einladungen erstellt",
+      "sentOne": "{{email}} wurde zu {{workspace}} eingeladen",
+      "sentMany_one": "{{count}} Person wurde zu {{workspace}} eingeladen",
+      "sentMany_other": "{{count}} Personen wurden zu {{workspace}} eingeladen",
+      "noEmail_one": "{{count}} Einladung wurde erstellt, aber ihre E-Mail konnte nicht zugestellt werden. Senden Sie sie unter Einladungen erneut.",
+      "noEmail_other": "{{count}} Einladungen wurden erstellt, aber ihre E-Mails konnten nicht zugestellt werden. Senden Sie sie unter Einladungen erneut.",
+      "someFailed_one": "{{count}} Einladung wurde nicht gesendet",
+      "someFailed_other": "{{count}} Einladungen wurden nicht gesendet",
+      "tryResending": "Erneut senden",
+      "tooMany": "Sie können bis zu {{count}} Personen auf einmal einladen.",
+      "removeLast_one": "Die letzte {{count}} entfernen",
+      "removeLast_other": "Die letzten {{count}} entfernen",
+      "seatsLeft_one": "Nur noch {{count}} Platz frei. Entfernen Sie {{excess}} oder führen Sie ein Upgrade durch.",
+      "seatsLeft_other": "Nur noch {{count}} Plätze frei. Entfernen Sie {{excess}} oder führen Sie ein Upgrade durch.",
+      "seatsLeftAskOwner_one": "Nur noch {{count}} Platz frei. Entfernen Sie {{excess}} oder bitten Sie {{owner}}, Plätze hinzuzufügen.",
+      "seatsLeftAskOwner_other": "Nur noch {{count}} Plätze frei. Entfernen Sie {{excess}} oder bitten Sie {{owner}}, Plätze hinzuzufügen.",
+      "seatsNone": "Keine Plätze mehr frei. Führen Sie ein Upgrade durch, um weitere hinzuzufügen.",
+      "seatsNoneAskOwner": "Keine Plätze mehr frei. Bitten Sie {{owner}}, Plätze hinzuzufügen.",
+      "upgrade": "Upgrade",
+      "ceilingLeft_one": "Sie können noch {{count}} Person einladen. Entfernen Sie {{excess}}, um fortzufahren.",
+      "ceilingLeft_other": "Sie können noch {{count}} Personen einladen. Entfernen Sie {{excess}}, um fortzufahren.",
+      "rateLimitedLeft_one": "Gerade kann nur noch {{count}} Einladung versendet werden. Entfernen Sie {{excess}}, um sie zu senden, oder versuchen Sie es später erneut.",
+      "rateLimitedLeft_other": "Gerade können nur noch {{count}} Einladungen versendet werden. Entfernen Sie {{excess}}, um sie zu senden, oder versuchen Sie es später erneut.",
+      "rateLimitedDaily": "Dieser Workspace kann bis zu {{limit}} Einladungen pro Tag senden. Entfernen Sie {{excess}}, um den Rest jetzt zu senden.",
+      "skippedMany_one": "{{count}} Adresse wurde übersprungen: bereits Mitglied oder bereits eingeladen.",
+      "skippedMany_other": "{{count}} Adressen wurden übersprungen: bereits Mitglieder oder bereits eingeladen.",
+      "skippedNotAdded_one": "{{count}} Adresse wurde übersprungen und hier nicht hinzugefügt: bereits Mitglied oder bereits eingeladen. Fügen Sie vorhandene Mitglieder stattdessen über die Mitgliederliste hinzu.",
+      "skippedNotAdded_other": "{{count}} Adressen wurden übersprungen und hier nicht hinzugefügt: bereits Mitglieder oder bereits eingeladen. Fügen Sie vorhandene Mitglieder stattdessen über die Mitgliederliste hinzu.",
+      "done": "Fertig",
       "role": {
-        "admin": "Administrator",
-        "member": "Mitglied"
+        "admin": "Workspace-Administrator",
+        "member": "Workspace-Mitglied"
       },
       "roleDescription": {
-        "admin": "Verwaltet Mitglieder und Abrechnung",
-        "member": "Nutzt den Workspace"
+        "admin": "Verwaltet Mitglieder, Einladungen, Gruppen und Einstellungen.",
+        "member": "Kann Notizen ansehen und bearbeiten."
+      },
+      "errors": {
+        "invalid": "{{email}} ist keine gültige E-Mail-Adresse",
+        "alreadyMember": "{{email}} ist bereits Mitglied, übersprungen",
+        "alreadyInvited": "{{email}} wurde bereits eingeladen, übersprungen. Senden Sie die Einladung unter Einladungen erneut.",
+        "seatLimit": "Dieser Workspace hat sein Platzlimit erreicht.",
+        "directoryRequired": "Weisen Sie {{email}} zuerst in Ihrem Identitätsanbieter zu.",
+        "notAllowed": "Sie können keine Personen mehr zu {{workspace}} einladen.",
+        "ssoRequired": "Melden Sie sich mit dem Single Sign-On (SSO) Ihres Unternehmens an, um Personen zu {{workspace}} einzuladen.",
+        "sessionExpired": "{{email}} konnte nicht eingeladen werden: Ihre Anmeldung ist abgelaufen oder hat sich geändert. Melden Sie sich erneut an und versuchen Sie es noch einmal.",
+        "rateLimited": "Gerade sind es zu viele Einladungen. Versuchen Sie es später erneut.",
+        "requestFailed": "{{email}} konnte nicht eingeladen werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+        "refused": "{{email}} konnte nicht eingeladen werden: {{reason}}"
       }
     },
     "join": {
@@ -3170,6 +3279,73 @@
       },
       "tryAgain": "Erneut versuchen"
     },
+    "removeMember": {
+      "title": "{{name}} aus {{workspace}} entfernen?",
+      "body": "Die Person verliert den Zugriff auf alle Teamspaces und Teams in diesem Workspace. Sie können sie jederzeit erneut einladen.",
+      "confirm": "Entfernen",
+      "removing": "Wird entfernt…",
+      "failed": "Das Entfernen von {{name}} konnte nicht bestätigt werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+      "notAllowed": "Sie haben keine Berechtigung mehr, Personen aus {{workspace}} zu entfernen.",
+      "alreadyRemoved": "{{name}} wurde bereits entfernt"
+    },
+    "removeMembers": {
+      "title_one": "{{count}} Mitglied aus {{workspace}} entfernen?",
+      "title_other": "{{count}} Mitglieder aus {{workspace}} entfernen?",
+      "confirm_one": "{{count}} Mitglied entfernen",
+      "confirm_other": "{{count}} Mitglieder entfernen",
+      "checking": "Wird geprüft…",
+      "failed_one": "Das Entfernen von {{count}} Mitglied konnte nicht bestätigt werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+      "failed_other": "Das Entfernen von {{count}} Mitgliedern konnte nicht bestätigt werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+      "body": "Diese Personen verlieren den Zugriff auf alle Teamspaces und Teams in diesem Workspace. Sie können sie jederzeit erneut einladen.",
+      "ownerOne": "{{name}} besitzt Notizen oder Teamspaces in diesem Workspace.",
+      "owners_one": "{{count}} davon besitzt Notizen oder Teamspaces.",
+      "owners_other": "{{count}} davon besitzen Notizen oder Teamspaces.",
+      "directoryManagedOne": "{{name}} wird von Ihrem Identitätsanbieter zugewiesen. Entfernen Sie die Person stattdessen dort.",
+      "directoryManaged_one": "{{count}} davon wird von Ihrem Identitätsanbieter zugewiesen. Entfernen Sie die Person stattdessen dort.",
+      "directoryManaged_other": "{{count}} davon werden von Ihrem Identitätsanbieter zugewiesen. Entfernen Sie sie stattdessen dort.",
+      "directoryManagedOneOthers": "{{name}} wird von Ihrem Identitätsanbieter zugewiesen. Entfernen Sie die Person dort, oder entfernen Sie das Häkchen bei dieser Person, um die anderen zu entfernen.",
+      "directoryManagedOthers_one": "{{count}} davon wird von Ihrem Identitätsanbieter zugewiesen. Entfernen Sie die Person dort, oder entfernen Sie das Häkchen bei dieser Person, um die anderen zu entfernen.",
+      "directoryManagedOthers_other": "{{count}} davon werden von Ihrem Identitätsanbieter zugewiesen. Entfernen Sie sie dort, oder entfernen Sie das Häkchen bei diesen Personen, um die anderen zu entfernen.",
+      "transferLabel": "Übertragen an",
+      "transferBody": "Die Notizen und Teamspaces gehen an den neuen Inhaber über. Die entfernten Personen verlieren den Zugriff auf diesen Workspace.",
+      "transferBodyLimited": "Die Notizen und Teamspaces gehen an {{name}} über, außer Notizen in Teamspaces, auf die {{name}} keinen Zugriff hat: Diese bleiben dort. Die entfernten Personen verlieren den Zugriff auf diesen Workspace.",
+      "you": "{{name}} (Sie)",
+      "transferConfirm": "Übertragen und entfernen",
+      "transferring": "Wird übertragen…",
+      "transferFailed": "Übertragung und Entfernen konnten nicht bestätigt werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+      "invalidTarget": "{{name}} kann keine Inhaberschaft mehr erhalten. Wählen Sie eine andere Person.",
+      "cannotRemoveOwner": "Der Inhaber des Workspace kann nicht entfernt werden.",
+      "cannotRemoveSelf": "Sie können sich nicht selbst entfernen. Verlassen Sie den Workspace unter „Allgemein“.",
+      "done_one": "{{count}} Mitglied entfernt",
+      "done_other": "{{count}} Mitglieder entfernt",
+      "transferDone_one": "Die Notizen und Teamspaces wurden zu {{name}} verschoben und {{count}} Mitglied wurde entfernt.",
+      "transferDone_other": "Die Notizen und Teamspaces wurden zu {{name}} verschoben und {{count}} Mitglieder wurden entfernt.",
+      "transferPartial_one": "{{count}} Notiz ist in einem Teamspace geblieben, auf den {{name}} keinen Zugriff hat. Alles andere wurde verschoben.",
+      "transferPartial_other": "{{count}} Notizen sind in Teamspaces geblieben, auf die {{name}} keinen Zugriff hat. Alles andere wurde verschoben.",
+      "alreadyRemoved_one": "{{count}} Mitglied wurde bereits entfernt",
+      "alreadyRemoved_other": "{{count}} Mitglieder wurden bereits entfernt"
+    },
+    "cancelInvitation": {
+      "title": "Einladung für {{email}} zurückziehen?",
+      "body": "Die Person kann mit dieser Einladung nicht beitreten. Aktuelle Mitglieder behalten ihren Zugriff.",
+      "keep": "Einladung behalten",
+      "canceling": "Wird zurückgezogen…",
+      "done": "Einladung zurückgezogen",
+      "failed": "Die Einladung konnte nicht zurückgezogen werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+      "notAllowed": "Sie haben keine Berechtigung mehr, Einladungen in {{workspace}} zurückzuziehen."
+    },
+    "cancelInvitations": {
+      "title_one": "{{count}} Einladung zurückziehen?",
+      "title_other": "{{count}} Einladungen zurückziehen?",
+      "body": "Die Personen können mit diesen Einladungen nicht beitreten. Aktuelle Mitglieder behalten ihren Zugriff.",
+      "keep": "Einladungen behalten",
+      "confirm": "Einladungen zurückziehen",
+      "done_one": "{{count}} Einladung zurückgezogen.",
+      "done_other": "{{count}} Einladungen zurückgezogen.",
+      "partial_one": "{{count}} Einladung konnte nicht zurückgezogen werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+      "partial_other": "{{count}} Einladungen konnten nicht zurückgezogen werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
+    },
+    "ssoRequired": "Melden Sie sich mit dem Single Sign-On (SSO) Ihres Unternehmens an, um Personen in {{workspace}} zu verwalten.",
     "transfer": {
       "title": "Neuen Inhaber wählen",
       "body": "Wählen Sie ein bestehendes Mitglied des Workspace. Nach der Übertragung werden Sie Administrator.",
@@ -3422,7 +3598,9 @@
         "viaGroup": "über {{group}}",
         "managedByGroup": "Über {{group}} hinzugefügt. Entferne die Person dort.",
         "roleFromGroup": "Admin über {{group}}. Ändere es dort.",
-        "invited": "Einladung an {{email}} gesendet"
+        "invited": "Einladung an {{email}} gesendet",
+        "invitedMany_one": "Einladung an {{count}} Person gesendet",
+        "invitedMany_other": "Einladungen an {{count}} Personen gesendet"
       },
       "invitedTo_one": "Sie treten {{count}} Team-Bereich bei",
       "invitedTo_other": "Sie treten {{count}} Team-Bereichen bei",
@@ -4034,6 +4212,31 @@
     "emptyTitle": "Füge Wörter zu deinem Wörterbuch hinzu",
     "emptyDescription": "Füge Wörter hinzu, die {{agentName}} immer richtig erkennen soll: Namen, Tools, Abkürzungen.",
     "addFirstWord": "Füge dein erstes Wort hinzu",
+    "importList": "Liste importieren",
+    "importMenu": "Importieren",
+    "importFromDragon": "Aus Dragon importieren",
+    "dragonImport": {
+      "title": "Aus Dragon importieren",
+      "found_one": "{{count}} Wort in {{fileName}} gefunden.",
+      "found_other": "{{count}} Wörter in {{fileName}} gefunden.",
+      "alreadyPresent": "Bereits in deinem Wörterbuch, daher übersprungen: {{count}}.",
+      "nothingNew": "Jedes Wort in dieser Datei ist bereits in deinem Wörterbuch.",
+      "unreadable": "Zeilen, die nicht gelesen werden konnten, daher übersprungen: {{count}}.",
+      "tooLong": "Wörter mit mehr als {{max}} Zeichen, daher übersprungen: {{count}}.",
+      "overLimit": "Dein Wörterbuch fasst bis zu {{max}} Wörter, daher nicht importiert: {{count}}.",
+      "propertiesIgnored": "Formatierungseigenschaften aus Dragon werden nicht importiert.",
+      "confirm_one": "{{count}} Wort importieren",
+      "confirm_other": "{{count}} Wörter importieren",
+      "done_one": "{{count}} Wort aus Dragon importiert",
+      "done_other": "{{count}} Wörter aus Dragon importiert",
+      "failedTitle": "Import fehlgeschlagen",
+      "error": {
+        "emptyFile": "In dieser Datei wurden keine Wörter gefunden.",
+        "unsupportedXml": "Das sieht nicht nach einem Export aus Dragon für Windows aus. Wähle in Dragon „Vocabulary → Export custom word and phrase list“ und speichere als TXT.",
+        "fileTooLarge": "Diese Datei ist zu groß für eine Dragon-Wortliste.",
+        "generic": "Diese Datei konnte nicht gelesen werden."
+      }
+    },
     "agentDefault": "Standardmäßig enthalten",
     "shared": {
       "allWords": "Alle Wörter",

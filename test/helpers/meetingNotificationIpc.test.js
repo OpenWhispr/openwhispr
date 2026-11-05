@@ -211,3 +211,26 @@ test("folder errors preserve request and destination; context lookup failure is 
     "FOLDERS_UNAVAILABLE"
   );
 });
+
+test("only the current control panel can change the meeting note lifecycle", () => {
+  const sender = {};
+  const calls = [];
+  fakeThis.windowManager = { controlPanelWindow: { webContents: sender } };
+  fakeThis.meetingDetectionEngine = {
+    markMeetingNoteOnly: (id) => calls.push(["open", id]),
+    closeMeetingNote: (id) => calls.push(["close", id]),
+  };
+  for (const channel of ["meeting-note-opened-without-recording", "meeting-note-closed"]) {
+    const handle = handlers.get(channel);
+    handle({ sender: {} }, "session");
+    handle({ sender }, null);
+    handle({ sender }, { id: "session" });
+    assert.deepEqual(calls, []);
+  }
+  handlers.get("meeting-note-opened-without-recording")({ sender }, "session");
+  handlers.get("meeting-note-closed")({ sender }, "session");
+  assert.deepEqual(calls, [
+    ["open", "session"],
+    ["close", "session"],
+  ]);
+});

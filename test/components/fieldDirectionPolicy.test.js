@@ -63,7 +63,6 @@ const EXPECTED_SHARED_FIELD_DIRECTIONS = {
   "src/components/DictionaryView.tsx": ["auto"],
   "src/components/EnterpriseProviderConfig.tsx": ["ltr", "ltr", "ltr", "ltr", "ltr", "ltr"],
   "src/components/ForgotPasswordView.tsx": ["ltr"],
-  "src/components/InviteTeammateDialog.tsx": ["ltr"],
   "src/components/LeaderboardSection.tsx": ["ltr"],
   "src/components/SettingsPage.tsx": ["ltr", "ltr", "ltr", "ltr", "ltr", "ltr"],
   "src/components/SnippetsView.tsx": ["auto", "auto", "auto", "auto"],
@@ -80,6 +79,8 @@ const EXPECTED_SHARED_FIELD_DIRECTIONS = {
   "src/components/settings/ProfileSection.tsx": ["auto", "ltr", "ltr", "ltr"],
   "src/components/settings/WorkspaceDeveloperTab.tsx": ["auto"],
   "src/components/settings/WorkspaceGeneralSection.tsx": ["auto"],
+  // Member search: names in any script.
+  "src/components/settings/WorkspaceMembersTab.tsx": ["auto"],
   // A skill's name and the skills search accept text in any script.
   "src/components/skills/CreateSkillScreen.tsx": ["auto"],
   "src/components/skills/SkillSearchInput.tsx": ["auto"],
@@ -122,6 +123,8 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/onboarding/UseCaseStep.tsx": ["auto"],
   "src/components/settings/ChatAgentSettings.tsx": ["auto"],
   "src/components/settings/ProfileSection.tsx": ["inherit"],
+  // Email addresses are Latin-script identifiers.
+  "src/components/workspace/InvitePeopleView.tsx": ["ltr"],
   // A skill's description is prose; the file pickers are hidden.
   "src/components/skills/CreateSkillScreen.tsx": ["auto", "inherit"],
   "src/components/skills/UploadSkillsScreen.tsx": ["inherit"],

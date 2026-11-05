@@ -186,7 +186,8 @@ for (const [name, open, closed] of [
   [
     "Tone & Style setup",
     (m) => React.createElement(m.toneStyle, { open: true, onOpenChange() {}, onOpenSettings() {} }),
-    (m) => React.createElement(m.toneStyle, { open: false, onOpenChange() {}, onOpenSettings() {} }),
+    (m) =>
+      React.createElement(m.toneStyle, { open: false, onOpenChange() {}, onOpenSettings() {} }),
   ],
 ]) {
   test(`the workspace intro waits while ${name} is open`, async (t) => {
