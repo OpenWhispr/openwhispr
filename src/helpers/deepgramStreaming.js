@@ -157,9 +157,9 @@ class DeepgramStreaming {
       punctuate: "true",
       interim_results: "true",
     });
-    if (lang) {
-      params.set("language", lang);
-    }
+    // Deepgram reads a missing language as English, so "auto" asks Nova-3 for
+    // its multilingual mode, which detects and code-switches.
+    params.set("language", lang || "multi");
     if (Array.isArray(options.keyterms)) {
       // Nova-3 uses "keyterm", Nova-2 uses "keywords"
       const paramName = useNova3 ? "keyterm" : "keywords";
