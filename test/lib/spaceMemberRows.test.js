@@ -36,7 +36,7 @@ const build = (overrides = {}) =>
 
 const ids = (rows) => rows.map((row) => row.id);
 
-test("admins, invitations, groups, then everyone else", () => {
+test("admins, invitations, teams, then everyone else", () => {
   const rows = build({
     members: [
       person("ronnie", "Ronnie", { role: "admin", direct_role: "admin" }),
@@ -50,12 +50,12 @@ test("admins, invitations, groups, then everyone else", () => {
 
   assert.deepEqual(
     rows.map((row) => row.kind),
-    ["person", "invitation", "group", "person", "person"]
+    ["person", "invitation", "team", "person", "person"]
   );
   assert.deepEqual(ids(rows), [
     "person:ronnie",
     "invitation:inv-1",
-    "group:sales",
+    "team:sales",
     "person:misa",
     "person:ravi",
   ]);
@@ -78,14 +78,14 @@ test("the API's order is kept inside each part", () => {
     "person:cy",
     "invitation:b",
     "invitation:a",
-    "group:two",
-    "group:one",
+    "team:two",
+    "team:one",
     "person:zed",
     "person:bob",
   ]);
 });
 
-test("someone both direct and via a group is a direct row", () => {
+test("someone both direct and via a team is a direct row", () => {
   const [row] = build({
     members: [
       person("misa", "Misa", {
@@ -99,7 +99,7 @@ test("someone both direct and via a group is a direct row", () => {
   assert.equal(row.editable, true);
 });
 
-test("a person with a direct role carries the groups that make them an admin", () => {
+test("a person with a direct role carries the teams that make them an admin", () => {
   const [row] = build({
     members: [
       person("misa", "Misa", {
@@ -114,11 +114,11 @@ test("a person with a direct role carries the groups that make them an admin", (
     ],
   });
 
-  assert.deepEqual(row.adminVia, ["Sales"], "a group admin through an admin-capped assignment");
+  assert.deepEqual(row.adminVia, ["Sales"], "a team admin through an admin-capped assignment");
   assert.deepEqual(build({ members: [person("ravi", "Ravi")] })[0].adminVia, []);
 });
 
-test("an inherited person has no menu and names the group", () => {
+test("an inherited person has no menu and names the team", () => {
   const [row] = build({
     members: [
       person("misa", "Misa", {
@@ -129,12 +129,12 @@ test("an inherited person has no menu and names the group", () => {
   });
 
   assert.equal(row.kind, "inherited");
-  assert.equal(row.groupName, "Sales");
+  assert.equal(row.teamName, "Sales");
   assert.equal(row.asAdmin, false);
   assert.ok(!("editable" in row), "an inherited row carries no menu flag");
 });
 
-test("an inherited admin says so, and several groups are listed together", () => {
+test("an inherited admin says so, and several teams are listed together", () => {
   const [row] = build({
     members: [
       person("misa", "Misa", {
@@ -151,7 +151,7 @@ test("an inherited admin says so, and several groups are listed together", () =>
 
   assert.equal(row.kind, "inherited");
   assert.equal(row.asAdmin, true);
-  assert.equal(row.groupName, "Sales & Design");
+  assert.equal(row.teamName, "Sales & Design");
 });
 
 test("an invitation has no menu", () => {
@@ -169,7 +169,7 @@ test("a person with a direct role has a menu, only with canManage", () => {
   assert.equal(build({ members, canManage: false })[0].editable, false);
 });
 
-test("a group row carries its access and count, and a missing count reads as unknown", () => {
+test("a team row carries its access and count, and a missing count reads as unknown", () => {
   const rows = build({
     teams: [teamRef("sales", "Sales", "member"), teamRef("design", "Design", "admin")],
     teamCounts: new Map([["sales", 5]]),
@@ -184,13 +184,13 @@ test("a group row carries its access and count, and a missing count reads as unk
   });
 });
 
-test("a group assigned before the API sent access reads as admin, as it always has", () => {
+test("a team assigned before the API sent access reads as admin, as it always has", () => {
   const [row] = build({ teams: [teamRef("legacy", "Legacy")] });
 
   assert.equal(row.team.access, "admin");
 });
 
-test("someone who comes through a group takes a role only when promoteInherited says so", () => {
+test("someone who comes through a team takes a role only when promoteInherited says so", () => {
   const members = [
     person("jin", "Jin", {
       direct_role: null,

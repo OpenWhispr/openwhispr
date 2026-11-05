@@ -2441,7 +2441,7 @@
         "general": "一般",
         "members": "メンバー",
         "invitations": "招待",
-        "teams": "グループ"
+        "teams": "チーム"
       },
       "people": {
         "title": "ユーザー",
@@ -2451,7 +2451,7 @@
         "addLabel": "メンバーを招待",
         "columns": {
           "name": "名前",
-          "team": "グループ",
+          "team": "チーム",
           "role": "ロール",
           "email": "メール",
           "status": "ステータス",
@@ -2477,7 +2477,7 @@
         "roleMenuLabel": "{{name}} のロールを変更",
         "roleDescription": {
           "member": "ノートを閲覧・編集できます。",
-          "admin": "メンバー、招待、グループ、設定を管理します。"
+          "admin": "メンバー、招待、チーム、設定を管理します。"
         },
         "roleFailed": "{{name}} のロールを変更できませんでした。接続を確認して、もう一度お試しください。",
         "roleNotAllowed": "{{workspace}} のロールを変更する権限がなくなりました。",
@@ -2544,7 +2544,7 @@
         "failedBody": "接続を確認して、もう一度お試しください。",
         "retry": "もう一度試す",
         "emptyTitle": "Teamspace はまだありません",
-        "emptyBody": "Teamspace は、チームのノートを共有するための場所です。メンバーやグループを追加すると、参加している全員が閲覧・編集できます。",
+        "emptyBody": "Teamspace は、チームのノートを共有するための場所です。メンバーやチームを追加すると、参加している全員が閲覧・編集できます。",
         "emptyBodyMember": "ワークスペースの管理者がまだ作成していません。",
         "adminCount_one": "管理者 {{count}} 人",
         "adminCount_other": "管理者 {{count}} 人",
@@ -2568,7 +2568,7 @@
           "descriptionLabel": "説明",
           "people": "ユーザー",
           "descriptionPlaceholder": "営業・サポート通話の録音と要約。通話ごとに 1 つのノート。",
-          "peoplePlaceholder": "名前、メールアドレス、またはグループ",
+          "peoplePlaceholder": "名前、メールアドレス、またはチーム",
           "defaultTitle": "デフォルトの Teamspace",
           "defaultBody": "新しいワークスペースメンバーを自動的に追加します。",
           "openTitle": "オープンな Teamspace",
@@ -2582,24 +2582,24 @@
           "createdInviteFailed_other": "{{space}} を作成しました。{{count}}人を招待できませんでした。「メンバー」から招待してください。",
           "inviteFailedWho": "招待されていない人：{{names}}。",
           "copyAddresses": "アドレスをコピー",
-          "groupsGone": "{{names}} は利用できなくなったため、追加されませんでした。"
+          "teamsGone": "{{names}} は利用できなくなったため、追加されませんでした。"
         },
         "picker": {
-          "groupPeople_one": "{{count}}人",
-          "groupPeople_other": "{{count}}人",
-          "groupChip_one": "{{name}} · {{count}}人",
-          "groupChip_other": "{{name}} · {{count}}人",
+          "teamPeople_one": "{{count}}人",
+          "teamPeople_other": "{{count}}人",
+          "teamChip_one": "{{name}} · {{count}}人",
+          "teamChip_other": "{{name}} · {{count}}人",
           "emailChip": "{{email}} · {{role}}",
           "noMember": "メンバーが見つかりません",
           "inviteToWorkspace": "ワークスペースに招待",
           "newToWorkspace": "ワークスペースの新規ユーザー",
           "select": "選択",
-          "noResultsTitle": "メンバーまたはグループが見つかりません",
+          "noResultsTitle": "メンバーまたはチームが見つかりません",
           "noResultsBody": "別の名前を試すか、メールアドレス全体を入力してください。",
           "noResultsBodyNoInvite": "別の名前をお試しください。",
           "hasAccess": "すでにアクセス権があります",
-          "groupHasAccess_one": "すでにアクセス権があります · {{count}}人",
-          "groupHasAccess_other": "すでにアクセス権があります · {{count}}人"
+          "teamHasAccess_one": "すでにアクセス権があります · {{count}}人",
+          "teamHasAccess_other": "すでにアクセス権があります · {{count}}人"
         },
         "members": {
           "columnRole": "Teamspace での役割",
@@ -2607,26 +2607,26 @@
           "adding": "追加中…",
           "retry": "もう一度試す",
           "invitationPending": "招待は保留中",
-          "via": "メンバー · {{group}} 経由",
-          "viaAdmin": "管理者 · {{group}} 経由",
+          "via": "メンバー · {{team}} 経由",
+          "viaAdmin": "管理者 · {{team}} 経由",
           "roleMember": "Teamspace メンバー",
           "roleMemberBody": "ノートを閲覧・編集できます",
           "roleAdmin": "Teamspace 管理者",
-          "roleAdminBody": "この Teamspace と割り当てられたグループを管理します。",
+          "roleAdminBody": "この Teamspace と割り当てられたチームを管理します。",
           "removeItem": "Teamspace から外す",
           "removeTitle": "{{name}} を {{space}} から外しますか？",
-          "removeBody": "{{name}} の直接のメンバーシップを終了します。グループ経由のアクセスは維持されます。ワークスペースには残ります。",
+          "removeBody": "{{name}} の直接のメンバーシップを終了します。チーム経由のアクセスは維持されます。ワークスペースには残ります。",
           "removeConfirm": "メンバーを外す",
           "removeFailedTitle": "{{name}} を外せませんでした",
           "removeFailedBody": "{{space}} での {{name}} のメンバーシップは変更されていません。接続を確認して、もう一度お試しください。",
           "removed": "{{space}} での {{name}} の直接のメンバーシップを削除しました。",
-          "removeGroupTitle": "{{group}} を {{space}} から外しますか？",
-          "removeGroupBody_one": "このグループの {{count}} 人は、このグループ経由のアクセス権を失います。グループ自体はワークスペースに残ります。",
-          "removeGroupBody_other": "このグループの {{count}} 人は、このグループ経由のアクセス権を失います。グループ自体はワークスペースに残ります。",
-          "removeGroupBodyNoCount": "このグループのメンバーは、このグループ経由のアクセス権を失います。グループ自体はワークスペースに残ります。",
+          "removeTeamTitle": "{{team}} を {{space}} から外しますか？",
+          "removeTeamBody_one": "このチームの {{count}} 人は、このチーム経由のアクセス権を失います。チーム自体はワークスペースに残ります。",
+          "removeTeamBody_other": "このチームの {{count}} 人は、このチーム経由のアクセス権を失います。チーム自体はワークスペースに残ります。",
+          "removeTeamBodyNoCount": "このチームのメンバーは、このチーム経由のアクセス権を失います。チーム自体はワークスペースに残ります。",
           "stagedNew": "新しいユーザーは、追加時に招待されます。Teamspace へのアクセスは、招待を承諾した後に始まります。",
-          "stagedGroup": "{{group}} のメンバー全員が、{{space}} へのメンバーアクセス権を継承します。",
-          "stagedGroups": "これらのグループのメンバー全員が、{{space}} へのメンバーアクセス権を継承します。",
+          "stagedTeam": "{{team}} のメンバー全員が、{{space}} へのメンバーアクセス権を継承します。",
+          "stagedTeams": "これらのチームのメンバー全員が、{{space}} へのメンバーアクセス権を継承します。",
           "invalid": "有効なメールアドレスを入力してください。選択したユーザーはそのまま保持されます。",
           "progressPeople": "{{names}} を追加しています…",
           "progressBoth_one": "{{names}} を追加し、{{count}} 件の招待を送信しています…",
@@ -2635,8 +2635,8 @@
           "progressInvites_other": "{{count}} 件の招待を送信しています…",
           "resultAdded": "{{names}} を追加しました。",
           "resultInvited": "{{names}} にワークスペースへの招待を送信しました。",
-          "resultGroup": "{{group}} を追加しました。メンバーはメンバーアクセス権を持つようになりました。",
-          "resultGroups": "{{names}} を追加しました。各グループのメンバーはメンバーアクセス権を持つようになりました。",
+          "resultTeam": "{{team}} を追加しました。メンバーはメンバーアクセス権を持つようになりました。",
+          "resultTeams": "{{names}} を追加しました。各チームのメンバーはメンバーアクセス権を持つようになりました。",
           "failed": "メンバーを追加できませんでした。選択内容は保持されています。もう一度お試しください。",
           "partialAdded": "{{names}} を追加しました。",
           "partialAddedMany": "{{names}} を追加しました。",
@@ -2683,7 +2683,7 @@
           "deleteFailedBody": "Teamspace はまだ利用できます。接続を確認して、もう一度お試しください。",
           "deleted": "{{space}} を削除しました。",
           "restored": "{{space}} を復元しました",
-          "leaveBodyKeeps": "直接のメンバーシップは終了します。{{groups}} 経由のアクセスは維持されます。",
+          "leaveBodyKeeps": "直接のメンバーシップは終了します。{{teams}} 経由のアクセスは維持されます。",
           "leaveBodyLoses": "{{space}} とそのノートにアクセスできなくなります。",
           "leaveBodyAdmins": "別の管理者がこの Teamspace の管理を続けます。",
           "deleteNotAllowed": "{{space}} を削除する権限がありません。",
@@ -2748,33 +2748,33 @@
         "errorTitle": "リクエストを更新できませんでした"
       },
       "teams": {
-        "title": "グループ",
-        "description": "Teamspace へのアクセスをまとめて付与できるワークスペースメンバーのグループ。",
-        "new": "新しいグループ",
-        "empty": "グループはまだありません。",
-        "createFirst": "最初のグループを作成",
+        "title": "チーム",
+        "description": "Teamspace へのアクセスをまとめて付与できるワークスペースメンバーのチーム。",
+        "new": "新しいチーム",
+        "empty": "チームはまだありません。",
+        "createFirst": "最初のチームを作成",
         "addMembersLabel": "メンバーを追加",
-        "createTitle": "グループを作成",
-        "nameLabel": "グループ名",
+        "createTitle": "チームを作成",
+        "nameLabel": "チーム名",
         "memberCount_one": "{{count}}人のメンバー",
         "memberCount_other": "{{count}}人のメンバー",
         "membersButton": "メンバー",
         "grantsAccessToSpaces_one": "{{count}} 件のスペースへのアクセスを付与しています",
         "grantsAccessToSpaces_other": "{{count}} 件のスペースへのアクセスを付与しています",
-        "couldNotCreate": "グループを作成できませんでした",
+        "couldNotCreate": "チームを作成できませんでした",
         "created": "{{team}} を作成しました",
         "deleted": "{{team}} を削除しました",
         "deleteConfirmTitle": "{{team}} を削除しますか？",
-        "deleteConfirmDescription": "グループをアーカイブします。このグループが付与していたアクセスは失われます。",
-        "deleteConfirmSpaceAccess_one": "このグループは {{count}} 件のスペースへのアクセスを付与しています。メンバーはそのアクセスを失います。",
-        "deleteConfirmSpaceAccess_other": "このグループは {{count}} 件のスペースへのアクセスを付与しています。メンバーはそのアクセスを失います。",
+        "deleteConfirmDescription": "チームをアーカイブします。このチームが付与していたアクセスは失われます。",
+        "deleteConfirmSpaceAccess_one": "このチームは {{count}} 件のスペースへのアクセスを付与しています。メンバーはそのアクセスを失います。",
+        "deleteConfirmSpaceAccess_other": "このチームは {{count}} 件のスペースへのアクセスを付与しています。メンバーはそのアクセスを失います。",
         "members": {
           "title": "{{team}} のメンバー",
           "removeConfirm": "{{name}} を {{team}} から外しますか？",
-          "leave": "グループから退出",
+          "leave": "チームから退出",
           "leftTeam": "{{team}} から退出しました",
           "leaveConfirm": "{{team}} から退出しますか？",
-          "leaveConfirmDescription": "直接追加されているか他のグループに含まれていない限り、このグループが付与するスペースへのアクセスを失います。"
+          "leaveConfirmDescription": "直接追加されているか他のチームに含まれていない限り、このチームが付与するスペースへのアクセスを失います。"
         }
       },
       "invites": {
@@ -3090,8 +3090,8 @@
       "couldNotChangeEmoji": "絵文字を変更できませんでした",
       "deleteSpace": "スペースを削除",
       "deleteHintLocal": "このデバイス上のフォルダーとノートを含め、このスペースを完全に削除します。",
-      "leaveConfirmDescription": "{{teams}} から削除され、それらのグループが開ける他のスペースへのアクセスも失われます。",
-      "stillViaGroups": "{{groups}} 経由で引き続き {{space}} にアクセスできます。",
+      "leaveConfirmDescription": "{{teams}} から削除され、それらのチームが開ける他のスペースへのアクセスも失われます。",
+      "stillViaTeams": "{{teams}} 経由で引き続き {{space}} にアクセスできます。",
       "deleteConfirmTitle": "スペースを削除しますか？",
       "deleteConfirmDescription": "{{space}}とそのすべてのフォルダとノートがこのデバイスから完全に削除されます。",
       "deleteTypeName": "確認のため {{space}} と入力してください",
@@ -3133,7 +3133,7 @@
         "addPeople": "メンバーを追加",
         "addedToTeam": "{{name}} を {{team}} に追加しました",
         "removedFromTeam": "{{name}} を {{team}} から削除しました",
-        "stillViaGroups": "{{name}} は {{groups}} 経由で引き続きアクセスできます",
+        "stillViaTeams": "{{name}} は {{teams}} 経由で引き続きアクセスできます",
         "roleUpdated": "役割を更新しました",
         "you": "自分",
         "addFailed": "{{total}}人中{{failed}}人を追加できませんでした",
@@ -3147,7 +3147,7 @@
         "removeConfirmDescription": "このスペースのすべてのノートにアクセスできなくなります。",
         "inviteFooter": "{{email}} をワークスペースに招待…",
         "empty": "まだ誰も追加されていません",
-        "roleFromGroup": "{{group}} 経由の管理者です。変更はそちらで行ってください。"
+        "roleFromTeam": "{{team}} 経由の管理者です。変更はそちらで行ってください。"
       },
       "invitedTo_one": "{{count}} 件の Teamspace に参加します",
       "invitedTo_other": "{{count}} 件の Teamspace に参加します",
@@ -3158,7 +3158,7 @@
         "accessChanged": "{{team}} のアクセスを更新しました"
       },
       "teams": {
-        "loadError": "グループを読み込めませんでした。"
+        "loadError": "チームを読み込めませんでした。"
       }
     },
     "structureIntro": {
@@ -3174,7 +3174,7 @@
       },
       "teamSpace": {
         "title": "Teamspace",
-        "description": "ワークスペース内の共有エリア。人やグループを追加してアクセスを付与します。"
+        "description": "ワークスペース内の共有エリア。人やチームを追加してアクセスを付与します。"
       },
       "contents": "各スペースにはフォルダーとノートを作成できます。",
       "done": "了解",
@@ -5503,7 +5503,7 @@
         "member": "ワークスペースのメンバー"
       },
       "roleDescription": {
-        "admin": "メンバー、招待、グループ、設定を管理します。",
+        "admin": "メンバー、招待、チーム、設定を管理します。",
         "member": "ノートを閲覧・編集できます。"
       },
       "errors": {

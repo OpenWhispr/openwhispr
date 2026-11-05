@@ -101,7 +101,7 @@ const workspaceMember = (userId, name, email = `${userId}@openronnie.com`) => ({
   image: null,
 });
 
-const group = (id, name, memberCount, emoji = null) => ({
+const team = (id, name, memberCount, emoji = null) => ({
   id,
   workspace_id: "w1",
   name,
@@ -143,7 +143,7 @@ const ROSTER = [
   workspaceMember("ethan", "Ethan"),
   workspaceMember("saket", "Saket"),
 ];
-const GROUPS = [group("sales", "Sales", 5), group("design", "Design Team", 2, "🎨")];
+const TEAMS = [team("sales", "Sales", 5), team("design", "Design Team", 2, "🎨")];
 const INVITATIONS = [invitation("inv-1", "clark@gmail.com")];
 
 const workspaceCapabilities = (overrides) => ({
@@ -197,7 +197,7 @@ async function mount(
     workspaceAdmin = false,
     members = MEMBERS,
     invitations = INVITATIONS,
-    groups = GROUPS,
+    teams = TEAMS,
     spaceTeams,
     listMembers,
     listInvitations,
@@ -235,7 +235,7 @@ async function mount(
     listTeams: async (id) => {
       calls.push(["teams", id]);
       if (listTeams) return listTeams();
-      return groups;
+      return teams;
     },
   };
   globalThis.__actions = {
@@ -357,7 +357,7 @@ const menuItem = (label) => menuItems().find((item) => text(item).startsWith(lab
 
 // ---- the table
 
-test("admins, invitations, groups, then everyone else", async (t) => {
+test("admins, invitations, teams, then everyone else", async (t) => {
   await mount(t);
 
   assert.deepEqual(
@@ -378,7 +378,7 @@ test("each kind of row says what it is", async (t) => {
   assert.equal(
     text(rowFor("Jin")),
     "Jin jin@openronnie.com · Sales Member · via Sales",
-    "an inherited person names the group beside the email and in the role cell"
+    "an inherited person names the team beside the email and in the role cell"
   );
 });
 
@@ -390,7 +390,7 @@ test("an email stays left-to-right and names keep their own direction", async (t
   assert.equal(rowFor("Misa").querySelector("[dir='auto']").textContent, "Misa");
 });
 
-test("an inherited admin reads Admin via its group", async (t) => {
+test("an inherited admin reads Admin via its team", async (t) => {
   await mount(t, {
     members: [
       entry("me", "Ronnie", { role: "admin", direct_role: "admin" }),
@@ -411,7 +411,7 @@ test("an inherited person has no menu; an invitation has no menu; a person with 
   assert.equal(roleTrigger(rowFor("Jin")), null);
   assert.equal(roleTrigger(rowFor("clark@gmail.com")), null);
   assert.ok(roleTrigger(rowFor("Misa")));
-  assert.ok(roleTrigger(rowFor("Sales")), "a group's access has one too");
+  assert.ok(roleTrigger(rowFor("Sales")), "a team's access has one too");
   assert.equal(roleTriggers().length, 5, "Ronnie, Sales, Misa, Ravi and Lila");
 });
 
@@ -442,7 +442,7 @@ test("only the rows scroll: the header and the field stay put", async (t) => {
   assert.ok(!scroller.contains(peopleInput()), "the field is outside the scroller");
 });
 
-test("a group's count is left out when the groups can't be read", async (t) => {
+test("a team's count is left out when the teams can't be read", async (t) => {
   await mount(t, {
     listTeams: async () => {
       throw new Error("offline");
@@ -533,13 +533,13 @@ test("a failed member read says so and retries", async (t) => {
 
 // ---- the people field
 
-test("Add members waits for something to add, and for the groups and people to load", async (t) => {
+test("Add members waits for something to add, and for the teams and people to load", async (t) => {
   await mount(t);
 
   const button = addButton();
   assert.equal(text(button), "Add members");
   assert.equal(button.disabled, true);
-  assert.equal(peopleInput().getAttribute("placeholder"), "Names, emails, or groups");
+  assert.equal(peopleInput().getAttribute("placeholder"), "Names, emails, or teams");
 
   await pickPerson("Ethan");
   assert.equal(addButton().disabled, false);
@@ -572,7 +572,7 @@ test("people who can't invite aren't offered an address", async (t) => {
   await ui.type(peopleInput(), "alex@example.com");
 
   assert.deepEqual(options().map(text), []);
-  assert.match(text(doc().querySelector('[role="status"]')), /No people or groups found/);
+  assert.match(text(doc().querySelector('[role="status"]')), /No people or teams found/);
   assert.match(text(doc().querySelector('[role="status"]')), /Try another name\./);
 });
 
@@ -614,17 +614,14 @@ test("what is staged is explained under the field", async (t) => {
   );
 });
 
-test("a group alone says what it grants, and several say so together", async (t) => {
+test("a team alone says what it grants, and several say so together", async (t) => {
   await mount(t, { spaceTeams: [] });
 
   await pickPerson("Design Team");
   assert.equal(lineText(), "Everyone in Design Team will inherit Member access to Customer Calls.");
 
   await pickPerson("Sales");
-  assert.equal(
-    lineText(),
-    "Everyone in these groups will inherit Member access to Customer Calls."
-  );
+  assert.equal(lineText(), "Everyone in these teams will inherit Member access to Customer Calls.");
 });
 
 test("an invalid address blocks Add members and says the rest are kept", async (t) => {
@@ -706,7 +703,7 @@ test("while it runs the button, field and chips wait, and the line says what is 
   assert.equal(lineText(), "Added Ethan. Sent alex@example.com a workspace invitation.");
 });
 
-test("the progress line names people and groups together", async (t) => {
+test("the progress line names people and teams together", async (t) => {
   let release;
   const gate = new Promise((resolve) => {
     release = resolve;
@@ -745,7 +742,7 @@ test("the progress line counts invitations when there is nobody else", async (t)
   await ui.settle();
 });
 
-test("a group is assigned and its line says what that means", async (t) => {
+test("a team is assigned and its line says what that means", async (t) => {
   const { callsTo, space } = await mount(t, { spaceTeams: [] });
 
   await pickPerson("Design Team");
@@ -761,7 +758,7 @@ test("a group is assigned and its line says what that means", async (t) => {
   assert.deepEqual(chipTexts(), []);
 });
 
-test("several groups are added together", async (t) => {
+test("several teams are added together", async (t) => {
   const { callsTo } = await mount(t, { spaceTeams: [] });
 
   await pickPerson("Design Team");
@@ -909,7 +906,7 @@ test("a failed people batch keeps those people while the invitations still go", 
   );
 });
 
-test("one group can fail alone", async (t) => {
+test("one team can fail alone", async (t) => {
   await mount(t, {
     spaceTeams: [],
     actions: {
@@ -1376,7 +1373,7 @@ test("a teamspace deleted meanwhile closes the panel, says so, and catches the m
   assert.equal(callsTo("sendInvitations").length, 0);
 });
 
-test("a group finding the teamspace deleted ends the attempt the same way", async (t) => {
+test("a team finding the teamspace deleted ends the attempt the same way", async (t) => {
   const { callsTo, lefts } = await mount(t, {
     spaceTeams: [],
     actions: { assignTeamToSpace: throwing(ARCHIVED) },
@@ -1390,7 +1387,7 @@ test("a group finding the teamspace deleted ends the attempt the same way", asyn
 
   assert.deepEqual(lefts, [true]);
   assert.deepEqual(toastTitles(), ["Customer Calls was deleted."]);
-  assert.equal(callsTo("assignTeamToSpace").length, 1, "the next group isn't tried");
+  assert.equal(callsTo("assignTeamToSpace").length, 1, "the next team isn't tried");
   assert.equal(callsTo("sendInvitations").length, 0);
 });
 
@@ -1471,7 +1468,7 @@ test("access revoked partway keeps what was said about what went, and drops the 
     lineText(),
     "Added Ethan. You no longer have permission to manage members of Customer Calls."
   );
-  assert.deepEqual(chipTexts(), [], "the group that failed first can't go either");
+  assert.deepEqual(chipTexts(), [], "the team that failed first can't go either");
   assert.equal(text(addButton()), "Add members");
 });
 
@@ -1667,7 +1664,7 @@ test("a person's role changes from their row", async (t) => {
   await openMenu(roleTrigger(rowFor("Misa")));
   assert.deepEqual(menuItems().map(text), [
     "Teamspace Member Can view and edit notes",
-    "Teamspace Admin Manages this teamspace and its assigned groups.",
+    "Teamspace Admin Manages this teamspace and its assigned teams.",
     "Remove from teamspace",
   ]);
   assert.equal(menuItems()[0].getAttribute("aria-checked"), "true");
@@ -1679,7 +1676,7 @@ test("a person's role changes from their row", async (t) => {
   assert.ok(callsTo("members").length > 1, "the rows are read again");
 });
 
-test("someone who is admin through a group can't be made a plain member here", async (t) => {
+test("someone who is admin through a team can't be made a plain member here", async (t) => {
   const { callsTo } = await mount(t, {
     members: [
       entry("me", "Ronnie", { role: "admin", direct_role: "admin" }),
@@ -1711,7 +1708,7 @@ test("someone who is admin through a group can't be made a plain member here", a
   assert.deepEqual(toastTitles(), [], "nothing was changed, so nothing is said");
 });
 
-test("a group that only caps access at Member doesn't lock the role", async (t) => {
+test("a team that only caps access at Member doesn't lock the role", async (t) => {
   await mount(t, {
     members: [
       entry("me", "Ronnie", { role: "admin", direct_role: "admin" }),
@@ -1812,7 +1809,7 @@ test("someone else's demotion isn't asked about", async (t) => {
 
 const VIA_SALES = [{ team_id: "sales", name: "Sales", role: "member", access: "member" }];
 
-test("the only admin with everyone else in a group can make one of them an admin", async (t) => {
+test("the only admin with everyone else in a team can make one of them an admin", async (t) => {
   const { callsTo } = await mount(t, {
     members: [
       entry("me", "Ronnie", { role: "admin", direct_role: "admin" }),
@@ -1830,7 +1827,7 @@ test("the only admin with everyone else in a group can make one of them an admin
   assert.equal(callsTo("setSpaceMemberRole")[0][3], "admin");
 });
 
-test("a workspace admin isn't blocked from leaving, so group people stay read-only", async (t) => {
+test("a workspace admin isn't blocked from leaving, so team people stay read-only", async (t) => {
   await mount(t, {
     workspaceAdmin: true,
     members: [
@@ -1842,13 +1839,13 @@ test("a workspace admin isn't blocked from leaving, so group people stay read-on
   assert.equal(roleTrigger(rowFor("Jin")), null);
 });
 
-test("group people stay read-only while someone direct could be made an admin", async (t) => {
+test("team people stay read-only while someone direct could be made an admin", async (t) => {
   await mount(t);
 
   assert.equal(roleTrigger(rowFor("Jin")), null);
 });
 
-test("group people stay read-only when another admin can carry on", async (t) => {
+test("team people stay read-only when another admin can carry on", async (t) => {
   await mount(t, {
     members: [
       entry("me", "Ronnie", { role: "admin", direct_role: "admin" }),
@@ -1864,7 +1861,7 @@ test("group people stay read-only when another admin can carry on", async (t) =>
   assert.equal(roleTrigger(rowFor("Jin")), null);
 });
 
-test("removing someone a group also reaches says that access stays", async (t) => {
+test("removing someone a team also reaches says that access stays", async (t) => {
   await mount(t, {
     members: [
       entry("me", "Ronnie", { role: "admin", direct_role: "admin" }),
@@ -1876,7 +1873,7 @@ test("removing someone a group also reaches says that access stays", async (t) =
   await ui.click(menuItem("Remove"));
   await ui.settle();
 
-  assert.match(dialogText(), /Access through a group will remain\./);
+  assert.match(dialogText(), /Access through a team will remain\./);
 });
 
 test("an invitation whose email didn't arrive says so, and who", async (t) => {
@@ -1943,7 +1940,7 @@ test("the only admin stepping down is told why", async (t) => {
   assert.equal(globalThis.__toasts[0].variant, "destructive");
 });
 
-test("a group's access changes from its row", async (t) => {
+test("a team's access changes from its row", async (t) => {
   const { callsTo, space } = await mount(t);
 
   await openMenu(roleTrigger(rowFor("Sales")));
@@ -2020,7 +2017,7 @@ test("Cancel leaves the person where they are", async (t) => {
   assert.ok(rowFor("Lila"));
 });
 
-test("a group that keeps access toasts that instead", async (t) => {
+test("a team that keeps access toasts that instead", async (t) => {
   await mount(t, {
     actions: {
       removeSpaceMember: async () => ({
@@ -2115,7 +2112,7 @@ test("leaving a teamspace deleted meanwhile closes the same way", async (t) => {
   assert.deepEqual(lefts, [true]);
 });
 
-test("removing a group from a teamspace deleted meanwhile closes the same way", async (t) => {
+test("removing a team from a teamspace deleted meanwhile closes the same way", async (t) => {
   const { lefts } = await mount(t, {
     actions: { unassignTeamFromSpace: throwing(ARCHIVED) },
   });
@@ -2204,7 +2201,7 @@ test("a workspace admin removing their own row is a plain removal: they keep imp
   assert.ok(!rowFor("Ronnie"), "the direct row is gone");
 });
 
-test("removing your own row while a group still reaches you stays open and says so", async (t) => {
+test("removing your own row while a team still reaches you stays open and says so", async (t) => {
   const { lefts } = await mount(t, {
     actions: {
       leaveSpace: async (space, userId, state) => {
@@ -2238,7 +2235,7 @@ test("removing someone else never leaves", async (t) => {
   assert.deepEqual(lefts, []);
 });
 
-test("removing a group asks first", async (t) => {
+test("removing a team asks first", async (t) => {
   const { callsTo, space } = await mount(t);
 
   await openMenu(roleTrigger(rowFor("Sales")));
@@ -2247,7 +2244,7 @@ test("removing a group asks first", async (t) => {
   assert.equal(
     dialogText(),
     "Remove Sales from Customer Calls? " +
-      "Its 5 people lose access through this group. The group stays in the workspace. " +
+      "Its 5 people lose access through this team. The team stays in the workspace. " +
       "Remove from teamspace Cancel"
   );
   assert.equal(callsTo("unassignTeamFromSpace").length, 0);
@@ -2261,16 +2258,16 @@ test("removing a group asks first", async (t) => {
   assert.ok(callsTo("members").length > 1, "the people it brought are read again");
 });
 
-test("a group of one person and one with no count say it as they are", async (t) => {
+test("a team of one person and one with no count say it as they are", async (t) => {
   await mount(t, {
-    groups: [group("sales", "Sales", 1)],
+    teams: [team("sales", "Sales", 1)],
   });
   await openMenu(roleTrigger(rowFor("Sales")));
   await ui.click(menuItem("Remove from teamspace"));
-  assert.match(dialogText(), /Its 1 person loses access through this group\./);
+  assert.match(dialogText(), /Its 1 person loses access through this team\./);
 });
 
-test("a group whose count is unknown doesn't make one up", async (t) => {
+test("a team whose count is unknown doesn't make one up", async (t) => {
   await mount(t, {
     listTeams: async () => {
       throw new Error("offline");
@@ -2279,10 +2276,10 @@ test("a group whose count is unknown doesn't make one up", async (t) => {
   await openMenu(roleTrigger(rowFor("Sales")));
   await ui.click(menuItem("Remove from teamspace"));
 
-  assert.match(dialogText(), /Its people lose access through this group\./);
+  assert.match(dialogText(), /Its people lose access through this team\./);
 });
 
-test("a group that failed to leave offers Try again", async (t) => {
+test("a team that failed to leave offers Try again", async (t) => {
   let attempts = 0;
   await mount(t, {
     actions: {

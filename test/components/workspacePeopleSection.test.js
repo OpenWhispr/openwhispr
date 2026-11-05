@@ -203,7 +203,7 @@ async function mount(t, WorkspacePeopleSection, workspace, props = {}) {
   return container;
 }
 
-test("member sees Members and Groups only, with the view subtitle", async (t) => {
+test("member sees Members and Teams only, with the view subtitle", async (t) => {
   const Section = await loadSection(t);
   const markup = render(Section, MEMBER);
 
@@ -216,7 +216,7 @@ test("member sees Members and Groups only, with the view subtitle", async (t) =>
   assert.equal(globalThis.__invitationsArgs.enabled, false);
 });
 
-test("admin sees Invitations between Members and Groups", async (t) => {
+test("admin sees Invitations between Members and Teams", async (t) => {
   const Section = await loadSection(t);
   const markup = render(Section, ADMIN);
 

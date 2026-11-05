@@ -37,7 +37,7 @@ const member = (userId, name, email = `${userId}@openronnie.com`) => ({
   image: null,
 });
 
-const group = (id, name, memberCount, emoji = null) => ({
+const team = (id, name, memberCount, emoji = null) => ({
   id,
   workspace_id: "w1",
   name,
@@ -55,7 +55,7 @@ const ROSTER = [
   member("ethan", "Ethan"),
   member("saket", "Saket"),
 ];
-const GROUPS = [group("sales", "Sales", 5), group("design", "Design Team", 2, "🎨")];
+const TEAMS = [team("sales", "Sales", 5), team("design", "Design Team", 2, "🎨")];
 
 const capabilities = (overrides) => ({
   manage_members: true,
@@ -137,7 +137,7 @@ test.before(async (t) => {
         };
       `,
       "/services/TeamsService":
-        "export const TeamsService = { list: (id) => globalThis.__listGroups(id) };",
+        "export const TeamsService = { list: (id) => globalThis.__listTeams(id) };",
       "/stores/noteStore": `
         export const revealContainer = (...args) => {
           if (globalThis.__revealThrows) throw new Error("store unavailable");
@@ -259,7 +259,7 @@ async function mount(
       for (const email of emails) onResult(email, { ok: true, emailSent: true });
     },
     rosterFailures = 0,
-    groupFailures = 0,
+    teamFailures = 0,
   } = {}
 ) {
   const calls = [];
@@ -290,13 +290,13 @@ async function mount(
   };
   globalThis.__toasts = [];
   globalThis.__navigation = [];
-  globalThis.__listGroups = async (workspaceId) => {
-    calls.push(["groups", workspaceId]);
-    if (groupFailures > 0) {
-      groupFailures -= 1;
+  globalThis.__listTeams = async (workspaceId) => {
+    calls.push(["teams", workspaceId]);
+    if (teamFailures > 0) {
+      teamFailures -= 1;
       throw new Error("offline");
     }
-    return GROUPS;
+    return TEAMS;
   };
   globalThis.__createSpace = async (workspaceId, input, access) => {
     calls.push(["createSpace", workspaceId, input, access]);
@@ -332,7 +332,7 @@ async function mount(
       "__workspaceHook",
       "__toasts",
       "__navigation",
-      "__listGroups",
+      "__listTeams",
       "__createSpace",
       "__sendInvitations",
     ]) {
@@ -407,7 +407,7 @@ test("turning Default and Open on sends them on, with the description trimmed", 
   });
 });
 
-test("members and groups go in the create body, addresses as invitations afterward", async (t) => {
+test("members and teams go in the create body, addresses as invitations afterward", async (t) => {
   const { calls, callsTo, closes, navigation, toasts, reopen } = await mount(t);
   await type(nameInput(), "Customer Calls");
 
@@ -424,7 +424,7 @@ test("members and groups go in the create body, addresses as invitations afterwa
   await click(createButton());
 
   assert.deepEqual(
-    calls.map(([call]) => call).filter((call) => call !== "roster" && call !== "groups"),
+    calls.map(([call]) => call).filter((call) => call !== "roster" && call !== "teams"),
     ["createSpace", "sendInvitations"],
     "the teamspace exists before anyone is invited into it"
   );
@@ -651,7 +651,7 @@ test("someone who left the workspace is dropped, so Try again can succeed", asyn
   assert.deepEqual(closes, [false]);
 });
 
-test("a group deleted since the list loaded is dropped and named", async (t) => {
+test("a team deleted since the list loaded is dropped and named", async (t) => {
   let attempts = 0;
   const { callsTo, closes } = await mount(t, {
     createSpace: async () => {
@@ -961,15 +961,15 @@ test("a roster that fails to load offers a retry in place of the field", async (
   assert.equal(callsTo("roster").length, 2);
 });
 
-test("groups that fail to load offer a retry too", async (t) => {
-  const { callsTo } = await mount(t, { groupFailures: 1 });
+test("teams that fail to load offer a retry too", async (t) => {
+  const { callsTo } = await mount(t, { teamFailures: 1 });
   assert.ok(peopleInput() === null);
-  assert.match(text(dialog()), /Couldn't load groups/);
+  assert.match(text(dialog()), /Couldn't load teams/);
 
   await click(buttonNamed("Retry"));
   await settle();
   assert.ok(peopleInput());
-  assert.equal(callsTo("groups").length, 2);
+  assert.equal(callsTo("teams").length, 2);
   await focus(peopleInput());
   assert.ok(optionTexts().some((option) => option.startsWith("Sales")));
 });

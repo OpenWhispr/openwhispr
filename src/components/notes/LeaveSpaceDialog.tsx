@@ -74,8 +74,8 @@ export function LeaveSpaceDialog({
     onOpenChange(false);
   };
 
-  // A direct grant is dropped on its own and access through groups is left where it is: groups
-  // are managed in the group. Leaving through groups is the way out only when they are the sole
+  // A direct grant is dropped on its own and access through teams is left where it is: teams
+  // are managed in the team. Leaving through teams is the way out only when they are the sole
   // grant.
   const leaveAll = async (): Promise<{ stillViaTeams: string[] }> => {
     if (direct) {
@@ -92,9 +92,9 @@ export function LeaveSpaceDialog({
       const { stillViaTeams } = await leaveAll();
       if (stillViaTeams.length > 0) {
         toast({
-          title: t("notes.spaces.stillViaGroups", {
+          title: t("notes.spaces.stillViaTeams", {
             space: name,
-            groups: formatList(i18n.language, stillViaTeams.map(isolate)),
+            teams: formatList(i18n.language, stillViaTeams.map(isolate)),
           }),
         });
         finish();
@@ -151,18 +151,18 @@ export function LeaveSpaceDialog({
     );
   }
 
-  const groupNames = formatList(
+  const teamNames = formatList(
     i18n.language,
     leaveTeams.map((team) => isolate(team.name))
   );
-  // Leaving through a group names the groups; a direct grant says what stays, and what goes.
+  // Leaving through a team names the teams; a direct grant says what stays, and what goes.
   let body: string;
   if (!direct) {
-    body = t("notes.spaces.leaveConfirmDescription", { teams: groupNames });
+    body = t("notes.spaces.leaveConfirmDescription", { teams: teamNames });
   } else {
     body =
       leaveTeams.length > 0
-        ? t("settingsPage.workspace.teamspaces.exit.leaveBodyKeeps", { groups: groupNames })
+        ? t("settingsPage.workspace.teamspaces.exit.leaveBodyKeeps", { teams: teamNames })
         : t("settingsPage.workspace.teamspaces.exit.leaveBodyLoses", { space: name });
     if (space.my_direct_role === "admin" && otherAdmins) {
       body += ` ${t("settingsPage.workspace.teamspaces.exit.leaveBodyAdmins")}`;

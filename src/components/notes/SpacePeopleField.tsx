@@ -13,7 +13,7 @@ import { useTranslation } from "react-i18next";
 import {
   addRecipients,
   emailRecipient,
-  groupRecipient,
+  teamRecipient,
   memberRecipient,
   pickerResults,
   recipientKey,
@@ -47,9 +47,9 @@ type InviteRole = "admin" | "member";
 export interface SpacePeopleFieldProps {
   id?: string;
   roster: WorkspaceMember[];
-  groups: Team[];
+  teams: Team[];
   accessUserIds?: ReadonlySet<string>;
-  accessGroupIds?: ReadonlySet<string>;
+  accessTeamIds?: ReadonlySet<string>;
   hiddenUserIds?: ReadonlySet<string>;
   /** Addresses with an invitation waiting, lowercased: shown as pending, never offered again. */
   pendingEmails?: ReadonlySet<string>;
@@ -71,7 +71,7 @@ export interface SpacePeopleFieldProps {
 
 type PickerRow =
   | { kind: "member"; member: WorkspaceMember; hasAccess: boolean; picked: boolean }
-  | { kind: "group"; group: Team; hasAccess: boolean; picked: boolean }
+  | { kind: "team"; team: Team; hasAccess: boolean; picked: boolean }
   | { kind: "invite"; email: string }
   | { kind: "pending"; email: string };
 
@@ -112,9 +112,9 @@ const isPickable = (row: PickerRow): boolean =>
 export function SpacePeopleField({
   id,
   roster,
-  groups,
+  teams,
   accessUserIds = NO_IDS,
-  accessGroupIds = NO_IDS,
+  accessTeamIds = NO_IDS,
   hiddenUserIds,
   pendingEmails,
   canInvite,
@@ -146,10 +146,10 @@ export function SpacePeopleField({
   const results = pickerResults({
     query,
     roster,
-    groups,
+    teams,
     picked,
     accessUserIds,
-    accessGroupIds,
+    accessTeamIds,
     hiddenUserIds,
     pendingEmails,
     canInvite,
@@ -161,9 +161,9 @@ export function SpacePeopleField({
       hasAccess,
       picked,
     })),
-    ...results.groups.map(({ group, hasAccess, picked }): PickerRow => ({
-      kind: "group",
-      group,
+    ...results.teams.map(({ team, hasAccess, picked }): PickerRow => ({
+      kind: "team",
+      team,
       hasAccess,
       picked,
     })),
@@ -216,7 +216,7 @@ export function SpacePeopleField({
     const stagedKeys = new Set(next.map(recipientKey));
     return parsed
       .filter((recipient) => !stagedKeys.has(recipientKey(recipient)))
-      .map((recipient) => (recipient.kind === "group" ? recipient.label : recipient.email))
+      .map((recipient) => (recipient.kind === "team" ? recipient.label : recipient.email))
       .join(", ");
   };
 
@@ -243,8 +243,8 @@ export function SpacePeopleField({
       const recipient = memberRecipient(row.member);
       if (row.picked) unstage(recipient);
       else stage([recipient]);
-    } else if (row.kind === "group") {
-      const recipient = groupRecipient(row.group);
+    } else if (row.kind === "team") {
+      const recipient = teamRecipient(row.team);
       if (row.picked) unstage(recipient);
       else stage([recipient]);
     } else {
@@ -328,7 +328,7 @@ export function SpacePeopleField({
     commitQuery();
   };
 
-  const emojiByTeam = new Map(groups.map((group) => [group.id, group.emoji ?? null]));
+  const emojiByTeam = new Map(teams.map((team) => [team.id, team.emoji ?? null]));
 
   return (
     <div
@@ -405,7 +405,7 @@ export function SpacePeopleField({
                     id={`${listId}-${index}`}
                     role="option"
                     // Who is picked; the row the arrow keys are on is aria-activedescendant.
-                    aria-selected={(row.kind === "member" || row.kind === "group") && row.picked}
+                    aria-selected={(row.kind === "member" || row.kind === "team") && row.picked}
                     aria-disabled={disabledRow || undefined}
                     onMouseEnter={() => {
                       if (!disabledRow) setHighlight({ index, byKeyboard: false });
@@ -451,9 +451,7 @@ export function SpacePeopleField({
             <RecipientChip
               key={recipientKey(recipient)}
               recipient={recipient}
-              emoji={
-                recipient.kind === "group" ? (emojiByTeam.get(recipient.teamId) ?? null) : null
-              }
+              emoji={recipient.kind === "team" ? (emojiByTeam.get(recipient.teamId) ?? null) : null}
               showRole={inviteRoleChoice}
               disabled={disabled}
               onRemove={() => unstage(recipient)}
@@ -467,7 +465,7 @@ export function SpacePeopleField({
 
 function rowKey(row: PickerRow): string {
   if (row.kind === "member") return `member:${row.member.user_id}`;
-  if (row.kind === "group") return `group:${row.group.id}`;
+  if (row.kind === "team") return `team:${row.team.id}`;
   return row.kind;
 }
 
@@ -513,20 +511,20 @@ function RowContent({
     );
   }
 
-  if (row.kind === "group") {
-    const { group, hasAccess } = row;
-    const count = group.member_count ?? 0;
+  if (row.kind === "team") {
+    const { team, hasAccess } = row;
+    const count = team.member_count ?? 0;
     return (
       <>
         <span aria-hidden="true" className={GROUP_TILE}>
-          <TileGlyph emoji={group.emoji ?? null} name={group.name} />
+          <TileGlyph emoji={team.emoji ?? null} name={team.name} />
         </span>
         <RowText
-          primary={<span dir="auto">{group.name}</span>}
+          primary={<span dir="auto">{team.name}</span>}
           secondary={
             hasAccess
-              ? t("settingsPage.workspace.teamspaces.picker.groupHasAccess", { count })
-              : t("settingsPage.workspace.teamspaces.picker.groupPeople", { count })
+              ? t("settingsPage.workspace.teamspaces.picker.teamHasAccess", { count })
+              : t("settingsPage.workspace.teamspaces.picker.teamPeople", { count })
           }
         />
         {row.picked ? <PickedCheck /> : null}
@@ -696,7 +694,7 @@ function RecipientChip({
     leading = <PersonAvatar name={recipient.label} email={recipient.email} />;
     label = <span dir="auto">{recipient.label}</span>;
     removeName = recipient.label;
-  } else if (recipient.kind === "group") {
+  } else if (recipient.kind === "team") {
     leading = (
       <span aria-hidden="true" className={GROUP_TILE}>
         <TileGlyph emoji={emoji} name={recipient.label} />
@@ -704,7 +702,7 @@ function RecipientChip({
     );
     label = (
       <span dir="auto">
-        {t("settingsPage.workspace.teamspaces.picker.groupChip", {
+        {t("settingsPage.workspace.teamspaces.picker.teamChip", {
           name: isolate(recipient.label),
           count: recipient.memberCount,
         })}

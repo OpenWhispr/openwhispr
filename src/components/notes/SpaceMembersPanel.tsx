@@ -113,13 +113,13 @@ function useLoad<T>(
 }
 
 type MemberRecipient = Extract<PickedRecipient, { kind: "member" }>;
-type GroupRecipient = Extract<PickedRecipient, { kind: "group" }>;
+type TeamRecipient = Extract<PickedRecipient, { kind: "team" }>;
 type EmailRecipient = Extract<PickedRecipient, { kind: "email" }>;
 
 const isMember = (recipient: PickedRecipient): recipient is MemberRecipient =>
   recipient.kind === "member";
-const isGroup = (recipient: PickedRecipient): recipient is GroupRecipient =>
-  recipient.kind === "group";
+const isTeam = (recipient: PickedRecipient): recipient is TeamRecipient =>
+  recipient.kind === "team";
 // An invalid address never goes out as one to invite; the field blocks Add members until it is fixed.
 const isInvitable = (recipient: PickedRecipient): recipient is EmailRecipient =>
   recipient.kind === "email" && recipient.valid;
@@ -131,8 +131,8 @@ function emptyOutcome(): AddAttemptOutcome {
   return {
     addedMembers: [],
     failedMembers: [],
-    addedGroups: [],
-    failedGroups: [],
+    addedTeams: [],
+    failedTeams: [],
     invited: [],
     undeliveredInvites: [],
     pendingInvites: [],
@@ -143,7 +143,7 @@ function emptyOutcome(): AddAttemptOutcome {
   };
 }
 
-// One Add members attempt: people in one batch, each group on its own, then the addresses once
+// One Add members attempt: people in one batch, each team on its own, then the addresses once
 // for each role. Nothing here throws; whatever didn't go is reported as failed so it stays staged.
 async function runAddAttempt(input: {
   space: SpaceItem;
@@ -164,7 +164,7 @@ async function runAddAttempt(input: {
   // last, so none has been tried yet.
   const stoppedBy = (ended: SpaceAccessEnd) => {
     outcome.failedMembers = [];
-    outcome.failedGroups = [];
+    outcome.failedTeams = [];
     return { outcome, rosterStale, knownAddresses, ended };
   };
 
@@ -190,14 +190,14 @@ async function runAddAttempt(input: {
     }
   }
 
-  for (const recipient of picked.filter(isGroup)) {
+  for (const recipient of picked.filter(isTeam)) {
     try {
       await assignTeamToSpace(space, recipient.teamId);
-      outcome.addedGroups.push(recipient);
+      outcome.addedTeams.push(recipient);
     } catch (error) {
       const ended = spaceAccessEnd(classifySpaceError(error));
       if (ended) return stoppedBy(ended);
-      outcome.failedGroups.push(recipient);
+      outcome.failedTeams.push(recipient);
     }
   }
 
@@ -319,15 +319,15 @@ function describeAttempt(
       sentences.push(t(`${COPY}.resultAdded`, { names: names(outcome.addedMembers) }));
     }
     sentences.push(...invitedSentences());
-    if (outcome.addedGroups.length === 1) {
-      sentences.push(t(`${COPY}.resultGroup`, { group: names(outcome.addedGroups) }));
-    } else if (outcome.addedGroups.length > 1) {
-      sentences.push(t(`${COPY}.resultGroups`, { names: names(outcome.addedGroups) }));
+    if (outcome.addedTeams.length === 1) {
+      sentences.push(t(`${COPY}.resultTeam`, { team: names(outcome.addedTeams) }));
+    } else if (outcome.addedTeams.length > 1) {
+      sentences.push(t(`${COPY}.resultTeams`, { names: names(outcome.addedTeams) }));
     }
   } else if (kind === "allFailed") {
     sentences.push(t(`${COPY}.failed`));
   } else {
-    const added = [...outcome.addedMembers, ...outcome.addedGroups];
+    const added = [...outcome.addedMembers, ...outcome.addedTeams];
     if (added.length > 0) {
       sentences.push(
         t(added.length === 1 ? `${COPY}.partialAdded` : `${COPY}.partialAddedMany`, {
@@ -346,7 +346,7 @@ function describeAttempt(
         )
       );
     }
-    const notAdded = [...outcome.failedMembers, ...outcome.failedGroups];
+    const notAdded = [...outcome.failedMembers, ...outcome.failedTeams];
     if (notAdded.length > 0) {
       sentences.push(t(`${COPY}.partialAddFailed`, { names: names(notAdded) }));
     }
@@ -385,10 +385,10 @@ function describeAttempt(
 
 type RemovalSubject =
   | { kind: "person"; member: SpaceMemberEntry }
-  | { kind: "group"; team: { id: string; name: string; memberCount: number | null } };
+  | { kind: "team"; team: { id: string; name: string; memberCount: number | null } };
 
 // Everyone with access to a teamspace, in one table: people added directly, people who come
-// through a group, invitations still waiting, and the groups themselves. Rendered inside
+// through a team, invitations still waiting, and the teams themselves. Rendered inside
 // SpaceSettingsDialog's Members tab. Admins of the teamspace also add people here.
 export default function SpaceMembersPanel({
   space,
@@ -510,14 +510,14 @@ export default function SpaceMembersPanel({
       }),
     [members, invitations, space.teams, workspaceTeams, canManage, nobodyToPromote, i18n.language]
   );
-  const groupEmoji = useMemo(
+  const teamEmoji = useMemo(
     () =>
       new Map(workspaceTeams.map((team): [string, string | null] => [team.id, team.emoji ?? null])),
     [workspaceTeams]
   );
 
   const accessUserIds = useMemo(() => new Set(members.map((member) => member.user_id)), [members]);
-  const accessGroupIds = useMemo(() => new Set(space.teams.map((team) => team.id)), [space.teams]);
+  const accessTeamIds = useMemo(() => new Set(space.teams.map((team) => team.id)), [space.teams]);
   // Lowercased, as the field compares: an address waiting for an answer is shown as pending in
   // its list rather than offered a second time.
   const pendingEmails = useMemo(
@@ -704,8 +704,8 @@ export default function SpaceMembersPanel({
       changePersonRole(row, role);
     } else if (row.kind === "inherited") {
       if (row.promotable) changePersonRole(row, role);
-    } else if (row.kind === "group") {
-      // Downgrading the only group that makes someone an admin is allowed here, as unassigning
+    } else if (row.kind === "team") {
+      // Downgrading the only team that makes someone an admin is allowed here, as unassigning
       // it is: any workspace admin can reverse it, and it never touches note access.
       void runPending(row.id, async () => {
         await setSpaceTeamAccess(space, row.team.id, role);
@@ -720,8 +720,8 @@ export default function SpaceMembersPanel({
   const handleRemove = (row: SpaceMemberRow): void => {
     if (row.kind === "person") {
       dispatchRemoval({ type: "open", subject: { kind: "person", member: row.member } });
-    } else if (row.kind === "group") {
-      dispatchRemoval({ type: "open", subject: { kind: "group", team: row.team } });
+    } else if (row.kind === "team") {
+      dispatchRemoval({ type: "open", subject: { kind: "team", team: row.team } });
     }
   };
 
@@ -732,7 +732,7 @@ export default function SpaceMembersPanel({
     try {
       if (subject.kind === "person") {
         const name = isolate(subject.member.name || subject.member.email);
-        const groupsOf = (teams: { name: string }[]): string =>
+        const teamsOf = (teams: { name: string }[]): string =>
           formatList(
             i18n.language,
             teams.map((team) => isolate(team.name))
@@ -746,18 +746,18 @@ export default function SpaceMembersPanel({
           left = still_via_teams.length === 0;
           title = left
             ? t("settingsPage.workspace.teamspaces.exit.left", { space: spaceName })
-            : t("notes.spaces.stillViaGroups", {
+            : t("notes.spaces.stillViaTeams", {
                 space: spaceName,
-                groups: groupsOf(still_via_teams),
+                teams: teamsOf(still_via_teams),
               });
         } else {
           const { still_via_teams } = await removeSpaceMember(space, subject.member.user_id);
-          // Access through a group stays; the toast says so rather than claiming they are gone.
+          // Access through a team stays; the toast says so rather than claiming they are gone.
           title =
             still_via_teams.length > 0
-              ? t("notes.spaces.members.stillViaGroups", {
+              ? t("notes.spaces.members.stillViaTeams", {
                   name,
-                  groups: groupsOf(still_via_teams),
+                  teams: teamsOf(still_via_teams),
                 })
               : t(`${COPY}.removed`, { name, space: spaceName });
         }
@@ -803,16 +803,16 @@ export default function SpaceMembersPanel({
 
   if (!spaceId) return null;
 
-  // What is staged, said before it is added: who is invited, and what a group grants.
+  // What is staged, said before it is added: who is invited, and what a team grants.
   const stagedSentences: string[] = [];
   if (summary.emails.length > 0) stagedSentences.push(t(`${COPY}.stagedNew`));
-  const stagedGroups = picked.filter(isGroup);
-  if (stagedGroups.length === 1) {
+  const stagedTeams = picked.filter(isTeam);
+  if (stagedTeams.length === 1) {
     stagedSentences.push(
-      t(`${COPY}.stagedGroup`, { group: isolate(stagedGroups[0].label), space: spaceName })
+      t(`${COPY}.stagedTeam`, { team: isolate(stagedTeams[0].label), space: spaceName })
     );
-  } else if (stagedGroups.length > 1) {
-    stagedSentences.push(t(`${COPY}.stagedGroups`, { space: spaceName }));
+  } else if (stagedTeams.length > 1) {
+    stagedSentences.push(t(`${COPY}.stagedTeams`, { space: spaceName }));
   }
 
   let line: StatusLine | null = null;
@@ -871,9 +871,9 @@ export default function SpaceMembersPanel({
           {peopleReady ? (
             <SpacePeopleField
               roster={roster}
-              groups={workspaceTeams}
+              teams={workspaceTeams}
               accessUserIds={accessUserIds}
-              accessGroupIds={accessGroupIds}
+              accessTeamIds={accessTeamIds}
               pendingEmails={pendingEmails}
               canInvite={canInvite}
               inviteRoleChoice={canInvite}
@@ -931,7 +931,7 @@ export default function SpaceMembersPanel({
       <SpaceMembersTable
         status={membersStatus}
         rows={rows}
-        groupEmoji={groupEmoji}
+        teamEmoji={teamEmoji}
         label={t("notes.spaces.teamsMembers.title", { space: spaceName })}
         canManage={canManage}
         pendingIds={pendingIds}
@@ -968,7 +968,7 @@ export default function SpaceMembersPanel({
               ? t(`${COPY}.removeFailedTitle`, { name: subjectName })
               : confirmSubject.kind === "person"
                 ? t(`${COPY}.removeTitle`, { name: subjectName, space: spaceName })
-                : t(`${COPY}.removeGroupTitle`, { group: subjectName, space: spaceName })
+                : t(`${COPY}.removeTeamTitle`, { team: subjectName, space: spaceName })
           }
           body={
             removalEnded
@@ -983,8 +983,8 @@ export default function SpaceMembersPanel({
                       { name: subjectName }
                     )
                   : confirmSubject.team.memberCount != null
-                    ? t(`${COPY}.removeGroupBody`, { count: confirmSubject.team.memberCount })
-                    : t(`${COPY}.removeGroupBodyNoCount`)
+                    ? t(`${COPY}.removeTeamBody`, { count: confirmSubject.team.memberCount })
+                    : t(`${COPY}.removeTeamBodyNoCount`)
           }
           error={
             removal.kind === "failed" && removal.error.kind === "refused"

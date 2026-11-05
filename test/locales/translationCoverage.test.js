@@ -22,9 +22,9 @@ const ARABIC_PLURAL_BASES = [
   "settingsPage.workspace.teams.deleteConfirmSpaceAccess",
   "settingsPage.workspace.teamspaces.adminCount",
   "settingsPage.workspace.teamspaces.form.createdInviteFailed",
-  "settingsPage.workspace.teamspaces.picker.groupPeople",
-  "settingsPage.workspace.teamspaces.picker.groupChip",
-  "settingsPage.workspace.teamspaces.picker.groupHasAccess",
+  "settingsPage.workspace.teamspaces.picker.teamPeople",
+  "settingsPage.workspace.teamspaces.picker.teamChip",
+  "settingsPage.workspace.teamspaces.picker.teamHasAccess",
   "settingsPage.workspace.teamspaces.addPeople.addingTitle",
   "settingsPage.workspace.teamspaces.addPeople.failedTitle",
   "settingsPage.workspace.teamspaces.addPeople.done",
@@ -366,4 +366,40 @@ test("Arabic plural counts resolve the exact CLDR form without English fallback"
       );
     }
   }
+});
+
+// Teams used to be called groups. The paywall and the workspaces intro use the
+// verb ("group people into teams"), so they sit outside the check.
+const OLD_TEAM_NOUN = {
+  en: /\bgroups?\b/i,
+  es: /grupos?/i,
+  fr: /groupes?/i,
+  de: /gruppen?/i,
+  pt: /grupos?/i,
+  it: /grupp[oi]/i,
+  ru: /групп/i,
+  "zh-CN": /群组|组/,
+  "zh-TW": /群組/,
+  ja: /グループ/,
+  ar: /مجموع/,
+};
+const GROUP_FREE_PREFIXES = ["settingsPage.workspace.", "notes.spaces."];
+const GROUP_FREE_KEYS = [
+  "notes.structureIntro.teamSpace.description",
+  "workspaces.invite.roleDescription.admin",
+];
+const GROUP_VERB_PREFIXES = ["settingsPage.workspace.teams.paywall"];
+
+test("no workspace copy says group", () => {
+  const found = [];
+  for (const locale of Object.keys(OLD_TEAM_NOUN)) {
+    for (const [key, value] of flatten(load(locale, "translation"))) {
+      const inScope =
+        GROUP_FREE_KEYS.includes(key) ||
+        GROUP_FREE_PREFIXES.some((prefix) => key.startsWith(prefix));
+      if (!inScope || GROUP_VERB_PREFIXES.some((prefix) => key.startsWith(prefix))) continue;
+      if (OLD_TEAM_NOUN[locale].test(String(value))) found.push(`${locale}: ${key}`);
+    }
+  }
+  assert.deepEqual(found, []);
 });

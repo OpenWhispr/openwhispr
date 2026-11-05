@@ -330,14 +330,14 @@ export default function CreateSpaceDialog({
       const gone = new Set(
         classified.kind === "notWorkspaceMembers"
           ? classified.userIds
-          : classified.kind === "groupsUnavailable"
+          : classified.kind === "teamsUnavailable"
             ? classified.teamIds
             : []
       );
       const goneRecipients = picked.filter(
         (recipient) =>
           (recipient.kind === "member" && gone.has(recipient.userId)) ||
-          (recipient.kind === "group" && gone.has(recipient.teamId))
+          (recipient.kind === "team" && gone.has(recipient.teamId))
       );
       if (classified.kind === "nameTaken") {
         setTakenName(trimmedName);
@@ -355,7 +355,7 @@ export default function CreateSpaceDialog({
           message:
             classified.kind === "notWorkspaceMembers"
               ? t("settingsPage.workspace.teamspaces.members.partialLeft", { names })
-              : t("settingsPage.workspace.teamspaces.form.groupsGone", { names }),
+              : t("settingsPage.workspace.teamspaces.form.teamsGone", { names }),
         });
         setRefocus("primary");
       } else {
@@ -623,7 +623,7 @@ export default function CreateSpaceDialog({
                     <SpacePeopleField
                       id="create-space-people"
                       roster={workspaceRoster}
-                      groups={workspaceTeams}
+                      teams={workspaceTeams}
                       hiddenUserIds={hiddenUserIds}
                       canInvite={canInvite}
                       inviteRoleChoice={false}

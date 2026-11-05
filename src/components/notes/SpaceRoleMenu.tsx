@@ -50,7 +50,7 @@ function isTeamRole(value: string): value is TeamRole {
 
 interface SpaceRoleMenuProps {
   role: TeamRole;
-  /** The person or group the menu acts on, for its accessible name. */
+  /** The person or team the menu acts on, for its accessible name. */
   subject: string;
   /** A change for this row is in flight. */
   pending: boolean;
@@ -58,14 +58,14 @@ interface SpaceRoleMenuProps {
   /** Left out for someone with no direct grant here, as there is nothing of theirs to remove. */
   onRemove?: () => void;
   /**
-   * The groups (already named for reading aloud) that make this person an admin. While there are
+   * The teams (already named for reading aloud) that make this person an admin. While there are
    * some, Member is not on offer: a direct Member role wouldn't lower them, and the row would go
    * on reading Admin.
    */
   adminThrough?: string;
 }
 
-// The role cell of a person or group the viewer manages: the two teamspace roles, then removal.
+// The role cell of a person or team the viewer manages: the two teamspace roles, then removal.
 // Roles here only ever affect this teamspace.
 export function SpaceRoleMenu({
   role,
@@ -104,12 +104,12 @@ export function SpaceRoleMenu({
         >
           {ROLES.map((option) => {
             const Icon = ROLE_ICON[option];
-            const lockedByGroup = option === "member" && Boolean(adminThrough);
+            const lockedByTeam = option === "member" && Boolean(adminThrough);
             return (
               <DropdownMenuRadioItem
                 key={option}
                 value={option}
-                disabled={lockedByGroup}
+                disabled={lockedByTeam}
                 className={ITEM_CLASS}
               >
                 <Icon
@@ -121,8 +121,8 @@ export function SpaceRoleMenu({
                     {t(ROLE_LABEL_KEY[option])}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {lockedByGroup
-                      ? t("notes.spaces.members.roleFromGroup", { group: adminThrough })
+                    {lockedByTeam
+                      ? t("notes.spaces.members.roleFromTeam", { team: adminThrough })
                       : t(ROLE_BODY_KEY[option])}
                   </span>
                 </span>

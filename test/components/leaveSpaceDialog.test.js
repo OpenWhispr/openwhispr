@@ -242,7 +242,7 @@ test("a direct member, or an admin with nobody to carry on, is told they lose ac
   assert.equal(body(), "You'll lose access to Customer Calls and its notes.");
 });
 
-test("a direct grant beside a group names the group that keeps access", async (t) => {
+test("a direct grant beside a team names the team that keeps access", async (t) => {
   await mount(t, {
     otherAdmins: true,
     space: { ...SPACE, teams: [{ id: "g1", name: "Sales", my_role: "member" }] },
@@ -260,7 +260,7 @@ test("a member who isn't an admin hears nothing about who manages it", async (t)
   assert.equal(body(), "You'll lose access to Customer Calls and its notes.");
 });
 
-test("someone with a group keeps the group-access wording", async (t) => {
+test("someone with a team keeps the team-access wording", async (t) => {
   const space = {
     ...SPACE,
     my_role: "member",
@@ -275,7 +275,7 @@ test("someone with a group keeps the group-access wording", async (t) => {
 
   assert.equal(
     body(),
-    "You'll be removed from Sales and Support and lose access to any other spaces those groups can open."
+    "You'll be removed from Sales and Support and lose access to any other spaces those teams can open."
   );
 
   await ui.click(buttonNamed("Leave teamspace"));
@@ -290,7 +290,7 @@ test("someone with a group keeps the group-access wording", async (t) => {
   assert.deepEqual(events, [["open", false], ["left"]]);
 });
 
-test("a group that fails stops the leave and offers Try again", async (t) => {
+test("a team that fails stops the leave and offers Try again", async (t) => {
   const space = {
     ...SPACE,
     my_direct_role: null,
@@ -317,7 +317,7 @@ test("a group that fails stops the leave and offers Try again", async (t) => {
   assert.deepEqual(events, []);
 });
 
-test("access that remains through a group keeps its toast and the settings open", async (t) => {
+test("access that remains through a team keeps its toast and the settings open", async (t) => {
   const { events } = await mount(t, {
     leaveSpace: async () => ({
       removed: true,

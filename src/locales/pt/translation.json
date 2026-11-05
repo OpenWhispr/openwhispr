@@ -2420,7 +2420,7 @@
         "general": "Geral",
         "members": "Membros",
         "invitations": "Convites",
-        "teams": "Grupos"
+        "teams": "Equipes"
       },
       "people": {
         "title": "Pessoas",
@@ -2430,7 +2430,7 @@
         "addLabel": "Convidar pessoas",
         "columns": {
           "name": "Nome",
-          "team": "Grupo",
+          "team": "Equipe",
           "role": "Função",
           "email": "E-mail",
           "status": "Status",
@@ -2456,7 +2456,7 @@
         "roleMenuLabel": "Alterar a função de {{name}}",
         "roleDescription": {
           "member": "Pode ver e editar notas.",
-          "admin": "Gerencia membros, convites, grupos e configurações."
+          "admin": "Gerencia membros, convites, equipes e configurações."
         },
         "roleFailed": "Não foi possível alterar a função de {{name}}. Verifique sua conexão e tente novamente.",
         "roleNotAllowed": "Você não tem mais permissão para alterar funções em {{workspace}}.",
@@ -2523,7 +2523,7 @@
         "failedBody": "Verifique sua conexão e tente novamente.",
         "retry": "Tentar novamente",
         "emptyTitle": "Nenhum teamspace ainda",
-        "emptyBody": "Um teamspace é uma área compartilhada para as notas de uma equipe. Adicione pessoas ou grupos, e todos nele poderão ler e editar.",
+        "emptyBody": "Um teamspace é uma área compartilhada para as notas de uma equipe. Adicione pessoas ou equipes, e todos nele poderão ler e editar.",
         "emptyBodyMember": "Os administradores do seu espaço de trabalho ainda não criaram nenhum.",
         "adminCount_one": "{{count}} administrador",
         "adminCount_other": "{{count}} administradores",
@@ -2547,7 +2547,7 @@
           "descriptionLabel": "Descrição",
           "people": "Pessoas",
           "descriptionPlaceholder": "Gravações e resumos de ligações de vendas e suporte, uma nota por ligação.",
-          "peoplePlaceholder": "Nomes, e-mails ou grupos",
+          "peoplePlaceholder": "Nomes, e-mails ou equipes",
           "defaultTitle": "Teamspace padrão",
           "defaultBody": "Adicionar automaticamente os novos membros do espaço de trabalho.",
           "openTitle": "Teamspace aberto",
@@ -2561,24 +2561,24 @@
           "createdInviteFailed_other": "{{space}} foi criado. Não foi possível convidar {{count}} pessoas. Convide-as em Membros.",
           "inviteFailedWho": "Não convidados: {{names}}.",
           "copyAddresses": "Copiar endereços",
-          "groupsGone": "{{names}} não está mais disponível, por isso não foi adicionado."
+          "teamsGone": "{{names}} não está mais disponível, por isso não foi adicionada."
         },
         "picker": {
-          "groupPeople_one": "{{count}} pessoa",
-          "groupPeople_other": "{{count}} pessoas",
-          "groupChip_one": "{{name}} · {{count}} pessoa",
-          "groupChip_other": "{{name}} · {{count}} pessoas",
+          "teamPeople_one": "{{count}} pessoa",
+          "teamPeople_other": "{{count}} pessoas",
+          "teamChip_one": "{{name}} · {{count}} pessoa",
+          "teamChip_other": "{{name}} · {{count}} pessoas",
           "emailChip": "{{email}} · {{role}}",
           "noMember": "Nenhum membro encontrado",
           "inviteToWorkspace": "Convidar para o espaço de trabalho",
           "newToWorkspace": "Novo no espaço de trabalho",
           "select": "Selecionar",
-          "noResultsTitle": "Nenhuma pessoa ou grupo encontrado",
+          "noResultsTitle": "Nenhuma pessoa ou equipe encontrada",
           "noResultsBody": "Tente outro nome ou digite um endereço de e-mail completo.",
           "noResultsBodyNoInvite": "Tente outro nome.",
           "hasAccess": "Já tem acesso",
-          "groupHasAccess_one": "Já tem acesso · {{count}} pessoa",
-          "groupHasAccess_other": "Já tem acesso · {{count}} pessoas"
+          "teamHasAccess_one": "Já tem acesso · {{count}} pessoa",
+          "teamHasAccess_other": "Já tem acesso · {{count}} pessoas"
         },
         "members": {
           "columnRole": "Função no teamspace",
@@ -2586,26 +2586,26 @@
           "adding": "Adicionando…",
           "retry": "Tentar novamente",
           "invitationPending": "Convite pendente",
-          "via": "Membro · via {{group}}",
-          "viaAdmin": "Administrador · via {{group}}",
+          "via": "Membro · via {{team}}",
+          "viaAdmin": "Administrador · via {{team}}",
           "roleMember": "Membro do teamspace",
           "roleMemberBody": "Pode ver e editar notas",
           "roleAdmin": "Administrador do teamspace",
-          "roleAdminBody": "Gerencia este teamspace e seus grupos atribuídos.",
+          "roleAdminBody": "Gerencia este teamspace e suas equipes atribuídas.",
           "removeItem": "Remover do teamspace",
           "removeTitle": "Remover {{name}} de {{space}}?",
-          "removeBody": "Isso remove a participação direta de {{name}}. O acesso por meio de um grupo continuará. A pessoa permanecerá no espaço de trabalho.",
+          "removeBody": "Isso remove a participação direta de {{name}}. O acesso por meio de uma equipe continuará. A pessoa permanecerá no espaço de trabalho.",
           "removeConfirm": "Remover membro",
           "removeFailedTitle": "Não foi possível remover {{name}}",
           "removeFailedBody": "A participação de {{name}} em {{space}} não foi alterada. Verifique sua conexão e tente novamente.",
           "removed": "A participação direta de {{name}} em {{space}} foi removida.",
-          "removeGroupTitle": "Remover {{group}} de {{space}}?",
-          "removeGroupBody_one": "{{count}} pessoa perde o acesso por meio deste grupo. O grupo permanece no espaço de trabalho.",
-          "removeGroupBody_other": "{{count}} pessoas perdem o acesso por meio deste grupo. O grupo permanece no espaço de trabalho.",
-          "removeGroupBodyNoCount": "As pessoas deste grupo perdem o acesso por meio dele. O grupo permanece no espaço de trabalho.",
+          "removeTeamTitle": "Remover {{team}} de {{space}}?",
+          "removeTeamBody_one": "{{count}} pessoa perde o acesso por meio desta equipe. A equipe permanece no espaço de trabalho.",
+          "removeTeamBody_other": "{{count}} pessoas perdem o acesso por meio desta equipe. A equipe permanece no espaço de trabalho.",
+          "removeTeamBodyNoCount": "As pessoas desta equipe perdem o acesso por meio dela. A equipe permanece no espaço de trabalho.",
           "stagedNew": "Pessoas novas são convidadas quando você as adiciona. O acesso ao teamspace começa depois que elas aceitarem.",
-          "stagedGroup": "Todos em {{group}} herdarão acesso de membro a {{space}}.",
-          "stagedGroups": "Todos nestes grupos herdarão acesso de membro a {{space}}.",
+          "stagedTeam": "Todas as pessoas em {{team}} herdarão acesso de membro a {{space}}.",
+          "stagedTeams": "Todas as pessoas destas equipes herdarão acesso de membro a {{space}}.",
           "invalid": "Digite um endereço de e-mail válido. As pessoas selecionadas foram mantidas.",
           "progressPeople": "Adicionando {{names}}…",
           "progressBoth_one": "Adicionando {{names}} e enviando {{count}} convite…",
@@ -2614,8 +2614,8 @@
           "progressInvites_other": "Enviando {{count}} convites…",
           "resultAdded": "Adicionado: {{names}}.",
           "resultInvited": "Convite para o espaço de trabalho enviado para {{names}}.",
-          "resultGroup": "{{group}} foi adicionado. Os integrantes agora têm acesso de membro.",
-          "resultGroups": "{{names}} foram adicionados. Os integrantes agora têm acesso de membro.",
+          "resultTeam": "{{team}} foi adicionada. Os integrantes agora têm acesso de membro.",
+          "resultTeams": "{{names}} foram adicionadas. Os integrantes agora têm acesso de membro.",
           "failed": "Não foi possível adicionar os membros. Suas seleções foram mantidas. Tente novamente.",
           "partialAdded": "{{names}} foi adicionado.",
           "partialAddedMany": "{{names}} foram adicionados.",
@@ -2662,7 +2662,7 @@
           "deleteFailedBody": "O teamspace continua disponível. Verifique sua conexão e tente novamente.",
           "deleted": "{{space}} foi excluído.",
           "restored": "{{space}} foi restaurado",
-          "leaveBodyKeeps": "Sua associação direta terminará. Você manterá o acesso por meio de {{groups}}.",
+          "leaveBodyKeeps": "Sua associação direta terminará. Você manterá o acesso por meio de {{teams}}.",
           "leaveBodyLoses": "Você perderá o acesso a {{space}} e às notas dele.",
           "leaveBodyAdmins": "Outro administrador continuará gerenciando este Teamspace.",
           "deleteNotAllowed": "Você não tem permissão para excluir {{space}}.",
@@ -2727,33 +2727,33 @@
         "errorTitle": "Não foi possível atualizar o pedido"
       },
       "teams": {
-        "title": "Grupos",
-        "description": "Grupos de membros do workspace que podem receber acesso a teamspaces de uma vez.",
-        "new": "Novo grupo",
-        "empty": "Nenhum grupo ainda.",
-        "createFirst": "Crie seu primeiro grupo",
+        "title": "Equipes",
+        "description": "Equipes de membros do workspace que podem receber acesso a teamspaces de uma vez.",
+        "new": "Nova equipe",
+        "empty": "Nenhuma equipe ainda.",
+        "createFirst": "Crie sua primeira equipe",
         "addMembersLabel": "Adicionar membros",
-        "createTitle": "Criar grupo",
-        "nameLabel": "Nome do grupo",
+        "createTitle": "Criar equipe",
+        "nameLabel": "Nome da equipe",
         "memberCount_one": "{{count}} membro",
         "memberCount_other": "{{count}} membros",
         "membersButton": "Membros",
         "grantsAccessToSpaces_one": "Dá acesso a {{count}} espaço",
         "grantsAccessToSpaces_other": "Dá acesso a {{count}} espaços",
-        "couldNotCreate": "Não foi possível criar o grupo",
+        "couldNotCreate": "Não foi possível criar a equipe",
         "created": "{{team}} criada",
         "deleted": "{{team}} excluída",
         "deleteConfirmTitle": "Excluir {{team}}?",
-        "deleteConfirmDescription": "Isso arquiva o grupo. Seus membros perdem o acesso que ele concedia.",
-        "deleteConfirmSpaceAccess_one": "Este grupo dá acesso a {{count}} espaço. Seus membros perderão esse acesso.",
-        "deleteConfirmSpaceAccess_other": "Este grupo dá acesso a {{count}} espaços. Seus membros perderão esse acesso.",
+        "deleteConfirmDescription": "Isso arquiva a equipe. Seus membros perdem o acesso que ela concedia.",
+        "deleteConfirmSpaceAccess_one": "Esta equipe dá acesso a {{count}} espaço. Seus membros perderão esse acesso.",
+        "deleteConfirmSpaceAccess_other": "Esta equipe dá acesso a {{count}} espaços. Seus membros perderão esse acesso.",
         "members": {
           "title": "Membros de {{team}}",
           "removeConfirm": "Remover {{name}} de {{team}}?",
-          "leave": "Sair do grupo",
+          "leave": "Sair da equipe",
           "leftTeam": "Você saiu de {{team}}",
           "leaveConfirm": "Sair de {{team}}?",
-          "leaveConfirmDescription": "Você perderá o acesso aos espaços atribuídos a este grupo, a menos que tenha sido adicionado diretamente ou outro grupo o inclua."
+          "leaveConfirmDescription": "Você perderá o acesso aos espaços atribuídos a esta equipe, a menos que tenha sido adicionado diretamente ou outra equipe o inclua."
         }
       },
       "invites": {
@@ -3162,8 +3162,8 @@
       "couldNotChangeEmoji": "Não foi possível alterar o emoji",
       "deleteSpace": "Excluir espaço",
       "deleteHintLocal": "Exclui permanentemente este espaço com suas pastas e notas neste dispositivo.",
-      "leaveConfirmDescription": "Você será removido de {{teams}} e perderá o acesso a outros espaços que esses grupos podem abrir.",
-      "stillViaGroups": "Você ainda tem acesso a {{space}} por meio de {{groups}}.",
+      "leaveConfirmDescription": "Você será removido de {{teams}} e perderá o acesso a outros espaços que essas equipes podem abrir.",
+      "stillViaTeams": "Você ainda tem acesso a {{space}} por meio de {{teams}}.",
       "deleteConfirmTitle": "Excluir espaço?",
       "deleteConfirmDescription": "Isso exclui permanentemente {{space}} com todas as suas pastas e notas neste dispositivo.",
       "deleteTypeName": "Digite {{space}} para confirmar",
@@ -3205,7 +3205,7 @@
         "addPeople": "Adicionar pessoas",
         "addedToTeam": "{{name}} adicionado a {{team}}",
         "removedFromTeam": "{{name}} removido de {{team}}",
-        "stillViaGroups": "{{name}} ainda tem acesso por meio de {{groups}}",
+        "stillViaTeams": "{{name}} ainda tem acesso por meio de {{teams}}",
         "roleUpdated": "Função atualizada",
         "you": "Você",
         "addFailed": "Não foi possível adicionar {{failed}} de {{total}} pessoas",
@@ -3219,7 +3219,7 @@
         "removeConfirmDescription": "A pessoa perderá o acesso a todas as notas deste espaço.",
         "inviteFooter": "Convidar {{email}} para o espaço de trabalho…",
         "empty": "Ninguém foi adicionado ainda",
-        "roleFromGroup": "Administrador por meio de {{group}}. Altere isso lá."
+        "roleFromTeam": "Administrador por meio de {{team}}. Altere isso lá."
       },
       "invitedTo_one": "Você entrará em {{count}} teamspace",
       "invitedTo_other": "Você entrará em {{count}} teamspaces",
@@ -3230,7 +3230,7 @@
         "accessChanged": "Acesso de {{team}} atualizado"
       },
       "teams": {
-        "loadError": "Não foi possível carregar os grupos."
+        "loadError": "Não foi possível carregar as equipes."
       }
     },
     "structureIntro": {
@@ -3246,7 +3246,7 @@
       },
       "teamSpace": {
         "title": "Teamspace",
-        "description": "Uma área compartilhada dentro de um workspace. Adicione pessoas ou grupos para dar acesso a elas."
+        "description": "Uma área compartilhada dentro de um workspace. Adicione pessoas ou equipes para dar acesso a elas."
       },
       "contents": "Cada espaço pode conter pastas e notas.",
       "done": "Entendi",
@@ -5524,7 +5524,7 @@
         "member": "Membro do espaço de trabalho"
       },
       "roleDescription": {
-        "admin": "Gerencia membros, convites, grupos e configurações.",
+        "admin": "Gerencia membros, convites, equipes e configurações.",
         "member": "Pode ver e editar notas."
       },
       "errors": {

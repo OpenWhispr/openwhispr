@@ -74,7 +74,7 @@ const EXPECTED_SHARED_FIELD_DIRECTIONS = {
   "src/components/notes/CreateSpaceDialog.tsx": ["auto"],
   "src/components/notes/DeleteSpaceDialog.tsx": ["auto"],
   "src/components/notes/FolderNotesPopover.tsx": ["auto"],
-  // Names, emails and groups typed in one field: a name may be in any script.
+  // Names, emails and teams typed in one field: a name may be in any script.
   "src/components/notes/SpacePeopleField.tsx": ["auto"],
   "src/components/notes/UploadAudioView.tsx": ["auto"],
   "src/components/settings/DictationAgentSettings.tsx": ["auto"],

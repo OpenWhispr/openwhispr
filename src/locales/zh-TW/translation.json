@@ -2441,7 +2441,7 @@
         "general": "一般",
         "members": "成員",
         "invitations": "邀請",
-        "teams": "群組"
+        "teams": "團隊"
       },
       "people": {
         "title": "人員",
@@ -2451,7 +2451,7 @@
         "addLabel": "邀請成員",
         "columns": {
           "name": "名稱",
-          "team": "群組",
+          "team": "團隊",
           "role": "工作區角色",
           "email": "電子郵件",
           "status": "狀態",
@@ -2477,7 +2477,7 @@
         "roleMenuLabel": "變更 {{name}} 的角色",
         "roleDescription": {
           "member": "可以檢視和編輯筆記。",
-          "admin": "管理成員、邀請、群組和設定。"
+          "admin": "管理成員、邀請、團隊和設定。"
         },
         "roleFailed": "無法變更 {{name}} 的角色。請檢查網路連線後再試一次。",
         "roleNotAllowed": "你已無權變更 {{workspace}} 中的角色。",
@@ -2544,7 +2544,7 @@
         "failedBody": "請檢查網路連線後再試一次。",
         "retry": "重試",
         "emptyTitle": "還沒有 Teamspace",
-        "emptyBody": "Teamspace 是團隊筆記的共享區域。新增成員或群組後，其中的每個人都可以閱讀和編輯。",
+        "emptyBody": "Teamspace 是團隊筆記的共享區域。新增成員或團隊後，其中的每個人都可以閱讀和編輯。",
         "emptyBodyMember": "工作區管理員尚未建立任何 Teamspace。",
         "adminCount_one": "{{count}} 位管理員",
         "adminCount_other": "{{count}} 位管理員",
@@ -2568,7 +2568,7 @@
           "descriptionLabel": "描述",
           "people": "人員",
           "descriptionPlaceholder": "銷售與支援通話的錄音和摘要，每通電話一則筆記。",
-          "peoplePlaceholder": "姓名、電子郵件或群組",
+          "peoplePlaceholder": "姓名、電子郵件或團隊",
           "defaultTitle": "預設 Teamspace",
           "defaultBody": "自動加入新的工作區成員。",
           "openTitle": "開放 Teamspace",
@@ -2582,24 +2582,24 @@
           "createdInviteFailed_other": "已建立 {{space}}。無法邀請 {{count}} 人。請在「成員」中邀請。",
           "inviteFailedWho": "未邀請：{{names}}。",
           "copyAddresses": "複製地址",
-          "groupsGone": "{{names}} 已無法使用，因此未新增。"
+          "teamsGone": "{{names}} 已無法使用，因此未新增。"
         },
         "picker": {
-          "groupPeople_one": "{{count}} 人",
-          "groupPeople_other": "{{count}} 人",
-          "groupChip_one": "{{name}} · {{count}} 人",
-          "groupChip_other": "{{name}} · {{count}} 人",
+          "teamPeople_one": "{{count}} 人",
+          "teamPeople_other": "{{count}} 人",
+          "teamChip_one": "{{name}} · {{count}} 人",
+          "teamChip_other": "{{name}} · {{count}} 人",
           "emailChip": "{{email}} · {{role}}",
           "noMember": "找不到成員",
           "inviteToWorkspace": "邀請加入工作區",
           "newToWorkspace": "工作區新成員",
           "select": "選取",
-          "noResultsTitle": "找不到成員或群組",
+          "noResultsTitle": "找不到成員或團隊",
           "noResultsBody": "請嘗試其他名稱，或輸入完整的電子郵件地址。",
           "noResultsBodyNoInvite": "請嘗試其他名稱。",
           "hasAccess": "已有存取權",
-          "groupHasAccess_one": "已有存取權 · {{count}} 人",
-          "groupHasAccess_other": "已有存取權 · {{count}} 人"
+          "teamHasAccess_one": "已有存取權 · {{count}} 人",
+          "teamHasAccess_other": "已有存取權 · {{count}} 人"
         },
         "members": {
           "columnRole": "Teamspace 角色",
@@ -2607,26 +2607,26 @@
           "adding": "正在加入…",
           "retry": "重試",
           "invitationPending": "邀請待處理",
-          "via": "成員 · 透過 {{group}}",
-          "viaAdmin": "管理員 · 透過 {{group}}",
+          "via": "成員 · 透過 {{team}}",
+          "viaAdmin": "管理員 · 透過 {{team}}",
           "roleMember": "Teamspace 成員",
           "roleMemberBody": "可以檢視和編輯筆記",
           "roleAdmin": "Teamspace 管理員",
-          "roleAdminBody": "管理此 Teamspace 及其已指派的群組。",
+          "roleAdminBody": "管理此 Teamspace 及其已指派的團隊。",
           "removeItem": "從 Teamspace 中移除",
           "removeTitle": "要將 {{name}} 從 {{space}} 中移除嗎？",
-          "removeBody": "這將結束 {{name}} 的直接成員身分。透過群組取得的存取權將保留。對方仍留在工作區中。",
+          "removeBody": "這將結束 {{name}} 的直接成員身分。透過團隊取得的存取權將保留。對方仍留在工作區中。",
           "removeConfirm": "移除成員",
           "removeFailedTitle": "無法移除 {{name}}",
           "removeFailedBody": "{{name}} 在 {{space}} 中的成員身分未變更。請檢查網路連線後再試一次。",
           "removed": "已移除 {{name}} 在 {{space}} 中的直接成員身分。",
-          "removeGroupTitle": "要將 {{group}} 從 {{space}} 中移除嗎？",
-          "removeGroupBody_one": "該群組的 {{count}} 人將失去透過此群組取得的存取權。該群組仍保留在工作區中。",
-          "removeGroupBody_other": "該群組的 {{count}} 人將失去透過此群組取得的存取權。該群組仍保留在工作區中。",
-          "removeGroupBodyNoCount": "該群組的成員將失去透過此群組取得的存取權。該群組仍保留在工作區中。",
+          "removeTeamTitle": "要將 {{team}} 從 {{space}} 中移除嗎？",
+          "removeTeamBody_one": "該團隊的 {{count}} 人將失去透過此團隊取得的存取權。該團隊仍保留在工作區中。",
+          "removeTeamBody_other": "該團隊的 {{count}} 人將失去透過此團隊取得的存取權。該團隊仍保留在工作區中。",
+          "removeTeamBodyNoCount": "該團隊的成員將失去透過此團隊取得的存取權。該團隊仍保留在工作區中。",
           "stagedNew": "加入新成員時會向其發送邀請。對方接受後才能存取 Teamspace。",
-          "stagedGroup": "{{group}} 中的所有人都將繼承 {{space}} 的成員存取權。",
-          "stagedGroups": "這些群組中的所有人都將繼承 {{space}} 的成員存取權。",
+          "stagedTeam": "{{team}} 中的所有人都將繼承 {{space}} 的成員存取權。",
+          "stagedTeams": "這些團隊中的所有人都將繼承 {{space}} 的成員存取權。",
           "invalid": "請輸入有效的電子郵件地址。你已選擇的人員會保留。",
           "progressPeople": "正在加入 {{names}}…",
           "progressBoth_one": "正在加入 {{names}} 並發送 {{count}} 份邀請…",
@@ -2635,8 +2635,8 @@
           "progressInvites_other": "正在發送 {{count}} 份邀請…",
           "resultAdded": "已加入 {{names}}。",
           "resultInvited": "已向 {{names}} 發送工作區邀請。",
-          "resultGroup": "已加入 {{group}}。其成員現在擁有成員存取權。",
-          "resultGroups": "已加入 {{names}}。其成員現在擁有成員存取權。",
+          "resultTeam": "已加入 {{team}}。其成員現在擁有成員存取權。",
+          "resultTeams": "已加入 {{names}}。其成員現在擁有成員存取權。",
           "failed": "無法加入成員。你的選擇已保留。請重試。",
           "partialAdded": "已加入 {{names}}。",
           "partialAddedMany": "已加入 {{names}}。",
@@ -2683,7 +2683,7 @@
           "deleteFailedBody": "該 Teamspace 仍可使用。請檢查網路連線後再試一次。",
           "deleted": "{{space}} 已被刪除。",
           "restored": "{{space}} 已還原",
-          "leaveBodyKeeps": "你的直接成員身分將結束。你仍可透過 {{groups}} 存取。",
+          "leaveBodyKeeps": "你的直接成員身分將結束。你仍可透過 {{teams}} 存取。",
           "leaveBodyLoses": "你將無法再存取 {{space}} 及其筆記。",
           "leaveBodyAdmins": "其他管理員將繼續管理此 Teamspace。",
           "deleteNotAllowed": "你沒有刪除 {{space}} 的權限。",
@@ -2748,33 +2748,33 @@
         "errorTitle": "無法更新申請"
       },
       "teams": {
-        "title": "群組",
-        "description": "可一次取得 Teamspace 存取權的工作區成員群組。",
-        "new": "新增群組",
-        "empty": "還沒有群組。",
-        "createFirst": "建立你的第一個群組",
+        "title": "團隊",
+        "description": "可一次取得 Teamspace 存取權的工作區成員團隊。",
+        "new": "新增團隊",
+        "empty": "還沒有團隊。",
+        "createFirst": "建立你的第一個團隊",
         "addMembersLabel": "新增成員",
-        "createTitle": "建立群組",
-        "nameLabel": "群組名稱",
+        "createTitle": "建立團隊",
+        "nameLabel": "團隊名稱",
         "memberCount_one": "{{count}} 位成員",
         "memberCount_other": "{{count}} 位成員",
         "membersButton": "成員",
         "grantsAccessToSpaces_one": "授予 {{count}} 個空間的存取權",
         "grantsAccessToSpaces_other": "授予 {{count}} 個空間的存取權",
-        "couldNotCreate": "無法建立群組",
+        "couldNotCreate": "無法建立團隊",
         "created": "已建立 {{team}}",
         "deleted": "已刪除 {{team}}",
         "deleteConfirmTitle": "刪除 {{team}}？",
-        "deleteConfirmDescription": "這將封存該群組。其成員將失去它授予的存取權。",
-        "deleteConfirmSpaceAccess_one": "該群組授予 {{count}} 個空間的存取權。其成員將失去該存取權。",
-        "deleteConfirmSpaceAccess_other": "該群組授予 {{count}} 個空間的存取權。其成員將失去該存取權。",
+        "deleteConfirmDescription": "這將封存該團隊。其成員將失去它授予的存取權。",
+        "deleteConfirmSpaceAccess_one": "該團隊授予 {{count}} 個空間的存取權。其成員將失去該存取權。",
+        "deleteConfirmSpaceAccess_other": "該團隊授予 {{count}} 個空間的存取權。其成員將失去該存取權。",
         "members": {
           "title": "{{team}} 的成員",
           "removeConfirm": "將 {{name}} 從 {{team}} 移除？",
-          "leave": "退出群組",
+          "leave": "退出團隊",
           "leftTeam": "你已退出 {{team}}",
           "leaveConfirm": "退出 {{team}}？",
-          "leaveConfirmDescription": "除非你被直接加入或其他群組包含你，否則你將失去透過該群組取得的空間存取權。"
+          "leaveConfirmDescription": "除非你被直接加入或其他團隊包含你，否則你將失去透過該團隊取得的空間存取權。"
         }
       },
       "invites": {
@@ -3162,8 +3162,8 @@
       "couldNotChangeEmoji": "無法變更表情符號",
       "deleteSpace": "刪除空間",
       "deleteHintLocal": "永久刪除此空間以及此裝置上的資料夾與筆記。",
-      "leaveConfirmDescription": "你將從 {{teams}} 中移除，並失去這些群組可開啟的其他空間的存取權。",
-      "stillViaGroups": "你仍可透過 {{groups}} 存取 {{space}}。",
+      "leaveConfirmDescription": "你將從 {{teams}} 中移除，並失去這些團隊可開啟的其他空間的存取權。",
+      "stillViaTeams": "你仍可透過 {{teams}} 存取 {{space}}。",
       "deleteConfirmTitle": "刪除空間？",
       "deleteConfirmDescription": "這會從此裝置永久刪除 {{space}} 及其所有資料夾和筆記。",
       "deleteTypeName": "輸入 {{space}} 以確認",
@@ -3205,7 +3205,7 @@
         "addPeople": "新增成員",
         "addedToTeam": "已將 {{name}} 加入 {{team}}",
         "removedFromTeam": "已將 {{name}} 從 {{team}} 移除",
-        "stillViaGroups": "{{name}} 仍可透過 {{groups}} 存取",
+        "stillViaTeams": "{{name}} 仍可透過 {{teams}} 存取",
         "roleUpdated": "角色已更新",
         "you": "你",
         "addFailed": "{{total}} 人中有 {{failed}} 人無法加入",
@@ -3219,7 +3219,7 @@
         "removeConfirmDescription": "對方將無法再存取此空間的所有筆記。",
         "inviteFooter": "邀請 {{email}} 加入工作區…",
         "empty": "尚未新增任何成員",
-        "roleFromGroup": "透過 {{group}} 取得管理員身分，請在該群組中變更。"
+        "roleFromTeam": "透過 {{team}} 取得管理員身分，請在該團隊中變更。"
       },
       "invitedTo_one": "你將加入 {{count}} 個 Teamspace",
       "invitedTo_other": "你將加入 {{count}} 個 Teamspace",
@@ -3230,7 +3230,7 @@
         "accessChanged": "已更新 {{team}} 的存取權"
       },
       "teams": {
-        "loadError": "無法載入群組。"
+        "loadError": "無法載入團隊。"
       }
     },
     "structureIntro": {
@@ -3246,7 +3246,7 @@
       },
       "teamSpace": {
         "title": "Teamspace",
-        "description": "工作區內的共享區域。加入人員或群組以授予存取權。"
+        "description": "工作區內的共享區域。加入人員或團隊以授予存取權。"
       },
       "contents": "每個空間都可以包含資料夾和筆記。",
       "done": "知道了",
@@ -5503,7 +5503,7 @@
         "member": "工作區成員"
       },
       "roleDescription": {
-        "admin": "管理成員、邀請、群組和設定。",
+        "admin": "管理成員、邀請、團隊和設定。",
         "member": "可以檢視和編輯筆記。"
       },
       "errors": {
