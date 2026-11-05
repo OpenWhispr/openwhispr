@@ -31,6 +31,7 @@ export interface TranscriptionSettings {
   localTranscriptionProvider: LocalTranscriptionProvider;
   parakeetModel: string;
   cohereModel: string;
+  qualcommModel: string;
   allowOpenAIFallback: boolean;
   allowLocalFallback: boolean;
   fallbackWhisperModel: string;
@@ -232,6 +233,7 @@ function useSettingsInternal() {
     whisperModel,
     parakeetModel,
     cohereModel,
+    qualcommModel,
     preferredLanguage,
     keepLocalModelLoaded,
   } = store;
@@ -261,7 +263,9 @@ function useSettingsInternal() {
         ? parakeetModel
         : localTranscriptionProvider === "cohere"
           ? cohereModel
-          : whisperModel;
+          : localTranscriptionProvider === "qualcomm"
+            ? qualcommModel
+            : whisperModel;
     window.electronAPI
       .syncStartupPreferences({
         useLocalWhisper,
@@ -285,6 +289,7 @@ function useSettingsInternal() {
     whisperModel,
     parakeetModel,
     cohereModel,
+    qualcommModel,
     preferredLanguage,
     localServerPrefs,
     keepLocalModelLoaded,
@@ -299,6 +304,7 @@ function useSettingsInternal() {
     localTranscriptionProvider: store.localTranscriptionProvider,
     parakeetModel: store.parakeetModel,
     cohereModel: store.cohereModel,
+    qualcommModel: store.qualcommModel,
     allowOpenAIFallback: store.allowOpenAIFallback,
     allowLocalFallback: store.allowLocalFallback,
     fallbackWhisperModel: store.fallbackWhisperModel,
@@ -350,6 +356,7 @@ function useSettingsInternal() {
     setLocalTranscriptionProvider: store.setLocalTranscriptionProvider,
     setParakeetModel: store.setParakeetModel,
     setCohereModel: store.setCohereModel,
+    setQualcommModel: store.setQualcommModel,
     setAllowOpenAIFallback: store.setAllowOpenAIFallback,
     setAllowLocalFallback: store.setAllowLocalFallback,
     setFallbackWhisperModel: store.setFallbackWhisperModel,

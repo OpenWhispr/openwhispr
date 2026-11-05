@@ -70,6 +70,7 @@ import {
   getTranscriptionProviders,
   isOnlineParakeetModel,
   isSherpaLocalProvider,
+  isQualcommLocalProvider,
 } from "../models/ModelRegistry";
 import { TINFOIL_PROXY_REQUIRED_ERROR } from "../services/transcriptionBaseUrl";
 import {
@@ -2312,7 +2313,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           managedTranscription.kind === "managed" ? managedTranscription.deployment : null;
         result = await this.processWithOpenAIAPI(audioBlob, metadata, wasCancelled);
       } else if (useLocalWhisper) {
-        if (isSherpaLocalProvider(localProvider)) {
+        if (isQualcommLocalProvider(localProvider)) {
+          activeModel = settings.qualcommModel || "whisper-tiny";
+          result = await this.processWithLocalQualcomm(
+            audioBlob,
+            activeModel,
+            metadata,
+            wasCancelled
+          );
+        } else if (isSherpaLocalProvider(localProvider)) {
           activeModel = localProvider === "cohere" ? settings.cohereModel : parakeetModel;
           result = await this.processWithLocalParakeet(
             audioBlob,
@@ -2743,6 +2752,117 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
       } else {
         throw new Error(`Parakeet failed: ${error.message}`);
+      }
+    }
+  }
+
+  async processWithLocalQualcomm(
+    audioBlob,
+    model = "whisper-tiny",
+    metadata = {},
+    wasCancelled = neverCancelled
+  ) {
+    const timings = {};
+
+    try {
+      let result;
+      const streamedText =
+        typeof metadata.streamedText === "string" ? metadata.streamedText.trim() : null;
+      // An empty stream is indistinguishable from silence; let the offline decode settle it.
+      if (streamedText) {
+        logger.debug("Qualcomm NPU using committed streaming transcript", { model }, "performance");
+        timings.transcriptionProcessingDurationMs = 0;
+        result = { success: true, text: streamedText };
+      } else {
+        const source = metadata.rawWav ?? audioBlob;
+        const arrayBuffer = await source.arrayBuffer();
+
+        logger.debug(
+          "Qualcomm NPU transcription starting",
+          {
+            audioFormat: source.type,
+            audioSizeBytes: source.size,
+            model,
+          },
+          "performance"
+        );
+
+        const transcriptionStart = performance.now();
+        result = await window.electronAPI.transcribeLocalQualcomm(arrayBuffer, {
+          model,
+          language: getBaseLanguageCode(this.getEffectiveSttLanguage(getSettings())),
+        });
+        timings.transcriptionProcessingDurationMs = Math.round(
+          performance.now() - transcriptionStart
+        );
+
+        logger.debug(
+          "Qualcomm NPU transcription complete",
+          {
+            transcriptionProcessingDurationMs: timings.transcriptionProcessingDurationMs,
+            success: result.success,
+          },
+          "performance"
+        );
+      }
+
+      if (result.success && result.text) {
+        const rawText = result.text;
+        const reasoningStart = performance.now();
+        const text = await this.processTranscription(result.text, "local-qualcomm", wasCancelled);
+        timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
+
+        if (text !== null && text !== undefined) {
+          return {
+            success: true,
+            text: text || result.text,
+            rawText,
+            source: "local-qualcomm",
+            timings,
+            ...(result.warning ? { warning: result.warning } : {}),
+            ...(metadata.rawWav ? { decodedRawWav: true } : {}),
+          };
+        } else {
+          throw new Error("No text transcribed");
+        }
+      } else if (result.success === false && result.message === "No audio detected") {
+        throw new Error("No audio detected");
+      } else {
+        throw new Error(result.message || result.error || "Qualcomm NPU transcription failed");
+      }
+    } catch (error) {
+      if (error.selectionEditFatal) {
+        throw error;
+      }
+      if (error.message === "No audio detected") {
+        throw error;
+      }
+
+      const {
+        allowOpenAIFallback,
+        useLocalWhisper: isLocalMode,
+        cloudTranscriptionProvider,
+      } = getSettings();
+      // A policy-blocked fallback surfaces the local failure, not a policy error.
+      const fallbackAllowedByPolicy = isTranscriptionSelectionAllowed(usePolicyStore.getState(), {
+        mode: "providers",
+        provider: cloudTranscriptionProvider || "openai",
+      });
+
+      if (allowOpenAIFallback && isLocalMode && fallbackAllowedByPolicy) {
+        try {
+          const fallbackResult = await this.processWithOpenAIAPI(audioBlob, metadata, wasCancelled);
+          return { ...fallbackResult, source: "openai-fallback" };
+        } catch (fallbackError) {
+          if (fallbackError.selectionEditFatal) {
+            throw fallbackError;
+          }
+          throw new Error(
+            `Qualcomm NPU failed: ${error.message}. OpenAI fallback also failed: ${fallbackError.message}`
+          );
+        }
+      } else {
+        throw new Error(`Qualcomm NPU failed: ${error.message}`);
       }
     }
   }

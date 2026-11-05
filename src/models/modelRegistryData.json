@@ -282,6 +282,105 @@
       "descriptionKey": "models.descriptions.whisper.turbo_q5"
     }
   },
+  "qualcommModels": {
+    "whisper-tiny": {
+      "name": "Whisper Tiny (NPU)",
+      "description": "Fastest Snapdragon NPU transcription",
+      "size": "101MB",
+      "sizeMb": 101,
+      "language": "multilingual",
+      "hfRepo": "qualcomm/Whisper-Tiny",
+      "hfModelSize": "tiny",
+      "organization": { "id": "qualcomm", "name": "Qualcomm" },
+      "recommended": true,
+      "modelCardUrl": "https://huggingface.co/qualcomm/Whisper-Tiny",
+      "descriptionKey": "models.descriptions.qualcomm.whisper_tiny"
+    },
+    "whisper-base": {
+      "name": "Whisper Base (NPU)",
+      "description": "Balanced Snapdragon NPU transcription",
+      "size": "190MB",
+      "sizeMb": 190,
+      "language": "multilingual",
+      "hfRepo": "qualcomm/Whisper-Base",
+      "hfModelSize": "base",
+      "organization": { "id": "qualcomm", "name": "Qualcomm" },
+      "modelCardUrl": "https://huggingface.co/qualcomm/Whisper-Base",
+      "descriptionKey": "models.descriptions.qualcomm.whisper_base"
+    },
+    "whisper-small": {
+      "name": "Whisper Small (NPU)",
+      "description": "Higher accuracy Snapdragon NPU transcription",
+      "size": "600MB",
+      "sizeMb": 600,
+      "language": "multilingual",
+      "hfRepo": "qualcomm/Whisper-Small",
+      "hfModelSize": "small",
+      "organization": { "id": "qualcomm", "name": "Qualcomm" },
+      "modelCardUrl": "https://huggingface.co/qualcomm/Whisper-Small",
+      "descriptionKey": "models.descriptions.qualcomm.whisper_small"
+    },
+    "whisper-small-quantized": {
+      "name": "Whisper Small (NPU, Quantized)",
+      "description": "Quantized Small for a smaller NPU download",
+      "size": "320MB",
+      "sizeMb": 320,
+      "language": "multilingual",
+      "hfRepo": "qualcomm/Whisper-Small-Quantized",
+      "hfModelSize": "small",
+      "organization": { "id": "qualcomm", "name": "Qualcomm" },
+      "modelCardUrl": "https://huggingface.co/qualcomm/Whisper-Small-Quantized",
+      "descriptionKey": "models.descriptions.qualcomm.whisper_small_quantized"
+    },
+    "whisper-medium": {
+      "name": "Whisper Medium (NPU)",
+      "description": "High accuracy Snapdragon NPU transcription",
+      "size": "1.9GB",
+      "sizeMb": 1900,
+      "language": "multilingual",
+      "hfRepo": "qualcomm/Whisper-Medium",
+      "hfModelSize": "medium",
+      "organization": { "id": "qualcomm", "name": "Qualcomm" },
+      "modelCardUrl": "https://huggingface.co/qualcomm/Whisper-Medium",
+      "descriptionKey": "models.descriptions.qualcomm.whisper_medium"
+    },
+    "whisper-medium-quantized": {
+      "name": "Whisper Medium (NPU, Quantized)",
+      "description": "Quantized Medium for a smaller NPU download",
+      "size": "1.0GB",
+      "sizeMb": 1000,
+      "language": "multilingual",
+      "hfRepo": "qualcomm/Whisper-Medium-Quantized",
+      "hfModelSize": "medium",
+      "organization": { "id": "qualcomm", "name": "Qualcomm" },
+      "modelCardUrl": "https://huggingface.co/qualcomm/Whisper-Medium-Quantized",
+      "descriptionKey": "models.descriptions.qualcomm.whisper_medium_quantized"
+    },
+    "whisper-large-v3-turbo": {
+      "name": "Whisper Large v3 Turbo (NPU)",
+      "description": "Best Snapdragon NPU accuracy, still fast",
+      "size": "2.0GB",
+      "sizeMb": 2000,
+      "language": "multilingual",
+      "hfRepo": "qualcomm/Whisper-Large-V3-Turbo",
+      "hfModelSize": "large-v3-turbo",
+      "organization": { "id": "qualcomm", "name": "Qualcomm" },
+      "modelCardUrl": "https://huggingface.co/qualcomm/Whisper-Large-V3-Turbo",
+      "descriptionKey": "models.descriptions.qualcomm.whisper_large_v3_turbo"
+    },
+    "whisper-large-v3-turbo-quantized": {
+      "name": "Whisper Large v3 Turbo (NPU, Quantized)",
+      "description": "Quantized Large v3 Turbo for a smaller NPU download",
+      "size": "1.1GB",
+      "sizeMb": 1100,
+      "language": "multilingual",
+      "hfRepo": "qualcomm/Whisper-Large-V3-Turbo-Quantized",
+      "hfModelSize": "large-v3-turbo",
+      "organization": { "id": "qualcomm", "name": "Qualcomm" },
+      "modelCardUrl": "https://huggingface.co/qualcomm/Whisper-Large-V3-Turbo-Quantized",
+      "descriptionKey": "models.descriptions.qualcomm.whisper_large_v3_turbo_quantized"
+    }
+  },
   "transcriptionProviders": [
     {
       "id": "openai",

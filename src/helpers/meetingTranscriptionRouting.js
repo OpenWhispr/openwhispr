@@ -34,6 +34,7 @@ export function resolveMeetingTranscriptionOptions({
   whisperModel,
   parakeetModel,
   cohereModel,
+  qualcommModel,
   selectedProvider,
   selectedModel,
   byokProviders,
@@ -51,7 +52,9 @@ export function resolveMeetingTranscriptionOptions({
           ? parakeetModel || "parakeet-tdt-0.6b-v3"
           : localProvider === "cohere"
             ? cohereModel || "cohere-transcribe-03-2026"
-            : whisperModel || "base",
+            : localProvider === "qualcomm"
+              ? qualcommModel || "whisper-tiny"
+              : whisperModel || "base",
       language,
     };
   }

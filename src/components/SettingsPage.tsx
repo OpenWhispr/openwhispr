@@ -479,6 +479,8 @@ interface TranscriptionSectionProps {
   setParakeetModel: (model: string) => void;
   cohereModel: string;
   setCohereModel: (model: string) => void;
+  qualcommModel: string;
+  setQualcommModel: (model: string) => void;
   cloudTranscriptionBaseUrl?: string;
   setCloudTranscriptionBaseUrl: (url: string) => void;
   transcriptionMode: InferenceMode;
@@ -516,6 +518,8 @@ function TranscriptionSection({
   setParakeetModel,
   cohereModel,
   setCohereModel,
+  qualcommModel,
+  setQualcommModel,
   cloudTranscriptionBaseUrl,
   setCloudTranscriptionBaseUrl,
   transcriptionMode,
@@ -630,11 +634,19 @@ function TranscriptionSection({
         setParakeetModel(modelId);
       } else if (provider === "cohere") {
         setCohereModel(modelId);
+      } else if (provider === "qualcomm") {
+        setQualcommModel(modelId);
       } else {
         setWhisperModel(modelId);
       }
     },
-    [localTranscriptionProvider, setParakeetModel, setCohereModel, setWhisperModel]
+    [
+      localTranscriptionProvider,
+      setParakeetModel,
+      setCohereModel,
+      setQualcommModel,
+      setWhisperModel,
+    ]
   );
 
   const selectedCloudModelStreams = Boolean(
@@ -671,7 +683,9 @@ function TranscriptionSection({
           ? parakeetModel
           : localTranscriptionProvider === "cohere"
             ? cohereModel
-            : whisperModel
+            : localTranscriptionProvider === "qualcomm"
+              ? qualcommModel
+              : whisperModel
       }
       onLocalModelSelect={handleLocalModelSelect}
       selectedLocalProvider={localTranscriptionProvider}
@@ -1165,6 +1179,7 @@ export default function SettingsPage({
     localTranscriptionProvider,
     parakeetModel,
     cohereModel,
+    qualcommModel,
     uiLanguage,
     preferredLanguage,
     chineseScriptPreference,
@@ -1188,6 +1203,7 @@ export default function SettingsPage({
     setLocalTranscriptionProvider,
     setParakeetModel,
     setCohereModel,
+    setQualcommModel,
     setCloudTranscriptionProvider,
     setCloudTranscriptionModel,
     setCloudTranscriptionBaseUrl,
@@ -4963,6 +4979,8 @@ EOF`,
                   setParakeetModel={setParakeetModel}
                   cohereModel={cohereModel}
                   setCohereModel={setCohereModel}
+                  qualcommModel={qualcommModel}
+                  setQualcommModel={setQualcommModel}
                   cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
                   setCloudTranscriptionBaseUrl={setCloudTranscriptionBaseUrl}
                   transcriptionMode={transcriptionMode}

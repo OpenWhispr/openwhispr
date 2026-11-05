@@ -143,6 +143,11 @@
       ]
     },
     {
+      "from": "resources/qualcomm",
+      "to": "qualcomm",
+      "filter": ["**/*"]
+    },
+    {
       "from": "resources/mediaremote-adapter/bin/mediaremote-adapter.pl",
       "to": "bin/mediaremote-adapter.pl"
     },

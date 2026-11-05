@@ -7,6 +7,7 @@ const registry = require("../../src/models/modelRegistryData.json");
 const managers = (downloaded) => ({
   whisperManager: { isModelDownloaded: (m) => downloaded.has(m) },
   parakeetManager: { isModelDownloaded: (m) => downloaded.has(m) },
+  qualcommManager: { isModelDownloaded: (m) => downloaded.has(m) },
 });
 
 test("lists every registry model with provider, download state, and the app's default", () => {
@@ -17,7 +18,8 @@ test("lists every registry model with provider, download state, and the app's de
 
   const whisperCount = Object.keys(registry.whisperModels).length;
   const sherpaCount = Object.keys(registry.parakeetModels).length;
-  assert.equal(models.length, whisperCount + sherpaCount);
+  const qualcommCount = Object.keys(registry.qualcommModels).length;
+  assert.equal(models.length, whisperCount + sherpaCount + qualcommCount);
 
   const base = models.find((m) => m.model === "base");
   assert.deepEqual(base, { provider: "whisper", model: "base", downloaded: true, default: true });
@@ -29,6 +31,18 @@ test("lists every registry model with provider, download state, and the app's de
 
   assert.equal(models.filter((m) => m.default).length, 1);
   assert.ok(models.some((m) => m.provider === "nvidia"));
+  assert.ok(models.some((m) => m.provider === "qualcomm" && m.model === "whisper-tiny"));
+});
+
+test("a qualcomm default is read from QUALCOMM_MODEL", () => {
+  const withQualcomm = listLocalTranscriptionModels({
+    ...managers(new Set()),
+    env: { LOCAL_TRANSCRIPTION_PROVIDER: "qualcomm", QUALCOMM_MODEL: "whisper-small" },
+  });
+  assert.deepEqual(
+    withQualcomm.filter((m) => m.default).map((m) => m.model),
+    ["whisper-small"]
+  );
 });
 
 test("a sherpa default is read from PARAKEET_MODEL, and cloud mode yields no default", () => {
