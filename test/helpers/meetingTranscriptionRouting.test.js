@@ -23,6 +23,7 @@ const byokProviders = [
   { id: "corti", models: [{ id: "corti-transcribe" }] },
   { id: "tinfoil", models: [{ id: "voxtral-mini-4b-realtime" }] },
   { id: "deepgram", models: [{ id: "nova-3", default: true }] },
+  { id: "xai", models: [{ id: "grok-stt" }] },
   {
     id: "assemblyai",
     models: [{ id: "universal-streaming-english", default: true }],
@@ -175,6 +176,25 @@ test("Corti keeps the meeting-specific connection settings", async () => {
       language: "en",
       environment: "us",
       tenant: "tenant",
+      keyterms: ["OpenWhispr"],
+    }
+  );
+});
+
+test("xAI routes to its realtime client with the dictionary as keyterms", async () => {
+  const { resolveMeetingTranscriptionOptions } = await load();
+
+  assert.deepEqual(
+    resolveMeetingTranscriptionOptions({
+      ...baseOptions,
+      selectedProvider: "xai",
+      selectedModel: "grok-stt",
+    }),
+    {
+      provider: "xai-realtime",
+      model: "grok-stt",
+      mode: "byok",
+      language: "en",
       keyterms: ["OpenWhispr"],
     }
   );
