@@ -70,6 +70,7 @@ import { createToolExecutionScope, type ToolExecutionScope } from "./toolExecuti
 import { isQueryResultData } from "../../services/tools/connectors/runQueryAction";
 import { getAgentToolActivityRemainingMs } from "../../helpers/agentToolPresentation";
 import type { Message, AgentState, ChatImageAttachment, ToolCallInfo } from "./types";
+import { isPendingAssistantModelDownloading } from "../onboarding/pendingLocalModels";
 import { toHistoryMessages, withoutEchoedToolTrace, type HistoryMessage } from "./historyMessages";
 import type { ContainerScope } from "../../types/chat";
 import type { NoteAttendeesRequest } from "../../types/connectors";
@@ -467,9 +468,15 @@ export function useChatStreaming({
 
         // Local mode with no model picked (e.g. the assistant was switched off
         // at setup): nothing on this device can answer, and Cloud is not the
-        // fallback. Say where to pick one.
+        // fallback. Say where to pick one, or that the model is on its way.
         if (llmMode === "local" && !llmConfig.model.trim()) {
-          answerWithLine(t("chat.localModelMissing"));
+          answerWithLine(
+            t(
+              (await isPendingAssistantModelDownloading())
+                ? "chat.localModelDownloading"
+                : "chat.localModelMissing"
+            )
+          );
           return;
         }
 

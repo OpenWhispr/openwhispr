@@ -677,3 +677,24 @@ test("the required-models step opens once nothing is left to wait for", async ()
   assert.equal(check(false, ["base"], ["base"]), true);
   assert.equal(check(false, ["base", "small"], ["base"]), false);
 });
+
+test("a rotated token keeps a step that owns downloads up through the policy refetch", async () => {
+  const { createOnboardingSession, keepsOnboardingStepThroughPolicyRefetch } = await load();
+  const session = (currentStepId) =>
+    JSON.stringify({ ...createOnboardingSession(), currentStepId });
+  const keeps = (overrides) =>
+    keepsOnboardingStepThroughPolicyRefetch({
+      showOnboarding: true,
+      sessionValue: session("local-setup"),
+      policyAccountId: "account",
+      lastResolvedAccountId: "account",
+      ...overrides,
+    });
+
+  assert.equal(keeps({}), true);
+  assert.equal(keeps({ sessionValue: session("required-models") }), true);
+  assert.equal(keeps({ sessionValue: session("notes") }), false, "nothing to lose elsewhere");
+  assert.equal(keeps({ showOnboarding: false }), false);
+  assert.equal(keeps({ lastResolvedAccountId: "someone-else" }), false, "another account reloads");
+  assert.equal(keeps({ policyAccountId: null, lastResolvedAccountId: null }), false, "suspended");
+});

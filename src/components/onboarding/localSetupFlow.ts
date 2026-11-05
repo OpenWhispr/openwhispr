@@ -53,9 +53,9 @@ export async function proceedWithLocalSetup(
   }
 ): Promise<void> {
   await finish(() => {
-    const { ready, pending, continueInBackground } = handOff();
+    const { ready, pending, graphicsPackPending, continueInBackground } = handOff();
     settings.apply(plan, ready);
-    settings.remember(plan, pending);
+    settings.remember(plan, pending, graphicsPackPending);
     continueInBackground((item) => settings.activate(item.id));
   });
 }

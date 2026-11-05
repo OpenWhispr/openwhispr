@@ -19,6 +19,7 @@ import {
 } from "../stores/policyRules";
 import type { PolicyScope } from "../types/policy";
 import { clearMissingLocalModelSelections } from "../stores/settingsStore";
+import { forgetPendingLocalModelById } from "../components/onboarding/pendingLocalModels";
 import "../types/electron";
 
 const PROGRESS_THROTTLE_MS = 100;
@@ -558,6 +559,7 @@ export function useModelDownload({
               ? await window.electronAPI?.cancelParakeetDownload()
               : await window.electronAPI?.modelCancelDownload?.(targetModel);
         if (result?.success) {
+          forgetPendingLocalModelById(targetModel);
           toast({
             title: t("hooks.modelDownload.downloadCancelled.title"),
             description: t("hooks.modelDownload.downloadCancelled.description"),

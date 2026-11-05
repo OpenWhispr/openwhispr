@@ -117,13 +117,16 @@ test("failure does not stop the queue", async () => {
   assert.equal(h.allEnabledDone(h.state), false, "Proceed stays locked on a failed row");
 });
 
-test("a failed model skips the rest of its row", async () => {
+test("a failed model still lets the graphics pack through, which every text row needs", async () => {
   const h = await harness(queue([cleanup, pack]));
   h.send({ type: "start" });
   h.complete();
   h.fail();
   assert.equal(h.status("cleanup"), "failed");
-  assert.equal(key(h.active()), key(assistant), "the pack does not download for a failed row");
+  assert.equal(key(h.active()), key(pack), "the assistant behind it still needs the pack");
+  h.complete();
+  assert.equal(h.status("cleanup"), "failed", "the pack doesn't clear the row's failure");
+  assert.equal(key(h.active()), key(assistant));
 });
 
 test("a failed graphics pack does not fail its row or lock Proceed", async () => {
@@ -152,6 +155,7 @@ test("a failed model with a pack behind it still fails its row, with Retry", asy
   h.send({ type: "start" });
   h.complete();
   h.fail(); // cleanup model
+  h.complete(); // the pack
   h.complete(); // assistant
   assert.equal(h.status("cleanup"), "failed");
   assert.equal(h.allEnabledDone(h.state), false, "Proceed stays locked");
@@ -159,8 +163,7 @@ test("a failed model with a pack behind it still fails its row, with Retry", asy
   h.send({ type: "retry", rowId: "cleanup" });
   assert.equal(key(h.active()), key(cleanup), "Retry downloads the model again");
   h.complete();
-  assert.equal(key(h.active()), key(pack), "then its pack");
-  h.complete();
+  assert.equal(h.active(), null, "the pack is already on disk");
   assert.equal(h.status("cleanup"), "done");
   assert.equal(h.allEnabledDone(h.state), true);
 });

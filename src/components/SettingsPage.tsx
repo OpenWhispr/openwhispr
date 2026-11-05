@@ -134,6 +134,7 @@ import {
 } from "../stores/noteStore.js";
 import { syncService } from "../services/SyncService.js";
 import { formatBytes } from "../utils/formatBytes";
+import { discardPendingLocalSetup } from "./onboarding/pendingLocalModels";
 import {
   clearMissingLocalModelSelections,
   TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
@@ -1759,6 +1760,7 @@ export default function SettingsPage({
           } else {
             // Every local model is gone, so no local selection can still resolve.
             clearMissingLocalModelSelections(() => false);
+            discardPendingLocalSetup();
             window.dispatchEvent(new Event("openwhispr-models-cleared"));
             showAlertDialog({
               title: t("settingsPage.developer.removeModels.successTitle"),

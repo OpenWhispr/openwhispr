@@ -145,6 +145,10 @@ const localLlmProviderIds = new Set(
   modelRegistryData.localProviders.map((provider) => provider.id)
 );
 
+const localLlmModelIds = new Set<string>(
+  modelRegistryData.localProviders.flatMap((provider) => provider.models.map((model) => model.id))
+);
+
 function transcriptionProviderModels(
   providerId: string,
   context: TranscriptionPolicyContext
@@ -3133,8 +3137,12 @@ export const selectResolvedLLMConfig = (
   const parent = def.fallbackScope
     ? selectResolvedLLMConfig(state, def.fallbackScope as InferenceScope)
     : undefined;
-  // A local scope runs only local models, so a fallback in another mode has none to lend.
-  const fallback = mode === "local" && parent?.mode !== "local" ? undefined : parent;
+  // A local scope runs only local models. A parent moved to another mode can still
+  // hold one (a mode switch keeps the model), and a scope inheriting it keeps working.
+  const fallback =
+    mode === "local" && parent?.mode !== "local" && !localLlmModelIds.has(parent?.model ?? "")
+      ? undefined
+      : parent;
 
   const read = (field: keyof InferenceScopeStoreKeys): string | undefined => {
     const key = def.storeKeys[field];

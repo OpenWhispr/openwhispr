@@ -423,7 +423,7 @@
       },
       "localSetup": {
         "title": "Te recomendamos esta configuración",
-        "subtitle": "Elegida para tu {{computer}} y {{language}}. Todo se ejecuta en este dispositivo.",
+        "subtitle": "Elegida para tu {{computer}} y {{language}}. Estos modelos se ejecutan en este dispositivo.",
         "subtitleOrganizationText": "Elegida para tu {{computer}} y {{language}}. El dictado se ejecuta en este dispositivo; el chat y las notas con IA usan el servicio que eligió tu organización.",
         "computer": {
           "chip": "Chip",
@@ -459,7 +459,8 @@
         },
         "unavailable": {
           "notEnoughMemory": "Memoria insuficiente",
-          "exceedsMemory": "Supera los límites de memoria de este equipo",
+          "tooSlow": "Demasiado lento aquí",
+          "tooSlowLine": "Tardaría demasiado en responder aquí. Puedes elegirlo más tarde en Ajustes",
           "memoryUnread": "No se pudo comprobar la memoria",
           "memoryMac": "{{model}} necesita {{needed}} GB de memoria y este Mac tiene {{have}} GB",
           "memoryComputer": "{{model}} necesita {{needed}} GB de memoria y este equipo tiene {{have}} GB",
@@ -476,6 +477,7 @@
         "downloaded": "Descargado",
         "foot": {
           "default": "Puedes cambiar cualquiera de estos ajustes más tarde en Ajustes.",
+          "dictationFailed": "El dictado debe descargarse antes de continuar. Reinténtalo arriba o vuelve atrás y elige otra configuración.",
           "finishesInBackground": "El resto se sigue descargando después de continuar y se activa cuando esté listo.",
           "failedStaysOff": "Lo que no se descargó queda desactivado. Puedes añadirlo más tarde en Ajustes.",
           "needsMac": "Se necesitan {{needed}} GB y este Mac tiene {{free}} GB libres.",
@@ -4154,6 +4156,7 @@
       "meeting": "Prepárame para mi próxima reunión",
       "sharedNotes": "Destaca mis notas compartidas"
     },
+    "localModelDownloading": "El modelo del asistente aún se está descargando. El chat se activará cuando esté listo.",
     "localModelMissing": "Elige un modelo para Chat en Configuración para chatear en este dispositivo."
   },
   "support": {

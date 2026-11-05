@@ -115,13 +115,21 @@ function updateItem(
   };
 }
 
-/** Moves to the next waiting item: the rest of the head row, then the rows behind it. */
+/**
+ * Moves to the next waiting item: the rest of the head row, then the rows behind it.
+ * A failed model stops its row, except for a graphics pack riding on it, which every
+ * text row needs.
+ */
 function activateNext(state: LocalSetupDownloadState): LocalSetupDownloadState {
   const queue = [...state.queue];
   while (queue.length) {
     const row = state.rows.find((r) => r.rowId === queue[0]);
-    const index = row?.items.findIndex((item) => item.status === "waiting") ?? -1;
-    if (row && index >= 0 && !row.items.some(blocksRow)) {
+    const failed = row?.items.some(blocksRow);
+    const index =
+      row?.items.findIndex(
+        (item) => item.status === "waiting" && (!failed || item.kind === "llamaVulkan")
+      ) ?? -1;
+    if (row && index >= 0) {
       const run = state.run + 1;
       return {
         ...updateItem(state, row.rowId, index, { status: "downloading", percent: 0 }),

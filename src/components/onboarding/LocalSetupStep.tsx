@@ -5,7 +5,7 @@
 // background. The page title and subtitle belong to OnboardingFlow, which names
 // the computer and the languages with the same helpers (localSetupLabels.ts).
 // Settings are only written by onProceed.
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
 import { ProviderIcon } from "../ui/ProviderIcon";
@@ -56,10 +56,8 @@ const ROW_KIND_KEYS: Record<LocalSetupRowId, string> = {
   cleanup: "onboarding.rehaul.localSetup.rows.cleanup",
   assistant: "onboarding.rehaul.localSetup.rows.assistant",
 };
-// A row too slow for this computer reads as memory too (Josh, 2026-11-03): its line
-// says the model exceeds what the computer can carry, with no figures to quote.
 const UNAVAILABLE_HEADING_KEYS: Record<NonNullable<LocalSetupRow["reason"]>, string> = {
-  tooSlow: "onboarding.rehaul.localSetup.unavailable.notEnoughMemory",
+  tooSlow: "onboarding.rehaul.localSetup.unavailable.tooSlow",
   memory: "onboarding.rehaul.localSetup.unavailable.notEnoughMemory",
   memoryUnread: "onboarding.rehaul.localSetup.unavailable.memoryUnread",
 };
@@ -69,7 +67,7 @@ const DESCRIPTION_KEYS: Record<LocalSetupRowId, string> = {
   assistant: "onboarding.rehaul.localSetup.description.assistant",
 };
 
-const formatGb = (bytes: number) => (bytes / 1e9).toFixed(1);
+const formatGb = (bytes: number): string => (bytes / 1e9).toFixed(1);
 
 function lineText(line: LocalSetupLine, onMac: boolean, t: Translate): string {
   switch (line.key) {
@@ -95,7 +93,7 @@ function ComputerCard({
 }: {
   profile: ComputerProfile;
   languageTags: string[];
-}) {
+}): ReactElement {
   const { t, i18n } = useTranslation();
   const appleChip = isAppleChipMac(profile);
   const DeviceIcon = profile.formFactor === "laptop" ? Laptop : Monitor;
@@ -154,7 +152,7 @@ function ComputerCard({
 }
 
 /** Download progress drawn over the row's icon; no wedge while the row waits its turn. */
-function DownloadPie({ percent, label }: { percent: number | null; label: string }) {
+function DownloadPie({ percent, label }: { percent: number | null; label: string }): ReactElement {
   const center = 13;
   const radius = 7.5;
   let wedge = null;
@@ -207,7 +205,7 @@ function SetupSwitch({
   disabled: boolean;
   label: string;
   onToggle: () => void;
-}) {
+}): ReactElement {
   return (
     <button
       type="button"
@@ -237,6 +235,7 @@ function SetupRow({
   progress,
   started,
   switchable,
+  cloudAllowed,
   onToggle,
   onRetry,
 }: {
@@ -247,9 +246,10 @@ function SetupRow({
   progress: LocalSetupRowProgress;
   started: boolean;
   switchable: boolean;
+  cloudAllowed: boolean;
   onToggle: () => void;
   onRetry: () => void;
-}) {
+}): ReactElement {
   const { t } = useTranslation();
   const unavailable = row.label === "unavailable";
   const active = on && !unavailable;
@@ -268,9 +268,15 @@ function SetupRow({
     >
       {t("onboarding.rehaul.localSetup.retry")}
     </button>
-  ) : unavailable || switchable ? (
+  ) : unavailable ? (
+    cloudAllowed && (
+      <span className={`ms-1.5 shrink-0 ${BADGE_CLASS}`}>
+        {t("onboarding.rehaul.localSetup.badge.cloud")}
+      </span>
+    )
+  ) : switchable ? (
     <span className={`ms-1.5 shrink-0 ${BADGE_CLASS}`}>
-      {t(`onboarding.rehaul.localSetup.badge.${unavailable ? "cloud" : "optional"}`)}
+      {t("onboarding.rehaul.localSetup.badge.optional")}
     </span>
   ) : null;
 
@@ -337,7 +343,12 @@ function SetupRow({
       {switchable && (
         <span className="flex w-12 shrink-0 justify-end">
           {!unavailable && (
-            <SetupSwitch checked={on} disabled={started} label={kind} onToggle={onToggle} />
+            <SetupSwitch
+              checked={on && !failed}
+              disabled={started}
+              label={kind}
+              onToggle={onToggle}
+            />
           )}
         </span>
       )}
@@ -352,7 +363,7 @@ export function LocalSetupStep({
   plan: LocalSetupPlan;
   /** handOff is taken once onboarding can finish, so a failed finish leaves the downloads here. */
   onProceed: (handOff: () => LocalSetupHandOff) => void;
-}) {
+}): ReactElement {
   const { t } = useTranslation();
   const { space, settled: spaceSettled } = useLocalSetupSpace();
   // Switches the user set. Empty until the first flip, so the space fit may turn
@@ -371,7 +382,8 @@ export function LocalSetupStep({
     // Models already downloaded (say, before Back) need no free space, so the fit
     // waits for the inventory too: a returning user never sees a row trimmed for a
     // frame because what is on disk wasn't known yet.
-    const isOnDisk = (item: LocalSetupDownload) => onDisk.includes(localSetupItemKey(item));
+    const isOnDisk = (item: LocalSetupDownload): boolean =>
+      onDisk.includes(localSetupItemKey(item));
     if (space && inventoryLoaded) return fitLocalSetupToSpace(plan, requested, space, isOnDisk);
     // Not read yet: everything fits until the reads say otherwise.
     return {
@@ -415,13 +427,13 @@ export function LocalSetupStep({
             ? "noSpace"
             : "download";
 
-  const toggle = (id: keyof LocalSetupSwitches) => {
+  const toggle = (id: keyof LocalSetupSwitches): void => {
     if (downloads.started) return;
     setKeptOffToFit((kept) => [...new Set([...kept, ...liveFit.autoOff])].filter((r) => r !== id));
     setRequested({ ...liveFit.switches, [id]: !liveFit.switches[id] });
   };
 
-  const press = () => {
+  const press = (): void => {
     if (phase === "proceed") {
       onProceed(downloads.handOff);
     } else if (phase === "download") {
@@ -431,7 +443,9 @@ export function LocalSetupStep({
   };
 
   let foot = t("onboarding.rehaul.localSetup.foot.default");
-  if (phase === "proceed" && optionalStatuses.some(isQueued)) {
+  if (phase === "failed") {
+    foot = t("onboarding.rehaul.localSetup.foot.dictationFailed");
+  } else if (phase === "proceed" && optionalStatuses.some(isQueued)) {
     foot = t("onboarding.rehaul.localSetup.foot.finishesInBackground");
   } else if (phase === "proceed" && optionalStatuses.includes("failed")) {
     foot = t("onboarding.rehaul.localSetup.foot.failedStaysOff");
@@ -458,7 +472,7 @@ export function LocalSetupStep({
     }
     if (row.line) return lineText(row.line, onMac, t);
     if (row.label === "unavailable")
-      return t("onboarding.rehaul.localSetup.unavailable.exceedsMemory");
+      return t("onboarding.rehaul.localSetup.unavailable.tooSlowLine");
     // A switched-off row still says what it does: the switch shows it's off.
     return t(DESCRIPTION_KEYS[row.id]);
   };
@@ -485,6 +499,7 @@ export function LocalSetupStep({
               progress={downloads.rows[row.id]}
               started={downloads.started}
               switchable={row.id !== "dictation"}
+              cloudAllowed={plan.cloudAllowed}
               onToggle={() => row.id !== "dictation" && toggle(row.id)}
               onRetry={() => downloads.retry(row.id)}
             />
@@ -519,6 +534,7 @@ export function LocalSetupStep({
       </div>
       <p
         data-local-setup-foot=""
+        aria-live="polite"
         className="mx-1 mt-3 text-center text-xs leading-normal text-[var(--onboarding-text-tertiary)]"
       >
         {foot}
@@ -533,7 +549,7 @@ export function LocalSetupStep({
  * three rows, so nothing moves when the card fills in. With a message (the
  * policy couldn't be read), the rows' panel says so instead of staying blank.
  */
-export function LocalSetupStepPlaceholder({ message }: { message?: string }) {
+export function LocalSetupStepPlaceholder({ message }: { message?: string }): ReactElement {
   return (
     <section aria-busy={message ? undefined : true} className={CARD_CLASS}>
       {/* ComputerCard: the header tile, then one line of label and value. */}
@@ -559,7 +575,7 @@ export function LocalSetupStepPlaceholder({ message }: { message?: string }) {
 }
 
 /** Holds the subtitle's usual two lines until the computer's name is known. */
-export function LocalSetupSubtitlePlaceholder() {
+export function LocalSetupSubtitlePlaceholder(): ReactElement {
   return (
     <span aria-hidden="true">
       &nbsp;

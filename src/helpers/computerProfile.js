@@ -259,22 +259,26 @@ async function readNvidia(d) {
   return { name: info.gpuName || "NVIDIA GPU", vramMb: info.vramMb ?? null };
 }
 
-function baseLanguage(languages) {
-  const first = Array.isArray(languages) ? languages[0] : null;
-  const base = typeof first === "string" ? first.split(/[-_.]/)[0].trim().toLowerCase() : "";
-  // Linux with no locale set reports C or POSIX, which names no language
-  return base && base !== "c" && base !== "posix" ? base : "en";
+// Every preferred language, as tags ("zh-TW"): a guest who also speaks German needs
+// a model that covers it, and is never asked which languages they speak.
+function preferredLanguages(languages) {
+  const tags = (Array.isArray(languages) ? languages : [])
+    .filter((language) => typeof language === "string")
+    .map((language) => language.split(".")[0].replace(/_/g, "-").trim())
+    // Linux with no locale set reports C or POSIX, which names no language
+    .filter((tag) => tag && !/^(c|posix)$/i.test(tag));
+  return tags.length ? tags : ["en"];
 }
 
 async function buildProfile(d) {
-  const [hardware, cpuModel, nvidia, usableMemoryBytes, parakeetSupported, systemLanguage] =
+  const [hardware, cpuModel, nvidia, usableMemoryBytes, parakeetSupported, systemLanguages] =
     await Promise.all([
       attempt(() => readHardware(d), NO_HARDWARE),
       attempt(() => d.os.cpus()[0]?.model, ""),
       attempt(() => readNvidia(d), null),
       attempt(() => d.os.totalmem(), 0),
       attempt(() => d.getParakeetCapability().supported === true, false),
-      attempt(async () => baseLanguage(await d.getPreferredSystemLanguages()), "en"),
+      attempt(async () => preferredLanguages(await d.getPreferredSystemLanguages()), ["en"]),
     ]);
   // A Mac reports its exact size, and Windows its installed modules when CIM answers
   const memoryGb =
@@ -314,7 +318,7 @@ async function buildProfile(d) {
     graphicsName,
     nvidia,
     parakeetSupported,
-    systemLanguage,
+    systemLanguages,
   };
 }
 
@@ -330,7 +334,7 @@ function fallbackProfile(deps) {
     graphicsName: null,
     nvidia: null,
     parakeetSupported: false,
-    systemLanguage: "en",
+    systemLanguages: ["en"],
   };
 }
 

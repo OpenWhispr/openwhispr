@@ -12,16 +12,22 @@ import {
 import { getASRModelOrganization } from "../../helpers/localASROrganization";
 import { useSettingsStore } from "../../stores/settingsStore";
 import {
+  clearPendingLocalModelFailures,
   consumePendingLocalModel,
+  forgetPendingGraphicsPack,
   forgetPendingLocalModel,
   getPendingLocalModelAvailability,
+  hasPendingGraphicsPack,
   hasPendingLocalModels,
+  isPendingLocalModel,
+  judgePendingLocalModel,
+  MAX_AUTOMATIC_DOWNLOAD_ATTEMPTS,
   readPendingLocalModels,
   type PendingLocalModelInventory,
   type PendingLocalModelKind,
   type PendingLocalModelSelection,
 } from "./pendingLocalModels";
-import { activatePendingLocalSetupModel } from "./localSetupSettings";
+import { activatePendingLocalSetupModel, pendingLocalSetupRowWanted } from "./localSetupSettings";
 import { downloadInBackground } from "./useLocalSetupDownloads";
 import type {
   LocalLLMDownloadProgressEvent,
@@ -106,6 +112,62 @@ function activatePendingLocalModel(family: "speech" | "llm", modelId: string) {
   store.setCloudTranscriptionForAllScopes({ useLocalWhisper: true });
 }
 
+/**
+ * Decides what becomes of each pending pick at launch. Local setup's queue lived in
+ * the window that closed (a quit or a reload), so a row the user switched on carries
+ * on, unless Settings gave its scopes a model or moved them off this device, or the
+ * policy no longer allows it. One that kept failing shows its failure and waits for
+ * Retry instead of retrying on every launch.
+ */
+function settlePendingDownloads(inventory: PendingLocalModelInventory): {
+  resume: string[];
+  failed: string[];
+  unresolved: boolean;
+} {
+  const canActivate = localStorage.getItem("localSetupPending") === "true";
+  const policy = usePolicyStore.getState();
+  const resume: string[] = [];
+  const failed: string[] = [];
+  let unresolved = false;
+  for (const [kind, selection] of Object.entries(readPendingLocalModels()) as [
+    PendingLocalModelKind,
+    PendingLocalModelSelection,
+  ][]) {
+    const availability = getPendingLocalModelAvailability(kind, selection, inventory);
+    if (availability === "downloaded" && canActivate) {
+      activatePendingLocalModel(kind === "dictation" ? "speech" : "llm", selection.modelId);
+    } else if (
+      availability === "missing" &&
+      canActivate &&
+      selection.resumable &&
+      kind !== "dictation"
+    ) {
+      const verdict = judgePendingLocalModel(kind, selection, policy);
+      if (verdict === "unresolved") unresolved = true;
+      else if (verdict === "denied" || !pendingLocalSetupRowWanted(kind)) {
+        forgetPendingLocalModel(kind, selection.modelId);
+      } else if ((selection.failedAttempts ?? 0) >= MAX_AUTOMATIC_DOWNLOAD_ATTEMPTS) {
+        failed.push(selection.modelId);
+      } else {
+        resume.push(selection.modelId);
+      }
+    } else if (availability === "downloaded" || availability === "missing") {
+      forgetPendingLocalModel(kind, selection.modelId);
+    }
+  }
+  return { resume, failed, unresolved };
+}
+
+// One at a time, as the setup step does; text models run better once the pack is here.
+async function resumeDownloads(modelIds: string[], graphicsPack: boolean): Promise<void> {
+  if (graphicsPack) {
+    const status = await window.electronAPI?.getLlamaVulkanStatus?.().catch(() => undefined);
+    if (status?.downloaded) forgetPendingGraphicsPack();
+    else await downloadInBackground({ kind: "llamaVulkan", id: "llama-vulkan" });
+  }
+  for (const id of modelIds) await downloadInBackground({ kind: "llm", id });
+}
+
 // The X on each row (Figma "Frame 25"), inlined rather than drawn with the icon set so
 // the 8px glyph inside the 24px circle and the 1.333 stroke come out exactly as
 // exported instead of needing to be back-scaled out of the 24 viewBox.
@@ -154,6 +216,26 @@ export default function BackgroundModelDownloadTray({
   // A download that finished while the policy was unresolved kept its selection;
   // the verdict that settles it is what activates it (or drops it).
   const policyResolution = usePolicyStore((state) => `${state.status}:${state.accountId}`);
+  // Local setup rows hydration couldn't judge yet, because the policy was unresolved.
+  const resumeWaitsOnPolicy = useRef(false);
+  const showFailedRows = useCallback(
+    (modelIds: string[]) => {
+      if (modelIds.length === 0) return;
+      setDownloads((current) => {
+        const next = { ...current };
+        for (const id of modelIds) {
+          next[downloadKey("llm", id)] = {
+            id,
+            kind: "llm",
+            percentage: 0,
+            error: t("onboarding.rehaul.localSetup.line.failed"),
+          };
+        }
+        return next;
+      });
+    },
+    [t]
+  );
   useEffect(() => {
     if (
       !hydrated ||
@@ -171,11 +253,16 @@ export default function BackgroundModelDownloadTray({
         if (getPendingLocalModelAvailability(kind, selection, inventory) === "downloaded")
           activatePendingLocalModel(kind === "dictation" ? "speech" : "llm", selection.modelId);
       }
+      if (!resumeWaitsOnPolicy.current) return;
+      const { resume, failed, unresolved } = settlePendingDownloads(inventory);
+      resumeWaitsOnPolicy.current = unresolved;
+      showFailedRows(failed);
+      void resumeDownloads(resume, false);
     });
     return () => {
       cancelled = true;
     };
-  }, [hydrated, policyResolution]);
+  }, [hydrated, policyResolution, showFailedRows]);
 
   useEffect(() => {
     // Hydration only exists to re-surface downloads the onboarding flow kicked
@@ -224,30 +311,14 @@ export default function BackgroundModelDownloadTray({
         };
       }
 
-      const canActivate = localStorage.getItem("localSetupPending") === "true";
-      const resume: string[] = [];
-      for (const [kind, selection] of Object.entries(readPendingLocalModels()) as [
-        PendingLocalModelKind,
-        PendingLocalModelSelection,
-      ][]) {
-        const availability = getPendingLocalModelAvailability(kind, selection, inventory);
-        if (availability === "downloaded" && canActivate) {
-          activatePendingLocalModel(kind === "dictation" ? "speech" : "llm", selection.modelId);
-        } else if (availability === "missing" && canActivate && selection.resumable) {
-          // Local setup's queue lived in the window that closed (a quit or a reload):
-          // carry on with the row the user switched on. Its X still forgets it.
-          resume.push(selection.modelId);
-        } else if (availability === "downloaded" || availability === "missing") {
-          forgetPendingLocalModel(kind, selection.modelId);
-        }
-      }
-      void (async () => {
-        for (const id of resume) await downloadInBackground({ kind: "llm", id });
-      })();
+      const { resume, failed, unresolved } = settlePendingDownloads(inventory);
+      resumeWaitsOnPolicy.current = unresolved;
+      void resumeDownloads(resume, hasPendingGraphicsPack());
 
       setDownloads((current) =>
         mergeHydratedDownloads(active, current, removedDuringHydration.current)
       );
+      showFailedRows(failed);
       hydrationInProgress.current = false;
       setHydrated(true);
     };
@@ -256,7 +327,7 @@ export default function BackgroundModelDownloadTray({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [showFailedRows]);
 
   useEffect(() => {
     // The three progress channels carry the same lifecycle in different field
@@ -423,6 +494,29 @@ export default function BackgroundModelDownloadTray({
     forgetPending();
   }, []);
 
+  const retryDownload = useCallback(
+    async (download: ActiveDownload) => {
+      clearPendingLocalModelFailures(download.id);
+      const key = downloadKey(download.kind, download.id);
+      setDownloads((current) => ({
+        ...current,
+        [key]: { ...download, percentage: 0, error: undefined },
+      }));
+      const ok = await downloadInBackground({ kind: download.kind, id: download.id });
+      if (ok) return;
+      // A refusal before the transfer starts sends no progress event to say so.
+      setDownloads((current) =>
+        current[key] && !current[key].error
+          ? {
+              ...current,
+              [key]: { ...current[key], error: t("onboarding.rehaul.localSetup.line.failed") },
+            }
+          : current
+      );
+    },
+    [t]
+  );
+
   const activeDownloads = useMemo(() => Object.values(downloads), [downloads]);
   const positionClass =
     placement === "onboarding"
@@ -504,7 +598,16 @@ export default function BackgroundModelDownloadTray({
               </span>
             </div>
             {download.error ? (
-              <p className="truncate text-[0.625rem] text-destructive">{download.error}</p>
+              <div>
+                <p className="truncate text-[0.625rem] text-destructive" title={download.error}>
+                  {download.error}
+                </p>
+                {isPendingLocalModel(download.id) && (
+                  <p className="text-[0.625rem] text-muted-foreground">
+                    {t("onboarding.rehaul.localSetup.foot.failedStaysOff")}
+                  </p>
+                )}
+              </div>
             ) : (
               // Frame 2147259038: 12 tall track on #F7F7F7 at radius 9, brand fill
               // at radius 11.
@@ -516,6 +619,18 @@ export default function BackgroundModelDownloadTray({
               </div>
             )}
           </div>
+          {download.error && isPendingLocalModel(download.id) && (
+            <button
+              type="button"
+              onClick={() => void retryDownload(download)}
+              aria-label={t("onboarding.rehaul.localSetup.retryRow", {
+                row: downloadDisplay(download).name,
+              })}
+              className="shrink-0 rounded-full px-1 text-xs font-medium text-primary transition-opacity hover:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+            >
+              {t("onboarding.rehaul.localSetup.retry")}
+            </button>
+          )}
           {/* Disabled during install because extraction genuinely cannot be undone
               — Parakeet answers INSTALLATION_IN_PROGRESS — so the control should
               not invite a click it would have to walk back. */}

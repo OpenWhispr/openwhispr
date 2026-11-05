@@ -423,14 +423,14 @@
       },
       "localSetup": {
         "title": "Nous vous recommandons ces réglages",
-        "subtitle": "Choisis pour votre {{computer}} et {{language}}. Tout s’exécute sur cet appareil.",
+        "subtitle": "Choisis pour votre {{computer}} et {{language}}. Ces modèles s’exécutent sur cet appareil.",
         "subtitleOrganizationText": "Choisis pour votre {{computer}} et {{language}}. La dictée s’exécute sur cet appareil ; le chat et les notes IA utilisent le service choisi par votre organisation.",
         "computer": {
           "chip": "Puce",
           "processor": "Processeur",
           "memory": "Mémoire",
-          "graphics": "Graphismes",
-          "builtIn": "Intégrés à la puce",
+          "graphics": "Carte graphique",
+          "builtIn": "Intégrée à la puce",
           "memoryValue": "{{gb}} Go",
           "mac": "Mac",
           "windowsLaptop": "PC portable Windows",
@@ -459,7 +459,8 @@
         },
         "unavailable": {
           "notEnoughMemory": "Mémoire insuffisante",
-          "exceedsMemory": "Dépasse les limites de mémoire de cet ordinateur",
+          "tooSlow": "Trop lent ici",
+          "tooSlowLine": "Mettrait trop de temps à répondre ici. Vous pourrez quand même le choisir plus tard dans les Paramètres",
           "memoryUnread": "Mémoire non vérifiée",
           "memoryMac": "{{model}} nécessite {{needed}} Go de mémoire, ce Mac en a {{have}} Go",
           "memoryComputer": "{{model}} nécessite {{needed}} Go de mémoire, cet ordinateur en a {{have}} Go",
@@ -476,6 +477,7 @@
         "downloaded": "Téléchargé",
         "foot": {
           "default": "Vous pourrez modifier tout cela plus tard dans les Paramètres.",
+          "dictationFailed": "La dictée doit être téléchargée avant de continuer. Réessayez ci-dessus, ou revenez en arrière pour choisir une autre configuration.",
           "finishesInBackground": "Le reste continue de se télécharger une fois que vous continuez et s’active dès qu’il est prêt.",
           "failedStaysOff": "Ce qui n’a pas pu être téléchargé reste désactivé. Vous pourrez l’ajouter plus tard dans les Paramètres.",
           "needsMac": "Il faut {{needed}} Go, et ce Mac a {{free}} Go d’espace libre.",
@@ -3462,6 +3464,7 @@
       "meeting": "Prépare-moi pour ma prochaine réunion",
       "sharedNotes": "Mets en avant mes notes partagées"
     },
+    "localModelDownloading": "Le modèle de l’assistant est encore en cours de téléchargement. Le chat s’activera dès qu’il sera prêt.",
     "localModelMissing": "Choisissez un modèle pour Chat dans les Paramètres pour discuter sur cet appareil."
   },
   "referral": {

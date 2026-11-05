@@ -19,7 +19,7 @@ const mac = (o) => ({
   graphicsName: null,
   nvidia: null,
   parakeetSupported: true,
-  systemLanguage: "en",
+  systemLanguages: ["en"],
   ...o,
 });
 const UNMANAGED = { status: "unmanaged", policy: null, appVersion: null };
@@ -318,6 +318,26 @@ test("a pending row never overrides what the user chose in Settings meanwhile", 
     "their pick stands"
   );
   assert.equal(state.useCleanupModel, false, "their switch stays as it was");
+});
+
+test("a scope inheriting cleanup's local model keeps it when cleanup moves to Cloud", async (t) => {
+  const { store } = await setup(t);
+  // How an existing install looks: Note Formatting on Local with no model of its own.
+  store.setResolvedLLMConfig("dictationCleanup", {
+    mode: "local",
+    provider: "qwen",
+    model: "qwen3.5-2b-q4_k_m",
+  });
+  store.setResolvedLLMConfig("noteFormatting", { mode: "local", provider: "", model: "" });
+  const noteFormatting = () =>
+    store.selectResolvedLLMConfig(store.useSettingsStore.getState(), "noteFormatting");
+  assert.equal(noteFormatting().model, "qwen3.5-2b-q4_k_m");
+
+  // A mode switch keeps the stored model, so the local one is still there to lend.
+  store.useSettingsStore.setState({ cleanupMode: "openwhispr" });
+  assert.equal(noteFormatting().mode, "local");
+  assert.equal(noteFormatting().provider, "qwen");
+  assert.equal(noteFormatting().model, "qwen3.5-2b-q4_k_m");
 });
 
 test("note formatting left off never borrows a cleanup model from another mode", async (t) => {

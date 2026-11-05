@@ -197,7 +197,7 @@ test("reads a Mac", async () => {
   assert.equal(profile.graphicsName, null);
   assert.equal(profile.nvidia, null);
   assert.equal(profile.parakeetSupported, true);
-  assert.equal(profile.systemLanguage, "en");
+  assert.deepEqual(profile.systemLanguages, ["en-US"]);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].options.timeout, 10000);
 });
@@ -466,27 +466,20 @@ test("Windows reads its installed memory modules over the usable figure", async 
   assert.equal((await readComputerProfile(deps)).memoryGb, 16);
 });
 
-test("the system language is the lower-cased base code, with en as the fallback", async () => {
+test("the system languages are every preferred tag, with en as the fallback", async () => {
   const read = async (getPreferredSystemLanguages) => {
     clearCache();
-    return (await readComputerProfile(baseDeps({ getPreferredSystemLanguages }))).systemLanguage;
+    return (await readComputerProfile(baseDeps({ getPreferredSystemLanguages }))).systemLanguages;
   };
-  assert.equal(await read(() => ["pt-BR", "en-US"]), "pt");
-  assert.equal(await read(() => ["zh-Hant-TW"]), "zh");
-  assert.equal(await read(() => ["NB"]), "nb");
-  assert.equal(await read(() => ["de_DE"]), "de");
-  assert.equal(await read(() => []), "en");
-  assert.equal(await read(() => [""]), "en");
-  assert.equal(await read(() => ["C"]), "en");
-  assert.equal(await read(() => ["POSIX"]), "en");
-  assert.equal(await read(() => ["C.UTF-8"]), "en");
-  assert.equal(await read(() => undefined), "en");
-  assert.equal(
-    await read(() => {
-      throw new Error("not ready");
-    }),
-    "en"
-  );
+  assert.deepEqual(await read(() => ["pt-BR", "en-US"]), ["pt-BR", "en-US"]);
+  assert.deepEqual(await read(() => ["zh-Hant-TW"]), ["zh-Hant-TW"]);
+  assert.deepEqual(await read(() => ["de_DE"]), ["de-DE"]);
+  assert.deepEqual(await read(() => ["pt_BR.UTF-8", "C"]), ["pt-BR"]);
+  assert.deepEqual(await read(() => []), ["en"]);
+  assert.deepEqual(await read(() => [""]), ["en"]);
+  assert.deepEqual(await read(() => ["C"]), ["en"]);
+  assert.deepEqual(await read(() => ["POSIX"]), ["en"]);
+  assert.deepEqual(await read(() => ["C.UTF-8"]), ["en"]);
 });
 
 test("an unsupported macOS reports parakeetSupported false", async () => {
@@ -540,7 +533,7 @@ test("failed reads degrade to nulls", async () => {
     assert.equal(profile.processorName, "");
     assert.equal(profile.memoryGb, 0);
     assert.equal(profile.parakeetSupported, false);
-    assert.equal(profile.systemLanguage, "en");
+    assert.deepEqual(profile.systemLanguages, ["en"]);
   }
   assert.deepEqual(
     [mac.platform, win.platform, linux.platform, mac.arch],

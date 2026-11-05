@@ -22,6 +22,7 @@ import {
 import {
   consumePendingLocalModel,
   discardPendingLocalSetup,
+  rememberPendingGraphicsPack,
   rememberPendingLocalModel,
 } from "./pendingLocalModels";
 
@@ -75,7 +76,8 @@ export function applyLocalSetupSettings(plan: LocalSetupPlan, switches: LocalSet
   // over these switches.
   discardPendingLocalSetup();
 
-  const row = (id: LocalSetupRow["id"]) => plan.rows.find((r) => r.id === id);
+  const row = (id: LocalSetupRow["id"]): LocalSetupRow | undefined =>
+    plan.rows.find((r) => r.id === id);
 
   const dictation = row("dictation");
   if (dictation) writeDictation(dictation);
@@ -103,8 +105,13 @@ export function applyLocalSetupSettings(plan: LocalSetupPlan, switches: LocalSet
 
 type OptionalRowId = Exclude<LocalSetupRowId, "dictation">;
 
-/** Rows switched on at Proceed whose models are still downloading. */
-export function rememberPendingLocalSetupRows(plan: LocalSetupPlan, rowIds: OptionalRowId[]): void {
+/** Rows switched on at Proceed whose models are still downloading, and the graphics pack if it is too. */
+export function rememberPendingLocalSetupRows(
+  plan: LocalSetupPlan,
+  rowIds: OptionalRowId[],
+  graphicsPackPending = false
+): void {
+  if (graphicsPackPending) rememberPendingGraphicsPack();
   for (const id of rowIds) {
     const row = plan.rows.find((r) => r.id === id);
     const provider = row && modelRegistry.getModel(row.modelId)?.provider.id;
@@ -118,6 +125,19 @@ export function rememberPendingLocalSetupRows(plan: LocalSetupPlan, rowIds: Opti
       });
     }
   }
+}
+
+/**
+ * Whether anything still waits for a pending row's model. Once Settings has given
+ * every scope of the row a model or moved it off this device, the download that
+ * would have filled them has no one to serve.
+ */
+export function pendingLocalSetupRowWanted(id: OptionalRowId): boolean {
+  const state = useSettingsStore.getState();
+  return (id === "cleanup" ? CLEANUP_SCOPES : ASSISTANT_SCOPES).some((scope) => {
+    const config = selectResolvedLLMConfig(state, scope);
+    return config.mode === "local" && !config.model;
+  });
 }
 
 /**

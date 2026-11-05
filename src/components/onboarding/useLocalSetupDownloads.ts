@@ -18,6 +18,7 @@ import {
 import { useModelDownload } from "../../hooks/useModelDownload";
 import logger from "../../utils/logger";
 import {
+  type LocalSetupItemState,
   activeItem,
   allEnabledDone,
   createLocalSetupDownloadState,
@@ -29,7 +30,16 @@ import {
   rowStatus,
   type RowStatus,
 } from "./localSetupDownloadState";
-import { claimLocalSetupDownload, releaseLocalSetupDownload } from "./localSetupDownloadClaims";
+import {
+  claimLocalSetupDownload,
+  handOverLocalSetupDownload,
+  releaseLocalSetupDownload,
+} from "./localSetupDownloadClaims";
+import {
+  forgetPendingGraphicsPack,
+  recordPendingGraphicsPackFailure,
+  recordPendingLocalModelFailure,
+} from "./pendingLocalModels";
 
 export interface LocalSetupRowProgress {
   status: RowStatus;
@@ -45,6 +55,8 @@ export interface LocalSetupHandOff {
   ready: LocalSetupSwitches;
   /** Switched on, with the model still on its way: turned on once it lands. */
   pending: OptionalRowId[];
+  /** The graphics pack hasn't landed yet: a quit mustn't lose it. */
+  graphicsPackPending: boolean;
   /**
    * Keeps the transfer in flight and the rest of the queue going after the step
    * is gone; onModelReady runs as each model lands.
@@ -113,8 +125,13 @@ export async function downloadInBackground(
   const api = window.electronAPI;
   if (item.kind === "llamaVulkan") {
     const result = await api?.downloadLlamaVulkanBinary?.();
-    if (result?.success !== true) warnPackFailed(result?.error);
-    return result?.success === true;
+    if (result?.success === true) {
+      forgetPendingGraphicsPack();
+      return true;
+    }
+    warnPackFailed(result?.error);
+    recordPendingGraphicsPackFailure();
+    return false;
   }
   const result =
     item.kind === "whisper"
@@ -128,6 +145,7 @@ export async function downloadInBackground(
     { kind: item.kind, id: item.id, error: result?.error ?? "no result" },
     "onboarding"
   );
+  if (result?.code !== "DOWNLOAD_IN_PROGRESS") recordPendingLocalModelFailure(item.id);
   return false;
 }
 
@@ -138,6 +156,13 @@ async function finishInBackground(
   for (const { item, result } of steps) {
     const ok = await (result ?? downloadInBackground(item)).catch(() => false);
     if (ok && item.kind !== "llamaVulkan") onModelReady(item);
+    // The transfer already in flight at Proceed reports here; the rest count themselves.
+    if (result && item.kind === "llamaVulkan") {
+      if (ok) forgetPendingGraphicsPack();
+      else recordPendingGraphicsPackFailure();
+    } else if (result && !ok) {
+      recordPendingLocalModelFailure(item.id);
+    }
   }
 }
 
@@ -246,6 +271,7 @@ export function useLocalSetupDownloads(
     });
     runningRef.current = { item, run, result };
     void result.then((ok) => {
+      if (handedOffRef.current) return;
       if (cancelledRef.current || runningRef.current?.run !== run) {
         releaseLocalSetupDownload(item);
         return;
@@ -291,7 +317,7 @@ export function useLocalSetupDownloads(
       return;
     }
     const item = runningRef.current?.item;
-    const finish = (ok: boolean) => {
+    const finish = (ok: boolean): void => {
       if (cancelledRef.current || runningRef.current?.run !== run) return;
       if (item) releaseLocalSetupDownload(item);
       runningRef.current = null;
@@ -351,7 +377,7 @@ export function useLocalSetupDownloads(
     const current = stateRef.current;
     // A row's state is its model's: a graphics pack still on its way doesn't hold
     // back a model already on disk.
-    const modelOf = (rowId: OptionalRowId) =>
+    const modelOf = (rowId: OptionalRowId): LocalSetupItemState | undefined =>
       current.rows
         .find((row) => row.rowId === rowId)
         ?.items.find((item) => item.kind !== "llamaVulkan");
@@ -363,7 +389,11 @@ export function useLocalSetupDownloads(
       else if (status && isQueued(status)) pending.push(rowId);
     }
 
-    const continueInBackground = (onModelReady: (item: LocalSetupDownload) => void) => {
+    const graphicsPackPending = current.rows.some((row) =>
+      row.items.some((item) => item.kind === "llamaVulkan" && item.status !== "done")
+    );
+
+    const continueInBackground = (onModelReady: (item: LocalSetupDownload) => void): void => {
       cancelledRef.current = true;
       handedOffRef.current = true;
       const running = runningRef.current;
@@ -371,14 +401,15 @@ export function useLocalSetupDownloads(
       const steps: Array<{ item: LocalSetupDownload; result?: Promise<boolean> }> = [];
       if (running) {
         // The tray shows it from here on.
-        releaseLocalSetupDownload(running.item);
+        handOverLocalSetupDownload(running.item);
         steps.push({ item: running.item, result: running.result });
       }
-      // What hasn't started yet, in queue order; a failed row stays as it is.
+      // What hasn't started yet, in queue order. A failed row stays as it is, but
+      // the graphics pack riding on it serves every text row.
       for (const row of current.rows) {
-        if (failedItem(current, row.rowId)) continue;
+        const failed = failedItem(current, row.rowId);
         for (const item of row.items) {
-          if (item.status === "waiting") {
+          if (item.status === "waiting" && (!failed || item.kind === "llamaVulkan")) {
             steps.push({ item: { kind: item.kind, id: item.id, bytes: item.bytes } });
           }
         }
@@ -386,7 +417,7 @@ export function useLocalSetupDownloads(
       void finishInBackground(steps, onModelReady);
     };
 
-    return { ready, pending, continueInBackground };
+    return { ready, pending, graphicsPackPending, continueInBackground };
   }, []);
 
   return {

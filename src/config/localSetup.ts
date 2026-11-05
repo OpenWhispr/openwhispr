@@ -49,7 +49,7 @@ export interface LocalSetupRow {
   download: LocalSetupDownload;
   label: LocalSetupLabel | null; // null only for an organisation-required model
   reason?: "tooSlow" | "memory" | "memoryUnread";
-  /** null: the row says what it does, or nothing under a "Too slow" heading. */
+  /** null: the row says what it does, or why it's too slow under a "Too slow" heading. */
   line: LocalSetupLine | null;
 }
 export interface LocalSetupPlan {
@@ -63,6 +63,8 @@ export interface LocalSetupPlan {
   startingSwitches: LocalSetupSwitches;
   /** The organization keeps AI models off this device, so chat and notes run where it chose. */
   organizationRunsText: boolean;
+  /** False under a policy that keeps AI on this device, where recommending Cloud would be a dead end. */
+  cloudAllowed: boolean;
 }
 export type LocalSetupSwitches = { cleanup: boolean; assistant: boolean };
 
@@ -285,7 +287,7 @@ function firstApprovedSpeechModel(
   const runnable = (allowedLocalModelIds(policy, "transcription") ?? []).filter(
     (id) => speechInfo(id) && !(parakeetModels[id] && profile.parakeetSupported === false)
   );
-  const fitsLanguages = (id: string) => {
+  const fitsLanguages = (id: string): boolean => {
     const supported = speechInfo(id)?.supportedLanguages;
     return !supported || languages.every((language) => supported.includes(language));
   };
@@ -304,7 +306,9 @@ function textRow(
 
   let label = entry.label;
   let reason: LocalSetupRow["reason"] = label === "unavailable" ? entry.reason : undefined;
-  if (label !== "unavailable" && !(profile.memoryGb >= neededGb)) {
+  // Memory comes first, even on a row already too slow: it's the reason the user can act on.
+  const tooLittleMemory = profile.memoryGb > 0 && profile.memoryGb < neededGb;
+  if (tooLittleMemory || (label !== "unavailable" && !(profile.memoryGb >= neededGb))) {
     label = "unavailable";
     reason = "memory";
   }
@@ -347,9 +351,9 @@ export function buildLocalSetupPlan(input: {
   const machineType = classifyMachine(profile);
   const machine = table.machines[machineType];
   const spoken = normalizeLanguages(input.spokenLanguages ?? []);
-  const languages = spoken.length ? spoken : normalizeLanguages([profile.systemLanguage]);
+  const languages = spoken.length ? spoken : normalizeLanguages(profile.systemLanguages);
   const languageTags = normalizeLanguageTags(
-    spoken.length ? input.spokenLanguages : [profile.systemLanguage]
+    spoken.length ? input.spokenLanguages : profile.systemLanguages
   );
 
   const rows: LocalSetupRow[] = [];
@@ -364,7 +368,7 @@ export function buildLocalSetupPlan(input: {
     rows.push(dictationRow(profile, machine, languages, organizationModelId));
   }
   const localTextAllowed = isModeAllowedByPolicy(policy, "llm", "local");
-  const textModelApproved = (id: "cleanup" | "assistant") =>
+  const textModelApproved = (id: "cleanup" | "assistant"): boolean =>
     isLocalModelAllowedByPolicy(policy, "llm", table.models[id]);
   if (localTextAllowed) {
     if (textModelApproved("cleanup")) rows.push(textRow("cleanup", profile, machine));
@@ -379,9 +383,10 @@ export function buildLocalSetupPlan(input: {
       ? { kind: "llamaVulkan", id: "llama-vulkan", bytes: packBytes }
       : null;
 
-  const organizationRunsText =
-    !localTextAllowed &&
-    TEXT_MODES_OFF_DEVICE.some((mode) => isModeAllowedByPolicy(policy, "llm", mode));
+  const cloudAllowed = TEXT_MODES_OFF_DEVICE.some((mode) =>
+    isModeAllowedByPolicy(policy, "llm", mode)
+  );
+  const organizationRunsText = !localTextAllowed && cloudAllowed;
 
   return {
     machineType,
@@ -392,6 +397,7 @@ export function buildLocalSetupPlan(input: {
     graphicsPack,
     startingSwitches: { cleanup: machine.cleanup.startsOn !== false, assistant: true },
     organizationRunsText,
+    cloudAllowed,
   };
 }
 
@@ -433,6 +439,17 @@ export function localSetupRequiredBytes(
 const TRIM_ORDER: Array<keyof LocalSetupSwitches> = ["assistant", "cleanup"];
 
 /**
+ * The least free space Local can start with, in whole GB: dictation alone, since
+ * the step turns the optional rows off to fit and Proceed only waits for dictation.
+ */
+export function localSetupMinimumSpaceGb(plan: LocalSetupPlan, factors: LocalSetupFactors): number {
+  const items = enabledDownloads(plan, { cleanup: false, assistant: false }).flatMap(
+    (row) => row.items
+  );
+  return Math.ceil(localSetupRequiredBytes(items, factors) / 1e9);
+}
+
+/**
  * Fits the switched-on rows to the free space. A switch the user set in
  * `requested` is kept as set; one left out starts as the plan says and, if on, may
  * be turned off to fit,
@@ -454,18 +471,18 @@ export function fitLocalSetupToSpace(
   state: SpaceState;
   requiredBytes: number;
 } {
-  const need = (switches: LocalSetupSwitches) =>
+  const need = (switches: LocalSetupSwitches): number =>
     localSetupRequiredBytes(
       enabledDownloads(plan, switches)
         .flatMap((row) => row.items)
         .filter((item) => !isOnDisk(item)),
       space.factors
     );
-  const fits = (bytes: number) => bytes <= space.availableBytes;
+  const fits = (bytes: number): boolean => bytes <= space.availableBytes;
 
   const switches: LocalSetupSwitches = { ...plan.startingSwitches, ...requested };
   const autoOff: LocalSetupRowId[] = [];
-  const trimmable = (id: keyof LocalSetupSwitches) => {
+  const trimmable = (id: keyof LocalSetupSwitches): boolean => {
     const row = plan.rows.find((r) => r.id === id);
     if (requested[id] !== undefined || !switches[id] || !row || row.label === "unavailable") {
       return false;

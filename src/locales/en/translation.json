@@ -423,7 +423,7 @@
       },
       "localSetup": {
         "title": "We recommend these settings",
-        "subtitle": "Picked for your {{computer}} and {{language}}. Everything runs on this device.",
+        "subtitle": "Picked for your {{computer}} and {{language}}. These models run on this device.",
         "subtitleOrganizationText": "Picked for your {{computer}} and {{language}}. Dictation runs on this device; chat and AI notes use the service your organization chose.",
         "computer": {
           "chip": "Chip",
@@ -459,7 +459,8 @@
         },
         "unavailable": {
           "notEnoughMemory": "Not enough memory",
-          "exceedsMemory": "Exceeds the memory limits of this computer",
+          "tooSlow": "Too slow on this computer",
+          "tooSlowLine": "Would take too long to respond here. You can still choose it later in Settings",
           "memoryUnread": "Couldn't check memory",
           "memoryMac": "{{model}} needs {{needed}} GB of memory, this Mac has {{have}} GB",
           "memoryComputer": "{{model}} needs {{needed}} GB of memory, this computer has {{have}} GB",
@@ -476,6 +477,7 @@
         "downloaded": "Downloaded",
         "foot": {
           "default": "You can change any of these later in Settings.",
+          "dictationFailed": "Dictation has to download before you can continue. Retry it above, or go back and choose another setup.",
           "finishesInBackground": "The rest keeps downloading after you proceed and turns on when it's ready.",
           "failedStaysOff": "What didn't download stays off. You can add it later in Settings.",
           "needsMac": "This needs {{needed}} GB, and this Mac has {{free}} GB free.",
@@ -3462,6 +3464,7 @@
       "meeting": "Prepare me for my next meeting",
       "sharedNotes": "Highlight my shared notes"
     },
+    "localModelDownloading": "Your assistant model is still downloading. Chat turns on when it's ready.",
     "localModelMissing": "Choose a model for Chat in Settings to chat on this device."
   },
   "referral": {

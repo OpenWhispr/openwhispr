@@ -423,7 +423,7 @@
       },
       "localSetup": {
         "title": "Wir empfehlen diese Einstellungen",
-        "subtitle": "Passend zu {{computer}} und {{language}} ausgewählt. Alles läuft auf diesem Gerät.",
+        "subtitle": "Passend zu {{computer}} und {{language}} ausgewählt. Diese Modelle laufen auf diesem Gerät.",
         "subtitleOrganizationText": "Passend zu {{computer}} und {{language}} ausgewählt. Das Diktieren läuft auf diesem Gerät; Chat und KI-Notizen nutzen den Dienst, den Ihre Organisation gewählt hat.",
         "computer": {
           "chip": "Chip",
@@ -459,7 +459,8 @@
         },
         "unavailable": {
           "notEnoughMemory": "Nicht genug Arbeitsspeicher",
-          "exceedsMemory": "Übersteigt den Arbeitsspeicher dieses Computers",
+          "tooSlow": "Hier zu langsam",
+          "tooSlowLine": "Würde hier zu lange für eine Antwort brauchen. Sie können es später trotzdem in den Einstellungen wählen",
           "memoryUnread": "Arbeitsspeicher nicht erkannt",
           "memoryMac": "{{model}} braucht {{needed}} GB Arbeitsspeicher, dieser Mac hat {{have}} GB",
           "memoryComputer": "{{model}} braucht {{needed}} GB Arbeitsspeicher, dieser Computer hat {{have}} GB",
@@ -476,6 +477,7 @@
         "downloaded": "Heruntergeladen",
         "foot": {
           "default": "Sie können all das später in den Einstellungen ändern.",
+          "dictationFailed": "Das Diktat muss heruntergeladen sein, bevor es weitergeht. Versuchen Sie es oben erneut, oder gehen Sie zurück und wählen Sie eine andere Einrichtung.",
           "finishesInBackground": "Der Rest wird nach dem Fortfahren weiter heruntergeladen und eingeschaltet, sobald er bereit ist.",
           "failedStaysOff": "Was nicht heruntergeladen wurde, bleibt aus. Sie können es später in den Einstellungen hinzufügen.",
           "needsMac": "Dafür werden {{needed}} GB benötigt, und auf diesem Mac sind {{free}} GB frei.",
@@ -3462,6 +3464,7 @@
       "meeting": "Bereite mich auf mein nächstes Meeting vor",
       "sharedNotes": "Hebe meine geteilten Notizen hervor"
     },
+    "localModelDownloading": "Dein Assistenzmodell wird noch heruntergeladen. Der Chat startet, sobald es bereit ist.",
     "localModelMissing": "Wähle in den Einstellungen ein Modell für Chat, um auf diesem Gerät zu chatten."
   },
   "referral": {

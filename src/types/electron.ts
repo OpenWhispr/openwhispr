@@ -1341,7 +1341,7 @@ export interface ComputerProfile {
   graphicsName: string | null; // null on Apple chips (UI shows "Built into chip")
   nvidia: { name: string; vramMb: number | null } | null;
   parakeetSupported: boolean; // getParakeetCapability().supported (macOS 15.5 rule)
-  systemLanguage: string; // base code of the first preferred system language, e.g. "pt"
+  systemLanguages: string[]; // preferred system languages, as tags, e.g. ["pt-BR", "en-US"]
 }
 
 /** What onboarding's local setup downloads: a speech model, a text model or the graphics pack. */

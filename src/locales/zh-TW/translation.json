@@ -423,7 +423,7 @@
       },
       "localSetup": {
         "title": "我們推薦以下設定",
-        "subtitle": "根據你的 {{computer}} 和 {{language}} 挑選。一切都在這台裝置上執行。",
+        "subtitle": "根據你的 {{computer}} 和 {{language}} 挑選。這些模型在這台裝置上執行。",
         "subtitleOrganizationText": "根據你的 {{computer}} 和 {{language}} 挑選。聽寫在這台裝置上執行；聊天和 AI 筆記使用你的組織選擇的服務。",
         "computer": {
           "chip": "晶片",
@@ -439,7 +439,7 @@
           "linuxDesktop": "Linux 桌上型電腦"
         },
         "rows": {
-          "dictation": "語音輸入",
+          "dictation": "聽寫",
           "cleanup": "文字整理",
           "assistant": "助理"
         },
@@ -459,7 +459,8 @@
         },
         "unavailable": {
           "notEnoughMemory": "記憶體不足",
-          "exceedsMemory": "超出這台電腦的記憶體上限",
+          "tooSlow": "在這台電腦上太慢",
+          "tooSlowLine": "在這裡回應會太慢。之後仍可以在設定中選擇",
           "memoryUnread": "無法偵測記憶體",
           "memoryMac": "{{model}} 需要 {{needed}} GB 記憶體，這台 Mac 只有 {{have}} GB",
           "memoryComputer": "{{model}} 需要 {{needed}} GB 記憶體，這台電腦只有 {{have}} GB",
@@ -476,12 +477,13 @@
         "downloaded": "已下載",
         "foot": {
           "default": "這些設定之後都可以在設定中變更。",
+          "dictationFailed": "需要先下載聽寫模型才能繼續。請在上方重試，或返回選擇其他設定。",
           "finishesInBackground": "其餘項目會在你繼續後接著下載，準備好後自動開啟。",
           "failedStaysOff": "未能下載的項目將保持關閉。之後可以在設定中新增。",
           "needsMac": "需要 {{needed}} GB，這台 Mac 有 {{free}} GB 可用空間。",
           "needsComputer": "需要 {{needed}} GB，這台電腦有 {{free}} GB 可用空間。",
-          "noSpaceMac": "語音輸入需要 {{needed}} GB 可用空間，這台 Mac 只有 {{free}} GB。請釋放一些空間後繼續。",
-          "noSpaceComputer": "語音輸入需要 {{needed}} GB 可用空間，這台電腦只有 {{free}} GB。請釋放一些空間後繼續。"
+          "noSpaceMac": "聽寫需要 {{needed}} GB 可用空間，這台 Mac 只有 {{free}} GB。請釋放一些空間後繼續。",
+          "noSpaceComputer": "聽寫需要 {{needed}} GB 可用空間，這台電腦只有 {{free}} GB。請釋放一些空間後繼續。"
         }
       }
     },
@@ -4081,6 +4083,7 @@
       "meeting": "幫我準備下一場會議",
       "sharedNotes": "突顯我的共享筆記"
     },
+    "localModelDownloading": "助理模型仍在下載中。準備就緒後即可聊天。",
     "localModelMissing": "在設定中為「聊天」選擇一個模型，即可在此裝置上聊天。"
   },
   "support": {

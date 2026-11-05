@@ -1,5 +1,5 @@
 import { SIGN_IN_PROMPTED_AT_KEY } from "../../utils/requestSignIn";
-import { PENDING_LOCAL_MODELS_KEY } from "./pendingLocalModels";
+import { PENDING_GRAPHICS_PACK_KEY, PENDING_LOCAL_MODELS_KEY } from "./pendingLocalModels";
 import type { PermissionGuideId } from "../../types/permissionGuide";
 
 export const ONBOARDING_SESSION_KEY = "onboardingSessionV2";
@@ -228,6 +228,7 @@ export function resetOnboardingProgress(storage: OnboardingStorage): void {
   storage.removeItem("skipAuth");
   storage.removeItem("localSetupPending");
   storage.removeItem(PENDING_LOCAL_MODELS_KEY);
+  storage.removeItem(PENDING_GRAPHICS_PACK_KEY);
   // A restart is not the sign-in that marker announces.
   storage.removeItem(SIGN_IN_PROMPTED_AT_KEY);
   // AppRouter uses this marker to distinguish an explicit restart from a
@@ -486,6 +487,25 @@ const DOWNLOAD_OWNING_STEPS: ReadonlySet<OnboardingStepId> = new Set<OnboardingS
 export function isDownloadOwningOnboardingStepActive(sessionValue: string | null): boolean {
   const stepId = parseOnboardingSession(sessionValue)?.currentStepId;
   return stepId !== undefined && DOWNLOAD_OWNING_STEPS.has(stepId);
+}
+
+/**
+ * A policy refetch normally shows the loading screen, which unmounts onboarding.
+ * A rotated token refetches the same account's policy, and unmounting a step that
+ * owns downloads would cancel them, so that step stays up through it.
+ */
+export function keepsOnboardingStepThroughPolicyRefetch(input: {
+  showOnboarding: boolean;
+  sessionValue: string | null;
+  policyAccountId: string | null;
+  lastResolvedAccountId: string | null;
+}): boolean {
+  return (
+    input.showOnboarding &&
+    input.policyAccountId !== null &&
+    input.policyAccountId === input.lastResolvedAccountId &&
+    isDownloadOwningOnboardingStepActive(input.sessionValue)
+  );
 }
 
 export function migrateLegacyOnboardingStep(value: string | null): OnboardingStepId {

@@ -342,3 +342,81 @@ test("a guest's pending selection the new account's policy refuses is dropped", 
   );
   assert.equal(pending.hasPendingLocalModels(), false);
 });
+
+test("a pending pick's verdict: unresolved waits, another account or a denial is final", async () => {
+  global.localStorage = createStorage();
+  const pending = await import("../../src/components/onboarding/pendingLocalModels.ts");
+  const selection = { provider: "qwen", modelId: "qwen3.5-2b-q4_k_m", accountId: "first" };
+  const managed = (allowedLocalModels) => ({
+    status: "managed",
+    appVersion: "1.11.1",
+    accountId: "first",
+    policy: {
+      llm: { allowedModes: ["local"], allowedLocalModels },
+      minAppVersion: null,
+    },
+  });
+  const judge = (policy) => pending.judgePendingLocalModel("cleanup", selection, policy);
+
+  assert.equal(judge({ status: "loading", accountId: "first" }), "unresolved");
+  assert.equal(judge({ status: "unmanaged", accountId: null }), "unresolved");
+  assert.equal(judge({ status: "unmanaged", accountId: "second" }), "denied");
+  assert.equal(judge(managed(["qwen3.5-2b-q4_k_m"])), "allowed");
+  assert.equal(judge(managed(["qwen3.5-4b-q4_k_m"])), "denied", "cleanup is an LLM pick");
+});
+
+test("failed background downloads count per model, and Retry starts over", async () => {
+  global.localStorage = createStorage();
+  const pending = await import("../../src/components/onboarding/pendingLocalModels.ts");
+  seedPending({
+    cleanup: { provider: "qwen", modelId: "a" },
+    assistant: { provider: "qwen", modelId: "b" },
+  });
+
+  pending.recordPendingLocalModelFailure("a");
+  pending.recordPendingLocalModelFailure("a");
+  assert.equal(pending.readPendingLocalModels().cleanup.failedAttempts, 2);
+  assert.equal(pending.readPendingLocalModels().assistant.failedAttempts, undefined);
+
+  pending.clearPendingLocalModelFailures("a");
+  assert.equal(pending.readPendingLocalModels().cleanup.failedAttempts, undefined);
+  assert.equal(pending.isPendingLocalModel("a"), true);
+
+  pending.forgetPendingLocalModelById("a");
+  assert.equal(pending.isPendingLocalModel("a"), false);
+});
+
+test("a graphics pack that keeps failing is given up on", async () => {
+  global.localStorage = createStorage();
+  const pending = await import("../../src/components/onboarding/pendingLocalModels.ts");
+  pending.rememberPendingGraphicsPack();
+  assert.equal(pending.hasPendingLocalModels(), true);
+  assert.equal(localStorage.getItem("localSetupPending"), "true");
+  for (let attempt = 1; attempt < pending.MAX_AUTOMATIC_DOWNLOAD_ATTEMPTS; attempt++) {
+    pending.recordPendingGraphicsPackFailure();
+    assert.equal(pending.hasPendingGraphicsPack(), true);
+  }
+  pending.recordPendingGraphicsPackFailure();
+  assert.equal(pending.hasPendingGraphicsPack(), false);
+
+  pending.rememberPendingGraphicsPack();
+  pending.discardPendingLocalSetup();
+  assert.equal(pending.hasPendingGraphicsPack(), false);
+});
+
+test("chat only says the assistant is on its way while a text model is really downloading", async () => {
+  global.localStorage = createStorage();
+  const pending = await import("../../src/components/onboarding/pendingLocalModels.ts");
+  const withActive = (active) => {
+    global.window = { electronAPI: { modelGetActiveDownloads: async () => active } };
+  };
+
+  withActive([{ modelType: "llm", modelId: "cleanup-model" }]);
+  assert.equal(await pending.isPendingAssistantModelDownloading(), false, "nothing pending");
+
+  seedPending({ assistant: { provider: "qwen", modelId: "assistant-model" } });
+  assert.equal(await pending.isPendingAssistantModelDownloading(), true, "queued behind cleanup");
+  withActive([{ modelType: "parakeet", modelId: "speech" }]);
+  assert.equal(await pending.isPendingAssistantModelDownloading(), false, "its download failed");
+  delete global.window;
+});

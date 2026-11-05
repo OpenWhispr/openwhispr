@@ -423,8 +423,8 @@
       },
       "localSetup": {
         "title": "おすすめの設定",
-        "subtitle": "お使いの {{computer}} と {{language}} に合わせて選びました。すべてこのデバイス上で動作します。",
-        "subtitleOrganizationText": "お使いの {{computer}} と {{language}} に合わせて選びました。音声入力はこのデバイス上で動作し、チャットと AI ノートは組織が選んだサービスを使います。",
+        "subtitle": "お使いの {{computer}} と {{language}} に合わせて選びました。これらのモデルはこのデバイス上で動作します。",
+        "subtitleOrganizationText": "お使いの {{computer}} と {{language}} に合わせて選びました。ディクテーションはこのデバイス上で動作し、チャットと AI ノートは組織が選んだサービスを使います。",
         "computer": {
           "chip": "チップ",
           "processor": "プロセッサ",
@@ -459,7 +459,8 @@
         },
         "unavailable": {
           "notEnoughMemory": "メモリが不足しています",
-          "exceedsMemory": "このコンピュータのメモリの上限を超えています",
+          "tooSlow": "このコンピュータでは遅すぎます",
+          "tooSlowLine": "ここでは応答に時間がかかりすぎます。あとで設定から選ぶこともできます",
           "memoryUnread": "メモリを確認できませんでした",
           "memoryMac": "{{model}} には {{needed}} GB のメモリが必要です。この Mac は {{have}} GB です",
           "memoryComputer": "{{model}} には {{needed}} GB のメモリが必要です。このコンピュータは {{have}} GB です",
@@ -476,6 +477,7 @@
         "downloaded": "ダウンロード済み",
         "foot": {
           "default": "これらはあとで設定からいつでも変更できます。",
+          "dictationFailed": "続行するにはディクテーションのダウンロードが必要です。上で再試行するか、戻って別の設定を選んでください。",
           "finishesInBackground": "残りは続行後もダウンロードを続け、準備ができるとオンになります。",
           "failedStaysOff": "ダウンロードできなかったものはオフのままです。あとで設定から追加できます。",
           "needsMac": "{{needed}} GB が必要です。この Mac の空き容量は {{free}} GB です。",
@@ -4081,6 +4083,7 @@
       "meeting": "次の会議に備えさせて",
       "sharedNotes": "共有ノートのハイライトを見せて"
     },
+    "localModelDownloading": "アシスタントのモデルをまだダウンロードしています。準備ができるとチャットが使えるようになります。",
     "localModelMissing": "このデバイスでチャットするには、設定で「チャット」のモデルを選択してください。"
   },
   "support": {

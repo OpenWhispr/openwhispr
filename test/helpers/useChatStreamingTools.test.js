@@ -1345,6 +1345,27 @@ for (const [surface, hookOptions] of [
     assert.equal(reasoningService.processTextStreamingAI.mock.callCount(), 0);
     assert.equal(reasoningService.processTextStreamingCloud.mock.callCount(), 0);
   });
+
+  test(`${surface} says so while the assistant model is still downloading`, async (t) => {
+    const { captured, getMessages } = await renderChatStreaming(t, hookOptions, {
+      settings: ASSISTANT_OFF,
+      electronAPI: {
+        modelGetActiveDownloads: async () => [{ modelType: "llm", modelId: "qwen3.5-4b-q4_k_m" }],
+      },
+    });
+    localStorage.setItem(
+      "pendingLocalModelSelectionsV1",
+      JSON.stringify({ assistant: { provider: "qwen", modelId: "qwen3.5-4b-q4_k_m" } })
+    );
+    const user = { id: "u1", role: "user", content: "Hello" };
+
+    await captured.sendToAI(user.content, [user]);
+
+    assert.equal(
+      getMessages().at(-1).content,
+      "Your assistant model is still downloading. Chat turns on when it's ready."
+    );
+  });
 }
 
 for (const [label, policy, content] of [

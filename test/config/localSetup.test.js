@@ -18,7 +18,7 @@ const mac = (o) => ({
   graphicsName: null,
   nvidia: null,
   parakeetSupported: true,
-  systemLanguage: "en",
+  systemLanguages: ["en"],
   ...o,
 });
 const pc = (o) => ({
@@ -32,7 +32,7 @@ const pc = (o) => ({
   graphicsName: "Intel Iris Xe",
   nvidia: null,
   parakeetSupported: true,
-  systemLanguage: "en",
+  systemLanguages: ["en"],
   ...o,
 });
 const rtx = { name: "NVIDIA GeForce RTX 4060", vramMb: 8188 };
@@ -158,7 +158,8 @@ test("never offers a model for a language it lacks", async () => {
 
 test("each table machine gets its table labels", async () => {
   const cases = [
-    [pc({ memoryGb: 8 }), "pc-under-16", ["fast", "slower", "unavailable"], "tooSlow"],
+    // Too slow as well, but too little memory is the reason the user can act on.
+    [pc({ memoryGb: 8 }), "pc-under-16", ["fast", "slower", "unavailable"], "memory"],
     [pc({}), "pc-16-plus", ["fast", "slower", "unavailable"], "tooSlow"],
     [pc({ nvidia: rtx }), "pc-nvidia", ["fast", "fast", "slower"], undefined],
     [mac({ memoryGb: 8 }), "mac-under-16", ["fast", "unavailable", "unavailable"], "memory"],
@@ -311,18 +312,36 @@ test("rows carry the registry name, icon and download", async () => {
   );
 });
 
+test("a guest's second system language counts: an English-only model can't dictate it", async () => {
+  const bilingual = await plan(mac({ systemLanguages: ["en-US", "de-DE"] }), {
+    spokenLanguages: [],
+  });
+  assert.deepEqual(bilingual.languages, ["en", "de"]);
+  assert.deepEqual(bilingual.languageTags, ["en", "de"]);
+  assert.equal(row(bilingual, "dictation").modelId, "orukeet-v0.1.0");
+
+  const regions = await plan(mac({ systemLanguages: ["en-US", "en-GB"] }), { spokenLanguages: [] });
+  assert.equal(row(regions, "dictation").modelId, "parakeet-unified-en-0.6b");
+  assert.deepEqual(
+    (await plan(mac({ systemLanguages: ["zh-TW"] }), { spokenLanguages: [] })).languageTags,
+    ["zh-Hant"]
+  );
+});
+
 test("languages fall back to the system language", async () => {
-  const guest = await plan(mac({ systemLanguage: "cy" }), { spokenLanguages: [] });
+  const guest = await plan(mac({ systemLanguages: ["cy"] }), { spokenLanguages: [] });
   assert.deepEqual(guest.languages, ["cy"]);
   assert.equal(row(guest, "dictation").modelId, "small");
-  const spoken = await plan(mac({ systemLanguage: "cy" }), { spokenLanguages: ["pt-BR", "auto"] });
+  const spoken = await plan(mac({ systemLanguages: ["cy"] }), {
+    spokenLanguages: ["pt-BR", "auto"],
+  });
   assert.deepEqual(spoken.languages, ["pt"]);
   assert.equal(row(spoken, "dictation").modelId, "orukeet-v0.1.0");
 });
 
 test("the plan names Chinese by its script and every other language by its base", async () => {
   const tags = async (spokenLanguages, systemLanguage = "en") =>
-    (await plan(mac({ systemLanguage }), { spokenLanguages })).languageTags;
+    (await plan(mac({ systemLanguages: [systemLanguage] }), { spokenLanguages })).languageTags;
   assert.deepEqual(await tags(["zh-TW"]), ["zh-Hant"]);
   assert.deepEqual(await tags(["zh-CN", "en-US", "en-GB"]), ["zh-Hans", "en"]);
   assert.deepEqual(await tags(["nb", "auto"]), ["no"]);
@@ -380,6 +399,27 @@ test("an allow-list that leaves out the table's dictation pick decides dictation
   });
   assert.equal(row(kept, "dictation").modelId, table.models.dictation.english);
   assert.equal(row(kept, "dictation").line, null);
+});
+
+test("the Local card's minimum is dictation alone, since the rest trims to fit", async () => {
+  const { localSetupMinimumSpaceGb, localSetupRequiredBytes, enabledDownloads } = await load();
+  const factors = { parakeet: 2.5, whisper: 1, llm: 1, llamaVulkan: 2 };
+  const p = await plan(mac({}));
+  const dictation = enabledDownloads(p, { cleanup: false, assistant: false })[0].items;
+  const gb = localSetupMinimumSpaceGb(p, factors);
+  assert.equal(gb, Math.ceil(localSetupRequiredBytes(dictation, factors) / 1e9));
+  assert.equal(gb, 2, "about 1.6 GB for Parakeet Unified EN, not the 7 GB of every row");
+  // A PC's pack rides on a text row, so it doesn't count either.
+  assert.equal(localSetupMinimumSpaceGb(await plan(pc({ nvidia: rtx })), factors), 2);
+});
+
+test("Cloud is only recommendable where the policy allows an off-device service", async () => {
+  assert.equal((await plan(mac({}))).cloudAllowed, true);
+  assert.equal((await plan(mac({}), { policy: managed() })).cloudAllowed, true);
+  assert.equal(
+    (await plan(mac({}), { policy: managed({ llmModes: ["local"] }) })).cloudAllowed,
+    false
+  );
 });
 
 test("a policy that keeps AI models off the device says chat and notes run where it chose", async () => {

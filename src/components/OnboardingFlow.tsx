@@ -39,11 +39,7 @@ import { usePolicySnapshot } from "../hooks/usePolicy";
 import { usePolicyStore } from "../stores/policyStore";
 import { isAgentAllowed, isScreenContextAllowed } from "../stores/policyRules";
 import { useSettingsStore } from "../stores/settingsStore";
-import {
-  enabledDownloads,
-  localSetupRequiredBytes,
-  type LocalSetupPlan,
-} from "../config/localSetup";
+import { localSetupMinimumSpaceGb, type LocalSetupPlan } from "../config/localSetup";
 import type { LocalSetupHandOff } from "./onboarding/useLocalSetupDownloads";
 import { getDefaultHotkey, parseHotkeyList, serializeHotkeyList } from "../utils/hotkeys";
 import {
@@ -388,7 +384,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   );
   const currentStepId = reconcileStepWithRoute(session.currentStepId, route);
 
-  // The space the Local card quotes: every row on, with the room each download
+  // The space the Local card quotes: dictation alone, with the room its download
   // reserves to unpack. Undefined until both reads land; the card has a default.
   // Read once as onboarding opens, so the card's figure is ready when it shows; it
   // is read again on focus only around the choice, not on every onboarding step.
@@ -397,10 +393,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   );
   const localSpaceGb = useMemo(() => {
     if (!localSetupPlan || !localSetupSpace) return undefined;
-    const items = enabledDownloads(localSetupPlan, { cleanup: true, assistant: true }).flatMap(
-      (row) => row.items
-    );
-    return Math.ceil(localSetupRequiredBytes(items, localSetupSpace.factors) / 1e9);
+    return localSetupMinimumSpaceGb(localSetupPlan, localSetupSpace.factors);
   }, [localSetupPlan, localSetupSpace]);
   const compact = COMPACT_STEPS.has(currentStepId);
   const windowMode = getOnboardingWindowMode(currentStepId);

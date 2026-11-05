@@ -275,8 +275,8 @@ export default function SetupChoiceStep({
                 </ul>
               </div>
             </div>
-            {/* Straight to the local setup step: it shows what will download, how
-                big it is and how fast it will feel before anything starts. */}
+            {/* Straight to the local setup step: it shows what will download and how
+                big it is before anything starts. */}
             <CardAction onClick={() => onSelect("local")}>
               {t("onboarding.rehaul.setupChoice.local.download")}
             </CardAction>

@@ -147,6 +147,18 @@ test("tray ignores local-setup downloads", async (t) => {
   assert.match(textContent(tray.row(`parakeet:${PARAKEET}`)), /30%/);
 });
 
+test("a transfer handed over at Proceed reaches the tray at once, an early error included", async (t) => {
+  const tray = await createTrayHarness(t);
+  saveSession("notes");
+  tray.registry.claimLocalSetupDownload({ kind: "llm", id: LLM });
+  await tray.llm(LLM, "progress", 10);
+  assert.equal(tray.row(`llm:${LLM}`), null, "the step still owns it");
+
+  tray.registry.handOverLocalSetupDownload({ kind: "llm", id: LLM });
+  await tray.emit("llm", { modelId: LLM, type: "error", error: "offline" });
+  assert.ok(tray.row(`llm:${LLM}`), "the failure shows, with no grace period to swallow it");
+});
+
 test("a completion still reaches the tray on the local-setup step", async (t) => {
   const tray = await createTrayHarness(t);
   saveSession("notes");
@@ -205,14 +217,30 @@ test("a model local setup left downloading turns its row on when it lands", asyn
 
 // Local setup quit (or reloaded) with its queue still going: main has no transfer
 // for the queued row, so the tray finds it missing on the next launch.
-async function relaunchWithPending(t, selections, { downloaded = [] } = {}) {
+// What Proceed writes for rows still downloading: on this device, with no model.
+const SCOPES_WAITING = {
+  cleanupMode: "local",
+  noteFormattingMode: "local",
+  translationMode: "local",
+  dictationAgentMode: "local",
+  chatAgentMode: "local",
+};
+
+async function relaunchWithPending(
+  t,
+  selections,
+  { downloaded = [], storage = {}, modelDownload, api = {} } = {}
+) {
   const requested = [];
   const tray = await createTrayHarness(t, {
     storage: {
+      ...SCOPES_WAITING,
       pendingLocalModelSelectionsV1: JSON.stringify(selections),
       localSetupPending: "true",
+      ...storage,
     },
     api: {
+      ...api,
       listWhisperModels: async () => ({ models: [] }),
       listParakeetModels: async () => ({ models: [] }),
       modelGetAll: async () =>
@@ -223,7 +251,7 @@ async function relaunchWithPending(t, selections, { downloaded = [] } = {}) {
         })),
       modelDownload: async (id) => {
         requested.push(id);
-        return { success: true };
+        return modelDownload ? modelDownload(id) : { success: true };
       },
     },
   });
@@ -261,4 +289,104 @@ test("a queued row that finished before the quit turns on instead of downloading
   assert.equal(pending.hasPendingLocalModels(), false);
   const store = await tray.vite.ssrLoadModule("/stores/settingsStore.ts");
   assert.equal(store.useSettingsStore.getState().useDictationAgent, true);
+});
+
+test("a queued row Settings has since answered doesn't download again", async (t) => {
+  const { requested, pending } = await relaunchWithPending(
+    t,
+    { assistant: { provider: "qwen", modelId: LLM, resumable: true } },
+    {
+      downloaded: [CLEANUP_LLM],
+      storage: {
+        chatAgentProvider: "qwen",
+        chatAgentModel: CLEANUP_LLM,
+        dictationAgentProvider: "qwen",
+        dictationAgentModel: CLEANUP_LLM,
+      },
+    }
+  );
+  assert.deepEqual(requested, []);
+  assert.equal(pending.hasPendingLocalModels(), false, "nothing waits for it any more");
+});
+
+test("a row with one scope still waiting keeps its download", async (t) => {
+  const { requested } = await relaunchWithPending(
+    t,
+    { assistant: { provider: "qwen", modelId: LLM, resumable: true } },
+    { storage: { chatAgentMode: "openwhispr" } }
+  );
+  assert.deepEqual(requested, [LLM], "the Voice Assistant scope still waits");
+});
+
+test("a download that kept failing waits for Retry, which starts the count over", async (t) => {
+  const { tray, requested, pending } = await relaunchWithPending(t, {
+    cleanup: {
+      provider: "qwen",
+      modelId: CLEANUP_LLM,
+      resumable: true,
+      failedAttempts: 3,
+    },
+  });
+  assert.deepEqual(requested, [], "no retry on this launch");
+  const row = () => tray.row(`llm:${CLEANUP_LLM}`);
+  assert.match(textContent(row()), /line\.failed/);
+  assert.match(textContent(row()), /foot\.failedStaysOff/, "says the feature stays off");
+
+  const retry = findElement(
+    row(),
+    (node) => node.props?.children === "onboarding.rehaul.localSetup.retry"
+  );
+  assert.ok(retry, "a Retry on the row");
+  await React.act(async () => retry.props.onClick());
+  assert.deepEqual(requested, [CLEANUP_LLM]);
+  assert.equal(pending.readPendingLocalModels().cleanup.failedAttempts, undefined);
+});
+
+test("a background failure counts toward the limit", async (t) => {
+  const { pending } = await relaunchWithPending(
+    t,
+    { cleanup: { provider: "qwen", modelId: CLEANUP_LLM, resumable: true } },
+    { modelDownload: () => ({ success: false, error: "offline" }) }
+  );
+  assert.equal(pending.readPendingLocalModels().cleanup.failedAttempts, 1);
+});
+
+test("a graphics pack still on its way at the quit is fetched on the next launch", async (t) => {
+  const packRequests = [];
+  const { pending } = await relaunchWithPending(
+    t,
+    {},
+    {
+      storage: { pendingLocalGraphicsPackFailures: "0" },
+      api: {
+        getLlamaVulkanStatus: async () => ({ downloaded: false }),
+        downloadLlamaVulkanBinary: async () => {
+          packRequests.push("pack");
+          return { success: true };
+        },
+      },
+    }
+  );
+  assert.deepEqual(packRequests, ["pack"]);
+  assert.equal(pending.hasPendingGraphicsPack(), false);
+});
+
+test("a graphics pack that landed before the quit isn't fetched again", async (t) => {
+  const packRequests = [];
+  const { pending } = await relaunchWithPending(
+    t,
+    {},
+    {
+      storage: { pendingLocalGraphicsPackFailures: "0" },
+      api: {
+        getLlamaVulkanStatus: async () => ({ downloaded: true }),
+        downloadLlamaVulkanBinary: async () => {
+          packRequests.push("pack");
+          return { success: true };
+        },
+      },
+    }
+  );
+  assert.deepEqual(packRequests, []);
+  assert.equal(pending.hasPendingGraphicsPack(), false);
 });

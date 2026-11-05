@@ -18,6 +18,11 @@ export function releaseLocalSetupDownload(
   claimedDownloads.set(localSetupItemKey(item), now);
 }
 
+/** Proceed gave the tray this transfer: its progress and any error show at once. */
+export function handOverLocalSetupDownload(item: Pick<LocalSetupDownload, "kind" | "id">): void {
+  claimedDownloads.delete(localSetupItemKey(item));
+}
+
 /** True while onboarding's local setup owns this transfer (kind as the tray keys it). */
 export function isLocalSetupDownload(
   kind: LocalSetupDownload["kind"],

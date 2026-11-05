@@ -402,7 +402,7 @@
       },
       "localSetup": {
         "title": "Recomendamos estas configurações",
-        "subtitle": "Escolhidas para o seu {{computer}} e para {{language}}. Tudo roda neste dispositivo.",
+        "subtitle": "Escolhidas para o seu {{computer}} e para {{language}}. Estes modelos rodam neste dispositivo.",
         "subtitleOrganizationText": "Escolhidas para o seu {{computer}} e para {{language}}. O ditado roda neste dispositivo; o chat e as notas com IA usam o serviço escolhido pela sua organização.",
         "computer": {
           "chip": "Chip",
@@ -438,7 +438,8 @@
         },
         "unavailable": {
           "notEnoughMemory": "Memória insuficiente",
-          "exceedsMemory": "Excede os limites de memória deste computador",
+          "tooSlow": "Muito lento aqui",
+          "tooSlowLine": "Demoraria demais para responder aqui. Você ainda pode escolher depois em Configurações",
           "memoryUnread": "Não foi possível verificar a memória",
           "memoryMac": "{{model}} precisa de {{needed}} GB de memória, este Mac tem {{have}} GB",
           "memoryComputer": "{{model}} precisa de {{needed}} GB de memória, este computador tem {{have}} GB",
@@ -455,6 +456,7 @@
         "downloaded": "Baixado",
         "foot": {
           "default": "Você pode mudar qualquer uma dessas opções depois em Configurações.",
+          "dictationFailed": "O ditado precisa ser baixado antes de continuar. Tente de novo acima, ou volte e escolha outra configuração.",
           "finishesInBackground": "O restante continua sendo baixado depois que você prosseguir e é ativado quando estiver pronto.",
           "failedStaysOff": "O que não foi baixado fica desativado. Você pode adicionar depois em Configurações.",
           "needsMac": "São necessários {{needed}} GB, e este Mac tem {{free}} GB livres.",
@@ -4102,6 +4104,7 @@
       "meeting": "Prepare-me para minha próxima reunião",
       "sharedNotes": "Destaque minhas notas compartilhadas"
     },
+    "localModelDownloading": "O modelo do assistente ainda está sendo baixado. O chat será ativado quando estiver pronto.",
     "localModelMissing": "Escolha um modelo para Chat em Configurações para conversar neste dispositivo."
   },
   "support": {

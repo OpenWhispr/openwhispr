@@ -16,7 +16,7 @@ const mac = (o) => ({
   graphicsName: null,
   nvidia: null,
   parakeetSupported: true,
-  systemLanguage: "en",
+  systemLanguages: ["en"],
   ...o,
 });
 const policy = (status) => ({ status, policy: null, appVersion: null });
@@ -42,7 +42,7 @@ test("the plan waits for the computer read and a resolved policy", async () => {
 
 test("a guest's plan follows the system language, not stored languages", async () => {
   const { planLocalSetup } = await load();
-  const plan = planLocalSetup(input({ guest: true, profile: mac({ systemLanguage: "fr" }) }));
+  const plan = planLocalSetup(input({ guest: true, profile: mac({ systemLanguages: ["fr"] }) }));
   assert.deepEqual(plan.languages, ["fr"]);
 });
 

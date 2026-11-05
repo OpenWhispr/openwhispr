@@ -17,6 +17,8 @@ export interface PendingLocalModelSelection {
   modelId: string;
   /** Left by local setup, whose download the tray resumes after a quit; an older build's pick isn't. */
   resumable?: boolean;
+  /** Background downloads of it that failed; a launch stops retrying on its own at the limit. */
+  failedAttempts?: number;
   accountId?: string | null;
 }
 
@@ -29,6 +31,14 @@ export interface PendingLocalModelInventory {
   parakeet?: ParakeetModelResult[];
   llm?: LocalLLMModelStatus[];
 }
+
+export type PendingLocalModelVerdict = "unresolved" | "allowed" | "denied";
+
+// A launch retries a failed download by itself this many times; after that the tray
+// shows the failure and waits for the user's Retry.
+export const MAX_AUTOMATIC_DOWNLOAD_ATTEMPTS = 3;
+
+export const PENDING_GRAPHICS_PACK_KEY = "pendingLocalGraphicsPackFailures";
 
 export type PendingLocalModelAvailability = "downloading" | "downloaded" | "missing" | "unknown";
 
@@ -43,7 +53,7 @@ export function readPendingLocalModels(): PendingLocalModelSelections {
   }
 }
 
-function writePendingLocalModels(selections: PendingLocalModelSelections) {
+function writePendingLocalModels(selections: PendingLocalModelSelections): void {
   if (Object.keys(selections).length === 0) {
     localStorage.removeItem(PENDING_LOCAL_MODELS_KEY);
     return;
@@ -58,27 +68,23 @@ function writePendingLocalModels(selections: PendingLocalModelSelections) {
 export function rememberPendingLocalModel(
   kind: PendingLocalModelKind,
   selection: PendingLocalModelSelection
-) {
+): void {
   writePendingLocalModels({ ...readPendingLocalModels(), [kind]: selection });
   localStorage.setItem("localSetupPending", "true");
 }
 
 /**
- * Hands over the selection for a finished download, or null when it can't be
- * activated. It is kept for a later try until the verdict is final: another
- * account or a settled denial drops it, while an unresolved policy leaves it in
- * place. The account is the identity, since a rotated token changes only the
- * generation. A blank account while a selection names one is unresolved too:
- * suspending the policy and a relaunch before its first fetch both blank it.
+ * Whether a pending selection may still run. Another account or a settled denial
+ * is final, while an unresolved policy can still go either way. The account is the
+ * identity, since a rotated token changes only the generation. A blank account
+ * while a selection names one is unresolved too: suspending the policy and a
+ * relaunch before its first fetch both blank it.
  */
-export function consumePendingLocalModel(
+export function judgePendingLocalModel(
   kind: PendingLocalModelKind,
-  modelId: string,
+  selection: PendingLocalModelSelection,
   policy: PolicyDecisionSnapshot & { accountId?: string | null }
-): PendingLocalModelSelection | null {
-  const selections = readPendingLocalModels();
-  const selection = selections[kind];
-  if (!selection || selection.modelId !== modelId) return null;
+): PendingLocalModelVerdict {
   // A selection naming no account was a guest's: signing in moves it to the new
   // account, whose settled verdict judges it below.
   const accountChanged =
@@ -91,26 +97,96 @@ export function consumePendingLocalModel(
       policy.status === "error" ||
       (selection.accountId != null && policy.accountId == null))
   )
-    return null;
-  delete selections[kind];
-  writePendingLocalModels(selections);
-  if (
-    accountChanged ||
-    !isLocalModelAllowedByPolicy(
+    return "unresolved";
+  return !accountChanged &&
+    isLocalModelAllowedByPolicy(
       policy,
       kind === "dictation" ? "transcription" : "llm",
       selection.modelId
     )
-  )
-    return null;
-  return selection;
+    ? "allowed"
+    : "denied";
 }
 
-export function forgetPendingLocalModel(kind: PendingLocalModelKind, modelId?: string) {
+/**
+ * Hands over the selection for a finished download, or null when it can't be
+ * activated. It is kept for a later try while the policy is unresolved, and
+ * dropped once the verdict is a denial.
+ */
+export function consumePendingLocalModel(
+  kind: PendingLocalModelKind,
+  modelId: string,
+  policy: PolicyDecisionSnapshot & { accountId?: string | null }
+): PendingLocalModelSelection | null {
+  const selections = readPendingLocalModels();
+  const selection = selections[kind];
+  if (!selection || selection.modelId !== modelId) return null;
+  const verdict = judgePendingLocalModel(kind, selection, policy);
+  if (verdict === "unresolved") return null;
+  delete selections[kind];
+  writePendingLocalModels(selections);
+  return verdict === "allowed" ? selection : null;
+}
+
+export function forgetPendingLocalModel(kind: PendingLocalModelKind, modelId?: string): void {
   const selections = readPendingLocalModels();
   if (modelId && selections[kind]?.modelId !== modelId) return;
   delete selections[kind];
   writePendingLocalModels(selections);
+}
+
+/** A download stopped by hand (Settings' cancel): nothing should resume or activate it. */
+export function forgetPendingLocalModelById(modelId: string): void {
+  for (const kind of ["dictation", "cleanup", "assistant"] as const) {
+    forgetPendingLocalModel(kind, modelId);
+  }
+}
+
+/** Counts a failed background download toward the limit on automatic retries. */
+export function recordPendingLocalModelFailure(modelId: string): void {
+  const selections = readPendingLocalModels();
+  for (const selection of Object.values(selections)) {
+    if (selection?.modelId === modelId) {
+      selection.failedAttempts = (selection.failedAttempts ?? 0) + 1;
+    }
+  }
+  writePendingLocalModels(selections);
+}
+
+/** The user pressed Retry: the limit on automatic retries starts over. */
+export function clearPendingLocalModelFailures(modelId: string): void {
+  const selections = readPendingLocalModels();
+  for (const selection of Object.values(selections)) {
+    if (selection?.modelId === modelId) delete selection.failedAttempts;
+  }
+  writePendingLocalModels(selections);
+}
+
+export function isPendingLocalModel(modelId: string): boolean {
+  return Object.values(readPendingLocalModels()).some(
+    (selection) => selection?.modelId === modelId
+  );
+}
+
+/** The graphics pack was still on its way at Proceed: the tray fetches it after a quit. */
+export function rememberPendingGraphicsPack(): void {
+  localStorage.setItem(PENDING_GRAPHICS_PACK_KEY, "0");
+  localStorage.setItem("localSetupPending", "true");
+}
+
+export function hasPendingGraphicsPack(): boolean {
+  return localStorage.getItem(PENDING_GRAPHICS_PACK_KEY) !== null;
+}
+
+export function forgetPendingGraphicsPack(): void {
+  localStorage.removeItem(PENDING_GRAPHICS_PACK_KEY);
+}
+
+/** A pack that keeps failing is given up on: nothing on screen names it, and text models still run. */
+export function recordPendingGraphicsPackFailure(): void {
+  const failures = Number(localStorage.getItem(PENDING_GRAPHICS_PACK_KEY)) + 1;
+  if (failures >= MAX_AUTOMATIC_DOWNLOAD_ATTEMPTS) forgetPendingGraphicsPack();
+  else localStorage.setItem(PENDING_GRAPHICS_PACK_KEY, String(failures));
 }
 
 /**
@@ -118,13 +194,25 @@ export function forgetPendingLocalModel(kind: PendingLocalModelKind, modelId?: s
  * older build's pick can't switch a row back on over the user's choice. Local
  * setup remembers its own rows again after this.
  */
-export function discardPendingLocalSetup() {
+export function discardPendingLocalSetup(): void {
   localStorage.removeItem(PENDING_LOCAL_MODELS_KEY);
+  forgetPendingGraphicsPack();
   localStorage.removeItem("localSetupPending");
 }
 
-export function hasPendingLocalModels() {
-  return Object.keys(readPendingLocalModels()).length > 0;
+export function hasPendingLocalModels(): boolean {
+  return Object.keys(readPendingLocalModels()).length > 0 || hasPendingGraphicsPack();
+}
+
+/**
+ * True while the assistant row's model is on its way: it is pending and a text model
+ * is downloading now, its own or the one queued ahead of it. A pending model whose
+ * download failed reads as false, so chat doesn't promise it is coming.
+ */
+export async function isPendingAssistantModelDownloading(): Promise<boolean> {
+  if (!readPendingLocalModels().assistant) return false;
+  const active = await window.electronAPI?.modelGetActiveDownloads?.().catch(() => undefined);
+  return !!active?.some((download) => download.modelType === "llm");
 }
 
 export function getPendingLocalModelAvailability(
