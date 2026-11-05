@@ -1150,7 +1150,7 @@ export default function SettingsPage({
   initialSubTab,
   onChooseWorkspace,
 }: SettingsPageProps) {
-  useRegistryVersion();
+  const registryVersion = useRegistryVersion();
   const { isCompact } = useSettingsLayout();
   const {
     confirmDialog,
@@ -1298,6 +1298,7 @@ export default function SettingsPage({
 
   const [currentVersion, setCurrentVersion] = useState<string>("");
   const [isRemovingModels, setIsRemovingModels] = useState(false);
+  const [retiredLocalModels, setRetiredLocalModels] = useState<Array<{ name: string }>>([]);
   const [cachePathHint, setCachePathHint] = useState(
     typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent)
       ? "%USERPROFILE%\\.cache\\openwhispr"
@@ -1743,6 +1744,33 @@ export default function SettingsPage({
       },
     });
   };
+
+  const refreshRetiredLocalModels = useCallback(async () => {
+    setRetiredLocalModels((await window.electronAPI?.listRetiredLocalModels?.()) ?? []);
+  }, []);
+
+  useEffect(() => {
+    void refreshRetiredLocalModels().catch(() => {});
+  }, [refreshRetiredLocalModels, registryVersion]);
+
+  const handleRemoveRetiredModels = useCallback(() => {
+    showConfirmDialog({
+      title: t("settingsPage.developer.retiredModels.confirmTitle"),
+      description: t("settingsPage.developer.retiredModels.confirmDescription"),
+      confirmText: t("settingsPage.developer.removeModels.confirmText"),
+      variant: "destructive",
+      onConfirm: async () => {
+        const result = await window.electronAPI?.deleteRetiredLocalModels?.();
+        await refreshRetiredLocalModels();
+        if (!result?.success) {
+          showAlertDialog({
+            title: t("settingsPage.developer.removeModels.failedTitle"),
+            description: t("settingsPage.developer.retiredModels.failedDescription"),
+          });
+        }
+      },
+    });
+  }, [refreshRetiredLocalModels, showConfirmDialog, showAlertDialog, t]);
 
   const handleRemoveModels = useCallback(() => {
     if (isRemovingModels) return;
@@ -4845,6 +4873,20 @@ EOF`,
                       </div>
                     </SettingsRow>
                   </SettingsPanelRow>
+                  {retiredLocalModels.length > 0 && (
+                    <SettingsPanelRow>
+                      <SettingsRow
+                        label={t("settingsPage.developer.retiredModels.label")}
+                        description={t("settingsPage.developer.retiredModels.description", {
+                          models: retiredLocalModels.map(({ name }) => name).join(", "),
+                        })}
+                      >
+                        <Button variant="destructive" size="sm" onClick={handleRemoveRetiredModels}>
+                          {t("settingsPage.developer.retiredModels.remove")}
+                        </Button>
+                      </SettingsRow>
+                    </SettingsPanelRow>
+                  )}
                 </SettingsPanel>
 
                 <SettingsPanel>

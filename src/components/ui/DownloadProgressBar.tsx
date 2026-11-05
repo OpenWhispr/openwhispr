@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Loader2 } from "../icons";
 import { formatETA, type DownloadProgress } from "../../hooks/useModelDownload";
 
@@ -22,6 +23,7 @@ export function DownloadProgressBar({
   isVerifying,
 }: DownloadProgressBarProps) {
   const { percentage, downloadedBytes, totalBytes, speed, eta } = progress;
+  const { t } = useTranslation();
   const pct = Math.round(percentage);
   const speedText = speed ? `${speed.toFixed(1)} MB/s` : "";
   const etaText = eta ? formatETA(eta) : "";
@@ -47,7 +49,7 @@ export function DownloadProgressBar({
             {isInstalling
               ? `Installing ${modelName}`
               : isVerifying
-                ? `Verifying ${modelName}`
+                ? t("hooks.modelDownload.verifying", { model: modelName })
                 : `Downloading ${modelName}`}
           </p>
           {!isInstalling && (indeterminate || speedText || etaText) && (

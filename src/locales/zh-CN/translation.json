@@ -450,6 +450,7 @@
         "cancelDownload": "取消下载 {{model}}",
         "downloads": "模型下载",
         "downloading": "正在下载… {{progress}}%",
+        "verifying": "正在验证",
         "installing": "安装中"
       }
     },
@@ -878,6 +879,9 @@
     },
     "modelRetiredTitle": "模型已不可用",
     "modelRetiredByProvider": "{{provider}} 已停用 {{from}}。已切换到 {{to}}。",
+    "modelUnavailableSwitched": "{{provider}} 已不再提供 {{from}}。已切换到 {{to}}。",
+    "localModelRetired": "{{from}} 已不再可用，因此已为你切换到 {{to}}。如果尚未下载，请在设置中下载。",
+    "localModelRetiredChooseAnother": "{{from}} 已不再可用。请在设置中选择其他本地模型。",
     "groq": {
       "modelRetired": "Groq 已停用 {{from}}，已切换至 {{to}}。"
     },
@@ -1069,6 +1073,7 @@
         "tlsError": "证书错误 — 您的网络可能使用了阻止下载的SSL检查。请尝试从其他网络下载。",
         "unknown": "未知错误"
       },
+      "verifying": "正在验证 {{model}}",
       "downloadFailed": {
         "title": "下载失败"
       },
@@ -1940,6 +1945,14 @@
       "dataManagementTitle": "数据管理",
       "modelCache": "模型缓存",
       "open": "打开",
+      "retiredModels": {
+        "label": "已停用的模型",
+        "description": "这些模型已不再提供，但仍保留在磁盘上：{{models}}。",
+        "remove": "移除",
+        "confirmTitle": "移除已停用的模型？",
+        "confirmDescription": "这会删除目录中不再提供的模型文件。其他已下载的模型会保留。",
+        "failedDescription": "部分文件无法移除。模型可能仍在使用中；请重启应用后重试。"
+      },
       "removeModels": {
         "confirmText": "删除模型",
         "description": "这将删除所有本地缓存的 Whisper 模型（{{path}}）并释放磁盘空间。你可以从模型选择器中重新下载。",

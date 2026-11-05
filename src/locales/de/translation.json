@@ -450,6 +450,7 @@
         "cancelDownload": "Download von {{model}} abbrechen",
         "downloads": "Modell-Downloads",
         "downloading": "Wird heruntergeladen… {{progress}}%",
+        "verifying": "Wird überprüft",
         "installing": "Wird installiert"
       }
     },
@@ -878,6 +879,9 @@
     },
     "modelRetiredTitle": "Modell nicht mehr verfügbar",
     "modelRetiredByProvider": "{{provider}} hat {{from}} eingestellt. Umgestellt auf {{to}}.",
+    "modelUnavailableSwitched": "{{from}} ist bei {{provider}} nicht mehr verfügbar. Gewechselt zu {{to}}.",
+    "localModelRetired": "{{from}} ist nicht mehr verfügbar, daher haben wir zu {{to}} gewechselt. Falls es noch nicht heruntergeladen ist, lade es in den Einstellungen herunter.",
+    "localModelRetiredChooseAnother": "{{from}} ist nicht mehr verfügbar. Wähle in den Einstellungen ein anderes lokales Modell.",
     "groq": {
       "modelRetired": "Groq hat {{from}} eingestellt. Zu {{to}} gewechselt."
     },
@@ -1069,6 +1073,7 @@
         "tlsError": "Zertifikatsfehler — Ihr Netzwerk verwendet möglicherweise SSL-Inspektion, die Downloads blockiert. Versuchen Sie es über ein anderes Netzwerk.",
         "unknown": "Unbekannter Fehler"
       },
+      "verifying": "{{model}} wird überprüft",
       "downloadFailed": {
         "title": "Download fehlgeschlagen"
       },
@@ -2264,6 +2269,14 @@
       "dataManagementTitle": "Datenverwaltung",
       "modelCache": "Modell-Cache",
       "open": "Öffnen",
+      "retiredModels": {
+        "label": "Eingestellte Modelle",
+        "description": "Diese Modelle werden nicht mehr angeboten, liegen aber noch auf dem Datenträger: {{models}}.",
+        "remove": "Entfernen",
+        "confirmTitle": "Eingestellte Modelle entfernen?",
+        "confirmDescription": "Dadurch werden die Dateien der Modelle gelöscht, die der Katalog nicht mehr anbietet. Andere heruntergeladene Modelle bleiben erhalten.",
+        "failedDescription": "Einige Dateien konnten nicht entfernt werden. Möglicherweise wird ein Modell noch verwendet. Starte die App neu und versuche es erneut."
+      },
       "removeModels": {
         "confirmText": "Modelle löschen",
         "description": "Dadurch werden alle lokal zwischengespeicherten Whisper-Modelle ({{path}}) gelöscht und Speicherplatz freigegeben. Sie können sie über die Modellauswahl erneut herunterladen.",

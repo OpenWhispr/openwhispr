@@ -450,6 +450,7 @@
         "cancelDownload": "取消下載 {{model}}",
         "downloads": "模型下載",
         "downloading": "正在下載… {{progress}}%",
+        "verifying": "正在驗證",
         "installing": "安裝中"
       }
     },
@@ -878,6 +879,9 @@
     },
     "modelRetiredTitle": "模型已無法使用",
     "modelRetiredByProvider": "{{provider}} 已停用 {{from}}。已切換至 {{to}}。",
+    "modelUnavailableSwitched": "{{provider}} 已不再提供 {{from}}。已切換至 {{to}}。",
+    "localModelRetired": "{{from}} 已不再提供，因此已為你切換至 {{to}}。如果尚未下載，請在設定中下載。",
+    "localModelRetiredChooseAnother": "{{from}} 已不再提供。請在設定中選擇其他本機模型。",
     "groq": {
       "modelRetired": "Groq 已停用 {{from}}，已切換至 {{to}}。"
     },
@@ -1069,6 +1073,7 @@
         "tlsError": "憑證錯誤 — 您的網路可能使用了阻擋下載的SSL檢查。請嘗試從其他網路下載。",
         "unknown": "未知錯誤"
       },
+      "verifying": "正在驗證 {{model}}",
       "downloadFailed": {
         "title": "下載失敗"
       },
@@ -1940,6 +1945,14 @@
       "dataManagementTitle": "資料管理",
       "modelCache": "模型快取",
       "open": "開啟",
+      "retiredModels": {
+        "label": "已停用的模型",
+        "description": "這些模型已不再提供，但仍保留在磁碟上：{{models}}。",
+        "remove": "移除",
+        "confirmTitle": "要移除已停用的模型嗎？",
+        "confirmDescription": "這會刪除目錄中不再提供的模型檔案。其他已下載的模型會保留。",
+        "failedDescription": "部分檔案無法移除。模型可能仍在使用中；請重新啟動應用程式後再試一次。"
+      },
       "removeModels": {
         "confirmText": "刪除模型",
         "description": "這將刪除所有本機快取的 Whisper 模型（{{path}}），並釋放磁碟空間。你可以從模型選擇器重新下載。",

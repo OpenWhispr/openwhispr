@@ -35,6 +35,7 @@ interface ActiveDownload {
   kind: DownloadKind;
   percentage: number;
   installing?: boolean;
+  verifying?: boolean;
   error?: string;
 }
 
@@ -296,6 +297,7 @@ export default function BackgroundModelDownloadTray({
             kind: event.kind,
             percentage: clampPercentage(event.percentage),
             installing: event.type === "installing",
+            verifying: event.type === "verifying",
             error: event.type === "error" ? event.error : undefined,
           },
         };
@@ -469,7 +471,9 @@ export default function BackgroundModelDownloadTray({
               <span className="shrink-0 font-medium tabular-nums text-muted-foreground">
                 {download.installing
                   ? t("onboarding.rehaul.local.installing")
-                  : `${Math.round(download.percentage)}%`}
+                  : download.verifying
+                    ? t("onboarding.rehaul.local.verifying")
+                    : `${Math.round(download.percentage)}%`}
               </span>
             </div>
             {download.error ? (

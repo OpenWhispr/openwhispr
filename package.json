@@ -82,7 +82,8 @@
     "preview": "cd src && vite preview",
     "clean": "node cleanup.js",
     "model-registry:verify": "node scripts/sync-model-registry.mjs --check",
-    "model-registry:sync": "node scripts/sync-model-registry.mjs"
+    "model-registry:sync": "node scripts/sync-model-registry.mjs",
+    "model-registry:release-check": "node scripts/sync-model-registry.mjs --release-check"
   },
   "keywords": [
     "dictation",

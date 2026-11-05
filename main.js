@@ -302,6 +302,7 @@ const { createRegistryLoader } = require("./src/helpers/registryLoader");
 const { registerRegistryIpc } = require("./src/helpers/registryIpc");
 const { replaceRegistryData } = require("./src/models/registryData.js");
 const { configureInstalledModels, withInstalledModels } = require("./src/helpers/installedModels");
+const { withTrustedDownloads } = require("./src/helpers/registryDownloadTrust");
 const registryTrustedKeys = require("./src/models/registryTrustedKeys.json");
 let registryLoader = null;
 let disposeRegistryIpc = null;
@@ -1232,11 +1233,12 @@ async function startApp() {
   // Only local signature/cache verification is awaited. Remote refresh starts
   // later, so offline startup and settings migrations see a usable catalog.
   const registryMetadata = require("./src/models/registryMetadata.json");
+  const bundledRegistryData = require("./src/models/modelRegistryData.json");
   configureInstalledModels(path.join(app.getPath("userData"), "installed-models.json"));
   registryLoader = createRegistryLoader({
     cachePath: path.join(app.getPath("userData"), "model-registry.json"),
     bundledSnapshot: {
-      data: require("./src/models/modelRegistryData.json"),
+      data: bundledRegistryData,
       manifestVersion: registryMetadata.manifestVersion,
     },
     clientContract: registryMetadata.clientContract,
@@ -1245,7 +1247,12 @@ async function startApp() {
     applySnapshot: (snapshot) =>
       replaceRegistryData({
         ...snapshot,
-        data: withInstalledModels(snapshot.data, app.getVersion()),
+        data: withInstalledModels(
+          withTrustedDownloads(snapshot.data, bundledRegistryData, (id) =>
+            debugLogger.warn("Refused a catalog download from an untrusted source", { id })
+          ),
+          app.getVersion()
+        ),
       }),
     fetch: (...args) => net.fetch(...args),
     onError: (error) =>

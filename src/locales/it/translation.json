@@ -450,6 +450,7 @@
         "cancelDownload": "Annulla il download di {{model}}",
         "downloads": "Download dei modelli",
         "downloading": "Download in corso… {{progress}}%",
+        "verifying": "Verifica",
         "installing": "Installazione"
       }
     },
@@ -878,6 +879,9 @@
     },
     "modelRetiredTitle": "Modello non più disponibile",
     "modelRetiredByProvider": "{{provider}} ha ritirato {{from}}. Passato a {{to}}.",
+    "modelUnavailableSwitched": "{{from}} non è più disponibile su {{provider}}. Passaggio a {{to}}.",
+    "localModelRetired": "{{from}} non è più disponibile, quindi siamo passati a {{to}}. Se non è ancora stato scaricato, scaricalo nelle Impostazioni.",
+    "localModelRetiredChooseAnother": "{{from}} non è più disponibile. Scegli un altro modello locale nelle Impostazioni.",
     "groq": {
       "modelRetired": "Groq ha ritirato {{from}}. Passato a {{to}}."
     },
@@ -1069,6 +1073,7 @@
         "tlsError": "Errore di certificato — la tua rete potrebbe usare l'ispezione SSL che blocca i download. Prova a scaricare da un'altra rete.",
         "unknown": "Errore sconosciuto"
       },
+      "verifying": "Verifica di {{model}}",
       "downloadFailed": {
         "title": "Download non riuscito"
       },
@@ -1940,6 +1945,14 @@
       "dataManagementTitle": "Gestione dati",
       "modelCache": "Cache dei modelli",
       "open": "Apri",
+      "retiredModels": {
+        "label": "Modelli ritirati",
+        "description": "Questi modelli non sono più offerti ma sono ancora sul disco: {{models}}.",
+        "remove": "Rimuovi",
+        "confirmTitle": "Rimuovere i modelli ritirati?",
+        "confirmDescription": "Questa operazione elimina i file dei modelli che il catalogo non offre più. Gli altri modelli scaricati restano.",
+        "failedDescription": "Non è stato possibile rimuovere alcuni file. Un modello potrebbe essere ancora in uso; riavvia l'app e riprova."
+      },
       "removeModels": {
         "confirmText": "Elimina modelli",
         "description": "Questa operazione elimina tutti i modelli Whisper memorizzati nella cache locale ({{path}}) e libera spazio su disco. Puoi scaricarli di nuovo dal selettore modelli.",

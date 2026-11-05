@@ -450,6 +450,7 @@
         "cancelDownload": "Cancelar la descarga de {{model}}",
         "downloads": "Descargas de modelos",
         "downloading": "Descargando… {{progress}}%",
+        "verifying": "Verificando",
         "installing": "Instalando"
       }
     },
@@ -878,6 +879,9 @@
     },
     "modelRetiredTitle": "Modelo ya no disponible",
     "modelRetiredByProvider": "{{provider}} retiró {{from}}. Se cambió a {{to}}.",
+    "modelUnavailableSwitched": "{{from}} ya no está disponible en {{provider}}. Se cambió a {{to}}.",
+    "localModelRetired": "{{from}} ya no está disponible, así que te cambiamos a {{to}}. Si aún no lo has descargado, descárgalo en Ajustes.",
+    "localModelRetiredChooseAnother": "{{from}} ya no está disponible. Elige otro modelo local en Ajustes.",
     "groq": {
       "modelRetired": "Groq retiró {{from}}. Se cambió a {{to}}."
     },
@@ -1069,6 +1073,7 @@
         "tlsError": "Error de certificado — tu red puede usar inspección SSL que bloquea las descargas. Intenta descargar desde otra red.",
         "unknown": "Error desconocido"
       },
+      "verifying": "Verificando {{model}}",
       "downloadFailed": {
         "title": "Descarga fallida"
       },
@@ -1992,6 +1997,14 @@
       "dataManagementTitle": "Gestión de datos",
       "modelCache": "Caché de modelos",
       "open": "Abrir",
+      "retiredModels": {
+        "label": "Modelos retirados",
+        "description": "Estos modelos ya no se ofrecen, pero siguen en el disco: {{models}}.",
+        "remove": "Eliminar",
+        "confirmTitle": "¿Eliminar los modelos retirados?",
+        "confirmDescription": "Esto borra los archivos de los modelos que el catálogo ya no ofrece. Los demás modelos descargados se conservan.",
+        "failedDescription": "No se pudieron eliminar algunos archivos. Puede que un modelo siga en uso; reinicia la aplicación e inténtalo de nuevo."
+      },
       "removeModels": {
         "confirmText": "Eliminar modelos",
         "description": "Esto elimina todos los modelos de Whisper almacenados en caché local ({{path}}) y libera espacio en disco. Puedes descargarlos nuevamente desde el selector de modelos.",

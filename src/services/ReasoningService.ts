@@ -43,7 +43,10 @@ import {
   type ParamFallbackDetails,
 } from "./ai/chatRequestBody";
 import { getModelFamilyConstraints } from "./ai/modelFamilyConstraints";
-import { detectEndpointDialect } from "./ai/thinkingSuppressionDialects";
+import {
+  detectEndpointDialect,
+  geminiCatalogThinkingFloor,
+} from "./ai/thinkingSuppressionDialects";
 import { abortOnCancel, isRequestCancelled, requestCancelledError } from "./ai/requestCancellation";
 import { openCodeSessionHeaders } from "./ai/openCodeSession";
 import { createStreamingThinkFilter } from "./ai/streamingThinkFilter";
@@ -959,7 +962,7 @@ class ReasoningService extends BaseReasoningService {
       ...(needsGeminiThinkingSuppressed
         ? {
             google: {
-              thinkingConfig: {
+              thinkingConfig: geminiCatalogThinkingFloor(model) ?? {
                 thinkingLevel:
                   getModelFamilyConstraints(model)?.reasoningEffort?.suppressValue ?? "minimal",
                 includeThoughts: false,

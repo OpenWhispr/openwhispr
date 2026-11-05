@@ -450,6 +450,7 @@
         "cancelDownload": "Annuler le téléchargement de {{model}}",
         "downloads": "Téléchargements de modèles",
         "downloading": "Téléchargement… {{progress}}%",
+        "verifying": "Vérification",
         "installing": "Installation"
       }
     },
@@ -878,6 +879,9 @@
     },
     "modelRetiredTitle": "Modèle non disponible",
     "modelRetiredByProvider": "{{provider}} a retiré {{from}}. Passage à {{to}}.",
+    "modelUnavailableSwitched": "{{from}} n'est plus disponible chez {{provider}}. Passage à {{to}}.",
+    "localModelRetired": "{{from}} n'est plus disponible : nous sommes passés à {{to}}. S'il n'est pas encore téléchargé, téléchargez-le dans les paramètres.",
+    "localModelRetiredChooseAnother": "{{from}} n'est plus disponible. Choisissez un autre modèle local dans les paramètres.",
     "groq": {
       "modelRetired": "Groq a retiré {{from}}. Basculé vers {{to}}."
     },
@@ -1069,6 +1073,7 @@
         "tlsError": "Erreur de certificat — votre réseau utilise peut-être une inspection SSL qui bloque les téléchargements. Essayez depuis un autre réseau.",
         "unknown": "Erreur inconnue"
       },
+      "verifying": "Vérification de {{model}}",
       "downloadFailed": {
         "title": "Échec du téléchargement"
       },
@@ -2264,6 +2269,14 @@
       "dataManagementTitle": "Gestion des données",
       "modelCache": "Cache des modèles",
       "open": "Ouvrir",
+      "retiredModels": {
+        "label": "Modèles retirés",
+        "description": "Ces modèles ne sont plus proposés mais restent sur le disque : {{models}}.",
+        "remove": "Supprimer",
+        "confirmTitle": "Supprimer les modèles retirés ?",
+        "confirmDescription": "Cela supprime les fichiers des modèles que le catalogue ne propose plus. Les autres modèles téléchargés sont conservés.",
+        "failedDescription": "Certains fichiers n'ont pas pu être supprimés. Un modèle est peut-être encore utilisé ; redémarrez l'application et réessayez."
+      },
       "removeModels": {
         "confirmText": "Supprimer les modèles",
         "description": "Cela supprime tous les modèles Whisper mis en cache localement ({{path}}) et libère de l'espace disque. Vous pouvez les retélécharger depuis le sélecteur de modèles.",

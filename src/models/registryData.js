@@ -61,6 +61,11 @@ export const getRegistrySnapshot = () => ({
 export const isCatalogPending = () => pending;
 export const getRetiredModel = (section, providerId, modelId) =>
   retired.get(retiredKey(section, providerId ?? "", modelId));
+export const listRetiredModels = () =>
+  [...retired].map(([key, model]) => {
+    const [section, providerId, id] = key.split("\0");
+    return { section, providerId, id, model };
+  });
 export function subscribeRegistry(listener) {
   listeners.add(listener);
   return () => listeners.delete(listener);
@@ -69,7 +74,13 @@ export function subscribeRegistry(listener) {
 // Only the verified main loader and its preload/IPC mirror call this boundary.
 // Signature and compatibility checks belong in main, never in the renderer.
 export function replaceRegistryData(snapshot) {
-  if (!Number.isSafeInteger(snapshot?.manifestVersion) || snapshot.manifestVersion <= version)
+  // The one change at the same version: a catalog that was pending has settled. Subscribers
+  // run again, so the repairs it held back happen now.
+  const settles = snapshot?.manifestVersion === version && pending && snapshot.pending !== true;
+  if (
+    !Number.isSafeInteger(snapshot?.manifestVersion) ||
+    (snapshot.manifestVersion <= version && !settles)
+  )
     return false;
   if (!snapshot.data || Object.keys(bundled).some((key) => !Object.hasOwn(snapshot.data, key)))
     return false;

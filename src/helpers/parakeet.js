@@ -106,6 +106,9 @@ class ParakeetManager {
         capability.supported &&
         isSherpaLocalProvider(localTranscriptionProvider) &&
         parakeetModel &&
+        // A saved model the catalog no longer offers (retired) must not be loaded, and has
+        // no runtime to start it on.
+        getParakeetModelConfig(parakeetModel) &&
         this.serverManager.isAvailable(getModelRuntime(parakeetModel))
       ) {
         if (this.serverManager.isModelDownloaded(parakeetModel)) {
@@ -412,24 +415,22 @@ class ParakeetManager {
         });
       }
 
-      if (modelConfig.sha256) {
-        // Checking a large archive takes minutes; show its progress, still cancellable.
-        const archiveBytes = (await fsPromises.stat(archivePath)).size;
-        const verifying = (bytesRead) =>
-          progressCallback?.({
-            type: "verifying",
-            model: modelName,
-            percentage: Math.min(100, Math.round((bytesRead / archiveBytes) * 100)),
-          });
-        verifying(0);
-        await validateModelArchive(
-          archivePath,
-          modelConfig.extractDir,
-          signal,
-          modelConfig.size,
-          verifying
-        );
-      }
+      // Checking a large archive takes minutes; show its progress, still cancellable.
+      const archiveBytes = (await fsPromises.stat(archivePath)).size;
+      const verifying = (bytesRead) =>
+        progressCallback?.({
+          type: "verifying",
+          model: modelName,
+          percentage: Math.min(100, Math.round((bytesRead / archiveBytes) * 100)),
+        });
+      verifying(0);
+      await validateModelArchive(
+        archivePath,
+        modelConfig.extractDir,
+        signal,
+        modelConfig.size,
+        verifying
+      );
       if (signal.aborted) throw Object.assign(new Error("Download cancelled"), { isAbort: true });
       downloadProcess.phase = "installing";
       downloadProcess.percentage = 100;

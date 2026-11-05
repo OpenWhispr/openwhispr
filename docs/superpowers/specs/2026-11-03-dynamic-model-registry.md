@@ -15,7 +15,7 @@ No released app has read a publication yet (#2683 and its revert #2685 both land
 | `legacy: true`                          | Still works; pickers hide it unless selected or (local) downloaded. | Both ways |
 | `retired: true`, optional `replacement` | No longer works.                                                    | One way   |
 
-Entries are never deleted; a retired entry tells old caches and apps what happened. `registryData` strips retired entries, so no picker, route or check can offer them, and keeps them in a retired index. `reconcileRetiredCloudModelSelections()` moves saved cloud and transcription selections to the replacement (or the provider default) at startup and on every catalog update, with the existing retired-model toast. `resolveRetiredCloudModel()` maps retired IDs at request dispatch for every hosted provider. Local retired models are not offered or loaded.
+Entries are never deleted; a retired entry tells old caches and apps what happened. `registryData` strips retired entries, so no picker, route or check can offer them, and keeps them in a retired index. `reconcileRetiredCloudModelSelections()` moves saved cloud and transcription selections to the replacement (or the provider default) at startup and on every catalog update, with the retired-model toast, which waits until the control panel has focus. `resolveRetiredCloudModel()` maps retired IDs at request dispatch for every hosted provider. Local retired models are not offered or loaded: Whisper and sherpa-onnx selections move to the replacement or the engine's recommended model, GGUF selections to a replacement on disk or to none, and Settings → Developer removes their files. An enterprise selection only follows a named replacement.
 
 ## Corrections (finding 2)
 
@@ -23,7 +23,7 @@ Every provider names an explicit, editable `defaultModel`; list order is display
 
 ## Evolving the format (finding 3)
 
-The registry authors strictly (unknown keys fail review); the app reads leniently through the shared `acceptCatalog`: unknown fields are dropped, an entry the app cannot read is skipped alone (its bundled copy stands in), provider endpoints and membership always come from the app, and it never throws. Fields an older app must understand travel with `minAppVersion`. Registry CI runs every catalog through each released app's reader (`compat/clients/`) and signs the readers it tested as `testedClientContracts`; the app applies a publication only when its own `clientContract` (recorded in `registryMetadata.json`, proved by `model-registry:verify`) is listed. A version more than 10,000 above the current one is refused.
+The registry authors strictly (unknown keys fail review); the app reads leniently through the shared `acceptCatalog`: unknown fields are dropped, an entry the app cannot read is skipped alone (its bundled copy stands in), provider endpoints and membership always come from the app, and it never throws. Fields an older app must understand travel with `minAppVersion`. Registry CI runs every catalog through each released app's reader (`compat/clients/`) and signs the readers it tested as `testedClientContracts`; the app applies a publication only when its own `clientContract` (recorded in `registryMetadata.json`, proved by `model-registry:verify`) is listed. A version more than 10,000 above the current one is refused. `npm run model-registry:release-check` fails a release build that pins no signed publication, or whose reader the live publication or the registry's `compat/clients` doesn't list.
 
 ## Boot safety and the loader (findings 4, 20, 21, 24–26)
 
@@ -31,7 +31,7 @@ The registry authors strictly (unknown keys fail review); the app reads lenientl
 
 ## Missing catalog entries (findings 7, 13–15, 30, 34–36)
 
-The localStorage "published history" and its unavailable-model error are removed. An ID no catalog knows is left alone rather than replaced (it may be a remote addition whose catalog has not loaded yet), cloud requests pass it through, and `installedModels.js` records every downloaded local model so main merges it back when its catalog entry is missing. Unknown Parakeet models fail closed, and a missing local model never triggers the cloud fallback.
+The localStorage "published history" and its unavailable-model error are removed. While a catalog is pending (one the app accepted before can't be used yet or, with updates off, the cache is newer than the bundle), an ID no catalog knows is left alone rather than replaced, and cloud requests pass it through. Otherwise it moves to the provider's default with a notice. A verified publication no newer than the catalog in use ends the pending state. Also, `installedModels.js` records every downloaded local model so main merges it back when its catalog entry is missing. Unknown Parakeet models fail closed, and a missing local model never triggers the cloud fallback.
 
 ## Not in this change
 

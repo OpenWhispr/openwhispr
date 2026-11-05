@@ -279,3 +279,79 @@ test("a cache that exists but cannot be used marks the catalog pending until one
   await fresh.loader.start();
   assert.equal(fresh.applied[0].pending, false, "a fresh install has nothing pending");
 });
+
+test("a cache no newer than the bundle is never pending, even when untested by this app", async (t) => {
+  const x = setup(t, { bundledSnapshot: { data: seed, manifestVersion: 6 } });
+  fs.writeFileSync(x.config.cachePath, signed(5, seed, { tested: ["d".repeat(64)] }));
+  await x.loader.start();
+  assert.deepEqual(
+    x.applied.map(({ manifestVersion, pending }) => [manifestVersion, pending]),
+    [[6, false]]
+  );
+  assert.deepEqual(x.errors, []);
+});
+
+test("a verified publication no newer than the bundle clears pending and heals the cache", async (t) => {
+  const x = setup(t, {
+    bundledSnapshot: { data: seed, manifestVersion: 6 },
+    fetch: async () => new Response(signed(6)),
+  });
+  fs.writeFileSync(x.config.cachePath, "{");
+  await x.loader.start();
+  assert.equal(x.applied.at(-1).pending, true);
+  await x.loader.refresh();
+  assert.deepEqual(
+    x.applied.map(({ manifestVersion, pending }) => [manifestVersion, pending]),
+    [
+      [6, true],
+      [6, false],
+    ]
+  );
+  assert.equal(JSON.parse(fs.readFileSync(x.config.cachePath, "utf8")).keyId, "fixture");
+
+  const relaunch = setup(t, {
+    cachePath: x.config.cachePath,
+    bundledSnapshot: { data: seed, manifestVersion: 6 },
+  });
+  await relaunch.loader.start();
+  assert.equal(relaunch.applied.at(-1).pending, false, "the healed cache stays healed");
+});
+
+test("a newer publication this app has not tested keeps the catalog pending", async (t) => {
+  const x = setup(t, {
+    bundledSnapshot: { data: seed, manifestVersion: 6 },
+    fetch: async () => new Response(signed(7, seed, { tested: ["d".repeat(64)] })),
+  });
+  fs.writeFileSync(x.config.cachePath, signed(7, seed, { tested: ["d".repeat(64)] }));
+  await x.loader.start();
+  await x.loader.refresh();
+  assert.equal(x.applied.length, 1);
+  assert.equal(x.applied[0].pending, true);
+  assert.match(x.errors.at(-1).message, /not tested/);
+});
+
+test("opting out keeps a saved model from a newer cached catalog, without using that catalog", async (t) => {
+  const x = setup(t, {
+    isEnabled: () => false,
+    bundledSnapshot: { data: seed, manifestVersion: 6 },
+  });
+  fs.writeFileSync(x.config.cachePath, signed(9));
+  await x.loader.start();
+  assert.deepEqual(
+    x.applied.map(({ manifestVersion, pending }) => [manifestVersion, pending]),
+    [[6, true]]
+  );
+  assert.equal(x.requests.length, 0);
+
+  const older = setup(t, {
+    isEnabled: () => false,
+    bundledSnapshot: { data: seed, manifestVersion: 6 },
+  });
+  fs.writeFileSync(older.config.cachePath, signed(5));
+  await older.loader.start();
+  assert.equal(older.applied[0].pending, false, "the bundle already holds an older catalog");
+
+  const none = setup(t, { isEnabled: () => false });
+  await none.loader.start();
+  assert.equal(none.applied[0].pending, false, "nothing cached, nothing to wait for");
+});

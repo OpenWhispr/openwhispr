@@ -42,6 +42,8 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Run quality checks
         run: npm run quality-check
+      - name: Check the model registry serves this build
+        run: npm run model-registry:release-check
       - name: Check translations
         run: npm run i18n:check
       - name: Audit dependencies

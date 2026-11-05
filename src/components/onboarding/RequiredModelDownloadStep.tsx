@@ -142,7 +142,9 @@ export function RequiredModelDownloadStep({
                   <span className="relative whitespace-nowrap">
                     {download.isInstalling
                       ? t("onboarding.rehaul.local.installing")
-                      : t("onboarding.rehaul.local.downloadingShort")}
+                      : download.isVerifying
+                        ? t("onboarding.rehaul.local.verifying")
+                        : t("onboarding.rehaul.local.downloadingShort")}
                   </span>
                 </span>
               ) : failure ? (

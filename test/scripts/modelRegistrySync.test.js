@@ -42,3 +42,18 @@ test("verify rejects a hand-edited catalog or reader with the way to add models"
     await assert.rejects(check(dir), /OpenWhispr\/model-registry/, file);
   }
 });
+
+test("a release needs a published catalog the registry keeps serving", async () => {
+  const { releaseProblems } = await import("../../scripts/sync-model-registry.mjs");
+  const metadata = { publicationCommit: "a".repeat(40), manifestVersion: 4, clientContract: "c" };
+  const good = { metadata, liveVersion: 4, liveTested: true, compatListed: true };
+  assert.deepEqual(releaseProblems(good), []);
+  assert.deepEqual(releaseProblems({ ...good, liveVersion: 9 }), [], "a newer live one is fine");
+  for (const [broken, pattern] of [
+    [{ metadata: { ...metadata, publicationCommit: undefined } }, /unpublished/],
+    [{ liveVersion: 3 }, /ahead of live/],
+    [{ liveTested: false }, /not tested/],
+    [{ compatListed: false }, /compat\/clients/],
+  ])
+    assert.match(releaseProblems({ ...good, ...broken }).join(), pattern);
+});

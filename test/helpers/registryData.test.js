@@ -109,3 +109,22 @@ test("one atomic update reaches CJS helpers, ESM readers and derived model lists
     store.replaceRegistryData({ data: old.data, manifestVersion: old.manifestVersion + 2 });
   }
 });
+
+test("the same version can clear pending, but never set it or replay an old snapshot", async () => {
+  const store = await import("../../src/models/registryData.js");
+  const version = store.getRegistryVersion() + 1;
+  let notified = 0;
+  const unsubscribe = store.subscribeRegistry(() => notified++);
+  const data = structuredClone(seed);
+  assert.equal(store.replaceRegistryData({ data, manifestVersion: version, pending: true }), true);
+  assert.equal(store.isCatalogPending(), true);
+  assert.equal(store.replaceRegistryData({ data, manifestVersion: version, pending: true }), false);
+
+  assert.equal(store.replaceRegistryData({ data, manifestVersion: version }), true);
+  assert.equal(store.isCatalogPending(), false);
+  assert.equal(notified, 2, "subscribers re-run the repairs pending held back");
+
+  assert.equal(store.replaceRegistryData({ data, manifestVersion: version, pending: true }), false);
+  assert.equal(store.isCatalogPending(), false);
+  unsubscribe();
+});

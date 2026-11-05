@@ -26,5 +26,11 @@ export function getRetiredModel(
   providerId: string | undefined,
   modelId: string
 ): RetiredModel | undefined;
+export function listRetiredModels(): Array<{
+  section: RegistrySection;
+  providerId: string;
+  id: string;
+  model: RetiredModel;
+}>;
 export function subscribeRegistry(listener: () => void): () => void;
 export function replaceRegistryData(snapshot: RegistrySnapshot): boolean;

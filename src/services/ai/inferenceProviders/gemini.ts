@@ -9,7 +9,7 @@ import { extractGeminiText } from "../../../helpers/geminiResponse.js";
 import { wrapCleanupTranscript } from "../../../config/prompts";
 import { chosenReasoningEffort, emptyOutputError, truncatedOutputError } from "../chatRequestBody";
 import logger from "../../../utils/logger";
-import { getCloudModel } from "../../../models/ModelRegistry";
+import { geminiCatalogThinkingFloor } from "../thinkingSuppressionDialects";
 import {
   asProviderError,
   providerHttpError,
@@ -54,14 +54,9 @@ const minimalThinking: Record<string, GeminiGenerationConfig["thinkingConfig"]> 
   "gemini-2.5-pro": { thinkingBudget: 128, includeThoughts: false },
 };
 
-// The catalog's thinkingFloor lets a model added through the registry carry its own
-// floor; the table covers models published before that field existed.
+// The table covers models published before the catalog's thinkingFloor existed.
 function thinkingFloor(model: string): GeminiGenerationConfig["thinkingConfig"] {
-  const floor = getCloudModel(model)?.thinkingFloor;
-  if (!floor) return minimalThinking[model];
-  return "level" in floor
-    ? { thinkingLevel: floor.level, includeThoughts: false }
-    : { thinkingBudget: floor.budget, includeThoughts: false };
+  return geminiCatalogThinkingFloor(model) ?? minimalThinking[model];
 }
 
 export const geminiProvider: InferenceProvider = {

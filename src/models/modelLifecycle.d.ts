@@ -10,6 +10,10 @@ export function retiredReplacement(
   modelId: string,
   providers?: ProviderList
 ): string | null;
+export function retiredLocalSpeechReplacement(
+  section: "whisperModels" | "parakeetModels",
+  modelId: string
+): string | null;
 export function isAwaitingCatalog(
   section: Exclude<RegistrySection, "whisperModels" | "parakeetModels">,
   modelId: string,

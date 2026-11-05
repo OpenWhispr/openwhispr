@@ -100,9 +100,11 @@ function createRegistryLoader({
   // hold this or an older version. Throws for anything untrusted or not meant for us.
   function accept(bytes) {
     const manifest = validateManifest(verifyEnvelope(bytes, trustedKeys));
+    // Entries are never deleted, so a catalog in use already holds everything an older one
+    // does. That stays true of an older copy cached by a previous app version's reader.
+    if (stopped || manifest.manifestVersion <= snapshot.manifestVersion) return false;
     if (!manifest.testedClientContracts.includes(clientContract))
       throw new Error(`Catalog ${manifest.manifestVersion} was not tested with this app version`);
-    if (stopped || manifest.manifestVersion <= snapshot.manifestVersion) return false;
     if (manifest.manifestVersion > snapshot.manifestVersion + MAX_VERSION_STEP)
       throw new Error(`Catalog version ${manifest.manifestVersion} is implausibly far ahead`);
     pending = false;
@@ -159,7 +161,15 @@ function createRegistryLoader({
         if (response.status === 304) return;
         const bytes = await Promise.race([readBoundedResponse(response), abort]);
         if (stopped || signal.aborted) return;
-        if (accept(bytes)) await persist(bytes);
+        if (accept(bytes)) {
+          await persist(bytes);
+        } else if (pending && !stopped) {
+          // The newest publication adds nothing to the catalog in use, so nothing is still
+          // to come. Replacing the unusable copies stops this repeating on every launch.
+          pending = false;
+          apply(snapshot);
+          await persist(bytes);
+        }
         etag = response.headers.get("etag");
       } catch (error) {
         if (!stopped) reportError(error);
@@ -190,10 +200,28 @@ function createRegistryLoader({
     return false;
   }
 
+  // Opted out, the cache stays unused. A saved model may still be one of its additions,
+  // and providers keep serving those, so it is not treated as unknown.
+  async function cacheHoldsNewerCatalog() {
+    for (const file of [cachePath, backupPath]) {
+      try {
+        const manifest = validateManifest(
+          verifyEnvelope(await readBoundedCache(file), trustedKeys)
+        );
+        if (manifest.manifestVersion > snapshot.manifestVersion) return true;
+      } catch (error) {
+        if (error.code !== "ENOENT") return true;
+      }
+    }
+    return false;
+  }
+
   async function start() {
     if (started || stopped) return;
     started = true;
-    const restored = isEnabled() ? await restoreCache() : true;
+    let restored = true;
+    if (isEnabled()) restored = await restoreCache();
+    else pending = await cacheHoldsNewerCatalog();
     if (!applied) apply(snapshot);
     if (!isEnabled() || stopped) return;
     // With no usable cached copy, fetch at once rather than leave remote additions

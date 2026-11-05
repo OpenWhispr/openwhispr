@@ -177,3 +177,36 @@ test("a Gemini model added through the catalog brings its own thinking floor", a
     includeThoughts: false,
   });
 });
+
+test("a catalog thinking floor also reaches the streaming and compatible paths", async () => {
+  const { registryData } = await import("../../src/models/registryData.js");
+  const store = await import("../../src/models/registryData.js");
+  const data = structuredClone(registryData);
+  const gemini = data.cloudProviders.find((provider) => provider.id === "gemini");
+  const base = { ...gemini.models[0], supportsThinking: true };
+  gemini.models.push(
+    { ...base, id: "gemini-remote-level", thinkingFloor: { level: "low" } },
+    { ...base, id: "gemini-remote-budget", thinkingFloor: { budget: 128 } }
+  );
+  store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1 });
+  const { geminiCatalogThinkingFloor, suppressThinking } =
+    await import("../../src/services/ai/thinkingSuppressionDialects.ts");
+
+  assert.deepEqual(geminiCatalogThinkingFloor("gemini-remote-level"), {
+    thinkingLevel: "low",
+    includeThoughts: false,
+  });
+  assert.deepEqual(geminiCatalogThinkingFloor("gemini-remote-budget"), {
+    thinkingBudget: 128,
+    includeThoughts: false,
+  });
+  assert.equal(geminiCatalogThinkingFloor("gemini-no-floor"), undefined);
+  const effort = (model) => {
+    const body = {};
+    suppressThinking(body, "gemini", model);
+    return body.reasoning_effort;
+  };
+  assert.equal(effort("gemini-remote-level"), "low");
+  assert.equal(effort("gemini-remote-budget"), "low");
+  assert.equal(effort("gemini-no-floor"), "minimal");
+});

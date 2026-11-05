@@ -5147,6 +5147,21 @@ class IPCHandlers {
       }
     });
 
+    const retiredModelDirs = () => {
+      const { getModelsDirForService } = require("./modelDirUtils");
+      return {
+        whisperDir: getModelsDirForService("whisper"),
+        parakeetDir: getModelsDirForService("parakeet"),
+        llamaDir: require("./modelManagerBridge").default.getModelsDir(),
+      };
+    };
+    ipcMain.handle("list-retired-local-models", () =>
+      require("./retiredLocalModels").listRetiredLocalModels(retiredModelDirs())
+    );
+    ipcMain.handle("delete-retired-local-models", () =>
+      require("./retiredLocalModels").deleteRetiredLocalModels(retiredModelDirs())
+    );
+
     ipcMain.handle("model-delete-all", async () => {
       try {
         const modelManager = require("./modelManagerBridge").default;

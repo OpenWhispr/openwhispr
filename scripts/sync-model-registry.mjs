@@ -5,6 +5,8 @@
 //   --check              offline: the vendored files are exactly what was synced
 //   --status             online, informational: is a newer publication live, and has it
 //                        been tested with this app's reader?
+//   --release-check      online, for release builds: fails unless the registry will keep
+//                        serving this build
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -196,6 +198,45 @@ async function status() {
   ].join("\n");
 }
 
+// A build the registry doesn't test applies no publication, ever, and only logs a warning.
+export function releaseProblems({ metadata, liveVersion, liveTested, compatListed }) {
+  const problems = [];
+  if (!metadata.publicationCommit)
+    problems.push("This build vendors an unpublished registry source; sync a signed publication.");
+  if (metadata.manifestVersion > liveVersion)
+    problems.push(`This build bundles ${metadata.manifestVersion}, ahead of live ${liveVersion}.`);
+  if (!liveTested) problems.push("The live publication was not tested with this app's reader.");
+  if (!compatListed)
+    problems.push(
+      `Add this reader to compat/clients in the registry (${metadata.clientContract}), or later publications stop testing it.`
+    );
+  return problems;
+}
+
+async function releaseCheck() {
+  const metadata = JSON.parse(
+    await fs.readFile(path.join(output, "registryMetadata.json"), "utf8")
+  );
+  const reader = require(path.join(output, "registrySchema.cjs"));
+  const manifest = reader.validateManifest(
+    verifyEnvelope(await fetchText(`${BASE}/published/v2/manifest.json`), pinnedKeys)
+  );
+  const compat = await fetch(`${BASE}/main/compat/clients/${metadata.clientContract}/client.json`, {
+    signal: AbortSignal.timeout(15000),
+    redirect: "error",
+  });
+  if (!compat.ok && compat.status !== 404)
+    throw new Error(`The registry answered HTTP ${compat.status}`);
+  const problems = releaseProblems({
+    metadata,
+    liveVersion: manifest.manifestVersion,
+    liveTested: manifest.testedClientContracts.includes(metadata.clientContract),
+    compatListed: compat.ok,
+  });
+  if (problems.length) throw new Error(problems.join("\n"));
+  return `Release check passed: live publication ${manifest.manifestVersion} serves this build.`;
+}
+
 async function main() {
   const argument = (flag) => {
     const index = process.argv.indexOf(flag);
@@ -203,6 +244,7 @@ async function main() {
   };
   if (process.argv.includes("--check")) return `Verified ${await check()}`;
   if (process.argv.includes("--status")) return status();
+  if (process.argv.includes("--release-check")) return releaseCheck();
   const revision = argument("--revision");
   const source = argument("--source");
   if (isCommit(revision)) return `Vendored ${await syncPublication(revision)}`;

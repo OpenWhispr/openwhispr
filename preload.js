@@ -652,6 +652,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   modelGetActiveDownloads: () => ipcRenderer.invoke("model-get-active-downloads"),
   modelCheck: (modelId) => ipcRenderer.invoke("model-check", modelId),
   modelDownload: (modelId) => ipcRenderer.invoke("model-download", modelId),
+  listRetiredLocalModels: () => ipcRenderer.invoke("list-retired-local-models"),
+  deleteRetiredLocalModels: () => ipcRenderer.invoke("delete-retired-local-models"),
   modelDelete: (modelId) => ipcRenderer.invoke("model-delete", modelId),
   modelDeleteAll: () => ipcRenderer.invoke("model-delete-all"),
   modelCheckRuntime: () => ipcRenderer.invoke("model-check-runtime"),

@@ -450,6 +450,7 @@
         "cancelDownload": "{{model}} のダウンロードをキャンセル",
         "downloads": "モデルのダウンロード",
         "downloading": "ダウンロード中… {{progress}}%",
+        "verifying": "検証中",
         "installing": "インストール中"
       }
     },
@@ -878,6 +879,9 @@
     },
     "modelRetiredTitle": "モデルが利用できません",
     "modelRetiredByProvider": "{{provider}} は {{from}} の提供を終了しました。{{to}} に切り替えました。",
+    "modelUnavailableSwitched": "{{provider}} では {{from}} を利用できなくなりました。{{to}} に切り替えました。",
+    "localModelRetired": "{{from}} は利用できなくなったため、{{to}} に切り替えました。まだダウンロードしていない場合は、設定からダウンロードしてください。",
+    "localModelRetiredChooseAnother": "{{from}} は利用できなくなりました。設定で別のローカルモデルを選択してください。",
     "groq": {
       "modelRetired": "Groq は {{from}} を提供終了しました。{{to}} に切り替えました。"
     },
@@ -1069,6 +1073,7 @@
         "tlsError": "証明書エラー — ネットワークのSSL検査がダウンロードをブロックしている可能性があります。別のネットワークからお試しください。",
         "unknown": "不明なエラー"
       },
+      "verifying": "{{model}} を検証中",
       "downloadFailed": {
         "title": "ダウンロードに失敗しました"
       },
@@ -1940,6 +1945,14 @@
       "dataManagementTitle": "データ管理",
       "modelCache": "モデルキャッシュ",
       "open": "開く",
+      "retiredModels": {
+        "label": "提供終了モデル",
+        "description": "これらのモデルは提供終了しましたが、ディスクに残っています：{{models}}。",
+        "remove": "削除",
+        "confirmTitle": "提供終了モデルを削除しますか？",
+        "confirmDescription": "カタログで提供されなくなったモデルのファイルを削除します。ダウンロード済みの他のモデルは残ります。",
+        "failedDescription": "一部のファイルを削除できませんでした。モデルが使用中の可能性があります。アプリを再起動してもう一度お試しください。"
+      },
       "removeModels": {
         "confirmText": "モデルを削除",
         "description": "ローカルにキャッシュされたすべての Whisper モデル（{{path}}）を削除し、ディスク容量を解放します。モデルピッカーから再度ダウンロードできます。",
