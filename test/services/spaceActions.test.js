@@ -414,6 +414,42 @@ test("addTeamMembers reports partial failures and still refreshes the mirror", a
   assert.ok(calls.some(([name]) => name === "mirror.upsert"));
 });
 
+test("a new assignment sends no access, so an existing one keeps its own", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps } = makeHarness();
+  const actions = createSpaceActions(deps);
+
+  await actions.assignTeamToSpaces("team-1", ["space-a", "space-b"]);
+
+  assert.deepEqual(
+    calls.filter(([name]) => name === "space.assignTeam"),
+    [
+      ["space.assignTeam", "space-a", "team-1", undefined],
+      ["space.assignTeam", "space-b", "team-1", undefined],
+    ]
+  );
+});
+
+test("assignTeamToSpaces tries every teamspace in order, reports the failures and refreshes once", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps } = makeHarness();
+  const boom = new Error("offline");
+  deps.spaces.assignTeam = async (spaceId, teamId) => {
+    calls.push(["space.assignTeam", spaceId, teamId]);
+    if (spaceId === "space-a") throw boom;
+  };
+  const actions = createSpaceActions(deps);
+
+  const { failures } = await actions.assignTeamToSpaces("team-1", ["space-a", "space-b"]);
+
+  assert.deepEqual(
+    calls.filter(([name]) => name === "space.assignTeam").map(([, spaceId]) => spaceId),
+    ["space-a", "space-b"]
+  );
+  assert.deepEqual(failures, [{ spaceId: "space-a", error: boom }]);
+  assert.equal(calls.filter(([name]) => name === "mirror.upsert").length, 1);
+});
+
 test("team assignment rejects local-only spaces before making a cloud request", async () => {
   const { createSpaceActions } = await load();
   const { calls, deps, localSpace } = makeHarness();

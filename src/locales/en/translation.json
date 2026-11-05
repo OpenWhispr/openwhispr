@@ -2135,8 +2135,31 @@
         "dialog": {
           "tabGeneral": "General",
           "tabMembers": "Members",
+          "tabSpaces": "Teamspaces",
           "nameLabel": "Team name",
           "renameFailed": "Couldn't rename {{team}}. Try again."
+        },
+        "spacesTab": {
+          "emptyTitle": "Not in any teamspace yet",
+          "emptyBody": "Add this team to a teamspace to give everyone in it access.",
+          "emptyAction": "Add to teamspace",
+          "noSpacesTitle": "No teamspaces yet",
+          "noSpacesBody": "A teamspace is a shared area for a team's notes. Add people or teams, and everyone in it can read and edit.",
+          "placeholder": "Find teamspaces to add",
+          "searchPlaceholder": "Find teamspaces",
+          "add": "Add teamspaces",
+          "adding": "Adding…",
+          "selectedTitle_one": "{{count}} teamspace selected",
+          "selectedTitle_other": "{{count}} teamspaces selected",
+          "selectedBody": "Add {{team}} to {{names}}.",
+          "noMatches": "No matching teamspaces",
+          "createNew": "Create new teamspace",
+          "failed": "Couldn't add {{team}}. Your selections are kept. Try again.",
+          "added_one": "Added {{team}} to {{count}} teamspace.",
+          "added_other": "Added {{team}} to {{count}} teamspaces.",
+          "addedPartly": "Added {{team}} to {{added}}. Couldn't add it to {{failed}}. Try again.",
+          "gone": "Couldn't add {{team}}. {{names}} can no longer be found.",
+          "notAllowed": "You can no longer manage {{names}}."
         },
         "exit": {
           "leaveTitle": "Leave team",

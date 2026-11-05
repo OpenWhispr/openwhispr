@@ -50,6 +50,13 @@ test.before(async (t) => {
           return React.createElement("div", { "data-members-panel": "" }, "Members panel");
         }
       `,
+      "/TeamSpacesPanel": `
+        import React from "react";
+        export default function Mock(props) {
+          globalThis.__spacesProps = props;
+          return React.createElement("div", { "data-spaces-panel": "" }, "Teamspaces panel");
+        }
+      `,
       "/notes/SpaceNameField": `
         import React from "react";
         export const TileGlyph = ({ emoji, name }) =>
@@ -183,7 +190,7 @@ test("an admin renames in place, and a taken name stays editable", async (t) => 
     },
   });
   const tabs = [...dialog().querySelectorAll('[role="tab"]')].map(text);
-  assert.deepEqual(tabs, ["General", "Members"], "Teamspaces stays hidden until its tab lands");
+  assert.deepEqual(tabs, ["General", "Members", "Teamspaces"]);
 
   await ui.type(nameInput(), "Sales EMEA");
   await ui.act(() =>
@@ -255,7 +262,8 @@ test("with neither capability there is nothing but the header", async (t) => {
   await mount(t, { team: team({}) });
 
   assert.deepEqual(
-    buttonTexts().filter((label) => /team/i.test(label)),
+    // The Teamspaces tab is always there; it is a tab, not an action.
+    buttonTexts().filter((label) => /team/i.test(label) && label !== "Teamspaces"),
     []
   );
   assert.deepEqual(toastTitles(), []);
@@ -312,6 +320,18 @@ test("the members panel gets the team and reports a lost team through onGone", a
   await ui.act(() => globalThis.__panelProps.onGone());
 
   assert.deepEqual(events, [["gone"]]);
+});
+
+test("the Teamspaces tab shows its panel with the team, and carries onChanged and onGone", async (t) => {
+  const { events } = await mount(t, { team: team({ manage_members: true }) });
+
+  await ui.pressTab(tabNamed("Teamspaces"));
+  assert.ok(doc().querySelector("[data-spaces-panel]"));
+  assert.equal(globalThis.__spacesProps.team.id, "t1");
+  await ui.act(() => globalThis.__spacesProps.onChanged());
+  await ui.act(() => globalThis.__spacesProps.onGone());
+
+  assert.deepEqual(events, [["changed"], ["gone"]]);
 });
 
 test("a failed roster read leaves the answer to the row", async (t) => {

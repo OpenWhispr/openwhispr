@@ -2864,8 +2864,31 @@
         "dialog": {
           "tabGeneral": "一般",
           "tabMembers": "メンバー",
+          "tabSpaces": "Teamspace",
           "nameLabel": "チーム名",
           "renameFailed": "{{team}} の名前を変更できませんでした。もう一度お試しください。"
+        },
+        "spacesTab": {
+          "emptyTitle": "まだどの Teamspace にも入っていません",
+          "emptyBody": "このチームを Teamspace に追加すると、メンバー全員がアクセスできます。",
+          "emptyAction": "Teamspace に追加",
+          "noSpacesTitle": "Teamspace はまだありません",
+          "noSpacesBody": "Teamspace はチームのノートを共有する場所です。ユーザーやチームを追加すると、全員が閲覧・編集できます。",
+          "placeholder": "追加する Teamspace を検索",
+          "searchPlaceholder": "Teamspace を検索",
+          "add": "Teamspace を追加",
+          "adding": "追加中…",
+          "selectedTitle_one": "{{count}} 個の Teamspace を選択中",
+          "selectedTitle_other": "{{count}} 個の Teamspace を選択中",
+          "selectedBody": "{{team}} を {{names}} に追加します。",
+          "noMatches": "一致する Teamspace がありません",
+          "createNew": "新しい Teamspace を作成",
+          "failed": "{{team}} を追加できませんでした。選択内容は保持されています。もう一度お試しください。",
+          "added_one": "{{team}} を {{count}} 個の Teamspace に追加しました。",
+          "added_other": "{{team}} を {{count}} 個の Teamspace に追加しました。",
+          "addedPartly": "{{team}} を {{added}} に追加しました。{{failed}} には追加できませんでした。もう一度お試しください。",
+          "gone": "{{team}} を追加できませんでした。{{names}} が見つかりません。",
+          "notAllowed": "{{names}} を管理できなくなりました。"
         },
         "exit": {
           "leaveTitle": "チームから退出",

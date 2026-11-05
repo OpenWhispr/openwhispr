@@ -537,6 +537,25 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     await refreshMirrorAfterWrite();
   }
 
+  // One request per teamspace, in order, every one tried: the POST is idempotent, so a retry can
+  // resend only what failed. No access is sent, so a teamspace the team is already in keeps its
+  // own. The mirror is read once, after all of them.
+  async function assignTeamToSpaces(
+    teamId: string,
+    spaceIds: string[]
+  ): Promise<{ failures: { spaceId: string; error: unknown }[] }> {
+    const failures: { spaceId: string; error: unknown }[] = [];
+    for (const spaceId of spaceIds) {
+      try {
+        await deps.spaces.assignTeam(spaceId, teamId);
+      } catch (error) {
+        failures.push({ spaceId, error });
+      }
+    }
+    await refreshMirrorAfterWrite();
+    return { failures };
+  }
+
   async function setSpaceTeamAccess(
     space: SpaceItem,
     teamId: string,
@@ -685,6 +704,7 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     renameTeam,
     holdTeamDelete,
     assignTeamToSpace,
+    assignTeamToSpaces,
     setSpaceTeamAccess,
     unassignTeamFromSpace,
     joinSpace,

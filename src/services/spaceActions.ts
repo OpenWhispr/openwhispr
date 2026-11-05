@@ -59,6 +59,7 @@ export const {
   renameTeam,
   holdTeamDelete,
   assignTeamToSpace,
+  assignTeamToSpaces,
   setSpaceTeamAccess,
   unassignTeamFromSpace,
   joinSpace,

@@ -2135,8 +2135,31 @@
         "dialog": {
           "tabGeneral": "Allgemein",
           "tabMembers": "Mitglieder",
+          "tabSpaces": "Teamspaces",
           "nameLabel": "Teamname",
           "renameFailed": "{{team}} konnte nicht umbenannt werden. Versuchen Sie es erneut."
+        },
+        "spacesTab": {
+          "emptyTitle": "Noch in keinem Teamspace",
+          "emptyBody": "Fügen Sie dieses Team einem Teamspace hinzu, damit alle darin Zugriff erhalten.",
+          "emptyAction": "Zu Teamspace hinzufügen",
+          "noSpacesTitle": "Noch keine Teamspaces",
+          "noSpacesBody": "Ein Teamspace ist ein gemeinsamer Bereich für die Notizen eines Teams. Fügen Sie Personen oder Teams hinzu, dann können alle darin lesen und bearbeiten.",
+          "placeholder": "Teamspaces zum Hinzufügen suchen",
+          "searchPlaceholder": "Teamspaces suchen",
+          "add": "Teamspaces hinzufügen",
+          "adding": "Wird hinzugefügt…",
+          "selectedTitle_one": "{{count}} Teamspace ausgewählt",
+          "selectedTitle_other": "{{count}} Teamspaces ausgewählt",
+          "selectedBody": "{{team}} zu {{names}} hinzufügen.",
+          "noMatches": "Keine passenden Teamspaces",
+          "createNew": "Neuen Teamspace erstellen",
+          "failed": "{{team}} konnte nicht hinzugefügt werden. Ihre Auswahl bleibt erhalten. Versuchen Sie es erneut.",
+          "added_one": "{{team}} wurde zu {{count}} Teamspace hinzugefügt.",
+          "added_other": "{{team}} wurde zu {{count}} Teamspaces hinzugefügt.",
+          "addedPartly": "{{team}} wurde zu {{added}} hinzugefügt. Zu {{failed}} konnte es nicht hinzugefügt werden. Versuchen Sie es erneut.",
+          "gone": "{{team}} konnte nicht hinzugefügt werden. {{names}} wurde nicht mehr gefunden.",
+          "notAllowed": "Sie können {{names}} nicht mehr verwalten."
         },
         "exit": {
           "leaveTitle": "Team verlassen",

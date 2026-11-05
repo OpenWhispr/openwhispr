@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, Settings, Trash2, User, UserCircle } from "../icons";
+import { Building2, Loader2, Settings, Trash2, User, UserCircle } from "../icons";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { useToast } from "../ui/useToast";
@@ -20,6 +20,7 @@ import {
 import DeleteTeamDialog from "./DeleteTeamDialog";
 import LeaveTeamDialog from "./LeaveTeamDialog";
 import TeamMembersPanel from "./TeamMembersPanel";
+import TeamSpacesPanel from "./TeamSpacesPanel";
 import { isolate } from "../../utils/bidiIsolate";
 import type { Team, Workspace } from "../../types/electron";
 
@@ -275,8 +276,6 @@ export default function TeamSettingsDialog({
       </div>
     ) : null;
 
-  // Teamspaces joins the tabs once its panel lands.
-  const visibleTab = tab === "spaces" ? "general" : tab;
   return (
     <>
       <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
@@ -336,7 +335,7 @@ export default function TeamSettingsDialog({
             </div>
           </div>
 
-          <Tabs value={visibleTab} onValueChange={(next) => setTab(next as TeamDialogTab)}>
+          <Tabs value={tab} onValueChange={(next) => setTab(next as TeamDialogTab)}>
             <TabsList className="h-7 p-0.5 rounded-[7px]">
               <TabsTrigger value="general" className={TAB_TRIGGER_CLASS}>
                 <Settings className="size-3" aria-hidden="true" />
@@ -345,6 +344,10 @@ export default function TeamSettingsDialog({
               <TabsTrigger value="members" className={TAB_TRIGGER_CLASS}>
                 <UserCircle className="size-3" aria-hidden="true" />
                 {t(`${KEY}.dialog.tabMembers`)}
+              </TabsTrigger>
+              <TabsTrigger value="spaces" className={TAB_TRIGGER_CLASS}>
+                <Building2 className="size-3" aria-hidden="true" />
+                {t(`${KEY}.dialog.tabSpaces`)}
               </TabsTrigger>
             </TabsList>
             <TabsContent value="general" className="mt-4">
@@ -355,6 +358,14 @@ export default function TeamSettingsDialog({
                 team={team}
                 workspace={workspace}
                 managed={managed}
+                onChanged={onChanged}
+                onGone={onGone}
+              />
+            </TabsContent>
+            <TabsContent value="spaces" className="mt-4">
+              <TeamSpacesPanel
+                team={team}
+                workspace={workspace}
                 onChanged={onChanged}
                 onGone={onGone}
               />

@@ -2864,8 +2864,31 @@
         "dialog": {
           "tabGeneral": "Generale",
           "tabMembers": "Membri",
+          "tabSpaces": "Teamspace",
           "nameLabel": "Nome del team",
           "renameFailed": "Impossibile rinominare {{team}}. Riprova."
+        },
+        "spacesTab": {
+          "emptyTitle": "Non è ancora in nessun teamspace",
+          "emptyBody": "Aggiungi questo team a un teamspace per dare accesso a tutti i suoi membri.",
+          "emptyAction": "Aggiungi a un teamspace",
+          "noSpacesTitle": "Ancora nessun teamspace",
+          "noSpacesBody": "Un teamspace è un'area condivisa per le note di un team. Aggiungi persone o team e tutti potranno leggere e modificare.",
+          "placeholder": "Cerca teamspace da aggiungere",
+          "searchPlaceholder": "Cerca teamspace",
+          "add": "Aggiungi teamspace",
+          "adding": "Aggiunta in corso…",
+          "selectedTitle_one": "{{count}} teamspace selezionato",
+          "selectedTitle_other": "{{count}} teamspace selezionati",
+          "selectedBody": "Aggiungi {{team}} a {{names}}.",
+          "noMatches": "Nessun teamspace corrispondente",
+          "createNew": "Crea nuovo teamspace",
+          "failed": "Impossibile aggiungere {{team}}. Le tue selezioni sono state mantenute. Riprova.",
+          "added_one": "{{team}} è stato aggiunto a {{count}} teamspace.",
+          "added_other": "{{team}} è stato aggiunto a {{count}} teamspace.",
+          "addedPartly": "{{team}} è stato aggiunto a {{added}}. Impossibile aggiungerlo a {{failed}}. Riprova.",
+          "gone": "Impossibile aggiungere {{team}}. {{names}} non è più disponibile.",
+          "notAllowed": "Non puoi più gestire {{names}}."
         },
         "exit": {
           "leaveTitle": "Lascia il team",

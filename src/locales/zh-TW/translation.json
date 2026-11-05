@@ -2864,8 +2864,31 @@
         "dialog": {
           "tabGeneral": "一般",
           "tabMembers": "成員",
+          "tabSpaces": "Teamspace",
           "nameLabel": "團隊名稱",
           "renameFailed": "無法重新命名 {{team}}，請再試一次。"
+        },
+        "spacesTab": {
+          "emptyTitle": "還不在任何 Teamspace 中",
+          "emptyBody": "將此團隊加入 Teamspace，團隊中的所有人都能取得存取權限。",
+          "emptyAction": "加入 Teamspace",
+          "noSpacesTitle": "還沒有 Teamspace",
+          "noSpacesBody": "Teamspace 是團隊共用筆記的空間。加入成員或團隊後，所有人都可以閱讀和編輯。",
+          "placeholder": "尋找要加入的 Teamspace",
+          "searchPlaceholder": "尋找 Teamspace",
+          "add": "加入 Teamspace",
+          "adding": "正在加入…",
+          "selectedTitle_one": "已選取 {{count}} 個 Teamspace",
+          "selectedTitle_other": "已選取 {{count}} 個 Teamspace",
+          "selectedBody": "將 {{team}} 加入 {{names}}。",
+          "noMatches": "沒有相符的 Teamspace",
+          "createNew": "建立新的 Teamspace",
+          "failed": "無法加入 {{team}}。你的選取已保留。請再試一次。",
+          "added_one": "已將 {{team}} 加入 {{count}} 個 Teamspace。",
+          "added_other": "已將 {{team}} 加入 {{count}} 個 Teamspace。",
+          "addedPartly": "已將 {{team}} 加入 {{added}}。無法加入 {{failed}}。請再試一次。",
+          "gone": "無法加入 {{team}}。找不到 {{names}}。",
+          "notAllowed": "你已無法管理 {{names}}。"
         },
         "exit": {
           "leaveTitle": "退出團隊",

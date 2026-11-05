@@ -677,6 +677,42 @@ test("a team deleted since the list loaded is dropped and named", async (t) => {
   assert.deepEqual(closes, [false]);
 });
 
+test("initialTeam is staged and sent", async (t) => {
+  const { callsTo } = await mount(t, { props: { initialTeam: TEAMS[0] } });
+
+  assert.deepEqual(chipTexts(), ["Sales · 5 people"]);
+
+  await type(nameInput(), "Research");
+  await click(createButton());
+
+  assert.deepEqual(callsTo("createSpace")[0][3], { memberIds: [], teamIds: ["sales"] });
+});
+
+test("a team no longer available drops with today's message", async (t) => {
+  let attempts = 0;
+  const { callsTo, closes } = await mount(t, {
+    props: { initialTeam: TEAMS[0] },
+    createSpace: async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw new CloudApiError("Teams unavailable", 400, "teams_not_available", {
+          team_ids: ["sales"],
+        });
+      }
+      return localSpace();
+    },
+  });
+  await type(nameInput(), "Research");
+  await click(createButton());
+
+  assert.deepEqual(chipTexts(), []);
+  assert.match(text(dialog()), /Sales is no longer available, so it wasn't added\./);
+
+  await click(createButton());
+  assert.deepEqual(callsTo("createSpace")[1][3], { memberIds: [], teamIds: [] });
+  assert.deepEqual(closes, [false]);
+});
+
 test("a refusal naming nobody keeps the general failure and its retry", async (t) => {
   const { closes } = await mount(t, {
     createSpace: async () => {

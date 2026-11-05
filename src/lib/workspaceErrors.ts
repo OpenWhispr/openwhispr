@@ -141,6 +141,28 @@ export function classifyTeamError(error: unknown): TeamActionError {
   return classifyRowActionError(error);
 }
 
+export type TeamAssignmentError = "teamGone" | "spaceGone" | "notAllowed" | "other";
+
+// POST /api/spaces/:id/teams answers 400 for a team that's gone (or moved out of the workspace),
+// 403 for someone who no longer administers the teamspace and 404 for a teamspace that's gone. A
+// 404 "Team not found" isn't among them: that is another route's answer.
+const TEAM_UNAVAILABLE_MESSAGE = /^team is not available in this workspace$/i;
+
+/** Which of the assignment's own refusals a failed request was. */
+export function classifyTeamAssignmentError(error: unknown): TeamAssignmentError {
+  if (
+    error instanceof CloudApiError &&
+    error.status === 400 &&
+    (error.code === "teams_not_available" || TEAM_UNAVAILABLE_MESSAGE.test(error.message))
+  ) {
+    return "teamGone";
+  }
+  const failure = classifySpaceError(error);
+  if (failure.kind === "gone") return "spaceGone";
+  if (failure.kind === "notAllowed") return "notAllowed";
+  return "other";
+}
+
 export type RemovalError =
   | { kind: "transferRequired"; owners: OwnedMemberContent[] }
   | { kind: "invalidTransferTarget" }

@@ -24,7 +24,12 @@ import { workspaceCan } from "../../lib/capabilities";
 import { formatList } from "../../lib/formatList";
 import { MAX_INVITE_RECIPIENTS } from "../../lib/inviteFlow";
 import { rosterFor } from "../../lib/peopleRoster";
-import { pickedSummary, type PickedRecipient } from "../../lib/spacePeoplePicker";
+import {
+  addRecipients,
+  pickedSummary,
+  teamRecipient,
+  type PickedRecipient,
+} from "../../lib/spacePeoplePicker";
 import { classifySpaceError } from "../../lib/workspaceErrors";
 import {
   manageableWorkspaces as findManageableWorkspaces,
@@ -53,6 +58,8 @@ interface CreateSpaceDialogProps {
    * since moving the notes view behind the modal would change what the person returns to.
    */
   revealOnCreate?: boolean;
+  /** A team to stage as a chip each time the dialog opens, as when it opens from a team's dialog. */
+  initialTeam?: Team;
 }
 
 export default function CreateSpaceDialog({
@@ -60,6 +67,7 @@ export default function CreateSpaceDialog({
   onOpenChange,
   initialWorkspaceId = null,
   revealOnCreate = true,
+  initialTeam,
 }: CreateSpaceDialogProps): ReactElement {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
@@ -156,6 +164,15 @@ export default function CreateSpaceDialog({
       return defaultWorkspace?.id ?? null;
     });
   }, [open, manageableWorkspaces, defaultWorkspace?.id, initialWorkspaceId]);
+
+  // Staged once per opening, so taking the chip off stays taken. A team that has gone by the time
+  // of the create drops out the way any other does.
+  const initialTeamRef = useRef(initialTeam);
+  initialTeamRef.current = initialTeam;
+  useEffect(() => {
+    const team = initialTeamRef.current;
+    if (open && team) setPicked((current) => addRecipients(current, [teamRecipient(team)]));
+  }, [open]);
 
   useEffect(() => {
     if (!refocus || isCreating) return;
