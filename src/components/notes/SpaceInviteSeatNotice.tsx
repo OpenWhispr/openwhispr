@@ -42,7 +42,8 @@ export function SpaceInviteSeatNotice({
             canManageBilling
               ? {
                   label: t("workspaces.invite.upgrade"),
-                  // A named section remounts Settings, which takes this field's dialog with it.
+                  // A named section remounts Settings, which closes a dialog hosted there. One
+                  // hosted by the sidebar or a note stays open underneath Billing.
                   onClick: () => void window.electronAPI?.openSettingsSection?.("plansBilling"),
                 }
               : undefined

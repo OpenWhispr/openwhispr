@@ -99,7 +99,6 @@ async function mount(
     return h(LeaveSpaceDialog, {
       space,
       userId: "me",
-      workspaceName: "Acme",
       open,
       onOpenChange: (next) => {
         events.push(["open", next]);
@@ -241,12 +240,12 @@ for (const [refusal, answer, line] of [
   [
     "losing permission",
     ["Space access revoked", 403, "space_access_revoked"],
-    "You no longer have permission to manage members of Customer Calls.",
+    "You no longer have access to Customer Calls",
   ],
   [
     "needing SSO",
     ["SSO required", 403, "SSO_REQUIRED"],
-    "Sign in with your company's single sign-on to manage people in Acme.",
+    "Your organization requires company SSO. Sign in with SSO and try again.",
   ],
 ]) {
   test(`${refusal} says so, with nothing to try again`, async (t) => {

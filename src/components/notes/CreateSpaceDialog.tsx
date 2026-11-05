@@ -367,10 +367,7 @@ export default function CreateSpaceDialog({
           classified.kind === "refused"
             ? { kind: "refused", message: classified.message }
             : classified.kind === "ssoRequired"
-              ? {
-                  kind: "refused",
-                  message: t("workspaces.ssoRequired", { workspace: isolate(workspace.name) }),
-                }
+              ? { kind: "refused", message: t("enterprise.audio.errors.ssoRequired") }
               : { kind: "general" }
         );
         setRefocus("primary");

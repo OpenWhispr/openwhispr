@@ -13,8 +13,6 @@ import type { SpaceItem } from "../../types/electron";
 interface LeaveSpaceDialogProps {
   space: SpaceItem;
   userId: string;
-  /** Named by the line for a session that needs single sign-on. */
-  workspaceName: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** undefined: the directory row isn't loaded, so the server is asked by trying. */
@@ -33,7 +31,6 @@ interface LeaveSpaceDialogProps {
 export function LeaveSpaceDialog({
   space,
   userId,
-  workspaceName,
   open,
   onOpenChange,
   soleAdmin,
@@ -145,9 +142,9 @@ export function LeaveSpaceDialog({
         title={t("settingsPage.workspace.teamspaces.exit.leaveFailedTitle", { space: name })}
         body={
           state.error.kind === "notAllowed"
-            ? t("settingsPage.workspace.teamspaces.members.notAllowed", { space: name })
+            ? t("notes.spaces.accessRevoked", { space: name })
             : state.error.kind === "ssoRequired"
-              ? t("workspaces.ssoRequired", { workspace: isolate(workspaceName) })
+              ? t("enterprise.audio.errors.ssoRequired")
               : t("settingsPage.workspace.teamspaces.exit.leaveFailedBody")
         }
         error={state.error.kind === "refused" ? state.error.message : null}

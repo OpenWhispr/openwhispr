@@ -534,7 +534,6 @@ export default function SpaceSettingsDialog({
         <LeaveSpaceDialog
           space={space}
           userId={user.id}
-          workspaceName={workspace?.name ?? ""}
           open={leaveOpen}
           onOpenChange={setLeaveOpen}
           soleAdmin={leaveFacts.soleAdmin}

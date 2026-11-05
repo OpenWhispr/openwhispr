@@ -756,7 +756,7 @@ test("needing SSO says so, with nothing to try again", async (t) => {
   assert.deepEqual(closes, []);
   assert.match(
     text(dialog()),
-    /Sign in with your company's single sign-on to manage people in Acme\./
+    /Your organization requires company SSO\. Sign in with SSO and try again\./
   );
   assert.ok(!retryButton());
   assert.ok(createButton());
