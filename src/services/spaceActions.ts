@@ -10,6 +10,7 @@ import {
 } from "../stores/noteStore";
 import { holdSpace, markHeldSpaceDeleted, releaseSpace } from "../lib/heldSpaceDeletes";
 import { holdTeam, releaseTeam } from "../lib/heldTeamDeletes";
+import { useWorkspaceStore } from "../stores/workspaceStore";
 import { invalidateSpaceRoster } from "../lib/spaceRosterCache";
 import { createSpaceActions } from "./spaceActionsCore";
 
@@ -36,6 +37,7 @@ const actions = createSpaceActions({
   markSpacePurged,
   releasePurgedSpace,
   invalidateSpaceRoster,
+  refreshWorkspaceRoster: (workspaceId) => useWorkspaceStore.getState().refreshMembers(workspaceId),
   deleteHold: {
     accountGeneration: getAccountGeneration,
     hide: (space, cloudSpaceId) => {

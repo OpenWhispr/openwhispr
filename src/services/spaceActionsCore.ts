@@ -114,6 +114,8 @@ export interface SpaceActionsDependencies {
   markSpacePurged: (cloudSpaceId: string, reason: "deleted") => Promise<void>;
   releasePurgedSpace: (cloudSpaceId: string) => Promise<void>;
   invalidateSpaceRoster: (cloudSpaceId?: string) => void;
+  /** Reads the workspace's people again; the Team column lists each person's teams. */
+  refreshWorkspaceRoster: (workspaceId: string) => Promise<void>;
   deleteHold: {
     /** Moves only when another account signs in, unlike the session's token. */
     accountGeneration: () => number;
@@ -297,6 +299,8 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
   ): Promise<Team> {
     const key = createKey("team", workspaceId, input.name);
     let sent = false;
+    // When the create this team came from was first tried; it is what the lookup measured from.
+    let originalTryAt: number | undefined;
     const team = await createSettling(key, {
       send: async () => {
         const created = await deps.teams.create(workspaceId, {
@@ -307,14 +311,19 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
         return created;
       },
       isNameTaken: (err) => classifyTeamError(err).kind === "nameTaken",
-      find: (triedAt) => findLostTeamCreate(workspaceId, input.name, triedAt),
+      find: (triedAt) => {
+        originalTryAt = triedAt;
+        return findLostTeamCreate(workspaceId, input.name, triedAt);
+      },
     });
     if (!sent && input.memberIds.length > 0) {
       try {
         await deps.teams.addMembers(team.id, input.memberIds);
       } catch (err) {
-        // The team is still unreported, so the next try may recover it again.
-        unsettledCreates.set(key, Date.now());
+        // The team is still unreported, so the next try may recover it again. Marked with the
+        // original time: a later one would drift out of the lost-create window of the team's
+        // creation as retries pile up.
+        unsettledCreates.set(key, originalTryAt ?? Date.now());
         throw err;
       }
     }
@@ -512,6 +521,13 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
           }
         }
         await refreshMirrorAfterWrite();
+        // The People page lists the deleted team on each of its members until the roster is read
+        // again. The delete went through, so a failed read isn't its failure.
+        try {
+          await deps.refreshWorkspaceRoster(team.workspace_id);
+        } catch (err) {
+          console.error("Workspace roster refresh failed after a team delete:", err);
+        }
         deps.sync.requestSyncAll("manual");
         return { success: true };
       },
@@ -658,8 +674,10 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     try {
       await deps.teams.removeMember(teamId, userId);
     } catch (err) {
-      // Already out of the group, as after a leave that got partway: the mirror is what's left.
-      if (classifySpaceError(err).kind !== "gone") throw err;
+      // Already out of the team, as after a leave that got partway, or the team deleted since:
+      // the mirror is what's left. A team route answers "Team not found", which the space
+      // classifier doesn't know.
+      if (classifyTeamError(err).kind !== "gone") throw err;
     }
     await refreshMirrorAfterWrite();
     deps.sync.requestSyncAll("manual");
