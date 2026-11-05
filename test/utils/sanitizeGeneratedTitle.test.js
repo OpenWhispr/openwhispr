@@ -1,5 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { spawnSync } = require("node:child_process");
+const path = require("node:path");
+const { pathToFileURL } = require("node:url");
 
 const load = () => import("../../src/utils/sanitizeGeneratedTitle.ts");
 
@@ -89,6 +92,49 @@ test("keeps quoted phrases at both ends intact", async () => {
   assert.equal(sanitizeGeneratedTitle("「設計」と「実装」"), "「設計」と「実装」");
 });
 
+test("keeps unspaced quoted phrases intact", async () => {
+  const { sanitizeGeneratedTitle } = await load();
+  for (const title of ['"設計"と"実装"', "‘计划’与‘预算’", "'設計'と'実装'", '"نعم"و"لا"']) {
+    assert.equal(sanitizeGeneratedTitle(title), title);
+  }
+  assert.equal(sanitizeGeneratedTitle('""設計"と"実装""'), '"設計"と"実装"');
+  assert.equal(sanitizeGeneratedTitle("‘‘计划’与‘预算’’"), "‘计划’与‘预算’");
+});
+
+test("peels wrappers around padded nested phrases", async () => {
+  const { sanitizeGeneratedTitle } = await load();
+  for (const [raw, expected] of [
+    ['"Notes on " Q3 " and " Q4 ""', 'Notes on " Q3 " and " Q4 "'],
+    ["'Notes on ' Q3 ' and ' Q4 ''", "Notes on ' Q3 ' and ' Q4 '"],
+    ['"Notes on " C++ " + " Rust ""', 'Notes on " C++ " + " Rust "'],
+  ]) {
+    assert.equal(sanitizeGeneratedTitle(raw), expected);
+  }
+});
+
+test("keeps quoted phrases separated by symbols intact", async () => {
+  const { sanitizeGeneratedTitle } = await load();
+  for (const title of ['"C++"+"Rust"', '"C++"→"Rust"', '"2025"⇒"2026"', '"🚀"+"🌕"']) {
+    assert.equal(sanitizeGeneratedTitle(title), title);
+  }
+  assert.equal(sanitizeGeneratedTitle('""C++"+"Rust""'), '"C++"+"Rust"');
+});
+
+test("checks the final quote balance after elisions and possessives", async () => {
+  const { sanitizeGeneratedTitle } = await load();
+  for (const [raw, expected] of [
+    ["‘Workin’ on ‘Dune’’", "Workin’ on ‘Dune’"],
+    ["‘Workin’ on ‘ Dune ’’", "Workin’ on ‘ Dune ’"],
+    ["'The teams' goals for 'Q4''", "The teams' goals for 'Q4'"],
+    ["'The teams' goals for ' Q4 ''", "The teams' goals for ' Q4 '"],
+    ["'Cafe\u0301's launch for 'Q4''", "Cafe\u0301's launch for 'Q4'"],
+    ["‘Workin’ vs ‘Dune’", "‘Workin’ vs ‘Dune’"],
+    ["'The teams' vs 'Q4'", "'The teams' vs 'Q4'"],
+  ]) {
+    assert.equal(sanitizeGeneratedTitle(raw), expected);
+  }
+});
+
 test("keeps separate phrases with padding or punctuation between quotes", async () => {
   const { sanitizeGeneratedTitle } = await load();
   for (const title of [
@@ -150,4 +196,30 @@ test("applies the length limit after peeling same-style wrappers", async () => {
   assert.equal(sanitizeGeneratedTitle('""' + "a".repeat(99) + '""'), "a".repeat(99));
   assert.equal(sanitizeGeneratedTitle('""' + "a".repeat(100) + '""'), "");
   assert.equal(sanitizeGeneratedTitle('"' + "a".repeat(93) + ' "Q3""'), "a".repeat(93) + ' "Q3"');
+});
+
+test("handles deeply wrapped model replies without stalling", () => {
+  const moduleUrl = pathToFileURL(
+    path.resolve(__dirname, "../../src/utils/sanitizeGeneratedTitle.ts")
+  );
+  // Isolate synchronous sanitization so the deadline can stop a regressed scan.
+  const result = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      "tsx",
+      "--input-type=module",
+      "-e",
+      `import assert from "node:assert/strict";
+       import { sanitizeGeneratedTitle } from ${JSON.stringify(moduleUrl.href)};
+       const wrappers = '"'.repeat(2048);
+       assert.equal(sanitizeGeneratedTitle(wrappers + 'Weekly standup' + wrappers), 'Weekly standup');
+       assert.equal(sanitizeGeneratedTitle(wrappers + '"Q3" vs "Q4"' + wrappers), '"Q3" vs "Q4"');
+       assert.equal(sanitizeGeneratedTitle('" '.repeat(2048) + 'Weekly standup' + ' "'.repeat(2048)), 'Weekly standup');
+       assert.equal(sanitizeGeneratedTitle(wrappers + 'a'.repeat(100) + wrappers), '');`,
+    ],
+    { encoding: "utf8", timeout: 10_000 }
+  );
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, result.stderr);
 });
