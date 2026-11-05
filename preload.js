@@ -631,6 +631,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   setAutoUpdatesEnabled: (enabled) => ipcRenderer.invoke("set-auto-updates-enabled", enabled),
 
   // Update event listeners
+  onUpdateStatusChanged: registerListener(
+    "update-status-changed",
+    (callback) => (_event, status) => callback(status)
+  ),
   onUpdateAvailable: registerListener("update-available"),
   onUpdateNotAvailable: registerListener("update-not-available"),
   onUpdateDownloaded: registerListener("update-downloaded"),

@@ -618,7 +618,8 @@
   "controlPanel": {
     "updateRequiredByOrg": {
       "title": "需要更新",
-      "description": "您的組織要求使用 OpenWhispr {{version}} 或更新版本。請更新應用程式。"
+      "description": "您的組織要求使用 OpenWhispr {{version}} 或更新版本。請更新應用程式。",
+      "contactIT": "你的組織要求使用 OpenWhispr {{version}} 或更新版本。請聯絡 IT 部門安裝經核准的版本。"
     },
     "update": {
       "readyTitle": "更新已準備就緒",
@@ -2201,7 +2202,13 @@
         "restarting": "重新啟動中...",
         "title": "更新",
         "versionPlaceholder": "—",
-        "whatsNew": "v{{version}} 的新功能"
+        "whatsNew": "v{{version}} 的新功能",
+        "managedByOrganization": "由你的組織管理。",
+        "itManaged": "更新由你的組織管理。",
+        "policyLoading": "正在載入更新設定…",
+        "policyUnavailable": "無法取得更新原則。請連線後再試。",
+        "managedBadge": "受管理",
+        "stagedBeforePolicy": "在此原則生效前已有更新準備就緒，可能會在結束應用程式時安裝。結束或重新啟動前請聯絡 IT 部門。"
       },
       "translationHotkey": {
         "title": "翻譯快捷鍵",

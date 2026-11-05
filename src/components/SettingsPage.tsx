@@ -75,6 +75,7 @@ import { usePermissions } from "../hooks/usePermissions";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import { useClipboard } from "../hooks/useClipboard";
 import { useUpdater } from "../hooks/useUpdater";
+import { updatePolicyMessageKey } from "../utils/updatePolicyMessage";
 
 import PromptStudio from "./ui/PromptStudio";
 import { ProviderTabs } from "./ui/ProviderTabs";
@@ -1323,8 +1324,17 @@ export default function SettingsPage({
     getAppVersion,
   } = useUpdater();
 
+  const organizationManagesUpdates = updateStatus.updateMode === "it_managed";
+  const updatePolicyPending = updateStatus.policyReady === false;
+  const updateToggleLocked =
+    updatePolicyPending || updateStatus.updateMode === "always_on" || organizationManagesUpdates;
+
   const isUpdateAvailable =
     !updateStatus.isDevelopment && (updateStatus.updateAvailable || updateStatus.updateDownloaded);
+  const showUpdateDetails =
+    !organizationManagesUpdates &&
+    !updatePolicyPending &&
+    (isUpdateAvailable || updateStatus.updateDownloaded || updateInfo?.releaseNotes);
 
   const migration = useMigration();
 
@@ -4573,13 +4583,17 @@ EOF`,
                   <SettingsRow
                     label={t("settingsPage.general.updates.currentVersion")}
                     description={
-                      updateStatus.isDevelopment
-                        ? t("settingsPage.general.updates.devMode")
-                        : !updateStatus.isSupported
-                          ? t("settingsPage.general.updates.managedByPackageManager")
-                          : isUpdateAvailable
-                            ? t("settingsPage.general.updates.newVersionAvailable")
-                            : t("settingsPage.general.updates.latestVersion")
+                      organizationManagesUpdates
+                        ? t("settingsPage.general.updates.itManaged")
+                        : updatePolicyPending
+                          ? t("settingsPage.general.updates.policyLoading")
+                          : updateStatus.isDevelopment
+                            ? t("settingsPage.general.updates.devMode")
+                            : !updateStatus.isSupported
+                              ? t("settingsPage.general.updates.managedByPackageManager")
+                              : isUpdateAvailable
+                                ? t("settingsPage.general.updates.newVersionAvailable")
+                                : t("settingsPage.general.updates.latestVersion")
                     }
                   >
                     <div className="flex items-center gap-2.5">
@@ -4589,7 +4603,11 @@ EOF`,
                       >
                         {currentVersion || t("settingsPage.general.updates.versionPlaceholder")}
                       </span>
-                      {updateStatus.isDevelopment ? (
+                      {organizationManagesUpdates ? (
+                        <Badge variant="outline">
+                          {t("settingsPage.general.updates.managedBadge")}
+                        </Badge>
+                      ) : updateStatus.isDevelopment ? (
                         <Badge variant="warning">
                           {t("settingsPage.general.updates.badges.dev")}
                         </Badge>
@@ -4610,16 +4628,25 @@ EOF`,
                   <SettingsPanelRow>
                     <SettingsRow
                       label={t("settingsPage.general.updates.automaticUpdates")}
-                      description={t("settingsPage.general.updates.automaticUpdatesDescription")}
+                      description={t(
+                        updatePolicyPending
+                          ? "settingsPage.general.updates.policyLoading"
+                          : updateToggleLocked
+                            ? "settingsPage.general.updates.managedByOrganization"
+                            : "settingsPage.general.updates.automaticUpdatesDescription"
+                      )}
                     >
-                      <Toggle checked={autoUpdatesEnabled} onChange={setAutoUpdatesEnabled} />
+                      <Toggle
+                        checked={updateStatus.effectiveAutoUpdatesEnabled ?? autoUpdatesEnabled}
+                        onChange={setAutoUpdatesEnabled}
+                        disabled={updateToggleLocked}
+                        ariaLabel={t("settingsPage.general.updates.automaticUpdates")}
+                      />
                     </SettingsRow>
                   </SettingsPanelRow>
                 )}
 
-                {(isUpdateAvailable ||
-                  updateStatus.updateDownloaded ||
-                  updateInfo?.releaseNotes) && (
+                {showUpdateDetails && (
                   <SettingsPanelRow>
                     <div className="space-y-2.5">
                       {isUpdateAvailable && !updateStatus.updateDownloaded && (
@@ -4628,7 +4655,12 @@ EOF`,
                             onClick={async () => {
                               try {
                                 await downloadUpdate();
-                              } catch {
+                              } catch (error) {
+                                const policyMessage = updatePolicyMessageKey(error);
+                                if (policyMessage) {
+                                  toast({ title: t(policyMessage) });
+                                  return;
+                                }
                                 showAlertDialog({
                                   title: t(
                                     "settingsPage.general.updates.dialogs.downloadFailed.title"
@@ -4685,7 +4717,12 @@ EOF`,
                               onConfirm: async () => {
                                 try {
                                   await installUpdateAction();
-                                } catch {
+                                } catch (error) {
+                                  const policyMessage = updatePolicyMessageKey(error);
+                                  if (policyMessage) {
+                                    toast({ title: t(policyMessage) });
+                                    return;
+                                  }
                                   showAlertDialog({
                                     title: t(
                                       "settingsPage.general.updates.dialogs.installFailed.title"
@@ -4732,12 +4769,20 @@ EOF`,
                   </SettingsPanelRow>
                 )}
               </SettingsPanel>
+              {organizationManagesUpdates && updateStatus.stagedUpdate && (
+                <p role="status" className="mt-3 text-xs text-warning">
+                  {t("settingsPage.general.updates.stagedBeforePolicy")}
+                </p>
+              )}
               <div className="mt-5 flex justify-end">
                 <Button
                   onClick={async () => {
                     try {
                       const result = await checkForUpdates();
-                      if (result && !result.updateAvailable) {
+                      const policyMessage = updatePolicyMessageKey(result);
+                      if (policyMessage) {
+                        toast({ title: t(policyMessage) });
+                      } else if (result && !result.updateAvailable) {
                         toast({
                           title: t("settingsPage.general.updates.dialogs.noUpdates.title"),
                           description: t(
@@ -4755,7 +4800,10 @@ EOF`,
                     }
                   }}
                   disabled={
-                    checkingForUpdates || updateStatus.isDevelopment || !updateStatus.isSupported
+                    checkingForUpdates ||
+                    updatePolicyPending ||
+                    (!organizationManagesUpdates &&
+                      (updateStatus.isDevelopment || !updateStatus.isSupported))
                   }
                   variant="outline"
                   size="sm"

@@ -903,6 +903,7 @@ class IPCHandlers {
   }
 
   _handleAuthTokenChange({ generation, token }) {
+    this.updateManager?.invalidatePolicy();
     // A new bearer may belong to another account, so its policy is fetched
     // before new work; only a sign-out ends the work already running. A real
     // account switch is cancelled once set-active-account-scope learns it.
@@ -931,6 +932,7 @@ class IPCHandlers {
       // As set-active-account-scope does: a connect can't outlive its account.
       this.connectorManager?.accountChanged();
     }
+    void this.updateManager?.refreshPolicy();
     broadcastToWindows("auth-token-state-changed", {
       generation,
       hasToken: Boolean(token),
@@ -2717,6 +2719,7 @@ class IPCHandlers {
       // holds for the same account: that only re-scopes the policy, and only a
       // different account ends the work and meeting already running.
       if (accountChanged || (accountId !== null && previousScope?.accountId !== accountId)) {
+        this.updateManager?.invalidatePolicy();
         this._audioFeaturePolicy?.invalidate(guestPolicy);
         if (accountChanged) {
           this._audioFeaturePolicy?.cancelJobs();
@@ -2731,6 +2734,7 @@ class IPCHandlers {
       this.databaseManager.setActiveAccountId(accountId);
       if (accountId !== null) accountScopeBinding.persist(accountId, state.token);
       else accountScopeBinding.clear();
+      void this.updateManager?.refreshPolicy();
       broadcastToWindows(
         "active-account-scope-changed",
         accountId !== null ? { accountId, authGeneration: state.generation } : null
@@ -6692,10 +6696,15 @@ class IPCHandlers {
           this.metaActivation?.close(),
           new Promise((resolve) => setTimeout(resolve, 1500)),
         ]).catch(() => {});
-        const tokenState = tokenStore.clear();
-        const win = BrowserWindow.fromWebContents(event.sender);
-        if (win) {
-          await win.webContents.session.clearStorageData({ storages: ["cookies"] });
+        let tokenState;
+        try {
+          const win = BrowserWindow.fromWebContents(event.sender);
+          if (win) {
+            await win.webContents.session.clearStorageData({ storages: ["cookies"] });
+          }
+        } finally {
+          // Retire cookie-authorized requests after cookie storage has settled.
+          tokenState = tokenStore.clear();
         }
         return {
           success: tokenState.success,
@@ -6753,10 +6762,11 @@ class IPCHandlers {
     const getSessionCookiesFromWindow = async (win) => {
       const scopedUrls = [getAuthUrl(), getApiUrl()].filter(Boolean);
       const cookiesByName = new Map();
+      const cookieSession = win?.webContents.session ?? session.defaultSession;
 
       for (const url of scopedUrls) {
         try {
-          const scopedCookies = await win.webContents.session.cookies.get({ url });
+          const scopedCookies = await cookieSession.cookies.get({ url });
           for (const cookie of scopedCookies) {
             if (!cookiesByName.has(cookie.name)) {
               cookiesByName.set(cookie.name, cookie.value);
@@ -6772,7 +6782,7 @@ class IPCHandlers {
 
       // Fallback for older sessions where cookies are not URL-scoped as expected.
       if (cookiesByName.size === 0) {
-        const allCookies = await win.webContents.session.cookies.get({});
+        const allCookies = await cookieSession.cookies.get({});
         for (const cookie of allCookies) {
           if (!cookiesByName.has(cookie.name)) {
             cookiesByName.set(cookie.name, cookie.value);
@@ -6807,7 +6817,7 @@ class IPCHandlers {
     const getAuthHeaderFromWindow = async (win) => {
       const token = tokenStore.get();
       if (token) return { Authorization: `Bearer ${token}` };
-      const cookieHeader = win ? await getSessionCookiesFromWindow(win) : "";
+      const cookieHeader = await getSessionCookiesFromWindow(win);
       return cookieHeader ? { Cookie: cookieHeader } : {};
     };
 
@@ -6880,11 +6890,37 @@ class IPCHandlers {
       broadcast: (snapshot) => {
         if (snapshot.authGeneration === tokenStore.getState().generation) {
           this._audioFeaturePolicy?.update(snapshot);
+          this.updateManager?.updatePolicy(snapshot);
         }
         broadcastToWindows("workspace-policy-changed", snapshot);
       },
       logger: debugLogger,
     });
+    this.getUpdatePolicy = async () => {
+      const { generation, token } = tokenStore.getState();
+      const binding = accountScopeBinding.read();
+      const scope = accountScopeBinding.resolveActiveAccountScope({
+        ...tokenStore.getState(),
+        binding,
+      });
+      const accountId =
+        scope?.accountId ?? this.databaseManager.activeAccountId ?? binding?.accountId;
+      const authHeaders = token
+        ? { Authorization: `Bearer ${token}` }
+        : await getAuthHeaderFromWindow(
+            [this.windowManager.controlPanelWindow, this.windowManager.mainWindow].find(
+              (win) => win && !win.isDestroyed()
+            )
+          );
+      if (generation !== tokenStore.getState().generation) return { success: false };
+      if (!token && !accountId && !authHeaders.Cookie)
+        return { success: true, managed: false, authGeneration: generation };
+      return workspacePolicyManager.getPolicy({
+        accountId,
+        expectedAuthGeneration: generation,
+        authHeaders,
+      });
+    };
     const { createAudioFeaturePolicy } = require("./audioFeaturePolicy");
     this._audioFeaturePolicy = createAudioFeaturePolicy({
       getPolicy: async (event, { refresh = false } = {}) => {
@@ -11466,6 +11502,7 @@ class IPCHandlers {
       // takes it here too, as it takes every broadcast.
       if (snapshot.success && snapshot.authGeneration === tokenStore.getState().generation) {
         this._audioFeaturePolicy.update(snapshot);
+        this.updateManager?.updatePolicy(snapshot);
       }
       return snapshot;
     });

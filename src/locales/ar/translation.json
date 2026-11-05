@@ -558,7 +558,8 @@
   "controlPanel": {
     "updateRequiredByOrg": {
       "title": "التحديث مطلوب",
-      "description": "تتطلب مؤسستك إصدار OpenWhispr {{version}} أو أحدث. يرجى تحديث التطبيق."
+      "description": "تتطلب مؤسستك إصدار OpenWhispr {{version}} أو أحدث. يرجى تحديث التطبيق.",
+      "contactIT": "تتطلب مؤسستك OpenWhispr بالإصدار {{version}} أو أحدث. تواصل مع قسم تقنية المعلومات لتثبيت إصدار معتمد."
     },
     "update": {
       "readyTitle": "التحديث جاهز للتثبيت",
@@ -4768,7 +4769,13 @@
         "restarting": "جاري إعادة التشغيل...",
         "title": "التحديثات",
         "versionPlaceholder": "—",
-        "whatsNew": "ما الجديد في v{{version}}"
+        "whatsNew": "ما الجديد في v{{version}}",
+        "managedByOrganization": "تديره مؤسستك.",
+        "itManaged": "تدير مؤسستك التحديثات.",
+        "policyLoading": "جارٍ تحميل إعدادات التحديث…",
+        "policyUnavailable": "سياسة التحديث غير متاحة. حاول مجددًا عند الاتصال بالشبكة.",
+        "managedBadge": "خاضع للإدارة",
+        "stagedBeforePolicy": "تم تجهيز تحديث قبل تطبيق هذه السياسة وقد يُثبَّت عند إغلاق التطبيق. تواصل مع قسم تقنية المعلومات قبل الإغلاق أو إعادة التشغيل."
       },
       "translationHotkey": {
         "title": "مفتاح اختصار الترجمة",
