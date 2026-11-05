@@ -1,4 +1,5 @@
 import { EnterpriseAudioSettings } from "./settings/EnterpriseAudioSettings";
+import ModelFallbackSettings from "./settings/ModelFallbackSettings";
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
@@ -799,6 +800,8 @@ function TranscriptionSection({
           )}
         </>
       )}
+
+      {!errorCard && !managedCard && <ModelFallbackSettings stage="transcription" />}
 
       {/* Local decoding still serves meetings and uploads, so the GPU choice stays reachable. */}
       <GpuDeviceSelector purpose="transcription" />

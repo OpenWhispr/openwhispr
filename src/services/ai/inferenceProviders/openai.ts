@@ -245,7 +245,10 @@ export const openaiProvider: InferenceProvider = {
     const hasReasoningRoom =
       !isCustomEndpoint && getCloudModel(model)?.supportsTemperature === false;
 
-    const retryStrategy = createApiRetryStrategy();
+    const retryStrategy = {
+      ...createApiRetryStrategy(),
+      ...(config.skipProviderRetries ? { maxRetries: 0 } : {}),
+    };
     const response = await withRetry(async () => {
       let lastError: Error | null = null;
       let lastRetryableError: Error | null = null;

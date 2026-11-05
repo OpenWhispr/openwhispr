@@ -2555,6 +2555,7 @@ declare global {
       getGeminiKey: () => Promise<string | null>;
       saveGeminiKey: (key: string) => Promise<void>;
       proxyGeminiTranscription?: (data: {
+        fallbackKeyId?: string;
         audioBuffer: ArrayBuffer;
         model?: string;
         language?: string;
@@ -2564,6 +2565,19 @@ declare global {
       // Groq API key management
       getGroqKey: () => Promise<string | null>;
       saveGroqKey: (key: string) => Promise<void>;
+      listFallbackKeys?: () => Promise<{
+        success: boolean;
+        profiles?: Array<{ id: string; provider: string; label: string }>;
+        error?: string;
+      }>;
+      saveFallbackKey?: (profile: { provider: string; label: string; key: string }) => Promise<{
+        success: boolean;
+        profile?: { id: string; provider: string; label: string };
+        error?: string;
+      }>;
+      deleteFallbackKey?: (id: string) => Promise<{ success: boolean; error?: string }>;
+      getFallbackKey?: (id: string, provider: string) => Promise<string | null>;
+      onFallbackKeysChanged?: (callback: () => void) => () => void;
       getOpenrouterKey: () => Promise<string | null>;
       saveOpenrouterKey: (key: string) => Promise<void>;
 
@@ -2571,6 +2585,7 @@ declare global {
       getXaiKey?: () => Promise<string | null>;
       saveXaiKey?: (key: string) => Promise<void>;
       proxyXaiTranscription?: (data: {
+        fallbackKeyId?: string;
         audioBuffer: ArrayBuffer;
         language?: string;
         keyterms?: string[];
@@ -2580,6 +2595,7 @@ declare global {
       getMistralKey: () => Promise<string | null>;
       saveMistralKey: (key: string) => Promise<void>;
       proxyMistralTranscription: (data: {
+        fallbackKeyId?: string;
         audioBuffer: ArrayBuffer;
         model?: string;
         language?: string;
@@ -2603,6 +2619,7 @@ declare global {
       saveTinfoilKey?: (key: string) => Promise<void>;
       getTinfoilChatModels?: () => Promise<TinfoilCatalogModel[]>;
       proxyTinfoilTranscription?: (data: {
+        fallbackKeyId?: string;
         audioBuffer: ArrayBuffer;
         language?: string;
         prompt?: string;
@@ -2914,6 +2931,7 @@ declare global {
         screenContextApplied?: boolean;
         error?: string;
         code?: string;
+        status?: number;
       }>;
       cancelCloudReason?: () => void;
       cloudStreamingUsage?: (

@@ -5848,5 +5848,32 @@
       "bootstrapMismatch": "Le fichier d’amorçage ne correspond pas à votre compte, à cet espace de travail ou à ses identifiants configurés.",
       "testLinkOtherWorkspace": "Ce lien de test concerne un autre espace de travail. Passez à cet espace de travail et rouvrez le lien."
     }
+  },
+  "modelFallback": {
+    "title": "Basculement automatique de modèle",
+    "description": "Essaie le modèle suivant si le quota est atteint, le délai est dépassé ou le fournisseur est indisponible.",
+    "credentials": "Utilise la clé enregistrée du fournisseur ou une clé nommée ci-dessous. Les modèles de secours cloud reçoivent votre dictée et peuvent entraîner des frais.",
+    "order": "Ordre des modèles de secours",
+    "provider": "Fournisseur de secours",
+    "model": "Modèle de secours",
+    "modelId": "Saisir un identifiant de modèle OpenRouter",
+    "empty": "Ajoutez jusqu’à trois modèles à essayer si le modèle principal échoue.",
+    "add": "Ajouter un modèle de secours",
+    "moveUp": "Monter {{model}}",
+    "moveDown": "Descendre {{model}}",
+    "remove": "Supprimer {{model}}",
+    "unavailable": "Indisponible, sera ignoré",
+    "downloadLocal": "Téléchargez d’abord un modèle local dans le sélecteur de modèles.",
+    "key": "Clé API",
+    "defaultKey": "Clé enregistrée par défaut",
+    "newKey": "Ajouter une autre clé",
+    "keyName": "Nom de la clé",
+    "keyValue": "Clé API",
+    "saveKey": "Enregistrer la clé",
+    "cancelKey": "Annuler",
+    "deleteKey": "Supprimer la clé sélectionnée",
+    "missingKey": "Clé manquante",
+    "keySaveError": "Impossible d’enregistrer la clé. Vérifiez le stockage sécurisé et réessayez.",
+    "keyDeleteError": "Impossible de supprimer la clé. Réessayez."
   }
 }

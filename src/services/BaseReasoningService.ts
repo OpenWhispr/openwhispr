@@ -7,6 +7,9 @@ import type { DictationToneStyle } from "../config/toneStyle";
 import type { ScreenContextImage } from "../types/electron";
 
 export interface ReasoningConfig {
+  /** The ordered fallback chain owns retrying this dictation request. */
+  skipProviderRetries?: boolean;
+  fallbackKeyId?: string;
   maxTokens?: number;
   temperature?: number;
   contextSize?: number;
