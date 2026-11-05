@@ -203,9 +203,13 @@ export function observeAndroidPurchaseUpdates(): () => void {
   let lastSubscriptionSignature = '';
   const retry = () => {
     const billingId = useUsageStore.getState().usage?.billingUserId;
-    if (!billingId || refreshing || disposed) return;
+    if (!billingId || disposed) return;
     const status = useAndroidBillingStatus.getState().accounts[billingId];
     if (status !== 'payment-pending' && status !== 'access-pending') return;
+    if (refreshing) {
+      retryPending = true;
+      return;
+    }
     refreshing = true;
     void (async () => {
       const account = await currentBillingAccount();

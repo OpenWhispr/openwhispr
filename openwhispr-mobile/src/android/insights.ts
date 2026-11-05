@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { z } from 'zod';
 import { api, ApiError } from '@/lib/apiClient';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
@@ -25,14 +26,65 @@ interface Ledger {
 }
 const empty = (): Ledger => ({ events: [], acknowledged: [] });
 const key = (scope: string) => `android-insights-v1:${scope}`;
+const eventSchema = z
+  .object({
+    event_id: z.string().min(1),
+    occurred_at: z.string().datetime({ offset: true }),
+    local_date: z.string().date(),
+    word_count: z.number().int().positive(),
+    spoken_duration_ms: z.number().int().nonnegative().nullable(),
+    mode: z.enum(['local', 'openwhispr_cloud', 'byok']),
+    provider: z.string().nullable(),
+    model: z.string().nullable(),
+    counter_version: z.literal(2),
+  })
+  .strict();
+const summarySchema = z.object({
+  totalWords: z.number().int().nonnegative(),
+  totalDictations: z.number().int().nonnegative(),
+});
+
+function parseLedger(raw: string | null): { ledger: Ledger; damaged: boolean } {
+  if (raw === null) return { ledger: empty(), damaged: false };
+  try {
+    const stored: unknown = JSON.parse(raw);
+    if (!stored || typeof stored !== 'object' || Array.isArray(stored))
+      return { ledger: empty(), damaged: true };
+    const value = stored as Record<string, unknown>;
+    const ledger = empty();
+    const ids = new Set<string>();
+    let damaged = !Array.isArray(value.events) || !Array.isArray(value.acknowledged);
+    for (const item of Array.isArray(value.events) ? value.events : []) {
+      const parsed = eventSchema.safeParse(item);
+      if (!parsed.success || ids.has(parsed.data.event_id)) {
+        damaged = true;
+        continue;
+      }
+      ids.add(parsed.data.event_id);
+      ledger.events.push(parsed.data);
+    }
+    for (const id of Array.isArray(value.acknowledged) ? value.acknowledged : []) {
+      if (typeof id === 'string' && id) ledger.acknowledged.push(id);
+      else damaged = true;
+    }
+    if (value.summary !== undefined) {
+      const summary = summarySchema.safeParse(value.summary);
+      if (summary.success) ledger.summary = summary.data;
+      else damaged = true;
+    }
+    return { ledger, damaged };
+  } catch {
+    return { ledger: empty(), damaged: true };
+  }
+}
+
 export function insightsScope(): string {
   const user = useAuthStore.getState().user;
   return user && !user.isAnonymous ? `account:${user.id}` : 'device';
 }
 function read(scope: string): Ledger {
   try {
-    const value = JSON.parse(localStorage.getItem(key(scope)) ?? 'null') as Ledger | null;
-    if (value && Array.isArray(value.events) && Array.isArray(value.acknowledged)) return value;
+    return parseLedger(localStorage.getItem(key(scope))).ledger;
   } catch {
     /* An unreadable ledger must not prevent dictation. */
   }
@@ -40,6 +92,9 @@ function read(scope: string): Ledger {
 }
 function write(scope: string, ledger: Ledger) {
   if (localStorage.getItem(`${key(scope)}:deleted`)) return;
+  const raw = localStorage.getItem(key(scope));
+  // Keep the damaged bytes before repair; a failed backup must not overwrite them.
+  if (raw !== null && parseLedger(raw).damaged) localStorage.setItem(`${key(scope)}:recovery`, raw);
   localStorage.setItem(key(scope), JSON.stringify(ledger));
   if (insightsScope() === scope) useInsights.setState({ scope, ledger });
 }
@@ -131,6 +186,7 @@ export function eraseAccountInsights(userId: string): void {
   if (active?.scope === scope) cancelActive();
   localStorage.setItem(`${key(scope)}:deleted`, 'true');
   localStorage.removeItem(key(scope));
+  localStorage.removeItem(`${key(scope)}:recovery`);
   if (useInsights.getState().scope === scope)
     useInsights.setState({ ledger: empty(), status: 'idle' });
 }

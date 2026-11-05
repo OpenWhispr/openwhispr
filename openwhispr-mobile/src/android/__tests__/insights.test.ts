@@ -691,3 +691,130 @@ it('removes the old deadline when accounts change without marking the new accoun
     jest.useRealTimers();
   }
 });
+
+it('isolates corrupt ledger rows while preserving valid events and their acknowledgements', async () => {
+  const raw = JSON.stringify({
+    events: [null, event, { ...event, event_id: 'bad-count', word_count: '400' }],
+    acknowledged: [null, 'one', 42],
+    summary: { totalWords: '400', totalDictations: -1 },
+  });
+  memory.set('android-insights-v1:account:a', raw);
+  await refreshInsights();
+  expect(useInsights.getState().ledger).toEqual({ events: [event], acknowledged: ['one'] });
+  expect(memory.get('android-insights-v1:account:a')).toBe(raw);
+  expect(api.post).not.toHaveBeenCalled();
+});
+
+it('keeps the original corrupt ledger recoverable before saving another dictation', async () => {
+  const raw = JSON.stringify({ events: [event, null], acknowledged: [] });
+  memory.set('android-insights-v1:account:a', raw);
+  recordInsight('account:a', { ...event, event_id: 'two' });
+  expect(useInsights.getState().ledger.events).toEqual([event, { ...event, event_id: 'two' }]);
+  expect(memory.get('android-insights-v1:account:a:recovery')).toBe(raw);
+  await refreshInsights();
+  expect(useInsights.getState().ledger.events).toHaveLength(2);
+});
+
+it('does not overwrite a damaged ledger when retaining the recovery copy fails', () => {
+  const raw = JSON.stringify({ events: [null], acknowledged: [] });
+  memory.set('android-insights-v1:account:a', raw);
+  const original = localStorage.setItem;
+  localStorage.setItem = (key, value) => {
+    if (key.endsWith(':recovery')) throw new Error('storage full');
+    original(key, value);
+  };
+  try {
+    expect(() => recordInsight('account:a', event)).toThrow('storage full');
+    expect(memory.get('android-insights-v1:account:a')).toBe(raw);
+  } finally {
+    localStorage.setItem = original;
+  }
+});
+
+it.each([
+  ['truncated JSON', '{"events":['],
+  ['invalid root', 'true'],
+  ['missing arrays', '{"events":null,"acknowledged":42}'],
+])('retains %s before restarting the statistics ledger', async (_label, raw) => {
+  memory.set('android-insights-v1:account:a', raw);
+  await refreshInsights();
+  expect(useInsights.getState().ledger).toEqual({ events: [], acknowledged: [] });
+  recordInsight('account:a', event);
+  expect(memory.get('android-insights-v1:account:a:recovery')).toBe(raw);
+  expect(useInsights.getState().ledger.events).toEqual([event]);
+});
+
+it.each([
+  { word_count: -1 },
+  { word_count: Number.MAX_SAFE_INTEGER + 1 },
+  { spoken_duration_ms: '2000' },
+  { occurred_at: 'not a date' },
+  { local_date: '2026-02-30' },
+  { mode: 'unexpected' },
+  { counter_version: 1 },
+  { transcript: 'This text must never enter an analytics request.' },
+])('does not upload an invalid stored event: %j', async (corruption) => {
+  const invalid = { ...event, event_id: 'invalid', ...corruption };
+  memory.set(
+    'android-insights-v1:account:a',
+    JSON.stringify({
+      events: [invalid, event, event],
+      acknowledged: [],
+    }),
+  );
+  mockConfig.insightsSyncEnabled = true;
+  await refreshInsights();
+  expect(jest.mocked(api.post).mock.calls[0][1]).toEqual({ events: [event] });
+  expect(useInsights.getState().ledger.events).toEqual([event]);
+  expect(useInsights.getState().ledger.acknowledged).toEqual(['one']);
+});
+
+it('removes only the deleted account recovery copy and prevents late recreation', async () => {
+  memory.set('android-insights-v1:account:a:recovery', 'damaged-a');
+  memory.set('android-insights-v1:account:b:recovery', 'damaged-b');
+  recordInsight('account:a', event);
+  eraseAccountInsights('a');
+  recordInsight('account:a', { ...event, event_id: 'late' });
+  await refreshInsights();
+  expect(memory.has('android-insights-v1:account:a:recovery')).toBe(false);
+  expect(memory.has('android-insights-v1:account:a')).toBe(false);
+  expect(memory.get('android-insights-v1:account:b:recovery')).toBe('damaged-b');
+});
+
+it('replays only pending batches after same-account session replacement', async () => {
+  const events = Array.from({ length: 401 }, (_, index) => ({ ...event, event_id: String(index) }));
+  events.forEach((item) => recordInsight('account:a', item));
+  mockConfig.insightsSyncEnabled = true;
+  const oldResponse = deferred<{ accepted: string[]; rejected: string[] }>();
+  const secondStarted = deferred<void>();
+  jest
+    .mocked(api.post)
+    .mockResolvedValueOnce({
+      accepted: events.slice(0, 200).map((item) => item.event_id),
+      rejected: [],
+    })
+    .mockImplementationOnce(() => {
+      secondStarted.resolve();
+      return oldResponse.promise;
+    });
+  const first = refreshInsights();
+  await secondStarted.promise;
+  const oldSignal = jest.mocked(api.post).mock.calls[1][2]?.signal;
+  jest.mocked(api.post).mockImplementation(async (_path, body) => ({
+    accepted: (body as { events: InsightEvent[] }).events.map((item) => item.event_id),
+    rejected: [],
+  }));
+  changeAccount('a', 'replacement-session-a');
+  await refreshInsights();
+  oldResponse.resolve({
+    accepted: events.slice(200, 400).map((item) => item.event_id),
+    rejected: [],
+  });
+  await first;
+  expect(oldSignal?.aborted).toBe(true);
+  expect(jest.mocked(api.post).mock.calls[2][1]).toEqual({ events: events.slice(200, 400) });
+  expect(jest.mocked(api.post).mock.calls[3][1]).toEqual({ events: events.slice(400) });
+  expect(useInsights.getState().ledger.acknowledged).toHaveLength(401);
+  expect(useInsights.getState().status).toBe('idle');
+  expect(mockAuthListeners.size).toBe(0);
+});
