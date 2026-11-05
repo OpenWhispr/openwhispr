@@ -291,11 +291,38 @@ function seedForkedChat(db) {
   return { parent: db.getAgentConversation(parent.id), fork };
 }
 
+test("a fork waits for its first turn, so another device gets what it says and its title", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  const { fork } = seedForkedChat(db);
+  const pushedFork = () =>
+    cloud
+      .logFor("/api/conversations/create")
+      .map((entry) => entry.body)
+      .find((body) => body.client_conversation_id === fork.client_conversation_id);
+
+  await service.pushPendingConversations();
+  assert.equal(pushedFork(), undefined, "a fork of only copies stays here");
+
+  db.updateAgentConversationTitle(fork.id, "My own branch");
+  db.addAgentMessage(fork.id, "user", "Only in the fork");
+  db.addAgentMessage(fork.id, "assistant", "Fork reply");
+  await service.pushPendingConversations();
+
+  const pushed = pushedFork();
+  assert.equal(pushed.title, "My own branch");
+  assert.equal(pushed.fork_message_count, 2);
+  assert.equal(pushed.messages.at(-1).content, "Fork reply");
+});
+
 test("a fork is pushed with its parent's client id, its copied count and its text", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
   const { db, cloud, service } = ctx;
   const { parent, fork } = seedForkedChat(db);
+  db.addAgentMessage(fork.id, "user", "Only in the fork");
+  db.addAgentMessage(fork.id, "assistant", "Fork reply");
 
   await service.syncAll(true);
 
@@ -308,7 +335,7 @@ test("a fork is pushed with its parent's client id, its copied count and its tex
   assert.equal(pushedFork.parent_client_conversation_id, parent.client_conversation_id);
   assert.equal(pushedFork.fork_message_count, 2);
   assert.equal(pushedFork.fork_context, "Here is a draft.");
-  assert.equal(pushedFork.messages.length, 2);
+  assert.equal(pushedFork.messages.length, 4);
   const pushedParent = bodies.get(parent.client_conversation_id);
   assert.equal(pushedParent.parent_client_conversation_id, null);
   assert.equal(pushedParent.fork_message_count, null);

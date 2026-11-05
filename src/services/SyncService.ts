@@ -380,13 +380,20 @@ function conversationCreateSnapshot(
 // A conversation is pushed once, so not while a reply is still running or
 // waiting on the user: another device would get a half turn and could answer
 // its question again. A turn that old was cut off (the app quit) and goes as is.
+// A fork waits for its first turn like a new chat does: it holds only copies
+// until then, and what it says next would never reach another device.
 const TURN_IN_PROGRESS_MAX_AGE_MS = 60 * 60 * 1000;
 
 function hasTurnInProgress(conversation: {
   has_active_turn?: boolean;
+  fork_message_count?: number | null;
   messages: ReadonlyArray<{ metadata?: unknown }>;
 }) {
-  if (conversation.has_active_turn || conversation.messages.length === 0) return true;
+  if (
+    conversation.has_active_turn ||
+    conversation.messages.length <= (conversation.fork_message_count ?? 0)
+  )
+    return true;
   return conversation.messages.some((message) => {
     let metadata = message.metadata;
     if (typeof metadata === "string") {
