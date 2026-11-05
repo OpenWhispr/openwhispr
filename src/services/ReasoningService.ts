@@ -24,6 +24,7 @@ import {
 import { streamText, stepCountIs } from "ai";
 import { compactTranscriptHistory } from "./ai/transcriptHistory";
 import { getAIModel } from "./ai/providers";
+import { localServerFetch, localServerStartError } from "./ai/localServerFetch";
 import { createEnterpriseChatModel } from "./ai/enterpriseChatModel";
 import { getManagedScopeResolution } from "../stores/enterpriseIdentityStore";
 import type { InferenceScope } from "../config/inferenceScopes";
@@ -696,11 +697,7 @@ class ReasoningService extends BaseReasoningService {
         window.electronAPI.llamaServerStart(model),
         assertStreamAllowed
       );
-      if (!serverResult.success || !serverResult.port) {
-        throw Object.assign(new Error(serverResult.error || "Failed to start local model server"), {
-          code: serverResult.code,
-        });
-      }
+      if (!serverResult.success || !serverResult.port) throw localServerStartError(serverResult);
       endpoint = `http://127.0.0.1:${serverResult.port}/v1/chat/completions`;
     } else {
       const access = await resolveStreamSetup(
@@ -1012,11 +1009,7 @@ class ReasoningService extends BaseReasoningService {
         window.electronAPI.llamaServerStart(model),
         assertStreamAllowed
       );
-      if (!serverResult.success || !serverResult.port) {
-        throw Object.assign(new Error(serverResult.error || "Failed to start local model server"), {
-          code: serverResult.code,
-        });
-      }
+      if (!serverResult.success || !serverResult.port) throw localServerStartError(serverResult);
       baseURL = `http://127.0.0.1:${serverResult.port}/v1`;
     } else {
       ({ apiKey, baseURL } = await resolveStreamSetup(
@@ -1041,6 +1034,7 @@ class ReasoningService extends BaseReasoningService {
           getAIModel(aiProvider, model, apiKey, baseURL, {
             disableThinking: openrouterDisableThinking,
             reasoningEffort: provider === "openrouter" ? reasoningEffort : undefined,
+            ...(isLocalProvider ? { fetch: localServerFetch(model) } : {}),
           }),
           assertStreamAllowed
         );

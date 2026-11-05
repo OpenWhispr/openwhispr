@@ -113,6 +113,8 @@ function makeGatedManager() {
   const { manager, starts } = makeManager();
   const stubStart = manager._doStart;
   const gates = [];
+  // These tests are about the queue, not about what a running server is doing.
+  manager._isBusy = async () => false;
   manager._doStart = async (modelPath, options) => {
     await new Promise((resolve, reject) => {
       gates.push({ resolve, reject });
@@ -436,6 +438,269 @@ test("stopWhenIdle leaves a server another start has replaced alone", async () =
   assert.equal(await manager.stopWhenIdle(), false);
   assert.equal(stops, 0);
   assert.equal(await new LlamaServerManager().stopWhenIdle(), false, "no server, nothing to stop");
+});
+
+// --- a restart never cuts off an answer ------------------------------------
+//
+// Streaming chat talks to the port directly, so only the server knows an answer
+// is being generated. Every restart (another model, a bigger window) goes through
+// the same wait, with a deadline the caller picks.
+
+const BUSY = [{ is_processing: false }, { is_processing: true }];
+const IDLE = [{ is_processing: false }, { is_processing: false }];
+
+// A manager already serving /models/running.gguf, with /slots stubbed and
+// stops recorded. replyFor decides what each /slots read answers.
+function makeRunningManager(replyFor) {
+  const { manager, starts } = makeManager();
+  const doStart = manager._doStart;
+  manager._doStart = async (modelPath, options) => {
+    await doStart(modelPath, options);
+    manager.process = { pid: starts.length };
+  };
+  manager.process = { pid: 0 };
+  manager.ready = true;
+  manager.port = 1;
+  manager.modelPath = "/models/running.gguf";
+  manager.draftModelPath = null;
+  manager.contextSize = 4096;
+  const stops = [];
+  manager.stop = async () => {
+    stops.push(manager.modelPath);
+    manager.process = null;
+    manager.ready = false;
+    manager.modelPath = null;
+    manager.contextSize = null;
+  };
+  manager._requestJson = async () => replyFor();
+  return { manager, starts, stops };
+}
+
+const isModelBusy = (error) => error.code === "LOCAL_MODEL_BUSY";
+const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+test("a start for another model waits for the answer to finish before stopping the server", async () => {
+  let answering = true;
+  const { manager, starts, stops } = makeRunningManager(() => (answering ? BUSY : IDLE));
+
+  const swap = manager.start("/models/other.gguf", { busyWaitMs: 5000 });
+  await pause(300);
+  assert.deepEqual(stops, [], "the answer keeps its server");
+  assert.equal(starts.length, 0);
+
+  answering = false;
+  await swap;
+  assert.deepEqual(stops, ["/models/running.gguf"]);
+  assert.equal(starts[0].modelPath, "/models/other.gguf");
+  manager.clearIdleTimer();
+});
+
+test("a start that runs out of time is refused and leaves the answer running", async () => {
+  const { manager, starts, stops } = makeRunningManager(() => BUSY);
+
+  const started = Date.now();
+  await assert.rejects(manager.start("/models/other.gguf", { busyWaitMs: 300 }), isModelBusy);
+  assert.ok(Date.now() - started < 1000, "the deadline is what ended the wait");
+  assert.deepEqual(stops, []);
+  assert.equal(starts.length, 0);
+  assert.equal(manager.modelPath, "/models/running.gguf");
+  assert.equal(manager.ready, true);
+});
+
+test("a start with no time to wait is refused at once", async () => {
+  const { manager, stops } = makeRunningManager(() => BUSY);
+
+  const started = Date.now();
+  await assert.rejects(manager.start("/models/other.gguf", { busyWaitMs: 0 }), isModelBusy);
+  assert.ok(Date.now() - started < 100);
+  assert.deepEqual(stops, []);
+});
+
+test("a server too busy to answer /slots counts as busy, and the wait still ends on time", async (t) => {
+  // llama-server answers /slots between batches, so a long prompt holds the reply.
+  const hung = http.createServer(() => {});
+  await new Promise((resolve) => hung.listen(0, "127.0.0.1", resolve));
+  t.after(() => {
+    hung.closeAllConnections();
+    hung.close();
+  });
+  const { manager, stops } = makeRunningManager(() => BUSY);
+  delete manager._requestJson;
+  manager.port = hung.address().port;
+
+  const started = Date.now();
+  await assert.rejects(manager.start("/models/other.gguf", { busyWaitMs: 300 }), isModelBusy);
+  assert.ok(Date.now() - started < 1500);
+  assert.deepEqual(stops, []);
+});
+
+test("a /slots read that fails outright does not hold the restart up", async () => {
+  const { manager, starts, stops } = makeRunningManager(() => null);
+
+  await manager.start("/models/other.gguf", { busyWaitMs: 5000 });
+  assert.equal(stops.length, 1);
+  assert.equal(starts.length, 1);
+  manager.clearIdleTimer();
+});
+
+test("a server that failed its health check is replaced without asking it", async () => {
+  let reads = 0;
+  const { manager, starts } = makeRunningManager(() => {
+    reads += 1;
+    return BUSY;
+  });
+  manager.ready = false;
+
+  await manager.start("/models/other.gguf", { busyWaitMs: 0 });
+  assert.equal(reads, 0);
+  assert.equal(starts.length, 1);
+  manager.clearIdleTimer();
+});
+
+test("the running model stays available while another start waits for its turn", async () => {
+  let answering = true;
+  const { manager, starts, stops } = makeRunningManager(() => (answering ? BUSY : IDLE));
+
+  const waiting = manager.start("/models/other.gguf", { busyWaitMs: 5000 });
+  await pause(50);
+
+  // A follow-up on the model that's answering is not queued behind the swap.
+  await manager.start("/models/running.gguf");
+  assert.deepEqual(stops, []);
+  assert.equal(starts.length, 0);
+
+  answering = false;
+  manager.handoffUntil = 0;
+  await waiting;
+  assert.equal(starts[0].modelPath, "/models/other.gguf");
+  manager.clearIdleTimer();
+});
+
+test("growing a busy server's context waits for its answer too", async () => {
+  let answering = true;
+  const { manager, starts, stops } = makeRunningManager(() => (answering ? BUSY : IDLE));
+
+  await assert.rejects(
+    manager.start("/models/running.gguf", { contextSize: 32768, busyWaitMs: 0 }),
+    isModelBusy
+  );
+  assert.deepEqual(stops, []);
+
+  answering = false;
+  await manager.start("/models/running.gguf", { contextSize: 32768, busyWaitMs: 0 });
+  assert.equal(starts[0].contextSize, 32768);
+  manager.clearIdleTimer();
+});
+
+test("a request main is waiting on counts as busy", async () => {
+  // Between sending it and the server taking it, /slots still reads idle.
+  const { manager, stops } = makeRunningManager(() => IDLE);
+  manager.activeRequest = {};
+
+  await assert.rejects(manager.start("/models/other.gguf", { busyWaitMs: 0 }), isModelBusy);
+  assert.deepEqual(stops, []);
+});
+
+test("a server just handed to a caller is kept until its request can arrive", async () => {
+  // The renderer gets the port, then connects: /slots reads idle in between.
+  const { manager, starts, stops } = makeRunningManager(() => IDLE);
+
+  await manager.start("/models/running.gguf");
+  await assert.rejects(manager.start("/models/other.gguf", { busyWaitMs: 100 }), isModelBusy);
+  assert.deepEqual(stops, []);
+
+  await manager.start("/models/other.gguf", { busyWaitMs: 5000 });
+  assert.deepEqual(stops, ["/models/running.gguf"]);
+  assert.equal(starts[0].modelPath, "/models/other.gguf");
+  manager.clearIdleTimer();
+});
+
+test("a queued start does not take the server a finished start just loaded", async () => {
+  const { manager, starts, stops } = makeRunningManager(() => IDLE);
+  const doStart = manager._doStart;
+  manager._doStart = async (modelPath, options) => {
+    await pause(50);
+    await doStart(modelPath, options);
+  };
+
+  const first = manager.start("/models/first.gguf", { busyWaitMs: 5000 });
+  const second = manager.start("/models/second.gguf", { busyWaitMs: 5000 });
+  let secondDone = false;
+  second.then(() => {
+    secondDone = true;
+  });
+
+  await first;
+  assert.equal(manager.modelPath, "/models/first.gguf");
+  await pause(200);
+  assert.equal(secondDone, false, "the first caller's request gets there first");
+  assert.equal(manager.modelPath, "/models/first.gguf");
+
+  await second;
+  assert.deepEqual(
+    starts.map((start) => start.modelPath),
+    ["/models/first.gguf", "/models/second.gguf"]
+  );
+  assert.deepEqual(stops, ["/models/running.gguf", "/models/first.gguf"]);
+  manager.clearIdleTimer();
+});
+
+test("the deadline also covers waiting for another model to finish loading", async () => {
+  const { manager } = makeManager();
+  let finishLoad;
+  manager._doStart = () => new Promise((resolve) => (finishLoad = resolve));
+
+  const loading = manager.start("/models/slow.gguf");
+  const started = Date.now();
+  await assert.rejects(manager.start("/models/other.gguf", { busyWaitMs: 100 }), isModelBusy);
+  assert.ok(Date.now() - started < 1000);
+
+  finishLoad();
+  await loading;
+  manager.clearIdleTimer();
+});
+
+test("an old server exiting late does not take the new server's handle with it", async (t) => {
+  // A server that ignored SIGTERM is SIGKILLed and stop() moves on before it
+  // exits, so its close event lands after the next server has spawned.
+  const portOf = () =>
+    new Promise((resolve) => {
+      const probe = http.createServer();
+      probe.listen(0, "127.0.0.1", () => {
+        const { port } = probe.address();
+        probe.close(() => resolve(port));
+      });
+    });
+  const healthServer = (port) => [
+    "-e",
+    `require("http").createServer((q,s)=>s.end("ok")).listen(${port},"127.0.0.1")`,
+  ];
+  const manager = new LlamaServerManager();
+  const spawnServer = async () => {
+    manager.port = await portOf();
+    await manager._startWithBinary(
+      process.execPath,
+      healthServer(manager.port),
+      process.env,
+      10000
+    );
+    return manager.process;
+  };
+
+  const oldServer = await spawnServer();
+  t.after(() => oldServer.kill("SIGKILL"));
+  manager.process = null;
+  const newServer = await spawnServer();
+  t.after(() => newServer.kill("SIGKILL"));
+
+  await new Promise((resolve) => {
+    oldServer.once("close", resolve);
+    oldServer.kill("SIGKILL");
+  });
+
+  assert.equal(manager.process, newServer);
+  assert.equal(manager.ready, true);
+  manager.stopHealthCheck();
 });
 
 test("usableContextSize reports the window the server actually has", async () => {

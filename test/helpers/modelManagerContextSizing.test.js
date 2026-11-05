@@ -68,7 +68,9 @@ async function setup(
     req.on("end", () => {
       let status = 200;
       let payload;
-      if (req.url === "/props") {
+      if (req.url === "/slots") {
+        payload = [{ is_processing: false }];
+      } else if (req.url === "/props") {
         calls.props += 1;
         payload = { default_generation_settings: { n_ctx: serverManager.contextSize } };
       } else if (req.url === "/apply-template") {
@@ -569,6 +571,35 @@ test("only Apple Silicon is treated as memory the GPU already shares", async (t)
   assert.notEqual(unified.reason, "gpu-cap", "unified memory needs no unverified-GPU cap");
   assert.equal(discrete.reason, "gpu-cap", "an Intel Mac's GPU memory is not system memory");
   assert.ok(discrete.ceiling < unified.ceiling);
+});
+
+test("a server too busy to swap stays a busy error, and says how long to wait", async (t) => {
+  const { modelManager: manager, serverManager, modelId } = await setup(t);
+  manager.currentServerModelId = "another-model";
+  const asked = [];
+  serverManager.isAvailable = () => true;
+  serverManager.start = async (_modelPath, options) => {
+    asked.push(options.busyWaitMs);
+    throw Object.assign(new Error("busy"), { code: "LOCAL_MODEL_BUSY" });
+  };
+
+  await assert.rejects(
+    manager.runInference(modelId, SHORT_PROMPT, { busyWaitMs: 1234 }),
+    (error) => error.code === "LOCAL_MODEL_BUSY"
+  );
+  assert.deepEqual(asked, [1234]);
+});
+
+test("a pre-warm never waits on another model's answer", async (t) => {
+  const { modelManager: manager, serverManager, modelId } = await setup(t);
+  const asked = [];
+  serverManager.isAvailable = () => true;
+  serverManager.start = async (_modelPath, options) => {
+    asked.push(options.busyWaitMs);
+  };
+
+  await manager.prewarmServer(modelId);
+  assert.deepEqual(asked, [0]);
 });
 
 test("a reply cut off at the token cap keeps its code through the bridge", async (t) => {

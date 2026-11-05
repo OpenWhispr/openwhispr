@@ -51,6 +51,8 @@ class LocalReasoningService {
         // field-by-field is what silently orphaned it before #2142: it was
         // declared, written by selection editing, and never forwarded.
         contextSize: config.contextSize,
+        // How long to wait for another model's answer before giving up.
+        busyWaitMs: config.busyWaitMs,
       };
 
       debugLogger.logReasoning("LOCAL_BRIDGE_INFERENCE", {

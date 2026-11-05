@@ -15,6 +15,9 @@ function makeManager() {
   const manager = new LlamaServerManager();
   const stops = [];
   manager.processing = false;
+  // Restarts here are about the idle timer; whether one waits is covered in
+  // llamaServerContext.test.js, and these tests mock the clock such a wait runs on.
+  manager._isBusy = async () => false;
   manager._requestJson = async (path) =>
     path === "/slots" ? [{ is_processing: false }, { is_processing: manager.processing }] : null;
   manager._doStart = async (modelPath, options = {}) => {

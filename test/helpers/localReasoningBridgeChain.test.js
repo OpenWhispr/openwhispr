@@ -71,6 +71,11 @@ async function setupChain(t, respond) {
     let raw = "";
     req.on("data", (chunk) => (raw += chunk));
     req.on("end", () => {
+      if (req.url === "/slots") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end("[]");
+        return;
+      }
       requests.push(JSON.parse(raw));
       const reply = respond();
       // null leaves the request hanging, like a model still generating.
@@ -259,6 +264,19 @@ test("a second request while one is in flight is refused with a typed code", asy
 
   release();
   assert.equal(await first, "first reply");
+});
+
+test("a caller's busy wait reaches runInference", async (t) => {
+  // This object is rebuilt field by field, which is how contextSize once got lost.
+  const { bridge, modelManager, modelId } = await setupChain(t, () => completion("stop", "ok"));
+  let received;
+  modelManager.runInference = async (_modelId, _text, options) => {
+    received = options.busyWaitMs;
+    return "ok";
+  };
+
+  await bridge.processText("text", modelId, { busyWaitMs: 1234 });
+  assert.equal(received, 1234);
 });
 
 test("cancel aborts only the in-flight request carrying that id, and frees the slot", async (t) => {

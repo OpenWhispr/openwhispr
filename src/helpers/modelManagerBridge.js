@@ -764,7 +764,11 @@ class ModelManager {
       const startAt = async (size) =>
         this.serverManager.start(
           modelPath,
-          await this.serverStartOptions(modelInfo, { contextSize: size, cacheRamMiB })
+          await this.serverStartOptions(modelInfo, {
+            contextSize: size,
+            cacheRamMiB,
+            busyWaitMs: options.busyWaitMs,
+          })
         );
       // llama.cpp's startup dump is the diagnostic, so it goes to the log here
       // and nowhere else: details crosses IPC to the renderer, which neither
@@ -790,7 +794,8 @@ class ModelManager {
         // be stepped down again.
         if (this.serverManager.contextSize < contextSize) refuse(contextSize);
       } catch (error) {
-        if (isLocalModelPolicyRefusal(error)) throw error;
+        // Busy means the running server was left alone, and says nothing about this window.
+        if (isLocalModelPolicyRefusal(error) || error.code === "LOCAL_MODEL_BUSY") throw error;
         refuse(contextSize);
         // start() stops the running server before it spawns, so a grow that
         // dies has already taken a working window with it. Come back at the
@@ -967,7 +972,11 @@ class ModelManager {
     if (!this.serverManager.isAvailable()) return false;
 
     try {
-      await this.serverManager.start(modelPath, await this.serverStartOptions(modelInfo));
+      // Nobody is waiting on a pre-warm, so it never gets in an answer's way.
+      await this.serverManager.start(
+        modelPath,
+        await this.serverStartOptions(modelInfo, { busyWaitMs: 0 })
+      );
       this.currentServerModelId = modelId;
       debugLogger.info("llama-server pre-warmed", { modelId });
       return true;
