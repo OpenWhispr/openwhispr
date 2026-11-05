@@ -48,6 +48,7 @@ import {
   isPolicyActionAllowed,
   isTranscriptionContextAllowed,
   isUpdateRequiredByOrg,
+  transcriptionChoiceRefusal,
 } from "../stores/policyRules";
 import { getManagedTranscriptionResolution } from "../services/managedTranscription";
 import {
@@ -93,7 +94,7 @@ import { getAgentName } from "../utils/agentName";
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
 import AssistantNoteUndoListener from "./notes/AssistantNoteUndoListener";
-import { providerErrorToastProps } from "../utils/describeProviderError";
+import { providerErrorActions, providerErrorToastProps } from "../utils/describeProviderError";
 import SpaceSyncToastListener from "./notes/SpaceSyncToastListener";
 import SharedDictionaryArrivalToastListener from "./SharedDictionaryArrivalToastListener";
 import { syncService } from "../services/SyncService.js";
@@ -763,7 +764,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           return;
         }
         if (!managed && !isTranscriptionContextAllowed(usePolicyStore.getState(), s, "dictation")) {
-          toast({ title: t("common.managedByOrg"), variant: "default" });
+          const refusal = transcriptionChoiceRefusal(usePolicyStore.getState(), s, "dictation");
+          toast({
+            title: t(refusal?.messageKey ?? "common.managedByOrg"),
+            variant: "default",
+            ...(refusal ? { actions: providerErrorActions(refusal, t) } : {}),
+          });
           return;
         }
         const result = await window.electronAPI.retryTranscription(id, {

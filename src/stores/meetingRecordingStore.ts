@@ -35,6 +35,7 @@ import {
   isAudioFeatureAllowed,
   isTranscriptionContextAllowed,
   meetingRecordingRefusal,
+  transcriptionChoiceRefusal,
   type PolicyDecisionSnapshot,
 } from "./policyRules";
 import { usePolicyStore } from "./policyStore";
@@ -216,6 +217,8 @@ const getMeetingTranscriptionOptions = () => {
       cortiTenant: state.cortiTenant,
       keyterms: getKeytermDictionaryWords(state).filter(Boolean),
     }),
+    // A model revoked mid-start stays blank for main to refuse, not the default chosen above.
+    ...(state.policyBlockedLocalScopes?.includes("meeting") ? { localModel: "" } : {}),
     enterpriseIdentity,
     enterpriseSetupMode: state.enterpriseTranscriptionSetupMode,
   };
@@ -540,6 +543,9 @@ const MEETING_POLICY_REFUSALS = new Set([
   "POLICY_MEETING_RECORDING_DISABLED",
   "AUDIO_PURPOSE_REQUIRED",
   "POLICY_UNRESOLVABLE",
+  "POLICY_MODEL_BLOCKED",
+  "POLICY_LOCAL_MODE_BLOCKED",
+  "POLICY_APP_VERSION_BLOCKED",
 ]);
 
 // Main-process errors that mean main has already ended the recording: a policy
@@ -554,23 +560,31 @@ const MEETING_MAIN_STOPS = new Set([
 // from this window doesn't explain it a second time.
 let mainStoppedSessionId: string | null = null;
 
-// A recording ended because the policy could not be checked. Unlike
+// Main ended a recording because the policy could not be checked. Unlike
 // POLICY_UNRESOLVABLE at start, there is nothing to try again in a moment.
 const POLICY_UNRESOLVED_STOP = "policyUnresolvedStop";
 
 // The sentinel explaining a meeting policy refuses, for a start or a stop.
-function meetingPolicyRefusalError(
-  policy: PolicyDecisionSnapshot,
-  phase: "start" | "stop"
-): string {
+function meetingPolicyRefusalError(policy: PolicyDecisionSnapshot): string {
   switch (meetingRecordingRefusal(policy)) {
     case "unresolved":
-      return phase === "stop" ? POLICY_UNRESOLVED_STOP : "POLICY_UNRESOLVABLE";
+      return "POLICY_UNRESOLVABLE";
     case "disabled":
       return "POLICY_MEETING_RECORDING_DISABLED";
     default:
       return "policyRestricted";
   }
+}
+
+// Managed audio outranks the personal selection, which a restricted model list
+// may refuse, but not the org's meeting recording switch. Judged on the realtime
+// route, since a batch-only deployment leaves meetings on the personal one.
+function isMeetingAllowedByPolicy(policy: PolicyDecisionSnapshot): boolean {
+  if (!isAudioFeatureAllowed(policy, "meeting")) return false;
+  return (
+    !!getManagedTranscriptionResolution("realtime") ||
+    isTranscriptionContextAllowed(policy, getSettings(), "meeting")
+  );
 }
 
 function reportMeetingError(error: string, extra: Partial<MeetingRecordingState> = {}): void {
@@ -844,7 +858,7 @@ async function cleanup(): Promise<void> {
 
 export async function prepareTranscription(): Promise<void> {
   if (isPrepared || isRecordingFlag || isStartingFlag) return;
-  if (!isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "meeting")) return;
+  if (!isMeetingAllowedByPolicy(usePolicyStore.getState())) return;
   if (preparePromise) return preparePromise;
 
   logger.info("Meeting transcription preparing (pre-warming WebSockets)...", {}, "meeting");
@@ -906,12 +920,12 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
   if (isStartingFlag && !args.canAutoStart) return true;
   if (args.canAutoStart && !args.canAutoStart()) return false;
   const policy = usePolicyStore.getState();
-  if (!isTranscriptionContextAllowed(policy, getSettings(), "meeting")) {
+  if (!isMeetingAllowedByPolicy(policy)) {
     logger.warn("Meeting recording blocked by workspace policy", {}, "meeting");
     reportMeetingError(
       isAudioFeatureAllowed(policy, "meeting")
-        ? "policyRestricted"
-        : meetingPolicyRefusalError(policy, "start")
+        ? (transcriptionChoiceRefusal(policy, getSettings(), "meeting")?.code ?? "policyRestricted")
+        : meetingPolicyRefusalError(policy)
     );
     return false;
   }
@@ -947,9 +961,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
     isStartingFlag = true;
     activeRecordingSessionId = sessionId;
     const isCurrentStart = () =>
-      startOperation.isCurrent() &&
-      activeRecordingSessionId === sessionId &&
-      isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "meeting");
+      startOperation.isCurrent() && activeRecordingSessionId === sessionId;
     let captureStarted = false;
     // Consent remains live until the first capture request, then stays latched
     // while the recording's other sources and connection finish starting.
@@ -1990,12 +2002,12 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
 
 /**
  * Ends a recording this window's policy now refuses, which main may still allow
- * (an unresolved policy, a minimum app version). Says why only when this call
- * ended it, so not for a stop the user or main already had under way.
+ * (a minimum app version). Says why only when this call ended it, so not for a
+ * stop the user or main already had under way.
  */
 export async function stopRecordingForPolicy(): Promise<void> {
   const sessionId = activeRecordingSessionId;
-  const reason = meetingPolicyRefusalError(usePolicyStore.getState(), "stop");
+  const reason = meetingPolicyRefusalError(usePolicyStore.getState());
   const { stopped, cancelledStart } = await stopRecording();
   if ((stopped || cancelledStart) && sessionId && mainStoppedSessionId !== sessionId) {
     reportMeetingError(reason);

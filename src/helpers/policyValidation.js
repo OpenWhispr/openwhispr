@@ -41,6 +41,11 @@ function isValidPolicyShape(policy) {
     typeof policy === "object" &&
     policy.version === 1 &&
     POLICY_SCOPES.every((scope) => Boolean(policy[scope])) &&
+    POLICY_SCOPES.every(
+      (scope) =>
+        policy[scope].allowedLocalModels == null ||
+        isProviderIdList(policy[scope].allowedLocalModels)
+    ) &&
     isKnownList(policy.transcription.allowedModes, TRANSCRIPTION_MODES) &&
     isProviderIdList(policy.transcription.allowedByokProviders) &&
     // Additive within policy version 1: absent (older server) means none.

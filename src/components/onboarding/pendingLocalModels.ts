@@ -1,3 +1,5 @@
+import { usesParakeetManager } from "../../helpers/localASROrganization";
+import { isLocalModelAllowedByPolicy, type PolicyDecisionSnapshot } from "../../stores/policyRules";
 import type {
   LocalLLMModelStatus,
   ParakeetModelResult,
@@ -11,6 +13,7 @@ export type PendingLocalModelKind = "dictation" | "assistant";
 export interface PendingLocalModelSelection {
   provider: string;
   modelId: string;
+  accountId?: string | null;
 }
 
 export type PendingLocalModelSelections = Partial<
@@ -59,15 +62,46 @@ export function isPendingLocalModel(
   return pending?.provider === selection.provider && pending.modelId === selection.modelId;
 }
 
+/**
+ * Hands over the selection for a finished download, or null when it can't be
+ * activated. It is kept for a later try until the verdict is final: another
+ * account or a settled denial drops it, while an unresolved policy leaves it in
+ * place. The account is the identity, since a rotated token changes only the
+ * generation. A blank account while a selection names one is unresolved too:
+ * suspending the policy and a relaunch before its first fetch both blank it.
+ */
 export function consumePendingLocalModel(
   kind: PendingLocalModelKind,
-  modelId: string
+  modelId: string,
+  policy: PolicyDecisionSnapshot & { accountId?: string | null }
 ): PendingLocalModelSelection | null {
   const selections = readPendingLocalModels();
   const selection = selections[kind];
   if (!selection || selection.modelId !== modelId) return null;
+  // A selection naming no account was a guest's: signing in moves it to the new
+  // account, whose settled verdict judges it below.
+  const accountChanged =
+    policy.accountId != null &&
+    selection.accountId != null &&
+    selection.accountId !== policy.accountId;
+  if (
+    !accountChanged &&
+    (policy.status === "loading" ||
+      policy.status === "error" ||
+      (selection.accountId != null && policy.accountId == null))
+  )
+    return null;
   delete selections[kind];
   writePendingLocalModels(selections);
+  if (
+    accountChanged ||
+    !isLocalModelAllowedByPolicy(
+      policy,
+      kind === "assistant" ? "llm" : "transcription",
+      selection.modelId
+    )
+  )
+    return null;
   return selection;
 }
 
@@ -100,7 +134,7 @@ export function getPendingLocalModelAvailability(
     return "missing";
   }
 
-  const models = selection.provider === "nvidia" ? inventory.parakeet : inventory.whisper;
+  const models = usesParakeetManager(selection.provider) ? inventory.parakeet : inventory.whisper;
   if (!models) return "unknown";
   const model = models.find((candidate) => candidate.model === selection.modelId);
   if (model?.downloaded) return "downloaded";

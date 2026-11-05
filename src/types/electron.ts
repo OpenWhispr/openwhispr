@@ -2400,7 +2400,7 @@ declare global {
       // llama-server
       llamaServerStart: (
         modelId: string
-      ) => Promise<{ success: boolean; port?: number; error?: string }>;
+      ) => Promise<{ success: boolean; port?: number; error?: string; code?: string }>;
       llamaServerStatus: () => Promise<LlamaServerStatus>;
       llamaGpuReset: () => Promise<{ success: boolean; error?: string }>;
       detectVulkanGpu?: () => Promise<VulkanGpuResult>;
@@ -3862,11 +3862,14 @@ declare global {
         model: string;
         language?: string;
         display?: boolean;
-      }) => Promise<{ success: boolean }>;
-      stopDictationPreview?: (opts?: {
-        showCleanup?: boolean;
-        flushed?: boolean;
-      }) => Promise<{ success: boolean; streamed?: boolean; text?: string }>;
+      }) => Promise<{ success: boolean; error?: string; code?: string }>;
+      stopDictationPreview?: (opts?: { showCleanup?: boolean; flushed?: boolean }) => Promise<{
+        success: boolean;
+        streamed?: boolean;
+        text?: string;
+        error?: string;
+        code?: string;
+      }>;
       dismissDictationPreview?: () => Promise<{ success: boolean }>;
       updateDictationPreview?: (text: string) => Promise<{ success: boolean }>;
       completeDictationPreview?: (payload: { text?: string }) => Promise<{ success: boolean }>;

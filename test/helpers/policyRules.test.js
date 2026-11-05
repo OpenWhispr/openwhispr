@@ -486,7 +486,14 @@ test("LLM dispatch requires an allowed mode and provider", async () => {
   const snapshot = { status: "managed", policy: noProviderPolicy, appVersion: "1.8.1" };
 
   assert.equal(isLlmSelectionAllowed(snapshot, { mode: "providers", provider: "openai" }), false);
-  assert.equal(isLlmSelectionAllowed(snapshot, { mode: "local", provider: "local" }), true);
+  assert.equal(
+    isLlmSelectionAllowed(snapshot, {
+      mode: "local",
+      provider: "local",
+      model: "qwen3.5-0.8b-q4_k_m",
+    }),
+    true
+  );
   assert.equal(isLlmSelectionAllowed(snapshot, { mode: "enterprise", provider: "bedrock" }), false);
 });
 
@@ -498,7 +505,10 @@ test("blocks transcription contexts whose stored mode is disallowed", async () =
     isTranscriptionSelectionAllowed(snapshot, { mode: "self-hosted", provider: "" }),
     false
   );
-  assert.equal(isTranscriptionSelectionAllowed(snapshot, { mode: "local", provider: "" }), true);
+  assert.equal(
+    isTranscriptionSelectionAllowed(snapshot, { mode: "local", provider: "", model: "base" }),
+    true
+  );
 });
 
 test("blocks BYOK transcription when no provider is allowed", async () => {
@@ -524,7 +534,7 @@ test("does not require a BYOK provider for local transcription", async () => {
   const snapshot = { status: "managed", policy: localOnlyPolicy, appVersion: "1.8.1" };
 
   assert.equal(
-    isTranscriptionSelectionAllowed(snapshot, { mode: "local", provider: "openai" }),
+    isTranscriptionSelectionAllowed(snapshot, { mode: "local", provider: "openai", model: "base" }),
     true
   );
 });
@@ -1152,7 +1162,10 @@ test("audio controls independently gate every mode while leaving dictation avail
         ["openwhispr", "openai"],
         ["enterprise", "azure"],
       ]) {
-        assert.equal(isTranscriptionSelectionAllowed(state, { mode, provider }), true);
+        assert.equal(
+          isTranscriptionSelectionAllowed(state, { mode, provider, model: "base" }),
+          true
+        );
       }
     }
   }

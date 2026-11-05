@@ -210,6 +210,7 @@
     "skip": "Salta",
     "policyAiProcessingRestricted": "L’elaborazione con IA è limitata dalla tua organizzazione.",
     "policyAgentRestricted": "L’uso dell’assistente IA è limitato dalla tua organizzazione.",
+    "policyAccountChanged": "Il tuo account è cambiato, quindi questa risposta è stata interrotta.",
     "policyTranscriptionRestricted": "La trascrizione è limitata dalla tua organizzazione.",
     "policyUnresolved": "Le impostazioni della tua organizzazione non sono ancora state caricate. Riprova tra un momento.",
     "managedConfigLoading": "Verifica della configurazione gestita della tua organizzazione in corso. Riprova tra un momento.",
@@ -442,6 +443,9 @@
         "descriptionLineOne": "Scegli i modelli da eseguire",
         "descriptionLineTwo": "sul tuo dispositivo.",
         "providerLabel": "Provider",
+        "cohereLanguageLabel": "Lingua di dettatura",
+        "cohereLanguageHint": "Cohere non rileva la lingua che parli, quindi scegli quella in cui detterai.",
+        "cohereLanguagePlaceholder": "Scegli una lingua",
         "download": "Scarica",
         "downloadingShort": "Download",
         "selected": "Selezionato",
@@ -584,7 +588,8 @@
       "queued": "In coda",
       "failed": {
         "title": "Un download non è stato completato",
-        "description": "Controlla la connessione e lo spazio libero su disco, poi riprova. Se continua a fallire, contatta il tuo amministratore."
+        "description": "Controlla la connessione e lo spazio libero su disco, poi riprova. Se continua a fallire, contatta il tuo amministratore.",
+        "notApproved": "La tua organizzazione non approva questo modello. Puoi continuare senza di esso."
       }
     },
     "permissionGuide": {
@@ -2877,6 +2882,21 @@
       "contextTooLargeGeneric": "È troppo lungo perché {{model}} possa leggerlo su questo computer. Prova un modello cloud oppure esegui l’azione su una selezione più breve.",
       "localServerUnavailable": "Impossibile avviare {{model}} su questo computer. Riprova o passa a un modello cloud.",
       "localModelBusy": "Il modello locale sta ancora elaborando un'altra richiesta. Attendi che finisca, poi riprova."
+    },
+    "policy": {
+      "guidance": "La tua organizzazione ha approvato questi modelli. Scegli quello più adatto al tuo computer.",
+      "notApproved": "Non approvato dalla tua organizzazione",
+      "noneSupported": "La tua organizzazione non ha approvato alcun modello locale supportato da questa versione dell’app. Aggiorna OpenWhispr o contatta l’amministratore.",
+      "emptyIntersection": "I tuoi spazi di lavoro non hanno alcun modello locale approvato in comune. Contatta l’amministratore.",
+      "modelBlocked": "Scegli un modello locale approvato dalla tua organizzazione.",
+      "modeBlocked": "La tua organizzazione ha disattivato l’elaborazione locale.",
+      "unresolved": "Impossibile determinare i criteri dello spazio di lavoro. Connettiti e riprova.",
+      "versionBlocked": "Aggiorna OpenWhispr per usare i modelli approvati dalla tua organizzazione.",
+      "updateRequired": "Aggiornamento richiesto",
+      "unavailable": "Non disponibile al momento",
+      "installedTitle": "Modelli locali installati",
+      "installedHint": "La tua organizzazione ha disattivato l’elaborazione locale, quindi questi modelli non possono essere eseguiti. Restano sul tuo computer finché non li elimini.",
+      "chooseModel": "Scegli un modello locale"
     }
   },
   "referral": {

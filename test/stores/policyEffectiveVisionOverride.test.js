@@ -201,3 +201,43 @@ test("a policy that moves a configured override's provider clears its model", as
     assert.equal(config.provider, "anthropic");
   });
 });
+
+test("a blocked local assistant's screenshot reaches neither Chat nor a permitted vision override", async (t) => {
+  const { useSettingsStore, selectPolicyEffectiveSettings, resolveChatStreamingInference } =
+    await loadStore(
+      t,
+      {
+        ...unconfiguredOverride,
+        dictationAgentMode: "local",
+        dictationAgentProvider: "qwen",
+        dictationAgentModel: "qwen3-4b-q4_k_m",
+        dictationAgentVisionMode: "providers",
+        dictationAgentVisionProvider: "gemini",
+        dictationAgentVisionModel: "gemini-2.5-flash",
+        chatAgentMode: "providers",
+        chatAgentProvider: "gemini",
+        chatAgentModel: "gemini-2.5-flash",
+      },
+      "openwhispr-policy-vision-blocked-agent-test-"
+    );
+  const raw = { ...useSettingsStore.getState(), isSignedIn: true };
+  const policy = managedByokPolicy(["gemini"]);
+  policy.policy.llm.allowedLocalModels = ["qwen3.5-0.8b-q4_k_m"];
+  const effective = selectPolicyEffectiveSettings(raw, policy);
+  assert.equal(
+    effective.dictationAgentVisionModel,
+    "gemini-2.5-flash",
+    "the override is permitted"
+  );
+
+  const { config, attachScreenContext } = resolveChatStreamingInference(effective, {
+    inferenceScope: "dictationAgent",
+    hasScreenContext: true,
+    isProviderImageWired: () => true,
+  });
+
+  assert.equal(config.scope, "dictationAgent");
+  assert.equal(config.mode, "local");
+  assert.equal(config.model, "");
+  assert.equal(attachScreenContext, false);
+});
