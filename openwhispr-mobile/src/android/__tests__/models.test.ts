@@ -227,6 +227,64 @@ it('localizes an interrupted model download in Arabic', async () => {
   );
 });
 
+it.each(['file-info', 'checksum', 'storage', 'directory'] as const)(
+  'starts no transfer when cancelled during the %s preparation step',
+  async (stage) => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let entered!: () => void;
+    const preparationStarted = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const waitForCancellation = async () => {
+      entered();
+      await held;
+    };
+    const missing = { exists: false, isDirectory: false, uri: modelPath(id) } as const;
+    if (stage === 'file-info') {
+      jest.mocked(FileSystem.getInfoAsync).mockImplementationOnce(async () => {
+        await waitForCancellation();
+        return missing;
+      });
+    } else if (stage === 'checksum') {
+      jest.mocked(AndroidDictation!.sha256).mockImplementationOnce(async () => {
+        await waitForCancellation();
+        return 'corrupt';
+      });
+    } else {
+      jest.mocked(FileSystem.getInfoAsync).mockResolvedValueOnce(missing);
+      if (stage === 'storage') {
+        jest.mocked(FileSystem.getFreeDiskStorageAsync).mockImplementationOnce(async () => {
+          await waitForCancellation();
+          return 4_000_000_000;
+        });
+      } else {
+        jest.mocked(FileSystem.makeDirectoryAsync).mockImplementationOnce(waitForCancellation);
+      }
+    }
+
+    const outcome = downloadAndroidModel(id).catch((error: unknown) => error);
+    await preparationStarted;
+    await cancelAndroidDownload(id);
+    release();
+
+    expect(await outcome).toEqual(expect.objectContaining({ message: 'Download cancelled.' }));
+    expect(FileSystem.createDownloadResumable).not.toHaveBeenCalled();
+    expect(FileSystem.moveAsync).not.toHaveBeenCalled();
+    expect(useModelDownloads.getState().progress[id]).toBeUndefined();
+
+    jest.mocked(FileSystem.getInfoAsync).mockResolvedValueOnce(missing);
+    await expect(downloadAndroidModel(id)).resolves.toBeUndefined();
+    expect(FileSystem.createDownloadResumable).toHaveBeenCalledTimes(1);
+    expect(FileSystem.moveAsync).toHaveBeenCalledWith({
+      from: `${modelPath(id)}.part`,
+      to: modelPath(id),
+    });
+  },
+);
+
 it.each(['Software caused connection abort', 'write failed: ENOSPC (No space left on device)'])(
   'keeps explicit cancellation separate from %s',
   async (message) => {
@@ -313,4 +371,19 @@ it('preserves an unrelated filesystem error rather than claiming storage is exha
     downloadAsync: jest.fn().mockRejectedValue(error),
   } as never);
   await expect(downloadAndroidModel(id)).rejects.toBe(error);
+});
+
+it('recognizes the exact cleanup artifact independently of the installed legacy artifact', async () => {
+  jest.mocked(FileSystem.getInfoAsync).mockImplementation(async (uri) => ({
+    exists: true,
+    isDirectory: false,
+    size: 2497281120,
+    modificationTime: modified,
+    uri,
+  }));
+  jest
+    .mocked(AndroidDictation!.sha256)
+    .mockResolvedValue('3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597');
+  await expect(modelReady('qwen-cleanup')).resolves.toBe(true);
+  await expect(modelReady('qwen-balanced')).resolves.toBe(false);
 });

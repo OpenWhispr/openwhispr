@@ -1,4 +1,4 @@
-import { act, fireEvent, render } from '@testing-library/react-native';
+import { act, cleanupAsync, fireEvent, render } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 import { createInstance } from 'i18next';
 import { I18nextProvider } from 'react-i18next';
@@ -6,6 +6,18 @@ import en from '@/locales/en/translation.json';
 import ar from '@/locales/ar/translation.json';
 import type { Folder } from '@/data';
 import { MoveToFolderSheet } from '../MoveToFolderSheet';
+
+jest.mock('../MoveToFolderSheet', () => ({
+  MoveToFolderSheet: (
+    props: React.ComponentProps<typeof import('../MoveToFolderSheet').MoveToFolderSheet>,
+  ) => {
+    const entry =
+      require('react-native').Platform.OS === 'android'
+        ? '../MoveToFolderSheet.android'
+        : '../MoveToFolderSheet';
+    return require('react').createElement(jest.requireActual(entry).MoveToFolderSheet, props);
+  },
+}));
 
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
@@ -32,7 +44,8 @@ jest.mock('@/components/ui/GlassIconButton', () => ({
 }));
 
 const originalOS = Platform.OS;
-afterEach(() => {
+afterEach(async () => {
+  await cleanupAsync();
   Platform.OS = originalOS;
 });
 

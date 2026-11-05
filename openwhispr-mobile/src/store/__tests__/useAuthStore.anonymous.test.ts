@@ -1,3 +1,8 @@
+jest.mock('@/android/accountData', () => ({
+  prepareAccountData: jest.fn(),
+  retryAccountDataDeletion: async () => {},
+}));
+
 const mockSignInAnonymously = jest.fn();
 const mockCaptureMessage = jest.fn();
 
@@ -36,6 +41,7 @@ jest.mock('expo-secure-store', () => ({
 }));
 
 import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore as useAndroidAuthStore } from '@/store/useAuthStore.android';
 import * as SecureStore from 'expo-secure-store';
 import { getSession, getStoredSession } from '@/lib/authClient';
 
@@ -66,6 +72,14 @@ beforeEach(() => {
     isLoading: false,
     error: null,
   });
+  useAndroidAuthStore.setState({
+    user: null,
+    sessionCookie: null,
+    isGuest: false,
+    isInitialized: true,
+    isLoading: false,
+    error: null,
+  });
   mockSignInAnonymously.mockResolvedValue({
     user: anonymousUser,
     sessionCookie: 'session=anon',
@@ -76,9 +90,9 @@ beforeEach(() => {
 
 it('restores an explicit local guest without making a network session request', async () => {
   jest.mocked(SecureStore.getItemAsync).mockResolvedValue('true');
-  await useAuthStore.getState().initialize();
+  await useAndroidAuthStore.getState().initialize();
   expect(getSession).not.toHaveBeenCalled();
-  expect(useAuthStore.getState()).toMatchObject({
+  expect(useAndroidAuthStore.getState()).toMatchObject({
     isGuest: true,
     isInitialized: true,
     isLoading: false,
@@ -204,4 +218,13 @@ it('still enters guest mode if the anonymous request fails while guest mode is w
     isGuest: true,
     isLoading: false,
   });
+});
+
+it('checks the upstream default server session before a stale local guest flag', async () => {
+  jest.mocked(SecureStore.getItemAsync).mockResolvedValue('true');
+  jest.mocked(getSession).mockResolvedValue(anonymousUser);
+  await useAuthStore.getState().initialize();
+  expect(getSession).toHaveBeenCalledWith();
+  expect(useAuthStore.getState()).toMatchObject({ user: anonymousUser, isGuest: false });
+  expect(SecureStore.getItemAsync).not.toHaveBeenCalled();
 });

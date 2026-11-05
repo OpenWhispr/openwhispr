@@ -12,7 +12,7 @@ interface Props {
   disabled: boolean;
   keyboardVisible: boolean;
   onStart: () => Promise<void>;
-  onStop: () => Promise<boolean | undefined>;
+  onStop: () => Promise<boolean | void>;
   onDiscard: () => Promise<void>;
   onFlush: () => void;
 }

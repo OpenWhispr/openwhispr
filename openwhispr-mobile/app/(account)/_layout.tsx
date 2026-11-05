@@ -1,14 +1,9 @@
-import type { NativeStackHeaderProps } from '@react-navigation/native-stack';
-import { useAndroidCopy } from '@/hooks/useAndroidCopy';
-import { WorkflowSettingsHeader } from '@/components/settings/WorkflowSettingsHeader';
 import { Stack, router } from 'expo-router';
-import { Platform, Pressable } from 'react-native';
+import { Pressable } from 'react-native';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { safeHaptics } from '@/lib/utils';
 import { customHeaderStackOptions, glassStackOptions } from '@/config/navigation';
 import { WORKFLOW_LABELS, parseWorkflow } from '@/lib/aiWorkflows';
-
-const androidPageHeader = Platform.OS === 'android' ? customHeaderStackOptions : {};
 
 // iOS 26 wraps custom header buttons in their own liquid-glass capsule, so this
 // back button is a bare chevron — the native bar supplies the glass. Adding our
@@ -36,12 +31,7 @@ function renderHeaderLeft({ canGoBack }: { canGoBack?: boolean }) {
   return canGoBack ? <HeaderBackButton /> : null;
 }
 
-function renderWorkflowHeader({ options, navigation }: NativeStackHeaderProps) {
-  return <WorkflowSettingsHeader title={options.title ?? ''} onBack={navigation.goBack} />;
-}
-
 export default function AccountLayout() {
-  const { copy } = useAndroidCopy();
   return (
     <Stack
       screenOptions={{
@@ -50,31 +40,15 @@ export default function AccountLayout() {
         headerLeft: renderHeaderLeft,
       }}
     >
-      <Stack.Screen name="device-check" options={customHeaderStackOptions} />
-      <Stack.Screen name="help" options={customHeaderStackOptions} />
       <Stack.Screen name="index" options={customHeaderStackOptions} />
       <Stack.Screen name="profile" options={{ title: 'Profile', headerLargeTitle: false }} />
-      <Stack.Screen
-        name="referral"
-        options={{ title: 'Referral', headerLargeTitle: false, ...androidPageHeader }}
-      />
-      <Stack.Screen
-        name="ai-models"
-        options={{ title: 'AI Models', headerLargeTitle: false, ...androidPageHeader }}
-      />
+      <Stack.Screen name="referral" options={{ title: 'Referral', headerLargeTitle: false }} />
+      <Stack.Screen name="ai-models" options={{ title: 'AI Models', headerLargeTitle: false }} />
       <Stack.Screen
         name="ai-workflow"
         options={({ route }) => {
           const scope = parseWorkflow((route.params as { scope?: string })?.scope);
-          return {
-            title: scope ? copy(`workflowSettings.${scope}`, WORKFLOW_LABELS[scope]) : '',
-            headerLargeTitle: false,
-            ...(Platform.OS === 'android'
-              ? {
-                  header: renderWorkflowHeader,
-                }
-              : {}),
-          };
+          return { title: scope ? WORKFLOW_LABELS[scope] : '', headerLargeTitle: false };
         }}
       />
       <Stack.Screen
@@ -95,7 +69,7 @@ export default function AccountLayout() {
       />
       <Stack.Screen
         name="preferences"
-        options={{ title: 'Preferences', headerLargeTitle: false, ...androidPageHeader }}
+        options={{ title: 'Preferences', headerLargeTitle: false }}
       />
       <Stack.Screen
         name="google-calendar"
@@ -105,10 +79,7 @@ export default function AccountLayout() {
         name="transcription-language"
         options={{ title: 'Transcription Language', headerLargeTitle: false }}
       />
-      <Stack.Screen
-        name="privacy"
-        options={{ title: 'Privacy & Data', headerLargeTitle: false, ...androidPageHeader }}
-      />
+      <Stack.Screen name="privacy" options={{ title: 'Privacy & Data', headerLargeTitle: false }} />
       <Stack.Screen
         name="model-download"
         options={{ title: 'Transcription Models', headerLargeTitle: false }}
@@ -123,7 +94,7 @@ export default function AccountLayout() {
       />
       <Stack.Screen
         name="licenses"
-        options={{ title: 'Licenses & Attribution', headerLargeTitle: false, ...androidPageHeader }}
+        options={{ title: 'Licenses & Attribution', headerLargeTitle: false }}
       />
     </Stack>
   );

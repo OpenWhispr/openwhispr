@@ -9,6 +9,32 @@ import {
 } from '@/lib/aiWorkflows';
 import type { UserConfig } from '@/types';
 
+jest.mock('@/lib/inferenceModes', () => {
+  const { Platform: runtimePlatform } = require('react-native') as typeof import('react-native');
+  const defaults = jest.requireActual(
+    '@/lib/inferenceModes',
+  ) as typeof import('@/lib/inferenceModes');
+  const android = jest.requireActual(
+    '@/lib/inferenceModes.android',
+  ) as typeof import('@/lib/inferenceModes.android');
+  return new Proxy(defaults, {
+    get: (_target, name) =>
+      Reflect.get(runtimePlatform.OS === 'android' ? android : defaults, name),
+  });
+});
+
+jest.mock('@/lib/aiWorkflows', () => {
+  const { Platform: runtimePlatform } = require('react-native') as typeof import('react-native');
+  const defaults = jest.requireActual('@/lib/aiWorkflows') as typeof import('@/lib/aiWorkflows');
+  const android = jest.requireActual(
+    '@/lib/aiWorkflows.android',
+  ) as typeof import('@/lib/aiWorkflows.android');
+  return new Proxy(defaults, {
+    get: (_target, name) =>
+      Reflect.get(runtimePlatform.OS === 'android' ? android : defaults, name),
+  });
+});
+
 function config(overrides: Partial<UserConfig> = {}): UserConfig {
   return { defaultMode: 'private', ...overrides } as UserConfig;
 }

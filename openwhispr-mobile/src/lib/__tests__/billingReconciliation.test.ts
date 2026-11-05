@@ -1,6 +1,7 @@
 import { reconcileStoreBilling } from '../billingReconciliation';
-import { Platform } from 'react-native';
-import { reconcileRevenueCatPurchases, withRevenueCatUser } from '../revenuecat';
+import { reconcileStoreBilling as reconcileAndroidStoreBilling } from '../billingReconciliation.android';
+import { reconcileRevenueCatPurchases } from '../revenuecat';
+import { withRevenueCatUser } from '../revenuecat.android';
 import { reconcileMobileBilling } from '@/data/remote/billingApi';
 
 let mockAuth = { user: { id: 'a' }, sessionCookie: 'cookie-a' };
@@ -11,8 +12,8 @@ jest.mock('@/store/useUsageStore', () => ({
 }));
 jest.mock('../revenuecat', () => ({
   reconcileRevenueCatPurchases: jest.fn(),
-  withRevenueCatUser: jest.fn(),
 }));
+jest.mock('../revenuecat.android', () => ({ withRevenueCatUser: jest.fn() }));
 jest.mock('@/data/remote/billingApi', () => ({ reconcileMobileBilling: jest.fn() }));
 
 beforeEach(() => {
@@ -60,23 +61,38 @@ it('discards an HTTP response after a session change', async () => {
   await expect(reconcileStoreBilling()).rejects.toThrow('Billing account changed');
 });
 
+it('starts a fresh iOS store sync after switching away and back while requests are pending', async () => {
+  const releases: (() => void)[] = [];
+  jest
+    .mocked(reconcileRevenueCatPurchases)
+    .mockImplementation(() => new Promise((resolve) => releases.push(() => resolve(true))));
+  const first = reconcileStoreBilling();
+  mockAuth = { user: { id: 'b' }, sessionCookie: 'cookie-b' };
+  mockUsage = { billingUserId: 'billing-b' };
+  const second = reconcileStoreBilling();
+  const secondOutcome = second.catch((error: Error) => error);
+  mockAuth = { user: { id: 'a' }, sessionCookie: 'cookie-a' };
+  mockUsage = { billingUserId: 'billing-a' };
+  const third = reconcileStoreBilling();
+  const startedFresh = third !== first;
+  releases.forEach((release) => release());
+  await Promise.all([first, third]);
+  expect(await secondOutcome).toEqual(new Error('Billing account changed'));
+  expect(startedFresh).toBe(true);
+  expect(reconcileRevenueCatPurchases).toHaveBeenCalledTimes(3);
+});
+
 it('checks Android access without implicitly restoring store purchases', async () => {
-  const originalPlatform = Platform.OS;
-  Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
   jest.mocked(withRevenueCatUser).mockImplementation(async (_userId, operation, check) => {
     check?.();
     return operation();
   });
-  try {
-    await reconcileStoreBilling();
-    expect(reconcileRevenueCatPurchases).not.toHaveBeenCalled();
-    expect(withRevenueCatUser).toHaveBeenCalledWith(
-      'billing-a',
-      expect.any(Function),
-      expect.any(Function),
-    );
-    expect(reconcileMobileBilling).toHaveBeenCalledWith('android', 'cookie-a');
-  } finally {
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatform });
-  }
+  await reconcileAndroidStoreBilling();
+  expect(reconcileRevenueCatPurchases).not.toHaveBeenCalled();
+  expect(withRevenueCatUser).toHaveBeenCalledWith(
+    'billing-a',
+    expect.any(Function),
+    expect.any(Function),
+  );
+  expect(reconcileMobileBilling).toHaveBeenCalledWith('android', 'cookie-a');
 });

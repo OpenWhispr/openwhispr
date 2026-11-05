@@ -4,7 +4,7 @@ import {
   identifyRevenueCatUser,
   resetRevenueCatUser,
   withRevenueCatUser,
-} from '../revenuecat';
+} from '../revenuecat.android';
 jest.mock('react-native', () => ({ Platform: { OS: 'android' } }));
 jest.mock('@react-native-async-storage/async-storage', () => ({
   __esModule: true,

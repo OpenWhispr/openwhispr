@@ -1,4 +1,9 @@
 import {
+  attendeeName as androidAttendeeName,
+  formatAttendeeChipLabel as formatAndroidAttendeeChipLabel,
+  formatNoteMetaDate as formatAndroidNoteMetaDate,
+} from '@/lib/notes/noteMeta.android';
+import {
   attendeeName,
   formatAttendeeChipLabel,
   formatNoteMetaDate,
@@ -178,8 +183,8 @@ describe('Android metadata presentation', () => {
     const presentation = { language: 'ar', today: 'اليوم', yesterday: 'أمس' };
     const before = earlier.getTime();
     const time = earlier.toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' });
-    expect(formatNoteMetaDate(toSqlite(earlier), now, presentation)).toBe(`أمس ${time}`);
-    expect(formatNoteMetaDate(now, now, presentation)).toBe(
+    expect(formatAndroidNoteMetaDate(toSqlite(earlier), now, presentation)).toBe(`أمس ${time}`);
+    expect(formatAndroidNoteMetaDate(now, now, presentation)).toBe(
       `اليوم ${now.toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' })}`,
     );
     expect(earlier.getTime()).toBe(before);
@@ -190,10 +195,10 @@ describe('Android metadata presentation', () => {
     const now = new Date(2026, 9, 16, 12);
     const date = new Date(2025, 0, 3, 8, 7);
     const presentation = { language: 'de', today: 'Heute', yesterday: 'Gestern' };
-    expect(formatNoteMetaDate(date, now, presentation)).toBe(
+    expect(formatAndroidNoteMetaDate(date, now, presentation)).toBe(
       `${date.toLocaleDateString('de', { month: 'short', day: 'numeric', year: 'numeric' })}, ${date.toLocaleTimeString('de', { hour: '2-digit', minute: '2-digit' })}`,
     );
-    expect(formatNoteMetaDate(new Date(NaN), now, presentation)).toBe('');
+    expect(formatAndroidNoteMetaDate(new Date(NaN), now, presentation)).toBe('');
   });
 });
 
@@ -204,11 +209,11 @@ it('localizes anonymous attendee labels without changing supplied names or membe
     person({ displayName: 'Sam Lee' }),
     person({}),
   ];
-  expect(attendeeName(attendees[0], labels)).toBe('أنت');
-  expect(attendeeName(attendees[1], labels)).toBe('Sam Lee');
-  expect(attendeeName(attendees[2], labels)).toBe('ضيف');
-  expect(formatAttendeeChipLabel(attendees, labels)).toBe('Sam +1');
-  expect(formatAttendeeChipLabel([attendees[0]], labels)).toBe('أنت');
-  expect(formatAttendeeChipLabel([attendees[2]], labels)).toBeNull();
+  expect(androidAttendeeName(attendees[0], labels)).toBe('أنت');
+  expect(androidAttendeeName(attendees[1], labels)).toBe('Sam Lee');
+  expect(androidAttendeeName(attendees[2], labels)).toBe('ضيف');
+  expect(formatAndroidAttendeeChipLabel(attendees, labels)).toBe('Sam +1');
+  expect(formatAndroidAttendeeChipLabel([attendees[0]], labels)).toBe('أنت');
+  expect(formatAndroidAttendeeChipLabel([attendees[2]], labels)).toBeNull();
   expect(attendees[0].self).toBe(true);
 });

@@ -1,4 +1,4 @@
-import { act, fireEvent, render } from '@testing-library/react-native';
+import { act, cleanupAsync, fireEvent, render } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 import { createInstance } from 'i18next';
 import { I18nextProvider } from 'react-i18next';
@@ -8,6 +8,14 @@ import { SpacesSection } from '../SpacesSection';
 import { FolderRow } from '../FolderRow';
 import type { Space } from '@/data';
 
+jest.mock('../FolderRow', () => jest.requireActual('../FolderRow.android'));
+
+jest.mock('../SpaceRow', () => jest.requireActual('../SpaceRow.android'));
+
+jest.mock('../SpacesSection', () => jest.requireActual('../SpacesSection.android'));
+
+jest.mock('../GroupedList', () => jest.requireActual('../GroupedList.android'));
+
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('../SectionHeader', () => ({
@@ -15,7 +23,8 @@ jest.mock('../SectionHeader', () => ({
     require('react').createElement(require('react-native').Text, null, label),
 }));
 const originalOS = Platform.OS;
-afterEach(() => {
+afterEach(async () => {
+  await cleanupAsync();
   Platform.OS = originalOS;
 });
 

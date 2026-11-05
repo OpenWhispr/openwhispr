@@ -1,6 +1,26 @@
+let mockCorrectionPlatform: 'ios' | 'android' = 'ios';
+jest.mock('../correctionPolicy', () => ({
+  get acceptsCorrectionEdit() {
+    return jest.requireActual(
+      mockCorrectionPlatform === 'android' ? '../correctionPolicy.android' : '../correctionPolicy',
+    ).acceptsCorrectionEdit;
+  },
+  get retainsCorrectionContext() {
+    return jest.requireActual(
+      mockCorrectionPlatform === 'android' ? '../correctionPolicy.android' : '../correctionPolicy',
+    ).retainsCorrectionContext;
+  },
+}));
+beforeEach(() => {
+  mockCorrectionPlatform = 'ios';
+});
+
 import { extractCorrections } from '../correctionLearner';
 
-describe('correction learning from note edits', () => {
+describe('Android correction learning from note edits', () => {
+  beforeEach(() => {
+    mockCorrectionPlatform = 'android';
+  });
   it('does not learn unrelated words when a note body is replaced', () => {
     const before =
       'uh order 12 blue folders, not 20. Nia can collect them after 3 pm only if Omar confirms. Do not email the draft to customers. The budget is 45 dollars. I still need to decide whether to book the room.';
@@ -53,4 +73,11 @@ describe('correction learning from note edits', () => {
     expect(extractCorrections('Please ask Maren.', 'Please ask Marin.', ['marin'])).toEqual([]);
     expect(extractCorrections('ask marin now', 'Ask Marin now', [])).toEqual([]);
   });
+});
+
+it.each([
+  ['Please ask Mar', 'Please ask Maren', 'Maren'],
+  ['Please ask Maren', 'Please ask Mare', 'Mare'],
+])('retains the upstream iOS tail-edit heuristic for %s', (before, after, word) => {
+  expect(extractCorrections(before, after, [])).toEqual([word]);
 });

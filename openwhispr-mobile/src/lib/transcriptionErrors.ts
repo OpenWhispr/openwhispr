@@ -26,10 +26,7 @@ export function toFriendlyTranscriptionErrorMessage(error: unknown): string {
     /internet connection appears to be offline|network connection was lost|could not connect to the server|not connected to the internet|offline/.test(
       lower,
     ) ||
-    /network request failed|failed to fetch|load failed|network error/.test(lower) ||
-    /unable to resolve host|unknownhostexception|no address associated with hostname|failed to connect to/.test(
-      lower,
-    )
+    /network request failed|failed to fetch|load failed|network error/.test(lower)
   ) {
     return OFFLINE_MESSAGE;
   }

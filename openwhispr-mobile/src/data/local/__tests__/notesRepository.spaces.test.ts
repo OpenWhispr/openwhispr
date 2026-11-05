@@ -731,3 +731,8 @@ describe('LocalNotesRepository.moveNoteToSpace', () => {
     expect(repo.getPendingNotes().map((n) => n.id)).toContain(note.id);
   });
 });
+
+// These recovery/retry cases exercise the Android repository policy.
+jest.mock('../notesRepositoryPlatform', () =>
+  jest.requireActual('../notesRepositoryPlatform.android'),
+);

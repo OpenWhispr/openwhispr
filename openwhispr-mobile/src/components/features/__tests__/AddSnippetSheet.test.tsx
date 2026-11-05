@@ -1,3 +1,28 @@
+jest.mock('@/lib/snippetClose', () => {
+  const ios = jest.requireActual<typeof import('@/lib/snippetClose')>('@/lib/snippetClose');
+  const android = jest.requireActual<typeof import('@/lib/snippetClose.android')>(
+    '@/lib/snippetClose.android',
+  );
+  return {
+    createSnippetCloseHandler: (options: import('@/lib/snippetClose').SnippetCloseOptions) =>
+      (require('react-native').Platform.OS === 'android' ? android : ios).createSnippetCloseHandler(
+        options,
+      ),
+  };
+});
+jest.mock('../AddSnippetSheet', () => {
+  const ios = jest.requireActual<typeof import('../AddSnippetSheet')>('../AddSnippetSheet');
+  const android = jest.requireActual<typeof import('../AddSnippetSheet.android')>(
+    '../AddSnippetSheet.android',
+  );
+  return {
+    AddSnippetSheet: (props: React.ComponentProps<typeof ios.AddSnippetSheet>) =>
+      require('react').createElement(
+        (require('react-native').Platform.OS === 'android' ? android : ios).AddSnippetSheet,
+        props,
+      ),
+  };
+});
 import React from 'react';
 import { Platform, TextInput } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
@@ -40,14 +65,22 @@ beforeAll(async () => {
     resources: { en },
   });
 });
-beforeEach(() => jest.clearAllMocks());
-it('preserves dirty fields until discard is explicitly confirmed', () => {
+const originalSheetPlatform = Platform.OS;
+beforeEach(() => {
+  jest.clearAllMocks();
+  Platform.OS = originalSheetPlatform;
+});
+afterEach(() => {
+  Platform.OS = originalSheetPlatform;
+});
+it('preserves Android dirty fields until discard is explicitly confirmed', () => {
+  Platform.OS = 'android';
   const close = jest.fn();
   const screen = render(
     <AddSnippetSheet visible onClose={close} onSubmit={jest.fn()} existingTriggers={[]} />,
   );
   fireEvent.changeText(screen.getByLabelText('Trigger'), 'signoff');
-  fireEvent.press(screen.getByText('Close'));
+  fireEvent.press(screen.getByText(/^close$/i));
   expect(close).not.toHaveBeenCalled();
   expect(screen.getByLabelText('Trigger').props.value).toBe('signoff');
   expect(confirmDestructive).toHaveBeenCalledWith('Discard changes?', expect.any(String), close, {
@@ -70,9 +103,9 @@ it('closes unchanged edits and successfully saved edits without a discard prompt
       existingTriggers={[]}
     />,
   );
-  fireEvent.press(screen.getByText('Close'));
+  fireEvent.press(screen.getByText(/^close$/i));
   expect(close).toHaveBeenCalledTimes(1);
-  fireEvent.changeText(screen.getByLabelText('Replacement'), 'Thank you');
+  fireEvent.changeText(screen.getByPlaceholderText('e.g. Best regards, Alex'), 'Thank you');
   fireEvent.press(screen.getByText('Save'));
   expect(save).toHaveBeenCalledWith('signoff', 'Thank you');
   expect(close).toHaveBeenCalledTimes(2);
@@ -122,4 +155,16 @@ describe('Android keyboard navigation', () => {
     expect(save).not.toHaveBeenCalled();
     expect(close).not.toHaveBeenCalled();
   });
+});
+
+it('preserves upstream iOS closing without a dirty-field confirmation', () => {
+  Platform.OS = 'ios';
+  const close = jest.fn();
+  const screen = render(
+    <AddSnippetSheet visible onClose={close} onSubmit={jest.fn()} existingTriggers={[]} />,
+  );
+  fireEvent.changeText(screen.getByPlaceholderText('e.g. signoff'), 'signoff');
+  fireEvent.press(screen.getByText(/^close$/i));
+  expect(close).toHaveBeenCalledTimes(1);
+  expect(confirmDestructive).not.toHaveBeenCalled();
 });

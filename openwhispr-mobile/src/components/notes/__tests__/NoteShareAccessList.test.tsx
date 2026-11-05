@@ -1,3 +1,17 @@
+jest.mock('../NoteShareAccessList', () => {
+  const ios = jest.requireActual<typeof import('../NoteShareAccessList')>('../NoteShareAccessList');
+  const android = jest.requireActual<typeof import('../NoteShareAccessList.android')>(
+    '../NoteShareAccessList.android',
+  );
+  return {
+    NoteShareAccessList: (props: import('react').ComponentProps<typeof ios.NoteShareAccessList>) =>
+      require('react').createElement(
+        (require('react-native').Platform.OS === 'android' ? android : ios).NoteShareAccessList,
+        props,
+      ),
+  };
+});
+
 import { MenuView, type MenuAction } from '@react-native-menu/menu';
 import { Alert, Platform, type AlertButton } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
@@ -421,7 +435,7 @@ it('localizes Android access changes without changing identities or bypassing co
       onRevokeInvitation: revoke,
       onResendInvitation: jest.fn(),
     };
-    const view = render(<NoteShareAccessList {...props} />);
+    let view = render(<NoteShareAccessList {...props} />);
     mockLanguage = 'ar';
     view.rerender(<NoteShareAccessList {...props} />);
     expect(view.getByLabelText('تغيير وصول Person').props.accessibilityValue).toEqual({
@@ -465,8 +479,9 @@ it('localizes Android access changes without changing identities or bypassing co
     view.rerender(<NoteShareAccessList {...props} canInvite={false} />);
     expect(view.queryByTestId('menu-grant-1:editor')).toBeNull();
     expect(view.queryByTestId('menu-invitation:inv-1:resend')).toBeNull();
+    view.unmount();
     Platform.OS = 'ios';
-    view.rerender(<NoteShareAccessList {...props} />);
+    view = render(<NoteShareAccessList {...props} />);
     expect(view.getByLabelText('Change access for Person')).toBeTruthy();
   } finally {
     Platform.OS = original;

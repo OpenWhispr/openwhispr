@@ -46,7 +46,7 @@ export function snapshotBenchmark(): BenchmarkSelection {
   const languages = getPreferredTranscriptionLanguages();
   return {
     speech: selectedSpeechModel(),
-    text: selectedTextModel(),
+    text: selectedTextModel('cleanup'),
     languages,
     language: languages.length === 1 && languages[0] !== 'auto' ? languages[0] : undefined,
     customPrompt: getActiveCustomCleanupPrompt(),
@@ -125,12 +125,12 @@ export async function runLocalBenchmark(
     const cleanupStart = Date.now();
     const request = {
       text: speech.text,
+      localModelPurpose: 'cleanup' as const,
       language: selection.language,
       customDictionary: selection.customDictionary,
       customPrompt: selection.customPrompt,
       tone: selection.tone,
       signal,
-      maxTokens: 900,
     };
     const cleaned = await LocalTextModel.processText(
       { ...request, ...buildProviderPrompt(request) },

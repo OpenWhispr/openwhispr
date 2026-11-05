@@ -1,10 +1,8 @@
-import { Platform } from 'react-native';
 import { AppleLLM, type AppleLLMAvailability } from '@/lib/appleLLM';
-import { androidCopy } from '@/lib/androidCopy';
 import type {
   LocalReasoningErrorCode,
   LocalReasoningReadiness,
-  ProcessingMode,
+  ReasoningRequest,
   ReasoningRoutingOptions,
   UserConfig,
 } from '@/types';
@@ -53,11 +51,8 @@ export function clearLocalReasoningReadinessCache(): void {
 
 export async function getLocalReasoningReadiness(options?: {
   refresh?: boolean;
+  localModelPurpose?: ReasoningRequest['localModelPurpose'];
 }): Promise<LocalReasoningReadiness> {
-  if (Platform.OS === 'android') {
-    const { androidTextReadiness } = await import('@/android/LocalTextModel');
-    return androidTextReadiness();
-  }
   if (!isAppleLocalIntelligenceEnabled()) {
     return { status: 'disabled', tokenCounting: false };
   }
@@ -130,18 +125,7 @@ function languageReadinessFor(availability: AppleLLMAvailability): LocalReasonin
 // Mode doesn't: note formatting follows its own selection, and notes made there are private.
 export function isLocalReasoningRequired(options: ReasoningRoutingOptions = {}): boolean {
   if (options.isPrivateNote) return true;
-  if (Platform.OS === 'android' && getActiveMode() === 'private') return true;
   return !getAuthUser();
-}
-
-function getActiveMode(): ProcessingMode {
-  try {
-    const { useProcessingModeStore } =
-      require('@/store/useProcessingModeStore') as typeof import('@/store/useProcessingModeStore');
-    return useProcessingModeStore.getState().activeMode;
-  } catch {
-    return 'cloud';
-  }
 }
 
 export function isAppleLocalIntelligenceEnabled(config = getUserConfig()): boolean {
@@ -195,7 +179,6 @@ export async function countLocalReasoningTokens(input: {
   instructions?: string;
   prompt: string;
 }): Promise<number | null> {
-  if (Platform.OS !== 'ios') return null;
   try {
     return await AppleLLM.countTokens(input);
   } catch {
@@ -257,11 +240,6 @@ export function getLocalReasoningLanguageNote(readiness: LocalReasoningReadiness
 }
 
 export function getLocalReasoningUnavailableMessage(readiness?: LocalReasoningReadiness): string {
-  if (Platform.OS === 'android')
-    return androidCopy(
-      'workflowSettings.localModelNeeded',
-      'Download a local text model in Account → Models to use on-device AI.',
-    );
   switch (readiness?.status) {
     case 'unsupportedDevice':
       return 'On-Device AI needs an iPhone with Apple Intelligence (iPhone 15 Pro or later).';
@@ -297,8 +275,6 @@ export function toLocalReasoningError(error: unknown): LocalReasoningError {
   switch (code) {
     case 'APPLE_LLM_UNSUPPORTED_LANGUAGE':
       return new LocalReasoningError(code, UNSUPPORTED_LANGUAGE_MESSAGE);
-    case 'LOCAL_CONTEXT_LIMIT':
-    case 'LOCAL_REASONING_FAILED':
     case 'APPLE_LLM_GUARDRAIL':
     case 'APPLE_LLM_CONTEXT_LIMIT':
     case 'APPLE_LLM_OUTPUT_LIMIT':
@@ -308,10 +284,7 @@ export function toLocalReasoningError(error: unknown): LocalReasoningError {
     case 'APPLE_LLM_CANCELLED':
       return new LocalReasoningError(code, message);
     default:
-      return new LocalReasoningError(
-        Platform.OS === 'android' ? 'LOCAL_REASONING_FAILED' : 'APPLE_LLM_FAILED',
-        message,
-      );
+      return new LocalReasoningError('APPLE_LLM_FAILED', message);
   }
 }
 
@@ -323,9 +296,7 @@ export function isLocalContextLimitError(error: unknown): boolean {
     typeof error === 'object' &&
     error !== null &&
     'code' in error &&
-    ['APPLE_LLM_CONTEXT_LIMIT', 'LOCAL_CONTEXT_LIMIT'].includes(
-      String((error as { code?: unknown }).code),
-    )
+    (error as { code?: unknown }).code === 'APPLE_LLM_CONTEXT_LIMIT'
   );
 }
 

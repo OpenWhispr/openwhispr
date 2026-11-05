@@ -16,6 +16,11 @@ function loadApiClient(options: LoadOptions = {}): {
 } {
   jest.resetModules();
   jest.doMock('react-native', () => ({ Platform: { OS: options.platform ?? 'ios' } }));
+  jest.doMock('../sessionFetch', () =>
+    jest.requireActual(
+      options.platform === 'android' ? '../sessionFetch.android' : '../sessionFetch',
+    ),
+  );
   const mockFetch = jest.fn();
   jest.doMock('expo/fetch', () => ({
     __esModule: true,
@@ -47,6 +52,7 @@ function okResponse(status: number, body: unknown = {}): unknown {
 
 afterEach(() => {
   jest.dontMock('react-native');
+  jest.dontMock('../sessionFetch');
   jest.dontMock('expo/fetch');
   jest.dontMock('expo-constants');
   jest.dontMock('@/store/useAuthStore');

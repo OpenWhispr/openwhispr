@@ -108,12 +108,15 @@
       "./plugins/android-bundle-inputs/withAndroidBundleInputs",
       "./plugins/android-billing/withAndroidBilling",
       "./plugins/android-inference/withAndroidInference",
+      "./plugins/android-updates/withAndroidUpdates",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/splash-icon.png",
-          "imageWidth": 180,
-          "backgroundColor": "#F8F6F5"
+          "android": {
+            "image": "./assets/splash-icon.png",
+            "imageWidth": 180,
+            "backgroundColor": "#F8F6F5"
+          }
         }
       ]
     ],

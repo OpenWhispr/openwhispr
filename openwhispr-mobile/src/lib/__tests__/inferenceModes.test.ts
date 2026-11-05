@@ -1,5 +1,16 @@
 jest.mock('react-native', () => ({ Platform: { OS: 'ios' } }));
 
+jest.mock('../inferenceModes', () => {
+  const { Platform } = jest.requireMock('react-native') as typeof import('react-native');
+  const defaults = jest.requireActual('../inferenceModes') as typeof import('../inferenceModes');
+  const android = jest.requireActual(
+    '../inferenceModes.android',
+  ) as typeof import('../inferenceModes.android');
+  return new Proxy(defaults, {
+    get: (_target, name) => Reflect.get(Platform.OS === 'android' ? android : defaults, name),
+  });
+});
+
 import { Platform } from 'react-native';
 import {
   dictationModeConfig,

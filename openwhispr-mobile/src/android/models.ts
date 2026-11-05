@@ -51,6 +51,13 @@ export const ANDROID_MODELS = {
     sha256: 'b139949c5bd74937ad8ed8c8cf3d9ffb1e99c866c823204dc42c0d91fa181897',
     url: 'https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/d7f544eead698dbd1f15126ef60b45a1e1933222/Qwen3-1.7B-Q4_K_M.gguf',
   },
+  'qwen-cleanup': {
+    title: 'Qwen3 4B',
+    kind: 'text',
+    bytes: 2497281120,
+    sha256: '3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597',
+    url: 'https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/a06e946bb6b655725eafa393f4a9745d460374c9/Qwen3-4B-Instruct-2507-Q4_K_M.gguf',
+  },
 } as const;
 export type AndroidModelId = keyof typeof ANDROID_MODELS;
 export function modelSupported(id: AndroidModelId): boolean {
@@ -141,6 +148,8 @@ export async function downloadAndroidModel(
         { intermediates: true },
       );
       try {
+        // Cancellation during file preparation has no native transfer to pause yet.
+        if (job.cancelled) throw new Error(i18n.t('downloadCancelled'));
         job.download = FileSystem.createDownloadResumable(file.url, temporary, {}, (event) =>
           progress(
             Math.min(0.98, (completed + event.totalBytesWritten) / ANDROID_MODELS[id].bytes),

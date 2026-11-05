@@ -1,8 +1,13 @@
+jest.mock('@/store/useTranscriptStore.android', () =>
+  jest.requireMock('@/store/useTranscriptStore'),
+);
 const mockUnassignedHistory = jest.fn(async () => []);
-jest.mock('@/services/storage/StorageService', () => ({
+jest.mock('@/services/storage/StorageService.android', () => ({
   StorageService: { getUnassignedTranscripts: () => mockUnassignedHistory() },
 }));
 import React from 'react';
+import * as transcriptionErrors from '@/lib/transcriptionErrors';
+import { toFriendlyTranscriptionErrorMessage as androidMessage } from '@/lib/transcriptionErrors.android';
 import { Alert } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { useFocusEffect } from 'expo-router';
@@ -147,6 +152,10 @@ it('uses durable dictation statistics rather than retained transcripts and keeps
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // Jest uses the default entry; Metro selects the Android formatter for this screen.
+  jest
+    .spyOn(transcriptionErrors, 'toFriendlyTranscriptionErrorMessage')
+    .mockImplementation(androidMessage);
   mockUploadProvider = 'byok';
   mockPickFile.mockReset();
   mockProcessUpload.mockReset().mockImplementation(async () => ({

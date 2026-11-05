@@ -26,7 +26,8 @@ jest.mock('../../../../modules/speaker-diarization/src', () => ({
 }));
 
 import { Platform } from 'react-native';
-import { getDiarizer } from '../getDiarizer';
+import { getDiarizer } from '../getDiarizer.android';
+import { getDiarizer as getIosDiarizer } from '../getDiarizer';
 import { FluidAudioDiarizer } from '../fluidAudioDiarizer';
 import { AndroidDictation } from '../../../../modules/android-dictation/src';
 import { modelReady } from '@/android/models';
@@ -53,7 +54,7 @@ afterEach(() => {
 it('makes the installed Android speaker runtime available while preserving iOS routing', () => {
   expect(getDiarizer().isAvailable()).toBe(true);
   Platform.OS = 'ios';
-  expect(getDiarizer()).toBe(FluidAudioDiarizer);
+  expect(getIosDiarizer()).toBe(FluidAudioDiarizer);
 });
 
 it('preserves timed overlapping speaker turns from the Android engine', async () => {

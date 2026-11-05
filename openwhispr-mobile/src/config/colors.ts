@@ -16,12 +16,11 @@ export const APP_BACKGROUND = '#F8F6F5';
 
 const ANDROID_FALLBACKS: Record<string, string> = {
   label: '#000000',
-  secondaryLabel: '#69666F',
-  tertiaryLabel: '#737078',
+  secondaryLabel: '#3C3C434D',
+  tertiaryLabel: '#3C3C434D',
   quaternaryLabel: '#3C3C432E',
   systemBackground: APP_BACKGROUND,
   secondarySystemBackground: '#F2F2F7',
-  tertiarySystemBackground: '#FFFFFF',
   secondarySystemGroupedBackground: '#FFFFFF',
   tertiarySystemFill: '#76768014',
   quaternarySystemFill: '#7676800F',

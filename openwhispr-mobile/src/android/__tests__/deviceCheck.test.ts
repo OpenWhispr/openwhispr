@@ -13,7 +13,8 @@ jest.mock('expo-file-system/legacy', () => ({
 jest.mock('../LocalSpeechModel', () => ({ LocalSpeechModel: { transcribe: jest.fn() } }));
 jest.mock('../LocalTextModel', () => ({
   LocalTextModel: { processText: jest.fn() },
-  selectedTextModel: () => 'qwen-balanced',
+  selectedTextModel: (purpose?: string) =>
+    purpose === 'cleanup' ? 'qwen-cleanup' : 'qwen-balanced',
 }));
 jest.mock('../models', () => ({ modelReady: jest.fn(async () => true) }));
 jest.mock('@/lib/dictationHints', () => ({ buildDictationHints: () => [] }));
@@ -33,6 +34,7 @@ import { LocalTextModel } from '../LocalTextModel';
 import { modelReady } from '../models';
 import {
   runLocalBenchmark,
+  snapshotBenchmark,
   deviceGuidance,
   type BenchmarkSelection,
   type LocalBenchmark,
@@ -207,4 +209,27 @@ it('signals only the owned native decoder immediately on cancellation', async ()
   reject(new Error('Sample cancelled.'));
   await expect(pending).rejects.toThrow('Sample cancelled.');
   expect(LocalSpeechModel.transcribe).not.toHaveBeenCalled();
+});
+
+it('pins the cleanup artifact for the device test instead of the general text choice', () => {
+  expect(snapshotBenchmark().text).toBe('qwen-cleanup');
+});
+
+it('inherits the cleanup model output budget for the device comparison', async () => {
+  await runLocalBenchmark(
+    'file:///cache/sample.wav',
+    {
+      ...selection,
+      text: 'qwen-cleanup',
+    },
+    new AbortController().signal,
+    jest.fn(),
+  );
+  expect(LocalTextModel.processText).toHaveBeenCalledWith(
+    expect.objectContaining({
+      localModelPurpose: 'cleanup',
+    }),
+    'qwen-cleanup',
+  );
+  expect(jest.mocked(LocalTextModel.processText).mock.calls[0][0]).not.toHaveProperty('maxTokens');
 });

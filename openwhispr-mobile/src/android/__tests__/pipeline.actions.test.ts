@@ -1,3 +1,7 @@
+jest.mock('@/lib/dictationLifecycle', () => jest.requireActual('@/lib/dictationLifecycle.android'));
+jest.mock('@/services/transcription/transcriptionLifecycle', () =>
+  jest.requireActual('@/services/transcription/transcriptionLifecycle.android'),
+);
 jest.mock('../insights', () => ({
   insightsScope: () => 'device',
   recordInsight: jest.fn(),

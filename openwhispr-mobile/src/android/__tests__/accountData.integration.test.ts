@@ -1,3 +1,25 @@
+jest.mock('@/lib/meetingRecoveryLifecycle', () =>
+  jest.requireActual('@/lib/meetingRecoveryLifecycle.android'),
+);
+jest.mock('@/lib/transcriptAudio', () => jest.requireActual('@/lib/transcriptAudio.android'));
+jest.mock('@/store/useTranscriptStore', () =>
+  jest.requireActual('@/store/useTranscriptStore.android'),
+);
+jest.mock('@/store/useNotesStore', () => jest.requireActual('@/store/useNotesStore.android'));
+jest.mock('@/store/useDictionaryStore', () =>
+  jest.requireActual('@/store/useDictionaryStore.android'),
+);
+jest.mock('@/store/useSnippetsStore', () => jest.requireActual('@/store/useSnippetsStore.android'));
+jest.mock('@/store/useAuthStore', () => jest.requireActual('@/store/useAuthStore.android'));
+jest.mock('@/lib/transcriptScope', () => jest.requireActual('@/lib/transcriptScope.android'));
+jest.mock('@/lib/meetingAudioStorage', () =>
+  jest.requireActual('@/lib/meetingAudioStorage.android'),
+);
+
+jest.mock('@/db/migrate', () => jest.requireActual('@/db/migrate.android'));
+// Exercise the same database adapter Metro selects for Android.
+jest.mock('@/db', () => jest.requireActual('@/db/index.android'));
+
 jest.mock('../../../modules/background-uploader/src', () => ({
   BackgroundUploader: { listProviderRecoveryJobIds: () => [], clearProviderRecovery: () => false },
 }));
@@ -165,7 +187,7 @@ it("does not sweep another account's meeting recordings after restoring a differ
 it('keeps upload history separate through A, Local and B and clears only the active owner', async () => {
   require('@/db/migrate').runMigrations();
   const { useAuthStore } = require('@/store/useAuthStore');
-  const { StorageService } = require('@/services/storage/StorageService');
+  const { StorageService } = require('@/services/storage/StorageService.android');
   const row = (id: string) => ({
     id,
     text: `${id} private transcript`,
@@ -195,7 +217,7 @@ it('preserves unowned history without assigning it to the account restored durin
   const legacy = JSON.stringify([{ id: 'legacy', text: 'Keep the original bytes' }]);
   localStorage.setItem('@openwhispr:transcripts', legacy);
   const { useAuthStore } = require('@/store/useAuthStore');
-  const { StorageService } = require('@/services/storage/StorageService');
+  const { StorageService } = require('@/services/storage/StorageService.android');
   await useAuthStore.getState().initialize();
   expect(await StorageService.getTranscripts()).toEqual([]);
   await StorageService.clearTranscripts();
@@ -469,7 +491,7 @@ it('preserves the original Android startup error and retries without opening the
 it('retains the existing iOS initialization fallback when its session request fails', async () => {
   require('react-native').Platform.OS = 'ios';
   mockSessionFailure = new Error('Session initialization failed');
-  const { useAuthStore } = require('@/store/useAuthStore');
+  const { useAuthStore } = jest.requireActual('@/store/useAuthStore');
   await expect(useAuthStore.getState().initialize()).resolves.toBeUndefined();
   expect(useAuthStore.getState()).toMatchObject({ isInitialized: true, isLoading: false });
 });
@@ -752,7 +774,7 @@ it('clears visible history before a switch and discards a delayed previous-accou
   require('@/db/migrate').runMigrations();
   const { useAuthStore } = require('@/store/useAuthStore');
   const { useTranscriptStore } = require('@/store/useTranscriptStore');
-  const { StorageService } = require('@/services/storage/StorageService');
+  const { StorageService } = require('@/services/storage/StorageService.android');
   await useAuthStore.getState().initialize();
   await useTranscriptStore
     .getState()
@@ -783,7 +805,7 @@ it('clears visible history before a switch and discards a delayed previous-accou
 it('keeps unassigned history accessible only through the signed-out device archive', async () => {
   require('@/db/migrate').runMigrations();
   const { useAuthStore } = require('@/store/useAuthStore');
-  const { StorageService } = require('@/services/storage/StorageService');
+  const { StorageService } = require('@/services/storage/StorageService.android');
   const rows = [{ id: 'unassigned', text: 'Preserved text' }];
   localStorage.setItem('@openwhispr:transcripts', JSON.stringify(rows));
   await useAuthStore.getState().initialize();
@@ -796,7 +818,7 @@ it('keeps unassigned history accessible only through the signed-out device archi
 it('erases the deleted account history without erasing Local, B or unassigned history', async () => {
   require('@/db/migrate').runMigrations();
   const { useAuthStore } = require('@/store/useAuthStore');
-  const { StorageService } = require('@/services/storage/StorageService');
+  const { StorageService } = require('@/services/storage/StorageService.android');
   await useAuthStore.getState().initialize();
   await StorageService.saveTranscripts([{ id: 'a', text: 'A' }]);
   const aKey = StorageService.transcriptOwner();
@@ -818,7 +840,7 @@ it('erases the deleted account history without erasing Local, B or unassigned hi
 it('keeps anonymous history with its collection when that account is linked', async () => {
   require('@/db/migrate').runMigrations();
   const { useAuthStore } = require('@/store/useAuthStore');
-  const { StorageService } = require('@/services/storage/StorageService');
+  const { StorageService } = require('@/services/storage/StorageService.android');
   mockSessionUser = { id: 'anon', email: '', isAnonymous: true };
   await useAuthStore.getState().initialize();
   const rows = [{ id: 'anonymous-owned', text: 'My anonymous recording' }];

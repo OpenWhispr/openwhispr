@@ -3,7 +3,7 @@ import { act, render } from '@testing-library/react-native';
 import { I18nManager } from 'react-native';
 import { createInstance } from 'i18next';
 import { I18nextProvider, initReactI18next } from 'react-i18next';
-import { AndroidSystemIcon as SystemIcon } from '../SystemIcon';
+import { SystemIcon } from '../SystemIcon.android';
 
 jest.mock('lucide-react-native', () => {
   const Text = require('react-native').Text;

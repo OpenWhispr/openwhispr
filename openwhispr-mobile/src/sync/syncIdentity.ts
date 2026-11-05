@@ -1,5 +1,4 @@
 import { notesRepository } from '@/data';
-import { Platform } from 'react-native';
 
 // Which identity the local rows belong to, kept in sync_state like the other
 // per-device bookkeeping (teamSpacesCapability.ts, pullCursors.ts).
@@ -36,11 +35,6 @@ export function clearAnonymousLink(): void {
  * under it would read as an account switch and wipe that account's local rows.
  */
 export function hasRealAccountHistory(): boolean {
-  if (Platform.OS === 'android') {
-    const { hasAndroidAccountHistory } =
-      require('@/android/accountData') as typeof import('@/android/accountData');
-    return hasAndroidAccountHistory();
-  }
   const lastUserId = getLastSyncedUserId();
   return lastUserId !== null && !isLinkFromAnonymous(lastUserId);
 }

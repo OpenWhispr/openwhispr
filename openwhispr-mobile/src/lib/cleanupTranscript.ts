@@ -17,7 +17,7 @@ import { buildDictationHintTiers } from './dictationHints';
 import { splitLlmDictionary, type LlmDictionary } from './snippets';
 import { fitDictionaryOnDevice } from './onDeviceDictionary';
 import { buildProviderPrompt } from '@/services/reasoning/buildProviderPrompt';
-import { buildLocalReasoningInstructions } from '@/services/reasoning/LocalReasoningService';
+import { createTimeoutSignal, localCleanupInstructions } from './cleanupLifecycle';
 import {
   LOCAL_CLEANUP_MAX_TRANSCRIPT_TOKENS,
   countLocalReasoningTokens,
@@ -48,24 +48,6 @@ export const CLEANUP_TIMEOUT_MS = 12_000;
 export const CLEANUP_MAX_RETRIES = 1;
 export const CLEANUP_INITIAL_RETRY_DELAY_MS = 750;
 
-function createTimeoutSignal(
-  timeoutMs: number,
-  parent?: AbortSignal,
-): { signal: AbortSignal; cancel: () => void } {
-  const controller = new AbortController();
-  const abort = () => controller.abort();
-  if (parent?.aborted) abort();
-  else parent?.addEventListener('abort', abort, { once: true });
-  const timeout = setTimeout(abort, timeoutMs);
-  return {
-    signal: controller.signal,
-    cancel: () => {
-      clearTimeout(timeout);
-      parent?.removeEventListener('abort', abort);
-    },
-  };
-}
-
 // Apple Intelligence writes a cleaned copy about as long as the transcript, at roughly 30 tokens a
 // second on an iPhone 15 Pro (Apple's figure), so a long one can't finish in Cloud's 12 s. The rate
 // here is lower so a slower or busier iPhone still finishes; the [reasoning] dev log reports the
@@ -86,7 +68,13 @@ const TOO_LONG_FOR_ON_DEVICE = 'This transcript is too long for On-Device cleanu
 async function prepareLocalRun(
   text: string,
 ): Promise<{ skipReason: string } | { tokens?: number; readiness?: LocalReasoningReadiness }> {
-  if (Platform.OS === 'android') return {};
+  if (Platform.OS === 'android') {
+    try {
+      return { readiness: await getLocalReasoningReadiness({ localModelPurpose: 'cleanup' }) };
+    } catch {
+      return { skipReason: 'Cleanup failed.' };
+    }
+  }
   let readiness = await getLocalReasoningReadiness();
   // The cached answer outlives a fix in iOS Settings, so check again before refusing.
   if (readiness.status !== 'ready') readiness = await getLocalReasoningReadiness({ refresh: true });
@@ -196,6 +184,7 @@ export async function cleanupTranscript(
     text: rawText,
     inferenceRoute,
     inferenceScope: 'cleanup',
+    ...(Platform.OS === 'android' ? { localModelPurpose: 'cleanup' as const } : {}),
     ...(routing ? { routing } : {}),
     language: lang,
     locale: lang,
@@ -225,7 +214,7 @@ export async function cleanupTranscript(
         const candidateRequest = withDictionary(candidate);
         const prompt = buildProviderPrompt(candidateRequest);
         return {
-          instructions: buildLocalReasoningInstructions({ ...candidateRequest, ...prompt }),
+          instructions: localCleanupInstructions(candidateRequest, prompt),
           prompt: prompt.text,
         };
       },
@@ -239,7 +228,7 @@ export async function cleanupTranscript(
     let retryCount = 0;
     const result = await withRetry(
       async () => {
-        const { signal, cancel } = createTimeoutSignal(timeoutMs, options.signal);
+        const { signal, cancel } = createTimeoutSignal(timeoutMs, options);
         try {
           return await ReasoningService.processText({ ...finalRequest, signal, timeoutMs });
         } finally {

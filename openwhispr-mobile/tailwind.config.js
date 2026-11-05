@@ -1,14 +1,18 @@
-const { platformColor, platformSelect } = require('nativewind/theme');
+const isIos = process.env.NATIVEWIND_OS === 'ios';
+const nativewind = isIos ? 'nativewind-ios' : 'nativewind';
+const { platformColor, platformSelect } = require(`${nativewind}/theme`);
 
 const BRAND = '#007AFF';
 
 const ios = (iosName, androidFallback, web = androidFallback) =>
-  platformSelect({ ios: platformColor(iosName), android: androidFallback, default: web });
+  isIos
+    ? platformColor(iosName, web, web)
+    : platformSelect({ ios: platformColor(iosName), android: androidFallback, default: web });
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: ['./App.{js,jsx,ts,tsx}', './app/**/*.{js,jsx,ts,tsx}', './src/**/*.{js,jsx,ts,tsx}'],
-  presets: [require('nativewind/preset')],
+  presets: [require(`${nativewind}/preset`)],
   theme: {
     extend: {
       colors: {

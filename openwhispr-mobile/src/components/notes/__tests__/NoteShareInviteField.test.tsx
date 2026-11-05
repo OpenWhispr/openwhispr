@@ -1,3 +1,20 @@
+jest.mock('../NoteShareInviteField', () => {
+  const ios =
+    jest.requireActual<typeof import('../NoteShareInviteField')>('../NoteShareInviteField');
+  const android = jest.requireActual<typeof import('../NoteShareInviteField.android')>(
+    '../NoteShareInviteField.android',
+  );
+  return {
+    NoteShareInviteField: (
+      props: import('react').ComponentProps<typeof ios.NoteShareInviteField>,
+    ) =>
+      require('react').createElement(
+        (require('react-native').Platform.OS === 'android' ? android : ios).NoteShareInviteField,
+        props,
+      ),
+  };
+});
+
 import { useState } from 'react';
 import { Platform } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';

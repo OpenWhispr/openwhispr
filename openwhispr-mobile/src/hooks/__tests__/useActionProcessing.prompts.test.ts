@@ -276,3 +276,21 @@ it('does not let a previous success timer clear a newer pending action', async (
     await pending;
   });
 });
+
+// Match Metro's platform entry selection while preserving the consumer assertions.
+jest.mock('@/hooks/useActionProcessing', () => ({
+  useActionProcessing: (
+    ...args: Parameters<(typeof import('@/hooks/useActionProcessing'))['useActionProcessing']>
+  ) => {
+    const platform = jest.requireActual<typeof import('react-native')>('react-native').Platform.OS;
+    const selected =
+      platform === 'android'
+        ? jest.requireActual<typeof import('@/hooks/useActionProcessing.android')>(
+            '@/hooks/useActionProcessing.android',
+          )
+        : jest.requireActual<typeof import('@/hooks/useActionProcessing')>(
+            '@/hooks/useActionProcessing',
+          );
+    return selected.useActionProcessing(...args);
+  },
+}));

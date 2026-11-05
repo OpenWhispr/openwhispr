@@ -1,3 +1,14 @@
+// Jest does not apply Metro's platform suffix resolution.
+jest.mock('@/lib/sessionFetch', () => ({
+  sessionFetch: (...args: Parameters<(typeof import('@/lib/sessionFetch'))['sessionFetch']>) => {
+    const platform = require('react-native').Platform.OS;
+    const transport = jest.requireActual(
+      platform === 'android' ? '@/lib/sessionFetch.android' : '@/lib/sessionFetch',
+    ) as typeof import('@/lib/sessionFetch');
+    return transport.sessionFetch(...args);
+  },
+}));
+
 jest.mock('@/lib/inferenceRouting', () => ({
   getInferenceSelection: jest.fn(() => undefined),
   resolveMobileProviderRoute: jest.fn(),

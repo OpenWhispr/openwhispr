@@ -1,3 +1,19 @@
+jest.mock('../cleanupLifecycle', () => ({
+  get createTimeoutSignal() {
+    return jest.requireActual(
+      require('react-native').Platform.OS === 'android'
+        ? '../cleanupLifecycle.android'
+        : '../cleanupLifecycle',
+    ).createTimeoutSignal;
+  },
+  get localCleanupInstructions() {
+    return jest.requireActual(
+      require('react-native').Platform.OS === 'android'
+        ? '../cleanupLifecycle.android'
+        : '../cleanupLifecycle',
+    ).localCleanupInstructions;
+  },
+}));
 import { Platform } from 'react-native';
 import { cleanupTranscript } from '../cleanupTranscript';
 import { countLocalReasoningTokens, fitsLocalReasoningBudget } from '../localReasoning';
@@ -78,4 +94,15 @@ it('preserves parent cancellation after shared hints have been fitted', async ()
   });
 
   expect(jest.mocked(ReasoningService.processText).mock.calls[0][0].signal?.aborted).toBe(true);
+});
+
+it('keeps the iOS cleanup timeout independent of an already aborted parent signal', async () => {
+  Platform.OS = 'ios';
+  const controller = new AbortController();
+  controller.abort();
+  await cleanupTranscript('iOS transcript', {
+    inferenceRoute: { mode: 'openwhispr', scope: 'cleanup' },
+    signal: controller.signal,
+  });
+  expect(jest.mocked(ReasoningService.processText).mock.calls[0][0].signal?.aborted).toBe(false);
 });

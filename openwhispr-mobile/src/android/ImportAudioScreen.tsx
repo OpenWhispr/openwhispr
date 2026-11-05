@@ -6,7 +6,7 @@ import { useNavigation, usePreventRemove, type NavigationAction } from '@react-n
 import * as Clipboard from 'expo-clipboard';
 import { Text } from '@/components/ui/Text';
 import { Button, Card, Page, styles } from './ui';
-import { useFileUpload } from '@/hooks/useFileUpload';
+import { useFileUpload } from '@/hooks/useFileUpload.android';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useNotesStore } from '@/store/useNotesStore';

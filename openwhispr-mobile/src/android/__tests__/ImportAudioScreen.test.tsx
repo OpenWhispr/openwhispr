@@ -58,7 +58,7 @@ jest.mock('../ui', () => ({
     ),
   styles: {},
 }));
-jest.mock('@/hooks/useFileUpload', () => ({
+jest.mock('@/hooks/useFileUpload.android', () => ({
   useFileUpload: (options: typeof mockOptions) => {
     mockOptions = options;
     return {
