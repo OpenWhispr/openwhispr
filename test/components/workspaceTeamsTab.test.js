@@ -109,6 +109,12 @@ async function loadTab(t, { workspace = ADMIN, status = "ready", teams = [], sta
           return null;
         }
       `,
+      "/TeamPaywallDialog": `
+        export default function TeamPaywallDialog(props) {
+          globalThis.__paywallDialog = props;
+          return null;
+        }
+      `,
       "/TeamMembersDialog": `
         export default function TeamMembersDialog(props) {
           globalThis.__membersDialog = props;
@@ -147,6 +153,7 @@ async function loadTab(t, { workspace = ADMIN, status = "ready", teams = [], sta
       "__memberReads",
       "__listMembers",
       "__createDialog",
+      "__paywallDialog",
       "__membersDialog",
       "__reloads",
     ]) {
@@ -270,7 +277,8 @@ test("an admin sees the table with Create in the empty state", async (t) => {
   assert.equal(globalThis.__createDialog.open, false);
   await React.act(async () => propsOf(create).onClick());
   assert.equal(globalThis.__createDialog.open, true);
-  assert.equal(globalThis.__createDialog.workspaceId, "w1");
+  assert.equal(globalThis.__createDialog.workspace, workspace);
+  assert.equal(globalThis.__paywallDialog.open, false);
 });
 
 test("an admin's table has the three columns, no checkboxes and no Create", async (t) => {
@@ -329,6 +337,72 @@ test("a free workspace's table and dialog stay fully working", async (t) => {
 test("a free workspace's empty state still offers Create, which the opener answers", async (t) => {
   const { Tab, workspace } = await loadTab(t, { workspace: FREE_ADMIN, teams: [] });
   assert.match(render(Tab, workspace), new RegExp(`${KEY}\\.create<`));
+
+  const container = await mount(t, Tab, workspace);
+  await React.act(async () => propsOf(buttonWithText(container, `${KEY}.create`)).onClick());
+  assert.equal(globalThis.__paywallDialog.open, true);
+  assert.equal(globalThis.__createDialog.open, false);
+});
+
+test("the server's refusal swaps the form for the paywall", async (t) => {
+  const { Tab, workspace } = await loadTab(t, { teams: [] });
+  const container = await mount(t, Tab, workspace);
+  await React.act(async () => propsOf(buttonWithText(container, `${KEY}.create`)).onClick());
+  assert.equal(globalThis.__createDialog.open, true);
+
+  await React.act(async () => globalThis.__createDialog.onPlanRequired());
+  assert.equal(globalThis.__createDialog.open, false);
+  assert.equal(globalThis.__paywallDialog.open, true);
+});
+
+test("a created team reloads the list and reports the outcome to the host", async (t) => {
+  const outcomes = [];
+  const { Tab, workspace } = await loadTab(t, { teams: [] });
+  const element = React.createElement(Tab, {
+    workspace,
+    onTeamCreated: (team, outcome) => outcomes.push([team.id, outcome]),
+  });
+  const container = installHostDom(t);
+  const root = createRoot(container);
+  mountedRoots.set(t, root);
+  await React.act(async () => root.render(element));
+
+  await React.act(async () =>
+    globalThis.__createDialog.onCreated({ id: "t1", name: "Sales" }, { memberCount: 2 })
+  );
+  assert.equal(globalThis.__reloads, 1);
+  assert.deepEqual(outcomes, [["t1", { memberCount: 2 }]]);
+});
+
+test("a request from People opens the opener once and says it was handled", async (t) => {
+  let handled = 0;
+  const { Tab, workspace } = await loadTab(t, { teams: [team("t1", "Designers")] });
+  const container = installHostDom(t);
+  const root = createRoot(container);
+  mountedRoots.set(t, root);
+  await React.act(async () =>
+    root.render(
+      React.createElement(Tab, {
+        workspace,
+        openCreateRequested: true,
+        onCreateRequestHandled: () => (handled += 1),
+      })
+    )
+  );
+  assert.equal(globalThis.__createDialog.open, true);
+  assert.equal(handled, 1);
+});
+
+test("the tab says when no team exists", async (t) => {
+  const reports = [];
+  const { Tab, workspace } = await loadTab(t, { teams: [] });
+  const container = installHostDom(t);
+  const root = createRoot(container);
+  mountedRoots.set(t, root);
+  await React.act(async () =>
+    root.render(React.createElement(Tab, { workspace, onTeamsEmptyChange: (e) => reports.push(e) }))
+  );
+  assert.equal(reports.at(-1), true);
 });
 
 test("the Members cell reads the roster only when opened", async (t) => {

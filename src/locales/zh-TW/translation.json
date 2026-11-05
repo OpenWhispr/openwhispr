@@ -2526,7 +2526,12 @@
           "addToTeamspace": "加入 Teamspace"
         },
         "teamsCount_one": "{{count}} 個團隊",
-        "teamsCount_other": "{{count}} 個團隊"
+        "teamsCount_other": "{{count}} 個團隊",
+        "addMenu": {
+          "invite": "邀請成員",
+          "createTeam": "建立團隊",
+          "label": "更多新增方式"
+        }
       },
       "teamspaces": {
         "title": "Teamspace",
@@ -2749,15 +2754,10 @@
         "errorTitle": "無法更新申請"
       },
       "teams": {
-        "addMembersLabel": "新增成員",
-        "createTitle": "建立團隊",
-        "nameLabel": "團隊名稱",
         "memberCount_one": "{{count}} 位成員",
         "memberCount_other": "{{count}} 位成員",
         "grantsAccessToSpaces_one": "授予 {{count}} 個空間的存取權",
         "grantsAccessToSpaces_other": "授予 {{count}} 個空間的存取權",
-        "couldNotCreate": "無法建立團隊",
-        "created": "已建立 {{team}}",
         "deleteConfirmSpaceAccess_one": "該團隊授予 {{count}} 個空間的存取權。其成員將失去該存取權。",
         "deleteConfirmSpaceAccess_other": "該團隊授予 {{count}} 個空間的存取權。其成員將失去該存取權。",
         "members": {
@@ -2788,7 +2788,43 @@
         "spaces_one": "{{count}} 個 Teamspace",
         "spaces_other": "{{count}} 個 Teamspace",
         "refreshFailed": "無法重新整理團隊。此清單可能不是最新的。",
-        "cellMenuLabel": "{{team}}：{{value}}"
+        "cellMenuLabel": "{{team}}：{{value}}",
+        "paywall": {
+          "title": "團隊屬於 Business 方案",
+          "body": "Teamspace 免費使用。升級後即可將成員分組為團隊。",
+          "bodyAskOwner": "Teamspace 免費使用。請 {{owner}} 升級，即可將成員分組為團隊。",
+          "bodyAskOwnerUnknown": "Teamspace 免費使用。請讓工作區擁有者升級，即可將成員分組為團隊。",
+          "upgrade": "升級至 Business",
+          "notNow": "暫不"
+        },
+        "form": {
+          "title": "建立團隊",
+          "subtitle": "一次新增多人的捷徑。",
+          "name": "名稱",
+          "namePlaceholder": "團隊名稱",
+          "nameRequired": "請輸入團隊名稱。",
+          "nameTaken": "已有名為 {{name}} 的團隊。",
+          "people": "成員",
+          "peoplePlaceholder": "姓名或電子郵件",
+          "adminNote": "你將被新增為團隊管理員。建立團隊時會傳送邀請。",
+          "adminNoteShort": "你將被新增為團隊管理員。",
+          "invalidEmail": "請輸入有效的電子郵件地址。",
+          "cancel": "取消",
+          "submit": "建立團隊",
+          "creating": "建立中…",
+          "retry": "重試",
+          "creatingStatus_one": "正在建立 {{team}} 並傳送 {{count}} 封邀請…",
+          "creatingStatus_other": "正在建立 {{team}} 並傳送 {{count}} 封邀請…",
+          "failed": "無法建立團隊。你的輸入已保留。",
+          "created": "已建立 {{team}}",
+          "createdAdded": "已建立 {{team}}。已新增 {{names}}。",
+          "createdInvited": "已建立 {{team}}。已邀請 {{invited}}。",
+          "createdAddedInvited": "已建立 {{team}}。已新增 {{names}}，並邀請了 {{invited}}。",
+          "createdWithMembers_one": "已建立 {{team}}，共 {{count}} 位成員",
+          "createdWithMembers_other": "已建立 {{team}}，共 {{count}} 位成員",
+          "createdSomeNotInvited_one": "已建立 {{team}}。無法邀請 {{count}} 人。",
+          "createdSomeNotInvited_other": "已建立 {{team}}。無法邀請 {{count}} 人。"
+        }
       },
       "invites": {
         "resending": "重新傳送中…",

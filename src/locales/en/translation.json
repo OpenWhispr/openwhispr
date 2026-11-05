@@ -1797,7 +1797,12 @@
           "addToTeamspace": "Add to teamspace"
         },
         "teamsCount_one": "{{count}} Team",
-        "teamsCount_other": "{{count}} Teams"
+        "teamsCount_other": "{{count}} Teams",
+        "addMenu": {
+          "invite": "Invite people",
+          "createTeam": "Create team",
+          "label": "More ways to add"
+        }
       },
       "teamspaces": {
         "title": "Teamspaces",
@@ -2020,15 +2025,10 @@
         "errorTitle": "Could not update the request"
       },
       "teams": {
-        "addMembersLabel": "Add members",
-        "createTitle": "Create team",
-        "nameLabel": "Team name",
         "memberCount_one": "{{count}} member",
         "memberCount_other": "{{count}} members",
         "grantsAccessToSpaces_one": "Grants access to {{count}} space",
         "grantsAccessToSpaces_other": "Grants access to {{count}} spaces",
-        "couldNotCreate": "Couldn't create team",
-        "created": "Created {{team}}",
         "deleteConfirmSpaceAccess_one": "This team grants access to {{count}} space. Its members will lose that access.",
         "deleteConfirmSpaceAccess_other": "This team grants access to {{count}} spaces. Its members will lose that access.",
         "members": {
@@ -2059,7 +2059,43 @@
         "spaces_one": "{{count}} teamspace",
         "spaces_other": "{{count}} teamspaces",
         "refreshFailed": "Couldn't refresh teams. This list may be out of date.",
-        "cellMenuLabel": "{{team}}: {{value}}"
+        "cellMenuLabel": "{{team}}: {{value}}",
+        "paywall": {
+          "title": "Teams are on the Business plan",
+          "body": "Teamspaces are free. Upgrade to group people into teams.",
+          "bodyAskOwner": "Teamspaces are free. Ask {{owner}} to upgrade to group people into teams.",
+          "bodyAskOwnerUnknown": "Teamspaces are free. Ask your workspace owner to upgrade to group people into teams.",
+          "upgrade": "Upgrade to Business",
+          "notNow": "Not now"
+        },
+        "form": {
+          "title": "Create team",
+          "subtitle": "A shortcut for adding several people at once.",
+          "name": "Name",
+          "namePlaceholder": "Team name",
+          "nameRequired": "Enter a team name.",
+          "nameTaken": "A team called {{name}} already exists.",
+          "people": "People",
+          "peoplePlaceholder": "Names or emails",
+          "adminNote": "You're added as the team's admin. Invitations send when you create the team.",
+          "adminNoteShort": "You're added as the team's admin.",
+          "invalidEmail": "Enter a valid email address.",
+          "cancel": "Cancel",
+          "submit": "Create team",
+          "creating": "Creating…",
+          "retry": "Try again",
+          "creatingStatus_one": "Creating {{team}} and sending {{count}} invitation…",
+          "creatingStatus_other": "Creating {{team}} and sending {{count}} invitations…",
+          "failed": "Couldn't create the team. Your entries are kept.",
+          "created": "Created {{team}}",
+          "createdAdded": "Created {{team}}. Added {{names}}.",
+          "createdInvited": "Created {{team}}. Invited {{invited}}.",
+          "createdAddedInvited": "Created {{team}}. Added {{names}} and invited {{invited}}.",
+          "createdWithMembers_one": "Created {{team}} with {{count}} member",
+          "createdWithMembers_other": "Created {{team}} with {{count}} members",
+          "createdSomeNotInvited_one": "Created {{team}}. Couldn't invite {{count}} person.",
+          "createdSomeNotInvited_other": "Created {{team}}. Couldn't invite {{count}} people."
+        }
       },
       "invites": {
         "resending": "Resending…",

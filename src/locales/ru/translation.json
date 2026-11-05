@@ -2552,7 +2552,12 @@
         "teamsCount_one": "{{count}} команда",
         "teamsCount_few": "{{count}} команды",
         "teamsCount_many": "{{count}} команд",
-        "teamsCount_other": "{{count}} команды"
+        "teamsCount_other": "{{count}} команды",
+        "addMenu": {
+          "invite": "Пригласить людей",
+          "createTeam": "Создать команду",
+          "label": "Другие способы добавить"
+        }
       },
       "teamspaces": {
         "title": "Teamspaces",
@@ -2799,9 +2804,6 @@
         "errorTitle": "Не удалось обновить запрос"
       },
       "teams": {
-        "addMembersLabel": "Добавить участников",
-        "createTitle": "Создать команду",
-        "nameLabel": "Название команды",
         "memberCount_one": "{{count}} участник",
         "memberCount_few": "{{count}} участника",
         "memberCount_many": "{{count}} участников",
@@ -2810,8 +2812,6 @@
         "grantsAccessToSpaces_few": "Даёт доступ к {{count}} пространствам",
         "grantsAccessToSpaces_many": "Даёт доступ к {{count}} пространствам",
         "grantsAccessToSpaces_other": "Даёт доступ к {{count}} пространствам",
-        "couldNotCreate": "Не удалось создать команду",
-        "created": "{{team}} создана",
         "deleteConfirmSpaceAccess_one": "Эта команда даёт доступ к {{count}} пространству. Её участники потеряют этот доступ.",
         "deleteConfirmSpaceAccess_few": "Эта команда даёт доступ к {{count}} пространствам. Её участники потеряют этот доступ.",
         "deleteConfirmSpaceAccess_many": "Эта команда даёт доступ к {{count}} пространствам. Её участники потеряют этот доступ.",
@@ -2848,7 +2848,49 @@
         "spaces_many": "{{count}} teamspace",
         "spaces_other": "{{count}} teamspace",
         "refreshFailed": "Не удалось обновить команды. Список может быть устаревшим.",
-        "cellMenuLabel": "{{team}}: {{value}}"
+        "cellMenuLabel": "{{team}}: {{value}}",
+        "paywall": {
+          "title": "Команды доступны в тарифе Business",
+          "body": "Teamspace бесплатны. Перейдите на более высокий тариф, чтобы объединять людей в команды.",
+          "bodyAskOwner": "Teamspace бесплатны. Попросите {{owner}} перейти на более высокий тариф, чтобы объединять людей в команды.",
+          "bodyAskOwnerUnknown": "Teamspace бесплатны. Попросите владельца рабочего пространства перейти на более высокий тариф, чтобы объединять людей в команды.",
+          "upgrade": "Перейти на Business",
+          "notNow": "Не сейчас"
+        },
+        "form": {
+          "title": "Создать команду",
+          "subtitle": "Быстрый способ добавить сразу несколько человек.",
+          "name": "Название",
+          "namePlaceholder": "Название команды",
+          "nameRequired": "Введите название команды.",
+          "nameTaken": "Команда с названием {{name}} уже существует.",
+          "people": "Люди",
+          "peoplePlaceholder": "Имена или адреса почты",
+          "adminNote": "Вы будете добавлены как администратор команды. Приглашения отправляются при создании команды.",
+          "adminNoteShort": "Вы будете добавлены как администратор команды.",
+          "invalidEmail": "Введите действительный адрес почты.",
+          "cancel": "Отмена",
+          "submit": "Создать команду",
+          "creating": "Создание…",
+          "retry": "Повторить",
+          "creatingStatus_one": "Создание {{team}} и отправка {{count}} приглашения…",
+          "creatingStatus_few": "Создание {{team}} и отправка {{count}} приглашений…",
+          "creatingStatus_many": "Создание {{team}} и отправка {{count}} приглашений…",
+          "creatingStatus_other": "Создание {{team}} и отправка {{count}} приглашения…",
+          "failed": "Не удалось создать команду. Ваши данные сохранены.",
+          "created": "Команда {{team}} создана",
+          "createdAdded": "Команда {{team}} создана. Добавлены: {{names}}.",
+          "createdInvited": "Команда {{team}} создана. Приглашены: {{invited}}.",
+          "createdAddedInvited": "Команда {{team}} создана. Добавлены: {{names}}. Приглашены: {{invited}}.",
+          "createdWithMembers_one": "Команда {{team}} создана, {{count}} участник",
+          "createdWithMembers_few": "Команда {{team}} создана, {{count}} участника",
+          "createdWithMembers_many": "Команда {{team}} создана, {{count}} участников",
+          "createdWithMembers_other": "Команда {{team}} создана, {{count}} участника",
+          "createdSomeNotInvited_one": "Команда {{team}} создана. Не удалось пригласить {{count}} человека.",
+          "createdSomeNotInvited_few": "Команда {{team}} создана. Не удалось пригласить {{count}} человек.",
+          "createdSomeNotInvited_many": "Команда {{team}} создана. Не удалось пригласить {{count}} человек.",
+          "createdSomeNotInvited_other": "Команда {{team}} создана. Не удалось пригласить {{count}} человека."
+        }
       },
       "invites": {
         "resending": "Отправка…",

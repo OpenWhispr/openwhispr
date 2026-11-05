@@ -62,6 +62,8 @@ export interface SpacePeopleFieldProps {
   placeholder: string;
   /** A control beside the input (Add members); the chips sit under both. */
   action?: ReactNode;
+  /** A line between the input and the chips, for a form whose people arrive already chosen. */
+  note?: ReactNode;
   /**
    * Each increase moves focus into the input with its list closed, to hand the field back after
    * a run: the list is for someone who came to pick, and would cover what the run just said.
@@ -124,6 +126,7 @@ export function SpacePeopleField({
   disabled = false,
   placeholder,
   action,
+  note,
   focusRequest = 0,
 }: SpacePeopleFieldProps): ReactElement {
   const { t } = useTranslation();
@@ -444,6 +447,7 @@ export function SpacePeopleField({
         </PopoverContent>
       </Popover>
       {action}
+      {note ? <div className="col-span-2">{note}</div> : null}
 
       {picked.length > 0 ? (
         <ul className="col-span-2 flex flex-wrap gap-1.5">

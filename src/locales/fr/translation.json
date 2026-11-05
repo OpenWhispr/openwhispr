@@ -1797,7 +1797,12 @@
           "addToTeamspace": "Ajouter au teamspace"
         },
         "teamsCount_one": "{{count}} équipe",
-        "teamsCount_other": "{{count}} équipes"
+        "teamsCount_other": "{{count}} équipes",
+        "addMenu": {
+          "invite": "Inviter des personnes",
+          "createTeam": "Créer une équipe",
+          "label": "Autres façons d'ajouter"
+        }
       },
       "teamspaces": {
         "title": "Teamspaces",
@@ -2020,15 +2025,10 @@
         "errorTitle": "Impossible de mettre à jour la demande"
       },
       "teams": {
-        "addMembersLabel": "Ajouter des membres",
-        "createTitle": "Créer une équipe",
-        "nameLabel": "Nom de l'équipe",
         "memberCount_one": "{{count}} membre",
         "memberCount_other": "{{count}} membres",
         "grantsAccessToSpaces_one": "Donne accès à {{count}} espace",
         "grantsAccessToSpaces_other": "Donne accès à {{count}} espaces",
-        "couldNotCreate": "Impossible de créer l'équipe",
-        "created": "{{team}} créée",
         "deleteConfirmSpaceAccess_one": "Cette équipe donne accès à {{count}} espace. Ses membres perdront cet accès.",
         "deleteConfirmSpaceAccess_other": "Cette équipe donne accès à {{count}} espaces. Ses membres perdront cet accès.",
         "members": {
@@ -2059,7 +2059,43 @@
         "spaces_one": "{{count}} teamspace",
         "spaces_other": "{{count}} teamspaces",
         "refreshFailed": "Impossible d'actualiser les équipes. Cette liste n'est peut-être pas à jour.",
-        "cellMenuLabel": "{{team}} : {{value}}"
+        "cellMenuLabel": "{{team}} : {{value}}",
+        "paywall": {
+          "title": "Les équipes sont dans l'offre Business",
+          "body": "Les teamspaces sont gratuits. Passez à l'offre supérieure pour regrouper des personnes en équipes.",
+          "bodyAskOwner": "Les teamspaces sont gratuits. Demandez à {{owner}} de passer à l'offre supérieure pour regrouper des personnes en équipes.",
+          "bodyAskOwnerUnknown": "Les teamspaces sont gratuits. Demandez au propriétaire de l'espace de travail de passer à l'offre supérieure pour regrouper des personnes en équipes.",
+          "upgrade": "Passer à Business",
+          "notNow": "Plus tard"
+        },
+        "form": {
+          "title": "Créer une équipe",
+          "subtitle": "Un raccourci pour ajouter plusieurs personnes à la fois.",
+          "name": "Nom",
+          "namePlaceholder": "Nom de l'équipe",
+          "nameRequired": "Saisissez un nom d'équipe.",
+          "nameTaken": "Une équipe nommée {{name}} existe déjà.",
+          "people": "Personnes",
+          "peoplePlaceholder": "Noms ou e-mails",
+          "adminNote": "Vous êtes ajouté comme administrateur de l'équipe. Les invitations sont envoyées à la création de l'équipe.",
+          "adminNoteShort": "Vous êtes ajouté comme administrateur de l'équipe.",
+          "invalidEmail": "Saisissez une adresse e-mail valide.",
+          "cancel": "Annuler",
+          "submit": "Créer l'équipe",
+          "creating": "Création…",
+          "retry": "Réessayer",
+          "creatingStatus_one": "Création de {{team}} et envoi de {{count}} invitation…",
+          "creatingStatus_other": "Création de {{team}} et envoi de {{count}} invitations…",
+          "failed": "Impossible de créer l'équipe. Vos saisies sont conservées.",
+          "created": "{{team}} créée",
+          "createdAdded": "{{team}} créée. Ajoutés : {{names}}.",
+          "createdInvited": "{{team}} créée. Invités : {{invited}}.",
+          "createdAddedInvited": "{{team}} créée. Ajoutés : {{names}}. Invités : {{invited}}.",
+          "createdWithMembers_one": "{{team}} créée avec {{count}} membre",
+          "createdWithMembers_other": "{{team}} créée avec {{count}} membres",
+          "createdSomeNotInvited_one": "{{team}} créée. Impossible d'inviter {{count}} personne.",
+          "createdSomeNotInvited_other": "{{team}} créée. Impossible d'inviter {{count}} personnes."
+        }
       },
       "invites": {
         "resending": "Renvoi…",

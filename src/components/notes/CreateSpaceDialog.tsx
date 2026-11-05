@@ -11,7 +11,7 @@ import { useToast } from "../ui/useToast";
 import CreateWorkspaceDialog from "../CreateWorkspaceDialog";
 import { WorkspaceErrorBar } from "../workspace/WorkspaceErrorBar";
 import { createSpace } from "../../services/spaceActions";
-import { invitePeople } from "../../services/invitePeople";
+import { inviteAfterCreate } from "../../lib/inviteAfterCreate";
 import { TeamsService } from "../../services/TeamsService";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
@@ -65,38 +65,6 @@ interface CreateSpaceDialogProps {
    * since moving the notes view behind the modal would change what the person returns to.
    */
   revealOnCreate?: boolean;
-}
-
-// The teamspace exists by now, so this never throws: whatever goes wrong here is a list of
-// people to invite from Members, never a failed create. Every address that didn't come back
-// invited counts, an existing member included. A pending invitation counts only when it didn't
-// take the teamspace, which is an older API's answer: that person is not in it.
-async function inviteIntoTeamspace(
-  workspaceId: string,
-  cloudSpaceId: string | null,
-  addresses: string[]
-): Promise<{ failed: string[]; undelivered: number }> {
-  if (addresses.length === 0) return { failed: [], undelivered: 0 };
-  if (!cloudSpaceId) return { failed: addresses, undelivered: 0 };
-  const failed: string[] = [];
-  let undelivered = 0;
-  try {
-    await invitePeople.sendInvitations({
-      workspaceId,
-      emails: addresses,
-      role: "member",
-      spaceIds: [cloudSpaceId],
-      onResult: (email, outcome) => {
-        // `=== true`: src compiles without strictNullChecks, where a bare `ok` doesn't narrow.
-        if (outcome.ok === true) {
-          if (!outcome.emailSent) undelivered += 1;
-        } else if (outcome.grantsAdded !== true) failed.push(email);
-      },
-    });
-  } catch {
-    return { failed: addresses, undelivered: 0 };
-  }
-  return { failed, undelivered };
 }
 
 export default function CreateSpaceDialog({
@@ -371,11 +339,15 @@ export default function CreateSpaceDialog({
     }
 
     // The teamspace exists from here on, so nothing below may leave it looking uncreated.
-    const invited = await inviteIntoTeamspace(
-      workspace.id,
-      space?.cloud_space_id ?? null,
-      emails.map(({ email }) => email)
-    );
+    const cloudSpaceId = space?.cloud_space_id ?? null;
+    const addresses = emails.map(({ email }) => email);
+    const invited = !cloudSpaceId
+      ? { failed: addresses, undelivered: 0 }
+      : await inviteAfterCreate({
+          workspaceId: workspace.id,
+          target: { spaceIds: [cloudSpaceId] },
+          recipients: addresses.map((email) => ({ email, role: "member" as const })),
+        });
     try {
       if (revealOnCreate && space) {
         revealContainer(space.id, null);

@@ -2526,7 +2526,12 @@
           "addToTeamspace": "添加到 Teamspace"
         },
         "teamsCount_one": "{{count}} 个团队",
-        "teamsCount_other": "{{count}} 个团队"
+        "teamsCount_other": "{{count}} 个团队",
+        "addMenu": {
+          "invite": "邀请成员",
+          "createTeam": "创建团队",
+          "label": "更多添加方式"
+        }
       },
       "teamspaces": {
         "title": "Teamspace",
@@ -2749,15 +2754,10 @@
         "errorTitle": "无法更新申请"
       },
       "teams": {
-        "addMembersLabel": "添加成员",
-        "createTitle": "创建团队",
-        "nameLabel": "团队名称",
         "memberCount_one": "{{count}} 名成员",
         "memberCount_other": "{{count}} 名成员",
         "grantsAccessToSpaces_one": "授予 {{count}} 个空间的访问权限",
         "grantsAccessToSpaces_other": "授予 {{count}} 个空间的访问权限",
-        "couldNotCreate": "无法创建团队",
-        "created": "已创建 {{team}}",
         "deleteConfirmSpaceAccess_one": "该团队授予 {{count}} 个空间的访问权限。其成员将失去该访问权限。",
         "deleteConfirmSpaceAccess_other": "该团队授予 {{count}} 个空间的访问权限。其成员将失去该访问权限。",
         "members": {
@@ -2788,7 +2788,43 @@
         "spaces_one": "{{count}} 个 Teamspace",
         "spaces_other": "{{count}} 个 Teamspace",
         "refreshFailed": "无法刷新团队。此列表可能不是最新的。",
-        "cellMenuLabel": "{{team}}：{{value}}"
+        "cellMenuLabel": "{{team}}：{{value}}",
+        "paywall": {
+          "title": "团队属于 Business 套餐",
+          "body": "Teamspace 免费使用。升级后即可将成员分组为团队。",
+          "bodyAskOwner": "Teamspace 免费使用。请 {{owner}} 升级，即可将成员分组为团队。",
+          "bodyAskOwnerUnknown": "Teamspace 免费使用。请让工作区所有者升级，即可将成员分组为团队。",
+          "upgrade": "升级到 Business",
+          "notNow": "暂不"
+        },
+        "form": {
+          "title": "创建团队",
+          "subtitle": "一次添加多人的快捷方式。",
+          "name": "名称",
+          "namePlaceholder": "团队名称",
+          "nameRequired": "请输入团队名称。",
+          "nameTaken": "已存在名为 {{name}} 的团队。",
+          "people": "成员",
+          "peoplePlaceholder": "姓名或邮箱",
+          "adminNote": "你将被添加为团队管理员。创建团队时会发送邀请。",
+          "adminNoteShort": "你将被添加为团队管理员。",
+          "invalidEmail": "请输入有效的邮箱地址。",
+          "cancel": "取消",
+          "submit": "创建团队",
+          "creating": "创建中…",
+          "retry": "重试",
+          "creatingStatus_one": "正在创建 {{team}} 并发送 {{count}} 份邀请…",
+          "creatingStatus_other": "正在创建 {{team}} 并发送 {{count}} 份邀请…",
+          "failed": "无法创建团队。你的输入已保留。",
+          "created": "已创建 {{team}}",
+          "createdAdded": "已创建 {{team}}。已添加 {{names}}。",
+          "createdInvited": "已创建 {{team}}。已邀请 {{invited}}。",
+          "createdAddedInvited": "已创建 {{team}}。已添加 {{names}}，并邀请了 {{invited}}。",
+          "createdWithMembers_one": "已创建 {{team}}，共 {{count}} 名成员",
+          "createdWithMembers_other": "已创建 {{team}}，共 {{count}} 名成员",
+          "createdSomeNotInvited_one": "已创建 {{team}}。无法邀请 {{count}} 人。",
+          "createdSomeNotInvited_other": "已创建 {{team}}。无法邀请 {{count}} 人。"
+        }
       },
       "invites": {
         "resending": "重新发送中…",

@@ -2526,7 +2526,12 @@
           "addToTeamspace": "Teamspace に追加"
         },
         "teamsCount_one": "{{count}} チーム",
-        "teamsCount_other": "{{count}} チーム"
+        "teamsCount_other": "{{count}} チーム",
+        "addMenu": {
+          "invite": "メンバーを招待",
+          "createTeam": "チームを作成",
+          "label": "その他の追加方法"
+        }
       },
       "teamspaces": {
         "title": "Teamspace",
@@ -2749,15 +2754,10 @@
         "errorTitle": "リクエストを更新できませんでした"
       },
       "teams": {
-        "addMembersLabel": "メンバーを追加",
-        "createTitle": "チームを作成",
-        "nameLabel": "チーム名",
         "memberCount_one": "{{count}}人のメンバー",
         "memberCount_other": "{{count}}人のメンバー",
         "grantsAccessToSpaces_one": "{{count}} 件のスペースへのアクセスを付与しています",
         "grantsAccessToSpaces_other": "{{count}} 件のスペースへのアクセスを付与しています",
-        "couldNotCreate": "チームを作成できませんでした",
-        "created": "{{team}} を作成しました",
         "deleteConfirmSpaceAccess_one": "このチームは {{count}} 件のスペースへのアクセスを付与しています。メンバーはそのアクセスを失います。",
         "deleteConfirmSpaceAccess_other": "このチームは {{count}} 件のスペースへのアクセスを付与しています。メンバーはそのアクセスを失います。",
         "members": {
@@ -2788,7 +2788,43 @@
         "spaces_one": "{{count}} 個の Teamspace",
         "spaces_other": "{{count}} 個の Teamspace",
         "refreshFailed": "チームを更新できませんでした。この一覧は最新ではない可能性があります。",
-        "cellMenuLabel": "{{team}}：{{value}}"
+        "cellMenuLabel": "{{team}}：{{value}}",
+        "paywall": {
+          "title": "チームは Business プランで利用できます",
+          "body": "Teamspace は無料です。アップグレードすると、メンバーをチームにまとめられます。",
+          "bodyAskOwner": "Teamspace は無料です。メンバーをチームにまとめるには、{{owner}} にアップグレードを依頼してください。",
+          "bodyAskOwnerUnknown": "Teamspace は無料です。メンバーをチームにまとめるには、ワークスペースのオーナーにアップグレードを依頼してください。",
+          "upgrade": "Business にアップグレード",
+          "notNow": "あとで"
+        },
+        "form": {
+          "title": "チームを作成",
+          "subtitle": "複数の人を一度に追加するためのショートカットです。",
+          "name": "名前",
+          "namePlaceholder": "チーム名",
+          "nameRequired": "チーム名を入力してください。",
+          "nameTaken": "{{name}} という名前のチームはすでにあります。",
+          "people": "メンバー",
+          "peoplePlaceholder": "名前またはメールアドレス",
+          "adminNote": "あなたはチームの管理者として追加されます。招待はチームの作成時に送信されます。",
+          "adminNoteShort": "あなたはチームの管理者として追加されます。",
+          "invalidEmail": "有効なメールアドレスを入力してください。",
+          "cancel": "キャンセル",
+          "submit": "チームを作成",
+          "creating": "作成中…",
+          "retry": "もう一度試す",
+          "creatingStatus_one": "{{team}} を作成し、{{count}} 件の招待を送信しています…",
+          "creatingStatus_other": "{{team}} を作成し、{{count}} 件の招待を送信しています…",
+          "failed": "チームを作成できませんでした。入力内容は保持されています。",
+          "created": "{{team}} を作成しました",
+          "createdAdded": "{{team}} を作成しました。{{names}} を追加しました。",
+          "createdInvited": "{{team}} を作成しました。{{invited}} を招待しました。",
+          "createdAddedInvited": "{{team}} を作成しました。{{names}} を追加し、{{invited}} を招待しました。",
+          "createdWithMembers_one": "{{team}} を作成しました（メンバー {{count}} 人）",
+          "createdWithMembers_other": "{{team}} を作成しました（メンバー {{count}} 人）",
+          "createdSomeNotInvited_one": "{{team}} を作成しました。{{count}} 人を招待できませんでした。",
+          "createdSomeNotInvited_other": "{{team}} を作成しました。{{count}} 人を招待できませんでした。"
+        }
       },
       "invites": {
         "resending": "再送信中…",

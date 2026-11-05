@@ -1,202 +1,499 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
-import { Loader2 } from "./icons";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "./ui/dialog";
+import type { TFunction } from "i18next";
+import { Loader2, Plus, Users } from "./icons";
+import { cn } from "./lib/utils";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import { Label } from "./ui/label";
-import { useToast } from "./ui/useToast";
-import MemberPickList from "./MemberPickList";
-import { TeamsService } from "../services/TeamsService";
-import { addTeamMembers } from "../services/spaceActions";
-import { orderMemberCandidates } from "../lib/memberCandidates";
-import { rosterFor } from "../lib/peopleRoster";
+import { useToast, type ToastProps } from "./ui/useToast";
+import { WorkspaceErrorBar } from "./workspace/WorkspaceErrorBar";
+import { SpacePeopleField } from "./notes/SpacePeopleField";
+import { createTeam } from "../services/spaceActions";
+import { inviteAfterCreate } from "../lib/inviteAfterCreate";
+import { serverRefusalMessage } from "../services/cloudApi";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { useAuth } from "../hooks/useAuth";
 import { useDelayedFlag } from "../hooks/useDelayedFlag";
-import type { Team, WorkspaceMember } from "../types/electron";
+import { workspaceCan } from "../lib/capabilities";
+import { formatList } from "../lib/formatList";
+import { MAX_INVITE_RECIPIENTS } from "../lib/inviteFlow";
+import { rosterFor } from "../lib/peopleRoster";
+import { memberRecipient, pickedSummary, type PickedRecipient } from "../lib/spacePeoplePicker";
+import { classifyTeamError } from "../lib/workspaceErrors";
+import { isolate } from "../utils/bidiIsolate";
+import type { Team, Workspace, WorkspaceMember } from "../types/electron";
 
-interface CreateTeamDialogProps {
-  workspaceId: string;
+// How many refused addresses the toast names; Copy addresses has them all.
+const FAILED_INVITES_NAMED = 5;
+// The toast is the only place left that says who wasn't invited, so it stays long enough to act on.
+const INVITE_FAILED_TOAST_MS = 15_000;
+// A toast names this many people per list before it falls back to a count.
+const NAMED_PER_LIST = 2;
+const FORM_KEY = "settingsPage.workspace.teams.form";
+
+const NO_TEAMS: Team[] = [];
+
+const BUTTON_BASE =
+  "flex h-10 flex-1 items-center justify-center gap-2 rounded-full px-4 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50";
+const PRIMARY_BUTTON = cn(BUTTON_BASE, "bg-primary text-primary-foreground hover:bg-primary/90");
+const SECONDARY_BUTTON = cn(
+  BUTTON_BASE,
+  "bg-surface-1 text-muted-foreground hover:bg-surface-3 hover:text-foreground"
+);
+
+type NameError = { kind: "required" } | { kind: "taken"; name: string };
+type CreateFailure = { kind: "general" } | { kind: "refused"; message: string };
+
+export interface CreateTeamDialogProps {
+  workspace: Workspace;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Fires after the team (and any picked members) exist on the server. */
-  onCreated?: (team: Team) => void | Promise<void>;
+  /** People already chosen, from the People selection. */
+  initialPeople?: WorkspaceMember[];
+  /** Fires once the team exists, before the form closes. */
+  onCreated?: (team: Team, outcome: { memberCount: number }) => void | Promise<void>;
+  /** The server refused on plan: the host closes this and opens the paywall. */
+  onPlanRequired: () => void;
 }
 
-/** One-step team creation: name it and pick its members in the same modal. */
+/** One-step team creation: name it, pick or invite its people, and nothing sends before Create. */
 export default function CreateTeamDialog({
-  workspaceId,
+  workspace,
   open,
   onOpenChange,
+  initialPeople,
   onCreated,
-}: CreateTeamDialogProps) {
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  const { user } = useAuth();
-  const {
-    members: roster,
-    rosterIsOurs,
-    refreshMembers,
-  } = useWorkspaceStore(
-    useShallow((s) => ({
-      members: rosterFor(s, workspaceId),
-      rosterIsOurs: s.membersWorkspaceId === workspaceId,
-      refreshMembers: s.refreshMembers,
-    }))
-  );
-  const [name, setName] = useState("");
-  const [memberSearch, setMemberSearch] = useState("");
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [membersError, setMembersError] = useState(false);
-  const [rosterLoaded, setRosterLoaded] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
-  const showSpinner = useDelayedFlag(isCreating);
-
-  const loadMembers = useCallback(async () => {
-    setMembersError(false);
-    setRosterLoaded(false);
-    try {
-      await refreshMembers(workspaceId);
-      setRosterLoaded(true);
-    } catch {
-      setMembersError(true);
-    }
-  }, [refreshMembers, workspaceId]);
-
-  useEffect(() => {
-    if (!open) return;
-    void loadMembers();
-  }, [open, loadMembers]);
-
-  const candidates = useMemo(
-    () => (rosterLoaded ? orderMemberCandidates(roster, user?.id) : []),
-    [roster, rosterLoaded, user?.id]
-  );
-  const rosterError = membersError || (rosterLoaded && !rosterIsOurs);
-  const handleOpenChange = (nextOpen: boolean) => {
-    onOpenChange(nextOpen);
-    if (!nextOpen) {
-      setName("");
-      setMemberSearch("");
-      setSelectedIds(new Set());
-    }
-  };
-
-  const toggleMember = (member: WorkspaceMember) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (!next.delete(member.user_id)) next.add(member.user_id);
-      return next;
-    });
-  };
-
-  const handleCreate = async () => {
-    const trimmed = name.trim();
-    if (!trimmed || isCreating) return;
-    setIsCreating(true);
-    try {
-      const team = await TeamsService.create(workspaceId, { name: trimmed });
-      // The server adds the creator to a new team as admin; re-adding them
-      // here would upsert that role back down to member.
-      const memberIds = [...selectedIds].filter((id) => id !== user?.id);
-      let added = 0;
-      if (memberIds.length > 0) {
-        const { failures } = await addTeamMembers(team.id, memberIds);
-        added = memberIds.length - failures.length;
-        if (failures.length > 0) {
-          toast({
-            title: t("notes.spaces.members.addFailed", {
-              failed: failures.length,
-              total: memberIds.length,
-            }),
-            variant: "destructive",
-          });
-        }
-      }
-      // +1: the creator's server-added admin row.
-      await onCreated?.({ ...team, member_count: added + 1 });
-      handleOpenChange(false);
-    } catch (err) {
-      toast({
-        title: t("settingsPage.workspace.teams.couldNotCreate"),
-        description: err instanceof Error ? err.message : t("common.unknownError"),
-        variant: "destructive",
-      });
-    } finally {
-      setIsCreating(false);
-    }
-  };
-
+  onPlanRequired,
+}: CreateTeamDialogProps): ReactElement {
+  // A create under way can't be taken back, so Esc and an overlay click wait for its answer.
+  const creatingRef = useRef(false);
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>{t("settingsPage.workspace.teams.createTitle")}</DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="create-team-name" className="text-xs font-medium">
-              {t("settingsPage.workspace.teams.nameLabel")}
-            </Label>
-            <Input
-              dir="auto"
-              id="create-team-name"
-              value={name}
-              autoFocus
-              maxLength={80}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void handleCreate();
-              }}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-foreground/50">
-              {t("settingsPage.workspace.teams.addMembersLabel")}
-            </label>
-            {rosterError ? (
-              <div className="rounded border border-border/70 dark:border-border-subtle/60 px-3 py-2.5 flex items-center justify-between gap-2">
-                <p className="text-xs text-muted-foreground">
-                  {t("settingsPage.workspace.members.loadError")}
-                </p>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => void loadMembers()}
-                  className="h-6 px-2 text-xs shrink-0"
-                >
-                  {t("settingsPage.workspace.loadError.retry")}
-                </Button>
-              </div>
-            ) : !rosterLoaded ? (
-              <div className="h-24 rounded bg-foreground/5 dark:bg-white/5 animate-pulse" />
-            ) : (
-              <MemberPickList
-                members={candidates}
-                search={memberSearch}
-                onSearchChange={setMemberSearch}
-                onSelect={toggleMember}
-                selectedIds={selectedIds}
-                currentUserId={user?.id}
-              />
-            )}
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => handleOpenChange(false)} disabled={isCreating}>
-            {t("common.cancel")}
-          </Button>
-          <Button onClick={() => void handleCreate()} disabled={!name.trim() || isCreating}>
-            {showSpinner && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
-            {t("common.create")}
-          </Button>
-        </DialogFooter>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && creatingRef.current) return;
+        onOpenChange(nextOpen);
+      }}
+    >
+      <DialogContent
+        hideCloseButton
+        className="max-h-[calc(100vh-32px)] w-[420px] max-w-[calc(100vw-32px)] grid-cols-1 items-stretch gap-6 overflow-y-auto rounded-[28px] p-5 sm:max-w-[420px]"
+      >
+        {/* Mounted only while open, so every opening starts from nothing. */}
+        <CreateTeamForm
+          workspace={workspace}
+          initialPeople={initialPeople}
+          onClose={() => onOpenChange(false)}
+          onCreatingChange={(creating) => {
+            creatingRef.current = creating;
+          }}
+          onCreated={onCreated}
+          onPlanRequired={onPlanRequired}
+        />
       </DialogContent>
     </Dialog>
   );
+}
+
+interface FormProps {
+  workspace: Workspace;
+  initialPeople?: WorkspaceMember[];
+  onClose: () => void;
+  onCreatingChange: (creating: boolean) => void;
+  onCreated?: CreateTeamDialogProps["onCreated"];
+  onPlanRequired: () => void;
+}
+
+function CreateTeamForm({
+  workspace,
+  initialPeople,
+  onClose,
+  onCreatingChange,
+  onCreated,
+  onPlanRequired,
+}: FormProps): ReactElement {
+  const { t, i18n } = useTranslation();
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const { members, membersWorkspaceId, refreshMembers } = useWorkspaceStore(
+    useShallow((state) => ({
+      members: state.members,
+      membersWorkspaceId: state.membersWorkspaceId,
+      refreshMembers: state.refreshMembers,
+    }))
+  );
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const primaryRef = useRef<HTMLButtonElement>(null);
+  const [name, setName] = useState("");
+  const [picked, setPicked] = useState<PickedRecipient[]>(() =>
+    (initialPeople ?? []).filter((person) => person.user_id !== user?.id).map(memberRecipient)
+  );
+  const [nameError, setNameError] = useState<NameError | null>(null);
+  const [failure, setFailure] = useState<CreateFailure | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
+  const [rosterLoaded, setRosterLoaded] = useState(false);
+  const [rosterFailed, setRosterFailed] = useState(false);
+  // Where focus goes once a failed create hands the form back: a disabled button loses it.
+  const [refocus, setRefocus] = useState<"name" | "primary" | null>(null);
+  const showSpinner = useDelayedFlag(isCreating);
+
+  const loadRoster = useCallback(async (): Promise<void> => {
+    setRosterFailed(false);
+    setRosterLoaded(false);
+    try {
+      await refreshMembers(workspace.id);
+      setRosterLoaded(true);
+    } catch {
+      setRosterFailed(true);
+    }
+  }, [refreshMembers, workspace.id]);
+
+  useEffect(() => {
+    void loadRoster();
+  }, [loadRoster]);
+
+  useEffect(() => {
+    if (!refocus || isCreating) return;
+    (refocus === "name" ? nameInputRef.current : primaryRef.current)?.focus();
+    setRefocus(null);
+  }, [refocus, isCreating]);
+
+  const roster = rosterFor({ members, membersWorkspaceId }, workspace.id);
+  // The creator becomes the team's admin on the server, so the field never offers them.
+  const hiddenUserIds = useMemo(() => new Set(user?.id ? [user.id] : []), [user?.id]);
+  // Only workspace admins can invite; anyone else who may create picks from who is here.
+  const canInvite = workspaceCan(workspace, "manage_members");
+  const loadFailed = rosterFailed || (rosterLoaded && membersWorkspaceId !== workspace.id);
+
+  const { memberIds, emails, hasInvalid } = useMemo(() => pickedSummary(picked), [picked]);
+  const tooManyInvites = emails.length > MAX_INVITE_RECIPIENTS;
+  const blocked = hasInvalid || tooManyInvites;
+  const selectionFirst = (initialPeople?.length ?? 0) > 0;
+
+  const handleNameChange = (next: string): void => {
+    setName(next);
+    setNameError(null);
+  };
+
+  const handleCreate = async (): Promise<void> => {
+    if (isCreating) return;
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      setNameError({ kind: "required" });
+      nameInputRef.current?.focus();
+      return;
+    }
+    if (blocked) return;
+    setIsCreating(true);
+    onCreatingChange(true);
+    setFailure(null);
+    setNameError(null);
+
+    let team: Team;
+    try {
+      team = await createTeam(workspace.id, { name: trimmedName, memberIds });
+    } catch (error) {
+      const classified = classifyTeamError(error);
+      if (classified.kind === "planRequired") {
+        // The capability the form was opened on is stale, so it catches up before the paywall.
+        void useWorkspaceStore
+          .getState()
+          .refresh({ fresh: true })
+          .catch(() => undefined);
+        onPlanRequired();
+      } else if (classified.kind === "nameTaken") {
+        setNameError({ kind: "taken", name: trimmedName });
+        setRefocus("name");
+      } else {
+        // Picks that left since the roster loaded would be refused again, so they come off the
+        // field. An answer naming nobody here falls through to the general failure.
+        const gone = new Set<string>(
+          classified.kind === "notWorkspaceMembers" ? classified.userIds : []
+        );
+        const goneNames = picked.flatMap((recipient) =>
+          recipient.kind === "member" && gone.has(recipient.userId) ? [recipient.label] : []
+        );
+        if (goneNames.length > 0) {
+          setPicked((current) =>
+            current.filter(
+              (recipient) => recipient.kind !== "member" || !gone.has(recipient.userId)
+            )
+          );
+          setFailure({
+            kind: "refused",
+            message:
+              serverRefusalMessage(error) ??
+              t("settingsPage.workspace.teamspaces.members.partialLeft", {
+                names: formatList(i18n.language, goneNames.map(isolate)),
+              }),
+          });
+        } else {
+          setFailure(
+            classified.kind === "refused"
+              ? { kind: "refused", message: classified.message }
+              : { kind: "general" }
+          );
+        }
+        setRefocus("primary");
+      }
+      setIsCreating(false);
+      onCreatingChange(false);
+      return;
+    }
+
+    // The team exists from here on, so nothing below may leave it looking uncreated.
+    const invite =
+      emails.length > 0
+        ? await inviteAfterCreate({
+            workspaceId: workspace.id,
+            target: { teamIds: [team.id] },
+            recipients: emails,
+          })
+        : { invited: [], failed: [], undelivered: 0 };
+    const addedNames = picked.flatMap((recipient) =>
+      recipient.kind === "member" ? [recipient.label] : []
+    );
+    try {
+      toast(
+        createdToast({
+          t,
+          language: i18n.language,
+          team: trimmedName,
+          added: addedNames,
+          invited: invite.invited,
+          failed: invite.failed,
+          undelivered: invite.undelivered,
+        })
+      );
+      await onCreated?.(team, { memberCount: addedNames.length + invite.invited.length });
+    } catch (error) {
+      // The team is made; a failed toast or reload must not leave Creating blocking every way out.
+      console.error("Create team follow-up failed:", error);
+    } finally {
+      onCreatingChange(false);
+      onClose();
+    }
+  };
+
+  const bar = (message: string): ReactElement => (
+    <WorkspaceErrorBar tone="error" message={message} />
+  );
+  const peopleError = hasInvalid
+    ? bar(t(`${FORM_KEY}.invalidEmail`))
+    : tooManyInvites
+      ? bar(t("workspaces.invite.tooMany", { count: MAX_INVITE_RECIPIENTS }))
+      : null;
+
+  // A selection arrives with its people chosen, so the note leads and the chips follow it.
+  const note =
+    isCreating && emails.length > 0 ? (
+      <p role="status" className="text-xs leading-snug text-muted-foreground">
+        {t(`${FORM_KEY}.creatingStatus`, { team: isolate(name.trim()), count: emails.length })}
+      </p>
+    ) : (
+      <p className="text-xs leading-snug text-muted-foreground">
+        {t(selectionFirst ? `${FORM_KEY}.adminNoteShort` : `${FORM_KEY}.adminNote`)}
+      </p>
+    );
+
+  const primaryLabel = isCreating
+    ? t(`${FORM_KEY}.creating`)
+    : failure?.kind === "general"
+      ? t(`${FORM_KEY}.retry`)
+      : t(`${FORM_KEY}.submit`);
+
+  return (
+    <>
+      <DialogHeader className="items-center gap-3 space-y-0 text-center sm:text-center">
+        <div className="flex size-[42px] items-center justify-center rounded-full bg-surface-3 text-foreground">
+          <Users className="size-3.5" aria-hidden="true" />
+        </div>
+        <div className="flex flex-col items-center gap-1.5">
+          <DialogTitle className="text-lg font-medium tracking-normal leading-snug">
+            {t(`${FORM_KEY}.title`)}
+          </DialogTitle>
+          <DialogDescription className="text-sm leading-normal">
+            {t(`${FORM_KEY}.subtitle`)}
+          </DialogDescription>
+        </div>
+      </DialogHeader>
+
+      <div className={cn("flex flex-col gap-4", isCreating && "opacity-70")}>
+        <div className="space-y-2">
+          <label htmlFor="create-team-name" className="text-xs font-medium text-foreground/50">
+            {t(`${FORM_KEY}.name`)}
+          </label>
+          <Input
+            ref={nameInputRef}
+            dir="auto"
+            id="create-team-name"
+            value={name}
+            autoFocus
+            maxLength={80}
+            readOnly={isCreating}
+            placeholder={t(`${FORM_KEY}.namePlaceholder`)}
+            aria-invalid={nameError !== null ? true : undefined}
+            onChange={(event) => handleNameChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") void handleCreate();
+            }}
+          />
+          {nameError?.kind === "required" && bar(t(`${FORM_KEY}.nameRequired`))}
+          {nameError?.kind === "taken" &&
+            bar(t(`${FORM_KEY}.nameTaken`, { name: isolate(nameError.name) }))}
+        </div>
+
+        <div className="space-y-2">
+          <label htmlFor="create-team-people" className="text-xs font-medium text-foreground/50">
+            {t(`${FORM_KEY}.people`)}
+          </label>
+          {loadFailed ? (
+            <div className="flex items-center justify-between gap-2 rounded border border-border/70 px-3 py-2.5 dark:border-border-subtle/60">
+              <p className="text-xs text-muted-foreground">
+                {t("settingsPage.workspace.members.loadError")}
+              </p>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void loadRoster()}
+                className="h-6 shrink-0 px-2 text-xs"
+              >
+                {t("settingsPage.workspace.loadError.retry")}
+              </Button>
+            </div>
+          ) : !rosterLoaded ? (
+            <div className="h-10 animate-pulse rounded-lg bg-foreground/5 dark:bg-white/5" />
+          ) : (
+            <>
+              <SpacePeopleField
+                id="create-team-people"
+                roster={roster}
+                teams={NO_TEAMS}
+                hiddenUserIds={hiddenUserIds}
+                canInvite={canInvite}
+                inviteRoleChoice
+                picked={picked}
+                onChange={setPicked}
+                disabled={isCreating}
+                placeholder={t(`${FORM_KEY}.peoplePlaceholder`)}
+                note={selectionFirst ? note : undefined}
+              />
+              {selectionFirst ? null : note}
+            </>
+          )}
+          {peopleError}
+          {failure?.kind === "general" && bar(t(`${FORM_KEY}.failed`))}
+          {failure?.kind === "refused" && bar(failure.message)}
+        </div>
+      </div>
+
+      <div className="flex gap-3">
+        <button type="button" onClick={onClose} disabled={isCreating} className={SECONDARY_BUTTON}>
+          {t(`${FORM_KEY}.cancel`)}
+        </button>
+        <button
+          ref={primaryRef}
+          type="button"
+          onClick={() => void handleCreate()}
+          disabled={isCreating || blocked}
+          // Blank reads as not ready, but stays pressable so the missing name can be named.
+          className={cn(PRIMARY_BUTTON, !name.trim() && !isCreating && "opacity-60")}
+        >
+          {isCreating ? (
+            showSpinner && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+          ) : failure?.kind === "general" ? null : (
+            <Plus className="size-3.5" aria-hidden="true" />
+          )}
+          {primaryLabel}
+        </button>
+      </div>
+    </>
+  );
+}
+
+interface CreatedToastInput {
+  t: TFunction;
+  language: string;
+  team: string;
+  added: string[];
+  invited: string[];
+  failed: string[];
+  undelivered: number;
+}
+
+// One line for what happened: who was added, who was invited, or how many couldn't be. More than
+// a couple of names would crowd the toast, so a long list is a count.
+function createdToast({
+  t,
+  language,
+  team,
+  added,
+  invited,
+  failed,
+  undelivered,
+}: CreatedToastInput): Omit<ToastProps, "id"> {
+  const teamName = isolate(team);
+  const addedList = formatList(language, added.map(isolate));
+  const invitedList = formatList(language, invited.map(isolate));
+
+  let title: string;
+  if (failed.length > 0) {
+    title = t(`${FORM_KEY}.createdSomeNotInvited`, { team: teamName, count: failed.length });
+  } else if (added.length > NAMED_PER_LIST || invited.length > NAMED_PER_LIST) {
+    title = t(`${FORM_KEY}.createdWithMembers`, {
+      team: teamName,
+      count: added.length + invited.length,
+    });
+  } else if (added.length > 0 && invited.length > 0) {
+    title = t(`${FORM_KEY}.createdAddedInvited`, {
+      team: teamName,
+      names: addedList,
+      invited: invitedList,
+    });
+  } else if (added.length > 0) {
+    title = t(`${FORM_KEY}.createdAdded`, { team: teamName, names: addedList });
+  } else if (invited.length > 0) {
+    title = t(`${FORM_KEY}.createdInvited`, { team: teamName, invited: invitedList });
+  } else {
+    title = t(`${FORM_KEY}.created`, { team: teamName });
+  }
+
+  const named = failed.slice(0, FAILED_INVITES_NAMED).map(isolate);
+  const descriptions = [
+    ...(failed.length > 0
+      ? [
+          t("settingsPage.workspace.teamspaces.form.inviteFailedWho", {
+            names:
+              formatList(language, named) +
+              (failed.length > named.length ? ` +${failed.length - named.length}` : ""),
+          }),
+        ]
+      : []),
+    ...(undelivered > 0 ? [t("workspaces.invite.noEmail", { count: undelivered })] : []),
+  ];
+  return {
+    title,
+    description: descriptions.length > 0 ? descriptions.join(" ") : undefined,
+    duration: descriptions.length > 0 ? INVITE_FAILED_TOAST_MS : undefined,
+    actions:
+      failed.length > 0
+        ? [
+            {
+              label: t("settingsPage.workspace.teamspaces.form.copyAddresses"),
+              icon: "copy",
+              dismissOnClick: false,
+              feedback: {
+                successLabel: t("common.copied"),
+                failureLabel: t("hooks.audioRecording.pastePermission.copyFailed"),
+              },
+              onClick: async () => {
+                await navigator.clipboard.writeText(failed.join("\n"));
+                return true;
+              },
+            },
+          ]
+        : undefined,
+  };
 }

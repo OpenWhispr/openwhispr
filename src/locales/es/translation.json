@@ -2578,7 +2578,12 @@
           "addToTeamspace": "Añadir al teamspace"
         },
         "teamsCount_one": "{{count}} equipo",
-        "teamsCount_other": "{{count}} equipos"
+        "teamsCount_other": "{{count}} equipos",
+        "addMenu": {
+          "invite": "Invitar personas",
+          "createTeam": "Crear equipo",
+          "label": "Más formas de añadir"
+        }
       },
       "teamspaces": {
         "title": "Teamspaces",
@@ -2801,15 +2806,10 @@
         "errorTitle": "No se pudo actualizar la solicitud"
       },
       "teams": {
-        "addMembersLabel": "Añadir miembros",
-        "createTitle": "Crear equipo",
-        "nameLabel": "Nombre del equipo",
         "memberCount_one": "{{count}} miembro",
         "memberCount_other": "{{count}} miembros",
         "grantsAccessToSpaces_one": "Da acceso a {{count}} espacio",
         "grantsAccessToSpaces_other": "Da acceso a {{count}} espacios",
-        "couldNotCreate": "No se pudo crear el equipo",
-        "created": "{{team}} creado",
         "deleteConfirmSpaceAccess_one": "Este equipo da acceso a {{count}} espacio. Sus miembros perderán ese acceso.",
         "deleteConfirmSpaceAccess_other": "Este equipo da acceso a {{count}} espacios. Sus miembros perderán ese acceso.",
         "members": {
@@ -2840,7 +2840,43 @@
         "spaces_one": "{{count}} teamspace",
         "spaces_other": "{{count}} teamspaces",
         "refreshFailed": "No se pudieron actualizar los equipos. Es posible que esta lista no esté al día.",
-        "cellMenuLabel": "{{team}}: {{value}}"
+        "cellMenuLabel": "{{team}}: {{value}}",
+        "paywall": {
+          "title": "Los equipos están en el plan Business",
+          "body": "Los teamspaces son gratis. Mejora tu plan para agrupar personas en equipos.",
+          "bodyAskOwner": "Los teamspaces son gratis. Pide a {{owner}} que mejore el plan para agrupar personas en equipos.",
+          "bodyAskOwnerUnknown": "Los teamspaces son gratis. Pide al propietario del espacio de trabajo que mejore el plan para agrupar personas en equipos.",
+          "upgrade": "Mejorar a Business",
+          "notNow": "Ahora no"
+        },
+        "form": {
+          "title": "Crear equipo",
+          "subtitle": "Un atajo para añadir a varias personas a la vez.",
+          "name": "Nombre",
+          "namePlaceholder": "Nombre del equipo",
+          "nameRequired": "Escribe un nombre para el equipo.",
+          "nameTaken": "Ya existe un equipo llamado {{name}}.",
+          "people": "Personas",
+          "peoplePlaceholder": "Nombres o correos",
+          "adminNote": "Se te añade como administrador del equipo. Las invitaciones se envían al crear el equipo.",
+          "adminNoteShort": "Se te añade como administrador del equipo.",
+          "invalidEmail": "Escribe una dirección de correo válida.",
+          "cancel": "Cancelar",
+          "submit": "Crear equipo",
+          "creating": "Creando…",
+          "retry": "Intentar de nuevo",
+          "creatingStatus_one": "Creando {{team}} y enviando {{count}} invitación…",
+          "creatingStatus_other": "Creando {{team}} y enviando {{count}} invitaciones…",
+          "failed": "No se pudo crear el equipo. Se conservan tus datos.",
+          "created": "{{team}} creado",
+          "createdAdded": "{{team}} creado. Se añadió a {{names}}.",
+          "createdInvited": "{{team}} creado. Se invitó a {{invited}}.",
+          "createdAddedInvited": "{{team}} creado. Se añadió a {{names}} y se invitó a {{invited}}.",
+          "createdWithMembers_one": "{{team}} creado con {{count}} miembro",
+          "createdWithMembers_other": "{{team}} creado con {{count}} miembros",
+          "createdSomeNotInvited_one": "{{team}} creado. No se pudo invitar a {{count}} persona.",
+          "createdSomeNotInvited_other": "{{team}} creado. No se pudo invitar a {{count}} personas."
+        }
       },
       "invites": {
         "resending": "Reenviando…",

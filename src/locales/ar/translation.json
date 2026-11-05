@@ -3955,7 +3955,12 @@
         "teamsCount_two": "{{count}} فريقان",
         "teamsCount_few": "{{count}} فرق",
         "teamsCount_many": "{{count}} فريقًا",
-        "teamsCount_other": "{{count}} فريق"
+        "teamsCount_other": "{{count}} فريق",
+        "addMenu": {
+          "invite": "دعوة أشخاص",
+          "createTeam": "إنشاء فريق",
+          "label": "طرق أخرى للإضافة"
+        }
       },
       "teamspaces": {
         "title": "مساحات الفريق",
@@ -4232,9 +4237,6 @@
         "errorTitle": "تعذر تحديث الطلب"
       },
       "teams": {
-        "addMembersLabel": "إضافة أعضاء",
-        "createTitle": "إنشاء فريق",
-        "nameLabel": "اسم الفريق",
         "memberCount_zero": "{{count}} أعضاء",
         "memberCount_one": "{{count}} عضو",
         "memberCount_two": "{{count}} عضوان",
@@ -4247,8 +4249,6 @@
         "grantsAccessToSpaces_few": "يمنح الوصول إلى {{count}} مساحات",
         "grantsAccessToSpaces_many": "يمنح الوصول إلى {{count}} مساحةً",
         "grantsAccessToSpaces_other": "يمنح الوصول إلى {{count}} مساحة",
-        "couldNotCreate": "تعذر إنشاء الفريق",
-        "created": "تم إنشاء {{team}}",
         "deleteConfirmSpaceAccess_zero": "يمنح هذا الفريق الوصول إلى {{count}} مساحات. سيفقد أعضاؤه هذا الوصول.",
         "deleteConfirmSpaceAccess_one": "يمنح هذا الفريق الوصول إلى {{count}} مساحة. سيفقد أعضاؤه هذا الوصول.",
         "deleteConfirmSpaceAccess_two": "يمنح هذا الفريق الوصول إلى {{count}} مساحتين. سيفقد أعضاؤه هذا الوصول.",
@@ -4291,7 +4291,55 @@
         "spaces_many": "{{count}} مساحة فريق",
         "spaces_other": "{{count}} مساحة فريق",
         "refreshFailed": "تعذّر تحديث الفرق. قد لا تكون هذه القائمة محدّثة.",
-        "cellMenuLabel": "{{team}}: {{value}}"
+        "cellMenuLabel": "{{team}}: {{value}}",
+        "paywall": {
+          "title": "الفرق متاحة في خطة Business",
+          "body": "مساحات الفريق مجانية. قم بالترقية لتجميع الأشخاص في فرق.",
+          "bodyAskOwner": "مساحات الفريق مجانية. اطلب من {{owner}} الترقية لتجميع الأشخاص في فرق.",
+          "bodyAskOwnerUnknown": "مساحات الفريق مجانية. اطلب من مالك مساحة العمل الترقية لتجميع الأشخاص في فرق.",
+          "upgrade": "الترقية إلى Business",
+          "notNow": "ليس الآن"
+        },
+        "form": {
+          "title": "إنشاء فريق",
+          "subtitle": "اختصار لإضافة عدة أشخاص دفعة واحدة.",
+          "name": "الاسم",
+          "namePlaceholder": "اسم الفريق",
+          "nameRequired": "أدخل اسم الفريق.",
+          "nameTaken": "يوجد فريق باسم {{name}} بالفعل.",
+          "people": "الأشخاص",
+          "peoplePlaceholder": "الأسماء أو عناوين البريد",
+          "adminNote": "ستتم إضافتك مشرفًا على الفريق. تُرسل الدعوات عند إنشاء الفريق.",
+          "adminNoteShort": "ستتم إضافتك مشرفًا على الفريق.",
+          "invalidEmail": "أدخل عنوان بريد إلكتروني صالحًا.",
+          "cancel": "إلغاء",
+          "submit": "إنشاء فريق",
+          "creating": "جارٍ الإنشاء…",
+          "retry": "حاول مرة أخرى",
+          "creatingStatus_zero": "جارٍ إنشاء {{team}} وإرسال {{count}} دعوة…",
+          "creatingStatus_one": "جارٍ إنشاء {{team}} وإرسال {{count}} دعوة…",
+          "creatingStatus_two": "جارٍ إنشاء {{team}} وإرسال {{count}} دعوة…",
+          "creatingStatus_few": "جارٍ إنشاء {{team}} وإرسال {{count}} دعوات…",
+          "creatingStatus_many": "جارٍ إنشاء {{team}} وإرسال {{count}} دعوة…",
+          "creatingStatus_other": "جارٍ إنشاء {{team}} وإرسال {{count}} دعوة…",
+          "failed": "تعذر إنشاء الفريق. تم الاحتفاظ بإدخالاتك.",
+          "created": "تم إنشاء {{team}}",
+          "createdAdded": "تم إنشاء {{team}}. تمت إضافة {{names}}.",
+          "createdInvited": "تم إنشاء {{team}}. تمت دعوة {{invited}}.",
+          "createdAddedInvited": "تم إنشاء {{team}}. تمت إضافة {{names}} ودعوة {{invited}}.",
+          "createdWithMembers_zero": "تم إنشاء {{team}} بـ {{count}} عضو",
+          "createdWithMembers_one": "تم إنشاء {{team}} بـ {{count}} عضو",
+          "createdWithMembers_two": "تم إنشاء {{team}} بـ {{count}} عضو",
+          "createdWithMembers_few": "تم إنشاء {{team}} بـ {{count}} أعضاء",
+          "createdWithMembers_many": "تم إنشاء {{team}} بـ {{count}} عضوًا",
+          "createdWithMembers_other": "تم إنشاء {{team}} بـ {{count}} عضو",
+          "createdSomeNotInvited_zero": "تم إنشاء {{team}}. تعذرت دعوة {{count}} شخص.",
+          "createdSomeNotInvited_one": "تم إنشاء {{team}}. تعذرت دعوة {{count}} شخص.",
+          "createdSomeNotInvited_two": "تم إنشاء {{team}}. تعذرت دعوة {{count}} شخص.",
+          "createdSomeNotInvited_few": "تم إنشاء {{team}}. تعذرت دعوة {{count}} أشخاص.",
+          "createdSomeNotInvited_many": "تم إنشاء {{team}}. تعذرت دعوة {{count}} شخصًا.",
+          "createdSomeNotInvited_other": "تم إنشاء {{team}}. تعذرت دعوة {{count}} شخص."
+        }
       },
       "invites": {
         "resending": "جاري إعادة الإرسال…",

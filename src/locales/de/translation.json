@@ -1797,7 +1797,12 @@
           "addToTeamspace": "Zu Teamspace hinzufügen"
         },
         "teamsCount_one": "{{count}} Team",
-        "teamsCount_other": "{{count}} Teams"
+        "teamsCount_other": "{{count}} Teams",
+        "addMenu": {
+          "invite": "Personen einladen",
+          "createTeam": "Team erstellen",
+          "label": "Weitere Möglichkeiten zum Hinzufügen"
+        }
       },
       "teamspaces": {
         "title": "Teamspaces",
@@ -2020,15 +2025,10 @@
         "errorTitle": "Anfrage konnte nicht aktualisiert werden"
       },
       "teams": {
-        "addMembersLabel": "Mitglieder hinzufügen",
-        "createTitle": "Team erstellen",
-        "nameLabel": "Teamname",
         "memberCount_one": "{{count}} Mitglied",
         "memberCount_other": "{{count}} Mitglieder",
         "grantsAccessToSpaces_one": "Gewährt Zugriff auf {{count}} Space",
         "grantsAccessToSpaces_other": "Gewährt Zugriff auf {{count}} Spaces",
-        "couldNotCreate": "Team konnte nicht erstellt werden",
-        "created": "{{team}} erstellt",
         "deleteConfirmSpaceAccess_one": "Dieses Team gewährt Zugriff auf {{count}} Space. Seine Mitglieder verlieren diesen Zugriff.",
         "deleteConfirmSpaceAccess_other": "Dieses Team gewährt Zugriff auf {{count}} Spaces. Seine Mitglieder verlieren diesen Zugriff.",
         "members": {
@@ -2059,7 +2059,43 @@
         "spaces_one": "{{count}} Teamspace",
         "spaces_other": "{{count}} Teamspaces",
         "refreshFailed": "Teams konnten nicht aktualisiert werden. Die Liste ist möglicherweise veraltet.",
-        "cellMenuLabel": "{{team}}: {{value}}"
+        "cellMenuLabel": "{{team}}: {{value}}",
+        "paywall": {
+          "title": "Teams sind im Business-Tarif enthalten",
+          "body": "Teamspaces sind kostenlos. Wechseln Sie zu Business, um Personen in Teams zu gruppieren.",
+          "bodyAskOwner": "Teamspaces sind kostenlos. Bitten Sie {{owner}}, auf Business zu wechseln, um Personen in Teams zu gruppieren.",
+          "bodyAskOwnerUnknown": "Teamspaces sind kostenlos. Bitten Sie den Inhaber Ihres Workspace, auf Business zu wechseln, um Personen in Teams zu gruppieren.",
+          "upgrade": "Auf Business upgraden",
+          "notNow": "Nicht jetzt"
+        },
+        "form": {
+          "title": "Team erstellen",
+          "subtitle": "Eine Abkürzung, um mehrere Personen auf einmal hinzuzufügen.",
+          "name": "Name",
+          "namePlaceholder": "Teamname",
+          "nameRequired": "Geben Sie einen Teamnamen ein.",
+          "nameTaken": "Ein Team namens {{name}} existiert bereits.",
+          "people": "Personen",
+          "peoplePlaceholder": "Namen oder E-Mail-Adressen",
+          "adminNote": "Sie werden als Admin des Teams hinzugefügt. Einladungen werden gesendet, sobald Sie das Team erstellen.",
+          "adminNoteShort": "Sie werden als Admin des Teams hinzugefügt.",
+          "invalidEmail": "Geben Sie eine gültige E-Mail-Adresse ein.",
+          "cancel": "Abbrechen",
+          "submit": "Team erstellen",
+          "creating": "Wird erstellt…",
+          "retry": "Erneut versuchen",
+          "creatingStatus_one": "{{team}} wird erstellt und {{count}} Einladung gesendet…",
+          "creatingStatus_other": "{{team}} wird erstellt und {{count}} Einladungen gesendet…",
+          "failed": "Das Team konnte nicht erstellt werden. Ihre Eingaben bleiben erhalten.",
+          "created": "{{team}} erstellt",
+          "createdAdded": "{{team}} erstellt. {{names}} hinzugefügt.",
+          "createdInvited": "{{team}} erstellt. {{invited}} eingeladen.",
+          "createdAddedInvited": "{{team}} erstellt. {{names}} hinzugefügt und {{invited}} eingeladen.",
+          "createdWithMembers_one": "{{team}} mit {{count}} Mitglied erstellt",
+          "createdWithMembers_other": "{{team}} mit {{count}} Mitgliedern erstellt",
+          "createdSomeNotInvited_one": "{{team}} erstellt. {{count}} Person konnte nicht eingeladen werden.",
+          "createdSomeNotInvited_other": "{{team}} erstellt. {{count}} Personen konnten nicht eingeladen werden."
+        }
       },
       "invites": {
         "resending": "Sende erneut…",
