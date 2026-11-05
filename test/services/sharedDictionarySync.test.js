@@ -1361,7 +1361,7 @@ test("an external upgrade retries a failed billing refresh on the next shared pa
   assert.deepEqual(ctx.hints().workspace, ["Qdrant"]);
 });
 
-for (const outcome of ["success", "shared failure", "personal failure"]) {
+for (const outcome of ["success", "shared failure", "personal failure", "late personal failure"]) {
   test(`background dictionary sync timestamp reflects ${outcome}`, async (t) => {
     const ctx = await setupPersonal(t);
     t.mock.method(console, "error", () => {});
@@ -1373,9 +1373,15 @@ for (const outcome of ["success", "shared failure", "personal failure"]) {
       "syncConversations",
       "syncTranscriptions",
       "syncSnippets",
+      "syncSkills",
       "syncAnalytics",
     ]) {
-      t.mock.method(ctx.service, phase, async () => {});
+      t.mock.method(ctx.service, phase, async () => {
+        if (phase === "syncAnalytics" && outcome === "late personal failure") {
+          ctx.cloud.failNext("/api/dictionary/list", { status: 503, code: "UNAVAILABLE" });
+          await ctx.service.syncDictionaryNow();
+        }
+      });
     }
     const previousSync = "2000-01-01T00:00:00.000Z";
     ctx.useSharedDictionaryStore.setState({ lastSyncedAt: previousSync });
@@ -1390,7 +1396,10 @@ for (const outcome of ["success", "shared failure", "personal failure"]) {
     // The changed event can reload partial mirror writes after a failed background pass.
     await ctx.useSharedDictionaryStore.getState().reload();
     assert.equal(ctx.cloud.requestsTo(LIST).length, 1);
-    assert.equal(ctx.cloud.requestsTo("/api/dictionary/list").length, 1);
+    assert.equal(
+      ctx.cloud.requestsTo("/api/dictionary/list").length,
+      outcome === "late personal failure" ? 2 : 1
+    );
     const finishedAt = ctx.useSharedDictionaryStore.getState().lastSyncedAt;
     if (outcome === "success") {
       assert.ok(Date.parse(finishedAt) >= started, "a completed pass publishes its time");

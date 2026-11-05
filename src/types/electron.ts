@@ -38,6 +38,9 @@ import type {
   NoteAttendeesRequest,
 } from "./connectors";
 import type {
+  CloudSkillEntry,
+  CloudSkillMeta,
+  SkillCloudExport,
   SkillCommitResult,
   SkillCreateInput,
   SkillDetail,
@@ -48,6 +51,8 @@ import type {
   SkillRef,
   SkillSaveResult,
   SkillSummary,
+  SkillSyncRow,
+  SkillSyncUnavailable,
   SkillUpdate,
   SkillUploadItem,
   SkillUploadPreview,
@@ -4125,6 +4130,32 @@ declare global {
       hardDeleteSnippet?: (id: number) => Promise<{ success: boolean; id: number }>;
       clearSnippetCloudId?: (id: number) => Promise<{ success: boolean }>;
       broadcastSnippetsUpdated?: () => Promise<{ success: boolean }>;
+
+      getPendingSkills?: () => Promise<SkillSyncRow[]>;
+      getPendingSkillDeletes?: () => Promise<SkillSyncRow[]>;
+      exportSkillForCloud?: (name: string) => Promise<SkillCloudExport>;
+      getSkillForCloudMerge?: (
+        cloudEntry: CloudSkillMeta
+      ) => Promise<SkillSyncRow | null | SkillSyncUnavailable>;
+      /** False when the entry was skipped for good; a failed write answers why. */
+      applySkillFromCloud?: (
+        cloudEntry: CloudSkillEntry,
+        expectedLocal?: SkillSyncRow | null
+      ) => Promise<boolean | { ok: false; error: SkillWriteError }>;
+      markSkillSynced?: (
+        name: string,
+        cloudId: string,
+        serverUpdatedAt: string | undefined,
+        expectedHash: string,
+        expectedEnabled: boolean
+      ) => Promise<{ success: boolean; changes: number } | null>;
+      hardDeleteSkill?: (name: string) => Promise<{ success: boolean } | null>;
+      queueSkillCloudDelete?: (
+        name: string,
+        cloudId: string
+      ) => Promise<{ success: boolean } | null>;
+      clearSkillCloudId?: (name: string) => Promise<{ success: boolean } | null>;
+      broadcastSkillsUpdated?: () => Promise<void>;
     };
 
     api?: {

@@ -16,6 +16,7 @@ import {
   useSkillsStore,
   type SkillCreateDraft,
 } from "../../stores/skillsStore";
+import { syncAfterLocalWrite } from "../../services/syncAfterLocalWrite";
 import type { SkillChatDraft, SkillProblemCode } from "../../types/skills";
 import { MAX_SKILL_BYTES, problemKey, writeFailedToast } from "./skillCopy";
 
@@ -186,6 +187,7 @@ export function CreateSkillScreen({
     setSaving(true);
     const result = await window.electronAPI?.skillsCreate?.(draft);
     setSaving(false);
+    if (result?.ok) syncAfterLocalWrite("syncSkillsNow");
     // The user can leave, discard or edit while main writes. That result belongs only to
     // the submitted draft, so it must not clear or mark a newer draft with old errors.
     if (useSkillsStore.getState().createDraftGeneration !== startedFor || currentDraft() !== draft)
