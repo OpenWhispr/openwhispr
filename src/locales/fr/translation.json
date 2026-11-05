@@ -209,6 +209,7 @@
     "skip": "Passer",
     "policyAiProcessingRestricted": "Le traitement par IA est restreint par votre organisation.",
     "policyAgentRestricted": "L’utilisation de l’assistant IA est restreinte par votre organisation.",
+    "policyAccountChanged": "Votre compte a changé : cette réponse a donc été interrompue.",
     "policyTranscriptionRestricted": "La transcription est restreinte par votre organisation.",
     "policyUnresolved": "Les paramètres de votre organisation ne sont pas encore chargés. Réessayez dans un instant.",
     "managedConfigLoading": "Vérification de la configuration gérée de votre organisation en cours. Réessayez dans un instant.",
@@ -441,6 +442,9 @@
         "descriptionLineOne": "Choisissez les modèles à exécuter",
         "descriptionLineTwo": "sur votre appareil.",
         "providerLabel": "Fournisseur",
+        "cohereLanguageLabel": "Langue de dictée",
+        "cohereLanguageHint": "Cohere ne détecte pas la langue que vous parlez : choisissez celle dans laquelle vous allez dicter.",
+        "cohereLanguagePlaceholder": "Choisissez une langue",
         "download": "Télécharger",
         "downloadingShort": "Téléchargement",
         "selected": "Sélectionné",
@@ -583,7 +587,8 @@
       "queued": "En attente",
       "failed": {
         "title": "Un téléchargement ne s'est pas terminé",
-        "description": "Vérifiez votre connexion et l'espace disque disponible, puis réessayez. Si le problème persiste, contactez votre administrateur."
+        "description": "Vérifiez votre connexion et l'espace disque disponible, puis réessayez. Si le problème persiste, contactez votre administrateur.",
+        "notApproved": "Votre organisation n’approuve pas ce modèle. Vous pouvez continuer sans lui."
       }
     },
     "permissionGuide": {
@@ -983,9 +988,9 @@
       },
       "translationFallback": {
         "unreachableTitle": "Traduction indisponible",
-        "unreachableDescription": "Votre dictée a été collée sans traduction. Vérifiez les paramètres de traduction.",
+        "unreachableDescription": "Votre dictée est restée dans sa langue d'origine. Vérifiez les paramètres de traduction.",
         "failedTitle": "Échec de la traduction",
-        "failedDescription": "Le texte original a été collé. Vous pouvez réessayer depuis l'Historique."
+        "failedDescription": "Votre dictée est restée dans sa langue d'origine. Vous pouvez réessayer depuis l'Historique."
       },
       "pushForceStopped": {
         "title": "Transcription non collée",
@@ -1020,7 +1025,10 @@
         "manualPaste": "Copiez votre texte ci-dessous, puis appuyez sur {{shortcut}} pour le coller.",
         "openSettings": "Ouvrir les réglages",
         "copyToClipboard": "Copier le texte",
-        "copyFailed": "Échec de la copie"
+        "copyFailed": "Échec de la copie",
+        "copiedTitle": "Copié, pas collé",
+        "copiedDescription": "Votre texte est dans le presse-papiers. Le collage automatique nécessite l’autorisation Accessibilité. Appuyez sur {{shortcut}} pour le coller manuellement.",
+        "dontShowAgain": "Ne plus afficher"
       },
       "pasteFailed": {
         "title": "Collage automatique impossible"
@@ -2546,10 +2554,10 @@
         "resetToDefault": "Réinitialiser à {{hotkey}}",
         "title": "Raccourci de dictée",
         "linuxPttPermissionTitle": "Maintenir pour parler nécessite une configuration",
-        "linuxPttPermissionDescription": "Exécutez cette commande et déconnectez-vous : sudo usermod -aG input $USER",
+        "linuxPttPermissionDescription": "Exécutez cette commande, puis déconnectez-vous de votre compte utilisateur Linux et reconnectez-vous : sudo usermod -aG input $USER",
         "linuxPttSetupTitle": "Maintenir pour parler nécessite une configuration",
         "linuxPttSetupDescription": "Votre utilisateur a besoin d'accéder aux périphériques de saisie clavier.",
-        "linuxPttSetupNote": "Après avoir exécuté la commande, déconnectez-vous et reconnectez-vous.",
+        "linuxPttSetupNote": "Après avoir exécuté la commande, déconnectez-vous de votre compte utilisateur Linux, puis reconnectez-vous.",
         "hyprlandConfigWriteWarningTitle": "Les raccourcis Hyprland ne seront pas conservés",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr ne peut pas écrire dans {{path}} ; les raccourcis ne survivront donc pas à un rechargement de la configuration Hyprland. Vérifiez que le fichier existe et qu'il est accessible en écriture.",
         "hyprlandUnbindDescription": "Sous Hyprland, OpenWhispr réserve le raccourci sélectionné. Tout raccourci Hyprland existant utilisant la même combinaison de touches sera supprimé quand OpenWhispr enregistrera son raccourci."
@@ -3153,6 +3161,21 @@
       "contextTooLargeGeneric": "C’est trop long pour que {{model}} puisse le lire sur cet ordinateur. Essayez un modèle cloud ou exécutez l’action sur une sélection plus courte.",
       "localServerUnavailable": "Impossible de démarrer {{model}} sur cet ordinateur. Réessayez ou passez à un modèle cloud.",
       "localModelBusy": "Le modèle local traite encore une autre requête. Attendez qu'elle se termine, puis réessayez."
+    },
+    "policy": {
+      "guidance": "Votre organisation a approuvé ces modèles. Choisissez celui qui convient à votre ordinateur.",
+      "notApproved": "Non approuvé par votre organisation",
+      "noneSupported": "Votre organisation n’a approuvé aucun modèle local pris en charge par cette version de l’application. Mettez OpenWhispr à jour ou contactez votre administrateur.",
+      "emptyIntersection": "Vos espaces de travail n’ont aucun modèle local approuvé en commun. Contactez votre administrateur.",
+      "modelBlocked": "Choisissez un modèle local approuvé par votre organisation.",
+      "modeBlocked": "Votre organisation a désactivé le traitement local.",
+      "unresolved": "Impossible de déterminer la politique de l’espace de travail. Connectez-vous et réessayez.",
+      "versionBlocked": "Mettez OpenWhispr à jour pour utiliser les modèles approuvés par votre organisation.",
+      "updateRequired": "Mise à jour requise",
+      "unavailable": "Indisponible pour le moment",
+      "installedTitle": "Modèles locaux installés",
+      "installedHint": "Votre organisation a désactivé le traitement local : ces modèles ne peuvent donc pas s’exécuter. Ils restent sur votre ordinateur jusqu’à leur suppression.",
+      "chooseModel": "Choisissez un modèle local"
     }
   },
   "insights": {

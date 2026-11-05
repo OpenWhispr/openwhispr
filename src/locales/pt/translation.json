@@ -188,6 +188,7 @@
     "skip": "Pular",
     "policyAiProcessingRestricted": "O processamento de IA está restrito pela sua organização.",
     "policyAgentRestricted": "O uso do assistente de IA está restrito pela sua organização.",
+    "policyAccountChanged": "Sua conta mudou, então esta resposta foi interrompida.",
     "policyTranscriptionRestricted": "A transcrição está restrita pela sua organização.",
     "policyUnresolved": "As configurações da sua organização ainda não foram carregadas. Tente novamente em instantes.",
     "managedConfigLoading": "Verificando a configuração gerenciada da sua organização. Tente novamente em instantes.",
@@ -420,6 +421,9 @@
         "descriptionLineOne": "Escolha os modelos que você quer",
         "descriptionLineTwo": "executar no seu dispositivo.",
         "providerLabel": "Provedor",
+        "cohereLanguageLabel": "Idioma de ditado",
+        "cohereLanguageHint": "O Cohere não detecta o idioma que você fala, então escolha o idioma em que vai ditar.",
+        "cohereLanguagePlaceholder": "Escolha um idioma",
         "download": "Baixar",
         "downloadingShort": "Baixando",
         "selected": "Selecionado",
@@ -562,7 +566,8 @@
       "queued": "Na fila",
       "failed": {
         "title": "Um download não foi concluído",
-        "description": "Verifique sua conexão e o espaço livre em disco e tente novamente. Se continuar falhando, entre em contato com seu administrador."
+        "description": "Verifique sua conexão e o espaço livre em disco e tente novamente. Se continuar falhando, entre em contato com seu administrador.",
+        "notApproved": "Sua organização não aprova este modelo. Você pode continuar sem ele."
       }
     },
     "permissionGuide": {
@@ -962,9 +967,9 @@
       },
       "translationFallback": {
         "unreachableTitle": "Tradução indisponível",
-        "unreachableDescription": "Seu ditado foi colado sem tradução. Verifique as configurações de tradução.",
+        "unreachableDescription": "Seu ditado ficou no idioma original. Verifique as configurações de tradução.",
         "failedTitle": "Falha na tradução",
-        "failedDescription": "O texto original foi colado. Você pode tentar novamente pelo Histórico."
+        "failedDescription": "Seu ditado ficou no idioma original. Você pode tentar novamente pelo Histórico."
       },
       "pushForceStopped": {
         "title": "Transcrição não colada",
@@ -999,7 +1004,10 @@
         "manualPaste": "Copie o texto abaixo e pressione {{shortcut}} para colá-lo.",
         "openSettings": "Abrir ajustes",
         "copyToClipboard": "Copiar texto",
-        "copyFailed": "Falha ao copiar"
+        "copyFailed": "Falha ao copiar",
+        "copiedTitle": "Copiado, não colado",
+        "copiedDescription": "Seu texto está na área de transferência. A colagem automática precisa da permissão de Acessibilidade. Pressione {{shortcut}} para colar manualmente.",
+        "dontShowAgain": "Não mostrar novamente"
       },
       "pasteFailed": {
         "title": "Não foi possível colar automaticamente"
@@ -1993,10 +2001,10 @@
         "resetToDefault": "Redefinir para {{hotkey}}",
         "title": "Atalho de ditado",
         "linuxPttPermissionTitle": "Manter pressionado para falar requer configuração",
-        "linuxPttPermissionDescription": "Execute este comando e faça logout: sudo usermod -aG input $USER",
+        "linuxPttPermissionDescription": "Execute este comando e depois termine a sessão da sua conta de utilizador Linux e volte a iniciá-la: sudo usermod -aG input $USER",
         "linuxPttSetupTitle": "Manter pressionado para falar requer configuração",
         "linuxPttSetupDescription": "O seu utilizador precisa de acesso aos dispositivos de entrada do teclado.",
-        "linuxPttSetupNote": "Depois de executar o comando, termine e reinicie a sessão.",
+        "linuxPttSetupNote": "Depois de executar o comando, termine a sessão da sua conta de utilizador Linux e volte a iniciá-la.",
         "hyprlandConfigWriteWarningTitle": "Os atalhos do Hyprland não serão mantidos",
         "hyprlandConfigWriteWarningDescription": "O OpenWhispr não consegue escrever em {{path}}, por isso os atalhos não serão mantidos após recarregar a configuração do Hyprland. Verifique se o ficheiro existe e permite escrita.",
         "hyprlandUnbindDescription": "No Hyprland, o OpenWhispr reserva o atalho selecionado. Qualquer atalho existente do Hyprland que use a mesma combinação de teclas será desvinculado quando o OpenWhispr registar o atalho."
@@ -3038,6 +3046,21 @@
       "contextTooLargeGeneric": "Isto é longo demais para o {{model}} ler neste computador. Experimente um modelo na nuvem ou execute a ação sobre uma seleção mais curta.",
       "localServerUnavailable": "Não foi possível iniciar o {{model}} neste computador. Tente novamente ou mude para um modelo na nuvem.",
       "localModelBusy": "O modelo local ainda está processando outro pedido. Aguarde até terminar e tente novamente."
+    },
+    "policy": {
+      "guidance": "Sua organização aprovou estes modelos. Escolha o que for mais adequado ao seu computador.",
+      "notApproved": "Não aprovado pela sua organização",
+      "noneSupported": "Sua organização não aprovou nenhum modelo local compatível com esta versão do aplicativo. Atualize o OpenWhispr ou entre em contato com o administrador.",
+      "emptyIntersection": "Seus espaços de trabalho não têm nenhum modelo local aprovado em comum. Entre em contato com o administrador.",
+      "modelBlocked": "Escolha um modelo local aprovado pela sua organização.",
+      "modeBlocked": "Sua organização desativou o processamento local.",
+      "unresolved": "Não foi possível obter a política do espaço de trabalho. Conecte-se e tente novamente.",
+      "versionBlocked": "Atualize o OpenWhispr para usar os modelos aprovados pela sua organização.",
+      "updateRequired": "Atualização necessária",
+      "unavailable": "Indisponível no momento",
+      "installedTitle": "Modelos locais instalados",
+      "installedHint": "Sua organização desativou o processamento local, então estes modelos não podem ser executados. Eles permanecem no seu computador até você excluí-los.",
+      "chooseModel": "Escolha um modelo local"
     }
   },
   "upgradePrompt": {

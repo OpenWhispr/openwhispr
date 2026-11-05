@@ -38,7 +38,9 @@ import {
 import { usePolicyStore } from "../stores/policyStore";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import type { EnterpriseAudioTestLink } from "../types/enterpriseAudio";
-import { usePolicySnapshot } from "../hooks/usePolicy";
+import { usePolicySnapshot, useMeetingAutoTranscriptionCheck } from "../hooks/usePolicy";
+import { handleMeetingRecordingRequest } from "../helpers/meetingRecordingRequest";
+import { useMeetingNoteSession } from "../hooks/useMeetingNoteSession";
 import {
   isAgentAllowed,
   isAudioFeatureAllowed,
@@ -46,6 +48,7 @@ import {
   isPolicyActionAllowed,
   isTranscriptionContextAllowed,
   isUpdateRequiredByOrg,
+  transcriptionChoiceRefusal,
 } from "../stores/policyRules";
 import { getManagedTranscriptionResolution } from "../services/managedTranscription";
 import {
@@ -91,7 +94,7 @@ import { getAgentName } from "../utils/agentName";
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
 import AssistantNoteUndoListener from "./notes/AssistantNoteUndoListener";
-import { providerErrorToastProps } from "../utils/describeProviderError";
+import { providerErrorActions, providerErrorToastProps } from "../utils/describeProviderError";
 import SpaceSyncToastListener from "./notes/SpaceSyncToastListener";
 import SharedDictionaryArrivalToastListener from "./SharedDictionaryArrivalToastListener";
 import { syncService } from "../services/SyncService.js";
@@ -184,6 +187,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     noteId: number;
     folderId: number | null;
     event: any;
+    trigger?: string;
+    noteSessionId?: string;
   } | null>(null);
   // Try now and Create with assistant open a chat; Open skill on a chat's card opens the skill.
   const [skillChatRequest, setSkillChatRequest] = useState<SkillChatRequest | null>(null);
@@ -196,6 +201,10 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const { toast } = useToast();
   const { useCleanupModel } = useSettings();
   const { isSignedIn, isLoaded: authLoaded, user } = useAuth();
+  const canAutoStartMeeting = useMeetingAutoTranscriptionCheck({
+    isLoaded: authLoaded,
+    isSignedIn,
+  });
   // Suppressed while a deep-linked invitation is open so the two never stack.
   const {
     joinable,
@@ -260,7 +269,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   ]);
 
   const agentAllowedByPolicy = usePolicyStore(isAgentAllowed);
-  const { createNote } = useCreateNote();
+  const { createNote } = useCreateNote(canAutoStartMeeting);
   // The note is created before the view switches so Notes mounts with it already open.
   const handleNewNote = useCallback(async () => {
     await createNote();
@@ -452,6 +461,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
 
   // A ref, not a per-run flag: StrictMode's remount must not cancel the first drain.
   const meetingNavigationMounted = useRef(false);
+  const meetingNoteSession = useMeetingNoteSession(activeView, activeNoteId);
   const recordingIdentityRef = useRef({ user, t });
   recordingIdentityRef.current = { user, t };
   useEffect(() => {
@@ -472,22 +482,46 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           () => import("./notes/PersonalNotesView"),
           (note) => {
             const { user: recordingUser, t: translate } = recordingIdentityRef.current;
-            void startRecordingForNote(note, recordingRecorderName(note, recordingUser, translate))
-              .then((accepted) => {
-                if (!accepted) void window.electronAPI?.restoreFromMeetingMode?.();
-              })
-              .catch((error) =>
-                logger.warn(
-                  "Failed to start notification recording",
-                  { error: String(error) },
-                  "meeting"
-                )
-              );
+            if (data.noteSessionId)
+              meetingNoteSession.current = { id: data.noteSessionId, noteId: note.id };
+            void handleMeetingRecordingRequest({
+              args: {
+                noteId: note.id,
+                noteTitle: note.title,
+                folderId: note.folder_id,
+                autoEndEligible: true,
+              },
+              canAutoStart: canAutoStartMeeting,
+              startRecording: (args) =>
+                startRecordingForNote(
+                  note,
+                  recordingRecorderName(note, recordingUser, translate),
+                  args.canAutoStart
+                ),
+              restoreFromMeetingMode: () => window.electronAPI?.restoreFromMeetingMode?.(),
+              onSuppressed: () =>
+                data.noteSessionId
+                  ? window.electronAPI?.meetingNoteOpenedWithoutRecording?.(data.noteSessionId)
+                  : undefined,
+              onHandled: () => {},
+            }).catch((error) =>
+              logger.warn(
+                "Failed to start notification recording",
+                { error: String(error) },
+                "meeting"
+              )
+            );
           }
         );
         return;
       }
-      if (!isCurrent()) return;
+      if (!isCurrent()) {
+        // Main already gave this navigation away, so nothing else can end its session.
+        if (data.noteSessionId) void window.electronAPI?.meetingNoteClosed?.(data.noteSessionId);
+        return;
+      }
+      if (data.noteSessionId)
+        meetingNoteSession.current = { id: data.noteSessionId, noteId: data.noteId };
       setActiveFolderId(data.folderId);
       setActiveNoteId(data.noteId);
       setActiveView("personal-notes");
@@ -495,6 +529,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         noteId: data.noteId,
         folderId: data.folderId,
         event: data.event,
+        trigger: data.trigger,
+        noteSessionId: data.noteSessionId,
       });
       void initializeNotes(null, 50, data.folderId);
       if (
@@ -515,7 +551,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       meetingNavigationMounted.current = false;
       cleanup?.();
     };
-  }, []);
+  }, [canAutoStartMeeting, meetingNoteSession]);
 
   useEffect(() => {
     const drain = async () => {
@@ -739,7 +775,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           return;
         }
         if (!managed && !isTranscriptionContextAllowed(usePolicyStore.getState(), s, "dictation")) {
-          toast({ title: t("common.managedByOrg"), variant: "default" });
+          const refusal = transcriptionChoiceRefusal(usePolicyStore.getState(), s, "dictation");
+          toast({
+            title: t(refusal?.messageKey ?? "common.managedByOrg"),
+            variant: "default",
+            ...(refusal ? { actions: providerErrorActions(refusal, t) } : {}),
+          });
           return;
         }
         const result = await window.electronAPI.retryTranscription(id, {
@@ -1368,6 +1409,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                       setShowSettings(true);
                     }}
                     meetingRecordingRequest={meetingRecordingRequest}
+                    canAutoStartMeeting={canAutoStartMeeting}
                     onMeetingRecordingRequestHandled={handleMeetingRecordingRequestHandled}
                     invitationEntry={invitationNotesEntry}
                     onInvitationEntryHandled={() => setInvitationNotesEntry(null)}

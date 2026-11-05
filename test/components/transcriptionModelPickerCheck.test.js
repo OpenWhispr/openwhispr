@@ -496,3 +496,112 @@ test("Corti: leaving a field that was already saved lets no answer save one stil
   await panel.answer({ success: false, errorCode: "network", unverified: true });
   assert.equal(panel.state().cortiTenant, "", "a half-typed tenant waits until it is left");
 });
+
+function localPicker(
+  t,
+  { policy, whisper = [], parakeet = [], capability = { supported: true }, overrides }
+) {
+  const list = (ids) => async () => ({
+    success: true,
+    models: ids.map((model) => ({ model, downloaded: true })),
+  });
+  return mount(t, {
+    policy,
+    overrides: { mode: "local", useLocalWhisper: true, ...overrides },
+    electronAPI: {
+      ...DOWNLOADS,
+      modelGetActiveDownloads: async () => [],
+      checkParakeetInstallation: async () => capability,
+      listWhisperModels: list(whisper),
+      listParakeetModels: list(parakeet),
+    },
+  });
+}
+const managedSpeech = (allowedLocalModels) => ({
+  status: "managed",
+  appVersion: "1.11.1",
+  policy: {
+    transcription: {
+      allowedModes: ["local", "providers"],
+      allowedByokProviders: [],
+      allowedLocalModels,
+    },
+    minAppVersion: null,
+  },
+});
+const localTabs = (panel) => panel.find((node) => node.props?.selectedId !== undefined)[0];
+const tabIds = (panel) => localTabs(panel).props.providers.map((tab) => tab.id);
+
+test("a restricted member sees only families with an approved or installed model", async (t) => {
+  const panel = await localPicker(t, {
+    policy: managedSpeech(["base"]),
+    parakeet: ["parakeet-tdt-0.6b-v3"],
+    overrides: { selectedLocalProvider: "whisper", selectedLocalModel: "base" },
+  });
+  assert.deepEqual(tabIds(panel), ["whisper", "nvidia"]);
+  await panel.selectTab("nvidia");
+  assert.equal(localTabs(panel).props.selectedId, "nvidia", "the blocked model can be deleted");
+  const card = panel.find((node) => node.props?.modelId === "parakeet-tdt-0.6b-v3")[0];
+  assert.equal(card.props.policyBlocked, true);
+});
+
+test("a saved family with nothing approved opens on an approved tab without saving", async (t) => {
+  const selected = [];
+  const panel = await localPicker(t, {
+    policy: managedSpeech(["base"]),
+    overrides: {
+      selectedLocalProvider: "nvidia",
+      selectedLocalModel: "orukeet-v0.1.0",
+      onLocalProviderSelect: (id) => selected.push(id),
+      onLocalModelSelect: (id) => selected.push(id),
+    },
+  });
+  assert.deepEqual(tabIds(panel), ["whisper"]);
+  assert.equal(localTabs(panel).props.selectedId, "whisper");
+  assert.deepEqual(selected, []);
+});
+
+for (const transcriptionContext of ["meeting", "upload"]) {
+  test(`the ${transcriptionContext} picker filters its tabs the same way`, async (t) => {
+    const panel = await localPicker(t, {
+      policy: managedSpeech(["orukeet-v0.1.0"]),
+      overrides: { transcriptionContext, selectedLocalProvider: "whisper", selectedLocalModel: "" },
+    });
+    assert.deepEqual(tabIds(panel), ["oruk"]);
+    assert.equal(localTabs(panel).props.selectedId, "oruk");
+  });
+}
+
+test("a guest keeps every tab", async (t) => {
+  const panel = await localPicker(t, {
+    overrides: { selectedLocalProvider: "whisper", selectedLocalModel: "" },
+  });
+  assert.deepEqual(tabIds(panel), ["oruk", "whisper", "nvidia", "cohere"]);
+});
+
+test("an unsupported Mac reroutes a blank sherpa selection to Whisper", async (t) => {
+  const selected = [];
+  await localPicker(t, {
+    capability: { supported: false, minimumMacOSVersion: "15.5" },
+    overrides: {
+      selectedLocalProvider: "nvidia",
+      selectedLocalModel: "",
+      onLocalProviderSelect: (id) => selected.push(id),
+    },
+  });
+  assert.equal(selected[0], "whisper");
+});
+
+test("an unsupported Mac leaves a policy-blocked sherpa selection saved", async (t) => {
+  const selected = [];
+  await localPicker(t, {
+    policy: managedSpeech(["base"]),
+    capability: { supported: false, minimumMacOSVersion: "15.5" },
+    overrides: {
+      selectedLocalProvider: "nvidia",
+      selectedLocalModel: "parakeet-tdt-0.6b-v3",
+      onLocalProviderSelect: (id) => selected.push(id),
+    },
+  });
+  assert.deepEqual(selected, []);
+});

@@ -58,9 +58,9 @@
       },
       "translationFallback": {
         "unreachableTitle": "الترجمة غير متاحة",
-        "unreachableDescription": "تم لصق الإملاء الخاص بك بدون ترجمة. تحقق من إعدادات الترجمة.",
+        "unreachableDescription": "بقي إملاؤك بلغته الأصلية. تحقق من إعدادات الترجمة.",
         "failedTitle": "فشلت الترجمة",
-        "failedDescription": "تم لصق النص الأصلي. يمكنك المحاولة مرة أخرى من السجل."
+        "failedDescription": "بقي إملاؤك بلغته الأصلية. يمكنك إعادة المحاولة من السجل."
       },
       "selectionEditing": {
         "notAppliedTitle": "لم يتم تطبيق تعديل التحديد",
@@ -95,7 +95,10 @@
         "manualPaste": "انسخ النص أدناه، ثم اضغط على {{shortcut}} للصقه.",
         "openSettings": "فتح الإعدادات",
         "copyToClipboard": "نسخ إلى الحافظة",
-        "copyFailed": "تعذّر النسخ"
+        "copyFailed": "تعذّر النسخ",
+        "copiedTitle": "تم النسخ، ولم يتم اللصق",
+        "copiedDescription": "النص موجود في الحافظة. يتطلب اللصق التلقائي إذن تسهيلات الاستخدام. اضغط على {{shortcut}} للصق يدويًا.",
+        "dontShowAgain": "عدم الإظهار مجددًا"
       },
       "pasteFailed": {
         "title": "تعذّر اللصق تلقائيًا"
@@ -401,6 +404,21 @@
       "contextTooLargeGeneric": "هذا أطول من أن يقرأه {{model}} على هذا الكمبيوتر. جرّب نموذجًا سحابيًا، أو نفّذ الإجراء على تحديد أقصر.",
       "localServerUnavailable": "تعذّر تشغيل {{model}} على هذا الكمبيوتر. حاول مرة أخرى، أو بدّل إلى نموذج سحابي.",
       "localModelBusy": "لا يزال النموذج المحلي يعالج طلبًا آخر. انتظر حتى ينتهي، ثم حاول مرة أخرى."
+    },
+    "policy": {
+      "guidance": "اعتمدت مؤسستك هذه النماذج. اختر النموذج المناسب لجهاز الكمبيوتر لديك.",
+      "notApproved": "غير معتمد من مؤسستك",
+      "noneSupported": "لم تعتمد مؤسستك أي نموذج محلي يدعمه إصدار التطبيق هذا. حدّث OpenWhispr أو تواصل مع المسؤول.",
+      "emptyIntersection": "لا يوجد نموذج محلي معتمد مشترك بين مساحات عملك. تواصل مع المسؤول.",
+      "modelBlocked": "اختر نموذجًا محليًا معتمدًا من مؤسستك.",
+      "modeBlocked": "عطّلت مؤسستك المعالجة المحلية.",
+      "unresolved": "تعذّر تحديد سياسة مساحة العمل. اتصل بالشبكة وحاول مجددًا.",
+      "versionBlocked": "حدّث OpenWhispr لاستخدام النماذج المعتمدة من مؤسستك.",
+      "updateRequired": "يلزم التحديث",
+      "unavailable": "غير متاح حاليًا",
+      "installedTitle": "النماذج المحلية المثبتة",
+      "installedHint": "عطّلت مؤسستك المعالجة المحلية، لذا لا يمكن تشغيل هذه النماذج. تبقى على جهازك حتى تحذفها.",
+      "chooseModel": "اختر نموذجًا محليًا"
     }
   },
   "reasoning": {
@@ -3651,6 +3669,9 @@
         "descriptionLineOne": "اختر النماذج التي تريد",
         "descriptionLineTwo": "تشغيلها على جهازك.",
         "providerLabel": "المزود",
+        "cohereLanguageLabel": "لغة الإملاء",
+        "cohereLanguageHint": "لا يكتشف Cohere لغتك تلقائيًا، لذا اختر اللغة التي ستُملي بها.",
+        "cohereLanguagePlaceholder": "اختر لغة",
         "download": "تنزيل",
         "downloadingShort": "جاري التنزيل",
         "selected": "محدد",
@@ -3793,7 +3814,8 @@
       "queued": "في قائمة الانتظار",
       "failed": {
         "title": "لم يكتمل التنزيل",
-        "description": "تحقق من اتصالك والمساحة الخالية على القرص، ثم أعد المحاولة. إذا استمر الفشل، فاتصل بالمسؤول."
+        "description": "تحقق من اتصالك والمساحة الخالية على القرص، ثم أعد المحاولة. إذا استمر الفشل، فاتصل بالمسؤول.",
+        "notApproved": "لا توافق مؤسستك على هذا النموذج. يمكنك المتابعة بدونه."
       }
     },
     "permissionGuide": {
@@ -4774,10 +4796,10 @@
         "resetToDefault": "إعادة التعيين إلى {{hotkey}}",
         "title": "مفتاح اختصار الإملاء",
         "linuxPttPermissionTitle": "يتطلب وضع «اضغط مع الاستمرار للتحدث» إعدادًا إضافيًا",
-        "linuxPttPermissionDescription": "قم بتشغيل هذا الأمر وتسجيل الخروج/الدخول: sudo usermod -aG input $USER",
+        "linuxPttPermissionDescription": "شغّل هذا الأمر، ثم سجّل الخروج من حساب مستخدم Linux الخاص بك وسجّل الدخول مجددًا: sudo usermod -aG input $USER",
         "linuxPttSetupTitle": "يتطلب وضع «اضغط مع الاستمرار للتحدث» إعدادًا",
         "linuxPttSetupDescription": "يحتاج المستخدم الخاص بك إلى الوصول إلى أجهزة إدخال لوحة المفاتيح.",
-        "linuxPttSetupNote": "بعد تشغيل الأمر، قم بتسجيل الخروج وتسجيل الدخول مرة أخرى.",
+        "linuxPttSetupNote": "بعد تشغيل الأمر، سجّل الخروج من حساب مستخدم Linux الخاص بك، ثم سجّل الدخول مجددًا.",
         "hyprlandConfigWriteWarningTitle": "لن يتم حفظ اختصارات Hyprland بشكل دائم",
         "hyprlandConfigWriteWarningDescription": "لا يمكن لـ OpenWhispr الكتابة إلى {{path}}، لذلك لن تبقى الاختصارات بعد إعادة تحميل تكوين Hyprland. تأكد من وجود الملف وقابليته للكتابة.",
         "hyprlandUnbindDescription": "في Hyprland، يستحوذ OpenWhispr على الاختصار المحدد. سيتم فك أي ارتباط Hyprland موجود يستخدم مجموعة المفاتيح نفسها عندما يسجل OpenWhispr اختصاره."
@@ -5447,6 +5469,7 @@
     "skip": "تخطي",
     "policyAiProcessingRestricted": "معالجة الذكاء الاصطناعي مقيدة من قبل مؤسستك.",
     "policyAgentRestricted": "استخدام مساعد الذكاء الاصطناعي مقيد من قبل مؤسستك.",
+    "policyAccountChanged": "تغيّر حسابك، لذلك تم إيقاف هذه الإجابة.",
     "policyTranscriptionRestricted": "التفريغ الصوتي مقيد من قبل مؤسستك.",
     "policyUnresolved": "لم يتم تحميل إعدادات مؤسستك بعد. حاول مرة أخرى بعد قليل.",
     "logout": "تسجيل الخروج",

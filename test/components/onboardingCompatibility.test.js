@@ -16,6 +16,7 @@ async function createOnboardingRenderer(t, platform = "linux") {
     noExternal: ["react-i18next"],
     mockModules: {
       "react-i18next": `
+        export const initReactI18next = { type: "3rdParty", init() {} };
         export function useTranslation() {
           return { t(key) { return key; } };
         }

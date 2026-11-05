@@ -43,6 +43,7 @@ export const SECTION_ALIASES: Record<string, SettingsSectionType> = {
   prompts: "llms",
   transcription: "speechToText",
   uploadTranscription: "speechToText",
+  noteRecording: "speechToText",
   softwareUpdates: "system",
   privacy: "privacyData",
   permissions: "privacyData",
@@ -53,6 +54,7 @@ export const SECTION_ALIASES: Record<string, SettingsSectionType> = {
 export const LEGACY_SUB_TAB: Record<string, string> = {
   transcription: "dictation",
   uploadTranscription: "upload",
+  noteRecording: "noteRecording",
   dictationAgent: "dictationAgent",
   meetings: "noteFormatting",
   noteFormatting: "noteFormatting",
