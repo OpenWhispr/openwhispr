@@ -1,3 +1,9 @@
+const {
+  runLocalModelOperation,
+  assertLocalModelOperation,
+  bindLocalModelDownload,
+  isLocalModelPolicyRefusal,
+} = require("./localModelPolicyGate");
 const path = require("path");
 const fs = require("fs");
 const { promises: fsPromises } = require("fs");
@@ -304,6 +310,12 @@ class ModelManager {
   }
 
   async downloadModel(modelId, onProgress) {
+    return runLocalModelOperation(this, "llm", modelId, () =>
+      this._policyAllowedDownloadModel(modelId, onProgress)
+    );
+  }
+
+  async _policyAllowedDownloadModel(modelId, onProgress) {
     this.ensureInitialized();
     const modelInfo = this.findModelById(modelId);
     if (!modelInfo) {
@@ -324,9 +336,11 @@ class ModelManager {
       });
     }
 
+    // Binding refuses a revoked lease, so it goes before anything takes the slot.
+    const { signal, abort } = createDownloadSignal();
+    const unbindPolicy = bindLocalModelDownload(this, abort);
     this.activeDownloads.set(modelId, true);
     this.downloadLifecycleVersion += 1;
-    const { signal, abort } = createDownloadSignal();
     this.activeRequests.set(modelId, { abort });
 
     try {
@@ -373,6 +387,7 @@ class ModelManager {
         if (onProgress) onProgress(progress, combined, combinedTotal);
       };
 
+      assertLocalModelOperation(this);
       await sharedDownloadFile(downloadUrl, modelPath, {
         signal,
         expectedSha256: model.sha256,
@@ -407,6 +422,7 @@ class ModelManager {
       if (hasDrafter) {
         const draftPath = path.join(this.modelsDir, model.draftFileName);
         try {
+          assertLocalModelOperation(this);
           await sharedDownloadFile(this.getDraftDownloadUrl(provider, model), draftPath, {
             signal,
             expectedSha256: model.draftSha256,
@@ -419,7 +435,7 @@ class ModelManager {
           }
         } catch (draftError) {
           await fsPromises.unlink(draftPath).catch(() => {});
-          if (draftError.isAbort) throw draftError;
+          if (draftError.isAbort || isLocalModelPolicyRefusal(draftError)) throw draftError;
           debugLogger.warn("MTP drafter download failed, keeping model without it", {
             modelId,
             error: draftError.message,
@@ -450,6 +466,7 @@ class ModelManager {
       }
       throw error;
     } finally {
+      unbindPolicy();
       if (this.activeDownloads.delete(modelId)) {
         this.downloadLifecycleVersion += 1;
       }
@@ -649,6 +666,16 @@ class ModelManager {
   }
 
   async runInference(modelId, prompt, options = {}) {
+    return runLocalModelOperation(
+      this,
+      "llm",
+      modelId,
+      () => this._policyAllowedRunInference(modelId, prompt, options),
+      { onAbort: () => this.cancelInference() }
+    );
+  }
+
+  async _policyAllowedRunInference(modelId, prompt, options = {}) {
     this.ensureInitialized();
     const startTime = Date.now();
     debugLogger.logReasoning("INFERENCE_START", {
@@ -773,6 +800,7 @@ class ModelManager {
         // be stepped down again.
         if (this.serverManager.contextSize < contextSize) refuse(contextSize);
       } catch (error) {
+        if (isLocalModelPolicyRefusal(error)) throw error;
         refuse(contextSize);
         // start() stops the running server before it spawns, so a grow that
         // dies has already taken a working window with it. Come back at the
@@ -790,6 +818,7 @@ class ModelManager {
         try {
           await startAt(restorableContextSize);
         } catch (restoreError) {
+          if (isLocalModelPolicyRefusal(restoreError)) throw restoreError;
           throw unavailable(restoreError);
         }
       }
@@ -907,6 +936,31 @@ class ModelManager {
   }
 
   async prewarmServer(modelId) {
+    try {
+      return await runLocalModelOperation(
+        this,
+        "llm",
+        modelId,
+        () => this._policyAllowedPrewarmServer(modelId),
+        { memoryOnly: true, onAbort: () => this.stopServer() }
+      );
+    } catch (error) {
+      if (error.code === "POLICY_UNRESOLVABLE") {
+        this.localModelPolicy?.runOnceVerdictSettles(() => {
+          // A request in the meantime already started what it needs.
+          if (this.serverManager.ready || this.serverManager.startupPromise) return;
+          this.prewarmServer(modelId).catch((resumeError) => {
+            debugLogger.warn("Resumed llama-server pre-warm failed", {
+              error: resumeError.message,
+            });
+          });
+        });
+      }
+      throw error;
+    }
+  }
+
+  async _policyAllowedPrewarmServer(modelId) {
     if (!modelId) return false;
     this.ensureInitialized();
 

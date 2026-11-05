@@ -136,3 +136,12 @@ test("legacy AI aliases still resolve", async () => {
   assert.equal(resolveSettingsSection("noSuchSection", nav), "account");
   assert.equal(LEGACY_SUB_TAB.agentMode, "chatIntelligence");
 });
+
+test("a meeting's refusal opens Speech-to-Text on its Note Recording tab", async () => {
+  const nav = await load();
+  const { isProviderSettingsTarget } = await import("../../src/helpers/providerHttpErrors.js");
+
+  assert.equal(isProviderSettingsTarget("noteRecording"), true);
+  assert.equal(nav.SECTION_ALIASES.noteRecording, "speechToText");
+  assert.equal(nav.LEGACY_SUB_TAB.noteRecording, "noteRecording");
+});

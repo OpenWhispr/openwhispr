@@ -37,6 +37,7 @@ import {
   filterByokProviderOptionsByPolicy,
   isModeAllowedByPolicy,
   isProviderAllowedByPolicy,
+  isLocalModelAllowedByPolicy,
   reconcileProviderSelection,
 } from "../stores/policyRules";
 import { usePolicySnapshot } from "../hooks/usePolicy";
@@ -559,6 +560,12 @@ export default function ReasoningModelSelector({
   // (e.g. a download finishing while another tab is browsed) can never commit
   // a mismatched (provider, model) pair.
   const handleModelSelect = (modelId: string) => {
+    if (
+      effectiveMode === "local" &&
+      modelId &&
+      !isLocalModelAllowedByPolicy(policyState, "llm", modelId)
+    )
+      return;
     if (!modelId) {
       setReasoningModel("");
       return;

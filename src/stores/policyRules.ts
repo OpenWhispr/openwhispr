@@ -60,6 +60,23 @@ export function isPolicyActionAllowed(state: PolicyDecisionSnapshot): boolean {
   return compareAppVersions(state.appVersion, state.policy.minAppVersion) >= 0;
 }
 
+/** A start mode this build doesn't know counts as manual. */
+export function isMeetingTranscriptionStartManual(state: PolicyDecisionSnapshot): boolean {
+  const policy = managedPolicy(state);
+  return policy !== null && (policy.meetings?.transcriptionStart ?? "automatic") !== "automatic";
+}
+
+/** A signed-in window must resolve policy before treating note navigation as consent. */
+export function isMeetingAutoTranscriptionAllowed(
+  state: PolicyDecisionSnapshot,
+  isSignedIn: boolean
+): boolean {
+  if (state.status === "unmanaged") return true;
+  if (state.status === "idle") return !isSignedIn;
+  if (!isPolicyActionAllowed(state)) return false;
+  return managedPolicy(state) !== null && !isMeetingTranscriptionStartManual(state);
+}
+
 /** Whether the org's minimum app version blocks this build (drives the update banner). */
 export function isUpdateRequiredByOrg(state: PolicyDecisionSnapshot): boolean {
   const minAppVersion = managedPolicy(state)?.minAppVersion;
@@ -239,6 +256,148 @@ export function isConnectorsBlockedByOrg(state: PolicyDecisionSnapshot): boolean
 }
 
 const warnedUnknownRequiredModelIds = new Set<string>();
+const warnedUnknownLocalModelIds = new Set<string>();
+
+// Read live: a catalog update can add or retire a local model during a session.
+export function isKnownLocalModelId(scope: PolicyScope, modelId: string): boolean {
+  if (scope === "transcription")
+    return (
+      Object.hasOwn(modelRegistryData.whisperModels, modelId) ||
+      Object.hasOwn(modelRegistryData.parakeetModels, modelId)
+    );
+  return modelRegistryData.localProviders.some((provider) =>
+    provider.models.some((model) => model.id === modelId)
+  );
+}
+
+export function allowedLocalModelIds(
+  state: PolicyDecisionSnapshot,
+  scope: PolicyScope
+): string[] | null {
+  const ids = managedPolicy(state)?.[scope].allowedLocalModels;
+  if (ids == null) return null;
+  return ids.filter((id) => {
+    if (isKnownLocalModelId(scope, id)) return true;
+    const key = `${scope}:${id}`;
+    if (!warnedUnknownLocalModelIds.has(key)) {
+      warnedUnknownLocalModelIds.add(key);
+      console.warn(`[policy] Ignoring unknown ${scope} local model id: ${id}`);
+    }
+    return false;
+  });
+}
+
+/**
+ * Only a managed policy judges the id: a guest's or unmanaged user's blank model
+ * takes the engine's default, and an unknown one fails as any bad id does, so
+ * neither is an organization's refusal.
+ */
+export function isLocalModelAllowedByPolicy(
+  state: PolicyDecisionSnapshot,
+  scope: PolicyScope,
+  modelId: string
+): boolean {
+  return managedPolicyDecision(state, (policy) => {
+    if (!isKnownLocalModelId(scope, modelId)) return false;
+    if (!policy[scope].allowedModes.includes("local")) return false;
+    const ids = allowedLocalModelIds(state, scope);
+    return ids === null || ids.includes(modelId);
+  });
+}
+
+export interface LocalModelRefusal {
+  code:
+    | "POLICY_UNRESOLVABLE"
+    | "POLICY_APP_VERSION_BLOCKED"
+    | "POLICY_LOCAL_MODE_BLOCKED"
+    | "POLICY_MODEL_BLOCKED";
+  messageKey: string;
+  settingsTarget: "speechToText" | "llms";
+}
+
+/** Why the policy refuses a local selection in this scope. Call once it has refused. */
+export function localModelRefusal(
+  state: PolicyDecisionSnapshot,
+  scope: PolicyScope
+): LocalModelRefusal {
+  const settingsTarget = scope === "llm" ? "llms" : "speechToText";
+  if (
+    state.status === "loading" ||
+    state.status === "error" ||
+    (state.status === "managed" && !state.policy)
+  ) {
+    return { code: "POLICY_UNRESOLVABLE", messageKey: "models.policy.unresolved", settingsTarget };
+  }
+  if (!isPolicyActionAllowed(state)) {
+    return {
+      code: "POLICY_APP_VERSION_BLOCKED",
+      messageKey: "models.policy.versionBlocked",
+      settingsTarget,
+    };
+  }
+  if (!isModeAllowedByPolicy(state, scope, "local")) {
+    return {
+      code: "POLICY_LOCAL_MODE_BLOCKED",
+      messageKey: "models.policy.modeBlocked",
+      settingsTarget,
+    };
+  }
+  return {
+    code: "POLICY_MODEL_BLOCKED",
+    messageKey:
+      managedPolicy(state)?.[scope].allowedLocalModels?.length === 0
+        ? "models.policy.emptyIntersection"
+        : allowedLocalModelIds(state, scope)?.length === 0
+          ? "models.policy.noneSupported"
+          : "models.policy.modelBlocked",
+    settingsTarget,
+  };
+}
+
+/** What a refused model's row says: only a refusal the organization made names it. */
+export function localModelRowRefusal(
+  state: PolicyDecisionSnapshot,
+  scope: PolicyScope
+): { labelKey: string; hintKey: string } {
+  const { code, messageKey } = localModelRefusal(state, scope);
+  return {
+    labelKey: isLocalChoiceRefusal(code)
+      ? "models.policy.notApproved"
+      : code === "POLICY_APP_VERSION_BLOCKED"
+        ? "models.policy.updateRequired"
+        : "models.policy.unavailable",
+    hintKey: messageKey,
+  };
+}
+
+/** The message for a local-model refusal that arrives as a code alone, as main sends it. */
+export const LOCAL_MODEL_REFUSAL_MESSAGE_KEYS: Record<LocalModelRefusal["code"], string> = {
+  POLICY_MODEL_BLOCKED: "models.policy.modelBlocked",
+  POLICY_LOCAL_MODE_BLOCKED: "models.policy.modeBlocked",
+  POLICY_UNRESOLVABLE: "models.policy.unresolved",
+  POLICY_APP_VERSION_BLOCKED: "models.policy.versionBlocked",
+};
+
+export function isLocalChoiceRefusal(code: unknown): boolean {
+  return code === "POLICY_MODEL_BLOCKED" || code === "POLICY_LOCAL_MODE_BLOCKED";
+}
+
+/** A refusal the member can fix by choosing again in Settings; null for any other. */
+export function localChoiceRefusal(
+  state: PolicyDecisionSnapshot,
+  scope: PolicyScope
+): LocalModelRefusal | null {
+  const refusal = localModelRefusal(state, scope);
+  return isLocalChoiceRefusal(refusal.code) ? refusal : null;
+}
+
+export function filterLocalModelOptionsByPolicy<T extends { id: string }>(
+  options: T[],
+  scope: PolicyScope,
+  state: PolicyDecisionSnapshot
+): T[] {
+  return options.filter((option) => isLocalModelAllowedByPolicy(state, scope, option.id));
+}
 
 /**
  * Model ids the org requires on disk, filtered to ids this build's registry
@@ -257,7 +416,8 @@ export function requiredLocalModelIds(state: PolicyDecisionSnapshot): string[] {
   const usable: string[] = [];
   for (const id of required) {
     if (known.has(id)) {
-      if (!usable.includes(id)) usable.push(id);
+      if (!usable.includes(id) && isLocalModelAllowedByPolicy(state, "transcription", id))
+        usable.push(id);
     } else if (!warnedUnknownRequiredModelIds.has(id)) {
       warnedUnknownRequiredModelIds.add(id);
       console.warn(`[policy] Ignoring unknown required local model id: ${id}`);
@@ -294,6 +454,7 @@ export function cloudBackupResumed(
 export interface LlmSelection {
   mode: InferenceMode;
   provider: string;
+  model?: string;
 }
 
 export interface PolicySelectionCatalog {
@@ -361,6 +522,8 @@ export function isLlmSelectionAllowed(
   state: PolicyDecisionSnapshot,
   selection: LlmSelection
 ): boolean {
+  if (selection.mode === "local")
+    return isLocalModelAllowedByPolicy(state, "llm", selection.model ?? "");
   if (!isModeAllowedByPolicy(state, "llm", selection.mode)) return false;
   if (selection.mode === "providers") {
     return isProviderAllowedByPolicy(state, "llm", selection.provider);
@@ -374,12 +537,15 @@ export function isLlmSelectionAllowed(
 export interface TranscriptionSelection {
   mode: InferenceMode;
   provider: string;
+  model?: string;
 }
 
 export function isTranscriptionSelectionAllowed(
   state: PolicyDecisionSnapshot,
   selection: TranscriptionSelection
 ): boolean {
+  if (selection.mode === "local")
+    return isLocalModelAllowedByPolicy(state, "transcription", selection.model ?? "");
   if (!isModeAllowedByPolicy(state, "transcription", selection.mode)) return false;
   if (selection.mode === "providers") {
     return isProviderAllowedByPolicy(state, "transcription", selection.provider);
@@ -396,19 +562,39 @@ export function getTranscriptionSelection(
   settings: SettingsState,
   context: TranscriptionPolicyContext
 ): TranscriptionSelection {
+  const prefix = context === "dictation" ? "" : context;
+  const read = (
+    key: "localTranscriptionProvider" | "whisperModel" | "parakeetModel" | "cohereModel"
+  ): string => {
+    const contextKey = prefix ? `${prefix}${key[0].toUpperCase()}${key.slice(1)}` : key;
+    return (settings[contextKey as keyof SettingsState] as string) || settings[key];
+  };
+  const provider = read("localTranscriptionProvider");
+  const model = settings.policyBlockedLocalScopes?.includes(context)
+    ? ""
+    : read(
+        provider === "whisper"
+          ? "whisperModel"
+          : provider === "cohere"
+            ? "cohereModel"
+            : "parakeetModel"
+      );
   if (context === "meeting") {
     return {
+      model,
       mode: settings.meetingTranscriptionMode,
       provider: settings.meetingCloudTranscriptionProvider || settings.cloudTranscriptionProvider,
     };
   }
   if (context === "upload") {
     return {
+      model,
       mode: settings.uploadTranscriptionMode,
       provider: settings.uploadCloudTranscriptionProvider || settings.cloudTranscriptionProvider,
     };
   }
   return {
+    model,
     mode: settings.transcriptionMode,
     provider: settings.cloudTranscriptionProvider,
   };
@@ -423,6 +609,30 @@ export function isTranscriptionContextAllowed(
     isAudioFeatureAllowed(state, context) &&
     isTranscriptionSelectionAllowed(state, getTranscriptionSelection(settings, context))
   );
+}
+
+/** Why a transcription context is refused, when choosing another local model would fix it. */
+export function transcriptionChoiceRefusal(
+  state: PolicyDecisionSnapshot,
+  settings: SettingsState,
+  context: TranscriptionPolicyContext
+): LocalModelRefusal | null {
+  if (!isAudioFeatureAllowed(state, context)) return null;
+  const selection = getTranscriptionSelection(settings, context);
+  if (selection.mode !== "local" || isTranscriptionSelectionAllowed(state, selection)) return null;
+  return localChoiceRefusal(state, "transcription");
+}
+
+/**
+ * Whether a settled verdict refuses this feature, which is what stops work
+ * already running. New work also waits on an unresolved verdict
+ * (isAudioFeatureAllowed), but one says nothing new about what's running.
+ */
+export function isAudioFeatureDenied(
+  state: PolicyDecisionSnapshot,
+  context: TranscriptionPolicyContext
+): boolean {
+  return state.status === "managed" && !!state.policy && !isAudioFeatureAllowed(state, context);
 }
 
 export function isAudioFeatureAllowed(

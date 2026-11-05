@@ -81,3 +81,16 @@ test("missing and corrupt archives reject instead of reporting successful verifi
   fs.writeFileSync(archivePath, "not a bzip2 archive");
   await assert.rejects(validateModelArchive(archivePath, "root"));
 });
+
+test("a revoked policy lease ends JavaScript extraction", async (t) => {
+  const { archivePath, dir } = fixture(t);
+  const { extractModelArchive } = require("../../src/helpers/modelArchiveIntegrity");
+  const lease = new AbortController();
+  const extracting = extractModelArchive(archivePath, dir, lease.signal);
+  lease.abort();
+  await assert.rejects(extracting, { isAbort: true });
+
+  const already = new AbortController();
+  already.abort();
+  await assert.rejects(extractModelArchive(archivePath, dir, already.signal), { isAbort: true });
+});

@@ -217,7 +217,7 @@ test("a catalog addition immediately rechecks an already-required local model", 
   const vite = await createRendererServer(t, {
     cachePrefix: "registry-required-live-",
     mockModules: {
-      "./usePolicy": `const snapshot = { status: 'managed', policy: { requiredLocalModels: ['required-future'] } }; export const usePolicySnapshot = () => snapshot;`,
+      "./usePolicy": `const snapshot = { status: 'managed', policy: { requiredLocalModels: ['required-future'], transcription: { allowedModes: ['local'] } } }; export const usePolicySnapshot = () => snapshot;`,
       "./useModelDownload": `export const LOCAL_MODELS_CHANGED_EVENT = 'local-models-changed';`,
     },
   });
@@ -245,4 +245,25 @@ test("a catalog addition immediately rechecks an already-required local model", 
   } finally {
     await React.act(async () => root.unmount());
   }
+});
+
+test("org policy treats a local model the catalog added or retired as it now stands", async (t) => {
+  installBrowserGlobals(t);
+  const vite = await createRendererServer(t, { cachePrefix: "registry-policy-known-" });
+  const { isKnownLocalModelId } = await vite.ssrLoadModule("/stores/policyRules.ts");
+  const store = await vite.ssrLoadModule("/models/registryData.js");
+  const gguf = seed.localProviders[0].models[0].id;
+  assert.equal(isKnownLocalModelId("transcription", "remote-whisper"), false);
+  assert.equal(isKnownLocalModelId("llm", "remote-gguf"), false);
+  assert.equal(isKnownLocalModelId("llm", gguf), true);
+
+  const data = structuredClone(seed);
+  data.whisperModels["remote-whisper"] = { ...data.whisperModels.base };
+  data.localProviders[0].models.push({ ...data.localProviders[0].models[1], id: "remote-gguf" });
+  Object.assign(data.localProviders[0].models[0], { retired: true });
+  store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1 });
+
+  assert.equal(isKnownLocalModelId("transcription", "remote-whisper"), true);
+  assert.equal(isKnownLocalModelId("llm", "remote-gguf"), true);
+  assert.equal(isKnownLocalModelId("llm", gguf), false, "a retired model is not loaded");
 });

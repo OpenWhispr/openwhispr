@@ -189,8 +189,24 @@ test("a warm connection opened for other keyterms is not reused", async () => {
   });
 });
 
+test("auto or no language asks Nova-3 for multilingual mode, not Deepgram's English default", () => {
+  const streaming = new DeepgramStreaming();
+  for (const language of ["auto", undefined]) {
+    const params = new URL(streaming.buildWebSocketUrl({ token: "t", language })).searchParams;
+    assert.equal(params.get("language"), "multi");
+    assert.equal(params.get("model"), "nova-3");
+  }
+});
+
+test("an explicit language is sent as is", () => {
+  const streaming = new DeepgramStreaming();
+  const params = new URL(streaming.buildWebSocketUrl({ token: "t", language: "bg" })).searchParams;
+  assert.equal(params.get("language"), "bg");
+  assert.equal(params.get("model"), "nova-3");
+});
+
 test("a warm connection is reused when the two option sets build the same URL", async () => {
-  // buildWebSocketUrl folds "auto" into no language and skips empty keyterms, so
+  // buildWebSocketUrl folds "auto" into multi and skips empty keyterms, so
   // the guard has to fold them the same way — otherwise every dictation cold
   // starts and the warm socket stops buying anything.
   await withMetadataServer(async (url, connections) => {

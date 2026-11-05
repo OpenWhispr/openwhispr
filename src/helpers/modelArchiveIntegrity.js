@@ -37,7 +37,10 @@ function runArchiveWorker(task, signal, onProgress) {
     const abort = () => {
       void worker.terminate();
     };
+    // Downloads pass createDownloadSignal's plain signal, which calls onAbort; extraction
+    // passes a policy lease's AbortSignal.
     if (signal) signal.onAbort = abort;
+    signal?.addEventListener?.("abort", abort, { once: true });
     let completed = false;
     let failure;
     worker.on("message", (result) => {
@@ -52,6 +55,7 @@ function runArchiveWorker(task, signal, onProgress) {
     // before the caller removes temporary files (particularly on Windows).
     worker.once("exit", (code) => {
       if (signal?.onAbort === abort) signal.onAbort = previousAbort;
+      signal?.removeEventListener?.("abort", abort);
       if (signal?.aborted)
         reject(Object.assign(new Error("Archive verification cancelled"), { isAbort: true }));
       else if (failure) reject(failure);
@@ -75,8 +79,8 @@ function validateModelArchive(archivePath, expectedRoot, signal, declaredBytes, 
   );
 }
 
-function extractModelArchive(archivePath, extractDir) {
-  return runArchiveWorker({ operation: "extract", archivePath, extractDir });
+function extractModelArchive(archivePath, extractDir, signal) {
+  return runArchiveWorker({ operation: "extract", archivePath, extractDir }, signal);
 }
 
 module.exports = { assertSafeModelArchiveEntry, validateModelArchive, extractModelArchive };

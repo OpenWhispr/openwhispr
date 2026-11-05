@@ -102,13 +102,9 @@ function PeopleBody({
   );
 
   const { reload } = invitations;
-  const handleInvited = useCallback(
-    (emails: string[]): void => {
-      invitedCountRef.current += emails.length;
-      void reload();
-    },
-    [reload]
-  );
+  const handleInvited = useCallback((emails: string[]): void => {
+    invitedCountRef.current += emails.length;
+  }, []);
 
   return (
     <>
@@ -125,7 +121,7 @@ function PeopleBody({
         </p>
       </div>
 
-      <div className="border-b border-border/70 dark:border-border-subtle/60 -mx-1 flex items-center gap-0.5 px-1">
+      <div className="border-b border-border/70 dark:border-border-subtle/60 -mx-1 flex flex-wrap items-center gap-0.5 px-1">
         <div role="tablist" className="flex items-center gap-0.5">
           {visibleTabs.map((id) => (
             <button
@@ -182,7 +178,12 @@ function PeopleBody({
           workspaceId={workspace.id}
           workspaceName={workspace.name}
           onInvited={handleInvited}
-          knownEmails={knownEmails}
+          onInvitationsChanged={reload}
+          knownEmails={
+            rosterIsOurs && invitations.status === "ready" && !invitations.stale
+              ? knownEmails
+              : undefined
+          }
         />
       )}
     </>
