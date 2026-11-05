@@ -79,19 +79,26 @@ export default function TeamSpacesPanel({
   const [revealed, setRevealed] = useState(false);
   const [focusRequest, setFocusRequest] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
+  // What this panel added, so it reads as assigned and stops being offered before (or without) the
+  // directory read that confirms it.
+  const [addedSpaces, setAddedSpaces] = useState<SpaceRef[]>([]);
 
   const canCreate = workspaceCan(workspace, "create_spaces");
   const ready = directory.status === "ready";
   const listed = directory.spaces;
 
   const assigned = useMemo<SpaceRef[]>(() => {
-    if (!ready) {
-      return (team.spaces ?? []).map(({ id, name, emoji }) => ({ id, name, emoji }));
+    const known = new Map<string, SpaceRef>();
+    const remember = ({ id, name, emoji }: SpaceRef): void => {
+      if (!known.has(id)) known.set(id, { id, name, emoji });
+    };
+    if (ready) {
+      listed.filter((space) => space.teams.some((entry) => entry.id === team.id)).forEach(remember);
     }
-    return listed
-      .filter((space) => space.teams.some((entry) => entry.id === team.id))
-      .map(({ id, name, emoji }) => ({ id, name, emoji }));
-  }, [ready, listed, team.id, team.spaces]);
+    (team.spaces ?? []).forEach(remember);
+    addedSpaces.forEach(remember);
+    return [...known.values()];
+  }, [ready, listed, team.id, team.spaces, addedSpaces]);
 
   const choices = useMemo<WorkspaceSpace[]>(() => {
     if (!ready) return [];
@@ -151,7 +158,15 @@ export default function TeamSpacesPanel({
     const added = picks.filter((space) => !failedIds.has(space.id));
     const failed = picks.filter((space) => failedIds.has(space.id));
     const reasons = failures.map((failure) => classifyTeamAssignmentError(failure.error));
-    if (added.length > 0) onChanged();
+    if (added.length > 0) {
+      onChanged();
+      if (mounted.current) {
+        setAddedSpaces((current) => [
+          ...current,
+          ...added.map(({ id, name, emoji }) => ({ id, name, emoji })),
+        ]);
+      }
+    }
     void reload();
 
     if (reasons.includes("teamGone")) {
@@ -181,9 +196,13 @@ export default function TeamSpacesPanel({
         ),
       });
     }
-    toast(failed.length === 0 ? { title } : { title, variant: "destructive" });
+    // A failure reads inline while the panel is there; the toast is for one that outlived it.
+    if (failed.length === 0 || !mounted.current) {
+      toast(failed.length === 0 ? { title } : { title, variant: "destructive" });
+    }
     if (!mounted.current) return;
     setAdding(false);
+    setFocusRequest((count) => count + 1);
     setSelectedIds(failed.map((space) => space.id));
     setFailureText(failed.length > 0 ? title : null);
   };
@@ -310,7 +329,15 @@ export default function TeamSpacesPanel({
             </p>
           </div>
         ) : hasAssigned ? (
-          <AssignedList spaces={assigned} label={t(`${KEY}.dialog.tabSpaces`)} />
+          <>
+            {failureText && (
+              // Every teamspace it named has left the choices, so nothing staged carries the line.
+              <p role="alert" className="text-xs text-destructive">
+                {failureText}
+              </p>
+            )}
+            <AssignedList spaces={assigned} label={t(`${KEY}.dialog.tabSpaces`)} />
+          </>
         ) : (
           <Message title={t(`${COPY}.emptyTitle`)} body={t(`${COPY}.emptyBody`)} />
         )}
@@ -436,7 +463,16 @@ function TeamspacePicker({
   const matches = needle
     ? choices.filter((space) => space.name.toLowerCase().includes(needle))
     : choices;
-  const activeIndex = active < matches.length ? active : -1;
+  // "Create new" is the list's last navigable row, so the keyboard reaches it from the field.
+  const rowCount = matches.length + (canCreate ? 1 : 0);
+  const activeIndex = active < rowCount ? active : -1;
+  const createActive = canCreate && activeIndex === matches.length;
+
+  useEffect(() => {
+    if (activeIndex < 0) return;
+    // Missing in some test environments.
+    document.getElementById(`${listId}-${activeIndex}`)?.scrollIntoView?.({ block: "nearest" });
+  }, [activeIndex, listId]);
 
   const handleChange = (value: string): void => {
     // Typing over the closed field's names starts a search rather than editing them.
@@ -449,14 +485,23 @@ function TeamspacePicker({
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      if (matches.length === 0) return;
+      if (rowCount === 0) return;
       event.preventDefault();
       setDismissed(false);
-      const step = event.key === "ArrowDown" ? 1 : -1;
-      setActive((current) => (current + step + matches.length) % matches.length);
+      const down = event.key === "ArrowDown";
+      setActive((current) => {
+        const from = current < rowCount ? current : -1;
+        if (from < 0) return down ? 0 : rowCount - 1;
+        return (from + (down ? 1 : -1) + rowCount) % rowCount;
+      });
     } else if (event.key === "Enter" && open && activeIndex >= 0) {
       event.preventDefault();
-      onToggle(matches[activeIndex].id);
+      if (createActive) {
+        setDismissed(true);
+        onCreate();
+      } else {
+        onToggle(matches[activeIndex].id);
+      }
     }
   };
 
@@ -570,11 +615,16 @@ function TeamspacePicker({
           <div className="mt-1 border-t border-border/60 pt-1">
             <button
               type="button"
+              id={`${listId}-${matches.length}`}
+              onMouseEnter={() => setActive(matches.length)}
               onClick={() => {
                 setDismissed(true);
                 onCreate();
               }}
-              className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-start text-sm text-foreground hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+              className={cn(
+                "flex w-full items-center gap-2 rounded-lg px-2 py-2 text-start text-sm text-foreground hover:bg-muted focus-visible:bg-muted focus-visible:outline-none",
+                createActive && "bg-muted"
+              )}
             >
               <Plus className="size-3.5 text-muted-foreground" aria-hidden="true" />
               {t(`${COPY}.createNew`)}

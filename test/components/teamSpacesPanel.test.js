@@ -42,6 +42,7 @@ test.before(async (t) => {
             loads: 1,
             reload: async () => {
               globalThis.__calls.push(["reload"]);
+              if (globalThis.__server.reload) return globalThis.__server.reload(setSpaces);
               const next = globalThis.__server.spaces();
               setSpaces(next);
               return next;
@@ -137,13 +138,13 @@ const workspaceWith = (createSpaces = true) => ({
 // What a test steers: the directory the server lists and how the assignment answers.
 async function mount(
   t,
-  { spaces = [], createSpaces = true, status = "ready", team = TEAM, assign } = {}
+  { spaces = [], createSpaces = true, status = "ready", team = TEAM, assign, reload } = {}
 ) {
   const calls = [];
   const events = [];
   const state = { spaces };
   globalThis.__calls = calls;
-  globalThis.__server = { spaces: () => state.spaces, status };
+  globalThis.__server = { spaces: () => state.spaces, status, reload };
   globalThis.__toasts = [];
   globalThis.__createProps = [];
   globalThis.__actions = {
@@ -320,7 +321,9 @@ test("all failed keeps the selections", async (t) => {
   await ui.click(buttonNamed("Add teamspaces"));
   await ui.settle();
 
-  assert.deepEqual(titles(toasts()), ["Couldn't add Sales. Your selections are kept. Try again."]);
+  // Inline while the panel is there, not a second time as a toast.
+  assert.deepEqual(toasts(), []);
+  assert.match(panelText(), /Couldn't add Sales\. Your selections are kept\. Try again\./);
   assert.match(panelText(), /2 teamspaces selected/);
   assert.ok(buttonNamed("Add teamspaces"));
   assert.deepEqual(events, []);
@@ -342,9 +345,8 @@ test("some failed keeps only those and names them", async (t) => {
   await ui.click(buttonNamed("Add teamspaces"));
   await ui.settle();
 
-  assert.deepEqual(titles(toasts()), [
-    "Added Sales to Planning. Couldn't add it to Product. Try again.",
-  ]);
+  assert.deepEqual(toasts(), []);
+  assert.match(panelText(), /Added Sales to Planning\. Couldn't add it to Product\. Try again\./);
   assert.match(panelText(), /1 teamspace selected/);
   assert.match(panelText(), /Couldn't add it to Product/);
   await ui.press(field(), "Escape");
@@ -390,7 +392,8 @@ test("losing space admin is worded as that, not as a connection problem", async 
   await ui.click(buttonNamed("Add teamspaces"));
   await ui.settle();
 
-  assert.deepEqual(titles(toasts()), ["You can no longer manage Planning."]);
+  assert.deepEqual(toasts(), []);
+  assert.match(panelText(), /You can no longer manage Planning\./);
 });
 
 test("an answer that lands after the tab closed is still reported, and closes nothing", async (t) => {
@@ -450,4 +453,103 @@ test("a failed directory read offers Try again", async (t) => {
 
   assert.match(panelText(), /Couldn't load teamspaces/);
   assert.ok(buttonNamed("Try again"));
+});
+
+const addPlanning = async () => {
+  await openPicker();
+  await choose("Planning");
+  await ui.click(buttonNamed("Add teamspaces"));
+};
+
+test("a teamspace just added reads as assigned while the directory read is still out", async (t) => {
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  await mount(t, { spaces: SPACES, reload: () => gate });
+  await addPlanning();
+  await ui.settle();
+
+  assert.deepEqual(rows(), ["Customer Calls", "Engineering", "Planning"]);
+  await openPicker();
+  assert.deepEqual(optionTexts(), ["Product", "Other Team Only"]);
+  release(null);
+});
+
+test("a teamspace just added stays assigned and unoffered when the read fails", async (t) => {
+  await mount(t, { spaces: SPACES, reload: async () => null });
+  await addPlanning();
+  await ui.settle();
+
+  assert.deepEqual(rows(), ["Customer Calls", "Engineering", "Planning"]);
+  await openPicker();
+  assert.deepEqual(optionTexts(), ["Product", "Other Team Only"]);
+});
+
+test("focus returns to the field once an attempt settles", async (t) => {
+  await mount(t, { spaces: SPACES });
+  await addPlanning();
+  await ui.settle();
+
+  assert.equal(doc().activeElement, field());
+});
+
+test("a failure that outlived the panel is a toast", async (t) => {
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const { toasts, unmount } = await mount(t, {
+    spaces: SPACES,
+    assign: async (_team, spaceIds) => {
+      await gate;
+      return { failures: spaceIds.map((spaceId) => ({ spaceId, error: new Error("offline") })) };
+    },
+  });
+  await addPlanning();
+  await unmount();
+  release();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.deepEqual(titles(toasts()), ["Couldn't add Sales. Your selections are kept. Try again."]);
+});
+
+test("arrow keys walk the options, Enter toggles, and ArrowUp from nowhere starts at the last", async (t) => {
+  await mount(t, { spaces: SPACES });
+  await openPicker();
+  const active = () => field().getAttribute("aria-activedescendant");
+  const activeText = () => text(doc().getElementById(active()));
+
+  await ui.press(field(), "ArrowUp");
+  // Last row is "Create new teamspace", after the three options.
+  assert.equal(activeText(), "Create new teamspace");
+  await ui.press(field(), "ArrowUp");
+  assert.equal(activeText(), "Other Team Only");
+  await ui.press(field(), "ArrowDown");
+  await ui.press(field(), "ArrowDown");
+  assert.equal(activeText(), "Planning");
+  await ui.press(field(), "Enter");
+  assert.equal(optionNamed("Planning").getAttribute("aria-selected"), "true");
+  await ui.press(field(), "Enter");
+  assert.equal(optionNamed("Planning").getAttribute("aria-selected"), "false");
+});
+
+test("Create new is reachable from the keyboard", async (t) => {
+  await mount(t, { spaces: SPACES });
+  await openPicker();
+  await ui.press(field(), "ArrowUp");
+  await ui.press(field(), "Enter");
+
+  const props = globalThis.__createProps.at(-1);
+  assert.equal(props.open, true);
+  assert.equal(props.initialTeam.id, "t1");
+});
+
+test("Space types into the search rather than choosing", async (t) => {
+  await mount(t, { spaces: SPACES });
+  await openPicker();
+  await ui.press(field(), "ArrowDown");
+  await ui.press(field(), " ");
+
+  assert.equal(optionNamed("Planning").getAttribute("aria-selected"), "false");
 });
