@@ -20,7 +20,74 @@ const CONNECTED = {
 };
 const LOOPBACK = { mode: "loopback", strategy: "loopback", status: "granted", granted: true };
 
-async function pendingStartup(t, { prewarm = false, loopback = false } = {}) {
+for (const unresolvedPolicy of [false, true]) {
+  test(`automatic start revoked during access checks never opens capture (unresolved: ${unresolvedPolicy})`, async (t) => {
+    const checking = Promise.withResolvers();
+    const access = Promise.withResolvers();
+    let allowed = true;
+    let captures = 0;
+    installMicCaptureGlobals(t);
+    navigator.mediaDevices.getUserMedia = async () => {
+      captures++;
+      throw new Error("unexpected capture");
+    };
+    installBrowserGlobals(t, {
+      window: {
+        electronAPI: {
+          checkSystemAudioAccess: () => {
+            checking.resolve();
+            return access.promise;
+          },
+          meetingTranscriptionStart: async () => {
+            captures++;
+            throw new Error("unexpected start");
+          },
+        },
+      },
+    });
+    const vite = await createRendererServer(t, { cachePrefix: "meeting-auto-start-revoked-" });
+    const { startRecording, useMeetingRecordingStore } = await vite.ssrLoadModule(
+      "/stores/meetingRecordingStore.ts"
+    );
+    const starting = startRecording({
+      ...START_ARGS,
+      noteId: 7,
+      noteTitle: "Standup",
+      folderId: 3,
+      seedSegments: [{ id: "earlier", text: "Earlier", source: "mic", timestamp: 1 }],
+      canAutoStart: () => allowed,
+    });
+    await checking.promise;
+    allowed = false;
+    if (unresolvedPolicy) {
+      const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+      usePolicyStore.setState({ status: "loading", policy: null });
+    }
+    access.resolve({
+      mode: "unsupported",
+      strategy: "unsupported",
+      status: "unsupported",
+      granted: false,
+    });
+    assert.equal(await starting, false);
+    assert.equal(await startRecording({ ...START_ARGS, canAutoStart: () => false }), false);
+    assert.equal(captures, 0);
+    const state = useMeetingRecordingStore.getState();
+    assert.equal(state.isRecording, false);
+    assert.equal(state.error, null);
+    assert.equal(state.recordingNoteId, null, "a start that never captured owns no note");
+    assert.equal(state.recordingNoteTitle, null);
+    assert.equal(state.recordingFolderId, null);
+    assert.equal(state.recordingStartedAt, null);
+    assert.deepEqual(state.segments, []);
+    assert.equal(state.transcript, "");
+  });
+}
+
+async function pendingStartup(
+  t,
+  { prewarm = false, loopback = false, canAutoStart, onDisplayRequest } = {}
+) {
   const ready = Promise.withResolvers();
   const requested = Promise.withResolvers();
   const captured = Promise.withResolvers();
@@ -80,7 +147,10 @@ async function pendingStartup(t, { prewarm = false, loopback = false } = {}) {
     captured.resolve();
     return stream;
   };
-  navigator.mediaDevices.getDisplayMedia = async (...args) => acquire(...args);
+  navigator.mediaDevices.getDisplayMedia = async (...args) => {
+    onDisplayRequest?.();
+    return acquire(...args);
+  };
   const Context = global.AudioContext;
   global.AudioContext = class extends Context {
     async close() {
@@ -98,7 +168,7 @@ async function pendingStartup(t, { prewarm = false, loopback = false } = {}) {
   const vite = await createRendererServer(t, { cachePrefix: "ow-meeting-startup-audio-" });
   const store = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
   const preparing = prewarm ? store.prepareTranscription() : Promise.resolve();
-  const starting = store.startRecording(START_ARGS);
+  const starting = store.startRecording({ ...START_ARGS, canAutoStart });
   t.after(async () => {
     ready.resolve(CONNECTED);
     availability.resolve({ success: true });
@@ -241,4 +311,241 @@ test("stopping during a slow connect releases the microphone before main settles
     mainStarts: 1,
     mainStops: 1,
   });
+});
+
+test("automatic consent stays live while both prewarm and microphone selection are pending", async (t) => {
+  const ready = Promise.withResolvers();
+  const selecting = Promise.withResolvers();
+  const selected = Promise.withResolvers();
+  let allowed = true;
+  const captures = [];
+  installMicCaptureGlobals(t);
+  navigator.mediaDevices.getUserMedia = async () => {
+    captures.push("mic");
+    throw new Error("unexpected microphone capture");
+  };
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        meetingTranscriptionPrepare: () => ready.promise,
+        meetingTranscriptionStart: async () => {
+          captures.push("main");
+          return CONNECTED;
+        },
+        checkSystemAudioAccess: async () => ({
+          mode: "unsupported",
+          strategy: "unsupported",
+          status: "unsupported",
+          granted: false,
+        }),
+        meetingTranscriptionStop: async () => ({ success: true }),
+      },
+    },
+  });
+  globalThis.__meetingMicrophoneSelection = () => {
+    selecting.resolve();
+    return selected.promise;
+  };
+  t.after(() => delete globalThis.__meetingMicrophoneSelection);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "meeting-pending-auto-consent-",
+    mockModules: {
+      "../helpers/microphoneSelection":
+        "export const resolvePreferredMicrophone = () => globalThis.__meetingMicrophoneSelection();",
+    },
+  });
+  const store = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
+  const preparing = store.prepareTranscription();
+  const starting = store.startRecording({ ...START_ARGS, canAutoStart: () => allowed });
+  await selecting.promise;
+  allowed = false;
+  ready.resolve({ success: true });
+  selected.resolve({ device: null });
+  await preparing;
+  assert.equal(await starting, false);
+  assert.deepEqual(captures, []);
+  assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
+  assert.equal(store.useMeetingRecordingStore.getState().error, null);
+});
+
+for (const nativeCapture of [false, true]) {
+  test(`automatic main setup ${nativeCapture ? "with" : "without"} native capture waits for microphone selection`, async (t) => {
+    const selecting = Promise.withResolvers();
+    const devices = Promise.withResolvers();
+    let store;
+    let starting;
+    t.after(async () => {
+      devices.resolve([]);
+      await starting;
+      await store?.stopRecording();
+    });
+    let allowed = true;
+    let microphoneCalls = 0;
+    let mainStarts = 0;
+    let mainStops = 0;
+    installMicCaptureGlobals(t);
+    const acquire = navigator.mediaDevices.getUserMedia;
+    navigator.mediaDevices.enumerateDevices = () => {
+      selecting.resolve();
+      return devices.promise;
+    };
+    navigator.mediaDevices.getUserMedia = async (...args) => {
+      microphoneCalls++;
+      return acquire(...args);
+    };
+    const strategy = nativeCapture ? "native" : "unsupported";
+    installBrowserGlobals(t, {
+      window: {
+        electronAPI: {
+          checkSystemAudioAccess: async () => ({
+            mode: strategy,
+            strategy,
+            status: nativeCapture ? "granted" : "unsupported",
+            granted: nativeCapture,
+          }),
+          meetingTranscriptionStart: async () => {
+            mainStarts++;
+            return { success: true, systemAudioMode: strategy, systemAudioStrategy: strategy };
+          },
+          meetingTranscriptionStop: async () => {
+            mainStops++;
+            return { success: true };
+          },
+        },
+      },
+    });
+    const vite = await createRendererServer(t, { cachePrefix: "meeting-main-capture-consent-" });
+    store = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
+    starting = store.startRecording({ ...START_ARGS, canAutoStart: () => allowed });
+    await selecting.promise;
+    assert.equal(mainStarts, 0, "main setup cannot consume the note session before capture");
+    allowed = false;
+    devices.resolve([]);
+    assert.equal(await starting, false);
+    assert.equal(microphoneCalls, 0);
+    assert.equal(mainStarts, 0);
+    assert.equal(mainStops, 0);
+    assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
+    assert.equal(store.useMeetingRecordingStore.getState().error, null);
+  });
+}
+
+for (const automatic of [false, true]) {
+  for (const microphoneFails of [false, true]) {
+    test(`${automatic ? "automatic" : "explicit"} native startup preserves capture ordering and continuity (microphone fails: ${microphoneFails})`, async (t) => {
+      const connecting = Promise.withResolvers();
+      const connected = Promise.withResolvers();
+      const requestedMicrophone = Promise.withResolvers();
+      const calls = [];
+      let allowed = true;
+      let store;
+      let starting;
+      t.after(async () => {
+        connected.resolve({
+          success: true,
+          systemAudioMode: "native",
+          systemAudioStrategy: "native",
+        });
+        await starting;
+        await store?.stopRecording();
+      });
+      installMicCaptureGlobals(t);
+      const acquire = navigator.mediaDevices.getUserMedia;
+      navigator.mediaDevices.getUserMedia = async (...args) => {
+        calls.push("mic");
+        requestedMicrophone.resolve();
+        if (microphoneFails) throw new Error("Microphone unavailable");
+        return acquire(...args);
+      };
+      installBrowserGlobals(t, {
+        window: {
+          electronAPI: {
+            checkSystemAudioAccess: async () => ({
+              mode: "native",
+              strategy: "native",
+              status: "granted",
+              granted: true,
+            }),
+            meetingTranscriptionStart: () => {
+              calls.push("main");
+              connecting.resolve();
+              return connected.promise;
+            },
+            meetingTranscriptionStop: async () => ({ success: true }),
+          },
+        },
+      });
+      const vite = await createRendererServer(t, { cachePrefix: "meeting-native-start-order-" });
+      store = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
+      starting = store.startRecording({
+        ...START_ARGS,
+        canAutoStart: automatic ? () => allowed : undefined,
+      });
+      await Promise.all([connecting.promise, requestedMicrophone.promise]);
+      assert.deepEqual(calls, automatic ? ["mic", "main"] : ["main", "mic"]);
+      allowed = false;
+      connected.resolve({
+        success: true,
+        systemAudioMode: "native",
+        systemAudioStrategy: "native",
+      });
+      assert.equal(
+        await starting,
+        true,
+        "a policy flip after the first capture request keeps the recording"
+      );
+      assert.equal(store.useMeetingRecordingStore.getState().isRecording, true);
+    });
+  }
+}
+
+test("policy changes after capture begins do not interrupt pending connection or live audio", async (t) => {
+  let allowed = true;
+  const session = await pendingStartup(t, { prewarm: true, canAutoStart: () => allowed });
+  allowed = false;
+  session.speak([100, 200]);
+  await session.finish();
+  session.speak([300, 400]);
+  assert.equal(await session.starting, true);
+  assert.equal(session.store.useMeetingRecordingStore.getState().isRecording, true);
+  assert.deepEqual(session.sent, [
+    [100, 200],
+    [300, 400],
+  ]);
+  await session.store.stopRecording();
+});
+
+test("display capture latches consent while the prewarm still holds main's start", async (t) => {
+  let allowed = true;
+  const session = await pendingStartup(t, {
+    prewarm: true,
+    loopback: true,
+    canAutoStart: () => allowed,
+    onDisplayRequest: () => (allowed = false),
+  });
+  session.availability.resolve({ success: true });
+  await session.finish();
+  assert.equal(await session.starting, true);
+  assert.equal(session.store.useMeetingRecordingStore.getState().isRecording, true);
+  await session.store.stopRecording();
+});
+
+test("consent lost before capture preparation never shows a recording state", async (t) => {
+  installMicCaptureGlobals(t);
+  installBrowserGlobals(t, { window: { electronAPI: {} } });
+  const vite = await createRendererServer(t, { cachePrefix: "meeting-auto-no-flash-" });
+  const { startRecording, useMeetingRecordingStore } = await vite.ssrLoadModule(
+    "/stores/meetingRecordingStore.ts"
+  );
+  const states = [];
+  const unsubscribe = useMeetingRecordingStore.subscribe((state) => states.push(state.isRecording));
+  t.after(unsubscribe);
+  let checks = 0;
+  const started = await startRecording({
+    ...START_ARGS,
+    // Allowed at the first check, gone by the second, past the previous recording's stop.
+    canAutoStart: () => (checks += 1) === 1,
+  });
+  assert.equal(started, false);
+  assert.equal(states.includes(true), false);
 });

@@ -3835,6 +3835,7 @@ declare global {
       startManualMeeting?: () => Promise<{ success: false; code?: string; error: string } | void>;
       getPendingMeetingNoteNavigation?: () => Promise<{
         navigationId?: string;
+        noteSessionId?: string;
         spaceId?: number;
         noteId: number;
         folderId: number | null;
@@ -3842,6 +3843,8 @@ declare global {
         trigger?: "hotkey" | "manual" | "calendar-join";
       } | null>;
       onMeetingNoteNavigationPending?: (callback: () => void) => () => void;
+      meetingNoteOpenedWithoutRecording?: (noteSessionId: string) => Promise<void>;
+      meetingNoteClosed?: (noteSessionId: string) => Promise<void>;
       getPendingNoteNavigation?: () => Promise<{
         noteId: number;
         folderId: number | null;

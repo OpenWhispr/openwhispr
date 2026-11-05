@@ -571,6 +571,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   windowIsMaximized: () => ipcRenderer.invoke("window-is-maximized"),
   snapToMeetingMode: () => ipcRenderer.invoke("snap-to-meeting-mode"),
   restoreFromMeetingMode: () => ipcRenderer.invoke("restore-from-meeting-mode"),
+  meetingNoteOpenedWithoutRecording: (id) =>
+    ipcRenderer.invoke("meeting-note-opened-without-recording", id),
+  meetingNoteClosed: (id) => ipcRenderer.invoke("meeting-note-closed", id),
   getPlatform: () => process.platform,
 
   // Cleanup function
