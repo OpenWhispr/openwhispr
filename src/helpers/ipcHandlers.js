@@ -31,6 +31,7 @@ const accountScopeBinding = require("./accountScopeBinding");
 const { registerProductHelpIpc, remoteHelpPolicyState } = require("./productHelp");
 const { createCloudApiRequestHandler } = require("./cloudApiRequest");
 const { MetaActivation } = require("./metaActivation");
+const { ProductEvents, createFileStore: createProductEventsStore } = require("./productEvents");
 const { decodeLeaderboardPngDataUrl, leaderboardImageFilename } = require("./leaderboardImage");
 const { withPolicyRequestHeaders } = require("./policyRequestHeaders");
 const {
@@ -2858,6 +2859,7 @@ class IPCHandlers {
       this.connectorManager?.accountChanged();
       void this.connectorManager?.notifyStatusChanged();
       void this.metaActivation?.flush();
+      void this.productEvents?.flush();
       return { success: true };
     });
 
@@ -2894,6 +2896,7 @@ class IPCHandlers {
           });
           const result = this.databaseManager.deleteAccountData(accountId);
           this.metaActivation?.purge(accountId);
+          this.productEvents?.purge(accountId);
           this.notifyVectorChanges();
           for (const noteId of result.deletedNoteIds) {
             this._asyncMirrorDelete(noteId);
@@ -6984,6 +6987,36 @@ class IPCHandlers {
       // Marketing bookkeeping must never prevent ordinary dictation/startup.
       debugLogger.warn("Activation storage unavailable");
     }
+    // Dashboard funnel milestones (app sign-in, onboarding completion). Like
+    // activation, it must never stand in the way of dictation or startup.
+    try {
+      this.productEvents = new ProductEvents({
+        store: createProductEventsStore(path.join(app.getPath("userData"), "product-events.json")),
+        getScope: () =>
+          accountScopeBinding.resolveActiveAccountScope({
+            ...tokenStore.getState(),
+            binding: accountScopeBinding.read(),
+          }),
+        request: createCloudApiRequestHandler({
+          getApiUrl,
+          getAppVersion: () => app.getVersion(),
+          tokenStore,
+          proxyFetch: (url, init) =>
+            proxyFetch(url, { ...init, signal: AbortSignal.timeout(10_000) }),
+        }),
+        getAppVersion: () => app.getVersion(),
+        logger: debugLogger,
+      });
+      void this.productEvents.flush();
+    } catch {
+      debugLogger.warn("Product events storage unavailable");
+    }
+    ipcMain.handle("product-events-record-app-session", (_event, context) =>
+      this.productEvents?.recordAppSession(context)
+    );
+    ipcMain.handle("product-events-record-onboarding-completed", (_event, completion) =>
+      this.productEvents?.recordOnboardingCompleted(completion)
+    );
     ipcMain.handle("activation-close", async () => {
       await Promise.race([
         this.metaActivation?.close(),
