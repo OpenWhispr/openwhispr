@@ -81,12 +81,7 @@ test("renderer presentation consumes the shared live-transcript geometry", async
   });
 });
 
-test("DictationErrorCard reports content height at the shared expected width", async (t) => {
-  const card = {
-    getBoundingClientRect: () => ({ width: 500 }),
-    offsetHeight: 120,
-    scrollHeight: 137,
-  };
+async function reportedDictationErrorHeights(t, card) {
   const reportedHeights = [];
   const originalResizeObserver = globalThis.ResizeObserver;
   const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
@@ -124,15 +119,7 @@ test("DictationErrorCard reports content height at the shared expected width", a
         export const Fragment = Symbol.for("react.fragment");
         export function jsxDEV(type, props, key) { return { type, props, key }; }
       `,
-      "/components/icons": `
-        export function RotateCcw() { return null; }
-        export function ScrollText() { return null; }
-        export function Settings() { return null; }
-        export function Copy() { return null; }
-        export function Check() { return null; }
-        export function X() { return null; }
-      `,
-      "react-i18next": `export function useTranslation() { return { t: (key) => key }; }`,
+      "/ui/ToastCard": `export function ToastCard() { return null; }`,
       react: `
         export function useLayoutEffect(effect) {
           globalThis.__dictationErrorCardCleanup = effect();
@@ -154,5 +141,27 @@ test("DictationErrorCard reports content height at the shared expected width", a
     onPreferredHeightChange: (height) => reportedHeights.push(height),
   });
 
-  assert.deepEqual(reportedHeights, [137]);
+  return reportedHeights;
+}
+
+test("DictationErrorCard reports content height at the shared expected width", async (t) => {
+  const heights = await reportedDictationErrorHeights(t, {
+    getBoundingClientRect: () => ({ width: 500 }),
+    offsetHeight: 120,
+    scrollHeight: 137,
+    closest: () => null,
+  });
+
+  assert.deepEqual(heights, [137]);
+});
+
+test("DictationErrorCard reports room for the toasts stacked above it", async (t) => {
+  const heights = await reportedDictationErrorHeights(t, {
+    getBoundingClientRect: () => ({ width: 500 }),
+    offsetHeight: 120,
+    scrollHeight: 120,
+    closest: (selector) => (selector === "[data-toast-stack]" ? { offsetHeight: 261 } : null),
+  });
+
+  assert.deepEqual(heights, [261]);
 });

@@ -1,6 +1,21 @@
+const {
+  registryData: modelRegistryData,
+  getRunnableSpeechModel,
+  listRunnableLocalModels,
+} = require("../models/registryData.js");
+const { isLocalModelPolicyRefusal } = require("./localModelPolicyGate");
 const { OrukeetStreaming, MANAGED_STREAM_OPTIONS } = require("./orukeetStreaming");
 const { connectManagedOrukeet } = require("./orukeetCloudSession");
-const { ipcMain, app, shell, BrowserWindow, systemPreferences, net, session } = require("electron");
+const {
+  ipcMain,
+  app,
+  shell,
+  BrowserWindow,
+  systemPreferences,
+  net,
+  session,
+  powerMonitor,
+} = require("electron");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
@@ -124,7 +139,11 @@ const HyprlandShortcutManager = require("./hyprlandShortcut");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
 const { i18nMain, changeLanguage } = require("./i18nMain");
 const DeepgramStreaming = require("./deepgramStreaming");
-const { GeminiLiveStreaming, GEMINI_LIVE_MODEL } = require("./geminiLiveStreaming");
+const {
+  GeminiLiveStreaming,
+  GEMINI_LIVE_MODEL,
+  resolveGeminiLiveModel,
+} = require("./geminiLiveStreaming");
 const CortiStreaming = require("./cortiStreaming");
 const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
 const { getCortiToken } = require("./cortiAuth");
@@ -139,6 +158,7 @@ const AudioStorageManager = require("./audioStorage");
 const { SkillLibrary } = require("./skills/skillLibrary");
 const { registerSkillsIpc } = require("./skills/skillsIpc");
 const LocalModelDownloadStatus = require("./localModelDownloadStatus");
+const { readLocalSetupSpace } = require("./localSetupSpace");
 const AgentStreamRequestRegistry = require("./agentStreamRequestRegistry");
 const createMeetingTranscriptionLifecycle = require("./meetingTranscriptionLifecycle");
 const liveSpeakerIdentifier = require("./liveSpeakerIdentifier");
@@ -230,6 +250,8 @@ const XAI_STT_URL = "https://api.x.ai/v1/stt";
 
 // Debounce delay: wait for user to stop typing before processing corrections
 const AUTO_LEARN_DEBOUNCE_MS = 1500;
+// Suggestions the invite dialog shows under its field.
+const INVITE_SUGGESTION_LIMIT = 5;
 
 // Route caps vary by provider (Gemini's inline-base64 limit is the lowest), so
 // the message reports the cap that actually applied.
@@ -349,6 +371,9 @@ function approveAudioPath(filePath) {
     // File vanished or unreadable; nothing to approve.
   }
 }
+
+// __Secure-openwhispr.session_token in production, and the names older builds used.
+const SESSION_COOKIE_PATTERN = /(?:^|;\s*)[^=;]*session_token=/;
 
 // Signed out, nothing restricts audio: guests keep every feature.
 function guestAudioPolicy(authGeneration) {
@@ -681,6 +706,8 @@ class IPCHandlers {
     this.clipboardManager = managers.clipboardManager;
     this.whisperManager = managers.whisperManager;
     this.parakeetManager = managers.parakeetManager;
+    this._initLocalModelPolicy(require("./modelManagerBridge").default);
+
     this.diarizationManager = managers.diarizationManager;
     this.windowManager = managers.windowManager;
     this.updateManager = managers.updateManager;
@@ -893,16 +920,119 @@ class IPCHandlers {
     }
   }
 
+  _initLocalModelPolicy(localLlmManager) {
+    this._authTokenHeld = Boolean(tokenStore.get());
+    const { createLocalModelPolicyGate } = require("./localModelPolicyGate");
+    const localServers = [
+      [
+        "transcription",
+        this.whisperManager.serverManager,
+        () =>
+          this.whisperManager.serverManager.localModelIdForPath?.(
+            this.whisperManager.serverManager.modelPath
+          ),
+      ],
+      [
+        "transcription",
+        this.parakeetManager.serverManager.wsServer,
+        () => this.parakeetManager.serverManager.wsServer.modelName,
+      ],
+      [
+        "llm",
+        localLlmManager.serverManager,
+        () =>
+          localLlmManager.serverManager.localModelIdForPath?.(
+            localLlmManager.serverManager.modelPath
+          ),
+      ],
+    ];
+    this._localModelPolicy = createLocalModelPolicyGate({
+      getPolicy: (options) => this._getMainModelPolicy?.({}, options) ?? { success: false },
+      getHeldPolicy: () => this._getMainModelPolicy?.({}, { held: true }) ?? { success: false },
+      getIdentity: () => tokenStore.getState().generation,
+      getAppVersion: () => app.getVersion(),
+      isSnapshotCurrent: (snapshot) =>
+        snapshot?.accountId === undefined ||
+        snapshot.accountId === this.databaseManager.activeAccountId,
+      onChange: () => {
+        for (const [scope, server, modelId] of localServers) {
+          if (server.isRemote || !modelId()) continue;
+          const denied = this._localModelPolicy.failure(scope, modelId());
+          if (denied) {
+            void server.stop().catch((error) =>
+              debugLogger.warn("Could not stop policy-blocked local server", {
+                error: error.message,
+              })
+            );
+          }
+        }
+        if (this._activeLocalMeetingLease) {
+          try {
+            this._localModelPolicy.assertCurrent(this._activeLocalMeetingLease);
+          } catch (error) {
+            // cancelJobs' abort: its callers stop the meeting themselves, as an account change.
+            // Anything that isn't the policy's refusal is not the organization's either.
+            if (isLocalModelPolicyRefusal(error) && error.code !== "POLICY_UNRESOLVABLE")
+              this._stopMeetingForPolicy?.(error.code);
+          }
+        }
+      },
+    });
+    for (const manager of [
+      this.whisperManager,
+      this.parakeetManager,
+      this.parakeetManager.serverManager,
+      localLlmManager,
+      ...localServers.map(([, server]) => server),
+    ]) {
+      manager.localModelPolicy = this._localModelPolicy;
+    }
+    const samePath = (actual, expected) =>
+      typeof actual === "string" && path.resolve(actual) === path.resolve(expected);
+    // Retired models included: a server started before a retirement keeps serving.
+    this.whisperManager.serverManager.localModelIdForPath = (modelPath) =>
+      listRunnableLocalModels("whisperModels").find(([id]) =>
+        samePath(modelPath, this.whisperManager.getModelPath(id))
+      )?.[0];
+    this.parakeetManager.serverManager.wsServer.localModelIdForPath = (modelPath, id) =>
+      getRunnableSpeechModel("parakeetModels", id) &&
+      samePath(modelPath, this.parakeetManager.getModelPath(id))
+        ? id
+        : undefined;
+    localLlmManager.serverManager.localModelIdForPath = (modelPath) =>
+      listRunnableLocalModels("localProviders").find(
+        ([, model]) =>
+          model.fileName &&
+          samePath(modelPath, path.join(localLlmManager.getModelsDir(), model.fileName))
+      )?.[0];
+  }
+
+  // Called once a cookie session has had its bearer migration: before that, a
+  // session with no bearer would read as a proven guest.
+  loadLocalModelPolicy() {
+    void this._localModelPolicy.resolve().catch(() => {});
+  }
+
   _handleAuthTokenChange({ generation, token }) {
     // A new bearer may belong to another account, so its policy is fetched
     // before new work; only a sign-out ends the work already running. A real
     // account switch is cancelled once set-active-account-scope learns it.
+    // Clearing a session that never existed changes no one's identity, so a
+    // guest's running work carries on.
+    const provenGuest =
+      this._authTokenHeld === false && typeof this.databaseManager.activeAccountId !== "string";
+    this._authTokenHeld = Boolean(token);
     if (token) {
+      this._localModelPolicy?.invalidate();
       this._audioFeaturePolicy?.invalidate();
     } else {
+      if (!provenGuest) this._localModelPolicy?.cancelJobs();
+      this._localModelPolicy?.invalidate(guestAudioPolicy(generation));
       this._audioFeaturePolicy?.invalidate(guestAudioPolicy(generation));
-      this._audioFeaturePolicy?.cancelJobs();
-      this._stopMeetingForPolicy?.("accountChanged");
+      if (!provenGuest) {
+        this._audioFeaturePolicy?.cancelJobs();
+        this._stopMeetingForPolicy?.("accountChanged");
+      }
     }
     this.windowManager.retireMeetingNotificationScope();
     // Like the jobs above, enterprise audio outlives a token rotation; a
@@ -1059,10 +1189,10 @@ class IPCHandlers {
       return this.localModelDownloadStatus.finish(modelType, modelId);
     }
 
-    if (progressData.type === "installing") {
+    if (progressData.type === "installing" || progressData.type === "verifying") {
       return this.localModelDownloadStatus.update(modelType, modelId, {
-        phase: "installing",
-        progress: progressData.percentage || 100,
+        phase: progressData.type,
+        progress: progressData.percentage ?? 100,
       });
     }
 
@@ -1837,7 +1967,11 @@ class IPCHandlers {
     });
 
     ipcMain.handle("open-settings-section", async (_event, section) => {
-      if (!isSettingsTarget(section) && !isProviderSettingsTarget(section)) {
+      if (
+        !isSettingsTarget(section) &&
+        !isProviderSettingsTarget(section) &&
+        section !== "plansBilling"
+      ) {
         return { success: false };
       }
       await this.windowManager.openSettings(section);
@@ -2704,14 +2838,23 @@ class IPCHandlers {
       const accountChanged = this.databaseManager.activeAccountId !== accountId;
       const guestPolicy =
         accountId === null && !state.token ? guestAudioPolicy(state.generation) : null;
+      const scopeChanged =
+        accountChanged || (accountId !== null && previousScope?.accountId !== accountId);
+      // Work a guest started needs no account's leave to go on: the new verdict
+      // decides it when it lands. Leaving an account does end its work.
+      const leftAccount =
+        accountChanged && typeof this.databaseManager.activeAccountId === "string";
+      if (leftAccount) this._localModelPolicy?.cancelJobs();
       // A rotated bearer no longer matches the stored binding, so this also
       // holds for the same account: that only re-scopes the policy, and only a
       // different account ends the work and meeting already running.
-      if (accountChanged || (accountId !== null && previousScope?.accountId !== accountId)) {
+      if (scopeChanged) {
         this._audioFeaturePolicy?.invalidate(guestPolicy);
-        if (accountChanged) {
+        if (leftAccount) {
           this._audioFeaturePolicy?.cancelJobs();
           this._stopMeetingForPolicy?.("accountChanged");
+        }
+        if (accountChanged) {
           this._retireEnterpriseAudio?.(false, "accountChanged");
           this._enterpriseAudioOwner = null;
         }
@@ -2722,6 +2865,10 @@ class IPCHandlers {
       this.databaseManager.setActiveAccountId(accountId);
       if (accountId !== null) accountScopeBinding.persist(accountId, state.token);
       else accountScopeBinding.clear();
+      // After the scope moved: the verdict this fetches is stamped with the
+      // account and cached under the binding, so neither may still be the old one.
+      if (scopeChanged) this._localModelPolicy?.invalidate(guestPolicy);
+      else if (guestPolicy) this._localModelPolicy?.update(guestPolicy);
       broadcastToWindows(
         "active-account-scope-changed",
         accountId !== null ? { accountId, authGeneration: state.generation } : null
@@ -3004,6 +3151,9 @@ class IPCHandlers {
     ipcMain.handle("db-get-note-by-client-id", (_, clientNoteId) =>
       this.databaseManager.getNoteByClientId(clientNoteId)
     );
+    ipcMain.handle("db-get-note-for-cloud-row", (_, clientNoteId, cloudId) =>
+      this.databaseManager.getNoteForCloudRow(clientNoteId, cloudId)
+    );
     ipcMain.handle("db-upsert-note-from-cloud", (_, cloudNote, localFolderId, localSpaceId) => {
       const note = this.databaseManager.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId);
       if (note) {
@@ -3012,6 +3162,9 @@ class IPCHandlers {
       }
       return note;
     });
+    ipcMain.handle("db-mark-note-creates-attempted", (_, clientNoteIds) =>
+      this.databaseManager.markNoteCreatesAttempted(clientNoteIds)
+    );
     ipcMain.handle(
       "db-acknowledge-note-create",
       (_, id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) => {
@@ -3203,14 +3356,20 @@ class IPCHandlers {
     ipcMain.handle("db-get-conversation-by-client-id", (_, clientId) =>
       this.databaseManager.getConversationByClientId(clientId)
     );
-    ipcMain.handle("db-upsert-conversation-from-cloud", (_, cloudConv, messages) =>
-      this.databaseManager.upsertConversationFromCloud(cloudConv, messages)
+    ipcMain.handle("db-upsert-conversation-from-cloud", (_, cloudConv, messages, snapshot) =>
+      this.databaseManager.upsertConversationFromCloud(cloudConv, messages, snapshot)
+    );
+    ipcMain.handle("db-mark-conversation-create-attempted", (_, id) =>
+      this.databaseManager.markConversationCreateAttempted(id)
     );
     ipcMain.handle("db-acknowledge-conversation-create", (_, id, snapshot, cloudId) =>
       this.databaseManager.acknowledgeConversationCreate(id, snapshot, cloudId)
     );
-    ipcMain.handle("db-mark-conversation-synced", (_, id, cloudId) =>
-      this.databaseManager.markConversationSynced(id, cloudId)
+    ipcMain.handle("db-mark-conversation-synced", (_, id, cloudId, snapshot) =>
+      this.databaseManager.markConversationSynced(id, cloudId, snapshot)
+    );
+    ipcMain.handle("db-replace-conversation-client-id", (_, id, expectedClientId) =>
+      this.databaseManager.replaceConversationClientId(id, expectedClientId)
     );
     ipcMain.handle("db-hard-delete-conversation", (_, id) => {
       const result = this.databaseManager.hardDeleteConversation(id);
@@ -3504,7 +3663,7 @@ class IPCHandlers {
             return { success: false, error: "Cancelled", code: "UPLOAD_CANCELLED" };
           }
           debugLogger.error("Audio file transcription error", { error: error.message });
-          return { success: false, error: error.message };
+          return { success: false, error: error.message, code: error.code };
         }
       });
     });
@@ -3654,8 +3813,8 @@ class IPCHandlers {
       // Promise cannot cross Electron's IPC boundary, though, and renderer
       // callers need to know whether text was pasted, but not the delayed
       // clipboard restoration promise. Successful platform paths predate the
-      // explicit `pasted` outcome; only the clipboard-only fallback and a held-back
-      // paste (held modifiers or a missing or failed wl-copy, which carries a `reason`) set false.
+      // explicit `pasted` outcome; only the clipboard-only fallback and a held-back paste
+      // (held modifiers or a missing or failed wl-copy) set false, each with a `reason`.
       return {
         success: true,
         pasted,
@@ -3783,6 +3942,8 @@ class IPCHandlers {
         return result;
       } catch (error) {
         debugLogger.error("Local Whisper transcription error", error);
+        if (isLocalModelPolicyRefusal(error))
+          return { success: false, error: error.message, code: error.code };
         const errorMessage = error.message || "Unknown error";
 
         // Return specific error types for better user feedback
@@ -4165,6 +4326,8 @@ class IPCHandlers {
         return result;
       } catch (error) {
         debugLogger.error("Local Parakeet transcription error", error);
+        if (isLocalModelPolicyRefusal(error))
+          return { success: false, error: error.message, code: error.code };
         const errorMessage = error.message || "Unknown error";
 
         if (errorMessage.includes("sherpa-onnx") && errorMessage.includes("not found")) {
@@ -4678,6 +4841,9 @@ class IPCHandlers {
           "globe-preference-state.json",
           ".system-audio-permission",
           "account-scope-binding.json",
+          "installed-models.json",
+          "model-registry.json",
+          "model-registry.json.backup",
           PAID_KEY_CHECKS_FILE,
         ]) {
           fs.rmSync(path.join(app.getPath("userData"), fileName), { force: true });
@@ -4761,6 +4927,11 @@ class IPCHandlers {
       }
       if (this._hotkeyCaptureMode === enabled) return { success: true, skipped: true };
       this._hotkeyCaptureMode = enabled;
+      if (enabled && (process.platform === "win32" || process.platform === "linux")) {
+        // Retired listeners cannot release an active Hold. End it before capture
+        // mode blocks the stop event sent to the recording renderer.
+        this.windowManager.resetWindowsPushState();
+      }
       this.windowManager.setHotkeyListeningMode(enabled);
       ipcMain.emit("hotkey-listening-mode-changed", null, enabled);
       const hotkeyManager = this.windowManager.hotkeyManager;
@@ -5155,6 +5326,21 @@ class IPCHandlers {
         };
       }
     });
+
+    const retiredModelDirs = () => {
+      const { getModelsDirForService } = require("./modelDirUtils");
+      return {
+        whisperDir: getModelsDirForService("whisper"),
+        parakeetDir: getModelsDirForService("parakeet"),
+        llamaDir: require("./modelManagerBridge").default.getModelsDir(),
+      };
+    };
+    ipcMain.handle("list-retired-local-models", (_event, inUse) =>
+      require("./retiredLocalModels").listRetiredLocalModels(retiredModelDirs(), inUse)
+    );
+    ipcMain.handle("delete-retired-local-models", (_event, inUse) =>
+      require("./retiredLocalModels").deleteRetiredLocalModels(retiredModelDirs(), inUse)
+    );
 
     ipcMain.handle("model-delete-all", async () => {
       try {
@@ -5960,9 +6146,12 @@ class IPCHandlers {
               neededModels: localServer.models,
             });
           }
-          modelManager.stopServer().catch((err) => {
+          // A background chat answer may still be streaming from it.
+          modelManager.stopServerWhenIdle().catch((err) => {
             debugLogger.error("Failed to stop llama-server", { error: err.message });
           });
+        } else {
+          modelManager.serverManager.cancelDeferredStop();
         }
       }
 
@@ -6174,7 +6363,7 @@ class IPCHandlers {
         this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
         return { success: true, port: modelManager.serverManager.port };
       } catch (error) {
-        return { success: false, error: error.message };
+        return { success: false, error: error.message, code: error.code };
       }
     });
 
@@ -6213,6 +6402,12 @@ class IPCHandlers {
         return { available: false, error: error.message };
       }
     });
+
+    ipcMain.handle("get-computer-profile", () =>
+      require("./computerProfile").readComputerProfile()
+    );
+
+    ipcMain.handle("get-local-setup-space", () => readLocalSetupSpace());
 
     ipcMain.handle("get-llama-vulkan-status", async () => {
       try {
@@ -6258,8 +6453,9 @@ class IPCHandlers {
           delete process.env.LLAMA_GPU_BACKEND;
           modelManager.serverManager.cachedServerBinaryPaths = null;
           await this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
-          // Stop server so next inference picks up the new Vulkan binary
-          await modelManager.stopServer().catch(() => {});
+          // The next inference picks up the new Vulkan binary. The pack can land in
+          // the background after onboarding, so an answer in progress finishes first.
+          modelManager.stopServerWhenIdle({ cancelOnReuse: false }).catch(() => {});
         }
 
         return result;
@@ -6367,7 +6563,10 @@ class IPCHandlers {
     ipcMain.handle("open-microphone-settings", () => openSystemSettings("microphone"));
     ipcMain.handle("open-sound-input-settings", () => openSystemSettings("sound"));
     ipcMain.handle("get-system-default-microphone", (_event, options = {}) =>
-      resolveSystemDefaultMicrophone({ refresh: options?.refresh === true })
+      resolveSystemDefaultMicrophone({
+        refresh: options?.refresh === true,
+        wait: options?.wait !== false,
+      })
     );
     ipcMain.handle("open-accessibility-settings", () => openSystemSettings("accessibility"));
     ipcMain.handle("open-system-audio-settings", () => openSystemSettings("systemAudio"));
@@ -6767,8 +6966,12 @@ class IPCHandlers {
           proxyFetch: (url, init) =>
             proxyFetch(url, { ...init, signal: AbortSignal.timeout(10_000) }),
         }),
+        logger: debugLogger,
       });
       this.metaActivation.start();
+      // A machine that slept through the hourly re-sync takes server time
+      // again on wake, before its next batch.
+      powerMonitor.on("resume", () => void this.metaActivation?.resync());
     } catch {
       // Marketing bookkeeping must never prevent ordinary dictation/startup.
       debugLogger.warn("Activation storage unavailable");
@@ -6793,38 +6996,71 @@ class IPCHandlers {
       getAppVersion: () => app.getVersion(),
       proxyFetch,
       tokenStore,
+      // Only the binding main validated may hand a verdict to a rotated credential.
+      getValidatedAccountId: () =>
+        accountScopeBinding.resolveActiveAccountScope({
+          ...tokenStore.getState(),
+          binding: accountScopeBinding.read(),
+        })?.accountId ?? null,
       broadcast: (snapshot) => {
         if (snapshot.authGeneration === tokenStore.getState().generation) {
           this._audioFeaturePolicy?.update(snapshot);
+          this._localModelPolicy?.update(snapshot);
         }
         broadcastToWindows("workspace-policy-changed", snapshot);
       },
       logger: debugLogger,
     });
     const { createAudioFeaturePolicy } = require("./audioFeaturePolicy");
+    const getMainPolicy = async (event = {}, { refresh = false, held = false } = {}) => {
+      const generation = tokenStore.getState().generation;
+      const authHeaders = event.sender
+        ? await getAuthHeader(event)
+        : await getAuthHeaderFromWindow(
+            [this.windowManager.controlPanelWindow, this.windowManager.mainWindow].find(
+              (win) => win && !win.isDestroyed()
+            ) ??
+              // With no window yet, no bearer doesn't prove a guest: a cookie
+              // session may still be waiting for its bearer migration.
+              (session.defaultSession && { webContents: { session: session.defaultSession } })
+          );
+      if (generation !== tokenStore.getState().generation) return { success: false };
+      // Other cookies in the jar say nothing about who this is.
+      if (!authHeaders.Authorization && !SESSION_COOKIE_PATTERN.test(authHeaders.Cookie ?? "")) {
+        return typeof this.databaseManager.activeAccountId === "string"
+          ? { success: false }
+          : guestAudioPolicy(generation);
+      }
+      if (held) {
+        return (
+          workspacePolicyManager.heldPolicy({
+            accountId: this.databaseManager.activeAccountId,
+            expectedAuthGeneration: generation,
+            authHeaders,
+          }) ?? { success: false }
+        );
+      }
+      const policy = await workspacePolicyManager.getPolicy({
+        accountId: this.databaseManager.activeAccountId,
+        expectedAuthGeneration: generation,
+        authHeaders,
+        refresh,
+      });
+      // A session cookie the API rejects has expired: with no bearer and no
+      // account this is a guest, not an identity waiting on its policy.
+      const isExpiredSession =
+        !authHeaders.Authorization &&
+        typeof this.databaseManager.activeAccountId !== "string" &&
+        policy.httpStatus === 401;
+      return isExpiredSession ? guestAudioPolicy(generation) : policy;
+    };
+    this._getMainModelPolicy = getMainPolicy;
+    // CLI and tray-only sessions also refresh while a native server stays loaded.
+    this._localModelPolicyRefreshTimer = this._localModelPolicy?.startPeriodicRefresh(
+      5 * 60 * 1000
+    );
     this._audioFeaturePolicy = createAudioFeaturePolicy({
-      getPolicy: async (event, { refresh = false } = {}) => {
-        const generation = tokenStore.getState().generation;
-        const authHeaders = event.sender
-          ? await getAuthHeader(event)
-          : await getAuthHeaderFromWindow(
-              [this.windowManager.controlPanelWindow, this.windowManager.mainWindow].find(
-                (win) => win && !win.isDestroyed()
-              )
-            );
-        if (generation !== tokenStore.getState().generation) return { success: false };
-        if (!authHeaders.Authorization && !authHeaders.Cookie) {
-          return typeof this.databaseManager.activeAccountId === "string"
-            ? { success: false }
-            : { success: true, managed: false };
-        }
-        return workspacePolicyManager.getPolicy({
-          accountId: this.databaseManager.activeAccountId,
-          expectedAuthGeneration: generation,
-          authHeaders,
-          refresh,
-        });
-      },
+      getPolicy: getMainPolicy,
       onBlocked: (purpose, code) => {
         if (purpose === "meeting") this._stopMeetingForPolicy?.(code);
       },
@@ -8458,6 +8694,8 @@ class IPCHandlers {
     const assertMeetingAllowed = () => {
       const denied = this._audioFeaturePolicy.activeFailure("meeting");
       if (denied) throw Object.assign(new Error(denied.error), { code: denied.code });
+      if (this._activeLocalMeetingLease)
+        this._localModelPolicy.assertCurrent(this._activeLocalMeetingLease);
     };
 
     const resolveEnterpriseMeetingOptions = async (event, options) => {
@@ -9178,6 +9416,7 @@ class IPCHandlers {
     const transcribeLocalMeetingChunk = async (source) => {
       const chunks = meetingLocalBuffers[source];
       if (!chunks.length) return;
+      const lease = this._activeLocalMeetingLease;
 
       const pcm24k = Buffer.concat(chunks);
       meetingLocalBuffers[source] = [];
@@ -9210,29 +9449,35 @@ class IPCHandlers {
 
       const wav = pcm16ToWav(pcm16k);
 
-      try {
-        let result;
+      const transcribeChunk = () => {
         if (isSherpaLocalProvider(meetingLocalProvider)) {
-          result = await this.parakeetManager.transcribeLocalParakeet(wav, {
+          return this.parakeetManager.transcribeLocalParakeet(wav, {
             model: meetingLocalModel,
             language: meetingLocalLanguage,
-          });
-        } else {
-          const vadOptions = this._resolveWhisperVadOptions("meeting");
-          result = await this.whisperManager.transcribeLocalWhisper(wav, {
-            model: meetingLocalModel,
-            language: meetingLocalLanguage,
-            // Keep whisper.cpp's default decoder thresholds on this continuous
-            // load: the raised #1458 values multiply temperature-fallback
-            // re-decodes, and meeting chunks already have RMS-gate, VAD, and
-            // holdback/dedup hallucination protection.
-            skipDecoderThresholds: true,
-            ...vadOptions,
           });
         }
+        return this.whisperManager.transcribeLocalWhisper(wav, {
+          model: meetingLocalModel,
+          language: meetingLocalLanguage,
+          // Keep whisper.cpp's default decoder thresholds on this continuous
+          // load: the raised #1458 values multiply temperature-fallback
+          // re-decodes, and meeting chunks already have RMS-gate, VAD, and
+          // holdback/dedup hallucination protection.
+          skipDecoderThresholds: true,
+          ...this._resolveWhisperVadOptions("meeting"),
+        });
+      };
+
+      try {
+        // Chunks belong to the meeting's lease, so a token rotation can't refuse
+        // one and end the meeting while its verdict is still being re-resolved.
+        const result = await (this._activeLocalMeetingLease
+          ? this._localModelPolicy.runWithLease(this._activeLocalMeetingLease, transcribeChunk)
+          : transcribeChunk());
         // A decode that outlives a revocation must not deliver its text, as
         // the streaming path's uncommitted disconnect does not.
         if (this._audioFeaturePolicy.activeFailure("meeting")) return;
+        assertMeetingAllowed();
 
         if (result?.success && result.text?.trim()) {
           const text = result.text.trim();
@@ -9353,9 +9598,15 @@ class IPCHandlers {
           source,
           error: error.message,
         });
+        // The revocation that cut it off has already stopped the meeting, with its reason.
+        if (lease?.signal.aborted) return;
         if (meetingLocalWin && !meetingLocalWin.isDestroyed()) {
-          meetingLocalWin.webContents.send("meeting-transcription-error", error.message);
+          meetingLocalWin.webContents.send(
+            "meeting-transcription-error",
+            isLocalModelPolicyRefusal(error) ? error.code : error.message
+          );
         }
+        if (isLocalModelPolicyRefusal(error)) this._stopMeetingForPolicy?.(error.code);
       }
     };
 
@@ -9395,6 +9646,10 @@ class IPCHandlers {
     };
 
     const resetMeetingLocalState = () => {
+      if (this._activeLocalMeetingLease) {
+        this._localModelPolicy.release(this._activeLocalMeetingLease);
+        this._activeLocalMeetingLease = null;
+      }
       if (meetingLocalTimer) {
         clearInterval(meetingLocalTimer);
         meetingLocalTimer = null;
@@ -9451,6 +9706,7 @@ class IPCHandlers {
     let dictationPreviewChunkCount = 0;
     // Online-runtime models stream here instead of the 1.5s chunked path.
     let dictationPreviewStream = null;
+    let dictationPreviewPolicyError = null;
     // false = headless streaming session (commit-only, no preview window).
     let dictationPreviewDisplay = true;
     // Bumped on every reset so async preview work can detect a stale session.
@@ -9470,6 +9726,7 @@ class IPCHandlers {
     };
 
     const resetDictationPreviewState = ({ preserveSession = false } = {}) => {
+      dictationPreviewPolicyError = null;
       dictationPreviewGen++;
       if (dictationPreviewTimer) {
         clearInterval(dictationPreviewTimer);
@@ -9489,6 +9746,13 @@ class IPCHandlers {
       dictationPreviewModel = null;
       dictationPreviewLanguage = null;
       dictationPreviewDisplay = true;
+    };
+
+    const stopDictationPreviewForPolicy = (error) => {
+      resetDictationPreviewState();
+      dictationPreviewPolicyError = error;
+      this.windowManager.hideTranscriptionPreview();
+      return { success: false, error: error.message, code: error.code, streamed: false, text: "" };
     };
 
     const startDictationPreviewTimer = () => {
@@ -9547,6 +9811,12 @@ class IPCHandlers {
         if (result?.success && result.text?.trim()) {
           this.windowManager.appendTranscriptionPreview(result.text.trim());
         } else if (result && !result.success) {
+          if (isLocalModelPolicyRefusal(result)) {
+            stopDictationPreviewForPolicy(
+              Object.assign(new Error(result.error), { code: result.code })
+            );
+            return;
+          }
           debugLogger.warn("Dictation preview chunk returned failure", {
             error: result.error || result.message,
             provider,
@@ -9554,6 +9824,10 @@ class IPCHandlers {
         }
       } catch (error) {
         if (gen !== dictationPreviewGen) return;
+        if (isLocalModelPolicyRefusal(error)) {
+          stopDictationPreviewForPolicy(error);
+          return;
+        }
         debugLogger.error("Dictation preview transcription chunk failed", {
           error: error.message,
           provider,
@@ -9731,6 +10005,25 @@ class IPCHandlers {
     const DICTATION_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
     const ORUKEET_IDLE_TIMEOUT_MS = 60 * 1000;
 
+    // A managed Orukeet start owns the connection until its stop. Warmups are for
+    // the next recording, so they neither replace this one's connection nor expire
+    // it as idle. Other routes cue the user only once connected, so they keep
+    // redialling over a warmup.
+    let dictationRecordingActive = false;
+    // Only a cancel stops a start in progress: a tap to stop waits for it to settle.
+    let dictationStopGeneration = 0;
+    const watchedDictationRenderers = new WeakSet();
+    // A renderer that reloads or closes mid-recording never sends its stop.
+    const releaseRecordingWithRenderer = (sender) => {
+      if (watchedDictationRenderers.has(sender)) return;
+      watchedDictationRenderers.add(sender);
+      const release = () => {
+        dictationRecordingActive = false;
+      };
+      sender.on("did-start-loading", release);
+      sender.once("destroyed", release);
+    };
+
     const clearDictationIdleTimer = () => {
       if (this._dictationIdleTimer) {
         clearTimeout(this._dictationIdleTimer);
@@ -9740,6 +10033,7 @@ class IPCHandlers {
 
     const startDictationIdleTimer = () => {
       clearDictationIdleTimer();
+      if (dictationRecordingActive) return;
       const idleTimeoutMs =
         this._dictationStreaming instanceof OrukeetStreaming
           ? ORUKEET_IDLE_TIMEOUT_MS
@@ -9962,6 +10256,22 @@ class IPCHandlers {
       }
 
       meetingTranscriptionStartInProgress = true;
+      if (options.provider === "local" && this._localModelPolicy) {
+        try {
+          this._activeLocalMeetingLease = await this._localModelPolicy.authorize(
+            "transcription",
+            options.localModel
+          );
+          this._localModelPolicy.assertCurrent(this._activeLocalMeetingLease);
+        } catch (error) {
+          if (this._activeLocalMeetingLease) {
+            this._localModelPolicy.release(this._activeLocalMeetingLease);
+            this._activeLocalMeetingLease = null;
+          }
+          meetingTranscriptionStartInProgress = false;
+          return toPolicyFailure(error);
+        }
+      }
       // The lifecycle wrapper is the only caller and always injects the same
       // sessionId it registered; re-deriving one here would silently break
       // scoped stop/auto-end matching.
@@ -10631,6 +10941,7 @@ class IPCHandlers {
 
     const warmupDictationStreaming = async (event, options) => {
       await this._dictationConnectPromise?.catch(() => {});
+      if (dictationRecordingActive) return { success: true, alreadyWarm: true };
       if (!isUnusedOrukeetConnection(this._dictationStreaming, options)) {
         await connectDictationStreaming(event, options);
         startDictationIdleTimer();
@@ -10650,9 +10961,23 @@ class IPCHandlers {
     });
 
     ipcMain.handle("dictation-realtime-start", async (event, options = {}) => {
+      const managedOrukeet = options.provider === "orukeet" && options.mode !== "byok";
+      const stopGeneration = dictationStopGeneration;
+      if (managedOrukeet) {
+        dictationRecordingActive = true;
+        releaseRecordingWithRenderer(event.sender);
+      }
       try {
         clearDictationIdleTimer();
         this._dictationPreviewEnabled = !!options.preview;
+        // A warmup still connecting may be the connection this start wants. Managed audio
+        // waits in the renderer; other routes need the connection before this tick ends.
+        if (managedOrukeet && this._dictationConnectPromise) {
+          await this._dictationConnectPromise.catch(() => {});
+          if (stopGeneration !== dictationStopGeneration) {
+            throw new Error("Dictation start was cancelled");
+          }
+        }
         if (
           !this._dictationStreaming?.isConnected ||
           this._dictationStreaming.connectionKey !== dictationConnectionKey(options)
@@ -10661,6 +10986,7 @@ class IPCHandlers {
         }
         return { success: true };
       } catch (err) {
+        dictationRecordingActive = false;
         return streamingStartFailure(err);
       }
     });
@@ -10681,6 +11007,8 @@ class IPCHandlers {
     });
 
     ipcMain.handle("dictation-realtime-stop", async () => {
+      dictationStopGeneration += 1;
+      dictationRecordingActive = false;
       clearDictationIdleTimer();
       if (!this._dictationStreaming) {
         return { success: true, text: "" };
@@ -10718,6 +11046,10 @@ class IPCHandlers {
               },
               onError: (error) => {
                 if (gen !== dictationPreviewGen || dictationPreviewStream !== stream) return;
+                if (isLocalModelPolicyRefusal(error)) {
+                  stopDictationPreviewForPolicy(error);
+                  return;
+                }
                 // Keep the preview alive on the chunked path; the final
                 // transcript falls back to decoding the full recording.
                 debugLogger.warn("Online preview stream failed mid-session, falling back", {
@@ -10739,6 +11071,8 @@ class IPCHandlers {
             dictationPreviewBuffer = [];
             return { success: true };
           } catch (error) {
+            if (gen !== dictationPreviewGen) return { success: true };
+            if (isLocalModelPolicyRefusal(error)) return stopDictationPreviewForPolicy(error);
             debugLogger.warn("Online preview stream unavailable, falling back to chunked preview", {
               model,
               error: error.message,
@@ -10770,7 +11104,12 @@ class IPCHandlers {
       }
       const pcm = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
       if (dictationPreviewStream) {
-        dictationPreviewStream.sendPcm16(pcm);
+        try {
+          dictationPreviewStream.sendPcm16(pcm);
+        } catch (error) {
+          if (isLocalModelPolicyRefusal(error)) stopDictationPreviewForPolicy(error);
+          else throw error;
+        }
         return;
       }
       dictationPreviewBuffer.push(pcm);
@@ -10823,6 +11162,12 @@ class IPCHandlers {
     );
 
     ipcMain.handle("stop-dictation-preview", async (_event, options = {}) => {
+      if (dictationPreviewPolicyError) {
+        const refusal = stopDictationPreviewForPolicy(dictationPreviewPolicyError);
+        // Reported once: this stop's dictation carries it from here.
+        dictationPreviewPolicyError = null;
+        return refusal;
+      }
       if (!dictationPreviewMode && !dictationPreviewSessionActive) {
         return { success: true, streamed: false, text: "" };
       }
@@ -10837,7 +11182,17 @@ class IPCHandlers {
         const stream = dictationPreviewStream;
         dictationPreviewStream = null;
         const gen = dictationPreviewGen;
-        const result = await stream.finish().catch(() => null);
+        let result;
+        try {
+          result = await stream.finish();
+        } catch (error) {
+          if (isLocalModelPolicyRefusal(error)) {
+            const refusal = stopDictationPreviewForPolicy(error);
+            dictationPreviewPolicyError = null;
+            return refusal;
+          }
+          result = null;
+        }
         if (gen !== dictationPreviewGen) {
           return { success: true, streamed: false, text: "" };
         }
@@ -11382,6 +11737,7 @@ class IPCHandlers {
       // takes it here too, as it takes every broadcast.
       if (snapshot.success && snapshot.authGeneration === tokenStore.getState().generation) {
         this._audioFeaturePolicy.update(snapshot);
+        this._localModelPolicy?.update(snapshot);
       }
       return snapshot;
     });
@@ -12012,6 +12368,8 @@ class IPCHandlers {
         await this.environmentManager.saveDebugLogging(enabled);
 
         debugLogger.refreshLogLevel();
+        // Each window caches its level on first log, so tell them all to re-read it.
+        broadcastToWindows("log-level-changed");
 
         return {
           success: true,
@@ -12031,6 +12389,21 @@ class IPCHandlers {
         return { success: true };
       } catch (error) {
         debugLogger.error("Failed to open logs folder:", error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle(
+      "get-model-registry-updates",
+      () => process.env.OPENWHISPR_MODEL_REGISTRY_MODE !== "bundled"
+    );
+
+    ipcMain.handle("set-model-registry-updates", async (event, enabled) => {
+      try {
+        await this.environmentManager.saveModelRegistryUpdates(enabled === true);
+        return { success: true };
+      } catch (error) {
+        debugLogger.error("Failed to save model catalog updates setting:", error);
         return { success: false, error: error.message };
       }
     });
@@ -12630,6 +13003,11 @@ class IPCHandlers {
 
     let geminiStreamingStartInProgress = false;
     let geminiSendDropCount = 0;
+    let geminiStartAudio = [];
+    let geminiStartAudioBytes = 0;
+    // Match the client's three-second cold-start bound. A model-changing start
+    // owns these frames, even while a previous warm handshake is finishing.
+    const GEMINI_START_AUDIO_MAX = 3 * 16000 * 2;
     // One handshake at a time. A start that raced an in-flight warmup used to
     // clear the cold-start buffer, spend a second single-use managed token and
     // report success while the warmup's handshake (and its failure) were still
@@ -12654,10 +13032,15 @@ class IPCHandlers {
       return streaming;
     };
 
-    // What a Gemini connection authenticated with: a managed one never serves a
-    // BYOK start or the reverse, and a BYOK one is not reused after a key save.
+    // Managed tokens are constrained to the server's existing model. BYOK can
+    // select newly published compatible models, each requiring its own socket.
+    const geminiConnectionModel = resolveGeminiLiveModel;
+    // A warm socket cannot cross credentials, modes, or selected models.
     const geminiConnectionKey = (options) =>
-      options.mode === "byok" ? `byok:${credentialGeneration}` : "managed";
+      JSON.stringify([
+        options.mode === "byok" ? `byok:${credentialGeneration}` : "managed",
+        geminiConnectionModel(options),
+      ]);
 
     const connectGeminiStreaming = (event, options) => {
       if (geminiConnectInFlight) return geminiConnectInFlight;
@@ -12677,6 +13060,7 @@ class IPCHandlers {
         const token = await fetchRealtimeToken(event, tokenOptions);
         await streaming.connect({
           ...options,
+          model: geminiConnectionModel(options),
           token,
           refreshToken: () => fetchRealtimeToken(event, tokenOptions),
         });
@@ -12708,6 +13092,8 @@ class IPCHandlers {
       }
 
       geminiStreamingStartInProgress = true;
+      geminiStartAudio = [];
+      geminiStartAudioBytes = 0;
       try {
         const streaming = ensureGeminiStreaming(event);
         if (geminiConnectInFlight) await geminiConnectInFlight;
@@ -12719,6 +13105,7 @@ class IPCHandlers {
           if (streaming.isConnected) await streaming.disconnect(false);
           await connectGeminiStreaming(event, options);
         }
+        for (const buffer of geminiStartAudio) streaming.sendAudio(buffer);
         geminiSendDropCount = 0;
         debugLogger.debug("Gemini streaming started", { usedWarmConnection }, "streaming");
         return { success: true, usedWarmConnection };
@@ -12730,11 +13117,30 @@ class IPCHandlers {
         return streamingStartFailure(error);
       } finally {
         geminiStreamingStartInProgress = false;
+        geminiStartAudio = [];
+        geminiStartAudioBytes = 0;
       }
     });
 
     ipcMain.on("gemini-streaming-send", (_event, audioBuffer) => {
       try {
+        if (geminiStreamingStartInProgress) {
+          const buffer = Buffer.from(audioBuffer);
+          if (geminiStartAudioBytes + buffer.length <= GEMINI_START_AUDIO_MAX) {
+            geminiStartAudio.push(buffer);
+            geminiStartAudioBytes += buffer.length;
+          } else {
+            // Same accounting as a dropped live send, so a slow start is visible in logs.
+            geminiSendDropCount++;
+            if (geminiSendDropCount <= 3 || geminiSendDropCount % 50 === 0)
+              debugLogger.warn(
+                "Gemini start audio dropped past the 3 s buffer",
+                { dropCount: geminiSendDropCount },
+                "streaming"
+              );
+          }
+          return;
+        }
         if (!this.geminiStreaming) return;
         const sent = this.geminiStreaming.sendAudio(Buffer.from(audioBuffer));
         if (!sent) {
@@ -13191,6 +13597,30 @@ class IPCHandlers {
       }
     });
 
+    // Limited to connected calendars and contact sources, like find_contact, with the addresses
+    // the invite dialog can't use left out before the limit so they don't crowd out the rest.
+    ipcMain.handle("search-invite-contacts", async (_event, query, exclude) => {
+      try {
+        const excluded = new Set(
+          (Array.isArray(exclude) ? exclude : []).map((email) => String(email).toLowerCase())
+        );
+        const { contacts } = searchContacts(
+          this.databaseManager.getContactLookupSources(),
+          String(query ?? ""),
+          { limit: excluded.size + INVITE_SUGGESTION_LIMIT }
+        );
+        return {
+          success: true,
+          contacts: contacts
+            .filter((contact) => !excluded.has(contact.email.toLowerCase()))
+            .slice(0, INVITE_SUGGESTION_LIMIT)
+            .map(({ email, name }) => ({ email, name })),
+        };
+      } catch {
+        return { success: false, contacts: [] };
+      }
+    });
+
     ipcMain.handle("upsert-contact", async (_event, contact) => {
       try {
         this.databaseManager.addManualContact(contact);
@@ -13333,6 +13763,22 @@ class IPCHandlers {
     ipcMain.handle("confirm-meeting-note-navigation", (event, navigationId, status) =>
       this.windowManager.confirmMeetingNoteNavigation(event.sender, navigationId, status)
     );
+    ipcMain.handle("meeting-note-opened-without-recording", (event, id) => {
+      if (
+        event.sender !== this.windowManager.controlPanelWindow?.webContents ||
+        typeof id !== "string"
+      )
+        return;
+      this.meetingDetectionEngine?.markMeetingNoteOnly(id);
+    });
+    ipcMain.handle("meeting-note-closed", (event, id) => {
+      if (
+        event.sender !== this.windowManager.controlPanelWindow?.webContents ||
+        typeof id !== "string"
+      )
+        return;
+      this.meetingDetectionEngine?.closeMeetingNote(id);
+    });
 
     ipcMain.handle("join-calendar-meeting", async (_event, eventId) => {
       try {
@@ -13384,6 +13830,10 @@ class IPCHandlers {
           require("./markdownMirror").init(basePath);
         } else {
           this._rebuildMirror(basePath);
+        }
+        // A rebuild never prunes, so copies merged at launch would keep their files.
+        for (const noteId of this.databaseManager.mergedNoteIds.splice(0)) {
+          require("./markdownMirror").deleteNote(noteId);
         }
         return { success: true };
       } catch (error) {
@@ -13575,6 +14025,43 @@ class IPCHandlers {
       } catch (error) {
         debugLogger.error("Granola import failed", { error: error.message }, "granola-import");
         return { success: false, error: "IMPORT_FAILED" };
+      }
+    });
+
+    ipcMain.handle("dragon-import-pick-file", async (event) => {
+      try {
+        const { dialog } = require("electron");
+        // Parent the dialog so it opens as a sheet on the panel window —
+        // a parentless panel can land invisible on another display/Space.
+        const parentWindow = BrowserWindow.fromWebContents(event.sender);
+        const dialogOptions = {
+          properties: ["openFile"],
+          filters: [{ name: "Dragon word list", extensions: ["txt", "xml"] }],
+        };
+        const result = parentWindow
+          ? await dialog.showOpenDialog(parentWindow, dialogOptions)
+          : await dialog.showOpenDialog(dialogOptions);
+        if (result.canceled || !result.filePaths.length) {
+          return { canceled: true };
+        }
+        const [filePath] = result.filePaths;
+        // A twenty-year Dragon vocabulary is well under 1 MB; anything near
+        // this bound is not a word list.
+        const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
+        if (fs.statSync(filePath).size > MAX_IMPORT_BYTES) {
+          return { canceled: false, success: false, error: "FILE_TOO_LARGE" };
+        }
+        // The renderer parses the bytes and applies the words, so a large or
+        // malformed file never holds up hotkeys and dictation here.
+        return {
+          canceled: false,
+          success: true,
+          fileName: path.basename(filePath),
+          bytes: fs.readFileSync(filePath),
+        };
+      } catch (error) {
+        debugLogger.error("Dragon import failed", { error: error.message }, "dragon-import");
+        return { canceled: false, success: false, error: "READ_FAILED" };
       }
     });
 

@@ -185,6 +185,9 @@ export function createMeetingRecordingStartCoordinator(): MeetingRecordingStartC
     }
 
     activeStart.canceled = true;
+    if (expectedSessionId == null) {
+      for (const pending of pendingStarts) pending.canceled = true;
+    }
     for (const release of activeStart.cancelReleases.splice(0)) release();
     return activeStart.settled;
   };

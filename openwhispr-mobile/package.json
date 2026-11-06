@@ -22,7 +22,7 @@
     "clean": "npm run format && npm run lint && npm run typecheck",
     "pretest": "npm rebuild better-sqlite3",
     "test": "jest",
-    "test:security": "node --test scripts/__tests__/node-forge.test.js",
+    "test:security": "node --test scripts/__tests__/node-forge.test.js scripts/__tests__/decode-uri-component.test.js",
     "test:watch": "jest --watch",
     "test:keyboard-capitalization": "sh scripts/test-keyboard-capitalization.sh",
     "postinstall": "patch-package --error-on-fail && npm run test:security && npm run download:brand-fonts",
