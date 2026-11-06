@@ -397,6 +397,7 @@
         "cancelDownload": "Cancelar o download de {{model}}",
         "downloads": "Downloads de modelos",
         "downloading": "Baixando… {{progress}}%",
+        "verifying": "Verificando",
         "installing": "Instalando"
       },
       "localSetup": {
@@ -892,6 +893,11 @@
       }
     },
     "modelRetiredTitle": "Modelo não disponível",
+    "modelRetiredByProvider": "{{provider}} descontinuou {{from}}. Alterado para {{to}}.",
+    "modelUnavailableSwitched": "{{from}} não está mais disponível em {{provider}}. Alterado para {{to}}.",
+    "localModelRetired": "{{from}} não está mais disponível, por isso mudamos para {{to}}. Se ainda não tiver sido baixado, baixe-o nas Configurações.",
+    "localModelRetiredChooseAnother": "{{from}} não está mais disponível. Escolha outro modelo local nas Configurações.",
+    "localModelRetiredKept": "{{from}} foi descontinuado. Ele continua funcionando porque já foi baixado, mas não pode ser baixado novamente. Escolha outro modelo local nas Configurações.",
     "groq": {
       "modelRetired": "A Groq descontinuou {{from}}. Alterado para {{to}}."
     },
@@ -1086,6 +1092,7 @@
         "tlsError": "Erro de certificado — sua rede pode usar inspeção SSL que bloqueia downloads. Tente baixar de outra rede.",
         "unknown": "Erro desconhecido"
       },
+      "verifying": "Verificando {{model}}",
       "downloadFailed": {
         "title": "Falha no download"
       },
@@ -1961,6 +1968,14 @@
       "dataManagementTitle": "Gerenciamento de dados",
       "modelCache": "Cache de modelos",
       "open": "Abrir",
+      "retiredModels": {
+        "label": "Modelos descontinuados",
+        "description": "Estes modelos não são mais oferecidos, mas ainda estão no disco: {{models}}.",
+        "remove": "Remover",
+        "confirmTitle": "Remover modelos descontinuados?",
+        "confirmDescription": "Isso exclui os arquivos dos modelos que o catálogo não oferece mais. Os outros modelos baixados são mantidos.",
+        "failedDescription": "Não foi possível remover alguns arquivos. Um modelo pode ainda estar em uso; reinicie o aplicativo e tente novamente."
+      },
       "removeModels": {
         "confirmText": "Excluir modelos",
         "description": "Isso exclui todos os modelos Whisper armazenados localmente ({{path}}) e libera espaço em disco. Você pode baixá-los novamente no seletor de modelos.",
@@ -2269,6 +2284,8 @@
       "leaderboardRequiresHistory": "Ative a retenção de dados antes de participar das classificações.",
       "usageAnalytics": "Análise de uso",
       "usageAnalyticsDescription": "Ajude-nos a melhorar o OpenWhispr compartilhando métricas anônimas de desempenho. Nunca enviamos conteúdo de transcrição — apenas dados de tempo e erros.",
+      "modelListUpdates": "Atualizações da lista de modelos",
+      "modelListUpdatesDescription": "Verifica a cada 15 minutos a lista pública de modelos do OpenWhispr no GitHub para encontrar modelos novos e descontinuados. As alterações entram totalmente em vigor após reiniciar.",
       "dataRetention": "Retenção de dados",
       "dataRetentionDescription": "Armazenar transcrições e áudio localmente no seu histórico. Quando desativado, as transcrições são coladas mas não salvas.",
       "transcriptRetention": "Retenção de transcrições",

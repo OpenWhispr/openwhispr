@@ -63,6 +63,7 @@ const UNAVAILABLE_HEADING_KEYS: Record<NonNullable<LocalSetupRow["reason"]>, str
   memory: "onboarding.rehaul.localSetup.unavailable.notEnoughMemory",
   memoryUnread: "onboarding.rehaul.localSetup.unavailable.memoryUnread",
   organization: "onboarding.rehaul.localSetup.unavailable.organization",
+  catalog: "transcription.parakeet.unavailable",
 };
 const DESCRIPTION_KEYS: Record<LocalSetupRowId, string> = {
   dictation: "onboarding.rehaul.localSetup.description.dictation",
@@ -380,6 +381,7 @@ export function LocalSetupStep({
   const [keptOffToFit, setKeptOffToFit] = useState<LocalSetupRowId[]>([]);
   // The fit at the moment Download was pressed: later space reads don't move it.
   const [frozenFit, setFrozenFit] = useState<Fit | null>(null);
+  const [startedDictation, setStartedDictation] = useState<LocalSetupRow | null>(null);
   // What the inventory found on disk. It arrives through the downloads hook, which
   // itself needs the fitted switches, so it is copied here (see below the hook).
   const [onDisk, setOnDisk] = useState<string[]>([]);
@@ -421,11 +423,18 @@ export function LocalSetupStep({
   // Download waits for the free-space read and the inventory, or it would freeze a
   // fit that hasn't seen either.
   const readsLanded = spaceSettled && inventoryLoaded;
-  // No dictation model the organization approved runs here: Local can't work, so
-  // nothing downloads and the way on is back to another setup.
-  const dictationBlocked = plan.rows.some(
-    (row) => row.id === "dictation" && row.label === "unavailable"
-  );
+  const currentDictation = plan.rows.find((row) => row.id === "dictation");
+  // Retirement stops new downloads, but a transfer already started can finish and
+  // keep working. A different model or an organization block must still stop Proceed.
+  const completedRetiredDictation =
+    downloads.started &&
+    dictationStatus === "done" &&
+    currentDictation?.reason === "catalog" &&
+    startedDictation &&
+    localSetupItemKey(startedDictation.download) === localSetupItemKey(currentDictation.download)
+      ? startedDictation
+      : null;
+  const dictationBlocked = currentDictation?.label === "unavailable" && !completedRetiredDictation;
   const phase:
     "proceed" | "download" | "downloading" | "failed" | "noSpace" | "reading" | "blocked" =
     dictationBlocked
@@ -453,6 +462,7 @@ export function LocalSetupStep({
       onProceed(downloads.handOff);
     } else if (phase === "download") {
       setFrozenFit(liveFit);
+      setStartedDictation(currentDictation ?? null);
       downloads.start();
     }
   };
@@ -488,6 +498,7 @@ export function LocalSetupStep({
       return t("onboarding.rehaul.localSetup.line.offToFit");
     }
     if (row.line) return lineText(row.line, onMac, t);
+    if (row.reason === "catalog") return null;
     if (row.label === "unavailable")
       return t("onboarding.rehaul.localSetup.unavailable.exceedsMemory");
     // A switched-off row still says what it does: the switch shows it's off.
@@ -499,7 +510,11 @@ export function LocalSetupStep({
       <ComputerCard profile={plan.profile} languageTags={plan.languageTags} />
 
       <div className={`mt-4 ${PANEL_CLASS}`}>
-        {plan.rows.map((row) => {
+        {plan.rows.map((planRow) => {
+          const row =
+            planRow.id === "dictation" && completedRetiredDictation
+              ? completedRetiredDictation
+              : planRow;
           const on = row.id === "dictation" || switches[row.id];
           // The graphics pack's size shows on the row it downloads with, unnamed.
           const pack =

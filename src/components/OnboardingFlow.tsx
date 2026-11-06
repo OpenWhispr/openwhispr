@@ -35,6 +35,7 @@ import { useHotkeyModeInfo } from "../hooks/useHotkeyModeInfo";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { useRequiredLocalModels } from "../hooks/useRequiredLocalModels";
 import { useComputerProfile } from "../hooks/useComputerProfile";
+import { useRegistryVersion } from "../hooks/useRegistryVersion";
 import { usePolicySnapshot } from "../hooks/usePolicy";
 import { usePolicyStore } from "../stores/policyStore";
 import { isAgentAllowed, isScreenContextAllowed } from "../stores/policyRules";
@@ -113,6 +114,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const platform = getPlatform();
   // Read as onboarding opens, so it has long landed by the local setup step.
   const computerProfile = useComputerProfile();
+  const registryVersion = useRegistryVersion();
   const { isSignedIn } = useAuth();
   const agentAllowed = usePolicyStore(isAgentAllowed);
   const screenContextAllowed = usePolicyStore(isScreenContextAllowed);
@@ -354,7 +356,15 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         spokenLanguages: settings.spokenLanguages,
         requiredModelIds: requiredModels.required,
       }),
-    [computerProfile, policy, requiredModels.required, session.authPath, settings.spokenLanguages]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the catalog changes in place; its version is the signal
+    [
+      computerProfile,
+      policy,
+      requiredModels.required,
+      session.authPath,
+      settings.spokenLanguages,
+      registryVersion,
+    ]
   );
   // A policy refresh that is loading or failed must not take a built plan away:
   // the step would unmount and cancel its downloads. The last plan stands until a

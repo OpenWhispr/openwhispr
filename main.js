@@ -301,6 +301,14 @@ const dockManager = require("./src/helpers/dockManager");
 const autoStart = require("./src/helpers/autoStart");
 const IPCHandlers = require("./src/helpers/ipcHandlers");
 const CliBridge = require("./src/helpers/cliBridge");
+const { createRegistryLoader } = require("./src/helpers/registryLoader");
+const { registerRegistryIpc } = require("./src/helpers/registryIpc");
+const { replaceRegistryData } = require("./src/models/registryData.js");
+const { configureInstalledModels, withInstalledModels } = require("./src/helpers/installedModels");
+const { withTrustedDownloads } = require("./src/helpers/registryDownloadTrust");
+const registryTrustedKeys = require("./src/models/registryTrustedKeys.json");
+let registryLoader = null;
+let disposeRegistryIpc = null;
 const UpdateManager = require("./src/updater");
 const GlobeKeyManager = require("./src/helpers/globeKeyManager");
 const DevServerManager = require("./src/helpers/devServerManager");
@@ -1220,6 +1228,46 @@ async function startApp() {
   // Await so a stale sidecar is confirmed dead before new ones can spawn and
   // contend for its port or storage lock.
   await reapStaleSidecars();
+
+  // The registry loader reports cache problems before core managers exist, so the
+  // logger starts first. Requiring it again in initializeCoreManagers is a no-op.
+  debugLogger = require("./src/helpers/debugLogger");
+  debugLogger.ensureFileLogging();
+
+  // Only local signature/cache verification is awaited. Remote refresh starts
+  // later, so offline startup and settings migrations see a usable catalog.
+  const registryMetadata = require("./src/models/registryMetadata.json");
+  const bundledRegistryData = require("./src/models/modelRegistryData.json");
+  configureInstalledModels(path.join(app.getPath("userData"), "installed-models.json"));
+  registryLoader = createRegistryLoader({
+    cachePath: path.join(app.getPath("userData"), "model-registry.json"),
+    bundledSnapshot: {
+      data: bundledRegistryData,
+      manifestVersion: registryMetadata.manifestVersion,
+    },
+    clientContract: registryMetadata.clientContract,
+    trustedKeys: registryTrustedKeys,
+    appVersion: app.getVersion(),
+    applySnapshot: (snapshot) =>
+      replaceRegistryData({
+        ...snapshot,
+        // Installed records pass the same download checks as the catalog.
+        data: withTrustedDownloads(
+          withInstalledModels(snapshot.data, app.getVersion()),
+          bundledRegistryData,
+          (id) => debugLogger.warn("Refused a catalog download from an untrusted source", { id })
+        ),
+      }),
+    fetch: (...args) => net.fetch(...args),
+    onError: (error) =>
+      debugLogger.warn("Model registry update unavailable", { error: error.message }),
+  });
+  await registryLoader.start();
+  disposeRegistryIpc = registerRegistryIpc(ipcMain, (channel, snapshot) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) window.webContents.send(channel, snapshot);
+    }
+  });
 
   // Phase 1: Core managers + IPC handlers before windows
   initializeCoreManagers();
@@ -2192,6 +2240,9 @@ if (gotSingleInstanceLock) {
 }
 
 function performSyncTeardown() {
+  registryLoader?.stop();
+  disposeRegistryIpc?.();
+  disposeRegistryIpc = null;
   if (wakeRewarmTimer) {
     clearTimeout(wakeRewarmTimer);
     wakeRewarmTimer = null;

@@ -1,4 +1,8 @@
-const modelRegistryData = require("../models/modelRegistryData.json");
+const {
+  registryData: modelRegistryData,
+  getRunnableSpeechModel,
+  listRunnableLocalModels,
+} = require("../models/registryData.js");
 const { isLocalModelPolicyRefusal } = require("./localModelPolicyGate");
 const { OrukeetStreaming, MANAGED_STREAM_OPTIONS } = require("./orukeetStreaming");
 const { connectManagedOrukeet } = require("./orukeetCloudSession");
@@ -133,7 +137,11 @@ const HyprlandShortcutManager = require("./hyprlandShortcut");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
 const { i18nMain, changeLanguage } = require("./i18nMain");
 const DeepgramStreaming = require("./deepgramStreaming");
-const { GeminiLiveStreaming, GEMINI_LIVE_MODEL } = require("./geminiLiveStreaming");
+const {
+  GeminiLiveStreaming,
+  GEMINI_LIVE_MODEL,
+  resolveGeminiLiveModel,
+} = require("./geminiLiveStreaming");
 const CortiStreaming = require("./cortiStreaming");
 const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
 const { getCortiToken } = require("./cortiAuth");
@@ -961,7 +969,9 @@ class IPCHandlers {
             this._localModelPolicy.assertCurrent(this._activeLocalMeetingLease);
           } catch (error) {
             // cancelJobs' abort: its callers stop the meeting themselves, as an account change.
-            if (error.code !== "POLICY_UNRESOLVABLE") this._stopMeetingForPolicy?.(error.code);
+            // Anything that isn't the policy's refusal is not the organization's either.
+            if (isLocalModelPolicyRefusal(error) && error.code !== "POLICY_UNRESOLVABLE")
+              this._stopMeetingForPolicy?.(error.code);
           }
         }
       },
@@ -977,21 +987,22 @@ class IPCHandlers {
     }
     const samePath = (actual, expected) =>
       typeof actual === "string" && path.resolve(actual) === path.resolve(expected);
+    // Retired models included: a server started before a retirement keeps serving.
     this.whisperManager.serverManager.localModelIdForPath = (modelPath) =>
-      Object.keys(modelRegistryData.whisperModels).find((id) =>
+      listRunnableLocalModels("whisperModels").find(([id]) =>
         samePath(modelPath, this.whisperManager.getModelPath(id))
-      );
+      )?.[0];
     this.parakeetManager.serverManager.wsServer.localModelIdForPath = (modelPath, id) =>
-      modelRegistryData.parakeetModels[id] &&
+      getRunnableSpeechModel("parakeetModels", id) &&
       samePath(modelPath, this.parakeetManager.getModelPath(id))
         ? id
         : undefined;
     localLlmManager.serverManager.localModelIdForPath = (modelPath) =>
-      modelRegistryData.localProviders
-        .flatMap((provider) => provider.models)
-        .find((model) =>
+      listRunnableLocalModels("localProviders").find(
+        ([, model]) =>
+          model.fileName &&
           samePath(modelPath, path.join(localLlmManager.getModelsDir(), model.fileName))
-        )?.id;
+      )?.[0];
   }
 
   // Called once a cookie session has had its bearer migration: before that, a
@@ -1176,10 +1187,10 @@ class IPCHandlers {
       return this.localModelDownloadStatus.finish(modelType, modelId);
     }
 
-    if (progressData.type === "installing") {
+    if (progressData.type === "installing" || progressData.type === "verifying") {
       return this.localModelDownloadStatus.update(modelType, modelId, {
-        phase: "installing",
-        progress: progressData.percentage || 100,
+        phase: progressData.type,
+        progress: progressData.percentage ?? 100,
       });
     }
 
@@ -4822,6 +4833,9 @@ class IPCHandlers {
           "globe-preference-state.json",
           ".system-audio-permission",
           "account-scope-binding.json",
+          "installed-models.json",
+          "model-registry.json",
+          "model-registry.json.backup",
           PAID_KEY_CHECKS_FILE,
         ]) {
           fs.rmSync(path.join(app.getPath("userData"), fileName), { force: true });
@@ -5280,6 +5294,21 @@ class IPCHandlers {
         };
       }
     });
+
+    const retiredModelDirs = () => {
+      const { getModelsDirForService } = require("./modelDirUtils");
+      return {
+        whisperDir: getModelsDirForService("whisper"),
+        parakeetDir: getModelsDirForService("parakeet"),
+        llamaDir: require("./modelManagerBridge").default.getModelsDir(),
+      };
+    };
+    ipcMain.handle("list-retired-local-models", (_event, inUse) =>
+      require("./retiredLocalModels").listRetiredLocalModels(retiredModelDirs(), inUse)
+    );
+    ipcMain.handle("delete-retired-local-models", (_event, inUse) =>
+      require("./retiredLocalModels").deleteRetiredLocalModels(retiredModelDirs(), inUse)
+    );
 
     ipcMain.handle("model-delete-all", async () => {
       try {
@@ -12418,6 +12447,21 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle(
+      "get-model-registry-updates",
+      () => process.env.OPENWHISPR_MODEL_REGISTRY_MODE !== "bundled"
+    );
+
+    ipcMain.handle("set-model-registry-updates", async (event, enabled) => {
+      try {
+        await this.environmentManager.saveModelRegistryUpdates(enabled === true);
+        return { success: true };
+      } catch (error) {
+        debugLogger.error("Failed to save model catalog updates setting:", error);
+        return { success: false, error: error.message };
+      }
+    });
+
     ipcMain.handle("check-for-updates", async () => {
       return this.updateManager.checkForUpdates();
     });
@@ -13013,6 +13057,11 @@ class IPCHandlers {
 
     let geminiStreamingStartInProgress = false;
     let geminiSendDropCount = 0;
+    let geminiStartAudio = [];
+    let geminiStartAudioBytes = 0;
+    // Match the client's three-second cold-start bound. A model-changing start
+    // owns these frames, even while a previous warm handshake is finishing.
+    const GEMINI_START_AUDIO_MAX = 3 * 16000 * 2;
     // One handshake at a time. A start that raced an in-flight warmup used to
     // clear the cold-start buffer, spend a second single-use managed token and
     // report success while the warmup's handshake (and its failure) were still
@@ -13037,10 +13086,15 @@ class IPCHandlers {
       return streaming;
     };
 
-    // What a Gemini connection authenticated with: a managed one never serves a
-    // BYOK start or the reverse, and a BYOK one is not reused after a key save.
+    // Managed tokens are constrained to the server's existing model. BYOK can
+    // select newly published compatible models, each requiring its own socket.
+    const geminiConnectionModel = resolveGeminiLiveModel;
+    // A warm socket cannot cross credentials, modes, or selected models.
     const geminiConnectionKey = (options) =>
-      options.mode === "byok" ? `byok:${credentialGeneration}` : "managed";
+      JSON.stringify([
+        options.mode === "byok" ? `byok:${credentialGeneration}` : "managed",
+        geminiConnectionModel(options),
+      ]);
 
     const connectGeminiStreaming = (event, options) => {
       if (geminiConnectInFlight) return geminiConnectInFlight;
@@ -13060,6 +13114,7 @@ class IPCHandlers {
         const token = await fetchRealtimeToken(event, tokenOptions);
         await streaming.connect({
           ...options,
+          model: geminiConnectionModel(options),
           token,
           refreshToken: () => fetchRealtimeToken(event, tokenOptions),
         });
@@ -13091,6 +13146,8 @@ class IPCHandlers {
       }
 
       geminiStreamingStartInProgress = true;
+      geminiStartAudio = [];
+      geminiStartAudioBytes = 0;
       try {
         const streaming = ensureGeminiStreaming(event);
         if (geminiConnectInFlight) await geminiConnectInFlight;
@@ -13102,6 +13159,7 @@ class IPCHandlers {
           if (streaming.isConnected) await streaming.disconnect(false);
           await connectGeminiStreaming(event, options);
         }
+        for (const buffer of geminiStartAudio) streaming.sendAudio(buffer);
         geminiSendDropCount = 0;
         debugLogger.debug("Gemini streaming started", { usedWarmConnection }, "streaming");
         return { success: true, usedWarmConnection };
@@ -13113,11 +13171,30 @@ class IPCHandlers {
         return streamingStartFailure(error);
       } finally {
         geminiStreamingStartInProgress = false;
+        geminiStartAudio = [];
+        geminiStartAudioBytes = 0;
       }
     });
 
     ipcMain.on("gemini-streaming-send", (_event, audioBuffer) => {
       try {
+        if (geminiStreamingStartInProgress) {
+          const buffer = Buffer.from(audioBuffer);
+          if (geminiStartAudioBytes + buffer.length <= GEMINI_START_AUDIO_MAX) {
+            geminiStartAudio.push(buffer);
+            geminiStartAudioBytes += buffer.length;
+          } else {
+            // Same accounting as a dropped live send, so a slow start is visible in logs.
+            geminiSendDropCount++;
+            if (geminiSendDropCount <= 3 || geminiSendDropCount % 50 === 0)
+              debugLogger.warn(
+                "Gemini start audio dropped past the 3 s buffer",
+                { dropCount: geminiSendDropCount },
+                "streaming"
+              );
+          }
+          return;
+        }
         if (!this.geminiStreaming) return;
         const sent = this.geminiStreaming.sendAudio(Buffer.from(audioBuffer));
         if (!sent) {

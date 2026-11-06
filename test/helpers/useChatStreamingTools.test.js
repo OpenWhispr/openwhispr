@@ -1468,3 +1468,32 @@ test("a blocked Voice Assistant answers with the refusal, not on the remote Chat
   assert.equal(reply.content, "Choose a local model your organization has approved.");
   assert.deepEqual(reply.error, { settingsTarget: "llms" });
 });
+
+for (const supportsTools of [true, false]) {
+  test(`local chat honors catalog supportsTools=${supportsTools} over its model-size guess`, async (t) => {
+    const modelId = supportsTools ? "qwen3.5-2b-q4_k_m" : "qwen3.5-4b-q4_k_m";
+    const { captured, offeredTools, vite } = await renderChatStreaming(
+      t,
+      {},
+      {
+        settings: { chatAgentMode: "local", chatAgentProvider: "qwen", chatAgentModel: modelId },
+      }
+    );
+    const store = await vite.ssrLoadModule("/models/registryData.js");
+    const before = store.getRegistrySnapshot();
+    const data = structuredClone(before.data);
+    data.localProviders
+      .flatMap((provider) => provider.models)
+      .find((model) => model.id === modelId).supportsTools = supportsTools;
+    store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1 });
+    t.after(() =>
+      store.replaceRegistryData({
+        ...before,
+        manifestVersion: store.getRegistryVersion() + 1,
+      })
+    );
+    await captured.sendToAI("Summarize my notes", []);
+    assert.equal(offeredTools.length, 1);
+    assert.equal(offeredTools[0].includes("search_notes"), supportsTools);
+  });
+}

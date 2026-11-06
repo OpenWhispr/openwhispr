@@ -1,6 +1,6 @@
 import i18n from "../../i18n";
 import ReasoningService, { type AgentStreamChunk } from "../../services/ReasoningService";
-import { isEnterpriseProvider } from "../../models/ModelRegistry";
+import { getLocalModel, isEnterpriseProvider } from "../../models/ModelRegistry";
 import { providerSupportsImages } from "../../services/ai/inferenceProviders";
 import { getSettings, useSettingsStore } from "../../stores/settingsStore";
 import { resolveChatStreamingInference } from "../../helpers/dictationAgentInference.js";
@@ -462,8 +462,11 @@ export function createChatTurnEngine(
           "openrouter",
           "corti",
         ].includes(llmConfig.provider);
+      // The catalog's supportsTools decides; the size guess covers models without it.
       const localModelCanUseTool =
-        isLocalProvider && estimateModelSizeB(llmConfig.model) >= LOCAL_TOOL_MIN_PARAMS_B;
+        isLocalProvider &&
+        (getLocalModel(llmConfig.model)?.supportsTools ??
+          estimateModelSizeB(llmConfig.model) >= LOCAL_TOOL_MIN_PARAMS_B);
       const supportsTools = isCloudAgent || !isLocalProvider || localModelCanUseTool;
       // A local or LAN model may have a 16k context; hosted models have room to spare.
       const contextTier =

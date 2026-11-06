@@ -43,7 +43,10 @@ import {
   type ParamFallbackDetails,
 } from "./ai/chatRequestBody";
 import { getModelFamilyConstraints } from "./ai/modelFamilyConstraints";
-import { detectEndpointDialect } from "./ai/thinkingSuppressionDialects";
+import {
+  detectEndpointDialect,
+  geminiCatalogThinkingFloor,
+} from "./ai/thinkingSuppressionDialects";
 import { abortOnCancel, isRequestCancelled, requestCancelledError } from "./ai/requestCancellation";
 import { openCodeSessionHeaders } from "./ai/openCodeSession";
 import { createStreamingThinkFilter } from "./ai/streamingThinkFilter";
@@ -607,7 +610,8 @@ class ReasoningService extends BaseReasoningService {
     try {
       const result = await handler.call({
         text,
-        model: trimmedModel,
+        // A saved selection the catalog has retired must not reach the provider.
+        model: resolveRetiredCloudModel(providerId, trimmedModel),
         agentName,
         config: dispatchConfig,
         ctx: this.providerContext,
@@ -1049,8 +1053,8 @@ class ReasoningService extends BaseReasoningService {
         return;
       }
       const aiProvider = isLocalProvider || isLanChat ? "local" : provider;
-      if (aiProvider === "tinfoil") {
-        model = resolveRetiredCloudModel("tinfoil", model);
+      if (!isEnterprise && aiProvider !== "local") {
+        model = resolveRetiredCloudModel(aiProvider, model);
       }
       // OpenRouter ids are never in the local registry, so the supportsThinking
       // exemption below can't apply — honor the toggle directly.
@@ -1095,7 +1099,7 @@ class ReasoningService extends BaseReasoningService {
         ...(needsGeminiThinkingSuppressed
           ? {
               google: {
-                thinkingConfig: {
+                thinkingConfig: geminiCatalogThinkingFloor(model) ?? {
                   thinkingLevel:
                     getModelFamilyConstraints(model)?.reasoningEffort?.suppressValue ?? "minimal",
                   includeThoughts: false,

@@ -18,6 +18,7 @@ import type { PolicyDecisionSnapshot } from "../stores/policyRules";
 import { getASRModelOrganization } from "../helpers/localASROrganization";
 import { formatBytes, spaceSizeUnit } from "../utils/formatBytes";
 import modelRegistryData from "../models/modelRegistryData.json" with { type: "json" };
+import { registryData } from "../models/registryData.js";
 import languageRegistry from "./languageRegistry.json" with { type: "json" };
 import localSetupTableData from "../models/localSetupTable.json" with { type: "json" };
 
@@ -50,7 +51,7 @@ export interface LocalSetupRow {
   download: LocalSetupDownload;
   label: LocalSetupLabel | null; // null only for an organisation-required model
   /** organization: dictation only, when no model the allow-list approves runs on this computer. */
-  reason?: "tooSlow" | "memory" | "memoryUnread" | "organization";
+  reason?: "tooSlow" | "memory" | "memoryUnread" | "organization" | "catalog";
   /** null: the row says what it does, or (too slow) that it exceeds this computer's memory. */
   line: LocalSetupLine | null;
 }
@@ -127,11 +128,15 @@ const parakeetModels = modelRegistryData.parakeetModels as unknown as Record<
   SpeechModelInfo
 >;
 const whisperModels = modelRegistryData.whisperModels as unknown as Record<string, SpeechModelInfo>;
-const textModels = new Map<string, { providerId: string; model: TextModelInfo }>();
-for (const provider of modelRegistryData.localProviders) {
-  for (const model of provider.models as TextModelInfo[]) {
-    textModels.set(model.id, { providerId: provider.id, model });
+function textModelInfo(
+  modelId: string,
+  providers = registryData.localProviders
+): { providerId: string; model: TextModelInfo } | undefined {
+  for (const provider of providers) {
+    const model = provider.models.find((entry) => entry.id === modelId);
+    if (model) return { providerId: provider.id, model };
   }
+  return undefined;
 }
 
 export function isAppleChipMac(profile: ComputerProfile): boolean {
@@ -234,15 +239,18 @@ export function pickDictationModel(
 }
 
 function speechInfo(modelId: string): SpeechModelInfo | undefined {
-  return parakeetModels[modelId] ?? whisperModels[modelId];
+  return registryData.parakeetModels[modelId] ?? registryData.whisperModels[modelId];
 }
 
 function speechDownload(modelId: string): { download: LocalSetupDownload; info: SpeechModelInfo } {
-  const info = speechInfo(modelId);
+  // Keep the benchmark row's label when a publication removes its model; the plan
+  // marks it unavailable instead of recommending an unmeasured replacement.
+  const info = speechInfo(modelId) ?? parakeetModels[modelId] ?? whisperModels[modelId];
   return {
     info,
     download: {
-      kind: parakeetModels[modelId] ? "parakeet" : "whisper",
+      kind:
+        registryData.parakeetModels[modelId] || parakeetModels[modelId] ? "parakeet" : "whisper",
       id: modelId,
       bytes: info.expectedSizeBytes ?? info.sizeMb * 1e6,
     },
@@ -287,7 +295,8 @@ function firstApprovedSpeechModel(
   languages: string[]
 ): string | undefined {
   const runnable = (allowedLocalModelIds(policy, "transcription") ?? []).filter(
-    (id) => speechInfo(id) && !(parakeetModels[id] && profile.parakeetSupported === false)
+    (id) =>
+      speechInfo(id) && !(registryData.parakeetModels[id] && profile.parakeetSupported === false)
   );
   const fitsLanguages = (id: string): boolean => {
     const supported = speechInfo(id)?.supportedLanguages;
@@ -302,7 +311,8 @@ function textRow(
   machine: MachineEntry
 ): LocalSetupRow {
   const modelId = table.models[id];
-  const { providerId, model } = textModels.get(modelId);
+  const { providerId, model } =
+    textModelInfo(modelId) ?? textModelInfo(modelId, modelRegistryData.localProviders);
   const entry = machine[id];
   const neededGb = table.memoryNeededGb[id][profile.platform === "darwin" ? "mac" : "pc"];
 
@@ -404,7 +414,12 @@ export function buildLocalSetupPlan(input: {
     profile,
     languages,
     languageTags,
-    rows,
+    rows: rows.map((row): LocalSetupRow => {
+      const offered = row.id === "dictation" ? speechInfo(row.modelId) : textModelInfo(row.modelId);
+      return offered || row.label === "unavailable"
+        ? row
+        : { ...row, label: "unavailable", reason: "catalog", line: null };
+    }),
     graphicsPack,
     startingSwitches: { cleanup: machine.cleanup.startsOn !== false, assistant: true },
     organizationRunsText,
@@ -540,12 +555,12 @@ export function fitLocalSetupToSpace(
 }
 
 function registrySize(download: LocalSetupDownload): string {
-  if (download.kind === "llm") return textModels.get(download.id)?.model.size ?? "";
+  if (download.kind === "llm") return textModelInfo(download.id)?.model.size ?? "";
   return speechInfo(download.id)?.size ?? "";
 }
 
 /** The size Settings shows for the row's model, or the combined size with the pack folded in. */
 export function rowSizeLabel(row: LocalSetupRow, pack: LocalSetupDownload | null): string {
   if (pack) return formatBytes(row.download.bytes + pack.bytes, 1);
-  return spaceSizeUnit(registrySize(row.download));
+  return spaceSizeUnit(registrySize(row.download)) || formatBytes(row.download.bytes, 1);
 }

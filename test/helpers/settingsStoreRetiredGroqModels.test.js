@@ -11,7 +11,8 @@ const modelRegistryData = require("../../src/models/modelRegistryData.json");
 test("retired groq model selections migrate to served replacements", async (t) => {
   const groqIds = modelRegistryData.cloudProviders
     .find((provider) => provider.id === "groq")
-    .models.map((model) => model.id);
+    .models.filter((model) => !model.retired)
+    .map((model) => model.id);
   for (const retired of ["llama-3.3-70b-versatile", "groq/compound", "groq/compound-mini"]) {
     assert.ok(!groqIds.includes(retired), `retired id ${retired} must be out of the registry`);
   }

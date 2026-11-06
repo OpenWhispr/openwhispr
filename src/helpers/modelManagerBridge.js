@@ -15,9 +15,10 @@ const {
   checkDiskSpace,
 } = require("./downloadUtils");
 
-const modelRegistryData = require("../models/modelRegistryData.json");
+const { registryData: modelRegistryData } = require("../models/registryData.js");
 const LlamaServerManager = require("./llamaServer");
 const debugLogger = require("./debugLogger");
+const { rememberInstalledModel, forgetInstalledModels } = require("./installedModels");
 const { readGgufMetadataFromFile } = require("./ggufMetadata");
 const {
   estimateTokens,
@@ -327,6 +328,7 @@ class ModelManager {
     const modelPath = path.join(this.modelsDir, model.fileName);
 
     if (await this.checkModelValid(modelPath)) {
+      rememberInstalledModel("localProviders", provider.id, modelId);
       return modelPath;
     }
 
@@ -390,6 +392,7 @@ class ModelManager {
       assertLocalModelOperation(this);
       await sharedDownloadFile(downloadUrl, modelPath, {
         signal,
+        expectedSha256: model.sha256,
         onProgress: hasDrafter
           ? (downloadedBytes) => emitCombined(downloadedBytes)
           : (downloadedBytes, totalBytes) => {
@@ -424,6 +427,7 @@ class ModelManager {
           assertLocalModelOperation(this);
           await sharedDownloadFile(this.getDraftDownloadUrl(provider, model), draftPath, {
             signal,
+            expectedSha256: model.draftSha256,
             onProgress: (downloadedBytes) => emitCombined(stats.size + downloadedBytes),
           });
           const draftStats = await fsPromises.stat(draftPath);
@@ -441,6 +445,7 @@ class ModelManager {
         }
       }
 
+      rememberInstalledModel("localProviders", provider.id, modelId);
       return modelPath;
     } catch (error) {
       if (error.isAbort) {
@@ -449,6 +454,11 @@ class ModelManager {
       if (error.isHttpError) {
         throw new ModelError(`Download failed with status ${error.statusCode}`, "DOWNLOAD_FAILED", {
           statusCode: error.statusCode,
+        });
+      }
+      if (error.code === "ERR_MODEL_INTEGRITY") {
+        throw new ModelError(`Download corrupted: ${error.message}`, "INTEGRITY_ERROR", {
+          error: error.message,
         });
       }
       if (!(error instanceof ModelError)) {
@@ -470,12 +480,12 @@ class ModelManager {
 
   getDownloadUrl(provider, model) {
     const baseUrl = provider.baseUrl || "https://huggingface.co";
-    return `${baseUrl}/${model.hfRepo}/resolve/main/${model.fileName}`;
+    return `${baseUrl}/${model.hfRepo}/resolve/${model.revision || "main"}/${model.fileName}`;
   }
 
   getDraftDownloadUrl(provider, model) {
     const baseUrl = provider.baseUrl || "https://huggingface.co";
-    return `${baseUrl}/${model.draftHfRepo}/resolve/main/${model.draftFileName}`;
+    return `${baseUrl}/${model.draftHfRepo}/resolve/${model.draftRevision || "main"}/${model.draftFileName}`;
   }
 
   modelHasDrafter(model) {
@@ -520,6 +530,7 @@ class ModelManager {
       const draftPath = path.join(this.modelsDir, modelInfo.model.draftFileName);
       await fsPromises.unlink(draftPath).catch(() => {});
     }
+    forgetInstalledModels("localProviders", modelInfo.provider.id, modelId);
   }
 
   async deleteAllModels() {
@@ -540,6 +551,7 @@ class ModelManager {
           }
         }
       }
+      forgetInstalledModels("localProviders");
     } catch (error) {
       throw new ModelError(
         `Failed to delete models directory: ${error.message}`,

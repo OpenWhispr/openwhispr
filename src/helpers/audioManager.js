@@ -183,7 +183,8 @@ import {
   isSelectionQuestionResponse,
 } from "./selectionEditing";
 import {
-  REALTIME_MODELS,
+  isOpenAiRealtimeSelection,
+  isGeminiLiveSelection,
   defaultStreamingProviderName,
   orukeetDetectedLanguageFields,
   resolveManagedOrukeetRoute,
@@ -637,6 +638,11 @@ const SELECTION_EDIT_FAILURE_COPY = {
   [EMPTY_OUTPUT_MESSAGE_KEY]: "emptyResponse",
   [TRUNCATED_OUTPUT_MESSAGE_KEY]: "truncatedResponse",
 };
+
+// A local model the app does not know is a setup problem, never a reason to send a
+// local-mode user's audio to a cloud provider.
+const isUnknownLocalModelError = (error) =>
+  /Invalid (model name|Parakeet model):/.test(error?.message ?? "");
 
 class AudioManager {
   constructor() {
@@ -2677,7 +2683,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         provider: cloudTranscriptionProvider || "openai",
       });
 
-      if (allowOpenAIFallback && isLocalMode && fallbackAllowedByPolicy) {
+      if (
+        allowOpenAIFallback &&
+        isLocalMode &&
+        fallbackAllowedByPolicy &&
+        !isUnknownLocalModelError(error)
+      ) {
         try {
           const fallbackResult = await this.processWithOpenAIAPI(audioBlob, metadata, wasCancelled);
           return { ...fallbackResult, source: "openai-fallback" };
@@ -2791,7 +2802,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         provider: cloudTranscriptionProvider || "openai",
       });
 
-      if (allowOpenAIFallback && isLocalMode && fallbackAllowedByPolicy) {
+      if (
+        allowOpenAIFallback &&
+        isLocalMode &&
+        fallbackAllowedByPolicy &&
+        !isUnknownLocalModelError(error)
+      ) {
         try {
           const fallbackResult = await this.processWithOpenAIAPI(audioBlob, metadata, wasCancelled);
           return { ...fallbackResult, source: "openai-fallback" };
@@ -4576,11 +4592,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const selfHostedModel = resolveSelfHostedTranscriptionModel(s);
       if (selfHostedModel) return selfHostedModel;
       const provider = s.cloudTranscriptionProvider || "openai";
-      // Tinfoil and Gemini pin their batch model in the registry rather than in
-      // settings: their streaming model has no batch endpoint, so a streaming
-      // fallback that reused the selected model would POST an unusable id.
+      // A streaming selection needs the provider's batch fallback. A selected
+      // compatible batch model must retain its own ID, including live additions.
       const batchModel = getBatchTranscriptionModel(provider);
-      if (batchModel) return batchModel;
+      const selectedModel = getTranscriptionProvider(provider)?.models.find(
+        (model) => model.id === s.cloudTranscriptionModel?.trim()
+      );
+      if (batchModel && (!selectedModel || selectedModel.streaming)) return batchModel;
       return resolveByokModel(provider, s.cloudTranscriptionModel);
     } catch (error) {
       return "gpt-transcribe";
@@ -5000,9 +5018,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // Gemini Live streams over its own WSS on either credential; the batch
     // Gemini model on the same provider stays on HTTP.
     if (s.cloudTranscriptionProvider === "gemini") {
-      const provider = getTranscriptionProvider("gemini");
-      const model = provider?.models.find((m) => m.id === s.cloudTranscriptionModel);
-      if (!model?.streaming) return false;
+      if (!isGeminiLiveSelection(s)) return false;
       if (s.cloudTranscriptionMode === "byok") return !!s.geminiApiKey;
       return !!(isSignedInOverride ?? s.isSignedIn);
     }
@@ -5024,7 +5040,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return false;
     }
 
-    if (REALTIME_MODELS.has(s.cloudTranscriptionModel)) {
+    if (isOpenAiRealtimeSelection(s)) {
       // Realtime WS is OpenAI-only — other providers fall through to HTTP.
       if ((s.cloudTranscriptionProvider || "openai") !== "openai") return false;
       if (s.cloudTranscriptionMode === "byok") return !!s.openaiApiKey;

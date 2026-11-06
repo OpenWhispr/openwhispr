@@ -226,3 +226,17 @@ test("a model revoked during a meeting start reaches main blank for it to refuse
   assert.equal(calls.start.at(-1)?.provider, "local");
   assert.equal(calls.start.at(-1).localModel, "");
 });
+
+test("main starts with the options resolved before capture, not a second resolve after it", () => {
+  const source = require("node:fs").readFileSync(
+    require("node:path").join(__dirname, "../../src/stores/meetingRecordingStore.ts"),
+    "utf8"
+  );
+  const start = source.slice(source.indexOf("meetingTranscriptionStart?.({"));
+  const call = start.slice(0, start.indexOf("});"));
+  assert.match(call, /\.\.\.meetingTranscriptionOptions,/);
+  assert.ok(
+    source.indexOf("const meetingTranscriptionOptions =") <
+      source.indexOf("prepareMeetingSystemAudioCapture(initialSystemAudioAccess,")
+  );
+});

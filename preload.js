@@ -63,6 +63,12 @@ const registerListener = (channel, handlerFactory) => {
 };
 
 contextBridge.exposeInMainWorld("electronAPI", {
+  initialModelRegistrySnapshot: ipcRenderer.sendSync?.("model-registry-initial"),
+  getModelRegistry: () => ipcRenderer.invoke("get-model-registry"),
+  onModelRegistryUpdated: registerListener(
+    "model-registry-updated",
+    (callback) => (_event, snapshot) => callback(snapshot)
+  ),
   setOnboardingWindowMode: (mode) => ipcRenderer.invoke("onboarding-set-window-mode", mode),
   setOnboardingActive: (active) => ipcRenderer.invoke("onboarding-set-active", active),
   openPermissionGuide: (state) => ipcRenderer.invoke("permission-guide-open", state),
@@ -650,6 +656,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   modelGetActiveDownloads: () => ipcRenderer.invoke("model-get-active-downloads"),
   modelCheck: (modelId) => ipcRenderer.invoke("model-check", modelId),
   modelDownload: (modelId) => ipcRenderer.invoke("model-download", modelId),
+  listRetiredLocalModels: (inUse) => ipcRenderer.invoke("list-retired-local-models", inUse),
+  deleteRetiredLocalModels: (inUse) => ipcRenderer.invoke("delete-retired-local-models", inUse),
   modelDelete: (modelId) => ipcRenderer.invoke("model-delete", modelId),
   modelDeleteAll: () => ipcRenderer.invoke("model-delete-all"),
   modelCheckRuntime: () => ipcRenderer.invoke("model-check-runtime"),
@@ -806,6 +814,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Debug logging management
   getDebugState: () => ipcRenderer.invoke("get-debug-state"),
   setDebugLogging: (enabled) => ipcRenderer.invoke("set-debug-logging", enabled),
+  getModelRegistryUpdates: () => ipcRenderer.invoke("get-model-registry-updates"),
+  setModelRegistryUpdates: (enabled) => ipcRenderer.invoke("set-model-registry-updates", enabled),
   openLogsFolder: () => ipcRenderer.invoke("open-logs-folder"),
 
   // System settings helpers for microphone/audio permissions

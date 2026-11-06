@@ -223,6 +223,21 @@ async function mount(
     )
   );
 
+  const rerender = async (nextPlan) => {
+    await React.act(async () =>
+      root.render(
+        React.createElement(LocalSetupStep, {
+          plan: nextPlan,
+          onProceed: (handOff) => {
+            const taken = handOff();
+            handOffs.push(taken);
+            proceeded.push({ ready: taken.ready, pending: taken.pending });
+          },
+        })
+      )
+    );
+  };
+
   const flush = () =>
     React.act(async () => {
       for (let i = 0; i < 10; i++) await Promise.resolve();
@@ -275,6 +290,7 @@ async function mount(
   return {
     container,
     plan,
+    rerender,
     setup,
     claims,
     step,
@@ -556,7 +572,10 @@ test("dictation the organization's models can't run here locks the step and says
   const row = s.row("dictation");
   assert.ok(row.textContent.includes(`${K}unavailable.organization`));
   assert.ok(row.textContent.includes(`${K}line.organizationModelsUnrunnable`));
-  assert.ok(!row.textContent.includes(`${K}badge.cloud`), "the organization chose, not the computer");
+  assert.ok(
+    !row.textContent.includes(`${K}badge.cloud`),
+    "the organization chose, not the computer"
+  );
   assert.ok(isDisabled(s.button()));
   assert.equal(s.foot(), `${K}foot.dictationUnavailable`);
 
@@ -946,3 +965,47 @@ test("header helpers name the computer and join the languages", async (t) => {
   assert.equal(step.localSetupLanguageLabel(["zh-Hant"], "en"), "Traditional Chinese");
   assert.equal(step.localSetupLanguageLabel(["zh-Hant"], "zh-TW"), "繁體中文");
 });
+
+for (const scenario of [
+  { name: "same retired model", modelId: DICTATION, reason: "catalog", canProceed: true },
+  {
+    name: "different retired model",
+    modelId: "orukeet-v0.1.0",
+    reason: "catalog",
+    canProceed: false,
+  },
+  { name: "policy-blocked model", modelId: DICTATION, reason: "organization", canProceed: false },
+]) {
+  test(`a completed transfer handles a plan update to ${scenario.name}`, async (t) => {
+    const s = await mount(t);
+    await s.click(s.button());
+    const updated = {
+      ...s.plan,
+      rows: s.plan.rows.map((row) =>
+        row.id !== "dictation"
+          ? row
+          : {
+              ...row,
+              modelId: scenario.modelId,
+              download: { ...row.download, id: scenario.modelId },
+              label: "unavailable",
+              reason: scenario.reason,
+              line: null,
+            }
+      ),
+    };
+    await s.rerender(updated);
+    assert.equal(isDisabled(s.button()), true);
+    await s.finish(DICTATION);
+    assert.equal(isDisabled(s.button()), !scenario.canProceed);
+    if (scenario.canProceed) {
+      assert.ok(s.button().textContent.includes(`${K}button.proceed`));
+      assert.equal(
+        s.row("dictation").textContent.includes("transcription.parakeet.unavailable"),
+        false
+      );
+      await s.click(s.button());
+      assert.equal(s.proceeded.length, 1);
+    }
+  });
+}

@@ -418,6 +418,7 @@
         "cancelDownload": "Cancel download of {{model}}",
         "downloads": "Model downloads",
         "downloading": "Downloading… {{progress}}%",
+        "verifying": "Verifying",
         "installing": "Installing"
       },
       "localSetup": {
@@ -913,6 +914,11 @@
       }
     },
     "modelRetiredTitle": "Model no longer available",
+    "modelRetiredByProvider": "{{provider}} retired {{from}}. Switched to {{to}}.",
+    "modelUnavailableSwitched": "{{from}} isn't available from {{provider}} anymore. Switched to {{to}}.",
+    "localModelRetired": "{{from}} is no longer available, so we switched you to {{to}}. If it isn't downloaded yet, download it in Settings.",
+    "localModelRetiredChooseAnother": "{{from}} is no longer available. Choose another local model in Settings.",
+    "localModelRetiredKept": "{{from}} has been retired. It keeps working because it's already downloaded, but it can't be downloaded again. Choose another local model in Settings.",
     "groq": {
       "modelRetired": "Groq retired {{from}}. Switched to {{to}}."
     },
@@ -1107,6 +1113,7 @@
         "tlsError": "Certificate error — your network may use SSL inspection that blocks downloads. Try downloading from a different network.",
         "unknown": "Unknown error"
       },
+      "verifying": "Verifying {{model}}",
       "downloadFailed": {
         "title": "Download Failed"
       },
@@ -2514,6 +2521,14 @@
       "dataManagementTitle": "Data Management",
       "modelCache": "Model cache",
       "open": "Open",
+      "retiredModels": {
+        "label": "Retired models",
+        "description": "These models are no longer offered but are still on disk: {{models}}.",
+        "remove": "Remove",
+        "confirmTitle": "Remove retired models?",
+        "confirmDescription": "This deletes the files of models the catalog no longer offers. Other downloaded models stay.",
+        "failedDescription": "Some files couldn't be removed. A model may still be in use; restart the app and try again."
+      },
       "removeModels": {
         "confirmText": "Delete Models",
         "description": "This deletes all locally cached Whisper models ({{path}}) and frees disk space. You can download them again from the model picker.",
@@ -2815,6 +2830,8 @@
       "title": "Privacy",
       "usageAnalytics": "Usage analytics",
       "usageAnalyticsDescription": "Help us improve OpenWhispr by sharing anonymous performance metrics. We never send transcription content — only timing and error data.",
+      "modelListUpdates": "Model list updates",
+      "modelListUpdatesDescription": "Check OpenWhispr's public model list on GitHub every 15 minutes for new and retired models. Changes take full effect after restart.",
       "insightsSync": "Sync personal Insights",
       "insightsSyncDescription": "Sync word counts, the date and exact time of each dictation, durations, and model types across your devices. Transcript content is never included. When you're signed in, clearing history also removes these counters from this device and your account.",
       "insightsSyncRequiresAccount": "Sign in to sync content-free Insights data across your devices.",

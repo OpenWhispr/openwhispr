@@ -1,3 +1,4 @@
+import { useRegistryVersion } from "../../hooks/useRegistryVersion";
 import { useEffect, useState } from "react";
 import {
   AlertCircle,
@@ -124,6 +125,7 @@ export default function SetupChoiceStep({
   onSelect,
   onRequestAuthentication,
 }: SetupChoiceStepProps) {
+  useRegistryVersion();
   const { t } = useTranslation();
   const policy = usePolicySnapshot();
   // Unknown counts as supported, or a Parakeet-only policy would flash "unavailable"
