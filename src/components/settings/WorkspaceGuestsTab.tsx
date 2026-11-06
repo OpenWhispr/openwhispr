@@ -218,23 +218,13 @@ export default function WorkspaceGuestsTab({
     </>
   );
 
-  if (isEmpty) {
-    return (
-      <>
-        {dialogs}
-        <EmptyGuests ref={emptyRef} />
-      </>
-    );
-  }
-
-  return (
+  const table = (
     <div
       ref={frameRef}
       tabIndex={-1}
       data-guests-table=""
       className={cn(TABLE_FRAME, "outline-none")}
     >
-      {dialogs}
       <table className="w-full table-fixed border-collapse">
         <colgroup>
           {canManage ? (
@@ -354,6 +344,15 @@ export default function WorkspaceGuestsTab({
         />
       ) : null}
     </div>
+  );
+
+  // The dialogs keep their place whether or not the list is empty, so inviting the last guests
+  // doesn't remount the invite dialog and drop its Sent screen.
+  return (
+    <>
+      {dialogs}
+      {isEmpty ? <EmptyGuests ref={emptyRef} /> : table}
+    </>
   );
 }
 

@@ -107,6 +107,7 @@ async function loadTab(
           globalThis.__inviteProps = props;
           React.useEffect(() => {
             globalThis.__inviteMounted = true;
+            globalThis.__inviteMounts = (globalThis.__inviteMounts ?? 0) + 1;
             return () => {
               globalThis.__inviteMounted = false;
             };
@@ -134,6 +135,7 @@ async function loadTab(
     delete globalThis.__toasts;
     delete globalThis.__inviteProps;
     delete globalThis.__inviteMounted;
+    delete globalThis.__inviteMounts;
     delete globalThis.__removeProps;
     delete globalThis.__clipboard;
   });
@@ -723,6 +725,8 @@ test("inviting the last listed guests keeps the dialog until it closes, then toa
   globalThis.__guestsState.guests = [];
   await rerender();
   assert.equal(globalThis.__inviteMounted, true, "the Sent screen is still showing");
+  // A remount would reset the dialog to its form; mounted once means its Sent state survived.
+  assert.equal(globalThis.__inviteMounts, 1);
   await React.act(async () => globalThis.__inviteProps.onOpenChange(false));
   assert.match(globalThis.__toasts[0].title, new RegExp(`${KEY}\\.invite\\.sent\\|count=1`));
   assert.equal(globalThis.__inviteMounted, false);
