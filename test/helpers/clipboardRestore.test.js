@@ -1099,6 +1099,89 @@ test("KDE tries portal before uinput", async () => {
   );
 });
 
+for (const legacy of [false, true]) {
+  test(`KDE uses a running ydotoold before ephemeral uinput (${legacy ? "legacy" : "current"})`, async () => {
+    const calls = [];
+    const Manager = loadClipboardManager({ spawn: createSpawn(calls, [1, 0]) });
+    const manager = new Manager();
+    manager.commandExists = (command) => command === "ydotool";
+    manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+    manager._readPortalToken = () => null;
+    manager._isYdotoolDaemonRunning = () => true;
+    manager._isYdotoolLegacy = () => legacy;
+
+    const result = await withWaylandEnvironment("KDE", () => manager.pasteLinux(null));
+
+    assert.equal(result.method, "ydotool");
+    assert.deepEqual(calls, [
+      { command: "/tmp/linux-fast-paste", args: ["--portal", "--shift-insert"] },
+      {
+        command: "ydotool",
+        args: legacy ? ["key", "shift+Insert"] : ["key", "42:1", "110:1", "110:0", "42:0"],
+      },
+    ]);
+  });
+}
+
+test("KDE keeps a successful portal ahead of a running ydotoold", async () => {
+  const calls = [];
+  const Manager = loadClipboardManager({ spawn: createSuccessfulSpawn(calls) });
+  const manager = new Manager();
+  manager.commandExists = (command) => command === "ydotool";
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+  manager._readPortalToken = () => null;
+  manager._isYdotoolDaemonRunning = () => true;
+
+  const result = await withWaylandEnvironment("KDE", () => manager.pasteLinux(null));
+
+  assert.equal(result.method, "portal");
+  assert.deepEqual(calls, [
+    { command: "/tmp/linux-fast-paste", args: ["--portal", "--shift-insert"] },
+  ]);
+});
+
+test("KDE falls back to ephemeral uinput when ydotool fails", async () => {
+  const calls = [];
+  const Manager = loadClipboardManager({ spawn: createSpawn(calls, [1, 1, 0]) });
+  const manager = new Manager();
+  manager.commandExists = (command) => command === "ydotool";
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+  manager._readPortalToken = () => null;
+  manager._isYdotoolDaemonRunning = () => true;
+  manager._isYdotoolLegacy = () => false;
+
+  const result = await withWaylandEnvironment("KDE", () => manager.pasteLinux(null));
+
+  assert.equal(result.method, "uinput");
+  assert.deepEqual(calls.map(({ command }) => command), [
+    "/tmp/linux-fast-paste",
+    "ydotool",
+    "/tmp/linux-fast-paste",
+  ]);
+  assert.deepEqual(calls[2].args, ["--uinput", "--shift-insert"]);
+});
+
+test("KDE does not retry a failed ydotool after the native paths fail", async () => {
+  const calls = [];
+  const Manager = loadClipboardManager({ spawn: createSpawn(calls, [1, 1, 1]) });
+  const manager = new Manager();
+  manager.commandExists = (command) => command === "ydotool";
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+  manager._readPortalToken = () => null;
+  manager._isYdotoolDaemonRunning = () => true;
+  manager._isYdotoolLegacy = () => false;
+
+  await assert.rejects(withWaylandEnvironment("KDE", () => manager.pasteLinux(null)), {
+    code: "PASTE_SIMULATION_FAILED",
+  });
+
+  assert.deepEqual(calls.map(({ command }) => command), [
+    "/tmp/linux-fast-paste",
+    "ydotool",
+    "/tmp/linux-fast-paste",
+  ]);
+});
+
 // On a non-Latin layout KWin can't map XK_v, so the Ctrl+V (or Ctrl+Shift+V) a
 // detected window would get reaches it as Ctrl alone (#2055).
 for (const windowClass of ["chromium", "kitty"]) {
