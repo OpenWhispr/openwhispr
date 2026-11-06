@@ -496,3 +496,41 @@ test("the second Esc closes", async (t) => {
   await ui.press(nameInput(), "Escape");
   assert.deepEqual(events.at(-1), ["open", false]);
 });
+
+test("Esc while a rename is saving keeps the new name, and closing doesn't send the old one", async (t) => {
+  let answer;
+  const { calls, events } = await mount(t, {
+    team: team({ manage_settings: true }),
+    renameTeam: (_id, name) =>
+      new Promise((resolve) => {
+        answer = () => resolve({ ...team({ manage_settings: true }), name });
+      }),
+  });
+
+  await ui.type(nameInput(), "Revenue");
+  await ui.press(nameInput(), "Enter");
+  await ui.type(nameInput(), "Revenue 2");
+  await ui.press(nameInput(), "Escape");
+  assert.equal(nameInput().value, "Revenue", "Esc puts back the name being saved, not the old one");
+  assert.deepEqual(events, []);
+
+  await ui.act(() => answer());
+  await ui.settle();
+  await ui.click(buttonNamed("Close"));
+  await ui.settle();
+  const renames = calls.filter(([name]) => name === "renameTeam").map(([, , value]) => value);
+  assert.deepEqual(renames, ["Revenue"]);
+});
+
+test("Esc while a rename is saving closes when nothing else was typed", async (t) => {
+  const { calls, events } = await mount(t, {
+    team: team({ manage_settings: true }),
+    renameTeam: () => new Promise(() => {}),
+  });
+
+  await ui.type(nameInput(), "Revenue");
+  await ui.press(nameInput(), "Enter");
+  await ui.press(nameInput(), "Escape");
+  assert.deepEqual(events.at(-1), ["open", false]);
+  assert.equal(calls.filter(([name]) => name === "renameTeam").length, 1);
+});

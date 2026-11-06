@@ -73,6 +73,9 @@ export default function TeamSettingsDialog({
   // The name the draft was seeded from or last saved as; null while closed.
   const [nameBaseline, setNameBaseline] = useState<string | null>(null);
   const [nameTaken, setNameTaken] = useState<string | null>(null);
+  // The name a rename is sending right now. Until it's answered it counts as the saved name, so
+  // Esc can't put back the name it is replacing.
+  const [savingName, setSavingName] = useState<string | null>(null);
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [checkingLeave, setCheckingLeave] = useState(false);
   const [leaveFacts, setLeaveFacts] = useState<{
@@ -147,6 +150,7 @@ export default function TeamSettingsDialog({
     }
     if (namesInFlight.current.has(name)) return;
     namesInFlight.current.add(name);
+    setSavingName(name);
     try {
       await renameTeam(team.id, name);
       setNameBaseline(name);
@@ -180,12 +184,14 @@ export default function TeamSettingsDialog({
       }
     } finally {
       namesInFlight.current.delete(name);
+      setSavingName((current) => (current === name ? null : current));
     }
   };
 
-  const nameDirty = nameBaseline !== null && draftName.trim() !== nameBaseline;
+  const savedName = savingName ?? nameBaseline;
+  const nameDirty = savedName !== null && draftName.trim() !== savedName;
   const revertName = (): void => {
-    if (nameBaseline !== null) setDraftName(nameBaseline);
+    if (savedName !== null) setDraftName(savedName);
     setNameTaken(null);
     refusedName.current = null;
   };
