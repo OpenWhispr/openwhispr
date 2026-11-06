@@ -1320,6 +1320,70 @@ test("open_settings carries the model scope of the chat that asked", async (t) =
   }
 });
 
+test("a chat that can ask the user offers the Slack picker when a name matches several people", async (t) => {
+  const { captured, reasoningService, vite } = await renderChatStreaming(
+    t,
+    { allowConnectors: true, allowInteractions: true },
+    {
+      electronAPI: {
+        connectorStatus: async () => [
+          {
+            id: "slack",
+            connected: true,
+            configured: true,
+            accountLabel: "chad",
+            needsReconnect: false,
+          },
+        ],
+        onConnectorStatusChanged: () => () => {},
+        connectorPrepare: async () => ({
+          status: "needs_clarification",
+          message: 'More than one match for "gab".',
+          candidates: ["Gabe Smith (@gabe)", "Gabriel Stone (@gstone)"],
+          choices: [
+            { label: "Gabe Smith (@gabe)", destination: "@gabe" },
+            { label: "Gabriel Stone (@gstone)", destination: "@gstone" },
+          ],
+        }),
+        connectorCancel: async () => ({ cancelled: true }),
+      },
+    }
+  );
+  const interactions = await vite.ssrLoadModule("/stores/agentInteractionStore.ts");
+  let question = null;
+  reasoningService.processTextStreamingCloud.mock.mockImplementation((_messages, config) =>
+    (async function* () {
+      let settled = false;
+      const running = config
+        .executeToolCall(
+          "slack_send_message",
+          JSON.stringify({ destination: "gab", text: "hi" }),
+          "srv-slack"
+        )
+        .finally(() => {
+          settled = true;
+        });
+      let entry;
+      while (
+        !settled &&
+        !(entry = Object.values(interactions.useAgentInteractionStore.getState().entries)[0])
+      ) {
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+      question = entry?.payload?.questions?.[0] ?? null;
+      if (entry) interactions.cancelInteraction(entry.key);
+      await running;
+      yield { type: "done", finishReason: "stop" };
+    })()
+  );
+  await captured.sendToAI("Message gab on Slack", []);
+  assert.equal(question?.id, "destination");
+  assert.deepEqual(
+    question.options.map((option) => option.id),
+    ["@gabe", "@gstone"]
+  );
+});
+
 // ---- Local mode with no model (the assistant switched off at setup) ----
 
 // What setup writes for a switched-off assistant: both scopes on this device, no

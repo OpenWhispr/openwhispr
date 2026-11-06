@@ -210,6 +210,26 @@ test("Stop before any text leaves no empty reply behind", async (t) => {
   );
 });
 
+test("Stop before the first text is shown keeps it, as the stopped reply saves it", async (t) => {
+  const fixture = await setupChatTurns(t);
+  const received = deferred();
+  const release = deferred();
+  fixture.reasoning.processTextStreamingAI.mock.mockImplementation(async function* () {
+    yield TEXT;
+    received.resolve();
+    await release.promise;
+  });
+  const { store, state, send, writes } = fixture;
+  store.selectChat({ kind: "conversation", conversationId: 2 });
+  send();
+  await received.promise;
+  store.cancelChatTurn({ kind: "conversation", conversationId: 2 });
+  release.resolve();
+  await until(() => state().entries["conversation:2"].settling === false);
+  assert.equal(writes[1].content, "partial answer");
+  assert.equal(assistantOf(fixture, 2)?.content, "partial answer");
+});
+
 test("a stopped turn settles before the view takes it, its unfinished tool still on the message", async (t) => {
   const fixture = await setupChatTurns(t);
   const release = holdAfter(fixture, {
