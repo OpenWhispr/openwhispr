@@ -619,6 +619,7 @@ test("cancelling during local model setup stops before streaming begins", async 
             serverStarted = true;
             return serverReady;
           },
+          llamaServerCancelStart: async () => {},
         },
       },
     }
@@ -666,6 +667,7 @@ test("cancelling tool-ineligible local setup prevents raw streaming", async (t) 
             serverStarted = true;
             return serverReady;
           },
+          llamaServerCancelStart: async () => {},
         },
       },
     }

@@ -590,6 +590,25 @@ test("a server too busy to swap stays a busy error, and says how long to wait", 
   assert.deepEqual(asked, [1234]);
 });
 
+test("a start the caller cancelled stays cancelled and reaches the server with its signal", async (t) => {
+  const { modelManager: manager, serverManager, modelId } = await setup(t);
+  manager.currentServerModelId = "another-model";
+  const caller = new AbortController();
+  let received;
+  serverManager.isAvailable = () => true;
+  serverManager.start = async (_modelPath, options) => {
+    received = options.signal;
+    throw Object.assign(new Error("cancelled"), { code: "LOCAL_MODEL_CANCELLED" });
+  };
+
+  await assert.rejects(
+    manager.runInference(modelId, SHORT_PROMPT, { signal: caller.signal }),
+    (error) => error.code === "LOCAL_MODEL_CANCELLED"
+  );
+  assert.equal(received, caller.signal);
+  assert.equal(manager.currentServerModelId, "another-model");
+});
+
 test("a pre-warm never waits on another model's answer", async (t) => {
   const { modelManager: manager, serverManager, modelId } = await setup(t);
   const asked = [];

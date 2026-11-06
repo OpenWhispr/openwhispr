@@ -66,6 +66,10 @@ function modelBusyError() {
   });
 }
 
+function cancelledError() {
+  return Object.assign(new Error("cancelled"), { code: "LOCAL_MODEL_CANCELLED" });
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -228,14 +232,23 @@ class LlamaServerManager {
     };
 
     const busyDeadline = Date.now() + (options.busyWaitMs ?? DEFAULT_BUSY_WAIT_MS);
+    // A caller that gives up during the wait must not still swap the model in.
+    const { signal } = options;
 
     for (;;) {
+      if (signal?.aborted) throw cancelledError();
       // Serialize with any in-flight startup; join it only when it will serve
       // this request. Callers record the model they asked for as loaded once
       // this resolves, so it must never resolve on a startup for another one.
       while (this.startupPromise) {
         if (servesRequest(this.startingRequest, request)) return this.startupPromise;
-        await this._untilSettledOrDeadline(this.startupPromise, busyDeadline);
+        await this._waitFor(
+          this.startupPromise.catch(() => {}),
+          {
+            deadline: busyDeadline,
+            signal,
+          }
+        );
       }
 
       if (this.ready && servesRequest(this, request)) {
@@ -252,12 +265,12 @@ class LlamaServerManager {
       // Restarting kills whatever the server is generating. The wait stays out
       // of startupPromise so the running model keeps serving meanwhile.
       const server = this.process;
-      const busy = await this._isBusy(busyDeadline - Date.now());
+      const busy = await this._waitFor(this._isBusy(busyDeadline - Date.now()), { signal });
       if (this.startupPromise || this.process !== server) continue;
       if (!busy) break;
       const remaining = busyDeadline - Date.now();
       if (remaining <= 0) throw modelBusyError();
-      await sleep(Math.min(remaining, BUSY_WAIT_POLL_MS));
+      await this._waitFor(sleep(Math.min(remaining, BUSY_WAIT_POLL_MS)), { signal });
     }
 
     this.startingRequest = request;
@@ -281,17 +294,24 @@ class LlamaServerManager {
     return this.startupPromise;
   }
 
-  async _untilSettledOrDeadline(promise, deadline) {
+  // Settles with the promise, unless the deadline passes first (busy) or the
+  // caller gives up (cancelled).
+  async _waitFor(promise, { deadline = Infinity, signal } = {}) {
+    if (signal?.aborted) throw cancelledError();
     const remaining = deadline - Date.now();
     if (remaining <= 0) throw modelBusyError();
     let timer;
-    const expired = new Promise((_, reject) => {
-      timer = setTimeout(() => reject(modelBusyError()), remaining);
+    let onAbort;
+    const interrupted = new Promise((_, reject) => {
+      if (remaining !== Infinity) timer = setTimeout(() => reject(modelBusyError()), remaining);
+      onAbort = () => reject(cancelledError());
+      signal?.addEventListener("abort", onAbort, { once: true });
     });
     try {
-      await Promise.race([promise.catch(() => {}), expired]);
+      return await Promise.race([promise, interrupted]);
     } finally {
       clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
     }
   }
 
@@ -879,6 +899,9 @@ class LlamaServerManager {
     if (!this.ready || !this.process) {
       throw new Error("llama-server is not running");
     }
+    // cancelInference() only reaches a request already sent; one cancelled on
+    // the way here is never sent.
+    if (options.signal?.aborted) throw cancelledError();
 
     this.clearIdleTimer();
 

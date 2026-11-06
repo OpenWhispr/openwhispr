@@ -6,11 +6,42 @@ interface LocalServerStartResult {
   code?: string;
 }
 
-export function localServerStartError(result: LocalServerStartResult): LocalInferenceError {
+function localServerStartError(result: LocalServerStartResult): LocalInferenceError {
   return buildLocalInferenceError({
     error: result.error || "Failed to start local model server",
     code: result.code,
   });
+}
+
+/**
+ * Asks main for the port serving `model`. Main can wait up to a minute for
+ * another model's answer first, so a cancel rejects at once with the signal's
+ * reason and tells main to stop waiting rather than swap the model in.
+ */
+export async function startLocalServer(
+  model: string,
+  signal?: AbortSignal | null
+): Promise<number> {
+  signal?.throwIfAborted();
+  const requestId = crypto.randomUUID();
+  let onAbort = (): void => {};
+  const cancelled = new Promise<never>((_, reject) => {
+    onAbort = () => {
+      void window.electronAPI.llamaServerCancelStart(requestId);
+      reject(signal?.reason);
+    };
+  });
+  signal?.addEventListener("abort", onAbort, { once: true });
+  try {
+    const server = await Promise.race([
+      window.electronAPI.llamaServerStart(model, requestId),
+      cancelled,
+    ]);
+    if (!server.success || !server.port) throw localServerStartError(server);
+    return server.port;
+  } finally {
+    signal?.removeEventListener("abort", onAbort);
+  }
 }
 
 /**
@@ -20,10 +51,9 @@ export function localServerStartError(result: LocalServerStartResult): LocalInfe
  */
 export function localServerFetch(model: string): typeof fetch {
   return async (input, init) => {
-    const server = await window.electronAPI.llamaServerStart(model);
-    if (!server.success || !server.port) throw localServerStartError(server);
+    const port = await startLocalServer(model, init?.signal);
     const url = new URL(input instanceof Request ? input.url : String(input));
-    url.port = String(server.port);
+    url.port = String(port);
     return fetch(url, init);
   };
 }

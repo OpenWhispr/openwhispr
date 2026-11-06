@@ -660,6 +660,72 @@ test("the deadline also covers waiting for another model to finish loading", asy
   manager.clearIdleTimer();
 });
 
+// A caller that gives up (a cancelled note action, Esc in chat) must not still
+// swap its model in once the answer it waited for is done.
+const isCancelled = (error) => error.code === "LOCAL_MODEL_CANCELLED";
+
+test("a start cancelled while it waits ends at once and never swaps the model", async () => {
+  const { manager, starts, stops } = makeRunningManager(() => BUSY);
+  const caller = new AbortController();
+
+  const waiting = manager.start("/models/other.gguf", { busyWaitMs: 60000, signal: caller.signal });
+  await pause(300);
+  const cancelledAt = Date.now();
+  caller.abort();
+  await assert.rejects(waiting, isCancelled);
+  assert.ok(Date.now() - cancelledAt < 100, "the cancel, not the deadline, ended the wait");
+
+  await pause(300);
+  assert.deepEqual(stops, []);
+  assert.equal(starts.length, 0);
+  assert.equal(manager.modelPath, "/models/running.gguf");
+});
+
+test("a start cancelled before it asks is refused without touching the server", async () => {
+  const { manager, starts, stops } = makeRunningManager(() => IDLE);
+  const caller = new AbortController();
+  caller.abort();
+
+  await assert.rejects(manager.start("/models/other.gguf", { signal: caller.signal }), isCancelled);
+  assert.deepEqual(stops, []);
+  assert.equal(starts.length, 0);
+});
+
+test("a start cancelled while another model loads does not load its own afterwards", async () => {
+  const { manager, starts } = makeManager();
+  let finishLoad;
+  const doStart = manager._doStart;
+  manager._doStart = (modelPath, options) =>
+    starts.length === 0
+      ? new Promise((resolve) => (finishLoad = resolve)).then(() => doStart(modelPath, options))
+      : doStart(modelPath, options);
+  const caller = new AbortController();
+
+  const loading = manager.start("/models/slow.gguf");
+  const waiting = manager.start("/models/other.gguf", { signal: caller.signal });
+  await pause(50);
+  caller.abort();
+  await assert.rejects(waiting, isCancelled);
+
+  finishLoad();
+  await loading;
+  assert.deepEqual(
+    starts.map((start) => start.modelPath),
+    ["/models/slow.gguf"]
+  );
+  manager.clearIdleTimer();
+});
+
+test("a request cancelled on its way to the server is never sent", async () => {
+  const { run, requests } = withReply({ content: "Cleaned text." });
+  await run(async (manager) => {
+    const caller = new AbortController();
+    caller.abort();
+    await assert.rejects(manager.inference(MESSAGES, { signal: caller.signal }), isCancelled);
+  });
+  assert.equal(requests.length, 0);
+});
+
 test("an old server exiting late does not take the new server's handle with it", async (t) => {
   // A server that ignored SIGTERM is SIGKILLed and stop() moves on before it
   // exits, so its close event lands after the next server has spawned.

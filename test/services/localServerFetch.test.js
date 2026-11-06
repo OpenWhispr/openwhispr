@@ -70,6 +70,63 @@ test("a model too busy to swap in fails the step with a translatable error, unse
   assert.equal(sent, 0);
 });
 
+test("a cancelled turn stops waiting for the server at once and tells main to give up", async (t) => {
+  const { localServerFetch } = await load(t);
+  const asked = [];
+  const cancelled = [];
+  globalThis.window.electronAPI = {
+    // Main is waiting out another model's answer, which could take a minute.
+    llamaServerStart: (model, requestId) => {
+      asked.push(requestId);
+      return new Promise(() => {});
+    },
+    llamaServerCancelStart: async (requestId) => {
+      cancelled.push(requestId);
+    },
+  };
+  let sent = 0;
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    sent += 1;
+    return new Response("{}");
+  };
+  t.after(() => (globalThis.fetch = realFetch));
+
+  const turn = new AbortController();
+  const step = localServerFetch("qwen3.5-4b")("http://127.0.0.1:8221/v1/chat/completions", {
+    signal: turn.signal,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  turn.abort();
+
+  await assert.rejects(step, { name: "AbortError" });
+  assert.equal(asked.length, 1);
+  assert.deepEqual(cancelled, asked);
+  assert.equal(sent, 0);
+});
+
+test("a turn already cancelled never asks main for the server", async (t) => {
+  const { localServerFetch } = await load(t);
+  let asked = 0;
+  globalThis.window.electronAPI = {
+    llamaServerStart: async () => {
+      asked += 1;
+      return { success: true, port: 8221 };
+    },
+    llamaServerCancelStart: async () => {},
+  };
+  const turn = new AbortController();
+  turn.abort();
+
+  await assert.rejects(
+    localServerFetch("qwen3.5-4b")("http://127.0.0.1:8221/v1/chat/completions", {
+      signal: turn.signal,
+    }),
+    { name: "AbortError" }
+  );
+  assert.equal(asked, 0);
+});
+
 test("that error reaches the chat through the AI SDK with its translation key", async (t) => {
   installBrowserGlobals(t);
   const vite = await createRendererServer(t, {
