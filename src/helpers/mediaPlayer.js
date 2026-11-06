@@ -8,6 +8,14 @@ const { killProcess } = require("../utils/process");
 // that bound: these helpers emit a few KB, and an unbounded buffer would let a
 // runaway one grow main-process memory until its deadline.
 const MAX_OUTPUT_BYTES = 1024 * 1024;
+const MPRIS_REQUEST_TIMEOUT_MS = 2000;
+const MPRIS_BUS_DESTINATION = "org.freedesktop.DBus";
+const MPRIS_BUS_PATH = "/org/freedesktop/DBus";
+const MPRIS_BUS_INTERFACE = "org.freedesktop.DBus";
+const MPRIS_PLAYER_PATH = "/org/mpris/MediaPlayer2";
+const MPRIS_PLAYER_INTERFACE = "org.mpris.MediaPlayer2.Player";
+const MPRIS_PROPERTIES_INTERFACE = "org.freedesktop.DBus.Properties";
+const MPRIS_NAME_PREFIX = "org.mpris.MediaPlayer2.";
 
 // Runs `cmd args` asynchronously and resolves with
 // { status, stdout, stderr, timedOut }. Times out after `timeout` ms; on
@@ -95,7 +103,13 @@ class MediaPlayer {
     this._nircmdPath = null;
     this._macBinaryChecked = false;
     this._macBinaryPath = null;
-    this._pausedPlayers = []; // MPRIS players we paused (Linux)
+    this._mediaSessions = new Map(); // recording ID -> active/restore state and acknowledged owners
+    this._mprisBus = null;
+    this._mprisGeneration = 0;
+    this._mprisPending = new Map();
+    this._mprisRecycleGeneration = null;
+    this._mprisOperationGeneration = null;
+    this._closed = false;
     this._didPause = false; // Whether we sent a pause via toggle fallback
     this._pausedWinApps = []; // GSMTC app IDs we paused (Windows)
     this._adapterChecked = false;
@@ -112,9 +126,209 @@ class MediaPlayer {
   // The queue holds a caught copy so a failed operation can't stall the ones
   // behind it, while the caller still gets the raw run.
   _serialize(operation) {
-    const run = this._queue.then(operation);
+    const run = this._queue.then(() => (this._closed ? false : operation()));
     this._queue = run.catch(() => {});
     return run;
+  }
+
+  _beginMediaSession(id) {
+    if (
+      this._closed ||
+      typeof id !== "string" ||
+      id.length === 0 ||
+      id.length > 128 ||
+      this._mediaSessions.has(id)
+    ) {
+      return null;
+    }
+    const session = { active: true, restore: true, pausedPlayers: [] };
+    this._mediaSessions.set(id, session);
+    return session;
+  }
+
+  _endMediaSession(id, restore) {
+    const session = this._mediaSessions.get(id);
+    if (!session?.active) return null;
+    session.active = false;
+    session.restore = restore === true;
+    return session;
+  }
+
+  async _runLinuxOperation(operation) {
+    if (this._closed) return false;
+    // Serialization lets one operation own this pin; never reconnect midway after invalidation.
+    this._mprisOperationGeneration = null;
+    try {
+      return await operation();
+    } finally {
+      this._recycleMprisConnection();
+      this._mprisOperationGeneration = null;
+    }
+  }
+
+  _isMprisOperationCurrent() {
+    // No generation means native transport was never acquired, so explicit fallback stays valid.
+    return (
+      !this._closed &&
+      (this._mprisOperationGeneration === null ||
+        this._mprisBus?.generation === this._mprisOperationGeneration)
+    );
+  }
+
+  _getMprisConnection() {
+    if (this._closed) return null;
+    if (this._mprisOperationGeneration !== null) {
+      return this._mprisBus?.generation === this._mprisOperationGeneration ? this._mprisBus : null;
+    }
+    if (this._mprisBus) return this._mprisBus;
+
+    let bus;
+    try {
+      bus = require("@homebridge/dbus-native").sessionBus();
+
+      const generation = ++this._mprisGeneration;
+      const state = { bus, generation };
+      this._mprisBus = state;
+      const disconnect = (event, err) => this._handleMprisDisconnect(generation, event, err);
+      bus.connection.on("error", (err) => disconnect("error", err));
+      bus.connection.on("end", () => disconnect("end"));
+      bus.connection.stream?.on?.("close", () => disconnect("stream close"));
+      try {
+        debugLogger.debug("MPRIS D-Bus connection opened", { generation }, "media");
+      } catch {}
+      return state;
+    } catch (err) {
+      try {
+        bus?.connection?.end?.();
+      } catch {}
+      debugLogger.debug(
+        "MPRIS D-Bus connection unavailable",
+        { error: String(err?.message || err).slice(0, 200) },
+        "media"
+      );
+      return null;
+    }
+  }
+
+  _invokeMpris(message) {
+    if (this._closed) return Promise.reject(new Error("Media player is closed"));
+    const state = this._getMprisConnection();
+    if (!state) return Promise.reject(new Error("MPRIS D-Bus connection unavailable"));
+    if (this._mprisOperationGeneration === null) {
+      this._mprisOperationGeneration = state.generation;
+    }
+
+    const { bus, generation } = state;
+    return new Promise((resolve, reject) => {
+      const key = Symbol(message.member);
+      let settled = false;
+      const settle = (callback, value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        this._mprisPending.delete(key);
+        callback(value);
+      };
+      const rejectRequest = (err) => settle(reject, this._normalizeMprisError(err, generation));
+      const timer = setTimeout(() => {
+        // dbus-native cannot cancel calls; recycle only after every sibling chain settles.
+        const err = new Error(
+          `MPRIS ${message.member} timed out for ${message.destination || MPRIS_BUS_DESTINATION}`
+        );
+        err.timedOut = true;
+        this._mprisRecycleGeneration = generation;
+        rejectRequest(err);
+      }, MPRIS_REQUEST_TIMEOUT_MS);
+
+      this._mprisPending.set(key, { generation, reject: rejectRequest });
+      try {
+        bus.invoke(message, (err, value) => {
+          if (settled) return;
+          if (this._mprisBus !== state) {
+            rejectRequest(new Error("Stale MPRIS D-Bus callback"));
+            return;
+          }
+          if (err) {
+            rejectRequest(err);
+            return;
+          }
+          settle(resolve, value);
+        });
+      } catch (err) {
+        rejectRequest(err);
+      }
+    });
+  }
+
+  _normalizeMprisError(err, generation) {
+    const normalized = err instanceof Error ? err : new Error(err?.message || String(err));
+    if (!(err instanceof Error) && err?.name) normalized.dbusName = err.name;
+    normalized.generation = generation;
+    return normalized;
+  }
+
+  _mprisErrorMeta(err, extra = {}) {
+    const errorName = err?.dbusName || (err?.name !== "Error" ? err?.name : undefined);
+    return {
+      ...extra,
+      errorName: errorName ? String(errorName).slice(0, 200) : undefined,
+      error: String(err?.message || err).slice(0, 200),
+      timedOut: err?.timedOut === true,
+      generation: err?.generation ?? extra.generation,
+    };
+  }
+
+  _handleMprisDisconnect(generation, event, err) {
+    if (!this._invalidateMprisConnection(generation, err || new Error(event))) return;
+    try {
+      debugLogger.warn(
+        "MPRIS D-Bus connection lost",
+        this._mprisErrorMeta(err || new Error(event), { event, generation }),
+        "media"
+      );
+    } catch {}
+  }
+
+  _invalidateMprisConnection(generation, reason) {
+    const state = this._mprisBus;
+    if (!state || state.generation !== generation) return false;
+
+    this._mprisBus = null;
+    // Unique names can be reused after a bus restart, so acknowledged targets expire here too.
+    for (const session of this._mediaSessions.values()) session.pausedPlayers = [];
+    if (this._mprisRecycleGeneration === generation) this._mprisRecycleGeneration = null;
+    for (const pending of this._mprisPending.values()) {
+      if (pending.generation === generation) pending.reject(reason);
+    }
+    try {
+      state.bus.connection.end();
+    } catch {}
+    return true;
+  }
+
+  _recycleMprisConnection() {
+    const generation = this._mprisRecycleGeneration;
+    if (generation === null) return;
+    // Restore on the original connection; actual disconnects still discard unsafe owners.
+    if ([...this._mediaSessions.values()].some((session) => session.pausedPlayers.length)) return;
+    this._mprisRecycleGeneration = null;
+    if (this._mprisBus?.generation !== generation) return;
+    this._invalidateMprisConnection(generation, new Error("MPRIS connection recycled"));
+    try {
+      debugLogger.debug("Recycled timed-out MPRIS D-Bus connection", { generation }, "media");
+    } catch {}
+  }
+
+  close() {
+    this._closed = true;
+    this._mediaSessions.clear();
+    const state = this._mprisBus;
+    if (state) {
+      this._invalidateMprisConnection(
+        state.generation,
+        new Error("MPRIS connection closed during application shutdown")
+      );
+    }
   }
 
   _resolveLinuxFastPaste() {
@@ -237,11 +451,14 @@ class MediaPlayer {
     return this._adapterPaths;
   }
 
-  pauseMedia() {
+  pauseMedia(sessionId) {
+    const session = process.platform === "linux" ? this._beginMediaSession(sessionId) : null;
+    if (process.platform === "linux" && !session) return Promise.resolve(false);
+
     return this._serialize(async () => {
       try {
         if (process.platform === "linux") {
-          return await this._pauseLinux();
+          return await this._runLinuxOperation(() => this._pauseMpris(session));
         } else if (process.platform === "darwin") {
           return await this._pauseMacOS();
         } else if (process.platform === "win32") {
@@ -254,11 +471,17 @@ class MediaPlayer {
     });
   }
 
-  resumeMedia() {
+  resumeMedia(sessionId, restore = true) {
+    if (process.platform === "linux") {
+      if (!this._endMediaSession(sessionId, restore)) return Promise.resolve(false);
+    } else if (!restore) {
+      return Promise.resolve(false);
+    }
+
     return this._serialize(async () => {
       try {
         if (process.platform === "linux") {
-          return await this._resumeLinux();
+          return await this._runLinuxOperation(() => this._resumeLinux());
         } else if (process.platform === "darwin") {
           return await this._resumeMacOS();
         } else if (process.platform === "win32") {
@@ -275,7 +498,7 @@ class MediaPlayer {
     return this._serialize(async () => {
       try {
         if (process.platform === "linux") {
-          return await this._toggleLinux();
+          return await this._runLinuxOperation(() => this._toggleLinux());
         } else if (process.platform === "darwin") {
           return await this._toggleMacOS();
         } else if (process.platform === "win32") {
@@ -290,139 +513,178 @@ class MediaPlayer {
 
   // --- Linux: MPRIS-aware pause/resume ---
 
-  async _pauseLinux() {
-    this._pausedPlayers = [];
-    if (await this._pauseMpris()) return true;
-
-    // Fallback: playerctl pause (not play-pause)
-    const result = await spawnAsync("playerctl", ["pause"], { timeout: 3000 });
-    if (result.status === 0) {
-      debugLogger.debug("Media paused via playerctl", {}, "media");
-      this._pausedPlayers = ["playerctl"];
-      return true;
-    }
-
-    return false;
-  }
-
   async _resumeLinux() {
-    if (this._pausedPlayers.length === 0) return false;
+    // A stale end from recording A must not resume media while recording B is active.
+    if ([...this._mediaSessions.values()].some((session) => session.active)) return false;
 
-    // If we used playerctl fallback
-    if (this._pausedPlayers.length === 1 && this._pausedPlayers[0] === "playerctl") {
-      this._pausedPlayers = [];
-      const result = await spawnAsync("playerctl", ["play"], { timeout: 3000 });
-      if (result.status === 0) {
-        debugLogger.debug("Media resumed via playerctl", {}, "media");
-        return true;
+    const players = new Set();
+    for (const [id, session] of this._mediaSessions) {
+      if (!session.restore || session.pausedPlayers.length === 0) {
+        this._mediaSessions.delete(id);
+        continue;
       }
-      return false;
+      for (const owner of session.pausedPlayers) players.add(owner);
     }
-
-    const resumed = await this._resumeMpris();
-    this._pausedPlayers = [];
+    if (players.size === 0) return false;
+    const resumed = await this._resumeMpris([...players]);
+    for (const [id, session] of this._mediaSessions) {
+      if (!session.active && session.pausedPlayers.length === 0) this._mediaSessions.delete(id);
+    }
     return resumed;
   }
 
-  async _pauseMpris() {
+  async _pauseMpris(session) {
+    if (!session.active) return false;
     const players = await this._listMprisPlayers();
-    if (!players || players.length === 0) return false;
+    if (!session.active || players.length === 0) return false;
+    const seenOwners = new Set();
 
-    for (const dest of players) {
-      const status = await this._getMprisPlaybackStatus(dest);
-      if (status !== "Playing") continue;
+    await Promise.allSettled(
+      players.map(async (player) => {
+        const owner = await this._getMprisOwner(player);
+        if (!session.active || !owner || seenOwners.has(owner)) return;
+        seenOwners.add(owner);
 
-      const result = await spawnAsync(
-        "dbus-send",
-        [
-          "--session",
-          "--type=method_call",
-          `--dest=${dest}`,
-          "/org/mpris/MediaPlayer2",
-          "org.mpris.MediaPlayer2.Player.Pause",
-        ],
-        { timeout: 2000 }
-      );
+        const status = await this._getMprisPlaybackStatus(player, owner);
+        if (!session.active || !this._isMprisOperationCurrent() || status !== "Playing") return;
 
-      if (result.status === 0) {
-        debugLogger.debug("Media paused via MPRIS", { player: dest }, "media");
-        this._pausedPlayers.push(dest);
-      }
-    }
-    return this._pausedPlayers.length > 0;
-  }
-
-  async _resumeMpris() {
-    let resumed = false;
-    for (const dest of this._pausedPlayers) {
-      if (dest === "playerctl") continue;
-      const result = await spawnAsync(
-        "dbus-send",
-        [
-          "--session",
-          "--type=method_call",
-          `--dest=${dest}`,
-          "/org/mpris/MediaPlayer2",
-          "org.mpris.MediaPlayer2.Player.Play",
-        ],
-        { timeout: 2000 }
-      );
-
-      if (result.status === 0) {
-        debugLogger.debug("Media resumed via MPRIS", { player: dest }, "media");
-        resumed = true;
-      }
-    }
-    return resumed;
-  }
-
-  async _getMprisPlaybackStatus(dest) {
-    const result = await spawnAsync(
-      "dbus-send",
-      [
-        "--session",
-        "--print-reply",
-        `--dest=${dest}`,
-        "/org/mpris/MediaPlayer2",
-        "org.freedesktop.DBus.Properties.Get",
-        "string:org.mpris.MediaPlayer2.Player",
-        "string:PlaybackStatus",
-      ],
-      { timeout: 2000 }
+        debugLogger.debug("MPRIS Pause dispatched", { player, owner }, "media");
+        try {
+          await this._invokeMpris({
+            destination: owner,
+            path: MPRIS_PLAYER_PATH,
+            interface: MPRIS_PLAYER_INTERFACE,
+            member: "Pause",
+          });
+          if (!this._isMprisOperationCurrent()) return;
+          // The end may arrive after dispatch; an acknowledged Pause still needs restoration.
+          session.pausedPlayers.push(owner);
+          debugLogger.debug("MPRIS Pause acknowledged", { player, owner }, "media");
+        } catch (err) {
+          debugLogger.debug(
+            "MPRIS Pause not acknowledged",
+            this._mprisErrorMeta(err, { player, owner }),
+            "media"
+          );
+        }
+      })
     );
+    return session.pausedPlayers.length > 0;
+  }
 
-    if (result.status !== 0) return null;
-
-    const match = result.stdout.match(/string "([A-Za-z]+)"/);
-    return match ? match[1] : null;
+  async _resumeMpris(players) {
+    const results = await Promise.all(
+      players.map(async (owner) => {
+        if (
+          !this._isMprisOperationCurrent() ||
+          [...this._mediaSessions.values()].some((session) => session.active)
+        ) {
+          return false;
+        }
+        // Once dispatched, the remote action cannot be canceled or safely retried.
+        for (const session of this._mediaSessions.values()) {
+          if (!session.active && session.restore) {
+            session.pausedPlayers = session.pausedPlayers.filter(
+              (candidate) => candidate !== owner
+            );
+          }
+        }
+        debugLogger.debug("MPRIS Play dispatched", { owner }, "media");
+        try {
+          await this._invokeMpris({
+            destination: owner,
+            path: MPRIS_PLAYER_PATH,
+            interface: MPRIS_PLAYER_INTERFACE,
+            member: "Play",
+          });
+          if (!this._isMprisOperationCurrent()) return false;
+          debugLogger.debug("MPRIS Play acknowledged", { owner }, "media");
+          return true;
+        } catch (err) {
+          debugLogger.debug(
+            "MPRIS Play not acknowledged",
+            this._mprisErrorMeta(err, { owner }),
+            "media"
+          );
+          return false;
+        }
+      })
+    );
+    return results.some(Boolean);
   }
 
   async _listMprisPlayers() {
-    const listResult = await spawnAsync(
-      "dbus-send",
-      [
-        "--session",
-        "--dest=org.freedesktop.DBus",
-        "--type=method_call",
-        "--print-reply",
-        "/org/freedesktop/DBus",
-        "org.freedesktop.DBus.ListNames",
-      ],
-      { timeout: 2000 }
-    );
+    try {
+      const names = await this._invokeMpris({
+        destination: MPRIS_BUS_DESTINATION,
+        path: MPRIS_BUS_PATH,
+        interface: MPRIS_BUS_INTERFACE,
+        member: "ListNames",
+      });
+      return Array.isArray(names)
+        ? names.filter((name) => typeof name === "string" && name.startsWith(MPRIS_NAME_PREFIX))
+        : [];
+    } catch (err) {
+      debugLogger.debug("MPRIS ListNames failed", this._mprisErrorMeta(err), "media");
+      return [];
+    }
+  }
 
-    if (listResult.status !== 0) return [];
+  async _getMprisOwner(player) {
+    try {
+      const owner = await this._invokeMpris({
+        destination: MPRIS_BUS_DESTINATION,
+        path: MPRIS_BUS_PATH,
+        interface: MPRIS_BUS_INTERFACE,
+        member: "GetNameOwner",
+        signature: "s",
+        body: [player],
+      });
+      return typeof owner === "string" && owner.startsWith(":") ? owner : null;
+    } catch (err) {
+      debugLogger.debug(
+        "MPRIS GetNameOwner failed",
+        this._mprisErrorMeta(err, { player }),
+        "media"
+      );
+      return null;
+    }
+  }
 
-    const matches = listResult.stdout.match(/string "org\.mpris\.MediaPlayer2\.[A-Za-z0-9_.\-]+"/g);
-    if (!matches || matches.length === 0) return [];
-
-    return matches.map((m) => m.replace(/^string "/, "").replace(/"$/, ""));
+  async _getMprisPlaybackStatus(player, owner) {
+    try {
+      const variant = await this._invokeMpris({
+        destination: owner,
+        path: MPRIS_PLAYER_PATH,
+        interface: MPRIS_PROPERTIES_INTERFACE,
+        member: "Get",
+        signature: "ss",
+        body: [MPRIS_PLAYER_INTERFACE, "PlaybackStatus"],
+      });
+      const signature = variant?.[0];
+      const status =
+        Array.isArray(signature) &&
+        signature.length === 1 &&
+        signature[0]?.type === "s" &&
+        Array.isArray(variant?.[1])
+          ? variant[1][0]
+          : null;
+      return status === "Playing" || status === "Paused" || status === "Stopped" ? status : null;
+    } catch (err) {
+      debugLogger.debug(
+        "MPRIS PlaybackStatus failed",
+        this._mprisErrorMeta(err, { player, owner }),
+        "media"
+      );
+      return null;
+    }
   }
 
   // --- Linux toggle (legacy, used by toggleMedia) ---
 
   async _toggleLinux() {
     if (await this._toggleMpris()) return true;
+    if (!this._isMprisOperationCurrent()) return false;
 
     const binary = this._resolveLinuxFastPaste();
     if (binary) {
@@ -432,6 +694,7 @@ class MediaPlayer {
         return true;
       }
     }
+    if (!this._isMprisOperationCurrent()) return false;
 
     const result = await spawnAsync("playerctl", ["play-pause"], { timeout: 3000 });
     if (result.status === 0) {
@@ -445,28 +708,34 @@ class MediaPlayer {
 
   async _toggleMpris() {
     const players = await this._listMprisPlayers();
-    if (!players || players.length === 0) return false;
-
-    let toggled = false;
-    for (const dest of players) {
-      const result = await spawnAsync(
-        "dbus-send",
-        [
-          "--session",
-          "--type=method_call",
-          `--dest=${dest}`,
-          "/org/mpris/MediaPlayer2",
-          "org.mpris.MediaPlayer2.Player.PlayPause",
-        ],
-        { timeout: 2000 }
-      );
-
-      if (result.status === 0) {
-        debugLogger.debug("Media toggled via MPRIS", { player: dest }, "media");
-        toggled = true;
-      }
-    }
-    return toggled;
+    if (players.length === 0) return false;
+    const seenOwners = new Set();
+    const results = await Promise.allSettled(
+      players.map(async (player) => {
+        const owner = await this._getMprisOwner(player);
+        if (!this._isMprisOperationCurrent() || !owner || seenOwners.has(owner)) return false;
+        seenOwners.add(owner);
+        try {
+          await this._invokeMpris({
+            destination: owner,
+            path: MPRIS_PLAYER_PATH,
+            interface: MPRIS_PLAYER_INTERFACE,
+            member: "PlayPause",
+          });
+          if (!this._isMprisOperationCurrent()) return false;
+          debugLogger.debug("Media toggled via MPRIS", { player, owner }, "media");
+          return true;
+        } catch (err) {
+          debugLogger.debug(
+            "MPRIS PlayPause not acknowledged",
+            this._mprisErrorMeta(err, { player, owner }),
+            "media"
+          );
+          return false;
+        }
+      })
+    );
+    return results.some((result) => result.status === "fulfilled" && result.value);
   }
 
   // --- macOS: MediaRemote-aware pause/resume ---
