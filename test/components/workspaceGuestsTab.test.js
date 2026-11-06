@@ -539,3 +539,148 @@ test("removing a guest's last note focuses the table explicitly", async (t) => {
   );
   assert.equal(focused, 1, "focus moved without waiting for the menu's unmount");
 });
+
+const RAVI = guest("ravi@x.com", null, [note("n9", "Budget")]);
+const SEL = `${KEY}.selection`;
+const EMPTY_REMOVAL = { removed: [], not_found: [], skipped_members: [], link_shared_note_ids: [] };
+
+async function mountSelectable(t, options) {
+  const { Tab, workspace } = await loadTab(t, options);
+  const container = installHostDom(t);
+  const root = createRoot(container);
+  mountedRoots.set(t, root);
+  const mount = () => React.act(async () => root.render(React.createElement(Tab, { workspace })));
+  await mount();
+  const checkboxes = () => collect(container, (node) => node.getAttribute("role") === "checkbox");
+  const rowBoxes = () => checkboxes().slice(1);
+  const headerBox = () => checkboxes()[0];
+  const barButton = (label) =>
+    findNode(
+      container,
+      (node) => node.tagName === "BUTTON" && textOf(node).trim() === `${SEL}.${label}`
+    );
+  const click = (node) => React.act(async () => propsOf(node).onClick({ shiftKey: false }));
+  return { container, mount, checkboxes, rowBoxes, headerBox, barButton, click };
+}
+
+test("selecting shows the bar with both actions", async (t) => {
+  const view = await mountSelectable(t, { guests: [JIN, RAVI] });
+  assert.equal(view.barButton("invite"), null, "no bar until something is selected");
+  await view.click(view.rowBoxes()[0]);
+  assert.ok(view.barButton("invite"));
+  assert.ok(view.barButton("remove"));
+  assert.match(textOf(view.container), /people\.selection\.count\|count=1/);
+});
+
+test("invite opens with every selected address", async (t) => {
+  const view = await mountSelectable(t, { guests: [JIN, RAVI] });
+  await view.click(view.headerBox());
+  await view.click(view.barButton("invite"));
+  const props = globalThis.__inviteProps;
+  assert.deepEqual(props.initialEmails, ["jin@x.com", "ravi@x.com"]);
+  assert.match(props.heading.title, new RegExp(`${KEY}\\.invite\\.title\\|count=2`));
+});
+
+test("a send clears the selection and toasts the sent count", async (t) => {
+  const view = await mountSelectable(t, { guests: [JIN, RAVI] });
+  await view.click(view.headerBox());
+  await view.click(view.barButton("invite"));
+  await React.act(async () => globalThis.__inviteProps.onInvited(["jin@x.com", "ravi@x.com"]));
+  await React.act(async () => globalThis.__inviteProps.onOpenChange(false));
+  assert.match(globalThis.__toasts[0].title, new RegExp(`${KEY}\\.invite\\.sent\\|count=2`));
+  assert.equal(view.barButton("invite"), null);
+});
+
+test("closing the invite without sending keeps the selection", async (t) => {
+  const view = await mountSelectable(t, { guests: [JIN, RAVI] });
+  await view.click(view.headerBox());
+  await view.click(view.barButton("invite"));
+  await React.act(async () => globalThis.__inviteProps.onOpenChange(false));
+  assert.ok(view.barButton("invite"));
+});
+
+test("remove removes the selected and clears", async (t) => {
+  const view = await mountSelectable(t, { guests: [JIN, RAVI] });
+  await view.click(view.headerBox());
+  await view.click(view.barButton("remove"));
+  assert.deepEqual(
+    globalThis.__removeProps.guests.map((g) => g.email),
+    ["jin@x.com", "ravi@x.com"]
+  );
+  await React.act(async () =>
+    globalThis.__removeProps.onRemoved({
+      ...EMPTY_REMOVAL,
+      removed: ["jin@x.com", "ravi@x.com"],
+    })
+  );
+  assert.deepEqual(globalThis.__dropped, [["jin@x.com", "ravi@x.com"]]);
+  assert.equal(globalThis.__reloads, 1);
+  assert.equal(view.barButton("remove"), null);
+});
+
+test("skipped members aren't counted as removed", async (t) => {
+  const view = await mountSelectable(t, { guests: [JIN, RAVI] });
+  await view.click(view.headerBox());
+  await view.click(view.barButton("remove"));
+  await React.act(async () =>
+    globalThis.__removeProps.onRemoved({
+      ...EMPTY_REMOVAL,
+      removed: ["jin@x.com"],
+      skipped_members: ["ravi@x.com"],
+    })
+  );
+  // Only the removed one is dropped; the member leaves through the reload.
+  assert.deepEqual(globalThis.__dropped, [["jin@x.com"]]);
+  assert.equal(globalThis.__reloads, 1);
+});
+
+test("a failure keeps the selection", async (t) => {
+  const view = await mountSelectable(t, { guests: [JIN, RAVI] });
+  await view.click(view.headerBox());
+  await view.click(view.barButton("remove"));
+  // The dialog reports failures itself and never calls onRemoved; closing it keeps the selection.
+  await React.act(async () => globalThis.__removeProps.onOpenChange(false));
+  assert.ok(view.barButton("remove"));
+  assert.match(textOf(view.container), /people\.selection\.count\|count=2/);
+});
+
+test("a reload drops guests that left", async (t) => {
+  const view = await mountSelectable(t, { guests: [JIN, RAVI] });
+  await view.click(view.headerBox());
+  globalThis.__guestsState.guests = [RAVI];
+  await view.mount();
+  assert.match(textOf(view.container), /people\.selection\.count\|count=1/);
+  await view.click(view.barButton("remove"));
+  assert.deepEqual(
+    globalThis.__removeProps.guests.map((g) => g.email),
+    ["ravi@x.com"]
+  );
+});
+
+test("select-all selects the listed guests only", async (t) => {
+  const view = await mountSelectable(t, { guests: [JIN, RAVI] });
+  assert.equal(view.headerBox().getAttribute("aria-checked"), "false");
+  await view.click(view.rowBoxes()[0]);
+  assert.equal(view.headerBox().getAttribute("aria-checked"), "mixed");
+  await view.click(view.headerBox());
+  assert.deepEqual(
+    view.rowBoxes().map((box) => box.getAttribute("aria-checked")),
+    ["true", "true"]
+  );
+  await view.click(view.headerBox());
+  assert.deepEqual(
+    view.rowBoxes().map((box) => box.getAttribute("aria-checked")),
+    ["false", "false"]
+  );
+});
+
+test("a removal that removed nobody shows no success toast", async (t) => {
+  const { item } = await mountTab(t, { guests: [JIN] });
+  await React.act(async () => propsOf(item(`${KEY}.menu.remove`)).onSelect());
+  await React.act(async () =>
+    globalThis.__removeProps.onRemoved({ ...EMPTY_REMOVAL, skipped_members: ["jin@x.com"] })
+  );
+  assert.deepEqual(globalThis.__dropped, []);
+  assert.equal(globalThis.__toasts.length, 0);
+  assert.equal(globalThis.__reloads, 1);
+});

@@ -3122,6 +3122,11 @@
           "failed": "Impossibile rimuovere gli ospiti. Nessuno è stato rimosso. Controlla la connessione e riprova.",
           "done_one": "Rimosso {{count}} ospite",
           "done_other": "Rimossi {{count}} ospiti"
+        },
+        "selection": {
+          "selectAll": "Seleziona tutti gli ospiti",
+          "invite": "Invita nel workspace",
+          "remove": "Rimuovi come ospite"
         }
       }
     },

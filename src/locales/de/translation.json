@@ -2383,6 +2383,11 @@
           "failed": "Die Gäste konnten nicht entfernt werden. Niemand wurde entfernt. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
           "done_one": "{{count}} Gast entfernt",
           "done_other": "{{count}} Gäste entfernt"
+        },
+        "selection": {
+          "selectAll": "Alle Gäste auswählen",
+          "invite": "Zum Workspace einladen",
+          "remove": "Als Gast entfernen"
         }
       }
     },

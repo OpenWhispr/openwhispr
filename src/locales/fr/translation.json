@@ -2389,6 +2389,11 @@
           "done_one": "{{count}} invité retiré",
           "done_many": "{{count}} d'invités retirés",
           "done_other": "{{count}} invités retirés"
+        },
+        "selection": {
+          "selectAll": "Sélectionner tous les invités",
+          "invite": "Inviter dans l'espace de travail",
+          "remove": "Retirer en tant qu'invité"
         }
       }
     },

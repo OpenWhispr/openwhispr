@@ -3122,6 +3122,11 @@
           "failed": "无法移除访客。没有人被移除。请检查网络连接后重试。",
           "done_one": "已移除 {{count}} 位访客",
           "done_other": "已移除 {{count}} 位访客"
+        },
+        "selection": {
+          "selectAll": "选择所有访客",
+          "invite": "邀请加入工作区",
+          "remove": "移除访客"
         }
       }
     },

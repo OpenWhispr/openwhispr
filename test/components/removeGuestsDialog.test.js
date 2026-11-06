@@ -154,6 +154,21 @@ test("skipped members aren't counted as removed in the toast", async (t) => {
   assert.match(globalThis.__toasts[0].title, /"count":1\}/);
 });
 
+test("nobody removed shows no success toast but still reports and closes", async (t) => {
+  const { mount } = await loadDialog(t);
+  globalThis.__removeImpl = async () => ({
+    removed: [],
+    not_found: [],
+    skipped_members: ["a@x.com"],
+    link_shared_note_ids: [],
+  });
+  const view = await mount([guest("a@x.com", "A")]);
+  await view.clickPrimary();
+  assert.equal(globalThis.__toasts.length, 0);
+  assert.equal(view.removed.length, 1);
+  assert.deepEqual(view.openChanges, [false]);
+});
+
 test("a failure keeps the dialog with Try again", async (t) => {
   const { mount } = await loadDialog(t);
   globalThis.__removeImpl = async () => {

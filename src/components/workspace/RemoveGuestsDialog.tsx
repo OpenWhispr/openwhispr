@@ -52,7 +52,10 @@ function RemoveGuestsDialogBody({
         emails: guests.map((guest) => guest.email),
       });
       // Someone who joined meanwhile is in skipped_members, so only what was removed counts.
-      toast({ title: t(`${KEY}.done`, { count: result.removed.length }) });
+      // Nobody removed (all joined meanwhile): the list correcting itself is the only news.
+      if (result.removed.length > 0) {
+        toast({ title: t(`${KEY}.done`, { count: result.removed.length }) });
+      }
       dispatch({ type: "succeeded" });
       onRemoved(result);
       onOpenChange(false);
