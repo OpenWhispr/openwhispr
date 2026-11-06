@@ -88,6 +88,8 @@ import {
 } from "../services/managedTranscription.ts";
 import { getTranscriptionApiKey } from "../services/fileTranscription";
 import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
+import { timestampRequestFields } from "./uploadTimestamps";
+import { dropNoSpeechSegments } from "./noSpeechSegments";
 import {
   isOrukeetStreaming,
   isSelfHostedTranscription,
@@ -4317,6 +4319,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (shouldStream) {
         formData.append("stream", "true");
       }
+      // verbose_json carries the per-segment no-speech scores dropNoSpeechSegments
+      // reads; the timestamp gate keeps it to the providers and models that accept it.
+      const requestsSegments =
+        !shouldStream &&
+        timestampRequestFields(route.provider, model)?.response_format === "verbose_json";
+      if (requestsSegments) {
+        formData.append("response_format", "verbose_json");
+      }
 
       const apiCallStart = performance.now();
 
@@ -4349,6 +4359,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             "model",
             language && language !== "auto" ? "language" : null,
             shouldStream ? "stream" : null,
+            requestsSegments ? "response_format" : null,
           ].filter(Boolean),
         },
         "transcription"
@@ -4447,6 +4458,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             "transcription"
           );
           throw new Error(`Failed to parse API response: ${parseError.message}`);
+        }
+
+        if (requestsSegments) {
+          const spokenText = dropNoSpeechSegments(result);
+          if (spokenText !== result.text) {
+            logger.debug(
+              "Dropped no-speech segments",
+              { originalLength: result.text?.length, keptLength: spokenText?.length },
+              "transcription"
+            );
+            result = { ...result, text: spokenText };
+          }
         }
 
         logger.debug(
