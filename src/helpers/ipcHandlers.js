@@ -6311,7 +6311,12 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("llama-server-start", async (event, modelId) => {
+    // A chat turn cancelled while start() waits out another model's answer must
+    // not swap its model in afterwards.
+    this.llamaServerStartAborts = new Map();
+    ipcMain.handle("llama-server-start", async (event, modelId, requestId) => {
+      const abortController = new AbortController();
+      if (requestId) this.llamaServerStartAborts.set(requestId, abortController);
       try {
         const modelManager = require("./modelManagerBridge").default;
         modelManager.ensureInitialized();
@@ -6324,15 +6329,20 @@ class IPCHandlers {
 
         await modelManager.serverManager.start(
           modelPath,
-          await modelManager.serverStartOptions(modelInfo)
+          await modelManager.serverStartOptions(modelInfo, { signal: abortController.signal })
         );
         modelManager.currentServerModelId = modelId;
 
-        this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
         return { success: true, port: modelManager.serverManager.port };
       } catch (error) {
         return { success: false, error: error.message, code: error.code };
+      } finally {
+        if (requestId) this.llamaServerStartAborts.delete(requestId);
       }
+    });
+
+    ipcMain.handle("llama-server-cancel-start", (event, requestId) => {
+      this.llamaServerStartAborts.get(requestId)?.abort();
     });
 
     ipcMain.handle("llama-server-status", async () => {

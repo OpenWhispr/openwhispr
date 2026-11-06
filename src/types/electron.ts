@@ -2474,8 +2474,11 @@ declare global {
 
       // llama-server
       llamaServerStart: (
-        modelId: string
+        modelId: string,
+        requestId?: string
       ) => Promise<{ success: boolean; port?: number; error?: string; code?: string }>;
+      /** Stops the llamaServerStart tagged `requestId` from waiting, and from swapping its model in. */
+      llamaServerCancelStart: (requestId: string) => Promise<void>;
       llamaServerStatus: () => Promise<LlamaServerStatus>;
       llamaGpuReset: () => Promise<{ success: boolean; error?: string }>;
       detectVulkanGpu?: () => Promise<VulkanGpuResult>;

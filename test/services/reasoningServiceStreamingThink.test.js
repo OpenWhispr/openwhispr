@@ -605,6 +605,39 @@ test("tool-enabled streaming does not flush buffered text after abort", async (t
   assert.equal(await collectAgentText(stream), "");
 });
 
+// A tool step can outlast the turn's model, and the next server usually reuses the port.
+test("each request of a local SDK turn asks main which port serves its model", async (t) => {
+  const ports = [11434, 11435];
+  const { reasoningService } = await loadReasoningService(
+    t,
+    "openwhispr-local-server-fetch-test-",
+    {
+      window: {
+        electronAPI: { llamaServerStart: async () => ({ success: true, port: ports.shift() }) },
+      },
+    }
+  );
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  const urls = [];
+  globalThis.fetch = async (url) => {
+    urls.push(String(url));
+    return createOpenAiSseResponse(["ok"]);
+  };
+
+  const stream = reasoningService.processTextStreamingAI(
+    [{ role: "user", content: "hi" }],
+    "qwen3-4b-q4_k_m",
+    "local",
+    { systemPrompt: "s", disableThinking: true },
+    {}
+  );
+  assert.equal(await collectAgentText(stream), "ok");
+  assert.deepEqual(urls, ["http://127.0.0.1:11435/v1/chat/completions"]);
+});
+
 test("cancelling during local model setup stops before streaming begins", async (t) => {
   const streamOwner = new AbortController();
   let resolveServer;
@@ -622,6 +655,7 @@ test("cancelling during local model setup stops before streaming begins", async 
             serverStarted = true;
             return serverReady;
           },
+          llamaServerCancelStart: async () => {},
         },
       },
     }
@@ -671,6 +705,7 @@ test("cancelling tool-ineligible local setup prevents raw streaming", async (t) 
             serverStarted = true;
             return serverReady;
           },
+          llamaServerCancelStart: async () => {},
         },
       },
     }
