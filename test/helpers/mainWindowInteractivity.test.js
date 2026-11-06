@@ -3,7 +3,6 @@ const assert = require("node:assert/strict");
 const Module = require("node:module");
 const { EventEmitter } = require("node:events");
 let applyInputRegion;
-let focusInputRegion;
 
 // Load the real WindowManager with the module surface it touches at require
 // time. setMainWindowInteractivity only reads `this.mainWindow`, so the tests
@@ -31,7 +30,6 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
     return {
       createLinuxWindowInputRegion: () => ({
         set: (region) => applyInputRegion(region),
-        focus: () => focusInputRegion(),
         stop: () => undefined,
       }),
     };

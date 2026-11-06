@@ -1,11 +1,15 @@
-import React, { Suspense, useEffect, useState } from "react";
+import React, { Suspense, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import App from "./App.jsx";
 import MeetingNotificationOverlay from "./components/MeetingNotificationOverlay.tsx";
 import { PermissionGuideOverlay } from "./components/onboarding/PermissionGuideOverlay";
 import ReauthenticationScreen from "./components/ReauthenticationScreen.tsx";
 import BackgroundModelDownloadTray from "./components/onboarding/BackgroundModelDownloadTray.tsx";
-import { LEGACY_ONBOARDING_STEP_KEY, ONBOARDING_SESSION_KEY } from "./components/onboarding/flow";
+import {
+  keepsOnboardingStepThroughPolicyRefetch,
+  LEGACY_ONBOARDING_STEP_KEY,
+  ONBOARDING_SESSION_KEY,
+} from "./components/onboarding/flow";
 import { useAuth } from "./hooks/useAuth";
 import { useControlPanelWindowDrag } from "./hooks/useControlPanelWindowDrag";
 import { useTheme } from "./hooks/useTheme";
@@ -56,10 +60,23 @@ function MainApp() {
     policyStatus === "managed" ||
     policyStatus === "unmanaged" ||
     policyStatus === "error";
-  const isWaitingForPolicyStart = isSignedIn && !policyResolved;
   const autoSyncReady = authLoaded && policyResolved;
 
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const policyAccountId = usePolicyStore((state) => state.accountId);
+  const lastResolvedPolicyAccount = useRef(null);
+  useEffect(() => {
+    if (policyResolved && isSignedIn) lastResolvedPolicyAccount.current = policyAccountId;
+  }, [isSignedIn, policyAccountId, policyResolved]);
+  const isWaitingForPolicyStart =
+    isSignedIn &&
+    !policyResolved &&
+    !keepsOnboardingStepThroughPolicyRefetch({
+      showOnboarding,
+      sessionValue: localStorage.getItem(ONBOARDING_SESSION_KEY),
+      policyAccountId,
+      lastResolvedAccountId: lastResolvedPolicyAccount.current,
+    });
   const [needsReauth, setNeedsReauth] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [postOnboardingSettingsSection, setPostOnboardingSettingsSection] = useState(undefined);

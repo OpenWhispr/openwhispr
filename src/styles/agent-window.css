@@ -19,6 +19,8 @@
   /* How strongly the modal's glow shows: a pale wash over light surfaces. */
   --agent-glow-full: 0.4;
   --agent-glow-faint: 0.16;
+  /* Light mode's modal shadow would be cut off at the window's 8px margin. */
+  --shadow-modal: none;
 }
 
 /* The assistant floats over any desktop, so in dark mode its surfaces are a

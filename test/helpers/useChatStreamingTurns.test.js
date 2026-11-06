@@ -69,15 +69,19 @@ async function renderChatStreaming(
   const offered = [];
   const prompts = [];
   let streamFor = () => (async function* () {})();
-  t.mock.method(reasoningService, "processTextStreamingAI", (messages, _m, _p, config, tools) => {
-    offered.push(Object.keys(tools ?? {}));
-    prompts.push(config.systemPrompt);
-    return streamFor(tools, config);
-  });
-  t.mock.method(reasoningService, "processTextStreamingCloud", (_messages, config) => {
+  t.mock.method(
+    reasoningService,
+    "processTextStreamingAI",
+    (messages, _m, _p, config, tools, signal) => {
+      offered.push(Object.keys(tools ?? {}));
+      prompts.push(config.systemPrompt);
+      return streamFor(tools, config, signal);
+    }
+  );
+  t.mock.method(reasoningService, "processTextStreamingCloud", (_messages, config, signal) => {
     offered.push((config.tools ?? []).map((tool) => tool.name));
     prompts.push(config.systemPrompt);
-    return streamFor(undefined, config);
+    return streamFor(undefined, config, signal);
   });
 
   let messages = [];
@@ -112,6 +116,9 @@ async function renderChatStreaming(
 }
 
 const toolOptions = (toolCallId) => ({ toolCallId, messages: [] });
+// Stop aborts the turn's own request signal, which ends a stubbed stream.
+const aborted = (signal) =>
+  new Promise((resolve) => signal.addEventListener("abort", resolve, { once: true }));
 
 test("a turn records when it ran, how it ended, its reasoning and each step", async (t) => {
   const harness = await renderChatStreaming(t, { allowInteractions: true });
@@ -243,9 +250,6 @@ test("a turn waiting on a question is saved as waiting, as answered, then comple
 
 test("Stop while a question waits keeps the reply, marked stopped, and dismisses it", async (t) => {
   const harness = await renderChatStreaming(t, { allowInteractions: true });
-  const reasoningService = (await harness.vite.ssrLoadModule("/services/ReasoningService.ts"))
-    .default;
-  t.mock.method(reasoningService, "cancelActiveStream", () => {});
   harness.setStream((tools) =>
     (async function* () {
       yield { type: "content", text: "I need one detail." };
@@ -270,16 +274,11 @@ test("Stop while a question waits keeps the reply, marked stopped, and dismisses
 
 test("a tool still running at Stop ends stopped, and may still have acted", async (t) => {
   const harness = await renderChatStreaming(t, { allowInteractions: true });
-  const reasoningService = (await harness.vite.ssrLoadModule("/services/ReasoningService.ts"))
-    .default;
-  let endStream;
-  const streamEnded = new Promise((resolve) => (endStream = resolve));
-  t.mock.method(reasoningService, "cancelActiveStream", () => endStream());
   const { toolTrace } = await harness.vite.ssrLoadModule("/components/chat/historyMessages.ts");
-  harness.setStream(() =>
+  harness.setStream((_tools, _config, signal) =>
     (async function* () {
       yield { type: "tool_calls", calls: [{ id: "w1", name: "web_search", arguments: "{}" }] };
-      await streamEnded;
+      await aborted(signal);
     })()
   );
   const sending = harness.captured.sendToAI("Look it up", []);
@@ -527,21 +526,16 @@ test("a send that lands after Stop is saved with the stopped reply", async (t) =
       },
     }
   );
-  const reasoningService = (await harness.vite.ssrLoadModule("/services/ReasoningService.ts"))
-    .default;
   // Stop ends the model stream; the tool call, already committing, runs on.
-  let endStream;
-  const streamEnded = new Promise((resolve) => (endStream = resolve));
-  t.mock.method(reasoningService, "cancelActiveStream", () => endStream());
   const approvals = await harness.vite.ssrLoadModule("/stores/connectorApprovalStore.ts");
-  harness.setStream((tools) =>
+  harness.setStream((tools, _config, signal) =>
     (async function* () {
       yield {
         type: "tool_calls",
         calls: [{ id: "s1", name: "slack_send_message", arguments: "{}" }],
       };
       void tools.slack_send_message.execute({ destination: "#eng", text: "hi" }, toolOptions("s1"));
-      await streamEnded;
+      await aborted(signal);
     })()
   );
   const sending = harness.captured.sendToAI("Post hi to #eng", []);
@@ -571,9 +565,6 @@ test("a tool stopped while it waits for its service to connect is recorded as no
       },
     }
   );
-  const reasoningService = (await harness.vite.ssrLoadModule("/services/ReasoningService.ts"))
-    .default;
-  t.mock.method(reasoningService, "cancelActiveStream", () => {});
   const { toolTrace } = await harness.vite.ssrLoadModule("/components/chat/historyMessages.ts");
   harness.setStream((tools) =>
     (async function* () {
@@ -651,11 +642,6 @@ test("a regenerate stopped or failed before its first token shows the reply it r
   ]) {
     const label = `${end}${olderReply ? ", older reply" : ""}`;
     const harness = await renderChatStreaming(t, { allowInteractions: true });
-    const reasoningService = (await harness.vite.ssrLoadModule("/services/ReasoningService.ts"))
-      .default;
-    let endStream;
-    const streamEnded = new Promise((resolve) => (endStream = resolve));
-    t.mock.method(reasoningService, "cancelActiveStream", () => endStream());
     const request = { id: "u1", role: "user", content: "Post hi to #eng", isStreaming: false };
     const reply = {
       id: "a0",
@@ -676,11 +662,11 @@ test("a regenerate stopped or failed before its first token shows the reply it r
       ],
     };
     harness.seed([request, reply]);
-    harness.setStream(() =>
+    harness.setStream((_tools, _config, signal) =>
       (async function* () {
         yield { type: "reasoning", text: "Thinking it over." };
         if (end === "error") throw new Error("provider down");
-        await streamEnded;
+        await aborted(signal);
       })()
     );
     let failures = 0;

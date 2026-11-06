@@ -1,0 +1,4 @@
+{
+  "description": "Deterministic tar.bz2 with one 64 MiB repeated-byte weights.bin; exercises CPU-heavy bzip2 decoding without a model download.",
+  "base64": "QlpoOTFBWSZTWaZrdPwFfj3fgMyAQAHlACAAQABy4Z6ACAggAGgxRqPSMgABoIqhpMI0bQ1NPR6pvIQBnzS11J3KAXXc2BZAjOAuRjkFFUDQ+qUQBVUTYEEEVQAkZzjqta3U769ZxKkRGswUAVVE/mKCskymsgXSdugBRTmIAYAgQAAAEEAAoM00E1U9JujBZqgUqXapCFDo9UClS+LuSKcKEgnH+lGg"
+}

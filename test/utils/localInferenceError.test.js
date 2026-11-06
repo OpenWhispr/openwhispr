@@ -111,3 +111,12 @@ test("a model busy with another request gets a translatable message, not the raw
   assert.equal(error.messageKey, "models.errors.localModelBusy");
   assert.equal(error.messageParams, undefined);
 });
+
+test("a refusal the member can fix by choosing again offers Settings; any other doesn't", () => {
+  for (const code of ["POLICY_MODEL_BLOCKED", "POLICY_LOCAL_MODE_BLOCKED"]) {
+    assert.equal(errors.buildLocalInferenceError({ code }).settingsTarget, "llms", code);
+  }
+  for (const code of ["POLICY_UNRESOLVABLE", "POLICY_APP_VERSION_BLOCKED", "LOCAL_MODEL_BUSY"]) {
+    assert.equal(errors.buildLocalInferenceError({ code }).settingsTarget, undefined, code);
+  }
+});

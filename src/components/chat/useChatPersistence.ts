@@ -1,24 +1,21 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import type { AssistantTurn, AssistantTurnStatus, Message, ToolCallInfo } from "./types";
+import type { Message, ToolCallInfo } from "./types";
 import type { TurnDetails } from "./useChatStreaming";
 import type { ContainerScope } from "../../types/chat";
-import type { AgentConversationWithMessages, AgentMessageRow } from "../../types/electron";
-import { withoutSkillCardDrafts } from "./skillCardRecord";
+import {
+  decodeChatMessages,
+  forkOriginOf,
+  replyMetadata,
+  saveReplyRow,
+  type ForkOrigin,
+  type StoredChatConversation,
+} from "./chatPersistence";
+
+export type { ForkOrigin } from "./chatPersistence";
 
 interface UseChatPersistenceOptions {
   conversationId?: number | null;
   onConversationCreated?: (id: number, title: string) => void;
-}
-
-/** Where the open conversation was forked from. */
-export interface ForkOrigin {
-  parentConversationId: number;
-  /** Null once the parent is deleted. */
-  parentTitle: string | null;
-  /** Text the fork was made from; it goes with the fork's next request. */
-  context: string | null;
-  /** How many of the fork's first messages are the parent's history. */
-  copiedMessageCount: number;
 }
 
 interface UserMessageDetails {
@@ -31,6 +28,8 @@ export interface ChatPersistence {
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   conversationId: number | null;
+  /** The note the open conversation was started from; undefined while it loads. */
+  noteId: number | null | undefined;
   /** Null for a conversation that isn't a fork. */
   forkOrigin: ForkOrigin | null;
   createConversation: (
@@ -66,6 +65,7 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
   const [conversationId, setConversationId] = useState<number | null>(
     options.conversationId ?? null
   );
+  const [noteId, setNoteId] = useState<number | null | undefined>(null);
   const [forkOrigin, setForkOrigin] = useState<ForkOrigin | null>(null);
   const conversationIdRef = useRef(conversationId);
   const messagesRef = useRef(messages);
@@ -93,20 +93,12 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
     );
   }, []);
 
-  const showConversation = useCallback((conversation: AgentConversationWithMessages) => {
+  const showConversation = useCallback((conversation: StoredChatConversation) => {
     conversationIdRef.current = conversation.id;
     setConversationId(conversation.id);
-    setForkOrigin(
-      conversation.parent_conversation_id != null
-        ? {
-            parentConversationId: conversation.parent_conversation_id,
-            parentTitle: conversation.parent_title ?? null,
-            context: conversation.fork_context ?? null,
-            copiedMessageCount: conversation.fork_message_count ?? 0,
-          }
-        : null
-    );
-    setMessages(conversation.messages.map(messageFromRow));
+    setNoteId(conversation.note_id ?? null);
+    setForkOrigin(forkOriginOf(conversation));
+    setMessages(decodeChatMessages(conversation));
   }, []);
 
   const createConversation = useCallback(
@@ -127,6 +119,7 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
       const id = conv.id;
       conversationIdRef.current = id;
       setConversationId(id);
+      setNoteId(noteId ?? null);
       options.onConversationCreated?.(id, title);
       return id;
     },
@@ -136,6 +129,8 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
   const loadConversation = useCallback(
     async (id: number) => {
       const version = ++sessionVersionRef.current;
+      // Unknown up front, so the last conversation's note never grounds a send made while this loads.
+      setNoteId(undefined);
       const conv = await window.electronAPI?.getAgentConversation?.(id);
       if (version !== sessionVersionRef.current) return false;
       if (!conv) {
@@ -144,6 +139,7 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
         // tombstoned row and the session is never persisted.
         conversationIdRef.current = null;
         setConversationId(null);
+        setNoteId(null);
         setForkOrigin(null);
         setMessages([]);
         return null;
@@ -187,32 +183,13 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
     ) => {
       const conversationId = details.conversationId ?? conversationIdRef.current;
       if (!conversationId) return;
-      const metadata =
-        toolCalls?.length || details.turn
-          ? {
-              ...(toolCalls?.length ? { toolCalls: withoutSkillCardDrafts(toolCalls) } : {}),
-              ...(details.turn ? { turn: details.turn } : {}),
-            }
-          : undefined;
+      const metadata = replyMetadata(toolCalls, details.turn);
       const savedRow =
         savedRowsRef.current.get(messageId) ??
         Promise.resolve(messagesRef.current.find((m) => m.id === messageId)?.dbId ?? null);
-      const saving = savedRow.then(async (rowId) => {
-        // A cloud pull can replace the rows, and the old id with them; the reply is then added again.
-        if (
-          rowId != null &&
-          (await window.electronAPI?.updateAgentMessage?.(rowId, content, metadata))
-        ) {
-          return rowId;
-        }
-        const row = await window.electronAPI?.addAgentMessage?.(
-          conversationId,
-          "assistant",
-          content,
-          metadata
-        );
-        return row?.id ?? null;
-      });
+      const saving = savedRow.then((rowId) =>
+        saveReplyRow(conversationId, rowId, content, metadata)
+      );
       savedRowsRef.current.set(
         messageId,
         saving.catch(() => null)
@@ -247,12 +224,14 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
     setForkOrigin(null);
     conversationIdRef.current = null;
     setConversationId(null);
+    setNoteId(null);
   }, []);
 
   return {
     messages,
     setMessages,
     conversationId,
+    noteId,
     forkOrigin,
     getSessionVersion,
     createConversation,
@@ -262,52 +241,4 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
     forkConversation,
     handleNewChat,
   };
-}
-
-// Nothing saved is still running once it loads. A reply saved while it
-// waited, whose wait ended with the app or the chat view, can still be
-// answered: it loads as interrupted. One saved mid-turn (the app quit after
-// an answer) loads as stopped, and so does every call it had running.
-function settledOnLoad(turn: AssistantTurn | undefined, toolCalls: ToolCallInfo[] | undefined) {
-  const status: AssistantTurnStatus | null =
-    turn?.status === "waiting" ? "interrupted" : turn?.status === "running" ? "stopped" : null;
-  return {
-    turn: turn && status ? { ...turn, status } : turn,
-    toolCalls: toolCalls?.map((call): ToolCallInfo => {
-      if (call.status !== "executing") return call;
-      return call.interaction?.state === "pending"
-        ? { ...call, status: "stopped", interaction: { ...call.interaction, state: "interrupted" } }
-        : { ...call, status: "stopped" };
-    }),
-  };
-}
-
-function messageFromRow(row: AgentMessageRow): Message {
-  const metadata = row.metadata ? tryParseMetadata(row.metadata) : undefined;
-  const { turn, toolCalls } = settledOnLoad(
-    metadata?.turn as AssistantTurn | undefined,
-    metadata?.toolCalls as ToolCallInfo[] | undefined
-  );
-  const selectedContext = metadata?.selectedContext;
-  const fromAnotherApp = metadata?.selectedContextSource === "external";
-  return {
-    id: crypto.randomUUID(),
-    dbId: row.id,
-    role: row.role as Message["role"],
-    content: row.content,
-    isStreaming: false,
-    ...(toolCalls ? { toolCalls } : {}),
-    ...(turn ? { turn } : {}),
-    ...(typeof selectedContext === "string" ? { selectedContext } : {}),
-    ...(fromAnotherApp ? { selectedContextSource: "external" as const } : {}),
-  };
-}
-
-function tryParseMetadata(raw: string | undefined): Record<string, unknown> | undefined {
-  if (!raw) return undefined;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return undefined;
-  }
 }

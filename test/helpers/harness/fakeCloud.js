@@ -55,8 +55,8 @@ const NOTE_FIELDS = [
 
 const FOLDER_FIELDS = ["name", "is_default", "sort_order"];
 
-// Conversations are read-only here: only the pull is modelled, so `messages`
-// rides along as a plain stored field.
+// `messages` rides along as a stored field; of the routes returning a conversation,
+// only the list includes it, as api/conversations/list.ts does.
 const CONVERSATION_FIELDS = ["title", "archived_at", "messages"];
 
 const DICTIONARY_FIELDS = ["word", "source"];
@@ -233,6 +233,30 @@ function createFakeCloud(config = {}) {
     prefix: "dict",
   };
 
+  function requireLiveConversation(id) {
+    const row = conversations.get(id);
+    if (!row || row.deleted_at) throw new HttpError(404, "Conversation not found");
+    return row;
+  }
+
+  function appendConversationMessage(row, { role, content, metadata }) {
+    const message = {
+      id: nextId("msg"),
+      conversation_id: row.id,
+      role,
+      content,
+      metadata: metadata ?? null,
+      created_at: toIso(clock()),
+    };
+    row.messages.push(message);
+    return message;
+  }
+
+  function conversationResponse(row) {
+    const { messages: _messages, ...conversation } = row;
+    return conversation;
+  }
+
   // Snapshot paging walks created_at backwards from `before` and hides
   // tombstones; delta paging walks updated_at forwards from `since` and must
   // carry tombstones, since that is how a delete reaches the other device.
@@ -388,14 +412,38 @@ function createFakeCloud(config = {}) {
         return { folders: rows.map((row) => structuredClone(row)) };
       }
 
-      // Conversation writes stay echo-stubs; only the read side is modelled,
-      // because the pull is what has to survive the ISO/SQLite format skew.
-      case "POST /api/conversations/create":
-        return { ...body, id: nextId("conv") };
-      case "PATCH /api/conversations/update":
-        return { ...body };
-      case "DELETE /api/conversations/delete":
+      // As api/conversations/create.ts: a client id already in the cloud keeps its
+      // row, tombstone included, and every message in the request is inserted again.
+      case "POST /api/conversations/create": {
+        const existing = findByClientId(conversationCollection, body?.client_conversation_id);
+        const row = existing ?? insertRow(conversationCollection, { ...body, messages: undefined });
+        if (!existing) row.messages = [];
+        row.title = body?.title ?? row.title;
+        row.updated_at = toIso(body?.updated_at ?? clock());
+        for (const message of body?.messages ?? []) appendConversationMessage(row, message);
+        return conversationResponse(row);
+      }
+      case "PATCH /api/conversations/update": {
+        const row = requireLiveConversation(body?.id);
+        if (body?.title !== undefined && body.title !== null) row.title = body.title;
+        row.updated_at = toIso(clock());
+        return conversationResponse(row);
+      }
+      case "DELETE /api/conversations/delete": {
+        const row = requireLiveConversation(body?.id);
+        row.deleted_at = toIso(clock());
+        row.updated_at = row.deleted_at;
         return {};
+      }
+      case "POST /api/conversations/messages": {
+        const row = requireLiveConversation(body?.conversation_id);
+        if (!body?.content) throw new HttpError(400, "content is required");
+        const message = appendConversationMessage(row, body);
+        row.updated_at = toIso(clock());
+        return message;
+      }
+      case "GET /api/conversations/messages":
+        return { messages: requireLiveConversation(query.get("conversation_id")).messages };
       case "GET /api/conversations/list": {
         const rows = page(conversationCollection, query, "created_at");
         // The client asks for include=messages; a page that stopped asking must
@@ -495,9 +543,20 @@ function createFakeCloud(config = {}) {
       clock = fn;
     },
     seedNote: (input) => structuredClone(insertRow(noteCollection, input)),
+    // A row the public API stored without a client id, and the server backfill
+    // that later keys it by its own id without moving updated_at.
+    seedUnkeyedNote: (input) => {
+      const row = insertRow(noteCollection, input);
+      row.client_note_id = null;
+      return structuredClone(row);
+    },
+    backfillNoteKey: (id) => {
+      notes.get(id).client_note_id = id;
+    },
+    setNoteRevision: (id, revision) => {
+      notes.get(id).revision = revision;
+    },
     seedFolder: (input) => structuredClone(insertRow(folderCollection, input)),
-    // Conversation deletes are echo-stubs, so a tombstone has to be seeded here
-    // rather than produced by the DELETE route.
     seedConversation: (input = {}) => {
       const row = insertRow(conversationCollection, input);
       // The defaults object is spread, not cloned, so every row needs its own array.

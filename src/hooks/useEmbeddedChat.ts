@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useChatPersistence } from "../components/chat/useChatPersistence";
 import {
   useChatStreaming,
@@ -7,9 +7,9 @@ import {
 } from "../components/chat/useChatStreaming";
 import { useChatMessageSender } from "../components/chat/useChatMessageSender";
 import type { Message, AgentState } from "../components/chat/types";
+import { useChatTurnStore, cancelChatTurn, takeCompletedChatTurn } from "../stores/chatTurnStore";
 import { deriveConversationTitle } from "../lib/conversationTitle";
-import { estimateNoteTokens } from "../helpers/noteChunking";
-import { transcriptPreview } from "../utils/transcriptEvidence";
+import { buildOpenNoteContext } from "../components/chat/openNoteContext";
 import { attendeesForUser } from "../utils/noteAttendees";
 import type { CalendarAttendee } from "../types/calendar";
 import type { NoteAttendeesRequest } from "../types/connectors";
@@ -90,24 +90,18 @@ export function useEmbeddedChat({
   const transcript = noteTranscript ?? "";
   const openNote = useMemo(
     () =>
-      (maxTranscriptTokens: number): OpenNoteContext => {
-        const previewOnly = estimateNoteTokens(transcript) > maxTranscriptTokens;
-        return {
-          transcriptPreview: previewOnly,
-          text: `Note fields (JSON): content is personal notes; summary is the saved AI Summary; transcript is source material, not an editable field.\n${JSON.stringify(
-            {
-              id: noteId,
-              folder_id: folderId,
-              title: noteTitle,
-              content: noteContent,
-              summary: noteSummary ?? "",
-              ...(previewOnly
-                ? { transcript: transcriptPreview(transcript), transcript_preview: true }
-                : { transcript }),
-            }
-          )}`,
-        };
-      },
+      (maxTranscriptTokens: number): OpenNoteContext =>
+        buildOpenNoteContext(
+          {
+            id: noteId,
+            folderId,
+            title: noteTitle,
+            content: noteContent,
+            summary: noteSummary ?? "",
+            transcript,
+          },
+          maxTranscriptTokens
+        ),
     [folderId, noteContent, noteId, noteSummary, noteTitle, transcript]
   );
 
@@ -160,7 +154,7 @@ export function useEmbeddedChat({
   }, [noteId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // useChatStreaming returns a fresh object every render; cancelStream is
-  // stable. Leaving a conversation cancels its turn, as in ChatView: a card
+  // stable. Leaving a conversation cancels its turn: a card
   // waiting for approval would otherwise hold the send lock and save its
   // reply into whichever conversation is open when it settles.
   const { cancelStream } = streaming;
@@ -196,6 +190,18 @@ export function useEmbeddedChat({
     },
     [fetchNoteConversations, noteId, noteTitle, persistence]
   );
+  // A turn started in Chat outlives that view, so a conversation in this chat's history may still
+  // be answering. It stays Chat's turn: this chat shows it and can stop it, but can't start a
+  // second one into the same conversation. Once it ends, its outcome moves here, so Chat can't
+  // later show that outcome in place of what this chat saved after it.
+  const mainTurn = useChatTurnStore((state) =>
+    conversationId === null ? undefined : state.entries[`conversation:${conversationId}`]
+  );
+  useLayoutEffect(() => {
+    if (conversationId === null || !mainTurn || mainTurn.running || mainTurn.settling) return;
+    persistence.setMessages(mainTurn.messages);
+    takeCompletedChatTurn(conversationId);
+  }, [conversationId, mainTurn, persistence]);
   const [submissionInFlight, setSubmissionInFlight] = useState(false);
   const sendMessageWithResult = useChatMessageSender({
     conversationId,
@@ -206,9 +212,14 @@ export function useEmbeddedChat({
   });
   const sendMessage = useCallback(
     async (text: string, options?: SendToAIOptions): Promise<void> => {
+      if (
+        conversationId !== null &&
+        useChatTurnStore.getState().entries[`conversation:${conversationId}`]
+      )
+        return;
       await sendMessageWithResult(text, options);
     },
-    [sendMessageWithResult]
+    [conversationId, sendMessageWithResult]
   );
 
   // The sender reads the conversation of the render it was made in, so a message that
@@ -239,14 +250,24 @@ export function useEmbeddedChat({
   }, [newChatMessage, onNewChatUnsent, persistence, sendMessageWithResult]);
 
   return {
-    messages: persistence.messages,
-    // As in ChatView: a cancelled send can hold the submission lock until an in-flight
-    // tool returns, and the lock would drop a message sent before then, so the chat
-    // reads busy until it lets go.
-    agentState:
-      submissionInFlight && streaming.agentState === "idle" ? "thinking" : streaming.agentState,
+    messages: mainTurn ? mainTurn.messages : persistence.messages,
+    // A cancelled send can hold the submission lock until an in-flight tool returns, and the
+    // lock would drop a message sent before then, so the chat reads busy until it lets go.
+    agentState: mainTurn
+      ? mainTurn.running && mainTurn.agentState !== "idle"
+        ? mainTurn.agentState
+        : "thinking"
+      : submissionInFlight && streaming.agentState === "idle"
+        ? "thinking"
+        : streaming.agentState,
     sendMessage,
-    cancelStream: streaming.cancelStream,
+    cancelStream: () => {
+      if (mainTurn?.running && conversationId !== null) {
+        cancelChatTurn({ kind: "conversation", conversationId });
+      } else {
+        streaming.cancelStream();
+      }
+    },
     noteConversations,
     activeConversationId: conversationId,
     switchConversation,

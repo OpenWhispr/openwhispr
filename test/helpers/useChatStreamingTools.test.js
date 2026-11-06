@@ -857,7 +857,7 @@ test("on a free plan, the model still writes the email and then says a paid plan
   const prompt = systemPromptOf(sentMessages[0]);
   assert.match(
     prompt,
-    /still write it in full in your reply, then end with one short sentence on how they can have you send it for them[^\n]*\n- Integrations \(Email, Slack, Linear, GitHub\): needs a paid OpenWhispr plan in Settings → Plans & Billing\./
+    /still write it in full in your reply, then end with one short sentence on how they can have you send it for them[^\n]*\n- Integrations \(Email, Slack, Linear, GitHub\): needs a paid OpenWhispr plan in Settings → Plan & Billing\./
   );
   assert.doesNotMatch(prompt, /- Web search: (needs|turned|not)/);
 });
@@ -946,7 +946,7 @@ test("a local model too small for tools is told so, with no tool notes in its hi
   const [system, ...history] = sentMessages[0];
   assert.match(
     system.content,
-    /- Tools \(web search, calendar, searching or changing notes, integrations\): the selected model runs without tools .* in Settings → Language Models\..* You can still use anything already in this prompt, such as note text/
+    /- Tools \(web search, calendar, searching or changing notes, integrations\): the selected model runs without tools .* in Settings → Language Model\..* You can still use anything already in this prompt, such as note text/
   );
   assert.doesNotMatch(system.content, /Tools used/);
   assert.equal(history[1].content, "Sunny.");
@@ -1319,3 +1319,191 @@ test("open_settings carries the model scope of the chat that asked", async (t) =
     assert.equal(payload?.scope, inferenceScope ?? "chatIntelligence");
   }
 });
+
+// ---- Local mode with no model (the assistant switched off at setup) ----
+
+// What setup writes for a switched-off assistant: both scopes on this device, no
+// model. The voice panel falls back to Chat while its own scope is unreachable.
+const ASSISTANT_OFF = {
+  useDictationAgent: false,
+  chatAgentMode: "local",
+  chatAgentProvider: "",
+  chatAgentModel: "",
+  dictationAgentMode: "local",
+  dictationAgentProvider: "",
+  dictationAgentModel: "",
+};
+
+for (const [surface, hookOptions] of [
+  ["chat", {}],
+  ["voice panel", { inferenceScope: "dictationAgent" }],
+]) {
+  test(`${surface} with no local model answers with the settings line`, async (t) => {
+    const llamaServerStart = t.mock.fn(async () => ({ success: true }));
+    const { captured, reasoningService, getMessages } = await renderChatStreaming(t, hookOptions, {
+      settings: ASSISTANT_OFF,
+      electronAPI: { llamaServerStart },
+    });
+    const user = { id: "u1", role: "user", content: "Hello" };
+
+    await captured.sendToAI(user.content, [user]);
+
+    const reply = getMessages().at(-1);
+    assert.equal(reply.role, "assistant");
+    assert.equal(reply.content, "Choose a model for Chat in Settings to chat on this device.");
+    assert.equal(llamaServerStart.mock.callCount(), 0);
+    assert.equal(reasoningService.processTextStreamingAI.mock.callCount(), 0);
+    assert.equal(reasoningService.processTextStreamingCloud.mock.callCount(), 0);
+  });
+
+  test(`${surface} says so while the assistant model is still downloading`, async (t) => {
+    const { captured, getMessages } = await renderChatStreaming(t, hookOptions, {
+      settings: ASSISTANT_OFF,
+      electronAPI: {
+        modelGetActiveDownloads: async () => [{ modelType: "llm", modelId: "qwen3.5-4b-q4_k_m" }],
+      },
+    });
+    localStorage.setItem(
+      "pendingLocalModelSelectionsV1",
+      JSON.stringify({ assistant: { provider: "qwen", modelId: "qwen3.5-4b-q4_k_m" } })
+    );
+    const user = { id: "u1", role: "user", content: "Hello" };
+
+    await captured.sendToAI(user.content, [user]);
+
+    assert.equal(
+      getMessages().at(-1).content,
+      "Your assistant model is still downloading. Chat turns on when it's ready."
+    );
+  });
+}
+
+test("cancelling while the local model download is checked leaves no late reply", async (t) => {
+  const downloads = Promise.withResolvers();
+  const { captured, getMessages, reasoningService } = await renderChatStreaming(
+    t,
+    {},
+    {
+      settings: ASSISTANT_OFF,
+      electronAPI: { modelGetActiveDownloads: () => downloads.promise },
+    }
+  );
+  localStorage.setItem(
+    "pendingLocalModelSelectionsV1",
+    JSON.stringify({ assistant: { provider: "qwen", modelId: "qwen3.5-4b-q4_k_m" } })
+  );
+  const user = { id: "u1", role: "user", content: "Hello" };
+  const sending = captured.sendToAI(user.content, [user]);
+  captured.cancelStream();
+  downloads.resolve([{ modelType: "llm", modelId: "qwen3.5-4b-q4_k_m" }]);
+  await sending;
+
+  assert.deepEqual(getMessages(), []);
+  assert.equal(reasoningService.processTextStreamingAI.mock.callCount(), 0);
+  assert.equal(reasoningService.processTextStreamingCloud.mock.callCount(), 0);
+});
+
+for (const [label, policy, content] of [
+  [
+    "a blocked model",
+    { allowedModes: ["local", "providers"], allowedLocalModels: ["qwen3-1.7b-q8_0"] },
+    "Choose a local model your organization has approved.",
+  ],
+  [
+    "Local turned off with nowhere to move",
+    { allowedModes: [], allowedLocalModels: null },
+    "Your organization has disabled local processing.",
+  ],
+]) {
+  test(`a chat refused for ${label} says so and links to Settings, without streaming`, async (t) => {
+    const { captured, sentMessages, usePolicyStore, getMessages } = await renderChatStreaming(
+      t,
+      {},
+      {
+        settings: {
+          chatAgentMode: "local",
+          chatAgentProvider: "qwen",
+          chatAgentModel: "qwen3.5-0.8b-q4_k_m",
+        },
+      }
+    );
+    usePolicyStore.setState({
+      status: "managed",
+      appVersion: "1.10.0",
+      policy: {
+        ...MANAGED_POLICY,
+        llm: { ...MANAGED_POLICY.llm, allowedByokProviders: ["openai"], ...policy },
+        features: { ...MANAGED_POLICY.features, agentEnabled: true },
+      },
+    });
+    await captured.sendToAI("Summarize this", []);
+    assert.equal(sentMessages.length, 0);
+    const reply = getMessages().at(-1);
+    assert.equal(reply.content, content);
+    assert.deepEqual(reply.error, { settingsTarget: "llms" });
+  });
+}
+
+test("a blocked Voice Assistant answers with the refusal, not on the remote Chat scope", async (t) => {
+  const { captured, sentMessages, usePolicyStore, getMessages } = await renderChatStreaming(
+    t,
+    { inferenceScope: "dictationAgent" },
+    {
+      settings: {
+        ...BYOK_SETTINGS,
+        useDictationAgent: true,
+        dictationAgentMode: "local",
+        dictationAgentProvider: "qwen",
+        dictationAgentModel: "qwen3.5-0.8b-q4_k_m",
+      },
+    }
+  );
+  usePolicyStore.setState({
+    status: "managed",
+    appVersion: "1.10.0",
+    policy: {
+      ...MANAGED_POLICY,
+      llm: {
+        ...MANAGED_POLICY.llm,
+        allowedModes: ["local", "providers"],
+        allowedByokProviders: ["openai"],
+        allowedLocalModels: ["qwen3-1.7b-q8_0"],
+      },
+      features: { ...MANAGED_POLICY.features, agentEnabled: true },
+    },
+  });
+  await captured.sendToAI("What's on my calendar?", []);
+  assert.equal(sentMessages.length, 0, "nothing reached any model");
+  const reply = getMessages().at(-1);
+  assert.equal(reply.content, "Choose a local model your organization has approved.");
+  assert.deepEqual(reply.error, { settingsTarget: "llms" });
+});
+
+for (const supportsTools of [true, false]) {
+  test(`local chat honors catalog supportsTools=${supportsTools} over its model-size guess`, async (t) => {
+    const modelId = supportsTools ? "qwen3.5-2b-q4_k_m" : "qwen3.5-4b-q4_k_m";
+    const { captured, offeredTools, vite } = await renderChatStreaming(
+      t,
+      {},
+      {
+        settings: { chatAgentMode: "local", chatAgentProvider: "qwen", chatAgentModel: modelId },
+      }
+    );
+    const store = await vite.ssrLoadModule("/models/registryData.js");
+    const before = store.getRegistrySnapshot();
+    const data = structuredClone(before.data);
+    data.localProviders
+      .flatMap((provider) => provider.models)
+      .find((model) => model.id === modelId).supportsTools = supportsTools;
+    store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1 });
+    t.after(() =>
+      store.replaceRegistryData({
+        ...before,
+        manifestVersion: store.getRegistryVersion() + 1,
+      })
+    );
+    await captured.sendToAI("Summarize my notes", []);
+    assert.equal(offeredTools.length, 1);
+    assert.equal(offeredTools[0].includes("search_notes"), supportsTools);
+  });
+}

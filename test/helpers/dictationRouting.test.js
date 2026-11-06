@@ -840,3 +840,28 @@ test("signed out of OpenWhispr Cloud, the cleanup notice says so", async () => {
   });
   assert.equal(byok.notice.messageKey, "hooks.audioRecording.cleanupUnconfigured");
 });
+
+test("a cleanup model the org blocked says so instead of calling cleanup unconfigured", async () => {
+  const { cleanupUnconfiguredNotice } = await load();
+  const settings = {
+    useCleanupModel: true,
+    cleanupMode: "local",
+    cleanupProvider: "qwen",
+    isSignedIn: true,
+    policyBlockedLocalScopes: ["dictationCleanup"],
+  };
+  const skipped = { skipped: true, cleanupReachable: false, settings };
+
+  const { notice } = cleanupUnconfiguredNotice(null, skipped);
+  assert.equal(notice.messageKey, "models.policy.modelBlocked");
+  assert.equal(notice.settingsTarget, "llms");
+  assert.equal(notice.surface, "llm");
+  assert.equal(cleanupUnconfiguredNotice(notice.setupKey, skipped).notice, null);
+
+  // Lifting the block leaves an ordinary unconfigured setup, which warns as itself.
+  const unconfigured = cleanupUnconfiguredNotice(notice.setupKey, {
+    ...skipped,
+    settings: { ...settings, policyBlockedLocalScopes: [] },
+  });
+  assert.equal(unconfigured.notice.messageKey, "hooks.audioRecording.cleanupUnconfigured");
+});

@@ -42,6 +42,34 @@ async function withServer(run, script) {
 
 const audioFrames = (received) => received.filter((message) => message.realtimeInput?.audio);
 
+test("live registry IDs reach the Gemini setup message while managed models stay fixed", async (t) => {
+  const store = require("../../src/models/registryData.js");
+  const old = store.getRegistrySnapshot();
+  const next = structuredClone(old.data);
+  next.transcriptionProviders
+    .find((provider) => provider.id === "gemini")
+    .models.push({
+      id: "registry-google-live",
+      name: "New Google model",
+      description: "Fixture",
+      streaming: true,
+    });
+  t.after(() =>
+    store.replaceRegistryData({ data: old.data, manifestVersion: old.manifestVersion + 2 })
+  );
+  store.replaceRegistryData({ data: next, manifestVersion: old.manifestVersion + 1 });
+  await withServer(async ({ streaming, received }) => {
+    await streaming.connect({ token: "key", mode: "byok", model: "registry-google-live" });
+    assert.equal(received[0].setup.model, "models/registry-google-live");
+    assert.equal(streaming.currentModel, "registry-google-live");
+    assert.equal(
+      streaming.buildSetupMessage({ mode: "openwhispr", model: "registry-google-live" }).setup
+        .model,
+      "models/gemini-3.5-transcribe-live"
+    );
+  });
+});
+
 test("url: the two Live methods are auth-disjoint and pinned per mode", () => {
   assert.equal(
     buildGeminiLiveUrl({ mode: "byok", token: "AI-KEY" }),
@@ -65,7 +93,12 @@ test("setup: the custom dictionary always ships; a language only when chosen", (
   });
 
   assert.deepEqual(
-    streaming.buildSetupMessage({ model: "gemini-next", language: "en", keyterms: [] }),
+    streaming.buildSetupMessage({
+      mode: "byok",
+      model: "gemini-next",
+      language: "en",
+      keyterms: [],
+    }),
     {
       setup: {
         model: "models/gemini-next",
