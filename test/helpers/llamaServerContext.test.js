@@ -3,7 +3,10 @@ const assert = require("node:assert/strict");
 const http = require("node:http");
 
 const LlamaServerManager = require("../../src/helpers/llamaServer.js");
-const { createLocalModelPolicyGate } = require("../../src/helpers/localModelPolicyGate");
+const {
+  createLocalModelPolicyGate,
+  runLocalModelOperation,
+} = require("../../src/helpers/localModelPolicyGate");
 const { managedPolicy } = require("./harness/policyFixtures");
 
 // A manager whose spawn is stubbed at the _doStart boundary, recording the
@@ -758,22 +761,28 @@ function withPolicy(manager) {
   return gate;
 }
 
-test("revoking a model waiting behind another model's answer leaves that answer running", async () => {
-  const { manager, starts, stops } = makeRunningManager(() => BUSY);
-  const gate = withPolicy(manager);
+// runInference and pre-warm call start() inside their own operation for the same model.
+for (const nested of [false, true]) {
+  test(`revoking a model waiting behind another model's answer leaves that answer running${nested ? ", nested in an operation" : ""}`, async () => {
+    let answering = true;
+    const { manager, starts, stops } = makeRunningManager(() => (answering ? BUSY : IDLE));
+    const gate = withPolicy(manager);
+    const start = () => manager.start("/models/other.gguf", { busyWaitMs: 60000 });
 
-  const waiting = manager.start("/models/other.gguf", { busyWaitMs: 60000 });
-  await pause(300);
-  const revokedAt = Date.now();
-  gate.update(llmPolicy([RUNNING_ID], 2));
+    const waiting = nested ? runLocalModelOperation(manager, "llm", OTHER_ID, start) : start();
+    await pause(300);
+    const revokedAt = Date.now();
+    gate.update(llmPolicy([RUNNING_ID], 2));
+    answering = false;
 
-  await assert.rejects(waiting, { code: "POLICY_MODEL_BLOCKED" });
-  assert.ok(Date.now() - revokedAt < 100, "the revoke, not the deadline, ended the wait");
-  await pause(300);
-  assert.deepEqual(stops, []);
-  assert.equal(starts.length, 0);
-  assert.equal(manager.modelPath, "/models/running.gguf");
-});
+    await assert.rejects(waiting, { code: "POLICY_MODEL_BLOCKED" });
+    assert.ok(Date.now() - revokedAt < 100, "the revoke, not the deadline, ended the wait");
+    await pause(300);
+    assert.deepEqual(stops, []);
+    assert.equal(starts.length, 0);
+    assert.equal(manager.modelPath, "/models/running.gguf");
+  });
+}
 
 test("revoking a model while its own server starts still stops that server", async () => {
   const { manager, stops } = makeRunningManager(() => IDLE);

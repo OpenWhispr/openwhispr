@@ -965,7 +965,18 @@ class ModelManager {
         "llm",
         modelId,
         () => this._policyAllowedPrewarmServer(modelId),
-        { memoryOnly: true, onAbort: () => this.stopServer() }
+        {
+          memoryOnly: true,
+          // The pre-warm may be checking whether another model is answering, so
+          // only a server that is, or is becoming, this model is stopped.
+          onAbort: () => {
+            const modelInfo = this.findModelById(modelId);
+            if (!modelInfo) return;
+            return this.serverManager._stopIfServing(
+              path.join(this.modelsDir, modelInfo.model.fileName)
+            );
+          },
+        }
       );
     } catch (error) {
       if (error.code === "POLICY_UNRESOLVABLE") {

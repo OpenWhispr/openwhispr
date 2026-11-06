@@ -1,4 +1,8 @@
-const { runLocalModelOperation, assertLocalModelOperation } = require("./localModelPolicyGate");
+const {
+  runLocalModelOperation,
+  assertLocalModelOperation,
+  localModelOperationSignal,
+} = require("./localModelPolicyGate");
 const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
@@ -68,11 +72,6 @@ function modelBusyError() {
 
 function cancelledError() {
   return Object.assign(new Error("cancelled"), { code: "LOCAL_MODEL_CANCELLED" });
-}
-
-function anySignal(...signals) {
-  const present = signals.filter(Boolean);
-  return present.length > 1 ? AbortSignal.any(present) : present[0];
 }
 
 function sleep(ms) {
@@ -229,10 +228,10 @@ class LlamaServerManager {
       // A revoked model ends its own wait through the lease's signal. The start
       // may be waiting behind another model's answer, so the server is stopped
       // only when it is, or is becoming, the revoked model.
-      (leaseSignal) =>
+      () =>
         this._policyAllowedStart(modelPath, {
           ...options,
-          signal: anySignal(options.signal, leaseSignal),
+          signal: localModelOperationSignal(this, options.signal),
         }),
       { onAbort: () => this._stopIfServing(modelPath) }
     );
