@@ -63,6 +63,12 @@ const registerListener = (channel, handlerFactory) => {
 };
 
 contextBridge.exposeInMainWorld("electronAPI", {
+  initialModelRegistrySnapshot: ipcRenderer.sendSync?.("model-registry-initial"),
+  getModelRegistry: () => ipcRenderer.invoke("get-model-registry"),
+  onModelRegistryUpdated: registerListener(
+    "model-registry-updated",
+    (callback) => (_event, snapshot) => callback(snapshot)
+  ),
   setOnboardingWindowMode: (mode) => ipcRenderer.invoke("onboarding-set-window-mode", mode),
   setOnboardingActive: (active) => ipcRenderer.invoke("onboarding-set-active", active),
   openPermissionGuide: (state) => ipcRenderer.invoke("permission-guide-open", state),
@@ -321,6 +327,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   noteFilesPickFolder: () => ipcRenderer.invoke("note-files-pick-folder"),
   granolaImportPickAndPreview: () => ipcRenderer.invoke("granola-import-pick-and-preview"),
   granolaImportRun: () => ipcRenderer.invoke("granola-import-run"),
+  dragonImportPickFile: () => ipcRenderer.invoke("dragon-import-pick-file"),
   showNoteFile: (noteId) => ipcRenderer.invoke("show-note-file", noteId),
   showFolderInExplorer: (folderName) => ipcRenderer.invoke("show-folder-in-explorer", folderName),
 
@@ -570,6 +577,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   windowIsMaximized: () => ipcRenderer.invoke("window-is-maximized"),
   snapToMeetingMode: () => ipcRenderer.invoke("snap-to-meeting-mode"),
   restoreFromMeetingMode: () => ipcRenderer.invoke("restore-from-meeting-mode"),
+  meetingNoteOpenedWithoutRecording: (id) =>
+    ipcRenderer.invoke("meeting-note-opened-without-recording", id),
+  meetingNoteClosed: (id) => ipcRenderer.invoke("meeting-note-closed", id),
   getPlatform: () => process.platform,
 
   // Cleanup function
@@ -646,6 +656,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   modelGetActiveDownloads: () => ipcRenderer.invoke("model-get-active-downloads"),
   modelCheck: (modelId) => ipcRenderer.invoke("model-check", modelId),
   modelDownload: (modelId) => ipcRenderer.invoke("model-download", modelId),
+  listRetiredLocalModels: (inUse) => ipcRenderer.invoke("list-retired-local-models", inUse),
+  deleteRetiredLocalModels: (inUse) => ipcRenderer.invoke("delete-retired-local-models", inUse),
   modelDelete: (modelId) => ipcRenderer.invoke("model-delete", modelId),
   modelDeleteAll: () => ipcRenderer.invoke("model-delete-all"),
   modelCheckRuntime: () => ipcRenderer.invoke("model-check-runtime"),
@@ -781,6 +793,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Vulkan GPU acceleration
   detectVulkanGpu: () => ipcRenderer.invoke("detect-vulkan-gpu"),
+  getComputerProfile: () => ipcRenderer.invoke("get-computer-profile"),
+  getLocalSetupSpace: () => ipcRenderer.invoke("get-local-setup-space"),
   getLlamaVulkanStatus: () => ipcRenderer.invoke("get-llama-vulkan-status"),
   downloadLlamaVulkanBinary: () => ipcRenderer.invoke("download-llama-vulkan-binary"),
   cancelLlamaVulkanDownload: () => ipcRenderer.invoke("cancel-llama-vulkan-download"),
@@ -791,6 +805,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
 
   getLogLevel: () => ipcRenderer.invoke("get-log-level"),
+  onLogLevelChanged: registerListener("log-level-changed", (callback) => () => callback()),
   log: (entry) => ipcRenderer.invoke("app-log", entry),
 
   // ydotool status check
@@ -799,6 +814,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Debug logging management
   getDebugState: () => ipcRenderer.invoke("get-debug-state"),
   setDebugLogging: (enabled) => ipcRenderer.invoke("set-debug-logging", enabled),
+  getModelRegistryUpdates: () => ipcRenderer.invoke("get-model-registry-updates"),
+  setModelRegistryUpdates: (enabled) => ipcRenderer.invoke("set-model-registry-updates", enabled),
   openLogsFolder: () => ipcRenderer.invoke("open-logs-folder"),
 
   // System settings helpers for microphone/audio permissions
@@ -1223,8 +1240,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getPendingNotes: (spaceKind) => ipcRenderer.invoke("db-get-pending-notes", spaceKind),
   getPendingNoteDeletes: () => ipcRenderer.invoke("db-get-pending-note-deletes"),
   getNoteByClientId: (clientNoteId) => ipcRenderer.invoke("db-get-note-by-client-id", clientNoteId),
+  getNoteForCloudRow: (clientNoteId, cloudId) =>
+    ipcRenderer.invoke("db-get-note-for-cloud-row", clientNoteId, cloudId),
   upsertNoteFromCloud: (cloudNote, localFolderId, localSpaceId) =>
     ipcRenderer.invoke("db-upsert-note-from-cloud", cloudNote, localFolderId, localSpaceId),
+  markNoteCreatesAttempted: (clientNoteIds) =>
+    ipcRenderer.invoke("db-mark-note-creates-attempted", clientNoteIds),
   acknowledgeNoteCreate: (id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) =>
     ipcRenderer.invoke(
       "db-acknowledge-note-create",
@@ -1302,12 +1323,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getPendingConversationDeletes: () => ipcRenderer.invoke("db-get-pending-conversation-deletes"),
   getConversationByClientId: (clientId) =>
     ipcRenderer.invoke("db-get-conversation-by-client-id", clientId),
-  upsertConversationFromCloud: (cloudConv, messages) =>
-    ipcRenderer.invoke("db-upsert-conversation-from-cloud", cloudConv, messages),
+  upsertConversationFromCloud: (cloudConv, messages, snapshot) =>
+    ipcRenderer.invoke("db-upsert-conversation-from-cloud", cloudConv, messages, snapshot),
+  markConversationCreateAttempted: (id) =>
+    ipcRenderer.invoke("db-mark-conversation-create-attempted", id),
   acknowledgeConversationCreate: (id, snapshot, cloudId) =>
     ipcRenderer.invoke("db-acknowledge-conversation-create", id, snapshot, cloudId),
-  markConversationSynced: (id, cloudId) =>
-    ipcRenderer.invoke("db-mark-conversation-synced", id, cloudId),
+  markConversationSynced: (id, cloudId, snapshot) =>
+    ipcRenderer.invoke("db-mark-conversation-synced", id, cloudId, snapshot),
+  replaceConversationClientId: (id, expectedClientId) =>
+    ipcRenderer.invoke("db-replace-conversation-client-id", id, expectedClientId),
   hardDeleteConversation: (id) => ipcRenderer.invoke("db-hard-delete-conversation", id),
 
   getPendingTranscriptions: () => ipcRenderer.invoke("db-get-pending-transcriptions"),
@@ -1449,6 +1474,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Contacts
   searchContacts: (query) => ipcRenderer.invoke("search-contacts", query),
+  searchInviteContacts: (query, exclude) =>
+    ipcRenderer.invoke("search-invite-contacts", query, exclude),
   upsertContact: (contact) => ipcRenderer.invoke("upsert-contact", contact),
   getMD5Hash: (text) => ipcRenderer.invoke("get-md5-hash", text),
 

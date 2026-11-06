@@ -2,6 +2,14 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createDb } = require("./harness/db.js");
 
+// As SyncService pulls: with the row its lookup found for that chat, or null.
+const pull = (db, cloudConv, messages) =>
+  db.upsertConversationFromCloud(
+    cloudConv,
+    messages,
+    db.getConversationByClientId(cloudConv.client_conversation_id)
+  );
+
 function seedConversation(db, title = "Plan the launch") {
   const conversation = db.createAgentConversation(title);
   const rows = [
@@ -102,7 +110,8 @@ test("a pull from the cloud keeps a fork's local link", (t) => {
   const { conversation, rows } = seedConversation(db);
   const fork = db.forkAgentConversation(conversation.id, rows[1].id, "context");
 
-  db.upsertConversationFromCloud(
+  pull(
+    db,
     {
       id: "cloud-fork",
       client_conversation_id: fork.client_conversation_id,

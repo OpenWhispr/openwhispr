@@ -71,6 +71,11 @@ async function setupChain(t, respond) {
     let raw = "";
     req.on("data", (chunk) => (raw += chunk));
     req.on("end", () => {
+      if (req.url === "/slots") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end("[]");
+        return;
+      }
       requests.push(JSON.parse(raw));
       const reply = respond();
       // null leaves the request hanging, like a model still generating.

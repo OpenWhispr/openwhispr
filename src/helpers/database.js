@@ -58,6 +58,11 @@ function typedTextOperation(text) {
   return typeof text === "string" && text.trim() ? "set" : null;
 }
 
+const NOTE_FOLDER_DELETE_PENDING_SQL = `EXISTS (
+  SELECT 1 FROM optimistic_folder_delete_rows r
+  WHERE r.entity_type = 'note' AND r.entity_id = n.id
+) AS folder_delete_pending`;
+
 // Every local field a note create (POST) carries; the acknowledgement compares
 // these atomically against the pushed snapshot. Must mirror NotePushSnapshot
 // in src/types/electron.ts.
@@ -279,6 +284,7 @@ class DatabaseManager {
   constructor() {
     this.db = null;
     this.activeAccountId = null;
+    this.mergedNoteIds = [];
     this.initDatabase();
   }
 
@@ -1326,6 +1332,27 @@ class DatabaseManager {
         if (!err.message.includes("duplicate column")) throw err;
       }
 
+      // Set just before a create request is sent, so a create whose reply never
+      // arrives still counts as one the server may hold. A create that failed
+      // before this column existed counts too.
+      let addedCreateAttempts = false;
+      for (const table of ["notes", "agent_conversations"]) {
+        try {
+          this.db.exec(
+            `ALTER TABLE ${table} ADD COLUMN cloud_create_attempted INTEGER NOT NULL DEFAULT 0`
+          );
+          addedCreateAttempts = true;
+        } catch (err) {
+          if (!err.message.includes("duplicate column")) throw err;
+        }
+      }
+      if (addedCreateAttempts) {
+        this.db.exec(
+          "UPDATE notes SET cloud_create_attempted = 1 WHERE cloud_id IS NULL AND sync_status = 'error'"
+        );
+        this._removeNeverSyncedTombstones();
+      }
+
       // Sync columns for transcriptions
       try {
         this.db.exec("ALTER TABLE transcriptions ADD COLUMN client_transcription_id TEXT");
@@ -1696,6 +1723,7 @@ class DatabaseManager {
         if (!err.message.includes("duplicate column")) throw err;
       }
       this.db.exec("CREATE INDEX IF NOT EXISTS idx_notes_account_id ON notes(account_id)");
+      this.db.exec("CREATE INDEX IF NOT EXISTS idx_notes_cloud_id ON notes(cloud_id)");
       this.db.exec("CREATE INDEX IF NOT EXISTS idx_folders_account_id ON folders(account_id)");
       // Builds before per-account folders kept names unique per space alone,
       // which fails once two accounts' default folders share a space; never
@@ -1786,6 +1814,11 @@ class DatabaseManager {
         // Undo is a convenience: it must never keep the notes database from
         // opening. Without it, assistant edits save as plain updates.
         debugLogger.error("Assistant note Undo unavailable", { error: error.message }, "database");
+      }
+      try {
+        this.mergedNoteIds = this.mergeDuplicateCloudNotes();
+      } catch (error) {
+        debugLogger.error("Merging note copies failed", { error: error.message }, "database");
       }
 
       return true;
@@ -4316,14 +4349,17 @@ class DatabaseManager {
       delete updates.cloud_revision;
       delete updates.cloud_create_rejected;
       delete updates.cloud_create_pending;
-      if (
-        updates.cloud_id === null ||
-        (updates.client_note_id && updates.client_note_id !== previous.client_note_id)
-      ) {
+      delete updates.cloud_create_attempted;
+      const newIdentity =
+        updates.client_note_id && updates.client_note_id !== previous.client_note_id;
+      if (updates.cloud_id === null || newIdentity) {
         updates.cloud_revision = null;
         updates.cloud_create_rejected = 0;
         updates.cloud_create_pending = null;
       }
+      // A new identity has never been sent. A note that only lost its cloud link
+      // keeps its identity, which an earlier create may have stored.
+      if (newIdentity) updates.cloud_create_attempted = 0;
       if (updates.folder_id != null) {
         // D2: a note's space always follows its folder's space.
         const folder = this._getFolderInAccountScope(updates.folder_id);
@@ -4363,6 +4399,7 @@ class DatabaseManager {
         "cloud_revision",
         "cloud_create_rejected",
         "cloud_create_pending",
+        "cloud_create_attempted",
         "title",
         "content",
         "enhanced_content",
@@ -5063,7 +5100,9 @@ class DatabaseManager {
   // the next push retires the cloud copy; a hard local delete would let the
   // next pull resurrect the conversation. Irreversible purge/revocation
   // callers also scrub their messages, while an optimistic ordinary delete
-  // retains synced messages until the server accepts it. Never-synced rows
+  // retains synced messages until the server accepts it. A row whose create
+  // request may have reached the server tombstones too, so its late receipt
+  // links it to a cloud delete. Rows no create request has carried
   // hard-delete: there is no server row to retire, and a bare tombstone would
   // linger forever (getPendingConversationDeletes requires a cloud_id).
   _retireConversationsWhere(
@@ -5071,18 +5110,17 @@ class DatabaseManager {
     params,
     { scrubSyncedMessages = false, syncedTombstoneStatus = "pending" } = {}
   ) {
-    const messageFilter = scrubSyncedMessages ? filter : `cloud_id IS NULL AND (${filter})`;
+    const neverSent = `cloud_id IS NULL AND cloud_create_attempted = 0 AND (${filter})`;
+    const messageFilter = scrubSyncedMessages ? filter : neverSent;
     this.db
       .prepare(
         `DELETE FROM agent_messages WHERE conversation_id IN (SELECT id FROM agent_conversations WHERE ${messageFilter})`
       )
       .run(...params);
-    this.db
-      .prepare(`DELETE FROM agent_conversations WHERE cloud_id IS NULL AND (${filter})`)
-      .run(...params);
+    this.db.prepare(`DELETE FROM agent_conversations WHERE ${neverSent}`).run(...params);
     this.db
       .prepare(
-        `UPDATE agent_conversations SET deleted_at = datetime('now'), sync_status = ?, updated_at = datetime('now') WHERE cloud_id IS NOT NULL AND deleted_at IS NULL AND (${filter})`
+        `UPDATE agent_conversations SET deleted_at = datetime('now'), sync_status = ?, updated_at = datetime('now') WHERE (cloud_id IS NOT NULL OR cloud_create_attempted = 1) AND deleted_at IS NULL AND (${filter})`
       )
       .run(syncedTombstoneStatus, ...params);
   }
@@ -5158,7 +5196,7 @@ class DatabaseManager {
             .map((row) => row.id);
           if (preservedIds.length > 0) {
             const relocateNote = this.db.prepare(
-              "UPDATE notes SET space_id = ?, folder_id = NULL, client_note_id = ?, cloud_id = NULL, cloud_updated_at = NULL, cloud_revision = NULL, cloud_create_rejected = 0, cloud_create_pending = NULL, owner_user_id = NULL, updated_by_user_id = NULL, sync_status = 'pending', left_team = 0, is_shared = 0, share_token = NULL, updated_at = datetime('now') WHERE id = ?"
+              "UPDATE notes SET space_id = ?, folder_id = NULL, client_note_id = ?, cloud_id = NULL, cloud_updated_at = NULL, cloud_revision = NULL, cloud_create_rejected = 0, cloud_create_pending = NULL, cloud_create_attempted = 0, owner_user_id = NULL, updated_by_user_id = NULL, sync_status = 'pending', left_team = 0, is_shared = 0, share_token = NULL, updated_at = datetime('now') WHERE id = ?"
             );
             const detachNoteConversation = this.db.prepare(
               "UPDATE agent_conversations SET space_id = NULL, folder_id = NULL WHERE note_id = ?"
@@ -5473,6 +5511,17 @@ class DatabaseManager {
         throw new Error("Database not initialized");
       }
       const accountScope = this._accountScopeCondition("notes");
+      const note = this.db
+        .prepare(
+          `SELECT cloud_id, cloud_create_attempted FROM notes
+           WHERE id = ? AND deleted_at IS NULL AND ${accountScope.sql}`
+        )
+        .get(id, ...accountScope.params);
+      // No create request has carried this note, so the server cannot hold it:
+      // it leaves the device now, with its chats and speaker rows. Any other
+      // note stays a tombstone until its cloud delete lands or a late create
+      // receipt links it.
+      if (note && !note.cloud_id && !note.cloud_create_attempted) return this.hardDeleteNote(id);
       const stmt = this.db.prepare(
         `UPDATE notes
          SET deleted_at = datetime('now'), sync_status = 'pending', updated_at = datetime('now')
@@ -5548,7 +5597,7 @@ class DatabaseManager {
           LEFT JOIN agent_messages m ON m.conversation_id = c.id
           WHERE c.note_id = ? AND c.deleted_at IS NULL
           GROUP BY c.id
-          ORDER BY c.updated_at DESC
+          ORDER BY datetime(c.updated_at) DESC
           LIMIT ?`
         )
         .all(noteId, limit);
@@ -5588,7 +5637,7 @@ class DatabaseManager {
           LEFT JOIN agent_messages m ON m.conversation_id = c.id
           WHERE ${scopeFilter} AND c.deleted_at IS NULL
           GROUP BY c.id
-          ORDER BY c.updated_at DESC
+          ORDER BY datetime(c.updated_at) DESC
           LIMIT ?`
         )
         .all(...params);
@@ -5607,7 +5656,7 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       return this.db
         .prepare(
-          "SELECT * FROM agent_conversations WHERE deleted_at IS NULL AND space_id IS NULL AND folder_id IS NULL ORDER BY updated_at DESC LIMIT ?"
+          "SELECT * FROM agent_conversations WHERE deleted_at IS NULL AND space_id IS NULL AND folder_id IS NULL ORDER BY datetime(updated_at) DESC LIMIT ?"
         )
         .all(limit);
     } catch (error) {
@@ -5631,9 +5680,7 @@ class DatabaseManager {
       if (!conversation) return null;
       // Messages saved within the same second keep the order they were added in.
       const messages = this.db
-        .prepare(
-          "SELECT * FROM agent_messages WHERE conversation_id = ? ORDER BY created_at ASC, id ASC"
-        )
+        .prepare("SELECT * FROM agent_messages WHERE conversation_id = ? ORDER BY id ASC")
         .all(id);
       return { ...conversation, messages };
     } catch (error) {
@@ -5645,6 +5692,15 @@ class DatabaseManager {
   deleteAgentConversation(id) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      // No create request has carried this chat, so it leaves the device now
+      // with its messages. A chat held by a pending folder delete is already a
+      // tombstone and stays one, so a denied folder delete can still restore it.
+      const neverSent = this.db
+        .prepare(
+          "SELECT 1 FROM agent_conversations WHERE id = ? AND deleted_at IS NULL AND cloud_id IS NULL AND cloud_create_attempted = 0"
+        )
+        .get(id);
+      if (neverSent) return this.hardDeleteConversation(id);
       const result = this.db
         .prepare(
           "UPDATE agent_conversations SET deleted_at = datetime('now'), sync_status = 'pending', updated_at = datetime('now') WHERE id = ?"
@@ -5969,7 +6025,7 @@ class DatabaseManager {
     try {
       if (!this.db) throw new Error("Database not initialized");
       return this.db
-        .prepare("SELECT * FROM agent_messages WHERE conversation_id = ? ORDER BY created_at ASC")
+        .prepare("SELECT * FROM agent_messages WHERE conversation_id = ? ORDER BY id ASC")
         .all(conversationId);
     } catch (error) {
       debugLogger.error("Error getting agent messages", { error: error.message }, "database");
@@ -6993,21 +7049,25 @@ class DatabaseManager {
       const archiveFilter = includeArchived
         ? "WHERE c.archived_at IS NOT NULL AND c.deleted_at IS NULL AND c.space_id IS NULL AND c.folder_id IS NULL"
         : "WHERE c.archived_at IS NULL AND c.deleted_at IS NULL AND c.space_id IS NULL AND c.folder_id IS NULL";
+      // Only a note the active account can open names a chat's source.
+      const noteScope = this._accountScopeCondition("n");
       return this.db
         .prepare(
           `SELECT c.id, c.title, c.created_at, c.updated_at, c.archived_at, c.cloud_id,
             c.parent_conversation_id,
+            c.note_id, n.title AS note_title, n.deleted_at AS note_deleted_at,
             COUNT(m.id) AS message_count,
-            (SELECT content FROM agent_messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_message,
-            (SELECT role FROM agent_messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_message_role
+            (SELECT content FROM agent_messages WHERE conversation_id = c.id ORDER BY id DESC LIMIT 1) AS last_message,
+            (SELECT role FROM agent_messages WHERE conversation_id = c.id ORDER BY id DESC LIMIT 1) AS last_message_role
           FROM agent_conversations c
           LEFT JOIN agent_messages m ON m.conversation_id = c.id
+          LEFT JOIN notes n ON n.id = c.note_id AND ${noteScope.sql}
           ${archiveFilter}
           GROUP BY c.id
-          ORDER BY c.updated_at DESC
+          ORDER BY datetime(c.updated_at) DESC
           LIMIT ? OFFSET ?`
         )
-        .all(limit, offset);
+        .all(...noteScope.params, limit, offset);
     } catch (error) {
       debugLogger.error(
         "Error getting agent conversations with preview",
@@ -7022,24 +7082,27 @@ class DatabaseManager {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const pattern = `%${query}%`;
+      const noteScope = this._accountScopeCondition("n");
       return this.db
         .prepare(
           `SELECT DISTINCT c.id, c.title, c.created_at, c.updated_at, c.archived_at, c.cloud_id,
             c.parent_conversation_id,
+            c.note_id, n.title AS note_title, n.deleted_at AS note_deleted_at,
             COUNT(m.id) AS message_count,
-            (SELECT content FROM agent_messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_message,
-            (SELECT role FROM agent_messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_message_role
+            (SELECT content FROM agent_messages WHERE conversation_id = c.id ORDER BY id DESC LIMIT 1) AS last_message,
+            (SELECT role FROM agent_messages WHERE conversation_id = c.id ORDER BY id DESC LIMIT 1) AS last_message_role
           FROM agent_conversations c
           LEFT JOIN agent_messages m ON m.conversation_id = c.id
           LEFT JOIN agent_messages ms ON ms.conversation_id = c.id
+          LEFT JOIN notes n ON n.id = c.note_id AND ${noteScope.sql}
           WHERE c.archived_at IS NULL AND c.deleted_at IS NULL
             AND c.space_id IS NULL AND c.folder_id IS NULL
             AND (c.title LIKE ? OR ms.content LIKE ?)
           GROUP BY c.id
-          ORDER BY c.updated_at DESC
+          ORDER BY datetime(c.updated_at) DESC
           LIMIT ?`
         )
-        .all(pattern, pattern, limit);
+        .all(...noteScope.params, pattern, pattern, limit);
     } catch (error) {
       debugLogger.error(
         "Error searching agent conversations",
@@ -7395,11 +7458,7 @@ class DatabaseManager {
       return (
         this.db
           .prepare(
-            `SELECT n.*,
-               EXISTS (
-                 SELECT 1 FROM optimistic_folder_delete_rows r
-                 WHERE r.entity_type = 'note' AND r.entity_id = n.id
-               ) AS folder_delete_pending
+            `SELECT n.*, ${NOTE_FOLDER_DELETE_PENDING_SQL}
              FROM notes n
              WHERE n.client_note_id = ? AND ${accountScope.sql}`
           )
@@ -7411,14 +7470,225 @@ class DatabaseManager {
     }
   }
 
+  // A copy of a cloud row that had no client id when it was pulled sits under a
+  // key of its own, so the cloud id finds what the key misses. A key held for
+  // another cloud row is not a match: acting on it would delete the wrong note.
+  getNoteForCloudRow(clientNoteId, cloudId) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const byKey = clientNoteId ? this.getNoteByClientId(clientNoteId) : null;
+      if (byKey && (!byKey.cloud_id || byKey.cloud_id === cloudId)) return byKey;
+      return this._getNoteByCloudId(cloudId);
+    } catch (error) {
+      debugLogger.error("Error getting note for cloud row", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  _getNoteByCloudId(cloudId) {
+    const accountScope = this._accountScopeCondition("n");
+    return (
+      this.db
+        .prepare(
+          `SELECT n.*, ${NOTE_FOLDER_DELETE_PENDING_SQL}
+           FROM notes n
+           WHERE n.cloud_id = ? AND ${accountScope.sql}
+           ORDER BY n.deleted_at IS NOT NULL, n.id
+           LIMIT 1`
+        )
+        .get(cloudId, ...accountScope.params) || null
+    );
+  }
+
+  // Older releases stored a new row each time a pull carried a cloud note with
+  // no client id. Every copy still writes to that one cloud note, so deleting
+  // any of them deletes it everywhere. Pending metadata keeps its original
+  // cloud identity; otherwise the copy nearest the cloud's current state wins.
+  // Never mix copies: stale text under a current base could overwrite the cloud.
+  // Other distinct pending edits become notes of their own. Copies a folder
+  // delete or unresolved create still owns wait for a later launch. Returns
+  // the removed note ids.
+  mergeDuplicateCloudNotes() {
+    if (!this.db) throw new Error("Database not initialized");
+    const cloudIds = this.db
+      .prepare(
+        "SELECT cloud_id FROM notes WHERE cloud_id IS NOT NULL GROUP BY cloud_id HAVING COUNT(*) > 1"
+      )
+      .pluck()
+      .all();
+    const removedIds = [];
+    if (cloudIds.length === 0) return removedIds;
+
+    const readCopies = this.db.prepare(
+      `SELECT n.*, ${NOTE_FOLDER_DELETE_PENDING_SQL} FROM notes n WHERE n.cloud_id = ?`
+    );
+    const spaceKind = this.db.prepare("SELECT kind FROM spaces WHERE id = ?").pluck();
+    const moveConversations = this.db.prepare(
+      "UPDATE agent_conversations SET note_id = ? WHERE note_id = ?"
+    );
+    const moveSpeakerMappings = this.db.prepare(
+      "UPDATE OR IGNORE speaker_mappings SET note_id = ? WHERE note_id = ?"
+    );
+    const moveSpeakerEmbeddings = this.db.prepare(
+      "UPDATE OR IGNORE note_speaker_embeddings SET note_id = ? WHERE note_id = ?"
+    );
+    const deleteNote = this.db.prepare("DELETE FROM notes WHERE id = ?");
+    const detachNote = this.db.prepare(
+      "UPDATE notes SET space_id = ?, folder_id = ?, client_note_id = ?, account_id = COALESCE(account_id, ?), cloud_id = NULL, cloud_updated_at = NULL, cloud_revision = NULL, cloud_create_attempted = 0, owner_user_id = NULL, updated_by_user_id = NULL, sync_status = 'pending', left_team = 0, is_shared = 0, share_token = NULL WHERE id = ?"
+    );
+    const detachConversations = this.db.prepare(
+      "UPDATE agent_conversations SET space_id = NULL, folder_id = NULL WHERE note_id = ?"
+    );
+    const updateKept = this.db.prepare(
+      `UPDATE notes SET account_id = COALESCE(account_id, ?), is_shared = ?, share_token = ?,
+         sync_status = ? WHERE id = ?`
+    );
+
+    const isDirty = (note) => note.sync_status !== "synced";
+    const instant = (value) => Date.parse(String(value).replace(" ", "T").replace(/Z?$/, "Z")) || 0;
+    const preference = (a, b) =>
+      (b.cloud_revision ?? -1) - (a.cloud_revision ?? -1) ||
+      instant(b.cloud_updated_at) - instant(a.cloud_updated_at) ||
+      isDirty(b) - isDirty(a) ||
+      instant(b.updated_at) - instant(a.updated_at) ||
+      a.id - b.id;
+    const text = (value) => (value ?? "").trim();
+    const TEXT_FIELDS = ["content", "enhanced_content", "transcript"];
+    const METADATA_FIELDS = [
+      ...SUMMARY_METADATA,
+      "note_type",
+      "source_file",
+      "audio_duration_seconds",
+      "folder_id",
+      "space_id",
+      "left_team",
+      "calendar_event_id",
+      "participants",
+      "diarization_enabled",
+      "expected_speaker_count",
+    ];
+    const sameText = (a, b) =>
+      ["title", ...TEXT_FIELDS].every((field) => text(a[field]) === text(b[field]));
+    const sameMetadata = (a, b) => METADATA_FIELDS.every((field) => a[field] === b[field]);
+    // Text the kept copy doesn't have, blank copies aside. A blank on the kept
+    // copy may be a clear the cloud recorded or may not; only its own pending
+    // clear is certain.
+    const fillsBlank = (note, kept) =>
+      TEXT_FIELDS.some(
+        (field) => text(note[field]) && !text(kept[field]) && !kept[`${field}_sync_operation`]
+      );
+    const holdsEdit = (note, kept) =>
+      ["title", ...TEXT_FIELDS].some(
+        (field) => text(note[field]) && text(note[field]) !== text(kept[field])
+      ) || !sameMetadata(note, kept);
+    const soleSpaceAccount = this.db
+      .prepare("SELECT account_id FROM space_accounts WHERE space_id = ?")
+      .pluck();
+
+    const merge = this.db.transaction((copies, account) => {
+      const sorted = copies.toSorted(preference);
+      const preferred = sorted.find((note) => !note.deleted_at) ?? sorted[0];
+      // A pending move or metadata edit still targets the original cloud row.
+      // Keep that complete snapshot with its own base so conflict resolution
+      // can settle it. Multiple linked copies would make Refresh hit a sibling.
+      const metadataDiffers = sorted.some(
+        (note) => !note.deleted_at && !sameMetadata(note, preferred)
+      );
+      const pendingMetadata = sorted.filter(
+        (note) =>
+          !note.deleted_at &&
+          isDirty(note) &&
+          ((note.id === preferred.id && metadataDiffers) || !sameMetadata(note, preferred))
+      );
+      const kept =
+        pendingMetadata.find((note) => note.left_team) ?? pendingMetadata[0] ?? preferred;
+      // The share lives only on this device, and its token can't be fetched again.
+      const shared = sorted.find((note) => note.share_token) ?? kept;
+      const ownNotes = [kept];
+      const removed = [];
+      // Clean copies are past versions of one cloud note, so the newest stands in
+      // for the rest; a note per version would flood the list.
+      let keptCleanText = false;
+      for (const note of sorted) {
+        if (note.id === kept.id) continue;
+        const preserveCopy =
+          !note.deleted_at &&
+          !ownNotes.some((other) => sameText(note, other) && sameMetadata(note, other)) &&
+          (isDirty(note) ? holdsEdit(note, kept) : !keptCleanText && fillsBlank(note, kept));
+        if (preserveCopy) {
+          if (!isDirty(note)) keptCleanText = true;
+          const inTeam = spaceKind.get(note.space_id) === "team";
+          const spaceAccounts = inTeam ? soleSpaceAccount.all(note.space_id) : [];
+          detachNote.run(
+            inTeam ? this.getPrivateSpaceId() : note.space_id,
+            inTeam ? null : note.folder_id,
+            randomUUID(),
+            account ?? (spaceAccounts.length === 1 ? spaceAccounts[0] : null),
+            note.id
+          );
+          if (inTeam) detachConversations.run(note.id);
+          ownNotes.push(note);
+          continue;
+        }
+        moveConversations.run(kept.id, note.id);
+        // A chat following its note across spaces must not keep the old scope:
+        // tearing that space down would retire it.
+        if (note.space_id !== kept.space_id) detachConversations.run(kept.id);
+        moveSpeakerMappings.run(kept.id, note.id);
+        moveSpeakerEmbeddings.run(kept.id, note.id);
+        this._deleteSpeakerRowsForNotes("SELECT id FROM notes WHERE id = ?", note.id);
+        deleteNote.run(note.id);
+        removed.push(note.id);
+      }
+      updateKept.run(
+        account,
+        kept.is_shared || (shared.share_token ? 1 : 0),
+        kept.share_token ?? shared.share_token,
+        // Only a pending tombstone is pushed; the delete must still reach the cloud.
+        kept.deleted_at ? "pending" : kept.sync_status,
+        kept.id
+      );
+      return removed;
+    });
+
+    for (const cloudId of cloudIds) {
+      try {
+        const copies = readCopies.all(cloudId);
+        // A row with no account joins the one account holding the note, as a
+        // pull adopts it. With two accounts each keeps its own and it stays out.
+        const accounts = [...new Set(copies.map((note) => note.account_id).filter(Boolean))];
+        const groups =
+          accounts.length > 1
+            ? accounts.map((account) => copies.filter((note) => note.account_id === account))
+            : [copies];
+        for (const group of groups) {
+          const held = group.some(
+            (note) =>
+              note.folder_delete_pending || note.cloud_create_pending || note.cloud_create_rejected
+          );
+          if (group.length > 1 && !held) {
+            const account = group.find((note) => note.account_id)?.account_id ?? null;
+            removedIds.push(...merge(group, account));
+          }
+        }
+      } catch (error) {
+        debugLogger.error("Merging note copies failed", { error: error.message }, "database");
+      }
+    }
+    return removedIds;
+  }
+
   upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const spaceId = localSpaceId ?? this.getPrivateSpaceId();
       const accountId = this._accountIdForSpace(spaceId);
-      const existing = this.db
-        .prepare("SELECT * FROM notes WHERE client_note_id = ?")
-        .get(cloudNote.client_note_id);
+      const existing =
+        (cloudNote.client_note_id &&
+          this.db
+            .prepare("SELECT * FROM notes WHERE client_note_id = ?")
+            .get(cloudNote.client_note_id)) ||
+        this._getNoteByCloudId(cloudNote.id);
       // Rows without an account (created signed out or before attribution) and
       // personal<->team moves are adopted as before; only another account's
       // row or another cloud row is left alone. Never throw: one bad row would
@@ -7448,6 +7718,14 @@ class DatabaseManager {
       const clearsContent = cleared.includes("content");
       const clearsSummary = cleared.includes("enhanced_content");
       cloudNote = { ...cloudNote };
+      // Until the cloud row has a client id the local copy keeps its own, and a
+      // new copy needs one: a row without a key can't be matched or conflict-gated.
+      if (!cloudNote.client_note_id) {
+        cloudNote.client_note_id = existing?.client_note_id ?? randomUUID();
+      }
+      // A note created through the public API without a title has none in the
+      // cloud; the local column requires one.
+      if (cloudNote.title == null) cloudNote.title = "Untitled Note";
       if (!cloudNote.content?.trim()) cloudNote.content = "";
       if (!cloudNote.enhanced_content?.trim()) cloudNote.enhanced_content = null;
       if (clearsSummary) {
@@ -7520,7 +7798,8 @@ class DatabaseManager {
           updated_by_user_id = ${updaterUpdate},
           owner_user_id = COALESCE(excluded.owner_user_id, owner_user_id),
           created_by_user_id = ${creatorUpdate},
-          sync_status = 'synced',
+          -- A delete made while this pull was in flight must still reach the cloud.
+          sync_status = CASE WHEN deleted_at IS NOT NULL THEN sync_status ELSE 'synced' END,
           left_team = 0,
           updated_at = excluded.updated_at,
           cloud_updated_at = excluded.cloud_updated_at,
@@ -7530,6 +7809,12 @@ class DatabaseManager {
           content_sync_operation = NULL,
           enhanced_content_sync_operation = NULL
       `);
+      // The cloud row's client id wins, so the next pull matches by key.
+      if (existing && existing.client_note_id !== cloudNote.client_note_id) {
+        this.db
+          .prepare("UPDATE notes SET client_note_id = ? WHERE id = ?")
+          .run(cloudNote.client_note_id, existing.id);
+      }
       stmt.run(
         cloudNote.client_note_id,
         cloudNote.id,
@@ -7597,6 +7882,28 @@ class DatabaseManager {
       kindOf.get(currentSpaceId)?.kind === "private"
       ? 1
       : 0;
+  }
+
+  // Runs just before a create request is sent. Returns the client ids that still
+  // name a note, so a note deleted or given a new identity since the push read
+  // it is left out of the request.
+  markNoteCreatesAttempted(clientNoteIds) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const mark = this.db.prepare(
+        "UPDATE notes SET cloud_create_attempted = 1 WHERE client_note_id = ?"
+      );
+      return this.db.transaction(() =>
+        clientNoteIds.filter((clientNoteId) => mark.run(clientNoteId).changes > 0)
+      )();
+    } catch (error) {
+      debugLogger.error(
+        "Error marking note creates attempted",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
   }
 
   // A create response arrives after an arbitrary network delay. Adopt it only
@@ -8105,6 +8412,22 @@ class DatabaseManager {
     })();
   }
 
+  // Runs once, when the create attempt columns are added. Earlier versions
+  // only marked a deleted note or chat as deleted, so one that never synced
+  // stayed on the device. This removes those rows with their speaker rows and
+  // messages. Rows a pending folder delete holds stay, so a refused folder
+  // delete can still restore them, and so do live chats about a removed note.
+  _removeNeverSyncedTombstones() {
+    const neverSynced = `deleted_at IS NOT NULL AND cloud_id IS NULL AND cloud_create_attempted = 0
+      AND id NOT IN (SELECT entity_id FROM optimistic_folder_delete_rows WHERE entity_type = ?)`;
+    const notes = `SELECT id FROM notes WHERE ${neverSynced}`;
+    this.db.transaction(() => {
+      this._deleteSpeakerRowsForNotes(notes, "note");
+      this.db.prepare(`DELETE FROM notes WHERE id IN (${notes})`).run("note");
+      this._hardDeleteConversationsWhere(neverSynced, ["conversation"]);
+    })();
+  }
+
   // Writes sync-owned columns (from cloudTextUpdates) without touching
   // updated_at or sync_status. Keys come from that fixed set, never input.
   _setNoteColumns(id, columns) {
@@ -8469,7 +8792,7 @@ class DatabaseManager {
         this._deleteSpeakerRowsForNotes(serverOwnedChildren, id);
         this.db.prepare(`DELETE FROM notes WHERE id IN (${serverOwnedChildren})`).run(id);
         const relocateNote = this.db.prepare(
-          "UPDATE notes SET space_id = ?, folder_id = ?, client_note_id = ?, cloud_id = NULL, cloud_updated_at = NULL, cloud_revision = NULL, cloud_create_rejected = 0, cloud_create_pending = NULL, owner_user_id = NULL, updated_by_user_id = NULL, sync_status = 'pending', left_team = 0, is_shared = 0, share_token = NULL, updated_at = datetime('now') WHERE id = ?"
+          "UPDATE notes SET space_id = ?, folder_id = ?, client_note_id = ?, cloud_id = NULL, cloud_updated_at = NULL, cloud_revision = NULL, cloud_create_rejected = 0, cloud_create_pending = NULL, cloud_create_attempted = 0, owner_user_id = NULL, updated_by_user_id = NULL, sync_status = 'pending', left_team = 0, is_shared = 0, share_token = NULL, updated_at = datetime('now') WHERE id = ?"
         );
         const detachNoteConversation = this.db.prepare(
           "UPDATE agent_conversations SET space_id = NULL, folder_id = NULL WHERE note_id = ?"
@@ -8862,7 +9185,8 @@ class DatabaseManager {
                EXISTS (
                  SELECT 1 FROM optimistic_folder_delete_rows r
                  WHERE r.entity_type = 'conversation' AND r.entity_id = c.id
-               ) AS folder_delete_pending
+               ) AS folder_delete_pending,
+               (SELECT COUNT(*) FROM agent_messages m WHERE m.conversation_id = c.id) AS message_count
              FROM agent_conversations c
              WHERE c.client_conversation_id = ?`
           )
@@ -8878,7 +9202,7 @@ class DatabaseManager {
     }
   }
 
-  upsertConversationFromCloud(cloudConv, messages) {
+  upsertConversationFromCloud(cloudConv, messages, snapshot) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const transaction = this.db.transaction(() => {
@@ -8899,13 +9223,32 @@ class DatabaseManager {
         }
         if (existing?.deleted_at) return existing;
 
+        // The renderer's lookup can go stale while this IPC waits behind a local
+        // save. Check the same snapshot inside the transaction that replaces messages.
+        const current = existing ? this._conversationWithMessageCount(existing.id) : null;
+        if (
+          snapshot === null
+            ? current !== null
+            : !current ||
+              !rowMatchesSnapshot(current, snapshot, [
+                "id",
+                "client_conversation_id",
+                "cloud_id",
+                "sync_status",
+              ]) ||
+              !this._conversationMatchesSnapshot(current, snapshot)
+        ) {
+          return existing;
+        }
+
         const convStmt = this.db.prepare(`
           INSERT INTO agent_conversations (client_conversation_id, cloud_id, title, note_id, sync_status, created_at, updated_at)
           VALUES (?, ?, ?, ?, 'synced', ?, ?)
           ON CONFLICT(client_conversation_id) DO UPDATE SET
             cloud_id = excluded.cloud_id,
             title = excluded.title,
-            note_id = excluded.note_id,
+            -- The cloud has no note column, so its copy never says which note a chat came from.
+            note_id = COALESCE(excluded.note_id, agent_conversations.note_id),
             sync_status = 'synced',
             updated_at = excluded.updated_at
         `);
@@ -8948,20 +9291,96 @@ class DatabaseManager {
     }
   }
 
-  markConversationSynced(id, cloudId) {
+  _conversationWithMessageCount(id) {
+    return this.db
+      .prepare(
+        `SELECT c.*, COUNT(m.id) AS message_count
+         FROM agent_conversations c
+         LEFT JOIN agent_messages m ON m.conversation_id = c.id
+         WHERE c.id = ?
+         GROUP BY c.id`
+      )
+      .get(id);
+  }
+
+  _conversationMatchesSnapshot(current, snapshot) {
+    return (
+      current.title === snapshot.title &&
+      current.updated_at === snapshot.updated_at &&
+      Number(current.message_count) === snapshot.message_count
+    );
+  }
+
+  // With a snapshot, only a chat still matching what was sent to the cloud
+  // settles; a later edit leaves it pending for the next pass.
+  markConversationSynced(id, cloudId, snapshot = null) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return this.db.transaction(() => {
+        if (snapshot) {
+          const current = this._conversationWithMessageCount(id);
+          if (
+            !current ||
+            current.cloud_id !== cloudId ||
+            !this._conversationMatchesSnapshot(current, snapshot)
+          ) {
+            return { success: false };
+          }
+        }
+        const result = this.db
+          .prepare(
+            `UPDATE agent_conversations
+             SET cloud_id = COALESCE(cloud_id, ?),
+                 sync_status = CASE WHEN deleted_at IS NULL THEN 'synced' ELSE 'pending' END
+             WHERE id = ?`
+          )
+          .run(cloudId, id);
+        return { success: result.changes > 0 };
+      })();
+    } catch (error) {
+      debugLogger.error("Error marking conversation synced", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  // Runs just before a create request is sent; a chat deleted since the push
+  // read it reports no success and is not sent.
+  markConversationCreateAttempted(id) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const result = this.db
+        .prepare("UPDATE agent_conversations SET cloud_create_attempted = 1 WHERE id = ?")
+        .run(id);
+      return { success: result.changes > 0 };
+    } catch (error) {
+      debugLogger.error(
+        "Error marking conversation create attempted",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
+  // The cloud's only copy under this identity is a tombstone that takes no more
+  // writes, so a live chat gets a new identity and goes up as a new copy.
+  replaceConversationClientId(id, expectedClientId) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const result = this.db
         .prepare(
           `UPDATE agent_conversations
-           SET cloud_id = COALESCE(cloud_id, ?),
-               sync_status = CASE WHEN deleted_at IS NULL THEN 'synced' ELSE 'pending' END
-           WHERE id = ?`
+           SET client_conversation_id = ?, cloud_create_attempted = 0, sync_status = 'pending'
+           WHERE id = ? AND client_conversation_id = ? AND cloud_id IS NULL AND deleted_at IS NULL`
         )
-        .run(cloudId, id);
+        .run(randomUUID(), id, expectedClientId);
       return { success: result.changes > 0 };
     } catch (error) {
-      debugLogger.error("Error marking conversation synced", { error: error.message }, "database");
+      debugLogger.error(
+        "Error replacing conversation client id",
+        { error: error.message },
+        "database"
+      );
       throw error;
     }
   }
@@ -8974,15 +9393,7 @@ class DatabaseManager {
       }
 
       return this.db.transaction(() => {
-        const current = this.db
-          .prepare(
-            `SELECT c.*, COUNT(m.id) AS message_count
-             FROM agent_conversations c
-             LEFT JOIN agent_messages m ON m.conversation_id = c.id
-             WHERE c.id = ?
-             GROUP BY c.id`
-          )
-          .get(id);
+        const current = this._conversationWithMessageCount(id);
         const expectedClientId = snapshot.client_conversation_id ?? null;
 
         if (!current || (current.client_conversation_id ?? null) !== expectedClientId) {
@@ -9002,7 +9413,10 @@ class DatabaseManager {
           return { success: true, outcome: "already-linked", cloud_id: current.cloud_id };
         }
 
-        if (current.deleted_at) {
+        // Linked at once, so a failure from here on can't lead to a second create,
+        // which would insert this request's messages again. Still pending until
+        // the cloud has the rest, or the delete goes through.
+        if (current.deleted_at || !this._conversationMatchesSnapshot(current, snapshot)) {
           this.db
             .prepare(
               `UPDATE agent_conversations
@@ -9010,15 +9424,11 @@ class DatabaseManager {
                WHERE id = ? AND cloud_id IS NULL`
             )
             .run(cloudId, id);
-          return { success: true, outcome: "delete-pending", cloud_id: cloudId };
-        }
-
-        const unchanged =
-          current.title === snapshot.title &&
-          current.updated_at === snapshot.updated_at &&
-          Number(current.message_count) === snapshot.message_count;
-        if (!unchanged) {
-          return { success: true, outcome: "changed", cloud_id: null };
+          return {
+            success: true,
+            outcome: current.deleted_at ? "delete-pending" : "changed",
+            cloud_id: cloudId,
+          };
         }
 
         this.db

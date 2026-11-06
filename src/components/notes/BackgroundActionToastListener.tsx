@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "../ui/useToast";
-import { ToastActionButton } from "../ui/Toast";
 import {
   useActionProcessingStore,
   consumeAppliedEvents,
@@ -57,9 +56,12 @@ export default function BackgroundActionToastListener() {
       const toastId = toast({
         title: t("notes.actions.applied", { name: getActionName(action, t) }),
         duration: UNDO_WINDOW_MS,
-        action: (
-          <ToastActionButton
-            onClick={async () => {
+        actions: [
+          {
+            label: t("app.toasts.undo"),
+            // A failed restore keeps the toast up for another try.
+            dismissOnClick: false,
+            onClick: async () => {
               // Writing to a note deleted since would bring it back.
               const note = await window.electronAPI.getNote(noteId);
               if (!note || note.deleted_at) {
@@ -68,11 +70,9 @@ export default function BackgroundActionToastListener() {
               }
               const result = await window.electronAPI.updateNote(noteId, previous);
               if (result?.success) dismiss(toastId);
-            }}
-          >
-            {t("app.toasts.undo")}
-          </ToastActionButton>
-        ),
+            },
+          },
+        ],
       });
       undoToastByNote.current.set(noteId, toastId);
     },

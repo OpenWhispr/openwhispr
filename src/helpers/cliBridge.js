@@ -8,6 +8,7 @@ const { isPortAvailable } = require("../utils/serverUtils");
 const { broadcastToWindows } = require("./windowBroadcast");
 const { NOTE_TEXT_FIELDS } = require("./noteFieldSync");
 const { isAudioPolicyRefusal } = require("./audioPolicyRefusals");
+const { isLocalModelPolicyRefusal } = require("./localModelPolicyGate");
 
 const PORT_RANGE_START = 8200;
 const PORT_RANGE_END = 8219;
@@ -256,7 +257,7 @@ class CliBridge {
       return;
     }
     // The cloud /v1 API answers every organization policy denial this way.
-    if (isAudioPolicyRefusal(err)) {
+    if (isAudioPolicyRefusal(err) || isLocalModelPolicyRefusal(err)) {
       sendV1Error(res, 403, "forbidden", err.message);
       return;
     }
@@ -365,7 +366,7 @@ class CliBridge {
 
     // Picks the requested model, or the one the app is set to use, and refuses
     // anything not on disk so the engines' own errors stay genuine failures.
-    const requireLocalModel = (models, requested) => {
+    const requireLocalModel = async (models, requested) => {
       if (requested !== undefined && typeof requested !== "string") {
         const err = new Error("'model' must be a string");
         err.code = "VALIDATION";
@@ -377,15 +378,17 @@ class CliBridge {
       if (!match) {
         const err = new Error(
           requested
-            ? `Unknown model '${requested}'. Available: ${models.map((m) => m.model).join(", ")}`
-            : "No local transcription model is selected. Choose one in OpenWhispr under Settings → Transcription, or pass 'model'."
+            ? `Unknown model '${requested}'. Known models: ${models.map((m) => m.model).join(", ")}`
+            : "No local transcription model is selected. Choose one in OpenWhispr under Settings → Speech to Text, or pass 'model'."
         );
         err.code = "VALIDATION";
         throw err;
       }
+      const lease = await ipc._localModelPolicy.authorize("transcription", match.model);
+      ipc._localModelPolicy.release(lease);
       if (!match.downloaded) {
         const err = new Error(
-          `Model '${match.model}' is not downloaded. Open OpenWhispr and download it under Settings → Transcription.`
+          `Model '${match.model}' is not downloaded. Open OpenWhispr and download it under Settings → Speech to Text.`
         );
         err.code = "VALIDATION";
         throw err;
@@ -545,13 +548,26 @@ class CliBridge {
           },
         };
       }),
-      exact("GET", "/v1/transcribe/models", () => ({ data: ipc.listLocalTranscriptionModels() })),
+      exact("GET", "/v1/transcribe/models", async () => {
+        await ipc._localModelPolicy.resolve();
+        return {
+          data: ipc.listLocalTranscriptionModels().filter((model) => {
+            const denied = ipc._localModelPolicy.failure("transcription", model.model);
+            if (
+              denied &&
+              !["POLICY_MODEL_BLOCKED", "POLICY_LOCAL_MODE_BLOCKED"].includes(denied.code)
+            )
+              throw denied;
+            return !denied;
+          }),
+        };
+      }),
       // The CLI runs on this machine, so it sends a path and the app reads the
       // file itself: no audio crosses the bridge and the user's downloaded
       // models do the work.
       exact("POST", "/v1/transcribe", async ({ body }) => {
         const real = requireAudioFile(body?.path);
-        const { provider, model } = requireLocalModel(
+        const { provider, model } = await requireLocalModel(
           ipc.listLocalTranscriptionModels(),
           body?.model
         );

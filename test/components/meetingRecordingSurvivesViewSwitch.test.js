@@ -56,7 +56,10 @@ const MOCKS = {
       }, []);
       return null;
     }`,
-  "./SpacesTree": `export default () => null;`,
+  "./SpacesTree": `export default (props) => {
+    globalThis.__spacesTreeProps = props;
+    return null;
+  };`,
   "/overview/ContainerOverview": `export const ContainerOverview = () => null;`,
   "./NotesStructureIntroDialog": `export default () => null;`,
   "./ActionManagerDialog": `export default () => null;`,
@@ -70,7 +73,7 @@ const MOCKS = {
     export const useNotesOnboarding = () => ({ isComplete: true, complete() {} });
   `,
   "/hooks/useTeamSpacesCapability": `export const useTeamSpacesCapability = () => false;`,
-  "/hooks/useAuth": `export const useAuth = () => ({ isSignedIn: false, user: null });`,
+  "/useAuth": `export const useAuth = () => ({ isLoaded: true, isSignedIn: false, user: null });`,
   // Just enough of the note store for setActiveNoteId to drive note switches.
   "/stores/noteStore": `
     import { useSyncExternalStore } from "react";
@@ -111,14 +114,20 @@ async function setup(t) {
   t.after(async () => {
     if (store) await React.act(async () => store.stopRecording());
     if (root) await React.act(async () => root.unmount());
-    for (const key of ["__editorLog", "__editorProps", "__notes", "__setActiveNoteId"]) {
+    for (const key of [
+      "__editorLog",
+      "__editorProps",
+      "__notes",
+      "__setActiveNoteId",
+      "__spacesTreeProps",
+    ]) {
       delete globalThis[key];
     }
   });
   globalThis.__editorLog = [];
   globalThis.__notes = structuredClone(NOTES);
 
-  const calls = { stop: 0, send: [], updateNote: [], trackStops: 0 };
+  const calls = { start: 0, stop: 0, send: [], updateNote: [], trackStops: 0, noteOnly: [] };
   const listeners = {};
   const capture = (name) => (callback) => {
     listeners[name] = callback;
@@ -133,11 +142,12 @@ async function setup(t) {
       mode: "native",
       strategy: "native",
     }),
-    meetingTranscriptionStart: async () => ({
-      success: true,
-      systemAudioMode: "native",
-      systemAudioStrategy: "native",
-    }),
+    meetingTranscriptionStart: async () => {
+      calls.start += 1;
+      return { success: true, systemAudioMode: "native", systemAudioStrategy: "native" };
+    },
+    meetingNoteOpenedWithoutRecording: async (id) => calls.noteOnly.push(id),
+    saveNote: async () => ({ success: true, note: globalThis.__notes[12] }),
     meetingTranscriptionSetSystemAudioAvailable: async () => ({ success: true }),
     meetingTranscriptionStop: async () => {
       calls.stop += 1;
@@ -201,16 +211,23 @@ async function setup(t) {
   store = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
 
   const Home = () => React.createElement("div", null, "home");
-  const Shell = ({ view }) =>
+  const { useMeetingAutoTranscriptionCheck } = await vite.ssrLoadModule("/hooks/usePolicy.ts");
+  const AutoStartingNotes = (props) =>
+    React.createElement(PersonalNotesView, {
+      ...props,
+      canAutoStartMeeting: useMeetingAutoTranscriptionCheck({ isLoaded: true, isSignedIn: false }),
+    });
+  const Shell = ({ view, notesProps }) =>
     React.createElement(
       React.Fragment,
       null,
       React.createElement(Mount),
-      view === "personal-notes" ? React.createElement(PersonalNotesView) : null,
+      view === "personal-notes" ? React.createElement(AutoStartingNotes, notesProps) : null,
       view === "home" ? React.createElement(Home) : null
     );
   root = createRoot(container);
-  const show = (view) => React.act(async () => root.render(React.createElement(Shell, { view })));
+  const show = (view, notesProps) =>
+    React.act(async () => root.render(React.createElement(Shell, { view, notesProps })));
   const openNote = (id) => React.act(async () => globalThis.__setActiveNoteId(id));
   const say = (text) =>
     React.act(async () =>
@@ -218,7 +235,29 @@ async function setup(t) {
     );
   const micChunk = () => worklets[0].port.onmessage({ data: new ArrayBuffer(16) });
   const isRecording = () => store.useMeetingRecordingStore.getState().isRecording;
-  return { store, show, openNote, say, micChunk, isRecording, calls };
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const setStartMode = (transcriptionStart) =>
+    React.act(async () =>
+      usePolicyStore.setState({
+        status: "managed",
+        appVersion: "1.11.1",
+        policy: {
+          version: 1,
+          transcription: { allowedModes: ["openwhispr", "local"], allowedByokProviders: [] },
+          llm: { allowedModes: ["openwhispr"], allowedByokProviders: [] },
+          features: {},
+          meetings: { transcriptionStart },
+          sharing: { externalLinkSharing: "allowed" },
+          dataRetention: {
+            audioRetentionMaxDays: null,
+            localHistoryMode: "user_choice",
+            cloudBackupAllowed: true,
+          },
+          minAppVersion: null,
+        },
+      })
+    );
+  return { store, show, openNote, say, micChunk, isRecording, calls, setStartMode };
 }
 
 test("#1685: switching views and notes mid-recording never stops the recording", async (t) => {
@@ -291,4 +330,111 @@ test("#1685 control: the note's Stop button does stop and is counted", async (t)
   assert.equal(isRecording(), false);
   assert.equal(calls.stop, 1);
   assert.equal(calls.trackStops, 1);
+});
+
+test("a meeting request records under automatic policy, and under manual only from the hotkey", async (t) => {
+  const { show, openNote, isRecording, calls, setStartMode, store } = await setup(t);
+  const handled = [];
+  const request = (extra) => ({
+    meetingRecordingRequest: { noteId: 11, folderId: null, event: null, ...extra },
+    onMeetingRecordingRequestHandled: () => handled.push(extra.noteSessionId),
+  });
+
+  await setStartMode("manual");
+  const calendarJoin = request({ trigger: "calendar-join", noteSessionId: "join" });
+  await show("personal-notes", calendarJoin);
+  assert.equal(calls.start, 0, "manual opens the note without capturing");
+  assert.deepEqual(calls.noteOnly, ["join"]);
+  assert.deepEqual(handled, ["join"]);
+
+  await setStartMode("automatic");
+  await openNote(12);
+  await openNote(11);
+  assert.equal(calls.start, 0, "a suppressed request is not replayed");
+
+  await show("personal-notes", request({ trigger: "calendar-join", noteSessionId: "next" }));
+  assert.equal(calls.start, 1, "automatic policy still records");
+  assert.equal(isRecording(), true);
+  await React.act(async () => store.stopRecording());
+
+  await setStartMode("manual");
+  await show("personal-notes", request({ trigger: "hotkey", noteSessionId: "hotkey" }));
+  assert.equal(calls.start, 2, "the hotkey is an explicit start");
+  assert.equal(isRecording(), true);
+  assert.deepEqual(calls.noteOnly, ["join"]);
+});
+
+test("a pending automatic start is consumed before a notes-view remount and cannot replay after suppression", async (t) => {
+  const access = Promise.withResolvers();
+  const nativeAccess = { granted: true, status: "granted", mode: "native", strategy: "native" };
+  t.after(() => access.resolve(nativeAccess));
+  const { show, calls, setStartMode, isRecording } = await setup(t);
+  globalThis.window.electronAPI.checkSystemAudioAccess = () => access.promise;
+  await setStartMode("automatic");
+  let pendingRequest = {
+    noteId: 11,
+    folderId: null,
+    event: null,
+    trigger: "calendar-join",
+    noteSessionId: "pending",
+  };
+  let handled = 0;
+  const notesProps = () => ({
+    meetingRecordingRequest: pendingRequest,
+    onMeetingRecordingRequestHandled: () => {
+      handled++;
+      pendingRequest = null;
+    },
+  });
+  await show("personal-notes", notesProps());
+  assert.equal(pendingRequest, null, "the parent must stop handing out an in-flight request");
+  assert.equal(handled, 1);
+  await show("home");
+  await show("personal-notes", notesProps());
+  await setStartMode("manual");
+  await React.act(async () => {
+    access.resolve(nativeAccess);
+    await new Promise(setImmediate);
+  });
+  assert.equal(isRecording(), false);
+  assert.deepEqual(calls.noteOnly, ["pending"]);
+  await setStartMode("automatic");
+  await show("home");
+  await show("personal-notes", notesProps());
+  assert.equal(handled, 1);
+  assert.equal(calls.start, 0);
+});
+
+test("Record starts from a note that manual policy opened without recording", async (t) => {
+  const { show, isRecording, calls, setStartMode } = await setup(t);
+  await setStartMode("manual");
+  await show("personal-notes", {
+    meetingRecordingRequest: {
+      noteId: 11,
+      folderId: null,
+      event: null,
+      trigger: "calendar-join",
+      noteSessionId: "join",
+    },
+    onMeetingRecordingRequestHandled: () => {},
+  });
+  assert.equal(calls.start, 0);
+  assert.equal(isRecording(), false);
+
+  await React.act(async () => globalThis.__editorProps.onStartRecording());
+  assert.equal(calls.start, 1, "pressing Record is the member's choice");
+  assert.equal(isRecording(), true);
+});
+
+test("New note in the notes view records under automatic policy but not manual", async (t) => {
+  const { show, calls, setStartMode, store } = await setup(t);
+  await setStartMode("manual");
+  await show("personal-notes");
+  await React.act(async () => globalThis.__spacesTreeProps.onNewNote(1, null));
+  assert.equal(calls.start, 0);
+
+  await setStartMode("automatic");
+  await React.act(async () => globalThis.__spacesTreeProps.onNewNote(1, null));
+  assert.equal(calls.start, 1);
+  await React.act(async () => store.stopRecording());
 });

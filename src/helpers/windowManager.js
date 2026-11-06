@@ -37,6 +37,7 @@ const {
 } = require("./dictationLifecycle");
 const { DEV_SERVER_PORT } = DevServerManager;
 const DRAG_MOVE_TOLERANCE_PX = 2;
+const ERR_ABORTED = -3;
 const {
   MAIN_WINDOW_CONFIG,
   CONTROL_PANEL_CONFIG,
@@ -62,6 +63,14 @@ const MEETING_NOTIFICATION_CARD_REGION = Object.freeze({
 const { centeredBounds, clampedBounds } = require("./onboardingWindowBounds");
 const { ONBOARDING_DEMO_KINDS, isOnboardingInputAllowed } = require("./onboardingInputPolicy");
 const { createHotkeyRepeatGate } = require("./hotkeyRepeatGate");
+
+// The renderer asks for a window mode per onboarding step; each one names its
+// size in ONBOARDING_WINDOW_SIZES. "restore" is handled separately.
+const ONBOARDING_WINDOW_SIZE_KEYS = {
+  compact: "COMPACT",
+  expanded: "EXPANDED",
+  "local-setup": "LOCAL_SETUP",
+};
 
 class WindowManager {
   constructor() {
@@ -116,6 +125,7 @@ class WindowManager {
     this.loadErrorShown = false;
     this.macCompoundPushState = null;
     this.winPushState = null;
+    this._nativeKeyListenersReady = false;
     this._cachedActivationMode = "tap";
     this._floatingIconAutoHide = false;
     this._panelStartPosition = "bottom-right";
@@ -1337,12 +1347,21 @@ class WindowManager {
     return true;
   }
 
+  // Called once dispatch handlers and optional slots are installed. Registration
+  // may still be reading the saved dictation key or falling back to another backend.
+  async initializeNativeKeyListeners() {
+    await this.hotkeyManager.registrationReady;
+    this._nativeKeyListenersReady = true;
+    this.reconcileNativeKeyListeners();
+  }
+
   /**
    * Sync the native low-level key listeners (Windows/Linux) so every hotkey slot
    * that needs one is watched. Call after any change to a slot hotkey or the
    * activation mode. No-op during hotkey capture (listeners are stopped then).
    */
   reconcileNativeKeyListeners() {
+    if (this.isQuitting || !this._nativeKeyListenersReady) return;
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     if (this.hotkeyManager.isInListeningMode()) return;
     const activationMode = this.getActivationMode();
@@ -1561,6 +1580,7 @@ class WindowManager {
     });
 
     this.controlPanelWindow.on("closed", () => {
+      this.meetingDetectionEngine?.closeCurrentMeetingNote?.();
       this._clearControlPanelVisibilityTimer();
       this.endOnboardingDemo();
       this.controlPanelWindow = null;
@@ -1574,7 +1594,16 @@ class WindowManager {
 
     MenuManager.setupControlPanelMenu(this.controlPanelWindow, () => this.openSettings());
 
+    // The initial load may already own a queued note; only release a replaced document's session.
+    // On commit, not on start: a navigation will-navigate blocks leaves the document in place.
+    let controlPanelDocumentLoaded = false;
+    this.controlPanelWindow.webContents.on("did-navigate", () => {
+      if (!controlPanelDocumentLoaded) return;
+      controlPanelDocumentLoaded = false;
+      this.meetingDetectionEngine?.closeCurrentMeetingNote?.();
+    });
     this.controlPanelWindow.webContents.on("did-finish-load", () => {
+      controlPanelDocumentLoaded = true;
       // Every fresh document starts unresolved. AppRouter releases the gate
       // only after it commits the normal app, so OAuth/onboarding reloads cannot
       // expose the dictation pill, hotkeys, or popup surfaces in between.
@@ -1589,6 +1618,8 @@ class WindowManager {
         if (!isMainFrame) {
           return;
         }
+        // An aborted navigation leaves the document in place; any other failure replaced it.
+        if (errorCode !== ERR_ABORTED) this.meetingDetectionEngine?.closeCurrentMeetingNote?.();
         if (process.env.NODE_ENV !== "development") {
           this.showLoadFailureDialog("Control panel", errorCode, errorDescription, validatedURL);
         }
@@ -1599,6 +1630,7 @@ class WindowManager {
     );
 
     this.controlPanelWindow.webContents.on("render-process-gone", (_event, details) => {
+      this.meetingDetectionEngine?.closeCurrentMeetingNote?.();
       if (details.reason === "crashed" || details.reason === "killed" || details.reason === "oom") {
         debugLogger.error(
           "Control panel renderer process gone",
@@ -1938,11 +1970,10 @@ class WindowManager {
     win.focus();
   }
 
-  // Compact onboarding starts at smaller bounds, but both modes expose the
+  // Compact onboarding starts at smaller bounds, but every mode exposes the
   // complete window-control contract so a frameless window never traps the
   // user in setup.
   _applyOnboardingWindowChrome(win, mode) {
-    const expanded = mode === "expanded";
     win.setResizable(true);
     win.setMinimizable(true);
     win.setMaximizable(true);
@@ -1951,7 +1982,7 @@ class WindowManager {
     // Floor at the mode's canonical size so no step renders below the bounds
     // it was designed for — clamped to the work area, or a 1366x768-class
     // display could never fit (and setContentBounds would fight the minimum).
-    const floor = expanded ? ONBOARDING_WINDOW_SIZES.EXPANDED : ONBOARDING_WINDOW_SIZES.COMPACT;
+    const floor = ONBOARDING_WINDOW_SIZES[ONBOARDING_WINDOW_SIZE_KEYS[mode]];
     const { workArea } = screen.getDisplayMatching(win.getBounds());
     win.setMinimumSize(
       Math.min(floor.width, workArea.width),
@@ -1965,7 +1996,7 @@ class WindowManager {
   setOnboardingWindowMode(mode) {
     const win = this.controlPanelWindow;
     if (!win || win.isDestroyed()) return false;
-    if (!new Set(["compact", "expanded", "restore"]).has(mode)) return false;
+    if (mode !== "restore" && !Object.hasOwn(ONBOARDING_WINDOW_SIZE_KEYS, mode)) return false;
     if (mode !== "restore" && (win.isFullScreen() || win.isMaximized())) {
       // Entering onboarding from a maximized/fullscreen control panel must not
       // refuse: each mode is applied at its canonical centered bounds, which
@@ -2024,8 +2055,7 @@ class WindowManager {
       return true;
     }
 
-    const target =
-      mode === "compact" ? ONBOARDING_WINDOW_SIZES.COMPACT : ONBOARDING_WINDOW_SIZES.EXPANDED;
+    const target = ONBOARDING_WINDOW_SIZES[ONBOARDING_WINDOW_SIZE_KEYS[mode]];
     const next = centeredBounds(current, target, workArea);
     if (
       current.x === next.x &&
@@ -2554,8 +2584,16 @@ class WindowManager {
   async queueMeetingNoteNavigation(payload, options) {
     if (!payload.navigationId) {
       this._pendingMeetingNoteNavigation = payload;
-      await this.createControlPanelWindow(options);
-      this.sendToControlPanel("meeting-note-navigation-pending");
+      try {
+        await this.createControlPanelWindow(options);
+        if (this._pendingMeetingNoteNavigation === payload)
+          this.sendToControlPanel("meeting-note-navigation-pending");
+      } catch (error) {
+        if (this._pendingMeetingNoteNavigation === payload)
+          this._pendingMeetingNoteNavigation = null;
+        this.meetingDetectionEngine?.abandonMeetingNote?.(payload.noteSessionId);
+        throw error;
+      }
       return;
     }
     if (!this.isMeetingNotificationOwner(options.owner))
@@ -2620,8 +2658,19 @@ class WindowManager {
     return result;
   }
 
+  isMeetingNoteNavigationPending(noteSessionId) {
+    if (noteSessionId == null) return false;
+    return (
+      this._pendingMeetingNoteNavigation?.noteSessionId === noteSessionId ||
+      // A navigation still waiting for a reloading panel isn't pending yet.
+      this._meetingNavigationOperation?.payload.noteSessionId === noteSessionId
+    );
+  }
+
   _settleMeetingNavigation(operation, result) {
     if (this._meetingNavigationOperation !== operation) return;
+    if (!result.success)
+      this.meetingDetectionEngine?.abandonMeetingNote?.(operation.payload.noteSessionId);
     this._meetingNavigationOperation = null;
     clearTimeout(operation.timer);
     operation.panel?.removeListener("closed", operation.onClose);

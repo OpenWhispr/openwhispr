@@ -1270,20 +1270,15 @@ export default function SpacesTree({
     undoToastIdRef.current = toast({
       title: t("notes.spaces.moved", { title, target }),
       duration: 8000,
-      action: (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            if (undoToastIdRef.current) dismiss(undoToastIdRef.current);
+      actions: [
+        {
+          label: t("notes.spaces.undo"),
+          onClick: () => {
             undoToastIdRef.current = null;
             onUndo();
-          }}
-          className="h-6 px-2 text-xs text-white/70 hover:text-white hover:bg-white/10"
-        >
-          {t("notes.spaces.undo")}
-        </Button>
-      ),
+          },
+        },
+      ],
     });
   };
 

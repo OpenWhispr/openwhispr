@@ -84,6 +84,7 @@ import { isRegenerableNoteTitle } from "../../helpers/regenerableNoteTitle";
 import { isMeetingAutoEndEligible } from "../../helpers/meetingRecordingSession";
 import { handleMeetingRecordingRequest } from "../../helpers/meetingRecordingRequest";
 import { markIntroSeen, NOTES_STRUCTURE_INTRO, shouldShowIntro } from "../../lib/versionedIntro";
+import { useModalGate } from "../../stores/modalGateStore";
 import type { InvitationNotesEntry } from "../../hooks/useInvitationNotesEntry";
 import {
   applyNoteDraftMutation,
@@ -137,10 +138,16 @@ interface PersonalNotesViewProps {
     noteId: number;
     folderId: number | null;
     event: any;
+    trigger?: string;
+    noteSessionId?: string;
   } | null;
   onMeetingRecordingRequestHandled?: () => void;
   invitationEntry?: InvitationNotesEntry | null;
   onInvitationEntryHandled?: () => void;
+  canAutoStartMeeting: () => boolean;
+  /** ControlPanel holds the workspace intro until this view has mounted after a join. */
+  notesHandOff?: boolean;
+  onNotesHandOffDone?: () => void;
 }
 
 // The list's CSS cap: 30% of the view it shares with the note.
@@ -155,6 +162,9 @@ export default function PersonalNotesView({
   onMeetingRecordingRequestHandled,
   invitationEntry,
   onInvitationEntryHandled,
+  canAutoStartMeeting,
+  notesHandOff = false,
+  onNotesHandOffDone,
 }: PersonalNotesViewProps) {
   const isMeetingMode = useIsMeetingMode();
   const isNarrowWindow = useIsNarrowWindow();
@@ -319,38 +329,38 @@ export default function PersonalNotesView({
     initializeNotesTree();
   }, []);
 
-  useEffect(() => {
-    if (
-      structureIntroPending &&
-      isOnboardingComplete &&
-      isSignedIn &&
-      teamSpacesAvailable &&
-      !isTreeLoading &&
-      !isSidePanelLayout
-    ) {
-      setShowStructureIntro(true);
-    }
-  }, [
-    structureIntroPending,
-    isOnboardingComplete,
-    isSignedIn,
-    teamSpacesAvailable,
-    isTreeLoading,
-    isSidePanelLayout,
-  ]);
-
+  // Due once only the notes tree is still loading; the workspace intro waits for it from then on.
+  const structureIntroDue =
+    structureIntroPending &&
+    isOnboardingComplete &&
+    isSignedIn &&
+    teamSpacesAvailable &&
+    !isSidePanelLayout;
   // Arriving via an accepted invitation reopens the structure intro even when
   // this device has already seen it, and even before notes onboarding is done
-  // (the dialog also renders in the onboarding branch below). Once per
-  // invitation: the entry outlives the dialog while its space syncs, and a
-  // layout change in that time must not bring the dialog back.
-  const structureIntroShownForRef = useRef<InvitationNotesEntry | null>(null);
+  // (the dialog also renders in the onboarding branch below). It opens once per
+  // invitation, when no side panel is in the way, and holds the gate until then.
+  const [invitationIntroShownFor, setInvitationIntroShownFor] =
+    useState<PersonalNotesViewProps["invitationEntry"]>(null);
+  const invitationIntroDue =
+    invitationEntry != null && !isSidePanelLayout && invitationIntroShownFor !== invitationEntry;
+  useModalGate("notesStructureIntroPending", structureIntroDue || invitationIntroDue);
+
   useEffect(() => {
-    if (!invitationEntry || isSidePanelLayout) return;
-    if (structureIntroShownForRef.current === invitationEntry) return;
-    structureIntroShownForRef.current = invitationEntry;
+    if (structureIntroDue && !isTreeLoading) setShowStructureIntro(true);
+  }, [structureIntroDue, isTreeLoading]);
+
+  useEffect(() => {
+    if (!invitationIntroDue) return;
     setShowStructureIntro(true);
-  }, [invitationEntry, isSidePanelLayout]);
+    setInvitationIntroShownFor(invitationEntry);
+  }, [invitationIntroDue, invitationEntry]);
+
+  // Releases ControlPanel's hand-off gate in the same render that opens the structure intro just
+  // above; a due intro already holds its own gate, so the workspace intro never slips in between.
+  useEffect(() => {
+    if (notesHandOff) onNotesHandOffDone?.();
+  }, [notesHandOff, onNotesHandOffDone]);
 
   // The acceptance modal starts a sync before navigating here. Once the first
   // space the invitation granted (directly or via a team) appears in the local
@@ -429,7 +439,6 @@ export default function PersonalNotesView({
     : linkedEventLookup?.id === linkedEventId
       ? linkedEventLookup.event
       : undefined;
-  const calendarEventName = linkedEvent?.summary ?? null;
 
   const startRecording = useCallback(
     () =>
@@ -611,7 +620,7 @@ export default function PersonalNotesView({
     return () => flushPendingSaves("unmount");
   }, [flushPendingSaves]);
 
-  const { createNote, createNoteIn } = useCreateNote();
+  const { createNote, createNoteIn } = useCreateNote(canAutoStartMeeting);
 
   const privateSpaceId = useMemo(
     () => spaces.find((s) => s.kind === "private")?.id ?? null,
@@ -725,8 +734,15 @@ export default function PersonalNotesView({
     [activeNoteId]
   );
 
+  const handledMeetingRequest = useRef<typeof meetingRecordingRequest>(null);
   useEffect(() => {
-    if (!meetingRecordingRequest || activeNoteId !== meetingRecordingRequest.noteId) return;
+    if (
+      !meetingRecordingRequest ||
+      activeNoteId !== meetingRecordingRequest.noteId ||
+      handledMeetingRequest.current === meetingRecordingRequest
+    )
+      return;
+    handledMeetingRequest.current = meetingRecordingRequest;
     const note = activeNote?.id === meetingRecordingRequest.noteId ? activeNote : null;
     const seedSegments = parseSeedSegments(note?.transcript);
     void handleMeetingRecordingRequest({
@@ -744,6 +760,14 @@ export default function PersonalNotesView({
         // yet is still a meeting note.
         autoEndEligible: note ? isMeetingAutoEndEligible(note) : true,
       },
+      trigger: meetingRecordingRequest.trigger,
+      canAutoStart: canAutoStartMeeting,
+      onSuppressed: () =>
+        meetingRecordingRequest.noteSessionId
+          ? window.electronAPI?.meetingNoteOpenedWithoutRecording?.(
+              meetingRecordingRequest.noteSessionId
+            )
+          : undefined,
       startRecording: storeStartRecording,
       restoreFromMeetingMode: async () => {
         await window.electronAPI?.restoreFromMeetingMode?.();
@@ -758,6 +782,7 @@ export default function PersonalNotesView({
     });
   }, [
     meetingRecordingRequest,
+    canAutoStartMeeting,
     activeNoteId,
     activeNote,
     onMeetingRecordingRequestHandled,
@@ -856,11 +881,11 @@ export default function PersonalNotesView({
       knownPeople,
       fromSummary,
       material,
-      allowTitleGeneration: isRegenerableNoteTitle(
-        editorNote.title,
-        [t("notes.list.untitledNote"), t("notes.list.newNote"), t("notes.sidebar.newNote")],
-        calendarEventName
-      ),
+      allowTitleGeneration: isRegenerableNoteTitle(editorNote.title, [
+        t("notes.list.untitledNote"),
+        t("notes.list.newNote"),
+        t("notes.sidebar.newNote"),
+      ]),
     });
   };
 

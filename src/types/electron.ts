@@ -496,8 +496,9 @@ export interface NoteItem {
   client_note_id: string;
   sync_status: "synced" | "pending" | "error";
   deleted_at: string | null;
-  // Computed by getNoteByClientId while a parent folder DELETE awaits its
-  // server result. Held notes stay hidden and must not be pulled/queued alone.
+  // Computed by getNoteByClientId and getNoteForCloudRow while a parent folder
+  // DELETE awaits its server result. Held notes stay hidden and must not be
+  // pulled/queued alone.
   folder_delete_pending?: number;
   // 1 while a cloud-backed row that left a team space still owes its scope
   // retraction push (D6); cleared when the row settles.
@@ -775,6 +776,45 @@ export interface SpaceCapabilities {
   leave: boolean;
 }
 
+// Who to ask for access to a space: its admins, as GET /api/workspaces/:id/spaces lists them.
+export interface SpaceAdminContact {
+  user_id: string;
+  name: string | null;
+  email: string;
+  image: string | null;
+}
+
+// A row of the workspace's space directory, which lists spaces the caller may not be in (yet).
+export interface WorkspaceSpace {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string | null;
+  emoji: string | null;
+  member_count: number;
+  teams: { id: string; name: string; access?: TeamRole }[];
+  // Everything below is absent from an older API.
+  is_default?: boolean;
+  is_open?: boolean;
+  admins?: SpaceAdminContact[];
+  my_role?: TeamRole | null;
+  my_direct_role?: TeamRole | null;
+  capabilities?: SpaceCapabilities | null;
+  can_join?: boolean;
+  // The caller is the only admin, so leaving or demoting themselves is refused.
+  sole_admin?: boolean;
+}
+
+export interface SpaceInvitation {
+  id: string;
+  email: string;
+  role: TeamRole;
+  /** The role accepting gives across the workspace. An older API leaves it out. */
+  workspace_role?: TeamRole;
+  expires_at: string;
+  created_at: string;
+}
+
 export interface Workspace {
   id: string;
   name: string;
@@ -790,6 +830,8 @@ export interface Workspace {
   seats: number;
   // Optional: absent from API responses that predate unified billing.
   seats_used?: number;
+  // Absent before API release 4.
+  seat_limit?: number;
   created_at: string;
   updated_at: string;
   role: WorkspaceRole;
@@ -800,6 +842,42 @@ export interface Workspace {
   has_subscription?: boolean;
 }
 
+export interface OwnedMemberContent {
+  user_id: string;
+  owned_notes: number;
+  owned_spaces: number;
+}
+
+export interface MemberRemovalPreview {
+  members: OwnedMemberContent[];
+  already_removed: string[];
+  transfer_required: boolean;
+}
+
+export interface MemberRemovalResult {
+  removed: string[];
+  already_removed: string[];
+  transferred: { to: string; notes: number; spaces: number } | null;
+}
+
+export type InvitationBatchStatus =
+  "invited" | "invalid_email" | "already_member" | "already_invited" | "directory_required";
+
+export interface InvitationBatchResult {
+  results: Array<{
+    email: string;
+    status: InvitationBatchStatus;
+    email_sent?: boolean;
+    /** With already_invited: that invitation now carries what the request named. Older APIs leave it out. */
+    grants_added?: boolean;
+  }>;
+}
+
+export interface MemberTeamRef {
+  id: string;
+  name: string;
+}
+
 export interface WorkspaceMember {
   user_id: string;
   role: WorkspaceRole;
@@ -808,6 +886,7 @@ export interface WorkspaceMember {
   email: string;
   name: string | null;
   image: string | null;
+  teams?: MemberTeamRef[]; // absent from APIs before release 3
 }
 
 export type TeamRole = "admin" | "member";
@@ -1170,7 +1249,7 @@ export interface AppVersionResult {
 }
 
 export interface WhisperDownloadProgressData {
-  type: "progress" | "installing" | "complete" | "error";
+  type: "progress" | "verifying" | "installing" | "complete" | "error";
   model: string;
   percentage?: number;
   downloaded_bytes?: number;
@@ -1184,7 +1263,7 @@ export interface WhisperDownloadProgressData {
 export interface LocalModelDownloadStatus {
   modelType: "whisper" | "parakeet" | "llm";
   modelId: string;
-  phase: "downloading" | "installing";
+  phase: "downloading" | "verifying" | "installing";
   progress: number;
   downloadedBytes: number;
   totalBytes: number;
@@ -1233,7 +1312,7 @@ export interface ParakeetModelsListResult {
 }
 
 export interface ParakeetDownloadProgressData {
-  type: "progress" | "installing" | "complete" | "error";
+  type: "progress" | "verifying" | "installing" | "complete" | "error";
   model: string;
   percentage?: number;
   downloaded_bytes?: number;
@@ -1295,6 +1374,30 @@ export interface VulkanGpuResult {
   deviceName?: string;
   reason?: string;
   error?: string;
+}
+
+export interface ComputerProfile {
+  platform: "darwin" | "win32" | "linux";
+  arch: string; // process.arch
+  name: string | null; // "MacBook Pro", "Dell XPS 13 9310"; null = use the generic name
+  formFactor: "laptop" | "desktop";
+  processorName: string; // "Apple M5 Pro", "Intel Core i5-1235U"
+  appleChip: { generation: number; tier: "" | "Pro" | "Max" | "Ultra" } | null;
+  memoryGb: number; // installed GB: a Mac's own figure, Windows' modules, else snapped from usable; 0 = unread
+  graphicsName: string | null; // null on Apple chips (UI shows "Built into chip")
+  nvidia: { name: string; vramMb: number | null } | null;
+  parakeetSupported: boolean; // getParakeetCapability().supported (macOS 15.5 rule)
+  systemLanguages: string[]; // preferred system languages, as tags, e.g. ["pt-BR", "en-US"]
+}
+
+/** What onboarding's local setup downloads: a speech model, a text model or the graphics pack. */
+export type LocalSetupDownloadKind = "whisper" | "parakeet" | "llm" | "llamaVulkan";
+
+/** Free space where local models download, and the room each download kind reserves. */
+export interface LocalSetupSpace {
+  availableBytes: number;
+  /** The room each kind reserves while it downloads and unpacks (main's disk checks). */
+  factors: Record<LocalSetupDownloadKind, number>;
 }
 
 export interface LlamaVulkanStatus {
@@ -1364,6 +1467,10 @@ export interface ConversationPreview {
   last_message_role?: "user" | "assistant" | "system" | null;
   /** Set on a fork: the chat it was copied from (local only, never synced). */
   parent_conversation_id?: number | null;
+  /** The note the chat was started from, joined in by the Chat list queries. */
+  note_id?: number | null;
+  note_title?: string | null;
+  note_deleted_at?: string | null;
 }
 
 export interface AgentMessageRow {
@@ -1378,9 +1485,11 @@ export interface AgentMessageRow {
 export interface AgentConversationWithMessages {
   id: number;
   title: string;
+  note_id?: number | null;
   archived_at?: string;
   cloud_id?: string | null;
   client_conversation_id?: string | null;
+  cloud_create_attempted?: number;
   created_at: string;
   updated_at: string;
   parent_conversation_id?: number | null;
@@ -1437,9 +1546,12 @@ export interface ReferralItem {
 
 declare global {
   interface Window {
+    commitHeldSpaceDeletes?: () => Promise<void>;
     electronAPI: {
       // Basic window operations
-      setOnboardingWindowMode?: (mode: "compact" | "expanded" | "restore") => Promise<boolean>;
+      setOnboardingWindowMode?: (
+        mode: "compact" | "expanded" | "local-setup" | "restore"
+      ) => Promise<boolean>;
       setOnboardingActive?: (active: boolean) => Promise<boolean>;
       openPermissionGuide?: (state: PermissionGuideState) => Promise<boolean>;
       closePermissionGuide?: () => Promise<boolean>;
@@ -1489,7 +1601,8 @@ declare global {
         | {
             success: true;
             pasted: boolean;
-            reason?: "modifiers-held" | "wl-copy-missing" | "wl-copy-failed";
+            reason?:
+              "modifiers-held" | "accessibility-missing" | "wl-copy-missing" | "wl-copy-failed";
           }
         | {
             success: false;
@@ -1559,7 +1672,7 @@ declare global {
       hideWindow: () => Promise<void>;
       showDictationPanel: () => Promise<void>;
       openSettingsSection?: (
-        section: SettingsTarget | ProviderSettingsTarget
+        section: SettingsTarget | ProviderSettingsTarget | "plansBilling"
       ) => Promise<{ success: boolean }>;
       captureDictationTarget?: () => Promise<{ success: boolean; pid: number | null }>;
       captureDictationAppCategory?: () => Promise<ToneAppCategory>;
@@ -2032,6 +2145,13 @@ declare global {
         skipped?: number;
         errors?: Array<{ clientNoteId: string; error: string }>;
       }>;
+      dragonImportPickFile?: () => Promise<{
+        canceled: boolean;
+        success?: boolean;
+        error?: string;
+        fileName?: string;
+        bytes?: Uint8Array;
+      }>;
       showNoteFile?: (noteId: number) => Promise<{ success: boolean }>;
       showFolderInExplorer?: (folderName: string) => Promise<{ success: boolean }>;
 
@@ -2276,6 +2396,8 @@ declare global {
         code?: string;
         details?: string;
       }>;
+      listRetiredLocalModels?: (inUse: string[]) => Promise<Array<{ id: string; name: string }>>;
+      deleteRetiredLocalModels?: (inUse: string[]) => Promise<{ success: boolean }>;
       modelDelete: (modelId: string) => Promise<{
         success: boolean;
         error?: string;
@@ -2385,10 +2507,12 @@ declare global {
       // llama-server
       llamaServerStart: (
         modelId: string
-      ) => Promise<{ success: boolean; port?: number; error?: string }>;
+      ) => Promise<{ success: boolean; port?: number; error?: string; code?: string }>;
       llamaServerStatus: () => Promise<LlamaServerStatus>;
       llamaGpuReset: () => Promise<{ success: boolean; error?: string }>;
       detectVulkanGpu?: () => Promise<VulkanGpuResult>;
+      getComputerProfile: () => Promise<ComputerProfile>;
+      getLocalSetupSpace: () => Promise<LocalSetupSpace>;
       getLlamaVulkanStatus?: () => Promise<LlamaVulkanStatus>;
       downloadLlamaVulkanBinary?: () => Promise<{
         success: boolean;
@@ -2459,6 +2583,11 @@ declare global {
       checkForUpdates: () => Promise<UpdateCheckResult>;
       downloadUpdate: () => Promise<UpdateResult>;
       installUpdate: () => Promise<UpdateResult>;
+      initialModelRegistrySnapshot: import("../models/registryData").RegistrySnapshot;
+      getModelRegistry: () => Promise<import("../models/registryData").RegistrySnapshot>;
+      onModelRegistryUpdated: (
+        callback: (snapshot: import("../models/registryData").RegistrySnapshot) => void
+      ) => () => void;
       getAppVersion: () => Promise<AppVersionResult>;
       getPostMigrationState: () => Promise<{ justMigrated: boolean }>;
       getOAuthProtocolRegistered: () => Promise<boolean>;
@@ -2752,6 +2881,7 @@ declare global {
 
       // Debug logging
       getLogLevel?: () => Promise<string>;
+      onLogLevelChanged?: (callback: () => void) => () => void;
       log?: (entry: {
         level: string;
         message: string;
@@ -2771,6 +2901,8 @@ declare global {
         error?: string;
       }>;
       openLogsFolder: () => Promise<{ success: boolean; error?: string }>;
+      getModelRegistryUpdates: () => Promise<boolean>;
+      setModelRegistryUpdates: (enabled: boolean) => Promise<{ success: boolean; error?: string }>;
 
       // FFmpeg availability
       checkFFmpegAvailability: () => Promise<FFmpegAvailabilityResult>;
@@ -2779,7 +2911,7 @@ declare global {
       // System settings helpers
       requestMicrophoneAccess?: () => Promise<{ granted: boolean }>;
       checkMicrophoneAccess?: () => Promise<{ granted: boolean; status: string }>;
-      getSystemDefaultMicrophone?: (options?: { refresh?: boolean }) => Promise<{
+      getSystemDefaultMicrophone?: (options?: { refresh?: boolean; wait?: boolean }) => Promise<{
         name: string;
         nativeId?: string;
         platform: string;
@@ -3449,6 +3581,14 @@ declare global {
         success: boolean;
         contacts: Array<{ email: string; display_name: string | null }>;
       }>;
+      /** People to invite: the same calendars and contacts the assistant's find_contact reads. */
+      searchInviteContacts: (
+        query: string,
+        exclude: string[]
+      ) => Promise<{
+        success: boolean;
+        contacts: Array<{ email: string; name: string | null }>;
+      }>;
       upsertContact: (contact: {
         email: string;
         displayName?: string | null;
@@ -3791,6 +3931,7 @@ declare global {
       startManualMeeting?: () => Promise<{ success: false; code?: string; error: string } | void>;
       getPendingMeetingNoteNavigation?: () => Promise<{
         navigationId?: string;
+        noteSessionId?: string;
         spaceId?: number;
         noteId: number;
         folderId: number | null;
@@ -3798,6 +3939,8 @@ declare global {
         trigger?: "hotkey" | "manual" | "calendar-join";
       } | null>;
       onMeetingNoteNavigationPending?: (callback: () => void) => () => void;
+      meetingNoteOpenedWithoutRecording?: (noteSessionId: string) => Promise<void>;
+      meetingNoteClosed?: (noteSessionId: string) => Promise<void>;
       getPendingNoteNavigation?: () => Promise<{
         noteId: number;
         folderId: number | null;
@@ -3813,11 +3956,14 @@ declare global {
         model: string;
         language?: string;
         display?: boolean;
-      }) => Promise<{ success: boolean }>;
-      stopDictationPreview?: (opts?: {
-        showCleanup?: boolean;
-        flushed?: boolean;
-      }) => Promise<{ success: boolean; streamed?: boolean; text?: string }>;
+      }) => Promise<{ success: boolean; error?: string; code?: string }>;
+      stopDictationPreview?: (opts?: { showCleanup?: boolean; flushed?: boolean }) => Promise<{
+        success: boolean;
+        streamed?: boolean;
+        text?: string;
+        error?: string;
+        code?: string;
+      }>;
       dismissDictationPreview?: () => Promise<{ success: boolean }>;
       updateDictationPreview?: (text: string) => Promise<{ success: boolean }>;
       completeDictationPreview?: (payload: { text?: string }) => Promise<{ success: boolean }>;
@@ -3828,11 +3974,16 @@ declare global {
       getPendingNotes?: (spaceKind?: "private" | "team") => Promise<NoteItem[]>;
       getPendingNoteDeletes?: () => Promise<NoteItem[]>;
       getNoteByClientId?: (clientNoteId: string) => Promise<NoteItem | null>;
+      getNoteForCloudRow?: (
+        clientNoteId: string | null | undefined,
+        cloudId: string
+      ) => Promise<NoteItem | null>;
       upsertNoteFromCloud?: (
         cloudNote: Record<string, unknown>,
         localFolderId: number | null,
         localSpaceId?: number | null
       ) => Promise<NoteItem | null>;
+      markNoteCreatesAttempted?: (clientNoteIds: string[]) => Promise<string[]>;
       acknowledgeNoteCreate?: (
         id: number,
         snapshot: NoteCreateSnapshot,
@@ -3912,8 +4063,10 @@ declare global {
       getConversationByClientId?: (clientId: string) => Promise<ConversationPreview | null>;
       upsertConversationFromCloud?: (
         cloudConv: Record<string, unknown>,
-        messages: Array<Record<string, unknown>>
+        messages: Array<Record<string, unknown>>,
+        snapshot: ConversationPreview | null
       ) => Promise<void>;
+      markConversationCreateAttempted?: (id: number) => Promise<{ success: boolean }>;
       acknowledgeConversationCreate?: (
         id: number,
         snapshot: ConversationCreateSnapshot,
@@ -3921,8 +4074,13 @@ declare global {
       ) => Promise<ConversationCreateAckResult | undefined>;
       markConversationSynced?: (
         id: number,
-        cloudId: string
+        cloudId: string,
+        snapshot?: ConversationCreateSnapshot
       ) => Promise<{ success: boolean } | undefined>;
+      replaceConversationClientId?: (
+        id: number,
+        expectedClientId: string | null
+      ) => Promise<{ success: boolean }>;
       hardDeleteConversation?: (id: number) => Promise<void>;
 
       getPendingTranscriptions?: () => Promise<TranscriptionItem[]>;

@@ -11,6 +11,7 @@ import { CONNECTION_TARGET_NAMES } from "../../config/agentCapabilities";
 import type { InteractionPayload, InteractionResult } from "../../types/agentInteractions";
 import type { ChatPersistence } from "./useChatPersistence";
 import type { SendToAIOptions } from "./useChatStreaming";
+import type { Message } from "./types";
 import { answerText } from "../../utils/interactionAnswers";
 
 // The request that continues the task: what the user answered, as they would
@@ -45,6 +46,14 @@ function followUpText(
   }
 }
 
+/** The open conversation, as a chat's persistence or the main chat's session holds it. */
+type InterruptedInteractionsHost = Pick<
+  ChatPersistence,
+  "messages" | "saveAssistantMessage" | "conversationId"
+> & {
+  setMessages: (update: (messages: Message[]) => Message[]) => void;
+};
+
 /**
  * Interactions whose turn ended before the user answered (the app closed, or
  * the chat went away) stay answerable while their reply is the last message.
@@ -54,8 +63,8 @@ function followUpText(
  * unanswered, and the model sees them as never answered.
  */
 export function useInterruptedInteractions(
-  persistence: ChatPersistence,
-  send: (text: string, options?: SendToAIOptions) => Promise<boolean>
+  persistence: InterruptedInteractionsHost,
+  send: (text: string, options?: SendToAIOptions) => boolean | Promise<boolean>
 ): void {
   const { t } = useTranslation();
   const { messages, setMessages, saveAssistantMessage, conversationId } = persistence;

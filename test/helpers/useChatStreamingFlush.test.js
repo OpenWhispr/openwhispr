@@ -112,9 +112,17 @@ async function renderChatStreaming(
   // setInterval that otherwise keeps the process alive after the test ends.
   t.after(() => reasoningService.destroy());
   if (stream) {
-    t.mock.method(reasoningService, "processTextStreamingAI", () => stream.read());
-    t.mock.method(reasoningService, "cancelActiveStream", () =>
-      stream.end(abortThrows ? new DOMException("aborted", "AbortError") : undefined)
+    t.mock.method(
+      reasoningService,
+      "processTextStreamingAI",
+      (_messages, _model, _provider, _config, _tools, signal) => {
+        signal.addEventListener(
+          "abort",
+          () => stream.end(abortThrows ? new DOMException("aborted", "AbortError") : undefined),
+          { once: true }
+        );
+        return stream.read();
+      }
     );
   }
 

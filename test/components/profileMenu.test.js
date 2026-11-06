@@ -98,3 +98,13 @@ test("the header names the plan once it is known", async (t) => {
   globalThis.__planLabel = "Pro";
   assert.match(render(signedIn), />Pro</);
 });
+
+test("an account presented offline says so in place of the plan", async (t) => {
+  const { render } = await loadProfileMenu(t);
+  globalThis.__planLabel = "Pro";
+
+  const markup = render({ ...signedIn, isOfflineAccount: true });
+
+  assert.match(markup, />settingsPage\.account\.offline</);
+  assert.doesNotMatch(markup, />Pro</);
+});

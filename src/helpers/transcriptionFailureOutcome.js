@@ -1,5 +1,6 @@
 import { DICTIONARY_ECHO_CODE } from "../utils/dictionaryEchoFilter.js";
 import { IPC_ERROR_FIELDS } from "./ipcErrorFields.js";
+import { isTranscriptionPolicyRefusal } from "./transcriptionFallback.js";
 
 // How a transcription failure ends, for batch recordings and re-uploaded
 // streaming ones alike. Silence is not reported. A transcript discarded as an
@@ -16,9 +17,10 @@ export const transcriptionFailureOutcome = (error) => {
   const report = {
     title: error.selectionEditFatal ? "Selection Edit Failed" : "Transcription Error",
     ...(error.selectionEditFatal ? { selectionEditFatal: true } : {}),
-    description: error.selectionEditFatal
-      ? error.message
-      : `Transcription failed: ${error.message}`,
+    description:
+      error.selectionEditFatal || isTranscriptionPolicyRefusal(error)
+        ? error.message
+        : `Transcription failed: ${error.message}`,
   };
   for (const key of IPC_ERROR_FIELDS) {
     if (error[key] !== undefined) report[key] = error[key];
