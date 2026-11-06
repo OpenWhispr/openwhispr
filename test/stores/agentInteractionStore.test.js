@@ -71,8 +71,12 @@ const QUESTIONS = {
   ],
 };
 
-test("dismissing a calendar card cancels its actual request and fences late settings writes", async () => {
-  for (const provider of ["google", "microsoft", "apple"]) {
+test("dismissing a calendar card cancels its actual request; only a connect main finished is recorded", async () => {
+  for (const [provider, late] of ["google", "microsoft", "apple"].flatMap((provider) => [
+    [provider, { success: false, error: "oauth_cancelled", reason: "cancelled" }],
+    // The cancel came after main saved the account: it is connected.
+    [provider, { success: true, email: "late@calendar.test" }],
+  ])) {
     let finish, requestId;
     const started = Promise.withResolvers();
     const cancelled = [],
@@ -108,14 +112,24 @@ test("dismissing a calendar card cancels its actual request and fences late sett
     const connecting = store.connectInteraction(key, provider);
     await started.promise;
     store.cancelInteraction(key);
-    finish({ success: true, email: "late@calendar.test" });
+    finish(late);
     await connecting;
     assert.deepEqual(await wait, { status: "cancelled" });
     assert.deepEqual(cancelled, [requestId], provider);
     assert.deepEqual(wrongCancels, [], provider);
-    assert.deepEqual(useSettingsStore.getState().gcalAccounts, []);
-    assert.deepEqual(useSettingsStore.getState().mcalAccounts, []);
-    assert.equal(useSettingsStore.getState().appleCalendarConnected, false);
+    const { gcalAccounts, mcalAccounts, appleCalendarConnected } = useSettingsStore.getState();
+    const saved = late.success ? provider : null;
+    assert.deepEqual(
+      gcalAccounts.map((account) => account.email),
+      saved === "google" ? ["late@calendar.test"] : [],
+      provider
+    );
+    assert.deepEqual(
+      mcalAccounts.map((account) => account.email),
+      saved === "microsoft" ? ["late@calendar.test"] : [],
+      provider
+    );
+    assert.equal(appleCalendarConnected, saved === "apple", provider);
   }
 });
 

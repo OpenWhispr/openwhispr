@@ -25,12 +25,14 @@ export async function connectCalendar(
     return "cancelled";
   }
   currentSignal.addEventListener("abort", cancel, { once: true });
+  // A connect that finished is recorded even if it was cancelled meanwhile:
+  // main saved the account by then.
   try {
     const store = useSettingsStore.getState();
     if (provider === "google") {
       const result = await window.electronAPI?.gcalStartOAuth?.(requestId);
-      if (currentSignal.aborted) return "cancelled";
-      if (!result?.success || !result.email) return oauthFailure(result?.error);
+      if (!result?.success || !result.email)
+        return currentSignal.aborted ? "cancelled" : oauthFailure(result?.error);
       store.setGcalAccounts([
         ...useSettingsStore.getState().gcalAccounts.filter((a) => a.email !== result.email),
         { email: result.email },
@@ -39,8 +41,8 @@ export async function connectCalendar(
     }
     if (provider === "microsoft") {
       const result = await window.electronAPI?.mcalStartOAuth?.(requestId);
-      if (currentSignal.aborted) return "cancelled";
-      if (!result?.success || !result.email) return oauthFailure(result?.error);
+      if (!result?.success || !result.email)
+        return currentSignal.aborted ? "cancelled" : oauthFailure(result?.error);
       store.setMcalAccounts([
         ...useSettingsStore.getState().mcalAccounts.filter((a) => a.email !== result.email),
         { email: result.email, tenantId: result.tenantId },
@@ -48,11 +50,11 @@ export async function connectCalendar(
       return "connected";
     }
     const result = await window.electronAPI?.acalConnect?.(requestId);
-    if (currentSignal.aborted || result?.reason === "cancelled") return "cancelled";
     if (result?.success) {
       store.setAppleCalendarConnected(true);
       return "connected";
     }
+    if (currentSignal.aborted || result?.reason === "cancelled") return "cancelled";
     // Only a real permission denial is one; a missing helper or a failed snapshot is not.
     return result?.reason === "denied" ? "denied" : "failed";
   } finally {

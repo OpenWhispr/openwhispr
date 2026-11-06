@@ -88,6 +88,8 @@ test("calendar IPC cancellation owns one request and cannot stop a newer attempt
         const index = signals.length;
         signals.push(options?.signal);
         await gates[index].promise;
+        // As the managers do: a cancel before the account is saved stops it.
+        options?.signal?.throwIfAborted();
         return { success: true, email: "calendar@test" };
       },
     };
@@ -107,6 +109,28 @@ test("calendar IPC cancellation owns one request and cannot stop a newer attempt
     const legacy = handlers.get(channel)(event(owner));
     gates[2].resolve();
     assert.equal((await legacy).success, true);
+  }
+});
+
+test("a calendar connect cancelled after its account was saved reports it connected", async () => {
+  for (const [channel, manager, method] of [
+    ["gcal-start-oauth", "googleCalendarManager", "startOAuth"],
+    ["mcal-start-oauth", "microsoftCalendarManager", "startOAuth"],
+    ["acal-connect", "appleCalendarManager", "connect"],
+  ]) {
+    // The cancel lands while the saved account's calendars sync.
+    const syncing = deferred();
+    target[manager] = {
+      [method]: async () => {
+        await syncing.promise;
+        return { success: true, email: "calendar@test" };
+      },
+    };
+    const owner = sender(1);
+    const pending = handlers.get(channel)(event(owner), "late");
+    handlers.get("calendar-cancel-connect")(event(owner), "late");
+    syncing.resolve();
+    assert.deepEqual(await pending, { success: true, email: "calendar@test" }, channel);
   }
 });
 

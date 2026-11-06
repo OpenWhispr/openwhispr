@@ -13109,9 +13109,8 @@ class IPCHandlers {
       const abort = () => controller.abort();
       event.sender.once("destroyed", abort);
       try {
-        const result = await authorize(controller.signal);
-        controller.signal.throwIfAborted();
-        return result;
+        // A cancel after the account was saved doesn't undo it, so report what happened.
+        return await authorize(controller.signal);
       } catch (error) {
         if (controller.signal.aborted)
           return { success: false, error: "oauth_cancelled", reason: "cancelled" };
