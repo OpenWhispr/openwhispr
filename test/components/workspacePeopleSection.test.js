@@ -87,7 +87,8 @@ async function loadSection(t, { storedTab, realTeamsTab = false } = {}) {
       `,
       "/WorkspaceGuestsTab": `
         import React from "react";
-        export default function Mock() {
+        export default function Mock(props) {
+          globalThis.__guestsTabProps = props;
           return React.createElement("div", { "data-tab-panel": "guests" });
         }
       `,
@@ -192,6 +193,7 @@ async function loadSection(t, { storedTab, realTeamsTab = false } = {}) {
       "__invitationsState",
       "__membersProps",
       "__invitationsTabProps",
+      "__guestsTabProps",
       "__dialogProps",
       "__inviteViewProps",
       "__sendCalls",
@@ -300,6 +302,17 @@ test("a stored guests tab reopens it, for members too", async (t) => {
   const Section = await loadSection(t, { storedTab: "guests" });
   assert.match(render(Section, MEMBER), /data-tab-panel="guests"/);
   assert.match(render(Section, ADMIN), /data-tab-panel="guests"/);
+});
+
+test("an invite sent from Guests reloads the invitations list", async (t) => {
+  const Section = await loadSection(t, { storedTab: "guests" });
+  render(Section, ADMIN);
+  assert.equal(
+    globalThis.__guestsTabProps.onInvitationsChanged,
+    globalThis.__invitationsState.reload
+  );
+  await globalThis.__guestsTabProps.onInvitationsChanged();
+  assert.equal(globalThis.__reloadCalls, 1);
 });
 
 test("a deep-linked invitations tab shows members without manage_members", async (t) => {

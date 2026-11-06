@@ -10,6 +10,7 @@ import {
   toggleRow,
   type RowSelection,
 } from "../../lib/rowSelection";
+import { classifyRowActionError } from "../../lib/workspaceErrors";
 import { GuestsService } from "../../services/GuestsService";
 import { isolate } from "../../utils/bidiIsolate";
 import {
@@ -48,13 +49,20 @@ const ROW_CHECKBOX =
 
 interface Props {
   workspace: Workspace;
+  /** Called after an invite from this tab, so the Invitations tab reads the new rows. */
+  onInvitationsChanged?: () => void;
 }
 
-export default function WorkspaceGuestsTab({ workspace }: Props): React.ReactElement {
+export default function WorkspaceGuestsTab({
+  workspace,
+  onInvitationsChanged,
+}: Props): React.ReactElement {
   const { t } = useTranslation();
-  // The workspace key remounts the tab per workspace, so the hook only ever sees one id here.
   const { toast } = useToast();
-  const { status, guests, reload, dropGuests, dropGuestNote } = useWorkspaceGuests(workspace.id);
+  // The parent body is keyed per workspace, so the hook only ever sees one id here.
+  const { status, guests, error, reload, dropGuests, dropGuestNote } = useWorkspaceGuests(
+    workspace.id
+  );
   const canManage = workspaceCan(workspace, "manage_members");
   // One path for a row's menu and the selection bar: both hand the dialogs a list of guests.
   const [inviting, setInviting] = useState<WorkspaceGuest[] | null>(null);
@@ -74,6 +82,25 @@ export default function WorkspaceGuestsTab({ workspace }: Props): React.ReactEle
   const sentRef = useRef(0);
   const columnCount = canManage ? 4 : 2;
   const frameRef = useRef<HTMLDivElement>(null);
+  const emptyRef = useRef<HTMLDivElement>(null);
+  // Set when focus was handed to the table as its last row went; the empty state takes it once
+  // the list has emptied, since the table is gone by then.
+  const refocusEmptyRef = useRef(false);
+  const isEmpty = status === "ready" && guests.length === 0;
+
+  useEffect(() => {
+    if (isEmpty && refocusEmptyRef.current) emptyRef.current?.focus();
+    refocusEmptyRef.current = false;
+  }, [isEmpty]);
+
+  const focusList = (): void => {
+    if (emptyRef.current) {
+      emptyRef.current.focus();
+      return;
+    }
+    frameRef.current?.focus();
+    refocusEmptyRef.current = true;
+  };
 
   // Ends one guest's access to one note. Resolves true when the server removed it.
   const removeFromNote = async (guest: WorkspaceGuest, noteId: string): Promise<boolean> => {
@@ -98,8 +125,22 @@ export default function WorkspaceGuestsTab({ workspace }: Props): React.ReactEle
       toast({ title: t(`${KEY}.removedFromNote`, names) });
       void reload();
       return true;
-    } catch {
-      toast({ title: t(`${KEY}.removeFromNoteFailed`, names), variant: "destructive" });
+    } catch (caught) {
+      const failure = classifyRowActionError(caught);
+      const workspaceName = isolate(workspace.name);
+      if (failure.kind === "gone") {
+        // The note (or the guest's access) is already gone; the reload corrects the row.
+        void reload();
+        return false;
+      }
+      let title = t(`${KEY}.removeFromNoteFailed`, names);
+      if (failure.kind === "refused") title = failure.message;
+      else if (failure.kind === "notAllowed") {
+        title = t("workspaces.removeMember.notAllowed", { workspace: workspaceName });
+      } else if (failure.kind === "ssoRequired") {
+        title = t("workspaces.ssoRequired", { workspace: workspaceName });
+      }
+      toast({ title, variant: "destructive" });
       return false;
     }
   };
@@ -122,8 +163,9 @@ export default function WorkspaceGuestsTab({ workspace }: Props): React.ReactEle
           workspace: isolate(workspace.name),
         }),
       });
-      // Invited guests move to Invitations, so nothing of the selection is left to act on.
-      setSelection(new Set());
+      // Invited guests move to Invitations, so those are no longer there to act on.
+      const invited = (inviting ?? []).map((guest) => guest.email);
+      setSelection((current) => setRows(current, invited, false));
     }
     sentRef.current = 0;
     setInviting(null);
@@ -148,7 +190,10 @@ export default function WorkspaceGuestsTab({ workspace }: Props): React.ReactEle
           onInvited={(emails) => {
             sentRef.current += emails.length;
           }}
-          onInvitationsChanged={() => void reload()}
+          onInvitationsChanged={() => {
+            void reload();
+            onInvitationsChanged?.();
+          }}
         />
       ) : null}
       {removing ? (
@@ -163,7 +208,9 @@ export default function WorkspaceGuestsTab({ workspace }: Props): React.ReactEle
             // Shown gone at once: the reload below can fail and would leave them listed. With
             // nobody removed (all joined meanwhile) only the reload has anything to correct.
             if (result.removed.length > 0) dropGuests(result.removed);
-            setSelection(new Set());
+            // A row's menu acts on one guest; the rest of the selection stays.
+            const handled = removing.map((guest) => guest.email);
+            setSelection((current) => setRows(current, handled, false));
             void reload();
           }}
         />
@@ -171,7 +218,14 @@ export default function WorkspaceGuestsTab({ workspace }: Props): React.ReactEle
     </>
   );
 
-  if (status === "ready" && guests.length === 0) return <EmptyGuests />;
+  if (isEmpty) {
+    return (
+      <>
+        {dialogs}
+        <EmptyGuests ref={emptyRef} />
+      </>
+    );
+  }
 
   return (
     <div
@@ -237,7 +291,7 @@ export default function WorkspaceGuestsTab({ workspace }: Props): React.ReactEle
                 selected={selection.has(guest.email)}
                 onToggle={() => setSelection((current) => toggleRow(current, guest.email))}
                 onRemoveFromNote={(noteId) => removeFromNote(guest, noteId)}
-                onTableFocus={() => frameRef.current?.focus()}
+                onTableFocus={focusList}
                 onInvite={() => setInviting([guest])}
                 onCopy={() => void copyEmail(guest)}
                 onRemove={() => setRemoving([guest])}
@@ -249,15 +303,21 @@ export default function WorkspaceGuestsTab({ workspace }: Props): React.ReactEle
                 {status === "failed" ? (
                   <div>
                     <p className="text-xs font-medium text-foreground">{t(`${KEY}.failedTitle`)}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">{t(`${KEY}.failedBody`)}</p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-3"
-                      onClick={() => void reload()}
-                    >
-                      {t("workspaces.exit.tryAgain")}
-                    </Button>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {error?.kind === "ssoRequired"
+                        ? t("workspaces.ssoRequired", { workspace: isolate(workspace.name) })
+                        : t(`${KEY}.failedBody`)}
+                    </p>
+                    {error?.kind === "ssoRequired" ? null : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-3"
+                        onClick={() => void reload()}
+                      >
+                        {t("workspaces.exit.tryAgain")}
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <div role="status">
@@ -297,10 +357,15 @@ export default function WorkspaceGuestsTab({ workspace }: Props): React.ReactEle
   );
 }
 
-function EmptyGuests(): React.ReactElement {
+function EmptyGuests({ ref }: { ref: React.Ref<HTMLDivElement> }): React.ReactElement {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-col items-center px-6 py-14 text-center">
+    <div
+      ref={ref}
+      tabIndex={-1}
+      data-guests-empty=""
+      className="flex flex-col items-center px-6 py-14 text-center outline-none"
+    >
       <span
         aria-hidden="true"
         className="flex size-11 items-center justify-center rounded-xl bg-surface-3 text-foreground/70"
@@ -452,7 +517,10 @@ function AccessCell({
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger
         className={CONTACTS_TRIGGER}
-        aria-label={`${t(`${KEY}.notesMenuLabel`, { name: isolate(guestDisplayName(guest)) })}: ${label}`}
+        aria-label={t(`${KEY}.notesTriggerLabel`, {
+          count: guest.notes.length,
+          name: isolate(guestDisplayName(guest)),
+        })}
       >
         <span className="truncate">{label}</span>
         <ChevronDown className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -471,39 +539,53 @@ function AccessCell({
         {guest.notes.map((note) => {
           const title = note.title?.trim() ? note.title : t("notes.list.untitled");
           const isSending = sending.has(note.id);
+          // A menu holds only items for a keyboard or screen reader, so a member's title is an
+          // item that does nothing.
+          if (!canManage) {
+            return (
+              <DropdownMenuItem
+                key={note.id}
+                className="gap-2.5 text-xs"
+                onSelect={(event) => event.preventDefault()}
+              >
+                <FileText aria-hidden="true" size={14} className="shrink-0 text-muted-foreground" />
+                <span dir="auto" className="min-w-0 flex-1 truncate text-foreground">
+                  {title}
+                </span>
+              </DropdownMenuItem>
+            );
+          }
           return (
             <div key={note.id} className="flex items-center gap-2.5 px-2 py-1.5">
               <FileText aria-hidden="true" size={14} className="shrink-0 text-muted-foreground" />
               <span dir="auto" className="min-w-0 flex-1 truncate text-xs text-foreground">
                 {title}
               </span>
-              {canManage ? (
-                <DropdownMenuItem
-                  asChild
-                  onSelect={(event) => {
-                    // Keep the menu open: the other notes are still listed.
-                    event.preventDefault();
-                    void removeNote(note.id);
+              <DropdownMenuItem
+                asChild
+                onSelect={(event) => {
+                  // Keep the menu open: the other notes are still listed.
+                  event.preventDefault();
+                  void removeNote(note.id);
+                }}
+              >
+                <button
+                  ref={(node) => {
+                    if (node) removeButtonRefs.current.set(note.id, node);
+                    else removeButtonRefs.current.delete(note.id);
                   }}
+                  type="button"
+                  aria-label={t(`${KEY}.removeFromNote`, { note: isolate(title) })}
+                  aria-disabled={isSending}
+                  className="inline-flex size-5 shrink-0 cursor-default items-center justify-center rounded text-muted-foreground outline-none transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:ring-1 focus-visible:ring-primary/30 aria-disabled:opacity-60"
                 >
-                  <button
-                    ref={(node) => {
-                      if (node) removeButtonRefs.current.set(note.id, node);
-                      else removeButtonRefs.current.delete(note.id);
-                    }}
-                    type="button"
-                    aria-label={t(`${KEY}.removeFromNote`, { note: isolate(title) })}
-                    aria-disabled={isSending}
-                    className="inline-flex size-5 shrink-0 cursor-default items-center justify-center rounded text-muted-foreground outline-none transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:ring-1 focus-visible:ring-primary/30 aria-disabled:opacity-60"
-                  >
-                    {isSending ? (
-                      <Loader2 className="size-3 animate-spin" aria-hidden="true" />
-                    ) : (
-                      <X className="size-3" aria-hidden="true" />
-                    )}
-                  </button>
-                </DropdownMenuItem>
-              ) : null}
+                  {isSending ? (
+                    <Loader2 className="size-3 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <X className="size-3" aria-hidden="true" />
+                  )}
+                </button>
+              </DropdownMenuItem>
             </div>
           );
         })}

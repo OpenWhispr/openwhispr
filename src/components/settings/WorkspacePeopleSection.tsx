@@ -217,7 +217,9 @@ function PeopleBody({
         {tab === "invitations" && (
           <WorkspaceInvitationsTab workspace={workspace} invitations={invitations} />
         )}
-        {tab === "guests" && <WorkspaceGuestsTab workspace={workspace} />}
+        {tab === "guests" && (
+          <WorkspaceGuestsTab workspace={workspace} onInvitationsChanged={invitations.reload} />
+        )}
         {tab === "teams" && (
           <WorkspaceTeamsTab
             workspace={workspace}
