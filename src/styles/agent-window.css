@@ -20,7 +20,7 @@
   --agent-glow-full: 0.4;
   --agent-glow-faint: 0.16;
   /* Light mode's modal shadow would be cut off at the window's 8px margin. */
-  --shadow-modal: none;
+  --shadow-modal: 0 0 #0000;
 }
 
 /* The assistant floats over any desktop, so in dark mode its surfaces (set
