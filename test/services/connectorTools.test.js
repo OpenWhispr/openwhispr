@@ -2188,6 +2188,13 @@ const MARKDOWN_BODY = [
   "# Über uns",
   "## Agenda ##",
   "**[Join](https://zoom.us/j/1)** or **https://ex.com**",
+  "# 1 priority is the launch.",
+  "# 2026 Goals",
+  "Call callbacks[key](value), or `**fn**([a](b))`.",
+  "Docs: https://example.com/docs/`v2`/index",
+  "```js",
+  "## not a heading [x](https://y.dev) **kept**",
+  "```",
 ].join("\n");
 const PLAIN_BODY = [
   "Schedule",
@@ -2201,6 +2208,13 @@ const PLAIN_BODY = [
   "Über uns",
   "Agenda",
   "Join (https://zoom.us/j/1) or https://ex.com",
+  "# 1 priority is the launch.",
+  "2026 Goals",
+  "Call callbacks[key](value), or `**fn**([a](b))`.",
+  "Docs: https://example.com/docs/`v2`/index",
+  "```js",
+  "## not a heading [x](https://y.dev) **kept**",
+  "```",
 ].join("\n");
 
 test("an email body loses its Markdown before the compose draft is built", async (t) => {

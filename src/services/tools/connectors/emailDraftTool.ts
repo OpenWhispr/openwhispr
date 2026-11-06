@@ -43,15 +43,20 @@ const PLAIN_TEXT_BODY = "Write the body in plain text, not Markdown (no **, # or
 
 // Bounded runs: the body is the model's (up to 512 KB) and this runs on the
 // renderer's main thread, so no pattern may rescan a long line from every [.
-const LINK = /\[([^\]\n]{1,500})\]\(([^)\s]{1,2000})\)/g;
-const URL_TOKEN = /\bhttps?:\/\/\S+/g;
+// A [ right after a word, ] or ) is code, not a link: callbacks[key](value).
+const LINK = /(?<![\w\])])\[([^\]\n]{1,500})\]\(([^)\s]{1,2000})\)/g;
+// Stops at a protected code span, which stays as it is.
+const URL_TOKEN = /\bhttps?:\/\/[^\s\u0000]+/g;
+// Fenced and inline code stay as written.
+const CODE = /^```[^\n]*\n[\s\S]*?^```|`[^`\n]{1,500}`/gm;
 // Both pairs of ** need a line edge or a non-word character outside them, so
 // x**2 + y**2 stays as it is.
 const BOLD = /(^|[^\w*])\*\*(?=\S)([^*\n]+?)(?<=\S)\*\*(?=$|[^\w*])/gm;
 const HEADING = /^(#{1,6})[ \t]+(\S.*)$/gm;
 // In any script: "# Über uns" is a heading too.
 const HEADING_START = /^[\p{L}\p{N}_]/u;
-const LOWERCASE_START = /^\p{Ll}/u;
+// "# of attendees" and "# 1 priority" aren't headings; "# 2026 Goals" is.
+const LOWERCASE_START = /^(?:\p{Ll}|\p{N}+\s+\p{Ll})/u;
 
 // A heading's text without its optional closing hashes ("# Title ##").
 function headingText(rest: string): string {
@@ -64,16 +69,17 @@ function headingText(rest: string): string {
  * The body with the Markdown models write anyway made plain, before the card
  * or the draft shows it, so the user sees exactly what is sent: **bold** loses
  * its markers, a heading line keeps its text, a link becomes "text (url)".
- * Links are left alone otherwise, and so are a count like "# of attendees",
- * single asterisks, underscores, list dashes and numbers.
+ * Links are left alone otherwise, and so are code, a count like "# of
+ * attendees" or "# 1", single asterisks, underscores, list dashes and numbers.
  */
 function plainTextBody(value: unknown): string {
   if (typeof value !== "string") return "";
   const urls: string[] = [];
   return (
     value
-      // NUL marks a protected link below.
+      // NUL marks protected code and links below.
       .replace(/\u0000/g, "")
+      .replace(CODE, (code) => `\u0000${urls.push(code) - 1}\u0000`)
       .replace(LINK, (_, text, url) => (text === url ? url : `${text} (${url})`))
       // A link's trailing ** is bold around it, not part of it: **https://…**.
       .replace(URL_TOKEN, (token) => {
