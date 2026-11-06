@@ -49,7 +49,7 @@ export interface LocalSetupRow {
   download: LocalSetupDownload;
   label: LocalSetupLabel | null; // null only for an organisation-required model
   reason?: "tooSlow" | "memory" | "memoryUnread";
-  /** null: the row says what it does, or why it's too slow under a "Too slow" heading. */
+  /** null: the row says what it does, or (too slow) that it exceeds this computer's memory. */
   line: LocalSetupLine | null;
 }
 export interface LocalSetupPlan {

@@ -459,8 +459,7 @@
         },
         "unavailable": {
           "notEnoughMemory": "Nicht genug Arbeitsspeicher",
-          "tooSlow": "Hier zu langsam",
-          "tooSlowLine": "Würde hier zu lange für eine Antwort brauchen. Sie können es später trotzdem in den Einstellungen wählen",
+          "exceedsMemory": "Übersteigt den Arbeitsspeicher dieses Computers",
           "memoryUnread": "Arbeitsspeicher nicht erkannt",
           "memoryMac": "{{model}} braucht {{needed}} GB Arbeitsspeicher, dieser Mac hat {{have}} GB",
           "memoryComputer": "{{model}} braucht {{needed}} GB Arbeitsspeicher, dieser Computer hat {{have}} GB",

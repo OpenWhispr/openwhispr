@@ -459,8 +459,7 @@
         },
         "unavailable": {
           "notEnoughMemory": "Memoria insufficiente",
-          "tooSlow": "Troppo lento qui",
-          "tooSlowLine": "Qui impiegherebbe troppo a rispondere. Puoi comunque sceglierlo più tardi nelle Impostazioni",
+          "exceedsMemory": "Supera i limiti di memoria di questo computer",
           "memoryUnread": "Impossibile verificare la memoria",
           "memoryMac": "{{model}} richiede {{needed}} GB di memoria, questo Mac ne ha {{have}} GB",
           "memoryComputer": "{{model}} richiede {{needed}} GB di memoria, questo computer ne ha {{have}} GB",

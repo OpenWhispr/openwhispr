@@ -459,8 +459,7 @@
         },
         "unavailable": {
           "notEnoughMemory": "メモリが不足しています",
-          "tooSlow": "このコンピュータでは遅すぎます",
-          "tooSlowLine": "ここでは応答に時間がかかりすぎます。あとで設定から選ぶこともできます",
+          "exceedsMemory": "このコンピュータのメモリの上限を超えています",
           "memoryUnread": "メモリを確認できませんでした",
           "memoryMac": "{{model}} には {{needed}} GB のメモリが必要です。この Mac は {{have}} GB です",
           "memoryComputer": "{{model}} には {{needed}} GB のメモリが必要です。このコンピュータは {{have}} GB です",

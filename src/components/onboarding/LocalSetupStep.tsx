@@ -56,8 +56,10 @@ const ROW_KIND_KEYS: Record<LocalSetupRowId, string> = {
   cleanup: "onboarding.rehaul.localSetup.rows.cleanup",
   assistant: "onboarding.rehaul.localSetup.rows.assistant",
 };
+// A row too slow for this computer reads as memory too (Josh, 2026-11-03): its line
+// says the model exceeds what the computer can carry, with no figures to quote.
 const UNAVAILABLE_HEADING_KEYS: Record<NonNullable<LocalSetupRow["reason"]>, string> = {
-  tooSlow: "onboarding.rehaul.localSetup.unavailable.tooSlow",
+  tooSlow: "onboarding.rehaul.localSetup.unavailable.notEnoughMemory",
   memory: "onboarding.rehaul.localSetup.unavailable.notEnoughMemory",
   memoryUnread: "onboarding.rehaul.localSetup.unavailable.memoryUnread",
 };
@@ -472,7 +474,7 @@ export function LocalSetupStep({
     }
     if (row.line) return lineText(row.line, onMac, t);
     if (row.label === "unavailable")
-      return t("onboarding.rehaul.localSetup.unavailable.tooSlowLine");
+      return t("onboarding.rehaul.localSetup.unavailable.exceedsMemory");
     // A switched-off row still says what it does: the switch shows it's off.
     return t(DESCRIPTION_KEYS[row.id]);
   };

@@ -459,8 +459,7 @@
         },
         "unavailable": {
           "notEnoughMemory": "内存不足",
-          "tooSlow": "在这台电脑上太慢",
-          "tooSlowLine": "在这里响应会太慢。之后仍可以在设置中选择",
+          "exceedsMemory": "超出这台电脑的内存上限",
           "memoryUnread": "无法检测内存",
           "memoryMac": "{{model}} 需要 {{needed}} GB 内存，这台 Mac 只有 {{have}} GB",
           "memoryComputer": "{{model}} 需要 {{needed}} GB 内存，这台电脑只有 {{have}} GB",
