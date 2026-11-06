@@ -77,6 +77,14 @@ function RemoveGuestsDialogBody({
     }
   };
 
+  const dismiss = (): void => {
+    dispatch({ type: "dismiss" });
+    onOpenChange(false);
+  };
+  const mayRetry =
+    state.kind !== "failed" ||
+    (state.error.kind !== "notAllowed" && state.error.kind !== "ssoRequired");
+
   const body = hasLinkSharedNote(guests)
     ? `${t(`${KEY}.body`)} ${t(`${KEY}.linkShared`)}`
     : t(`${KEY}.body`);
@@ -95,23 +103,25 @@ function RemoveGuestsDialogBody({
       }
       body={body}
       error={state.kind === "failed" ? errorLine(state.error) : null}
-      primary={{
-        label: busy
-          ? t(`${KEY}.removing`)
-          : state.kind === "failed"
-            ? t("workspaces.exit.tryAgain")
-            : count === 1
-              ? t(`${KEY}.confirmOne`)
-              : t(`${KEY}.confirm`, { count }),
-        onClick: () => void run(),
-        tone: "destructive",
-      }}
+      primary={
+        // Asking again can't change a refusal of permission, so it only offers to close.
+        state.kind === "failed" && !mayRetry
+          ? { label: t("common.close"), onClick: dismiss, tone: "primary" }
+          : {
+              label: busy
+                ? t(`${KEY}.removing`)
+                : state.kind === "failed"
+                  ? t("workspaces.exit.tryAgain")
+                  : count === 1
+                    ? t(`${KEY}.confirmOne`)
+                    : t(`${KEY}.confirm`, { count }),
+              onClick: () => void run(),
+              tone: "destructive",
+            }
+      }
       cancelLabel={t("common.cancel")}
       busy={busy}
-      onDismiss={() => {
-        dispatch({ type: "dismiss" });
-        onOpenChange(false);
-      }}
+      onDismiss={dismiss}
     />
   );
 }

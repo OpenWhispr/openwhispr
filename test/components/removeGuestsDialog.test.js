@@ -74,6 +74,7 @@ async function loadDialog(t) {
       `,
     },
   });
+  const { CloudApiError } = await vite.ssrLoadModule("/services/cloudApi.ts");
   const { RemoveGuestsDialog } = await vite.ssrLoadModule(
     "/components/workspace/RemoveGuestsDialog.tsx"
   );
@@ -102,7 +103,7 @@ async function loadDialog(t) {
       dismiss: () => React.act(async () => globalThis.__actionDialogProps.onDismiss()),
     };
   };
-  return { mount };
+  return { mount, CloudApiError };
 }
 
 test("remove asks first and names the guest", async (t) => {
@@ -201,4 +202,31 @@ test("Cancel sends nothing", async (t) => {
   await view.dismiss();
   assert.equal(globalThis.__removeCalls.length, 0);
   assert.deepEqual(view.openChanges, [false]);
+});
+
+test("a refusal of permission offers Close, not Try again", async (t) => {
+  const { mount, CloudApiError } = await loadDialog(t);
+  globalThis.__removeImpl = async () => {
+    throw new CloudApiError("Forbidden", 403);
+  };
+  const view = await mount([guest("a@x.com", "A")]);
+  await view.clickPrimary();
+  const text = view.text();
+  assert.match(text, /!workspaces\.removeMember\.notAllowed/);
+  assert.match(text, /\[common\.close\]/);
+  assert.doesNotMatch(text, /tryAgain/);
+  assert.equal(globalThis.__actionDialogProps.primary.tone, "primary");
+  await view.clickPrimary();
+  assert.equal(globalThis.__removeCalls.length, 1, "Close sends nothing");
+  assert.deepEqual(view.openChanges, [false]);
+});
+
+test("an SSO refusal offers Close, not Try again", async (t) => {
+  const { mount, CloudApiError } = await loadDialog(t);
+  globalThis.__removeImpl = async () => {
+    throw new CloudApiError("SSO", 403, "SSO_REQUIRED");
+  };
+  const view = await mount([guest("a@x.com", "A")]);
+  await view.clickPrimary();
+  assert.match(view.text(), /\[common\.close\]/);
 });

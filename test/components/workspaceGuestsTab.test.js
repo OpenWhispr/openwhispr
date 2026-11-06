@@ -37,7 +37,10 @@ const guest = (email, name, notes = []) => ({ email, name, image: null, notes })
 
 const mountedRoots = new Map();
 
-async function loadTab(t, { workspace = ADMIN, status = "ready", guests = [] } = {}) {
+async function loadTab(
+  t,
+  { workspace = ADMIN, status = "ready", guests = [], error = { kind: "failed" } } = {}
+) {
   t.after(async () => {
     const root = mountedRoots.get(t);
     mountedRoots.delete(t);
@@ -83,6 +86,10 @@ async function loadTab(t, { workspace = ADMIN, status = "ready", guests = [] } =
             ? React.cloneElement(children, { "data-item": "", onSelect })
             : h("button", { "data-item": "", onSelect, ...rest }, children);
       `,
+      "/lib/workspaceErrors": `
+        export const classifyRowActionError = (error) =>
+          error.rowKind ? { kind: error.rowKind, message: error.message } : { kind: "failed" };
+      `,
       "/services/GuestsService": `
         export const GuestsService = {
           remove: (workspaceId, input) => {
@@ -95,8 +102,15 @@ async function loadTab(t, { workspace = ADMIN, status = "ready", guests = [] } =
         export const useToast = () => ({ toast: (toast) => globalThis.__toasts.push(toast) });
       `,
       "/InviteTeammateDialog": `
+        import React from "react";
         export default function InviteTeammateDialog(props) {
           globalThis.__inviteProps = props;
+          React.useEffect(() => {
+            globalThis.__inviteMounted = true;
+            return () => {
+              globalThis.__inviteMounted = false;
+            };
+          }, []);
           return null;
         }
       `,
@@ -119,6 +133,7 @@ async function loadTab(t, { workspace = ADMIN, status = "ready", guests = [] } =
     delete globalThis.__removeImpl;
     delete globalThis.__toasts;
     delete globalThis.__inviteProps;
+    delete globalThis.__inviteMounted;
     delete globalThis.__removeProps;
     delete globalThis.__clipboard;
   });
@@ -141,7 +156,7 @@ async function loadTab(t, { workspace = ADMIN, status = "ready", guests = [] } =
   globalThis.__guestsState = {
     status,
     guests,
-    error: status === "failed" ? { kind: "failed" } : null,
+    error: status === "failed" ? error : null,
     reload: async () => {
       globalThis.__reloads += 1;
     },
@@ -219,7 +234,7 @@ test("the Access menu lists titles, untitled ones as Untitled", async (t) => {
   const markup = render(Tab, workspace);
   assert.match(markup, /dir="auto"[^>]*>Roadmap</);
   assert.equal(markup.split(">notes.list.untitled<").length - 1, 2);
-  assert.match(markup, new RegExp(`${KEY}\\.notesMenuLabel`));
+  assert.match(markup, new RegExp(`${KEY}\\.notesTriggerLabel\\|count=3,name=`));
 });
 
 test("a 404 from an older API shows Failed", async (t) => {
@@ -258,15 +273,17 @@ test("without manage_members there are no checkboxes, no Actions and no ×", asy
 
 const JIN = guest("jin@x.com", "Jin Park", [note("n1", "Plan", { visibility: "link" })]);
 
-async function mountTab(t, options) {
+async function mountTab(t, { props = {}, ...options } = {}) {
   const { Tab, workspace } = await loadTab(t, options);
   const container = installHostDom(t);
   const root = createRoot(container);
   mountedRoots.set(t, root);
-  await React.act(async () => root.render(React.createElement(Tab, { workspace })));
+  await React.act(async () => root.render(React.createElement(Tab, { workspace, ...props })));
+  const rerender = () =>
+    React.act(async () => root.render(React.createElement(Tab, { workspace, ...props })));
   const item = (label) =>
     findNode(container, (node) => node.hasAttribute("data-item") && textOf(node).trim() === label);
-  return { container, item };
+  return { container, item, rerender };
 }
 
 test("the row menu offers invite, copy and remove", async (t) => {
@@ -683,4 +700,145 @@ test("a removal that removed nobody shows no success toast", async (t) => {
   assert.deepEqual(globalThis.__dropped, []);
   assert.equal(globalThis.__toasts.length, 0);
   assert.equal(globalThis.__reloads, 1);
+});
+
+test("a send from Guests also refreshes the Invitations tab", async (t) => {
+  let refreshed = 0;
+  const { item } = await mountTab(t, {
+    guests: [JIN],
+    props: { onInvitationsChanged: () => void refreshed++ },
+  });
+  await React.act(async () => propsOf(item(`${KEY}.menu.invite`)).onSelect());
+  await React.act(async () => globalThis.__inviteProps.onInvitationsChanged());
+  assert.equal(globalThis.__reloads, 1);
+  assert.equal(refreshed, 1);
+});
+
+test("inviting the last listed guests keeps the dialog until it closes, then toasts", async (t) => {
+  const { item, rerender } = await mountTab(t, { guests: [JIN] });
+  await React.act(async () => propsOf(item(`${KEY}.menu.invite`)).onSelect());
+  assert.equal(globalThis.__inviteMounted, true);
+  await React.act(async () => globalThis.__inviteProps.onInvited(["jin@x.com"]));
+  // The send moved the guest to Invitations, so the reload comes back empty.
+  globalThis.__guestsState.guests = [];
+  await rerender();
+  assert.equal(globalThis.__inviteMounted, true, "the Sent screen is still showing");
+  await React.act(async () => globalThis.__inviteProps.onOpenChange(false));
+  assert.match(globalThis.__toasts[0].title, new RegExp(`${KEY}\\.invite\\.sent\\|count=1`));
+  assert.equal(globalThis.__inviteMounted, false);
+});
+
+test("the last note of the last guest moves focus to the empty state", async (t) => {
+  const { container, rerender } = await mountTab(t, { guests: [JIN] });
+  const focused = [];
+  const frame = findNode(container, (node) => node.hasAttribute("data-guests-table"));
+  // The host DOM has no focus tracking, so record which element asked for it.
+  Object.getPrototypeOf(frame).focus = function focus() {
+    focused.push(this);
+  };
+  await React.act(async () =>
+    propsOf(removeButtons(container)[0]).onSelect({ preventDefault() {} })
+  );
+  assert.equal(focused.length, 1, "the table takes focus while it is still there");
+  globalThis.__guestsState.guests = [];
+  await rerender();
+  const empty = findNode(container, (node) => node.hasAttribute("data-guests-empty"));
+  assert.ok(empty, "the empty state renders");
+  assert.equal(empty.getAttribute("tabindex"), "-1");
+  assert.ok(focused[focused.length - 1] === empty, "the empty state takes focus once it renders");
+});
+
+test("members' notes are menu items that do nothing", async (t) => {
+  const { container } = await mountTab(t, { workspace: MEMBER, guests: [TWO] });
+  const rows = collect(container, (node) => node.hasAttribute("data-item"));
+  assert.deepEqual(
+    rows.map((node) => textOf(node).trim()),
+    ["Plan", "Roadmap"]
+  );
+  const event = {
+    preventDefault() {
+      this.prevented = true;
+    },
+  };
+  propsOf(rows[0]).onSelect(event);
+  assert.equal(event.prevented, true);
+  assert.equal(globalThis.__removeCalls.length, 0);
+});
+
+test("Failed for an SSO workspace says so and offers no Try again", async (t) => {
+  const { container } = await mountTab(t, { status: "failed", error: { kind: "ssoRequired" } });
+  assert.match(textOf(container), /workspaces\.ssoRequired\|workspace=\u2068Acme\u2069/);
+  assert.doesNotMatch(textOf(container), /workspaces\.exit\.tryAgain/);
+  assert.doesNotMatch(textOf(container), new RegExp(`${KEY}\\.failedBody`));
+});
+
+async function failWith(t, error) {
+  const { container } = await mountTab(t, { guests: [TWO] });
+  globalThis.__removeImpl = async () => {
+    throw error;
+  };
+  await React.act(async () =>
+    propsOf(removeButtons(container)[0]).onSelect({ preventDefault() {} })
+  );
+}
+
+const toastsAfter = async (t, rowKind, message = "x") => {
+  await failWith(t, Object.assign(new Error(message), { rowKind }));
+  return globalThis.__toasts;
+};
+
+test("a × refused for permission names that, not the connection", async (t) => {
+  const toasts = await toastsAfter(t, "notAllowed");
+  assert.match(toasts[0].title, /workspaces\.removeMember\.notAllowed\|workspace=\u2068Acme\u2069/);
+  assert.equal(toasts[0].variant, "destructive");
+});
+
+test("a × refused for SSO says to sign in with SSO", async (t) => {
+  const toasts = await toastsAfter(t, "ssoRequired");
+  assert.match(toasts[0].title, /workspaces\.ssoRequired\|workspace=/);
+});
+
+test("a × the server refused shows its reason", async (t) => {
+  const toasts = await toastsAfter(t, "refused", "Not today");
+  assert.equal(toasts[0].title, "Not today");
+});
+
+test("a × for a note that is gone reloads instead of toasting", async (t) => {
+  const toasts = await toastsAfter(t, "gone");
+  assert.equal(toasts.length, 0);
+  assert.equal(globalThis.__reloads, 1);
+  assert.deepEqual(globalThis.__droppedNotes, []);
+});
+
+test("a connection failure still blames the connection", async (t) => {
+  const toasts = await toastsAfter(t, "failed");
+  assert.match(toasts[0].title, new RegExp(`${KEY}\\.removeFromNoteFailed\\|`));
+});
+
+test("inviting one guest from its row keeps the rest of the selection", async (t) => {
+  const view = await mountSelectable(t, { guests: [JIN, RAVI] });
+  await view.click(view.headerBox());
+  const rowMenuInvite = findNode(
+    view.container,
+    (node) => node.hasAttribute("data-item") && textOf(node).trim() === `${KEY}.menu.invite`
+  );
+  await React.act(async () => propsOf(rowMenuInvite).onSelect());
+  assert.deepEqual(globalThis.__inviteProps.initialEmails, ["jin@x.com"]);
+  await React.act(async () => globalThis.__inviteProps.onInvited(["jin@x.com"]));
+  await React.act(async () => globalThis.__inviteProps.onOpenChange(false));
+  assert.match(textOf(view.container), /people\.selection\.count\|count=1/);
+});
+
+test("removing one guest from its row keeps the rest of the selection", async (t) => {
+  const view = await mountSelectable(t, { guests: [JIN, RAVI] });
+  await view.click(view.headerBox());
+  const rowMenuRemove = findNode(
+    view.container,
+    (node) => node.hasAttribute("data-item") && textOf(node).trim() === `${KEY}.menu.remove`
+  );
+  await React.act(async () => propsOf(rowMenuRemove).onSelect());
+  await React.act(async () =>
+    globalThis.__removeProps.onRemoved({ ...EMPTY_REMOVAL, removed: ["jin@x.com"] })
+  );
+  assert.match(textOf(view.container), /people\.selection\.count\|count=1/);
 });
