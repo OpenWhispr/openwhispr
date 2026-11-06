@@ -534,6 +534,31 @@ test("arrow keys walk the options, Enter toggles, and ArrowUp from nowhere start
   assert.equal(optionNamed("Planning").getAttribute("aria-selected"), "false");
 });
 
+test("keys that pick an IME candidate leave the list alone", async (t) => {
+  await mount(t, { spaces: SPACES });
+  await openPicker();
+  await ui.press(field(), "ArrowDown");
+  const composing = async (key) => {
+    const event = new happyWindow.KeyboardEvent("keydown", {
+      key,
+      isComposing: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    await ui.act(() => field().dispatchEvent(event));
+    return event;
+  };
+
+  assert.equal((await composing("ArrowDown")).defaultPrevented, false);
+  await composing("Enter");
+
+  assert.equal(
+    text(doc().getElementById(field().getAttribute("aria-activedescendant"))),
+    "Planning"
+  );
+  assert.equal(optionNamed("Planning").getAttribute("aria-selected"), "false");
+});
+
 test("Create new is reachable from the keyboard", async (t) => {
   await mount(t, { spaces: SPACES });
   await openPicker();

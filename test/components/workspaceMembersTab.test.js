@@ -907,6 +907,18 @@ test("the row menu's Remove opens the same dialog with one member", async (t) =>
   assert.equal(state.defaultOwnerId, "u-admin");
 });
 
+test("a row's Remove says nothing about a selected owner", async (t) => {
+  const WorkspaceMembersTab = await loadMembersTab(t, { members: PEOPLE, captureRoleMenus: true });
+  globalThis.__authUser = { id: "u-admin" };
+  const container = await mount(t, WorkspaceMembersTab, ADMIN_WORKSPACE);
+  await React.act(async () => propsOf(ownerBox(container)).onClick());
+  await React.act(async () => propsOf(memberBoxes(container)[0]).onClick());
+
+  await React.act(async () => globalThis.__roleMenus["u-mason"].onRemove());
+
+  assert.equal(globalThis.__removeDialog.ownerKept, false);
+});
+
 const addMenuNode = (container) =>
   findNode(container, (node) => node.hasAttribute?.("data-add-to-teamspace"));
 

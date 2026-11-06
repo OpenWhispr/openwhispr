@@ -484,6 +484,7 @@ function TeamspacePicker({
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
+    if (event.nativeEvent.isComposing) return;
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       if (rowCount === 0) return;
       event.preventDefault();

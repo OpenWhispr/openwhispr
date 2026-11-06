@@ -72,6 +72,8 @@ export default function WorkspaceMembersTab({
   );
   const [transferState, dispatchTransfer] = useReducer(transferReducer, { kind: "closed" });
   const [removeState, dispatchRemove] = useReducer(memberRemovalReducer, { kind: "closed" });
+  // Whether the removal on screen was the bar's and left a selected owner out.
+  const [removalKeepsOwner, setRemovalKeepsOwner] = useState(false);
   const [selection, setSelection] = useState<RowSelection>(() => new Set());
   const [joinRequests, setJoinRequests] = useState<WorkspaceJoinRequest[]>([]);
   const [decidingId, setDecidingId] = useState<string | null>(null);
@@ -293,7 +295,8 @@ export default function WorkspaceMembersTab({
     }
   }
 
-  function openRemoval(subjects: WorkspaceMember[]): void {
+  function openRemoval(subjects: WorkspaceMember[], ownerKept = false): void {
+    setRemovalKeepsOwner(ownerKept);
     dispatchRemove({ type: "open", subjects, defaultOwnerId: user?.id ?? "" });
   }
 
@@ -579,7 +582,7 @@ export default function WorkspaceMembersTab({
                   id: "remove",
                   label: t("settingsPage.workspace.people.selection.remove"),
                   tone: "destructive",
-                  onClick: () => openRemoval(removableMembers),
+                  onClick: () => openRemoval(removableMembers, ownerSelected),
                 },
               ]
             : []
@@ -644,7 +647,7 @@ export default function WorkspaceMembersTab({
         roster={members}
         state={removeState}
         dispatch={dispatchRemove}
-        ownerKept={ownerSelected}
+        ownerKept={removalKeepsOwner}
         onRemoved={(removedIds) => setSelection((current) => setRows(current, removedIds, false))}
       />
     </div>
