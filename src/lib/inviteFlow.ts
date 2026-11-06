@@ -303,6 +303,8 @@ function withRecipients(state: InviteFlowState, recipients: InviteRecipient[]): 
 
 export function createInviteFlow(input: {
   initialEmail?: string;
+  /** Addresses to open as chips; invalid ones are dropped, since they came from the server. */
+  initialEmails?: string[];
   attachInvited?: boolean;
 }): InviteFlowState {
   const base: InviteFlowState = {
@@ -318,6 +320,12 @@ export function createInviteFlow(input: {
     seats: { purchasedLeft: null, ceilingLeft: null },
     rateLimit: null,
   };
+  if (input.initialEmails !== undefined) {
+    return addEmails(
+      base,
+      input.initialEmails.filter((email) => isValidEmail(normalize(email)))
+    );
+  }
   const initialEmail = input.initialEmail?.trim() ?? "";
   if (!initialEmail) return base;
   // A caller can pass a half-typed address (a roster search for "john@acme"); a chip could only

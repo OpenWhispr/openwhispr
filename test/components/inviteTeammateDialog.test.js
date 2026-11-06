@@ -924,3 +924,42 @@ test("a run that changed no invitation doesn't ask", async (t) => {
     assert.equal(changes, 0, kind);
   }
 });
+
+test("initialEmails open as chips and reopening resets to them", async (t) => {
+  const { latest, rerender } = await mountDialog(t, {
+    open: true,
+    onOpenChange: () => {},
+    workspaceId: "w1",
+    workspaceName: "Acme",
+    initialEmails: ["jin@x.com", "ravi@x.com"],
+  });
+  const chips = () => latest().state.recipients.map((recipient) => recipient.email);
+  assert.deepEqual(chips(), ["jin@x.com", "ravi@x.com"]);
+
+  await React.act(async () => latest().dispatch({ type: "remove", email: "jin@x.com" }));
+  assert.deepEqual(chips(), ["ravi@x.com"]);
+
+  await rerender({ open: false });
+  await rerender({ open: true });
+  assert.deepEqual(chips(), ["jin@x.com", "ravi@x.com"]);
+});
+
+test("heading replaces the title and description", async (t) => {
+  const heading = {
+    title: "Invite 2 guests to Ronnie's Space",
+    description: "They'll get a link.",
+  };
+  const { latest } = await mountDialog(t, {
+    open: true,
+    onOpenChange: () => {},
+    workspaceId: "w1",
+    workspaceName: "Acme",
+    heading,
+  });
+  assert.deepEqual(latest().heading, heading);
+
+  const { container } = await mountWithWorkspace(t, WORKSPACE, { heading }, { realView: true });
+  assert.match(container.textContent, /Invite 2 guests to Ronnie's Space/);
+  assert.match(container.textContent, /They'll get a link\./);
+  assert.doesNotMatch(container.textContent, /workspaces\.invite\.title/);
+});
