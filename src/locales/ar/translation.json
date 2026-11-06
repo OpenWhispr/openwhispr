@@ -4803,6 +4803,9 @@
         "noteCount_many": "{{count}} ملاحظة",
         "noteCount_other": "{{count}} ملاحظة",
         "notesMenuLabel": "الملاحظات المشتركة مع {{name}}",
+        "removeFromNote": "إزالة من {{note}}",
+        "removedFromNote": "تمت إزالة {{name}} من {{note}}",
+        "removeFromNoteFailed": "تعذّرت إزالة {{name}} من {{note}}. تحقق من اتصالك وحاول مرة أخرى.",
         "menu": {
           "label": "إجراءات {{name}}",
           "invite": "دعوة إلى مساحة العمل",

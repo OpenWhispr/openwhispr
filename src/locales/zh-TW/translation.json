@@ -3093,6 +3093,9 @@
         "noteCount_one": "{{count}} 則筆記",
         "noteCount_other": "{{count}} 則筆記",
         "notesMenuLabel": "與 {{name}} 共享的筆記",
+        "removeFromNote": "從 {{note}} 移除",
+        "removedFromNote": "已將 {{name}} 從 {{note}} 移除",
+        "removeFromNoteFailed": "無法將 {{name}} 從 {{note}} 移除。請檢查網路連線後再試一次。",
         "menu": {
           "label": "{{name}} 的操作",
           "invite": "邀請加入工作區",

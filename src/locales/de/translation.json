@@ -2354,6 +2354,9 @@
         "noteCount_one": "{{count}} Notiz",
         "noteCount_other": "{{count}} Notizen",
         "notesMenuLabel": "Mit {{name}} geteilte Notizen",
+        "removeFromNote": "Aus {{note}} entfernen",
+        "removedFromNote": "{{name}} wurde aus {{note}} entfernt",
+        "removeFromNoteFailed": "{{name}} konnte nicht aus {{note}} entfernt werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
         "menu": {
           "label": "Aktionen für {{name}}",
           "invite": "Zum Workspace einladen",

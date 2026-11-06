@@ -3173,6 +3173,9 @@
         "noteCount_many": "{{count}} заметок",
         "noteCount_other": "{{count}} заметки",
         "notesMenuLabel": "Заметки, доступные {{name}}",
+        "removeFromNote": "Убрать из {{note}}",
+        "removedFromNote": "{{name}} убран из {{note}}",
+        "removeFromNoteFailed": "Не удалось убрать {{name}} из {{note}}. Проверьте подключение и повторите попытку.",
         "menu": {
           "label": "Действия для {{name}}",
           "invite": "Пригласить в рабочее пространство",

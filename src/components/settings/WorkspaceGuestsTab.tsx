@@ -3,8 +3,19 @@ import { useTranslation } from "react-i18next";
 import { useWorkspaceGuests } from "../../hooks/useWorkspaceGuests";
 import { workspaceCan } from "../../lib/capabilities";
 import { guestDisplayName } from "../../lib/guestsView";
+import { GuestsService } from "../../services/GuestsService";
 import { isolate } from "../../utils/bidiIsolate";
-import { ChevronDown, Copy, FileText, MoreHorizontal, Trash2, UserPlus, Users } from "../icons";
+import {
+  ChevronDown,
+  Copy,
+  FileText,
+  Loader2,
+  MoreHorizontal,
+  Trash2,
+  UserPlus,
+  Users,
+  X,
+} from "../icons";
 import InviteTeammateDialog from "../InviteTeammateDialog";
 import MemberAvatar from "../MemberAvatar";
 import { Button } from "../ui/button";
@@ -30,13 +41,43 @@ export default function WorkspaceGuestsTab({ workspace }: Props): React.ReactEle
   const { t } = useTranslation();
   // The workspace key remounts the tab per workspace, so the hook only ever sees one id here.
   const { toast } = useToast();
-  const { status, guests, reload, dropGuests } = useWorkspaceGuests(workspace.id);
+  const { status, guests, reload, dropGuests, dropGuestNote } = useWorkspaceGuests(workspace.id);
   const canManage = workspaceCan(workspace, "manage_members");
   const [inviting, setInviting] = useState<WorkspaceGuest | null>(null);
   const [removing, setRemoving] = useState<WorkspaceGuest | null>(null);
   // Invitations sent since the invite dialog opened, for the toast when it closes.
   const sentRef = useRef(0);
   const columnCount = canManage ? 3 : 2;
+  const frameRef = useRef<HTMLDivElement>(null);
+
+  // Ends one guest's access to one note. Resolves true when the server removed it.
+  const removeFromNote = async (guest: WorkspaceGuest, noteId: string): Promise<boolean> => {
+    const target = guest.notes.find((note) => note.id === noteId);
+    const names = {
+      name: isolate(guestDisplayName(guest)),
+      note: isolate(target?.title?.trim() ? target.title : t("notes.list.untitled")),
+    };
+    try {
+      const result = await GuestsService.remove(workspace.id, {
+        emails: [guest.email],
+        note_id: noteId,
+      });
+      const email = guest.email.toLowerCase();
+      if (!result.removed.some((removed) => removed.toLowerCase() === email)) {
+        // Already gone or a member by now: the reload corrects the row without a false success.
+        void reload();
+        return false;
+      }
+      // Shown gone at once: the reload below can fail and would leave the note listed.
+      dropGuestNote(guest.email, noteId);
+      toast({ title: t(`${KEY}.removedFromNote`, names) });
+      void reload();
+      return true;
+    } catch {
+      toast({ title: t(`${KEY}.removeFromNoteFailed`, names), variant: "destructive" });
+      return false;
+    }
+  };
 
   const copyEmail = async (guest: WorkspaceGuest): Promise<void> => {
     try {
@@ -101,7 +142,12 @@ export default function WorkspaceGuestsTab({ workspace }: Props): React.ReactEle
   if (status === "ready" && guests.length === 0) return <EmptyGuests />;
 
   return (
-    <div className={TABLE_FRAME}>
+    <div
+      ref={frameRef}
+      tabIndex={-1}
+      data-guests-table=""
+      className={cn(TABLE_FRAME, "outline-none")}
+    >
       {dialogs}
       <table className="w-full table-fixed border-collapse">
         <colgroup>
@@ -140,6 +186,8 @@ export default function WorkspaceGuestsTab({ workspace }: Props): React.ReactEle
                 key={guest.email}
                 guest={guest}
                 canManage={canManage}
+                onRemoveFromNote={(noteId) => removeFromNote(guest, noteId)}
+                onTableFocus={() => frameRef.current?.focus()}
                 onInvite={() => setInviting(guest)}
                 onCopy={() => void copyEmail(guest)}
                 onRemove={() => setRemoving(guest)}
@@ -201,6 +249,8 @@ function EmptyGuests(): React.ReactElement {
 interface GuestRowProps {
   guest: WorkspaceGuest;
   canManage: boolean;
+  onRemoveFromNote: (noteId: string) => Promise<boolean>;
+  onTableFocus: () => void;
   onInvite: () => void;
   onCopy: () => void;
   onRemove: () => void;
@@ -209,6 +259,8 @@ interface GuestRowProps {
 function GuestRow({
   guest,
   canManage,
+  onRemoveFromNote,
+  onTableFocus,
   onInvite,
   onCopy,
   onRemove,
@@ -238,7 +290,12 @@ function GuestRow({
         </div>
       </td>
       <td className="ps-3 pe-4 max-w-0">
-        <AccessCell guest={guest} />
+        <AccessCell
+          guest={guest}
+          canManage={canManage}
+          onRemoveFromNote={onRemoveFromNote}
+          onTableFocus={onTableFocus}
+        />
       </td>
       {canManage ? (
         <td className="ps-3 pe-4 text-end">
@@ -249,11 +306,40 @@ function GuestRow({
   );
 }
 
-function AccessCell({ guest }: { guest: WorkspaceGuest }): React.ReactElement {
+function AccessCell({
+  guest,
+  canManage,
+  onRemoveFromNote,
+  onTableFocus,
+}: Pick<
+  GuestRowProps,
+  "guest" | "canManage" | "onRemoveFromNote" | "onTableFocus"
+>): React.ReactElement {
   const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  // Notes whose removal is in flight; a press on one of them does nothing.
+  const [sending, setSending] = useState<ReadonlySet<string>>(new Set());
+  const sendingRef = useRef(new Set<string>());
+  // Set when the last note went: the row is leaving, so focus goes to the table, not the trigger.
+  const emptiedRef = useRef(false);
   const label = t(`${KEY}.noteCount`, { count: guest.notes.length });
+
+  const removeNote = async (noteId: string): Promise<void> => {
+    if (sendingRef.current.has(noteId)) return;
+    sendingRef.current.add(noteId);
+    setSending(new Set(sendingRef.current));
+    // The row can unmount as soon as the removal lands, so the flag is set before it.
+    const emptying = guest.notes.every((note) => note.id === noteId);
+    if (emptying) emptiedRef.current = true;
+    const removed = await onRemoveFromNote(noteId);
+    sendingRef.current.delete(noteId);
+    setSending(new Set(sendingRef.current));
+    if (!removed) emptiedRef.current = false;
+    else if (emptying) setOpen(false);
+  };
+
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger
         className={CONTACTS_TRIGGER}
         aria-label={`${t(`${KEY}.notesMenuLabel`, { name: isolate(guestDisplayName(guest)) })}: ${label}`}
@@ -261,17 +347,51 @@ function AccessCell({ guest }: { guest: WorkspaceGuest }): React.ReactElement {
         <span className="truncate">{label}</span>
         <ChevronDown className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="max-h-72 w-72 overflow-y-auto p-1.5">
-        <ul className="flex flex-col">
-          {guest.notes.map((note) => (
-            <li key={note.id} className="flex items-center gap-2.5 px-2 py-1.5">
+      <DropdownMenuContent
+        align="start"
+        className="max-h-72 w-72 overflow-y-auto p-1.5"
+        onCloseAutoFocus={(event) => {
+          if (!emptiedRef.current) return;
+          emptiedRef.current = false;
+          event.preventDefault();
+          onTableFocus();
+        }}
+      >
+        {guest.notes.map((note) => {
+          const title = note.title?.trim() ? note.title : t("notes.list.untitled");
+          const isSending = sending.has(note.id);
+          return (
+            <div key={note.id} className="flex items-center gap-2.5 px-2 py-1.5">
               <FileText aria-hidden="true" size={14} className="shrink-0 text-muted-foreground" />
               <span dir="auto" className="min-w-0 flex-1 truncate text-xs text-foreground">
-                {note.title?.trim() ? note.title : t("notes.list.untitled")}
+                {title}
               </span>
-            </li>
-          ))}
-        </ul>
+              {canManage ? (
+                <DropdownMenuItem
+                  asChild
+                  onSelect={(event) => {
+                    // Keep the menu open: the other notes are still listed.
+                    event.preventDefault();
+                    void removeNote(note.id);
+                  }}
+                >
+                  <button
+                    type="button"
+                    aria-label={t(`${KEY}.removeFromNote`, { note: isolate(title) })}
+                    aria-disabled={isSending}
+                    className="inline-flex size-5 shrink-0 cursor-default items-center justify-center rounded text-muted-foreground outline-none transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:ring-1 focus-visible:ring-primary/30 aria-disabled:opacity-60"
+                  >
+                    {isSending ? (
+                      <Loader2 className="size-3 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <X className="size-3" aria-hidden="true" />
+                    )}
+                  </button>
+                </DropdownMenuItem>
+              ) : null}
+            </div>
+          );
+        })}
       </DropdownMenuContent>
     </DropdownMenu>
   );

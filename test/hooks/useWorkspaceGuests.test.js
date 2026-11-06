@@ -170,3 +170,31 @@ test("dropGuests takes whole guests out and survives a failed reload", async (t)
     ["b@x.com"]
   );
 });
+
+test("dropGuestNote takes one note off a guest and drops a guest left with none", async (t) => {
+  const { mount, state } = await loadHook(t);
+  const withNotes = (email, ids) => ({
+    ...guest(email),
+    notes: ids.map((id) => ({ id, title: id, permission: "viewer", visibility: "invited" })),
+  });
+  globalThis.__guestListImpl = async () => [
+    withNotes("a@x.com", ["n1", "n2"]),
+    withNotes("b@x.com", ["n1"]),
+  ];
+  await mount("w1");
+
+  await React.act(async () => state().dropGuestNote("A@x.com", "n1"));
+  assert.deepEqual(
+    state().guests.map((g) => [g.email, g.notes.map((n) => n.id)]),
+    [
+      ["a@x.com", ["n2"]],
+      ["b@x.com", ["n1"]],
+    ]
+  );
+
+  await React.act(async () => state().dropGuestNote("b@x.com", "n1"));
+  assert.deepEqual(
+    state().guests.map((g) => g.email),
+    ["a@x.com"]
+  );
+});

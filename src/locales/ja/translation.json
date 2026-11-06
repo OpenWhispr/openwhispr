@@ -3093,6 +3093,9 @@
         "noteCount_one": "{{count}} 件のノート",
         "noteCount_other": "{{count}} 件のノート",
         "notesMenuLabel": "{{name}} と共有しているノート",
+        "removeFromNote": "{{note}} から削除",
+        "removedFromNote": "{{name}} を {{note}} から削除しました",
+        "removeFromNoteFailed": "{{name}} を {{note}} から削除できませんでした。接続を確認して、もう一度お試しください。",
         "menu": {
           "label": "{{name}} の操作",
           "invite": "ワークスペースに招待",
