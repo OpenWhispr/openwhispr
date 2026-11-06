@@ -72,22 +72,32 @@ const SAVED_OBJECT = /\bkeys?\b/i;
 
 const ALL_VERBS = [...KIND_OF_VERB.keys()];
 const ADVERBS = String.raw`(?:(?:just|already|now|also|successfully)\s+)*`;
-// (a) "I've sent", "I have just posted", "I sent". "Drafted" only in a report:
-// "I've drafted it below" describes the reply's own text.
+// (a) "I've sent", "I have just posted", "I sent", "I went ahead and sent".
+// "Drafted" only in a report: "I've drafted it below" describes the reply's
+// own text.
 const FIRST_PERSON = new RegExp(
-  String.raw`\bI(?:['’]ve|\s+have)?\s+${ADVERBS}(${ALL_VERBS.filter((verb) => verb !== "drafted").join("|")})\b`,
+  String.raw`\bI(?:['’]ve|\s+have)?\s+(?:(?:went|gone)\s+ahead\s+and\s+)?${ADVERBS}(${ALL_VERBS.filter((verb) => verb !== "drafted").join("|")})\b`,
   "gi"
 );
-// (b) A result report: "it was sent", "your email to Gabe has been sent",
-// "the issue is now created", "it's been posted". "That" opens the sentence:
-// elsewhere it is a relative clause about something else ("the suit that was
-// filed").
+// (b) A result report: "it was sent", "your email to Gabe Smith has been
+// sent", "your Slack message was sent", "the issue is now created", "it's been
+// posted". "That" opens the sentence: elsewhere it is a relative clause about
+// something else ("the suit that was filed").
 const REPORT = new RegExp(
-  String.raw`(?:^\W*that|\b(?:it|your\s+[\w-]+|the\s+(?:email|message|draft|issue|comment|note)))(?:\s+to\s+(?:the\s+)?\S+)?(?:\s+(?:was|has\s+been|is\s+now)|['’]s\s+been)\s+${ADVERBS}(${ALL_VERBS.join("|")})\b`,
+  String.raw`(?:^\W*that|\b(?:it|your\s+(?:(?:slack|linear|github)\s+(?=(?:message|comment|issue|post|reply)\b))?[\w-]+|the\s+(?:email|message|draft|issue|comment|note)))(?:\s+to\s+(?:the\s+)?\S+(?:\s+[\w'’-]+)?)?(?:\s+(?:was|has\s+been|is\s+now)|['’]s\s+been)\s+${ADVERBS}(${ALL_VERBS.join("|")})\b`,
   "gi"
 );
 // (c) "Sent to Gabe!", "Message posted to #eng".
 const SENT_TO = /^\W*(?:(?:email|message|reply|comment)\s+)?(sent|posted)\s+to\b/gi;
+// (d) Alone, a short report: "Email sent.", "Sent it!". A label ("**Sent**")
+// has no full stop. Only on the reply's first line, and not in a bulleted
+// list or a numbered one LIST_ITEM or INLINE_LIST spots: further down or in a
+// list it is more likely a status the reply passes on.
+const SENT_ALONE = /^\W*(?:(?:email|message|reply|comment)\s+)?(sent|posted)(?:\s+it)?[.!]+\s*$/gi;
+const LIST_ITEM = /^\s*(?:[-*+•]|\d+[.)])\s/;
+// A numbered list on the first line: two items ("Acme: 1. Done. 2. Email
+// sent."), or a first item after a colon or a sentence's end.
+const INLINE_LIST = /(?:^|\s)\d+[.)]\s.*\s\d+[.)]\s|[:.!?][*_]*\s+1[.)]\s/;
 
 // A clause that is a condition, a plan or someone else's account ("Once it's
 // sent", "According to your notes, …", "saved automatically") claims nothing,
@@ -215,13 +225,23 @@ const FORMS: ReadonlyArray<[RegExp, "first" | "report" | "sentTo"]> = [
   [FIRST_PERSON, "first"],
   [REPORT, "report"],
   [SENT_TO, "sentTo"],
+  [SENT_ALONE, "report"],
 ];
 
 function claimsIn(text: string, askedToWrite: boolean): Claim[] {
   const claims: Claim[] = [];
-  for (const sentence of ownWords(text, askedToWrite).split(/(?<=[.!?])\s+|\n+/)) {
+  const own = ownWords(text, askedToWrite);
+  const firstLine = own.trimStart().split("\n", 1)[0];
+  const lead = new Set(
+    LIST_ITEM.test(firstLine) || INLINE_LIST.test(firstLine)
+      ? []
+      : firstLine.split(/(?<=[.!?])\s+/).map((s) => s.trim())
+  );
+  for (const sentence of own.split(/(?<=[.!?])\s+|\n+/)) {
     if (sentence.trim().endsWith("?") || LABELLED_LINE.test(sentence)) continue;
     for (const [pattern, form] of FORMS) {
+      if (pattern === SENT_ALONE && (!lead.has(sentence.trim()) || LIST_ITEM.test(sentence)))
+        continue;
       for (const match of sentence.matchAll(pattern)) {
         const verb = match[1].toLowerCase();
         const kind = KIND_OF_VERB.get(verb);
@@ -319,12 +339,13 @@ export function isUnbackedClaim(
       const { tools, did } = KINDS[kind];
       if (!tools.some(isOffered) || theirWords.includes(phrase)) return false;
       if (thirdPerson && lookedUp) return false;
-      if (turnCalls.some((call) => tools.includes(call.name) && did(call))) return false;
+      // A connector call that asked to connect first backs the connect too.
+      const ofKind = (call: ToolCallInfo) =>
+        (kind === "connect" || tools.includes(call.name)) && did(call);
+      if (turnCalls.some(ofKind)) return false;
       return (
         !(report || asksIfDone) ||
-        !earlierCalls.some(
-          (call) => tools.includes(call.name) && did(call) && wentTo(call, destination)
-        )
+        !earlierCalls.some((call) => ofKind(call) && wentTo(call, destination))
       );
     }
   );

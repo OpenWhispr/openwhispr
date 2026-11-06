@@ -108,6 +108,14 @@ test("the three forms in the reply's own voice are claims", async () => {
     "The draft has been drafted and is in Gmail.",
     "Sent to #eng.",
     "✅ Email sent to Josh.",
+    "Your email to Gabe Smith has been sent.",
+    "Your Slack message was sent.",
+    "Done! Email sent.",
+    "Sent it.",
+    "Email sent!\n\nLet me know if you'd like anything else.",
+    "Moved the call to Nov 12. Email sent.",
+    "I went ahead and sent the email.",
+    "I've gone ahead and posted it.",
     "I've connected Gmail for you.",
     "I've saved your OpenAI key.",
     "I've created the note.",
@@ -131,6 +139,14 @@ test("plans, questions, negations, states and descriptions are not claims", asyn
     "I've saved it to your notes.",
     "Done ✅",
     "If it was sent, Gabe has it by now.",
+    "Not sent yet.",
+    "Message sent?",
+    "I went ahead and drafted it below.",
+    "Your Slack workspace was connected last week.",
+    "Your GitHub account is now connected, but the app isn't installed on that repo.",
+    "**Sent**\n- Proposal to Acme\n**Drafts**\n- Budget",
+    "## Sent",
+    "- Email sent",
     "",
   ]) {
     assert.equal(await unbacked(text), false, text);
@@ -377,6 +393,37 @@ test("a real connect or saved key backs saying so; a dismissed card doesn't", as
   assert.equal(await unbacked("I've saved your OpenAI key.", { turnCalls: [savedKey] }), false);
   assert.equal(await unbacked("I've connected Gmail.", { turnCalls: [dismissed] }), true);
   assert.equal(await unbacked("I've saved your OpenAI key.", { turnCalls: [connected] }), true);
+
+  // A send that asked to connect first: its connect card backs the connect.
+  const connectedThenSent = call("slack_send_message", {
+    metadata: { status: "sent" },
+    interaction: {
+      payload: { kind: "connection", target: "slack" },
+      state: "settled",
+      result: { status: "connected" },
+    },
+  });
+  assert.equal(
+    await unbacked("I've connected Slack and I've sent the message.", {
+      turnCalls: [connectedThenSent],
+    }),
+    false
+  );
+  assert.equal(
+    await unbacked("I've connected Slack and I've sent the message.", {
+      turnCalls: [sent("slack_send_message")],
+    }),
+    true,
+    "a send alone doesn't back the connect"
+  );
+  assert.equal(
+    await unbacked("Yes, I connected Slack earlier.", {
+      request: { text: "Did you connect Slack?" },
+      earlierCalls: [connectedThenSent],
+    }),
+    false,
+    "nor in a later turn"
+  );
 });
 
 test("an earlier turn backs only a report of the same kind, to whoever it names", async () => {
@@ -445,6 +492,44 @@ test("a standup or update the user asked for is not the reply's own voice", asyn
     "**Yesterday:** I filed two bugs in Linear.",
   ]) {
     assert.equal(await unbacked(text, { request }), false, text);
+  }
+});
+
+test('a bare "Email sent." is a report: an earlier send or this turn\'s lookup backs it', async () => {
+  assert.equal(await unbacked("Done! Email sent."), true);
+  assert.equal(
+    await unbacked("You're welcome! Email sent.", {
+      request: { text: "Thanks!" },
+      earlierCalls: [sent()],
+    }),
+    false
+  );
+  assert.equal(
+    await unbacked("Yes. Email sent.", {
+      request: { text: "Did I send Acme the proposal?" },
+      turnCalls: [call("search_notes")],
+    }),
+    false
+  );
+  // Further down or in a list it is a status passed on, as from library
+  // notes, not a claim.
+  for (const text of [
+    "Where things are with Acme:\n- Proposal reviewed with Dana.\n- Email sent.",
+    "1. Email sent.",
+    "- Proposal reviewed. Email sent.",
+    "Progress so far:\n\nEmail sent.\nInvoice pending.",
+    "Acme status: - Proposal reviewed. - Email sent.",
+    "Acme: • Proposal reviewed. • Email sent.",
+    "Acme: 1. Proposal reviewed. 2. Email sent.",
+    "**Acme:** 1. Email sent. 2. Invoice pending.",
+    "Acme: 1. Proposal reviewed, 2. Email sent.",
+    "Here's where Acme stands: 1. Email sent.\n2. Invoice pending.",
+  ]) {
+    assert.equal(
+      await unbacked(text, { request: { text: "Where are we with Acme?" } }),
+      false,
+      text
+    );
   }
 });
 
