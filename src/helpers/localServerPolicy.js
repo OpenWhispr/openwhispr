@@ -1,7 +1,7 @@
-// Which model each LLM scope needs pre-warmed in the shared llama-server, and
-// whether that server can be stopped. This is the single rule for stopping it:
-// every scope that can run locally shares the one server, so it may only stop
-// once none of them needs the model it holds.
+// Which model each LLM scope needs pre-warmed in the local llama-servers, and
+// whether a server can be stopped. This is the single rule for stopping one:
+// scopes that use the same model share its server, so it may only stop once
+// none of them needs the model it holds.
 //
 // A scope stores its local selection as a catalog family id (qwen, gemma, …),
 // never the literal "local", so only the scope's mode says whether it runs
@@ -40,9 +40,10 @@ export function resolveLocalServerNeeds({
   return { cleanup, dictationAgent, models };
 }
 
-// The one model launch pre-warms. The server holds a single model, so warming
-// both scopes' models would load one only to replace it with the other. Cleanup
-// runs on every dictation; the Voice Assistant only when summoned.
+// The one model launch pre-warms. Cleanup runs on every dictation; the Voice
+// Assistant only when summoned, so its model loads on first use (beside the
+// cleanup model where memory allows, see modelManagerBridge's server pool)
+// rather than holding memory from launch.
 export function resolvePrewarmModel({
   cleanupProvider,
   cleanupModel,
@@ -54,7 +55,7 @@ export function resolvePrewarmModel({
   return "";
 }
 
-// The server holds one model, so it can also go when no scope needs the model
+// Each server holds one model, so it can also go when no scope needs the model
 // it has loaded: the next local request reloads it with the right one anyway.
 export function shouldStopLocalServer({ models }, loadedModelId) {
   return loadedModelId ? !models.includes(loadedModelId) : models.length === 0;

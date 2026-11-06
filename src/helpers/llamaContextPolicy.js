@@ -162,6 +162,9 @@ function resolveContextCeiling({
   hasRecurrentState = false,
   trainedContextTokens = 0,
   discreteGpuUnverified = false,
+  // What another llama-server already holds (residentServerBytes), charged to
+  // this one's budget so two servers together stay inside the one allowance.
+  residentBytes = 0,
 }) {
   if (!Number.isFinite(totalMemoryBytes) || totalMemoryBytes <= 0) {
     return fallbackCeiling("no-memory-info");
@@ -173,6 +176,7 @@ function resolveContextCeiling({
   const budgetBytes = totalMemoryBytes * USABLE_MEMORY_FRACTION - FIXED_OS_RESERVE_BYTES;
   const kvBudgetBytes =
     budgetBytes -
+    residentBytes -
     weightsBytes -
     draftWeightsBytes -
     COMPUTE_FIXED_BYTES -
@@ -207,6 +211,38 @@ function resolveContextCeiling({
   };
 }
 
+/**
+ * Memory one running server takes out of the shared budget: its weights,
+ * drafter, fixed compute and recurrent state, plus KV and compute at its
+ * window (never below the baseline every server starts at). Same terms as
+ * resolveContextCeiling, so the two can never disagree about what fits.
+ */
+function residentServerBytes(
+  { weightsBytes = 0, draftWeightsBytes = 0, kvBytesPerToken, hasRecurrentState = false },
+  contextSize = 0
+) {
+  return (
+    weightsBytes +
+    draftWeightsBytes +
+    COMPUTE_FIXED_BYTES +
+    (hasRecurrentState ? RECURRENT_STATE_BYTES : 0) +
+    Math.max(contextSize || 0, BASELINE_CONTEXT_SIZE) * (kvBytesPerToken + COMPUTE_BYTES_PER_TOKEN)
+  );
+}
+
+/**
+ * Whether a server for `profile` at `contextSize` fits beside servers already
+ * holding `residentBytes`, within the budget a single server gets on its own.
+ * An unknown KV cost or memory size answers no: one server is the safe default.
+ */
+function fitsBesideResidentServers(profile, contextSize, { totalMemoryBytes, residentBytes }) {
+  if (!Number.isFinite(totalMemoryBytes) || totalMemoryBytes <= 0) return false;
+  if (!Number.isFinite(profile?.kvBytesPerToken) || profile.kvBytesPerToken <= 0) return false;
+  if (!Number.isFinite(residentBytes)) return false;
+  const budgetBytes = totalMemoryBytes * USABLE_MEMORY_FRACTION - FIXED_OS_RESERVE_BYTES;
+  return residentBytes + residentServerBytes(profile, contextSize) <= budgetBytes;
+}
+
 // Quantizing the chosen context bounds how many distinct restarts a session can
 // cause: at most one per rung per model, however many differently-sized
 // requests arrive.
@@ -233,6 +269,8 @@ module.exports = {
   kvBytesPerToken,
   resolveContextCeiling,
   resolveContextSize,
+  residentServerBytes,
+  fitsBesideResidentServers,
   CONTEXT_STEPS,
   BASELINE_CONTEXT_SIZE,
   USABLE_MEMORY_FRACTION,

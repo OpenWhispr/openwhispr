@@ -348,3 +348,73 @@ test("resolveContextSize honours a caller floor without breaching the ceiling", 
 test("resolveContextSize never drops below the baseline even with a tiny ceiling", () => {
   assert.equal(policy.resolveContextSize({ needed: 100, ceiling: 4096 }), 16384);
 });
+
+// Two llama-servers side by side (dictation cleanup + assistant) share the
+// budget one server gets alone. Real Qwen3.5 2B / 4B Q4_K_M numbers.
+const QWEN35_2B = {
+  weightsBytes: 1_396_198_496,
+  kvBytesPerToken: 51200,
+  hasRecurrentState: true,
+};
+const QWEN35_4B = {
+  weightsBytes: 3_013_027_808,
+  kvBytesPerToken: 135168,
+  hasRecurrentState: true,
+};
+
+test("a resident server is charged its weights, fixed costs and window", () => {
+  const atBaseline = policy.residentServerBytes(QWEN35_4B, 0);
+  assert.equal(
+    atBaseline,
+    QWEN35_4B.weightsBytes +
+      policy.COMPUTE_FIXED_BYTES +
+      policy.RECURRENT_STATE_BYTES +
+      policy.BASELINE_CONTEXT_SIZE * (QWEN35_4B.kvBytesPerToken + policy.COMPUTE_BYTES_PER_TOKEN)
+  );
+  assert.ok(policy.residentServerBytes(QWEN35_4B, 65536) > atBaseline);
+});
+
+test("the cleanup and assistant pair fits from 24 GB, not on 16 or 18 GB", () => {
+  const fits = (gb) =>
+    policy.fitsBesideResidentServers(QWEN35_2B, policy.BASELINE_CONTEXT_SIZE, {
+      totalMemoryBytes: gb * GIB,
+      residentBytes: policy.residentServerBytes(QWEN35_4B, policy.BASELINE_CONTEXT_SIZE),
+    });
+  assert.deepEqual([16, 18, 24, 36, 48].map(fits), [false, false, true, true, true]);
+});
+
+test("a grown window on the other server can leave no room for a second", () => {
+  assert.equal(
+    policy.fitsBesideResidentServers(QWEN35_2B, policy.BASELINE_CONTEXT_SIZE, {
+      totalMemoryBytes: 24 * GIB,
+      residentBytes: policy.residentServerBytes(QWEN35_4B, 32768),
+    }),
+    false
+  );
+});
+
+test("a second server whose cost or memory is unknown does not fit", () => {
+  const resident = policy.residentServerBytes(QWEN35_4B, 0);
+  const at = (profile, totalMemoryBytes, residentBytes = resident) =>
+    policy.fitsBesideResidentServers(profile, 0, { totalMemoryBytes, residentBytes });
+  assert.equal(at({ ...QWEN35_2B, kvBytesPerToken: null }, 48 * GIB), false);
+  assert.equal(at(QWEN35_2B, 0), false);
+  assert.equal(at(QWEN35_2B, 48 * GIB, Infinity), false);
+});
+
+test("resident bytes come out of a server's own context ceiling", () => {
+  const base = {
+    totalMemoryBytes: 24 * GIB,
+    weightsBytes: QWEN35_4B.weightsBytes,
+    kvBytesPerToken: QWEN35_4B.kvBytesPerToken,
+    hasRecurrentState: true,
+    trainedContextTokens: 262144,
+  };
+  const alone = policy.resolveContextCeiling(base);
+  const beside = policy.resolveContextCeiling({
+    ...base,
+    residentBytes: policy.residentServerBytes(QWEN35_2B, 0),
+  });
+  assert.ok(beside.ceiling < alone.ceiling);
+  assert.ok(beside.ceiling >= policy.BASELINE_CONTEXT_SIZE);
+});

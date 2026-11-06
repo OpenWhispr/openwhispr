@@ -11,18 +11,19 @@ const handlers = new Map();
 const userDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "local-server-sync-ipc-"));
 
 const MODEL = "qwen3.5-4b-q4_k_m";
+const CLEANUP_MODEL = "qwen3.5-2b-q4_k_m";
+// One entry per running llama-server, by the model it holds.
 const modelManager = {
-  currentServerModelId: null,
-  stops: 0,
-  getServerStatus: () => ({ running: true }),
-  stopServer: async () => {
-    modelManager.stops += 1;
+  loaded: [],
+  stopped: [],
+  keepResident: null,
+  stopServersNotNeeded: async (shouldStop) => {
+    for (const modelId of modelManager.loaded) {
+      if (shouldStop(modelId)) modelManager.stopped.push(modelId);
+    }
   },
-  serverManager: {
-    keepResident: null,
-    setKeepResident: (keepResident) => {
-      modelManager.serverManager.keepResident = keepResident;
-    },
+  setKeepResident: (keepResident) => {
+    modelManager.keepResident = keepResident;
   },
 };
 
@@ -109,8 +110,8 @@ test.after(() => {
 });
 
 function sync({ loaded, signedIn = false, policySettled = true, ...scopes }) {
-  modelManager.currentServerModelId = loaded;
-  modelManager.stops = 0;
+  modelManager.loaded = Array.isArray(loaded) ? loaded : [loaded];
+  modelManager.stopped = [];
   target.signedIn = signedIn;
   return handlers.get("sync-startup-preferences")(
     {},
@@ -132,32 +133,43 @@ function sync({ loaded, signedIn = false, policySettled = true, ...scopes }) {
 
 test("a window sync keeps the server while another scope still needs its model", async () => {
   await sync({ loaded: MODEL, chatAgentMode: "local", chatAgentModel: MODEL });
-  assert.equal(modelManager.stops, 0);
+  assert.deepEqual(modelManager.stopped, []);
 });
 
 test("a window sync stops the server once no scope needs its model", async () => {
   await sync({ loaded: MODEL, chatAgentMode: "local", chatAgentModel: "gemma-4-e2b" });
-  assert.equal(modelManager.stops, 1);
+  assert.deepEqual(modelManager.stopped, [MODEL]);
+});
+
+test("with two servers, a sync stops only the one whose model no scope needs", async () => {
+  await sync({
+    loaded: [CLEANUP_MODEL, MODEL],
+    cleanupMode: "local",
+    cleanupModel: CLEANUP_MODEL,
+    chatAgentMode: "local",
+    chatAgentModel: "gemma-4-e2b",
+  });
+  assert.deepEqual(modelManager.stopped, [MODEL]);
 });
 
 test("a signed-in window waits for its workspace policy before touching the server", async () => {
   await sync({ loaded: MODEL, signedIn: true, policySettled: false });
-  assert.equal(modelManager.stops, 0);
+  assert.deepEqual(modelManager.stopped, []);
   assert.equal(target.envKeys.includes("CLEANUP_PROVIDER"), false, "no pre-warm change either");
 
   await sync({ loaded: MODEL, signedIn: true, policySettled: true });
-  assert.equal(modelManager.stops, 1);
+  assert.deepEqual(modelManager.stopped, [MODEL]);
 });
 
 test("signed out, the policy never loads, so an unresolved policy does not block the stop", async () => {
   await sync({ loaded: MODEL, signedIn: false, policySettled: false });
-  assert.equal(modelManager.stops, 1);
+  assert.deepEqual(modelManager.stopped, [MODEL]);
 });
 
 test("Keep model loaded applies before the workspace policy settles", async () => {
   await sync({ loaded: MODEL, signedIn: true, policySettled: false, keepLocalModelLoaded: true });
-  assert.equal(modelManager.serverManager.keepResident, true);
+  assert.equal(modelManager.keepResident, true);
 
   await sync({ loaded: MODEL, signedIn: true, policySettled: false });
-  assert.equal(modelManager.serverManager.keepResident, false, "missing means off");
+  assert.equal(modelManager.keepResident, false, "missing means off");
 });
