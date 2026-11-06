@@ -340,3 +340,92 @@ test("asking for the running server cancels a deferred stop", async (t) => {
   assert.equal(await deferredStop, false);
   assert.equal(stops.length, 0);
 });
+
+for (const [label, modelPath, options] of [
+  ["another model", "/models/other.gguf", { contextSize: 4096 }],
+  ["a larger context", "/models/summary.gguf", { contextSize: 8192 }],
+  ["another drafter", "/models/summary.gguf", { contextSize: 4096, draftModelPath: "/draft.gguf" }],
+]) {
+  test(`a request for ${label} cannot share an incompatible restart's success`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+    const { manager, stops } = makeManager();
+    await manager.start("/models/chat.gguf");
+    manager.processing = true;
+    const ready = Promise.withResolvers();
+    const doStart = manager._doStart;
+    manager._doStart = async (...args) => {
+      await ready.promise;
+      return doStart(...args);
+    };
+    const first = manager.start("/models/summary.gguf", { contextSize: 4096 });
+    await settle();
+    const second = manager.start(modelPath, options);
+    const rejected = assert.rejects(second, /another request|different|incompatible/i);
+    manager.processing = false;
+    t.mock.timers.tick(1000);
+    await settle();
+    ready.resolve();
+    await first;
+    await rejected;
+    assert.equal(manager.modelPath, "/models/summary.gguf");
+    assert.equal(manager.contextSize, 4096);
+    assert.equal(manager.draftModelPath, null);
+    assert.equal(stops.length, 1, "the rejected request leaves the first caller's server running");
+  });
+}
+
+test("compatible requests share a cold start and keep the larger context", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  const { manager, stops } = makeManager();
+  const ready = Promise.withResolvers();
+  const doStart = manager._doStart;
+  let starts = 0;
+  manager._doStart = async (...args) => {
+    starts += 1;
+    await ready.promise;
+    return doStart(...args);
+  };
+  const first = manager.start("/models/chat.gguf", { contextSize: 8192 });
+  const second = manager.start("/models/chat.gguf", { contextSize: 4096 });
+  ready.resolve();
+  await Promise.all([first, second]);
+  assert.equal(starts, 1);
+  assert.equal(stops.length, 0);
+  assert.equal(manager.contextSize, 8192);
+});
+
+test("restarting an unhealthy server does not wait for its slots response", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  const { manager, stops } = makeManager();
+  await manager.start("/models/chat.gguf");
+  manager.ready = false;
+  const slots = Promise.withResolvers();
+  manager._requestJson = () => slots.promise;
+  const restarting = manager.start("/models/chat.gguf");
+  t.after(async () => {
+    slots.resolve([]);
+    await restarting;
+  });
+  await settle();
+  assert.equal(stops.length, 1, "recovery must not depend on an unresponsive server");
+  assert.equal(manager.ready, true);
+});
+
+test("a deferred stop without a server cleans up without contacting a local service", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  const manager = new LlamaServerManager();
+  const requests = [];
+  manager._requestJson = async (path) => {
+    requests.push(path);
+    return [];
+  };
+  manager.ready = true;
+  manager.contextSize = 4096;
+  manager.resetIdleTimer();
+  assert.equal(await manager.stopWhenIdle(), true);
+  assert.deepEqual(requests, [], "a missing server has no slots endpoint to poll");
+  assert.equal(manager.ready, false);
+  assert.equal(manager.contextSize, null);
+  assert.equal(manager.idleTimer, null);
+  assert.equal(manager.deferredStop, null);
+});

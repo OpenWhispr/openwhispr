@@ -6,6 +6,7 @@ const { installInteractiveDom } = require("../lib/interactiveDom");
 const { setupChatTurns, until } = require("../lib/chatTurnHarness");
 
 const MOCKS = {
+  "/ui/useToast": `export const useToast = () => ({ toast: () => {} });`,
   "/ChatInput": `import { createElement } from "react"; export function ChatInput(props) { globalThis.__chatInput = props; return createElement("textarea"); }`,
   "/ConversationList": `export default function ConversationList(props) { globalThis.__conversationList = props; return null; }`,
   "/ChatMessages": `export function ChatMessages() { return null; }`,

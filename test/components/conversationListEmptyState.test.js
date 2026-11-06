@@ -45,6 +45,7 @@ async function renderConversationList(t, { active, archived }) {
         onNewChat: noop,
         onOpenSearch: noop,
         onArchive: noop,
+        onUnarchive: noop,
         onDelete: noop,
         refreshKey: 0,
       })

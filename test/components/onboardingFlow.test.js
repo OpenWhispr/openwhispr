@@ -532,3 +532,15 @@ test("a session written before the resume flags infers its hotkey confirmations"
   assert.equal(past.resume.dictationDemoCompleted, false);
   assert.equal(past.resume.assistantDemoCompleted, false);
 });
+
+test("the required-models step opens once nothing is left to wait for", async () => {
+  const { canLeaveRequiredModels } = await load();
+  const check = (loading, missing, refused) =>
+    canLeaveRequiredModels({ loading, missing, refused });
+  assert.equal(check(true, [], []), false);
+  assert.equal(check(false, ["base"], []), false);
+  assert.equal(check(false, [], []), true);
+  // The organization refused this model, so waiting for it would never end.
+  assert.equal(check(false, ["base"], ["base"]), true);
+  assert.equal(check(false, ["base", "small"], ["base"]), false);
+});

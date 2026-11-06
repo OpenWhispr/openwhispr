@@ -168,7 +168,6 @@
   },
   "common": {
     "continue": "繼續",
-    "add": "新增",
     "retry": "重試",
     "back": "返回",
     "logout": "登出",
@@ -210,6 +209,7 @@
     "skip": "略過",
     "policyAiProcessingRestricted": "AI 處理已被您的組織限制。",
     "policyAgentRestricted": "AI 助理的使用已被您的組織限制。",
+    "policyAccountChanged": "您的帳戶已變更，因此此回答已停止。",
     "policyTranscriptionRestricted": "轉錄已被您的組織限制。",
     "policyUnresolved": "貴組織的設定尚未載入完成。請稍後再試。",
     "managedConfigLoading": "正在檢查您組織的託管設定。請稍候再試。",
@@ -442,6 +442,9 @@
         "descriptionLineOne": "選擇你想在裝置上",
         "descriptionLineTwo": "執行的模型。",
         "providerLabel": "服務商",
+        "cohereLanguageLabel": "聽寫語言",
+        "cohereLanguageHint": "Cohere 無法自動偵測語言，請選擇你要聽寫的語言。",
+        "cohereLanguagePlaceholder": "選擇語言",
         "download": "下載",
         "downloadingShort": "下載中",
         "selected": "已選擇",
@@ -584,7 +587,8 @@
       "queued": "排隊中",
       "failed": {
         "title": "有一項下載未完成",
-        "description": "請檢查網路連線與磁碟剩餘空間，然後重試。如果仍然失敗，請聯絡您的管理員。"
+        "description": "請檢查網路連線與磁碟剩餘空間，然後重試。如果仍然失敗，請聯絡您的管理員。",
+        "notApproved": "你的組織未核准此模型。你可以在沒有它的情況下繼續。"
       }
     },
     "permissionGuide": {
@@ -984,9 +988,9 @@
       },
       "translationFallback": {
         "unreachableTitle": "翻譯無法使用",
-        "unreachableDescription": "你的口述內容已按原文貼上，未經翻譯。請檢查翻譯設定。",
+        "unreachableDescription": "你的口述內容維持原語言，未經翻譯。請檢查翻譯設定。",
         "failedTitle": "翻譯失敗",
-        "failedDescription": "已貼上原始文字。你可以在歷史記錄中重試。"
+        "failedDescription": "你的口述內容維持原語言，未經翻譯。你可以在歷史記錄中重試。"
       },
       "pushForceStopped": {
         "title": "轉錄內容未貼上",
@@ -1021,7 +1025,10 @@
         "manualPaste": "點擊下方按鈕複製文字，然後按 {{shortcut}} 貼上。",
         "openSettings": "開啟設定",
         "copyToClipboard": "複製到剪貼板",
-        "copyFailed": "複製失敗"
+        "copyFailed": "複製失敗",
+        "copiedTitle": "已複製，未貼上",
+        "copiedDescription": "文字已複製到剪貼簿。自動貼上需要輔助使用權限。按 {{shortcut}} 可手動貼上。",
+        "dontShowAgain": "不再提示"
       },
       "pasteFailed": {
         "title": "無法自動貼上"
@@ -1561,6 +1568,10 @@
         "label": "人員",
         "description": "成員與團隊"
       },
+      "workspaceTeamspaces": {
+        "label": "Teamspace",
+        "description": "共享筆記"
+      },
       "workspaceDeveloper": {
         "label": "開發者",
         "description": "工作區 API 金鑰"
@@ -2011,10 +2022,10 @@
         "resetToDefault": "重置為 {{hotkey}}",
         "title": "語音輸入快捷鍵",
         "linuxPttPermissionTitle": "按住說話需要額外設定",
-        "linuxPttPermissionDescription": "執行此指令並重新登入：sudo usermod -aG input $USER",
+        "linuxPttPermissionDescription": "執行此指令，然後登出你的 Linux 使用者帳號並重新登入：sudo usermod -aG input $USER",
         "linuxPttSetupTitle": "按住說話需要設定",
         "linuxPttSetupDescription": "您的使用者需要存取鍵盤輸入裝置的權限。",
-        "linuxPttSetupNote": "執行指令後，請登出並重新登入。",
+        "linuxPttSetupNote": "執行指令後，請登出你的 Linux 使用者帳號，然後重新登入。",
         "hyprlandConfigWriteWarningTitle": "Hyprland 按鍵綁定不會保留",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr 無法寫入 {{path}}，因此重新載入 Hyprland 設定後按鍵綁定不會保留。請確認該檔案存在且可寫入。",
         "hyprlandUnbindDescription": "在 Hyprland 上，OpenWhispr 會佔用所選快捷鍵。當 OpenWhispr 註冊該快捷鍵時，任何使用相同按鍵組合的既有 Hyprland 綁定都會被解除。"
@@ -2233,7 +2244,7 @@
     "privacy": {
       "cloudBackup": "雲端備份",
       "cloudBackupDescription": "將轉錄記錄和筆記備份至雲端，實現跨裝置無縫存取。",
-      "cloudBackupTeamCaveat": "團隊空間中的筆記和您已分享的筆記會始終同步，不受此設定影響。",
+      "cloudBackupTeamCaveat": "Teamspace 中的筆記和您已分享的筆記會始終同步，不受此設定影響。",
       "cloudNotesMigration": "正在備份筆記… {{done}} / {{total}}",
       "cloudNotesMigrationDone": "所有筆記已備份",
       "description": "控制哪些資料會離開你的裝置。預設全部關閉。",
@@ -2520,7 +2531,186 @@
           "selectAllMembers": "選取所有成員",
           "selectAllInvitations": "選取所有邀請",
           "selectRow": "選取 {{name}}",
-          "remove": "移除"
+          "remove": "移除",
+          "addToTeamspace": "加入 Teamspace"
+        }
+      },
+      "teamspaces": {
+        "title": "Teamspace",
+        "subtitleManage": "管理此工作區中的 Teamspace。",
+        "subtitleView": "此工作區中的 Teamspace。",
+        "create": "建立 Teamspace",
+        "columns": {
+          "name": "名稱",
+          "admins": "管理員",
+          "actions": "操作",
+          "members": "成員"
+        },
+        "loadingTitle": "正在載入 Teamspace…",
+        "loadingBody": "工作區的 Teamspace 會顯示在這裡。",
+        "failedTitle": "無法載入 Teamspace",
+        "failedBody": "請檢查網路連線後再試一次。",
+        "retry": "重試",
+        "emptyTitle": "還沒有 Teamspace",
+        "emptyBody": "Teamspace 是團隊筆記的共享區域。新增成員或群組後，其中的每個人都可以閱讀和編輯。",
+        "emptyBodyMember": "工作區管理員尚未建立任何 Teamspace。",
+        "adminCount_one": "{{count}} 位管理員",
+        "adminCount_other": "{{count}} 位管理員",
+        "noAdmins": "工作區管理員",
+        "you": "你",
+        "join": "加入",
+        "joining": "正在加入…",
+        "joined": "已加入 {{space}}",
+        "joinFailed": "無法加入 {{space}}，請再試一次。",
+        "joinClosed": "{{space}} 不再接受新成員。請聯絡管理員將你加入。",
+        "openTeamspace": "開啟 Teamspace",
+        "rowMenu": {
+          "label": "{{name}} 的操作",
+          "settings": "設定",
+          "delete": "刪除 Teamspace"
+        },
+        "form": {
+          "title": "建立 Teamspace",
+          "description": "團隊筆記的共享區域。你新增的每個人都可以閱讀和編輯。",
+          "nameAndIcon": "名稱與圖示",
+          "descriptionLabel": "描述",
+          "people": "人員",
+          "descriptionPlaceholder": "銷售與支援通話的錄音和摘要，每通電話一則筆記。",
+          "peoplePlaceholder": "姓名、電子郵件或群組",
+          "defaultTitle": "預設 Teamspace",
+          "defaultBody": "自動加入新的工作區成員。",
+          "openTitle": "開放 Teamspace",
+          "openBody": "允許工作區成員加入。",
+          "invalidEmail": "電子郵件無效",
+          "nameTaken": "已有名為 {{name}} 的 Teamspace",
+          "failed": "無法建立 Teamspace。你填寫的內容已保留。請重試。",
+          "creating": "建立中",
+          "created": "已建立 {{space}}",
+          "createdInviteFailed_one": "已建立 {{space}}。無法邀請 {{count}} 人。請在「成員」中邀請。",
+          "createdInviteFailed_other": "已建立 {{space}}。無法邀請 {{count}} 人。請在「成員」中邀請。",
+          "inviteFailedWho": "未邀請：{{names}}。",
+          "copyAddresses": "複製地址",
+          "groupsGone": "{{names}} 已無法使用，因此未新增。"
+        },
+        "picker": {
+          "groupPeople_one": "{{count}} 人",
+          "groupPeople_other": "{{count}} 人",
+          "groupChip_one": "{{name}} · {{count}} 人",
+          "groupChip_other": "{{name}} · {{count}} 人",
+          "emailChip": "{{email}} · {{role}}",
+          "noMember": "找不到成員",
+          "inviteToWorkspace": "邀請加入工作區",
+          "newToWorkspace": "工作區新成員",
+          "select": "選取",
+          "noResultsTitle": "找不到成員或群組",
+          "noResultsBody": "請嘗試其他名稱，或輸入完整的電子郵件地址。",
+          "noResultsBodyNoInvite": "請嘗試其他名稱。",
+          "hasAccess": "已有存取權",
+          "groupHasAccess_one": "已有存取權 · {{count}} 人",
+          "groupHasAccess_other": "已有存取權 · {{count}} 人"
+        },
+        "members": {
+          "columnRole": "Teamspace 角色",
+          "add": "加入成員",
+          "adding": "正在加入…",
+          "retry": "重試",
+          "invitationPending": "邀請待處理",
+          "via": "成員 · 透過 {{group}}",
+          "viaAdmin": "管理員 · 透過 {{group}}",
+          "roleMember": "Teamspace 成員",
+          "roleMemberBody": "可以檢視和編輯筆記",
+          "roleAdmin": "Teamspace 管理員",
+          "roleAdminBody": "管理此 Teamspace 及其已指派的群組。",
+          "removeItem": "從 Teamspace 中移除",
+          "removeTitle": "要將 {{name}} 從 {{space}} 中移除嗎？",
+          "removeBody": "這將結束 {{name}} 的直接成員身分。透過群組取得的存取權將保留。對方仍留在工作區中。",
+          "removeConfirm": "移除成員",
+          "removeFailedTitle": "無法移除 {{name}}",
+          "removeFailedBody": "{{name}} 在 {{space}} 中的成員身分未變更。請檢查網路連線後再試一次。",
+          "removed": "已移除 {{name}} 在 {{space}} 中的直接成員身分。",
+          "removeGroupTitle": "要將 {{group}} 從 {{space}} 中移除嗎？",
+          "removeGroupBody_one": "該群組的 {{count}} 人將失去透過此群組取得的存取權。該群組仍保留在工作區中。",
+          "removeGroupBody_other": "該群組的 {{count}} 人將失去透過此群組取得的存取權。該群組仍保留在工作區中。",
+          "removeGroupBodyNoCount": "該群組的成員將失去透過此群組取得的存取權。該群組仍保留在工作區中。",
+          "stagedNew": "加入新成員時會向其發送邀請。對方接受後才能存取 Teamspace。",
+          "stagedGroup": "{{group}} 中的所有人都將繼承 {{space}} 的成員存取權。",
+          "stagedGroups": "這些群組中的所有人都將繼承 {{space}} 的成員存取權。",
+          "invalid": "請輸入有效的電子郵件地址。你已選擇的人員會保留。",
+          "progressPeople": "正在加入 {{names}}…",
+          "progressBoth_one": "正在加入 {{names}} 並發送 {{count}} 份邀請…",
+          "progressBoth_other": "正在加入 {{names}} 並發送 {{count}} 份邀請…",
+          "progressInvites_one": "正在發送 {{count}} 份邀請…",
+          "progressInvites_other": "正在發送 {{count}} 份邀請…",
+          "resultAdded": "已加入 {{names}}。",
+          "resultInvited": "已向 {{names}} 發送工作區邀請。",
+          "resultGroup": "已加入 {{group}}。其成員現在擁有成員存取權。",
+          "resultGroups": "已加入 {{names}}。其成員現在擁有成員存取權。",
+          "failed": "無法加入成員。你的選擇已保留。請重試。",
+          "partialAdded": "已加入 {{names}}。",
+          "partialAddedMany": "已加入 {{names}}。",
+          "partialInviteFailed": "無法向 {{names}} 發送邀請。請重試。",
+          "partialInviteFailedMany": "無法向 {{names}} 發送邀請。請重試。",
+          "partialAddFailed": "無法加入 {{names}}。請重試。",
+          "partialLeft": "{{names}} 已離開工作區，因此未被加入。",
+          "notAllowed": "你已無權管理 {{space}} 的成員。",
+          "notInvited": "{{names}} 未獲邀請。",
+          "notInvitedMany": "{{names}} 未獲邀請。",
+          "skippedInvited": "{{names}} 已有工作區邀請，因此未被加入此 Teamspace。",
+          "skippedInvitedMany": "{{names}} 已有工作區邀請，因此未被加入此 Teamspace。",
+          "removeBodyPlain": "{{name}} 將無法再存取此 Teamspace 及其筆記，但仍留在工作區中。",
+          "invitationPendingAdmin": "邀請待接受 · 工作區管理員",
+          "resultInvitedNoEmail": "已為 {{names}} 建立邀請，但郵件未能送達。請在「邀請」中重新傳送。",
+          "resultInvitedPending": "{{names}} 已有工作區邀請，因此已將此團隊空間加入該邀請。未傳送新郵件，該邀請中的工作區角色維持不變。",
+          "stepDownTitle": "要卸任 {{space}} 的管理員嗎？",
+          "stepDownBody": "你將無法再管理此 Teamspace 及其成員。只有其他管理員才能讓你重新成為管理員。",
+          "stepDownConfirm": "卸任"
+        },
+        "settings": {
+          "leaveTitle": "離開 Teamspace",
+          "leaveBody": "離開此 Teamspace。",
+          "leaveAction": "離開 Teamspace",
+          "deleteTitle": "刪除 Teamspace",
+          "deleteBody": "為所有人移除此 Teamspace。",
+          "deleteAction": "刪除 Teamspace",
+          "flagsFailed": "無法載入這些設定。",
+          "flagSaveFailed": "無法儲存。請再試一次。",
+          "deleteDefaultAdminOnly": "只有工作區管理員可以刪除預設團隊空間。",
+          "defaultAdminOnly": "只有工作區管理員可以變更此項。"
+        },
+        "exit": {
+          "blockedTitle": "請先新增另一位管理員",
+          "blockedBody": "你是 {{space}} 的唯一管理員。離開前，請先將另一位成員設為管理員。",
+          "blockedAction": "管理成員",
+          "leaveTitle": "要離開 {{space}} 嗎？",
+          "leaveFailedTitle": "無法離開 {{space}}",
+          "leaveFailedBody": "你的成員身分未變更。請檢查網路連線後再試一次。",
+          "left": "你已離開 {{space}}。",
+          "deleteTitle": "要刪除 {{space}} 嗎？",
+          "deleteBody": "這將為所有人從工作區中移除 {{space}}。",
+          "deleteFailedTitle": "無法刪除 {{space}}",
+          "deleteFailedBody": "該 Teamspace 仍可使用。請檢查網路連線後再試一次。",
+          "deleted": "{{space}} 已被刪除。",
+          "restored": "{{space}} 已還原",
+          "leaveBodyKeeps": "你的直接成員身分將結束。你仍可透過 {{groups}} 存取。",
+          "leaveBodyLoses": "你將無法再存取 {{space}} 及其筆記。",
+          "leaveBodyAdmins": "其他管理員將繼續管理此 Teamspace。",
+          "deleteNotAllowed": "你沒有刪除 {{space}} 的權限。",
+          "movedToPersonal_one": "{{count}} 則未同步的筆記已移至你的個人空間。",
+          "movedToPersonal_other": "{{count}} 則未同步的筆記已移至你的個人空間。"
+        },
+        "addPeople": {
+          "loading": "正在載入 Teamspace…",
+          "failed": "無法載入 Teamspace",
+          "none": "還沒有 Teamspace",
+          "addingTitle_one": "正在加入 {{count}} 人…",
+          "addingTitle_other": "正在加入 {{count}} 人…",
+          "addingBody": "將他們加入 {{space}} 期間，請保持此視窗開啟。",
+          "addingAction": "正在加入…",
+          "failedTitle_one": "無法加入 {{count}} 人",
+          "failedTitle_other": "無法加入 {{count}} 人",
+          "failedBody": "他們尚未加入 {{space}}。你的選擇已保留。請檢查網路連線後再試一次。",
+          "done_one": "已將 {{count}} 人加入 {{space}}",
+          "done_other": "已將 {{count}} 人加入 {{space}}"
         }
       },
       "role": {
@@ -2545,7 +2735,7 @@
         "delete": "刪除工作區",
         "deleting": "刪除中…",
         "leaveTitle": "離開工作區",
-        "leaveDescription": "將自己從此工作區移除。你將失去其團隊空間的存取權。",
+        "leaveDescription": "將自己從此工作區移除。你將失去其 Teamspace 的存取權。",
         "leave": "離開工作區",
         "leaving": "離開中…"
       },
@@ -2567,7 +2757,7 @@
       },
       "teams": {
         "title": "群組",
-        "description": "可一次取得團隊空間存取權的工作區成員群組。",
+        "description": "可一次取得 Teamspace 存取權的工作區成員群組。",
         "new": "新增群組",
         "empty": "還沒有群組。",
         "createFirst": "建立你的第一個群組",
@@ -2877,6 +3067,21 @@
       "contextTooLargeGeneric": "內容過長，{{model}} 無法在這台電腦上讀取。請改用雲端模型，或對更短的選取範圍執行該動作。",
       "localServerUnavailable": "無法在這台電腦上啟動 {{model}}。請重試，或改用雲端模型。",
       "localModelBusy": "本機模型仍在處理另一個請求。請等待其完成後再試。"
+    },
+    "policy": {
+      "guidance": "組織已核准這些模型。請選擇適合你電腦的模型。",
+      "notApproved": "未獲組織核准",
+      "noneSupported": "組織未核准此應用程式版本支援的任何本機模型。請更新 OpenWhispr 或聯絡管理員。",
+      "emptyIntersection": "你的工作區沒有共同核准的本機模型。請聯絡管理員。",
+      "modelBlocked": "請選擇組織核准的本機模型。",
+      "modeBlocked": "組織已停用本機處理。",
+      "unresolved": "無法取得工作區原則。請連線後再試一次。",
+      "versionBlocked": "請更新 OpenWhispr 以使用組織核准的模型。",
+      "updateRequired": "需要更新",
+      "unavailable": "暫時無法使用",
+      "installedTitle": "已安裝的本機模型",
+      "installedHint": "組織已停用本機處理，因此這些模型無法執行。它們會保留在你的電腦上，直到你將其刪除。",
+      "chooseModel": "選擇本機模型"
     }
   },
   "referral": {
@@ -2972,34 +3177,18 @@
       "teamSpaces": "Teamspaces",
       "personal": "個人",
       "privateTooltip": "只有你可以看到你的個人空間",
-      "newSpace": "新增團隊空間",
-      "createTitle": "建立團隊空間",
-      "createDescription": "工作區內的共享區域，供你加入的人員和群組存取。",
+      "newSpace": "新增 Teamspace",
       "nameAndIconLabel": "名稱與圖示",
-      "create": "建立",
-      "couldNotCreate": "無法建立空間",
-      "created": "已建立 {{space}}",
       "changeEmoji": "變更表情符號",
       "settings": "設定",
-      "settingsTitle": "空間設定",
       "couldNotRename": "無法重新命名空間",
       "couldNotChangeEmoji": "無法變更表情符號",
       "deleteSpace": "刪除空間",
-      "deleteHintTeam": "為所有人移除此空間，其群組會保留。",
       "deleteHintLocal": "永久刪除此空間以及此裝置上的資料夾與筆記。",
-      "leaveTitle": "離開空間",
-      "leaveDescription": "你的筆記仍可供其他成員存取。",
-      "leave": "離開空間",
-      "leaveConfirmTitle": "要離開 {{space}} 嗎？",
       "leaveConfirmDescription": "你將從 {{teams}} 中移除，並失去這些群組可開啟的其他空間的存取權。",
-      "leaveDirectDescription": "你將失去此空間的存取權。",
-      "leaveKeepsGroupAccess": "你將保留透過 {{groups}} 的存取權。",
-      "left": "已離開 {{space}}",
       "stillViaGroups": "你仍可透過 {{groups}} 存取 {{space}}。",
-      "couldNotLeave": "無法離開空間",
       "deleteConfirmTitle": "刪除空間？",
       "deleteConfirmDescription": "這會從此裝置永久刪除 {{space}} 及其所有資料夾和筆記。",
-      "deleteConfirmTeamDescription": "這將為所有人刪除 {{space}}。群組會保留，但成員將失去其所有資料夾與筆記的存取權。",
       "deleteTypeName": "輸入 {{space}} 以確認",
       "couldNotDelete": "無法刪除空間",
       "deleted": "已刪除 {{space}}",
@@ -3010,9 +3199,9 @@
       "spaceRoot": "空間根目錄",
       "moveConfirm": "移動",
       "confirmMoveInTitle": "移動到 {{space}}？",
-      "confirmMoveIn": "{{space}} 中的所有人都將能檢視和編輯這則筆記。之後筆記將無法移出團隊空間。",
-      "confirmMoveInFolder": "{{space}} 中的所有人都將能檢視和編輯這個資料夾及其筆記。之後資料夾及其筆記將無法移出團隊空間。",
-      "cantMoveOut": "筆記無法移出團隊空間。",
+      "confirmMoveIn": "{{space}} 中的所有人都將能檢視和編輯這則筆記。之後筆記將無法移出 Teamspace。",
+      "confirmMoveInFolder": "{{space}} 中的所有人都將能檢視和編輯這個資料夾及其筆記。之後資料夾及其筆記將無法移出 Teamspace。",
+      "cantMoveOut": "筆記無法移出 Teamspace。",
       "cantMoveTeammate": "只有筆記擁有者或工作區管理員才能將其移至其他空間。",
       "moved": "已將「{{title}}」移動到 {{target}}",
       "couldNotMove": "無法移動資料夾",
@@ -3050,44 +3239,21 @@
         "roleAdminDescription": "管理成員與設定。",
         "roleMemberDescription": "可以檢視與編輯筆記。",
         "remove": "移除",
-        "removeConfirm": "要將 {{name}} 從 {{space}} 移除嗎？",
         "removeConfirmDescription": "對方將無法再存取此空間的所有筆記。",
-        "removeKeepsGroupAccess": "他們將保留透過 {{groups}} 的存取權。",
         "inviteFooter": "邀請 {{email}} 加入工作區…",
         "empty": "尚未新增任何成員",
-        "viaGroup": "透過 {{group}}",
-        "managedByGroup": "透過 {{group}} 加入。請在該群組中移除。",
-        "roleFromGroup": "透過 {{group}} 取得管理員身分，請在該群組中變更。",
-        "invited": "已向 {{email}} 傳送邀請",
-        "invitedMany_one": "已向 {{count}} 人傳送邀請",
-        "invitedMany_other": "已向 {{count}} 人傳送邀請"
+        "roleFromGroup": "透過 {{group}} 取得管理員身分，請在該群組中變更。"
       },
-      "invitedTo_one": "你將加入 {{count}} 個團隊空間",
-      "invitedTo_other": "你將加入 {{count}} 個團隊空間",
+      "invitedTo_one": "你將加入 {{count}} 個 Teamspace",
+      "invitedTo_other": "你將加入 {{count}} 個 Teamspace",
       "invitedToSpaces": "你將加入 {{spaces}}",
       "teamsMembers": {
         "title": "{{space}} 的成員",
-        "noTeams": "尚無群組可存取此空間。",
-        "addTeamLabel": "將群組加入此空間",
-        "chooseTeam": "選擇群組…",
-        "teamAdded": "已將 {{team}} 加入 {{space}}",
         "teamRemoved": "已將 {{team}} 從 {{space}} 移除",
-        "removeTeamFromSpace": "從空間移除",
-        "removeTeamConfirm": "將 {{team}} 從 {{space}} 移除？",
-        "removeTeamConfirmDescription": "除非這些成員被直接加入或其他已指派的群組包含他們，否則他們將失去此空間的存取權。",
-        "accessLabel": "空間存取權",
-        "accessAdmin": "管理員",
-        "accessMember": "成員",
-        "accessChanged": "已更新 {{team}} 的存取權",
-        "accessHint": "僅當存取權設為「管理員」時，{{team}} 的管理員才能管理此空間。"
+        "accessChanged": "已更新 {{team}} 的存取權"
       },
       "teams": {
-        "newTeam": "新增群組",
         "loadError": "無法載入群組。"
-      },
-      "groups": {
-        "title": "有存取權的群組",
-        "optional": "群組（選填）"
       }
     },
     "structureIntro": {
@@ -3099,10 +3265,10 @@
       },
       "workspace": {
         "title": "工作區",
-        "description": "集中管理工作區的成員、角色和團隊空間。"
+        "description": "集中管理工作區的成員、角色和 Teamspace。"
       },
       "teamSpace": {
-        "title": "團隊空間",
+        "title": "Teamspace",
         "description": "工作區內的共享區域。加入人員或群組以授予存取權。"
       },
       "contents": "每個空間都可以包含資料夾和筆記。",
@@ -3589,7 +3755,7 @@
       },
       "banner": {
         "title": {
-          "team": "你的團隊空間",
+          "team": "你的 Teamspace",
           "private": "你的私人空間"
         },
         "body": {
@@ -5134,7 +5300,7 @@
         "owner": "擁有者",
         "editor": "可編輯",
         "viewer": "可檢視",
-        "teamAudience": "此團隊空間中的所有人",
+        "teamAudience": "此 Teamspace 中的所有人",
         "pending": "待處理",
         "accepted": "已取得存取權",
         "resend": "重新傳送邀請",
@@ -5291,7 +5457,7 @@
     },
     "create": {
       "title": "建立工作區",
-      "description": "工作區集中管理組織的成員和帳單。你可以在其中建立團隊空間來分享筆記。",
+      "description": "工作區集中管理組織的成員和帳單。你可以在其中建立 Teamspace 來分享筆記。",
       "nameLabel": "工作區名稱",
       "namePlaceholder": "Acme Corp",
       "submit": "建立工作區",
@@ -5325,6 +5491,10 @@
       "submitting_other": "正在邀請 {{count}} 人…",
       "sentTitle_one": "已傳送 {{count}} 份邀請",
       "sentTitle_other": "已傳送 {{count}} 份邀請",
+      "attachedTitle_one": "已更新 {{count}} 個邀請",
+      "attachedTitle_other": "已更新 {{count}} 個邀請",
+      "attachedBody_one": "{{count}} 個地址已有工作區邀請，因此已加入這些邀請。未傳送新郵件。",
+      "attachedBody_other": "{{count}} 個地址已有工作區邀請，因此已加入這些邀請。未傳送新郵件。",
       "createdTitle_one": "已建立 {{count}} 封邀請",
       "createdTitle_other": "已建立 {{count}} 封邀請",
       "sentOne": "已邀請 {{email}} 加入 {{workspace}}",
@@ -5413,7 +5583,7 @@
     "exit": {
       "leave": {
         "title": "離開 {{name}}？",
-        "body": "你將失去此工作區、其團隊與團隊空間的存取權。工作區管理員可以再次邀請你。",
+        "body": "你將失去此工作區、其團隊與 Teamspace 的存取權。工作區管理員可以再次邀請你。",
         "failed": "無法離開 {{name}}。請檢查網路連線後再試一次。"
       },
       "left": {
@@ -5423,7 +5593,7 @@
       "chooseWorkspace": "選擇工作區",
       "delete": {
         "title": "刪除 {{name}}？",
-        "body": "這將為所有人永久刪除該工作區及其筆記、檔案、團隊與團隊空間，且無法復原。"
+        "body": "這將為所有人永久刪除該工作區及其筆記、檔案、團隊與 Teamspace，且無法復原。"
       },
       "deleting": {
         "title": "正在刪除 {{name}}…",
@@ -5440,7 +5610,7 @@
     },
     "removeMember": {
       "title": "要將 {{name}} 從 {{workspace}} 移除嗎？",
-      "body": "對方將失去此工作區中所有團隊空間和團隊的存取權限。你可以隨時再次邀請對方。",
+      "body": "對方將失去此工作區中所有 Teamspace 和團隊的存取權限。你可以隨時再次邀請對方。",
       "confirm": "移除",
       "removing": "正在移除…",
       "failed": "無法確認已移除 {{name}}。請檢查網路連線後再試一次。",
@@ -5455,10 +5625,10 @@
       "checking": "正在檢查…",
       "failed_one": "無法確認已移除 {{count}} 名成員。請檢查網路連線後再試一次。",
       "failed_other": "無法確認已移除 {{count}} 名成員。請檢查網路連線後再試一次。",
-      "body": "這些人將失去此工作區中所有團隊空間和團隊的存取權限。你可以隨時再次邀請他們。",
-      "ownerOne": "{{name}} 在此工作區中擁有筆記或團隊空間。",
-      "owners_one": "其中 {{count}} 人擁有筆記或團隊空間。",
-      "owners_other": "其中 {{count}} 人擁有筆記或團隊空間。",
+      "body": "這些人將失去此工作區中所有 Teamspace 和團隊的存取權限。你可以隨時再次邀請他們。",
+      "ownerOne": "{{name}} 在此工作區中擁有筆記或 Teamspace。",
+      "owners_one": "其中 {{count}} 人擁有筆記或 Teamspace。",
+      "owners_other": "其中 {{count}} 人擁有筆記或 Teamspace。",
       "directoryManagedOne": "{{name}} 由身分識別提供者指派。請改在身分識別提供者中移除。",
       "directoryManaged_one": "其中 {{count}} 人由身分識別提供者指派。請改在身分識別提供者中移除。",
       "directoryManaged_other": "其中 {{count}} 人由身分識別提供者指派。請改在身分識別提供者中移除。",
@@ -5466,8 +5636,8 @@
       "directoryManagedOthers_one": "其中 {{count}} 人由身分識別提供者指派。請在身分識別提供者中移除，或取消勾選以移除其他人。",
       "directoryManagedOthers_other": "其中 {{count}} 人由身分識別提供者指派。請在身分識別提供者中移除，或取消勾選以移除其他人。",
       "transferLabel": "轉讓給",
-      "transferBody": "他們的筆記和團隊空間將轉給新擁有者。他們將失去此工作區的存取權限。",
-      "transferBodyLimited": "他們的筆記和團隊空間將轉給 {{name}}，但 {{name}} 無法存取的團隊空間中的筆記會留在原處。他們將失去此工作區的存取權限。",
+      "transferBody": "他們的筆記和 Teamspace 將轉給新擁有者。他們將失去此工作區的存取權限。",
+      "transferBodyLimited": "他們的筆記和 Teamspace 將轉給 {{name}}，但 {{name}} 無法存取的 Teamspace 中的筆記會留在原處。他們將失去此工作區的存取權限。",
       "you": "{{name}}（你）",
       "transferConfirm": "轉讓並移除",
       "transferring": "正在轉讓…",
@@ -5477,10 +5647,10 @@
       "cannotRemoveSelf": "你無法移除自己。請在「一般」中離開工作區。",
       "done_one": "已移除 {{count}} 名成員",
       "done_other": "已移除 {{count}} 名成員",
-      "transferDone_one": "已將他們的筆記和團隊空間移至 {{name}}，並移除了 {{count}} 名成員。",
-      "transferDone_other": "已將他們的筆記和團隊空間移至 {{name}}，並移除了 {{count}} 名成員。",
-      "transferPartial_one": "{{count}} 則筆記留在了 {{name}} 無法存取的團隊空間中。其餘內容已全部移動。",
-      "transferPartial_other": "{{count}} 則筆記留在了 {{name}} 無法存取的團隊空間中。其餘內容已全部移動。",
+      "transferDone_one": "已將他們的筆記和 Teamspace 移至 {{name}}，並移除了 {{count}} 名成員。",
+      "transferDone_other": "已將他們的筆記和 Teamspace 移至 {{name}}，並移除了 {{count}} 名成員。",
+      "transferPartial_one": "{{count}} 則筆記留在了 {{name}} 無法存取的 Teamspace 中。其餘內容已全部移動。",
+      "transferPartial_other": "{{count}} 則筆記留在了 {{name}} 無法存取的 Teamspace 中。其餘內容已全部移動。",
       "alreadyRemoved_one": "{{count}} 名成員已被移除",
       "alreadyRemoved_other": "{{count}} 名成員已被移除"
     },

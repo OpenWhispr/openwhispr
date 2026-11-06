@@ -9,6 +9,7 @@ const { until } = require("../lib/chatTurnHarness");
 // ChatView with a conversation already open: persistence reports the note it was
 // started from, and the note comes from a faked getNote.
 const MOCKS = {
+  "/ui/useToast": `export const useToast = () => ({ toast: () => {} });`,
   "/hooks/useAuth": `export const useAuth = () => ({ isLoaded: true, isSignedIn: !!globalThis.__user, user: globalThis.__user ?? null });`,
   // Each send records the note the turn was given. Sends named __probe only read it.
   "/chatTurnEngine": `

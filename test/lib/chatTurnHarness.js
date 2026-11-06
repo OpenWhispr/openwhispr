@@ -22,7 +22,7 @@ async function until(predicate) {
   }
   assert.ok(predicate(), "expected asynchronous chat state");
 }
-async function setupChatTurns(t, electronAPI = {}, mockModules = {}) {
+async function setupChatTurns(t, electronAPI = {}, mockModules = {}, rendererOptions = {}) {
   const unmounts = [];
   let cleanup = () => {};
   t.after(async () => {
@@ -51,6 +51,7 @@ async function setupChatTurns(t, electronAPI = {}, mockModules = {}) {
     },
   });
   const vite = await createRendererServer(t, {
+    ...rendererOptions,
     mockModules: { ...SIGNED_OUT_AUTH_MOCK, ...mockModules },
   });
   const store = await vite.ssrLoadModule("/stores/chatTurnStore.ts");

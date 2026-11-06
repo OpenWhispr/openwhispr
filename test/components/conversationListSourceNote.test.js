@@ -74,6 +74,7 @@ async function renderConversationList(t, api = {}) {
         onNewChat: noop,
         onOpenSearch: noop,
         onArchive: noop,
+        onUnarchive: noop,
         onDelete: noop,
         refreshKey: 0,
       })

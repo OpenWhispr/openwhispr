@@ -77,7 +77,7 @@ async function setup(t) {
       status: "ready",
       config: { generation: 1, providers: [{ version: 1, ...record }] },
     });
-  return { calls, store, useRecord };
+  return { calls, store, useRecord, usePolicyStore, useSettingsStore };
 }
 
 test("required batch-only Azure audio keeps meetings on the user's own route", async (t) => {
@@ -109,4 +109,120 @@ test("an unavailable managed realtime route fails before any capture starts, wit
   const state = store.useMeetingRecordingStore.getState();
   assert.equal(state.isRecording, false);
   assert.equal(state.error, "managedConfig:enterprise.audio.operationUnavailable");
+});
+
+// Managed audio outranks the personal selection, so a stale local meeting model
+// that a restricted list blocks must not stop an enterprise recording.
+const MANAGED_AZURE = {
+  provider: "azure",
+  mode: "managed_required",
+  allowManualSetup: false,
+  config: {
+    ...AZURE,
+    transcription: { ...AZURE.transcription },
+    realtime: { allowedDeployments: ["company-rt"], defaultDeployment: "company-rt" },
+  },
+};
+const managedSnapshot = (allowedModes, allowedLocalModels) => ({
+  status: "managed",
+  managed: true,
+  appVersion: "1.11.1",
+  policy: {
+    version: 1,
+    transcription: {
+      allowedModes,
+      allowedByokProviders: [],
+      allowedEnterpriseProviders: ["azure"],
+      allowedLocalModels,
+    },
+    llm: { allowedModes: [], allowedByokProviders: [], allowedEnterpriseProviders: [] },
+    features: { agentEnabled: false, webSearchEnabled: false },
+    sharing: { externalLinkSharing: "disabled" },
+    dataRetention: {
+      audioRetentionMaxDays: null,
+      localHistoryMode: "user_choice",
+      cloudBackupAllowed: false,
+    },
+    minAppVersion: null,
+  },
+});
+
+for (const [label, allowedModes] of [
+  ["enterprise-only workspace", ["enterprise"]],
+  ["workspace allowing Local and Enterprise with a restricted list", ["local", "enterprise"]],
+]) {
+  test(`a stale local meeting selection doesn't refuse enterprise audio: ${label}`, async (t) => {
+    const { calls, store, useRecord, usePolicyStore, useSettingsStore } = await setup(t);
+    useSettingsStore.setState({
+      meetingLocalTranscriptionProvider: "whisper",
+      whisperModel: "small",
+      meetingWhisperModel: "",
+    });
+    usePolicyStore.setState(managedSnapshot(allowedModes, ["base"]));
+    useRecord(MANAGED_AZURE);
+
+    await store.prepareTranscription();
+    assert.equal(calls.prepare.at(-1)?.provider, "enterprise-realtime");
+    assert.equal(calls.prepare.at(-1).managedContext.provider, "azure");
+
+    assert.equal(await store.startRecording(START_ARGS), true);
+    assert.equal(store.useMeetingRecordingStore.getState().error, "stopped by test");
+    assert.equal(calls.start.at(-1)?.provider, "enterprise-realtime");
+    assert.equal(calls.mic, 1, "isCurrentStart let the capture proceed");
+  });
+}
+
+test("a blocked local meeting with no managed route is refused by name, and the org's switch outranks managed audio", async (t) => {
+  const { calls, store, useRecord, usePolicyStore, useSettingsStore } = await setup(t);
+  useSettingsStore.setState({
+    meetingLocalTranscriptionProvider: "whisper",
+    whisperModel: "small",
+    meetingWhisperModel: "",
+  });
+  const restricted = managedSnapshot(["local"], ["base"]);
+  usePolicyStore.setState(restricted);
+
+  await store.prepareTranscription();
+  assert.equal(calls.prepare.length, 0);
+  assert.equal(await store.startRecording(START_ARGS), false);
+  assert.equal(store.useMeetingRecordingStore.getState().error, "POLICY_MODEL_BLOCKED");
+  assert.equal(calls.start.length, 0);
+
+  useRecord(MANAGED_AZURE);
+  usePolicyStore.setState({
+    ...restricted,
+    policy: {
+      ...restricted.policy,
+      transcription: { ...restricted.policy.transcription, allowedModes: ["local", "enterprise"] },
+      features: { ...restricted.policy.features, meetingRecordingEnabled: false },
+    },
+  });
+  await store.prepareTranscription();
+  assert.equal(calls.prepare.length, 0);
+  assert.equal(await store.startRecording(START_ARGS), false);
+  assert.equal(
+    store.useMeetingRecordingStore.getState().error,
+    "POLICY_MEETING_RECORDING_DISABLED"
+  );
+  assert.equal(calls.start.length, 0);
+});
+
+test("a model revoked during a meeting start reaches main blank for it to refuse, not as a default", async (t) => {
+  const { calls, store, usePolicyStore, useSettingsStore } = await setup(t);
+  useSettingsStore.setState({
+    meetingLocalTranscriptionProvider: "whisper",
+    whisperModel: "small",
+    meetingWhisperModel: "",
+  });
+  usePolicyStore.setState(managedSnapshot(["local"], ["small", "base"]));
+  const { electronAPI } = globalThis.window;
+  const { checkSystemAudioAccess } = electronAPI;
+  electronAPI.checkSystemAudioAccess = () => {
+    usePolicyStore.setState(managedSnapshot(["local"], ["base"]));
+    return checkSystemAudioAccess();
+  };
+
+  assert.equal(await store.startRecording(START_ARGS), true);
+  assert.equal(calls.start.at(-1)?.provider, "local");
+  assert.equal(calls.start.at(-1).localModel, "");
 });

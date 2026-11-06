@@ -13,6 +13,7 @@ const { SKILLS_MOCKS, ariaLabel, click, findAll, settle } = require("../lib/skil
 // The engine records each send and its options; the composer renders its leading row,
 // so the chip is real and clickable.
 const MOCKS = {
+  "/ui/useToast": `export const useToast = () => ({ toast: () => {} });`,
   "react-i18next": SKILLS_MOCKS["react-i18next"],
   ...SIGNED_OUT_AUTH_MOCK,
   "/chatTurnEngine": `

@@ -59,6 +59,8 @@ import { clearTinfoilClientCache } from "./ai/tinfoilClient";
 import { resolveChatRoute } from "../helpers/chatRouting";
 import { assertAgentAllowedByPolicy, assertReasoningAllowedByPolicy } from "./reasoningPolicy";
 import type { InferenceMode } from "../types/electron";
+import { usePolicyStore } from "../stores/policyStore";
+import i18n from "../i18n";
 
 export type ToolMetadata = Record<string, unknown> | Array<Record<string, unknown>>;
 
@@ -114,9 +116,61 @@ function resolveLlmDispatchMode(
   return "providers";
 }
 
-function assertAgentSessionAllowedByPolicy(provider: string, mode: InferenceMode): void {
+function assertAgentSessionAllowedByPolicy(
+  provider: string,
+  mode: InferenceMode,
+  model?: string
+): void {
   assertAgentAllowedByPolicy();
-  assertReasoningAllowedByPolicy(provider, mode);
+  assertReasoningAllowedByPolicy(provider, mode, model);
+}
+
+function createAgentStreamPolicyCheck(
+  provider: string,
+  mode: InferenceMode,
+  model: string,
+  abortController: AbortController
+): () => void {
+  const { accountId } = usePolicyStore.getState();
+  let running = false;
+  const assertAllowed = (): void => {
+    const state = usePolicyStore.getState();
+    const unresolved =
+      state.status === "error" || state.status === "loading" || state.status === "idle";
+    // By account, not credential: a rotated token keeps the account's verdict.
+    // A suspended policy blanks the account without naming another one, and a
+    // guest who signs in had no account to lose: its verdict decides from here.
+    const suspended = state.accountId === null && state.status === "loading";
+    if (accountId !== null && state.accountId !== accountId && !suspended) {
+      throw Object.assign(new Error(i18n.t("common.policyAccountChanged")), {
+        code: "POLICY_UNRESOLVABLE",
+        messageKey: "common.policyAccountChanged",
+      });
+    }
+    // An unresolved verdict says nothing new about work already running.
+    if (running && unresolved) return;
+    assertAgentSessionAllowedByPolicy(provider, mode, model);
+    running = true;
+  };
+  return (): void => {
+    try {
+      assertAllowed();
+    } catch (error) {
+      abortController.abort();
+      throw error;
+    }
+  };
+}
+
+async function resolveStreamSetup<T>(pending: Promise<T>, assertAllowed: () => void): Promise<T> {
+  try {
+    const result = await pending;
+    assertAllowed();
+    return result;
+  } catch (error) {
+    assertAllowed();
+    throw error;
+  }
 }
 
 function logParamFallback(logEvent: string) {
@@ -526,7 +580,11 @@ class ReasoningService extends BaseReasoningService {
       throw new Error("No reasoning provider selected");
     }
     if (dispatchConfig.requiresAgent) assertAgentAllowedByPolicy();
-    assertReasoningAllowedByPolicy(providerId, resolveLlmDispatchMode(providerId, dispatchConfig));
+    assertReasoningAllowedByPolicy(
+      providerId,
+      resolveLlmDispatchMode(providerId, dispatchConfig),
+      trimmedModel
+    );
 
     if (!trimmedModel && providerId !== "openwhispr" && providerId !== "lan") {
       throw new Error("No reasoning model selected");
@@ -555,6 +613,14 @@ class ReasoningService extends BaseReasoningService {
         ctx: this.providerContext,
       });
 
+      // An unresolved verdict says nothing new about an answer that has finished.
+      if (usePolicyStore.getState().status === "managed") {
+        assertReasoningAllowedByPolicy(
+          providerId,
+          resolveLlmDispatchMode(providerId, dispatchConfig),
+          trimmedModel
+        );
+      }
       if (validateCleanup) assertValidCleanupOutput(text, result);
 
       logger.logReasoning("PROVIDER_SUCCESS", {
@@ -623,7 +689,13 @@ class ReasoningService extends BaseReasoningService {
     });
     const mode: InferenceMode =
       route.kind === "self-hosted" ? "self-hosted" : route.kind === "local" ? "local" : "providers";
-    assertAgentSessionAllowedByPolicy(provider, mode);
+    const assertStreamAllowed = createAgentStreamPolicyCheck(
+      provider,
+      mode,
+      model,
+      abortController
+    );
+    assertStreamAllowed();
     const isLocalProvider = route.kind === "local";
     const isLanChat = route.kind === "self-hosted";
 
@@ -635,13 +707,21 @@ class ReasoningService extends BaseReasoningService {
       endpoint = buildApiUrl(baseUrl, "/chat/completions");
       apiKey = route.apiKey;
     } else if (isLocalProvider) {
-      const serverResult = await window.electronAPI.llamaServerStart(model);
+      const serverResult = await resolveStreamSetup(
+        window.electronAPI.llamaServerStart(model),
+        assertStreamAllowed
+      );
       if (!serverResult.success || !serverResult.port) {
-        throw new Error(serverResult.error || "Failed to start local model server");
+        throw Object.assign(new Error(serverResult.error || "Failed to start local model server"), {
+          code: serverResult.code,
+        });
       }
       endpoint = `http://127.0.0.1:${serverResult.port}/v1/chat/completions`;
     } else {
-      const access = await this.resolveByokAccess(provider, config);
+      const access = await resolveStreamSetup(
+        this.resolveByokAccess(provider, config),
+        assertStreamAllowed
+      );
       apiKey = access.apiKey;
       const chatBase =
         access.baseURL ??
@@ -663,6 +743,7 @@ class ReasoningService extends BaseReasoningService {
       );
     }
 
+    assertStreamAllowed();
     if (abortController.signal.aborted) return;
 
     const requestBody: Record<string, unknown> = {
@@ -725,18 +806,21 @@ class ReasoningService extends BaseReasoningService {
     try {
       response = await fetchWithParamFallback(
         endpoint,
-        () =>
-          fetch(endpoint, {
+        () => {
+          assertStreamAllowed();
+          return fetch(endpoint, {
             method: "POST",
             headers,
             body: JSON.stringify(requestBody),
             signal: abortController.signal,
-          }),
+          });
+        },
         requestBody,
         logParamFallback("AGENT_STREAM_PARAM_FALLBACK")
       );
     } catch (error) {
       clearTimeout(timeoutId);
+      assertStreamAllowed();
       if ((error as Error).name === "AbortError" && abortController.signal.aborted) {
         if (!timeoutTriggered) return;
         throw timeoutError();
@@ -750,7 +834,9 @@ class ReasoningService extends BaseReasoningService {
       let errorText: string;
       try {
         errorText = await response.text();
+        assertStreamAllowed();
       } catch (error) {
+        assertStreamAllowed();
         if (!abortController.signal.aborted) throw error;
         if (!timeoutTriggered) return;
         throw timeoutError();
@@ -795,6 +881,7 @@ class ReasoningService extends BaseReasoningService {
     try {
       while (true) {
         const { done, value } = await reader.read();
+        assertStreamAllowed();
         if (done) break;
 
         // Reset on bytes, including keepalives, partial SSE frames and hidden
@@ -806,6 +893,7 @@ class ReasoningService extends BaseReasoningService {
         buffer = lines.pop() || "";
 
         for (const line of lines) {
+          assertStreamAllowed();
           const trimmed = line.trim();
           if (!trimmed || !trimmed.startsWith("data: ")) continue;
 
@@ -813,29 +901,32 @@ class ReasoningService extends BaseReasoningService {
           if (data === "[DONE]") {
             const trailing = filterThinkTags?.finish();
             if (trailing) yield trailing;
+            assertStreamAllowed();
             return;
           }
 
+          let content: string | undefined;
           try {
             const parsed = JSON.parse(data);
-            let content = parsed.choices?.[0]?.delta?.content;
-            if (!content) continue;
-
-            if (filterThinkTags) {
-              content = filterThinkTags(content);
-              if (!content) continue;
-            }
-
-            yield content;
+            content = parsed.choices?.[0]?.delta?.content;
           } catch {
             // skip malformed SSE chunks
+            continue;
           }
+          if (!content) continue;
+          if (filterThinkTags) content = filterThinkTags(content);
+          if (!content) continue;
+          assertStreamAllowed();
+          yield content;
+          assertStreamAllowed();
         }
       }
 
       const trailing = filterThinkTags?.finish();
       if (trailing) yield trailing;
+      assertStreamAllowed();
     } catch (error) {
+      assertStreamAllowed();
       if ((error as Error).name === "AbortError" && abortController.signal.aborted) {
         if (!timeoutTriggered) return;
         throw timeoutError();
@@ -878,13 +969,19 @@ class ReasoningService extends BaseReasoningService {
           : route.kind === "local"
             ? "local"
             : "providers";
-    assertAgentSessionAllowedByPolicy(provider, mode);
     // Both streaming transports share this owner so cancellation survives
     // asynchronous server, key, and model setup.
     const { controller: abortController, release } = this.createStreamOperation(signal);
     let transportComplete = false;
     try {
       if (abortController.signal.aborted) return;
+      const assertStreamAllowed = createAgentStreamPolicyCheck(
+        provider,
+        mode,
+        model,
+        abortController
+      );
+      assertStreamAllowed();
       const isEnterprise = route.kind === "enterprise";
       const isLocalProvider = route.kind === "local";
       const isLanChat = route.kind === "self-hosted";
@@ -900,8 +997,10 @@ class ReasoningService extends BaseReasoningService {
             abortController
           );
           for await (const text of contentGen) {
+            assertStreamAllowed();
             yield { type: "content", text };
           }
+          assertStreamAllowed();
           transportComplete = true;
           yield { type: "done", finishReason: "stop" };
         } catch (error) {
@@ -925,14 +1024,26 @@ class ReasoningService extends BaseReasoningService {
         apiKey = route.apiKey;
         baseURL = resolveSelfHostedOpenAIBase(route.baseUrl);
       } else if (isLocalProvider) {
-        const serverResult = await window.electronAPI.llamaServerStart(model);
+        const serverResult = await resolveStreamSetup(
+          window.electronAPI.llamaServerStart(model),
+          assertStreamAllowed
+        );
         if (!serverResult.success || !serverResult.port) {
-          throw new Error(serverResult.error || "Failed to start local model server");
+          throw Object.assign(
+            new Error(serverResult.error || "Failed to start local model server"),
+            {
+              code: serverResult.code,
+            }
+          );
         }
         baseURL = `http://127.0.0.1:${serverResult.port}/v1`;
       } else {
-        ({ apiKey, baseURL } = await this.resolveByokAccess(provider, config));
+        ({ apiKey, baseURL } = await resolveStreamSetup(
+          this.resolveByokAccess(provider, config),
+          assertStreamAllowed
+        ));
       }
+      assertStreamAllowed();
       if (abortController.signal.aborted) {
         yield { type: "done", finishReason: "stop" };
         return;
@@ -950,11 +1061,15 @@ class ReasoningService extends BaseReasoningService {
       // Resolving a Tinfoil model refreshes the registry, so read model config after it.
       const aiModel = isEnterprise
         ? createEnterpriseChatModel(provider as EnterpriseProvider, model, config.inferenceScope)
-        : await getAIModel(aiProvider, model, apiKey, baseURL, {
-            disableThinking: openrouterDisableThinking,
-            reasoningEffort: provider === "openrouter" ? reasoningEffort : undefined,
-          });
+        : await resolveStreamSetup(
+            getAIModel(aiProvider, model, apiKey, baseURL, {
+              disableThinking: openrouterDisableThinking,
+              reasoningEffort: provider === "openrouter" ? reasoningEffort : undefined,
+            }),
+            assertStreamAllowed
+          );
 
+      assertStreamAllowed();
       if (abortController.signal.aborted) {
         yield { type: "done", finishReason: "stop" };
         return;
@@ -1046,6 +1161,7 @@ class ReasoningService extends BaseReasoningService {
 
       try {
         for await (const chunk of result.fullStream) {
+          assertStreamAllowed();
           if (chunk.type === "text-delta") {
             const text = filterThinkTags ? filterThinkTags(chunk.text) : chunk.text;
             if (text) yield { type: "content", text };
@@ -1113,11 +1229,14 @@ class ReasoningService extends BaseReasoningService {
           } else if (chunk.type === "finish") {
             const trailing = finishFilteredText();
             if (trailing) yield { type: "content", text: trailing };
+            assertStreamAllowed();
             transportComplete = true;
             yield { type: "done", finishReason: chunk.finishReason };
           }
         }
+        assertStreamAllowed();
       } catch (error) {
+        assertStreamAllowed();
         canFlushFilteredText = false;
         finishFilteredText();
         if (abortController.signal.aborted) {

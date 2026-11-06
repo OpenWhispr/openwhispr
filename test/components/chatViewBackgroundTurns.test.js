@@ -5,6 +5,7 @@ const { createRoot } = require("react-dom/client");
 const { installInteractiveDom } = require("../lib/interactiveDom");
 const { setupChatTurns, until, flush } = require("../lib/chatTurnHarness");
 const mocks = {
+  "/ui/useToast": `export const useToast = () => ({ toast: () => {} });`,
   "/ChatInput": `export function ChatInput(props) { globalThis.__backgroundInput = props; return null; }`,
   "/ChatMessages": `export function ChatMessages(props) { globalThis.__backgroundMessages = props; return null; }`,
   "/ConversationList": `export default function ConversationList(props) { globalThis.__backgroundList = props; return null; }`,

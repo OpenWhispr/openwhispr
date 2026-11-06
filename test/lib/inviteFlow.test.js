@@ -102,6 +102,52 @@ test("a pending invitation is flagged before sending", () => {
   assert.equal(inviteSummary(state).skipped.length, 1);
 });
 
+test("on a team or teamspace, an address already invited can still be sent", () => {
+  const state = commitText(
+    run(createInviteFlow({ attachInvited: true }), {
+      type: "roster",
+      memberEmails: ["sam@acme.test"],
+      invitedEmails: ["pat@acme.test"],
+    }),
+    "pat@acme.test sam@acme.test"
+  );
+  assert.deepEqual(state.recipients[0].state, { status: "draft" });
+  assert.deepEqual(state.recipients[1].state, { status: "blocked", reason: "alreadyMember" });
+  assert.deepEqual(inviteSummary(state).sendable, ["pat@acme.test"]);
+});
+
+test("an invitation that exists takes no room under the seat ceiling", () => {
+  const state = commitText(
+    run(
+      createInviteFlow({ attachInvited: true }),
+      { type: "roster", memberEmails: [], invitedEmails: ["pat@acme.test"] },
+      { type: "seats", purchasedLeft: null, ceilingLeft: 0 }
+    ),
+    "pat@acme.test"
+  );
+  assert.equal(inviteSummary(state).overCeiling, null);
+  assert.equal(inviteSummary(state).canSend, true);
+});
+
+test("an address whose invitation took the teamspace is reported apart from those emailed", () => {
+  const added = commitText(createInviteFlow({ attachInvited: true }), "pat@acme.test");
+  const state = run(
+    added,
+    { type: "send" },
+    {
+      type: "result",
+      email: "pat@acme.test",
+      outcome: { ok: false, kind: "alreadyInvited", grantsAdded: true },
+    },
+    { type: "finished" }
+  );
+  assert.deepEqual(state.attached, ["pat@acme.test"]);
+  assert.deepEqual(state.sent, []);
+  assert.deepEqual(state.recipients, []);
+  assert.equal(state.phase, "done");
+  assert.equal(inviteSummary(state).noEmailCount, 0);
+});
+
 test("the roster arriving later skips existing addresses, including after a seat refusal", () => {
   const added = commitText(fresh(), "sam@acme.test pat@acme.test new@acme.test");
   const refused = run(

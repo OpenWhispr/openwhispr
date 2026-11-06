@@ -19,6 +19,7 @@ interface ConversationListProps {
   onNewChat: () => void;
   onOpenSearch: () => void;
   onArchive: (id: number) => void;
+  onUnarchive: (id: number) => void;
   onDelete: (id: number) => void;
   refreshKey: number;
 }
@@ -65,6 +66,7 @@ export default function ConversationList({
   onNewChat,
   onOpenSearch,
   onArchive,
+  onUnarchive,
   onDelete,
   refreshKey,
 }: ConversationListProps) {
@@ -311,6 +313,7 @@ export default function ConversationList({
                       isActive={item.data.id === activeConversationId}
                       onClick={() => onSelectConversation(item.data.id)}
                       onArchive={onArchive}
+                      onUnarchive={onUnarchive}
                       onDelete={onDelete}
                     />
                   )}

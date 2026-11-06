@@ -1,3 +1,4 @@
+const { runLocalModelOperation, assertLocalModelOperation } = require("./localModelPolicyGate");
 const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
@@ -180,7 +181,18 @@ class LlamaServerManager {
   }
 
   async start(modelPath, options = {}) {
-    if (this.startupPromise) return this.startupPromise;
+    return runLocalModelOperation(
+      this,
+      "llm",
+      this.localModelIdForPath?.(modelPath),
+      () => this._policyAllowedStart(modelPath, options),
+      { onAbort: () => this.stop() }
+    );
+  }
+
+  async _policyAllowedStart(modelPath, options = {}) {
+    const pendingStartup = this.startupPromise;
+    if (pendingStartup) await pendingStartup;
     if (this.restartPromise) {
       await this.restartPromise;
       return this.start(modelPath, options);
@@ -201,6 +213,12 @@ class LlamaServerManager {
       // inference(), so asking for the running server is its only activity.
       this.resetIdleTimer();
       return;
+    }
+
+    // A caller joining a start must not report success for another request's
+    // model or replace that server before the first caller can use it.
+    if (pendingStartup) {
+      throw new Error("The local model server was started for another request. Please try again.");
     }
 
     if (this.process) {
@@ -440,6 +458,7 @@ class LlamaServerManager {
     return new Promise((resolve, reject) => {
       debugLogger.debug("Spawning llama-server", { binary: binaryPath, port: this.port, args });
 
+      assertLocalModelOperation(this);
       this.process = spawn(binaryPath, args, {
         stdio: ["ignore", "pipe", "pipe"],
         windowsHide: true,
@@ -669,7 +688,7 @@ class LlamaServerManager {
 
   async _waitForSlots(timeoutMs) {
     const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline && (await this._slotsBusy())) {
+    while (this.process && this.ready && Date.now() < deadline && (await this._slotsBusy())) {
       await new Promise((resolve) => setTimeout(resolve, SLOT_POLL_INTERVAL_MS).unref?.());
     }
   }
@@ -678,7 +697,7 @@ class LlamaServerManager {
   async stopWhenIdle() {
     const request = {};
     this.deferredStop = request;
-    while (this.deferredStop === request) {
+    while (this.process && this.deferredStop === request) {
       if (!(await this._slotsBusy())) break;
       if (this.deferredStop !== request) break;
       await new Promise((resolve) => setTimeout(resolve, SLOT_POLL_INTERVAL_MS).unref?.());
@@ -751,9 +770,8 @@ class LlamaServerManager {
   }
 
   /**
-   * The context window actually in force, which is not always what we asked
-   * for: a concurrent caller can join an in-flight start that used a smaller
-   * size. Returns null when it cannot be read.
+   * The context window actually in force, which the GPU startup ladder may
+   * reduce below the requested size. Returns null when it cannot be read.
    */
   async usableContextSize() {
     if (!this.ready || !this.process) return null;
@@ -777,14 +795,29 @@ class LlamaServerManager {
       payload.chat_template_kwargs = { enable_thinking: false };
     }
 
+    assertLocalModelOperation(this);
     const templated = await this._requestJson("/apply-template", payload);
     if (typeof templated?.prompt !== "string") return null;
 
+    assertLocalModelOperation(this);
     const tokenized = await this._requestJson("/tokenize", { content: templated.prompt });
     return Array.isArray(tokenized?.tokens) ? tokenized.tokens.length : null;
   }
 
   async inference(messages, options = {}) {
+    // Nothing to authorize once stopped, which clears the model: that's the
+    // ordinary not-running error, not a refusal of a model nobody named.
+    if (!this.ready || !this.process) return this._policyAllowedInference(messages, options);
+    return runLocalModelOperation(
+      this,
+      "llm",
+      this.localModelIdForPath?.(this.modelPath),
+      () => this._policyAllowedInference(messages, options),
+      { onAbort: () => this.cancelInference() }
+    );
+  }
+
+  async _policyAllowedInference(messages, options = {}) {
     if (!this.ready || !this.process) {
       throw new Error("llama-server is not running");
     }
