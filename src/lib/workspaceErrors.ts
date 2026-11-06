@@ -112,9 +112,12 @@ export type TeamActionError =
   | { kind: "nameTaken" }
   | { kind: "lastAdmin" }
   | { kind: "notWorkspaceMembers"; userIds: string[] }
+  // A role change for someone no longer on the team: the team itself is still there.
+  | { kind: "memberGone" }
   | RowActionError;
 
 const TEAM_GONE_MESSAGE = /^team not found$/i;
+const MEMBER_GONE_MESSAGE = /^member not found$/i;
 
 /** Maps a failed team action; codes come first, then a missing team, then the row action kinds. */
 export function classifyTeamError(error: unknown): TeamActionError {
@@ -137,6 +140,9 @@ export function classifyTeamError(error: unknown): TeamActionError {
       }
     }
     if (error.status === 404 && TEAM_GONE_MESSAGE.test(error.message)) return { kind: "gone" };
+    if (error.status === 404 && MEMBER_GONE_MESSAGE.test(error.message)) {
+      return { kind: "memberGone" };
+    }
   }
   return classifyRowActionError(error);
 }

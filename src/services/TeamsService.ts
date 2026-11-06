@@ -28,12 +28,15 @@ async function listMembers(teamId: string): Promise<TeamMember[]> {
   return res.data;
 }
 
-async function addMember(
+// Changes the role of someone already on the team. Unlike POST /members, which adds whoever it is
+// sent, a role picked from a roster that is out of date can't bring back someone removed since: the
+// API answers 404 "Member not found".
+async function setMemberRole(
   teamId: string,
   userId: string,
-  role: "admin" | "member" = "member"
+  role: "admin" | "member"
 ): Promise<void> {
-  await cloudPost(`/api/teams/${teamId}/members`, { user_id: userId, role });
+  await cloudPatch(`/api/teams/${teamId}/members/${userId}`, { role });
 }
 
 async function addMembers(
@@ -62,7 +65,7 @@ export const TeamsService = {
   update,
   remove,
   listMembers,
-  addMember,
+  setMemberRole,
   addMembers,
   listInvitations,
   removeMember,

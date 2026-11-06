@@ -419,6 +419,18 @@ test("an old API's missing invitations route leaves the table showing", async (t
   assert.equal(lineText(), null, "the failure says nothing");
 });
 
+test("a team deleted since the list was read says so and closes, with no Retry", async (t) => {
+  const { events } = await mount(t, {
+    listMembers: async () => {
+      throw new CloudApiError("Team not found", 404);
+    },
+  });
+  await ui.settle();
+
+  assert.deepEqual(toastTitles(), ["Sales no longer exists."]);
+  assert.deepEqual(events, [["gone"]]);
+});
+
 test("a failed member read says so and reads again", async (t) => {
   let failures = 1;
   const { callsTo } = await mount(t, {
@@ -800,6 +812,25 @@ test("a failed role change says whose", async (t) => {
 
   assert.deepEqual(toastTitles(), ["Couldn't change Misa's role. Try again."]);
   assert.equal(text(rowFor("Misa")), "Misa misa@openronnie.com Member");
+});
+
+test("a role change for someone removed meanwhile says so and drops their row", async (t) => {
+  const { events } = await mount(t, {
+    actions: {
+      setTeamMemberRole: async (_teamId, userId, _role, state) => {
+        state.members = state.members.filter((entry) => entry.user_id !== userId);
+        throw new CloudApiError("Member not found", 404);
+      },
+    },
+  });
+
+  await openMenu(roleTrigger(rowFor("Misa")));
+  await ui.click(menuItem("Team Admin"));
+  await ui.settle();
+
+  assert.deepEqual(toastTitles(), ["Misa is no longer on Sales."]);
+  assert.equal(rowFor("Misa"), undefined, "the list is read again");
+  assert.deepEqual(events, [["changed"]], "the team stays open");
 });
 
 test("losing permission while changing a role closes through onGone", async (t) => {

@@ -16,8 +16,8 @@ function makeHarness() {
   const deps = {
     teams: {
       remove: async (teamId) => calls.push(["team.remove", teamId]),
-      addMember: async (teamId, userId, role) =>
-        calls.push(["team.addMember", teamId, userId, role]),
+      setMemberRole: async (teamId, userId, role) =>
+        calls.push(["team.setMemberRole", teamId, userId, role]),
       removeMember: async (teamId, userId) => calls.push(["team.removeMember", teamId, userId]),
     },
     spaces: {
@@ -1398,7 +1398,7 @@ test("a leave that fails any other way still throws, without touching the mirror
   assert.deepEqual(calls, []);
 });
 
-test("leaving a team that was deleted meanwhile counts as left", async () => {
+test("leaving a team that was deleted meanwhile says so, after the mirror catches up", async () => {
   const { createSpaceActions } = await load();
   const { CloudApiError } = await import("../../src/services/cloudApi.ts");
   const { calls, deps } = makeHarness();
@@ -1406,7 +1406,9 @@ test("leaving a team that was deleted meanwhile counts as left", async () => {
     throw new CloudApiError("Team not found", 404);
   };
 
-  await createSpaceActions(deps).leaveTeam("team-1", "me");
+  await assert.rejects(createSpaceActions(deps).leaveTeam("team-1", "me"), {
+    message: "Team not found",
+  });
 
   assert.ok(
     calls.some(([name]) => name === "space.mySpaces"),

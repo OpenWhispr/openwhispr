@@ -41,6 +41,17 @@ test("create sends the founding members in the body", async (t) => {
   assert.deepEqual(requests[0].body, { name: "Sales", member_ids: ["u1", "u2"] });
 });
 
+test("setMemberRole patches the member, so it can't add someone who left", async (t) => {
+  const requests = installCloudCapture(t);
+  const { TeamsService } = require("../../src/services/TeamsService.ts");
+
+  await TeamsService.setMemberRole("team-1", "user-1", "admin");
+
+  assert.equal(requests[0].method, "PATCH");
+  assert.equal(requests[0].path, "/api/teams/team-1/members/user-1");
+  assert.deepEqual(requests[0].body, { role: "admin" });
+});
+
 test("update patches the team", async (t) => {
   const requests = installCloudCapture(t, { id: "team-1", name: "Revenue" });
   const { TeamsService } = require("../../src/services/TeamsService.ts");

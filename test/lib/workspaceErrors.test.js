@@ -366,6 +366,12 @@ test("a missing team reads as gone", () => {
   assert.notDeepEqual(classifyTeamError(new CloudApiError("Not found", 404)), { kind: "gone" });
 });
 
+test("a member missing from a team that still exists is told apart from a missing team", () => {
+  assert.deepEqual(classifyTeamError(new CloudApiError("Member not found", 404)), {
+    kind: "memberGone",
+  });
+});
+
 test("an unknown team failure reads as failed", () => {
   assert.deepEqual(classifyTeamError(new Error("boom")), { kind: "failed" });
   assert.deepEqual(classifyTeamError(new CloudApiError("x", 403)), { kind: "notAllowed" });

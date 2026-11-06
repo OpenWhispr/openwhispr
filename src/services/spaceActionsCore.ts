@@ -73,7 +73,7 @@ export interface SpaceActionsDependencies {
       userIds: string[]
     ) => Promise<{ added: string[]; already_members: string[] }>;
     remove: (teamId: string) => Promise<void>;
-    addMember: (teamId: string, userId: string, role?: TeamRole) => Promise<void>;
+    setMemberRole: (teamId: string, userId: string, role: TeamRole) => Promise<void>;
     removeMember: (teamId: string, userId: string) => Promise<void>;
   };
   spaces: {
@@ -698,7 +698,7 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
   }
 
   async function setTeamMemberRole(teamId: string, userId: string, role: TeamRole): Promise<void> {
-    await deps.teams.addMember(teamId, userId, role);
+    await deps.teams.setMemberRole(teamId, userId, role);
     await refreshMirrorAfterWrite();
   }
 
@@ -706,10 +706,17 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     try {
       await deps.teams.removeMember(teamId, userId);
     } catch (err) {
-      // Already out of the team, as after a leave that got partway, or the team deleted since:
-      // the mirror is what's left. A team route answers "Team not found", which the space
-      // classifier doesn't know.
-      if (classifyTeamError(err).kind !== "gone") throw err;
+      const kind = classifyTeamError(err).kind;
+      // Already out of the team, as after a leave that got partway: that is leaving.
+      if (kind !== "memberGone") {
+        // Deleted since: the mirror catches up, and the caller says the team is gone rather
+        // than that the user left it.
+        if (kind === "gone") {
+          await refreshMirrorAfterWrite();
+          deps.sync.requestSyncAll("manual");
+        }
+        throw err;
+      }
     }
     await refreshMirrorAfterWrite();
     deps.sync.requestSyncAll("manual");

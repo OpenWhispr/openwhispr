@@ -378,7 +378,13 @@ export default function TeamMembersPanel({
   });
 
   const loadMembers = useCallback(() => TeamsService.listMembers(team.id), [team.id]);
-  const { members, loading, loadFailed, reload: reloadMembers } = useMemberRoster(loadMembers);
+  const {
+    members,
+    loading,
+    loadFailed,
+    loadError,
+    reload: reloadMembers,
+  } = useMemberRoster(loadMembers);
 
   // The first read has nothing to show yet, and the hook only says it is loading once its effect
   // has run, so "loading" also covers the commit before that.
@@ -441,6 +447,14 @@ export default function TeamMembersPanel({
     });
     onGone();
   };
+
+  // A team deleted since the list was read can't be read again: say so rather than offer a Retry
+  // that always fails.
+  useEffect(() => {
+    if (loadError && classifyTeamError(loadError).kind === "gone") closeLostTeam("gone");
+    // Only a new failure matters; closeLostTeam reads the team as it is then.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadError]);
 
   const handlePickedChange = (next: PickedRecipient[]): void => {
     setPicked(next);
@@ -584,6 +598,17 @@ export default function TeamMembersPanel({
           });
         } else if (failure.kind === "gone" || failure.kind === "notAllowed") {
           closeLostTeam(failure.kind);
+        } else if (failure.kind === "memberGone") {
+          // Removed by someone else since the list was read: the list catches up.
+          toast({
+            title: t(`${MEMBERS}.memberGone`, {
+              name: isolate(member.name || member.email),
+              team: teamName,
+            }),
+            variant: "destructive",
+          });
+          onChanged();
+          await reloadMembers();
         } else if (failure.kind === "ssoRequired") {
           toast({
             title: t("workspaces.ssoRequired", { workspace: isolate(workspace.name) }),
