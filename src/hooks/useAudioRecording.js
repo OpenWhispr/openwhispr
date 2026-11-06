@@ -13,6 +13,7 @@ import {
   dismissPastePermissionNotice,
 } from "../utils/permissions";
 import { needsSttConfigBeforeStart } from "../helpers/sttConfigPolicy";
+import { isManagedOrukeetStream } from "../helpers/transcriptionFallback";
 import {
   isAgentAllowed,
   isLocalChoiceRefusal,
@@ -70,6 +71,8 @@ export const useAudioRecording = (toast, options = {}) => {
   const audioManagerRef = useRef(null);
   const startLockRef = useRef(false);
   const stopRequestedDuringStartRef = useRef(false);
+  const startEffectsOnReportRef = useRef(false);
+  const startCuePendingRef = useRef(false);
   const pushForceStoppedRef = useRef(false);
   const stopLockRef = useRef(false);
   const preparationGenerationRef = useRef(0);
@@ -265,7 +268,16 @@ export const useAudioRecording = (toast, options = {}) => {
           }
         }
 
-        const didStart = audioManagerRef.current.shouldUseStreaming()
+        const usesStreaming = audioManagerRef.current.shouldUseStreaming();
+        const managedOrukeet =
+          usesStreaming &&
+          isManagedOrukeetStream({
+            providerName: audioManagerRef.current.getStreamingProviderName?.(),
+            cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
+          });
+        startEffectsOnReportRef.current = managedOrukeet;
+        startCuePendingRef.current = managedOrukeet;
+        const didStart = usesStreaming
           ? await audioManagerRef.current.startStreamingRecording()
           : await audioManagerRef.current.startRecording();
         recordingStarted = didStart;
@@ -292,7 +304,11 @@ export const useAudioRecording = (toast, options = {}) => {
 
         // A quick tap can end the recording inside the start call itself (deferred
         // streaming stop) — don't pause media for a recording that already ended. See #1060.
-        if (didStart && audioManagerRef.current.getState().isRecording) {
+        if (
+          !startEffectsOnReportRef.current &&
+          didStart &&
+          audioManagerRef.current.getState().isRecording
+        ) {
           if (getSettings().pauseMediaOnDictation) {
             window.electronAPI?.pauseMediaPlayback?.();
           }
@@ -303,6 +319,8 @@ export const useAudioRecording = (toast, options = {}) => {
         return didStart;
       } finally {
         startLockRef.current = false;
+        startEffectsOnReportRef.current = false;
+        startCuePendingRef.current = false;
         // A stop that landed mid-start set isStopping expecting the started
         // recording's state change to clear it; if the recording never began,
         // no state change will ever arrive.
@@ -539,6 +557,25 @@ export const useAudioRecording = (toast, options = {}) => {
     audioManagerRef.current.setCallbacks({
       onStateChange: ({ isRecording, isProcessing, isStreaming, micCaptureStatus }) => {
         reportLifecycle(isRecording ? "recording" : isProcessing ? "processing" : "idle");
+        // Managed Orukeet acts with the pill, not when the start resolves: its start
+        // stays pending on a cold connect for seconds while audio already buffers.
+        // A fallback to batch reports recording again after its not-recording report
+        // released these, so only the cue is once per start.
+        if (
+          isRecording &&
+          !wasRecordingRef.current &&
+          startEffectsOnReportRef.current &&
+          !stopRequestedDuringStartRef.current
+        ) {
+          if (getSettings().pauseMediaOnDictation) {
+            window.electronAPI?.pauseMediaPlayback?.();
+          }
+          window.electronAPI?.registerCancelHotkey?.("Escape");
+          if (startCuePendingRef.current) {
+            startCuePendingRef.current = false;
+            void playStartCue();
+          }
+        }
         if (isRecording) {
           onDemoEventRef.current?.({ kind: demoKindRef.current, status: "listening" });
         } else if (isProcessing) {
@@ -1158,6 +1195,15 @@ export const useAudioRecording = (toast, options = {}) => {
       disposeForceStopped?.();
       if (audioManagerRef.current) {
         audioManagerRef.current.cleanup();
+      }
+      // cleanup() ends a recording without reporting it, so nothing else releases
+      // these, and the next start would read as a repeat of this recording.
+      if (wasRecordingRef.current) {
+        wasRecordingRef.current = false;
+        window.electronAPI?.unregisterCancelHotkey?.();
+        if (getSettings().pauseMediaOnDictation) {
+          window.electronAPI?.resumeMediaPlayback?.();
+        }
       }
     };
   }, [
