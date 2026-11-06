@@ -78,6 +78,7 @@ function harness({
     let meetingLocalTimer = null;
     let meetingLocalWin = null;
     let meetingLocalBuffers = { mic: [], system: [] };
+    const meetingLocalChunkClock = { mark() {}, take: () => 0, reset() {} };
     let meetingLocalTranscript = "";
     let meetingLocalProvider = null;
     let meetingLocalModel = null;
@@ -331,6 +332,7 @@ function chunkHarness() {
   vm.runInContext(
     `
     const meetingLocalBuffers = { mic: [], system: [Buffer.alloc(4)] };
+    const meetingLocalChunkClock = { take: () => 0 };
     const meetingLocalWin = { isDestroyed: () => false, webContents: { send: (channel, payload) => finals.push({ channel, payload }) } };
     const meetingLocalProvider = "nvidia";
     const meetingLocalModel = "parakeet";
