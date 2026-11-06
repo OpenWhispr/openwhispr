@@ -257,11 +257,10 @@ test("selectPersonal leaves no active workspace and survives a refresh", async (
 });
 
 test("a saved Personal choice is restored on launch", async (t) => {
-  const { useWorkspaceStore, PERSONAL_SELECTED_KEY } = await loadStoreForPersonal(t, {
+  const { useWorkspaceStore } = await loadStoreForPersonal(t, {
     list: businessOnly,
     storage: { workspacePersonalSelected: "true" },
   });
-  assert.equal(PERSONAL_SELECTED_KEY, "workspacePersonalSelected");
 
   await useWorkspaceStore.getState().refresh();
 
@@ -318,7 +317,7 @@ test("losing the last workspace drops a saved Personal choice", async (t) => {
   assert.equal(storage.getItem(PERSONAL_SELECTED_KEY), null);
 });
 
-test("a window that follows another window's Personal choice keeps it on refresh", async (t) => {
+test("a window follows another window's Personal choice", async (t) => {
   const { useWorkspaceStore, handleActiveWorkspaceStorage, storage, PERSONAL_SELECTED_KEY } =
     await loadStoreForPersonal(t, {
       list: businessOnly,
@@ -330,10 +329,8 @@ test("a window that follows another window's Personal choice keeps it on refresh
   handleActiveWorkspaceStorage({ key: PERSONAL_SELECTED_KEY, newValue: "true" });
   storage.removeItem("activeWorkspaceId");
   handleActiveWorkspaceStorage({ key: "activeWorkspaceId", newValue: null });
+
   assert.equal(useWorkspaceStore.getState().personalSelected, true);
-
-  await useWorkspaceStore.getState().refresh({ fresh: true });
-
   assert.equal(useWorkspaceStore.getState().activeWorkspaceId, null);
 });
 

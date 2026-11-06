@@ -88,7 +88,7 @@ export function resolveSharedAccessState(input: {
   signedIn: boolean;
   workspace: Workspace | null;
   // Personal is chosen over the listed workspaces, so their lists are a switch away, not a plan.
-  personalSelected?: boolean;
+  personalSelected: boolean;
   // The server's flag. It is set on every answer for a workspace without the
   // plan, so it only means "paused" when there are words to pause.
   serverPaused: boolean | null;

@@ -65,15 +65,9 @@ export default function AddNotesToFolderDialog({
     window.electronAPI.getNotes(null, 500, null, null, visibleSpaceIds).then(setAllNotes);
   }, [open, visibleSpaceIds]);
 
-  // The query scopes at the DB; this also drops an older answer for a previous scope.
   const availableNotes = useMemo(
-    () =>
-      allNotes.filter(
-        (n) =>
-          n.folder_id !== targetFolderId &&
-          (!visibleSpaceIds || visibleSpaceIds.includes(n.space_id))
-      ),
-    [allNotes, targetFolderId, visibleSpaceIds]
+    () => allNotes.filter((n) => n.folder_id !== targetFolderId),
+    [allNotes, targetFolderId]
   );
 
   const filteredNotes = useMemo(() => {

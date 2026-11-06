@@ -15,7 +15,7 @@ interface WorkspaceSwitcherInput {
   error: boolean;
   workspaces: Workspace[];
   activeWorkspaceId: string | null;
-  personalSelected?: boolean;
+  personalSelected: boolean;
 }
 
 /**
@@ -52,7 +52,7 @@ export function resolveWorkspaceSwitcher({
   error,
   workspaces,
   activeWorkspaceId,
-  personalSelected = false,
+  personalSelected,
 }: WorkspaceSwitcherInput): WorkspaceSwitcherState {
   if (!isSignedIn) return { kind: "hidden" };
   if (!loaded) return { kind: "loading" };

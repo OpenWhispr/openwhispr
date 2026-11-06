@@ -12,9 +12,10 @@ function isListedWorkspace(workspaceId: string, workspaces: Workspace[]): boolea
 }
 
 /**
- * Whether a space shows while `activeWorkspaceId` is the active workspace.
- * Personal is account-level, so it shows in every workspace. A team space
- * whose workspace isn't listed (legacy rows, a list that hasn't loaded) stays
+ * Whether a space shows while `activeWorkspaceId` is the active workspace, or
+ * while `personalSelected` puts Personal in place of every workspace. The
+ * private space is account-level, so it always shows. A team space whose
+ * workspace isn't listed (legacy rows, a list that hasn't loaded) stays
  * visible too, since no switch could ever reach it otherwise.
  */
 export function isSpaceInWorkspaceScope(
