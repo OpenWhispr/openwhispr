@@ -76,8 +76,19 @@ const OUTCOME_URL_MAX_CHARS = 200;
 const LEDGER_STATUSES = new Set(["sent", "draft_opened", "unknown"]);
 const LEDGER_MAX_ENTRIES = 10;
 const LEDGER_REQUEST_MAX_CHARS = 500;
-const LEDGER_NOTE =
-  "Earlier messages in this conversation were left out to save space. The requests in them that led to an action, each with what the action did:";
+const LEFT_OUT_NOTE = "Earlier messages in this conversation were left out to save space.";
+const LEDGER_NOTE = `${LEFT_OUT_NOTE} The requests in them that led to an action, each with what the action did:`;
+const CUT_NOTE = "(The rest of this message was cut to save space.)";
+
+// An older message cut to a third of the history, so one oversized paste or
+// reply can't leave the request alone.
+function cutToShare(m: Message, maxTokens: number): Message {
+  const tokens = estimateNoteTokens(m.content);
+  if (tokens <= maxTokens / 3) return m;
+  const chars = Array.from(m.content);
+  const kept = chars.slice(0, Math.floor((chars.length * maxTokens) / 3 / tokens)).join("");
+  return { ...m, content: `${kept}\n${CUT_NOTE}` };
+}
 
 function traceArgument(call: ToolCallInfo): string | null {
   const field = TRACE_ARGUMENT[call.name];
@@ -399,7 +410,7 @@ function ledgerText(turns: LedgerTurn[]): string {
  * requests that led to them.
  */
 export function toHistoryMessages(
-  messages: ReadonlyArray<Message>,
+  allMessages: ReadonlyArray<Message>,
   {
     toolHistory,
     isOffered = () => true,
@@ -407,9 +418,10 @@ export function toHistoryMessages(
   }: { toolHistory: ToolHistory; isOffered?: IsOffered; maxTokens?: number }
 ): HistoryMessage[] {
   // The request, the newest user message, always stays, however long it is.
-  let request = messages.length - 1;
-  while (request >= 0 && messages[request].role !== "user") request--;
+  let request = allMessages.length - 1;
+  while (request >= 0 && allMessages[request].role !== "user") request--;
   if (request < 0) return [];
+  let messages = allMessages;
   const keptFrom = (maxEntries: number): number => {
     let first = messages.length;
     for (let entries = 0, tokens = 0; first > 0; first--) {
@@ -423,6 +435,12 @@ export function toHistoryMessages(
     return first;
   };
   let first = keptFrom(HISTORY_MAX_ENTRIES);
+  // Only the request fits: cut the older messages to share the room, so one
+  // oversized paste or reply doesn't take every other message with it.
+  if (first === request && request > 0) {
+    messages = allMessages.map((m, i) => (i < request ? cutToShare(m, maxTokens) : m));
+    first = keptFrom(HISTORY_MAX_ENTRIES);
+  }
   const sendsLeftOut = toolHistory !== "none" && ledgerTurns(messages.slice(0, first)).length > 0;
   // As tool messages the sends need entries of their own; a text trace rides
   // in the first kept message.
@@ -438,6 +456,11 @@ export function toHistoryMessages(
   if (toolHistory === "text" && turns.length > 0) {
     const [head, ...rest] = kept;
     return [{ ...head, content: `${ledgerText(turns)}\n\n${head.content}` }, ...rest];
+  }
+  // A chat may open with a greeting, which the history skips anyway.
+  const leftOut = first > allMessages.findIndex((m) => m.role === "user");
+  if (leftOut && turns.length === 0 && kept.length === 1) {
+    return [{ ...kept[0], content: `${LEFT_OUT_NOTE}\n\n${kept[0].content}` }];
   }
   return [...ledger, ...kept];
 }

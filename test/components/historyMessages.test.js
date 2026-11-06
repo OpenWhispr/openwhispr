@@ -285,13 +285,60 @@ test("history keeps the newest messages within 40 entries and 16,000 tokens", as
   const long = Array.from({ length: 5 }, (_, i) => user(`${i}`.repeat(20_000)));
   assert.equal(toHistoryMessages(long, { toolHistory: "text" }).length, 2);
 
-  // The request itself always goes, however long.
+  // The request itself always goes, however long, and says what was left out.
   const huge = [user("Earlier"), assistant("Sure."), user("x".repeat(60_000))];
-  assert.deepEqual(
-    toHistoryMessages(huge, { toolHistory: "text" }).map((m) => m.content.length),
-    [60_000]
+  const alone = toHistoryMessages(huge, { toolHistory: "text" });
+  assert.equal(alone.length, 1);
+  assert.equal(
+    alone[0].content,
+    `Earlier messages in this conversation were left out to save space.\n\n${"x".repeat(60_000)}`
   );
   assert.deepEqual(toHistoryMessages([assistant("Hello")], { toolHistory: "text" }), []);
+});
+
+test("one oversized earlier message is cut to share the room, not left out with every other", async () => {
+  const { toHistoryMessages } = await load();
+  const cut = /\n\(The rest of this message was cut to save space\.\)$/;
+  for (const [toolHistory, maxTokens] of [
+    ["text", undefined],
+    ["parts", undefined],
+    ["text", 4_000],
+  ]) {
+    const options = { toolHistory, ...(maxTokens ? { maxTokens } : {}) };
+    // A long paste, then its summary, then a follow-up about it.
+    const pasted = toHistoryMessages(
+      [user(`Summarize: ${"y".repeat(70_000)}`), assistant("A summary."), user("Make it shorter")],
+      options
+    );
+    assert.deepEqual(
+      pasted.map((m) => m.role),
+      ["user", "assistant", "user"],
+      String(maxTokens)
+    );
+    assert.ok(pasted[0].content.startsWith("Summarize: yyy"));
+    assert.match(pasted[0].content, cut);
+    assert.ok(pasted[0].content.length < 70_000);
+    assert.equal(pasted[1].content, "A summary.");
+    assert.equal(pasted[2].content, "Make it shorter");
+
+    // A long reply the same way.
+    const answered = toHistoryMessages(
+      [user("Write it all out"), assistant("z".repeat(70_000)), user("Now in French")],
+      options
+    );
+    assert.equal(answered.length, 3);
+    assert.match(answered[1].content, cut);
+  }
+  // A chat that fits is sent as it is, one that opens with a greeting too.
+  const short = [user("Hi"), assistant("Hello."), user("Thanks")];
+  assert.deepEqual(
+    toHistoryMessages(short, { toolHistory: "text" }).map((m) => m.content),
+    ["Hi", "Hello.", "Thanks"]
+  );
+  assert.deepEqual(
+    toHistoryMessages([assistant("How can I help?"), user("Thanks")], { toolHistory: "text" }),
+    [{ role: "user", content: "Thanks" }]
+  );
 });
 
 test("historical built-in help remains readable without inventing a model tool", async () => {
@@ -826,7 +873,12 @@ test("history always starts with the user, however the cap cuts it", async () =>
   ];
   const capped = toHistoryMessages(busy, { toolHistory: "parts" });
   assert.ok(capped.length <= 40, String(capped.length));
-  assert.deepEqual(capped, [{ role: "user", content: "Thanks" }]);
+  assert.deepEqual(capped, [
+    {
+      role: "user",
+      content: "Earlier messages in this conversation were left out to save space.\n\nThanks",
+    },
+  ]);
 });
 
 test("a call to a tool this turn doesn't offer is a note, never a tool message: a provider may refuse it", async () => {
