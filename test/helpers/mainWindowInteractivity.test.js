@@ -184,6 +184,42 @@ test("Linux native visibility reports hide, show, minimize and restore to the re
   }
 });
 
+test("Windows nudges the pill's size on every show so button presses reach it again", () => {
+  const original = Object.getOwnPropertyDescriptor(process, "platform");
+  try {
+    for (const [platform, expected] of [
+      ["win32", 2],
+      ["darwin", 0],
+      ["linux", 0],
+    ]) {
+      Object.defineProperty(process, "platform", { value: platform, configurable: true });
+      const bounds = { x: 1708, y: 908, width: 208, height: 120 };
+      const setBounds = [];
+      const win = new EventEmitter();
+      win.isDestroyed = () => false;
+      win.isVisible = () => true;
+      win.isMinimized = () => false;
+      win.getBounds = () => ({ ...bounds });
+      win.setBounds = (next) => setBounds.push(next);
+      win.webContents = Object.assign(new EventEmitter(), { send: () => undefined });
+      const manager = Object.assign(Object.create(WindowManager.prototype), {
+        mainWindow: win,
+        enforceMainWindowOnTop: () => {},
+      });
+      WindowManager.prototype.registerMainWindowEvents.call(manager);
+      win.emit("ready-to-show");
+      win.emit("show");
+      assert.equal(setBounds.length, expected, platform);
+      if (expected) {
+        // The size changes for one call and always ends where it started.
+        assert.deepEqual(setBounds, [{ ...bounds, width: 209 }, bounds]);
+      }
+    }
+  } finally {
+    Object.defineProperty(process, "platform", original);
+  }
+});
+
 test("a failed Linux keyboard focus request settles quietly", async () => {
   const win = { ...fakeWindow(), isVisible: () => true, isMinimized: () => false };
   const manager = Object.assign(Object.create(WindowManager.prototype), { mainWindow: win });
