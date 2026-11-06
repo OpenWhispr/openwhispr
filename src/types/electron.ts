@@ -927,6 +927,27 @@ export interface TeamInvitation {
   created_at: string;
 }
 
+export interface WorkspaceGuestNote {
+  id: string;
+  title: string | null;
+  permission: "viewer" | "editor";
+  visibility: "link" | "domain" | "invited";
+}
+
+export interface WorkspaceGuest {
+  email: string;
+  name: string | null;
+  image: string | null;
+  notes: WorkspaceGuestNote[];
+}
+
+export interface GuestRemoval {
+  removed: string[];
+  not_found: string[];
+  skipped_members: string[];
+  link_shared_note_ids: string[];
+}
+
 export interface TeamMember {
   user_id: string;
   role: TeamRole;
