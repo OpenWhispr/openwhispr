@@ -4,6 +4,7 @@ const {
   listRunnableLocalModels,
 } = require("../models/registryData.js");
 const { isLocalModelPolicyRefusal } = require("./localModelPolicyGate");
+const { transcribeWithDictionary } = require("./localWhisperDictionary");
 const { OrukeetStreaming, MANAGED_STREAM_OPTIONS } = require("./orukeetStreaming");
 const { connectManagedOrukeet } = require("./orukeetCloudSession");
 const {
@@ -1224,10 +1225,12 @@ class IPCHandlers {
     if (isSherpaLocalProvider(options.provider)) {
       return this.parakeetManager.transcribeLocalParakeet(audioBuffer, options);
     }
-    return this.whisperManager.transcribeLocalWhisper(audioBuffer, {
-      ...options,
-      ...this._resolveWhisperVadOptions("noteRecording"),
-    });
+    return transcribeWithDictionary(
+      this.whisperManager,
+      audioBuffer,
+      { ...options, ...this._resolveWhisperVadOptions("noteRecording") },
+      this._getDictionarySafe()
+    );
   }
 
   approveAudioPath(filePath) {
@@ -7837,11 +7840,12 @@ class IPCHandlers {
             });
           } else if (this.whisperManager?.serverManager?.isAvailable?.()) {
             const vadOptions = this._resolveWhisperVadOptions("noteRecording");
-            result = await this.whisperManager.transcribeLocalWhisper(buffer, {
-              model: settings.whisperModel,
-              language,
-              ...vadOptions,
-            });
+            result = await transcribeWithDictionary(
+              this.whisperManager,
+              buffer,
+              { model: settings.whisperModel, language, ...vadOptions },
+              this._getDictionarySafe()
+            );
           }
         } else if (settings?.cloudTranscriptionMode === "openwhispr") {
           const win = BrowserWindow.fromWebContents(event.sender);
@@ -9854,11 +9858,13 @@ class IPCHandlers {
           });
         } else {
           const vadOptions = this._resolveWhisperVadOptions("dictation");
-          result = await this.whisperManager.transcribeLocalWhisper(wav, {
-            model,
-            language,
-            ...vadOptions,
-          });
+          result = await transcribeWithDictionary(
+            this.whisperManager,
+            wav,
+            { model, language, ...vadOptions },
+            this._getDictionarySafe(),
+            { onEcho: "discard" }
+          );
         }
 
         if (gen !== dictationPreviewGen) return;
