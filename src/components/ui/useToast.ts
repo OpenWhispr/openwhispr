@@ -33,6 +33,8 @@ export interface ToastProps {
   variant?: "default" | "destructive" | "success";
   duration?: number;
   onClose?: () => void;
+  /** Called once when the toast goes away, however it went: timed out, closed or dismissed. */
+  onSettled?: () => void;
   dismissible?: boolean;
 }
 

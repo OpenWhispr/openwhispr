@@ -17,7 +17,7 @@ Keep the flag off until the private Cloud backend implements `POST /api/stt/oruk
 
 Session minting, service credentials and operational deployment commands belong in the private Cloud backend and deployment handoff. The desktop receives only the authenticated session response.
 
-The response contains `baseUrl`, `websocketUrl`, `clientToken`, `protocol`, `expiresIn`, `singleUse`, and `model`. The main process validates all fields, pins the destination to exact approved paths at `https://orukeet.gizmovoice.ai`, and connects using `orukeet.pcm.v1` and `auth.<clientToken>` WebSocket subprotocols. A renderer-selected URL cannot redirect managed credentials. Token issuance and connection are bound to the current account; cancellation or credential changes cannot reopen a stale session.
+The response contains `baseUrl`, `websocketUrl`, `clientToken`, `protocol`, `expiresIn`, `singleUse`, and `model`. The main process validates all fields, pins the destination to exact approved paths at `https://orukeet.gizmovoice.ai` or `https://orukeet.openwhispr.com`, and connects using `orukeet.pcm.v1` and `auth.<clientToken>` WebSocket subprotocols. A renderer-selected URL cannot redirect managed credentials. Token issuance and connection are bound to the current account; cancellation or credential changes cannot reopen a stale session.
 
 **Usage enforcement:** current GPU tokens are single-use connection credentials with a 60-second connection expiry, not per-user billing grants. An established socket can last longer. Token issuance checks alone do not enforce paid audio duration. Before a paid rollout, the private backend and gateway must provide trusted user/session metering or proxy sessions through an authenticated metered backend. Client duration telemetry is not a trusted billing receipt. Rebenchmark if a proxy hop is introduced.
 
@@ -25,7 +25,7 @@ The response contains `baseUrl`, `websocketUrl`, `clientToken`, `protocol`, `exp
 
 ## Recording lifecycle
 
-The main process creates the adapter before requesting the session so initial PCM is buffered. The existing AudioWorklet emits mono PCM16 at 16 kHz. On release it sends its final PCM and a flush acknowledgement; only then does the desktop commit. Final acknowledgement replaces fixed settling delays. Successful silence is accepted without a second transcription. A flush failure closes the incomplete stream and preserves the existing recording fallback.
+The renderer holds PCM on the managed route until the session has started, because the start cue plays before then and main can replace a connection that is still warming up. On other routes the main process creates the adapter before requesting the session so initial PCM is buffered there. The existing AudioWorklet emits mono PCM16 at 16 kHz. On release it sends its final PCM and a flush acknowledgement; only then does the desktop commit. Final acknowledgement replaces fixed settling delays. Successful silence is accepted without a second transcription. A flush failure closes the incomplete stream and preserves the existing recording fallback.
 
 The desktop closes the used adapter after each recording and creates a new warm connection; it only reuses a socket that has carried no audio. An unused Orukeet connection closes after 60 seconds; recording startup cancels that timer. Cancellation closes without commit. Pending audio is bounded to 2 MiB; setup and final waits are bounded. Application heartbeats run every 15 seconds. The server allows at most 600 seconds of audio and uses overlapped windows above 60 seconds; an individual socket has a 20-minute lifetime.
 
@@ -64,8 +64,8 @@ translation and the separate supported-language-score cohort keep their paths.
 The main process calls `POST /api/stt/orukeet/pipeline-session` with cleanup
 options (dictionary, custom prompt, language, locale and agent name). The backend
 builds the same prompt as `/api/reason`, applies account/policy/usage checks, and
-returns a single-use, 60-second grant. The desktop accepts only the fixed
-`orukeet.gizmovoice.ai` hostname and the documented Gemma 12B regional paths. Both the grant
+returns a single-use, 60-second grant. The desktop accepts only the
+`orukeet.gizmovoice.ai` and `orukeet.openwhispr.com` hostnames and the documented Gemma 12B regional paths. Both the grant
 and WebSocket `ready` must confirm account limits.
 
 Audio streams while recording. The one final result carries raw ASR and cleaned

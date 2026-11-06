@@ -1368,6 +1368,31 @@ for (const [surface, hookOptions] of [
   });
 }
 
+test("cancelling while the local model download is checked leaves no late reply", async (t) => {
+  const downloads = Promise.withResolvers();
+  const { captured, getMessages, reasoningService } = await renderChatStreaming(
+    t,
+    {},
+    {
+      settings: ASSISTANT_OFF,
+      electronAPI: { modelGetActiveDownloads: () => downloads.promise },
+    }
+  );
+  localStorage.setItem(
+    "pendingLocalModelSelectionsV1",
+    JSON.stringify({ assistant: { provider: "qwen", modelId: "qwen3.5-4b-q4_k_m" } })
+  );
+  const user = { id: "u1", role: "user", content: "Hello" };
+  const sending = captured.sendToAI(user.content, [user]);
+  captured.cancelStream();
+  downloads.resolve([{ modelType: "llm", modelId: "qwen3.5-4b-q4_k_m" }]);
+  await sending;
+
+  assert.deepEqual(getMessages(), []);
+  assert.equal(reasoningService.processTextStreamingAI.mock.callCount(), 0);
+  assert.equal(reasoningService.processTextStreamingCloud.mock.callCount(), 0);
+});
+
 for (const [label, policy, content] of [
   [
     "a blocked model",

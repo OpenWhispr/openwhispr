@@ -790,7 +790,7 @@ class ModelManager {
         // be stepped down again.
         if (this.serverManager.contextSize < contextSize) refuse(contextSize);
       } catch (error) {
-        if (isLocalModelPolicyRefusal(error)) throw error;
+        if (isLocalModelPolicyRefusal(error) || error.code === "LOCAL_MODEL_BUSY") throw error;
         refuse(contextSize);
         // start() stops the running server before it spawns, so a grow that
         // dies has already taken a working window with it. Come back at the
@@ -808,7 +808,8 @@ class ModelManager {
         try {
           await startAt(restorableContextSize);
         } catch (restoreError) {
-          if (isLocalModelPolicyRefusal(restoreError)) throw restoreError;
+          if (isLocalModelPolicyRefusal(restoreError) || restoreError.code === "LOCAL_MODEL_BUSY")
+            throw restoreError;
           throw unavailable(restoreError);
         }
       }
@@ -917,8 +918,8 @@ class ModelManager {
     this.currentServerModelId = null;
   }
 
-  async stopServerWhenIdle() {
-    if (await this.serverManager.stopWhenIdle()) this.currentServerModelId = null;
+  async stopServerWhenIdle(options) {
+    if (await this.serverManager.stopWhenIdle(options)) this.currentServerModelId = null;
   }
 
   getServerStatus() {

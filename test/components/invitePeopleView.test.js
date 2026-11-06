@@ -49,6 +49,7 @@ async function loadView(t) {
           role: "member",
           phase: "editing",
           sent: [],
+          attached: [],
           memberEmails: [],
           invitedEmails: [],
           seats: { purchasedLeft: null, ceilingLeft: null },

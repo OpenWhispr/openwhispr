@@ -1,3 +1,4 @@
+import { forgetHeldSpaces, isSpaceHeld } from "../lib/heldSpaceDeletes";
 import { create } from "zustand";
 import { syncService } from "../services/SyncService.js";
 import {
@@ -437,8 +438,9 @@ export async function loadSpaces(): Promise<SpaceItem[]> {
   const items = (await window.electronAPI.getSpaces?.()) ?? [];
   // A newer load may have resolved first.
   if (gen !== spacesLoadGeneration) return items;
-  useNoteStore.setState({ spaces: items });
-  return items;
+  const visible = items.filter((space) => !isSpaceHeld(space.id));
+  useNoteStore.setState({ spaces: visible });
+  return visible;
 }
 
 export async function loadFolders(): Promise<FolderItem[]> {
@@ -454,7 +456,11 @@ export async function loadFolders(): Promise<FolderItem[]> {
     if (c.folder_id != null) folderCounts[c.folder_id] = c.count;
     else if (c.space_id != null) spaceRootCounts[c.space_id] = c.count;
   });
-  useNoteStore.setState({ folders: items, folderCounts, spaceRootCounts });
+  useNoteStore.setState({
+    folders: items.filter((folder) => !isSpaceHeld(folder.space_id)),
+    folderCounts,
+    spaceRootCounts,
+  });
   return items;
 }
 
@@ -491,6 +497,8 @@ export function resetForAccountChange(): void {
   accountGeneration += 1;
   pendingFolderPreset = null;
   purgeDisplacedNote = null;
+  hiddenSpaces.clear();
+  forgetHeldSpaces();
 
   invalidateKeyedLoadGenerations(containerLoadGenerations);
   containerLoadsInFlight.clear();
@@ -775,6 +783,14 @@ export function removeNote(id: number): void {
 let purgeDisplacedNote: { spaceId: number; title: string | null; at: number } | null = null;
 const PURGE_DISPLACED_NOTE_TTL_MS = 30_000;
 
+// What a held delete took out of state, for the real purge that follows: by then the store no
+// longer lists the space, and its cleanup still has to find everything that belonged to it.
+const hiddenSpaces = new Map<number, { cloudSpaceId: string | null; folderIds: number[] }>();
+
+export function getAccountGeneration(): number {
+  return accountGeneration;
+}
+
 export function readPurgeDisplacedNote(spaceId: number): { title: string | null } | null {
   const memo = purgeDisplacedNote;
   if (!memo || memo.spaceId !== spaceId || Date.now() - memo.at > PURGE_DISPLACED_NOTE_TTL_MS) {
@@ -784,13 +800,19 @@ export function readPurgeDisplacedNote(spaceId: number): { title: string | null 
   return { title: memo.title };
 }
 
-function handleSpacePurged(spaceId: number): void {
+// `holding`: a held delete, which may yet be undone. Only the view goes, so what isn't the view's
+// (unresolved conflicts, which gate the next push) stays until the purge is real.
+function handleSpacePurged(spaceId: number, { holding = false } = {}): void {
   const state = useNoteStore.getState();
-  const purgedCloudSpaceId = state.spaces.find((s) => s.id === spaceId)?.cloud_space_id ?? null;
+  const hidden = hiddenSpaces.get(spaceId);
+  if (!holding) hiddenSpaces.delete(spaceId);
+  const purgedCloudSpaceId =
+    state.spaces.find((s) => s.id === spaceId)?.cloud_space_id ?? hidden?.cloudSpaceId ?? null;
   const removedKeys = new Set<string>([spaceContainerKey(spaceId)]);
   state.folders.forEach((f) => {
     if (f.space_id === spaceId) removedKeys.add(folderContainerKey(f.id));
   });
+  hidden?.folderIds.forEach((id) => removedKeys.add(folderContainerKey(id)));
 
   const teardown = teardownNoteContainers(state, removedKeys);
   const folderCounts = { ...state.folderCounts };
@@ -814,13 +836,15 @@ function handleSpacePurged(spaceId: number): void {
   });
   const shareByCloudId = new Map(state.shareByCloudId);
   purgedCloudIds.forEach((id) => shareByCloudId.delete(id));
-  const noteConflicts = Object.fromEntries(
-    Object.entries(state.noteConflicts).filter(
-      ([clientId, cloudNote]) =>
-        !purgedClientIds.has(clientId) &&
-        (purgedCloudSpaceId == null || cloudNote.space_id !== purgedCloudSpaceId)
-    )
-  );
+  const noteConflicts = holding
+    ? state.noteConflicts
+    : Object.fromEntries(
+        Object.entries(state.noteConflicts).filter(
+          ([clientId, cloudNote]) =>
+            !purgedClientIds.has(clientId) &&
+            (purgedCloudSpaceId == null || cloudNote.space_id !== purgedCloudSpaceId)
+        )
+      );
   Object.keys(state.noteConflicts).forEach((clientId) => {
     if (!(clientId in noteConflicts)) removeNoteConflictId(clientId);
   });
@@ -840,7 +864,7 @@ function handleSpacePurged(spaceId: number): void {
     extra.activeNoteId = null;
     // Only synced rows are deleted by the purge; dirty rows relocate to
     // Personal and already announce themselves with a titled toast.
-    if (activeNote.sync_status === "synced" && activeNote.cloud_id) {
+    if (!holding && activeNote.sync_status === "synced" && activeNote.cloud_id) {
       purgeDisplacedNote = { spaceId, title: activeNote.title, at: Date.now() };
     }
   }
@@ -868,6 +892,54 @@ function handleSpacePurged(spaceId: number): void {
       void loadContainerNotes(privateRootKey);
     }
   }
+}
+
+/**
+ * Takes a space whose delete is being held out of the view, as its purge would, while its rows stay
+ * on this device. The result brings it back; `reopen` also returns to where the person was, unless
+ * they have since gone elsewhere.
+ */
+export function hideSpaceInView(spaceId: number): (reopen: boolean) => Promise<void> {
+  const before = useNoteStore.getState();
+  const { activeContext, expandedContainers } = before;
+  const openNote =
+    before.activeNoteId != null ? findNoteInState(before, before.activeNoteId) : null;
+  const noteToReopen = openNote?.space_id === spaceId ? openNote : null;
+  const contextToReopen = activeContext?.spaceId === spaceId ? activeContext : null;
+  const workspaceAtHide = useWorkspaceStore.getState().activeWorkspaceId;
+  hiddenSpaces.set(spaceId, {
+    cloudSpaceId: before.spaces.find((s) => s.id === spaceId)?.cloud_space_id ?? null,
+    folderIds: before.folders.filter((f) => f.space_id === spaceId).map((f) => f.id),
+  });
+  handleSpacePurged(spaceId, { holding: true });
+  const hiddenState = useNoteStore.getState();
+  const fallback = hiddenState.activeContext;
+  const expandedHere = [...expandedContainers].filter(
+    (key) => !hiddenState.expandedContainers.has(key)
+  );
+
+  return async (reopen) => {
+    hiddenSpaces.delete(spaceId);
+    await Promise.all([loadSpaces(), loadFolders()]);
+    if (!reopen) return;
+    const now = useNoteStore.getState();
+    const expanded = new Set([...now.expandedContainers, ...expandedHere]);
+    persistExpandedContainers(expanded);
+    useNoteStore.setState({ expandedContainers: expanded });
+    const stayed =
+      now.activeContext === fallback &&
+      useWorkspaceStore.getState().activeWorkspaceId === workspaceAtHide;
+    if (!stayed) return;
+    if (contextToReopen) setActiveContext(contextToReopen.spaceId, contextToReopen.folderId);
+    if (noteToReopen && now.activeNoteId == null) {
+      await ensureContainerLoaded(
+        noteToReopen.folder_id != null
+          ? folderContainerKey(noteToReopen.folder_id)
+          : spaceContainerKey(spaceId)
+      );
+      setActiveNoteId(noteToReopen.id);
+    }
+  };
 }
 
 export async function createFolder(
@@ -961,7 +1033,9 @@ export async function updateSpaceMeta(
 }
 
 /** Local purge (dev override); store cleanup happens via the space-purged broadcast. */
-export async function purgeSpace(id: number): Promise<{ success: boolean; error?: string }> {
+export async function purgeSpace(
+  id: number
+): Promise<{ success: boolean; error?: string; relocatedCount?: number }> {
   return (await window.electronAPI.purgeSpace?.(id)) ?? { success: false };
 }
 

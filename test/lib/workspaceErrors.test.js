@@ -5,6 +5,8 @@ const {
   classifyInviteError,
   classifyRemovalError,
   classifyRowActionError,
+  classifySpaceError,
+  rowActionErrorOf,
 } = require("../../src/lib/workspaceErrors.ts");
 const { CloudApiError } = require("../../src/services/cloudApi.ts");
 
@@ -241,4 +243,98 @@ test("a rate-limited invite keeps how many fit and the daily limit", () => {
   });
   // An older answer without the numbers has nothing to trim to.
   assert.deepEqual(classifyInviteError(limited(undefined)), { kind: "rateLimited" });
+});
+
+test("space refusals map to their kinds by code", () => {
+  const cases = [
+    [new CloudApiError("x", 409, "space_name_taken"), { kind: "nameTaken" }],
+    [new CloudApiError("x", 409, "last_space_admin"), { kind: "lastAdmin" }],
+    [new CloudApiError("x", 403, "space_not_open"), { kind: "notOpen" }],
+    [new CloudApiError("x", 410, "space_archived"), { kind: "archived" }],
+    [new CloudApiError("x", 404, "space_not_found"), { kind: "gone" }],
+  ];
+  for (const [error, expected] of cases) {
+    assert.deepEqual(classifySpaceError(error), expected, error.code);
+  }
+});
+
+test("access revoked reads as not allowed, which no retry changes", () => {
+  assert.deepEqual(classifySpaceError(new CloudApiError("x", 403, "space_access_revoked")), {
+    kind: "notAllowed",
+  });
+});
+
+test("not_workspace_members names the people who are not in the workspace", () => {
+  assert.deepEqual(
+    classifySpaceError(
+      new CloudApiError("Some of these people aren't members", 400, "not_workspace_members", {
+        user_ids: ["u1", "u2"],
+      })
+    ),
+    { kind: "notWorkspaceMembers", userIds: ["u1", "u2"] }
+  );
+});
+
+test("not_workspace_members without a list gives an empty list", () => {
+  for (const details of [null, undefined, {}, { user_ids: "u1" }]) {
+    assert.deepEqual(
+      classifySpaceError(new CloudApiError("x", 400, "not_workspace_members", details)),
+      { kind: "notWorkspaceMembers", userIds: [] }
+    );
+  }
+});
+
+test("not_workspace_members keeps only the string ids", () => {
+  assert.deepEqual(
+    classifySpaceError(
+      new CloudApiError("x", 400, "not_workspace_members", { user_ids: ["u1", 2, null, "u3"] })
+    ),
+    { kind: "notWorkspaceMembers", userIds: ["u1", "u3"] }
+  );
+});
+
+test("a space failure without a space code falls back to the row action kinds", () => {
+  assert.deepEqual(classifySpaceError(new CloudApiError("Insufficient role", 403)), {
+    kind: "notAllowed",
+  });
+  assert.deepEqual(classifySpaceError(new CloudApiError("x", 429, "rate_limited")), {
+    kind: "rateLimited",
+  });
+  assert.deepEqual(classifySpaceError(new CloudApiError("Name is too long", 400)), {
+    kind: "refused",
+    message: "Name is too long",
+  });
+});
+
+test("an unknown 500 reads as failed", () => {
+  assert.deepEqual(classifySpaceError(new CloudApiError("API error: 500", 500)), {
+    kind: "failed",
+  });
+  assert.deepEqual(classifySpaceError(new Error("offline")), { kind: "failed" });
+});
+
+test("a space failure that no row dialog has a screen for reads as failed", () => {
+  for (const failure of [
+    { kind: "nameTaken" },
+    { kind: "lastAdmin" },
+    { kind: "notOpen" },
+    { kind: "archived" },
+    { kind: "notWorkspaceMembers", userIds: ["u1"] },
+  ]) {
+    assert.deepEqual(rowActionErrorOf(failure), { kind: "failed" });
+  }
+  assert.deepEqual(rowActionErrorOf(undefined), { kind: "failed" });
+});
+
+test("a row action failure passes through a space failure unchanged", () => {
+  for (const failure of [
+    { kind: "gone" },
+    { kind: "notAllowed" },
+    { kind: "ssoRequired" },
+    { kind: "rateLimited" },
+    { kind: "refused", message: "Cannot leave a directory-managed teamspace" },
+    { kind: "failed" },
+  ]) {
+    assert.deepEqual(rowActionErrorOf(failure), failure);
+  }
 });

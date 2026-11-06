@@ -3324,8 +3324,8 @@ class IPCHandlers {
     ipcMain.handle("db-get-conversation-by-client-id", (_, clientId) =>
       this.databaseManager.getConversationByClientId(clientId)
     );
-    ipcMain.handle("db-upsert-conversation-from-cloud", (_, cloudConv, messages) =>
-      this.databaseManager.upsertConversationFromCloud(cloudConv, messages)
+    ipcMain.handle("db-upsert-conversation-from-cloud", (_, cloudConv, messages, snapshot) =>
+      this.databaseManager.upsertConversationFromCloud(cloudConv, messages, snapshot)
     );
     ipcMain.handle("db-mark-conversation-create-attempted", (_, id) =>
       this.databaseManager.markConversationCreateAttempted(id)
@@ -3333,8 +3333,11 @@ class IPCHandlers {
     ipcMain.handle("db-acknowledge-conversation-create", (_, id, snapshot, cloudId) =>
       this.databaseManager.acknowledgeConversationCreate(id, snapshot, cloudId)
     );
-    ipcMain.handle("db-mark-conversation-synced", (_, id, cloudId) =>
-      this.databaseManager.markConversationSynced(id, cloudId)
+    ipcMain.handle("db-mark-conversation-synced", (_, id, cloudId, snapshot) =>
+      this.databaseManager.markConversationSynced(id, cloudId, snapshot)
+    );
+    ipcMain.handle("db-replace-conversation-client-id", (_, id, expectedClientId) =>
+      this.databaseManager.replaceConversationClientId(id, expectedClientId)
     );
     ipcMain.handle("db-hard-delete-conversation", (_, id) => {
       const result = this.databaseManager.hardDeleteConversation(id);
@@ -3791,8 +3794,8 @@ class IPCHandlers {
       // Promise cannot cross Electron's IPC boundary, though, and renderer
       // callers need to know whether text was pasted, but not the delayed
       // clipboard restoration promise. Successful platform paths predate the
-      // explicit `pasted` outcome; only the clipboard-only fallback and a held-back
-      // paste (held modifiers or a missing or failed wl-copy, which carries a `reason`) set false.
+      // explicit `pasted` outcome; only the clipboard-only fallback and a held-back paste
+      // (held modifiers or a missing or failed wl-copy) set false, each with a `reason`.
       return {
         success: true,
         pasted,
@@ -6082,9 +6085,12 @@ class IPCHandlers {
               neededModels: localServer.models,
             });
           }
-          modelManager.stopServer().catch((err) => {
+          // A background chat answer may still be streaming from it.
+          modelManager.stopServerWhenIdle().catch((err) => {
             debugLogger.error("Failed to stop llama-server", { error: err.message });
           });
+        } else {
+          modelManager.serverManager.cancelDeferredStop();
         }
       }
 
@@ -6388,7 +6394,7 @@ class IPCHandlers {
           await this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
           // The next inference picks up the new Vulkan binary. The pack can land in
           // the background after onboarding, so an answer in progress finishes first.
-          modelManager.stopServerWhenIdle().catch(() => {});
+          modelManager.stopServerWhenIdle({ cancelOnReuse: false }).catch(() => {});
         }
 
         return result;
@@ -10021,6 +10027,25 @@ class IPCHandlers {
     const DICTATION_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
     const ORUKEET_IDLE_TIMEOUT_MS = 60 * 1000;
 
+    // A managed Orukeet start owns the connection until its stop. Warmups are for
+    // the next recording, so they neither replace this one's connection nor expire
+    // it as idle. Other routes cue the user only once connected, so they keep
+    // redialling over a warmup.
+    let dictationRecordingActive = false;
+    // Only a cancel stops a start in progress: a tap to stop waits for it to settle.
+    let dictationStopGeneration = 0;
+    const watchedDictationRenderers = new WeakSet();
+    // A renderer that reloads or closes mid-recording never sends its stop.
+    const releaseRecordingWithRenderer = (sender) => {
+      if (watchedDictationRenderers.has(sender)) return;
+      watchedDictationRenderers.add(sender);
+      const release = () => {
+        dictationRecordingActive = false;
+      };
+      sender.on("did-start-loading", release);
+      sender.once("destroyed", release);
+    };
+
     const clearDictationIdleTimer = () => {
       if (this._dictationIdleTimer) {
         clearTimeout(this._dictationIdleTimer);
@@ -10030,6 +10055,7 @@ class IPCHandlers {
 
     const startDictationIdleTimer = () => {
       clearDictationIdleTimer();
+      if (dictationRecordingActive) return;
       const idleTimeoutMs =
         this._dictationStreaming instanceof OrukeetStreaming
           ? ORUKEET_IDLE_TIMEOUT_MS
@@ -10937,6 +10963,7 @@ class IPCHandlers {
 
     const warmupDictationStreaming = async (event, options) => {
       await this._dictationConnectPromise?.catch(() => {});
+      if (dictationRecordingActive) return { success: true, alreadyWarm: true };
       if (!isUnusedOrukeetConnection(this._dictationStreaming, options)) {
         await connectDictationStreaming(event, options);
         startDictationIdleTimer();
@@ -10956,9 +10983,23 @@ class IPCHandlers {
     });
 
     ipcMain.handle("dictation-realtime-start", async (event, options = {}) => {
+      const managedOrukeet = options.provider === "orukeet" && options.mode !== "byok";
+      const stopGeneration = dictationStopGeneration;
+      if (managedOrukeet) {
+        dictationRecordingActive = true;
+        releaseRecordingWithRenderer(event.sender);
+      }
       try {
         clearDictationIdleTimer();
         this._dictationPreviewEnabled = !!options.preview;
+        // A warmup still connecting may be the connection this start wants. Managed audio
+        // waits in the renderer; other routes need the connection before this tick ends.
+        if (managedOrukeet && this._dictationConnectPromise) {
+          await this._dictationConnectPromise.catch(() => {});
+          if (stopGeneration !== dictationStopGeneration) {
+            throw new Error("Dictation start was cancelled");
+          }
+        }
         if (
           !this._dictationStreaming?.isConnected ||
           this._dictationStreaming.connectionKey !== dictationConnectionKey(options)
@@ -10967,6 +11008,7 @@ class IPCHandlers {
         }
         return { success: true };
       } catch (err) {
+        dictationRecordingActive = false;
         return streamingStartFailure(err);
       }
     });
@@ -10987,6 +11029,8 @@ class IPCHandlers {
     });
 
     ipcMain.handle("dictation-realtime-stop", async () => {
+      dictationStopGeneration += 1;
+      dictationRecordingActive = false;
       clearDictationIdleTimer();
       if (!this._dictationStreaming) {
         return { success: true, text: "" };

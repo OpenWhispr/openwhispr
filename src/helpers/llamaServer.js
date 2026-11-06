@@ -22,9 +22,12 @@ const HEALTH_CHECK_TIMEOUT_MS = 2000;
 const STARTUP_POLL_INTERVAL_MS = 500;
 const HEALTH_CHECK_FAILURE_THRESHOLD = 3;
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
-const BUSY_POLL_MS = 5000;
 const DEFAULT_CONTEXT_SIZE = 4096;
 const PREFLIGHT_TIMEOUT_MS = 10000;
+const SLOT_POLL_INTERVAL_MS = 1000;
+// A chat answer in the background gets this long to finish before a request that needs another
+// model or a bigger window restarts the server. Whoever asked is waiting on screen.
+const RESTART_WAIT_MS = 30000;
 
 /**
  * llama-server reports a prompt that overflows the context as a 400 whose body
@@ -39,17 +42,6 @@ function withContextSize(args, contextSize) {
   const copy = [...args];
   copy[index + 1] = String(contextSize);
   return copy;
-}
-
-// Whether a server started with `server`'s settings can take `request` without
-// a restart: the same model and drafter, and a context at least as large. The context
-// only grows, so a short request never shrinks a window a long one opened.
-function servesRequest(server, request) {
-  return (
-    server.modelPath === request.modelPath &&
-    server.draftModelPath === request.draftModelPath &&
-    request.contextSize <= (server.contextSize || 0)
-  );
 }
 
 function buildResponseError(statusCode, body) {
@@ -101,9 +93,9 @@ class LlamaServerManager {
     // one just paid to open. See #2142.
     this.contextSize = null;
     this.startupPromise = null;
-    // What the in-flight startup was asked for, so start() can tell whether
-    // joining it would serve another caller's request.
-    this.startingRequest = null;
+    this.restartPromise = null;
+    this.stopPromise = null;
+    this.deferredStop = null;
     this.healthCheckInterval = null;
     this.healthCheckFailures = 0;
     this.cachedServerBinaryPaths = null;
@@ -200,47 +192,60 @@ class LlamaServerManager {
   }
 
   async _policyAllowedStart(modelPath, options = {}) {
-    const request = {
-      modelPath,
-      // A change in drafter presence for the same model must still restart the
-      // server so the new speculative-decoding flags take effect.
-      draftModelPath: options.draftModelPath || null,
-      contextSize: options.contextSize || DEFAULT_CONTEXT_SIZE,
-    };
-
-    // Serialize with any in-flight startup; join it only when it will serve
-    // this request. Callers record the model they asked for as loaded once
-    // this resolves, so it must never resolve on a startup for another one.
-    while (this.startupPromise) {
-      if (servesRequest(this.startingRequest, request)) return this.startupPromise;
-      await this.startupPromise.catch(() => {});
+    if (this.stopPromise) await this.stopPromise;
+    const pendingStartup = this.startupPromise;
+    if (pendingStartup) await pendingStartup;
+    if (this.restartPromise) {
+      await this.restartPromise;
+      return this.start(modelPath, options);
     }
+    this.cancelDeferredStop();
 
-    if (this.ready && servesRequest(this, request)) {
+    // A change in drafter presence for the same model must still restart the
+    // server so the new speculative-decoding flags take effect.
+    const requestedDraftPath = options.draftModelPath || null;
+    const requestedContextSize = options.contextSize || DEFAULT_CONTEXT_SIZE;
+    if (
+      this.ready &&
+      this.modelPath === modelPath &&
+      this.draftModelPath === requestedDraftPath &&
+      requestedContextSize <= (this.contextSize || 0)
+    ) {
       // Streaming chat reaches the port directly and never goes through
       // inference(), so asking for the running server is its only activity.
       this.resetIdleTimer();
       return;
     }
 
-    this.startingRequest = request;
-    // Assigned before any await so waiters woken by the same startup cannot
-    // both spawn.
-    this.startupPromise = (async () => {
+    // A caller joining a start must not report success for another request's
+    // model or replace that server before the first caller can use it.
+    if (pendingStartup) {
+      throw Object.assign(
+        new Error("The local model server was started for another request. Please try again."),
+        { code: "LOCAL_MODEL_BUSY" }
+      );
+    }
+
+    if (this.process) {
+      this.restartPromise = this._waitForSlots(RESTART_WAIT_MS).then(() => this.stop());
       try {
-        if (this.process) await this.stop();
-        // Residency may have been turned off while the old server stopped.
-        this.clearIdleTimer();
-        await this._doStart(modelPath, options);
-        // The ladder may have stepped the context down to get a GPU rung to
-        // start; record what loaded, not what was asked for.
-        this.contextSize = this.activeContextSize ?? request.contextSize;
+        await this.restartPromise;
       } finally {
-        this.startupPromise = null;
-        this.startingRequest = null;
+        this.restartPromise = null;
       }
-    })();
-    return this.startupPromise;
+    }
+
+    // Residency may have been turned off while the old server stopped.
+    this.clearIdleTimer();
+    this.startupPromise = this._doStart(modelPath, options);
+    try {
+      await this.startupPromise;
+      // The ladder may have stepped the context down to get a GPU rung to
+      // start; record what loaded, not what was asked for.
+      this.contextSize = this.activeContextSize ?? requestedContextSize;
+    } finally {
+      this.startupPromise = null;
+    }
   }
 
   _buildBaseArgs(modelPath, port, options = {}) {
@@ -664,9 +669,9 @@ class LlamaServerManager {
     const timer = setTimeout(async () => {
       // Streaming chat talks to the port directly, so only the server knows
       // whether an answer that outlived the timeout is still being generated.
-      const slots = await this._requestJson("/slots");
+      const busy = await this._slotsBusy();
       if (this.idleTimer !== timer) return;
-      if (Array.isArray(slots) && slots.some((slot) => slot.is_processing)) {
+      if (busy) {
         this.resetIdleTimer();
         return;
       }
@@ -681,21 +686,39 @@ class LlamaServerManager {
     this.idleTimer = timer;
   }
 
-  // Stops the running server once nothing is generating, so a binary that landed
-  // in the background takes over without cutting an answer short. True if it stopped.
-  async stopWhenIdle() {
+  async _slotsBusy() {
+    const slots = await this._requestJson("/slots");
+    return Array.isArray(slots) && slots.some((slot) => slot.is_processing);
+  }
+
+  async _waitForSlots(timeoutMs) {
+    const deadline = Date.now() + timeoutMs;
+    while (this.process && this.ready && Date.now() < deadline && (await this._slotsBusy())) {
+      await new Promise((resolve) => setTimeout(resolve, SLOT_POLL_INTERVAL_MS).unref?.());
+    }
+  }
+
+  /** Waits for active answers; settings-driven stops can be cancelled by reuse. */
+  async stopWhenIdle({ cancelOnReuse = true } = {}) {
+    const request = {};
+    if (cancelOnReuse) this.deferredStop = request;
     await this.startupPromise?.catch(() => {});
     const server = this.process;
-    while (server && this.process === server) {
-      const slots = await this._requestJson("/slots");
-      if (this.process !== server) return false;
-      if (!(Array.isArray(slots) && slots.some((slot) => slot.is_processing))) {
-        await this.stop();
-        return true;
-      }
-      await new Promise((resolve) => setTimeout(resolve, BUSY_POLL_MS).unref());
+    const isCurrent = () =>
+      this.process === server && (!cancelOnReuse || this.deferredStop === request);
+    while (server && isCurrent()) {
+      if (!(await this._slotsBusy())) break;
+      if (!isCurrent()) break;
+      await new Promise((resolve) => setTimeout(resolve, SLOT_POLL_INTERVAL_MS).unref?.());
     }
-    return false;
+    if (!isCurrent()) return false;
+    if (cancelOnReuse) this.deferredStop = null;
+    await this.stop();
+    return true;
+  }
+
+  cancelDeferredStop() {
+    this.deferredStop = null;
   }
 
   clearIdleTimer() {
@@ -756,9 +779,8 @@ class LlamaServerManager {
   }
 
   /**
-   * The context window actually in force, which is not always what we asked
-   * for: a concurrent caller can join an in-flight start that used a smaller
-   * size. Returns null when it cannot be read.
+   * The context window actually in force, which the GPU startup ladder may
+   * reduce below the requested size. Returns null when it cannot be read.
    */
   async usableContextSize() {
     if (!this.ready || !this.process) return null;
@@ -928,6 +950,18 @@ class LlamaServerManager {
   }
 
   async stop() {
+    if (this.stopPromise) return this.stopPromise;
+    this.stopPromise = this._stop();
+    try {
+      await this.stopPromise;
+    } finally {
+      this.stopPromise = null;
+    }
+  }
+
+  async _stop() {
+    this.ready = false;
+    this.cancelDeferredStop();
     this.clearIdleTimer();
     this.stopHealthCheck();
 
