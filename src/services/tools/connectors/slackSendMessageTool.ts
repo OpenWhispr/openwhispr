@@ -26,7 +26,8 @@ function askAboutVanishedChannel(result: ToolResult, destination: string): ToolR
 // Whether a reply meant for a thread went into it, as Slack's response said.
 function withThreadReply(result: ToolResult, thread: string): ToolResult {
   const data = result.data as { status?: string; outsideThread?: true } | null;
-  if (!thread || data?.status !== "sent") return result;
+  // A destination that links to a message is a thread too.
+  if (data?.status !== "sent" || !(thread || data.outsideThread)) return result;
   const { outsideThread, ...sent } = data;
   return { ...result, data: { ...sent, repliedInThread: !outsideThread } };
 }
@@ -34,14 +35,14 @@ function withThreadReply(result: ToolResult, thread: string): ToolResult {
 export const slackSendMessageTool: ToolDefinition = {
   name: "slack_send_message",
   description:
-    "Post a message to Slack as the user. Nothing is sent until the user approves it on a card. `destination` is a #channel the user is in, a person's name, an @handle, an email address, a Slack id (C…, U… or D…) or a Slack link to the conversation. `text` is the message in Markdown. `thread` replies in a thread instead of posting a new message: a Slack link to any message in that thread.",
+    "Post a message to Slack as the user. Nothing is sent until the user approves it on a card. `destination` is a #channel the user is in, a person's name, an @handle, an email address, a Slack id (C…, U… or D…) or a Slack link to the conversation (a link to a message replies in its thread). `text` is the message in Markdown. `thread` replies in a thread instead of posting a new message: a Slack link to any message in that thread.",
   parameters: {
     type: "object",
     properties: {
       destination: {
         type: "string",
         description:
-          "#channel, a person's name, @handle, email address, Slack id, or a Slack link to the conversation",
+          "#channel, a person's name, @handle, email address, Slack id, or a Slack link to the conversation (a link to a message replies in its thread)",
       },
       text: { type: "string", description: "The message, in Markdown" },
       thread: {

@@ -41,3 +41,43 @@ test("destination spelling and recipient order still identify the same action", 
     })
   );
 });
+
+test("Slack replies through message links to two threads are two actions", async () => {
+  const { approvalActionKey } = await import("../../src/services/tools/connectors/actionKey.ts");
+  const key = (destination, started, thread) =>
+    approvalActionKey(
+      "slack",
+      "send_message",
+      { destination, text: "Thanks!", ...(thread ? { thread } : {}) },
+      {
+        destinationLabel: "#eng",
+        body: "Thanks!",
+        ...(started
+          ? {
+              notes: [
+                { key: "connectors.approval.slack.notes.replyInThread", values: { started } },
+              ],
+            }
+          : {}),
+      }
+    );
+  const root = key("#eng");
+  const first = key("https://acme.slack.com/archives/C0ENG/p1727200000123456", "1727200000123");
+  const second = key("https://acme.slack.com/archives/C0ENG/p1727200500000100", "1727200500000");
+  assert.notEqual(first, second);
+  assert.notEqual(first, root);
+  assert.equal(key("C0ENG"), root, "a post at the root keys as before");
+  // The same thread through a thread link, or through a link to a reply in it.
+  assert.equal(
+    key("#eng", "1727200000123", "https://acme.slack.com/archives/C0ENG/p1727200000123456"),
+    first
+  );
+  assert.equal(
+    key(
+      "#eng",
+      "1727200000123",
+      "https://acme.slack.com/archives/C0ENG/p1727200099000200?thread_ts=1727200000.123456"
+    ),
+    first
+  );
+});

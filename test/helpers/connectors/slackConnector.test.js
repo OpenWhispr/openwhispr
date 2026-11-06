@@ -104,7 +104,8 @@ test("a DM is opened only after Send, never while preparing", async () => {
     BOUND
   );
   assert.equal(prepared.status, "ready");
-  assert.equal(prepared.preview.destinationLabel, "Gabe Smith");
+  // With the username, since display names repeat.
+  assert.equal(prepared.preview.destinationLabel, "Gabe Smith (@gabe)");
   assert.equal(slack.methods().includes("conversations.open"), false);
 
   const result = await connector.commit("send_message", prepared.payload, {}, BOUND);
@@ -751,6 +752,24 @@ test("a thread link posts the reply in that thread, and the result links the rep
   assert.deepEqual(result, { state: "sent", url: ENG_REPLY });
 });
 
+test("a link to a message as the destination replies in its thread", async () => {
+  // The thread's first message, or a reply in it.
+  for (const destination of [ENG_MESSAGE, ENG_REPLY]) {
+    const { connector, slack } = await setupSlack({
+      ...channelsOnly,
+      "chat.postMessage": [ok(FIXTURES.postedReply)],
+    });
+
+    const prepared = await connector.prepare("send_message", { destination, text: "On it" }, BOUND);
+    assert.equal(prepared.status, "ready", destination);
+    assert.deepEqual(prepared.preview.notes, [replyNote("1727200000123")], destination);
+    await connector.commit("send_message", prepared.payload, {}, BOUND);
+
+    assert.equal(posts(slack)[0].params.channel, "C0ENG0001", destination);
+    assert.equal(posts(slack)[0].params.thread_ts, "1727200000.123456", destination);
+  }
+});
+
 test("the Reply in thread note shows when the thread started, in every language", async () => {
   const i18next = (await import("i18next")).default.createInstance();
   const languages = fs
@@ -1009,7 +1028,7 @@ test("a channel, person or DM named by id, or by a link, resolves exactly", asyn
   assert.deepEqual(await target("U0GABE001"), {
     kind: "user",
     id: "U0GABE001",
-    label: "Gabe Smith",
+    label: "Gabe Smith (@gabe)",
   });
   assert.deepEqual(slack.calls.at(-1), {
     method: "users.info",
@@ -1038,7 +1057,7 @@ test("a channel, person or DM named by id, or by a link, resolves exactly", asyn
   assert.equal(posts(slack)[0].params.channel, "D0GABE001");
 
   const dm = await target("D0GABE001");
-  assert.deepEqual(dm, { kind: "dm", id: "D0GABE001", label: "Gabe Smith" });
+  assert.deepEqual(dm, { kind: "dm", id: "D0GABE001", label: "Gabe Smith (@gabe)" });
   assert.deepEqual(await target(GABE_DM_MESSAGE), dm);
   const opens = slack.methods().filter((method) => method === "conversations.open").length;
   const prepared = await connector.prepare(
@@ -1046,7 +1065,7 @@ test("a channel, person or DM named by id, or by a link, resolves exactly", asyn
     { destination: "D0GABE001", text: "again" },
     BOUND
   );
-  assert.equal(prepared.preview.destinationLabel, "Gabe Smith");
+  assert.equal(prepared.preview.destinationLabel, "Gabe Smith (@gabe)");
   const sent = await connector.commit("send_message", prepared.payload, {}, BOUND);
   assert.equal(sent.state, "sent");
   assert.equal(posts(slack).at(-1).params.channel, "D0GABE001");
@@ -1191,7 +1210,7 @@ test("a name that only looks like an id is still a name", async () => {
   });
   // Too short to be ids, or shaped like one but nobody's id: names either way.
   for (const [destination, label] of [
-    ["GABE", "Gabe Smith"],
+    ["GABE", "Gabe Smith (@gabe)"],
     ["D2C", "#d2c"],
     ["DEV2", "#dev2"],
     ["W3C", "#w3c"],

@@ -507,6 +507,7 @@ test("slack_send_message passes a thread link to main and tells the model the re
     { state: "sent", url: `${reply}?thread_ts=1727200000.123456&cid=C0ENG` },
     { state: "sent", url: reply, outsideThread: true },
     { state: "sent", url: reply },
+    { state: "sent", url: reply, outsideThread: true },
   ];
   installBrowserGlobals(t, {
     window: {
@@ -548,12 +549,17 @@ test("slack_send_message passes a thread link to main and tells the model the re
   });
   const unthreaded = await send("call-41", { destination: "#eng", text: "Again", thread });
   const plain = await send("call-42", { destination: "#eng", text: "On it", thread: null });
+  // A link to a message as the destination is a thread too.
+  const linked = await send("call-43", { destination: thread, text: "Linked" });
 
   assert.deepEqual(prepared, [
     ["slack", "send_message", { destination: "#eng", text: "On it", thread }],
     ["slack", "send_message", { destination: "#eng", text: "Again", thread }],
     ["slack", "send_message", { destination: "#eng", text: "On it" }],
+    ["slack", "send_message", { destination: thread, text: "Linked" }],
   ]);
+  assert.equal(linked.data.repliedInThread, false);
+  assert.equal("outsideThread" in linked.data, false);
   assert.equal(threaded.data.status, "sent");
   assert.equal(threaded.data.repliedInThread, true);
   assert.equal(unthreaded.data.status, "sent");

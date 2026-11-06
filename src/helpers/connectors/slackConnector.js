@@ -155,7 +155,7 @@ function parseDestination(raw) {
   if (isValidEmailAddress(value)) return { kind: "email", query: value };
   if (value.startsWith("@")) return { kind: "person", query: value.slice(1) };
   const link = parseSlackLink(value);
-  if (link) return { kind: "link", query: link.channelId };
+  if (link) return { kind: "link", query: link.channelId, threadTs: link.threadTs };
   if (SLACK_ID.test(value)) return { kind: "id", query: value };
   return { kind: "any", query: value };
 }
@@ -386,8 +386,8 @@ function createSlackConnector({ api, auth, directory, credentials }) {
       if (!destination)
         return clarify("Ask the user which Slack channel or person to send this to.");
       const threadLink = typeof args.thread === "string" ? args.thread.trim() : "";
-      const thread = threadLink ? parseSlackLink(threadLink) : null;
-      if (threadLink && !thread?.threadTs) {
+      const threadArg = threadLink ? parseSlackLink(threadLink) : null;
+      if (threadLink && !threadArg?.threadTs) {
         return prepareFailed("invalid_thread", failureMessage("invalid_thread"));
       }
 
@@ -400,6 +400,11 @@ function createSlackConnector({ api, auth, directory, credentials }) {
       }
       const { credential } = access;
       const parsed = parseDestination(destination);
+      // A destination that links to a message replies in its thread, unless
+      // the call names a thread itself.
+      const thread =
+        threadArg ??
+        (parsed.threadTs ? { channelId: parsed.query, threadTs: parsed.threadTs } : null);
       const cacheKey = loginCacheKey(binding, credential);
       const found = await findTargetWithRefresh(parsed, binding, access, cacheKey);
       if (found.clarify) return found.clarify;
@@ -413,7 +418,8 @@ function createSlackConnector({ api, auth, directory, credentials }) {
       const target = {
         kind: found.candidate.kind,
         id: found.candidate.id,
-        label: found.candidate.label,
+        // A person with their username, since display names repeat.
+        label: found.candidate.hint ?? found.candidate.label,
       };
       // A person's DM is known only once Send opens it, unless an earlier Send
       // here opened the thread's DM with someone else: then nothing is opened.

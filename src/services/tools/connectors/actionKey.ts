@@ -51,7 +51,7 @@ export function approvalActionKey(
   connectorId: string,
   action: string,
   args: Record<string, unknown>,
-  preview: Pick<ConnectorPreview, "destinationLabel" | "fields" | "title" | "body">,
+  preview: Pick<ConnectorPreview, "destinationLabel" | "fields" | "title" | "body" | "notes">,
   fields: ConnectorEdits = preview.fields ?? {
     ...(preview.title !== undefined ? { title: preview.title } : {}),
     body: preview.body,
@@ -66,6 +66,11 @@ export function approvalActionKey(
     approved.destination = preview.destinationLabel;
     approved.text = fields.body;
     delete approved.body;
+    // The card's note names the thread, whichever link led to it: replies to
+    // two threads are two actions, and to one thread one.
+    approved.thread =
+      preview.notes?.find((note) => note.key === "connectors.approval.slack.notes.replyInThread")
+        ?.values?.started ?? approved.thread;
   } else if (connectorId === "github") {
     approved[action === "comment" ? "target" : "repo"] = preview.destinationLabel;
   } else if (connectorId === "linear") {
