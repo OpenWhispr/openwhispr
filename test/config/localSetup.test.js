@@ -444,6 +444,9 @@ test("the Local card's minimum is dictation alone, since the rest trims to fit",
   assert.equal(gb, 2, "about 1.6 GB for Parakeet Unified EN, not the 7 GB of every row");
   // A PC's pack rides on a text row, so it doesn't count either.
   assert.equal(localSetupMinimumSpaceGb(await plan(pc({ nvidia: rtx })), factors), 2);
+  // No dictation to download (the organization's models can't run here): no figure, not 0 GB.
+  const blocked = await plan(mac({}), { policy: managed({ speechModels: [] }) });
+  assert.equal(localSetupMinimumSpaceGb(blocked, factors), undefined);
 });
 
 test("Cloud is only recommendable where the policy allows an off-device service", async () => {

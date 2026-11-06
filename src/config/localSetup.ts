@@ -452,11 +452,17 @@ const TRIM_ORDER: Array<keyof LocalSetupSwitches> = ["assistant", "cleanup"];
 /**
  * The least free space Local can start with, in whole GB: dictation alone, since
  * the step turns the optional rows off to fit and Proceed only waits for dictation.
+ * Undefined when dictation won't download here, so the card keeps its default
+ * rather than claiming nothing is needed.
  */
-export function localSetupMinimumSpaceGb(plan: LocalSetupPlan, factors: LocalSetupFactors): number {
+export function localSetupMinimumSpaceGb(
+  plan: LocalSetupPlan,
+  factors: LocalSetupFactors
+): number | undefined {
   const items = enabledDownloads(plan, { cleanup: false, assistant: false }).flatMap(
     (row) => row.items
   );
+  if (items.length === 0) return undefined;
   return Math.ceil(localSetupRequiredBytes(items, factors) / 1e9);
 }
 
