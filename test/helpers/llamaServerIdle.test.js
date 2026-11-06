@@ -15,9 +15,9 @@ function makeManager() {
   const manager = new LlamaServerManager();
   const stops = [];
   manager.processing = false;
-  // Restarts here are about the idle timer; whether one waits is covered in
-  // llamaServerContext.test.js, and these tests mock the clock such a wait runs on.
-  manager._isBusy = async () => false;
+  // A restart waits while `processing` is set; the handoff grace and /slots
+  // timeouts behind the real check are covered in llamaServerContext.test.js.
+  manager._isBusy = async () => manager.processing;
   manager._requestJson = async (path) =>
     path === "/slots" ? [{ is_processing: false }, { is_processing: manager.processing }] : null;
   manager._doStart = async (modelPath, options = {}) => {
@@ -232,7 +232,6 @@ test("resyncing an unchanged residency setting leaves the idle countdown alone",
 test("switching models waits for an answer still being generated", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
   const { manager, stops } = makeManager();
-  manager._isBusy = async () => manager.processing;
   await manager.start("/models/chat.gguf");
   manager.processing = true;
 
@@ -258,7 +257,6 @@ test("switching models waits for an answer still being generated", async (t) => 
 test("switching models doesn't wait for an answer forever", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
   const { manager, stops } = makeManager();
-  manager._isBusy = async () => manager.processing;
   await manager.start("/models/chat.gguf");
   manager.processing = true;
   const refused = assert.rejects(manager.start("/models/summary.gguf"), {
@@ -298,6 +296,7 @@ test("requests that arrive during the wait share one restart", async (t) => {
   await settle();
   const second = manager.start("/models/summary.gguf");
   await settle();
+  assert.equal(stops.length, 0, "the running answer keeps its server");
   manager.processing = false;
   t.mock.timers.tick(1000);
   await settle();
