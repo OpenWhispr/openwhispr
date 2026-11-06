@@ -29,6 +29,7 @@ interface ConversationItemProps {
   isActive: boolean;
   onClick: () => void;
   onArchive: (id: number) => void;
+  onUnarchive: (id: number) => void;
   onDelete: (id: number) => void;
 }
 
@@ -54,6 +55,7 @@ export default function ConversationItem({
   isActive,
   onClick,
   onArchive,
+  onUnarchive,
   onDelete,
 }: ConversationItemProps) {
   const { t } = useTranslation();
@@ -101,7 +103,7 @@ export default function ConversationItem({
                 <DropdownMenuItem
                   onClick={(e) => {
                     e.stopPropagation();
-                    onArchive(conversation.id);
+                    (isArchived ? onUnarchive : onArchive)(conversation.id);
                   }}
                   className="text-xs gap-2 rounded-lg px-2.5 py-1.5 cursor-pointer focus:bg-foreground/5"
                 >

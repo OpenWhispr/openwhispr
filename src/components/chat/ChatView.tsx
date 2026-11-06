@@ -7,6 +7,7 @@ import { ChatMessages } from "./ChatMessages";
 import { ChatInput } from "./ChatInput";
 import ConversationList from "./ConversationList";
 import { ConfirmDialog } from "../ui/dialog";
+import { useToast } from "../ui/useToast";
 import { PAGE_CONTENT_WIDTH_CLASS } from "../ui/pageWidth";
 import { NewChatEmptyState } from "./NewChatEmptyState";
 import { CreatorOpening } from "./CreatorOpening";
@@ -49,6 +50,7 @@ export default function ChatView({
   onOpenNote,
 }: ChatViewProps) {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const [activeConversationId, setActiveConversationId] = useState<number | null>(null);
   const [isNewChat, setIsNewChat] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -232,6 +234,19 @@ export default function ChatView({
     [activeConversationId, handleNewChat]
   );
 
+  const handleUnarchive = useCallback(
+    async (id: number) => {
+      try {
+        await window.electronAPI?.unarchiveAgentConversation?.(id);
+        setRefreshKey((k) => k + 1);
+      } catch (error) {
+        console.error("Failed to unarchive conversation", error);
+        toast({ title: t("common.error"), variant: "destructive" });
+      }
+    },
+    [t, toast]
+  );
+
   const handleDelete = useCallback(
     (id: number) => {
       showConfirmDialog({
@@ -300,6 +315,7 @@ export default function ChatView({
               onNewChat={startNewChat}
               onOpenSearch={() => setShowSearch(true)}
               onArchive={handleArchive}
+              onUnarchive={handleUnarchive}
               onDelete={handleDelete}
               refreshKey={refreshKey}
             />
