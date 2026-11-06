@@ -1630,6 +1630,9 @@ declare global {
       ) => () => void;
       onCancelDictationPreparation?: (callback: () => void) => () => void;
       onCancelDictation?: (callback: () => void) => () => void;
+      onCancelHotkeyPressed?: (callback: () => void) => () => void;
+      registerCancelHotkey?: (key: string) => Promise<{ success: boolean; error?: string }>;
+      unregisterCancelHotkey?: () => Promise<{ success: boolean }>;
       onDictationForceStopped?: (
         callback: (payload?: { reason?: "timeout" | "reset" | "manual" }) => void
       ) => () => void;
