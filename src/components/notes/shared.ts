@@ -91,6 +91,9 @@ const UPLOAD_POLICY_REFUSAL_CODES = new Set([
   "POLICY_AUDIO_UPLOAD_DISABLED",
   "AUDIO_PURPOSE_REQUIRED",
   "POLICY_UNRESOLVABLE",
+  "POLICY_MODEL_BLOCKED",
+  "POLICY_LOCAL_MODE_BLOCKED",
+  "POLICY_APP_VERSION_BLOCKED",
 ]);
 
 export function isUploadPolicyRefusal(failure: unknown): boolean {

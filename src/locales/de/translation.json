@@ -168,7 +168,6 @@
   },
   "common": {
     "continue": "Weiter",
-    "add": "Hinzufügen",
     "retry": "Erneut versuchen",
     "back": "Zurück",
     "logout": "Abmelden",
@@ -210,6 +209,7 @@
     "skip": "Überspringen",
     "policyAiProcessingRestricted": "Die KI-Verarbeitung ist durch Ihre Organisation eingeschränkt.",
     "policyAgentRestricted": "Die Nutzung des KI-Assistenten ist durch Ihre Organisation eingeschränkt.",
+    "policyAccountChanged": "Ihr Konto hat sich geändert, daher wurde diese Antwort abgebrochen.",
     "policyTranscriptionRestricted": "Die Transkription ist durch Ihre Organisation eingeschränkt.",
     "policyUnresolved": "Die Einstellungen Ihrer Organisation wurden noch nicht geladen. Versuchen Sie es gleich noch einmal.",
     "managedConfigLoading": "Die verwaltete Einrichtung Ihrer Organisation wird überprüft. Versuchen Sie es gleich noch einmal.",
@@ -355,34 +355,10 @@
           "features": {
             "device": "Läuft auf Ihrem Gerät",
             "offline": "Funktioniert nach der Einrichtung offline",
-            "models": "Modelle für Diktat und Assistant wählen",
+            "setup": "Für diesen Computer eingerichtet",
             "free": "Für immer kostenlos"
           }
         },
-        "warnings": {
-          "byok": {
-            "title": "Ihr Anbieter verarbeitet Ihre Daten",
-            "description": "Sie fügen Zugangsdaten für separate Diktat- und Assistant-Anbieter hinzu. Es gelten die Preise und Aufbewahrungsrichtlinien des Anbieters.",
-            "continue": "API-Anbieter einrichten",
-            "steps": {
-              "1": "Anbieter für Diktat und Assistant wählen",
-              "2": "Zugangsdaten über sichere Speicherung hinzufügen",
-              "3": "Jede Verbindung vor der Aktivierung testen"
-            }
-          },
-          "local": {
-            "title": "Die lokale Einrichtung erfordert ein paar zusätzliche Schritte",
-            "description": "Die lokale Verarbeitung behält Ihre Sprache auf diesem Gerät, erfordert aber eine einmalige Einrichtung und mindestens {{minimumSpace}} GB freien Speicher.",
-            "continue": "Lokal einrichten",
-            "steps": {
-              "1": "Transkriptions-Engine wählen",
-              "2": "Modell konfigurieren oder herunterladen, etwa {{modelSize}}",
-              "3": "Auf Installation und Aktivierung warten"
-            }
-          }
-        },
-        "useCloud": "Stattdessen Cloud verwenden",
-        "continueSetup": "Einrichtung fortsetzen",
         "showMore": "Weitere Optionen anzeigen",
         "moreOptions": {
           "title": "API-Einrichtung wählen",
@@ -437,20 +413,80 @@
         }
       },
       "local": {
-        "title": "Lokale Modelle einrichten",
-        "description": "Wählen Sie die Modelle, die auf Ihrem Gerät laufen sollen.",
-        "descriptionLineOne": "Wählen Sie die Modelle, die",
-        "descriptionLineTwo": "auf Ihrem Gerät laufen sollen.",
-        "providerLabel": "Anbieter",
-        "download": "Herunterladen",
         "downloadingShort": "Wird geladen",
-        "selected": "Ausgewählt",
-        "use": "Verwenden",
         "downloadInProgress": "Download läuft",
         "cancelDownload": "Download von {{model}} abbrechen",
         "downloads": "Modell-Downloads",
         "downloading": "Wird heruntergeladen… {{progress}}%",
+        "verifying": "Wird überprüft",
         "installing": "Wird installiert"
+      },
+      "localSetup": {
+        "title": "Wir empfehlen diese Einstellungen",
+        "subtitle": "Passend zu {{computer}} und {{language}} ausgewählt. Diese Modelle laufen auf diesem Gerät.",
+        "subtitleOrganizationText": "Passend zu {{computer}} und {{language}} ausgewählt. Das Diktieren läuft auf diesem Gerät; Chat und KI-Notizen nutzen den Dienst, den Ihre Organisation gewählt hat.",
+        "computer": {
+          "chip": "Chip",
+          "processor": "Prozessor",
+          "memory": "Arbeitsspeicher",
+          "graphics": "Grafik",
+          "builtIn": "Im Chip integriert",
+          "memoryValue": "{{gb}} GB",
+          "mac": "Mac",
+          "windowsLaptop": "Windows-Laptop",
+          "windowsDesktop": "Windows-Desktop-PC",
+          "linuxLaptop": "Linux-Laptop",
+          "linuxDesktop": "Linux-Desktop-PC"
+        },
+        "rows": {
+          "dictation": "Diktat",
+          "cleanup": "Textbereinigung",
+          "assistant": "Assistent"
+        },
+        "description": {
+          "dictation": "Wandelt Ihre Stimme in jeder App in Text um",
+          "cleanup": "Entfernt Füllwörter und korrigiert die Grammatik",
+          "assistant": "Beantwortet Fragen und erledigt Ihre Anfragen"
+        },
+        "badge": {
+          "optional": "Optional",
+          "cloud": "Cloud empfohlen"
+        },
+        "line": {
+          "requiredByOrganization": "Von Ihrer Organisation vorgeschrieben",
+          "organizationModelsUnrunnable": "Keines der von Ihrer Organisation freigegebenen Modelle läuft auf diesem Computer",
+          "offToFit": "Aus, damit es in den freien Speicherplatz dieses Computers passt",
+          "failed": "Download fehlgeschlagen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut"
+        },
+        "unavailable": {
+          "notEnoughMemory": "Nicht genug Arbeitsspeicher",
+          "exceedsMemory": "Übersteigt den Arbeitsspeicher dieses Computers",
+          "memoryUnread": "Arbeitsspeicher nicht erkannt",
+          "organization": "Auf diesem Computer nicht verfügbar",
+          "memoryMac": "{{model}} braucht {{needed}} GB Arbeitsspeicher, dieser Mac hat {{have}} GB",
+          "memoryComputer": "{{model}} braucht {{needed}} GB Arbeitsspeicher, dieser Computer hat {{have}} GB",
+          "memoryUnreadLine": "{{model}} braucht {{needed}} GB Arbeitsspeicher. Wenn dieser Computer so viel hat, schalten Sie es später in den Einstellungen ein"
+        },
+        "button": {
+          "download": "Modelle herunterladen",
+          "downloading": "Wird heruntergeladen",
+          "proceed": "Fortfahren",
+          "noSpace": "Nicht genug freier Speicherplatz"
+        },
+        "retry": "Erneut versuchen",
+        "retryRow": "{{row}} erneut versuchen",
+        "downloaded": "Heruntergeladen",
+        "foot": {
+          "default": "Sie können all das später in den Einstellungen ändern.",
+          "dictationFailed": "Das Diktat muss heruntergeladen sein, bevor es weitergeht. Versuchen Sie es oben erneut, oder gehen Sie zurück und wählen Sie eine andere Einrichtung.",
+          "dictationUnavailable": "Mit den von Ihrer Organisation freigegebenen Modellen ist Diktat auf diesem Computer nicht möglich. Gehen Sie zurück und wählen Sie eine andere Einrichtung.",
+          "finishesInBackground": "Der Rest wird nach dem Fortfahren weiter heruntergeladen und eingeschaltet, sobald er bereit ist.",
+          "failedStaysOff": "Was nicht heruntergeladen wurde, bleibt aus. Sie können es später in den Einstellungen hinzufügen.",
+          "needsMac": "Dafür werden {{needed}} GB benötigt, und auf diesem Mac sind {{free}} GB frei.",
+          "needsComputer": "Dafür werden {{needed}} GB benötigt, und auf diesem Computer sind {{free}} GB frei.",
+          "noSpaceMac": "Das Diktat braucht {{needed}} GB freien Speicherplatz, und dieser Mac hat {{free}} GB. Geben Sie Speicherplatz frei, um fortzufahren.",
+          "noSpaceComputer": "Das Diktat braucht {{needed}} GB freien Speicherplatz, und dieser Computer hat {{free}} GB. Geben Sie Speicherplatz frei, um fortzufahren."
+        }
       }
     },
     "steps": {
@@ -584,7 +620,8 @@
       "queued": "In Warteschlange",
       "failed": {
         "title": "Ein Download wurde nicht abgeschlossen",
-        "description": "Prüfen Sie Ihre Verbindung und den freien Speicherplatz und versuchen Sie es erneut. Wenn der Fehler weiterhin auftritt, wenden Sie sich an Ihren Administrator."
+        "description": "Prüfen Sie Ihre Verbindung und den freien Speicherplatz und versuchen Sie es erneut. Wenn der Fehler weiterhin auftritt, wenden Sie sich an Ihren Administrator.",
+        "notApproved": "Ihre Organisation hat dieses Modell nicht genehmigt. Sie können ohne es fortfahren."
       }
     },
     "permissionGuide": {
@@ -877,6 +914,11 @@
       }
     },
     "modelRetiredTitle": "Modell nicht mehr verfügbar",
+    "modelRetiredByProvider": "{{provider}} hat {{from}} eingestellt. Umgestellt auf {{to}}.",
+    "modelUnavailableSwitched": "{{from}} ist bei {{provider}} nicht mehr verfügbar. Gewechselt zu {{to}}.",
+    "localModelRetired": "{{from}} ist nicht mehr verfügbar, daher haben wir zu {{to}} gewechselt. Falls es noch nicht heruntergeladen ist, lade es in den Einstellungen herunter.",
+    "localModelRetiredChooseAnother": "{{from}} ist nicht mehr verfügbar. Wähle in den Einstellungen ein anderes lokales Modell.",
+    "localModelRetiredKept": "{{from}} wurde eingestellt. Es funktioniert weiter, da es bereits heruntergeladen ist, kann aber nicht erneut heruntergeladen werden. Wähle in den Einstellungen ein anderes lokales Modell.",
     "groq": {
       "modelRetired": "Groq hat {{from}} eingestellt. Zu {{to}} gewechselt."
     },
@@ -969,7 +1011,7 @@
         "chunkLoss": "Ein Netzwerkproblem hat zu viel von der Aufnahme verloren. Transkribieren Sie sie über den Verlauf erneut.",
         "agentReasoningFailed": "Ihr Sprachassistent konnte den Befehl nicht verarbeiten – stattdessen wurde das unbearbeitete Transkript eingefügt.",
         "screenContextSkipped": "Der Screenshot konnte nicht gesendet werden, daher lief Ihr Befehl ohne Bildschirmkontext.",
-        "customEndpointInvalid": "Ihr benutzerdefinierter Transkriptionsendpunkt ist nicht konfiguriert oder seine URL ist ungültig. Aktualisieren Sie ihn unter Einstellungen → Sprache zu Text.",
+        "customEndpointInvalid": "Ihr benutzerdefinierter Transkriptionsendpunkt ist nicht konfiguriert oder seine URL ist ungültig. Aktualisieren Sie ihn unter Einstellungen → Spracherkennung.",
         "managedTranscriptionUnavailable": "Die verwaltete Transkription ist derzeit nicht verfügbar. Versuchen Sie es gleich noch einmal.",
         "managedRouteInvalid": "Die verwaltete Transkription konnte aufgrund einer Konfigurationsabweichung nicht gestartet werden. Versuchen Sie es erneut oder wenden Sie sich an Ihren Administrator.",
         "managedAuthRejected": "Die verwalteten Transkriptions-Anmeldedaten Ihrer Organisation wurden abgelehnt. Wenden Sie sich an Ihren Administrator.",
@@ -977,16 +1019,16 @@
         "managedResponseMalformed": "Der Transkriptionsdienst Ihrer Organisation hat eine Antwort gesendet, die OpenWhispr nicht lesen konnte. Versuchen Sie es erneut oder wenden Sie sich an Ihren Administrator.",
         "managedChunkTooLarge": "Diese Audiodatei konnte nicht klein genug für den Transkriptionsdienst Ihrer Organisation aufgeteilt werden. Wenden Sie sich an Ihren Administrator.",
         "streamingOnlyProvider": "Dieser Anbieter unterstützt nur Live-Transkription. Wähle für Datei-Uploads und Wiederholungen einen anderen Anbieter.",
-        "providerKeyMissing": "Für Ihren Transkriptionsanbieter ist kein API-Schlüssel hinterlegt. Fügen Sie ihn unter Einstellungen → Sprache zu Text hinzu.",
+        "providerKeyMissing": "Für Ihren Transkriptionsanbieter ist kein API-Schlüssel hinterlegt. Fügen Sie ihn unter Einstellungen → Spracherkennung hinzu.",
         "cleanupTruncated": "Dem KI-Modell ging der Platz aus, bevor es dein Diktat fertig bereinigt hatte.",
         "cleanupDuplicated": "Die KI-Bereinigung hat das Transkript wiederholt. Der Originaltext wurde beibehalten.",
         "cleanupEmptyReply": "Das KI-Modell lieferte eine leere Antwort statt des bereinigten Diktats."
       },
       "translationFallback": {
         "unreachableTitle": "Übersetzung nicht verfügbar",
-        "unreachableDescription": "Dein Diktat wurde unübersetzt eingefügt. Überprüfe die Übersetzungseinstellungen.",
+        "unreachableDescription": "Dein Diktat bleibt in der Originalsprache. Überprüfe die Übersetzungseinstellungen.",
         "failedTitle": "Übersetzung fehlgeschlagen",
-        "failedDescription": "Der Originaltext wurde eingefügt. Du kannst es im Verlauf erneut versuchen."
+        "failedDescription": "Dein Diktat bleibt in der Originalsprache. Du kannst es im Verlauf erneut versuchen."
       },
       "pushForceStopped": {
         "title": "Transkription nicht eingefügt",
@@ -1021,7 +1063,10 @@
         "manualPaste": "Kopiere deinen Text unten und drücke dann {{shortcut}}, um ihn einzufügen.",
         "openSettings": "Einstellungen öffnen",
         "copyToClipboard": "Text kopieren",
-        "copyFailed": "Kopieren fehlgeschlagen"
+        "copyFailed": "Kopieren fehlgeschlagen",
+        "copiedTitle": "Kopiert, nicht eingefügt",
+        "copiedDescription": "Dein Text ist in der Zwischenablage. Automatisches Einfügen benötigt die Bedienungshilfen-Berechtigung. Drücke {{shortcut}}, um manuell einzufügen.",
+        "dontShowAgain": "Nicht mehr anzeigen"
       },
       "pasteFailed": {
         "title": "Automatisches Einfügen fehlgeschlagen"
@@ -1068,6 +1113,7 @@
         "tlsError": "Zertifikatsfehler — Ihr Netzwerk verwendet möglicherweise SSL-Inspektion, die Downloads blockiert. Versuchen Sie es über ein anderes Netzwerk.",
         "unknown": "Unbekannter Fehler"
       },
+      "verifying": "{{model}} wird überprüft",
       "downloadFailed": {
         "title": "Download fehlgeschlagen"
       },
@@ -1236,7 +1282,8 @@
     },
     "welcomeSubtitle": "Die Kraft Ihrer Stimme. Zu Ihren Bedingungen.",
     "welcomeTitle": "Willkommen bei OpenWhispr",
-    "sessionExpired": "Sitzung abgelaufen"
+    "sessionExpired": "Sitzung abgelaufen",
+    "unconfirmedSession": "Deine Anmeldung konnte nicht bestätigt werden, daher wurde nichts geändert. Versuche es erneut, sobald OpenWhispr seine Server erreicht."
   },
   "calendar": {
     "title": "Google Kalender",
@@ -1633,7 +1680,7 @@
     "managedAccount": "Verwaltetes Konto",
     "groups": {
       "account": "Konto",
-      "app": "App",
+      "workspace": "Workspace",
       "aiModels": "KI-Modelle",
       "system": "System"
     },
@@ -1644,11 +1691,23 @@
       },
       "plansBilling": {
         "description": "Tarife, Nutzung & Abrechnung",
-        "label": "Tarife & Abrechnung"
+        "label": "Tarif & Abrechnung"
       },
-      "workspace": {
-        "description": "Mitglieder, Team-Bereiche und API-Schlüssel",
-        "label": "Workspace"
+      "workspaceGeneral": {
+        "label": "Allgemein",
+        "description": "Name und Symbol des Workspace"
+      },
+      "workspacePeople": {
+        "label": "Personen",
+        "description": "Mitglieder und Teams"
+      },
+      "workspaceTeamspaces": {
+        "label": "Teamspaces",
+        "description": "Gemeinsame Notizen"
+      },
+      "workspaceDeveloper": {
+        "label": "Entwickler",
+        "description": "API-Schlüssel des Workspace"
       },
       "general": {
         "description": "Darstellung, Töne & Start",
@@ -1668,7 +1727,7 @@
       },
       "llms": {
         "description": "Modelle für Chat, Bereinigung & Zusammenfassungen",
-        "label": "Sprachmodelle"
+        "label": "Sprachmodell"
       },
       "privacyData": {
         "description": "Datenschutz, Berechtigungen & Analyse",
@@ -1699,8 +1758,270 @@
       "tab": {
         "general": "Allgemein",
         "members": "Mitglieder",
-        "teams": "Gruppen",
-        "developer": "Entwickler"
+        "invitations": "Einladungen",
+        "teams": "Gruppen"
+      },
+      "people": {
+        "title": "Personen",
+        "description": "Verwalten Sie die Personen in Ihrem Workspace und ihre Rollen.",
+        "subtitleView": "Die Personen in Ihrem Workspace und ihre Rollen.",
+        "add": "Hinzufügen",
+        "addLabel": "Personen einladen",
+        "columns": {
+          "name": "Name",
+          "team": "Gruppe",
+          "role": "Workspace-Rolle",
+          "email": "E-Mail",
+          "status": "Status",
+          "actions": "Aktionen"
+        },
+        "you": "Sie",
+        "teamsNone": "Keine",
+        "teamsMore": "+{{count}}",
+        "loading": {
+          "title": "Mitglieder werden geladen…",
+          "body": "Die Mitglieder Ihres Workspace werden hier angezeigt."
+        },
+        "failed": {
+          "title": "Mitglieder konnten nicht geladen werden",
+          "body": "Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
+        },
+        "search": {
+          "placeholder": "Mitglieder suchen",
+          "clear": "Suche löschen",
+          "noResultsTitle": "Kein Mitglied entspricht „{{query}}“",
+          "noResultsBody": "Prüfen Sie die Schreibweise oder suchen Sie nach der E-Mail-Adresse."
+        },
+        "roleMenuLabel": "Rolle von {{name}} ändern",
+        "roleDescription": {
+          "member": "Kann Notizen ansehen und bearbeiten.",
+          "admin": "Verwaltet Mitglieder, Einladungen, Gruppen und Einstellungen."
+        },
+        "roleFailed": "Die Rolle von {{name}} konnte nicht geändert werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+        "roleNotAllowed": "Sie haben keine Berechtigung mehr, Rollen in {{workspace}} zu ändern.",
+        "invitations": {
+          "loading": "Einladungen werden geladen…",
+          "failedTitle": "Einladungen konnten nicht geladen werden",
+          "emptyTitle": "Keine Einladungen",
+          "emptyBody": "Neue Einladungen erscheinen hier, bis sie angenommen werden.",
+          "pending_one": "Ausstehend · Läuft in {{count}} Tag ab",
+          "pending_other": "Ausstehend · Läuft in {{count}} Tagen ab",
+          "expired": "Abgelaufen",
+          "resend": "Einladung erneut senden",
+          "cancel": "Einladung zurückziehen",
+          "resendFailed": "Die Einladung an {{email}} konnte nicht erneut gesendet werden. Ziehen Sie sie zurück und laden Sie die Person erneut ein.",
+          "resendNotAllowed": "Sie haben keine Berechtigung mehr, Einladungen in {{workspace}} erneut zu senden.",
+          "noLongerPending": "Die Einladung an {{email}} ist nicht mehr offen",
+          "noLongerPendingMany_one": "{{count}} Einladung ist nicht mehr offen.",
+          "noLongerPendingMany_other": "{{count}} Einladungen sind nicht mehr offen.",
+          "refreshFailed": "Einladungen konnten nicht aktualisiert werden. Die Liste ist möglicherweise veraltet.",
+          "cancelSelected": "Einladungen zurückziehen",
+          "resendSelected": "Einladungen erneut senden",
+          "resendingSelected": "Wird erneut gesendet…",
+          "resentMany_one": "Es wurde {{count}} Einladung erneut gesendet.",
+          "resentMany_other": "Es wurden {{count}} Einladungen erneut gesendet.",
+          "resentPartial_one": "{{count}} Einladung erneut gesendet.",
+          "resentPartial_other": "{{count}} Einladungen erneut gesendet.",
+          "resendFailedOne": "Die Einladung an {{email}} ist fehlgeschlagen. Versuchen Sie es erneut über Aktionen.",
+          "resendFailedSome_one": "{{count}} Einladung ist fehlgeschlagen. Versuchen Sie es erneut über Aktionen.",
+          "resendFailedSome_other": "{{count}} Einladungen sind fehlgeschlagen. Versuchen Sie es erneut über Aktionen.",
+          "resendFailedAll_one": "{{count}} Einladung konnte nicht erneut gesendet werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+          "resendFailedAll_other": "{{count}} Einladungen konnten nicht erneut gesendet werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+          "resentNoEmailOne": "Die Einladung für {{email}} wurde aktualisiert, aber die E-Mail konnte nicht zugestellt werden und der alte Link funktioniert nicht mehr. Senden Sie sie erneut, um es noch einmal zu versuchen.",
+          "resentNoEmailMany_one": "{{count}} Einladung wurde aktualisiert, aber die E-Mail konnte nicht zugestellt werden und der alte Link funktioniert nicht mehr. Sie bleibt ausgewählt, damit Sie sie erneut senden können.",
+          "resentNoEmailMany_other": "{{count}} Einladungen wurden aktualisiert, aber die E-Mails konnten nicht zugestellt werden und die alten Links funktionieren nicht mehr. Sie bleiben ausgewählt, damit Sie sie erneut senden können.",
+          "resendUnrenewable_one": "{{count}} abgelaufene Einladung konnte nicht erneuert werden. Widerrufen Sie sie und laden Sie die Person erneut ein.",
+          "resendUnrenewable_other": "{{count}} abgelaufene Einladungen konnten nicht erneuert werden. Widerrufen Sie sie und laden Sie die Personen erneut ein."
+        },
+        "selection": {
+          "count_one": "{{count}} ausgewählt",
+          "count_other": "{{count}} ausgewählt",
+          "clear": "Aufheben",
+          "label": "Ausgewählte Personen",
+          "selectAllMembers": "Alle Mitglieder auswählen",
+          "selectAllInvitations": "Alle Einladungen auswählen",
+          "selectRow": "{{name}} auswählen",
+          "remove": "Entfernen",
+          "addToTeamspace": "Zu Teamspace hinzufügen"
+        }
+      },
+      "teamspaces": {
+        "title": "Teamspaces",
+        "subtitleManage": "Verwalten Sie die Teamspaces in diesem Workspace.",
+        "subtitleView": "Teamspaces in diesem Workspace.",
+        "create": "Teamspace erstellen",
+        "columns": {
+          "name": "Name",
+          "admins": "Administratoren",
+          "actions": "Aktionen",
+          "members": "Mitglieder"
+        },
+        "loadingTitle": "Teamspaces werden geladen…",
+        "loadingBody": "Die Teamspaces Ihres Workspace werden hier angezeigt.",
+        "failedTitle": "Teamspaces konnten nicht geladen werden",
+        "failedBody": "Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+        "retry": "Erneut versuchen",
+        "emptyTitle": "Noch keine Teamspaces",
+        "emptyBody": "Ein Teamspace ist ein gemeinsamer Bereich für die Notizen eines Teams. Fügen Sie Personen oder Gruppen hinzu, und alle darin können lesen und bearbeiten.",
+        "emptyBodyMember": "Die Administratoren Ihres Workspace haben noch keinen erstellt.",
+        "adminCount_one": "{{count}} Administrator",
+        "adminCount_other": "{{count}} Administratoren",
+        "noAdmins": "Workspace-Administratoren",
+        "you": "Sie",
+        "join": "Beitreten",
+        "joining": "Wird beigetreten…",
+        "joined": "{{space}} beigetreten",
+        "joinFailed": "{{space}} konnte nicht beigetreten werden. Versuchen Sie es erneut.",
+        "joinClosed": "{{space}} nimmt keine neuen Mitglieder mehr auf. Bitten Sie einen Administrator, Sie hinzuzufügen.",
+        "openTeamspace": "Teamspace öffnen",
+        "rowMenu": {
+          "label": "Aktionen für {{name}}",
+          "settings": "Einstellungen",
+          "delete": "Teamspace löschen"
+        },
+        "form": {
+          "title": "Teamspace erstellen",
+          "description": "Ein gemeinsamer Bereich für die Notizen eines Teams. Alle, die Sie hinzufügen, können lesen und bearbeiten.",
+          "nameAndIcon": "Name und Symbol",
+          "descriptionLabel": "Beschreibung",
+          "people": "Personen",
+          "descriptionPlaceholder": "Aufnahmen und Zusammenfassungen von Vertriebs- und Support-Gesprächen, eine Notiz pro Gespräch.",
+          "peoplePlaceholder": "Namen, E-Mail-Adressen oder Gruppen",
+          "defaultTitle": "Standard-Teamspace",
+          "defaultBody": "Neue Workspace-Mitglieder automatisch hinzufügen.",
+          "openTitle": "Offener Teamspace",
+          "openBody": "Workspace-Mitgliedern den Beitritt erlauben.",
+          "invalidEmail": "Ungültige E-Mail-Adresse",
+          "nameTaken": "Ein Teamspace namens {{name}} existiert bereits",
+          "failed": "Der Teamspace konnte nicht erstellt werden. Ihre Angaben bleiben erhalten. Versuchen Sie es erneut.",
+          "creating": "Wird erstellt",
+          "created": "{{space}} erstellt",
+          "createdInviteFailed_one": "{{space}} erstellt. {{count}} Person konnte nicht eingeladen werden. Laden Sie sie unter Mitglieder ein.",
+          "createdInviteFailed_other": "{{space}} erstellt. {{count}} Personen konnten nicht eingeladen werden. Laden Sie sie unter Mitglieder ein.",
+          "inviteFailedWho": "Nicht eingeladen: {{names}}.",
+          "copyAddresses": "Adressen kopieren",
+          "groupsGone": "{{names}} ist nicht mehr verfügbar und wurde daher nicht hinzugefügt."
+        },
+        "picker": {
+          "groupPeople_one": "{{count}} Person",
+          "groupPeople_other": "{{count}} Personen",
+          "groupChip_one": "{{name}} · {{count}} Person",
+          "groupChip_other": "{{name}} · {{count}} Personen",
+          "emailChip": "{{email}} · {{role}}",
+          "noMember": "Kein Mitglied gefunden",
+          "inviteToWorkspace": "In den Workspace einladen",
+          "newToWorkspace": "Neu im Workspace",
+          "select": "Auswählen",
+          "noResultsTitle": "Keine Personen oder Gruppen gefunden",
+          "noResultsBody": "Versuchen Sie einen anderen Namen oder geben Sie eine vollständige E-Mail-Adresse ein.",
+          "noResultsBodyNoInvite": "Versuchen Sie einen anderen Namen.",
+          "hasAccess": "Hat bereits Zugriff",
+          "groupHasAccess_one": "Hat bereits Zugriff · {{count}} Person",
+          "groupHasAccess_other": "Hat bereits Zugriff · {{count}} Personen"
+        },
+        "members": {
+          "columnRole": "Teamspace-Rolle",
+          "add": "Mitglieder hinzufügen",
+          "adding": "Wird hinzugefügt…",
+          "retry": "Erneut versuchen",
+          "invitationPending": "Einladung ausstehend",
+          "via": "Mitglied · über {{group}}",
+          "viaAdmin": "Administrator · über {{group}}",
+          "roleMember": "Teamspace-Mitglied",
+          "roleMemberBody": "Kann Notizen ansehen und bearbeiten",
+          "roleAdmin": "Teamspace-Admin",
+          "roleAdminBody": "Verwaltet diesen Teamspace und die zugewiesenen Gruppen.",
+          "removeItem": "Aus Teamspace entfernen",
+          "removeTitle": "{{name}} aus {{space}} entfernen?",
+          "removeBody": "Dadurch endet die direkte Mitgliedschaft von {{name}}. Der Zugriff über eine Gruppe bleibt bestehen. Die Person bleibt im Workspace.",
+          "removeConfirm": "Mitglied entfernen",
+          "removeFailedTitle": "{{name}} konnte nicht entfernt werden",
+          "removeFailedBody": "Die Mitgliedschaft von {{name}} in {{space}} ist unverändert. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+          "removed": "Die direkte Mitgliedschaft von {{name}} in {{space}} wurde entfernt.",
+          "removeGroupTitle": "{{group}} aus {{space}} entfernen?",
+          "removeGroupBody_one": "Die {{count}} Person in dieser Gruppe verliert den Zugriff über sie. Die Gruppe bleibt im Workspace.",
+          "removeGroupBody_other": "Die {{count}} Personen in dieser Gruppe verlieren den Zugriff über sie. Die Gruppe bleibt im Workspace.",
+          "removeGroupBodyNoCount": "Die Personen in dieser Gruppe verlieren den Zugriff über sie. Die Gruppe bleibt im Workspace.",
+          "stagedNew": "Neue Personen werden eingeladen, sobald Sie sie hinzufügen. Der Zugriff auf den Teamspace beginnt, nachdem sie die Einladung angenommen haben.",
+          "stagedGroup": "Alle in {{group}} erben Mitglieder-Zugriff auf {{space}}.",
+          "stagedGroups": "Alle in diesen Gruppen erben Mitglieder-Zugriff auf {{space}}.",
+          "invalid": "Geben Sie eine gültige E-Mail-Adresse ein. Ihre ausgewählten Personen bleiben erhalten.",
+          "progressPeople": "{{names}} wird hinzugefügt…",
+          "progressBoth_one": "{{names}} wird hinzugefügt und {{count}} Einladung gesendet…",
+          "progressBoth_other": "{{names}} wird hinzugefügt und {{count}} Einladungen gesendet…",
+          "progressInvites_one": "{{count}} Einladung wird gesendet…",
+          "progressInvites_other": "{{count}} Einladungen werden gesendet…",
+          "resultAdded": "{{names}} hinzugefügt.",
+          "resultInvited": "{{names}} wurde eine Workspace-Einladung gesendet.",
+          "resultGroup": "{{group}} hinzugefügt. Die Mitglieder haben jetzt Mitglieder-Zugriff.",
+          "resultGroups": "{{names}} hinzugefügt. Deren Mitglieder haben jetzt Mitglieder-Zugriff.",
+          "failed": "Mitglieder konnten nicht hinzugefügt werden. Ihre Auswahl bleibt erhalten. Versuchen Sie es erneut.",
+          "partialAdded": "{{names}} wurde hinzugefügt.",
+          "partialAddedMany": "{{names}} wurden hinzugefügt.",
+          "partialInviteFailed": "Die Einladung an {{names}} wurde nicht gesendet. Versuchen Sie es erneut.",
+          "partialInviteFailedMany": "Die Einladungen an {{names}} wurden nicht gesendet. Versuchen Sie es erneut.",
+          "partialAddFailed": "Hinzufügen nicht möglich: {{names}}. Versuchen Sie es erneut.",
+          "partialLeft": "Aus dem Workspace ausgetreten und deshalb nicht hinzugefügt: {{names}}.",
+          "notAllowed": "Sie haben keine Berechtigung mehr, die Mitglieder von {{space}} zu verwalten.",
+          "notInvited": "{{names}} wurde nicht eingeladen.",
+          "notInvitedMany": "{{names}} wurden nicht eingeladen.",
+          "skippedInvited": "{{names}} hat bereits eine Workspace-Einladung und wurde deshalb nicht zu diesem Teamspace hinzugefügt.",
+          "skippedInvitedMany": "{{names}} haben bereits Workspace-Einladungen und wurden deshalb nicht zu diesem Teamspace hinzugefügt.",
+          "removeBodyPlain": "{{name}} verliert den Zugriff auf diesen Teamspace und seine Notizen. Die Person bleibt im Workspace.",
+          "invitationPendingAdmin": "Einladung ausstehend · Workspace-Admin",
+          "resultInvitedNoEmail": "Einladungen für {{names}} wurden erstellt, aber die E-Mail konnte nicht zugestellt werden. Senden Sie sie unter Einladungen erneut.",
+          "resultInvitedPending": "{{names}} hatte bereits eine Workspace-Einladung, daher wurde dieser Teamspace hinzugefügt. Es wurde keine neue E-Mail gesendet, und die Workspace-Rolle in dieser Einladung bleibt unverändert.",
+          "stepDownTitle": "Als Admin von {{space}} zurücktreten?",
+          "stepDownBody": "Sie können diesen Teamspace und seine Mitglieder dann nicht mehr verwalten. Nur ein anderer Admin kann Sie wieder zum Admin machen.",
+          "stepDownConfirm": "Zurücktreten"
+        },
+        "settings": {
+          "leaveTitle": "Teamspace verlassen",
+          "leaveBody": "Diesen Teamspace verlassen.",
+          "leaveAction": "Teamspace verlassen",
+          "deleteTitle": "Teamspace löschen",
+          "deleteBody": "Diesen Teamspace für alle entfernen.",
+          "deleteAction": "Teamspace löschen",
+          "flagsFailed": "Diese Einstellungen konnten nicht geladen werden.",
+          "flagSaveFailed": "Speichern nicht möglich. Versuchen Sie es erneut.",
+          "deleteDefaultAdminOnly": "Nur Workspace-Admins können einen Standard-Teamspace löschen.",
+          "defaultAdminOnly": "Nur Workspace-Administratoren können das ändern."
+        },
+        "exit": {
+          "blockedTitle": "Fügen Sie zuerst einen weiteren Admin hinzu",
+          "blockedBody": "Sie sind der einzige Admin von {{space}}. Machen Sie ein anderes Mitglied zum Admin, bevor Sie gehen.",
+          "blockedAction": "Mitglieder verwalten",
+          "leaveTitle": "{{space}} verlassen?",
+          "leaveFailedTitle": "{{space}} konnte nicht verlassen werden",
+          "leaveFailedBody": "Ihre Mitgliedschaft ist unverändert. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+          "left": "Sie haben {{space}} verlassen.",
+          "deleteTitle": "{{space}} löschen?",
+          "deleteBody": "Dadurch wird {{space}} für alle aus dem Workspace entfernt.",
+          "deleteFailedTitle": "{{space}} konnte nicht gelöscht werden",
+          "deleteFailedBody": "Der Teamspace ist weiterhin verfügbar. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+          "deleted": "{{space}} wurde gelöscht.",
+          "restored": "{{space}} wurde wiederhergestellt",
+          "leaveBodyKeeps": "Ihre direkte Mitgliedschaft endet. Der Zugriff über {{groups}} bleibt bestehen.",
+          "leaveBodyLoses": "Sie verlieren den Zugriff auf {{space}} und seine Notizen.",
+          "leaveBodyAdmins": "Ein anderer Admin verwaltet diesen Teamspace weiter.",
+          "deleteNotAllowed": "Sie haben keine Berechtigung, {{space}} zu löschen.",
+          "movedToPersonal_one": "{{count}} nicht synchronisierte Notiz wurde in Ihren persönlichen Bereich verschoben.",
+          "movedToPersonal_other": "{{count}} nicht synchronisierte Notizen wurden in Ihren persönlichen Bereich verschoben."
+        },
+        "addPeople": {
+          "loading": "Teamspaces werden geladen…",
+          "failed": "Teamspaces konnten nicht geladen werden",
+          "none": "Noch keine Teamspaces",
+          "addingTitle_one": "{{count}} Person wird hinzugefügt…",
+          "addingTitle_other": "{{count}} Personen werden hinzugefügt…",
+          "addingBody": "Lassen Sie dieses Fenster geöffnet, während sie zu {{space}} hinzugefügt werden.",
+          "addingAction": "Wird hinzugefügt…",
+          "failedTitle_one": "{{count}} Person konnte nicht hinzugefügt werden",
+          "failedTitle_other": "{{count}} Personen konnten nicht hinzugefügt werden",
+          "failedBody": "Sie wurden nicht zu {{space}} hinzugefügt. Ihre Auswahl bleibt erhalten. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+          "done_one": "{{count}} Person zu {{space}} hinzugefügt",
+          "done_other": "{{count}} Personen zu {{space}} hinzugefügt"
+        }
       },
       "role": {
         "owner": "Inhaber",
@@ -1708,45 +2029,33 @@
         "member": "Mitglied"
       },
       "general": {
+        "title": "Allgemein",
+        "subtitleManage": "Verwalten Sie Name, Icons und mehr für Ihren Workspace",
+        "subtitleView": "Name und Icon Ihres Workspace.",
         "nameLabel": "Workspace-Name",
+        "nameHint": "Der Workspace-Name darf bis zu 65 Zeichen lang sein",
+        "iconLabel": "Workspace-Icon",
+        "iconHint": "Dieses Icon erscheint in Ihrer Seitenleiste und in Benachrichtigungen.",
+        "roleLabel": "Ihre Rolle",
         "saved": "Workspace aktualisiert",
+        "ownerTitle": "Workspace-Inhaber",
+        "ownerDescription": "Übertragen Sie die Inhaberschaft an ein anderes Workspace-Mitglied.",
         "dangerTitle": "Workspace löschen",
-        "dangerDescription": "Alle geteilten Notizen, Ordner und Integrationen werden gelöscht. Dies kann nicht rückgängig gemacht werden.",
+        "dangerDescription": "Diesen Workspace dauerhaft löschen, einschließlich aller Notizen und Dateien.",
         "delete": "Workspace löschen",
-        "confirmTitle": "{{name}} löschen?",
-        "confirmDescription": "Dies kündigt das Abonnement und entfernt alle Workspace-Daten dauerhaft.",
         "deleting": "Lösche…",
-        "deleted": "Workspace gelöscht",
         "leaveTitle": "Workspace verlassen",
-        "leaveDescription": "Sie verlieren den Zugriff auf diesen Workspace und seine geteilten Notizen.",
+        "leaveDescription": "Entfernen Sie sich aus diesem Workspace. Sie verlieren den Zugriff auf seine Teamspaces.",
         "leave": "Workspace verlassen",
-        "leaving": "Verlasse…",
-        "leaveConfirm": {
-          "title": "{{name}} verlassen?",
-          "description": "Sie verlieren sofort den Zugriff. Ein Administrator kann Sie erneut einladen."
-        },
-        "left": "Sie haben {{name}} verlassen"
+        "leaving": "Verlasse…"
       },
       "members": {
-        "title": "Mitglieder",
         "description": "{{count}} von {{seats}} Plätzen belegt.",
-        "invite": "Einladen",
-        "empty": "Noch keine Mitglieder.",
         "loadError": "Mitglieder konnten nicht geladen werden.",
         "roleUpdated": "Rolle aktualisiert",
         "removed": "{{name}} entfernt",
-        "promote": "Zum Administrator machen",
-        "demote": "Zum Mitglied machen",
         "transferOwnership": "Eigentum übertragen",
-        "remove": "Aus Workspace entfernen",
-        "removeConfirm": {
-          "title": "Dieses Mitglied entfernen?",
-          "description": "{{name}} verliert sofort den Zugriff auf {{workspace}}."
-        },
-        "transferConfirm": {
-          "title": "Eigentum übertragen?",
-          "description": "{{name}} wird Inhaber von {{workspace}}. Ihre Rolle ändert sich zu Administrator und nur der neue Inhaber kann das Eigentum zurückübertragen."
-        }
+        "remove": "Aus Workspace entfernen"
       },
       "joinRequests": {
         "title": "Beitrittsanfragen",
@@ -1758,7 +2067,7 @@
       },
       "teams": {
         "title": "Gruppen",
-        "description": "Gruppen von Workspace-Mitgliedern, denen gemeinsam Zugriff auf Team-Spaces gewährt werden kann.",
+        "description": "Gruppen von Workspace-Mitgliedern, denen gemeinsam Zugriff auf Teamspaces gewährt werden kann.",
         "new": "Neue Gruppe",
         "empty": "Noch keine Gruppen.",
         "createFirst": "Erstelle deine erste Gruppe",
@@ -1787,22 +2096,9 @@
         }
       },
       "invites": {
-        "title": "Ausstehende Einladungen",
-        "expiresIn_one": "Läuft in {{count}} Tag ab",
-        "expiresIn_other": "Läuft in {{count}} Tagen ab",
-        "expired": "Abgelaufen",
-        "loadError": "Einladungen konnten nicht geladen werden.",
-        "resend": "Erneut senden",
         "resending": "Sende erneut…",
-        "revoke": "Widerrufen",
         "resent": "Einladung erneut gesendet",
-        "resentNoEmail": "Einladung aktualisiert, aber die E-Mail konnte nicht zugestellt werden.",
-        "revoked": "Einladung widerrufen",
-        "revokeFailed": "Einladung konnte nicht widerrufen werden",
-        "revokeConfirm": {
-          "title": "Diese Einladung widerrufen?",
-          "description": "Der Einladungslink für {{email}} funktioniert dann nicht mehr."
-        }
+        "resentNoEmail": "Einladung aktualisiert, aber die E-Mail konnte nicht zugestellt werden."
       },
       "billing": {
         "plan": "Plan",
@@ -1939,6 +2235,10 @@
       "notSignedIn": "Nicht angemeldet",
       "notSignedInDescription": "Erstellen Sie ein Konto, um Premium-Funktionen freizuschalten.",
       "offline": "Offline",
+      "offlineAccount": {
+        "title": "Stand deiner letzten Anmeldung",
+        "description": "Synchronisierung und Kontoänderungen sind pausiert, bis OpenWhispr seine Server erreicht."
+      },
       "pastDue": {
         "description": "Sie sind vorerst im kostenlosen Tarif. Aktualisieren Sie Ihre Zahlungsmethode, um wieder Pro zu erhalten.",
         "title": "Ihre Zahlung konnte nicht verarbeitet werden"
@@ -2221,6 +2521,14 @@
       "dataManagementTitle": "Datenverwaltung",
       "modelCache": "Modell-Cache",
       "open": "Öffnen",
+      "retiredModels": {
+        "label": "Eingestellte Modelle",
+        "description": "Diese Modelle werden nicht mehr angeboten, liegen aber noch auf dem Datenträger: {{models}}.",
+        "remove": "Entfernen",
+        "confirmTitle": "Eingestellte Modelle entfernen?",
+        "confirmDescription": "Dadurch werden die Dateien der Modelle gelöscht, die der Katalog nicht mehr anbietet. Andere heruntergeladene Modelle bleiben erhalten.",
+        "failedDescription": "Einige Dateien konnten nicht entfernt werden. Möglicherweise wird ein Modell noch verwendet. Starte die App neu und versuche es erneut."
+      },
       "removeModels": {
         "confirmText": "Modelle löschen",
         "description": "Dadurch werden alle lokal zwischengespeicherten Whisper-Modelle ({{path}}) gelöscht und Speicherplatz freigegeben. Sie können sie über die Modellauswahl erneut herunterladen.",
@@ -2293,10 +2601,10 @@
         "resetToDefault": "Auf {{hotkey}} zurücksetzen",
         "title": "Diktat-Hotkey",
         "linuxPttPermissionTitle": "Gedrückt halten zum Sprechen erfordert zusätzliche Einrichtung",
-        "linuxPttPermissionDescription": "Führen Sie diesen Befehl aus und melden Sie sich ab/an: sudo usermod -aG input $USER",
+        "linuxPttPermissionDescription": "Führen Sie diesen Befehl aus, melden Sie sich dann von Ihrem Linux-Benutzerkonto ab und wieder an: sudo usermod -aG input $USER",
         "linuxPttSetupTitle": "Gedrückt halten zum Sprechen erfordert Einrichtung",
         "linuxPttSetupDescription": "Ihr Benutzer benötigt Zugriff auf die Tastatureingabegeräte.",
-        "linuxPttSetupNote": "Melden Sie sich nach dem Ausführen des Befehls ab und wieder an.",
+        "linuxPttSetupNote": "Melden Sie sich nach dem Ausführen des Befehls von Ihrem Linux-Benutzerkonto ab und dann wieder an.",
         "hyprlandConfigWriteWarningTitle": "Hyprland-Tastenkombinationen werden nicht dauerhaft gespeichert",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr kann nicht in {{path}} schreiben. Deshalb bleiben Tastenkombinationen nach einem Neuladen der Hyprland-Konfiguration nicht erhalten. Stellen Sie sicher, dass die Datei existiert und beschreibbar ist.",
         "hyprlandUnbindDescription": "Unter Hyprland beansprucht OpenWhispr die ausgewählte Tastenkombination. Jede vorhandene Hyprland-Belegung mit derselben Tastenkombination wird aufgehoben, wenn OpenWhispr seine Tastenkombination registriert."
@@ -2515,7 +2823,7 @@
     "privacy": {
       "cloudBackup": "Cloud-Backup",
       "cloudBackupDescription": "Sichern Sie Ihre Transkriptionen und Notizen in der Cloud für nahtlosen Zugriff auf allen Geräten.",
-      "cloudBackupTeamCaveat": "Notizen in Team-Bereichen und geteilte Notizen werden unabhängig von dieser Einstellung immer synchronisiert.",
+      "cloudBackupTeamCaveat": "Notizen in Teamspaces und geteilte Notizen werden unabhängig von dieser Einstellung immer synchronisiert.",
       "cloudNotesMigration": "Notizen werden gesichert… {{done}} / {{total}}",
       "cloudNotesMigrationDone": "Alle Notizen gesichert",
       "description": "Steuern Sie, welche Daten Ihr Gerät verlassen. Standardmäßig ist alles deaktiviert.",
@@ -2529,6 +2837,8 @@
       "leaderboardRequiresHistory": "Aktivieren Sie die Datenaufbewahrung, bevor Sie Bestenlisten beitreten.",
       "usageAnalytics": "Nutzungsanalysen",
       "usageAnalyticsDescription": "Helfen Sie uns, OpenWhispr zu verbessern, indem Sie anonyme Leistungsdaten teilen. Wir senden niemals Transkriptionsinhalte – nur Timing- und Fehlerdaten.",
+      "modelListUpdates": "Aktualisierungen der Modellliste",
+      "modelListUpdatesDescription": "Prüft alle 15 Minuten die öffentliche Modellliste von OpenWhispr auf GitHub auf neue und eingestellte Modelle. Änderungen werden nach einem Neustart vollständig wirksam.",
       "audioRetention": "Audio-Aufbewahrung",
       "audioRetentionDescription": "Diktat-Audio lokal für erneute Transkription und Download speichern. Dateien werden nach Ablauf der Aufbewahrungsfrist automatisch gelöscht. Meeting-Audio wird niemals gespeichert.",
       "audioRetentionDisabled": "Deaktiviert",
@@ -2567,7 +2877,7 @@
       "selfHostedStreamingNote": "Erfordert einen Server, der Streaming-Transkription unterstützt."
     },
     "llms": {
-      "title": "Sprachmodelle",
+      "title": "Sprachmodell",
       "description": "Konfigurieren Sie Modelle für Bereinigung, Notizformatierung und Chat",
       "tabs": {
         "dictationCleanup": "Diktat-Bereinigung",
@@ -2900,6 +3210,21 @@
       "contextTooLargeGeneric": "Das ist zu lang, als dass {{model}} es auf diesem Computer lesen könnte. Versuchen Sie ein Cloud-Modell oder führen Sie die Aktion für eine kürzere Auswahl aus.",
       "localServerUnavailable": "{{model}} konnte auf diesem Computer nicht gestartet werden. Versuchen Sie es erneut oder wechseln Sie zu einem Cloud-Modell.",
       "localModelBusy": "Das lokale Modell bearbeitet noch eine andere Anfrage. Warten Sie, bis sie abgeschlossen ist, und versuchen Sie es dann erneut."
+    },
+    "policy": {
+      "guidance": "Ihre Organisation hat diese Modelle genehmigt. Wählen Sie eines, das zu Ihrem Computer passt.",
+      "notApproved": "Von Ihrer Organisation nicht genehmigt",
+      "noneSupported": "Ihre Organisation hat kein lokales Modell genehmigt, das diese App-Version unterstützt. Aktualisieren Sie OpenWhispr oder wenden Sie sich an Ihre Administration.",
+      "emptyIntersection": "Ihre Arbeitsbereiche haben kein gemeinsames genehmigtes lokales Modell. Wenden Sie sich an Ihre Administration.",
+      "modelBlocked": "Wählen Sie ein von Ihrer Organisation genehmigtes lokales Modell.",
+      "modeBlocked": "Ihre Organisation hat die lokale Verarbeitung deaktiviert.",
+      "unresolved": "Die Arbeitsbereichsrichtlinie konnte nicht ermittelt werden. Stellen Sie eine Verbindung her und versuchen Sie es erneut.",
+      "versionBlocked": "Aktualisieren Sie OpenWhispr, um die genehmigten Modelle Ihrer Organisation zu nutzen.",
+      "updateRequired": "Update erforderlich",
+      "unavailable": "Derzeit nicht verfügbar",
+      "installedTitle": "Installierte lokale Modelle",
+      "installedHint": "Ihre Organisation hat die lokale Verarbeitung deaktiviert, daher können diese Modelle nicht ausgeführt werden. Sie bleiben auf Ihrem Computer, bis Sie sie löschen.",
+      "chooseModel": "Lokales Modell auswählen"
     }
   },
   "insights": {
@@ -3056,13 +3381,12 @@
   "workspaces": {
     "switcher": {
       "workspaces": "Workspaces",
-      "create": "Workspace erstellen…",
       "add": "Workspace hinzufügen",
       "invitePeople": "Personen einladen"
     },
     "create": {
       "title": "Workspace erstellen",
-      "description": "Ein Workspace bündelt die Mitglieder und Abrechnung Ihrer Organisation. Darin erstellen Sie Team-Bereiche für gemeinsame Notizen.",
+      "description": "Ein Workspace bündelt die Mitglieder und Abrechnung Ihrer Organisation. Darin erstellen Sie Teamspaces für gemeinsame Notizen.",
       "nameLabel": "Workspace-Name",
       "namePlaceholder": "Acme Corp",
       "submit": "Workspace erstellen",
@@ -3074,27 +3398,82 @@
       "description": "Sie sind nun Inhaber von {{name}}."
     },
     "invite": {
-      "title": "Zu {{workspace}} einladen",
-      "description": "Fügen Sie Teammitglieder per E-Mail hinzu. Sie erhalten einen Beitrittslink.",
-      "emailLabel": "E-Mail",
-      "emailPlaceholder": "teammitglied@example.com",
-      "roleLabel": "Rolle",
+      "title": "Personen einladen",
+      "description": "Die eingeladenen Personen erhalten per E-Mail einen Link, um {{workspace}} beizutreten.",
+      "emailLabel": "E-Mail-Adressen",
+      "emailHint": "Trennen Sie E-Mail-Adressen durch Kommas. Alle erhalten dieselbe Rolle.",
+      "emailPlaceholder": "E-Mail suchen",
+      "addMore": "Weitere hinzufügen…",
+      "removeRecipient": "{{email}} entfernen",
+      "suggestions": "Vorschläge",
+      "roleLabel": "Workspace-Rolle",
       "seatUsage": "{{used}} von {{seats}} Plätzen belegt",
       "seatCost": "Bei Annahme wird deinem Tarif ein Platz hinzugefügt · geschätzte anteilige Kosten: {{amount}}.",
-      "submit": "Einladung senden",
-      "submitting": "Sende…",
-      "sentTitle": "Einladung gesendet",
-      "sentDescription": "Einladung an {{email}} gesendet.",
-      "sentNoEmailTitle": "Einladung erstellt, aber nicht per E-Mail gesendet",
-      "sentNoEmailDescription": "{{email}} wurde eingeladen, aber die E-Mail konnte nicht zugestellt werden. Senden Sie sie später erneut oder teilen Sie den Einladungslink anders.",
-      "errorTitle": "Einladung konnte nicht gesendet werden",
+      "seatCostMany_one": "Wenn alle annehmen, wird Ihrem Tarif {{count}} Platz hinzugefügt · geschätzte anteilige Kosten: {{amount}}.",
+      "seatCostMany_other": "Wenn alle annehmen, werden Ihrem Tarif {{count}} Plätze hinzugefügt · geschätzte anteilige Kosten: {{amount}}.",
+      "seatCostManyUnpriced_one": "Wenn alle annehmen, wird Ihrem Tarif {{count}} Platz hinzugefügt.",
+      "seatCostManyUnpriced_other": "Wenn alle annehmen, werden Ihrem Tarif {{count}} Plätze hinzugefügt.",
+      "submitOne": "Einladung senden",
+      "submit_one": "{{count}} Einladung senden",
+      "submit_other": "{{count}} Einladungen senden",
+      "submitting_one": "{{count}} Person wird eingeladen…",
+      "submitting_other": "{{count}} Personen werden eingeladen…",
+      "sentTitle_one": "{{count}} Einladung gesendet",
+      "sentTitle_other": "{{count}} Einladungen gesendet",
+      "attachedTitle_one": "{{count}} Einladung aktualisiert",
+      "attachedTitle_other": "{{count}} Einladungen aktualisiert",
+      "attachedBody_one": "{{count}} Adresse hatte bereits eine Workspace-Einladung, daher wurde dies hinzugefügt. Es wurde keine neue E-Mail gesendet.",
+      "attachedBody_other": "{{count}} Adressen hatten bereits Workspace-Einladungen, daher wurde dies hinzugefügt. Es wurde keine neue E-Mail gesendet.",
+      "createdTitle_one": "{{count}} Einladung erstellt",
+      "createdTitle_other": "{{count}} Einladungen erstellt",
+      "sentOne": "{{email}} wurde zu {{workspace}} eingeladen",
+      "sentMany_one": "{{count}} Person wurde zu {{workspace}} eingeladen",
+      "sentMany_other": "{{count}} Personen wurden zu {{workspace}} eingeladen",
+      "noEmail_one": "{{count}} Einladung wurde erstellt, aber ihre E-Mail konnte nicht zugestellt werden. Senden Sie sie unter Einladungen erneut.",
+      "noEmail_other": "{{count}} Einladungen wurden erstellt, aber ihre E-Mails konnten nicht zugestellt werden. Senden Sie sie unter Einladungen erneut.",
+      "someFailed_one": "{{count}} Einladung wurde nicht gesendet",
+      "someFailed_other": "{{count}} Einladungen wurden nicht gesendet",
+      "tryResending": "Erneut senden",
+      "tooMany": "Sie können bis zu {{count}} Personen auf einmal einladen.",
+      "removeLast_one": "Die letzte {{count}} entfernen",
+      "removeLast_other": "Die letzten {{count}} entfernen",
+      "seatsLeft_one": "Nur noch {{count}} Platz frei. Entfernen Sie {{excess}} oder führen Sie ein Upgrade durch.",
+      "seatsLeft_other": "Nur noch {{count}} Plätze frei. Entfernen Sie {{excess}} oder führen Sie ein Upgrade durch.",
+      "seatsLeftAskOwner_one": "Nur noch {{count}} Platz frei. Entfernen Sie {{excess}} oder bitten Sie {{owner}}, Plätze hinzuzufügen.",
+      "seatsLeftAskOwner_other": "Nur noch {{count}} Plätze frei. Entfernen Sie {{excess}} oder bitten Sie {{owner}}, Plätze hinzuzufügen.",
+      "seatsNone": "Keine Plätze mehr frei. Führen Sie ein Upgrade durch, um weitere hinzuzufügen.",
+      "seatsNoneAskOwner": "Keine Plätze mehr frei. Bitten Sie {{owner}}, Plätze hinzuzufügen.",
+      "upgrade": "Upgrade",
+      "ceilingLeft_one": "Sie können noch {{count}} Person einladen. Entfernen Sie {{excess}}, um fortzufahren.",
+      "ceilingLeft_other": "Sie können noch {{count}} Personen einladen. Entfernen Sie {{excess}}, um fortzufahren.",
+      "rateLimitedLeft_one": "Gerade kann nur noch {{count}} Einladung versendet werden. Entfernen Sie {{excess}}, um sie zu senden, oder versuchen Sie es später erneut.",
+      "rateLimitedLeft_other": "Gerade können nur noch {{count}} Einladungen versendet werden. Entfernen Sie {{excess}}, um sie zu senden, oder versuchen Sie es später erneut.",
+      "rateLimitedDaily": "Dieser Workspace kann bis zu {{limit}} Einladungen pro Tag senden. Entfernen Sie {{excess}}, um den Rest jetzt zu senden.",
+      "skippedMany_one": "{{count}} Adresse wurde übersprungen: bereits Mitglied oder bereits eingeladen.",
+      "skippedMany_other": "{{count}} Adressen wurden übersprungen: bereits Mitglieder oder bereits eingeladen.",
+      "skippedNotAdded_one": "{{count}} Adresse wurde übersprungen und hier nicht hinzugefügt: bereits Mitglied oder bereits eingeladen. Fügen Sie vorhandene Mitglieder stattdessen über die Mitgliederliste hinzu.",
+      "skippedNotAdded_other": "{{count}} Adressen wurden übersprungen und hier nicht hinzugefügt: bereits Mitglieder oder bereits eingeladen. Fügen Sie vorhandene Mitglieder stattdessen über die Mitgliederliste hinzu.",
+      "done": "Fertig",
       "role": {
-        "admin": "Administrator",
-        "member": "Mitglied"
+        "admin": "Workspace-Administrator",
+        "member": "Workspace-Mitglied"
       },
       "roleDescription": {
-        "admin": "Verwaltet Mitglieder und Abrechnung",
-        "member": "Nutzt den Workspace"
+        "admin": "Verwaltet Mitglieder, Einladungen, Gruppen und Einstellungen.",
+        "member": "Kann Notizen ansehen und bearbeiten."
+      },
+      "errors": {
+        "invalid": "{{email}} ist keine gültige E-Mail-Adresse",
+        "alreadyMember": "{{email}} ist bereits Mitglied, übersprungen",
+        "alreadyInvited": "{{email}} wurde bereits eingeladen, übersprungen. Senden Sie die Einladung unter Einladungen erneut.",
+        "seatLimit": "Dieser Workspace hat sein Platzlimit erreicht.",
+        "directoryRequired": "Weisen Sie {{email}} zuerst in Ihrem Identitätsanbieter zu.",
+        "notAllowed": "Sie können keine Personen mehr zu {{workspace}} einladen.",
+        "ssoRequired": "Melden Sie sich mit dem Single Sign-On (SSO) Ihres Unternehmens an, um Personen zu {{workspace}} einzuladen.",
+        "sessionExpired": "{{email}} konnte nicht eingeladen werden: Ihre Anmeldung ist abgelaufen oder hat sich geändert. Melden Sie sich erneut an und versuchen Sie es noch einmal.",
+        "rateLimited": "Gerade sind es zu viele Einladungen. Versuchen Sie es später erneut.",
+        "requestFailed": "{{email}} konnte nicht eingeladen werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+        "refused": "{{email}} konnte nicht eingeladen werden: {{reason}}"
       }
     },
     "join": {
@@ -3129,9 +3508,140 @@
       "errorTitle": "Einladung konnte nicht angenommen werden",
       "sentTo": "Einladung gesendet an {{email}}",
       "wrongAccount": "Diese Einladung wurde an {{email}} gesendet. Sie sind als {{current}} angemeldet."
+    },
+    "exit": {
+      "leave": {
+        "title": "{{name}} verlassen?",
+        "body": "Sie verlieren den Zugriff auf diesen Workspace, seine Teams und seine Teamspaces. Ein Workspace-Admin kann Sie wieder einladen.",
+        "failed": "{{name}} konnte nicht verlassen werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
+      },
+      "left": {
+        "title": "Sie haben {{name}} verlassen"
+      },
+      "chooseAnother": "Wählen Sie einen anderen Workspace, um fortzufahren.",
+      "chooseWorkspace": "Workspace auswählen",
+      "delete": {
+        "title": "{{name}} löschen?",
+        "body": "Dadurch werden der Workspace, seine Notizen, Dateien, Teams und Teamspaces für alle dauerhaft gelöscht. Das kann nicht rückgängig gemacht werden."
+      },
+      "deleting": {
+        "title": "{{name}} wird gelöscht…",
+        "body": "Lassen Sie dieses Fenster geöffnet, während der Workspace gelöscht wird."
+      },
+      "deleteFailed": {
+        "title": "Workspace konnte nicht gelöscht werden",
+        "body": "{{name}} ist weiterhin verfügbar. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
+      },
+      "deleted": {
+        "title": "{{name}} wurde gelöscht"
+      },
+      "tryAgain": "Erneut versuchen"
+    },
+    "removeMember": {
+      "title": "{{name}} aus {{workspace}} entfernen?",
+      "body": "Die Person verliert den Zugriff auf alle Teamspaces und Teams in diesem Workspace. Sie können sie jederzeit erneut einladen.",
+      "confirm": "Entfernen",
+      "removing": "Wird entfernt…",
+      "failed": "Das Entfernen von {{name}} konnte nicht bestätigt werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+      "notAllowed": "Sie haben keine Berechtigung mehr, Personen aus {{workspace}} zu entfernen.",
+      "alreadyRemoved": "{{name}} wurde bereits entfernt"
+    },
+    "removeMembers": {
+      "title_one": "{{count}} Mitglied aus {{workspace}} entfernen?",
+      "title_other": "{{count}} Mitglieder aus {{workspace}} entfernen?",
+      "confirm_one": "{{count}} Mitglied entfernen",
+      "confirm_other": "{{count}} Mitglieder entfernen",
+      "checking": "Wird geprüft…",
+      "failed_one": "Das Entfernen von {{count}} Mitglied konnte nicht bestätigt werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+      "failed_other": "Das Entfernen von {{count}} Mitgliedern konnte nicht bestätigt werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+      "body": "Diese Personen verlieren den Zugriff auf alle Teamspaces und Teams in diesem Workspace. Sie können sie jederzeit erneut einladen.",
+      "ownerOne": "{{name}} besitzt Notizen oder Teamspaces in diesem Workspace.",
+      "owners_one": "{{count}} davon besitzt Notizen oder Teamspaces.",
+      "owners_other": "{{count}} davon besitzen Notizen oder Teamspaces.",
+      "directoryManagedOne": "{{name}} wird von Ihrem Identitätsanbieter zugewiesen. Entfernen Sie die Person stattdessen dort.",
+      "directoryManaged_one": "{{count}} davon wird von Ihrem Identitätsanbieter zugewiesen. Entfernen Sie die Person stattdessen dort.",
+      "directoryManaged_other": "{{count}} davon werden von Ihrem Identitätsanbieter zugewiesen. Entfernen Sie sie stattdessen dort.",
+      "directoryManagedOneOthers": "{{name}} wird von Ihrem Identitätsanbieter zugewiesen. Entfernen Sie die Person dort, oder entfernen Sie das Häkchen bei dieser Person, um die anderen zu entfernen.",
+      "directoryManagedOthers_one": "{{count}} davon wird von Ihrem Identitätsanbieter zugewiesen. Entfernen Sie die Person dort, oder entfernen Sie das Häkchen bei dieser Person, um die anderen zu entfernen.",
+      "directoryManagedOthers_other": "{{count}} davon werden von Ihrem Identitätsanbieter zugewiesen. Entfernen Sie sie dort, oder entfernen Sie das Häkchen bei diesen Personen, um die anderen zu entfernen.",
+      "transferLabel": "Übertragen an",
+      "transferBody": "Die Notizen und Teamspaces gehen an den neuen Inhaber über. Die entfernten Personen verlieren den Zugriff auf diesen Workspace.",
+      "transferBodyLimited": "Die Notizen und Teamspaces gehen an {{name}} über, außer Notizen in Teamspaces, auf die {{name}} keinen Zugriff hat: Diese bleiben dort. Die entfernten Personen verlieren den Zugriff auf diesen Workspace.",
+      "you": "{{name}} (Sie)",
+      "transferConfirm": "Übertragen und entfernen",
+      "transferring": "Wird übertragen…",
+      "transferFailed": "Übertragung und Entfernen konnten nicht bestätigt werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+      "invalidTarget": "{{name}} kann keine Inhaberschaft mehr erhalten. Wählen Sie eine andere Person.",
+      "cannotRemoveOwner": "Der Inhaber des Workspace kann nicht entfernt werden.",
+      "cannotRemoveSelf": "Sie können sich nicht selbst entfernen. Verlassen Sie den Workspace unter „Allgemein“.",
+      "done_one": "{{count}} Mitglied entfernt",
+      "done_other": "{{count}} Mitglieder entfernt",
+      "transferDone_one": "Die Notizen und Teamspaces wurden zu {{name}} verschoben und {{count}} Mitglied wurde entfernt.",
+      "transferDone_other": "Die Notizen und Teamspaces wurden zu {{name}} verschoben und {{count}} Mitglieder wurden entfernt.",
+      "transferPartial_one": "{{count}} Notiz ist in einem Teamspace geblieben, auf den {{name}} keinen Zugriff hat. Alles andere wurde verschoben.",
+      "transferPartial_other": "{{count}} Notizen sind in Teamspaces geblieben, auf die {{name}} keinen Zugriff hat. Alles andere wurde verschoben.",
+      "alreadyRemoved_one": "{{count}} Mitglied wurde bereits entfernt",
+      "alreadyRemoved_other": "{{count}} Mitglieder wurden bereits entfernt"
+    },
+    "cancelInvitation": {
+      "title": "Einladung für {{email}} zurückziehen?",
+      "body": "Die Person kann mit dieser Einladung nicht beitreten. Aktuelle Mitglieder behalten ihren Zugriff.",
+      "keep": "Einladung behalten",
+      "canceling": "Wird zurückgezogen…",
+      "done": "Einladung zurückgezogen",
+      "failed": "Die Einladung konnte nicht zurückgezogen werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+      "notAllowed": "Sie haben keine Berechtigung mehr, Einladungen in {{workspace}} zurückzuziehen."
+    },
+    "cancelInvitations": {
+      "title_one": "{{count}} Einladung zurückziehen?",
+      "title_other": "{{count}} Einladungen zurückziehen?",
+      "body": "Die Personen können mit diesen Einladungen nicht beitreten. Aktuelle Mitglieder behalten ihren Zugriff.",
+      "keep": "Einladungen behalten",
+      "confirm": "Einladungen zurückziehen",
+      "done_one": "{{count}} Einladung zurückgezogen.",
+      "done_other": "{{count}} Einladungen zurückgezogen.",
+      "partial_one": "{{count}} Einladung konnte nicht zurückgezogen werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+      "partial_other": "{{count}} Einladungen konnten nicht zurückgezogen werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
+    },
+    "ssoRequired": "Melden Sie sich mit dem Single Sign-On (SSO) Ihres Unternehmens an, um Personen in {{workspace}} zu verwalten.",
+    "transfer": {
+      "title": "Neuen Inhaber wählen",
+      "body": "Wählen Sie ein bestehendes Mitglied des Workspace. Nach der Übertragung werden Sie Administrator.",
+      "newOwner": "Neuer Inhaber",
+      "placeholder": "Mitglied des Workspace wählen",
+      "candidate": "{{name}} · {{role}}",
+      "confirmTitle": "Inhaberschaft an {{name}} übertragen?",
+      "confirmBody": "{{name}} wird Inhaber von {{workspace}}. Sie werden Administrator.",
+      "submit": "Inhaberschaft übertragen",
+      "transferringTitle": "Inhaberschaft wird übertragen…",
+      "transferringBody": "Lassen Sie dieses Fenster geöffnet. Die Inhaberschaft ändert sich, sobald die Übertragung abgeschlossen ist.",
+      "transferring": "Wird übertragen…",
+      "failed": "Die Inhaberschaft konnte nicht übertragen werden. Sie sind weiterhin Inhaber. Versuchen Sie es erneut.",
+      "noCandidates": "Laden Sie jemanden in {{workspace}} ein, bevor Sie die Inhaberschaft übertragen.",
+      "done": "Inhaberschaft des Workspace an {{name}} übertragen. Sie sind jetzt Administrator."
+    },
+    "intro": {
+      "workspace": {
+        "title": "Ihr Workspace ist Ihre Basis",
+        "body": "Alle in Ihrem Unternehmen arbeiten hier. Ihre privaten Notizen bleiben privat, bis Sie sie teilen."
+      },
+      "teamspaces": {
+        "title": "Notizen in Teamspaces teilen",
+        "body": "Erstellen Sie in einem Workspace einen Teamspace für ein Projekt oder Thema, etwa Kundengespräche. Alle, die Sie hinzufügen, können seine Notizen lesen und bearbeiten."
+      },
+      "teams": {
+        "title": "Ein ganzes Team auf einmal hinzufügen",
+        "body": "Fassen Sie Personen in einem Team zusammen, etwa Vertrieb, und fügen Sie das Team dann in einem Schritt zu jedem Teamspace hinzu."
+      },
+      "getStarted": "Los geht's",
+      "progress": "Schritt {{current}} von {{total}}"
     }
   },
   "chat": {
+    "answering": "Antwort wird erstellt…",
+    "conversationCreateFailed": "Die Unterhaltung konnte nicht gestartet werden. Deine Frage ist wieder unter „Neuer Chat“.",
+    "messageSaveFailed": "Diese Nachricht konnte nicht gespeichert werden. Bitte versuche es erneut.",
+    "conversationLoadFailed": "Diese Unterhaltung konnte nicht geladen werden. Bitte versuche es erneut.",
     "newChat": "Neuer Chat",
     "search": "Unterhaltungen suchen...",
     "archived": "Archiviert",
@@ -3154,6 +3664,13 @@
     "searchTitle": "Unterhaltungen suchen",
     "searchDescription": "In allen Unterhaltungen suchen",
     "inputPlaceholder": "Frag etwas...",
+    "sourceNote": {
+      "from": "Aus der Notiz",
+      "open": "Notiz öffnen",
+      "deleted": "Diese Notiz wurde gelöscht",
+      "deletedShort": "Gelöscht",
+      "askAbout": "Frag etwas zu {{title}}..."
+    },
     "starters": {
       "todos": "Liste meine letzten Aufgaben auf",
       "meeting": "Bereite mich auf mein nächstes Meeting vor",
@@ -3162,7 +3679,9 @@
     "fork": "Abzweigen",
     "forked": "Abgezweigter Chat",
     "forkedFrom": "Abgezweigt von „{{title}}“",
-    "forkFailed": "Chat konnte nicht abgezweigt werden"
+    "forkFailed": "Chat konnte nicht abgezweigt werden",
+    "localModelDownloading": "Dein Assistenzmodell wird noch heruntergeladen. Der Chat startet, sobald es bereit ist.",
+    "localModelMissing": "Wähle in den Einstellungen ein Modell für Chat, um auf diesem Gerät zu chatten."
   },
   "referral": {
     "title": "Empfehlen und Belohnungen erhalten",
@@ -3257,34 +3776,18 @@
       "teamSpaces": "Teamspaces",
       "personal": "Persönlich",
       "privateTooltip": "Nur du kannst deinen persönlichen Bereich sehen",
-      "newSpace": "Neuer Team-Bereich",
-      "createTitle": "Team-Bereich erstellen",
-      "createDescription": "Ein gemeinsamer Bereich in einem Workspace für die Personen und Gruppen, die du hinzufügst.",
+      "newSpace": "Neuer Teamspace",
       "nameAndIconLabel": "Name und Symbol",
-      "create": "Erstellen",
-      "couldNotCreate": "Bereich konnte nicht erstellt werden",
-      "created": "{{space}} erstellt",
       "changeEmoji": "Emoji ändern",
       "settings": "Einstellungen",
-      "settingsTitle": "Space-Einstellungen",
       "couldNotRename": "Bereich konnte nicht umbenannt werden",
       "couldNotChangeEmoji": "Emoji konnte nicht geändert werden",
       "deleteSpace": "Bereich löschen",
-      "deleteHintTeam": "Entfernt diesen Space für alle. Seine Gruppen bleiben bestehen.",
       "deleteHintLocal": "Löscht diesen Space mit seinen Ordnern und Notizen auf diesem Gerät endgültig.",
-      "leaveTitle": "Space verlassen",
-      "leaveDescription": "Deine Notizen bleiben für die anderen Mitglieder verfügbar.",
-      "leave": "Space verlassen",
-      "leaveConfirmTitle": "{{space}} verlassen?",
       "leaveConfirmDescription": "Du wirst aus {{teams}} entfernt und verlierst den Zugriff auf alle anderen Spaces, die diese Gruppen öffnen können.",
-      "leaveDirectDescription": "Du verlierst den Zugriff auf diesen Space.",
-      "leaveKeepsGroupAccess": "Du behältst den Zugriff über {{groups}}.",
-      "left": "Du hast {{space}} verlassen",
       "stillViaGroups": "Du hast weiterhin Zugriff auf {{space}} über {{groups}}.",
-      "couldNotLeave": "Space konnte nicht verlassen werden",
       "deleteConfirmTitle": "Bereich löschen?",
       "deleteConfirmDescription": "Dadurch werden {{space}} und alle zugehörigen Ordner und Notizen auf diesem Gerät endgültig gelöscht.",
-      "deleteConfirmTeamDescription": "Dies löscht {{space}} für alle. Die Gruppen bleiben bestehen, aber Mitglieder verlieren den Zugriff auf alle Ordner und Notizen.",
       "deleteTypeName": "Geben Sie {{space}} zur Bestätigung ein",
       "couldNotDelete": "Bereich konnte nicht gelöscht werden",
       "deleted": "{{space}} gelöscht",
@@ -3295,9 +3798,9 @@
       "spaceRoot": "Oberste Ebene",
       "moveConfirm": "Verschieben",
       "confirmMoveInTitle": "Nach {{space}} verschieben?",
-      "confirmMoveIn": "Alle in {{space}} können diese Notiz sehen und bearbeiten. Notizen können später nicht wieder aus einem Team-Bereich herausbewegt werden.",
-      "confirmMoveInFolder": "Alle in {{space}} können diesen Ordner und seine Notizen sehen und bearbeiten. Ordner und Notizen können später nicht wieder aus einem Team-Bereich herausbewegt werden.",
-      "cantMoveOut": "Notizen können nicht aus einem Team-Bereich herausbewegt werden.",
+      "confirmMoveIn": "Alle in {{space}} können diese Notiz sehen und bearbeiten. Notizen können später nicht wieder aus einem Teamspace herausbewegt werden.",
+      "confirmMoveInFolder": "Alle in {{space}} können diesen Ordner und seine Notizen sehen und bearbeiten. Ordner und Notizen können später nicht wieder aus einem Teamspace herausbewegt werden.",
+      "cantMoveOut": "Notizen können nicht aus einem Teamspace herausbewegt werden.",
       "cantMoveTeammate": "Nur der Besitzer der Notiz oder ein Workspace-Admin kann sie in einen anderen Bereich verschieben.",
       "moved": "„{{title}}“ nach {{target}} verschoben",
       "couldNotMove": "Ordner konnte nicht verschoben werden",
@@ -3335,42 +3838,21 @@
         "roleAdminDescription": "Verwaltet Personen und Einstellungen.",
         "roleMemberDescription": "Kann Notizen ansehen und bearbeiten.",
         "remove": "Entfernen",
-        "removeConfirm": "{{name}} aus {{space}} entfernen?",
         "removeConfirmDescription": "Diese Person verliert den Zugriff auf alle Notizen in diesem Bereich.",
-        "removeKeepsGroupAccess": "Der Zugriff über {{groups}} bleibt bestehen.",
         "inviteFooter": "{{email}} in den Workspace einladen…",
         "empty": "Noch niemand hinzugefügt",
-        "viaGroup": "über {{group}}",
-        "managedByGroup": "Über {{group}} hinzugefügt. Entferne die Person dort.",
-        "roleFromGroup": "Admin über {{group}}. Ändere es dort.",
-        "invited": "Einladung an {{email}} gesendet"
+        "roleFromGroup": "Admin über {{group}}. Ändere es dort."
       },
-      "invitedTo_one": "Sie treten {{count}} Team-Bereich bei",
-      "invitedTo_other": "Sie treten {{count}} Team-Bereichen bei",
+      "invitedTo_one": "Sie treten {{count}} Teamspace bei",
+      "invitedTo_other": "Sie treten {{count}} Teamspaces bei",
       "invitedToSpaces": "Du trittst {{spaces}} bei",
       "teamsMembers": {
         "title": "Mitglieder von {{space}}",
-        "noTeams": "Diesem Space sind noch keine Gruppen zugewiesen.",
-        "addTeamLabel": "Gruppe zu diesem Space hinzufügen",
-        "chooseTeam": "Gruppe auswählen…",
-        "teamAdded": "{{team}} wurde zu {{space}} hinzugefügt",
         "teamRemoved": "{{team}} wurde aus {{space}} entfernt",
-        "removeTeamFromSpace": "Aus dem Space entfernen",
-        "removeTeamConfirm": "{{team}} aus {{space}} entfernen?",
-        "removeTeamConfirmDescription": "Ihre Mitglieder verlieren den Zugriff auf diesen Space, sofern sie nicht direkt hinzugefügt wurden oder eine andere Gruppe sie einschließt.",
-        "accessLabel": "Space-Zugriff",
-        "accessAdmin": "Admin",
-        "accessMember": "Mitglied",
-        "accessChanged": "Zugriff für {{team}} aktualisiert",
-        "accessHint": "Admins von {{team}} verwalten diesen Space nur, wenn sein Zugriff auf Admin gesetzt ist."
+        "accessChanged": "Zugriff für {{team}} aktualisiert"
       },
       "teams": {
-        "newTeam": "Neue Gruppe",
         "loadError": "Gruppen konnten nicht geladen werden."
-      },
-      "groups": {
-        "title": "Gruppen mit Zugriff",
-        "optional": "Gruppen (optional)"
       }
     },
     "structureIntro": {
@@ -3382,10 +3864,10 @@
       },
       "workspace": {
         "title": "Workspace",
-        "description": "Hier werden Mitglieder, Rollen und Team-Bereiche Ihres Workspace verwaltet."
+        "description": "Hier werden Mitglieder, Rollen und Teamspaces Ihres Workspace verwaltet."
       },
       "teamSpace": {
-        "title": "Team-Bereich",
+        "title": "Teamspace",
         "description": "Ein gemeinsamer Bereich in einem Workspace. Füge Personen oder Gruppen hinzu, um ihnen Zugriff zu geben."
       },
       "contents": "Jeder Bereich kann Ordner und Notizen enthalten.",
@@ -3445,6 +3927,7 @@
       "transcriptEmptyDescription": "Starte eine Aufnahme, und alles Gesagte erscheint hier.",
       "startRecording": "Aufnahme starten",
       "generateSummary": "KI-Zusammenfassung erstellen",
+      "generateWithTemplate": "Mit {{template}} erstellen",
       "startWriting": "Schreibe los...",
       "staleIndicator": "Der Inhalt hat sich seit der Verbesserung geändert",
       "live": "Live",
@@ -3739,9 +4222,9 @@
         "actionFailed": "Aktion fehlgeschlagen",
         "noEndpoint": "Keine URL für den selbst gehosteten Server festgelegt. Konfigurieren Sie eine in den Einstellungen.",
         "outputTruncated": "Dem KI-Modell ging der Platz aus, bevor es fertig war. Die Notiz bleibt daher unverändert.",
-        "outputSpentThinking": "Das KI-Modell hat sein gesamtes Ausgabelimit mit Nachdenken verbraucht und keine Notizen geschrieben. Die Notiz bleibt daher unverändert. Aktivieren Sie unter Einstellungen → Sprachmodelle → Notizformatierung „Denkausgabe deaktivieren“ oder wählen Sie ein Modell, das weniger nachdenkt, und versuchen Sie es erneut.",
-        "outputSpentThinkingDisabled": "Das KI-Modell hat sein gesamtes Ausgabelimit mit Nachdenken verbraucht und keine Notizen geschrieben, obwohl „Denkausgabe deaktivieren“ aktiv ist. Die Notiz bleibt daher unverändert. Wählen Sie unter Einstellungen → Sprachmodelle → Notizformatierung ein anderes Modell.",
-        "outputSpentThinkingOtherModel": "Das KI-Modell hat sein gesamtes Ausgabelimit mit Nachdenken verbraucht und keine Notizen geschrieben. Die Notiz bleibt daher unverändert. Wählen Sie unter Einstellungen → Sprachmodelle → Notizformatierung ein Modell, das weniger nachdenkt.",
+        "outputSpentThinking": "Das KI-Modell hat sein gesamtes Ausgabelimit mit Nachdenken verbraucht und keine Notizen geschrieben. Die Notiz bleibt daher unverändert. Aktivieren Sie unter Einstellungen → Sprachmodell → Notizformatierung „Denkausgabe deaktivieren“ oder wählen Sie ein Modell, das weniger nachdenkt, und versuchen Sie es erneut.",
+        "outputSpentThinkingDisabled": "Das KI-Modell hat sein gesamtes Ausgabelimit mit Nachdenken verbraucht und keine Notizen geschrieben, obwohl „Denkausgabe deaktivieren“ aktiv ist. Die Notiz bleibt daher unverändert. Wählen Sie unter Einstellungen → Sprachmodell → Notizformatierung ein anderes Modell.",
+        "outputSpentThinkingOtherModel": "Das KI-Modell hat sein gesamtes Ausgabelimit mit Nachdenken verbraucht und keine Notizen geschrieben. Die Notiz bleibt daher unverändert. Wählen Sie unter Einstellungen → Sprachmodell → Notizformatierung ein Modell, das weniger nachdenkt.",
         "nothingToSummarize": "Diese Notiz enthält noch nichts zum Zusammenfassen, daher bleibt die KI-Zusammenfassung unverändert.",
         "saveFailed": "Speichern nicht möglich. Prüfen Sie, dass nichts zu lang ist, und versuchen Sie es erneut."
       },
@@ -3755,6 +4238,11 @@
       "applied": "KI-Zusammenfassung mit {{name}} aktualisiert"
     },
     "templates": {
+      "defaultLabel": "Standardvorlage für Zusammenfassungen",
+      "defaultHint": "Diese Vorlage für die Zusammenfassungsschaltfläche nach einem Meeting verwenden.",
+      "defaultBadge": "Standard",
+      "saveBeforeDefault": "Speichere diese Vorlage, um sie als Standard festzulegen.",
+      "defaultSaveFailed": "Die Standardvorlage konnte nicht aktualisiert werden. Versuche es erneut.",
       "tab": "Vorlagen",
       "managerTitle": "Vorlagen & Aktionen",
       "manage": "Vorlagen verwalten...",
@@ -3866,7 +4354,7 @@
       },
       "banner": {
         "title": {
-          "team": "Dein Team-Space",
+          "team": "Dein Teamspace",
           "private": "Dein privater Space"
         },
         "body": {
@@ -3949,6 +4437,31 @@
     "emptyTitle": "Füge Wörter zu deinem Wörterbuch hinzu",
     "emptyDescription": "Füge Wörter hinzu, die {{agentName}} immer richtig erkennen soll: Namen, Tools, Abkürzungen.",
     "addFirstWord": "Füge dein erstes Wort hinzu",
+    "importList": "Liste importieren",
+    "importMenu": "Importieren",
+    "importFromDragon": "Aus Dragon importieren",
+    "dragonImport": {
+      "title": "Aus Dragon importieren",
+      "found_one": "{{count}} Wort in {{fileName}} gefunden.",
+      "found_other": "{{count}} Wörter in {{fileName}} gefunden.",
+      "alreadyPresent": "Bereits in deinem Wörterbuch, daher übersprungen: {{count}}.",
+      "nothingNew": "Jedes Wort in dieser Datei ist bereits in deinem Wörterbuch.",
+      "unreadable": "Zeilen, die nicht gelesen werden konnten, daher übersprungen: {{count}}.",
+      "tooLong": "Wörter mit mehr als {{max}} Zeichen, daher übersprungen: {{count}}.",
+      "overLimit": "Dein Wörterbuch fasst bis zu {{max}} Wörter, daher nicht importiert: {{count}}.",
+      "propertiesIgnored": "Formatierungseigenschaften aus Dragon werden nicht importiert.",
+      "confirm_one": "{{count}} Wort importieren",
+      "confirm_other": "{{count}} Wörter importieren",
+      "done_one": "{{count}} Wort aus Dragon importiert",
+      "done_other": "{{count}} Wörter aus Dragon importiert",
+      "failedTitle": "Import fehlgeschlagen",
+      "error": {
+        "emptyFile": "In dieser Datei wurden keine Wörter gefunden.",
+        "unsupportedXml": "Das sieht nicht nach einem Export aus Dragon für Windows aus. Wähle in Dragon „Vocabulary → Export custom word and phrase list“ und speichere als TXT.",
+        "fileTooLarge": "Diese Datei ist zu groß für eine Dragon-Wortliste.",
+        "generic": "Diese Datei konnte nicht gelesen werden."
+      }
+    },
     "agentDefault": "Standardmäßig enthalten",
     "shared": {
       "allWords": "Alle Wörter",
@@ -4230,7 +4743,7 @@
       "thinking": "Denkt nach...",
       "typeMessage": "Nachricht eingeben...",
       "send": "Senden",
-      "voiceDraftStreamingOnly": "Spracheingabe ist mit Ihrem Transkriptionsanbieter nicht verfügbar: Er unterstützt nur Live-Diktat. Wählen Sie unter Einstellungen → Sprache zu Text einen anderen Anbieter.",
+      "voiceDraftStreamingOnly": "Spracheingabe ist mit Ihrem Transkriptionsanbieter nicht verfügbar: Er unterstützt nur Live-Diktat. Wählen Sie unter Einstellungen → Spracherkennung einen anderen Anbieter.",
       "commands": "Befehle",
       "slashNavigate": "zum Navigieren",
       "slashSelect": "zum Auswählen",
@@ -5253,7 +5766,7 @@
         "owner": "Eigentümer",
         "editor": "Kann bearbeiten",
         "viewer": "Kann ansehen",
-        "teamAudience": "Alle in diesem Team-Bereich",
+        "teamAudience": "Alle in diesem Teamspace",
         "pending": "Ausstehend",
         "accepted": "Hat Zugriff",
         "resend": "Einladung erneut senden",
@@ -5435,7 +5948,7 @@
     "unreachable": "{{provider}} konnte nicht erreicht werden. Überprüfen Sie Ihre Verbindung.",
     "noResponse": "Keine Antwort von {{provider}} erhalten. Überprüfen Sie Ihren API-Schlüssel und Ihre Verbindung.",
     "unknown": "{{provider}} hat einen unerwarteten Fehler zurückgegeben.",
-    "keyMissing": "Für {{provider}} ist kein API-Schlüssel hinterlegt. Fügen Sie ihn unter Einstellungen → Sprachmodelle hinzu.",
+    "keyMissing": "Für {{provider}} ist kein API-Schlüssel hinterlegt. Fügen Sie ihn unter Einstellungen → Sprachmodell hinzu.",
     "selfHosted": {
       "authFailed": "Ihr Server hat den API-Schlüssel abgelehnt.",
       "accessDenied": "Ihr Server hat den Zugriff verweigert. Der Schlüssel deckt dieses Modell möglicherweise nicht ab.",

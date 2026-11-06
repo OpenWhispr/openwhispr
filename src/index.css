@@ -96,6 +96,8 @@
   --color-brand-link: #2e3659;
   --color-pattern: #e7e5e4;
 
+  --shadow-modal: 0 24px 48px -12px oklch(0 0 0 / 0.18);
+
   /* Model picker premium effects (light mode) */
   --shadow-metallic-light: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 1px 3px rgba(0, 0, 0, 0.08);
   --shadow-card-hover-subtle: 0 2px 8px -2px rgba(0, 0, 0, 0.1);
@@ -361,6 +363,7 @@ body:has(.onboarding-canvas) {
   --onboarding-link: var(--color-link);
   --onboarding-danger: #ef4444;
   --onboarding-success: #22c55e;
+  --onboarding-success-foreground: #0a0a0a;
   /* Keycap. The cap is lit from above, so it needs its own top/bottom pair rather
      than reusing the surface tokens: in dark it has to sit *above* the page fill
      while still reading as a physical key. */
@@ -405,6 +408,7 @@ body.dark:has(.onboarding-canvas) {
   --onboarding-inverse-text: #0a0a0a;
   --onboarding-danger: #f87171;
   --onboarding-success: #4ade80;
+  --onboarding-success-foreground: #0a0a0a;
   --onboarding-keycap-top: #3a3a3a;
   --onboarding-keycap-bottom: #262626;
   --onboarding-keycap-bevel: #4d4d4d;
@@ -1126,16 +1130,6 @@ a:hover {
   filter: invert(1);
 }
 
-/* Toast — opaque dark HUD surface, same in light & dark mode */
-.toast-surface {
-  background: oklch(0.15 0.006 260);
-  border: 1px solid oklch(0.25 0.006 260);
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.04),
-    0 8px 24px -4px oklch(0 0 0 / 0.5),
-    0 2px 8px -2px oklch(0 0 0 / 0.3);
-}
-
 /* Enter from the physical outer edge of the direction-aware toast stack. */
 .toast-enter {
   --toast-enter-x: 1rem;
@@ -1170,15 +1164,6 @@ a:hover {
   }
   to {
     width: 0%;
-  }
-}
-
-@keyframes toast-border-progress {
-  from {
-    stroke-dashoffset: 0;
-  }
-  to {
-    stroke-dashoffset: 1;
   }
 }
 

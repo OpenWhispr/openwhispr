@@ -2,8 +2,9 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
 
-// open-settings-section takes the agent's open_settings destinations and every
-// provider error target, such as Note Formatting from a note run's error toast.
+// open-settings-section takes the agent's open_settings destinations, every
+// provider error target, such as Note Formatting from a note run's error
+// toast, and Upgrade's Plan & Billing.
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const REAL_MODULES = new Set(["./settingsTargets", "./providerHttpErrors"]);
 const originalLoad = Module._load;
@@ -105,4 +106,22 @@ test("open-settings-section opens agent and provider error destinations only", a
   opened.length = 0;
   assert.deepEqual(await open({}, "system"), { success: false });
   assert.deepEqual(opened, []);
+});
+
+test("Upgrade's Plan & Billing is a section the renderer may ask for", async () => {
+  const open = handlers.get("open-settings-section");
+  opened.length = 0;
+
+  assert.deepEqual(await open({}, "plansBilling"), { success: true });
+  assert.deepEqual(opened, ["plansBilling"]);
+});
+
+test("the provider targets still open, and nothing else does", async () => {
+  const open = handlers.get("open-settings-section");
+  opened.length = 0;
+
+  assert.deepEqual(await open({}, "speechToText"), { success: true });
+  assert.deepEqual(await open({}, "account"), { success: false });
+  assert.deepEqual(await open({}, undefined), { success: false });
+  assert.deepEqual(opened, ["speechToText"]);
 });

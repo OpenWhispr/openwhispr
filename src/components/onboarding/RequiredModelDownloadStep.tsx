@@ -1,12 +1,16 @@
+import { useRegistryVersion } from "../../hooks/useRegistryVersion";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { AlertCircle, Check } from "../icons";
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
 import { ProviderIcon } from "../ui/ProviderIcon";
 import { useModelDownload } from "../../hooks/useModelDownload";
+import { usePolicySnapshot } from "../../hooks/usePolicy";
+import { isPolicySettled } from "../../stores/policyRules";
 import { getASRModelOrganization } from "../../helpers/localASROrganization";
 import { getParakeetModels, getWhisperModels } from "../../models/ModelRegistry";
 import { SETUP_CARD_CLASS } from "./ProviderSetupStep";
+import { spaceSizeUnit } from "../../utils/formatBytes";
 
 type ModelFamily = "whisper" | "parakeet";
 
@@ -17,6 +21,8 @@ interface RequiredModelDownloadStepProps {
   loading: boolean;
   refresh: () => Promise<void>;
   onProceed: () => void;
+  /** Models the organization refused, which the container stops waiting for. */
+  onRefusedChange?: (modelIds: string[]) => void;
 }
 
 /**
@@ -33,8 +39,11 @@ export function RequiredModelDownloadStep({
   loading,
   refresh,
   onProceed,
+  onRefusedChange,
 }: RequiredModelDownloadStepProps) {
+  useRegistryVersion();
   const { t } = useTranslation();
+  const policy = usePolicySnapshot();
   const whisperCatalog = getWhisperModels();
   const parakeetCatalog = getParakeetModels();
 
@@ -48,6 +57,13 @@ export function RequiredModelDownloadStep({
     }),
     [whisperDownload.downloadErrors, parakeetDownload.downloadErrors]
   );
+  const failureCodes: Record<string, string | undefined> = {
+    ...whisperDownload.downloadErrorCodes,
+    ...parakeetDownload.downloadErrorCodes,
+  };
+  const isRefused = (modelId: string): boolean =>
+    whisperDownload.isPolicyBlockedModel(modelId) || parakeetDownload.isPolicyBlockedModel(modelId);
+  const refusedKey = required.filter(isRefused).join("\n");
   const startedAnyRef = useRef(false);
   const autoAdvancedRef = useRef(false);
 
@@ -76,19 +92,34 @@ export function RequiredModelDownloadStep({
     if (next) startDownload(next);
   }, [loading, anyDownloadActive, missing, failedModels, startDownload]);
 
-  // The route raced a completed download (or the requirement was lifted) and
-  // everything is already on disk: continue instead of showing a stale
-  // blocking screen. Only before any download ran here — after one, the user
-  // sees the completed checklist and continues themselves.
   useEffect(() => {
-    if (autoAdvancedRef.current || startedAnyRef.current) return;
+    onRefusedChange?.(refusedKey ? refusedKey.split("\n") : []);
+  }, [onRefusedChange, refusedKey]);
+
+  // The route raced a completed download and everything is already on disk:
+  // continue instead of showing a stale blocking screen. Only before any
+  // download ran here — after one, the user sees the completed checklist and
+  // continues themselves, unless the requirement was lifted and the list is
+  // empty. A token rotation empties it too while its policy loads, so that has
+  // to settle first.
+  const requirementLifted = required.length === 0 && isPolicySettled(policy) && !anyDownloadActive;
+  useEffect(() => {
+    if (autoAdvancedRef.current || (startedAnyRef.current && !requirementLifted)) return;
     if (!loading && missing.length === 0) {
       autoAdvancedRef.current = true;
       onProceed();
     }
-  }, [loading, missing, onProceed]);
+  }, [loading, missing, onProceed, requirementLifted]);
 
+  // "Choose an approved model" would be wrong here: this list offers no choice.
+  const failureText = (modelId: string): string =>
+    failureCodes[modelId] === "POLICY_MODEL_BLOCKED"
+      ? t("models.policy.notApproved")
+      : failedModels[modelId];
   const hasFailures = required.some((modelId): boolean => !!failedModels[modelId]);
+  const policyFailure = required.find(
+    (modelId) => failureCodes[modelId]?.startsWith("POLICY_") || isRefused(modelId)
+  );
 
   return (
     <section className={`mt-5 ${SETUP_CARD_CLASS}`}>
@@ -121,10 +152,12 @@ export function RequiredModelDownloadStep({
                   {info?.name ?? modelId}
                 </span>
                 {failure ? (
-                  <span className="mt-0.5 block truncate text-xs text-destructive">{failure}</span>
+                  <span className="mt-0.5 block truncate text-xs text-destructive">
+                    {failureText(modelId)}
+                  </span>
                 ) : (
                   <span className="mt-0.5 block truncate text-xs text-[var(--onboarding-text-secondary)]">
-                    {info?.size?.replace(/(?<=\d)(?=[A-Za-z])/, " ") ?? ""}
+                    {info?.size ? spaceSizeUnit(info.size) : ""}
                   </span>
                 )}
               </div>
@@ -140,10 +173,12 @@ export function RequiredModelDownloadStep({
                   <span className="relative whitespace-nowrap">
                     {download.isInstalling
                       ? t("onboarding.rehaul.local.installing")
-                      : t("onboarding.rehaul.local.downloadingShort")}
+                      : download.isVerifying
+                        ? t("onboarding.rehaul.local.verifying")
+                        : t("onboarding.rehaul.local.downloadingShort")}
                   </span>
                 </span>
-              ) : failure ? (
+              ) : failure && isRefused(modelId) ? null : failure ? (
                 <Button
                   type="button"
                   onClick={() => startDownload(modelId)}
@@ -178,7 +213,11 @@ export function RequiredModelDownloadStep({
             {t("onboarding.requiredModels.failed.title")}
           </h2>
           <p className="mt-1.5 text-xs leading-5 text-[var(--onboarding-text-secondary)]">
-            {t("onboarding.requiredModels.failed.description")}
+            {!policyFailure
+              ? t("onboarding.requiredModels.failed.description")
+              : failureCodes[policyFailure] === "POLICY_MODEL_BLOCKED"
+                ? t("onboarding.requiredModels.failed.notApproved")
+                : failedModels[policyFailure]}
           </p>
         </div>
       )}

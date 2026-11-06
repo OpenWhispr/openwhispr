@@ -143,6 +143,7 @@ class AudioActivityDetector extends EventEmitter {
       this.consecutiveChecks = 0;
       this.audioActiveStart = null;
       this._clearSustainedTimer();
+      this._clearResetTimer();
     } else {
       this._reevaluateAfterGate();
     }
@@ -159,6 +160,7 @@ class AudioActivityDetector extends EventEmitter {
     this.consecutiveChecks = 0;
     this.audioActiveStart = null;
     this._clearSustainedTimer();
+    if (active) this._clearResetTimer();
     if (!active) {
       this._reevaluateAfterGate();
     }
@@ -762,12 +764,25 @@ class AudioActivityDetector extends EventEmitter {
     this._lastKnownMicState = active;
     this._lastKnownMicAttributed = attributed;
     this._rearmPromptForSourceChange(active);
+    // Before the gates, or the timer could clear the prompt of a call that came back
+    // behind one. Device activity with no meeting app behind it is not that call.
+    if (active && this._isUnattributedActivityCorroborated()) this._clearResetTimer();
     this._evaluateMicState(active);
   }
 
   _reevaluateAfterGate() {
-    if (this._running && this._eventDriven && this._lastKnownMicState) {
+    if (!this._running || !this._eventDriven) return;
+    if (this._lastKnownMicState) {
       this._evaluateMicState(true);
+    } else if (
+      // The call may have ended behind the gate, which drops that inactive edge,
+      // so nothing else would let the next call prompt.
+      this.hasPrompted &&
+      !this._resetTimer &&
+      !this._userRecording &&
+      !this._micWarmHold
+    ) {
+      this._startResetTimer();
     }
   }
 
@@ -892,8 +907,11 @@ class AudioActivityDetector extends EventEmitter {
   async _check() {
     if (this._checking) return;
     if (this.lastDismissedAt && Date.now() - this.lastDismissedAt < COOLDOWN_MS) return;
-    if (this._userRecording) return;
-    if (this._micWarmHold) return;
+    if (this._userRecording || this._micWarmHold) {
+      // Checks can't see the call behind a gate. The next inactive one restarts the timer.
+      this._clearResetTimer();
+      return;
+    }
 
     this._checking = true;
     try {
@@ -931,7 +949,8 @@ class AudioActivityDetector extends EventEmitter {
         }
         this.consecutiveChecks = 0;
         this.audioActiveStart = null;
-        if (this.hasPrompted) this._startResetTimer();
+        // Every inactive check lands here, so restarting would keep the timer from ever firing.
+        if (this.hasPrompted && !this._resetTimer) this._startResetTimer();
       }
     } finally {
       this._checking = false;

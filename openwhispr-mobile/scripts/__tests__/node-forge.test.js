@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const { Buffer } = require('node:buffer');
+const { spawnSync } = require('node:child_process');
 const { generateKeyPairSync } = require('node:crypto');
 const path = require('node:path');
 const { test } = require('node:test');
@@ -17,13 +18,39 @@ const { privateKey: privatePem } = generateKeyPairSync('rsa', {
   publicKeyEncoding: { type: 'pkcs1', format: 'pem' },
 });
 
-// Exercise every locked copy: a nested, unpatched dependency must also block CI.
+// Exercise every locked copy: a nested, vulnerable dependency must also block CI.
 for (const forgePath of forgePaths) {
-  const forge = require(path.resolve(__dirname, '../..', forgePath));
+  const resolved = path.resolve(__dirname, '../..', forgePath);
+  const forge = require(resolved);
   const privateKey = forge.pki.privateKeyFromPem(privatePem);
   const publicKey = forge.pki.setRsaPublicKey(privateKey.n, privateKey.e);
   const { asn1 } = forge;
   const digest = forge.md.sha256.create().update('OpenWhispr update manifest').digest().getBytes();
+
+  test(`${forgePath}: accepts private keys as both string and Buffer PEM input`, () => {
+    const bufferedKey = forge.pki.privateKeyFromPem(Buffer.from(privatePem));
+    assert.equal(bufferedKey.n.toString(16), privateKey.n.toString(16));
+    assert.equal(bufferedKey.d.toString(16), privateKey.d.toString(16));
+  });
+
+  test(`${forgePath}: rejects the published malformed PEM payload within the subprocess deadline`, () => {
+    // GHSA-7wch-p9px-956x blocks the event loop; a subprocess bounds a regression.
+    const result = spawnSync(
+      process.execPath,
+      [
+        '-e',
+        `
+      const assert = require('node:assert/strict');
+      const forge = require(${JSON.stringify(resolved)});
+      const pem = ' -----BEGIN I-----G-----END B'.repeat(1000) + '\\x00';
+      assert.throws(() => forge.pki.certificateFromPem(pem), /Invalid PEM formatted message/);
+    `,
+      ],
+      { timeout: 5000, encoding: 'utf8' },
+    );
+    assert.ifError(result.error);
+    assert.equal(result.status, 0, result.stderr);
+  });
 
   for (const includeNull of [false, true]) {
     for (const extraElements of [0, 1, 2]) {
