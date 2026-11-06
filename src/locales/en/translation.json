@@ -1759,6 +1759,7 @@
         "general": "General",
         "members": "Members",
         "invitations": "Invitations",
+        "guests": "Guests",
         "teams": "Teams"
       },
       "people": {
@@ -2337,6 +2338,21 @@
         "title": "Enterprise console",
         "description": "Manage SSO, policies, and members on the web",
         "open": "Open console"
+      },
+      "guests": {
+        "columns": {
+          "name": "Name",
+          "access": "Access"
+        },
+        "emptyTitle": "No guests yet",
+        "emptyBody": "People outside this workspace who can view your shared notes will show up here.",
+        "loadingTitle": "Loading guests…",
+        "loadingBody": "Your workspace guests will appear here.",
+        "failedTitle": "Couldn't load guests",
+        "failedBody": "Check your connection and try again.",
+        "noteCount_one": "{{count}} note",
+        "noteCount_other": "{{count}} notes",
+        "notesMenuLabel": "Notes shared with {{name}}"
       }
     },
     "unifiedBilling": {

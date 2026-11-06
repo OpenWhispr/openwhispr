@@ -4054,6 +4054,7 @@
         "general": "عام",
         "members": "الأعضاء",
         "invitations": "الدعوات",
+        "guests": "الضيوف",
         "teams": "الفرق"
       },
       "people": {
@@ -4782,6 +4783,25 @@
         "title": "وحدة تحكم Enterprise",
         "description": "إدارة SSO والسياسات والأعضاء على الويب",
         "open": "فتح وحدة التحكم"
+      },
+      "guests": {
+        "columns": {
+          "name": "الاسم",
+          "access": "الوصول"
+        },
+        "emptyTitle": "لا يوجد ضيوف بعد",
+        "emptyBody": "سيظهر هنا الأشخاص من خارج مساحة العمل هذه الذين يمكنهم عرض ملاحظاتك المشتركة.",
+        "loadingTitle": "جارٍ تحميل الضيوف…",
+        "loadingBody": "سيظهر ضيوف مساحة العمل هنا.",
+        "failedTitle": "تعذّر تحميل الضيوف",
+        "failedBody": "تحقق من اتصالك وحاول مرة أخرى.",
+        "noteCount_zero": "{{count}} ملاحظة",
+        "noteCount_one": "{{count}} ملاحظة",
+        "noteCount_two": "{{count}} ملاحظتان",
+        "noteCount_few": "{{count}} ملاحظات",
+        "noteCount_many": "{{count}} ملاحظة",
+        "noteCount_other": "{{count}} ملاحظة",
+        "notesMenuLabel": "الملاحظات المشتركة مع {{name}}"
       }
     },
     "unifiedBilling": {

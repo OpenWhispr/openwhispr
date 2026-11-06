@@ -2498,6 +2498,7 @@
         "general": "一般",
         "members": "成員",
         "invitations": "邀請",
+        "guests": "訪客",
         "teams": "團隊"
       },
       "people": {
@@ -3076,6 +3077,21 @@
         "title": "Enterprise 主控台",
         "description": "在網頁上管理 SSO、政策與成員",
         "open": "開啟主控台"
+      },
+      "guests": {
+        "columns": {
+          "name": "名稱",
+          "access": "存取權限"
+        },
+        "emptyTitle": "尚無訪客",
+        "emptyBody": "此工作區以外、可以檢視你共享筆記的人會顯示在這裡。",
+        "loadingTitle": "正在載入訪客…",
+        "loadingBody": "你的工作區訪客會顯示在這裡。",
+        "failedTitle": "無法載入訪客",
+        "failedBody": "請檢查網路連線後再試一次。",
+        "noteCount_one": "{{count}} 則筆記",
+        "noteCount_other": "{{count}} 則筆記",
+        "notesMenuLabel": "與 {{name}} 共享的筆記"
       }
     },
     "enterpriseCheckout": {

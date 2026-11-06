@@ -16,13 +16,14 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import WorkspaceInvitationsTab from "./WorkspaceInvitationsTab";
+import WorkspaceGuestsTab from "./WorkspaceGuestsTab";
 import WorkspaceMembersTab from "./WorkspaceMembersTab";
 import WorkspaceTeamsTab from "./WorkspaceTeamsTab";
 import SettingsWorkspaceFrame from "./SettingsWorkspaceFrame";
 import { useSettingsWorkspace } from "./useSettingsWorkspace";
 import { useWorkspaceInvitations } from "./useWorkspaceInvitations";
 
-const PEOPLE_TABS = ["members", "invitations", "teams"] as const;
+const PEOPLE_TABS = ["members", "invitations", "guests", "teams"] as const;
 type PeopleTab = (typeof PEOPLE_TABS)[number];
 
 const PEOPLE_TAB_KEY = "settings.workspacePeopleTab";
@@ -216,6 +217,7 @@ function PeopleBody({
         {tab === "invitations" && (
           <WorkspaceInvitationsTab workspace={workspace} invitations={invitations} />
         )}
+        {tab === "guests" && <WorkspaceGuestsTab workspace={workspace} />}
         {tab === "teams" && (
           <WorkspaceTeamsTab
             workspace={workspace}

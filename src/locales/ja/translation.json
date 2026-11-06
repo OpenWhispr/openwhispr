@@ -2498,6 +2498,7 @@
         "general": "一般",
         "members": "メンバー",
         "invitations": "招待",
+        "guests": "ゲスト",
         "teams": "チーム"
       },
       "people": {
@@ -3076,6 +3077,21 @@
         "title": "Enterpriseコンソール",
         "description": "SSO、ポリシー、メンバーをウェブで管理",
         "open": "コンソールを開く"
+      },
+      "guests": {
+        "columns": {
+          "name": "名前",
+          "access": "アクセス"
+        },
+        "emptyTitle": "ゲストはまだいません",
+        "emptyBody": "このワークスペース外で、共有ノートを閲覧できる人がここに表示されます。",
+        "loadingTitle": "ゲストを読み込み中…",
+        "loadingBody": "ワークスペースのゲストがここに表示されます。",
+        "failedTitle": "ゲストを読み込めませんでした",
+        "failedBody": "接続を確認して、もう一度お試しください。",
+        "noteCount_one": "{{count}} 件のノート",
+        "noteCount_other": "{{count}} 件のノート",
+        "notesMenuLabel": "{{name}} と共有しているノート"
       }
     },
     "enterpriseCheckout": {

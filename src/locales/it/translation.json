@@ -2498,6 +2498,7 @@
         "general": "Generale",
         "members": "Membri",
         "invitations": "Inviti",
+        "guests": "Ospiti",
         "teams": "Team"
       },
       "people": {
@@ -3076,6 +3077,21 @@
         "title": "Console Enterprise",
         "description": "Gestisci SSO, policy e membri dal web",
         "open": "Apri console"
+      },
+      "guests": {
+        "columns": {
+          "name": "Nome",
+          "access": "Accesso"
+        },
+        "emptyTitle": "Ancora nessun ospite",
+        "emptyBody": "Le persone esterne a questo spazio di lavoro che possono vedere le tue note condivise compariranno qui.",
+        "loadingTitle": "Caricamento degli ospiti…",
+        "loadingBody": "Gli ospiti del tuo spazio di lavoro compariranno qui.",
+        "failedTitle": "Impossibile caricare gli ospiti",
+        "failedBody": "Controlla la connessione e riprova.",
+        "noteCount_one": "{{count}} nota",
+        "noteCount_other": "{{count}} note",
+        "notesMenuLabel": "Note condivise con {{name}}"
       }
     },
     "enterpriseCheckout": {

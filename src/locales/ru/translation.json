@@ -2504,6 +2504,7 @@
         "general": "Общие",
         "members": "Участники",
         "invitations": "Приглашения",
+        "guests": "Гости",
         "teams": "Команды"
       },
       "people": {
@@ -3154,6 +3155,23 @@
         "title": "Консоль Enterprise",
         "description": "Управляйте SSO, политиками и участниками через веб",
         "open": "Открыть консоль"
+      },
+      "guests": {
+        "columns": {
+          "name": "Имя",
+          "access": "Доступ"
+        },
+        "emptyTitle": "Гостей пока нет",
+        "emptyBody": "Здесь появятся люди вне этого рабочего пространства, которые могут просматривать ваши общие заметки.",
+        "loadingTitle": "Загрузка гостей…",
+        "loadingBody": "Здесь появятся гости вашего рабочего пространства.",
+        "failedTitle": "Не удалось загрузить гостей",
+        "failedBody": "Проверьте подключение и повторите попытку.",
+        "noteCount_one": "{{count}} заметка",
+        "noteCount_few": "{{count}} заметки",
+        "noteCount_many": "{{count}} заметок",
+        "noteCount_other": "{{count}} заметки",
+        "notesMenuLabel": "Заметки, доступные {{name}}"
       }
     },
     "enterpriseCheckout": {

@@ -1759,6 +1759,7 @@
         "general": "Allgemein",
         "members": "Mitglieder",
         "invitations": "Einladungen",
+        "guests": "Gäste",
         "teams": "Teams"
       },
       "people": {
@@ -2337,6 +2338,21 @@
         "title": "Enterprise-Konsole",
         "description": "SSO, Richtlinien und Mitglieder im Web verwalten",
         "open": "Konsole öffnen"
+      },
+      "guests": {
+        "columns": {
+          "name": "Name",
+          "access": "Zugriff"
+        },
+        "emptyTitle": "Noch keine Gäste",
+        "emptyBody": "Personen außerhalb dieses Arbeitsbereichs, die Ihre geteilten Notizen ansehen können, erscheinen hier.",
+        "loadingTitle": "Gäste werden geladen …",
+        "loadingBody": "Die Gäste Ihres Arbeitsbereichs erscheinen hier.",
+        "failedTitle": "Gäste konnten nicht geladen werden",
+        "failedBody": "Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+        "noteCount_one": "{{count}} Notiz",
+        "noteCount_other": "{{count}} Notizen",
+        "notesMenuLabel": "Mit {{name}} geteilte Notizen"
       }
     },
     "unifiedBilling": {
