@@ -83,7 +83,7 @@ async function loadTab(
           h("div", { ref, "data-menu-content": "", onCloseAutoFocus }, children);
         export const DropdownMenuItem = ({ children, onSelect, asChild, ...rest }) =>
           asChild
-            ? React.cloneElement(children, { "data-item": "", onSelect })
+            ? React.cloneElement(children, { "data-item": "", "data-item-class": rest.className, onSelect })
             : h("button", { "data-item": "", onSelect, ...rest }, children);
       `,
       "/lib/workspaceErrors": `
@@ -387,6 +387,16 @@ const removeButtons = (container) =>
       (node.getAttribute("aria-label") ?? "").startsWith(REMOVE_LABEL)
   );
 const settle = () => React.act(async () => {});
+
+test("the × sizes itself on the menu item, so the item's padding can't hide its icon", async (t) => {
+  const { container } = await mountTab(t, { guests: [TWO] });
+  const [button] = removeButtons(container);
+  // asChild only concatenates class lists; the item's px-2.5 py-2 beat a size-5 set on the button
+  // and left the icon zero wide. Sized on the item, cn() lets p-0 and size-5 win.
+  assert.match(button.getAttribute("data-item-class"), /\bsize-5\b/);
+  assert.match(button.getAttribute("data-item-class"), /\bp-0\b/);
+  assert.doesNotMatch(button.getAttribute("class") ?? "", /\bsize-5\b/);
+});
 
 test("the × removes that note only", async (t) => {
   const { container } = await mountTab(t, { guests: [TWO] });

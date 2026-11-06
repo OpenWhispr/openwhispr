@@ -562,6 +562,9 @@ function AccessCell({
               </span>
               <DropdownMenuItem
                 asChild
+                // On the item, not the button: asChild only concatenates the two class lists, so the
+                // item's padding would win over the button's size and leave the icon no width.
+                className="inline-flex size-5 shrink-0 cursor-default items-center justify-center rounded p-0 text-muted-foreground outline-none transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:ring-1 focus-visible:ring-primary/30 aria-disabled:opacity-60"
                 onSelect={(event) => {
                   // Keep the menu open: the other notes are still listed.
                   event.preventDefault();
@@ -576,7 +579,6 @@ function AccessCell({
                   type="button"
                   aria-label={t(`${KEY}.removeFromNote`, { note: isolate(title) })}
                   aria-disabled={isSending}
-                  className="inline-flex size-5 shrink-0 cursor-default items-center justify-center rounded text-muted-foreground outline-none transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:ring-1 focus-visible:ring-primary/30 aria-disabled:opacity-60"
                 >
                   {isSending ? (
                     <Loader2 className="size-3 animate-spin" aria-hidden="true" />
