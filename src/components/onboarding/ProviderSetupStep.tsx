@@ -39,7 +39,7 @@ import {
   isProviderAllowedByPolicy,
 } from "../../stores/policyRules";
 import {
-  getTranscriptionProviders,
+  getDictationTranscriptionProviders,
   getParakeetModels,
   getWhisperModels,
   modelRegistry,
@@ -247,6 +247,8 @@ function providerCredential(provider: string, store: ReturnType<typeof useSettin
       return { value: store.deepgramApiKey, set: store.setDeepgramApiKey };
     case "assemblyai":
       return { value: store.assemblyaiApiKey, set: store.setAssemblyaiApiKey };
+    case "elevenlabs":
+      return { value: store.elevenlabsApiKey, set: store.setElevenlabsApiKey };
     default:
       return { value: "", set: (_value: string) => undefined };
   }
@@ -437,7 +439,7 @@ export function ByokProviderStep({
   const providers = useMemo(
     () =>
       filterByokProviderOptionsByPolicy<HostedProvider>(
-        assistant ? modelRegistry.getCloudProviders() : getTranscriptionProviders(),
+        assistant ? modelRegistry.getCloudProviders() : getDictationTranscriptionProviders(),
         scope,
         policy
       ),

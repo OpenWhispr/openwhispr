@@ -12,6 +12,7 @@ import { ConfirmDialog } from "./ui/dialog";
 import { useDialogs } from "../hooks/useDialogs";
 import { useModelDownload, type DownloadProgress } from "../hooks/useModelDownload";
 import {
+  getDictationTranscriptionProviders,
   getTranscriptionProviders,
   getMeetingStreamingTranscriptionProviders,
   TranscriptionProviderData,
@@ -284,6 +285,7 @@ const CLOUD_PROVIDER_TABS = [
   { id: "tinfoil", name: "Tinfoil" },
   { id: "deepgram", name: "Deepgram" },
   { id: "assemblyai", name: "AssemblyAI" },
+  { id: "elevenlabs", name: "ElevenLabs" },
   { id: "custom", name: "Custom" },
 ];
 
@@ -300,7 +302,8 @@ interface ProviderCredentialField {
     | "cortiTenant"
     | "tinfoilApiKey"
     | "deepgramApiKey"
-    | "assemblyaiApiKey";
+    | "assemblyaiApiKey"
+    | "elevenlabsApiKey";
   input: "secret" | "text" | "select";
   labelKey?: string;
   placeholder?: string;
@@ -364,6 +367,10 @@ const PROVIDER_CREDENTIALS: Record<
   assemblyai: {
     consoleUrl: "https://www.assemblyai.com/dashboard/api-keys",
     fields: [{ key: "assemblyaiApiKey", input: "secret" }],
+  },
+  elevenlabs: {
+    consoleUrl: "https://elevenlabs.io/app/settings/api-keys",
+    fields: [{ key: "elevenlabsApiKey", input: "secret" }],
   },
 };
 
@@ -500,6 +507,8 @@ export default function TranscriptionModelPicker({
   const setDeepgramApiKey = useSettingsStore((s) => s.setDeepgramApiKey);
   const assemblyaiApiKey = useSettingsStore((s) => s.assemblyaiApiKey);
   const setAssemblyaiApiKey = useSettingsStore((s) => s.setAssemblyaiApiKey);
+  const elevenlabsApiKey = useSettingsStore((s) => s.elevenlabsApiKey);
+  const setElevenlabsApiKey = useSettingsStore((s) => s.setElevenlabsApiKey);
   const customTranscriptionApiKey = useSettingsStore((s) => s.customTranscriptionApiKey);
   const setCustomTranscriptionApiKey = useSettingsStore((s) => s.setCustomTranscriptionApiKey);
   const isSignedIn = useSettingsStore((s) => s.isSignedIn);
@@ -618,7 +627,7 @@ export default function TranscriptionModelPicker({
   // route at all (transcriptionRoute fails them closed), so they are hidden there.
   const availableCloudProviders = useMemo(() => {
     if (streamingOnly) return getMeetingStreamingTranscriptionProviders();
-    const providers = getTranscriptionProviders();
+    const providers = getDictationTranscriptionProviders();
     if (transcriptionContext !== "upload") return providers;
     return providers.filter((provider) => !STREAMING_ONLY_PROVIDERS.has(provider.id));
   }, [streamingOnly, transcriptionContext]);
@@ -1194,6 +1203,7 @@ export default function TranscriptionModelPicker({
     tinfoilApiKey: keyDraft.value("tinfoilApiKey", tinfoilApiKey),
     deepgramApiKey: keyDraft.value("deepgramApiKey", deepgramApiKey),
     assemblyaiApiKey: keyDraft.value("assemblyaiApiKey", assemblyaiApiKey),
+    elevenlabsApiKey: keyDraft.value("elevenlabsApiKey", elevenlabsApiKey),
   };
   const customKey = keyDraft.value("customTranscriptionApiKey", customTranscriptionApiKey);
   const credentialSetters: Record<ProviderCredentialField["key"], (value: string) => void> = {
@@ -1209,6 +1219,7 @@ export default function TranscriptionModelPicker({
     tinfoilApiKey: setTinfoilApiKey,
     deepgramApiKey: setDeepgramApiKey,
     assemblyaiApiKey: setAssemblyaiApiKey,
+    elevenlabsApiKey: setElevenlabsApiKey,
   };
 
   const endpointHold = useFocusHold();
