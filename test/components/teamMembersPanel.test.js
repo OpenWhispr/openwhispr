@@ -790,9 +790,7 @@ test("the only admin stepping down stays admin and is told why", async (t) => {
   await ui.click(menuItem("Team Member"));
   await ui.settle();
 
-  assert.deepEqual(toastTitles(), [
-    "You're the only admin of Sales. Make another member an admin before you leave.",
-  ]);
+  assert.deepEqual(toastTitles(), ["Add another admin first"]);
   assert.equal(text(rowFor("Ronnie")), "Ronnie me@openronnie.com Admin");
   assert.deepEqual(events, []);
 });

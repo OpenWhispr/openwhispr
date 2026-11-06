@@ -292,7 +292,7 @@ export default function TeamSpacesPanel({
               <TeamspacePicker
                 choices={choices}
                 selectedIds={staged.map((space) => space.id)}
-                summary={stagedNames.join(", ")}
+                summary={formatList(i18n.language, stagedNames)}
                 disabled={adding}
                 canCreate={canCreate}
                 inputRef={fieldRef}

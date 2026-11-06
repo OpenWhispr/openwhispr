@@ -104,7 +104,7 @@ function PersonAvatar({
 const TILE =
   "flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-foreground/5 dark:bg-white/6";
 // The tile's glyph is an emoji sized for a larger tile in the table.
-const GROUP_TILE = cn(TILE, "[&>span]:text-xs");
+const TEAM_TILE = cn(TILE, "[&>span]:text-xs");
 const ACTION_PILL =
   "shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-primary/15";
 
@@ -520,7 +520,7 @@ function RowContent({
     const count = team.member_count ?? 0;
     return (
       <>
-        <span aria-hidden="true" className={GROUP_TILE}>
+        <span aria-hidden="true" className={TEAM_TILE}>
           <TileGlyph emoji={team.emoji ?? null} name={team.name} />
         </span>
         <RowText
@@ -700,7 +700,7 @@ function RecipientChip({
     removeName = recipient.label;
   } else if (recipient.kind === "team") {
     leading = (
-      <span aria-hidden="true" className={GROUP_TILE}>
+      <span aria-hidden="true" className={TEAM_TILE}>
         <TileGlyph emoji={emoji} name={recipient.label} />
       </span>
     );

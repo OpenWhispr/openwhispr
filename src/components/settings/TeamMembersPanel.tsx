@@ -593,7 +593,7 @@ export default function TeamMembersPanel({
         const failure = classifyTeamError(error);
         if (failure.kind === "lastAdmin") {
           toast({
-            title: t(`${COPY}.exit.blockedBody`, { team: teamName }),
+            title: t(`${COPY}.exit.blockedTitle`),
             variant: "destructive",
           });
         } else if (failure.kind === "gone" || failure.kind === "notAllowed") {

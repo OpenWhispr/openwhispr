@@ -286,7 +286,7 @@ test("choosing teamspaces joins their names in the field and stages the add", as
 
   assert.equal(field().getAttribute("value") ?? field().value, "");
   await ui.press(field(), "Escape");
-  assert.equal(field().value, "Planning, Product");
+  assert.equal(field().value, "Planning and Product");
   assert.match(panelText(), /2 teamspaces selected/);
   assert.match(panelText(), /Add Sales to Planning and Product\./);
   assert.deepEqual(rows(), []);

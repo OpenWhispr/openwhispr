@@ -34,7 +34,6 @@ interface TeamSettingsDialogProps {
   workspace: Workspace;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  initialTab?: TeamDialogTab;
   /** A write changed something the table shows. */
   onChanged: () => void;
   /** The team is gone for this user: deleted, left or removed. */
@@ -48,7 +47,6 @@ export default function TeamSettingsDialog({
   workspace,
   open,
   onOpenChange,
-  initialTab = "general",
   onChanged,
   onGone,
 }: TeamSettingsDialogProps): ReactElement {
@@ -67,7 +65,7 @@ export default function TeamSettingsDialog({
   // and they stay in the dialog afterwards.
   const isWorkspaceAdmin = workspaceCan(workspace, "manage_teams");
 
-  const [tab, setTab] = useState<TeamDialogTab>(initialTab);
+  const [tab, setTab] = useState<TeamDialogTab>("general");
   const [wasOpen, setWasOpen] = useState(open);
   const [draftName, setDraftName] = useState(team.name);
   // The name the draft was seeded from or last saved as; null while closed.
@@ -126,10 +124,10 @@ export default function TeamSettingsDialog({
       setDraftName(team.name);
     }
   }
-  // Each opening starts on the tab it was asked for, with nothing carried over from the last.
+  // Each opening starts on General, with nothing carried over from the last.
   if (open !== wasOpen) {
     setWasOpen(open);
-    setTab(initialTab);
+    setTab("general");
     setNameTaken(null);
     refusedName.current = null;
     if (open) closing.current = false;
