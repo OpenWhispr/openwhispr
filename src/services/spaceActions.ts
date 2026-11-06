@@ -37,7 +37,13 @@ const actions = createSpaceActions({
   markSpacePurged,
   releasePurgedSpace,
   invalidateSpaceRoster,
-  refreshWorkspaceRoster: (workspaceId) => useWorkspaceStore.getState().refreshMembers(workspaceId),
+  refreshWorkspaceRoster: async (workspaceId) => {
+    // The store holds one workspace's roster. A delete that commits after a switch would replace
+    // the one now showing, and that workspace's roster is read again when it is opened.
+    const store = useWorkspaceStore.getState();
+    if (store.activeWorkspaceId !== workspaceId) return;
+    await store.refreshMembers(workspaceId);
+  },
   deleteHold: {
     accountGeneration: getAccountGeneration,
     hide: (space, cloudSpaceId) => {
