@@ -2338,10 +2338,11 @@
           "title_one": "{{count}} Gast aus {{workspace}} entfernen?",
           "title_other": "{{count}} Gäste aus {{workspace}} entfernen?",
           "body": "Die Gäste verlieren den Zugriff auf alle mit ihnen geteilten Notizen. Sie können Notizen jederzeit erneut mit ihnen teilen.",
-          "linkShared": "Per Link geteilte Notizen bleiben für alle mit dem Link zugänglich.",
+          "linkShared": "Gäste können über Link- oder Domainfreigaben weiterhin Zugriff haben.",
           "confirm_one": "{{count}} Gast entfernen",
           "confirm_other": "{{count}} Gäste entfernen",
           "removing": "Wird entfernt…",
+          "limit": "Wähle höchstens {{count}} Gäste aus, um sie auf einmal zu entfernen.",
           "failed": "Die Gäste konnten nicht entfernt werden. Niemand wurde entfernt. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
           "done_one": "{{count}} Gast entfernt",
           "done_other": "{{count}} Gäste entfernt"

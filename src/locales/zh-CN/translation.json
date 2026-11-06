@@ -3067,10 +3067,11 @@
           "title_one": "要将 {{count}} 位访客从 {{workspace}} 移除吗？",
           "title_other": "要将 {{count}} 位访客从 {{workspace}} 移除吗？",
           "body": "他们将无法再访问与其共享的所有笔记。你可以随时再次与他们共享笔记。",
-          "linkShared": "通过链接共享的笔记仍可供任何持有链接的人打开。",
+          "linkShared": "访客可能仍可通过链接共享或域名共享访问。",
           "confirm_one": "移除 {{count}} 位访客",
           "confirm_other": "移除 {{count}} 位访客",
           "removing": "正在移除…",
+          "limit": "每次最多可选择移除 {{count}} 位访客。",
           "failed": "无法移除访客。没有人被移除。请检查网络连接后重试。",
           "done_one": "已移除 {{count}} 位访客",
           "done_other": "已移除 {{count}} 位访客"

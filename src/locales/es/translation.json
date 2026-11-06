@@ -3119,10 +3119,11 @@
           "title_one": "¿Quitar a {{count}} invitado de {{workspace}}?",
           "title_other": "¿Quitar a {{count}} invitados de {{workspace}}?",
           "body": "Perderán el acceso a todas las notas compartidas con ellos. Puedes volver a compartirles notas cuando quieras.",
-          "linkShared": "Las notas compartidas mediante enlace siguen abiertas para cualquiera que tenga el enlace.",
+          "linkShared": "Los invitados pueden seguir teniendo acceso mediante enlaces o el uso compartido por dominio.",
           "confirm_one": "Quitar {{count}} invitado",
           "confirm_other": "Quitar {{count}} invitados",
           "removing": "Quitando…",
+          "limit": "Selecciona hasta {{count}} invitados para eliminarlos a la vez.",
           "failed": "No se pudo quitar a los invitados. No se quitó a nadie. Revisa tu conexión e inténtalo de nuevo.",
           "done_one": "Se quitó {{count}} invitado",
           "done_other": "Se quitaron {{count}} invitados"

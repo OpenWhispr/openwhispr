@@ -230,3 +230,28 @@ test("an SSO refusal offers Close, not Try again", async (t) => {
   await view.clickPrimary();
   assert.match(view.text(), /\[common\.close\]/);
 });
+
+test("over 500 guests explains the limit without sending a removal", async (t) => {
+  const { mount } = await loadDialog(t);
+  const view = await mount(
+    Array.from({ length: 501 }, (_, index) => guest(`guest${index}@outside.test`, null))
+  );
+  assert.match(view.text(), /remove\.limit/);
+  assert.match(view.text(), /500/);
+  assert.equal(globalThis.__actionDialogProps.primary.disabled, true);
+  await view.clickPrimary();
+  assert.equal(globalThis.__removeCalls.length, 0);
+  assert.deepEqual(view.openChanges, []);
+});
+
+test("500 guests can be removed in one request", async (t) => {
+  const { mount } = await loadDialog(t);
+  const view = await mount(
+    Array.from({ length: 500 }, (_, index) => guest(`guest${index}@outside.test`, null))
+  );
+  await view.clickPrimary();
+  assert.equal(globalThis.__removeCalls.length, 1);
+  assert.equal(globalThis.__removeCalls[0][1].emails.length, 500);
+  assert.equal(view.removed[0].removed.length, 500);
+  assert.deepEqual(view.openChanges, [false]);
+});
