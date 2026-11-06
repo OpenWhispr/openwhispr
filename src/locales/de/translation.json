@@ -2071,6 +2071,7 @@
           "removeFailedBody": "{{name}} ist weiterhin Mitglied von {{team}}. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
           "removed": "{{name}} wurde aus {{team}} entfernt.",
           "roleFailed": "Die Rolle von {{name}} konnte nicht geändert werden. Versuchen Sie es erneut.",
+          "memberGone": "{{name}} ist nicht mehr in {{team}}.",
           "notAllowed": "Sie können {{team}} nicht mehr verwalten.",
           "invitedNoEmail": "{{invited}} eingeladen, aber die E-Mail wurde nicht gesendet. Verwenden Sie unten „Erneut senden“.",
           "skippedInvited": "Nicht zu {{team}} hinzugefügt: {{names}}. Es besteht bereits eine Workspace-Einladung."
@@ -2102,7 +2103,12 @@
           "bodyAskOwner": "Teamspaces sind kostenlos. Bitten Sie {{owner}}, auf Business zu wechseln, um Personen in Teams zu gruppieren.",
           "bodyAskOwnerUnknown": "Teamspaces sind kostenlos. Bitten Sie den Inhaber Ihres Workspace, auf Business zu wechseln, um Personen in Teams zu gruppieren.",
           "upgrade": "Auf Business upgraden",
-          "notNow": "Nicht jetzt"
+          "notNow": "Nicht jetzt",
+          "lapsedTitle": "Der Tarif dieses Workspace ist nicht aktiv",
+          "lapsedBody": "Aktualisieren Sie die Abrechnung, um Teams zu erstellen. Ihre bestehenden Teams funktionieren weiter.",
+          "lapsedBodyAskOwner": "Bitten Sie {{owner}}, die Abrechnung zu aktualisieren, um Teams zu erstellen. Ihre bestehenden Teams funktionieren weiter.",
+          "lapsedBodyAskOwnerUnknown": "Bitten Sie den Inhaber des Workspace, die Abrechnung zu aktualisieren, um Teams zu erstellen. Ihre bestehenden Teams funktionieren weiter.",
+          "updateBilling": "Abrechnung aktualisieren"
         },
         "form": {
           "title": "Team erstellen",

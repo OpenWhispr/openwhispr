@@ -365,6 +365,33 @@ test("a created team reloads the list", async (t) => {
   assert.equal(globalThis.__reloads, 1);
 });
 
+test("closing the form reads the list again, once, since a lost create may have made the team", async (t) => {
+  const { Tab, workspace } = await loadTab(t, { teams: [] });
+  await mount(t, Tab, workspace);
+
+  await React.act(async () => globalThis.__createDialog.onOpenChange(true));
+  await React.act(async () => globalThis.__createDialog.onOpenChange(false));
+  assert.equal(globalThis.__reloads, 1, "a close with no create reads the list");
+
+  await React.act(async () => globalThis.__createDialog.onOpenChange(true));
+  await React.act(async () =>
+    globalThis.__createDialog.onCreated({ id: "t1", name: "Sales" }, { memberCount: 2 })
+  );
+  await React.act(async () => globalThis.__createDialog.onOpenChange(false));
+  assert.equal(globalThis.__reloads, 2, "a create already read it");
+});
+
+test("a paywall that finds the plan active opens the form", async (t) => {
+  const { Tab, workspace } = await loadTab(t, { teams: [] });
+  await mount(t, Tab, workspace);
+  await React.act(async () => globalThis.__createDialog.onPlanRequired());
+  assert.equal(globalThis.__paywallDialog.open, true);
+
+  await React.act(async () => globalThis.__paywallDialog.onAvailable());
+  assert.equal(globalThis.__paywallDialog.open, false);
+  assert.equal(globalThis.__createDialog.open, true);
+});
+
 test("a request from People opens the opener once and says it was handled", async (t) => {
   let handled = 0;
   const { Tab, workspace } = await loadTab(t, { teams: [team("t1", "Designers")] });

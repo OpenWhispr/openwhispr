@@ -1,10 +1,11 @@
-import type { ReactElement } from "react";
+import { useEffect, useRef, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { Users } from "../icons";
 import { cn } from "../lib/utils";
 import { PRIMARY_BUTTON, SECONDARY_BUTTON } from "./dialogButtons";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
-import { workspaceCan } from "../../lib/capabilities";
+import { teamCreationFor, workspaceCan } from "../../lib/capabilities";
+import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { isolate } from "../../utils/bidiIsolate";
 import type { Workspace } from "../../types/electron";
 
@@ -12,20 +13,48 @@ export interface TeamPaywallDialogProps {
   workspace: Workspace;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** A fresh read says teams can be created after all; the host opens the form instead. */
+  onAvailable?: () => void;
 }
 
+// The API's TEAM_PLANS: a workspace on one of these that can't create teams has a subscription
+// that lapsed (past due, canceled), which checkout can't upgrade.
+const TEAM_PLANS = new Set(["business", "enterprise"]);
+const COPY = "settingsPage.workspace.teams.paywall";
+
 /**
- * What a workspace below Business sees when it tries to create a team. It never reads a plan
- * name: `manage_billing` says who can buy, and everyone else is told who to ask.
+ * What a workspace that can't create teams sees when it tries: below Business, an upgrade; a
+ * lapsed Business or Enterprise plan, a billing fix. `manage_billing` says who can act, and
+ * everyone else is told who to ask.
  */
 export default function TeamPaywallDialog({
   workspace,
   open,
   onOpenChange,
+  onAvailable,
 }: TeamPaywallDialogProps): ReactElement {
   const { t } = useTranslation();
   const canUpgrade = workspaceCan(workspace, "manage_billing");
   const owner = workspace.billing_manager;
+  const lapsed = TEAM_PLANS.has(workspace.plan);
+  const blocked = teamCreationFor(workspace) !== "allowed";
+
+  // The capability the paywall opened on may be stale (a plan changed on the web or another
+  // device, or a webhook that landed late), so each opening reads the workspace again.
+  useEffect(() => {
+    if (open) void useWorkspaceStore.getState().refresh({ fresh: true });
+  }, [open]);
+  // Hands over only after this opening saw creating blocked: a server refusal can open the
+  // paywall while the list still says allowed, and handing over then would loop.
+  const sawBlocked = useRef(false);
+  useEffect(() => {
+    if (!open) {
+      sawBlocked.current = false;
+      return;
+    }
+    if (blocked) sawBlocked.current = true;
+    else if (sawBlocked.current) onAvailable?.();
+  }, [open, blocked, onAvailable]);
 
   // A named section remounts Settings, so this also works from inside Settings.
   const handleUpgrade = (): void => {
@@ -33,11 +62,12 @@ export default function TeamPaywallDialog({
     void window.electronAPI?.openSettingsSection?.("plansBilling");
   };
 
+  const variant = lapsed ? "lapsedBody" : "body";
   const body = canUpgrade
-    ? t("settingsPage.workspace.teams.paywall.body")
+    ? t(`${COPY}.${variant}`)
     : owner
-      ? t("settingsPage.workspace.teams.paywall.bodyAskOwner", { owner: isolate(owner) })
-      : t("settingsPage.workspace.teams.paywall.bodyAskOwnerUnknown");
+      ? t(`${COPY}.${variant}AskOwner`, { owner: isolate(owner) })
+      : t(`${COPY}.${variant}AskOwnerUnknown`);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -51,7 +81,7 @@ export default function TeamPaywallDialog({
           </div>
           <div className="flex flex-col items-center gap-1.5">
             <DialogTitle className="text-lg font-medium tracking-normal leading-snug">
-              {t("settingsPage.workspace.teams.paywall.title")}
+              {t(lapsed ? `${COPY}.lapsedTitle` : `${COPY}.title`)}
             </DialogTitle>
             <DialogDescription className="text-sm leading-normal">{body}</DialogDescription>
           </div>
@@ -65,14 +95,14 @@ export default function TeamPaywallDialog({
                 onClick={handleUpgrade}
                 className={cn(PRIMARY_BUTTON, "flex-none")}
               >
-                {t("settingsPage.workspace.teams.paywall.upgrade")}
+                {t(lapsed ? `${COPY}.updateBilling` : `${COPY}.upgrade`)}
               </button>
               <button
                 type="button"
                 onClick={() => onOpenChange(false)}
                 className={cn(SECONDARY_BUTTON, "flex-none")}
               >
-                {t("settingsPage.workspace.teams.paywall.notNow")}
+                {t(`${COPY}.notNow`)}
               </button>
             </>
           ) : (

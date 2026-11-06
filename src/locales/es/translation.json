@@ -2852,6 +2852,7 @@
           "removeFailedBody": "{{name}} sigue siendo miembro de {{team}}. Comprueba tu conexión e inténtalo de nuevo.",
           "removed": "Se quitó a {{name}} de {{team}}.",
           "roleFailed": "No se pudo cambiar el rol de {{name}}. Inténtalo de nuevo.",
+          "memberGone": "{{name}} ya no está en {{team}}.",
           "notAllowed": "Ya no puedes gestionar {{team}}.",
           "invitedNoEmail": "Se invitó a {{invited}}, pero el correo no se envió. Usa Reenviar más abajo.",
           "skippedInvited": "No se añadió a {{team}}: {{names}}. Ya tienen una invitación al espacio de trabajo."
@@ -2883,7 +2884,12 @@
           "bodyAskOwner": "Los teamspaces son gratis. Pide a {{owner}} que mejore el plan para agrupar personas en equipos.",
           "bodyAskOwnerUnknown": "Los teamspaces son gratis. Pide al propietario del espacio de trabajo que mejore el plan para agrupar personas en equipos.",
           "upgrade": "Mejorar a Business",
-          "notNow": "Ahora no"
+          "notNow": "Ahora no",
+          "lapsedTitle": "El plan de este espacio de trabajo no está activo",
+          "lapsedBody": "Actualiza la facturación para crear equipos. Tus equipos actuales siguen funcionando.",
+          "lapsedBodyAskOwner": "Pide a {{owner}} que actualice la facturación para crear equipos. Tus equipos actuales siguen funcionando.",
+          "lapsedBodyAskOwnerUnknown": "Pide al propietario del espacio de trabajo que actualice la facturación para crear equipos. Tus equipos actuales siguen funcionando.",
+          "updateBilling": "Actualizar facturación"
         },
         "form": {
           "title": "Crear equipo",

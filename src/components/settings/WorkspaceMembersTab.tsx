@@ -622,6 +622,11 @@ export default function WorkspaceMembersTab({
             workspace={workspace}
             open={paywallOpen}
             onOpenChange={setPaywallOpen}
+            onAvailable={() => {
+              setPaywallOpen(false);
+              setCreatePeople(selectedMembers);
+              setCreateOpen(true);
+            }}
           />
         </>
       )}

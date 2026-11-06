@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useWorkspaceTeams } from "../../hooks/useWorkspaceTeams";
 import { teamCreationFor } from "../../lib/capabilities";
@@ -52,6 +52,15 @@ export default function WorkspaceTeamsTab({
     else if (creation === "paywall") setPaywallOpen(true);
   };
 
+  // A create whose answer was lost may still have made the team, and a Try again under another
+  // name would leave it unlisted, so closing reads the list again unless a create just did.
+  const createdThisOpening = useRef(false);
+  const handleCreateOpenChange = (open: boolean): void => {
+    if (!open && !createdThisOpening.current) void reload();
+    createdThisOpening.current = false;
+    setCreateOpen(open);
+  };
+
   const empty = status === "ready" && teams.length === 0;
   useEffect(() => {
     onTeamsEmptyChange?.(empty);
@@ -89,8 +98,9 @@ export default function WorkspaceTeamsTab({
       <CreateTeamDialog
         workspace={workspace}
         open={createOpen}
-        onOpenChange={setCreateOpen}
+        onOpenChange={handleCreateOpenChange}
         onCreated={async () => {
+          createdThisOpening.current = true;
           await reload();
         }}
         onPlanRequired={() => {
@@ -99,7 +109,15 @@ export default function WorkspaceTeamsTab({
         }}
       />
 
-      <TeamPaywallDialog workspace={workspace} open={paywallOpen} onOpenChange={setPaywallOpen} />
+      <TeamPaywallDialog
+        workspace={workspace}
+        open={paywallOpen}
+        onOpenChange={setPaywallOpen}
+        onAvailable={() => {
+          setPaywallOpen(false);
+          setCreateOpen(true);
+        }}
+      />
 
       {openTeam && (
         <TeamSettingsDialog

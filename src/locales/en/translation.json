@@ -2071,6 +2071,7 @@
           "removeFailedBody": "{{name}} is still a member of {{team}}. Check your connection and try again.",
           "removed": "{{name}} was removed from {{team}}.",
           "roleFailed": "Couldn't change {{name}}'s role. Try again.",
+          "memberGone": "{{name}} is no longer on {{team}}.",
           "notAllowed": "You can no longer manage {{team}}.",
           "invitedNoEmail": "Invited {{invited}}, but the email didn't send. Use Resend below.",
           "skippedInvited": "Not added to {{team}}: {{names}}. They already have a workspace invitation."
@@ -2102,7 +2103,12 @@
           "bodyAskOwner": "Teamspaces are free. Ask {{owner}} to upgrade to group people into teams.",
           "bodyAskOwnerUnknown": "Teamspaces are free. Ask your workspace owner to upgrade to group people into teams.",
           "upgrade": "Upgrade to Business",
-          "notNow": "Not now"
+          "notNow": "Not now",
+          "lapsedTitle": "This workspace's plan isn't active",
+          "lapsedBody": "Update billing to create teams. Your existing teams keep working.",
+          "lapsedBodyAskOwner": "Ask {{owner}} to update billing to create teams. Your existing teams keep working.",
+          "lapsedBodyAskOwnerUnknown": "Ask your workspace owner to update billing to create teams. Your existing teams keep working.",
+          "updateBilling": "Update billing"
         },
         "form": {
           "title": "Create team",

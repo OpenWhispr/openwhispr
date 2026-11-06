@@ -2800,6 +2800,7 @@
           "removeFailedBody": "{{name}} 仍是 {{team}} 的成員。請檢查網路連線後再試一次。",
           "removed": "{{name}} 已從 {{team}} 中移除。",
           "roleFailed": "無法變更 {{name}} 的角色。請再試一次。",
+          "memberGone": "{{name}} 已不在 {{team}} 中。",
           "notAllowed": "你已無法管理 {{team}}。",
           "invitedNoEmail": "已邀請 {{invited}}，但郵件未傳送。請使用下方的「重新傳送」。",
           "skippedInvited": "未加入 {{team}}：{{names}}。已存在工作區邀請。"
@@ -2831,7 +2832,12 @@
           "bodyAskOwner": "Teamspace 免費使用。請 {{owner}} 升級，即可將成員分組為團隊。",
           "bodyAskOwnerUnknown": "Teamspace 免費使用。請讓工作區擁有者升級，即可將成員分組為團隊。",
           "upgrade": "升級至 Business",
-          "notNow": "暫不"
+          "notNow": "暫不",
+          "lapsedTitle": "此工作區的方案未生效",
+          "lapsedBody": "請更新帳單資訊以建立團隊。現有團隊仍可正常使用。",
+          "lapsedBodyAskOwner": "請聯絡 {{owner}} 更新帳單資訊以建立團隊。現有團隊仍可正常使用。",
+          "lapsedBodyAskOwnerUnknown": "請聯絡工作區擁有者更新帳單資訊以建立團隊。現有團隊仍可正常使用。",
+          "updateBilling": "更新帳單"
         },
         "form": {
           "title": "建立團隊",

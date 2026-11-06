@@ -2800,6 +2800,7 @@
           "removeFailedBody": "{{name}} 仍是 {{team}} 的成员。请检查网络连接后重试。",
           "removed": "{{name}} 已从 {{team}} 中移除。",
           "roleFailed": "无法更改 {{name}} 的角色。请重试。",
+          "memberGone": "{{name}} 已不在 {{team}} 中。",
           "notAllowed": "你已无法管理 {{team}}。",
           "invitedNoEmail": "已邀请 {{invited}}，但邮件未发送。请使用下方的“重新发送”。",
           "skippedInvited": "未添加到 {{team}}：{{names}}。已存在工作区邀请。"
@@ -2831,7 +2832,12 @@
           "bodyAskOwner": "Teamspace 免费使用。请 {{owner}} 升级，即可将成员分组为团队。",
           "bodyAskOwnerUnknown": "Teamspace 免费使用。请让工作区所有者升级，即可将成员分组为团队。",
           "upgrade": "升级到 Business",
-          "notNow": "暂不"
+          "notNow": "暂不",
+          "lapsedTitle": "此工作区的套餐未生效",
+          "lapsedBody": "请更新账单信息以创建团队。现有团队仍可正常使用。",
+          "lapsedBodyAskOwner": "请联系 {{owner}} 更新账单信息以创建团队。现有团队仍可正常使用。",
+          "lapsedBodyAskOwnerUnknown": "请联系工作区所有者更新账单信息以创建团队。现有团队仍可正常使用。",
+          "updateBilling": "更新账单"
         },
         "form": {
           "title": "创建团队",
