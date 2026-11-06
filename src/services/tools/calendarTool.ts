@@ -5,12 +5,14 @@ import { localDateFormatter, localizeInstant } from "./calendarAvailabilityTool"
 
 type TimeRange = "today" | "tomorrow" | "week";
 
-// Through the end of the range's last local day ("week": today and the six
-// days after it), so all-day and timed events cover the same days.
+// To the local midnight that ends the range's last day ("week": today and the
+// six days after it), so all-day and timed events cover the same days. The
+// midnight itself, not 23:59:59.999: where the clocks go back at midnight,
+// that time comes twice, and the first leaves the query on the same day.
 function getWindowEnd(timeRange: TimeRange): Date {
   const end = new Date();
-  end.setDate(end.getDate() + (timeRange === "week" ? 6 : timeRange === "tomorrow" ? 1 : 0));
-  end.setHours(23, 59, 59, 999);
+  end.setDate(end.getDate() + (timeRange === "week" ? 7 : timeRange === "tomorrow" ? 2 : 1));
+  end.setHours(0, 0, 0, 0);
   return end;
 }
 
@@ -118,7 +120,7 @@ export const calendarTool: ToolDefinition = {
       const events = response.events
         .filter(
           (event: Record<string, unknown>) =>
-            isAllDay(event) || (parseEventTime(event.start_time, false) ?? 0) <= windowEnd
+            isAllDay(event) || (parseEventTime(event.start_time, false) ?? 0) < windowEnd
         )
         .map((event: Record<string, unknown>) => describeEvent(event, formatter));
 

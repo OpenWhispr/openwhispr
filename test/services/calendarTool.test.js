@@ -257,6 +257,24 @@ test("the week range runs to the end of the sixth day after today, like today an
   assert.deepEqual(calls[2][1], { includeAllDay: true });
 });
 
+test("where the clocks go back at midnight, the window still reaches the next day", async (t) => {
+  // Cairo, Thursday Oct 29 2026: midnight goes back to 23:00, so 23:00-24:00 comes twice.
+  inTimeZone(t, "Africa/Cairo");
+  t.mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-10-29T07:00:00Z") });
+  const { calendarTool } = await load();
+  const calls = [];
+  stubEvents([], calls);
+
+  await calendarTool.execute({ timeRange: "today" });
+
+  // To Friday's midnight (22:00 UTC), not the first 23:59: the query's local
+  // date is then Friday, so it keeps Thursday's all-day events.
+  const [[minutes]] = calls;
+  assert.equal(minutes, 15 * 60);
+  const end = new Date(Date.parse("2026-10-29T07:00:00Z") + minutes * 60000);
+  assert.equal(end.toLocaleDateString("en-CA", { timeZone: "Africa/Cairo" }), "2026-10-30");
+});
+
 test("a meeting at the next midnight belongs to the next day, not today", async (t) => {
   inTimeZone(t, "America/Los_Angeles");
   t.mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-10-23T17:00:00Z") });
