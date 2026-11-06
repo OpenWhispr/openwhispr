@@ -437,15 +437,8 @@ function missingConversationMessages<Message extends { role: string; content: st
   cloud: ReadonlyArray<{ role: string; content: string }>
 ): Message[] {
   let held = 0;
-  return local.filter((message, index) => {
-    const copy = cloud[held];
-    // An empty message facing text never went up if its turn goes on with another
-    // of its role (a tool step before its answer); otherwise it is that text emptied.
-    const skipped =
-      !message.content &&
-      !!copy?.content &&
-      local.slice(index + 1).find((later) => later.content)?.role === message.role;
-    if (copy?.role === message.role && !skipped) {
+  return local.filter((message) => {
+    if (cloud[held]?.role === message.role) {
       held += 1;
       return false;
     }

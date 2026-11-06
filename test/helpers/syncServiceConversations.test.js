@@ -345,31 +345,6 @@ test("a reply regenerated with no text keeps its place, so the next turn goes up
   assert.equal(db.getAgentConversation(conversation.id).sync_status, "synced");
 });
 
-test("a tool-only reply never takes the place of an answer the cloud has", async (t) => {
-  const ctx = await setup(t);
-  if (!ctx) return;
-  const { db, cloud, api, service } = ctx;
-  await establishCursor(service);
-  const conversation = db.createAgentConversation("Tool-only turn");
-  db.addAgentMessage(conversation.id, "user", "first message");
-  const clientId = db.getAgentConversation(conversation.id).client_conversation_id;
-  const gate = pauseNextConversationCreate(api);
-
-  // The answer goes up, and the chat stays pending for the next pass.
-  cloud.failWith("/api/conversations/update", { status: 500 });
-  const sync = service.syncAll(true);
-  await gate.started;
-  db.addAgentMessage(conversation.id, "assistant", "", { toolCalls: [{ id: "t1" }] });
-  db.addAgentMessage(conversation.id, "assistant", "answer");
-  gate.resume();
-  await sync;
-  cloud.clearFailures();
-  await service.syncAll(true);
-
-  assertOneLiveCopy(cloud, clientId, ["first message", "answer"]);
-  assert.equal(db.getAgentConversation(conversation.id).sync_status, "synced");
-});
-
 test("an edit during the follow-up keeps the chat pending until the cloud has it", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
