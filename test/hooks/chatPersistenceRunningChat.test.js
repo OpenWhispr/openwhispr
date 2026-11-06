@@ -1174,8 +1174,8 @@ test("account and credential boundaries stop a live question without writing its
       const auth = await h.vite.ssrLoadModule("/lib/authRequestContext.ts");
       await h.act(() => auth.observeAuthTokenStateEvent({ generation: 1, hasToken: true }));
       let signal;
-      h.service.processTextStreamingAI = async function* (_m, _model, _p, config, tools) {
-        signal = config.signal;
+      h.service.processTextStreamingAI = async function* (_m, _model, _p, _config, tools, stream) {
+        signal = stream;
         yield {
           type: "tool_calls",
           calls: [{ id: "question", name: "ask_user", arguments: "{}" }],
@@ -1300,8 +1300,8 @@ test("a send landing after an account switch cannot checkpoint into the replacem
         new Promise((resolve) => {
           finishCommit = () => resolve({ state: "sent", url: "https://fixture.invalid/sent" });
         });
-      h.service.processTextStreamingAI = async function* (_m, _model, _p, config, tools) {
-        turnSignal = config.signal;
+      h.service.processTextStreamingAI = async function* (_m, _model, _p, _config, tools, stream) {
+        turnSignal = stream;
         yield {
           type: "tool_calls",
           calls: [{ id: "send", name: "slack_send_message", arguments: "{}" }],
@@ -1310,9 +1310,7 @@ test("a send landing after an account switch cannot checkpoint into the replacem
           { destination: "#eng", text: "hi" },
           { toolCallId: "send", messages: [] }
         );
-        await new Promise((resolve) =>
-          config.signal.addEventListener("abort", resolve, { once: true })
-        );
+        await new Promise((resolve) => stream.addEventListener("abort", resolve, { once: true }));
       };
       let sending;
       await h.act(async () => {

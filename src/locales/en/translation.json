@@ -355,34 +355,10 @@
           "features": {
             "device": "Runs on your device",
             "offline": "Works offline after setup",
-            "models": "Choose models for dictation and assistant",
+            "setup": "Set up for this computer",
             "free": "Forever free to use"
           }
         },
-        "warnings": {
-          "byok": {
-            "title": "Your provider handles your data",
-            "description": "You’ll add credentials for separate dictation and Assistant providers. Provider pricing and retention policies apply.",
-            "continue": "Set up API provider",
-            "steps": {
-              "1": "Choose providers for dictation and Assistant",
-              "2": "Add credentials using secure storage",
-              "3": "Test each connection before activation"
-            }
-          },
-          "local": {
-            "title": "Local setup takes a few extra steps",
-            "description": "Local processing keeps your speech on this device, but requires a one-time setup and at least {{minimumSpace}} GB of free space.",
-            "continue": "Setup Locally",
-            "steps": {
-              "1": "Choose a transcription engine",
-              "2": "Configure or download a model, about {{modelSize}}",
-              "3": "Wait for installation and activation"
-            }
-          }
-        },
-        "useCloud": "Use Cloud instead",
-        "continueSetup": "Continue setup",
         "showMore": "Show More Options",
         "moreOptions": {
           "title": "Choose your API setup",
@@ -437,23 +413,80 @@
         }
       },
       "local": {
-        "title": "Set up local models",
-        "description": "Choose the models you want to run on your device.",
-        "descriptionLineOne": "Choose the models you want",
-        "descriptionLineTwo": "to run on your device.",
-        "providerLabel": "Provider",
-        "cohereLanguageLabel": "Dictation language",
-        "cohereLanguageHint": "Cohere can't detect the language you speak, so choose the one you'll dictate in.",
-        "cohereLanguagePlaceholder": "Choose a language",
-        "download": "Download",
         "downloadingShort": "Downloading",
-        "selected": "Selected",
-        "use": "Use",
         "downloadInProgress": "Download in progress",
         "cancelDownload": "Cancel download of {{model}}",
         "downloads": "Model downloads",
         "downloading": "Downloading… {{progress}}%",
+        "verifying": "Verifying",
         "installing": "Installing"
+      },
+      "localSetup": {
+        "title": "We recommend these settings",
+        "subtitle": "Picked for your {{computer}} and {{language}}. These models run on this device.",
+        "subtitleOrganizationText": "Picked for your {{computer}} and {{language}}. Dictation runs on this device; chat and AI notes use the service your organization chose.",
+        "computer": {
+          "chip": "Chip",
+          "processor": "Processor",
+          "memory": "Memory",
+          "graphics": "Graphics",
+          "builtIn": "Built into chip",
+          "memoryValue": "{{gb}} GB",
+          "mac": "Mac",
+          "windowsLaptop": "Windows laptop",
+          "windowsDesktop": "Windows desktop",
+          "linuxLaptop": "Linux laptop",
+          "linuxDesktop": "Linux desktop"
+        },
+        "rows": {
+          "dictation": "Dictation",
+          "cleanup": "Cleanup",
+          "assistant": "Assistant"
+        },
+        "description": {
+          "dictation": "Turns your voice into text in any app",
+          "cleanup": "Removes filler words and fixes grammar",
+          "assistant": "Answers questions and acts on your requests"
+        },
+        "badge": {
+          "optional": "Optional",
+          "cloud": "Cloud recommended"
+        },
+        "line": {
+          "requiredByOrganization": "Required by your organization",
+          "organizationModelsUnrunnable": "None of the models your organization approved runs on this computer",
+          "offToFit": "Off to fit the free space on this computer",
+          "failed": "Couldn't download. Check your connection and retry"
+        },
+        "unavailable": {
+          "notEnoughMemory": "Not enough memory",
+          "exceedsMemory": "Exceeds the memory limits of this computer",
+          "memoryUnread": "Couldn't check memory",
+          "organization": "Not available on this computer",
+          "memoryMac": "{{model}} needs {{needed}} GB of memory, this Mac has {{have}} GB",
+          "memoryComputer": "{{model}} needs {{needed}} GB of memory, this computer has {{have}} GB",
+          "memoryUnreadLine": "{{model}} needs {{needed}} GB of memory. If this computer has that much, turn it on later in Settings"
+        },
+        "button": {
+          "download": "Download models",
+          "downloading": "Downloading",
+          "proceed": "Proceed",
+          "noSpace": "Not enough free space"
+        },
+        "retry": "Retry",
+        "retryRow": "Retry {{row}}",
+        "downloaded": "Downloaded",
+        "foot": {
+          "default": "You can change any of these later in Settings.",
+          "dictationFailed": "Dictation has to download before you can continue. Retry it above, or go back and choose another setup.",
+          "dictationUnavailable": "Dictation can't run on this computer with the models your organization approved. Go back and choose another setup.",
+          "finishesInBackground": "The rest keeps downloading after you proceed and turns on when it's ready.",
+          "failedStaysOff": "What didn't download stays off. You can add it later in Settings.",
+          "needsMac": "This needs {{needed}} GB, and this Mac has {{free}} GB free.",
+          "needsComputer": "This needs {{needed}} GB, and this computer has {{free}} GB free.",
+          "noSpaceMac": "Dictation needs {{needed}} GB free and this Mac has {{free}} GB. Free up some space to continue.",
+          "noSpaceComputer": "Dictation needs {{needed}} GB free and this computer has {{free}} GB. Free up some space to continue."
+        }
       }
     },
     "steps": {
@@ -881,6 +914,11 @@
       }
     },
     "modelRetiredTitle": "Model no longer available",
+    "modelRetiredByProvider": "{{provider}} retired {{from}}. Switched to {{to}}.",
+    "modelUnavailableSwitched": "{{from}} isn't available from {{provider}} anymore. Switched to {{to}}.",
+    "localModelRetired": "{{from}} is no longer available, so we switched you to {{to}}. If it isn't downloaded yet, download it in Settings.",
+    "localModelRetiredChooseAnother": "{{from}} is no longer available. Choose another local model in Settings.",
+    "localModelRetiredKept": "{{from}} has been retired. It keeps working because it's already downloaded, but it can't be downloaded again. Choose another local model in Settings.",
     "groq": {
       "modelRetired": "Groq retired {{from}}. Switched to {{to}}."
     },
@@ -1075,6 +1113,7 @@
         "tlsError": "Certificate error — your network may use SSL inspection that blocks downloads. Try downloading from a different network.",
         "unknown": "Unknown error"
       },
+      "verifying": "Verifying {{model}}",
       "downloadFailed": {
         "title": "Download Failed"
       },
@@ -2482,6 +2521,14 @@
       "dataManagementTitle": "Data Management",
       "modelCache": "Model cache",
       "open": "Open",
+      "retiredModels": {
+        "label": "Retired models",
+        "description": "These models are no longer offered but are still on disk: {{models}}.",
+        "remove": "Remove",
+        "confirmTitle": "Remove retired models?",
+        "confirmDescription": "This deletes the files of models the catalog no longer offers. Other downloaded models stay.",
+        "failedDescription": "Some files couldn't be removed. A model may still be in use; restart the app and try again."
+      },
       "removeModels": {
         "confirmText": "Delete Models",
         "description": "This deletes all locally cached Whisper models ({{path}}) and frees disk space. You can download them again from the model picker.",
@@ -2783,6 +2830,8 @@
       "title": "Privacy",
       "usageAnalytics": "Usage analytics",
       "usageAnalyticsDescription": "Help us improve OpenWhispr by sharing anonymous performance metrics. We never send transcription content — only timing and error data.",
+      "modelListUpdates": "Model list updates",
+      "modelListUpdatesDescription": "Check OpenWhispr's public model list on GitHub every 15 minutes for new and retired models. Changes take full effect after restart.",
       "insightsSync": "Sync personal Insights",
       "insightsSyncDescription": "Sync word counts, the date and exact time of each dictation, durations, and model types across your devices. Transcript content is never included. When you're signed in, clearing history also removes these counters from this device and your account.",
       "insightsSyncRequiresAccount": "Sign in to sync content-free Insights data across your devices.",
@@ -3589,6 +3638,10 @@
     }
   },
   "chat": {
+    "answering": "Answering…",
+    "conversationCreateFailed": "Couldn’t start the conversation. Your question is back in New chat.",
+    "messageSaveFailed": "Couldn’t save this message. Please try again.",
+    "conversationLoadFailed": "Couldn’t load this conversation. Please try again.",
     "newChat": "New chat",
     "search": "Search conversations...",
     "archived": "Archived",
@@ -3628,7 +3681,9 @@
     "forkedFrom": "Forked from \"{{title}}\"",
     "forkFailed": "Couldn't fork this chat",
     "sendNotStarted": "This chat is busy. Your message wasn't sent. Try again when the current request finishes.",
-    "openFailed": "This chat is no longer available."
+    "openFailed": "This chat is no longer available.",
+    "localModelDownloading": "Your assistant model is still downloading. Chat turns on when it's ready.",
+    "localModelMissing": "Choose a model for Chat in Settings to chat on this device."
   },
   "referral": {
     "title": "Refer and earn rewards",

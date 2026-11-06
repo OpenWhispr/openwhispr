@@ -1249,7 +1249,7 @@ export interface AppVersionResult {
 }
 
 export interface WhisperDownloadProgressData {
-  type: "progress" | "installing" | "complete" | "error";
+  type: "progress" | "verifying" | "installing" | "complete" | "error";
   model: string;
   percentage?: number;
   downloaded_bytes?: number;
@@ -1263,7 +1263,7 @@ export interface WhisperDownloadProgressData {
 export interface LocalModelDownloadStatus {
   modelType: "whisper" | "parakeet" | "llm";
   modelId: string;
-  phase: "downloading" | "installing";
+  phase: "downloading" | "verifying" | "installing";
   progress: number;
   downloadedBytes: number;
   totalBytes: number;
@@ -1312,7 +1312,7 @@ export interface ParakeetModelsListResult {
 }
 
 export interface ParakeetDownloadProgressData {
-  type: "progress" | "installing" | "complete" | "error";
+  type: "progress" | "verifying" | "installing" | "complete" | "error";
   model: string;
   percentage?: number;
   downloaded_bytes?: number;
@@ -1374,6 +1374,30 @@ export interface VulkanGpuResult {
   deviceName?: string;
   reason?: string;
   error?: string;
+}
+
+export interface ComputerProfile {
+  platform: "darwin" | "win32" | "linux";
+  arch: string; // process.arch
+  name: string | null; // "MacBook Pro", "Dell XPS 13 9310"; null = use the generic name
+  formFactor: "laptop" | "desktop";
+  processorName: string; // "Apple M5 Pro", "Intel Core i5-1235U"
+  appleChip: { generation: number; tier: "" | "Pro" | "Max" | "Ultra" } | null;
+  memoryGb: number; // installed GB: a Mac's own figure, Windows' modules, else snapped from usable; 0 = unread
+  graphicsName: string | null; // null on Apple chips (UI shows "Built into chip")
+  nvidia: { name: string; vramMb: number | null } | null;
+  parakeetSupported: boolean; // getParakeetCapability().supported (macOS 15.5 rule)
+  systemLanguages: string[]; // preferred system languages, as tags, e.g. ["pt-BR", "en-US"]
+}
+
+/** What onboarding's local setup downloads: a speech model, a text model or the graphics pack. */
+export type LocalSetupDownloadKind = "whisper" | "parakeet" | "llm" | "llamaVulkan";
+
+/** Free space where local models download, and the room each download kind reserves. */
+export interface LocalSetupSpace {
+  availableBytes: number;
+  /** The room each kind reserves while it downloads and unpacks (main's disk checks). */
+  factors: Record<LocalSetupDownloadKind, number>;
 }
 
 export interface LlamaVulkanStatus {
@@ -1547,7 +1571,9 @@ declare global {
     commitHeldSpaceDeletes?: () => Promise<void>;
     electronAPI: {
       // Basic window operations
-      setOnboardingWindowMode?: (mode: "compact" | "expanded" | "restore") => Promise<boolean>;
+      setOnboardingWindowMode?: (
+        mode: "compact" | "expanded" | "local-setup" | "restore"
+      ) => Promise<boolean>;
       setOnboardingActive?: (active: boolean) => Promise<boolean>;
       openPermissionGuide?: (state: PermissionGuideState) => Promise<boolean>;
       closePermissionGuide?: () => Promise<boolean>;
@@ -2367,6 +2393,8 @@ declare global {
         code?: string;
         details?: string;
       }>;
+      listRetiredLocalModels?: (inUse: string[]) => Promise<Array<{ id: string; name: string }>>;
+      deleteRetiredLocalModels?: (inUse: string[]) => Promise<{ success: boolean }>;
       modelDelete: (modelId: string) => Promise<{
         success: boolean;
         error?: string;
@@ -2480,6 +2508,8 @@ declare global {
       llamaServerStatus: () => Promise<LlamaServerStatus>;
       llamaGpuReset: () => Promise<{ success: boolean; error?: string }>;
       detectVulkanGpu?: () => Promise<VulkanGpuResult>;
+      getComputerProfile: () => Promise<ComputerProfile>;
+      getLocalSetupSpace: () => Promise<LocalSetupSpace>;
       getLlamaVulkanStatus?: () => Promise<LlamaVulkanStatus>;
       downloadLlamaVulkanBinary?: () => Promise<{
         success: boolean;
@@ -2545,6 +2575,11 @@ declare global {
       checkForUpdates: () => Promise<UpdateCheckResult>;
       downloadUpdate: () => Promise<UpdateResult>;
       installUpdate: () => Promise<UpdateResult>;
+      initialModelRegistrySnapshot: import("../models/registryData").RegistrySnapshot;
+      getModelRegistry: () => Promise<import("../models/registryData").RegistrySnapshot>;
+      onModelRegistryUpdated: (
+        callback: (snapshot: import("../models/registryData").RegistrySnapshot) => void
+      ) => () => void;
       getAppVersion: () => Promise<AppVersionResult>;
       getPostMigrationState: () => Promise<{ justMigrated: boolean }>;
       getOAuthProtocolRegistered: () => Promise<boolean>;
@@ -2858,6 +2893,8 @@ declare global {
         error?: string;
       }>;
       openLogsFolder: () => Promise<{ success: boolean; error?: string }>;
+      getModelRegistryUpdates: () => Promise<boolean>;
+      setModelRegistryUpdates: (enabled: boolean) => Promise<{ success: boolean; error?: string }>;
 
       // FFmpeg availability
       checkFFmpegAvailability: () => Promise<FFmpegAvailabilityResult>;
@@ -2866,7 +2903,7 @@ declare global {
       // System settings helpers
       requestMicrophoneAccess?: () => Promise<{ granted: boolean }>;
       checkMicrophoneAccess?: () => Promise<{ granted: boolean; status: string }>;
-      getSystemDefaultMicrophone?: (options?: { refresh?: boolean }) => Promise<{
+      getSystemDefaultMicrophone?: (options?: { refresh?: boolean; wait?: boolean }) => Promise<{
         name: string;
         nativeId?: string;
         platform: string;

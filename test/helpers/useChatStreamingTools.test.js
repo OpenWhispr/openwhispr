@@ -1486,7 +1486,7 @@ test("in the agent window a Cloud screenshot is read through look_at_screen, not
   });
   const asked = [];
   t.mock.method(reasoningService, "askAboutScreen", async (...args) => {
-    asked.push(args);
+    asked.push({ args, abortedWhileAsking: args[3].aborted });
     return "  The terminal shows 'ECONNREFUSED 127.0.0.1:3000'.  ";
   });
 
@@ -1501,13 +1501,17 @@ test("in the agent window a Cloud screenshot is read through look_at_screen, not
   assert.doesNotMatch(configs[0].systemPrompt, /SCREEN CONTEXT:/);
   assert.match(configs[0].systemPrompt, /available only through look_at_screen/);
   assert.equal(asked.length, 1);
-  assert.deepEqual(asked[0].slice(0, 3), [
+  assert.deepEqual(asked[0].args.slice(0, 3), [
     "What does the error say?",
     { data: "base64-image", mediaType: "image/jpeg" },
     LOOK_AT_SCREEN_PROMPT,
   ]);
-  assert.equal(asked[0][3], configs[0].signal, "screen interpretation belongs to the asking turn");
-  assert.equal(asked[0][3].aborted, true, "the completed turn releases its subrequests");
+  assert.equal(
+    asked[0].abortedWhileAsking,
+    false,
+    "screen interpretation belongs to the asking turn"
+  );
+  assert.equal(asked[0].args[3].aborted, true, "the completed turn releases its subrequests");
   // What the screen showed reaches the model, never the saved tool call.
   // Marked as screen content: a page on screen can carry instructions.
   assert.equal(
@@ -1524,7 +1528,6 @@ test("in the agent window a Cloud screenshot is read through look_at_screen, not
   await captured.sendToAI("Thanks!", [{ id: "u2", role: "user", content: "Thanks!" }]);
   assert.ok(!offeredTools[1].includes("look_at_screen"), "only the turn with a screenshot has it");
 });
-
 
 test("look_at_screen reads the screen at most twice a turn", async () => {
   const { createLookAtScreenTool } = await import("../../src/services/tools/lookAtScreenTool.ts");
@@ -1565,6 +1568,153 @@ test("automatic library context includes saved summaries and prioritizes private
   assert.match(body, /Introductory notes/);
   assert.match(sentMessages[0][0].content, /before considering public sources/);
   assert.match(sentMessages[0][0].content, /Explicit questions about OpenWhispr/);
+});
+
+test("a chat that can ask the user offers the Slack picker when a name matches several people", async (t) => {
+  const { captured, reasoningService, vite } = await renderChatStreaming(
+    t,
+    { allowConnectors: true, allowInteractions: true },
+    {
+      electronAPI: {
+        connectorStatus: async () => [
+          {
+            id: "slack",
+            connected: true,
+            configured: true,
+            accountLabel: "chad",
+            needsReconnect: false,
+          },
+        ],
+        onConnectorStatusChanged: () => () => {},
+        connectorPrepare: async () => ({
+          status: "needs_clarification",
+          message: 'More than one match for "gab".',
+          candidates: ["Gabe Smith (@gabe)", "Gabriel Stone (@gstone)"],
+          choices: [
+            { label: "Gabe Smith (@gabe)", destination: "@gabe" },
+            { label: "Gabriel Stone (@gstone)", destination: "@gstone" },
+          ],
+        }),
+        connectorCancel: async () => ({ cancelled: true }),
+      },
+    }
+  );
+  const interactions = await vite.ssrLoadModule("/stores/agentInteractionStore.ts");
+  let question = null;
+  reasoningService.processTextStreamingCloud.mock.mockImplementation((_messages, config) =>
+    (async function* () {
+      let settled = false;
+      const running = config
+        .executeToolCall(
+          "slack_send_message",
+          JSON.stringify({ destination: "gab", text: "hi" }),
+          "srv-slack"
+        )
+        .finally(() => {
+          settled = true;
+        });
+      let entry;
+      while (
+        !settled &&
+        !(entry = Object.values(interactions.useAgentInteractionStore.getState().entries)[0])
+      ) {
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+      question = entry?.payload?.questions?.[0] ?? null;
+      if (entry) interactions.cancelInteraction(entry.key);
+      await running;
+      yield { type: "done", finishReason: "stop" };
+    })()
+  );
+  await captured.sendToAI("Message gab on Slack", []);
+  assert.equal(question?.id, "destination");
+  assert.deepEqual(
+    question.options.map((option) => option.id),
+    ["@gabe", "@gstone"]
+  );
+});
+
+// ---- Local mode with no model (the assistant switched off at setup) ----
+
+// What setup writes for a switched-off assistant: both scopes on this device, no
+// model. The voice panel falls back to Chat while its own scope is unreachable.
+const ASSISTANT_OFF = {
+  useDictationAgent: false,
+  chatAgentMode: "local",
+  chatAgentProvider: "",
+  chatAgentModel: "",
+  dictationAgentMode: "local",
+  dictationAgentProvider: "",
+  dictationAgentModel: "",
+};
+
+for (const [surface, hookOptions] of [
+  ["chat", {}],
+  ["voice panel", { inferenceScope: "dictationAgent" }],
+]) {
+  test(`${surface} with no local model answers with the settings line`, async (t) => {
+    const llamaServerStart = t.mock.fn(async () => ({ success: true }));
+    const { captured, reasoningService, getMessages } = await renderChatStreaming(t, hookOptions, {
+      settings: ASSISTANT_OFF,
+      electronAPI: { llamaServerStart },
+    });
+    const user = { id: "u1", role: "user", content: "Hello" };
+
+    await captured.sendToAI(user.content, [user]);
+
+    const reply = getMessages().at(-1);
+    assert.equal(reply.role, "assistant");
+    assert.equal(reply.content, "Choose a model for Chat in Settings to chat on this device.");
+    assert.equal(llamaServerStart.mock.callCount(), 0);
+    assert.equal(reasoningService.processTextStreamingAI.mock.callCount(), 0);
+    assert.equal(reasoningService.processTextStreamingCloud.mock.callCount(), 0);
+  });
+
+  test(`${surface} says so while the assistant model is still downloading`, async (t) => {
+    const { captured, getMessages } = await renderChatStreaming(t, hookOptions, {
+      settings: ASSISTANT_OFF,
+      electronAPI: {
+        modelGetActiveDownloads: async () => [{ modelType: "llm", modelId: "qwen3.5-4b-q4_k_m" }],
+      },
+    });
+    localStorage.setItem(
+      "pendingLocalModelSelectionsV1",
+      JSON.stringify({ assistant: { provider: "qwen", modelId: "qwen3.5-4b-q4_k_m" } })
+    );
+    const user = { id: "u1", role: "user", content: "Hello" };
+
+    await captured.sendToAI(user.content, [user]);
+
+    assert.equal(
+      getMessages().at(-1).content,
+      "Your assistant model is still downloading. Chat turns on when it's ready."
+    );
+  });
+}
+
+test("cancelling while the local model download is checked leaves no late reply", async (t) => {
+  const downloads = Promise.withResolvers();
+  const { captured, getMessages, reasoningService } = await renderChatStreaming(
+    t,
+    {},
+    {
+      settings: ASSISTANT_OFF,
+      electronAPI: { modelGetActiveDownloads: () => downloads.promise },
+    }
+  );
+  localStorage.setItem(
+    "pendingLocalModelSelectionsV1",
+    JSON.stringify({ assistant: { provider: "qwen", modelId: "qwen3.5-4b-q4_k_m" } })
+  );
+  const user = { id: "u1", role: "user", content: "Hello" };
+  const sending = captured.sendToAI(user.content, [user]);
+  captured.cancelStream();
+  downloads.resolve([{ modelType: "llm", modelId: "qwen3.5-4b-q4_k_m" }]);
+  await sending;
+
+  assert.deepEqual(getMessages(), []);
+  assert.equal(reasoningService.processTextStreamingAI.mock.callCount(), 0);
+  assert.equal(reasoningService.processTextStreamingCloud.mock.callCount(), 0);
 });
 
 for (const [label, policy, content] of [
@@ -1642,3 +1792,32 @@ test("a blocked Voice Assistant answers with the refusal, not on the remote Chat
   assert.equal(reply.content, "Choose a local model your organization has approved.");
   assert.deepEqual(reply.error, { settingsTarget: "llms" });
 });
+
+for (const supportsTools of [true, false]) {
+  test(`local chat honors catalog supportsTools=${supportsTools} over its model-size guess`, async (t) => {
+    const modelId = supportsTools ? "qwen3.5-2b-q4_k_m" : "qwen3.5-4b-q4_k_m";
+    const { captured, offeredTools, vite } = await renderChatStreaming(
+      t,
+      {},
+      {
+        settings: { chatAgentMode: "local", chatAgentProvider: "qwen", chatAgentModel: modelId },
+      }
+    );
+    const store = await vite.ssrLoadModule("/models/registryData.js");
+    const before = store.getRegistrySnapshot();
+    const data = structuredClone(before.data);
+    data.localProviders
+      .flatMap((provider) => provider.models)
+      .find((model) => model.id === modelId).supportsTools = supportsTools;
+    store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1 });
+    t.after(() =>
+      store.replaceRegistryData({
+        ...before,
+        manifestVersion: store.getRegistryVersion() + 1,
+      })
+    );
+    await captured.sendToAI("Summarize my notes", []);
+    assert.equal(offeredTools.length, 1);
+    assert.equal(offeredTools[0].includes("search_notes"), supportsTools);
+  });
+}

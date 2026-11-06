@@ -114,8 +114,8 @@ async function renderChatStreaming(
     t.mock.method(
       reasoningService,
       "processTextStreamingAI",
-      (_messages, _model, _provider, config) => {
-        config.signal.addEventListener(
+      (_messages, _model, _provider, _config, _tools, signal) => {
+        signal.addEventListener(
           "abort",
           () => stream.end(abortThrows ? new DOMException("aborted", "AbortError") : undefined),
           { once: true }

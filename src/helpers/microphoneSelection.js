@@ -120,6 +120,7 @@ export async function resolvePreferredMicrophone({
   mediaDevices = navigator.mediaDevices,
   forceSystemDefault = false,
   refreshSystemDefault = false,
+  waitForSystemDefault = true,
   getSystemDefault = (options) => window.electronAPI?.getSystemDefaultMicrophone?.(options),
 }) {
   const effectiveSettings = forceSystemDefault
@@ -131,7 +132,9 @@ export async function resolvePreferredMicrophone({
 
   if (mode === "system") {
     try {
-      systemDefault = (await getSystemDefault?.({ refresh: refreshSystemDefault })) || null;
+      systemDefault =
+        (await getSystemDefault?.({ refresh: refreshSystemDefault, wait: waitForSystemDefault })) ||
+        null;
     } catch {
       // The explicit Chromium "default" device below remains the safe fallback.
     }

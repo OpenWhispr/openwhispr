@@ -1,51 +1,33 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const React = require("react");
+const { until } = require("../lib/chatTurnHarness");
 const {
-  SIGNED_OUT_AUTH_MOCK,
   createRendererServer,
   installBrowserGlobals,
+  SIGNED_OUT_AUTH_MOCK,
 } = require("../lib/rendererTestHarness");
 const { installInteractiveDom } = require("../lib/interactiveDom");
 const { SKILLS_MOCKS, ariaLabel, click, findAll, settle } = require("../lib/skillsHarness");
 
-// ChatView with its real message sender. The streaming hook records each send and its
-// options; the composer renders its leading row, so the chip is real and clickable.
+// The engine records each send and its options; the composer renders its leading row,
+// so the chip is real and clickable.
 const MOCKS = {
-  "/ui/useToast": `export function useToast() { return { toast() {} }; }`,
+  "/ui/useToast": `export const useToast = () => ({ toast: () => {} });`,
   "/useInterruptedInteractions": `export function useInterruptedInteractions() {}`,
-  ...SIGNED_OUT_AUTH_MOCK,
   "react-i18next": SKILLS_MOCKS["react-i18next"],
-  "/useChatStreaming": `
-    import { useCallback } from "react";
-    export function useChatStreaming(options) {
-      globalThis.__chatStreamingOptions = options;
-      const sendToAI = useCallback(async (text, _messages, sendOptions) => {
-        globalThis.__sends.push({ text, options: sendOptions });
-      }, []);
-      const state = {
-        agentState: globalThis.__agentState ?? "idle",
-        toolStatus: "",
-        activeToolName: "",
-      };
-      return { ...state, sendToAI, cancelStream() {} };
-    }
-  `,
-  "/useChatPersistence": `
-    export function useChatPersistence() {
+  ...SIGNED_OUT_AUTH_MOCK,
+  "/chatTurnEngine": `
+    export function createChatTurnEngine(getOptions, sink) {
+      globalThis.__chatStreamingOptions = getOptions();
       return {
-        conversationId: null,
-        noteId: null,
-        messages: [],
-        setMessages() {},
-        createConversation: async () => 1,
-        saveUserMessage: async () => {},
-        saveAssistantMessage() {},
-        getSessionVersion: () => 1,
-        loadConversation: async (_id, beforeOpen) => { beforeOpen?.(); return []; },
-        handleNewChat() {
-          globalThis.__newChats += 1;
+        async send(text, _messages, options) {
+          globalThis.__sends.push({ text, options });
+          sink.setAgentState("streaming");
+          if (globalThis.__pendingSkillSend) await globalThis.__pendingSkillSend;
+          sink.setAgentState("idle");
         },
+        cancel() {},
       };
     }
   `,
@@ -71,10 +53,10 @@ const MOCKS = {
       return createElement("div", null, leading ?? emptyState);
     }
   `,
-  "/ui/dialog": `export function ConfirmDialog() { return null; }`,
+  "/ui/dialog": `export function ConfirmDialog() { return null; } export function AlertDialog() { return null; }`,
   "/hooks/useDialogs": `
     export function useDialogs() {
-      return { confirmDialog: { open: false }, showConfirmDialog() {}, hideConfirmDialog() {} };
+      return { confirmDialog: { open: false }, alertDialog: { open: false }, showConfirmDialog() {}, hideConfirmDialog() {} };
     }
   `,
 };
@@ -88,20 +70,26 @@ async function renderChatView(t, skillRequest = null) {
     if (root) await React.act(async () => root.unmount());
     for (const key of [
       "__sends",
-      "__newChats",
       "__chatInput",
       "__conversationList",
       "__chatStreamingOptions",
       "__skillChatActions",
-      "__agentState",
     ]) {
       delete globalThis[key];
     }
   });
-  installBrowserGlobals(t);
+  let nextId = 1;
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        createAgentConversation: async () => ({ id: nextId++ }),
+        getAgentConversation: async (id) => ({ id, messages: [] }),
+        addAgentMessage: async () => ({ id: 1 }),
+      },
+    },
+  });
   const container = installInteractiveDom(t);
   globalThis.__sends = [];
-  globalThis.__newChats = 0;
   const { createRoot } = require("react-dom/client");
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-chat-view-skills-test-",
@@ -120,11 +108,18 @@ async function renderChatView(t, skillRequest = null) {
     )
   );
   await settle();
+  if (skillRequest?.kind === "create" && skillRequest.draft) {
+    await React.act(async () => until(() => globalThis.__sends.length === 1));
+  }
 
   const chip = () =>
     findAll(container, (node) => ariaLabel(node).startsWith("skills.chat.chipRemove"))[0];
   const send = async (text) => {
-    await React.act(async () => globalThis.__chatInput.onTextSubmit(text));
+    const previous = globalThis.__sends.length;
+    await React.act(async () => {
+      globalThis.__chatInput.onTextSubmit(text);
+      await until(() => globalThis.__sends.length > previous);
+    });
     await settle();
     return globalThis.__sends.at(-1).options;
   };
@@ -138,8 +133,6 @@ const picks = { name: "meeting-prep", displayName: "Meeting prep" };
 test("Try now opens a new chat with the skill's chip and placeholder", async (t) => {
   const { container, calls, chip, send } = await renderChatView(t, TRY_MEETING_PREP);
 
-  assert.equal(globalThis.__chatStreamingOptions.skillsEnabled, true);
-  assert.equal(globalThis.__newChats, 1, "a new chat started");
   assert.equal(calls.handled, 1);
   assert.equal(ariaLabel(chip()), chipLabel("Meeting prep"));
   assert.match(container.textContent, /Meeting prep/);
@@ -153,6 +146,7 @@ test("Try now opens a new chat with the skill's chip and placeholder", async (t)
   assert.equal(findAll(container, playing).length, 1);
 
   const options = await send("Prep my 3pm with Dana");
+  assert.equal(globalThis.__chatStreamingOptions.skillsEnabled, true);
   assert.deepEqual(options.attachedSkill, { name: "meeting-prep" });
   assert.equal(options.allowSkillPick, true);
 });
@@ -277,12 +271,18 @@ test("Draft with assistant on an empty form only opens the creator", async (t) =
   assert.deepEqual(globalThis.__sends, []);
 });
 
-test("Open skill waits for the turn to finish", async (t) => {
-  // Leaving the chat ends a running turn, and a turn holding only the card isn't saved then.
-  globalThis.__agentState = "streaming";
-  await renderChatView(t);
-
-  assert.equal(globalThis.__skillChatActions.openSkill, undefined);
+test("Open skill stays enabled during a reply", async (t) => {
+  let resolve;
+  globalThis.__pendingSkillSend = new Promise((done) => {
+    resolve = done;
+  });
+  const { calls, send } = await renderChatView(t);
+  await send("Working");
+  assert.notEqual(globalThis.__chatInput.agentState, "idle");
+  await React.act(async () => globalThis.__skillChatActions.openSkill("meeting-prep"));
+  assert.deepEqual(calls.opened, ["meeting-prep"]);
+  await React.act(async () => resolve());
+  delete globalThis.__pendingSkillSend;
 });
 
 test("a conversation's skills come back when the user returns to it", async (t) => {
@@ -318,12 +318,11 @@ test("a request is handled once, however often the chat re-renders", async (t) =
   await settle();
 
   assert.equal(calls.handled, 1);
-  assert.equal(globalThis.__newChats, 1);
+
   assert.equal(chip(), undefined);
 });
 
-// React's development build mounts, unmounts and remounts once; the real persistence ends a
-// session on unmount, which would drop a send started during the first mount.
+// React's development build mounts, unmounts and remounts once.
 test("Draft with assistant sends once under React's development double mount", async (t) => {
   let root = null;
   const created = [];
@@ -340,14 +339,15 @@ test("Draft with assistant sends once under React's development double mount", a
           created.push(title);
           return { id: 7 };
         },
-        addAgentMessage: async () => {},
+        addAgentMessage: async () => ({ id: 1 }),
+        getAgentConversation: async (id) => ({ id, messages: [] }),
       },
     },
   });
   const container = installInteractiveDom(t);
   globalThis.__sends = [];
   const { createRoot } = require("react-dom/client");
-  const { "/useChatPersistence": _persistence, ...mockModules } = MOCKS;
+  const mockModules = MOCKS;
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-chat-view-skills-strict-test-",
     noExternal: ["react-i18next"],
@@ -367,8 +367,7 @@ test("Draft with assistant sends once under React's development double mount", a
 
   root = createRoot(container);
   await React.act(async () => root.render(React.createElement(React.StrictMode, null, view)));
-  await settle();
-  await settle();
+  await React.act(async () => until(() => globalThis.__sends.length === 1));
 
   assert.equal(globalThis.__sends.length, 1);
   assert.equal(created.length, 1, "one conversation, and no empty one left behind");

@@ -17,6 +17,7 @@ const defaultMockModules = (settingsKey) => ({
     "export default { debug() {}, info() {}, warn() {}, error() {}, logReasoning() {} };",
   "/stores/settingsStore": `
     export const getSettings = () => globalThis.${settingsKey};
+    export const useSettingsStore = { subscribe: () => () => {} };
     export const getEffectiveCleanupModel = () => null;
     export const selectResolvedLLMConfig = () => ({ model: null, provider: null });
     export const isCloudCleanupMode = () => false;

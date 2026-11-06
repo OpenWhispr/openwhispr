@@ -355,34 +355,10 @@
           "features": {
             "device": "Funciona en tu dispositivo",
             "offline": "Funciona sin conexión tras la configuración",
-            "models": "Elige modelos para dictado y asistente",
+            "setup": "Configurado para este equipo",
             "free": "Gratis para siempre"
           }
         },
-        "warnings": {
-          "byok": {
-            "title": "Tu proveedor gestiona tus datos",
-            "description": "Añadirás credenciales para proveedores independientes de dictado y Assistant. Se aplican los precios y las políticas de retención del proveedor.",
-            "continue": "Configurar proveedor de API",
-            "steps": {
-              "1": "Elige proveedores para dictado y Assistant",
-              "2": "Añade credenciales con almacenamiento seguro",
-              "3": "Prueba cada conexión antes de activarla"
-            }
-          },
-          "local": {
-            "title": "La configuración local requiere algunos pasos más",
-            "description": "El procesamiento local mantiene tu voz en este dispositivo, pero requiere una configuración inicial y al menos {{minimumSpace}} GB de espacio libre.",
-            "continue": "Configurar localmente",
-            "steps": {
-              "1": "Elige un motor de transcripción",
-              "2": "Configura o descarga un modelo, unos {{modelSize}}",
-              "3": "Espera a la instalación y la activación"
-            }
-          }
-        },
-        "useCloud": "Usar Nube en su lugar",
-        "continueSetup": "Continuar la configuración",
         "showMore": "Mostrar más opciones",
         "moreOptions": {
           "title": "Elige tu configuración de API",
@@ -437,23 +413,80 @@
         }
       },
       "local": {
-        "title": "Configura los modelos locales",
-        "description": "Elige los modelos que quieres ejecutar en tu dispositivo.",
-        "descriptionLineOne": "Elige los modelos que quieres",
-        "descriptionLineTwo": "ejecutar en tu dispositivo.",
-        "providerLabel": "Proveedor",
-        "cohereLanguageLabel": "Idioma de dictado",
-        "cohereLanguageHint": "Cohere no detecta el idioma que hablas, así que elige el idioma en el que vas a dictar.",
-        "cohereLanguagePlaceholder": "Elige un idioma",
-        "download": "Descargar",
         "downloadingShort": "Descargando",
-        "selected": "Seleccionado",
-        "use": "Usar",
         "downloadInProgress": "Descarga en curso",
         "cancelDownload": "Cancelar la descarga de {{model}}",
         "downloads": "Descargas de modelos",
         "downloading": "Descargando… {{progress}}%",
+        "verifying": "Verificando",
         "installing": "Instalando"
+      },
+      "localSetup": {
+        "title": "Te recomendamos esta configuración",
+        "subtitle": "Elegida para tu {{computer}} y {{language}}. Estos modelos se ejecutan en este dispositivo.",
+        "subtitleOrganizationText": "Elegida para tu {{computer}} y {{language}}. El dictado se ejecuta en este dispositivo; el chat y las notas con IA usan el servicio que eligió tu organización.",
+        "computer": {
+          "chip": "Chip",
+          "processor": "Procesador",
+          "memory": "Memoria",
+          "graphics": "Gráficos",
+          "builtIn": "Integrados en el chip",
+          "memoryValue": "{{gb}} GB",
+          "mac": "Mac",
+          "windowsLaptop": "Portátil Windows",
+          "windowsDesktop": "Equipo de escritorio Windows",
+          "linuxLaptop": "Portátil Linux",
+          "linuxDesktop": "Equipo de escritorio Linux"
+        },
+        "rows": {
+          "dictation": "Dictado",
+          "cleanup": "Corrección",
+          "assistant": "Asistente"
+        },
+        "description": {
+          "dictation": "Convierte tu voz en texto en cualquier app",
+          "cleanup": "Elimina muletillas y corrige la gramática",
+          "assistant": "Responde preguntas y hace lo que le pides"
+        },
+        "badge": {
+          "optional": "Opcional",
+          "cloud": "Se recomienda la nube"
+        },
+        "line": {
+          "requiredByOrganization": "Exigido por tu organización",
+          "organizationModelsUnrunnable": "Ninguno de los modelos aprobados por tu organización funciona en este equipo",
+          "offToFit": "Desactivado para que quepa en el espacio libre de este equipo",
+          "failed": "No se pudo descargar. Comprueba tu conexión y reinténtalo"
+        },
+        "unavailable": {
+          "notEnoughMemory": "Memoria insuficiente",
+          "exceedsMemory": "Supera los límites de memoria de este equipo",
+          "memoryUnread": "No se pudo comprobar la memoria",
+          "organization": "No disponible en este equipo",
+          "memoryMac": "{{model}} necesita {{needed}} GB de memoria y este Mac tiene {{have}} GB",
+          "memoryComputer": "{{model}} necesita {{needed}} GB de memoria y este equipo tiene {{have}} GB",
+          "memoryUnreadLine": "{{model}} necesita {{needed}} GB de memoria. Si este equipo tiene esa cantidad, puedes activarlo más tarde en Ajustes"
+        },
+        "button": {
+          "download": "Descargar modelos",
+          "downloading": "Descargando",
+          "proceed": "Continuar",
+          "noSpace": "No hay suficiente espacio libre"
+        },
+        "retry": "Reintentar",
+        "retryRow": "Reintentar {{row}}",
+        "downloaded": "Descargado",
+        "foot": {
+          "default": "Puedes cambiar cualquiera de estos ajustes más tarde en Ajustes.",
+          "dictationFailed": "El dictado debe descargarse antes de continuar. Reinténtalo arriba o vuelve atrás y elige otra configuración.",
+          "dictationUnavailable": "El dictado no puede funcionar en este equipo con los modelos que aprobó tu organización. Vuelve atrás y elige otra configuración.",
+          "finishesInBackground": "El resto se sigue descargando después de continuar y se activa cuando esté listo.",
+          "failedStaysOff": "Lo que no se descargó queda desactivado. Puedes añadirlo más tarde en Ajustes.",
+          "needsMac": "Se necesitan {{needed}} GB y este Mac tiene {{free}} GB libres.",
+          "needsComputer": "Se necesitan {{needed}} GB y este equipo tiene {{free}} GB libres.",
+          "noSpaceMac": "El dictado necesita {{needed}} GB libres y este Mac tiene {{free}} GB. Libera espacio para continuar.",
+          "noSpaceComputer": "El dictado necesita {{needed}} GB libres y este equipo tiene {{free}} GB. Libera espacio para continuar."
+        }
       }
     },
     "steps": {
@@ -881,6 +914,11 @@
       }
     },
     "modelRetiredTitle": "Modelo ya no disponible",
+    "modelRetiredByProvider": "{{provider}} retiró {{from}}. Se cambió a {{to}}.",
+    "modelUnavailableSwitched": "{{from}} ya no está disponible en {{provider}}. Se cambió a {{to}}.",
+    "localModelRetired": "{{from}} ya no está disponible, así que te cambiamos a {{to}}. Si aún no lo has descargado, descárgalo en Ajustes.",
+    "localModelRetiredChooseAnother": "{{from}} ya no está disponible. Elige otro modelo local en Ajustes.",
+    "localModelRetiredKept": "{{from}} se ha retirado. Sigue funcionando porque ya está descargado, pero no se puede volver a descargar. Elige otro modelo local en Ajustes.",
     "groq": {
       "modelRetired": "Groq retiró {{from}}. Se cambió a {{to}}."
     },
@@ -1075,6 +1113,7 @@
         "tlsError": "Error de certificado — tu red puede usar inspección SSL que bloquea las descargas. Intenta descargar desde otra red.",
         "unknown": "Error desconocido"
       },
+      "verifying": "Verificando {{model}}",
       "downloadFailed": {
         "title": "Descarga fallida"
       },
@@ -2002,6 +2041,14 @@
       "dataManagementTitle": "Gestión de datos",
       "modelCache": "Caché de modelos",
       "open": "Abrir",
+      "retiredModels": {
+        "label": "Modelos retirados",
+        "description": "Estos modelos ya no se ofrecen, pero siguen en el disco: {{models}}.",
+        "remove": "Eliminar",
+        "confirmTitle": "¿Eliminar los modelos retirados?",
+        "confirmDescription": "Esto borra los archivos de los modelos que el catálogo ya no ofrece. Los demás modelos descargados se conservan.",
+        "failedDescription": "No se pudieron eliminar algunos archivos. Puede que un modelo siga en uso; reinicia la aplicación e inténtalo de nuevo."
+      },
       "removeModels": {
         "confirmText": "Eliminar modelos",
         "description": "Esto elimina todos los modelos de Whisper almacenados en caché local ({{path}}) y libera espacio en disco. Puedes descargarlos nuevamente desde el selector de modelos.",
@@ -2310,6 +2357,8 @@
       "leaderboardRequiresHistory": "Activa la retención de datos antes de unirte a las clasificaciones.",
       "usageAnalytics": "Analíticas de uso",
       "usageAnalyticsDescription": "Ayúdanos a mejorar OpenWhispr compartiendo métricas de rendimiento anónimas. Nunca enviamos contenido de transcripciones, solo datos de tiempo y errores.",
+      "modelListUpdates": "Actualizaciones de la lista de modelos",
+      "modelListUpdatesDescription": "Consulta cada 15 minutos la lista pública de modelos de OpenWhispr en GitHub para ver modelos nuevos y retirados. Los cambios se aplican por completo tras reiniciar.",
       "dataRetention": "Retención de datos",
       "dataRetentionDescription": "Almacenar transcripciones y audio localmente en tu historial. Cuando está desactivado, las transcripciones se pegan pero no se guardan.",
       "transcriptRetention": "Retención de transcripciones",
@@ -4238,6 +4287,10 @@
     "expand": "Expandir barra lateral"
   },
   "chat": {
+    "answering": "Respondiendo…",
+    "conversationCreateFailed": "No se pudo iniciar la conversación. Tu pregunta está de nuevo en Nuevo chat.",
+    "messageSaveFailed": "No se pudo guardar este mensaje. Inténtalo de nuevo.",
+    "conversationLoadFailed": "No se pudo cargar esta conversación. Inténtalo de nuevo.",
     "newChat": "Nuevo chat",
     "search": "Buscar conversaciones...",
     "archived": "Archivadas",
@@ -4277,7 +4330,9 @@
     "forkedFrom": "Bifurcado de «{{title}}»",
     "forkFailed": "No se pudo bifurcar este chat",
     "sendNotStarted": "Este chat está ocupado. Tu mensaje no se envió. Inténtalo de nuevo cuando termine la solicitud actual.",
-    "openFailed": "Este chat ya no está disponible."
+    "openFailed": "Este chat ya no está disponible.",
+    "localModelDownloading": "El modelo del asistente aún se está descargando. El chat se activará cuando esté listo.",
+    "localModelMissing": "Elige un modelo para Chat en Configuración para chatear en este dispositivo."
   },
   "support": {
     "documentation": "Documentación",

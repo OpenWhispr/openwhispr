@@ -355,34 +355,10 @@
           "features": {
             "device": "Läuft auf Ihrem Gerät",
             "offline": "Funktioniert nach der Einrichtung offline",
-            "models": "Modelle für Diktat und Assistant wählen",
+            "setup": "Für diesen Computer eingerichtet",
             "free": "Für immer kostenlos"
           }
         },
-        "warnings": {
-          "byok": {
-            "title": "Ihr Anbieter verarbeitet Ihre Daten",
-            "description": "Sie fügen Zugangsdaten für separate Diktat- und Assistant-Anbieter hinzu. Es gelten die Preise und Aufbewahrungsrichtlinien des Anbieters.",
-            "continue": "API-Anbieter einrichten",
-            "steps": {
-              "1": "Anbieter für Diktat und Assistant wählen",
-              "2": "Zugangsdaten über sichere Speicherung hinzufügen",
-              "3": "Jede Verbindung vor der Aktivierung testen"
-            }
-          },
-          "local": {
-            "title": "Die lokale Einrichtung erfordert ein paar zusätzliche Schritte",
-            "description": "Die lokale Verarbeitung behält Ihre Sprache auf diesem Gerät, erfordert aber eine einmalige Einrichtung und mindestens {{minimumSpace}} GB freien Speicher.",
-            "continue": "Lokal einrichten",
-            "steps": {
-              "1": "Transkriptions-Engine wählen",
-              "2": "Modell konfigurieren oder herunterladen, etwa {{modelSize}}",
-              "3": "Auf Installation und Aktivierung warten"
-            }
-          }
-        },
-        "useCloud": "Stattdessen Cloud verwenden",
-        "continueSetup": "Einrichtung fortsetzen",
         "showMore": "Weitere Optionen anzeigen",
         "moreOptions": {
           "title": "API-Einrichtung wählen",
@@ -437,23 +413,80 @@
         }
       },
       "local": {
-        "title": "Lokale Modelle einrichten",
-        "description": "Wählen Sie die Modelle, die auf Ihrem Gerät laufen sollen.",
-        "descriptionLineOne": "Wählen Sie die Modelle, die",
-        "descriptionLineTwo": "auf Ihrem Gerät laufen sollen.",
-        "providerLabel": "Anbieter",
-        "cohereLanguageLabel": "Diktiersprache",
-        "cohereLanguageHint": "Cohere erkennt Ihre Sprache nicht automatisch. Wählen Sie die Sprache, in der Sie diktieren.",
-        "cohereLanguagePlaceholder": "Sprache auswählen",
-        "download": "Herunterladen",
         "downloadingShort": "Wird geladen",
-        "selected": "Ausgewählt",
-        "use": "Verwenden",
         "downloadInProgress": "Download läuft",
         "cancelDownload": "Download von {{model}} abbrechen",
         "downloads": "Modell-Downloads",
         "downloading": "Wird heruntergeladen… {{progress}}%",
+        "verifying": "Wird überprüft",
         "installing": "Wird installiert"
+      },
+      "localSetup": {
+        "title": "Wir empfehlen diese Einstellungen",
+        "subtitle": "Passend zu {{computer}} und {{language}} ausgewählt. Diese Modelle laufen auf diesem Gerät.",
+        "subtitleOrganizationText": "Passend zu {{computer}} und {{language}} ausgewählt. Das Diktieren läuft auf diesem Gerät; Chat und KI-Notizen nutzen den Dienst, den Ihre Organisation gewählt hat.",
+        "computer": {
+          "chip": "Chip",
+          "processor": "Prozessor",
+          "memory": "Arbeitsspeicher",
+          "graphics": "Grafik",
+          "builtIn": "Im Chip integriert",
+          "memoryValue": "{{gb}} GB",
+          "mac": "Mac",
+          "windowsLaptop": "Windows-Laptop",
+          "windowsDesktop": "Windows-Desktop-PC",
+          "linuxLaptop": "Linux-Laptop",
+          "linuxDesktop": "Linux-Desktop-PC"
+        },
+        "rows": {
+          "dictation": "Diktat",
+          "cleanup": "Textbereinigung",
+          "assistant": "Assistent"
+        },
+        "description": {
+          "dictation": "Wandelt Ihre Stimme in jeder App in Text um",
+          "cleanup": "Entfernt Füllwörter und korrigiert die Grammatik",
+          "assistant": "Beantwortet Fragen und erledigt Ihre Anfragen"
+        },
+        "badge": {
+          "optional": "Optional",
+          "cloud": "Cloud empfohlen"
+        },
+        "line": {
+          "requiredByOrganization": "Von Ihrer Organisation vorgeschrieben",
+          "organizationModelsUnrunnable": "Keines der von Ihrer Organisation freigegebenen Modelle läuft auf diesem Computer",
+          "offToFit": "Aus, damit es in den freien Speicherplatz dieses Computers passt",
+          "failed": "Download fehlgeschlagen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut"
+        },
+        "unavailable": {
+          "notEnoughMemory": "Nicht genug Arbeitsspeicher",
+          "exceedsMemory": "Übersteigt den Arbeitsspeicher dieses Computers",
+          "memoryUnread": "Arbeitsspeicher nicht erkannt",
+          "organization": "Auf diesem Computer nicht verfügbar",
+          "memoryMac": "{{model}} braucht {{needed}} GB Arbeitsspeicher, dieser Mac hat {{have}} GB",
+          "memoryComputer": "{{model}} braucht {{needed}} GB Arbeitsspeicher, dieser Computer hat {{have}} GB",
+          "memoryUnreadLine": "{{model}} braucht {{needed}} GB Arbeitsspeicher. Wenn dieser Computer so viel hat, schalten Sie es später in den Einstellungen ein"
+        },
+        "button": {
+          "download": "Modelle herunterladen",
+          "downloading": "Wird heruntergeladen",
+          "proceed": "Fortfahren",
+          "noSpace": "Nicht genug freier Speicherplatz"
+        },
+        "retry": "Erneut versuchen",
+        "retryRow": "{{row}} erneut versuchen",
+        "downloaded": "Heruntergeladen",
+        "foot": {
+          "default": "Sie können all das später in den Einstellungen ändern.",
+          "dictationFailed": "Das Diktat muss heruntergeladen sein, bevor es weitergeht. Versuchen Sie es oben erneut, oder gehen Sie zurück und wählen Sie eine andere Einrichtung.",
+          "dictationUnavailable": "Mit den von Ihrer Organisation freigegebenen Modellen ist Diktat auf diesem Computer nicht möglich. Gehen Sie zurück und wählen Sie eine andere Einrichtung.",
+          "finishesInBackground": "Der Rest wird nach dem Fortfahren weiter heruntergeladen und eingeschaltet, sobald er bereit ist.",
+          "failedStaysOff": "Was nicht heruntergeladen wurde, bleibt aus. Sie können es später in den Einstellungen hinzufügen.",
+          "needsMac": "Dafür werden {{needed}} GB benötigt, und auf diesem Mac sind {{free}} GB frei.",
+          "needsComputer": "Dafür werden {{needed}} GB benötigt, und auf diesem Computer sind {{free}} GB frei.",
+          "noSpaceMac": "Das Diktat braucht {{needed}} GB freien Speicherplatz, und dieser Mac hat {{free}} GB. Geben Sie Speicherplatz frei, um fortzufahren.",
+          "noSpaceComputer": "Das Diktat braucht {{needed}} GB freien Speicherplatz, und dieser Computer hat {{free}} GB. Geben Sie Speicherplatz frei, um fortzufahren."
+        }
       }
     },
     "steps": {
@@ -881,6 +914,11 @@
       }
     },
     "modelRetiredTitle": "Modell nicht mehr verfügbar",
+    "modelRetiredByProvider": "{{provider}} hat {{from}} eingestellt. Umgestellt auf {{to}}.",
+    "modelUnavailableSwitched": "{{from}} ist bei {{provider}} nicht mehr verfügbar. Gewechselt zu {{to}}.",
+    "localModelRetired": "{{from}} ist nicht mehr verfügbar, daher haben wir zu {{to}} gewechselt. Falls es noch nicht heruntergeladen ist, lade es in den Einstellungen herunter.",
+    "localModelRetiredChooseAnother": "{{from}} ist nicht mehr verfügbar. Wähle in den Einstellungen ein anderes lokales Modell.",
+    "localModelRetiredKept": "{{from}} wurde eingestellt. Es funktioniert weiter, da es bereits heruntergeladen ist, kann aber nicht erneut heruntergeladen werden. Wähle in den Einstellungen ein anderes lokales Modell.",
     "groq": {
       "modelRetired": "Groq hat {{from}} eingestellt. Zu {{to}} gewechselt."
     },
@@ -1075,6 +1113,7 @@
         "tlsError": "Zertifikatsfehler — Ihr Netzwerk verwendet möglicherweise SSL-Inspektion, die Downloads blockiert. Versuchen Sie es über ein anderes Netzwerk.",
         "unknown": "Unbekannter Fehler"
       },
+      "verifying": "{{model}} wird überprüft",
       "downloadFailed": {
         "title": "Download fehlgeschlagen"
       },
@@ -2482,6 +2521,14 @@
       "dataManagementTitle": "Datenverwaltung",
       "modelCache": "Modell-Cache",
       "open": "Öffnen",
+      "retiredModels": {
+        "label": "Eingestellte Modelle",
+        "description": "Diese Modelle werden nicht mehr angeboten, liegen aber noch auf dem Datenträger: {{models}}.",
+        "remove": "Entfernen",
+        "confirmTitle": "Eingestellte Modelle entfernen?",
+        "confirmDescription": "Dadurch werden die Dateien der Modelle gelöscht, die der Katalog nicht mehr anbietet. Andere heruntergeladene Modelle bleiben erhalten.",
+        "failedDescription": "Einige Dateien konnten nicht entfernt werden. Möglicherweise wird ein Modell noch verwendet. Starte die App neu und versuche es erneut."
+      },
       "removeModels": {
         "confirmText": "Modelle löschen",
         "description": "Dadurch werden alle lokal zwischengespeicherten Whisper-Modelle ({{path}}) gelöscht und Speicherplatz freigegeben. Sie können sie über die Modellauswahl erneut herunterladen.",
@@ -2790,6 +2837,8 @@
       "leaderboardRequiresHistory": "Aktivieren Sie die Datenaufbewahrung, bevor Sie Bestenlisten beitreten.",
       "usageAnalytics": "Nutzungsanalysen",
       "usageAnalyticsDescription": "Helfen Sie uns, OpenWhispr zu verbessern, indem Sie anonyme Leistungsdaten teilen. Wir senden niemals Transkriptionsinhalte – nur Timing- und Fehlerdaten.",
+      "modelListUpdates": "Aktualisierungen der Modellliste",
+      "modelListUpdatesDescription": "Prüft alle 15 Minuten die öffentliche Modellliste von OpenWhispr auf GitHub auf neue und eingestellte Modelle. Änderungen werden nach einem Neustart vollständig wirksam.",
       "audioRetention": "Audio-Aufbewahrung",
       "audioRetentionDescription": "Diktat-Audio lokal für erneute Transkription und Download speichern. Dateien werden nach Ablauf der Aufbewahrungsfrist automatisch gelöscht. Meeting-Audio wird niemals gespeichert.",
       "audioRetentionDisabled": "Deaktiviert",
@@ -3589,6 +3638,10 @@
     }
   },
   "chat": {
+    "answering": "Antwort wird erstellt…",
+    "conversationCreateFailed": "Die Unterhaltung konnte nicht gestartet werden. Deine Frage ist wieder unter „Neuer Chat“.",
+    "messageSaveFailed": "Diese Nachricht konnte nicht gespeichert werden. Bitte versuche es erneut.",
+    "conversationLoadFailed": "Diese Unterhaltung konnte nicht geladen werden. Bitte versuche es erneut.",
     "newChat": "Neuer Chat",
     "search": "Unterhaltungen suchen...",
     "archived": "Archiviert",
@@ -3628,7 +3681,9 @@
     "forkedFrom": "Abgezweigt von „{{title}}“",
     "forkFailed": "Chat konnte nicht abgezweigt werden",
     "sendNotStarted": "Dieser Chat ist beschäftigt. Deine Nachricht wurde nicht gesendet. Versuche es nach Abschluss der aktuellen Anfrage erneut.",
-    "openFailed": "Dieser Chat ist nicht mehr verfügbar."
+    "openFailed": "Dieser Chat ist nicht mehr verfügbar.",
+    "localModelDownloading": "Dein Assistenzmodell wird noch heruntergeladen. Der Chat startet, sobald es bereit ist.",
+    "localModelMissing": "Wähle in den Einstellungen ein Modell für Chat, um auf diesem Gerät zu chatten."
   },
   "referral": {
     "title": "Empfehlen und Belohnungen erhalten",

@@ -92,7 +92,6 @@ export async function editSelectedText(
     ...(local
       ? { responseFormat: { ...SELECTION_EDIT_RESPONSE_FORMAT, type: "json_object" as const } }
       : {}),
-    signal,
     requestId: crypto.randomUUID(),
   };
   if (attachment && attachScreenContext && isScreenContextAllowed(usePolicyStore.getState())) {

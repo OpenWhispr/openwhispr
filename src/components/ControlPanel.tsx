@@ -35,6 +35,12 @@ import {
   selectPolicyEffectiveSettings,
   useSettingsStore,
 } from "../stores/settingsStore";
+import {
+  startNewChat,
+  subscribeChatAccountScope,
+  subscribeChatPolicy,
+} from "../stores/chatTurnStore";
+import { useChatNeedsAttention } from "./chat/useChatNeedsAttention";
 import { usePolicyStore } from "../stores/policyStore";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import type { EnterpriseAudioTestLink } from "../types/enterpriseAudio";
@@ -157,12 +163,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const [showSearch, setShowSearch] = useState(false);
   const showDiscarded = useShowDiscarded();
   const [activeView, setActiveView] = useState<ControlPanelView>("home");
-  // The chat stays mounted once opened, so a turn waiting on the user survives
-  // a trip to another view (Integrations, from an open_settings card).
-  const [chatOpened, setChatOpened] = useState(false);
-  if (activeView === "chat" && !chatOpened) setChatOpened(true);
-  const [chatNeedsAttention, setChatNeedsAttention] = useState(false);
-  const [newChatRequest, setNewChatRequest] = useState(0);
+  // The chat keeps its turns running behind other views; one that waits on the user marks Chat.
+  const chatNeedsAttention = useChatNeedsAttention();
   useModalGate("invitation", invitationToken !== null);
   // Accepting an invitation or joining a workspace routes to Notes, which may open its structure
   // intro. Notes is lazy, so it can mount late; this holds the gate until it has taken over.
@@ -277,6 +279,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   ]);
 
   const agentAllowedByPolicy = usePolicyStore(isAgentAllowed);
+  useEffect(subscribeChatPolicy, []);
+  useEffect(subscribeChatAccountScope, []);
   const { createNote } = useCreateNote(canAutoStartMeeting);
   // The note is created before the view switches so Notes mounts with it already open.
   const handleNewNote = useCallback(async () => {
@@ -1256,7 +1260,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                     onNewChat={
                       agentAllowedByPolicy
                         ? () => {
-                            setNewChatRequest((count) => count + 1);
+                            startNewChat();
                             setActiveView("chat");
                           }
                         : undefined
@@ -1416,20 +1420,15 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   />
                 </Suspense>
               )}
-              {chatOpened && agentAllowedByPolicy && (
-                <div className={activeView === "chat" ? "contents" : "hidden"}>
-                  <Suspense fallback={null}>
-                    <ChatView
-                      active={activeView === "chat"}
-                      newChatRequest={newChatRequest}
-                      onAttentionChange={setChatNeedsAttention}
-                      skillRequest={skillChatRequest}
-                      onSkillRequestHandled={handleSkillChatRequestHandled}
-                      onOpenSkill={openSkill}
-                      onOpenNote={openChatSourceNote}
-                    />
-                  </Suspense>
-                </div>
+              {activeView === "chat" && agentAllowedByPolicy && (
+                <Suspense fallback={null}>
+                  <ChatView
+                    skillRequest={skillChatRequest}
+                    onSkillRequestHandled={handleSkillChatRequestHandled}
+                    onOpenSkill={openSkill}
+                    onOpenNote={openChatSourceNote}
+                  />
+                </Suspense>
               )}
               {activeView === "personal-notes" && (
                 <Suspense fallback={null}>

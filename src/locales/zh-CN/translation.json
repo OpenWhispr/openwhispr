@@ -355,34 +355,10 @@
           "features": {
             "device": "在你的设备上运行",
             "offline": "设置完成后可离线使用",
-            "models": "为听写和助手选择模型",
+            "setup": "为这台电脑量身设置",
             "free": "永久免费使用"
           }
         },
-        "warnings": {
-          "byok": {
-            "title": "你的数据由服务商处理",
-            "description": "你需要分别为听写和 Assistant 服务商添加凭据。将适用服务商的定价和数据保留政策。",
-            "continue": "设置 API 服务商",
-            "steps": {
-              "1": "为听写和 Assistant 选择服务商",
-              "2": "使用安全存储添加凭据",
-              "3": "启用前测试每个连接"
-            }
-          },
-          "local": {
-            "title": "本地设置需要多几个步骤",
-            "description": "本地处理会把你的语音保留在此设备上，但需要一次性设置和至少 {{minimumSpace}} GB 可用空间。",
-            "continue": "本地设置",
-            "steps": {
-              "1": "选择转录引擎",
-              "2": "配置或下载模型，约 {{modelSize}}",
-              "3": "等待安装和启用"
-            }
-          }
-        },
-        "useCloud": "改用云端",
-        "continueSetup": "继续设置",
         "showMore": "显示更多选项",
         "moreOptions": {
           "title": "选择你的 API 设置方式",
@@ -437,23 +413,80 @@
         }
       },
       "local": {
-        "title": "设置本地模型",
-        "description": "选择你想在设备上运行的模型。",
-        "descriptionLineOne": "选择你想在设备上",
-        "descriptionLineTwo": "运行的模型。",
-        "providerLabel": "服务商",
-        "cohereLanguageLabel": "听写语言",
-        "cohereLanguageHint": "Cohere 无法自动检测语言，请选择你要听写的语言。",
-        "cohereLanguagePlaceholder": "选择语言",
-        "download": "下载",
         "downloadingShort": "下载中",
-        "selected": "已选择",
-        "use": "使用",
         "downloadInProgress": "下载进行中",
         "cancelDownload": "取消下载 {{model}}",
         "downloads": "模型下载",
         "downloading": "正在下载… {{progress}}%",
+        "verifying": "正在验证",
         "installing": "安装中"
+      },
+      "localSetup": {
+        "title": "我们推荐以下设置",
+        "subtitle": "根据你的 {{computer}} 和 {{language}} 挑选。这些模型在这台设备上运行。",
+        "subtitleOrganizationText": "根据你的 {{computer}} 和 {{language}} 挑选。听写在这台设备上运行；聊天和 AI 笔记使用你的组织选择的服务。",
+        "computer": {
+          "chip": "芯片",
+          "processor": "处理器",
+          "memory": "内存",
+          "graphics": "图形",
+          "builtIn": "芯片内置",
+          "memoryValue": "{{gb}} GB",
+          "mac": "Mac",
+          "windowsLaptop": "Windows 笔记本电脑",
+          "windowsDesktop": "Windows 台式电脑",
+          "linuxLaptop": "Linux 笔记本电脑",
+          "linuxDesktop": "Linux 台式电脑"
+        },
+        "rows": {
+          "dictation": "听写",
+          "cleanup": "文本整理",
+          "assistant": "助手"
+        },
+        "description": {
+          "dictation": "在任何应用中把语音转成文字",
+          "cleanup": "去除语气词并修正语法",
+          "assistant": "回答问题并执行你的请求"
+        },
+        "badge": {
+          "optional": "可选",
+          "cloud": "推荐使用云端"
+        },
+        "line": {
+          "requiredByOrganization": "你的组织要求使用",
+          "organizationModelsUnrunnable": "你的组织批准的模型都无法在此电脑上运行",
+          "offToFit": "已关闭，以适应这台电脑的可用空间",
+          "failed": "无法下载。请检查网络连接后重试"
+        },
+        "unavailable": {
+          "notEnoughMemory": "内存不足",
+          "exceedsMemory": "超出这台电脑的内存上限",
+          "memoryUnread": "无法检测内存",
+          "organization": "此电脑上不可用",
+          "memoryMac": "{{model}} 需要 {{needed}} GB 内存，这台 Mac 只有 {{have}} GB",
+          "memoryComputer": "{{model}} 需要 {{needed}} GB 内存，这台电脑只有 {{have}} GB",
+          "memoryUnreadLine": "{{model}} 需要 {{needed}} GB 内存。如果这台电脑有这么多内存，可以稍后在设置中开启"
+        },
+        "button": {
+          "download": "下载模型",
+          "downloading": "正在下载",
+          "proceed": "继续",
+          "noSpace": "可用空间不足"
+        },
+        "retry": "重试",
+        "retryRow": "重试{{row}}",
+        "downloaded": "已下载",
+        "foot": {
+          "default": "这些设置之后都可以在设置中更改。",
+          "dictationFailed": "需要先下载听写模型才能继续。请在上方重试，或返回选择其他设置。",
+          "dictationUnavailable": "使用你的组织批准的模型，此电脑无法进行听写。请返回选择其他设置。",
+          "finishesInBackground": "其余内容会在你继续后接着下载，准备好后自动开启。",
+          "failedStaysOff": "未能下载的项目将保持关闭。之后可以在设置中添加。",
+          "needsMac": "需要 {{needed}} GB，这台 Mac 有 {{free}} GB 可用空间。",
+          "needsComputer": "需要 {{needed}} GB，这台电脑有 {{free}} GB 可用空间。",
+          "noSpaceMac": "听写需要 {{needed}} GB 可用空间，这台 Mac 只有 {{free}} GB。请释放一些空间后继续。",
+          "noSpaceComputer": "听写需要 {{needed}} GB 可用空间，这台电脑只有 {{free}} GB。请释放一些空间后继续。"
+        }
       }
     },
     "steps": {
@@ -881,6 +914,11 @@
       }
     },
     "modelRetiredTitle": "模型已不可用",
+    "modelRetiredByProvider": "{{provider}} 已停用 {{from}}。已切换到 {{to}}。",
+    "modelUnavailableSwitched": "{{provider}} 已不再提供 {{from}}。已切换到 {{to}}。",
+    "localModelRetired": "{{from}} 已不再可用，因此已为你切换到 {{to}}。如果尚未下载，请在设置中下载。",
+    "localModelRetiredChooseAnother": "{{from}} 已不再可用。请在设置中选择其他本地模型。",
+    "localModelRetiredKept": "{{from}} 已停用。由于已下载，它仍可继续使用，但无法再次下载。请在设置中选择其他本地模型。",
     "groq": {
       "modelRetired": "Groq 已停用 {{from}}，已切换至 {{to}}。"
     },
@@ -1075,6 +1113,7 @@
         "tlsError": "证书错误 — 您的网络可能使用了阻止下载的SSL检查。请尝试从其他网络下载。",
         "unknown": "未知错误"
       },
+      "verifying": "正在验证 {{model}}",
       "downloadFailed": {
         "title": "下载失败"
       },
@@ -1950,6 +1989,14 @@
       "dataManagementTitle": "数据管理",
       "modelCache": "模型缓存",
       "open": "打开",
+      "retiredModels": {
+        "label": "已停用的模型",
+        "description": "这些模型已不再提供，但仍保留在磁盘上：{{models}}。",
+        "remove": "移除",
+        "confirmTitle": "移除已停用的模型？",
+        "confirmDescription": "这会删除目录中不再提供的模型文件。其他已下载的模型会保留。",
+        "failedDescription": "部分文件无法移除。模型可能仍在使用中；请重启应用后重试。"
+      },
       "removeModels": {
         "confirmText": "删除模型",
         "description": "这将删除所有本地缓存的 Whisper 模型（{{path}}）并释放磁盘空间。你可以从模型选择器中重新下载。",
@@ -2258,6 +2305,8 @@
       "leaderboardRequiresHistory": "加入排行榜前，请先开启数据保留。",
       "usageAnalytics": "使用分析",
       "usageAnalyticsDescription": "通过分享匿名性能数据帮助我们改进 OpenWhispr。我们绝不发送转录内容——仅发送计时和错误数据。",
+      "modelListUpdates": "模型列表更新",
+      "modelListUpdatesDescription": "每 15 分钟检查 GitHub 上 OpenWhispr 的公开模型列表，获取新增和已停用的模型。更改将在重启后完全生效。",
       "dataRetention": "数据保留",
       "dataRetentionDescription": "将转录和音频本地保存到历史记录中。禁用后，转录内容会被粘贴但不会被保存。",
       "transcriptRetention": "转录保留",
@@ -4165,6 +4214,10 @@
     "expand": "展开侧边栏"
   },
   "chat": {
+    "answering": "正在回答…",
+    "conversationCreateFailed": "无法开始对话。你的问题已恢复到新对话中。",
+    "messageSaveFailed": "无法保存此消息。请重试。",
+    "conversationLoadFailed": "无法加载此对话。请重试。",
     "newChat": "新对话",
     "search": "搜索对话...",
     "archived": "已归档",
@@ -4204,7 +4257,9 @@
     "forkedFrom": "分叉自“{{title}}”",
     "forkFailed": "无法分叉此对话",
     "sendNotStarted": "此对话正忙。你的消息未发送。请在当前请求完成后重试。",
-    "openFailed": "此对话已不可用。"
+    "openFailed": "此对话已不可用。",
+    "localModelDownloading": "助手模型仍在下载中。准备就绪后即可聊天。",
+    "localModelMissing": "在设置中为“聊天”选择一个模型，即可在此设备上聊天。"
   },
   "support": {
     "documentation": "文档",

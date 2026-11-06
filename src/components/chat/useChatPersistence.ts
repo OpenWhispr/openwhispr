@@ -1,29 +1,22 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import type { AssistantTurn, AssistantTurnStatus, Message, ToolCallInfo } from "./types";
+import type { Message, ToolCallInfo } from "./types";
 import type { TurnDetails } from "./useChatStreaming";
 import type { ContainerScope } from "../../types/chat";
-import type { AgentConversationWithMessages, AgentMessageRow } from "../../types/electron";
 import { getAuthRequestContextSnapshot, subscribeAuthBoundary } from "../../lib/authRequestContext";
-import { connectsFirst } from "./historyMessages";
-import logger from "../../utils/logger";
-import { withoutSkillCardDrafts } from "./skillCardRecord";
+import {
+  decodeChatMessages,
+  forkOriginOf,
+  replyMetadata,
+  saveReplyRow,
+  type ForkOrigin,
+  type StoredChatConversation,
+} from "./chatPersistence";
+
+export type { ForkOrigin } from "./chatPersistence";
 
 interface UseChatPersistenceOptions {
   conversationId?: number | null;
   onConversationCreated?: (id: number, title: string) => void;
-}
-
-/** Where the open conversation was forked from. */
-export interface ForkOrigin {
-  parentConversationId: number;
-  /** Null once the parent is deleted. */
-  parentTitle: string | null;
-  /** The fork's own title as it loaded: its parent's until it is named or renamed. */
-  title: string;
-  /** Text the fork was made from; it goes with the fork's next request. */
-  context: string | null;
-  /** How many of the fork's first messages are the parent's history. */
-  copiedMessageCount: number;
 }
 
 interface UserMessageDetails {
@@ -125,9 +118,9 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
       if (claim && !claim.owned) return false;
       let messages: Message[] | undefined;
       if (claim?.conversation && ownedConversationRef.current !== id) {
-        messages = claim.conversation.messages.map((row) => {
-          const existing = messagesRef.current.find((message) => message.dbId === row.id);
-          return { ...messageFromRow(row), ...(existing ? { id: existing.id } : {}) };
+        messages = decodeChatMessages(claim.conversation).map((message) => {
+          const existing = messagesRef.current.find((shown) => shown.dbId === message.dbId);
+          return existing ? { ...message, id: existing.id } : message;
         });
         messagesRef.current = messages;
         setMessages(messages);
@@ -159,22 +152,12 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
   }, []);
 
   const showConversation = useCallback(
-    (conversation: AgentConversationWithMessages, recover = true) => {
+    (conversation: StoredChatConversation, messages: Message[]) => {
       conversationIdRef.current = conversation.id;
       setConversationId(conversation.id);
       setNoteId(conversation.note_id ?? null);
-      setForkOrigin(
-        conversation.parent_conversation_id != null
-          ? {
-              parentConversationId: conversation.parent_conversation_id,
-              parentTitle: conversation.parent_title ?? null,
-              title: conversation.title,
-              context: conversation.fork_context ?? null,
-              copiedMessageCount: conversation.fork_message_count ?? 0,
-            }
-          : null
-      );
-      setMessages(conversation.messages.map((row) => messageFromRow(row, recover)));
+      setForkOrigin(forkOriginOf(conversation));
+      setMessages(messages);
     },
     []
   );
@@ -264,12 +247,14 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
       }
       const recover = !claim || claim.owned;
       if (!recover) blockedConversationRef.current = id;
-      showConversation(conv, recover);
-      const last = conv.messages.at(-1);
-      const metadata = last?.metadata ? tryParseMetadata(last.metadata) : undefined;
-      const hasRecovery = (metadata?.toolCalls as ToolCallInfo[] | undefined)?.some(
-        (call) => call.interaction?.state === "pending" || call.interaction?.state === "interrupted"
-      );
+      const messages = decodeChatMessages(conv, recover);
+      showConversation(conv, messages);
+      const hasRecovery = messages
+        .at(-1)
+        ?.toolCalls?.some(
+          (call) =>
+            call.interaction?.state === "pending" || call.interaction?.state === "interrupted"
+        );
       if (recover && !hasRecovery) void releaseConversation(id);
       return true;
     },
@@ -331,35 +316,13 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
       const accountCurrent = () =>
         accountVersion === accountVersionRef.current &&
         authGeneration === getAuthRequestContextSnapshot().observedGeneration;
-      const metadata =
-        toolCalls?.length || details.turn
-          ? {
-              ...(toolCalls?.length ? { toolCalls: withoutSkillCardDrafts(toolCalls) } : {}),
-              ...(details.turn ? { turn: details.turn } : {}),
-            }
-          : undefined;
+      const metadata = replyMetadata(toolCalls, details.turn);
       const savedRow =
         savedRowsRef.current.get(messageId) ??
         Promise.resolve(messagesRef.current.find((m) => m.id === messageId)?.dbId ?? null);
-      const saving = savedRow.then(async (rowId) => {
-        if (!accountCurrent()) return null;
-        if (rowId != null) {
-          try {
-            await window.electronAPI?.updateAgentMessage?.(rowId, content, metadata);
-          } catch (error) {
-            logger.warn("Unable to update saved reply", { error }, "chat");
-          }
-          return rowId;
-        }
-        if (!accountCurrent()) return null;
-        const row = await window.electronAPI?.addAgentMessage?.(
-          conversationId,
-          "assistant",
-          content,
-          metadata
-        );
-        return row?.id ?? null;
-      });
+      const saving = savedRow.then((rowId) =>
+        accountCurrent() ? saveReplyRow(conversationId, rowId, content, metadata) : null
+      );
       savedRowsRef.current.set(
         messageId,
         saving.catch(() => null)
@@ -436,68 +399,4 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
     forkConversation,
     handleNewChat,
   };
-}
-
-// Nothing saved is still running once it loads. A reply saved while it
-// waited, whose wait ended with the app or the chat view, can still be
-// answered: it loads as interrupted. One saved mid-turn (the app quit after
-// an answer) loads as stopped, and so does every call it had running.
-function settledOnLoad(turn: AssistantTurn | undefined, toolCalls: ToolCallInfo[] | undefined) {
-  const status: AssistantTurnStatus | null =
-    turn?.status === "waiting" ? "interrupted" : turn?.status === "running" ? "stopped" : null;
-  return {
-    turn: turn && status ? { ...turn, status } : turn,
-    toolCalls: toolCalls?.map((call): ToolCallInfo => {
-      const outcome = call.metadata && !Array.isArray(call.metadata) ? call.metadata.status : null;
-      if (
-        connectsFirst(call) &&
-        (call.interaction?.state === "pending" || call.interaction?.state === "interrupted") &&
-        !outcome
-      ) {
-        call = { ...call, metadata: { status: "not_sent" } };
-      }
-      if (call.status !== "executing") return call;
-      return call.interaction?.state === "pending"
-        ? { ...call, status: "stopped", interaction: { ...call.interaction, state: "interrupted" } }
-        : { ...call, status: "stopped" };
-    }),
-  };
-}
-
-function messageFromRow(row: AgentMessageRow, recover = true): Message {
-  const metadata = row.metadata ? tryParseMetadata(row.metadata) : undefined;
-  const savedTurn = metadata?.turn as AssistantTurn | undefined;
-  const savedCalls = metadata?.toolCalls as ToolCallInfo[] | undefined;
-  const { turn, toolCalls } = recover
-    ? settledOnLoad(savedTurn, savedCalls)
-    : {
-        turn: savedTurn,
-        toolCalls: savedCalls?.map((call) =>
-          call.interaction?.state === "interrupted"
-            ? { ...call, interaction: { ...call.interaction, state: "pending" as const } }
-            : call
-        ),
-      };
-  const selectedContext = metadata?.selectedContext;
-  const fromAnotherApp = metadata?.selectedContextSource === "external";
-  return {
-    id: crypto.randomUUID(),
-    dbId: row.id,
-    role: row.role as Message["role"],
-    content: row.content,
-    isStreaming: false,
-    ...(toolCalls ? { toolCalls } : {}),
-    ...(turn ? { turn } : {}),
-    ...(typeof selectedContext === "string" ? { selectedContext } : {}),
-    ...(fromAnotherApp ? { selectedContextSource: "external" as const } : {}),
-  };
-}
-
-function tryParseMetadata(raw: string | undefined): Record<string, unknown> | undefined {
-  if (!raw) return undefined;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return undefined;
-  }
 }

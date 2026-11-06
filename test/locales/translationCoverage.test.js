@@ -140,6 +140,9 @@ function registryDescriptionKeys(node, out = []) {
   if (Array.isArray(node)) {
     for (const child of node) registryDescriptionKeys(child, out);
   } else if (node && typeof node === "object") {
+    // Retired models never reach a picker (registryData strips them), so their
+    // descriptions never render.
+    if (node.retired) return out;
     if (typeof node.descriptionKey === "string") out.push(node.descriptionKey);
     for (const child of Object.values(node)) registryDescriptionKeys(child, out);
   }
