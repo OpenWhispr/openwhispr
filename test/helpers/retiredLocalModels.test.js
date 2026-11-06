@@ -61,6 +61,16 @@ test("only retired files go, and never one an offered model still uses", async (
       .sort(),
     [gguf.id, "parakeet-tdt-110m-en", "tiny"].sort()
   );
+  // A retired file still selected keeps running, so it isn't a leftover.
+  const inUse = ["parakeet-tdt-110m-en"];
+  assert.deepEqual(
+    listRetiredLocalModels(dirs, inUse)
+      .map(({ id }) => id)
+      .sort(),
+    [gguf.id, "tiny"].sort()
+  );
+  assert.deepEqual(deleteRetiredLocalModels(dirs, inUse), { success: true });
+  assert.equal(fs.existsSync(retiredParakeet), true, "the selected one stays");
   assert.deepEqual(deleteRetiredLocalModels(dirs), { success: true });
 
   for (const gone of [retiredGguf, retiredWhisper, retiredParakeet])

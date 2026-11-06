@@ -2291,8 +2291,8 @@ declare global {
         code?: string;
         details?: string;
       }>;
-      listRetiredLocalModels?: () => Promise<Array<{ id: string; name: string }>>;
-      deleteRetiredLocalModels?: () => Promise<{ success: boolean }>;
+      listRetiredLocalModels?: (inUse: string[]) => Promise<Array<{ id: string; name: string }>>;
+      deleteRetiredLocalModels?: (inUse: string[]) => Promise<{ success: boolean }>;
       modelDelete: (modelId: string) => Promise<{
         success: boolean;
         error?: string;

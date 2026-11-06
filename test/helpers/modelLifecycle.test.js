@@ -302,11 +302,113 @@ async function reconcileSpeechWith(t, downloaded, cachePrefix) {
 test("a retired speech model moves to a model on disk before one it would have to download", async (t) => {
   const { settings, toasts } = await reconcileSpeechWith(
     t,
-    ["small", "tiny"],
+    ["tiny"],
     "model-lifecycle-speech-disk-"
   );
   assert.equal(settings.useSettingsStore.getState().whisperModel, "tiny");
   assert.equal(toasts.takeQueuedRetiredModelSwitches()[0].to, seed.whisperModels.tiny.name);
+});
+
+test("a retired file on disk outranks another download, but not its named replacement", async (t) => {
+  const kept = await reconcileSpeechWith(t, ["small", "tiny"], "model-lifecycle-speech-keep-");
+  assert.equal(kept.settings.useSettingsStore.getState().whisperModel, "small");
+  const named = await reconcileSpeechWith(t, ["small", "medium"], "model-lifecycle-speech-named-");
+  assert.equal(named.settings.useSettingsStore.getState().whisperModel, "medium");
+});
+
+test("a retired multilingual model never moves to an English-only one, or a blocked one", async () => {
+  const store = await import("../../src/models/registryData.js");
+  const { retiredLocalSpeechReplacement } = await import("../../src/models/modelLifecycle.js");
+  const data = structuredClone(seed);
+  retireLocal(data, "parakeetModels", "parakeet-tdt-0.6b-v3", "orukeet-v0.1.0");
+  store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1 });
+  const on =
+    (...ids) =>
+    (id) =>
+      ids.includes(id);
+
+  const v3 = "parakeet-tdt-0.6b-v3";
+  assert.equal(
+    retiredLocalSpeechReplacement("parakeetModels", v3, on("parakeet-tdt-110m-en")),
+    "orukeet-v0.1.0"
+  );
+  assert.equal(
+    retiredLocalSpeechReplacement("parakeetModels", v3, on(v3, "parakeet-tdt-110m-en")),
+    null
+  );
+  // A managed org that allows only the retired model keeps it, rather than moving to a
+  // blocked file on disk or its blocked replacement.
+  assert.equal(
+    retiredLocalSpeechReplacement("parakeetModels", v3, on(v3, "orukeet-v0.1.0"), on(v3)),
+    null
+  );
+  assert.equal(
+    retiredLocalSpeechReplacement("parakeetModels", v3, on(v3), on("orukeet-v0.1.0")),
+    "orukeet-v0.1.0",
+    "a blocked retired file is not kept"
+  );
+  store.replaceRegistryData({
+    data: structuredClone(seed),
+    manifestVersion: store.getRegistryVersion() + 1,
+  });
+});
+
+test("an unreadable disk leaves a retired speech selection alone", async (t) => {
+  installBrowserGlobals(t, {
+    initialStorage: {
+      _llmScopeKeysMigrated: "1",
+      _providerSettingsMigrated: "1",
+      useLocalWhisper: "true",
+      localTranscriptionProvider: "whisper",
+      whisperModel: "small",
+    },
+    window: {
+      location: { search: "?panel=true" },
+      electronAPI: {
+        ...speechDisk([]),
+        listWhisperModels: async () => {
+          throw new Error("EIO");
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t, { cachePrefix: "model-lifecycle-speech-eio-" });
+  const settings = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const store = await vite.ssrLoadModule("/models/registryData.js");
+  const data = structuredClone(seed);
+  retireLocal(data, "whisperModels", "small", "medium");
+  store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1 });
+  await settings.reconcileRetiredLocalSpeechSelections();
+  assert.equal(settings.useSettingsStore.getState().whisperModel, "small");
+});
+
+test("a retired meeting model moves to a model meetings can stream", async (t) => {
+  installBrowserGlobals(t, {
+    initialStorage: {
+      _llmScopeKeysMigrated: "1",
+      _providerSettingsMigrated: "1",
+      meetingTranscriptionMode: "providers",
+      meetingCloudTranscriptionMode: "byok",
+      meetingUseLocalWhisper: "false",
+      meetingCloudTranscriptionProvider: "openai",
+      meetingCloudTranscriptionModel: "gpt-4o-mini-transcribe",
+    },
+    window: { location: { search: "?panel=true" } },
+  });
+  const vite = await createRendererServer(t, { cachePrefix: "model-lifecycle-meeting-" });
+  const settings = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const store = await vite.ssrLoadModule("/models/registryData.js");
+  const toasts = await vite.ssrLoadModule("/stores/retiredModelSwitchStore.ts");
+  const data = structuredClone(seed);
+  retire(data, "transcriptionProviders", "openai", "gpt-4o-mini-transcribe", "gpt-transcribe");
+  store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1 });
+  settings.reconcileRetiredCloudModelSelections();
+
+  assert.equal(
+    settings.useSettingsStore.getState().meetingCloudTranscriptionModel,
+    "gpt-4o-transcribe"
+  );
+  assert.equal(toasts.takeQueuedRetiredModelSwitches()[0].to, "GPT-4o Transcribe");
 });
 
 test("a retired speech model with nothing else on disk keeps running, and says so once", async (t) => {

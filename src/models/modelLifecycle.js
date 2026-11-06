@@ -27,13 +27,26 @@ export function retiredReplacement(section, providerId, modelId, providers) {
   );
 }
 
+// A model that transcribes every language the retired one did, so a move never takes a
+// multilingual user onto an English-only model. Entries without a list (Whisper) cover all.
+function coversLanguages(model, retired) {
+  if (!model.supportedLanguages || !retired.supportedLanguages) return true;
+  return retired.supportedLanguages.every((code) => model.supportedLanguages.includes(code));
+}
+
 // The local speech model a retired selection moves to, on its own engine, since Whisper,
-// transducer and Cohere selections live in separate settings. A downloaded model comes
-// first: the named replacement, then the engine's recommended, then any. With none of them
-// on disk, a selection whose retired file is stays on it (null), since that keeps running
-// (getRunnableSpeechModel); otherwise it moves to the named replacement or the recommended
-// model, to download.
-export function retiredLocalSpeechReplacement(section, modelId, isDownloaded = () => false) {
+// transducer and Cohere selections live in separate settings; null to stay. In order: the
+// named replacement already on disk; the retired file itself while it is on disk, since it
+// keeps running (getRunnableSpeechModel) and was the user's choice; another downloaded model
+// covering its languages; otherwise the named replacement or the recommended model, to
+// download. `isAllowed` (org policy) ranks allowed models first, and a retired file the
+// policy blocks is never kept.
+export function retiredLocalSpeechReplacement(
+  section,
+  modelId,
+  isDownloaded = () => false,
+  isAllowed = () => true
+) {
   const retired = getRetiredModel(section, "", modelId);
   if (!retired) return null;
   const models = getRegistryData()[section];
@@ -44,10 +57,13 @@ export function retiredLocalSpeechReplacement(section, modelId, isDownloaded = (
       (a, b) => Number(Boolean(models[b].recommended)) - Number(Boolean(models[a].recommended))
     );
   const named = offeredReplacement(section, "", modelId, (id) => offered.includes(id));
-  const candidates = [named, ...offered].filter(Boolean);
-  const onDisk = candidates.find(isDownloaded);
+  if (named && isDownloaded(named) && isAllowed(named)) return named;
+  if (isDownloaded(modelId) && isAllowed(modelId)) return null;
+  const compatible = offered.filter((id) => coversLanguages(models[id], retired));
+  const onDisk = compatible.find((id) => isDownloaded(id) && isAllowed(id));
   if (onDisk) return onDisk;
-  return isDownloaded(modelId) ? null : (candidates[0] ?? null);
+  const candidates = [named, ...compatible, ...offered].filter(Boolean);
+  return candidates.find(isAllowed) ?? candidates[0] ?? null;
 }
 
 // While a catalog this app accepted before cannot be loaded (see isCatalogPending), a

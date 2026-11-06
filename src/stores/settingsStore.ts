@@ -66,6 +66,7 @@ import { STREAMING_ONLY_PROVIDERS } from "../helpers/transcriptionRoute";
 import {
   getTranscriptionSelection,
   isLocalModelAllowedByPolicy,
+  isPolicyActionAllowed,
   isScreenContextAllowed,
   resolveEffectivePolicySelection,
   type PolicyDecisionSnapshot,
@@ -3625,16 +3626,26 @@ const LOCAL_SPEECH_CONTEXTS = [
   ],
 ] as const;
 
+/** Every saved local speech model, so cleaning up retired files spares one still selected. */
+export function selectedLocalSpeechModelIds(): string[] {
+  const state = useSettingsStore.getState() as unknown as Record<string, unknown>;
+  const keys = [
+    ...LOCAL_SPEECH_CONTEXTS.flatMap(([, , ...models]) => models),
+    "fallbackWhisperModel",
+  ];
+  return [...new Set(keys.map((key) => state[key]).filter((id) => typeof id === "string"))];
+}
+
 // Retired local speech models already announced as kept, so a selection that stays on one
 // is told once rather than at every launch.
 const KEPT_RETIRED_SPEECH_KEY = "retiredSpeechModelsKeptNoticed";
 
-// Which local speech models are on disk, retired ones included. An unknown answer counts as
-// none, so a selection then moves as if nothing were downloaded.
+// Which local speech models are on disk, retired ones included. Null when the disk can't be
+// read, so a selection on a retired file that may still be there isn't moved off it for good.
 async function downloadedSpeechModels(
   section: "whisperModels" | "parakeetModels",
   retiredIds: string[]
-): Promise<Set<string>> {
+): Promise<Set<string> | null> {
   const api = isBrowser ? window.electronAPI : undefined;
   try {
     const whisper = section === "whisperModels";
@@ -3650,15 +3661,24 @@ async function downloadedSpeechModels(
       )
     );
   } catch {
-    return new Set();
+    return null;
   }
 }
 
+// A policy that hasn't resolved yet judges nothing, so it can't steer a permanent move.
+function isSpeechModelAllowed(modelId: string): boolean {
+  const policyState = usePolicyStore.getState();
+  return (
+    !isPolicyActionAllowed(policyState) ||
+    isLocalModelAllowedByPolicy(policyState, "transcription", modelId)
+  );
+}
+
 /**
- * Moves saved Whisper and sherpa-onnx selections off a retired model, preferring one already
- * on disk (retiredLocalSpeechReplacement); with none, a retired file still on disk keeps
- * running. Only a context using that engine tells the user: a cloud user still stores the
- * default Whisper model.
+ * Moves saved Whisper and sherpa-onnx selections off a retired model (see
+ * retiredLocalSpeechReplacement for the order); a retired file still on disk keeps running
+ * unless its named replacement is downloaded too. Only a context using that engine tells the
+ * user: a cloud user still stores the default Whisper model.
  */
 export async function reconcileRetiredLocalSpeechSelections(): Promise<void> {
   const state = useSettingsStore.getState() as unknown as Record<string, unknown>;
@@ -3702,7 +3722,13 @@ export async function reconcileRetiredLocalSpeechSelections(): Promise<void> {
     if ((useSettingsStore.getState() as unknown as Record<string, unknown>)[storeKey] !== from)
       continue;
     const onDisk = section === "whisperModels" ? whisperOnDisk : parakeetOnDisk;
-    const to = retiredLocalSpeechReplacement(section, from, (id) => onDisk.has(id));
+    if (!onDisk) continue;
+    const to = retiredLocalSpeechReplacement(
+      section,
+      from,
+      (id) => onDisk.has(id),
+      isSpeechModelAllowed
+    );
     if (!to) {
       const keptKey = `${section}:${from}`;
       if (!inUse || !onDisk.has(from) || kept.includes(keptKey)) continue;
@@ -3798,8 +3824,14 @@ export function reconcileRetiredCloudModelSelections(): void {
     if (state[keys.mode] !== "providers") continue;
     const provider = state[keys.provider] as string;
     const model = state[keys.model] as string;
+    if (!provider || !model || !getRetiredModel("transcriptionProviders", provider, model))
+      continue;
+    // Each context offers its own models (meetings stream), so the move stays within them,
+    // as the policy repair does.
     const replacement =
-      provider && model && retiredReplacement("transcriptionProviders", provider, model);
+      offeredReplacement("transcriptionProviders", provider, model, (id) =>
+        transcriptionModelBelongsToProvider(provider, id, keys.context)
+      ) ?? defaultTranscriptionModel(provider, keys.context);
     if (replacement)
       repoint("transcriptionProviders", keys.model, provider, model, replacement, true);
   }

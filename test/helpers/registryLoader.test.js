@@ -213,6 +213,30 @@ test("unchanged catalogs are revalidated with an ETag and a 304 changes nothing"
   assert.equal(x.errors.length, 0);
 });
 
+test("a cache write that fails is tried again, rather than answered with a 304", async (t) => {
+  const x = setup(t, {
+    fetch: async (_url, init) => {
+      x.requests.push(init);
+      return init.headers["If-None-Match"]
+        ? new Response(null, { status: 304 })
+        : new Response(signed(2), { headers: { etag: '"v2"' } });
+    },
+  });
+  // A directory where the temporary file goes makes the write fail, as a full disk would.
+  fs.mkdirSync(`${x.config.cachePath}.tmp`);
+  await x.loader.refresh();
+  assert.equal(x.loader.getSnapshot().manifestVersion, 2);
+  assert.equal(fs.existsSync(x.config.cachePath), false);
+  assert.equal(x.errors.length, 1);
+
+  fs.rmdirSync(`${x.config.cachePath}.tmp`);
+  await x.loader.refresh();
+  assert.equal(x.requests[1].headers["If-None-Match"], undefined, "no ETag for an unsaved copy");
+  assert.equal(JSON.parse(fs.readFileSync(x.config.cachePath, "utf8")).keyId, "fixture");
+  await x.loader.refresh();
+  assert.equal(x.requests[2].headers["If-None-Match"], '"v2"', "saved, so revalidated again");
+});
+
 test("turning updates off uses only the bundle: no cache and no network", async (t) => {
   let enabled = false;
   const x = setup(t, { isEnabled: () => enabled });

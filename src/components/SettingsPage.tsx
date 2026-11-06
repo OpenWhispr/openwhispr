@@ -137,6 +137,7 @@ import { syncService } from "../services/SyncService.js";
 import { formatBytes } from "../utils/formatBytes";
 import {
   clearMissingLocalModelSelections,
+  selectedLocalSpeechModelIds,
   TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
   TRANSCRIPTION_POLICY_PROVIDER_IDS,
   useSettingsStore,
@@ -1749,7 +1750,9 @@ export default function SettingsPage({
   };
 
   const refreshRetiredLocalModels = useCallback(async () => {
-    setRetiredLocalModels((await window.electronAPI?.listRetiredLocalModels?.()) ?? []);
+    setRetiredLocalModels(
+      (await window.electronAPI?.listRetiredLocalModels?.(selectedLocalSpeechModelIds())) ?? []
+    );
   }, []);
 
   useEffect(() => {
@@ -1763,7 +1766,9 @@ export default function SettingsPage({
       confirmText: t("settingsPage.developer.removeModels.confirmText"),
       variant: "destructive",
       onConfirm: async () => {
-        const result = await window.electronAPI?.deleteRetiredLocalModels?.();
+        const result = await window.electronAPI?.deleteRetiredLocalModels?.(
+          selectedLocalSpeechModelIds()
+        );
         await refreshRetiredLocalModels();
         if (!result?.success) {
           showAlertDialog({

@@ -4,8 +4,13 @@ const { getRegistryData, listRetiredModels } = require("../models/registryData.j
 const { forgetInstalledModels } = require("./installedModels");
 
 // Retired models leave every list, so their rows, and the per-model delete behind them,
-// are gone while the files stay on disk. A file an offered model also uses is kept.
-function retiredModelFiles({ whisperDir, parakeetDir, llamaDir }) {
+// are gone while the files stay on disk. A file an offered model also uses is kept, and so
+// is a speech model a saved selection still runs (`inUse`): a retired file stays selected
+// while nothing better is on disk.
+function retiredModelFiles({ whisperDir, parakeetDir, llamaDir }, inUse = []) {
+  const selected = new Set(
+    Array.isArray(inUse) ? inUse.filter((id) => typeof id === "string") : []
+  );
   const data = getRegistryData();
   const offeredGguf = new Set(
     data.localProviders.flatMap(({ models }) =>
@@ -19,6 +24,7 @@ function retiredModelFiles({ whisperDir, parakeetDir, llamaDir }) {
       .map((name) => path.join(dir, name));
 
   return listRetiredModels().flatMap(({ section, providerId, id, model }) => {
+    if (section !== "localProviders" && selected.has(id)) return [];
     let paths = [];
     if (section === "localProviders")
       paths = inDir(llamaDir, [model.fileName, model.draftFileName], offeredGguf);
@@ -30,13 +36,13 @@ function retiredModelFiles({ whisperDir, parakeetDir, llamaDir }) {
   });
 }
 
-function listRetiredLocalModels(dirs) {
-  return retiredModelFiles(dirs).map(({ id, name }) => ({ id, name }));
+function listRetiredLocalModels(dirs, inUse) {
+  return retiredModelFiles(dirs, inUse).map(({ id, name }) => ({ id, name }));
 }
 
-function deleteRetiredLocalModels(dirs) {
+function deleteRetiredLocalModels(dirs, inUse) {
   let failed = 0;
-  for (const { section, providerId, id, paths } of retiredModelFiles(dirs)) {
+  for (const { section, providerId, id, paths } of retiredModelFiles(dirs, inUse)) {
     try {
       for (const file of paths) fs.rmSync(file, { recursive: true, force: true });
       forgetInstalledModels(section, providerId, id);

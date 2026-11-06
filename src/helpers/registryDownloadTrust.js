@@ -26,6 +26,7 @@ const LOCATION_FIELDS = [
   "draftFileName",
   "downloadUrl",
 ];
+const HASH_FIELDS = ["sha256", "draftSha256"];
 
 const publisherIsTrusted = (repo) => !repo || TRUSTED_HF_PUBLISHERS.has(repo.split("/")[0]);
 
@@ -40,8 +41,18 @@ function isTrusted(model, shipped) {
   if (![model.hfRepo, model.draftHfRepo].every(publisherIsTrusted)) return false;
   if (![model.downloadUrl, model.manifestUrl].every(urlIsTrusted)) return false;
   // A download this release didn't ship has to name the bytes it expects.
-  const unchanged = shipped && LOCATION_FIELDS.every((field) => model[field] === shipped[field]);
-  return !!unchanged || (!!model.sha256 && (!model.draftFileName || !!model.draftSha256));
+  if (!shipped) return !!model.sha256 && (!model.draftFileName || !!model.draftSha256);
+  // A shipped download changes one leg at a time, as registry CI requires: the signer names
+  // a new hash, so a move must keep the hash this release shipped, and a hash this release
+  // shipped is never dropped. A move together with a new hash needs an app release.
+  const moved = LOCATION_FIELDS.some((field) => model[field] !== shipped[field]);
+  if (moved)
+    return (
+      !!shipped.sha256 &&
+      model.sha256 === shipped.sha256 &&
+      (!model.draftFileName || (!!shipped.draftSha256 && model.draftSha256 === shipped.draftSha256))
+    );
+  return HASH_FIELDS.every((field) => !shipped[field] || !!model[field]);
 }
 
 // An entry that fails keeps its shipped copy, or leaves when this release has none.

@@ -5299,11 +5299,11 @@ class IPCHandlers {
         llamaDir: require("./modelManagerBridge").default.getModelsDir(),
       };
     };
-    ipcMain.handle("list-retired-local-models", () =>
-      require("./retiredLocalModels").listRetiredLocalModels(retiredModelDirs())
+    ipcMain.handle("list-retired-local-models", (_event, inUse) =>
+      require("./retiredLocalModels").listRetiredLocalModels(retiredModelDirs(), inUse)
     );
-    ipcMain.handle("delete-retired-local-models", () =>
-      require("./retiredLocalModels").deleteRetiredLocalModels(retiredModelDirs())
+    ipcMain.handle("delete-retired-local-models", (_event, inUse) =>
+      require("./retiredLocalModels").deleteRetiredLocalModels(retiredModelDirs(), inUse)
     );
 
     ipcMain.handle("model-delete-all", async () => {

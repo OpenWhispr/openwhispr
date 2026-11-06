@@ -67,6 +67,9 @@ function createRegistryLoader({
     manifestVersion: bundledSnapshot.manifestVersion,
   };
   let etag = null;
+  // The version applied this session that couldn't be written to the cache, so the next
+  // check writes it rather than taking a 304; otherwise the next launch restores an older copy.
+  let unsavedVersion = null;
   let applied = false;
   // True while a catalog this app accepted before (its cache exists) cannot be used yet:
   // until one loads, a saved model the bundle does not know may be one of its additions.
@@ -120,7 +123,7 @@ function createRegistryLoader({
   }
 
   // Keeps the previous good copy as a backup, so one damaged file never loses the catalog.
-  async function persist(bytes) {
+  async function persist(bytes, manifestVersion) {
     const temporary = `${cachePath}.tmp`;
     try {
       await fs.mkdir(path.dirname(cachePath), { recursive: true });
@@ -129,8 +132,11 @@ function createRegistryLoader({
         if (error.code !== "ENOENT") throw error;
       });
       await fs.rename(temporary, cachePath);
+      unsavedVersion = null;
     } catch (error) {
       await fs.unlink(temporary).catch(() => {});
+      unsavedVersion = manifestVersion;
+      etag = null;
       reportError(error);
     }
   }
@@ -170,13 +176,15 @@ function createRegistryLoader({
         // isn't downloaded again until it changes. Unverified bytes may just be damaged.
         etag = response.headers.get("etag");
         if (accept(manifest)) {
-          await persist(bytes);
+          await persist(bytes, manifest.manifestVersion);
         } else if (pending && !stopped) {
           // The newest publication adds nothing to the catalog in use, so nothing is still
           // to come. Replacing the unusable copies stops this repeating on every launch.
           pending = false;
           apply(snapshot);
-          await persist(bytes);
+          await persist(bytes, manifest.manifestVersion);
+        } else if (!stopped && manifest.manifestVersion === unsavedVersion) {
+          await persist(bytes, manifest.manifestVersion);
         }
       } catch (error) {
         if (!stopped) reportError(error);
