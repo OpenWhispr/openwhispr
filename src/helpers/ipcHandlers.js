@@ -3323,8 +3323,8 @@ class IPCHandlers {
     ipcMain.handle("db-get-conversation-by-client-id", (_, clientId) =>
       this.databaseManager.getConversationByClientId(clientId)
     );
-    ipcMain.handle("db-upsert-conversation-from-cloud", (_, cloudConv, messages) =>
-      this.databaseManager.upsertConversationFromCloud(cloudConv, messages)
+    ipcMain.handle("db-upsert-conversation-from-cloud", (_, cloudConv, messages, snapshot) =>
+      this.databaseManager.upsertConversationFromCloud(cloudConv, messages, snapshot)
     );
     ipcMain.handle("db-mark-conversation-create-attempted", (_, id) =>
       this.databaseManager.markConversationCreateAttempted(id)
@@ -3332,8 +3332,11 @@ class IPCHandlers {
     ipcMain.handle("db-acknowledge-conversation-create", (_, id, snapshot, cloudId) =>
       this.databaseManager.acknowledgeConversationCreate(id, snapshot, cloudId)
     );
-    ipcMain.handle("db-mark-conversation-synced", (_, id, cloudId) =>
-      this.databaseManager.markConversationSynced(id, cloudId)
+    ipcMain.handle("db-mark-conversation-synced", (_, id, cloudId, snapshot) =>
+      this.databaseManager.markConversationSynced(id, cloudId, snapshot)
+    );
+    ipcMain.handle("db-replace-conversation-client-id", (_, id, expectedClientId) =>
+      this.databaseManager.replaceConversationClientId(id, expectedClientId)
     );
     ipcMain.handle("db-hard-delete-conversation", (_, id) => {
       const result = this.databaseManager.hardDeleteConversation(id);
