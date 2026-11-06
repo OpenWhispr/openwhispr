@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
+const { isLocalModelPolicyRefusal } = require("../../src/helpers/localModelPolicyGate");
 
 const source = fs.readFileSync(path.join(__dirname, "../../src/helpers/ipcHandlers.js"), "utf8");
 
@@ -421,7 +422,12 @@ test("a local meeting lease invalidated during admission is released before retu
 
 test("model policy refresh stops only the active local meeting selection before its first native load", () => {
   const callback = sliceBetween("onChange: () => {", "    for (const manager of [");
-  for (const activeModel of [null, "base"]) {
+  for (const [activeModel, code, expected] of [
+    [null, "POLICY_MODEL_BLOCKED", []],
+    ["base", "POLICY_MODEL_BLOCKED", ["POLICY_MODEL_BLOCKED"]],
+    ["base", "POLICY_UNRESOLVABLE", []],
+    ["base", "ECONNRESET", []],
+  ]) {
     const stopped = [];
     const context = {
       localServers: activeModel
@@ -431,9 +437,10 @@ test("model policy refresh stops only the active local meeting selection before 
       _localModelPolicy: {
         failure: () => ({ code: "POLICY_MODEL_BLOCKED" }),
         assertCurrent: () => {
-          throw Object.assign(new Error("blocked"), { code: "POLICY_MODEL_BLOCKED" });
+          throw Object.assign(new Error("policy check failed"), { code });
         },
       },
+      isLocalModelPolicyRefusal,
       _stopMeetingForPolicy: (code) => stopped.push(code),
       debugLogger: { warn() {} },
     };
@@ -443,7 +450,7 @@ test("model policy refresh stops only the active local meeting selection before 
       Object.assign(context, { capture: (value) => value })
     );
     vm.runInContext("config.onChange()", context);
-    assert.deepEqual(stopped, activeModel ? ["POLICY_MODEL_BLOCKED"] : []);
+    assert.deepEqual(stopped, expected, `${activeModel}: ${code}`);
   }
 });
 
