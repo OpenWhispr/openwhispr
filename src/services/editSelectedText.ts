@@ -104,15 +104,25 @@ export async function editSelectedText(
   };
   signal.throwIfAborted();
   signal.addEventListener("abort", cancel, { once: true });
-  try {
-    const result = await ReasoningService.processText(
+  const run = (runConfig: ReasoningConfig) =>
+    ReasoningService.processText(
       local
         ? buildLocalSelectionEditUserPrompt(instruction, selectedText)
         : buildSelectionEditUserPrompt(instruction, selectedText),
       target.model,
       agentName,
-      config
+      runConfig
     );
+  try {
+    let result: string;
+    try {
+      result = await run(config);
+    } catch (error) {
+      // As with the wake word, a screenshot the model or transport rejects
+      // must not cost the edit: run it once more without the screenshot.
+      if (!config.screenContext || signal.aborted) throw error;
+      result = await run({ ...config, screenContext: undefined, systemPrompt });
+    }
     signal.throwIfAborted();
     if (isSelectionQuestionResponse(result, marker)) return null;
     return local

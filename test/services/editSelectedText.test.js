@@ -47,6 +47,46 @@ test("selection edits send the screenshot on their first call and validate compl
   assert.equal(calls[0][3].requireCompleteOutput, true);
 });
 
+test("a screenshot the model refuses costs the edit nothing: it runs once more without it", async (t) => {
+  const { service, editSelectedText } = await editor(t);
+  const configs = [];
+  t.mock.method(service, "processText", async (...args) => {
+    configs.push(args[3]);
+    if (configs.length === 1) throw new Error("image rejected");
+    const marker = args[3].systemPrompt.match(/__OPENWHISPR_SELECTION_COMPLETE_[\w-]+__/)[0];
+    return `Revised.${marker}`;
+  });
+  const attachment = { image: "fixture-image", mediaType: "image/jpeg" };
+  const result = await editSelectedText("Elaborate this", "Short.", {
+    attachment,
+    signal: new AbortController().signal,
+  });
+  assert.equal(result, "Revised.");
+  assert.equal(configs.length, 2);
+  assert.ok(configs[0].screenContext);
+  assert.match(configs[0].systemPrompt, /SCREEN CONTEXT:/);
+  assert.equal(configs[1].screenContext, undefined);
+  assert.doesNotMatch(configs[1].systemPrompt, /SCREEN CONTEXT:/);
+  assert.match(configs[1].systemPrompt, /__OPENWHISPR_SELECTION_COMPLETE_/);
+
+  // Without a screenshot, or once cancelled, a failure is the answer.
+  for (const [options, controller] of [
+    [{}, new AbortController()],
+    [{ attachment }, new AbortController()],
+  ]) {
+    configs.length = 0;
+    t.mock.method(service, "processText", async (...args) => {
+      configs.push(args[3]);
+      if (options.attachment) controller.abort();
+      throw new Error("provider down");
+    });
+    await assert.rejects(
+      editSelectedText("Elaborate this", "Short.", { ...options, signal: controller.signal })
+    );
+    assert.equal(configs.length, 1);
+  }
+});
+
 test("selection questions return the existing editor verdict; partial edits are rejected", async (t) => {
   const { service, editSelectedText } = await editor(t);
   let response = "__OPENWHISPR_SELECTION_QUESTION__";

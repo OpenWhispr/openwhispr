@@ -144,6 +144,14 @@ async function mountWindow(t, { platform } = {}) {
   const interactions = await vite.ssrLoadModule("/stores/agentInteractionStore.ts");
   const approvals = await vite.ssrLoadModule("/stores/connectorApprovalStore.ts");
   approvalStore = approvals.useConnectorApprovalStore;
+  // A Voice Assistant that can edit selected text.
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  useSettingsStore.setState({
+    useDictationAgent: true,
+    dictationAgentMode: "providers",
+    dictationAgentProvider: "openai",
+    dictationAgentModel: "gpt-4.1-mini",
+  });
   const { default: AgentWindow } = await vite.ssrLoadModule("/components/agent/AgentWindow.tsx");
   const { SettingsProvider } = await vite.ssrLoadModule("/hooks/useSettings.ts");
   const { ToastProvider } = await vite.ssrLoadModule("/components/ui/Toast.tsx");
@@ -1924,4 +1932,41 @@ test("a newer follow-up selection survives an older send awaiting its screenshot
   await setDraft(view, view.host.querySelector(COMPOSER), "Explain this selected part");
   await React.act(async () => view.button("Send").click());
   assert.equal(globalThis.__chat.sentOptions.at(-1).selectedContext.text, "New follow-up context.");
+});
+
+test("with the Voice Assistant off, another app's selection goes to the chat, not an edit", async (t) => {
+  const view = await mountWindow(t);
+  const { useSettingsStore } = await view.vite.ssrLoadModule("/stores/settingsStore.ts");
+  useSettingsStore.setState({ useDictationAgent: false });
+  view.happyWindow.electronAPI.captureSelectedText = async () => ({
+    status: "selected",
+    sessionId: "selection-off",
+    text: "Short introduction.",
+    characterCount: 19,
+  });
+  await React.act(async () => view.main.handlers.hotkey({ external: true }));
+  await React.act(async () =>
+    globalThis.__voice.callbacks.onTranscript("Make it formal", "submit")
+  );
+  assert.deepEqual(globalThis.__selectionEdits.calls, []);
+  assert.deepEqual(globalThis.__chat.sent, ["Make it formal"]);
+  assert.equal(globalThis.__chat.sentOptions[0].selectedContext.text, "Short introduction.");
+});
+
+test("a selection edit that fails keeps the spoken request in the composer", async (t) => {
+  const view = await mountWindow(t);
+  view.happyWindow.electronAPI.captureSelectedText = async () => ({
+    status: "selected",
+    sessionId: "selection-failed",
+    text: "Original",
+  });
+  const failed = Promise.reject(new Error("provider down"));
+  failed.catch(() => {});
+  globalThis.__selectionEdits.result = failed;
+  await React.act(async () => view.main.handlers.hotkey({ external: true }));
+  await React.act(async () => globalThis.__voice.callbacks.onTranscript("Rewrite this", "submit"));
+  assert.equal(globalThis.__selectionEdits.calls.length, 1);
+  assert.deepEqual(globalThis.__chat.sent, []);
+  assert.equal(view.host.querySelector("textarea").value, "Rewrite this");
+  await view.waitForLayout("typing");
 });

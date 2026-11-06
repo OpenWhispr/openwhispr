@@ -7,8 +7,9 @@ import { mirrorActiveAccountScope } from "../../lib/accountScopeMirror";
 import { subscribeAuthBoundary } from "../../lib/authRequestContext";
 import { usePolicyStore } from "../../stores/policyStore";
 import { isAgentAllowed, isScreenContextAllowed } from "../../stores/policyRules";
-import { getSettings } from "../../stores/settingsStore";
+import { getSettings, isCloudDictationAgentMode } from "../../stores/settingsStore";
 import { resolveAgentAccessRefusal } from "../../helpers/agentAccessPolicy";
+import { resolveDictationAgentInference } from "../../helpers/dictationAgentInference";
 import {
   CARDS_WITHOUT_DISMISS,
   answerWithText,
@@ -448,7 +449,16 @@ export default function AgentWindow() {
         selectedContext: stateRef.current.selectedContext,
         attachment: stateRef.current.attachment,
       };
-      if (!target || (target.kind === "external" && extras.selectedContext?.text !== target.text)) {
+      // As with the wake word, another app's selection goes to the chat while
+      // the Voice Assistant can't edit it.
+      if (
+        !target ||
+        (target.kind === "external" &&
+          (extras.selectedContext?.text !== target.text ||
+            !resolveDictationAgentInference(getSettings(), {
+              isCloudAgent: isCloudDictationAgentMode(),
+            }).reachable))
+      ) {
         submit(text, false, extras);
         return;
       }
@@ -522,11 +532,19 @@ export default function AgentWindow() {
         dispatch({ type: "setContext", context: null });
         dispatch({ type: "setAttachment", attachment: null });
       } catch {
-        if (current())
+        if (current()) {
+          // The request waits in the composer, so a failed edit loses nothing.
+          dispatch({
+            type: "held",
+            text,
+            context: extras.selectedContext,
+            attachment: extras.attachment,
+          });
           dispatch({
             type: "notice",
             notice: "hooks.audioRecording.selectionEditing.reasoningFailed",
           });
+        }
       } finally {
         controller.signal.removeEventListener("abort", cancelReplacement);
         if (selectionEditRef.current === controller) {
