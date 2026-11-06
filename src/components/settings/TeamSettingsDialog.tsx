@@ -27,7 +27,7 @@ import type { Team, Workspace } from "../../types/electron";
 const KEY = "settingsPage.workspace.teams";
 const NAME_MAX_LENGTH = 80;
 
-export type TeamDialogTab = "general" | "members" | "spaces";
+type TeamDialogTab = "general" | "members" | "spaces";
 
 interface TeamSettingsDialogProps {
   team: Team;

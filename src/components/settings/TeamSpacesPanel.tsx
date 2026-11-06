@@ -429,7 +429,7 @@ function AssignedList({ spaces, label }: { spaces: SpaceRef[]; label: string }):
 interface TeamspacePickerProps {
   choices: WorkspaceSpace[];
   selectedIds: string[];
-  /** The chosen names, comma-joined, which the field shows while its list is closed. */
+  /** The chosen names as a list in the reader's language, shown while the field's list is closed. */
   summary: string;
   disabled: boolean;
   canCreate: boolean;
