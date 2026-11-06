@@ -6502,7 +6502,10 @@ class IPCHandlers {
     ipcMain.handle("open-microphone-settings", () => openSystemSettings("microphone"));
     ipcMain.handle("open-sound-input-settings", () => openSystemSettings("sound"));
     ipcMain.handle("get-system-default-microphone", (_event, options = {}) =>
-      resolveSystemDefaultMicrophone({ refresh: options?.refresh === true })
+      resolveSystemDefaultMicrophone({
+        refresh: options?.refresh === true,
+        wait: options?.wait !== false,
+      })
     );
     ipcMain.handle("open-accessibility-settings", () => openSystemSettings("accessibility"));
     ipcMain.handle("open-system-audio-settings", () => openSystemSettings("systemAudio"));

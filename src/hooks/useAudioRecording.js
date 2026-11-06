@@ -387,8 +387,8 @@ export const useAudioRecording = (toast, options = {}) => {
   useEffect(() => {
     audioManagerRef.current = new AudioManager();
 
-    // Resolve and pin the input device now, not on the first hotkey press, which
-    // would otherwise wait on the device lookup before the mic can open.
+    // Resolve and pin the input device now: the first hotkey press won't wait for
+    // the device lookup, so it would open Chromium's default device instead.
     void audioManagerRef.current.cacheMicrophoneDeviceId?.();
 
     // Keep this at mount: it opens the recording spool, which a hung main process would block.

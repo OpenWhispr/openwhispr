@@ -710,7 +710,7 @@ class AudioManager {
       this.cancelPreparedMicCapture();
       this.micStreamHold.drop();
       // The main process keeps the OS default mic until told it changed, so
-      // re-resolve now rather than on the next hotkey press (~2s on Windows).
+      // re-resolve now, or the next hotkey press would pin the old default.
       window.electronAPI?.getSystemDefaultMicrophone?.({ refresh: true })?.catch(() => {});
     };
     navigator.mediaDevices?.addEventListener?.("devicechange", this._onDeviceChange);
@@ -785,11 +785,13 @@ class AudioManager {
     this._streamingMicSwapPromise = null;
     this.micRecovery = new ActiveMicRecoveryController({
       mediaDevices: navigator.mediaDevices,
+      // Recovery waits for the default-mic lookup; a dictation's start and warm-up don't (#2765).
       acquire: async (reason) => {
         try {
           const constraints = await this.getAudioConstraints(
             false,
-            reason === "devicechange" || reason === "devicechange-ended"
+            reason === "devicechange" || reason === "devicechange-ended",
+            true
           );
           return await navigator.mediaDevices.getUserMedia(constraints);
         } catch (error) {
@@ -798,7 +800,7 @@ class AudioManager {
             { error: error.message },
             "audio"
           );
-          const fallback = await this.getAudioConstraints(true);
+          const fallback = await this.getAudioConstraints(true, false, true);
           return navigator.mediaDevices.getUserMedia(fallback);
         }
       },
@@ -1280,7 +1282,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return STREAMING_PROVIDERS[name] ? name : defaultStreamingProviderName("dictation");
   }
 
-  async getAudioConstraints(forceDefaultMic = false, refreshSystemDefault = false) {
+  async getAudioConstraints(
+    forceDefaultMic = false,
+    refreshSystemDefault = false,
+    waitForSystemDefault = false
+  ) {
     const settings = getSettings();
 
     // All browser audio processing disabled to avoid OS-level side-effects.
@@ -1310,6 +1316,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         settings,
         forceSystemDefault: forceDefaultMic,
         refreshSystemDefault: forceDefaultMic || refreshSystemDefault,
+        waitForSystemDefault,
       });
       const deviceId = resolution.device?.deviceId;
 
