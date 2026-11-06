@@ -823,6 +823,133 @@ test("linux: production and sink-monitor streams do not drive meeting prompts", 
   detector.stop();
 });
 
+test("linux: peak-meter streams never prompt at startup or after dismissal", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("linux", {
+    execResponses: [
+      {
+        stdout: JSON.stringify([
+          {
+            properties: {
+              "application.process.id": "101",
+              "application.process.binary": "plasmashell",
+              "media.name": "PlasmaPA-VolumeMeter",
+              "stream.monitor": "true",
+            },
+          },
+          {
+            properties: {
+              "application.process.id": "101",
+              "stream.monitor": "true",
+              "stream.capture.sink": "true",
+            },
+          },
+        ]),
+      },
+      {
+        stdout: JSON.stringify([
+          { properties: { "application.process.id": "102", "stream.monitor": "true" } },
+        ]),
+      },
+    ],
+  });
+  t.after(() => detector.stop());
+  const detections = [];
+  detector.on("sustained-audio-detected", (event) => detections.push(event));
+
+  await detector.start();
+  t.mock.timers.tick(2000);
+  assert.equal(detections.length, 0);
+  assert.equal(detector._sustainedTimer, null);
+  assert.deepEqual(detector.getExternalMicState(), {
+    reliable: true,
+    externalMicActive: true,
+  });
+
+  detector.dismiss();
+  children[0].stdout.emit("data", "Event 'new' on source-output #2\n");
+  await flushImmediate();
+  t.mock.timers.tick(5 * 60 * 1000);
+  t.mock.timers.tick(2000);
+  assert.equal(detections.length, 0, "cooldown must not revive a peak-meter prompt");
+  assert.equal(detector._sustainedTimer, null);
+});
+
+test("linux: a peak meter does not hide a real capture from the same process", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const meter = {
+    properties: { "application.process.id": "202", "stream.monitor": "true" },
+  };
+  const { detector, children } = createDetector("linux", {
+    execResponses: [
+      { stdout: JSON.stringify([meter]) },
+      {
+        stdout: JSON.stringify([
+          meter,
+          { properties: { "application.process.id": "202", "stream.monitor": "false" } },
+        ]),
+      },
+      { stdout: JSON.stringify([meter]) },
+    ],
+  });
+  t.after(() => detector.stop());
+
+  await detector.start();
+  assert.equal(detector._sustainedTimer, null);
+  t.mock.timers.tick(RECONCILE_SPACING_MS);
+  children[0].stdout.emit("data", "Event 'new' on source-output #2\n");
+  await flushImmediate();
+  assert.notEqual(detector._sustainedTimer, null, "real mic capture must still prompt");
+
+  t.mock.timers.tick(RECONCILE_SPACING_MS);
+  children[0].stdout.emit("data", "Event 'remove' on source-output #2\n");
+  await flushImmediate();
+  assert.equal(detector._sustainedTimer, null, "the remaining meter must not keep the timer armed");
+});
+
+test("linux: peak-meter filtering survives a failed exclusion provider", async (t) => {
+  const { detector } = createDetector("linux", {
+    excludedProcessIds: () => {
+      throw new Error("process tree unavailable");
+    },
+    execResponses: [
+      {
+        stdout: JSON.stringify([
+          { properties: { "application.process.id": "101", "stream.monitor": "true" } },
+          { properties: { "stream.monitor": "true" } },
+        ]),
+      },
+    ],
+  });
+  t.after(() => detector.stop());
+
+  await detector.start();
+  assert.equal(detector.getExternalMicState().reliable, false);
+  assert.equal(detector._sustainedTimer, null);
+});
+
+test("linux: polling ignores peak meters but accepts ordinary capture", async () => {
+  const meter = {
+    properties: { "application.process.id": "202", "stream.monitor": "true" },
+  };
+  const { detector } = createDetector("linux", {
+    execResponses: [
+      { stdout: JSON.stringify([meter]) },
+      {
+        stdout: JSON.stringify([
+          meter,
+          { properties: { "application.process.id": "202", "stream.monitor": "false" } },
+        ]),
+      },
+      { stdout: JSON.stringify([{ properties: { "application.process.id": "203" } }]) },
+    ],
+  });
+
+  assert.equal(await detector._checkLinux(), false);
+  assert.equal(await detector._checkLinux(), true);
+  assert.equal(await detector._checkLinux(), true);
+});
+
 test("linux: browser captures prompt and unattributed streams stay in the fallback count", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
   const { detector, children } = createDetector("linux", {
