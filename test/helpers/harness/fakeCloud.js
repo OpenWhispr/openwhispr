@@ -239,13 +239,25 @@ function createFakeCloud(config = {}) {
     return row;
   }
 
+  // Postgres text and jsonb refuse NUL, so the API drops it from what it stores.
+  function stripNul(value) {
+    if (typeof value === "string") return value.replaceAll("\u0000", "");
+    if (Array.isArray(value)) return value.map(stripNul);
+    if (value !== null && typeof value === "object") {
+      return Object.fromEntries(
+        Object.entries(value).map(([key, entry]) => [stripNul(key), stripNul(entry)])
+      );
+    }
+    return value;
+  }
+
   function appendConversationMessage(row, { role, content, metadata }) {
     const message = {
       id: nextId("msg"),
       conversation_id: row.id,
       role,
-      content,
-      metadata: metadata ?? null,
+      content: stripNul(content),
+      metadata: stripNul(metadata ?? null),
       created_at: toIso(clock()),
     };
     row.messages.push(message);
@@ -418,14 +430,14 @@ function createFakeCloud(config = {}) {
         const existing = findByClientId(conversationCollection, body?.client_conversation_id);
         const row = existing ?? insertRow(conversationCollection, { ...body, messages: undefined });
         if (!existing) row.messages = [];
-        row.title = body?.title ?? row.title;
+        row.title = stripNul(body?.title ?? row.title);
         row.updated_at = toIso(body?.updated_at ?? clock());
         for (const message of body?.messages ?? []) appendConversationMessage(row, message);
         return conversationResponse(row);
       }
       case "PATCH /api/conversations/update": {
         const row = requireLiveConversation(body?.id);
-        if (body?.title !== undefined && body.title !== null) row.title = body.title;
+        if (body?.title !== undefined && body.title !== null) row.title = stripNul(body.title);
         row.updated_at = toIso(clock());
         return conversationResponse(row);
       }
