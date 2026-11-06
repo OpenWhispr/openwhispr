@@ -18,28 +18,24 @@ test("Add existing never offers a note from a workspace Personal hides", async (
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
   });
-  const updatedAt = new Date().toISOString();
+  const note = (id, title, spaceId) => ({
+    id,
+    title,
+    content: "",
+    space_id: spaceId,
+    folder_id: null,
+    updated_at: new Date().toISOString(),
+  });
+  // Newest first, as the query orders them: enough Acme notes to fill the dialog's limit.
+  const notes = [
+    ...Array.from({ length: 500 }, (_, i) => note(100 + i, "Acme roadmap", 2)),
+    note(1, "Personal plan", 1),
+  ];
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
-        getNotes: async () => [
-          {
-            id: 1,
-            title: "Personal plan",
-            content: "",
-            space_id: 1,
-            folder_id: null,
-            updated_at: updatedAt,
-          },
-          {
-            id: 2,
-            title: "Acme roadmap",
-            content: "",
-            space_id: 2,
-            folder_id: null,
-            updated_at: updatedAt,
-          },
-        ],
+        getNotes: async (_type, limit, _folderId, _spaceId, spaceIds) =>
+          notes.filter((n) => !spaceIds || spaceIds.includes(n.space_id)).slice(0, limit),
       },
     },
   });
@@ -58,10 +54,11 @@ test("Add existing never offers a note from a workspace Personal hides", async (
         export const DialogTitle = Pass;
       `,
       "/stores/noteStore": `
-        export const useSpaces = () => [
+        const spaces = [
           { id: 1, kind: "private", workspace_id: null },
           { id: 2, kind: "team", workspace_id: "acme" },
         ];
+        export const useSpaces = () => spaces;
       `,
       "/useAuth": `export const useAuth = () => ({ isSignedIn: true });`,
       "/stores/workspaceStore": `

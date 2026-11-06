@@ -46,21 +46,33 @@ export default function AddNotesToFolderDialog({
   const [isAdding, setIsAdding] = useState(false);
   // The tree's scope: adding a note moves it into this folder's space, so one the tree hides
   // must never be offered.
-  const visibleSpaces = useSpacesInWorkspaceScope(useSpaces());
+  const spaces = useSpaces();
+  const visibleSpaces = useSpacesInWorkspaceScope(spaces);
+  // null when nothing is hidden, so the query stays unscoped.
   const visibleSpaceIds = useMemo(
-    () => new Set(visibleSpaces.map((space) => space.id)),
-    [visibleSpaces]
+    () => (visibleSpaces.length === spaces.length ? null : visibleSpaces.map((s) => s.id)),
+    [visibleSpaces, spaces.length]
   );
 
   useEffect(() => {
     if (!open) return;
     setSearch("");
     setSelected(new Set());
-    window.electronAPI.getNotes(null, 500, null).then(setAllNotes);
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    window.electronAPI.getNotes(null, 500, null, null, visibleSpaceIds).then(setAllNotes);
+  }, [open, visibleSpaceIds]);
+
+  // The query scopes at the DB; this also drops an older answer for a previous scope.
   const availableNotes = useMemo(
-    () => allNotes.filter((n) => n.folder_id !== targetFolderId && visibleSpaceIds.has(n.space_id)),
+    () =>
+      allNotes.filter(
+        (n) =>
+          n.folder_id !== targetFolderId &&
+          (!visibleSpaceIds || visibleSpaceIds.includes(n.space_id))
+      ),
     [allNotes, targetFolderId, visibleSpaceIds]
   );
 
