@@ -3,6 +3,8 @@ const assert = require("node:assert/strict");
 const http = require("node:http");
 
 const LlamaServerManager = require("../../src/helpers/llamaServer.js");
+const { createLocalModelPolicyGate } = require("../../src/helpers/localModelPolicyGate");
+const { managedPolicy } = require("./harness/policyFixtures");
 
 // A manager whose spawn is stubbed at the _doStart boundary, recording the
 // options each start was asked for.
@@ -714,6 +716,94 @@ test("a start cancelled while another model loads does not load its own afterwar
     ["/models/slow.gguf"]
   );
   manager.clearIdleTimer();
+});
+
+test("a handoff made while /slots is being read outlives the idle answer", async () => {
+  // The read was sent before the port went to its new caller, so its idle
+  // answer says nothing about the request that caller is about to send.
+  const { manager, starts, stops } = makeRunningManager(() => IDLE);
+  let reads = 0;
+  manager._requestJson = async () => {
+    reads += 1;
+    if (reads === 1) await manager.start("/models/running.gguf");
+    return IDLE;
+  };
+
+  await assert.rejects(manager.start("/models/other.gguf", { busyWaitMs: 300 }), isModelBusy);
+  assert.deepEqual(stops, []);
+  assert.equal(starts.length, 0);
+});
+
+test("a request main sends while /slots is being read outlives the idle answer", async () => {
+  const { manager, stops } = makeRunningManager(() => IDLE);
+  manager._requestJson = async () => {
+    manager.activeRequest = {};
+    return IDLE;
+  };
+
+  await assert.rejects(manager.start("/models/other.gguf", { busyWaitMs: 0 }), isModelBusy);
+  assert.deepEqual(stops, []);
+});
+
+// --- a revoked model only stops a server that is its own --------------------
+
+const RUNNING_ID = "qwen3.5-0.8b-q4_k_m";
+const OTHER_ID = "qwen3.5-9b-q4_k_m";
+
+function llmPolicy(allowed, revision) {
+  return {
+    success: true,
+    managed: true,
+    authGeneration: 1,
+    revision,
+    policy: managedPolicy({ llm: { allowedModes: ["local"], allowedLocalModels: allowed } }),
+  };
+}
+
+function withPolicy(manager) {
+  const gate = createLocalModelPolicyGate({
+    getPolicy: async () => llmPolicy([RUNNING_ID, OTHER_ID], 1),
+    getIdentity: () => 1,
+    getAppVersion: () => "1.11.1",
+  });
+  manager.localModelPolicy = gate;
+  manager.localModelIdForPath = (modelPath) =>
+    modelPath === "/models/running.gguf" ? RUNNING_ID : OTHER_ID;
+  return gate;
+}
+
+test("revoking a model waiting behind another model's answer leaves that answer running", async () => {
+  const { manager, starts, stops } = makeRunningManager(() => BUSY);
+  const gate = withPolicy(manager);
+
+  const waiting = manager.start("/models/other.gguf", { busyWaitMs: 60000 });
+  await pause(300);
+  const revokedAt = Date.now();
+  gate.update(llmPolicy([RUNNING_ID], 2));
+
+  await assert.rejects(waiting, { code: "POLICY_MODEL_BLOCKED" });
+  assert.ok(Date.now() - revokedAt < 100, "the revoke, not the deadline, ended the wait");
+  await pause(300);
+  assert.deepEqual(stops, []);
+  assert.equal(starts.length, 0);
+  assert.equal(manager.modelPath, "/models/running.gguf");
+});
+
+test("revoking a model while its own server starts still stops that server", async () => {
+  const { manager, stops } = makeRunningManager(() => IDLE);
+  const gate = withPolicy(manager);
+  let loading;
+  manager._doStart = () => new Promise((resolve) => (loading = resolve));
+
+  const starting = manager.start("/models/other.gguf");
+  while (!loading) await pause(10);
+  assert.equal(stops.length, 1, "the swap stopped the old server");
+  gate.update(llmPolicy([RUNNING_ID], 2));
+  assert.equal(stops.length, 2, "the revoked model's own startup was stopped");
+
+  // A real load fails once its process is killed; this stub has to be let go.
+  loading();
+  await assert.rejects(starting, { code: "POLICY_MODEL_BLOCKED" });
 });
 
 test("a request cancelled on its way to the server is never sent", async () => {

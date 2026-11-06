@@ -70,6 +70,11 @@ function cancelledError() {
   return Object.assign(new Error("cancelled"), { code: "LOCAL_MODEL_CANCELLED" });
 }
 
+function anySignal(...signals) {
+  const present = signals.filter(Boolean);
+  return present.length > 1 ? AbortSignal.any(present) : present[0];
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -127,6 +132,8 @@ class LlamaServerManager {
     // joining it would serve another caller's request.
     this.startingRequest = null;
     this.handoffUntil = 0;
+    // Counts handoffs, so a /slots read can tell one happened while it was out.
+    this.handoffs = 0;
     this.healthCheckInterval = null;
     this.healthCheckFailures = 0;
     this.cachedServerBinaryPaths = null;
@@ -217,9 +224,27 @@ class LlamaServerManager {
       this,
       "llm",
       this.localModelIdForPath?.(modelPath),
-      () => this._policyAllowedStart(modelPath, options),
-      { onAbort: () => this.stop() }
+      // A revoked model ends its own wait through the lease's signal. The start
+      // may be waiting behind another model's answer, so the server is stopped
+      // only when it is, or is becoming, the revoked model.
+      (leaseSignal) =>
+        this._policyAllowedStart(modelPath, {
+          ...options,
+          signal: anySignal(options.signal, leaseSignal),
+        }),
+      { onAbort: () => this._stopIfServing(modelPath) }
     );
+  }
+
+  _stopIfServing(modelPath) {
+    if (this.modelPath === modelPath || this.startingRequest?.modelPath === modelPath) {
+      return this.stop();
+    }
+  }
+
+  _handOff() {
+    this.handoffUntil = Date.now() + HANDOFF_GRACE_MS;
+    this.handoffs += 1;
   }
 
   async _policyAllowedStart(modelPath, options = {}) {
@@ -255,7 +280,7 @@ class LlamaServerManager {
         // Streaming chat reaches the port directly and never goes through
         // inference(), so asking for the running server is its only activity.
         this.resetIdleTimer();
-        this.handoffUntil = Date.now() + HANDOFF_GRACE_MS;
+        this._handOff();
         return;
       }
 
@@ -285,7 +310,7 @@ class LlamaServerManager {
         // The ladder may have stepped the context down to get a GPU rung to
         // start; record what loaded, not what was asked for.
         this.contextSize = this.activeContextSize ?? request.contextSize;
-        this.handoffUntil = Date.now() + HANDOFF_GRACE_MS;
+        this._handOff();
       } finally {
         this.startupPromise = null;
         this.startingRequest = null;
@@ -320,12 +345,15 @@ class LlamaServerManager {
   // one that goes unanswered is usually still evaluating a long prompt.
   async _isBusy(budgetMs) {
     if (this.activeRequest || Date.now() < this.handoffUntil) return true;
+    const handoffs = this.handoffs;
     const slots = await this._requestJson(
       "/slots",
       null,
       Math.min(PREFLIGHT_TIMEOUT_MS, Math.max(MIN_SLOTS_READ_MS, budgetMs)),
       SLOTS_UNANSWERED
     );
+    // Work handed out while the read was out is newer than its answer.
+    if (this.activeRequest || this.handoffs !== handoffs) return true;
     if (slots === SLOTS_UNANSWERED) return true;
     return Array.isArray(slots) && slots.some((slot) => slot.is_processing);
   }
