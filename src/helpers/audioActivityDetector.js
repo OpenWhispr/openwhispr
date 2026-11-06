@@ -22,11 +22,17 @@ const EXEC_OPTS = { timeout: 5000, encoding: "utf8" };
 
 function isLinuxMeetingPromptSourceOutput(sourceOutput) {
   const properties = sourceOutput?.properties ?? {};
-  return properties["media.role"] !== "production" && properties["stream.capture.sink"] !== "true";
+  // PipeWire marks peak-detect streams (e.g. PlasmaPA volume meters) as
+  // monitors even when they watch a microphone rather than a sink.
+  return (
+    properties["media.role"] !== "production" &&
+    properties["stream.capture.sink"] !== "true" &&
+    properties["stream.monitor"] !== "true"
+  );
 }
 
 // Every pid holding a capture stream, and those whose streams are all
-// production or sink-monitor capture, which are not meeting evidence.
+// production, sink-monitor or peak-meter capture, which are not meeting evidence.
 function classifyLinuxCapturePids(sourceOutputs) {
   const capturePids = new Set();
   const meetingCapturePids = new Set();
