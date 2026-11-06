@@ -4238,6 +4238,10 @@
     "expand": "Expandir barra lateral"
   },
   "chat": {
+    "answering": "Respondiendo…",
+    "conversationCreateFailed": "No se pudo iniciar la conversación. Tu pregunta está de nuevo en Nuevo chat.",
+    "messageSaveFailed": "No se pudo guardar este mensaje. Inténtalo de nuevo.",
+    "conversationLoadFailed": "No se pudo cargar esta conversación. Inténtalo de nuevo.",
     "newChat": "Nuevo chat",
     "search": "Buscar conversaciones...",
     "archived": "Archivadas",

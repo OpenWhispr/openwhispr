@@ -4165,6 +4165,10 @@
     "expand": "サイドバーを展開"
   },
   "chat": {
+    "answering": "回答中…",
+    "conversationCreateFailed": "会話を開始できませんでした。質問は新しいチャットに戻されました。",
+    "messageSaveFailed": "このメッセージを保存できませんでした。もう一度お試しください。",
+    "conversationLoadFailed": "この会話を読み込めませんでした。もう一度お試しください。",
     "newChat": "新しいチャット",
     "search": "会話を検索...",
     "archived": "アーカイブ済み",

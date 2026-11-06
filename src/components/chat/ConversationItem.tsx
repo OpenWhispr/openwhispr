@@ -1,6 +1,7 @@
+import { useIsConversationAnswering } from "../../stores/chatTurnStore";
 import { useTranslation } from "react-i18next";
 import { useUiLocale } from "../../hooks/useUiLocale";
-import { MoreHorizontal, Archive, ArchiveRestore, Trash2, FileText } from "../icons";
+import { MoreHorizontal, Archive, ArchiveRestore, Trash2, FileText, Loader2 } from "../icons";
 import { Button } from "../ui/button";
 import {
   DropdownMenu,
@@ -60,6 +61,7 @@ export default function ConversationItem({
 }: ConversationItemProps) {
   const { t } = useTranslation();
   const locale = useUiLocale();
+  const answering = useIsConversationAnswering(conversation.id);
   const isArchived = !!conversation.is_archived;
   const { sourceNote } = conversation;
   // useEmbeddedChat titled untitled notes' chats "Untitled".
@@ -86,7 +88,17 @@ export default function ConversationItem({
           </p>
           <div className="flex items-center gap-0.5 shrink-0">
             <span className="text-[10px] text-muted-foreground/70 tabular-nums group-hover:opacity-0 transition-opacity">
-              {formatTimestamp(conversation.updated_at, locale)}
+              {answering ? (
+                <span role="status" aria-label={t("chat.answering")}>
+                  <Loader2
+                    size={12}
+                    className="animate-spin text-muted-foreground/70"
+                    aria-hidden="true"
+                  />
+                </span>
+              ) : (
+                formatTimestamp(conversation.updated_at, locale)
+              )}
             </span>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

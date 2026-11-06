@@ -1,3 +1,4 @@
+import { useChatTurnStore } from "../../stores/chatTurnStore";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Plus, Search, Archive as ArchiveIcon } from "../icons";
 import { useTranslation } from "react-i18next";
@@ -70,6 +71,9 @@ export default function ConversationList({
   refreshKey,
 }: ConversationListProps) {
   const { t } = useTranslation();
+  const listRevision = useChatTurnStore((state) => state.listRevision);
+  const accountGeneration = useChatTurnStore((state) => state.accountGeneration);
+  const requestVersion = useRef(0);
   const [conversations, setConversations] = useState<ConversationPreview[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -78,13 +82,21 @@ export default function ConversationList({
   const showSkeletonTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showSkeleton, setShowSkeleton] = useState(false);
 
+  // A refresh of a shown list stays silent: the rows, an open menu and the scroll position stay.
+  const shownGeneration = useRef<number | null>(null);
   const loadConversations = useCallback(async () => {
+    const version = ++requestVersion.current;
+    const generation = useChatTurnStore.getState().accountGeneration;
+    const current = (): boolean =>
+      version === requestVersion.current &&
+      generation === useChatTurnStore.getState().accountGeneration;
     setLoadError(false);
     try {
       const [active, archived] = await Promise.all([
         window.electronAPI?.getAgentConversationsWithPreview?.(200, 0, false),
         window.electronAPI?.getAgentConversationsWithPreview?.(200, 0, true),
       ]);
+      if (!current()) return;
       const toPreview = (c: ConversationRow) => ({
         id: c.id,
         title: c.title || "Untitled",
@@ -102,25 +114,36 @@ export default function ConversationList({
       // The Archived toggle hides once nothing is archived; leave that view with it.
       if (!archived?.length) setShowArchived(false);
     } catch {
-      setLoadError(true);
+      if (current()) setLoadError(true);
     } finally {
-      setIsLoading(false);
-      setShowSkeleton(false);
-      if (showSkeletonTimer.current) {
-        clearTimeout(showSkeletonTimer.current);
-        showSkeletonTimer.current = null;
+      if (current()) {
+        shownGeneration.current = generation;
+        setIsLoading(false);
+        setShowSkeleton(false);
+        if (showSkeletonTimer.current) {
+          clearTimeout(showSkeletonTimer.current);
+          showSkeletonTimer.current = null;
+        }
       }
     }
   }, []);
 
   useEffect(() => {
-    setIsLoading(true);
-    showSkeletonTimer.current = setTimeout(() => setShowSkeleton(true), 150);
+    if (shownGeneration.current !== accountGeneration) {
+      setIsLoading(true);
+      showSkeletonTimer.current = setTimeout(() => setShowSkeleton(true), 150);
+    }
     loadConversations();
     return () => {
+      requestVersion.current += 1;
       if (showSkeletonTimer.current) clearTimeout(showSkeletonTimer.current);
     };
-  }, [loadConversations, refreshKey]);
+  }, [loadConversations, refreshKey, listRevision, accountGeneration]);
+
+  useEffect(() => {
+    setConversations([]);
+    setShowArchived(false);
+  }, [accountGeneration]);
 
   useEffect(() => {
     const refresh = () => void loadConversations();
@@ -146,6 +169,10 @@ export default function ConversationList({
     count: flatItems.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: (index) => (flatItems[index].type === "header" ? 28 : 52),
+    getItemKey: (index) => {
+      const item = flatItems[index];
+      return item.type === "conversation" ? `conversation:${item.data.id}` : `header:${item.label}`;
+    },
     overscan: 5,
   });
 

@@ -100,14 +100,14 @@ test("a row whose note was deleted says so", async (t) => {
   const container = await renderConversationList(t);
   const text = rowText(container, "Open questions");
   assert.match(text, /Daily standup/);
-  assert.match(text, /chat\.sourceNote\.deletedShort/);
+  assert.match(text, /Deleted/);
 });
 
 test("an untitled note's row drops the Untitled suffix and shows the note as untitled", async (t) => {
   const container = await renderConversationList(t);
   const text = rowText(container, "Draft a reply");
   assert.doesNotMatch(text, /· Untitled/);
-  assert.match(text, /notes\.list\.untitledNote/);
+  assert.match(text, /Untitled Note/);
 });
 
 test("a plain chat's row keeps its preview", async (t) => {
@@ -118,7 +118,7 @@ test("a plain chat's row keeps its preview", async (t) => {
 for (const [event, changes, expected] of [
   ["onNoteUpdated", { note_title: "Renamed planning sync" }, /Renamed planning sync/],
   ["onNoteSynced", { note_title: "Synced planning sync" }, /Synced planning sync/],
-  ["onNoteDeleted", { note_deleted_at: "2026-11-02T10:00:00Z" }, /chat\.sourceNote\.deletedShort/],
+  ["onNoteDeleted", { note_deleted_at: "2026-11-02T10:00:00Z" }, /Deleted/],
   ["onFolderDeleted", { note_title: null }, /three decisions/],
   ["onSpacePurged", { note_title: null }, /three decisions/],
 ]) {
