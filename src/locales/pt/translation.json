@@ -3837,6 +3837,7 @@
       },
       "locked": {
         "noWorkspace": "Os dicionários compartilhados estão incluídos no Business. Compartilhe com todos o jargão, os nomes de produtos e as siglas da sua equipe.",
+        "chooseWorkspace": "Você está em Pessoal. Mude para um espaço de trabalho para usar as palavras compartilhadas dele.",
         "upgradeAdmin": "Os dicionários compartilhados estão incluídos no Business. Faça o upgrade de {{workspace}} para que todos tenham as mesmas palavras.",
         "upgradeMember": "Os dicionários compartilhados estão incluídos no Business. Peça a um administrador para fazer o upgrade de {{workspace}}.",
         "paused_one": "A {{count}} palavra compartilhada de {{workspace}} está pausada. Faça o upgrade para o Business para usá-la novamente no ditado.",

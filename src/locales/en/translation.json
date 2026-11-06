@@ -4361,6 +4361,7 @@
       },
       "locked": {
         "noWorkspace": "Shared dictionaries are included with Business. Share your team's jargon, product names and acronyms with everyone.",
+        "chooseWorkspace": "You're in Personal. Switch to a workspace to use its shared words.",
         "upgradeAdmin": "Shared dictionaries are included with Business. Upgrade {{workspace}} so everyone gets the same words.",
         "upgradeMember": "Shared dictionaries are included with Business. Ask an admin to upgrade {{workspace}}.",
         "paused_one": "{{workspace}}'s {{count}} shared word is paused. Upgrade to Business to use it in dictation again.",

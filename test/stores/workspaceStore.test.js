@@ -348,3 +348,24 @@ test("an account change drops the Personal choice", async (t) => {
   assert.equal(useWorkspaceStore.getState().personalSelected, false);
   assert.equal(storage.getItem(PERSONAL_SELECTED_KEY), null);
 });
+
+test("a refresh follows another window's workspace choice it hasn't heard of yet", async (t) => {
+  const { useWorkspaceStore, storage, PERSONAL_SELECTED_KEY, ACTIVE_WORKSPACE_KEY } =
+    await loadStoreForPersonal(t, {
+      list: [
+        { id: "a", plan: "business", status: "active" },
+        { id: "b", plan: "business", status: "active" },
+      ],
+      storage: { workspacePersonalSelected: "true" },
+    });
+  await useWorkspaceStore.getState().refresh();
+
+  // Another window left Personal for "b"; its storage events haven't arrived here yet.
+  storage.removeItem(PERSONAL_SELECTED_KEY);
+  storage.setItem(ACTIVE_WORKSPACE_KEY, "b");
+  await useWorkspaceStore.getState().refresh({ fresh: true });
+
+  assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "b");
+  assert.equal(useWorkspaceStore.getState().personalSelected, false);
+  assert.equal(storage.getItem(ACTIVE_WORKSPACE_KEY), "b");
+});

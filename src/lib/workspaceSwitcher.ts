@@ -56,12 +56,14 @@ export function resolveWorkspaceSwitcher({
 }: WorkspaceSwitcherInput): WorkspaceSwitcherState {
   if (!isSignedIn) return { kind: "hidden" };
   if (!loaded) return { kind: "loading" };
-  if (personalSelected) return { kind: "personal" };
   if (workspaces.length === 0) {
     // Anyone in a workspace has one saved as active or chose Personal, so a failed load without
-    // one is a user who had none last time: they stay Personal rather than seeing an error.
-    return error && activeWorkspaceId ? { kind: "error" } : { kind: "personal" };
+    // either is a user who had none last time: they stay Personal rather than seeing an error.
+    return error && (activeWorkspaceId || personalSelected)
+      ? { kind: "error" }
+      : { kind: "personal" };
   }
+  if (personalSelected) return { kind: "personal" };
   const current = workspaces.find((w) => w.id === activeWorkspaceId) ?? workspaces[0];
   return { kind: "workspace", current, canInvite: workspaceCan(current, "manage_members") };
 }

@@ -4361,6 +4361,7 @@
       },
       "locked": {
         "noWorkspace": "Geteilte Wörterbücher sind in Business enthalten. Teile Fachbegriffe, Produktnamen und Abkürzungen deines Teams mit allen.",
+        "chooseWorkspace": "Du bist in „Persönlich“. Wechsle zu einem Workspace, um seine geteilten Wörter zu nutzen.",
         "upgradeAdmin": "Geteilte Wörterbücher sind in Business enthalten. Upgrade {{workspace}}, damit alle dieselben Wörter bekommen.",
         "upgradeMember": "Geteilte Wörterbücher sind in Business enthalten. Bitte einen Admin, {{workspace}} upzugraden.",
         "paused_one": "Das {{count}} geteilte Wort von {{workspace}} ist pausiert. Upgrade auf Business, um es wieder beim Diktieren zu nutzen.",

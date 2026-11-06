@@ -268,22 +268,24 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       try {
         const workspaces = await WorkspacesService.list();
         if (superseded()) return;
+        // Both choices come from storage: another window may have changed them a task before
+        // this answer, ahead of its storage events. Memory only says what this window showed.
         const activeId = get().activeWorkspaceId;
-        // Read from storage: another window may have picked Personal a task before this answer.
+        const savedActiveId = readActiveWorkspaceId();
         const savedPersonal = readPersonalSelected();
         const personalSelected = savedPersonal && canChoosePersonal(workspaces);
         if (savedPersonal && !personalSelected) writePersonalSelected(false);
-        const stillValid = activeId && workspaces.some((w) => w.id === activeId);
+        const stillValid = savedActiveId && workspaces.some((w) => w.id === savedActiveId);
         const resolvedActiveId = personalSelected
           ? null
           : stillValid
-            ? activeId
+            ? savedActiveId
             : defaultActiveWorkspaceId(workspaces);
         const activeChanged = resolvedActiveId !== activeId;
         if (activeChanged) membersRequestSeq++;
         // Written before the state changes, as setActiveWorkspaceId does: the
         // subscribers publish for the workspace localStorage names.
-        if (activeChanged) writeActiveWorkspaceId(resolvedActiveId);
+        if (resolvedActiveId !== savedActiveId) writeActiveWorkspaceId(resolvedActiveId);
         set({
           workspaces,
           loaded: true,

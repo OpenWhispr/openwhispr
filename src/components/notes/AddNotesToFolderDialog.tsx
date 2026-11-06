@@ -6,6 +6,9 @@ import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { cn } from "../lib/utils";
 import { formatDateGroup } from "../../utils/dateFormatting";
+import { useSpaces } from "../../stores/noteStore";
+import { useWorkspace } from "../../hooks/useWorkspace";
+import { notesAddableToFolder, spacesInWorkspaceScope } from "../../lib/workspaceSelection";
 import type { NoteItem } from "../../types/electron";
 
 interface AddNotesToFolderDialogProps {
@@ -42,6 +45,21 @@ export default function AddNotesToFolderDialog({
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [isAdding, setIsAdding] = useState(false);
+  const spaces = useSpaces();
+  const { workspaces, active: activeWorkspace, personalSelected } = useWorkspace();
+  // The tree's scope: a note it hides would leave its space unseen when added here.
+  const visibleSpaceIds = useMemo(
+    () =>
+      new Set(
+        spacesInWorkspaceScope(
+          spaces,
+          activeWorkspace?.id ?? null,
+          workspaces,
+          personalSelected
+        ).map((space) => space.id)
+      ),
+    [spaces, activeWorkspace?.id, workspaces, personalSelected]
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -51,8 +69,8 @@ export default function AddNotesToFolderDialog({
   }, [open]);
 
   const availableNotes = useMemo(
-    () => allNotes.filter((n) => n.folder_id !== targetFolderId),
-    [allNotes, targetFolderId]
+    () => notesAddableToFolder(allNotes, targetFolderId, visibleSpaceIds),
+    [allNotes, targetFolderId, visibleSpaceIds]
   );
 
   const filteredNotes = useMemo(() => {

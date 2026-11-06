@@ -4,6 +4,7 @@ const {
   decideNoteWorkspaceScope,
   isSpaceInWorkspaceScope,
   manageableWorkspaces,
+  notesAddableToFolder,
   selectWorkspaceForSpaceCreation,
   spacesInWorkspaceScope,
 } = require("../../src/lib/workspaceSelection.ts");
@@ -183,5 +184,17 @@ test("decideNoteWorkspaceScope: opening a team note from Personal enters its wor
       noteSpace: teamIn(2, "a"),
     }),
     { kind: "enterWorkspace", workspaceId: "a" }
+  );
+});
+
+test("notesAddableToFolder offers only notes in visible spaces, outside the folder", () => {
+  const notes = [
+    { id: 1, space_id: 1, folder_id: null },
+    { id: 2, space_id: 1, folder_id: 7 },
+    { id: 3, space_id: 9, folder_id: null },
+  ];
+  assert.deepEqual(
+    notesAddableToFolder(notes, 7, new Set([1])).map((note) => note.id),
+    [1]
   );
 });

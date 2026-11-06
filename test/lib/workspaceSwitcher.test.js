@@ -160,3 +160,11 @@ test("Settings manages no workspace while Personal is chosen", async () => {
 
   assert.equal(settingsWorkspace([workspace("acme")], null, true), null);
 });
+
+test("a failed load with a saved Personal choice shows the error, not an empty Personal", async () => {
+  const { resolveWorkspaceSwitcher } = await load();
+
+  assert.deepEqual(resolveWorkspaceSwitcher({ ...base, error: true, personalSelected: true }), {
+    kind: "error",
+  });
+});
