@@ -86,6 +86,7 @@ function harness({
     let meetingLocalWin = null;
     let meetingLocalBuffers = { mic: [], system: [] };
     const meetingLocalChunkClock = { mark() {}, take: () => 0, reset() {} };
+    const meetingLocalPromptContext = { get: () => "", remember() {}, reset() {} };
     let meetingLocalTranscript = "";
     let meetingLocalProvider = null;
     let meetingLocalModel = null;
@@ -331,6 +332,7 @@ function chunkHarness() {
     _audioFeaturePolicy: { activeFailure: () => null },
     parakeetManager: { transcribeLocalParakeet: () => decode.promise },
     finals,
+    remembered: [],
     debugLogger: { debug() {}, error() {} },
     Buffer,
     isLocalModelPolicyRefusal: (error) => error?.code?.startsWith("POLICY_"),
@@ -344,6 +346,7 @@ function chunkHarness() {
     const meetingConnectionOptions = { language: "en" };
     const meetingLocalBuffers = { mic: [], system: [Buffer.alloc(4)] };
     const meetingLocalChunkClock = { take: () => 0, mark() {} };
+    const meetingLocalPromptContext = { get: () => "", remember: (source, text) => remembered.push([source, text]), reset() {} };
     const meetingLocalWin = { isDestroyed: () => false, webContents: { send: (channel, payload) => finals.push({ channel, payload }) } };
     const meetingLocalProvider = "nvidia";
     const meetingLocalModel = "parakeet";
@@ -368,7 +371,7 @@ function chunkHarness() {
     `,
     context
   );
-  return { context, decode, finals };
+  return { context, decode, finals, remembered: context.remembered };
 }
 
 test("local meeting admission authorizes its selected model before capturing or loading", async () => {
@@ -488,4 +491,12 @@ test("a decode with segments delivers each segment as its own final", async () =
   });
   await pending;
   assert.deepEqual(plain(finals), ["Erster Satz.", "Zweiter Satz."]);
+});
+
+test("a delivered decode primes the next chunk of its source", async () => {
+  const { context, decode, remembered } = chunkHarness();
+  const pending = context.transcribe();
+  decode.resolve({ success: true, text: " Erster Satz. " });
+  await pending;
+  assert.deepEqual(plain(remembered), [["system", "Erster Satz."]]);
 });
