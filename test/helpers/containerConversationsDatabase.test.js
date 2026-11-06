@@ -696,8 +696,8 @@ test("denied folder delete restores the same notes, speakers, and conversations 
   db.saveNoteSpeakerEmbeddings(child.id, { SPEAKER_00: Buffer.from([1, 2, 3, 4]) });
 
   const childNoteConv = db.createAgentConversation("Child note chat", child.id);
-  db.markConversationSynced(childNoteConv.id, "cloud-conv-child");
   db.addAgentMessage(childNoteConv.id, "user", "keep while folder delete is pending");
+  db.markConversationSynced(childNoteConv.id, "cloud-conv-child");
   const localNoteConv = db.createAgentConversation("Local note chat", localChild.id);
   db.addAgentMessage(localNoteConv.id, "user", "local note chat survives denial");
   const localFolderConv = db.createAgentConversation("Folder chat", null, space.id, folder.id);
