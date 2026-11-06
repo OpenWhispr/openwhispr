@@ -3116,10 +3116,11 @@
           "title_one": "Rimuovere {{count}} ospite da {{workspace}}?",
           "title_other": "Rimuovere {{count}} ospiti da {{workspace}}?",
           "body": "Perderanno l'accesso a tutte le note condivise con loro. Puoi condividere di nuovo le note con loro in qualsiasi momento.",
-          "linkShared": "Le note condivise tramite link restano aperte a chiunque abbia il link.",
+          "linkShared": "Gli ospiti potrebbero avere ancora accesso tramite la condivisione via link o dominio.",
           "confirm_one": "Rimuovi {{count}} ospite",
           "confirm_other": "Rimuovi {{count}} ospiti",
           "removing": "Rimozione in corso…",
+          "limit": "Seleziona fino a {{count}} ospiti da rimuovere alla volta.",
           "failed": "Impossibile rimuovere gli ospiti. Nessuno è stato rimosso. Controlla la connessione e riprova.",
           "done_one": "Rimosso {{count}} ospite",
           "done_other": "Rimossi {{count}} ospiti"

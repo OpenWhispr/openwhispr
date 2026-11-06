@@ -12,6 +12,7 @@ import {
 } from "../../lib/rowSelection";
 import { classifyRowActionError } from "../../lib/workspaceErrors";
 import { GuestsService } from "../../services/GuestsService";
+import { CloudApiError } from "../../services/cloudApi";
 import { isolate } from "../../utils/bidiIsolate";
 import {
   ChevronDown,
@@ -53,17 +54,29 @@ interface Props {
   onInvitationsChanged?: () => void;
 }
 
-export default function WorkspaceGuestsTab({
+export default function WorkspaceGuestsTab(props: Props): React.ReactElement {
+  const canManage = workspaceCan(props.workspace, "manage_members");
+  // Permissions scope the returned notes; a change must discard the old list and open actions.
+  return (
+    <WorkspaceGuestsBody
+      key={`${props.workspace.id}:${canManage}`}
+      {...props}
+      canManage={canManage}
+    />
+  );
+}
+
+function WorkspaceGuestsBody({
   workspace,
   onInvitationsChanged,
-}: Props): React.ReactElement {
+  canManage,
+}: Props & { canManage: boolean }): React.ReactElement {
   const { t } = useTranslation();
   const { toast } = useToast();
   // The parent body is keyed per workspace, so the hook only ever sees one id here.
   const { status, guests, error, reload, dropGuests, dropGuestNote } = useWorkspaceGuests(
     workspace.id
   );
-  const canManage = workspaceCan(workspace, "manage_members");
   // One path for a row's menu and the selection bar: both hand the dialogs a list of guests.
   const [inviting, setInviting] = useState<WorkspaceGuest[] | null>(null);
   const [removing, setRemoving] = useState<WorkspaceGuest[] | null>(null);
@@ -122,13 +135,22 @@ export default function WorkspaceGuestsTab({
       }
       // Shown gone at once: the reload below can fail and would leave the note listed.
       dropGuestNote(guest.email, noteId);
-      toast({ title: t(`${KEY}.removedFromNote`, names) });
+      toast({
+        title: t(`${KEY}.removedFromNote`, names),
+        description:
+          result.link_shared_note_ids.length > 0 ? t(`${KEY}.remove.linkShared`) : undefined,
+      });
       void reload();
       return true;
     } catch (caught) {
       const failure = classifyRowActionError(caught);
       const workspaceName = isolate(workspace.name);
-      if (failure.kind === "gone") {
+      if (
+        failure.kind === "gone" ||
+        (caught instanceof CloudApiError &&
+          caught.status === 404 &&
+          caught.message === "Note not found")
+      ) {
         // The note (or the guest's access) is already gone; the reload corrects the row.
         void reload();
         return false;
@@ -470,6 +492,11 @@ function AccessCell({
   // Notes whose removal is in flight; a press on one of them does nothing.
   const [sending, setSending] = useState<ReadonlySet<string>>(new Set());
   const sendingRef = useRef(new Set<string>());
+  // Completed requests update this immediately, including before React renders overlapping removals.
+  const remainingNoteIdsRef = useRef(new Set(guest.notes.map((note) => note.id)));
+  useEffect(() => {
+    remainingNoteIdsRef.current = new Set(guest.notes.map((note) => note.id));
+  }, [guest.notes]);
   // Set when the last note went: the row is leaving, so focus goes to the table, not the trigger.
   const emptiedRef = useRef(false);
   const label = t(`${KEY}.noteCount`, { count: guest.notes.length });
@@ -505,10 +532,14 @@ function AccessCell({
     if (!removed) {
       emptiedRef.current = false;
       focusAfterRef.current = null;
-    } else if (emptying) {
-      // Say where focus goes rather than leaving it to the menu's unmount: the row is gone.
-      onTableFocus();
-      setOpen(false);
+    } else {
+      remainingNoteIdsRef.current.delete(noteId);
+      if (remainingNoteIdsRef.current.size === 0) {
+        emptiedRef.current = true;
+        // Say where focus goes rather than leaving it to the menu's unmount: the row is gone.
+        onTableFocus();
+        setOpen(false);
+      }
     }
   };
 

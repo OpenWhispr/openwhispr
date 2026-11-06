@@ -10,6 +10,7 @@ import { useToast } from "../ui/useToast";
 import { WorkspaceActionDialog } from "./WorkspaceActionDialog";
 
 const KEY = "settingsPage.workspace.guests.remove";
+const MAX_GUEST_REMOVAL = 500;
 
 interface RemoveGuestsDialogProps {
   open: boolean;
@@ -40,11 +41,12 @@ function RemoveGuestsDialogBody({
   const runningRef = useRef(false);
 
   const count = guests.length;
+  const exceedsLimit = count > MAX_GUEST_REMOVAL;
   const busy = state.kind === "running";
   const workspaceName = isolate(workspace.name);
 
   const run = async (): Promise<void> => {
-    if (runningRef.current) return;
+    if (runningRef.current || exceedsLimit) return;
     runningRef.current = true;
     dispatch({ type: "confirm" });
     try {
@@ -102,7 +104,13 @@ function RemoveGuestsDialogBody({
           : t(`${KEY}.title`, { count, workspace: workspaceName })
       }
       body={body}
-      error={state.kind === "failed" ? errorLine(state.error) : null}
+      error={
+        exceedsLimit
+          ? t(`${KEY}.limit`, { count: MAX_GUEST_REMOVAL })
+          : state.kind === "failed"
+            ? errorLine(state.error)
+            : null
+      }
       primary={
         // Asking again can't change a refusal of permission, so it only offers to close.
         state.kind === "failed" && !mayRetry
@@ -115,6 +123,7 @@ function RemoveGuestsDialogBody({
                   : count === 1
                     ? t(`${KEY}.confirmOne`)
                     : t(`${KEY}.confirm`, { count }),
+              disabled: exceedsLimit,
               onClick: () => void run(),
               tone: "destructive",
             }

@@ -3116,10 +3116,11 @@
           "title_one": "要將 {{count}} 位訪客從 {{workspace}} 移除嗎？",
           "title_other": "要將 {{count}} 位訪客從 {{workspace}} 移除嗎？",
           "body": "他們將無法再存取與其共用的所有筆記。你可以隨時再次與他們共用筆記。",
-          "linkShared": "透過連結共用的筆記仍可供任何持有連結的人開啟。",
+          "linkShared": "訪客可能仍可透過連結分享或網域分享存取。",
           "confirm_one": "移除 {{count}} 位訪客",
           "confirm_other": "移除 {{count}} 位訪客",
           "removing": "正在移除…",
+          "limit": "每次最多可選擇移除 {{count}} 位訪客。",
           "failed": "無法移除訪客。沒有人被移除。請檢查網路連線後再試一次。",
           "done_one": "已移除 {{count}} 位訪客",
           "done_other": "已移除 {{count}} 位訪客"

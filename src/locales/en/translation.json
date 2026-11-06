@@ -2377,10 +2377,11 @@
           "title_one": "Remove {{count}} guest from {{workspace}}?",
           "title_other": "Remove {{count}} guests from {{workspace}}?",
           "body": "They'll lose access to every note shared with them. You can share notes with them again anytime.",
-          "linkShared": "Notes shared by link stay open to anyone with the link.",
+          "linkShared": "Guests may still have access through link or domain sharing.",
           "confirm_one": "Remove {{count}} guest",
           "confirm_other": "Remove {{count}} guests",
           "removing": "Removing…",
+          "limit": "Select up to {{count}} guests to remove at once.",
           "failed": "Couldn't remove guests. Nobody was removed. Check your connection and try again.",
           "done_one": "Removed {{count}} guest",
           "done_other": "Removed {{count}} guests"
