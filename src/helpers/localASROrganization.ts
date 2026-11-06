@@ -1,6 +1,6 @@
 import { registryData as modelData } from "../models/registryData.js";
 
-const catalog = () => modelData.parakeetModels;
+const catalog = (): typeof modelData.parakeetModels => modelData.parakeetModels;
 // Oruk leads: it is the recommended local route, so it is the first tab everywhere.
 export const LOCAL_ASR_ORGANIZATIONS = [
   { id: "oruk", name: "Oruk" },
@@ -8,15 +8,6 @@ export const LOCAL_ASR_ORGANIZATIONS = [
   { id: "nvidia", name: "NVIDIA" },
   { id: "cohere", name: "Cohere" },
 ];
-
-// What the local route opens on before the user has ever chosen a local model.
-export const DEFAULT_LOCAL_ASR_SELECTION = {
-  provider: "oruk",
-  modelId:
-    Object.keys(catalog()).find(
-      (id) => catalog()[id]?.organization?.id === "oruk" && catalog()[id]?.recommended
-    ) ?? "",
-};
 
 export function getASRModelOrganization(modelId: string): string {
   return (

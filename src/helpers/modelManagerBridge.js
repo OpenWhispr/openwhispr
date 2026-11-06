@@ -29,6 +29,8 @@ const {
 } = require("./llamaContextPolicy");
 
 const MIN_FILE_SIZE = 1_000_000; // 1MB minimum for valid model files
+// Room a download reserves: the model file(s) plus headroom.
+const LLM_DISK_SPACE_FACTOR = 1.2;
 
 // The context every server still STARTS at. Requests that need more grow it
 // on demand, bounded by a per-machine, per-model ceiling (llamaContextPolicy).
@@ -353,7 +355,7 @@ class ModelManager {
         requiredBytes += model.draftSizeBytes;
       }
       if (requiredBytes > 0) {
-        this.downloadReservations.set(modelId, requiredBytes * 1.2);
+        this.downloadReservations.set(modelId, requiredBytes * LLM_DISK_SPACE_FACTOR);
         const reservedBytes = this.getReservedDownloadBytes();
         const spaceCheck = await checkDiskSpace(this.modelsDir, reservedBytes);
         if (!spaceCheck.ok) {
@@ -800,7 +802,7 @@ class ModelManager {
         // be stepped down again.
         if (this.serverManager.contextSize < contextSize) refuse(contextSize);
       } catch (error) {
-        if (isLocalModelPolicyRefusal(error)) throw error;
+        if (isLocalModelPolicyRefusal(error) || error.code === "LOCAL_MODEL_BUSY") throw error;
         refuse(contextSize);
         // start() stops the running server before it spawns, so a grow that
         // dies has already taken a working window with it. Come back at the
@@ -818,7 +820,8 @@ class ModelManager {
         try {
           await startAt(restorableContextSize);
         } catch (restoreError) {
-          if (isLocalModelPolicyRefusal(restoreError)) throw restoreError;
+          if (isLocalModelPolicyRefusal(restoreError) || restoreError.code === "LOCAL_MODEL_BUSY")
+            throw restoreError;
           throw unavailable(restoreError);
         }
       }
@@ -927,6 +930,10 @@ class ModelManager {
     this.currentServerModelId = null;
   }
 
+  async stopServerWhenIdle(options) {
+    if (await this.serverManager.stopWhenIdle(options)) this.currentServerModelId = null;
+  }
+
   getServerStatus() {
     return this.serverManager.getStatus();
   }
@@ -988,4 +995,5 @@ module.exports = {
   default: new ModelManager(),
   ModelError,
   ModelNotFoundError,
+  LLM_DISK_SPACE_FACTOR,
 };

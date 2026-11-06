@@ -64,6 +64,14 @@ const { centeredBounds, clampedBounds } = require("./onboardingWindowBounds");
 const { ONBOARDING_DEMO_KINDS, isOnboardingInputAllowed } = require("./onboardingInputPolicy");
 const { createHotkeyRepeatGate } = require("./hotkeyRepeatGate");
 
+// The renderer asks for a window mode per onboarding step; each one names its
+// size in ONBOARDING_WINDOW_SIZES. "restore" is handled separately.
+const ONBOARDING_WINDOW_SIZE_KEYS = {
+  compact: "COMPACT",
+  expanded: "EXPANDED",
+  "local-setup": "LOCAL_SETUP",
+};
+
 class WindowManager {
   constructor() {
     this.mainWindow = null;
@@ -1962,11 +1970,10 @@ class WindowManager {
     win.focus();
   }
 
-  // Compact onboarding starts at smaller bounds, but both modes expose the
+  // Compact onboarding starts at smaller bounds, but every mode exposes the
   // complete window-control contract so a frameless window never traps the
   // user in setup.
   _applyOnboardingWindowChrome(win, mode) {
-    const expanded = mode === "expanded";
     win.setResizable(true);
     win.setMinimizable(true);
     win.setMaximizable(true);
@@ -1975,7 +1982,7 @@ class WindowManager {
     // Floor at the mode's canonical size so no step renders below the bounds
     // it was designed for — clamped to the work area, or a 1366x768-class
     // display could never fit (and setContentBounds would fight the minimum).
-    const floor = expanded ? ONBOARDING_WINDOW_SIZES.EXPANDED : ONBOARDING_WINDOW_SIZES.COMPACT;
+    const floor = ONBOARDING_WINDOW_SIZES[ONBOARDING_WINDOW_SIZE_KEYS[mode]];
     const { workArea } = screen.getDisplayMatching(win.getBounds());
     win.setMinimumSize(
       Math.min(floor.width, workArea.width),
@@ -1989,7 +1996,7 @@ class WindowManager {
   setOnboardingWindowMode(mode) {
     const win = this.controlPanelWindow;
     if (!win || win.isDestroyed()) return false;
-    if (!new Set(["compact", "expanded", "restore"]).has(mode)) return false;
+    if (mode !== "restore" && !Object.hasOwn(ONBOARDING_WINDOW_SIZE_KEYS, mode)) return false;
     if (mode !== "restore" && (win.isFullScreen() || win.isMaximized())) {
       // Entering onboarding from a maximized/fullscreen control panel must not
       // refuse: each mode is applied at its canonical centered bounds, which
@@ -2048,8 +2055,7 @@ class WindowManager {
       return true;
     }
 
-    const target =
-      mode === "compact" ? ONBOARDING_WINDOW_SIZES.COMPACT : ONBOARDING_WINDOW_SIZES.EXPANDED;
+    const target = ONBOARDING_WINDOW_SIZES[ONBOARDING_WINDOW_SIZE_KEYS[mode]];
     const next = centeredBounds(current, target, workArea);
     if (
       current.x === next.x &&

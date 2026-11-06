@@ -68,7 +68,9 @@ async function setup(
     req.on("end", () => {
       let status = 200;
       let payload;
-      if (req.url === "/props") {
+      if (req.url === "/slots") {
+        payload = [];
+      } else if (req.url === "/props") {
         calls.props += 1;
         payload = { default_generation_settings: { n_ctx: serverManager.contextSize } };
       } else if (req.url === "/apply-template") {
@@ -583,4 +585,62 @@ test("a reply cut off at the token cap keeps its code through the bridge", async
       return true;
     }
   );
+});
+
+test("a larger request overlapping pre-warm reports busy and can retry at its full context", async (t) => {
+  const { modelManager, modelId, serverManager, calls, restarts } = await setup(t, {
+    tokenCount: 20514,
+  });
+  serverManager.ready = false;
+  serverManager.process = null;
+  serverManager.contextSize = null;
+  modelManager.currentServerModelId = null;
+  const ready = Promise.withResolvers();
+  const joined = Promise.withResolvers();
+  const spawned = Promise.withResolvers();
+  const doStart = serverManager._doStart;
+  serverManager._doStart = async (modelPath, options) => {
+    spawned.resolve();
+    await ready.promise;
+    await doStart(modelPath, options);
+    serverManager.modelPath = modelPath;
+    serverManager.draftModelPath = options.draftModelPath || null;
+  };
+  const start = serverManager.start;
+  t.mock.method(serverManager, "start", function (...args) {
+    const result = start.apply(this, args);
+    if (args[1].contextSize > 16384) joined.resolve();
+    return result;
+  });
+  const warming = modelManager.prewarmServer(modelId);
+  await spawned.promise;
+  const inference = modelManager.runInference(modelId, LONG_PROMPT, {
+    systemPrompt: "Write notes.",
+  });
+  const rejected = assert.rejects(inference, { code: "LOCAL_MODEL_BUSY" });
+  await joined.promise;
+  ready.resolve();
+  assert.equal(await warming, true);
+  await rejected;
+  assert.equal(calls.completions, 0);
+  assert.deepEqual(restarts, [16384], "contention must leave the pre-warmed server running");
+  assert.equal(
+    await modelManager.runInference(modelId, LONG_PROMPT, { systemPrompt: "Write notes." }),
+    "done"
+  );
+  assert.deepEqual(restarts, [16384, 32768], "a retry must still be allowed to grow the context");
+  assert.equal(serverManager.contextSize, 32768);
+});
+
+test("a binary refresh clears the loaded model after reuse without cancelling the refresh", async (t) => {
+  const { modelManager, serverManager } = await setup(t);
+  const slots = Promise.withResolvers();
+  serverManager._requestJson = () => slots.promise;
+  const stopping = modelManager.stopServerWhenIdle({ cancelOnReuse: false });
+  serverManager.cancelDeferredStop();
+  slots.resolve([]);
+  await stopping;
+
+  assert.equal(serverManager.process, null);
+  assert.equal(modelManager.currentServerModelId, null);
 });

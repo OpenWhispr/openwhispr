@@ -346,6 +346,7 @@ const { i18nMain, changeLanguage } = require("./src/helpers/i18nMain");
 const { ensureYdotool } = require("./src/helpers/ensureYdotool");
 const sidecarRegistry = require("./src/helpers/sidecarRegistry");
 const { reapStaleSidecars } = require("./src/helpers/sidecarReaper");
+const { resolvePrewarmModel } = require("./src/helpers/localServerPolicy");
 
 // Manager instances - initialized after app.whenReady()
 let debugLogger = null;
@@ -1529,21 +1530,17 @@ async function startApp() {
   // TODO: drop legacy REASONING_PROVIDER / LOCAL_REASONING_MODEL fallbacks after 2 releases.
   const cleanupProvider = process.env.CLEANUP_PROVIDER || process.env.REASONING_PROVIDER;
   const cleanupLocalModel = process.env.LOCAL_CLEANUP_MODEL || process.env.LOCAL_REASONING_MODEL;
-  if (cleanupProvider === "local" && cleanupLocalModel) {
+  const prewarmModel = resolvePrewarmModel({
+    cleanupProvider,
+    cleanupModel: cleanupLocalModel,
+    dictationAgentProvider: process.env.DICTATION_AGENT_PROVIDER,
+    dictationAgentModel: process.env.LOCAL_DICTATION_AGENT_MODEL,
+  });
+  if (prewarmModel) {
     const modelManager = require("./src/helpers/modelManagerBridge").default;
-    modelManager.prewarmServer(cleanupLocalModel).catch((err) => {
-      debugLogger.debug("llama-server pre-warm error (non-fatal)", { error: err.message });
-    });
-  }
-
-  if (
-    process.env.DICTATION_AGENT_PROVIDER === "local" &&
-    process.env.LOCAL_DICTATION_AGENT_MODEL &&
-    process.env.LOCAL_DICTATION_AGENT_MODEL !== cleanupLocalModel
-  ) {
-    const modelManager = require("./src/helpers/modelManagerBridge").default;
-    modelManager.prewarmServer(process.env.LOCAL_DICTATION_AGENT_MODEL).catch((err) => {
-      debugLogger.debug("dictation-agent llama-server pre-warm error (non-fatal)", {
+    modelManager.prewarmServer(prewarmModel).catch((err) => {
+      debugLogger.debug("llama-server pre-warm error (non-fatal)", {
+        model: prewarmModel,
         error: err.message,
       });
     });
@@ -2227,6 +2224,15 @@ if (gotSingleInstanceLock) {
       sidecarRegistry.shutdownAll(),
       Promise.race([
         ipcHandlers?.metaActivation?.shutdown(),
+        new Promise((resolve) => setTimeout(resolve, 1500)),
+      ]),
+      // A teamspace delete still in its Undo window, which the toast already reported as done.
+      Promise.race([
+        isLiveWindow(windowManager?.controlPanelWindow)
+          ? windowManager.controlPanelWindow.webContents.executeJavaScript(
+              "window.commitHeldSpaceDeletes?.()"
+            )
+          : undefined,
         new Promise((resolve) => setTimeout(resolve, 1500)),
       ]),
     ]).finally(() => app.exit(0));

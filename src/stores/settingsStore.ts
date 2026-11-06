@@ -158,6 +158,10 @@ const localLlmProviderIds = new Set(
   modelRegistryData.localProviders.map((provider) => provider.id)
 );
 
+const localLlmModelIds = new Set<string>(
+  modelRegistryData.localProviders.flatMap((provider) => provider.models.map((model) => model.id))
+);
+
 function transcriptionProviderModels(
   providerId: string,
   context: TranscriptionPolicyContext
@@ -3163,9 +3167,16 @@ export const selectResolvedLLMConfig = (
   scope: InferenceScope
 ): ResolvedLLMConfig => {
   const def: InferenceScopeDefinition = INFERENCE_SCOPES[scope];
-  const fallback = def.fallbackScope
+  const mode = state[def.storeKeys.mode] as InferenceMode;
+  const parent = def.fallbackScope
     ? selectResolvedLLMConfig(state, def.fallbackScope as InferenceScope)
     : undefined;
+  // A local scope runs only local models. A parent moved to another mode can still
+  // hold one (a mode switch keeps the model), and a scope inheriting it keeps working.
+  const fallback =
+    mode === "local" && parent?.mode !== "local" && !localLlmModelIds.has(parent?.model ?? "")
+      ? undefined
+      : parent;
 
   const read = (field: keyof InferenceScopeStoreKeys): string | undefined => {
     const key = def.storeKeys[field];
@@ -3178,7 +3189,7 @@ export const selectResolvedLLMConfig = (
 
   const localConfig: ResolvedLLMConfig = {
     scope,
-    mode: state[def.storeKeys.mode] as InferenceMode,
+    mode,
     provider: read("provider") || fallback?.provider || "",
     model: state.policyBlockedLocalScopes?.includes(scope)
       ? ""
@@ -3470,6 +3481,16 @@ export function selectPolicyEffectiveSettings(
     if (definition.storeKeys.cloudMode) {
       writable[definition.storeKeys.cloudMode] =
         selection.mode === "openwhispr" ? "openwhispr" : "byok";
+    }
+
+    // A local scope with no model is switched off on this device (onboarding's
+    // local setup, a deleted model); a default would name a model nobody downloaded.
+    if (selection.mode === "local" && config.mode === "local" && !config.model) {
+      writable[definition.storeKeys.provider] = config.provider;
+      writable[definition.storeKeys.model] = "";
+      // Under an allow-list a blank is a choice still to make, which the refusal explains.
+      if (!isLocalModelAllowedByPolicy(policyState, "llm", "")) blockedLocalScopes.push(scope);
+      continue;
     }
 
     let provider = selection.provider;

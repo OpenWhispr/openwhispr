@@ -793,6 +793,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Vulkan GPU acceleration
   detectVulkanGpu: () => ipcRenderer.invoke("detect-vulkan-gpu"),
+  getComputerProfile: () => ipcRenderer.invoke("get-computer-profile"),
+  getLocalSetupSpace: () => ipcRenderer.invoke("get-local-setup-space"),
   getLlamaVulkanStatus: () => ipcRenderer.invoke("get-llama-vulkan-status"),
   downloadLlamaVulkanBinary: () => ipcRenderer.invoke("download-llama-vulkan-binary"),
   cancelLlamaVulkanDownload: () => ipcRenderer.invoke("cancel-llama-vulkan-download"),
@@ -1317,14 +1319,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getPendingConversationDeletes: () => ipcRenderer.invoke("db-get-pending-conversation-deletes"),
   getConversationByClientId: (clientId) =>
     ipcRenderer.invoke("db-get-conversation-by-client-id", clientId),
-  upsertConversationFromCloud: (cloudConv, messages) =>
-    ipcRenderer.invoke("db-upsert-conversation-from-cloud", cloudConv, messages),
+  upsertConversationFromCloud: (cloudConv, messages, snapshot) =>
+    ipcRenderer.invoke("db-upsert-conversation-from-cloud", cloudConv, messages, snapshot),
   markConversationCreateAttempted: (id) =>
     ipcRenderer.invoke("db-mark-conversation-create-attempted", id),
   acknowledgeConversationCreate: (id, snapshot, cloudId) =>
     ipcRenderer.invoke("db-acknowledge-conversation-create", id, snapshot, cloudId),
-  markConversationSynced: (id, cloudId) =>
-    ipcRenderer.invoke("db-mark-conversation-synced", id, cloudId),
+  markConversationSynced: (id, cloudId, snapshot) =>
+    ipcRenderer.invoke("db-mark-conversation-synced", id, cloudId, snapshot),
+  replaceConversationClientId: (id, expectedClientId) =>
+    ipcRenderer.invoke("db-replace-conversation-client-id", id, expectedClientId),
   hardDeleteConversation: (id) => ipcRenderer.invoke("db-hard-delete-conversation", id),
 
   getPendingTranscriptions: () => ipcRenderer.invoke("db-get-pending-transcriptions"),
