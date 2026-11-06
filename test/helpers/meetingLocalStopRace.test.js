@@ -4,6 +4,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
+const localChunking = require("../../src/helpers/meetingLocalChunking");
+
 const source = fs.readFileSync(path.join(__dirname, "../../src/helpers/ipcHandlers.js"), "utf8");
 
 const sliceBetween = (startMarker, endMarker) => {
@@ -65,7 +67,7 @@ function harness({
     _resolveInitialMeetingSpeakerConfig: () => null,
     BrowserWindow: { fromWebContents: () => win },
     ALLOWED_MEETING_PROVIDERS: new Set(["local"]),
-    LOCAL_MEETING_CHUNK_INTERVAL_MS: 5000,
+    LOCAL_MEETING_CUT_CHECK_MS: 250,
     credentialGeneration: 0,
     getEnterpriseAudioRequest: async () => null,
     setInterval: () => "local-timer",
@@ -327,17 +329,17 @@ function chunkHarness() {
     debugLogger: { debug() {}, error() {} },
     Buffer,
     isLocalModelPolicyRefusal: (error) => error?.code?.startsWith("POLICY_"),
+    ...localChunking,
   };
   vm.createContext(context);
   vm.runInContext(
     `
     const meetingLocalBuffers = { mic: [], system: [Buffer.alloc(4)] };
-    const meetingLocalChunkClock = { take: () => 0 };
+    const meetingLocalChunkClock = { take: () => 0, mark() {} };
     const meetingLocalWin = { isDestroyed: () => false, webContents: { send: (channel, payload) => finals.push({ channel, payload }) } };
     const meetingLocalProvider = "nvidia";
     const meetingLocalModel = "parakeet";
     const meetingLocalLanguage = "en";
-    const LOCAL_MEETING_CHUNK_INTERVAL_MS = 5000;
     const meetingEchoLeakDetector = { isSystemSpeaking: () => false };
     const downsample24kTo16k = (pcm) => pcm;
     const computeChunkStats = () => ({ rms: 1, peak: 1, sampleCount: 2 });
@@ -354,7 +356,7 @@ function chunkHarness() {
 
     ${sliceBetween("const transcribeLocalMeetingChunk =", "const transcribeAllLocalBuffers =")}
 
-    globalThis.transcribe = () => transcribeLocalMeetingChunk("system");
+    globalThis.transcribe = () => transcribeLocalMeetingChunk("system", { final: true });
     `,
     context
   );
@@ -462,4 +464,19 @@ test("a local decode that finishes after revocation delivers no text", async () 
     await pending;
     assert.deepEqual(plain(finals), revoked ? [] : ["said as the policy changed"]);
   }
+});
+
+test("a decode with segments delivers each segment as its own final", async () => {
+  const { context, decode, finals } = chunkHarness();
+  const pending = context.transcribe();
+  decode.resolve({
+    success: true,
+    text: "Erster Satz. Zweiter Satz.",
+    segments: [
+      { start: 0, end: 1, text: "Erster Satz." },
+      { start: 1.2, end: 2, text: "Zweiter Satz." },
+    ],
+  });
+  await pending;
+  assert.deepEqual(plain(finals), ["Erster Satz.", "Zweiter Satz."]);
 });
