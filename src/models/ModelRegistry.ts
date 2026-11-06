@@ -18,6 +18,8 @@ export interface ModelDefinition {
   hfRepo: string;
   recommended?: boolean;
   supportsThinking?: boolean;
+  /** Local only: the model calls the assistant's tools reliably. Absent: chat without tools. */
+  supportsTools?: boolean;
   /** Superseded: kept so existing selections keep working; see isListedModel. */
   legacy?: boolean;
   // Optional MTP speculative-decoding drafter downloaded alongside the main GGUF.

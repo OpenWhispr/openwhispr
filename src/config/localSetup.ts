@@ -119,6 +119,7 @@ interface TextModelInfo {
   name: string;
   size: string;
   sizeBytes: number;
+  draftSizeBytes?: number; // the speed-up drafter that downloads with it
 }
 const parakeetModels = modelRegistryData.parakeetModels as unknown as Record<
   string,
@@ -327,7 +328,7 @@ function textRow(
     modelId,
     modelName: model.name,
     providerIcon: providerId,
-    download: { kind: "llm", id: modelId, bytes: model.sizeBytes },
+    download: { kind: "llm", id: modelId, bytes: model.sizeBytes + (model.draftSizeBytes ?? 0) },
     label,
     ...(reason ? { reason } : {}),
     line,
