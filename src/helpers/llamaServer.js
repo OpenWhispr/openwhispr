@@ -94,6 +94,7 @@ class LlamaServerManager {
     this.contextSize = null;
     this.startupPromise = null;
     this.restartPromise = null;
+    this.stopPromise = null;
     this.deferredStop = null;
     this.healthCheckInterval = null;
     this.healthCheckFailures = 0;
@@ -191,6 +192,7 @@ class LlamaServerManager {
   }
 
   async _policyAllowedStart(modelPath, options = {}) {
+    if (this.stopPromise) await this.stopPromise;
     const pendingStartup = this.startupPromise;
     if (pendingStartup) await pendingStartup;
     if (this.restartPromise) {
@@ -218,7 +220,10 @@ class LlamaServerManager {
     // A caller joining a start must not report success for another request's
     // model or replace that server before the first caller can use it.
     if (pendingStartup) {
-      throw new Error("The local model server was started for another request. Please try again.");
+      throw Object.assign(
+        new Error("The local model server was started for another request. Please try again."),
+        { code: "LOCAL_MODEL_BUSY" }
+      );
     }
 
     if (this.process) {
@@ -941,6 +946,17 @@ class LlamaServerManager {
   }
 
   async stop() {
+    if (this.stopPromise) return this.stopPromise;
+    this.stopPromise = this._stop();
+    try {
+      await this.stopPromise;
+    } finally {
+      this.stopPromise = null;
+    }
+  }
+
+  async _stop() {
+    this.ready = false;
     this.cancelDeferredStop();
     this.clearIdleTimer();
     this.stopHealthCheck();

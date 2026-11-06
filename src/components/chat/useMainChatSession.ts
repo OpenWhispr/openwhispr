@@ -144,7 +144,7 @@ export function useMainChatSession(): MainChatSession {
   }, [selection, token, validate]);
 
   // A row this store just created still validates, in the background: it has nothing to load.
-  const justCreated = state.createdSelectionToken === token;
+  const justCreated = state.createdSelectionToken === token && entry !== undefined;
   const validated = selection.kind !== "conversation" || loaded?.token === token || justCreated;
   const error =
     selection.kind === "new-chat"

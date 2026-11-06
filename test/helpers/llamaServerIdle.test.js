@@ -429,3 +429,54 @@ test("a deferred stop without a server cleans up without contacting a local serv
   assert.equal(manager.idleTimer, null);
   assert.equal(manager.deferredStop, null);
 });
+
+for (const shutdown of ["deferred", "idle"]) {
+  test(`a same-model start waits for an in-flight ${shutdown} stop and uses a replacement`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+    const { EventEmitter } = require("node:events");
+    const manager = new LlamaServerManager();
+    t.after(() => manager.clearIdleTimer());
+    const children = [];
+    const signals = [];
+    manager._requestJson = async () => [];
+    manager._doStart = async (modelPath) => {
+      const child = new EventEmitter();
+      child.exitCode = null;
+      child.kill = (signal) => {
+        signals.push(signal || "SIGTERM");
+      };
+      children.push(child);
+      manager.process = child;
+      manager.port = 8220 + children.length;
+      manager.modelPath = modelPath;
+      manager.draftModelPath = null;
+      manager.ready = true;
+      manager.resetIdleTimer();
+    };
+    await manager.start("/models/chat.gguf");
+    const stopping = shutdown === "deferred" ? manager.stopWhenIdle() : null;
+    if (shutdown === "idle") t.mock.timers.tick(5 * MINUTE);
+    await settle();
+    assert.deepEqual(signals, ["SIGTERM"]);
+    let returned = false;
+    const starting = manager.start("/models/chat.gguf").then(() => {
+      returned = true;
+    });
+    t.after(async () => {
+      children[0].emit("close", 0);
+      await Promise.all([stopping, starting]);
+    });
+    await settle();
+    assert.equal(returned, false, "a terminating server must never be handed to a caller");
+    assert.equal(manager.getStatus().running, false);
+    const duplicateStop = manager.stop();
+    assert.deepEqual(signals, ["SIGTERM"], "concurrent stops share the same shutdown");
+    children[0].emit("close", 0);
+    await Promise.all([stopping, duplicateStop, starting]);
+    assert.equal(children.length, 2);
+    assert.equal(manager.process, children[1]);
+    assert.equal(manager.port, 8222);
+    assert.equal(manager.ready, true);
+    assert.equal(manager.modelPath, "/models/chat.gguf");
+  });
+}

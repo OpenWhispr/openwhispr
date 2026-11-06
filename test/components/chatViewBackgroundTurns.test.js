@@ -120,3 +120,47 @@ test("a refused starter card adds to the typed text instead of replacing it", as
   });
   assert.equal(fixture.input().draftText, "half a thought\n\nStarter prompt");
 });
+
+test("reopening a completed store-created chat waits for its persisted messages", async (t) => {
+  const { deferred } = require("../lib/chatTurnHarness");
+  const reloaded = deferred();
+  let reopening = false;
+  const fixture = await setupChatTurns(
+    t,
+    { getAgentConversation: async (id) => (reopening ? reloaded.promise : { id, messages: [] }) },
+    mocks
+  );
+  const container = installInteractiveDom(t);
+  const { default: ChatView } = await fixture.vite.ssrLoadModule("/components/chat/ChatView.tsx");
+  const root = createRoot(container);
+  fixture.unmounts.push(async () => React.act(async () => root.unmount()));
+  await React.act(async () => root.render(React.createElement(ChatView)));
+  await React.act(async () => {
+    globalThis.__backgroundInput.onTextSubmit("Remember this question");
+    await until(() => fixture.streams.length === 1);
+  });
+  const id = fixture.state().selection.conversationId;
+  await React.act(async () => {
+    fixture.streams[0].resolve("Remember this answer");
+    await until(() => !fixture.state().entries[`conversation:${id}`]?.running);
+  });
+  assert.equal(fixture.state().entries[`conversation:${id}`], undefined);
+  await React.act(async () => root.render(null));
+  reopening = true;
+  await React.act(async () => root.render(React.createElement(ChatView)));
+  assert.equal(globalThis.__backgroundInput.sendDisabled, true);
+  assert.equal(globalThis.__backgroundMessages.emptyState, null);
+  await React.act(async () => {
+    reloaded.resolve({ id, messages: fixture.writes, note_id: null });
+    await flush();
+  });
+  assert.equal(globalThis.__backgroundInput.sendDisabled, false);
+  assert.deepEqual(
+    globalThis.__backgroundMessages.messages.map(({ content }) => content),
+    ["Remember this question", "Remember this answer"]
+  );
+  await React.act(async () => {
+    globalThis.__backgroundInput.onTextSubmit("Follow up");
+    await until(() => fixture.streams.length === 2);
+  });
+});
