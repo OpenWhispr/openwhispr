@@ -4,6 +4,7 @@ import TaskItem from "@tiptap/extension-task-item";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Markdown } from "tiptap-markdown";
 import { HorizontalRuleOutsideTables, markdownTableExtensions } from "./RichTextEditorTable";
+import { createEditorBlockExtensions } from "./editorBlocks/editorBlockExtensions";
 
 /**
  * The note editor's schema and Markdown round-trip. Order matters: at equal
@@ -14,7 +15,11 @@ import { HorizontalRuleOutsideTables, markdownTableExtensions } from "./RichText
 export function createRichTextExtensions(placeholder: string) {
   return [
     StarterKit.configure({
-      heading: { levels: [1, 2, 3] },
+      // The editor-block extensions replace these three with Markdown-aware versions
+      // (alignment, syntax colours); see createEditorBlockExtensions.
+      paragraph: false,
+      heading: false,
+      codeBlock: false,
       bulletList: { keepMarks: true },
       orderedList: { keepMarks: true },
       horizontalRule: false,
@@ -22,6 +27,7 @@ export function createRichTextExtensions(placeholder: string) {
     HorizontalRuleOutsideTables,
     TaskList,
     TaskItem.configure({ nested: true }),
+    ...createEditorBlockExtensions(),
     Placeholder.configure({
       placeholder,
       emptyEditorClass: "is-editor-empty",

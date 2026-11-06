@@ -3414,6 +3414,122 @@
         "taskList": "Elenco di controllo",
         "blockquote": "Citazione",
         "table": "Inserisci tabella"
+      },
+      "blocks": {
+        "groups": {
+          "basic": "Base",
+          "blocks": "Blocchi",
+          "style": "Stile",
+          "tools": "Strumenti"
+        },
+        "slash": {
+          "heading": "Titolo {{level}}",
+          "bulletList": "Elenco puntato",
+          "orderedList": "Elenco numerato",
+          "taskList": "Attività con casella",
+          "quote": "Citazione",
+          "divider": "Separatore",
+          "table": "Tabella",
+          "codeBlock": "Blocco di codice",
+          "codeHint": "Colori della sintassi",
+          "noteLink": "Collega nota",
+          "noteLinkHint": "oppure digita [[",
+          "toggle": "Comprimibile",
+          "callout": "Riquadro: {{type}}",
+          "toc": "Indice",
+          "mathBlock": "Blocco matematico",
+          "inlineMath": "Formula in linea",
+          "inlineMathHint": "oppure digita $$x^2$$",
+          "youtube": "Video YouTube",
+          "twitch": "Video Twitch",
+          "emoji": "Emoji",
+          "emojiHint": "oppure digita :smile:",
+          "highlight": "Evidenzia",
+          "subscript": "Pedice",
+          "superscript": "Apice",
+          "color": "Colore del testo: {{name}}",
+          "font": "Carattere: {{name}}",
+          "ruby": "Annotazione ruby",
+          "rubyHint": "Lettura sopra il testo",
+          "align": "Allinea: {{dir}}",
+          "find": "Trova e sostituisci",
+          "invisible": "Mostra/nascondi caratteri invisibili"
+        },
+        "callout": {
+          "note": "Nota",
+          "tip": "Suggerimento",
+          "important": "Importante",
+          "warning": "Avviso",
+          "caution": "Attenzione"
+        },
+        "colors": {
+          "default": "Predefinito",
+          "red": "Rosso",
+          "orange": "Arancione",
+          "yellow": "Giallo",
+          "green": "Verde",
+          "blue": "Blu",
+          "purple": "Viola",
+          "gray": "Grigio"
+        },
+        "fonts": {
+          "default": "Predefinito",
+          "serif": "Con grazie",
+          "monospace": "Monospaziato",
+          "rounded": "Arrotondato"
+        },
+        "align": {
+          "left": "Sinistra",
+          "center": "Centro",
+          "right": "Destra",
+          "justify": "Giustificato"
+        },
+        "prompt": {
+          "latexBlock": "LaTeX, es. \\sum_{i=1}^n x_i",
+          "latexInline": "LaTeX, es. x^2",
+          "youtube": "Link YouTube",
+          "twitch": "Link Twitch",
+          "emoji": "Nome emoji, es. rocket",
+          "reading": "Lettura, es. かんじ",
+          "textReading": "Testo|lettura, es. 漢字|かんじ",
+          "apply": "Invio per applicare · Esc per annullare",
+          "mathEdit": "Invio per salvare · Esc per annullare · vuoto elimina"
+        },
+        "toolbar": {
+          "highlight": "Evidenzia",
+          "subscript": "Pedice",
+          "superscript": "Apice",
+          "color": "Colore del testo",
+          "font": "Carattere",
+          "alignment": "Allineamento",
+          "ruby": "Testo ruby (lettura sopra i caratteri)"
+        },
+        "find": {
+          "find": "Trova",
+          "replace": "Sostituisci",
+          "all": "Tutti",
+          "previous": "Precedente",
+          "next": "Successivo",
+          "matchCase": "Maiuscole/minuscole",
+          "close": "Chiudi"
+        },
+        "count": "Parole: {{words}} · Caratteri: {{chars}}",
+        "link": {
+          "header": "Collega nota",
+          "empty": "Digita il titolo di una nota…",
+          "create": "Collega a “{{title}}” (nessuna nota ancora)",
+          "open": "Apri “{{title}}”",
+          "missing": "Nessuna nota intitolata “{{title}}”"
+        },
+        "backlinks": {
+          "label": "Collegata da",
+          "more": "+{{count}} altre",
+          "untitled": "Senza titolo"
+        },
+        "toc": {
+          "title": "Indice",
+          "empty": "Aggiungi titoli per creare l'indice."
+        }
       }
     },
     "participants": {

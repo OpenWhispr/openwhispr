@@ -3466,6 +3466,122 @@
         "taskList": "Lista de verificación",
         "blockquote": "Cita",
         "table": "Insertar tabla"
+      },
+      "blocks": {
+        "groups": {
+          "basic": "Básico",
+          "blocks": "Bloques",
+          "style": "Estilo",
+          "tools": "Herramientas"
+        },
+        "slash": {
+          "heading": "Encabezado {{level}}",
+          "bulletList": "Lista con viñetas",
+          "orderedList": "Lista numerada",
+          "taskList": "Tarea con casilla",
+          "quote": "Cita",
+          "divider": "Separador",
+          "table": "Tabla",
+          "codeBlock": "Bloque de código",
+          "codeHint": "Colores de sintaxis",
+          "noteLink": "Enlazar nota",
+          "noteLinkHint": "o escribe [[",
+          "toggle": "Desplegable",
+          "callout": "Aviso: {{type}}",
+          "toc": "Índice",
+          "mathBlock": "Bloque matemático",
+          "inlineMath": "Fórmula en línea",
+          "inlineMathHint": "o escribe $$x^2$$",
+          "youtube": "Vídeo de YouTube",
+          "twitch": "Vídeo de Twitch",
+          "emoji": "Emoji",
+          "emojiHint": "o escribe :smile:",
+          "highlight": "Resaltar",
+          "subscript": "Subíndice",
+          "superscript": "Superíndice",
+          "color": "Color del texto: {{name}}",
+          "font": "Fuente: {{name}}",
+          "ruby": "Anotación ruby",
+          "rubyHint": "Lectura sobre el texto",
+          "align": "Alinear: {{dir}}",
+          "find": "Buscar y reemplazar",
+          "invisible": "Mostrar/ocultar caracteres invisibles"
+        },
+        "callout": {
+          "note": "Nota",
+          "tip": "Consejo",
+          "important": "Importante",
+          "warning": "Advertencia",
+          "caution": "Precaución"
+        },
+        "colors": {
+          "default": "Predeterminado",
+          "red": "Rojo",
+          "orange": "Naranja",
+          "yellow": "Amarillo",
+          "green": "Verde",
+          "blue": "Azul",
+          "purple": "Morado",
+          "gray": "Gris"
+        },
+        "fonts": {
+          "default": "Predeterminada",
+          "serif": "Serif",
+          "monospace": "Monoespaciada",
+          "rounded": "Redondeada"
+        },
+        "align": {
+          "left": "Izquierda",
+          "center": "Centro",
+          "right": "Derecha",
+          "justify": "Justificado"
+        },
+        "prompt": {
+          "latexBlock": "LaTeX, p. ej. \\sum_{i=1}^n x_i",
+          "latexInline": "LaTeX, p. ej. x^2",
+          "youtube": "Enlace de YouTube",
+          "twitch": "Enlace de Twitch",
+          "emoji": "Nombre del emoji, p. ej. rocket",
+          "reading": "Lectura, p. ej. かんじ",
+          "textReading": "Texto|lectura, p. ej. 漢字|かんじ",
+          "apply": "Intro para aplicar · Esc para cancelar",
+          "mathEdit": "Intro para guardar · Esc para cancelar · vacío lo borra"
+        },
+        "toolbar": {
+          "highlight": "Resaltar",
+          "subscript": "Subíndice",
+          "superscript": "Superíndice",
+          "color": "Color del texto",
+          "font": "Fuente",
+          "alignment": "Alineación",
+          "ruby": "Texto ruby (lectura sobre los caracteres)"
+        },
+        "find": {
+          "find": "Buscar",
+          "replace": "Reemplazar",
+          "all": "Todo",
+          "previous": "Anterior",
+          "next": "Siguiente",
+          "matchCase": "Coincidir mayúsculas",
+          "close": "Cerrar"
+        },
+        "count": "Palabras: {{words}} · Caracteres: {{chars}}",
+        "link": {
+          "header": "Enlazar nota",
+          "empty": "Escribe el título de una nota…",
+          "create": "Enlazar a «{{title}}» (aún no existe)",
+          "open": "Abrir «{{title}}»",
+          "missing": "No hay ninguna nota titulada «{{title}}»"
+        },
+        "backlinks": {
+          "label": "Enlazada desde",
+          "more": "+{{count}} más",
+          "untitled": "Sin título"
+        },
+        "toc": {
+          "title": "Contenido",
+          "empty": "Añade encabezados para crear el índice."
+        }
       }
     },
     "participants": {

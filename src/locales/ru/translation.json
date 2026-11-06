@@ -3474,6 +3474,122 @@
         "taskList": "Список задач",
         "blockquote": "Цитата",
         "table": "Вставить таблицу"
+      },
+      "blocks": {
+        "groups": {
+          "basic": "Основное",
+          "blocks": "Блоки",
+          "style": "Стиль",
+          "tools": "Инструменты"
+        },
+        "slash": {
+          "heading": "Заголовок {{level}}",
+          "bulletList": "Маркированный список",
+          "orderedList": "Нумерованный список",
+          "taskList": "Задача с флажком",
+          "quote": "Цитата",
+          "divider": "Разделитель",
+          "table": "Таблица",
+          "codeBlock": "Блок кода",
+          "codeHint": "Подсветка синтаксиса",
+          "noteLink": "Ссылка на заметку",
+          "noteLinkHint": "или введите [[",
+          "toggle": "Раскрывающийся блок",
+          "callout": "Выноска: {{type}}",
+          "toc": "Оглавление",
+          "mathBlock": "Блок формулы",
+          "inlineMath": "Формула в строке",
+          "inlineMathHint": "или введите $$x^2$$",
+          "youtube": "Видео YouTube",
+          "twitch": "Видео Twitch",
+          "emoji": "Эмодзи",
+          "emojiHint": "или введите :smile:",
+          "highlight": "Выделить",
+          "subscript": "Нижний индекс",
+          "superscript": "Верхний индекс",
+          "color": "Цвет текста: {{name}}",
+          "font": "Шрифт: {{name}}",
+          "ruby": "Аннотация руби",
+          "rubyHint": "Чтение над текстом",
+          "align": "Выровнять: {{dir}}",
+          "find": "Найти и заменить",
+          "invisible": "Показать/скрыть невидимые символы"
+        },
+        "callout": {
+          "note": "Заметка",
+          "tip": "Совет",
+          "important": "Важно",
+          "warning": "Предупреждение",
+          "caution": "Осторожно"
+        },
+        "colors": {
+          "default": "По умолчанию",
+          "red": "Красный",
+          "orange": "Оранжевый",
+          "yellow": "Жёлтый",
+          "green": "Зелёный",
+          "blue": "Синий",
+          "purple": "Фиолетовый",
+          "gray": "Серый"
+        },
+        "fonts": {
+          "default": "По умолчанию",
+          "serif": "С засечками",
+          "monospace": "Моноширинный",
+          "rounded": "Скруглённый"
+        },
+        "align": {
+          "left": "Влево",
+          "center": "По центру",
+          "right": "Вправо",
+          "justify": "По ширине"
+        },
+        "prompt": {
+          "latexBlock": "LaTeX, например \\sum_{i=1}^n x_i",
+          "latexInline": "LaTeX, например x^2",
+          "youtube": "Ссылка на YouTube",
+          "twitch": "Ссылка на Twitch",
+          "emoji": "Название эмодзи, например rocket",
+          "reading": "Чтение, например かんじ",
+          "textReading": "Текст|чтение, например 漢字|かんじ",
+          "apply": "Enter — применить · Esc — отмена",
+          "mathEdit": "Enter — сохранить · Esc — отмена · пусто — удалить"
+        },
+        "toolbar": {
+          "highlight": "Выделить",
+          "subscript": "Нижний индекс",
+          "superscript": "Верхний индекс",
+          "color": "Цвет текста",
+          "font": "Шрифт",
+          "alignment": "Выравнивание",
+          "ruby": "Текст руби (чтение над символами)"
+        },
+        "find": {
+          "find": "Найти",
+          "replace": "Заменить",
+          "all": "Все",
+          "previous": "Назад",
+          "next": "Далее",
+          "matchCase": "Учитывать регистр",
+          "close": "Закрыть"
+        },
+        "count": "Слова: {{words}} · Символы: {{chars}}",
+        "link": {
+          "header": "Ссылка на заметку",
+          "empty": "Введите название заметки…",
+          "create": "Ссылка на «{{title}}» (заметки пока нет)",
+          "open": "Открыть «{{title}}»",
+          "missing": "Нет заметки с названием «{{title}}»"
+        },
+        "backlinks": {
+          "label": "Ссылаются",
+          "more": "+{{count}} ещё",
+          "untitled": "Без названия"
+        },
+        "toc": {
+          "title": "Содержание",
+          "empty": "Добавьте заголовки, чтобы построить оглавление."
+        }
       }
     },
     "participants": {
