@@ -4,25 +4,34 @@ import * as Nucleo from "./nucleo";
 
 export type { IconComponent, IconProps } from "./createIcon";
 export {
+  AlignCenter,
+  AlignJustify,
+  AlignRight,
   Bold,
   ChevronsUpDown,
   Circle,
   CopyRounded,
   EyeOff,
   FolderRounded,
+  FontFamily,
   Heading,
+  Highlighter,
   Italic,
   List,
   ListChecks,
   ListEnd,
   ListOrdered,
   Quote,
+  RubyText,
   SkillStack,
   Square,
   SquareSlash,
   SquareSparkle,
   Strikethrough,
+  Subscript,
+  Superscript,
   Table,
+  TextColor,
 } from "./primitives";
 
 export const AlertCircle = createIcon("alert-circle", Nucleo.CircleWarningOutline24);

@@ -3905,6 +3905,122 @@
         "taskList": "Checklist",
         "blockquote": "Quote",
         "table": "Insert table"
+      },
+      "blocks": {
+        "groups": {
+          "basic": "Basic",
+          "blocks": "Blocks",
+          "style": "Style",
+          "tools": "Tools"
+        },
+        "slash": {
+          "heading": "Heading {{level}}",
+          "bulletList": "Bulleted list",
+          "orderedList": "Numbered list",
+          "taskList": "Checkbox task",
+          "quote": "Quote",
+          "divider": "Divider",
+          "table": "Table",
+          "codeBlock": "Code block",
+          "codeHint": "Syntax colours",
+          "noteLink": "Link to note",
+          "noteLinkHint": "or type [[",
+          "toggle": "Toggle",
+          "callout": "Callout: {{type}}",
+          "toc": "Table of contents",
+          "mathBlock": "Math block",
+          "inlineMath": "Inline math",
+          "inlineMathHint": "or type $$x^2$$",
+          "youtube": "YouTube video",
+          "twitch": "Twitch video",
+          "emoji": "Emoji",
+          "emojiHint": "or type :smile:",
+          "highlight": "Highlight",
+          "subscript": "Subscript",
+          "superscript": "Superscript",
+          "color": "Text colour: {{name}}",
+          "font": "Font: {{name}}",
+          "ruby": "Ruby annotation",
+          "rubyHint": "Reading above text",
+          "align": "Align: {{dir}}",
+          "find": "Find and replace",
+          "invisible": "Show/hide invisible characters"
+        },
+        "callout": {
+          "note": "Note",
+          "tip": "Tip",
+          "important": "Important",
+          "warning": "Warning",
+          "caution": "Caution"
+        },
+        "colors": {
+          "default": "Default",
+          "red": "Red",
+          "orange": "Orange",
+          "yellow": "Yellow",
+          "green": "Green",
+          "blue": "Blue",
+          "purple": "Purple",
+          "gray": "Gray"
+        },
+        "fonts": {
+          "default": "Default",
+          "serif": "Serif",
+          "monospace": "Monospace",
+          "rounded": "Rounded"
+        },
+        "align": {
+          "left": "Left",
+          "center": "Center",
+          "right": "Right",
+          "justify": "Justify"
+        },
+        "prompt": {
+          "latexBlock": "LaTeX, e.g. \\sum_{i=1}^n x_i",
+          "latexInline": "LaTeX, e.g. x^2",
+          "youtube": "YouTube link",
+          "twitch": "Twitch link",
+          "emoji": "Emoji name, e.g. rocket",
+          "reading": "Reading, e.g. かんじ",
+          "textReading": "Text|reading, e.g. 漢字|かんじ",
+          "apply": "Enter to apply · Esc to cancel",
+          "mathEdit": "Enter to save · Esc to cancel · empty deletes"
+        },
+        "toolbar": {
+          "highlight": "Highlight",
+          "subscript": "Subscript",
+          "superscript": "Superscript",
+          "color": "Text colour",
+          "font": "Font",
+          "alignment": "Alignment",
+          "ruby": "Ruby text (reading above characters)"
+        },
+        "find": {
+          "find": "Find",
+          "replace": "Replace",
+          "all": "All",
+          "previous": "Previous",
+          "next": "Next",
+          "matchCase": "Match case",
+          "close": "Close"
+        },
+        "count": "Words: {{words}} · Characters: {{chars}}",
+        "link": {
+          "header": "Link to note",
+          "empty": "Type a note title…",
+          "create": "Link to “{{title}}” (no note yet)",
+          "open": "Open “{{title}}”",
+          "missing": "No note titled “{{title}}”"
+        },
+        "backlinks": {
+          "label": "Linked from",
+          "more": "+{{count}} more",
+          "untitled": "Untitled"
+        },
+        "toc": {
+          "title": "Contents",
+          "empty": "Add headings to build the table of contents."
+        }
       }
     },
     "participants": {

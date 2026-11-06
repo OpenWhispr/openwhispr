@@ -3003,6 +3003,122 @@
         "taskList": "قائمة مهام",
         "blockquote": "اقتباس",
         "table": "إدراج جدول"
+      },
+      "blocks": {
+        "groups": {
+          "basic": "أساسي",
+          "blocks": "كتل",
+          "style": "النمط",
+          "tools": "أدوات"
+        },
+        "slash": {
+          "heading": "عنوان {{level}}",
+          "bulletList": "قائمة نقطية",
+          "orderedList": "قائمة مرقمة",
+          "taskList": "مهمة بمربع اختيار",
+          "quote": "اقتباس",
+          "divider": "فاصل",
+          "table": "جدول",
+          "codeBlock": "كتلة تعليمات برمجية",
+          "codeHint": "تلوين الصيغة",
+          "noteLink": "ربط ملاحظة",
+          "noteLinkHint": "أو اكتب [[",
+          "toggle": "كتلة قابلة للطي",
+          "callout": "تنبيه: {{type}}",
+          "toc": "جدول المحتويات",
+          "mathBlock": "كتلة رياضية",
+          "inlineMath": "معادلة ضمن السطر",
+          "inlineMathHint": "أو اكتب $$x^2$$",
+          "youtube": "فيديو YouTube",
+          "twitch": "فيديو Twitch",
+          "emoji": "رمز تعبيري",
+          "emojiHint": "أو اكتب :smile:",
+          "highlight": "تمييز",
+          "subscript": "نص سفلي",
+          "superscript": "نص علوي",
+          "color": "لون النص: {{name}}",
+          "font": "الخط: {{name}}",
+          "ruby": "تعليق روبي",
+          "rubyHint": "القراءة فوق النص",
+          "align": "محاذاة: {{dir}}",
+          "find": "بحث واستبدال",
+          "invisible": "إظهار/إخفاء الأحرف غير المرئية"
+        },
+        "callout": {
+          "note": "ملاحظة",
+          "tip": "نصيحة",
+          "important": "مهم",
+          "warning": "تحذير",
+          "caution": "تنبيه"
+        },
+        "colors": {
+          "default": "افتراضي",
+          "red": "أحمر",
+          "orange": "برتقالي",
+          "yellow": "أصفر",
+          "green": "أخضر",
+          "blue": "أزرق",
+          "purple": "بنفسجي",
+          "gray": "رمادي"
+        },
+        "fonts": {
+          "default": "افتراضي",
+          "serif": "مذيّل",
+          "monospace": "ثابت العرض",
+          "rounded": "مستدير"
+        },
+        "align": {
+          "left": "يسار",
+          "center": "وسط",
+          "right": "يمين",
+          "justify": "ضبط"
+        },
+        "prompt": {
+          "latexBlock": "LaTeX، مثل \\sum_{i=1}^n x_i",
+          "latexInline": "LaTeX، مثل x^2",
+          "youtube": "رابط YouTube",
+          "twitch": "رابط Twitch",
+          "emoji": "اسم الرمز التعبيري، مثل rocket",
+          "reading": "القراءة، مثل かんじ",
+          "textReading": "النص|القراءة، مثل 漢字|かんじ",
+          "apply": "Enter للتطبيق · Esc للإلغاء",
+          "mathEdit": "Enter للحفظ · Esc للإلغاء · الفراغ يحذف"
+        },
+        "toolbar": {
+          "highlight": "تمييز",
+          "subscript": "نص سفلي",
+          "superscript": "نص علوي",
+          "color": "لون النص",
+          "font": "الخط",
+          "alignment": "المحاذاة",
+          "ruby": "نص روبي (القراءة فوق الأحرف)"
+        },
+        "find": {
+          "find": "بحث",
+          "replace": "استبدال",
+          "all": "الكل",
+          "previous": "السابق",
+          "next": "التالي",
+          "matchCase": "مطابقة حالة الأحرف",
+          "close": "إغلاق"
+        },
+        "count": "الكلمات: {{words}} · الأحرف: {{chars}}",
+        "link": {
+          "header": "ربط ملاحظة",
+          "empty": "اكتب عنوان ملاحظة…",
+          "create": "ربط بـ «{{title}}» (لا توجد ملاحظة بعد)",
+          "open": "فتح «{{title}}»",
+          "missing": "لا توجد ملاحظة بعنوان «{{title}}»"
+        },
+        "backlinks": {
+          "label": "مرتبطة من",
+          "more": "+{{count}} أخرى",
+          "untitled": "بلا عنوان"
+        },
+        "toc": {
+          "title": "المحتويات",
+          "empty": "أضف عناوين لإنشاء جدول المحتويات."
+        }
       }
     },
     "participants": {

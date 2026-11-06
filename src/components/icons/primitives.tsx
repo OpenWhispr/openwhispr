@@ -63,6 +63,90 @@ const glyph = (children: SVGProps<SVGSVGElement>["children"]) =>
     );
   };
 
+// Text-style marks for the note editor's formatting toolbar (highlight,
+// sub/superscript, colour, font, alignment, ruby), on the same 24px grid.
+const HighlighterMark = glyph(
+  <>
+    <path d="M14.5 4.5l5 5-8 8H6.5v-5z" />
+    <path d="M4 20.5h16" />
+  </>
+);
+
+const SubscriptMark = glyph(
+  <>
+    <path d="M4 5l8 10" />
+    <path d="M12 5l-8 10" />
+    <path d="M15.5 15.5c0-1.4 3.5-1.7 3.5.3 0 1.4-3.5 2.6-3.5 4.7h3.8" />
+  </>
+);
+
+const SuperscriptMark = glyph(
+  <>
+    <path d="M4 9l8 10" />
+    <path d="M12 9l-8 10" />
+    <path d="M15.5 4.5c0-1.4 3.5-1.7 3.5.3 0 1.4-3.5 2.6-3.5 4.7h3.8" />
+  </>
+);
+
+const TextColorMark = glyph(
+  <>
+    <path d="M6.5 16L12 3.5 17.5 16" />
+    <path d="M8.3 12h7.4" />
+    <path d="M4 20.5h16" />
+  </>
+);
+
+const FontFamilyMark = glyph(
+  <>
+    <path d="M4 19V7.5C4 5.6 5.1 4.5 7 4.5h1.5" />
+    <path d="M3 10.5h5" />
+    <path d="M12 19v-6.5c0-1.4 1-2.5 2.5-2.5h1" />
+    <path d="M11 14.5h5" />
+    <path d="M19.5 10v9" />
+  </>
+);
+
+const alignRows = (indents: [number, number][]) => (
+  <>
+    {indents.map(([from, to], i) => (
+      <path key={i} d={`M${from} ${5 + i * 4.67}H${to}`} />
+    ))}
+  </>
+);
+const AlignCenterMark = glyph(
+  alignRows([
+    [4, 20],
+    [7, 17],
+    [4, 20],
+    [7, 17],
+  ])
+);
+const AlignRightMark = glyph(
+  alignRows([
+    [4, 20],
+    [10, 20],
+    [4, 20],
+    [10, 20],
+  ])
+);
+const AlignJustifyMark = glyph(
+  alignRows([
+    [4, 20],
+    [4, 20],
+    [4, 20],
+    [4, 20],
+  ])
+);
+
+const RubyTextMark = glyph(
+  <>
+    <path d="M8 4h8" />
+    <path d="M5 20v-8h14v8" />
+    <path d="M5 16h14" />
+    <path d="M12 9v11" />
+  </>
+);
+
 const listRows = (x: number) => (
   <>
     <path d={`M${x} 6h11`} />
@@ -255,3 +339,12 @@ export const SkillStack = createIcon("skill-stack", SkillStackMark);
 export const Strikethrough = createIcon("strikethrough", StrikethroughMark);
 export const Table = createIcon("table", TableMark);
 export const SquareSparkle = createIcon("square-sparkle", SquareSparkleMark);
+export const AlignCenter = createIcon("align-center", AlignCenterMark);
+export const AlignJustify = createIcon("align-justify", AlignJustifyMark);
+export const AlignRight = createIcon("align-right", AlignRightMark);
+export const FontFamily = createIcon("font-family", FontFamilyMark);
+export const Highlighter = createIcon("highlighter", HighlighterMark);
+export const RubyText = createIcon("ruby-text", RubyTextMark);
+export const Subscript = createIcon("subscript", SubscriptMark);
+export const Superscript = createIcon("superscript", SuperscriptMark);
+export const TextColor = createIcon("text-color", TextColorMark);

@@ -3365,6 +3365,122 @@
         "taskList": "核取清單",
         "blockquote": "引用",
         "table": "插入表格"
+      },
+      "blocks": {
+        "groups": {
+          "basic": "基本",
+          "blocks": "區塊",
+          "style": "樣式",
+          "tools": "工具"
+        },
+        "slash": {
+          "heading": "標題 {{level}}",
+          "bulletList": "項目符號清單",
+          "orderedList": "編號清單",
+          "taskList": "核取方塊任務",
+          "quote": "引言",
+          "divider": "分隔線",
+          "table": "表格",
+          "codeBlock": "程式碼區塊",
+          "codeHint": "語法著色",
+          "noteLink": "連結筆記",
+          "noteLinkHint": "或輸入 [[",
+          "toggle": "摺疊區塊",
+          "callout": "標註：{{type}}",
+          "toc": "目錄",
+          "mathBlock": "數學公式區塊",
+          "inlineMath": "行內公式",
+          "inlineMathHint": "或輸入 $$x^2$$",
+          "youtube": "YouTube 影片",
+          "twitch": "Twitch 影片",
+          "emoji": "表情符號",
+          "emojiHint": "或輸入 :smile:",
+          "highlight": "醒目提示",
+          "subscript": "下標",
+          "superscript": "上標",
+          "color": "文字顏色：{{name}}",
+          "font": "字型：{{name}}",
+          "ruby": "注音",
+          "rubyHint": "在文字上方顯示讀音",
+          "align": "對齊：{{dir}}",
+          "find": "尋找與取代",
+          "invisible": "顯示/隱藏不可見字元"
+        },
+        "callout": {
+          "note": "注意",
+          "tip": "提示",
+          "important": "重要",
+          "warning": "警告",
+          "caution": "小心"
+        },
+        "colors": {
+          "default": "預設",
+          "red": "紅色",
+          "orange": "橘色",
+          "yellow": "黃色",
+          "green": "綠色",
+          "blue": "藍色",
+          "purple": "紫色",
+          "gray": "灰色"
+        },
+        "fonts": {
+          "default": "預設",
+          "serif": "襯線",
+          "monospace": "等寬",
+          "rounded": "圓體"
+        },
+        "align": {
+          "left": "靠左",
+          "center": "置中",
+          "right": "靠右",
+          "justify": "左右對齊"
+        },
+        "prompt": {
+          "latexBlock": "LaTeX，例如 \\sum_{i=1}^n x_i",
+          "latexInline": "LaTeX，例如 x^2",
+          "youtube": "YouTube 連結",
+          "twitch": "Twitch 連結",
+          "emoji": "表情符號名稱，例如 rocket",
+          "reading": "讀音，例如 かんじ",
+          "textReading": "文字|讀音，例如 漢字|かんじ",
+          "apply": "Enter 套用 · Esc 取消",
+          "mathEdit": "Enter 儲存 · Esc 取消 · 留空則刪除"
+        },
+        "toolbar": {
+          "highlight": "醒目提示",
+          "subscript": "下標",
+          "superscript": "上標",
+          "color": "文字顏色",
+          "font": "字型",
+          "alignment": "對齊",
+          "ruby": "注音（在文字上方顯示讀音）"
+        },
+        "find": {
+          "find": "尋找",
+          "replace": "取代",
+          "all": "全部",
+          "previous": "上一個",
+          "next": "下一個",
+          "matchCase": "區分大小寫",
+          "close": "關閉"
+        },
+        "count": "字詞：{{words}} · 字元：{{chars}}",
+        "link": {
+          "header": "連結筆記",
+          "empty": "輸入筆記標題…",
+          "create": "連結到「{{title}}」（尚無此筆記）",
+          "open": "開啟「{{title}}」",
+          "missing": "沒有標題為「{{title}}」的筆記"
+        },
+        "backlinks": {
+          "label": "被以下筆記連結",
+          "more": "另外 {{count}} 則",
+          "untitled": "無標題"
+        },
+        "toc": {
+          "title": "目錄",
+          "empty": "新增標題以產生目錄。"
+        }
       }
     },
     "participants": {

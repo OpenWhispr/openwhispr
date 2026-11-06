@@ -3365,6 +3365,122 @@
         "taskList": "清单",
         "blockquote": "引用",
         "table": "插入表格"
+      },
+      "blocks": {
+        "groups": {
+          "basic": "基础",
+          "blocks": "区块",
+          "style": "样式",
+          "tools": "工具"
+        },
+        "slash": {
+          "heading": "标题 {{level}}",
+          "bulletList": "项目符号列表",
+          "orderedList": "编号列表",
+          "taskList": "复选框任务",
+          "quote": "引用",
+          "divider": "分隔线",
+          "table": "表格",
+          "codeBlock": "代码块",
+          "codeHint": "语法着色",
+          "noteLink": "链接笔记",
+          "noteLinkHint": "或输入 [[",
+          "toggle": "折叠块",
+          "callout": "标注：{{type}}",
+          "toc": "目录",
+          "mathBlock": "数学公式块",
+          "inlineMath": "行内公式",
+          "inlineMathHint": "或输入 $$x^2$$",
+          "youtube": "YouTube 视频",
+          "twitch": "Twitch 视频",
+          "emoji": "表情",
+          "emojiHint": "或输入 :smile:",
+          "highlight": "高亮",
+          "subscript": "下标",
+          "superscript": "上标",
+          "color": "文字颜色：{{name}}",
+          "font": "字体：{{name}}",
+          "ruby": "注音",
+          "rubyHint": "在文字上方显示读音",
+          "align": "对齐：{{dir}}",
+          "find": "查找和替换",
+          "invisible": "显示/隐藏不可见字符"
+        },
+        "callout": {
+          "note": "注意",
+          "tip": "提示",
+          "important": "重要",
+          "warning": "警告",
+          "caution": "小心"
+        },
+        "colors": {
+          "default": "默认",
+          "red": "红色",
+          "orange": "橙色",
+          "yellow": "黄色",
+          "green": "绿色",
+          "blue": "蓝色",
+          "purple": "紫色",
+          "gray": "灰色"
+        },
+        "fonts": {
+          "default": "默认",
+          "serif": "衬线",
+          "monospace": "等宽",
+          "rounded": "圆体"
+        },
+        "align": {
+          "left": "左对齐",
+          "center": "居中",
+          "right": "右对齐",
+          "justify": "两端对齐"
+        },
+        "prompt": {
+          "latexBlock": "LaTeX，例如 \\sum_{i=1}^n x_i",
+          "latexInline": "LaTeX，例如 x^2",
+          "youtube": "YouTube 链接",
+          "twitch": "Twitch 链接",
+          "emoji": "表情名称，例如 rocket",
+          "reading": "读音，例如 かんじ",
+          "textReading": "文字|读音，例如 漢字|かんじ",
+          "apply": "Enter 应用 · Esc 取消",
+          "mathEdit": "Enter 保存 · Esc 取消 · 留空则删除"
+        },
+        "toolbar": {
+          "highlight": "高亮",
+          "subscript": "下标",
+          "superscript": "上标",
+          "color": "文字颜色",
+          "font": "字体",
+          "alignment": "对齐",
+          "ruby": "注音（在文字上方显示读音）"
+        },
+        "find": {
+          "find": "查找",
+          "replace": "替换",
+          "all": "全部",
+          "previous": "上一个",
+          "next": "下一个",
+          "matchCase": "区分大小写",
+          "close": "关闭"
+        },
+        "count": "字词：{{words}} · 字符：{{chars}}",
+        "link": {
+          "header": "链接笔记",
+          "empty": "输入笔记标题…",
+          "create": "链接到“{{title}}”（尚无此笔记）",
+          "open": "打开“{{title}}”",
+          "missing": "没有标题为“{{title}}”的笔记"
+        },
+        "backlinks": {
+          "label": "被以下笔记链接",
+          "more": "另外 {{count}} 条",
+          "untitled": "无标题"
+        },
+        "toc": {
+          "title": "目录",
+          "empty": "添加标题以生成目录。"
+        }
       }
     },
     "participants": {

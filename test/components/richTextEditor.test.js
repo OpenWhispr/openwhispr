@@ -1266,3 +1266,57 @@ test("the empty-line toolbar stays on the caret when Enter scrolls the note, abo
   assert.ok(top() + height <= caret().top, `above the caret, not under the bar (top ${top()})`);
   assert.deepEqual(notes.errors, []);
 });
+
+test("opening a note stored in non-canonical Markdown does not save it", async (t) => {
+  // Block IDs and heading anchors are set as the note opens. That changes node
+  // attributes but not the Markdown, so it must not save (and must not drop the
+  // assistant's Undo). '*' bullets and '__bold__' aren't the serializer's form.
+  const notes = await mountNotes(
+    t,
+    "# Summary\n\n* first item\n* second item\n\n__bold__ text\n\n## Next"
+  );
+  await notes.act(() => {}, 300);
+  assert.deepEqual(notes.changes, []);
+  await notes.act(
+    () => notes.editor().commands.insertContentAt(notes.editor().state.doc.content.size - 1, "!"),
+    50
+  );
+  assert.equal(notes.changes.length, 1, "a real edit still saves");
+});
+
+test("the formatting toolbar's style controls apply Markdown-safe styles", async (t) => {
+  const notes = await mountNotes(t, "Hello world here");
+  await notes.act(() => notes.editor().commands.setTextSelection({ from: 1, to: 6 }), 300);
+  const label = (key) => `notes.editor.blocks.toolbar.${key}`;
+  for (const key of ["color", "font", "alignment", "ruby"]) assert.ok(isShown(label(key)), key);
+  for (const key of ["highlight", "subscript", "superscript"]) {
+    assert.ok(happyWindow.document.querySelector(`[aria-label^="${label(key)}"]`), key);
+  }
+  await notes.act(
+    () => clickButton(happyWindow.document.querySelector(`[aria-label^="${label("highlight")}"]`)),
+    50
+  );
+  assert.match(notes.saved(), /==Hello== world here/);
+  await notes.act(() => pointerDown(byLabel(label("color"))), 50);
+  await notes.act(() => menuItem("notes.editor.blocks.colors.red").click(), 50);
+  assert.match(notes.saved(), /\{color:#e11d48\}/);
+  assert.deepEqual(notes.errors, []);
+});
+
+test("typing [[ links a note, saved as [[Title]], and clicking it opens the note", async (t) => {
+  const opened = [];
+  happyWindow.electronAPI = {
+    ...happyWindow.electronAPI,
+    getNotes: async () => [
+      { id: 7, title: "Weekly sync", content: "", enhanced_content: "", updated_at: "2026-11-04" },
+    ],
+    agentOpenNote: async (id) => opened.push(id),
+  };
+  const notes = await mountNotes(t, "Start");
+  await notes.act(() => notes.editor().commands.setTextSelection(6));
+  await notes.act(() => notes.editor().commands.insertContent(" [[Week"), 120);
+  await notes.act(() => pressKey(notes.editor(), "Enter"), 80);
+  assert.match(notes.saved(), /Start \[\[Weekly sync\]\]/);
+  await notes.act(() => happyWindow.document.querySelector(".note-link").click(), 60);
+  assert.deepEqual(opened, [7]);
+});

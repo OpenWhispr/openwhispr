@@ -1,0 +1,409 @@
+/* editor additions (drag handle, toggles). */
+
+/* Drag handle: shown by Tiptap beside the hovered block. */
+.rte-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  height: 1.4rem;
+  margin-right: 0.25rem;
+  border-radius: 4px;
+  color: currentColor;
+  opacity: 0.35;
+  cursor: grab;
+  font-size: 0.85rem;
+  line-height: 1;
+  user-select: none;
+}
+.rte-drag-handle:hover {
+  opacity: 0.8;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+.rte-drag-handle:active {
+  cursor: grabbing;
+}
+
+/* Toggle blocks (Tiptap Details). */
+.ProseMirror [data-type="details"] {
+  display: flex;
+  gap: 0.25rem;
+  margin: 0.4rem 0;
+}
+.ProseMirror [data-type="details"] > button {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.5rem;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.ProseMirror [data-type="details"] > button:hover {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+.ProseMirror [data-type="details"] > button::before {
+  content: "\25B6";
+  font-size: 0.6rem;
+  opacity: 0.6;
+  transition: transform 0.15s ease;
+}
+.ProseMirror [data-type="details"].is-open > button::before {
+  transform: rotate(90deg);
+}
+.ProseMirror [data-type="details"] > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.ProseMirror [data-type="details"] summary {
+  font-weight: 600;
+  list-style: none;
+}
+.ProseMirror [data-type="details"] summary::-webkit-details-marker {
+  display: none;
+}
+.ProseMirror [data-type="detailsContent"] {
+  margin-top: 0.15rem;
+}
+
+/* ---- Callouts ---------------------------------------------------------- */
+.ProseMirror .callout {
+  --callout: #2563eb;
+  margin: 0.6rem 0;
+  padding: 0.55rem 0.8rem 0.55rem 2.1rem;
+  border-left: 3px solid var(--callout);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--callout) 9%, transparent);
+  position: relative;
+}
+.ProseMirror .callout::before {
+  position: absolute;
+  left: 0.65rem;
+  top: 0.55rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.ProseMirror .callout[data-callout="note"] {
+  --callout: #2563eb;
+}
+.ProseMirror .callout[data-callout="note"]::before {
+  content: "ℹ️";
+}
+.ProseMirror .callout[data-callout="tip"] {
+  --callout: #16a34a;
+}
+.ProseMirror .callout[data-callout="tip"]::before {
+  content: "💡";
+}
+.ProseMirror .callout[data-callout="important"] {
+  --callout: #9333ea;
+}
+.ProseMirror .callout[data-callout="important"]::before {
+  content: "❗";
+}
+.ProseMirror .callout[data-callout="warning"] {
+  --callout: #ca8a04;
+}
+.ProseMirror .callout[data-callout="warning"]::before {
+  content: "⚠️";
+}
+.ProseMirror .callout[data-callout="caution"] {
+  --callout: #dc2626;
+}
+.ProseMirror .callout[data-callout="caution"]::before {
+  content: "🛑";
+}
+.ProseMirror .callout > :first-child {
+  margin-top: 0;
+}
+.ProseMirror .callout > :last-child {
+  margin-bottom: 0;
+}
+
+/* ---- Table of contents ------------------------------------------------- */
+.table-of-contents {
+  margin: 0.6rem 0;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  border-radius: 8px;
+}
+.table-of-contents-title {
+  font-weight: 600;
+  font-size: 0.8rem;
+  opacity: 0.7;
+  margin-bottom: 0.3rem;
+}
+.table-of-contents-empty {
+  font-size: 0.85rem;
+  opacity: 0.5;
+}
+.table-of-contents-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-size: 0.9rem;
+  padding-top: 0.1rem;
+  padding-bottom: 0.1rem;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.85;
+}
+.table-of-contents-item:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+/* ---- Math -------------------------------------------------------------- */
+.ProseMirror [data-type="inline-math"],
+.ProseMirror [data-type="block-math"] {
+  cursor: pointer;
+}
+.ProseMirror [data-type="block-math"] {
+  margin: 0.6rem 0;
+  text-align: center;
+}
+.rte-inline-input {
+  width: 320px;
+  padding: 6px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  background: var(--color-popover, #1f1f23);
+  color: var(--color-popover-foreground, inherit);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+.rte-inline-input input {
+  width: 100%;
+  padding: 4px 6px;
+  border-radius: 5px;
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  background: transparent;
+  color: inherit;
+  font-family: Menlo, monospace;
+  font-size: 0.85rem;
+  outline: none;
+}
+.rte-inline-input-hint {
+  margin-top: 4px;
+  font-size: 0.7rem;
+  opacity: 0.55;
+}
+
+/* ---- Highlight, ruby, embeds ------------------------------------------- */
+.ProseMirror mark {
+  background: color-mix(in srgb, #facc15 45%, transparent);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+.ProseMirror ruby rt {
+  font-size: 0.6em;
+  opacity: 0.75;
+}
+.ProseMirror div[data-youtube-video],
+.ProseMirror div[data-twitch-video] {
+  margin: 0.6rem 0;
+}
+.ProseMirror div[data-youtube-video] iframe,
+.ProseMirror div[data-twitch-video] iframe {
+  max-width: 100%;
+  border: 0;
+  border-radius: 8px;
+}
+
+/* ---- Code block syntax colours (lowlight / highlight.js classes) -------- */
+.ProseMirror pre .hljs-comment,
+.ProseMirror pre .hljs-quote {
+  color: #8b949e;
+  font-style: italic;
+}
+.ProseMirror pre .hljs-keyword,
+.ProseMirror pre .hljs-selector-tag,
+.ProseMirror pre .hljs-built_in {
+  color: #d2a8ff;
+}
+.ProseMirror pre .hljs-string,
+.ProseMirror pre .hljs-regexp,
+.ProseMirror pre .hljs-addition {
+  color: #7ee787;
+}
+.ProseMirror pre .hljs-number,
+.ProseMirror pre .hljs-literal,
+.ProseMirror pre .hljs-symbol {
+  color: #79c0ff;
+}
+.ProseMirror pre .hljs-title,
+.ProseMirror pre .hljs-section,
+.ProseMirror pre .hljs-function {
+  color: #ffa657;
+}
+.ProseMirror pre .hljs-attr,
+.ProseMirror pre .hljs-attribute,
+.ProseMirror pre .hljs-variable {
+  color: #79c0ff;
+}
+.ProseMirror pre .hljs-type,
+.ProseMirror pre .hljs-class {
+  color: #ffa657;
+}
+.ProseMirror pre .hljs-deletion {
+  color: #ffa198;
+}
+@media (prefers-color-scheme: light) {
+  .ProseMirror pre .hljs-keyword,
+  .ProseMirror pre .hljs-selector-tag,
+  .ProseMirror pre .hljs-built_in {
+    color: #8250df;
+  }
+  .ProseMirror pre .hljs-string,
+  .ProseMirror pre .hljs-regexp,
+  .ProseMirror pre .hljs-addition {
+    color: #116329;
+  }
+  .ProseMirror pre .hljs-number,
+  .ProseMirror pre .hljs-literal,
+  .ProseMirror pre .hljs-symbol,
+  .ProseMirror pre .hljs-attr,
+  .ProseMirror pre .hljs-attribute,
+  .ProseMirror pre .hljs-variable {
+    color: #0550ae;
+  }
+  .ProseMirror pre .hljs-title,
+  .ProseMirror pre .hljs-section,
+  .ProseMirror pre .hljs-function,
+  .ProseMirror pre .hljs-type,
+  .ProseMirror pre .hljs-class {
+    color: #953800;
+  }
+}
+
+/* ---- Find & replace ---------------------------------------------------- */
+.ProseMirror .search-result {
+  background: color-mix(in srgb, #facc15 35%, transparent);
+  border-radius: 2px;
+}
+.ProseMirror .search-result-current {
+  background: color-mix(in srgb, #f97316 55%, transparent);
+}
+.rte-find-panel {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  background: var(--color-popover, #1f1f23);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  font-size: 0.8rem;
+}
+.rte-find-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.rte-find-panel input {
+  width: 180px;
+  padding: 3px 6px;
+  border-radius: 5px;
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  background: transparent;
+  color: inherit;
+  outline: none;
+}
+.rte-find-panel button {
+  min-width: 26px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  border: 0;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  color: inherit;
+  cursor: pointer;
+}
+.rte-find-panel button:hover {
+  background: color-mix(in srgb, currentColor 16%, transparent);
+}
+.rte-find-panel button.is-active {
+  background: color-mix(in srgb, #2563eb 40%, transparent);
+}
+.rte-find-panel button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.rte-find-count {
+  min-width: 38px;
+  text-align: center;
+  opacity: 0.6;
+}
+
+/* ---- Word count, focus ------------------------------------------------- */
+.rte-word-count {
+  position: absolute;
+  right: 12px;
+  bottom: calc(var(--bottom-overlay-height, 0px) + 6px);
+  z-index: 5;
+  font-size: 0.7rem;
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* ---- Note links & backlinks ------------------------------------------- */
+.ProseMirror .note-link {
+  color: var(--color-primary, #2563eb);
+  background: color-mix(in srgb, var(--color-primary, #2563eb) 10%, transparent);
+  border-radius: 4px;
+  padding: 0 3px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ProseMirror .note-link::before {
+  content: "↗ ";
+  font-size: 0.8em;
+  opacity: 0.7;
+}
+.ProseMirror .note-link:hover {
+  text-decoration: underline;
+}
+.ProseMirror .note-link.is-unresolved {
+  color: inherit;
+  background: none;
+  opacity: 0.65;
+  border-bottom: 1px dashed currentColor;
+  border-radius: 0;
+  cursor: help;
+}
+.ProseMirror .note-link.ProseMirror-selectednode {
+  outline: 2px solid var(--color-primary, #2563eb);
+}
+.rte-backlinks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  padding: 6px 0 2px;
+  font-size: 0.75rem;
+}
+.rte-backlinks-label {
+  opacity: 0.55;
+}
+.rte-backlink {
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.85;
+}
+.rte-backlink:hover {
+  opacity: 1;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}

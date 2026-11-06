@@ -138,6 +138,8 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/ui/LanguageSelector.tsx": ["auto"],
   // A skill's instructions: Markdown prose in any script.
   "src/components/ui/LineNumberedTextarea.tsx": ["auto"],
+  // Find and replace terms are user text in any script.
+  "src/components/ui/editorBlocks/FindReplacePanel.tsx": ["auto", "auto"],
 };
 
 test("shared field primitives inherit unless a consumer declares its content direction", async (t) => {

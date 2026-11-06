@@ -3365,6 +3365,122 @@
         "taskList": "Lista de verificação",
         "blockquote": "Citação",
         "table": "Inserir tabela"
+      },
+      "blocks": {
+        "groups": {
+          "basic": "Básico",
+          "blocks": "Blocos",
+          "style": "Estilo",
+          "tools": "Ferramentas"
+        },
+        "slash": {
+          "heading": "Título {{level}}",
+          "bulletList": "Lista com marcadores",
+          "orderedList": "Lista numerada",
+          "taskList": "Tarefa com caixa",
+          "quote": "Citação",
+          "divider": "Divisor",
+          "table": "Tabela",
+          "codeBlock": "Bloco de código",
+          "codeHint": "Cores de sintaxe",
+          "noteLink": "Vincular nota",
+          "noteLinkHint": "ou digite [[",
+          "toggle": "Recolhível",
+          "callout": "Destaque: {{type}}",
+          "toc": "Sumário",
+          "mathBlock": "Bloco de matemática",
+          "inlineMath": "Fórmula em linha",
+          "inlineMathHint": "ou digite $$x^2$$",
+          "youtube": "Vídeo do YouTube",
+          "twitch": "Vídeo da Twitch",
+          "emoji": "Emoji",
+          "emojiHint": "ou digite :smile:",
+          "highlight": "Realçar",
+          "subscript": "Subscrito",
+          "superscript": "Sobrescrito",
+          "color": "Cor do texto: {{name}}",
+          "font": "Fonte: {{name}}",
+          "ruby": "Anotação ruby",
+          "rubyHint": "Leitura acima do texto",
+          "align": "Alinhar: {{dir}}",
+          "find": "Localizar e substituir",
+          "invisible": "Mostrar/ocultar caracteres invisíveis"
+        },
+        "callout": {
+          "note": "Nota",
+          "tip": "Dica",
+          "important": "Importante",
+          "warning": "Aviso",
+          "caution": "Cuidado"
+        },
+        "colors": {
+          "default": "Padrão",
+          "red": "Vermelho",
+          "orange": "Laranja",
+          "yellow": "Amarelo",
+          "green": "Verde",
+          "blue": "Azul",
+          "purple": "Roxo",
+          "gray": "Cinza"
+        },
+        "fonts": {
+          "default": "Padrão",
+          "serif": "Serifa",
+          "monospace": "Monoespaçada",
+          "rounded": "Arredondada"
+        },
+        "align": {
+          "left": "Esquerda",
+          "center": "Centro",
+          "right": "Direita",
+          "justify": "Justificado"
+        },
+        "prompt": {
+          "latexBlock": "LaTeX, ex.: \\sum_{i=1}^n x_i",
+          "latexInline": "LaTeX, ex.: x^2",
+          "youtube": "Link do YouTube",
+          "twitch": "Link da Twitch",
+          "emoji": "Nome do emoji, ex.: rocket",
+          "reading": "Leitura, ex.: かんじ",
+          "textReading": "Texto|leitura, ex.: 漢字|かんじ",
+          "apply": "Enter para aplicar · Esc para cancelar",
+          "mathEdit": "Enter para salvar · Esc para cancelar · vazio exclui"
+        },
+        "toolbar": {
+          "highlight": "Realçar",
+          "subscript": "Subscrito",
+          "superscript": "Sobrescrito",
+          "color": "Cor do texto",
+          "font": "Fonte",
+          "alignment": "Alinhamento",
+          "ruby": "Texto ruby (leitura acima dos caracteres)"
+        },
+        "find": {
+          "find": "Localizar",
+          "replace": "Substituir",
+          "all": "Tudo",
+          "previous": "Anterior",
+          "next": "Próximo",
+          "matchCase": "Diferenciar maiúsculas",
+          "close": "Fechar"
+        },
+        "count": "Palavras: {{words}} · Caracteres: {{chars}}",
+        "link": {
+          "header": "Vincular nota",
+          "empty": "Digite o título de uma nota…",
+          "create": "Vincular a “{{title}}” (ainda sem nota)",
+          "open": "Abrir “{{title}}”",
+          "missing": "Nenhuma nota com o título “{{title}}”"
+        },
+        "backlinks": {
+          "label": "Vinculada em",
+          "more": "+{{count}} mais",
+          "untitled": "Sem título"
+        },
+        "toc": {
+          "title": "Conteúdo",
+          "empty": "Adicione títulos para criar o sumário."
+        }
       }
     },
     "participants": {

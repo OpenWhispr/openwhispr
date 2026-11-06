@@ -43,6 +43,7 @@ import {
   type ChainCommand,
 } from "./RichTextEditorMenus";
 import { insertEmptyTable, isOnEmptyLine } from "./RichTextEditorTable";
+import { FormatStyleControls } from "./editorBlocks/FormatStyleControls";
 
 interface FormatAction {
   key: string;
@@ -208,7 +209,16 @@ function FormatToolbar({
     >
       {MARKS.map(actionButton)}
       <Separator />
-      <DropdownMenu open={dropdown.open} onOpenChange={dropdown.setOpen}>
+      {/* highlight, sub/superscript, colour, font, alignment, ruby. */}
+      <FormatStyleControls editor={editor} dropdown={dropdown} />
+      <Separator />
+      <DropdownMenu
+        open={dropdown.open}
+        onOpenChange={(open) => {
+          if (open) dropdown.setExtraOpen(null); // one dropdown at a time
+          dropdown.setOpen(open);
+        }}
+      >
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
