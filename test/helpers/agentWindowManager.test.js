@@ -438,6 +438,22 @@ test("the pill sits above a dictation pill docked in the center of the same disp
   assert.equal(win.bounds.y + win.bounds.height, 836);
 });
 
+test("a dictation pill dragged out of the lower 40% leaves the bottom center to the agent", async () => {
+  for (const platform of ["darwin", "win32"]) {
+    cursor = { x: 100, y: 100 };
+    const mainWindow = {
+      isDestroyed: () => false,
+      isVisible: () => true,
+      getBounds: () => ({ x: 616, y: 20, width: 208, height: 120 }),
+    };
+    const { win } = await openedManager({
+      platform,
+      windowManager: createWindowManager({ _panelStartPosition: "center", mainWindow }),
+    });
+    assert.equal(win.bounds.y + win.bounds.height, 896, platform);
+  }
+});
+
 test("on Windows the window sits above the whole dictation window, which takes every click", async () => {
   cursor = { x: 100, y: 100 };
   const mainWindow = {

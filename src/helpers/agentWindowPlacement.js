@@ -52,11 +52,17 @@ const DICTATION_DOCK_INSET = 12;
 const DICTATION_PILL_HEIGHT = 40;
 const DICTATION_GAP = 8;
 
+// The top of the dock's zone: its pill stays in the lower 40%.
+const dockZoneTop = (workArea) =>
+  workArea.y + workArea.height * 0.6 + AGENT_LAYOUT_SIZES.pill.height;
+
 /**
  * Where the window's bottom-center sits on a display: the bottom center of the
  * work area, lifted above the dictation pill when that pill is docked in the
  * center of the same display. Where the dictation window takes clicks across
- * its whole area (Windows), it is lifted above that window instead.
+ * its whole area (Windows), it is lifted above that window instead. A pill
+ * that leaves no room for the agent above it within the lower 40% isn't in
+ * the way.
  */
 function computeAgentAnchor({
   workArea,
@@ -65,10 +71,11 @@ function computeAgentAnchor({
 }) {
   const centerX = workArea.x + workArea.width / 2;
   let bottom = workArea.y + workArea.height - BOTTOM_MARGIN;
-  if (dictationBounds) {
-    const dictationTop = wholeDictationWindowTakesClicks
-      ? dictationBounds.y
-      : dictationBounds.y + dictationBounds.height - DICTATION_DOCK_INSET - DICTATION_PILL_HEIGHT;
+  const pillTop = dictationBounds
+    ? dictationBounds.y + dictationBounds.height - DICTATION_DOCK_INSET - DICTATION_PILL_HEIGHT
+    : null;
+  if (pillTop !== null && pillTop - DICTATION_GAP >= dockZoneTop(workArea)) {
+    const dictationTop = wholeDictationWindowTakesClicks ? dictationBounds.y : pillTop;
     bottom = Math.min(bottom, dictationTop - DICTATION_GAP);
   }
   return { centerX, bottom };
@@ -85,11 +92,7 @@ function clampAgentAnchor(
   const sideInset = workArea.width * 0.06 + halfWidth;
   const minBottom = Math.min(
     maxBottom,
-    workArea.y +
-      Math.max(
-        workArea.height * 0.6 + AGENT_LAYOUT_SIZES.pill.height,
-        AGENT_LAYOUT_SIZES.modal.height
-      )
+    Math.max(dockZoneTop(workArea), workArea.y + AGENT_LAYOUT_SIZES.modal.height)
   );
   return {
     centerX: Math.max(
