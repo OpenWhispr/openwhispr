@@ -319,7 +319,9 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
       const metadata = replyMetadata(toolCalls, details.turn);
       const savedRow =
         savedRowsRef.current.get(messageId) ??
-        Promise.resolve(messagesRef.current.find((m) => m.id === messageId)?.dbId ?? null);
+        Promise.resolve(
+          details.rowId ?? messagesRef.current.find((m) => m.id === messageId)?.dbId ?? null
+        );
       const saving = savedRow.then((rowId) =>
         accountCurrent() ? saveReplyRow(conversationId, rowId, content, metadata) : null
       );

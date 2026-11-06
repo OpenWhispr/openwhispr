@@ -301,6 +301,8 @@ export interface TurnDetails {
   turn?: AssistantTurn;
   /** The conversation the turn ran in, so a turn that ends after a switch saves there. */
   conversationId?: number;
+  /** The saved row a regenerated reply replaces: it's completed there even once New chat cleared it. */
+  rowId?: number;
 }
 
 export type TurnHandler = (
@@ -1009,6 +1011,7 @@ export function createChatTurnEngine(
       const turnDetails = (): TurnDetails => ({
         turn: currentTurn(),
         ...(options?.conversationId != null ? { conversationId: options.conversationId } : {}),
+        ...(replaced?.dbId != null ? { rowId: replaced.dbId } : {}),
       });
       const hasPendingInteraction = (): boolean =>
         toolCalls.some((call) => call.interaction?.state === "pending");

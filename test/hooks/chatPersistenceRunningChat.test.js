@@ -569,6 +569,35 @@ for (const failure of ["owned elsewhere", "claim rejected"]) {
   });
 }
 
+test("a regeneration stopped by New chat completes the reply's own row", async (t) => {
+  const h = await mountPersistence(t, { streaming: true, agent: true });
+  const conversation = await h.db.api.createAgentConversation("Regenerated");
+  await h.db.api.addAgentMessage(conversation.id, "user", "Hello");
+  await h.db.api.addAgentMessage(conversation.id, "assistant", "Original reply");
+  await h.act(() => h.current().switchChat(conversation.id));
+  const streaming = Promise.withResolvers();
+  h.service.processTextStreamingAI = async function* (_m, _model, _p, _config, _tools, signal) {
+    yield { type: "content", text: "Partial" };
+    yield { type: "tool_calls", calls: [{ id: "lookup", name: "search_notes", arguments: "{}" }] };
+    streaming.resolve();
+    await new Promise((resolve) => signal.addEventListener("abort", resolve, { once: true }));
+    // The stop is saved after New chat has rendered the empty chat.
+    await new Promise(setImmediate);
+  };
+  let regenerating;
+  await h.act(async () => {
+    regenerating = h.current().regenerate(h.current().messages.at(-1));
+    await streaming.promise;
+  });
+  await h.act(() => h.current().newChat());
+  await h.act(() => regenerating);
+  assert.deepEqual(
+    h.db.rows.filter((row) => row.role === "assistant").map((row) => row.content),
+    ["Partial"]
+  );
+  assert.equal(h.db.calls.update.length, 1);
+});
+
 test("a pending regeneration excludes duplicate clicks across renders and stale completions", async (t) => {
   const h = await mountPersistence(t, { streaming: true, agent: true });
   const conversations = await Promise.all(
