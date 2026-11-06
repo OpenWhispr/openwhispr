@@ -2488,6 +2488,10 @@
         "description": "工作區讓你與團隊成員協作並分享筆記。",
         "create": "建立工作區"
       },
+      "personal": {
+        "title": "你目前在「個人」中",
+        "description": "選擇一個工作區以管理其設定。"
+      },
       "loadError": {
         "title": "無法載入工作區",
         "description": "請檢查網路連線後再試一次。",
@@ -4013,6 +4017,7 @@
       },
       "locked": {
         "noWorkspace": "共享字典包含在 Business 方案中。與所有人共享團隊的術語、產品名稱和縮寫。",
+        "chooseWorkspace": "你目前在「個人」中。切換到一個工作區即可使用其共享詞語。",
         "upgradeAdmin": "共享字典包含在 Business 方案中。升級 {{workspace}}，讓每個人都使用相同的詞語。",
         "upgradeMember": "共享字典包含在 Business 方案中。請管理員升級 {{workspace}}。",
         "paused_one": "{{workspace}} 的 {{count}} 個共享詞語已暫停。升級到 Business 即可在聽寫中再次使用。",

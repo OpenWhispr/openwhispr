@@ -127,7 +127,7 @@ let awaitingOpenedContext: ActiveContext | null = null;
 function reconcileWorkspaceScope(trigger: NoteWorkspaceScopeReason): void {
   if (applyingWorkspaceScope) return;
   const state = useNoteStore.getState();
-  const { activeWorkspaceId, workspaces } = useWorkspaceStore.getState();
+  const { activeWorkspaceId, personalSelected, workspaces } = useWorkspaceStore.getState();
   const spaceById = (id: number): SpaceItem | null =>
     state.spaces.find((space) => space.id === id) ?? null;
   const activeNote = state.activeNoteId != null ? findNoteInState(state, state.activeNoteId) : null;
@@ -146,6 +146,7 @@ function reconcileWorkspaceScope(trigger: NoteWorkspaceScopeReason): void {
     reason,
     activeWorkspaceId,
     workspaces,
+    personalSelected,
     contextSpace,
     noteSpace,
   });
@@ -194,7 +195,10 @@ useNoteStore.subscribe((state, previous) => {
   }
 });
 useWorkspaceStore.subscribe((state, previous) => {
-  if (state.activeWorkspaceId !== previous.activeWorkspaceId) {
+  if (
+    state.activeWorkspaceId !== previous.activeWorkspaceId ||
+    state.personalSelected !== previous.personalSelected
+  ) {
     awaitingOpenedNoteId = null;
     awaitingOpenedContext = null;
     reconcileWorkspaceScope("workspaceSwitched");
@@ -634,8 +638,8 @@ export function setActiveContext(spaceId: number, folderId: number | null): void
 // Where the notes view lands with nothing else to show: Personal's default
 // folder, which every workspace shows.
 function defaultContext(spaces: SpaceItem[], folders: FolderItem[]): ActiveContext | null {
-  const { activeWorkspaceId, workspaces } = useWorkspaceStore.getState();
-  const visible = spacesInWorkspaceScope(spaces, activeWorkspaceId, workspaces);
+  const { activeWorkspaceId, personalSelected, workspaces } = useWorkspaceStore.getState();
+  const visible = spacesInWorkspaceScope(spaces, activeWorkspaceId, workspaces, personalSelected);
   const privateSpace = visible.find((s) => s.kind === "private") ?? visible[0];
   if (!privateSpace) return null;
   const privateFolders = folders.filter((f) => f.space_id === privateSpace.id);

@@ -2488,6 +2488,10 @@
         "description": "工作区让你与同事协作并共享笔记。",
         "create": "创建工作区"
       },
+      "personal": {
+        "title": "你当前在“个人”中",
+        "description": "选择一个工作区以管理其设置。"
+      },
       "loadError": {
         "title": "无法加载工作区",
         "description": "请检查网络连接后重试。",
@@ -4013,6 +4017,7 @@
       },
       "locked": {
         "noWorkspace": "共享词典包含在 Business 方案中。与所有人共享团队的行话、产品名称和缩写。",
+        "chooseWorkspace": "你当前在“个人”中。切换到一个工作区即可使用其共享词语。",
         "upgradeAdmin": "共享词典包含在 Business 方案中。升级 {{workspace}}，让每个人都使用相同的词语。",
         "upgradeMember": "共享词典包含在 Business 方案中。请让管理员升级 {{workspace}}。",
         "paused_one": "{{workspace}} 的 {{count}} 个共享词语已暂停。升级到 Business 即可在听写中再次使用。",
