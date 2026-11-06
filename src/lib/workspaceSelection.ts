@@ -21,7 +21,7 @@ export function isSpaceInWorkspaceScope(
   space: ScopedSpace,
   activeWorkspaceId: string | null,
   workspaces: Workspace[],
-  personalSelected = false
+  personalSelected: boolean
 ): boolean {
   if (space.kind === "private") return true;
   if (personalSelected) {
@@ -37,7 +37,7 @@ export function spacesInWorkspaceScope<S extends ScopedSpace>(
   spaces: S[],
   activeWorkspaceId: string | null,
   workspaces: Workspace[],
-  personalSelected = false
+  personalSelected: boolean
 ): S[] {
   return spaces.filter((space) =>
     isSpaceInWorkspaceScope(space, activeWorkspaceId, workspaces, personalSelected)
@@ -76,7 +76,7 @@ export function decideNoteWorkspaceScope(input: {
   reason: NoteWorkspaceScopeReason;
   activeWorkspaceId: string | null;
   workspaces: Workspace[];
-  personalSelected?: boolean;
+  personalSelected: boolean;
   contextSpace: ScopedSpace | null;
   noteSpace: ScopedSpace | null;
 }): NoteWorkspaceScopeDecision {
