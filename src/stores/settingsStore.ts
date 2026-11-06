@@ -3625,39 +3625,107 @@ const LOCAL_SPEECH_CONTEXTS = [
   ],
 ] as const;
 
+// Retired local speech models already announced as kept, so a selection that stays on one
+// is told once rather than at every launch.
+const KEPT_RETIRED_SPEECH_KEY = "retiredSpeechModelsKeptNoticed";
+
+// Which local speech models are on disk, retired ones included. An unknown answer counts as
+// none, so a selection then moves as if nothing were downloaded.
+async function downloadedSpeechModels(
+  section: "whisperModels" | "parakeetModels",
+  retiredIds: string[]
+): Promise<Set<string>> {
+  const api = isBrowser ? window.electronAPI : undefined;
+  try {
+    const whisper = section === "whisperModels";
+    const [list, ...retired] = await Promise.all([
+      whisper ? api?.listWhisperModels?.() : api?.listParakeetModels?.(),
+      ...retiredIds.map((id) =>
+        whisper ? api?.checkModelStatus?.(id) : api?.checkParakeetModelStatus?.(id)
+      ),
+    ]);
+    return new Set(
+      [...(list?.models ?? []), ...retired].flatMap((model) =>
+        model?.downloaded ? [model.model] : []
+      )
+    );
+  } catch {
+    return new Set();
+  }
+}
+
 /**
- * Moves saved Whisper and sherpa-onnx selections off a retired model. main refuses a model
- * the catalog no longer offers, so otherwise every dictation fails. Only a context using
- * that engine tells the user: a cloud user still stores the default Whisper model.
+ * Moves saved Whisper and sherpa-onnx selections off a retired model, preferring one already
+ * on disk (retiredLocalSpeechReplacement); with none, a retired file still on disk keeps
+ * running. Only a context using that engine tells the user: a cloud user still stores the
+ * default Whisper model.
  */
-export function reconcileRetiredLocalSpeechSelections(): void {
+export async function reconcileRetiredLocalSpeechSelections(): Promise<void> {
   const state = useSettingsStore.getState() as unknown as Record<string, unknown>;
-  const move = (
-    section: "whisperModels" | "parakeetModels",
-    storeKey: string,
-    inUse: boolean
-  ): void => {
-    const from = state[storeKey] as string;
-    const retired = from && getRetiredModel(section, "", from);
-    const to = retired && retiredLocalSpeechReplacement(section, from);
-    if (!retired || !to) return;
+  const contexts = LOCAL_SPEECH_CONTEXTS.flatMap(
+    ([useLocal, provider, whisper, parakeet, cohere]) => {
+      const inUse = (engine: string): boolean =>
+        state[useLocal] === true && state[provider] === engine;
+      return [
+        { section: "whisperModels", storeKey: whisper, inUse: inUse("whisper") },
+        { section: "parakeetModels", storeKey: parakeet, inUse: inUse("nvidia") },
+        { section: "parakeetModels", storeKey: cohere, inUse: inUse("cohere") },
+      ] as const;
+    }
+  );
+  const stale = [
+    ...contexts,
+    { section: "whisperModels", storeKey: "fallbackWhisperModel", inUse: false } as const,
+  ].flatMap((context) => {
+    const from = state[context.storeKey] as string;
+    const retired = from ? getRetiredModel(context.section, "", from) : undefined;
+    return retired ? [{ ...context, from, retired }] : [];
+  });
+  if (stale.length === 0) return;
+
+  const retiredIds = (section: string): string[] => [
+    ...new Set(stale.filter((entry) => entry.section === section).map((entry) => entry.from)),
+  ];
+  const [whisperOnDisk, parakeetOnDisk] = await Promise.all([
+    downloadedSpeechModels("whisperModels", retiredIds("whisperModels")),
+    downloadedSpeechModels("parakeetModels", retiredIds("parakeetModels")),
+  ]);
+  let kept: string[] = [];
+  try {
+    kept = isBrowser ? JSON.parse(localStorage.getItem(KEPT_RETIRED_SPEECH_KEY) ?? "[]") : [];
+  } catch {
+    // Unreadable: announce again.
+  }
+
+  for (const { section, storeKey, inUse, from, retired } of stale) {
+    // The user may have picked another model while the disk was read.
+    if ((useSettingsStore.getState() as unknown as Record<string, unknown>)[storeKey] !== from)
+      continue;
+    const onDisk = section === "whisperModels" ? whisperOnDisk : parakeetOnDisk;
+    const to = retiredLocalSpeechReplacement(section, from, (id) => onDisk.has(id));
+    if (!to) {
+      const keptKey = `${section}:${from}`;
+      if (!inUse || !onDisk.has(from) || kept.includes(keptKey)) continue;
+      kept = [...kept, keptKey];
+      if (isBrowser) localStorage.setItem(KEPT_RETIRED_SPEECH_KEY, JSON.stringify(kept));
+      queueRetiredModelSwitch({
+        provider: "",
+        from: retired.name,
+        to: "",
+        messageKey: "reasoning.localModelRetiredKept",
+      });
+      continue;
+    }
     const { alreadyMoved } = moveSelection(storeKey, to);
     logger.info("Repointed retired local speech model", { scope: storeKey, from, to }, "settings");
-    if (!inUse || alreadyMoved) return;
+    if (!inUse || alreadyMoved) continue;
     queueRetiredModelSwitch({
       provider: "",
       from: retired.name,
       to: modelRegistryData[section][to]?.name ?? to,
       messageKey: "reasoning.localModelRetired",
     });
-  };
-  for (const [useLocal, provider, whisper, parakeet, cohere] of LOCAL_SPEECH_CONTEXTS) {
-    const inUse = (engine: string) => state[useLocal] === true && state[provider] === engine;
-    move("whisperModels", whisper, inUse("whisper"));
-    move("parakeetModels", parakeet, inUse("nvidia"));
-    move("parakeetModels", cohere, inUse("cohere"));
   }
-  move("whisperModels", "fallbackWhisperModel", false);
 }
 
 /**
@@ -4233,12 +4301,17 @@ export async function initializeSettings(): Promise<void> {
       );
     }
 
+    const moveRetiredSpeech = (): void => {
+      reconcileRetiredLocalSpeechSelections().catch((err: Error) =>
+        logger.warn("Failed to move retired speech models", { error: err.message }, "settings")
+      );
+    };
     reconcileRetiredCloudModelSelections();
-    reconcileRetiredLocalSpeechSelections();
+    moveRetiredSpeech();
     // A publication that retires a model mid-session moves its selections at once.
     subscribeRegistry(() => {
       reconcileRetiredCloudModelSelections();
-      reconcileRetiredLocalSpeechSelections();
+      moveRetiredSpeech();
       reconcileRetiredLocalLlmSelections().catch((err: Error) =>
         logger.warn("Failed to move retired local models", { error: err.message }, "settings")
       );

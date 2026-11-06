@@ -18,7 +18,8 @@ export function offeredReplacement(
 ): string | null;
 export function retiredLocalSpeechReplacement(
   section: "whisperModels" | "parakeetModels",
-  modelId: string
+  modelId: string,
+  isDownloaded?: (id: string) => boolean
 ): string | null;
 export function isAwaitingCatalog(
   section: Exclude<RegistrySection, "whisperModels" | "parakeetModels">,

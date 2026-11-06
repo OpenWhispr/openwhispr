@@ -887,6 +887,7 @@
     "modelUnavailableSwitched": "{{from}} isn't available from {{provider}} anymore. Switched to {{to}}.",
     "localModelRetired": "{{from}} is no longer available, so we switched you to {{to}}. If it isn't downloaded yet, download it in Settings.",
     "localModelRetiredChooseAnother": "{{from}} is no longer available. Choose another local model in Settings.",
+    "localModelRetiredKept": "{{from}} has been retired. It keeps working because it's already downloaded, but it can't be downloaded again. Choose another local model in Settings.",
     "groq": {
       "modelRetired": "Groq retired {{from}}. Switched to {{to}}."
     },

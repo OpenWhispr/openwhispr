@@ -5,7 +5,10 @@ import type { SettingsState } from "./settingsStore";
 import { compareAppVersions } from "../utils/version.ts";
 // The pure registry store keeps this policy module usable without browser globals.
 // Provider membership is code-pinned by catalog compatibility validation.
-import { registryData as modelRegistryData } from "../models/registryData.js";
+import {
+  listRunnableLocalModels,
+  registryData as modelRegistryData,
+} from "../models/registryData.js";
 
 export type PolicyStatus = "idle" | "loading" | "managed" | "unmanaged" | "error";
 
@@ -258,15 +261,16 @@ export function isConnectorsBlockedByOrg(state: PolicyDecisionSnapshot): boolean
 const warnedUnknownRequiredModelIds = new Set<string>();
 const warnedUnknownLocalModelIds = new Set<string>();
 
-// Read live: a catalog update can add or retire a local model during a session.
+// Read live: a catalog update can add a local model during a session. A retired one stays
+// known, since a file on disk and the work already running on it keep going
+// (getRunnableSpeechModel).
 export function isKnownLocalModelId(scope: PolicyScope, modelId: string): boolean {
-  if (scope === "transcription")
-    return (
-      Object.hasOwn(modelRegistryData.whisperModels, modelId) ||
-      Object.hasOwn(modelRegistryData.parakeetModels, modelId)
-    );
-  return modelRegistryData.localProviders.some((provider) =>
-    provider.models.some((model) => model.id === modelId)
+  const sections =
+    scope === "transcription"
+      ? (["whisperModels", "parakeetModels"] as const)
+      : (["localProviders"] as const);
+  return sections.some((section) =>
+    listRunnableLocalModels(section).some(([id]) => id === modelId)
   );
 }
 

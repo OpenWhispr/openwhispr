@@ -7,11 +7,14 @@
 import { isOrukeetStreaming } from "./selfHostedTranscription.js";
 import { STREAMING_ONLY_PROVIDERS } from "./transcriptionRoute.ts";
 import { registryData as modelRegistryData, subscribeRegistry } from "../models/registryData.js";
+import bundledRegistryData from "../models/modelRegistryData.json" with { type: "json" };
 
 export const ORUKEET_MODEL = "orukeet-v0.1.0";
-// Read at module load: a catalog that retired the model must not stop windows loading.
+// The languages OpenWhispr Cloud's Orukeet serves, which this build pins. Read from the
+// bundle, not the live catalog: a publication retiring the local download must not change
+// the cloud route.
 const ORUKEET_LANGUAGES = new Set(
-  modelRegistryData.parakeetModels[ORUKEET_MODEL]?.supportedLanguages ?? []
+  bundledRegistryData.parakeetModels[ORUKEET_MODEL]?.supportedLanguages ?? []
 );
 
 // Existing default retained during the opt-in group-score rollout. Scores are

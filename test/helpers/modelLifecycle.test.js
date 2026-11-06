@@ -247,7 +247,7 @@ test("a retired local speech model moves every context, and tells only its users
   // Named across engines: a transducer selection can't hold a Cohere model.
   retireLocal(data, "parakeetModels", "parakeet-tdt-0.6b-v3", "cohere-transcribe-03-2026");
   store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1 });
-  settings.reconcileRetiredLocalSpeechSelections();
+  await settings.reconcileRetiredLocalSpeechSelections();
 
   const state = settings.useSettingsStore.getState();
   assert.equal(state.whisperModel, "turbo");
@@ -261,6 +261,93 @@ test("a retired local speech model moves every context, and tells only its users
   assert.equal(events.length, 1, "this user dictates on Whisper, not on Parakeet");
   assert.equal(events[0].messageKey, "reasoning.localModelRetired");
   assert.equal(events[0].to, seed.whisperModels.turbo.name);
+});
+
+function speechDisk(downloaded) {
+  const status = (model) => ({ success: true, model, downloaded: downloaded.includes(model) });
+  return {
+    listWhisperModels: async () => ({
+      success: true,
+      cache_dir: "",
+      models: Object.keys(seed.whisperModels).map(status),
+    }),
+    checkModelStatus: async (model) => status(model),
+    listParakeetModels: async () => ({ success: true, cache_dir: "", models: [] }),
+    checkParakeetModelStatus: async (model) => status(model),
+  };
+}
+
+async function reconcileSpeechWith(t, downloaded, cachePrefix) {
+  installBrowserGlobals(t, {
+    initialStorage: {
+      _llmScopeKeysMigrated: "1",
+      _providerSettingsMigrated: "1",
+      useLocalWhisper: "true",
+      localTranscriptionProvider: "whisper",
+      whisperModel: "small",
+    },
+    window: { location: { search: "?panel=true" }, electronAPI: speechDisk(downloaded) },
+  });
+  const vite = await createRendererServer(t, { cachePrefix });
+  const settings = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const store = await vite.ssrLoadModule("/models/registryData.js");
+  const toasts = await vite.ssrLoadModule("/stores/retiredModelSwitchStore.ts");
+  const data = structuredClone(seed);
+  retireLocal(data, "whisperModels", "small", "medium");
+  store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1 });
+  await settings.reconcileRetiredLocalSpeechSelections();
+  return { settings, toasts };
+}
+
+test("a retired speech model moves to a model on disk before one it would have to download", async (t) => {
+  const { settings, toasts } = await reconcileSpeechWith(
+    t,
+    ["small", "tiny"],
+    "model-lifecycle-speech-disk-"
+  );
+  assert.equal(settings.useSettingsStore.getState().whisperModel, "tiny");
+  assert.equal(toasts.takeQueuedRetiredModelSwitches()[0].to, seed.whisperModels.tiny.name);
+});
+
+test("a retired speech model with nothing else on disk keeps running, and says so once", async (t) => {
+  const { settings, toasts } = await reconcileSpeechWith(t, ["small"], "model-lifecycle-kept-");
+  assert.equal(settings.useSettingsStore.getState().whisperModel, "small");
+  assert.deepEqual(
+    toasts.takeQueuedRetiredModelSwitches().map((event) => event.messageKey),
+    ["reasoning.localModelRetiredKept"]
+  );
+  await settings.reconcileRetiredLocalSpeechSelections();
+  assert.deepEqual(toasts.takeQueuedRetiredModelSwitches(), [], "told once");
+});
+
+test("a retired speech model still runs from disk, and Orukeet's cloud languages stay", async () => {
+  const store = await import("../../src/models/registryData.js");
+  const data = structuredClone(seed);
+  retireLocal(data, "whisperModels", "small", "medium");
+  retireLocal(data, "parakeetModels", "nemotron-speech-streaming-en-0.6b");
+  retireLocal(data, "parakeetModels", "orukeet-v0.1.0");
+  store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1 });
+
+  assert.equal(store.getRegistryData().whisperModels.small, undefined, "no longer offered");
+  assert.equal(
+    store.getRunnableSpeechModel("whisperModels", "small").fileName,
+    seed.whisperModels.small.fileName
+  );
+  assert.equal(store.getRunnableSpeechModel("whisperModels", "missing"), null);
+  const { getModelRuntime } = require("../../src/helpers/parakeetModelInfo");
+  assert.equal(getModelRuntime("nemotron-speech-streaming-en-0.6b"), "online");
+  const { isOnlineParakeetModel } = await import("../../src/models/ModelRegistry.ts");
+  assert.equal(isOnlineParakeetModel("nemotron-speech-streaming-en-0.6b"), true);
+
+  const routing = await import("../../src/helpers/dictationStreamingRouting.js");
+  assert.equal(routing.isOrukeetLanguage("en"), true);
+  assert.equal(
+    routing.shouldRetranscribeOrukeetLanguage({
+      language: "auto",
+      final: { language: "en", languageConfidence: 0.99, languageAudioSeconds: 5 },
+    }),
+    false
+  );
 });
 
 test("a retired GGUF model moves to a replacement on disk, otherwise asks again", async (t) => {

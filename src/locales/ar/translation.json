@@ -561,6 +561,7 @@
     "modelUnavailableSwitched": "لم يعد {{from}} متاحًا من {{provider}}. تم التبديل إلى {{to}}.",
     "localModelRetired": "لم يعد {{from}} متاحًا، لذا بدّلنا إلى {{to}}. إذا لم يكن قد نُزّل بعد، فنزّله من الإعدادات.",
     "localModelRetiredChooseAnother": "لم يعد {{from}} متاحًا. اختر نموذجًا محليًا آخر من الإعدادات.",
+    "localModelRetiredKept": "تم إيقاف {{from}}. سيستمر في العمل لأنه مُنزَّل بالفعل، لكن لا يمكن تنزيله مرة أخرى. اختر نموذجًا محليًا آخر من الإعدادات.",
     "groq": {
       "modelRetired": "قام Groq بإيقاف {{from}}. تم التبديل إلى {{to}}."
     },

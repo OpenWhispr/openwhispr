@@ -1,4 +1,8 @@
-import { registryData as modelData, subscribeRegistry } from "./registryData.js";
+import {
+  getRunnableSpeechModel,
+  registryData as modelData,
+  subscribeRegistry,
+} from "./registryData.js";
 import { isCloudCleanupMode, getSettings } from "../stores/settingsStore";
 import { isSelectableTinfoilModel } from "../config/retiredCloudModelPolicy.js";
 import { getCloudModelProviders, setTinfoilModelOverlay } from "./cloudModelCatalog";
@@ -568,12 +572,13 @@ export function getParakeetModelInfo(modelId: string): ParakeetModelInfo | undef
   return modelData.parakeetModels[modelId];
 }
 
+// A retired model still on disk keeps running (getRunnableSpeechModel), on its own runtime.
 export function isOnlineParakeetModel(modelId: string): boolean {
-  return modelData.parakeetModels[modelId]?.runtime === "online";
+  return getRunnableSpeechModel("parakeetModels", modelId)?.runtime === "online";
 }
 
 export function isCohereTranscribeModel(modelId: string): boolean {
-  return modelData.parakeetModels[modelId]?.modelType === "cohere-transcribe";
+  return getRunnableSpeechModel("parakeetModels", modelId)?.modelType === "cohere-transcribe";
 }
 
 // Both providers run on the parakeet/sherpa-onnx stack; only whisper differs.

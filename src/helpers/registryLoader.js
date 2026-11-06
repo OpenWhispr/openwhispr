@@ -101,8 +101,9 @@ function createRegistryLoader({
   }
 
   // Returns true when the manifest holds a newer catalog that is now applied, false when it
-  // holds this or an older version. Throws for one not meant for this build.
-  function accept(manifest) {
+  // holds this or an older version. Throws for one not meant for this build. `stillPending`
+  // keeps a newer catalog awaited after this one applies.
+  function accept(manifest, stillPending = false) {
     // Entries are never deleted, so a catalog in use already holds everything an older one
     // does. That stays true of an older copy cached by a previous app version's reader.
     if (stopped || manifest.manifestVersion <= snapshot.manifestVersion) return false;
@@ -110,7 +111,7 @@ function createRegistryLoader({
       throw new Error(`Catalog ${manifest.manifestVersion} was not tested with this app version`);
     if (manifest.manifestVersion > snapshot.manifestVersion + MAX_VERSION_STEP)
       throw new Error(`Catalog version ${manifest.manifestVersion} is implausibly far ahead`);
-    pending = false;
+    pending = stillPending;
     apply({
       data: acceptCatalog(manifest.data, bundledSnapshot.data, appVersion),
       manifestVersion: manifest.manifestVersion,
@@ -188,21 +189,26 @@ function createRegistryLoader({
     return inFlight;
   }
 
-  // True when a cached copy was usable; `pending` when copies exist but none was.
+  // True when a cached copy was usable. `pending` when the newest copy was not: the backup
+  // is the older one, so a damaged, refused or half-written newer copy may have held
+  // additions it lacks, and only a verified fetch can tell.
   async function restoreCache() {
-    let found = false;
+    let unusable = false;
     for (const file of [cachePath, backupPath]) {
       try {
-        accept(readManifest(await readBoundedCache(file)));
+        const manifest = readManifest(await readBoundedCache(file));
+        // persist moves the copy in use to the backup before writing the new one.
+        const awaited = file === backupPath;
+        if (!accept(manifest, awaited)) pending = awaited;
         return true;
       } catch (error) {
         if (error.code !== "ENOENT") {
-          found = true;
+          unusable = true;
           reportError(error);
         }
       }
     }
-    pending = found;
+    pending = unusable;
     return false;
   }
 
@@ -228,13 +234,13 @@ function createRegistryLoader({
     else pending = await cacheHoldsNewerCatalog();
     if (!applied) apply(snapshot);
     if (!isEnabled() || stopped) return;
-    // With no usable cached copy, fetch at once rather than leave remote additions
-    // missing for the first minutes of the session.
+    // With no usable cached copy, or only an older one, fetch at once rather than leave
+    // remote additions missing for the first minutes of the session.
     startupTimer = setTimeout(
       () => {
         void refresh();
       },
-      restored ? startupDelayMs : 0
+      restored && !pending ? startupDelayMs : 0
     );
     interval = setInterval(() => {
       void refresh();

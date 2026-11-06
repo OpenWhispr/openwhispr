@@ -1,4 +1,4 @@
-const { registryData: modelRegistryData } = require("../models/registryData.js");
+const { getRunnableSpeechModel } = require("../models/registryData.js");
 
 const TRANSDUCER_MODEL_FILES = [
   "encoder.int8.onnx",
@@ -15,7 +15,7 @@ const COHERE_TRANSCRIBE_MODEL_FILES = [
 ];
 
 function getModelInfo(modelName) {
-  return modelRegistryData.parakeetModels?.[modelName];
+  return getRunnableSpeechModel("parakeetModels", modelName) ?? undefined;
 }
 
 function getModelRuntime(modelName) {

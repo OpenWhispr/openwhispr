@@ -887,6 +887,7 @@
     "modelUnavailableSwitched": "{{from}} n'est plus disponible chez {{provider}}. Passage à {{to}}.",
     "localModelRetired": "{{from}} n'est plus disponible : nous sommes passés à {{to}}. S'il n'est pas encore téléchargé, téléchargez-le dans les paramètres.",
     "localModelRetiredChooseAnother": "{{from}} n'est plus disponible. Choisissez un autre modèle local dans les paramètres.",
+    "localModelRetiredKept": "{{from}} a été retiré. Il continue de fonctionner car il est déjà téléchargé, mais il ne peut plus être téléchargé. Choisissez un autre modèle local dans les paramètres.",
     "groq": {
       "modelRetired": "Groq a retiré {{from}}. Basculé vers {{to}}."
     },

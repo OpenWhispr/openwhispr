@@ -6,6 +6,15 @@ const path = require("node:path");
 const vm = require("node:vm");
 const { createRequire } = require("node:module");
 
+// Only offered models here: none of these tests retires one.
+function registryStub(data) {
+  return {
+    registryData: data,
+    getRunnableSpeechModel: (section, id) =>
+      Object.hasOwn(data[section], id) ? data[section][id] : null,
+  };
+}
+
 test("a cancellation during archive verification never installs or completes the model", async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "registry-cancel-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -23,7 +32,7 @@ test("a cancellation during archive verification never installs or completes the
   const file = path.resolve(__dirname, "../../src/helpers/parakeet.js");
   const realRequire = createRequire(file);
   const stubs = {
-    "../models/registryData.js": { registryData: data },
+    "../models/registryData.js": registryStub(data),
     "./debugLogger": { info() {}, warn() {}, debug() {} },
     "./modelDirUtils": { getModelsDirForService: () => root },
     "./parakeetCapability": { assertParakeetSupported() {} },
@@ -96,7 +105,7 @@ function loadManager(root, data, stubs = {}) {
   const file = path.resolve(__dirname, "../../src/helpers/parakeet.js");
   const realRequire = createRequire(file);
   const allStubs = {
-    "../models/registryData.js": { registryData: data },
+    "../models/registryData.js": registryStub(data),
     "./debugLogger": { info() {}, warn() {}, debug() {} },
     "./modelDirUtils": { getModelsDirForService: () => root },
     "./parakeetCapability": {
@@ -167,7 +176,7 @@ test("an archive with no catalog hash still gets the structural check, with its 
   assert.equal(fs.existsSync(path.join(root, `${model}.tar.bz2`)), false);
 });
 
-test("launch never pre-warms a model the catalog no longer offers", async (t) => {
+test("launch never pre-warms a model the catalog does not know", async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "registry-prewarm-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const data = structuredClone(require("../../src/models/modelRegistryData.json"));

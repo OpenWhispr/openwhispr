@@ -26,7 +26,10 @@ const {
   pathHasProblematicChars,
 } = require("./modelDirUtils");
 
-const { registryData: modelRegistryData } = require("../models/registryData.js");
+const {
+  registryData: modelRegistryData,
+  getRunnableSpeechModel,
+} = require("../models/registryData.js");
 const {
   rememberInstalledModel,
   forgetInstalledModels,
@@ -237,8 +240,8 @@ class WhisperManager {
 
   validateModelName(modelName) {
     // Only allow known model names to prevent path traversal attacks
-    const validModels = getValidModelNames();
-    if (!validModels.includes(modelName)) {
+    if (!getRunnableSpeechModel("whisperModels", modelName)) {
+      const validModels = getValidModelNames();
       throw new Error(`Invalid model name: ${modelName}. Valid models: ${validModels.join(", ")}`);
     }
     return true;
@@ -246,8 +249,10 @@ class WhisperManager {
 
   getModelPath(modelName) {
     this.validateModelName(modelName);
-    const config = getWhisperModelConfig(modelName);
-    return path.join(this.getModelsDir(), config.fileName);
+    return path.join(
+      this.getModelsDir(),
+      getRunnableSpeechModel("whisperModels", modelName).fileName
+    );
   }
 
   isModelDownloaded(modelName) {
@@ -780,6 +785,7 @@ class WhisperManager {
   async _policyAllowedDownloadWhisperModel(modelName, progressCallback = null) {
     this.validateModelName(modelName);
     const modelConfig = getWhisperModelConfig(modelName);
+    if (!modelConfig) throw new Error(`Whisper model "${modelName}" is retired.`);
 
     const modelPath = this.getModelPath(modelName);
     const modelsDir = this.getModelsDir();

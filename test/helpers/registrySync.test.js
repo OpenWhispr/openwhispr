@@ -247,7 +247,7 @@ test("a catalog addition immediately rechecks an already-required local model", 
   }
 });
 
-test("org policy treats a local model the catalog added or retired as it now stands", async (t) => {
+test("org policy knows a local model the catalog added, and keeps one it retired", async (t) => {
   installBrowserGlobals(t);
   const vite = await createRendererServer(t, { cachePrefix: "registry-policy-known-" });
   const { isKnownLocalModelId } = await vite.ssrLoadModule("/stores/policyRules.ts");
@@ -265,5 +265,7 @@ test("org policy treats a local model the catalog added or retired as it now sta
 
   assert.equal(isKnownLocalModelId("transcription", "remote-whisper"), true);
   assert.equal(isKnownLocalModelId("llm", "remote-gguf"), true);
-  assert.equal(isKnownLocalModelId("llm", gguf), false, "a retired model is not loaded");
+  // Running work and a file already on disk keep going after a retirement.
+  assert.equal(isKnownLocalModelId("llm", gguf), true, "a retired model stays known");
+  assert.equal(isKnownLocalModelId("transcription", gguf), false, "per scope");
 });

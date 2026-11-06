@@ -76,6 +76,24 @@ export const listRetiredModels = () =>
     const [section, providerId, id] = key.split("\0");
     return { section, providerId, id, model };
   });
+// Retiring a local model stops new downloads and selections, never a file already on
+// disk: a selection with nothing else to move to keeps running it, and so does work
+// that started before the retirement landed.
+export const getRunnableSpeechModel = (section, modelId) =>
+  (Object.hasOwn(registryData[section], modelId) ? registryData[section][modelId] : null) ??
+  getRetiredModel(section, "", modelId) ??
+  null;
+// Every local model of a section this app can run, offered or retired, as [id, model].
+export const listRunnableLocalModels = (section) => [
+  ...(section === "localProviders"
+    ? registryData.localProviders.flatMap((provider) =>
+        provider.models.map((model) => [model.id, model])
+      )
+    : Object.entries(registryData[section])),
+  ...listRetiredModels()
+    .filter((entry) => entry.section === section)
+    .map((entry) => [entry.id, entry.model]),
+];
 export function subscribeRegistry(listener) {
   listeners.add(listener);
   return () => listeners.delete(listener);

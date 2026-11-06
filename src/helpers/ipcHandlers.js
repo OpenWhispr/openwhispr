@@ -1,4 +1,8 @@
-const { registryData: modelRegistryData } = require("../models/registryData.js");
+const {
+  registryData: modelRegistryData,
+  getRunnableSpeechModel,
+  listRunnableLocalModels,
+} = require("../models/registryData.js");
 const { isLocalModelPolicyRefusal } = require("./localModelPolicyGate");
 const { OrukeetStreaming, MANAGED_STREAM_OPTIONS } = require("./orukeetStreaming");
 const { connectManagedOrukeet } = require("./orukeetCloudSession");
@@ -964,7 +968,9 @@ class IPCHandlers {
             this._localModelPolicy.assertCurrent(this._activeLocalMeetingLease);
           } catch (error) {
             // cancelJobs' abort: its callers stop the meeting themselves, as an account change.
-            if (error.code !== "POLICY_UNRESOLVABLE") this._stopMeetingForPolicy?.(error.code);
+            // Anything that isn't the policy's refusal is not the organization's either.
+            if (isLocalModelPolicyRefusal(error) && error.code !== "POLICY_UNRESOLVABLE")
+              this._stopMeetingForPolicy?.(error.code);
           }
         }
       },
@@ -980,21 +986,22 @@ class IPCHandlers {
     }
     const samePath = (actual, expected) =>
       typeof actual === "string" && path.resolve(actual) === path.resolve(expected);
+    // Retired models included: a server started before a retirement keeps serving.
     this.whisperManager.serverManager.localModelIdForPath = (modelPath) =>
-      Object.keys(modelRegistryData.whisperModels).find((id) =>
+      listRunnableLocalModels("whisperModels").find(([id]) =>
         samePath(modelPath, this.whisperManager.getModelPath(id))
-      );
+      )?.[0];
     this.parakeetManager.serverManager.wsServer.localModelIdForPath = (modelPath, id) =>
-      modelRegistryData.parakeetModels[id] &&
+      getRunnableSpeechModel("parakeetModels", id) &&
       samePath(modelPath, this.parakeetManager.getModelPath(id))
         ? id
         : undefined;
     localLlmManager.serverManager.localModelIdForPath = (modelPath) =>
-      modelRegistryData.localProviders
-        .flatMap((provider) => provider.models)
-        .find((model) =>
+      listRunnableLocalModels("localProviders").find(
+        ([, model]) =>
+          model.fileName &&
           samePath(modelPath, path.join(localLlmManager.getModelsDir(), model.fileName))
-        )?.id;
+      )?.[0];
   }
 
   // Called once a cookie session has had its bearer migration: before that, a

@@ -1,4 +1,4 @@
-import type { ModelRegistryData } from "./ModelRegistry";
+import type { ModelRegistryData, ParakeetModelInfo, WhisperModelInfo } from "./ModelRegistry";
 export type RegistrySnapshot = {
   data: ModelRegistryData;
   manifestVersion: number;
@@ -32,5 +32,16 @@ export function listRetiredModels(): Array<{
   id: string;
   model: RetiredModel;
 }>;
+export function getRunnableSpeechModel(
+  section: "whisperModels",
+  modelId: string
+): WhisperModelInfo | null;
+export function getRunnableSpeechModel(
+  section: "parakeetModels",
+  modelId: string
+): ParakeetModelInfo | null;
+export function listRunnableLocalModels(
+  section: "whisperModels" | "parakeetModels" | "localProviders"
+): Array<[string, { fileName?: string }]>;
 export function subscribeRegistry(listener: () => void): () => void;
 export function replaceRegistryData(snapshot: RegistrySnapshot): boolean;

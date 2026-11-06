@@ -139,12 +139,40 @@ test("untrusted, untested, implausible or malformed publications keep the usable
 });
 
 test("a damaged cache falls back to its backup, and with neither the app fetches at once", async (t) => {
-  const backup = setup(t);
+  const healthy = setup(t);
+  fs.writeFileSync(healthy.config.cachePath, signed(3));
+  await healthy.loader.start();
+  assert.equal(healthy.applied.at(-1).pending, false);
+  assert.equal(healthy.requests.length, 0, "a restored cache waits for the normal startup delay");
+
+  // The backup is the older copy: what the damaged one added stays awaited until the
+  // fetch answers, so a saved model from it isn't swapped for a default meanwhile.
+  let answer;
+  const answered = new Promise((resolve) => (answer = resolve));
+  const backup = setup(t, {
+    fetch: async () => {
+      answer();
+      return new Response(signed(3));
+    },
+  });
   fs.writeFileSync(backup.config.cachePath, "{");
   fs.writeFileSync(`${backup.config.cachePath}.backup`, signed(3));
   await backup.loader.start();
   assert.equal(backup.loader.getSnapshot().manifestVersion, 3);
-  assert.equal(backup.requests.length, 0, "a restored cache waits for the normal startup delay");
+  assert.equal(backup.applied.at(-1).pending, true);
+  await answered;
+  await backup.loader.refresh();
+  assert.equal(backup.applied.at(-1).pending, false, "settled by the verified fetch");
+  assert.equal(backup.applied.at(-1).manifestVersion, 3);
+
+  // A newest copy refused for this build is no different.
+  const refused = setup(t);
+  fs.writeFileSync(refused.config.cachePath, signed(4, seed, { tested: ["d".repeat(64)] }));
+  fs.writeFileSync(`${refused.config.cachePath}.backup`, signed(3));
+  await refused.loader.start();
+  refused.loader.stop();
+  assert.equal(refused.applied.at(-1).manifestVersion, 3);
+  assert.equal(refused.applied.at(-1).pending, true);
 
   const fetched = new Promise((resolve) => {
     const missing = setup(t, {

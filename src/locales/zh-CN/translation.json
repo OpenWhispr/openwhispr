@@ -887,6 +887,7 @@
     "modelUnavailableSwitched": "{{provider}} 已不再提供 {{from}}。已切换到 {{to}}。",
     "localModelRetired": "{{from}} 已不再可用，因此已为你切换到 {{to}}。如果尚未下载，请在设置中下载。",
     "localModelRetiredChooseAnother": "{{from}} 已不再可用。请在设置中选择其他本地模型。",
+    "localModelRetiredKept": "{{from}} 已停用。由于已下载，它仍可继续使用，但无法再次下载。请在设置中选择其他本地模型。",
     "groq": {
       "modelRetired": "Groq 已停用 {{from}}，已切换至 {{to}}。"
     },

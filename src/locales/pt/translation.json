@@ -866,6 +866,7 @@
     "modelUnavailableSwitched": "{{from}} não está mais disponível em {{provider}}. Alterado para {{to}}.",
     "localModelRetired": "{{from}} não está mais disponível, por isso mudamos para {{to}}. Se ainda não tiver sido baixado, baixe-o nas Configurações.",
     "localModelRetiredChooseAnother": "{{from}} não está mais disponível. Escolha outro modelo local nas Configurações.",
+    "localModelRetiredKept": "{{from}} foi descontinuado. Ele continua funcionando porque já foi baixado, mas não pode ser baixado novamente. Escolha outro modelo local nas Configurações.",
     "groq": {
       "modelRetired": "A Groq descontinuou {{from}}. Alterado para {{to}}."
     },

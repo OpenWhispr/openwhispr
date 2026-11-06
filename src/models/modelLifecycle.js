@@ -27,21 +27,27 @@ export function retiredReplacement(section, providerId, modelId, providers) {
   );
 }
 
-// The local speech model a retired selection moves to: its named replacement, otherwise
-// the engine's recommended or first model. Stays on the same engine, because Whisper,
-// transducer and Cohere selections live in separate settings.
-export function retiredLocalSpeechReplacement(section, modelId) {
+// The local speech model a retired selection moves to, on its own engine, since Whisper,
+// transducer and Cohere selections live in separate settings. A downloaded model comes
+// first: the named replacement, then the engine's recommended, then any. With none of them
+// on disk, a selection whose retired file is stays on it (null), since that keeps running
+// (getRunnableSpeechModel); otherwise it moves to the named replacement or the recommended
+// model, to download.
+export function retiredLocalSpeechReplacement(section, modelId, isDownloaded = () => false) {
   const retired = getRetiredModel(section, "", modelId);
   if (!retired) return null;
   const models = getRegistryData()[section];
   const engine = (model) => model.modelType === "cohere-transcribe";
-  const offered = Object.keys(models).filter((id) => engine(models[id]) === engine(retired));
-  return (
-    offeredReplacement(section, "", modelId, (id) => offered.includes(id)) ??
-    offered.find((id) => models[id].recommended) ??
-    offered[0] ??
-    null
-  );
+  const offered = Object.keys(models)
+    .filter((id) => engine(models[id]) === engine(retired))
+    .sort(
+      (a, b) => Number(Boolean(models[b].recommended)) - Number(Boolean(models[a].recommended))
+    );
+  const named = offeredReplacement(section, "", modelId, (id) => offered.includes(id));
+  const candidates = [named, ...offered].filter(Boolean);
+  const onDisk = candidates.find(isDownloaded);
+  if (onDisk) return onDisk;
+  return isDownloaded(modelId) ? null : (candidates[0] ?? null);
 }
 
 // While a catalog this app accepted before cannot be loaded (see isCatalogPending), a

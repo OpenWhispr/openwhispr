@@ -29,7 +29,10 @@ const {
 const { getModelsDirForService } = require("./modelDirUtils");
 const { assertParakeetSupported, getParakeetCapability } = require("./parakeetCapability");
 
-const { registryData: modelRegistryData } = require("../models/registryData.js");
+const {
+  registryData: modelRegistryData,
+  getRunnableSpeechModel,
+} = require("../models/registryData.js");
 const {
   getModelRuntime,
   getRequiredModelFiles,
@@ -67,8 +70,8 @@ class ParakeetManager {
   }
 
   validateModelName(modelName) {
-    const validModels = getValidModelNames();
-    if (!validModels.includes(modelName)) {
+    if (!getRunnableSpeechModel("parakeetModels", modelName)) {
+      const validModels = getValidModelNames();
       throw new Error(
         `Invalid Parakeet model: ${modelName}. Valid models: ${validModels.join(", ")}`
       );
@@ -104,9 +107,7 @@ class ParakeetManager {
       capability.supported &&
       isSherpaLocalProvider(localTranscriptionProvider) &&
       parakeetModel &&
-      // A saved model the catalog no longer offers (retired) must not be loaded, and has
-      // no runtime to start it on.
-      getParakeetModelConfig(parakeetModel) &&
+      getRunnableSpeechModel("parakeetModels", parakeetModel) &&
       this.serverManager.isAvailable(getModelRuntime(parakeetModel))
     ) {
       if (this.serverManager.isModelDownloaded(parakeetModel)) {
@@ -414,6 +415,7 @@ class ParakeetManager {
     this.validateModelName(modelName);
     assertParakeetSupported();
     const modelConfig = getParakeetModelConfig(modelName);
+    if (!modelConfig) throw new Error(`Parakeet model "${modelName}" is retired.`);
 
     const modelPath = this.getModelPath(modelName);
     const modelsDir = this.getModelsDir();
