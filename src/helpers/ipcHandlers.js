@@ -4,6 +4,11 @@ const {
   listRunnableLocalModels,
 } = require("../models/registryData.js");
 const { isLocalModelPolicyRefusal } = require("./localModelPolicyGate");
+const {
+  transcribeWithDictionary,
+  createMeetingPromptContext,
+  transcribeMeetingChunkWithPrompt,
+} = require("./localWhisperDictionary");
 const { OrukeetStreaming, MANAGED_STREAM_OPTIONS } = require("./orukeetStreaming");
 const { connectManagedOrukeet } = require("./orukeetCloudSession");
 const {
@@ -179,6 +184,13 @@ const {
 } = require("./meetingMicGate");
 const { deriveDetectorPreferences } = require("./meetingDetectionPreferencePolicy");
 const { resolveDiarizationInput } = require("./meetingDiarizationInput");
+const { createLocalChunkClock } = require("./meetingLocalChunkClock");
+const {
+  LOCAL_CHUNK_LIMITS,
+  bytesToMs,
+  findLocalChunkCut,
+  toLocalMeetingSegments,
+} = require("./meetingLocalChunking");
 const { applySmartSpacing } = require("./smartSpacing");
 const { applyAutoLearnSetting } = require("./autoLearnSetting");
 const {
@@ -1224,10 +1236,12 @@ class IPCHandlers {
     if (isSherpaLocalProvider(options.provider)) {
       return this.parakeetManager.transcribeLocalParakeet(audioBuffer, options);
     }
-    return this.whisperManager.transcribeLocalWhisper(audioBuffer, {
-      ...options,
-      ...this._resolveWhisperVadOptions("noteRecording"),
-    });
+    return transcribeWithDictionary(
+      this.whisperManager,
+      audioBuffer,
+      { ...options, ...this._resolveWhisperVadOptions("noteRecording") },
+      this._getDictionarySafe()
+    );
   }
 
   approveAudioPath(filePath) {
@@ -7837,11 +7851,12 @@ class IPCHandlers {
             });
           } else if (this.whisperManager?.serverManager?.isAvailable?.()) {
             const vadOptions = this._resolveWhisperVadOptions("noteRecording");
-            result = await this.whisperManager.transcribeLocalWhisper(buffer, {
-              model: settings.whisperModel,
-              language,
-              ...vadOptions,
-            });
+            result = await transcribeWithDictionary(
+              this.whisperManager,
+              buffer,
+              { model: settings.whisperModel, language, ...vadOptions },
+              this._getDictionarySafe()
+            );
           }
         } else if (settings?.cloudTranscriptionMode === "openwhispr") {
           const win = BrowserWindow.fromWebContents(event.sender);
@@ -8098,10 +8113,11 @@ class IPCHandlers {
     const DUPLICATE_TRANSCRIPT_WINDOW_MS = 6000;
     const DUPLICATE_TRANSCRIPT_MERGE_LIMIT = 3;
     const STREAMING_RISKY_MIC_SEGMENT_HOLDBACK_MS = 3000;
-    const LOCAL_MEETING_CHUNK_INTERVAL_MS = 5000;
-    // Must outlast one local transcription cycle so a straddling remote
-    // utterance's next-cycle system transcript can confirm buffered echo.
-    const LOCAL_RISKY_MIC_SEGMENT_HOLDBACK_MS = LOCAL_MEETING_CHUNK_INTERVAL_MS + 1000;
+    // How often local buffers are checked for a pause to cut at.
+    const LOCAL_MEETING_CUT_CHECK_MS = 250;
+    // Must outlast the longest system chunk plus its decode, so a straddling
+    // remote utterance's system transcript can still confirm buffered echo.
+    const LOCAL_RISKY_MIC_SEGMENT_HOLDBACK_MS = LOCAL_CHUNK_LIMITS.system.maxMs + 2000;
     const RACING_MIC_RETRACT_WINDOW_MS = 4000;
 
     const buildNearbyTranscriptCandidates = (
@@ -9069,6 +9085,8 @@ class IPCHandlers {
 
     let meetingLocalMode = false;
     let meetingLocalBuffers = { mic: [], system: [] };
+    const meetingLocalChunkClock = createLocalChunkClock();
+    const meetingLocalPromptContext = createMeetingPromptContext();
     let meetingLocalTimer = null;
     let meetingLocalWin = null;
     let meetingLocalTranscript = "";
@@ -9156,6 +9174,7 @@ class IPCHandlers {
         // Local STT timestamps each batch with wall time, not a sample cursor.
         // Large synthetic gaps would dilute speech and inflate the next batch.
         if (synthetic) return;
+        meetingLocalChunkClock.mark(source, capturedAt);
         meetingLocalBuffers[source].push(buffer);
         return;
       }
@@ -9467,13 +9486,28 @@ class IPCHandlers {
       return started;
     };
 
-    const transcribeLocalMeetingChunk = async (source) => {
+    // Transcribes the next chunk of a source's buffer: up to a pause past the
+    // minimum length, or the quietest point before the limit. The rest stays
+    // buffered for the next pass; `final` takes it regardless of length.
+    const transcribeLocalMeetingChunk = async (source, { final = false } = {}) => {
       const chunks = meetingLocalBuffers[source];
       if (!chunks.length) return;
       const lease = this._activeLocalMeetingLease;
 
-      const pcm24k = Buffer.concat(chunks);
-      meetingLocalBuffers[source] = [];
+      const buffered = chunks.length === 1 ? chunks[0] : Buffer.concat(chunks);
+      const cut = findLocalChunkCut(buffered, { source, final });
+      if (cut == null) {
+        // A final pass leaves nothing behind, not even a stray odd byte.
+        meetingLocalBuffers[source] = final ? [] : [buffered];
+        return;
+      }
+      const pcm24k = buffered.subarray(0, cut);
+      const rest = buffered.subarray(cut);
+      meetingLocalBuffers[source] = rest.length ? [rest] : [];
+      const chunkStartedAt = meetingLocalChunkClock.take(source, pcm24k.length);
+      const chunkDurationMs = bytesToMs(pcm24k.length);
+      // The rest continues where this chunk's audio ends.
+      if (rest.length) meetingLocalChunkClock.mark(source, chunkStartedAt + chunkDurationMs);
 
       const pcm16k = downsample24kTo16k(pcm24k);
 
@@ -9485,7 +9519,7 @@ class IPCHandlers {
         peak,
         sampleCount,
         isSystemSpeaking: () =>
-          meetingEchoLeakDetector.isSystemSpeaking(Date.now() - LOCAL_MEETING_CHUNK_INTERVAL_MS),
+          meetingEchoLeakDetector.isSystemSpeaking(Date.now() - chunkDurationMs),
       });
       if (verdict.action === "skip") {
         debugLogger.debug(
@@ -9510,16 +9544,25 @@ class IPCHandlers {
             language: meetingLocalLanguage,
           });
         }
-        return this.whisperManager.transcribeLocalWhisper(wav, {
-          model: meetingLocalModel,
-          language: meetingLocalLanguage,
-          // Keep whisper.cpp's default decoder thresholds on this continuous
-          // load: the raised #1458 values multiply temperature-fallback
-          // re-decodes, and meeting chunks already have RMS-gate, VAD, and
-          // holdback/dedup hallucination protection.
-          skipDecoderThresholds: true,
-          ...this._resolveWhisperVadOptions("meeting"),
-        });
+        // Dictionary + the end of this source's previous chunk as the prompt.
+        return transcribeMeetingChunkWithPrompt(
+          this.whisperManager,
+          wav,
+          {
+            model: meetingLocalModel,
+            language: meetingLocalLanguage,
+            // Keep whisper.cpp's default decoder thresholds on this continuous
+            // load: the raised #1458 values multiply temperature-fallback
+            // re-decodes, and meeting chunks already have RMS-gate, VAD, and
+            // holdback/dedup hallucination protection.
+            skipDecoderThresholds: true,
+            // Each whisper segment becomes its own row with its own capture time.
+            segments: true,
+            ...this._resolveWhisperVadOptions("meeting"),
+          },
+          this._getDictionarySafe(),
+          meetingLocalPromptContext.get(source)
+        );
       };
 
       try {
@@ -9534,18 +9577,19 @@ class IPCHandlers {
         assertMeetingAllowed();
 
         if (result?.success && result.text?.trim()) {
-          const text = result.text.trim();
-          const segTimestamp = Date.now();
+          const chunkText = result.text.trim();
           let micSuppression = null;
           if (source === "mic") {
-            const chunkDurationMs = (pcm24k.length / 2 / 24000) * 1000;
+            // The echo check keeps its decode-time window: the detector's
+            // history is bounded, and this is the window it has always seen.
+            const decodedAt = Date.now();
             micSuppression = shouldSuppressMicTranscriptSegment(
-              segTimestamp - chunkDurationMs,
-              segTimestamp
+              decodedAt - chunkDurationMs,
+              decodedAt
             );
             debugLogger.debug("Local meeting transcription candidate", {
               source,
-              text: text.slice(0, 80),
+              text: chunkText.slice(0, 80),
               suppress: micSuppression.suppress,
               reason: micSuppression.reason,
               hasBleedEvidence: micSuppression.hasBleedEvidence,
@@ -9558,49 +9602,15 @@ class IPCHandlers {
                 reason: micSuppression.reason,
                 averageCorrelation: micSuppression.averageCorrelation?.toFixed(3),
                 averageResidual: micSuppression.averageResidual?.toFixed(3),
-                text: text.slice(0, 80),
-              });
-              return;
-            }
-
-            if (shouldSkipDuplicateMicSegment(text, segTimestamp, micSuppression)) {
-              debugLogger.debug("Skipping duplicate local mic segment that matches system audio", {
-                text: text.slice(0, 80),
-                averageCorrelation: micSuppression.averageCorrelation?.toFixed(3),
-                averageResidual: micSuppression.averageResidual?.toFixed(3),
+                text: chunkText.slice(0, 80),
               });
               return;
             }
           } else {
             debugLogger.debug("Local meeting transcription candidate", {
               source,
-              text: text.slice(0, 80),
+              text: chunkText.slice(0, 80),
             });
-          }
-
-          if (source === "system") {
-            const pending = removePendingMicFinalsFor(text, segTimestamp);
-            if (pending.length > 0) {
-              debugLogger.debug(
-                "Dropping buffered local mic segments after system transcript arrived",
-                {
-                  count: pending.length,
-                  text: text.slice(0, 80),
-                }
-              );
-            }
-
-            const retracted = removeRacingMicEntriesFor(text, segTimestamp);
-            for (const stale of retracted) {
-              if (meetingLocalWin && !meetingLocalWin.isDestroyed()) {
-                meetingLocalWin.webContents.send("meeting-transcription-segment", {
-                  text: stale.text,
-                  source: "mic",
-                  type: "retract",
-                  timestamp: stale.timestamp,
-                });
-              }
-            }
           }
 
           const sendLocalSegment = (channel, payload) => {
@@ -9613,39 +9623,88 @@ class IPCHandlers {
             }
           };
 
-          if (source === "mic" && hasRiskyMicDuplicateProfile(micSuppression)) {
-            debugLogger.debug("Buffering risky local mic segment before renderer commit", {
-              text: text.slice(0, 80),
-              holdbackMs: LOCAL_RISKY_MIC_SEGMENT_HOLDBACK_MS,
-              reason: micSuppression?.reason,
-              hasBleedEvidence: micSuppression?.hasBleedEvidence,
-            });
-            queuePendingMicFinal({
+          // Only text that is actually delivered primes the next chunk.
+          meetingLocalPromptContext.remember(source, chunkText);
+
+          // Each segment starts when its audio was captured, as on the streaming
+          // path (speech start), so diarization and live speaker windows line up
+          // with what was said rather than with when the decode finished.
+          for (const { text, timestamp: segTimestamp } of toLocalMeetingSegments(
+            result,
+            chunkStartedAt,
+            chunkDurationMs
+          )) {
+            if (
+              source === "mic" &&
+              shouldSkipDuplicateMicSegment(text, segTimestamp, micSuppression)
+            ) {
+              debugLogger.debug("Skipping duplicate local mic segment that matches system audio", {
+                text: text.slice(0, 80),
+                averageCorrelation: micSuppression.averageCorrelation?.toFixed(3),
+                averageResidual: micSuppression.averageResidual?.toFixed(3),
+              });
+              continue;
+            }
+
+            if (source === "system") {
+              const pending = removePendingMicFinalsFor(text, segTimestamp);
+              if (pending.length > 0) {
+                debugLogger.debug(
+                  "Dropping buffered local mic segments after system transcript arrived",
+                  {
+                    count: pending.length,
+                    text: text.slice(0, 80),
+                  }
+                );
+              }
+
+              const retracted = removeRacingMicEntriesFor(text, segTimestamp);
+              for (const stale of retracted) {
+                if (meetingLocalWin && !meetingLocalWin.isDestroyed()) {
+                  meetingLocalWin.webContents.send("meeting-transcription-segment", {
+                    text: stale.text,
+                    source: "mic",
+                    type: "retract",
+                    timestamp: stale.timestamp,
+                  });
+                }
+              }
+            }
+
+            if (source === "mic" && hasRiskyMicDuplicateProfile(micSuppression)) {
+              debugLogger.debug("Buffering risky local mic segment before renderer commit", {
+                text: text.slice(0, 80),
+                holdbackMs: LOCAL_RISKY_MIC_SEGMENT_HOLDBACK_MS,
+                reason: micSuppression?.reason,
+                hasBleedEvidence: micSuppression?.hasBleedEvidence,
+              });
+              queuePendingMicFinal({
+                text,
+                timestamp: segTimestamp,
+                micSuppression,
+                holdbackMs: LOCAL_RISKY_MIC_SEGMENT_HOLDBACK_MS,
+                emit: () =>
+                  sendMeetingFinalSegment({
+                    text,
+                    source,
+                    timestamp: segTimestamp,
+                    micSuppression,
+                    send: sendLocalSegment,
+                    includeInLocalTranscript: true,
+                  }),
+              });
+              continue;
+            }
+
+            sendMeetingFinalSegment({
               text,
+              source,
               timestamp: segTimestamp,
               micSuppression,
-              holdbackMs: LOCAL_RISKY_MIC_SEGMENT_HOLDBACK_MS,
-              emit: () =>
-                sendMeetingFinalSegment({
-                  text,
-                  source,
-                  timestamp: segTimestamp,
-                  micSuppression,
-                  send: sendLocalSegment,
-                  includeInLocalTranscript: true,
-                }),
+              send: sendLocalSegment,
+              includeInLocalTranscript: true,
             });
-            return;
           }
-
-          sendMeetingFinalSegment({
-            text,
-            source,
-            timestamp: segTimestamp,
-            micSuppression,
-            send: sendLocalSegment,
-            includeInLocalTranscript: true,
-          });
         }
       } catch (error) {
         debugLogger.error("Local meeting transcription chunk failed", {
@@ -9664,14 +9723,21 @@ class IPCHandlers {
       }
     };
 
-    const transcribeAllLocalBuffers = () => {
+    // `final` drains both buffers, in chunks no longer than their limit.
+    const transcribeAllLocalBuffers = ({ final = false } = {}) => {
       if (this._audioFeaturePolicy.activeFailure("meeting")) return Promise.resolve();
       if (meetingLocalTranscribePromise) return meetingLocalTranscribePromise;
       meetingLocalTranscribePromise = (async () => {
         try {
-          await transcribeLocalMeetingChunk("system");
-          if (!this._audioFeaturePolicy.activeFailure("meeting"))
-            await transcribeLocalMeetingChunk("mic");
+          do {
+            await transcribeLocalMeetingChunk("system", { final });
+            if (this._audioFeaturePolicy.activeFailure("meeting")) break;
+            await transcribeLocalMeetingChunk("mic", { final });
+            if (this._audioFeaturePolicy.activeFailure("meeting")) break;
+          } while (
+            final &&
+            (meetingLocalBuffers.system.length > 0 || meetingLocalBuffers.mic.length > 0)
+          );
         } finally {
           meetingLocalTranscribePromise = null;
         }
@@ -9722,6 +9788,8 @@ class IPCHandlers {
       this._activeMeetingNoteId = null;
       meetingLocalMode = false;
       meetingLocalBuffers = { mic: [], system: [] };
+      meetingLocalChunkClock.reset();
+      meetingLocalPromptContext.reset();
       if (meetingDiarizationStream) {
         meetingDiarizationStream.end();
         meetingDiarizationStream = null;
@@ -9854,11 +9922,13 @@ class IPCHandlers {
           });
         } else {
           const vadOptions = this._resolveWhisperVadOptions("dictation");
-          result = await this.whisperManager.transcribeLocalWhisper(wav, {
-            model,
-            language,
-            ...vadOptions,
-          });
+          result = await transcribeWithDictionary(
+            this.whisperManager,
+            wav,
+            { model, language, ...vadOptions },
+            this._getDictionarySafe(),
+            { onEcho: "discard" }
+          );
         }
 
         if (gen !== dictationPreviewGen) return;
@@ -10429,6 +10499,8 @@ class IPCHandlers {
           meetingLocalLanguage = options.language || null;
           meetingLocalWin = BrowserWindow.fromWebContents(event.sender);
           meetingLocalBuffers = { mic: [], system: [] };
+          meetingLocalChunkClock.reset();
+          meetingLocalPromptContext.reset();
           meetingLocalTranscript = "";
 
           await startLiveSpeakerIdentification(meetingLocalWin, systemAudioMode);
@@ -10436,7 +10508,7 @@ class IPCHandlers {
 
           meetingLocalTimer = setInterval(() => {
             transcribeAllLocalBuffers();
-          }, LOCAL_MEETING_CHUNK_INTERVAL_MS);
+          }, LOCAL_MEETING_CUT_CHECK_MS);
 
           ({ systemAudioMode, systemAudioStrategy } = await startMeetingSystemAudio(
             event,
@@ -10827,7 +10899,7 @@ class IPCHandlers {
           try {
             await settleLocalMeetingTranscription();
             if (!this._audioFeaturePolicy.activeFailure("meeting"))
-              await transcribeAllLocalBuffers();
+              await transcribeAllLocalBuffers({ final: true });
           } catch (err) {
             debugLogger.error("Local meeting final transcription failed", { error: err.message });
           }
