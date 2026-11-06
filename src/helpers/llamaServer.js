@@ -104,7 +104,10 @@ function buildResponseError(statusCode, body) {
 }
 
 class LlamaServerManager {
-  constructor() {
+  // pidName keys this server's sidecar pid file; a second server needs its own
+  // or each would clear the other's record and an orphan could go unreaped.
+  constructor({ pidName = "llama" } = {}) {
+    this.pidName = pidName;
     this.keepResident = false;
     this.process = null;
     this.port = null;
@@ -292,6 +295,30 @@ class LlamaServerManager {
       }
     })();
     return this.startupPromise;
+  }
+
+  // Frees this server for another one's memory, waiting for an answer in
+  // progress no longer than a restart would. Throws LOCAL_MODEL_BUSY and leaves
+  // the server running if it is still working at the deadline.
+  async stopUnlessBusy(busyWaitMs = DEFAULT_BUSY_WAIT_MS, { signal } = {}) {
+    const deadline = Date.now() + busyWaitMs;
+    for (;;) {
+      if (this.startupPromise) {
+        await this._waitFor(
+          this.startupPromise.catch(() => {}),
+          { deadline, signal }
+        );
+      }
+      if (!this.process) return this.stop();
+      const server = this.process;
+      const busy =
+        this.ready && (await this._waitFor(this._isBusy(deadline - Date.now()), { signal }));
+      if (this.startupPromise || this.process !== server) continue;
+      if (!busy) return this.stop();
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) throw modelBusyError();
+      await this._waitFor(sleep(Math.min(remaining, BUSY_WAIT_POLL_MS)), { signal });
+    }
   }
 
   // Settles with the promise, unless the deadline passes first (busy) or the
@@ -554,7 +581,7 @@ class LlamaServerManager {
         detached: process.platform !== "win32",
       });
       this.process = child;
-      sidecarPidFile.write("llama", child.pid);
+      sidecarPidFile.write(this.pidName, child.pid);
 
       let stderrBuffer = "";
       let exitCode = null;
@@ -592,7 +619,7 @@ class LlamaServerManager {
         this.ready = false;
         this.process = null;
         this.stopHealthCheck();
-        sidecarPidFile.clear("llama");
+        sidecarPidFile.clear(this.pidName);
       });
 
       const getProcessInfo = () => ({ stderr: stderrBuffer, exitCode, exitSignal });

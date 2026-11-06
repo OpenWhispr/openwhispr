@@ -24,6 +24,8 @@ const {
   kvBytesPerToken,
   resolveContextCeiling,
   resolveContextSize,
+  residentServerBytes,
+  fitsBesideResidentServers,
   BASELINE_CONTEXT_SIZE,
 } = require("./llamaContextPolicy");
 
@@ -60,6 +62,9 @@ const PREFLIGHT_MEASURE_FACTOR = 2;
 // ever made. Below it, refusing beats handing back a sentence and a half.
 const MIN_OUTPUT_TOKENS = 512;
 
+// Internal: a second server failed to start, so the request is retried on one.
+const SECOND_SERVER_REFUSED = "SECOND_SERVER_REFUSED";
+
 function getLocalProviders() {
   return modelRegistryData.localProviders || [];
 }
@@ -87,8 +92,26 @@ class ModelManager {
     this.downloadReservations = new Map();
     this.activeRequests = new Map(); // Track HTTP requests for cancellation
     this.downloadLifecycleVersion = 0;
-    this.serverManager = new LlamaServerManager();
-    this.currentServerModelId = null;
+    // Two servers so dictation cleanup and the assistant stop evicting each
+    // other's model (and the assistant's prompt cache) on every alternation.
+    // The second only starts when another model's server is running and both
+    // fit the memory one server alone may use; otherwise this is the single
+    // swapping server it always was. servers[0] serves whenever only one runs.
+    this.servers = [
+      new LlamaServerManager(),
+      new LlamaServerManager({ pidName: "llama-secondary" }),
+    ];
+    for (const server of this.servers) {
+      // The model this server was last started for. Like the old single
+      // currentServerModelId it outlives an idle stop, so read it with ready.
+      server.modelId = null;
+      server.lastUsedAt = 0;
+    }
+    this._memoryProfiles = new Map();
+    this._loggedCeilings = new Map();
+    // Set once a server failed to start beside another, so the rest of the
+    // session goes back to one swapping server rather than failing again.
+    this._secondServerFailed = false;
     this._initialized = false;
 
     // IMPORTANT: Do NOT call app.getPath() here!
@@ -121,6 +144,20 @@ class ModelManager {
   getModelsDir() {
     const { getCacheRoot } = require("./modelDirUtils");
     return path.join(getCacheRoot(), "models");
+  }
+
+  // The server every caller that predates the pool reaches: GPU and binary
+  // housekeeping, status, and the only server off Apple Silicon.
+  get serverManager() {
+    return this.servers[0];
+  }
+
+  get currentServerModelId() {
+    return this.servers[0].modelId;
+  }
+
+  set currentServerModelId(modelId) {
+    this.servers[0].modelId = modelId;
   }
 
   async ensureModelsDirExists() {
@@ -258,14 +295,13 @@ class ModelManager {
   }
 
   /**
-   * The largest context this machine may give this model, and the prompt-cache
-   * bound that goes with it. Memoized per model file: it reads a few MiB off
-   * the front of the GGUF, so it must not sit on the hot path.
+   * What a model costs in memory, read once per file: the GGUF header and the
+   * weights' size on disk. Memoized because it reads a few MiB off the front
+   * of the GGUF, so it must not sit on the hot path.
    */
-  async contextCeiling(modelInfo, modelPath) {
-    if (this._contextCeilingCache?.modelPath === modelPath) {
-      return this._contextCeilingCache.value;
-    }
+  async _memoryProfile(modelInfo, modelPath) {
+    const cached = this._memoryProfiles.get(modelPath);
+    if (cached) return cached;
 
     const metadata = await readGgufMetadataFromFile(modelPath);
     const sizeOf = async (filePath) => {
@@ -277,8 +313,8 @@ class ModelManager {
       }
     };
 
-    const value = resolveContextCeiling({
-      totalMemoryBytes: this._systemMemoryBytes(),
+    const profile = {
+      architecture: metadata?.architecture ?? null,
       weightsBytes: await sizeOf(modelPath),
       draftWeightsBytes: await sizeOf(await this.resolveDraftPath(modelInfo.model)),
       kvBytesPerToken: kvBytesPerToken(metadata),
@@ -286,23 +322,247 @@ class ModelManager {
       // The GGUF is the file llama.cpp actually loads, so it outranks the
       // registry, which is wrong for at least the qwen2.5-7b entries.
       trainedContextTokens: metadata?.contextLength || modelInfo.model.contextLength || 0,
+    };
+    this._memoryProfiles.set(modelPath, profile);
+    return profile;
+  }
+
+  /**
+   * The largest context this machine may give this model, and the prompt-cache
+   * bound that goes with it. `residentBytes` is what another running server
+   * already holds, so two servers together stay inside one server's budget.
+   */
+  async contextCeiling(modelInfo, modelPath, { residentBytes = 0 } = {}) {
+    const profile = await this._memoryProfile(modelInfo, modelPath);
+    const value = resolveContextCeiling({
+      totalMemoryBytes: this._systemMemoryBytes(),
+      weightsBytes: profile.weightsBytes,
+      draftWeightsBytes: profile.draftWeightsBytes,
+      kvBytesPerToken: profile.kvBytesPerToken,
+      hasRecurrentState: profile.hasRecurrentState,
+      trainedContextTokens: profile.trainedContextTokens,
       // Anywhere but Apple Silicon the GPU may have its own memory that we do
       // not probe, so the system-RAM budget alone is not a safe bound. Stay
       // modest and let the GPU fallback ladder handle the rest. Intel Macs
       // count: a discrete Radeon has a few GB of its own, and the darwin start
       // path has no reduced-context rung to catch an over-sized window.
-      discreteGpuUnverified: process.platform !== "darwin" || process.arch !== "arm64",
+      discreteGpuUnverified: !this._unifiedMemory(),
+      residentBytes,
     });
 
-    debugLogger.info("Resolved llama-server context ceiling", {
-      model: modelInfo.model.id,
-      architecture: metadata?.architecture ?? null,
-      kvBytesPerToken: kvBytesPerToken(metadata),
-      ...value,
-    });
-
-    this._contextCeilingCache = { modelPath, value };
+    if (this._loggedCeilings.get(modelPath) !== `${residentBytes}:${value.ceiling}`) {
+      this._loggedCeilings.set(modelPath, `${residentBytes}:${value.ceiling}`);
+      debugLogger.info("Resolved llama-server context ceiling", {
+        model: modelInfo.model.id,
+        architecture: profile.architecture,
+        kvBytesPerToken: profile.kvBytesPerToken,
+        besideAnotherServer: residentBytes > 0,
+        ...value,
+      });
+    }
     return value;
+  }
+
+  // Seam so the pool can be exercised on any platform in tests. Only Apple
+  // Silicon's memory is one pool the budget can see; elsewhere a GPU's own
+  // memory is unprobed, and a second model that overflows it falls back to the
+  // processor, which costs far more than the swap it would save.
+  _unifiedMemory() {
+    return process.platform === "darwin" && process.arch === "arm64";
+  }
+
+  _modelPathFor(modelInfo) {
+    return path.join(this.modelsDir, modelInfo.model.fileName);
+  }
+
+  _isOccupied(server) {
+    return Boolean(server.process || server.startupPromise);
+  }
+
+  // The model a server holds or is starting, by file, so it is known before
+  // the start that records modelId has finished.
+  _serverModelPath(server) {
+    return server.startingRequest?.modelPath ?? server.modelPath;
+  }
+
+  _holdsModel(server, modelId, modelPath) {
+    if (server.startingRequest) return server.startingRequest.modelPath === modelPath;
+    return (
+      this._isOccupied(server) && (server.modelId === modelId || server.modelPath === modelPath)
+    );
+  }
+
+  // What every server but `server` holds, at the window it runs or is starting with.
+  async _otherServersBytes(server) {
+    let total = 0;
+    for (const other of this.servers) {
+      if (other === server || !this._isOccupied(other)) continue;
+      const otherPath = this._serverModelPath(other);
+      const otherInfo =
+        (otherPath && this._findModelByFileName(path.basename(otherPath))) ||
+        (other.modelId && this.findModelById(other.modelId));
+      // A server whose model can't be named can't be priced: leave no room.
+      if (!otherInfo) return Infinity;
+      const profile = await this._memoryProfile(
+        otherInfo,
+        otherPath || this._modelPathFor(otherInfo)
+      );
+      const window = Math.max(other.contextSize || 0, other.startingRequest?.contextSize || 0);
+      total += residentServerBytes(profile, window);
+    }
+    return total;
+  }
+
+  _findModelByFileName(fileName) {
+    for (const provider of getLocalProviders()) {
+      const model = provider.models.find((m) => m.fileName === fileName);
+      if (model) return { model, provider };
+    }
+    return null;
+  }
+
+  async _fitsBeside(server, modelInfo, modelPath, contextSize) {
+    try {
+      return fitsBesideResidentServers(
+        await this._memoryProfile(modelInfo, modelPath),
+        contextSize,
+        {
+          totalMemoryBytes: this._systemMemoryBytes(),
+          residentBytes: await this._otherServersBytes(server),
+        }
+      );
+    } catch (error) {
+      debugLogger.warn("Could not price a second llama-server; keeping one", {
+        error: error.message,
+      });
+      return false;
+    }
+  }
+
+  /**
+   * The server a request for this model should use. Its own server when one
+   * holds it; a free one when another model's server is running and both fit;
+   * otherwise the server used longest ago, which swaps its model as before.
+   * A swap that still leaves too little room frees the other server first.
+   */
+  async _serverFor(modelId, modelInfo, modelPath, { contextSize, busyWaitMs, signal } = {}) {
+    const window = contextSize || BASELINE_CONTEXT_SIZE;
+    const chosen = await (async () => {
+      const holding = this.servers.find((server) => this._holdsModel(server, modelId, modelPath));
+      if (holding) return holding;
+
+      const [primary] = this.servers;
+      const occupied = this.servers.filter((server) => this._isOccupied(server));
+      if (occupied.length === 0 || !this._unifiedMemory() || this._secondServerFailed) {
+        return occupied.length === 1 ? occupied[0] : primary;
+      }
+
+      const free = this.servers.find((server) => !this._isOccupied(server));
+      if (free && (await this._fitsBeside(free, modelInfo, modelPath, window))) {
+        debugLogger.info("Starting a second llama-server beside the running one", {
+          model: modelId,
+          running: occupied.map((server) => server.modelId),
+        });
+        return free;
+      }
+
+      const target = [...occupied].sort((a, b) => a.lastUsedAt - b.lastUsedAt)[0];
+      if (
+        !(await this._fitsBeside(target, modelInfo, modelPath, window)) &&
+        !(await this._releaseOtherServers(target, busyWaitMs, signal))
+      ) {
+        // Loading beside a server still answering would overrun the budget.
+        throw Object.assign(new Error("The local model is still working on another request."), {
+          code: "LOCAL_MODEL_BUSY",
+        });
+      }
+      return target;
+    })();
+    chosen.lastUsedAt = Date.now();
+    return chosen;
+  }
+
+  // Stops every server but `server` so it can have the memory to itself.
+  // False (and nothing stopped) if one is still busy when the wait runs out.
+  async _releaseOtherServers(server, busyWaitMs, signal) {
+    for (const other of this.servers) {
+      if (other === server || !this._isOccupied(other)) continue;
+      try {
+        await other.stopUnlessBusy(busyWaitMs, { signal });
+      } catch (error) {
+        if (error.code === "LOCAL_MODEL_BUSY") return false;
+        throw error;
+      }
+      other.modelId = null;
+    }
+    return true;
+  }
+
+  // A second server that would not start says nothing about the model, only
+  // that this machine won't hold two: drop back to one server for the session.
+  // Only a fresh start counts: a running server that fails to grow keeps its
+  // own restore path. Stopped before returning, or the retry would pick it again.
+  async _secondServerRefused(server, error, { freshStart }) {
+    if (this._secondServerFailed || !freshStart) return false;
+    if (isLocalModelPolicyRefusal(error) || SERVER_LEFT_ALONE_CODES.has(error.code)) return false;
+    if (!this.servers.some((other) => other !== server && this._isOccupied(other))) return false;
+    this._secondServerFailed = true;
+    debugLogger.warn("A second llama-server failed to start; using one server", {
+      error: error.message,
+    });
+    await server.stop().catch(() => {});
+    server.modelId = null;
+    return true;
+  }
+
+  /**
+   * Starts (or reuses) the server for a model that callers then reach on its
+   * port directly, as streaming chat does. Resolves to that server.
+   */
+  async serverForModel(modelId, startOverrides = {}) {
+    this.ensureInitialized();
+    const modelInfo = this.findModelById(modelId);
+    if (!modelInfo) throw new ModelNotFoundError(modelId);
+    const modelPath = this._modelPathFor(modelInfo);
+    const options = await this.serverStartOptions(modelInfo, startOverrides);
+    const start = async () => {
+      const server = await this._serverFor(modelId, modelInfo, modelPath, options);
+      const wasServing = Boolean(server.ready && server.process && server.modelId === modelId);
+      try {
+        await server.start(modelPath, options);
+      } catch (error) {
+        if (await this._secondServerRefused(server, error, { freshStart: !wasServing }))
+          return null;
+        throw error;
+      }
+      server.modelId = modelId;
+      return server;
+    };
+    return (await start()) ?? (await start());
+  }
+
+  loadedModelIds() {
+    return this.servers
+      .filter((server) => server.ready && server.process && server.modelId)
+      .map((server) => server.modelId);
+  }
+
+  setKeepResident(keepResident) {
+    for (const server of this.servers) server.setKeepResident(keepResident);
+  }
+
+  // Stops each server whose model no scope needs any more (see shouldStop).
+  async stopServersNotNeeded(shouldStop) {
+    await Promise.all(
+      this.servers.map(async (server) => {
+        if (!this._isOccupied(server) || !shouldStop(server.modelId)) return;
+        debugLogger.debug("Stopping llama-server: no scope needs its model", {
+          loadedModel: server.modelId,
+        });
+        await server.stop();
+        server.modelId = null;
+      })
+    );
   }
 
   getReservedDownloadBytes() {
@@ -566,6 +826,7 @@ class ModelManager {
    * Returns the output allowance the request should actually be sent with.
    */
   async _ensurePromptFits({
+    server,
     modelInfo,
     messages,
     options,
@@ -576,14 +837,14 @@ class ModelManager {
     startServer,
   }) {
     const reserveTokens = reserveFor(maxTokens);
-    const running = this.serverManager.contextSize || contextFloor;
+    const running = server.contextSize || contextFloor;
 
     // Comfortably inside the window: measuring cannot change the outcome, and
     // every dictation would otherwise pay for two HTTP round trips.
     if ((estimatedTokens + reserveTokens) * PREFLIGHT_MEASURE_FACTOR <= running) return maxTokens;
 
-    const usable = (await this.serverManager.usableContextSize()) ?? running;
-    const exactTokens = await this.serverManager.countPromptTokens(messages, {
+    const usable = (await server.usableContextSize()) ?? running;
+    const exactTokens = await server.countPromptTokens(messages, {
       disableThinking: options.disableThinking,
     });
 
@@ -601,7 +862,7 @@ class ModelManager {
     const neededTokens = exactTokens + reserveTokens;
     if (neededTokens <= usable) return maxTokens;
 
-    const { ceiling: maxContext } = await ceilingFor();
+    const { ceiling: maxContext } = await ceilingFor(neededTokens);
     const grown = resolveContextSize({
       needed: neededTokens,
       floor: contextFloor,
@@ -610,8 +871,7 @@ class ModelManager {
 
     if (grown > usable) await startServer(grown);
 
-    const nowUsable =
-      (await this.serverManager.usableContextSize()) ?? this.serverManager.contextSize ?? grown;
+    const nowUsable = (await server.usableContextSize()) ?? server.contextSize ?? grown;
     if (neededTokens <= nowUsable) return maxTokens;
 
     // The window is as big as this machine allows and the prompt still does not
@@ -669,6 +929,16 @@ class ModelManager {
   }
 
   async _policyAllowedRunInference(modelId, prompt, options = {}) {
+    try {
+      return await this._runInferenceOnce(modelId, prompt, options);
+    } catch (error) {
+      // The second server would not start: the request runs again on one.
+      if (error.code !== SECOND_SERVER_REFUSED) throw error;
+      return this._runInferenceOnce(modelId, prompt, options);
+    }
+  }
+
+  async _runInferenceOnce(modelId, prompt, options = {}) {
     this.ensureInitialized();
     const startTime = Date.now();
     debugLogger.logReasoning("INFERENCE_START", {
@@ -723,9 +993,30 @@ class ModelManager {
     // raise the floor but never breach the ceiling.
     const contextFloor = Math.max(SERVER_CONTEXT_SIZE, options.contextSize || 0);
 
+    // Picked before anything is sized: the ceiling depends on what the other
+    // server holds, and every later step must talk to this same server.
+    const server = await this._serverFor(modelId, modelInfo, modelPath, {
+      contextSize: contextFloor,
+      busyWaitMs: options.busyWaitMs,
+      signal: options.signal,
+    });
+
     let ceiling = null;
-    const ceilingFor = async () => {
-      if (ceiling === null) ceiling = await this.contextCeiling(modelInfo, modelPath);
+    // Beside another server this model gets what that one leaves. A request
+    // needing more than that, but no more than the machine would give it
+    // alone, frees the other server once it is idle rather than being cut short.
+    const ceilingFor = async (needed = 0) => {
+      const residentBytes = await this._otherServersBytes(server);
+      ceiling = await this.contextCeiling(modelInfo, modelPath, { residentBytes });
+      if (residentBytes > 0 && needed > ceiling.ceiling) {
+        const alone = await this.contextCeiling(modelInfo, modelPath);
+        if (
+          alone.ceiling > ceiling.ceiling &&
+          (await this._releaseOtherServers(server, options.busyWaitMs, options.signal))
+        ) {
+          ceiling = alone;
+        }
+      }
       return ceiling;
     };
 
@@ -734,7 +1025,7 @@ class ModelManager {
     // window the machine cannot afford reopens #1203. The baseline floor needs
     // no check, which is what keeps the GGUF read off the short-request path.
     if (contextFloor > SERVER_CONTEXT_SIZE || estimatedTokens + reserveTokens > contextFloor) {
-      const { ceiling: maxContext } = await ceilingFor();
+      const { ceiling: maxContext } = await ceilingFor(estimatedTokens + reserveTokens);
       targetContextSize = resolveContextSize({
         needed: estimatedTokens + reserveTokens,
         floor: contextFloor,
@@ -751,7 +1042,7 @@ class ModelManager {
     };
 
     const startServer = async (contextSize) => {
-      if (this.serverManager.ready && contextSize >= smallestRefusedContextSize) return;
+      if (server.ready && contextSize >= smallestRefusedContextSize) return;
 
       const { cacheRamMiB } = ceiling ?? {};
       // Only a live server already serving THIS model has a window worth
@@ -759,13 +1050,9 @@ class ModelManager {
       // in stop() alone, not when a process dies or a health check trips — and
       // another model's window says nothing about this one.
       const restorableContextSize =
-        this.serverManager.ready &&
-        this.serverManager.process &&
-        this.currentServerModelId === modelId
-          ? this.serverManager.contextSize
-          : null;
+        server.ready && server.process && server.modelId === modelId ? server.contextSize : null;
       const startAt = async (size) =>
-        this.serverManager.start(
+        server.start(
           modelPath,
           await this.serverStartOptions(modelInfo, {
             contextSize: size,
@@ -796,8 +1083,13 @@ class ModelManager {
         // without ever throwing. Recording that is what stops the preflight
         // asking for the same window again and paying a second model load to
         // be stepped down again.
-        if (this.serverManager.contextSize < contextSize) refuse(contextSize);
+        if (server.contextSize < contextSize) refuse(contextSize);
       } catch (error) {
+        if (
+          await this._secondServerRefused(server, error, { freshStart: !restorableContextSize })
+        ) {
+          throw Object.assign(new Error(error.message), { code: SECOND_SERVER_REFUSED });
+        }
         // The running server was left alone, which says nothing about this window.
         if (isLocalModelPolicyRefusal(error) || SERVER_LEFT_ALONE_CODES.has(error.code)) {
           throw error;
@@ -828,33 +1120,34 @@ class ModelManager {
           throw unavailable(restoreError);
         }
       }
-      this.currentServerModelId = modelId;
+      server.modelId = modelId;
     };
 
     // Start/restart the server if needed, if the model changed, or if this
     // request needs a bigger window than the running one has.
     if (
-      !this.serverManager.ready ||
-      this.currentServerModelId !== modelId ||
-      targetContextSize > (this.serverManager.contextSize || SERVER_CONTEXT_SIZE)
+      !server.ready ||
+      server.modelId !== modelId ||
+      targetContextSize > (server.contextSize || SERVER_CONTEXT_SIZE)
     ) {
       debugLogger.logReasoning("INFERENCE_STARTING_SERVER", {
-        currentModel: this.currentServerModelId,
+        currentModel: server.modelId,
         requestedModel: modelId,
-        serverReady: this.serverManager.ready,
+        serverReady: server.ready,
         contextSize: targetContextSize,
       });
 
       await startServer(targetContextSize);
 
       debugLogger.logReasoning("INFERENCE_SERVER_STARTED", {
-        port: this.serverManager.port,
+        port: server.port,
         model: modelId,
-        contextSize: this.serverManager.contextSize,
+        contextSize: server.contextSize,
       });
     }
 
     const grantedMaxTokens = await this._ensurePromptFits({
+      server,
       modelInfo,
       messages,
       options,
@@ -877,7 +1170,7 @@ class ModelManager {
     });
 
     try {
-      const result = await this.serverManager.inference(messages, {
+      const result = await server.inference(messages, {
         temperature: options.temperature ?? 0.7,
         // The preflight may have traded output room for prompt room; sending
         // the original value would put the request back over the window.
@@ -930,20 +1223,36 @@ class ModelManager {
   }
 
   async stopServer() {
-    await this.serverManager.stop();
-    this.currentServerModelId = null;
+    await Promise.all(
+      this.servers.map(async (server) => {
+        await server.stop();
+        server.modelId = null;
+      })
+    );
   }
 
   async stopServerWhenIdle() {
-    if (await this.serverManager.stopWhenIdle()) this.currentServerModelId = null;
+    await Promise.all(
+      this.servers.map(async (server) => {
+        if (await server.stopWhenIdle()) server.modelId = null;
+      })
+    );
   }
 
+  // The running server most recently used, or the primary when none runs.
   getServerStatus() {
-    return this.serverManager.getStatus();
+    const running = this.servers
+      .filter((server) => server.ready && server.process)
+      .sort((a, b) => b.lastUsedAt - a.lastUsedAt);
+    return {
+      ...(running[0] ?? this.serverManager).getStatus(),
+      loadedModels: this.loadedModelIds(),
+    };
   }
 
+  // The bridge runs one inference at a time, so at most one server has one.
   cancelInference() {
-    this.serverManager.cancelInference();
+    for (const server of this.servers) server.cancelInference();
   }
 
   async prewarmServer(modelId) {
@@ -959,7 +1268,7 @@ class ModelManager {
       if (error.code === "POLICY_UNRESOLVABLE") {
         this.localModelPolicy?.runOnceVerdictSettles(() => {
           // A request in the meantime already started what it needs.
-          if (this.serverManager.ready || this.serverManager.startupPromise) return;
+          if (this.servers.some((server) => server.ready || server.startupPromise)) return;
           this.prewarmServer(modelId).catch((resumeError) => {
             debugLogger.warn("Resumed llama-server pre-warm failed", {
               error: resumeError.message,
@@ -985,11 +1294,7 @@ class ModelManager {
 
     try {
       // Nobody is waiting on a pre-warm, so it never gets in an answer's way.
-      await this.serverManager.start(
-        modelPath,
-        await this.serverStartOptions(modelInfo, { busyWaitMs: 0 })
-      );
-      this.currentServerModelId = modelId;
+      await this.serverForModel(modelId, { busyWaitMs: 0 });
       debugLogger.info("llama-server pre-warmed", { modelId });
       return true;
     } catch (error) {

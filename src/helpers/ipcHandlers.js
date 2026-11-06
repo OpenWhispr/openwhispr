@@ -927,14 +927,12 @@ class IPCHandlers {
         this.parakeetManager.serverManager.wsServer,
         () => this.parakeetManager.serverManager.wsServer.modelName,
       ],
-      [
+      // Dictation cleanup and the assistant can each have a llama-server.
+      ...(localLlmManager.servers ?? [localLlmManager.serverManager]).map((server) => [
         "llm",
-        localLlmManager.serverManager,
-        () =>
-          localLlmManager.serverManager.localModelIdForPath?.(
-            localLlmManager.serverManager.modelPath
-          ),
-      ],
+        server,
+        () => server.localModelIdForPath?.(server.modelPath),
+      ]),
     ];
     this._localModelPolicy = createLocalModelPolicyGate({
       getPolicy: (options) => this._getMainModelPolicy?.({}, options) ?? { success: false },
@@ -986,12 +984,15 @@ class IPCHandlers {
       samePath(modelPath, this.parakeetManager.getModelPath(id))
         ? id
         : undefined;
-    localLlmManager.serverManager.localModelIdForPath = (modelPath) =>
+    const llmModelIdForPath = (modelPath) =>
       modelRegistryData.localProviders
         .flatMap((provider) => provider.models)
         .find((model) =>
           samePath(modelPath, path.join(localLlmManager.getModelsDir(), model.fileName))
         )?.id;
+    for (const server of localLlmManager.servers ?? [localLlmManager.serverManager]) {
+      server.localModelIdForPath = llmModelIdForPath;
+    }
   }
 
   // Called once a cookie session has had its bearer migration: before that, a
@@ -4098,17 +4099,15 @@ class IPCHandlers {
           }
           if (purpose === "intelligence") {
             const modelManager = require("./modelManagerBridge").default;
-            if (modelManager.serverManager?.process) {
+            const modelIds = modelManager.loadedModelIds();
+            if (modelIds.length > 0) {
               debugLogger.info(
                 "Restarting llama-server for GPU change",
                 { from: oldUuid, to: uuid },
                 "gpu"
               );
-              const modelId = modelManager.currentServerModelId;
-              await modelManager.serverManager.stop();
-              if (modelId) {
-                await modelManager.prewarmServer(modelId);
-              }
+              await modelManager.stopServer();
+              for (const modelId of modelIds) await modelManager.prewarmServer(modelId);
             }
           }
         } catch (err) {
@@ -6051,7 +6050,7 @@ class IPCHandlers {
 
       // No workspace policy governs this, so it applies before the policy settles.
       const modelManager = require("./modelManagerBridge").default;
-      modelManager.serverManager.setKeepResident(prefs.keepLocalModelLoaded === true);
+      modelManager.setKeepResident(prefs.keepLocalModelLoaded === true);
 
       // A signed-in window whose workspace policy is still loading reports
       // unclamped modes, so it neither pre-warms nor stops the shared
@@ -6073,19 +6072,15 @@ class IPCHandlers {
           clearVars.push("DICTATION_AGENT_PROVIDER", "LOCAL_DICTATION_AGENT_MODEL");
         }
 
-        // Stop the shared llama-server only when no scope still needs the model
-        // it holds, so the active scopes keep their server when another leaves.
-        if (shouldStopLocalServer(localServer, modelManager.currentServerModelId)) {
-          if (modelManager.getServerStatus().running) {
-            debugLogger.debug("Stopping llama-server: no scope needs its model", {
-              loadedModel: modelManager.currentServerModelId,
-              neededModels: localServer.models,
-            });
-          }
-          modelManager.stopServer().catch((err) => {
+        // Stop a llama-server only when no scope still needs the model it
+        // holds, so the active scopes keep their server when another leaves.
+        modelManager
+          .stopServersNotNeeded((loadedModelId) =>
+            shouldStopLocalServer(localServer, loadedModelId)
+          )
+          .catch((err) => {
             debugLogger.error("Failed to stop llama-server", { error: err.message });
           });
-        }
       }
 
       this._syncStartupEnv(setVars, clearVars);
@@ -6285,21 +6280,16 @@ class IPCHandlers {
       try {
         const modelManager = require("./modelManagerBridge").default;
         modelManager.ensureInitialized();
-        const modelInfo = modelManager.findModelById(modelId);
-        if (!modelInfo) {
+        if (!modelManager.findModelById(modelId)) {
           return { success: false, error: `Model "${modelId}" not found` };
         }
 
-        const modelPath = require("path").join(modelManager.modelsDir, modelInfo.model.fileName);
-
-        await modelManager.serverManager.start(
-          modelPath,
-          await modelManager.serverStartOptions(modelInfo, { signal: abortController.signal })
-        );
-        modelManager.currentServerModelId = modelId;
+        const server = await modelManager.serverForModel(modelId, {
+          signal: abortController.signal,
+        });
 
         this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
-        return { success: true, port: modelManager.serverManager.port };
+        return { success: true, port: server.port };
       } catch (error) {
         return { success: false, error: error.message, code: error.code };
       } finally {
