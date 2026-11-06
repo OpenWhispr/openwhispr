@@ -152,3 +152,30 @@ test("a fork the user left for another chat first shows no error", async (t) => 
   await forkFirstReply({ id: 41, title: "Chat 7", messages: [] });
   assert.equal(globalThis.__conversationList.activeConversationId, 41, "the fork opens");
 });
+
+test("a reply sent in this chat can be forked", async (t) => {
+  const forks = [];
+  const fixture = await renderChatView(t, {
+    forkAgentConversation: async (...args) => {
+      forks.push(args);
+      return { id: 40, title: "Chat 7", messages: [] };
+    },
+  });
+  await React.act(async () => globalThis.__conversationList.onSelectConversation(7));
+  await React.act(async () => {
+    globalThis.__chatInput.onTextSubmit("Draft a plan");
+    await until(() => fixture.streams.length === 1);
+  });
+  await React.act(async () => {
+    fixture.streams[0].resolve("Plan");
+    await until(() => !fixture.state().entries["conversation:7"]);
+  });
+  const { messages } = globalThis.__chatMessages;
+  assert.deepEqual(
+    messages.map((message) => message.dbId),
+    [1, 2],
+    "both messages carry their saved rows"
+  );
+  await React.act(async () => globalThis.__chatMessages.onForkMessage(messages[1].id));
+  assert.deepEqual(forks, [[7, 2, null]]);
+});

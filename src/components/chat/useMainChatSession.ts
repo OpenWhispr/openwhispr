@@ -189,6 +189,14 @@ export function useMainChatSession(): MainChatSession {
           : undefined;
   const source = useSourceNote(noteId);
 
+  const setMessages = useCallback(
+    (update: (messages: Message[]) => Message[]): void =>
+      setLoaded((previous) =>
+        previous?.token === token ? { ...previous, messages: update(previous.messages) } : previous
+      ),
+    [token]
+  );
+
   useLayoutEffect(() => {
     if (selection.kind !== "conversation" || !ready || !entry || entry.running || entry.settling)
       return;
@@ -200,8 +208,8 @@ export function useMainChatSession(): MainChatSession {
       noteId: previous?.token === token ? previous.noteId : null,
       forkOrigin: previous?.token === token ? previous.forkOrigin : null,
     }));
-    takeCompletedChatTurn(selection.conversationId);
-  }, [selection, ready, entry, token]);
+    takeCompletedChatTurn(selection.conversationId, setMessages);
+  }, [selection, ready, entry, token, setMessages]);
 
   const openConversation = useCallback(
     async (id: number, source: "sidebar" | "restore"): Promise<void> => {
@@ -237,14 +245,6 @@ export function useMainChatSession(): MainChatSession {
       return fork.id;
     },
     [openConversation]
-  );
-
-  const setMessages = useCallback(
-    (update: (messages: Message[]) => Message[]): void =>
-      setLoaded((previous) =>
-        previous?.token === token ? { ...previous, messages: update(previous.messages) } : previous
-      ),
-    [token]
   );
 
   const saveAssistantMessage = useCallback(

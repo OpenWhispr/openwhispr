@@ -404,11 +404,11 @@ export function createChatTurnEngine(
         options?.replaceMessage ? [...allMessages, options.replaceMessage] : allMessages
       ),
     });
-    let clearContentFlush = (): void => {};
+    let flushPendingContent = (): void => {};
     let toolTimer: ReturnType<typeof setTimeout> | null = null;
     let activityStarted: number | null = null;
     const clearTimers = (): void => {
-      clearContentFlush();
+      flushPendingContent();
       if (toolTimer !== null) clearTimeout(toolTimer);
       toolTimer = null;
     };
@@ -469,7 +469,7 @@ export function createChatTurnEngine(
       if (!cancelled()) await runSend();
     } finally {
       toolScope.abort();
-      clearContentFlush();
+      flushPendingContent();
       setAgentState("idle");
       if (cancelled() || !isCurrent()) clearTimers();
     }
@@ -934,7 +934,6 @@ export function createChatTurnEngine(
         clearTimeout(contentFlushTimer);
         contentFlushTimer = null;
       };
-      clearContentFlush = cancelContentFlush;
       const flushContentNow = (): void => {
         cancelContentFlush();
         setMessages((prev) =>
@@ -944,6 +943,10 @@ export function createChatTurnEngine(
               : m
           )
         );
+      };
+      // Stop shows the text that had arrived, as the stopped reply saves it.
+      flushPendingContent = (): void => {
+        if (contentFlushTimer !== null) flushContentNow();
       };
       const scheduleContentFlush = (): void => {
         if (contentFlushTimer !== null) return;
