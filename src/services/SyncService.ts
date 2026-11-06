@@ -616,10 +616,10 @@ export class SyncService {
     localStorage.removeItem("purgedTeamIds");
     // Both hold account-scoped/local numeric ids that collide across accounts.
     localStorage.removeItem("activeWorkspaceId");
-    localStorage.removeItem(PERSONAL_SELECTED_KEY);
     localStorage.removeItem("notesTree.expanded");
     // Sign-out can happen offline, before the auth reconcile that resets the workspace store.
     localStorage.removeItem(WORKSPACE_LIST_CACHE_KEY);
+    localStorage.removeItem(PERSONAL_SELECTED_KEY);
     // Shared lists and hides belong to the departing account. The arrival
     // toast's flags are keyed by account and stay, so it never repeats.
     removeLocalStorageKeysWithPrefix(SHARED_DICTIONARY_CURSOR_PREFIX);
