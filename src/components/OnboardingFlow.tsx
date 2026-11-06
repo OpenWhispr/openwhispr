@@ -1376,6 +1376,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             ? goBack
             : undefined
         }
+        // Back while Proceed finishes would leave a step that has already been
+        // committed (local setup's downloads cancel as it unmounts).
+        backDisabled={isFinishing}
         onContinue={showsContinue ? () => void continueFromCurrentStep() : undefined}
         // Demos are optional practice, and calendar connections on Notes are
         // optional setup. Both advance through the same persisted route.

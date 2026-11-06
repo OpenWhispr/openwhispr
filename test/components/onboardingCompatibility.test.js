@@ -114,6 +114,21 @@ test("Linux onboarding exposes labelled minimize, maximize, and close controls i
   }
 });
 
+test("Back can be shown and held inert, so the footer stays put while onboarding finishes", async (t) => {
+  const vite = await createOnboardingRenderer(t);
+  const { default: OnboardingShell } = await vite.ssrLoadModule(
+    "/components/onboarding/OnboardingShell.tsx"
+  );
+  const back = (props) =>
+    renderToStaticMarkup(
+      React.createElement(OnboardingShell, { onBack: () => {}, ...props }, React.createElement("div"))
+    ).match(/<button[^>]*aria-label="common\.back"[^>]*>/)?.[0];
+
+  assert.ok(back({}), "Back is shown");
+  assert.doesNotMatch(back({}), /\sdisabled=""/);
+  assert.match(back({ backDisabled: true }), /\sdisabled=""/);
+});
+
 test("a denied microphone exposes the existing Linux settings recovery", async (t) => {
   const vite = await createOnboardingRenderer(t);
   const { default: CompactPermissionsStep } = await vite.ssrLoadModule(

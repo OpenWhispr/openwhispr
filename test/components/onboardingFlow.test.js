@@ -80,6 +80,8 @@ test("the local setup step is wired through its helpers", () => {
   // A policy that couldn't be read gets a line instead of a blank card.
   const placeholder = String.raw`<LocalSetupStepPlaceholder\s+message=\{policy\.status === "error"`;
   assert.match(source, new RegExp(String.raw`${placeholder} \? t\("common\.policyUnresolved"\)`));
+  // Back during the finish would unmount the step and cancel what Proceed handed on.
+  assert.match(source, /backDisabled=\{isFinishing\}/);
 });
 
 test("each step asks for its window size, local setup a taller one", async () => {
