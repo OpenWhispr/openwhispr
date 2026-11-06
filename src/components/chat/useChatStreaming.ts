@@ -1577,9 +1577,9 @@ export function useChatStreaming({
                   : m
               )
             );
-            // A failed reply is shown, not saved, unless its tools already
-            // acted: the agent chat must remember what they did.
-            if (allowInteractions && toolCalls.length > 0) saveReply();
+            // The agent chat saves a failed reply as failed, so a reload says so
+            // and remembers what its tools did; other chats only show it.
+            if (allowInteractions) saveReply();
           }
         }
 

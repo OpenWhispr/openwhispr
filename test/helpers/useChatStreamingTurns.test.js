@@ -146,6 +146,32 @@ test("unclassified live provider failures use generic copy and preserve only sep
   }
 });
 
+test("the agent chat saves a reply that failed before any tool as failed; other chats only show it", async (t) => {
+  for (const allowInteractions of [true, false]) {
+    await t.test(String(allowInteractions), async (t) => {
+      const h = await renderChatStreaming(t, { allowInteractions });
+      h.setStream(() =>
+        (async function* () {
+          yield { type: "content", text: "Partial" };
+          throw new Error("RAW_PROVIDER_SECRET");
+        })()
+      );
+      await h.captured.sendToAI("Go", [], { conversationId: 1 });
+      assert.match(h.assistant().content, /unexpected error/);
+      if (!allowInteractions) {
+        assert.deepEqual(h.completed, []);
+        return;
+      }
+      // Saved over the running checkpoint, so a reload shows it failed, not stopped.
+      assert.equal(h.completed.length, 1);
+      const [[, content, toolCalls, details]] = h.completed;
+      assert.equal(content, "Partial", "the error text is never saved");
+      assert.equal(toolCalls, undefined);
+      assert.equal(details.turn.status, "error");
+    });
+  }
+});
+
 test("classified live provider failures retain their actionable copy and details", async (t) => {
   const h = await renderChatStreaming(t, { allowInteractions: true });
   const { providerHttpError } = await h.vite.ssrLoadModule("/helpers/providerHttpErrors.js");
