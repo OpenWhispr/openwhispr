@@ -665,6 +665,33 @@ test("a fork is pushed with its parent's client id, its copied count and its tex
   assert.equal(pushedParent.fork_context, null);
 });
 
+test("a fork created on a retry counts only the copied messages its cloud copy gets", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  const parent = db.createAgentConversation("Email the notes");
+  db.addAgentMessage(parent.id, "user", "Email Sam the notes");
+  // A card-only turn saves an empty reply, which the messages route refuses.
+  const cardOnly = db.addAgentMessage(parent.id, "assistant", "", {
+    turn: { startedAt: 1, finishedAt: 2, status: "complete" },
+  });
+  const fork = db.forkAgentConversation(parent.id, cardOnly.id, null);
+  db.addAgentMessage(fork.id, "user", "Now draft one for Ana");
+  db.addAgentMessage(fork.id, "assistant", "Here is Ana's draft.");
+  // An earlier create went out and failed, so this one carries no messages.
+  updateConversation(db, fork.id, { cloud_create_attempted: 1 });
+
+  await service.pushPendingConversations();
+
+  const copy = cloud.conversation(fork.client_conversation_id);
+  assert.equal(copy.fork_message_count, 1);
+  assert.deepEqual(
+    copy.messages.slice(copy.fork_message_count).map((message) => message.content),
+    ["Now draft one for Ana", "Here is Ana's draft."],
+    "another device shows the fork's own turns"
+  );
+});
+
 const CLOUD_PARENT = {
   client_conversation_id: "cloud-parent",
   title: "Plan the launch",

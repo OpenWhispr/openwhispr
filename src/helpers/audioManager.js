@@ -331,7 +331,7 @@ function resolveReasoningRoute(
   const kind = resolveDictationRouteKind({
     cleanupReachable,
     // A blocked assistant still takes its own commands, and refuses them by name
-    // in the panel: one never falls back to cleanup and gets pasted as text.
+    // in the agent window: one never falls back to cleanup and gets pasted as text.
     agentReachable: agent.reachable || isAgentScopeBlocked(settings),
     // A translation recording ignores the wake word, so skip the scan.
     agentInvoked:

@@ -5681,10 +5681,9 @@ class DatabaseManager {
         )
         .get(id);
       if (!conversation) return null;
-      // Messages saved within the same second keep the order they were added in.
-      // datetime() because a pulled message's time is ISO ("…T…Z") and a local
-      // one SQLite's ("… …"): compared as text, a local message sorts before
-      // every pulled one of its day, and a fork would hide the user's own turns.
+      // In the order they were saved. Their times can't order them: a pulled
+      // message's is ISO ("…T…Z") and a local one's SQLite's ("… …"), so as text
+      // a local message sorts before every pulled one of its day.
       const messages = this.db
         .prepare("SELECT * FROM agent_messages WHERE conversation_id = ? ORDER BY id ASC")
         .all(id);
@@ -9261,7 +9260,8 @@ class DatabaseManager {
         }
 
         // A fork's origin never changes, so a cloud copy without it (from an
-        // API or app that predates it) keeps the one this device has.
+        // API or app that predates it) keeps the one this device has. The copied
+        // count follows the messages written here, when the copy carries one.
         const convStmt = this.db.prepare(`
           INSERT INTO agent_conversations (client_conversation_id, cloud_id, title, note_id, sync_status, created_at, updated_at,
             parent_client_conversation_id, fork_message_count, fork_context)
@@ -9274,7 +9274,7 @@ class DatabaseManager {
             sync_status = 'synced',
             updated_at = excluded.updated_at,
             parent_client_conversation_id = COALESCE(parent_client_conversation_id, excluded.parent_client_conversation_id),
-            fork_message_count = COALESCE(fork_message_count, excluded.fork_message_count),
+            fork_message_count = COALESCE(excluded.fork_message_count, fork_message_count),
             fork_context = COALESCE(fork_context, excluded.fork_context)
         `);
         // The origin as the cloud has it, made sane: a chat isn't its own

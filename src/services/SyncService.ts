@@ -1341,7 +1341,12 @@ export class SyncService {
       created_at: full.created_at,
       updated_at: full.updated_at,
       parent_client_conversation_id: full.parent_client_conversation_id,
-      fork_message_count: full.fork_message_count,
+      // A retry's messages follow it without the empty ones, which the messages
+      // route refuses, so the copied count names only those the cloud will hold.
+      fork_message_count:
+        full.cloud_create_attempted && full.fork_message_count
+          ? full.messages.slice(0, full.fork_message_count).filter((m) => m.content).length || null
+          : full.fork_message_count,
       fork_context: full.fork_context,
       messages: messages.map((m) => ({
         role: m.role,

@@ -225,7 +225,7 @@ test("two chats that name each other as parent don't both link", (t) => {
 // A pulled message's time is ISO ("…T…Z"), a local one SQLite's ("… …"):
 // compared as text, a later local message of the same day would sort first,
 // and the fork view (which hides its copied messages) would hide it instead.
-test("messages added to a pulled chat stay after the pulled ones, by time", (t) => {
+test("messages added to a pulled chat stay after the pulled ones", (t) => {
   const db = createDb(t);
   if (!db) return;
   const pulled = pull(
@@ -253,6 +253,35 @@ test("messages added to a pulled chat stay after the pulled ones, by time", (t) 
   assert.deepEqual(order(db.getAgentMessages(pulled.id)), expected);
   const preview = db.getAgentConversationsWithPreview().find((row) => row.id === pulled.id);
   assert.equal(preview.last_message, "Make it shorter");
+});
+
+test("a pulled copy of a fork brings its copied count with its messages", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const { conversation, rows } = seedConversation(db);
+  const fork = db.forkAgentConversation(conversation.id, rows[1].id, null);
+  assert.equal(db.getAgentConversation(fork.id).fork_message_count, 2);
+
+  // The cloud's copy left out an empty copied reply, so it copied one message.
+  pull(
+    db,
+    {
+      id: "cloud-fork",
+      client_conversation_id: fork.client_conversation_id,
+      title: "Plan the launch",
+      updated_at: new Date().toISOString(),
+      parent_client_conversation_id: conversation.client_conversation_id,
+      fork_message_count: 1,
+    },
+    [
+      { role: "user", content: "Draft the launch email" },
+      { role: "user", content: "Only in the fork" },
+    ]
+  );
+
+  const pulled = db.getAgentConversation(fork.id);
+  assert.equal(pulled.fork_message_count, 1);
+  assert.equal(pulled.parent_conversation_id, conversation.id, "the origin stays");
 });
 
 test("a pulled fork whose parent was deleted here stays a plain chat", (t) => {
