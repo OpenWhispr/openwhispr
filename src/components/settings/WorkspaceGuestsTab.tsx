@@ -30,7 +30,7 @@ export default function WorkspaceGuestsTab({ workspace }: Props): React.ReactEle
   const { t } = useTranslation();
   // The workspace key remounts the tab per workspace, so the hook only ever sees one id here.
   const { toast } = useToast();
-  const { status, guests, reload } = useWorkspaceGuests(workspace.id);
+  const { status, guests, reload, dropGuests } = useWorkspaceGuests(workspace.id);
   const canManage = workspaceCan(workspace, "manage_members");
   const [inviting, setInviting] = useState<WorkspaceGuest | null>(null);
   const [removing, setRemoving] = useState<WorkspaceGuest | null>(null);
@@ -88,7 +88,11 @@ export default function WorkspaceGuestsTab({ workspace }: Props): React.ReactEle
           }}
           workspace={workspace}
           guests={[removing]}
-          onRemoved={() => void reload()}
+          onRemoved={(result) => {
+            // Shown gone at once: the reload below can fail and would leave them listed.
+            dropGuests(result.removed);
+            void reload();
+          }}
         />
       ) : null}
     </>

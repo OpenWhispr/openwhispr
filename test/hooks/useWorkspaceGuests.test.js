@@ -148,3 +148,25 @@ test("a failed reload keeps the last list", async (t) => {
     ["b@x.com"]
   );
 });
+
+test("dropGuests takes whole guests out and survives a failed reload", async (t) => {
+  const { mount, state } = await loadHook(t);
+  globalThis.__guestListImpl = async () => [guest("a@x.com"), guest("b@x.com")];
+  await mount("w1");
+
+  await React.act(async () => state().dropGuests(["A@x.com"]));
+  assert.deepEqual(
+    state().guests.map((g) => g.email),
+    ["b@x.com"]
+  );
+
+  globalThis.__guestListImpl = async () => {
+    throw new Error("offline");
+  };
+  await React.act(async () => state().reload());
+  assert.equal(state().status, "ready");
+  assert.deepEqual(
+    state().guests.map((g) => g.email),
+    ["b@x.com"]
+  );
+});
