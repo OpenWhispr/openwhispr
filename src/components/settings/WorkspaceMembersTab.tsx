@@ -5,6 +5,7 @@ import { ChevronDown, Loader2, Search, Users, X } from "../icons";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { WorkspacesService } from "../../services/WorkspacesService";
 import { useAuth } from "../../hooks/useAuth";
+import { useHeldTeamIds } from "../../hooks/useHeldTeamIds";
 import { Button } from "../ui/button";
 import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "../ui/BidiInterpolatedText";
 import { ESCAPE_CLEARS_ATTRIBUTE } from "../ui/escapeClears";
@@ -16,6 +17,7 @@ import MemberAvatar from "../MemberAvatar";
 import { cn } from "../lib/utils";
 import { isolate } from "../../utils/bidiIsolate";
 import { teamCreationFor, workspaceCan } from "../../lib/capabilities";
+import { withoutHeldTeams } from "../../lib/heldTeamDeletes";
 import { memberRemovalReducer } from "../../lib/memberRemovalFlow";
 import {
   headerCheckState,
@@ -251,18 +253,27 @@ export default function WorkspaceMembersTab({
   });
   const showTeams = rosterHasTeams(members);
 
-  // The owner and your own row can't be removed here, so they have no checkbox.
+  // Your own row has no checkbox. The owner's has one, for adding them to teams and teamspaces;
+  // Remove leaves them out, since the owner can't be removed.
   const isSelectable = (member: WorkspaceMember): boolean =>
-    canManage && member.role !== "owner" && member.user_id !== user?.id;
+    canManage && member.user_id !== user?.id;
   const selectableMembers = view.kind === "rows" ? view.rows.filter(isSelectable) : [];
   const selectableIds = selectableMembers.map((member) => member.user_id);
   const headerChecked = HEADER_CHECKED[headerCheckState(selectableIds, selection)];
   const selectedMembers = selectableMembers.filter((member) => selection.has(member.user_id));
+  const removableMembers = selectedMembers.filter((member) => member.role !== "owner");
+  const ownerSelected = removableMembers.length < selectedMembers.length;
   const selectableKey = selectableIds.join(",");
+  // Adding clears the selection, and the bar goes with it, taking the button that opened the menu
+  // or dialog. Focus moves to the search field rather than dropping to the page.
+  const clearSelectionAfterAdding = (): void => {
+    setSelection(new Set());
+    requestAnimationFrame(() => searchInputRef.current?.focus());
+  };
   const teamspace = useAddToTeamspace({
     workspace,
     people: selectedMembers,
-    onAdded: () => setSelection(new Set()),
+    onAdded: clearSelectionAfterAdding,
     onOpenTeamspace,
     returnFocusRef: barOpenerRef,
   });
@@ -561,20 +572,24 @@ export default function WorkspaceMembersTab({
       <SelectionBar
         count={selectedMembers.length}
         onClear={() => setSelection(new Set())}
-        actions={[
-          {
-            id: "remove",
-            label: t("settingsPage.workspace.people.selection.remove"),
-            tone: "destructive",
-            onClick: () => openRemoval(selectedMembers),
-          },
-        ]}
+        actions={
+          removableMembers.length > 0
+            ? [
+                {
+                  id: "remove",
+                  label: t("settingsPage.workspace.people.selection.remove"),
+                  tone: "destructive",
+                  onClick: () => openRemoval(removableMembers),
+                },
+              ]
+            : []
+        }
         // Only whoever manages members can select anyone, so the bar and this menu share that check.
         trailing={
           <PeopleAddMenu
             workspace={workspace}
             people={selectedMembers}
-            onAdded={() => setSelection(new Set())}
+            onAdded={clearSelectionAfterAdding}
             teamAdd={teamAdd}
             teamspace={teamspace}
             openerRef={barOpenerRef}
@@ -595,7 +610,7 @@ export default function WorkspaceMembersTab({
             initialPeople={createPeople}
             onCreated={async () => {
               // The dialog has toasted; the Team column reads the roster.
-              setSelection(new Set());
+              clearSelectionAfterAdding();
               await refreshMembers(workspace.id).catch(() => undefined);
             }}
             onPlanRequired={() => {
@@ -624,6 +639,7 @@ export default function WorkspaceMembersTab({
         roster={members}
         state={removeState}
         dispatch={dispatchRemove}
+        ownerKept={ownerSelected}
         onRemoved={(removedIds) => setSelection((current) => setRows(current, removedIds, false))}
       />
     </div>
@@ -632,7 +648,8 @@ export default function WorkspaceMembersTab({
 
 function TeamCell({ teams }: { teams: WorkspaceMember["teams"] }): React.ReactElement {
   const { t } = useTranslation();
-  const list = teams ?? [];
+  const heldTeams = useHeldTeamIds();
+  const list = withoutHeldTeams(teams ?? [], heldTeams);
 
   return (
     <td className="px-3 w-[40%] max-w-0">

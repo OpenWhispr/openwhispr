@@ -340,6 +340,20 @@ test("a person's teams read None, a name, or a count with a list", async (t) => 
   assert.doesNotMatch(markup, /teamsMore/);
 });
 
+test("a team waiting out its delete Undo is left out of the Team column", async (t) => {
+  const members = [{ ...MEMBERS[1], teams: [team("t1", "Sales"), team("t2", "Support")] }];
+  const WorkspaceMembersTab = await loadMembersTab(t, { members });
+  const held = await servers.get(t).ssrLoadModule("/lib/heldTeamDeletes.ts");
+  held.holdTeam("t2");
+  t.after(() => held.forgetHeldTeams());
+
+  const rows = rowsByName(render(WorkspaceMembersTab, { ...WORKSPACE, role: "admin" }), members);
+
+  assert.match(rows.admin, /Sales/);
+  assert.doesNotMatch(rows.admin, /Support/);
+  assert.doesNotMatch(rows.admin, /teamsCount/);
+});
+
 test("exactly two teams read as a count", async (t) => {
   const members = [{ ...MEMBERS[1], teams: [team("t1", "Sales"), team("t2", "Support")] }];
   const WorkspaceMembersTab = await loadMembersTab(t, { members });
@@ -660,6 +674,8 @@ const checkboxes = (container) =>
   findAll(container, (node) =>
     /people\.selection\.(selectRow|selectAllMembers)$/.test(node.getAttribute("aria-label") ?? "")
   );
+// The rows' checkboxes past select all and the owner (the table's first row): the members'.
+const memberBoxes = (container) => checkboxes(container).slice(2);
 
 // The table's body rows, in order (the header row is left out).
 const bodyRows = (container) => findAll(container, (node) => node.localName === "tr").slice(1);
@@ -684,17 +700,57 @@ async function mountPeople(t, search) {
   return { WorkspaceMembersTab, container };
 }
 
-test("admins get checkboxes except on the owner and their own row", async (t) => {
+test("admins get checkboxes on every row but their own", async (t) => {
   const { container } = await mountPeople(t);
   const labels = checkboxes(container).map((node) => node.getAttribute("aria-label"));
 
-  // Select all, then Mia, Oliver and Mason; not Olivia (owner) or Adam (you).
-  assert.deepEqual(labels, [SELECT_ALL, SELECT_ROW, SELECT_ROW, SELECT_ROW]);
+  // Select all, then Olivia (owner), Mia, Oliver and Mason; not Adam (you).
+  assert.deepEqual(labels, [SELECT_ALL, SELECT_ROW, SELECT_ROW, SELECT_ROW, SELECT_ROW]);
   const rows = bodyRows(container);
   assert.equal(rows.length, PEOPLE.length);
-  assert.equal(checkboxes(rows[0]).length, 0);
+  assert.equal(checkboxes(rows[0]).length, 1, "the owner can be added to teams");
   assert.equal(checkboxes(rows[1]).length, 0);
   assert.equal(checkboxes(rows[2]).length, 1);
+});
+
+const ownerBox = (container) => checkboxes(bodyRows(container)[0])[0];
+const removeButton = (container) =>
+  findNode(
+    container,
+    (node) =>
+      node.localName === "button" &&
+      textOf(node).includes("settingsPage.workspace.people.selection.remove")
+  );
+
+test("Remove leaves the owner out, and the dialog says they stay", async (t) => {
+  const { container } = await mountPeople(t);
+  await React.act(async () => propsOf(ownerBox(container)).onClick());
+  await React.act(async () => propsOf(memberBoxes(container)[0]).onClick());
+  assert.match(barText(container), /selection\.count#2/);
+
+  await React.act(async () => propsOf(removeButton(container)).onClick());
+  assert.deepEqual(
+    globalThis.__removeDialog.state.subjects.map((member) => member.user_id),
+    ["u-member"]
+  );
+  assert.equal(globalThis.__removeDialog.ownerKept, true);
+  assert.deepEqual(
+    globalThis.__addMenu.people.map((member) => member.user_id),
+    ["u-owner", "u-member"],
+    "adding takes the owner along"
+  );
+});
+
+test("with only the owner selected there is no Remove", async (t) => {
+  const { container } = await mountPeople(t);
+  await React.act(async () => propsOf(ownerBox(container)).onClick());
+
+  assert.match(barText(container), /selection\.count#1/);
+  assert.equal(removeButton(container), null);
+  assert.deepEqual(
+    globalThis.__addMenu.people.map((member) => member.user_id),
+    ["u-owner"]
+  );
 });
 
 test("members get no checkboxes and no bar", async (t) => {
@@ -711,7 +767,7 @@ test("selecting two rows shows 2 selected with Remove", async (t) => {
   const { container } = await mountPeople(t);
   assert.doesNotMatch(barText(container), /selection\.count/);
 
-  const boxes = checkboxes(container).slice(1);
+  const boxes = memberBoxes(container);
   await React.act(async () => propsOf(boxes[0]).onClick());
   await React.act(async () => propsOf(boxes[1]).onClick());
 
@@ -729,13 +785,13 @@ test("select all picks only visible selectable rows", async (t) => {
 
   const selectable = checkboxes(container).length - 1;
   assert.match(barText(container), new RegExp(`selection\\.count#${selectable}(?!\\d)`));
-  assert.ok(selectable < visible, "the owner and your own row stay unselected");
+  assert.ok(selectable < visible, "your own row stays unselected");
   assert.ok(checkboxes(container).every((node) => node.getAttribute("aria-checked") === "true"));
 });
 
 test("a search drops selected rows it hides", async (t) => {
   const { WorkspaceMembersTab, container } = await mountPeople(t);
-  const boxes = checkboxes(container).slice(1);
+  const boxes = memberBoxes(container);
   const names = PEOPLE.filter((m) => m.role === "member");
   assert.equal(boxes.length, names.length);
   // Mia, Oliver, Mason in order: select Oliver and Mason.
@@ -753,7 +809,7 @@ test("a search drops selected rows it hides", async (t) => {
 
 test("changing workspace clears the selection", async (t) => {
   const { WorkspaceMembersTab, container } = await mountPeople(t);
-  await React.act(async () => propsOf(checkboxes(container)[1]).onClick());
+  await React.act(async () => propsOf(memberBoxes(container)[0]).onClick());
   assert.match(barText(container), /selection\.count#1/);
 
   await React.act(async () =>
@@ -764,7 +820,7 @@ test("changing workspace clears the selection", async (t) => {
 
 test("Remove from the bar opens the dialog with the selection", async (t) => {
   const { container } = await mountPeople(t);
-  const boxes = checkboxes(container).slice(1);
+  const boxes = memberBoxes(container);
   await React.act(async () => propsOf(boxes[0]).onClick());
   await React.act(async () => propsOf(boxes[2]).onClick());
 
@@ -787,7 +843,7 @@ test("Remove from the bar opens the dialog with the selection", async (t) => {
 
 test("a removal drops the removed people from the selection", async (t) => {
   const { container } = await mountPeople(t);
-  const boxes = checkboxes(container).slice(1);
+  const boxes = memberBoxes(container);
   await React.act(async () => propsOf(boxes[0]).onClick());
   await React.act(async () => propsOf(boxes[1]).onClick());
 
@@ -797,7 +853,7 @@ test("a removal drops the removed people from the selection", async (t) => {
 
 test("Cancel on a refused removal keeps the selection, so one person can be unticked", async (t) => {
   const { container } = await mountPeople(t);
-  const boxes = checkboxes(container).slice(1);
+  const boxes = memberBoxes(container);
   await React.act(async () => propsOf(boxes[0]).onClick());
   await React.act(async () => propsOf(boxes[1]).onClick());
   const pressRemove = () =>
@@ -825,7 +881,7 @@ test("Cancel on a refused removal keeps the selection, so one person can be unti
   assert.equal(globalThis.__removeDialog.state.kind, "closed");
   assert.match(barText(container), /selection\.count#2/);
 
-  await React.act(async () => propsOf(checkboxes(container).slice(1)[0]).onClick());
+  await React.act(async () => propsOf(memberBoxes(container)[0]).onClick());
   assert.match(barText(container), /selection\.count#1/);
 
   await pressRemove();
@@ -861,7 +917,7 @@ test("the bar offers its Add menu only with manage_members", async (t) => {
 
   // Nobody selected, no bar, no menu.
   assert.equal(addMenuNode(container), null);
-  await React.act(async () => propsOf(checkboxes(container)[1]).onClick());
+  await React.act(async () => propsOf(memberBoxes(container)[0]).onClick());
   assert.ok(addMenuNode(container), "the menu is in the bar");
   assert.equal(globalThis.__addMenu.workspace.id, "w1");
 
@@ -900,7 +956,7 @@ test("the bar offers its Add menu only with manage_members", async (t) => {
 
 test("the Add menu sits after Remove and gets the selected people", async (t) => {
   const { container } = await mountPeople(t);
-  const boxes = checkboxes(container).slice(1);
+  const boxes = memberBoxes(container);
   await React.act(async () => propsOf(boxes[0]).onClick());
   await React.act(async () => propsOf(boxes[2]).onClick());
 
@@ -927,17 +983,41 @@ test("adding clears the selection, and Open teamspace goes where the page says",
   const container = await mount(t, WorkspaceMembersTab, ADMIN_WORKSPACE, {
     onOpenTeamspace: (localSpaceId) => opened.push(localSpaceId),
   });
-  await React.act(async () => propsOf(checkboxes(container)[1]).onClick());
-  await React.act(async () => propsOf(checkboxes(container)[2]).onClick());
+  await React.act(async () => propsOf(memberBoxes(container)[0]).onClick());
+  await React.act(async () => propsOf(memberBoxes(container)[1]).onClick());
   assert.match(barText(container), /selection\.count#2/);
 
   globalThis.__teamspaceArgs.onOpenTeamspace(42);
   assert.deepEqual(opened, [42]);
 
+  const searchFocus = watchSearchFocus(t, container);
   await React.act(async () => globalThis.__addMenu.onAdded());
   assert.doesNotMatch(barText(container), /selection\.count/);
   assert.equal(addMenuNode(container), null);
+  assert.equal(searchFocus.count, 1, "focus moves to the search field, not the page");
 });
+
+// The host DOM has no frames or focus, so the next frame runs at once and the search field counts
+// the times it is focused.
+function watchSearchFocus(t, container) {
+  const [search] = findAll(
+    container,
+    (node) => node.getAttribute("aria-label") === "settingsPage.workspace.people.search.placeholder"
+  );
+  const watched = { count: 0 };
+  search.focus = () => {
+    watched.count += 1;
+  };
+  const original = globalThis.requestAnimationFrame;
+  globalThis.requestAnimationFrame = (callback) => {
+    callback(0);
+    return 1;
+  };
+  t.after(() => {
+    globalThis.requestAnimationFrame = original;
+  });
+  return watched;
+}
 
 test("the row menus get Add to team only with manage_members", async (t) => {
   const WorkspaceMembersTab = await loadMembersTab(t, { members: PEOPLE, captureRoleMenus: true });
@@ -972,8 +1052,8 @@ const PAYWALL_WORKSPACE = {
 };
 
 async function selectTwo(container) {
-  await React.act(async () => propsOf(checkboxes(container)[1]).onClick());
-  await React.act(async () => propsOf(checkboxes(container)[3]).onClick());
+  await React.act(async () => propsOf(memberBoxes(container)[0]).onClick());
+  await React.act(async () => propsOf(memberBoxes(container)[2]).onClick());
   assert.match(barText(container), /selection\.count#2/);
 }
 
@@ -1005,6 +1085,7 @@ test("the selection clears and the Team column updates", async (t) => {
   await selectTwo(container);
   await React.act(async () => globalThis.__addMenu.onCreateTeam());
   const readsBefore = reads;
+  const searchFocus = watchSearchFocus(t, container);
 
   await React.act(async () =>
     globalThis.__createDialog.onCreated({ id: "t9", name: "Sales" }, { memberCount: 2 })
@@ -1012,6 +1093,7 @@ test("the selection clears and the Team column updates", async (t) => {
 
   assert.doesNotMatch(barText(container), /selection\.count/);
   assert.equal(reads, readsBefore + 1, "the roster is read again for the Team column");
+  assert.equal(searchFocus.count, 1);
   // The bar is gone, and the dialog is still mounted to finish closing.
   assert.equal(globalThis.__createDialogMounts, 1);
   assert.deepEqual(
