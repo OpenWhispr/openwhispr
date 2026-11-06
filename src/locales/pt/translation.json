@@ -433,6 +433,7 @@
         },
         "line": {
           "requiredByOrganization": "Exigido pela sua organização",
+          "organizationModelsUnrunnable": "Nenhum dos modelos aprovados pela sua organização funciona neste computador",
           "offToFit": "Desativado para caber no espaço livre deste computador",
           "failed": "Não foi possível baixar. Verifique sua conexão e tente novamente"
         },
@@ -440,6 +441,7 @@
           "notEnoughMemory": "Memória insuficiente",
           "exceedsMemory": "Excede os limites de memória deste computador",
           "memoryUnread": "Não foi possível verificar a memória",
+          "organization": "Indisponível neste computador",
           "memoryMac": "{{model}} precisa de {{needed}} GB de memória, este Mac tem {{have}} GB",
           "memoryComputer": "{{model}} precisa de {{needed}} GB de memória, este computador tem {{have}} GB",
           "memoryUnreadLine": "{{model}} precisa de {{needed}} GB de memória. Se este computador tiver isso, você pode ativar depois em Configurações"
@@ -456,6 +458,7 @@
         "foot": {
           "default": "Você pode mudar qualquer uma dessas opções depois em Configurações.",
           "dictationFailed": "O ditado precisa ser baixado antes de continuar. Tente de novo acima, ou volte e escolha outra configuração.",
+          "dictationUnavailable": "O ditado não funciona neste computador com os modelos aprovados pela sua organização. Volte e escolha outra configuração.",
           "finishesInBackground": "O restante continua sendo baixado depois que você prosseguir e é ativado quando estiver pronto.",
           "failedStaysOff": "O que não foi baixado fica desativado. Você pode adicionar depois em Configurações.",
           "needsMac": "São necessários {{needed}} GB, e este Mac tem {{free}} GB livres.",

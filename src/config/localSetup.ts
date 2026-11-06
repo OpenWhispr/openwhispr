@@ -39,6 +39,7 @@ export interface LocalSetupDownload {
 }
 export type LocalSetupLine =
   | { key: "requiredByOrganization" }
+  | { key: "organizationModelsUnrunnable" }
   | { key: "notEnoughMemory"; model: string; neededGb: number; haveGb: number }
   | { key: "memoryUnread"; model: string; neededGb: number };
 export interface LocalSetupRow {
@@ -48,7 +49,8 @@ export interface LocalSetupRow {
   providerIcon: string; // ProviderIcon id: "nvidia" | "oruk" | "openai" | "qwen"
   download: LocalSetupDownload;
   label: LocalSetupLabel | null; // null only for an organisation-required model
-  reason?: "tooSlow" | "memory" | "memoryUnread";
+  /** organization: dictation only, when no model the allow-list approves runs on this computer. */
+  reason?: "tooSlow" | "memory" | "memoryUnread" | "organization";
   /** null: the row says what it does, or (too slow) that it exceeds this computer's memory. */
   line: LocalSetupLine | null;
 }
@@ -359,13 +361,22 @@ export function buildLocalSetupPlan(input: {
   const rows: LocalSetupRow[] = [];
   if (isModeAllowedByPolicy(policy, "transcription", "local")) {
     const { modelId } = pickDictationModel(languages, profile);
+    const tablePickApproved = isLocalModelAllowedByPolicy(policy, "transcription", modelId);
     // An allow-list that leaves out the table's pick decides dictation, as a required model does.
     const organizationModelId =
       requiredSpeechModelId ??
-      (isLocalModelAllowedByPolicy(policy, "transcription", modelId)
-        ? undefined
-        : firstApprovedSpeechModel(policy, profile, languages));
-    rows.push(dictationRow(profile, machine, languages, organizationModelId));
+      (tablePickApproved ? undefined : firstApprovedSpeechModel(policy, profile, languages));
+    rows.push(
+      organizationModelId || tablePickApproved
+        ? dictationRow(profile, machine, languages, organizationModelId)
+        : // Offering the table's pick would only end in the policy refusing its download.
+          {
+            ...speechRowBase(modelId),
+            label: "unavailable",
+            reason: "organization",
+            line: { key: "organizationModelsUnrunnable" },
+          }
+    );
   }
   const localTextAllowed = isModeAllowedByPolicy(policy, "llm", "local");
   const textModelApproved = (id: "cleanup" | "assistant"): boolean =>

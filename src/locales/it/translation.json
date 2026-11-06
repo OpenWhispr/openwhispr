@@ -454,6 +454,7 @@
         },
         "line": {
           "requiredByOrganization": "Richiesto dalla tua organizzazione",
+          "organizationModelsUnrunnable": "Nessuno dei modelli approvati dalla tua organizzazione funziona su questo computer",
           "offToFit": "Disattivato per rientrare nello spazio libero di questo computer",
           "failed": "Download non riuscito. Controlla la connessione e riprova"
         },
@@ -461,6 +462,7 @@
           "notEnoughMemory": "Memoria insufficiente",
           "exceedsMemory": "Supera i limiti di memoria di questo computer",
           "memoryUnread": "Impossibile verificare la memoria",
+          "organization": "Non disponibile su questo computer",
           "memoryMac": "{{model}} richiede {{needed}} GB di memoria, questo Mac ne ha {{have}} GB",
           "memoryComputer": "{{model}} richiede {{needed}} GB di memoria, questo computer ne ha {{have}} GB",
           "memoryUnreadLine": "{{model}} richiede {{needed}} GB di memoria. Se questo computer ne ha così tanta, attivalo più tardi nelle Impostazioni"
@@ -477,6 +479,7 @@
         "foot": {
           "default": "Puoi modificare tutto questo più tardi nelle Impostazioni.",
           "dictationFailed": "La dettatura deve essere scaricata prima di continuare. Riprova qui sopra, oppure torna indietro e scegli un'altra configurazione.",
+          "dictationUnavailable": "La dettatura non può funzionare su questo computer con i modelli approvati dalla tua organizzazione. Torna indietro e scegli un'altra configurazione.",
           "finishesInBackground": "Il resto continua a scaricarsi dopo che prosegui e si attiva quando è pronto.",
           "failedStaysOff": "Ciò che non è stato scaricato resta disattivato. Puoi aggiungerlo più tardi nelle Impostazioni.",
           "needsMac": "Servono {{needed}} GB e questo Mac ha {{free}} GB liberi.",

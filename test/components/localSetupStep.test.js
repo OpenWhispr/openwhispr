@@ -537,6 +537,36 @@ test("a too-slow row recommends nothing the organization forbids", async (t) => 
   assert.ok(s.row("assistant").textContent.includes(`${K}unavailable.notEnoughMemory`));
 });
 
+test("dictation the organization's models can't run here locks the step and says why", async (t) => {
+  const s = await mount(t, {
+    mapPlan: (p) => ({
+      ...p,
+      rows: p.rows.map((row) =>
+        row.id !== "dictation"
+          ? row
+          : {
+              ...row,
+              label: "unavailable",
+              reason: "organization",
+              line: { key: "organizationModelsUnrunnable" },
+            }
+      ),
+    }),
+  });
+  const row = s.row("dictation");
+  assert.ok(row.textContent.includes(`${K}unavailable.organization`));
+  assert.ok(row.textContent.includes(`${K}line.organizationModelsUnrunnable`));
+  assert.ok(!row.textContent.includes(`${K}badge.cloud`), "the organization chose, not the computer");
+  assert.ok(isDisabled(s.button()));
+  assert.equal(s.foot(), `${K}foot.dictationUnavailable`);
+
+  await s.click(s.button());
+  assert.deepEqual(s.calls.parakeet, []);
+  assert.deepEqual(s.calls.whisper, []);
+  assert.deepEqual(s.calls.llm, []);
+  assert.equal(s.proceeded.length, 0);
+});
+
 test("a failed optional row says why, offers Retry, and stays off at Proceed", async (t) => {
   const s = await mount(t);
   await s.click(s.button());

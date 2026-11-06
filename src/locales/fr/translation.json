@@ -454,6 +454,7 @@
         },
         "line": {
           "requiredByOrganization": "Imposé par votre organisation",
+          "organizationModelsUnrunnable": "Aucun des modèles approuvés par votre organisation ne fonctionne sur cet ordinateur",
           "offToFit": "Désactivé pour tenir dans l’espace libre de cet ordinateur",
           "failed": "Téléchargement impossible. Vérifiez votre connexion et réessayez"
         },
@@ -461,6 +462,7 @@
           "notEnoughMemory": "Mémoire insuffisante",
           "exceedsMemory": "Dépasse les limites de mémoire de cet ordinateur",
           "memoryUnread": "Mémoire non vérifiée",
+          "organization": "Indisponible sur cet ordinateur",
           "memoryMac": "{{model}} nécessite {{needed}} Go de mémoire, ce Mac en a {{have}} Go",
           "memoryComputer": "{{model}} nécessite {{needed}} Go de mémoire, cet ordinateur en a {{have}} Go",
           "memoryUnreadLine": "{{model}} nécessite {{needed}} Go de mémoire. Si cet ordinateur en a autant, vous pourrez l’activer plus tard dans les Paramètres"
@@ -477,6 +479,7 @@
         "foot": {
           "default": "Vous pourrez modifier tout cela plus tard dans les Paramètres.",
           "dictationFailed": "La dictée doit être téléchargée avant de continuer. Réessayez ci-dessus, ou revenez en arrière pour choisir une autre configuration.",
+          "dictationUnavailable": "La dictée ne peut pas fonctionner sur cet ordinateur avec les modèles approuvés par votre organisation. Revenez en arrière pour choisir une autre configuration.",
           "finishesInBackground": "Le reste continue de se télécharger une fois que vous continuez et s’active dès qu’il est prêt.",
           "failedStaysOff": "Ce qui n’a pas pu être téléchargé reste désactivé. Vous pourrez l’ajouter plus tard dans les Paramètres.",
           "needsMac": "Il faut {{needed}} Go, et ce Mac a {{free}} Go d’espace libre.",

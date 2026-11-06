@@ -62,6 +62,7 @@ const UNAVAILABLE_HEADING_KEYS: Record<NonNullable<LocalSetupRow["reason"]>, str
   tooSlow: "onboarding.rehaul.localSetup.unavailable.notEnoughMemory",
   memory: "onboarding.rehaul.localSetup.unavailable.notEnoughMemory",
   memoryUnread: "onboarding.rehaul.localSetup.unavailable.memoryUnread",
+  organization: "onboarding.rehaul.localSetup.unavailable.organization",
 };
 const DESCRIPTION_KEYS: Record<LocalSetupRowId, string> = {
   dictation: "onboarding.rehaul.localSetup.description.dictation",
@@ -75,6 +76,8 @@ function lineText(line: LocalSetupLine, onMac: boolean, t: Translate): string {
   switch (line.key) {
     case "requiredByOrganization":
       return t("onboarding.rehaul.localSetup.line.requiredByOrganization");
+    case "organizationModelsUnrunnable":
+      return t("onboarding.rehaul.localSetup.line.organizationModelsUnrunnable");
     case "notEnoughMemory": {
       const values = { model: line.model, needed: line.neededGb, have: line.haveGb };
       return onMac
@@ -271,7 +274,9 @@ function SetupRow({
       {t("onboarding.rehaul.localSetup.retry")}
     </button>
   ) : unavailable ? (
-    cloudAllowed && (
+    // The organization's allow-list rules this row out, not the computer, so Cloud isn't the advice.
+    cloudAllowed &&
+    row.reason !== "organization" && (
       <span className={`ms-1.5 shrink-0 ${BADGE_CLASS}`}>
         {t("onboarding.rehaul.localSetup.badge.cloud")}
       </span>
@@ -416,18 +421,26 @@ export function LocalSetupStep({
   // Download waits for the free-space read and the inventory, or it would freeze a
   // fit that hasn't seen either.
   const readsLanded = spaceSettled && inventoryLoaded;
-  const phase: "proceed" | "download" | "downloading" | "failed" | "noSpace" | "reading" =
-    downloads.allDone || (downloads.started && dictationStatus === "done")
-      ? "proceed"
-      : downloads.started
-        ? isQueued(dictationStatus)
-          ? "downloading"
-          : "failed"
-        : !readsLanded
-          ? "reading"
-          : fit.state === "noSpace" || fit.state === "overflow"
-            ? "noSpace"
-            : "download";
+  // No dictation model the organization approved runs here: Local can't work, so
+  // nothing downloads and the way on is back to another setup.
+  const dictationBlocked = plan.rows.some(
+    (row) => row.id === "dictation" && row.label === "unavailable"
+  );
+  const phase:
+    "proceed" | "download" | "downloading" | "failed" | "noSpace" | "reading" | "blocked" =
+    dictationBlocked
+      ? "blocked"
+      : downloads.allDone || (downloads.started && dictationStatus === "done")
+        ? "proceed"
+        : downloads.started
+          ? isQueued(dictationStatus)
+            ? "downloading"
+            : "failed"
+          : !readsLanded
+            ? "reading"
+            : fit.state === "noSpace" || fit.state === "overflow"
+              ? "noSpace"
+              : "download";
 
   const toggle = (id: keyof LocalSetupSwitches): void => {
     if (downloads.started) return;
@@ -445,7 +458,9 @@ export function LocalSetupStep({
   };
 
   let foot = t("onboarding.rehaul.localSetup.foot.default");
-  if (phase === "failed") {
+  if (phase === "blocked") {
+    foot = t("onboarding.rehaul.localSetup.foot.dictationUnavailable");
+  } else if (phase === "failed") {
     foot = t("onboarding.rehaul.localSetup.foot.dictationFailed");
   } else if (phase === "proceed" && optionalStatuses.some(isQueued)) {
     foot = t("onboarding.rehaul.localSetup.foot.finishesInBackground");

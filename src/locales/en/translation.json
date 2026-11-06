@@ -454,6 +454,7 @@
         },
         "line": {
           "requiredByOrganization": "Required by your organization",
+          "organizationModelsUnrunnable": "None of the models your organization approved runs on this computer",
           "offToFit": "Off to fit the free space on this computer",
           "failed": "Couldn't download. Check your connection and retry"
         },
@@ -461,6 +462,7 @@
           "notEnoughMemory": "Not enough memory",
           "exceedsMemory": "Exceeds the memory limits of this computer",
           "memoryUnread": "Couldn't check memory",
+          "organization": "Not available on this computer",
           "memoryMac": "{{model}} needs {{needed}} GB of memory, this Mac has {{have}} GB",
           "memoryComputer": "{{model}} needs {{needed}} GB of memory, this computer has {{have}} GB",
           "memoryUnreadLine": "{{model}} needs {{needed}} GB of memory. If this computer has that much, turn it on later in Settings"
@@ -477,6 +479,7 @@
         "foot": {
           "default": "You can change any of these later in Settings.",
           "dictationFailed": "Dictation has to download before you can continue. Retry it above, or go back and choose another setup.",
+          "dictationUnavailable": "Dictation can't run on this computer with the models your organization approved. Go back and choose another setup.",
           "finishesInBackground": "The rest keeps downloading after you proceed and turns on when it's ready.",
           "failedStaysOff": "What didn't download stays off. You can add it later in Settings.",
           "needsMac": "This needs {{needed}} GB, and this Mac has {{free}} GB free.",

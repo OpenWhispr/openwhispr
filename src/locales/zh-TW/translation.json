@@ -454,6 +454,7 @@
         },
         "line": {
           "requiredByOrganization": "你的組織要求使用",
+          "organizationModelsUnrunnable": "你的組織核准的模型都無法在此電腦上執行",
           "offToFit": "已關閉，以符合這台電腦的可用空間",
           "failed": "無法下載。請檢查網路連線後重試"
         },
@@ -461,6 +462,7 @@
           "notEnoughMemory": "記憶體不足",
           "exceedsMemory": "超出這台電腦的記憶體上限",
           "memoryUnread": "無法偵測記憶體",
+          "organization": "此電腦上無法使用",
           "memoryMac": "{{model}} 需要 {{needed}} GB 記憶體，這台 Mac 只有 {{have}} GB",
           "memoryComputer": "{{model}} 需要 {{needed}} GB 記憶體，這台電腦只有 {{have}} GB",
           "memoryUnreadLine": "{{model}} 需要 {{needed}} GB 記憶體。如果這台電腦有這麼多記憶體，可以稍後在設定中開啟"
@@ -477,6 +479,7 @@
         "foot": {
           "default": "這些設定之後都可以在設定中變更。",
           "dictationFailed": "需要先下載聽寫模型才能繼續。請在上方重試，或返回選擇其他設定。",
+          "dictationUnavailable": "使用你的組織核准的模型，此電腦無法進行聽寫。請返回選擇其他設定。",
           "finishesInBackground": "其餘項目會在你繼續後接著下載，準備好後自動開啟。",
           "failedStaysOff": "未能下載的項目將保持關閉。之後可以在設定中新增。",
           "needsMac": "需要 {{needed}} GB，這台 Mac 有 {{free}} GB 可用空間。",

@@ -454,6 +454,7 @@
         },
         "line": {
           "requiredByOrganization": "Von Ihrer Organisation vorgeschrieben",
+          "organizationModelsUnrunnable": "Keines der von Ihrer Organisation freigegebenen Modelle läuft auf diesem Computer",
           "offToFit": "Aus, damit es in den freien Speicherplatz dieses Computers passt",
           "failed": "Download fehlgeschlagen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut"
         },
@@ -461,6 +462,7 @@
           "notEnoughMemory": "Nicht genug Arbeitsspeicher",
           "exceedsMemory": "Übersteigt den Arbeitsspeicher dieses Computers",
           "memoryUnread": "Arbeitsspeicher nicht erkannt",
+          "organization": "Auf diesem Computer nicht verfügbar",
           "memoryMac": "{{model}} braucht {{needed}} GB Arbeitsspeicher, dieser Mac hat {{have}} GB",
           "memoryComputer": "{{model}} braucht {{needed}} GB Arbeitsspeicher, dieser Computer hat {{have}} GB",
           "memoryUnreadLine": "{{model}} braucht {{needed}} GB Arbeitsspeicher. Wenn dieser Computer so viel hat, schalten Sie es später in den Einstellungen ein"
@@ -477,6 +479,7 @@
         "foot": {
           "default": "Sie können all das später in den Einstellungen ändern.",
           "dictationFailed": "Das Diktat muss heruntergeladen sein, bevor es weitergeht. Versuchen Sie es oben erneut, oder gehen Sie zurück und wählen Sie eine andere Einrichtung.",
+          "dictationUnavailable": "Mit den von Ihrer Organisation freigegebenen Modellen ist Diktat auf diesem Computer nicht möglich. Gehen Sie zurück und wählen Sie eine andere Einrichtung.",
           "finishesInBackground": "Der Rest wird nach dem Fortfahren weiter heruntergeladen und eingeschaltet, sobald er bereit ist.",
           "failedStaysOff": "Was nicht heruntergeladen wurde, bleibt aus. Sie können es später in den Einstellungen hinzufügen.",
           "needsMac": "Dafür werden {{needed}} GB benötigt, und auf diesem Mac sind {{free}} GB frei.",

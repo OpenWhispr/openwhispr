@@ -401,6 +401,29 @@ test("an allow-list that leaves out the table's dictation pick decides dictation
   assert.equal(row(kept, "dictation").line, null);
 });
 
+test("an allow-list with nothing this computer can run leaves dictation unavailable", async () => {
+  const { enabledDownloads } = await load();
+  const { isLocalModelAllowedByPolicy } = await import("../../src/stores/policyRules.ts");
+  for (const [label, profile, speechModels] of [
+    ["Parakeet only, on a Mac that can't run it", mac({ parakeetSupported: false }), ["parakeet-tdt-0.6b-v3"]],
+    ["an empty list", mac({}), []],
+    ["ids this build doesn't know", mac({}), ["not-a-model"]],
+  ]) {
+    const policy = managed({ speechModels });
+    const p = await plan(profile, { policy });
+    const dictation = row(p, "dictation");
+    assert.equal(dictation.label, "unavailable", label);
+    assert.equal(dictation.reason, "organization", label);
+    assert.deepEqual(dictation.line, { key: "organizationModelsUnrunnable" }, label);
+    // Never offered for download, since the policy would refuse it.
+    assert.equal(isLocalModelAllowedByPolicy(policy, "transcription", dictation.modelId), false);
+    assert.ok(
+      enabledDownloads(p, { cleanup: true, assistant: true }).every((r) => r.rowId !== "dictation"),
+      label
+    );
+  }
+});
+
 test("the Local card's minimum is dictation alone, since the rest trims to fit", async () => {
   const { localSetupMinimumSpaceGb, localSetupRequiredBytes, enabledDownloads } = await load();
   const factors = { parakeet: 2.5, whisper: 1, llm: 1, llamaVulkan: 2 };

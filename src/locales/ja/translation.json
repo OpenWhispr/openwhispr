@@ -454,6 +454,7 @@
         },
         "line": {
           "requiredByOrganization": "組織によって必須に設定されています",
+          "organizationModelsUnrunnable": "組織が承認したモデルはどれもこのコンピュータでは動作しません",
           "offToFit": "このコンピュータの空き容量に収めるためオフにしています",
           "failed": "ダウンロードできませんでした。接続を確認して再試行してください"
         },
@@ -461,6 +462,7 @@
           "notEnoughMemory": "メモリが不足しています",
           "exceedsMemory": "このコンピュータのメモリの上限を超えています",
           "memoryUnread": "メモリを確認できませんでした",
+          "organization": "このコンピュータでは利用できません",
           "memoryMac": "{{model}} には {{needed}} GB のメモリが必要です。この Mac は {{have}} GB です",
           "memoryComputer": "{{model}} には {{needed}} GB のメモリが必要です。このコンピュータは {{have}} GB です",
           "memoryUnreadLine": "{{model}} には {{needed}} GB のメモリが必要です。このコンピュータにそれだけのメモリがある場合は、あとで設定からオンにしてください"
@@ -477,6 +479,7 @@
         "foot": {
           "default": "これらはあとで設定からいつでも変更できます。",
           "dictationFailed": "続行するにはディクテーションのダウンロードが必要です。上で再試行するか、戻って別の設定を選んでください。",
+          "dictationUnavailable": "組織が承認したモデルでは、このコンピュータでディクテーションを使えません。戻って別の設定を選んでください。",
           "finishesInBackground": "残りは続行後もダウンロードを続け、準備ができるとオンになります。",
           "failedStaysOff": "ダウンロードできなかったものはオフのままです。あとで設定から追加できます。",
           "needsMac": "{{needed}} GB が必要です。この Mac の空き容量は {{free}} GB です。",
