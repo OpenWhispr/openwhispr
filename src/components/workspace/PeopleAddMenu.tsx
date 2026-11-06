@@ -58,6 +58,8 @@ interface AddOptions {
 
 export interface PeopleTeamAdd {
   teams: WorkspaceTeamsState;
+  /** A menu that holds the team list opened: its next `open` reads the lists again. */
+  menuOpened: () => void;
   /** The team list is read when a menu first opens it, so the page doesn't load it for nobody. */
   open: () => void;
   add: (team: Team, people: WorkspaceMember[], options?: AddOptions) => void;
@@ -278,14 +280,21 @@ export function useAddPeopleToTeam(workspace: Workspace): PeopleTeamAdd {
 
   // The boxes read the roster and the list, both as they were when the page loaded, so each opening
   // reads them again: someone else may have changed a team since, and a stale ticked box can't be
-  // picked. The first opening has no list yet, and activating loads it.
+  // picked. The first opening has no list yet, and activating loads it. A submenu opens and closes
+  // as the pointer passes over it, so that is once per opening of the menu holding it.
+  const readThisOpening = useRef(false);
+  function menuOpened(): void {
+    readThisOpening.current = false;
+  }
   function open(): void {
+    if (readThisOpening.current) return;
+    readThisOpening.current = true;
     if (activated) void teams.reload();
     else setActivated(true);
     void refreshMembers(workspace.id).catch(() => undefined);
   }
 
-  return { teams, open, add, dialog };
+  return { teams, menuOpened, open, add, dialog };
 }
 
 interface PeopleAddMenuProps {
@@ -338,6 +347,7 @@ export function PeopleAddMenu({
         onOpenChange={(open) => {
           if (!open) return;
           openerRef.current = labelRef.current;
+          teamAdd.menuOpened();
           teamAdd.open();
         }}
       >
@@ -366,6 +376,8 @@ export function PeopleAddMenu({
           if (!open) return;
           openerRef.current = chevronRef.current;
           setBoundary(dialogBoundaryOf(chevronRef.current));
+          teamAdd.menuOpened();
+          teamspace.menuOpened();
         }}
       >
         <DropdownMenuTrigger asChild>

@@ -772,6 +772,34 @@ test("opening the menu again reads the team list again", async (t) => {
   assert.equal(callsTo("teams").length, 2);
 });
 
+test("passing over the submenus reads the lists once per opening of the menu", async (t) => {
+  const { callsTo } = await mount(t);
+  let coverageReads = 0;
+  globalThis.__api.coverage = async () => {
+    coverageReads += 1;
+    return [];
+  };
+
+  await openChevronMenu();
+  for (let pass = 0; pass < 3; pass += 1) {
+    for (const name of ["Add to team", "Add to teamspace"]) {
+      await ui.press(itemNamed(name), "ArrowRight");
+      await ui.settle();
+      await ui.press(menus().at(-1), "ArrowLeft");
+      await ui.settle();
+    }
+  }
+  assert.equal(callsTo("teams").length, 1);
+  assert.equal(callsTo("roster").length, 1);
+  assert.equal(coverageReads, 1);
+
+  await ui.press(menus()[0], "Escape");
+  await ui.settle();
+  await openTeamSubmenu();
+  assert.equal(callsTo("teams").length, 2, "a new opening reads the list again");
+  assert.equal(callsTo("roster").length, 2);
+});
+
 test("Try again recounts the dialog's title for who it sends", async (t) => {
   let attempts = 0;
   await mount(t, {

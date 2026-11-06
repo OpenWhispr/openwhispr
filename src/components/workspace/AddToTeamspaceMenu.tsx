@@ -49,6 +49,8 @@ interface AddToTeamspaceProps {
 export interface AddToTeamspace {
   /** The "Add to teamspace" submenu, for inside a menu's content. */
   submenu: ReactElement;
+  /** The menu holding the submenu opened: the submenu's next opening reads coverage again. */
+  menuOpened: () => void;
   /** Outside the menu, which unmounts its content on close and would take a running dialog with it. */
   dialog: ReactElement | null;
 }
@@ -107,10 +109,18 @@ export function useAddToTeamspace({
     }
   }
 
+  // A submenu opens and closes as the pointer passes over it, so coverage is read once per opening
+  // of the menu holding it rather than blanking the boxes on every pass.
+  const coverageReadThisOpening = useRef(false);
+  function menuOpened(): void {
+    coverageReadThisOpening.current = false;
+  }
   function handleOpenChange(open: boolean): void {
     if (!open) return;
     setBoundary(dialogBoundaryOf(returnFocusRef.current));
     setOpened(true);
+    if (coverageReadThisOpening.current) return;
+    coverageReadThisOpening.current = true;
     void readCoverage(people.map((person) => person.user_id));
   }
 
@@ -312,5 +322,5 @@ export function useAddToTeamspace({
     />
   ) : null;
 
-  return { submenu, dialog };
+  return { submenu, menuOpened, dialog };
 }

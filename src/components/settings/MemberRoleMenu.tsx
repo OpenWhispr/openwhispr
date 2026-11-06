@@ -64,7 +64,7 @@ export function MemberRoleMenu({
   }
 
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={(open) => open && teamAdd?.menuOpened()}>
       <DropdownMenuTrigger
         ref={triggerRef}
         disabled={pending}
