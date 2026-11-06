@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useWorkspaceGuests } from "../../hooks/useWorkspaceGuests";
 import { workspaceCan } from "../../lib/capabilities";
@@ -323,6 +323,20 @@ function AccessCell({
   // Set when the last note went: the row is leaving, so focus goes to the table, not the trigger.
   const emptiedRef = useRef(false);
   const label = t(`${KEY}.noteCount`, { count: guest.notes.length });
+  const contentRef = useRef<HTMLDivElement>(null);
+  const removeButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  // The note whose × takes focus once the removed one is gone from the list.
+  const focusAfterRef = useRef<{ removed: string; next: string | undefined } | null>(null);
+
+  // The × that held focus unmounts with its note; without this focus falls to <body> and the
+  // menu stops answering arrow keys and Escape.
+  useEffect(() => {
+    const pending = focusAfterRef.current;
+    if (!pending || guest.notes.some((note) => note.id === pending.removed)) return;
+    focusAfterRef.current = null;
+    const button = pending.next ? removeButtonRefs.current.get(pending.next) : undefined;
+    (button ?? contentRef.current)?.focus();
+  }, [guest.notes]);
 
   const removeNote = async (noteId: string): Promise<void> => {
     if (sendingRef.current.has(noteId)) return;
@@ -331,11 +345,21 @@ function AccessCell({
     // The row can unmount as soon as the removal lands, so the flag is set before it.
     const emptying = guest.notes.every((note) => note.id === noteId);
     if (emptying) emptiedRef.current = true;
+    const index = guest.notes.findIndex((note) => note.id === noteId);
+    const neighbour = guest.notes[index + 1] ?? guest.notes[index - 1];
+    // Set before the request: the list can lose the note before the answer is read here.
+    focusAfterRef.current = emptying ? null : { removed: noteId, next: neighbour?.id };
     const removed = await onRemoveFromNote(noteId);
     sendingRef.current.delete(noteId);
     setSending(new Set(sendingRef.current));
-    if (!removed) emptiedRef.current = false;
-    else if (emptying) setOpen(false);
+    if (!removed) {
+      emptiedRef.current = false;
+      focusAfterRef.current = null;
+    } else if (emptying) {
+      // Say where focus goes rather than leaving it to the menu's unmount: the row is gone.
+      onTableFocus();
+      setOpen(false);
+    }
   };
 
   return (
@@ -348,6 +372,7 @@ function AccessCell({
         <ChevronDown className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
       </DropdownMenuTrigger>
       <DropdownMenuContent
+        ref={contentRef}
         align="start"
         className="max-h-72 w-72 overflow-y-auto p-1.5"
         onCloseAutoFocus={(event) => {
@@ -376,6 +401,10 @@ function AccessCell({
                   }}
                 >
                   <button
+                    ref={(node) => {
+                      if (node) removeButtonRefs.current.set(note.id, node);
+                      else removeButtonRefs.current.delete(note.id);
+                    }}
                     type="button"
                     aria-label={t(`${KEY}.removeFromNote`, { note: isolate(title) })}
                     aria-disabled={isSending}

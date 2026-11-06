@@ -76,8 +76,8 @@ async function loadTab(t, { workspace = ADMIN, status = "ready", guests = [] } =
         export const DropdownMenu = ({ children }) => h("div", { "data-menu": "" }, children);
         export const DropdownMenuTrigger = ({ children, "aria-label": label }) =>
           h("button", { "data-trigger": "", "aria-label": label }, children);
-        export const DropdownMenuContent = ({ children, onCloseAutoFocus }) =>
-          h("div", { "data-menu-content": "", onCloseAutoFocus }, children);
+        export const DropdownMenuContent = ({ children, onCloseAutoFocus, ref }) =>
+          h("div", { ref, "data-menu-content": "", onCloseAutoFocus }, children);
         export const DropdownMenuItem = ({ children, onSelect, asChild, ...rest }) =>
           asChild
             ? React.cloneElement(children, { "data-item": "", onSelect })
@@ -484,4 +484,58 @@ test("a menu that still has notes returns focus to its trigger", async (t) => {
 test("members get no ×", async (t) => {
   const { container } = await mountTab(t, { workspace: MEMBER, guests: [TWO] });
   assert.equal(removeButtons(container).length, 0);
+});
+
+const THREE = guest("jin@x.com", "Jin Park", [
+  note("n1", "Plan"),
+  note("n2", "Roadmap"),
+  note("n3", "Budget"),
+]);
+
+async function removeAndRerender(t, notes, pressedIndex) {
+  const { Tab, workspace } = await loadTab(t, { guests: [guest("jin@x.com", "Jin Park", notes)] });
+  const container = installHostDom(t);
+  const root = createRoot(container);
+  mountedRoots.set(t, root);
+  const mount = () => React.act(async () => root.render(React.createElement(Tab, { workspace })));
+  await mount();
+  const buttons = removeButtons(container);
+  const focused = [];
+  buttons.forEach((node, index) => (node.focus = () => focused.push(`button${index}`)));
+  const content = findNode(container, (node) => node.hasAttribute("data-menu-content"));
+  content.focus = () => focused.push("content");
+  await React.act(async () => propsOf(buttons[pressedIndex]).onSelect({ preventDefault() {} }));
+  // The hook has dropped the note by now.
+  globalThis.__guestsState.guests = [
+    guest(
+      "jin@x.com",
+      "Jin Park",
+      notes.filter((_, index) => index !== pressedIndex)
+    ),
+  ];
+  await mount();
+  return focused;
+}
+
+test("removing a middle note moves focus to the next note's ×", async (t) => {
+  const notes = THREE.notes;
+  const focused = await removeAndRerender(t, notes, 1);
+  // button2 (Budget) survives the rerender as the same node, so index 2 is the next ×.
+  assert.deepEqual(focused, ["button2"]);
+});
+
+test("removing the last note in the list moves focus to the previous ×", async (t) => {
+  const focused = await removeAndRerender(t, THREE.notes, 2);
+  assert.deepEqual(focused, ["button1"]);
+});
+
+test("removing a guest's last note focuses the table explicitly", async (t) => {
+  const { container } = await mountTab(t, { guests: [JIN] });
+  const frame = findNode(container, (node) => node.hasAttribute("data-guests-table"));
+  let focused = 0;
+  frame.focus = () => void focused++;
+  await React.act(async () =>
+    propsOf(removeButtons(container)[0]).onSelect({ preventDefault() {} })
+  );
+  assert.equal(focused, 1, "focus moved without waiting for the menu's unmount");
 });
