@@ -50,7 +50,7 @@ const EMPTY_RESPONSE_TEXT = JSON.parse(
 
 async function renderChatStreaming(
   t,
-  { electronAPI = {}, settings = {}, onStreamComplete, live = false } = {}
+  { electronAPI = {}, settings = {}, onStreamComplete, live = false, beforeEffects } = {}
 ) {
   installBrowserGlobals(t, { window: { electronAPI } });
   const container = live ? installHookDom(t) : null;
@@ -95,6 +95,7 @@ async function renderChatStreaming(
   // singleton constructed at import time; its API-key cache starts a real
   // setInterval that otherwise keeps the process alive after the test ends.
   t.after(() => reasoningService.destroy());
+  const auth = beforeEffects ? await vite.ssrLoadModule("/lib/authRequestContext.ts") : null;
 
   let messages = [];
   const setMessages = (updater) => {
@@ -108,6 +109,8 @@ async function renderChatStreaming(
       setMessages,
       onStreamComplete,
     });
+    // After the first render, before the hook's effects subscribe.
+    React.useLayoutEffect(() => beforeEffects?.(auth), []);
     return null;
   }
 
@@ -139,6 +142,7 @@ async function renderChatStreaming(
       return sibling;
     },
     getMessages: () => messages,
+    reasoningService,
     unmount,
   };
 }
@@ -504,4 +508,50 @@ test("idle sibling cancellation leaves the real LAN stream running", async (t) =
   finish();
   await sending;
   assert.deepEqual(saved, ["Partial answer"]);
+});
+
+test("a credential change before the hook subscribes still lets it answer", async (t) => {
+  const { captured, getMessages, reasoningService, unmount } = await renderChatStreaming(t, {
+    live: true,
+    beforeEffects: (auth) => auth.observeAuthTokenStateEvent({ generation: 2, hasToken: true }),
+  });
+  t.mock.method(reasoningService, "processTextStreamingAI", async function* () {
+    yield { type: "content", text: "Answered" };
+    yield { type: "done", finishReason: "stop" };
+  });
+  await React.act(() => captured.sendToAI("hello", []));
+  await unmount();
+  assert.equal(getMessages().find((m) => m.role === "assistant")?.content, "Answered");
+});
+
+test("an account change fences the running turn before stopping it", async (t) => {
+  const scopeListeners = new Set();
+  const { captured, getMessages, reasoningService, unmount } = await renderChatStreaming(t, {
+    live: true,
+    electronAPI: {
+      onActiveAccountScopeChanged: (listener) => {
+        scopeListeners.add(listener);
+        return () => scopeListeners.delete(listener);
+      },
+    },
+  });
+  const streamed = Promise.withResolvers();
+  t.mock.method(
+    reasoningService,
+    "processTextStreamingAI",
+    async function* (_m, _model, _p, _config, _tools, signal) {
+      yield { type: "content", text: "Old account text" };
+      streamed.resolve();
+      await new Promise((resolve) => signal.addEventListener("abort", resolve, { once: true }));
+    }
+  );
+  await React.act(async () => {
+    const sending = captured.sendToAI("hello", []);
+    await streamed.promise;
+    // The text is still waiting for its flush, which Stop would show.
+    scopeListeners.forEach((listener) => listener({ accountId: "account-b", authGeneration: 1 }));
+    await sending;
+  });
+  await unmount();
+  assert.equal(getMessages().find((m) => m.role === "assistant").content, "");
 });

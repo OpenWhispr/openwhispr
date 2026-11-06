@@ -36,10 +36,12 @@ export function useChatStreaming(options: UseChatStreamingOptions): ChatStreamin
   const messagesRef = useRef(options.setMessages);
   messagesRef.current = options.setMessages;
   const accountVersionRef = useRef(0);
+  const engineGenerationRef = useRef<number | null>(null);
   // One engine per account: a turn started before an account change writes nothing after it.
   const createEngine = useCallback((): ChatTurnEngine => {
     const accountVersion = accountVersionRef.current;
     const authGeneration = getAuthRequestContextSnapshot().observedGeneration;
+    engineGenerationRef.current = authGeneration;
     const isOwnerCurrent = (): boolean =>
       accountVersion === accountVersionRef.current &&
       authGeneration === getAuthRequestContextSnapshot().observedGeneration;
@@ -52,18 +54,22 @@ export function useChatStreaming(options: UseChatStreamingOptions): ChatStreamin
   }, []);
   const engineRef = useRef<ChatTurnEngine | null>(null);
   if (!engineRef.current) engineRef.current = createEngine();
-  useEffect(
-    () =>
-      subscribeAuthBoundary(() => {
-        engineRef.current?.cancel({ explicit: true });
-        accountVersionRef.current += 1;
-        engineRef.current = createEngine();
-        setAgentState("idle");
-        setToolStatus("");
-        setActiveToolName("");
-      }),
-    [createEngine]
-  );
+  useEffect(() => {
+    const replaceEngine = (): void => {
+      // Fence before aborting: abort listeners can run synchronously.
+      accountVersionRef.current += 1;
+      engineRef.current?.cancel({ explicit: true });
+      engineRef.current = createEngine();
+      setAgentState("idle");
+      setToolStatus("");
+      setActiveToolName("");
+    };
+    const unsubscribe = subscribeAuthBoundary(replaceEngine);
+    // The boundary counts changes from now, so one since the engine was made replaces it here.
+    if (engineGenerationRef.current !== getAuthRequestContextSnapshot().observedGeneration)
+      replaceEngine();
+    return unsubscribe;
+  }, [createEngine]);
   useEffect(() => () => engineRef.current?.cancel({ explicit: false }), []);
   const sendToAI = useCallback<ChatStreaming["sendToAI"]>(
     (userText, messages, sendOptions) => engineRef.current!.send(userText, messages, sendOptions),
