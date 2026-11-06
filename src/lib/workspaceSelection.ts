@@ -1,4 +1,4 @@
-import type { NoteItem, SpaceItem, Workspace } from "../types/electron";
+import type { SpaceItem, Workspace } from "../types/electron";
 import { workspaceCan } from "./capabilities.ts";
 
 export function manageableWorkspaces(workspaces: Workspace[]): Workspace[] {
@@ -41,20 +41,6 @@ export function spacesInWorkspaceScope<S extends ScopedSpace>(
 ): S[] {
   return spaces.filter((space) =>
     isSpaceInWorkspaceScope(space, activeWorkspaceId, workspaces, personalSelected)
-  );
-}
-
-/**
- * The notes "Add existing" may offer for a folder. Adding one sets its folder, which also moves it
- * into the folder's space, so a note the current scope hides must never be offered.
- */
-export function notesAddableToFolder<N extends Pick<NoteItem, "folder_id" | "space_id">>(
-  notes: N[],
-  targetFolderId: number,
-  visibleSpaceIds: ReadonlySet<number>
-): N[] {
-  return notes.filter(
-    (note) => note.folder_id !== targetFolderId && visibleSpaceIds.has(note.space_id)
   );
 }
 

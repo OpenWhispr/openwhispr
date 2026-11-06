@@ -8,7 +8,6 @@ import { cn } from "../lib/utils";
 import { formatDateGroup } from "../../utils/dateFormatting";
 import { useSpaces } from "../../stores/noteStore";
 import { useSpacesInWorkspaceScope } from "../../hooks/useWorkspace";
-import { notesAddableToFolder } from "../../lib/workspaceSelection";
 import type { NoteItem } from "../../types/electron";
 
 interface AddNotesToFolderDialogProps {
@@ -45,7 +44,8 @@ export default function AddNotesToFolderDialog({
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [isAdding, setIsAdding] = useState(false);
-  // The tree's scope: a note it hides would leave its space unseen when added here.
+  // The tree's scope: adding a note moves it into this folder's space, so one the tree hides
+  // must never be offered.
   const visibleSpaces = useSpacesInWorkspaceScope(useSpaces());
   const visibleSpaceIds = useMemo(
     () => new Set(visibleSpaces.map((space) => space.id)),
@@ -60,7 +60,7 @@ export default function AddNotesToFolderDialog({
   }, [open]);
 
   const availableNotes = useMemo(
-    () => notesAddableToFolder(allNotes, targetFolderId, visibleSpaceIds),
+    () => allNotes.filter((n) => n.folder_id !== targetFolderId && visibleSpaceIds.has(n.space_id)),
     [allNotes, targetFolderId, visibleSpaceIds]
   );
 
