@@ -22,6 +22,7 @@ import {
   isPendingLocalModel,
   judgePendingLocalModel,
   MAX_AUTOMATIC_DOWNLOAD_ATTEMPTS,
+  readLocalModelInventory,
   readPendingLocalModels,
   type PendingLocalModelInventory,
   type PendingLocalModelKind,
@@ -78,15 +79,6 @@ function downloadDisplay(download: ActiveDownload) {
     name: localModel?.model.name ?? download.id,
     provider: localModel?.provider.id ?? "local",
   };
-}
-
-async function readLocalModelInventory(): Promise<PendingLocalModelInventory> {
-  const [whisper, parakeet, llm] = await Promise.all([
-    window.electronAPI?.listWhisperModels?.().catch(() => undefined),
-    window.electronAPI?.listParakeetModels?.().catch(() => undefined),
-    window.electronAPI?.modelGetAll?.().catch(() => undefined),
-  ]);
-  return { whisper: whisper?.models, parakeet: parakeet?.models, llm };
 }
 
 function activatePendingLocalModel(family: "speech" | "llm", modelId: string) {
