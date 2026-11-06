@@ -345,6 +345,23 @@ test("asking for the running server cancels a deferred stop", async (t) => {
   assert.equal(stops.length, 0);
 });
 
+test("a start refused while the answer runs leaves a deferred stop in place", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  const { manager, stops } = makeManager();
+  await manager.start("/models/chat.gguf");
+  manager.processing = true;
+  const deferredStop = manager.stopWhenIdle();
+  await settle();
+  await assert.rejects(manager.start("/models/summary.gguf", { busyWaitMs: 0 }), {
+    code: "LOCAL_MODEL_BUSY",
+  });
+  manager.processing = false;
+  t.mock.timers.tick(1000);
+  await settle();
+  assert.equal(await deferredStop, true);
+  assert.equal(stops.length, 1);
+});
+
 for (const [label, modelPath, options] of [
   ["another model", "/models/other.gguf", { contextSize: 4096 }],
   ["a larger context", "/models/summary.gguf", { contextSize: 8192 }],

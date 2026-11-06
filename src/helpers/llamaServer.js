@@ -250,7 +250,6 @@ class LlamaServerManager {
 
   async _policyAllowedStart(modelPath, options = {}) {
     if (this.stopPromise) await this.stopPromise;
-    this.cancelDeferredStop();
 
     const request = {
       modelPath,
@@ -270,7 +269,10 @@ class LlamaServerManager {
       // this request. Callers record the model they asked for as loaded once
       // this resolves, so it must never resolve on a startup for another one.
       while (this.startupPromise) {
-        if (servesRequest(this.startingRequest, request)) return this.startupPromise;
+        if (servesRequest(this.startingRequest, request)) {
+          this.cancelDeferredStop();
+          return this.startupPromise;
+        }
         await this._waitFor(
           this.startupPromise.catch(() => {}),
           {
@@ -283,6 +285,7 @@ class LlamaServerManager {
       if (this.ready && servesRequest(this, request)) {
         // Streaming chat reaches the port directly and never goes through
         // inference(), so asking for the running server is its only activity.
+        this.cancelDeferredStop();
         this.resetIdleTimer();
         this._handOff();
         return;
