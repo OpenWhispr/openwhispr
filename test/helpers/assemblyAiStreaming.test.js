@@ -418,3 +418,130 @@ test("a warm connection opened at another sample rate is not reused", async () =
     }
   });
 });
+
+test("warm connection closes automatically after idle timeout and does not re-warm", async () => {
+  await withBeginServer(async (url, connections) => {
+    const streaming = new AssemblyAiStreaming();
+    dialLoopback(streaming, url);
+
+    try {
+      await streaming.warmup({ token: "test-token", idleTimeoutMs: 50 });
+      assert.equal(streaming.hasWarmConnection(), true);
+      assert.notEqual(streaming.keepAliveInterval, null);
+
+      // Wait past the idle timeout
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      assert.equal(streaming.hasWarmConnection(), false);
+      assert.equal(streaming.warmConnection, null);
+      assert.equal(streaming.rewarmTimer, null);
+      assert.equal(streaming.keepAliveInterval, null);
+      // Sockets opened should remain 1 (no re-warm opened a 2nd socket)
+      assert.equal(connections.length, 1);
+    } finally {
+      streaming.cleanupAll();
+    }
+  });
+});
+
+test("using warm connection cancels the idle timeout", async () => {
+  await withBeginServer(async (url) => {
+    const streaming = new AssemblyAiStreaming();
+    dialLoopback(streaming, url);
+
+    try {
+      await streaming.warmup({ token: "test-token", idleTimeoutMs: 60 });
+      assert.equal(streaming.hasWarmConnection(), true);
+
+      // Connect (uses the warm connection)
+      await streaming.connect({ token: "test-token" });
+      assert.equal(streaming.isConnected, true);
+      assert.equal(streaming.warmIdleTimer, null);
+
+      // Wait past what would have been the warm idle timeout
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Active dictation session remains alive
+      assert.equal(streaming.isConnected, true);
+      assert.notEqual(streaming.ws, null);
+    } finally {
+      streaming.cleanupAll();
+    }
+  });
+});
+
+test("warmup refreshes the idle timeout when connection is already warm", async () => {
+  await withBeginServer(async (url) => {
+    const streaming = new AssemblyAiStreaming();
+    dialLoopback(streaming, url);
+
+    try {
+      await streaming.warmup({ token: "test-token", idleTimeoutMs: 80 });
+      assert.equal(streaming.hasWarmConnection(), true);
+
+      // Wait 40ms, then call warmup again to refresh the timer
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      await streaming.warmup({ token: "test-token", idleTimeoutMs: 80 });
+      assert.equal(streaming.hasWarmConnection(), true);
+
+      // At 60ms after refresh (100ms total from start, past original 80ms), still warm
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      assert.equal(streaming.hasWarmConnection(), true);
+
+      // At 50ms more (110ms after refresh), should have idled out
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      assert.equal(streaming.hasWarmConnection(), false);
+    } finally {
+      streaming.cleanupAll();
+    }
+  });
+});
+
+test("connect cold-starts cleanly after warm connection idles out", async () => {
+  await withBeginServer(async (url, connections) => {
+    const streaming = new AssemblyAiStreaming();
+    dialLoopback(streaming, url);
+
+    try {
+      await streaming.warmup({ token: "test-token", idleTimeoutMs: 50 });
+      assert.equal(streaming.hasWarmConnection(), true);
+
+      // Wait for idle timeout to close the warm connection
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      assert.equal(streaming.hasWarmConnection(), false);
+
+      // Connect now performs a cold start
+      await streaming.connect({ token: "test-token" });
+      assert.equal(streaming.isConnected, true);
+      assert.equal(connections.length, 2, "second socket opened for cold start");
+    } finally {
+      streaming.cleanupAll();
+    }
+  });
+});
+
+test("resetWarmIdleTimer resets the idle timer expiration", async () => {
+  await withBeginServer(async (url) => {
+    const streaming = new AssemblyAiStreaming();
+    dialLoopback(streaming, url);
+
+    try {
+      await streaming.warmup({ token: "test-token", idleTimeoutMs: 80 });
+      assert.equal(streaming.hasWarmConnection(), true);
+
+      // At 40ms, explicitly reset timer with 80ms
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      streaming.resetWarmIdleTimer(80);
+
+      // At 60ms after reset (100ms total, past original 80ms), still warm
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      assert.equal(streaming.hasWarmConnection(), true);
+
+      // At 50ms more, idle timeout fires
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      assert.equal(streaming.hasWarmConnection(), false);
+    } finally {
+      streaming.cleanupAll();
+    }
+  });
+});
