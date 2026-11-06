@@ -1250,11 +1250,11 @@ async function startApp() {
     applySnapshot: (snapshot) =>
       replaceRegistryData({
         ...snapshot,
-        data: withInstalledModels(
-          withTrustedDownloads(snapshot.data, bundledRegistryData, (id) =>
-            debugLogger.warn("Refused a catalog download from an untrusted source", { id })
-          ),
-          app.getVersion()
+        // Installed records pass the same download checks as the catalog.
+        data: withTrustedDownloads(
+          withInstalledModels(snapshot.data, app.getVersion()),
+          bundledRegistryData,
+          (id) => debugLogger.warn("Refused a catalog download from an untrusted source", { id })
         ),
       }),
     fetch: (...args) => net.fetch(...args),

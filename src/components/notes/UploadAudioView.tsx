@@ -477,19 +477,24 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         }
         return;
       }
-      if (isSherpaLocalProvider(localTranscriptionProvider)) {
-        const r = await window.electronAPI.listParakeetModels?.();
-        if (!cancelled)
-          setProviderReady(
-            !!(r?.success && r.models.some((m: { downloaded?: boolean }) => m.downloaded))
-          );
-      } else {
-        const r = await window.electronAPI.listWhisperModels?.();
-        if (!cancelled)
-          setProviderReady(
-            !!(r?.success && r.models.some((m: { downloaded?: boolean }) => m.downloaded))
-          );
+      const sherpa = isSherpaLocalProvider(localTranscriptionProvider);
+      const r = sherpa
+        ? await window.electronAPI.listParakeetModels?.()
+        : await window.electronAPI.listWhisperModels?.();
+      let ready = !!(r?.success && r.models.some((m: { downloaded?: boolean }) => m.downloaded));
+      // The lists hold offered models only; a retired model still on disk keeps running.
+      const selected = sherpa
+        ? localTranscriptionProvider === "cohere"
+          ? cohereModel
+          : parakeetModel
+        : whisperModel;
+      if (!ready && selected) {
+        const status = sherpa
+          ? await window.electronAPI.checkParakeetModelStatus?.(selected)
+          : await window.electronAPI.checkModelStatus?.(selected);
+        ready = !!status?.downloaded;
       }
+      if (!cancelled) setProviderReady(ready);
     };
     checkProviderReady();
     return () => {
@@ -502,6 +507,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     remoteTranscriptionUrl,
     useLocalWhisper,
     localTranscriptionProvider,
+    whisperModel,
+    parakeetModel,
+    cohereModel,
     cloudTranscriptionProvider,
     cloudTranscriptionBaseUrl,
     openaiApiKey,

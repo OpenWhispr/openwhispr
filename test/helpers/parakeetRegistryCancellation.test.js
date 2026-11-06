@@ -214,3 +214,85 @@ test("launch never pre-warms a model the catalog does not know", async (t) => {
   });
   assert.deepEqual(started, [offered]);
 });
+
+function archiveManager(root, data, { checkDiskSpace, validateModelArchive, policy }) {
+  const signal = { aborted: false };
+  const stubs = {
+    "./parakeetServer": class {
+      isModelDownloaded() {
+        return false;
+      }
+      isAvailable() {
+        return false;
+      }
+      getServerStatus() {
+        return {};
+      }
+    },
+    "./downloadUtils": {
+      createDownloadSignal: () => ({
+        signal,
+        abort() {
+          signal.aborted = true;
+        },
+      }),
+      async downloadFile(_url, target) {
+        fs.writeFileSync(target, "archive");
+      },
+      checkDiskSpace,
+    },
+    "./modelArchiveIntegrity": { validateModelArchive },
+  };
+  if (policy) stubs["./localModelPolicyGate"] = policy;
+  const manager = loadManager(root, data, stubs);
+  manager.isInitialized = true;
+  manager._extractModel = async () => {};
+  return manager;
+}
+
+test("an archive refused for disk space, not for itself, is kept for the next attempt", async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "registry-disk-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const data = structuredClone(require("../../src/models/modelRegistryData.json"));
+  const model = "parakeet-tdt-110m-en";
+  const archive = path.join(root, `${model}.tar.bz2`);
+  fs.writeFileSync(archive, "finished archive");
+  const manager = archiveManager(root, data, {
+    checkDiskSpace: async () => ({ ok: false, availableBytes: 0 }),
+    validateModelArchive: async () => {},
+  });
+  await assert.rejects(manager.downloadParakeetModel(model), /Not enough disk space/);
+  assert.equal(fs.existsSync(archive), true);
+});
+
+test("a revocation during the archive check keeps the finished archive", async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "registry-revoke-verify-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const data = structuredClone(require("../../src/models/modelRegistryData.json"));
+  const model = "parakeet-tdt-110m-en";
+  let revoked = false;
+  let abortDownload;
+  const refusal = () => Object.assign(new Error("blocked"), { code: "POLICY_MODEL_BLOCKED" });
+  const manager = archiveManager(root, data, {
+    checkDiskSpace: async () => ({ ok: true }),
+    validateModelArchive: async () => {
+      revoked = true;
+      abortDownload();
+      throw Object.assign(new Error("Verification cancelled"), { isAbort: true });
+    },
+    policy: {
+      runLocalModelOperation: (_owner, _scope, _model, run) => run(),
+      isLocalModelPolicyRefusal: (error) => error?.code === "POLICY_MODEL_BLOCKED",
+      assertLocalModelOperation() {
+        if (revoked) throw refusal();
+      },
+      localModelOperationSignal: (_owner, signal) => signal,
+      bindLocalModelDownload(_owner, abort) {
+        abortDownload = abort;
+        return () => {};
+      },
+    },
+  });
+  await assert.rejects(manager.downloadParakeetModel(model), { code: "POLICY_MODEL_BLOCKED" });
+  assert.equal(fs.existsSync(path.join(root, `${model}.tar.bz2`)), true);
+});

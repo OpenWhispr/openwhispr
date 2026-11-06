@@ -441,6 +441,7 @@ class ParakeetManager {
       totalBytes: 0,
     };
     this.currentDownloadProcess = downloadProcess;
+    let archiveRejected = false;
 
     try {
       await fsPromises.mkdir(modelsDir, { recursive: true });
@@ -503,13 +504,18 @@ class ParakeetManager {
           percentage: Math.min(100, Math.round((bytesRead / archiveBytes) * 100)),
         });
       verifying(0);
-      await validateModelArchive(
-        archivePath,
-        modelConfig.extractDir,
-        signal,
-        modelConfig.size,
-        verifying
-      );
+      try {
+        await validateModelArchive(
+          archivePath,
+          modelConfig.extractDir,
+          signal,
+          modelConfig.size,
+          verifying
+        );
+      } catch (validationError) {
+        if (!validationError.isAbort && !signal.aborted) archiveRejected = true;
+        throw validationError;
+      }
       if (signal.aborted) throw Object.assign(new Error("Download cancelled"), { isAbort: true });
       downloadProcess.phase = "installing";
       downloadProcess.percentage = 100;
@@ -575,16 +581,27 @@ class ParakeetManager {
 
       rememberInstalledModel("parakeetModels", "", modelName);
       return { model: modelName, downloaded: true, path: modelPath, success: true };
-    } catch (error) {
+    } catch (caught) {
+      let error = caught;
+      // A revocation reaches the transfer and the archive check as an abort.
+      if (error.isAbort || signal.aborted) {
+        try {
+          assertLocalModelOperation(this);
+        } catch (policyRefusal) {
+          if (isLocalModelPolicyRefusal(policyRefusal)) error = policyRefusal;
+        }
+      }
       // A policy revocation says nothing about the archive, and it may be allowed again.
       if (isLocalModelPolicyRefusal(error)) throw error;
-      // A cancelled, unverifiable or unextractable archive is never reused.
-      await fsPromises.unlink(archivePath).catch(() => {});
       if (error.isAbort || signal.aborted) {
+        await fsPromises.unlink(archivePath).catch(() => {});
         throw Object.assign(new Error("Download interrupted by user"), {
           code: "DOWNLOAD_CANCELLED",
         });
       }
+      // A bad archive is never reused (extraction drops its own); one that never got that far,
+      // such as after a disk-space refusal, is kept for the next attempt.
+      if (archiveRejected) await fsPromises.unlink(archivePath).catch(() => {});
       throw error;
     } finally {
       unbindPolicy();

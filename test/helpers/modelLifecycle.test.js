@@ -493,6 +493,67 @@ test("a retired GGUF model moves to a replacement on disk, otherwise asks again"
   );
 });
 
+test("a GGUF pick made while the disk is read is never overwritten", async (t) => {
+  const provider = seed.localProviders.find((p) => p.models.length > 2 && p.id !== "llama");
+  const [retiredOne, replacement, picked] = provider.models.filter((m) => !m.legacy);
+  let settings;
+  installBrowserGlobals(t, {
+    initialStorage: {
+      _llmScopeKeysMigrated: "1",
+      _providerSettingsMigrated: "1",
+      cleanupMode: "local",
+      cleanupProvider: provider.id,
+      cleanupModel: retiredOne.id,
+    },
+    window: {
+      location: { search: "?panel=true" },
+      electronAPI: {
+        modelGetAll: async () => {
+          settings.useSettingsStore.setState({ cleanupModel: picked.id });
+          return [{ id: replacement.id, isDownloaded: true }];
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t, { cachePrefix: "model-lifecycle-gguf-race-" });
+  settings = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const store = await vite.ssrLoadModule("/models/registryData.js");
+  const data = structuredClone(seed);
+  retire(data, "localProviders", provider.id, retiredOne.id, replacement.id);
+  store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1 });
+  await settings.reconcileRetiredLocalLlmSelections();
+  assert.equal(settings.useSettingsStore.getState().cleanupModel, picked.id);
+});
+
+test("a Bedrock profile outside the US follows its replacement in the same region", async (t) => {
+  const bedrock = seed.enterpriseProviders.find((p) => p.id === "bedrock");
+  const [named, replacement] = bedrock.models.filter((m) => !m.retired && m.id.startsWith("us."));
+  const inRegion = (id) => id.replace(/^us\./, "eu.");
+  installBrowserGlobals(t, {
+    initialStorage: {
+      _llmScopeKeysMigrated: "1",
+      _providerSettingsMigrated: "1",
+      bedrockRegion: "eu-west-1",
+      cleanupMode: "enterprise",
+      cleanupProvider: "bedrock",
+      cleanupModel: inRegion(named.id),
+    },
+    window: { location: { search: "?panel=true" } },
+  });
+  const vite = await createRendererServer(t, { cachePrefix: "model-lifecycle-bedrock-eu-" });
+  const settings = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const store = await vite.ssrLoadModule("/models/registryData.js");
+  const toasts = await vite.ssrLoadModule("/stores/retiredModelSwitchStore.ts");
+  const data = structuredClone(seed);
+  retire(data, "enterpriseProviders", "bedrock", named.id, replacement.id);
+  store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1 });
+  settings.reconcileRetiredCloudModelSelections();
+
+  assert.equal(settings.useSettingsStore.getState().cleanupModel, inRegion(replacement.id));
+  const [event] = toasts.takeQueuedRetiredModelSwitches();
+  assert.deepEqual([event.from, event.to], [named.name, replacement.name]);
+});
+
 test("an enterprise scope follows only a named replacement", async (t) => {
   const bedrock = seed.enterpriseProviders.find((p) => p.id === "bedrock");
   const [named, replacement, unnamed] = bedrock.models.filter((m) => !m.retired);

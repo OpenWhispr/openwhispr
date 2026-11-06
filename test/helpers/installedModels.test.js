@@ -75,13 +75,30 @@ test("a damaged record can't stop catalog updates or reach the prototype", (t) =
       [key("__proto__", "", "polluted")]: { name: "x" },
       [key("whisperModels", "", "__proto__")]: { polluted: true },
       "not json": { name: "x" },
-      [key("whisperModels", "", "kept")]: { name: "Kept" },
+      [key("whisperModels", "", "kept")]: {
+        ...seed.whisperModels.base,
+        name: "Kept",
+        fileName: "ggml-kept.bin",
+      },
+      [key("whisperModels", "", "unsafe-name")]: {
+        ...seed.whisperModels.base,
+        fileName: "../../outside.bin",
+      },
+      [key("whisperModels", "", "incomplete")]: { name: "x" },
+      [key("localProviders", "qwen", "unsafe-gguf")]: {
+        ...seed.localProviders.find((p) => p.id === "qwen").models[0],
+        fileName: "../escape.gguf",
+      },
     })
   );
   const merged = withInstalledModels(seed, "99.0.0");
   assert.equal(merged.whisperModels.kept.name, "Kept");
-  for (const id of ["null-entry", "text-entry", "wrong-shape"])
+  for (const id of ["null-entry", "text-entry", "wrong-shape", "unsafe-name", "incomplete"])
     assert.equal(Object.hasOwn(merged.whisperModels, id), false, id);
+  assert.equal(
+    merged.localProviders.find((p) => p.id === "qwen").models.some((m) => m.id === "unsafe-gguf"),
+    false
+  );
   assert.equal({}.polluted, undefined);
   assert.equal(merged.whisperModels.polluted, undefined);
 });

@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { getRegistryData } = require("../models/registryData.js");
 const { isModelSupported } = require("../models/registrySelection.js");
+const { acceptCatalog } = require("../models/registrySchema.cjs");
 
 // The catalog entry of each local model this app installed. Main merges entries a catalog
 // does not list at all back into it, so an installed model keeps working and can be
@@ -96,22 +97,36 @@ function pruneInstalledModels(section, isStillInstalled) {
 }
 
 // A model needing a newer app (after a downgrade) stays out, as the catalog keeps it out.
+// The record is a file on disk, so each entry is read on its own the way a catalog entry is
+// (acceptCatalog): one this app can't read, or with an unsafe name, is skipped.
 function withInstalledModels(data, appVersion) {
-  const merged = structuredClone(data);
+  let merged = null;
   for (const [key, entry] of Object.entries(readRecord())) {
     const parsed = parseKey(key);
     if (!parsed || !entry || typeof entry !== "object" || !isModelSupported(entry, appVersion))
       continue;
     const { section, providerId, modelId } = parsed;
+    const provider = providerId && data[section]?.find?.((item) => item?.id === providerId);
+    const listed = providerId
+      ? !provider?.models || provider.models.some((model) => model.id === modelId)
+      : !data[section] || Object.hasOwn(data[section], modelId);
+    if (listed) continue;
+
+    const addition = providerId
+      ? { [section]: [{ id: providerId, models: [{ ...entry, id: modelId }] }] }
+      : { [section]: { [modelId]: entry } };
+    const accepted = acceptCatalog(addition, data, appVersion);
+    merged ??= structuredClone(data);
     if (providerId) {
-      const provider = merged[section]?.find((item) => item?.id === providerId);
-      if (provider?.models && !provider.models.some((model) => model.id === modelId))
-        provider.models.push({ ...entry, id: modelId });
-    } else if (merged[section] && !Object.hasOwn(merged[section], modelId)) {
-      merged[section][modelId] = entry;
+      const model = accepted[section]
+        .find((item) => item.id === providerId)
+        ?.models.find((item) => item.id === modelId);
+      if (model) merged[section].find((item) => item.id === providerId).models.push(model);
+    } else if (Object.hasOwn(accepted[section], modelId)) {
+      merged[section][modelId] = accepted[section][modelId];
     }
   }
-  return merged;
+  return merged ?? data;
 }
 
 module.exports = {

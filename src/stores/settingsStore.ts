@@ -3581,6 +3581,9 @@ export async function reconcileRetiredLocalLlmSelections(installed?: Set<string>
         .map((model) => model.id)
     );
   for (const { storeKey, modelId, retired, providerId } of stale) {
+    // The user may have picked another model while the disk was read.
+    if ((useSettingsStore.getState() as unknown as Record<string, unknown>)[storeKey] !== modelId)
+      continue;
     const to =
       offeredReplacement("localProviders", providerId, modelId, (id) => onDisk.has(id)) ?? "";
     const { alreadyMoved } = moveSelection(storeKey, to);
@@ -3772,10 +3775,15 @@ export function reconcileRetiredCloudModelSelections(): void {
     provider: string,
     from: string,
     to: string,
-    announce: boolean
+    announce: boolean,
+    storedTo = to
   ) => {
-    const { alreadyMoved } = moveSelection(storeKey, to);
-    logger.info("Repointed retired model selection", { scope: storeKey, from, to }, "settings");
+    const { alreadyMoved } = moveSelection(storeKey, storedTo);
+    logger.info(
+      "Repointed retired model selection",
+      { scope: storeKey, from, to: storedTo },
+      "settings"
+    );
     if (!announce || alreadyMoved) return;
     const retired = getRetiredModel(section, provider, from);
     const providerDef = modelRegistryData[section].find((p) => p.id === provider);
@@ -3795,11 +3803,22 @@ export function reconcileRetiredCloudModelSelections(): void {
     if (!provider || !model) continue;
     if (mode === "enterprise") {
       const offered = modelRegistryData.enterpriseProviders.find((p) => p.id === provider)?.models;
-      const named = offeredReplacement("enterpriseProviders", provider, model, (id) =>
+      // Bedrock stores profile IDs for the user's region; the catalog lists us. ones.
+      const bedrock = provider === "bedrock";
+      const catalogId = bedrock ? adjustBedrockModelForRegion(model, "us-east-1") : model;
+      const named = offeredReplacement("enterpriseProviders", provider, catalogId, (id) =>
         Boolean(offered?.some((m) => m.id === id))
       );
       if (named)
-        repoint("enterpriseProviders", scope.storeKeys.model, provider, model, named, true);
+        repoint(
+          "enterpriseProviders",
+          scope.storeKeys.model,
+          provider,
+          catalogId,
+          named,
+          true,
+          bedrock ? adjustBedrockModelForRegion(named, state.bedrockRegion as string) : named
+        );
       continue;
     }
     if (!usesCloudModelCatalog(mode) || provider === "tinfoil") continue;
