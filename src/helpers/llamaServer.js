@@ -233,11 +233,11 @@ class LlamaServerManager {
           ...options,
           signal: localModelOperationSignal(this, options.signal),
         }),
-      { onAbort: () => this._stopIfServing(modelPath) }
+      { onAbort: () => this.stopIfServing(modelPath) }
     );
   }
 
-  _stopIfServing(modelPath) {
+  stopIfServing(modelPath) {
     if (this.modelPath === modelPath || this.startingRequest?.modelPath === modelPath) {
       return this.stop();
     }
@@ -275,10 +275,7 @@ class LlamaServerManager {
         }
         await this._waitFor(
           this.startupPromise.catch(() => {}),
-          {
-            deadline: busyDeadline,
-            signal,
-          }
+          { deadline: busyDeadline, signal }
         );
       }
 
@@ -623,7 +620,7 @@ class LlamaServerManager {
         debugLogger.debug("llama-server process exited", { code, signal });
         // A SIGKILLed server can exit after stop() moved on and the next one
         // spawned; losing that one's handle would orphan it.
-        if (this.process !== child) return;
+        if (this.process && this.process !== child) return;
         this.ready = false;
         this.process = null;
         this.stopHealthCheck();

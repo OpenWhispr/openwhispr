@@ -6333,7 +6333,6 @@ class IPCHandlers {
         );
         modelManager.currentServerModelId = modelId;
 
-        this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
         return { success: true, port: modelManager.serverManager.port };
       } catch (error) {
         return { success: false, error: error.message, code: error.code };

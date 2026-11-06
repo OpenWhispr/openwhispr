@@ -452,10 +452,11 @@ const isValidApiKey = (key, provider = "openai") => {
   return key !== placeholder;
 };
 
-// Realtime providers expose no finalize handshake (unlike Deepgram/AssemblyAI/
-// Corti), so the transcript tail lands whenever it lands — wait, don't sleep.
 // Dictation won't wait out another model's answer: past this it goes in as spoken.
 const DICTATION_MODEL_BUSY_WAIT_MS = 2000;
+
+// Realtime providers expose no finalize handshake (unlike Deepgram/AssemblyAI/
+// Corti), so the transcript tail lands whenever it lands — wait, don't sleep.
 const STREAMING_FINAL_QUIET_MS = 250;
 const STREAMING_FINAL_CEILING_MS = 2000;
 

@@ -380,11 +380,11 @@ for (const [label, modelPath, options] of [
     };
     const first = manager.start("/models/summary.gguf", { contextSize: 4096 });
     await settle();
-    const second = manager.start(modelPath, { ...options, busyWaitMs: 0 });
-    const rejected = assert.rejects(second, /another request|different|incompatible/i);
     manager.processing = false;
     t.mock.timers.tick(1000);
     await settle();
+    const second = manager.start(modelPath, { ...options, busyWaitMs: 0 });
+    const rejected = assert.rejects(second, /another request|different|incompatible/i);
     ready.resolve();
     await first;
     await rejected;

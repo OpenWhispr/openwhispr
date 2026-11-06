@@ -972,7 +972,7 @@ class ModelManager {
           onAbort: () => {
             const modelInfo = this.findModelById(modelId);
             if (!modelInfo) return;
-            return this.serverManager._stopIfServing(
+            return this.serverManager.stopIfServing(
               path.join(this.modelsDir, modelInfo.model.fileName)
             );
           },
