@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
+const { isLocalModelPolicyRefusal } = require("../../src/helpers/localModelPolicyGate");
 
 const source = fs.readFileSync(path.join(__dirname, "../../src/helpers/ipcHandlers.js"), "utf8");
 
@@ -436,6 +437,7 @@ test("model policy refresh stops only the active local meeting selection before 
       },
       _stopMeetingForPolicy: (code) => stopped.push(code),
       debugLogger: { warn() {} },
+      isLocalModelPolicyRefusal,
     };
     vm.createContext(context);
     vm.runInContext(
