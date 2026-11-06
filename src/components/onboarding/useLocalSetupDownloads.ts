@@ -34,6 +34,7 @@ import {
   claimLocalSetupDownload,
   handOverLocalSetupDownload,
   releaseLocalSetupDownload,
+  runLocalSetupHandOff,
 } from "./localSetupDownloadClaims";
 import {
   forgetPendingGraphicsPack,
@@ -414,7 +415,7 @@ export function useLocalSetupDownloads(
           }
         }
       }
-      void finishInBackground(steps, onModelReady);
+      void runLocalSetupHandOff(() => finishInBackground(steps, onModelReady));
     };
 
     return { ready, pending, graphicsPackPending, continueInBackground };

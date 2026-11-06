@@ -43,7 +43,7 @@ function saveSession(currentStepId) {
   );
 }
 
-async function createTrayHarness(t, { api = {}, storage = {} } = {}) {
+async function createTrayHarness(t, { api = {}, storage = {}, beforeMount } = {}) {
   let unmount = async () => {};
   t.after(() => unmount());
   const listeners = { whisper: new Set(), parakeet: new Set(), llm: new Set() };
@@ -81,6 +81,7 @@ async function createTrayHarness(t, { api = {}, storage = {} } = {}) {
     "/components/onboarding/BackgroundModelDownloadTray.tsx"
   );
   const registry = await vite.ssrLoadModule("/components/onboarding/localSetupDownloadClaims.ts");
+  await beforeMount?.({ vite, registry });
   let tree;
   function Harness() {
     tree = BackgroundModelDownloadTray({ placement: "onboarding" });
@@ -229,10 +230,11 @@ const SCOPES_WAITING = {
 async function relaunchWithPending(
   t,
   selections,
-  { downloaded = [], storage = {}, modelDownload, api = {} } = {}
+  { downloaded = [], storage = {}, modelDownload, api = {}, beforeMount } = {}
 ) {
   const requested = [];
   const tray = await createTrayHarness(t, {
+    beforeMount,
     storage: {
       ...SCOPES_WAITING,
       pendingLocalModelSelectionsV1: JSON.stringify(selections),
@@ -389,4 +391,34 @@ test("a graphics pack that landed before the quit isn't fetched again", async (t
   );
   assert.deepEqual(packRequests, []);
   assert.equal(pending.hasPendingGraphicsPack(), false);
+});
+
+test("right after Proceed the tray leaves the step's queue to fetch its rows", async (t) => {
+  let endHandOff;
+  const packRequests = [];
+  const { tray, requested } = await relaunchWithPending(
+    t,
+    {
+      cleanup: { provider: "qwen", modelId: CLEANUP_LLM, resumable: true },
+      assistant: { provider: "qwen", modelId: LLM, resumable: true },
+    },
+    {
+      storage: { pendingLocalGraphicsPackFailures: "0" },
+      api: {
+        getLlamaVulkanStatus: async () => ({ downloaded: false }),
+        downloadLlamaVulkanBinary: async () => {
+          packRequests.push("pack");
+          return { success: true };
+        },
+      },
+      // The step's Proceed starts its queue before the control panel's tray mounts.
+      beforeMount: ({ registry }) => {
+        void registry.runLocalSetupHandOff(() => new Promise((resolve) => (endHandOff = resolve)));
+      },
+    }
+  );
+  assert.deepEqual(requested, [], "one download at a time: the step's queue has them");
+  assert.deepEqual(packRequests, [], "the graphics pack isn't fetched twice");
+  await React.act(async () => endHandOff());
+  assert.equal(tray.registry.isLocalSetupHandOffRunning(), false);
 });

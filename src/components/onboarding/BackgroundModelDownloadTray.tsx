@@ -37,7 +37,7 @@ import type {
 import { isTrayInstalling, mergeHydratedDownloads } from "./localDownloadState";
 import { AnimatedEllipsis } from "./AnimatedEllipsis";
 import { ONBOARDING_SESSION_KEY, isDownloadOwningOnboardingStepActive } from "./flow";
-import { isLocalSetupDownload } from "./localSetupDownloadClaims";
+import { isLocalSetupDownload, isLocalSetupHandOffRunning } from "./localSetupDownloadClaims";
 import { getPlatform } from "../../utils/platform";
 
 type DownloadKind = "whisper" | "parakeet" | "llm";
@@ -160,6 +160,8 @@ function settlePendingDownloads(inventory: PendingLocalModelInventory): {
 
 // One at a time, as the setup step does; text models run better once the pack is here.
 async function resumeDownloads(modelIds: string[], graphicsPack: boolean): Promise<void> {
+  // Right after Proceed the step's own queue still runs in this window and fetches these.
+  if (isLocalSetupHandOffRunning()) return;
   if (graphicsPack) {
     const status = await window.electronAPI?.getLlamaVulkanStatus?.().catch(() => undefined);
     if (status?.downloaded) forgetPendingGraphicsPack();
