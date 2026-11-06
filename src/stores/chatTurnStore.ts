@@ -476,8 +476,8 @@ export function startChatSend(input: StartChatSendInput): boolean {
       patch(() => ({ running: false, agentState: "idle", toolStatus: "", activeToolName: "" }));
       patchEntry(ownerCurrent, () => ({ settling: false }));
       submissions.delete(submissionId);
-      // A claim made before an account change no longer counts in main.
-      if (claimedId !== null && ownerCurrent()) releaseChatConversation(claimedId);
+      // Even for a dropped chat: a delete that fails keeps its row, which must not stay busy.
+      if (claimedId !== null) releaseChatConversation(claimedId);
     }
   };
   void run();

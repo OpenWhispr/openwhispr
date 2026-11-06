@@ -58,6 +58,28 @@ test("two conversations answer independently and stop cannot release a newer tur
   );
 });
 
+test("a turn gives its conversation back after the chat is dropped for deletion", async (t) => {
+  const owners = new Map();
+  const { store, send, streams } = await setupChatTurns(t, {
+    claimAgentConversation: async (id, owner) => {
+      const owned = !owners.has(id) || owners.get(id) === owner;
+      if (owned) owners.set(id, owner);
+      return { owned, conversation: { id, title: `Chat ${id}`, messages: [] } };
+    },
+    releaseAgentConversation: async (id, owner) => {
+      if (owners.get(id) === owner) owners.delete(id);
+    },
+  });
+  store.selectChat({ kind: "conversation", conversationId: 4 });
+  send();
+  await until(() => streams.length === 1);
+  assert.equal(owners.has(4), true);
+  // ChatView drops a chat before deleting it, and a delete that fails keeps the row.
+  store.dropChatConversation(4);
+  streams[0].resolve("late");
+  await until(() => !owners.has(4));
+});
+
 test("failed creations restore each question once after the newer New chat draft", async (t) => {
   const first = deferred(),
     second = deferred();
