@@ -3084,7 +3084,8 @@
       "guests": {
         "columns": {
           "name": "Nombre",
-          "access": "Acceso"
+          "access": "Acceso",
+          "actions": "Acciones"
         },
         "emptyTitle": "Aún no hay invitados",
         "emptyBody": "Las personas ajenas a este espacio de trabajo que pueden ver tus notas compartidas aparecerán aquí.",
@@ -3094,7 +3095,34 @@
         "failedBody": "Comprueba tu conexión e inténtalo de nuevo.",
         "noteCount_one": "{{count}} nota",
         "noteCount_other": "{{count}} notas",
-        "notesMenuLabel": "Notas compartidas con {{name}}"
+        "notesMenuLabel": "Notas compartidas con {{name}}",
+        "menu": {
+          "label": "Acciones para {{name}}",
+          "invite": "Invitar al espacio de trabajo",
+          "copyEmail": "Copiar correo electrónico",
+          "remove": "Quitar como invitado"
+        },
+        "invite": {
+          "title_one": "Invitar a {{count}} invitado a {{workspace}}",
+          "title_other": "Invitar a {{count}} invitados a {{workspace}}",
+          "description": "Recibirán un enlace por correo para unirse a {{workspace}}.",
+          "sent_one": "Se envió {{count}} invitación para unirse a {{workspace}}",
+          "sent_other": "Se enviaron {{count}} invitaciones para unirse a {{workspace}}"
+        },
+        "remove": {
+          "titleOne": "¿Quitar a {{name}} de {{workspace}}?",
+          "confirmOne": "Quitar invitado",
+          "title_one": "¿Quitar a {{count}} invitado de {{workspace}}?",
+          "title_other": "¿Quitar a {{count}} invitados de {{workspace}}?",
+          "body": "Perderán el acceso a todas las notas compartidas con ellos. Puedes volver a compartirles notas cuando quieras.",
+          "linkShared": "Las notas compartidas mediante enlace siguen abiertas para cualquiera que tenga el enlace.",
+          "confirm_one": "Quitar {{count}} invitado",
+          "confirm_other": "Quitar {{count}} invitados",
+          "removing": "Quitando…",
+          "failed": "No se pudo quitar a los invitados. No se quitó a nadie. Revisa tu conexión e inténtalo de nuevo.",
+          "done_one": "Se quitó {{count}} invitado",
+          "done_other": "Se quitaron {{count}} invitados"
+        }
       }
     },
     "enterpriseCheckout": {

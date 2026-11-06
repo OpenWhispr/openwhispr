@@ -3011,7 +3011,8 @@
       "guests": {
         "columns": {
           "name": "Nome",
-          "access": "Acesso"
+          "access": "Acesso",
+          "actions": "Ações"
         },
         "emptyTitle": "Ainda não há convidados",
         "emptyBody": "As pessoas de fora deste espaço de trabalho que podem ver suas notas compartilhadas aparecerão aqui.",
@@ -3022,7 +3023,39 @@
         "noteCount_one": "{{count}} nota",
         "noteCount_many": "{{count}} notas",
         "noteCount_other": "{{count}} notas",
-        "notesMenuLabel": "Notas compartilhadas com {{name}}"
+        "notesMenuLabel": "Notas compartilhadas com {{name}}",
+        "menu": {
+          "label": "Ações para {{name}}",
+          "invite": "Convidar para o espaço de trabalho",
+          "copyEmail": "Copiar e-mail",
+          "remove": "Remover como convidado"
+        },
+        "invite": {
+          "title_one": "Convidar {{count}} convidado para {{workspace}}",
+          "title_many": "Convidar {{count}} de convidados para {{workspace}}",
+          "title_other": "Convidar {{count}} convidados para {{workspace}}",
+          "description": "Eles receberão um link por e-mail para entrar em {{workspace}}.",
+          "sent_one": "{{count}} convite enviado para entrar em {{workspace}}",
+          "sent_many": "{{count}} de convites enviados para entrar em {{workspace}}",
+          "sent_other": "{{count}} convites enviados para entrar em {{workspace}}"
+        },
+        "remove": {
+          "titleOne": "Remover {{name}} de {{workspace}}?",
+          "confirmOne": "Remover convidado",
+          "title_one": "Remover {{count}} convidado de {{workspace}}?",
+          "title_many": "Remover {{count}} de convidados de {{workspace}}?",
+          "title_other": "Remover {{count}} convidados de {{workspace}}?",
+          "body": "Eles perderão o acesso a todas as notas compartilhadas com eles. Você pode compartilhar notas com eles novamente quando quiser.",
+          "linkShared": "As notas compartilhadas por link continuam abertas para qualquer pessoa com o link.",
+          "confirm_one": "Remover {{count}} convidado",
+          "confirm_many": "Remover {{count}} de convidados",
+          "confirm_other": "Remover {{count}} convidados",
+          "removing": "Removendo…",
+          "failed": "Não foi possível remover os convidados. Ninguém foi removido. Verifique sua conexão e tente novamente.",
+          "done_one": "{{count}} convidado removido",
+          "done_many": "{{count}} de convidados removidos",
+          "done_other": "{{count}} convidados removidos"
+        }
       }
     },
     "enterpriseCheckout": {

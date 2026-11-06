@@ -123,3 +123,28 @@ test("reload refetches", async (t) => {
   assert.equal(state().guests.length, 2);
   assert.deepEqual(globalThis.__guestListCalls, ["w1", "w1"]);
 });
+
+test("a failed reload keeps the last list", async (t) => {
+  const { mount, state } = await loadHook(t);
+  globalThis.__guestListImpl = async () => [guest("a@x.com")];
+  await mount("w1");
+
+  globalThis.__guestListImpl = async () => {
+    throw new Error("offline");
+  };
+  await React.act(async () => state().reload());
+  assert.equal(state().status, "ready");
+  assert.deepEqual(
+    state().guests.map((g) => g.email),
+    ["a@x.com"]
+  );
+  assert.deepEqual(state().error, { kind: "failed" });
+
+  globalThis.__guestListImpl = async () => [guest("b@x.com")];
+  await React.act(async () => state().reload());
+  assert.equal(state().error, null);
+  assert.deepEqual(
+    state().guests.map((g) => g.email),
+    ["b@x.com"]
+  );
+});

@@ -3032,7 +3032,8 @@
       "guests": {
         "columns": {
           "name": "名前",
-          "access": "アクセス"
+          "access": "アクセス",
+          "actions": "操作"
         },
         "emptyTitle": "ゲストはまだいません",
         "emptyBody": "このワークスペース外で、共有ノートを閲覧できる人がここに表示されます。",
@@ -3042,7 +3043,34 @@
         "failedBody": "接続を確認して、もう一度お試しください。",
         "noteCount_one": "{{count}} 件のノート",
         "noteCount_other": "{{count}} 件のノート",
-        "notesMenuLabel": "{{name}} と共有しているノート"
+        "notesMenuLabel": "{{name}} と共有しているノート",
+        "menu": {
+          "label": "{{name}} の操作",
+          "invite": "ワークスペースに招待",
+          "copyEmail": "メールアドレスをコピー",
+          "remove": "ゲストを削除"
+        },
+        "invite": {
+          "title_one": "{{count}} 人のゲストを {{workspace}} に招待",
+          "title_other": "{{count}} 人のゲストを {{workspace}} に招待",
+          "description": "{{workspace}} に参加するためのリンクがメールで届きます。",
+          "sent_one": "{{workspace}} への招待を {{count}} 件送信しました",
+          "sent_other": "{{workspace}} への招待を {{count}} 件送信しました"
+        },
+        "remove": {
+          "titleOne": "{{name}} を {{workspace}} から削除しますか？",
+          "confirmOne": "ゲストを削除",
+          "title_one": "{{count}} 人のゲストを {{workspace}} から削除しますか？",
+          "title_other": "{{count}} 人のゲストを {{workspace}} から削除しますか？",
+          "body": "共有されているすべてのノートにアクセスできなくなります。ノートはいつでも再共有できます。",
+          "linkShared": "リンクで共有されているノートは、リンクを知っている人なら誰でも開けます。",
+          "confirm_one": "{{count}} 人のゲストを削除",
+          "confirm_other": "{{count}} 人のゲストを削除",
+          "removing": "削除中…",
+          "failed": "ゲストを削除できませんでした。誰も削除されていません。接続を確認してもう一度お試しください。",
+          "done_one": "{{count}} 人のゲストを削除しました",
+          "done_other": "{{count}} 人のゲストを削除しました"
+        }
       }
     },
     "enterpriseCheckout": {

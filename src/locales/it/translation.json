@@ -3032,7 +3032,8 @@
       "guests": {
         "columns": {
           "name": "Nome",
-          "access": "Accesso"
+          "access": "Accesso",
+          "actions": "Azioni"
         },
         "emptyTitle": "Ancora nessun ospite",
         "emptyBody": "Le persone esterne a questo spazio di lavoro che possono vedere le tue note condivise compariranno qui.",
@@ -3042,7 +3043,34 @@
         "failedBody": "Controlla la connessione e riprova.",
         "noteCount_one": "{{count}} nota",
         "noteCount_other": "{{count}} note",
-        "notesMenuLabel": "Note condivise con {{name}}"
+        "notesMenuLabel": "Note condivise con {{name}}",
+        "menu": {
+          "label": "Azioni per {{name}}",
+          "invite": "Invita nel workspace",
+          "copyEmail": "Copia email",
+          "remove": "Rimuovi come ospite"
+        },
+        "invite": {
+          "title_one": "Invita {{count}} ospite in {{workspace}}",
+          "title_other": "Invita {{count}} ospiti in {{workspace}}",
+          "description": "Riceveranno un link via email per unirsi a {{workspace}}.",
+          "sent_one": "Inviato {{count}} invito per unirsi a {{workspace}}",
+          "sent_other": "Inviati {{count}} inviti per unirsi a {{workspace}}"
+        },
+        "remove": {
+          "titleOne": "Rimuovere {{name}} da {{workspace}}?",
+          "confirmOne": "Rimuovi ospite",
+          "title_one": "Rimuovere {{count}} ospite da {{workspace}}?",
+          "title_other": "Rimuovere {{count}} ospiti da {{workspace}}?",
+          "body": "Perderanno l'accesso a tutte le note condivise con loro. Puoi condividere di nuovo le note con loro in qualsiasi momento.",
+          "linkShared": "Le note condivise tramite link restano aperte a chiunque abbia il link.",
+          "confirm_one": "Rimuovi {{count}} ospite",
+          "confirm_other": "Rimuovi {{count}} ospiti",
+          "removing": "Rimozione in corso…",
+          "failed": "Impossibile rimuovere gli ospiti. Nessuno è stato rimosso. Controlla la connessione e riprova.",
+          "done_one": "Rimosso {{count}} ospite",
+          "done_other": "Rimossi {{count}} ospiti"
+        }
       }
     },
     "enterpriseCheckout": {

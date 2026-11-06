@@ -49,7 +49,13 @@ export function useWorkspaceGuests(workspaceId: string): WorkspaceGuestsState {
     }
     // A switch, an unmount or a newer request makes this answer stale.
     if (currentWorkspaceRef.current !== target || latestRequestRef.current !== requestId) return;
-    setSlot({ workspaceId: target, guests, error });
+    // A reload that fails behind a list already on screen keeps that list; only a load with
+    // nothing to show falls back to Failed.
+    setSlot((previous) =>
+      !guests && previous && previous.workspaceId === target && previous.guests
+        ? { ...previous, error }
+        : { workspaceId: target, guests, error }
+    );
   }, []);
 
   useEffect(() => {
@@ -60,6 +66,6 @@ export function useWorkspaceGuests(workspaceId: string): WorkspaceGuestsState {
 
   const own = slot && slot.workspaceId === workspaceId ? slot : null;
   if (!own) return { status: "loading", guests: NO_GUESTS, error: null, reload };
-  if (own.guests) return { status: "ready", guests: own.guests, error: null, reload };
+  if (own.guests) return { status: "ready", guests: own.guests, error: own.error, reload };
   return { status: "failed", guests: NO_GUESTS, error: own.error, reload };
 }

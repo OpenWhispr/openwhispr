@@ -2303,7 +2303,8 @@
       "guests": {
         "columns": {
           "name": "Name",
-          "access": "Zugriff"
+          "access": "Zugriff",
+          "actions": "Aktionen"
         },
         "emptyTitle": "Noch keine Gäste",
         "emptyBody": "Personen außerhalb dieses Arbeitsbereichs, die Ihre geteilten Notizen ansehen können, erscheinen hier.",
@@ -2313,7 +2314,34 @@
         "failedBody": "Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
         "noteCount_one": "{{count}} Notiz",
         "noteCount_other": "{{count}} Notizen",
-        "notesMenuLabel": "Mit {{name}} geteilte Notizen"
+        "notesMenuLabel": "Mit {{name}} geteilte Notizen",
+        "menu": {
+          "label": "Aktionen für {{name}}",
+          "invite": "Zum Workspace einladen",
+          "copyEmail": "E-Mail-Adresse kopieren",
+          "remove": "Als Gast entfernen"
+        },
+        "invite": {
+          "title_one": "{{count}} Gast zu {{workspace}} einladen",
+          "title_other": "{{count}} Gäste zu {{workspace}} einladen",
+          "description": "Die Gäste erhalten per E-Mail einen Link, um {{workspace}} beizutreten.",
+          "sent_one": "{{count}} Einladung zum Beitritt zu {{workspace}} gesendet",
+          "sent_other": "{{count}} Einladungen zum Beitritt zu {{workspace}} gesendet"
+        },
+        "remove": {
+          "titleOne": "{{name}} aus {{workspace}} entfernen?",
+          "confirmOne": "Gast entfernen",
+          "title_one": "{{count}} Gast aus {{workspace}} entfernen?",
+          "title_other": "{{count}} Gäste aus {{workspace}} entfernen?",
+          "body": "Sie verlieren den Zugriff auf alle mit ihnen geteilten Notizen. Sie können Notizen jederzeit erneut mit ihnen teilen.",
+          "linkShared": "Per Link geteilte Notizen bleiben für alle mit dem Link zugänglich.",
+          "confirm_one": "{{count}} Gast entfernen",
+          "confirm_other": "{{count}} Gäste entfernen",
+          "removing": "Wird entfernt…",
+          "failed": "Die Gäste konnten nicht entfernt werden. Niemand wurde entfernt. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+          "done_one": "{{count}} Gast entfernt",
+          "done_other": "{{count}} Gäste entfernt"
+        }
       }
     },
     "unifiedBilling": {

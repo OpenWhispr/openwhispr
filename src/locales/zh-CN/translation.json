@@ -3032,7 +3032,8 @@
       "guests": {
         "columns": {
           "name": "名称",
-          "access": "访问权限"
+          "access": "访问权限",
+          "actions": "操作"
         },
         "emptyTitle": "暂无访客",
         "emptyBody": "此工作区之外、可以查看你共享笔记的人会显示在这里。",
@@ -3042,7 +3043,34 @@
         "failedBody": "请检查网络连接后重试。",
         "noteCount_one": "{{count}} 篇笔记",
         "noteCount_other": "{{count}} 篇笔记",
-        "notesMenuLabel": "与 {{name}} 共享的笔记"
+        "notesMenuLabel": "与 {{name}} 共享的笔记",
+        "menu": {
+          "label": "{{name}} 的操作",
+          "invite": "邀请加入工作区",
+          "copyEmail": "复制邮箱",
+          "remove": "移除访客"
+        },
+        "invite": {
+          "title_one": "邀请 {{count}} 位访客加入 {{workspace}}",
+          "title_other": "邀请 {{count}} 位访客加入 {{workspace}}",
+          "description": "他们将收到一封电子邮件，通过其中的链接加入 {{workspace}}。",
+          "sent_one": "已发送 {{count}} 份邀请，邀请加入 {{workspace}}",
+          "sent_other": "已发送 {{count}} 份邀请，邀请加入 {{workspace}}"
+        },
+        "remove": {
+          "titleOne": "要将 {{name}} 从 {{workspace}} 移除吗？",
+          "confirmOne": "移除访客",
+          "title_one": "要将 {{count}} 位访客从 {{workspace}} 移除吗？",
+          "title_other": "要将 {{count}} 位访客从 {{workspace}} 移除吗？",
+          "body": "他们将无法再访问与其共享的所有笔记。你可以随时再次与他们共享笔记。",
+          "linkShared": "通过链接共享的笔记仍可供任何持有链接的人打开。",
+          "confirm_one": "移除 {{count}} 位访客",
+          "confirm_other": "移除 {{count}} 位访客",
+          "removing": "正在移除…",
+          "failed": "无法移除访客。没有人被移除。请检查网络连接后重试。",
+          "done_one": "已移除 {{count}} 位访客",
+          "done_other": "已移除 {{count}} 位访客"
+        }
       }
     },
     "enterpriseCheckout": {

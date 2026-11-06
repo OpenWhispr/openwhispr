@@ -77,6 +77,23 @@ async function loadTab(t, { workspace = ADMIN, status = "ready", guests = [] } =
         export const DropdownMenuTrigger = ({ children, "aria-label": label }) =>
           h("button", { "data-trigger": "", "aria-label": label }, children);
         export const DropdownMenuContent = ({ children }) => h("div", { "data-menu-content": "" }, children);
+        export const DropdownMenuItem = ({ children, onSelect }) =>
+          h("button", { "data-item": "", onSelect }, children);
+      `,
+      "/ui/useToast": `
+        export const useToast = () => ({ toast: (toast) => globalThis.__toasts.push(toast) });
+      `,
+      "/InviteTeammateDialog": `
+        export default function InviteTeammateDialog(props) {
+          globalThis.__inviteProps = props;
+          return null;
+        }
+      `,
+      "/workspace/RemoveGuestsDialog": `
+        export function RemoveGuestsDialog(props) {
+          globalThis.__removeProps = props;
+          return null;
+        }
       `,
     },
   });
@@ -85,8 +102,18 @@ async function loadTab(t, { workspace = ADMIN, status = "ready", guests = [] } =
     delete globalThis.__guestsState;
     delete globalThis.__guestsArgs;
     delete globalThis.__reloads;
+    delete globalThis.__toasts;
+    delete globalThis.__inviteProps;
+    delete globalThis.__removeProps;
+    delete globalThis.__clipboard;
   });
   globalThis.__reloads = 0;
+  globalThis.__toasts = [];
+  globalThis.__clipboard = [];
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: { clipboard: { writeText: async (text) => void globalThis.__clipboard.push(text) } },
+  });
   globalThis.__guestsState = {
     status,
     guests,
@@ -201,4 +228,85 @@ test("without manage_members there are no checkboxes, no Actions and no ×", asy
   assert.doesNotMatch(markup, /type="checkbox"/);
   assert.doesNotMatch(markup, new RegExp(`${KEY}\\.columns\\.actions`));
   assert.doesNotMatch(markup, new RegExp(`${KEY}\\.removeFromNote`));
+});
+
+const JIN = guest("jin@x.com", "Jin Park", [note("n1", "Plan", { visibility: "link" })]);
+
+async function mountTab(t, options) {
+  const { Tab, workspace } = await loadTab(t, options);
+  const container = installHostDom(t);
+  const root = createRoot(container);
+  mountedRoots.set(t, root);
+  await React.act(async () => root.render(React.createElement(Tab, { workspace })));
+  const item = (label) =>
+    findNode(container, (node) => node.hasAttribute("data-item") && textOf(node).trim() === label);
+  return { container, item };
+}
+
+test("the row menu offers invite, copy and remove", async (t) => {
+  const { Tab, workspace } = await loadTab(t, { guests: [JIN] });
+  const markup = render(Tab, workspace);
+  assert.match(markup, new RegExp(`${KEY}\\.columns\\.actions`));
+  assert.match(markup, new RegExp(`${KEY}\\.menu\\.label\\|name=`));
+  for (const key of ["invite", "copyEmail", "remove"]) {
+    assert.match(markup, new RegExp(`${KEY}\\.menu\\.${key}`));
+  }
+});
+
+test("copy writes the email and toasts", async (t) => {
+  const { item } = await mountTab(t, { guests: [JIN] });
+  await React.act(async () => propsOf(item(`${KEY}.menu.copyEmail`)).onSelect());
+  assert.deepEqual(globalThis.__clipboard, ["jin@x.com"]);
+  assert.equal(globalThis.__toasts[0].title, "common.copied");
+});
+
+test("invite opens the dialog with the guest's address and the guest heading", async (t) => {
+  const { item } = await mountTab(t, { guests: [JIN] });
+  assert.equal(globalThis.__inviteProps, undefined);
+  await React.act(async () => propsOf(item(`${KEY}.menu.invite`)).onSelect());
+  const props = globalThis.__inviteProps;
+  assert.equal(props.open, true);
+  assert.equal(props.workspaceId, "w1");
+  assert.equal(props.workspaceName, "Acme");
+  assert.deepEqual(props.initialEmails, ["jin@x.com"]);
+  assert.match(props.heading.title, new RegExp(`${KEY}\\.invite\\.title\\|count=1`));
+  assert.match(props.heading.description, new RegExp(`${KEY}\\.invite\\.description`));
+});
+
+test("a send reloads the list and closing toasts the sent count", async (t) => {
+  const { item } = await mountTab(t, { guests: [JIN] });
+  await React.act(async () => propsOf(item(`${KEY}.menu.invite`)).onSelect());
+  await React.act(async () => globalThis.__inviteProps.onInvitationsChanged());
+  assert.equal(globalThis.__reloads, 1);
+  await React.act(async () => globalThis.__inviteProps.onInvited(["jin@x.com"]));
+  await React.act(async () => globalThis.__inviteProps.onOpenChange(false));
+  assert.match(globalThis.__toasts[0].title, new RegExp(`${KEY}\\.invite\\.sent\\|count=1`));
+});
+
+test("closing the invite without sending doesn't toast", async (t) => {
+  const { item } = await mountTab(t, { guests: [JIN] });
+  await React.act(async () => propsOf(item(`${KEY}.menu.invite`)).onSelect());
+  await React.act(async () => globalThis.__inviteProps.onOpenChange(false));
+  assert.equal(globalThis.__toasts.length, 0);
+});
+
+test("remove asks first, then removes and reloads", async (t) => {
+  const { item } = await mountTab(t, { guests: [JIN] });
+  assert.equal(globalThis.__removeProps, undefined);
+  await React.act(async () => propsOf(item(`${KEY}.menu.remove`)).onSelect());
+  const props = globalThis.__removeProps;
+  assert.equal(props.open, true);
+  assert.deepEqual(
+    props.guests.map((g) => g.email),
+    ["jin@x.com"]
+  );
+  await React.act(async () =>
+    props.onRemoved({
+      removed: ["jin@x.com"],
+      not_found: [],
+      skipped_members: [],
+      link_shared_note_ids: [],
+    })
+  );
+  assert.equal(globalThis.__reloads, 1);
 });
