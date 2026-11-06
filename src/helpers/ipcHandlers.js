@@ -193,6 +193,7 @@ const {
 } = require("./meetingMicGate");
 const { deriveDetectorPreferences } = require("./meetingDetectionPreferencePolicy");
 const { resolveDiarizationInput } = require("./meetingDiarizationInput");
+const { createLocalChunkClock } = require("./meetingLocalChunkClock");
 const { applySmartSpacing } = require("./smartSpacing");
 const { applyAutoLearnSetting } = require("./autoLearnSetting");
 const {
@@ -9349,6 +9350,7 @@ class IPCHandlers {
 
     let meetingLocalMode = false;
     let meetingLocalBuffers = { mic: [], system: [] };
+    const meetingLocalChunkClock = createLocalChunkClock();
     let meetingLocalTimer = null;
     let meetingLocalWin = null;
     let meetingLocalTranscript = "";
@@ -9436,6 +9438,7 @@ class IPCHandlers {
         // Local STT timestamps each batch with wall time, not a sample cursor.
         // Large synthetic gaps would dilute speech and inflate the next batch.
         if (synthetic) return;
+        meetingLocalChunkClock.mark(source, capturedAt);
         meetingLocalBuffers[source].push(buffer);
         return;
       }
@@ -9754,6 +9757,7 @@ class IPCHandlers {
 
       const pcm24k = Buffer.concat(chunks);
       meetingLocalBuffers[source] = [];
+      const chunkStartedAt = meetingLocalChunkClock.take(source, pcm24k.length);
 
       const pcm16k = downsample24kTo16k(pcm24k);
 
@@ -9819,13 +9823,19 @@ class IPCHandlers {
             debugLogger.debug("Dropping wrong-script local meeting fragment", { source });
             return;
           }
-          const segTimestamp = Date.now();
+          // The segment starts when its audio was captured, as on the streaming
+          // path (speech start), so diarization and live speaker windows line up
+          // with what was said rather than with when the decode finished.
+          const segTimestamp = chunkStartedAt;
           let micSuppression = null;
           if (source === "mic") {
             const chunkDurationMs = (pcm24k.length / 2 / 24000) * 1000;
+            // The echo check keeps its decode-time window: the detector's
+            // history is bounded, and this is the window it has always seen.
+            const decodedAt = Date.now();
             micSuppression = shouldSuppressMicTranscriptSegment(
-              segTimestamp - chunkDurationMs,
-              segTimestamp
+              decodedAt - chunkDurationMs,
+              decodedAt
             );
             debugLogger.debug("Local meeting transcription candidate", {
               source,
@@ -10008,6 +10018,7 @@ class IPCHandlers {
       this._activeMeetingNoteId = null;
       meetingLocalMode = false;
       meetingLocalBuffers = { mic: [], system: [] };
+      meetingLocalChunkClock.reset();
       if (meetingDiarizationStream) {
         meetingDiarizationStream.end();
         meetingDiarizationStream = null;
@@ -10710,6 +10721,7 @@ class IPCHandlers {
           meetingLocalLanguage = options.language || null;
           meetingLocalWin = BrowserWindow.fromWebContents(event.sender);
           meetingLocalBuffers = { mic: [], system: [] };
+          meetingLocalChunkClock.reset();
           meetingLocalTranscript = "";
 
           await startLiveSpeakerIdentification(meetingLocalWin, systemAudioMode);
