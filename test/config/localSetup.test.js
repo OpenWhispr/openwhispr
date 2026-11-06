@@ -322,6 +322,16 @@ test("a guest's second system language counts: an English-only model can't dicta
 
   const regions = await plan(mac({ systemLanguages: ["en-US", "en-GB"] }), { spokenLanguages: [] });
   assert.equal(row(regions, "dictation").modelId, "parakeet-unified-en-0.6b");
+
+  // A language no local model lists still counts: Whisper detects it, a narrower model can't.
+  for (const systemLanguages of [
+    ["en-IN", "bn-IN"],
+    ["de", "ka"],
+    ["hi", "te"],
+  ]) {
+    const p = await plan(mac({ systemLanguages }), { spokenLanguages: [] });
+    assert.equal(row(p, "dictation").modelId, "small", systemLanguages.join(" + "));
+  }
   assert.deepEqual(
     (await plan(mac({ systemLanguages: ["zh-TW"] }), { spokenLanguages: [] })).languageTags,
     ["zh-Hant"]
@@ -401,6 +411,33 @@ test("an allow-list that leaves out the table's dictation pick decides dictation
   assert.equal(row(kept, "dictation").line, null);
 });
 
+test("an allow-list with nothing this computer can run leaves dictation unavailable", async () => {
+  const { enabledDownloads } = await load();
+  const { isLocalModelAllowedByPolicy } = await import("../../src/stores/policyRules.ts");
+  for (const [label, profile, speechModels] of [
+    [
+      "Parakeet only, on a Mac that can't run it",
+      mac({ parakeetSupported: false }),
+      ["parakeet-tdt-0.6b-v3"],
+    ],
+    ["an empty list", mac({}), []],
+    ["ids this build doesn't know", mac({}), ["not-a-model"]],
+  ]) {
+    const policy = managed({ speechModels });
+    const p = await plan(profile, { policy });
+    const dictation = row(p, "dictation");
+    assert.equal(dictation.label, "unavailable", label);
+    assert.equal(dictation.reason, "organization", label);
+    assert.deepEqual(dictation.line, { key: "organizationModelsUnrunnable" }, label);
+    // Never offered for download, since the policy would refuse it.
+    assert.equal(isLocalModelAllowedByPolicy(policy, "transcription", dictation.modelId), false);
+    assert.ok(
+      enabledDownloads(p, { cleanup: true, assistant: true }).every((r) => r.rowId !== "dictation"),
+      label
+    );
+  }
+});
+
 test("the Local card's minimum is dictation alone, since the rest trims to fit", async () => {
   const { localSetupMinimumSpaceGb, localSetupRequiredBytes, enabledDownloads } = await load();
   const factors = { parakeet: 2.5, whisper: 1, llm: 1, llamaVulkan: 2 };
@@ -411,6 +448,9 @@ test("the Local card's minimum is dictation alone, since the rest trims to fit",
   assert.equal(gb, 2, "about 1.6 GB for Parakeet Unified EN, not the 7 GB of every row");
   // A PC's pack rides on a text row, so it doesn't count either.
   assert.equal(localSetupMinimumSpaceGb(await plan(pc({ nvidia: rtx })), factors), 2);
+  // No dictation to download (the organization's models can't run here): no figure, not 0 GB.
+  const blocked = await plan(mac({}), { policy: managed({ speechModels: [] }) });
+  assert.equal(localSetupMinimumSpaceGb(blocked, factors), undefined);
 });
 
 test("Cloud is only recommendable where the policy allows an off-device service", async () => {
@@ -478,7 +518,11 @@ test("sizes match what Settings shows", async () => {
   const size = async (profile, langs) =>
     rowSizeLabel(row(await plan(profile, { spokenLanguages: langs }), "dictation"), null);
   assert.equal(await size(mac({}), ["en-US"]), "631 MB");
-  assert.equal(await size(mac({}), ["de"]), "464 MB");
+  // Display metadata is pinned to the signed publication; reservations use archive bytes below.
+  assert.equal(
+    await size(mac({}), ["de"]),
+    registry.parakeetModels[table.models.dictation.european].size.replace("MB", " MB")
+  );
   assert.equal(await size(mac({}), ["ja"]), "466 MB");
   assert.equal(await size(mac({}), ["hi"]), "650 MB");
   const p = await plan(pc({ nvidia: rtx }));
@@ -490,15 +534,14 @@ test("sizes match what Settings shows", async () => {
   assert.equal(rowSizeLabel(row(p, "cleanup"), bigPack), "1.7 GB");
 });
 
-test("speech picks quote their downloaded file", () => {
+test("speech download reservations use the expected archive bytes", async () => {
   const picks = new Set(Object.values(table.models.dictation));
   for (const id of picks) {
     const model = registry.parakeetModels[id] || registry.whisperModels[id];
     assert.ok(model, id);
     if (!model.expectedSizeBytes) continue;
-    const quotedMb = parseFloat(model.size) * (/GB/.test(model.size) ? 1024 : 1);
-    const fileMb = model.expectedSizeBytes / 2 ** 20;
-    assert.ok(Math.abs(quotedMb - fileMb) / fileMb < 0.02, `${id}: ${model.size} vs ${fileMb}`);
+    const selected = row(await plan(mac({}), { requiredSpeechModelId: id }), "dictation");
+    assert.equal(selected.download.bytes, model.expectedSizeBytes, id);
   }
 });
 
@@ -743,4 +786,78 @@ test("items already on disk cost nothing and their rows are never trimmed", asyn
   assert.deepEqual(nvTight.autoOff, ["assistant", "cleanup"]);
   const withPack = has(row(nv, "dictation").modelId, row(nv, "cleanup").modelId, "llama-vulkan");
   assert.deepEqual(fitLocalSetupToSpace(nv, {}, space(0.01), withPack).autoOff, ["assistant"]);
+});
+
+async function updateCatalog(t, update) {
+  const store = await import("../../src/models/registryData.js");
+  const before = store.getRegistrySnapshot();
+  const data = structuredClone(before.data);
+  update(data);
+  store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1 });
+  t.after(() =>
+    store.replaceRegistryData({ ...before, manifestVersion: store.getRegistryVersion() + 1 })
+  );
+}
+
+test("local setup uses catalog updates for model metadata and download sizes", async (t) => {
+  await plan(mac({}));
+  await updateCatalog(t, (data) => {
+    Object.assign(data.parakeetModels[table.models.dictation.english], {
+      name: "Updated speech model",
+      expectedSizeBytes: 123456789,
+    });
+    const model = data.localProviders
+      .flatMap((provider) => provider.models)
+      .find((entry) => entry.id === table.models.assistant);
+    Object.assign(model, { name: "Updated assistant", sizeBytes: 987654321, size: "942MB" });
+  });
+  const updated = await plan(mac({}));
+  assert.equal(row(updated, "dictation").modelName, "Updated speech model");
+  assert.equal(row(updated, "dictation").download.bytes, 123456789);
+  assert.equal(row(updated, "assistant").modelName, "Updated assistant");
+  assert.equal(row(updated, "assistant").download.bytes, 987654321);
+});
+
+test("local setup accepts an organization-required model published after launch", async (t) => {
+  await plan(mac({}));
+  await updateCatalog(t, (data) => {
+    data.parakeetModels["published-required-model"] = {
+      ...data.parakeetModels[table.models.dictation.english],
+      name: "Published required model",
+    };
+  });
+  const updated = await plan(mac({}), {
+    policy: managed({ speechModels: ["published-required-model"] }),
+    requiredSpeechModelId: "published-required-model",
+  });
+  assert.equal(row(updated, "dictation").modelId, "published-required-model");
+  assert.deepEqual(row(updated, "dictation").line, { key: "requiredByOrganization" });
+});
+
+test("local setup never queues retired benchmark picks for a new download", async (t) => {
+  await plan(mac({}));
+  await updateCatalog(t, (data) => {
+    data.parakeetModels[table.models.dictation.english].retired = true;
+    data.localProviders
+      .flatMap((provider) => provider.models)
+      .find((model) => model.id === table.models.assistant).retired = true;
+  });
+  const updated = await plan(mac({}));
+  const { enabledDownloads } = await load();
+  const downloads = enabledDownloads(updated, { cleanup: true, assistant: true })
+    .flatMap((entry) => entry.items)
+    .map((item) => item.id);
+  assert.equal(row(updated, "dictation").label, "unavailable");
+  assert.equal(row(updated, "assistant").label, "unavailable");
+  assert.equal(downloads.includes(table.models.dictation.english), false);
+  assert.equal(downloads.includes(table.models.assistant), false);
+});
+
+test("catalog retirement never overrides an organization block", async (t) => {
+  await updateCatalog(t, (data) => {
+    data.parakeetModels[table.models.dictation.english].retired = true;
+  });
+  const blocked = await plan(mac({}), { policy: managed({ speechModels: [] }) });
+  assert.equal(row(blocked, "dictation").label, "unavailable");
+  assert.equal(row(blocked, "dictation").reason, "organization");
 });

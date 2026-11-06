@@ -1,4 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
+import { useRegistryVersion } from "../hooks/useRegistryVersion";
+import { isAwaitingCatalog } from "../models/modelLifecycle.js";
+import { getRegistryData } from "../models/registryData.js";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
@@ -472,6 +475,7 @@ export default function TranscriptionModelPicker({
   mode,
   streamingOnly = false,
 }: TranscriptionModelPickerProps) {
+  const registryVersion = useRegistryVersion();
   const { t } = useTranslation();
   const switchCloudTranscriptionProvider = useSettingsStore(
     (s) => s.switchCloudTranscriptionProvider
@@ -621,7 +625,8 @@ export default function TranscriptionModelPicker({
     const providers = getTranscriptionProviders();
     if (transcriptionContext !== "upload") return providers;
     return providers.filter((provider) => !STREAMING_ONLY_PROVIDERS.has(provider.id));
-  }, [streamingOnly, transcriptionContext]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the catalog changes in place; its version is the signal
+  }, [streamingOnly, transcriptionContext, registryVersion]);
   const cloudProviders = useMemo(
     () => filterByokProviderOptionsByPolicy(availableCloudProviders, "transcription", policyState),
     [availableCloudProviders, policyState]
@@ -755,6 +760,15 @@ export default function TranscriptionModelPicker({
     // Reconcile null means the input needs no correction — echo the browsed
     // input, not the committed pair, or browsing to the Custom tab (always
     // reconciled as valid) would never display it.
+    // A model a pending catalog may still supply stays chosen (see isAwaitingCatalog); a
+    // known model this scope filters out is still reconciled.
+    if (
+      !browsedCloudProvider &&
+      cloudProviders.some((provider) => provider.id === selectedCloudProvider) &&
+      isAwaitingCatalog("transcriptionProviders", selectedCloudModel)
+    ) {
+      return { provider: selectedCloudProvider, model: selectedCloudModel };
+    }
     return (
       reconcileCloudProviderSelection({
         selectedProvider: browsedCloudProvider ?? selectedCloudProvider,
@@ -843,6 +857,11 @@ export default function TranscriptionModelPicker({
   }, [fallbackLocalTab]);
 
   useEffect(() => {
+    hasLoadedRef.current = false;
+    hasLoadedParakeetRef.current = false;
+  }, [registryVersion]);
+
+  useEffect(() => {
     if (!effectiveLocal) return;
 
     if (internalLocalProvider === "whisper" && !hasLoadedRef.current) {
@@ -852,7 +871,7 @@ export default function TranscriptionModelPicker({
       hasLoadedParakeetRef.current = true;
       loadParakeetModelsRef.current?.();
     }
-  }, [effectiveLocal, internalLocalProvider]);
+  }, [effectiveLocal, internalLocalProvider, registryVersion]);
 
   useEffect(() => {
     if (effectiveLocal) return;
@@ -1116,7 +1135,12 @@ export default function TranscriptionModelPicker({
       )
         return;
       const organization = getASRModelOrganization(modelId);
-      const provider = organization === "cohere" ? "cohere" : "nvidia";
+      // The engine, not the publisher, decides the route: a streaming model published by
+      // Cohere still runs on the NVIDIA/sherpa streaming path.
+      const provider =
+        getRegistryData().parakeetModels[modelId]?.modelType === "cohere-transcribe"
+          ? "cohere"
+          : "nvidia";
       setInternalLocalProvider(organization);
       onLocalProviderSelect?.(provider);
       onLocalModelSelect(modelId, provider);
@@ -1353,6 +1377,7 @@ export default function TranscriptionModelPicker({
                 totalBytes: status.totalBytes,
               }}
               isInstalling={status.phase === "installing"}
+              isVerifying={status.phase === "verifying"}
             />
           );
         })}

@@ -183,7 +183,8 @@ import {
   isSelectionQuestionResponse,
 } from "./selectionEditing";
 import {
-  REALTIME_MODELS,
+  isOpenAiRealtimeSelection,
+  isGeminiLiveSelection,
   defaultStreamingProviderName,
   orukeetDetectedLanguageFields,
   resolveManagedOrukeetRoute,
@@ -640,6 +641,11 @@ const SELECTION_EDIT_FAILURE_COPY = {
   [TRUNCATED_OUTPUT_MESSAGE_KEY]: "truncatedResponse",
 };
 
+// A local model the app does not know is a setup problem, never a reason to send a
+// local-mode user's audio to a cloud provider.
+const isUnknownLocalModelError = (error) =>
+  /Invalid (model name|Parakeet model):/.test(error?.message ?? "");
+
 class AudioManager {
   constructor() {
     this.mediaRecorder = null;
@@ -712,7 +718,7 @@ class AudioManager {
       this.cancelPreparedMicCapture();
       this.micStreamHold.drop();
       // The main process keeps the OS default mic until told it changed, so
-      // re-resolve now rather than on the next hotkey press (~2s on Windows).
+      // re-resolve now, or the next hotkey press would pin the old default.
       window.electronAPI?.getSystemDefaultMicrophone?.({ refresh: true })?.catch(() => {});
     };
     navigator.mediaDevices?.addEventListener?.("devicechange", this._onDeviceChange);
@@ -787,11 +793,13 @@ class AudioManager {
     this._streamingMicSwapPromise = null;
     this.micRecovery = new ActiveMicRecoveryController({
       mediaDevices: navigator.mediaDevices,
+      // Recovery waits for the default-mic lookup; a dictation's start and warm-up don't (#2765).
       acquire: async (reason) => {
         try {
           const constraints = await this.getAudioConstraints(
             false,
-            reason === "devicechange" || reason === "devicechange-ended"
+            reason === "devicechange" || reason === "devicechange-ended",
+            true
           );
           return await navigator.mediaDevices.getUserMedia(constraints);
         } catch (error) {
@@ -800,7 +808,7 @@ class AudioManager {
             { error: error.message },
             "audio"
           );
-          const fallback = await this.getAudioConstraints(true);
+          const fallback = await this.getAudioConstraints(true, false, true);
           return navigator.mediaDevices.getUserMedia(fallback);
         }
       },
@@ -1282,7 +1290,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return STREAMING_PROVIDERS[name] ? name : defaultStreamingProviderName("dictation");
   }
 
-  async getAudioConstraints(forceDefaultMic = false, refreshSystemDefault = false) {
+  async getAudioConstraints(
+    forceDefaultMic = false,
+    refreshSystemDefault = false,
+    waitForSystemDefault = false
+  ) {
     const settings = getSettings();
 
     // All browser audio processing disabled to avoid OS-level side-effects.
@@ -1312,6 +1324,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         settings,
         forceSystemDefault: forceDefaultMic,
         refreshSystemDefault: forceDefaultMic || refreshSystemDefault,
+        waitForSystemDefault,
       });
       const deviceId = resolution.device?.deviceId;
 
@@ -2672,7 +2685,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         provider: cloudTranscriptionProvider || "openai",
       });
 
-      if (allowOpenAIFallback && isLocalMode && fallbackAllowedByPolicy) {
+      if (
+        allowOpenAIFallback &&
+        isLocalMode &&
+        fallbackAllowedByPolicy &&
+        !isUnknownLocalModelError(error)
+      ) {
         try {
           const fallbackResult = await this.processWithOpenAIAPI(audioBlob, metadata, wasCancelled);
           return { ...fallbackResult, source: "openai-fallback" };
@@ -2786,7 +2804,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         provider: cloudTranscriptionProvider || "openai",
       });
 
-      if (allowOpenAIFallback && isLocalMode && fallbackAllowedByPolicy) {
+      if (
+        allowOpenAIFallback &&
+        isLocalMode &&
+        fallbackAllowedByPolicy &&
+        !isUnknownLocalModelError(error)
+      ) {
         try {
           const fallbackResult = await this.processWithOpenAIAPI(audioBlob, metadata, wasCancelled);
           return { ...fallbackResult, source: "openai-fallback" };
@@ -4575,11 +4598,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const selfHostedModel = resolveSelfHostedTranscriptionModel(s);
       if (selfHostedModel) return selfHostedModel;
       const provider = s.cloudTranscriptionProvider || "openai";
-      // Tinfoil and Gemini pin their batch model in the registry rather than in
-      // settings: their streaming model has no batch endpoint, so a streaming
-      // fallback that reused the selected model would POST an unusable id.
+      // A streaming selection needs the provider's batch fallback. A selected
+      // compatible batch model must retain its own ID, including live additions.
       const batchModel = getBatchTranscriptionModel(provider);
-      if (batchModel) return batchModel;
+      const selectedModel = getTranscriptionProvider(provider)?.models.find(
+        (model) => model.id === s.cloudTranscriptionModel?.trim()
+      );
+      if (batchModel && (!selectedModel || selectedModel.streaming)) return batchModel;
       return resolveByokModel(provider, s.cloudTranscriptionModel);
     } catch (error) {
       return "gpt-transcribe";
@@ -4999,9 +5024,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // Gemini Live streams over its own WSS on either credential; the batch
     // Gemini model on the same provider stays on HTTP.
     if (s.cloudTranscriptionProvider === "gemini") {
-      const provider = getTranscriptionProvider("gemini");
-      const model = provider?.models.find((m) => m.id === s.cloudTranscriptionModel);
-      if (!model?.streaming) return false;
+      if (!isGeminiLiveSelection(s)) return false;
       if (s.cloudTranscriptionMode === "byok") return !!s.geminiApiKey;
       return !!(isSignedInOverride ?? s.isSignedIn);
     }
@@ -5023,7 +5046,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return false;
     }
 
-    if (REALTIME_MODELS.has(s.cloudTranscriptionModel)) {
+    if (isOpenAiRealtimeSelection(s)) {
       // Realtime WS is OpenAI-only — other providers fall through to HTTP.
       if ((s.cloudTranscriptionProvider || "openai") !== "openai") return false;
       if (s.cloudTranscriptionMode === "byok") return !!s.openaiApiKey;
@@ -5412,7 +5435,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       // 2. Set up audio pipeline so frames flow the instant WebSocket is ready.
       //    Frames sent before the connection is open are buffered (bounded) by
-      //    sendAudio(), not dropped.
+      //    sendAudio(), not dropped. Managed Orukeet's wait in heldFrames instead.
       const audioContext = await this.getOrCreateAudioContext();
       this.streamingAudioContext = audioContext;
       this.streamingSource = audioContext.createMediaStreamSource(stream);
@@ -5435,13 +5458,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // cannot change how this session's stream errors are handled. Only a
       // session whose fallback recorder started has a capture to fail over
       // to; stop finishes that recorder before a refused commit can arrive.
-      const failsOver =
-        Boolean(this.streamingFallbackRecorder) &&
-        isManagedOrukeetStream({
-          providerName,
-          cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
-        });
-      let heldFrames = null;
+      const managedOrukeet = isManagedOrukeetStream({
+        providerName,
+        cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
+      });
+      const failsOver = Boolean(this.streamingFallbackRecorder) && managedOrukeet;
+      // Managed Orukeet cues the user before its session exists, and main can drop
+      // what reaches a connection it replaces (a warmup for another route, a failed
+      // one, a session retry). So its audio waits here until the session has started.
+      let heldFrames = managedOrukeet ? [] : null;
 
       this.streamingProcessor.port.onmessage = (event) => {
         // The worklet posts its remaining PCM followed by a "flushed" sentinel
@@ -5556,18 +5581,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         pipelineSettings.toneStyleEnabled &&
         this.getPipelineCleanupOptions(pipelineSettings)
       ) {
-        heldFrames = [];
+        heldFrames ??= [];
         const waitMs = Math.max(0, this.toneStyleStartDeadline - performance.now());
         this.lastToneAppCategory = await Promise.race([
           this.toneStylePromise,
           new Promise((resolve) => setTimeout(() => resolve(null), waitMs)),
         ]);
-        if (startWasCancelled()) {
-          // cancelStreamingRecording waits for this settlement before it
-          // releases the capture; minting a session now would only waste one.
-          this._settleStreamingStart();
-          return false;
-        }
+      }
+      if (startWasCancelled()) {
+        // cancelStreamingRecording waits for this settlement before it
+        // releases the capture; minting a session now would only waste one.
+        this._settleStreamingStart();
+        return false;
       }
       this._activePipelineOptions =
         pipelineSettings.toneStyleEnabled && !this.lastToneAppCategory
@@ -5592,6 +5617,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         // switch before stop cannot move its words in or out of Cloud usage.
         this._streamingMeteredByCloud = isCloudMeteredStream(sessionOptions);
         const res = await provider.start(sessionOptions);
+        // The user is gone: no upgrade prompt, session refresh or retry for this answer.
+        if (startWasCancelled()) return res;
 
         return this.classifyStreamingStartResult(res, { useLocalWhisper });
       });
@@ -5605,6 +5632,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (result.needsFallback && this.streamingFallbackReason && this.streamingFallbackRecorder) {
         this._streamingFailoverReason = this.streamingFallbackReason;
         this.streamingFallbackReason = null;
+        heldFrames = null;
         logger.info(
           "Managed Orukeet unavailable, recording for the Cloud upload",
           { reason: this._streamingFailoverReason },
@@ -5841,6 +5869,21 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.cleanupStreamingListeners(sessionId);
       this._streamingFallbackSegments = [];
       this.onStateChange?.({ isRecording: false, isProcessing: true, isStreaming: false });
+
+      // Esc is live during managed Orukeet's cold connect, which can take seconds.
+      // Stopping aborts its mint and socket, so the start settles now and the pill
+      // doesn't sit busy until the connect times out.
+      if (
+        this.streamingStartInProgress &&
+        isManagedOrukeetStream({
+          providerName,
+          cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
+        })
+      ) {
+        void this.getStreamingProvider(providerName)
+          .stop()
+          .catch(() => {});
+      }
 
       const providerStop = this._waitForStreamingStartSettlement()
         .then(() => {

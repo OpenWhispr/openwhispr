@@ -32,6 +32,20 @@ export interface PendingLocalModelInventory {
   llm?: LocalLLMModelStatus[];
 }
 
+/**
+ * Every local model main knows of, read one way for the setup step and the tray,
+ * so they never disagree on what is on disk. A family that can't be read is left out.
+ */
+export async function readLocalModelInventory(): Promise<PendingLocalModelInventory> {
+  const api = window.electronAPI;
+  const [whisper, parakeet, llm] = await Promise.all([
+    api?.listWhisperModels?.().catch(() => undefined),
+    api?.listParakeetModels?.().catch(() => undefined),
+    api?.modelGetAll?.().catch(() => undefined),
+  ]);
+  return { whisper: whisper?.models, parakeet: parakeet?.models, llm };
+}
+
 export type PendingLocalModelVerdict = "unresolved" | "allowed" | "denied";
 
 // A launch retries a failed download by itself this many times; after that the tray

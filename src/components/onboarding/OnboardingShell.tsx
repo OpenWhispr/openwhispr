@@ -17,6 +17,7 @@ interface OnboardingShellProps {
   compact?: boolean;
   children: ReactNode;
   onBack?: () => void;
+  backDisabled?: boolean;
   onContinue?: () => void;
   onSkip?: () => void;
   continueLabel?: string;
@@ -190,6 +191,7 @@ export default function OnboardingShell({
   compact = false,
   children,
   onBack,
+  backDisabled = false,
   onContinue,
   onSkip,
   continueLabel,
@@ -287,6 +289,7 @@ export default function OnboardingShell({
                   // box, which would leave nothing for the collapse to animate.
                   size="default"
                   onClick={onBack}
+                  disabled={backDisabled}
                   // One duration and curve for the pill and the label, so the
                   // min-width/padding collapse and the label collapse read as a
                   // single motion instead of two.

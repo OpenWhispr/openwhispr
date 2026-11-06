@@ -28,6 +28,7 @@ async function mountUseAuth(t, { initialStorage }) {
     if (root) await React.act(async () => root.unmount());
   });
   const calls = {
+    chatPrepared: [],
     fetchPolicy: [],
     setActiveAccountScope: [],
     purge: 0,
@@ -58,6 +59,11 @@ async function mountUseAuth(t, { initialStorage }) {
             ? { accountId: binding.accountId, authGeneration: token.generation }
             : null,
         setActiveAccountScope: async (accountId, generation) => {
+          assert.equal(
+            calls.chatPrepared.at(-1),
+            accountId,
+            "chat ownership is fenced before main scope changes"
+          );
           calls.setActiveAccountScope.push([accountId, generation]);
           return { success: true };
         },
@@ -110,6 +116,10 @@ async function mountUseAuth(t, { initialStorage }) {
         };
       `,
       "/lib/spaceRosterCache": "export const invalidateSpaceRoster = () => {};",
+      "/stores/chatTurnStore": `
+        export function prepareChatAccountScope(accountId) { globalThis.__authTest.calls.chatPrepared.push(accountId); }
+        export function resetForAccountChange() {}
+      `,
       "/stores/noteStore": "export const resetForAccountChange = () => {};",
       "/stores/workspaceStore": `
         const calls = globalThis.__authTest.calls;

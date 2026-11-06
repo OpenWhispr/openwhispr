@@ -1,4 +1,8 @@
-const modelRegistryData = require("../models/modelRegistryData.json");
+const {
+  registryData: modelRegistryData,
+  getRunnableSpeechModel,
+  listRunnableLocalModels,
+} = require("../models/registryData.js");
 const { isLocalModelPolicyRefusal } = require("./localModelPolicyGate");
 const { OrukeetStreaming, MANAGED_STREAM_OPTIONS } = require("./orukeetStreaming");
 const { connectManagedOrukeet } = require("./orukeetCloudSession");
@@ -133,7 +137,11 @@ const HyprlandShortcutManager = require("./hyprlandShortcut");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
 const { i18nMain, changeLanguage } = require("./i18nMain");
 const DeepgramStreaming = require("./deepgramStreaming");
-const { GeminiLiveStreaming, GEMINI_LIVE_MODEL } = require("./geminiLiveStreaming");
+const {
+  GeminiLiveStreaming,
+  GEMINI_LIVE_MODEL,
+  resolveGeminiLiveModel,
+} = require("./geminiLiveStreaming");
 const CortiStreaming = require("./cortiStreaming");
 const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
 const { getCortiToken } = require("./cortiAuth");
@@ -961,7 +969,9 @@ class IPCHandlers {
             this._localModelPolicy.assertCurrent(this._activeLocalMeetingLease);
           } catch (error) {
             // cancelJobs' abort: its callers stop the meeting themselves, as an account change.
-            if (error.code !== "POLICY_UNRESOLVABLE") this._stopMeetingForPolicy?.(error.code);
+            // Anything that isn't the policy's refusal is not the organization's either.
+            if (isLocalModelPolicyRefusal(error) && error.code !== "POLICY_UNRESOLVABLE")
+              this._stopMeetingForPolicy?.(error.code);
           }
         }
       },
@@ -977,21 +987,22 @@ class IPCHandlers {
     }
     const samePath = (actual, expected) =>
       typeof actual === "string" && path.resolve(actual) === path.resolve(expected);
+    // Retired models included: a server started before a retirement keeps serving.
     this.whisperManager.serverManager.localModelIdForPath = (modelPath) =>
-      Object.keys(modelRegistryData.whisperModels).find((id) =>
+      listRunnableLocalModels("whisperModels").find(([id]) =>
         samePath(modelPath, this.whisperManager.getModelPath(id))
-      );
+      )?.[0];
     this.parakeetManager.serverManager.wsServer.localModelIdForPath = (modelPath, id) =>
-      modelRegistryData.parakeetModels[id] &&
+      getRunnableSpeechModel("parakeetModels", id) &&
       samePath(modelPath, this.parakeetManager.getModelPath(id))
         ? id
         : undefined;
     localLlmManager.serverManager.localModelIdForPath = (modelPath) =>
-      modelRegistryData.localProviders
-        .flatMap((provider) => provider.models)
-        .find((model) =>
+      listRunnableLocalModels("localProviders").find(
+        ([, model]) =>
+          model.fileName &&
           samePath(modelPath, path.join(localLlmManager.getModelsDir(), model.fileName))
-        )?.id;
+      )?.[0];
   }
 
   // Called once a cookie session has had its bearer migration: before that, a
@@ -1176,10 +1187,10 @@ class IPCHandlers {
       return this.localModelDownloadStatus.finish(modelType, modelId);
     }
 
-    if (progressData.type === "installing") {
+    if (progressData.type === "installing" || progressData.type === "verifying") {
       return this.localModelDownloadStatus.update(modelType, modelId, {
-        phase: "installing",
-        progress: progressData.percentage || 100,
+        phase: progressData.type,
+        progress: progressData.percentage ?? 100,
       });
     }
 
@@ -3324,8 +3335,8 @@ class IPCHandlers {
     ipcMain.handle("db-get-conversation-by-client-id", (_, clientId) =>
       this.databaseManager.getConversationByClientId(clientId)
     );
-    ipcMain.handle("db-upsert-conversation-from-cloud", (_, cloudConv, messages) =>
-      this.databaseManager.upsertConversationFromCloud(cloudConv, messages)
+    ipcMain.handle("db-upsert-conversation-from-cloud", (_, cloudConv, messages, snapshot) =>
+      this.databaseManager.upsertConversationFromCloud(cloudConv, messages, snapshot)
     );
     ipcMain.handle("db-mark-conversation-create-attempted", (_, id) =>
       this.databaseManager.markConversationCreateAttempted(id)
@@ -3333,8 +3344,11 @@ class IPCHandlers {
     ipcMain.handle("db-acknowledge-conversation-create", (_, id, snapshot, cloudId) =>
       this.databaseManager.acknowledgeConversationCreate(id, snapshot, cloudId)
     );
-    ipcMain.handle("db-mark-conversation-synced", (_, id, cloudId) =>
-      this.databaseManager.markConversationSynced(id, cloudId)
+    ipcMain.handle("db-mark-conversation-synced", (_, id, cloudId, snapshot) =>
+      this.databaseManager.markConversationSynced(id, cloudId, snapshot)
+    );
+    ipcMain.handle("db-replace-conversation-client-id", (_, id, expectedClientId) =>
+      this.databaseManager.replaceConversationClientId(id, expectedClientId)
     );
     ipcMain.handle("db-hard-delete-conversation", (_, id) => {
       const result = this.databaseManager.hardDeleteConversation(id);
@@ -3791,8 +3805,8 @@ class IPCHandlers {
       // Promise cannot cross Electron's IPC boundary, though, and renderer
       // callers need to know whether text was pasted, but not the delayed
       // clipboard restoration promise. Successful platform paths predate the
-      // explicit `pasted` outcome; only the clipboard-only fallback and a held-back
-      // paste (held modifiers or a missing or failed wl-copy, which carries a `reason`) set false.
+      // explicit `pasted` outcome; only the clipboard-only fallback and a held-back paste
+      // (held modifiers or a missing or failed wl-copy) set false, each with a `reason`.
       return {
         success: true,
         pasted,
@@ -4819,6 +4833,9 @@ class IPCHandlers {
           "globe-preference-state.json",
           ".system-audio-permission",
           "account-scope-binding.json",
+          "installed-models.json",
+          "model-registry.json",
+          "model-registry.json.backup",
           PAID_KEY_CHECKS_FILE,
         ]) {
           fs.rmSync(path.join(app.getPath("userData"), fileName), { force: true });
@@ -5277,6 +5294,21 @@ class IPCHandlers {
         };
       }
     });
+
+    const retiredModelDirs = () => {
+      const { getModelsDirForService } = require("./modelDirUtils");
+      return {
+        whisperDir: getModelsDirForService("whisper"),
+        parakeetDir: getModelsDirForService("parakeet"),
+        llamaDir: require("./modelManagerBridge").default.getModelsDir(),
+      };
+    };
+    ipcMain.handle("list-retired-local-models", (_event, inUse) =>
+      require("./retiredLocalModels").listRetiredLocalModels(retiredModelDirs(), inUse)
+    );
+    ipcMain.handle("delete-retired-local-models", (_event, inUse) =>
+      require("./retiredLocalModels").deleteRetiredLocalModels(retiredModelDirs(), inUse)
+    );
 
     ipcMain.handle("model-delete-all", async () => {
       try {
@@ -6082,9 +6114,12 @@ class IPCHandlers {
               neededModels: localServer.models,
             });
           }
-          modelManager.stopServer().catch((err) => {
+          // A background chat answer may still be streaming from it.
+          modelManager.stopServerWhenIdle().catch((err) => {
             debugLogger.error("Failed to stop llama-server", { error: err.message });
           });
+        } else {
+          modelManager.serverManager.cancelDeferredStop();
         }
       }
 
@@ -6399,7 +6434,7 @@ class IPCHandlers {
           await this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
           // The next inference picks up the new Vulkan binary. The pack can land in
           // the background after onboarding, so an answer in progress finishes first.
-          modelManager.stopServerWhenIdle().catch(() => {});
+          modelManager.stopServerWhenIdle({ cancelOnReuse: false }).catch(() => {});
         }
 
         return result;
@@ -6507,7 +6542,10 @@ class IPCHandlers {
     ipcMain.handle("open-microphone-settings", () => openSystemSettings("microphone"));
     ipcMain.handle("open-sound-input-settings", () => openSystemSettings("sound"));
     ipcMain.handle("get-system-default-microphone", (_event, options = {}) =>
-      resolveSystemDefaultMicrophone({ refresh: options?.refresh === true })
+      resolveSystemDefaultMicrophone({
+        refresh: options?.refresh === true,
+        wait: options?.wait !== false,
+      })
     );
     ipcMain.handle("open-accessibility-settings", () => openSystemSettings("accessibility"));
     ipcMain.handle("open-system-audio-settings", () => openSystemSettings("systemAudio"));
@@ -10032,6 +10070,25 @@ class IPCHandlers {
     const DICTATION_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
     const ORUKEET_IDLE_TIMEOUT_MS = 60 * 1000;
 
+    // A managed Orukeet start owns the connection until its stop. Warmups are for
+    // the next recording, so they neither replace this one's connection nor expire
+    // it as idle. Other routes cue the user only once connected, so they keep
+    // redialling over a warmup.
+    let dictationRecordingActive = false;
+    // Only a cancel stops a start in progress: a tap to stop waits for it to settle.
+    let dictationStopGeneration = 0;
+    const watchedDictationRenderers = new WeakSet();
+    // A renderer that reloads or closes mid-recording never sends its stop.
+    const releaseRecordingWithRenderer = (sender) => {
+      if (watchedDictationRenderers.has(sender)) return;
+      watchedDictationRenderers.add(sender);
+      const release = () => {
+        dictationRecordingActive = false;
+      };
+      sender.on("did-start-loading", release);
+      sender.once("destroyed", release);
+    };
+
     const clearDictationIdleTimer = () => {
       if (this._dictationIdleTimer) {
         clearTimeout(this._dictationIdleTimer);
@@ -10041,6 +10098,7 @@ class IPCHandlers {
 
     const startDictationIdleTimer = () => {
       clearDictationIdleTimer();
+      if (dictationRecordingActive) return;
       const idleTimeoutMs =
         this._dictationStreaming instanceof OrukeetStreaming
           ? ORUKEET_IDLE_TIMEOUT_MS
@@ -10948,6 +11006,7 @@ class IPCHandlers {
 
     const warmupDictationStreaming = async (event, options) => {
       await this._dictationConnectPromise?.catch(() => {});
+      if (dictationRecordingActive) return { success: true, alreadyWarm: true };
       if (!isUnusedOrukeetConnection(this._dictationStreaming, options)) {
         await connectDictationStreaming(event, options);
         startDictationIdleTimer();
@@ -10967,9 +11026,23 @@ class IPCHandlers {
     });
 
     ipcMain.handle("dictation-realtime-start", async (event, options = {}) => {
+      const managedOrukeet = options.provider === "orukeet" && options.mode !== "byok";
+      const stopGeneration = dictationStopGeneration;
+      if (managedOrukeet) {
+        dictationRecordingActive = true;
+        releaseRecordingWithRenderer(event.sender);
+      }
       try {
         clearDictationIdleTimer();
         this._dictationPreviewEnabled = !!options.preview;
+        // A warmup still connecting may be the connection this start wants. Managed audio
+        // waits in the renderer; other routes need the connection before this tick ends.
+        if (managedOrukeet && this._dictationConnectPromise) {
+          await this._dictationConnectPromise.catch(() => {});
+          if (stopGeneration !== dictationStopGeneration) {
+            throw new Error("Dictation start was cancelled");
+          }
+        }
         if (
           !this._dictationStreaming?.isConnected ||
           this._dictationStreaming.connectionKey !== dictationConnectionKey(options)
@@ -10978,6 +11051,7 @@ class IPCHandlers {
         }
         return { success: true };
       } catch (err) {
+        dictationRecordingActive = false;
         return streamingStartFailure(err);
       }
     });
@@ -10998,6 +11072,8 @@ class IPCHandlers {
     });
 
     ipcMain.handle("dictation-realtime-stop", async () => {
+      dictationStopGeneration += 1;
+      dictationRecordingActive = false;
       clearDictationIdleTimer();
       if (!this._dictationStreaming) {
         return { success: true, text: "" };
@@ -12382,6 +12458,21 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle(
+      "get-model-registry-updates",
+      () => process.env.OPENWHISPR_MODEL_REGISTRY_MODE !== "bundled"
+    );
+
+    ipcMain.handle("set-model-registry-updates", async (event, enabled) => {
+      try {
+        await this.environmentManager.saveModelRegistryUpdates(enabled === true);
+        return { success: true };
+      } catch (error) {
+        debugLogger.error("Failed to save model catalog updates setting:", error);
+        return { success: false, error: error.message };
+      }
+    });
+
     ipcMain.handle("check-for-updates", async () => {
       return this.updateManager.checkForUpdates();
     });
@@ -12977,6 +13068,11 @@ class IPCHandlers {
 
     let geminiStreamingStartInProgress = false;
     let geminiSendDropCount = 0;
+    let geminiStartAudio = [];
+    let geminiStartAudioBytes = 0;
+    // Match the client's three-second cold-start bound. A model-changing start
+    // owns these frames, even while a previous warm handshake is finishing.
+    const GEMINI_START_AUDIO_MAX = 3 * 16000 * 2;
     // One handshake at a time. A start that raced an in-flight warmup used to
     // clear the cold-start buffer, spend a second single-use managed token and
     // report success while the warmup's handshake (and its failure) were still
@@ -13001,10 +13097,15 @@ class IPCHandlers {
       return streaming;
     };
 
-    // What a Gemini connection authenticated with: a managed one never serves a
-    // BYOK start or the reverse, and a BYOK one is not reused after a key save.
+    // Managed tokens are constrained to the server's existing model. BYOK can
+    // select newly published compatible models, each requiring its own socket.
+    const geminiConnectionModel = resolveGeminiLiveModel;
+    // A warm socket cannot cross credentials, modes, or selected models.
     const geminiConnectionKey = (options) =>
-      options.mode === "byok" ? `byok:${credentialGeneration}` : "managed";
+      JSON.stringify([
+        options.mode === "byok" ? `byok:${credentialGeneration}` : "managed",
+        geminiConnectionModel(options),
+      ]);
 
     const connectGeminiStreaming = (event, options) => {
       if (geminiConnectInFlight) return geminiConnectInFlight;
@@ -13024,6 +13125,7 @@ class IPCHandlers {
         const token = await fetchRealtimeToken(event, tokenOptions);
         await streaming.connect({
           ...options,
+          model: geminiConnectionModel(options),
           token,
           refreshToken: () => fetchRealtimeToken(event, tokenOptions),
         });
@@ -13055,6 +13157,8 @@ class IPCHandlers {
       }
 
       geminiStreamingStartInProgress = true;
+      geminiStartAudio = [];
+      geminiStartAudioBytes = 0;
       try {
         const streaming = ensureGeminiStreaming(event);
         if (geminiConnectInFlight) await geminiConnectInFlight;
@@ -13066,6 +13170,7 @@ class IPCHandlers {
           if (streaming.isConnected) await streaming.disconnect(false);
           await connectGeminiStreaming(event, options);
         }
+        for (const buffer of geminiStartAudio) streaming.sendAudio(buffer);
         geminiSendDropCount = 0;
         debugLogger.debug("Gemini streaming started", { usedWarmConnection }, "streaming");
         return { success: true, usedWarmConnection };
@@ -13077,11 +13182,30 @@ class IPCHandlers {
         return streamingStartFailure(error);
       } finally {
         geminiStreamingStartInProgress = false;
+        geminiStartAudio = [];
+        geminiStartAudioBytes = 0;
       }
     });
 
     ipcMain.on("gemini-streaming-send", (_event, audioBuffer) => {
       try {
+        if (geminiStreamingStartInProgress) {
+          const buffer = Buffer.from(audioBuffer);
+          if (geminiStartAudioBytes + buffer.length <= GEMINI_START_AUDIO_MAX) {
+            geminiStartAudio.push(buffer);
+            geminiStartAudioBytes += buffer.length;
+          } else {
+            // Same accounting as a dropped live send, so a slow start is visible in logs.
+            geminiSendDropCount++;
+            if (geminiSendDropCount <= 3 || geminiSendDropCount % 50 === 0)
+              debugLogger.warn(
+                "Gemini start audio dropped past the 3 s buffer",
+                { dropCount: geminiSendDropCount },
+                "streaming"
+              );
+          }
+          return;
+        }
         if (!this.geminiStreaming) return;
         const sent = this.geminiStreaming.sendAudio(Buffer.from(audioBuffer));
         if (!sent) {

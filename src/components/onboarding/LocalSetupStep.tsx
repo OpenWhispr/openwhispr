@@ -56,10 +56,14 @@ const ROW_KIND_KEYS: Record<LocalSetupRowId, string> = {
   cleanup: "onboarding.rehaul.localSetup.rows.cleanup",
   assistant: "onboarding.rehaul.localSetup.rows.assistant",
 };
+// A row too slow for this computer reads as memory too (Josh, 2026-11-03): its line
+// says the model exceeds what the computer can carry, with no figures to quote.
 const UNAVAILABLE_HEADING_KEYS: Record<NonNullable<LocalSetupRow["reason"]>, string> = {
-  tooSlow: "onboarding.rehaul.localSetup.unavailable.tooSlow",
+  tooSlow: "onboarding.rehaul.localSetup.unavailable.notEnoughMemory",
   memory: "onboarding.rehaul.localSetup.unavailable.notEnoughMemory",
   memoryUnread: "onboarding.rehaul.localSetup.unavailable.memoryUnread",
+  organization: "onboarding.rehaul.localSetup.unavailable.organization",
+  catalog: "transcription.parakeet.unavailable",
 };
 const DESCRIPTION_KEYS: Record<LocalSetupRowId, string> = {
   dictation: "onboarding.rehaul.localSetup.description.dictation",
@@ -73,6 +77,8 @@ function lineText(line: LocalSetupLine, onMac: boolean, t: Translate): string {
   switch (line.key) {
     case "requiredByOrganization":
       return t("onboarding.rehaul.localSetup.line.requiredByOrganization");
+    case "organizationModelsUnrunnable":
+      return t("onboarding.rehaul.localSetup.line.organizationModelsUnrunnable");
     case "notEnoughMemory": {
       const values = { model: line.model, needed: line.neededGb, have: line.haveGb };
       return onMac
@@ -269,7 +275,9 @@ function SetupRow({
       {t("onboarding.rehaul.localSetup.retry")}
     </button>
   ) : unavailable ? (
-    cloudAllowed && (
+    // The organization's allow-list rules this row out, not the computer, so Cloud isn't the advice.
+    cloudAllowed &&
+    row.reason !== "organization" && (
       <span className={`ms-1.5 shrink-0 ${BADGE_CLASS}`}>
         {t("onboarding.rehaul.localSetup.badge.cloud")}
       </span>
@@ -373,6 +381,7 @@ export function LocalSetupStep({
   const [keptOffToFit, setKeptOffToFit] = useState<LocalSetupRowId[]>([]);
   // The fit at the moment Download was pressed: later space reads don't move it.
   const [frozenFit, setFrozenFit] = useState<Fit | null>(null);
+  const [startedDictation, setStartedDictation] = useState<LocalSetupRow | null>(null);
   // What the inventory found on disk. It arrives through the downloads hook, which
   // itself needs the fitted switches, so it is copied here (see below the hook).
   const [onDisk, setOnDisk] = useState<string[]>([]);
@@ -414,18 +423,33 @@ export function LocalSetupStep({
   // Download waits for the free-space read and the inventory, or it would freeze a
   // fit that hasn't seen either.
   const readsLanded = spaceSettled && inventoryLoaded;
-  const phase: "proceed" | "download" | "downloading" | "failed" | "noSpace" | "reading" =
-    downloads.allDone || (downloads.started && dictationStatus === "done")
-      ? "proceed"
-      : downloads.started
-        ? isQueued(dictationStatus)
-          ? "downloading"
-          : "failed"
-        : !readsLanded
-          ? "reading"
-          : fit.state === "noSpace" || fit.state === "overflow"
-            ? "noSpace"
-            : "download";
+  const currentDictation = plan.rows.find((row) => row.id === "dictation");
+  // Retirement stops new downloads, but a transfer already started can finish and
+  // keep working. A different model or an organization block must still stop Proceed.
+  const completedRetiredDictation =
+    downloads.started &&
+    dictationStatus === "done" &&
+    currentDictation?.reason === "catalog" &&
+    startedDictation &&
+    localSetupItemKey(startedDictation.download) === localSetupItemKey(currentDictation.download)
+      ? startedDictation
+      : null;
+  const dictationBlocked = currentDictation?.label === "unavailable" && !completedRetiredDictation;
+  const phase:
+    "proceed" | "download" | "downloading" | "failed" | "noSpace" | "reading" | "blocked" =
+    dictationBlocked
+      ? "blocked"
+      : downloads.allDone || (downloads.started && dictationStatus === "done")
+        ? "proceed"
+        : downloads.started
+          ? isQueued(dictationStatus)
+            ? "downloading"
+            : "failed"
+          : !readsLanded
+            ? "reading"
+            : fit.state === "noSpace" || fit.state === "overflow"
+              ? "noSpace"
+              : "download";
 
   const toggle = (id: keyof LocalSetupSwitches): void => {
     if (downloads.started) return;
@@ -438,12 +462,15 @@ export function LocalSetupStep({
       onProceed(downloads.handOff);
     } else if (phase === "download") {
       setFrozenFit(liveFit);
+      setStartedDictation(currentDictation ?? null);
       downloads.start();
     }
   };
 
   let foot = t("onboarding.rehaul.localSetup.foot.default");
-  if (phase === "failed") {
+  if (phase === "blocked") {
+    foot = t("onboarding.rehaul.localSetup.foot.dictationUnavailable");
+  } else if (phase === "failed") {
     foot = t("onboarding.rehaul.localSetup.foot.dictationFailed");
   } else if (phase === "proceed" && optionalStatuses.some(isQueued)) {
     foot = t("onboarding.rehaul.localSetup.foot.finishesInBackground");
@@ -471,8 +498,9 @@ export function LocalSetupStep({
       return t("onboarding.rehaul.localSetup.line.offToFit");
     }
     if (row.line) return lineText(row.line, onMac, t);
+    if (row.reason === "catalog") return null;
     if (row.label === "unavailable")
-      return t("onboarding.rehaul.localSetup.unavailable.tooSlowLine");
+      return t("onboarding.rehaul.localSetup.unavailable.exceedsMemory");
     // A switched-off row still says what it does: the switch shows it's off.
     return t(DESCRIPTION_KEYS[row.id]);
   };
@@ -482,7 +510,11 @@ export function LocalSetupStep({
       <ComputerCard profile={plan.profile} languageTags={plan.languageTags} />
 
       <div className={`mt-4 ${PANEL_CLASS}`}>
-        {plan.rows.map((row) => {
+        {plan.rows.map((planRow) => {
+          const row =
+            planRow.id === "dictation" && completedRetiredDictation
+              ? completedRetiredDictation
+              : planRow;
           const on = row.id === "dictation" || switches[row.id];
           // The graphics pack's size shows on the row it downloads with, unnamed.
           const pack =

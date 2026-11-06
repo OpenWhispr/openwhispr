@@ -20,6 +20,14 @@ const ARABIC_PLURAL_BASES = [
   "settingsPage.workspace.teams.memberCount",
   "settingsPage.workspace.teams.grantsAccessToSpaces",
   "settingsPage.workspace.teams.deleteConfirmSpaceAccess",
+  "settingsPage.workspace.teamspaces.adminCount",
+  "settingsPage.workspace.teamspaces.form.createdInviteFailed",
+  "settingsPage.workspace.teamspaces.picker.groupPeople",
+  "settingsPage.workspace.teamspaces.picker.groupChip",
+  "settingsPage.workspace.teamspaces.picker.groupHasAccess",
+  "settingsPage.workspace.teamspaces.addPeople.addingTitle",
+  "settingsPage.workspace.teamspaces.addPeople.failedTitle",
+  "settingsPage.workspace.teamspaces.addPeople.done",
   "settingsPage.workspace.people.invitations.pending",
   "settingsPage.workspace.people.selection.count",
   "settingsPage.workspace.people.invitations.resentMany",
@@ -55,7 +63,6 @@ const ARABIC_PLURAL_BASES = [
   "workspaces.invite.seatCostManyUnpriced",
   "notes.spaces.noteCount",
   "notes.spaces.invitedTo",
-  "notes.spaces.members.invitedMany",
   "notes.addToFolder.addCount",
   "notes.overview.meta.folders",
   "notes.overview.meta.members",
@@ -133,6 +140,9 @@ function registryDescriptionKeys(node, out = []) {
   if (Array.isArray(node)) {
     for (const child of node) registryDescriptionKeys(child, out);
   } else if (node && typeof node === "object") {
+    // Retired models never reach a picker (registryData strips them), so their
+    // descriptions never render.
+    if (node.retired) return out;
     if (typeof node.descriptionKey === "string") out.push(node.descriptionKey);
     for (const child of Object.values(node)) registryDescriptionKeys(child, out);
   }
