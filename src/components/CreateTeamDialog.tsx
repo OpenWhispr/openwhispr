@@ -11,9 +11,9 @@ import { useToast, type ToastProps } from "./ui/useToast";
 import { WorkspaceErrorBar } from "./workspace/WorkspaceErrorBar";
 import { PRIMARY_BUTTON, SECONDARY_BUTTON } from "./workspace/dialogButtons";
 import { SpacePeopleField } from "./notes/SpacePeopleField";
+import { SpaceInviteSeatNotice } from "./notes/SpaceInviteSeatNotice";
 import { createTeam } from "../services/spaceActions";
 import { inviteAfterCreate, inviteFollowUpToast } from "../lib/inviteAfterCreate";
-import { serverRefusalMessage } from "../services/cloudApi";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { useAuth } from "../hooks/useAuth";
 import { workspaceCan } from "../lib/capabilities";
@@ -219,11 +219,9 @@ function CreateTeamForm({
           );
           setFailure({
             kind: "refused",
-            message:
-              serverRefusalMessage(error) ??
-              t("settingsPage.workspace.teamspaces.members.partialLeft", {
-                names: formatList(i18n.language, goneNames.map(isolate)),
-              }),
+            message: t("settingsPage.workspace.teamspaces.members.partialLeft", {
+              names: formatList(i18n.language, goneNames.map(isolate)),
+            }),
           });
         } else {
           setFailure(
@@ -389,6 +387,9 @@ function CreateTeamForm({
             <div className="h-10 animate-pulse rounded-lg bg-foreground/5 dark:bg-white/5" />
           )}
           {peopleError}
+          {emails.length > 0 && !isCreating && (
+            <SpaceInviteSeatNotice workspaceId={workspace.id} addressCount={emails.length} />
+          )}
           {failure?.kind === "general" && bar(t(`${FORM_KEY}.failed`))}
           {failure?.kind === "refused" && bar(failure.message)}
           {(failure?.kind === "notAllowed" || failure?.kind === "ssoRequired") &&

@@ -111,6 +111,13 @@ test.before(async (t) => {
           { getState: () => globalThis.__store }
         );
       `,
+      "/services/WorkspacesService": `
+        export const WorkspacesService = {
+          previewSeats: async () => {
+            throw new Error("no subscription");
+          },
+        };
+      `,
       "/hooks/useAuth": 'export const useAuth = () => ({ user: { id: "me" } });',
       "/ui/useToast":
         "export const useToast = () => ({ toast: (toast) => globalThis.__toasts.push(toast) });",
@@ -209,6 +216,7 @@ async function mount(
     canManageMembers = true,
     createTeam = async () => createdTeam(),
     rosterFails = false,
+    workspaceFields = {},
     sendInvitations = async ({ emails, onResult }) => {
       for (const email of emails) onResult(email, { ok: true, emailSent: true });
     },
@@ -216,8 +224,9 @@ async function mount(
 ) {
   const calls = [];
   const closes = [];
-  const workspace = workspaceWith({ manage_members: canManageMembers });
+  const workspace = { ...workspaceWith({ manage_members: canManageMembers }), ...workspaceFields };
   const store = {
+    workspaces: [workspace],
     members: [],
     membersWorkspaceId: null,
     refreshMembers: async (workspaceId) => {
@@ -282,6 +291,22 @@ async function mount(
     callsTo: (name) => calls.filter(([call]) => call === name),
   };
 }
+
+test("a new address says what it costs before the team is made, and Create still goes", async (t) => {
+  await mount(t, {
+    workspaceFields: { has_subscription: true, seats: 8, seats_used: 8, billing_manager: "Olivia" },
+  });
+  await type(nameInput(), "Sales");
+  await pickPerson("Ethan");
+  assert.doesNotMatch(text(dialog()), /Using 8 of 8 seats/, "people take no seat");
+
+  await addAddress("new@example.com");
+  await settle();
+
+  assert.match(text(dialog()), /Using 8 of 8 seats/);
+  assert.match(text(dialog()), /No seats left\. Ask Olivia to add seats\./);
+  assert.equal(createButton().disabled, false);
+});
 
 test("an empty name says so and sends nothing", async (t) => {
   const { calls } = await mount(t);
@@ -594,13 +619,13 @@ test("a selection of one is counted too", async (t) => {
   assert.equal(readable(toasts()[0].title), "Created Sales with 1 member");
 });
 
-test("someone who left since the selection comes off, with the server's words", async (t) => {
+test("someone who left since the selection comes off, named in the user's language", async (t) => {
   const { closes } = await mount(t, {
     rosterFails: true,
     props: { initialPeople: [ROSTER[1], ROSTER[2]] },
     createTeam: async () => {
       throw new CloudApiError(
-        "Ethan is no longer in this workspace",
+        "One or more users are not members of this workspace",
         400,
         "not_workspace_members",
         { user_ids: ["ethan"] }
@@ -611,7 +636,9 @@ test("someone who left since the selection comes off, with the server's words", 
   await click(createButton());
 
   assert.deepEqual(chipTexts(), ["Saket"]);
-  assert.deepEqual(alertTexts(), ["Ethan is no longer in this workspace"]);
+  assert.deepEqual(alertTexts().map(readable), [
+    "Ethan left the workspace, so they weren't added.",
+  ]);
   assert.deepEqual(closes, []);
 });
 
@@ -677,11 +704,11 @@ test("a pending create locks the form and ignores a second press", async (t) => 
   assert.equal(callsTo("sendInvitations").length, 1);
 });
 
-test("people who left the workspace come off the form, with the server's words", async (t) => {
+test("people who left the workspace come off the form, named in the user's language", async (t) => {
   const { closes } = await mount(t, {
     createTeam: async () => {
       throw new CloudApiError(
-        "Ethan is no longer in this workspace",
+        "One or more users are not members of this workspace",
         400,
         "not_workspace_members",
         {
@@ -696,7 +723,9 @@ test("people who left the workspace come off the form, with the server's words",
   await click(createButton());
 
   assert.deepEqual(chipTexts(), ["Saket"]);
-  assert.deepEqual(alertTexts(), ["Ethan is no longer in this workspace"]);
+  assert.deepEqual(alertTexts().map(readable), [
+    "Ethan left the workspace, so they weren't added.",
+  ]);
   assert.deepEqual(closes, []);
   // The primary stays Create team: what to fix is already off the form.
   assert.ok(createButton());
