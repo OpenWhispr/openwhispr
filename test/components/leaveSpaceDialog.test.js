@@ -349,6 +349,38 @@ test("a team that fails stops the leave and offers Try again", async (t) => {
   assert.deepEqual(events, []);
 });
 
+test("a team that refuses its only admin shows the team's block, without Try again", async (t) => {
+  const space = {
+    ...SPACE,
+    my_direct_role: null,
+    teams: [{ id: "g1", name: "Sales", my_role: "admin" }],
+  };
+  const { events } = await mount(t, {
+    space,
+    leaveTeam: async () => {
+      throw new CloudApiError(
+        "Make another member an admin before you leave.",
+        409,
+        "last_team_admin"
+      );
+    },
+  });
+
+  await ui.click(buttonNamed("Leave teamspace"));
+  await ui.settle();
+
+  assert.equal(heading(), "Add another admin first");
+  assert.equal(
+    body(),
+    "You're the only admin of Sales. Make another member an admin before you leave."
+  );
+  assert.deepEqual(buttons().map(text), ["Close"]);
+  assert.deepEqual(toastTitles(), []);
+
+  await ui.click(buttonNamed("Close"));
+  assert.deepEqual(events, [["open", false]]);
+});
+
 test("access that remains through a team keeps its toast and the settings open", async (t) => {
   const { events } = await mount(t, {
     leaveSpace: async () => ({

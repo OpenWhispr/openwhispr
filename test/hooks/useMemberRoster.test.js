@@ -31,11 +31,6 @@ async function loadHook(t, load) {
   const container = installHookDom(t);
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-member-roster-hook-",
-    noExternal: ["react-i18next"],
-    mockModules: {
-      "react-i18next": "export const useTranslation = () => ({ t: (key) => key });",
-      "/ui/useToast": "export const useToast = () => ({ toast: () => {} });",
-    },
   });
   const { useMemberRoster } = await vite.ssrLoadModule("/hooks/useMemberRoster.ts");
   function Harness() {

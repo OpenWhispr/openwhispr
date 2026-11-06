@@ -65,6 +65,7 @@ async function loadHook(t) {
   });
   const { useWorkspaceTeams } = await vite.ssrLoadModule("/hooks/useWorkspaceTeams.ts");
   const held = await vite.ssrLoadModule("/lib/heldTeamDeletes.ts");
+  const heldSpaces = await vite.ssrLoadModule("/lib/heldSpaceDeletes.ts");
   function Harness({ workspaceId, enabled }) {
     globalThis.__latestTeams = useWorkspaceTeams(workspaceId, enabled);
     return null;
@@ -75,7 +76,7 @@ async function loadHook(t) {
     React.act(async () => {
       root.render(React.createElement(Harness, { workspaceId, enabled }));
     });
-  return { mount, held, state: () => globalThis.__latestTeams };
+  return { mount, held, heldSpaces, state: () => globalThis.__latestTeams };
 }
 
 const ids = (state) => state().teams.map((team) => team.id);
@@ -151,6 +152,27 @@ test("a held team leaves the list and comes back on Undo", async (t) => {
   await React.act(async () => held.releaseTeam("t1"));
   assert.deepEqual(ids(state), ["t1", "t2"]);
   assert.equal(state().loads, 2);
+});
+
+test("a held teamspace leaves its teams and comes back on Undo", async (t) => {
+  const { mount, heldSpaces, state } = await loadHook(t);
+  const space = (id) => ({ id, name: id, emoji: null, access: "member" });
+  globalThis.__teamListImpl = async () => [
+    { ...currentRow("t1"), spaces: [space("s1"), space("s2")] },
+  ];
+  await mount("w1", true);
+  const spaceIds = () => state().teams[0].spaces.map((entry) => entry.id);
+  assert.deepEqual(spaceIds(), ["s1", "s2"]);
+
+  await React.act(async () => heldSpaces.holdSpace(1, "s1"));
+  assert.deepEqual(spaceIds(), ["s2"]);
+
+  // The server still lists it on the team, so a reload mustn't bring it back.
+  await React.act(async () => state().reload());
+  assert.deepEqual(spaceIds(), ["s2"]);
+
+  await React.act(async () => heldSpaces.releaseSpace(1, "s1"));
+  assert.deepEqual(spaceIds(), ["s1", "s2"]);
 });
 
 test("rows from an older API still render", async (t) => {

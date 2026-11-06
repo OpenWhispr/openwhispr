@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { heldCloudSpaceIds, subscribeHeldSpaces } from "../lib/heldSpaceDeletes";
 import { withoutHeldTeams } from "../lib/heldTeamDeletes";
 import { useHeldTeamIds } from "./useHeldTeamIds";
 import { TeamsService } from "../services/TeamsService";
@@ -7,8 +8,8 @@ import type { Team } from "../types/electron";
 export interface WorkspaceTeamsState {
   status: "idle" | "loading" | "failed" | "ready";
   /**
-   * As the API returned them, less any whose delete is waiting out its Undo window. Fields an
-   * older API leaves out stay missing.
+   * As the API returned them, less any team or teamspace whose delete is waiting out its Undo
+   * window. Fields an older API leaves out stay missing.
    */
   teams: Team[];
   /** The last reload failed, so the list on screen may be out of date. */
@@ -97,8 +98,17 @@ export function useWorkspaceTeams(
   // A slot left over from another workspace is invisible until its own load lands.
   const own = slot && slot.workspaceId === workspaceId ? slot : null;
   const held = useHeldTeamIds();
+  const heldSpaces = useSyncExternalStore(subscribeHeldSpaces, heldCloudSpaceIds);
   const listed = own?.teams ?? NO_TEAMS;
-  const teams = useMemo(() => withoutHeldTeams(listed, held), [listed, held]);
+  const teams = useMemo(
+    () =>
+      withoutHeldTeams(listed, held).map((team) =>
+        team.spaces?.some((space) => heldSpaces.has(space.id))
+          ? { ...team, spaces: team.spaces.filter((space) => !heldSpaces.has(space.id)) }
+          : team
+      ),
+    [listed, held, heldSpaces]
+  );
   let status: WorkspaceTeamsState["status"];
   if (!enabled || !workspaceId) status = "idle";
   else if (own?.teams) status = "ready";
