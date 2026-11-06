@@ -23,6 +23,7 @@ import openrouterIcon from "@/assets/icons/providers/openrouter.svg";
 import tinfoilIcon from "@/assets/icons/providers/tinfoil.svg";
 import deepgramIcon from "@/assets/icons/providers/deepgram.svg";
 import assemblyaiIcon from "@/assets/icons/providers/assemblyai.svg";
+import elevenlabsIcon from "@/assets/icons/providers/elevenlabs.svg";
 
 export const PROVIDER_ICONS: Record<string, string> = {
   oruk: orukIcon,
@@ -48,6 +49,7 @@ export const PROVIDER_ICONS: Record<string, string> = {
   tinfoil: tinfoilIcon,
   deepgram: deepgramIcon,
   assemblyai: assemblyaiIcon,
+  elevenlabs: elevenlabsIcon,
 };
 
 export function getProviderIcon(provider: string): string | undefined {
@@ -65,6 +67,7 @@ export const MONOCHROME_PROVIDERS = [
   "openrouter",
   "tinfoil",
   "assemblyai",
+  "elevenlabs",
 ] as const;
 
 export function isMonochromeProvider(provider: string): boolean {

@@ -116,7 +116,7 @@ export type TranscriptionRoute =
   | { transport: "local" }
   | {
       transport: "proxied";
-      provider: "tinfoil" | "mistral" | "xai" | "corti" | "gemini";
+      provider: "tinfoil" | "mistral" | "xai" | "corti" | "gemini" | "elevenlabs";
       model: string | null;
       language?: string;
       sizeCapBytes: number;
@@ -190,6 +190,7 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
       (provider === "mistral" && trimmed.startsWith("voxtral-")) ||
       (provider === "corti" && trimmed.startsWith("corti-")) ||
       (provider === "gemini" && trimmed.startsWith("gemini-")) ||
+      (provider === "elevenlabs" && trimmed.startsWith("scribe_")) ||
       (provider === "deepgram" && (trimmed.startsWith("nova-") || trimmed.startsWith("flux-"))) ||
       (provider === "assemblyai" &&
         (trimmed.startsWith("universal-") || trimmed.startsWith("slam-")));
@@ -200,6 +201,7 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
   if (provider === "mistral") return "voxtral-mini-latest";
   if (provider === "corti") return "corti-transcribe";
   if (provider === "gemini") return "gemini-3.5-transcribe";
+  if (provider === "elevenlabs") return "scribe_v2";
   if (provider === "deepgram") return "nova-3";
   if (provider === "assemblyai") return "universal-3-6-pro";
   return "gpt-transcribe";
@@ -351,6 +353,15 @@ export function resolveTranscriptionRoute({
       model,
       language,
       sizeCapBytes: GEMINI_FILE_SIZE_LIMIT,
+    };
+  }
+  if (provider === "elevenlabs") {
+    return {
+      transport: "proxied",
+      provider,
+      model,
+      language,
+      sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
     };
   }
   if (provider === "corti") {
