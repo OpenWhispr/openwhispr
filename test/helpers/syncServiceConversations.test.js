@@ -144,6 +144,26 @@ test("a chat edited during its first create survives on an established device", 
   assertOneLiveCopy(cloud, clientId, ["first message", "late message"]);
 });
 
+test("a message the cloud stored without its NUL characters is not sent again", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, api, service } = ctx;
+  await establishCursor(service);
+  const conversation = db.createAgentConversation("Pasted output");
+  db.addAgentMessage(conversation.id, "user", "pasted\u0000 output");
+  const clientId = db.getAgentConversation(conversation.id).client_conversation_id;
+  const gate = pauseNextConversationCreate(api);
+
+  const firstSync = service.syncAll(true);
+  await gate.started;
+  db.addAgentMessage(conversation.id, "assistant", "late message");
+  gate.resume();
+  await firstSync;
+
+  assert.equal(db.getAgentConversation(conversation.id).sync_status, "synced");
+  assertOneLiveCopy(cloud, clientId, ["pasted output", "late message"]);
+});
+
 test("a refused follow-up retries with only what the cloud is missing", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;

@@ -390,13 +390,14 @@ function conversationMessageMetadata(metadata: unknown): Record<string, unknown>
 
 // Messages carry no shared id, so a local message counts as sent while the cloud
 // holds an unmatched one with the same role and text. The messages route refuses
-// empty content, so a tool-only turn stays on this device.
+// empty content, so a tool-only turn stays on this device. The cloud stores text
+// without NUL characters, which Postgres refuses, so they don't count either.
 function missingConversationMessages<Message extends { role: string; content: string }>(
   local: readonly Message[],
   cloud: ReadonlyArray<{ role: string; content: string }>
 ): Message[] {
   const key = (message: { role: string; content: string }): string =>
-    JSON.stringify([message.role, message.content]);
+    JSON.stringify([message.role, message.content.replaceAll("\u0000", "")]);
   const unmatched = new Map<string, number>();
   for (const message of cloud) {
     unmatched.set(key(message), (unmatched.get(key(message)) ?? 0) + 1);
