@@ -2428,6 +2428,7 @@
         "general": "Geral",
         "members": "Membros",
         "invitations": "Convites",
+        "guests": "Convidados",
         "teams": "Equipes"
       },
       "people": {
@@ -3006,6 +3007,22 @@
         "title": "Console Enterprise",
         "description": "Gerencie SSO, políticas e membros pela web",
         "open": "Abrir console"
+      },
+      "guests": {
+        "columns": {
+          "name": "Nome",
+          "access": "Acesso"
+        },
+        "emptyTitle": "Ainda não há convidados",
+        "emptyBody": "As pessoas de fora deste espaço de trabalho que podem ver suas notas compartilhadas aparecerão aqui.",
+        "loadingTitle": "Carregando convidados…",
+        "loadingBody": "Os convidados do seu espaço de trabalho aparecerão aqui.",
+        "failedTitle": "Não foi possível carregar os convidados",
+        "failedBody": "Verifique sua conexão e tente novamente.",
+        "noteCount_one": "{{count}} nota",
+        "noteCount_many": "{{count}} notas",
+        "noteCount_other": "{{count}} notas",
+        "notesMenuLabel": "Notas compartilhadas com {{name}}"
       }
     },
     "enterpriseCheckout": {

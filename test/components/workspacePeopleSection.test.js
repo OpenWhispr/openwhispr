@@ -85,6 +85,12 @@ async function loadSection(t, { storedTab, realTeamsTab = false } = {}) {
           return React.createElement("div", { "data-tab-panel": "members" });
         }
       `,
+      "/WorkspaceGuestsTab": `
+        import React from "react";
+        export default function Mock() {
+          return React.createElement("div", { "data-tab-panel": "guests" });
+        }
+      `,
       "/WorkspaceInvitationsTab": `
         import React from "react";
         export default function Mock(props) {
@@ -247,12 +253,13 @@ async function mount(t, WorkspacePeopleSection, workspace, props = {}) {
   return container;
 }
 
-test("member sees Members and Teams only, with the view subtitle", async (t) => {
+test("member sees Members, Guests and Teams, with the view subtitle", async (t) => {
   const Section = await loadSection(t);
   const markup = render(Section, MEMBER);
 
   assert.deepEqual(tabLabels(markup), [
     "settingsPage.workspace.tab.members",
+    "settingsPage.workspace.tab.guests",
     "settingsPage.workspace.tab.teams",
   ]);
   assert.match(markup, /settingsPage\.workspace\.people\.subtitleView/);
@@ -260,13 +267,14 @@ test("member sees Members and Teams only, with the view subtitle", async (t) => 
   assert.equal(globalThis.__invitationsArgs.enabled, false);
 });
 
-test("admin sees Invitations between Members and Teams", async (t) => {
+test("Guests sits between Invitations and Teams", async (t) => {
   const Section = await loadSection(t);
   const markup = render(Section, ADMIN);
 
   assert.deepEqual(tabLabels(markup), [
     "settingsPage.workspace.tab.members",
     "settingsPage.workspace.tab.invitations",
+    "settingsPage.workspace.tab.guests",
     "settingsPage.workspace.tab.teams",
   ]);
   assert.match(markup, /settingsPage\.workspace\.people\.description/);
@@ -286,6 +294,12 @@ test("a stored invitations tab falls back to members without manage_members", as
   const adminMarkup = render(Section, ADMIN);
   assert.match(adminMarkup, /data-tab-panel="invitations"/);
   assert.equal(globalThis.__invitationsTabProps.invitations, globalThis.__invitationsState);
+});
+
+test("a stored guests tab reopens it, for members too", async (t) => {
+  const Section = await loadSection(t, { storedTab: "guests" });
+  assert.match(render(Section, MEMBER), /data-tab-panel="guests"/);
+  assert.match(render(Section, ADMIN), /data-tab-panel="guests"/);
 });
 
 test("a deep-linked invitations tab shows members without manage_members", async (t) => {
