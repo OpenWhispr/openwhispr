@@ -322,6 +322,16 @@ test("a guest's second system language counts: an English-only model can't dicta
 
   const regions = await plan(mac({ systemLanguages: ["en-US", "en-GB"] }), { spokenLanguages: [] });
   assert.equal(row(regions, "dictation").modelId, "parakeet-unified-en-0.6b");
+
+  // A language no local model lists still counts: Whisper detects it, a narrower model can't.
+  for (const systemLanguages of [
+    ["en-IN", "bn-IN"],
+    ["de", "ka"],
+    ["hi", "te"],
+  ]) {
+    const p = await plan(mac({ systemLanguages }), { spokenLanguages: [] });
+    assert.equal(row(p, "dictation").modelId, "small", systemLanguages.join(" + "));
+  }
   assert.deepEqual(
     (await plan(mac({ systemLanguages: ["zh-TW"] }), { spokenLanguages: [] })).languageTags,
     ["zh-Hant"]

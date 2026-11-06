@@ -210,17 +210,17 @@ const europeanLanguages = new Set(
 );
 
 function languageGroup(languages: string[]): LanguageGroup {
-  const known = languages.filter(
-    (code) => europeanLanguages.has(code) || code === "hi" || whisperLanguages.has(code)
-  );
-  // No language at all reads as English; one no local model knows goes to Whisper,
-  // which detects the language rather than forcing English onto it.
-  if (languages.length > 0 && known.length === 0) return "other";
-  if (known.every((code) => code === "en")) return "english";
-  if (known.includes("hi") && known.every((code) => code === "hi" || code === "en")) {
+  const known = (code: string): boolean =>
+    europeanLanguages.has(code) || code === "hi" || whisperLanguages.has(code);
+  // No language at all reads as English. One no local model knows goes to Whisper,
+  // which detects the language rather than forcing another model's onto it, even
+  // beside languages a narrower model covers (a guest on en-IN and bn-IN).
+  if (!languages.every(known)) return "other";
+  if (languages.every((code) => code === "en")) return "english";
+  if (languages.includes("hi") && languages.every((code) => code === "hi" || code === "en")) {
     return "hindi";
   }
-  if (known.every((code) => europeanLanguages.has(code))) return "european";
+  if (languages.every((code) => europeanLanguages.has(code))) return "european";
   return "other";
 }
 
