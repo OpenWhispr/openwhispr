@@ -7,12 +7,19 @@ import { getSettings } from "../stores/settingsStore";
 import { expandSnippets } from "../utils/snippets";
 import { getRecordingErrorTitle, getRecordingErrorDescription } from "../utils/recordingErrors";
 import { providerErrorActions } from "../utils/describeProviderError";
-import { isAccessibilitySkipped } from "../utils/permissions";
+import {
+  isAccessibilitySkipped,
+  isPastePermissionNoticeDismissed,
+  dismissPastePermissionNotice,
+} from "../utils/permissions";
 import { needsSttConfigBeforeStart } from "../helpers/sttConfigPolicy";
+import { isManagedOrukeetStream } from "../helpers/transcriptionFallback";
 import {
   isAgentAllowed,
+  isLocalChoiceRefusal,
   isScreenContextAllowed,
   isTranscriptionContextAllowed,
+  transcriptionChoiceRefusal,
 } from "../stores/policyRules";
 import { isManagedTranscriptionActive } from "../services/managedTranscription";
 import { usePolicyStore } from "../stores/policyStore";
@@ -65,12 +72,15 @@ export const useAudioRecording = (toast, options = {}) => {
   // pill or its menu never pass main's hotkey guard, so they check this.
   const agentRecordingRef = useRef(false);
   const stopRequestedDuringStartRef = useRef(false);
+  const startEffectsOnReportRef = useRef(false);
+  const startCuePendingRef = useRef(false);
   const pushForceStoppedRef = useRef(false);
   const stopLockRef = useRef(false);
   const preparationGenerationRef = useRef(0);
   const dictationErrorGenerationRef = useRef(0);
   const wasRecordingRef = useRef(false);
   const pastesInFlightRef = useRef(0);
+  const clipboardNoticeShownRef = useRef(false);
   const wasMicUnavailableRef = useRef(false);
   const demoKindRef = useRef("dictation");
   const onDemoEventRef = useRef(options.onDemoEvent);
@@ -180,10 +190,18 @@ export const useAudioRecording = (toast, options = {}) => {
         if (!manager || agentRecordingRef.current) return false;
         const policyState = usePolicyStore.getState();
         if (
-          (!isManagedTranscriptionActive() &&
-            !isTranscriptionContextAllowed(policyState, getSettings(), "dictation")) ||
-          (voiceAgentRequested && !isAgentAllowed(policyState))
+          !isManagedTranscriptionActive() &&
+          !isTranscriptionContextAllowed(policyState, getSettings(), "dictation")
         ) {
+          const refusal = transcriptionChoiceRefusal(policyState, getSettings(), "dictation");
+          toast({
+            title: t(refusal?.messageKey ?? "common.managedByOrg"),
+            variant: "default",
+            ...(refusal ? { actions: providerErrorActions(refusal, t) } : {}),
+          });
+          return false;
+        }
+        if (voiceAgentRequested && !isAgentAllowed(policyState)) {
           toast({ title: t("common.managedByOrg"), variant: "default" });
           return false;
         }
@@ -282,7 +300,16 @@ export const useAudioRecording = (toast, options = {}) => {
         }
         if (!current()) return false;
 
-        const didStart = manager.shouldUseStreaming()
+        const usesStreaming = manager.shouldUseStreaming();
+        const managedOrukeet =
+          usesStreaming &&
+          isManagedOrukeetStream({
+            providerName: manager.getStreamingProviderName?.(),
+            cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
+          });
+        startEffectsOnReportRef.current = managedOrukeet;
+        startCuePendingRef.current = managedOrukeet;
+        const didStart = usesStreaming
           ? await manager.startStreamingRecording()
           : await manager.startRecording();
         if (!current()) {
@@ -317,7 +344,11 @@ export const useAudioRecording = (toast, options = {}) => {
 
         // A quick tap can end the recording inside the start call itself (deferred
         // streaming stop) — don't pause media for a recording that already ended. See #1060.
-        if (didStart && audioManagerRef.current.getState().isRecording) {
+        if (
+          !startEffectsOnReportRef.current &&
+          didStart &&
+          audioManagerRef.current.getState().isRecording
+        ) {
           if (getSettings().pauseMediaOnDictation) {
             window.electronAPI?.pauseMediaPlayback?.();
           }
@@ -328,6 +359,8 @@ export const useAudioRecording = (toast, options = {}) => {
         return didStart;
       } finally {
         startLockRef.current = false;
+        startEffectsOnReportRef.current = false;
+        startCuePendingRef.current = false;
         // A stop that landed mid-start set isStopping expecting the started
         // recording's state change to clear it; if the recording never began,
         // no state change will ever arrive.
@@ -411,6 +444,7 @@ export const useAudioRecording = (toast, options = {}) => {
       duration,
       code,
       settingsLaunchFailed = false,
+      clipboardFallback = false,
       onRetry,
       settingsTarget,
       technicalDetails,
@@ -446,12 +480,18 @@ export const useAudioRecording = (toast, options = {}) => {
                   transcript,
                   code,
                   settingsLaunchFailed: true,
+                  clipboardFallback,
                 });
               }
             },
           },
         ];
-        if (transcript.trim()) {
+        if (clipboardFallback) {
+          actions.push({
+            label: t("hooks.audioRecording.pastePermission.dontShowAgain"),
+            onClick: dismissPastePermissionNotice,
+          });
+        } else if (transcript.trim()) {
           actions.push({
             label: t("hooks.audioRecording.pastePermission.copyToClipboard"),
             icon: "copy",
@@ -462,7 +502,7 @@ export const useAudioRecording = (toast, options = {}) => {
             },
             onClick: async () => {
               if (!isCurrent()) return;
-              let copied = false;
+              let copied;
               try {
                 const result = await window.electronAPI?.writeClipboard?.(transcript);
                 copied = result?.success === true;
@@ -479,14 +519,15 @@ export const useAudioRecording = (toast, options = {}) => {
             settingsLaunchFailed
               ? t("hooks.audioRecording.pastePermission.settingsFailed")
               : description,
-            transcript.trim()
+            clipboardFallback && settingsLaunchFailed ? description : "",
+            transcript.trim() && !clipboardFallback
               ? t("hooks.audioRecording.pastePermission.manualPaste", { shortcut: "Cmd+V" })
               : "",
           ]
             .filter(Boolean)
             .join(" "),
           descriptionHotkey: transcript.trim() ? "Cmd+V" : undefined,
-          variant: "destructive",
+          variant: clipboardFallback ? "default" : "destructive",
           presentation: "dictation-error",
           duration: 0,
           dismissible: true,
@@ -559,6 +600,25 @@ export const useAudioRecording = (toast, options = {}) => {
                 ? "preparing"
                 : "idle"
         );
+        // Managed Orukeet acts with the pill, not when the start resolves: its start
+        // stays pending on a cold connect for seconds while audio already buffers.
+        // A fallback to batch reports recording again after its not-recording report
+        // released these, so only the cue is once per start.
+        if (
+          isRecording &&
+          !wasRecordingRef.current &&
+          startEffectsOnReportRef.current &&
+          !stopRequestedDuringStartRef.current
+        ) {
+          if (getSettings().pauseMediaOnDictation) {
+            window.electronAPI?.pauseMediaPlayback?.();
+          }
+          window.electronAPI?.registerCancelHotkey?.("Escape");
+          if (startCuePendingRef.current) {
+            startCuePendingRef.current = false;
+            void playStartCue();
+          }
+        }
         if (isRecording) {
           onDemoEventRef.current?.({ kind: demoKindRef.current, status: "listening" });
         } else if (isProcessing) {
@@ -631,7 +691,10 @@ export const useAudioRecording = (toast, options = {}) => {
             duration: error?.code === "AUTH_EXPIRED" ? 8000 : undefined,
             code: error?.code,
             transcript: error?.transcript,
-            settingsTarget: error?.settingsTarget,
+            // Main's refusals name the model, not where to choose another.
+            settingsTarget:
+              error?.settingsTarget ??
+              (isLocalChoiceRefusal(error?.code) ? "speechToText" : undefined),
             technicalDetails: error?.technicalDetails,
           });
         }
@@ -862,7 +925,27 @@ export const useAudioRecording = (toast, options = {}) => {
                 ...pasteOptions,
               })
             );
-            if (pasteOutcome.reason === "modifiers-held") {
+            if (
+              pasteOutcome.reason === "accessibility-missing" &&
+              generation === dictationErrorGenerationRef.current &&
+              !startLockRef.current &&
+              !clipboardNoticeShownRef.current &&
+              !isPastePermissionNoticeDismissed()
+            ) {
+              // Once per launch: clipboard-only can be deliberate, and the card
+              // would otherwise cover the screen after every dictation.
+              clipboardNoticeShownRef.current = true;
+              window.electronAPI?.hideDictationPreview?.();
+              showDictationError({
+                title: t("hooks.audioRecording.pastePermission.copiedTitle"),
+                description: t("hooks.audioRecording.pastePermission.copiedDescription", {
+                  shortcut: "Cmd+V",
+                }),
+                transcript: result.text,
+                code: "ACCESSIBILITY_PERMISSION_REQUIRED",
+                clipboardFallback: true,
+              });
+            } else if (pasteOutcome.reason === "modifiers-held") {
               await reportHeldBackPaste(
                 "modifiers-held",
                 {
@@ -912,7 +995,7 @@ export const useAudioRecording = (toast, options = {}) => {
             });
           } else if (autoPasteEnabled && !result.assistantConversation) {
             const pasteStart = performance.now();
-            let pasteSucceeded = true;
+            let pasteSucceeded;
             if (result.selectionEdit?.sessionId) {
               const generation = dictationErrorGenerationRef.current;
               const replacement = await whilePasting(() =>
@@ -1168,6 +1251,15 @@ export const useAudioRecording = (toast, options = {}) => {
           reportLifecycle("idle");
         } else {
           reportManagerLifecycle(audioManagerRef.current);
+        }
+      }
+      // cleanup() ends a recording without reporting it, so nothing else releases
+      // these, and the next start would read as a repeat of this recording.
+      if (wasRecordingRef.current) {
+        wasRecordingRef.current = false;
+        window.electronAPI?.unregisterCancelHotkey?.();
+        if (getSettings().pauseMediaOnDictation) {
+          window.electronAPI?.resumeMediaPlayback?.();
         }
       }
     };

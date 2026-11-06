@@ -68,6 +68,8 @@ function createElectronApi(db, options = {}) {
     getPendingNotes: async (spaceKind) => db.getPendingNotes(spaceKind),
     getPendingNoteDeletes: async () => db.getPendingNoteDeletes(),
     getNoteByClientId: async (clientNoteId) => db.getNoteByClientId(clientNoteId),
+    getNoteForCloudRow: async (clientNoteId, cloudId) =>
+      db.getNoteForCloudRow(clientNoteId, cloudId),
     upsertNoteFromCloud: async (cloudNote, localFolderId, localSpaceId) =>
       db.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId),
     markNoteCreatesAttempted: async (clientNoteIds) => db.markNoteCreatesAttempted(clientNoteIds),
@@ -155,12 +157,15 @@ function createElectronApi(db, options = {}) {
     getPendingConversations: async () => db.getPendingConversations(),
     getPendingConversationDeletes: async () => db.getPendingConversationDeletes(),
     getConversationByClientId: async (clientId) => db.getConversationByClientId(clientId),
-    upsertConversationFromCloud: async (cloudConv, messages) =>
-      db.upsertConversationFromCloud(cloudConv, messages),
+    upsertConversationFromCloud: async (cloudConv, messages, snapshot) =>
+      db.upsertConversationFromCloud(cloudConv, messages, snapshot),
     markConversationCreateAttempted: async (id) => db.markConversationCreateAttempted(id),
     acknowledgeConversationCreate: async (id, snapshot, cloudId) =>
       db.acknowledgeConversationCreate(id, snapshot, cloudId),
-    markConversationSynced: async (id, cloudId) => db.markConversationSynced(id, cloudId),
+    markConversationSynced: async (id, cloudId, snapshot) =>
+      db.markConversationSynced(id, cloudId, snapshot),
+    replaceConversationClientId: async (id, expectedClientId) =>
+      db.replaceConversationClientId(id, expectedClientId),
     hardDeleteConversation: async (id) => db.hardDeleteConversation(id),
 
     // Transcriptions

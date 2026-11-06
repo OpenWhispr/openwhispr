@@ -2,6 +2,14 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createDb } = require("./harness/db.js");
 
+// As SyncService pulls: with the row its lookup found for that chat, or null.
+const pull = (db, cloudConv, messages) =>
+  db.upsertConversationFromCloud(
+    cloudConv,
+    messages,
+    db.getConversationByClientId(cloudConv.client_conversation_id)
+  );
+
 function seedConversation(db, title = "Plan the launch") {
   const conversation = db.createAgentConversation(title);
   const rows = [
@@ -97,7 +105,8 @@ test("a fork keeps how much it copied when its parent is pulled again", (t) => {
   const fork = db.forkAgentConversation(conversation.id, rows[1].id, null);
 
   // A newer cloud copy of the parent replaces its messages with new rows.
-  db.upsertConversationFromCloud(
+  pull(
+    db,
     {
       id: "cloud-parent",
       client_conversation_id: conversation.client_conversation_id,
@@ -111,7 +120,8 @@ test("a fork keeps how much it copied when its parent is pulled again", (t) => {
 });
 
 function pullFork(db, clientId, parentClientId) {
-  return db.upsertConversationFromCloud(
+  return pull(
+    db,
     {
       id: `cloud-${clientId}`,
       client_conversation_id: clientId,
@@ -131,7 +141,8 @@ test("a pulled fork links to its parent by client id, whichever arrives first", 
   const fork = pullFork(db, "fork-chat", "parent-chat");
   assert.equal(db.getAgentConversation(fork.id).parent_conversation_id, null);
 
-  const parent = db.upsertConversationFromCloud(
+  const parent = pull(
+    db,
     {
       id: "cloud-parent-chat",
       client_conversation_id: "parent-chat",
@@ -158,7 +169,8 @@ test("a pulled chat isn't its own parent, and its copied count fits its messages
   assert.equal(own.parent_client_conversation_id, null);
   assert.equal(own.fork_message_count, null);
 
-  const tooMany = db.upsertConversationFromCloud(
+  const tooMany = pull(
+    db,
     {
       id: "cloud-big",
       client_conversation_id: "big-fork",
@@ -171,7 +183,8 @@ test("a pulled chat isn't its own parent, and its copied count fits its messages
   );
   assert.equal(db.getAgentConversation(tooMany.id).fork_message_count, 1);
   for (const count of [0, -2, 1.5, "three", null]) {
-    const odd = db.upsertConversationFromCloud(
+    const odd = pull(
+      db,
       {
         id: `cloud-odd-${count}`,
         client_conversation_id: `odd-${count}`,
@@ -185,7 +198,8 @@ test("a pulled chat isn't its own parent, and its copied count fits its messages
     assert.equal(db.getAgentConversation(odd.id).fork_message_count, null, String(count));
   }
   // An integer column can arrive as a string.
-  const asText = db.upsertConversationFromCloud(
+  const asText = pull(
+    db,
     {
       id: "cloud-text",
       client_conversation_id: "text-fork",
@@ -214,7 +228,8 @@ test("two chats that name each other as parent don't both link", (t) => {
 test("messages added to a pulled chat stay after the pulled ones, by time", (t) => {
   const db = createDb(t);
   if (!db) return;
-  const pulled = db.upsertConversationFromCloud(
+  const pulled = pull(
+    db,
     {
       id: "cloud-fork-chat",
       client_conversation_id: "fork-chat",
@@ -294,7 +309,8 @@ test("a pull from the cloud keeps a fork's local link", (t) => {
   const { conversation, rows } = seedConversation(db);
   const fork = db.forkAgentConversation(conversation.id, rows[1].id, "context");
 
-  db.upsertConversationFromCloud(
+  pull(
+    db,
     {
       id: "cloud-fork",
       client_conversation_id: fork.client_conversation_id,

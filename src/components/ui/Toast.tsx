@@ -29,6 +29,8 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [toasts, setToasts] = React.useState<ToastState[]>([]);
   const toastsRef = React.useRef<ToastState[]>([]);
   const timersRef = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  // A toast can start leaving twice (its timer, then a dismiss during the exit animation).
+  const settledRef = React.useRef(new Set<string>());
 
   React.useEffect(() => {
     toastsRef.current = toasts;
@@ -43,9 +45,15 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const startExitAnimation = React.useCallback((id: string) => {
+    const leaving = toastsRef.current.find((item) => item.id === id);
+    if (leaving?.onSettled && !settledRef.current.has(id)) {
+      settledRef.current.add(id);
+      leaving.onSettled();
+    }
     setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, isExiting: true } : t)));
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
+      settledRef.current.delete(id);
     }, 200);
   }, []);
 
@@ -203,11 +211,13 @@ const ToastViewport: React.FC<{
 
   return (
     <div
+      data-toast-viewport=""
+      data-toast-stack
       className={cn(
         "fixed z-[100] flex flex-col gap-2 pointer-events-none",
         isDictationPanel
           ? hasDictationError
-            ? "inset-x-3 bottom-3"
+            ? "inset-x-3 bottom-3 [&>*]:w-full [&>*]:max-w-none"
             : "top-4 bottom-20 end-6 justify-end-safe"
           : "bottom-5 end-5",
         isDictationPanel &&
@@ -343,7 +353,8 @@ const Toast: React.FC<
           onDismiss={dismissible ? onClose : undefined}
           actions={actions ?? []}
           onAction={handleStructuredAction}
-          tone="error"
+          role={isDestructive ? "alert" : "status"}
+          tone={isDestructive ? "error" : undefined}
           onPreferredHeightChange={handleErrorHeightChange}
           progressDuration={!isExiting ? duration : 0}
           progressPaused={timerPaused}

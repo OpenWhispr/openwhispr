@@ -496,8 +496,9 @@ export interface NoteItem {
   client_note_id: string;
   sync_status: "synced" | "pending" | "error";
   deleted_at: string | null;
-  // Computed by getNoteByClientId while a parent folder DELETE awaits its
-  // server result. Held notes stay hidden and must not be pulled/queued alone.
+  // Computed by getNoteByClientId and getNoteForCloudRow while a parent folder
+  // DELETE awaits its server result. Held notes stay hidden and must not be
+  // pulled/queued alone.
   folder_delete_pending?: number;
   // 1 while a cloud-backed row that left a team space still owes its scope
   // retraction push (D6); cleared when the row settles.
@@ -775,6 +776,45 @@ export interface SpaceCapabilities {
   leave: boolean;
 }
 
+// Who to ask for access to a space: its admins, as GET /api/workspaces/:id/spaces lists them.
+export interface SpaceAdminContact {
+  user_id: string;
+  name: string | null;
+  email: string;
+  image: string | null;
+}
+
+// A row of the workspace's space directory, which lists spaces the caller may not be in (yet).
+export interface WorkspaceSpace {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string | null;
+  emoji: string | null;
+  member_count: number;
+  teams: { id: string; name: string; access?: TeamRole }[];
+  // Everything below is absent from an older API.
+  is_default?: boolean;
+  is_open?: boolean;
+  admins?: SpaceAdminContact[];
+  my_role?: TeamRole | null;
+  my_direct_role?: TeamRole | null;
+  capabilities?: SpaceCapabilities | null;
+  can_join?: boolean;
+  // The caller is the only admin, so leaving or demoting themselves is refused.
+  sole_admin?: boolean;
+}
+
+export interface SpaceInvitation {
+  id: string;
+  email: string;
+  role: TeamRole;
+  /** The role accepting gives across the workspace. An older API leaves it out. */
+  workspace_role?: TeamRole;
+  expires_at: string;
+  created_at: string;
+}
+
 export interface Workspace {
   id: string;
   name: string;
@@ -824,7 +864,13 @@ export type InvitationBatchStatus =
   "invited" | "invalid_email" | "already_member" | "already_invited" | "directory_required";
 
 export interface InvitationBatchResult {
-  results: Array<{ email: string; status: InvitationBatchStatus; email_sent?: boolean }>;
+  results: Array<{
+    email: string;
+    status: InvitationBatchStatus;
+    email_sent?: boolean;
+    /** With already_invited: that invitation now carries what the request named. Older APIs leave it out. */
+    grants_added?: boolean;
+  }>;
 }
 
 export interface MemberTeamRef {
@@ -1421,6 +1467,7 @@ export interface AgentConversationWithMessages {
   archived_at?: string;
   cloud_id?: string | null;
   client_conversation_id?: string | null;
+  cloud_create_attempted?: number;
   created_at: string;
   updated_at: string;
   parent_conversation_id?: number | null;
@@ -1497,6 +1544,7 @@ export interface ReferralItem {
 
 declare global {
   interface Window {
+    commitHeldSpaceDeletes?: () => Promise<void>;
     electronAPI: {
       // Basic window operations
       setOnboardingWindowMode?: (mode: "compact" | "expanded" | "restore") => Promise<boolean>;
@@ -1576,7 +1624,8 @@ declare global {
         | {
             success: true;
             pasted: boolean;
-            reason?: "modifiers-held" | "wl-copy-missing" | "wl-copy-failed";
+            reason?:
+              "modifiers-held" | "accessibility-missing" | "wl-copy-missing" | "wl-copy-failed";
           }
         | {
             success: false;
@@ -2427,7 +2476,7 @@ declare global {
       // llama-server
       llamaServerStart: (
         modelId: string
-      ) => Promise<{ success: boolean; port?: number; error?: string }>;
+      ) => Promise<{ success: boolean; port?: number; error?: string; code?: string }>;
       llamaServerStatus: () => Promise<LlamaServerStatus>;
       llamaGpuReset: () => Promise<{ success: boolean; error?: string }>;
       detectVulkanGpu?: () => Promise<VulkanGpuResult>;
@@ -2789,6 +2838,7 @@ declare global {
 
       // Debug logging
       getLogLevel?: () => Promise<string>;
+      onLogLevelChanged?: (callback: () => void) => () => void;
       log?: (entry: {
         level: string;
         message: string;
@@ -3853,6 +3903,7 @@ declare global {
       startManualMeeting?: () => Promise<{ success: false; code?: string; error: string } | void>;
       getPendingMeetingNoteNavigation?: () => Promise<{
         navigationId?: string;
+        noteSessionId?: string;
         spaceId?: number;
         noteId: number;
         folderId: number | null;
@@ -3860,6 +3911,8 @@ declare global {
         trigger?: "hotkey" | "manual" | "calendar-join";
       } | null>;
       onMeetingNoteNavigationPending?: (callback: () => void) => () => void;
+      meetingNoteOpenedWithoutRecording?: (noteSessionId: string) => Promise<void>;
+      meetingNoteClosed?: (noteSessionId: string) => Promise<void>;
       getPendingNoteNavigation?: () => Promise<{
         noteId: number;
         folderId: number | null;
@@ -3875,11 +3928,14 @@ declare global {
         model: string;
         language?: string;
         display?: boolean;
-      }) => Promise<{ success: boolean }>;
-      stopDictationPreview?: (opts?: {
-        showCleanup?: boolean;
-        flushed?: boolean;
-      }) => Promise<{ success: boolean; streamed?: boolean; text?: string }>;
+      }) => Promise<{ success: boolean; error?: string; code?: string }>;
+      stopDictationPreview?: (opts?: { showCleanup?: boolean; flushed?: boolean }) => Promise<{
+        success: boolean;
+        streamed?: boolean;
+        text?: string;
+        error?: string;
+        code?: string;
+      }>;
       dismissDictationPreview?: () => Promise<{ success: boolean }>;
       updateDictationPreview?: (text: string) => Promise<{ success: boolean }>;
       completeDictationPreview?: (payload: { text?: string }) => Promise<{ success: boolean }>;
@@ -3890,6 +3946,10 @@ declare global {
       getPendingNotes?: (spaceKind?: "private" | "team") => Promise<NoteItem[]>;
       getPendingNoteDeletes?: () => Promise<NoteItem[]>;
       getNoteByClientId?: (clientNoteId: string) => Promise<NoteItem | null>;
+      getNoteForCloudRow?: (
+        clientNoteId: string | null | undefined,
+        cloudId: string
+      ) => Promise<NoteItem | null>;
       upsertNoteFromCloud?: (
         cloudNote: Record<string, unknown>,
         localFolderId: number | null,
@@ -3975,7 +4035,8 @@ declare global {
       getConversationByClientId?: (clientId: string) => Promise<ConversationPreview | null>;
       upsertConversationFromCloud?: (
         cloudConv: Record<string, unknown>,
-        messages: Array<Record<string, unknown>>
+        messages: Array<Record<string, unknown>>,
+        snapshot: ConversationPreview | null
       ) => Promise<void>;
       markConversationCreateAttempted?: (id: number) => Promise<{ success: boolean }>;
       acknowledgeConversationCreate?: (
@@ -3985,8 +4046,13 @@ declare global {
       ) => Promise<ConversationCreateAckResult | undefined>;
       markConversationSynced?: (
         id: number,
-        cloudId: string
+        cloudId: string,
+        snapshot?: ConversationCreateSnapshot
       ) => Promise<{ success: boolean } | undefined>;
+      replaceConversationClientId?: (
+        id: number,
+        expectedClientId: string | null
+      ) => Promise<{ success: boolean }>;
       hardDeleteConversation?: (id: number) => Promise<void>;
 
       getPendingTranscriptions?: () => Promise<TranscriptionItem[]>;

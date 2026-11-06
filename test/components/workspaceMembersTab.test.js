@@ -82,6 +82,13 @@ async function loadMembersTab(
           }
         : {}),
       "/TransferOwnershipDialog": "export const TransferOwnershipDialog = () => null;",
+      "/AddToTeamspaceMenu": `
+        import React from "react";
+        export function AddToTeamspaceMenu(props) {
+          globalThis.__addMenu = props;
+          return React.createElement("span", { "data-add-to-teamspace": "" });
+        }
+      `,
       "/RemoveMembersDialog": `
         export function RemoveMembersDialog(props) {
           globalThis.__removeDialog = props;
@@ -118,6 +125,7 @@ async function loadMembersTab(
     delete globalThis.__toasts;
     delete globalThis.__roleMenus;
     delete globalThis.__removeDialog;
+    delete globalThis.__addMenu;
   });
   globalThis.__workspaceMembers = members;
   globalThis.__membersWorkspaceId = membersWorkspaceId;
@@ -144,12 +152,13 @@ function rowsByName(markup, members = MEMBERS) {
 function tabElement(
   WorkspaceMembersTab,
   workspace,
-  { searchQuery = "", onSearchQueryChange } = {}
+  { searchQuery = "", onSearchQueryChange, onOpenTeamspace } = {}
 ) {
   return React.createElement(WorkspaceMembersTab, {
     workspace,
     searchQuery,
     onSearchQueryChange: onSearchQueryChange ?? (() => {}),
+    onOpenTeamspace,
   });
 }
 
@@ -777,4 +786,92 @@ test("the row menu's Remove opens the same dialog with one member", async (t) =>
     ["u-mason"]
   );
   assert.equal(state.defaultOwnerId, "u-admin");
+});
+
+const addMenuNode = (container) =>
+  findNode(container, (node) => node.hasAttribute?.("data-add-to-teamspace"));
+
+test("the bar offers Add to teamspace only with manage_members", async (t) => {
+  const WorkspaceMembersTab = await loadMembersTab(t, { members: PEOPLE });
+  globalThis.__authUser = { id: "u-admin" };
+  const container = await mount(t, WorkspaceMembersTab, ADMIN_WORKSPACE);
+
+  // Nobody selected, no bar, no menu.
+  assert.equal(addMenuNode(container), null);
+  await React.act(async () => propsOf(checkboxes(container)[1]).onClick());
+  assert.ok(addMenuNode(container), "the menu is in the bar");
+  assert.equal(globalThis.__addMenu.workspace.id, "w1");
+
+  // Whoever isn't allowed to manage members has nothing to select, so no bar either, whatever
+  // their role is called.
+  const capabilities = (manageMembers) => ({
+    manage_members: manageMembers,
+    manage_teams: false,
+    create_spaces: false,
+    manage_settings: false,
+    manage_billing: false,
+    delete_workspace: false,
+    transfer_ownership: false,
+    leave: true,
+  });
+  for (const workspace of [
+    { ...WORKSPACE, role: "member" },
+    { ...WORKSPACE, role: "admin", capabilities: capabilities(false) },
+  ]) {
+    delete globalThis.__addMenu;
+    const viewer = await mount(t, WorkspaceMembersTab, workspace);
+    assert.equal(checkboxes(viewer).length, 0);
+    assert.equal(addMenuNode(viewer), null);
+    assert.equal(globalThis.__addMenu, undefined);
+  }
+
+  // Someone allowed by capability, not by role name, gets it.
+  const granted = await mount(t, WorkspaceMembersTab, {
+    ...WORKSPACE,
+    role: "member",
+    capabilities: capabilities(true),
+  });
+  await React.act(async () => propsOf(checkboxes(granted)[1]).onClick());
+  assert.ok(addMenuNode(granted));
+});
+
+test("Add to teamspace sits after Remove and gets the selected people", async (t) => {
+  const { container } = await mountPeople(t);
+  const boxes = checkboxes(container).slice(1);
+  await React.act(async () => propsOf(boxes[0]).onClick());
+  await React.act(async () => propsOf(boxes[2]).onClick());
+
+  assert.deepEqual(
+    globalThis.__addMenu.people.map((member) => member.user_id),
+    ["u-member", "u-mason"]
+  );
+  const bar = findNode(container, (node) => node.getAttribute("role") === "region");
+  const names = findAll(
+    bar,
+    (node) => node.localName === "button" || node.hasAttribute("data-add-to-teamspace")
+  ).map((node) => (node.localName === "button" ? textOf(node) : "menu"));
+  assert.deepEqual(names, [
+    "settingsPage.workspace.people.selection.clear",
+    "settingsPage.workspace.people.selection.remove",
+    "menu",
+  ]);
+});
+
+test("adding clears the selection, and Open teamspace goes where the page says", async (t) => {
+  const opened = [];
+  const WorkspaceMembersTab = await loadMembersTab(t, { members: PEOPLE });
+  globalThis.__authUser = { id: "u-admin" };
+  const container = await mount(t, WorkspaceMembersTab, ADMIN_WORKSPACE, {
+    onOpenTeamspace: (localSpaceId) => opened.push(localSpaceId),
+  });
+  await React.act(async () => propsOf(checkboxes(container)[1]).onClick());
+  await React.act(async () => propsOf(checkboxes(container)[2]).onClick());
+  assert.match(barText(container), /selection\.count#2/);
+
+  globalThis.__addMenu.onOpenTeamspace(42);
+  assert.deepEqual(opened, [42]);
+
+  await React.act(async () => globalThis.__addMenu.onAdded());
+  assert.doesNotMatch(barText(container), /selection\.count/);
+  assert.equal(addMenuNode(container), null);
 });
