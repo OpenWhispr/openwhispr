@@ -4047,7 +4047,8 @@ declare global {
       markConversationSynced?: (
         id: number,
         cloudId: string,
-        snapshot?: ConversationCreateSnapshot
+        snapshot?: ConversationCreateSnapshot,
+        cloudUpdatedAt?: string
       ) => Promise<{ success: boolean } | undefined>;
       replaceConversationClientId?: (
         id: number,

@@ -426,23 +426,27 @@ function conversationMessageMetadata(metadata: unknown): Record<string, unknown>
   return { ...rest, turn: savedTurn };
 }
 
-// Messages carry no shared id, so a local message counts as sent while the cloud
-// holds an unmatched one with the same role and text. The messages route refuses
-// empty content, so a tool-only turn stays on this device.
+// Messages carry no shared id. The cloud copy holds this device's messages in
+// the order they were stored, one at a time: those its create carried, empty
+// ones too, then those sent after it, never an empty one, which the messages
+// route refuses. So a local message counts as sent while the copy holds one of
+// its role in its place, whatever the text: a reply regenerated since keeps its
+// place, and the cloud can't change a message.
 function missingConversationMessages<Message extends { role: string; content: string }>(
   local: readonly Message[],
   cloud: ReadonlyArray<{ role: string; content: string }>
 ): Message[] {
-  const key = (message: { role: string; content: string }): string =>
-    JSON.stringify([message.role, message.content]);
-  const unmatched = new Map<string, number>();
-  for (const message of cloud) {
-    unmatched.set(key(message), (unmatched.get(key(message)) ?? 0) + 1);
-  }
-  return local.filter((message) => {
-    const remaining = unmatched.get(key(message)) ?? 0;
-    if (remaining > 0) {
-      unmatched.set(key(message), remaining - 1);
+  let held = 0;
+  return local.filter((message, index) => {
+    const copy = cloud[held];
+    // An empty message facing text never went up if its turn goes on with another
+    // of its role (a tool step before its answer); otherwise it is that text emptied.
+    const skipped =
+      !message.content &&
+      !!copy?.content &&
+      local.slice(index + 1).find((later) => later.content)?.role === message.role;
+    if (copy?.role === message.role && !skipped) {
+      held += 1;
       return false;
     }
     return message.content.length > 0;
@@ -1321,8 +1325,8 @@ export class SyncService {
         conversationMessageMetadata(message.metadata)
       );
     }
-    await ConversationsService.update(cloudId, { title: local.title });
-    await window.electronAPI.markConversationSynced?.(localId, cloudId, snapshot);
+    const cloud = await ConversationsService.update(cloudId, { title: local.title });
+    await window.electronAPI.markConversationSynced?.(localId, cloudId, snapshot, cloud.updated_at);
   }
 
   // Recorded before the request is sent, so a chat deleted while it is in

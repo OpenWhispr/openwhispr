@@ -3414,8 +3414,8 @@ class IPCHandlers {
     ipcMain.handle("db-acknowledge-conversation-create", (_, id, snapshot, cloudId) =>
       this.databaseManager.acknowledgeConversationCreate(id, snapshot, cloudId)
     );
-    ipcMain.handle("db-mark-conversation-synced", (_, id, cloudId, snapshot) =>
-      this.databaseManager.markConversationSynced(id, cloudId, snapshot)
+    ipcMain.handle("db-mark-conversation-synced", (_, id, cloudId, snapshot, cloudUpdatedAt) =>
+      this.databaseManager.markConversationSynced(id, cloudId, snapshot, cloudUpdatedAt)
     );
     ipcMain.handle("db-replace-conversation-client-id", (_, id, expectedClientId) =>
       this.databaseManager.replaceConversationClientId(id, expectedClientId)

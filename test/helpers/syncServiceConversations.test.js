@@ -285,6 +285,91 @@ test("a message the route can't store never holds up the rest of the chat", asyn
   assert.equal(local.messages.length, 3, "the shorter cloud copy must not replace local history");
 });
 
+test("a reply regenerated while its chat uploads goes up once and stays new here", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, api, service } = ctx;
+  await establishCursor(service);
+  const conversation = db.createAgentConversation("Regenerated reply");
+  db.addAgentMessage(conversation.id, "user", "question");
+  const reply = db.addAgentMessage(conversation.id, "assistant", "first answer");
+  // Older, so the regenerate below changes the chat's time within this second.
+  updateConversation(db, conversation.id, { updated_at: LOCAL_EARLY });
+  const clientId = db.getAgentConversation(conversation.id).client_conversation_id;
+  const gate = pauseNextConversationCreate(api);
+
+  const sync = service.syncAll(true);
+  await gate.started;
+  db.updateAgentMessage(reply.id, "second answer", null);
+  gate.resume();
+  await sync;
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  await service.syncAll(true);
+
+  // The cloud can't change a message, so its copy keeps the first answer.
+  assertOneLiveCopy(cloud, clientId, ["question", "first answer"]);
+  const local = db.getAgentConversation(conversation.id);
+  assert.deepEqual(
+    local.messages.map((message) => message.content),
+    ["question", "second answer"]
+  );
+  assert.equal(local.sync_status, "synced");
+});
+
+test("a reply regenerated with no text keeps its place, so the next turn goes up once", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, api, service } = ctx;
+  await establishCursor(service);
+  const conversation = db.createAgentConversation("Card-only reply");
+  db.addAgentMessage(conversation.id, "user", "question");
+  const reply = db.addAgentMessage(conversation.id, "assistant", "Done.");
+  updateConversation(db, conversation.id, { updated_at: LOCAL_EARLY });
+  const clientId = db.getAgentConversation(conversation.id).client_conversation_id;
+  const gate = pauseNextConversationCreate(api);
+
+  // The first follow-up can't settle, so a second one reads what it sent.
+  cloud.failWith("/api/conversations/update", { status: 500 });
+  const sync = service.syncAll(true);
+  await gate.started;
+  db.updateAgentMessage(reply.id, "", { toolCalls: [{ id: "t1" }] });
+  db.addAgentMessage(conversation.id, "user", "follow-up");
+  // The same words as the reply the cloud holds, so only its place tells them apart.
+  db.addAgentMessage(conversation.id, "assistant", "Done.");
+  gate.resume();
+  await sync;
+  cloud.clearFailures();
+  await service.syncAll(true);
+
+  assertOneLiveCopy(cloud, clientId, ["question", "Done.", "follow-up", "Done."]);
+  assert.equal(db.getAgentConversation(conversation.id).sync_status, "synced");
+});
+
+test("a tool-only reply never takes the place of an answer the cloud has", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, api, service } = ctx;
+  await establishCursor(service);
+  const conversation = db.createAgentConversation("Tool-only turn");
+  db.addAgentMessage(conversation.id, "user", "first message");
+  const clientId = db.getAgentConversation(conversation.id).client_conversation_id;
+  const gate = pauseNextConversationCreate(api);
+
+  // The answer goes up, and the chat stays pending for the next pass.
+  cloud.failWith("/api/conversations/update", { status: 500 });
+  const sync = service.syncAll(true);
+  await gate.started;
+  db.addAgentMessage(conversation.id, "assistant", "", { toolCalls: [{ id: "t1" }] });
+  db.addAgentMessage(conversation.id, "assistant", "answer");
+  gate.resume();
+  await sync;
+  cloud.clearFailures();
+  await service.syncAll(true);
+
+  assertOneLiveCopy(cloud, clientId, ["first message", "answer"]);
+  assert.equal(db.getAgentConversation(conversation.id).sync_status, "synced");
+});
+
 test("an edit during the follow-up keeps the chat pending until the cloud has it", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;

@@ -9370,7 +9370,9 @@ class DatabaseManager {
 
   // With a snapshot, only a chat still matching what was sent to the cloud
   // settles; a later edit leaves it pending for the next pass.
-  markConversationSynced(id, cloudId, snapshot = null) {
+  // Takes the copy's own time, so the pull doesn't take the copy this pass wrote
+  // for a newer one: its text can be older than this device's (a regenerated reply).
+  markConversationSynced(id, cloudId, snapshot = null, cloudUpdatedAt = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       return this.db.transaction(() => {
@@ -9388,10 +9390,11 @@ class DatabaseManager {
           .prepare(
             `UPDATE agent_conversations
              SET cloud_id = COALESCE(cloud_id, ?),
+                 updated_at = COALESCE(?, updated_at),
                  sync_status = CASE WHEN deleted_at IS NULL THEN 'synced' ELSE 'pending' END
              WHERE id = ?`
           )
-          .run(cloudId, id);
+          .run(cloudId, cloudUpdatedAt, id);
         return { success: result.changes > 0 };
       })();
     } catch (error) {
