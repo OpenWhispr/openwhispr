@@ -631,3 +631,16 @@ test("a larger request overlapping pre-warm reports busy and can retry at its fu
   assert.deepEqual(restarts, [16384, 32768], "a retry must still be allowed to grow the context");
   assert.equal(serverManager.contextSize, 32768);
 });
+
+test("a binary refresh clears the loaded model after reuse without cancelling the refresh", async (t) => {
+  const { modelManager, serverManager } = await setup(t);
+  const slots = Promise.withResolvers();
+  serverManager._requestJson = () => slots.promise;
+  const stopping = modelManager.stopServerWhenIdle({ cancelOnReuse: false });
+  serverManager.cancelDeferredStop();
+  slots.resolve([]);
+  await stopping;
+
+  assert.equal(serverManager.process, null);
+  assert.equal(modelManager.currentServerModelId, null);
+});

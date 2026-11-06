@@ -480,3 +480,27 @@ for (const shutdown of ["deferred", "idle"]) {
     assert.equal(manager.modelPath, "/models/chat.gguf");
   });
 }
+
+for (const reuse of ["preferences", "same-model start"]) {
+  test(`a binary refresh survives ${reuse} and waits for the active answer`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+    const { manager, stops } = makeManager();
+    manager.setKeepResident(true);
+    await manager.start("/models/chat.gguf");
+    manager.processing = true;
+
+    const refresh = manager.stopWhenIdle({ cancelOnReuse: false });
+    await settle();
+    if (reuse === "preferences") manager.cancelDeferredStop();
+    else await manager.start("/models/chat.gguf");
+    t.mock.timers.tick(1000);
+    await settle();
+    assert.equal(stops.length, 0, "the current answer still owns its server");
+
+    manager.processing = false;
+    t.mock.timers.tick(1000);
+    await settle();
+    assert.equal(await refresh, true);
+    assert.equal(stops.length, 1, "the next inference can load the installed GPU binary");
+  });
+}

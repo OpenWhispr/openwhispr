@@ -355,34 +355,10 @@
           "features": {
             "device": "デバイス上で動作",
             "offline": "設定後はオフラインで動作",
-            "models": "ディクテーションとアシスタント用のモデルを選択",
+            "setup": "このコンピュータに合わせて設定",
             "free": "ずっと無料で使える"
           }
         },
-        "warnings": {
-          "byok": {
-            "title": "データはプロバイダーが取り扱います",
-            "description": "ディクテーションと Assistant のプロバイダーそれぞれに認証情報を追加します。プロバイダーの料金と保持ポリシーが適用されます。",
-            "continue": "API プロバイダーを設定",
-            "steps": {
-              "1": "ディクテーションと Assistant のプロバイダーを選ぶ",
-              "2": "安全なストレージを使って認証情報を追加する",
-              "3": "有効化する前に各接続をテストする"
-            }
-          },
-          "local": {
-            "title": "ローカル設定には追加の手順がいくつか必要です",
-            "description": "ローカル処理では音声がこのデバイスに留まりますが、初回の設定と {{minimumSpace}} GB 以上の空き容量が必要です。",
-            "continue": "ローカルでセットアップ",
-            "steps": {
-              "1": "文字起こしエンジンを選ぶ",
-              "2": "モデルを設定またはダウンロードする（約 {{modelSize}}）",
-              "3": "インストールと有効化を待つ"
-            }
-          }
-        },
-        "useCloud": "代わりにクラウドを使う",
-        "continueSetup": "セットアップを続ける",
         "showMore": "その他のオプションを表示",
         "moreOptions": {
           "title": "API の設定方法を選択",
@@ -437,23 +413,79 @@
         }
       },
       "local": {
-        "title": "ローカルモデルを設定",
-        "description": "デバイス上で実行するモデルを選択してください。",
-        "descriptionLineOne": "デバイス上で実行する",
-        "descriptionLineTwo": "モデルを選択してください。",
-        "providerLabel": "プロバイダー",
-        "cohereLanguageLabel": "音声入力の言語",
-        "cohereLanguageHint": "Cohere は話している言語を自動検出できません。音声入力に使う言語を選択してください。",
-        "cohereLanguagePlaceholder": "言語を選択",
-        "download": "ダウンロード",
         "downloadingShort": "ダウンロード中",
-        "selected": "選択済み",
-        "use": "使用",
         "downloadInProgress": "ダウンロード中",
         "cancelDownload": "{{model}} のダウンロードをキャンセル",
         "downloads": "モデルのダウンロード",
         "downloading": "ダウンロード中… {{progress}}%",
         "installing": "インストール中"
+      },
+      "localSetup": {
+        "title": "おすすめの設定",
+        "subtitle": "お使いの {{computer}} と {{language}} に合わせて選びました。これらのモデルはこのデバイス上で動作します。",
+        "subtitleOrganizationText": "お使いの {{computer}} と {{language}} に合わせて選びました。ディクテーションはこのデバイス上で動作し、チャットと AI ノートは組織が選んだサービスを使います。",
+        "computer": {
+          "chip": "チップ",
+          "processor": "プロセッサ",
+          "memory": "メモリ",
+          "graphics": "グラフィックス",
+          "builtIn": "チップに内蔵",
+          "memoryValue": "{{gb}} GB",
+          "mac": "Mac",
+          "windowsLaptop": "Windows ノート PC",
+          "windowsDesktop": "Windows デスクトップ PC",
+          "linuxLaptop": "Linux ノート PC",
+          "linuxDesktop": "Linux デスクトップ PC"
+        },
+        "rows": {
+          "dictation": "ディクテーション",
+          "cleanup": "クリーンアップ",
+          "assistant": "アシスタント"
+        },
+        "description": {
+          "dictation": "どのアプリでも音声をテキストに変換します",
+          "cleanup": "フィラーワードを除去し、文法を整えます",
+          "assistant": "質問に答え、依頼を実行します"
+        },
+        "badge": {
+          "optional": "任意",
+          "cloud": "クラウド推奨"
+        },
+        "line": {
+          "requiredByOrganization": "組織によって必須に設定されています",
+          "organizationModelsUnrunnable": "組織が承認したモデルはどれもこのコンピュータでは動作しません",
+          "offToFit": "このコンピュータの空き容量に収めるためオフにしています",
+          "failed": "ダウンロードできませんでした。接続を確認して再試行してください"
+        },
+        "unavailable": {
+          "notEnoughMemory": "メモリが不足しています",
+          "exceedsMemory": "このコンピュータのメモリの上限を超えています",
+          "memoryUnread": "メモリを確認できませんでした",
+          "organization": "このコンピュータでは利用できません",
+          "memoryMac": "{{model}} には {{needed}} GB のメモリが必要です。この Mac は {{have}} GB です",
+          "memoryComputer": "{{model}} には {{needed}} GB のメモリが必要です。このコンピュータは {{have}} GB です",
+          "memoryUnreadLine": "{{model}} には {{needed}} GB のメモリが必要です。このコンピュータにそれだけのメモリがある場合は、あとで設定からオンにしてください"
+        },
+        "button": {
+          "download": "モデルをダウンロード",
+          "downloading": "ダウンロード中",
+          "proceed": "次へ進む",
+          "noSpace": "空き容量が不足しています"
+        },
+        "retry": "再試行",
+        "retryRow": "{{row}}を再試行",
+        "downloaded": "ダウンロード済み",
+        "foot": {
+          "default": "これらはあとで設定からいつでも変更できます。",
+          "dictationFailed": "続行するにはディクテーションのダウンロードが必要です。上で再試行するか、戻って別の設定を選んでください。",
+          "dictationUnavailable": "組織が承認したモデルでは、このコンピュータでディクテーションを使えません。戻って別の設定を選んでください。",
+          "finishesInBackground": "残りは続行後もダウンロードを続け、準備ができるとオンになります。",
+          "failedStaysOff": "ダウンロードできなかったものはオフのままです。あとで設定から追加できます。",
+          "needsMac": "{{needed}} GB が必要です。この Mac の空き容量は {{free}} GB です。",
+          "needsComputer": "{{needed}} GB が必要です。このコンピュータの空き容量は {{free}} GB です。",
+          "noSpaceMac": "ディクテーションには {{needed}} GB の空き容量が必要ですが、この Mac は {{free}} GB です。続けるには空き容量を増やしてください。",
+          "noSpaceComputer": "ディクテーションには {{needed}} GB の空き容量が必要ですが、このコンピュータは {{free}} GB です。続けるには空き容量を増やしてください。"
+        }
       }
     },
     "steps": {
@@ -4202,7 +4234,9 @@
       "todos": "最近のTo Doを一覧にして",
       "meeting": "次の会議に備えさせて",
       "sharedNotes": "共有ノートのハイライトを見せて"
-    }
+    },
+    "localModelDownloading": "アシスタントのモデルをまだダウンロードしています。準備ができるとチャットが使えるようになります。",
+    "localModelMissing": "このデバイスでチャットするには、設定で「チャット」のモデルを選択してください。"
   },
   "support": {
     "documentation": "ドキュメント",

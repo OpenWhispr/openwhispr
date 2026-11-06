@@ -1310,6 +1310,89 @@ test("without Tone & Style no send carries a writing style", async (t) => {
   assert.doesNotMatch(sentMessages[0][0].content, /WRITING STYLE/);
 });
 
+// ---- Local mode with no model (the assistant switched off at setup) ----
+
+// What setup writes for a switched-off assistant: both scopes on this device, no
+// model. The voice panel falls back to Chat while its own scope is unreachable.
+const ASSISTANT_OFF = {
+  useDictationAgent: false,
+  chatAgentMode: "local",
+  chatAgentProvider: "",
+  chatAgentModel: "",
+  dictationAgentMode: "local",
+  dictationAgentProvider: "",
+  dictationAgentModel: "",
+};
+
+for (const [surface, hookOptions] of [
+  ["chat", {}],
+  ["voice panel", { inferenceScope: "dictationAgent" }],
+]) {
+  test(`${surface} with no local model answers with the settings line`, async (t) => {
+    const llamaServerStart = t.mock.fn(async () => ({ success: true }));
+    const { captured, reasoningService, getMessages } = await renderChatStreaming(t, hookOptions, {
+      settings: ASSISTANT_OFF,
+      electronAPI: { llamaServerStart },
+    });
+    const user = { id: "u1", role: "user", content: "Hello" };
+
+    await captured.sendToAI(user.content, [user]);
+
+    const reply = getMessages().at(-1);
+    assert.equal(reply.role, "assistant");
+    assert.equal(reply.content, "Choose a model for Chat in Settings to chat on this device.");
+    assert.equal(llamaServerStart.mock.callCount(), 0);
+    assert.equal(reasoningService.processTextStreamingAI.mock.callCount(), 0);
+    assert.equal(reasoningService.processTextStreamingCloud.mock.callCount(), 0);
+  });
+
+  test(`${surface} says so while the assistant model is still downloading`, async (t) => {
+    const { captured, getMessages } = await renderChatStreaming(t, hookOptions, {
+      settings: ASSISTANT_OFF,
+      electronAPI: {
+        modelGetActiveDownloads: async () => [{ modelType: "llm", modelId: "qwen3.5-4b-q4_k_m" }],
+      },
+    });
+    localStorage.setItem(
+      "pendingLocalModelSelectionsV1",
+      JSON.stringify({ assistant: { provider: "qwen", modelId: "qwen3.5-4b-q4_k_m" } })
+    );
+    const user = { id: "u1", role: "user", content: "Hello" };
+
+    await captured.sendToAI(user.content, [user]);
+
+    assert.equal(
+      getMessages().at(-1).content,
+      "Your assistant model is still downloading. Chat turns on when it's ready."
+    );
+  });
+}
+
+test("cancelling while the local model download is checked leaves no late reply", async (t) => {
+  const downloads = Promise.withResolvers();
+  const { captured, getMessages, reasoningService } = await renderChatStreaming(
+    t,
+    {},
+    {
+      settings: ASSISTANT_OFF,
+      electronAPI: { modelGetActiveDownloads: () => downloads.promise },
+    }
+  );
+  localStorage.setItem(
+    "pendingLocalModelSelectionsV1",
+    JSON.stringify({ assistant: { provider: "qwen", modelId: "qwen3.5-4b-q4_k_m" } })
+  );
+  const user = { id: "u1", role: "user", content: "Hello" };
+  const sending = captured.sendToAI(user.content, [user]);
+  captured.cancelStream();
+  downloads.resolve([{ modelType: "llm", modelId: "qwen3.5-4b-q4_k_m" }]);
+  await sending;
+
+  assert.deepEqual(getMessages(), []);
+  assert.equal(reasoningService.processTextStreamingAI.mock.callCount(), 0);
+  assert.equal(reasoningService.processTextStreamingCloud.mock.callCount(), 0);
+});
+
 for (const [label, policy, content] of [
   [
     "a blocked model",

@@ -355,34 +355,10 @@
           "features": {
             "device": "Funciona en tu dispositivo",
             "offline": "Funciona sin conexión tras la configuración",
-            "models": "Elige modelos para dictado y asistente",
+            "setup": "Configurado para este equipo",
             "free": "Gratis para siempre"
           }
         },
-        "warnings": {
-          "byok": {
-            "title": "Tu proveedor gestiona tus datos",
-            "description": "Añadirás credenciales para proveedores independientes de dictado y Assistant. Se aplican los precios y las políticas de retención del proveedor.",
-            "continue": "Configurar proveedor de API",
-            "steps": {
-              "1": "Elige proveedores para dictado y Assistant",
-              "2": "Añade credenciales con almacenamiento seguro",
-              "3": "Prueba cada conexión antes de activarla"
-            }
-          },
-          "local": {
-            "title": "La configuración local requiere algunos pasos más",
-            "description": "El procesamiento local mantiene tu voz en este dispositivo, pero requiere una configuración inicial y al menos {{minimumSpace}} GB de espacio libre.",
-            "continue": "Configurar localmente",
-            "steps": {
-              "1": "Elige un motor de transcripción",
-              "2": "Configura o descarga un modelo, unos {{modelSize}}",
-              "3": "Espera a la instalación y la activación"
-            }
-          }
-        },
-        "useCloud": "Usar Nube en su lugar",
-        "continueSetup": "Continuar la configuración",
         "showMore": "Mostrar más opciones",
         "moreOptions": {
           "title": "Elige tu configuración de API",
@@ -437,23 +413,79 @@
         }
       },
       "local": {
-        "title": "Configura los modelos locales",
-        "description": "Elige los modelos que quieres ejecutar en tu dispositivo.",
-        "descriptionLineOne": "Elige los modelos que quieres",
-        "descriptionLineTwo": "ejecutar en tu dispositivo.",
-        "providerLabel": "Proveedor",
-        "cohereLanguageLabel": "Idioma de dictado",
-        "cohereLanguageHint": "Cohere no detecta el idioma que hablas, así que elige el idioma en el que vas a dictar.",
-        "cohereLanguagePlaceholder": "Elige un idioma",
-        "download": "Descargar",
         "downloadingShort": "Descargando",
-        "selected": "Seleccionado",
-        "use": "Usar",
         "downloadInProgress": "Descarga en curso",
         "cancelDownload": "Cancelar la descarga de {{model}}",
         "downloads": "Descargas de modelos",
         "downloading": "Descargando… {{progress}}%",
         "installing": "Instalando"
+      },
+      "localSetup": {
+        "title": "Te recomendamos esta configuración",
+        "subtitle": "Elegida para tu {{computer}} y {{language}}. Estos modelos se ejecutan en este dispositivo.",
+        "subtitleOrganizationText": "Elegida para tu {{computer}} y {{language}}. El dictado se ejecuta en este dispositivo; el chat y las notas con IA usan el servicio que eligió tu organización.",
+        "computer": {
+          "chip": "Chip",
+          "processor": "Procesador",
+          "memory": "Memoria",
+          "graphics": "Gráficos",
+          "builtIn": "Integrados en el chip",
+          "memoryValue": "{{gb}} GB",
+          "mac": "Mac",
+          "windowsLaptop": "Portátil Windows",
+          "windowsDesktop": "Equipo de escritorio Windows",
+          "linuxLaptop": "Portátil Linux",
+          "linuxDesktop": "Equipo de escritorio Linux"
+        },
+        "rows": {
+          "dictation": "Dictado",
+          "cleanup": "Corrección",
+          "assistant": "Asistente"
+        },
+        "description": {
+          "dictation": "Convierte tu voz en texto en cualquier app",
+          "cleanup": "Elimina muletillas y corrige la gramática",
+          "assistant": "Responde preguntas y hace lo que le pides"
+        },
+        "badge": {
+          "optional": "Opcional",
+          "cloud": "Se recomienda la nube"
+        },
+        "line": {
+          "requiredByOrganization": "Exigido por tu organización",
+          "organizationModelsUnrunnable": "Ninguno de los modelos aprobados por tu organización funciona en este equipo",
+          "offToFit": "Desactivado para que quepa en el espacio libre de este equipo",
+          "failed": "No se pudo descargar. Comprueba tu conexión y reinténtalo"
+        },
+        "unavailable": {
+          "notEnoughMemory": "Memoria insuficiente",
+          "exceedsMemory": "Supera los límites de memoria de este equipo",
+          "memoryUnread": "No se pudo comprobar la memoria",
+          "organization": "No disponible en este equipo",
+          "memoryMac": "{{model}} necesita {{needed}} GB de memoria y este Mac tiene {{have}} GB",
+          "memoryComputer": "{{model}} necesita {{needed}} GB de memoria y este equipo tiene {{have}} GB",
+          "memoryUnreadLine": "{{model}} necesita {{needed}} GB de memoria. Si este equipo tiene esa cantidad, puedes activarlo más tarde en Ajustes"
+        },
+        "button": {
+          "download": "Descargar modelos",
+          "downloading": "Descargando",
+          "proceed": "Continuar",
+          "noSpace": "No hay suficiente espacio libre"
+        },
+        "retry": "Reintentar",
+        "retryRow": "Reintentar {{row}}",
+        "downloaded": "Descargado",
+        "foot": {
+          "default": "Puedes cambiar cualquiera de estos ajustes más tarde en Ajustes.",
+          "dictationFailed": "El dictado debe descargarse antes de continuar. Reinténtalo arriba o vuelve atrás y elige otra configuración.",
+          "dictationUnavailable": "El dictado no puede funcionar en este equipo con los modelos que aprobó tu organización. Vuelve atrás y elige otra configuración.",
+          "finishesInBackground": "El resto se sigue descargando después de continuar y se activa cuando esté listo.",
+          "failedStaysOff": "Lo que no se descargó queda desactivado. Puedes añadirlo más tarde en Ajustes.",
+          "needsMac": "Se necesitan {{needed}} GB y este Mac tiene {{free}} GB libres.",
+          "needsComputer": "Se necesitan {{needed}} GB y este equipo tiene {{free}} GB libres.",
+          "noSpaceMac": "El dictado necesita {{needed}} GB libres y este Mac tiene {{free}} GB. Libera espacio para continuar.",
+          "noSpaceComputer": "El dictado necesita {{needed}} GB libres y este equipo tiene {{free}} GB. Libera espacio para continuar."
+        }
       }
     },
     "steps": {
@@ -4275,7 +4307,9 @@
       "todos": "Enumera mis tareas recientes",
       "meeting": "Prepárame para mi próxima reunión",
       "sharedNotes": "Destaca mis notas compartidas"
-    }
+    },
+    "localModelDownloading": "El modelo del asistente aún se está descargando. El chat se activará cuando esté listo.",
+    "localModelMissing": "Elige un modelo para Chat en Configuración para chatear en este dispositivo."
   },
   "support": {
     "documentation": "Documentación",

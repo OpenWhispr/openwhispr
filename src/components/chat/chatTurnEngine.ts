@@ -68,6 +68,7 @@ import { createToolExecutionScope, type ToolExecutionScope } from "./toolExecuti
 import { isQueryResultData } from "../../services/tools/connectors/runQueryAction";
 import { getAgentToolActivityRemainingMs } from "../../helpers/agentToolPresentation";
 import type { Message, AgentState, ChatImageAttachment, ToolCallInfo } from "./types";
+import { isPendingAssistantModelDownloading } from "../onboarding/pendingLocalModels";
 import { toHistoryMessages, withoutEchoedToolTrace, type HistoryMessage } from "./historyMessages";
 import type { ContainerScope } from "../../types/chat";
 import type { NoteAttendeesRequest } from "../../types/connectors";
@@ -385,6 +386,20 @@ export function createChatTurnEngine(
         responseAnnounced = true;
         if (!options?.suppressResponseContent) onResponseContent?.();
       };
+      // Answers the already-appended user message with one line instead of a dead end.
+      const answerWithLine = (content: string, error?: Message["error"]): void => {
+        announceResponse();
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content,
+            isStreaming: false,
+            ...(error ? { error } : {}),
+          },
+        ]);
+      };
       const currentOpenNote = getOptions().openNote;
       const settings = getSettings();
       const { config: llmConfig, attachScreenContext } = resolveChatStreamingInference(settings, {
@@ -409,24 +424,25 @@ export function createChatTurnEngine(
           model: llmConfig.model,
         })
       ) {
-        // The user message is already appended; answer it instead of dead-ending silently.
         const agentAllowed = isAgentAllowed(policyState);
         const refusal =
           agentAllowed && llmMode === "local" ? localChoiceRefusal(policyState, "llm") : null;
-        const restriction = !agentAllowed
-          ? t("common.policyAgentRestricted")
-          : t(refusal?.messageKey ?? "common.policyAiProcessingRestricted");
-        announceResponse();
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: crypto.randomUUID(),
-            role: "assistant",
-            content: restriction,
-            isStreaming: false,
-            ...(refusal ? { error: { settingsTarget: refusal.settingsTarget } } : {}),
-          },
-        ]);
+        answerWithLine(
+          !agentAllowed
+            ? t("common.policyAgentRestricted")
+            : t(refusal?.messageKey ?? "common.policyAiProcessingRestricted"),
+          refusal ? { settingsTarget: refusal.settingsTarget } : undefined
+        );
+        return;
+      }
+
+      // Local mode with no model picked (e.g. the assistant was switched off
+      // at setup): nothing on this device can answer, and Cloud is not the
+      // fallback. Say where to pick one, or that the model is on its way.
+      if (llmMode === "local" && !llmConfig.model.trim()) {
+        const downloading = await isPendingAssistantModelDownloading();
+        if (cancelled()) return;
+        answerWithLine(t(downloading ? "chat.localModelDownloading" : "chat.localModelMissing"));
         return;
       }
 

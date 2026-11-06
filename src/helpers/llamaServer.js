@@ -698,17 +698,21 @@ class LlamaServerManager {
     }
   }
 
-  /** Stops once the server has nothing to generate, unless it is needed again before that. */
-  async stopWhenIdle() {
+  /** Waits for active answers; settings-driven stops can be cancelled by reuse. */
+  async stopWhenIdle({ cancelOnReuse = true } = {}) {
     const request = {};
-    this.deferredStop = request;
-    while (this.process && this.deferredStop === request) {
+    if (cancelOnReuse) this.deferredStop = request;
+    await this.startupPromise?.catch(() => {});
+    const server = this.process;
+    const isCurrent = () =>
+      this.process === server && (!cancelOnReuse || this.deferredStop === request);
+    while (server && isCurrent()) {
       if (!(await this._slotsBusy())) break;
-      if (this.deferredStop !== request) break;
+      if (!isCurrent()) break;
       await new Promise((resolve) => setTimeout(resolve, SLOT_POLL_INTERVAL_MS).unref?.());
     }
-    if (this.deferredStop !== request) return false;
-    this.deferredStop = null;
+    if (!isCurrent()) return false;
+    if (cancelOnReuse) this.deferredStop = null;
     await this.stop();
     return true;
   }

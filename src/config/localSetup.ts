@@ -1,0 +1,551 @@
+// Onboarding's "We recommend these settings" pick: which local models suit this
+// computer and these languages. The table's speeds decide which rows are offered
+// and which start on; the screen never quotes them. Every number and label comes
+// from localSetupTable.json; this module only looks them up.
+import type {
+  ComputerProfile,
+  InferenceMode,
+  LocalSetupDownloadKind,
+  LocalSetupSpace,
+} from "../types/electron";
+import {
+  allowedLocalModelIds,
+  isAgentAllowed,
+  isLocalModelAllowedByPolicy,
+  isModeAllowedByPolicy,
+} from "../stores/policyRules";
+import type { PolicyDecisionSnapshot } from "../stores/policyRules";
+import { getASRModelOrganization } from "../helpers/localASROrganization";
+import { formatBytes, spaceSizeUnit } from "../utils/formatBytes";
+import modelRegistryData from "../models/modelRegistryData.json" with { type: "json" };
+import languageRegistry from "./languageRegistry.json" with { type: "json" };
+import localSetupTableData from "../models/localSetupTable.json" with { type: "json" };
+
+export type LocalSetupRowId = "dictation" | "cleanup" | "assistant";
+export type LocalSetupLabel = "fast" | "slower" | "unavailable";
+export type MachineType =
+  | "pc-under-16"
+  | "pc-16-plus"
+  | "pc-nvidia"
+  | "mac-under-16"
+  | "mac-16-plus" // the cautious row for unread chips
+  | `mac-m${number}` // base chip, e.g. "mac-m4"
+  | `mac-m${number}-${"pro" | "max"}`; // e.g. "mac-m4-pro"; an Ultra takes its Max row
+export type LanguageGroup = "english" | "european" | "hindi" | "other";
+export interface LocalSetupDownload {
+  kind: LocalSetupDownloadKind;
+  id: string;
+  bytes: number;
+}
+export type LocalSetupLine =
+  | { key: "requiredByOrganization" }
+  | { key: "organizationModelsUnrunnable" }
+  | { key: "notEnoughMemory"; model: string; neededGb: number; haveGb: number }
+  | { key: "memoryUnread"; model: string; neededGb: number };
+export interface LocalSetupRow {
+  id: LocalSetupRowId;
+  modelId: string;
+  modelName: string; // registry name, e.g. "Parakeet Unified EN 0.6B"
+  providerIcon: string; // ProviderIcon id: "nvidia" | "oruk" | "openai" | "qwen"
+  download: LocalSetupDownload;
+  label: LocalSetupLabel | null; // null only for an organisation-required model
+  /** organization: dictation only, when no model the allow-list approves runs on this computer. */
+  reason?: "tooSlow" | "memory" | "memoryUnread" | "organization";
+  /** null: the row says what it does, or (too slow) that it exceeds this computer's memory. */
+  line: LocalSetupLine | null;
+}
+export interface LocalSetupPlan {
+  machineType: MachineType;
+  profile: ComputerProfile;
+  languages: string[]; // base codes the pick was made for
+  languageTags: string[]; // the same languages to name on screen; Chinese keeps its script
+  rows: LocalSetupRow[]; // policy-hidden rows are absent; order dictation, cleanup, assistant
+  graphicsPack: LocalSetupDownload | null;
+  /** How the switches start before the user or the space fit touches them. */
+  startingSwitches: LocalSetupSwitches;
+  /** The organization keeps AI models off this device, so chat and notes run where it chose. */
+  organizationRunsText: boolean;
+  /** False under a policy that keeps AI on this device, where recommending Cloud would be a dead end. */
+  cloudAllowed: boolean;
+}
+export type LocalSetupSwitches = { cleanup: boolean; assistant: boolean };
+
+// The shape of localSetupTable.json. `null` as a range's high end means "or more".
+type Range = [number, number | null];
+type UnavailableReason = "tooSlow" | "memory";
+interface DictationEntry {
+  label: LocalSetupLabel;
+  seconds: Range | null;
+}
+interface MachineEntry {
+  dictation: Record<LanguageGroup, DictationEntry>;
+  cleanup: {
+    label: LocalSetupLabel;
+    reason?: UnavailableReason;
+    addedSeconds: Range | null;
+    /** false: offered, but starts switched off (processor-only PCs, decided 2026-11-02). */
+    startsOn?: boolean;
+  };
+  assistant: {
+    label: LocalSetupLabel;
+    reason?: UnavailableReason;
+    firstWordsSeconds: Range | null;
+  };
+  source: string;
+}
+interface LocalSetupTable {
+  models: {
+    dictation: Record<LanguageGroup | "olderMac", string>;
+    cleanup: string;
+    assistant: string;
+  };
+  /** Machine-type cut-offs: an NVIDIA card counts from this much video memory; "16" in the type names. */
+  classification: { nvidiaMinVramMb: number; memoryBandGb: number };
+  memoryNeededGb: Record<"cleanup" | "assistant", { mac: number; pc: number }>;
+  graphicsPackBytes: Record<string, number>;
+  olderMacDictation: DictationEntry;
+  machines: Record<string, MachineEntry>;
+}
+
+const table = localSetupTableData as unknown as LocalSetupTable;
+
+interface SpeechModelInfo {
+  name: string;
+  size: string;
+  sizeMb: number;
+  expectedSizeBytes?: number;
+  supportedLanguages?: string[];
+}
+interface TextModelInfo {
+  id: string;
+  name: string;
+  size: string;
+  sizeBytes: number;
+}
+const parakeetModels = modelRegistryData.parakeetModels as unknown as Record<
+  string,
+  SpeechModelInfo
+>;
+const whisperModels = modelRegistryData.whisperModels as unknown as Record<string, SpeechModelInfo>;
+const textModels = new Map<string, { providerId: string; model: TextModelInfo }>();
+for (const provider of modelRegistryData.localProviders) {
+  for (const model of provider.models as TextModelInfo[]) {
+    textModels.set(model.id, { providerId: provider.id, model });
+  }
+}
+
+export function isAppleChipMac(profile: ComputerProfile): boolean {
+  return profile.platform === "darwin" && (profile.appleChip != null || profile.arch === "arm64");
+}
+
+export function classifyMachine(profile: ComputerProfile): MachineType {
+  const { memoryBandGb, nvidiaMinVramMb } = table.classification;
+  if (isAppleChipMac(profile)) {
+    if (!(profile.memoryGb >= memoryBandGb)) return "mac-under-16";
+    const chip = profile.appleChip;
+    // An Ultra is two Max chips, and a newer chip is never slower than the newest
+    // listed one of its tier: both take that row, a lower bound on their speed.
+    const tier =
+      chip?.tier === "Pro"
+        ? "-pro"
+        : chip?.tier === "Max" || chip?.tier === "Ultra"
+          ? "-max"
+          : chip?.tier === ""
+            ? ""
+            : null;
+    if (chip && tier !== null) {
+      for (let generation = chip.generation; generation >= 1; generation--) {
+        const key = `mac-m${generation}${tier}`;
+        if (table.machines[key]) return key as MachineType;
+      }
+    }
+    return "mac-16-plus";
+  }
+  const vramMb = profile.nvidia?.vramMb;
+  if (vramMb != null && vramMb >= nvidiaMinVramMb) return "pc-nvidia";
+  return profile.memoryGb >= memoryBandGb ? "pc-16-plus" : "pc-under-16";
+}
+
+// macOS reports Norwegian Bokmål as "nb" and Filipino as "fil"; the language list
+// (and Whisper) call them "no" and "tl".
+const LANGUAGE_ALIASES: Record<string, string> = { nb: "no", fil: "tl" };
+
+function baseCode(code: string): string {
+  const base = code.split("-")[0].toLowerCase();
+  return LANGUAGE_ALIASES[base] ?? base;
+}
+
+// "zh-TW" and "zh-CN" share a base code but not a name: Traditional or Simplified.
+function languageTag(code: string): string {
+  const [base, region] = code.split("-");
+  if (baseCode(base) !== "zh" || !region) return baseCode(code);
+  return /^(tw|hk|mo|hant)$/i.test(region) ? "zh-Hant" : "zh-Hans";
+}
+
+function normalizeLanguageTags(codes: string[]): string[] {
+  const out: string[] = [];
+  for (const code of codes) {
+    if (typeof code !== "string" || !code || baseCode(code) === "auto") continue;
+    const tag = languageTag(code);
+    if (!out.includes(tag)) out.push(tag);
+  }
+  return out;
+}
+
+function normalizeLanguages(codes: string[]): string[] {
+  const out: string[] = [];
+  for (const code of codes) {
+    if (typeof code !== "string" || !code) continue;
+    const base = baseCode(code);
+    if (base !== "auto" && !out.includes(base)) out.push(base);
+  }
+  return out;
+}
+
+const whisperLanguages = new Set(
+  languageRegistry.languages.filter((l) => l.whisper).map((l) => baseCode(l.code))
+);
+const europeanLanguages = new Set(
+  parakeetModels[table.models.dictation.european]?.supportedLanguages ?? []
+);
+
+function languageGroup(languages: string[]): LanguageGroup {
+  const known = (code: string): boolean =>
+    europeanLanguages.has(code) || code === "hi" || whisperLanguages.has(code);
+  // No language at all reads as English. One no local model knows goes to Whisper,
+  // which detects the language rather than forcing another model's onto it, even
+  // beside languages a narrower model covers (a guest on en-IN and bn-IN).
+  if (!languages.every(known)) return "other";
+  if (languages.every((code) => code === "en")) return "english";
+  if (languages.includes("hi") && languages.every((code) => code === "hi" || code === "en")) {
+    return "hindi";
+  }
+  if (languages.every((code) => europeanLanguages.has(code))) return "european";
+  return "other";
+}
+
+export function pickDictationModel(
+  languages: string[],
+  profile: ComputerProfile
+): { modelId: string; group: LanguageGroup | "olderMac" } {
+  const group =
+    profile.parakeetSupported === false ? "olderMac" : languageGroup(normalizeLanguages(languages));
+  return { modelId: table.models.dictation[group], group };
+}
+
+function speechInfo(modelId: string): SpeechModelInfo | undefined {
+  return parakeetModels[modelId] ?? whisperModels[modelId];
+}
+
+function speechDownload(modelId: string): { download: LocalSetupDownload; info: SpeechModelInfo } {
+  const info = speechInfo(modelId);
+  return {
+    info,
+    download: {
+      kind: parakeetModels[modelId] ? "parakeet" : "whisper",
+      id: modelId,
+      bytes: info.expectedSizeBytes ?? info.sizeMb * 1e6,
+    },
+  };
+}
+
+function speechRowBase(modelId: string): Omit<LocalSetupRow, "label" | "line"> {
+  const { download, info } = speechDownload(modelId);
+  return {
+    id: "dictation",
+    modelId,
+    modelName: info.name,
+    providerIcon: download.kind === "parakeet" ? getASRModelOrganization(modelId) : "openai",
+    download,
+  };
+}
+
+function dictationRow(
+  profile: ComputerProfile,
+  machine: MachineEntry,
+  languages: string[],
+  requiredSpeechModelId?: string
+): LocalSetupRow {
+  // requiredLocalModelIds already drops ids this build can't download; the check keeps an
+  // unknown id from reaching the registry lookups below.
+  if (requiredSpeechModelId && speechInfo(requiredSpeechModelId)) {
+    return {
+      ...speechRowBase(requiredSpeechModelId),
+      label: null,
+      line: { key: "requiredByOrganization" },
+    };
+  }
+  const { modelId, group } = pickDictationModel(languages, profile);
+  const entry = group === "olderMac" ? table.olderMacDictation : machine.dictation[group];
+  return { ...speechRowBase(modelId), label: entry.label, line: null };
+}
+
+/** The first model an allow-list approves that this computer can run, for these languages if one fits. */
+function firstApprovedSpeechModel(
+  policy: PolicyDecisionSnapshot,
+  profile: ComputerProfile,
+  languages: string[]
+): string | undefined {
+  const runnable = (allowedLocalModelIds(policy, "transcription") ?? []).filter(
+    (id) => speechInfo(id) && !(parakeetModels[id] && profile.parakeetSupported === false)
+  );
+  const fitsLanguages = (id: string): boolean => {
+    const supported = speechInfo(id)?.supportedLanguages;
+    return !supported || languages.every((language) => supported.includes(language));
+  };
+  return runnable.find(fitsLanguages) ?? runnable[0];
+}
+
+function textRow(
+  id: "cleanup" | "assistant",
+  profile: ComputerProfile,
+  machine: MachineEntry
+): LocalSetupRow {
+  const modelId = table.models[id];
+  const { providerId, model } = textModels.get(modelId);
+  const entry = machine[id];
+  const neededGb = table.memoryNeededGb[id][profile.platform === "darwin" ? "mac" : "pc"];
+
+  let label = entry.label;
+  let reason: LocalSetupRow["reason"] = label === "unavailable" ? entry.reason : undefined;
+  // Memory comes first, even on a row already too slow: it's the reason the user can act on.
+  const tooLittleMemory = profile.memoryGb > 0 && profile.memoryGb < neededGb;
+  if (tooLittleMemory || (label !== "unavailable" && !(profile.memoryGb >= neededGb))) {
+    label = "unavailable";
+    reason = "memory";
+  }
+  // Memory that couldn't be read keeps the row off, but the row says so rather than "too little".
+  if (reason === "memory" && !(profile.memoryGb > 0)) reason = "memoryUnread";
+
+  const line: LocalSetupLine | null =
+    reason === "memoryUnread"
+      ? { key: "memoryUnread", model: model.name, neededGb }
+      : reason === "memory"
+        ? { key: "notEnoughMemory", model: model.name, neededGb, haveGb: profile.memoryGb }
+        : null;
+
+  return {
+    id,
+    modelId,
+    modelName: model.name,
+    providerIcon: providerId,
+    download: { kind: "llm", id: modelId, bytes: model.sizeBytes },
+    label,
+    ...(reason ? { reason } : {}),
+    line,
+  };
+}
+
+const TEXT_MODES_OFF_DEVICE: InferenceMode[] = [
+  "openwhispr",
+  "providers",
+  "self-hosted",
+  "enterprise",
+];
+
+export function buildLocalSetupPlan(input: {
+  profile: ComputerProfile;
+  spokenLanguages: string[]; // settings.spokenLanguages; [] for guests
+  policy: PolicyDecisionSnapshot;
+  requiredSpeechModelId?: string; // first org-required speech model, if any
+}): LocalSetupPlan {
+  const { profile, policy, requiredSpeechModelId } = input;
+  const machineType = classifyMachine(profile);
+  const machine = table.machines[machineType];
+  const spoken = normalizeLanguages(input.spokenLanguages ?? []);
+  const languages = spoken.length ? spoken : normalizeLanguages(profile.systemLanguages);
+  const languageTags = normalizeLanguageTags(
+    spoken.length ? input.spokenLanguages : profile.systemLanguages
+  );
+
+  const rows: LocalSetupRow[] = [];
+  if (isModeAllowedByPolicy(policy, "transcription", "local")) {
+    const { modelId } = pickDictationModel(languages, profile);
+    const tablePickApproved = isLocalModelAllowedByPolicy(policy, "transcription", modelId);
+    // An allow-list that leaves out the table's pick decides dictation, as a required model does.
+    const organizationModelId =
+      requiredSpeechModelId ??
+      (tablePickApproved ? undefined : firstApprovedSpeechModel(policy, profile, languages));
+    rows.push(
+      organizationModelId || tablePickApproved
+        ? dictationRow(profile, machine, languages, organizationModelId)
+        : // Offering the table's pick would only end in the policy refusing its download.
+          {
+            ...speechRowBase(modelId),
+            label: "unavailable",
+            reason: "organization",
+            line: { key: "organizationModelsUnrunnable" },
+          }
+    );
+  }
+  const localTextAllowed = isModeAllowedByPolicy(policy, "llm", "local");
+  const textModelApproved = (id: "cleanup" | "assistant"): boolean =>
+    isLocalModelAllowedByPolicy(policy, "llm", table.models[id]);
+  if (localTextAllowed) {
+    if (textModelApproved("cleanup")) rows.push(textRow("cleanup", profile, machine));
+    if (isAgentAllowed(policy) && textModelApproved("assistant")) {
+      rows.push(textRow("assistant", profile, machine));
+    }
+  }
+
+  const packBytes = table.graphicsPackBytes[`${profile.platform}-${profile.arch}`];
+  const graphicsPack: LocalSetupDownload | null =
+    machineType === "pc-nvidia" && packBytes
+      ? { kind: "llamaVulkan", id: "llama-vulkan", bytes: packBytes }
+      : null;
+
+  const cloudAllowed = TEXT_MODES_OFF_DEVICE.some((mode) =>
+    isModeAllowedByPolicy(policy, "llm", mode)
+  );
+  const organizationRunsText = !localTextAllowed && cloudAllowed;
+
+  return {
+    machineType,
+    profile,
+    languages,
+    languageTags,
+    rows,
+    graphicsPack,
+    startingSwitches: { cleanup: machine.cleanup.startsOn !== false, assistant: true },
+    organizationRunsText,
+    cloudAllowed,
+  };
+}
+
+/**
+ * What to download, row by row, for the switches the user left on. The
+ * graphics pack rides with the first text row that is switched on (call 4).
+ */
+export function enabledDownloads(
+  plan: LocalSetupPlan,
+  switches: LocalSetupSwitches
+): Array<{ rowId: LocalSetupRowId; items: LocalSetupDownload[] }> {
+  const out: Array<{ rowId: LocalSetupRowId; items: LocalSetupDownload[] }> = [];
+  let pack = plan.graphicsPack;
+  for (const row of plan.rows) {
+    if (row.label === "unavailable") continue;
+    if (row.id !== "dictation" && !switches[row.id]) continue;
+    const items = [row.download];
+    if (row.id !== "dictation" && pack) {
+      items.push(pack);
+      pack = null;
+    }
+    out.push({ rowId: row.id, items });
+  }
+  return out;
+}
+
+export type SpaceState = "fits" | "trimmed" | "overflow" | "noSpace";
+export type LocalSetupFactors = LocalSetupSpace["factors"];
+
+/** Free disk space the downloads need, counting the room each one reserves. */
+export function localSetupRequiredBytes(
+  items: LocalSetupDownload[],
+  factors: LocalSetupFactors
+): number {
+  return items.reduce((sum, item) => sum + item.bytes * (factors[item.kind] ?? 1), 0);
+}
+
+// Turned off in this order until the downloads fit (design §4.5).
+const TRIM_ORDER: Array<keyof LocalSetupSwitches> = ["assistant", "cleanup"];
+
+/**
+ * The least free space Local can start with, in whole GB: dictation alone, since
+ * the step turns the optional rows off to fit and Proceed only waits for dictation.
+ * Undefined when dictation won't download here, so the card keeps its default
+ * rather than claiming nothing is needed.
+ */
+export function localSetupMinimumSpaceGb(
+  plan: LocalSetupPlan,
+  factors: LocalSetupFactors
+): number | undefined {
+  const items = enabledDownloads(plan, { cleanup: false, assistant: false }).flatMap(
+    (row) => row.items
+  );
+  if (items.length === 0) return undefined;
+  return Math.ceil(localSetupRequiredBytes(items, factors) / 1e9);
+}
+
+/**
+ * Fits the switched-on rows to the free space. A switch the user set in
+ * `requested` is kept as set; one left out starts as the plan says and, if on, may
+ * be turned off to fit,
+ * the assistant first, then cleanup. When the user's own switches don't fit, the
+ * state is "overflow" and the download stays locked instead of re-trimming them;
+ * no other row is turned off then, since that would still not fit.
+ * `requiredBytes` is what the resulting switches need, or dictation alone for
+ * "noSpace". Items `isOnDisk` reports cost nothing, and a row whose items are all
+ * on disk is never turned off to fit: there is nothing left to download for it.
+ */
+export function fitLocalSetupToSpace(
+  plan: LocalSetupPlan,
+  requested: Partial<LocalSetupSwitches>,
+  space: { availableBytes: number; factors: LocalSetupFactors },
+  isOnDisk: (item: LocalSetupDownload) => boolean = () => false
+): {
+  switches: LocalSetupSwitches;
+  autoOff: LocalSetupRowId[];
+  state: SpaceState;
+  requiredBytes: number;
+} {
+  const need = (switches: LocalSetupSwitches): number =>
+    localSetupRequiredBytes(
+      enabledDownloads(plan, switches)
+        .flatMap((row) => row.items)
+        .filter((item) => !isOnDisk(item)),
+      space.factors
+    );
+  const fits = (bytes: number): boolean => bytes <= space.availableBytes;
+
+  const switches: LocalSetupSwitches = { ...plan.startingSwitches, ...requested };
+  const autoOff: LocalSetupRowId[] = [];
+  const trimmable = (id: keyof LocalSetupSwitches): boolean => {
+    const row = plan.rows.find((r) => r.id === id);
+    if (requested[id] !== undefined || !switches[id] || !row || row.label === "unavailable") {
+      return false;
+    }
+    // Already downloaded, pack included: turning it off frees nothing.
+    const items = enabledDownloads(plan, switches).find((r) => r.rowId === id)?.items ?? [];
+    return !items.every(isOnDisk);
+  };
+
+  const dictationOnly = need({ cleanup: false, assistant: false });
+  if (!fits(dictationOnly)) {
+    for (const id of TRIM_ORDER) {
+      if (!trimmable(id)) continue;
+      switches[id] = false;
+      autoOff.push(id);
+    }
+    return { switches, autoOff, state: "noSpace", requiredBytes: dictationOnly };
+  }
+
+  const untrimmed = { ...switches };
+  for (const id of TRIM_ORDER) {
+    if (fits(need(switches))) break;
+    if (!trimmable(id)) continue;
+    switches[id] = false;
+    autoOff.push(id);
+  }
+  // The user's own switches overflow even with the rest trimmed: turning a row
+  // off would free nothing that helps, so leave every row as it was.
+  if (!fits(need(switches))) {
+    return { switches: untrimmed, autoOff: [], state: "overflow", requiredBytes: need(untrimmed) };
+  }
+  return {
+    switches,
+    autoOff,
+    state: autoOff.length ? "trimmed" : "fits",
+    requiredBytes: need(switches),
+  };
+}
+
+function registrySize(download: LocalSetupDownload): string {
+  if (download.kind === "llm") return textModels.get(download.id)?.model.size ?? "";
+  return speechInfo(download.id)?.size ?? "";
+}
+
+/** The size Settings shows for the row's model, or the combined size with the pack folded in. */
+export function rowSizeLabel(row: LocalSetupRow, pack: LocalSetupDownload | null): string {
+  if (pack) return formatBytes(row.download.bytes + pack.bytes, 1);
+  return spaceSizeUnit(registrySize(row.download));
+}

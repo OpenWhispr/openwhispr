@@ -85,6 +85,161 @@ test("stopping the server forgets the grown context", async () => {
   assert.equal(manager.contextSize, null);
 });
 
+test("a server that died is started again for the same model", async () => {
+  const { manager, starts } = makeManager();
+
+  await manager.start("/models/main.gguf", { contextSize: 16384 });
+  // What the process close handler leaves behind: the model and context
+  // outlive a crash, so only `ready` says the server is gone.
+  manager.ready = false;
+  manager.process = null;
+
+  await manager.start("/models/main.gguf", { contextSize: 16384 });
+  assert.equal(starts.length, 2);
+});
+
+// --- concurrent starts ---------------------------------------------------
+//
+// The server is shared between scopes, so cleanup and the Voice Assistant can
+// ask for different models at once. Callers record the model they asked for
+// as loaded once start() resolves, so a start must never resolve on a startup
+// that does not give it what it asked for — the renderer would then be handed
+// model A's port for a model B request.
+
+// Like makeManager(), but each start stays in flight until released, and a
+// started server leaves a live process behind, so the next start has to await
+// stop() before it spawns.
+function makeGatedManager() {
+  const { manager, starts } = makeManager();
+  const stubStart = manager._doStart;
+  const gates = [];
+  manager._doStart = async (modelPath, options) => {
+    await new Promise((resolve, reject) => {
+      gates.push({ resolve, reject });
+    });
+    await stubStart(modelPath, options);
+    manager.process = { exitCode: 0, once: (event, callback) => callback() };
+  };
+  const release = async (index, error) => {
+    // Let start() reach _doStart before settling it.
+    for (let attempt = 0; !gates[index]; attempt++) {
+      assert.ok(attempt < 50, `start #${index + 1} never reached _doStart`);
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    if (error) gates[index].reject(error);
+    else gates[index].resolve();
+  };
+  const tick = async () => {
+    for (let i = 0; i < 10; i++) await new Promise((resolve) => setImmediate(resolve));
+  };
+  return { manager, starts, release, spawned: () => gates.length, tick };
+}
+
+for (const [label, modelPath, options] of [
+  ["another model", "/models/assistant.gguf", { contextSize: 16384 }],
+  ["a larger context", "/models/cleanup.gguf", { contextSize: 32768 }],
+  ["another drafter", "/models/cleanup.gguf", { draftModelPath: "/d.gguf" }],
+]) {
+  test(`a cold start rejects a concurrent request for ${label} without replacing its server`, async () => {
+    const { manager, release, spawned, tick } = makeGatedManager();
+    const first = manager.start("/models/cleanup.gguf", { contextSize: 16384 });
+    const second = manager.start(modelPath, options);
+    const rejected = assert.rejects(second, { code: "LOCAL_MODEL_BUSY" });
+    await tick();
+    assert.equal(spawned(), 1);
+
+    await release(0);
+    await first;
+    await rejected;
+
+    assert.equal(spawned(), 1, "the first caller keeps the server it just started");
+    assert.equal(manager.modelPath, "/models/cleanup.gguf");
+    assert.equal(manager.contextSize, 16384);
+    assert.equal(manager.draftModelPath, null);
+  });
+}
+
+test("a failed in-flight start propagates to waiters and allows a later retry", async () => {
+  const { manager, starts, release } = makeGatedManager();
+  const first = manager.start("/models/cleanup.gguf");
+  const second = manager.start("/models/assistant.gguf");
+  const firstRejected = assert.rejects(first, /spawn failed/);
+  const secondRejected = assert.rejects(second, /spawn failed/);
+
+  await release(0, new Error("spawn failed"));
+  await Promise.all([firstRejected, secondRejected]);
+
+  const retry = manager.start("/models/assistant.gguf");
+  await release(1);
+  await retry;
+  assert.deepEqual(
+    starts.map((start) => start.modelPath),
+    ["/models/assistant.gguf"]
+  );
+  assert.equal(manager.modelPath, "/models/assistant.gguf");
+});
+
+test("concurrent starts for the same model share one startup, and its failure", async () => {
+  const { manager, release, spawned, tick } = makeGatedManager();
+  const first = manager.start("/models/cleanup.gguf");
+  const second = manager.start("/models/cleanup.gguf");
+  const firstRejected = assert.rejects(first, /spawn failed/);
+  const secondRejected = assert.rejects(second, /spawn failed/);
+
+  await release(0, new Error("spawn failed"));
+  await Promise.all([firstRejected, secondRejected]);
+  await tick();
+  assert.equal(spawned(), 1, "the joined start must not spawn a second time");
+});
+
+test("a start needing a smaller context joins a larger in-flight start", async () => {
+  const { manager, release, spawned } = makeGatedManager();
+  const large = manager.start("/models/main.gguf", { contextSize: 32768 });
+  const small = manager.start("/models/main.gguf", { contextSize: 16384 });
+
+  await release(0);
+  await Promise.all([large, small]);
+  assert.equal(spawned(), 1);
+  assert.equal(manager.contextSize, 32768);
+});
+
+test("multiple incompatible waiters leave the first caller's server running", async () => {
+  const { manager, starts, release, spawned } = makeGatedManager();
+  const first = manager.start("/models/a.gguf");
+  const secondRejected = assert.rejects(manager.start("/models/b.gguf"), {
+    code: "LOCAL_MODEL_BUSY",
+  });
+  const thirdRejected = assert.rejects(manager.start("/models/c.gguf"), {
+    code: "LOCAL_MODEL_BUSY",
+  });
+
+  await release(0);
+  await Promise.all([first, secondRejected, thirdRejected]);
+  assert.equal(spawned(), 1);
+  assert.equal(starts.length, 1);
+  assert.equal(manager.modelPath, "/models/a.gguf");
+});
+
+for (const cancelled of [false, true]) {
+  test(`a stop during startup ${cancelled ? "can be cancelled" : "waits for the server to load"}`, async (t) => {
+    const { manager, release, tick } = makeGatedManager();
+    const stop = t.mock.method(manager, "stop", async () => {
+      manager.process = null;
+    });
+    manager._requestJson = async () => [];
+    const starting = manager.start("/models/assistant.gguf");
+    const stopping = manager.stopWhenIdle();
+    await tick();
+    assert.equal(stop.mock.callCount(), 0, "shutdown waits for startup to finish");
+
+    if (cancelled) manager.cancelDeferredStop();
+    await release(0);
+    await starting;
+    assert.equal(await stopping, !cancelled);
+    assert.equal(stop.mock.callCount(), cancelled ? 0 : 1);
+  });
+}
+
 // --- spawn arguments -----------------------------------------------------
 
 test("every GPU ladder rung inherits the requested context and cache bounds", async () => {
@@ -225,6 +380,50 @@ function withStubServer(routes) {
       await new Promise((resolve) => server.close(resolve));
     }
   };
+}
+
+test("stopWhenIdle waits for an answer in progress before it stops the server", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const manager = new LlamaServerManager();
+  manager.process = { exitCode: 0, once: (event, callback) => callback() };
+  const replies = [[{ is_processing: true }], [{ is_processing: false }]];
+  let stops = 0;
+  manager._requestJson = async () => replies.shift();
+  manager.stop = async () => {
+    stops += 1;
+    manager.process = null;
+  };
+
+  const stopped = manager.stopWhenIdle();
+  for (let i = 0; i < 5; i++) await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(stops, 0, "the answer keeps running");
+
+  t.mock.timers.tick(5000);
+  assert.equal(await stopped, true);
+  assert.equal(stops, 1);
+});
+
+for (const cancelOnReuse of [true, false]) {
+  test(`stopWhenIdle leaves a replacement server alone (cancelOnReuse: ${cancelOnReuse})`, async () => {
+    const manager = new LlamaServerManager();
+    manager.process = { exitCode: 0 };
+    let stops = 0;
+    manager.stop = async () => {
+      stops += 1;
+    };
+    manager._requestJson = async () => {
+      manager.process = { exitCode: 0 };
+      return [];
+    };
+
+    assert.equal(await manager.stopWhenIdle({ cancelOnReuse }), false);
+    assert.equal(stops, 0);
+    assert.equal(
+      await new LlamaServerManager().stopWhenIdle(),
+      true,
+      "no server, cleanup completes"
+    );
+  });
 }
 
 test("usableContextSize reports the window the server actually has", async () => {

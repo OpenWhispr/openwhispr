@@ -19,6 +19,7 @@ import {
 } from "../stores/policyRules";
 import type { PolicyScope } from "../types/policy";
 import { clearMissingLocalModelSelections } from "../stores/settingsStore";
+import { forgetPendingLocalModelById } from "../components/onboarding/pendingLocalModels";
 import "../types/electron";
 
 const PROGRESS_THROTTLE_MS = 100;
@@ -48,6 +49,11 @@ interface UseModelDownloadOptions {
   modelType: ModelType;
   onDownloadComplete?: () => void;
   onModelsCleared?: () => void;
+  /**
+   * false: a failure is only recorded in downloadErrors, and a refused request
+   * raises no "download in progress" toast, for screens that show both inline.
+   */
+  showErrorDialog?: boolean;
 }
 
 interface ModelDownloadTerminalEvent {
@@ -134,6 +140,7 @@ export function useModelDownload({
   modelType,
   onDownloadComplete,
   onModelsCleared,
+  showErrorDialog = true,
 }: UseModelDownloadOptions) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -231,6 +238,32 @@ export function useModelDownload({
     [clearCancelling, removeDownload]
   );
 
+  // Screens that show progress inline (showErrorDialog false) say nothing extra here.
+  const reportInProgress = useCallback(() => {
+    if (!showErrorDialog) return;
+    toast({
+      title: t("hooks.modelDownload.downloadInProgress.title"),
+      description: t("hooks.modelDownload.downloadInProgress.description"),
+    });
+  }, [showErrorDialog, t, toast]);
+
+  const reportError = useCallback(
+    (modelId: string, message: string, code?: string) => {
+      setDownloadErrors((current) => ({ ...current, [modelId]: message }));
+      setDownloadErrorCodes((current) => ({ ...current, [modelId]: code }));
+      if (!showErrorDialog) return;
+      toast({
+        title:
+          code === "EXTRACTION_FAILED"
+            ? t("hooks.modelDownload.installationFailed.title")
+            : t("hooks.modelDownload.downloadFailed.title"),
+        description: message,
+        variant: "destructive",
+      });
+    },
+    [showErrorDialog, t, toast]
+  );
+
   const handleTerminalDownload = useCallback(
     async (
       modelId: string,
@@ -256,20 +289,11 @@ export function useModelDownload({
           error || t("hooks.modelDownload.errors.unknown"),
           code
         );
-        setDownloadErrors((current) => ({ ...current, [modelId]: message }));
-        setDownloadErrorCodes((current) => ({ ...current, [modelId]: code }));
-        toast({
-          title:
-            code === "EXTRACTION_FAILED"
-              ? t("hooks.modelDownload.installationFailed.title")
-              : t("hooks.modelDownload.downloadFailed.title"),
-          description: message,
-          variant: "destructive",
-        });
+        reportError(modelId, message, code);
       }
       await settleDownload(modelId, sequence);
     },
-    [settleDownload, t, toast]
+    [reportError, settleDownload, t]
   );
 
   const handleNativeProgress = useCallback(
@@ -354,31 +378,22 @@ export function useModelDownload({
     };
   }, [updateDownload]);
 
+  // Resolves true only when this request put the model on disk.
   const downloadModel = useCallback(
-    async (modelId: string, onSelectAfterDownload?: (id: string) => void) => {
+    async (modelId: string, onSelectAfterDownload?: (id: string) => void): Promise<boolean> => {
       const policy = usePolicyStore.getState();
       if (!isLocalModelAllowedByPolicy(policy, policyScope, modelId)) {
         const { code, messageKey } = localModelRefusal(policy, policyScope);
-        const message = t(messageKey);
-        setDownloadErrors((current) => ({ ...current, [modelId]: message }));
-        setDownloadErrorCodes((current) => ({ ...current, [modelId]: code }));
-        toast({
-          title: t("hooks.modelDownload.downloadFailed.title"),
-          description: message,
-          variant: "destructive",
-        });
-        return;
+        reportError(modelId, t(messageKey), code);
+        return false;
       }
       if (
         ownedRequestsRef.current.has(modelId) ||
         downloads[modelId] ||
         (modelType !== "llm" && Object.keys(downloads).length > 0)
       ) {
-        toast({
-          title: t("hooks.modelDownload.downloadInProgress.title"),
-          description: t("hooks.modelDownload.downloadInProgress.description"),
-        });
-        return;
+        reportInProgress();
+        return false;
       }
 
       setDownloadErrorCodes((current) => ({ ...current, [modelId]: undefined }));
@@ -401,6 +416,7 @@ export function useModelDownload({
 
       let keepActiveDownloadState = false;
       let isDuplicateRequest = false;
+      let succeeded = false;
 
       try {
         const result =
@@ -411,6 +427,7 @@ export function useModelDownload({
               : await window.electronAPI?.modelDownload?.(modelId);
 
         if (result?.success) {
+          succeeded = true;
           notifyLocalModelsChanged();
           const currentPolicy = usePolicyStore.getState();
           // Only the account matters: a rotated token is the same member.
@@ -423,7 +440,7 @@ export function useModelDownload({
         } else if (result?.code === "DOWNLOAD_IN_PROGRESS") {
           isDuplicateRequest = true;
           const activeDownloads = await window.electronAPI?.modelGetActiveDownloads?.();
-          if (ownedRequestsRef.current.get(modelId)) return;
+          if (ownedRequestsRef.current.get(modelId)) return false;
           const activeDownload = activeDownloads?.find(
             (status) =>
               status.modelType === modelType && (modelType !== "llm" || status.modelId === modelId)
@@ -432,40 +449,21 @@ export function useModelDownload({
             updateDownload(activeDownload);
             keepActiveDownloadState = activeDownload.modelId === modelId;
           }
-          toast({
-            title: t("hooks.modelDownload.downloadInProgress.title"),
-            description: t("hooks.modelDownload.downloadInProgress.description"),
-          });
+          reportInProgress();
         } else if (!isCancellation(result?.error, result?.code)) {
           const message = getDownloadErrorMessage(
             t,
             result?.error || t("hooks.modelDownload.errors.unknown"),
             result?.code
           );
-          setDownloadErrors((current) => ({ ...current, [modelId]: message }));
-          setDownloadErrorCodes((current) => ({ ...current, [modelId]: result?.code }));
-          toast({
-            title:
-              result?.code === "EXTRACTION_FAILED"
-                ? t("hooks.modelDownload.installationFailed.title")
-                : t("hooks.modelDownload.downloadFailed.title"),
-            description: message,
-            variant: "destructive",
-          });
+          reportError(modelId, message, result?.code);
         }
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         if (!isCancellation(errorMessage)) {
           const code =
             error && typeof error === "object" && "code" in error ? String(error.code) : undefined;
-          const message = getDownloadErrorMessage(t, errorMessage, code);
-          setDownloadErrors((current) => ({ ...current, [modelId]: message }));
-          setDownloadErrorCodes((current) => ({ ...current, [modelId]: code }));
-          toast({
-            title: t("hooks.modelDownload.downloadFailed.title"),
-            description: message,
-            variant: "destructive",
-          });
+          reportError(modelId, getDownloadErrorMessage(t, errorMessage, code), code);
         }
       } finally {
         const terminalEvent = ownedRequestsRef.current.get(modelId);
@@ -483,15 +481,17 @@ export function useModelDownload({
           await settleDownload(modelId);
         }
       }
+      return succeeded;
     },
     [
       downloads,
       handleTerminalDownload,
       policyScope,
       modelType,
+      reportError,
+      reportInProgress,
       settleDownload,
       t,
-      toast,
       updateDownload,
     ]
   );
@@ -559,6 +559,7 @@ export function useModelDownload({
               ? await window.electronAPI?.cancelParakeetDownload()
               : await window.electronAPI?.modelCancelDownload?.(targetModel);
         if (result?.success) {
+          forgetPendingLocalModelById(targetModel);
           toast({
             title: t("hooks.modelDownload.downloadCancelled.title"),
             description: t("hooks.modelDownload.downloadCancelled.description"),
