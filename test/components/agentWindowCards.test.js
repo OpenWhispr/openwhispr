@@ -1970,3 +1970,27 @@ test("a selection edit that fails keeps the spoken request in the composer", asy
   assert.equal(view.host.querySelector("textarea").value, "Rewrite this");
   await view.waitForLayout("typing");
 });
+
+test("Esc while a take is transcribing drops the take and keeps the chat", async (t) => {
+  const view = await mountWindow(t);
+  let hides = 0;
+  view.happyWindow.electronAPI.agentWindowHide = async () => {
+    hides += 1;
+    return true;
+  };
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  await view.settle();
+  await view.chat({ busy: false, messages: [user, finished] });
+  await React.act(async () => globalThis.__voice.set("transcribing"));
+  const cancels = globalThis.__voice.cancels;
+  await React.act(async () =>
+    view.happyWindow.document.dispatchEvent(
+      new view.happyWindow.KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+    )
+  );
+  await view.settle();
+  assert.equal(globalThis.__voice.cancels, cancels + 1, "the take is dropped");
+  assert.equal(globalThis.__chat.newChats, 0, "the chat stays");
+  assert.equal(globalThis.__chat.cancels, 0);
+  assert.equal(hides, 0);
+});

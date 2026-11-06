@@ -766,7 +766,7 @@ export default function AgentWindow() {
       dropTake();
       return;
     }
-    if (listening) {
+    if (listening || transcribing) {
       dropTake();
       if (openedByTakeRef.current && stateRef.current.layout === "pill") void close();
       return;
@@ -782,7 +782,7 @@ export default function AgentWindow() {
       return;
     }
     void close();
-  }, [busy, close, dropTake, listening, stopRequest]);
+  }, [busy, close, dropTake, listening, stopRequest, transcribing]);
 
   // Main's messages, read through a ref so each listener is registered once.
   const handlersRef = useRef({
@@ -1196,7 +1196,7 @@ export default function AgentWindow() {
               onPointerMove={(event) => {
                 if (event.movementX || event.movementY) nudge.cancel();
               }}
-              className="agent-chat-scroll flex max-h-[400px] w-[420px] shrink-0 flex-col overflow-y-auto rounded-2xl border border-border/50 shadow-[var(--shadow-card)] *:my-0"
+              className="agent-chat-scroll flex max-h-[400px] w-[420px] shrink-0 flex-col overflow-y-auto rounded-2xl border border-border/50 shadow-[var(--shadow-card)] [&>*>*]:my-0"
             >
               <ToolCallCard messageId={pendingCard.messageId} toolCall={pendingCard.toolCall} />
             </div>
