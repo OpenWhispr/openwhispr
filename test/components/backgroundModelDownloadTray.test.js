@@ -422,3 +422,81 @@ test("right after Proceed the tray leaves the step's queue to fetch its rows", a
   await React.act(async () => endHandOff());
   assert.equal(tray.registry.isLocalSetupHandOffRunning(), false);
 });
+
+const ACCOUNT = "account-a";
+const managedPolicy = (llmModes) => ({
+  status: "managed",
+  accountId: ACCOUNT,
+  appVersion: "1.11.1",
+  policy: {
+    version: 1,
+    transcription: { allowedModes: ["local", "openwhispr"], allowedByokProviders: [] },
+    llm: { allowedModes: llmModes, allowedByokProviders: [], allowedEnterpriseProviders: [] },
+    features: { agentEnabled: true, webSearchEnabled: true, connectorsEnabled: true },
+    sharing: { externalLinkSharing: "disabled" },
+    dataRetention: {
+      audioRetentionMaxDays: null,
+      localHistoryMode: "user_choice",
+      cloudBackupAllowed: true,
+    },
+    minAppVersion: null,
+  },
+});
+
+// The policy is still loading when the tray mounts at launch, so nothing it can't
+// judge yet is downloaded or switched on; the verdict that settles it decides.
+async function relaunchBeforePolicy(t, options = {}) {
+  const relaunch = await relaunchWithPending(
+    t,
+    { assistant: { provider: "qwen", modelId: LLM, resumable: true, accountId: ACCOUNT } },
+    {
+      ...options,
+      // Proceed switched the assistant off while its model was still downloading.
+      storage: { useDictationAgent: "false", chatAgentModel: "", dictationAgentModel: "" },
+      beforeMount: async ({ vite }) => {
+        const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+        usePolicyStore.setState({ status: "loading", accountId: ACCOUNT });
+      },
+    }
+  );
+  const { usePolicyStore } = await relaunch.tray.vite.ssrLoadModule("/stores/policyStore.ts");
+  const store = await relaunch.tray.vite.ssrLoadModule("/stores/settingsStore.ts");
+  const resolvePolicy = async (state) => {
+    await React.act(async () => usePolicyStore.setState(state));
+    await React.act(async () => {});
+  };
+  return { ...relaunch, store, resolvePolicy };
+}
+
+test("a queued row waits for the policy, then downloads once it's allowed", async (t) => {
+  const { requested, pending, resolvePolicy } = await relaunchBeforePolicy(t);
+  assert.deepEqual(requested, []);
+  assert.ok(pending.readPendingLocalModels().assistant, "kept until the policy says");
+
+  await resolvePolicy(managedPolicy(["local", "openwhispr"]));
+  assert.deepEqual(requested, [LLM]);
+});
+
+test("a model that landed while the policy loaded turns on once it's approved", async (t) => {
+  const { requested, pending, store, resolvePolicy } = await relaunchBeforePolicy(t, {
+    downloaded: [LLM],
+  });
+  assert.equal(store.useSettingsStore.getState().useDictationAgent, false);
+  assert.ok(pending.readPendingLocalModels().assistant);
+
+  await resolvePolicy(managedPolicy(["local", "openwhispr"]));
+  const state = store.useSettingsStore.getState();
+  assert.equal(state.useDictationAgent, true);
+  assert.equal(store.selectResolvedLLMConfig(state, "chatIntelligence").model, LLM);
+  assert.equal(pending.hasPendingLocalModels(), false);
+  assert.deepEqual(requested, []);
+});
+
+test("a policy that settles against the row drops it without downloading", async (t) => {
+  const { requested, pending, store, resolvePolicy } = await relaunchBeforePolicy(t);
+
+  await resolvePolicy(managedPolicy(["openwhispr"]));
+  assert.deepEqual(requested, []);
+  assert.equal(pending.hasPendingLocalModels(), false);
+  assert.equal(store.useSettingsStore.getState().useDictationAgent, false);
+});
