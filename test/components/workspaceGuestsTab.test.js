@@ -76,9 +76,20 @@ async function loadTab(t, { workspace = ADMIN, status = "ready", guests = [] } =
         export const DropdownMenu = ({ children }) => h("div", { "data-menu": "" }, children);
         export const DropdownMenuTrigger = ({ children, "aria-label": label }) =>
           h("button", { "data-trigger": "", "aria-label": label }, children);
-        export const DropdownMenuContent = ({ children }) => h("div", { "data-menu-content": "" }, children);
-        export const DropdownMenuItem = ({ children, onSelect }) =>
-          h("button", { "data-item": "", onSelect }, children);
+        export const DropdownMenuContent = ({ children, onCloseAutoFocus }) =>
+          h("div", { "data-menu-content": "", onCloseAutoFocus }, children);
+        export const DropdownMenuItem = ({ children, onSelect, asChild, ...rest }) =>
+          asChild
+            ? React.cloneElement(children, { "data-item": "", onSelect })
+            : h("button", { "data-item": "", onSelect, ...rest }, children);
+      `,
+      "/services/GuestsService": `
+        export const GuestsService = {
+          remove: (workspaceId, input) => {
+            globalThis.__removeCalls.push([workspaceId, input]);
+            return globalThis.__removeImpl(workspaceId, input);
+          },
+        };
       `,
       "/ui/useToast": `
         export const useToast = () => ({ toast: (toast) => globalThis.__toasts.push(toast) });
@@ -103,6 +114,9 @@ async function loadTab(t, { workspace = ADMIN, status = "ready", guests = [] } =
     delete globalThis.__guestsArgs;
     delete globalThis.__reloads;
     delete globalThis.__dropped;
+    delete globalThis.__droppedNotes;
+    delete globalThis.__removeCalls;
+    delete globalThis.__removeImpl;
     delete globalThis.__toasts;
     delete globalThis.__inviteProps;
     delete globalThis.__removeProps;
@@ -110,6 +124,14 @@ async function loadTab(t, { workspace = ADMIN, status = "ready", guests = [] } =
   });
   globalThis.__reloads = 0;
   globalThis.__dropped = [];
+  globalThis.__droppedNotes = [];
+  globalThis.__removeCalls = [];
+  globalThis.__removeImpl = async (_workspaceId, input) => ({
+    removed: input.emails,
+    not_found: [],
+    skipped_members: [],
+    link_shared_note_ids: [],
+  });
   globalThis.__toasts = [];
   globalThis.__clipboard = [];
   Object.defineProperty(globalThis, "navigator", {
@@ -124,6 +146,7 @@ async function loadTab(t, { workspace = ADMIN, status = "ready", guests = [] } =
       globalThis.__reloads += 1;
     },
     dropGuests: (emails) => globalThis.__dropped.push(emails),
+    dropGuestNote: (email, noteId) => globalThis.__droppedNotes.push([email, noteId]),
   };
   return { Tab: module.default, workspace };
 }
@@ -195,7 +218,7 @@ test("the Access menu lists titles, untitled ones as Untitled", async (t) => {
   });
   const markup = render(Tab, workspace);
   assert.match(markup, /dir="auto"[^>]*>Roadmap</);
-  assert.equal(markup.split("notes.list.untitled").length - 1, 2);
+  assert.equal(markup.split(">notes.list.untitled<").length - 1, 2);
   assert.match(markup, new RegExp(`${KEY}\\.notesMenuLabel`));
 });
 
@@ -328,4 +351,137 @@ test("removed guests leave the list at once even if the reload fails", async (t)
   // Dropped by the hook before the reload, so a failing reload can't leave them listed.
   assert.deepEqual(globalThis.__dropped, [["jin@x.com"]]);
   assert.equal(globalThis.__reloads, 1);
+});
+
+const TWO = guest("jin@x.com", "Jin Park", [note("n1", "Plan"), note("n2", "Roadmap")]);
+const REMOVE_LABEL = `${KEY}.removeFromNote`;
+function collect(node, predicate, found = []) {
+  if (node.nodeType === 1 && predicate(node)) found.push(node);
+  for (const child of node.childNodes ?? []) collect(child, predicate, found);
+  return found;
+}
+const removeButtons = (container) =>
+  collect(
+    container,
+    (node) =>
+      node.hasAttribute("data-item") &&
+      (node.getAttribute("aria-label") ?? "").startsWith(REMOVE_LABEL)
+  );
+const settle = () => React.act(async () => {});
+
+test("the × removes that note only", async (t) => {
+  const { container } = await mountTab(t, { guests: [TWO] });
+  const buttons = removeButtons(container);
+  assert.equal(buttons.length, 2);
+  assert.match(buttons[1].getAttribute("aria-label"), /note=\u2068Roadmap\u2069/);
+  const event = {
+    preventDefault() {
+      this.prevented = true;
+    },
+  };
+  await React.act(async () => propsOf(buttons[1]).onSelect(event));
+  assert.equal(event.prevented, true, "the menu stays open");
+  assert.deepEqual(globalThis.__removeCalls, [["w1", { emails: ["jin@x.com"], note_id: "n2" }]]);
+  assert.deepEqual(globalThis.__droppedNotes, [["jin@x.com", "n2"]]);
+  assert.equal(globalThis.__reloads, 1);
+  assert.match(globalThis.__toasts[0].title, new RegExp(`${KEY}\\.removedFromNote\\|`));
+  assert.match(globalThis.__toasts[0].title, /note=\u2068Roadmap\u2069/);
+});
+
+test("a second press while sending does nothing", async (t) => {
+  let release;
+  const { container } = await mountTab(t, { guests: [TWO] });
+  globalThis.__removeImpl = (_w, input) =>
+    new Promise((resolve) => {
+      release = () =>
+        resolve({
+          removed: input.emails,
+          not_found: [],
+          skipped_members: [],
+          link_shared_note_ids: [],
+        });
+    });
+  const button = removeButtons(container)[0];
+  const event = { preventDefault() {} };
+  await React.act(async () => void propsOf(button).onSelect(event));
+  await React.act(async () => void propsOf(button).onSelect(event));
+  assert.equal(globalThis.__removeCalls.length, 1);
+  await React.act(async () => release());
+  assert.equal(globalThis.__reloads, 1);
+});
+
+test("a failure keeps the note and toasts", async (t) => {
+  const { container } = await mountTab(t, { guests: [TWO] });
+  globalThis.__removeImpl = async () => {
+    throw new Error("offline");
+  };
+  await React.act(async () =>
+    propsOf(removeButtons(container)[0]).onSelect({ preventDefault() {} })
+  );
+  assert.deepEqual(globalThis.__droppedNotes, []);
+  assert.equal(globalThis.__reloads, 0);
+  assert.match(globalThis.__toasts[0].title, new RegExp(`${KEY}\\.removeFromNoteFailed\\|`));
+  assert.equal(globalThis.__toasts[0].variant, "destructive");
+  // The item is usable again.
+  await React.act(async () =>
+    propsOf(removeButtons(container)[0]).onSelect({ preventDefault() {} })
+  );
+  assert.equal(globalThis.__removeCalls.length, 2);
+});
+
+test("a guest the server skipped isn't toasted as removed", async (t) => {
+  const { container } = await mountTab(t, { guests: [TWO] });
+  globalThis.__removeImpl = async () => ({
+    removed: [],
+    not_found: [],
+    skipped_members: ["JIN@x.com"],
+    link_shared_note_ids: [],
+  });
+  await React.act(async () =>
+    propsOf(removeButtons(container)[0]).onSelect({ preventDefault() {} })
+  );
+  assert.deepEqual(globalThis.__droppedNotes, []);
+  assert.equal(globalThis.__toasts.length, 0);
+  assert.equal(globalThis.__reloads, 1);
+});
+
+test("removing a guest's last note drops the row and keeps focus in the table", async (t) => {
+  const { container } = await mountTab(t, { guests: [JIN] });
+  await React.act(async () =>
+    propsOf(removeButtons(container)[0]).onSelect({ preventDefault() {} })
+  );
+  assert.deepEqual(globalThis.__droppedNotes, [["jin@x.com", "n1"]]);
+  const frame = findNode(container, (node) => node.hasAttribute("data-guests-table"));
+  assert.ok(frame, "the table frame can take focus");
+  let focused = 0;
+  frame.focus = () => void focused++;
+  const content = findNode(container, (node) => node.hasAttribute("data-menu-content"));
+  const event = {
+    preventDefault() {
+      this.prevented = true;
+    },
+  };
+  propsOf(content).onCloseAutoFocus(event);
+  assert.equal(event.prevented, true);
+  assert.equal(focused, 1);
+});
+
+test("a menu that still has notes returns focus to its trigger", async (t) => {
+  const { container } = await mountTab(t, { guests: [TWO] });
+  await React.act(async () =>
+    propsOf(removeButtons(container)[0]).onSelect({ preventDefault() {} })
+  );
+  const content = findNode(container, (node) => node.hasAttribute("data-menu-content"));
+  const event = {
+    preventDefault() {
+      this.prevented = true;
+    },
+  };
+  propsOf(content).onCloseAutoFocus(event);
+  assert.equal(event.prevented, undefined);
+});
+
+test("members get no ×", async (t) => {
+  const { container } = await mountTab(t, { workspace: MEMBER, guests: [TWO] });
+  assert.equal(removeButtons(container).length, 0);
 });

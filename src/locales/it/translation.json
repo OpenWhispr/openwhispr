@@ -3044,6 +3044,9 @@
         "noteCount_one": "{{count}} nota",
         "noteCount_other": "{{count}} note",
         "notesMenuLabel": "Note condivise con {{name}}",
+        "removeFromNote": "Rimuovi da {{note}}",
+        "removedFromNote": "{{name}} è stato rimosso da {{note}}",
+        "removeFromNoteFailed": "Impossibile rimuovere {{name}} da {{note}}. Controlla la connessione e riprova.",
         "menu": {
           "label": "Azioni per {{name}}",
           "invite": "Invita nel workspace",

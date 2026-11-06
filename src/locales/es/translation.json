@@ -3096,6 +3096,9 @@
         "noteCount_one": "{{count}} nota",
         "noteCount_other": "{{count}} notas",
         "notesMenuLabel": "Notas compartidas con {{name}}",
+        "removeFromNote": "Quitar de {{note}}",
+        "removedFromNote": "{{name}} se quitó de {{note}}",
+        "removeFromNoteFailed": "No se pudo quitar a {{name}} de {{note}}. Comprueba tu conexión e inténtalo de nuevo.",
         "menu": {
           "label": "Acciones para {{name}}",
           "invite": "Invitar al espacio de trabajo",

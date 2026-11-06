@@ -2315,6 +2315,9 @@
         "noteCount_one": "{{count}} note",
         "noteCount_other": "{{count}} notes",
         "notesMenuLabel": "Notes shared with {{name}}",
+        "removeFromNote": "Remove from {{note}}",
+        "removedFromNote": "Removed {{name}} from {{note}}",
+        "removeFromNoteFailed": "Couldn't remove {{name}} from {{note}}. Check your connection and try again.",
         "menu": {
           "label": "Actions for {{name}}",
           "invite": "Invite to workspace",

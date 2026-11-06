@@ -10,6 +10,8 @@ export interface WorkspaceGuestsState {
   reload: () => Promise<void>;
   /** Takes whole guests out of the shown list at once, e.g. after a removal, ahead of a reload. */
   dropGuests: (emails: string[]) => void;
+  /** Takes one note off a guest at once; a guest left with no notes leaves the list. */
+  dropGuestNote: (email: string, noteId: string) => void;
 }
 
 // What the last answer for one workspace left behind; an answer is only ever kept under the
@@ -81,9 +83,45 @@ export function useWorkspaceGuests(workspaceId: string): WorkspaceGuestsState {
     [workspaceId]
   );
 
+  const dropGuestNote = useCallback(
+    (email: string, noteId: string): void => {
+      const target = email.toLowerCase();
+      setSlot((previous) =>
+        previous && previous.workspaceId === workspaceId && previous.guests
+          ? {
+              ...previous,
+              guests: previous.guests
+                .map((guest) =>
+                  guest.email.toLowerCase() === target
+                    ? { ...guest, notes: guest.notes.filter((note) => note.id !== noteId) }
+                    : guest
+                )
+                .filter((guest) => guest.email.toLowerCase() !== target || guest.notes.length > 0),
+            }
+          : previous
+      );
+    },
+    [workspaceId]
+  );
+
   const own = slot && slot.workspaceId === workspaceId ? slot : null;
-  if (!own) return { status: "loading", guests: NO_GUESTS, error: null, reload, dropGuests };
+  if (!own)
+    return { status: "loading", guests: NO_GUESTS, error: null, reload, dropGuests, dropGuestNote };
   if (own.guests)
-    return { status: "ready", guests: own.guests, error: own.error, reload, dropGuests };
-  return { status: "failed", guests: NO_GUESTS, error: own.error, reload, dropGuests };
+    return {
+      status: "ready",
+      guests: own.guests,
+      error: own.error,
+      reload,
+      dropGuests,
+      dropGuestNote,
+    };
+  return {
+    status: "failed",
+    guests: NO_GUESTS,
+    error: own.error,
+    reload,
+    dropGuests,
+    dropGuestNote,
+  };
 }

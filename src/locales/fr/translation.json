@@ -2316,6 +2316,9 @@
         "noteCount_many": "{{count}} notes",
         "noteCount_other": "{{count}} notes",
         "notesMenuLabel": "Notes partagées avec {{name}}",
+        "removeFromNote": "Retirer de {{note}}",
+        "removedFromNote": "{{name}} a été retiré de {{note}}",
+        "removeFromNoteFailed": "Impossible de retirer {{name}} de {{note}}. Vérifiez votre connexion et réessayez.",
         "menu": {
           "label": "Actions pour {{name}}",
           "invite": "Inviter dans l'espace de travail",
