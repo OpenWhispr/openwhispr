@@ -200,7 +200,7 @@ export function useEmbeddedChat({
   useLayoutEffect(() => {
     if (conversationId === null || !mainTurn || mainTurn.running || mainTurn.settling) return;
     persistence.setMessages(mainTurn.messages);
-    takeCompletedChatTurn(conversationId);
+    takeCompletedChatTurn(conversationId, persistence.setMessages);
   }, [conversationId, mainTurn, persistence]);
   const [submissionInFlight, setSubmissionInFlight] = useState(false);
   const sendMessageWithResult = useChatMessageSender({

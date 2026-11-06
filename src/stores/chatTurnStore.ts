@@ -87,6 +87,13 @@ interface Submission {
   engine: ChatTurnEngine | null;
 }
 const submissions = new Map<string, Submission>();
+type MessagesUpdate = (messages: Message[]) => Message[];
+// The chat that took each conversation's finished turn: a send that commits after Stop still
+// reports on the message that chat now shows.
+const handedOverTurns = new Map<
+  number,
+  { submissionId: string; setMessages: (update: MessagesUpdate) => void }
+>();
 const deletedConversations = new Set<number>();
 const conversationRevisions = new Map<number, number>();
 let accountId: string | null | undefined;
@@ -268,13 +275,19 @@ export function startChatSend(input: StartChatSendInput): boolean {
   };
   const patch = (update: (current: ChatTurnEntry) => Partial<ChatTurnEntry>): void =>
     patchEntry(active, update);
+  // Stop only fences the turn's status: what it did still belongs on its message.
+  const setMessages = (update: MessagesUpdate): void => {
+    if (!ownerCurrent()) return;
+    const view =
+      operation.conversationId === null ? undefined : handedOverTurns.get(operation.conversationId);
+    if (view?.submissionId === submissionId) view.setMessages(update);
+    else patchEntry(ownerCurrent, (current) => ({ messages: update(current.messages) }));
+  };
   // The saved row a message forks through.
   const setDbId = (messageId: string, dbId: number): void =>
-    patchEntry(ownerCurrent, (current) => ({
-      messages: current.messages.map((message) =>
-        message.id === messageId ? { ...message, dbId } : message
-      ),
-    }));
+    setMessages((messages) =>
+      messages.map((message) => (message.id === messageId ? { ...message, dbId } : message))
+    );
   const showSaveError = (): void =>
     patch((current) => ({
       messages: [
@@ -373,9 +386,7 @@ export function startChatSend(input: StartChatSendInput): boolean {
           isOwnerCurrent: ownerCurrent,
         }),
         {
-          // Stop only fences the turn's status: what it did still belongs on its message.
-          setMessages: (update) =>
-            patchEntry(ownerCurrent, (current) => ({ messages: update(current.messages) })),
+          setMessages,
           setAgentState: (agentState) => patch(() => ({ agentState })),
           setToolStatus: (toolStatus) => patch(() => ({ toolStatus })),
           setActiveToolName: (activeToolName) => patch(() => ({ activeToolName })),
@@ -527,10 +538,14 @@ export function acceptChatConversation(conversationId: number): void {
   deletedConversations.delete(conversationId);
 }
 
-export function takeCompletedChatTurn(conversationId: number): ChatTurnEntry | null {
+export function takeCompletedChatTurn(
+  conversationId: number,
+  setMessages: (update: MessagesUpdate) => void
+): ChatTurnEntry | null {
   const key = `conversation:${conversationId}`;
   const entry = useChatTurnStore.getState().entries[key];
   if (!entry || entry.running || entry.settling) return null;
+  handedOverTurns.set(conversationId, { submissionId: entry.submissionId, setMessages });
   useChatTurnStore.setState((state) => {
     const entries = { ...state.entries };
     delete entries[key];
@@ -569,6 +584,7 @@ export function resetForAccountChange(): void {
     operation.engine?.cancel({ explicit: true });
   }
   submissions.clear();
+  handedOverTurns.clear();
   deletedConversations.clear();
   conversationRevisions.clear();
 }
