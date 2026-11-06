@@ -8,6 +8,8 @@ export interface WorkspaceGuestsState {
   guests: WorkspaceGuest[];
   error: RowActionError | null;
   reload: () => Promise<void>;
+  /** Takes whole guests out of the shown list at once, e.g. after a removal, ahead of a reload. */
+  dropGuests: (emails: string[]) => void;
 }
 
 // What the last answer for one workspace left behind; an answer is only ever kept under the
@@ -64,8 +66,24 @@ export function useWorkspaceGuests(workspaceId: string): WorkspaceGuestsState {
 
   const reload = useCallback((): Promise<void> => load(workspaceId), [load, workspaceId]);
 
+  const dropGuests = useCallback(
+    (emails: string[]): void => {
+      const gone = new Set(emails.map((email) => email.toLowerCase()));
+      setSlot((previous) =>
+        previous && previous.workspaceId === workspaceId && previous.guests
+          ? {
+              ...previous,
+              guests: previous.guests.filter((guest) => !gone.has(guest.email.toLowerCase())),
+            }
+          : previous
+      );
+    },
+    [workspaceId]
+  );
+
   const own = slot && slot.workspaceId === workspaceId ? slot : null;
-  if (!own) return { status: "loading", guests: NO_GUESTS, error: null, reload };
-  if (own.guests) return { status: "ready", guests: own.guests, error: own.error, reload };
-  return { status: "failed", guests: NO_GUESTS, error: own.error, reload };
+  if (!own) return { status: "loading", guests: NO_GUESTS, error: null, reload, dropGuests };
+  if (own.guests)
+    return { status: "ready", guests: own.guests, error: own.error, reload, dropGuests };
+  return { status: "failed", guests: NO_GUESTS, error: own.error, reload, dropGuests };
 }

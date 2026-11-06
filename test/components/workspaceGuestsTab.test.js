@@ -102,12 +102,14 @@ async function loadTab(t, { workspace = ADMIN, status = "ready", guests = [] } =
     delete globalThis.__guestsState;
     delete globalThis.__guestsArgs;
     delete globalThis.__reloads;
+    delete globalThis.__dropped;
     delete globalThis.__toasts;
     delete globalThis.__inviteProps;
     delete globalThis.__removeProps;
     delete globalThis.__clipboard;
   });
   globalThis.__reloads = 0;
+  globalThis.__dropped = [];
   globalThis.__toasts = [];
   globalThis.__clipboard = [];
   Object.defineProperty(globalThis, "navigator", {
@@ -121,6 +123,7 @@ async function loadTab(t, { workspace = ADMIN, status = "ready", guests = [] } =
     reload: async () => {
       globalThis.__reloads += 1;
     },
+    dropGuests: (emails) => globalThis.__dropped.push(emails),
   };
   return { Tab: module.default, workspace };
 }
@@ -308,5 +311,21 @@ test("remove asks first, then removes and reloads", async (t) => {
       link_shared_note_ids: [],
     })
   );
+  assert.equal(globalThis.__reloads, 1);
+});
+
+test("removed guests leave the list at once even if the reload fails", async (t) => {
+  const { item } = await mountTab(t, { guests: [JIN] });
+  await React.act(async () => propsOf(item(`${KEY}.menu.remove`)).onSelect());
+  await React.act(async () =>
+    globalThis.__removeProps.onRemoved({
+      removed: ["jin@x.com"],
+      not_found: [],
+      skipped_members: [],
+      link_shared_note_ids: [],
+    })
+  );
+  // Dropped by the hook before the reload, so a failing reload can't leave them listed.
+  assert.deepEqual(globalThis.__dropped, [["jin@x.com"]]);
   assert.equal(globalThis.__reloads, 1);
 });
