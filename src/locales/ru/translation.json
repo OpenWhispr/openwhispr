@@ -3159,7 +3159,8 @@
       "guests": {
         "columns": {
           "name": "Имя",
-          "access": "Доступ"
+          "access": "Доступ",
+          "actions": "Действия"
         },
         "emptyTitle": "Гостей пока нет",
         "emptyBody": "Здесь появятся люди вне этого рабочего пространства, которые могут просматривать ваши общие заметки.",
@@ -3171,7 +3172,44 @@
         "noteCount_few": "{{count}} заметки",
         "noteCount_many": "{{count}} заметок",
         "noteCount_other": "{{count}} заметки",
-        "notesMenuLabel": "Заметки, доступные {{name}}"
+        "notesMenuLabel": "Заметки, доступные {{name}}",
+        "menu": {
+          "label": "Действия для {{name}}",
+          "invite": "Пригласить в рабочее пространство",
+          "copyEmail": "Скопировать эл. почту",
+          "remove": "Удалить из гостей"
+        },
+        "invite": {
+          "title_one": "Пригласить {{count}} гостя в «{{workspace}}»",
+          "title_few": "Пригласить {{count}} гостя в «{{workspace}}»",
+          "title_many": "Пригласить {{count}} гостей в «{{workspace}}»",
+          "title_other": "Пригласить {{count}} гостя в «{{workspace}}»",
+          "description": "Они получат ссылку по эл. почте, чтобы присоединиться к «{{workspace}}».",
+          "sent_one": "Отправлено {{count}} приглашение в «{{workspace}}»",
+          "sent_few": "Отправлено {{count}} приглашения в «{{workspace}}»",
+          "sent_many": "Отправлено {{count}} приглашений в «{{workspace}}»",
+          "sent_other": "Отправлено {{count}} приглашения в «{{workspace}}»"
+        },
+        "remove": {
+          "titleOne": "Удалить гостя {{name}} из «{{workspace}}»?",
+          "confirmOne": "Удалить гостя",
+          "title_one": "Удалить {{count}} гостя из «{{workspace}}»?",
+          "title_few": "Удалить {{count}} гостя из «{{workspace}}»?",
+          "title_many": "Удалить {{count}} гостей из «{{workspace}}»?",
+          "title_other": "Удалить {{count}} гостя из «{{workspace}}»?",
+          "body": "Они потеряют доступ ко всем заметкам, которыми с ними поделились. Вы можете снова поделиться с ними заметками в любое время.",
+          "linkShared": "Заметки, открытые по ссылке, остаются доступными всем, у кого есть ссылка.",
+          "confirm_one": "Удалить {{count}} гостя",
+          "confirm_few": "Удалить {{count}} гостя",
+          "confirm_many": "Удалить {{count}} гостей",
+          "confirm_other": "Удалить {{count}} гостя",
+          "removing": "Удаление…",
+          "failed": "Не удалось удалить гостей. Никто не был удалён. Проверьте подключение и повторите попытку.",
+          "done_one": "Удалён {{count}} гость",
+          "done_few": "Удалено {{count}} гостя",
+          "done_many": "Удалено {{count}} гостей",
+          "done_other": "Удалено {{count}} гостя"
+        }
       }
     },
     "enterpriseCheckout": {

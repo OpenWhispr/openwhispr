@@ -3081,7 +3081,8 @@
       "guests": {
         "columns": {
           "name": "名稱",
-          "access": "存取權限"
+          "access": "存取權限",
+          "actions": "操作"
         },
         "emptyTitle": "尚無訪客",
         "emptyBody": "此工作區以外、可以檢視你共享筆記的人會顯示在這裡。",
@@ -3091,7 +3092,34 @@
         "failedBody": "請檢查網路連線後再試一次。",
         "noteCount_one": "{{count}} 則筆記",
         "noteCount_other": "{{count}} 則筆記",
-        "notesMenuLabel": "與 {{name}} 共享的筆記"
+        "notesMenuLabel": "與 {{name}} 共享的筆記",
+        "menu": {
+          "label": "{{name}} 的操作",
+          "invite": "邀請加入工作區",
+          "copyEmail": "複製電子郵件",
+          "remove": "移除訪客"
+        },
+        "invite": {
+          "title_one": "邀請 {{count}} 位訪客加入 {{workspace}}",
+          "title_other": "邀請 {{count}} 位訪客加入 {{workspace}}",
+          "description": "他們會收到一封電子郵件，透過其中的連結加入 {{workspace}}。",
+          "sent_one": "已傳送 {{count}} 份邀請，邀請加入 {{workspace}}",
+          "sent_other": "已傳送 {{count}} 份邀請，邀請加入 {{workspace}}"
+        },
+        "remove": {
+          "titleOne": "要將 {{name}} 從 {{workspace}} 移除嗎？",
+          "confirmOne": "移除訪客",
+          "title_one": "要將 {{count}} 位訪客從 {{workspace}} 移除嗎？",
+          "title_other": "要將 {{count}} 位訪客從 {{workspace}} 移除嗎？",
+          "body": "他們將無法再存取與其共用的所有筆記。你可以隨時再次與他們共用筆記。",
+          "linkShared": "透過連結共用的筆記仍可供任何持有連結的人開啟。",
+          "confirm_one": "移除 {{count}} 位訪客",
+          "confirm_other": "移除 {{count}} 位訪客",
+          "removing": "正在移除…",
+          "failed": "無法移除訪客。沒有人被移除。請檢查網路連線後再試一次。",
+          "done_one": "已移除 {{count}} 位訪客",
+          "done_other": "已移除 {{count}} 位訪客"
+        }
       }
     },
     "enterpriseCheckout": {
