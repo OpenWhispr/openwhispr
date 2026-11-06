@@ -18,11 +18,13 @@ import { useWorkspace } from "../../hooks/useWorkspace";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { useAuth } from "../../hooks/useAuth";
 import { useDelayedFlag } from "../../hooks/useDelayedFlag";
+import { useHeldTeamIds } from "../../hooks/useHeldTeamIds";
 import { SpaceInviteSeatNotice } from "./SpaceInviteSeatNotice";
 import SpaceNameField from "./SpaceNameField";
 import { SpacePeopleField } from "./SpacePeopleField";
 import { workspaceCan } from "../../lib/capabilities";
 import { formatList } from "../../lib/formatList";
+import { withoutHeldTeams } from "../../lib/heldTeamDeletes";
 import { MAX_INVITE_RECIPIENTS } from "../../lib/inviteFlow";
 import { rosterFor } from "../../lib/peopleRoster";
 import {
@@ -188,7 +190,11 @@ export default function CreateSpaceDialog({
     rosterWorkspaceId === workspace?.id
       ? rosterFor({ members: roster, membersWorkspaceId }, workspace?.id)
       : NO_MEMBERS;
-  const workspaceTeams = teamsWorkspaceId === workspace?.id ? teams : NO_TEAMS;
+  const heldTeams = useHeldTeamIds();
+  const workspaceTeams = useMemo(
+    () => withoutHeldTeams(teamsWorkspaceId === workspace?.id ? teams : NO_TEAMS, heldTeams),
+    [teamsWorkspaceId, workspace?.id, teams, heldTeams]
+  );
   // The creator becomes the teamspace's admin on the server, so the field never offers them.
   const hiddenUserIds = useMemo(() => new Set(user?.id ? [user.id] : []), [user?.id]);
   // Only workspace admins can invite; anyone else who may create picks from who is here.

@@ -459,6 +459,17 @@ test("turning Default and Open on sends them on, with the description trimmed", 
   });
 });
 
+test("a team waiting out its delete Undo isn't offered", async (t) => {
+  const held = await vite.ssrLoadModule("/lib/heldTeamDeletes.ts");
+  held.holdTeam("sales");
+  t.after(() => held.forgetHeldTeams());
+  await mount(t);
+
+  await focus(peopleInput());
+  assert.ok(!optionTexts().some((option) => option.startsWith("Sales")));
+  assert.ok(optionTexts().some((option) => option.startsWith("Design Team")));
+});
+
 test("members and teams go in the create body, addresses as invitations afterward", async (t) => {
   const { calls, callsTo, closes, navigation, toasts, reopen } = await mount(t);
   await type(nameInput(), "Customer Calls");

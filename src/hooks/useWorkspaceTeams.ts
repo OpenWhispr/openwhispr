@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { heldTeamIds, subscribeHeldTeams } from "../lib/heldTeamDeletes";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { withoutHeldTeams } from "../lib/heldTeamDeletes";
+import { useHeldTeamIds } from "./useHeldTeamIds";
 import { TeamsService } from "../services/TeamsService";
 import type { Team } from "../types/electron";
 
@@ -95,12 +96,9 @@ export function useWorkspaceTeams(
 
   // A slot left over from another workspace is invisible until its own load lands.
   const own = slot && slot.workspaceId === workspaceId ? slot : null;
-  const held = useSyncExternalStore(subscribeHeldTeams, heldTeamIds);
+  const held = useHeldTeamIds();
   const listed = own?.teams ?? NO_TEAMS;
-  const teams = useMemo(
-    () => (held.size > 0 ? listed.filter((team) => !held.has(team.id)) : listed),
-    [listed, held]
-  );
+  const teams = useMemo(() => withoutHeldTeams(listed, held), [listed, held]);
   let status: WorkspaceTeamsState["status"];
   if (!enabled || !workspaceId) status = "idle";
   else if (own?.teams) status = "ready";

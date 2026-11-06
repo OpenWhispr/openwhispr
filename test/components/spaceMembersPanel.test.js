@@ -576,6 +576,21 @@ test("the field offers who isn't here yet, and shows who is", async (t) => {
   assert.ok(texts.includes("Design Team 2 people"));
 });
 
+test("teams waiting out their delete Undo are neither listed nor offered", async (t) => {
+  const held = await vite.ssrLoadModule("/lib/heldTeamDeletes.ts");
+  held.holdTeam("sales");
+  held.holdTeam("design");
+  t.after(() => held.forgetHeldTeams());
+  await mount(t);
+
+  assert.ok(!rowTexts().some((row) => row.startsWith("Sales")), "the assigned team's row is gone");
+  await ui.focus(peopleInput());
+  const texts = options().map(text);
+  assert.ok(!texts.some((option) => option.startsWith("Sales")));
+  assert.ok(!texts.some((option) => option.startsWith("Design Team")));
+  assert.ok(texts.includes("Ethan ethan@openronnie.com"));
+});
+
 test("workspace admins reach every teamspace, so they aren't offered as people to add", async (t) => {
   const { callsTo } = await mount(t, {
     // Few enough that the list's cap keeps everyone.

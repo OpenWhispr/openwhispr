@@ -15,11 +15,13 @@ import { useToast } from "../ui/useToast";
 import { WorkspaceActionDialog } from "../workspace/WorkspaceActionDialog";
 import { cn } from "../lib/utils";
 import { useAuth } from "../../hooks/useAuth";
+import { useHeldTeamIds } from "../../hooks/useHeldTeamIds";
 import { useLoad } from "../../hooks/useLoad";
 import { useMemberRoster } from "../../hooks/useMemberRoster";
 import { spaceCan, workspaceCan } from "../../lib/capabilities";
 import { confirmActionReducer } from "../../lib/confirmActionFlow";
 import { formatList } from "../../lib/formatList";
+import { withoutHeldTeams } from "../../lib/heldTeamDeletes";
 import { rosterFor } from "../../lib/peopleRoster";
 import {
   attemptSummary,
@@ -424,7 +426,11 @@ export default function SpaceMembersPanel({
 
   const loadTeams = useCallback(() => TeamsService.list(workspaceId), [workspaceId]);
   const teamsLoad = useLoad(workspaceId ? loadTeams : null, NO_TEAMS);
-  const workspaceTeams = teamsLoad.data;
+  const heldTeams = useHeldTeamIds();
+  const workspaceTeams = useMemo(
+    () => withoutHeldTeams(teamsLoad.data, heldTeams),
+    [teamsLoad.data, heldTeams]
+  );
 
   const loadRoster = useCallback(() => refreshMembers(workspaceId), [refreshMembers, workspaceId]);
   const rosterLoad = useLoad(canManage && workspaceId ? loadRoster : null, undefined);
@@ -457,7 +463,7 @@ export default function SpaceMembersPanel({
       buildSpaceMemberRows({
         members,
         invitations,
-        teams: space.teams,
+        teams: withoutHeldTeams(space.teams, heldTeams),
         teamCounts: new Map(
           workspaceTeams
             .filter((team) => team.member_count != null)
@@ -467,7 +473,16 @@ export default function SpaceMembersPanel({
         promoteInherited: nobodyToPromote,
         formatNames: (names) => formatList(i18n.language, names),
       }),
-    [members, invitations, space.teams, workspaceTeams, canManage, nobodyToPromote, i18n.language]
+    [
+      members,
+      invitations,
+      space.teams,
+      heldTeams,
+      workspaceTeams,
+      canManage,
+      nobodyToPromote,
+      i18n.language,
+    ]
   );
   const teamEmoji = useMemo(
     () =>

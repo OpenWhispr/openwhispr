@@ -1,5 +1,5 @@
-// Teams whose delete is waiting out its Undo window. Nothing has happened to them yet, here or on
-// the server, so the views that list them only need to leave them out.
+// Teams whose delete is waiting out its Undo window, or went through from this device. Every view
+// that lists teams leaves them out.
 type Listener = () => void;
 
 let heldIds: ReadonlySet<string> = new Set();
@@ -35,6 +35,13 @@ export function isTeamHeld(teamId: string): boolean {
 
 export function heldTeamIds(): ReadonlySet<string> {
   return heldIds;
+}
+
+export function withoutHeldTeams<T extends { id: string }>(
+  teams: T[],
+  held: ReadonlySet<string>
+): T[] {
+  return held.size > 0 ? teams.filter((team) => !held.has(team.id)) : teams;
 }
 
 export function subscribeHeldTeams(listener: Listener): () => void {
