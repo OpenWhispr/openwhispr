@@ -1337,7 +1337,7 @@ export interface ComputerProfile {
   formFactor: "laptop" | "desktop";
   processorName: string; // "Apple M5 Pro", "Intel Core i5-1235U"
   appleChip: { generation: number; tier: "" | "Pro" | "Max" | "Ultra" } | null;
-  memoryGb: number; // Math.round(os.totalmem() / 2**30)
+  memoryGb: number; // installed GB: a Mac's own figure, Windows' modules, else snapped from usable; 0 = unread
   graphicsName: string | null; // null on Apple chips (UI shows "Built into chip")
   nvidia: { name: string; vramMb: number | null } | null;
   parakeetSupported: boolean; // getParakeetCapability().supported (macOS 15.5 rule)
