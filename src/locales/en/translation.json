@@ -2344,6 +2344,11 @@
           "failed": "Couldn't remove guests. Nobody was removed. Check your connection and try again.",
           "done_one": "Removed {{count}} guest",
           "done_other": "Removed {{count}} guests"
+        },
+        "selection": {
+          "selectAll": "Select all guests",
+          "invite": "Invite to workspace",
+          "remove": "Remove as guest"
         }
       }
     },

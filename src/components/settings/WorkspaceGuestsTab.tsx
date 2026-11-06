@@ -3,6 +3,13 @@ import { useTranslation } from "react-i18next";
 import { useWorkspaceGuests } from "../../hooks/useWorkspaceGuests";
 import { workspaceCan } from "../../lib/capabilities";
 import { guestDisplayName } from "../../lib/guestsView";
+import {
+  headerCheckState,
+  keepRows,
+  setRows,
+  toggleRow,
+  type RowSelection,
+} from "../../lib/rowSelection";
 import { GuestsService } from "../../services/GuestsService";
 import { isolate } from "../../utils/bidiIsolate";
 import {
@@ -16,6 +23,7 @@ import {
   Users,
   X,
 } from "../icons";
+import { RowCheckbox } from "../dictionary/RowCheckbox";
 import InviteTeammateDialog from "../InviteTeammateDialog";
 import MemberAvatar from "../MemberAvatar";
 import { Button } from "../ui/button";
@@ -27,11 +35,16 @@ import {
 } from "../ui/dropdown-menu";
 import { useToast } from "../ui/useToast";
 import { RemoveGuestsDialog } from "../workspace/RemoveGuestsDialog";
+import { SelectionBar } from "../workspace/SelectionBar";
 import { cn } from "../lib/utils";
 import type { Workspace, WorkspaceGuest } from "../../types/electron";
 import { CONTACTS_TRIGGER, HEADER_CELL, ROW_DIVIDER, TABLE_FRAME } from "./tableTokens";
 
 const KEY = "settingsPage.workspace.guests";
+const HEADER_CHECKED = { none: false, some: "mixed", all: true } as const;
+// A bigger target than the box, without moving it.
+const ROW_CHECKBOX =
+  "-m-1 p-1 focus-visible:ring-primary/50 disabled:opacity-50 disabled:cursor-default!";
 
 interface Props {
   workspace: Workspace;
@@ -43,11 +56,23 @@ export default function WorkspaceGuestsTab({ workspace }: Props): React.ReactEle
   const { toast } = useToast();
   const { status, guests, reload, dropGuests, dropGuestNote } = useWorkspaceGuests(workspace.id);
   const canManage = workspaceCan(workspace, "manage_members");
-  const [inviting, setInviting] = useState<WorkspaceGuest | null>(null);
-  const [removing, setRemoving] = useState<WorkspaceGuest | null>(null);
+  // One path for a row's menu and the selection bar: both hand the dialogs a list of guests.
+  const [inviting, setInviting] = useState<WorkspaceGuest[] | null>(null);
+  const [removing, setRemoving] = useState<WorkspaceGuest[] | null>(null);
+  const [selection, setSelection] = useState<RowSelection>(() => new Set());
+  const emails = guests.map((guest) => guest.email);
+  const emailKey = emails.join("\n");
+  const selectedGuests = guests.filter((guest) => selection.has(guest.email));
+  const headerChecked = HEADER_CHECKED[headerCheckState(emails, selection)];
+
+  // The bar acts on what is listed, so a reload that drops a guest drops it from the selection.
+  useEffect(() => {
+    setSelection((current) => keepRows(current, emails));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [emailKey]);
   // Invitations sent since the invite dialog opened, for the toast when it closes.
   const sentRef = useRef(0);
-  const columnCount = canManage ? 3 : 2;
+  const columnCount = canManage ? 4 : 2;
   const frameRef = useRef<HTMLDivElement>(null);
 
   // Ends one guest's access to one note. Resolves true when the server removed it.
@@ -97,6 +122,8 @@ export default function WorkspaceGuestsTab({ workspace }: Props): React.ReactEle
           workspace: isolate(workspace.name),
         }),
       });
+      // Invited guests move to Invitations, so nothing of the selection is left to act on.
+      setSelection(new Set());
     }
     sentRef.current = 0;
     setInviting(null);
@@ -110,9 +137,12 @@ export default function WorkspaceGuestsTab({ workspace }: Props): React.ReactEle
           onOpenChange={closeInvite}
           workspaceId={workspace.id}
           workspaceName={workspace.name}
-          initialEmails={[inviting.email]}
+          initialEmails={inviting.map((guest) => guest.email)}
           heading={{
-            title: t(`${KEY}.invite.title`, { count: 1, workspace: isolate(workspace.name) }),
+            title: t(`${KEY}.invite.title`, {
+              count: inviting.length,
+              workspace: isolate(workspace.name),
+            }),
             description: t(`${KEY}.invite.description`, { workspace: isolate(workspace.name) }),
           }}
           onInvited={(emails) => {
@@ -128,10 +158,12 @@ export default function WorkspaceGuestsTab({ workspace }: Props): React.ReactEle
             if (!open) setRemoving(null);
           }}
           workspace={workspace}
-          guests={[removing]}
+          guests={removing}
           onRemoved={(result) => {
-            // Shown gone at once: the reload below can fail and would leave them listed.
-            dropGuests(result.removed);
+            // Shown gone at once: the reload below can fail and would leave them listed. With
+            // nobody removed (all joined meanwhile) only the reload has anything to correct.
+            if (result.removed.length > 0) dropGuests(result.removed);
+            setSelection(new Set());
             void reload();
           }}
         />
@@ -153,8 +185,9 @@ export default function WorkspaceGuestsTab({ workspace }: Props): React.ReactEle
         <colgroup>
           {canManage ? (
             <>
-              <col className="w-[50%]" />
-              <col className="w-[35%]" />
+              <col className="w-10" />
+              <col className="w-[47%]" />
+              <col className="w-[33%]" />
               <col className="w-[15%]" />
             </>
           ) : (
@@ -166,7 +199,22 @@ export default function WorkspaceGuestsTab({ workspace }: Props): React.ReactEle
         </colgroup>
         <thead>
           <tr>
-            <th scope="col" className={cn(HEADER_CELL, "ps-4 pe-3 text-start")}>
+            {canManage ? (
+              <th scope="col" className={cn(HEADER_CELL, "ps-4 pe-0 text-start")}>
+                <RowCheckbox
+                  label={t(`${KEY}.selection.selectAll`)}
+                  checked={headerChecked}
+                  className={ROW_CHECKBOX}
+                  onToggle={() =>
+                    setSelection((current) => setRows(current, emails, headerChecked !== true))
+                  }
+                />
+              </th>
+            ) : null}
+            <th
+              scope="col"
+              className={cn(HEADER_CELL, canManage ? "ps-3" : "ps-4", "pe-3 text-start")}
+            >
               {t(`${KEY}.columns.name`)}
             </th>
             <th scope="col" className={cn(HEADER_CELL, "ps-3 pe-4 text-start")}>
@@ -186,11 +234,13 @@ export default function WorkspaceGuestsTab({ workspace }: Props): React.ReactEle
                 key={guest.email}
                 guest={guest}
                 canManage={canManage}
+                selected={selection.has(guest.email)}
+                onToggle={() => setSelection((current) => toggleRow(current, guest.email))}
                 onRemoveFromNote={(noteId) => removeFromNote(guest, noteId)}
                 onTableFocus={() => frameRef.current?.focus()}
-                onInvite={() => setInviting(guest)}
+                onInvite={() => setInviting([guest])}
                 onCopy={() => void copyEmail(guest)}
-                onRemove={() => setRemoving(guest)}
+                onRemove={() => setRemoving([guest])}
               />
             ))
           ) : (
@@ -224,6 +274,25 @@ export default function WorkspaceGuestsTab({ workspace }: Props): React.ReactEle
           )}
         </tbody>
       </table>
+      {canManage ? (
+        <SelectionBar
+          count={selectedGuests.length}
+          onClear={() => setSelection(new Set())}
+          actions={[
+            {
+              id: "remove",
+              label: t(`${KEY}.selection.remove`),
+              tone: "destructive",
+              onClick: () => setRemoving(selectedGuests),
+            },
+            {
+              id: "invite",
+              label: t(`${KEY}.selection.invite`),
+              onClick: () => setInviting(selectedGuests),
+            },
+          ]}
+        />
+      ) : null}
     </div>
   );
 }
@@ -249,6 +318,8 @@ function EmptyGuests(): React.ReactElement {
 interface GuestRowProps {
   guest: WorkspaceGuest;
   canManage: boolean;
+  selected: boolean;
+  onToggle: () => void;
   onRemoveFromNote: (noteId: string) => Promise<boolean>;
   onTableFocus: () => void;
   onInvite: () => void;
@@ -259,16 +330,31 @@ interface GuestRowProps {
 function GuestRow({
   guest,
   canManage,
+  selected,
+  onToggle,
   onRemoveFromNote,
   onTableFocus,
   onInvite,
   onCopy,
   onRemove,
 }: GuestRowProps): React.ReactElement {
+  const { t } = useTranslation();
   const hasName = guest.name?.trim();
   return (
     <tr className={cn("h-14", ROW_DIVIDER)}>
-      <td className="ps-4 pe-3 max-w-0">
+      {canManage ? (
+        <td className="ps-4 pe-0">
+          <RowCheckbox
+            label={t(`settingsPage.workspace.people.selection.selectRow`, {
+              name: isolate(guestDisplayName(guest)),
+            })}
+            checked={selected}
+            className={ROW_CHECKBOX}
+            onToggle={onToggle}
+          />
+        </td>
+      ) : null}
+      <td className={cn(canManage ? "ps-3" : "ps-4", "pe-3 max-w-0")}>
         <div className="flex min-w-0 items-center gap-3">
           <MemberAvatar name={guest.name} email={guest.email} image={guest.image} />
           <div className="min-w-0">

@@ -4638,6 +4638,11 @@
           "done_few": "تمت إزالة {{count}} ضيوف",
           "done_many": "تمت إزالة {{count}} ضيفًا",
           "done_other": "تمت إزالة {{count}} ضيف"
+        },
+        "selection": {
+          "selectAll": "تحديد كل الضيوف",
+          "invite": "دعوة إلى مساحة العمل",
+          "remove": "إزالة كضيف"
         }
       }
     },

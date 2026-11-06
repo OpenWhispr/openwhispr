@@ -3125,6 +3125,11 @@
           "failed": "No se pudo quitar a los invitados. No se quitó a nadie. Revisa tu conexión e inténtalo de nuevo.",
           "done_one": "Se quitó {{count}} invitado",
           "done_other": "Se quitaron {{count}} invitados"
+        },
+        "selection": {
+          "selectAll": "Seleccionar todos los invitados",
+          "invite": "Invitar al espacio de trabajo",
+          "remove": "Quitar como invitado"
         }
       }
     },

@@ -3058,6 +3058,11 @@
           "done_one": "{{count}} convidado removido",
           "done_many": "{{count}} de convidados removidos",
           "done_other": "{{count}} convidados removidos"
+        },
+        "selection": {
+          "selectAll": "Selecionar todos os convidados",
+          "invite": "Convidar para o espaço de trabalho",
+          "remove": "Remover como convidado"
         }
       }
     },
