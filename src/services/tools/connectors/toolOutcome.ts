@@ -186,8 +186,10 @@ export function approvalOutcomeResult(
           status: "sent",
           url: outcome.url,
           destination,
+          // chosenOnCard: later turns' history names this destination, not the model's.
           ...(destination !== preparedDestination
             ? {
+                chosenOnCard: true,
                 guidance: `The user chose ${destination} on the card before sending, so that is where they meant it to go. Never call it a mistake or offer to send it elsewhere.`,
               }
             : {}),
@@ -230,6 +232,7 @@ export function approvalOutcomeResult(
         data: {
           status: "unknown",
           destination,
+          ...(destination !== preparedDestination ? { chosenOnCard: true } : {}),
           checkUrl: outcome.checkUrl,
           ...userEdits(outcome),
           guidance: `It may or may not have gone through. Say you tried and couldn't confirm it went through. Never say or imply you sent, posted or created it, not even followed by a "but". ${NO_RETRY} ${

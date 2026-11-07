@@ -1487,7 +1487,8 @@ export default function AgentWindow() {
       onTranscript={() => (state.layout === "modal" ? collapse() : dispatch({ type: "expand" }))}
       onMic={() => void voiceCall.setMicMuted(!voiceCall.micMuted)}
       onEnd={endCall}
-      onStopReply={stopCallReply}
+      // Over a waiting card, Stop silences only its read-out: the card stays.
+      onStopReply={pendingCard ? voiceCall.stopSpeech : stopCallReply}
       onLeave={leaveCall}
       onShowCard={!inModal && callCardHidden ? () => setHiddenCallCard(null) : undefined}
     />
@@ -1569,7 +1570,7 @@ export default function AgentWindow() {
                 readAloud={readAloudState}
                 onRegenerate={regenerate}
                 onFork={forkMessage}
-                onFollowUp={followUp}
+                onFollowUp={state.call ? undefined : followUp}
                 onContinue={continueTurn}
                 emptyState={emptyState}
                 backToLatest={state.call !== null}

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSettings, useSettingsStore } from "../../stores/settingsStore";
 import { resolveChatStreamingInference } from "../../helpers/dictationAgentInference.js";
 import logger from "../../utils/logger";
-import { createSpeechChunker } from "../../services/voice/speechChunker";
+import { CLAUSE_TERMINATORS, createSpeechChunker } from "../../services/voice/speechChunker";
 import { createPcmPlayer, type PcmPlayer } from "../../services/voice/pcmPlayer";
 import { startMicStream, type MicStream } from "../../services/voice/micStream";
 import {
@@ -356,7 +356,8 @@ export function useVoiceCall({
         return;
       }
       if (replyChunksRef.current < MAX_SPOKEN_CHUNKS) {
-        replyChunksRef.current += 1;
+        // A first chunk cut at a clause is part of a sentence, not one of its own.
+        if (!CLAUSE_TERMINATORS.has(chunk.at(-1) ?? "")) replyChunksRef.current += 1;
         speakChunk(chunk);
       } else {
         cutShortRef.current = true;
@@ -433,13 +434,12 @@ export function useVoiceCall({
           if (held && !claimCheckRef.current?.(answerRef.current)) {
             for (const chunk of held) offerChunk(chunk);
           }
-          // A written-out draft is read on screen, never aloud.
-          if (writesDraftRef.current) {
+          // A written-out draft is read in the chat, never aloud, as is the rest of a long reply.
+          if (writesDraftRef.current || cutShortRef.current) {
             writesDraftRef.current = false;
-            speakChunk(onScreenLine(spokenLanguageFor(answerRef.current)));
-          }
-          if (cutShortRef.current && profileRef.current) {
-            speakChunk(moreInChatLine(profileRef.current.language));
+            speakChunk(
+              moreInChatLine(profileRef.current?.language ?? spokenLanguageFor(answerRef.current))
+            );
           }
           responseDoneRef.current = true;
           if (outcome === "stopped") logTurn("stopped");
@@ -585,6 +585,13 @@ export function useVoiceCall({
   /** Stops only the reply being spoken; the call keeps listening. */
   const stopReply = useCallback(() => dropAnswer("stopped"), [dropAnswer]);
 
+  /** Stops only what is being said; the turn goes on, and what it says next is spoken. */
+  const stopSpeech = useCallback(() => {
+    holdForSpeech(false);
+    playerRef.current?.flush();
+    if (utteranceRef.current) void api?.cancelSpeech(utteranceRef.current);
+  }, [api, holdForSpeech]);
+
   /**
    * Says what the card the reply waits on asks (a question and its options), or
    * that it is on screen, to review and send when it waits on Send. Part of the
@@ -634,9 +641,7 @@ export function useVoiceCall({
         // The harness's scripted lines are separate requests, never answers to a card.
         if (!harnessRef.current && callbacksRef.current.answersCard(event.text)) {
           // The question needn't be heard out; its turn goes on speaking as it resumes.
-          holdForSpeech(false);
-          playerRef.current?.flush();
-          if (utteranceRef.current) void api?.cancelSpeech(utteranceRef.current);
+          stopSpeech();
           return;
         }
         let joinedRequest: string | null = null;
@@ -731,7 +736,16 @@ export function useVoiceCall({
         endOnItsOwn("meeting");
       }
     },
-    [api, chunker, createTurnSpeech, dropAnswer, endOnItsOwn, holdForSpeech, releaseHold]
+    [
+      api,
+      chunker,
+      createTurnSpeech,
+      dropAnswer,
+      endOnItsOwn,
+      holdForSpeech,
+      releaseHold,
+      stopSpeech,
+    ]
   );
   const handleEventRef = useRef(handleEvent);
   handleEventRef.current = handleEvent;
@@ -951,6 +965,7 @@ export function useVoiceCall({
       start,
       end,
       stopReply,
+      stopSpeech,
       announce,
       setMicMuted,
       setInputHeld,
@@ -969,6 +984,7 @@ export function useVoiceCall({
       speaking,
       start,
       stopReply,
+      stopSpeech,
     ]
   );
 }

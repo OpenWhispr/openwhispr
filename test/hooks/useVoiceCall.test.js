@@ -539,7 +539,7 @@ test("a reply waits while the user, already talking again, finishes the request"
   );
 });
 
-test("a reply that writes out an email draft says it is on screen, never the draft", async (t) => {
+test("a reply that writes out an email draft says it is in the chat, never the draft", async (t) => {
   const { calls, act, startListening, say, lastTurn } = await mountVoiceCall(t);
   await startListening();
   await say("Send an email to Bob telling him I will be late today.");
@@ -551,7 +551,7 @@ test("a reply that writes out an email draft says it is on screen, never the dra
   );
   await act(() => turn.speech.onEnd("complete"));
 
-  assert.deepEqual(spokenTexts(calls), ["Here's a draft for Bob.", "It's on your screen."]);
+  assert.deepEqual(spokenTexts(calls), ["Here's a draft for Bob.", "The rest is in the chat."]);
 });
 
 test("words that answer a waiting question go to the card, and its turn goes on speaking", async (t) => {
@@ -849,6 +849,39 @@ test("fillers don't count against what a reply may say aloud", async (t) => {
     "Four.",
     "The rest is in the chat.",
   ]);
+});
+
+test("a first chunk cut at a clause doesn't use up one of the sentences said aloud", async (t) => {
+  const { calls, act, startListening, say, lastTurn } = await mountVoiceCall(t);
+  await startListening();
+  await say("give me four tips for better sleep");
+  await act(() =>
+    lastTurn().speech.onText(
+      "1. Keep a consistent bedtime and wake-up time, even on weekends.\n2. Keep it dark.\n3. Skip late caffeine.\n4. Wind down first.\n"
+    )
+  );
+  await act(() => lastTurn().speech.onEnd("complete"));
+
+  assert.deepEqual(spokenTexts(calls), [
+    "Keep a consistent bedtime and wake-up time,",
+    "even on weekends.",
+    "Keep it dark.",
+    "Skip late caffeine.",
+    "Wind down first.",
+  ]);
+});
+
+test("Stop over a waiting card's read-out silences it and keeps the turn", async (t) => {
+  const { hook, calls, act, startListening, say, lastTurn } = await mountVoiceCall(t);
+  await startListening();
+  await say("email Bob that I'm late");
+  await act(() => hook.current.announce({ awaitsSend: true }));
+  await act(() => hook.current.stopSpeech());
+
+  assert.equal(calls.dropped, 0, "the card's turn goes on");
+  assert.equal(calls.cancelledSpeech.length, 1);
+  await act(() => lastTurn().speech.onText("Sent it. "));
+  assert.equal(spokenTexts(calls).at(-1), "Sent it.");
 });
 
 test("in the harness, every line is a request of its own, never a card's answer", async (t) => {

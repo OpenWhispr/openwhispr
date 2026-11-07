@@ -6,7 +6,7 @@ export interface SpeechChunker {
 
 // "।" ends a Hindi sentence.
 const SENTENCE_TERMINATORS = new Set([".", "!", "?", "…", "।"]);
-const CLAUSE_TERMINATORS = new Set([",", ";", ":"]);
+export const CLAUSE_TERMINATORS = new Set([",", ";", ":"]);
 // The first chunk may end at a clause this far in, so a long opening sentence's audio starts sooner.
 const FIRST_CHUNK_MIN_CHARS = 24;
 

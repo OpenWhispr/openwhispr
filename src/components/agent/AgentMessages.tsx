@@ -290,7 +290,7 @@ function SelectionToolbar({
 }: {
   target: SelectionTarget;
   busy: boolean;
-  onFollowUp: () => void;
+  onFollowUp?: () => void;
   /** Absent for a reply that isn't saved yet: there is nothing to fork from. */
   onForkFrom?: () => void;
 }) {
@@ -316,13 +316,15 @@ function SelectionToolbar({
       className="fixed z-30 flex h-10 items-center overflow-hidden rounded-full border border-border bg-popover shadow-[var(--shadow-card)]"
       style={position ?? { top: 0, left: 0, visibility: "hidden" }}
     >
-      <button type="button" onClick={onFollowUp} className={item}>
-        <CornerDownLeft size={15} className="rtl:scale-x-[-1]" />
-        {t("agentWindow.followUp")}
-      </button>
+      {onFollowUp && (
+        <button type="button" onClick={onFollowUp} className={item}>
+          <CornerDownLeft size={15} className="rtl:scale-x-[-1]" />
+          {t("agentWindow.followUp")}
+        </button>
+      )}
       {onForkFrom && (
         <>
-          <span className="h-4 w-px bg-border" aria-hidden="true" />
+          {onFollowUp && <span className="h-4 w-px bg-border" aria-hidden="true" />}
           <button type="button" onClick={onForkFrom} disabled={busy} className={item}>
             <GitFork size={15} />
             {t("agentWindow.forkFromHere")}
@@ -341,7 +343,8 @@ interface AgentMessageListProps {
   readAloud: ReadAloud;
   onRegenerate: (message: Message) => void;
   onFork: (messageId: string, selectedText?: string) => void;
-  onFollowUp: (selection: { messageId: string; text: string }) => void;
+  /** Absent in a voice call: its pill has no chip to show a follow-up with. */
+  onFollowUp?: (selection: { messageId: string; text: string }) => void;
   onContinue: () => void;
   emptyState: ReactNode;
   /** Offer a way back to the newest line once the reader scrolls up (a call's transcript). */
@@ -473,14 +476,17 @@ export function AgentMessageList({
           {t("agentWindow.backToLatest")}
         </button>
       )}
-      {selection && (
+      {selection && (onFollowUp || selectionSaved) && (
         <SelectionToolbar
           target={selection}
           busy={busy}
-          onFollowUp={() => {
-            onFollowUp(selection);
-            finishSelection();
-          }}
+          onFollowUp={
+            onFollowUp &&
+            (() => {
+              onFollowUp(selection);
+              finishSelection();
+            })
+          }
           onForkFrom={
             selectionSaved
               ? () => {
