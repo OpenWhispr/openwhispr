@@ -1,0 +1,71 @@
+name: Bug report
+description: Create a report to help us improve
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the bug
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: To Reproduce
+      description: Steps to trigger the bug.
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: A clear and concise description of what you expected to happen.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - macOS
+        - Windows
+        - Linux
+        - iOS
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: OpenWhispr version
+      description: Which version are you running?
+      placeholder: e.g. 1.2.3
+    validations:
+      required: true
+
+  - type: textarea
+    id: linux_details
+    attributes:
+      label: Linux distribution & display server
+      description: If you're on Linux, which distribution and are you using X11 or Wayland? (e.g. Ubuntu 24.04, Wayland)
+      placeholder: e.g. Ubuntu 24.04, Wayland
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: If applicable, add screenshots to help explain the problem.
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Add any other context about the problem here.
