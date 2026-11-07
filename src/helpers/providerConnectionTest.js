@@ -418,7 +418,12 @@ async function testProviderConnection(
   const provider = String(config?.provider || "").toLowerCase();
   if (provider === "deepgram") return testDeepgramKey(request, fetchImpl);
 
-  const model = String(config?.model || "").trim();
+  // xAI's /v1/stt takes no model and /v1/models never lists one for it, so the
+  // transcription check is the key alone (#3006).
+  const model =
+    provider === "xai" && config?.scope === "transcription"
+      ? ""
+      : String(config?.model || "").trim();
   let failure = null;
   let everyListMissing = true;
   for (const endpoint of request.endpoints) {

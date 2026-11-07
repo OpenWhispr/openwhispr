@@ -1039,3 +1039,21 @@ test("a model list whose body never arrives is no verdict, not a missing model",
   );
   assert.equal(unreadable.errorCode, "modelNotFound", "a list that can't be read offers nothing");
 });
+
+// xAI's /v1/stt takes no model, and /v1/models never lists grok-stt (OpenWhispr's
+// own name for it), so a valid key used to fail as modelNotFound (#3006).
+test("an xAI transcription key passes on any model list", async () => {
+  const fetchImpl = async () => jsonResponse(200, { data: [{ id: "grok-4" }] });
+
+  const transcription = await testProviderConnection(
+    { scope: "transcription", provider: "xai", apiKey: "xai-made-up", model: "grok-stt" },
+    fetchImpl
+  );
+  assert.deepEqual(transcription, { success: true });
+
+  const reasoning = await testProviderConnection(
+    { scope: "reasoning", provider: "xai", apiKey: "xai-made-up", model: "grok-missing" },
+    fetchImpl
+  );
+  assert.equal(reasoning.errorCode, "modelNotFound", "a chat model must still be checked");
+});
