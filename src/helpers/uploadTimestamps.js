@@ -4,7 +4,9 @@
 // (gpt-4o-transcribe rejects verbose_json; custom/self-hosted servers may
 // 400 on unknown fields) must keep the plain-text request untouched — a
 // missing timestamp is a degraded export, never a failed upload.
-function timestampRequestFields(provider, model) {
+// ESM so dictation (renderer) and file upload (main, via require(esm)) share
+// the gate.
+export function timestampRequestFields(provider, model) {
   if (provider === "openai" && model === "whisper-1") {
     return { response_format: "verbose_json" };
   }
@@ -22,7 +24,7 @@ function timestampRequestFields(provider, model) {
 // usable, or when the kept segments don't hold every word of the response's
 // text (whitespace aside, so CJK joins match), so callers fall back to the
 // plain transcript rather than store a timed one with words missing.
-function mapVerboseSegments(responseData) {
+export function mapVerboseSegments(responseData) {
   const segments = responseData?.segments;
   if (!Array.isArray(segments)) return null;
 
@@ -48,5 +50,3 @@ function mapVerboseSegments(responseData) {
   }
   return mapped;
 }
-
-module.exports = { timestampRequestFields, mapVerboseSegments };
