@@ -1,5 +1,6 @@
 import { ReactNode, forwardRef } from 'react';
-import { View, TextInput, PlatformColor, type TextInputProps } from 'react-native';
+import { View, TextInput, type TextInputProps } from 'react-native';
+import { iosColor } from '@/config/colors';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { AppFont } from '@/lib/fonts';
 
@@ -35,7 +36,7 @@ export const SearchField = forwardRef<TextInput, SearchFieldProps>(function Sear
     <View
       style={{
         height: SEARCH_FIELD_HEIGHT,
-        backgroundColor: PlatformColor('tertiarySystemFill') as unknown as string,
+        backgroundColor: iosColor('tertiarySystemFill'),
         borderRadius: SEARCH_FIELD_RADIUS,
         borderCurve: 'continuous',
       }}
@@ -47,7 +48,7 @@ export const SearchField = forwardRef<TextInput, SearchFieldProps>(function Sear
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={PlatformColor('tertiaryLabel') as unknown as string}
+        placeholderTextColor={iosColor('tertiaryLabel')}
         returnKeyType={returnKeyType}
         onSubmitEditing={onSubmit}
         accessibilityLabel={accessibilityLabel}
