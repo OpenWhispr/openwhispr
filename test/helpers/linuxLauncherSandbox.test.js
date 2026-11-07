@@ -42,6 +42,9 @@ function runLauncher(ctx, { unshareExit = 0, env = {}, args = [] } = {}) {
       PATH: `${ctx.stubBin}:${process.env.PATH}`,
       XDG_SESSION_TYPE: "x11",
       XDG_CONFIG_HOME: path.join(ctx.tmp, "xdg"),
+      // Keeps these cases about the sandbox when they run on a real Hyprland
+      // desktop, where the scale probe would otherwise add a flag of its own.
+      HYPRLAND_INSTANCE_SIGNATURE: "",
       STUB_UNSHARE_EXIT: String(unshareExit),
       ...env,
     },
