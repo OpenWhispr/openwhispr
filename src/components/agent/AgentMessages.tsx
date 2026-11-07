@@ -346,6 +346,8 @@ interface AgentMessageListProps {
   emptyState: ReactNode;
   /** The conversation's own height, for a window that grows with it (a call's transcript). */
   onContentHeight?: (height: number) => void;
+  /** Offer a way back to the newest line once the reader scrolls up (a call's transcript). */
+  backToLatest?: boolean;
 }
 
 // Further than this from the bottom, the reader has left the latest messages.
@@ -364,6 +366,7 @@ export function AgentMessageList({
   onContinue,
   emptyState,
   onContentHeight,
+  backToLatest = false,
 }: AgentMessageListProps) {
   const { t } = useTranslation();
   const { scrollRef, handleScroll, handleWheel, scrollToBottom } =
@@ -471,7 +474,7 @@ export function AgentMessageList({
           </div>
         )}
       </div>
-      {awayFromBottom && (
+      {backToLatest && awayFromBottom && (
         <button
           type="button"
           onClick={() => {

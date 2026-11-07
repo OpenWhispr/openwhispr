@@ -238,6 +238,29 @@ test("turns decode one at a time, and one that finishes after its session ended 
   assert.equal(sentOfType(webContents, "transcript").length, 1);
 });
 
+test("what a session hears is marked with that session", async () => {
+  const webContents = await startSession();
+  speak();
+  await settle();
+  transcriptions[0].resolve({ success: true, text: "hello" });
+  await settle();
+
+  const [transcript] = sentOfType(webContents, "transcript");
+  assert.equal(typeof transcript.sessionId, "number");
+});
+
+test("only the call window can cancel speech or a model download", async () => {
+  callWindow = fakeRenderer();
+  const other = { sender: fakeRenderer() };
+  assert.deepEqual(
+    await handlers.get("voice-conversation:cancel-speech")(other, { utteranceId: "u1" }),
+    { cancelled: false }
+  );
+  assert.deepEqual(await handlers.get("voice-conversation:cancel-download")(other), {
+    cancelled: false,
+  });
+});
+
 test("a transcription that fails is reported, not sent as silence", async () => {
   const webContents = await startSession();
   speak();

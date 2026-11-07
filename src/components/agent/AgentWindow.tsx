@@ -600,7 +600,7 @@ export default function AgentWindow() {
   // request carries, and answered for speech. A turn still running (talked
   // over, or left from typing) stops first: one stream runs per window.
   const sendSpokenTurn = useCallback(
-    async ({ text, speech, replyLanguage, dryRunWrites }: VoiceCallTurn) => {
+    async ({ text, speech, replyLanguage, dryRunWrites, isCurrent }: VoiceCallTurn) => {
       if (refuseIfRestricted()) {
         speech.onEnd("refused");
         return;
@@ -608,7 +608,8 @@ export default function AgentWindow() {
       if (chatBusyRef.current) cancelTurn();
       await chatSettled();
       const current = stateRef.current;
-      if (!current.call || current.call.stopped) {
+      // Dropped while the old turn stopped (a stop word, another request, New chat): never sent.
+      if (!isCurrent() || !current.call || current.call.stopped) {
         speech.onEnd("stopped");
         return;
       }
@@ -710,6 +711,15 @@ export default function AgentWindow() {
     void endVoiceCall();
     dispatch({ type: "endCall" });
   }, [cancelTurn, dispatch, endVoiceCall]);
+
+  // The organization turned the assistant off mid-call: the call ends and says
+  // why. A policy still loading (a refetch) leaves it running.
+  useEffect(() => {
+    if (callActive && policyResolved && !agentAllowed) {
+      endCall();
+      refuseIfRestricted();
+    }
+  }, [agentAllowed, callActive, endCall, policyResolved, refuseIfRestricted]);
 
   // The voice harness (OPENWHISPR_VOICE_HARNESS=1): a call with no mic, once the app settles.
   const { harnessAvailable } = voiceCall;
@@ -902,17 +912,20 @@ export default function AgentWindow() {
     dispatch({ type: "hide" });
   }, [dispatch, endVoiceCall, hideSurface, newChat]);
 
+  // A call already listens: a press or Ask assistant only brings it back into view.
+  const showActiveCall = useCallback(() => {
+    const current = stateRef.current;
+    if (!current.call || current.call.stopped) return false;
+    if (!current.visible) dispatch({ type: "show", layout: current.layout, input: current.input });
+    return true;
+  }, [dispatch]);
+
   const handleHotkey = useCallback(
     ({ external }: { external: boolean }) => {
       if (refuseIfRestricted()) return;
       setRefusal(null);
-      // A call already listens: the press only brings it back into view.
+      if (showActiveCall()) return;
       const current = stateRef.current;
-      if (current.call && !current.call.stopped) {
-        if (!current.visible)
-          dispatch({ type: "show", layout: current.layout, input: current.input });
-        return;
-      }
       // The second press sends what was said.
       if (listening) {
         voice.stop("submit");
@@ -934,7 +947,16 @@ export default function AgentWindow() {
       }
       void startListening({ external });
     },
-    [busy, dispatch, editingSelection, listening, refuseIfRestricted, startListening, voice]
+    [
+      busy,
+      dispatch,
+      editingSelection,
+      listening,
+      refuseIfRestricted,
+      showActiveCall,
+      startListening,
+      voice,
+    ]
   );
 
   const handleEscape = useCallback(() => {
@@ -943,7 +965,7 @@ export default function AgentWindow() {
       if (call.settings) {
         dispatch({ type: "callSettings", open: false });
       } else if (voiceCallRef.current.speaking || busy) {
-        // Esc does what the call's slot does: stop the reply, else end the call.
+        // Esc stops the reply first, spoken or still being worked on; the next one ends the call.
         stopCallReply();
       } else {
         endCall();
@@ -996,6 +1018,7 @@ export default function AgentWindow() {
     open: (layout) => {
       if (refuseIfRestricted()) return;
       setRefusal(null);
+      if (showActiveCall()) return;
       // Typing shows no take: what was said so far starts the draft, as Keyboard does.
       if (listening) voice.stop("draft");
       openedByTakeRef.current = false;
@@ -1366,7 +1389,7 @@ export default function AgentWindow() {
   const voicePill = (inModal: boolean) => (
     <VoicePill
       status={callStatus}
-      notice={callActive && callSession === "active" ? notice : null}
+      notice={(callActive && callSession === "active") || state.call?.stopped ? notice : null}
       readLevel={voiceCall.readLevel}
       waveformActive={callSession === "active" && (!voiceCall.micMuted || voiceCall.speaking)}
       micMuted={voiceCall.micMuted}
@@ -1459,6 +1482,7 @@ export default function AgentWindow() {
               onContinue={continueTurn}
               emptyState={emptyState}
               onContentHeight={state.call ? setTranscriptContent : undefined}
+              backToLatest={state.call !== null}
             />
           </AgentModal>
         ) : state.layout === "typing" ? (

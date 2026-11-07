@@ -128,7 +128,9 @@ function registerVoiceConversationIpc({
   };
 
   voiceWorker.on("speech-start", () => {
-    if (session && !session.inputPaused) send({ type: "speech-start", at: Date.now() });
+    if (session && !session.inputPaused) {
+      send({ type: "speech-start", sessionId: session.id, at: Date.now() });
+    }
   });
 
   voiceWorker.on("speech-segment", ({ samples, endpoint }) => {
@@ -144,6 +146,7 @@ function registerVoiceConversationIpc({
         if (session !== turnSession) return;
         send({
           type: "transcript",
+          sessionId: turnSession.id,
           text,
           speechMs,
           sttMs: Date.now() - endedAt,
@@ -153,7 +156,12 @@ function registerVoiceConversationIpc({
       } catch (error) {
         debugLogger.error("voice conversation transcription failed", { error: error?.message });
         if (session === turnSession) {
-          send({ type: "error", stage: "stt", message: error?.message || String(error) });
+          send({
+            type: "error",
+            stage: "stt",
+            sessionId: turnSession.id,
+            message: error?.message || String(error),
+          });
         }
       }
     });
@@ -382,14 +390,18 @@ function registerVoiceConversationIpc({
     return promise;
   });
 
-  ipcMain.handle("voice-conversation:cancel-download", () => {
+  ipcMain.handle("voice-conversation:cancel-download", (event) => {
+    if (!isFromCallWindow(event)) return { cancelled: false };
     modelDownload?.abort();
     return { cancelled: Boolean(modelDownload) };
   });
 
-  ipcMain.handle("voice-conversation:cancel-speech", (_event, { utteranceId } = {}) =>
-    voiceWorker.running ? voiceWorker.request("cancel", { utteranceId }) : { cancelled: true }
-  );
+  ipcMain.handle("voice-conversation:cancel-speech", (event, { utteranceId } = {}) => {
+    if (!isFromCallWindow(event)) return { cancelled: false };
+    return voiceWorker.running
+      ? voiceWorker.request("cancel", { utteranceId })
+      : { cancelled: true };
+  });
 
   // A late stop from an earlier session (stop, then start again quickly) must not end
   // the new one, so it names the session it means.

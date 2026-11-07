@@ -49,8 +49,8 @@ async function mountVoiceCall(t, { settings = {}, voiceState = true } = {}) {
     transcriptionFailures: 0,
   };
   const events = { emit: () => {} };
-  const pending = { readiness: [], start: [], mic: [] };
-  const state = { answersCard: () => false, busy: false };
+  const pending = { readiness: [], start: [], mic: [], speak: [] };
+  const state = { answersCard: () => false, busy: false, holdSpeak: false };
   const api = {
     isHarness: async () => false,
     onEvent: (callback) => {
@@ -89,6 +89,11 @@ async function mountVoiceCall(t, { settings = {}, voiceState = true } = {}) {
     },
     speak: async ({ text, profile }) => {
       calls.spoken.push({ text, profile });
+      if (state.holdSpeak) {
+        const next = deferred();
+        pending.speak.push(next);
+        await next.promise;
+      }
       return {};
     },
     reportTurn: () => {},
@@ -114,17 +119,20 @@ async function mountVoiceCall(t, { settings = {}, voiceState = true } = {}) {
       pending.mic.push(next);
       return next.promise;
     },
-    createPcmPlayer: () => ({
-      enqueue() {},
-      flush: () => calls.player.push("flush"),
-      pause: () => calls.player.push("pause"),
-      resume: () => calls.player.push("resume"),
-      isPlaying: () => false,
-      readLevel: () => 0,
-      close: async () => {
-        calls.playerCloses += 1;
-      },
-    }),
+    createPcmPlayer: (options) => {
+      calls.playerOptions = options;
+      return {
+        enqueue() {},
+        flush: () => calls.player.push("flush"),
+        pause: () => calls.player.push("pause"),
+        resume: () => calls.player.push("resume"),
+        isPlaying: () => false,
+        readLevel: () => 0,
+        close: async () => {
+          calls.playerCloses += 1;
+        },
+      };
+    },
   };
   t.after(() => delete globalThis.__voiceCall);
 
@@ -401,8 +409,9 @@ test("text the claim check flags is held, dropped when withdrawn, spoken once ba
   await say("send it");
   await act(() => lastTurn().speech.onText("Sure. I've sent it. ", isUnbacked));
   assert.deepEqual(spokenTexts(calls), [], "flagged text isn't spoken");
-  await act(() => lastTurn().speech.onTextWithdrawn());
-  await act(() => lastTurn().speech.onText("I haven't sent it yet. ", () => false));
+  await act(() => lastTurn().speech.onTextWithdrawn(0));
+  // The same check reads the answer without the withdrawn claim.
+  await act(() => lastTurn().speech.onText("I haven't sent it yet. ", isUnbacked));
   await act(() => lastTurn().speech.onEnd("complete"));
   assert.deepEqual(spokenTexts(calls), ["I haven't sent it yet."]);
 
@@ -570,4 +579,119 @@ test("a waiting card is announced as part of the reply, and only while one is sp
   await act(() => hook.current.announce());
   assert.deepEqual(spokenTexts(calls), ["Which tone do you want?", "It's on your screen."]);
   assert.equal(calls.turns.length, 1);
+});
+
+test("a turn dropped before it was sent says so, so the window never sends it", async (t) => {
+  const { hook, act, startListening, say, lastTurn } = await mountVoiceCall(t);
+  await startListening();
+  await say("what's the weather");
+  const turn = lastTurn();
+  assert.equal(turn.isCurrent(), true);
+
+  await act(() => hook.current.stopReply());
+  assert.equal(turn.isCurrent(), false);
+});
+
+test("turning the microphone on and off quickly leaves one stream, closed at End", async (t) => {
+  const { hook, calls, pending, act, openMic, startListening } = await mountVoiceCall(t);
+  await startListening();
+
+  await act(() => void hook.current.setMicMuted(true));
+  await act(() => void hook.current.setMicMuted(false));
+  await act(() => void hook.current.setMicMuted(true));
+  await act(() => void hook.current.setMicMuted(false));
+  const [first, second] = pending.mic.slice(-2);
+  await act(() => first.resolve(openMic()));
+  await act(() => second.resolve(openMic()));
+  await act(() => hook.current.end());
+
+  assert.equal(calls.micOpens, 3);
+  assert.equal(calls.micStops, 3, "every stream opened is stopped");
+});
+
+test("a reply paused for the user's speech goes on when nothing can be heard", async (t) => {
+  const { hook, calls, act, events, startListening, say } = await mountVoiceCall(t);
+  await startListening();
+  await say("tell me a story");
+  await act(() => events.emit({ type: "speech-start", at: 0 }));
+  assert.deepEqual(calls.player.slice(-1), ["pause"]);
+
+  await act(() => hook.current.setMicMuted(true));
+  assert.deepEqual(calls.player.slice(-1), ["resume"], "microphone off");
+
+  await act(() => void hook.current.setMicMuted(false));
+  await act(() => events.emit({ type: "speech-start", at: 0 }));
+  await act(() => hook.current.setInputHeld(true));
+  assert.deepEqual(calls.player.slice(-1), ["resume"], "a card asking for a secret");
+});
+
+test("what an earlier session heard never becomes a turn of this one", async (t) => {
+  const { calls, act, events, startListening } = await mountVoiceCall(t);
+  await startListening();
+  const heard = (sessionId) =>
+    act(() =>
+      events.emit({
+        type: "transcript",
+        sessionId,
+        text: "hello there",
+        speechMs: 900,
+        sttMs: 80,
+        endedAt: 0,
+        endpoint: null,
+      })
+    );
+
+  await heard(6);
+  assert.equal(calls.turns.length, 0);
+  await heard(7);
+  assert.equal(calls.turns.length, 1);
+});
+
+test("a reply stays speaking through the gap while its next chunk synthesizes", async (t) => {
+  const { hook, calls, pending, state, act, startListening, say, lastTurn } =
+    await mountVoiceCall(t);
+  await startListening();
+  state.holdSpeak = true;
+  await say("tell me two things");
+  await act(() => lastTurn().speech.onText("One. Two. Three. "));
+  await act(() => calls.playerOptions.onStart());
+  assert.equal(hook.current.speaking, true);
+
+  await act(() => calls.playerOptions.onIdle());
+  assert.equal(hook.current.speaking, true, "a chunk is still synthesizing");
+
+  await act(() => {
+    for (const next of pending.speak) next.resolve();
+  });
+  assert.equal(hook.current.speaking, false, "nothing left to say until the model writes more");
+});
+
+test("fillers don't count against what a reply may say aloud", async (t) => {
+  const { calls, act, startListening, say, lastTurn } = await mountVoiceCall(t);
+  await startListening();
+  await say("check my calendar and list everything");
+  await act(() => lastTurn().speech.onToolCalls(["get_calendar_events"]));
+  await act(() => lastTurn().speech.onText("One. Two. Three. Four. Five. "));
+  await act(() => lastTurn().speech.onEnd("complete"));
+
+  assert.deepEqual(spokenTexts(calls), [
+    "Let me check your calendar.",
+    "One.",
+    "Two.",
+    "Three.",
+    "Four.",
+    "The rest is in the chat.",
+  ]);
+});
+
+test("in the harness, every line is a request of its own, never a card's answer", async (t) => {
+  const { hook, calls, pending, state, act, say } = await mountVoiceCall(t);
+  state.answersCard = () => true;
+  await act(() => void hook.current.start({ harness: true }));
+  await act(() => pending.readiness.at(-1).resolve({ ready: true }));
+  await act(() => pending.start.at(-1).resolve({ sessionId: 7, sampleRate: 44100 }));
+
+  await say("what's the capital of Australia");
+  assert.equal(calls.turns.length, 1);
+  assert.equal(calls.turns[0].dryRunWrites, true);
 });

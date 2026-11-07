@@ -296,6 +296,7 @@ class AgentWindowManager {
     this.pending = null;
     this.layout = "pill";
     this.wide = false;
+    this.call = false;
     this.keyboardFocus = false;
     this.inputRegion?.stop();
     this.inputRegion = null;

@@ -42,6 +42,8 @@ export interface VoiceCallTurn {
   replyLanguage: SpokenLanguage | null;
   /** A harness turn: write tools answer without running. */
   dryRunWrites: boolean;
+  /** False once the turn was dropped (talked over, stopped, the call ended): don't send it. */
+  isCurrent: () => boolean;
 }
 
 interface UseVoiceCallOptions {
@@ -147,6 +149,8 @@ export function useVoiceCall({
   const profileRef = useRef<VoiceSpeechProfile | null>(null);
   const responseDoneRef = useRef(false);
   const chunkIndexRef = useRef(0);
+  // The reply's own sentences spoken, which MAX_SPOKEN_CHUNKS caps (not fillers or a card's question).
+  const replyChunksRef = useRef(0);
   // The reply ran past what a reply may say aloud.
   const cutShortRef = useRef(false);
   const pendingSpeaksRef = useRef(0);
@@ -262,6 +266,7 @@ export function useVoiceCall({
       heldForSpeechRef.current = false;
       playerRef.current?.resume();
     }
+    setSpeaking(false);
     logTurn(chunkIndexRef.current === 0 ? "empty" : "spoke");
   }, [logTurn]);
 
@@ -291,7 +296,9 @@ export function useVoiceCall({
         })
         .finally(() => {
           pendingSpeaksRef.current -= 1;
-          if (utteranceRef.current === utteranceId) finishUtteranceIfDrained();
+          if (utteranceRef.current !== utteranceId) return;
+          if (pendingSpeaksRef.current === 0 && !playerRef.current?.isPlaying()) setSpeaking(false);
+          finishUtteranceIfDrained();
         });
     },
     [api, finishUtteranceIfDrained, speechProfile, spokenLanguageFor]
@@ -310,8 +317,12 @@ export function useVoiceCall({
         heldChunksRef.current = [chunk];
         return;
       }
-      if (chunkIndexRef.current < MAX_SPOKEN_CHUNKS) speakChunk(chunk);
-      else cutShortRef.current = true;
+      if (replyChunksRef.current < MAX_SPOKEN_CHUNKS) {
+        replyChunksRef.current += 1;
+        speakChunk(chunk);
+      } else {
+        cutShortRef.current = true;
+      }
     },
     [speakChunk]
   );
@@ -325,6 +336,7 @@ export function useVoiceCall({
       heldChunksRef.current = null;
       chunker.reset();
       playerRef.current?.flush();
+      setSpeaking(false);
       if (!utteranceId) return;
       void api?.cancelSpeech(utteranceId);
       if (!responseDoneRef.current) callbacksRef.current.onReplyDropped();
@@ -354,8 +366,11 @@ export function useVoiceCall({
         onWriteRun: (toolName, ok) => {
           if (current()) turnRef.current?.ranWrites.push(ok ? toolName : `${toolName} (failed)`);
         },
-        onTextWithdrawn: () => {
+        onTextWithdrawn: (keptLength) => {
           if (!current()) return;
+          // The claim check reads the answer as the engine now has it, without the withdrawn text.
+          answerRef.current = answerRef.current.slice(0, keptLength);
+          if (turnRef.current) turnRef.current.answer = answerRef.current;
           heldChunksRef.current = null;
           chunker.reset();
         },
@@ -482,15 +497,20 @@ export function useVoiceCall({
       setMicMutedState(muted);
       pauseInput(muted || inputHeldRef.current);
       if (muted) {
+        // No words can follow to decide a reply paused for the user's speech.
+        releaseHold();
         await releaseMic();
         return;
       }
       if (harnessRef.current) return;
       try {
         const mic = await openMic();
-        // Muted again, or the call ended, while the device opened.
-        if (!activeRef.current || micMutedRef.current) await mic.stop().catch(() => {});
-        else micRef.current = mic;
+        // Muted again, the call ended, or a later unmute's device opened first.
+        if (!activeRef.current || micMutedRef.current || micRef.current) {
+          await mic.stop().catch(() => {});
+        } else {
+          micRef.current = mic;
+        }
       } catch (error) {
         logger.warn(
           "Voice call mic reopen failed",
@@ -500,7 +520,7 @@ export function useVoiceCall({
         endOnItsOwn("mic-lost");
       }
     },
-    [endOnItsOwn, openMic, pauseInput, releaseMic]
+    [endOnItsOwn, openMic, pauseInput, releaseHold, releaseMic]
   );
 
   /** A card asks for a secret: what the user says meanwhile is never transcribed. */
@@ -508,9 +528,11 @@ export function useVoiceCall({
     (held: boolean) => {
       if (inputHeldRef.current === held) return;
       inputHeldRef.current = held;
-      if (activeRef.current) pauseInput(held || micMutedRef.current);
+      if (!activeRef.current) return;
+      if (held) releaseHold();
+      pauseInput(held || micMutedRef.current);
     },
-    [pauseInput]
+    [pauseInput, releaseHold]
   );
 
   /** Stops only the reply being spoken; the call keeps listening. */
@@ -537,6 +559,8 @@ export function useVoiceCall({
   const handleEvent = useCallback(
     (event: VoiceConversationEvent) => {
       if (!activeRef.current) return;
+      // A late event of an earlier session (End, then Call again) is not this call's.
+      if ("sessionId" in event && event.sessionId !== sessionIdRef.current) return;
       if (event.type !== "error") lastActivityRef.current = Date.now();
       if (event.type === "speech-start") {
         if (utteranceRef.current && !heldForSpeechRef.current) {
@@ -550,7 +574,8 @@ export function useVoiceCall({
           releaseHold();
           return;
         }
-        if (callbacksRef.current.answersCard(event.text)) {
+        // The harness's scripted lines are separate requests, never answers to a card.
+        if (!harnessRef.current && callbacksRef.current.answersCard(event.text)) {
           // The question needn't be heard out; its turn goes on speaking as it resumes.
           heldForSpeechRef.current = false;
           playerRef.current?.flush();
@@ -576,6 +601,7 @@ export function useVoiceCall({
         profileRef.current = null;
         responseDoneRef.current = false;
         chunkIndexRef.current = 0;
+        replyChunksRef.current = 0;
         cutShortRef.current = false;
         answerRef.current = "";
         heldChunksRef.current = null;
@@ -601,6 +627,7 @@ export function useVoiceCall({
           speech: createTurnSpeech(utteranceId),
           replyLanguage: voiceCallLanguage === "auto" ? null : voiceCallLanguage,
           dryRunWrites: harnessRef.current,
+          isCurrent: () => utteranceRef.current === utteranceId,
         });
       } else if (event.type === "tts-audio") {
         if (event.utteranceId !== utteranceRef.current) return;
@@ -713,7 +740,8 @@ export function useVoiceCall({
             if (!heldForSpeechRef.current) setSpeaking(true);
           },
           onIdle: () => {
-            setSpeaking(false);
+            // A gap while the next chunk synthesizes is still the reply speaking.
+            if (pendingSpeaksRef.current === 0) setSpeaking(false);
             finishUtteranceIfDrained();
           },
         });
@@ -789,6 +817,17 @@ export function useVoiceCall({
               ?.setLanguage(sessionId, {
                 language: settings.voiceCallLanguage,
                 ...recognizerPreferences(getSettings()),
+              })
+              .then((switched) => {
+                // No downloaded model hears it after all: the call stays in the language it hears.
+                if (switched === false && activeRef.current) {
+                  logger.warn(
+                    "Voice call language not switched",
+                    { language: settings.voiceCallLanguage },
+                    "voice-call"
+                  );
+                  useSettingsStore.getState().setVoiceCallLanguage(previous.voiceCallLanguage);
+                }
               })
               .catch(() => {});
           }

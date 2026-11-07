@@ -519,7 +519,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => () => callback()
   ),
 
-  // Local Parakeet (NVIDIA) functions
   // Voice calls on the agent window: a hands-free listen → answer → speak session.
   voiceConversation: {
     start: (options) => ipcRenderer.invoke("voice-conversation:start", options),
@@ -555,6 +554,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ),
   },
 
+  // Local Parakeet (NVIDIA) functions
   transcribeLocalParakeet: (audioBlob, options) =>
     ipcRenderer.invoke("transcribe-local-parakeet", audioBlob, options),
   checkParakeetInstallation: () => ipcRenderer.invoke("check-parakeet-installation"),

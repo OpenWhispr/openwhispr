@@ -57,10 +57,12 @@ export type VoiceConversationReadiness =
       missingBytes?: number;
     };
 
+// `sessionId` marks what one session heard, so a later session can ignore it.
 export type VoiceConversationEvent =
-  | { type: "speech-start"; at: number }
+  | { type: "speech-start"; sessionId: number; at: number }
   | {
       type: "transcript";
+      sessionId: number;
       text: string;
       speechMs: number;
       sttMs: number;
@@ -74,5 +76,6 @@ export type VoiceConversationEvent =
       samples: Float32Array;
       at: number;
     }
-  | { type: "error"; stage: "stt" | "worker"; message: string }
+  | { type: "error"; stage: "stt"; sessionId: number; message: string }
+  | { type: "error"; stage: "worker"; message: string }
   | { type: "ended"; reason: "meeting" };

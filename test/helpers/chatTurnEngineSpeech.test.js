@@ -38,7 +38,7 @@ function speechLog() {
   const events = [];
   const speech = {
     onText: (delta, isUnbacked) => events.push(["text", delta, typeof isUnbacked]),
-    onTextWithdrawn: () => events.push(["withdrawn"]),
+    onTextWithdrawn: (keptLength) => events.push(["withdrawn", keptLength]),
     onToolCalls: (names) => events.push(["tools", names]),
     onEnd: (outcome) => events.push(["end", outcome]),
   };
@@ -106,7 +106,7 @@ test("an answer the claim check asks again is withdrawn from speech before the n
 
   assert.deepEqual(events, [
     ["text", "I've sent it.", "function"],
-    ["withdrawn"],
+    ["withdrawn", 0],
     ["text", "I haven't sent it yet.", "function"],
     ["end", "complete"],
   ]);
@@ -139,7 +139,7 @@ test("a stopped spoken request ends as stopped, and a failed one says why", asyn
   const failed = speechLog();
   await fixture.engine.send("hello", [], { voice: failed.voice });
   const [, withdrawn, said, end] = failed.events;
-  assert.deepEqual(withdrawn, ["withdrawn"]);
+  assert.deepEqual(withdrawn, ["withdrawn", 0]);
   assert.equal(said[0], "text");
   assert.ok(said[1].length > 0, "the failure is spoken");
   assert.deepEqual(end, ["end", "error"]);

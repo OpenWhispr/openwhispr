@@ -327,8 +327,11 @@ export interface TurnSpeechObserver {
    * it flags may be withdrawn, so it isn't spoken until the turn shows it stands.
    */
   onText: (delta: string, isUnbacked?: (text: string) => boolean) => void;
-  /** The text since the last tool step was withdrawn (an unbacked claim asked again). */
-  onTextWithdrawn: () => void;
+  /**
+   * Text was withdrawn (an unbacked claim asked again, or a failure replacing
+   * the reply): the reply now keeps only its first `keptLength` characters.
+   */
+  onTextWithdrawn: (keptLength: number) => void;
   /** The model called these tools. */
   onToolCalls: (toolNames: string[]) => void;
   /** The tools this turn offers, once (the voice harness scores against them). */
@@ -1268,7 +1271,7 @@ export function createChatTurnEngine(
         askedAgainFrom = null;
         if (speech && heardLength > fullContent.length) {
           heardLength = fullContent.length;
-          speech.onTextWithdrawn();
+          speech.onTextWithdrawn(heardLength);
         }
       };
       const keepAskedReply = (): void => {
@@ -1606,7 +1609,7 @@ export function createChatTurnEngine(
           settleStoppedTurn(true);
           turn = { ...turn, status: "error" };
           if (speech) {
-            speech.onTextWithdrawn();
+            speech.onTextWithdrawn(0);
             speech.onText(failure.description);
             speechOutcome = "error";
           }
