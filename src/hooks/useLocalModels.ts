@@ -1,3 +1,4 @@
+import { useRegistryVersion } from "./useRegistryVersion";
 import { useState, useEffect, useCallback } from "react";
 import { ModelDefinition } from "../models/ModelRegistry";
 import "../types/electron";
@@ -16,6 +17,7 @@ interface LLMDownloadProgressEvent {
 }
 
 export function useLocalModels() {
+  const registryVersion = useRegistryVersion();
   const [models, setModels] = useState<ModelWithStatus[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +49,7 @@ export function useLocalModels() {
     return () => {
       disposeProgress?.();
     };
-  }, [loadModels]);
+  }, [loadModels, registryVersion]);
 
   const downloadModel = useCallback(
     async (modelId: string) => {

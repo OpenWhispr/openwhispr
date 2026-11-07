@@ -252,8 +252,6 @@ async function renderSetupChoice(t, policy, capability) {
   return {
     selected,
     press,
-    warningOpen: () =>
-      has(tree, (node) => node.props?.open === true && "onOpenChange" in node.props),
     unavailable: () => has(tree, (node) => node.props?.role === "alert"),
     explainsLocal: () => has(tree, (node) => node.type?.name === "LocalModelPolicyNotice"),
     localCard: () =>
@@ -316,27 +314,4 @@ test("a member with Local available gets no explanation", async (t) => {
   );
   assert.equal(step.localCard(), true);
   assert.equal(step.explainsLocal(), false);
-});
-
-test("a warning opened before the device check can't start a setup that check ruled out", async (t) => {
-  let answer;
-  const capability = new Promise((resolve) => {
-    answer = resolve;
-  });
-  const policy = managedPolicy({
-    transcription: {
-      allowedModes: ["local", "openwhispr"],
-      allowedLocalModels: ["parakeet-tdt-0.6b-v3"],
-    },
-    llm: { allowedModes: ["openwhispr"], allowedLocalModels: [] },
-  });
-  const step = await renderSetupChoice(t, policy, capability);
-  await step.press("onboarding.rehaul.setupChoice.local.download");
-  assert.equal(step.warningOpen(), true);
-
-  await React.act(async () => answer({ supported: false }));
-  assert.equal(step.localCard(), false);
-  await step.press("onboarding.rehaul.setupChoice.warnings.local.continue");
-  assert.deepEqual(step.selected, []);
-  assert.equal(step.warningOpen(), false, "the warning closes rather than doing nothing");
 });

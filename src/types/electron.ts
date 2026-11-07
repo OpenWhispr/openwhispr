@@ -9,6 +9,7 @@ import type { EnterpriseAudioSetupContext, EnterpriseAudioTestLink } from "./ent
 import type { TechnicalErrorDetailsData } from "../components/ui/useToast";
 import type { ProviderSettingsTarget } from "../utils/describeProviderError";
 import type { RemovedTranscriptSegment } from "../utils/diarizationCompletion";
+import type { SettingsTarget } from "./agentInteractions";
 import type {
   ManagedEnterpriseConfig,
   ManagedEnterpriseRequestContext,
@@ -775,6 +776,45 @@ export interface SpaceCapabilities {
   leave: boolean;
 }
 
+// Who to ask for access to a space: its admins, as GET /api/workspaces/:id/spaces lists them.
+export interface SpaceAdminContact {
+  user_id: string;
+  name: string | null;
+  email: string;
+  image: string | null;
+}
+
+// A row of the workspace's space directory, which lists spaces the caller may not be in (yet).
+export interface WorkspaceSpace {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string | null;
+  emoji: string | null;
+  member_count: number;
+  teams: { id: string; name: string; access?: TeamRole }[];
+  // Everything below is absent from an older API.
+  is_default?: boolean;
+  is_open?: boolean;
+  admins?: SpaceAdminContact[];
+  my_role?: TeamRole | null;
+  my_direct_role?: TeamRole | null;
+  capabilities?: SpaceCapabilities | null;
+  can_join?: boolean;
+  // The caller is the only admin, so leaving or demoting themselves is refused.
+  sole_admin?: boolean;
+}
+
+export interface SpaceInvitation {
+  id: string;
+  email: string;
+  role: TeamRole;
+  /** The role accepting gives across the workspace. An older API leaves it out. */
+  workspace_role?: TeamRole;
+  expires_at: string;
+  created_at: string;
+}
+
 export interface Workspace {
   id: string;
   name: string;
@@ -824,7 +864,13 @@ export type InvitationBatchStatus =
   "invited" | "invalid_email" | "already_member" | "already_invited" | "directory_required";
 
 export interface InvitationBatchResult {
-  results: Array<{ email: string; status: InvitationBatchStatus; email_sent?: boolean }>;
+  results: Array<{
+    email: string;
+    status: InvitationBatchStatus;
+    email_sent?: boolean;
+    /** With already_invited: that invitation now carries what the request named. Older APIs leave it out. */
+    grants_added?: boolean;
+  }>;
 }
 
 export interface MemberTeamRef {
@@ -1203,7 +1249,7 @@ export interface AppVersionResult {
 }
 
 export interface WhisperDownloadProgressData {
-  type: "progress" | "installing" | "complete" | "error";
+  type: "progress" | "verifying" | "installing" | "complete" | "error";
   model: string;
   percentage?: number;
   downloaded_bytes?: number;
@@ -1217,7 +1263,7 @@ export interface WhisperDownloadProgressData {
 export interface LocalModelDownloadStatus {
   modelType: "whisper" | "parakeet" | "llm";
   modelId: string;
-  phase: "downloading" | "installing";
+  phase: "downloading" | "verifying" | "installing";
   progress: number;
   downloadedBytes: number;
   totalBytes: number;
@@ -1266,7 +1312,7 @@ export interface ParakeetModelsListResult {
 }
 
 export interface ParakeetDownloadProgressData {
-  type: "progress" | "installing" | "complete" | "error";
+  type: "progress" | "verifying" | "installing" | "complete" | "error";
   model: string;
   percentage?: number;
   downloaded_bytes?: number;
@@ -1328,6 +1374,30 @@ export interface VulkanGpuResult {
   deviceName?: string;
   reason?: string;
   error?: string;
+}
+
+export interface ComputerProfile {
+  platform: "darwin" | "win32" | "linux";
+  arch: string; // process.arch
+  name: string | null; // "MacBook Pro", "Dell XPS 13 9310"; null = use the generic name
+  formFactor: "laptop" | "desktop";
+  processorName: string; // "Apple M5 Pro", "Intel Core i5-1235U"
+  appleChip: { generation: number; tier: "" | "Pro" | "Max" | "Ultra" } | null;
+  memoryGb: number; // installed GB: a Mac's own figure, Windows' modules, else snapped from usable; 0 = unread
+  graphicsName: string | null; // null on Apple chips (UI shows "Built into chip")
+  nvidia: { name: string; vramMb: number | null } | null;
+  parakeetSupported: boolean; // getParakeetCapability().supported (macOS 15.5 rule)
+  systemLanguages: string[]; // preferred system languages, as tags, e.g. ["pt-BR", "en-US"]
+}
+
+/** What onboarding's local setup downloads: a speech model, a text model or the graphics pack. */
+export type LocalSetupDownloadKind = "whisper" | "parakeet" | "llm" | "llamaVulkan";
+
+/** Free space where local models download, and the room each download kind reserves. */
+export interface LocalSetupSpace {
+  availableBytes: number;
+  /** The room each kind reserves while it downloads and unpacks (main's disk checks). */
+  factors: Record<LocalSetupDownloadKind, number>;
 }
 
 export interface LlamaVulkanStatus {
@@ -1395,10 +1465,45 @@ export interface ConversationPreview {
   message_count: number;
   last_message?: string | null;
   last_message_role?: "user" | "assistant" | "system" | null;
+  /** Set on a fork once the chat it was copied from is on this device. */
+  parent_conversation_id?: number | null;
   /** The note the chat was started from, joined in by the Chat list queries. */
   note_id?: number | null;
   note_title?: string | null;
   note_deleted_at?: string | null;
+}
+
+export interface AgentMessageRow {
+  id: number;
+  conversation_id: number;
+  role: "user" | "assistant" | "system";
+  content: string;
+  metadata?: string;
+  created_at: string;
+}
+
+export interface AgentConversationWithMessages {
+  id: number;
+  title: string;
+  note_id?: number | null;
+  /** Main's live ownership claim; never stored or uploaded. */
+  has_active_turn?: boolean;
+  archived_at?: string;
+  cloud_id?: string | null;
+  client_conversation_id?: string | null;
+  cloud_create_attempted?: number;
+  created_at: string;
+  updated_at: string;
+  parent_conversation_id?: number | null;
+  /** The parent's client id, which every device shares. */
+  parent_client_conversation_id?: string | null;
+  /** Text the fork was made from, sent as context with its next request. */
+  fork_context?: string | null;
+  /** The parent's title, while the parent still exists. */
+  parent_title?: string | null;
+  /** How many of a fork's first messages it copied from its parent. */
+  fork_message_count?: number | null;
+  messages: AgentMessageRow[];
 }
 
 export interface ConversationCreateSnapshot {
@@ -1434,6 +1539,24 @@ export interface OnboardingDemoEvent {
   level?: number;
 }
 
+/**
+ * What the agent window shows: the pill, the composer above it, the modal, or
+ * (standalone) a card the turn waits on, above the compact pill.
+ */
+export type AgentWindowLayout = "pill" | "typing" | "standalone" | "modal";
+
+/** The agent window's voice take, which keeps dictation off the microphone while recording. */
+export type AgentVoiceState = "idle" | "recording" | "transcribing";
+
+/** A conversational wake-word command, sent from the dictation window to the agent window. */
+export interface AgentWindowCommand {
+  text: string;
+  /** Base64 screenshot without a data-URL prefix. */
+  attachment: { image: string; mediaType: string } | null;
+  /** Text selected in another app when the command was spoken. */
+  selectedContext: { text: string; source: "external" } | null;
+}
+
 export interface ReferralItem {
   id: string;
   email: string;
@@ -1445,9 +1568,12 @@ export interface ReferralItem {
 
 declare global {
   interface Window {
+    commitHeldSpaceDeletes?: () => Promise<void>;
     electronAPI: {
       // Basic window operations
-      setOnboardingWindowMode?: (mode: "compact" | "expanded" | "restore") => Promise<boolean>;
+      setOnboardingWindowMode?: (
+        mode: "compact" | "expanded" | "local-setup" | "restore"
+      ) => Promise<boolean>;
       setOnboardingActive?: (active: boolean) => Promise<boolean>;
       openPermissionGuide?: (state: PermissionGuideState) => Promise<boolean>;
       closePermissionGuide?: () => Promise<boolean>;
@@ -1458,6 +1584,35 @@ declare global {
       ) => void;
       onPermissionGuideState?: (callback: (state: PermissionGuideState) => void) => () => void;
       onPermissionGuideAction?: (callback: (action: PermissionGuideAction) => void) => () => void;
+      agentWindowReady?: () => void;
+      /** Bounds for a layout, and keyboard focus for typing in it. */
+      agentWindowSetLayout?: (request: {
+        layout: AgentWindowLayout;
+        focus: boolean;
+        /** standalone only: the card's measured height. */
+        contentHeight?: number;
+        /** pill only: the wider pill that reads "Waiting for answer". */
+        wide?: boolean;
+      }) => Promise<boolean>;
+      agentWindowHide?: () => Promise<boolean>;
+      agentWindowSetDragging?: (dragging: boolean) => void;
+      /** False refuses a recording while dictation is using the microphone. */
+      agentWindowSetVoiceState?: (state: AgentVoiceState, attempt: string) => Promise<boolean>;
+      openAgentWindow?: () => Promise<boolean>;
+      submitAgentCommand?: (command: AgentWindowCommand) => Promise<boolean>;
+      /** `external`: the press came from another app, whose selection may be captured. */
+      onAgentWindowHotkey?: (callback: (payload: { external: boolean }) => void) => () => void;
+      onAgentWindowOpen?: (
+        callback: (payload: { layout: AgentWindowLayout }) => void
+      ) => () => void;
+      onAgentWindowCommand?: (callback: (command: AgentWindowCommand) => void) => () => void;
+      onAgentWindowDismiss?: (callback: () => void) => () => void;
+      /** The dictation window's view of the agent's microphone: no dictation starts while it records. */
+      onAgentRecordingChanged?: (callback: (recording: boolean) => void) => () => void;
+      /** A global Esc for the window that registered it, while it records. */
+      registerCancelHotkey?: (key: string) => Promise<unknown>;
+      unregisterCancelHotkey?: () => Promise<{ success: boolean }>;
+      onCancelHotkeyPressed?: (callback: () => void) => () => void;
       verifySystemAudioAccess?: () => Promise<SystemAudioAccessResult>;
       beginOnboardingDemo?: (session: { id: string; kind: OnboardingDemoKind }) => Promise<boolean>;
       endOnboardingDemo?: (id: string) => Promise<boolean>;
@@ -1490,8 +1645,6 @@ declare global {
           allowClipboardFallback?: boolean;
           /** Paste exactly this text: no smart spacing, no AutoLearn. */
           raw?: boolean;
-          /** Paste only into the app the assistant panel's voice command was spoken over. */
-          assistantTarget?: boolean;
         }
       ) => Promise<
         | {
@@ -1506,21 +1659,13 @@ declare global {
             code: "ACCESSIBILITY_PERMISSION_REQUIRED";
             clipboardCopied: true;
           }
-        /** assistantTarget: no app to paste into, so nothing was pasted or copied. */
-        | { success: false; pasted: false; reason: "no-target" }
       >;
-      captureSelectedText?: (options?: { probeEditable?: boolean }) => Promise<
+      captureSelectedText?: () => Promise<
         | {
             status: "selected";
             sessionId: string;
             text: string;
             characterCount: number;
-          }
-        | {
-            status: "editable";
-            sessionId: string;
-            /** True when the captured app keeps markdown (spec Appendix A); false means plain text. */
-            acceptsMarkdown: boolean;
           }
         | {
             status: "none" | "unavailable" | "target_changed" | "too_large";
@@ -1529,6 +1674,7 @@ declare global {
             maxCharacters?: number;
           }
       >;
+      cancelSelectionEdit?: (sessionId: string) => Promise<void>;
       replaceSelectedText?: (
         sessionId: string,
         text: string,
@@ -1538,6 +1684,7 @@ declare global {
         code?:
           | "invalid_replacement"
           | "session_expired"
+          | "cancelled"
           | "target_changed"
           | "selection_unavailable"
           | "selection_changed"
@@ -1548,75 +1695,29 @@ declare global {
           | "selection_manager_unavailable";
         error?: string;
       }>;
-      pasteAtCapturedTarget?: (
-        sessionId: string,
-        text: string,
-        options?: { restoreClipboard?: boolean; allowClipboardFallback?: boolean }
-      ) => Promise<{
-        success: boolean;
-        code?:
-          | "invalid_replacement"
-          | "session_expired"
-          | "target_changed"
-          | "paste_failed"
-          | "modifiers_held"
-          | "wl_copy_missing"
-          | "wl_copy_failed"
-          | "selection_manager_unavailable";
-        error?: string;
-      }>;
       hideWindow: () => Promise<void>;
       showDictationPanel: () => Promise<void>;
       openSettingsSection?: (
-        section: ProviderSettingsTarget | "plansBilling"
+        section: SettingsTarget | ProviderSettingsTarget | "plansBilling"
       ) => Promise<{ success: boolean }>;
       captureDictationTarget?: () => Promise<{ success: boolean; pid: number | null }>;
       captureDictationAppCategory?: () => Promise<ToneAppCategory>;
       onToggleDictation: (callback: () => void) => () => void;
       onToggleVoiceAgent?: (callback: () => void) => () => void;
       onToggleTranslation?: (callback: () => void) => () => void;
-      onOpenAssistantPanel?: (callback: () => void) => () => void;
       onMeetingStartRefused?: (callback: (code: string) => void) => () => void;
       onStartDictation?: (callback: () => void) => () => void;
       onStopDictation?: (callback: () => void) => () => void;
-      onPrepareDictation?: (
-        callback: (options?: { inputKind?: "dictation" | "assistant" | "translation" }) => void
-      ) => () => void;
+      onPrepareDictation?: (callback: () => void) => () => void;
       onCancelDictationPreparation?: (callback: () => void) => () => void;
-      onCancelDictation?: (callback: () => void) => () => void;
       onDictationForceStopped?: (
         callback: (payload?: { reason?: "timeout" | "reset" | "manual" }) => void
       ) => () => void;
       micWarmHoldChanged?: (active: boolean) => void;
       dictationLifecycleStateChanged: (
         state: "idle" | "preparing" | "recording" | "processing",
-        inputKind?: "dictation" | "assistant" | "translation"
-      ) => void;
-      dictationAudioLevelChanged?: (level: number) => void;
-      toggleAgentPanelDictation?: () => Promise<{ success: boolean }>;
-      cancelAgentPanelDictation?: () => Promise<{ success: boolean }>;
-      getAgentDictationPillState?: () => Promise<{
-        lifecycle: "idle" | "preparing" | "recording" | "processing";
-        interactive: boolean;
-        horizontalDirection: "left" | "right";
-      }>;
-      resizeAgentDictationPillToContent?: (surfaceHeight: number | null) => Promise<{
-        success: boolean;
-        changed?: boolean;
-        bounds?: { x: number; y: number; width: number; height: number };
-        message?: string;
-      }>;
-      setAgentDictationPillInteractivity?: (interactive: boolean) => Promise<{ success: boolean }>;
-      onAgentDictationPillStateChanged?: (
-        callback: (state: {
-          lifecycle: "idle" | "preparing" | "recording" | "processing";
-          interactive: boolean;
-          horizontalDirection: "left" | "right";
-        }) => void
-      ) => () => void;
-      onAgentDictationPillAudioLevelChanged?: (callback: (level: number) => void) => () => void;
-      showAgentDictationFinalTranscript?: (text: string) => void;
-      onAgentDictationPillFinalTranscript?: (callback: (text: string) => void) => () => void;
+        attempt: string
+      ) => Promise<boolean>;
 
       // STT config
       getSttConfig?: () => Promise<
@@ -2293,6 +2394,8 @@ declare global {
         code?: string;
         details?: string;
       }>;
+      listRetiredLocalModels?: (inUse: string[]) => Promise<Array<{ id: string; name: string }>>;
+      deleteRetiredLocalModels?: (inUse: string[]) => Promise<{ success: boolean }>;
       modelDelete: (modelId: string) => Promise<{
         success: boolean;
         error?: string;
@@ -2406,6 +2509,8 @@ declare global {
       llamaServerStatus: () => Promise<LlamaServerStatus>;
       llamaGpuReset: () => Promise<{ success: boolean; error?: string }>;
       detectVulkanGpu?: () => Promise<VulkanGpuResult>;
+      getComputerProfile: () => Promise<ComputerProfile>;
+      getLocalSetupSpace: () => Promise<LocalSetupSpace>;
       getLlamaVulkanStatus?: () => Promise<LlamaVulkanStatus>;
       downloadLlamaVulkanBinary?: () => Promise<{
         success: boolean;
@@ -2447,7 +2552,6 @@ declare global {
           | "WITH_MENU"
           | "WITH_TOAST"
           | "EXPANDED"
-          | "ASSISTANT"
       ) => Promise<{
         success: boolean;
         bounds?: Electron.Rectangle;
@@ -2463,10 +2567,6 @@ declare global {
       resizeDictationErrorWindowToContent: (
         surfaceHeight: number
       ) => Promise<{ success: boolean; bounds?: Electron.Rectangle; message?: string }>;
-      setAssistantPanelOpen: (open: boolean) => Promise<{ success: boolean }>;
-      /** Adopt the app the panel's voice command was spoken over, or forget it; true if usable. */
-      assistantPasteTarget?: (action: "adopt" | "forget") => Promise<boolean>;
-      setAssistantPanelBusy: (busy: boolean) => Promise<{ success: boolean }>;
 
       // App management
       cleanupApp: () => Promise<{ success: boolean; message: string; errors?: string[] }>;
@@ -2476,6 +2576,11 @@ declare global {
       checkForUpdates: () => Promise<UpdateCheckResult>;
       downloadUpdate: () => Promise<UpdateResult>;
       installUpdate: () => Promise<UpdateResult>;
+      initialModelRegistrySnapshot: import("../models/registryData").RegistrySnapshot;
+      getModelRegistry: () => Promise<import("../models/registryData").RegistrySnapshot>;
+      onModelRegistryUpdated: (
+        callback: (snapshot: import("../models/registryData").RegistrySnapshot) => void
+      ) => () => void;
       getAppVersion: () => Promise<AppVersionResult>;
       getPostMigrationState: () => Promise<{ justMigrated: boolean }>;
       getOAuthProtocolRegistered: () => Promise<boolean>;
@@ -2789,6 +2894,8 @@ declare global {
         error?: string;
       }>;
       openLogsFolder: () => Promise<{ success: boolean; error?: string }>;
+      getModelRegistryUpdates: () => Promise<boolean>;
+      setModelRegistryUpdates: (enabled: boolean) => Promise<{ success: boolean; error?: string }>;
 
       // FFmpeg availability
       checkFFmpegAvailability: () => Promise<FFmpegAvailabilityResult>;
@@ -2797,7 +2904,7 @@ declare global {
       // System settings helpers
       requestMicrophoneAccess?: () => Promise<{ granted: boolean }>;
       checkMicrophoneAccess?: () => Promise<{ granted: boolean; status: string }>;
-      getSystemDefaultMicrophone?: (options?: { refresh?: boolean }) => Promise<{
+      getSystemDefaultMicrophone?: (options?: { refresh?: boolean; wait?: boolean }) => Promise<{
         name: string;
         nativeId?: string;
         platform: string;
@@ -3200,24 +3307,18 @@ declare global {
           updated_at: string;
         }>
       >;
-      getAgentConversation?: (id: number) => Promise<{
-        id: number;
-        title: string;
-        note_id?: number | null;
-        archived_at?: string;
-        cloud_id?: string | null;
-        client_conversation_id?: string | null;
-        created_at: string;
-        updated_at: string;
-        messages: Array<{
-          id: number;
-          conversation_id: number;
-          role: "user" | "assistant" | "system";
-          content: string;
-          metadata?: string;
-          created_at: string;
-        }>;
-      } | null>;
+      claimAgentConversation?: (
+        id: number,
+        ownerId: string
+      ) => Promise<{
+        owned: boolean;
+        conversation: AgentConversationWithMessages | null;
+      }>;
+      releaseAgentConversation?: (id: number, ownerId: string) => Promise<void>;
+      onAgentConversationReleased?: (
+        callback: (event: { conversationId: number }) => void
+      ) => () => void;
+      getAgentConversation?: (id: number) => Promise<AgentConversationWithMessages | null>;
       deleteAgentConversation?: (id: number) => Promise<{ success: boolean }>;
       updateAgentConversationTitle?: (id: number, title: string) => Promise<{ success: boolean }>;
       addAgentMessage?: (
@@ -3225,24 +3326,19 @@ declare global {
         role: "user" | "assistant" | "system",
         content: string,
         metadata?: Record<string, unknown>
-      ) => Promise<{
-        id: number;
-        conversation_id: number;
-        role: string;
-        content: string;
-        metadata?: string;
-        created_at: string;
-      } | null>;
-      getAgentMessages?: (conversationId: number) => Promise<
-        Array<{
-          id: number;
-          conversation_id: number;
-          role: "user" | "assistant" | "system";
-          content: string;
-          metadata?: string;
-          created_at: string;
-        }>
-      >;
+      ) => Promise<AgentMessageRow | null>;
+      updateAgentMessage?: (
+        id: number,
+        content: string,
+        metadata?: Record<string, unknown>
+      ) => Promise<AgentMessageRow | null>;
+      /** Null when the conversation is gone or the message isn't in it. */
+      forkAgentConversation?: (
+        conversationId: number,
+        throughMessageId: number,
+        forkContext?: string | null
+      ) => Promise<AgentConversationWithMessages | null>;
+      getAgentMessages?: (conversationId: number) => Promise<AgentMessageRow[]>;
       getAgentConversationsWithPreview?: (
         limit?: number,
         offset?: number,
@@ -3403,7 +3499,10 @@ declare global {
       >;
 
       // Google Calendar
-      gcalStartOAuth?: () => Promise<{ success: boolean; email?: string; error?: string }>;
+      gcalStartOAuth?: (
+        requestId?: string
+      ) => Promise<{ success: boolean; email?: string; error?: string }>;
+      calendarCancelConnect?: (requestId: string) => Promise<boolean>;
       gcalDisconnect?: (email?: string) => Promise<{ success: boolean; error?: string }>;
       gcalGetConnectionStatus?: () => Promise<{
         connected: boolean;
@@ -3418,7 +3517,8 @@ declare global {
       gcalSetPrimaryOnly?: (value: boolean) => Promise<{ success: boolean; error?: string }>;
       gcalSyncEvents?: () => Promise<{ success: boolean; error?: string }>;
       gcalGetUpcomingEvents?: (
-        windowMinutes?: number
+        windowMinutes?: number,
+        options?: { includeAllDay?: boolean }
       ) => Promise<{ success: boolean; events: any[] }>;
       connectorStatus?: () => Promise<ConnectorStatus[]>;
       connectorPrepare?: (
@@ -3729,7 +3829,7 @@ declare global {
       onGcalEventsSynced?: (callback: (data: any) => void) => () => void;
 
       // Microsoft Calendar
-      mcalStartOAuth?: () => Promise<{
+      mcalStartOAuth?: (requestId?: string) => Promise<{
         success: boolean;
         email?: string;
         tenantId?: string | null;
@@ -3745,7 +3845,9 @@ declare global {
       onMcalEventsSynced?: (callback: (data: any) => void) => () => void;
 
       // Apple Calendar (macOS EventKit)
-      acalConnect?: () => Promise<{ success: boolean; reason?: string; error?: string }>;
+      acalConnect?: (
+        requestId?: string
+      ) => Promise<{ success: boolean; reason?: string; error?: string }>;
       acalDisconnect?: () => Promise<{ success: boolean; error?: string }>;
       acalGetConnectionStatus?: () => Promise<{ connected: boolean; sourceNames: string[] }>;
       openCalendarPrivacySettings?: () => Promise<{ success: boolean; error?: string }>;
@@ -3971,7 +4073,8 @@ declare global {
       getConversationByClientId?: (clientId: string) => Promise<ConversationPreview | null>;
       upsertConversationFromCloud?: (
         cloudConv: Record<string, unknown>,
-        messages: Array<Record<string, unknown>>
+        messages: Array<Record<string, unknown>>,
+        snapshot: ConversationPreview | null
       ) => Promise<void>;
       markConversationCreateAttempted?: (id: number) => Promise<{ success: boolean }>;
       acknowledgeConversationCreate?: (
@@ -3981,8 +4084,14 @@ declare global {
       ) => Promise<ConversationCreateAckResult | undefined>;
       markConversationSynced?: (
         id: number,
-        cloudId: string
+        cloudId: string,
+        snapshot?: ConversationCreateSnapshot,
+        cloudUpdatedAt?: string
       ) => Promise<{ success: boolean } | undefined>;
+      replaceConversationClientId?: (
+        id: number,
+        expectedClientId: string | null
+      ) => Promise<{ success: boolean }>;
       hardDeleteConversation?: (id: number) => Promise<void>;
 
       getPendingTranscriptions?: () => Promise<TranscriptionItem[]>;

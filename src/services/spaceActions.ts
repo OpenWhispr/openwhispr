@@ -1,7 +1,14 @@
 import { TeamsService } from "./TeamsService";
 import { SpacesService } from "./SpacesService";
-import { markSpacePurged, syncService, upsertCloudSpaces } from "./SyncService";
-import { loadSpaces, purgeSpace, updateSpaceMeta } from "../stores/noteStore";
+import { markSpacePurged, releasePurgedSpace, syncService, upsertCloudSpaces } from "./SyncService";
+import {
+  getAccountGeneration,
+  hideSpaceInView,
+  loadSpaces,
+  purgeSpace,
+  updateSpaceMeta,
+} from "../stores/noteStore";
+import { holdSpace, markHeldSpaceDeleted, releaseSpace } from "../lib/heldSpaceDeletes";
 import { invalidateSpaceRoster } from "../lib/spaceRosterCache";
 import { createSpaceActions } from "./spaceActionsCore";
 
@@ -21,27 +28,51 @@ const actions = createSpaceActions({
     updateSpaceMeta,
     purgeSpace,
     loadSpaces,
+    getSpaces: async () => (await window.electronAPI.getSpaces?.()) ?? [],
   },
   mirror: { upsertCloudSpaces },
   sync: syncService,
   markSpacePurged,
+  releasePurgedSpace,
   invalidateSpaceRoster,
+  deleteHold: {
+    accountGeneration: getAccountGeneration,
+    hide: (space, cloudSpaceId) => {
+      holdSpace(space.id, cloudSpaceId);
+      return hideSpaceInView(space.id);
+    },
+    release: (space, cloudSpaceId) => releaseSpace(space.id, cloudSpaceId),
+    markDeleted: (space) => markHeldSpaceDeleted(space.id),
+  },
 });
 
 export const {
   createSpace,
   renameSpace,
   deleteSpace,
+  holdSpaceDelete,
+  commitHeldDeletes,
   assignTeamToSpace,
   setSpaceTeamAccess,
   unassignTeamFromSpace,
-  addSpaceMembers,
+  joinSpace,
+  addPeopleToSpace,
+  setSpaceAccessFlags,
+  localSpaceIdFor,
   setSpaceMemberRole,
   removeSpaceMember,
   leaveSpace,
+  requestSpacesResync,
   addTeamMembers,
   removeTeamMember,
   setTeamMemberRole,
   leaveTeam,
   deleteTeam,
 } = actions;
+
+// Never return a value from this listener: Electron treats one as refusing the unload.
+window.addEventListener("beforeunload", () => {
+  void commitHeldDeletes();
+});
+// Main calls this at quit: its before-quit ends in app.exit, which skips beforeunload.
+window.commitHeldSpaceDeletes = commitHeldDeletes;

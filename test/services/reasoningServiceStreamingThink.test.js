@@ -555,6 +555,7 @@ test("tool-loop filtering resets after an unterminated reasoning block", async (
 });
 
 test("tool-enabled streaming does not flush buffered text after abort", async (t) => {
+  const streamOwner = new AbortController();
   const { reasoningService } = await loadReasoningService(
     t,
     "openwhispr-abort-streaming-think-test-"
@@ -594,16 +595,18 @@ test("tool-enabled streaming does not flush buffered text after abort", async (t
       lanUrl: "http://127.0.0.1:11434/v1",
       disableThinking: true,
     },
-    {}
+    {},
+    streamOwner.signal
   );
 
   const first = await stream.next();
   assert.deepEqual(first.value, { type: "content", text: "Answer" });
-  reasoningService.cancelActiveStream();
+  streamOwner.abort();
   assert.equal(await collectAgentText(stream), "");
 });
 
 test("cancelling during local model setup stops before streaming begins", async (t) => {
+  const streamOwner = new AbortController();
   let resolveServer;
   let serverStarted = false;
   const serverReady = new Promise((resolve) => {
@@ -634,23 +637,25 @@ test("cancelling during local model setup stops before streaming begins", async 
     "qwen3-4b-q4_k_m",
     "local",
     { systemPrompt: "Answer the user.", disableThinking: true },
-    {}
+    {},
+    streamOwner.signal
   );
   const first = stream.next();
   for (let i = 0; i < 50 && !serverStarted; i++) await waitForMicrotasks();
   assert.equal(serverStarted, true, "fixture setup: local model setup must be pending");
 
-  reasoningService.cancelActiveStream();
+  streamOwner.abort();
   resolveServer({ success: true, port: 11434 });
 
   assert.deepEqual(await first, {
-    value: { type: "done", finishReason: "stop" },
+    value: { type: "done", finishReason: "abort" },
     done: false,
   });
   assert.equal((await stream.next()).done, true);
 });
 
 test("cancelling tool-ineligible local setup prevents raw streaming", async (t) => {
+  const streamOwner = new AbortController();
   let resolveServer;
   let serverStarted = false;
   const serverReady = new Promise((resolve) => {
@@ -685,24 +690,26 @@ test("cancelling tool-ineligible local setup prevents raw streaming", async (t) 
     "qwen3-1.7b-q4_k_m",
     "local",
     { systemPrompt: "Answer the user.", disableThinking: true },
-    undefined
+    undefined,
+    streamOwner.signal
   );
   const first = stream.next();
   for (let i = 0; i < 50 && !serverStarted; i++) await waitForMicrotasks();
   assert.equal(serverStarted, true, "fixture setup: raw model setup must be pending");
 
-  reasoningService.cancelActiveStream();
+  streamOwner.abort();
   resolveServer({ success: true, port: 11434 });
 
   const firstResult = await first;
   const chunks = firstResult.done ? [] : [firstResult.value];
   for await (const chunk of stream) chunks.push(chunk);
 
-  assert.deepEqual(chunks, [{ type: "done", finishReason: "stop" }]);
+  assert.deepEqual(chunks, [{ type: "done", finishReason: "abort" }]);
   assert.equal(fetchCalls, 0);
 });
 
 test("cancelling a raw stream after its reader starts ends normally", async (t) => {
+  const streamOwner = new AbortController();
   const { reasoningService } = await loadReasoningService(t, "openwhispr-raw-reader-cancel-test-");
   const originalFetch = globalThis.fetch;
   t.after(() => {
@@ -737,13 +744,14 @@ test("cancelling a raw stream after its reader starts ends normally", async (t) 
       lanUrl: "http://127.0.0.1:11434/v1",
       disableThinking: true,
     },
-    undefined
+    undefined,
+    streamOwner.signal
   );
   const output = collectAgentText(stream);
   for (let i = 0; i < 50 && !readerStarted; i++) await waitForMicrotasks();
   assert.equal(readerStarted, true, "fixture setup: the response reader must be pending");
 
-  reasoningService.cancelActiveStream();
+  streamOwner.abort();
 
   assert.equal(await output, "");
 });
@@ -909,10 +917,12 @@ test("non-local streaming remains unfiltered", async (t) => {
 });
 
 test("chat cancellation leaves single-shot reasoning alive until all requests are cancelled", async (t) => {
+  const streamOwner = new AbortController();
+  const bridge = createAgentStreamBridge();
   const { reasoningService } = await loadReasoningService(
     t,
     "openwhispr-non-streaming-reason-cancel-test-",
-    { window: { electronAPI: { getGroqKey: async () => "test-key" } } }
+    { window: { electronAPI: { getGroqKey: async () => "test-key", ...bridge.electronAPI } } }
   );
   const originalFetch = globalThis.fetch;
   t.after(() => {
@@ -943,7 +953,16 @@ test("chat cancellation leaves single-shot reasoning alive until all requests ar
   while (!requestStarted) await waitForMicrotasks();
   const cancelled = assert.rejects(reasoning, /cancelled/i);
 
-  reasoningService.cancelActiveStream();
+  const chatStream = reasoningService.processTextStreamingCloud(
+    [{ role: "user", content: "hi" }],
+    { systemPrompt: "Answer" },
+    streamOwner.signal
+  );
+  const chatEnded = chatStream.next();
+  while (bridge.startCalls.length === 0) await waitForMicrotasks();
+  streamOwner.abort();
+  await chatEnded;
+  assert.equal(bridge.cancelCalls.length, 1, "the chat stream itself was cancelled");
   assert.equal(requestSignal?.aborted, false);
 
   reasoningService.cancelAllRequests();
@@ -1071,17 +1090,22 @@ test("cloud agent streaming correlates events to the initiating request", async 
 });
 
 test("a cloud stream sends main only the options the API request carries", async (t) => {
+  const streamOwner = new AbortController();
   const bridge = createAgentStreamBridge();
   const { reasoningService } = await loadReasoningService(t, "openwhispr-cloud-agent-options-", {
     window: { electronAPI: bridge.electronAPI },
   });
-  const stream = reasoningService.processTextStreamingCloud([{ role: "user", content: "hello" }], {
-    systemPrompt: "Answer the user.",
-    tools: [{ name: "get_note", description: "Read a note", parameters: {} }],
-    screenContext: { data: "aGVsbG8=", mediaType: "image/jpeg" },
-    // Retired with assistant memory (openwhispr-api#243); must not reach main.
-    noteChat: true,
-  });
+  const stream = reasoningService.processTextStreamingCloud(
+    [{ role: "user", content: "hello" }],
+    {
+      systemPrompt: "Answer the user.",
+      tools: [{ name: "get_note", description: "Read a note", parameters: {} }],
+      screenContext: { data: "aGVsbG8=", mediaType: "image/jpeg" },
+      // Retired with assistant memory (openwhispr-api#243); must not reach main.
+      noteChat: true,
+    },
+    streamOwner.signal
+  );
   const pending = stream.next();
   await waitForMicrotasks();
 
@@ -1090,62 +1114,78 @@ test("a cloud stream sends main only the options the API request carries", async
     "systemPrompt",
     "tools",
   ]);
-  reasoningService.cancelActiveStream();
+  streamOwner.abort();
   await pending;
 });
 
 test("cancelling a cloud agent stream aborts main and ends the local generator", async (t) => {
+  const streamOwner = new AbortController();
   const bridge = createAgentStreamBridge();
   const { reasoningService } = await loadReasoningService(
     t,
     "openwhispr-cloud-agent-cancel-test-",
     { window: { electronAPI: bridge.electronAPI } }
   );
-  const stream = reasoningService.processTextStreamingCloud([{ role: "user", content: "hello" }], {
-    systemPrompt: "Answer the user.",
-  });
+  const stream = reasoningService.processTextStreamingCloud(
+    [{ role: "user", content: "hello" }],
+    {
+      systemPrompt: "Answer the user.",
+    },
+    streamOwner.signal
+  );
   const pending = stream.next();
   await waitForMicrotasks();
   const [requestId] = bridge.startCalls[0];
 
-  reasoningService.cancelActiveStream();
+  streamOwner.abort();
 
   assert.deepEqual(bridge.cancelCalls, [requestId]);
-  assert.equal((await pending).done, true);
+  assert.deepEqual(await pending, { value: { type: "done", finishReason: "abort" }, done: false });
+  assert.equal((await stream.next()).done, true);
   assert.deepEqual(bridge.cleanupCounts, { chunk: 1, error: 1, end: 1 });
 });
 
 test("cancelling a cloud stream before its first next prevents the request", async (t) => {
+  const streamOwner = new AbortController();
   const bridge = createAgentStreamBridge();
   const { reasoningService } = await loadReasoningService(
     t,
     "openwhispr-cloud-agent-pre-next-cancel-test-",
     { window: { electronAPI: bridge.electronAPI } }
   );
-  const stream = reasoningService.processTextStreamingCloud([{ role: "user", content: "hello" }], {
-    systemPrompt: "Answer the user.",
-  });
+  const stream = reasoningService.processTextStreamingCloud(
+    [{ role: "user", content: "hello" }],
+    {
+      systemPrompt: "Answer the user.",
+    },
+    streamOwner.signal
+  );
 
-  reasoningService.cancelActiveStream();
+  streamOwner.abort();
   const first = stream.next();
   await waitForMicrotasks();
   const startedRequests = bridge.startCalls.length;
-  if (startedRequests > 0) reasoningService.cancelActiveStream();
+  if (startedRequests > 0) streamOwner.abort();
 
   assert.equal(startedRequests, 0);
   assert.equal((await first).done, true);
 });
 
 test("cancelling a cloud agent stream drops chunks already queued locally", async (t) => {
+  const streamOwner = new AbortController();
   const bridge = createAgentStreamBridge();
   const { reasoningService } = await loadReasoningService(
     t,
     "openwhispr-cloud-agent-queued-cancel-test-",
     { window: { electronAPI: bridge.electronAPI } }
   );
-  const stream = reasoningService.processTextStreamingCloud([{ role: "user", content: "hello" }], {
-    systemPrompt: "Answer the user.",
-  });
+  const stream = reasoningService.processTextStreamingCloud(
+    [{ role: "user", content: "hello" }],
+    {
+      systemPrompt: "Answer the user.",
+    },
+    streamOwner.signal
+  );
   const first = stream.next();
   await waitForMicrotasks();
   const [requestId] = bridge.startCalls[0];
@@ -1154,14 +1194,18 @@ test("cancelling a cloud agent stream drops chunks already queued locally", asyn
   bridge.emitChunk({ requestId, chunk: { type: "content", text: "queued" } });
   assert.deepEqual(await first, { value: { type: "content", text: "first" }, done: false });
 
-  reasoningService.cancelActiveStream();
+  streamOwner.abort();
 
-  assert.equal((await stream.next()).done, true);
+  assert.deepEqual(await stream.next(), {
+    value: { type: "done", finishReason: "abort" },
+    done: false,
+  });
   bridge.emitChunk({ requestId, chunk: { type: "content", text: "late" } });
   assert.equal((await stream.next()).done, true);
 });
 
 test("cancelling during a cloud tool execution prevents results and later model steps", async (t) => {
+  const streamOwner = new AbortController();
   const bridge = createAgentStreamBridge();
   const { reasoningService } = await loadReasoningService(
     t,
@@ -1182,7 +1226,8 @@ test("cancelling during a cloud tool execution prevents results and later model 
         toolStarted = true;
         return toolResult;
       },
-    }
+    },
+    streamOwner.signal
   );
   const first = stream.next();
   await waitForMicrotasks();
@@ -1203,10 +1248,11 @@ test("cancelling during a cloud tool execution prevents results and later model 
   bridge.emitEnd({ requestId });
   while (!toolStarted) await waitForMicrotasks();
 
-  reasoningService.cancelActiveStream();
+  streamOwner.abort();
   resolveTool({ data: "created", displayText: "Created note" });
 
-  assert.equal((await pending).done, true);
+  assert.deepEqual(await pending, { value: { type: "done", finishReason: "abort" }, done: false });
+  assert.equal((await stream.next()).done, true);
   assert.equal(bridge.startCalls.length, 1);
 });
 

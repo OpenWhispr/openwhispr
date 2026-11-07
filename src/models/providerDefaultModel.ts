@@ -1,7 +1,7 @@
 /**
- * A provider's default model. Static registry lists are ordered best-first, so
- * position is the rule; a live catalog (Tinfoil) is ordered by the provider, so
- * it names its default in the registry and that name wins instead.
+ * A provider's default model. Every catalog provider names its default
+ * (`defaultModel`, required by the model registry), so list order is display
+ * order only; the first model is the fallback for lists with no named default.
  *
  * Kept import-free so the settings store can use it: ModelRegistry imports the
  * store, so the store cannot import ModelRegistry back.

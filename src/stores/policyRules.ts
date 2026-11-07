@@ -1,11 +1,14 @@
+import { pickDefaultModelId } from "../models/providerDefaultModel.ts";
 import type { InferenceMode, ShareVisibility } from "../types/electron";
 import type { OrgPolicy, PolicyScope } from "../types/policy";
 import type { SettingsState } from "./settingsStore";
 import { compareAppVersions } from "../utils/version.ts";
-// The registry JSON directly (like policyValidation.js), NOT ModelRegistry:
-// that module pulls the settings/identity stores, whose module scope needs
-// real browser globals, and this file is imported by node-run sync tests.
-import modelRegistryData from "../models/modelRegistryData.json" with { type: "json" };
+// The pure registry store keeps this policy module usable without browser globals.
+// Provider membership is code-pinned by catalog compatibility validation.
+import {
+  listRunnableLocalModels,
+  registryData as modelRegistryData,
+} from "../models/registryData.js";
 
 export type PolicyStatus = "idle" | "loading" | "managed" | "unmanaged" | "error";
 
@@ -256,19 +259,19 @@ export function isConnectorsBlockedByOrg(state: PolicyDecisionSnapshot): boolean
 }
 
 const warnedUnknownRequiredModelIds = new Set<string>();
-const KNOWN_LOCAL_MODEL_IDS: Record<PolicyScope, ReadonlySet<string>> = {
-  transcription: new Set([
-    ...Object.keys(modelRegistryData.whisperModels),
-    ...Object.keys(modelRegistryData.parakeetModels),
-  ]),
-  llm: new Set(
-    modelRegistryData.localProviders.flatMap((provider) => provider.models.map((model) => model.id))
-  ),
-};
 const warnedUnknownLocalModelIds = new Set<string>();
 
+// Read live: a catalog update can add a local model during a session. A retired one stays
+// known, since a file on disk and the work already running on it keep going
+// (getRunnableSpeechModel).
 export function isKnownLocalModelId(scope: PolicyScope, modelId: string): boolean {
-  return KNOWN_LOCAL_MODEL_IDS[scope].has(modelId);
+  const sections =
+    scope === "transcription"
+      ? (["whisperModels", "parakeetModels"] as const)
+      : (["localProviders"] as const);
+  return sections.some((section) =>
+    listRunnableLocalModels(section).some(([id]) => id === modelId)
+  );
 }
 
 export function allowedLocalModelIds(
@@ -278,7 +281,7 @@ export function allowedLocalModelIds(
   const ids = managedPolicy(state)?.[scope].allowedLocalModels;
   if (ids == null) return null;
   return ids.filter((id) => {
-    if (KNOWN_LOCAL_MODEL_IDS[scope].has(id)) return true;
+    if (isKnownLocalModelId(scope, id)) return true;
     const key = `${scope}:${id}`;
     if (!warnedUnknownLocalModelIds.has(key)) {
       warnedUnknownLocalModelIds.add(key);
@@ -834,6 +837,7 @@ export function reconcileProviderSelection<T extends { id: string; disabled?: bo
 
 interface CloudProviderOption {
   id: string;
+  defaultModel?: string;
   models?: ReadonlyArray<{ id: string }>;
 }
 
@@ -856,7 +860,7 @@ export function reconcileCloudProviderSelection({
     if (!selected.models?.length || selected.models.some((model) => model.id === selectedModel)) {
       return null;
     }
-    return { provider: selected.id, model: selected.models[0].id };
+    return { provider: selected.id, model: pickDefaultModelId(selected) };
   }
   if (hasCustomUrl && customAllowed) {
     return { provider: "custom", model: selectedModel || "whisper-1" };
@@ -865,5 +869,5 @@ export function reconcileCloudProviderSelection({
   if (!first) {
     return customAllowed ? { provider: "custom", model: selectedModel || "whisper-1" } : null;
   }
-  return { provider: first.id, model: first.models?.[0]?.id ?? "" };
+  return { provider: first.id, model: pickDefaultModelId(first) };
 }
