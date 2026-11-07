@@ -97,8 +97,9 @@ interface TurnMetrics {
 // is in the chat; the transcript keeps the whole answer. Bounded in code: brevity
 // pressure in the prompt alone made the model skip tools (#2349's harness).
 const MAX_SPOKEN_CHUNKS = 4;
-// A line opening with one of these writes out an email: a draft, never read aloud.
-const EMAIL_HEADER = /^(?:To|Cc|Subject):/i;
+// A line opening with one of these, in a call's languages, writes out an email:
+// a draft, never read aloud.
+const EMAIL_HEADER = /^(?:To|Cc|Subject|Para|Asunto|À|Objet|An|Betreff|प्रति|विषय)\s?:/i;
 // A call ends after 2.5 minutes with no speech either way and nothing in progress.
 const IDLE_STOP_MS = 150_000;
 const SESSION_TICK_MS = 10_000;
@@ -171,7 +172,7 @@ export function useVoiceCall({
   const pendingSpeaksRef = useRef(0);
   // Text the claim check flagged: spoken only once the turn shows it stands.
   const heldChunksRef = useRef<string[] | null>(null);
-  // The reply wrote out an email draft (no tool could send it): only what follows it is said.
+  // The reply wrote out an email draft (no tool could send it): the rest of it isn't said.
   const writesDraftRef = useRef(false);
   const answerRef = useRef("");
   const claimCheckRef = useRef<((text: string) => boolean) | undefined>(undefined);
@@ -432,15 +433,10 @@ export function useVoiceCall({
           if (held && !claimCheckRef.current?.(answerRef.current)) {
             for (const chunk of held) offerChunk(chunk);
           }
-          // After a written-out draft, its last paragraph says what came of it
-          // ("Connect your email and I can send this").
+          // A written-out draft is read on screen, never aloud.
           if (writesDraftRef.current) {
             writesDraftRef.current = false;
-            const outcome = createSpeechChunker();
-            const lastParagraph = answerRef.current.split(/\n\s*\n/).at(-1) ?? "";
-            for (const chunk of [...outcome.push(lastParagraph), ...outcome.flush()]) {
-              offerChunk(chunk);
-            }
+            speakChunk(onScreenLine(spokenLanguageFor(answerRef.current)));
           }
           if (cutShortRef.current && profileRef.current) {
             speakChunk(moreInChatLine(profileRef.current.language));

@@ -26,7 +26,7 @@ interface AgentPillProps {
   noticeDetail?: string;
   /** Voice input is unavailable with this transcription provider: Mic is off. */
   micUnavailableHint?: string;
-  /** A take is still transcribing, or a reply is running. */
+  /** A take is still transcribing, or a reply is running: Mic and Call are off. */
   micDisabled?: boolean;
   /** A card waits on the user: Expand pulses blue until the modal opens to it. */
   expandCue?: boolean;
@@ -101,7 +101,10 @@ export function AgentPill({
               key={button}
               type="button"
               onClick={() => onAction(button)}
-              disabled={button === "mic" && (micDisabled || Boolean(unavailable))}
+              disabled={
+                (button === "mic" && (micDisabled || Boolean(unavailable))) ||
+                (button === "call" && micDisabled)
+              }
               aria-label={t(label)}
               title={unavailable ?? t(label)}
               className={cn(ICON_BUTTON, button === "expand" && expandCue && "agent-expand-cue")}

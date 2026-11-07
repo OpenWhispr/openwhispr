@@ -235,3 +235,39 @@ test("a request a pause cut short is answered whole, without the requests it joi
   assert.doesNotMatch(request, /small town/, "the unheard reply to its first half is left out");
   assert.match(request, /capital of Peru/, "an earlier request stays");
 });
+
+test("a request a pause cut short keeps the selected text its first half was asked about", async (t) => {
+  const fixture = await setup(t);
+  const sent = [];
+  t.mock.method(fixture.service, "processTextStreamingAI", async function* (messages) {
+    sent.push(JSON.stringify(messages));
+    yield { type: "content", text: "Here it is, friendlier." };
+    yield { type: "done", finishReason: "stop" };
+  });
+  const history = [
+    {
+      id: "u1",
+      role: "user",
+      content: "Rewrite this",
+      selectedContext: "The quarterly numbers are bad.",
+      isStreaming: false,
+    },
+    {
+      id: "a1",
+      role: "assistant",
+      content: "",
+      isStreaming: false,
+      turn: { startedAt: 1, finishedAt: 2, status: "stopped" },
+    },
+    { id: "u2", role: "user", content: "to sound friendlier.", isStreaming: false },
+  ];
+  const { voice } = speechLog();
+  await fixture.engine.send("to sound friendlier.", history, {
+    requestText: "Rewrite this to sound friendlier.",
+    voice: { ...voice, continues: true },
+  });
+
+  const [request] = sent;
+  assert.match(request, /The quarterly numbers are bad\./);
+  assert.equal(request.match(/Rewrite this/g).length, 1, "the request is read once");
+});

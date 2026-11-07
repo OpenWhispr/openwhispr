@@ -989,6 +989,7 @@
         "workspaceLabel": "مساحة العمل",
         "channelLabel": "القناة",
         "asLabel": "بصفتك",
+        "destination": "{{workspace}} · {{destination}}",
         "findChannel": "ابحث عن قناة",
         "noChannels": "لم يتم العثور على قنوات",
         "channelsUnavailable": "تعذّر تحميل قنواتك.",

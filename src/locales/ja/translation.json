@@ -4966,6 +4966,7 @@
         "workspaceLabel": "ワークスペース",
         "channelLabel": "チャンネル",
         "asLabel": "送信者",
+        "destination": "{{workspace}} · {{destination}}",
         "findChannel": "チャンネルを検索",
         "noChannels": "チャンネルが見つかりません",
         "channelsUnavailable": "チャンネルを読み込めませんでした。",

@@ -291,7 +291,7 @@ test("Esc on Copy, outside the fields, never cancels the card", async (t) => {
   // The panel's Esc would cancel the turn and withdraw the card with the edit.
   const event = { cancelBubble: false };
   await React.act(async () =>
-    dispatch(button(container, "connectors.approval.email.copyAll"), "keydown", {
+    dispatch(button(container, "common.copy"), "keydown", {
       key: "Escape",
       stopPropagation() {
         event.cancelBubble = true;
@@ -324,27 +324,14 @@ test("a stripped display name shows the addresses the email will go to", async (
   assert.ok(sendsTo(), "the resolved addresses are shown");
 });
 
-test("each field copies alone, and Copy all copies the email as the card shows it", async (t) => {
+test("outside a call Copy copies the message alone, and no field has a copy of its own", async (t) => {
   const { container, calls } = await mountEmailCard(t);
-  await React.act(async () => type(field(container, "subjectLabel"), "Q3 (final)"));
-
   const labelled = (label) =>
     findElement(container, (element) => element.getAttribute?.("aria-label") === label);
-  await React.act(async () => dispatch(labelled("connectors.approval.email.copySubject"), "click"));
-  await React.act(async () =>
-    dispatch(button(container, "connectors.approval.email.copyAll"), "click")
-  );
+  assert.equal(labelled("connectors.approval.email.copySubject"), null);
+  assert.equal(labelled("connectors.approval.email.copyBody"), null);
 
-  assert.equal(calls.clipboard[0], "Q3 (final)");
-  assert.equal(
-    calls.clipboard[1],
-    [
-      "connectors.approval.email.toLabel: josh@acme.test",
-      "connectors.approval.email.ccLabel: sam@acme.test",
-      "connectors.approval.email.subjectLabel: Q3 (final)",
-      "",
-      "Numbers attached.",
-    ].join("\n")
-  );
-  assert.ok(labelled("common.copied"), "the field shows it was copied");
+  await React.act(async () => dispatch(button(container, "common.copy"), "click"));
+
+  assert.deepEqual(calls.clipboard, ["Numbers attached."]);
 });

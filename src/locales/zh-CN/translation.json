@@ -4966,6 +4966,7 @@
         "workspaceLabel": "工作区",
         "channelLabel": "频道",
         "asLabel": "身份",
+        "destination": "{{workspace}} · {{destination}}",
         "findChannel": "查找频道",
         "noChannels": "未找到频道",
         "channelsUnavailable": "无法加载你的频道。",

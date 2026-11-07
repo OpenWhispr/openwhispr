@@ -1,8 +1,3 @@
-export interface SpeechChunkerOptions {
-  /** Stop emitting after this many chunks; the rest stays on screen but isn't spoken. */
-  maxChunks?: number;
-}
-
 export interface SpeechChunker {
   push: (delta: string) => string[];
   flush: () => string[];
@@ -46,9 +41,7 @@ export function toSpeakableText(text: string): string {
  * Splits a streamed answer into chunks worth handing to TTS one at a time: whole
  * sentences (or lines); only the first chunk may stop at a clause.
  */
-export function createSpeechChunker({
-  maxChunks = Number.POSITIVE_INFINITY,
-}: SpeechChunkerOptions = {}): SpeechChunker {
+export function createSpeechChunker(): SpeechChunker {
   let buffer = "";
   let emittedCount = 0;
 
@@ -77,7 +70,7 @@ export function createSpeechChunker({
 
   const emit = (raw: string, out: string[]): void => {
     const speakable = toSpeakableText(raw);
-    if (!speakable || emittedCount >= maxChunks) return;
+    if (!speakable) return;
     emittedCount += 1;
     out.push(speakable);
   };

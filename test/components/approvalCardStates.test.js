@@ -69,8 +69,15 @@ const SLACK = {
   state: "pending",
 };
 
-test("a Slack card with no channel to choose shows its workspace, channel and sender read-only", async (t) => {
+test("outside a call a Slack card names its workspace in the Channel row", async (t) => {
   const card = await mountCard(t, SLACK);
+  const text = card.host.textContent;
+  assert.match(text, /connectors\.approval\.slack\.destination/);
+  assert.doesNotMatch(text, /connectors\.approval\.slack\.workspaceLabel/);
+});
+
+test("in a call a Slack card with no channel to choose shows its workspace, channel and sender read-only", async (t) => {
+  const card = await mountCard(t, SLACK, {}, "compact");
   const text = card.host.textContent;
   assert.match(text, /connectors\.approval\.slack\.workspaceLabel/);
   assert.match(text, /OpenWhispr/);
@@ -166,7 +173,11 @@ test("a channel post's picker lists the channels main read for this card, with t
 });
 
 test("the channel search narrows the list, and a pick changes the card and what Send commits", async (t) => {
-  const card = await openChannelMenu(t);
+  // Without a workspace the trigger shows the channel alone.
+  const card = await openChannelMenu(t, {
+    ...CHANNEL_POST,
+    preview: { ...CHANNEL_POST.preview, workspaceLabel: undefined },
+  });
   const search = card.host.ownerDocument.querySelector(
     'input[aria-label="connectors.approval.slack.findChannel"]'
   );
@@ -221,6 +232,25 @@ const EMAIL = {
   draft: { fields: EMAIL_FIELDS, body: EMAIL_FIELDS.body },
   state: "pending",
 };
+
+test("in a call each field copies alone, and Copy all copies the email as the card shows it", async (t) => {
+  const card = await mountCard(t, EMAIL, {}, "compact");
+  const subjectCopy = card.host.querySelector(
+    '[aria-label="connectors.approval.email.copySubject"]'
+  );
+  await React.act(async () => subjectCopy.click());
+  await React.act(async () => card.button("connectors.approval.email.copyAll").click());
+
+  assert.deepEqual(card.calls.clipboard, [
+    "Review",
+    [
+      "connectors.approval.email.toLabel: sam@example.test",
+      "connectors.approval.email.subjectLabel: Review",
+      "",
+      "Hi Sam",
+    ].join("\n"),
+  ]);
+});
 
 test("in a call an email card has Copy all and Send in its title row, and no sender or Cancel", async (t) => {
   const card = await mountCard(t, EMAIL, {}, "compact");

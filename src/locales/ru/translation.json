@@ -5094,6 +5094,7 @@
         "workspaceLabel": "Рабочее пространство",
         "channelLabel": "Канал",
         "asLabel": "От имени",
+        "destination": "{{workspace}} · {{destination}}",
         "findChannel": "Найти канал",
         "noChannels": "Каналы не найдены",
         "channelsUnavailable": "Не удалось загрузить ваши каналы.",

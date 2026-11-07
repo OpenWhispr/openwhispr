@@ -84,13 +84,19 @@ const DISK_SPACE_FACTOR = 3;
 
 function defaultDeps() {
   const logger = require("./debugLogger");
-  const { downloadFile, checkDiskSpace, sha256File } = require("./downloadUtils");
-  const { extractTarBz2 } = require("./systemTar");
+  const { downloadFile, checkDiskSpace, verifyFileSha256 } = require("./downloadUtils");
+  const { runSystemTar } = require("./systemTar");
+  const { extractModelArchive } = require("./modelArchiveIntegrity");
   return {
     downloadFile,
     checkDiskSpace,
-    sha256File,
-    extractTarBz2: (archivePath, destDir) => extractTarBz2(archivePath, destDir, { logger }),
+    verifyFileSha256,
+    // Windows' tar can't read bz2; the bundled decoder runs in a worker, off the main thread.
+    extractTarBz2: (archivePath, destDir, signal) =>
+      runSystemTar(archivePath, destDir).catch((error) => {
+        logger.debug("System tar failed, falling back to JS extraction", { error: error.message });
+        return extractModelArchive(archivePath, destDir, signal);
+      }),
     logger,
   };
 }
@@ -126,8 +132,8 @@ async function extractArchiveModel(
   const stagingDir = path.join(modelsDir, `${stagingPrefix(model)}${process.pid}-${Date.now()}`);
   fs.mkdirSync(stagingDir, { recursive: true });
   try {
-    await extractTarBz2(archivePath, stagingDir);
-    // Extraction doesn't watch the signal, so a cancel during it lands here.
+    await extractTarBz2(archivePath, stagingDir, signal);
+    // System tar doesn't watch the signal, so a cancel during it lands here.
     if (signal?.aborted) {
       throw Object.assign(new Error("Download cancelled"), { isAbort: true });
     }
@@ -166,7 +172,7 @@ async function downloadVoiceModels({
   onProgress = () => {},
   deps = {},
 } = {}) {
-  const { downloadFile, extractTarBz2, checkDiskSpace, sha256File, logger } = {
+  const { downloadFile, extractTarBz2, checkDiskSpace, verifyFileSha256, logger } = {
     ...defaultDeps(),
     ...deps,
   };
@@ -194,12 +200,7 @@ async function downloadVoiceModels({
         onProgress({ model: model.id, downloadedBytes, totalBytes }),
     });
     try {
-      const actual = await sha256File(dest);
-      if (actual !== model.sha256) {
-        throw new Error(
-          `${model.id}: download failed its checksum (sha256 ${actual}, expected ${model.sha256})`
-        );
-      }
+      await verifyFileSha256(dest, model.sha256, signal);
       if (model.archive) {
         await extractArchiveModel(model, dest, modelsDir, { extractTarBz2, signal, logger });
       } else {

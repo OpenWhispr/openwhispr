@@ -54,15 +54,6 @@ test("splits on newlines and question or exclamation marks", async () => {
   assert.deepEqual(chunker.flush(), ["Okay"]);
 });
 
-test("stops emitting after the spoken-sentence limit, until reset", async () => {
-  const { createSpeechChunker } = await load();
-  const chunker = createSpeechChunker({ maxChunks: 2 });
-  assert.deepEqual(pushAll(chunker, ["One. Two. Three. Four. "]), ["One.", "Two."]);
-  assert.deepEqual(chunker.flush(), []);
-  chunker.reset();
-  assert.deepEqual(pushAll(chunker, ["Fresh start. "]), ["Fresh start."]);
-});
-
 test("strips markdown, skips headings and drops chunks with nothing speakable", async () => {
   const { createSpeechChunker } = await load();
   const chunker = createSpeechChunker();

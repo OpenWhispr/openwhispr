@@ -539,21 +539,19 @@ test("a reply waits while the user, already talking again, finishes the request"
   );
 });
 
-test("a reply that writes out an email draft says only what follows it", async (t) => {
+test("a reply that writes out an email draft says it is on screen, never the draft", async (t) => {
   const { calls, act, startListening, say, lastTurn } = await mountVoiceCall(t);
   await startListening();
   await say("Send an email to Bob telling him I will be late today.");
   const turn = lastTurn();
   await act(() =>
     turn.speech.onText(
-      "To: Bob <bob@example.com>\nSubject: Running Late Today\n\nHi Bob,\n\nI'll be late today.\n\nThanks.\n\nConnect your email integration and I can send this for you."
+      "Here's a draft for Bob.\n\nTo: Bob <bob@example.com>\nSubject: Running Late Today\n\nHi Bob,\n\nI'll be late today.\n\nBest regards,\nSaket"
     )
   );
   await act(() => turn.speech.onEnd("complete"));
 
-  assert.deepEqual(spokenTexts(calls), [
-    "Connect your email integration and I can send this for you.",
-  ]);
+  assert.deepEqual(spokenTexts(calls), ["Here's a draft for Bob.", "It's on your screen."]);
 });
 
 test("words that answer a waiting question go to the card, and its turn goes on speaking", async (t) => {

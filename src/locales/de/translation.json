@@ -5319,6 +5319,7 @@
         "workspaceLabel": "Workspace",
         "channelLabel": "Kanal",
         "asLabel": "Als",
+        "destination": "{{workspace}} · {{destination}}",
         "findChannel": "Kanal suchen",
         "noChannels": "Keine Kanäle gefunden",
         "channelsUnavailable": "Deine Kanäle konnten nicht geladen werden.",

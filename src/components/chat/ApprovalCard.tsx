@@ -1,4 +1,4 @@
-import { useId, useRef, type KeyboardEvent, type ReactElement } from "react";
+import { useId, useRef, type KeyboardEvent, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, CopyRounded, ExternalLink, Mail, Send } from "../icons";
 import { cn } from "../lib/utils";
@@ -159,10 +159,10 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
       ? t("connectors.approval.email.invalidAddressAnnouncement")
       : problemText;
   const hasFieldLayout = Boolean(emailFields || issueFields);
-  // Copy takes the message itself, as the card shows it now; an email's Copy
-  // all takes its recipients and subject with it.
+  // Copy takes the message itself, as the card shows it now; in a call an
+  // email's Copy all takes its recipients and subject with it.
   const body = emailFields?.body ?? issueFields?.body ?? draft.body;
-  const copyAllText = emailFields
+  const copyAllText = titleActions
     ? [
         `${t("connectors.approval.email.toLabel")}: ${emailFields.to.join(", ")}`,
         ...(emailFields.cc.length > 0
@@ -215,6 +215,41 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
   const setBody = (value: string) =>
     updateApprovalDraft(entry.key, draft.fields ? { fields: { body: value } } : { body: value });
 
+  // Outside a call the Channel row names the workspace too; a call's card gives it its own row.
+  const channelText =
+    !inCall && preview.workspaceLabel
+      ? t("connectors.approval.slack.destination", {
+          workspace: preview.workspaceLabel,
+          destination,
+        })
+      : destination;
+  const withSlackMark = (content: ReactNode): ReactElement => (
+    <span className="flex min-w-0 flex-1 items-center gap-1.5 text-foreground" dir="auto">
+      <img
+        src={slackMark}
+        alt=""
+        aria-hidden="true"
+        width={14}
+        height={14}
+        decoding="async"
+        draggable={false}
+        className="shrink-0"
+      />
+      {content}
+    </span>
+  );
+  // Main lists the channels for a pending action only; after a failure,
+  // Retry prepares a new one first.
+  const channelPicker =
+    pending && !entry.reconnect && preview.channel !== undefined ? (
+      <SlackChannelPicker
+        actionId={entry.actionId}
+        selectedId={pickedChannel?.id ?? preview.channel}
+        label={channelText}
+        onPick={(channel) => updateApprovalDraft(entry.key, { channel })}
+      />
+    ) : null;
+
   const header = emailFields ? (
     <EmailApprovalFields
       fields={emailFields}
@@ -227,38 +262,19 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
     />
   ) : slack ? (
     <>
-      {preview.workspaceLabel && (
+      {inCall && preview.workspaceLabel && (
         <HeaderRow label={t("connectors.approval.slack.workspaceLabel")}>
-          <span className="flex min-w-0 flex-1 items-center gap-1.5 text-foreground" dir="auto">
-            <img
-              src={slackMark}
-              alt=""
-              aria-hidden="true"
-              width={14}
-              height={14}
-              decoding="async"
-              draggable={false}
-              className="shrink-0"
-            />
-            <span className="truncate">{preview.workspaceLabel}</span>
-          </span>
+          {withSlackMark(<span className="truncate">{preview.workspaceLabel}</span>)}
         </HeaderRow>
       )}
       <HeaderRow label={t("connectors.approval.slack.channelLabel")}>
-        {/* Main lists the channels for a pending action only; after a
-            failure, Retry prepares a new one first. */}
-        {pending && !entry.reconnect && preview.channel !== undefined ? (
-          <SlackChannelPicker
-            actionId={entry.actionId}
-            selectedId={pickedChannel?.id ?? preview.channel}
-            label={destination}
-            onPick={(channel) => updateApprovalDraft(entry.key, { channel })}
-          />
-        ) : (
-          <span className="min-w-0 flex-1 truncate text-foreground" dir="auto">
-            {destination}
-          </span>
-        )}
+        {inCall
+          ? (channelPicker ?? (
+              <span className="min-w-0 flex-1 truncate text-foreground" dir="auto">
+                {channelText}
+              </span>
+            ))
+          : withSlackMark(channelPicker ?? <span className="truncate">{channelText}</span>)}
       </HeaderRow>
       <HeaderRow label={t("connectors.approval.slack.asLabel")}>
         <span className="min-w-0 flex-1 truncate font-medium text-foreground" dir="auto">
@@ -335,7 +351,11 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
     >
       {copied ? <Check size={14} className="text-success" /> : <CopyRounded size={14} />}
       {t(
-        copied ? "common.copied" : emailFields ? "connectors.approval.email.copyAll" : "common.copy"
+        copied
+          ? "common.copied"
+          : titleActions
+            ? "connectors.approval.email.copyAll"
+            : "common.copy"
       )}
     </button>
   );
@@ -457,14 +477,8 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
           callPlacement === "compact" ? "max-h-92" : "max-h-44"
         )}
       >
-        {emailFields && (
-          <div
-            className={cn(
-              "sticky top-0 z-10 float-end -mt-1 h-0",
-              // In a call it lines up with the header's copy buttons.
-              !titleActions && "-me-2"
-            )}
-          >
+        {titleActions && (
+          <div className="sticky top-0 z-10 float-end -mt-1 h-0">
             <CopyFieldButton text={body} label={t("connectors.approval.email.copyBody")} />
           </div>
         )}

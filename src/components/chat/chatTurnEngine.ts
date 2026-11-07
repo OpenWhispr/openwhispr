@@ -999,13 +999,16 @@ export function createChatTurnEngine(
         : -1;
       // A request a pause cut short is sent whole: the requests it joins and
       // their replies, which did nothing, are left out, so it is read once.
+      // The selected text a joined request was asked about goes with it.
       const joined = new Set<number>();
+      let joinedSelection: Message | undefined;
       for (let i = allMessages.length - 2; options?.voice?.continues && i >= 0; i -= 1) {
         const message = allMessages[i];
         if (message.role !== "user") continue;
         if (!userText.includes(message.content) || allMessages[i + 1].toolCalls?.length) break;
         joined.add(i);
         if (allMessages[i + 1].role === "assistant") joined.add(i + 1);
+        if (message.selectedContext) joinedSelection = message;
       }
       const asked = options?.voice
         ? allMessages.filter(
@@ -1020,7 +1023,18 @@ export function createChatTurnEngine(
       const history: HistoryMessage[] = toHistoryMessages(
         requestText
           ? asked.map((message, i) =>
-              i === requestIndex ? { ...message, content: requestText } : message
+              i === requestIndex
+                ? {
+                    ...message,
+                    content: requestText,
+                    ...(joinedSelection && !message.selectedContext
+                      ? {
+                          selectedContext: joinedSelection.selectedContext,
+                          selectedContextSource: joinedSelection.selectedContextSource,
+                        }
+                      : {}),
+                  }
+                : message
             )
           : asked,
         {

@@ -15,7 +15,6 @@ const {
   PARAKEET_MINIMUM_MACOS_VERSION,
   compareVersions,
 } = require("../src/helpers/parakeetCapability");
-const { extractTarBz2WithJs } = require("../src/helpers/systemTar");
 const { listImportedModules, renameImportedModule } = require("./lib/pe-imports");
 
 const SHERPA_ONNX_VERSION = "1.13.8";
@@ -219,7 +218,10 @@ async function extractTarBz2(archivePath, destDir, { platform = process.platform
   if (platform === "win32") {
     // Windows bsdtar may spawn an external bzip2 and never finish. Use the
     // same bundled decompressor as model installation, with no PATH tools.
-    await extractTarBz2WithJs(archivePath, destDir);
+    const { pipeline } = require("stream/promises");
+    const unbzip2 = require("unbzip2-stream");
+    const tar = require("tar");
+    await pipeline(fs.createReadStream(archivePath), unbzip2(), tar.x({ cwd: destDir }));
     return;
   }
   // Use relative paths from archive dir as cwd, so neither -f nor -C args

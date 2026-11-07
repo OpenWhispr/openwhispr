@@ -51,7 +51,11 @@ function fakeDeps(dir, { skipFile } = {}) {
         fs.writeFileSync(dest, pinnedHashOf(url));
         onProgress?.(5, 10);
       },
-      sha256File: async (filePath) => fs.readFileSync(filePath, "utf8"),
+      verifyFileSha256: async (filePath, expected) => {
+        if (fs.readFileSync(filePath, "utf8") !== expected) {
+          throw new Error("Model SHA-256 verification failed");
+        }
+      },
       extractTarBz2: async (_archive, destDir) => {
         for (const file of tts.requiredFiles) {
           if (file !== skipFile) touch(destDir, file);
@@ -267,7 +271,10 @@ test("a download that fails its pinned hash is discarded and never counts as rea
     if (url.endsWith("smart-turn-v3.2-cpu.onnx")) fs.writeFileSync(dest, "<html>error</html>");
   };
 
-  await assert.rejects(downloadVoiceModels({ modelsDir: dir, deps }), /smart-turn: .*checksum/);
+  await assert.rejects(
+    downloadVoiceModels({ modelsDir: dir, deps }),
+    /SHA-256 verification failed/
+  );
 
   const status = getVoiceModelStatus(dir);
   assert.ok(status.missing.includes("smart-turn"));

@@ -4966,6 +4966,7 @@
         "workspaceLabel": "工作區",
         "channelLabel": "頻道",
         "asLabel": "身分",
+        "destination": "{{workspace}} · {{destination}}",
         "findChannel": "尋找頻道",
         "noChannels": "找不到頻道",
         "channelsUnavailable": "無法載入你的頻道。",
