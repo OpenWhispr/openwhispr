@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Keyboard, Maximize, Mic, Square, X, type IconComponent } from "../icons";
+import { Keyboard, Maximize, Mic, Phone, Square, X, type IconComponent } from "../icons";
 import { cn } from "../lib/utils";
 import { ICON_BUTTON } from "../chat/interactions/cardStyles";
 import { PillWaveform } from "../dictation/PillWaveform";
@@ -8,6 +8,7 @@ import { useAgentWindowDrag } from "./useAgentWindowDrag";
 
 const BUTTONS: Record<AgentPillButton, { icon: IconComponent; label: string }> = {
   expand: { icon: Maximize, label: "agentWindow.actions.expand" },
+  call: { icon: Phone, label: "agentWindow.call.actions.start" },
   mic: { icon: Mic, label: "agentWindow.actions.speak" },
   keyboard: { icon: Keyboard, label: "agentWindow.actions.type" },
   stop: { icon: Square, label: "agentWindow.actions.stop" },

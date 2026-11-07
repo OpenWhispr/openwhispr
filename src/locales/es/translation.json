@@ -4676,7 +4676,80 @@
       "steps_one": "{{count}} paso",
       "steps_other": "{{count}} pasos"
     },
-    "waitingForAnswer": "Esperando respuesta"
+    "waitingForAnswer": "Esperando respuesta",
+    "call": {
+      "status": {
+        "starting": "Iniciando voz…",
+        "listening": "Escuchando",
+        "working": "Trabajando…",
+        "speaking": "Hablando",
+        "micOff": "Micrófono apagado",
+        "waiting": "Esperando una acción",
+        "sendingEmail": "Enviando correo",
+        "sendingMessage": "Enviando mensaje",
+        "stopped": "Detenido"
+      },
+      "actions": {
+        "start": "Iniciar Voice Agent",
+        "settings": "Ajustes",
+        "transcript": "Mostrar chat",
+        "hideTranscript": "Ocultar chat",
+        "micOff": "Apagar micrófono",
+        "micOn": "Encender micrófono",
+        "end": "Terminar llamada",
+        "stopReply": "Dejar de hablar",
+        "backToText": "Volver a escribir"
+      },
+      "settings": {
+        "title": "Ajustes",
+        "close": "Cerrar ajustes",
+        "voice": "Voz",
+        "speed": "Velocidad",
+        "language": "Idioma",
+        "voices": {
+          "helios": "Helios",
+          "aurora": "Aurora"
+        },
+        "male": "Masculina",
+        "female": "Femenina",
+        "slower": "Más lento",
+        "faster": "Más rápido",
+        "speedValue": "{{value}}x",
+        "autoDetect": "Detección automática",
+        "searchLanguages": "Buscar idiomas",
+        "noLanguages": "No se encontraron idiomas",
+        "languageUnavailable": "Ningún modelo de voz de este equipo entiende {{language}}",
+        "needsSpeechModel": "Necesita un modelo de voz"
+      },
+      "setup": {
+        "download": "Descargar",
+        "openSettings": "Abrir Ajustes",
+        "changeLanguage": "Cambiar idioma",
+        "retry": "Reintentar",
+        "cancel": "Cancelar",
+        "downloading": "Descargando… {{percent}}%",
+        "downloadFailed": "No se pudieron descargar los modelos de voz. Revisa tu conexión e inténtalo de nuevo.",
+        "reasons": {
+          "voice-models-missing": "Las llamadas de voz necesitan {{size}} MB de modelos de voz en este equipo.",
+          "speech-model-missing": "Las llamadas de voz necesitan un modelo de voz local para oírte. Descarga uno en Ajustes.",
+          "language-model-missing": "Ningún modelo de voz de este equipo entiende el idioma de la llamada. Descarga uno en Ajustes o elige otro idioma.",
+          "language-unsupported": "Las llamadas aún no están disponibles en este idioma.",
+          "brain-not-downloaded": "El modelo del Asistente de voz aún no está descargado.",
+          "brain-sign-in-required": "Inicia sesión para responder llamadas con OpenWhispr Cloud o elige otro modelo.",
+          "brain-key-missing": "Añade una clave de API para el modelo del Asistente de voz.",
+          "meeting-recording": "Se está grabando una reunión. Las llamadas podrán empezar cuando termine.",
+          "mic-busy": "El dictado está usando el micrófono.",
+          "mic-denied": "OpenWhispr no puede usar el micrófono. Permítelo en Ajustes.",
+          "start-failed": "No se pudo iniciar la llamada."
+        }
+      },
+      "notices": {
+        "endedForMeeting": "Llamada terminada por una reunión",
+        "workerStopped": "La voz dejó de funcionar",
+        "endedIdle": "Llamada terminada tras un rato en silencio"
+      }
+    },
+    "backToLatest": "Volver a lo último"
   },
   "integrations": {
     "title": "Integraciones",

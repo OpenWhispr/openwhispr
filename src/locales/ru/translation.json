@@ -4731,7 +4731,80 @@
       "steps_many": "{{count}} шагов",
       "steps_other": "{{count}} шага"
     },
-    "waitingForAnswer": "Ожидание ответа"
+    "waitingForAnswer": "Ожидание ответа",
+    "call": {
+      "status": {
+        "starting": "Запуск голоса…",
+        "listening": "Слушаю",
+        "working": "Работаю…",
+        "speaking": "Говорю",
+        "micOff": "Микрофон выключен",
+        "waiting": "Ожидание действия",
+        "sendingEmail": "Отправка письма",
+        "sendingMessage": "Отправка сообщения",
+        "stopped": "Остановлено"
+      },
+      "actions": {
+        "start": "Запустить Voice Agent",
+        "settings": "Настройки",
+        "transcript": "Показать чат",
+        "hideTranscript": "Скрыть чат",
+        "micOff": "Выключить микрофон",
+        "micOn": "Включить микрофон",
+        "end": "Завершить звонок",
+        "stopReply": "Перестать говорить",
+        "backToText": "Вернуться к набору"
+      },
+      "settings": {
+        "title": "Настройки",
+        "close": "Закрыть настройки",
+        "voice": "Голос",
+        "speed": "Скорость",
+        "language": "Язык",
+        "voices": {
+          "helios": "Helios",
+          "aurora": "Aurora"
+        },
+        "male": "Мужской",
+        "female": "Женский",
+        "slower": "Медленнее",
+        "faster": "Быстрее",
+        "speedValue": "{{value}}x",
+        "autoDetect": "Автоопределение",
+        "searchLanguages": "Поиск языков",
+        "noLanguages": "Языки не найдены",
+        "languageUnavailable": "Ни одна речевая модель на этом компьютере не понимает язык: {{language}}",
+        "needsSpeechModel": "Нужна речевая модель"
+      },
+      "setup": {
+        "download": "Скачать",
+        "openSettings": "Открыть настройки",
+        "changeLanguage": "Сменить язык",
+        "retry": "Повторить",
+        "cancel": "Отмена",
+        "downloading": "Загрузка… {{percent}}%",
+        "downloadFailed": "Не удалось скачать голосовые модели. Проверьте подключение и попробуйте снова.",
+        "reasons": {
+          "voice-models-missing": "Для голосовых звонков нужно {{size}} МБ голосовых моделей на этом компьютере.",
+          "speech-model-missing": "Для голосовых звонков нужна локальная речевая модель, чтобы слышать вас. Скачайте её в настройках.",
+          "language-model-missing": "Ни одна речевая модель на этом компьютере не понимает язык звонка. Скачайте модель в настройках или выберите другой язык.",
+          "language-unsupported": "Звонки пока недоступны на этом языке.",
+          "brain-not-downloaded": "Модель голосового ассистента ещё не скачана.",
+          "brain-sign-in-required": "Войдите, чтобы отвечать на звонки через OpenWhispr Cloud, или выберите другую модель.",
+          "brain-key-missing": "Добавьте API-ключ для модели голосового ассистента.",
+          "meeting-recording": "Идёт запись встречи. Звонки можно будет начать после её окончания.",
+          "mic-busy": "Диктовка использует микрофон.",
+          "mic-denied": "OpenWhispr не может использовать микрофон. Разрешите доступ в настройках.",
+          "start-failed": "Не удалось начать звонок."
+        }
+      },
+      "notices": {
+        "endedForMeeting": "Звонок завершён из-за встречи",
+        "workerStopped": "Голос перестал работать",
+        "endedIdle": "Звонок завершён после паузы"
+      }
+    },
+    "backToLatest": "К последним"
   },
   "integrations": {
     "title": "Интеграции",

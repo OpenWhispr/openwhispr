@@ -17,6 +17,12 @@ import type {
 } from "../types/electron";
 import type { CalendarAccount, MicrosoftCalendarAccount } from "../types/calendar";
 import { normalizeEmailDraftTarget, type EmailDraftTargetSetting } from "../utils/emailDraftTarget";
+import {
+  normalizeVoiceCallLanguage,
+  normalizeVoiceCallSpeed,
+  normalizeVoiceCallVoice,
+} from "../utils/voiceCallSettings";
+import type { VoiceCallLanguage, VoiceCallVoice } from "../services/voice/types";
 import { normalizeToneStyles, type ToneStyles } from "../config/toneStyle";
 import { PROMPT_KIND_LIST, type PromptKind } from "../config/prompts/registry";
 import { sweepRetiredPromptOverrides } from "../config/retiredPrompts";
@@ -1175,6 +1181,11 @@ export interface SettingsState
   // Voice-agent screen context: opt-in screenshot capture, plus an optional
   // dedicated model used only when a screenshot is attached.
   voiceAgentScreenContext: boolean;
+  // Voice calls: the voice and rate replies are spoken with, and the language a
+  // call hears and answers in (separate from dictation's language).
+  voiceCallVoice: VoiceCallVoice;
+  voiceCallSpeed: number;
+  voiceCallLanguage: VoiceCallLanguage;
   emailDraftTarget: EmailDraftTargetSetting;
   defaultSummaryTemplateId: string;
   toneStyleEnabled: boolean;
@@ -1210,6 +1221,9 @@ export interface SettingsState
   setDictationAgentCustomApiKey: (key: string) => void;
 
   setVoiceAgentScreenContext: (value: boolean) => void;
+  setVoiceCallVoice: (value: VoiceCallVoice) => void;
+  setVoiceCallSpeed: (value: number) => void;
+  setVoiceCallLanguage: (value: VoiceCallLanguage) => void;
   setToneStyleEnabled: (value: boolean) => void;
   setToneStyles: (styles: ToneStyles) => void;
   setEmailDraftTarget: (value: EmailDraftTargetSetting) => void;
@@ -2134,6 +2148,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   dictationAgentCustomApiKey: readString("dictationAgentCustomApiKey", ""),
 
   voiceAgentScreenContext: readBoolean("voiceAgentScreenContext", false),
+  voiceCallVoice: normalizeVoiceCallVoice(readString("voiceCallVoice", "")),
+  voiceCallSpeed: normalizeVoiceCallSpeed(readNumber("voiceCallSpeed", 1)),
+  voiceCallLanguage: normalizeVoiceCallLanguage(readString("voiceCallLanguage", "auto")),
   emailDraftTarget: normalizeEmailDraftTarget(readString("emailDraftTarget", "auto")),
   defaultSummaryTemplateId: readString("defaultSummaryTemplateId", GENERATE_NOTES_KEY),
   toneStyleEnabled: readBoolean("toneStyleEnabled", false),
@@ -2182,6 +2199,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   ),
 
   setVoiceAgentScreenContext: createBooleanSetter("voiceAgentScreenContext"),
+  setVoiceCallVoice: createStringSetter("voiceCallVoice"),
+  setVoiceCallSpeed: (value: number) =>
+    createNumberSetter("voiceCallSpeed")(normalizeVoiceCallSpeed(value)),
+  setVoiceCallLanguage: createStringSetter("voiceCallLanguage"),
   setEmailDraftTarget: createStringSetter("emailDraftTarget"),
   setDefaultSummaryTemplateId: createStringSetter("defaultSummaryTemplateId"),
   setToneStyleEnabled: createBooleanSetter("toneStyleEnabled"),
@@ -4469,6 +4490,12 @@ export async function initializeSettings(): Promise<void> {
       }
     } else if (key === "emailDraftTarget") {
       value = normalizeEmailDraftTarget(newValue);
+    } else if (key === "voiceCallVoice") {
+      value = normalizeVoiceCallVoice(newValue);
+    } else if (key === "voiceCallSpeed") {
+      value = normalizeVoiceCallSpeed(newValue);
+    } else if (key === "voiceCallLanguage") {
+      value = normalizeVoiceCallLanguage(newValue);
     } else if (key === "toneStyles") {
       value = normalizeToneStyles(newValue);
     } else {

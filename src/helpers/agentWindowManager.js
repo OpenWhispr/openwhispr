@@ -39,6 +39,8 @@ class AgentWindowManager {
     // A standalone card's measured height.
     this.contentHeight = 0;
     this.wide = false;
+    // The layouts of a voice call (its pill, its transcript).
+    this.call = false;
     this.anchor = null;
     this.displayId = null;
     this.savedAnchors = new Map();
@@ -144,16 +146,20 @@ class AgentWindowManager {
 
   setLayout(event, request) {
     if (!isFromWindow(event, this.window) || !AGENT_LAYOUT_SIZES[request?.layout]) return false;
-    const standalone = request.layout === "standalone";
-    if (standalone && !Number.isFinite(request.contentHeight)) return false;
+    const call = request.call === true;
+    const measured = request.layout === "standalone" || (call && request.layout === "modal");
+    if (measured && !Number.isFinite(request.contentHeight)) return false;
     const focus = request.focus === true;
-    if (request.layout !== this.layout) void this.dragManager.stopWindowDrag();
+    if (request.layout !== this.layout || call !== this.call) {
+      void this.dragManager.stopWindowDrag();
+    }
     // A card that only changed height must not take the keyboard back from
     // the app the user went to.
     const refocus = request.layout !== this.layout || focus !== this.keyboardFocus;
     this.layout = request.layout;
-    this.contentHeight = standalone ? request.contentHeight : 0;
-    this.wide = request.layout === "pill" && request.wide === true;
+    this.call = call;
+    this.contentHeight = measured ? request.contentHeight : 0;
+    this.wide = request.layout === "pill" && !call && request.wide === true;
     this._applyBounds();
     if (refocus) this._setKeyboardFocus(focus);
     return true;
@@ -335,6 +341,7 @@ class AgentWindowManager {
     // Shrunk while hidden, so the next show never paints a stale modal frame.
     this.layout = "pill";
     this.wide = false;
+    this.call = false;
     if (this.anchor) this._applyBounds();
   }
 
@@ -401,6 +408,7 @@ class AgentWindowManager {
       workArea: display.workArea || display.bounds,
       contentHeight: this.contentHeight,
       wide: this.wide,
+      call: this.call,
     });
   }
 

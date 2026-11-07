@@ -7,14 +7,15 @@ const SMART_TURN_MAX_TURN_MS = 30000;
 const SUPERTONIC_NUM_STEPS = 5;
 const TTS_NUM_THREADS = 2;
 
-// The call's voices by their setting ids. Supertonic 3's voice.bin holds F1–F5 as
-// speakers 0–4 and M1–M5 as 5–9 (checked by pitch: 0–4 sit at 160–205 Hz, 5–9 at 80–130 Hz).
-const VOICE_SPEAKER_IDS = { helios: 5, aurora: 1 };
-const DEFAULT_VOICE = "helios";
-const SPEECH_RATE = { min: 0.5, max: 2, step: 0.25, default: 1 };
-// What a call hears and answers in. "auto" hears any language its speech model knows
-// and answers in the one spoken.
-const CALL_LANGUAGES = ["auto", "en", "hi", "es", "fr", "de"];
+// The call's voices by setting id, mapped to Supertonic 3 speakers: its voice.bin holds
+// F1–F5 as speakers 0–4 and M1–M5 as 5–9 (checked by pitch: 0–4 sit at 160–205 Hz,
+// 5–9 at 80–130 Hz). Helios is M1, Aurora is F2. Shared with the renderer's settings.
+const {
+  voices: VOICE_SPEAKER_IDS,
+  defaultVoice: DEFAULT_VOICE,
+  speed: SPEECH_RATE,
+  languages: CALL_LANGUAGES,
+} = require("../config/voiceCall.json");
 // Supertonic reads these; an answer in any other language is read as English.
 const SPEECH_LANGUAGES = new Set(CALL_LANGUAGES.filter((language) => language !== "auto"));
 
@@ -124,8 +125,6 @@ function float32ToPcm16Buffer(samples) {
 module.exports = {
   VAD_SAMPLE_RATE,
   CALL_LANGUAGES,
-  SPEECH_RATE,
-  VOICE_SPEAKER_IDS,
   buildVoiceWorkerConfig,
   toSpeechProfile,
   speechProfileKey,

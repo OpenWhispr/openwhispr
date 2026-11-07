@@ -11,7 +11,7 @@ const {
 test("every call language has every line, and the fillers are among the prepared lines", () => {
   for (const language of SPOKEN_LANGUAGES) {
     const lines = preparedLines(language);
-    assert.equal(lines.length, 5, language);
+    assert.equal(lines.length, 6, language);
     assert.ok(
       lines.every((line) => line.length > 0 && line.length <= 200),
       language
@@ -36,4 +36,15 @@ test("a reply's language is told by its script, letters and common words", () =>
   assert.equal(detectSpokenLanguage("Klar, morgen früh hast du zwei Termine."), "de");
   assert.equal(detectSpokenLanguage("Sure, you have two meetings tomorrow."), "en");
   assert.equal(detectSpokenLanguage("Okay."), null);
+});
+
+test("over a reply, one word is a backchannel or a stop, never a request", () => {
+  const { interruptionKind } = require("../../../src/services/voice/voiceLines");
+  assert.equal(interruptionKind("Please."), "ignore");
+  assert.equal(interruptionKind("okay"), "ignore");
+  assert.equal(interruptionKind("Stop."), "stop");
+  assert.equal(interruptionKind("Arrête !"), "stop");
+  assert.equal(interruptionKind("रुको"), "stop");
+  assert.equal(interruptionKind("Wait, make it shorter."), "request");
+  assert.equal(interruptionKind("नहीं, छोटा करो"), "request");
 });

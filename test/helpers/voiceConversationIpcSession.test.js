@@ -417,3 +417,27 @@ test("prepared speech only reaches a running session's worker, and only short li
   ]);
   await stop();
 });
+
+test("a language changed mid-call is heard by a model that knows it from the next turn", async () => {
+  const webContents = fakeRenderer();
+  const started = start(webContents, { language: "en" });
+  voiceWorker.configure?.resolve();
+  const { sessionId } = await started;
+  const setLanguage = (language) =>
+    handlers.get("voice-conversation:set-language")({ sender: webContents }, sessionId, {
+      language,
+    });
+
+  assert.equal(await setLanguage("hi"), true);
+  speak();
+  await settle();
+  assert.deepEqual(whisperTranscriptions.at(-1).options, { model: "base", language: "hi" });
+
+  downloadedWhisper.clear();
+  try {
+    assert.equal(await setLanguage("hi"), false, "nothing here hears it: the old model stays");
+  } finally {
+    downloadedWhisper.add("base");
+  }
+  await stop();
+});

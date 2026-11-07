@@ -344,7 +344,12 @@ interface AgentMessageListProps {
   onFollowUp: (selection: { messageId: string; text: string }) => void;
   onContinue: () => void;
   emptyState: ReactNode;
+  /** The conversation's own height, for a window that grows with it (a call's transcript). */
+  onContentHeight?: (height: number) => void;
 }
+
+// Further than this from the bottom, the reader has left the latest messages.
+const AWAY_FROM_BOTTOM_PX = 80;
 
 /** The chat, oldest first, scrolling inside the modal and following a reply while at the bottom. */
 export function AgentMessageList({
@@ -358,8 +363,12 @@ export function AgentMessageList({
   onFollowUp,
   onContinue,
   emptyState,
+  onContentHeight,
 }: AgentMessageListProps) {
-  const { scrollRef, handleScroll, handleWheel } = useStickToBottom<HTMLDivElement>(messages);
+  const { t } = useTranslation();
+  const { scrollRef, handleScroll, handleWheel, scrollToBottom } =
+    useStickToBottom<HTMLDivElement>(messages);
+  const [awayFromBottom, setAwayFromBottom] = useState(false);
   // The list's height as of its last resize: a scroll event that sees another
   // height was queued before the resize (the bottom pin), not the reader's.
   const viewportHeightRef = useRef(0);
@@ -380,6 +389,16 @@ export function AgentMessageList({
     observer.observe(node);
     return () => observer.disconnect();
   }, [scrollRef]);
+
+  useEffect(() => {
+    const content = scrollRef.current?.firstElementChild;
+    if (!content || !onContentHeight) return;
+    const observer = new ResizeObserver(() =>
+      onContentHeight(Math.ceil(content.getBoundingClientRect().height))
+    );
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [onContentHeight, scrollRef]);
 
   useEffect(() => {
     const update = () => setSelection(readSelection(scrollRef.current));
@@ -408,7 +427,11 @@ export function AgentMessageList({
         // The scroll that pins the bottom arrives a frame late; when the list
         // shrank meanwhile (the selected context opening above the composer)
         // it would read as the reader leaving the bottom.
-        if (event.currentTarget.clientHeight === viewportHeightRef.current) handleScroll();
+        const node = event.currentTarget;
+        if (node.clientHeight === viewportHeightRef.current) handleScroll();
+        setAwayFromBottom(
+          node.scrollHeight - node.scrollTop - node.clientHeight > AWAY_FROM_BOTTOM_PX
+        );
         setSelection(null);
       }}
       onWheel={handleWheel}
@@ -448,6 +471,18 @@ export function AgentMessageList({
           </div>
         )}
       </div>
+      {awayFromBottom && (
+        <button
+          type="button"
+          onClick={() => {
+            scrollToBottom();
+            setAwayFromBottom(false);
+          }}
+          className="sticky bottom-1 z-10 mx-auto mt-2 flex h-8 w-fit items-center rounded-full border border-border bg-surface-1 px-3.5 text-[13px] text-foreground shadow-[var(--shadow-card)] transition-colors hover:bg-surface-2 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40"
+        >
+          {t("agentWindow.backToLatest")}
+        </button>
+      )}
       {selection && (
         <SelectionToolbar
           target={selection}

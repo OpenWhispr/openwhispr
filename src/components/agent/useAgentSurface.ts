@@ -29,6 +29,7 @@ export function useAgentSurface({
   focus,
   contentHeight,
   wide = false,
+  call = false,
 }: {
   visible: boolean;
   layout: AgentWindowLayout;
@@ -37,17 +38,20 @@ export function useAgentSurface({
   contentHeight?: number;
   /** pill only: the wider pill that reads "Waiting for answer" or a notice; it widens in place. */
   wide?: boolean;
+  /** A voice call's layouts: its taller pill, and its transcript (which brings contentHeight). */
+  call?: boolean;
 }) {
   const [shown, setShown] = useState(false);
   // The layout main last sized the window for; a hide shrinks it to the pill.
   const appliedLayoutRef = useRef<AgentWindowLayout>("pill");
+  const appliedCallRef = useRef(false);
 
   useEffect(() => {
     if (!visible) return undefined;
     let current = true;
     const widePill = layout === "pill" && wide;
     void (async () => {
-      const resizes = appliedLayoutRef.current !== layout;
+      const resizes = appliedLayoutRef.current !== layout || appliedCallRef.current !== call;
       if (resizes) {
         setShown(false);
         await nextFrame();
@@ -64,8 +68,10 @@ export function useAgentSurface({
         focus,
         ...(contentHeight !== undefined ? { contentHeight } : {}),
         ...(widePill ? { wide: true } : {}),
+        ...(call ? { call: true } : {}),
       });
       appliedLayoutRef.current = layout;
+      appliedCallRef.current = call;
       if (resizes) {
         await resized;
         await nextFrame();
@@ -75,7 +81,7 @@ export function useAgentSurface({
     return () => {
       current = false;
     };
-  }, [visible, layout, focus, contentHeight, wide]);
+  }, [visible, layout, focus, contentHeight, wide, call]);
 
   // Close: transparent first, so the next show never paints this frame.
   const hide = useCallback(async () => {
@@ -84,12 +90,14 @@ export function useAgentSurface({
     await nextFrame();
     await window.electronAPI?.agentWindowHide?.();
     appliedLayoutRef.current = "pill";
+    appliedCallRef.current = false;
   }, []);
 
   // Main already hid the window (onboarding took the screen).
   const forgetBounds = useCallback(() => {
     setShown(false);
     appliedLayoutRef.current = "pill";
+    appliedCallRef.current = false;
   }, []);
 
   return { shown, hide, forgetBounds };

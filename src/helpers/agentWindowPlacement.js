@@ -3,11 +3,11 @@
 
 // The window shrinks to what it shows, plus an 8px margin on every side for
 // the surface's shadow; on Windows and Linux its transparent parts still take
-// clicks. The pill row is never wider than PILL_CONTENT_WIDTH (the idle pill
-// is 176px, and Thinking… in German 199px), except the pill that reads
+// clicks. The pill row is never wider than PILL_CONTENT_WIDTH (the idle pill,
+// with Call, is 206px, and Thinking… in German 199px), except the pill that reads
 // "Waiting for answer" (the reference's is 287px, French 299px) or a notice.
 const SHADOW_MARGIN = 8;
-const PILL_CONTENT_WIDTH = 200;
+const PILL_CONTENT_WIDTH = 216;
 const WAITING_PILL_CONTENT_WIDTH = 304;
 const PILL_HEIGHT = 40;
 const COMPOSER = { width: 510, height: 145 };
@@ -16,11 +16,38 @@ const MODAL = { width: 480, height: 520 };
 // A standalone card is as tall as it measures, within these bounds; a taller
 // one scrolls inside.
 const STANDALONE_CARD = { width: 420, minHeight: 80, maxHeight: 400 };
+// In a voice call the pill carries its status above it (237×65 in the reference),
+// and the transcript grows with what it shows, from 358px up to 480px.
+const CALL_PILL = { width: 240, height: 65 };
+const CALL_TRANSCRIPT = { width: 360, minHeight: 358, maxHeight: 480 };
 
-const standaloneSize = (cardHeight) => ({
+const standaloneSize = (cardHeight, pillHeight = PILL_HEIGHT) => ({
   width: STANDALONE_CARD.width + 2 * SHADOW_MARGIN,
-  height: cardHeight + COMPOSER_GAP + PILL_HEIGHT + 2 * SHADOW_MARGIN,
+  height: cardHeight + COMPOSER_GAP + pillHeight + 2 * SHADOW_MARGIN,
 });
+
+const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+function callLayoutSize(layout, contentHeight) {
+  if (layout === "standalone") {
+    return standaloneSize(
+      clamp(contentHeight, STANDALONE_CARD.minHeight, STANDALONE_CARD.maxHeight),
+      CALL_PILL.height
+    );
+  }
+  if (layout === "modal") {
+    return {
+      width: CALL_TRANSCRIPT.width + 2 * SHADOW_MARGIN,
+      height:
+        clamp(contentHeight, CALL_TRANSCRIPT.minHeight, CALL_TRANSCRIPT.maxHeight) +
+        2 * SHADOW_MARGIN,
+    };
+  }
+  return {
+    width: CALL_PILL.width + 2 * SHADOW_MARGIN,
+    height: CALL_PILL.height + 2 * SHADOW_MARGIN,
+  };
+}
 
 const AGENT_LAYOUT_SIZES = Object.freeze({
   pill: {
@@ -106,14 +133,21 @@ function clampAgentAnchor(
 /**
  * The window's bounds for a layout, kept inside the work area: a modal too
  * tall for it shrinks. A standalone card brings its measured height; a wide
- * pill is the one waiting for an answer.
+ * pill is the one waiting for an answer. A voice call has its own pill, and
+ * its transcript (the modal) brings its measured height too.
  */
-function computeAgentWindowBounds({ anchor, layout, workArea, contentHeight = 0, wide = false }) {
-  const size =
-    layout === "standalone"
-      ? standaloneSize(
-          Math.min(Math.max(contentHeight, STANDALONE_CARD.minHeight), STANDALONE_CARD.maxHeight)
-        )
+function computeAgentWindowBounds({
+  anchor,
+  layout,
+  workArea,
+  contentHeight = 0,
+  wide = false,
+  call = false,
+}) {
+  const size = call
+    ? callLayoutSize(layout, contentHeight)
+    : layout === "standalone"
+      ? standaloneSize(clamp(contentHeight, STANDALONE_CARD.minHeight, STANDALONE_CARD.maxHeight))
       : layout === "pill" && wide
         ? WAITING_PILL_SIZE
         : (AGENT_LAYOUT_SIZES[layout] ?? AGENT_LAYOUT_SIZES.pill);

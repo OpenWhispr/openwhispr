@@ -4956,7 +4956,80 @@
       "steps_one": "{{count}} step",
       "steps_other": "{{count}} steps"
     },
-    "waitingForAnswer": "Waiting for answer"
+    "waitingForAnswer": "Waiting for answer",
+    "call": {
+      "status": {
+        "starting": "Starting voice…",
+        "listening": "Listening",
+        "working": "Working…",
+        "speaking": "Speaking",
+        "micOff": "Microphone off",
+        "waiting": "Waiting For Action",
+        "sendingEmail": "Sending email",
+        "sendingMessage": "Sending message",
+        "stopped": "Stopped"
+      },
+      "actions": {
+        "start": "Start Voice Agent",
+        "settings": "Settings",
+        "transcript": "Show chat",
+        "hideTranscript": "Hide chat",
+        "micOff": "Turn microphone off",
+        "micOn": "Turn microphone on",
+        "end": "End call",
+        "stopReply": "Stop speaking",
+        "backToText": "Back to typing"
+      },
+      "settings": {
+        "title": "Settings",
+        "close": "Close settings",
+        "voice": "Voice",
+        "speed": "Speed",
+        "language": "Language",
+        "voices": {
+          "helios": "Helios",
+          "aurora": "Aurora"
+        },
+        "male": "Male",
+        "female": "Female",
+        "slower": "Slower",
+        "faster": "Faster",
+        "speedValue": "{{value}}x",
+        "autoDetect": "Auto-detect",
+        "searchLanguages": "Search languages",
+        "noLanguages": "No languages found",
+        "languageUnavailable": "No speech model on this computer understands {{language}}",
+        "needsSpeechModel": "Needs a speech model"
+      },
+      "setup": {
+        "download": "Download",
+        "openSettings": "Open Settings",
+        "changeLanguage": "Change language",
+        "retry": "Try again",
+        "cancel": "Cancel",
+        "downloading": "Downloading… {{percent}}%",
+        "downloadFailed": "Couldn't download the voice models. Check your connection and try again.",
+        "reasons": {
+          "voice-models-missing": "Voice calls need {{size}} MB of voice models on this computer.",
+          "speech-model-missing": "Voice calls need a local speech model to hear you. Download one in Settings.",
+          "language-model-missing": "No speech model on this computer understands the call's language. Download one in Settings, or pick another language.",
+          "language-unsupported": "Calls aren't available in this language yet.",
+          "brain-not-downloaded": "The Voice Assistant's model isn't downloaded yet.",
+          "brain-sign-in-required": "Sign in to answer calls with OpenWhispr Cloud, or pick another model.",
+          "brain-key-missing": "Add an API key for the Voice Assistant's model.",
+          "meeting-recording": "A meeting is being recorded. Calls can start once it ends.",
+          "mic-busy": "Dictation is using the microphone.",
+          "mic-denied": "OpenWhispr can't use the microphone. Allow it in Settings.",
+          "start-failed": "Couldn't start the call."
+        }
+      },
+      "notices": {
+        "endedForMeeting": "Call ended for a meeting",
+        "workerStopped": "Voice stopped working",
+        "endedIdle": "Call ended after a quiet while"
+      }
+    },
+    "backToLatest": "Back to latest"
   },
   "integrations": {
     "title": "Integrations",

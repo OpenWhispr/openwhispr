@@ -1590,10 +1590,12 @@ declare global {
       agentWindowSetLayout?: (request: {
         layout: AgentWindowLayout;
         focus: boolean;
-        /** standalone only: the card's measured height. */
+        /** standalone, and a call's modal (its transcript): the measured height. */
         contentHeight?: number;
         /** pill only: the wider pill that reads "Waiting for answer". */
         wide?: boolean;
+        /** A voice call's layouts: its taller pill, and its narrower transcript. */
+        call?: boolean;
       }) => Promise<boolean>;
       agentWindowHide?: () => Promise<boolean>;
       agentWindowSetDragging?: (dragging: boolean) => void;
@@ -2371,6 +2373,15 @@ declare global {
         sendMic: (samples: Float32Array) => void;
         /** Microphone off, or a card asking for a secret: nothing heard becomes a turn. */
         pauseInput: (sessionId: number, paused: boolean) => Promise<boolean>;
+        /** The call's language changed: false when no downloaded model hears it. */
+        setLanguage: (
+          sessionId: number,
+          request: {
+            language: VoiceCallLanguage;
+            preferredParakeet?: string;
+            preferredWhisper?: string;
+          }
+        ) => Promise<boolean>;
         keepModelWarm: (modelId: string) => Promise<{ warmed: boolean; reason?: string }>;
         speak: (request: {
           utteranceId: string;

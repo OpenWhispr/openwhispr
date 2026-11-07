@@ -207,3 +207,18 @@
     -webkit-text-fill-color: var(--color-foreground);
   }
 }
+
+/* The speaking glow in a call's status cap: a monochrome bloom rising from the
+   pill, as strong as the reply is loud (VoicePill sets --voice-level). */
+.voice-pill-glow {
+  --voice-level: 0;
+  background: radial-gradient(
+    60% 90% at 50% 100%,
+    color-mix(in oklab, var(--color-foreground) 85%, transparent),
+    color-mix(in oklab, var(--color-foreground) 25%, transparent) 45%,
+    transparent 75%
+  );
+  opacity: calc(0.35 + var(--voice-level) * 0.65);
+  transform-origin: 50% 100%;
+  transform: scaleY(calc(0.75 + var(--voice-level) * 0.25));
+}

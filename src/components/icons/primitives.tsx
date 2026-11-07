@@ -243,6 +243,28 @@ const MinimizeMark = glyph(
   </>
 );
 
+// The voice call's controls: a handset, the microphone off, and the transcript.
+const PhoneMark = glyph(
+  <path d="M8.5 3.5H5.5a2 2 0 0 0-2 2.2C4.2 13.6 10.4 19.8 18.3 20.5a2 2 0 0 0 2.2-2v-3l-4-1.5-2 2a12 12 0 0 1-6.5-6.5l2-2z" />
+);
+
+const MicOffMark = glyph(
+  <>
+    <path d="M16 10V6a4 4 0 0 0-7.6-1.7" />
+    <path d="M8 8.5V10a4 4 0 0 0 6.2 3.3" />
+    <path d="M20 10a8 8 0 0 1-1.4 4.5M16.6 16.6A8 8 0 0 1 4 10" />
+    <path d="M12 18v4" />
+    <path d="M3 3l18 18" />
+  </>
+);
+
+const MessagesMark = glyph(
+  <>
+    <path d="M15 8V5a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h1v3l3-3" />
+    <path d="M10 8h10a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-1v3l-4-3h-5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z" />
+  </>
+);
+
 const VolumeMark = glyph(
   <>
     <path d="M11 4.7a.7.7 0 0 0-1.2-.5L6.4 7.6A1.4 1.4 0 0 1 5.4 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.4a1.4 1.4 0 0 1 1 .4l3.4 3.4a.7.7 0 0 0 1.2-.5z" />
@@ -342,3 +364,6 @@ export const Table = createIcon("table", TableMark);
 export const SquareSparkle = createIcon("square-sparkle", SquareSparkleMark);
 export const TextSelect = createIcon("text-select", TextSelectMark);
 export const Volume = createIcon("volume", VolumeMark);
+export const Phone = createIcon("phone", PhoneMark);
+export const MicOff = createIcon("mic-off", MicOffMark);
+export const Messages = createIcon("messages", MessagesMark);

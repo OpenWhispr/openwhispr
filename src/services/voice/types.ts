@@ -4,12 +4,14 @@ export type VoiceCallLanguage = "auto" | "en" | "hi" | "es" | "fr" | "de";
 /** The call's voices by their setting ids (main maps them to Supertonic speakers). */
 export type VoiceCallVoice = "helios" | "aurora";
 
+/** A language a call speaks in (Auto picks one of these per reply). */
+export type SpokenLanguage = Exclude<VoiceCallLanguage, "auto">;
+
 /** What one utterance is spoken with: every chunk of it carries the same profile. */
 export interface VoiceSpeechProfile {
   voice: VoiceCallVoice;
   speed: number;
-  /** A language Supertonic reads (never "auto"). */
-  language: string;
+  language: SpokenLanguage;
 }
 
 /** One finished voice turn, sent to the main process in harness mode. */

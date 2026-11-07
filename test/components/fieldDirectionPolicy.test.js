@@ -106,6 +106,8 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/SettingsPage.tsx": ["inherit"],
   // The agent's typed request: prose in any script.
   "src/components/agent/AgentComposer.tsx": ["auto"],
+  // A call's language search: language names in any script.
+  "src/components/agent/VoiceCallSettings.tsx": ["auto"],
   // An answer card's title and message: prose in any script.
   "src/components/chat/ApprovalCard.tsx": ["auto", "auto"],
   "src/components/chat/ChatInput.tsx": ["auto"],

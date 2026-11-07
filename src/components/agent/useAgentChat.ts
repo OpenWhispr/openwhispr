@@ -6,6 +6,7 @@ import { useInterruptedInteractions } from "../chat/useInterruptedInteractions";
 import type { SendToAIOptions } from "../chat/useChatStreaming";
 import type { Message } from "../chat/types";
 
+const noop = () => {};
 const conversationTitle = (text: string) => (text.length > 50 ? `${text.slice(0, 50)}...` : text);
 
 /**
@@ -80,6 +81,13 @@ export function useAgentChat({
   const { loadConversation, handleNewChat, forkConversation, conversationId, getSessionVersion } =
     persistence;
 
+  // The send in flight, so a spoken turn can wait for a stopped one to let go.
+  const inFlightRef = useRef<Promise<boolean> | null>(null);
+  const settled = useCallback(
+    (): Promise<void> => inFlightRef.current?.then(noop, noop) ?? Promise.resolve(),
+    []
+  );
+
   // A message the user wrote. A fork starts with its parent's title; the first
   // one written in it names it, as a new chat's does, unless it was renamed.
   const send = useCallback(
@@ -95,7 +103,14 @@ export function useAgentChat({
           conversationTitle(text)
         );
       }
-      return sendWithSkill(text, options);
+      const sending = sendWithSkill(text, options);
+      inFlightRef.current = sending;
+      void sending
+        .finally(() => {
+          if (inFlightRef.current === sending) inFlightRef.current = null;
+        })
+        .catch(noop);
+      return sending;
     },
     [conversationId, forkOrigin, sendWithSkill]
   );
@@ -182,6 +197,7 @@ export function useAgentChat({
     agentState: streaming.agentState,
     busy,
     send,
+    settled,
     cancel: cancelStream,
     switchChat,
     newChat,

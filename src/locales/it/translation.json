@@ -4624,7 +4624,80 @@
       "steps_one": "{{count}} passaggio",
       "steps_other": "{{count}} passaggi"
     },
-    "waitingForAnswer": "In attesa di risposta"
+    "waitingForAnswer": "In attesa di risposta",
+    "call": {
+      "status": {
+        "starting": "Avvio della voce…",
+        "listening": "In ascolto",
+        "working": "Al lavoro…",
+        "speaking": "Sta parlando",
+        "micOff": "Microfono spento",
+        "waiting": "In attesa di un'azione",
+        "sendingEmail": "Invio dell'email",
+        "sendingMessage": "Invio del messaggio",
+        "stopped": "Interrotto"
+      },
+      "actions": {
+        "start": "Avvia Voice Agent",
+        "settings": "Impostazioni",
+        "transcript": "Mostra chat",
+        "hideTranscript": "Nascondi chat",
+        "micOff": "Spegni il microfono",
+        "micOn": "Accendi il microfono",
+        "end": "Termina chiamata",
+        "stopReply": "Smetti di parlare",
+        "backToText": "Torna a scrivere"
+      },
+      "settings": {
+        "title": "Impostazioni",
+        "close": "Chiudi impostazioni",
+        "voice": "Voce",
+        "speed": "Velocità",
+        "language": "Lingua",
+        "voices": {
+          "helios": "Helios",
+          "aurora": "Aurora"
+        },
+        "male": "Maschile",
+        "female": "Femminile",
+        "slower": "Più lento",
+        "faster": "Più veloce",
+        "speedValue": "{{value}}x",
+        "autoDetect": "Rilevamento automatico",
+        "searchLanguages": "Cerca lingue",
+        "noLanguages": "Nessuna lingua trovata",
+        "languageUnavailable": "Nessun modello vocale su questo computer capisce {{language}}",
+        "needsSpeechModel": "Serve un modello vocale"
+      },
+      "setup": {
+        "download": "Scarica",
+        "openSettings": "Apri Impostazioni",
+        "changeLanguage": "Cambia lingua",
+        "retry": "Riprova",
+        "cancel": "Annulla",
+        "downloading": "Download… {{percent}}%",
+        "downloadFailed": "Impossibile scaricare i modelli vocali. Controlla la connessione e riprova.",
+        "reasons": {
+          "voice-models-missing": "Le chiamate vocali richiedono {{size}} MB di modelli vocali su questo computer.",
+          "speech-model-missing": "Le chiamate vocali richiedono un modello vocale locale per sentirti. Scaricane uno nelle Impostazioni.",
+          "language-model-missing": "Nessun modello vocale su questo computer capisce la lingua della chiamata. Scaricane uno nelle Impostazioni o scegli un'altra lingua.",
+          "language-unsupported": "Le chiamate non sono ancora disponibili in questa lingua.",
+          "brain-not-downloaded": "Il modello dell'Assistente vocale non è ancora stato scaricato.",
+          "brain-sign-in-required": "Accedi per rispondere alle chiamate con OpenWhispr Cloud o scegli un altro modello.",
+          "brain-key-missing": "Aggiungi una chiave API per il modello dell'Assistente vocale.",
+          "meeting-recording": "È in corso la registrazione di una riunione. Le chiamate potranno iniziare quando termina.",
+          "mic-busy": "La dettatura sta usando il microfono.",
+          "mic-denied": "OpenWhispr non può usare il microfono. Consentilo nelle Impostazioni.",
+          "start-failed": "Impossibile avviare la chiamata."
+        }
+      },
+      "notices": {
+        "endedForMeeting": "Chiamata terminata per una riunione",
+        "workerStopped": "La voce ha smesso di funzionare",
+        "endedIdle": "Chiamata terminata dopo un po' di silenzio"
+      }
+    },
+    "backToLatest": "Torna agli ultimi"
   },
   "integrations": {
     "title": "Integrazioni",

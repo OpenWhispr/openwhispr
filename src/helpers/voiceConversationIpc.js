@@ -290,6 +290,23 @@ function registerVoiceConversationIpc({
     return true;
   });
 
+  // The call's language changed: later turns are heard by a model that knows it.
+  ipcMain.handle("voice-conversation:set-language", (event, sessionId, request = {}) => {
+    if (!session || event.sender !== sender || sessionId !== session.id) return false;
+    const recognizer = recognizerFor(request);
+    if (!recognizer) return false;
+    session.recognizer = recognizer;
+    const warm =
+      recognizer.engine === "whisper"
+        ? whisperManager.startServer(recognizer.model)
+        : parakeetManager.startServer(recognizer.model, recognizer.language);
+    Promise.resolve(warm).catch((error) => {
+      debugLogger.warn("voice conversation speech model warm-up failed", { error: error?.message });
+    });
+    debugLogger.info("voice conversation language changed", { recognizer });
+    return true;
+  });
+
   ipcMain.handle("voice-conversation:speak", (event, request = {}) => {
     if (!session || event.sender !== sender) return { cancelled: true };
     return voiceWorker.request("speak", {

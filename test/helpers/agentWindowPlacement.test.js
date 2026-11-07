@@ -58,3 +58,23 @@ test("a dictation pill lifts the dock only while it is in the dock's lower 40%",
     }
   }
 });
+
+test("a call's layouts: its taller pill, cards above it, and a transcript that grows to 480", () => {
+  const workArea = { x: 0, y: 0, width: 1512, height: 944 };
+  const anchor = { centerX: 756, bottom: 940 };
+  const size = (layout, contentHeight) => {
+    const { width, height } = computeAgentWindowBounds({
+      anchor,
+      layout,
+      workArea,
+      contentHeight,
+      call: true,
+    });
+    return [width, height];
+  };
+  assert.deepEqual(size("pill"), [256, 81]);
+  assert.deepEqual(size("standalone", 182), [436, 182 + 12 + 65 + 16]);
+  assert.deepEqual(size("modal", 100), [376, 358 + 16]);
+  assert.deepEqual(size("modal", 420), [376, 420 + 16]);
+  assert.deepEqual(size("modal", 900), [376, 480 + 16]);
+});

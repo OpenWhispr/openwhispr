@@ -4603,7 +4603,80 @@
       "steps_one": "{{count}} 个步骤",
       "steps_other": "{{count}} 个步骤"
     },
-    "waitingForAnswer": "等待回答"
+    "waitingForAnswer": "等待回答",
+    "call": {
+      "status": {
+        "starting": "正在启动语音…",
+        "listening": "正在聆听",
+        "working": "处理中…",
+        "speaking": "正在说话",
+        "micOff": "麦克风已关闭",
+        "waiting": "等待操作",
+        "sendingEmail": "正在发送邮件",
+        "sendingMessage": "正在发送消息",
+        "stopped": "已停止"
+      },
+      "actions": {
+        "start": "开始 Voice Agent",
+        "settings": "设置",
+        "transcript": "显示聊天",
+        "hideTranscript": "隐藏聊天",
+        "micOff": "关闭麦克风",
+        "micOn": "打开麦克风",
+        "end": "结束通话",
+        "stopReply": "停止说话",
+        "backToText": "返回输入"
+      },
+      "settings": {
+        "title": "设置",
+        "close": "关闭设置",
+        "voice": "声音",
+        "speed": "语速",
+        "language": "语言",
+        "voices": {
+          "helios": "Helios",
+          "aurora": "Aurora"
+        },
+        "male": "男声",
+        "female": "女声",
+        "slower": "更慢",
+        "faster": "更快",
+        "speedValue": "{{value}}x",
+        "autoDetect": "自动检测",
+        "searchLanguages": "搜索语言",
+        "noLanguages": "未找到语言",
+        "languageUnavailable": "这台电脑上没有能识别{{language}}的语音模型",
+        "needsSpeechModel": "需要语音模型"
+      },
+      "setup": {
+        "download": "下载",
+        "openSettings": "打开设置",
+        "changeLanguage": "更改语言",
+        "retry": "重试",
+        "cancel": "取消",
+        "downloading": "正在下载… {{percent}}%",
+        "downloadFailed": "无法下载语音模型。请检查网络连接后重试。",
+        "reasons": {
+          "voice-models-missing": "语音通话需要在这台电脑上下载 {{size}} MB 的语音模型。",
+          "speech-model-missing": "语音通话需要本地语音模型才能听到你说话。请在设置中下载一个。",
+          "language-model-missing": "这台电脑上没有能识别通话语言的语音模型。请在设置中下载，或选择其他语言。",
+          "language-unsupported": "此语言暂不支持通话。",
+          "brain-not-downloaded": "语音助手的模型尚未下载。",
+          "brain-sign-in-required": "请登录以使用 OpenWhispr Cloud 接听通话，或选择其他模型。",
+          "brain-key-missing": "请为语音助手的模型添加 API 密钥。",
+          "meeting-recording": "正在录制会议。会议结束后即可开始通话。",
+          "mic-busy": "听写正在使用麦克风。",
+          "mic-denied": "OpenWhispr 无法使用麦克风。请在设置中允许。",
+          "start-failed": "无法开始通话。"
+        }
+      },
+      "notices": {
+        "endedForMeeting": "因会议结束了通话",
+        "workerStopped": "语音已停止工作",
+        "endedIdle": "安静一段时间后通话已结束"
+      }
+    },
+    "backToLatest": "回到最新"
   },
   "integrations": {
     "title": "集成",

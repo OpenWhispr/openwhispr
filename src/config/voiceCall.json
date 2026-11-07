@@ -1,0 +1,6 @@
+{
+  "voices": { "helios": 5, "aurora": 1 },
+  "defaultVoice": "helios",
+  "speed": { "min": 0.5, "max": 2, "step": 0.25, "default": 1 },
+  "languages": ["auto", "en", "hi", "es", "fr", "de"]
+}

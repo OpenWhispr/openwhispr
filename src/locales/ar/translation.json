@@ -2815,7 +2815,80 @@
       "steps_many": "{{count}} خطوة",
       "steps_other": "{{count}} خطوة"
     },
-    "waitingForAnswer": "في انتظار الإجابة"
+    "waitingForAnswer": "في انتظار الإجابة",
+    "call": {
+      "status": {
+        "starting": "جارٍ تشغيل الصوت…",
+        "listening": "يستمع",
+        "working": "يعمل…",
+        "speaking": "يتحدث",
+        "micOff": "الميكروفون متوقف",
+        "waiting": "بانتظار إجراء",
+        "sendingEmail": "جارٍ إرسال البريد",
+        "sendingMessage": "جارٍ إرسال الرسالة",
+        "stopped": "متوقف"
+      },
+      "actions": {
+        "start": "بدء Voice Agent",
+        "settings": "الإعدادات",
+        "transcript": "إظهار المحادثة",
+        "hideTranscript": "إخفاء المحادثة",
+        "micOff": "إيقاف الميكروفون",
+        "micOn": "تشغيل الميكروفون",
+        "end": "إنهاء المكالمة",
+        "stopReply": "التوقف عن الكلام",
+        "backToText": "العودة إلى الكتابة"
+      },
+      "settings": {
+        "title": "الإعدادات",
+        "close": "إغلاق الإعدادات",
+        "voice": "الصوت",
+        "speed": "السرعة",
+        "language": "اللغة",
+        "voices": {
+          "helios": "Helios",
+          "aurora": "Aurora"
+        },
+        "male": "ذكر",
+        "female": "أنثى",
+        "slower": "أبطأ",
+        "faster": "أسرع",
+        "speedValue": "{{value}}x",
+        "autoDetect": "اكتشاف تلقائي",
+        "searchLanguages": "البحث عن لغة",
+        "noLanguages": "لم يتم العثور على لغات",
+        "languageUnavailable": "لا يوجد نموذج كلام على هذا الكمبيوتر يفهم {{language}}",
+        "needsSpeechModel": "يحتاج إلى نموذج كلام"
+      },
+      "setup": {
+        "download": "تنزيل",
+        "openSettings": "فتح الإعدادات",
+        "changeLanguage": "تغيير اللغة",
+        "retry": "إعادة المحاولة",
+        "cancel": "إلغاء",
+        "downloading": "جارٍ التنزيل… {{percent}}%",
+        "downloadFailed": "تعذّر تنزيل نماذج الصوت. تحقق من اتصالك وحاول مرة أخرى.",
+        "reasons": {
+          "voice-models-missing": "تحتاج المكالمات الصوتية إلى {{size}} ميغابايت من نماذج الصوت على هذا الكمبيوتر.",
+          "speech-model-missing": "تحتاج المكالمات الصوتية إلى نموذج كلام محلي لسماعك. نزّل واحدًا من الإعدادات.",
+          "language-model-missing": "لا يوجد نموذج كلام على هذا الكمبيوتر يفهم لغة المكالمة. نزّل واحدًا من الإعدادات أو اختر لغة أخرى.",
+          "language-unsupported": "المكالمات غير متاحة بهذه اللغة بعد.",
+          "brain-not-downloaded": "لم يتم تنزيل نموذج المساعد الصوتي بعد.",
+          "brain-sign-in-required": "سجّل الدخول للرد على المكالمات باستخدام OpenWhispr Cloud، أو اختر نموذجًا آخر.",
+          "brain-key-missing": "أضف مفتاح API لنموذج المساعد الصوتي.",
+          "meeting-recording": "يتم تسجيل اجتماع. يمكن بدء المكالمات بعد انتهائه.",
+          "mic-busy": "الإملاء يستخدم الميكروفون.",
+          "mic-denied": "لا يستطيع OpenWhispr استخدام الميكروفون. اسمح بذلك في الإعدادات.",
+          "start-failed": "تعذّر بدء المكالمة."
+        }
+      },
+      "notices": {
+        "endedForMeeting": "انتهت المكالمة بسبب اجتماع",
+        "workerStopped": "توقف الصوت عن العمل",
+        "endedIdle": "انتهت المكالمة بعد فترة من الصمت"
+      }
+    },
+    "backToLatest": "العودة إلى الأحدث"
   },
   "noteEditor": {
     "saved": "تم الحفظ",

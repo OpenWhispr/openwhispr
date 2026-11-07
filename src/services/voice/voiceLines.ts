@@ -3,13 +3,17 @@
 // isn't a UI locale, so these lines live here rather than in the locale files.
 // The Hindi lines avoid first-person verbs, which would mark the speaker's gender.
 
-export type SpokenLanguage = "en" | "hi" | "es" | "fr" | "de";
+import type { SpokenLanguage } from "./types";
+
+export type { SpokenLanguage };
 type ToolFiller = "web" | "notes" | "calendar" | "other";
 
 interface VoiceLines {
   fillers: Record<ToolFiller, string>;
   /** Spoken after a reply cut short for speech; the transcript has all of it. */
   moreInChat: string;
+  /** Spoken when a card waits on the user that speech can't answer (a send, a connection). */
+  onScreen: string;
 }
 
 const LINES: Record<SpokenLanguage, VoiceLines> = {
@@ -21,6 +25,7 @@ const LINES: Record<SpokenLanguage, VoiceLines> = {
       other: "One moment.",
     },
     moreInChat: "The rest is in the chat.",
+    onScreen: "It's on your screen.",
   },
   hi: {
     fillers: {
@@ -30,6 +35,7 @@ const LINES: Record<SpokenLanguage, VoiceLines> = {
       other: "एक पल रुकिए।",
     },
     moreInChat: "बाकी जवाब चैट में है।",
+    onScreen: "यह आपकी स्क्रीन पर है।",
   },
   es: {
     fillers: {
@@ -39,6 +45,7 @@ const LINES: Record<SpokenLanguage, VoiceLines> = {
       other: "Un momento.",
     },
     moreInChat: "El resto está en el chat.",
+    onScreen: "Está en tu pantalla.",
   },
   fr: {
     fillers: {
@@ -48,6 +55,7 @@ const LINES: Record<SpokenLanguage, VoiceLines> = {
       other: "Un instant.",
     },
     moreInChat: "La suite est dans le chat.",
+    onScreen: "C'est à l'écran.",
   },
   de: {
     fillers: {
@@ -57,6 +65,7 @@ const LINES: Record<SpokenLanguage, VoiceLines> = {
       other: "Einen Moment.",
     },
     moreInChat: "Der Rest steht im Chat.",
+    onScreen: "Es ist auf deinem Bildschirm.",
   },
 };
 
@@ -67,8 +76,8 @@ export const isSpokenLanguage = (value: string): value is SpokenLanguage =>
 
 /** Every line a call may say while it works, so a session can prepare their audio. */
 export function preparedLines(language: SpokenLanguage): string[] {
-  const { fillers, moreInChat } = LINES[language];
-  return [...Object.values(fillers), moreInChat];
+  const { fillers, moreInChat, onScreen } = LINES[language];
+  return [...Object.values(fillers), moreInChat, onScreen];
 }
 
 /** What to say while these tools run, so the wait isn't silent. */
@@ -83,6 +92,56 @@ export function toolFiller(toolNames: readonly string[], language: SpokenLanguag
 }
 
 export const moreInChatLine = (language: SpokenLanguage): string => LINES[language].moreInChat;
+
+export const onScreenLine = (language: SpokenLanguage): string => LINES[language].onScreen;
+
+// Said alone over a reply, these stop it; any other single word ("okay",
+// "please", "yeah") is a backchannel, and the reply goes on.
+const STOP_WORDS = new Set(
+  [
+    "stop",
+    "wait",
+    "cancel",
+    "enough",
+    "quiet",
+    "no",
+    "para",
+    "espera",
+    "basta",
+    "cancela",
+    "calla",
+    "arrête",
+    "arrete",
+    "attends",
+    "annule",
+    "stoppe",
+    "non",
+    "stopp",
+    "warte",
+    "halt",
+    "abbrechen",
+    "nein",
+    "रुको",
+    "रुकिए",
+    "बस",
+    "ठहरो",
+    "नहीं",
+  ].map((word) => word.normalize("NFC"))
+);
+
+/**
+ * What words said over a reply mean: nothing (a backchannel or noise), stop it,
+ * or a new request. A single word is never a request on its own.
+ */
+export function interruptionKind(text: string): "ignore" | "stop" | "request" {
+  const words =
+    text
+      .normalize("NFC")
+      .toLowerCase()
+      .match(/[\p{L}\p{M}'’]+/gu) ?? [];
+  if (words.length >= 2) return "request";
+  return words.length === 1 && STOP_WORDS.has(words[0]) ? "stop" : "ignore";
+}
 
 const WORDS: Record<Exclude<SpokenLanguage, "hi">, ReadonlySet<string>> = {
   en: new Set("the and is you to of it that your have for what this are with".split(" ")),
