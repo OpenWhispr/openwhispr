@@ -49,9 +49,8 @@ function buildVoiceWorkerConfig({ modelPaths }) {
         model: modelPaths.vad,
         threshold: 0.5,
         minSilenceDuration: SMART_TURN_PAUSE_MS / 1000,
-        // "Stop." over a reply, its onset dulled by echo cancellation, stayed under
-        // 0.25 s; 0.15 s also let a short laugh or sneeze start a turn.
-        minSpeechDuration: 0.2,
+        // "Stop." over a reply, its onset dulled by echo cancellation, stayed under 0.25 s.
+        minSpeechDuration: 0.15,
         maxSpeechDuration: 20,
         windowSize: 512,
       },

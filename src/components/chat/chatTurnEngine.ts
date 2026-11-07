@@ -383,15 +383,12 @@ export interface SendToAIOptions {
    * `replyLanguage` (null: the language spoken), and `speech` hears it stream.
    * `dryRunWrites` (the voice harness) runs no write tool. `interrupts`: it was
    * said over a turn still running, so that turn's request may be its start.
-   * `continues`: `requestText` is the request before, a pause cut short, with
-   * this message joined on; it is answered whole, in place of the requests it joins.
    */
   voice?: {
     replyLanguage: string | null;
     speech: TurnSpeechObserver;
     dryRunWrites?: boolean;
     interrupts?: boolean;
-    continues?: boolean;
   };
 }
 
@@ -470,8 +467,6 @@ export function createChatTurnEngine(
     cancel({ explicit: true });
     const speech = options?.voice?.speech;
     let speechOutcome: TurnSpeechOutcome = "stopped";
-    // Its context and claim check read the whole request, not the words after the pause.
-    if (options?.voice?.continues && options.requestText) userText = options.requestText;
     const sendNumber = ++latestSend;
     const stopsAtStart = stops;
     const { claimConversation } = getOptions();
@@ -496,6 +491,7 @@ export function createChatTurnEngine(
         const latest = claim.messages.at(-1);
         if (latest?.dbId !== options.replaceMessage.dbId || latest?.role !== "assistant") {
           options.onReplaceFailed?.();
+          speech?.onEnd("refused");
           await claim.release();
           return;
         }
@@ -997,44 +993,17 @@ export function createChatTurnEngine(
       const talkedOver = options?.voice?.interrupts
         ? roles.lastIndexOf("user", roles.length - 2)
         : -1;
-      // A request a pause cut short is sent whole: the requests it joins and
-      // their replies, which did nothing, are left out, so it is read once.
-      // The selected text a joined request was asked about goes with it.
-      const joined = new Set<number>();
-      let joinedSelection: Message | undefined;
-      for (let i = allMessages.length - 2; options?.voice?.continues && i >= 0; i -= 1) {
-        const message = allMessages[i];
-        if (message.role !== "user") continue;
-        if (!userText.includes(message.content) || allMessages[i + 1].toolCalls?.length) break;
-        joined.add(i);
-        if (allMessages[i + 1].role === "assistant") joined.add(i + 1);
-        if (message.selectedContext) joinedSelection = message;
-      }
       const asked = options?.voice
         ? allMessages.filter(
             (message, i) =>
-              !joined.has(i) &&
-              (message.role !== "user" ||
-                i === talkedOver ||
-                !stoppedBeforeReply(allMessages[i + 1]))
+              message.role !== "user" || i === talkedOver || !stoppedBeforeReply(allMessages[i + 1])
           )
         : allMessages;
       const requestIndex = asked.map((message) => message.role).lastIndexOf("user");
       const history: HistoryMessage[] = toHistoryMessages(
         requestText
           ? asked.map((message, i) =>
-              i === requestIndex
-                ? {
-                    ...message,
-                    content: requestText,
-                    ...(joinedSelection && !message.selectedContext
-                      ? {
-                          selectedContext: joinedSelection.selectedContext,
-                          selectedContextSource: joinedSelection.selectedContextSource,
-                        }
-                      : {}),
-                  }
-                : message
+              i === requestIndex ? { ...message, content: requestText } : message
             )
           : asked,
         {

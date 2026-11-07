@@ -205,6 +205,8 @@ export default function AgentWindow() {
   // A new function every render; read through a ref so callbacks stay stable.
   const sendRef = useRef(chat.send);
   sendRef.current = chat.send;
+  const sendJoinedRef = useRef(chat.sendJoined);
+  sendJoinedRef.current = chat.sendJoined;
   const readAloud = useReadAloud(i18n.language);
   const { stop: stopReading } = readAloud;
 
@@ -636,20 +638,15 @@ export default function AgentWindow() {
         attachment: current.attachment,
       });
       try {
-        const sent = await sendRef.current(text, {
+        const options = {
           ...(current.selectedContext ? { selectedContext: current.selectedContext } : {}),
           ...(current.attachment ? { attachment: current.attachment } : {}),
-          // A request a pause cut short: the chat shows the words said after it,
-          // and the model answers it whole, in place of the requests it joins.
-          ...(joinedRequest ? { requestText: joinedRequest } : {}),
-          voice: {
-            replyLanguage,
-            speech,
-            dryRunWrites,
-            interrupts: interrupts && !joinedRequest,
-            continues: Boolean(joinedRequest),
-          },
-        });
+          voice: { replyLanguage, speech, dryRunWrites, interrupts: interrupts && !joinedRequest },
+        };
+        // A request a pause cut short is answered whole, in place of its first half.
+        const sent = await (joinedRequest
+          ? sendJoinedRef.current(joinedRequest, options)
+          : sendRef.current(text, options));
         // Never sent: the engine never heard of it, so it never ends it.
         if (!sent) speech.onEnd("refused");
       } catch {
@@ -712,22 +709,19 @@ export default function AgentWindow() {
   }, [announceCard, callActive, cardAnnouncement, cardAwaitsSend, pendingQuestion]);
 
   // An answer card sent from the compact call stays above its pill through
-  // Sending… and what came of it, as in the transcript, then gives way.
+  // Sending… and what came of it, as in the transcript, until the next turn
+  // or card takes its place, or the call ends.
   const [sentCard, setSentCard] = useState<PendingCard | null>(null);
   useEffect(() => {
-    if (pendingCard && callActive)
-      setSentCard(pendingCard.interaction === null ? pendingCard : null);
+    if (!callActive) setSentCard(null);
+    else if (pendingCard) setSentCard(pendingCard.interaction === null ? pendingCard : null);
   }, [callActive, pendingCard]);
-  const sent = sentCard ? approvals[sentCard.key] : undefined;
+  const sent =
+    sentCard && messages.at(-1)?.id === sentCard.messageId ? approvals[sentCard.key] : undefined;
   // A failed send that offers Retry still waits on the user.
   const sendSettled =
     !sent?.awaitingRetry &&
     (sent?.state === "sent" || sent?.state === "failed" || sent?.state === "unknown");
-  useEffect(() => {
-    if (!sendSettled) return undefined;
-    const timer = setTimeout(() => setSentCard(null), NOTICE_MS);
-    return () => clearTimeout(timer);
-  }, [sendSettled]);
   const callCard = pendingCard ?? (sent?.state === "committing" || sendSettled ? sentCard : null);
   // A card the user minimized the call's transcript over waits behind the
   // pill, which reads Waiting For Action until its cap brings the card back.
@@ -996,8 +990,10 @@ export default function AgentWindow() {
   }, [dispatch, endVoiceCall, hideSurface, newChat]);
 
   // A call already listens: a press or Ask assistant only brings it back into view.
+  // A call Stopped in the transcript is left first, so the take or typing shows.
   const showActiveCall = useCallback(() => {
     const current = stateRef.current;
+    if (current.call?.stopped) dispatch({ type: "leaveCall" });
     if (!current.call || current.call.stopped) return false;
     if (!current.visible) dispatch({ type: "show", layout: current.layout, input: current.input });
     return true;
@@ -1110,6 +1106,7 @@ export default function AgentWindow() {
     command: (command) => {
       if (refuseIfRestricted()) return;
       setRefusal(null);
+      if (stateRef.current.call?.stopped) dispatch({ type: "leaveCall" });
       if (!stateRef.current.visible) dispatch({ type: "show", layout: "pill", input: "voice" });
       submit(command.text, false, {
         selectedContext: command.selectedContext

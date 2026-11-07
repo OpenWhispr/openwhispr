@@ -53,8 +53,11 @@ export function createSpeechChunker(): SpeechChunker {
       if (!isWhitespace(next)) continue;
       if (SENTENCE_TERMINATORS.has(char)) {
         const following = buffer.slice(index + 1).trimStart()[0];
-        // "e.g. last week" continues the sentence; an uppercase or missing next word ends it.
-        if (char === "." && isLowercase(following)) continue;
+        // "e.g. last week" continues the sentence, and so does a list item's number
+        // ("1. Keep"); an uppercase or missing next word ends it.
+        if (char === "." && (isLowercase(following) || /^\d+$/.test(buffer.slice(0, index)))) {
+          continue;
+        }
         return index + 1;
       }
       if (

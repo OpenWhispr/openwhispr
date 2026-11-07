@@ -12,7 +12,7 @@ async function mountChat(t) {
   });
   installBrowserGlobals(t);
   const container = installInteractiveDom(t);
-  const calls = { sends: [], regenerated: [], streaming: null };
+  const calls = { sends: [], regenerated: [], rewrites: [], streaming: null };
   globalThis.__agentSkillCalls = calls;
   t.after(() => delete globalThis.__agentSkillCalls);
   const vite = await createRendererServer(t, {
@@ -21,11 +21,12 @@ async function mountChat(t) {
       "react-i18next": SKILLS_MOCKS["react-i18next"],
       "/chat/useChatPersistence": `
         const messages = [
-          { id: "u1", role: "user", content: "Prep my meeting", isStreaming: false },
+          { id: "u1", role: "user", content: "Prep my meeting", isStreaming: false, dbId: 7 },
           { id: "a1", role: "assistant", content: "Your prep", isStreaming: false },
         ];
         export function useChatPersistence() { return {
-          messages, conversationId: 1, forkOrigin: null, setMessages() {},
+          messages, conversationId: 1, forkOrigin: null,
+          setMessages(update) { globalThis.__agentSkillCalls.rewrites.push(update(messages)); },
           async createConversation() { return 1; },
           async loadConversation(id, beforeOpen) { beforeOpen?.(); return { id }; },
           getSessionVersion: () => 1,
@@ -129,4 +130,29 @@ test("regenerating an assistant answer keeps the skill it was using", async (t) 
   await React.act(async () => view.chat().regenerate(view.chat().messages[1]));
   assert.equal(view.calls.regenerated.length, 1);
   assert.deepEqual(view.calls.regenerated[0].options.attachedSkill, { name: "meeting-prep" });
+});
+
+test("a request a pause cut short replaces its first half and answers in place of its reply", async (t) => {
+  const view = await mountChat(t);
+  const updates = [];
+  globalThis.window.electronAPI.updateAgentMessage = async (...args) => updates.push(args);
+  const voice = { replyLanguage: null };
+  await React.act(async () => view.chat().sendJoined("Prep my meeting with Dana", { voice }));
+  const [answered] = view.calls.regenerated;
+  assert.equal(answered.text, "Prep my meeting with Dana");
+  assert.deepEqual(
+    answered.messages.map((message) => message.content),
+    ["Prep my meeting with Dana"]
+  );
+  assert.equal(answered.options.replaceMessage.id, "a1");
+  assert.equal(answered.options.voice, voice);
+  assert.deepEqual(
+    view.calls.rewrites[0].map((message) => message.content),
+    ["Prep my meeting with Dana", "Your prep"]
+  );
+  assert.deepEqual(updates, [[7, "Prep my meeting with Dana", undefined]]);
+  assert.equal(view.calls.sends.length, 0, "no second request is added");
+
+  await React.act(async () => view.chat().sendJoined("Plan my week", { voice }));
+  assert.equal(view.calls.sends.at(-1).text, "Plan my week", "anything else is sent as it is");
 });

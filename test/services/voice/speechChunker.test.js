@@ -47,6 +47,15 @@ test("does not split decimals or lowercase continuations after abbreviations", a
   ]);
 });
 
+test("a numbered list item is one chunk, not its number and then its text", async () => {
+  const { createSpeechChunker } = await load();
+  const chunker = createSpeechChunker();
+  assert.deepEqual(
+    pushAll(chunker, ["1. Keep a set bedtime.\n2. Dim the lights.\n", "3. Skip late coffee.\n"]),
+    ["Keep a set bedtime.", "Dim the lights.", "Skip late coffee."]
+  );
+});
+
 test("splits on newlines and question or exclamation marks", async () => {
   const { createSpeechChunker } = await load();
   const chunker = createSpeechChunker();
