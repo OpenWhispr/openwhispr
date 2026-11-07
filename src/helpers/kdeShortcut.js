@@ -108,6 +108,24 @@ const QT_KEYS = {
   pause: 0x01000008,
 };
 
+const QT_MODIFIER_MASK = 0xfe000000;
+
+// Qt::Key_Shift/Control/Meta/Alt → their Qt::KeyboardModifier bit.
+const QT_MODIFIER_KEYS = {
+  0x01000020: 0x02000000,
+  0x01000021: 0x04000000,
+  0x01000022: 0x10000000,
+  0x01000023: 0x08000000,
+};
+
+// kglobalacceld 6.8 stores a modifier-only chord as "modifiers + one modifier
+// key" (Ctrl+Meta comes back as Meta|Key_Control), so fold that key back into
+// its modifier bit before comparing with what was requested (#2750).
+function normalizeQtKeyCode(qtKey) {
+  const modifierBit = QT_MODIFIER_KEYS[qtKey & ~QT_MODIFIER_MASK];
+  return modifierBit ? (qtKey & QT_MODIFIER_MASK) | modifierBit : qtKey;
+}
+
 const COMPONENT_NAME = "openwhispr";
 
 class KDEShortcutManager {
@@ -257,7 +275,6 @@ class KDEShortcutManager {
     // Modifier-only shortcuts (e.g. Control+Super) don't work on X11.
     // KWin accepts them on Wayland, but emits press and release together after
     // the first modifier is released, so they cannot represent push-to-talk.
-    const QT_MODIFIER_MASK = 0xfe000000;
     const isModifierOnly = (qtKey & ~QT_MODIFIER_MASK) === 0;
     const modifierOnlyUnsupported =
       isModifierOnly &&
@@ -342,10 +359,10 @@ class KDEShortcutManager {
         });
       });
 
-      // Post-registration conflict check: if setShortcut assigned a different key,
-      // another component owns it.
+      // Post-registration conflict check: KF5 and kglobalacceld up to 6.6 answer a key
+      // another component owns with an empty one; 6.7+ stores it anyway.
       const assignedKey = Array.isArray(result) && result.length > 0 ? result[0] : null;
-      if (assignedKey !== null && assignedKey !== qtKey) {
+      if (assignedKey !== null && normalizeQtKeyCode(assignedKey) !== qtKey) {
         debugLogger.log("[KDEShortcut] Shortcut conflict — setShortcut assigned different key", {
           slot: slotName,
           requested: `0x${qtKey.toString(16)}`,
