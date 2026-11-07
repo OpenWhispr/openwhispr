@@ -290,6 +290,12 @@ export const APP_GROUP_KEYS = {
   KEYBOARD_RECORDING_TONE: 'keyboard_recording_tone',
   KEYBOARD_RECORDING_TONE_JOB_ID: 'keyboard_recording_tone_job_id',
   KEYBOARD_TONE_APPLICABLE: 'keyboard_tone_applicable',
+  // App → keyboard: "0" turns the keyboard's typo autocorrection off; anything else (or an
+  // unreadable container) leaves it on. Persisted across launches like the tone mirror.
+  KEYBOARD_AUTOCORRECTION_ENABLED: 'keyboard_autocorrection_enabled',
+  // App → keyboard: the languages it corrects, as "de,en". Missing, empty or unknown-only
+  // (or an unreadable container) means German and English.
+  KEYBOARD_AUTOCORRECTION_LANGUAGES: 'keyboard_autocorrection_languages',
   BACKGROUND_SESSION_READY: 'background_session_ready',
   // Hotkey dictation: "<pid>:<ms>", stamped by markHotkeyJsReady once
   // useKeyboardHandoff's recording listeners are subscribed; the hotkey's cold

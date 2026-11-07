@@ -10,6 +10,7 @@ import { useConfigToggle } from '@/hooks/useConfigToggle';
 import { DEFAULT_LANGUAGE, getLanguage } from '@/lib/languages';
 import { toneLabel, DEFAULT_KEYBOARD_TONE } from '@/lib/keyboardTone';
 import { getDictationAgentName } from '@/lib/dictationAgent';
+import { keyboardAutocorrectionSummary } from '@/lib/keyboardAutocorrection';
 import { LiveActivity } from '../../modules/live-activity/src';
 
 export default function PreferencesScreen() {
@@ -73,6 +74,20 @@ export default function PreferencesScreen() {
           subtitle={toneLabel(keyboardTone)}
           onPress={() => router.push('/(account)/keyboard-tone')}
         />
+        {Platform.OS === 'ios' ? (
+          <SettingsRow
+            iconStyle="line"
+            icon="textformat.abc.dottedunderline"
+            mdIcon="SpellCheck"
+            title="Autocorrection"
+            description="Fixes obvious typos when you tap space"
+            subtitle={keyboardAutocorrectionSummary(
+              config?.keyboardAutocorrectionEnabled ?? true,
+              config?.keyboardAutocorrectionLanguages,
+            )}
+            onPress={() => router.push('/(account)/keyboard-autocorrection')}
+          />
+        ) : null}
         <SettingsRow
           iconStyle="line"
           icon="person.wave.2"
