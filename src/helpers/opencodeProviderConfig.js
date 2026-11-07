@@ -38,10 +38,16 @@ function getOpencodeProvider(id) {
 }
 
 // One id per unit of work, so a request and its retries read as one
-// conversation to Go's router. Zen never sees a header it acts on.
-function opencodeHeaders(id, randomUUID = () => require("crypto").randomUUID()) {
+// conversation to Go's router. A chat turn passes the id it minted when its
+// model was built, so every tool step in that turn is the same conversation;
+// a one-shot call mints its own. Zen never sees a header it acts on.
+function opencodeHeaders(
+  id,
+  { sessionId, randomUUID = () => require("crypto").randomUUID() } = {}
+) {
   const provider = getOpencodeProvider(id);
-  return provider.requiresSession ? { [SESSION_HEADER]: randomUUID() } : {};
+  if (!provider.requiresSession) return {};
+  return { [SESSION_HEADER]: sessionId || randomUUID() };
 }
 
 module.exports = {

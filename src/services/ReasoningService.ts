@@ -1058,7 +1058,10 @@ class ReasoningService extends BaseReasoningService {
       );
       assertStreamAllowed();
       const isEnterprise = route.kind === "enterprise";
-      const isOpencode = provider === "opencode-go" || provider === "opencode-zen";
+      // A declared self-hosted URL wins over a stale provider id
+      // (resolveChatRoute), so only a provider route may pick the OpenCode proxy.
+      const isOpencode =
+        route.kind === "provider" && (provider === "opencode-go" || provider === "opencode-zen");
       const isLocalProvider = route.kind === "local";
       const isLanChat = route.kind === "self-hosted";
 

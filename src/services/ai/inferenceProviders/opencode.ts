@@ -1,13 +1,15 @@
 import type { InferenceProvider } from "./types";
-import { getCloudModel } from "../../../models/ModelRegistry";
+import { getOpencodeCatalogModel } from "../../../models/ModelRegistry";
 import { wrapCleanupTranscript } from "../../../config/prompts";
+import { getLlmRequestTimeoutSeconds } from "../../../helpers/llmRequestTimeout.js";
 import logger from "../../../utils/logger";
 import { errorFromIpcResult } from "../../../helpers/ipcErrorFields";
 
 // OpenCode Go and Zen are separate subscriptions on one host, so each has its
 // own key and its own provider id. Both requests run in the main process:
 // opencode.ai answers no CORS preflight, which blocks a renderer fetch before
-// it is sent. Go's per-conversation session header is minted in main.
+// it is sent. Go's session id is minted per chat turn (or per one-shot call)
+// and attached in main.
 function createOpencodeProvider(
   id: "opencode-go" | "opencode-zen",
   displayName: string
@@ -24,16 +26,22 @@ function createOpencodeProvider(
 
       const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName, config.toneStyle);
       const userContent = config.systemPrompt ? text : wrapCleanupTranscript(text);
-      // Unknown models default to sending `temperature`, which Chat Completions
-      // accepts; registry entries that reject it say so.
-      const supportsTemperature = getCloudModel(model)?.supportsTemperature ?? true;
+      // The live list states whether the model takes a temperature. A model that
+      // isn't in the list gets none.
+      const supportsTemperature = getOpencodeCatalogModel(id, model)?.supportsTemperature ?? false;
 
       const result = await window.electronAPI.processOpencodeReasoning(
         id,
         userContent,
         model,
         agentName,
-        { ...config, systemPrompt, supportsTemperature }
+        {
+          ...config,
+          systemPrompt,
+          supportsTemperature,
+          // Note formatting gets the long deadline, like the enterprise path.
+          timeoutMs: getLlmRequestTimeoutSeconds({ scope: config.inferenceScope }) * 1000,
+        }
       );
 
       if (!result.success) {

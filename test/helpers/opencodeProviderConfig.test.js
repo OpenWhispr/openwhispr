@@ -7,7 +7,9 @@ const {
   isOpencodeProvider,
   opencodeHeaders,
 } = require("../../src/helpers/opencodeProviderConfig");
+const { resolveProviderRequest } = require("../../src/helpers/providerConnectionTest");
 const { BYOK_API_KEYS } = require("../../src/config/secretKeys");
+const { isSelectableOpencodeModelId } = require("../../src/config/opencodeModelPolicy.js");
 const modelData = require("../../src/models/modelRegistryData.json");
 
 // OpenCode Go and Zen are separate subscriptions on one host, so the two ids
@@ -37,17 +39,31 @@ test("each provider id has its own key manifest entry and env var", () => {
   assert.equal(new Set(envs).size, envs.length, "the two providers share no env var");
 });
 
+test("the connection check probes the configured base URL", () => {
+  // Drift here would test a key against one host while real requests go to another.
+  for (const provider of Object.values(OPENCODE_PROVIDERS)) {
+    const request = resolveProviderRequest({ provider: provider.id, apiKey: "sk-test" });
+    assert.equal(request.endpoint, `${provider.baseUrl}/models`, provider.id);
+  }
+});
+
 test("only Go carries the per-conversation session header", () => {
+  assert.deepEqual(opencodeHeaders("opencode-go", { randomUUID: () => "fixed-id" }), {
+    "x-opencode-session": "fixed-id",
+  });
+  assert.deepEqual(opencodeHeaders("opencode-zen", { randomUUID: () => "fixed-id" }), {});
+});
+
+test("a chat turn's session id is reused instead of minted per request", () => {
+  // Every tool step of one turn must read as the same conversation to Go.
   assert.deepEqual(
-    opencodeHeaders("opencode-go", () => "fixed-id"),
+    opencodeHeaders("opencode-go", { sessionId: "turn-id", randomUUID: () => "fresh" }),
     {
-      "x-opencode-session": "fixed-id",
+      "x-opencode-session": "turn-id",
     }
   );
-  assert.deepEqual(
-    opencodeHeaders("opencode-zen", () => "fixed-id"),
-    {}
-  );
+  // Zen ignores the header even when a caller supplies one.
+  assert.deepEqual(opencodeHeaders("opencode-zen", { sessionId: "turn-id" }), {});
 });
 
 test("an unknown or missing provider is refused", () => {
@@ -57,30 +73,30 @@ test("an unknown or missing provider is refused", () => {
   assert.throws(() => getOpencodeProvider("opencode"), /Unsupported OpenCode provider/);
 });
 
-test("both providers are selectable and have a handler and models", () => {
+test("both providers are selectable and their seed lists default to a listed model", () => {
   for (const id of Object.keys(OPENCODE_PROVIDERS)) {
     const provider = modelData.cloudProviders.find((entry) => entry.id === id);
     assert.ok(provider, `${id} is in the model registry`);
-    assert.ok(provider.models.length > 0, `${id} lists at least one model`);
+    assert.ok(provider.models.length > 0, `${id} seeds at least one model`);
     assert.ok(
       provider.models.some((model) => model.id === provider.defaultModel),
-      `${id} defaults to a listed model`
+      `${id} defaults to a seeded model`
     );
   }
 });
 
-test("free and contributor tiers stay out of the catalog", () => {
-  // Those tiers may log prompts or train on them. The app dictates private
-  // speech, so only paid tiers are offered.
+test("the offline seed holds only models the live list would offer", () => {
+  // Once OpenCode can be reached the picker shows its live list instead, but
+  // offline this seed is all there is, so it must pass the same policy.
   for (const id of Object.keys(OPENCODE_PROVIDERS)) {
     const provider = modelData.cloudProviders.find((entry) => entry.id === id);
-    const exposed = provider.models.filter(
-      (model) => model.id.endsWith("-free") || model.id.includes("contributor")
-    );
-    assert.deepEqual(
-      exposed.map((model) => model.id),
-      [],
-      `${id} lists no free tier`
-    );
+    for (const model of provider.models) {
+      assert.equal(isSelectableOpencodeModelId(model.id), true, `${id} seeds ${model.id}`);
+      assert.equal(
+        typeof model.supportsTemperature,
+        "boolean",
+        `${id}/${model.id} states temperature`
+      );
+    }
   }
 });

@@ -5,7 +5,11 @@ import {
 } from "./registryData.js";
 import { isCloudCleanupMode, getSettings } from "../stores/settingsStore";
 import { isSelectableTinfoilModel } from "../config/retiredCloudModelPolicy.js";
-import { getCloudModelProviders, setTinfoilModelOverlay } from "./cloudModelCatalog";
+import {
+  getCloudModelProviders,
+  setTinfoilModelOverlay,
+  setOpencodeModelOverlay,
+} from "./cloudModelCatalog";
 import { isUploadOnlyTranscriptionModel } from "./appTranscriptionProviders.js";
 import { pickDefaultModelId } from "./providerDefaultModel";
 import { filterMeetingStreamingProviders } from "../helpers/meetingTranscriptionRouting";
@@ -275,9 +279,11 @@ export function enterpriseProviderName(provider: EnterpriseProvider | "openai-co
 }
 
 export function toReasoningModel(m: CloudModelDefinition): ReasoningModel {
+  // A missing display name renders as a blank row; the id always reads.
+  const name = typeof m.name === "string" ? m.name.trim() : "";
   return {
     value: m.id,
-    label: m.name,
+    label: name || m.id,
     description: m.description,
     descriptionKey: m.descriptionKey,
     legacy: m.legacy,
@@ -339,6 +345,26 @@ export function getTinfoilModels(): CloudModelDefinition[] {
 
 export function getCloudProviderDefaultModelId(providerId: string): string | undefined {
   return modelData.cloudProviders.find((provider) => provider.id === providerId)?.defaultModel;
+}
+
+export function getOpencodeCatalogModels(providerId: string): CloudModelDefinition[] {
+  return modelRegistry.getCloudProviders().find((provider) => provider.id === providerId)?.models ?? [];
+}
+
+export function getOpencodeCatalogModel(
+  providerId: string,
+  modelId: string
+): CloudModelDefinition | undefined {
+  return getOpencodeCatalogModels(providerId).find((model) => model.id === modelId);
+}
+
+export function applyOpencodeModels(providerId: string, models: CloudModelDefinition[]): void {
+  if (models.length === 0) return;
+  setOpencodeModelOverlay(providerId, models);
+  const reasoningProvider = REASONING_PROVIDERS[providerId];
+  if (reasoningProvider) {
+    reasoningProvider.models = models.map(toReasoningModel);
+  }
 }
 
 export function applyTinfoilModels(models: CloudModelDefinition[]): void {

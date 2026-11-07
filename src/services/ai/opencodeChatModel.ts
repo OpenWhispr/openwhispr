@@ -41,6 +41,9 @@ export function createOpencodeChatModel(
   provider: OpenCodeProviderId,
   modelId: string
 ): LanguageModelV3 {
+  // One session per model instance (one chat turn): every tool step of the
+  // turn then reads as the same conversation to OpenCode Go's router.
+  const sessionId = crypto.randomUUID();
   return {
     specificationVersion: "v3",
     provider,
@@ -58,6 +61,7 @@ export function createOpencodeChatModel(
       }
 
       const streamId = crypto.randomUUID();
+      let settled = false;
       let unsubscribe: (() => void) | undefined;
       const stopListening = () => {
         unsubscribe?.();
@@ -66,13 +70,19 @@ export function createOpencodeChatModel(
 
       const stream = new ReadableStream<LanguageModelV3StreamPart>({
         start: (controller) => {
-          let settled = false;
           const fail = (message: string) => {
             if (settled) return;
             settled = true;
             stopListening();
             controller.error(new Error(message));
           };
+
+          // A turn cancelled before its first step should not open a request.
+          if (options.abortSignal?.aborted) {
+            settled = true;
+            controller.close();
+            return;
+          }
 
           unsubscribe = api.onOpencodeStreamPart!((payload) => {
             if (payload.streamId !== streamId) return;
@@ -94,6 +104,7 @@ export function createOpencodeChatModel(
 
           api.opencodeStreamStart!({
             streamId,
+            sessionId,
             provider,
             modelId,
             config: {},
@@ -105,6 +116,8 @@ export function createOpencodeChatModel(
             .catch((error: Error) => fail(error.message));
         },
         cancel: () => {
+          // The consumer is gone; a late error/done must not touch a closed controller.
+          settled = true;
           stopListening();
           api.opencodeStreamCancel?.(streamId);
         },

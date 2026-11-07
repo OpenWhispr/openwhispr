@@ -66,7 +66,7 @@ const BYOK_API_KEYS = [
   },
   // OpenCode sells two products on one host: Go (flat-rate subscription,
   // /zen/go/v1) and Zen (pay-as-you-go, /zen/v1). They are separate
-  // subscriptions, so each keeps its own key, the way Hermes names them.
+  // subscriptions, so each keeps its own key.
   {
     base: "opencode-go",
     env: "OPENCODE_GO_API_KEY",

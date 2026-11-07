@@ -2,6 +2,7 @@ import type { ModelDefinition } from "../models/ModelRegistry";
 import type { ReasoningConfig } from "../services/BaseReasoningService";
 import type { PermissionGuideState, PermissionGuideAction } from "./permissionGuide";
 import type { TinfoilCatalogModel } from "../models/tinfoilModels";
+import type { CloudModelDefinition } from "../models/ModelRegistry";
 import type { UsageResponse } from "../lib/usageStore";
 import type { DictationTone, ToneAppCategory } from "../config/toneStyle";
 import type { OrgPolicy } from "./policy";
@@ -2549,6 +2550,7 @@ declare global {
       // the enterprise one: parts are relayed verbatim.
       opencodeStreamStart?: (payload: {
         streamId: string;
+        sessionId?: string;
         provider: "opencode-go" | "opencode-zen";
         modelId: string;
         config: Record<string, unknown>;
@@ -2830,6 +2832,7 @@ declare global {
       getOpencodeZenKey?: () => Promise<string | null>;
       saveOpencodeZenKey?: (key: string) => Promise<void>;
       getTinfoilChatModels?: () => Promise<TinfoilCatalogModel[]>;
+      getOpencodeModels?: (providerId: string) => Promise<CloudModelDefinition[]>;
       proxyTinfoilTranscription?: (data: {
         audioBuffer: ArrayBuffer;
         language?: string;
