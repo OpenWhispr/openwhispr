@@ -10,9 +10,12 @@ const SEGMENTATION_URL =
 const SEGMENTATION_DIR = "sherpa-onnx-pyannote-segmentation-3-0";
 const SEGMENTATION_FILE = "model.onnx";
 
-const EMBEDDING_URL =
-  "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx";
-const EMBEDDING_FILE = "3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx";
+const {
+  EMBEDDING_MODEL_URL: EMBEDDING_URL,
+  EMBEDDING_MODEL_FILE: EMBEDDING_FILE,
+} = require("../src/constants/speakerDetection.json");
+// Superseded embedding model; removed so builds don't bundle both.
+const LEGACY_EMBEDDING_FILE = "3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx";
 const VAD_URL =
   "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx";
 const VAD_FILE = "silero_vad.onnx";
@@ -48,6 +51,7 @@ async function main() {
   const segModelPath = path.join(modelDir, SEGMENTATION_DIR, SEGMENTATION_FILE);
   const embModelPath = path.join(modelDir, EMBEDDING_FILE);
   const vadModelPath = path.join(modelDir, VAD_FILE);
+  fs.rmSync(path.join(modelDir, LEGACY_EMBEDDING_FILE), { force: true });
 
   const allExist =
     fs.existsSync(segModelPath) && fs.existsSync(embModelPath) && fs.existsSync(vadModelPath);

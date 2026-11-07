@@ -10,6 +10,12 @@ const CLIENT_SOURCE = fs.readFileSync(path.resolve("src/helpers/onnxWorkerClient
 const EMBEDDINGS_SOURCE = fs.readFileSync(path.resolve("src/helpers/localEmbeddings.js"), "utf8");
 const SPEAKER_SOURCE = fs.readFileSync(path.resolve("src/helpers/speakerEmbeddings.js"), "utf8");
 const SPEAKER_SAMPLES = new Float32Array(16000 * 2).fill(0.1);
+// Sources run in a vm context: resolve their relative requires from their own folder,
+// not from this test file's.
+const requireFromSrc = (dir) => (name) =>
+  require(name.startsWith(".") ? path.resolve("src", dir, name) : name);
+const requireWorkerDep = requireFromSrc("workers");
+const requireHelperDep = requireFromSrc("helpers");
 
 function fakeOrt(events, nativeSession) {
   return {
@@ -33,7 +39,7 @@ function loadEmbeddings(client) {
       if (name === "fs") return { existsSync: () => true };
       if (name === "./debugLogger") return { debug() {} };
       if (name === "./onnxWorkerClient") return client;
-      return require(name);
+      return requireHelperDep(name);
     },
   });
   vm.runInContext(EMBEDDINGS_SOURCE, localContext);
@@ -57,7 +63,7 @@ function loadSpeakerEmbeddings(client, idleTimers) {
       if (name === "./debugLogger") return { debug() {}, warn() {} };
       if (name === "./modelDirUtils") return { getModelsDirForService: () => "/models" };
       if (name === "./onnxWorkerClient") return client;
-      return require(name);
+      return requireHelperDep(name);
     },
   });
   vm.runInContext(SPEAKER_SOURCE, context);
@@ -94,7 +100,7 @@ function createHarness() {
           },
           Tensor: class {},
         };
-      return require(name);
+      return requireWorkerDep(name);
     },
     process: { env: {}, on() {}, parentPort: { once() {} } },
     setImmediate,
@@ -280,7 +286,7 @@ function createIntegratedHarness({ failRelease = null } = {}) {
       require(name) {
         if (name === "fs") return { readFileSync: () => JSON.stringify({ model: { vocab: {} } }) };
         if (name === "onnxruntime-node") return fakeOrt(events, nativeSession);
-        return require(name);
+        return requireWorkerDep(name);
       },
       process: {
         env: {},
@@ -331,7 +337,7 @@ function createIntegratedHarness({ failRelease = null } = {}) {
           utilityProcess: { fork },
         };
       if (name === "./debugLogger") return { debug() {}, info() {}, warn() {}, error() {} };
-      return require(name);
+      return requireHelperDep(name);
     },
   });
   vm.runInContext(CLIENT_SOURCE, clientContext);

@@ -11,12 +11,13 @@ const {
   resolveClusterThreshold,
   dropNegligibleClusters,
   isCollapsedDiarization,
+  mergeClustersByVoice,
   capSpeakerClustersByVoice,
 } = require("../../src/helpers/diarizationPolicy");
 
-// 0.55 is tuned for short clean audio; on a 73-minute single-mic voice memo one
-// speaker's embeddings spread past it and clustering stopped merging at 46
-// "speakers". The threshold must grow with duration.
+// The short-audio default is tuned for short recordings; on a 73-minute
+// single-mic voice memo one speaker's embeddings spread past it and clustering
+// stopped merging at 46 "speakers". The threshold must grow with duration.
 test("short audio keeps the sherpa default threshold", () => {
   assert.equal(clusterThresholdForDuration(0), DEFAULT_CLUSTER_THRESHOLD);
   assert.equal(
@@ -360,4 +361,51 @@ test("the voice cap leaves a run within the cap untouched and can fold everythin
   assert.deepEqual(speakersOf(capSpeakerClustersByVoice(segments, 1, new Map(), dot)), [
     "speaker_0",
   ]);
+});
+
+// Clustering splits one voice into several clusters on meeting audio; their
+// voices still match, while different people's don't (#2641).
+test("clusters with the same voice merge into the larger one", () => {
+  const segments = [
+    ...cluster("speaker_0", 10, 10),
+    ...cluster("speaker_1", 4, 10),
+    ...cluster("speaker_2", 8, 10),
+  ];
+  const centroids = new Map([
+    ["speaker_0", [1, 0]],
+    ["speaker_1", [0.8, 0.6]],
+    ["speaker_2", [0, 1]],
+  ]);
+  const merged = mergeClustersByVoice(segments, centroids, dot);
+  assert.deepEqual(speakersOf(merged), ["speaker_0", "speaker_2"]);
+  assert.equal(merged.filter((s) => s.speaker === "speaker_0").length, 14);
+});
+
+test("a voice between two others joins the closer one without chaining them together", () => {
+  // speaker_1 matches both, speaker_2 more closely. Once merged, the pair's
+  // speech-weighted voice no longer matches speaker_0.
+  const segments = [
+    ...cluster("speaker_0", 9, 10),
+    ...cluster("speaker_1", 1, 10),
+    ...cluster("speaker_2", 5, 10),
+  ];
+  const centroids = new Map([
+    ["speaker_0", [1, 0]],
+    ["speaker_1", [0.6, 0.8]],
+    ["speaker_2", [0, 1]],
+  ]);
+  const merged = mergeClustersByVoice(segments, centroids, dot);
+  assert.deepEqual(speakersOf(merged), ["speaker_0", "speaker_2"]);
+  assert.equal(merged[9].speaker, "speaker_2");
+});
+
+test("voice merging leaves distinct voices and clusters without a voice alone", () => {
+  const segments = [...cluster("speaker_0", 10, 10), ...cluster("speaker_1", 8, 10)];
+  const distinct = new Map([
+    ["speaker_0", [1, 0]],
+    ["speaker_1", [0, 1]],
+  ]);
+  assert.equal(mergeClustersByVoice(segments, distinct, dot), segments);
+  assert.equal(mergeClustersByVoice(segments, new Map([["speaker_0", [1, 0]]]), dot), segments);
+  assert.deepEqual(mergeClustersByVoice([], distinct, dot), []);
 });
