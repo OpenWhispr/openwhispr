@@ -32,6 +32,7 @@ test("automatic asks for the material's language and headings, with the interfac
   const line = noteOutputLanguageInstruction("auto", "de");
   assert.match(line, /^OUTPUT LANGUAGE: Detect the language of the transcript/);
   assert.match(line, /write your entire output in that language, including the section headings/);
+  assert.match(line, /headings above are English placeholders: translate every heading/);
   assert.match(line, /no clear language, write in German\./);
   assert.ok(line.endsWith(`Reply ${NOTHING_TO_SUMMARIZE} exactly as written, never translated.`));
   assert.match(noteOutputLanguageInstruction("auto", "zz"), /write in English\./);
@@ -46,6 +47,7 @@ test("a chosen language is named outright and keeps the no-content marker untran
     /^OUTPUT LANGUAGE: Write your entire output in German, including the section headings/
   );
   assert.doesNotMatch(line, /Detect/);
+  assert.doesNotMatch(line, /placeholders/);
   assert.match(line, /NOTHING_TO_SUMMARIZE exactly as written, never translated\.$/);
   // An unknown code falls back to the automatic line rather than naming nothing.
   assert.match(noteOutputLanguageInstruction("xx", "en"), /Detect the language/);

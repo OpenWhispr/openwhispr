@@ -1,7 +1,7 @@
 // The language a note's AI summary is written in. "auto" lets the model take it
-// from the material, which a 4B local model does reliably only when the line
-// names the whole output and its headings: the templates' section headings are
-// English and pull the reply into English otherwise.
+// from the material. The templates' section headings are English and pull the
+// reply into English: with thinking off, as local models run, Gemma 4 E4B kept
+// them English until the line called them placeholders to translate.
 
 import registry from "../config/languageRegistry.json" with { type: "json" };
 import { NOTHING_TO_SUMMARIZE } from "./builtinActions.js";
@@ -43,5 +43,5 @@ export function noteOutputLanguageInstruction(choice, uiLanguage) {
     return `OUTPUT LANGUAGE: Write your entire output in ${fixed}, including the section headings, whatever language the material is in.${keepMarker}`;
   }
   const fallback = noteLanguageName(uiLanguage) ?? "English";
-  return `OUTPUT LANGUAGE: Detect the language of the transcript, or of the notes when there is no transcript, and write your entire output in that language, including the section headings. If the material has no clear language, write in ${fallback}.${keepMarker}`;
+  return `OUTPUT LANGUAGE: Detect the language of the transcript, or of the notes when there is no transcript, and write your entire output in that language, including the section headings. The section headings above are English placeholders: translate every heading into that language. If the material has no clear language, write in ${fallback}.${keepMarker}`;
 }

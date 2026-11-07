@@ -30,6 +30,8 @@ interface TemplatePickerProps {
   alignTo: React.RefObject<HTMLElement | null>;
   /** The trigger, rendered as is. */
   children: React.ReactNode;
+  /** Without a summary yet, running the current template creates rather than regenerates it. */
+  hasSummary?: boolean;
   /** The language the next run writes in: "auto" or a language code. */
   summaryLanguage?: string;
   /** The Summary language setting, offered too when it is not a UI language. */
@@ -46,6 +48,7 @@ export default function TemplatePicker({
   disabled,
   alignTo,
   children,
+  hasSummary = true,
   summaryLanguage,
   summaryLanguageSetting = "auto",
   onSummaryLanguageChange,
@@ -95,7 +98,7 @@ export default function TemplatePicker({
               <span dir="auto" className="min-w-0 flex-1 truncate font-medium">
                 {getActionName(template, t)}
               </span>
-              {isCurrent && (
+              {isCurrent && hasSummary && (
                 <Tooltip content={t("notes.templates.regenerate")}>
                   <RefreshCw size={12} className="shrink-0 text-foreground/50" />
                 </Tooltip>
