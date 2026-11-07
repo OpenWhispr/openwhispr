@@ -124,6 +124,14 @@ jobs:
             selected is the list of applied upstream commit SHAs; skipped is
             [{sha,reason}] for every other commit. Together they must cover the
             exact context commit list once. No fabricated test results.
+            Copy SHAs programmatically from context.json; never type placeholders
+            or reconstruct them from memory. Before returning, use Python to
+            compare your selected/skipped SHAs with context.json, asserting exact
+            set equality and no duplicates. Resolve every missing/unknown entry.
+            Dependency updates may be applied by copying upstream manifest and
+            lockfile changes without installing packages here; evaluate their
+            security and compatibility merits rather than skipping solely because
+            this job does not install dependencies.
           claude_args: >-
             --model sonnet
             --max-turns 80
