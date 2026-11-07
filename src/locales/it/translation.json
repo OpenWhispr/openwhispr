@@ -3986,6 +3986,8 @@
       "deselectAll": "Deseleziona tutto",
       "confirmed": "Confermato",
       "nameAssigned": "Nome assegnato",
+      "uncertain": "Incerto",
+      "uncertainHint": "Il parlante di questa riga è incerto: seleziona la riga per riassegnarla",
       "state": {
         "provisional": "Provvisorio",
         "confirmed": "Confermato",

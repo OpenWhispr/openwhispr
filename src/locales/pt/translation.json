@@ -3993,6 +3993,8 @@
       "deselectAll": "Desmarcar tudo",
       "confirmed": "Confirmado",
       "nameAssigned": "Nome atribuído",
+      "uncertain": "Incerto",
+      "uncertainHint": "O orador desta linha é incerto – selecione a linha para reatribuí-la",
       "state": {
         "provisional": "Provisório",
         "confirmed": "Confirmado",

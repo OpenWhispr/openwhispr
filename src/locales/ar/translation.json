@@ -3552,6 +3552,8 @@
       "deselectAll": "إلغاء تحديد الكل",
       "confirmed": "مؤكد",
       "nameAssigned": "تم تعيين الاسم",
+      "uncertain": "غير مؤكد",
+      "uncertainHint": "المتحدث في هذا السطر غير مؤكد – حدد السطر لإعادة تعيينه",
       "state": {
         "provisional": "مؤقت",
         "confirmed": "مؤكد",

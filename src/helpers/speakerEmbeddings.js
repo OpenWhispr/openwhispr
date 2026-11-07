@@ -11,6 +11,7 @@ const {
 const SAMPLE_RATE = 16000;
 const MIN_SEGMENT_SECONDS = 1.5;
 const MIN_SEGMENT_SAMPLES = SAMPLE_RATE * MIN_SEGMENT_SECONDS;
+const MIN_WINDOW_SECONDS = 0.5;
 const MAX_EMBEDDING_SECONDS = 8;
 const MAX_EMBEDDING_SAMPLES = SAMPLE_RATE * MAX_EMBEDDING_SECONDS;
 const BYTES_PER_SAMPLE = 2;
@@ -182,6 +183,29 @@ class SpeakerEmbeddings {
       fs.closeSync(fd);
     }
     return centroids;
+  }
+
+  // One voice per transcript line (sentenceSpeakers): keeps the WAV open and reads
+  // only each window's bytes. Windows down to 0.5 s are read, below the 1.5 s the
+  // cluster voices need, since a short reply is exactly the line that must not
+  // inherit its neighbour's speaker. Call close() when done.
+  openWindowReader(wavPath) {
+    const fd = fs.openSync(wavPath, "r");
+    const header = this._parseWavHeader(this._readBytes(fd, 0, WAV_HEADER_READ_BYTES));
+    let closed = false;
+    return {
+      embed: async (startSec, endSec) => {
+        if (closed || !(endSec - startSec >= MIN_WINDOW_SECONDS)) return null;
+        const { byteOffset, numSamples } = this._embeddingWindow(header, startSec, endSec);
+        const pcm = this._readBytes(fd, byteOffset, numSamples * BYTES_PER_SAMPLE);
+        return this._extractEmbeddingFromSamples(this._decodePcm16(pcm, 0, numSamples));
+      },
+      close: () => {
+        if (closed) return;
+        closed = true;
+        fs.closeSync(fd);
+      },
+    };
   }
 
   _readBytes(fd, position, length) {

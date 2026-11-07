@@ -117,14 +117,19 @@ function toLocalMeetingSegments(result, chunkStartedAt, chunkDurationMs) {
     // diarization keeps the window up to the next row for it.
     return text ? [{ text, timestamp: chunkStartedAt, timestampIsSpeechStart: false }] : [];
   }
+  const clamp = (offsetMs) => Math.min(Math.max(0, offsetMs), Math.max(0, chunkDurationMs));
   return segments.map((segment) => {
-    const offsetMs = Number.isFinite(segment.start) ? segment.start * 1000 : 0;
-    const clamped = Math.min(Math.max(0, offsetMs), Math.max(0, chunkDurationMs));
-    return {
+    const startMs = clamp(Number.isFinite(segment.start) ? segment.start * 1000 : 0);
+    const timed = {
       text: segment.text.trim(),
-      timestamp: Math.round(chunkStartedAt + clamped),
+      timestamp: Math.round(chunkStartedAt + startMs),
       timestampIsSpeechStart: true,
     };
+    // The end lets per-line speaker assignment hear only this line's voice.
+    if (Number.isFinite(segment.end) && segment.end * 1000 > startMs) {
+      timed.endTimestamp = Math.round(chunkStartedAt + clamp(segment.end * 1000));
+    }
+    return timed;
   });
 }
 

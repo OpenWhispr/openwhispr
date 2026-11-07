@@ -3986,6 +3986,8 @@
       "deselectAll": "取消全选",
       "confirmed": "已确认",
       "nameAssigned": "姓名已分配",
+      "uncertain": "不确定",
+      "uncertainHint": "此行的说话人不确定——选择该行以重新分配",
       "state": {
         "provisional": "临时",
         "confirmed": "已确认",
