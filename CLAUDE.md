@@ -2,6 +2,13 @@
 
 This document provides comprehensive technical details about the OpenWhispr project architecture for AI assistants working on the codebase.
 
+## Personal fork requirements
+
+Before modifying this fork, read `FORK.md` and `.github/personal-fork-policy.json`. They define Nick's current requested behavior and take precedence over upstream product assumptions in this technical reference. When Nick requests a behavior change, update those two files and the relevant regression tests in the same change. Register new required tests in `protected_tests` and keep requirement IDs aligned with the intended behavior. Changes to the isolated UI checks belong in `scripts/verify-personal-fork.cjs` and must accompany changes that affect the tested settings journeys. Do not leave future maintenance runs protecting an obsolete requirement.
+
+Automatic upstream-maintenance runs may adapt application code, resolve conflicts and integrate verified fixes into `feat/byok-cleanup`, but may not edit or weaken owner requirements, protected tests or maintenance infrastructure. The GitHub Actions workflow reads the latest personal-branch requirements for every run; routine maintenance does not authorize releases or desktop installation.
+
+
 ## Response Style
 
 Keep responses focused, brief, and concise. Keep disclaimers and caveats short, and spend most of the response on the main answer. When asked to explain something, give a high-level summary unless an in-depth explanation is specifically requested.

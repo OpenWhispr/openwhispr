@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { PERSONAL_FORK } from "../config/forkPolicy";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
@@ -4226,73 +4227,77 @@ EOF`,
               )}
 
               <SettingsPanel>
-                <SettingsPanelRow>
-                  <SettingsRow
-                    label={t("settingsPage.privacy.insightsSync")}
-                    description={
-                      !isSignedIn
-                        ? t("settingsPage.privacy.insightsSyncRequiresAccount")
-                        : !insightsSyncAllowedByPolicy
-                          ? t("common.managedByOrg")
-                          : effectiveDataRetentionEnabled
-                            ? t("settingsPage.privacy.insightsSyncDescription")
-                            : t("settingsPage.privacy.insightsSyncRequiresHistory")
-                    }
-                  >
-                    {/* With history off nothing is counted anywhere: this
+                {!PERSONAL_FORK && (
+                  <>
+                    <SettingsPanelRow>
+                      <SettingsRow
+                        label={t("settingsPage.privacy.insightsSync")}
+                        description={
+                          !isSignedIn
+                            ? t("settingsPage.privacy.insightsSyncRequiresAccount")
+                            : !insightsSyncAllowedByPolicy
+                              ? t("common.managedByOrg")
+                              : effectiveDataRetentionEnabled
+                                ? t("settingsPage.privacy.insightsSyncDescription")
+                                : t("settingsPage.privacy.insightsSyncRequiresHistory")
+                        }
+                      >
+                        {/* With history off nothing is counted anywhere: this
                         device records no counter, and the cloud writes none
                         either, because analyticsSyncEnabled withholds the
                         localDate its analytics write requires. Turning this on
                         could therefore only promise a sync that never happens —
                         but an already-on toggle must stay switchable off. */}
-                    <Toggle
-                      checked={insightsSyncEnabled}
-                      disabled={
-                        !isSignedIn ||
-                        !canToggleInsightsSync ||
-                        (!effectiveDataRetentionEnabled && !insightsSyncEnabled)
-                      }
-                      onChange={(enabled) => {
-                        if (enabled) void enableInsightsSync();
-                        else disableInsightsSync();
-                      }}
-                    />
-                  </SettingsRow>
-                </SettingsPanelRow>
-                <SettingsPanelRow>
-                  <SettingsRow
-                    label={t("insights.leaderboard.title")}
-                    description={
-                      !isSignedIn
-                        ? t("settingsPage.privacy.leaderboardRequiresAccount")
-                        : leaderboardParticipationError === "read"
-                          ? t("insights.leaderboard.activationError")
-                          : leaderboardLeavePending
-                            ? t("insights.leaderboard.leavePending")
-                            : !insightsSyncAllowedByPolicy
-                              ? t("common.managedByOrg")
-                              : !effectiveDataRetentionEnabled
-                                ? t("settingsPage.privacy.leaderboardRequiresHistory")
-                                : t("settingsPage.privacy.leaderboardDescription")
-                    }
-                  >
-                    <Toggle
-                      checked={isSignedIn && leaderboardParticipationEnabled}
-                      disabled={
-                        !isSignedIn ||
-                        !leaderboardParticipationReady ||
-                        leaderboardPreferencePending ||
-                        leaderboardParticipationUpdating ||
-                        leaderboardParticipationError === "read" ||
-                        (!leaderboardParticipationEnabled &&
-                          (!effectiveDataRetentionEnabled ||
-                            !insightsSyncAllowedByPolicy ||
-                            (!insightsSyncEnabled && !canToggleInsightsSync)))
-                      }
-                      onChange={(enabled) => void updateLeaderboardParticipation(enabled)}
-                    />
-                  </SettingsRow>
-                </SettingsPanelRow>
+                        <Toggle
+                          checked={insightsSyncEnabled}
+                          disabled={
+                            !isSignedIn ||
+                            !canToggleInsightsSync ||
+                            (!effectiveDataRetentionEnabled && !insightsSyncEnabled)
+                          }
+                          onChange={(enabled) => {
+                            if (enabled) void enableInsightsSync();
+                            else disableInsightsSync();
+                          }}
+                        />
+                      </SettingsRow>
+                    </SettingsPanelRow>
+                    <SettingsPanelRow>
+                      <SettingsRow
+                        label={t("insights.leaderboard.title")}
+                        description={
+                          !isSignedIn
+                            ? t("settingsPage.privacy.leaderboardRequiresAccount")
+                            : leaderboardParticipationError === "read"
+                              ? t("insights.leaderboard.activationError")
+                              : leaderboardLeavePending
+                                ? t("insights.leaderboard.leavePending")
+                                : !insightsSyncAllowedByPolicy
+                                  ? t("common.managedByOrg")
+                                  : !effectiveDataRetentionEnabled
+                                    ? t("settingsPage.privacy.leaderboardRequiresHistory")
+                                    : t("settingsPage.privacy.leaderboardDescription")
+                        }
+                      >
+                        <Toggle
+                          checked={isSignedIn && leaderboardParticipationEnabled}
+                          disabled={
+                            !isSignedIn ||
+                            !leaderboardParticipationReady ||
+                            leaderboardPreferencePending ||
+                            leaderboardParticipationUpdating ||
+                            leaderboardParticipationError === "read" ||
+                            (!leaderboardParticipationEnabled &&
+                              (!effectiveDataRetentionEnabled ||
+                                !insightsSyncAllowedByPolicy ||
+                                (!insightsSyncEnabled && !canToggleInsightsSync)))
+                          }
+                          onChange={(enabled) => void updateLeaderboardParticipation(enabled)}
+                        />
+                      </SettingsRow>
+                    </SettingsPanelRow>
+                  </>
+                )}
                 <SettingsPanelRow>
                   <SettingsRow
                     label={t("settingsPage.privacy.usageAnalytics")}

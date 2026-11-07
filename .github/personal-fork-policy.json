@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "personal_branch": "feat/byok-cleanup",
+  "upstream_repository": "OpenWhispr/openwhispr",
+  "initial_upstream_commit": "7a6ae826de9ec1caf65f3a6e769475dab2ae829f",
+  "contract": "FORK.md",
+  "requirements": [
+    {
+      "id": "personal-account-free",
+      "behavior": "No reachable OpenWhispr sign-in, subscription, billing, upgrade advertising or managed-cloud onboarding; no unnecessary account-service background requests."
+    },
+    {
+      "id": "manual-model-ids",
+      "behavior": "Editable full cleanup/reasoning and transcription model IDs, including unknown suffixes, persist unchanged across discovery, tab switches and reloads; catalogs are not allowlists."
+    },
+    {
+      "id": "openrouter-transcription",
+      "behavior": "OpenRouter batch transcription is used consistently by dictation, retry and file uploads, even when generic streaming is enabled; never substitute OpenAI models/endpoints; request provider.data_collection=deny."
+    },
+    {
+      "id": "openrouter-routing",
+      "behavior": "Nitro, Floor and Exacto are mutually exclusive; Free is offered only for actual catalog variants; full inference IDs are preserved and STT routing limitations remain explicit."
+    },
+    {
+      "id": "gemini-smart-cleanup",
+      "behavior": "Optional direct Gemini 3.5 batch Smart cleanup, off by default, consistently used by dictation/retry/upload where applicable; no changes to Live mode or other providers."
+    },
+    {
+      "id": "existing-data-and-functions",
+      "behavior": "Preserve recording, hotkeys, paste, history, notes, local models, direct API providers, existing settings, credentials and application user-data identity."
+    }
+  ],
+  "protected_tests": [
+    "test/components/forkManualModel.test.js",
+    "test/components/openrouterOptions.test.js",
+    "test/components/openrouterSttPicker.test.js",
+    "test/components/personalFork.test.js",
+    "test/helpers/audioManagerOpenrouterBatch.test.js",
+    "test/helpers/forkPackaging.test.js",
+    "test/helpers/geminiSmartCleanup.test.js",
+    "test/helpers/modelRowHeight.test.js",
+    "test/helpers/openrouterNitro.test.js",
+    "test/helpers/openrouterSttRoute.test.js",
+    "test/helpers/openrouterTranscription.test.js",
+    "test/helpers/openrouterVariants.test.js",
+    "test/helpers/retryTranscriptionHandler.test.js"
+  ]
+}
