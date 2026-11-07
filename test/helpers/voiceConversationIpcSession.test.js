@@ -210,15 +210,6 @@ test("a worker that fails to load ends the session", async () => {
   assert.equal(hearsMic(webContents), false);
 });
 
-test("the harness brain override is ignored outside the harness", async () => {
-  process.env.OPENWHISPR_VOICE_HARNESS_BRAIN = "qwen3.5-4b";
-  try {
-    assert.equal(await handlers.get("voice-conversation:brain-override")(), null);
-  } finally {
-    delete process.env.OPENWHISPR_VOICE_HARNESS_BRAIN;
-  }
-});
-
 test("our own shutdown on quit ends the session without an error", async () => {
   const webContents = await startSession();
   voiceWorker.emit("exit", { code: 0 });

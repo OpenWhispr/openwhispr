@@ -1327,7 +1327,7 @@ export default function AgentWindow() {
       <BrandMarkIcon size={22} className="text-primary" />
       <p dir="auto">{t(refusal)}</p>
     </div>
-  ) : state.input === "keyboard" && !forkOrigin?.parentTitle ? (
+  ) : state.input === "keyboard" && !state.call && !forkOrigin?.parentTitle ? (
     // A fork with nothing of its own yet shows just its chip.
     <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
       <BrandMarkIcon size={22} className="text-primary" />
@@ -1474,7 +1474,7 @@ export default function AgentWindow() {
               <div
                 ref={cardFrameRef}
                 className={cn(
-                  "flex max-h-[400px] w-[420px] max-w-full shrink-0 flex-col items-center",
+                  "flex max-h-[520px] w-[420px] max-w-full shrink-0 flex-col items-center",
                   !callAbovePill &&
                     "agent-chat-scroll overflow-y-auto rounded-2xl border border-border/50 shadow-[var(--shadow-card)] [&>*>*]:my-0"
                 )}

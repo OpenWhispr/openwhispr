@@ -178,11 +178,6 @@ function registerVoiceConversationIpc({
   // (voiceHarnessRunner.js) waits on these to score scripted conversations.
   const harnessEnabled = process.env.OPENWHISPR_VOICE_HARNESS === "1";
   ipcMain.handle("voice-conversation:harness-enabled", () => harnessEnabled);
-  // Local model id that answers voice turns instead of the Voice Assistant setting,
-  // so harness comparisons neither depend on nor change the user's settings.
-  ipcMain.handle("voice-conversation:brain-override", () =>
-    harnessEnabled ? (process.env.OPENWHISPR_VOICE_HARNESS_BRAIN || "").trim() || null : null
-  );
   ipcMain.on("voice-conversation:turn-report", (_event, report) =>
     conversationEvents.emit("turn-report", report)
   );
@@ -216,6 +211,8 @@ function registerVoiceConversationIpc({
     const starting = beginSession(event.sender, {
       recognizer,
       sampleRate: configuredSampleRate,
+      // Named in the harness report.
+      brainModel: typeof options.brainModel === "string" ? options.brainModel : null,
       harness: !!options.harness,
     });
     const sessionId = starting.id;

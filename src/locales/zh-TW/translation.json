@@ -4908,7 +4908,11 @@
         "subjectTooLong": "主旨不能超過 {{max}} 個字元。",
         "bodyTooLong": "郵件內文過長，無法透過 Gmail 傳送。請縮短後再傳送。",
         "unknown": "無法確認是否已傳送，請檢查「寄件備份」資料夾。",
-        "fromLabel": "寄件者"
+        "fromLabel": "寄件者",
+        "copyAll": "全部複製",
+        "copyRecipients": "複製收件者",
+        "copySubject": "複製主旨",
+        "copyBody": "複製內文"
       },
       "github": {
         "notes": {

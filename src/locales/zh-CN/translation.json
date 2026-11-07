@@ -4908,7 +4908,11 @@
         "subjectTooLong": "主题不能超过 {{max}} 个字符。",
         "bodyTooLong": "邮件正文过长，无法通过 Gmail 发送。请缩短后再发送。",
         "unknown": "无法确认是否已发送，请检查“已发送”文件夹。",
-        "fromLabel": "发件人"
+        "fromLabel": "发件人",
+        "copyAll": "全部复制",
+        "copyRecipients": "复制收件人",
+        "copySubject": "复制主题",
+        "copyBody": "复制正文"
       },
       "github": {
         "notes": {

@@ -880,7 +880,7 @@ A hands-free call on the agent window: listen → the agent's turn → spoken re
 - **Window**: `agentWindowReducer`'s `call` surface (orthogonal to layout/input); main sizes call layouts with `call: true` (pill 237×65, cards/settings above it, transcript 360 wide growing 358→480 with its content). Settings (`VoiceCallSettings.tsx`: Voice, Speed stepper, searchable Language with each language's real availability from `voice-conversation:languages`), and why a call couldn't start with its fix (`VoiceCallSetupCard.tsx`: voice model download in place, Settings, language) show above the pill
 - **Settings**: `voiceCallVoice`, `voiceCallSpeed`, `voiceCallLanguage` (independent of dictation's language)
 - **Release gates inherited from #2349, still open**: sherpa-onnx-node statically links GPL espeak-ng; Supertonic's OpenRAIL-M terms in the EULA/notices; packaged smoke tests per platform; Windows with `System32\onnxruntime.dll`
-- **Harness**: `OPENWHISPR_VOICE_HARNESS=1` starts a mic-less call in the agent window and plays `voiceHarness.js` scenarios into the VAD (`OPENWHISPR_VOICE_HARNESS_BRAIN` pins a local model)
+- **Harness**: `OPENWHISPR_VOICE_HARNESS=1` starts a mic-less call in the agent window and plays `voiceHarness.js` scenarios into the VAD, then writes a latency and tool-choice report
 - **Tests**: `test/hooks/useVoiceCall.test.js`, `test/helpers/voiceConversation*.test.js`, `test/helpers/chatTurnEngineSpeech.test.js`, `test/services/voice/*.test.js`
 
 ## Development Guidelines

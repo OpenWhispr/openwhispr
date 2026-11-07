@@ -5282,7 +5282,11 @@
         "subjectTooLong": "L'objet doit compter au plus {{max}} caractères.",
         "bodyTooLong": "Le message est trop long pour Gmail. Raccourcissez-le pour l'envoyer.",
         "unknown": "Impossible de confirmer l'envoi. Vérifiez votre dossier Messages envoyés.",
-        "fromLabel": "De"
+        "fromLabel": "De",
+        "copyAll": "Tout copier",
+        "copyRecipients": "Copier les destinataires",
+        "copySubject": "Copier l'objet",
+        "copyBody": "Copier le message"
       },
       "github": {
         "notes": {

@@ -131,7 +131,7 @@ function summarizeHarness(results) {
     userStop: stats(metric("userStopToFirstAudioMs")),
     endpoint: stats(metric("endpointMs")),
     firstAudio: stats(metric("speechEndToFirstAudioMs")),
-    firstWord: stats(metric("transcriptToFirstDeltaMs")),
+    firstWord: stats(metric("transcriptToFirstTextMs")),
     ttsFirstAudio: stats(metric("firstChunkToFirstAudioMs")),
     bargeIn: stats(results.map((item) => item.bargeInMs).filter(Number.isFinite)),
   };

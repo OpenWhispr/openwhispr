@@ -83,10 +83,14 @@ async function mountEmailCard(
       store.cancelApproval(key);
     }
   });
-  const calls = { commit: [], cancel: [] };
+  const calls = { commit: [], cancel: [], clipboard: [] };
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
+        writeClipboard: async (text) => {
+          calls.clipboard.push(text);
+          return { success: true };
+        },
         connectorPrepare: async () => ({
           status: "ready",
           actionId: "a1",
@@ -287,7 +291,7 @@ test("Esc on Copy, outside the fields, never cancels the card", async (t) => {
   // The panel's Esc would cancel the turn and withdraw the card with the edit.
   const event = { cancelBubble: false };
   await React.act(async () =>
-    dispatch(button(container, "common.copy"), "keydown", {
+    dispatch(button(container, "connectors.approval.email.copyAll"), "keydown", {
       key: "Escape",
       stopPropagation() {
         event.cancelBubble = true;
@@ -318,4 +322,29 @@ test("a stripped display name shows the addresses the email will go to", async (
   await React.act(async () => type(field(container, "toLabel"), "josh, Dana Lee <dana@acme.test>"));
   assert.deepEqual(draftFields().to, ["dana@acme.test"]);
   assert.ok(sendsTo(), "the resolved addresses are shown");
+});
+
+test("each field copies alone, and Copy all copies the email as the card shows it", async (t) => {
+  const { container, calls } = await mountEmailCard(t);
+  await React.act(async () => type(field(container, "subjectLabel"), "Q3 (final)"));
+
+  const labelled = (label) =>
+    findElement(container, (element) => element.getAttribute?.("aria-label") === label);
+  await React.act(async () => dispatch(labelled("connectors.approval.email.copySubject"), "click"));
+  await React.act(async () =>
+    dispatch(button(container, "connectors.approval.email.copyAll"), "click")
+  );
+
+  assert.equal(calls.clipboard[0], "Q3 (final)");
+  assert.equal(
+    calls.clipboard[1],
+    [
+      "connectors.approval.email.toLabel: josh@acme.test",
+      "connectors.approval.email.ccLabel: sam@acme.test",
+      "connectors.approval.email.subjectLabel: Q3 (final)",
+      "",
+      "Numbers attached.",
+    ].join("\n")
+  );
+  assert.ok(labelled("common.copied"), "the field shows it was copied");
 });

@@ -9,6 +9,7 @@ import {
 import { cn } from "../lib/utils";
 import { INLINE_FIELD } from "./interactions/cardStyles";
 import { HeaderRow } from "./interactions/HeaderRow";
+import { CopyFieldButton } from "./CopyFieldButton";
 
 // A subject is one header line. A pasted line break becomes a space here,
 // so the card never shows a subject main would refuse to send.
@@ -80,7 +81,15 @@ function EmailFieldsEditor({
 
   return (
     <>
-      <HeaderRow label={t("connectors.approval.email.toLabel")}>
+      <HeaderRow
+        label={t("connectors.approval.email.toLabel")}
+        action={
+          <CopyFieldButton
+            text={fields.to.join(", ")}
+            label={t("connectors.approval.email.copyRecipients")}
+          />
+        }
+      >
         <input
           aria-label={t("connectors.approval.email.toLabel")}
           title={addressHint}
@@ -121,7 +130,15 @@ function EmailFieldsEditor({
           fields.cc.some((address) => recipientLabel(address) !== address)) && (
           <ResolvedAddresses addresses={fields.cc} />
         )}
-      <HeaderRow label={t("connectors.approval.email.subjectLabel")}>
+      <HeaderRow
+        label={t("connectors.approval.email.subjectLabel")}
+        action={
+          <CopyFieldButton
+            text={fields.subject}
+            label={t("connectors.approval.email.copySubject")}
+          />
+        }
+      >
         <input
           aria-label={t("connectors.approval.email.subjectLabel")}
           data-approval-field="subject"
@@ -150,7 +167,15 @@ function EmailFieldsView({ fields, showCc }: { fields: EmailFields; showCc: bool
   );
   return (
     <>
-      <HeaderRow label={t("connectors.approval.email.toLabel")}>
+      <HeaderRow
+        label={t("connectors.approval.email.toLabel")}
+        action={
+          <CopyFieldButton
+            text={fields.to.join(", ")}
+            label={t("connectors.approval.email.copyRecipients")}
+          />
+        }
+      >
         {value(fields.to.map(recipientLabel).join(", "))}
       </HeaderRow>
       {showCc && fields.cc.length > 0 && (
@@ -158,7 +183,15 @@ function EmailFieldsView({ fields, showCc }: { fields: EmailFields; showCc: bool
           {value(fields.cc.map(recipientLabel).join(", "))}
         </HeaderRow>
       )}
-      <HeaderRow label={t("connectors.approval.email.subjectLabel")}>
+      <HeaderRow
+        label={t("connectors.approval.email.subjectLabel")}
+        action={
+          <CopyFieldButton
+            text={fields.subject}
+            label={t("connectors.approval.email.copySubject")}
+          />
+        }
+      >
         {value(fields.subject, "font-medium")}
       </HeaderRow>
     </>

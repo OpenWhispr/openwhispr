@@ -20,6 +20,8 @@ const STANDALONE_CARD = { width: 420, minHeight: 80, maxHeight: 400 };
 // and the transcript grows with what it shows, from 358px up to 480px.
 const CALL_PILL = { width: 240, height: 65 };
 const CALL_TRANSCRIPT = { width: 360, minHeight: 358, maxHeight: 480 };
+// A long answer card with the call's pill is about 597px in the reference.
+const CALL_CARD_MAX_HEIGHT = 520;
 
 const standaloneSize = (cardHeight, pillHeight = PILL_HEIGHT) => ({
   width: STANDALONE_CARD.width + 2 * SHADOW_MARGIN,
@@ -31,7 +33,7 @@ const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 function callLayoutSize(layout, contentHeight) {
   if (layout === "standalone") {
     return standaloneSize(
-      clamp(contentHeight, STANDALONE_CARD.minHeight, STANDALONE_CARD.maxHeight),
+      clamp(contentHeight, STANDALONE_CARD.minHeight, CALL_CARD_MAX_HEIGHT),
       CALL_PILL.height
     );
   }

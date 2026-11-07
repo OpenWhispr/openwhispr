@@ -89,7 +89,7 @@ const result = (overrides) => ({
   outcome: "spoke",
   metrics: {
     speechEndToFirstAudioMs: 1000,
-    transcriptToFirstDeltaMs: 400,
+    transcriptToFirstTextMs: 400,
     firstChunkToFirstAudioMs: 300,
   },
   answer: "Hi.",

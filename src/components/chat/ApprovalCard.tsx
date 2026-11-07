@@ -12,6 +12,7 @@ import {
   type ApprovalEntry,
 } from "../../stores/connectorApprovalStore";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
+import { CopyFieldButton } from "./CopyFieldButton";
 import { connectorErrorText } from "../../utils/connectorErrorCopy";
 import { CONNECTION_TARGET_NAMES } from "../../config/agentCapabilities";
 import type { ConnectionTarget } from "../../types/agentInteractions";
@@ -143,9 +144,21 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
       ? t("connectors.approval.email.invalidAddressAnnouncement")
       : problemText;
   const hasFieldLayout = Boolean(emailFields || issueFields);
-  // Copy takes the message itself, as the card shows it now.
+  // Copy takes the message itself, as the card shows it now; an email's Copy
+  // all takes its recipients and subject with it.
   const body = emailFields?.body ?? issueFields?.body ?? draft.body;
-  const { copied, copyText, confirmCopied } = useCopyFeedback(body);
+  const copyAllText = emailFields
+    ? [
+        `${t("connectors.approval.email.toLabel")}: ${emailFields.to.join(", ")}`,
+        ...(emailFields.cc.length > 0
+          ? [`${t("connectors.approval.email.ccLabel")}: ${emailFields.cc.join(", ")}`]
+          : []),
+        `${t("connectors.approval.email.subjectLabel")}: ${emailFields.subject}`,
+        "",
+        body,
+      ].join("\n")
+    : body;
+  const { copied, copyText, confirmCopied } = useCopyFeedback(copyAllText);
 
   // Each layout names its own button and outcomes ("Create issue",
   // "Created ENG-124"); every other card keeps Send and "Sent to …".
@@ -289,11 +302,13 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
   const copyButton = (
     <button
       type="button"
-      onClick={() => void copyText(body).then((done) => done && confirmCopied(body))}
+      onClick={() => void copyText(copyAllText).then((done) => done && confirmCopied(copyAllText))}
       className={PILL_BUTTON}
     >
       {copied ? <Check size={14} className="text-success" /> : <CopyRounded size={14} />}
-      {t(copied ? "common.copied" : "common.copy")}
+      {t(
+        copied ? "common.copied" : emailFields ? "connectors.approval.email.copyAll" : "common.copy"
+      )}
     </button>
   );
   const outcomeLink = (entry.state === "sent" || entry.state === "unknown") && entry.url && (
@@ -321,8 +336,13 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
       {/* A long message scrolls here; who it goes to and the actions stay put. */}
       <div
         data-approval-body=""
-        className="agent-chat-scroll max-h-44 overflow-y-auto px-4 py-3 text-[14px] agent:text-[15px]"
+        className="group agent-chat-scroll relative max-h-44 overflow-y-auto px-4 py-3 text-[14px] agent:text-[15px]"
       >
+        {emailFields && (
+          <div className="sticky top-0 z-10 float-end -me-2 -mt-1 h-0">
+            <CopyFieldButton text={body} label={t("connectors.approval.email.copyBody")} />
+          </div>
+        )}
         {message}
       </div>
 

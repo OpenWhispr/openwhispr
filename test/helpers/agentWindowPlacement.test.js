@@ -74,6 +74,7 @@ test("a call's layouts: its taller pill, cards above it, and a transcript that g
   };
   assert.deepEqual(size("pill"), [256, 81]);
   assert.deepEqual(size("standalone", 182), [436, 182 + 12 + 65 + 16]);
+  assert.deepEqual(size("standalone", 900), [436, 520 + 12 + 65 + 16], "a long answer's reference");
   assert.deepEqual(size("modal", 100), [376, 358 + 16]);
   assert.deepEqual(size("modal", 420), [376, 420 + 16]);
   assert.deepEqual(size("modal", 900), [376, 480 + 16]);

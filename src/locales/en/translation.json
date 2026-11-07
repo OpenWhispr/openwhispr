@@ -5261,7 +5261,11 @@
         "subjectTooLong": "Keep the subject to {{max}} characters or fewer.",
         "bodyTooLong": "The message is too long for Gmail. Shorten it to send.",
         "unknown": "Couldn't confirm it was sent. Check your Sent folder.",
-        "fromLabel": "From"
+        "fromLabel": "From",
+        "copyAll": "Copy all",
+        "copyRecipients": "Copy recipients",
+        "copySubject": "Copy subject",
+        "copyBody": "Copy message"
       },
       "github": {
         "notes": {

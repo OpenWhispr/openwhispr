@@ -4929,7 +4929,11 @@
         "subjectTooLong": "O assunto pode ter no máximo {{max}} caracteres.",
         "bodyTooLong": "A mensagem é longa demais para o Gmail. Encurte-a para enviar.",
         "unknown": "Não foi possível confirmar o envio. Verifique sua pasta de enviados.",
-        "fromLabel": "De"
+        "fromLabel": "De",
+        "copyAll": "Copiar tudo",
+        "copyRecipients": "Copiar destinatários",
+        "copySubject": "Copiar assunto",
+        "copyBody": "Copiar mensagem"
       },
       "github": {
         "notes": {

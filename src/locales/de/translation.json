@@ -5261,7 +5261,11 @@
         "subjectTooLong": "Der Betreff darf höchstens {{max}} Zeichen lang sein.",
         "bodyTooLong": "Die Nachricht ist zu lang für Gmail. Kürze sie, um sie zu senden.",
         "unknown": "Konnte nicht bestätigt werden. Bitte den Ordner „Gesendet“ prüfen.",
-        "fromLabel": "Von"
+        "fromLabel": "Von",
+        "copyAll": "Alles kopieren",
+        "copyRecipients": "Empfänger kopieren",
+        "copySubject": "Betreff kopieren",
+        "copyBody": "Nachricht kopieren"
       },
       "github": {
         "notes": {

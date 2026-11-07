@@ -4981,7 +4981,11 @@
         "subjectTooLong": "El asunto debe tener {{max}} caracteres como máximo.",
         "bodyTooLong": "El mensaje es demasiado largo para Gmail. Acórtalo para enviarlo.",
         "unknown": "No se pudo confirmar el envío. Revisa tu carpeta de enviados.",
-        "fromLabel": "De"
+        "fromLabel": "De",
+        "copyAll": "Copiar todo",
+        "copyRecipients": "Copiar destinatarios",
+        "copySubject": "Copiar asunto",
+        "copyBody": "Copiar mensaje"
       },
       "github": {
         "notes": {

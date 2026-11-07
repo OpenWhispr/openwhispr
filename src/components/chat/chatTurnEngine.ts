@@ -331,6 +331,10 @@ export interface TurnSpeechObserver {
   onTextWithdrawn: () => void;
   /** The model called these tools. */
   onToolCalls: (toolNames: string[]) => void;
+  /** The tools this turn offers, once (the voice harness scores against them). */
+  onToolsOffered?: (toolNames: string[]) => void;
+  /** A tool finished: whether it ran without an error. */
+  onToolResult?: (toolName: string, ok: boolean) => void;
   onEnd: (outcome: TurnSpeechOutcome) => void;
 }
 
@@ -928,6 +932,7 @@ export function createChatTurnEngine(
       const offeredTools = registry
         ? [...registry.getAll(), ...(lookAtScreen ? [lookAtScreen] : [])]
         : undefined;
+      speech?.onToolsOffered?.(offeredTools?.map((tool) => tool.name) ?? []);
       // The user's dictionary rides on every conversation so replies use their
       // jargon — same suffix the dictation prompts carry.
       let systemPrompt = appendDictionarySuffix(
@@ -1482,6 +1487,7 @@ export function createChatTurnEngine(
             flushContentNow();
             setAgentState("streaming");
             completeToolActivity();
+            speech?.onToolResult?.(chunk.toolName, !chunk.isError);
           } else if (chunk.type === "done") {
             // Ended from outside the turn: it stops, rather than counting as answered.
             if (chunk.finishReason === "abort") {

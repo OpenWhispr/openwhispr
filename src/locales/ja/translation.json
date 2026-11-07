@@ -4908,7 +4908,11 @@
         "subjectTooLong": "件名は{{max}}文字以内にしてください。",
         "bodyTooLong": "メッセージが長すぎて Gmail で送信できません。短くしてから送信してください。",
         "unknown": "送信されたか確認できませんでした。送信済みフォルダを確認してください。",
-        "fromLabel": "差出人"
+        "fromLabel": "差出人",
+        "copyAll": "すべてコピー",
+        "copyRecipients": "宛先をコピー",
+        "copySubject": "件名をコピー",
+        "copyBody": "本文をコピー"
       },
       "github": {
         "notes": {

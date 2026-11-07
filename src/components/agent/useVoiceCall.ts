@@ -74,6 +74,9 @@ interface TurnMetrics {
   ttsGenerateMs?: number | null;
   chunks: number;
   calledTools: string[];
+  availableTools: string[];
+  /** Tools that ran, in order: the name, or "<name> (failed)". */
+  ranTools: string[];
   transcript: string;
   answer: string;
 }
@@ -236,8 +239,8 @@ export function useVoiceCall({
           outcome,
           transcript: turn.transcript,
           calledTools: turn.calledTools,
-          availableTools: [],
-          ranWrites: [],
+          availableTools: turn.availableTools,
+          ranWrites: turn.ranTools,
           answer: turn.answer,
           endedAt: turn.endedAt,
           metrics,
@@ -342,6 +345,12 @@ export function useVoiceCall({
             turn.answer = answerRef.current;
           }
           for (const chunk of chunker.push(delta)) offerChunk(chunk);
+        },
+        onToolsOffered: (toolNames) => {
+          if (current() && turnRef.current) turnRef.current.availableTools = toolNames;
+        },
+        onToolResult: (toolName, ok) => {
+          if (current()) turnRef.current?.ranTools.push(ok ? toolName : `${toolName} (failed)`);
         },
         onTextWithdrawn: () => {
           if (!current()) return;
@@ -579,6 +588,8 @@ export function useVoiceCall({
           transcriptAt: Date.now(),
           chunks: 0,
           calledTools: [],
+          availableTools: [],
+          ranTools: [],
           transcript: event.text,
           answer: "",
         };
@@ -682,7 +693,12 @@ export function useVoiceCall({
           releaseVoiceState();
           return refuse(readiness);
         }
-        const info = await api.start({ language, ...recognizer, harness });
+        const info = await api.start({
+          language,
+          ...recognizer,
+          brainModel: brainConfig.model || undefined,
+          harness,
+        });
         sessionId = info.sessionId;
         if (isStale()) return abandon();
         sessionIdRef.current = sessionId;

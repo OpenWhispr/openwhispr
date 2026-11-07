@@ -27,7 +27,7 @@ const MENU_ITEM =
 
 // Room above the panel while a menu is open: the window is only as tall as
 // what it shows, and the menus rise above the panel (the language list most).
-const MENU_ROOM_PX = { voice: 48, language: 168 } as const;
+const MENU_ROOM_PX = { voice: 48, language: 124 } as const;
 
 const VOICE_LABELS = {
   helios: {

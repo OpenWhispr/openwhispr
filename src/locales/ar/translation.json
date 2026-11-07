@@ -933,7 +933,11 @@
         "subjectTooLong": "اجعل الموضوع {{max}} حرفًا أو أقل.",
         "bodyTooLong": "الرسالة طويلة جدًا بالنسبة إلى Gmail. اختصرها لإرسالها.",
         "unknown": "تعذّر تأكيد الإرسال. تحقق من مجلد البريد المُرسل.",
-        "fromLabel": "من"
+        "fromLabel": "من",
+        "copyAll": "نسخ الكل",
+        "copyRecipients": "نسخ المستلمين",
+        "copySubject": "نسخ الموضوع",
+        "copyBody": "نسخ الرسالة"
       },
       "github": {
         "notes": {

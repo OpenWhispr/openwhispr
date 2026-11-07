@@ -543,7 +543,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
       (callback) => (_event, progress) => callback(progress)
     ),
     isHarness: () => ipcRenderer.invoke("voice-conversation:harness-enabled"),
-    brainOverride: () => ipcRenderer.invoke("voice-conversation:brain-override"),
     reportTurn: (report) => ipcRenderer.send("voice-conversation:turn-report", report),
     reportTurnEvent: (turnEvent) => ipcRenderer.send("voice-conversation:turn-event", turnEvent),
     onHarnessDone: registerListener(
