@@ -27,6 +27,9 @@ export interface RetiredProviderModels {
 
 export type RetiredModelProvider = keyof typeof RETIRED_CLOUD_MODELS;
 
+/** Providers that can announce a model switch: the retirement table, plus OpenCode's live lists. */
+export type RetiredSwitchProvider = RetiredModelProvider | "opencode-go" | "opencode-zen";
+
 interface RetiredModelStorage {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;

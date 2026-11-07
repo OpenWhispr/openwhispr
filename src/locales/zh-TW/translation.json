@@ -807,6 +807,7 @@
       "ownerLabel": "擁有者：{{owner}}",
       "unableToLoadModels": "無法從端點載入模型。",
       "searchPlaceholder": "搜尋模型…",
+      "clearSearch": "清除搜尋",
       "selectedGroup": "已選擇",
       "otherGroup": "其他",
       "noSearchResults": "沒有與「{{query}}」相符的模型",
@@ -921,6 +922,9 @@
     "localModelRetiredKept": "{{from}} 已停止提供。由於已下載，它仍可繼續使用，但無法再次下載。請在設定中選擇其他本機模型。",
     "groq": {
       "modelRetired": "Groq 已停用 {{from}}，已切換至 {{to}}。"
+    },
+    "opencode": {
+      "modelRetired": "OpenCode 已停用 {{from}}，已切換至 {{to}}。"
     },
     "tinfoil": {
       "modelRetired": "Tinfoil 已停用 {{from}}，已切換至 {{to}}。",

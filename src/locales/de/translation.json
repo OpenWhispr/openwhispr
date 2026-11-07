@@ -807,6 +807,7 @@
       "ownerLabel": "Anbieter: {{owner}}",
       "unableToLoadModels": "Modelle konnten nicht vom Endpoint geladen werden.",
       "searchPlaceholder": "Modelle suchen…",
+      "clearSearch": "Suche löschen",
       "selectedGroup": "Ausgewählt",
       "otherGroup": "Sonstige",
       "noSearchResults": "Keine Modelle für „{{query}}“",
@@ -921,6 +922,9 @@
     "localModelRetiredKept": "{{from}} wurde eingestellt. Es funktioniert weiter, da es bereits heruntergeladen ist, kann aber nicht erneut heruntergeladen werden. Wähle in den Einstellungen ein anderes lokales Modell.",
     "groq": {
       "modelRetired": "Groq hat {{from}} eingestellt. Zu {{to}} gewechselt."
+    },
+    "opencode": {
+      "modelRetired": "OpenCode hat {{from}} eingestellt. Zu {{to}} gewechselt."
     },
     "tinfoil": {
       "modelRetired": "Tinfoil hat {{from}} eingestellt. Zu {{to}} gewechselt.",

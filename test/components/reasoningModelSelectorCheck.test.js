@@ -345,3 +345,35 @@ test("a refused key typed again is held back before its new answer", async (t) =
   await panel.unmount();
   assert.equal(panel.state().openaiApiKey, "sk-saved");
 });
+
+const catalogModels = (count) =>
+  Array.from({ length: count }, (_, i) => ({
+    id: `model-${i}`,
+    name: `Model ${i}`,
+    description: "",
+    supportsTemperature: true,
+    tokenParam: "max_tokens",
+  }));
+
+const mountOpencode = (t, count) =>
+  mount(t, {
+    overrides: { localReasoningProvider: "opencode-go", reasoningModel: "" },
+    electronAPI: { getOpencodeModels: async () => catalogModels(count) },
+  });
+
+test("an OpenCode catalog longer than a dozen models gets the searchable list", async (t) => {
+  const panel = await mountOpencode(t, 13);
+  await panel.wait(0);
+  await panel.wait(0);
+
+  assert.equal(panel.find((node) => node.type?.name === "SearchableModelList").length, 1);
+});
+
+test("a short OpenCode catalog keeps the plain card list", async (t) => {
+  const panel = await mountOpencode(t, 4);
+  await panel.wait(0);
+  await panel.wait(0);
+
+  assert.equal(panel.find((node) => node.type?.name === "SearchableModelList").length, 0);
+  assert.equal(panel.find((node) => node.type?.name === "ModelCardList").length, 1);
+});

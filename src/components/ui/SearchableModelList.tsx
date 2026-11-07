@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Search } from "../icons";
+import { Search, X } from "../icons";
 import { Input } from "./input";
 import { ModelCard, type ModelCardOption } from "./ModelCardList";
 import { getRemoteProviderIcon } from "../../utils/providerIcons";
@@ -67,7 +67,13 @@ export default function SearchableModelList({
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(-1);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const normalizedQuery = query.trim().toLowerCase();
+
+  const clearQuery = () => {
+    setQuery("");
+    inputRef.current?.focus();
+  };
 
   const selectedOption = useMemo(
     () => models.find((m) => m.value === selectedModel) ?? null,
@@ -213,6 +219,7 @@ export default function SearchableModelList({
           className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/70 pointer-events-none"
         />
         <Input
+          ref={inputRef}
           dir="ltr"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
@@ -223,8 +230,18 @@ export default function SearchableModelList({
           aria-expanded={rows.length > 0}
           aria-controls={listboxId}
           aria-activedescendant={activeId}
-          className="h-9 pl-8 text-sm"
+          className="h-9 pl-8 pe-8 text-sm"
         />
+        {query && (
+          <button
+            type="button"
+            aria-label={t("reasoning.custom.clearSearch")}
+            onClick={clearQuery}
+            className="absolute end-2.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+          >
+            <X size={14} />
+          </button>
+        )}
       </div>
 
       {rows.length > 0 && (
