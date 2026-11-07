@@ -2,6 +2,7 @@ const { execFileSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+const { randomUUID } = require("crypto");
 const debugLogger = require("./debugLogger");
 const { bindingIdFor, slotOfBindingId, indexOfBindingId } = require("./hotkeyBindingId");
 
@@ -78,6 +79,96 @@ const MANAGED_HEADER_VARIANTS = new Set([
   ...MANAGED_HEADER_TEXT,
   "If you delete this file, also remove the matching source line from your Hyprland config.",
 ]);
+
+/** @returns {{ code: string, topLevelLines: boolean[] }} */
+function getLuaCodeStructure(content) {
+  // Keep quoted literals, but ignore comments and long strings containing example code.
+  const code = content.replace(
+    /"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|--\[(=*)\[[\s\S]*?(?:\]\1\]|$)|--[^\n]*|\[(=*)\[[\s\S]*?(?:\]\2\]|$)/g,
+    (token) => (/^["']/.test(token) ? token : token.replace(/[^\r\n]/g, " "))
+  );
+  const structure = code
+    .replace(/"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'/g, (token) =>
+      token.replace(/[^\r\n]/g, " ")
+    )
+    .split("\n");
+  let depth = 0;
+  const topLevelLines = structure.map((line) => {
+    const topLevel = depth === 0;
+    for (const token of line.match(/\b(?:function|if|do|repeat|end|until)\b|[()[\]{}]/g) || []) {
+      depth += /^(?:end|until|[)\]}])$/.test(token) ? -1 : 1;
+    }
+    return topLevel;
+  });
+  return { code, topLevelLines };
+}
+
+/** @returns {boolean} */
+function hasLuaLoadDirective({ code, topLevelLines }, bindsPath) {
+  const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const quoted = `${escape(JSON.stringify(bindsPath))}|${escape(
+    `'${bindsPath.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`
+  )}`;
+  const loader = new RegExp(
+    `^\\s*(?:(?:require|dofile)\\s*(?:\\(\\s*(?:${quoted})\\s*\\)|(?:${quoted}))|` +
+      `pcall\\s*\\(\\s*(?:require|dofile)\\s*,\\s*(?:${quoted})\\s*\\))\\s*;?\\s*(?=\\r?\\n|$)`
+  );
+  let offset = 0;
+  for (const [index, line] of code.split("\n").entries()) {
+    if (topLevelLines[index] && /^\s*return\b/.test(line)) break;
+    if (topLevelLines[index] && loader.test(code.slice(offset))) return true;
+    offset += line.length + 1;
+  }
+  return false;
+}
+
+/** @returns {{ target: string, metadata: import("fs").Stats | null }} */
+function getWritableConfigTarget(filePath) {
+  let entry;
+  try {
+    entry = fs.lstatSync(filePath);
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  // Resolve existing links before replacing: rename must update the dotfile
+  // target, never replace the user's symlink with a regular file.
+  const target = entry ? fs.realpathSync(filePath) : filePath;
+  const metadata = entry ? fs.statSync(target) : null;
+  if (metadata && (!metadata.isFile() || metadata.nlink > 1)) {
+    throw new Error(`Cannot atomically replace non-regular or hard-linked config: ${filePath}`);
+  }
+  if (metadata) fs.accessSync(target, fs.constants.W_OK);
+  fs.accessSync(path.dirname(target), fs.constants.W_OK | fs.constants.X_OK);
+  return { target, metadata };
+}
+
+function writeConfigAtomically(filePath, content) {
+  const { target, metadata } = getWritableConfigTarget(filePath);
+  const temp = path.join(path.dirname(target), `.${path.basename(target)}.${randomUUID()}.tmp`);
+  let fd;
+  try {
+    fd = fs.openSync(temp, "wx", 0o600);
+    fs.writeFileSync(fd, content, "utf-8");
+    if (metadata) {
+      const current = fs.fstatSync(fd);
+      if (current.uid !== metadata.uid || current.gid !== metadata.gid) {
+        fs.fchownSync(fd, metadata.uid, metadata.gid);
+      }
+    }
+    fs.fchmodSync(fd, metadata ? metadata.mode & 0o7777 : 0o666 & ~process.umask());
+    fs.fsyncSync(fd);
+    fs.closeSync(fd);
+    fd = undefined;
+    fs.renameSync(temp, target);
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+    try {
+      fs.unlinkSync(temp);
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+  }
+}
 
 function isManagedHeaderLine(line) {
   return MANAGED_HEADER_VARIANTS.has(line.trim().replace(/^(#|--)\s*/, ""));
@@ -205,6 +296,8 @@ class HyprlandShortcutManager {
     this.persistencePending = false;
     this.config = null;
     this.dbusNameRequestTimeoutMs = dbusNameRequestTimeoutMs;
+    // Set by HotkeyManager to debug-log each press: (slotName, action).
+    this.onHotkeyEvent = null;
   }
 
   /**
@@ -284,15 +377,18 @@ class HyprlandShortcutManager {
       const toggleMethods = {};
       for (const [slot, method] of Object.entries(SLOT_TOGGLE_METHOD)) {
         toggleMethods[method] = () => {
+          this.onHotkeyEvent?.(slot, "press");
           const cb = this.callbacks[slot];
           if (typeof cb === "function") cb();
         };
       }
       toggleMethods.PttDown = () => {
+        this.onHotkeyEvent?.("dictation", "down");
         const cb = this.callbacks.dictation;
         if (typeof cb === "function") cb(undefined, "down");
       };
       toggleMethods.PttUp = () => {
+        this.onHotkeyEvent?.("dictation", "up");
         const cb = this.callbacks.dictation;
         if (typeof cb === "function") cb(undefined, "up");
       };
@@ -302,29 +398,25 @@ class HyprlandShortcutManager {
       // Any process on the session bus can call these, so a row this build does
       // not hold is refused rather than dispatched: a malformed index must not
       // read as row 0, which is the row that is always bound.
-      const rowCallback = (slot, index) => {
-        if (typeof slot !== "string" || !slot) return null;
+      const dispatchRow = (slot, index, action, phase) => {
+        if (typeof slot !== "string" || !slot) return;
         const row =
           typeof index === "number"
             ? index
             : typeof index === "string" && /^\d+$/.test(index)
               ? Number(index)
               : NaN;
-        if (!Number.isInteger(row) || row < 0) return null;
-        return this.callbacks[bindingIdFor(slot, row)];
+        if (!Number.isInteger(row) || row < 0) return;
+        const bindingId = bindingIdFor(slot, row);
+        const cb = this.callbacks[bindingId];
+        if (typeof cb !== "function") return;
+        this.onHotkeyEvent?.(bindingId, action);
+        if (phase) cb(undefined, phase);
+        else cb();
       };
-      toggleMethods.ToggleBinding = (slot, index) => {
-        const cb = rowCallback(slot, index);
-        if (typeof cb === "function") cb();
-      };
-      toggleMethods.PttDownBinding = (slot, index) => {
-        const cb = rowCallback(slot, index);
-        if (typeof cb === "function") cb(undefined, "down");
-      };
-      toggleMethods.PttUpBinding = (slot, index) => {
-        const cb = rowCallback(slot, index);
-        if (typeof cb === "function") cb(undefined, "up");
-      };
+      toggleMethods.ToggleBinding = (slot, index) => dispatchRow(slot, index, "press");
+      toggleMethods.PttDownBinding = (slot, index) => dispatchRow(slot, index, "down", "down");
+      toggleMethods.PttUpBinding = (slot, index) => dispatchRow(slot, index, "up", "up");
       this.bus.exportInterface(toggleMethods, DBUS_OBJECT_PATH, {
         name: DBUS_INTERFACE,
         methods: {
@@ -482,7 +574,7 @@ class HyprlandShortcutManager {
     }
 
     const newContent = buildManagedBindsContent([...userLines, ...bindLines], config.format);
-    fs.writeFileSync(config.bindsPath, newContent, "utf-8");
+    if (newContent !== content) writeConfigAtomically(config.bindsPath, newContent);
   }
 
   _persistBinds(config, desiredBinds) {
@@ -503,11 +595,16 @@ class HyprlandShortcutManager {
       throw err;
     }
 
+    const luaStructure = config.format === "lua" ? getLuaCodeStructure(content) : null;
+    if (luaStructure && hasLuaLoadDirective(luaStructure, config.bindsPath)) return true;
+
     const sourceLine =
       config.format === "lua"
         ? `pcall(require, ${JSON.stringify(config.bindsPath)})`
         : `source = ${config.bindsPath}`;
-    const lines = content.split("\n").filter((line) => {
+    const lines = content.split("\n").filter((line, index) => {
+      // Removing a nested call can invalidate its surrounding expression.
+      if (luaStructure && !luaStructure.topLevelLines[index]) return true;
       if (!line.includes(BINDS_FILENAMES[config.format])) return true;
       const trimmed = line.trim();
       return config.format === "lua"
@@ -531,7 +628,7 @@ class HyprlandShortcutManager {
     const newContent = lines.join("\n");
     if (newContent === content) return true;
 
-    fs.writeFileSync(config.path, newContent, "utf-8");
+    writeConfigAtomically(config.path, newContent);
     debugLogger.log(`[HyprlandShortcut] Added binding load directive to ${config.path}`);
     return true;
   }
@@ -648,24 +745,15 @@ class HyprlandShortcutManager {
   static getHyprlandConfigStatus() {
     const config = getHyprlandConfig();
     const mainConfig = config.path;
-    const configDir = path.dirname(mainConfig);
     const status = {
       path: mainConfig,
       canWrite: false,
     };
 
     try {
-      fs.accessSync(mainConfig, fs.constants.F_OK | fs.constants.W_OK);
-      if (!fs.statSync(mainConfig).isFile()) {
-        throw new Error(`Hyprland config is not a file: ${mainConfig}`);
-      }
-      fs.accessSync(configDir, fs.constants.W_OK);
-      if (fs.existsSync(config.bindsPath)) {
-        fs.accessSync(config.bindsPath, fs.constants.W_OK);
-        if (!fs.statSync(config.bindsPath).isFile()) {
-          throw new Error(`Managed binds path is not a file: ${config.bindsPath}`);
-        }
-      }
+      fs.accessSync(mainConfig, fs.constants.F_OK);
+      getWritableConfigTarget(mainConfig);
+      getWritableConfigTarget(config.bindsPath);
       status.canWrite = true;
     } catch (err) {
       debugLogger.log(

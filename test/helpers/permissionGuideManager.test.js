@@ -132,6 +132,7 @@ function fixture({
         // app actually ships; only the OS window query is stubbed.
         if (name === "./permissionGuidePlacement")
           return require("../../src/helpers/permissionGuidePlacement.js");
+        if (name === "./ipcSender") return require("../../src/helpers/ipcSender.js");
         if (name === "./settingsWindowState")
           return {
             readSettingsWindowState: async () => settingsState(),

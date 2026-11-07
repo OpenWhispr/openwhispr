@@ -28,6 +28,8 @@ import {
   type TranscriptionProviderBaseUrl,
 } from "../services/transcriptionBaseUrl.ts";
 import type { ManagedEnterpriseRequestContext } from "../types/enterpriseIdentity.ts";
+import { getRegistryData } from "../models/registryData.js";
+import { retiredReplacement } from "../models/modelLifecycle.js";
 
 const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
 
@@ -81,7 +83,7 @@ export interface TranscriptionRouteSettings {
 export type ManagedTranscriptionResolution =
   | {
       kind: "managed";
-      provider: "azure";
+      provider: "azure" | "openai-compatible";
       deployment: string;
       context: ManagedEnterpriseRequestContext;
     }
@@ -136,7 +138,7 @@ export type TranscriptionRoute =
       // Workspace-managed Azure STT. Executed only in the main process, which
       // re-validates the context and holds the Entra token.
       transport: "managed";
-      provider: "azure";
+      provider: "azure" | "openai-compatible";
       deployment: string;
       context: ManagedEnterpriseRequestContext;
       sizeCapBytes: number;
@@ -172,15 +174,18 @@ export const XAI_STT_LANGUAGES = new Set([
   "vi",
 ]);
 
-// Prefix-matched rather than registry-checked on purpose: this module loads in
-// the packaged main process without the registry, and strict validation would
-// reset the model of anyone still on a retired id. The registry-backed picker
-// rules live in settingsStore; transcriptionRouteModelAgreement.test.js pins the
-// two together for every shipping model.
+// The live catalog decides first: an offered model is sent as is, and a retired one
+// moves to its replacement. The prefix rules then keep a model the catalog does not know
+// yet (a remote addition before its catalog loads) instead of resetting it;
+// transcriptionRouteModelAgreement.test.js pins them to every shipping model.
 export function resolveByokModel(provider: string, configuredModel?: string): string {
   const trimmed = (configuredModel || "").trim();
   if (provider === "custom") return trimmed || "whisper-1";
   if (trimmed) {
+    const catalogProvider = getRegistryData().transcriptionProviders.find((p) => p.id === provider);
+    if (catalogProvider?.models.some((model) => model.id === trimmed)) return trimmed;
+    const replacement = retiredReplacement("transcriptionProviders", provider, trimmed);
+    if (replacement) return replacement;
     const matchesProvider =
       (provider === "groq" && trimmed.startsWith("whisper-large-v3")) ||
       (provider === "openai" &&
@@ -201,7 +206,7 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
   if (provider === "corti") return "corti-transcribe";
   if (provider === "gemini") return "gemini-3.5-transcribe";
   if (provider === "deepgram") return "nova-3";
-  if (provider === "assemblyai") return "universal-3-5-pro";
+  if (provider === "assemblyai") return "universal-3-6-pro";
   return "gpt-transcribe";
 }
 

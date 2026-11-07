@@ -201,6 +201,8 @@ class GnomeShortcutManager {
     this.globalShortcutsPortal = new GnomeGlobalShortcutsPortal();
     // Track which slots have been registered in gsettings
     this.registeredSlots = new Set();
+    // Set by HotkeyManager to debug-log each press: (slotName, action).
+    this.onHotkeyEvent = null;
   }
 
   static isGnome() {
@@ -305,21 +307,25 @@ class GnomeShortcutManager {
       this.bus.exportInterface(
         {
           Toggle: () => {
+            this.onHotkeyEvent?.("dictation", "press");
             if (this.dictationCallback) {
               this.dictationCallback();
             }
           },
           ToggleMeeting: () => {
+            this.onHotkeyEvent?.("meeting", "press");
             if (this.meetingCallback) {
               this.meetingCallback();
             }
           },
           ToggleVoiceAgent: () => {
+            this.onHotkeyEvent?.("voiceAgent", "press");
             if (this.voiceAgentCallback) {
               this.voiceAgentCallback();
             }
           },
           ToggleTranslation: () => {
+            this.onHotkeyEvent?.("translation", "press");
             if (this.translationCallback) {
               this.translationCallback();
             }
@@ -328,6 +334,7 @@ class GnomeShortcutManager {
           // naming a binding that no longer exists resolves to nothing rather
           // than falling back to the first row.
           ToggleBinding: (bindingId) => {
+            this.onHotkeyEvent?.(bindingId, "press");
             this.bindingCallbacks.get(bindingId)?.();
           },
         },
@@ -365,6 +372,15 @@ class GnomeShortcutManager {
     return this.globalShortcutsPortal.isAvailable();
   }
 
+  // The portal reports each Hold's down and up; they reach the debug log under
+  // the row's own binding id.
+  _loggedPortalCallback(bindingId, callback) {
+    return (hotkeyArg, phase) => {
+      this.onHotkeyEvent?.(bindingId, phase);
+      return callback(hotkeyArg, phase);
+    };
+  }
+
   /**
    * Binds every Hold row in one portal session. No gsettings fallback here:
    * in a multi-row commit a per-row fallback leaves an orphan Tap binding for
@@ -393,7 +409,7 @@ class GnomeShortcutManager {
         preferredTrigger: keysym
           ? preferredTrigger.replace(EXTENDED_FUNCTION_KEY, keysym)
           : preferredTrigger,
-        callback,
+        callback: this._loggedPortalCallback(bindingId, callback),
       });
       this.bindingCallbacks.set(bindingId, callback);
     }
@@ -436,12 +452,13 @@ class GnomeShortcutManager {
     const trigger = keysym
       ? preferredTrigger.replace(EXTENDED_FUNCTION_KEY, keysym)
       : preferredTrigger;
+    const portalCallback = this._loggedPortalCallback(bindingId, callback);
     const registered =
       typeof this.globalShortcutsPortal.registerKeybindings === "function"
         ? await this.globalShortcutsPortal.registerKeybindings([
-            { bindingId, preferredTrigger: trigger, callback },
+            { bindingId, preferredTrigger: trigger, callback: portalCallback },
           ])
-        : await this.globalShortcutsPortal.registerKeybinding(trigger, callback, bindingId);
+        : await this.globalShortcutsPortal.registerKeybinding(trigger, portalCallback, bindingId);
     if (!registered) {
       // Reuses the keymap answer Hold already resolved rather than reading it again.
       await this.registerKeybinding(tapShortcut, bindingId, resolved);

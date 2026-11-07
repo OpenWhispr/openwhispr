@@ -60,6 +60,7 @@ class MeetingDetectionEngine {
     this.preferences = { processDetection: false, audioDetection: false };
     this._userRecording = false;
     this._meetingModeActive = false;
+    this._meetingNoteSession = null;
     this._notificationQueue = [];
     this._postRecordingCooldown = null;
     this._recordingSession = null;
@@ -248,6 +249,10 @@ class MeetingDetectionEngine {
   }) {
     if (this._recordingSession) this._deactivateAutoEnd();
 
+    // Recording from a note-only session takes the meeting back over, so Stop
+    // releases it the way it does after an automatic start.
+    if (this._meetingNoteSession?.noteOnly) this._meetingModeActive = true;
+    this._clearMeetingNoteSession();
     this._recordingSession = {
       sessionId,
       autoEndEligible: autoEndEligible === true,
@@ -327,7 +332,15 @@ class MeetingDetectionEngine {
   // Calendar reminders enter the same pipeline as mic detections, so they share
   // the recording gates, queueing, cooldowns, and the overlay window.
   handleCalendarReminder(event) {
-    this._handleDetection("calendar", event.id, { event, detectedAt: Date.now() });
+    const detect = () =>
+      this._handleDetection("calendar", event.id, { event, detectedAt: Date.now() });
+    // A reminder can fire before the policy's first load at launch; fetch it
+    // rather than judge the meeting on a policy that hasn't arrived.
+    if (this.windowManager.getMeetingRecordingRefusal?.()?.code === "POLICY_UNRESOLVABLE") {
+      void this.windowManager.resolveMeetingRecordingRefusal().then(detect);
+      return;
+    }
+    detect();
   }
 
   _handleDetection(source, key, data) {
@@ -349,6 +362,11 @@ class MeetingDetectionEngine {
 
     if (this.activeDetections.has(detectionId)) {
       debugLogger.debug("Detection already active, skipping", { detectionId }, "meeting");
+      return;
+    }
+
+    if (this._belongsToMeetingNote(source, key)) {
+      debugLogger.info("Suppressing detection — its note is open", { detectionId }, "meeting");
       return;
     }
 
@@ -402,13 +420,25 @@ class MeetingDetectionEngine {
   _showPrompt(detectionId, source, key, data) {
     const calendarEvent = data?.event ?? this._findCalendarEvent();
     const event = calendarEvent ?? placeholderEvent("__detected__");
+    const joinUrl = source === "calendar" ? getMeetingJoinUrl(calendarEvent) : null;
+    // While the org has meeting recording off, a reminder with a link can still
+    // join the meeting; every other prompt only offers to record it.
+    const recordingRefusal = this.windowManager.getMeetingRecordingRefusal?.()?.code ?? null;
+    if (recordingRefusal && !joinUrl) {
+      debugLogger.info(
+        "Suppressing detection — meeting recording is off by policy",
+        { detectionId, source },
+        "meeting"
+      );
+      this.activeDetections.delete(detectionId);
+      return;
+    }
 
     let variant = "detected";
     if (calendarEvent) {
       const started = new Date(calendarEvent.start_time).getTime() <= Date.now();
       variant = started ? "underway" : "starting";
     }
-    const joinUrl = source === "calendar" ? getMeetingJoinUrl(calendarEvent) : null;
 
     debugLogger.info(
       "Showing notification",
@@ -418,6 +448,7 @@ class MeetingDetectionEngine {
         variant,
         title: calendarEvent?.summary ?? null,
         hasJoinUrl: !!joinUrl,
+        recordingRefusal,
       },
       "meeting"
     );
@@ -434,15 +465,19 @@ class MeetingDetectionEngine {
       event,
       variant,
       joinUrl,
+      ...(recordingRefusal ? { recordingRefusal } : {}),
     });
   }
 
   handleNotificationResponse(detectionId, action, options = {}, owner) {
-    if (!["start", "join", "dismiss"].includes(action))
+    if (!["start", "join", "open", "dismiss"].includes(action))
       return Promise.resolve({ success: false, code: "INVALID_REQUEST" });
     if (owner.responsePromise) return owner.responsePromise;
-    if (action === "dismiss") {
-      this._dismiss();
+    if (action === "dismiss" || action === "open") {
+      // Opening the meeting without recording it is not a decline, so it starts
+      // no mic cooldown.
+      if (action === "open") this.openNotificationJoinUrl(owner);
+      else this._dismiss();
       this.activeDetections.delete(detectionId);
       this.windowManager.dismissMeetingNotification({ notifyEngine: false });
       return Promise.resolve({ success: true, value: null });
@@ -466,15 +501,19 @@ class MeetingDetectionEngine {
     return owner.responsePromise;
   }
 
+  // Once per card: a Join retried after a failed start must not reopen the call.
+  openNotificationJoinUrl(owner) {
+    if (owner.joinDispatched) return;
+    owner.joinDispatched = true;
+    const joinUrl = getMeetingJoinUrl(owner.detection.event);
+    if (joinUrl)
+      void openExternalUrl(joinUrl).catch((error) =>
+        debugLogger.error("Failed to open meeting link", { error: error.message }, "meeting")
+      );
+  }
+
   async _startNotification(owner, action, options) {
-    if (action === "join" && !owner.joinDispatched) {
-      owner.joinDispatched = true;
-      const joinUrl = getMeetingJoinUrl(owner.detection.event);
-      if (joinUrl)
-        void openExternalUrl(joinUrl).catch((error) =>
-          debugLogger.error("Failed to open meeting link", { error: error.message }, "meeting")
-        );
-    }
+    if (action === "join") this.openNotificationJoinUrl(owner);
     const db = this.databaseManager;
     const context = () =>
       meetingDestinationContext(db, owner, this.windowManager.meetingRecentDestinations);
@@ -521,21 +560,37 @@ class MeetingDetectionEngine {
     this._meetingModeActive = true;
     // Join leaves the meeting it just opened in front: an open panel updates
     // behind it instead of covering the call.
+    const noteSessionId = this._beginMeetingNoteSession(eventId ? owner.detection.event : null, {
+      acceptedMicPrompt: owner.detection.source === "audio",
+    });
     const navigation = await this.windowManager.queueMeetingNoteNavigation(
-      { ...owner.authorizedNote, navigationId: randomUUID() },
+      { ...owner.authorizedNote, navigationId: randomUUID(), noteSessionId },
       { owner, activate: action !== "join" }
     );
     if (!navigation.success) {
-      this._meetingModeActive = false;
+      this.abandonMeetingNote(noteSessionId);
       return navigation;
     }
-    this.audioActivityDetector.resetPrompt();
     this.activeDetections.delete(owner.prompt.detectionId);
     this.windowManager.dismissMeetingNotification({ notifyEngine: false });
     return { success: true, value: null };
   }
 
+  // Both manual starts record into the note they create, so a start the org
+  // refuses must end before that note exists.
+  async _meetingStartRefusal() {
+    const refusal = await this.windowManager.resolveMeetingRecordingRefusal?.();
+    if (refusal)
+      debugLogger.info("Meeting start refused by policy", { code: refusal.code }, "meeting");
+    return refusal;
+  }
+
   async startManualMeeting(options) {
+    const refusal = await this._meetingStartRefusal();
+    if (refusal) {
+      this.windowManager.sendMeetingStartRefused(refusal.code);
+      return;
+    }
     debugLogger.info("Starting manual meeting", {}, "meeting");
 
     // A live meeting already owns a note: a second start would leave the recording
@@ -574,6 +629,7 @@ class MeetingDetectionEngine {
     await this.windowManager.queueMeetingNoteNavigation(
       {
         noteId: noteResult.note.id,
+        noteSessionId: this._beginMeetingNoteSession(null),
         folderId: meetingsFolder.id,
         event,
         trigger: "hotkey",
@@ -594,6 +650,7 @@ class MeetingDetectionEngine {
     await this.windowManager.queueMeetingNoteNavigation(
       {
         noteId: existingNote.id,
+        noteSessionId: this._beginMeetingNoteSession(event),
         folderId: existingNote.folder_id ?? this.databaseManager.getMeetingsFolder()?.id,
         event,
         trigger,
@@ -603,7 +660,10 @@ class MeetingDetectionEngine {
     return true;
   }
 
+  // Resolves with the org's refusal, if any, for the caller to explain.
   async joinCalendarMeeting(eventId, trigger = "calendar-join", options) {
+    const refusal = await this._meetingStartRefusal();
+    if (refusal) return refusal;
     this._meetingModeActive = true;
     debugLogger.info("Joining calendar meeting", { eventId, trigger }, "meeting");
 
@@ -643,6 +703,7 @@ class MeetingDetectionEngine {
     await this.windowManager.queueMeetingNoteNavigation(
       {
         noteId: noteResult.note.id,
+        noteSessionId: this._beginMeetingNoteSession(calEvent),
         folderId: meetingsFolder.id,
         event: calEvent,
         trigger,
@@ -689,6 +750,13 @@ class MeetingDetectionEngine {
       return;
     }
 
+    // A card closing on its own can flush mid-dictation or mid-cooldown; the
+    // cooldown that follows the recording flushes the queue instead.
+    if (this._userRecording || this._postRecordingCooldown) {
+      debugLogger.info("Holding queued notifications — user is recording", {}, "meeting");
+      return;
+    }
+
     // A dictation's post-recording cooldown can flush while a meeting recording
     // is still live; hold the queue for the flush that follows the recording.
     if (this._recordingSession) {
@@ -702,8 +770,16 @@ class MeetingDetectionEngine {
       "meeting"
     );
 
-    const [best, ...discarded] = this._notificationQueue;
+    const queued = this._notificationQueue;
     this._notificationQueue = [];
+    // Queued before its note opened, so the check on arrival couldn't catch it.
+    const pending = queued.filter(({ source, key }) => {
+      const belongs = this._belongsToMeetingNote(source, key);
+      if (belongs) this.activeDetections.delete(`${source}:${key}`);
+      return !belongs;
+    });
+    if (pending.length === 0) return;
+    const [best, ...discarded] = pending;
     // This flush coalesces the batch into one prompt. Entries it discards must
     // not keep suppressing future microphone detections after that prompt ends.
     for (const { source, key, data } of discarded) {
@@ -719,12 +795,77 @@ class MeetingDetectionEngine {
     this.audioActivityDetector.dismiss();
   }
 
-  setMeetingModeActive(active) {
+  _beginMeetingNoteSession(event, { acceptedMicPrompt = false } = {}) {
+    this._clearMeetingNoteSession();
+    const id = randomUUID();
+    const endsAt = Date.parse(event?.end_time);
+    this._meetingNoteSession = {
+      id,
+      eventId: event?.id ?? null,
+      endsAt,
+      // Joining an event turns the mic on next. Only a mic prompt means that call is
+      // already here: the detector's own prompted state can belong to an earlier call.
+      awaitingMic: Number.isFinite(endsAt) && !acceptedMicPrompt,
+      noteOnly: false,
+    };
+    return id;
+  }
+
+  _clearMeetingNoteSession() {
+    this._meetingNoteSession = null;
+  }
+
+  // Until the event ends, its own reminder and the call it starts are not new
+  // meetings. Anything else still prompts.
+  _belongsToMeetingNote(source, key) {
+    const session = this._meetingNoteSession;
+    if (!session || !(this._now() < session.endsAt)) return false;
+    if (source === "calendar") return key === session.eventId;
+    if (!session.awaitingMic) return false;
+    session.awaitingMic = false;
+    return true;
+  }
+
+  // No capture follows, so prompts resume now: a note left open, or hidden in
+  // the tray, must not silence later meetings. The detector keeps its prompt
+  // identity, so the accepted call does not prompt again.
+  markMeetingNoteOnly(id) {
+    const session = this._meetingNoteSession;
+    if (!session || session.id !== id || this._recordingSession || session.noteOnly) return;
+    session.noteOnly = true;
+    this._meetingModeActive = false;
+    debugLogger.info("Meeting note opened without recording", {}, "meeting");
+  }
+
+  closeMeetingNote(id, { resetAudioPrompt = true } = {}) {
+    if (!this._meetingNoteSession || this._meetingNoteSession.id !== id) return;
+    const noteOnly = this._meetingNoteSession.noteOnly;
+    this._clearMeetingNoteSession();
+    if (noteOnly || this._recordingSession) return;
+    this.setMeetingModeActive(false, { resetAudioPrompt });
+    this._flushNotificationQueue();
+  }
+
+  // The note never opened, so the mic was never ours: the call it was opened for
+  // keeps its prompt identity and doesn't prompt again.
+  abandonMeetingNote(id) {
+    this.closeMeetingNote(id, { resetAudioPrompt: false });
+  }
+
+  closeCurrentMeetingNote() {
+    const id = this._meetingNoteSession?.id;
+    // A queued navigation replays into the next document, which takes the session over.
+    if (this.windowManager.isMeetingNoteNavigationPending?.(id)) return;
+    this.closeMeetingNote(id);
+  }
+
+  setMeetingModeActive(active, { resetAudioPrompt = true } = {}) {
     this._meetingModeActive = active;
     debugLogger.info("Meeting mode active state changed", { active }, "meeting");
     if (!active) {
+      this._clearMeetingNoteSession();
       // Own mic usage during meeting mode sets hasPrompted=true; reset so future detections work
-      this.audioActivityDetector.resetPrompt();
+      if (resetAudioPrompt) this.audioActivityDetector.resetPrompt();
     }
   }
 
@@ -732,12 +873,14 @@ class MeetingDetectionEngine {
     this._userRecording = active;
     this.audioActivityDetector.setUserRecording(active);
 
-    if (active) {
-      if (this._postRecordingCooldown) {
-        clearTimeout(this._postRecordingCooldown);
-        this._postRecordingCooldown = null;
-      }
-    } else {
+    // Dictation reports preparing, processing and idle as not recording, so one
+    // gap between dictations reports it several times; a replaced timer must
+    // not flush during the next one.
+    if (this._postRecordingCooldown) {
+      clearTimeout(this._postRecordingCooldown);
+      this._postRecordingCooldown = null;
+    }
+    if (!active) {
       this._postRecordingCooldown = setTimeout(() => {
         this._postRecordingCooldown = null;
         this._flushNotificationQueue();
@@ -774,6 +917,7 @@ class MeetingDetectionEngine {
   stop() {
     debugLogger.info("Meeting detection engine stopped", {}, "meeting");
     this._deactivateAutoEnd();
+    this._clearMeetingNoteSession();
     this._recordingSession = null;
     this.meetingProcessDetector.stop();
     this.audioActivityDetector.stop();

@@ -9,8 +9,8 @@ const vm = require("node:vm");
 // callback 150 ms after the press. Two things have to be true of all three:
 //
 //  * the cleanup mode is resolved at the ACCEPTED key-down, so an edit during
-//    the hold cannot change the recording already under way, and the prepare
-//    and the start describe the same recording;
+//    the hold cannot change the recording already under way (the prepare only
+//    opens the mic and carries no mode; the start carries it);
 //  * a press is refused while the rows are being committed, BEFORE it claims
 //    the press owner or schedules the start — a claim made here would be acted
 //    on by a callback that fires after the commit cleared the gate.
@@ -48,7 +48,7 @@ function runHandler({ source, trigger, hotkeys, modes, activationMode, committin
     clearNativePressOwner: () => {},
     // Only the override is recorded: the payload object belongs to the vm
     // realm, so comparing it directly fails on prototype identity alone.
-    sendPrepareDictation: (payload) => events.push(["prepare", payload?.cleanupOverride ?? null]),
+    sendPrepareDictation: (...args) => events.push(["prepare", ...args]),
     sendStartDictation: (payload) => events.push(["start", payload?.cleanupOverride ?? null]),
     sendToggleDictation: (payload) => events.push(["toggle", payload?.cleanupOverride ?? null]),
     sendToggleVoiceAgent: () => {},
@@ -67,6 +67,7 @@ function runHandler({ source, trigger, hotkeys, modes, activationMode, committin
       getSlotHotkeys: (slot) => (slot === "dictation" ? hotkeys : []),
       slotHasHotkey: (slot, hotkey) => slot === "dictation" && hotkeys.includes(hotkey),
       isInListeningMode: () => false,
+      logHotkeyEvent: () => {},
     },
     windowManager,
     isLiveWindow: (win) => Boolean(win),
@@ -143,11 +144,7 @@ for (const [name, config] of Object.entries(PATHS)) {
     const run = runHandler({ ...config, modes, activationMode: "push" });
 
     const atPress = await run.press();
-    assert.deepEqual(
-      atPress.events,
-      [["prepare", "cleaned"]],
-      "the prepare carries the matched row's mode"
-    );
+    assert.deepEqual(atPress.events, [["prepare"]], "the press pre-warms the mic, payload-free");
     assert.deepEqual(atPress.owners, [owner], "the press is registered as a binding owner");
 
     // A commit lands while the key is still down. The recording already under

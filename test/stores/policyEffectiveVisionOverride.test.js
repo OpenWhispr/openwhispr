@@ -154,9 +154,13 @@ test("the vision picker shows no Active model after policy clears its selection"
     );
 
   const visionMarkup = renderEditor("dictationAgentVision");
-  assert.ok(visionMarkup.includes("GPT-5 Mini"), "the model list is actually rendered");
+  assert.ok(visionMarkup.includes("GPT-6 Astra"), "the model list is actually rendered");
   assert.ok(!visionMarkup.includes(`>${i18n.t("common.active")}<`));
-  assert.ok(renderEditor("dictationAgent").includes(`>${i18n.t("common.active")}<`));
+  // gpt-5-mini is legacy: listed only where it is the selection.
+  assert.ok(!visionMarkup.includes("GPT-5 Mini"));
+  const agentMarkup = renderEditor("dictationAgent");
+  assert.ok(agentMarkup.includes("GPT-5 Mini"));
+  assert.ok(agentMarkup.includes(`>${i18n.t("common.active")}<`));
 });
 
 test("a policy that moves a configured override's provider clears its model", async (t) => {
@@ -196,4 +200,44 @@ test("a policy that moves a configured override's provider clears its model", as
     assert.equal(config.scope, "dictationAgent");
     assert.equal(config.provider, "anthropic");
   });
+});
+
+test("a blocked local assistant's screenshot reaches neither Chat nor a permitted vision override", async (t) => {
+  const { useSettingsStore, selectPolicyEffectiveSettings, resolveChatStreamingInference } =
+    await loadStore(
+      t,
+      {
+        ...unconfiguredOverride,
+        dictationAgentMode: "local",
+        dictationAgentProvider: "qwen",
+        dictationAgentModel: "qwen3-4b-q4_k_m",
+        dictationAgentVisionMode: "providers",
+        dictationAgentVisionProvider: "gemini",
+        dictationAgentVisionModel: "gemini-2.5-flash",
+        chatAgentMode: "providers",
+        chatAgentProvider: "gemini",
+        chatAgentModel: "gemini-2.5-flash",
+      },
+      "openwhispr-policy-vision-blocked-agent-test-"
+    );
+  const raw = { ...useSettingsStore.getState(), isSignedIn: true };
+  const policy = managedByokPolicy(["gemini"]);
+  policy.policy.llm.allowedLocalModels = ["qwen3.5-0.8b-q4_k_m"];
+  const effective = selectPolicyEffectiveSettings(raw, policy);
+  assert.equal(
+    effective.dictationAgentVisionModel,
+    "gemini-2.5-flash",
+    "the override is permitted"
+  );
+
+  const { config, attachScreenContext } = resolveChatStreamingInference(effective, {
+    inferenceScope: "dictationAgent",
+    hasScreenContext: true,
+    isProviderImageWired: () => true,
+  });
+
+  assert.equal(config.scope, "dictationAgent");
+  assert.equal(config.mode, "local");
+  assert.equal(config.model, "");
+  assert.equal(attachScreenContext, false);
 });

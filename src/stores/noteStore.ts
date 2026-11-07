@@ -1,6 +1,10 @@
+import { forgetHeldSpaces, isSpaceHeld } from "../lib/heldSpaceDeletes";
 import { create } from "zustand";
 import { syncService } from "../services/SyncService.js";
-import { resolveRendererCloudNoteCreateBatch } from "../services/noteCreateAck";
+import {
+  recordNoteCreateAttempts,
+  resolveRendererCloudNoteCreateBatch,
+} from "../services/noteCreateAck";
 import {
   createClearedAccountNoteState,
   invalidateKeyedLoadGenerations,
@@ -14,6 +18,12 @@ import {
   removeNoteConflictId,
 } from "../lib/noteConflictRegistry";
 import { findDefaultFolder } from "../components/notes/shared";
+import {
+  decideNoteWorkspaceScope,
+  spacesInWorkspaceScope,
+  type NoteWorkspaceScopeReason,
+} from "../lib/workspaceSelection";
+import { useWorkspaceStore } from "./workspaceStore";
 import type { CloudNote } from "../services/NotesService.js";
 import type {
   FolderItem,
@@ -101,6 +111,98 @@ useNoteStore.subscribe((state) => {
   if (state.activeNoteId === syncedActiveNoteId) return;
   syncedActiveNoteId = state.activeNoteId;
   syncService.setNoteOpen(state.activeNoteId != null);
+});
+
+// Keeps the open note and container inside the active workspace (rules in
+// decideNoteWorkspaceScope). Leaving a hidden note takes two writes, and the
+// first would read as navigating back into the workspace just left, so
+// reconciling pauses while they apply.
+let applyingWorkspaceScope = false;
+// A note or container the user opened before it loaded (a teamspace created a
+// moment ago, a note whose folder isn't read yet): its first load still counts
+// as the user's navigation, so it may switch workspace then. A workspace
+// switch cancels that.
+let awaitingOpenedNoteId: number | null = null;
+let awaitingOpenedContext: ActiveContext | null = null;
+function reconcileWorkspaceScope(trigger: NoteWorkspaceScopeReason): void {
+  if (applyingWorkspaceScope) return;
+  const state = useNoteStore.getState();
+  const { activeWorkspaceId, workspaces } = useWorkspaceStore.getState();
+  const spaceById = (id: number): SpaceItem | null =>
+    state.spaces.find((space) => space.id === id) ?? null;
+  const activeNote = state.activeNoteId != null ? findNoteInState(state, state.activeNoteId) : null;
+  const noteSpace = activeNote ? spaceById(activeNote.space_id) : null;
+  const contextSpace = state.activeContext ? spaceById(state.activeContext.spaceId) : null;
+  let reason = trigger;
+  if (noteSpace && awaitingOpenedNoteId === state.activeNoteId) {
+    awaitingOpenedNoteId = null;
+    reason = "navigated";
+  }
+  if (contextSpace && awaitingOpenedContext === state.activeContext) {
+    awaitingOpenedContext = null;
+    reason = "navigated";
+  }
+  const decision = decideNoteWorkspaceScope({
+    reason,
+    activeWorkspaceId,
+    workspaces,
+    contextSpace,
+    noteSpace,
+  });
+  if (decision.kind === "none") return;
+  if (decision.kind === "enterWorkspace") {
+    // The switch reconciles again, closing whatever the old workspace left open.
+    useWorkspaceStore.getState().setActiveWorkspaceId(decision.workspaceId);
+    return;
+  }
+  applyingWorkspaceScope = true;
+  try {
+    if (decision.clearNote) setActiveNoteId(null);
+    const context =
+      decision.context === "note" && activeNote
+        ? { spaceId: activeNote.space_id, folderId: activeNote.folder_id ?? null }
+        : decision.context === "default"
+          ? defaultContext(state.spaces, state.folders)
+          : null;
+    if (context) {
+      setActiveContext(context.spaceId, context.folderId);
+      revealContainer(context.spaceId, context.folderId);
+    }
+  } finally {
+    applyingWorkspaceScope = false;
+  }
+}
+
+useNoteStore.subscribe((state, previous) => {
+  // What reconciling itself opens is never the user's navigation.
+  if (state.activeNoteId !== previous.activeNoteId) {
+    awaitingOpenedNoteId = applyingWorkspaceScope ? null : state.activeNoteId;
+  }
+  if (state.activeContext !== previous.activeContext) {
+    awaitingOpenedContext = applyingWorkspaceScope ? null : state.activeContext;
+  }
+  if (
+    state.activeContext !== previous.activeContext ||
+    state.activeNoteId !== previous.activeNoteId
+  ) {
+    reconcileWorkspaceScope("navigated");
+  } else if (
+    state.spaces !== previous.spaces ||
+    state.notesByContainer !== previous.notesByContainer
+  ) {
+    reconcileWorkspaceScope("dataChanged");
+  }
+});
+useWorkspaceStore.subscribe((state, previous) => {
+  if (state.activeWorkspaceId !== previous.activeWorkspaceId) {
+    awaitingOpenedNoteId = null;
+    awaitingOpenedContext = null;
+    reconcileWorkspaceScope("workspaceSwitched");
+  } else if (state.workspaces !== previous.workspaces) {
+    // A workspace that just arrived (an accepted invitation) can claim the
+    // space the user already opened.
+    reconcileWorkspaceScope("navigated");
+  }
 });
 
 let hasBoundIpcListeners = false;
@@ -336,8 +438,9 @@ export async function loadSpaces(): Promise<SpaceItem[]> {
   const items = (await window.electronAPI.getSpaces?.()) ?? [];
   // A newer load may have resolved first.
   if (gen !== spacesLoadGeneration) return items;
-  useNoteStore.setState({ spaces: items });
-  return items;
+  const visible = items.filter((space) => !isSpaceHeld(space.id));
+  useNoteStore.setState({ spaces: visible });
+  return visible;
 }
 
 export async function loadFolders(): Promise<FolderItem[]> {
@@ -353,7 +456,11 @@ export async function loadFolders(): Promise<FolderItem[]> {
     if (c.folder_id != null) folderCounts[c.folder_id] = c.count;
     else if (c.space_id != null) spaceRootCounts[c.space_id] = c.count;
   });
-  useNoteStore.setState({ folders: items, folderCounts, spaceRootCounts });
+  useNoteStore.setState({
+    folders: items.filter((folder) => !isSpaceHeld(folder.space_id)),
+    folderCounts,
+    spaceRootCounts,
+  });
   return items;
 }
 
@@ -390,6 +497,8 @@ export function resetForAccountChange(): void {
   accountGeneration += 1;
   pendingFolderPreset = null;
   purgeDisplacedNote = null;
+  hiddenSpaces.clear();
+  forgetHeldSpaces();
 
   invalidateKeyedLoadGenerations(containerLoadGenerations);
   containerLoadsInFlight.clear();
@@ -419,9 +528,15 @@ export async function loadContainerNotes(
       kind === "f"
         ? ((await window.electronAPI.getNotes(noteType, limit, id)) ?? [])
         : ((await window.electronAPI.getNotes(noteType, limit, null, id)) ?? []);
-    // A newer load for this container may have resolved first.
+    // Refreshing an older open note adds another async boundary; a newer
+    // load or account reset must supersede the entire result.
+    if (containerLoadGenerations.get(key) !== gen) return items;
+    const withOpen = await withOpenNote(key, items);
     if (containerLoadGenerations.get(key) === gen) {
-      applyContainers({ ...useNoteStore.getState().notesByContainer, [key]: items });
+      applyContainers({
+        ...useNoteStore.getState().notesByContainer,
+        [key]: withOpen,
+      });
     }
     return items;
   })();
@@ -431,6 +546,51 @@ export async function loadContainerNotes(
   } finally {
     if (containerLoadsInFlight.get(key) === load) containerLoadsInFlight.delete(key);
   }
+}
+
+// The open note can sit past its container's loaded page (ensureNoteLoaded, or
+// newer notes pushing it down); a reload must not close it.
+async function withOpenNote(key: string, items: NoteItem[]): Promise<NoteItem[]> {
+  const { activeNoteId, notesByContainer } = useNoteStore.getState();
+  if (activeNoteId == null || items.some((note) => note.id === activeNoteId)) return items;
+  const open = notesByContainer[key]?.find((note) => note.id === activeNoteId);
+  if (!open) return items;
+  const refreshed = await window.electronAPI.getNote(activeNoteId);
+  const state = useNoteStore.getState();
+  if (state.activeNoteId !== activeNoteId) return items;
+  const current = state.notesByContainer[key]?.find((note) => note.id === activeNoteId);
+  // IPC updates and deletions arriving during the lookup are newer than its snapshot.
+  const note = current === open ? refreshed : current;
+  return note && !note.deleted_at && noteContainerKey(note) === key ? [...items, note] : items;
+}
+
+/**
+ * Jump navigation opens a note by id, but the notes view only shows notes in
+ * the store, and containers load their newest page. A note past it is fetched
+ * and added to its container.
+ */
+export async function ensureNoteLoaded(id: number): Promise<void> {
+  if (getNoteFromStore(id)) return;
+  const accountGen = accountGeneration;
+  const note = await window.electronAPI.getNote(id);
+  if (accountGen !== accountGeneration || !note || note.deleted_at) return;
+  const key = noteContainerKey(note);
+  await ensureContainerLoaded(key);
+  if (accountGen !== accountGeneration) return;
+  const refreshed = await window.electronAPI.getNote(id);
+  if (
+    accountGen !== accountGeneration ||
+    !refreshed ||
+    refreshed.deleted_at ||
+    noteContainerKey(refreshed) !== key
+  )
+    return;
+  const state = useNoteStore.getState();
+  if (findNoteInState(state, id)) return;
+  applyContainers({
+    ...state.notesByContainer,
+    [key]: [...(state.notesByContainer[key] ?? []), refreshed],
+  });
 }
 
 export async function ensureContainerLoaded(key: string): Promise<NoteItem[]> {
@@ -471,6 +631,18 @@ export function setActiveContext(spaceId: number, folderId: number | null): void
   void ensureContainerLoaded(key);
 }
 
+// Where the notes view lands with nothing else to show: Personal's default
+// folder, which every workspace shows.
+function defaultContext(spaces: SpaceItem[], folders: FolderItem[]): ActiveContext | null {
+  const { activeWorkspaceId, workspaces } = useWorkspaceStore.getState();
+  const visible = spacesInWorkspaceScope(spaces, activeWorkspaceId, workspaces);
+  const privateSpace = visible.find((s) => s.kind === "private") ?? visible[0];
+  if (!privateSpace) return null;
+  const privateFolders = folders.filter((f) => f.space_id === privateSpace.id);
+  const initialFolder = findDefaultFolder(privateFolders) ?? privateFolders[0];
+  return { spaceId: privateSpace.id, folderId: initialFolder?.id ?? null };
+}
+
 /**
  * Loads spaces, folders and counts, resolves the initial active context
  * (honoring a pending folder preset or a prior activeContext, e.g. navigating
@@ -496,16 +668,13 @@ export async function initializeNotesTree(): Promise<void> {
       (preset.folderId == null || folders.some((f) => f.id === preset.folderId))
         ? preset
         : null;
-    const privateSpace = spaces.find((s) => s.kind === "private") ?? spaces[0];
     let context: ActiveContext | null = null;
     if (presetFolder) {
       context = { spaceId: presetFolder.space_id, folderId: presetFolder.id };
     } else if (presetContext) {
       context = presetContext;
-    } else if (privateSpace) {
-      const privateFolders = folders.filter((f) => f.space_id === privateSpace.id);
-      const initialFolder = findDefaultFolder(privateFolders) ?? privateFolders[0];
-      context = { spaceId: privateSpace.id, folderId: initialFolder?.id ?? null };
+    } else {
+      context = defaultContext(spaces, folders);
     }
     if (!context) return;
 
@@ -558,9 +727,8 @@ export function addNote(note: NoteItem): void {
   const items = state.notesByContainer[key];
   // Not-yet-loaded containers pick the note up on their lazy load.
   if (!items) return;
-  const next = [note, ...items.filter((existing) => existing.id !== note.id)].slice(
-    0,
-    currentLimit
+  const next = [note, ...items.filter((existing) => existing.id !== note.id)].filter(
+    (existing, index) => index < currentLimit || existing.id === state.activeNoteId
   );
   applyContainers({ ...state.notesByContainer, [key]: next });
 }
@@ -586,7 +754,9 @@ export function updateNoteInStore(note: NoteItem): void {
   }
   const target = notesByContainer[targetKey];
   if (target && !target.some((existing) => existing.id === note.id)) {
-    notesByContainer[targetKey] = [note, ...target].slice(0, currentLimit);
+    notesByContainer[targetKey] = [note, ...target].filter(
+      (existing, index) => index < currentLimit || existing.id === state.activeNoteId
+    );
     changed = true;
   }
   if (changed) applyContainers(notesByContainer);
@@ -613,6 +783,14 @@ export function removeNote(id: number): void {
 let purgeDisplacedNote: { spaceId: number; title: string | null; at: number } | null = null;
 const PURGE_DISPLACED_NOTE_TTL_MS = 30_000;
 
+// What a held delete took out of state, for the real purge that follows: by then the store no
+// longer lists the space, and its cleanup still has to find everything that belonged to it.
+const hiddenSpaces = new Map<number, { cloudSpaceId: string | null; folderIds: number[] }>();
+
+export function getAccountGeneration(): number {
+  return accountGeneration;
+}
+
 export function readPurgeDisplacedNote(spaceId: number): { title: string | null } | null {
   const memo = purgeDisplacedNote;
   if (!memo || memo.spaceId !== spaceId || Date.now() - memo.at > PURGE_DISPLACED_NOTE_TTL_MS) {
@@ -622,13 +800,19 @@ export function readPurgeDisplacedNote(spaceId: number): { title: string | null 
   return { title: memo.title };
 }
 
-function handleSpacePurged(spaceId: number): void {
+// `holding`: a held delete, which may yet be undone. Only the view goes, so what isn't the view's
+// (unresolved conflicts, which gate the next push) stays until the purge is real.
+function handleSpacePurged(spaceId: number, { holding = false } = {}): void {
   const state = useNoteStore.getState();
-  const purgedCloudSpaceId = state.spaces.find((s) => s.id === spaceId)?.cloud_space_id ?? null;
+  const hidden = hiddenSpaces.get(spaceId);
+  if (!holding) hiddenSpaces.delete(spaceId);
+  const purgedCloudSpaceId =
+    state.spaces.find((s) => s.id === spaceId)?.cloud_space_id ?? hidden?.cloudSpaceId ?? null;
   const removedKeys = new Set<string>([spaceContainerKey(spaceId)]);
   state.folders.forEach((f) => {
     if (f.space_id === spaceId) removedKeys.add(folderContainerKey(f.id));
   });
+  hidden?.folderIds.forEach((id) => removedKeys.add(folderContainerKey(id)));
 
   const teardown = teardownNoteContainers(state, removedKeys);
   const folderCounts = { ...state.folderCounts };
@@ -652,13 +836,15 @@ function handleSpacePurged(spaceId: number): void {
   });
   const shareByCloudId = new Map(state.shareByCloudId);
   purgedCloudIds.forEach((id) => shareByCloudId.delete(id));
-  const noteConflicts = Object.fromEntries(
-    Object.entries(state.noteConflicts).filter(
-      ([clientId, cloudNote]) =>
-        !purgedClientIds.has(clientId) &&
-        (purgedCloudSpaceId == null || cloudNote.space_id !== purgedCloudSpaceId)
-    )
-  );
+  const noteConflicts = holding
+    ? state.noteConflicts
+    : Object.fromEntries(
+        Object.entries(state.noteConflicts).filter(
+          ([clientId, cloudNote]) =>
+            !purgedClientIds.has(clientId) &&
+            (purgedCloudSpaceId == null || cloudNote.space_id !== purgedCloudSpaceId)
+        )
+      );
   Object.keys(state.noteConflicts).forEach((clientId) => {
     if (!(clientId in noteConflicts)) removeNoteConflictId(clientId);
   });
@@ -678,7 +864,7 @@ function handleSpacePurged(spaceId: number): void {
     extra.activeNoteId = null;
     // Only synced rows are deleted by the purge; dirty rows relocate to
     // Personal and already announce themselves with a titled toast.
-    if (activeNote.sync_status === "synced" && activeNote.cloud_id) {
+    if (!holding && activeNote.sync_status === "synced" && activeNote.cloud_id) {
       purgeDisplacedNote = { spaceId, title: activeNote.title, at: Date.now() };
     }
   }
@@ -706,6 +892,54 @@ function handleSpacePurged(spaceId: number): void {
       void loadContainerNotes(privateRootKey);
     }
   }
+}
+
+/**
+ * Takes a space whose delete is being held out of the view, as its purge would, while its rows stay
+ * on this device. The result brings it back; `reopen` also returns to where the person was, unless
+ * they have since gone elsewhere.
+ */
+export function hideSpaceInView(spaceId: number): (reopen: boolean) => Promise<void> {
+  const before = useNoteStore.getState();
+  const { activeContext, expandedContainers } = before;
+  const openNote =
+    before.activeNoteId != null ? findNoteInState(before, before.activeNoteId) : null;
+  const noteToReopen = openNote?.space_id === spaceId ? openNote : null;
+  const contextToReopen = activeContext?.spaceId === spaceId ? activeContext : null;
+  const workspaceAtHide = useWorkspaceStore.getState().activeWorkspaceId;
+  hiddenSpaces.set(spaceId, {
+    cloudSpaceId: before.spaces.find((s) => s.id === spaceId)?.cloud_space_id ?? null,
+    folderIds: before.folders.filter((f) => f.space_id === spaceId).map((f) => f.id),
+  });
+  handleSpacePurged(spaceId, { holding: true });
+  const hiddenState = useNoteStore.getState();
+  const fallback = hiddenState.activeContext;
+  const expandedHere = [...expandedContainers].filter(
+    (key) => !hiddenState.expandedContainers.has(key)
+  );
+
+  return async (reopen) => {
+    hiddenSpaces.delete(spaceId);
+    await Promise.all([loadSpaces(), loadFolders()]);
+    if (!reopen) return;
+    const now = useNoteStore.getState();
+    const expanded = new Set([...now.expandedContainers, ...expandedHere]);
+    persistExpandedContainers(expanded);
+    useNoteStore.setState({ expandedContainers: expanded });
+    const stayed =
+      now.activeContext === fallback &&
+      useWorkspaceStore.getState().activeWorkspaceId === workspaceAtHide;
+    if (!stayed) return;
+    if (contextToReopen) setActiveContext(contextToReopen.spaceId, contextToReopen.folderId);
+    if (noteToReopen && now.activeNoteId == null) {
+      await ensureContainerLoaded(
+        noteToReopen.folder_id != null
+          ? folderContainerKey(noteToReopen.folder_id)
+          : spaceContainerKey(spaceId)
+      );
+      setActiveNoteId(noteToReopen.id);
+    }
+  };
 }
 
 export async function createFolder(
@@ -799,7 +1033,9 @@ export async function updateSpaceMeta(
 }
 
 /** Local purge (dev override); store cleanup happens via the space-purged broadcast. */
-export async function purgeSpace(id: number): Promise<{ success: boolean; error?: string }> {
+export async function purgeSpace(
+  id: number
+): Promise<{ success: boolean; error?: string; relocatedCount?: number }> {
   return (await window.electronAPI.purgeSpace?.(id)) ?? { success: false };
 }
 
@@ -929,8 +1165,11 @@ export async function startMigration(): Promise<void> {
     if (gen !== migrationGeneration) return;
     const chunk = unsynced.slice(i, i + CHUNK_SIZE);
     try {
+      const recorded = await recordNoteCreateAttempts(chunk.map((n) => n.client_note_id));
+      const sendable = chunk.filter((n) => recorded.has(n.client_note_id));
+      if (sendable.length === 0) continue;
       const { created } = await NotesService.batchCreate(
-        chunk.map((n) => ({
+        sendable.map((n) => ({
           client_note_id: n.client_note_id,
           title: n.title,
           content: n.content,
@@ -949,7 +1188,7 @@ export async function startMigration(): Promise<void> {
       // Still run every response through the atomic identity/snapshot guard so
       // a purged fork is untouched and its proven cloud orphan is cleaned up.
       await resolveRendererCloudNoteCreateBatch(
-        chunk,
+        sendable,
         created,
         (cloudId) => NotesService.delete(cloudId),
         // Migration POSTs intentionally omit transcript/diarization fields,

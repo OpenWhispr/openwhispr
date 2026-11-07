@@ -128,7 +128,8 @@ async function mountHarness(t) {
         onCancelDictationPreparation: noopDispose,
         onStopDictation: noopDispose,
         onDictationForceStopped: noopDispose,
-        dictationLifecycleStateChanged: NOOP,
+        // Admission is an invoke now: a start proceeds only once main admits it.
+        dictationLifecycleStateChanged: async () => true,
         completeDictationPreview: NOOP,
         hideDictationPreview: NOOP,
         setScreenContextEnabled: NOOP,

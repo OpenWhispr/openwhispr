@@ -208,6 +208,8 @@ function fixture({ refuse, refuseRelease = false, holdRelease = false, backend =
     hotkeyManager,
     controlPanelWindow: {},
     setHotkeyListeningMode: (enabled) => hotkeyManager.setListeningMode(enabled),
+    // Upstream ends a live Windows/Linux Hold before capture retires its listeners.
+    resetWindowsPushState: () => {},
     createHotkeyCallback: () => () => {},
     reconcileNativeKeyListeners: () => {},
     getActivationMode: () => "tap",

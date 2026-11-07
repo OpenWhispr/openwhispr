@@ -19,8 +19,9 @@ class GoogleCalendarOAuth {
     return process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
   }
 
-  startOAuthFlow() {
+  startOAuthFlow({ signal } = {}) {
     return runOAuthLoopbackFlow({
+      signal,
       errorParam: "gcal_error",
       buildAuthUrl: (redirectUri, state, codeChallenge) => {
         const params = new URLSearchParams({
@@ -37,7 +38,8 @@ class GoogleCalendarOAuth {
         return `${GOOGLE_AUTH_URL}?${params.toString()}`;
       },
       handleCallback: async (code, redirectUri, codeVerifier) => {
-        const tokenData = await this.exchangeCodeForTokens(code, redirectUri, codeVerifier);
+        const tokenData = await this.exchangeCodeForTokens(code, redirectUri, codeVerifier, signal);
+        signal?.throwIfAborted();
 
         if (tokenData.error) {
           throw new OAuthFlowError(
@@ -76,7 +78,7 @@ class GoogleCalendarOAuth {
     });
   }
 
-  async exchangeCodeForTokens(code, redirectUri, codeVerifier) {
+  async exchangeCodeForTokens(code, redirectUri, codeVerifier, signal) {
     const body = new URLSearchParams({
       code,
       client_id: this.getClientId(),
@@ -86,7 +88,7 @@ class GoogleCalendarOAuth {
       code_verifier: codeVerifier,
     }).toString();
 
-    return this._httpsPost(GOOGLE_TOKEN_URL, body);
+    return this._httpsPost(GOOGLE_TOKEN_URL, body, signal);
   }
 
   async refreshAccessToken(refreshToken) {
@@ -138,12 +140,14 @@ class GoogleCalendarOAuth {
     }
   }
 
-  async _httpsPost(urlString, body) {
+  async _httpsPost(urlString, body, signal) {
     const response = await net.fetch(urlString, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body,
-      signal: AbortSignal.timeout(10000),
+      signal: signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(10000)])
+        : AbortSignal.timeout(10000),
       useSessionCookies: false,
     });
     const text = await response.text();

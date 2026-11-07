@@ -125,14 +125,11 @@ test("the dictation toggle carries its row's cleanup override to the renderer", 
 
   manager.sendToggleDictation({ cleanupOverride: "cleaned" });
 
-  // Pre-warms the mic one message ahead of the toggle, and both messages
-  // describe the SAME recording: the prepare that opens the mic must not
-  // disagree with the toggle about which cleanup was asked for.
+  // Pre-warms the mic one message ahead of the toggle. The prepare only opens
+  // the mic and carries nothing, so the toggle alone says which cleanup the
+  // recording asked for.
   assert.deepEqual(sent, [
-    {
-      channel: "prepare-dictation",
-      payload: { inputKind: "dictation", cleanupOverride: "cleaned" },
-    },
+    { channel: "prepare-dictation", payload: undefined },
     { channel: "toggle-dictation", payload: { cleanupOverride: "cleaned" } },
   ]);
 });
@@ -164,7 +161,6 @@ test("preload forwards the payload for every channel that carries the override",
   for (const [channel, listenerName] of [
     ["toggle-dictation", "onToggleDictation"],
     ["start-dictation", "onStartDictation"],
-    ["prepare-dictation", "onPrepareDictation"],
   ]) {
     const received = [];
     const dispose = api[listenerName]((...args) => received.push(args));

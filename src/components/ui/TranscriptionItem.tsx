@@ -24,7 +24,7 @@ import type {
   TranscriptionErrorCode,
 } from "../../types/electron";
 import { cn } from "../lib/utils";
-import { getCachedPlatform } from "../../utils/platform";
+import { getCachedPlatform, showInFolderLabelKey } from "../../utils/platform";
 import { formatMmSs } from "../../utils/formatDuration";
 
 const platform = getCachedPlatform();
@@ -34,12 +34,6 @@ const ACTION_BUTTON_CLASS =
 
 const TRANSCRIPT_TEXT_CLASS =
   "text-base leading-normal wrap-break-word whitespace-pre-wrap text-foreground";
-
-function getShowInFolderKey(): string {
-  if (platform === "win32") return "controlPanel.history.showInFolderWindows";
-  if (platform === "linux") return "controlPanel.history.showInFolderLinux";
-  return "controlPanel.history.showInFolder";
-}
 
 interface MenuAction {
   key: string;
@@ -142,7 +136,7 @@ export default function TranscriptionItem({
     hasAudio && {
       key: "folder",
       icon: FolderOpen,
-      label: t(getShowInFolderKey()),
+      label: t(showInFolderLabelKey(platform)),
       onSelect: () => onShowAudioInFolder?.(item.id),
     },
     {

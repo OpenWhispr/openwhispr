@@ -14,6 +14,14 @@ const {
 
 const EXTENSION_NAME = 'OpenWhisprKeyboard';
 const EXTENSION_BUNDLE_ID_SUFFIX = 'keyboard';
+// Copied from ios/ into the generated project and wired into the keyboard target.
+const EXTENSION_FILES = [
+  { name: 'KeyboardViewController.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'KeyboardCapitalization.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+];
+const BUILD_PHASE_ISA = {
+  Sources: 'PBXSourcesBuildPhase',
+};
 
 function firstScheme(value) {
   if (Array.isArray(value)) {
@@ -66,10 +74,9 @@ function writeExtensionSupportFiles(platformProjectRoot, environment) {
     fs.mkdirSync(extensionDir, { recursive: true });
   }
 
-  fs.copyFileSync(
-    path.join(pluginSourceDir, 'KeyboardViewController.swift'),
-    path.join(extensionDir, 'KeyboardViewController.swift'),
-  );
+  for (const file of EXTENSION_FILES) {
+    fs.copyFileSync(path.join(pluginSourceDir, file.name), path.join(extensionDir, file.name));
+  }
 
   const infoPlist = readPlist(path.join(pluginSourceDir, 'Info.plist'));
   infoPlist.CFBundleDisplayName = environment.keyboardDisplayName;
@@ -182,21 +189,18 @@ function hasEmbeddedExtension(xcodeProject, hostTargetUuid, extensionProductRefU
   return false;
 }
 
-function findFileReferenceUuidByBasename(xcodeProject, basename) {
+// Looks only inside the extension's own group, so an app file that happens to share a
+// name is never mistaken for (and moved into) the keyboard target.
+function findGroupFileReferenceUuid(xcodeProject, groupKey, basename) {
   const fileRefs = xcodeProject.pbxFileReferenceSection();
-  for (const [uuid, entry] of Object.entries(fileRefs)) {
-    if (uuid.endsWith('_comment')) {
-      continue;
-    }
-
-    const pathValue = typeof entry?.path === 'string' ? entry.path.replace(/"/g, '') : '';
-    const nameValue = typeof entry?.name === 'string' ? entry.name.replace(/"/g, '') : '';
-    if (pathValue === basename || nameValue === basename) {
-      return uuid;
-    }
-  }
-
-  return null;
+  const children = xcodeProject.getPBXGroupByKey(groupKey)?.children || [];
+  const child = children.find((entry) => {
+    const ref = fileRefs[entry?.value];
+    return [ref?.path, ref?.name].some(
+      (value) => typeof value === 'string' && value.replace(/"/g, '') === basename,
+    );
+  });
+  return child?.value ?? null;
 }
 
 function findBuildFileUuidForFileRef(xcodeProject, fileRefUuid) {
@@ -214,7 +218,7 @@ function findBuildFileUuidForFileRef(xcodeProject, fileRefUuid) {
   return null;
 }
 
-function ensureBuildFileForSource(xcodeProject, fileRefUuid, fileName) {
+function ensureBuildFile(xcodeProject, fileRefUuid, fileName, phase) {
   const existingBuildFileUuid = findBuildFileUuidForFileRef(xcodeProject, fileRefUuid);
   if (existingBuildFileUuid) {
     return existingBuildFileUuid;
@@ -227,43 +231,36 @@ function ensureBuildFileForSource(xcodeProject, fileRefUuid, fileName) {
     fileRef: fileRefUuid,
     fileRef_comment: fileName,
   };
-  buildFiles[`${buildFileUuid}_comment`] = `${fileName} in Sources`;
+  buildFiles[`${buildFileUuid}_comment`] = `${fileName} in ${phase}`;
   xcodeProject.hash.project.objects.PBXBuildFile = buildFiles;
 
   return buildFileUuid;
 }
 
-function ensureSourceMembershipForTarget(xcodeProject, targetUuid, sourceBuildFileUuid, fileName) {
-  const targetSourcesPhaseUuid = ensureSourcesBuildPhaseExists(xcodeProject, targetUuid);
-  if (!targetSourcesPhaseUuid) {
+function ensurePhaseMembershipForTarget(xcodeProject, targetUuid, buildFileUuid, fileName, phase) {
+  const isa = BUILD_PHASE_ISA[phase];
+  const targetPhaseUuid = ensureBuildPhaseExists(xcodeProject, targetUuid, phase);
+  const allPhases = xcodeProject.hash.project.objects[isa] || {};
+  const targetPhase = allPhases[targetPhaseUuid];
+  if (!targetPhase) {
     return;
   }
 
-  const allSourcePhases = xcodeProject.hash.project.objects.PBXSourcesBuildPhase || {};
-  const targetSourcesPhase = allSourcePhases[targetSourcesPhaseUuid];
-  if (!targetSourcesPhase) {
-    return;
+  targetPhase.files = targetPhase.files || [];
+  if (!targetPhase.files.some((entry) => entry?.value === buildFileUuid)) {
+    targetPhase.files.push({ value: buildFileUuid, comment: `${fileName} in ${phase}` });
   }
 
-  targetSourcesPhase.files = targetSourcesPhase.files || [];
-  const sourceComment = `${fileName} in Sources`;
-  if (!targetSourcesPhase.files.some((entry) => entry?.value === sourceBuildFileUuid)) {
-    targetSourcesPhase.files.push({
-      value: sourceBuildFileUuid,
-      comment: sourceComment,
-    });
-  }
-
-  for (const [phaseUuid, phase] of Object.entries(allSourcePhases)) {
-    if (phaseUuid.endsWith('_comment') || phaseUuid === targetSourcesPhaseUuid) {
+  for (const [phaseUuid, other] of Object.entries(allPhases)) {
+    if (phaseUuid.endsWith('_comment') || phaseUuid === targetPhaseUuid) {
       continue;
     }
 
-    if (!Array.isArray(phase?.files)) {
+    if (!Array.isArray(other?.files)) {
       continue;
     }
 
-    phase.files = phase.files.filter((entry) => entry?.value !== sourceBuildFileUuid);
+    other.files = other.files.filter((entry) => entry?.value !== buildFileUuid);
   }
 }
 
@@ -283,34 +280,79 @@ function findTargetUuidByName(xcodeProject, targetName) {
   return null;
 }
 
-function ensureSourcesBuildPhaseExists(xcodeProject, targetUuid) {
+function ensureBuildPhaseExists(xcodeProject, targetUuid, phase) {
+  const isa = BUILD_PHASE_ISA[phase];
   const nativeTargets = xcodeProject.pbxNativeTargetSection();
   const target = nativeTargets?.[targetUuid];
   if (!target?.buildPhases) {
     return null;
   }
 
-  const sourcePhases = xcodeProject.hash.project.objects.PBXSourcesBuildPhase || {};
+  const phases = xcodeProject.hash.project.objects[isa] || {};
   for (const phaseRef of target.buildPhases) {
     const phaseUuid = phaseRef?.value || phaseRef;
-    const phase = sourcePhases[phaseUuid];
-    if (phase?.isa === 'PBXSourcesBuildPhase') {
+    if (phases[phaseUuid]?.isa === isa) {
       return phaseUuid;
     }
   }
 
   const newPhaseUuid = xcodeProject.generateUuid();
-  sourcePhases[newPhaseUuid] = {
-    isa: 'PBXSourcesBuildPhase',
+  phases[newPhaseUuid] = {
+    isa,
     buildActionMask: 2147483647,
     files: [],
     runOnlyForDeploymentPostprocessing: 0,
   };
-  sourcePhases[`${newPhaseUuid}_comment`] = 'Sources';
-  xcodeProject.hash.project.objects.PBXSourcesBuildPhase = sourcePhases;
+  phases[`${newPhaseUuid}_comment`] = phase;
+  xcodeProject.hash.project.objects[isa] = phases;
 
-  target.buildPhases.push({ value: newPhaseUuid, comment: 'Sources' });
+  target.buildPhases.push({ value: newPhaseUuid, comment: phase });
   return newPhaseUuid;
+}
+
+// CocoaPods rewrites the group with only `path`, and older plugin versions could leave an
+// empty named duplicate beside it, so prefer whichever group already holds the sources.
+function ensureExtensionGroup(xcodeProject) {
+  const groups = xcodeProject.hash.project.objects.PBXGroup || {};
+  const candidates = Object.keys(groups).filter(
+    (key) =>
+      !key.endsWith('_comment') &&
+      [groups[key]?.name, groups[key]?.path].some(
+        (value) => typeof value === 'string' && value.replace(/"/g, '') === EXTENSION_NAME,
+      ),
+  );
+  const existingGroupKey =
+    candidates.find((key) =>
+      EXTENSION_FILES.some((file) => findGroupFileReferenceUuid(xcodeProject, key, file.name)),
+    ) ?? candidates[0];
+  if (existingGroupKey) {
+    return existingGroupKey;
+  }
+
+  const groupKey = xcodeProject.pbxCreateGroup(EXTENSION_NAME, EXTENSION_NAME);
+  xcodeProject.addToPbxGroup(groupKey, xcodeProject.getFirstProject().firstProject.mainGroup);
+  return groupKey;
+}
+
+// Every source the keyboard needs, in its own target only. Throws rather
+// than letting prebuild ship a keyboard that doesn't compile.
+function ensureExtensionFiles(xcodeProject, targetUuid, groupKey) {
+  for (const file of EXTENSION_FILES) {
+    const fileRefUuid =
+      findGroupFileReferenceUuid(xcodeProject, groupKey, file.name) ||
+      xcodeProject.addFile(file.name, groupKey, {
+        lastKnownFileType: file.fileType,
+        sourceTree: '"<group>"',
+      })?.fileRef;
+    if (!fileRefUuid) {
+      throw new Error(
+        `[keyboard-extension] Could not add ${file.name} to the ${EXTENSION_NAME} group; another file reference already uses that path`,
+      );
+    }
+
+    const buildFileUuid = ensureBuildFile(xcodeProject, fileRefUuid, file.name, file.phase);
+    ensurePhaseMembershipForTarget(xcodeProject, targetUuid, buildFileUuid, file.name, file.phase);
+  }
 }
 
 function withKeyboardExtension(config) {
@@ -332,25 +374,14 @@ function withKeyboardExtension(config) {
     const developmentTeamId = resolveDevelopmentTeamId(cfg, xcodeProject);
     writeExtensionSupportFiles(platformProjectRoot, environment);
 
-    // Check if target already exists
-    const existingTarget = xcodeProject.pbxTargetByName(EXTENSION_NAME);
+    const extensionGroupKey = ensureExtensionGroup(xcodeProject);
+    // pbxTargetByName returns the bare target object (no uuid), so look the key up.
+    const existingTargetUuid = findTargetUuidByName(xcodeProject, EXTENSION_NAME);
     let targetKey;
-    let productRefUuid;
-    let keyboardSourceFileRefUuid = null;
 
-    if (existingTarget) {
-      targetKey = existingTarget.uuid;
-      const nativeTargets = xcodeProject.pbxNativeTargetSection();
-      productRefUuid = nativeTargets?.[targetKey]?.productReference;
-      ensureSourcesBuildPhaseExists(xcodeProject, targetKey);
+    if (existingTargetUuid) {
+      targetKey = existingTargetUuid;
     } else {
-      // Create a PBX group for the extension files first.
-      const extensionGroupKey = xcodeProject.pbxCreateGroup(EXTENSION_NAME, EXTENSION_NAME);
-
-      // Add the group to the main project.
-      const mainGroupKey = xcodeProject.getFirstProject().firstProject.mainGroup;
-      xcodeProject.addToPbxGroup(extensionGroupKey, mainGroupKey);
-
       // Add Info.plist to the group (not to build phase).
       xcodeProject.addFile('Info.plist', extensionGroupKey, {
         lastKnownFileType: 'text.plist.xml',
@@ -363,7 +394,7 @@ function withKeyboardExtension(config) {
         sourceTree: '"<group>"',
       });
 
-      // Add the extension target - this creates the target with proper build phases.
+      // Add the extension target; ensureExtensionFiles below gives it its Sources phase.
       const target = xcodeProject.addTarget(
         EXTENSION_NAME,
         'app_extension',
@@ -372,44 +403,10 @@ function withKeyboardExtension(config) {
       );
 
       targetKey = target.uuid;
-      ensureSourcesBuildPhaseExists(xcodeProject, targetKey);
-
-      // Add source file to the extension target's Sources build phase.
-      const sourceFile = xcodeProject.addSourceFile(
-        'KeyboardViewController.swift',
-        {
-          target: targetKey,
-          lastKnownFileType: 'sourcecode.swift',
-          sourceTree: '"<group>"',
-        },
-        extensionGroupKey,
-      );
-      keyboardSourceFileRefUuid =
-        sourceFile?.fileRef ||
-        findFileReferenceUuidByBasename(xcodeProject, 'KeyboardViewController.swift');
-
-      // Get the product reference from the target.
-      const nativeTargets = xcodeProject.pbxNativeTargetSection();
-      productRefUuid = nativeTargets?.[targetKey]?.productReference;
     }
 
-    keyboardSourceFileRefUuid =
-      keyboardSourceFileRefUuid ||
-      findFileReferenceUuidByBasename(xcodeProject, 'KeyboardViewController.swift');
-
-    if (keyboardSourceFileRefUuid) {
-      const sourceBuildFileUuid = ensureBuildFileForSource(
-        xcodeProject,
-        keyboardSourceFileRefUuid,
-        'KeyboardViewController.swift',
-      );
-      ensureSourceMembershipForTarget(
-        xcodeProject,
-        targetKey,
-        sourceBuildFileUuid,
-        'KeyboardViewController.swift',
-      );
-    }
+    const productRefUuid = xcodeProject.pbxNativeTargetSection()?.[targetKey]?.productReference;
+    ensureExtensionFiles(xcodeProject, targetKey, extensionGroupKey);
 
     // Set build settings for the extension target.
     const buildSettings = {
@@ -448,7 +445,7 @@ function withKeyboardExtension(config) {
       );
     }
 
-    if (existingTarget) {
+    if (existingTargetUuid) {
       console.log(`[keyboard-extension] Updated ${EXTENSION_NAME} target build settings`);
     } else {
       console.log(`[keyboard-extension] Added ${EXTENSION_NAME} target to Xcode project`);
@@ -457,8 +454,8 @@ function withKeyboardExtension(config) {
     return cfg;
   });
 
-  // Expo/RN prebuild steps can rewrite target build phases after xcode mods run.
-  // Re-apply source-phase wiring on the final pbxproj representation.
+  // Expo runs dangerous mods before the xcodeproj mod. When a previous prebuild left the
+  // project in place (no --clean), this repairs the keyboard's file wiring on disk first.
   config = withDangerousMod(config, [
     'ios',
     async (cfg) => {
@@ -484,42 +481,7 @@ function withKeyboardExtension(config) {
         return cfg;
       }
 
-      ensureSourcesBuildPhaseExists(xcodeProject, extensionTargetUuid);
-
-      let extensionGroupKey = xcodeProject.findPBXGroupKey({
-        name: EXTENSION_NAME,
-      });
-      if (!extensionGroupKey) {
-        extensionGroupKey = xcodeProject.pbxCreateGroup(EXTENSION_NAME, EXTENSION_NAME);
-        const mainGroupKey = xcodeProject.getFirstProject().firstProject.mainGroup;
-        xcodeProject.addToPbxGroup(extensionGroupKey, mainGroupKey);
-      }
-
-      let keyboardSourceFileRefUuid = findFileReferenceUuidByBasename(
-        xcodeProject,
-        'KeyboardViewController.swift',
-      );
-      if (!keyboardSourceFileRefUuid) {
-        const sourceFile = xcodeProject.addFile('KeyboardViewController.swift', extensionGroupKey, {
-          lastKnownFileType: 'sourcecode.swift',
-          sourceTree: '"<group>"',
-        });
-        keyboardSourceFileRefUuid = sourceFile?.fileRef || null;
-      }
-
-      if (keyboardSourceFileRefUuid) {
-        const sourceBuildFileUuid = ensureBuildFileForSource(
-          xcodeProject,
-          keyboardSourceFileRefUuid,
-          'KeyboardViewController.swift',
-        );
-        ensureSourceMembershipForTarget(
-          xcodeProject,
-          extensionTargetUuid,
-          sourceBuildFileUuid,
-          'KeyboardViewController.swift',
-        );
-      }
+      ensureExtensionFiles(xcodeProject, extensionTargetUuid, ensureExtensionGroup(xcodeProject));
 
       fs.writeFileSync(projectFilePath, xcodeProject.writeSync());
 
@@ -531,3 +493,7 @@ function withKeyboardExtension(config) {
 }
 
 module.exports = withKeyboardExtension;
+module.exports.EXTENSION_FILES = EXTENSION_FILES;
+module.exports.ensureExtensionFiles = ensureExtensionFiles;
+module.exports.ensureExtensionGroup = ensureExtensionGroup;
+module.exports.writeExtensionSupportFiles = writeExtensionSupportFiles;

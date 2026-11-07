@@ -6,7 +6,14 @@ import {
   cloudDelete,
   type DataWrap,
 } from "./cloudApi.js";
-import type { SpaceTeamRef, TeamMember, TeamRole } from "../types/electron";
+import type {
+  SpaceCapabilities,
+  SpaceInvitation,
+  SpaceTeamRef,
+  TeamMember,
+  TeamRole,
+  WorkspaceSpace,
+} from "../types/electron";
 
 export interface MySpace {
   id: string;
@@ -20,9 +27,17 @@ export interface MySpace {
   my_direct_role: TeamRole | null;
   member_count: number;
   teams: SpaceTeamRef[];
+  // Server-computed permissions; absent from older APIs.
+  capabilities?: SpaceCapabilities;
   created_at: string;
   updated_at: string;
 }
+
+// PATCH /api/spaces/:id answers with the space row only, without the caller's access.
+export type SpaceRecord = Pick<
+  MySpace,
+  "id" | "workspace_id" | "name" | "slug" | "description" | "emoji" | "created_at" | "updated_at"
+>;
 
 // Union roster entry: one row per user across direct members and all assigned
 // teams, with attribution of which grant(s) convey the access. via_teams is
@@ -57,6 +72,8 @@ async function create(
     name: string;
     emoji?: string | null;
     description?: string;
+    is_default?: boolean;
+    is_open?: boolean;
     member_ids: string[];
     team_ids: string[];
   }
@@ -67,9 +84,15 @@ async function create(
 
 async function update(
   spaceId: string,
-  patch: { name?: string; description?: string; emoji?: string | null }
-): Promise<MySpace> {
-  const res = await cloudPatch<DataWrap<MySpace>>(`/api/spaces/${spaceId}`, patch);
+  patch: {
+    name?: string;
+    description?: string | null;
+    emoji?: string | null;
+    is_default?: boolean;
+    is_open?: boolean;
+  }
+): Promise<SpaceRecord> {
+  const res = await cloudPatch<DataWrap<SpaceRecord>>(`/api/spaces/${spaceId}`, patch);
   return res.data;
 }
 
@@ -95,16 +118,6 @@ async function listMembers(spaceId: string): Promise<SpaceMemberEntry[]> {
   return res.data;
 }
 
-// The members POST upserts, so re-adding an existing direct member changes
-// their role rather than failing.
-async function addMember(
-  spaceId: string,
-  userId: string,
-  role: TeamRole = "member"
-): Promise<void> {
-  await cloudPost(`/api/spaces/${spaceId}/members`, { user_id: userId, role });
-}
-
 // Promoting someone who is only present via a team creates their direct row.
 async function setMemberRole(spaceId: string, userId: string, role: TeamRole): Promise<void> {
   await cloudPatch(`/api/spaces/${spaceId}/members/${userId}`, { role });
@@ -124,6 +137,48 @@ async function removeMember(spaceId: string, userId: string): Promise<SpaceMembe
   return res.data;
 }
 
+// The workspace's space directory: spaces the caller is not in appear too, with can_join and the
+// admins to ask, so the pages can offer to join or request access.
+async function listInWorkspace(workspaceId: string): Promise<WorkspaceSpace[]> {
+  const res = await cloudGet<DataWrap<WorkspaceSpace[]>>(`/api/workspaces/${workspaceId}/spaces`);
+  return res.data;
+}
+
+// How many of the given people are already in each space, for the Add people picker.
+async function coverage(
+  workspaceId: string,
+  userIds: string[]
+): Promise<{ space_id: string; count: number }[]> {
+  const res = await cloudPost<DataWrap<{ space_id: string; count: number }[]>>(
+    `/api/workspaces/${workspaceId}/spaces/coverage`,
+    { user_ids: userIds }
+  );
+  return res.data;
+}
+
+// Only an open space can be joined by the caller; joined is false when they were already in.
+async function join(spaceId: string): Promise<{ joined: boolean }> {
+  const res = await cloudPost<DataWrap<{ joined: boolean }>>(`/api/spaces/${spaceId}/join`);
+  return res.data;
+}
+
+// Adding never changes someone's role: people already in the space come back as already_members.
+async function addMembers(
+  spaceId: string,
+  userIds: string[]
+): Promise<{ added: string[]; already_members: string[] }> {
+  const res = await cloudPost<DataWrap<{ added: string[]; already_members: string[] }>>(
+    `/api/spaces/${spaceId}/members/batch`,
+    { user_ids: userIds }
+  );
+  return res.data;
+}
+
+async function listInvitations(spaceId: string): Promise<SpaceInvitation[]> {
+  const res = await cloudGet<DataWrap<SpaceInvitation[]>>(`/api/spaces/${spaceId}/invitations`);
+  return res.data;
+}
+
 export const SpacesService = {
   mySpaces,
   mySpacesForAuthValidation,
@@ -133,7 +188,11 @@ export const SpacesService = {
   assignTeam,
   unassignTeam,
   listMembers,
-  addMember,
   setMemberRole,
   removeMember,
+  listInWorkspace,
+  coverage,
+  join,
+  addMembers,
+  listInvitations,
 };

@@ -7,22 +7,8 @@
 const AUTH_TOKEN = "harness-token";
 const AUTH_GENERATION = 0;
 
-// syncAll() asserts the whole dictionary and snippet surface exists before doing
-// any work and aborts the pass if a name is missing, so both are present but
-// inert — this harness covers notes and folders.
-function inertDictionaryApi() {
-  return {
-    getPendingDictionary: async () => [],
-    getPendingDictionaryDeletes: async () => [],
-    getDictionaryByClientId: async () => null,
-    upsertDictionaryFromCloud: async () => undefined,
-    markDictionarySynced: async () => ({ success: true, changes: 1 }),
-    hardDeleteDictionary: async () => ({ success: true }),
-    clearDictionaryCloudId: async () => ({ success: true }),
-    broadcastDictionaryUpdated: async () => undefined,
-  };
-}
-
+// syncAll() asserts the whole snippet surface exists before doing any work and
+// aborts the pass if a name is missing, so it is present but inert.
 function inertSnippetApi() {
   return {
     getPendingSnippets: async () => [],
@@ -82,8 +68,11 @@ function createElectronApi(db, options = {}) {
     getPendingNotes: async (spaceKind) => db.getPendingNotes(spaceKind),
     getPendingNoteDeletes: async () => db.getPendingNoteDeletes(),
     getNoteByClientId: async (clientNoteId) => db.getNoteByClientId(clientNoteId),
+    getNoteForCloudRow: async (clientNoteId, cloudId) =>
+      db.getNoteForCloudRow(clientNoteId, cloudId),
     upsertNoteFromCloud: async (cloudNote, localFolderId, localSpaceId) =>
       db.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId),
+    markNoteCreatesAttempted: async (clientNoteIds) => db.markNoteCreatesAttempted(clientNoteIds),
     acknowledgeNoteCreate: async (id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) =>
       db.acknowledgeNoteCreate(id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options),
     markNoteSyncedIfUnchanged: async (
@@ -168,11 +157,15 @@ function createElectronApi(db, options = {}) {
     getPendingConversations: async () => db.getPendingConversations(),
     getPendingConversationDeletes: async () => db.getPendingConversationDeletes(),
     getConversationByClientId: async (clientId) => db.getConversationByClientId(clientId),
-    upsertConversationFromCloud: async (cloudConv, messages) =>
-      db.upsertConversationFromCloud(cloudConv, messages),
+    upsertConversationFromCloud: async (cloudConv, messages, snapshot) =>
+      db.upsertConversationFromCloud(cloudConv, messages, snapshot),
+    markConversationCreateAttempted: async (id) => db.markConversationCreateAttempted(id),
     acknowledgeConversationCreate: async (id, snapshot, cloudId) =>
       db.acknowledgeConversationCreate(id, snapshot, cloudId),
-    markConversationSynced: async (id, cloudId) => db.markConversationSynced(id, cloudId),
+    markConversationSynced: async (id, cloudId, snapshot, cloudUpdatedAt) =>
+      db.markConversationSynced(id, cloudId, snapshot, cloudUpdatedAt),
+    replaceConversationClientId: async (id, expectedClientId) =>
+      db.replaceConversationClientId(id, expectedClientId),
     hardDeleteConversation: async (id) => db.hardDeleteConversation(id),
 
     // Transcriptions
@@ -185,7 +178,17 @@ function createElectronApi(db, options = {}) {
     markTranscriptionSynced: async (id, cloudId) => db.markTranscriptionSynced(id, cloudId),
     hardDeleteTranscription: async (id) => db.hardDeleteTranscription(id),
 
-    ...inertDictionaryApi(),
+    // Dictionary
+    getPendingDictionary: async () => db.getPendingDictionary(),
+    getPendingDictionaryDeletes: async () => db.getPendingDictionaryDeletes(),
+    getDictionaryByClientId: async (clientDictId) => db.getDictionaryEntryByClientId(clientDictId),
+    upsertDictionaryFromCloud: async (cloudEntry) => db.upsertDictionaryFromCloud(cloudEntry),
+    markDictionarySynced: async (...args) => db.markDictionaryEntrySynced(...args),
+    hardDeleteDictionary: async (id) => db.hardDeleteDictionaryEntry(id),
+    clearDictionaryCloudId: async (id) => db.clearDictionaryCloudId(id),
+    // The real handler re-reads the words to broadcast them; there are no windows here.
+    broadcastDictionaryUpdated: async () => ({ success: true }),
+
     ...inertSnippetApi(),
     ...inertAnalyticsApi(),
   };

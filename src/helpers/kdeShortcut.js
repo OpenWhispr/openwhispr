@@ -118,6 +118,8 @@ class KDEShortcutManager {
     this.componentProxy = null;
     this.callbacks = new Map();
     this.registeredSlots = new Set();
+    // Set by HotkeyManager to debug-log each press and release: (slotName, action).
+    this.onHotkeyEvent = null;
   }
 
   static isKDE() {
@@ -197,14 +199,14 @@ class KDEShortcutManager {
       });
 
       iface.on("globalShortcutPressed", (componentUnique, shortcutUnique, timestamp) => {
-        debugLogger.log("[KDEShortcut] Shortcut pressed", { componentUnique, shortcutUnique });
         // KGlobalAccel signal sends the actionUnique value as shortcutUnique.
         // Direct callback lookup by slotName should match. Fallback maps
         // actionFriendly names for compatibility.
-        const callback =
-          this.callbacks.get(shortcutUnique) || this._findCallbackByFriendlyName(shortcutUnique);
+        const slotName = this._resolveSlotName(shortcutUnique);
+        const callback = slotName ? this.callbacks.get(slotName) : null;
         if (callback) {
-          callback(shortcutUnique, "down");
+          this.onHotkeyEvent?.(slotName, "down");
+          callback(slotName, "down");
         } else {
           debugLogger.log("[KDEShortcut] No callback found for", {
             shortcutUnique,
@@ -213,10 +215,8 @@ class KDEShortcutManager {
         }
       });
       iface.on("globalShortcutReleased", (componentUnique, shortcutUnique) => {
-        debugLogger.log("[KDEShortcut] Shortcut released", { componentUnique, shortcutUnique });
-        const slotName = this.callbacks.has(shortcutUnique)
-          ? shortcutUnique
-          : this._findSlotByFriendlyName(shortcutUnique);
+        const slotName = this._resolveSlotName(shortcutUnique);
+        if (slotName) this.onHotkeyEvent?.(slotName, "up");
         // Any dictation row, not just the first: "dictation", "dictation#1", …
         // all hold to speak, and only the binding that started a push may end
         // it. Other slots are tap-only and have no release semantics.
@@ -233,9 +233,10 @@ class KDEShortcutManager {
     }
   }
 
-  _findCallbackByFriendlyName(name) {
-    const slotName = this._findSlotByFriendlyName(name);
-    return slotName ? this.callbacks.get(slotName) : null;
+  _resolveSlotName(shortcutUnique) {
+    return this.callbacks.has(shortcutUnique)
+      ? shortcutUnique
+      : this._findSlotByFriendlyName(shortcutUnique);
   }
 
   _findSlotByFriendlyName(name) {

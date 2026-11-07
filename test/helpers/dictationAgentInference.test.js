@@ -458,3 +458,63 @@ test("a vision override that cannot see images drops the screenshot instead of r
   assert.equal(config.scope, "dictationAgent");
   assert.equal(attachScreenContext, false);
 });
+
+// A policy-blocked assistant is refused where it stands: the panel must not move
+// a request the org denied onto Chat, or a screenshot onto the vision override,
+// either of which can be remote.
+const blockedAgent = {
+  ...panelSettings,
+  dictationAgentMode: "local",
+  dictationAgentProvider: "qwen",
+  dictationAgentModel: "",
+  policyBlockedLocalScopes: ["dictationAgent"],
+};
+
+test("a policy-blocked Voice Assistant stays on its own scope instead of falling back to Chat", async () => {
+  // Unreachable is what sends a selection edit to the panel with its text quoted.
+  const { resolveDictationAgentInference } = await load();
+  assert.equal(resolveDictationAgentInference(blockedAgent).reachable, false);
+
+  const { config, attachScreenContext } = panel(blockedAgent);
+
+  assert.equal(config.scope, "dictationAgent");
+  assert.equal(config.mode, "local");
+  assert.equal(config.model, "");
+  assert.equal(attachScreenContext, false);
+});
+
+test("a policy-blocked Voice Assistant's screenshot goes to neither Chat nor the vision override", () => {
+  const { config, attachScreenContext } = panel(
+    {
+      ...blockedAgent,
+      useDictationAgentVisionModel: true,
+      dictationAgentVisionMode: "providers",
+      dictationAgentVisionProvider: "openai",
+      dictationAgentVisionModel: "gpt-5-mini",
+    },
+    { hasScreenContext: true }
+  );
+
+  assert.equal(config.scope, "dictationAgent");
+  assert.equal(config.model, "");
+  assert.equal(attachScreenContext, false);
+});
+
+test("a switched-off assistant was never going to answer, so a blocked model on it changes nothing", () => {
+  const { config } = panel({ ...blockedAgent, useDictationAgent: false });
+
+  assert.equal(config.scope, "chatIntelligence");
+  assert.equal(config.model, "claude-sonnet-4-5");
+});
+
+test("another scope's block doesn't hold an unreachable assistant back from Chat", () => {
+  const { config } = panel({
+    ...panelSettings,
+    dictationAgentMode: "providers",
+    dictationAgentProvider: "",
+    dictationAgentModel: "",
+    policyBlockedLocalScopes: ["dictationCleanup"],
+  });
+
+  assert.equal(config.scope, "chatIntelligence");
+});

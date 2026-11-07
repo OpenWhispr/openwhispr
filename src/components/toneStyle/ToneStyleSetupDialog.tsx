@@ -5,6 +5,7 @@ import { Button } from "../ui/button";
 import { BidiInterpolatedText, BIDI_VALUE_TOKEN } from "../ui/BidiInterpolatedText";
 import { cn } from "../lib/utils";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { useModalGate } from "../../stores/modalGateStore";
 import {
   TONE_APP_CATEGORIES,
   TONE_OPTIONS,
@@ -122,6 +123,7 @@ export default function ToneStyleSetupDialog({
   onOpenSettings,
 }: ToneStyleSetupDialogProps) {
   const { t } = useTranslation();
+  useModalGate("toneStyleSetup", open);
   const useCleanupModel = useSettingsStore((s) => s.useCleanupModel);
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<ToneStyles>(() => useSettingsStore.getState().toneStyles);

@@ -10,6 +10,7 @@ import { AlertDialog, ConfirmDialog } from "../ui/dialog";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useSystemAudioPermission } from "../../hooks/useSystemAudioPermission";
 import { canManageSystemAudioInApp } from "../../utils/systemAudioAccess";
+import { connectCalendar } from "../../utils/calendarConnect";
 import type { CalendarAccount, MicrosoftCalendarAccount } from "../../types/calendar";
 import { IntegrationsPane } from "./IntegrationsPane";
 import googleCalendarIcon from "../../assets/icons/google-calendar.svg";
@@ -170,55 +171,35 @@ export function CalendarsPane({ title }: CalendarsPaneProps): ReactElement {
   const startOAuth = useCallback(async () => {
     setIsConnecting(true);
     try {
-      const result = await window.electronAPI?.gcalStartOAuth?.();
-      if (result?.success && result.email) {
-        const current = useSettingsStore.getState().gcalAccounts;
-        setGcalAccounts([
-          ...current.filter((a) => a.email !== result.email),
-          { email: result.email },
-        ]);
-      } else if (!result?.error?.includes("access_denied")) {
-        // access_denied means the user cancelled on the consent screen
+      if ((await connectCalendar("google")) === "failed") {
         setOauthErrorKey("integrations.googleCalendar");
       }
     } finally {
       setIsConnecting(false);
     }
-  }, [setGcalAccounts]);
+  }, []);
 
   const startMicrosoftOAuth = useCallback(async () => {
     setIsMsConnecting(true);
     try {
-      const result = await window.electronAPI?.mcalStartOAuth?.();
-      if (result?.success && result.email) {
-        const current = useSettingsStore.getState().mcalAccounts;
-        setMcalAccounts([
-          ...current.filter((a) => a.email !== result.email),
-          { email: result.email, tenantId: result.tenantId },
-        ]);
-      } else if (!result?.error?.includes("access_denied")) {
+      if ((await connectCalendar("microsoft")) === "failed") {
         setOauthErrorKey("integrations.microsoftCalendar");
       }
     } finally {
       setIsMsConnecting(false);
     }
-  }, [setMcalAccounts]);
+  }, []);
 
   const connectAppleCalendar = useCallback(async () => {
     setIsAppleConnecting(true);
     try {
-      const result = await window.electronAPI?.acalConnect?.();
-      if (result?.success) {
-        setAppleCalendarConnected(true);
-      } else {
-        // Only send the user to Privacy settings when access was actually
-        // denied; helper-missing/snapshot-failed are not permission problems.
-        setAppleConnectError(result?.reason === "denied" ? "denied" : "failed");
-      }
+      const result = await connectCalendar("apple");
+      // Only a real denial sends the user to Privacy settings.
+      if (result !== "connected") setAppleConnectError(result === "denied" ? "denied" : "failed");
     } finally {
       setIsAppleConnecting(false);
     }
-  }, [setAppleCalendarConnected]);
+  }, []);
 
   const withSystemAudioGate = useCallback(
     async (connect: () => Promise<void>) => {

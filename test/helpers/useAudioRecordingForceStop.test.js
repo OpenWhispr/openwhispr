@@ -11,23 +11,24 @@ const {
 const FAKE_AUDIO_MANAGER_SOURCE = `
 export default class FakeAudioManager {
   constructor() {
+    this.state = {};
     this.voiceAgentRequested = false;
     this.translationRequested = false;
     this.sttConfig = {};
     globalThis.__forceStopAudioManager = this;
   }
   getState() {
-    return {};
+    return this.state;
   }
   setCallbacks(callbacks) {
     this.callbacks = callbacks;
   }
   setVoiceAgentRequested() {}
-  setAssistantSelectionContext() {}
   setTranslationRequested() {}
   setCleanupOverride() {}
   startRecording() {
     globalThis.__forceStopStarts += 1;
+    this.state.isRecording = true;
     return Promise.resolve(true);
   }
   complete(result) {
@@ -121,7 +122,10 @@ async function mountHarness(
           forceStopListener = callback;
           return () => {};
         },
-        dictationLifecycleStateChanged: (state) => lifecycle.push(state),
+        dictationLifecycleStateChanged: async (state) => {
+          lifecycle.push(state);
+          return true;
+        },
         completeDictationPreview: NOOP,
         hideDictationPreview: () => {
           previewHides += 1;

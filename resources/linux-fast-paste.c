@@ -386,6 +386,11 @@ static int contains_terminal_name(const char *wm_class, const char *name) {
 
 static int is_terminal(const char *wm_class) {
     if (!wm_class) return 0;
+    /* Omarchy assigns terminal-launched apps their own IDs. Keep in sync with
+     * OMARCHY_TERMINAL_PREFIXES in src/helpers/clipboard.js. */
+    if (strncasecmp(wm_class, "org.omarchy.", strlen("org.omarchy.")) == 0 ||
+        strncasecmp(wm_class, "tui.", strlen("tui.")) == 0)
+        return 1;
     for (int i = 0; terminal_classes[i]; i++) {
         if (contains_terminal_name(wm_class, terminal_classes[i]))
             return 1;
@@ -444,20 +449,22 @@ static int detect_terminal_atspi(void) {
             AtspiAccessible *win = atspi_accessible_get_child_at_index(app, j, NULL);
             if (!win) continue;
             AtspiStateSet *states = atspi_accessible_get_state_set(win);
-            gboolean active = atspi_state_set_contains(states, ATSPI_STATE_ACTIVE);
-            g_object_unref(states);
+            gboolean active = states && atspi_state_set_contains(states, ATSPI_STATE_ACTIVE);
+            if (states) g_object_unref(states);
             if (active) {
                 char *name = atspi_accessible_get_name(app, NULL);
                 int result = name ? is_terminal(name) : 0;
                 g_free(name);
                 g_object_unref(win);
                 g_object_unref(app);
+                g_object_unref(desktop);
                 return result;
             }
             g_object_unref(win);
         }
         g_object_unref(app);
     }
+    g_object_unref(desktop);
     return -1;
 }
 

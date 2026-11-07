@@ -4,9 +4,7 @@ const assert = require("node:assert/strict");
 const registry = require("../../src/models/modelRegistryData.json");
 const load = () => import("../../src/helpers/transcriptionRoute.ts");
 
-// resolveByokModel validates by prefix so it can run in the packaged main process
-// without the registry, which means the two can silently drift apart. Every model
-// the picker can write must survive a round trip through the resolver, or a user
+// Every model the picker can write must survive a round trip through the resolver, or a user
 // who picks it has their choice replaced by the provider default at request time.
 //
 // Tinfoil is excluded: its batch model comes from the registry directly
@@ -83,5 +81,5 @@ test("a model belonging to another provider degrades to the provider default", a
   assert.equal(resolveByokModel("corti", "whisper-1"), "corti-transcribe");
   assert.equal(resolveByokModel("gemini", "whisper-1"), "gemini-3.5-transcribe");
   assert.equal(resolveByokModel("deepgram", "whisper-1"), "nova-3");
-  assert.equal(resolveByokModel("assemblyai", "nova-3"), "universal-3-5-pro");
+  assert.equal(resolveByokModel("assemblyai", "nova-3"), "universal-3-6-pro");
 });

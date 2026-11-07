@@ -9,6 +9,7 @@ import { extractGeminiText } from "../../../helpers/geminiResponse.js";
 import { wrapCleanupTranscript } from "../../../config/prompts";
 import { chosenReasoningEffort, emptyOutputError, truncatedOutputError } from "../chatRequestBody";
 import logger from "../../../utils/logger";
+import { geminiCatalogThinkingFloor } from "../thinkingSuppressionDialects";
 import {
   asProviderError,
   providerHttpError,
@@ -37,8 +38,12 @@ interface GeminiGenerationConfig {
   };
 }
 
-// Thinking controls differ by model: Pro cannot use minimal, and 2.5 uses budgets.
+// Thinking controls differ by model: Pro, 3.8 Flash and 4 Argon cannot use
+// minimal, and 2.5 uses budgets.
 const minimalThinking: Record<string, GeminiGenerationConfig["thinkingConfig"]> = {
+  "gemini-3.6-flash": { thinkingLevel: "minimal", includeThoughts: false },
+  "gemini-3.8-flash": { thinkingLevel: "low", includeThoughts: false },
+  "gemini-4-argon": { thinkingLevel: "low", includeThoughts: false },
   "gemini-3.5-flash": { thinkingLevel: "minimal", includeThoughts: false },
   "gemini-3.5-flash-lite": { thinkingLevel: "minimal", includeThoughts: false },
   "gemini-3.1-flash-lite": { thinkingLevel: "minimal", includeThoughts: false },
@@ -48,6 +53,11 @@ const minimalThinking: Record<string, GeminiGenerationConfig["thinkingConfig"]> 
   "gemini-2.5-flash-lite": { thinkingBudget: 0, includeThoughts: false },
   "gemini-2.5-pro": { thinkingBudget: 128, includeThoughts: false },
 };
+
+// The table covers models published before the catalog's thinkingFloor existed.
+function thinkingFloor(model: string): GeminiGenerationConfig["thinkingConfig"] {
+  return geminiCatalogThinkingFloor(model) ?? minimalThinking[model];
+}
 
 export const geminiProvider: InferenceProvider = {
   id: "gemini",
@@ -78,8 +88,8 @@ export const geminiProvider: InferenceProvider = {
     const thinkingLevel = chosenReasoningEffort("gemini", model, config);
     if (thinkingLevel) {
       generationConfig.thinkingConfig = { thinkingLevel, includeThoughts: false };
-    } else if (config.disableThinking === true && minimalThinking[model]) {
-      generationConfig.thinkingConfig = minimalThinking[model];
+    } else if (config.disableThinking === true && thinkingFloor(model)) {
+      generationConfig.thinkingConfig = thinkingFloor(model);
     }
 
     const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [

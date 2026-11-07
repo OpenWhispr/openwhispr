@@ -40,6 +40,20 @@ export function resolveLocalServerNeeds({
   return { cleanup, dictationAgent, models };
 }
 
+// The one model launch pre-warms. The server holds a single model, so warming
+// both scopes' models would load one only to replace it with the other. Cleanup
+// runs on every dictation; the Voice Assistant only when summoned.
+export function resolvePrewarmModel({
+  cleanupProvider,
+  cleanupModel,
+  dictationAgentProvider,
+  dictationAgentModel,
+}) {
+  if (cleanupProvider === "local" && cleanupModel) return cleanupModel;
+  if (dictationAgentProvider === "local" && dictationAgentModel) return dictationAgentModel;
+  return "";
+}
+
 // The server holds one model, so it can also go when no scope needs the model
 // it has loaded: the next local request reloads it with the right one anyway.
 export function shouldStopLocalServer({ models }, loadedModelId) {

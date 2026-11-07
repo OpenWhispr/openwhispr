@@ -7,7 +7,8 @@ const KDEShortcutManager = require("./kdeShortcut");
 const { i18nMain } = require("./i18nMain");
 const { parseHotkeyList } = require("./hotkeyList");
 const { canonicalizeHotkey } = require("./hotkeyCanonical");
-const { bindingIdFor, slotOfBindingId } = require("./hotkeyBindingId");
+const { bindingIdFor, slotOfBindingId, indexOfBindingId } = require("./hotkeyBindingId");
+const { createHotkeyRepeatGate } = require("./hotkeyRepeatGate");
 
 // Delay to ensure localStorage is accessible after window load
 const HOTKEY_REGISTRATION_DELAY_MS = 1000;
@@ -125,6 +126,9 @@ class HotkeyManager extends EventEmitter {
     this.useHyprland = false;
     this.hyprlandInitializationAttempted = false;
     this.hyprlandRegistrationReady = Promise.resolve();
+    // Completion of dictation startup, including any backend/globalShortcut fallback.
+    // Consumers must not use this to delay the windows or the saved-Hold check.
+    this.registrationReady = Promise.resolve();
     this.kdeManager = null;
     this.useKDE = false;
     // While the GNOME or Hyprland registration waits to read the saved hotkey, the
@@ -650,6 +654,52 @@ class HotkeyManager extends EventEmitter {
     return (this.slots.get(slotName)?.hotkeys ?? []).includes(key);
   }
 
+  // Debug-log line for a press or release of a bound hotkey: where it came from,
+  // the slots that own it and their activation mode. Key names only, never
+  // dictated text. Unbound keys are skipped because the macOS listener reports
+  // every right modifier and side mouse button, and so is hotkey capture, where
+  // the keys are the new hotkey being typed.
+  logHotkeyEvent(source, action, key) {
+    if (this.isListeningMode) return;
+    const slots = [];
+    for (const [slotName, slot] of this.slots) {
+      if ((slot.hotkeys ?? []).includes(key)) slots.push(slotName);
+    }
+    if (slots.length === 0) return;
+    // Only dictation can hold; every other slot toggles.
+    const activationMode =
+      slots.includes("dictation") && this.activationMode === "push" ? "push" : "tap";
+    debugLogger.debug("Hotkey event", { source, action, key, slots, activationMode }, "hotkey");
+  }
+
+  // Desktop shortcut backends (GNOME, KDE, Hyprland) report a binding id, not a
+  // key; the id names the slot and the row whose hotkey fired.
+  logSlotHotkeyEvent(source, action, bindingId) {
+    this.logHotkeyEvent(
+      source,
+      action,
+      this.slots.get(slotOfBindingId(bindingId))?.hotkeys?.[indexOfBindingId(bindingId)]
+    );
+  }
+
+  // Every globalShortcut registration goes through here so its presses reach the
+  // debug log. The callback gets the hotkey that fired, so shared callbacks act
+  // on the right one.
+  registerGlobalShortcut(accelerator, hotkey, callback) {
+    const isPress = createHotkeyRepeatGate();
+    return globalShortcut.register(accelerator, () => {
+      // A held key re-fires on every autorepeat, so log the hold once. A key the
+      // Windows/Linux listener watches is logged there with its down and up.
+      const nativeListenerLogs =
+        process.platform !== "darwin" &&
+        this.getNativeListenerKeys(this.activationMode).includes(hotkey);
+      if (isPress() && !nativeListenerLogs) {
+        this.logHotkeyEvent("global-shortcut", "press", hotkey);
+      }
+      return callback(hotkey);
+    });
+  }
+
   // Name of the slot that owns `key`, or null. First match wins.
   findSlotByHotkey(key) {
     if (!key) return null;
@@ -968,8 +1018,7 @@ class HotkeyManager extends EventEmitter {
         globalShortcut.unregister(accelerator);
       }
 
-      // Pass the triggering hotkey so shared callbacks act on the one that fired.
-      const success = globalShortcut.register(accelerator, () => callback(hotkey));
+      const success = this.registerGlobalShortcut(accelerator, hotkey, callback);
       debugLogger.log(`[HotkeyManager] Registration result for "${hotkey}": ${success}`);
       if (success) {
         return { success: true, hotkey, accelerator };
@@ -1160,7 +1209,7 @@ class HotkeyManager extends EventEmitter {
       const prevAccel = previousAccelerators?.[i];
       if (!prevAccel) return;
       try {
-        const restored = globalShortcut.register(prevAccel, () => callback(previousHotkey));
+        const restored = this.registerGlobalShortcut(prevAccel, previousHotkey, callback);
         if (restored) {
           debugLogger.log(
             `[HotkeyManager] Restored previous hotkey "${previousHotkey}" after failed registration`
@@ -1183,6 +1232,8 @@ class HotkeyManager extends EventEmitter {
 
     try {
       this.gnomeManager = new GnomeShortcutManager();
+      this.gnomeManager.onHotkeyEvent = (slotName, action) =>
+        this.logSlotHotkeyEvent("gnome", action, slotName);
 
       const dbusOk = await this.gnomeManager.initDBusService(callback);
       if (dbusOk) {
@@ -1234,6 +1285,8 @@ class HotkeyManager extends EventEmitter {
 
     try {
       this.kdeManager = new KDEShortcutManager();
+      this.kdeManager.onHotkeyEvent = (slotName, action) =>
+        this.logSlotHotkeyEvent("kde", action, slotName);
       const ok = await this.kdeManager.init();
       if (ok) {
         await this.kdeManager.removeRetiredAgentKeybinding();
@@ -1278,6 +1331,8 @@ class HotkeyManager extends EventEmitter {
 
       try {
         this.hyprlandManager = new HyprlandShortcutManager();
+        this.hyprlandManager.onHotkeyEvent = (slotName, action) =>
+          this.logSlotHotkeyEvent("hyprland", action, slotName);
 
         const dbusOk = await this.hyprlandManager.initDBusService(callback);
         debugLogger.log("[HotkeyManager] Hyprland D-Bus init result:", dbusOk);
@@ -1303,6 +1358,7 @@ class HotkeyManager extends EventEmitter {
 
     this.mainWindow = mainWindow;
     this.hotkeyCallback = callback;
+    this.registrationReady = Promise.resolve();
 
     // Try GNOME native shortcuts on any GNOME session (X11 or Wayland).
     // On Wayland: required (globalShortcut/XGrabKey doesn't work globally).
@@ -1326,7 +1382,7 @@ class HotkeyManager extends EventEmitter {
               );
               if (!ok) {
                 this.useGnome = false;
-                this.loadSavedHotkeyOrDefault(mainWindow, callback);
+                return this.loadSavedHotkeyOrDefault(mainWindow, callback);
               }
             }
           } catch (err) {
@@ -1335,12 +1391,14 @@ class HotkeyManager extends EventEmitter {
               err.message
             );
             this.useGnome = false;
-            this.loadSavedHotkeyOrDefault(mainWindow, callback);
+            return this.loadSavedHotkeyOrDefault(mainWindow, callback);
           }
         };
 
         this.nativeRegistrationPending = true;
-        setTimeout(registerGnomeHotkey, HOTKEY_REGISTRATION_DELAY_MS);
+        this.registrationReady = new Promise((resolve) =>
+          setTimeout(resolve, HOTKEY_REGISTRATION_DELAY_MS)
+        ).then(registerGnomeHotkey);
         this.isInitialized = true;
         return;
       }
@@ -1376,7 +1434,7 @@ class HotkeyManager extends EventEmitter {
               );
               if (!ok) {
                 this.useHyprland = false;
-                this.loadSavedHotkeyOrDefault(mainWindow, callback);
+                return this.loadSavedHotkeyOrDefault(mainWindow, callback);
               }
             }
           } catch (err) {
@@ -1385,14 +1443,15 @@ class HotkeyManager extends EventEmitter {
               err.message
             );
             this.useHyprland = false;
-            this.loadSavedHotkeyOrDefault(mainWindow, callback);
+            return this.loadSavedHotkeyOrDefault(mainWindow, callback);
           }
         };
 
         this.nativeRegistrationPending = true;
-        this.hyprlandRegistrationReady = new Promise((resolve) =>
+        this.registrationReady = new Promise((resolve) =>
           setTimeout(resolve, HOTKEY_REGISTRATION_DELAY_MS)
         ).then(registerHyprlandHotkey);
+        this.hyprlandRegistrationReady = this.registrationReady;
         this.isInitialized = true;
         return;
       }
@@ -1437,7 +1496,7 @@ class HotkeyManager extends EventEmitter {
               this.kdeManager.close();
               this.kdeManager = null;
               this.useKDE = false;
-              this.loadSavedHotkeyOrDefault(mainWindow, callback);
+              return this.loadSavedHotkeyOrDefault(mainWindow, callback);
             }
           } catch (err) {
             debugLogger.log(
@@ -1447,12 +1506,14 @@ class HotkeyManager extends EventEmitter {
             this.kdeManager?.close();
             this.kdeManager = null;
             this.useKDE = false;
-            this.loadSavedHotkeyOrDefault(mainWindow, callback);
+            return this.loadSavedHotkeyOrDefault(mainWindow, callback);
           }
         };
 
         this.nativeRegistrationPending = true;
-        setTimeout(registerKDEHotkey, HOTKEY_REGISTRATION_DELAY_MS);
+        this.registrationReady = new Promise((resolve) =>
+          setTimeout(resolve, HOTKEY_REGISTRATION_DELAY_MS)
+        ).then(registerKDEHotkey);
         this.isInitialized = true;
         return;
       }
@@ -1471,15 +1532,17 @@ class HotkeyManager extends EventEmitter {
         debugLogger.log(`[HotkeyManager] Hotkey "${envHotkey}" registered from env`);
       } else {
         debugLogger.log(`[HotkeyManager] Env hotkey "${envHotkey}" failed, waiting for page`);
-        this.loadSavedHotkeyOrDefault(mainWindow, callback);
+        this.registrationReady = this.loadSavedHotkeyOrDefault(mainWindow, callback);
       }
     } else {
-      const loadHotkey = () => this.loadSavedHotkeyOrDefault(mainWindow, callback);
-      if (mainWindow.webContents.isLoading()) {
-        mainWindow.webContents.once("did-finish-load", loadHotkey);
-      } else {
-        loadHotkey();
-      }
+      this.registrationReady = new Promise((resolve) => {
+        const loadHotkey = () => resolve(this.loadSavedHotkeyOrDefault(mainWindow, callback));
+        if (mainWindow.webContents.isLoading()) {
+          mainWindow.webContents.once("did-finish-load", loadHotkey);
+        } else {
+          loadHotkey();
+        }
+      });
     }
 
     this.isInitialized = true;
@@ -1950,7 +2013,8 @@ class HotkeyManager extends EventEmitter {
 
   getHyprlandConfigStatus() {
     if (!this.hyprlandManager) return null;
-    return HyprlandShortcutManager.getHyprlandConfigStatus();
+    const status = HyprlandShortcutManager.getHyprlandConfigStatus();
+    return { ...status, canWrite: status.canWrite && !this.hyprlandManager.persistencePending };
   }
 
   isUsingKDE() {

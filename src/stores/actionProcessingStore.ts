@@ -8,7 +8,10 @@ import {
   selectResolvedNoteFormatting,
   type ResolvedNoteFormatting,
 } from "./settingsStore";
+import { localModelRefusal } from "./policyRules";
+import { usePolicyStore } from "./policyStore";
 import { appendDictionarySuffix } from "../config/prompts";
+import { getLlmDictionaryWords } from "../utils/snippets";
 import { generateNoteTitle } from "../utils/generateTitle";
 import { buildNoteFormattingOverrides } from "../helpers/noteFormattingOverrides";
 import { PROVIDER_ERROR_CODES } from "../helpers/providerHttpErrors.js";
@@ -526,7 +529,17 @@ export function runBackgroundAction(
 
   const modelId = options.modelId;
   if (!modelId && !options.isCloudMode) {
-    pushErrorEvent({ noteId, message: labels.noModel });
+    const blocked = getSettings().policyBlockedLocalScopes?.includes("noteFormatting");
+    pushErrorEvent({
+      noteId,
+      message: labels.noModel,
+      ...(blocked
+        ? {
+            messageKey: localModelRefusal(usePolicyStore.getState(), "llm").messageKey,
+            settingsTarget: "noteFormatting",
+          }
+        : {}),
+    });
     return;
   }
 
@@ -565,7 +578,9 @@ export function runBackgroundAction(
       const systemPrompt = appendDictionarySuffix(
         instructions,
         // Any transcript is speech-to-text, which misspells names.
-        options.isMeetingNote || options.hasPlainTranscript ? settings.customDictionary : undefined,
+        options.isMeetingNote || options.hasPlainTranscript
+          ? getLlmDictionaryWords(settings, { includeTriggers: false })
+          : undefined,
         settings.uiLanguage
       );
       const requestConfig: ReasoningConfig = {
@@ -619,6 +634,12 @@ export function runBackgroundAction(
 
       const before = await window.electronAPI.getNote(noteId);
       if (isCancelled()) return;
+      // The note was deleted while the action ran, so there is nothing to write to.
+      if (!before) {
+        processingFlags.set(noteId, false);
+        clearNoteState(noteId);
+        return;
+      }
 
       const enhancedContent = options.knownPeople?.length
         ? tagActionItemOwners(enhanced, options.knownPeople)
