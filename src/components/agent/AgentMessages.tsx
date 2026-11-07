@@ -344,8 +344,6 @@ interface AgentMessageListProps {
   onFollowUp: (selection: { messageId: string; text: string }) => void;
   onContinue: () => void;
   emptyState: ReactNode;
-  /** The conversation's own height, for a window that grows with it (a call's transcript). */
-  onContentHeight?: (height: number) => void;
   /** Offer a way back to the newest line once the reader scrolls up (a call's transcript). */
   backToLatest?: boolean;
 }
@@ -365,7 +363,6 @@ export function AgentMessageList({
   onFollowUp,
   onContinue,
   emptyState,
-  onContentHeight,
   backToLatest = false,
 }: AgentMessageListProps) {
   const { t } = useTranslation();
@@ -392,16 +389,6 @@ export function AgentMessageList({
     observer.observe(node);
     return () => observer.disconnect();
   }, [scrollRef]);
-
-  useEffect(() => {
-    const content = scrollRef.current?.firstElementChild;
-    if (!content || !onContentHeight) return;
-    const observer = new ResizeObserver(() =>
-      onContentHeight(Math.ceil(content.getBoundingClientRect().height))
-    );
-    observer.observe(content);
-    return () => observer.disconnect();
-  }, [onContentHeight, scrollRef]);
 
   useEffect(() => {
     const update = () => setSelection(readSelection(scrollRef.current));

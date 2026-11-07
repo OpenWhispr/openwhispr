@@ -4959,7 +4959,7 @@
     "waitingForAnswer": "Warte auf Antwort",
     "call": {
       "status": {
-        "starting": "Sprache wird gestartet…",
+        "starting": "Anruf wird gestartet…",
         "listening": "Hört zu",
         "working": "Arbeitet…",
         "speaking": "Spricht",

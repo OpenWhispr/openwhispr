@@ -75,9 +75,6 @@ const CALL_END_NOTICES: Record<VoiceCallEndReason, string> = {
   idle: "agentWindow.call.notices.endedIdle",
   "mic-lost": "agentWindow.call.notices.micLost",
 };
-// A call's transcript around its conversation: the header, the list's bottom
-// padding, and the pill row.
-const TRANSCRIPT_CHROME_PX = 145;
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -827,17 +824,11 @@ export default function AgentWindow() {
     onOpen: () => moveOnItsOwn({ type: "expand" }),
   });
 
-  // A call's transcript grows with its conversation (main keeps it within 358–480px).
-  const [transcriptContent, setTranscriptContent] = useState(0);
-
   const surface = useAgentSurface({
     visible: state.visible,
     layout: state.layout,
     focus: surfaceFocus,
     ...(standalone ? { contentHeight: cardHeight } : {}),
-    ...(state.call && state.layout === "modal"
-      ? { contentHeight: transcriptContent + TRANSCRIPT_CHROME_PX }
-      : {}),
     call: state.call !== null,
     // Only the pill that reads "Waiting for answer", or a notice, needs the wider window.
     wide:
@@ -1520,7 +1511,7 @@ export default function AgentWindow() {
               state.call ? (
                 <div className="relative flex flex-col items-center">
                   {callAbovePill && (
-                    <div className="absolute inset-x-0 bottom-full mb-3 flex justify-center">
+                    <div className="absolute inset-x-0 bottom-full z-20 mb-3 flex justify-center">
                       {callAbovePill}
                     </div>
                   )}
@@ -1553,7 +1544,6 @@ export default function AgentWindow() {
               onFollowUp={followUp}
               onContinue={continueTurn}
               emptyState={emptyState}
-              onContentHeight={state.call ? setTranscriptContent : undefined}
               backToLatest={state.call !== null}
             />
           </AgentModal>

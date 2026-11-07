@@ -16,10 +16,9 @@ const MODAL = { width: 480, height: 520 };
 // A standalone card is as tall as it measures, within these bounds; a taller
 // one scrolls inside.
 const STANDALONE_CARD = { width: 420, minHeight: 80, maxHeight: 400 };
-// In a voice call the pill carries its status above it (237×65 in the reference),
-// and the transcript grows with what it shows, from 358px up to 480px.
+// In a voice call the pill carries its status above it (237×65 in the reference);
+// its transcript is the modal, as in typed chat.
 const CALL_PILL = { width: 240, height: 65 };
-const CALL_TRANSCRIPT = { width: 360, minHeight: 358, maxHeight: 480 };
 // A long answer card with the call's pill is about 597px in the reference.
 const CALL_CARD_MAX_HEIGHT = 520;
 
@@ -37,14 +36,7 @@ function callLayoutSize(layout, contentHeight) {
       CALL_PILL.height
     );
   }
-  if (layout === "modal") {
-    return {
-      width: CALL_TRANSCRIPT.width + 2 * SHADOW_MARGIN,
-      height:
-        clamp(contentHeight, CALL_TRANSCRIPT.minHeight, CALL_TRANSCRIPT.maxHeight) +
-        2 * SHADOW_MARGIN,
-    };
-  }
+  if (layout === "modal") return AGENT_LAYOUT_SIZES.modal;
   return {
     width: CALL_PILL.width + 2 * SHADOW_MARGIN,
     height: CALL_PILL.height + 2 * SHADOW_MARGIN,
@@ -135,8 +127,7 @@ function clampAgentAnchor(
 /**
  * The window's bounds for a layout, kept inside the work area: a modal too
  * tall for it shrinks. A standalone card brings its measured height; a wide
- * pill is the one waiting for an answer. A voice call has its own pill, and
- * its transcript (the modal) brings its measured height too.
+ * pill is the one waiting for an answer. A voice call has its own pill.
  */
 function computeAgentWindowBounds({
   anchor,

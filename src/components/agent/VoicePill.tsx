@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { Messages, Mic, MicOff, Settings, X } from "../icons";
 import { cn } from "../lib/utils";
 import { ICON_BUTTON } from "../chat/interactions/cardStyles";
-import { PillWaveform } from "../dictation/PillWaveform";
 import { useAgentWindowDrag } from "./useAgentWindowDrag";
 
 /** What the call's status cap says, from what is actually happening. */
@@ -37,14 +36,17 @@ const STATUS_LABELS: Record<VoiceCallStatus, string> = {
 const CAP_WIDTH = 196;
 const CAP_HEIGHT = 28;
 const CAP_PATH = "M0 28C13 28 14 1 39 1H157C182 1 183 28 196 28";
+// The Sound glyph's four bars at rest; they rise with the sound, by up to SOUND_GAIN.
+const SOUND_BARS_PX = [8, 10, 12, 8];
+const SOUND_GAIN = 0.6;
 
 interface VoicePillProps {
   status: VoiceCallStatus;
   /** Said in the cap for a moment in place of the status (already translated). */
   notice?: string | null;
-  /** The reply's or the microphone's level, for the waveform and the speaking glow. */
+  /** The reply's or the microphone's level, for the Sound bars and the speaking glow. */
   readLevel: () => number;
-  /** The waveform follows sound; still while the microphone is off and nothing plays. */
+  /** The Sound bars follow sound; dimmed and still while the microphone is off and nothing plays. */
   waveformActive: boolean;
   micMuted: boolean;
   sessionControl: VoiceSessionControl;
@@ -88,15 +90,17 @@ export function VoicePill({
   const starting = status === "starting";
   const stopped = status === "stopped";
   const glow = speakingGlow && status === "speaking" && !notice;
-  const glowRef = useRef<HTMLDivElement>(null);
+  const levelActive = glow || (waveformActive && !stopped);
+  const pillRef = useRef<HTMLDivElement>(null);
 
-  // The glow breathes with the reply as it is heard; it holds still under
-  // reduced motion, and an animation ending never changes the call.
+  // The Sound bars and the glow follow the reply or the microphone as it is
+  // heard (--voice-level); they hold still under reduced motion, and an
+  // animation ending never changes the call.
   useEffect(() => {
-    const element = glowRef.current;
-    if (!glow || !element) return undefined;
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
-      element.style.setProperty("--voice-level", "0.6");
+    const element = pillRef.current;
+    if (!element) return undefined;
+    if (!levelActive || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      element.style.setProperty("--voice-level", "0");
       return undefined;
     }
     let frame = 0;
@@ -108,13 +112,14 @@ export function VoicePill({
     };
     frame = requestAnimationFrame(paint);
     return () => cancelAnimationFrame(frame);
-  }, [glow, readLevel]);
+  }, [levelActive, readLevel]);
 
   const surface = inModal ? "bg-surface-1 dark:bg-surface-2" : "agent-panel bg-surface-0";
   const capFill = inModal ? "fill-surface-1 dark:fill-surface-2" : "fill-[var(--color-surface-0)]";
 
   return (
     <div
+      ref={pillRef}
       className="relative flex h-[65px] w-[237px] max-w-full shrink-0 flex-col items-center select-none"
       data-voice-pill
     >
@@ -133,7 +138,6 @@ export function VoicePill({
         </svg>
         {glow && (
           <div
-            ref={glowRef}
             className="voice-pill-glow pointer-events-none absolute inset-0"
             style={{ clipPath: `path("${CAP_PATH}Z")` }}
           />
@@ -147,21 +151,38 @@ export function VoicePill({
             glow && "sr-only"
           )}
         >
-          {label}
+          <span
+            key={label}
+            className={cn("voice-pill-swap", status === "speaking" && "voice-pill-swap-slow")}
+          >
+            {label}
+          </span>
         </span>
       </div>
       <div
         className={cn(
-          "relative flex h-[38px] w-full cursor-grab items-center rounded-full border border-border ps-4 pe-1.5 text-muted-foreground shadow-[var(--shadow-card)] active:cursor-grabbing",
+          "relative flex h-[38px] w-full cursor-grab items-center rounded-full border border-border ps-3.5 pe-1.5 text-muted-foreground shadow-[var(--shadow-card)] active:cursor-grabbing",
           surface
         )}
         {...dragHandlers}
       >
-        <PillWaveform
-          getLevel={readLevel}
-          active={waveformActive && !stopped}
-          className={cn("h-5 shrink-0 text-foreground", !waveformActive && "opacity-50")}
-        />
+        <div
+          className={cn(
+            "flex h-5 shrink-0 items-center gap-[3.5px] text-foreground",
+            !waveformActive && "opacity-50"
+          )}
+          aria-hidden="true"
+        >
+          {SOUND_BARS_PX.map((height, index) => (
+            <span
+              key={index}
+              className="w-0.5 rounded-full bg-current"
+              style={{
+                height: `calc(${height}px * (1 + var(--voice-level, 0) * ${SOUND_GAIN}))`,
+              }}
+            />
+          ))}
+        </div>
         {/* Stopped: the controls fade on the pill's own surface. */}
         <div
           className={cn("ms-auto flex items-center gap-0.5", stopped && "opacity-40")}
@@ -219,7 +240,7 @@ export function VoicePill({
               onClick={onStopReply}
               aria-label={t("agentWindow.call.actions.stopReply")}
               title={t("agentWindow.call.actions.stopReply")}
-              className="ms-1 flex size-6 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-[filter] hover:brightness-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              className="voice-pill-swap voice-pill-swap-slow ms-1 flex size-6 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-[filter] hover:brightness-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             >
               <span className="size-2.5 rounded-[2px] bg-current" aria-hidden="true" />
             </button>
@@ -229,7 +250,7 @@ export function VoicePill({
               onClick={onEnd}
               aria-label={t("agentWindow.call.actions.end")}
               title={t("agentWindow.call.actions.end")}
-              className="ms-1 flex size-6 shrink-0 items-center justify-center rounded-full bg-destructive text-white transition-[filter] hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              className="voice-pill-swap ms-1 flex size-6 shrink-0 items-center justify-center rounded-full bg-destructive text-white transition-[filter] hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             >
               <X size={14} strokeWidth={2.5} />
             </button>

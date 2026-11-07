@@ -39,7 +39,7 @@ class AgentWindowManager {
     // A standalone card's measured height.
     this.contentHeight = 0;
     this.wide = false;
-    // The layouts of a voice call (its pill, its transcript).
+    // The layouts of a voice call (its pill and the cards above it).
     this.call = false;
     this.anchor = null;
     this.displayId = null;
@@ -147,8 +147,8 @@ class AgentWindowManager {
   setLayout(event, request) {
     if (!isFromWindow(event, this.window) || !AGENT_LAYOUT_SIZES[request?.layout]) return false;
     const call = request.call === true;
-    const measured = request.layout === "standalone" || (call && request.layout === "modal");
-    if (measured && !Number.isFinite(request.contentHeight)) return false;
+    const standalone = request.layout === "standalone";
+    if (standalone && !Number.isFinite(request.contentHeight)) return false;
     const focus = request.focus === true;
     if (request.layout !== this.layout || call !== this.call) {
       void this.dragManager.stopWindowDrag();
@@ -158,7 +158,7 @@ class AgentWindowManager {
     const refocus = request.layout !== this.layout || focus !== this.keyboardFocus;
     this.layout = request.layout;
     this.call = call;
-    this.contentHeight = measured ? request.contentHeight : 0;
+    this.contentHeight = standalone ? request.contentHeight : 0;
     this.wide = request.layout === "pill" && !call && request.wide === true;
     this._applyBounds();
     if (refocus) this._setKeyboardFocus(focus);

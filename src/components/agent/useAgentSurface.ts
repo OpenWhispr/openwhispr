@@ -38,7 +38,7 @@ export function useAgentSurface({
   contentHeight?: number;
   /** pill only: the wider pill that reads "Waiting for answer" or a notice; it widens in place. */
   wide?: boolean;
-  /** A voice call's layouts: its taller pill, and its transcript (which brings contentHeight). */
+  /** A voice call's layouts: its taller pill, with cards above it. */
   call?: boolean;
 }) {
   const [shown, setShown] = useState(false);
