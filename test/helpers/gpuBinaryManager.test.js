@@ -75,6 +75,7 @@ require.cache[require.resolve("../../src/helpers/downloadUtils.js")] = {
     },
     findFile: async (dir, name) => walk(dir).find((f) => path.basename(f) === name) || null,
     findFiles: async (dir, pattern) => walk(dir).filter((f) => pattern.test(path.basename(f))),
+    sha256File: async (filePath) => sha256(fs.readFileSync(filePath)),
   },
 };
 

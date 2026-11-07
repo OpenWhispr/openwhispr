@@ -520,6 +520,40 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
 
   // Local Parakeet (NVIDIA) functions
+  // Voice calls on the agent window: a hands-free listen → answer → speak session.
+  voiceConversation: {
+    start: (options) => ipcRenderer.invoke("voice-conversation:start", options),
+    sendMic: (samples) => ipcRenderer.send("voice-conversation:mic", samples),
+    pauseInput: (sessionId, paused) =>
+      ipcRenderer.invoke("voice-conversation:pause-input", sessionId, paused),
+    keepModelWarm: (modelId) => ipcRenderer.invoke("voice-conversation:keep-model-warm", modelId),
+    speak: (request) => ipcRenderer.invoke("voice-conversation:speak", request),
+    prepareSpeech: (request) => ipcRenderer.invoke("voice-conversation:prepare-speech", request),
+    cancelSpeech: (utteranceId) =>
+      ipcRenderer.invoke("voice-conversation:cancel-speech", { utteranceId }),
+    stop: (sessionId) => ipcRenderer.invoke("voice-conversation:stop", sessionId),
+    getReadiness: (request) => ipcRenderer.invoke("voice-conversation:get-readiness", request),
+    languages: (request) => ipcRenderer.invoke("voice-conversation:languages", request),
+    downloadModels: () => ipcRenderer.invoke("voice-conversation:download-models"),
+    cancelModelDownload: () => ipcRenderer.invoke("voice-conversation:cancel-download"),
+    onDownloadProgress: registerListener(
+      "voice-conversation:download-progress",
+      (callback) => (_event, progress) => callback(progress)
+    ),
+    isHarness: () => ipcRenderer.invoke("voice-conversation:harness-enabled"),
+    brainOverride: () => ipcRenderer.invoke("voice-conversation:brain-override"),
+    reportTurn: (report) => ipcRenderer.send("voice-conversation:turn-report", report),
+    reportTurnEvent: (turnEvent) => ipcRenderer.send("voice-conversation:turn-event", turnEvent),
+    onHarnessDone: registerListener(
+      "voice-conversation:harness-done",
+      (callback) => () => callback()
+    ),
+    onEvent: registerListener(
+      "voice-conversation:event",
+      (callback) => (_event, payload) => callback(payload)
+    ),
+  },
+
   transcribeLocalParakeet: (audioBlob, options) =>
     ipcRenderer.invoke("transcribe-local-parakeet", audioBlob, options),
   checkParakeetInstallation: () => ipcRenderer.invoke("check-parakeet-installation"),
