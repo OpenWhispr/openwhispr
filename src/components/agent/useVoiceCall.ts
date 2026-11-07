@@ -45,6 +45,8 @@ export interface VoiceCallTurn {
   replyLanguage: SpokenLanguage | null;
   /** A harness turn: write tools answer without running. */
   dryRunWrites: boolean;
+  /** The request before, sent again with the words said after a pause joined on. */
+  continues: boolean;
   /** False once the turn was dropped (talked over, stopped, the call ended): don't send it. */
   isCurrent: () => boolean;
 }
@@ -621,6 +623,7 @@ export function useVoiceCall({
           return;
         }
         let text = event.text;
+        let continues = false;
         if (utteranceRef.current) {
           // Over a reply, one word is a backchannel ("okay", "please") or a stop;
           // only more than that is a new request. Before any of the reply was
@@ -632,6 +635,7 @@ export function useVoiceCall({
           }
           if (!replyHeardRef.current) {
             text = `${requestTextRef.current} ${event.text}`;
+            continues = true;
           } else if (kind === "ignore") {
             releaseHold();
             return;
@@ -676,6 +680,7 @@ export function useVoiceCall({
           speech: createTurnSpeech(utteranceId),
           replyLanguage: voiceCallLanguage === "auto" ? null : voiceCallLanguage,
           dryRunWrites: harnessRef.current,
+          continues,
           isCurrent: () => utteranceRef.current === utteranceId,
         });
       } else if (event.type === "tts-audio") {
@@ -887,6 +892,20 @@ export function useVoiceCall({
       }),
     [api, prepareLines, spokenLanguageFor]
   );
+
+  // Using the call's window (its settings, menus, transcript) keeps it from idling out too.
+  useEffect(() => {
+    if (session !== "active") return undefined;
+    const touch = () => {
+      lastActivityRef.current = Date.now();
+    };
+    window.addEventListener("pointerdown", touch, true);
+    window.addEventListener("keydown", touch, true);
+    return () => {
+      window.removeEventListener("pointerdown", touch, true);
+      window.removeEventListener("keydown", touch, true);
+    };
+  }, [session]);
 
   useEffect(
     () => () => {

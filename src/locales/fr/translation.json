@@ -5033,7 +5033,7 @@
         "reasons": {
           "voice-models-missing": "Les appels vocaux nécessitent {{size}} Mo de modèles vocaux sur cet ordinateur.",
           "speech-model-missing": "Les appels vocaux nécessitent un modèle vocal local pour vous entendre. Téléchargez-en un dans les réglages.",
-          "language-model-missing": "Aucun modèle vocal de cet ordinateur ne comprend la langue de l'appel. Téléchargez-en un dans les réglages ou choisissez une autre langue.",
+          "language-model-missing": "Aucun modèle vocal de cet ordinateur ne comprend la langue de l'appel ({{language}}). Téléchargez-en un dans les réglages ou choisissez une autre langue.",
           "language-unsupported": "Les appels ne sont pas encore disponibles dans cette langue.",
           "brain-not-downloaded": "Le modèle de l'Assistant vocal n'est pas encore téléchargé.",
           "brain-sign-in-required": "Connectez-vous pour répondre aux appels avec OpenWhispr Cloud, ou choisissez un autre modèle.",
@@ -5045,9 +5045,10 @@
         }
       },
       "notices": {
-        "endedForMeeting": "Appel terminé pour une réunion",
-        "workerStopped": "La voix a cessé de fonctionner",
-        "endedIdle": "Appel terminé après un moment de silence"
+        "endedForMeeting": "Fin pour réunion",
+        "workerStopped": "Voix interrompue",
+        "endedIdle": "Fin après un silence",
+        "micLost": "Micro déconnecté"
       }
     },
     "backToLatest": "Revenir au plus récent"

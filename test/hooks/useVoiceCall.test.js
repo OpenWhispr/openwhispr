@@ -500,6 +500,11 @@ test("words said before any of the reply was heard go on with the request they f
   assert.equal(calls.turns.length, 2);
   assert.equal(calls.dropped, 1, "the first half's turn stops");
   assert.equal(lastTurn().text, "Create a note titled Groceries with the text milk.");
+  assert.deepEqual(
+    calls.turns.map((turn) => turn.continues),
+    [false, true],
+    "the joined request carries the first half"
+  );
 });
 
 test("a reply waits while the user, already talking again, finishes the request", async (t) => {
@@ -601,6 +606,26 @@ test("a quiet call stops after 2.5 minutes, but not while a card or a reply runs
   await act(() => t.mock.timers.tick(150_000));
   assert.equal(hook.current.session, "off");
   assert.deepEqual(calls.ended, ["idle"]);
+});
+
+test("using the call's window keeps a quiet call from idling out", async (t) => {
+  const { hook, calls, act, startListening } = await mountVoiceCall(t);
+  const listeners = new Map();
+  globalThis.window.addEventListener = (type, listener) => listeners.set(type, listener);
+  globalThis.window.removeEventListener = (type) => listeners.delete(type);
+  t.mock.timers.enable({ apis: ["setInterval", "Date"], now: 0 });
+  await startListening();
+
+  await act(() => t.mock.timers.tick(140_000));
+  listeners.get("pointerdown")();
+  await act(() => t.mock.timers.tick(140_000));
+  listeners.get("keydown")();
+  await act(() => t.mock.timers.tick(140_000));
+  assert.equal(hook.current.session, "active", "a click or a key in its settings is activity");
+
+  await act(() => t.mock.timers.tick(10_000));
+  assert.deepEqual(calls.ended, ["idle"]);
+  assert.equal(listeners.size, 0, "the ended call stops listening to the window");
 });
 
 test("a call prepares the lines it says while working, in its language and voice", async (t) => {

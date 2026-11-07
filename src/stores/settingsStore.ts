@@ -2149,7 +2149,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   voiceAgentScreenContext: readBoolean("voiceAgentScreenContext", false),
   voiceCallVoice: normalizeVoiceCallVoice(readString("voiceCallVoice", "")),
-  voiceCallSpeed: normalizeVoiceCallSpeed(readNumber("voiceCallSpeed", 1)),
+  voiceCallSpeed: normalizeVoiceCallSpeed(readString("voiceCallSpeed", "1")),
   voiceCallLanguage: normalizeVoiceCallLanguage(readString("voiceCallLanguage", "auto")),
   emailDraftTarget: normalizeEmailDraftTarget(readString("emailDraftTarget", "auto")),
   defaultSummaryTemplateId: readString("defaultSummaryTemplateId", GENERATE_NOTES_KEY),

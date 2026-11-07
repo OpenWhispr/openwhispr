@@ -5012,7 +5012,7 @@
         "reasons": {
           "voice-models-missing": "Sprachanrufe brauchen {{size}} MB Sprachmodelle auf diesem Computer.",
           "speech-model-missing": "Sprachanrufe brauchen ein lokales Sprachmodell, um dich zu hören. Lade eins in den Einstellungen herunter.",
-          "language-model-missing": "Kein Sprachmodell auf diesem Computer versteht die Sprache des Anrufs. Lade eins in den Einstellungen herunter oder wähle eine andere Sprache.",
+          "language-model-missing": "Kein Sprachmodell auf diesem Computer versteht {{language}}. Lade eins in den Einstellungen herunter oder wähle eine andere Sprache.",
           "language-unsupported": "Anrufe sind in dieser Sprache noch nicht verfügbar.",
           "brain-not-downloaded": "Das Modell des Sprachassistenten ist noch nicht heruntergeladen.",
           "brain-sign-in-required": "Melde dich an, um Anrufe mit OpenWhispr Cloud zu beantworten, oder wähle ein anderes Modell.",
@@ -5024,9 +5024,10 @@
         }
       },
       "notices": {
-        "endedForMeeting": "Anruf für ein Meeting beendet",
-        "workerStopped": "Die Sprache funktioniert nicht mehr",
-        "endedIdle": "Anruf nach einer stillen Weile beendet"
+        "endedForMeeting": "Beendet: Meeting",
+        "workerStopped": "Stimme ausgefallen",
+        "endedIdle": "Nach Stille beendet",
+        "micLost": "Mikrofon getrennt"
       }
     },
     "backToLatest": "Zum Neuesten"

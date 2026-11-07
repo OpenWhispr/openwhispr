@@ -381,9 +381,25 @@ export interface SendToAIOptions {
   /**
    * A request spoken in a voice call: the reply is written to be read aloud in
    * `replyLanguage` (null: the language spoken), and `speech` hears it stream.
-   * `dryRunWrites` (the voice harness) runs no write tool.
+   * `dryRunWrites` (the voice harness) runs no write tool. `interrupts`: it was
+   * said over a turn still running, so that turn's request may be its start.
    */
-  voice?: { replyLanguage: string | null; speech: TurnSpeechObserver; dryRunWrites?: boolean };
+  voice?: {
+    replyLanguage: string | null;
+    speech: TurnSpeechObserver;
+    dryRunWrites?: boolean;
+    interrupts?: boolean;
+  };
+}
+
+// A reply stopped before it said or did anything.
+function stoppedBeforeReply(message: Message | undefined): boolean {
+  return (
+    message?.role === "assistant" &&
+    message.turn?.status === "stopped" &&
+    !message.content.trim() &&
+    !message.toolCalls?.length
+  );
 }
 
 // Walks backward to the newest user message; a null transform keeps walking.
@@ -968,13 +984,27 @@ export function createChatTurnEngine(
       // request; swapped before the history is built, so a note the history
       // opens the request with (sends it left out) stays.
       const requestText = options?.requestText;
-      const requestIndex = allMessages.map((message) => message.role).lastIndexOf("user");
+      // A spoken request leaves out those the user stopped before any reply (End,
+      // Stop, a stop word): read beside it, one was answered as if asked again.
+      // The one it talked over stays, as it may be this request's start; typed
+      // chat keeps them all, noted.
+      const roles = allMessages.map((message) => message.role);
+      const talkedOver = options?.voice?.interrupts
+        ? roles.lastIndexOf("user", roles.length - 2)
+        : -1;
+      const asked = options?.voice
+        ? allMessages.filter(
+            (message, i) =>
+              message.role !== "user" || i === talkedOver || !stoppedBeforeReply(allMessages[i + 1])
+          )
+        : allMessages;
+      const requestIndex = asked.map((message) => message.role).lastIndexOf("user");
       const history: HistoryMessage[] = toHistoryMessages(
         requestText
-          ? allMessages.map((message, i) =>
+          ? asked.map((message, i) =>
               i === requestIndex ? { ...message, content: requestText } : message
             )
-          : allMessages,
+          : asked,
         {
           toolHistory,
           isOffered: (name) => offeredTools?.some((tool) => tool.name === name) ?? false,

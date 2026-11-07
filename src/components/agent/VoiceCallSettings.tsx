@@ -40,7 +40,7 @@ const VOICE_LABELS = {
   },
 } as const;
 
-function useLanguageName() {
+export function useLanguageName() {
   const { t, i18n } = useTranslation();
   return useMemo(() => {
     let names: Intl.DisplayNames | null = null;

@@ -3,7 +3,9 @@ import { useTranslation } from "react-i18next";
 import { X } from "../icons";
 import { ICON_BUTTON, PILL_BUTTON, PRIMARY_PILL_BUTTON } from "../chat/interactions/cardStyles";
 import { openProviderSettings } from "../../utils/describeProviderError";
+import { useSettingsStore } from "../../stores/settingsStore";
 import type { VoiceCallStartFailure } from "./useVoiceCall";
+import { useLanguageName } from "./VoiceCallSettings";
 
 type Action = "download" | "settings" | "llmSettings" | "micSettings" | "language" | "retry";
 
@@ -46,6 +48,8 @@ export function VoiceCallSetupCard({
   onClose,
 }: VoiceCallSetupCardProps) {
   const { t } = useTranslation();
+  const nameOf = useLanguageName();
+  const language = useSettingsStore((state) => state.voiceCallLanguage);
   const [download, setDownload] = useState<{ percent: number } | null>(null);
   const [downloadFailed, setDownloadFailed] = useState(false);
   const action = ACTIONS[failure.reason];
@@ -109,7 +113,10 @@ export function VoiceCallSetupCard({
         <p id="voice-call-setup-message" dir="auto" className="flex-1 pt-1">
           {downloadFailed
             ? t("agentWindow.call.setup.downloadFailed")
-            : t(`agentWindow.call.setup.reasons.${failure.reason}`, { size: missingMb ?? "" })}
+            : t(`agentWindow.call.setup.reasons.${failure.reason}`, {
+                size: missingMb ?? "",
+                language: nameOf(language),
+              })}
         </p>
         <button
           type="button"
@@ -140,10 +147,10 @@ export function VoiceCallSetupCard({
             </>
           ) : (
             <>
-              {/* Another language may need nothing new: try it once it's picked. */}
-              {action === "language" && (
-                <button type="button" onClick={onRetry} className={PILL_BUTTON}>
-                  {t(ACTION_LABELS.retry)}
+              {/* A model that hears the language is a download in Settings. */}
+              {failure.reason === "language-model-missing" && (
+                <button type="button" onClick={() => run("settings")} className={PILL_BUTTON}>
+                  {t(ACTION_LABELS.settings)}
                 </button>
               )}
               <button type="button" onClick={() => run(action)} className={PRIMARY_PILL_BUTTON}>

@@ -4732,7 +4732,7 @@
         "reasons": {
           "voice-models-missing": "Las llamadas de voz necesitan {{size}} MB de modelos de voz en este equipo.",
           "speech-model-missing": "Las llamadas de voz necesitan un modelo de voz local para oírte. Descarga uno en Ajustes.",
-          "language-model-missing": "Ningún modelo de voz de este equipo entiende el idioma de la llamada. Descarga uno en Ajustes o elige otro idioma.",
+          "language-model-missing": "Ningún modelo de voz de este equipo entiende el idioma de la llamada ({{language}}). Descarga uno en Ajustes o elige otro idioma.",
           "language-unsupported": "Las llamadas aún no están disponibles en este idioma.",
           "brain-not-downloaded": "El modelo del Asistente de voz aún no está descargado.",
           "brain-sign-in-required": "Inicia sesión para responder llamadas con OpenWhispr Cloud o elige otro modelo.",
@@ -4744,9 +4744,10 @@
         }
       },
       "notices": {
-        "endedForMeeting": "Llamada terminada por una reunión",
-        "workerStopped": "La voz dejó de funcionar",
-        "endedIdle": "Llamada terminada tras un rato en silencio"
+        "endedForMeeting": "Terminó por reunión",
+        "workerStopped": "La voz falló",
+        "endedIdle": "Terminó por silencio",
+        "micLost": "Micro desconectado"
       }
     },
     "backToLatest": "Volver a lo último"

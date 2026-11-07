@@ -4659,7 +4659,7 @@
         "reasons": {
           "voice-models-missing": "音声通話には、このコンピューターに {{size}} MB の音声モデルが必要です。",
           "speech-model-missing": "音声通話であなたの声を聞き取るには、ローカルの音声モデルが必要です。設定でダウンロードしてください。",
-          "language-model-missing": "このコンピューターの音声モデルは通話の言語を認識できません。設定でダウンロードするか、別の言語を選んでください。",
+          "language-model-missing": "このコンピューターの音声モデルは通話の言語（{{language}}）を認識できません。設定でダウンロードするか、別の言語を選んでください。",
           "language-unsupported": "この言語ではまだ通話を利用できません。",
           "brain-not-downloaded": "音声アシスタントのモデルがまだダウンロードされていません。",
           "brain-sign-in-required": "OpenWhispr Cloud で通話に応答するにはサインインするか、別のモデルを選んでください。",
@@ -4671,9 +4671,10 @@
         }
       },
       "notices": {
-        "endedForMeeting": "会議のため通話を終了しました",
-        "workerStopped": "音声が動作しなくなりました",
-        "endedIdle": "しばらく無音だったため通話を終了しました"
+        "endedForMeeting": "会議のため終了",
+        "workerStopped": "音声が停止しました",
+        "endedIdle": "無音のため終了",
+        "micLost": "マイクが切れました"
       }
     },
     "backToLatest": "最新に戻る"

@@ -7,7 +7,11 @@ import { mirrorActiveAccountScope } from "../../lib/accountScopeMirror";
 import { subscribeAuthBoundary } from "../../lib/authRequestContext";
 import { usePolicyStore } from "../../stores/policyStore";
 import { isAgentAllowed, isScreenContextAllowed } from "../../stores/policyRules";
-import { getSettings, isCloudDictationAgentMode } from "../../stores/settingsStore";
+import {
+  getSettings,
+  isCloudDictationAgentMode,
+  useSettingsStore,
+} from "../../stores/settingsStore";
 import { resolveAgentAccessRefusal } from "../../helpers/agentAccessPolicy";
 import { resolveDictationAgentInference } from "../../helpers/dictationAgentInference";
 import {
@@ -40,6 +44,7 @@ import {
   type AgentPillStatus,
   type AgentWindowAction,
   type AgentWindowState,
+  type PendingCard,
 } from "./agentWindowState";
 import { useAgentSurface } from "./useAgentSurface";
 import { useAgentVoice, type AgentVoiceIntent } from "./useAgentVoice";
@@ -68,7 +73,7 @@ const CALL_END_NOTICES: Record<VoiceCallEndReason, string> = {
   meeting: "agentWindow.call.notices.endedForMeeting",
   worker: "agentWindow.call.notices.workerStopped",
   idle: "agentWindow.call.notices.endedIdle",
-  "mic-lost": "agentWindow.notices.micUnavailable",
+  "mic-lost": "agentWindow.call.notices.micLost",
 };
 // A call's transcript around its conversation: the header, the list's bottom
 // padding, and the pill row.
@@ -160,6 +165,10 @@ export default function AgentWindow() {
     policyStatus === "idle" || policyStatus === "managed" || policyStatus === "unmanaged";
   // An i18n key explaining why the assistant can't run, shown in the modal.
   const [refusal, setRefusal] = useState<string | null>(null);
+  // Allowed again (an organization turned it back on): the chat shows once more.
+  useEffect(() => {
+    if (agentAllowed) setRefusal(null);
+  }, [agentAllowed]);
 
   // The sandboxed window can't resolve a session; policy follows main's account.
   useEffect(() => mirrorActiveAccountScope(), []);
@@ -600,12 +609,13 @@ export default function AgentWindow() {
   // request carries, and answered for speech. A turn still running (talked
   // over, or left from typing) stops first: one stream runs per window.
   const sendSpokenTurn = useCallback(
-    async ({ text, speech, replyLanguage, dryRunWrites, isCurrent }: VoiceCallTurn) => {
+    async ({ text, speech, replyLanguage, dryRunWrites, continues, isCurrent }: VoiceCallTurn) => {
       if (refuseIfRestricted()) {
         speech.onEnd("refused");
         return;
       }
-      if (chatBusyRef.current) cancelTurn();
+      const interrupts = chatBusyRef.current;
+      if (interrupts) cancelTurn();
       await chatSettled();
       const current = stateRef.current;
       // Dropped while the old turn stopped (a stop word, another request, New chat): never sent.
@@ -624,7 +634,8 @@ export default function AgentWindow() {
         const sent = await sendRef.current(text, {
           ...(current.selectedContext ? { selectedContext: current.selectedContext } : {}),
           ...(current.attachment ? { attachment: current.attachment } : {}),
-          voice: { replyLanguage, speech, dryRunWrites },
+          // A request sent again with words joined on carries the one it talked over.
+          voice: { replyLanguage, speech, dryRunWrites, interrupts: interrupts && !continues },
         });
         // Never sent: the engine never heard of it, so it never ends it.
         if (!sent) speech.onEnd("refused");
@@ -636,11 +647,12 @@ export default function AgentWindow() {
   );
 
   const voiceCall = useVoiceCall({
-    // Said while a question waits, the words answer it, as the composer's do.
+    // Said while a question waits, the words answer it as the composer's do,
+    // added to what is already picked or typed on the card.
     answersCard: (text) => {
       const card = pendingCardRef.current;
       if (card?.interaction !== "questions") return false;
-      answerWithText(card.key, text);
+      answerWithText(card.key, text, { append: true });
       return true;
     },
     onUserTurn: (turn) => void sendSpokenTurn(turn),
@@ -686,17 +698,36 @@ export default function AgentWindow() {
     announceCard({ question: pendingQuestion, awaitsSend: cardAwaitsSend });
   }, [announceCard, callActive, cardAnnouncement, cardAwaitsSend, pendingQuestion]);
 
+  // An answer card sent from the compact call stays above its pill through
+  // Sending… and what came of it, as in the transcript, then gives way.
+  const [sentCard, setSentCard] = useState<PendingCard | null>(null);
+  useEffect(() => {
+    if (pendingCard && callActive)
+      setSentCard(pendingCard.interaction === null ? pendingCard : null);
+  }, [callActive, pendingCard]);
+  const sent = sentCard ? approvals[sentCard.key] : undefined;
+  // A failed send that offers Retry still waits on the user.
+  const sendSettled =
+    !sent?.awaitingRetry &&
+    (sent?.state === "sent" || sent?.state === "failed" || sent?.state === "unknown");
+  useEffect(() => {
+    if (!sendSettled) return undefined;
+    const timer = setTimeout(() => setSentCard(null), NOTICE_MS);
+    return () => clearTimeout(timer);
+  }, [sendSettled]);
+  const callCard = pendingCard ?? (sent?.state === "committing" || sendSettled ? sentCard : null);
+
   // The compact call shows what is above its pill (its settings, why it
   // couldn't start, a card), sized before paint so the pill never jumps.
   const callFailed = voiceCall.failure !== null;
   useLayoutEffect(() => {
     const call = state.call;
     if (!call || call.stopped || state.layout === "modal") return;
-    const standaloneWanted = call.settings || callFailed || pendingCard !== null;
+    const standaloneWanted = call.settings || callFailed || callCard !== null;
     if (standaloneWanted !== (state.layout === "standalone")) {
       dispatch({ type: "callCompact", standalone: standaloneWanted });
     }
-  }, [callFailed, dispatch, pendingCard, state.call, state.layout]);
+  }, [callCard, callFailed, dispatch, state.call, state.layout]);
 
   const startCall = useCallback(async () => {
     if (refuseIfRestricted()) return;
@@ -705,6 +736,20 @@ export default function AgentWindow() {
     dispatch({ type: "startCall" });
     await voiceCall.start();
   }, [callSession, dispatch, listening, refuseIfRestricted, stopReading, transcribing, voiceCall]);
+
+  // Sent from a card saying no model hears the call's language, the user picked
+  // another: the call starts again in it.
+  useEffect(
+    () =>
+      useSettingsStore.subscribe((settings, previous) => {
+        const reason = voiceCallRef.current.failure?.reason;
+        if (settings.voiceCallLanguage === previous.voiceCallLanguage) return;
+        if (reason !== "language-model-missing" && reason !== "language-unsupported") return;
+        voiceCallRef.current.clearFailure();
+        void voiceCallRef.current.start();
+      }),
+    []
+  );
 
   // End stops the call, what it is saying, and the turn it is running; the chat stays.
   const endCall = useCallback(() => {
@@ -722,6 +767,31 @@ export default function AgentWindow() {
       refuseIfRestricted();
     }
   }, [agentAllowed, callActive, endCall, policyResolved, refuseIfRestricted]);
+
+  // A call Stopped in the transcript goes back to typing at the first key
+  // typed, as at a click on its pill; the key starts on the draft.
+  const callStopped = state.layout === "modal" && Boolean(state.call?.stopped);
+  useEffect(() => {
+    if (!callStopped) return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (
+        event.key.length !== 1 ||
+        event.metaKey ||
+        (event.ctrlKey && !event.getModifierState("AltGraph")) ||
+        event.defaultPrevented ||
+        // A card's field keeps its keys, and Space still presses a focused button.
+        target?.closest("input, textarea, [contenteditable]") ||
+        (event.key === " " && target?.closest("button"))
+      )
+        return;
+      event.preventDefault();
+      dispatch({ type: "setDraft", draft: stateRef.current.draft + event.key });
+      dispatch({ type: "leaveCall" });
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [callStopped, dispatch]);
 
   // The voice harness (OPENWHISPR_VOICE_HARNESS=1): a call with no mic, once the app settles.
   const { harnessAvailable } = voiceCall;
@@ -1506,11 +1576,8 @@ export default function AgentWindow() {
                 )}
               >
                 {callAbovePill ??
-                  (pendingCard && (
-                    <ToolCallCard
-                      messageId={pendingCard.messageId}
-                      toolCall={pendingCard.toolCall}
-                    />
+                  (callCard && (
+                    <ToolCallCard messageId={callCard.messageId} toolCall={callCard.toolCall} />
                   ))}
               </div>
             )}

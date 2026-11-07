@@ -4659,7 +4659,7 @@
         "reasons": {
           "voice-models-missing": "語音通話需要在這台電腦上下載 {{size}} MB 的語音模型。",
           "speech-model-missing": "語音通話需要本機語音模型才能聽到你說話。請在設定中下載一個。",
-          "language-model-missing": "這台電腦上沒有能辨識通話語言的語音模型。請在設定中下載，或選擇其他語言。",
+          "language-model-missing": "這台電腦上沒有能辨識通話語言（{{language}}）的語音模型。請在設定中下載，或選擇其他語言。",
           "language-unsupported": "此語言尚不支援通話。",
           "brain-not-downloaded": "語音助理的模型尚未下載。",
           "brain-sign-in-required": "請登入以使用 OpenWhispr Cloud 接聽通話，或選擇其他模型。",
@@ -4671,9 +4671,10 @@
         }
       },
       "notices": {
-        "endedForMeeting": "因會議結束了通話",
+        "endedForMeeting": "因會議已結束",
         "workerStopped": "語音已停止運作",
-        "endedIdle": "安靜一段時間後通話已結束"
+        "endedIdle": "因無人說話已結束",
+        "micLost": "麥克風已斷線"
       }
     },
     "backToLatest": "回到最新"

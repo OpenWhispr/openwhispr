@@ -168,3 +168,36 @@ test("a withdrawn answer keeps the reply spoken before its step", async (t) => {
     ["end", "complete"],
   ]);
 });
+
+test("a spoken request leaves out one stopped before any reply, unless it talked over it", async (t) => {
+  const fixture = await setup(t);
+  const sent = [];
+  t.mock.method(fixture.service, "processTextStreamingAI", async function* (messages) {
+    sent.push(JSON.stringify(messages));
+    yield { type: "content", text: "Four." };
+    yield { type: "done", finishReason: "stop" };
+  });
+  const history = [
+    { id: "u1", role: "user", content: "Write a long poem about the ocean.", isStreaming: false },
+    {
+      id: "a1",
+      role: "assistant",
+      content: "",
+      isStreaming: false,
+      turn: { startedAt: 1, finishedAt: 2, status: "stopped" },
+    },
+    { id: "u2", role: "user", content: "What is 2 plus 2?", isStreaming: false },
+  ];
+  const { voice } = speechLog();
+  await fixture.engine.send("What is 2 plus 2?", history, { voice });
+  await fixture.engine.send("What is 2 plus 2?", history, {
+    voice: { ...voice, interrupts: true },
+  });
+  await fixture.engine.send("What is 2 plus 2?", history);
+
+  const [spoken, talkedOver, typed] = sent;
+  assert.doesNotMatch(spoken, /ocean/, "an ended or stopped request isn't asked again");
+  assert.match(spoken, /2 plus 2/);
+  assert.match(talkedOver, /ocean/, "words said over a turn may finish its request");
+  assert.match(typed, /ocean/, "typed chat keeps it, noted");
+});

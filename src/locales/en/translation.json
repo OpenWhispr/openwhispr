@@ -5012,7 +5012,7 @@
         "reasons": {
           "voice-models-missing": "Voice calls need {{size}} MB of voice models on this computer.",
           "speech-model-missing": "Voice calls need a local speech model to hear you. Download one in Settings.",
-          "language-model-missing": "No speech model on this computer understands the call's language. Download one in Settings, or pick another language.",
+          "language-model-missing": "No speech model on this computer understands {{language}}. Download one in Settings, or pick another language.",
           "language-unsupported": "Calls aren't available in this language yet.",
           "brain-not-downloaded": "The Voice Assistant's model isn't downloaded yet.",
           "brain-sign-in-required": "Sign in to answer calls with OpenWhispr Cloud, or pick another model.",
@@ -5024,9 +5024,10 @@
         }
       },
       "notices": {
-        "endedForMeeting": "Call ended for a meeting",
-        "workerStopped": "Voice stopped working",
-        "endedIdle": "Call ended after a quiet while"
+        "endedForMeeting": "Ended for a meeting",
+        "workerStopped": "Voice failed",
+        "endedIdle": "Ended after silence",
+        "micLost": "Mic disconnected"
       }
     },
     "backToLatest": "Back to latest"
