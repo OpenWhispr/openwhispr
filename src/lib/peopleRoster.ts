@@ -1,7 +1,5 @@
-import type { MemberTeamRef, WorkspaceInvitation, WorkspaceMember } from "../types/electron";
+import type { WorkspaceInvitation, WorkspaceMember } from "../types/electron";
 import { filterMemberCandidates } from "./memberCandidates";
-
-export const TEAM_SUMMARY_SHOWN = 2;
 
 const DAY_MS = 86_400_000;
 
@@ -24,14 +22,6 @@ export function rosterFor(
 // first case.
 export function rosterHasTeams(members: Pick<WorkspaceMember, "teams">[]): boolean {
   return members.some((member) => Array.isArray(member.teams));
-}
-
-export function teamSummary(teams: MemberTeamRef[] | undefined): { shown: string[]; more: number } {
-  const all = teams ?? [];
-  return {
-    shown: all.slice(0, TEAM_SUMMARY_SHOWN).map((team) => team.name),
-    more: Math.max(0, all.length - TEAM_SUMMARY_SHOWN),
-  };
 }
 
 export type MembersView =

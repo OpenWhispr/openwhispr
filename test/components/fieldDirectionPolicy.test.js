@@ -75,13 +75,15 @@ const EXPECTED_SHARED_FIELD_DIRECTIONS = {
   "src/components/notes/CreateSpaceDialog.tsx": ["auto"],
   "src/components/notes/DeleteSpaceDialog.tsx": ["auto"],
   "src/components/notes/FolderNotesPopover.tsx": ["auto"],
-  // Names, emails and groups typed in one field: a name may be in any script.
+  // Names, emails and teams typed in one field: a name may be in any script.
   "src/components/notes/SpacePeopleField.tsx": ["auto"],
   "src/components/notes/UploadAudioView.tsx": ["auto"],
   "src/components/settings/DictationAgentSettings.tsx": ["auto"],
   "src/components/settings/EnterpriseAudioSettings.tsx": ["ltr"],
   "src/components/settings/EnterpriseCheckoutDialog.tsx": ["inherit"],
   "src/components/settings/ProfileSection.tsx": ["auto", "ltr", "ltr", "ltr"],
+  // Teamspace search: names in any script.
+  "src/components/settings/TeamSpacesPanel.tsx": ["auto"],
   "src/components/settings/WorkspaceDeveloperTab.tsx": ["auto"],
   "src/components/settings/WorkspaceGeneralSection.tsx": ["auto"],
   // Member search: names in any script.
@@ -101,7 +103,6 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/CommandSearch.tsx": ["auto"],
   // Folder names and search accept user text in any script.
   "src/components/MeetingNotificationFolderPicker.tsx": ["auto", "auto"],
-  "src/components/MemberPickList.tsx": ["auto"],
   "src/components/ReferralDashboard.tsx": ["ltr"],
   "src/components/SettingsPage.tsx": ["inherit"],
   // The agent's typed request: prose in any script.
@@ -136,6 +137,7 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/onboarding/UseCaseStep.tsx": ["auto"],
   "src/components/settings/ChatAgentSettings.tsx": ["auto"],
   "src/components/settings/ProfileSection.tsx": ["inherit"],
+  "src/components/settings/TeamSettingsDialog.tsx": ["auto"],
   // Email addresses are Latin-script identifiers.
   "src/components/workspace/InvitePeopleView.tsx": ["ltr"],
   // A skill's description is prose; the file pickers are hidden.

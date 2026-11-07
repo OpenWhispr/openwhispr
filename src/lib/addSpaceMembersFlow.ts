@@ -11,9 +11,11 @@ export interface InviteRefusal {
 /** What one Add members attempt did with each staged recipient. */
 export interface AddAttemptOutcome {
   addedMembers: PickedRecipient[];
+  /** People the server reported as on the team already, so they were not added. */
+  alreadyMembers?: PickedRecipient[];
   failedMembers: PickedRecipient[];
-  addedGroups: PickedRecipient[];
-  failedGroups: PickedRecipient[];
+  addedTeams: PickedRecipient[];
+  failedTeams: PickedRecipient[];
   invited: PickedRecipient[];
   /** The invited whose invitation exists but whose email couldn't be delivered. */
   undeliveredInvites: PickedRecipient[];
@@ -55,7 +57,7 @@ export function remainingAfter(
     .filter(({ failure }) => retriesAsItStands(failure) || seatRoomLeft(failure) > 0)
     .map(({ recipient }) => recipient);
   const failed = new Set(
-    [...outcome.failedMembers, ...outcome.failedGroups, ...outcome.failedInvites, ...kept].map(
+    [...outcome.failedMembers, ...outcome.failedTeams, ...outcome.failedInvites, ...kept].map(
       recipientKey
     )
   );
@@ -64,7 +66,7 @@ export function remainingAfter(
 
 function hasFailures(outcome: AddAttemptOutcome): boolean {
   return (
-    outcome.failedMembers.length + outcome.failedGroups.length + outcome.failedInvites.length > 0
+    outcome.failedMembers.length + outcome.failedTeams.length + outcome.failedInvites.length > 0
   );
 }
 
@@ -79,7 +81,7 @@ export function canRetry(outcome: AddAttemptOutcome): boolean {
 export function attemptSummary(outcome: AddAttemptOutcome): {
   kind: "allDone" | "allFailed" | "partial";
 } {
-  const went = outcome.addedMembers.length + outcome.addedGroups.length + outcome.invited.length;
+  const went = outcome.addedMembers.length + outcome.addedTeams.length + outcome.invited.length;
   if (!hasFailures(outcome)) return { kind: "allDone" };
   return { kind: went === 0 && outcome.refusedInvites.length === 0 ? "allFailed" : "partial" };
 }

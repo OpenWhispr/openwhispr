@@ -162,7 +162,7 @@ async function loadDialog(t) {
   const { CloudApiError } = await vite.ssrLoadModule("/services/cloudApi.ts");
 
   // Drives the dialog with the real reducer, as the Members tab does.
-  const mount = async (initial) => {
+  const mount = async (initial, extraProps = {}) => {
     const events = [];
     const removed = [];
     function Harness() {
@@ -177,6 +177,7 @@ async function loadDialog(t) {
         state,
         dispatch: record,
         onRemoved: (ids) => removed.push(ids),
+        ...extraProps,
       });
     }
     const container = installHostDom(t);
@@ -219,6 +220,17 @@ test("two members without content show the plain confirm", async (t) => {
   assert.equal(props.primary.tone, "destructive");
   assert.notEqual(props.primary.disabled, true);
   assert.equal(props.cancelLabel, "common.cancel");
+});
+
+test("a selection that also held the owner says the owner stays", async (t) => {
+  const { mount, opened } = await loadDialog(t);
+  globalThis.__previewImpl = async () => preview([owns("u-liam", 0, 0)]);
+
+  const plain = await mount(opened([LIAM]));
+  assert.doesNotMatch(plain.text(), /cannotRemoveOwner/);
+
+  const withOwner = await mount(opened([LIAM]), { ownerKept: true });
+  assert.match(withOwner.text(), /workspaces\.removeMembers\.cannotRemoveOwner/);
 });
 
 test("one member without content shows the single-member copy", async (t) => {

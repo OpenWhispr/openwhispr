@@ -10,21 +10,29 @@ import { Toggle } from "../ui/toggle";
 import { useToast } from "../ui/useToast";
 import CreateWorkspaceDialog from "../CreateWorkspaceDialog";
 import { WorkspaceErrorBar } from "../workspace/WorkspaceErrorBar";
+import { PRIMARY_BUTTON, SECONDARY_BUTTON } from "../workspace/dialogButtons";
 import { createSpace } from "../../services/spaceActions";
-import { invitePeople } from "../../services/invitePeople";
+import { inviteAfterCreate, inviteFollowUpToast } from "../../lib/inviteAfterCreate";
 import { TeamsService } from "../../services/TeamsService";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { useAuth } from "../../hooks/useAuth";
 import { useDelayedFlag } from "../../hooks/useDelayedFlag";
+import { useHeldTeamIds } from "../../hooks/useHeldTeamIds";
 import { SpaceInviteSeatNotice } from "./SpaceInviteSeatNotice";
 import SpaceNameField from "./SpaceNameField";
 import { SpacePeopleField } from "./SpacePeopleField";
 import { workspaceCan } from "../../lib/capabilities";
 import { formatList } from "../../lib/formatList";
+import { withoutHeldTeams } from "../../lib/heldTeamDeletes";
 import { MAX_INVITE_RECIPIENTS } from "../../lib/inviteFlow";
 import { rosterFor } from "../../lib/peopleRoster";
-import { pickedSummary, type PickedRecipient } from "../../lib/spacePeoplePicker";
+import {
+  addRecipients,
+  pickedSummary,
+  teamRecipient,
+  type PickedRecipient,
+} from "../../lib/spacePeoplePicker";
 import { classifySpaceError } from "../../lib/workspaceErrors";
 import {
   manageableWorkspaces as findManageableWorkspaces,
@@ -38,19 +46,6 @@ import type { SpaceItem, Team, WorkspaceMember } from "../../types/electron";
 const DESCRIPTION_MAX_LENGTH = 280;
 const NO_MEMBERS: WorkspaceMember[] = [];
 const NO_TEAMS: Team[] = [];
-// How many refused addresses the toast names; Copy addresses has them all.
-const FAILED_INVITES_NAMED = 5;
-// The toast is the only place left that says who wasn't invited, so it stays long enough to act on.
-const INVITE_FAILED_TOAST_MS = 15_000;
-
-// The footer's buttons share one look with the other workspace dialogs: two equal capsules.
-const BUTTON_BASE =
-  "flex h-10 flex-1 items-center justify-center gap-2 rounded-full px-4 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50";
-const PRIMARY_BUTTON = cn(BUTTON_BASE, "bg-primary text-primary-foreground hover:bg-primary/90");
-const SECONDARY_BUTTON = cn(
-  BUTTON_BASE,
-  "bg-surface-1 text-muted-foreground hover:bg-surface-3 hover:text-foreground"
-);
 
 // What the footer is told about a create that failed and left the dialog open. A taken name is
 // not here: it belongs to the name field.
@@ -66,38 +61,8 @@ interface CreateSpaceDialogProps {
    * since moving the notes view behind the modal would change what the person returns to.
    */
   revealOnCreate?: boolean;
-}
-
-// The teamspace exists by now, so this never throws: whatever goes wrong here is a list of
-// people to invite from Members, never a failed create. Every address that didn't come back
-// invited counts, an existing member included. A pending invitation counts only when it didn't
-// take the teamspace, which is an older API's answer: that person is not in it.
-async function inviteIntoTeamspace(
-  workspaceId: string,
-  cloudSpaceId: string | null,
-  addresses: string[]
-): Promise<{ failed: string[]; undelivered: number }> {
-  if (addresses.length === 0) return { failed: [], undelivered: 0 };
-  if (!cloudSpaceId) return { failed: addresses, undelivered: 0 };
-  const failed: string[] = [];
-  let undelivered = 0;
-  try {
-    await invitePeople.sendInvitations({
-      workspaceId,
-      emails: addresses,
-      role: "member",
-      spaceIds: [cloudSpaceId],
-      onResult: (email, outcome) => {
-        // `=== true`: src compiles without strictNullChecks, where a bare `ok` doesn't narrow.
-        if (outcome.ok === true) {
-          if (!outcome.emailSent) undelivered += 1;
-        } else if (outcome.grantsAdded !== true) failed.push(email);
-      },
-    });
-  } catch {
-    return { failed: addresses, undelivered: 0 };
-  }
-  return { failed, undelivered };
+  /** A team to stage as a chip each time the dialog opens, as when it opens from a team's dialog. */
+  initialTeam?: Team;
 }
 
 export default function CreateSpaceDialog({
@@ -105,6 +70,7 @@ export default function CreateSpaceDialog({
   onOpenChange,
   initialWorkspaceId = null,
   revealOnCreate = true,
+  initialTeam,
 }: CreateSpaceDialogProps): ReactElement {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
@@ -205,6 +171,15 @@ export default function CreateSpaceDialog({
     });
   }, [open, manageableWorkspaces, defaultWorkspace?.id, initialWorkspaceId]);
 
+  // Staged once per opening, so taking the chip off stays taken. A team that has gone by the time
+  // of the create drops out the way any other does.
+  const initialTeamRef = useRef(initialTeam);
+  initialTeamRef.current = initialTeam;
+  useEffect(() => {
+    const team = initialTeamRef.current;
+    if (open && team) setPicked((current) => addRecipients(current, [teamRecipient(team)]));
+  }, [open]);
+
   useEffect(() => {
     if (!refocus || isCreating) return;
     (refocus === "name" ? nameInputRef.current : primaryRef.current)?.focus();
@@ -215,7 +190,11 @@ export default function CreateSpaceDialog({
     rosterWorkspaceId === workspace?.id
       ? rosterFor({ members: roster, membersWorkspaceId }, workspace?.id)
       : NO_MEMBERS;
-  const workspaceTeams = teamsWorkspaceId === workspace?.id ? teams : NO_TEAMS;
+  const heldTeams = useHeldTeamIds();
+  const workspaceTeams = useMemo(
+    () => withoutHeldTeams(teamsWorkspaceId === workspace?.id ? teams : NO_TEAMS, heldTeams),
+    [teamsWorkspaceId, workspace?.id, teams, heldTeams]
+  );
   // The creator becomes the teamspace's admin on the server, so the field never offers them.
   const hiddenUserIds = useMemo(() => new Set(user?.id ? [user.id] : []), [user?.id]);
   // Only workspace admins can invite; anyone else who may create picks from who is here.
@@ -334,14 +313,14 @@ export default function CreateSpaceDialog({
       const gone = new Set(
         classified.kind === "notWorkspaceMembers"
           ? classified.userIds
-          : classified.kind === "groupsUnavailable"
+          : classified.kind === "teamsUnavailable"
             ? classified.teamIds
             : []
       );
       const goneRecipients = picked.filter(
         (recipient) =>
           (recipient.kind === "member" && gone.has(recipient.userId)) ||
-          (recipient.kind === "group" && gone.has(recipient.teamId))
+          (recipient.kind === "team" && gone.has(recipient.teamId))
       );
       if (classified.kind === "nameTaken") {
         setTakenName(trimmedName);
@@ -359,7 +338,7 @@ export default function CreateSpaceDialog({
           message:
             classified.kind === "notWorkspaceMembers"
               ? t("settingsPage.workspace.teamspaces.members.partialLeft", { names })
-              : t("settingsPage.workspace.teamspaces.form.groupsGone", { names }),
+              : t("settingsPage.workspace.teamspaces.form.teamsGone", { names }),
         });
         setRefocus("primary");
       } else {
@@ -377,11 +356,15 @@ export default function CreateSpaceDialog({
     }
 
     // The teamspace exists from here on, so nothing below may leave it looking uncreated.
-    const invited = await inviteIntoTeamspace(
-      workspace.id,
-      space?.cloud_space_id ?? null,
-      emails.map(({ email }) => email)
-    );
+    const cloudSpaceId = space?.cloud_space_id ?? null;
+    const addresses = emails.map(({ email }) => email);
+    const invited = !cloudSpaceId
+      ? { failed: addresses, undelivered: 0 }
+      : await inviteAfterCreate({
+          workspaceId: workspace.id,
+          target: { spaceIds: [cloudSpaceId] },
+          recipients: addresses.map((email) => ({ email, role: "member" as const })),
+        });
     try {
       if (revealOnCreate && space) {
         revealContainer(space.id, null);
@@ -389,19 +372,6 @@ export default function CreateSpaceDialog({
       }
       const spaceName = isolate(trimmedName);
       const { failed, undelivered } = invited;
-      const named = failed.slice(0, FAILED_INVITES_NAMED).map(isolate);
-      const descriptions = [
-        ...(failed.length > 0
-          ? [
-              t("settingsPage.workspace.teamspaces.form.inviteFailedWho", {
-                names:
-                  formatList(i18n.language, named) +
-                  (failed.length > named.length ? ` +${failed.length - named.length}` : ""),
-              }),
-            ]
-          : []),
-        ...(undelivered > 0 ? [t("workspaces.invite.noEmail", { count: undelivered })] : []),
-      ];
       toast({
         title:
           failed.length > 0
@@ -410,26 +380,7 @@ export default function CreateSpaceDialog({
                 count: failed.length,
               })
             : t("settingsPage.workspace.teamspaces.form.created", { space: spaceName }),
-        description: descriptions.length > 0 ? descriptions.join(" ") : undefined,
-        duration: descriptions.length > 0 ? INVITE_FAILED_TOAST_MS : undefined,
-        actions:
-          failed.length > 0
-            ? [
-                {
-                  label: t("settingsPage.workspace.teamspaces.form.copyAddresses"),
-                  icon: "copy",
-                  dismissOnClick: false,
-                  feedback: {
-                    successLabel: t("common.copied"),
-                    failureLabel: t("hooks.audioRecording.pastePermission.copyFailed"),
-                  },
-                  onClick: async () => {
-                    await navigator.clipboard.writeText(failed.join("\n"));
-                    return true;
-                  },
-                },
-              ]
-            : undefined,
+        ...inviteFollowUpToast({ t, language: i18n.language, failed, undelivered }),
       });
     } catch (error) {
       // The teamspace is made; a failed reveal or toast must not leave Creating blocking every way out.
@@ -629,7 +580,7 @@ export default function CreateSpaceDialog({
                     <SpacePeopleField
                       id="create-space-people"
                       roster={workspaceRoster}
-                      groups={workspaceTeams}
+                      teams={workspaceTeams}
                       hiddenUserIds={hiddenUserIds}
                       canInvite={canInvite}
                       inviteRoleChoice={false}
