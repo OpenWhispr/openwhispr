@@ -12,9 +12,11 @@ import {
   moreInChatLine,
   onScreenLine,
   preparedLines,
+  questionLine,
   toolFiller,
   type SpokenLanguage,
 } from "../../services/voice/voiceLines";
+import type { InteractionQuestion } from "../../types/agentInteractions";
 import type {
   VoiceCallLanguage,
   VoiceConversationEvent,
@@ -149,6 +151,11 @@ export function useVoiceCall({
   const playerRef = useRef<PcmPlayer | null>(null);
   const [chunker] = useState(() => createSpeechChunker());
   const utteranceRef = useRef<string | null>(null);
+  // What the reply being worked on answers, and whether any of it was heard yet.
+  const requestTextRef = useRef("");
+  const replyHeardRef = useRef(false);
+  // When the user last started speaking, on main's clock (as a transcript's endedAt).
+  const lastSpeechStartAtRef = useRef(0);
   const profileRef = useRef<VoiceSpeechProfile | null>(null);
   const responseDoneRef = useRef(false);
   const chunkIndexRef = useRef(0);
@@ -261,6 +268,17 @@ export function useVoiceCall({
     [api]
   );
 
+  // Main hears of a hold, so a word or two said over the reply ends its turn at the first pause.
+  const holdForSpeech = useCallback(
+    (held: boolean) => {
+      if (heldForSpeechRef.current === held) return;
+      heldForSpeechRef.current = held;
+      const sessionId = sessionIdRef.current;
+      if (sessionId !== null) api?.holdReply(sessionId, held);
+    },
+    [api]
+  );
+
   // A turn ends only when the answer is complete, every chunk is synthesized and
   // playback has drained; a gap between two chunks' audio must not end it early.
   const finishUtteranceIfDrained = useCallback(() => {
@@ -268,12 +286,12 @@ export function useVoiceCall({
     if (pendingSpeaksRef.current > 0 || playerRef.current?.isPlaying()) return;
     utteranceRef.current = null;
     if (heldForSpeechRef.current) {
-      heldForSpeechRef.current = false;
+      holdForSpeech(false);
       playerRef.current?.resume();
     }
     setSpeaking(false);
     logTurn(turnRef.current?.failure ?? (chunkIndexRef.current === 0 ? "empty" : "spoke"));
-  }, [logTurn]);
+  }, [holdForSpeech, logTurn]);
 
   const speakChunk = useCallback(
     (text: string) => {
@@ -288,6 +306,8 @@ export function useVoiceCall({
       }
       const chunkIndex = chunkIndexRef.current++;
       pendingSpeaksRef.current += 1;
+      // The reply speaks from here: until its audio drains, Stop and Esc stop it.
+      setSpeaking(true);
       void api
         .speak({ utteranceId, chunkIndex, text, profile: profileRef.current })
         .then((result) => {
@@ -337,7 +357,7 @@ export function useVoiceCall({
     (outcome: "barge-in" | "stopped") => {
       const utteranceId = utteranceRef.current;
       utteranceRef.current = null;
-      heldForSpeechRef.current = false;
+      holdForSpeech(false);
       heldChunksRef.current = null;
       chunker.reset();
       playerRef.current?.flush();
@@ -347,7 +367,7 @@ export function useVoiceCall({
       if (!responseDoneRef.current) callbacksRef.current.onReplyDropped();
       logTurn(outcome);
     },
-    [api, chunker, logTurn]
+    [api, chunker, holdForSpeech, logTurn]
   );
 
   const createTurnSpeech = useCallback(
@@ -418,10 +438,10 @@ export function useVoiceCall({
   // over the answer only pauses it; the words decide whether to drop it.
   const releaseHold = useCallback(() => {
     if (!heldForSpeechRef.current) return;
-    heldForSpeechRef.current = false;
+    holdForSpeech(false);
     playerRef.current?.resume();
-    setSpeaking(Boolean(playerRef.current?.isPlaying()));
-  }, []);
+    if (playerRef.current?.isPlaying()) replyHeardRef.current = true;
+  }, [holdForSpeech]);
 
   const releaseMic = useCallback(async () => {
     const mic = micRef.current;
@@ -547,19 +567,28 @@ export function useVoiceCall({
   const stopReply = useCallback(() => dropAnswer("stopped"), [dropAnswer]);
 
   /**
-   * Says what the card the reply waits on asks (a question's prompt), or
-   * without text that it is on screen. Part of the reply being spoken, so
-   * talking over it works as over the rest.
+   * Says what the card the reply waits on asks (a question and its options), or
+   * that it is on screen, to review and send when it waits on Send. Part of the
+   * reply being spoken, so talking over it works as over the rest.
    */
   const announce = useCallback(
-    (text?: string) => {
+    ({
+      question,
+      awaitsSend = false,
+    }: {
+      question?: InteractionQuestion;
+      awaitsSend?: boolean;
+    }) => {
       if (!utteranceRef.current) return;
-      if (!text) {
-        speakChunk(onScreenLine(spokenLanguageFor(answerRef.current)));
+      const language = spokenLanguageFor(answerRef.current);
+      if (!question) {
+        speakChunk(onScreenLine(language, awaitsSend));
         return;
       }
       const lines = createSpeechChunker();
-      for (const chunk of [...lines.push(text), ...lines.flush()]) speakChunk(chunk);
+      for (const chunk of [...lines.push(questionLine(question, language)), ...lines.flush()]) {
+        speakChunk(chunk);
+      }
     },
     [speakChunk, spokenLanguageFor]
   );
@@ -571,10 +600,11 @@ export function useVoiceCall({
       if ("sessionId" in event && event.sessionId !== sessionIdRef.current) return;
       if (event.type !== "error") lastActivityRef.current = Date.now();
       if (event.type === "speech-start") {
+        lastSpeechStartAtRef.current = event.at;
         if (utteranceRef.current && !heldForSpeechRef.current) {
-          heldForSpeechRef.current = true;
+          // Held, the reply still reads as speaking: Stop and Esc stop it meanwhile.
+          holdForSpeech(true);
           playerRef.current?.pause();
-          setSpeaking(false);
           if (harnessRef.current) api?.reportTurnEvent({ type: "flushed", at: Date.now() });
         }
       } else if (event.type === "transcript") {
@@ -585,27 +615,38 @@ export function useVoiceCall({
         // The harness's scripted lines are separate requests, never answers to a card.
         if (!harnessRef.current && callbacksRef.current.answersCard(event.text)) {
           // The question needn't be heard out; its turn goes on speaking as it resumes.
-          heldForSpeechRef.current = false;
+          holdForSpeech(false);
           playerRef.current?.flush();
           if (utteranceRef.current) void api?.cancelSpeech(utteranceRef.current);
           return;
         }
+        let text = event.text;
         if (utteranceRef.current) {
           // Over a reply, one word is a backchannel ("okay", "please") or a stop;
-          // only more than that is a new request.
+          // only more than that is a new request. Before any of the reply was
+          // heard, the words go on with the request they follow (a pause cut it).
           const kind = interruptionKind(event.text);
-          if (kind === "ignore") {
-            releaseHold();
-            return;
-          }
           if (kind === "stop") {
             dropAnswer("stopped");
+            return;
+          }
+          if (!replyHeardRef.current) {
+            text = `${requestTextRef.current} ${event.text}`;
+          } else if (kind === "ignore") {
+            releaseHold();
             return;
           }
           dropAnswer("barge-in");
         }
         const utteranceId = crypto.randomUUID();
         utteranceRef.current = utteranceId;
+        requestTextRef.current = text;
+        replyHeardRef.current = false;
+        // The user is talking again already: the reply waits on what they say.
+        if (lastSpeechStartAtRef.current > event.endedAt) {
+          holdForSpeech(true);
+          playerRef.current?.pause();
+        }
         profileRef.current = null;
         responseDoneRef.current = false;
         chunkIndexRef.current = 0;
@@ -615,7 +656,7 @@ export function useVoiceCall({
         heldChunksRef.current = null;
         claimCheckRef.current = undefined;
         chunker.reset();
-        heardLanguageRef.current = detectSpokenLanguage(event.text) ?? heardLanguageRef.current;
+        heardLanguageRef.current = detectSpokenLanguage(text) ?? heardLanguageRef.current;
         turnRef.current = {
           endedAt: event.endedAt,
           endpoint: event.endpoint,
@@ -626,12 +667,12 @@ export function useVoiceCall({
           calledTools: [],
           availableTools: [],
           ranWrites: [],
-          transcript: event.text,
+          transcript: text,
           answer: "",
         };
         const { voiceCallLanguage } = getSettings();
         callbacksRef.current.onUserTurn({
-          text: event.text,
+          text,
           speech: createTurnSpeech(utteranceId),
           replyLanguage: voiceCallLanguage === "auto" ? null : voiceCallLanguage,
           dryRunWrites: harnessRef.current,
@@ -646,6 +687,7 @@ export function useVoiceCall({
             api?.reportTurnEvent({ type: "first-audio", at: turn.firstAudioAt });
           }
         }
+        if (!heldForSpeechRef.current) replyHeardRef.current = true;
         playerRef.current?.enqueue(event.samples);
       } else if (event.type === "error") {
         logger.warn(
@@ -664,7 +706,7 @@ export function useVoiceCall({
         endOnItsOwn("meeting");
       }
     },
-    [api, chunker, createTurnSpeech, dropAnswer, endOnItsOwn, releaseHold]
+    [api, chunker, createTurnSpeech, dropAnswer, endOnItsOwn, holdForSpeech, releaseHold]
   );
   const handleEventRef = useRef(handleEvent);
   handleEventRef.current = handleEvent;
@@ -744,9 +786,7 @@ export function useVoiceCall({
         playerRef.current = createPcmPlayer({
           // Supertonic synthesizes at 44.1 kHz.
           sampleRate: info.sampleRate || 44100,
-          onStart: () => {
-            if (!heldForSpeechRef.current) setSpeaking(true);
-          },
+          onStart: () => setSpeaking(true),
           onIdle: () => {
             // A gap while the next chunk synthesizes is still the reply speaking.
             if (pendingSpeaksRef.current === 0) setSpeaking(false);

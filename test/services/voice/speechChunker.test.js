@@ -7,35 +7,32 @@ const pushAll = (chunker, deltas) => deltas.flatMap((delta) => chunker.push(delt
 
 test("emits a sentence as soon as its terminator is followed by whitespace", async () => {
   const { createSpeechChunker } = await load();
-  const chunker = createSpeechChunker({ firstChunkMinChars: 1000 });
+  const chunker = createSpeechChunker();
   assert.deepEqual(pushAll(chunker, ["You have two ", "meetings.", " The first"]), [
     "You have two meetings.",
   ]);
   assert.deepEqual(chunker.flush(), ["The first"]);
 });
 
-test("the first chunk may break at a clause once it is long enough, later chunks may not", async () => {
+test("a sentence is never cut at a clause or for its length", async () => {
   const { createSpeechChunker } = await load();
-  const chunker = createSpeechChunker({ firstChunkMinChars: 20 });
-  const out = pushAll(chunker, [
-    "Tomorrow looks fairly busy for you, ",
-    "with a design review at ten, and a one-on-one at two. ",
-  ]);
-  assert.deepEqual(out, [
-    "Tomorrow looks fairly busy for you,",
-    "with a design review at ten, and a one-on-one at two.",
+  const chunker = createSpeechChunker();
+  const sentence =
+    "To add a meeting, open OpenWhispr, then Settings and Profile, and enable the calendar integration there. ";
+  assert.deepEqual(pushAll(chunker, [sentence.slice(0, 40), sentence.slice(40)]), [
+    sentence.trim(),
   ]);
 });
 
-test("a clause shorter than the first-chunk minimum does not split", async () => {
+test("a Hindi sentence ends at its danda", async () => {
   const { createSpeechChunker } = await load();
-  const chunker = createSpeechChunker({ firstChunkMinChars: 20 });
-  assert.deepEqual(pushAll(chunker, ["Sure, one moment. "]), ["Sure, one moment."]);
+  const chunker = createSpeechChunker();
+  assert.deepEqual(pushAll(chunker, ["कल दो मीटिंग हैं। पहली नौ बजे"]), ["कल दो मीटिंग हैं।"]);
 });
 
 test("does not split decimals or lowercase continuations after abbreviations", async () => {
   const { createSpeechChunker } = await load();
-  const chunker = createSpeechChunker({ firstChunkMinChars: 1000 });
+  const chunker = createSpeechChunker();
   assert.deepEqual(pushAll(chunker, ["Version 3.5 shipped, e.g. last week. Next"]), [
     "Version 3.5 shipped, e.g. last week.",
   ]);
@@ -43,67 +40,44 @@ test("does not split decimals or lowercase continuations after abbreviations", a
 
 test("splits on newlines and question or exclamation marks", async () => {
   const { createSpeechChunker } = await load();
-  const chunker = createSpeechChunker({ firstChunkMinChars: 1000 });
+  const chunker = createSpeechChunker();
   assert.deepEqual(pushAll(chunker, ["Done!\nWant more? Okay"]), ["Done!", "Want more?"]);
   assert.deepEqual(chunker.flush(), ["Okay"]);
 });
 
-test("forces a split at the last space once a chunk exceeds the maximum length", async () => {
-  const { createSpeechChunker } = await load();
-  const chunker = createSpeechChunker({
-    firstChunkMinChars: 1000,
-    maxChunkChars: 20,
-    maxFirstChunkChars: 20,
-  });
-  assert.deepEqual(pushAll(chunker, ["one two three four five six seven"]), [
-    "one two three four",
-  ]);
-  assert.deepEqual(chunker.flush(), ["five six seven"]);
-});
-
-test("a long first sentence with no punctuation is cut at a space so speech can start", async () => {
-  const { createSpeechChunker } = await load();
-  const chunker = createSpeechChunker({ firstChunkMinChars: 24, maxFirstChunkChars: 40 });
-  const out = pushAll(chunker, ["The weather in Tokyo right now is mostly sunny with light winds from the east"]);
-  assert.equal(out.length, 1);
-  assert.ok(out[0].length <= 40);
-  assert.ok(!out[0].endsWith(" "));
-  // Later chunks keep waiting for real sentence boundaries.
-  assert.deepEqual(pushAll(chunker, [" and a high of twenty"]), []);
-});
-
 test("stops emitting after the spoken-sentence limit, until reset", async () => {
   const { createSpeechChunker } = await load();
-  const chunker = createSpeechChunker({ firstChunkMinChars: 1000, maxChunks: 2 });
+  const chunker = createSpeechChunker({ maxChunks: 2 });
   assert.deepEqual(pushAll(chunker, ["One. Two. Three. Four. "]), ["One.", "Two."]);
   assert.deepEqual(chunker.flush(), []);
   chunker.reset();
   assert.deepEqual(pushAll(chunker, ["Fresh start. "]), ["Fresh start."]);
 });
 
-test("strips markdown and drops chunks with nothing speakable", async () => {
+test("strips markdown, skips headings and drops chunks with nothing speakable", async () => {
   const { createSpeechChunker } = await load();
-  const chunker = createSpeechChunker({ firstChunkMinChars: 1000 });
+  const chunker = createSpeechChunker();
   const out = pushAll(chunker, [
-    "## Summary\n",
+    "## Founding and Kingdom (753 BC – 509 BC)\n",
     "- **Design review** at `10:00`.\n",
+    "• Open Settings → Profile.\n",
     "See [the notes](https://example.com/notes) or https://example.com/x for more.\n",
     "---\n",
   ]);
   assert.deepEqual(out, [
-    "Summary",
     "Design review at 10:00.",
+    "Open Settings, Profile.",
     "See the notes or a link for more.",
   ]);
 });
 
-test("reset discards buffered text and restores first-chunk behaviour", async () => {
+test("reset discards buffered text", async () => {
   const { createSpeechChunker } = await load();
-  const chunker = createSpeechChunker({ firstChunkMinChars: 10 });
+  const chunker = createSpeechChunker();
   pushAll(chunker, ["This will be dropped, entirely"]);
   chunker.reset();
   assert.deepEqual(chunker.flush(), []);
-  assert.deepEqual(pushAll(chunker, ["A fresh answer here, "]), ["A fresh answer here,"]);
+  assert.deepEqual(pushAll(chunker, ["A fresh answer here. "]), ["A fresh answer here."]);
 });
 
 test("toSpeakableText leaves plain text untouched", async () => {

@@ -669,20 +669,22 @@ export default function AgentWindow() {
   }, [holdCallInput, pendingCard]);
 
   // A call says what the card its reply waits on asks: each question of a
-  // stack aloud, as it comes up, and of any other card that it is on screen.
+  // stack aloud, as it comes up, and of any other card that it is on screen
+  // (an answer card, to review and send there).
   const pendingEntry = pendingCard ? interactions[pendingCard.key] : undefined;
   const pendingQuestion =
     pendingEntry?.payload.kind === "questions"
       ? pendingEntry.payload.questions[pendingEntry.step]
       : undefined;
   const cardAnnouncement = pendingCard ? `${pendingCard.id}:${pendingQuestion?.id ?? ""}` : null;
+  const cardAwaitsSend = pendingCard?.interaction === null && pendingCard.key in approvals;
   const announcedCardRef = useRef<string | null>(null);
   const { announce: announceCard } = voiceCall;
   useEffect(() => {
     if (!callActive || !cardAnnouncement || announcedCardRef.current === cardAnnouncement) return;
     announcedCardRef.current = cardAnnouncement;
-    announceCard(pendingQuestion?.prompt);
-  }, [announceCard, callActive, cardAnnouncement, pendingQuestion]);
+    announceCard({ question: pendingQuestion, awaitsSend: cardAwaitsSend });
+  }, [announceCard, callActive, cardAnnouncement, cardAwaitsSend, pendingQuestion]);
 
   // The compact call shows what is above its pill (its settings, why it
   // couldn't start, a card), sized before paint so the pill never jumps.

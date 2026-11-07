@@ -2375,6 +2375,8 @@ declare global {
         sendMic: (samples: Float32Array) => void;
         /** Microphone off, or a card asking for a secret: nothing heard becomes a turn. */
         pauseInput: (sessionId: number, paused: boolean) => Promise<boolean>;
+        /** A reply waits on the user's speech: a word or two ends the turn at its first pause. */
+        holdReply: (sessionId: number, held: boolean) => void;
         /** The call's language changed: false when no downloaded model hears it. */
         setLanguage: (
           sessionId: number,

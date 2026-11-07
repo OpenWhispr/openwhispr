@@ -295,6 +295,13 @@ function registerVoiceConversationIpc({
     return true;
   });
 
+  // A reply paused for the user's speech: a word or two ends the turn at its first pause,
+  // so a backchannel or a stop word doesn't wait out the end-of-turn silence.
+  ipcMain.on("voice-conversation:hold-reply", (event, sessionId, held) => {
+    if (!session || event.sender !== sender || sessionId !== session.id) return;
+    voiceWorker.notify("reply-held", { held: held === true });
+  });
+
   // The call's language changed: later turns are heard by a model that knows it.
   ipcMain.handle("voice-conversation:set-language", (event, sessionId, request = {}) => {
     if (!session || event.sender !== sender || sessionId !== session.id) return false;

@@ -32,6 +32,17 @@ test("smart mode asks the classifier about the turn so far on each short pause",
   ]);
 });
 
+test("over a held reply, a word or two commits at its first pause; more is still classified", () => {
+  const short = createTurnEndpointer({ smartTurn: true });
+  const [commit] = short.onSegment({ ...segment(1000, 500), nowSample: ms(1700), quick: true });
+  assert.equal(commit.type, "commit");
+  assert.equal(commit.reason, "silence");
+
+  const long = createTurnEndpointer({ smartTurn: true });
+  const [action] = long.onSegment({ ...segment(1000, 1800), nowSample: ms(3000), quick: true });
+  assert.equal(action.type, "classify");
+});
+
 test("the classifier window never starts before sample 0 or reaches back more than 8 s", () => {
   const early = createTurnEndpointer({ smartTurn: true, preRollMs: 500 });
   assert.equal(early.onSegment({ ...segment(100, 500), nowSample: ms(800) })[0].fromSample, 0);

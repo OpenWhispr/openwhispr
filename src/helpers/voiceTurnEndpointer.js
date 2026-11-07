@@ -2,7 +2,8 @@
 // replayable offline. Silence-only mode commits each Silero segment. Smart Turn
 // mode treats a (short) Silero segment end as a candidate pause: the classifier
 // decides whether the turn is complete, and max silence commits it regardless, as
-// does the first pause once the turn holds max-turn worth of speech.
+// does the first pause once the turn holds max-turn worth of speech. Over a reply
+// held for the user's speech, a word or two commits at its first pause.
 
 const DEFAULT_SAMPLE_RATE = 16000;
 const SMART_TURN_CONTEXT_MS = 8000;
@@ -26,12 +27,14 @@ function createTurnEndpointer({
   maxTurnMs = 30000,
   threshold = 0.5,
   preRollMs = 500,
+  quickTurnMs = 1000,
 }) {
   const toSamples = (valueMs) => Math.round((valueMs * sampleRate) / 1000);
   const maxSilenceSamples = toSamples(maxSilenceMs);
   const maxTurnSamples = toSamples(maxTurnMs);
   const contextSamples = toSamples(SMART_TURN_CONTEXT_MS);
   const preRollSamples = toSamples(preRollMs);
+  const quickTurnSamples = toSamples(quickTurnMs);
 
   let segments = [];
   let speaking = false;
@@ -70,11 +73,14 @@ function createTurnEndpointer({
       return [];
     },
 
-    onSegment({ samples, startSample, nowSample }) {
+    // `quick`: a reply waits on this turn, which is likely a backchannel or a stop word.
+    onSegment({ samples, startSample, nowSample, quick = false }) {
       segments.push({ samples, startSample });
       speaking = false;
       lastSpeechEndSample = startSample + samples.length;
-      if (!smartTurn) return commit("silence", nowSample, null);
+      if (!smartTurn || (quick && speechLength(segments) <= quickTurnSamples)) {
+        return commit("silence", nowSample, null);
+      }
       if (speechLength(segments) >= maxTurnSamples)
         return commit("max-turn", nowSample, lastProbability);
       awaitingRequestId = nextRequestId++;

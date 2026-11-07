@@ -3,6 +3,7 @@
 // isn't a UI locale, so these lines live here rather than in the locale files.
 // The Hindi lines avoid first-person verbs, which would mark the speaker's gender.
 
+import type { InteractionQuestion } from "../../types/agentInteractions";
 import type { SpokenLanguage } from "./types";
 
 export type { SpokenLanguage };
@@ -12,8 +13,10 @@ interface VoiceLines {
   fillers: Record<ToolFiller, string>;
   /** Spoken after a reply cut short for speech; the transcript has all of it. */
   moreInChat: string;
-  /** Spoken when a card waits on the user that speech can't answer (a send, a connection). */
+  /** Spoken when a card waits on the user that speech can't answer (a connection, a key). */
   onScreen: string;
+  /** Spoken when an answer card waits on Send, which speech never presses. */
+  onScreenToSend: string;
 }
 
 const LINES: Record<SpokenLanguage, VoiceLines> = {
@@ -26,6 +29,7 @@ const LINES: Record<SpokenLanguage, VoiceLines> = {
     },
     moreInChat: "The rest is in the chat.",
     onScreen: "It's on your screen.",
+    onScreenToSend: "It's on your screen. Review it, then press Send.",
   },
   hi: {
     fillers: {
@@ -36,6 +40,7 @@ const LINES: Record<SpokenLanguage, VoiceLines> = {
     },
     moreInChat: "बाकी जवाब चैट में है।",
     onScreen: "यह आपकी स्क्रीन पर है।",
+    onScreenToSend: "यह आपकी स्क्रीन पर है। देखकर सेंड दबाइए।",
   },
   es: {
     fillers: {
@@ -46,6 +51,7 @@ const LINES: Record<SpokenLanguage, VoiceLines> = {
     },
     moreInChat: "El resto está en el chat.",
     onScreen: "Está en tu pantalla.",
+    onScreenToSend: "Está en tu pantalla. Revísalo y haz clic en Enviar.",
   },
   fr: {
     fillers: {
@@ -56,6 +62,7 @@ const LINES: Record<SpokenLanguage, VoiceLines> = {
     },
     moreInChat: "La suite est dans le chat.",
     onScreen: "C'est à l'écran.",
+    onScreenToSend: "C'est à l'écran. Vérifiez-le, puis cliquez sur Envoyer.",
   },
   de: {
     fillers: {
@@ -66,6 +73,7 @@ const LINES: Record<SpokenLanguage, VoiceLines> = {
     },
     moreInChat: "Der Rest steht im Chat.",
     onScreen: "Es ist auf deinem Bildschirm.",
+    onScreenToSend: "Es ist auf deinem Bildschirm. Prüf es und klick dann auf Senden.",
   },
 };
 
@@ -76,8 +84,8 @@ export const isSpokenLanguage = (value: string): value is SpokenLanguage =>
 
 /** Every line a call may say while it works, so a session can prepare their audio. */
 export function preparedLines(language: SpokenLanguage): string[] {
-  const { fillers, moreInChat, onScreen } = LINES[language];
-  return [...Object.values(fillers), moreInChat, onScreen];
+  const { fillers, moreInChat, onScreen, onScreenToSend } = LINES[language];
+  return [...Object.values(fillers), moreInChat, onScreen, onScreenToSend];
 }
 
 /** What to say while these tools run, so the wait isn't silent. */
@@ -93,7 +101,22 @@ export function toolFiller(toolNames: readonly string[], language: SpokenLanguag
 
 export const moreInChatLine = (language: SpokenLanguage): string => LINES[language].moreInChat;
 
-export const onScreenLine = (language: SpokenLanguage): string => LINES[language].onScreen;
+export const onScreenLine = (language: SpokenLanguage, awaitsSend = false): string =>
+  awaitsSend ? LINES[language].onScreenToSend : LINES[language].onScreen;
+
+// A choice question reads out this many options at most; more are left to the screen.
+const MAX_SPOKEN_OPTIONS = 4;
+
+/** A question as the call asks it: its prompt, then its options ("A, B, or C"). */
+export function questionLine(
+  { prompt, options = [] }: Pick<InteractionQuestion, "prompt" | "options">,
+  language: SpokenLanguage
+): string {
+  if (options.length === 0) return prompt;
+  if (options.length > MAX_SPOKEN_OPTIONS) return `${prompt} ${LINES[language].onScreen}`;
+  const labels = options.map((option) => option.label);
+  return `${prompt} ${new Intl.ListFormat(language, { type: "disjunction" }).format(labels)}.`;
+}
 
 // Said alone over a reply, these stop it; any other single word ("okay",
 // "please", "yeah") is a backchannel, and the reply goes on.

@@ -11,7 +11,7 @@ const {
 test("every call language has every line, and the fillers are among the prepared lines", () => {
   for (const language of SPOKEN_LANGUAGES) {
     const lines = preparedLines(language);
-    assert.equal(lines.length, 6, language);
+    assert.equal(lines.length, 7, language);
     assert.ok(
       lines.every((line) => line.length > 0 && line.length <= 200),
       language

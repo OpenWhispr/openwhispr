@@ -10,6 +10,7 @@ const {
 const { createSmartTurnSession } = require("./smartTurnSession");
 const { createPreparedSpeech } = require("./preparedSpeech");
 const { trimSilence } = require("./trimSilence");
+const { timeStretch } = require("./timeStretch");
 const { speechProfileKey } = require("../helpers/voiceConversationConfig");
 
 const VAD_SAMPLE_RATE = 16000;
@@ -46,6 +47,8 @@ let tts = null;
 let numSteps = 5;
 let vad = null;
 let vadSpeaking = false;
+// The renderer paused a reply for the user's speech: a short turn ends at its first pause.
+let replyHeld = false;
 let endpointer = null;
 let smartTurn = null;
 let micRing = createSampleRing(MIC_RING_SAMPLES);
@@ -62,12 +65,32 @@ function enqueueTts(run) {
   return result;
 }
 
+// Supertonic speeds up less than asked above 1x and drops words from 1.5x (most of
+// them at 2x), so a faster rate synthesizes at 1x and is time-stretched to the rate.
+const MAX_MODEL_SPEED = 1;
+
 // Speaker, rate and language ride on every request, so one worker speaks any profile.
-const generationRequest = ({ sid, speed, lang }) => ({
-  sid,
-  speed,
-  generationConfig: new sherpa.GenerationConfig({ sid, speed, numSteps, extra: { lang } }),
-});
+const generationRequest = ({ sid, speed, lang }) => {
+  const modelSpeed = Math.min(speed, MAX_MODEL_SPEED);
+  return {
+    sid,
+    speed: modelSpeed,
+    generationConfig: new sherpa.GenerationConfig({
+      sid,
+      speed: modelSpeed,
+      numSteps,
+      extra: { lang },
+    }),
+  };
+};
+
+// What plays: the synthesized clip without its padding, at the profile's full rate.
+const playable = (samples, sampleRate, { speed }) =>
+  timeStretch(
+    trimSilence(samples, sampleRate),
+    speed / Math.min(speed, MAX_MODEL_SPEED),
+    sampleRate
+  );
 
 const preparedSpeech = createPreparedSpeech({
   synthesize: (text, profile) =>
@@ -77,7 +100,7 @@ const preparedSpeech = createPreparedSpeech({
         enableExternalBuffer: false,
         ...generationRequest(profile),
       });
-      return trimSilence(audio.samples, audio.sampleRate);
+      return playable(audio.samples, audio.sampleRate, profile);
     }),
   onError: (error) => log("warn", "speech preparation failed", { error: error?.message }),
 });
@@ -112,6 +135,7 @@ async function loadSmartTurn(smartTurnConfig, vadConfig) {
 function resetTurnState() {
   vad?.reset();
   vadSpeaking = false;
+  replyHeld = false;
   endpointer?.reset();
   micRing = createSampleRing(MIC_RING_SAMPLES);
   latestClassifyId = 0;
@@ -173,7 +197,7 @@ function speak({ utteranceId, chunkIndex, text, profile }) {
         if (cancelledUtterances.has(utteranceId)) return 0;
         if (info.samples?.length) {
           if (firstAudioMs === null) firstAudioMs = Date.now() - started;
-          const samples = trimSilence(info.samples, tts.sampleRate);
+          const samples = playable(info.samples, tts.sampleRate, profile);
           streamedSamples += samples.length;
           emit("tts-audio", { utteranceId, chunkIndex, samples });
         }
@@ -184,7 +208,7 @@ function speak({ utteranceId, chunkIndex, text, profile }) {
     // Non-streaming models may report the audio only in the result.
     if (streamedSamples === 0 && audio.samples?.length) {
       firstAudioMs = Date.now() - started;
-      const samples = trimSilence(audio.samples, audio.sampleRate);
+      const samples = playable(audio.samples, audio.sampleRate, profile);
       emit("tts-audio", { utteranceId, chunkIndex, samples });
     }
     return {
@@ -272,6 +296,7 @@ function feedVad({ samples }) {
         samples: new Float32Array(segment.samples),
         startSample: segment.start,
         nowSample: micRing.totalSamples,
+        quick: replyHeld,
       })
     );
   }
@@ -293,6 +318,9 @@ const handlers = {
   },
   "vad-feed": feedVad,
   "vad-reset": resetTurnState,
+  "reply-held": ({ held }) => {
+    replyHeld = held === true;
+  },
 };
 
 async function onMessage({ id, method, payload }) {

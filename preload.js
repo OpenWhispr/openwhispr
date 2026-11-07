@@ -525,6 +525,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     sendMic: (samples) => ipcRenderer.send("voice-conversation:mic", samples),
     pauseInput: (sessionId, paused) =>
       ipcRenderer.invoke("voice-conversation:pause-input", sessionId, paused),
+    holdReply: (sessionId, held) =>
+      ipcRenderer.send("voice-conversation:hold-reply", sessionId, held),
     setLanguage: (sessionId, request) =>
       ipcRenderer.invoke("voice-conversation:set-language", sessionId, request),
     keepModelWarm: (modelId) => ipcRenderer.invoke("voice-conversation:keep-model-warm", modelId),

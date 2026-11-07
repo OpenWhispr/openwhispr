@@ -42,6 +42,7 @@ async function mountVoiceCall(t, { settings = {}, voiceState = true } = {}) {
     prepared: [],
     player: [],
     paused: [],
+    held: [],
     cancelledSpeech: [],
     turns: [],
     reports: [],
@@ -86,6 +87,7 @@ async function mountVoiceCall(t, { settings = {}, voiceState = true } = {}) {
       calls.paused.push([sessionId, paused]);
       return true;
     },
+    holdReply: (sessionId, held) => calls.held.push([sessionId, held]),
     keepModelWarm: async () => {},
     setLanguage: async (_sessionId, { language }) => {
       calls.languages.push(language);
@@ -99,8 +101,8 @@ async function mountVoiceCall(t, { settings = {}, voiceState = true } = {}) {
       calls.prepared.push(request);
       return { queued: request.texts.length };
     },
-    speak: async ({ text, profile }) => {
-      calls.spoken.push({ text, profile });
+    speak: async ({ utteranceId, text, profile }) => {
+      calls.spoken.push({ utteranceId, text, profile });
       if (state.holdSpeak) {
         const next = deferred();
         pending.speak.push(next);
@@ -245,7 +247,7 @@ async function mountVoiceCall(t, { settings = {}, voiceState = true } = {}) {
     await act(() => pending.start.at(-1).resolve({ sessionId: 7, sampleRate: 44100 }));
     await act(() => pending.mic.at(-1).resolve(openMic()));
   };
-  const say = (text) =>
+  const say = (text, endedAt = 0) =>
     act(() =>
       events.emit({
         type: "transcript",
@@ -253,8 +255,19 @@ async function mountVoiceCall(t, { settings = {}, voiceState = true } = {}) {
         text,
         speechMs: 900,
         sttMs: 80,
-        endedAt: 0,
+        endedAt,
         endpoint: null,
+      })
+    );
+  // The reply's audio reaches the player: from here the user has heard it.
+  const hear = () =>
+    act(() =>
+      events.emit({
+        type: "tts-audio",
+        utteranceId: calls.spoken.at(-1).utteranceId,
+        chunkIndex: 0,
+        samples: new Float32Array(1),
+        at: 0,
       })
     );
   const lastTurn = () => calls.turns.at(-1);
@@ -270,6 +283,7 @@ async function mountVoiceCall(t, { settings = {}, voiceState = true } = {}) {
     started: () => started,
     startListening,
     say,
+    hear,
     lastTurn,
   };
 }
@@ -451,10 +465,12 @@ test("text the claim check flags is held, dropped when withdrawn, spoken once ba
 });
 
 test("talking over a reply pauses it; noise lets it go on; words stop it and its turn", async (t) => {
-  const { calls, act, events, startListening, say, lastTurn } = await mountVoiceCall(t);
+  const { calls, act, events, startListening, say, hear, lastTurn } = await mountVoiceCall(t);
   await startListening();
   await say("tell me a long story");
   const story = lastTurn();
+  await act(() => story.speech.onText("Once upon a time. "));
+  await hear();
 
   await act(() => events.emit({ type: "speech-start", sessionId: 7, at: 0 }));
   assert.deepEqual(calls.player, ["pause"]);
@@ -466,10 +482,39 @@ test("talking over a reply pauses it; noise lets it go on; words stop it and its
   await say("stop, that's enough");
   assert.equal(calls.dropped, 1, "words interrupt it for real");
   assert.equal(calls.player.at(-1), "flush");
-  assert.notEqual(lastTurn(), story);
+  assert.equal(lastTurn().text, "stop, that's enough");
   // The old reply's late text is never spoken.
-  await act(() => story.speech.onText("Once upon a time. "));
-  assert.deepEqual(spokenTexts(calls), []);
+  await act(() => story.speech.onText("The end. "));
+  assert.deepEqual(spokenTexts(calls), ["Once upon a time."]);
+});
+
+test("words said before any of the reply was heard go on with the request they follow", async (t) => {
+  const { calls, act, events, startListening, say, lastTurn } = await mountVoiceCall(t);
+  await startListening();
+  await say("Create a note titled Groceries with the text", 100);
+  // A one-word continuation said before the reply's audio is still part of the request.
+  await act(() => lastTurn().speech.onText("Done. "));
+  await act(() => events.emit({ type: "speech-start", sessionId: 7, at: 200 }));
+  await say("milk.", 300);
+
+  assert.equal(calls.turns.length, 2);
+  assert.equal(calls.dropped, 1, "the first half's turn stops");
+  assert.equal(lastTurn().text, "Create a note titled Groceries with the text milk.");
+});
+
+test("a reply waits while the user, already talking again, finishes the request", async (t) => {
+  const { calls, act, events, startListening, say, lastTurn } = await mountVoiceCall(t);
+  await startListening();
+  // Speech started again after the first half ended, before its transcript arrived.
+  await act(() => events.emit({ type: "speech-start", sessionId: 7, at: 200 }));
+  await say("Count from one to thirty,", 100);
+  assert.deepEqual(calls.player, ["pause"], "its reply is held from the start");
+
+  await say("saying each number as its own sentence.", 300);
+  assert.equal(
+    lastTurn().text,
+    "Count from one to thirty, saying each number as its own sentence."
+  );
 });
 
 test("words that answer a waiting question go to the card, and its turn goes on speaking", async (t) => {
@@ -581,10 +626,11 @@ test("a failed transcription is reported and lets a paused reply go on", async (
 });
 
 test("one word over a reply never cancels it, unless it is a stop", async (t) => {
-  const { hook, calls, act, startListening, say, lastTurn } = await mountVoiceCall(t);
+  const { hook, calls, act, startListening, say, hear, lastTurn } = await mountVoiceCall(t);
   await startListening();
   await say("write me a headline");
   await act(() => lastTurn().speech.onText("Here is one idea. "));
+  await hear();
 
   await say("Please.");
   assert.equal(calls.turns.length, 1, "a backchannel isn't a request");
@@ -599,13 +645,29 @@ test("one word over a reply never cancels it, unless it is a stop", async (t) =>
 test("a waiting card is announced as part of the reply, and only while one is spoken", async (t) => {
   const { hook, calls, act, startListening, say } = await mountVoiceCall(t);
   await startListening();
-  await act(() => hook.current.announce("Which tone do you want?"));
+  const question = {
+    id: "tone",
+    kind: "single",
+    prompt: "Which tone do you want?",
+    options: [
+      { id: "warm", label: "Warm" },
+      { id: "formal", label: "Formal" },
+      { id: "playful", label: "Playful" },
+    ],
+  };
+  await act(() => hook.current.announce({ question }));
   assert.deepEqual(spokenTexts(calls), [], "no reply, nothing to announce into");
 
   await say("write a headline");
-  await act(() => hook.current.announce("Which tone do you want?"));
-  await act(() => hook.current.announce());
-  assert.deepEqual(spokenTexts(calls), ["Which tone do you want?", "It's on your screen."]);
+  await act(() => hook.current.announce({ question }));
+  await act(() => hook.current.announce({ awaitsSend: true }));
+  await act(() => hook.current.announce({}));
+  assert.deepEqual(spokenTexts(calls), [
+    "Which tone do you want?",
+    "Warm, Formal, or Playful.",
+    "It's on your screen. Review it, then press Send.",
+    "It's on your screen.",
+  ]);
   assert.equal(calls.turns.length, 1);
 });
 
@@ -692,6 +754,26 @@ test("a reply stays speaking through the gap while its next chunk synthesizes", 
     for (const next of pending.speak) next.resolve();
   });
   assert.equal(hook.current.speaking, false, "nothing left to say until the model writes more");
+});
+
+test("a reply reads as speaking from its first chunk sent, through a pause for the user's speech", async (t) => {
+  const { hook, calls, pending, state, act, events, startListening, say, lastTurn } =
+    await mountVoiceCall(t);
+  await startListening();
+  state.holdSpeak = true;
+  await say("what's the capital of France");
+  await act(() => lastTurn().speech.onText("Paris. "));
+  await act(() => lastTurn().speech.onEnd("complete"));
+  assert.equal(hook.current.speaking, true, "synthesizing, before any audio plays");
+
+  await act(() => events.emit({ type: "speech-start", sessionId: 7, at: 0 }));
+  assert.equal(hook.current.speaking, true, "held for the user's speech");
+  assert.deepEqual(calls.held, [[7, true]], "main ends a short turn at its first pause");
+
+  await act(() => hook.current.stopReply());
+  assert.equal(hook.current.speaking, false);
+  assert.deepEqual(calls.held.at(-1), [7, false]);
+  for (const next of pending.speak) next.resolve();
 });
 
 test("fillers don't count against what a reply may say aloud", async (t) => {
