@@ -4,6 +4,7 @@ const { spawnSync } = require("child_process");
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const { linuxBaselineFlags } = require("./lib/linux-baseline-flags");
 
 const isLinux = process.platform === "linux";
 if (!isLinux) {
@@ -167,7 +168,17 @@ function attemptCompile(command, args) {
   });
 }
 
-const compileArgs = ["-O2", cSource, "-o", outputBinary, "-lX11", "-lXtst", "-lXext", "-lm"];
+const compileArgs = [
+  "-O2",
+  ...linuxBaselineFlags(),
+  cSource,
+  "-o",
+  outputBinary,
+  "-lX11",
+  "-lXtst",
+  "-lXext",
+  "-lm",
+];
 
 if (uinputAvailable) {
   log("uinput headers found, enabling uinput support");
