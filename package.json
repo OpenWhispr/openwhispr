@@ -118,7 +118,7 @@
     "espree": "^11.2.0",
     "globals": "17.5.0",
     "happy-dom": "^21.0.4",
-    "postcss": "^8.5.10",
+    "postcss": "^8.5.32",
     "prettier": "^3.8.3",
     "tailwindcss": "^4.1.10",
     "tsx": "^4.23.1",
