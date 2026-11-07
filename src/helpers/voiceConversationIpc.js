@@ -30,6 +30,10 @@ const WHISPER_PREFERENCE = [
   "tiny",
 ];
 
+// Whisper writes Hindi in Urdu script even when told the language is Hindi; a
+// prompt in Devanagari keeps it, and so the reply, in Devanagari.
+const HINDI_SCRIPT_PROMPT = "नमस्ते, आज क्या करना है?";
+
 const isNoSpeech = (result) =>
   result?.success === false &&
   (result.code === "NO_SPEECH_DETECTED" || result.message === "No audio detected");
@@ -114,6 +118,7 @@ function registerVoiceConversationIpc({
         ? await whisperManager.transcribeLocalWhisper(wav, {
             model: recognizer.model,
             language: recognizer.language,
+            ...(recognizer.language === "hi" ? { initialPrompt: HINDI_SCRIPT_PROMPT } : {}),
           })
         : await parakeetManager.transcribeLocalParakeet(wav, {
             model: recognizer.model,

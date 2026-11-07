@@ -11,6 +11,9 @@ export interface SpeechChunker {
 
 // "।" ends a Hindi sentence.
 const SENTENCE_TERMINATORS = new Set([".", "!", "?", "…", "।"]);
+const CLAUSE_TERMINATORS = new Set([",", ";", ":"]);
+// The first chunk may end at a clause this far in, so a long opening sentence's audio starts sooner.
+const FIRST_CHUNK_MIN_CHARS = 24;
 
 const isWhitespace = (char: string | undefined): boolean => char !== undefined && /\s/.test(char);
 const isLowercase = (char: string | undefined): boolean =>
@@ -24,6 +27,8 @@ export function toSpeakableText(text: string): string {
       .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
       .replace(/https?:\/\/\S+/g, "a link")
       .replace(/`([^`]*)`/g, "$1")
+      // A line that is only bold, with no sentence end ("**Inner Planets**"), is a heading.
+      .replace(/^\s*(\*\*|__)[^*_\n]*[^*_.!?…।\s]\1\s*$/gm, "")
       .replace(/(\*\*|__)(.*?)\1/g, "$2")
       .replace(/\*+/g, "")
       // A heading is structure, not something to say.
@@ -39,7 +44,7 @@ export function toSpeakableText(text: string): string {
 
 /**
  * Splits a streamed answer into chunks worth handing to TTS one at a time: whole
- * sentences (or lines), never a sentence cut in two.
+ * sentences (or lines); only the first chunk may stop at a clause.
  */
 export function createSpeechChunker({
   maxChunks = Number.POSITIVE_INFINITY,
@@ -57,6 +62,13 @@ export function createSpeechChunker({
         const following = buffer.slice(index + 1).trimStart()[0];
         // "e.g. last week" continues the sentence; an uppercase or missing next word ends it.
         if (char === "." && isLowercase(following)) continue;
+        return index + 1;
+      }
+      if (
+        emittedCount === 0 &&
+        CLAUSE_TERMINATORS.has(char) &&
+        index + 1 >= FIRST_CHUNK_MIN_CHARS
+      ) {
         return index + 1;
       }
     }

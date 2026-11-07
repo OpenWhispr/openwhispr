@@ -199,6 +199,8 @@ test("a channel picked on the card is what Send commits, and where the tool says
     { actionId: "a1", edits: { body: "Original text", channel: "G0LEADS01" } },
   ]);
   assert.equal(result.data.destination, "#leads");
+  // Told the user picked it, the model doesn't call the send a mistake.
+  assert.match(result.data.guidance, /The user chose #leads on the card/);
   const { approvalActionKey } = await vite.ssrLoadModule("/services/tools/connectors/actionKey.ts");
   const args = { destination: "#eng", text: "Original text" };
   const sentTo = (destinationLabel) =>

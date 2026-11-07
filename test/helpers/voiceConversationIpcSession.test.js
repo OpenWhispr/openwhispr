@@ -303,7 +303,11 @@ test("each call language is heard by a model that knows it", async () => {
   assert.deepEqual(startedServers.at(-1), "whisper:base");
   speak();
   await settle();
-  assert.deepEqual(whisperTranscriptions[0].options, { model: "base", language: "hi" });
+  assert.deepEqual(whisperTranscriptions[0].options, {
+    model: "base",
+    language: "hi",
+    initialPrompt: "नमस्ते, आज क्या करना है?",
+  });
   whisperTranscriptions[0].resolve({ success: true, text: "नमस्ते" });
   await settle();
   assert.equal(sentOfType(webContents, "transcript")[0].text, "नमस्ते");
@@ -442,7 +446,11 @@ test("a language changed mid-call is heard by a model that knows it from the nex
   assert.equal(await setLanguage("hi"), true);
   speak();
   await settle();
-  assert.deepEqual(whisperTranscriptions.at(-1).options, { model: "base", language: "hi" });
+  assert.deepEqual(whisperTranscriptions.at(-1).options, {
+    model: "base",
+    language: "hi",
+    initialPrompt: "नमस्ते, आज क्या करना है?",
+  });
 
   downloadedWhisper.clear();
   try {

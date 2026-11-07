@@ -780,36 +780,14 @@ test("a preview's picker channel must be declared editable and of its type, or t
   }
 });
 
-test("a connector refusing the card's edits withdraws the action as not_sent/invalid_edit", async () => {
-  const committed = [];
-  const { manager, log } = await setup({
-    actions: CHANNEL_ACTIONS,
-    commit: async (_action, _payload, edits) => {
-      committed.push(edits);
-      return { state: "not_sent", reason: "invalid_edit" };
-    },
-  });
+test("a picked channel of the wrong type never reaches the connector", async () => {
+  const { manager, fake } = await setup({ actions: CHANNEL_ACTIONS });
   const { actionId } = await manager.prepare("fake", "post", { text: "x" }, ALLOWED);
-
-  const result = await manager.commit(actionId, { channel: "C0OTHER01", title: "x" }, ALLOWED);
-
-  assert.deepEqual(result, { state: "not_sent", reason: "invalid_edit" });
-  assert.deepEqual(committed, [{ channel: "C0OTHER01" }]);
-  assert.equal(log.rows.get(actionId).state, "cancelled");
-  assert.equal(log.rows.get(actionId).errorCode, "invalid_edit");
-  // Settled: a second Send finds nothing to send.
-  assert.deepEqual(await manager.commit(actionId, {}, ALLOWED), {
-    state: "not_sent",
-    reason: "not_found",
-  });
-  // A picked channel of the wrong type never reaches the connector.
-  const typed = await setup({ actions: CHANNEL_ACTIONS });
-  const prepared = await typed.manager.prepare("fake", "post", { text: "x" }, ALLOWED);
-  assert.deepEqual(await typed.manager.commit(prepared.actionId, { channel: ["C1"] }, ALLOWED), {
+  assert.deepEqual(await manager.commit(actionId, { channel: ["C1"] }, ALLOWED), {
     state: "not_sent",
     reason: "invalid_edit",
   });
-  assert.equal(typed.fake.calls.commit.length, 0);
+  assert.equal(fake.calls.commit.length, 0);
 });
 
 test("a card's destinations are read under its own binding, for its account, while it can still send", async () => {

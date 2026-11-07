@@ -70,13 +70,6 @@ function normalizeCommitResult(result) {
           destinationLabel: result.destinationLabel,
         }),
       };
-    // The connector refused the card's edits before acting (a Slack channel
-    // the bound login isn't in), as sanitizeEdits does. Any other not_sent
-    // is main's alone to report.
-    case "not_sent":
-      return result.reason === "invalid_edit"
-        ? { state: "not_sent", reason: "invalid_edit" }
-        : { state: "unknown" };
     default:
       return { state: "unknown" };
   }
@@ -811,13 +804,11 @@ function createConnectorManager({
     if (result.errorCode === "reconnect_needed") void notifyStatusChanged();
 
     pendingActions.finish(actionId);
-    // Edits the connector refused: nothing went out, as with sanitizeEdits.
-    const refused = result.state === "not_sent";
     record(() =>
       actionLog.update(actionId, {
-        state: refused ? "cancelled" : result.state,
+        state: result.state,
         resultUrl: result.url || result.checkUrl || null,
-        errorCode: (refused ? result.reason : result.errorCode) || null,
+        errorCode: result.errorCode || null,
         // Only when the connector's commit named one (Gmail's edited
         // recipients, Slack's picked channel): the row otherwise keeps the
         // label prepare wrote.

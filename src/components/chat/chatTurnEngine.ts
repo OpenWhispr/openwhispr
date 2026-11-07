@@ -383,12 +383,15 @@ export interface SendToAIOptions {
    * `replyLanguage` (null: the language spoken), and `speech` hears it stream.
    * `dryRunWrites` (the voice harness) runs no write tool. `interrupts`: it was
    * said over a turn still running, so that turn's request may be its start.
+   * `continues`: `requestText` is the request before, a pause cut short, with
+   * this message joined on; it is answered whole, in place of the requests it joins.
    */
   voice?: {
     replyLanguage: string | null;
     speech: TurnSpeechObserver;
     dryRunWrites?: boolean;
     interrupts?: boolean;
+    continues?: boolean;
   };
 }
 
@@ -467,6 +470,8 @@ export function createChatTurnEngine(
     cancel({ explicit: true });
     const speech = options?.voice?.speech;
     let speechOutcome: TurnSpeechOutcome = "stopped";
+    // Its context and claim check read the whole request, not the words after the pause.
+    if (options?.voice?.continues && options.requestText) userText = options.requestText;
     const sendNumber = ++latestSend;
     const stopsAtStart = stops;
     const { claimConversation } = getOptions();
@@ -992,10 +997,23 @@ export function createChatTurnEngine(
       const talkedOver = options?.voice?.interrupts
         ? roles.lastIndexOf("user", roles.length - 2)
         : -1;
+      // A request a pause cut short is sent whole: the requests it joins and
+      // their replies, which did nothing, are left out, so it is read once.
+      const joined = new Set<number>();
+      for (let i = allMessages.length - 2; options?.voice?.continues && i >= 0; i -= 1) {
+        const message = allMessages[i];
+        if (message.role !== "user") continue;
+        if (!userText.includes(message.content) || allMessages[i + 1].toolCalls?.length) break;
+        joined.add(i);
+        if (allMessages[i + 1].role === "assistant") joined.add(i + 1);
+      }
       const asked = options?.voice
         ? allMessages.filter(
             (message, i) =>
-              message.role !== "user" || i === talkedOver || !stoppedBeforeReply(allMessages[i + 1])
+              !joined.has(i) &&
+              (message.role !== "user" ||
+                i === talkedOver ||
+                !stoppedBeforeReply(allMessages[i + 1]))
           )
         : allMessages;
       const requestIndex = asked.map((message) => message.role).lastIndexOf("user");

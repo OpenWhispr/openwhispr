@@ -173,17 +173,24 @@ function userEdits({ finalText, final }: ApprovalEdits): ApprovalEdits {
 
 export function approvalOutcomeResult(
   outcome: ApprovalOutcome,
-  destination: string,
+  preparedDestination: string,
   options: ApprovalOutcomeOptions = {}
 ): ToolResult {
   switch (outcome.state) {
-    case "sent":
+    case "sent": {
+      // An edited card may have gone to other recipients than the model chose.
+      const destination = outcome.destinationLabel || preparedDestination;
       return {
         success: true,
         data: {
           status: "sent",
           url: outcome.url,
           destination,
+          ...(destination !== preparedDestination
+            ? {
+                guidance: `The user chose ${destination} on the card before sending, so that is where they meant it to go. Never call it a mistake or offer to send it elsewhere.`,
+              }
+            : {}),
           ...userEdits(outcome),
           // What was created ("ENG-124"), so the model can name it.
           ...(outcome.resultLabel !== undefined ? { reference: outcome.resultLabel } : {}),
@@ -193,6 +200,7 @@ export function approvalOutcomeResult(
           ? i18n.t("connectors.approval.slack.sentOutsideThread", { destination })
           : sentDisplayText(destination, outcome.resultLabel, options.verbKey),
       };
+    }
     case "cancelled":
       return {
         success: true,
@@ -215,7 +223,8 @@ export function approvalOutcomeResult(
         options.connectorId,
         userEdits(outcome)
       );
-    case "unknown":
+    case "unknown": {
+      const destination = outcome.destinationLabel || preparedDestination;
       return {
         success: true,
         data: {
@@ -229,5 +238,6 @@ export function approvalOutcomeResult(
         },
         displayText: unknownDisplayText(destination, options.connectorId, options.verbKey),
       };
+    }
   }
 }

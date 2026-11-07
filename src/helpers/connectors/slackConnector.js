@@ -529,7 +529,13 @@ function createSlackConnector({ api, auth, directory, credentials }) {
             message: failureMessage(found.error, "", "Couldn't reach Slack. Nothing was sent."),
           };
         }
-        if (!found.candidate) return { state: "not_sent", reason: "invalid_edit" };
+        if (!found.candidate) {
+          return {
+            state: "failed",
+            errorCode: "not_in_channel",
+            message: failureMessage("not_in_channel", "the channel picked on the card"),
+          };
+        }
         target = { kind: "channel", id: found.candidate.id, label: found.candidate.label };
       }
       // Who the receipt and the model name, when the card changed it.

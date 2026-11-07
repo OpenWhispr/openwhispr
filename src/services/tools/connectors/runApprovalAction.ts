@@ -128,12 +128,7 @@ export async function runApprovalAction(
     // With what the user wrote on the card, so asking where keeps it.
     return prepareFailureResult(outcome.clarification, connectorId, outcome);
   }
-  // An edited card may have gone to other recipients than the model chose.
-  const destination =
-    (outcome.state === "sent" || outcome.state === "unknown") && outcome.destinationLabel
-      ? outcome.destinationLabel
-      : prepared.preview.destinationLabel;
-  return approvalOutcomeResult(outcome, destination, {
+  return approvalOutcomeResult(outcome, prepared.preview.destinationLabel, {
     ...options,
     connectorId,
     verbKey: prepared.preview.verbKey,

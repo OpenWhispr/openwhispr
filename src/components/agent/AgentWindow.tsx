@@ -607,7 +607,14 @@ export default function AgentWindow() {
   // request carries, and answered for speech. A turn still running (talked
   // over, or left from typing) stops first: one stream runs per window.
   const sendSpokenTurn = useCallback(
-    async ({ text, speech, replyLanguage, dryRunWrites, continues, isCurrent }: VoiceCallTurn) => {
+    async ({
+      text,
+      speech,
+      replyLanguage,
+      dryRunWrites,
+      joinedRequest,
+      isCurrent,
+    }: VoiceCallTurn) => {
       if (refuseIfRestricted()) {
         speech.onEnd("refused");
         return;
@@ -632,8 +639,16 @@ export default function AgentWindow() {
         const sent = await sendRef.current(text, {
           ...(current.selectedContext ? { selectedContext: current.selectedContext } : {}),
           ...(current.attachment ? { attachment: current.attachment } : {}),
-          // A request sent again with words joined on carries the one it talked over.
-          voice: { replyLanguage, speech, dryRunWrites, interrupts: interrupts && !continues },
+          // A request a pause cut short: the chat shows the words said after it,
+          // and the model answers it whole, in place of the requests it joins.
+          ...(joinedRequest ? { requestText: joinedRequest } : {}),
+          voice: {
+            replyLanguage,
+            speech,
+            dryRunWrites,
+            interrupts: interrupts && !joinedRequest,
+            continues: Boolean(joinedRequest),
+          },
         });
         // Never sent: the engine never heard of it, so it never ends it.
         if (!sent) speech.onEnd("refused");

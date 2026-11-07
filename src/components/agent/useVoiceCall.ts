@@ -39,14 +39,15 @@ export type VoiceCallEndReason = "meeting" | "worker" | "idle" | "mic-lost";
 
 /** A spoken turn: its text, and the observer that speaks its reply. */
 export interface VoiceCallTurn {
+  /** What the user said: the message the chat shows. */
   text: string;
   speech: TurnSpeechObserver;
   /** The language to answer in; null answers in the one spoken. */
   replyLanguage: SpokenLanguage | null;
   /** A harness turn: write tools answer without running. */
   dryRunWrites: boolean;
-  /** The request before, sent again with the words said after a pause joined on. */
-  continues: boolean;
+  /** The request before, a pause cut short, with `text` joined on: what the model answers. */
+  joinedRequest: string | null;
   /** False once the turn was dropped (talked over, stopped, the call ended): don't send it. */
   isCurrent: () => boolean;
 }
@@ -96,6 +97,8 @@ interface TurnMetrics {
 // is in the chat; the transcript keeps the whole answer. Bounded in code: brevity
 // pressure in the prompt alone made the model skip tools (#2349's harness).
 const MAX_SPOKEN_CHUNKS = 4;
+// A line opening with one of these writes out an email: a draft, never read aloud.
+const EMAIL_HEADER = /^(?:To|Cc|Subject):/i;
 // A call ends after 2.5 minutes with no speech either way and nothing in progress.
 const IDLE_STOP_MS = 150_000;
 const SESSION_TICK_MS = 10_000;
@@ -168,6 +171,8 @@ export function useVoiceCall({
   const pendingSpeaksRef = useRef(0);
   // Text the claim check flagged: spoken only once the turn shows it stands.
   const heldChunksRef = useRef<string[] | null>(null);
+  // The reply wrote out an email draft (no tool could send it): only what follows it is said.
+  const writesDraftRef = useRef(false);
   const answerRef = useRef("");
   const claimCheckRef = useRef<((text: string) => boolean) | undefined>(undefined);
   // Playback is paused while the user may be talking over the answer (see speech-start).
@@ -332,9 +337,14 @@ export function useVoiceCall({
   );
 
   // Speaks a chunk, unless the reply already said all a reply may (the rest is in
-  // the chat) or the claim check flags it.
+  // the chat), it is part of a written-out draft, or the claim check flags it.
   const offerChunk = useCallback(
     (chunk: string) => {
+      if (writesDraftRef.current) return;
+      if (EMAIL_HEADER.test(chunk)) {
+        writesDraftRef.current = true;
+        return;
+      }
       const held = heldChunksRef.current;
       if (held) {
         held.push(chunk);
@@ -399,6 +409,7 @@ export function useVoiceCall({
           answerRef.current = answerRef.current.slice(0, keptLength);
           if (turnRef.current) turnRef.current.answer = answerRef.current;
           heldChunksRef.current = null;
+          writesDraftRef.current = false;
           chunker.reset();
         },
         onToolCalls: (toolNames) => {
@@ -420,6 +431,16 @@ export function useVoiceCall({
           // Held text is spoken once the finished turn backs it, and never otherwise.
           if (held && !claimCheckRef.current?.(answerRef.current)) {
             for (const chunk of held) offerChunk(chunk);
+          }
+          // After a written-out draft, its last paragraph says what came of it
+          // ("Connect your email and I can send this").
+          if (writesDraftRef.current) {
+            writesDraftRef.current = false;
+            const outcome = createSpeechChunker();
+            const lastParagraph = answerRef.current.split(/\n\s*\n/).at(-1) ?? "";
+            for (const chunk of [...outcome.push(lastParagraph), ...outcome.flush()]) {
+              offerChunk(chunk);
+            }
           }
           if (cutShortRef.current && profileRef.current) {
             speakChunk(moreInChatLine(profileRef.current.language));
@@ -622,26 +643,28 @@ export function useVoiceCall({
           if (utteranceRef.current) void api?.cancelSpeech(utteranceRef.current);
           return;
         }
-        let text = event.text;
-        let continues = false;
+        let joinedRequest: string | null = null;
         if (utteranceRef.current) {
-          // Over a reply, one word is a backchannel ("okay", "please") or a stop;
-          // only more than that is a new request. Before any of the reply was
-          // heard, the words go on with the request they follow (a pause cut it).
+          // Over a reply, one word is a backchannel ("okay", "please"), a noise
+          // or a stop; only more than that is a new request. Before any of the
+          // reply was heard, and before its turn called a tool, the words go on
+          // with the request they follow (a pause cut it); a turn that may have
+          // acted is never asked again.
           const kind = interruptionKind(event.text);
           if (kind === "stop") {
             dropAnswer("stopped");
             return;
           }
-          if (!replyHeardRef.current) {
-            text = `${requestTextRef.current} ${event.text}`;
-            continues = true;
-          } else if (kind === "ignore") {
+          if (kind === "ignore") {
             releaseHold();
             return;
           }
+          if (!replyHeardRef.current && turnRef.current?.calledTools.length === 0) {
+            joinedRequest = `${requestTextRef.current} ${event.text}`;
+          }
           dropAnswer("barge-in");
         }
+        const text = joinedRequest ?? event.text;
         const utteranceId = crypto.randomUUID();
         utteranceRef.current = utteranceId;
         requestTextRef.current = text;
@@ -658,6 +681,7 @@ export function useVoiceCall({
         cutShortRef.current = false;
         answerRef.current = "";
         heldChunksRef.current = null;
+        writesDraftRef.current = false;
         claimCheckRef.current = undefined;
         chunker.reset();
         heardLanguageRef.current = detectSpokenLanguage(text) ?? heardLanguageRef.current;
@@ -676,11 +700,11 @@ export function useVoiceCall({
         };
         const { voiceCallLanguage } = getSettings();
         callbacksRef.current.onUserTurn({
-          text,
+          text: event.text,
           speech: createTurnSpeech(utteranceId),
           replyLanguage: voiceCallLanguage === "auto" ? null : voiceCallLanguage,
           dryRunWrites: harnessRef.current,
-          continues,
+          joinedRequest,
           isCurrent: () => utteranceRef.current === utteranceId,
         });
       } else if (event.type === "tts-audio") {

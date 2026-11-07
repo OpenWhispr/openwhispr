@@ -492,19 +492,36 @@ test("words said before any of the reply was heard go on with the request they f
   const { calls, act, events, startListening, say, lastTurn } = await mountVoiceCall(t);
   await startListening();
   await say("Create a note titled Groceries with the text", 100);
-  // A one-word continuation said before the reply's audio is still part of the request.
   await act(() => lastTurn().speech.onText("Done. "));
+  // One word (a laugh, "okay") before the reply's audio is no request: the reply goes on.
   await act(() => events.emit({ type: "speech-start", sessionId: 7, at: 200 }));
-  await say("milk.", 300);
+  await say("Ha.", 300);
+  assert.equal(calls.turns.length, 1);
+  assert.equal(calls.dropped, 0);
 
+  await act(() => events.emit({ type: "speech-start", sessionId: 7, at: 400 }));
+  await say("milk and eggs.", 500);
   assert.equal(calls.turns.length, 2);
   assert.equal(calls.dropped, 1, "the first half's turn stops");
-  assert.equal(lastTurn().text, "Create a note titled Groceries with the text milk.");
+  assert.equal(lastTurn().text, "milk and eggs.", "the chat shows what was said");
   assert.deepEqual(
-    calls.turns.map((turn) => turn.continues),
-    [false, true],
-    "the joined request carries the first half"
+    calls.turns.map((turn) => turn.joinedRequest),
+    [null, "Create a note titled Groceries with the text milk and eggs."],
+    "the model answers the request whole"
   );
+});
+
+test("words after a turn that called a tool are their own request, never joined onto it", async (t) => {
+  const { calls, act, events, startListening, say, lastTurn } = await mountVoiceCall(t);
+  await startListening();
+  await say("Create a note called Ideas.", 100);
+  await act(() => lastTurn().speech.onToolCalls(["create_note"]));
+  await act(() => events.emit({ type: "speech-start", sessionId: 7, at: 200 }));
+  await say("Put build a treehouse in it.", 300);
+
+  assert.equal(calls.dropped, 1);
+  assert.equal(lastTurn().text, "Put build a treehouse in it.");
+  assert.equal(lastTurn().joinedRequest, null, "a note it may have created isn't asked for again");
 });
 
 test("a reply waits while the user, already talking again, finishes the request", async (t) => {
@@ -517,9 +534,26 @@ test("a reply waits while the user, already talking again, finishes the request"
 
   await say("saying each number as its own sentence.", 300);
   assert.equal(
-    lastTurn().text,
+    lastTurn().joinedRequest,
     "Count from one to thirty, saying each number as its own sentence."
   );
+});
+
+test("a reply that writes out an email draft says only what follows it", async (t) => {
+  const { calls, act, startListening, say, lastTurn } = await mountVoiceCall(t);
+  await startListening();
+  await say("Send an email to Bob telling him I will be late today.");
+  const turn = lastTurn();
+  await act(() =>
+    turn.speech.onText(
+      "To: Bob <bob@example.com>\nSubject: Running Late Today\n\nHi Bob,\n\nI'll be late today.\n\nThanks.\n\nConnect your email integration and I can send this for you."
+    )
+  );
+  await act(() => turn.speech.onEnd("complete"));
+
+  assert.deepEqual(spokenTexts(calls), [
+    "Connect your email integration and I can send this for you.",
+  ]);
 });
 
 test("words that answer a waiting question go to the card, and its turn goes on speaking", async (t) => {

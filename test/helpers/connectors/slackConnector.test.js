@@ -1285,7 +1285,15 @@ test("Send refuses a picked channel the login isn't in, or that isn't a channel,
 
     const result = await connector.commit("send_message", prepared.payload, { channel }, BOUND);
 
-    assert.deepEqual(result, { state: "not_sent", reason: "invalid_edit" }, channel);
+    assert.deepEqual(
+      result,
+      {
+        state: "failed",
+        errorCode: "not_in_channel",
+        message: "You're not a member of the channel picked on the card.",
+      },
+      channel
+    );
     assert.deepEqual(slack.methods(), ["users.conversations"], channel);
   }
 });
@@ -1368,11 +1376,12 @@ test("through the manager, the picker lists only the card's bound login, and the
 
   const refused = await prepare();
   assert.deepEqual(await manager.commit(refused.actionId, { channel: "C0OTHER01" }, ALLOWED), {
-    state: "not_sent",
-    reason: "invalid_edit",
+    state: "failed",
+    errorCode: "not_in_channel",
+    message: "You're not a member of the channel picked on the card.",
   });
-  assert.equal(rows.get(refused.actionId).state, "cancelled");
-  assert.equal(rows.get(refused.actionId).errorCode, "invalid_edit");
+  assert.equal(rows.get(refused.actionId).state, "failed");
+  assert.equal(rows.get(refused.actionId).errorCode, "not_in_channel");
   assert.equal(posts(slack).length, 1);
 
   // Another login (here another workspace) never lists for a card prepared before it.

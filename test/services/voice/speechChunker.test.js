@@ -14,14 +14,23 @@ test("emits a sentence as soon as its terminator is followed by whitespace", asy
   assert.deepEqual(chunker.flush(), ["The first"]);
 });
 
-test("a sentence is never cut at a clause or for its length", async () => {
+test("only a long first chunk may stop at a clause, and no chunk is cut for its length", async () => {
   const { createSpeechChunker } = await load();
   const chunker = createSpeechChunker();
-  const sentence =
-    "To add a meeting, open OpenWhispr, then Settings and Profile, and enable the calendar integration there. ";
-  assert.deepEqual(pushAll(chunker, [sentence.slice(0, 40), sentence.slice(40)]), [
-    sentence.trim(),
+  const out = pushAll(chunker, [
+    "Sure, high above the misty peaks of the Ember Range, a dragon named Cinder ",
+    "baked bread. Every morning, before the sun rose over the valley, she lit her oven. ",
   ]);
+  assert.deepEqual(out, [
+    "Sure, high above the misty peaks of the Ember Range,",
+    "a dragon named Cinder baked bread.",
+    "Every morning, before the sun rose over the valley, she lit her oven.",
+  ]);
+  const unpunctuated = createSpeechChunker();
+  assert.deepEqual(
+    pushAll(unpunctuated, ["The weather in Tokyo right now is mostly sunny with light winds "]),
+    []
+  );
 });
 
 test("a Hindi sentence ends at its danda", async () => {
@@ -59,6 +68,7 @@ test("strips markdown, skips headings and drops chunks with nothing speakable", 
   const chunker = createSpeechChunker();
   const out = pushAll(chunker, [
     "## Founding and Kingdom (753 BC – 509 BC)\n",
+    "**Inner Planets**  \n",
     "- **Design review** at `10:00`.\n",
     "• Open Settings → Profile.\n",
     "See [the notes](https://example.com/notes) or https://example.com/x for more.\n",

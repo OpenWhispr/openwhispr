@@ -201,3 +201,37 @@ test("a spoken request leaves out one stopped before any reply, unless it talked
   assert.match(talkedOver, /ocean/, "words said over a turn may finish its request");
   assert.match(typed, /ocean/, "typed chat keeps it, noted");
 });
+
+test("a request a pause cut short is answered whole, without the requests it joins", async (t) => {
+  const fixture = await setup(t);
+  const sent = [];
+  t.mock.method(fixture.service, "processTextStreamingAI", async function* (messages) {
+    sent.push(JSON.stringify(messages));
+    yield { type: "content", text: "Rome was founded in 753 BC." };
+    yield { type: "done", finishReason: "stop" };
+  });
+  const turn = (status) => ({ startedAt: 1, finishedAt: 2, status });
+  const history = [
+    { id: "u0", role: "user", content: "What is the capital of Peru?", isStreaming: false },
+    { id: "a0", role: "assistant", content: "Lima.", isStreaming: false, turn: turn("complete") },
+    { id: "u1", role: "user", content: "Tell me about Rome in detail,", isStreaming: false },
+    {
+      id: "a1",
+      role: "assistant",
+      content: "Rome began as a small town",
+      isStreaming: false,
+      turn: turn("stopped"),
+    },
+    { id: "u2", role: "user", content: "from its founding to its fall.", isStreaming: false },
+  ];
+  const { voice } = speechLog();
+  await fixture.engine.send("from its founding to its fall.", history, {
+    requestText: "Tell me about Rome in detail, from its founding to its fall.",
+    voice: { ...voice, continues: true },
+  });
+
+  const [request] = sent;
+  assert.equal(request.match(/Tell me about Rome/g).length, 1, "the request is read once");
+  assert.doesNotMatch(request, /small town/, "the unheard reply to its first half is left out");
+  assert.match(request, /capital of Peru/, "an earlier request stays");
+});
