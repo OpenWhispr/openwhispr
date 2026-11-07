@@ -16,6 +16,7 @@ import {
   type SpokenLanguage,
 } from "../../services/voice/voiceLines";
 import type {
+  VoiceCallLanguage,
   VoiceConversationEvent,
   VoiceConversationReadiness,
   VoiceSpeechProfile,
@@ -76,6 +77,8 @@ interface TurnMetrics {
   /** First chunk only: waiting in the worker's TTS queue, then generating to first audio. */
   ttsQueueWaitMs?: number | null;
   ttsGenerateMs?: number | null;
+  /** The engine ended the turn without a reply of its own (its failure or refusal was spoken). */
+  failure?: "error" | "refused";
   chunks: number;
   calledTools: string[];
   availableTools: string[];
@@ -166,6 +169,8 @@ export function useVoiceCall({
   const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const turnRef = useRef<TurnMetrics | null>(null);
   const startGenerationRef = useRef(0);
+  // The language set back after main refused it: main never left the one it hears.
+  const revertedLanguageRef = useRef<VoiceCallLanguage | null>(null);
   const callbacks = {
     answersCard,
     onUserTurn,
@@ -267,7 +272,7 @@ export function useVoiceCall({
       playerRef.current?.resume();
     }
     setSpeaking(false);
-    logTurn(chunkIndexRef.current === 0 ? "empty" : "spoke");
+    logTurn(turnRef.current?.failure ?? (chunkIndexRef.current === 0 ? "empty" : "spoke"));
   }, [logTurn]);
 
   const speakChunk = useCallback(
@@ -399,6 +404,9 @@ export function useVoiceCall({
           }
           responseDoneRef.current = true;
           if (outcome === "stopped") logTurn("stopped");
+          else if ((outcome === "error" || outcome === "refused") && turnRef.current) {
+            turnRef.current.failure = outcome;
+          }
           finishUtteranceIfDrained();
         },
       };
@@ -811,23 +819,21 @@ export function useVoiceCall({
         if (settings.voiceCallLanguage !== previous.voiceCallLanguage) {
           // The next turn is heard by a model that knows the new language.
           const sessionId = sessionIdRef.current;
+          const language = settings.voiceCallLanguage;
           heardLanguageRef.current = null;
-          if (sessionId !== null) {
+          if (revertedLanguageRef.current === language) {
+            revertedLanguageRef.current = null;
+          } else if (sessionId !== null) {
             void api
-              ?.setLanguage(sessionId, {
-                language: settings.voiceCallLanguage,
-                ...recognizerPreferences(getSettings()),
-              })
+              ?.setLanguage(sessionId, { language, ...recognizerPreferences(getSettings()) })
               .then((switched) => {
-                // No downloaded model hears it after all: the call stays in the language it hears.
-                if (switched === false && activeRef.current) {
-                  logger.warn(
-                    "Voice call language not switched",
-                    { language: settings.voiceCallLanguage },
-                    "voice-call"
-                  );
-                  useSettingsStore.getState().setVoiceCallLanguage(previous.voiceCallLanguage);
-                }
+                // No downloaded model hears it after all: unless another was picked
+                // meanwhile, the setting goes back to the language the call still hears.
+                if (switched !== false || !activeRef.current) return;
+                logger.warn("Voice call language not switched", { language }, "voice-call");
+                if (getSettings().voiceCallLanguage !== language) return;
+                revertedLanguageRef.current = previous.voiceCallLanguage;
+                useSettingsStore.getState().setVoiceCallLanguage(previous.voiceCallLanguage);
               })
               .catch(() => {});
           }

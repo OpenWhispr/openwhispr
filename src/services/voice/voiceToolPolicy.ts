@@ -107,9 +107,14 @@ export function adaptToolsForVoice(
       tool = {
         ...write,
         execute: async (args, context) => {
-          const result = await write.execute(args, context);
-          onWriteRun(write.name, result.success);
-          return result;
+          let ok = false;
+          try {
+            const result = await write.execute(args, context);
+            ok = result.success;
+            return result;
+          } finally {
+            onWriteRun(write.name, ok);
+          }
         },
       };
     }

@@ -249,16 +249,13 @@ test("what a session hears is marked with that session", async () => {
   assert.equal(typeof transcript.sessionId, "number");
 });
 
-test("only the call window can cancel speech or a model download", async () => {
+test("only the call window can cancel speech", async () => {
   callWindow = fakeRenderer();
   const other = { sender: fakeRenderer() };
   assert.deepEqual(
     await handlers.get("voice-conversation:cancel-speech")(other, { utteranceId: "u1" }),
     { cancelled: false }
   );
-  assert.deepEqual(await handlers.get("voice-conversation:cancel-download")(other), {
-    cancelled: false,
-  });
 });
 
 test("a transcription that fails is reported, not sent as silence", async () => {

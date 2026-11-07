@@ -144,3 +144,27 @@ test("a stopped spoken request ends as stopped, and a failed one says why", asyn
   assert.ok(said[1].length > 0, "the failure is spoken");
   assert.deepEqual(end, ["end", "error"]);
 });
+
+test("a withdrawn answer keeps the reply spoken before its step", async (t) => {
+  const fixture = await setup(t);
+  t.mock.method(fixture.service, "processTextStreamingAI", async function* () {
+    yield { type: "content", text: "Claro. " };
+    yield { type: "tool_calls", calls: [{ id: "c1", name: "web_search", arguments: "{}" }] };
+    yield { type: "tool_result", callId: "c1", toolName: "web_search", displayText: "Found" };
+    yield { type: "content", text: "Ya lo envié." };
+    yield { type: "unbacked_claim", retry: true };
+    yield { type: "content", text: "Todavía no lo envié." };
+    yield { type: "done", finishReason: "stop" };
+  });
+  const { events, voice } = speechLog();
+  await fixture.engine.send("envíalo", [], { voice });
+
+  assert.deepEqual(events, [
+    ["text", "Claro. ", "function"],
+    ["tools", ["web_search"]],
+    ["text", "Ya lo envié.", "function"],
+    ["withdrawn", "Claro. ".length],
+    ["text", "Todavía no lo envié.", "function"],
+    ["end", "complete"],
+  ]);
+});

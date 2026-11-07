@@ -44,13 +44,21 @@ async function mountVoiceCall(t, { settings = {}, voiceState = true } = {}) {
     paused: [],
     cancelledSpeech: [],
     turns: [],
+    reports: [],
+    languages: [],
+    languageSettings: [],
     dropped: 0,
     ended: [],
     transcriptionFailures: 0,
   };
   const events = { emit: () => {} };
   const pending = { readiness: [], start: [], mic: [], speak: [] };
-  const state = { answersCard: () => false, busy: false, holdSpeak: false };
+  const state = {
+    answersCard: () => false,
+    busy: false,
+    holdSpeak: false,
+    languageHeard: () => true,
+  };
   const api = {
     isHarness: async () => false,
     onEvent: (callback) => {
@@ -79,6 +87,10 @@ async function mountVoiceCall(t, { settings = {}, voiceState = true } = {}) {
       return true;
     },
     keepModelWarm: async () => {},
+    setLanguage: async (_sessionId, { language }) => {
+      calls.languages.push(language);
+      return state.languageHeard(language);
+    },
     cancelSpeech: async (utteranceId) => {
       calls.cancelledSpeech.push(utteranceId);
       return { cancelled: true };
@@ -96,7 +108,7 @@ async function mountVoiceCall(t, { settings = {}, voiceState = true } = {}) {
       }
       return {};
     },
-    reportTurn: () => {},
+    reportTurn: (report) => calls.reports.push(report),
     reportTurnEvent: () => {},
   };
   globalThis.__voiceCall = {
@@ -134,6 +146,13 @@ async function mountVoiceCall(t, { settings = {}, voiceState = true } = {}) {
       };
     },
   };
+  // The store's setter: the setting changes, and its subscribers hear it.
+  globalThis.__voiceCall.setLanguage = (language) => {
+    const previous = globalThis.__voiceCall.settings;
+    calls.languageSettings.push(language);
+    globalThis.__voiceCall.settings = { ...previous, voiceCallLanguage: language };
+    globalThis.__voiceCall.settingsListener?.(globalThis.__voiceCall.settings, previous);
+  };
   t.after(() => delete globalThis.__voiceCall);
 
   installBrowserGlobals(t, {
@@ -155,7 +174,15 @@ async function mountVoiceCall(t, { settings = {}, voiceState = true } = {}) {
         export function getSettings() {
           return globalThis.__voiceCall.settings;
         }
-        export const useSettingsStore = { subscribe: () => () => {} };
+        export const useSettingsStore = {
+          subscribe: (listener) => {
+            globalThis.__voiceCall.settingsListener = listener;
+            return () => {};
+          },
+          getState: () => ({
+            setVoiceCallLanguage: (language) => globalThis.__voiceCall.setLanguage(language),
+          }),
+        };
       `,
       "/utils/logger": `
         export default { info() {}, warn() {}, error() {}, debug() {} };
@@ -222,6 +249,7 @@ async function mountVoiceCall(t, { settings = {}, voiceState = true } = {}) {
     act(() =>
       events.emit({
         type: "transcript",
+        sessionId: 7,
         text,
         speechMs: 900,
         sttMs: 80,
@@ -428,13 +456,13 @@ test("talking over a reply pauses it; noise lets it go on; words stop it and its
   await say("tell me a long story");
   const story = lastTurn();
 
-  await act(() => events.emit({ type: "speech-start", at: 0 }));
+  await act(() => events.emit({ type: "speech-start", sessionId: 7, at: 0 }));
   assert.deepEqual(calls.player, ["pause"]);
   await say("");
   assert.deepEqual(calls.player, ["pause", "resume"]);
   assert.equal(calls.dropped, 0, "a cough doesn't cancel the reply");
 
-  await act(() => events.emit({ type: "speech-start", at: 0 }));
+  await act(() => events.emit({ type: "speech-start", sessionId: 7, at: 0 }));
   await say("stop, that's enough");
   assert.equal(calls.dropped, 1, "words interrupt it for real");
   assert.equal(calls.player.at(-1), "flush");
@@ -545,7 +573,7 @@ test("a failed transcription is reported and lets a paused reply go on", async (
   const { calls, act, events, startListening, say } = await mountVoiceCall(t);
   await startListening();
   await say("tell me a story");
-  await act(() => events.emit({ type: "speech-start", at: 0 }));
+  await act(() => events.emit({ type: "speech-start", sessionId: 7, at: 0 }));
   await act(() => events.emit({ type: "error", stage: "stt", message: "decode failed" }));
 
   assert.equal(calls.transcriptionFailures, 1);
@@ -613,14 +641,14 @@ test("a reply paused for the user's speech goes on when nothing can be heard", a
   const { hook, calls, act, events, startListening, say } = await mountVoiceCall(t);
   await startListening();
   await say("tell me a story");
-  await act(() => events.emit({ type: "speech-start", at: 0 }));
+  await act(() => events.emit({ type: "speech-start", sessionId: 7, at: 0 }));
   assert.deepEqual(calls.player.slice(-1), ["pause"]);
 
   await act(() => hook.current.setMicMuted(true));
   assert.deepEqual(calls.player.slice(-1), ["resume"], "microphone off");
 
   await act(() => void hook.current.setMicMuted(false));
-  await act(() => events.emit({ type: "speech-start", at: 0 }));
+  await act(() => events.emit({ type: "speech-start", sessionId: 7, at: 0 }));
   await act(() => hook.current.setInputHeld(true));
   assert.deepEqual(calls.player.slice(-1), ["resume"], "a card asking for a secret");
 });
@@ -694,4 +722,43 @@ test("in the harness, every line is a request of its own, never a card's answer"
   await say("what's the capital of Australia");
   assert.equal(calls.turns.length, 1);
   assert.equal(calls.turns[0].dryRunWrites, true);
+});
+
+test("a language no model hears is set back once, without asking main again", async (t) => {
+  const { calls, state, act, startListening } = await mountVoiceCall(t);
+  await startListening();
+  state.languageHeard = (language) => language !== "de";
+
+  await act(() => globalThis.__voiceCall.setLanguage("de"));
+
+  assert.deepEqual(calls.languageSettings, ["de", "en"], "set back to the language heard");
+  assert.deepEqual(calls.languages, ["de"], "main kept its recognizer, so it isn't asked again");
+});
+
+test("a refused language never undoes one picked after it", async (t) => {
+  const { calls, state, act, startListening } = await mountVoiceCall(t);
+  await startListening();
+  let refuse;
+  state.languageHeard = (language) =>
+    language === "de" ? new Promise((resolve) => (refuse = () => resolve(false))) : true;
+
+  await act(() => globalThis.__voiceCall.setLanguage("de"));
+  await act(() => globalThis.__voiceCall.setLanguage("fr"));
+  await act(() => refuse());
+
+  assert.deepEqual(calls.languageSettings, ["de", "fr"]);
+  assert.equal(globalThis.__voiceCall.settings.voiceCallLanguage, "fr");
+});
+
+test("a turn the engine failed or refused is reported as such, not as spoken", async (t) => {
+  const { hook, calls, pending, act, say, lastTurn } = await mountVoiceCall(t);
+  await act(() => void hook.current.start({ harness: true }));
+  await act(() => pending.readiness.at(-1).resolve({ ready: true }));
+  await act(() => pending.start.at(-1).resolve({ sessionId: 7, sampleRate: 44100 }));
+
+  await say("what's on my calendar");
+  await act(() => lastTurn().speech.onText("Sorry, the assistant couldn't answer. "));
+  await act(() => lastTurn().speech.onEnd("error"));
+
+  assert.equal(calls.reports.at(-1).outcome, "error");
 });

@@ -140,8 +140,9 @@ function LanguagePicker({ onOpenChange }: { onOpenChange: (open: boolean) => voi
             </p>
           )}
           {matches.map((code) => {
-            // Offered once main says a downloaded model hears it (it answers at once).
-            const available = code === language || Boolean(heard?.has(code));
+            // Unknown until main answers: offered; one no model hears is set back mid-call,
+            // and checked again when a call starts.
+            const available = heard === null || heard.has(code);
             return (
               <button
                 key={code}
