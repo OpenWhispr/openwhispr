@@ -1427,6 +1427,24 @@ test("Esc on an idle window starts a new chat; over a running reply it only stop
   assert.equal(globalThis.__chat.newChats, 1);
 });
 
+test("in a call, Esc stops a running turn the call isn't speaking (a Regenerate)", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  await view.settle();
+  await view.chat({ messages: [user, finished] });
+  await React.act(async () => view.button("Start Voice Agent").click());
+  await view.chat({ busy: true, messages: [user, reply([], "Here is")] });
+
+  await React.act(async () =>
+    view.happyWindow.document.dispatchEvent(
+      new view.happyWindow.KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+    )
+  );
+  assert.equal(globalThis.__chat.cancels, 1);
+  assert.ok(view.button("End call"), "the call goes on");
+  await view.waitForLayout("modal");
+});
+
 test("Esc over selected text clears the selection and keeps the chat", async (t) => {
   const view = await mountWindow(t);
   await React.act(async () => view.main.handlers.open({ layout: "modal" }));

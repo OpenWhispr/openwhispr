@@ -51,10 +51,10 @@ interface VoicePillProps {
   micMuted: boolean;
   sessionControl: VoiceSessionControl;
   settingsOpen: boolean;
-  transcriptOpen: boolean;
-  /** The compact pill shows speech as a glow in its cap instead of the word. */
-  speakingGlow: boolean;
-  /** Inside the transcript the pill is a shade apart from the panel it sits on. */
+  /**
+   * Inside the transcript the pill is a shade apart from the panel it sits on;
+   * the compact pill shows speech as a glow in its cap instead of the word.
+   */
   inModal?: boolean;
   onSettings: () => void;
   onTranscript: () => void;
@@ -76,8 +76,6 @@ export function VoicePill({
   micMuted,
   sessionControl,
   settingsOpen,
-  transcriptOpen,
-  speakingGlow,
   inModal = false,
   onSettings,
   onTranscript,
@@ -92,7 +90,7 @@ export function VoicePill({
   const label = notice ?? t(STATUS_LABELS[status]);
   const starting = status === "starting";
   const stopped = status === "stopped";
-  const glow = speakingGlow && status === "speaking" && !notice;
+  const glow = !inModal && status === "speaking" && !notice;
   const levelActive = glow || (waveformActive && !stopped);
   const pillRef = useRef<HTMLDivElement>(null);
 
@@ -217,13 +215,13 @@ export function VoicePill({
             onClick={onTranscript}
             disabled={starting}
             aria-label={t(
-              transcriptOpen
+              inModal
                 ? "agentWindow.call.actions.hideTranscript"
                 : "agentWindow.call.actions.transcript"
             )}
-            aria-pressed={transcriptOpen}
+            aria-pressed={inModal}
             title={t(
-              transcriptOpen
+              inModal
                 ? "agentWindow.call.actions.hideTranscript"
                 : "agentWindow.call.actions.transcript"
             )}

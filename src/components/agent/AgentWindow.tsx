@@ -1046,6 +1046,7 @@ export default function AgentWindow() {
       } else if (voiceCallRef.current.speaking || busy) {
         // Esc stops the reply first, spoken or still being worked on; the next one ends the call.
         stopCallReply();
+        if (chatBusyRef.current) cancelTurn();
       } else {
         endCall();
       }
@@ -1073,6 +1074,7 @@ export default function AgentWindow() {
     void close();
   }, [
     busy,
+    cancelTurn,
     close,
     dispatch,
     dropTake,
@@ -1480,8 +1482,6 @@ export default function AgentWindow() {
       micMuted={voiceCall.micMuted}
       sessionControl={voiceCall.speaking ? "stopReply" : "end"}
       settingsOpen={Boolean(state.call?.settings)}
-      transcriptOpen={state.layout === "modal"}
-      speakingGlow={!inModal}
       inModal={inModal}
       onSettings={() => dispatch({ type: "callSettings", open: !state.call?.settings })}
       onTranscript={() => (state.layout === "modal" ? collapse() : dispatch({ type: "expand" }))}
