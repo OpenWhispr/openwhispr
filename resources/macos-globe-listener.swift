@@ -176,6 +176,18 @@ enum GlobeSystemAction {
     }
 }
 
+enum FnTransition {
+    case down, up, ignoredFlag
+}
+
+func fnTransition(keyCode: UInt16, hasFnFlag: Bool, fnIsDown: Bool) -> FnTransition? {
+    // Injected or remote events (e.g. arrow keys carry the fn flag) can leave a stale
+    // fn flag on later modifier events; only the Fn key itself may start a press.
+    if hasFnFlag && !fnIsDown { return keyCode == 63 ? .down : .ignoredFlag }
+    if !hasFnFlag && fnIsDown { return .up }
+    return nil
+}
+
 func applyConfiguration(_ config: ListenerConfig) {
     suppressedMouseButtons = config.mouseButtons
     updateMouseEventTap()
@@ -289,17 +301,23 @@ guard let monitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged, h
     let flags = event.modifierFlags
     let containsFn = flags.contains(.function)
 
-    if containsFn && !fnIsDown {
-        fnIsDown = true
-        fnInterrupted = false
-        emit("FN_DOWN")
-    } else if !containsFn && fnIsDown {
-        fnIsDown = false
-        fnInterrupted = false
-        emit("FN_UP")
+    let keyCode = event.keyCode
+
+    if let transition = fnTransition(keyCode: keyCode, hasFnFlag: containsFn, fnIsDown: fnIsDown) {
+        switch transition {
+        case .down:
+            fnIsDown = true
+            fnInterrupted = false
+            emit("FN_DOWN")
+        case .up:
+            fnIsDown = false
+            fnInterrupted = false
+            emit("FN_UP")
+        case .ignoredFlag:
+            break
+        }
     }
 
-    let keyCode = event.keyCode
     for (code, flag, name) in rightModifiers {
         if keyCode == code {
             emit(flags.contains(flag) ? "RIGHT_MOD_DOWN:\(name)" : "RIGHT_MOD_UP:\(name)")
