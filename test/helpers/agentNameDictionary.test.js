@@ -113,3 +113,62 @@ test("removes previous agent name when oldName contains surrounding whitespace",
     }
   );
 });
+
+test("accepts a Set dictionary and asks for no changes when the name is present", async () => {
+  const { agentNameDictionaryChanges } = await load();
+  assert.deepEqual(agentNameDictionaryChanges(new Set(["OpenWhispr", "Alice"]), "OpenWhispr"), {
+    add: [],
+    remove: [],
+  });
+});
+
+test("swaps the previous agent name when the dictionary is a Set", async () => {
+  const { agentNameDictionaryChanges } = await load();
+  assert.deepEqual(
+    agentNameDictionaryChanges(new Set(["OpenWhispr", "Alice"]), "Jarvis", "OpenWhispr"),
+    {
+      add: ["Jarvis"],
+      remove: ["OpenWhispr"],
+    }
+  );
+});
+
+test("accepts any iterable dictionary, not just arrays", async () => {
+  const { agentNameDictionaryChanges } = await load();
+  const dictionary = new Map([
+    ["OpenWhispr", 1],
+    ["Alice", 2],
+  ]).keys();
+  assert.deepEqual(agentNameDictionaryChanges(dictionary, "OpenWhispr", "Alice"), {
+    add: [],
+    remove: ["Alice"],
+  });
+});
+
+test("degrades a non-iterable dictionary to an empty one without throwing", async () => {
+  const { agentNameDictionaryChanges } = await load();
+  assert.deepEqual(agentNameDictionaryChanges({ 0: "OpenWhispr" }, "Jarvis"), {
+    add: ["Jarvis"],
+    remove: [],
+  });
+});
+
+test("does not throw when the dictionary contains non-string elements", async () => {
+  const { agentNameDictionaryChanges } = await load();
+  assert.deepEqual(agentNameDictionaryChanges(new Set(["OpenWhispr", 42, null]), "OpenWhispr"), {
+    add: [],
+    remove: [],
+  });
+});
+
+test("findStoredWord returns undefined for a non-string word", async () => {
+  const { findStoredWord } = await load();
+  assert.equal(findStoredWord(["OpenWhispr"], 42), undefined);
+  assert.equal(findStoredWord(["OpenWhispr"], null), undefined);
+  assert.equal(findStoredWord(["OpenWhispr"], undefined), undefined);
+});
+
+test("findStoredWord matches a stored string word", async () => {
+  const { findStoredWord } = await load();
+  assert.equal(findStoredWord(["OpenWhispr", "Alice"], "openwhispr"), "OpenWhispr");
+});
