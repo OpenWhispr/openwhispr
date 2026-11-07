@@ -60,6 +60,7 @@ import { AgentComposer } from "./AgentComposer";
 import { AgentModal, type AgentModalGlow } from "./AgentModal";
 import { AgentMessageList } from "./AgentMessages";
 import { ToolCallCard } from "../chat/ChatMessage";
+import { CallCardContext } from "../chat/callCardContext";
 import { SkillChip } from "../chat/SkillChip";
 import { SelectedContextBlock } from "./AgentContext";
 
@@ -713,6 +714,10 @@ export default function AgentWindow() {
     return () => clearTimeout(timer);
   }, [sendSettled]);
   const callCard = pendingCard ?? (sent?.state === "committing" || sendSettled ? sentCard : null);
+  // A card the user minimized the call's transcript over waits behind the
+  // pill, which reads Waiting For Action until its cap brings the card back.
+  const [hiddenCallCard, setHiddenCallCard] = useState<string | null>(null);
+  const callCardHidden = callCard !== null && callCard.id === hiddenCallCard;
 
   // The compact call shows what is above its pill (its settings, why it
   // couldn't start, a card), sized before paint so the pill never jumps.
@@ -720,11 +725,11 @@ export default function AgentWindow() {
   useLayoutEffect(() => {
     const call = state.call;
     if (!call || call.stopped || state.layout === "modal") return;
-    const standaloneWanted = call.settings || callFailed || callCard !== null;
+    const standaloneWanted = call.settings || callFailed || (callCard !== null && !callCardHidden);
     if (standaloneWanted !== (state.layout === "standalone")) {
       dispatch({ type: "callCompact", standalone: standaloneWanted });
     }
-  }, [callCard, callFailed, dispatch, state.call, state.layout]);
+  }, [callCard, callCardHidden, callFailed, dispatch, state.call, state.layout]);
 
   const startCall = useCallback(async () => {
     if (refuseIfRestricted()) return;
@@ -1449,6 +1454,11 @@ export default function AgentWindow() {
     voiceCall.clearFailure();
     void voiceCall.start();
   };
+  // Minimized over a waiting card, a call keeps that card behind its pill.
+  const collapse = () => {
+    if (state.call && pendingCard) setHiddenCallCard(pendingCard.id);
+    dispatch({ type: "collapse", pending: Boolean(pendingCard) });
+  };
   const voicePill = (inModal: boolean) => (
     <VoicePill
       status={callStatus}
@@ -1462,15 +1472,20 @@ export default function AgentWindow() {
       speakingGlow={!inModal}
       inModal={inModal}
       onSettings={() => dispatch({ type: "callSettings", open: !state.call?.settings })}
-      onTranscript={() =>
-        dispatch(state.layout === "modal" ? { type: "collapse" } : { type: "expand" })
-      }
+      onTranscript={() => (state.layout === "modal" ? collapse() : dispatch({ type: "expand" }))}
       onMic={() => void voiceCall.setMicMuted(!voiceCall.micMuted)}
       onEnd={endCall}
       onStopReply={stopCallReply}
       onLeave={leaveCall}
+      onShowCard={!inModal && callCardHidden ? () => setHiddenCallCard(null) : undefined}
     />
   );
+  // A question stack's questions still to come show behind it, three at most.
+  const questionsBehind =
+    pendingEntry?.payload.kind === "questions"
+      ? Math.min(3, pendingEntry.payload.questions.length - 1 - pendingEntry.step)
+      : 0;
+  const wideCallCard = callCard?.interaction === null || callCard?.interaction === "connection";
   // Above the call's pill, the most recent ask first: its settings, why it
   // couldn't start, then the card its turn waits on.
   const callAbovePill = !state.call ? null : state.call.settings ? (
@@ -1506,7 +1521,7 @@ export default function AgentWindow() {
             conversationId={conversationId}
             onNewChat={newChat}
             onSelectChat={switchChat}
-            onCollapse={() => dispatch({ type: "collapse", pending: Boolean(pendingCard) })}
+            onCollapse={collapse}
             footer={
               state.call ? (
                 <div className="relative flex flex-col items-center">
@@ -1532,20 +1547,22 @@ export default function AgentWindow() {
               )
             }
           >
-            <AgentMessageList
-              key={openedChat}
-              messages={refusal ? [] : shown}
-              forkOrigin={forkOrigin}
-              onOpenParent={switchChat}
-              busy={busy}
-              readAloud={readAloudState}
-              onRegenerate={regenerate}
-              onFork={forkMessage}
-              onFollowUp={followUp}
-              onContinue={continueTurn}
-              emptyState={emptyState}
-              backToLatest={state.call !== null}
-            />
+            <CallCardContext.Provider value={state.call ? "transcript" : null}>
+              <AgentMessageList
+                key={openedChat}
+                messages={refusal ? [] : shown}
+                forkOrigin={forkOrigin}
+                onOpenParent={switchChat}
+                busy={busy}
+                readAloud={readAloudState}
+                onRegenerate={regenerate}
+                onFork={forkMessage}
+                onFollowUp={followUp}
+                onContinue={continueTurn}
+                emptyState={emptyState}
+                backToLatest={state.call !== null}
+              />
+            </CallCardContext.Provider>
           </AgentModal>
         ) : state.layout === "typing" ? (
           <>
@@ -1557,18 +1574,33 @@ export default function AgentWindow() {
         ) : state.call ? (
           <>
             {standalone && (
-              <div
-                ref={cardFrameRef}
-                className={cn(
-                  "flex max-h-[520px] w-[420px] max-w-full shrink-0 flex-col items-center",
-                  !callAbovePill &&
-                    "agent-chat-scroll overflow-y-auto rounded-2xl border border-border/50 shadow-[var(--shadow-card)] [&>*>*]:my-0"
-                )}
-              >
-                {callAbovePill ??
-                  (callCard && (
-                    <ToolCallCard messageId={callCard.messageId} toolCall={callCard.toolCall} />
+              <div ref={cardFrameRef} className="flex max-w-full shrink-0 flex-col items-center">
+                {!callAbovePill &&
+                  Array.from({ length: questionsBehind }, (_, depth) => (
+                    <div
+                      key={depth}
+                      aria-hidden="true"
+                      className="-mb-4 h-6.5 self-stretch rounded-t-2xl border-x border-t border-border/50 bg-surface-1"
+                      style={{ marginInline: (questionsBehind - depth) * 8 }}
+                    />
                   ))}
+                <div
+                  className={cn(
+                    "flex max-h-[520px] max-w-full shrink-0 flex-col",
+                    callAbovePill
+                      ? "w-[420px] items-center"
+                      : "agent-chat-scroll overflow-y-auto rounded-2xl border border-border/50 shadow-[var(--shadow-card)] [&>*>*]:my-0",
+                    // An answer or connect card is the call's wide card; a question the narrower one.
+                    !callAbovePill && (wideCallCard ? "w-[450px]" : "w-[420px]")
+                  )}
+                >
+                  {callAbovePill ??
+                    (callCard && (
+                      <CallCardContext.Provider value="compact">
+                        <ToolCallCard messageId={callCard.messageId} toolCall={callCard.toolCall} />
+                      </CallCardContext.Provider>
+                    ))}
+                </div>
               </div>
             )}
             {voicePill(false)}

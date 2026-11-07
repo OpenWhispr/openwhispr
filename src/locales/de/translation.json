@@ -4978,7 +4978,8 @@
         "micOn": "Mikrofon einschalten",
         "end": "Anruf beenden",
         "stopReply": "Sprechen stoppen",
-        "backToText": "Zurück zur Eingabe"
+        "backToText": "Zurück zur Eingabe",
+        "showCard": "Ausstehendes anzeigen"
       },
       "settings": {
         "title": "Einstellungen",
@@ -5263,8 +5264,10 @@
         "bodyTooLong": "Die Nachricht ist zu lang für Gmail. Kürze sie, um sie zu senden.",
         "unknown": "Konnte nicht bestätigt werden. Bitte den Ordner „Gesendet“ prüfen.",
         "fromLabel": "Von",
+        "title": "E-Mail",
         "copyAll": "Alles kopieren",
         "copyRecipients": "Empfänger kopieren",
+        "copyCc": "Cc kopieren",
         "copySubject": "Betreff kopieren",
         "copyBody": "Nachricht kopieren"
       },

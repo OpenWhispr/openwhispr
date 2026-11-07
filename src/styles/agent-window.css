@@ -144,13 +144,21 @@
   opacity: 1;
 }
 
-/* A connect card carries a faint wash of the brand blue behind its actions. */
-.agent-window [data-interaction-card][data-kind="connection"] {
+/* A connect card carries a faint wash of the brand blue behind its actions
+   (a call's card is plain, as in the call's designs). */
+.agent-window [data-interaction-card][data-kind="connection"]:not([data-call]) {
   background-image: radial-gradient(
     55% 140% at 72% 100%,
     color-mix(in oklab, var(--color-primary) 9%, transparent),
     transparent
   );
+}
+
+/* In a call a card's main and picked controls (Send, Allow, a ticked box,
+   Open Settings) are neutral, as in the call's designs, not the brand blue. */
+.agent-window [data-call] {
+  --color-primary: var(--color-foreground);
+  --color-primary-foreground: var(--color-background);
 }
 
 /* A step that is running: the label in the foreground color, with the brand

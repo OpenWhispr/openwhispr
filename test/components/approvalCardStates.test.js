@@ -4,8 +4,8 @@ const React = require("react");
 const { createRendererServer, installHappyDom } = require("../lib/rendererTestHarness");
 
 // The answer card in happy-dom over the real store; i18n is not initialized,
-// so labels are their keys.
-async function mountCard(t, entry, electronAPI = {}) {
+// so labels are their keys. `placement` shows it in a voice call.
+async function mountCard(t, entry, electronAPI = {}, placement = null) {
   let root = null;
   t.after(() => root && React.act(async () => root.unmount()));
   const happyWindow = await installHappyDom(t);
@@ -26,10 +26,15 @@ async function mountCard(t, entry, electronAPI = {}) {
   const vite = await createRendererServer(t, { cachePrefix: "openwhispr-approval-states-" });
   const store = await vite.ssrLoadModule("/stores/connectorApprovalStore.ts");
   const { ApprovalCard } = await vite.ssrLoadModule("/components/chat/ApprovalCard.tsx");
+  const { CallCardContext } = await vite.ssrLoadModule("/components/chat/callCardContext.ts");
   store.useConnectorApprovalStore.setState({ entries: { [entry.key]: entry } });
   function Harness() {
     const current = store.useConnectorApprovalStore((state) => state.entries[entry.key]);
-    return React.createElement(ApprovalCard, { entry: current });
+    return React.createElement(
+      CallCardContext.Provider,
+      { value: placement },
+      React.createElement(ApprovalCard, { entry: current })
+    );
   }
   const { createRoot } = require("react-dom/client");
   const host = happyWindow.document.createElement("div");
@@ -197,6 +202,46 @@ test("no channel is listed when main can't read them, and none is offered after 
 
   await card.set({ state: "failed", awaitingRetry: true, errorCode: "rate_limited" });
   assert.equal(card.host.querySelector('[data-approval-field="channel"]'), null);
+});
+
+const EMAIL_FIELDS = { to: ["sam@example.test"], cc: [], subject: "Review", body: "Hi Sam" };
+const EMAIL = {
+  key: "m1::c2",
+  messageId: "m1",
+  toolCallId: "c2",
+  actionId: "a2",
+  connectorId: "gmail",
+  preview: {
+    verbKey: "email",
+    destinationLabel: "sam@example.test",
+    accountLabel: "me@example.test",
+    body: EMAIL_FIELDS.body,
+    fields: EMAIL_FIELDS,
+  },
+  draft: { fields: EMAIL_FIELDS, body: EMAIL_FIELDS.body },
+  state: "pending",
+};
+
+test("in a call an email card has Copy all and Send in its title row, and no sender or Cancel", async (t) => {
+  const card = await mountCard(t, EMAIL, {}, "compact");
+  const title = card.host.querySelector("[data-approval-card]").firstElementChild;
+  assert.match(title.textContent, /connectors\.approval\.email\.title/);
+  assert.ok(title.contains(card.button("connectors.approval.email.copyAll")));
+  assert.ok(title.contains(card.button("connectors.approval.send")));
+  assert.doesNotMatch(card.host.textContent, /connectors\.approval\.email\.fromLabel/);
+  assert.equal(card.button("connectors.approval.cancel"), undefined);
+
+  await card.set({ state: "committing" });
+  assert.ok(title.contains(card.button("connectors.approval.sending")), "Sending… stays there");
+});
+
+test("outside a call the email card keeps its sender and its actions at the foot", async (t) => {
+  const card = await mountCard(t, EMAIL);
+  const parts = [...card.host.querySelector("[data-approval-card]").children];
+  assert.match(parts[0].textContent, /connectors\.approval\.email\.fromLabel/);
+  assert.doesNotMatch(parts[0].textContent, /connectors\.approval\.email\.title/);
+  assert.ok(parts.at(-1).contains(card.button("connectors.approval.send")));
+  assert.ok(card.button("connectors.approval.cancel"));
 });
 
 test("Copy copies the message as it stands, and says so", async (t) => {

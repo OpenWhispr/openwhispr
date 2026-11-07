@@ -4625,7 +4625,8 @@
         "micOn": "開啟麥克風",
         "end": "結束通話",
         "stopReply": "停止說話",
-        "backToText": "返回輸入"
+        "backToText": "返回輸入",
+        "showCard": "顯示待處理內容"
       },
       "settings": {
         "title": "設定",
@@ -4910,8 +4911,10 @@
         "bodyTooLong": "郵件內文過長，無法透過 Gmail 傳送。請縮短後再傳送。",
         "unknown": "無法確認是否已傳送，請檢查「寄件備份」資料夾。",
         "fromLabel": "寄件者",
+        "title": "郵件",
         "copyAll": "全部複製",
         "copyRecipients": "複製收件者",
+        "copyCc": "複製副本",
         "copySubject": "複製主旨",
         "copyBody": "複製內文"
       },

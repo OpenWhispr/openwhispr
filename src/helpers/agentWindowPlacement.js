@@ -21,9 +21,15 @@ const STANDALONE_CARD = { width: 420, minHeight: 80, maxHeight: 400 };
 const CALL_PILL = { width: 240, height: 65 };
 // A long answer card with the call's pill is about 597px in the reference.
 const CALL_CARD_MAX_HEIGHT = 520;
+// A call's answer and connect cards are 450px wide in the reference (its questions 420px, centred).
+const CALL_CARD_WIDTH = 450;
 
-const standaloneSize = (cardHeight, pillHeight = PILL_HEIGHT) => ({
-  width: STANDALONE_CARD.width + 2 * SHADOW_MARGIN,
+const standaloneSize = (
+  cardHeight,
+  pillHeight = PILL_HEIGHT,
+  cardWidth = STANDALONE_CARD.width
+) => ({
+  width: cardWidth + 2 * SHADOW_MARGIN,
   height: cardHeight + COMPOSER_GAP + pillHeight + 2 * SHADOW_MARGIN,
 });
 
@@ -33,7 +39,8 @@ function callLayoutSize(layout, contentHeight) {
   if (layout === "standalone") {
     return standaloneSize(
       clamp(contentHeight, STANDALONE_CARD.minHeight, CALL_CARD_MAX_HEIGHT),
-      CALL_PILL.height
+      CALL_PILL.height,
+      CALL_CARD_WIDTH
     );
   }
   if (layout === "modal") return AGENT_LAYOUT_SIZES.modal;

@@ -4999,7 +4999,8 @@
         "micOn": "Activer le micro",
         "end": "Terminer l'appel",
         "stopReply": "Arrêter de parler",
-        "backToText": "Revenir à la saisie"
+        "backToText": "Revenir à la saisie",
+        "showCard": "Afficher ce qui attend"
       },
       "settings": {
         "title": "Réglages",
@@ -5284,8 +5285,10 @@
         "bodyTooLong": "Le message est trop long pour Gmail. Raccourcissez-le pour l'envoyer.",
         "unknown": "Impossible de confirmer l'envoi. Vérifiez votre dossier Messages envoyés.",
         "fromLabel": "De",
+        "title": "E-mail",
         "copyAll": "Tout copier",
         "copyRecipients": "Copier les destinataires",
+        "copyCc": "Copier les Cc",
         "copySubject": "Copier l'objet",
         "copyBody": "Copier le message"
       },

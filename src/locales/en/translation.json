@@ -4978,7 +4978,8 @@
         "micOn": "Turn microphone on",
         "end": "End call",
         "stopReply": "Stop speaking",
-        "backToText": "Back to typing"
+        "backToText": "Back to typing",
+        "showCard": "Show what's waiting"
       },
       "settings": {
         "title": "Settings",
@@ -5263,8 +5264,10 @@
         "bodyTooLong": "The message is too long for Gmail. Shorten it to send.",
         "unknown": "Couldn't confirm it was sent. Check your Sent folder.",
         "fromLabel": "From",
+        "title": "Email",
         "copyAll": "Copy all",
         "copyRecipients": "Copy recipients",
+        "copyCc": "Copy Cc",
         "copySubject": "Copy subject",
         "copyBody": "Copy message"
       },

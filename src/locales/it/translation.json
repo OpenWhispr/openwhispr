@@ -4646,7 +4646,8 @@
         "micOn": "Accendi il microfono",
         "end": "Termina chiamata",
         "stopReply": "Smetti di parlare",
-        "backToText": "Torna a scrivere"
+        "backToText": "Torna a scrivere",
+        "showCard": "Mostra ciò che è in attesa"
       },
       "settings": {
         "title": "Impostazioni",
@@ -4931,8 +4932,10 @@
         "bodyTooLong": "Il messaggio è troppo lungo per Gmail. Accorcialo per inviarlo.",
         "unknown": "Impossibile confermare l'invio. Controlla la cartella Posta inviata.",
         "fromLabel": "Da",
+        "title": "Email",
         "copyAll": "Copia tutto",
         "copyRecipients": "Copia destinatari",
+        "copyCc": "Copia Cc",
         "copySubject": "Copia oggetto",
         "copyBody": "Copia messaggio"
       },

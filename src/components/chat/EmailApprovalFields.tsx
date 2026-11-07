@@ -23,8 +23,8 @@ interface EmailApprovalFieldsProps {
   editing: boolean;
   /** Cc shows when it has addresses (or had them when the card opened). */
   showCc: boolean;
-  /** The sending Gmail address, read only. */
-  accountLabel: string;
+  /** The sending Gmail address, read only; a call's card names none. */
+  accountLabel?: string;
   /** What blocks Send, and the id of the text that says why. */
   problems: EmailFieldProblems | null;
   problemsId: string;
@@ -53,7 +53,10 @@ function ResolvedAddresses({ addresses }: { addresses: string[] }): ReactElement
   const { t } = useTranslation();
   if (addresses.length === 0) return null;
   return (
-    <p className="ps-18 text-xs text-muted-foreground agent:ps-16 agent:text-[13px]" dir="auto">
+    <p
+      className="col-span-full ps-18 text-xs text-muted-foreground agent:ps-16 agent:text-[13px]"
+      dir="auto"
+    >
       {t("connectors.approval.email.sendsTo", {
         addresses: addresses.map(recipientLabel).join(", "),
       })}
@@ -109,7 +112,15 @@ function EmailFieldsEditor({
         <ResolvedAddresses addresses={fields.to} />
       )}
       {showCc && (
-        <HeaderRow label={t("connectors.approval.email.ccLabel")}>
+        <HeaderRow
+          label={t("connectors.approval.email.ccLabel")}
+          action={
+            <CopyFieldButton
+              text={fields.cc.join(", ")}
+              label={t("connectors.approval.email.copyCc")}
+            />
+          }
+        >
           <input
             aria-label={t("connectors.approval.email.ccLabel")}
             title={addressHint}
@@ -179,7 +190,15 @@ function EmailFieldsView({ fields, showCc }: { fields: EmailFields; showCc: bool
         {value(fields.to.map(recipientLabel).join(", "))}
       </HeaderRow>
       {showCc && fields.cc.length > 0 && (
-        <HeaderRow label={t("connectors.approval.email.ccLabel")}>
+        <HeaderRow
+          label={t("connectors.approval.email.ccLabel")}
+          action={
+            <CopyFieldButton
+              text={fields.cc.join(", ")}
+              label={t("connectors.approval.email.copyCc")}
+            />
+          }
+        >
           {value(fields.cc.map(recipientLabel).join(", "))}
         </HeaderRow>
       )}
@@ -198,7 +217,7 @@ function EmailFieldsView({ fields, showCc }: { fields: EmailFields; showCc: bool
   );
 }
 
-/** The email card's To, Cc and Subject, shown or edited inline, and who it is from. */
+/** The email card's To, Cc and Subject, shown or edited inline, and who it is from when given. */
 export function EmailApprovalFields({
   editing,
   accountLabel,
@@ -212,11 +231,13 @@ export function EmailApprovalFields({
       ) : (
         <EmailFieldsView fields={props.fields} showCc={props.showCc} />
       )}
-      <HeaderRow label={t("connectors.approval.email.fromLabel")}>
-        <span className="min-w-0 flex-1 truncate text-muted-foreground" dir="auto">
-          {accountLabel}
-        </span>
-      </HeaderRow>
+      {accountLabel !== undefined && (
+        <HeaderRow label={t("connectors.approval.email.fromLabel")}>
+          <span className="min-w-0 flex-1 truncate text-muted-foreground" dir="auto">
+            {accountLabel}
+          </span>
+        </HeaderRow>
+      )}
     </>
   );
 }

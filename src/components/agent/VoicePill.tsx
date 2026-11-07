@@ -63,6 +63,8 @@ interface VoicePillProps {
   onStopReply: () => void;
   /** Stopped: the pill is inert, and a click on it goes back to typing. */
   onLeave: () => void;
+  /** A card waits behind the pill: its cap brings it back. */
+  onShowCard?: () => void;
 }
 
 /** A voice call's pill: its status above, then sound, Settings, Chat, Microphone and End. */
@@ -83,6 +85,7 @@ export function VoicePill({
   onEnd,
   onStopReply,
   onLeave,
+  onShowCard,
 }: VoicePillProps) {
   const { t } = useTranslation();
   const dragHandlers = useAgentWindowDrag();
@@ -158,6 +161,15 @@ export function VoicePill({
             {label}
           </span>
         </span>
+        {onShowCard && (
+          <button
+            type="button"
+            onClick={onShowCard}
+            aria-label={t("agentWindow.call.actions.showCard")}
+            title={t("agentWindow.call.actions.showCard")}
+            className="absolute inset-x-6 inset-y-0 rounded-t-xl focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40"
+          />
+        )}
       </div>
       <div
         className={cn(

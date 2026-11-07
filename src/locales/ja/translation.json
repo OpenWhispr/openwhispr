@@ -4625,7 +4625,8 @@
         "micOn": "マイクをオン",
         "end": "通話を終了",
         "stopReply": "話すのをやめる",
-        "backToText": "入力に戻る"
+        "backToText": "入力に戻る",
+        "showCard": "待機中の内容を表示"
       },
       "settings": {
         "title": "設定",
@@ -4910,8 +4911,10 @@
         "bodyTooLong": "メッセージが長すぎて Gmail で送信できません。短くしてから送信してください。",
         "unknown": "送信されたか確認できませんでした。送信済みフォルダを確認してください。",
         "fromLabel": "差出人",
+        "title": "メール",
         "copyAll": "すべてコピー",
         "copyRecipients": "宛先をコピー",
+        "copyCc": "Ccをコピー",
         "copySubject": "件名をコピー",
         "copyBody": "本文をコピー"
       },
