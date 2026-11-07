@@ -105,9 +105,7 @@ for (const shell of OPENCODE_SHELLS) {
   opencodeOverlays.set(shell.id, cachedModels.length ? cachedModels : null);
 }
 
-export function getOpencodeShell(
-  providerId: string
-): OpencodeShell | undefined {
+export function getOpencodeShell(providerId: string): OpencodeShell | undefined {
   return OPENCODE_SHELLS.find((shell) => shell.id === providerId);
 }
 
@@ -127,10 +125,7 @@ export function getCloudModelProviders(): CloudProviderData[] {
   return providers;
 }
 
-export function setOpencodeModelOverlay(
-  providerId: string,
-  models: CloudModelDefinition[]
-): void {
+export function setOpencodeModelOverlay(providerId: string, models: CloudModelDefinition[]): void {
   opencodeOverlays.set(providerId, models);
 }
 

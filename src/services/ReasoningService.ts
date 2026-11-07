@@ -1136,13 +1136,13 @@ class ReasoningService extends BaseReasoningService {
         : isOpencode
           ? createOpencodeChatModel(provider as OpenCodeProviderId, model)
           : await resolveStreamSetup(
-            getAIModel(aiProvider, model, apiKey, baseURL, {
-              disableThinking: openrouterDisableThinking,
-              reasoningEffort: provider === "openrouter" ? reasoningEffort : undefined,
-              ...(isLocalProvider ? { fetch: localServerFetch(model) } : {}),
-            }),
-            assertStreamAllowed
-          );
+              getAIModel(aiProvider, model, apiKey, baseURL, {
+                disableThinking: openrouterDisableThinking,
+                reasoningEffort: provider === "openrouter" ? reasoningEffort : undefined,
+                ...(isLocalProvider ? { fetch: localServerFetch(model) } : {}),
+              }),
+              assertStreamAllowed
+            );
 
       assertStreamAllowed();
       if (abortController.signal.aborted) {

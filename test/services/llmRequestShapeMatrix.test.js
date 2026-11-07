@@ -130,8 +130,9 @@ const MATRIX = [
     CLEANUP,
     { max_completion_tokens: MAX_TOKENS },
   ],
-  // OpenCode's live lists carry glm-5.3, but a custom endpoint keeps the request
-  // shape it had before: getCloudModel never reads a live list for another provider.
+  // OpenCode's live lists carry glm-5.3, but getCloudModel skips live-only
+  // providers for other providers' requests, so a custom endpoint keeps
+  // the shape it had before OpenCode's lists existed.
   [
     "custom glm-5.3 (Ollama Cloud) pins high below its max default (#2008)",
     "custom",

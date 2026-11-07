@@ -208,12 +208,18 @@ test("a failed refresh keeps the registry and the selection as they were", async
   assert.equal(settings.getSettings().cleanupModel, kimiSeed.id);
 });
 
-test("a live list answers only for its own provider, never for a same-named custom model", async (t) => {
+test("each product reads its own seed list before the first fetch", async (t) => {
   installBrowserGlobals(t, { initialStorage: markers });
   const vite = await createRendererServer(t);
   const registry = await vite.ssrLoadModule("/models/ModelRegistry.ts");
 
-  assert.equal(registry.getCloudModel("glm-5.3"), undefined);
-  assert.equal(registry.getCloudModel("glm-5.3", "custom"), undefined);
-  assert.equal(registry.getCloudModel("glm-5.3", "opencode-go")?.id, "glm-5.3");
+  assert.deepEqual(
+    registry.getOpencodeCatalogModels("opencode-go").map((m) => m.id),
+    ["glm-5.3", "deepseek-v4.1-flash", "kimi-k2.7-code", "minimax-m3.1-flash"]
+  );
+  assert.deepEqual(
+    registry.getOpencodeCatalogModels("opencode-zen").map((m) => m.id),
+    ["glm-5.3", "deepseek-v4.1-flash", "kimi-k3", "minimax-m3"]
+  );
+  assert.equal(registry.getOpencodeCatalogModel("opencode-go", "kimi-k3"), undefined);
 });

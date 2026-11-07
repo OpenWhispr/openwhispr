@@ -576,7 +576,14 @@ export default function ReasoningModelSelector({
       invertInDark,
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the catalog changes in place; its version is the signal
-  }, [displayedCloudProvider, openaiModelOptions, tinfoilModels, opencodeModels, t, registryVersion]);
+  }, [
+    displayedCloudProvider,
+    openaiModelOptions,
+    tinfoilModels,
+    opencodeModels,
+    t,
+    registryVersion,
+  ]);
 
   // Keyed by provider IDs, not the list, so a catalog update doesn't reset browsing.
   const localProviderIds = localProviders.map((p) => p.id).join("\n");

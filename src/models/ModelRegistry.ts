@@ -11,6 +11,7 @@ import {
   setOpencodeModelOverlay,
 } from "./cloudModelCatalog";
 import { isUploadOnlyTranscriptionModel } from "./appTranscriptionProviders.js";
+import { isOpencodeCatalogProvider } from "../config/opencodeModelPolicy.js";
 import { pickDefaultModelId } from "./providerDefaultModel";
 import { filterMeetingStreamingProviders } from "../helpers/meetingTranscriptionRouting";
 import type { InferenceMode } from "../types/electron";
@@ -348,7 +349,9 @@ export function getCloudProviderDefaultModelId(providerId: string): string | und
 }
 
 export function getOpencodeCatalogModels(providerId: string): CloudModelDefinition[] {
-  return modelRegistry.getCloudProviders().find((provider) => provider.id === providerId)?.models ?? [];
+  return (
+    modelRegistry.getCloudProviders().find((provider) => provider.id === providerId)?.models ?? []
+  );
 }
 
 export function getOpencodeCatalogModel(
@@ -536,6 +539,12 @@ export function getCloudModel(
   providerId?: string
 ): CloudModelDefinition | undefined {
   for (const provider of modelRegistry.getCloudProviders()) {
+    // OpenCode's providers exist only as live lists (code seed, cache, overlay)
+    // whose public ids collide with self-hosted and custom models (glm-5.3 on
+    // Ollama Cloud): only a request to OpenCode itself may read them, so those
+    // models keep the shape, effort and suppression behavior the shared
+    // registry and family facts give them.
+    if (isOpencodeCatalogProvider(provider.id) && provider.id !== providerId) continue;
     const model = provider.models.find((m) => m.id === modelId);
     if (model) return model;
   }

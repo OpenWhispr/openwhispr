@@ -10,7 +10,7 @@ const {
 const { resolveProviderRequest } = require("../../src/helpers/providerConnectionTest");
 const { BYOK_API_KEYS } = require("../../src/config/secretKeys");
 const { isSelectableOpencodeModelId } = require("../../src/config/opencodeModelPolicy.js");
-const modelData = require("../../src/models/modelRegistryData.json");
+const { getOpencodeShell } = require("../../src/models/cloudModelCatalog");
 
 // OpenCode Go and Zen are separate subscriptions on one host, so the two ids
 // must never collapse into one entry: each needs its own base URL and key.
@@ -75,11 +75,11 @@ test("an unknown or missing provider is refused", () => {
 
 test("both providers are selectable and their seed lists default to a listed model", () => {
   for (const id of Object.keys(OPENCODE_PROVIDERS)) {
-    const provider = modelData.cloudProviders.find((entry) => entry.id === id);
-    assert.ok(provider, `${id} is in the model registry`);
-    assert.ok(provider.models.length > 0, `${id} seeds at least one model`);
+    const shell = getOpencodeShell(id);
+    assert.ok(shell, `${id} is registered`);
+    assert.ok(shell.models.length > 0, `${id} seeds at least one model`);
     assert.ok(
-      provider.models.some((model) => model.id === provider.defaultModel),
+      shell.models.some((model) => model.id === shell.defaultModel),
       `${id} defaults to a seeded model`
     );
   }
@@ -89,8 +89,8 @@ test("the offline seed holds only models the live list would offer", () => {
   // Once OpenCode can be reached the picker shows its live list instead, but
   // offline this seed is all there is, so it must pass the same policy.
   for (const id of Object.keys(OPENCODE_PROVIDERS)) {
-    const provider = modelData.cloudProviders.find((entry) => entry.id === id);
-    for (const model of provider.models) {
+    const shell = getOpencodeShell(id);
+    for (const model of shell.models) {
       assert.equal(isSelectableOpencodeModelId(model.id), true, `${id} seeds ${model.id}`);
       assert.equal(
         typeof model.supportsTemperature,
