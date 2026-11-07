@@ -84,7 +84,13 @@ function toFrames(samples, frameSize = 512) {
   return frames;
 }
 
-function scoreTurn({ expectTools, calledTools, availableTools }) {
+function scoreTurn({ expectTools, calledTools, availableTools, outcome, bargeInMs }) {
+  // No reply finished: a card left waiting, a timeout, or a turn talked over
+  // (unless talking over it was the scenario).
+  const bargedIn = outcome === "barge-in" && Number.isFinite(bargeInMs);
+  if (outcome !== "spoke" && !bargedIn) {
+    return { status: "incomplete", reason: outcome };
+  }
   if (expectTools.length === 0) {
     return calledTools.length === 0
       ? { status: "pass" }
@@ -126,6 +132,7 @@ function summarizeHarness(results) {
     passed: scored.filter(({ score }) => score.status === "pass").length,
     failed: scored.filter(({ score }) => score.status === "fail").length,
     skipped: scored.filter(({ score }) => score.status === "skipped").length,
+    incomplete: scored.filter(({ score }) => score.status === "incomplete").length,
     failures: scored.filter(({ score }) => score.status === "fail").map(({ item }) => item.id),
     // The full wait the user feels: turn-end detection, then the pipeline.
     userStop: stats(metric("userStopToFirstAudioMs")),
@@ -161,7 +168,7 @@ function formatHarnessReport({ results, summary, environment }) {
     `| TTS first audio | ${seconds(summary.ttsFirstAudio.p50)} | ${seconds(summary.ttsFirstAudio.p90)} | ${summary.ttsFirstAudio.n} |`,
     `| Barge-in (speech start → audio stopped) | ${seconds(summary.bargeIn.p50)} | ${seconds(summary.bargeIn.p90)} | ${summary.bargeIn.n} |`,
     "",
-    `Tool choice: **${summary.passed}/${scoredTotal} correct**, ${summary.skipped} skipped (tool not available in this session).`,
+    `Tool choice: **${summary.passed}/${scoredTotal} correct**, ${summary.skipped} skipped (tool not available in this session), ${summary.incomplete} without a finished reply.`,
     "",
     // "Ran" verifies the write-once guard end to end: "Called" is every tool call
     // the model made (including repeats the guard blocked from running), so

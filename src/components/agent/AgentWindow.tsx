@@ -600,7 +600,7 @@ export default function AgentWindow() {
   // request carries, and answered for speech. A turn still running (talked
   // over, or left from typing) stops first: one stream runs per window.
   const sendSpokenTurn = useCallback(
-    async ({ text, speech, replyLanguage }: VoiceCallTurn) => {
+    async ({ text, speech, replyLanguage, dryRunWrites }: VoiceCallTurn) => {
       if (refuseIfRestricted()) {
         speech.onEnd("refused");
         return;
@@ -623,7 +623,7 @@ export default function AgentWindow() {
         const sent = await sendRef.current(text, {
           ...(current.selectedContext ? { selectedContext: current.selectedContext } : {}),
           ...(current.attachment ? { attachment: current.attachment } : {}),
-          voice: { replyLanguage, speech },
+          voice: { replyLanguage, speech, dryRunWrites },
         });
         // Never sent: the engine never heard of it, so it never ends it.
         if (!sent) speech.onEnd("refused");

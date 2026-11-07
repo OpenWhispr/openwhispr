@@ -40,6 +40,8 @@ export interface VoiceCallTurn {
   speech: TurnSpeechObserver;
   /** The language to answer in; null answers in the one spoken. */
   replyLanguage: SpokenLanguage | null;
+  /** A harness turn: write tools answer without running. */
+  dryRunWrites: boolean;
 }
 
 interface UseVoiceCallOptions {
@@ -75,8 +77,8 @@ interface TurnMetrics {
   chunks: number;
   calledTools: string[];
   availableTools: string[];
-  /** Tools that ran, in order: the name, or "<name> (failed)". */
-  ranTools: string[];
+  /** Writes that ran, in order: the name, or "<name> (failed)". */
+  ranWrites: string[];
   transcript: string;
   answer: string;
 }
@@ -240,7 +242,7 @@ export function useVoiceCall({
           transcript: turn.transcript,
           calledTools: turn.calledTools,
           availableTools: turn.availableTools,
-          ranWrites: turn.ranTools,
+          ranWrites: turn.ranWrites,
           answer: turn.answer,
           endedAt: turn.endedAt,
           metrics,
@@ -349,8 +351,8 @@ export function useVoiceCall({
         onToolsOffered: (toolNames) => {
           if (current() && turnRef.current) turnRef.current.availableTools = toolNames;
         },
-        onToolResult: (toolName, ok) => {
-          if (current()) turnRef.current?.ranTools.push(ok ? toolName : `${toolName} (failed)`);
+        onWriteRun: (toolName, ok) => {
+          if (current()) turnRef.current?.ranWrites.push(ok ? toolName : `${toolName} (failed)`);
         },
         onTextWithdrawn: () => {
           if (!current()) return;
@@ -589,7 +591,7 @@ export function useVoiceCall({
           chunks: 0,
           calledTools: [],
           availableTools: [],
-          ranTools: [],
+          ranWrites: [],
           transcript: event.text,
           answer: "",
         };
@@ -598,6 +600,7 @@ export function useVoiceCall({
           text: event.text,
           speech: createTurnSpeech(utteranceId),
           replyLanguage: voiceCallLanguage === "auto" ? null : voiceCallLanguage,
+          dryRunWrites: harnessRef.current,
         });
       } else if (event.type === "tts-audio") {
         if (event.utteranceId !== utteranceRef.current) return;

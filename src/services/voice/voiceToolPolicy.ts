@@ -8,6 +8,12 @@ const GUARDED_WRITES = new Set(["create_note", "update_note", "update_dictionary
 // A failed write changed nothing, so one retry can't duplicate anything; a
 // second failure ends it so a failing tool can't loop.
 const MAX_RUNS_AFTER_FAILURE = 2;
+// The harness plays scripted turns into a real profile, so no write may change it.
+const DRY_RUN_RESULT: ToolResult = {
+  success: true,
+  data: { dryRun: true, note: "Test run: nothing was changed." },
+  displayText: "Test run: nothing was changed.",
+};
 
 interface WebResult {
   title?: string;
@@ -74,21 +80,48 @@ function guardRepeats(tool: ToolDefinition): ToolDefinition {
   };
 }
 
+interface VoiceToolOptions {
+  /** The harness: every write answers with a canned success instead of running. */
+  dryRunWrites?: boolean;
+  /** Hears each write that runs; a repeat the guard blocks never runs. */
+  onWriteRun?: (toolName: string, ok: boolean) => void;
+}
+
 /**
  * The tools of one spoken turn: web results cut to what speech can use, and
  * an identical local write (same tool, same arguments) runs once. Different
  * writes in one turn all run. The registry is built for this turn alone, so
  * the guard lasts exactly one turn.
  */
-export function adaptToolsForVoice(registry: ToolRegistry): void {
-  for (const tool of registry.getAll()) {
-    if (tool.name === "web_search") {
-      registry.register({
-        ...tool,
-        execute: async (args, context) => compactWebResults(await tool.execute(args, context)),
-      });
-    } else if (GUARDED_WRITES.has(tool.name)) {
-      registry.register(guardRepeats(tool));
+export function adaptToolsForVoice(
+  registry: ToolRegistry,
+  { dryRunWrites = false, onWriteRun }: VoiceToolOptions = {}
+): void {
+  for (const original of registry.getAll()) {
+    let tool = original;
+    if (!tool.readOnly && dryRunWrites) {
+      tool = { ...tool, execute: async () => DRY_RUN_RESULT };
     }
+    if (!tool.readOnly && onWriteRun) {
+      const write = tool;
+      tool = {
+        ...write,
+        execute: async (args, context) => {
+          const result = await write.execute(args, context);
+          onWriteRun(write.name, result.success);
+          return result;
+        },
+      };
+    }
+    if (tool.name === "web_search") {
+      const search = tool;
+      tool = {
+        ...search,
+        execute: async (args, context) => compactWebResults(await search.execute(args, context)),
+      };
+    } else if (GUARDED_WRITES.has(tool.name)) {
+      tool = guardRepeats(tool);
+    }
+    if (tool !== original) registry.register(tool);
   }
 }

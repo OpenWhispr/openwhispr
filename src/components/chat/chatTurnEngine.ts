@@ -333,8 +333,8 @@ export interface TurnSpeechObserver {
   onToolCalls: (toolNames: string[]) => void;
   /** The tools this turn offers, once (the voice harness scores against them). */
   onToolsOffered?: (toolNames: string[]) => void;
-  /** A tool finished: whether it ran without an error. */
-  onToolResult?: (toolName: string, ok: boolean) => void;
+  /** A write tool ran (a repeat the write-once guard blocked never does): whether it succeeded. */
+  onWriteRun?: (toolName: string, ok: boolean) => void;
   onEnd: (outcome: TurnSpeechOutcome) => void;
 }
 
@@ -378,8 +378,9 @@ export interface SendToAIOptions {
   /**
    * A request spoken in a voice call: the reply is written to be read aloud in
    * `replyLanguage` (null: the language spoken), and `speech` hears it stream.
+   * `dryRunWrites` (the voice harness) runs no write tool.
    */
-  voice?: { replyLanguage: string | null; speech: TurnSpeechObserver };
+  voice?: { replyLanguage: string | null; speech: TurnSpeechObserver; dryRunWrites?: boolean };
 }
 
 // Walks backward to the newest user message; a null transform keeps walking.
@@ -772,7 +773,12 @@ export function createChatTurnEngine(
               }
             : undefined,
         });
-        if (options?.voice) adaptToolsForVoice(registry);
+        if (options?.voice) {
+          adaptToolsForVoice(registry, {
+            dryRunWrites: options.voice.dryRunWrites,
+            onWriteRun: options.voice.speech.onWriteRun,
+          });
+        }
       }
 
       // Named in the prompt so the model says how to turn a capability on
@@ -1487,7 +1493,6 @@ export function createChatTurnEngine(
             flushContentNow();
             setAgentState("streaming");
             completeToolActivity();
-            speech?.onToolResult?.(chunk.toolName, !chunk.isError);
           } else if (chunk.type === "done") {
             // Ended from outside the turn: it stops, rather than counting as answered.
             if (chunk.finishReason === "abort") {

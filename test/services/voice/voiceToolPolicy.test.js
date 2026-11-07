@@ -100,3 +100,34 @@ test("web results are cut to three short ones without links", async () => {
   assert.deepEqual(Object.keys(data[0]), ["title", "text", "publishedDate"]);
   assert.equal(data[0].text.length, 240);
 });
+
+test("a harness turn answers every write without running it, and still runs reads", async () => {
+  const write = countingTool("create_note", [{ success: true, data: { id: 1 } }]);
+  const read = { ...countingTool("search_notes", [{ success: true, data: [] }]) };
+  read.tool.readOnly = true;
+  const registry = new ToolRegistry();
+  registry.register(write.tool);
+  registry.register(read.tool);
+  adaptToolsForVoice(registry, { dryRunWrites: true });
+
+  const written = await registry.get("create_note").execute({ title: "x" });
+  await registry.get("search_notes").execute({ query: "x" });
+
+  assert.equal(write.calls.length, 0, "the write never ran");
+  assert.equal(written.success, true);
+  assert.equal(written.data.dryRun, true);
+  assert.equal(read.calls.length, 1);
+});
+
+test("only writes that actually run are reported, so a blocked repeat is not", async () => {
+  const runs = [];
+  const write = countingTool("create_note", [{ success: true, data: { id: 1 } }]);
+  const registry = new ToolRegistry();
+  registry.register(write.tool);
+  adaptToolsForVoice(registry, { onWriteRun: (name, ok) => runs.push([name, ok]) });
+
+  await registry.get("create_note").execute({ title: "x" });
+  await registry.get("create_note").execute({ title: "x" });
+
+  assert.deepEqual(runs, [["create_note", true]]);
+});

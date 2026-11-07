@@ -45,6 +45,7 @@ test("scoring: expected tool called, no tool when none expected, unavailable too
   const available = ["web_search", "search_notes"];
   assert.deepEqual(
     scoreTurn({
+      outcome: "spoke",
       expectTools: ["web_search"],
       calledTools: ["web_search"],
       availableTools: available,
@@ -54,20 +55,35 @@ test("scoring: expected tool called, no tool when none expected, unavailable too
     }
   );
   assert.equal(
-    scoreTurn({ expectTools: ["web_search"], calledTools: [], availableTools: available }).status,
+    scoreTurn({
+      outcome: "spoke",
+      expectTools: ["web_search"],
+      calledTools: [],
+      availableTools: available,
+    }).status,
     "fail"
   );
   assert.equal(
-    scoreTurn({ expectTools: [], calledTools: [], availableTools: available }).status,
+    scoreTurn({ outcome: "spoke", expectTools: [], calledTools: [], availableTools: available })
+      .status,
     "pass"
   );
   assert.equal(
-    scoreTurn({ expectTools: [], calledTools: ["web_search"], availableTools: available }).status,
+    scoreTurn({
+      outcome: "spoke",
+      expectTools: [],
+      calledTools: ["web_search"],
+      availableTools: available,
+    }).status,
     "fail"
   );
   assert.equal(
-    scoreTurn({ expectTools: ["get_calendar_events"], calledTools: [], availableTools: available })
-      .status,
+    scoreTurn({
+      outcome: "spoke",
+      expectTools: ["get_calendar_events"],
+      calledTools: [],
+      availableTools: available,
+    }).status,
     "skipped"
   );
 });
@@ -111,6 +127,7 @@ test("summary counts pass/fail/skip and reports latency percentiles", () => {
   assert.equal(summary.passed, 2);
   assert.equal(summary.failed, 1);
   assert.equal(summary.skipped, 1);
+  assert.equal(summary.incomplete, 0);
   assert.equal(summary.firstAudio.p50, 1000);
   assert.equal(summary.firstAudio.p90, 3000);
   assert.equal(summary.bargeIn.p90, 250);
@@ -178,4 +195,15 @@ test("the report has a Ran column showing executed writes, separate from Called"
   assert.match(noteCreateRow, /create_note, create_note \| create_note \|/);
   const plainRagRow = report.split("\n").find((line) => line.startsWith("| plain-rag |"));
   assert.match(plainRagRow, /\| none \| none \|/);
+});
+
+test("a turn with no finished reply is incomplete, unless it was talked over on purpose", () => {
+  const summary = summarizeHarness([
+    result({ id: "waiting", outcome: "timeout" }),
+    result({ id: "card", expectTools: ["search_notes"], outcome: "barge-in" }),
+    result({ id: "interrupted", outcome: "barge-in", bargeInMs: 300 }),
+  ]);
+  assert.equal(summary.incomplete, 2);
+  assert.equal(summary.passed, 1);
+  assert.equal(summary.skipped, 0);
 });
