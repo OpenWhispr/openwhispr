@@ -4317,6 +4317,8 @@
       "deselectAll": "Alle abwählen",
       "confirmed": "Bestätigt",
       "nameAssigned": "Name zugewiesen",
+      "uncertain": "Unsicher",
+      "uncertainHint": "Sprecher dieser Zeile ist unsicher – Zeile auswählen und zuweisen",
       "state": {
         "provisional": "Vorläufig",
         "confirmed": "Bestätigt",

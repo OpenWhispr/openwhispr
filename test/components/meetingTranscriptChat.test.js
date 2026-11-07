@@ -273,3 +273,29 @@ test("original unnumbered mic rows show the resolved recorder and preserve named
   assert.ok(corrected.includes("Corrected"));
   assert.ok(!corrected.includes("Alice Recorder"));
 });
+
+test("an uncertain line inside a speaker's run shows its label and marker after the call", async () => {
+  const segments = [
+    { id: "u1", text: "a long sure line", source: "system", timestamp: 1, speaker: "speaker_0" },
+    {
+      id: "u2",
+      text: "Ja.",
+      source: "system",
+      timestamp: 2,
+      speaker: "speaker_0",
+      speakerIsPlaceholder: true,
+      speakerStatus: "provisional",
+    },
+  ];
+  const html = await renderChat({ segments, speakerMappings: { speaker_0: "Alice" } });
+  assert.ok(html.includes(">Unsure<"), "the uncertain line is marked");
+  assert.equal(html.split("grid-rows-[0fr]").length - 1, 0, "its label is not hidden behind hover");
+
+  const live = await renderChat({ segments, isRecording: true });
+  assert.ok(!live.includes(">Unsure<"), "live guesses are not flagged while recording");
+
+  const locked = await renderChat({
+    segments: [segments[0], { ...segments[1], speakerLocked: true, speakerStatus: "locked" }],
+  });
+  assert.ok(!locked.includes(">Unsure<"), "a line the user assigned is no longer flagged");
+});

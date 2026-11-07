@@ -91,8 +91,22 @@ test("whisper segments each start at their own capture time", () => {
     ],
   };
   assert.deepEqual(toLocalMeetingSegments(result, 10_000, 6000), [
-    { text: "Hallo zusammen.", timestamp: 10_400 },
-    { text: "Wie geht es euch?", timestamp: 12_600 },
+    { text: "Hallo zusammen.", timestamp: 10_400, endTimestamp: 12_100 },
+    { text: "Wie geht es euch?", timestamp: 12_600, endTimestamp: 14_900 },
+  ]);
+});
+
+test("a segment end past the chunk is clamped, and an end before the start is dropped", () => {
+  const result = {
+    text: "a b",
+    segments: [
+      { start: 1, end: 9, text: "a" },
+      { start: 2, end: 2, text: "b" },
+    ],
+  };
+  assert.deepEqual(toLocalMeetingSegments(result, 1000, 5000), [
+    { text: "a", timestamp: 2000, endTimestamp: 6000 },
+    { text: "b", timestamp: 3000 },
   ]);
 });
 

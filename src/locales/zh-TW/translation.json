@@ -3765,6 +3765,8 @@
       "deselectAll": "取消全選",
       "confirmed": "已確認",
       "nameAssigned": "姓名已指派",
+      "uncertain": "不確定",
+      "uncertainHint": "此行的說話者不確定——選取該行以重新指派",
       "state": {
         "provisional": "暫定",
         "confirmed": "已確認",

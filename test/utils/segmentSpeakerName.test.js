@@ -89,3 +89,31 @@ test("own-voice segments are unaffected by a mapping on another cluster", async 
   assert.equal(resolveSegmentSpeakerName(you, { speaker_0: "Alice" }), undefined);
   assert.equal(groupKey(you, { speaker_0: "Alice" }, resolveSegmentSpeakerName), "id:you");
 });
+
+test("naming a speaker locks its sure lines but leaves guessed lines provisional", async () => {
+  const { nameTranscriptSpeaker } = await load();
+  const sure = nameTranscriptSpeaker(
+    { source: "system", speaker: "speaker_1", text: "a", speakerStatus: "confirmed" },
+    "speaker_1",
+    "Eva"
+  );
+  assert.equal(sure.speakerName, "Eva");
+  assert.equal(sure.speakerLocked, true);
+  assert.equal(sure.speakerStatus, "locked");
+
+  const guessed = nameTranscriptSpeaker(
+    {
+      source: "system",
+      speaker: "speaker_1",
+      text: "Ja.",
+      speakerIsPlaceholder: true,
+      speakerStatus: "provisional",
+    },
+    "speaker_1",
+    "Eva"
+  );
+  assert.equal(guessed.speakerName, "Eva");
+  assert.equal(guessed.speakerLocked, false);
+  assert.equal(guessed.speakerStatus, "provisional");
+  assert.equal(guessed.speakerIsPlaceholder, true);
+});
