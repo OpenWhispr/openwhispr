@@ -4323,6 +4323,8 @@
       "deselectAll": "Tout désélectionner",
       "confirmed": "Confirmé",
       "nameAssigned": "Nom attribué",
+      "uncertain": "Incertain",
+      "uncertainHint": "Le locuteur de cette ligne est incertain – sélectionnez la ligne pour la réattribuer",
       "state": {
         "provisional": "Provisoire",
         "confirmed": "Confirmé",

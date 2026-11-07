@@ -3817,6 +3817,8 @@
       "deselectAll": "Deseleccionar todo",
       "confirmed": "Confirmado",
       "nameAssigned": "Nombre asignado",
+      "uncertain": "Dudoso",
+      "uncertainHint": "El hablante de esta línea es incierto: selecciona la línea para reasignarla",
       "state": {
         "provisional": "Provisional",
         "confirmed": "Confirmado",

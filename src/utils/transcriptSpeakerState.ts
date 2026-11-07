@@ -99,6 +99,30 @@ export const lockTranscriptSpeaker = (
     speakerLockSource: "user",
   });
 
+// Naming a speaker locks its lines to the name, except lines only guessed to be
+// that speaker (provisional after per-line voice assignment): they take the
+// name but stay provisional and unlocked, so they remain marked to check.
+export const nameTranscriptSpeaker = (
+  segment: TranscriptSegment,
+  speakerId: string,
+  displayName: string
+) =>
+  segment.speakerIsPlaceholder &&
+  segment.speakerStatus === "provisional" &&
+  !isTranscriptSpeakerLocked(segment)
+    ? applyTranscriptSpeakerPatch(segment, {
+        speakerName: displayName,
+        suggestedName: undefined,
+        suggestedProfileId: undefined,
+      })
+    : lockTranscriptSpeaker(segment, {
+        speakerName: displayName,
+        speaker: speakerId,
+        speakerIsPlaceholder: false,
+        suggestedName: undefined,
+        suggestedProfileId: undefined,
+      });
+
 const mergeSpeakerFields = (existing: TranscriptSegment, incoming: TranscriptSegment) => {
   const merged = {
     ...incoming,
