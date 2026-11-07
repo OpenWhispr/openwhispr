@@ -759,8 +759,12 @@
     },
     "loading": "Chargement...",
     "gpu": {
-      "bannerTitle": "Accélération GPU disponible",
-      "bannerDescription": "Activez l'accélération GPU pour de meilleures performances.",
+      "bannerTitle": "Accélération GPU disponible pour la transcription et l’IA locale",
+      "bannerDescription": "Activez les packs GPU pour la transcription locale Whisper et le traitement par IA locale dans les paramètres.",
+      "transcriptionTitle": "Accélération GPU disponible pour la transcription",
+      "transcriptionDescription": "Accélérez la transcription locale Whisper grâce au GPU.",
+      "intelligenceTitle": "Accélération GPU disponible pour l’IA locale",
+      "intelligenceDescription": "Accélérez le traitement par IA locale avec un pack GPU distinct de celui de la transcription Whisper.",
       "enableButton": "Activer le GPU",
       "dismissButton": "Pas maintenant"
     },

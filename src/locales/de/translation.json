@@ -759,8 +759,12 @@
     },
     "loading": "Laden...",
     "gpu": {
-      "bannerTitle": "GPU-Beschleunigung verfügbar",
-      "bannerDescription": "Aktiviere die GPU-Beschleunigung für schnellere Leistung.",
+      "bannerTitle": "GPU-Beschleunigung für Transkription und lokale KI verfügbar",
+      "bannerDescription": "Aktiviere in den Einstellungen GPU-Pakete für die lokale Whisper-Transkription und die lokale KI-Verarbeitung.",
+      "transcriptionTitle": "GPU-Beschleunigung für Transkription verfügbar",
+      "transcriptionDescription": "Beschleunige die lokale Whisper-Transkription mit GPU-Beschleunigung.",
+      "intelligenceTitle": "GPU-Beschleunigung für lokale KI verfügbar",
+      "intelligenceDescription": "Beschleunige die lokale KI-Verarbeitung mit einem separaten GPU-Paket, unabhängig von der Whisper-Transkription.",
       "enableButton": "GPU aktivieren",
       "dismissButton": "Nicht jetzt"
     },
