@@ -38,7 +38,7 @@ test("openCodeSessionHeaders mints one id per call and stays empty elsewhere", a
 });
 
 /** Drains an AI SDK stream and returns the headers the transport actually sent. */
-async function captureChatHeaders(t, baseUrl) {
+async function captureChatHeaders(t, baseUrl, provider = "custom", opts) {
   const { getAIModel } = await loadProviders();
   const originalFetch = globalThis.fetch;
   t.after(() => {
@@ -62,7 +62,7 @@ async function captureChatHeaders(t, baseUrl) {
     });
   };
 
-  const model = await getAIModel("custom", "kimi-k2.5", "test-key", baseUrl);
+  const model = await getAIModel(provider, "kimi-k2.5", "test-key", baseUrl, opts);
   const { stream } = await model.doStream({
     prompt: [{ role: "user", content: [{ type: "text", text: "hello" }] }],
   });
@@ -80,4 +80,19 @@ test("the chat transport sends a session id to OpenCode Go", async (t) => {
 test("the chat transport sends no session id to other custom endpoints", async (t) => {
   const sent = await captureChatHeaders(t, "https://responses-only.example/v1");
   assert.equal("x-opencode-session" in sent, false);
+  assert.equal("HTTP-Referer" in sent, false);
+  assert.equal("X-OpenRouter-Title" in sent, false);
+});
+
+test("OpenRouter and Custom chat transports send app attribution alongside authentication", async (t) => {
+  for (const provider of ["openrouter", "custom"]) {
+    const sent = new Headers(
+      await captureChatHeaders(t, "https://openrouter.ai/api/v1", provider, {
+        disableThinking: true,
+      })
+    );
+    assert.equal(sent.get("HTTP-Referer"), "https://openwhispr.com");
+    assert.equal(sent.get("X-OpenRouter-Title"), "OpenWhispr");
+    assert.equal(sent.get("Authorization"), "Bearer test-key");
+  }
 });
