@@ -40,6 +40,8 @@ export interface InviteSuggestion {
 
 export interface InvitePeopleViewProps {
   workspaceName: string;
+  /** Replaces the default title and description when given. */
+  heading?: { title: string; description: string };
   state: InviteFlowState;
   dispatch: (event: InviteFlowEvent) => void;
   suggestions: InviteSuggestion[];
@@ -99,6 +101,7 @@ interface BarContent {
 
 export function InvitePeopleView({
   workspaceName,
+  heading,
   state,
   dispatch,
   suggestions,
@@ -332,10 +335,11 @@ export function InvitePeopleView({
         <>
           <div className="flex flex-col gap-1.5">
             <DialogTitle className="text-lg font-medium leading-snug tracking-normal">
-              {t("workspaces.invite.title")}
+              {heading?.title ?? t("workspaces.invite.title")}
             </DialogTitle>
             <DialogDescription className="text-sm leading-normal">
-              {t("workspaces.invite.description", { workspace: isolate(workspaceName) })}
+              {heading?.description ??
+                t("workspaces.invite.description", { workspace: isolate(workspaceName) })}
             </DialogDescription>
             {seatLine ? <p className="text-xs text-muted-foreground">{seatLine}</p> : null}
             {seatCostLine ? <p className="text-xs text-muted-foreground">{seatCostLine}</p> : null}

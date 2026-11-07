@@ -1759,6 +1759,7 @@
         "general": "General",
         "members": "Members",
         "invitations": "Invitations",
+        "guests": "Guests",
         "teams": "Teams"
       },
       "people": {
@@ -2337,6 +2338,59 @@
         "title": "Enterprise console",
         "description": "Manage SSO, policies, and members on the web",
         "open": "Open console"
+      },
+      "guests": {
+        "columns": {
+          "name": "Name",
+          "access": "Access",
+          "actions": "Actions"
+        },
+        "emptyTitle": "No guests yet",
+        "emptyBody": "People outside this workspace who can view your shared notes will show up here.",
+        "loadingTitle": "Loading guests…",
+        "loadingBody": "Your workspace guests will appear here.",
+        "failedTitle": "Couldn't load guests",
+        "failedBody": "Check your connection and try again.",
+        "noteCount_one": "{{count}} note",
+        "noteCount_other": "{{count}} notes",
+        "notesTriggerLabel_one": "{{count}} note shared with {{name}}",
+        "notesTriggerLabel_other": "{{count}} notes shared with {{name}}",
+        "removeFromNote": "Remove from {{note}}",
+        "removedFromNote": "Removed {{name}} from {{note}}",
+        "removeFromNoteFailed": "Couldn't remove {{name}} from {{note}}. Check your connection and try again.",
+        "menu": {
+          "label": "Actions for {{name}}",
+          "invite": "Invite to workspace",
+          "copyEmail": "Copy email",
+          "remove": "Remove as guest"
+        },
+        "invite": {
+          "title_one": "Invite {{count}} guest to {{workspace}}",
+          "title_other": "Invite {{count}} guests to {{workspace}}",
+          "description": "They'll get an email link to join {{workspace}}.",
+          "sent_one": "Sent {{count}} invite to join {{workspace}}",
+          "sent_other": "Sent {{count}} invites to join {{workspace}}"
+        },
+        "remove": {
+          "titleOne": "Remove {{name}} from {{workspace}}?",
+          "confirmOne": "Remove guest",
+          "title_one": "Remove {{count}} guest from {{workspace}}?",
+          "title_other": "Remove {{count}} guests from {{workspace}}?",
+          "body": "They'll lose access to every note shared with them. You can share notes with them again anytime.",
+          "linkShared": "Guests may still have access through link or domain sharing.",
+          "confirm_one": "Remove {{count}} guest",
+          "confirm_other": "Remove {{count}} guests",
+          "removing": "Removing…",
+          "limit": "Select up to {{count}} guests to remove at once.",
+          "failed": "Couldn't remove guests. Nobody was removed. Check your connection and try again.",
+          "done_one": "Removed {{count}} guest",
+          "done_other": "Removed {{count}} guests"
+        },
+        "selection": {
+          "selectAll": "Select all guests",
+          "invite": "Invite to workspace",
+          "remove": "Remove as guest"
+        }
       }
     },
     "unifiedBilling": {

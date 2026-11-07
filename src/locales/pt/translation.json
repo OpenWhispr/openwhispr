@@ -2477,6 +2477,7 @@
         "general": "Geral",
         "members": "Membros",
         "invitations": "Convites",
+        "guests": "Convidados",
         "teams": "Equipes"
       },
       "people": {
@@ -3055,6 +3056,66 @@
         "title": "Console Enterprise",
         "description": "Gerencie SSO, políticas e membros pela web",
         "open": "Abrir console"
+      },
+      "guests": {
+        "columns": {
+          "name": "Nome",
+          "access": "Acesso",
+          "actions": "Ações"
+        },
+        "emptyTitle": "Ainda não há convidados",
+        "emptyBody": "As pessoas de fora deste espaço de trabalho que podem ver suas notas compartilhadas aparecerão aqui.",
+        "loadingTitle": "Carregando convidados…",
+        "loadingBody": "Os convidados do seu espaço de trabalho aparecerão aqui.",
+        "failedTitle": "Não foi possível carregar os convidados",
+        "failedBody": "Verifique sua conexão e tente novamente.",
+        "noteCount_one": "{{count}} nota",
+        "noteCount_many": "{{count}} notas",
+        "noteCount_other": "{{count}} notas",
+        "notesTriggerLabel_one": "{{count}} nota compartilhada com {{name}}",
+        "notesTriggerLabel_many": "{{count}} de notas compartilhadas com {{name}}",
+        "notesTriggerLabel_other": "{{count}} notas compartilhadas com {{name}}",
+        "removeFromNote": "Remover de {{note}}",
+        "removedFromNote": "{{name}} foi removido de {{note}}",
+        "removeFromNoteFailed": "Não foi possível remover {{name}} de {{note}}. Verifique sua conexão e tente novamente.",
+        "menu": {
+          "label": "Ações para {{name}}",
+          "invite": "Convidar para o espaço de trabalho",
+          "copyEmail": "Copiar e-mail",
+          "remove": "Remover como convidado"
+        },
+        "invite": {
+          "title_one": "Convidar {{count}} convidado para {{workspace}}",
+          "title_many": "Convidar {{count}} de convidados para {{workspace}}",
+          "title_other": "Convidar {{count}} convidados para {{workspace}}",
+          "description": "Eles receberão um link por e-mail para entrar em {{workspace}}.",
+          "sent_one": "{{count}} convite enviado para entrar em {{workspace}}",
+          "sent_many": "{{count}} de convites enviados para entrar em {{workspace}}",
+          "sent_other": "{{count}} convites enviados para entrar em {{workspace}}"
+        },
+        "remove": {
+          "titleOne": "Remover {{name}} de {{workspace}}?",
+          "confirmOne": "Remover convidado",
+          "title_one": "Remover {{count}} convidado de {{workspace}}?",
+          "title_many": "Remover {{count}} de convidados de {{workspace}}?",
+          "title_other": "Remover {{count}} convidados de {{workspace}}?",
+          "body": "Eles perderão o acesso a todas as notas compartilhadas com eles. Você pode compartilhar notas com eles novamente quando quiser.",
+          "linkShared": "Os convidados ainda podem ter acesso por compartilhamento de link ou domínio.",
+          "confirm_one": "Remover {{count}} convidado",
+          "confirm_many": "Remover {{count}} de convidados",
+          "confirm_other": "Remover {{count}} convidados",
+          "removing": "Removendo…",
+          "limit": "Selecione até {{count}} convidados para remover de uma só vez.",
+          "failed": "Não foi possível remover os convidados. Ninguém foi removido. Verifique sua conexão e tente novamente.",
+          "done_one": "{{count}} convidado removido",
+          "done_many": "{{count}} de convidados removidos",
+          "done_other": "{{count}} convidados removidos"
+        },
+        "selection": {
+          "selectAll": "Selecionar todos os convidados",
+          "invite": "Convidar para o espaço de trabalho",
+          "remove": "Remover como convidado"
+        }
       }
     },
     "enterpriseCheckout": {

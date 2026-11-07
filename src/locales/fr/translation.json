@@ -1759,6 +1759,7 @@
         "general": "Général",
         "members": "Membres",
         "invitations": "Invitations",
+        "guests": "Invités",
         "teams": "Équipes"
       },
       "people": {
@@ -2337,6 +2338,66 @@
         "title": "Console Enterprise",
         "description": "Gérez le SSO, les politiques et les membres sur le web",
         "open": "Ouvrir la console"
+      },
+      "guests": {
+        "columns": {
+          "name": "Nom",
+          "access": "Accès",
+          "actions": "Actions"
+        },
+        "emptyTitle": "Aucun invité pour l’instant",
+        "emptyBody": "Les personnes extérieures à cet espace de travail qui peuvent consulter vos notes partagées apparaîtront ici.",
+        "loadingTitle": "Chargement des invités…",
+        "loadingBody": "Les invités de votre espace de travail apparaîtront ici.",
+        "failedTitle": "Impossible de charger les invités",
+        "failedBody": "Vérifiez votre connexion et réessayez.",
+        "noteCount_one": "{{count}} note",
+        "noteCount_many": "{{count}} notes",
+        "noteCount_other": "{{count}} notes",
+        "notesTriggerLabel_one": "{{count}} note partagée avec {{name}}",
+        "notesTriggerLabel_many": "{{count}} de notes partagées avec {{name}}",
+        "notesTriggerLabel_other": "{{count}} notes partagées avec {{name}}",
+        "removeFromNote": "Retirer de {{note}}",
+        "removedFromNote": "{{name}} a été retiré de {{note}}",
+        "removeFromNoteFailed": "Impossible de retirer {{name}} de {{note}}. Vérifiez votre connexion et réessayez.",
+        "menu": {
+          "label": "Actions pour {{name}}",
+          "invite": "Inviter dans l'espace de travail",
+          "copyEmail": "Copier l'e-mail",
+          "remove": "Retirer en tant qu'invité"
+        },
+        "invite": {
+          "title_one": "Inviter {{count}} invité dans {{workspace}}",
+          "title_many": "Inviter {{count}} d'invités dans {{workspace}}",
+          "title_other": "Inviter {{count}} invités dans {{workspace}}",
+          "description": "Ils recevront un lien par e-mail pour rejoindre {{workspace}}.",
+          "sent_one": "{{count}} invitation envoyée pour rejoindre {{workspace}}",
+          "sent_many": "{{count}} d'invitations envoyées pour rejoindre {{workspace}}",
+          "sent_other": "{{count}} invitations envoyées pour rejoindre {{workspace}}"
+        },
+        "remove": {
+          "titleOne": "Retirer {{name}} de {{workspace}} ?",
+          "confirmOne": "Retirer l'invité",
+          "title_one": "Retirer {{count}} invité de {{workspace}} ?",
+          "title_many": "Retirer {{count}} d'invités de {{workspace}} ?",
+          "title_other": "Retirer {{count}} invités de {{workspace}} ?",
+          "body": "Ils perdront l'accès à toutes les notes partagées avec eux. Vous pouvez partager à nouveau des notes avec eux à tout moment.",
+          "linkShared": "Les invités peuvent conserver un accès via le partage par lien ou par domaine.",
+          "confirm_one": "Retirer {{count}} invité",
+          "confirm_many": "Retirer {{count}} d'invités",
+          "confirm_other": "Retirer {{count}} invités",
+          "removing": "Retrait en cours…",
+          "limit": "Sélectionnez jusqu’à {{count}} invités à supprimer à la fois.",
+          "failed": "Impossible de retirer les invités. Personne n'a été retiré. Vérifiez votre connexion et réessayez.",
+          "done_one": "{{count}} invité retiré",
+          "done_many": "{{count}} d'invités retirés",
+          "done_other": "{{count}} invités retirés"
+        },
+        "selection": {
+          "selectAll": "Sélectionner tous les invités",
+          "invite": "Inviter dans l'espace de travail",
+          "remove": "Retirer en tant qu'invité"
+        }
       }
     },
     "unifiedBilling": {
