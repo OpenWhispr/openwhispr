@@ -213,6 +213,7 @@ jobs:
       - name: Exercise real isolated Electron settings
         env:
           NODE_PATH: ${{ runner.temp }}/ui-tools/node_modules
+          OPENWHISPR_VERIFY_SCREENSHOTS: ${{ runner.temp }}/verification
         run: node scripts/verify-personal-fork.cjs > "$RUNNER_TEMP/verification/ui.json"
       - name: Reject source changes made during verification
         run: |
@@ -278,7 +279,12 @@ jobs:
             ${{ runner.temp }}/artifacts/maintenance-candidate/claude-result.json
             and the original range under
             ${{ runner.temp }}/artifacts/maintenance-context/context.json.
-            Read ${{ runner.temp }}/regression-comparison.json. Baseline failures
+            Read ${{ runner.temp }}/regression-comparison.json and inspect the
+            real isolated UI screenshots at
+            ${{ runner.temp }}/artifacts/verification-candidate/privacy.png and
+            ${{ runner.temp }}/artifacts/verification-candidate/openrouter.png.
+            Check visible account prompts, clipped controls and model fields.
+            Baseline failures
             are not a passing full suite; reject any new failure/skip/missing test.
             Check that real maintenance fixes were applied appropriately and no
             unrelated features, account screens, ads or hosted-service calls were
