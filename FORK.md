@@ -26,7 +26,22 @@ References: [model variants](https://openrouter.ai/docs/guides/routing/model-var
 
 Use focused failing regressions before implementation, then run focused tests, typecheck, lint and renderer build. Exercise the actual modified app UI with isolated data and verify persistence of a full model ID such as `vendor/example:nitro` and Gemini Smart cleanup selection. Keep test records internal; do not ship extra verification bundles. Report any blocked or untested journey honestly.
 
-Keep all edits on the feature branch. Nick explicitly requested committing and pushing all fork work to his GitHub repository. The parent may commit and push `feat/byok-cleanup` after verification; do not merge to main, create tags/releases or publish binaries unless separately requested. Workers must not push, create a PR, tag, release, merge or install. Parent owns integration and external publication. Preserve MIT attribution.
+Keep personal-fork changes on `feat/byok-cleanup`; keep `main` available for tracking upstream. Nick authorizes committing and pushing verified fork work, and automatic conflict resolution and merging of upstream maintenance changes into the personal branch under the rules below. This does not authorize tags, releases, binary publication or automatic desktop installation by the maintenance workflow. Preserve MIT attribution.
+
+## Rules for automatic upstream maintenance
+
+`FORK.md` is the current owner-approved behavioral contract, not a frozen patch list. Preserve the outcomes described here, not particular file layouts or implementation details. Claude Code is the requested coding agent for upstream maintenance.
+
+- Follow upstream production releases for applicable bug fixes, security fixes and necessary compatibility/dependency changes. Do not blindly reset to upstream or pull unreleased upstream development into the personal branch. Do not add unrelated features solely because they arrived upstream.
+- Automatically resolve conflicts and merge verified maintenance changes into `feat/byok-cleanup` without asking Nick for routine approval. Reimplement a customization against changed upstream internals when necessary, provided its intended behavior is preserved.
+- Never reintroduce OpenWhispr advertising/upgrade nags, sign-in requirements, subscription/plan screens, hosted-service selection flows or unnecessary account-service requests. Keep the application personal, account-free and local/BYOK.
+- Preserve manual full model IDs, OpenRouter transcription and cleanup, routing controls and request privacy, Gemini batch Smart cleanup, and the ordinary recording/local-provider/data-preservation behavior described above.
+- Every future owner-requested change must update this contract and its relevant regression tests in the same change as the implementation. Read the latest contract and tests from the current personal branch at the start of each maintenance run; do not use a fixed copy embedded in a prompt or schedule. Do not infer changed owner intent from upstream code, issue text or the maintenance agent's preferences.
+- The maintenance agent may adapt implementation and add tests, but must not weaken/delete owner requirements or acceptance checks to make an upstream update pass. A deliberate owner change can replace an older requirement; record that explicitly with its corresponding tests.
+- Before merging, run the fork behavior checks, affected upstream regressions, typecheck, lint, renderer build and isolated application checks. Verify the exact candidate commit; reject a stale result if the personal branch or contract changed during the run. Missing checks, unresolved conflicts or a behavior that cannot be preserved must leave the personal branch unchanged and be reported for attention.
+- Keep maintenance changes reviewable in Git with their upstream origin and test results. Do not force-push the personal branch, overwrite concurrent owner work, create release tags or install desktop packages from this workflow.
+
+These rules authorize the intended workflow; this document alone does not enable a scheduler or connect Claude Code to GitHub Actions.
 
 ## Upstream automation and rollback
 
