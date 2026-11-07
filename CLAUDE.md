@@ -271,7 +271,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **ReasoningService.ts**: AI processing for agent-addressed commands
   - Each streaming call takes the caller's `AbortSignal` and owns its controller and cloud request id, so streams run concurrently and starting or cancelling one never touches another. `cancelAllRequests()` (dictation cancel, in the dictation window's instance) aborts all of them. An aborted stream ends with `finishReason: "abort"`, which the chat engine saves as a stopped turn, never as an answer
   - Detects when user addresses their named agent and removes the agent name from final output
-  - Provider implementations live in a registry at `src/services/ai/inferenceProviders/index.ts` covering 8 providers (`anthropic`, `enterprise`, `gemini`, `groq`, `lan`, `local`, `openai`, `openwhispr`), each implementing the `InferenceProvider` interface from `types.ts`
+  - Provider implementations live in a registry at `src/services/ai/inferenceProviders/index.ts` covering 12 providers (`anthropic`, `corti`, `enterprise`, `gemini`, `groq`, `lan`, `local`, `opencode-go`, `opencode-zen`, `openai`, `openwhispr`, `tinfoil`), each implementing the `InferenceProvider` interface from `types.ts`
   - Per-scope LLM config: 4 scopes (`dictationCleanup`, `dictationAgent`, `noteFormatting`, `chatIntelligence`) defined in `src/config/inferenceScopes.ts`
   - `selectResolvedLLMConfig(state, scope)` in `settingsStore.ts` resolves provider/model per scope with fallback chains
 
@@ -524,6 +524,10 @@ npm run model-registry:sync -- --revision <commit on the registry's published br
   `REASONING_PROVIDERS` (`buildReasoningProviders()`), consumed by the model pickers
 - `src/models/providerDefaultModel.ts` - `pickProviderDefaultModel()`: the provider's `defaultModel`, else the first model
 - `src/models/legacyModels.ts` - `isListedModel()`: pickers list a legacy entry only while it is selected
+- `src/config/opencodeModelPolicy.js` - Pure ESM policy for OpenCode's live model lists, shared by main and renderer: keeps only `type: "chat"` models that declare the `chat-completions` protocol (the only transport this app speaks), drops zero-priced, `-free`/`contributor` and locally-deprecated ids, reads `capabilities.temperature` strictly, no `supportsThinking`, blank display names fall back to the id
+- `src/helpers/opencodeCatalog.js` - Main-process fetch of `{baseUrl}/models` (one request per product, 10s timeout, in-flight dedupe, 60s failure backoff); the API key is sent as `Authorization: Bearer` when set
+- `src/models/opencodeModelCache.ts` + `src/models/opencodeModels.ts` + `src/hooks/useOpencodeModels.ts` - Renderer cache (`opencodeModels:<providerId>` in localStorage, 1h freshness), refresh/reconcile into `retiredModelSwitchStore`, and picker hook
+- OpenCode Go/Zen have no signed-catalog entries: `src/models/cloudModelCatalog.ts` registers code shells (id, label, default plus a 4-model offline seed each, verified against live payloads) and the live fetch applies as an overlay (`setOpencodeModelOverlay`, mirroring Tinfoil) without touching the signed catalog. If the signed catalog ever lists them, it wins. A follow-up should move these providers into the model-registry repo so a vendor sync carries them
   (muted, marked Legacy and disabled) or, for a local model, while its file is still downloaded so
   it can be deleted. Speech-to-text pickers don't read the flag yet, so no Whisper or Parakeet
   entry may carry it (`test/helpers/legacyModels.test.js`).
