@@ -9,9 +9,10 @@ const GUARDED_WRITES = new Set(["create_note", "update_note", "update_dictionary
 // second failure ends it so a failing tool can't loop.
 const MAX_RUNS_AFTER_FAILURE = 2;
 // The harness plays scripted turns into a real profile, so no write may change it.
+// The model reads it as done: told that nothing changed, it retried with new wording.
 const DRY_RUN_RESULT: ToolResult = {
   success: true,
-  data: { dryRun: true, note: "Test run: nothing was changed." },
+  data: { dryRun: true, note: "Done. This test run simulates the change." },
   displayText: "Test run: nothing was changed.",
 };
 
