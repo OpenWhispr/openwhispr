@@ -147,3 +147,43 @@ test("mergeWhisperPrompt puts the bias first so prompt truncation keeps it", asy
   const truncated = prompt.slice(0, MAX_PROMPT_CHARS);
   assert.equal(truncated.slice(0, truncated.lastIndexOf(",")).startsWith(bias), true);
 });
+
+// twp→cn reverts 么 to 幺 (OpenCC's Taiwan variant table maps them), so
+// already-Simplified text lost every 么 on its way through (#2985).
+test("applyChineseScript keeps 么 in Simplified text", async () => {
+  const { applyChineseScript } = await load();
+  assert.equal(
+    await applyChineseScript("为什么 OpenWhispr 这么坑？", "simplified"),
+    "为什么 OpenWhispr 这么坑？"
+  );
+  assert.equal(await applyChineseScript("什么怎么那么", "simplified"), "什么怎么那么");
+  assert.equal(await applyChineseScript("為什麼 這麼", "simplified"), "为什么 这么");
+  assert.equal(await applyChineseScript("這是繁體中文軟體", "simplified"), "这是繁体中文软件");
+});
+
+test("Simplified conversion preserves sentence-final 么 in explicit and auto modes", async () => {
+  const { applyChineseScript, resolveChineseScriptTarget } = await load();
+  for (const text of ["是么", "对么", "可以么"]) {
+    for (const preferredLanguage of ["zh-CN", "auto"]) {
+      const target = resolveChineseScriptTarget(preferredLanguage, "simplified", text);
+      assert.equal(target, "simplified", `${preferredLanguage}: ${text}`);
+      assert.equal(await applyChineseScript(text, target), text, `${preferredLanguage}: ${text}`);
+    }
+  }
+});
+
+test("applyChineseScript preserves legitimate 幺 alongside 么", async () => {
+  const { applyChineseScript } = await load();
+  for (const text of ["幺蛾子", "幺九", "为什么会有幺蛾子"]) {
+    assert.equal(await applyChineseScript(text, "simplified"), text);
+  }
+});
+
+// On auto, short phrases like 為什麼 had no listed variant and kept their
+// Traditional characters despite the Simplified preference (#2985).
+test("auto detects 么 / 麼 phrases as Chinese", async () => {
+  const { resolveChineseScriptTarget } = await load();
+  assert.equal(resolveChineseScriptTarget("auto", "simplified", "為什麼"), "simplified");
+  assert.equal(resolveChineseScriptTarget("auto", "simplified", "什麼時候"), "simplified");
+  assert.equal(resolveChineseScriptTarget("auto", "traditional", "为什么"), "traditional");
+});
