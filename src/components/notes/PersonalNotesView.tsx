@@ -4,7 +4,7 @@ import { useShallow } from "zustand/react/shallow";
 import { Plus, Sparkles } from "../icons";
 import { useToast } from "../ui/useToast";
 import { PanelResizeHandle } from "../ui/PanelResizeHandle";
-import NoteEditor from "./NoteEditor";
+import NoteEditor, { type NoteRunOptions } from "./NoteEditor";
 import SpacesTree from "./SpacesTree";
 import { ContainerOverview } from "./overview/ContainerOverview";
 import NotesStructureIntroDialog from "./NotesStructureIntroDialog";
@@ -794,7 +794,7 @@ export default function PersonalNotesView({
   // the store — this view can be unmounted when an auto-end stop fires.
   const isActiveNoteRecording = isTranscribing && recordingNoteId === activeNote?.id;
 
-  const runNoteAction = async (action: ActionItem) => {
+  const runNoteAction = async (action: ActionItem, runOptions?: NoteRunOptions) => {
     if (!editorNote) return;
     const {
       recordingNoteId: liveNoteId,
@@ -881,6 +881,7 @@ export default function PersonalNotesView({
       knownPeople,
       fromSummary,
       material,
+      summaryLanguage: runOptions?.summaryLanguage,
       allowTitleGeneration: isRegenerableNoteTitle(editorNote.title, [
         t("notes.list.untitledNote"),
         t("notes.list.newNote"),

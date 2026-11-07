@@ -2889,7 +2889,10 @@
     },
     "noteFormatting": {
       "autoGenerateTitle": "Auto-generate note titles",
-      "autoGenerateTitleDescription": "Use AI to generate a short title for notes after transcription or enhancement"
+      "autoGenerateTitleDescription": "Use AI to generate a short title for notes after transcription or enhancement",
+      "summaryLanguage": "Summary language",
+      "summaryLanguageDescription": "Language AI summaries are written in. Automatic uses the language of the meeting or notes, and the interface language when that is unclear.",
+      "summaryLanguageAuto": "Automatic (meeting language)"
     },
     "transcription": {
       "customSetup": "Custom Setup",
@@ -4266,7 +4269,9 @@
       "noTemplates": "No templates yet",
       "emptyEditorTitle": "Select a template",
       "emptyEditorDescription": "Choose a template from the list or create a new one",
-      "outputHint": "Applying a template creates or replaces the AI summary using your notes and transcript."
+      "outputHint": "Applying a template creates or replaces the AI summary using your notes and transcript.",
+      "language": "Summary language",
+      "languageAuto": "Automatic"
     },
     "onboarding": {
       "llm": {

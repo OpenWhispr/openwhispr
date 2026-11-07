@@ -2357,7 +2357,10 @@
     },
     "noteFormatting": {
       "autoGenerateTitle": "ノートのタイトルを自動生成",
-      "autoGenerateTitleDescription": "文字起こしや改善後にAIを使用してノートの短いタイトルを生成します"
+      "autoGenerateTitleDescription": "文字起こしや改善後にAIを使用してノートの短いタイトルを生成します",
+      "summaryLanguage": "要約の言語",
+      "summaryLanguageDescription": "AI 要約を書く言語です。自動では会議またはメモの言語を使い、判別できない場合はインターフェースの言語を使います。",
+      "summaryLanguageAuto": "自動（会議の言語）"
     },
     "transcription": {
       "customSetup": "カスタム設定",
@@ -3473,7 +3476,9 @@
       "noTemplates": "テンプレートはまだありません",
       "emptyEditorTitle": "テンプレートを選択",
       "emptyEditorDescription": "リストからテンプレートを選択するか、新しく作成してください",
-      "outputHint": "テンプレートを適用すると、ノートと文字起こしをもとにAI要約を作成、または置き換えます。"
+      "outputHint": "テンプレートを適用すると、ノートと文字起こしをもとにAI要約を作成、または置き換えます。",
+      "language": "要約の言語",
+      "languageAuto": "自動"
     },
     "empty": {
       "title": "まだノートがありません",

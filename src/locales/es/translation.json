@@ -2409,7 +2409,10 @@
     },
     "noteFormatting": {
       "autoGenerateTitle": "Generar títulos de notas automáticamente",
-      "autoGenerateTitleDescription": "Usar IA para generar un título corto para las notas después de la transcripción o mejora"
+      "autoGenerateTitleDescription": "Usar IA para generar un título corto para las notas después de la transcripción o mejora",
+      "summaryLanguage": "Idioma del resumen",
+      "summaryLanguageDescription": "Idioma en el que se escriben los resúmenes de IA. Automático usa el idioma de la reunión o de las notas y, si no está claro, el idioma de la interfaz.",
+      "summaryLanguageAuto": "Automático (idioma de la reunión)"
     },
     "transcription": {
       "customSetup": "Configuración personalizada",
@@ -3750,7 +3753,9 @@
       "noTemplates": "Aún no hay plantillas",
       "emptyEditorTitle": "Seleccionar plantilla",
       "emptyEditorDescription": "Elige una plantilla de la lista o crea una nueva",
-      "outputHint": "Al aplicar una plantilla, se crea o reemplaza el resumen de IA a partir de tus notas y la transcripción."
+      "outputHint": "Al aplicar una plantilla, se crea o reemplaza el resumen de IA a partir de tus notas y la transcripción.",
+      "language": "Idioma del resumen",
+      "languageAuto": "Automático"
     },
     "empty": {
       "title": "Todavía no hay notas aquí",

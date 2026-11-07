@@ -24,7 +24,13 @@ async function loadStore(
   const cancelledRequests = [];
   installBrowserGlobals(t, {
     // The real settings store reads the route from storage at load time.
-    initialStorage: { noteFormattingMode: mode, noteFormattingUseLocal: "true", ...storage },
+    // An English interface keeps the summary language line's fallback fixed.
+    initialStorage: {
+      noteFormattingMode: mode,
+      noteFormattingUseLocal: "true",
+      uiLanguage: "en",
+      ...storage,
+    },
     window: {
       electronAPI: {
         updateNote: async (noteId, payload) => {
@@ -118,7 +124,7 @@ test("material that fits is one request with today's prompt and no budget read",
   assert.equal(calls.length, 1);
   assert.deepEqual(budgetCalls, []);
   assert.ok(calls[0].text.includes("## Meeting Transcript"));
-  assert.ok(calls[0].config.systemPrompt.endsWith("Summarize the meeting."));
+  assert.match(calls[0].config.systemPrompt, /Summarize the meeting\.\n\nOUTPUT LANGUAGE: Detect/);
   assert.equal(calls[0].config.maxTokens, 4096);
 });
 
@@ -727,10 +733,14 @@ test("a transcript without speaker labels is packed without a prose prefix", asy
     assert.doesNotMatch(part.config.systemPrompt, /speaker's label|by label|Meeting Context/);
   }
   const { compileTemplatePrompt } = await import("../../src/helpers/templatePrompts.js");
+  const { noteOutputLanguageInstruction } = await import("../../src/helpers/noteOutputLanguage.js");
   assert.ok(
-    calls
-      .at(-1)
-      .config.systemPrompt.startsWith(compileTemplatePrompt(ACTION, { hasPlainTranscript: true })),
+    calls.at(-1).config.systemPrompt.startsWith(
+      compileTemplatePrompt(ACTION, {
+        hasPlainTranscript: true,
+        outputLanguage: noteOutputLanguageInstruction("auto", "en"),
+      })
+    ),
     "the merge pass carries the plain-transcript rule"
   );
 });
@@ -738,6 +748,8 @@ test("a transcript without speaker labels is packed without a prose prefix", asy
 test("a transcript in plain text gets its own prompt and the dictionary, and owners it names become mentions", async (t) => {
   const { compileTemplatePrompt, compileSummaryActionPrompt } =
     await import("../../src/helpers/templatePrompts.js");
+  const { noteOutputLanguageInstruction } = await import("../../src/helpers/noteOutputLanguage.js");
+  const outputLanguage = noteOutputLanguageInstruction("auto", "en");
   const reply = [
     "## Action Items",
     "- [ ] Fix the build by Friday — Alice",
@@ -761,7 +773,7 @@ test("a transcript in plain text gets its own prompt and the dictionary, and own
     knownPeople: [{ name: "Alice Ng", email: "alice@example.com" }],
   });
   await waitFor(() => updates.length === 1, "the plain transcript's save");
-  const instructions = compileTemplatePrompt(ACTION, plainOptions);
+  const instructions = compileTemplatePrompt(ACTION, { ...plainOptions, outputLanguage });
   assert.equal(updates[0].payload.enhancement_prompt, instructions);
   assert.ok(calls[0].config.systemPrompt.startsWith(instructions));
   assert.ok(
@@ -794,8 +806,8 @@ test("a transcript in plain text gets its own prompt and the dictionary, and own
   await waitFor(() => updates.length === 3, "the personal note's save");
   assert.equal(
     calls.at(-1).config.systemPrompt,
-    compileTemplatePrompt(ACTION),
-    "a personal note is unchanged"
+    compileTemplatePrompt(ACTION, { outputLanguage }),
+    "a personal note gets no dictionary"
   );
 
   // A summary action on a note with no summary yet writes one from the material.
@@ -806,7 +818,7 @@ test("a transcript in plain text gets its own prompt and the dictionary, and own
     calls
       .at(-1)
       .config.systemPrompt.startsWith(
-        compileSummaryActionPrompt(shorten, { fromSummary: false, ...plainOptions })
+        compileSummaryActionPrompt(shorten, { fromSummary: false, ...plainOptions, outputLanguage })
       ),
     "a first summary from a summary action gets the plain-transcript preamble"
   );

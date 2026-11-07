@@ -216,6 +216,12 @@ function LiveMeetingTranscriptChat({
   );
 }
 
+/** What a summary run takes from the editor besides its template. */
+export interface NoteRunOptions {
+  /** "auto" or a language code; unset follows the Summary language setting. */
+  summaryLanguage?: string;
+}
+
 interface NoteEditorProps {
   note: NoteItem;
   onTitleChange: (sourceNoteId: number, title: string) => void;
@@ -230,7 +236,7 @@ interface NoteEditorProps {
   onExportTranscript?: (format: "txt" | "srt" | "json" | "md") => void;
   enhancement?: Enhancement;
   /** Runs a template, or an action that edits the summary, on this note. */
-  onRunNoteAction?: (action: ActionItem) => void;
+  onRunNoteAction?: (action: ActionItem, options?: NoteRunOptions) => void;
   onManageActions?: (kind: ActionKind) => void;
   actionProcessingState?: ActionProcessingState;
   actionName?: string | null;
@@ -488,6 +494,12 @@ export default function NoteEditor({
   const templates = useActionsOfKind("template");
   const noteActions = useActionsOfKind("action");
   const defaultSummaryTemplateId = useSettingsStore((state) => state.defaultSummaryTemplateId);
+  // The picker's language applies to this note's next summary runs; other notes
+  // keep the Summary language setting.
+  const noteSummaryLanguage = useSettingsStore((state) => state.noteSummaryLanguage);
+  const [summaryLanguageByNote, setSummaryLanguageByNote] = useState<Record<number, string>>({});
+  const summaryLanguage = summaryLanguageByNote[note.id] ?? noteSummaryLanguage;
+  const runSummary = (template: ActionItem) => onRunNoteAction?.(template, { summaryLanguage });
   const defaultTemplate = resolveDefaultTemplate(templates, defaultSummaryTemplateId);
   const noteTemplate = resolveTemplate(templates, note.enhancement_template_id);
   const isDefaultAiSummary = defaultTemplate?.translation_key === GENERATE_NOTES_KEY;
@@ -1351,10 +1363,15 @@ export default function NoteEditor({
                       <TemplatePicker
                         templates={templates}
                         current={noteTemplate}
-                        onRun={(template) => onRunNoteAction?.(template)}
+                        onRun={runSummary}
                         onManage={() => onManageActions?.("template")}
                         disabled={isActionRunning}
                         alignTo={summaryTabRef}
+                        summaryLanguage={summaryLanguage}
+                        summaryLanguageSetting={noteSummaryLanguage}
+                        onSummaryLanguageChange={(language) =>
+                          setSummaryLanguageByNote((prev) => ({ ...prev, [note.id]: language }))
+                        }
                       >
                         <button
                           type="button"
@@ -1627,7 +1644,7 @@ export default function NoteEditor({
                 <Button
                   className="h-9 max-w-full min-w-0 gap-2 px-4 text-sm"
                   aria-label={summaryCalloutLabel}
-                  onClick={() => onRunNoteAction?.(defaultTemplate)}
+                  onClick={() => runSummary(defaultTemplate)}
                 >
                   <AlignLeft size={16} className="shrink-0" />
                   <span className="truncate">

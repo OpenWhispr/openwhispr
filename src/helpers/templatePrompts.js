@@ -64,8 +64,20 @@ const flatSystemPrompt = ({ isMeetingNote, hasPlainTranscript }) =>
  */
 export function compileTemplatePrompt(
   template,
-  { isMeetingNote = false, hasPlainTranscript = false } = {}
+  { isMeetingNote = false, hasPlainTranscript = false, outputLanguage = "" } = {}
 ) {
+  return withOutputLanguage(
+    compileTemplateInstructions(template, { isMeetingNote, hasPlainTranscript }),
+    outputLanguage
+  );
+}
+
+// The OUTPUT LANGUAGE line (noteOutputLanguage.js) closes the prompt, where a
+// small model still follows it after the English sections.
+const withOutputLanguage = (prompt, outputLanguage) =>
+  outputLanguage ? `${prompt}\n\n${outputLanguage}` : prompt;
+
+function compileTemplateInstructions(template, { isMeetingNote, hasPlainTranscript }) {
   const preamble =
     SOURCE_FIDELITY_RULE + "\n\n" + inputPreamble({ isMeetingNote, hasPlainTranscript });
   const sections = normalizeSections(template.sections);
@@ -100,13 +112,17 @@ export function compileTemplatePrompt(
 
 export function compileSummaryActionPrompt(
   action,
-  { fromSummary, isMeetingNote = false, hasPlainTranscript = false }
+  { fromSummary, isMeetingNote = false, hasPlainTranscript = false, outputLanguage = "" }
 ) {
   if (fromSummary)
-    return SOURCE_FIDELITY_RULE + "\n\n" + SUMMARY_ACTION_SYSTEM_PROMPT + action.prompt;
+    return withOutputLanguage(
+      SOURCE_FIDELITY_RULE + "\n\n" + SUMMARY_ACTION_SYSTEM_PROMPT + action.prompt,
+      outputLanguage
+    );
   const preamble = inputPreamble({ isMeetingNote, hasPlainTranscript });
-  return (
-    SOURCE_FIDELITY_RULE + "\n\n" + preamble + SUMMARY_ACTION_FROM_MATERIAL_PROMPT + action.prompt
+  return withOutputLanguage(
+    SOURCE_FIDELITY_RULE + "\n\n" + preamble + SUMMARY_ACTION_FROM_MATERIAL_PROMPT + action.prompt,
+    outputLanguage
   );
 }
 
