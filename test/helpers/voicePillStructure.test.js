@@ -9,6 +9,7 @@ const sourceRoot = path.resolve(__dirname, "../..");
 // under test may live in either file.
 const readDictationStyles = () =>
   fs.readFileSync(path.join(sourceRoot, "src/index.css"), "utf8") +
+  fs.readFileSync(path.join(sourceRoot, "src/styles/theme-tokens.css"), "utf8") +
   fs.readFileSync(path.join(sourceRoot, "src/styles/dictation-panel.css"), "utf8");
 
 // The pill renders the resting silhouette and the live waveform as two
