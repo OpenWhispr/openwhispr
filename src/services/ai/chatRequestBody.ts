@@ -76,6 +76,10 @@ export function applyChatCompletionsParams(
     requestBody.reasoning_effort = familyEffort.cleanupValue;
   }
 
+  if (config.responseFormat) {
+    requestBody.response_format = config.responseFormat;
+  }
+
   const suppressed = applyThinkingSuppression(
     requestBody,
     model,

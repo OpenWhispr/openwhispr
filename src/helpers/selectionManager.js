@@ -245,6 +245,7 @@ class SelectionManager {
     // The caller knows whether a caret capture could ever be used (auto-paste
     // on); without it the probe's binary spawn would be pure waste.
     const probeEditable = options.probeEditable === true;
+    const forceFreshTarget = options.forceFreshTarget === true;
     return this.clipboardManager.runClipboardOperation(async () => {
       // captureTarget() fires on every toggle press, including stop. Fast
       // cloud transcription can get here before the stop-press probe lands
@@ -255,6 +256,9 @@ class SelectionManager {
         await this._captureTargetPromise;
       }
       this._pruneSessions();
+      if (forceFreshTarget || !this.lastTarget) {
+        await this.captureTarget({ force: true });
+      }
       const expectedTarget =
         this.platform === "darwin" && this.textEditMonitor?.lastTargetPid
           ? { kind: "mac-pid", pid: this.textEditMonitor.lastTargetPid }
@@ -330,6 +334,7 @@ class SelectionManager {
         const pasteResult = await this.clipboardManager._pasteText(replacement, {
           ...options,
           restoreClipboard: options.restoreClipboard !== false,
+          ...(session.target?.kind === "win-hwnd" ? { targetWindow: session.target.id } : {}),
         });
         await pasteResult?.restoreComplete;
         if (pasteResult?.pasted === false) {
@@ -930,7 +935,13 @@ class SelectionManager {
   }
 
   _sameTarget(a, b) {
-    return !!a && !!b && a.kind === b.kind && String(a.id ?? a.pid) === String(b.id ?? b.pid);
+    if (!a || !b || a.kind !== b.kind) return false;
+    if (a.kind === "win-hwnd") {
+      const hA = parseWindowHandle(a.id);
+      const hB = parseWindowHandle(b.id);
+      if (hA !== null && hB !== null) return hA === hB;
+    }
+    return String(a.id ?? a.pid) === String(b.id ?? b.pid);
   }
 }
 
