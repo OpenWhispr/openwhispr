@@ -56,8 +56,17 @@ const NOTE_FIELDS = [
 const FOLDER_FIELDS = ["name", "is_default", "sort_order"];
 
 // `messages` rides along as a stored field; of the routes returning a conversation,
-// only the list includes it, as api/conversations/list.ts does.
-const CONVERSATION_FIELDS = ["title", "archived_at", "messages"];
+// only the list includes it, as api/conversations/list.ts does. A row stored
+// without a fork's origin lacks those keys, as every row from an API without
+// them does.
+const CONVERSATION_FIELDS = [
+  "title",
+  "archived_at",
+  "messages",
+  "parent_client_conversation_id",
+  "fork_message_count",
+  "fork_context",
+];
 
 const DICTIONARY_FIELDS = ["word", "source"];
 

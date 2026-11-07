@@ -44,6 +44,13 @@ async function setupChatTurns(t, electronAPI = {}, mockModules = {}, rendererOpt
           writes.push({ id, role, content, metadata });
           return { id: writes.length };
         },
+        // A reply saved while it ran is completed in its row.
+        updateAgentMessage: async (rowId, content, metadata) => {
+          const write = writes[rowId - 1];
+          if (!write) return null;
+          Object.assign(write, { content, metadata });
+          return { id: rowId };
+        },
         getAgentConversation: async (id) =>
           rows.get(id) ?? { id, title: `Chat ${id}`, messages: [] },
         ...electronAPI,

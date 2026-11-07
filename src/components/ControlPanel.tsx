@@ -35,7 +35,12 @@ import {
   selectPolicyEffectiveSettings,
   useSettingsStore,
 } from "../stores/settingsStore";
-import { subscribeChatAccountScope, subscribeChatPolicy } from "../stores/chatTurnStore";
+import {
+  startNewChat,
+  subscribeChatAccountScope,
+  subscribeChatPolicy,
+} from "../stores/chatTurnStore";
+import { useChatNeedsAttention } from "./chat/useChatNeedsAttention";
 import { usePolicyStore } from "../stores/policyStore";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import type { EnterpriseAudioTestLink } from "../types/enterpriseAudio";
@@ -114,6 +119,8 @@ import type { SourceNote } from "./chat/useSourceNote";
 const platform = getCachedPlatform();
 
 const SIDEBAR_WIDTH_PX = 192;
+// open-settings-section names an Integrations section as "integrations.<section>".
+const INTEGRATIONS_TARGET_PREFIX = "integrations.";
 
 const SettingsModal = React.lazy(() => import("./SettingsModal"));
 const ReferralModal = React.lazy(() => import("./ReferralModal"));
@@ -156,6 +163,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const [showSearch, setShowSearch] = useState(false);
   const showDiscarded = useShowDiscarded();
   const [activeView, setActiveView] = useState<ControlPanelView>("home");
+  // The chat keeps its turns running behind other views; one that waits on the user marks Chat.
+  const chatNeedsAttention = useChatNeedsAttention();
   useModalGate("invitation", invitationToken !== null);
   // Accepting an invitation or joining a workspace routes to Notes, which may open its structure
   // intro. Notes is lazy, so it can mount late; this holds the gate until it has taken over.
@@ -578,6 +587,15 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     // start); a bare request (app-menu Cmd+,) keeps an open modal where it is.
     const drain = async (showAnyway: boolean) => {
       const section = await window.electronAPI?.getPendingSettingsSection?.();
+      // Integrations is a view, not a Settings section.
+      if (section?.startsWith(INTEGRATIONS_TARGET_PREFIX)) {
+        setIntegrationsSection(
+          section.slice(INTEGRATIONS_TARGET_PREFIX.length) as IntegrationsSection
+        );
+        setActiveView("integrations");
+        setShowSettings(false);
+        return;
+      }
       if (section) {
         setSettingsSection(section);
         setSettingsRequest((count) => count + 1);
@@ -1189,6 +1207,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         >
           <ControlPanelSidebar
             activeView={activeView}
+            chatNeedsAttention={activeView !== "chat" && chatNeedsAttention}
             onViewChange={setActiveView}
             onOpenSettings={() => {
               setSettingsSection(undefined);
@@ -1238,7 +1257,14 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 <div className="flex items-center gap-2">
                   <NewNoteMenu
                     onNewNote={handleNewNote}
-                    onNewChat={agentAllowedByPolicy ? () => setActiveView("chat") : undefined}
+                    onNewChat={
+                      agentAllowedByPolicy
+                        ? () => {
+                            startNewChat();
+                            setActiveView("chat");
+                          }
+                        : undefined
+                    }
                   />
                   <ProfileMenu
                     onOpenSettings={(section) => {

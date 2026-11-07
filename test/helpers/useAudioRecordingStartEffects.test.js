@@ -72,6 +72,10 @@ export default class FakeAudioManager {
     this.report({ isRecording: false, isProcessing: true, isStreaming: false });
     return Promise.resolve(true);
   }
+  // As the real one with no batch recording to stop.
+  cancelRecording() {
+    return false;
+  }
 }
 `;
 
@@ -106,7 +110,8 @@ async function mountHook(t, route = MANAGED_ORUKEET) {
         onPrepareDictation: noopDispose,
         onCancelDictationPreparation: noopDispose,
         onStopDictation: noopDispose,
-        dictationLifecycleStateChanged: () => {},
+        // Main grants the microphone, as it does when nothing else holds it.
+        dictationLifecycleStateChanged: async () => true,
         pauseMediaPlayback: () => globalThis.__startEvents.push("pause"),
         resumeMediaPlayback: () => globalThis.__startEvents.push("resume"),
         registerCancelHotkey: () => globalThis.__startEvents.push("register"),

@@ -51,13 +51,14 @@ test("main Chat keeps A alive through New chat, B, and unmount with writes bound
   fixture.streams[1].resolve("B answer");
   fixture.streams[0].resolve("A answer");
   await until(() => Object.values(fixture.state().entries).every((entry) => !entry.running));
+  // Each reply's row is saved when its turn starts and completed in place.
   assert.deepEqual(
     fixture.writes.map(({ id, content }) => [id, content]),
     [
       [firstId, "A"],
+      [firstId, "A answer"],
       [secondId, "B"],
       [secondId, "B answer"],
-      [firstId, "A answer"],
     ]
   );
 });

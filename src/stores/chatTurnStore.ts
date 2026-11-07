@@ -6,7 +6,7 @@ import type {
   OpenNoteContext,
   SendToAIOptions,
 } from "../components/chat/chatTurnEngine";
-import { appendChatMessage } from "../components/chat/chatPersistence";
+import { appendChatMessage, replyMetadata, saveReplyRow } from "../components/chat/chatPersistence";
 import {
   NO_CHAT_SKILLS,
   readChatSkills,
@@ -17,6 +17,7 @@ import {
 import type { AgentState, Message } from "../components/chat/types";
 import { usePolicyStore } from "./policyStore";
 import { isAgentAllowed } from "./policyRules";
+import { normalizeAgentSelectionContext } from "../utils/agentSelectionContext";
 
 export type ChatSelection =
   | { kind: "new-chat" }
@@ -86,9 +87,31 @@ interface Submission {
   engine: ChatTurnEngine | null;
 }
 const submissions = new Map<string, Submission>();
+type MessagesUpdate = (messages: Message[]) => Message[];
+// The chat that took each conversation's finished turn: a send that commits after Stop still
+// reports on the message that chat now shows.
+const handedOverTurns = new Map<
+  number,
+  { submissionId: string; setMessages: (update: MessagesUpdate) => void }
+>();
 const deletedConversations = new Set<number>();
 const conversationRevisions = new Map<number, number>();
 let accountId: string | null | undefined;
+// This chat's claim on a conversation in main: while one of its turns runs there (or a
+// question it restored waits), another window shows the conversation without running or
+// answering it.
+const chatOwnerId = crypto.randomUUID();
+
+export function claimChatConversation(id: number) {
+  return window.electronAPI?.claimAgentConversation?.(id, chatOwnerId);
+}
+
+/** Gives the conversation back to other windows, unless one of this chat's turns still runs there. */
+export function releaseChatConversation(id: number): void {
+  const entry = useChatTurnStore.getState().entries[`conversation:${id}`];
+  if (entry?.running || entry?.settling) return;
+  void window.electronAPI?.releaseAgentConversation?.(id, chatOwnerId);
+}
 
 export function chatSelectionKey(selection: ChatSelection): string {
   if (selection.kind === "conversation") return `conversation:${selection.conversationId}`;
@@ -210,6 +233,8 @@ export function startChatSend(input: StartChatSendInput): boolean {
   const selection: ChatSelection =
     conversationId === null ? { kind: "submission", submissionId } : input.selection;
   const key = chatSelectionKey(selection);
+  const selectedContext = normalizeAgentSelectionContext(input.options?.selectedContext)?.text;
+  const userMessageId = crypto.randomUUID();
   const entry: ChatTurnEntry = {
     submissionId,
     conversationId,
@@ -217,10 +242,11 @@ export function startChatSend(input: StartChatSendInput): boolean {
     messages: [
       ...(state.entries[selectionKey]?.messages ?? input.messages),
       {
-        id: crypto.randomUUID(),
+        id: userMessageId,
         role: "user",
         content: input.text,
         isStreaming: false,
+        ...(selectedContext ? { selectedContext } : {}),
       },
     ],
     agentState: "thinking",
@@ -264,6 +290,19 @@ export function startChatSend(input: StartChatSendInput): boolean {
   };
   const patch = (update: (current: ChatTurnEntry) => Partial<ChatTurnEntry>): void =>
     patchEntry(active, update);
+  // Stop only fences the turn's status: what it did still belongs on its message.
+  const setMessages = (update: MessagesUpdate): void => {
+    if (!ownerCurrent()) return;
+    const view =
+      operation.conversationId === null ? undefined : handedOverTurns.get(operation.conversationId);
+    if (view?.submissionId === submissionId) view.setMessages(update);
+    else patchEntry(ownerCurrent, (current) => ({ messages: update(current.messages) }));
+  };
+  // The saved row a message forks through.
+  const setDbId = (messageId: string, dbId: number): void =>
+    setMessages((messages) =>
+      messages.map((message) => (message.id === messageId ? { ...message, dbId } : message))
+    );
   const showSaveError = (): void =>
     patch((current) => ({
       messages: [
@@ -278,6 +317,9 @@ export function startChatSend(input: StartChatSendInput): boolean {
     }));
   const run = async (): Promise<void> => {
     const writes: Promise<void>[] = [];
+    // One save at a time per reply, so a reply saved while it waited is
+    // completed in place rather than added twice.
+    const savedRows = new Map<string, Promise<number | null>>();
     const openNote = input.openNote;
     let noteAvailable = true;
     const invalidateNote = (): void => {
@@ -296,6 +338,7 @@ export function startChatSend(input: StartChatSendInput): boolean {
           window.electronAPI?.onFolderDeleted?.(invalidateNote),
         ]
       : [];
+    let claimedId: number | null = null;
     try {
       if (operation.conversationId === null) {
         const title = input.text.length > 50 ? `${input.text.slice(0, 50)}...` : input.text;
@@ -331,8 +374,18 @@ export function startChatSend(input: StartChatSendInput): boolean {
       }
       const boundId = operation.conversationId;
       if (!active()) return;
-      await appendChatMessage(boundId, "user", input.text);
+      const claim = await claimChatConversation(boundId);
+      if (claim?.owned) claimedId = boundId;
       if (!active()) return;
+      if (claim && !claim.owned) throw new Error("Another window is running this conversation");
+      const userRowId = await appendChatMessage(
+        boundId,
+        "user",
+        input.text,
+        selectedContext ? { selectedContext } : undefined
+      );
+      if (!active()) return;
+      setDbId(userMessageId, userRowId);
       bumpListRevision();
       const { createChatTurnEngine } = await import("../components/chat/chatTurnEngine");
       if (!active()) return;
@@ -348,13 +401,12 @@ export function startChatSend(input: StartChatSendInput): boolean {
               }
             : undefined,
           allowConnectors: true,
+          allowInteractions: true,
           skillsEnabled: true,
           isOwnerCurrent: ownerCurrent,
         }),
         {
-          // Stop only fences the turn's status: what it did still belongs on its message.
-          setMessages: (update) =>
-            patchEntry(ownerCurrent, (current) => ({ messages: update(current.messages) })),
+          setMessages,
           setAgentState: (agentState) => patch(() => ({ agentState })),
           setToolStatus: (toolStatus) => patch(() => ({ toolStatus })),
           setActiveToolName: (activeToolName) => patch(() => ({ activeToolName })),
@@ -373,18 +425,28 @@ export function startChatSend(input: StartChatSendInput): boolean {
             attached: { ref: { name: skill.name }, displayName: skill.displayName, picked: true },
           });
         },
-        persistAssistantMessage: (content, toolCalls) => {
+        persistAssistantMessage: (messageId, content, toolCalls, { turn }) => {
           // An already-saved skill may report after Stop. Account changes and deletion fence even that write.
           if (!ownerCurrent()) return;
-          const write = appendChatMessage(boundId, "assistant", content, toolCalls)
-            .then(() => {
+          const metadata = replyMetadata(toolCalls, turn);
+          const saving = (savedRows.get(messageId) ?? Promise.resolve(null)).then(async (rowId) => {
+            const savedId = await saveReplyRow(boundId, rowId, content, metadata);
+            if (savedId === null) throw new Error("Conversation is no longer available");
+            return savedId;
+          });
+          savedRows.set(
+            messageId,
+            saving.catch(() => null)
+          );
+          const write = saving
+            .then((rowId) => {
+              setDbId(messageId, rowId);
               if (ownerCurrent()) bumpListRevision();
             })
             .catch(() => {
               showSaveError();
             });
           writes.push(write);
-          return write;
         },
       });
       await Promise.all(writes);
@@ -414,6 +476,8 @@ export function startChatSend(input: StartChatSendInput): boolean {
       patch(() => ({ running: false, agentState: "idle", toolStatus: "", activeToolName: "" }));
       patchEntry(ownerCurrent, () => ({ settling: false }));
       submissions.delete(submissionId);
+      // Even for a dropped chat: a delete that fails keeps its row, which must not stay busy.
+      if (claimedId !== null) releaseChatConversation(claimedId);
     }
   };
   void run();
@@ -441,10 +505,8 @@ export function cancelChatTurn(selection: ChatSelection): void {
         agentState: "idle",
         toolStatus: "",
         activeToolName: "",
-        // Stop discards the save, not what the user already saw or what its tools already did.
-        messages: current.messages
-          .filter((message) => !message.isStreaming || message.content || message.toolCalls?.length)
-          .map((message) => ({ ...message, isStreaming: false })),
+        // Stop keeps the reply (saved when its turn started) with what its tools already did; the engine saves it as stopped.
+        messages: current.messages.map((message) => ({ ...message, isStreaming: false })),
       };
     if (entry.conversationId !== null) return { entries };
     const selected = chatSelectionKey(state.selection) === key;
@@ -496,10 +558,14 @@ export function acceptChatConversation(conversationId: number): void {
   deletedConversations.delete(conversationId);
 }
 
-export function takeCompletedChatTurn(conversationId: number): ChatTurnEntry | null {
+export function takeCompletedChatTurn(
+  conversationId: number,
+  setMessages: (update: MessagesUpdate) => void
+): ChatTurnEntry | null {
   const key = `conversation:${conversationId}`;
   const entry = useChatTurnStore.getState().entries[key];
   if (!entry || entry.running || entry.settling) return null;
+  handedOverTurns.set(conversationId, { submissionId: entry.submissionId, setMessages });
   useChatTurnStore.setState((state) => {
     const entries = { ...state.entries };
     delete entries[key];
@@ -538,6 +604,7 @@ export function resetForAccountChange(): void {
     operation.engine?.cancel({ explicit: true });
   }
   submissions.clear();
+  handedOverTurns.clear();
   deletedConversations.clear();
   conversationRevisions.clear();
 }

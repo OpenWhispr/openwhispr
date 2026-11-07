@@ -104,6 +104,7 @@ export default function ConversationList({
         created_at: c.created_at,
         updated_at: c.updated_at,
         is_archived: !!c.archived_at,
+        is_fork: c.parent_conversation_id != null,
         // A note that's gone entirely has no title to show; the chat reads as a plain one.
         sourceNote:
           c.note_id != null && c.note_title != null

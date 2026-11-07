@@ -381,30 +381,65 @@ function conversationCreateSnapshot(
   };
 }
 
-function conversationMessageMetadata(metadata: unknown): Record<string, unknown> | null {
-  if (!metadata) return null;
-  return typeof metadata === "string"
-    ? JSON.parse(metadata)
-    : (metadata as Record<string, unknown>);
+// A chat isn't sent while a reply is still running or waiting on the user:
+// another device would get a half turn and could answer its question again, and
+// messages carry no shared id, so the finished reply would go as another
+// message. A turn that old was cut off (the app quit) and goes as is. A fork
+// waits for its first turn like a new chat does, since until then it holds only
+// copies of its parent's messages.
+const TURN_IN_PROGRESS_MAX_AGE_MS = 60 * 60 * 1000;
+
+function hasTurnInProgress(conversation: {
+  has_active_turn?: boolean;
+  fork_message_count?: number | null;
+  messages: ReadonlyArray<{ metadata?: unknown }>;
+}) {
+  if (
+    conversation.has_active_turn ||
+    conversation.messages.length <= (conversation.fork_message_count ?? 0)
+  )
+    return true;
+  return conversation.messages.some((message) => {
+    let metadata = message.metadata;
+    if (typeof metadata === "string") {
+      try {
+        metadata = JSON.parse(metadata);
+      } catch {
+        return false;
+      }
+    }
+    const turn = (metadata as { turn?: { status?: string; startedAt?: number } } | null)?.turn;
+    return (
+      (turn?.status === "waiting" || turn?.status === "running") &&
+      Date.now() - (turn.startedAt ?? 0) < TURN_IN_PROGRESS_MAX_AGE_MS
+    );
+  });
 }
 
-// Messages carry no shared id, so a local message counts as sent while the cloud
-// holds an unmatched one with the same role and text. The messages route refuses
-// empty content, so a tool-only turn stays on this device.
+function conversationMessageMetadata(metadata: unknown): Record<string, unknown> | null {
+  if (!metadata) return null;
+  const parsed = typeof metadata === "string" ? JSON.parse(metadata) : metadata;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  const { turn, ...rest } = parsed as Record<string, unknown>;
+  if (!turn || typeof turn !== "object" || Array.isArray(turn)) return parsed;
+  const { reasoning: _reasoning, ...savedTurn } = turn as Record<string, unknown>;
+  return { ...rest, turn: savedTurn };
+}
+
+// Messages carry no shared id. The cloud copy holds this device's messages in
+// the order they were stored, one at a time: those its create carried, empty
+// ones too, then those sent after it, never an empty one, which the messages
+// route refuses. So a local message counts as sent while the copy holds one of
+// its role in its place, whatever the text: a reply regenerated since keeps its
+// place, and the cloud can't change a message.
 function missingConversationMessages<Message extends { role: string; content: string }>(
   local: readonly Message[],
   cloud: ReadonlyArray<{ role: string; content: string }>
 ): Message[] {
-  const key = (message: { role: string; content: string }): string =>
-    JSON.stringify([message.role, message.content]);
-  const unmatched = new Map<string, number>();
-  for (const message of cloud) {
-    unmatched.set(key(message), (unmatched.get(key(message)) ?? 0) + 1);
-  }
+  let held = 0;
   return local.filter((message) => {
-    const remaining = unmatched.get(key(message)) ?? 0;
-    if (remaining > 0) {
-      unmatched.set(key(message), remaining - 1);
+    if (cloud[held]?.role === message.role) {
+      held += 1;
       return false;
     }
     return message.content.length > 0;
@@ -1272,7 +1307,7 @@ export class SyncService {
   // the cloud holds what this pass read, so a later edit gets its own attempt.
   private async sendMissingConversationContent(localId: number, cloudId: string): Promise<void> {
     const local = await window.electronAPI.getAgentConversation?.(localId);
-    if (!local) return;
+    if (!local || hasTurnInProgress(local)) return;
     const snapshot = conversationCreateSnapshot(local);
     const { messages: cloudMessages } = await ConversationsService.listMessages(cloudId);
     for (const message of missingConversationMessages(local.messages, cloudMessages)) {
@@ -1283,8 +1318,8 @@ export class SyncService {
         conversationMessageMetadata(message.metadata)
       );
     }
-    await ConversationsService.update(cloudId, { title: local.title });
-    await window.electronAPI.markConversationSynced?.(localId, cloudId, snapshot);
+    const cloud = await ConversationsService.update(cloudId, { title: local.title });
+    await window.electronAPI.markConversationSynced?.(localId, cloudId, snapshot, cloud.updated_at);
   }
 
   // Recorded before the request is sent, so a chat deleted while it is in
@@ -1302,6 +1337,14 @@ export class SyncService {
       title: full.title,
       created_at: full.created_at,
       updated_at: full.updated_at,
+      parent_client_conversation_id: full.parent_client_conversation_id,
+      // A retry's messages follow it without the empty ones, which the messages
+      // route refuses, so the copied count names only those the cloud will hold.
+      fork_message_count:
+        full.cloud_create_attempted && full.fork_message_count
+          ? full.messages.slice(0, full.fork_message_count).filter((m) => m.content).length || null
+          : full.fork_message_count,
+      fork_context: full.fork_context,
       messages: messages.map((m) => ({
         role: m.role,
         content: m.content,
@@ -1327,7 +1370,7 @@ export class SyncService {
 
     if (full.cloud_id) {
       await ConversationsService.update(full.cloud_id, { title: full.title });
-    } else {
+    } else if (!hasTurnInProgress(full)) {
       await this.createCloudConversation(full);
     }
   }
@@ -2667,7 +2710,7 @@ export class SyncService {
     for (const conv of fresh) {
       try {
         const full = await window.electronAPI.getAgentConversation?.(conv.id);
-        if (!full) continue;
+        if (!full || hasTurnInProgress(full)) continue;
         await this.createCloudConversation(full);
       } catch (err) {
         console.error("Conversation sync failed:", err);

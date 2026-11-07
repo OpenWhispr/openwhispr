@@ -93,10 +93,6 @@ test("technical output values remain LTR inside an Arabic document", () => {
       /<bdi dir="ltr">\{invitation\.email\}<\/bdi>/,
     ],
     [
-      "src/components/dictation/AssistantPanel.tsx",
-      /<kbd\s+dir="ltr"[\s\S]*?\{readableVoiceHotkey\}/,
-    ],
-    [
       "src/components/EnterpriseProviderConfig.tsx",
       /<select\s+dir="ltr"\s+value=\{store\.bedrockRegion\}/,
     ],

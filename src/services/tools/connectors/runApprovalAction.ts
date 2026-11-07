@@ -1,17 +1,24 @@
 import i18n from "../../../i18n";
 import type { ToolExecutionContext, ToolResult } from "../ToolRegistry";
-import { requestApproval } from "../../../stores/connectorApprovalStore";
+import type { ConnectorPrepareResult } from "../../../types/connectors";
 import {
+  approvalKey,
+  requestApproval,
+  useConnectorApprovalStore,
+} from "../../../stores/connectorApprovalStore";
+import {
+  duplicateActionResult,
   approvalOutcomeResult,
   notSentResult,
   prepareFailureResult,
   unavailableResult,
 } from "./toolOutcome";
+import { approvalActionKey, connectorActionKey } from "./actionKey";
 
 /**
  * Cards one turn can raise, across every connector. "File these eight action
  * items as issues" gets five now and the rest on request; a model stuck in a
- * loop, or following injected text, can't bury the panel in cards.
+ * loop, or following injected text, can't bury the chat in cards.
  */
 export const MAX_APPROVAL_CARDS_PER_TURN = 5;
 const CARD_SLOT = "approval_card";
@@ -32,37 +39,90 @@ export async function runApprovalAction(
   options: { unknownGuidance?: string } = {}
 ): Promise<ToolResult> {
   if (!context) return unavailableResult("no_chat_context");
-  // Whatever happens next (a card, a question, a refusal), the answer belongs
-  // in the panel: a voice turn must never paste it at the caret.
-  context.onHoldDelivery();
+  // Claim before preparing a card: a concurrent call or a completed action in
+  // this request may already hold this key.
+  const actionKey = connectorActionKey(connectorId, action, args);
+  if (!context.claimAction(actionKey)) return duplicateActionResult();
   // Claimed before the first await, so calls running in parallel can't overshoot.
   if (!context.claimTurnSlot(CARD_SLOT, MAX_APPROVAL_CARDS_PER_TURN)) {
+    context.releaseAction(actionKey);
     return notSentResult(
       "card_limit",
       CARD_LIMIT_GUIDANCE,
       i18n.t("connectors.toolStatus.cardLimit", { max: MAX_APPROVAL_CARDS_PER_TURN })
     );
   }
-  // A rejected IPC call reads as unavailable, so the caller's turn slot is
-  // given back and the model is told not to retry.
-  const prepared = await window.electronAPI
-    ?.connectorPrepare?.(connectorId, action, args)
-    .catch(() => undefined);
+  // The same send in an earlier request may be wanted again; the card says so
+  // and the user's Send decides. A rejected IPC call reads as unavailable.
+  const prepare = async (): Promise<ConnectorPrepareResult | undefined> => {
+    const result = await window.electronAPI
+      ?.connectorPrepare?.(connectorId, action, args)
+      .catch(() => undefined);
+    if (
+      result?.status !== "ready" ||
+      (!context.sentEarlier(actionKey) &&
+        !context.sentEarlier(approvalActionKey(connectorId, action, args, result.preview)))
+    )
+      return result;
+    const { preview } = result;
+    const notes = [...(preview.notes ?? []), { key: "connectors.approval.sentEarlier" }];
+    return { ...result, preview: { ...preview, notes } };
+  };
+  const prepared = await prepare();
   // No card appeared, so the slot goes back for another try this turn.
   if (!prepared) {
     context.releaseTurnSlot(CARD_SLOT);
+    context.releaseAction(actionKey);
     return unavailableResult("connectors_unavailable");
   }
   if (prepared.status !== "ready") {
     context.releaseTurnSlot(CARD_SLOT);
+    context.releaseAction(actionKey);
     return prepareFailureResult(prepared, connectorId);
   }
+  const preparedKey = approvalActionKey(connectorId, action, args, prepared.preview);
+  if (preparedKey !== actionKey && !context.claimAction(preparedKey)) {
+    void window.electronAPI?.connectorCancel?.(prepared.actionId, "cancelled_by_user");
+    context.releaseAction(actionKey);
+    context.releaseTurnSlot(CARD_SLOT);
+    return duplicateActionResult();
+  }
 
-  const outcome = await requestApproval(context, {
-    actionId: prepared.actionId,
-    connectorId,
-    preview: prepared.preview,
-  });
+  // Retry and a reconnect prepare the same action again while the tool
+  // still waits, so it stays this one send.
+  const outcome = await requestApproval(
+    context,
+    { actionId: prepared.actionId, connectorId, preview: prepared.preview },
+    prepare
+  );
+  context.releaseAction(actionKey);
+  if (preparedKey !== actionKey) context.releaseAction(preparedKey);
+  if (outcome.state === "sent" || outcome.state === "unknown") {
+    const card =
+      useConnectorApprovalStore.getState().entries[
+        approvalKey(context.messageId, context.toolCallId)
+      ];
+    const completedKey = approvalActionKey(
+      connectorId,
+      action,
+      args,
+      card?.preview ?? prepared.preview,
+      card?.draft.fields ?? (card ? { title: card.draft.title, body: card.draft.body } : undefined)
+    );
+    context.recordCompletedAction(completedKey, {
+      status: outcome.state,
+      ...(outcome.state === "sent"
+        ? {
+            ...(outcome.url ? { url: outcome.url } : {}),
+            ...(outcome.resultLabel ? { reference: outcome.resultLabel } : {}),
+          }
+        : {}),
+    });
+  }
+  if (outcome.state === "not_sent" && outcome.clarification) {
+    // With what the user wrote on the card, so asking where keeps it.
+    return prepareFailureResult(outcome.clarification, connectorId, outcome);
+  }
   // An edited card may have gone to other recipients than the model chose.
   const destination =
     (outcome.state === "sent" || outcome.state === "unknown") && outcome.destinationLabel

@@ -126,7 +126,7 @@ test("a remote selection survives a launch whose catalog has not loaded it yet",
     initialStorage: { _llmScopeKeysMigrated: "1", _providerSettingsMigrated: "1" },
   });
   const vite = await createRendererServer(t, { cachePrefix: "registry-lost-cache-" });
-  let settings = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  await vite.ssrLoadModule("/stores/settingsStore.ts");
   const store = await vite.ssrLoadModule("/models/registryData.js");
   const data = structuredClone(seed);
   data.cloudProviders
@@ -163,7 +163,7 @@ test("a remote selection survives a launch whose catalog has not loaded it yet",
     manifestVersion: bundleOnly.getRegistryVersion() + 1,
     pending: true,
   });
-  settings = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const settings = await vite.ssrLoadModule("/stores/settingsStore.ts");
   settings.reconcileRetiredCloudModelSelections();
   // Installed models are listed from their install record, not from the catalog.
   globalThis.window.electronAPI.modelGetAll = async () => [

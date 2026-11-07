@@ -37,7 +37,7 @@ function loadWindowConfigWithGeometry(assistantPanelSizeLimits) {
   }
 }
 
-test("the main-process assistant window consumes the shared voice-surface geometry", () => {
+test("the main-process voice surfaces consume the shared voice-surface geometry", () => {
   const windowConfig = loadWindowConfigWithGeometry({
     ratioWidth: 500,
     ratioHeight: 625,
@@ -47,16 +47,16 @@ test("the main-process assistant window consumes the shared voice-surface geomet
     maxSurfaceWidth: 700,
   });
 
-  assert.deepEqual(windowConfig.WINDOW_SIZES.ASSISTANT, { width: 531, height: 656 });
+  assert.equal(windowConfig.WINDOW_SIZES.DICTATION_ERROR.width, 531);
 });
 
-test("the main and renderer geometry adapters agree with the native assistant footprint", async () => {
+test("the main and renderer geometry adapters agree with the native voice surface footprint", async () => {
   const geometry = require("../../src/helpers/voiceSurfaceGeometry.js");
   const windowConfig = require(WINDOW_CONFIG_PATH);
   const rendererGeometry = await import("../../src/helpers/voiceSurfaceGeometry.mjs");
 
   assert.equal(
-    windowConfig.WINDOW_SIZES.ASSISTANT.width,
+    windowConfig.WINDOW_SIZES.DICTATION_ERROR.width,
     geometry.ASSISTANT_PANEL_SIZE_LIMITS.ratioWidth + geometry.ASSISTANT_PANEL_SIZE_LIMITS.gutter
   );
   assert.deepEqual(

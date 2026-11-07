@@ -54,7 +54,8 @@ test("cloud streams run concurrently and abort only their owner's request", asyn
   ownerA.abort();
   await flush();
   assert.deepEqual(fixture.cancelled, [fixture.started[0]]);
-  assert.equal((await nextA).done, true);
+  assert.deepEqual((await nextA).value, { type: "done", finishReason: "abort" });
+  assert.equal((await streamA.next()).done, true);
   fixture.emit("chunk", fixture.started[1], { type: "content", text: "still answering" });
   assert.equal((await nextB).value.text, "still answering");
   await streamB.return();

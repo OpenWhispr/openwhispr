@@ -135,7 +135,7 @@ test("load failures hide stale messages and reject sends until a successful retr
   await React.act(async () => mounted.session().openConversation(1, "sidebar"));
   assert.ok(mounted.session().error);
   assert.deepEqual(mounted.session().messages, []);
-  assert.equal(mounted.session().send("do not send"), false);
+  assert.equal(await mounted.session().send("do not send"), false);
   fail = false;
   await React.act(async () => {
     mounted.session().retryLoad();
@@ -293,6 +293,66 @@ for (const kind of ["connector", "skill"]) {
   });
 }
 
+test("a send that commits after Stop reaches the conversation on screen and the next turn", async (t) => {
+  const commit = deferred();
+  const fixture = await setupChatTurns(t, {
+    connectorStatus: async () => [
+      { id: "slack", connected: true, accountLabel: "chad", workspaceLabel: "Acme" },
+    ],
+    onConnectorStatusChanged: () => () => {},
+    connectorPrepare: async () => ({
+      status: "ready",
+      actionId: "action-a",
+      preview: { verbKey: "slackPost", destinationLabel: "#eng", body: "Hi team" },
+    }),
+    connectorCommit: () => commit.promise,
+    connectorCancel: async () => ({ cancelled: true }),
+  });
+  globalThis.localStorage.setItem("isSubscribed", "true");
+  (await fixture.vite.ssrLoadModule("/stores/settingsStore.ts")).useSettingsStore.setState({
+    isSignedIn: true,
+  });
+  const { useConnectorApprovalStore, approveAction } = await fixture.vite.ssrLoadModule(
+    "/stores/connectorApprovalStore.ts"
+  );
+  const pendingCard = () =>
+    Object.values(useConnectorApprovalStore.getState().entries).find(
+      (entry) => entry.state === "pending"
+    );
+  const args = { destination: "#eng", text: "Hi team" };
+  fixture.reasoning.processTextStreamingAI.mock.mockImplementation(
+    async function* (_messages, _model, _provider, _config, tools) {
+      const call = { id: "call-a", name: "slack_send_message", arguments: JSON.stringify(args) };
+      yield { type: "tool_calls", calls: [call] };
+      // Ends on Stop while the approved card still commits, as the AI SDK stream does.
+      await tools.slack_send_message.execute(args, { toolCallId: call.id, messages: [] });
+    }
+  );
+  const mounted = await mountSession(t, fixture);
+  await React.act(async () => mounted.session().openConversation(1, "sidebar"));
+  await React.act(async () => {
+    mounted.session().send("Post it");
+    await until(() => pendingCard() !== undefined);
+  });
+  await React.act(async () => {
+    void approveAction(pendingCard().key);
+    mounted.session().cancel();
+    await until(() => fixture.state().entries["conversation:1"] === undefined);
+  });
+  const savedActionKey = () =>
+    fixture.writes.find((row) => row.role === "assistant")?.metadata?.toolCalls?.[0]?.actionKey;
+  await React.act(async () => {
+    commit.resolve({ state: "sent" });
+    await until(() => savedActionKey() !== undefined);
+  });
+  assert.equal(mounted.session().messages.at(-1).toolCalls[0].actionKey, savedActionKey());
+  await React.act(async () => {
+    mounted.session().send("Retry");
+    await until(() => pendingCard() !== undefined);
+  });
+  assert.deepEqual(pendingCard().preview.notes, [{ key: "connectors.approval.sentEarlier" }]);
+});
+
 test("a row that survives failed deletion can send again without reviving its discarded turn", async (t) => {
   const fixture = await setupChatTurns(t);
   fixture.store.selectChat({ kind: "conversation", conversationId: 2 });
@@ -302,7 +362,7 @@ test("a row that survives failed deletion can send again without reviving its di
   const mounted = await mountSession(t, fixture);
   await React.act(async () => mounted.session().openConversation(2, "sidebar"));
   await React.act(async () => {
-    assert.equal(mounted.session().send("new question"), true);
+    assert.equal(await mounted.session().send("new question"), true);
     await until(() => fixture.streams.length === 2);
   });
   await React.act(async () => {
@@ -373,7 +433,10 @@ test("clicking the open conversation leaves it alone, unsaved error included", a
   await until(() => fixture.streams.length === 1);
   await React.act(async () => {
     fixture.streams[0].reject(new Error("boom"));
-    await until(() => mounted.session().messages.at(-1)?.content.includes("boom"));
+    // The failure is shown in its own words; what the provider said stays in the details.
+    await until(
+      () => mounted.session().messages.at(-1)?.error?.technicalDetails?.underlyingError === "boom"
+    );
   });
   const before = mounted.session().messages;
   const readsBefore = reads;
@@ -498,7 +561,7 @@ for (const [event, changedId, unmount = false] of [
       await flush();
     });
     await React.act(async () => {
-      assert.equal(mounted.session().send("What does my source note say?"), true);
+      assert.equal(await mounted.session().send("What does my source note say?"), true);
       await until(() => readingSkills);
     });
     if (unmount) await mounted.unmount();

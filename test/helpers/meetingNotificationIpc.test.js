@@ -9,7 +9,7 @@ const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
 
 // Registers the real handler closures against a fake `this` (the scaffolding
-// from agentDictationPillIpc.test.js), with userData in a temporary directory.
+// from windowIpcSenders.test.js), with userData in a temporary directory.
 const handlers = new Map();
 const userDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "account-scope-ipc-"));
 
