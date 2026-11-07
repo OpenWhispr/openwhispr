@@ -28,6 +28,7 @@ import type {
   ConnectorCommitResult,
   ConnectorConnectProgress,
   ConnectorConnectResult,
+  ConnectorDestinationsResult,
   ConnectorDirectResult,
   ConnectorDisconnectResult,
   ConnectorEdits,
@@ -3615,6 +3616,8 @@ declare global {
         args: Record<string, unknown>
       ) => Promise<ConnectorQueryResult>;
       connectorCommit?: (actionId: string, edits: ConnectorEdits) => Promise<ConnectorCommitResult>;
+      /** Where a pending card may send instead: its bound Slack login's channels. */
+      connectorDestinations?: (actionId: string) => Promise<ConnectorDestinationsResult>;
       /** Cancels a pending approval, or a direct run (by its runId) still waiting on policy. */
       connectorCancel?: (
         actionId: string,

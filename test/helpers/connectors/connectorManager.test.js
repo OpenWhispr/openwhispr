@@ -739,6 +739,144 @@ test("a card field the action doesn't declare editable (a typo, say) means no ca
   }
 });
 
+// A Slack-like card whose channel the user may change on the card.
+const CHANNEL_ACTIONS = {
+  post: { kind: "approval", editable: { body: "text", channel: "line" } },
+};
+const CHANNEL_PREVIEW = {
+  verbKey: "slackPost",
+  destinationLabel: "#eng",
+  accountLabel: "chad",
+  body: "Ship it",
+  channel: "C0ENG0001",
+};
+
+test("a preview's picker channel must be declared editable and of its type, or there's no card", async () => {
+  const prepareWith = async (actions, channel) => {
+    const { manager, log } = await setup({
+      actions,
+      prepare: async () => ({
+        status: "ready",
+        payload: {},
+        preview: { ...CHANNEL_PREVIEW, channel },
+      }),
+    });
+    return { result: await manager.prepare("fake", "post", { text: "x" }, ALLOWED), log };
+  };
+  assert.equal(
+    (await prepareWith(CHANNEL_ACTIONS, "C0ENG0001")).result.preview.channel,
+    "C0ENG0001"
+  );
+  assert.equal("channel" in (await prepareWith(CHANNEL_ACTIONS, undefined)).result.preview, false);
+
+  for (const [actions, channel] of [
+    [{ post: { kind: "approval", editable: { body: "text" } } }, "C0ENG0001"],
+    [CHANNEL_ACTIONS, 7],
+    [CHANNEL_ACTIONS, "C0ENG0001\nBcc"],
+  ]) {
+    const { result, log } = await prepareWith(actions, channel);
+    assert.equal(result.errorCode, "invalid_result", JSON.stringify(channel));
+    assert.equal(log.rows.size, 0);
+  }
+});
+
+test("a connector refusing the card's edits withdraws the action as not_sent/invalid_edit", async () => {
+  const committed = [];
+  const { manager, log } = await setup({
+    actions: CHANNEL_ACTIONS,
+    commit: async (_action, _payload, edits) => {
+      committed.push(edits);
+      return { state: "not_sent", reason: "invalid_edit" };
+    },
+  });
+  const { actionId } = await manager.prepare("fake", "post", { text: "x" }, ALLOWED);
+
+  const result = await manager.commit(actionId, { channel: "C0OTHER01", title: "x" }, ALLOWED);
+
+  assert.deepEqual(result, { state: "not_sent", reason: "invalid_edit" });
+  assert.deepEqual(committed, [{ channel: "C0OTHER01" }]);
+  assert.equal(log.rows.get(actionId).state, "cancelled");
+  assert.equal(log.rows.get(actionId).errorCode, "invalid_edit");
+  // Settled: a second Send finds nothing to send.
+  assert.deepEqual(await manager.commit(actionId, {}, ALLOWED), {
+    state: "not_sent",
+    reason: "not_found",
+  });
+  // A picked channel of the wrong type never reaches the connector.
+  const typed = await setup({ actions: CHANNEL_ACTIONS });
+  const prepared = await typed.manager.prepare("fake", "post", { text: "x" }, ALLOWED);
+  assert.deepEqual(await typed.manager.commit(prepared.actionId, { channel: ["C1"] }, ALLOWED), {
+    state: "not_sent",
+    reason: "invalid_edit",
+  });
+  assert.equal(typed.fake.calls.commit.length, 0);
+});
+
+test("a card's destinations are read under its own binding, for its account, while it can still send", async () => {
+  const asked = [];
+  const { manager } = await setup({
+    actions: CHANNEL_ACTIONS,
+    destinations: async (action, payload, context) => {
+      asked.push({ action, payload, context });
+      return {
+        status: "ok",
+        destinations: [
+          { id: "C1", label: "#eng", token: "LEAK" },
+          { id: 7, label: "#bad" },
+          null,
+          { id: "C2", label: "#design" },
+        ],
+      };
+    },
+  });
+  const { actionId } = await manager.prepare("fake", "post", { text: "x" }, ALLOWED);
+
+  assert.deepEqual(await manager.destinations(actionId, ALLOWED), {
+    status: "ok",
+    destinations: [
+      { id: "C1", label: "#eng" },
+      { id: "C2", label: "#design" },
+    ],
+  });
+  assert.deepEqual(asked[0].context.binding, { accountId: "U1", workspaceId: "T1", generation: 1 });
+  assert.deepEqual(asked[0].payload, { channel: "C1", text: "x" });
+
+  for (const [auth, reason] of [
+    [{ policyState: "blocked", accountId: ACCOUNT }, "policy_blocked"],
+    [{ ...ALLOWED, accountId: "account-b" }, "account_changed"],
+  ]) {
+    assert.deepEqual(await manager.destinations(actionId, auth), { status: "unavailable", reason });
+  }
+  assert.equal(asked.length, 1);
+  manager.cancel(actionId, "cancelled_by_user");
+  assert.deepEqual(await manager.destinations(actionId, ALLOWED), {
+    status: "unavailable",
+    reason: "not_found",
+  });
+});
+
+test("a destinations read that throws or answers malformed fails closed", async () => {
+  for (const [destinations, errorCode] of [
+    [async () => ({ status: "ok", destinations: "C1" }), "invalid_result"],
+    [async () => undefined, "invalid_result"],
+    [async () => ({ status: "failed", errorCode: 5 }), "destinations_failed"],
+    [async () => ({ status: "failed", errorCode: "ratelimited" }), "ratelimited"],
+    [
+      async () => {
+        throw new Error("boom");
+      },
+      "destinations_failed",
+    ],
+  ]) {
+    const { manager } = await setup({ actions: CHANNEL_ACTIONS, destinations });
+    const { actionId } = await manager.prepare("fake", "post", { text: "x" }, ALLOWED);
+    assert.deepEqual(await manager.destinations(actionId, ALLOWED), {
+      status: "failed",
+      errorCode,
+    });
+  }
+});
+
 test("an issue or comment card missing a field its layout needs means no card", async () => {
   const prepareWith = async (verbKey, fields) => {
     const { manager, log } = await setup({

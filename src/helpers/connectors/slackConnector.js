@@ -103,6 +103,12 @@ function threadFits(target, thread) {
   return target.kind === "user" ? thread.channelId.startsWith("D") : target.id === thread.channelId;
 }
 
+// Only a channel post's card lets the user choose another of their channels;
+// a thread reply and a direct message keep the destination they were prepared with.
+function channelPickable({ target, thread }) {
+  return target.kind === "channel" && !thread;
+}
+
 function failureMessage(errorCode, label = "", fallback = "Slack didn't accept the message.") {
   switch (errorCode) {
     case "not_in_channel":
@@ -352,10 +358,30 @@ function createSlackConnector({ api, auth, directory, credentials }) {
     return { error: refusedAgain(binding).errorCode };
   }
 
+  // The channel the user picked on the card, found again among the bound
+  // login's channels. Not one of them (another workspace's, one the user
+  // left, a person or a DM) is no candidate.
+  async function findPickedChannel(channelId, binding, access) {
+    if (!/^[CG]/.test(channelId) || !SLACK_ID.test(channelId)) return {};
+    const cacheKey = loginCacheKey(binding, access.credential);
+    // An id names its channel as a link does.
+    const found = await findTargetWithRefresh(
+      { kind: "link", query: channelId },
+      binding,
+      access,
+      cacheKey
+    );
+    if (found.error) return { error: found.error };
+    return found.candidate?.kind === "channel" ? { candidate: found.candidate } : {};
+  }
+
   return {
     id: "slack",
-    // The card edits only the message text; the destination stays as prepared.
-    actions: { send_message: { kind: "approval", editable: { body: "text" } } },
+    // The card edits the message text and, for a channel post, which of the
+    // user's channels it goes to (`channel`, the picked id).
+    actions: {
+      send_message: { kind: "approval", editable: { body: "text", channel: "line" } },
+    },
 
     async getStatus() {
       const entry = credentials.read(credentials.activeAccountId(), "slack");
@@ -441,8 +467,28 @@ function createSlackConnector({ api, auth, directory, credentials }) {
           accountLabel: credential.userName,
           workspaceLabel: credential.teamName,
           body: text,
+          ...(channelPickable({ target, thread }) ? { channel: target.id } : {}),
           ...(thread ? { notes: [replyInThreadNote(thread.threadTs)] } : {}),
         },
+      };
+    },
+
+    // What a channel post's card offers to switch to: the channels the bound
+    // login is in, from the cache prepare reads. Never another login's.
+    async destinations(action, payload, { binding } = {}) {
+      if (action !== "send_message" || !channelPickable(payload)) {
+        return { status: "ok", destinations: [] };
+      }
+      const access = await auth.getAccessToken(binding);
+      if (!access.ok) return { status: "failed", errorCode: access.errorCode };
+      const channels = await directory.channels(
+        access.token,
+        loginCacheKey(binding, access.credential)
+      );
+      if (!channels.ok) return { status: "failed", errorCode: channels.errorCode };
+      return {
+        status: "ok",
+        destinations: channels.items.map(({ id, label }) => ({ id, label })),
       };
     },
 
@@ -450,7 +496,8 @@ function createSlackConnector({ api, auth, directory, credentials }) {
       if (action !== "send_message") {
         return { state: "failed", errorCode: "unknown_action", message: "Unknown Slack action." };
       }
-      const { target, thread } = payload;
+      const { thread } = payload;
+      let { target } = payload;
       const text = typeof edits.body === "string" ? edits.body : payload.text;
       // Checked before anything reaches Slack, a DM open included.
       const problem = textProblem(text);
@@ -468,6 +515,25 @@ function createSlackConnector({ api, auth, directory, credentials }) {
           ),
         };
       }
+
+      // Another channel picked on the card goes out only if the bound login
+      // is still in it; a thread reply or DM ignores the edit.
+      const picked =
+        channelPickable(payload) && edits.channel !== undefined && edits.channel !== target.id;
+      if (picked) {
+        const found = await findPickedChannel(edits.channel, binding, access);
+        if (found.error) {
+          return {
+            state: "failed",
+            errorCode: found.error,
+            message: failureMessage(found.error, "", "Couldn't reach Slack. Nothing was sent."),
+          };
+        }
+        if (!found.candidate) return { state: "not_sent", reason: "invalid_edit" };
+        target = { kind: "channel", id: found.candidate.id, label: found.candidate.label };
+      }
+      // Who the receipt and the model name, when the card changed it.
+      const sentTo = picked ? { destinationLabel: target.label } : {};
 
       let channel = target.id;
       let current = access;
@@ -530,6 +596,7 @@ function createSlackConnector({ api, auth, directory, credentials }) {
             result.data.ts,
             threaded ? threadTs : undefined
           ),
+          ...sentTo,
           ...(thread && !threaded ? { outsideThread: true } : {}),
         };
       }
@@ -544,6 +611,7 @@ function createSlackConnector({ api, auth, directory, credentials }) {
         state: "unknown",
         errorCode: result.errorCode,
         checkUrl: `https://app.slack.com/client/${posted.access.credential.teamId}/${channel}`,
+        ...sentTo,
       };
     },
 

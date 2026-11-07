@@ -4960,9 +4960,12 @@
       },
       "sentEarlier": "你之前已在此对话中尝试过。再次发送前，请先确认是否已完成。",
       "slack": {
+        "workspaceLabel": "工作区",
         "channelLabel": "频道",
         "asLabel": "身份",
-        "destination": "{{workspace}} · {{destination}}",
+        "findChannel": "查找频道",
+        "noChannels": "未找到频道",
+        "channelsUnavailable": "无法加载你的频道。",
         "notes": {
           "replyInThread": "在 {{started, datetime(dateStyle: medium; timeStyle: short)}} 开始的话题中回复"
         },

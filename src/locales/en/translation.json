@@ -5313,9 +5313,12 @@
       },
       "sentEarlier": "You tried this earlier in this chat. Check whether it went through before sending again.",
       "slack": {
+        "workspaceLabel": "Workspace",
         "channelLabel": "Channel",
         "asLabel": "As",
-        "destination": "{{workspace}} · {{destination}}",
+        "findChannel": "Find a channel",
+        "noChannels": "No channels found",
+        "channelsUnavailable": "Couldn't load your channels.",
         "notes": {
           "replyInThread": "Reply in thread started {{started, datetime(dateStyle: medium; timeStyle: short)}}"
         },

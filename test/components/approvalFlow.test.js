@@ -33,8 +33,9 @@ function button(root, label) {
 const SENT = { state: "sent", url: "https://slack.test/p/1" };
 
 // Mounts a card for a real runApprovalAction turn; returns what the test drives.
-// Commits answer with `replies` in turn; each prepare gets the next action id.
-async function mountApprovalTurn(t, { replies = [SENT] } = {}) {
+// Commits answer with `replies` in turn; each prepare gets the next action id,
+// and its preview is the default one with `preview` over it.
+async function mountApprovalTurn(t, { replies = [SENT], preview = {} } = {}) {
   let root = null;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
@@ -57,6 +58,7 @@ async function mountApprovalTurn(t, { replies = [SENT] } = {}) {
             destinationLabel: "#eng",
             accountLabel: "chad",
             body: "Original text",
+            ...preview,
           },
         }),
         connectorCommit: async (actionId, edits) => {
@@ -113,6 +115,7 @@ async function mountApprovalTurn(t, { replies = [SENT] } = {}) {
       for (let i = 0; i < 20; i += 1) await new Promise((resolve) => setImmediate(resolve));
     });
 
+  const completed = [];
   let toolResult;
   await React.act(async () => {
     toolResult = runApprovalAction(
@@ -124,7 +127,7 @@ async function mountApprovalTurn(t, { replies = [SENT] } = {}) {
         claimAction: () => true,
         releaseAction() {},
         sentEarlier: () => false,
-        recordCompletedAction() {},
+        recordCompletedAction: (key) => completed.push(key),
         releaseTurnSlot() {},
       },
       "slack",
@@ -137,7 +140,7 @@ async function mountApprovalTurn(t, { replies = [SENT] } = {}) {
     findElement(container, (element) => element.tagName === "TEXTAREA"),
     "the card shows the text, editable"
   );
-  return { container, store, commits, connects, toolResult, remount, settle };
+  return { container, store, commits, connects, completed, toolResult, remount, settle, vite };
 }
 
 test("Change the text in place, Send: the reviewed text is what gets sent", async (t) => {
@@ -177,6 +180,34 @@ test("Send commits the edit and freezes the text", async (t) => {
     "the sent text is no longer editable"
   );
   assert.match(container.textContent, /Edited text/);
+});
+
+test("a channel picked on the card is what Send commits, and where the tool says and records it went", async (t) => {
+  const { container, store, commits, completed, toolResult, vite } = await mountApprovalTurn(t, {
+    preview: { channel: "C0ENG0001" },
+    replies: [{ ...SENT, destinationLabel: "#leads" }],
+  });
+  await React.act(async () =>
+    store.updateApprovalDraft(store.approvalKey("m1", "call-1"), {
+      channel: { id: "G0LEADS01", label: "#leads" },
+    })
+  );
+  await React.act(async () => click(button(container, "connectors.approval.send")));
+  const result = await toolResult;
+
+  assert.deepEqual(commits, [
+    { actionId: "a1", edits: { body: "Original text", channel: "G0LEADS01" } },
+  ]);
+  assert.equal(result.data.destination, "#leads");
+  const { approvalActionKey } = await vite.ssrLoadModule("/services/tools/connectors/actionKey.ts");
+  const args = { destination: "#eng", text: "Original text" };
+  const sentTo = (destinationLabel) =>
+    approvalActionKey("slack", "send_message", args, {
+      destinationLabel,
+      body: "Original text",
+    });
+  assert.deepEqual(completed, [sentTo("#leads")]);
+  assert.notEqual(sentTo("#leads"), sentTo("#eng"), "a later #eng send isn't this one");
 });
 
 test("edits on the card survive a remount", async (t) => {

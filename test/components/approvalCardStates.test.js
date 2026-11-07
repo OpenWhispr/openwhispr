@@ -64,13 +64,16 @@ const SLACK = {
   state: "pending",
 };
 
-test("a Slack card shows its channel and sender read-only; only the message is edited", async (t) => {
+test("a Slack card with no channel to choose shows its workspace, channel and sender read-only", async (t) => {
   const card = await mountCard(t, SLACK);
   const text = card.host.textContent;
+  assert.match(text, /connectors\.approval\.slack\.workspaceLabel/);
+  assert.match(text, /OpenWhispr/);
   assert.match(text, /connectors\.approval\.slack\.channelLabel/);
-  assert.match(text, /connectors\.approval\.slack\.destination/);
+  assert.match(text, /#design/);
   assert.match(text, /connectors\.approval\.slack\.asLabel/);
   assert.match(text, /pratham/);
+  assert.equal(card.host.querySelector('[data-approval-field="channel"]'), null, "no picker");
   const fields = card.host.querySelectorAll("input, textarea");
   assert.equal(fields.length, 1, "nothing but the message can be edited");
   assert.equal(fields[0].tagName, "TEXTAREA");
@@ -80,7 +83,120 @@ test("a Slack card shows its channel and sender read-only; only the message is e
     /\binput-inline\b/,
     "styled by the card, not the app's global field"
   );
-  assert.ok(card.host.querySelector('img[aria-hidden="true"]'), "Slack's logo by the channel");
+  assert.ok(card.host.querySelector('img[aria-hidden="true"]'), "Slack's logo by the workspace");
+
+  // A DM or thread reply keeps its destination: a channel edit never reaches Send.
+  card.store.updateApprovalDraft(SLACK.key, { channel: { id: "C0OTHER01", label: "#other" } });
+  await React.act(async () => card.button("connectors.approval.send").click());
+  assert.deepEqual(card.calls.commit, [{ actionId: "a1", edits: { body: SLACK.draft.body } }]);
+});
+
+// A channel post: main lists the bound login's channels for this card's action.
+const CHANNELS = [
+  { id: "C0GENERAL", label: "#general" },
+  { id: "C0DESIGN1", label: "#design" },
+  { id: "C0ENGINEE", label: "#engineering" },
+  { id: "C0PRODUCT", label: "#product" },
+  { id: "C0DREVIEW", label: "#design-reviews" },
+  { id: "C0DSYSTEM", label: "#design-system" },
+];
+const CHANNEL_POST = { ...SLACK, preview: { ...SLACK.preview, channel: "C0DESIGN1" } };
+
+// What Radix's popover reads from the global scope, beyond the card's own.
+function installPopoverGlobals(t, view) {
+  const names = [
+    "getComputedStyle",
+    "HTMLInputElement",
+    "MutationObserver",
+    "CustomEvent",
+    "FocusEvent",
+    "PointerEvent",
+  ];
+  const originals = names.map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)]);
+  for (const name of names) {
+    const value = name === "getComputedStyle" ? view.getComputedStyle.bind(view) : view[name];
+    Object.defineProperty(globalThis, name, { value, configurable: true, writable: true });
+  }
+  t.after(() => {
+    for (const [name, descriptor] of originals) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+      else delete globalThis[name];
+    }
+  });
+}
+
+async function openChannelMenu(t, entry = CHANNEL_POST, electronAPI = {}) {
+  const asked = [];
+  const card = await mountCard(t, entry, {
+    connectorDestinations: async (actionId) => {
+      asked.push(actionId);
+      return { status: "ok", destinations: CHANNELS };
+    },
+    ...electronAPI,
+  });
+  installPopoverGlobals(t, card.host.ownerDocument.defaultView);
+  await React.act(async () => card.host.querySelector('[data-approval-field="channel"]').click());
+  const menu = card.host.ownerDocument.querySelector('[role="listbox"]');
+  const options = () =>
+    [...menu.querySelectorAll('[role="option"]')].map((option) => option.textContent);
+  return { ...card, asked, menu, options };
+}
+
+test("a channel post's picker lists the channels main read for this card, with the current one checked", async (t) => {
+  const card = await openChannelMenu(t);
+  assert.deepEqual(card.asked, ["a1"], "asked for this card's action, so its bound login");
+  assert.deepEqual(
+    card.options(),
+    CHANNELS.map((channel) => channel.label)
+  );
+  const selected = card.menu.querySelector('[aria-selected="true"]');
+  assert.equal(selected.textContent, "#design");
+  assert.ok(selected.querySelector("svg"), "a checkmark on the current channel");
+  assert.equal(
+    card.host.ownerDocument.querySelector(
+      'input[aria-label="connectors.approval.slack.findChannel"]'
+    ).placeholder,
+    "connectors.approval.slack.findChannel"
+  );
+});
+
+test("the channel search narrows the list, and a pick changes the card and what Send commits", async (t) => {
+  const card = await openChannelMenu(t);
+  const search = card.host.ownerDocument.querySelector(
+    'input[aria-label="connectors.approval.slack.findChannel"]'
+  );
+  await React.act(async () => {
+    Object.getOwnPropertyDescriptor(Object.getPrototypeOf(search), "value").set.call(search, "des");
+    search.dispatchEvent(new search.ownerDocument.defaultView.Event("input", { bubbles: true }));
+  });
+  assert.deepEqual(card.options(), ["#design", "#design-reviews", "#design-system"]);
+
+  const reviews = [...card.menu.querySelectorAll('[role="option"]')].find(
+    (option) => option.textContent === "#design-reviews"
+  );
+  await React.act(async () => reviews.click());
+  const trigger = card.host.querySelector('[data-approval-field="channel"]');
+  assert.equal(trigger.textContent, "#design-reviews");
+  assert.deepEqual(card.store.useConnectorApprovalStore.getState().entries["m1::c1"].draft, {
+    body: SLACK.draft.body,
+    channel: { id: "C0DREVIEW", label: "#design-reviews" },
+  });
+
+  await React.act(async () => card.button("connectors.approval.send").click());
+  assert.deepEqual(card.calls.commit, [
+    { actionId: "a1", edits: { body: SLACK.draft.body, channel: "C0DREVIEW" } },
+  ]);
+});
+
+test("no channel is listed when main can't read them, and none is offered after the card leaves pending", async (t) => {
+  const card = await openChannelMenu(t, CHANNEL_POST, {
+    connectorDestinations: async () => ({ status: "unavailable", reason: "not_found" }),
+  });
+  assert.deepEqual(card.options(), []);
+  assert.match(card.menu.textContent, /connectors\.approval\.slack\.channelsUnavailable/);
+
+  await card.set({ state: "failed", awaitingRetry: true, errorCode: "rate_limited" });
+  assert.equal(card.host.querySelector('[data-approval-field="channel"]'), null);
 });
 
 test("Copy copies the message as it stands, and says so", async (t) => {

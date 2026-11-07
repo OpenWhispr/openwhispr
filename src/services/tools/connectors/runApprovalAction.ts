@@ -102,11 +102,16 @@ export async function runApprovalAction(
       useConnectorApprovalStore.getState().entries[
         approvalKey(context.messageId, context.toolCallId)
       ];
+    const shown = card?.preview ?? prepared.preview;
+    // Where it went, when the card changed that (a picked Slack channel).
+    const sentTo = outcome.destinationLabel
+      ? { ...shown, destinationLabel: outcome.destinationLabel }
+      : shown;
     const completedKey = approvalActionKey(
       connectorId,
       action,
       args,
-      card?.preview ?? prepared.preview,
+      sentTo,
       card?.draft.fields ?? (card ? { title: card.draft.title, body: card.draft.body } : undefined)
     );
     context.recordCompletedAction(completedKey, {

@@ -5088,9 +5088,12 @@
       },
       "sentEarlier": "Вы уже пытались сделать это в этом чате. Перед повторной отправкой проверьте, получилось ли это.",
       "slack": {
+        "workspaceLabel": "Рабочее пространство",
         "channelLabel": "Канал",
         "asLabel": "От имени",
-        "destination": "{{workspace}} · {{destination}}",
+        "findChannel": "Найти канал",
+        "noChannels": "Каналы не найдены",
+        "channelsUnavailable": "Не удалось загрузить ваши каналы.",
         "notes": {
           "replyInThread": "Ответ в ветке, начатой {{started, datetime(dateStyle: medium; timeStyle: short)}}"
         },

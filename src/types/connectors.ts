@@ -22,7 +22,23 @@ export interface ConnectorPreview {
    * connector sets `body` to the same text as `fields.body`.
    */
   fields?: Record<string, string | string[]>;
+  /**
+   * The channel id a Slack channel post's picker starts on. Only a card that
+   * lets the user choose another channel has one (never a thread reply or DM).
+   */
+  channel?: string;
 }
+
+/** Somewhere a card can send to instead: one of the bound login's Slack channels. */
+export interface ConnectorDestination {
+  id: string;
+  label: string;
+}
+
+export type ConnectorDestinationsResult =
+  | { status: "ok"; destinations: ConnectorDestination[] }
+  | { status: "failed"; errorCode: string }
+  | { status: "unavailable"; reason: string };
 
 /** What Send commits: a fields preview's fields, otherwise title and body. */
 export interface ConnectorEdits {

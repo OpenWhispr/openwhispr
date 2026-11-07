@@ -4960,9 +4960,12 @@
       },
       "sentEarlier": "このチャットで以前に試みています。再送信する前に、完了しているか確認してください。",
       "slack": {
+        "workspaceLabel": "ワークスペース",
         "channelLabel": "チャンネル",
         "asLabel": "送信者",
-        "destination": "{{workspace}} · {{destination}}",
+        "findChannel": "チャンネルを検索",
+        "noChannels": "チャンネルが見つかりません",
+        "channelsUnavailable": "チャンネルを読み込めませんでした。",
         "notes": {
           "replyInThread": "{{started, datetime(dateStyle: medium; timeStyle: short)}}に始まったスレッドに返信"
         },

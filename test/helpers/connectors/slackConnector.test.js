@@ -77,6 +77,7 @@ test("a channel post: prepare only reads, and Send posts once with a permalink",
     accountLabel: "chad",
     workspaceLabel: "Acme Test",
     body: "Ship it",
+    channel: "C0ENG0001",
   });
   assert.deepEqual(slack.methods(), ["users.conversations"]);
 
@@ -606,37 +607,49 @@ test("a Slack login is the same account only for the same user in the same works
   assert.notEqual(loginKey(login), loginKey({ ...login, teamId: "T2" }));
 });
 
-test("Slack's card lets the user edit only the message text", async () => {
+test("Slack's card lets the user edit the message text and the channel", async () => {
   const { connector } = await setupSlack({});
   assert.deepEqual(connector.actions, {
-    send_message: { kind: "approval", editable: { body: "text" } },
+    send_message: { kind: "approval", editable: { body: "text", channel: "line" } },
   });
 });
 
-// The whole path the card's Send takes: the manager keeps only the declared
-// body, and Slack posts it to the channel the card was prepared for.
-test("an edited Slack card posts its edited text through the manager, and nothing else it sent", async () => {
-  const { connector, slack } = await setupSlack({
-    ...channelsOnly,
-    "chat.postMessage": [ok(FIXTURES.posted)],
-  });
+// The manager over a real Slack connector, with its receipts in `rows`.
+async function slackManager(connector) {
   const [{ createConnectorManager }, { createPendingActions }] = await Promise.all([
     import("../../../src/helpers/connectors/connectorManager.js"),
     import("../../../src/helpers/connectors/pendingActions.js"),
   ]);
+  const rows = new Map();
   const manager = createConnectorManager({
     connectors: [connector],
     pendingActions: createPendingActions(),
     actionLog: {
-      insert() {},
-      update: () => 1,
+      insert: (row) => rows.set(row.id, { ...row }),
+      update: (id, patch) => {
+        rows.set(id, { ...rows.get(id), ...patch });
+        return 1;
+      },
       listRecent: () => [],
       reconcileInterrupted: () => ({}),
     },
     logger: { info() {}, warn() {}, error() {} },
     getAccountId: () => "acct-1",
   });
-  const auth = { policyState: "allowed", accountId: "acct-1" };
+  return { manager, rows };
+}
+
+const ALLOWED = { policyState: "allowed", accountId: "acct-1" };
+
+// The whole path the card's Send takes: the manager keeps only the declared
+// fields, and Slack posts the body to the channel the card was prepared for.
+test("an edited Slack card posts its edited text through the manager, and nothing else it sent", async () => {
+  const { connector, slack } = await setupSlack({
+    ...channelsOnly,
+    "chat.postMessage": [ok(FIXTURES.posted)],
+  });
+  const { manager } = await slackManager(connector);
+  const auth = ALLOWED;
 
   const prepared = await manager.prepare(
     "slack",
@@ -647,7 +660,7 @@ test("an edited Slack card posts its edited text through the manager, and nothin
   assert.equal(prepared.status, "ready");
   const result = await manager.commit(
     prepared.actionId,
-    { body: "Ship it today", title: "Ignored", channel: "C0OTHER", text: "Not this" },
+    { body: "Ship it today", title: "Ignored", text: "Not this", destination: "#leads" },
     auth
   );
 
@@ -1223,4 +1236,152 @@ test("a name that only looks like an id is still a name", async () => {
     assert.equal(prepared.status, "ready", destination);
     assert.equal(prepared.preview.destinationLabel, label, destination);
   }
+});
+
+// The card's channel picker: only on a channel post, listing the bound
+// login's channels, and checked again at Send.
+const LEADS = "G0LEADS01";
+const ENG_CHANNELS = [
+  { id: "C0ENG0001", label: "#eng" },
+  { id: "C0ENGBE01", label: "#eng-backend" },
+  { id: LEADS, label: "#leads" },
+];
+
+test("a channel post's card offers the login's channels, and Send posts to the one picked and names it", async () => {
+  const { connector, slack } = await setupSlack({
+    ...channelsOnly,
+    "chat.postMessage": [ok({ ...FIXTURES.posted, channel: LEADS })],
+  });
+  const prepared = await prepareEng(connector);
+  assert.equal(prepared.preview.channel, "C0ENG0001");
+
+  assert.deepEqual(await connector.destinations("send_message", prepared.payload, BOUND), {
+    status: "ok",
+    destinations: ENG_CHANNELS,
+  });
+  const result = await connector.commit(
+    "send_message",
+    prepared.payload,
+    { body: "Ship it", channel: LEADS },
+    BOUND
+  );
+
+  assert.deepEqual(result, {
+    state: "sent",
+    url: "https://acme-test.slack.com/archives/G0LEADS01/p1727200000123456",
+    destinationLabel: "#leads",
+  });
+  assert.equal(posts(slack)[0].params.channel, LEADS);
+  // The list and the check at Send both read prepare's cached list.
+  assert.deepEqual(slack.methods(), ["users.conversations", "chat.postMessage"]);
+});
+
+test("Send refuses a picked channel the login isn't in, or that isn't a channel, before writing to Slack", async () => {
+  // Another workspace's channel (or one the user isn't in), a person, a DM,
+  // and something that is no Slack id at all.
+  for (const channel of ["C0OTHER01", "U0GABE001", "D0GABE001", "#leads"]) {
+    const { connector, slack } = await setupSlack(channelsOnly);
+    const prepared = await prepareEng(connector);
+
+    const result = await connector.commit("send_message", prepared.payload, { channel }, BOUND);
+
+    assert.deepEqual(result, { state: "not_sent", reason: "invalid_edit" }, channel);
+    assert.deepEqual(slack.methods(), ["users.conversations"], channel);
+  }
+});
+
+test("a DM and a thread reply offer no picker and ignore a channel edit", async () => {
+  const dm = await setupSlack({
+    ...channelsOnly,
+    "users.list": [ok(FIXTURES.people)],
+    "conversations.open": [ok(FIXTURES.dmOpen)],
+    "chat.postMessage": [ok(FIXTURES.postedDm)],
+  });
+  const toGabe = await dm.connector.prepare(
+    "send_message",
+    { destination: "Gabe Smith", text: "Lunch?" },
+    BOUND
+  );
+  const thread = await setupSlack({
+    ...channelsOnly,
+    "chat.postMessage": [ok(FIXTURES.postedReply)],
+  });
+  const reply = await thread.connector.prepare(
+    "send_message",
+    { destination: "#eng", text: "On it", thread: ENG_MESSAGE },
+    BOUND
+  );
+
+  for (const [{ connector, slack }, prepared, postedTo] of [
+    [dm, toGabe, "D0GABE001"],
+    [thread, reply, "C0ENG0001"],
+  ]) {
+    assert.equal(prepared.preview.channel, undefined, postedTo);
+    assert.deepEqual(await connector.destinations("send_message", prepared.payload, BOUND), {
+      status: "ok",
+      destinations: [],
+    });
+    const result = await connector.commit(
+      "send_message",
+      prepared.payload,
+      { channel: LEADS },
+      BOUND
+    );
+    assert.equal(result.state, "sent", postedTo);
+    assert.equal(result.destinationLabel, undefined, "the receipt keeps the prepared label");
+    assert.equal(posts(slack)[0].params.channel, postedTo);
+  }
+  assert.equal(posts(thread.slack)[0].params.thread_ts, "1727200000.123456");
+});
+
+test("through the manager, the picker lists only the card's bound login, and the receipt names the pick", async () => {
+  const { connector, slack, credentials } = await setupSlack({
+    ...channelsOnly,
+    "chat.postMessage": [ok({ ...FIXTURES.posted, channel: LEADS })],
+  });
+  const { manager, rows } = await slackManager(connector);
+  const prepare = () =>
+    manager.prepare("slack", "send_message", { destination: "#eng", text: "Ship it" }, ALLOWED);
+
+  const picked = await prepare();
+  assert.equal(picked.preview.channel, "C0ENG0001");
+  assert.deepEqual(await manager.destinations(picked.actionId, ALLOWED), {
+    status: "ok",
+    destinations: ENG_CHANNELS,
+  });
+  assert.equal(slack.calls[0].authorization, `Bearer ${CONNECTED.accessToken}`);
+  assert.deepEqual(
+    await manager.destinations(picked.actionId, { ...ALLOWED, accountId: "acct-2" }),
+    { status: "unavailable", reason: "account_changed" }
+  );
+  assert.deepEqual(await manager.commit(picked.actionId, { channel: LEADS }, ALLOWED), {
+    state: "sent",
+    url: "https://acme-test.slack.com/archives/G0LEADS01/p1727200000123456",
+    destinationLabel: "#leads",
+  });
+  assert.equal(rows.get(picked.actionId).destinationLabel, "#leads");
+  // Settled: nothing more to list for it.
+  assert.deepEqual(await manager.destinations(picked.actionId, ALLOWED), {
+    status: "unavailable",
+    reason: "not_found",
+  });
+
+  const refused = await prepare();
+  assert.deepEqual(await manager.commit(refused.actionId, { channel: "C0OTHER01" }, ALLOWED), {
+    state: "not_sent",
+    reason: "invalid_edit",
+  });
+  assert.equal(rows.get(refused.actionId).state, "cancelled");
+  assert.equal(rows.get(refused.actionId).errorCode, "invalid_edit");
+  assert.equal(posts(slack).length, 1);
+
+  // Another login (here another workspace) never lists for a card prepared before it.
+  const stale = await prepare();
+  credentials.replace("acct-1", "slack", { ...BOB, teamId: "T0OTHER" }, 1);
+  const calls = slack.calls.length;
+  assert.deepEqual(await manager.destinations(stale.actionId, ALLOWED), {
+    status: "failed",
+    errorCode: "connection_changed",
+  });
+  assert.equal(slack.calls.length, calls);
 });

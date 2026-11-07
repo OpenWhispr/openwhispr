@@ -36,6 +36,7 @@ import {
 } from "../../utils/issueApprovalFields";
 import { EmailApprovalFields } from "./EmailApprovalFields";
 import { IssueApprovalFields } from "./IssueApprovalFields";
+import { SlackChannelPicker } from "./SlackChannelPicker";
 import { ConnectRow } from "./interactions/ConnectionCard";
 import { HeaderRow } from "./interactions/HeaderRow";
 import {
@@ -109,11 +110,15 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
   const verb = issueVerb(preview.verbKey);
   const issueFields = verb && draft.fields ? toIssueFields(draft.fields, verb) : null;
   const slack = preview.verbKey === "slackPost";
+  // A Slack channel post's channel, when the user picked another one.
+  const pickedChannel = preview.channel !== undefined ? draft.channel : undefined;
   // Who it goes to follows the user's edits: main's answer once sent,
-  // otherwise the card's own To and Cc.
+  // otherwise the card's own To and Cc, or its picked channel.
   const destination =
     entry.destinationLabel ??
-    ((emailFields && recipientsLabel(emailFields.to, emailFields.cc)) || preview.destinationLabel);
+    ((emailFields && recipientsLabel(emailFields.to, emailFields.cc)) ||
+      pickedChannel?.label ||
+      preview.destinationLabel);
   const problems = emailFields ? emailFieldProblems(emailFields) : null;
   const issueProblem = verb && issueFields ? issueFieldProblem(issueFields, verb) : null;
   // Send commits exactly what the card shows, so it waits until the card
@@ -212,27 +217,38 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
     />
   ) : slack ? (
     <>
-      <HeaderRow label={t("connectors.approval.slack.channelLabel")}>
-        <span className="flex min-w-0 flex-1 items-center gap-1.5 text-foreground" dir="auto">
-          <img
-            src={slackMark}
-            alt=""
-            aria-hidden="true"
-            width={14}
-            height={14}
-            decoding="async"
-            draggable={false}
-            className="shrink-0"
-          />
-          <span className="truncate">
-            {preview.workspaceLabel
-              ? t("connectors.approval.slack.destination", {
-                  workspace: preview.workspaceLabel,
-                  destination,
-                })
-              : destination}
+      {preview.workspaceLabel && (
+        <HeaderRow label={t("connectors.approval.slack.workspaceLabel")}>
+          <span className="flex min-w-0 flex-1 items-center gap-1.5 text-foreground" dir="auto">
+            <img
+              src={slackMark}
+              alt=""
+              aria-hidden="true"
+              width={14}
+              height={14}
+              decoding="async"
+              draggable={false}
+              className="shrink-0"
+            />
+            <span className="truncate">{preview.workspaceLabel}</span>
           </span>
-        </span>
+        </HeaderRow>
+      )}
+      <HeaderRow label={t("connectors.approval.slack.channelLabel")}>
+        {/* Main lists the channels for a pending action only; after a
+            failure, Retry prepares a new one first. */}
+        {pending && !entry.reconnect && preview.channel !== undefined ? (
+          <SlackChannelPicker
+            actionId={entry.actionId}
+            selectedId={pickedChannel?.id ?? preview.channel}
+            label={destination}
+            onPick={(channel) => updateApprovalDraft(entry.key, { channel })}
+          />
+        ) : (
+          <span className="min-w-0 flex-1 truncate text-foreground" dir="auto">
+            {destination}
+          </span>
+        )}
       </HeaderRow>
       <HeaderRow label={t("connectors.approval.slack.asLabel")}>
         <span className="min-w-0 flex-1 truncate font-medium text-foreground" dir="auto">

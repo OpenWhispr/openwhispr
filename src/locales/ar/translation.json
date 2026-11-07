@@ -984,9 +984,12 @@
       },
       "sentEarlier": "سبق أن حاولت هذا في هذه المحادثة. تحقّق مما إذا كان قد تم قبل إرساله مرة أخرى.",
       "slack": {
+        "workspaceLabel": "مساحة العمل",
         "channelLabel": "القناة",
         "asLabel": "بصفتك",
-        "destination": "{{workspace}} · {{destination}}",
+        "findChannel": "ابحث عن قناة",
+        "noChannels": "لم يتم العثور على قنوات",
+        "channelsUnavailable": "تعذّر تحميل قنواتك.",
         "notes": {
           "replyInThread": "رد في سلسلة الرسائل التي بدأت في {{started, datetime(dateStyle: medium; timeStyle: short)}}"
         },

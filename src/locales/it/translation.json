@@ -4981,9 +4981,12 @@
       },
       "sentEarlier": "Hai già tentato questa operazione in questa chat. Verifica se è riuscita prima di inviare di nuovo.",
       "slack": {
+        "workspaceLabel": "Spazio di lavoro",
         "channelLabel": "Canale",
         "asLabel": "Come",
-        "destination": "{{workspace}} · {{destination}}",
+        "findChannel": "Cerca un canale",
+        "noChannels": "Nessun canale trovato",
+        "channelsUnavailable": "Impossibile caricare i tuoi canali.",
         "notes": {
           "replyInThread": "Risposta nel thread iniziato il {{started, datetime(dateStyle: medium; timeStyle: short)}}"
         },

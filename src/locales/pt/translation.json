@@ -4981,9 +4981,12 @@
       },
       "sentEarlier": "Você já tentou isto antes nesta conversa. Confira se deu certo antes de enviar novamente.",
       "slack": {
+        "workspaceLabel": "Workspace",
         "channelLabel": "Canal",
         "asLabel": "Como",
-        "destination": "{{workspace}} · {{destination}}",
+        "findChannel": "Encontrar um canal",
+        "noChannels": "Nenhum canal encontrado",
+        "channelsUnavailable": "Não foi possível carregar seus canais.",
         "notes": {
           "replyInThread": "Resposta na thread iniciada em {{started, datetime(dateStyle: medium; timeStyle: short)}}"
         },
