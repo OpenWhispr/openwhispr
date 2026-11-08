@@ -127,7 +127,7 @@
     "vite": "^8.1.6"
   },
   "dependencies": {
-    "@ai-sdk/amazon-bedrock": "^4.0.93",
+    "@ai-sdk/amazon-bedrock": "^5.0.133",
     "@ai-sdk/anthropic": "^3.0.58",
     "@ai-sdk/azure": "^3.0.53",
     "@ai-sdk/google": "^3.0.43",
