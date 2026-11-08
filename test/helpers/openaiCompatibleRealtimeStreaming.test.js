@@ -830,3 +830,32 @@ test("one id-less committed for an unbound turn and stop keeps the text and ends
   t.mock.timers.tick(1);
   assert.equal((await stop.stopped).text, "first turn last turn");
 });
+
+for (const type of [
+  "conversation.item.input_audio_transcription.completed",
+  "conversation.item.input_audio_transcription.failed",
+]) {
+  test(`a named ${type.split(".").pop()} pairs with a turn committed without an id`, async (t) => {
+    const { streaming, socket } = await connectWith({ model: "whisper", apiKey: "" });
+    const stamps = [];
+    streaming.onFinalTranscript = (_text, timestamp) => stamps.push(timestamp);
+    let now = 1000;
+    t.mock.method(Date, "now", () => now);
+    streaming.sendAudio(Buffer.alloc(4800));
+
+    emit(socket, { type: "input_audio_buffer.speech_started" });
+    now = 2000;
+    emit(socket, { type: "input_audio_buffer.speech_stopped" });
+    emit(socket, { type: "input_audio_buffer.committed" });
+    now = 3000;
+    emit(socket, { type, item_id: "a", transcript: "hello" });
+    if (type.endsWith("completed")) assert.deepEqual(stamps, [1000]);
+
+    const stop = trackStop(streaming);
+    await tickImmediate();
+    emit(socket, { type: "input_audio_buffer.cleared" });
+    await tickImmediate();
+    assert.equal(stop.settled, true, "no turn is left waiting for a transcript");
+    await stop.stopped;
+  });
+}

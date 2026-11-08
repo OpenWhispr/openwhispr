@@ -66,6 +66,8 @@ class OpenAICompatibleRealtimeStreaming extends OpenAIRealtimeStreaming {
     this._openTurn = null;
     this._turns = [];
     this._startsById = new Map();
+    // Ids this client gave to turns the server committed without one.
+    this._syntheticIds = new Set();
     // Set once the server sends committed for a turn it closed on silence.
     this._vadCommitShape = false;
   }
@@ -73,7 +75,9 @@ class OpenAICompatibleRealtimeStreaming extends OpenAIRealtimeStreaming {
   _nameTurn(itemId) {
     if (itemId) return itemId;
     this._unnamedTurnCount += 1;
-    return `unnamed-turn-${this._unnamedTurnCount}`;
+    const id = `unnamed-turn-${this._unnamedTurnCount}`;
+    this._syntheticIds.add(id);
+    return id;
   }
 
   handleMessage(data) {
@@ -153,8 +157,17 @@ class OpenAICompatibleRealtimeStreaming extends OpenAIRealtimeStreaming {
       case COMPLETED:
       case FAILED: {
         let index = event.item_id ? this._turns.findIndex((turn) => turn.id === event.item_id) : -1;
-        if (index === -1) index = this._turns.findIndex((turn) => !event.item_id || !turn.id);
+        if (index === -1) {
+          index = this._turns.findIndex(
+            (turn) => !event.item_id || !turn.id || this._syntheticIds.has(turn.id)
+          );
+        }
         const [turn] = index === -1 ? [] : this._turns.splice(index, 1);
+        // A server that names the transcript but not the committed leaves the
+        // id this client gave the turn pending in the base class.
+        if (turn && this._syntheticIds.delete(turn.id) && event.item_id) {
+          this.pendingTranscriptions.delete(turn.id);
+        }
         // A transcript that matches no known turn while stopping is the
         // commit's own, from a server that never acks commits.
         if (!turn && this._stop) this._stop.acked = true;
