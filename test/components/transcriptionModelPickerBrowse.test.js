@@ -2,9 +2,6 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { mountSettingsPanel } = require("../lib/settingsPanelHarness");
 
-const NAMED_HINT = "transcription.browsedProviderHint";
-const GENERIC_HINT = "transcription.browsedProviderHintNoCurrent";
-
 // The Note Recording picker, as MeetingSettings renders it.
 const mount = (t, overrides = {}) =>
   mountSettingsPanel(t, {
@@ -29,16 +26,23 @@ const mount = (t, overrides = {}) =>
     },
   });
 
+// The harness's `t` returns the key followed by its interpolation values.
 const hint = (panel) =>
-  panel.find((node) => node.props?.children === NAMED_HINT || node.props?.children === GENERIC_HINT)[0]
-    ?.props.children;
+  panel.find(
+    (node) =>
+      typeof node.props?.children === "string" &&
+      node.props.children.startsWith("transcription.browsedProviderHint")
+  )[0]?.props.children;
 
 test("a browsed tab says the saved provider stays in use until a model is picked", async (t) => {
   const panel = await mount(t);
   assert.equal(hint(panel), undefined, "the saved provider's own tab needs no hint");
 
   await panel.selectTab("deepgram");
-  assert.equal(hint(panel), NAMED_HINT);
+  assert.equal(
+    hint(panel),
+    'transcription.browsedProviderHint {"current":"OpenAI","provider":"Deepgram"}'
+  );
   assert.equal(panel.state().meetingCloudTranscriptionProvider, "", "browsing saves nothing");
 
   await panel.selectTab("openai");
@@ -47,7 +51,6 @@ test("a browsed tab says the saved provider stays in use until a model is picked
   await panel.selectTab("deepgram");
   await panel.selectModel("nova-3");
   assert.equal(panel.state().meetingCloudTranscriptionProvider, "deepgram");
-  await panel.setProps({ selectedCloudProvider: "deepgram", selectedCloudModel: "nova-3" });
   assert.equal(hint(panel), undefined, "a picked model saves the tab");
 });
 
@@ -58,5 +61,5 @@ test("a saved provider this picker doesn't offer is not named", async (t) => {
     selectedCloudModel: "whisper-large-v3-turbo",
   });
   await panel.selectTab("deepgram");
-  assert.equal(hint(panel), GENERIC_HINT);
+  assert.equal(hint(panel), 'transcription.browsedProviderHintNoCurrent {"provider":"Deepgram"}');
 });

@@ -89,7 +89,8 @@ async function mountSettingsPanel(
     resolveAlias: { "@": path.resolve(__dirname, "../../src") },
     mockModules: {
       "react-i18next": `
-        const t = (key) => key;
+        // Interpolation values ride along, so a test can see what a string names.
+        const t = (key, options) => (options ? key + " " + JSON.stringify(options) : key);
         export function useTranslation() { return { t }; }
         export const initReactI18next = { type: "3rdParty", init() {} };
       `,
