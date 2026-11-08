@@ -792,6 +792,10 @@ export default function TranscriptionModelPicker({
   ]);
   const displayedCloudProvider = effectiveCloudSelection.provider;
   const displayedCloudModel = effectiveCloudSelection.model;
+  const activeCloudProvider =
+    browsedCloudProvider && displayedCloudProvider !== selectedCloudProvider
+      ? cloudProviderTabs.find((provider) => provider.id === selectedCloudProvider)
+      : undefined;
 
   useEffect(() => {
     if (
@@ -1557,6 +1561,11 @@ export default function TranscriptionModelPicker({
               colorScheme="purple"
               wrap
             />
+          )}
+          {activeCloudProvider && (
+            <p className="text-xs text-muted-foreground">
+              {activeCloudProvider.name} · {t("common.active")}
+            </p>
           )}
 
           {providerAllowed(displayedCloudProvider) && (
