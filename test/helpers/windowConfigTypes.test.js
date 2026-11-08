@@ -87,6 +87,10 @@ test("onboarding sizing does not resize the normal control panel", () => {
   );
   assert.deepEqual(windowConfig.ONBOARDING_WINDOW_SIZES.COMPACT, { width: 480, height: 624 });
   assert.deepEqual(windowConfig.ONBOARDING_WINDOW_SIZES.EXPANDED, { width: 1000, height: 740 });
+  assert.deepEqual(windowConfig.ONBOARDING_WINDOW_SIZES.LOCAL_SETUP, {
+    width: 1000,
+    height: 880,
+  });
 });
 
 test("the overlay resolver preserves every unaffected platform and session", () => {

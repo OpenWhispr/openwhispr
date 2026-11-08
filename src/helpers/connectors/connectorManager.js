@@ -2,6 +2,8 @@ const crypto = require("crypto");
 const { describeError } = require("./errorSummary");
 const { policyRefusal } = require("./connectorPolicy");
 const { normalizeQueryResult, queryFailed } = require("./queryResult");
+// The most destinations a connector offers to pick from.
+const { MAX_CANDIDATES } = require("./targetResolution");
 
 const CANCEL_REASONS = new Set(["cancelled_by_user", "conversation_ended", "expired"]);
 
@@ -54,6 +56,8 @@ function normalizeCommitResult(result) {
           destinationLabel: result.destinationLabel,
           resultLabel: result.resultLabel,
         }),
+        // A reply meant for a thread that went out as a new message (Slack).
+        ...(result.outsideThread === true ? { outsideThread: true } : {}),
       };
     case "failed":
       return failedResult(result);
@@ -200,6 +204,14 @@ function normalizePrepareResult(result, editable) {
             status: "needs_clarification",
             message: result.message,
             candidates: Array.isArray(result.candidates) ? result.candidates.filter(isString) : [],
+            ...(Array.isArray(result.choices)
+              ? {
+                  choices: result.choices
+                    .filter((choice) => isString(choice?.label) && isString(choice?.destination))
+                    .slice(0, MAX_CANDIDATES)
+                    .map(({ label, destination }) => ({ label, destination })),
+                }
+              : {}),
           }
         : INVALID_PREPARE_RESULT;
     case "failed":

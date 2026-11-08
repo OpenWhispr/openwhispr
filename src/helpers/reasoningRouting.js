@@ -1,5 +1,9 @@
 // Map a reasoning cloud routing to the InferenceMode its Settings tab selects on.
 // Mirrors deriveTranscriptionMode (byok custom → self-hosted, other cloud → providers).
+const defaultModelOf = (provider) =>
+  (provider?.models?.find((model) => model.id === provider.defaultModel) ?? provider?.models?.[0])
+    ?.id;
+
 export function deriveReasoningMode(cloudMode, provider) {
   if (cloudMode === "byok") {
     return provider === "custom" ? "self-hosted" : "providers";
@@ -59,9 +63,9 @@ export function buildCortiOnboardingPayloads(
     useLocalWhisper: false,
     cloudTranscriptionMode: "byok",
     cloudTranscriptionProvider: "corti",
-    cloudTranscriptionModel: transcriptionProvider?.models?.[0]?.id,
+    cloudTranscriptionModel: defaultModelOf(transcriptionProvider),
   };
-  const cortiModel = reasoningProvider?.models?.[0]?.id;
+  const cortiModel = defaultModelOf(reasoningProvider);
   const reasoning =
     environment === "eu" && hasApiKey && cortiModel
       ? {

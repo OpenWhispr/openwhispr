@@ -104,3 +104,19 @@ test("backs off after a failure instead of refetching on every call", async () =
 
   assert.equal(calls, 1);
 });
+
+test("excludes explicitly retired models even while the live endpoint serves them", async () => {
+  const { getTinfoilChatModels } = loadCatalog(async () =>
+    okResponse([
+      CHAT_MODEL,
+      { ...CHAT_MODEL, id: "glm-5-3-flash", deprecated: true },
+      { ...CHAT_MODEL, id: "glm-5-2" },
+      // A future deprecation is not an instruction to migrate an unrelated model.
+      { ...CHAT_MODEL, id: "future-model", deprecated: true },
+    ])
+  );
+  assert.deepEqual(
+    (await getTinfoilChatModels()).map((m) => m.id),
+    ["glm-5-3", "future-model"]
+  );
+});

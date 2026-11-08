@@ -95,3 +95,27 @@ test("ignores legacy account-only and malformed cache envelopes", () => {
     assert.equal(readWorkspacePolicyCache(cachePath, identity), null);
   });
 });
+
+test("an account's latest verdict is readable only from entries its binding vouched for", () => {
+  const { readAccountPolicyCache } = require("../../src/helpers/workspacePolicyCache");
+  withTempCache((cachePath) => {
+    const origin = "https://api.openwhispr.test";
+    const account = (credentialHash, accountId, accountValidated) => ({
+      apiOrigin: origin,
+      credentialHash,
+      accountId,
+      ...(accountValidated && { accountValidated }),
+    });
+    const verdict = (label) => ({ ...policyData, label });
+    writeWorkspacePolicyCache(cachePath, account("older", "account-a", true), verdict("older"));
+    writeWorkspacePolicyCache(cachePath, account("newer", "account-a", true), verdict("newer"));
+    // Stamped with an account by a request, with no binding behind it.
+    writeWorkspacePolicyCache(cachePath, account("label", "account-a"), verdict("label"));
+
+    const lookup = (accountId, apiOrigin = origin) =>
+      readAccountPolicyCache(cachePath, { apiOrigin, accountId });
+    assert.equal(lookup("account-a").label, "newer");
+    assert.equal(lookup("account-b"), null);
+    assert.equal(lookup("account-a", "https://self-hosted.openwhispr.test"), null);
+  });
+});

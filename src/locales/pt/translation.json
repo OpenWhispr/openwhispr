@@ -147,7 +147,6 @@
   },
   "common": {
     "continue": "Continuar",
-    "add": "Adicionar",
     "retry": "Tentar novamente",
     "back": "Voltar",
     "logout": "Sair",
@@ -189,6 +188,7 @@
     "skip": "Pular",
     "policyAiProcessingRestricted": "O processamento de IA está restrito pela sua organização.",
     "policyAgentRestricted": "O uso do assistente de IA está restrito pela sua organização.",
+    "policyAccountChanged": "Sua conta mudou, então esta resposta foi interrompida.",
     "policyTranscriptionRestricted": "A transcrição está restrita pela sua organização.",
     "policyUnresolved": "As configurações da sua organização ainda não foram carregadas. Tente novamente em instantes.",
     "managedConfigLoading": "Verificando a configuração gerenciada da sua organização. Tente novamente em instantes.",
@@ -334,34 +334,10 @@
           "features": {
             "device": "Roda no seu dispositivo",
             "offline": "Funciona offline depois da configuração",
-            "models": "Escolha modelos para ditado e assistente",
+            "setup": "Configurado para este computador",
             "free": "Grátis para sempre"
           }
         },
-        "warnings": {
-          "byok": {
-            "title": "Seu provedor cuida dos seus dados",
-            "description": "Você vai adicionar credenciais para provedores separados de ditado e Assistant. Os preços e as políticas de retenção do provedor se aplicam.",
-            "continue": "Configurar provedor de API",
-            "steps": {
-              "1": "Escolha provedores para ditado e Assistant",
-              "2": "Adicione credenciais com armazenamento seguro",
-              "3": "Teste cada conexão antes de ativar"
-            }
-          },
-          "local": {
-            "title": "A configuração local leva alguns passos extras",
-            "description": "O processamento local mantém sua fala neste dispositivo, mas exige uma configuração inicial e pelo menos {{minimumSpace}} GB de espaço livre.",
-            "continue": "Configurar localmente",
-            "steps": {
-              "1": "Escolha um motor de transcrição",
-              "2": "Configure ou baixe um modelo, cerca de {{modelSize}}",
-              "3": "Aguarde a instalação e a ativação"
-            }
-          }
-        },
-        "useCloud": "Usar a Nuvem em vez disso",
-        "continueSetup": "Continuar a configuração",
         "showMore": "Mostrar mais opções",
         "moreOptions": {
           "title": "Escolha sua configuração de API",
@@ -416,20 +392,80 @@
         }
       },
       "local": {
-        "title": "Configurar modelos locais",
-        "description": "Escolha os modelos que você quer executar no seu dispositivo.",
-        "descriptionLineOne": "Escolha os modelos que você quer",
-        "descriptionLineTwo": "executar no seu dispositivo.",
-        "providerLabel": "Provedor",
-        "download": "Baixar",
         "downloadingShort": "Baixando",
-        "selected": "Selecionado",
-        "use": "Usar",
         "downloadInProgress": "Download em andamento",
         "cancelDownload": "Cancelar o download de {{model}}",
         "downloads": "Downloads de modelos",
         "downloading": "Baixando… {{progress}}%",
+        "verifying": "Verificando",
         "installing": "Instalando"
+      },
+      "localSetup": {
+        "title": "Recomendamos estas configurações",
+        "subtitle": "Escolhidas para o seu {{computer}} e para {{language}}. Estes modelos rodam neste dispositivo.",
+        "subtitleOrganizationText": "Escolhidas para o seu {{computer}} e para {{language}}. O ditado roda neste dispositivo; o chat e as notas com IA usam o serviço escolhido pela sua organização.",
+        "computer": {
+          "chip": "Chip",
+          "processor": "Processador",
+          "memory": "Memória",
+          "graphics": "Gráficos",
+          "builtIn": "Integrados ao chip",
+          "memoryValue": "{{gb}} GB",
+          "mac": "Mac",
+          "windowsLaptop": "Notebook Windows",
+          "windowsDesktop": "Desktop Windows",
+          "linuxLaptop": "Notebook Linux",
+          "linuxDesktop": "Desktop Linux"
+        },
+        "rows": {
+          "dictation": "Ditado",
+          "cleanup": "Limpeza",
+          "assistant": "Assistente"
+        },
+        "description": {
+          "dictation": "Transforma sua voz em texto em qualquer app",
+          "cleanup": "Remove palavras de preenchimento e corrige a gramática",
+          "assistant": "Responde perguntas e executa seus pedidos"
+        },
+        "badge": {
+          "optional": "Opcional",
+          "cloud": "Nuvem recomendada"
+        },
+        "line": {
+          "requiredByOrganization": "Exigido pela sua organização",
+          "organizationModelsUnrunnable": "Nenhum dos modelos aprovados pela sua organização funciona neste computador",
+          "offToFit": "Desativado para caber no espaço livre deste computador",
+          "failed": "Não foi possível baixar. Verifique sua conexão e tente novamente"
+        },
+        "unavailable": {
+          "notEnoughMemory": "Memória insuficiente",
+          "exceedsMemory": "Excede os limites de memória deste computador",
+          "memoryUnread": "Não foi possível verificar a memória",
+          "organization": "Indisponível neste computador",
+          "memoryMac": "{{model}} precisa de {{needed}} GB de memória, este Mac tem {{have}} GB",
+          "memoryComputer": "{{model}} precisa de {{needed}} GB de memória, este computador tem {{have}} GB",
+          "memoryUnreadLine": "{{model}} precisa de {{needed}} GB de memória. Se este computador tiver isso, você pode ativar depois em Configurações"
+        },
+        "button": {
+          "download": "Baixar modelos",
+          "downloading": "Baixando",
+          "proceed": "Prosseguir",
+          "noSpace": "Espaço livre insuficiente"
+        },
+        "retry": "Tentar novamente",
+        "retryRow": "Tentar novamente: {{row}}",
+        "downloaded": "Baixado",
+        "foot": {
+          "default": "Você pode mudar qualquer uma dessas opções depois em Configurações.",
+          "dictationFailed": "O ditado precisa ser baixado antes de continuar. Tente de novo acima, ou volte e escolha outra configuração.",
+          "dictationUnavailable": "O ditado não funciona neste computador com os modelos aprovados pela sua organização. Volte e escolha outra configuração.",
+          "finishesInBackground": "O restante continua sendo baixado depois que você prosseguir e é ativado quando estiver pronto.",
+          "failedStaysOff": "O que não foi baixado fica desativado. Você pode adicionar depois em Configurações.",
+          "needsMac": "São necessários {{needed}} GB, e este Mac tem {{free}} GB livres.",
+          "needsComputer": "São necessários {{needed}} GB, e este computador tem {{free}} GB livres.",
+          "noSpaceMac": "O ditado precisa de {{needed}} GB livres e este Mac tem {{free}} GB. Libere espaço para continuar.",
+          "noSpaceComputer": "O ditado precisa de {{needed}} GB livres e este computador tem {{free}} GB. Libere espaço para continuar."
+        }
       }
     },
     "steps": {
@@ -563,7 +599,8 @@
       "queued": "Na fila",
       "failed": {
         "title": "Um download não foi concluído",
-        "description": "Verifique sua conexão e o espaço livre em disco e tente novamente. Se continuar falhando, entre em contato com seu administrador."
+        "description": "Verifique sua conexão e o espaço livre em disco e tente novamente. Se continuar falhando, entre em contato com seu administrador.",
+        "notApproved": "Sua organização não aprova este modelo. Você pode continuar sem ele."
       }
     },
     "permissionGuide": {
@@ -856,6 +893,11 @@
       }
     },
     "modelRetiredTitle": "Modelo não disponível",
+    "modelRetiredByProvider": "{{provider}} descontinuou {{from}}. Alterado para {{to}}.",
+    "modelUnavailableSwitched": "{{from}} não está mais disponível em {{provider}}. Alterado para {{to}}.",
+    "localModelRetired": "{{from}} não está mais disponível, por isso mudamos para {{to}}. Se ainda não tiver sido baixado, baixe-o nas Configurações.",
+    "localModelRetiredChooseAnother": "{{from}} não está mais disponível. Escolha outro modelo local nas Configurações.",
+    "localModelRetiredKept": "{{from}} foi descontinuado. Ele continua funcionando porque já foi baixado, mas não pode ser baixado novamente. Escolha outro modelo local nas Configurações.",
     "groq": {
       "modelRetired": "A Groq descontinuou {{from}}. Alterado para {{to}}."
     },
@@ -948,7 +990,7 @@
         "chunkLoss": "Um problema de rede fez perder grande parte da gravação. Retranscreva-a a partir do histórico.",
         "agentReasoningFailed": "Seu assistente de voz não conseguiu processar o comando; a transcrição bruta foi inserida no lugar.",
         "screenContextSkipped": "Não foi possível enviar a captura, então seu comando foi executado sem contexto de tela.",
-        "customEndpointInvalid": "Seu endpoint de transcrição personalizado não está configurado ou a URL é inválida. Atualize-o em Configurações → Fala para texto.",
+        "customEndpointInvalid": "Seu endpoint de transcrição personalizado não está configurado ou a URL é inválida. Atualize-o em Configurações → Voz para texto.",
         "managedTranscriptionUnavailable": "A transcrição gerenciada não está disponível no momento. Tente novamente em instantes.",
         "managedRouteInvalid": "A transcrição gerenciada não pôde ser iniciada devido a uma incompatibilidade de configuração. Tente novamente ou entre em contato com o administrador.",
         "managedAuthRejected": "As credenciais de transcrição gerenciada da sua organização foram rejeitadas. Entre em contato com o administrador.",
@@ -956,16 +998,16 @@
         "managedResponseMalformed": "O serviço de transcrição da sua organização enviou uma resposta que o OpenWhispr não conseguiu ler. Tente novamente ou entre em contato com o administrador.",
         "managedChunkTooLarge": "Não foi possível dividir este áudio em partes pequenas o suficiente para o serviço de transcrição da sua organização. Entre em contato com o administrador.",
         "streamingOnlyProvider": "Este provedor só suporta transcrição ao vivo. Escolha outro provedor para uploads de arquivos e novas tentativas.",
-        "providerKeyMissing": "Nenhuma chave de API definida para seu provedor de transcrição. Adicione-a em Configurações → Fala para texto.",
+        "providerKeyMissing": "Nenhuma chave de API definida para seu provedor de transcrição. Adicione-a em Configurações → Voz para texto.",
         "cleanupTruncated": "O modelo de IA ficou sem espaço antes de terminar a limpeza do seu ditado.",
         "cleanupDuplicated": "A limpeza por IA repetiu a transcrição. O texto original foi mantido.",
         "cleanupEmptyReply": "O modelo de IA devolveu uma resposta vazia em vez do ditado limpo."
       },
       "translationFallback": {
         "unreachableTitle": "Tradução indisponível",
-        "unreachableDescription": "Seu ditado foi colado sem tradução. Verifique as configurações de tradução.",
+        "unreachableDescription": "Seu ditado ficou no idioma original. Verifique as configurações de tradução.",
         "failedTitle": "Falha na tradução",
-        "failedDescription": "O texto original foi colado. Você pode tentar novamente pelo Histórico."
+        "failedDescription": "Seu ditado ficou no idioma original. Você pode tentar novamente pelo Histórico."
       },
       "pushForceStopped": {
         "title": "Transcrição não colada",
@@ -1000,7 +1042,10 @@
         "manualPaste": "Copie o texto abaixo e pressione {{shortcut}} para colá-lo.",
         "openSettings": "Abrir ajustes",
         "copyToClipboard": "Copiar texto",
-        "copyFailed": "Falha ao copiar"
+        "copyFailed": "Falha ao copiar",
+        "copiedTitle": "Copiado, não colado",
+        "copiedDescription": "Seu texto está na área de transferência. A colagem automática precisa da permissão de Acessibilidade. Pressione {{shortcut}} para colar manualmente.",
+        "dontShowAgain": "Não mostrar novamente"
       },
       "pasteFailed": {
         "title": "Não foi possível colar automaticamente"
@@ -1047,6 +1092,7 @@
         "tlsError": "Erro de certificado — sua rede pode usar inspeção SSL que bloqueia downloads. Tente baixar de outra rede.",
         "unknown": "Erro desconhecido"
       },
+      "verifying": "Verificando {{model}}",
       "downloadFailed": {
         "title": "Falha no download"
       },
@@ -1519,7 +1565,7 @@
     "managedAccount": "Conta gerenciada",
     "groups": {
       "account": "Conta",
-      "app": "Aplicativo",
+      "workspace": "Espaço de trabalho",
       "aiModels": "Modelos de IA",
       "system": "Sistema"
     },
@@ -1530,7 +1576,23 @@
       },
       "plansBilling": {
         "description": "Planos, uso e cobrança",
-        "label": "Planos e cobrança"
+        "label": "Plano e cobrança"
+      },
+      "workspaceGeneral": {
+        "label": "Geral",
+        "description": "Nome e ícone do espaço de trabalho"
+      },
+      "workspacePeople": {
+        "label": "Pessoas",
+        "description": "Membros e equipes"
+      },
+      "workspaceTeamspaces": {
+        "label": "Teamspaces",
+        "description": "Notas compartilhadas"
+      },
+      "workspaceDeveloper": {
+        "label": "Desenvolvedor",
+        "description": "Chaves de API do espaço de trabalho"
       },
       "general": {
         "description": "Aparência, sons e inicialização",
@@ -1550,7 +1612,7 @@
       },
       "llms": {
         "description": "Modelos para chat, limpeza e resumos",
-        "label": "Modelos de linguagem"
+        "label": "Modelo de linguagem"
       },
       "privacyData": {
         "description": "Privacidade, permissões e análise",
@@ -1559,10 +1621,6 @@
       "system": {
         "description": "Atualizações, armazenamento e ferramentas de desenvolvimento",
         "label": "Sistema"
-      },
-      "workspace": {
-        "description": "Membros, espaços de equipe e chaves de API",
-        "label": "Espaço de trabalho"
       }
     },
     "title": "Configurações"
@@ -1835,7 +1893,7 @@
       },
       "examplesTitle": "Exemplos",
       "helper": "Escolha algo curto e natural de se dizer em voz alta",
-      "howItWorksDescription": "Quando você diz \"Ei {{agentName}}\" seguido de uma instrução, o texto destacado é substituído com segurança pelo resultado. Com a colagem automática ativada, a resposta é colada no cursor de um campo editável em foco; caso contrário, abre no painel flutuante do assistente.",
+      "howItWorksDescription": "Quando você diz \"Ei {{agentName}}\" seguido de uma instrução, o texto destacado é substituído com segurança pelo resultado. Os outros pedidos abrem na janela do assistente.",
       "howItWorksTitle": "Como funciona",
       "instructionMode": "Instrução",
       "placeholder": "ex.: Jarvis, Nova, Atlas...",
@@ -1910,6 +1968,14 @@
       "dataManagementTitle": "Gerenciamento de dados",
       "modelCache": "Cache de modelos",
       "open": "Abrir",
+      "retiredModels": {
+        "label": "Modelos descontinuados",
+        "description": "Estes modelos não são mais oferecidos, mas ainda estão no disco: {{models}}.",
+        "remove": "Remover",
+        "confirmTitle": "Remover modelos descontinuados?",
+        "confirmDescription": "Isso exclui os arquivos dos modelos que o catálogo não oferece mais. Os outros modelos baixados são mantidos.",
+        "failedDescription": "Não foi possível remover alguns arquivos. Um modelo pode ainda estar em uso; reinicie o aplicativo e tente novamente."
+      },
       "removeModels": {
         "confirmText": "Excluir modelos",
         "description": "Isso exclui todos os modelos Whisper armazenados localmente ({{path}}) e libera espaço em disco. Você pode baixá-los novamente no seletor de modelos.",
@@ -1982,10 +2048,10 @@
         "resetToDefault": "Redefinir para {{hotkey}}",
         "title": "Atalho de ditado",
         "linuxPttPermissionTitle": "Manter pressionado para falar requer configuração",
-        "linuxPttPermissionDescription": "Execute este comando e faça logout: sudo usermod -aG input $USER",
+        "linuxPttPermissionDescription": "Execute este comando e depois termine a sessão da sua conta de utilizador Linux e volte a iniciá-la: sudo usermod -aG input $USER",
         "linuxPttSetupTitle": "Manter pressionado para falar requer configuração",
         "linuxPttSetupDescription": "O seu utilizador precisa de acesso aos dispositivos de entrada do teclado.",
-        "linuxPttSetupNote": "Depois de executar o comando, termine e reinicie a sessão.",
+        "linuxPttSetupNote": "Depois de executar o comando, termine a sessão da sua conta de utilizador Linux e volte a iniciá-la.",
         "hyprlandConfigWriteWarningTitle": "Os atalhos do Hyprland não serão mantidos",
         "hyprlandConfigWriteWarningDescription": "O OpenWhispr não consegue escrever em {{path}}, por isso os atalhos não serão mantidos após recarregar a configuração do Hyprland. Verifique se o ficheiro existe e permite escrita.",
         "hyprlandUnbindDescription": "No Hyprland, o OpenWhispr reserva o atalho selecionado. Qualquer atalho existente do Hyprland que use a mesma combinação de teclas será desvinculado quando o OpenWhispr registar o atalho."
@@ -1999,7 +2065,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Atalho do assistente de voz",
-        "description": "Diga um comando e o assistente usa suas notas, calendário e ferramentas web. A resposta é colada em um cursor editável em foco, substitui o texto selecionado ou abre no painel flutuante."
+        "description": "Diga um pedido e o assistente responde na própria janela, usando suas notas, calendário e ferramentas web. O texto que você destacar antes vai junto como contexto."
       },
       "microphone": {
         "description": "Selecione qual dispositivo de entrada usar para ditado",
@@ -2204,7 +2270,7 @@
     "privacy": {
       "cloudBackup": "Backup na nuvem",
       "cloudBackupDescription": "Salve suas transcrições e notas na nuvem para acesso contínuo em todos os dispositivos.",
-      "cloudBackupTeamCaveat": "Notas em espaços de equipe e notas que você compartilhou são sempre sincronizadas, independentemente desta configuração.",
+      "cloudBackupTeamCaveat": "Notas em teamspaces e notas que você compartilhou são sempre sincronizadas, independentemente desta configuração.",
       "cloudNotesMigration": "Fazendo backup das notas… {{done}} / {{total}}",
       "cloudNotesMigrationDone": "Todas as notas salvas na nuvem",
       "description": "Controle quais dados saem do seu dispositivo. Tudo está desativado por padrão.",
@@ -2218,6 +2284,8 @@
       "leaderboardRequiresHistory": "Ative a retenção de dados antes de participar das classificações.",
       "usageAnalytics": "Análise de uso",
       "usageAnalyticsDescription": "Ajude-nos a melhorar o OpenWhispr compartilhando métricas anônimas de desempenho. Nunca enviamos conteúdo de transcrição — apenas dados de tempo e erros.",
+      "modelListUpdates": "Atualizações da lista de modelos",
+      "modelListUpdatesDescription": "Verifica a cada 15 minutos a lista pública de modelos do OpenWhispr no GitHub para encontrar modelos novos e descontinuados. As alterações entram totalmente em vigor após reiniciar.",
       "dataRetention": "Retenção de dados",
       "dataRetentionDescription": "Armazenar transcrições e áudio localmente no seu histórico. Quando desativado, as transcrições são coladas mas não salvas.",
       "transcriptRetention": "Retenção de transcrições",
@@ -2256,7 +2324,7 @@
       "selfHostedStreamingNote": "Requer um servidor que suporte transcrição em streaming."
     },
     "llms": {
-      "title": "Modelos de linguagem",
+      "title": "Modelo de linguagem",
       "description": "Configure modelos para limpeza, formatação de notas e chat",
       "tabs": {
         "dictationCleanup": "Limpeza do ditado",
@@ -2408,8 +2476,270 @@
       "tab": {
         "general": "Geral",
         "members": "Membros",
-        "teams": "Grupos",
-        "developer": "Desenvolvedor"
+        "invitations": "Convites",
+        "teams": "Grupos"
+      },
+      "people": {
+        "title": "Pessoas",
+        "description": "Gerencie as pessoas do seu espaço de trabalho e as funções delas.",
+        "subtitleView": "As pessoas do seu espaço de trabalho e as funções delas.",
+        "add": "Adicionar",
+        "addLabel": "Convidar pessoas",
+        "columns": {
+          "name": "Nome",
+          "team": "Grupo",
+          "role": "Função",
+          "email": "E-mail",
+          "status": "Status",
+          "actions": "Ações"
+        },
+        "you": "Você",
+        "teamsNone": "Nenhum",
+        "teamsMore": "+{{count}}",
+        "loading": {
+          "title": "Carregando membros…",
+          "body": "Os membros do seu espaço de trabalho aparecerão aqui."
+        },
+        "failed": {
+          "title": "Não foi possível carregar os membros",
+          "body": "Verifique sua conexão e tente novamente."
+        },
+        "search": {
+          "placeholder": "Pesquisar membros",
+          "clear": "Limpar pesquisa",
+          "noResultsTitle": "Nenhum membro corresponde a “{{query}}”",
+          "noResultsBody": "Verifique a ortografia ou pesquise por e-mail."
+        },
+        "roleMenuLabel": "Alterar a função de {{name}}",
+        "roleDescription": {
+          "member": "Pode ver e editar notas.",
+          "admin": "Gerencia membros, convites, grupos e configurações."
+        },
+        "roleFailed": "Não foi possível alterar a função de {{name}}. Verifique sua conexão e tente novamente.",
+        "roleNotAllowed": "Você não tem mais permissão para alterar funções em {{workspace}}.",
+        "invitations": {
+          "loading": "Carregando convites…",
+          "failedTitle": "Não foi possível carregar os convites",
+          "emptyTitle": "Nenhum convite",
+          "emptyBody": "Os novos convites aparecem aqui até serem aceitos.",
+          "pending_one": "Pendente · Expira em {{count}} dia",
+          "pending_other": "Pendente · Expira em {{count}} dias",
+          "expired": "Expirado",
+          "resend": "Reenviar convite",
+          "cancel": "Cancelar convite",
+          "resendFailed": "Não foi possível reenviar o convite para {{email}}. Cancele-o e convide a pessoa novamente.",
+          "resendNotAllowed": "Você não tem mais permissão para reenviar convites em {{workspace}}.",
+          "noLongerPending": "O convite para {{email}} não está mais pendente",
+          "noLongerPendingMany_one": "{{count}} convite não está mais pendente.",
+          "noLongerPendingMany_other": "{{count}} convites não estão mais pendentes.",
+          "refreshFailed": "Não foi possível atualizar os convites. Esta lista pode estar desatualizada.",
+          "cancelSelected": "Cancelar convites",
+          "resendSelected": "Reenviar convites",
+          "resendingSelected": "Reenviando…",
+          "resentMany_one": "Foi reenviado {{count}} convite.",
+          "resentMany_other": "Foram reenviados {{count}} convites.",
+          "resentPartial_one": "{{count}} convite reenviado.",
+          "resentPartial_other": "{{count}} convites reenviados.",
+          "resendFailedOne": "O convite para {{email}} falhou. Tente novamente em Ações.",
+          "resendFailedSome_one": "{{count}} convite falhou. Tente novamente em Ações.",
+          "resendFailedSome_other": "{{count}} convites falharam. Tente novamente em Ações.",
+          "resendFailedAll_one": "Não foi possível reenviar {{count}} convite. Verifique sua conexão e tente novamente.",
+          "resendFailedAll_other": "Não foi possível reenviar {{count}} convites. Verifique sua conexão e tente novamente.",
+          "resentNoEmailOne": "O convite de {{email}} foi atualizado, mas não foi possível entregar o e-mail e o link antigo não funciona mais. Reenvie-o para tentar novamente.",
+          "resentNoEmailMany_one": "{{count}} convite foi atualizado, mas não foi possível entregar o e-mail e o link antigo não funciona mais. Ele continua selecionado para que você possa reenviá-lo.",
+          "resentNoEmailMany_other": "{{count}} convites foram atualizados, mas não foi possível entregar os e-mails e os links antigos não funcionam mais. Eles continuam selecionados para que você possa reenviá-los.",
+          "resendUnrenewable_one": "Não foi possível renovar {{count}} convite expirado. Cancele-o e convide essa pessoa novamente.",
+          "resendUnrenewable_other": "Não foi possível renovar {{count}} convites expirados. Cancele-os e convide essas pessoas novamente."
+        },
+        "selection": {
+          "count_one": "{{count}} selecionado",
+          "count_other": "{{count}} selecionados",
+          "clear": "Limpar",
+          "label": "Pessoas selecionadas",
+          "selectAllMembers": "Selecionar todos os membros",
+          "selectAllInvitations": "Selecionar todos os convites",
+          "selectRow": "Selecionar {{name}}",
+          "remove": "Remover",
+          "addToTeamspace": "Adicionar ao teamspace"
+        }
+      },
+      "teamspaces": {
+        "title": "Teamspaces",
+        "subtitleManage": "Gerencie os teamspaces deste espaço de trabalho.",
+        "subtitleView": "Teamspaces deste espaço de trabalho.",
+        "create": "Criar teamspace",
+        "columns": {
+          "name": "Nome",
+          "admins": "Administradores",
+          "actions": "Ações",
+          "members": "Membros"
+        },
+        "loadingTitle": "Carregando teamspaces…",
+        "loadingBody": "Os teamspaces do seu espaço de trabalho aparecerão aqui.",
+        "failedTitle": "Não foi possível carregar os teamspaces",
+        "failedBody": "Verifique sua conexão e tente novamente.",
+        "retry": "Tentar novamente",
+        "emptyTitle": "Nenhum teamspace ainda",
+        "emptyBody": "Um teamspace é uma área compartilhada para as notas de uma equipe. Adicione pessoas ou grupos, e todos nele poderão ler e editar.",
+        "emptyBodyMember": "Os administradores do seu espaço de trabalho ainda não criaram nenhum.",
+        "adminCount_one": "{{count}} administrador",
+        "adminCount_other": "{{count}} administradores",
+        "noAdmins": "Administradores do espaço de trabalho",
+        "you": "Você",
+        "join": "Entrar",
+        "joining": "Entrando…",
+        "joined": "Você entrou em {{space}}",
+        "joinFailed": "Não foi possível entrar em {{space}}. Tente novamente.",
+        "joinClosed": "{{space}} não aceita mais novos membros. Peça a um administrador que adicione você.",
+        "openTeamspace": "Abrir teamspace",
+        "rowMenu": {
+          "label": "Ações de {{name}}",
+          "settings": "Configurações",
+          "delete": "Excluir teamspace"
+        },
+        "form": {
+          "title": "Criar teamspace",
+          "description": "Uma área compartilhada para as notas de uma equipe. Todos que você adicionar poderão ler e editar.",
+          "nameAndIcon": "Nome e ícone",
+          "descriptionLabel": "Descrição",
+          "people": "Pessoas",
+          "descriptionPlaceholder": "Gravações e resumos de ligações de vendas e suporte, uma nota por ligação.",
+          "peoplePlaceholder": "Nomes, e-mails ou grupos",
+          "defaultTitle": "Teamspace padrão",
+          "defaultBody": "Adicionar automaticamente os novos membros do espaço de trabalho.",
+          "openTitle": "Teamspace aberto",
+          "openBody": "Permitir que os membros do espaço de trabalho entrem.",
+          "invalidEmail": "E-mail inválido",
+          "nameTaken": "Já existe um teamspace chamado {{name}}",
+          "failed": "Não foi possível criar o teamspace. Seus dados foram mantidos. Tente novamente.",
+          "creating": "Criando",
+          "created": "{{space}} criado",
+          "createdInviteFailed_one": "{{space}} foi criado. Não foi possível convidar {{count}} pessoa. Convide-a em Membros.",
+          "createdInviteFailed_other": "{{space}} foi criado. Não foi possível convidar {{count}} pessoas. Convide-as em Membros.",
+          "inviteFailedWho": "Não convidados: {{names}}.",
+          "copyAddresses": "Copiar endereços",
+          "groupsGone": "{{names}} não está mais disponível, por isso não foi adicionado."
+        },
+        "picker": {
+          "groupPeople_one": "{{count}} pessoa",
+          "groupPeople_other": "{{count}} pessoas",
+          "groupChip_one": "{{name}} · {{count}} pessoa",
+          "groupChip_other": "{{name}} · {{count}} pessoas",
+          "emailChip": "{{email}} · {{role}}",
+          "noMember": "Nenhum membro encontrado",
+          "inviteToWorkspace": "Convidar para o espaço de trabalho",
+          "newToWorkspace": "Novo no espaço de trabalho",
+          "select": "Selecionar",
+          "noResultsTitle": "Nenhuma pessoa ou grupo encontrado",
+          "noResultsBody": "Tente outro nome ou digite um endereço de e-mail completo.",
+          "noResultsBodyNoInvite": "Tente outro nome.",
+          "hasAccess": "Já tem acesso",
+          "groupHasAccess_one": "Já tem acesso · {{count}} pessoa",
+          "groupHasAccess_other": "Já tem acesso · {{count}} pessoas"
+        },
+        "members": {
+          "columnRole": "Função no teamspace",
+          "add": "Adicionar membros",
+          "adding": "Adicionando…",
+          "retry": "Tentar novamente",
+          "invitationPending": "Convite pendente",
+          "via": "Membro · via {{group}}",
+          "viaAdmin": "Administrador · via {{group}}",
+          "roleMember": "Membro do teamspace",
+          "roleMemberBody": "Pode ver e editar notas",
+          "roleAdmin": "Administrador do teamspace",
+          "roleAdminBody": "Gerencia este teamspace e seus grupos atribuídos.",
+          "removeItem": "Remover do teamspace",
+          "removeTitle": "Remover {{name}} de {{space}}?",
+          "removeBody": "Isso remove a participação direta de {{name}}. O acesso por meio de um grupo continuará. A pessoa permanecerá no espaço de trabalho.",
+          "removeConfirm": "Remover membro",
+          "removeFailedTitle": "Não foi possível remover {{name}}",
+          "removeFailedBody": "A participação de {{name}} em {{space}} não foi alterada. Verifique sua conexão e tente novamente.",
+          "removed": "A participação direta de {{name}} em {{space}} foi removida.",
+          "removeGroupTitle": "Remover {{group}} de {{space}}?",
+          "removeGroupBody_one": "{{count}} pessoa perde o acesso por meio deste grupo. O grupo permanece no espaço de trabalho.",
+          "removeGroupBody_other": "{{count}} pessoas perdem o acesso por meio deste grupo. O grupo permanece no espaço de trabalho.",
+          "removeGroupBodyNoCount": "As pessoas deste grupo perdem o acesso por meio dele. O grupo permanece no espaço de trabalho.",
+          "stagedNew": "Pessoas novas são convidadas quando você as adiciona. O acesso ao teamspace começa depois que elas aceitarem.",
+          "stagedGroup": "Todos em {{group}} herdarão acesso de membro a {{space}}.",
+          "stagedGroups": "Todos nestes grupos herdarão acesso de membro a {{space}}.",
+          "invalid": "Digite um endereço de e-mail válido. As pessoas selecionadas foram mantidas.",
+          "progressPeople": "Adicionando {{names}}…",
+          "progressBoth_one": "Adicionando {{names}} e enviando {{count}} convite…",
+          "progressBoth_other": "Adicionando {{names}} e enviando {{count}} convites…",
+          "progressInvites_one": "Enviando {{count}} convite…",
+          "progressInvites_other": "Enviando {{count}} convites…",
+          "resultAdded": "Adicionado: {{names}}.",
+          "resultInvited": "Convite para o espaço de trabalho enviado para {{names}}.",
+          "resultGroup": "{{group}} foi adicionado. Os integrantes agora têm acesso de membro.",
+          "resultGroups": "{{names}} foram adicionados. Os integrantes agora têm acesso de membro.",
+          "failed": "Não foi possível adicionar os membros. Suas seleções foram mantidas. Tente novamente.",
+          "partialAdded": "{{names}} foi adicionado.",
+          "partialAddedMany": "{{names}} foram adicionados.",
+          "partialInviteFailed": "O convite para {{names}} não foi enviado. Tente novamente.",
+          "partialInviteFailedMany": "Os convites para {{names}} não foram enviados. Tente novamente.",
+          "partialAddFailed": "Não foi possível adicionar {{names}}. Tente novamente.",
+          "partialLeft": "Saíram do espaço de trabalho e não foram adicionados: {{names}}.",
+          "notAllowed": "Você não tem mais permissão para gerenciar os membros de {{space}}.",
+          "notInvited": "{{names}} não recebeu convite.",
+          "notInvitedMany": "{{names}} não receberam convite.",
+          "skippedInvited": "{{names}} já tem um convite para o espaço de trabalho, então não foi adicionado a este teamspace.",
+          "skippedInvitedMany": "{{names}} já têm convites para o espaço de trabalho, então não foram adicionados a este teamspace.",
+          "removeBodyPlain": "{{name}} perderá o acesso a este Teamspace e às notas dele. A pessoa continuará no workspace.",
+          "invitationPendingAdmin": "Convite pendente · Administrador do workspace",
+          "resultInvitedNoEmail": "Convites criados para {{names}}, mas não foi possível entregar o e-mail. Reenvie em Convites.",
+          "resultInvitedPending": "{{names}} já tinha um convite para o espaço de trabalho, então este teamspace foi adicionado a ele. Nenhum novo e-mail foi enviado e a função no espaço de trabalho desse convite não muda.",
+          "stepDownTitle": "Deixar de ser administrador de {{space}}?",
+          "stepDownBody": "Você não poderá mais gerenciar este Teamspace nem os membros dele. Só outro administrador poderá torná-lo administrador novamente.",
+          "stepDownConfirm": "Deixar o cargo"
+        },
+        "settings": {
+          "leaveTitle": "Sair do teamspace",
+          "leaveBody": "Saia deste teamspace.",
+          "leaveAction": "Sair do teamspace",
+          "deleteTitle": "Excluir teamspace",
+          "deleteBody": "Remova este teamspace para todos.",
+          "deleteAction": "Excluir teamspace",
+          "flagsFailed": "Não foi possível carregar estas configurações.",
+          "flagSaveFailed": "Não foi possível salvar. Tente novamente.",
+          "deleteDefaultAdminOnly": "Somente administradores do espaço de trabalho podem excluir um teamspace padrão.",
+          "defaultAdminOnly": "Somente administradores do espaço de trabalho podem alterar isso."
+        },
+        "exit": {
+          "blockedTitle": "Adicione outro administrador primeiro",
+          "blockedBody": "Você é o único administrador de {{space}}. Torne outro membro administrador antes de sair.",
+          "blockedAction": "Gerenciar membros",
+          "leaveTitle": "Sair de {{space}}?",
+          "leaveFailedTitle": "Não foi possível sair de {{space}}",
+          "leaveFailedBody": "Sua participação não foi alterada. Verifique sua conexão e tente novamente.",
+          "left": "Você saiu de {{space}}.",
+          "deleteTitle": "Excluir {{space}}?",
+          "deleteBody": "Isso remove {{space}} do espaço de trabalho para todos.",
+          "deleteFailedTitle": "Não foi possível excluir {{space}}",
+          "deleteFailedBody": "O teamspace continua disponível. Verifique sua conexão e tente novamente.",
+          "deleted": "{{space}} foi excluído.",
+          "restored": "{{space}} foi restaurado",
+          "leaveBodyKeeps": "Sua associação direta terminará. Você manterá o acesso por meio de {{groups}}.",
+          "leaveBodyLoses": "Você perderá o acesso a {{space}} e às notas dele.",
+          "leaveBodyAdmins": "Outro administrador continuará gerenciando este Teamspace.",
+          "deleteNotAllowed": "Você não tem permissão para excluir {{space}}.",
+          "movedToPersonal_one": "{{count}} nota não sincronizada foi movida para seu espaço pessoal.",
+          "movedToPersonal_other": "{{count}} notas não sincronizadas foram movidas para seu espaço pessoal."
+        },
+        "addPeople": {
+          "loading": "Carregando teamspaces…",
+          "failed": "Não foi possível carregar os teamspaces",
+          "none": "Nenhum teamspace ainda",
+          "addingTitle_one": "Adicionando {{count}} pessoa…",
+          "addingTitle_other": "Adicionando {{count}} pessoas…",
+          "addingBody": "Mantenha esta janela aberta enquanto elas são adicionadas a {{space}}.",
+          "addingAction": "Adicionando…",
+          "failedTitle_one": "Não foi possível adicionar {{count}} pessoa",
+          "failedTitle_other": "Não foi possível adicionar {{count}} pessoas",
+          "failedBody": "Elas não foram adicionadas a {{space}}. Sua seleção foi mantida. Verifique sua conexão e tente novamente.",
+          "done_one": "{{count}} pessoa adicionada a {{space}}",
+          "done_other": "{{count}} pessoas adicionadas a {{space}}"
+        }
       },
       "role": {
         "owner": "Proprietário",
@@ -2417,45 +2747,33 @@
         "member": "Membro"
       },
       "general": {
+        "title": "Geral",
+        "subtitleManage": "Gerencie o nome, os ícones e mais do seu espaço de trabalho",
+        "subtitleView": "O nome e o ícone do seu espaço de trabalho.",
         "nameLabel": "Nome do espaço de trabalho",
+        "nameHint": "O nome do espaço de trabalho pode ter até 65 caracteres",
+        "iconLabel": "Ícone do espaço de trabalho",
+        "iconHint": "Este ícone aparece na sua barra lateral e nas notificações.",
+        "roleLabel": "Sua função",
         "saved": "Espaço de trabalho atualizado",
+        "ownerTitle": "Proprietário do espaço de trabalho",
+        "ownerDescription": "Transfira a propriedade para outro membro do espaço de trabalho.",
         "dangerTitle": "Excluir espaço de trabalho",
-        "dangerDescription": "Todas as notas, pastas e integrações compartilhadas serão excluídas. Esta ação não pode ser desfeita.",
+        "dangerDescription": "Exclua permanentemente este espaço de trabalho, incluindo todas as notas e arquivos.",
         "delete": "Excluir espaço de trabalho",
-        "confirmTitle": "Excluir {{name}}?",
-        "confirmDescription": "Isso cancela a assinatura e remove todos os dados do espaço de trabalho permanentemente.",
         "deleting": "Excluindo…",
-        "deleted": "Espaço de trabalho excluído",
         "leaveTitle": "Sair do espaço de trabalho",
-        "leaveDescription": "Você perderá o acesso a este espaço de trabalho e às notas compartilhadas dele.",
+        "leaveDescription": "Saia deste espaço de trabalho. Você perderá o acesso aos teamspaces dele.",
         "leave": "Sair do espaço de trabalho",
-        "leaving": "Saindo…",
-        "leaveConfirm": {
-          "title": "Sair de {{name}}?",
-          "description": "Você perderá o acesso imediatamente. Um administrador pode convidá-lo de volta."
-        },
-        "left": "Você saiu de {{name}}"
+        "leaving": "Saindo…"
       },
       "members": {
-        "title": "Membros",
         "description": "{{count}} de {{seats}} assentos usados.",
-        "invite": "Convidar",
-        "empty": "Ainda não há membros.",
         "loadError": "Não foi possível carregar os membros.",
         "roleUpdated": "Função atualizada",
         "removed": "{{name}} removido",
-        "promote": "Tornar administrador",
-        "demote": "Tornar membro",
         "transferOwnership": "Transferir propriedade",
-        "remove": "Remover do espaço de trabalho",
-        "removeConfirm": {
-          "title": "Remover este membro?",
-          "description": "{{name}} perderá o acesso a {{workspace}} imediatamente."
-        },
-        "transferConfirm": {
-          "title": "Transferir a propriedade?",
-          "description": "{{name}} se torna o proprietário de {{workspace}}. Sua função muda para administrador e apenas o novo proprietário pode transferi-la de volta."
-        }
+        "remove": "Remover do espaço de trabalho"
       },
       "joinRequests": {
         "title": "Pedidos de acesso",
@@ -2467,7 +2785,7 @@
       },
       "teams": {
         "title": "Grupos",
-        "description": "Grupos de membros do workspace que podem receber acesso a espaços de equipe de uma vez.",
+        "description": "Grupos de membros do workspace que podem receber acesso a teamspaces de uma vez.",
         "new": "Novo grupo",
         "empty": "Nenhum grupo ainda.",
         "createFirst": "Crie seu primeiro grupo",
@@ -2496,22 +2814,9 @@
         }
       },
       "invites": {
-        "title": "Convites pendentes",
-        "expiresIn_one": "Expira em {{count}} dia",
-        "expiresIn_other": "Expira em {{count}} dias",
-        "expired": "Expirado",
-        "loadError": "Não foi possível carregar os convites.",
-        "resend": "Reenviar",
         "resending": "Reenviando…",
-        "revoke": "Revogar",
         "resent": "Convite reenviado",
-        "resentNoEmail": "Convite atualizado, mas não foi possível entregar o e-mail.",
-        "revoked": "Convite revogado",
-        "revokeFailed": "Não foi possível revogar o convite",
-        "revokeConfirm": {
-          "title": "Revogar este convite?",
-          "description": "O link de convite de {{email}} deixará de funcionar."
-        }
+        "resentNoEmail": "Convite atualizado, mas não foi possível entregar o e-mail."
       },
       "billing": {
         "plan": "Plano",
@@ -2790,6 +3095,21 @@
       "contextTooLargeGeneric": "Isto é longo demais para o {{model}} ler neste computador. Experimente um modelo na nuvem ou execute a ação sobre uma seleção mais curta.",
       "localServerUnavailable": "Não foi possível iniciar o {{model}} neste computador. Tente novamente ou mude para um modelo na nuvem.",
       "localModelBusy": "O modelo local ainda está processando outro pedido. Aguarde até terminar e tente novamente."
+    },
+    "policy": {
+      "guidance": "Sua organização aprovou estes modelos. Escolha o que for mais adequado ao seu computador.",
+      "notApproved": "Não aprovado pela sua organização",
+      "noneSupported": "Sua organização não aprovou nenhum modelo local compatível com esta versão do aplicativo. Atualize o OpenWhispr ou entre em contato com o administrador.",
+      "emptyIntersection": "Seus espaços de trabalho não têm nenhum modelo local aprovado em comum. Entre em contato com o administrador.",
+      "modelBlocked": "Escolha um modelo local aprovado pela sua organização.",
+      "modeBlocked": "Sua organização desativou o processamento local.",
+      "unresolved": "Não foi possível obter a política do espaço de trabalho. Conecte-se e tente novamente.",
+      "versionBlocked": "Atualize o OpenWhispr para usar os modelos aprovados pela sua organização.",
+      "updateRequired": "Atualização necessária",
+      "unavailable": "Indisponível no momento",
+      "installedTitle": "Modelos locais instalados",
+      "installedHint": "Sua organização desativou o processamento local, então estes modelos não podem ser executados. Eles permanecem no seu computador até você excluí-los.",
+      "chooseModel": "Escolha um modelo local"
     }
   },
   "upgradePrompt": {
@@ -2906,34 +3226,18 @@
       "teamSpaces": "Teamspaces",
       "personal": "Pessoal",
       "privateTooltip": "Somente você pode ver seu espaço pessoal",
-      "newSpace": "Novo espaço de equipe",
-      "createTitle": "Criar espaço de equipe",
-      "createDescription": "Uma área compartilhada dentro de um workspace para as pessoas e grupos que você adicionar.",
+      "newSpace": "Novo teamspace",
       "nameAndIconLabel": "Nome e ícone",
-      "create": "Criar",
-      "couldNotCreate": "Não foi possível criar o espaço",
-      "created": "{{space}} criado",
       "changeEmoji": "Alterar emoji",
       "settings": "Configurações",
-      "settingsTitle": "Configurações do espaço",
       "couldNotRename": "Não foi possível renomear o espaço",
       "couldNotChangeEmoji": "Não foi possível alterar o emoji",
       "deleteSpace": "Excluir espaço",
-      "deleteHintTeam": "Remove este espaço para todos. Seus grupos permanecem.",
       "deleteHintLocal": "Exclui permanentemente este espaço com suas pastas e notas neste dispositivo.",
-      "leaveTitle": "Sair do espaço",
-      "leaveDescription": "Suas notas continuam disponíveis para os outros membros.",
-      "leave": "Sair do espaço",
-      "leaveConfirmTitle": "Sair de {{space}}?",
       "leaveConfirmDescription": "Você será removido de {{teams}} e perderá o acesso a outros espaços que esses grupos podem abrir.",
-      "leaveDirectDescription": "Você perderá o acesso a este espaço.",
-      "leaveKeepsGroupAccess": "Você manterá o acesso por meio de {{groups}}.",
-      "left": "Você saiu de {{space}}",
       "stillViaGroups": "Você ainda tem acesso a {{space}} por meio de {{groups}}.",
-      "couldNotLeave": "Não foi possível sair do espaço",
       "deleteConfirmTitle": "Excluir espaço?",
       "deleteConfirmDescription": "Isso exclui permanentemente {{space}} com todas as suas pastas e notas neste dispositivo.",
-      "deleteConfirmTeamDescription": "Isso exclui {{space}} para todos. Seus grupos permanecem, mas os membros perdem o acesso a todas as pastas e notas.",
       "deleteTypeName": "Digite {{space}} para confirmar",
       "couldNotDelete": "Não foi possível excluir o espaço",
       "deleted": "{{space}} excluído",
@@ -2944,9 +3248,9 @@
       "spaceRoot": "Raiz do espaço",
       "moveConfirm": "Mover",
       "confirmMoveInTitle": "Mover para {{space}}?",
-      "confirmMoveIn": "Todos em {{space}} poderão ver e editar esta nota. As notas não podem ser retiradas de um espaço de equipe depois.",
-      "confirmMoveInFolder": "Todos em {{space}} poderão ver e editar esta pasta e suas notas. As pastas e notas não podem ser retiradas de um espaço de equipe depois.",
-      "cantMoveOut": "As notas não podem ser retiradas de um espaço de equipe.",
+      "confirmMoveIn": "Todos em {{space}} poderão ver e editar esta nota. As notas não podem ser retiradas de um teamspace depois.",
+      "confirmMoveInFolder": "Todos em {{space}} poderão ver e editar esta pasta e suas notas. As pastas e notas não podem ser retiradas de um teamspace depois.",
+      "cantMoveOut": "As notas não podem ser retiradas de um teamspace.",
       "cantMoveTeammate": "Apenas o proprietário da nota ou um administrador do workspace pode movê-la para outro espaço.",
       "moved": "“{{title}}” movida para {{target}}",
       "couldNotMove": "Não foi possível mover a pasta",
@@ -2984,42 +3288,21 @@
         "roleAdminDescription": "Gerencia pessoas e configurações.",
         "roleMemberDescription": "Pode ver e editar notas.",
         "remove": "Remover",
-        "removeConfirm": "Remover {{name}} de {{space}}?",
         "removeConfirmDescription": "A pessoa perderá o acesso a todas as notas deste espaço.",
-        "removeKeepsGroupAccess": "O acesso por meio de {{groups}} será mantido.",
         "inviteFooter": "Convidar {{email}} para o espaço de trabalho…",
         "empty": "Ninguém foi adicionado ainda",
-        "viaGroup": "via {{group}}",
-        "managedByGroup": "Adicionado por meio de {{group}}. Remova a pessoa lá.",
-        "roleFromGroup": "Administrador por meio de {{group}}. Altere isso lá.",
-        "invited": "Convite enviado para {{email}}"
+        "roleFromGroup": "Administrador por meio de {{group}}. Altere isso lá."
       },
-      "invitedTo_one": "Você entrará em {{count}} espaço de equipe",
-      "invitedTo_other": "Você entrará em {{count}} espaços de equipe",
+      "invitedTo_one": "Você entrará em {{count}} teamspace",
+      "invitedTo_other": "Você entrará em {{count}} teamspaces",
       "invitedToSpaces": "Você entrará em {{spaces}}",
       "teamsMembers": {
         "title": "Membros de {{space}}",
-        "noTeams": "Nenhum grupo tem acesso a este espaço ainda.",
-        "addTeamLabel": "Adicionar um grupo a este espaço",
-        "chooseTeam": "Escolher grupo…",
-        "teamAdded": "{{team}} adicionada a {{space}}",
         "teamRemoved": "{{team}} removida de {{space}}",
-        "removeTeamFromSpace": "Remover do espaço",
-        "removeTeamConfirm": "Remover {{team}} de {{space}}?",
-        "removeTeamConfirmDescription": "Seus membros perderão o acesso a este espaço, a menos que tenham sido adicionados diretamente ou outro grupo os inclua.",
-        "accessLabel": "Acesso ao espaço",
-        "accessAdmin": "Administrador",
-        "accessMember": "Membro",
-        "accessChanged": "Acesso de {{team}} atualizado",
-        "accessHint": "Os administradores de {{team}} só gerenciam este espaço quando seu acesso está definido como Administrador."
+        "accessChanged": "Acesso de {{team}} atualizado"
       },
       "teams": {
-        "newTeam": "Novo grupo",
         "loadError": "Não foi possível carregar os grupos."
-      },
-      "groups": {
-        "title": "Grupos com acesso",
-        "optional": "Grupos (opcional)"
       }
     },
     "structureIntro": {
@@ -3031,10 +3314,10 @@
       },
       "workspace": {
         "title": "Espaço de trabalho",
-        "description": "O lugar dos membros, funções e espaços de equipe do seu workspace."
+        "description": "O lugar dos membros, funções e teamspaces do seu workspace."
       },
       "teamSpace": {
-        "title": "Espaço de equipe",
+        "title": "Teamspace",
         "description": "Uma área compartilhada dentro de um workspace. Adicione pessoas ou grupos para dar acesso a elas."
       },
       "contents": "Cada espaço pode conter pastas e notas.",
@@ -3094,6 +3377,7 @@
       "transcriptEmptyDescription": "Inicie uma gravação e tudo o que for dito aparecerá aqui.",
       "startRecording": "Começar a gravar",
       "generateSummary": "Gerar resumo com IA",
+      "generateWithTemplate": "Gerar com {{template}}",
       "startWriting": "Comece a escrever...",
       "staleIndicator": "O conteúdo mudou desde o aprimoramento",
       "live": "Ao vivo",
@@ -3372,9 +3656,9 @@
         "actionFailed": "A ação falhou",
         "noEndpoint": "Nenhum URL de servidor auto-hospedado definido. Configure um nas Configurações.",
         "outputTruncated": "O modelo de IA ficou sem espaço antes de terminar, então a nota ficou como estava.",
-        "outputSpentThinking": "O modelo de IA gastou todo o limite de saída raciocinando e não escreveu notas, então a nota ficou como estava. Ative \"Desativar saída de raciocínio\" ou escolha um modelo que raciocine menos em Configurações → Modelos de linguagem → Formatação de notas e tente novamente.",
-        "outputSpentThinkingDisabled": "O modelo de IA gastou todo o limite de saída raciocinando e não escreveu notas, mesmo com \"Desativar saída de raciocínio\" ativado, então a nota ficou como estava. Escolha outro modelo em Configurações → Modelos de linguagem → Formatação de notas.",
-        "outputSpentThinkingOtherModel": "O modelo de IA gastou todo o limite de saída raciocinando e não escreveu notas, então a nota ficou como estava. Escolha um modelo que raciocine menos em Configurações → Modelos de linguagem → Formatação de notas.",
+        "outputSpentThinking": "O modelo de IA gastou todo o limite de saída raciocinando e não escreveu notas, então a nota ficou como estava. Ative \"Desativar saída de raciocínio\" ou escolha um modelo que raciocine menos em Configurações → Modelo de linguagem → Formatação de notas e tente novamente.",
+        "outputSpentThinkingDisabled": "O modelo de IA gastou todo o limite de saída raciocinando e não escreveu notas, mesmo com \"Desativar saída de raciocínio\" ativado, então a nota ficou como estava. Escolha outro modelo em Configurações → Modelo de linguagem → Formatação de notas.",
+        "outputSpentThinkingOtherModel": "O modelo de IA gastou todo o limite de saída raciocinando e não escreveu notas, então a nota ficou como estava. Escolha um modelo que raciocine menos em Configurações → Modelo de linguagem → Formatação de notas.",
         "nothingToSummarize": "Esta nota ainda não tem nada para resumir, então o resumo com IA ficou como estava.",
         "saveFailed": "Não foi possível salvar. Verifique se nada está longo demais e tente novamente."
       },
@@ -3388,6 +3672,11 @@
       "applied": "Resumo com IA atualizado com {{name}}"
     },
     "templates": {
+      "defaultLabel": "Modelo de resumo padrão",
+      "defaultHint": "Usar este modelo para o botão de resumo após uma reunião.",
+      "defaultBadge": "Padrão",
+      "saveBeforeDefault": "Salve este modelo para defini-lo como padrão.",
+      "defaultSaveFailed": "Não foi possível atualizar o modelo padrão. Tente novamente.",
       "tab": "Modelos",
       "managerTitle": "Modelos e ações",
       "manage": "Gerenciar modelos...",
@@ -3515,7 +3804,7 @@
       },
       "banner": {
         "title": {
-          "team": "Seu espaço de equipe",
+          "team": "Seu teamspace",
           "private": "Seu espaço privado"
         },
         "body": {
@@ -3599,6 +3888,34 @@
     "emptyTitle": "Adicione palavras ao seu dicionário",
     "emptyDescription": "Adicione palavras que {{agentName}} deve sempre acertar: nomes, ferramentas, siglas.",
     "addFirstWord": "Adicione sua primeira palavra",
+    "importList": "Importar uma lista",
+    "importMenu": "Importar",
+    "importFromDragon": "Importar do Dragon",
+    "dragonImport": {
+      "title": "Importar do Dragon",
+      "found_one": "{{count}} palavra encontrada em {{fileName}}.",
+      "found_many": "{{count}} palavras encontradas em {{fileName}}.",
+      "found_other": "{{count}} palavras encontradas em {{fileName}}.",
+      "alreadyPresent": "Já estavam no seu dicionário, por isso foram ignoradas: {{count}}.",
+      "nothingNew": "Todas as palavras deste arquivo já estão no seu dicionário.",
+      "unreadable": "Linhas que não puderam ser lidas, por isso foram ignoradas: {{count}}.",
+      "tooLong": "Palavras com mais de {{max}} caracteres, por isso foram ignoradas: {{count}}.",
+      "overLimit": "Seu dicionário comporta até {{max}} palavras, por isso não foram importadas: {{count}}.",
+      "propertiesIgnored": "As propriedades de formatação do Dragon não são importadas.",
+      "confirm_one": "Importar {{count}} palavra",
+      "confirm_many": "Importar {{count}} palavras",
+      "confirm_other": "Importar {{count}} palavras",
+      "done_one": "{{count}} palavra importada do Dragon",
+      "done_many": "{{count}} palavras importadas do Dragon",
+      "done_other": "{{count}} palavras importadas do Dragon",
+      "failedTitle": "Falha na importação",
+      "error": {
+        "emptyFile": "Nenhuma palavra foi encontrada nesse arquivo.",
+        "unsupportedXml": "Isso não parece uma exportação do Dragon para Windows. No Dragon, escolha Vocabulary → Export custom word and phrase list e salve como TXT.",
+        "fileTooLarge": "Esse arquivo é grande demais para ser uma lista de palavras do Dragon.",
+        "generic": "Não foi possível ler esse arquivo."
+      }
+    },
     "agentDefault": "Adicionado por padrão",
     "shared": {
       "allWords": "Todas as palavras",
@@ -3918,6 +4235,10 @@
     "expand": "Expandir barra lateral"
   },
   "chat": {
+    "answering": "Respondendo…",
+    "conversationCreateFailed": "Não foi possível iniciar a conversa. Sua pergunta está de volta em Novo chat.",
+    "messageSaveFailed": "Não foi possível salvar esta mensagem. Tente novamente.",
+    "conversationLoadFailed": "Não foi possível carregar esta conversa. Tente novamente.",
     "newChat": "Novo chat",
     "search": "Pesquisar conversas...",
     "archived": "Arquivadas",
@@ -3940,11 +4261,26 @@
     "searchTitle": "Pesquisar conversas",
     "searchDescription": "Pesquisar em todas as conversas",
     "inputPlaceholder": "Pergunte algo...",
+    "sourceNote": {
+      "from": "Da nota",
+      "open": "Abrir nota",
+      "deleted": "Esta nota foi excluída",
+      "deletedShort": "Excluída",
+      "askAbout": "Pergunte sobre {{title}}..."
+    },
     "starters": {
       "todos": "Liste minhas tarefas recentes",
       "meeting": "Prepare-me para minha próxima reunião",
       "sharedNotes": "Destaque minhas notas compartilhadas"
-    }
+    },
+    "fork": "Bifurcar",
+    "forked": "Conversa bifurcada",
+    "forkedFrom": "Bifurcada de \"{{title}}\"",
+    "forkFailed": "Não foi possível bifurcar esta conversa",
+    "sendNotStarted": "Esta conversa está ocupada. Sua mensagem não foi enviada. Tente novamente quando a solicitação atual terminar.",
+    "openFailed": "Esta conversa não está mais disponível.",
+    "localModelDownloading": "O modelo do assistente ainda está sendo baixado. O chat será ativado quando estiver pronto.",
+    "localModelMissing": "Escolha um modelo para Chat em Configurações para conversar neste dispositivo."
   },
   "support": {
     "documentation": "Documentação",
@@ -4027,7 +4363,6 @@
       "hotkeyToSpeak": "{{hotkey}} para falar",
       "recording": "Gravando...",
       "processing": "Processando...",
-      "clickToSpeak": "Clique para falar",
       "waitingForMicrophone": "Aguardando microfone…"
     },
     "buttons": {
@@ -4039,7 +4374,6 @@
       "startListening": "Começar a ouvir",
       "hideForNow": "Ocultar por agora",
       "askAssistant": "Perguntar ao assistente",
-      "busyRecording": "Termine primeiro a gravação atual",
       "startMeetingRecording": "Iniciar gravação da reunião"
     }
   },
@@ -4079,7 +4413,7 @@
       "thinking": "Pensando...",
       "typeMessage": "Digite uma mensagem...",
       "send": "Enviar",
-      "voiceDraftStreamingOnly": "A entrada por voz não está disponível com seu provedor de transcrição: ele só suporta ditado ao vivo. Escolha outro provedor em Configurações → Fala para texto.",
+      "voiceDraftStreamingOnly": "A entrada por voz não está disponível com seu provedor de transcrição: ele só suporta ditado ao vivo. Escolha outro provedor em Configurações → Voz para texto.",
       "commands": "Comandos",
       "slashNavigate": "para navegar",
       "slashSelect": "para selecionar",
@@ -4142,30 +4476,155 @@
       "update_skillName": "Atualizar habilidade",
       "search_openwhispr_helpStatus": "Pesquisando na ajuda do OpenWhispr...",
       "read_openwhispr_helpStatus": "Lendo a ajuda do OpenWhispr...",
-      "get_openwhispr_contextStatus": "Lendo as configurações do OpenWhispr..."
+      "get_openwhispr_contextStatus": "Lendo as configurações do OpenWhispr...",
+      "ask_userName": "Pergunta",
+      "ask_userStatus": "Perguntando a você...",
+      "request_connectionName": "Conexão",
+      "request_connectionStatus": "Pedindo para conectar...",
+      "request_accessName": "Acesso",
+      "request_accessStatus": "Pedindo acesso...",
+      "look_at_screenName": "Ver a tela",
+      "look_at_screenStatus": "Vendo sua tela...",
+      "look_at_screenSuccess": "Tela lida.",
+      "look_at_screenFailed": "Não foi possível ler a tela.",
+      "request_api_keyName": "Chave de API",
+      "request_api_keyStatus": "Pedindo uma chave de API...",
+      "open_settingsName": "Configurações",
+      "open_settingsStatus": "Indicando as configurações..."
+    },
+    "turn": {
+      "reasoning": "Raciocínio",
+      "stopped": "Interrompido",
+      "stepLimit": "Pausado após o número máximo de etapas.",
+      "continue": "Continuar",
+      "continueMessage": "Continue",
+      "failed": "Esta resposta falhou.",
+      "unbackedClaim": "Não foi feito: nada foi executado para o que esta resposta diz ter feito."
+    },
+    "interactions": {
+      "notNow": "Agora não",
+      "cancel": "Cancelar",
+      "questions": {
+        "recommended": "{{label}} (Recomendado)",
+        "submit": "Enviar",
+        "placeholder": "Digite sua resposta…",
+        "previous": "Pergunta anterior",
+        "next": "Próxima pergunta",
+        "position": "{{current}}/{{total}}",
+        "continue": "Continuar",
+        "typedAnswer": "Sua resposta: {{answer}}"
+      },
+      "connection": {
+        "title": "Conectar {{name}}",
+        "connect": "Conectar {{name}}",
+        "connecting": "Conclua a conexão no navegador…",
+        "failed": "Não foi possível conectar. Tente novamente.",
+        "permissionDenied": "O acesso ao calendário foi negado. Permita-o nos Ajustes do Sistema e tente novamente.",
+        "calendarTitle": "Conectar um calendário",
+        "yes": "Sim",
+        "reasons": {
+          "gmail": "Posso enviar o e-mail pelo seu Gmail.",
+          "slack": "Posso publicar a mensagem no Slack para você.",
+          "linear": "Posso encontrar e criar issues do Linear para você.",
+          "github": "Posso encontrar e criar issues do GitHub para você.",
+          "calendar": "Posso verificar sua disponibilidade e sugerir horários."
+        }
+      },
+      "access": {
+        "screen": "Permitir acesso à sua tela?",
+        "allow": "Permitir",
+        "capturing": "Capturando…"
+      },
+      "apiKey": {
+        "title": "Adicione sua chave de API do {{provider}}",
+        "placeholder": "Cole ou digite aqui",
+        "save": "Salvar",
+        "label": "Chave de API do {{provider}}",
+        "saved": "Chave do {{provider}} salva"
+      },
+      "settings": {
+        "done": "Concluído",
+        "technicalDetails": "Detalhes técnicos",
+        "checking": "Verificando…"
+      },
+      "status": {
+        "answered": "Respondido",
+        "connected": "{{name}} conectado",
+        "granted": "Tela compartilhada",
+        "declined": "Não permitido",
+        "saved": "Chave de API salva",
+        "done": "De volta das configurações",
+        "cancelled": "Dispensado",
+        "notAnswered": "Sem resposta",
+        "invalid": "Não foi possível mostrar a pergunta"
+      },
+      "followUp": {
+        "connected": "Conectei o {{name}}.",
+        "granted": "Permiti o acesso à minha tela.",
+        "saved": "Salvei minha chave de API do {{provider}}.",
+        "done": "Terminei nas configurações."
+      }
     }
   },
-  "assistant": {
-    "panel": {
-      "selectionHint": "Selecione o texto para editar com",
-      "selectedContext": "Texto selecionado adicionado",
-      "removeSelectedContext": "Remover texto selecionado",
-      "newConversation": "Nova conversa",
-      "copyToClipboard": "Copiar para a área de transferência",
-      "suggestions": {
-        "summarizeNotes": "Resuma minhas notas recentes",
-        "calendar": "O que está no meu calendário?",
-        "draft": "Ajude-me a redigir algo"
-      }
+  "agentWindow": {
+    "title": "Assistente",
+    "actions": {
+      "expand": "Expandir",
+      "collapse": "Minimizar",
+      "speak": "Falar",
+      "type": "Digitar",
+      "stop": "Parar",
+      "close": "Fechar",
+      "regenerate": "Gerar novamente",
+      "readAloud": "Ler em voz alta",
+      "stopReading": "Parar leitura"
     },
-    "toolActivity": {
-      "verbs": {
-        "invoking": "Invocando",
-        "calling": "Chamando",
-        "using": "Usando"
-      },
-      "toolFallback": "Ferramenta"
-    }
+    "notices": {
+      "nothingHeard": "Não entendi",
+      "transcriptionFailed": "Não foi possível transcrever",
+      "micUnavailable": "Não foi possível abrir o microfone",
+      "regenerateFailed": "Não foi possível gerar a resposta novamente",
+      "dictationActive": "O ditado está usando o microfone"
+    },
+    "composer": {
+      "placeholder": "Dite ou digite sua pergunta…",
+      "followUpPlaceholder": "Faça uma pergunta de acompanhamento…",
+      "answerPlaceholder": "Responda aqui…",
+      "cardPlaceholder": "Responda no cartão acima…"
+    },
+    "empty": {
+      "title": "Como posso ajudar?",
+      "description": "Digite seu pedido abaixo."
+    },
+    "selectedContext": {
+      "title": "Contexto selecionado",
+      "remove": "Remover o contexto selecionado",
+      "fromAnswer": "Da resposta: \"{{text}}\"",
+      "fromOtherApp": "De outro app: \"{{text}}\""
+    },
+    "selectionHint": "Selecione um texto para perguntar ou bifurcar",
+    "selectionToolbar": "Texto selecionado",
+    "followUp": "Perguntar",
+    "forkFromHere": "Bifurcar daqui",
+    "chats": {
+      "title": "Chats",
+      "switch": "Trocar de chat",
+      "new": "Novo chat",
+      "empty": "Nenhum chat ainda",
+      "untitled": "Chat sem título",
+      "fork": "Bifurcado"
+    },
+    "progress": {
+      "callingTools_one": "Chamando {{count}} ferramenta…",
+      "callingTools_other": "Chamando {{count}} ferramentas…",
+      "checkingAnswers": "Verificando as respostas…",
+      "reasoning": "Raciocinando…",
+      "reasonedFor": "Raciocinou por {{duration}}",
+      "workedFor": "Trabalhou por {{duration}}",
+      "steps_one": "{{count}} etapa",
+      "steps_other": "{{count}} etapas"
+    },
+    "waitingForAnswer": "Aguardando resposta"
   },
   "integrations": {
     "title": "Integrações",
@@ -4288,7 +4747,6 @@
     "approval": {
       "headers": {
         "default": "Enviar para {{destination}}",
-        "slackPost": "Publicar em {{destination}}",
         "email": "E-mail para {{destination}}",
         "issue": "Criar issue em {{destination}}",
         "comment": "Comentar em {{destination}}"
@@ -4296,8 +4754,6 @@
       "identity": "Como {{account}}",
       "identityWithWorkspace": "Como {{account}} em {{workspace}}",
       "send": "Enviar",
-      "edit": "Editar",
-      "doneEditing": "Edição concluída",
       "cancel": "Cancelar",
       "titleLabel": "Título",
       "bodyLabel": "Mensagem",
@@ -4323,6 +4779,10 @@
         "credential_save_failed": "Não foi possível salvar o login do Slack neste computador. Nada foi enviado. Tente novamente.",
         "dm_failed": "Não foi possível abrir a mensagem direta para {{destination}}. Nada foi enviado.",
         "restricted": "{{destination}} é somente leitura ou restrito para você.",
+        "thread_mismatch": "Essa thread está em uma conversa diferente de {{destination}}. Nada foi enviado.",
+        "invalid_thread": "Isso não é um link para uma mensagem do Slack. Nada foi enviado.",
+        "thread_closed": "O Slack não permite respostas nessa thread. Nada foi enviado.",
+        "thread_only": "{{destination}} só aceita respostas em threads. Nada foi enviado.",
         "generic": "Algo deu errado. Nada foi enviado.",
         "github": {
           "reconnect_needed": "O GitHub precisa ser reconectado nas Configurações.",
@@ -4383,7 +4843,6 @@
         }
       },
       "email": {
-        "from": "De {{account}}",
         "toLabel": "Para",
         "ccLabel": "Cc",
         "subjectLabel": "Assunto",
@@ -4396,7 +4855,8 @@
         "tooManyRecipients": "Um e-mail pode ir para no máximo {{max}} endereços, somando Para e Cc.",
         "subjectTooLong": "O assunto pode ter no máximo {{max}} caracteres.",
         "bodyTooLong": "A mensagem é longa demais para o Gmail. Encurte-a para enviar.",
-        "unknown": "Não foi possível confirmar o envio. Verifique sua pasta de enviados."
+        "unknown": "Não foi possível confirmar o envio. Verifique sua pasta de enviados.",
+        "fromLabel": "De"
       },
       "github": {
         "notes": {
@@ -4440,7 +4900,22 @@
         "notes": {
           "targetTitle": "Em \"{{title}}\""
         }
-      }
+      },
+      "sentEarlier": "Você já tentou isto antes nesta conversa. Confira se deu certo antes de enviar novamente.",
+      "slack": {
+        "channelLabel": "Canal",
+        "asLabel": "Como",
+        "destination": "{{workspace}} · {{destination}}",
+        "notes": {
+          "replyInThread": "Resposta na thread iniciada em {{started, datetime(dateStyle: medium; timeStyle: short)}}"
+        },
+        "sentOutsideThread": "Enviado para {{destination}} como nova mensagem, não na thread."
+      },
+      "sentLabel": "Enviado",
+      "identityChanged": "Agora será enviado como {{account}}. Pressione Enviar para enviar.",
+      "connectToSend": "Conecte o {{name}} para enviar isto",
+      "edit": "Editar",
+      "doneEditing": "Edição concluída"
     },
     "policyOff": "Sua organização desativou os conectores.",
     "email": {
@@ -4489,7 +4964,8 @@
         "connectedBody": "Você pode fechar esta aba e voltar para o OpenWhispr.",
         "failedTitle": "O Slack não foi conectado",
         "failedBody": "Volte para o OpenWhispr para tentar novamente."
-      }
+      },
+      "pickDestination": "Qual “{{destination}}” você quis dizer?"
     },
     "github": {
       "title": "GitHub",
@@ -4665,6 +5141,10 @@
         "credential_save_failed": "Não foi possível salvar o login do Slack neste computador. Nada foi enviado.",
         "dm_failed": "Não foi possível abrir a mensagem direta. Nada foi enviado.",
         "restricted": "Esse canal é somente leitura ou restrito.",
+        "thread_mismatch": "Essa thread está em outra conversa. Nada foi enviado.",
+        "invalid_thread": "Não é um link para uma mensagem do Slack.",
+        "thread_closed": "O Slack não permite respostas nessa thread.",
+        "thread_only": "Esse canal só aceita respostas em threads.",
         "generic": "Não funcionou.",
         "github": {
           "reconnect_needed": "O GitHub precisa ser reconectado.",
@@ -4729,7 +5209,8 @@
       },
       "gmailDraftLimit": "Só é possível preparar {{max}} e-mails por solicitação.",
       "queryResults": "Resultados encontrados: {{total}}",
-      "cardLimit": "Só é possível preparar {{max}} cartões por solicitação."
+      "cardLimit": "Só é possível preparar {{max}} cartões por solicitação.",
+      "alreadySent": "Já feito para este pedido"
     },
     "beta": "Beta",
     "upsell": "Os conectores estão incluídos nos planos pagos. Faça upgrade para o assistente trabalhar nas suas ferramentas.",
@@ -5042,7 +5523,7 @@
         "owner": "Proprietário",
         "editor": "Pode editar",
         "viewer": "Pode visualizar",
-        "teamAudience": "Todos neste espaço de equipe",
+        "teamAudience": "Todos neste teamspace",
         "pending": "Pendente",
         "accepted": "Com acesso",
         "resend": "Reenviar convite",
@@ -5194,13 +5675,12 @@
   "workspaces": {
     "switcher": {
       "workspaces": "Espaços de trabalho",
-      "create": "Criar espaço de trabalho…",
       "add": "Adicionar espaço de trabalho",
       "invitePeople": "Convidar pessoas"
     },
     "create": {
       "title": "Criar espaço de trabalho",
-      "description": "Um espaço de trabalho reúne os membros e a cobrança da sua organização. Crie espaços de equipe dentro dele para notas compartilhadas.",
+      "description": "Um espaço de trabalho reúne os membros e a cobrança da sua organização. Crie teamspaces dentro dele para notas compartilhadas.",
       "nameLabel": "Nome do espaço de trabalho",
       "namePlaceholder": "Acme Corp",
       "submit": "Criar espaço de trabalho",
@@ -5212,27 +5692,82 @@
       "description": "Agora você é o proprietário de {{name}}."
     },
     "invite": {
-      "title": "Convidar para {{workspace}}",
-      "description": "Adicione colegas por e-mail. Eles receberão um link para entrar.",
-      "emailLabel": "E-mail",
-      "emailPlaceholder": "colega@exemplo.com",
-      "roleLabel": "Função",
+      "title": "Convidar pessoas",
+      "description": "Elas receberão um link por e-mail para entrar em {{workspace}}.",
+      "emailLabel": "Endereços de e-mail",
+      "emailHint": "Separe os e-mails com vírgulas. Todos recebem a mesma função.",
+      "emailPlaceholder": "Pesquisar e-mail",
+      "addMore": "Adicionar mais…",
+      "removeRecipient": "Remover {{email}}",
+      "suggestions": "Sugestões",
+      "roleLabel": "Função no espaço de trabalho",
       "seatUsage": "Usando {{used}} de {{seats}} assentos",
       "seatCost": "Se a pessoa aceitar, será adicionado um assento ao plano · cobrança proporcional estimada de {{amount}}.",
-      "submit": "Enviar convite",
-      "submitting": "Enviando…",
-      "sentTitle": "Convite enviado",
-      "sentDescription": "Enviamos um convite para {{email}}.",
-      "sentNoEmailTitle": "Convite criado, mas não enviado por e-mail",
-      "sentNoEmailDescription": "{{email}} foi convidado, mas não foi possível entregar o e-mail. Reenvie-o mais tarde ou compartilhe o link de convite de outra forma.",
-      "errorTitle": "Não foi possível enviar o convite",
+      "seatCostMany_one": "Se todos aceitarem, será adicionado {{count}} assento ao plano · cobrança proporcional estimada de {{amount}}.",
+      "seatCostMany_other": "Se todos aceitarem, serão adicionados {{count}} assentos ao plano · cobrança proporcional estimada de {{amount}}.",
+      "seatCostManyUnpriced_one": "Se todos aceitarem, será adicionado {{count}} assento ao plano.",
+      "seatCostManyUnpriced_other": "Se todos aceitarem, serão adicionados {{count}} assentos ao plano.",
+      "submitOne": "Enviar convite",
+      "submit_one": "Enviar {{count}} convite",
+      "submit_other": "Enviar {{count}} convites",
+      "submitting_one": "Convidando {{count}} pessoa…",
+      "submitting_other": "Convidando {{count}} pessoas…",
+      "sentTitle_one": "{{count}} convite enviado",
+      "sentTitle_other": "{{count}} convites enviados",
+      "attachedTitle_one": "{{count}} convite atualizado",
+      "attachedTitle_other": "{{count}} convites atualizados",
+      "attachedBody_one": "{{count}} endereço já tinha um convite para o espaço de trabalho, então isto foi adicionado a ele. Nenhum novo e-mail foi enviado.",
+      "attachedBody_other": "{{count}} endereços já tinham convites para o espaço de trabalho, então isto foi adicionado a eles. Nenhum novo e-mail foi enviado.",
+      "createdTitle_one": "{{count}} convite criado",
+      "createdTitle_other": "{{count}} convites criados",
+      "sentOne": "Você convidou {{email}} para {{workspace}}",
+      "sentMany_one": "Você convidou {{count}} pessoa para {{workspace}}",
+      "sentMany_other": "Você convidou {{count}} pessoas para {{workspace}}",
+      "noEmail_one": "{{count}} convite foi criado, mas o e-mail não pôde ser entregue. Reenvie-o em Convites.",
+      "noEmail_other": "{{count}} convites foram criados, mas os e-mails não puderam ser entregues. Reenvie-os em Convites.",
+      "someFailed_one": "{{count}} convite não foi enviado",
+      "someFailed_other": "{{count}} convites não foram enviados",
+      "tryResending": "Tentar reenviar",
+      "tooMany": "Você pode convidar até {{count}} pessoas de cada vez.",
+      "removeLast_one": "Remover o último {{count}}",
+      "removeLast_other": "Remover os últimos {{count}}",
+      "seatsLeft_one": "Resta apenas {{count}} assento. Remova {{excess}} ou faça upgrade.",
+      "seatsLeft_other": "Restam apenas {{count}} assentos. Remova {{excess}} ou faça upgrade.",
+      "seatsLeftAskOwner_one": "Resta apenas {{count}} assento. Remova {{excess}} ou peça a {{owner}} para adicionar assentos.",
+      "seatsLeftAskOwner_other": "Restam apenas {{count}} assentos. Remova {{excess}} ou peça a {{owner}} para adicionar assentos.",
+      "seatsNone": "Não restam assentos. Faça upgrade para adicionar mais.",
+      "seatsNoneAskOwner": "Não restam assentos. Peça a {{owner}} para adicionar assentos.",
+      "upgrade": "Fazer upgrade",
+      "ceilingLeft_one": "Você pode convidar mais {{count}} pessoa. Remova {{excess}} para continuar.",
+      "ceilingLeft_other": "Você pode convidar mais {{count}} pessoas. Remova {{excess}} para continuar.",
+      "rateLimitedLeft_one": "No momento, só é possível enviar mais {{count}} convite. Remova {{excess}} para enviá-lo ou tente novamente mais tarde.",
+      "rateLimitedLeft_other": "No momento, só é possível enviar mais {{count}} convites. Remova {{excess}} para enviá-los ou tente novamente mais tarde.",
+      "rateLimitedDaily": "Este espaço de trabalho pode enviar até {{limit}} convites por dia. Remova {{excess}} para enviar o restante agora.",
+      "skippedMany_one": "{{count}} endereço foi ignorado: já é membro ou já foi convidado.",
+      "skippedMany_other": "{{count}} endereços foram ignorados: já são membros ou já foram convidados.",
+      "skippedNotAdded_one": "{{count}} endereço foi ignorado e não foi adicionado aqui: já é membro ou já foi convidado. Adicione membros existentes pela lista de membros.",
+      "skippedNotAdded_other": "{{count}} endereços foram ignorados e não foram adicionados aqui: já são membros ou já foram convidados. Adicione membros existentes pela lista de membros.",
+      "done": "Concluído",
       "role": {
-        "admin": "Administrador",
-        "member": "Membro"
+        "admin": "Administrador do espaço de trabalho",
+        "member": "Membro do espaço de trabalho"
       },
       "roleDescription": {
-        "admin": "Gerencia membros e cobrança",
-        "member": "Usa o espaço de trabalho"
+        "admin": "Gerencia membros, convites, grupos e configurações.",
+        "member": "Pode ver e editar notas."
+      },
+      "errors": {
+        "invalid": "{{email}} não é um e-mail válido",
+        "alreadyMember": "{{email}} já é membro e foi ignorado",
+        "alreadyInvited": "{{email}} já foi convidado e foi ignorado. Reenvie o convite em Convites.",
+        "seatLimit": "Este espaço de trabalho atingiu o limite de assentos.",
+        "directoryRequired": "Primeiro atribua {{email}} no seu provedor de identidade.",
+        "notAllowed": "Você não pode mais convidar pessoas para {{workspace}}.",
+        "ssoRequired": "Entre com o login único (SSO) da sua empresa para convidar pessoas para {{workspace}}.",
+        "sessionExpired": "Não foi possível convidar {{email}}: seu login expirou ou mudou. Entre novamente e tente outra vez.",
+        "rateLimited": "Muitos convites no momento. Tente novamente mais tarde.",
+        "requestFailed": "Não foi possível convidar {{email}}. Verifique sua conexão e tente novamente.",
+        "refused": "Não foi possível convidar {{email}}: {{reason}}"
       }
     },
     "join": {
@@ -5267,6 +5802,133 @@
       "errorTitle": "Não foi possível aceitar o convite",
       "sentTo": "Convite enviado para {{email}}",
       "wrongAccount": "Este convite foi enviado para {{email}}. Você está conectado como {{current}}."
+    },
+    "exit": {
+      "leave": {
+        "title": "Sair de {{name}}?",
+        "body": "Você perderá o acesso a este espaço de trabalho, às equipes e aos teamspaces dele. Um administrador do espaço de trabalho pode convidar você de volta.",
+        "failed": "Não foi possível sair de {{name}}. Verifique sua conexão e tente novamente."
+      },
+      "left": {
+        "title": "Você saiu de {{name}}"
+      },
+      "chooseAnother": "Escolha outro espaço de trabalho para continuar.",
+      "chooseWorkspace": "Escolher espaço de trabalho",
+      "delete": {
+        "title": "Excluir {{name}}?",
+        "body": "Isso exclui permanentemente o espaço de trabalho, as notas, os arquivos, as equipes e os teamspaces dele para todos. Não é possível desfazer."
+      },
+      "deleting": {
+        "title": "Excluindo {{name}}…",
+        "body": "Mantenha esta janela aberta enquanto o espaço de trabalho é excluído."
+      },
+      "deleteFailed": {
+        "title": "Não foi possível excluir o espaço de trabalho",
+        "body": "{{name}} continua disponível. Verifique sua conexão e tente novamente."
+      },
+      "deleted": {
+        "title": "{{name}} foi excluído"
+      },
+      "tryAgain": "Tentar novamente"
+    },
+    "removeMember": {
+      "title": "Remover {{name}} de {{workspace}}?",
+      "body": "Essa pessoa perderá o acesso a todos os teamspaces e equipes deste espaço de trabalho. Você pode convidá-la novamente a qualquer momento.",
+      "confirm": "Remover",
+      "removing": "Removendo…",
+      "failed": "Não foi possível confirmar a remoção de {{name}}. Verifique sua conexão e tente novamente.",
+      "notAllowed": "Você não tem mais permissão para remover pessoas de {{workspace}}.",
+      "alreadyRemoved": "{{name}} já foi removido"
+    },
+    "removeMembers": {
+      "title_one": "Remover {{count}} membro de {{workspace}}?",
+      "title_other": "Remover {{count}} membros de {{workspace}}?",
+      "confirm_one": "Remover {{count}} membro",
+      "confirm_other": "Remover {{count}} membros",
+      "checking": "Verificando…",
+      "failed_one": "Não foi possível confirmar a remoção de {{count}} membro. Verifique sua conexão e tente novamente.",
+      "failed_other": "Não foi possível confirmar a remoção de {{count}} membros. Verifique sua conexão e tente novamente.",
+      "body": "Essas pessoas perderão o acesso a todos os teamspaces e equipes deste espaço de trabalho. Você pode convidá-las novamente a qualquer momento.",
+      "ownerOne": "{{name}} é proprietário de notas ou teamspaces neste espaço de trabalho.",
+      "owners_one": "{{count}} deles é proprietário de notas ou teamspaces.",
+      "owners_other": "{{count}} deles são proprietários de notas ou teamspaces.",
+      "directoryManagedOne": "{{name}} é atribuído pelo seu provedor de identidade. Remova essa pessoa por lá.",
+      "directoryManaged_one": "{{count}} deles é atribuído pelo seu provedor de identidade. Remova essa pessoa por lá.",
+      "directoryManaged_other": "{{count}} deles são atribuídos pelo seu provedor de identidade. Remova essas pessoas por lá.",
+      "directoryManagedOneOthers": "{{name}} é atribuído pelo seu provedor de identidade. Remova essa pessoa por lá ou desmarque-a para remover os outros.",
+      "directoryManagedOthers_one": "{{count}} deles é atribuído pelo seu provedor de identidade. Remova essa pessoa por lá ou desmarque-a para remover os outros.",
+      "directoryManagedOthers_other": "{{count}} deles são atribuídos pelo seu provedor de identidade. Remova essas pessoas por lá ou desmarque-as para remover os outros.",
+      "transferLabel": "Transferir para",
+      "transferBody": "As notas e os teamspaces deles passarão para o novo proprietário. Eles perderão o acesso a este espaço de trabalho.",
+      "transferBodyLimited": "As notas e os teamspaces deles passarão para {{name}}, exceto as notas em teamspaces que {{name}} não pode acessar, que ficarão neles. Eles perderão o acesso a este espaço de trabalho.",
+      "you": "{{name}} (você)",
+      "transferConfirm": "Transferir e remover",
+      "transferring": "Transferindo…",
+      "transferFailed": "Não foi possível confirmar a transferência e a remoção. Verifique sua conexão e tente novamente.",
+      "invalidTarget": "{{name}} não pode mais receber a propriedade. Escolha outra pessoa.",
+      "cannotRemoveOwner": "O proprietário do espaço de trabalho não pode ser removido.",
+      "cannotRemoveSelf": "Você não pode remover a si mesmo. Saia do espaço de trabalho em Geral.",
+      "done_one": "{{count}} membro removido",
+      "done_other": "{{count}} membros removidos",
+      "transferDone_one": "As notas e os teamspaces deles foram movidos para {{name}} e {{count}} membro foi removido.",
+      "transferDone_other": "As notas e os teamspaces deles foram movidos para {{name}} e {{count}} membros foram removidos.",
+      "transferPartial_one": "{{count}} nota ficou em um teamspace que {{name}} não pode acessar. Todo o resto foi movido.",
+      "transferPartial_other": "{{count}} notas ficaram em teamspaces que {{name}} não pode acessar. Todo o resto foi movido.",
+      "alreadyRemoved_one": "{{count}} membro já tinha sido removido",
+      "alreadyRemoved_other": "{{count}} membros já tinham sido removidos"
+    },
+    "cancelInvitation": {
+      "title": "Cancelar o convite para {{email}}?",
+      "body": "A pessoa não poderá entrar com este convite. Os membros atuais mantêm o acesso.",
+      "keep": "Manter convite",
+      "canceling": "Cancelando…",
+      "done": "Convite cancelado",
+      "failed": "Não foi possível cancelar o convite. Verifique sua conexão e tente novamente.",
+      "notAllowed": "Você não tem mais permissão para cancelar convites em {{workspace}}."
+    },
+    "cancelInvitations": {
+      "title_one": "Cancelar {{count}} convite?",
+      "title_other": "Cancelar {{count}} convites?",
+      "body": "Essas pessoas não poderão entrar com estes convites. Os membros atuais mantêm o acesso.",
+      "keep": "Manter convites",
+      "confirm": "Cancelar convites",
+      "done_one": "{{count}} convite cancelado.",
+      "done_other": "{{count}} convites cancelados.",
+      "partial_one": "Não foi possível cancelar {{count}} convite. Verifique sua conexão e tente novamente.",
+      "partial_other": "Não foi possível cancelar {{count}} convites. Verifique sua conexão e tente novamente."
+    },
+    "ssoRequired": "Entre com o login único (SSO) da sua empresa para gerenciar as pessoas de {{workspace}}.",
+    "transfer": {
+      "title": "Escolha um novo proprietário",
+      "body": "Escolha um membro existente do espaço de trabalho. Você se tornará administrador após a transferência.",
+      "newOwner": "Novo proprietário",
+      "placeholder": "Escolha um membro do espaço de trabalho",
+      "candidate": "{{name}} · {{role}}",
+      "confirmTitle": "Transferir a propriedade para {{name}}?",
+      "confirmBody": "{{name}} se tornará o proprietário de {{workspace}}. Você se tornará administrador.",
+      "submit": "Transferir propriedade",
+      "transferringTitle": "Transferindo a propriedade…",
+      "transferringBody": "Mantenha esta janela aberta. A propriedade mudará quando a transferência for concluída.",
+      "transferring": "Transferindo…",
+      "failed": "Não foi possível transferir a propriedade. Você continua sendo o proprietário. Tente novamente.",
+      "noCandidates": "Convide alguém para {{workspace}} antes de transferir a propriedade.",
+      "done": "Propriedade do espaço de trabalho transferida para {{name}}. Agora você é administrador."
+    },
+    "intro": {
+      "workspace": {
+        "title": "Seu espaço de trabalho é a sua base",
+        "body": "Todos na sua empresa trabalham aqui. Suas notas privadas continuam privadas até você compartilhá-las."
+      },
+      "teamspaces": {
+        "title": "Compartilhe notas em teamspaces",
+        "body": "Dentro de um espaço de trabalho, crie um teamspace para um projeto ou tema, como Chamadas com clientes. Todos que você adicionar podem ler e editar as notas dele."
+      },
+      "teams": {
+        "title": "Adicione uma equipe inteira de uma vez",
+        "body": "Agrupe pessoas em uma equipe, como Vendas, e depois adicione a equipe a qualquer teamspace em uma única etapa."
+      },
+      "getStarted": "Começar",
+      "progress": "Etapa {{current}} de {{total}}"
     }
   },
   "dictationTranslation": {
@@ -5354,7 +6016,7 @@
     "unreachable": "Não foi possível conectar-se a {{provider}}. Verifique sua conexão.",
     "noResponse": "Não foi possível obter uma resposta de {{provider}}. Verifique sua chave de API e sua conexão.",
     "unknown": "{{provider}} retornou um erro inesperado.",
-    "keyMissing": "Nenhuma chave de API definida para {{provider}}. Adicione-a em Configurações → Modelos de linguagem.",
+    "keyMissing": "Nenhuma chave de API definida para {{provider}}. Adicione-a em Configurações → Modelo de linguagem.",
     "selfHosted": {
       "authFailed": "Seu servidor rejeitou a chave de API.",
       "accessDenied": "Seu servidor negou o acesso. A chave pode não incluir este modelo.",

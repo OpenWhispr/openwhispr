@@ -1,14 +1,21 @@
 const { randomUUID } = require("node:crypto");
 
+// performance.now() is not corrected by network time sync and drifts from
+// server time (on Windows it ran 30 s ahead within 1-7 days of registering), so the
+// server time is fetched again hourly.
+const ANCHOR_TTL_MS = 60 * 60_000;
+
 // A small dedicated queue. It never reads transcription/Insights tables and
 // never stores text, audio, model names, titles or application context.
 class MetaActivation {
-  constructor({ db, getScope, request, monotonicNow = () => performance.now() }) {
+  constructor({ db, getScope, request, monotonicNow = () => performance.now(), logger = null }) {
     this.db = db;
     this.getScope = getScope;
     this.request = request;
     this.monotonicNow = monotonicNow;
+    this.logger = logger;
     this.anchor = null;
+    this.rejectedStreams = new Set();
     this.running = null;
     this.failedCaptures = new Set();
     this.db.exec(`
@@ -53,6 +60,25 @@ class MetaActivation {
     return this.anchor.serverTime + (this.monotonicNow() - this.anchor.monotonicTime);
   }
 
+  // A stale anchor still stamps captures (a null clock would be a coverage gap);
+  // only the next pass re-registers to refresh it. A closing stream skips the
+  // hourly refresh: its pass races the quit/sign-out deadline, and the timer
+  // has kept the anchor under an hour old.
+  needsRegistration(scope, stream) {
+    if (stream.state === "new" || this.clock(scope) === null || this.anchor.stale) return true;
+    return (
+      stream.state !== "closing" && this.monotonicNow() - this.anchor.monotonicTime >= ANCHOR_TTL_MS
+    );
+  }
+
+  // Waking is not activity: a stream with no clock has nothing to refresh, and
+  // the timer's permission gate still applies.
+  async resync() {
+    if (!this.anchor) return;
+    this.anchor.stale = true;
+    await this.flush(true);
+  }
+
   begin() {
     const scope = this.getScope();
     let stream = this.current(scope);
@@ -77,14 +103,19 @@ class MetaActivation {
     const id = randomUUID();
     this.db
       .prepare("INSERT INTO captures(id,stream_id,generation,started_at) VALUES(?,?,?,?)")
-      .run(id, stream.id, scope.authGeneration, new Date(Math.ceil(time)).toISOString());
+      .run(
+        id,
+        stream.id,
+        scope.authGeneration,
+        new Date(afterWatermark(time, stream)).toISOString()
+      );
     return id;
   }
 
   stopCapture(id) {
     const row = this.db
       .prepare(
-        "SELECT c.*,s.account_id FROM captures c JOIN streams s ON s.id=c.stream_id WHERE c.id=?"
+        "SELECT c.*,s.account_id,s.complete_through FROM captures c JOIN streams s ON s.id=c.stream_id WHERE c.id=?"
       )
       .get(id);
     if (!row || row.occurred_at) return;
@@ -101,7 +132,10 @@ class MetaActivation {
     }
     this.db
       .prepare("UPDATE captures SET occurred_at=? WHERE id=?")
-      .run(new Date(Math.max(Math.ceil(time), Date.parse(row.started_at) + 1)).toISOString(), id);
+      .run(
+        new Date(Math.max(afterWatermark(time, row), Date.parse(row.started_at) + 1)).toISOString(),
+        id
+      );
   }
 
   finish(id, wordCount) {
@@ -204,11 +238,19 @@ class MetaActivation {
       assertCurrent();
       if (!result?.success) {
         if (result?.status === 403 && !stream.registered_at) this.unpermittedStream = stream.id;
+        // The server refuses a watermark it reads as future or backdated; a
+        // drifted clock is the likely cause, so the next pass re-registers.
+        // Every batch error is a 409, so a clock taken after a rejection isn't
+        // refreshed again until a batch succeeds or the hour is up.
+        if (result?.status === 409 && this.anchor && !this.anchor.afterRejection) {
+          this.anchor.stale = true;
+          this.anchor.rejected = true;
+        }
         throw new Error("Activation sync unavailable");
       }
       return result.data;
     };
-    if (this.clock(scope) === null || stream.state === "new") {
+    if (this.needsRegistration(scope, stream)) {
       const response = await post("/api/activation/device", {
         accountId: scope.accountId,
         deviceId: stream.id,
@@ -227,22 +269,55 @@ class MetaActivation {
         this.db.prepare("UPDATE streams SET state='closed' WHERE id=?").run(stream.id);
         return;
       }
+      const serverTime = Date.parse(response.serverTime);
+      const localNow = this.clock(scope);
+      const afterRejection = localNow !== null && Boolean(this.anchor.rejected);
+      if (localNow !== null) {
+        const driftMs = Math.round(localNow - serverTime);
+        if (afterRejection && !this.rejectedStreams.has(stream.id)) {
+          this.rejectedStreams.add(stream.id);
+          this.logger?.warn("Activation batch rejected; clock re-synced", { driftMs });
+        } else if (Math.abs(driftMs) >= 1000) {
+          this.logger?.debug("Activation clock re-synced", { driftMs });
+        }
+      }
       this.anchor = {
         accountId: scope.accountId,
         generation: scope.authGeneration,
-        serverTime: Date.parse(response.serverTime),
+        serverTime,
         monotonicTime: this.monotonicNow(),
+        afterRejection,
       };
+      // Adopt the server's watermark when it is ahead (a batch committed but
+      // its answer was lost), so new stamps and batches never land behind it.
+      // ISO-8601 UTC strings compare in time order.
+      const serverThrough = new Date(response.device.complete_through).toISOString();
       this.db
         .prepare(
-          "UPDATE streams SET state=CASE WHEN state='closing' THEN state ELSE 'open' END,registered_at=?,complete_through=COALESCE(complete_through,?) WHERE id=?"
+          "UPDATE streams SET state=CASE WHEN state='closing' THEN state ELSE 'open' END,registered_at=?,complete_through=MAX(IFNULL(complete_through,?),?) WHERE id=?"
         )
         .run(
           new Date(response.device.registered_at).toISOString(),
-          new Date(response.device.complete_through).toISOString(),
+          serverThrough,
+          serverThrough,
           stream.id
         );
       stream = this.current(scope);
+      if (Number.isSafeInteger(response.device.last_seq)) {
+        // Only advance backdated events: the server cannot accept them at or
+        // below its watermark. Future stamps may still commit after this
+        // snapshot, so preserve them and wait for server time to catch up.
+        this.db
+          .prepare(
+            "UPDATE captures SET occurred_at=? WHERE stream_id=? AND (seq IS NULL OR seq>?) AND occurred_at<=?"
+          )
+          .run(
+            new Date(Date.parse(stream.complete_through) + 1).toISOString(),
+            stream.id,
+            response.device.last_seq,
+            stream.complete_through
+          );
+      }
     }
     const pending = this.db
       .prepare("SELECT * FROM captures WHERE stream_id=? ORDER BY seq")
@@ -278,6 +353,7 @@ class MetaActivation {
     }
     if (!Number.isSafeInteger(result.acceptedThrough) || result.acceptedThrough > stream.last_seq)
       throw new Error("Invalid acknowledgement");
+    if (this.anchor) this.anchor.afterRejection = false;
     this.db.transaction(() => {
       this.db
         .prepare("DELETE FROM captures WHERE stream_id=? AND seq<=?")
@@ -346,6 +422,12 @@ class MetaActivation {
     clearInterval(this.timer);
     await this.close();
   }
+}
+
+// The server refuses a contribution at or before the stream's acknowledged
+// watermark, which a re-sync can move the clock behind.
+function afterWatermark(time, stream) {
+  return Math.max(Math.ceil(time), (Date.parse(stream.complete_through) || 0) + 1);
 }
 
 module.exports = { MetaActivation };

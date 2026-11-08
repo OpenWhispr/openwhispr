@@ -13,6 +13,7 @@ import TeamRosterSection from "../TeamRosterSection";
 import { leaveTeam } from "../../services/spaceActions";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { workspaceCan } from "../../lib/capabilities";
+import { rosterFor } from "../../lib/peopleRoster";
 import { canManageTeamRoster } from "../../lib/spacePermissions";
 import type { Team, TeamMember, Workspace } from "../../types/electron";
 
@@ -34,7 +35,7 @@ export default function TeamMembersDialog({
   const { user } = useAuth();
   const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
   const { members: roster, refreshMembers } = useWorkspaceStore(
-    useShallow((s) => ({ members: s.members, refreshMembers: s.refreshMembers }))
+    useShallow((s) => ({ members: rosterFor(s, workspace.id), refreshMembers: s.refreshMembers }))
   );
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [isLeaving, setIsLeaving] = useState(false);

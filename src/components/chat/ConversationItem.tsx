@@ -1,6 +1,15 @@
+import { useIsConversationAnswering } from "../../stores/chatTurnStore";
 import { useTranslation } from "react-i18next";
 import { useUiLocale } from "../../hooks/useUiLocale";
-import { MoreHorizontal, Archive, ArchiveRestore, Trash2 } from "../icons";
+import {
+  MoreHorizontal,
+  Archive,
+  ArchiveRestore,
+  Trash2,
+  FileText,
+  Loader2,
+  GitFork,
+} from "../icons";
 import { Button } from "../ui/button";
 import {
   DropdownMenu,
@@ -11,6 +20,7 @@ import {
 } from "../ui/dropdown-menu";
 import { cn } from "../lib/utils";
 import { formatShortDate, normalizeDbDate } from "../../utils/dateFormatting";
+import { withoutNoteSuffix } from "../../lib/conversationTitle";
 
 export interface ConversationPreview {
   id: number;
@@ -19,6 +29,10 @@ export interface ConversationPreview {
   created_at: string;
   updated_at: string;
   is_archived?: boolean;
+  /** Forked from another chat. */
+  is_fork?: boolean;
+  /** The note the chat was started from. */
+  sourceNote?: { title: string; deleted: boolean };
 }
 
 interface ConversationItemProps {
@@ -26,6 +40,7 @@ interface ConversationItemProps {
   isActive: boolean;
   onClick: () => void;
   onArchive: (id: number) => void;
+  onUnarchive: (id: number) => void;
   onDelete: (id: number) => void;
 }
 
@@ -51,11 +66,17 @@ export default function ConversationItem({
   isActive,
   onClick,
   onArchive,
+  onUnarchive,
   onDelete,
 }: ConversationItemProps) {
   const { t } = useTranslation();
   const locale = useUiLocale();
+  const answering = useIsConversationAnswering(conversation.id);
   const isArchived = !!conversation.is_archived;
+  const { sourceNote } = conversation;
+  // useEmbeddedChat titled untitled notes' chats "Untitled".
+  const noteTitle = sourceNote ? sourceNote.title || "Untitled" : "";
+  const title = sourceNote ? withoutNoteSuffix(conversation.title, noteTitle) : conversation.title;
 
   return (
     <button
@@ -69,15 +90,35 @@ export default function ConversationItem({
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
-          <p
-            dir="auto"
-            className={cn("text-xs truncate text-foreground", isActive && "font-medium")}
-          >
-            {conversation.title}
-          </p>
+          <div className="flex min-w-0 items-center gap-1">
+            {conversation.is_fork && (
+              <GitFork
+                size={11}
+                className="shrink-0 text-muted-foreground/70"
+                role="img"
+                aria-label={t("chat.forked")}
+              />
+            )}
+            <p
+              dir="auto"
+              className={cn("text-xs truncate text-foreground", isActive && "font-medium")}
+            >
+              {title}
+            </p>
+          </div>
           <div className="flex items-center gap-0.5 shrink-0">
             <span className="text-[10px] text-muted-foreground/70 tabular-nums group-hover:opacity-0 transition-opacity">
-              {formatTimestamp(conversation.updated_at, locale)}
+              {answering ? (
+                <span role="status" aria-label={t("chat.answering")}>
+                  <Loader2
+                    size={12}
+                    className="animate-spin text-muted-foreground/70"
+                    aria-hidden="true"
+                  />
+                </span>
+              ) : (
+                formatTimestamp(conversation.updated_at, locale)
+              )}
             </span>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -94,7 +135,7 @@ export default function ConversationItem({
                 <DropdownMenuItem
                   onClick={(e) => {
                     e.stopPropagation();
-                    onArchive(conversation.id);
+                    (isArchived ? onUnarchive : onArchive)(conversation.id);
                   }}
                   className="text-xs gap-2 rounded-lg px-2.5 py-1.5 cursor-pointer focus:bg-foreground/5"
                 >
@@ -125,10 +166,27 @@ export default function ConversationItem({
             </DropdownMenu>
           </div>
         </div>
-        {conversation.preview && (
-          <p dir="auto" className="text-[11px] text-muted-foreground/70 line-clamp-1 mt-0.5">
-            {conversation.preview}
+        {sourceNote ? (
+          <p
+            className={cn(
+              "flex items-center gap-1 min-w-0 text-[11px] mt-0.5",
+              isActive && !sourceNote.deleted ? "text-primary" : "text-muted-foreground/70"
+            )}
+          >
+            <FileText size={11} className="shrink-0" />
+            <span dir="auto" className={cn("truncate", sourceNote.deleted && "line-through")}>
+              {sourceNote.title || t("notes.list.untitledNote")}
+            </span>
+            {sourceNote.deleted && (
+              <span className="shrink-0">· {t("chat.sourceNote.deletedShort")}</span>
+            )}
           </p>
+        ) : (
+          conversation.preview && (
+            <p dir="auto" className="text-[11px] text-muted-foreground/70 line-clamp-1 mt-0.5">
+              {conversation.preview}
+            </p>
+          )
         )}
       </div>
     </button>
