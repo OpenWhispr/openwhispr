@@ -77,20 +77,27 @@ export function useActionsOfKind(kind: ActionKind): ActionItem[] {
   return useActionStore(useShallow((state) => state.actions.filter((a) => a.kind === kind)));
 }
 
-/**
- * The template a summary is written with: the note's own, else the default AI
- * Summary. An id can outlive its template or belong to a teammate's, so it is
- * only a preference.
- */
+export function resolveDefaultTemplate(
+  templates: ActionItem[],
+  defaultClientId?: string | null
+): ActionItem | null {
+  const eligible = templates.filter((action) => action.kind === "template");
+  return (
+    eligible.find((action) => action.client_id === defaultClientId) ??
+    eligible.find((action) => action.translation_key === GENERATE_NOTES_KEY) ??
+    eligible[0] ??
+    null
+  );
+}
+
+// Regeneration preserves the note's template when it is still available locally.
 export function resolveTemplate(
   templates: ActionItem[],
   clientId: string | null | undefined
 ): ActionItem | null {
   return (
-    templates.find((a) => a.client_id === clientId) ??
-    templates.find((a) => a.translation_key === GENERATE_NOTES_KEY) ??
-    templates[0] ??
-    null
+    templates.find((action) => action.kind === "template" && action.client_id === clientId) ??
+    resolveDefaultTemplate(templates)
   );
 }
 

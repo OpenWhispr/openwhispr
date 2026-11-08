@@ -118,6 +118,14 @@ function installInteractiveDom(t) {
     getAttribute(name) {
       return this.attributes.get(name) ?? null;
     }
+    closest(selector) {
+      const attribute = selector.match(/^\[([\w-]+)\]$/)?.[1];
+      if (!attribute) throw new Error(`Unsupported selector: ${selector}`);
+      for (let node = this; node?.nodeType === 1; node = node.parentNode) {
+        if (node.getAttribute(attribute) !== null) return node;
+      }
+      return null;
+    }
 
     removeAttribute(name) {
       this.attributes.delete(name);
