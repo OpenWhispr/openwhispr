@@ -81,7 +81,11 @@ jobs:
           PY
       - name: Run dependency install scripts and prepare UI tooling
         run: |
-          node node_modules/electron/install.js
+          for attempt in 1 2 3; do
+            node node_modules/electron/install.js && break
+            [[ "$attempt" -lt 3 ]] || exit 1
+            sleep 15
+          done
           npm rebuild
           npm install --prefix "$RUNNER_TEMP/ui-tools" --ignore-scripts --no-audit --no-fund playwright-core@1.65.0
       - name: Check personal behavior and source
@@ -95,7 +99,14 @@ jobs:
           npm run typecheck
           npm run lint
       - name: Compile helpers and obtain bundled runtime assets
-        run: npm run prebuild:linux
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for attempt in 1 2 3; do
+            npm run prebuild:linux && break
+            [[ "$attempt" -lt 3 ]] || exit 1
+            sleep 15
+          done
       - name: Set personal release identity
         id: version
         env:
