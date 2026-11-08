@@ -147,6 +147,7 @@ jobs:
             this job does not install dependencies.
           claude_args: >-
             --model opus
+            --effort medium
             --max-turns 80
             --tools Read,Glob,Grep,Edit,Write
             --allowedTools Read,Glob,Grep,Edit,Write
@@ -344,7 +345,8 @@ jobs:
             diff is suitable for automatic integration. Return approved, summary,
             requirements [{id,passed,reason}]. Fail closed on uncertainty.
           claude_args: >-
-            --model sonnet
+            --model opus
+            --effort medium
             --max-turns 35
             --tools Read,Glob,Grep
             --allowedTools Read,Glob,Grep
