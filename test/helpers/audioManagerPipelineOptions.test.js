@@ -215,7 +215,7 @@ async function loadTonedOrukeetStart(t, cachePrefix) {
 
 const tick = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-test("with a custom cleanup prompt, which takes no tone, a start and the next warmup mint combined cleanup without waiting for the app", async (t) => {
+test("with a custom cleanup prompt, which takes no tone, a start and the next warmup mint combined cleanup with no app known", async (t) => {
   const { window, useSettingsStore, manager, minted } = await loadTonedOrukeetStart(
     t,
     "orukeet-pipeline-tone-custom-"

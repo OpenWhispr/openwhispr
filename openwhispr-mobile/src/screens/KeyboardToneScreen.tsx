@@ -22,7 +22,6 @@ export default function KeyboardToneScreen() {
   const hasCustomPrompt = useCustomPromptsStore(
     (state) => resolveCustomPrompt(state.customPrompts.cleanup) !== undefined,
   );
-  // A custom cleanup prompt is applied as written, without a tone.
   const notice = !applicable
     ? 'Tone requires Cloud mode with Text Cleanup turned on. Your choice is saved and will apply once both are active.'
     : hasCustomPrompt

@@ -5058,8 +5058,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               voiceAgentRequested: this.voiceAgentRequested,
               // Warmup runs while idle, so the socket is for an ordinary
               // dictation into the app the last start learned in time (Tone &
-              // Style). With no app known, a start mints no combined cleanup,
-              // so neither does warmup.
+              // Style). With no app known, a start whose cleanup takes a tone
+              // mints no combined cleanup, so neither does warmup.
               pipelineOptions:
                 this.cleanupTakesTone(settings) && !this.lastToneAppCategory
                   ? undefined
@@ -5508,13 +5508,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.onStateChange?.({ isRecording: true, isProcessing: false, isStreaming: true });
       await this.beginMicRecovery(stream);
 
-      // A combined cleanup's prompt is fixed when its session is minted, so with
-      // Tone & Style on the start waits briefly for the app being dictated into
-      // before minting. Audio from the wait is held until the session has
-      // started: with no warm socket main has nowhere to buffer it, and a warm
-      // one minted for another app is replaced. An app not known by then (a
-      // Wayland AT-SPI target takes about a second) gets no combined cleanup:
-      // /api/reason cleans up in its tone at stop.
+      // A combined cleanup's prompt is fixed when its session is minted, so when
+      // the cleanup takes a tone the start waits briefly for the app being
+      // dictated into before minting. Audio from the wait is held until the
+      // session has started: with no warm socket main has nowhere to buffer it,
+      // and a warm one minted for another app is replaced. An app not known by
+      // then (a Wayland AT-SPI target takes about a second) gets no combined
+      // cleanup: /api/reason cleans up in its tone at stop.
       const pipelineSettings = getSettings();
       if (
         providerName === "orukeet" &&
