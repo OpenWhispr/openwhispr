@@ -74,6 +74,11 @@ class ResultsTests(unittest.TestCase):
         self.assertEqual(checks.platform_files({}, {'test/helpers/mac.test.js / name': 'skip'}), ['test/helpers/mac.test.js'])
         self.assertEqual(checks.platform_files({'test/a.test.js / old': 'pass'}, {'test/a.test.js / old': 'skip'}), [])
 
+    def test_native_subtests_cover_a_skipped_parent_only_when_all_pass(self):
+        self.assertEqual(checks.compare({}, {'suite': 'skip'}, {'suite / child': 'pass'})['new_skips'], [])
+        self.assertEqual(checks.compare({}, {'suite': 'skip'}, {'suite / a': 'pass', 'suite / b': 'skip'})['new_skips'], ['suite'])
+        self.assertEqual(checks.compare({}, {'suite': 'skip'}, {'suite': 'fail', 'suite / child': 'pass'})['new_skips'], ['suite'])
+
     def test_empty_output_fails_closed(self):
         with tempfile.TemporaryDirectory() as d:
             f = Path(d) / 'results.xml'
