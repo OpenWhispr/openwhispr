@@ -120,7 +120,11 @@ jobs:
             protected_tests listed in the policy. Never delete tests or weaken
             assertions. You may add tests and adapt implementation to preserve
             intended behaviour. If the contract genuinely cannot be preserved,
-            report incomplete instead of changing the requirements.
+            report incomplete instead of changing the requirements. Unread work
+            is not a blocker: continue inspecting every patch and implementing
+            every applicable fix before returning. Do not defer commits just to
+            finish early. Include regression tests for applied fixes unless the
+            existing protected tests already cover the changed behavior.
             Read each released commit's complete patch under
             ${{ runner.temp }}/upstream-patches/<sha>.patch. Use Edit/Write to
             implement the relevant changes in this checkout. You have no shell
@@ -142,7 +146,7 @@ jobs:
             security and compatibility merits rather than skipping solely because
             this job does not install dependencies.
           claude_args: >-
-            --model sonnet
+            --model opus
             --max-turns 80
             --tools Read,Glob,Grep,Edit,Write
             --allowedTools Read,Glob,Grep,Edit,Write
