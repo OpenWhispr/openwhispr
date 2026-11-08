@@ -79,15 +79,20 @@ export function isOpencodeListFresh(providerId: OpencodeCatalogProviderId): bool
 /**
  * Pulls a product's live model list into the registry, at most once an hour.
  * Rejects when OpenCode can't be reached, leaving the registry as it was.
+ * Pass `{ force: true }` to refetch even when the cache is fresh (the picker's
+ * manual refresh).
  */
 export function refreshOpencodeModels(
-  providerId: OpencodeCatalogProviderId
+  providerId: OpencodeCatalogProviderId,
+  options?: { force?: boolean }
 ): Promise<CloudModelDefinition[]> {
-  const cached = readCachedOpencodeModels(providerId);
-  if (isCachedOpencodeListFresh(cached)) {
-    // Another window may have fetched this; make sure our registry has it too.
-    applyOpencodeModels(providerId, cached.models);
-    return Promise.resolve(cached.models);
+  if (!options?.force) {
+    const cached = readCachedOpencodeModels(providerId);
+    if (isCachedOpencodeListFresh(cached)) {
+      // Another window may have fetched this; make sure our registry has it too.
+      applyOpencodeModels(providerId, cached.models);
+      return Promise.resolve(cached.models);
+    }
   }
 
   let pending = inFlight.get(providerId);

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getOpencodeCatalogModels, type CloudModelDefinition } from "../models/ModelRegistry";
 import {
   isOpencodeListFresh,
@@ -12,6 +12,8 @@ interface UseOpencodeModelsResult {
   models: CloudModelDefinition[];
   loading: boolean;
   error: string | null;
+  /** Refetches even when the cache is fresh (the picker's manual refresh). */
+  refresh: () => Promise<void>;
 }
 
 interface RefreshStatus {
@@ -38,6 +40,37 @@ export function useOpencodeModels(providerId: string): UseOpencodeModelsResult {
   const latestRequest = useRef(0);
   const isMountedRef = useRef(true);
 
+  const refresh = useCallback(
+    async (options?: { force?: boolean }) => {
+      if (!isOpencodeCatalogProvider(providerId)) return;
+      const id = providerId as OpencodeCatalogProviderId;
+      const request = ++latestRequest.current;
+      if (options?.force || !isOpencodeListFresh(id)) {
+        setStatus({ providerId: id, loading: true, error: null });
+      }
+
+      try {
+        await refreshOpencodeModels(id, options);
+      } catch (err) {
+        logger.error("Failed to load OpenCode models", { error: err }, "models");
+        if (isMountedRef.current && request === latestRequest.current) {
+          setStatus({
+            providerId: id,
+            loading: false,
+            error: (err as Error).message || "Unable to load models",
+          });
+        }
+        return;
+      }
+      if (!isMountedRef.current) return;
+      setRevision((revision) => revision + 1);
+      if (request === latestRequest.current) {
+        setStatus({ providerId: id, loading: false, error: null });
+      }
+    },
+    [providerId]
+  );
+
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
@@ -47,36 +80,14 @@ export function useOpencodeModels(providerId: string): UseOpencodeModelsResult {
 
   useEffect(() => {
     if (!enabled) return;
-    const id = providerId as OpencodeCatalogProviderId;
-    const request = ++latestRequest.current;
-    if (!isOpencodeListFresh(id)) {
-      setStatus({ providerId: id, loading: true, error: null });
-    }
-
-    refreshOpencodeModels(id)
-      .then(() => {
-        if (!isMountedRef.current) return;
-        setRevision((revision) => revision + 1);
-        if (request === latestRequest.current) {
-          setStatus({ providerId: id, loading: false, error: null });
-        }
-      })
-      .catch((err: Error) => {
-        logger.error("Failed to load OpenCode models", { error: err }, "models");
-        if (isMountedRef.current && request === latestRequest.current) {
-          setStatus({
-            providerId: id,
-            loading: false,
-            error: err.message || "Unable to load models",
-          });
-        }
-      });
-  }, [enabled, providerId]);
+    refresh();
+  }, [enabled, providerId, refresh]);
 
   const visible = status.providerId === providerId ? status : null;
   return {
     models: enabled ? getOpencodeCatalogModels(providerId) : NO_MODELS,
     loading: visible?.loading ?? false,
     error: visible?.error ?? null,
+    refresh: () => refresh({ force: true }),
   };
 }

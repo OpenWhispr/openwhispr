@@ -418,6 +418,7 @@ export default function ReasoningModelSelector({
     models: opencodeModels,
     loading: opencodeModelsLoading,
     error: opencodeModelsError,
+    refresh: refreshOpencodeList,
   } = useOpencodeModels(displayedCloudProvider);
   const catalogModelsLoading = tinfoilModelsLoading || opencodeModelsLoading;
   const catalogModelsError = tinfoilModelsError || opencodeModelsError;
@@ -425,6 +426,9 @@ export default function ReasoningModelSelector({
   // time; above a dozen models they get the searchable list instead.
   const usesCatalogModels =
     displayedCloudProvider === "tinfoil" || isOpencodeCatalogProvider(displayedCloudProvider);
+  // OpenCode's list is cached for an hour, so the searchable list gets a
+  // manual refresh beside the search bar; Tinfoil keeps its auto refresh.
+  const showOpencodeRefresh = isOpencodeCatalogProvider(displayedCloudProvider);
   const modeTabs = [
     ...(isModeAllowedByPolicy(policyState, "llm", "providers") && cloudProviders.length > 0
       ? [{ id: "cloud", name: t("reasoning.mode.cloud") }]
@@ -767,6 +771,8 @@ export default function ReasoningModelSelector({
                           localReasoningProvider === displayedCloudProvider ? reasoningModel : ""
                         }
                         onModelSelect={handleModelSelect}
+                        onRefresh={showOpencodeRefresh ? refreshOpencodeList : undefined}
+                        refreshing={showOpencodeRefresh && opencodeModelsLoading}
                       />
                     ) : (
                       <ModelCardList
