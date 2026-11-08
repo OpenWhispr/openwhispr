@@ -76,7 +76,7 @@ test("provider segments serialize into the meeting-path transcript shape", async
   // relative seconds with Date.now() values.
   assert.deepEqual(JSON.parse(transcript), [
     { text: "Hello world.", timestamp: anchorMs },
-    { text: "Named part.", timestamp: anchorMs + 4200, speakerName: "Speaker 1" },
+    { text: "Named part.", timestamp: anchorMs + 4200, speaker: "speaker_0" },
   ]);
 });
 
@@ -139,37 +139,86 @@ test("segments persist the transcript even when diarization is off", async () =>
   const { buildUploadNoteMetadata } = await load();
 
   const anchorMs = 1_700_000_000_000;
-  const { noteUpdates } = buildUploadNoteMetadata(
+  const { transcript, noteUpdates } = buildUploadNoteMetadata(
     { enabled: false, localModelsReady: false, numSpeakers: null },
     60,
     [{ text: "Hello.", start: 0, end: 2 }],
     anchorMs
   );
 
+  assert.equal(transcript, JSON.stringify([{ text: "Hello.", timestamp: anchorMs }]));
   // The transcript must not drag the diarization columns along: a null
   // diarization_enabled still defers to the global speaker setting.
-  assert.deepEqual(noteUpdates, {
-    transcript: JSON.stringify([{ text: "Hello.", timestamp: anchorMs }]),
-  });
+  assert.equal(noteUpdates, null);
 });
 
-test("segments and diarization metadata share one noteUpdates write", async () => {
+test("diarization metadata follows the insert separately from the transcript", async () => {
   const { buildUploadNoteMetadata } = await load();
 
   const anchorMs = 1_700_000_000_000;
-  const { noteUpdates } = buildUploadNoteMetadata(
+  const { transcript, noteUpdates } = buildUploadNoteMetadata(
     { enabled: true, localModelsReady: true, numSpeakers: 2 },
     60,
     [{ text: "Hi.", start: 1, speaker: "Speaker 1" }],
     anchorMs
   );
 
-  assert.deepEqual(noteUpdates, {
-    diarization_enabled: 1,
-    transcript: JSON.stringify([
-      { text: "Hi.", timestamp: anchorMs + 1000, speakerName: "Speaker 1" },
+  assert.equal(
+    transcript,
+    JSON.stringify([{ text: "Hi.", timestamp: anchorMs + 1000, speaker: "speaker_0" }])
+  );
+  assert.deepEqual(noteUpdates, { diarization_enabled: 1 });
+});
+
+// The transcript is the note's only copy of the text, so a timed one missing a
+// segment's words would lose them; the caller then stores the whole text untimed.
+// Speakers become the meeting path's ids, in order of first appearance, so the
+// UI translates their labels, renaming and mobile key on them, and a recording
+// made into the note later numbers its own speakers after them.
+test("provider speaker labels become meeting speaker ids", async () => {
+  const { buildUploadTranscript } = await load();
+
+  const stored = JSON.parse(
+    buildUploadTranscript(
+      [
+        { text: "One.", start: 0, speaker: "B" },
+        { text: "Two.", start: 1, speaker: "A" },
+        { text: "Three.", start: 2, speaker: "B" },
+        { text: "Four.", start: 3 },
+      ],
+      1_700_000_000_000
+    )
+  );
+  assert.deepEqual(
+    stored.map((segment) => segment.speaker),
+    ["speaker_0", "speaker_1", "speaker_0", undefined]
+  );
+  assert.ok(stored.every((segment) => !("speakerName" in segment)));
+});
+
+test("a spoken segment without a start gives no timed transcript", async () => {
+  const { buildUploadTranscript } = await load();
+
+  assert.equal(
+    buildUploadTranscript([
+      { text: "First sentence.", start: 0 },
+      { text: "Second sentence.", start: NaN },
     ]),
-  });
+    undefined
+  );
+  assert.equal(
+    JSON.parse(
+      buildUploadTranscript(
+        [
+          { text: "  ", start: NaN },
+          { text: "Kept.", start: 2 },
+        ],
+        1_700_000_000_000
+      )
+    ).length,
+    1,
+    "a blank segment carries no words, so its missing start loses nothing"
+  );
 });
 
 test("upload titles fall back to the transcript, then the file name", async () => {

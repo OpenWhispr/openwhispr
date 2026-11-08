@@ -23,7 +23,11 @@ import {
 } from "../../stores/settingsStore";
 import { cn } from "../lib/utils";
 import logger from "../../utils/logger";
-import { parseSeedSegments, parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
+import {
+  parseSeedSegments,
+  parseTranscriptSegments,
+  speakerlessTranscriptText,
+} from "../../utils/parseTranscriptSegments";
 import { isExplicitSpeakerCount, resolveExpectedSpeakerCount } from "../../utils/participants";
 import {
   buildLlmTranscript,
@@ -751,10 +755,14 @@ export default function PersonalNotesView({
     const noteContent = editorNote.content;
     const hasNotes = !!noteContent.trim();
     if (!hasNotes && !rawTranscript) return;
-    // An upload whose provider returned no segments saved its transcript as the
-    // note's text and left the transcript empty (#2666).
+    // Uploads made before their text moved into the transcript keep it as the
+    // note's text with no transcript; newer ones whose provider named no
+    // speakers store it as segments without any. Either way nothing shows who
+    // speaks, so it runs as a plain transcript (#2666).
     const transcriptInContent = !rawTranscript && editorNote.note_type === "upload";
-    const transcriptText = transcriptInContent ? noteContent : rawTranscript;
+    const segments = parseTranscriptSegments(rawTranscript);
+    const speakerlessText = speakerlessTranscriptText(segments);
+    const transcriptText = transcriptInContent ? noteContent : (speakerlessText ?? rawTranscript);
 
     let formattedTranscript = "";
     let meetingContext = "";
@@ -767,8 +775,7 @@ export default function PersonalNotesView({
         selfEmail: user?.email?.trim() || null,
         participants: parseNoteParticipants(editorNote.participants),
       };
-      const segments = parseTranscriptSegments(rawTranscript);
-      if (segments.length > 0) {
+      if (segments.length > 0 && speakerlessText === null) {
         isMeetingNote = true;
         const mappingRows =
           (await window.electronAPI?.getSpeakerMappings?.(editorNote.id).catch(() => [])) || [];

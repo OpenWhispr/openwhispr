@@ -1,0 +1,98 @@
+{
+  "base_sha": "00f0fd0489a6843f87d736e4dcf785d4452e1b9f",
+  "release_tag": "v1.11.0",
+  "reviewed_upstream": "b9e9ebefac4b961456c269164a93ddfdd53438b9",
+  "selected": [
+    "c0639e5aad45194e2524222011c14395af3b6e2a",
+    "f2a269646075ab4a82b86f08802aeaf315191520",
+    "101e7fe174cd5441d98ee0ac5a2b4c5f75177e47",
+    "369be9b0a18532a43857c6c90f1eafafbddc08a2",
+    "f1b1aa1908b98122039b0d723201b62957ece6e6",
+    "68367bf5035276414b99b78b54c34182e45e007c",
+    "16bd34971ecc994c315e2911c5fa3c9052d4a4af",
+    "9ce28e8fce24af3aa898f7c92340b364c7f2963b",
+    "ec5852811c09cd7b76992fbbddaba49cc5acb523",
+    "fbb862bec28adabf627eda6d70b60aae36b83696",
+    "520b98e804d9144cf1125d62850dbf956945d862",
+    "8525cdf83a34fedb571e398aedfee140398cb877",
+    "3b07feeda49512995c8250909a8a009407d5f1ba"
+  ],
+  "skipped": [
+    {
+      "reason": "Mobile app feature (Chat tab)",
+      "sha": "f16644f0a8f17c139b7d7add363a04665b1b8844"
+    },
+    {
+      "reason": "Mobile version bump only",
+      "sha": "6408cd9a1081dc4935706fcbba6aaeae1d2cd18d"
+    },
+    {
+      "reason": "New feature: hotkey debug event logging; not a fix",
+      "sha": "cf4aa8a114773eb081c6cbff2f80b06e3140e857"
+    },
+    {
+      "reason": "New feature: model catalog additions/legacy restructuring; fork keeps manual model IDs",
+      "sha": "87b7d8e69a288dfed549953d5bf4ddf17d9805f3"
+    },
+    {
+      "reason": "Fix only reachable via cloud sync/team space purge, removed in account-free fork",
+      "sha": "b035c6877e884d7a7669385f0f0aac8a71078923"
+    },
+    {
+      "reason": "Workspace/team server capabilities feature",
+      "sha": "642fdfc1717ca2acb43df7a79854c3e1c76d9cde"
+    },
+    {
+      "reason": "Org/workspace policy feature",
+      "sha": "febeedffdb14211e4bd82f1cb0848e6475674f2d"
+    },
+    {
+      "reason": "Enterprise Azure/private gateway feature",
+      "sha": "66e03c104e203f29309fec2ae9e7f82472841776"
+    },
+    {
+      "reason": "New feature: Skills library",
+      "sha": "1e9f243de413410b136765119ae544127bf88f2f"
+    },
+    {
+      "reason": "New feature: skills in chat; builds on Skills library",
+      "sha": "5a85333ab1da42fbcb12593a6ee33f1221c6997d"
+    },
+    {
+      "reason": "Account deletion behavior; accounts removed in fork",
+      "sha": "2fb00992fd799c4276b0fbc424c718e42cbf1daf"
+    },
+    {
+      "reason": "Mobile shared team dictionary feature",
+      "sha": "19064150f02296d995e0f07ab8c3c14ca485cd0a"
+    },
+    {
+      "reason": "Shared team dictionary feature (teams/workspaces)",
+      "sha": "6c4e2651d5eb2b0dc937ca2536cf82a294909564"
+    },
+    {
+      "reason": "Mobile billing/discount fix",
+      "sha": "fc786f41c91de8177ce7d9333d2834d973cc3c19"
+    },
+    {
+      "reason": "Fix to skipped shared team dictionary feature",
+      "sha": "1b2ff7748d5616c40893fcf68e9b9ec4c6aa191d"
+    },
+    {
+      "reason": "Workspace/teamspace scoping; teams removed in fork",
+      "sha": "4bb0030a05370da08d556f31bc252390bbdc369b"
+    },
+    {
+      "reason": "Changelog-only",
+      "sha": "ba69bfd06cced7133724e6bb76295fbae2a8b556"
+    },
+    {
+      "reason": "Shared team notes recorder naming; team feature",
+      "sha": "6c259884170ef47f11e2a06b5d8d64b9ea4a4914"
+    },
+    {
+      "reason": "Spaces invitation intro; team/invitation feature",
+      "sha": "b9e9ebefac4b961456c269164a93ddfdd53438b9"
+    }
+  ]
+}

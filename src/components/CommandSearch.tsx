@@ -25,6 +25,7 @@ import {
 } from "./ui/dropdown-menu";
 import type { NoteItem, FolderItem, SpaceItem, TranscriptionItem } from "../types/electron.js";
 import { formatRelativeTime } from "../utils/dateFormatting";
+import { parseTranscriptSegments } from "../utils/parseTranscriptSegments";
 import { defaultFolderDisplayName, folderMatchesQuery } from "./notes/shared";
 
 interface ConversationResult {
@@ -666,7 +667,16 @@ function NoteRow({
   t: (key: string, opts?: Record<string, unknown>) => string;
   locale?: string;
 }) {
-  const preview = stripMarkdownPreview(note.content).slice(0, 90);
+  // An upload's transcription lives in its transcript, so one without notes previews that.
+  const preview = useMemo(() => {
+    const transcriptOnly = note.note_type === "upload" && !note.content.trim();
+    const text = transcriptOnly
+      ? parseTranscriptSegments(note.transcript || "")
+          .map((segment) => segment.text)
+          .join(" ")
+      : note.content;
+    return stripMarkdownPreview(text).slice(0, 90);
+  }, [note.content, note.note_type, note.transcript]);
   const NoteIcon =
     note.note_type === "meeting" ? Users : note.note_type === "upload" ? Upload : FileText;
   return (

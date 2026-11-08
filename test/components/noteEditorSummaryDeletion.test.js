@@ -286,6 +286,57 @@ test("deleting the AI summary moves the selection to Your notes", async (t) => {
   await unmount();
 });
 
+test("an uploaded transcript opens in Transcript and leaves Your notes available for writing", async (t) => {
+  const { createDb } = require("../helpers/harness/db");
+  const db = createDb(t);
+  assert.ok(db);
+  let cleanup = () => {};
+  t.after(() => cleanup());
+  const { render, click, latest, unmount, vite } = await loadNoteEditor(t);
+  cleanup = unmount;
+  Object.assign(globalThis.window.electronAPI, {
+    saveNote: async (...args) => db.saveNote(...args),
+    updateNote: async (...args) => db.updateNote(...args),
+  });
+  const { saveUploadNote } = await vite.ssrLoadModule("/services/uploadNotes.ts");
+  const text = "Uploaded words.\nAnother paragraph.";
+  const saved = await saveUploadNote({
+    title: "Uploaded meeting",
+    text,
+    sourceName: "public-fixture.wav",
+    folderId: null,
+    diarization: { enabled: false, localModelsReady: false, numSpeakers: null },
+  });
+  const note = db.getNote(saved.note.id);
+  await render(undefined, { note });
+  // No click: an upload without notes opens on its transcript.
+  let transcript = null;
+  walk(latest(), (node) => {
+    if (node.props.segments) transcript = node.props.segments;
+  });
+  assert.deepEqual(
+    transcript?.map((segment) => segment.text),
+    [text]
+  );
+  await click("raw");
+  assert.ok(collectEditorValues(latest()).includes(""), "Your notes starts empty");
+  db.updateNote(note.id, { content: "My own reminder" });
+  await render(undefined, { note: db.getNote(note.id) });
+  await click("raw");
+  assert.ok(collectEditorValues(latest()).includes("My own reminder"));
+  await click("transcript");
+  transcript = null;
+  walk(latest(), (node) => {
+    if (node.props.segments) transcript = node.props.segments;
+  });
+  assert.deepEqual(
+    transcript.map((segment) => segment.text),
+    [text]
+  );
+  await unmount();
+  cleanup = () => {};
+});
+
 test("the highlight slides onto Your notes when the summary is deleted", async (t) => {
   const { render, click, latest, unmount } = await loadNoteEditor(t);
 

@@ -351,8 +351,46 @@ test("a note without a transcript keeps the personal-note run", async (t) => {
   assert.deepEqual(options.knownPeople, []);
 });
 
-// An upload whose provider returned no segments saves its transcript as the
-// note's text and leaves the transcript empty, so that text is the transcript.
+// Uploads whose provider named no speakers store segments with no speaker or
+// source (and with no timing when it returned no segments): nothing shows who
+// speaks, so they must not run as a meeting with every line given to "Them" (#2666).
+test("an upload stored as untimed segments runs as a plain transcript beside the user's notes", async (t) => {
+  const text = "Alice, can you fix the build by Friday? Sure.";
+  const { input, options } = await runSummaryOn(t, {
+    note_type: "upload",
+    transcript: JSON.stringify([{ text }]),
+    participants: PARTICIPANTS,
+  });
+  assert.equal(options.hasPlainTranscript, true);
+  assert.equal(options.isMeetingNote, false);
+  assert.equal(input, `${NOTE.content}\n\n## Meeting Transcript\n${text}`);
+  assert.deepEqual(options.material, { notes: NOTE.content, meetingContext: "", transcript: text });
+  assert.deepEqual(options.knownPeople, USER_AND_INVITEE);
+});
+
+test("an upload with timed segments but no speakers runs as a plain transcript", async (t) => {
+  const transcript = JSON.stringify([
+    { text: "First part.", timestamp: 1_700_000_000_000 },
+    { text: "Second part.", timestamp: 1_700_000_004_000 },
+  ]);
+  const { input, options } = await runSummaryOn(t, { note_type: "upload", transcript });
+  assert.equal(options.hasPlainTranscript, true);
+  assert.equal(options.isMeetingNote, false);
+  assert.ok(input.endsWith("## Meeting Transcript\nFirst part.\n\nSecond part."));
+});
+
+test("an upload with timed speaker segments still runs as a meeting", async (t) => {
+  const transcript = JSON.stringify([
+    { text: "Ship on Friday.", timestamp: 1_700_000_000_000, speaker: "speaker_0" },
+  ]);
+  const { input, options } = await runSummaryOn(t, { note_type: "upload", transcript });
+  assert.equal(options.isMeetingNote, true);
+  assert.ok(!options.hasPlainTranscript);
+  assert.ok(input.includes("Speaker 1: Ship on Friday."));
+});
+
+// Uploads made before the transcript held their text saved it as the note's
+// text and left the transcript empty, so that text is the transcript.
 test("an upload whose transcript is the note's text runs as a plain transcript", async (t) => {
   const content = "Alice, can you fix the build by Friday? Sure.";
   const { input, options } = await runSummaryOn(t, {

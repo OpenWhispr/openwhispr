@@ -138,7 +138,7 @@ export async function signOut(): Promise<void> {
   credentialAccountCache = null;
   await window.electronAPI?.closeActivationStream?.().catch(() => undefined);
   try {
-    await authClient?.signOut();
+    await authClient?.signOut({});
   } catch {
     // Local sign-out must still cross a credential generation boundary when
     // the server is offline; the remote session can expire independently.
@@ -331,7 +331,7 @@ export async function hasCredentialAccount(): Promise<boolean> {
   if (!authClient) return false;
   if (credentialAccountCache !== null) return credentialAccountCache;
   try {
-    const { data, error } = await authClient.listAccounts();
+    const { data, error } = await authClient.listAccounts({ query: {} });
     if (error || !data) return true;
     credentialAccountCache = data.some((account) => account.providerId === "credential");
     return credentialAccountCache;
