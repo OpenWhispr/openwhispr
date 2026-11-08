@@ -97,11 +97,12 @@ function MeetingSelfHostedRealtimePanel() {
           onChange={(e) => setMeetingRealtimeUrl(e.target.value)}
           placeholder="ws://192.168.1.20:9000/v1/realtime"
           aria-invalid={urlInvalid || undefined}
+          aria-describedby={urlInvalid ? "meeting-realtime-url-error" : undefined}
           autoComplete="off"
           spellCheck={false}
         />
         {urlInvalid && (
-          <p className="text-xs text-destructive">
+          <p id="meeting-realtime-url-error" className="text-xs text-destructive">
             {t("settingsPage.transcription.selfHostedRealtime.urlInvalid")}
           </p>
         )}
