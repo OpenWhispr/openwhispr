@@ -382,6 +382,14 @@ class GuardTests(Fixture):
             write(r, 'tools/AGENTS.md', '#!/bin/sh\n', mode=0o755)
 
         cases = {
+            'npm execution config': add('.npmrc'),
+            'eslint config': add('eslint.config.js'),
+            'renderer eslint config': add('src/eslint.config.js'),
+            'typescript config': add('src/tsconfig.json'),
+            'vite config': add('src/vite.config.mjs'),
+            'settings harness': add('test/lib/settingsPanelHarness.js'),
+            'renderer harness': add('test/lib/rendererTestHarness.js'),
+            'audio harness': add('test/helpers/harness/audioManager.js'),
             'hermes instructions': add('.hermes.md'),
             'nested hermes instructions': add('src/deep/.hermes.md'),
             'nested CLAUDE.md': add('src/CLAUDE.md'),

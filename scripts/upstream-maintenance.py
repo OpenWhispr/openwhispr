@@ -45,8 +45,15 @@ PROTECTED_FILES = {
     'scripts/upstream-maintenance.py': 'trusted maintenance helper',
     'scripts/verify-personal-fork.cjs': 'fork verification script',
     'scripts/check-maintenance-tests.py': 'maintenance test checker',
+    '.npmrc': 'package execution configuration',
+    'eslint.config.js': 'verification configuration',
+    'src/eslint.config.js': 'verification configuration',
+    'src/tsconfig.json': 'verification configuration',
+    'src/vite.config.mjs': 'verification configuration',
 }
 PROTECTED_PREFIXES = {
+    'test/lib/': 'shared protected-test harnesses',
+    'test/helpers/harness/': 'shared protected-test harnesses',
     '.github/': 'workflows, policy and state are not agent-editable',
     'test/maintenance/': 'maintenance tests',
 }

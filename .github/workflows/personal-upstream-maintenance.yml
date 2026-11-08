@@ -77,12 +77,21 @@ jobs:
         with:
           node-version: "24"
       - name: Make released upstream commits available
+        id: upstream
         run: |
           python - <<'PY'
-          import json, os, subprocess
+          import json, os, subprocess, pathlib
           c = json.load(open(os.environ['RUNNER_TEMP'] + '/context.json'))
           subprocess.run(['git','fetch','--no-tags','https://github.com/OpenWhispr/openwhispr.git',c['upstream_sha']],check=True)
+          patches = pathlib.Path(os.environ['RUNNER_TEMP']) / 'upstream-patches'
+          patches.mkdir()
+          for commit in c['commits']:
+              (patches / (commit['sha'] + '.patch')).write_bytes(subprocess.check_output(['git','show','--format=fuller','--no-ext-diff','--binary',commit['sha']]))
+          sha = {'type':'string','enum':[r['sha'] for r in c['commits']]}
+          schema = {'type':'object','properties':{'complete':{'type':'boolean'},'selected':{'type':'array','items':sha,'uniqueItems':True},'skipped':{'type':'array','items':{'type':'object','properties':{'sha':sha,'reason':{'type':'string','minLength':1}},'required':['sha','reason'],'additionalProperties':False}},'summary':{'type':'string'}},'required':['complete','selected','skipped','summary'],'additionalProperties':False}
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f: f.write('schema=' + json.dumps(schema,separators=(',',':')) + '\n')
           PY
+          chmod -R a-w .git "$RUNNER_TEMP/control" "$RUNNER_TEMP/upstream-patches"
       - name: Claude Code applies maintenance fixes
         id: claude
         uses: anthropics/claude-code-action@61a9c274fa7110a66dfafc1bbbced03833eb25fe # v1
@@ -112,9 +121,10 @@ jobs:
             assertions. You may add tests and adapt implementation to preserve
             intended behaviour. If the contract genuinely cannot be preserved,
             report incomplete instead of changing the requirements.
-            Use git show/diff to inspect upstream. Apply relevant patches or
-            implement the minimal equivalent changes. Do not use git merge or
-            cherry-pick that commits; leave a cleanly applicable working diff.
+            Read each released commit's complete patch under
+            ${{ runner.temp }}/upstream-patches/<sha>.patch. Use Edit/Write to
+            implement the relevant changes in this checkout. You have no shell
+            or network tools. Never edit .git or files outside the source checkout.
             Do not install dependencies or run builds in this editing job; keep
             generated/ignored files out of the candidate. A separate fresh job
             independently runs tests/build/runtime checks and reviews your diff.
@@ -124,10 +134,9 @@ jobs:
             selected is the list of applied upstream commit SHAs; skipped is
             [{sha,reason}] for every other commit. Together they must cover the
             exact context commit list once. No fabricated test results.
-            Copy SHAs programmatically from context.json; never type placeholders
-            or reconstruct them from memory. Before returning, use Python to
-            compare your selected/skipped SHAs with context.json, asserting exact
-            set equality and no duplicates. Resolve every missing/unknown entry.
+            Use only the exact SHAs enumerated in the output schema. The trusted
+            controller verifies exact coverage and rejects missing or duplicate
+            entries. Never type placeholders or reconstruct IDs from memory.
             Dependency updates may be applied by copying upstream manifest and
             lockfile changes without installing packages here; evaluate their
             security and compatibility merits rather than skipping solely because
@@ -135,11 +144,13 @@ jobs:
           claude_args: >-
             --model sonnet
             --max-turns 80
-            --allowedTools Read,Glob,Grep,Edit,Write,Bash
-            --disallowedTools WebSearch,WebFetch
+            --tools Read,Glob,Grep,Edit,Write
+            --allowedTools Read,Glob,Grep,Edit,Write
+            --disallowedTools Bash,WebSearch,WebFetch,Agent
+            --add-dir '${{ runner.temp }}'
             --strict-mcp-config
             --mcp-config '{"mcpServers":{}}'
-            --json-schema '{"type":"object","properties":{"complete":{"type":"boolean"},"selected":{"type":"array","items":{"type":"string","pattern":"^[0-9a-f]{40}$"}},"skipped":{"type":"array","items":{"type":"object","properties":{"sha":{"type":"string","pattern":"^[0-9a-f]{40}$"},"reason":{"type":"string","minLength":1}},"required":["sha","reason"],"additionalProperties":false}},"summary":{"type":"string"}},"required":["complete","selected","skipped","summary"],"additionalProperties":false}'
+            --json-schema '${{ steps.upstream.outputs.schema }}'
       - name: Capture candidate without granting GitHub write access
         env:
           RESULT: ${{ steps.claude.outputs.structured_output }}
@@ -151,6 +162,7 @@ jobs:
           p = os.environ['RUNNER_TEMP'] + '/claude-result.json'
           with open(p, 'w') as f: json.dump(json.loads(os.environ['RESULT']), f)
           PY
+          chmod -R u+w .git
           python "$RUNNER_TEMP/control/scripts/upstream-maintenance.py" candidate --repo . --context "$RUNNER_TEMP/context.json" --result "$RUNNER_TEMP/claude-result.json" --patch "$RUNNER_TEMP/candidate.patch"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -208,11 +220,26 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y xvfb dbus-x11 libasound2t64 libgbm1 libnss3 libgtk-3-0 libsecret-1-0
           npm ci
+          node node_modules/electron/install.js
           npm install --prefix "$RUNNER_TEMP/ui-tools" --ignore-scripts --no-audit --no-fund playwright-core@1.65.0
       - name: Fork behavior tests
         run: python "$RUNNER_TEMP/control/scripts/check-maintenance-tests.py" run --repo . --output "$RUNNER_TEMP/verification/focused" --focused
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: verification-${{ matrix.version }}-focused
+          path: ${{ runner.temp }}/verification/focused
+          retention-days: 30
+          if-no-files-found: error
       - name: Full regression suite
         run: python "$RUNNER_TEMP/control/scripts/check-maintenance-tests.py" run --repo . --output "$RUNNER_TEMP/verification/full"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: verification-${{ matrix.version }}-full
+          path: ${{ runner.temp }}/verification/full
+          retention-days: 30
+          if-no-files-found: error
       - name: Typecheck, lint and renderer build
         run: |
           npm run typecheck
@@ -263,7 +290,16 @@ jobs:
         env:
           BASE: ${{ needs.prepare.outputs.base }}
         run: |
-          python "$RUNNER_TEMP/control/scripts/check-maintenance-tests.py" compare "$RUNNER_TEMP/artifacts/verification-baseline/full/results.json" "$RUNNER_TEMP/artifacts/verification-candidate/full/results.json" > "$RUNNER_TEMP/regression-comparison.json"
+          python "$RUNNER_TEMP/control/scripts/check-maintenance-tests.py" compare "$RUNNER_TEMP/artifacts/verification-baseline-full/results.json" "$RUNNER_TEMP/artifacts/verification-candidate-full/results.json" > "$RUNNER_TEMP/regression-comparison.json"
+          python - <<'PY'
+          import json, os, pathlib
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'artifacts'
+          for version in ('baseline', 'candidate'):
+              focused = json.loads((root / ('verification-' + version + '-focused') / 'results.json').read_text())
+              assert focused and all(v == 'pass' for v in focused.values())
+              ui = json.loads((root / ('verification-' + version) / 'ui.json').read_text())
+              assert ui['ok'] is True and not ui['checks']['failed'] and ui['console']['unexpected_count'] == 0
+          PY
           python "$RUNNER_TEMP/control/scripts/upstream-maintenance.py" check-patch --repo . --base "$BASE" --patch "$RUNNER_TEMP/artifacts/maintenance-candidate/candidate.patch" --context "$RUNNER_TEMP/artifacts/maintenance-context/context.json"
           test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/artifacts/verification-candidate/tree.txt")"
           git diff --cached --stat "$BASE" > "$RUNNER_TEMP/change-summary.txt"
@@ -309,6 +345,7 @@ jobs:
             --tools Read,Glob,Grep
             --allowedTools Read,Glob,Grep
             --disallowedTools Bash,Edit,Write,WebFetch,WebSearch,Agent
+            --add-dir '${{ runner.temp }}'
             --strict-mcp-config
             --mcp-config '{"mcpServers":{}}'
             --json-schema '{"type":"object","properties":{"approved":{"type":"boolean"},"summary":{"type":"string"},"requirements":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},"passed":{"type":"boolean"},"reason":{"type":"string","minLength":1}},"required":["id","passed","reason"],"additionalProperties":false}}},"required":["approved","summary","requirements"],"additionalProperties":false}'
@@ -374,7 +411,12 @@ jobs:
           test "$(git rev-parse FETCH_HEAD)" = "$BASE"
           git config user.name 'OpenWhispr maintenance'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git -c core.hooksPath=/dev/null commit -m 'fix: integrate reviewed upstream maintenance'
+          python - <<'PY'
+          import json, pathlib, subprocess
+          state = json.loads(pathlib.Path('.github/upstream-maintenance-state.json').read_text())
+          message = 'fix: integrate reviewed upstream ' + state['release_tag'] + '\n\nUpstream: ' + state['reviewed_upstream']
+          subprocess.run(['git','-c','core.hooksPath=/dev/null','commit','-m',message],check=True)
+          PY
           gh auth setup-git
           git -c core.hooksPath=/dev/null push origin HEAD:refs/heads/feat/byok-cleanup
           test "$(gh api repos/SLOPTIMUS-PRIME/openwhispr/git/ref/heads/feat/byok-cleanup --jq .object.sha)" = "$(git rev-parse HEAD)"
