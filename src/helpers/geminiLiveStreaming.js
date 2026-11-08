@@ -1,6 +1,7 @@
 const WebSocket = require("ws");
 const debugLogger = require("./debugLogger");
 const { computePcm16Rms } = require("../utils/audioUtils");
+const { getRegistryData } = require("../models/registryData.js");
 
 const SAMPLE_RATE = 16000;
 const WEBSOCKET_TIMEOUT_MS = 15000;
@@ -19,10 +20,15 @@ const MAX_CUSTOM_VOCABULARY = 100;
 const TURN_REOPEN_RMS = 0.012;
 const GEMINI_LIVE_MODEL = "gemini-3.5-transcribe-live";
 
-// In managed mode the model comes from the BYOK-shaped settings, which still
-// hold another provider's id, so anything but a Gemini id is ignored.
-const resolveLiveModel = (model) =>
-  model && model.startsWith("gemini-") ? model : GEMINI_LIVE_MODEL;
+function resolveGeminiLiveModel({ model, mode } = {}) {
+  if (mode !== "byok" || typeof model !== "string") return GEMINI_LIVE_MODEL;
+  const selected = model.trim();
+  const registered = getRegistryData()
+    .transcriptionProviders.find((provider) => provider.id === "gemini")
+    ?.models.some((entry) => entry.id === selected && entry.streaming);
+  // Keep legacy Gemini IDs usable; new IDs are scoped to the verified catalog.
+  return registered || selected.startsWith("gemini-") ? selected : GEMINI_LIVE_MODEL;
+}
 
 const WS_BASE = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage";
 
@@ -120,7 +126,7 @@ class GeminiLiveStreaming {
     return buildGeminiLiveUrl(options);
   }
 
-  buildSetupMessage({ model, language, keyterms } = {}) {
+  buildSetupMessage({ model, mode, language, keyterms } = {}) {
     const customVocabulary = (keyterms || [])
       .map((term) => String(term).trim())
       .filter(Boolean)
@@ -134,7 +140,7 @@ class GeminiLiveStreaming {
 
     return {
       setup: {
-        model: `models/${resolveLiveModel(model)}`,
+        model: `models/${resolveGeminiLiveModel({ model, mode })}`,
         generationConfig: { responseModalities: ["TEXT"] },
         inputAudioTranscription,
       },
@@ -158,7 +164,7 @@ class GeminiLiveStreaming {
     this.completedSegments = [];
     this.openTurnPartial = "";
     this.audioBytesSent = 0;
-    this.currentModel = resolveLiveModel(options.model);
+    this.currentModel = resolveGeminiLiveModel(options);
     this._connectionLossNotified = false;
     this._audioStreamEndSentAt = null;
     this._turnEnded = false;
@@ -499,4 +505,9 @@ class GeminiLiveStreaming {
   }
 }
 
-module.exports = { GeminiLiveStreaming, buildGeminiLiveUrl, GEMINI_LIVE_MODEL };
+module.exports = {
+  GeminiLiveStreaming,
+  buildGeminiLiveUrl,
+  GEMINI_LIVE_MODEL,
+  resolveGeminiLiveModel,
+};

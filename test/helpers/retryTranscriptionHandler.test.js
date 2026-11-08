@@ -1132,6 +1132,28 @@ test("file IPCs preserve dictation when uploads are disabled, including cloud so
   assert.equal(deleted.code, "POLICY_AUDIO_UPLOAD_DISABLED");
 });
 
+test("transcribe-audio-file keeps a local model refusal's code", async (t) => {
+  const { createAudioFeaturePolicy } = require("../../src/helpers/audioFeaturePolicy");
+  const originalPolicy = fakeThis._audioFeaturePolicy;
+  const originalLocal = fakeThis.transcribeLocalFile;
+  t.after(() => {
+    fakeThis._audioFeaturePolicy = originalPolicy;
+    fakeThis.transcribeLocalFile = originalLocal;
+  });
+  fakeThis._audioFeaturePolicy = createAudioFeaturePolicy({
+    getPolicy: async () => ({ success: true, managed: false, policy: null }),
+  });
+  fakeThis.transcribeLocalFile = async () => {
+    throw Object.assign(new Error("Choose a local model"), { code: "POLICY_MODEL_BLOCKED" });
+  };
+  fsNode.writeFileSync(uploadTempFile, WAV_BUFFER);
+
+  const refused = await handlers.get("transcribe-audio-file")({ sender: {} }, uploadTempFile, {});
+
+  assert.equal(refused.success, false);
+  assert.equal(refused.code, "POLICY_MODEL_BLOCKED");
+});
+
 test("cancelling during policy lookup prevents every upload handler's later side effects", async (t) => {
   const { createAudioFeaturePolicy } = require("../../src/helpers/audioFeaturePolicy");
   const { deferred } = require("./harness/deferred");

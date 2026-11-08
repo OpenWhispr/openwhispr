@@ -140,13 +140,28 @@ function baseProps(enhancement) {
   };
 }
 
-async function loadNoteEditor(t, permission) {
+async function loadNoteEditor(t, permission, options = {}) {
+  const events = {};
   installBrowserGlobals(t, {
+    initialStorage: { customDictionary: '["OpenWhispr"]', ...options.initialStorage },
     window: {
+      addEventListener: (name, callback) => {
+        events[name] = callback;
+      },
       electronAPI: {
+        getOpenAIKey: async () => "",
         getSpeakerProfiles: async () => [],
         getSpeakerMappings: async () => [],
-        getActions: async () => [TEMPLATE, DEFAULT_TEMPLATE, ...(globalThis.__noteActions ?? [])],
+        getActions: async () =>
+          options.actions ?? [TEMPLATE, DEFAULT_TEMPLATE, ...(globalThis.__noteActions ?? [])],
+        onActionUpdated: (callback) => {
+          events.actionUpdated = callback;
+          return () => {};
+        },
+        onActionDeleted: (callback) => {
+          events.actionDeleted = callback;
+          return () => {};
+        },
       },
     },
   });
@@ -169,7 +184,8 @@ async function loadNoteEditor(t, permission) {
     noExternal: ["react-i18next"],
     mockModules: {
       "react-i18next": `
-        const t = (key) => key;
+        const t = (key, options) => key === "notes.editor.generateWithTemplate"
+          ? "Generate with " + options.template : key;
         const i18n = { resolvedLanguage: "en", language: "en" };
         export function useTranslation() { return { t, i18n }; }
         export const initReactI18next = { type: "3rdParty", init() {} };
@@ -182,7 +198,7 @@ async function loadNoteEditor(t, permission) {
         export function SelectionBar() { return null; }
       `,
       "/EmbeddedChat": `export default function EmbeddedChat() { return null; }`,
-      "/hooks/useAuth": `
+      "/useAuth": `
         export function useAuth() {
           return globalThis.__noteEditorAuth ?? { isSignedIn: false, user: null };
         }
@@ -256,8 +272,113 @@ export function useSpaceRoster(cloudSpaceId) {
     });
   const latest = () => renders.at(-1);
   const unmount = () => React.act(async () => root.unmount());
-  return { render, click, latest, unmount, resizeCallbacks, vite };
+  return { render, click, latest, unmount, resizeCallbacks, vite, events };
 }
+
+function summaryCallout(tree) {
+  let callout = null;
+  walk(tree, (node) => {
+    if (!callout && "onAskSubmit" in node.props) callout = node.props.callout;
+  });
+  return callout;
+}
+
+const CUSTOM_TEMPLATE = {
+  ...TEMPLATE,
+  id: 3,
+  client_id: "custom-template",
+  translation_key: undefined,
+  name: "My meeting recap",
+};
+
+test("summary pill follows preference changes, renames and deletion without generating automatically", async (t) => {
+  let ui;
+  t.after(() => ui?.unmount());
+  ui = await loadNoteEditor(t, undefined, { actions: [DEFAULT_TEMPLATE, CUSTOM_TEMPLATE] });
+  const { useSettingsStore, initializeSettings } = await ui.vite.ssrLoadModule(
+    "/stores/settingsStore.ts"
+  );
+  await initializeSettings();
+  const ran = [];
+  await ui.render(undefined, { onRunNoteAction: (action) => ran.push(action) });
+  assert.equal(summaryCallout(ui.latest()).props["aria-label"], "notes.editor.generateSummary");
+  await React.act(async () =>
+    useSettingsStore.getState().setDefaultSummaryTemplateId("custom-template")
+  );
+  assert.deepEqual(ran, []);
+  assert.equal(summaryCallout(ui.latest()).props["aria-label"], "Generate with My meeting recap");
+  summaryCallout(ui.latest()).props.onClick();
+  assert.equal(ran.at(-1), CUSTOM_TEMPLATE);
+  const renamed = { ...CUSTOM_TEMPLATE, name: "ملخص الاجتماع " + "long name ".repeat(20) };
+  await React.act(async () => ui.events.actionUpdated(renamed));
+  assert.equal(summaryCallout(ui.latest()).props["aria-label"], `Generate with ${renamed.name}`);
+  summaryCallout(ui.latest()).props.onClick();
+  assert.equal(ran.at(-1), renamed);
+  await React.act(async () =>
+    ui.events.storage({
+      key: "defaultSummaryTemplateId",
+      newValue: DEFAULT_TEMPLATE.client_id,
+      storageArea: localStorage,
+    })
+  );
+  assert.equal(summaryCallout(ui.latest()).props["aria-label"], "notes.editor.generateSummary");
+  await React.act(async () =>
+    useSettingsStore.getState().setDefaultSummaryTemplateId("custom-template")
+  );
+  await React.act(async () => ui.events.actionDeleted({ id: CUSTOM_TEMPLATE.id }));
+  assert.equal(summaryCallout(ui.latest()).props["aria-label"], "notes.editor.generateSummary");
+  summaryCallout(ui.latest()).props.onClick();
+  assert.equal(ran.at(-1), DEFAULT_TEMPLATE);
+  assert.equal(ran.length, 3);
+});
+
+for (const templateId of [TEMPLATE.client_id, null, "unavailable-template"]) {
+  test(`deleting a summary offers the current default while regeneration retains the note template (${templateId ?? "null"})`, async (t) => {
+    let ui;
+    t.after(() => ui?.unmount());
+    ui = await loadNoteEditor(t, undefined, {
+      actions: [TEMPLATE, DEFAULT_TEMPLATE, CUSTOM_TEMPLATE],
+      initialStorage: { defaultSummaryTemplateId: CUSTOM_TEMPLATE.client_id },
+    });
+    const ran = [];
+    const note = { ...NOTE, enhancement_template_id: templateId };
+    const expectedTemplate = templateId === TEMPLATE.client_id ? TEMPLATE : DEFAULT_TEMPLATE;
+    await ui.render(ENHANCEMENT, { note, onRunNoteAction: (action) => ran.push(action) });
+    assert.ok(!summaryCallout(ui.latest()));
+    let picker;
+    walk(ui.latest(), (node) => {
+      if (node.props.templates) picker = node;
+    });
+    assert.equal(picker.props.current, expectedTemplate);
+    assert.deepEqual(ran, []);
+    assert.ok(collectEditorValues(ui.latest()).includes(ENHANCEMENT.content));
+    picker.props.onRun(picker.props.current);
+    assert.deepEqual(ran, [expectedTemplate]);
+    await ui.render(undefined, {
+      note: { ...note, enhanced_content: null },
+      onRunNoteAction: (action) => ran.push(action),
+    });
+    assert.equal(summaryCallout(ui.latest()).props["aria-label"], "Generate with My meeting recap");
+    summaryCallout(ui.latest()).props.onClick();
+    assert.equal(ran.at(-1), CUSTOM_TEMPLATE);
+  });
+}
+
+test("an empty template catalog hides the pill and retains the saved default", async (t) => {
+  let ui;
+  t.after(() => ui?.unmount());
+  ui = await loadNoteEditor(t, undefined, {
+    actions: [],
+    initialStorage: { defaultSummaryTemplateId: CUSTOM_TEMPLATE.client_id },
+  });
+  await ui.render(undefined, {
+    onRunNoteAction() {
+      assert.fail("must not run");
+    },
+  });
+  assert.ok(!summaryCallout(ui.latest()));
+  assert.equal(localStorage.getItem("defaultSummaryTemplateId"), CUSTOM_TEMPLATE.client_id);
+});
 
 test("deleting the AI summary moves the selection to Your notes", async (t) => {
   const { render, latest, unmount } = await loadNoteEditor(t);
@@ -1282,6 +1403,7 @@ test("diarization keeps stored recorder labels separate from viewer-local self m
 test("only the org's meeting switch shows a banner; other restrictions explain themselves on the record button", async (t) => {
   const { render, latest, unmount, vite } = await loadNoteEditor(t);
   const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
   const messages = () => {
     const out = [];
     walk(latest(), (node) => {
@@ -1289,11 +1411,18 @@ test("only the org's meeting switch shows a banner; other restrictions explain t
     });
     return out;
   };
+  // The editor reads the policy-effective selection, which needs both sections.
+  const scope = {
+    allowedModes: ["openwhispr", "providers", "local", "self-hosted", "enterprise"],
+    allowedByokProviders: [],
+    allowedEnterpriseProviders: [],
+  };
+  const sections = { transcription: scope, llm: scope };
   for (const audioUploadEnabled of [true, false]) {
     await React.act(async () => {
       usePolicyStore.setState({
         status: "managed",
-        policy: { features: { meetingRecordingEnabled: false, audioUploadEnabled } },
+        policy: { ...sections, features: { meetingRecordingEnabled: false, audioUploadEnabled } },
       });
     });
     await render(undefined, { recordingAllowed: false });
@@ -1301,7 +1430,7 @@ test("only the org's meeting switch shows a banner; other restrictions explain t
     assert.ok(collectEditorValues(latest()).includes(NOTE.content), "saved notes remain readable");
     await React.act(async () => {
       usePolicyStore.setState({
-        policy: { features: { meetingRecordingEnabled: true, audioUploadEnabled } },
+        policy: { ...sections, features: { meetingRecordingEnabled: true, audioUploadEnabled } },
       });
     });
     await render(undefined, { recordingAllowed: true });
@@ -1317,7 +1446,7 @@ test("only the org's meeting switch shows a banner; other restrictions explain t
   for (const [policy, expected] of [
     [{ status: "loading", policy: null }, "common.policyUnresolved"],
     [
-      { status: "managed", policy: { features: { meetingRecordingEnabled: true } } },
+      { status: "managed", policy: { ...sections, features: { meetingRecordingEnabled: true } } },
       "notes.meeting.restrictedByOrg",
     ],
   ]) {
@@ -1326,5 +1455,30 @@ test("only the org's meeting switch shows a banner; other restrictions explain t
     assert.deepEqual(messages(), [], `${policy.status}: no banner`);
     assert.equal(recordReason(), expected);
   }
+
+  // A refused local model is fixed in Settings, so it says so and links there.
+  await React.act(async () => {
+    useSettingsStore.setState({
+      meetingTranscriptionMode: "local",
+      meetingLocalTranscriptionProvider: "whisper",
+      meetingWhisperModel: "small",
+    });
+    usePolicyStore.setState({
+      status: "managed",
+      policy: {
+        ...sections,
+        transcription: { ...scope, allowedLocalModels: ["base"] },
+        features: { meetingRecordingEnabled: true },
+      },
+    });
+  });
+  await render(undefined, { recordingAllowed: false });
+  assert.deepEqual(messages(), ["models.policy.modelBlocked"]);
+  assert.equal(recordReason(), "models.policy.modelBlocked");
+  const links = [];
+  walk(latest(), (node) => {
+    if (node.props.children === "providerErrors.openSettings") links.push(node);
+  });
+  assert.equal(links.length, 1);
   await unmount();
 });

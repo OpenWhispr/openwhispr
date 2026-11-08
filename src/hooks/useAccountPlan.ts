@@ -10,7 +10,7 @@ interface AccountPlan {
   coveringWorkspaceNames: string[];
   /** The covering workspaces' best plan; null until the workspace store resolves them. */
   coveringPlanLabel: string | null;
-  /** The plan the account is on, as Settings → Plans & Billing names it; null until known. */
+  /** The plan the account is on, as Settings → Plan & Billing names it; null until known. */
   planLabel: string | null;
 }
 

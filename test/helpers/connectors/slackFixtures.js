@@ -45,21 +45,21 @@ const FIXTURES = {
     ok: true,
     channels: [
       {
-        id: "C0ENG",
+        id: "C0ENG0001",
         name: "eng",
         is_channel: true,
         is_private: false,
         is_archived: false,
       },
       {
-        id: "C0ENGBE",
+        id: "C0ENGBE01",
         name: "eng-backend",
         is_channel: true,
         is_private: false,
         is_archived: false,
       },
       {
-        id: "G0LEADS",
+        id: "G0LEADS01",
         name: "leads",
         is_channel: true,
         is_private: true,
@@ -79,7 +79,7 @@ const FIXTURES = {
         profile: { real_name: "Chad Test", display_name: "chad" },
       },
       {
-        id: "U0GABE",
+        id: "U0GABE001",
         name: "gabe",
         deleted: false,
         is_bot: false,
@@ -119,25 +119,37 @@ const FIXTURES = {
   lookupGabe: {
     ok: true,
     user: {
-      id: "U0GABE",
+      id: "U0GABE001",
       name: "gabe",
       deleted: false,
       is_bot: false,
       profile: { real_name: "Gabe Smith", display_name: "gabe" },
     },
   },
-  dmOpen: { ok: true, channel: { id: "D0GABE" } },
+  dmOpen: { ok: true, channel: { id: "D0GABE001" } },
   posted: {
     ok: true,
-    channel: "C0ENG",
+    channel: "C0ENG0001",
     ts: "1727200000.123456",
     message: { type: "message", user: "U0CHAD", ts: "1727200000.123456" },
   },
   postedDm: {
     ok: true,
-    channel: "D0GABE",
+    channel: "D0GABE001",
     ts: "1727200001.000100",
     message: { type: "message", user: "U0CHAD", ts: "1727200001.000100" },
+  },
+  // A reply in the thread FIXTURES.posted started.
+  postedReply: {
+    ok: true,
+    channel: "C0ENG0001",
+    ts: "1727200009.000200",
+    message: {
+      type: "message",
+      user: "U0CHAD",
+      ts: "1727200009.000200",
+      thread_ts: "1727200000.123456",
+    },
   },
 };
 

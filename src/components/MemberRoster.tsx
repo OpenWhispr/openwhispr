@@ -14,7 +14,6 @@ import { cn } from "./lib/utils";
 import MemberAvatar from "./MemberAvatar";
 import MemberPickList from "./MemberPickList";
 import RoleBadge from "./RoleBadge";
-import { formatList } from "../lib/formatList";
 import type { TeamRole, WorkspaceMember } from "../types/electron";
 
 const ROLES: TeamRole[] = ["admin", "member"];
@@ -38,12 +37,6 @@ export interface RosterMember {
   name: string | null;
   image: string | null;
   role: TeamRole;
-  /** Direct grant on the container; null when the row exists only through groups. */
-  direct_role?: TeamRole | null;
-  /** Names of the groups that grant this row access. */
-  via?: string[];
-  /** Groups whose grant alone makes this row an admin; a demotion here can't lower that. */
-  adminVia?: string[];
 }
 
 interface MemberRosterProps<M extends RosterMember> {
@@ -65,9 +58,8 @@ interface MemberRosterProps<M extends RosterMember> {
   onInvite?: (email: string) => void;
 }
 
-// Presentational roster shared by team and space membership: rows with a
-// quiet role menu, plus the add-people block. Data loading and mutations
-// live in the wrappers (TeamRosterSection, SpaceMembersPanel).
+// Presentational team roster: rows with a quiet role menu, plus the add-people
+// block. Data loading and mutations live in the wrapper (TeamRosterSection).
 export default function MemberRoster<M extends RosterMember>({
   members,
   loading,
@@ -82,9 +74,8 @@ export default function MemberRoster<M extends RosterMember>({
   onAdd,
   onInvite,
 }: MemberRosterProps<M>) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const [addSearch, setAddSearch] = useState("");
-  const formatGroups = (names: string[]) => formatList(i18n.language, names);
 
   const searchEmail = addSearch.trim().toLowerCase();
   // addCandidates is the workspace roster minus current members, so together
@@ -113,10 +104,6 @@ export default function MemberRoster<M extends RosterMember>({
           {members.map((member) => {
             const isSelf = member.user_id === currentUserId;
             const isBusy = busyIds.has(member.user_id);
-            const groups = member.via ?? [];
-            // Only a group grants this row: removal happens in that group.
-            const viaGroupOnly = !member.direct_role && groups.length > 0;
-            const adminVia = member.adminVia ?? [];
             return (
               <div key={member.user_id} className="flex items-center gap-3 px-4 h-14">
                 <MemberAvatar name={member.name} email={member.email} image={member.image} />
@@ -130,11 +117,6 @@ export default function MemberRoster<M extends RosterMember>({
                     </p>
                   )}
                 </div>
-                {groups.length > 0 && (
-                  <span className="text-[10px] text-foreground/45 truncate max-w-32">
-                    {t("notes.spaces.members.viaGroup", { group: formatGroups(groups) })}
-                  </span>
-                )}
                 {canManage && !isSelf ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -148,51 +130,32 @@ export default function MemberRoster<M extends RosterMember>({
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-60">
-                      {ROLES.map((role) => {
-                        const lockedByGroup = role === "member" && adminVia.length > 0;
-                        return (
-                          <DropdownMenuItem
-                            key={role}
-                            disabled={lockedByGroup}
-                            onClick={() => {
-                              if (role !== member.role) onRoleChange(member, role);
-                            }}
-                            className="flex-col items-start gap-0.5 rounded-md px-2 py-1.5"
-                          >
-                            <span className="flex w-full items-center text-xs font-medium">
-                              {t(ROLE_LABEL_KEY[role])}
-                              {member.role === role && (
-                                <Check size={12} className="ms-auto text-primary" />
-                              )}
-                            </span>
-                            <span className="text-[11px] text-muted-foreground whitespace-normal">
-                              {lockedByGroup
-                                ? t("notes.spaces.members.roleFromGroup", {
-                                    group: formatGroups(adminVia),
-                                  })
-                                : t(ROLE_DESCRIPTION_KEY[role])}
-                            </span>
-                          </DropdownMenuItem>
-                        );
-                      })}
+                      {ROLES.map((role) => (
+                        <DropdownMenuItem
+                          key={role}
+                          onClick={() => {
+                            if (role !== member.role) onRoleChange(member, role);
+                          }}
+                          className="flex-col items-start gap-0.5 rounded-md px-2 py-1.5"
+                        >
+                          <span className="flex w-full items-center text-xs font-medium">
+                            {t(ROLE_LABEL_KEY[role])}
+                            {member.role === role && (
+                              <Check size={12} className="ms-auto text-primary" />
+                            )}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground whitespace-normal">
+                            {t(ROLE_DESCRIPTION_KEY[role])}
+                          </span>
+                        </DropdownMenuItem>
+                      ))}
                       <DropdownMenuSeparator />
-                      {viaGroupOnly ? (
-                        <DropdownMenuItem
-                          disabled
-                          className="rounded-md px-2 py-1.5 text-[11px] text-muted-foreground whitespace-normal"
-                        >
-                          {t("notes.spaces.members.managedByGroup", {
-                            group: formatGroups(groups),
-                          })}
-                        </DropdownMenuItem>
-                      ) : (
-                        <DropdownMenuItem
-                          onClick={() => onRemove(member)}
-                          className="rounded-md px-2 py-1.5 text-xs text-destructive focus:bg-destructive/10 focus:text-destructive"
-                        >
-                          {t("notes.spaces.members.remove")}
-                        </DropdownMenuItem>
-                      )}
+                      <DropdownMenuItem
+                        onClick={() => onRemove(member)}
+                        className="rounded-md px-2 py-1.5 text-xs text-destructive focus:bg-destructive/10 focus:text-destructive"
+                      >
+                        {t("notes.spaces.members.remove")}
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 ) : (
