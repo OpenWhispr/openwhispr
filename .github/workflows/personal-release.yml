@@ -60,12 +60,29 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y xvfb xauth dbus-x11 libasound2t64 libgbm1 libnss3 libgtk-3-0 libsecret-1-0 libfuse2t64 libx11-dev libxtst-dev libatspi2.0-dev libglib2.0-dev libpipewire-0.3-dev pkg-config
-          for attempt in 1 2 3; do
-            npm ci && break
-            [[ "$attempt" != 3 ]] || exit 1
-            sleep 10
-          done
+          npm ci --ignore-scripts
+      - name: Fetch pinned FFmpeg assets through the GitHub asset API
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import gzip, hashlib, json, pathlib, subprocess, urllib.parse
+          root=pathlib.Path('node_modules/ffmpeg-static')
+          pkg=json.loads((root/'package.json').read_text())
+          tag=pkg['ffmpeg-static']['binary-release-tag']
+          release=json.loads(subprocess.check_output(['gh','api','repos/eugeneware/ffmpeg-static/releases/tags/'+urllib.parse.quote(tag,safe='')]))
+          assets={a['name']:a for a in release['assets']}
+          for name, dest in [('ffmpeg-linux-x64.gz','ffmpeg'),('linux-x64.LICENSE','ffmpeg.LICENSE'),('linux-x64.README','ffmpeg.README')]:
+              asset=assets[name]
+              raw=subprocess.check_output(['gh','api','-H','Accept: application/octet-stream','repos/eugeneware/ffmpeg-static/releases/assets/'+str(asset['id'])])
+              assert len(raw) == asset['size'] and 'sha256:'+hashlib.sha256(raw).hexdigest() == asset['digest'], name
+              (root/dest).write_bytes(gzip.decompress(raw) if name.endswith('.gz') else raw)
+          (root/'ffmpeg').chmod(0o755)
+          PY
+      - name: Run dependency install scripts and prepare UI tooling
+        run: |
           node node_modules/electron/install.js
+          npm rebuild
           npm install --prefix "$RUNNER_TEMP/ui-tools" --ignore-scripts --no-audit --no-fund playwright-core@1.65.0
       - name: Check personal behavior and source
         run: |
