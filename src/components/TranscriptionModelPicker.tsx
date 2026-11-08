@@ -1256,6 +1256,14 @@ export default function TranscriptionModelPicker({
   const visible = usePanelVisible();
   // A tab that is only being browsed has no model of this panel's: the key alone is checked.
   const panelModel = selectedCloudProvider === displayedCloudProvider ? displayedCloudModel : "";
+  // Only a model pick saves a browsed tab, so say which provider is still in use until then.
+  const browsedProviderName =
+    browsedCloudProvider && selectedCloudProvider !== displayedCloudProvider
+      ? cloudProviderTabs.find((tab) => tab.id === displayedCloudProvider)?.name
+      : undefined;
+  const currentProviderName = cloudProviderTabs.find(
+    (tab) => tab.id === selectedCloudProvider
+  )?.name;
   const isCustom = displayedCloudProvider === "custom";
   const isCorti = displayedCloudProvider === "corti";
   const providerKey = credentialValues[providerCredentials.fields[0].key];
@@ -1723,6 +1731,18 @@ export default function TranscriptionModelPicker({
                       onModelSelect={handleCloudModelSelect}
                       colorScheme="purple"
                     />
+                    {browsedProviderName && (
+                      <p className="text-xs text-muted-foreground">
+                        {currentProviderName
+                          ? t("transcription.browsedProviderHint", {
+                              current: currentProviderName,
+                              provider: browsedProviderName,
+                            })
+                          : t("transcription.browsedProviderHintNoCurrent", {
+                              provider: browsedProviderName,
+                            })}
+                      </p>
+                    )}
                     {displayedCloudProvider === "tinfoil" && (
                       <p className="text-xs text-muted-foreground/70">
                         {t("transcription.tinfoil.transportNote")}{" "}

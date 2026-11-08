@@ -949,6 +949,8 @@
     "getKey": "Получить ключ ->",
     "endpointUrl": "URL конечной точки",
     "azureHint": "Azure AI Foundry: укажите endpoint вашего ресурса (например, https://your-resource.cognitiveservices.azure.com) и задайте в поле «Model» точное имя вашего развёртывания.",
+    "browsedProviderHint": "Сейчас используется {{current}}. Выберите модель, чтобы перейти на {{provider}}.",
+    "browsedProviderHintNoCurrent": "Выберите модель, чтобы начать использовать {{provider}}.",
     "customProvider": "Пользовательский",
     "fallback": {
       "whisperModelDescription": "Модель",

@@ -949,6 +949,8 @@
     "getKey": "キーを取得 ->",
     "endpointUrl": "エンドポイント URL",
     "azureHint": "Azure AI Foundry: リソースのエンドポイント（例: https://your-resource.cognitiveservices.azure.com）を入力し、モデルにデプロイの正確な名前を設定してください。",
+    "browsedProviderHint": "現在は {{current}} が使用されています。{{provider}} に切り替えるにはモデルを選択してください。",
+    "browsedProviderHintNoCurrent": "{{provider}} を使うにはモデルを選択してください。",
     "customProvider": "カスタム",
     "fallback": {
       "whisperModelDescription": "モデル",

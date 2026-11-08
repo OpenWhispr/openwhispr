@@ -209,6 +209,11 @@ async function mountSettingsPanel(
       const tabs = find((node) => node.props?.providers?.some?.((tab) => tab.id === id))[0];
       await act(() => tabs.props.onSelect(id));
     },
+    selectModel: async (id) => {
+      await leaveFields();
+      const list = find((node) => typeof node.props?.onModelSelect === "function")[0];
+      await act(() => list.props.onModelSelect(id));
+    },
     choose: async (value) => {
       await leaveFields();
       const select = find((node) => typeof node.props?.onValueChange === "function")[0];

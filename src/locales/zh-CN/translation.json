@@ -949,6 +949,8 @@
     "getKey": "获取密钥 ->",
     "endpointUrl": "端点 URL",
     "azureHint": "Azure AI Foundry：输入你的资源终结点（例如 https://your-resource.cognitiveservices.azure.com），并将“模型”设置为你的确切部署名称。",
+    "browsedProviderHint": "当前仍在使用 {{current}}。选择一个模型即可切换到 {{provider}}。",
+    "browsedProviderHintNoCurrent": "选择一个模型即可开始使用 {{provider}}。",
     "customProvider": "自定义",
     "fallback": {
       "whisperModelDescription": "模型",
