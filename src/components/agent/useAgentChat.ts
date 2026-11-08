@@ -124,16 +124,16 @@ export function useAgentChat({
   );
 
   // A spoken request a pause cut short, said whole. While its first half is
-  // still the last request, that request is rewritten and its reply answered
-  // again in place, as a regenerate does, so the chat and its history hold
-  // the request once; otherwise it is sent as it is.
+  // still the last request, that request is rewritten and its reply (if it
+  // had one yet) answered again in place, as a regenerate does, so the chat
+  // and its history hold the request once; otherwise it is sent as it is.
   const sendJoined = useCallback(
     (requestText: string, options?: SendToAIOptions): Promise<boolean> => {
       const messages = messagesRef.current;
-      const reply = messages.at(-1);
-      const request = messages.at(-2);
+      const replied = messages.at(-1)?.role === "assistant";
+      const reply = replied ? messages.at(-1) : undefined;
+      const request = messages.at(replied ? -2 : -1);
       if (
-        reply?.role !== "assistant" ||
         request?.role !== "user" ||
         !requestText.startsWith(`${request.content} `) ||
         conversationId == null
@@ -155,7 +155,7 @@ export function useAgentChat({
           .catch(noop);
       }
       return track(
-        sendToAI(requestText, [...messages.slice(0, -2), joined], {
+        sendToAI(requestText, [...messages.slice(0, replied ? -2 : -1), joined], {
           ...skillSendOptions(),
           ...options,
           conversationId,

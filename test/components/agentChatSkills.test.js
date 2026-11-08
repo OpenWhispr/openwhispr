@@ -5,14 +5,14 @@ const { createRendererServer, installBrowserGlobals } = require("../lib/renderer
 const { installInteractiveDom } = require("../lib/interactiveDom");
 const { SKILLS_MOCKS, ariaLabel, click, findAll, settle } = require("../lib/skillsHarness");
 
-async function mountChat(t) {
+async function mountChat(t, { messages } = {}) {
   let root;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
   });
   installBrowserGlobals(t);
   const container = installInteractiveDom(t);
-  const calls = { sends: [], regenerated: [], rewrites: [], streaming: null };
+  const calls = { sends: [], regenerated: [], rewrites: [], streaming: null, messages };
   globalThis.__agentSkillCalls = calls;
   t.after(() => delete globalThis.__agentSkillCalls);
   const vite = await createRendererServer(t, {
@@ -20,7 +20,7 @@ async function mountChat(t) {
     mockModules: {
       "react-i18next": SKILLS_MOCKS["react-i18next"],
       "/chat/useChatPersistence": `
-        const messages = [
+        const messages = globalThis.__agentSkillCalls.messages ?? [
           { id: "u1", role: "user", content: "Prep my meeting", isStreaming: false, dbId: 7 },
           { id: "a1", role: "assistant", content: "Your prep", isStreaming: false },
         ];
@@ -155,4 +155,24 @@ test("a request a pause cut short replaces its first half and answers in place o
 
   await React.act(async () => view.chat().sendJoined("Plan my week", { voice }));
   assert.equal(view.calls.sends.at(-1).text, "Plan my week", "anything else is sent as it is");
+});
+
+test("a first half stopped before its reply started is still replaced, never left as a fragment", async (t) => {
+  const view = await mountChat(t, {
+    messages: [{ id: "u1", role: "user", content: "Prep my meeting", isStreaming: false }],
+  });
+  await React.act(async () =>
+    view.chat().sendJoined("Prep my meeting with Dana", { voice: { replyLanguage: null } })
+  );
+  const [answered] = view.calls.regenerated;
+  assert.deepEqual(
+    answered.messages.map((message) => message.content),
+    ["Prep my meeting with Dana"]
+  );
+  assert.equal(answered.options.replaceMessage, undefined);
+  assert.deepEqual(
+    view.calls.rewrites[0].map((message) => message.content),
+    ["Prep my meeting with Dana"]
+  );
+  assert.equal(view.calls.sends.length, 0, "no second request is added");
 });

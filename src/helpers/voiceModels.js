@@ -132,8 +132,11 @@ async function extractArchiveModel(
   const stagingDir = path.join(modelsDir, `${stagingPrefix(model)}${process.pid}-${Date.now()}`);
   fs.mkdirSync(stagingDir, { recursive: true });
   try {
-    await extractTarBz2(archivePath, stagingDir, signal);
-    // System tar doesn't watch the signal, so a cancel during it lands here.
+    await extractTarBz2(archivePath, stagingDir, signal).catch((error) => {
+      if (!signal?.aborted) throw error;
+    });
+    // System tar doesn't watch the signal, and the JS extractor rejects with its
+    // own message: either way a cancel during extraction lands here.
     if (signal?.aborted) {
       throw Object.assign(new Error("Download cancelled"), { isAbort: true });
     }

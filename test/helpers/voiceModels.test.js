@@ -251,6 +251,23 @@ test("a cancel during extraction discards it instead of reporting ready", async 
   assert.equal(fs.existsSync(path.join(dir, `${tts.target}.tar.bz2`)), false);
 });
 
+test("a cancel during the JS extractor reads as a cancelled download, not its own error", async (t) => {
+  const dir = tempDir(t);
+  const { deps } = fakeDeps(dir);
+  const signal = { aborted: false };
+  // Windows always extracts bz2 here, and its worker rejects with its own message.
+  deps.extractTarBz2 = async () => {
+    signal.aborted = true;
+    throw Object.assign(new Error("Archive verification cancelled"), { isAbort: true });
+  };
+
+  await assert.rejects(downloadVoiceModels({ modelsDir: dir, signal, deps }), {
+    message: "Download cancelled",
+  });
+  assert.deepEqual(getVoiceModelStatus(dir).missing, ["supertonic-tts"]);
+  assert.deepEqual(partialDirs(dir), []);
+});
+
 test("paths point inside the models directory", () => {
   const paths = getVoiceModelPaths("/models");
   assert.equal(paths.vad, path.join("/models", "silero_vad.onnx"));
