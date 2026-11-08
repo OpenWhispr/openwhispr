@@ -64,8 +64,15 @@ def compare(baseline, candidate, platform_results=None):
     platform_results = platform_results or {}
     # Supplemental native-platform runs can cover only NEW platform-only tests.
     # Never use a pass elsewhere to conceal an existing Linux pass becoming a skip.
+    def native_passed(key):
+        if key in platform_results:
+            return platform_results[key] == 'pass'
+        # JUnit reports a skipped nested test as one testcase, but an executed
+        # parent as a testsuite containing its actual subtests.
+        children = [v for k, v in platform_results.items() if k.startswith(key + ' / ')]
+        return bool(children) and all(v == 'pass' for v in children)
     covered = [k for k, v in candidate.items()
-               if v == 'skip' and k not in baseline and platform_results.get(k) == 'pass']
+               if v == 'skip' and k not in baseline and native_passed(k)]
     return {
         'missing': sorted(set(baseline) - set(candidate)),
         'new_failures': sorted({k for k, v in candidate.items() if v == 'fail' and baseline.get(k) != 'fail'}
@@ -135,6 +142,8 @@ def run(repo, output, focused, files_from=None):
         proc = subprocess.run(cmd, cwd=repo, env=env, stdout=log, stderr=subprocess.STDOUT, timeout=1200)
     if proc.returncode not in (0, 1):
         raise ValueError('Test runner crashed: ' + str(proc.returncode))
+    if files_from and proc.returncode != 0:
+        raise ValueError('Native test runner failed: ' + str(proc.returncode))
     result = read_results(xml, double_escaped=double_escaped)
     (output / 'results.json').write_text(json.dumps(result, indent=2) + '\n')
     counts = {s: list(result.values()).count(s) for s in ('pass', 'fail', 'skip')}
