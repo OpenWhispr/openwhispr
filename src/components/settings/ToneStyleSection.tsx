@@ -23,6 +23,7 @@ export default function ToneStyleSection({ onOpenCleanupSettings }: ToneStyleSec
   const savedStyles = useSettingsStore((s) => s.toneStyles);
   const toneStyleEnabled = useSettingsStore((s) => s.toneStyleEnabled);
   const useCleanupModel = useSettingsStore((s) => s.useCleanupModel);
+  const hasCustomCleanupPrompt = useSettingsStore((s) => !!s.customPrompts.cleanup);
   const [draft, setDraft] = useState<ToneStyles>(savedStyles);
   const canSave =
     toneStyleEnabled &&
@@ -74,6 +75,13 @@ export default function ToneStyleSection({ onOpenCleanupSettings }: ToneStyleSec
           <Button variant="outline" size="sm" className="shrink-0" onClick={turnOnCleanup}>
             {t("toneStyle.settings.turnOnCleanup")}
           </Button>
+        </InfoBox>
+      )}
+
+      {/* A custom cleanup prompt is applied as written, without a tone. */}
+      {toneStyleEnabled && useCleanupModel && hasCustomCleanupPrompt && (
+        <InfoBox variant="warning" className="mb-6 p-3">
+          <p className="text-[13px] text-foreground">{t("toneStyle.settings.customPrompt")}</p>
         </InfoBox>
       )}
 

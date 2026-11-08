@@ -9,6 +9,7 @@ async function loadModules(t) {
     window,
     prompts: await vite.ssrLoadModule("/config/prompts.ts"),
     toneStyle: await vite.ssrLoadModule("/config/toneStyle.ts"),
+    settings: await vite.ssrLoadModule("/stores/settingsStore.ts"),
     openwhispr: (await vite.ssrLoadModule("/services/ai/inferenceProviders/openwhispr.ts"))
       .openwhisprProvider,
   };
@@ -38,11 +39,25 @@ test("the cleanup prompt ends with the app's medium, the tone and its priority",
   assert.doesNotMatch(other, /The text is/);
 });
 
+// The tone's priority sentence would override the user's own rules, so a
+// toned dictation gets the prompt History's Re-transcribe uses, as on Cloud.
+test("a custom cleanup prompt takes no tone", async (t) => {
+  const { prompts, settings } = await loadModules(t);
+  settings.useSettingsStore.getState().setCustomPrompt("cleanup", "Keep my exact words.");
+
+  const toned = prompts.getCleanupSystemPrompt(null, ["OpenWhispr"], "en", "en", {
+    appCategory: "email",
+    tone: "formal",
+  });
+  assert.equal(toned, prompts.getCleanupSystemPrompt(null, ["OpenWhispr"], "en", "en"));
+  assert.ok(toned.startsWith("Keep my exact words."));
+});
+
 // openwhispr-api's lib/prompts.ts TONE_INSTRUCTIONS, which Cloud cleanup
 // appends for the same tone: BYOK and local cleanup must send the same words.
 const SERVER_TONE_SENTENCES = {
   formal:
-    "Apply this tone: formal and polished. Use complete sentences with standard capitalization and full punctuation, spell out informal contractions (in English: I will, do not) but keep any the language's grammar requires, and leave out slang, filler, texting shorthand, emoji and em dashes. Restyle only; do not add or remove information.",
+    "Apply this tone: formal and polished. Use complete sentences with standard capitalization and full punctuation, spell out informal contractions where the result still reads as natural written language (in English: I will, do not), but keep a contraction in a question or fixed phrase where spelling it out would be ungrammatical or stilted (in English: Don't you think?, Let's go), and keep any the language's grammar requires, and leave out slang, filler, texting shorthand, emoji and em dashes. Restyle only; do not add or remove information.",
   casual:
     "Apply this tone: casual and friendly, like a quick note to a colleague. Use the language's everyday contractions (in English: I'll, it's, don't) and everyday wording, standard capitalization and light punctuation with no semicolons or em dashes; a final period can be dropped. Restyle only; do not add or remove information.",
   very_casual:

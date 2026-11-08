@@ -25,7 +25,7 @@ it('builds cleanup prompts locally with language, dictionary, tone and agent-nam
   );
 });
 
-it('keeps custom cleanup prompts as cleanup transforms with contextual instructions', () => {
+it('keeps custom cleanup prompts as cleanup transforms with contextual instructions but no tone', () => {
   const prompt = buildProviderPrompt({
     text: 'hello',
     customPrompt: 'Be concise, {{agentName}}.',
@@ -35,7 +35,7 @@ it('keeps custom cleanup prompts as cleanup transforms with contextual instructi
   });
   expect(prompt.systemPrompt).toContain('Be concise, Aria.');
   expect(prompt.systemPrompt).toContain('You MUST write your entire output in German');
-  expect(prompt.systemPrompt).toContain('Apply this tone: casual and friendly');
+  expect(prompt.systemPrompt).not.toContain('Apply this tone');
   expect(prompt.text).toContain('<transcript>');
 });
 
