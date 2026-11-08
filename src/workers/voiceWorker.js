@@ -3,7 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 const {
-  createConfiguredTurnEndpointer,
+  createTurnEndpointer,
   createSampleRing,
   withPreRoll,
 } = require("../helpers/voiceTurnEndpointer");
@@ -155,9 +155,12 @@ async function configure({
   numSteps = steps;
   const vadConfig = await loadSmartTurn(smartTurnConfig, requestedVadConfig);
   vad = new lib.Vad(vadConfig, 60);
-  endpointer = createConfiguredTurnEndpointer({
-    smartTurnConfig,
-    classifierLoaded: Boolean(smartTurn),
+  const { maxSilenceMs, maxTurnMs, threshold } = smartTurnConfig || {};
+  endpointer = createTurnEndpointer({
+    smartTurn: Boolean(smartTurn),
+    maxSilenceMs,
+    maxTurnMs,
+    threshold,
   });
   resetTurnState();
   log("info", "configured", {

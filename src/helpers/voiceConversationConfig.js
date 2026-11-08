@@ -84,7 +84,8 @@ const speechProfileKey = ({ sid, speed, lang }) => `${sid}:${speed}:${lang}`;
  * model that knows the language (the one dictation runs first, so the shared
  * sherpa-onnx server isn't swapped), else a downloaded Whisper model for a
  * language no Parakeet model here knows. Auto needs a model that detects the
- * language itself, which Cohere can't. Null when nothing downloaded fits.
+ * language itself, which Cohere can't, and prefers a multilingual one to an
+ * English-only one. Null when nothing downloaded fits.
  */
 function resolveCallRecognizer(
   language,
@@ -94,10 +95,14 @@ function resolveCallRecognizer(
     language === "auto"
       ? model.modelType !== "cohere-transcribe"
       : (model.supportedLanguages ?? []).includes(language);
-  const parakeet = [
+  const candidates = [
     ...parakeetModels.filter((model) => model.id === preferredParakeet),
     ...parakeetModels,
-  ].find((model) => fits(model) && isParakeetDownloaded(model.id));
+  ].filter((model) => fits(model) && isParakeetDownloaded(model.id));
+  const parakeet =
+    (language === "auto" &&
+      candidates.find((model) => (model.supportedLanguages ?? []).length > 1)) ||
+    candidates[0];
   if (parakeet) {
     return {
       engine: "parakeet",

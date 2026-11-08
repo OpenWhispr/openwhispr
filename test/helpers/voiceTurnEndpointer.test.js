@@ -25,7 +25,7 @@ test("silence-only mode commits every VAD segment as its own turn", () => {
 });
 
 test("smart mode asks the classifier about the turn so far on each short pause", () => {
-  const endpointer = createTurnEndpointer({ smartTurn: true, preRollMs: 500 });
+  const endpointer = createTurnEndpointer({ smartTurn: true });
   const actions = endpointer.onSegment({ ...segment(1000, 800), nowSample: ms(2000) });
   assert.deepEqual(actions, [
     { type: "classify", requestId: 1, fromSample: ms(500), toSample: ms(2000) },
@@ -44,10 +44,10 @@ test("over a held reply, a word or two commits at its first pause; more is still
 });
 
 test("the classifier window never starts before sample 0 or reaches back more than 8 s", () => {
-  const early = createTurnEndpointer({ smartTurn: true, preRollMs: 500 });
+  const early = createTurnEndpointer({ smartTurn: true });
   assert.equal(early.onSegment({ ...segment(100, 500), nowSample: ms(800) })[0].fromSample, 0);
 
-  const long = createTurnEndpointer({ smartTurn: true, preRollMs: 500 });
+  const long = createTurnEndpointer({ smartTurn: true });
   const [action] = long.onSegment({ ...segment(1000, 12000), nowSample: ms(13200) });
   assert.equal(action.fromSample, ms(13200) - ms(8000));
 });
@@ -76,7 +76,7 @@ test("a complete prediction commits the turn with every segment joined", () => {
 });
 
 test("the classifier window for a later pause starts at the first segment of the turn", () => {
-  const endpointer = createTurnEndpointer({ smartTurn: true, preRollMs: 500 });
+  const endpointer = createTurnEndpointer({ smartTurn: true });
   endpointer.onSegment({ ...segment(1000, 800), nowSample: ms(2000) });
   endpointer.onSpeechStart();
   const [action] = endpointer.onSegment({ ...segment(2400, 600), nowSample: ms(3200) });

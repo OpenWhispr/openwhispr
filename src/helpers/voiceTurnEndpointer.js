@@ -5,8 +5,10 @@
 // does the first pause once the turn holds max-turn worth of speech. Over a reply
 // held for the user's speech, a word or two commits at its first pause.
 
-const DEFAULT_SAMPLE_RATE = 16000;
+const SAMPLE_RATE = 16000;
 const SMART_TURN_CONTEXT_MS = 8000;
+const PRE_ROLL_MS = 500;
+const QUICK_TURN_MS = 1000;
 
 const speechLength = (segments) => segments.reduce((sum, entry) => sum + entry.samples.length, 0);
 
@@ -20,21 +22,19 @@ function concatSegments(segments) {
   return joined;
 }
 
+const toSamples = (valueMs) => Math.round((valueMs * SAMPLE_RATE) / 1000);
+
 function createTurnEndpointer({
   smartTurn,
-  sampleRate = DEFAULT_SAMPLE_RATE,
   maxSilenceMs = 1200,
   maxTurnMs = 30000,
   threshold = 0.5,
-  preRollMs = 500,
-  quickTurnMs = 1000,
 }) {
-  const toSamples = (valueMs) => Math.round((valueMs * sampleRate) / 1000);
   const maxSilenceSamples = toSamples(maxSilenceMs);
   const maxTurnSamples = toSamples(maxTurnMs);
   const contextSamples = toSamples(SMART_TURN_CONTEXT_MS);
-  const preRollSamples = toSamples(preRollMs);
-  const quickTurnSamples = toSamples(quickTurnMs);
+  const preRollSamples = toSamples(PRE_ROLL_MS);
+  const quickTurnSamples = toSamples(QUICK_TURN_MS);
 
   let segments = [];
   let speaking = false;
@@ -113,12 +113,6 @@ function createTurnEndpointer({
   };
 }
 
-/** The worker's endpointer for its `smartTurn` config; silence-only without the classifier. */
-function createConfiguredTurnEndpointer({ smartTurnConfig, classifierLoaded }) {
-  const { maxSilenceMs, maxTurnMs, threshold } = smartTurnConfig || {};
-  return createTurnEndpointer({ smartTurn: classifierLoaded, maxSilenceMs, maxTurnMs, threshold });
-}
-
 /** Rolling mic history addressed by absolute sample index, for classifier windows. */
 function createSampleRing(capacity) {
   const buffer = new Float32Array(capacity);
@@ -168,7 +162,6 @@ function withPreRoll({ ring, turnStartSample, samples, preRollSamples }) {
 
 module.exports = {
   createTurnEndpointer,
-  createConfiguredTurnEndpointer,
   createSampleRing,
   withPreRoll,
 };

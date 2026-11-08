@@ -9,18 +9,19 @@ const {
   toSpeechProfile,
 } = require("../../src/helpers/voiceConversationConfig");
 const { getVoiceModelPaths } = require("../../src/helpers/voiceModels");
-const { createConfiguredTurnEndpointer } = require("../../src/helpers/voiceTurnEndpointer");
+const { createTurnEndpointer } = require("../../src/helpers/voiceTurnEndpointer");
 
 const ms = (value) => (value * 16000) / 1000;
 const segment = (startMs, lengthMs) => ({
   startSample: ms(startMs),
   samples: new Float32Array(ms(lengthMs)),
 });
-const workerEndpointer = (classifierLoaded) =>
-  createConfiguredTurnEndpointer({
-    smartTurnConfig: buildVoiceWorkerConfig({ modelPaths: getVoiceModelPaths("/m") }).smartTurn,
-    classifierLoaded,
-  });
+const workerEndpointer = (classifierLoaded) => {
+  const { maxSilenceMs, maxTurnMs, threshold } = buildVoiceWorkerConfig({
+    modelPaths: getVoiceModelPaths("/m"),
+  }).smartTurn;
+  return createTurnEndpointer({ smartTurn: classifierLoaded, maxSilenceMs, maxTurnMs, threshold });
+};
 
 const PARAKEET_MODELS = [
   { id: "parakeet-tdt-0.6b-v3", supportedLanguages: ["en", "es", "fr", "de"] },
@@ -51,6 +52,22 @@ test("a call hears its language with the model dictation runs when that model kn
     recognize("es", { ...downloaded, preferredParakeet: "parakeet-unified-en-0.6b" }).model,
     "parakeet-tdt-0.6b-v3",
     "an English-only model can't hear Spanish"
+  );
+});
+
+test("Auto hears with a multilingual model over dictation's English-only one", () => {
+  const preferredParakeet = "parakeet-unified-en-0.6b";
+  assert.equal(
+    recognize("auto", {
+      parakeet: ["parakeet-unified-en-0.6b", "parakeet-tdt-0.6b-v3"],
+      preferredParakeet,
+    }).model,
+    "parakeet-tdt-0.6b-v3"
+  );
+  assert.equal(
+    recognize("auto", { parakeet: ["parakeet-unified-en-0.6b"], preferredParakeet }).model,
+    "parakeet-unified-en-0.6b",
+    "an English-only model still hears Auto when it is the only one"
   );
 });
 

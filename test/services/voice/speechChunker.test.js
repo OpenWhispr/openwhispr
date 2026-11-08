@@ -77,7 +77,7 @@ test("strips markdown, skips headings and drops chunks with nothing speakable", 
   assert.deepEqual(out, [
     "Design review at 10:00.",
     "Open Settings, Profile.",
-    "See the notes or a link for more.",
+    "See the notes or example.com for more.",
   ]);
 });
 
