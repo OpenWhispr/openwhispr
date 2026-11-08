@@ -54,7 +54,6 @@ let smartTurn = null;
 let micRing = createSampleRing(MIC_RING_SAMPLES);
 let classifyQueue = Promise.resolve();
 let latestClassifyId = 0;
-let lastClassify = null;
 let ttsQueue = Promise.resolve();
 const cancelledUtterances = new Set();
 
@@ -139,7 +138,6 @@ function resetTurnState() {
   endpointer?.reset();
   micRing = createSampleRing(MIC_RING_SAMPLES);
   latestClassifyId = 0;
-  lastClassify = null;
 }
 
 async function configure({
@@ -176,7 +174,7 @@ async function configure({
   };
 }
 
-function speak({ utteranceId, chunkIndex, text, profile }) {
+function speak({ utteranceId, text, profile }) {
   const receivedAt = Date.now();
   const run = async () => {
     if (!tts) throw new Error("voice worker not configured");
@@ -186,8 +184,8 @@ function speak({ utteranceId, chunkIndex, text, profile }) {
     const queueWaitMs = started - receivedAt;
     const prepared = preparedSpeech.get(text, speechProfileKey(profile));
     if (prepared) {
-      emit("tts-audio", { utteranceId, chunkIndex, samples: prepared });
-      return { queueWaitMs, firstAudioMs: 0, totalMs: 0, sampleRate: tts.sampleRate };
+      emit("tts-audio", { utteranceId, samples: prepared });
+      return { queueWaitMs, firstAudioMs: 0 };
     }
     let streamedSamples = 0;
     let firstAudioMs = null;
@@ -202,7 +200,7 @@ function speak({ utteranceId, chunkIndex, text, profile }) {
           if (firstAudioMs === null) firstAudioMs = Date.now() - started;
           const samples = playable(info.samples, tts.sampleRate, profile);
           streamedSamples += samples.length;
-          emit("tts-audio", { utteranceId, chunkIndex, samples });
+          emit("tts-audio", { utteranceId, samples });
         }
         return 1;
       },
@@ -212,14 +210,9 @@ function speak({ utteranceId, chunkIndex, text, profile }) {
     if (streamedSamples === 0 && audio.samples?.length) {
       firstAudioMs = Date.now() - started;
       const samples = playable(audio.samples, audio.sampleRate, profile);
-      emit("tts-audio", { utteranceId, chunkIndex, samples });
+      emit("tts-audio", { utteranceId, samples });
     }
-    return {
-      queueWaitMs,
-      firstAudioMs,
-      totalMs: Date.now() - started,
-      sampleRate: audio.sampleRate,
-    };
+    return { queueWaitMs, firstAudioMs };
   };
   preparedSpeech.speakStarted();
   return enqueueTts(run).finally(() => preparedSpeech.speakEnded());
@@ -234,14 +227,10 @@ function classify({ requestId, fromSample, toSample }) {
     // A newer pause superseded this one while it waited behind a running call.
     if (requestId !== latestClassifyId || !smartTurn) return;
     let probability = null;
-    // A failed prediction must not report the timings of an earlier one.
-    lastClassify = null;
     const samplesBefore = micRing.totalSamples;
     const started = performance.now();
     try {
-      const result = await smartTurn.predict(audio);
-      probability = result.probability;
-      lastClassify = { ...result, audioMs: samplesToMs(audio.length) };
+      probability = await smartTurn.predict(audio);
     } catch (error) {
       log("error", "smart turn prediction failed", { error: error?.message });
     }
@@ -268,15 +257,10 @@ function applyTurnActions(actions) {
         }),
         endpoint: {
           reason: action.reason,
-          probability: action.probability,
-          segments: action.segments,
           // Speech end to commit, on the mic clock: what the user waits before the pipeline starts.
           endpointMs: samplesToMs(action.commitSample - action.speechEndSample),
-          featureMs: action.reason === "silence" ? null : (lastClassify?.featureMs ?? null),
-          inferenceMs: action.reason === "silence" ? null : (lastClassify?.inferenceMs ?? null),
         },
       });
-      lastClassify = null;
     }
   }
 }

@@ -22,18 +22,11 @@ async function createSmartTurnSession({ model, numThreads = 4 }) {
 
   /** Probability (0-1) that the speaker has finished, from up to the last 8 s of 16 kHz audio. */
   async function predict(samples) {
-    const started = performance.now();
     const features = whisperLogMel(prepareSmartTurnAudio(samples));
-    const featuresDone = performance.now();
     const outputs = await session.run({
       [inputName]: new ort.Tensor("float32", features, [1, SMART_TURN_MELS, SMART_TURN_FRAMES]),
     });
-    const done = performance.now();
-    return {
-      probability: Number(outputs[outputName].data[0]),
-      featureMs: featuresDone - started,
-      inferenceMs: done - featuresDone,
-    };
+    return Number(outputs[outputName].data[0]);
   }
 
   // The first WASM run compiles kernels (~2x a warm run); pay it at load time.

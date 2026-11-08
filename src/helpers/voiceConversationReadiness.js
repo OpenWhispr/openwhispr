@@ -12,6 +12,7 @@ function checkVoiceConversationReadiness({
   meetingRecording = false,
   modelStatus,
   recognizer,
+  refusal = null,
   language,
   brain,
 }) {
@@ -27,6 +28,8 @@ function checkVoiceConversationReadiness({
     };
   }
   if (!recognizer) {
+    // A downloaded model the organization refuses: downloading another won't help.
+    if (refusal) return { ready: false, reason: "speech-model-refused", code: refusal };
     // English and Auto take any local Parakeet model; another language needs one that knows it.
     return {
       ready: false,

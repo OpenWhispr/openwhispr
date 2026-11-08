@@ -55,26 +55,30 @@ function registerVoiceConversationIpc({
   let configuredSmartTurn = false;
   const conversationEvents = new EventEmitter();
 
-  const recognizerFor = ({ language, preferredParakeet, preferredWhisper } = {}) =>
-    resolveCallRecognizer(language, {
+  // A model the organization's policy refuses would refuse every turn; `onRefused`
+  // hears its refusal code, so readiness can tell it from a missing model.
+  const recognizerFor = ({ language, preferredParakeet, preferredWhisper } = {}, onRefused) => {
+    const usable = (manager, name) => {
+      if (!manager.isModelDownloaded(name)) return false;
+      const refusal = manager.localModelPolicy?.failure("transcription", name);
+      if (refusal) onRefused?.(refusal.code);
+      return !refusal;
+    };
+    return resolveCallRecognizer(language, {
       parakeetModels: listRunnableLocalModels("parakeetModels").map(([id, model]) => ({
         id,
         supportedLanguages: model.supportedLanguages,
         modelType: model.modelType,
       })),
       preferredParakeet,
-      // A model the organization's policy refuses would refuse every turn.
-      isParakeetDownloaded: (name) =>
-        parakeetManager.isModelDownloaded(name) &&
-        !parakeetManager.localModelPolicy?.failure("transcription", name),
+      isParakeetDownloaded: (name) => usable(parakeetManager, name),
       whisperModels: [
         preferredWhisper,
         ...WHISPER_PREFERENCE.filter((name) => Object.hasOwn(registryData.whisperModels, name)),
       ].filter(Boolean),
-      isWhisperDownloaded: (name) =>
-        whisperManager.isModelDownloaded(name) &&
-        !whisperManager.localModelPolicy?.failure("transcription", name),
+      isWhisperDownloaded: (name) => usable(whisperManager, name),
     });
+  };
 
   // One way out of a session, whoever ends it: the renderer's stop, a worker crash,
   // a meeting, or the renderer reloading or crashing. The last never reaches stop.
@@ -172,8 +176,8 @@ function registerVoiceConversationIpc({
     });
   });
 
-  voiceWorker.on("tts-audio", ({ utteranceId, chunkIndex, samples }) => {
-    send({ type: "tts-audio", utteranceId, chunkIndex, samples, at: Date.now() });
+  voiceWorker.on("tts-audio", ({ utteranceId, samples }) => {
+    send({ type: "tts-audio", utteranceId, samples });
   });
 
   voiceWorker.on("exit", ({ code }) => {
@@ -327,7 +331,6 @@ function registerVoiceConversationIpc({
     if (!session || event.sender !== sender) return { cancelled: true };
     return voiceWorker.request("speak", {
       utteranceId: request.utteranceId,
-      chunkIndex: request.chunkIndex,
       text: request.text,
       profile: toSpeechProfile(request.profile),
     });
@@ -358,10 +361,15 @@ function registerVoiceConversationIpc({
     // The standard BYOK providers keep their key in the environment; custom and
     // enterprise providers have their own credentials, so they aren't checked here.
     const byokKey = BYOK_API_KEYS.find((entry) => entry.base === brain.provider);
+    let refusal = null;
+    const recognizer = recognizerFor(request, (code) => {
+      refusal ??= code;
+    });
     return checkVoiceConversationReadiness({
       meetingRecording: Boolean(isMeetingRecording?.()),
       modelStatus: voiceModels.getVoiceModelStatus(),
-      recognizer: recognizerFor(request),
+      recognizer,
+      refusal,
       language: request.language,
       brain: {
         mode: brain.mode,

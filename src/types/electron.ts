@@ -2389,13 +2389,11 @@ declare global {
         keepModelWarm: (modelId: string) => Promise<{ warmed: boolean; reason?: string }>;
         speak: (request: {
           utteranceId: string;
-          chunkIndex: number;
           text: string;
           profile: VoiceSpeechProfile;
         }) => Promise<{
           queueWaitMs?: number;
           firstAudioMs?: number | null;
-          totalMs?: number;
           cancelled?: boolean;
         }>;
         /** Synthesizes short lines ahead of time so they play without a wait. */

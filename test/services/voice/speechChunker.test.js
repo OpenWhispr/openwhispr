@@ -73,6 +73,7 @@ test("strips markdown, skips headings and drops chunks with nothing speakable", 
     "• Open Settings → Profile.\n",
     "See [the notes](https://example.com/notes) or https://example.com/x for more.\n",
     "Join at https://user:tok3n@meet.example.com:8443?pwd=Xy12ab today.\n",
+    "Log in at https://u:p@ss@host.example.com/x now.\n",
     "---\n",
   ]);
   assert.deepEqual(out, [
@@ -80,6 +81,7 @@ test("strips markdown, skips headings and drops chunks with nothing speakable", 
     "Open Settings, Profile.",
     "See the notes or example.com for more.",
     "Join at meet.example.com today.",
+    "Log in at host.example.com now.",
   ]);
 });
 

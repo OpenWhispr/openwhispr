@@ -265,9 +265,7 @@ async function mountVoiceCall(t, { settings = {}, voiceState = true } = {}) {
       events.emit({
         type: "tts-audio",
         utteranceId: calls.spoken.at(-1).utteranceId,
-        chunkIndex: 0,
         samples: new Float32Array(1),
-        at: 0,
       })
     );
   const lastTurn = () => calls.turns.at(-1);
@@ -853,6 +851,22 @@ test("an answer said over a question's read-out keeps its usual turn end", async
 
   await act(() => events.emit({ type: "speech-start", sessionId: 7, at: 0 }));
   assert.deepEqual(calls.held, [], 'its opening ("Well.") isn\'t cut at its first pause');
+  for (const next of pending.speak) next.resolve();
+});
+
+test("once the reply goes on past a question answered on its card, a word over it ends at its pause", async (t) => {
+  const { hook, calls, pending, state, act, events, startListening, say, lastTurn } =
+    await mountVoiceCall(t);
+  await startListening();
+  state.holdSpeak = true;
+  await say("write a headline");
+  const question = { id: "tone", kind: "text", prompt: "Which tone do you want?" };
+  await act(() => hook.current.announce({ question }));
+  // Answered with a click: the turn goes on with more of its reply.
+  await act(() => lastTurn().speech.onText("Here is a calm one. "));
+
+  await act(() => events.emit({ type: "speech-start", sessionId: 7, at: 0 }));
+  assert.deepEqual(calls.held, [[7, true]]);
   for (const next of pending.speak) next.resolve();
 });
 

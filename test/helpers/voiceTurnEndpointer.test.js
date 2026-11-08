@@ -66,13 +66,11 @@ test("a complete prediction commits the turn with every segment joined", () => {
 
   assert.equal(commit.type, "commit");
   assert.equal(commit.reason, "smart-turn");
-  assert.equal(commit.probability, 0.9);
   assert.equal(commit.samples.length, ms(1400));
   assert.equal(commit.samples[0], Math.fround(0.1));
   assert.equal(commit.samples[commit.samples.length - 1], Math.fround(0.2));
   assert.equal(commit.speechEndSample, ms(3000));
   assert.equal(commit.commitSample, ms(3230));
-  assert.equal(commit.segments, 2);
 });
 
 test("the classifier window for a later pause starts at the first segment of the turn", () => {
@@ -91,7 +89,6 @@ test("an incomplete prediction waits, then max silence commits the turn", () => 
 
   const [commit] = endpointer.advance(ms(3000));
   assert.equal(commit.reason, "max-silence");
-  assert.equal(commit.probability, 0.3);
   assert.equal(commit.commitSample, ms(3000));
   assert.deepEqual(endpointer.advance(ms(4000)), []);
 });
@@ -101,7 +98,6 @@ test("max silence commits even when the classifier has not answered", () => {
   const [action] = endpointer.onSegment({ ...segment(1000, 800), nowSample: ms(2000) });
   const [commit] = endpointer.advance(ms(3000));
   assert.equal(commit.reason, "max-silence");
-  assert.equal(commit.probability, null);
   assert.deepEqual(endpointer.onPrediction({ requestId: action.requestId, probability: 0.99 }), []);
 });
 
@@ -136,9 +132,7 @@ test("a turn holding max-turn worth of speech commits at that pause without the 
   const [commit] = endpointer.onSegment({ ...segment(3000, 500), nowSample: ms(3700) });
   assert.equal(commit.type, "commit");
   assert.equal(commit.reason, "max-turn");
-  assert.equal(commit.probability, 0.3);
   assert.equal(commit.samples.length, ms(2000));
-  assert.equal(commit.segments, 2);
   assert.equal(commit.commitSample, ms(3700));
 });
 

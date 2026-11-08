@@ -359,6 +359,16 @@ test("a model the organization blocks never hears a call, in Auto or a fixed lan
     await startSession({ language: "auto", preferredParakeet: "parakeet-tdt-0.6b-v3" });
     assert.deepEqual(startedServers, ["parakeet-unified-en-0.6b"]);
     await stop();
+
+    // Every downloaded model that fits refused: readiness says why, not "download one".
+    blockedModels.add("parakeet-unified-en-0.6b");
+    assert.deepEqual(
+      await handlers.get("voice-conversation:get-readiness")(
+        { sender: callWindow },
+        { language: "auto" }
+      ),
+      { ready: false, reason: "speech-model-refused", code: "POLICY_MODEL_BLOCKED" }
+    );
   } finally {
     blockedModels.clear();
   }
@@ -426,7 +436,6 @@ test("speech is spoken with the voice, rate and language the renderer chose", as
     { sender: webContents },
     {
       utteranceId: "u",
-      chunkIndex: 0,
       text: "Hola.",
       profile: { voice: "aurora", speed: 1.3, language: "es" },
     }
@@ -435,7 +444,6 @@ test("speech is spoken with the voice, rate and language the renderer chose", as
     method: "speak",
     payload: {
       utteranceId: "u",
-      chunkIndex: 0,
       text: "Hola.",
       profile: { sid: 1, speed: 1.25, lang: "es" },
     },

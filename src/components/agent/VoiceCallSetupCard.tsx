@@ -4,6 +4,8 @@ import { X } from "../icons";
 import { ICON_BUTTON, PILL_BUTTON, PRIMARY_PILL_BUTTON } from "../chat/interactions/cardStyles";
 import { openProviderSettings } from "../../utils/describeProviderError";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { isCancellation } from "../../hooks/useModelDownload";
+import { LOCAL_MODEL_REFUSAL_MESSAGE_KEYS } from "../../stores/policyRules";
 import type { VoiceCallStartFailure } from "./useVoiceCall";
 import { useLanguageName } from "./VoiceCallSettings";
 
@@ -12,6 +14,7 @@ type Action = "download" | "settings" | "llmSettings" | "micSettings" | "languag
 const ACTIONS: Record<VoiceCallStartFailure["reason"], Action | null> = {
   "voice-models-missing": "download",
   "speech-model-missing": "settings",
+  "speech-model-refused": "settings",
   "language-model-missing": "language",
   "language-unsupported": "language",
   "brain-not-downloaded": "llmSettings",
@@ -84,9 +87,9 @@ export function VoiceCallSetupCard({
         if (status.ready) onRetry();
         else setDownloadFailed(true);
       })
-      .catch(() => {
+      .catch((error: Error) => {
         setDownload(null);
-        setDownloadFailed(true);
+        setDownloadFailed(!isCancellation(error?.message));
       });
   };
 
@@ -111,10 +114,12 @@ export function VoiceCallSetupCard({
         <p id="voice-call-setup-message" dir="auto" className="flex-1 pt-1">
           {downloadFailed
             ? t("agentWindow.call.setup.downloadFailed")
-            : t(`agentWindow.call.setup.reasons.${failure.reason}`, {
-                size: missingMb ?? "",
-                language: nameOf(language),
-              })}
+            : failure.reason === "speech-model-refused"
+              ? t(LOCAL_MODEL_REFUSAL_MESSAGE_KEYS[failure.code])
+              : t(`agentWindow.call.setup.reasons.${failure.reason}`, {
+                  size: missingMb ?? "",
+                  language: nameOf(language),
+                })}
         </p>
         <button
           type="button"

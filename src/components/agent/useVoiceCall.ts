@@ -324,7 +324,7 @@ export function useVoiceCall({
       // The reply speaks from here: until its audio drains, Stop and Esc stop it.
       setSpeaking(true);
       void api
-        .speak({ utteranceId, chunkIndex, text, profile: profileRef.current })
+        .speak({ utteranceId, text, profile: profileRef.current })
         .then((result) => {
           if (chunkIndex === 0 && turn && turnRef.current === turn) {
             turn.ttsQueueWaitMs = result?.queueWaitMs ?? null;
@@ -397,6 +397,8 @@ export function useVoiceCall({
       return {
         onText: (delta, isUnbacked) => {
           if (!current()) return;
+          // The reply goes on, so a card's question it waited on was answered.
+          askingRef.current = false;
           claimCheckRef.current = isUnbacked;
           answerRef.current += delta;
           const turn = turnRef.current;

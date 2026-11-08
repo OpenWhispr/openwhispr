@@ -63,7 +63,6 @@ async function synthesize(voiceWorker, text, index, sampleRate) {
     // The scripted user speaks in one fixed voice, so a run never depends on settings.
     await voiceWorker.request("speak", {
       utteranceId,
-      chunkIndex: 0,
       text,
       profile: toSpeechProfile({ voice: "aurora", speed: 1, language: "en" }),
     });

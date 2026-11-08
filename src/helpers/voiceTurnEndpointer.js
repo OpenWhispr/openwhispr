@@ -41,25 +41,21 @@ function createTurnEndpointer({
   let lastSpeechEndSample = 0;
   let nextRequestId = 1;
   let awaitingRequestId = null;
-  let lastProbability = null;
 
   const reset = () => {
     segments = [];
     speaking = false;
     awaitingRequestId = null;
-    lastProbability = null;
   };
 
-  const commit = (reason, commitSample, probability) => {
+  const commit = (reason, commitSample) => {
     const action = {
       type: "commit",
       reason,
       samples: concatSegments(segments),
-      segments: segments.length,
       turnStartSample: segments[0].startSample,
       speechEndSample: lastSpeechEndSample,
       commitSample,
-      probability,
     };
     reset();
     return [action];
@@ -79,10 +75,9 @@ function createTurnEndpointer({
       speaking = false;
       lastSpeechEndSample = startSample + samples.length;
       if (!smartTurn || (quick && speechLength(segments) <= quickTurnSamples)) {
-        return commit("silence", nowSample, null);
+        return commit("silence", nowSample);
       }
-      if (speechLength(segments) >= maxTurnSamples)
-        return commit("max-turn", nowSample, lastProbability);
+      if (speechLength(segments) >= maxTurnSamples) return commit("max-turn", nowSample);
       awaitingRequestId = nextRequestId++;
       const turnStart = Math.max(0, segments[0].startSample - preRollSamples);
       return [
@@ -99,14 +94,13 @@ function createTurnEndpointer({
       if (requestId !== awaitingRequestId || speaking || segments.length === 0) return [];
       awaitingRequestId = null;
       if (probability === null || probability === undefined) return [];
-      lastProbability = probability;
-      return probability > threshold ? commit("smart-turn", nowSample, probability) : [];
+      return probability > threshold ? commit("smart-turn", nowSample) : [];
     },
 
     advance(nowSample) {
       if (segments.length === 0 || speaking) return [];
       if (nowSample - lastSpeechEndSample < maxSilenceSamples) return [];
-      return commit("max-silence", nowSample, lastProbability);
+      return commit("max-silence", nowSample);
     },
 
     reset,

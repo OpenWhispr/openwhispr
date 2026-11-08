@@ -1,3 +1,5 @@
+import type { LocalModelRefusal } from "../../stores/policyRules";
+
 /** What a call hears and answers in; "auto" answers in the language spoken. */
 export type VoiceCallLanguage = "auto" | "en" | "hi" | "es" | "fr" | "de";
 
@@ -31,12 +33,8 @@ export interface VoiceTurnReport {
 /** How the worker decided the user's turn was over (Smart Turn or plain silence). */
 export interface VoiceTurnEndpoint {
   reason: "silence" | "smart-turn" | "max-silence" | "max-turn";
-  probability: number | null;
-  segments: number;
   /** Speech end to turn commit, on the mic clock. */
   endpointMs: number;
-  featureMs: number | null;
-  inferenceMs: number | null;
 }
 
 /** Result of the main-process precondition check run before a session starts. */
@@ -55,7 +53,9 @@ export type VoiceConversationReadiness =
         | "brain-key-missing";
       missing?: string[];
       missingBytes?: number;
-    };
+    }
+  /** Every downloaded model that fits is refused by the organization's policy. */
+  | { ready: false; reason: "speech-model-refused"; code: LocalModelRefusal["code"] };
 
 // `sessionId` marks what one session heard, so a later session can ignore it.
 export type VoiceConversationEvent =
@@ -72,9 +72,7 @@ export type VoiceConversationEvent =
   | {
       type: "tts-audio";
       utteranceId: string;
-      chunkIndex: number;
       samples: Float32Array;
-      at: number;
     }
   | { type: "error"; stage: "stt"; sessionId: number; message: string }
   | { type: "error"; stage: "worker"; message: string }

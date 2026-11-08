@@ -51,6 +51,18 @@ test("no speech model for the language is reported, naming whether any would do"
   assert.equal(without("de"), "language-model-missing");
 });
 
+test("a downloaded model the organization refuses is told apart from a missing one", () => {
+  assert.deepEqual(
+    checkVoiceConversationReadiness({
+      ...READY,
+      language: "de",
+      recognizer: null,
+      refusal: "POLICY_LOCAL_MODE_BLOCKED",
+    }),
+    { ready: false, reason: "speech-model-refused", code: "POLICY_LOCAL_MODE_BLOCKED" }
+  );
+});
+
 test("a local brain that is not downloaded is reported; cloud brains need no download", () => {
   const localMissing = {
     ...READY,
