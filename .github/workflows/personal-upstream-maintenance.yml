@@ -418,8 +418,67 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
-  review:
+  verify-native:
     needs: [prepare, candidate, verify]
+    runs-on: macos-15
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.prepare.outputs.base }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          path: .maintenance-control
+          persist-credentials: false
+      - run: mv .maintenance-control "$RUNNER_TEMP/control"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          path: ${{ runner.temp }}/artifacts
+      - name: Select new platform-only tests from actual Linux results
+        id: files
+        run: |
+          python3 "$RUNNER_TEMP/control/scripts/check-maintenance-tests.py" platform-files "$RUNNER_TEMP/artifacts/verification-baseline-full/results.json" "$RUNNER_TEMP/artifacts/verification-candidate-full/results.json" > "$RUNNER_TEMP/native-files.json"
+          python3 - <<'PY'
+          import json, os
+          files = json.load(open(os.environ['RUNNER_TEMP'] + '/native-files.json'))
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f: f.write('count=' + str(len(files)) + '\n')
+          PY
+      - name: Validate exact candidate
+        env:
+          BASE: ${{ needs.prepare.outputs.base }}
+        run: |
+          python3 "$RUNNER_TEMP/control/scripts/upstream-maintenance.py" check-patch --repo . --base "$BASE" --patch "$RUNNER_TEMP/artifacts/maintenance-candidate/candidate.patch" --context "$RUNNER_TEMP/artifacts/maintenance-context/context.json"
+          test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/artifacts/verification-candidate/tree.txt")"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        if: steps.files.outputs.count != '0'
+        with:
+          node-version: "24"
+      - name: Install native runtime
+        if: steps.files.outputs.count != '0'
+        run: |
+          npm ci
+          node node_modules/electron/install.js
+      - name: Execute platform tests on macOS
+        run: python3 "$RUNNER_TEMP/control/scripts/check-maintenance-tests.py" run --repo . --output "$RUNNER_TEMP/native-results" --files-from "$RUNNER_TEMP/native-files.json"
+      - name: Reject changes made by platform tests
+        run: |
+          git add -u
+          test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/artifacts/verification-candidate/tree.txt")"
+          test -z "$(git ls-files --others --exclude-standard)"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: verification-native
+          path: ${{ runner.temp }}/native-results
+          retention-days: 30
+          if-no-files-found: error
+
+  review:
+    needs: [prepare, candidate, verify, verify-native]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -446,7 +505,7 @@ jobs:
         env:
           BASE: ${{ needs.prepare.outputs.base }}
         run: |
-          python "$RUNNER_TEMP/control/scripts/check-maintenance-tests.py" compare "$RUNNER_TEMP/artifacts/verification-baseline-full/results.json" "$RUNNER_TEMP/artifacts/verification-candidate-full/results.json" > "$RUNNER_TEMP/regression-comparison.json"
+          python "$RUNNER_TEMP/control/scripts/check-maintenance-tests.py" compare "$RUNNER_TEMP/artifacts/verification-baseline-full/results.json" "$RUNNER_TEMP/artifacts/verification-candidate-full/results.json" --platform-results "$RUNNER_TEMP/artifacts/verification-native/results.json" > "$RUNNER_TEMP/regression-comparison.json"
           python - <<'PY'
           import json, os, pathlib
           root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'artifacts'
@@ -495,6 +554,10 @@ jobs:
             Check visible account prompts, clipped controls and model fields.
             Baseline failures
             are not a passing full suite; reject any new failure/skip/missing test.
+            The comparison explicitly records controller-reviewed upstream test
+            renames and new platform-only tests that actually passed on macOS.
+            Inspect verification-native/results.json for those actual results.
+            No existing Linux pass may become a skip, even if it passes on macOS.
             Check that real maintenance fixes were applied appropriately and no
             unrelated features, account screens, ads or hosted-service calls were
             introduced. Reject skipped relevant security/bug fixes without sound
@@ -589,7 +652,7 @@ jobs:
           printf 'Updated personal branch to `%s`. Desktop package unchanged.\n' "$(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
 
   report-failure:
-    needs: [prepare, classify, candidate, verify, review, publish]
+    needs: [prepare, classify, candidate, verify, verify-native, review, publish]
     if: always() && contains(needs.*.result, 'failure')
     runs-on: ubuntu-24.04
     timeout-minutes: 5

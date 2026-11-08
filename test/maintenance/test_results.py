@@ -42,6 +42,38 @@ class ResultsTests(unittest.TestCase):
             f.write_text('<testsuites><testcase name="same" file="test/a.js"/><testcase name="same" file="test/a.js"><failure/></testcase></testsuites>')
             self.assertEqual(checks.read_results(f), {'test/a.js / same': 'pass', 'test/a.js / same [occurrence 2]': 'fail'})
 
+    def test_runtime_quote_encoding_does_not_change_identity(self):
+        with tempfile.TemporaryDirectory() as d:
+            old, new = Path(d) / 'old.xml', Path(d) / 'new.xml'
+            old.write_text('<testsuites><testcase name="a &amp;quot;quote&amp;quot;" file="test/a.js"/></testsuites>')
+            new.write_text('<testsuites><testcase name="a &quot;quote&quot;" file="test/a.js"/></testsuites>')
+            self.assertEqual(checks.read_results(old, double_escaped=True), checks.read_results(new))
+
+    def test_literal_entity_in_new_runtime_is_not_unescaped(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / 'results.xml'
+            f.write_text('<testsuites><testcase name="literal &amp;quot;"/></testsuites>')
+            self.assertEqual(checks.read_results(f), {'literal &quot;': 'pass'})
+
+    def test_reviewed_upstream_rename_retains_identity(self):
+        old = 'test/helpers/hyprlandShortcut.test.js / replaces an old dofile loader before a trailing top-level return'
+        new = 'test/helpers/hyprlandShortcut.test.js / keeps an existing dofile loader before a trailing top-level return'
+        self.assertEqual(checks.compare({old: 'pass'}, {new: 'pass'})['missing'], [])
+        self.assertEqual(checks.compare({old: 'pass'}, {new: 'fail'})['new_failures'], [new])
+        self.assertEqual(checks.compare({old: 'pass'}, {})['missing'], [old])
+
+    def test_new_platform_skip_requires_an_actual_pass(self):
+        self.assertEqual(checks.compare({}, {'mac': 'skip'}, {'mac': 'pass'})['new_skips'], [])
+        self.assertEqual(checks.compare({}, {'mac': 'skip'}, {'mac': 'skip'})['new_skips'], ['mac'])
+        self.assertEqual(checks.compare({'mac': 'pass'}, {'mac': 'skip'}, {'mac': 'pass'})['new_skips'], ['mac'])
+        self.assertEqual(checks.compare({}, {'mac': 'skip'}, {'mac': 'fail'})['new_failures'], ['mac'])
+
+    def test_platform_files_reject_paths_outside_tests(self):
+        with self.assertRaises(ValueError):
+            checks.platform_files({}, {'../../evil.js / name': 'skip'})
+        self.assertEqual(checks.platform_files({}, {'test/helpers/mac.test.js / name': 'skip'}), ['test/helpers/mac.test.js'])
+        self.assertEqual(checks.platform_files({'test/a.test.js / old': 'pass'}, {'test/a.test.js / old': 'skip'}), [])
+
     def test_empty_output_fails_closed(self):
         with tempfile.TemporaryDirectory() as d:
             f = Path(d) / 'results.xml'
