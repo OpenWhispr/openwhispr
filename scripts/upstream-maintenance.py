@@ -3,11 +3,20 @@
 
 Commands (all fail closed: exit 1 with "error: ..." on stderr, nothing on stdout):
 
-  prepare     --repo DIR --output JSON [--base SHA]
-  guard       --repo DIR --base SHA
-  candidate   --repo DIR --context JSON --result JSON --patch PATH
-  check-patch --repo DIR --base SHA --patch PATH --context JSON [--expect-tree SHA]
-  publish     --repo DIR --context JSON --patch PATH --tree SHA [--remote NAME]
+  prepare        --repo DIR --output JSON [--base SHA]
+  export-upstream --repo DIR --context JSON --output DIR [--only-attention REPORT]
+  check-result   --repo DIR --context JSON --result JSON
+  apply-selected --repo DIR --context JSON --result JSON --report JSON
+  protected-paths --repo DIR --base SHA --output DIR
+  guard          --repo DIR --base SHA
+  candidate      --repo DIR --context JSON --result JSON --patch PATH [--editor-result JSON]
+  check-patch    --repo DIR --base SHA --patch PATH --context JSON [--expect-tree SHA]
+  publish        --repo DIR --context JSON --patch PATH --tree SHA [--remote NAME]
+
+Flow: Claude classifies the whole upstream range (selected/skipped, read-only tools);
+apply-selected applies the selected commits with Git three-way merges, never writing
+protected paths; only commits that conflict or touch protected configuration are handed
+to a conflict editor, whose result is validated by candidate against a fresh recomputation.
 
 Run this from a trusted checkout, never from the repository being maintained.
 Only the Python standard library, git and gh are used; no shell strings.
@@ -357,7 +366,7 @@ def parse_result(path, ctx):
 
 # -------------------------------------------------------------------- the guard
 
-def load_policy_tests(repo, base):
+def load_policy_tests(repo, base, fold=True):
     p = git_try(repo, 'cat-file', 'blob', '%s:%s' % (base, POLICY_PATH))
     if p.returncode:
         fail('fork policy %s is missing at the base commit' % POLICY_PATH)
@@ -372,7 +381,7 @@ def load_policy_tests(repo, base):
     for t in tests:
         if not isinstance(t, str) or not t or t.startswith('/') or '..' in t.split('/'):
             fail('fork policy has an invalid protected test path: %r' % (t,))
-        out.append(t.casefold())
+        out.append(t.casefold() if fold else t)
     return out
 
 
@@ -487,6 +496,339 @@ def guard_tree(repo, base, ctx=None):
     return tree
 
 
+# ------------------------------------------------- mechanical application of picks
+
+# Git metadata an editing agent could use to make later trusted Git commands run code or
+# change what they read. The editor has no shell and is denied .git, so this is a second layer.
+RISKY_CONFIG = re.compile(
+    r'^(include\.|includeif\.|filter\.|alias\.|merge\..*\.(driver|name)$|diff\..*\.(command|textconv)$'
+    r'|core\.(fsmonitor|hookspath|attributesfile|worktree)$)')
+ATTENTION_IGNORED_NAMES = ('fork.md', 'claude.md', '.gitmodules')
+
+
+def check_git_metadata(repo):
+    git_dir = repo / '.git'
+    if git_dir.is_symlink() or not git_dir.is_dir():
+        fail('.git must be a real directory')
+    attributes = git_dir / 'info' / 'attributes'
+    if attributes.exists() and attributes.stat().st_size:
+        fail('.git/info/attributes must not be used')
+    hooks = git_dir / 'hooks'
+    if hooks.is_dir():
+        for entry in hooks.iterdir():
+            if not entry.name.endswith('.sample'):
+                fail('unexpected Git hook %s' % entry.name)
+    p = git_try(repo, 'config', '--local', '--list', '-z')
+    if p.returncode:
+        fail('cannot read local Git configuration')
+    for record in p.stdout.decode('utf-8', 'replace').split('\0'):
+        key = record.partition('\n')[0].casefold()
+        if key and RISKY_CONFIG.match(key):
+            fail('local Git configuration key %s is not allowed' % key)
+
+
+def needs_adaptation(path):
+    """True when a dropped protected change may leave other code needing an adaptation."""
+    key = path.casefold()
+    if key.startswith('.github/') or key in ATTENTION_IGNORED_NAMES:
+        return False
+    parts = key.split('/')
+    return not (parts[-1] in INSTRUCTION_NAMES or any(p in INSTRUCTION_DIRS for p in parts))
+
+
+def tree_entries(repo, tree):
+    entries = {}
+    for record in git(repo, 'ls-tree', '-r', '-z', '--full-tree', tree).split(b'\0'):
+        if record:
+            meta, _, path = record.partition(b'\t')
+            mode, _, sha = meta.decode().split()
+            entries[path.decode('utf-8', 'replace')] = (mode, sha)
+    return entries
+
+
+def set_paths(repo, tree, source_entries, paths):
+    """Return tree with each path reset to its entry in source_entries (removed if absent)."""
+    if not paths:
+        return tree
+    scratch = tempfile.mkdtemp(prefix='um-index-')
+    try:
+        env = {'GIT_INDEX_FILE': os.path.join(scratch, 'index')}
+        git(repo, 'read-tree', tree, env=env)
+        data = b''
+        for path in sorted(paths):
+            mode, sha = source_entries.get(path, ('0', '0' * 40))
+            data += ('%s %s\t%s' % (mode, sha, path)).encode('utf-8') + b'\0'
+        git(repo, 'update-index', '-z', '--index-info', input=data, env=env)
+        return git_text(repo, 'write-tree', env=env)
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+
+
+def commit_paths(repo, parent, sha):
+    raw = git(repo, 'diff-tree', '-r', '-z', '--name-only', '--no-renames', '--no-commit-id', parent, sha)
+    return [p.decode('utf-8', 'replace') for p in raw.split(b'\0') if p]
+
+
+def merge_pick(repo, ours, sha, parent):
+    """Three-way merge of upstream commit sha (relative to parent) onto the ours commit."""
+    # GIT_BASE turns diff.renames off; merges still need rename detection to follow fork renames.
+    p = git_try(repo, '-c', 'merge.renames=true', 'merge-tree', '--write-tree', '-z', '--name-only', '--no-messages',
+                '--merge-base=' + parent, ours, sha)
+    if p.returncode not in (0, 1):
+        fail('git merge-tree failed for %s: %s' % (sha, p.stderr.decode(errors='replace').strip()))
+    tokens = p.stdout.split(b'\0')
+    tree = tokens[0].decode()
+    if not SHA_RE.match(tree):
+        fail('unexpected merge-tree output for %s' % sha)
+    conflicts = {t.decode('utf-8', 'replace') for t in tokens[1:] if t} if p.returncode else set()
+    return tree, conflicts
+
+
+def mechanical_plan(repo, ctx, selected):
+    """Apply each selected upstream commit in order with a Git three-way merge.
+
+    Pure function of the object database: it never reads the work tree, so it can be recomputed
+    after an agent has edited it. Protected paths, symlinks, gitlinks, deleted tests and package.json
+    scripts are never taken from upstream; what could not be applied is reported per commit.
+    """
+    base = ctx['base_sha']
+    protected_tests = load_policy_tests(repo, base)
+    name, email = COMMIT_AUTHOR
+    ident = {'GIT_AUTHOR_NAME': name, 'GIT_AUTHOR_EMAIL': email,
+             'GIT_COMMITTER_NAME': name, 'GIT_COMMITTER_EMAIL': email,
+             'GIT_AUTHOR_DATE': '2000-01-01T00:00:00Z', 'GIT_COMMITTER_DATE': '2000-01-01T00:00:00Z'}
+    ours = base
+    ours_tree = git_text(repo, 'rev-parse', base + '^{tree}')
+    commits = []
+    for sha in selected:
+        entry = {'sha': sha, 'status': 'applied', 'applied': [], 'conflicts': [], 'protected': [],
+                 'kept_tests': [], 'guard': [], 'guard_paths': []}
+        commits.append(entry)
+        parents = git_text(repo, 'rev-list', '--parents', '-n', '1', sha).split()
+        if len(parents) != 2:
+            entry.update(status='unapplied', guard=['merge or root commit cannot be applied mechanically'])
+            continue
+        merged, conflicted = merge_pick(repo, ours, sha, parents[1])
+        touched = set(commit_paths(repo, parents[1], sha))
+        revert, conflicts = set(), set()
+        changes = tree_changes(repo, ours_tree, merged)
+        for ch in changes:
+            path = ch['path']
+            if protection_reason(path, protected_tests):
+                entry['protected'].append(path)
+                revert.add(path)
+            elif path in conflicted or (conflicted and path not in touched):
+                conflicts.add(path)
+                revert.add(path)
+            elif '120000' in (ch['old_mode'], ch['new_mode']) or '160000' in (ch['old_mode'], ch['new_mode']):
+                entry['guard'].append('%s: symlinks and submodules are not applied' % path)
+                entry['guard_paths'].append(path)
+                revert.add(path)
+            elif ch['status'] in ('D', 'T') and is_test_path(path):
+                entry['kept_tests'].append(path)
+                revert.add(path)
+        for path in conflicted:
+            if not protection_reason(path, protected_tests):
+                conflicts.add(path)
+        source = tree_entries(repo, ours_tree)
+        result = set_paths(repo, merged, source, revert)
+        if any(ch['path'] == 'package.json' and ch['path'] not in revert for ch in changes):
+            why = package_problem(repo, base, result)
+            if why:
+                for path in ('package.json', 'package-lock.json'):
+                    if any(ch['path'] == path for ch in changes):
+                        revert.add(path)
+                        entry['guard_paths'].append(path)
+                entry['guard'].append('package.json: ' + why + '; package manifest and lockfile left unchanged')
+                result = set_paths(repo, merged, source, revert)
+        entry['applied'] = sorted(ch['path'] for ch in changes if ch['path'] not in revert)
+        entry['conflicts'] = sorted(conflicts)
+        entry['protected'] = sorted(set(entry['protected']))
+        entry['kept_tests'] = sorted(entry['kept_tests'])
+        if conflicts or entry['guard']:
+            entry['status'] = 'partial' if entry['applied'] else 'unapplied'
+        ours = git_text(repo, 'commit-tree', result, '-p', ours, input=('mechanical %s\n' % sha).encode(), env=ident)
+        ours_tree = result
+    return {'base_sha': base, 'tree': ours_tree, 'commits': commits}
+
+
+def attention_shas(plan):
+    return [c['sha'] for c in plan['commits']
+            if c['status'] != 'applied' or any(needs_adaptation(p) for p in c['protected'])]
+
+
+def materialize(repo, base_tree, tree):
+    """Write the planned tree into the clean work tree without Git filters."""
+    changes = tree_changes(repo, base_tree, tree)
+    for ch in changes:
+        if ch['status'] == 'D':
+            target = Path(repo) / ch['path']
+            if target.is_symlink() or target.is_file():
+                target.unlink()
+    for ch in changes:
+        if ch['status'] == 'D':
+            continue
+        target = Path(repo) / ch['path']
+        if ch['new_mode'] not in ('100644', '100755'):
+            fail('%s: unsupported file mode %s in the planned tree' % (ch['path'], ch['new_mode']))
+        for parent in reversed(target.parents):
+            if parent == Path(repo) or repo not in parent.parents:
+                continue
+            if parent.is_file() or parent.is_symlink():
+                parent.unlink()
+        if target.is_dir() and not target.is_symlink():
+            shutil.rmtree(target)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(git(repo, 'cat-file', 'blob', ch['new_sha']))
+        target.chmod(0o755 if ch['new_mode'] == '100755' else 0o644)
+
+
+def parse_editor_result(path, plan, attention, ctx, selected, skipped):
+    """Validate the conflict editor's answer and return the final (selected, skipped)."""
+    if not attention:
+        if path is not None:
+            fail('a conflict-editor result was supplied but no commit needs the editor')
+        return selected, skipped
+    if path is None:
+        fail('commits need the conflict editor (%d) but no editor result was supplied' % len(attention))
+    data = read_json(path, 'editor result')
+    keys = {'complete', 'resolved', 'skipped', 'summary'}
+    if not isinstance(data, dict) or set(data) != keys:
+        fail('editor result must be an object with exactly: ' + ', '.join(sorted(keys)))
+    if not isinstance(data['complete'], bool) or not data['complete']:
+        fail('the conflict editor reported the work as incomplete')
+    if not isinstance(data['summary'], str) or not data['summary'].strip() or len(data['summary']) > 20000:
+        fail('editor result.summary must be a non-empty string')
+    reasons = parse_decisions(data['resolved'], data['skipped'], 'editor result')
+    resolved = list(data['resolved'])
+    if len(resolved) != len(set(resolved)) or set(resolved) & set(reasons):
+        fail('a commit appears more than once in the editor result')
+    if set(resolved) | set(reasons) != set(attention):
+        fail('the editor result must account for exactly the commits that needed it '
+             '(missing: %s; unexpected: %s)' % (sorted(set(attention) - set(resolved) - set(reasons)) or 'none',
+                                              sorted((set(resolved) | set(reasons)) - set(attention)) or 'none'))
+    by_sha = {c['sha']: c for c in plan['commits']}
+    for sha in reasons:
+        if by_sha[sha]['status'] != 'unapplied':
+            fail('commit %s was partly applied and cannot be skipped by the conflict editor' % sha)
+    order = [c['sha'] for c in ctx['commits']]
+    final_selected = [s for s in selected if s not in reasons]
+    merged = {item['sha']: item['reason'] for item in skipped}
+    merged.update({s: 'conflict editor: ' + r for s, r in reasons.items()})
+    return final_selected, [{'sha': s, 'reason': merged[s]} for s in order if s in merged]
+
+
+# ------------------------------------------------------------ agent-facing exports
+
+EXPORT_EXCLUDES = (':(exclude)package-lock.json', ':(exclude)openwhispr-mobile', ':(exclude)src/locales')
+DENY_NAME = re.compile(r'^[A-Za-z0-9._][A-Za-z0-9._/-]*$')
+
+
+def numstat(repo, sha):
+    raw = git(repo, 'show', '--format=', '--numstat', '-z', '--no-renames', sha).decode('utf-8', 'replace')
+    rows = []
+    for record in filter(None, raw.split('\0')):
+        ins, _, rest = record.partition('\t')
+        dele, _, path = rest.partition('\t')
+        rows.append((ins, dele, path))
+    return rows
+
+
+def export_commit(repo, sha, max_bytes, paths=None):
+    head = git(repo, 'show', '--format=fuller', '--no-patch', sha).decode('utf-8', 'replace')
+    # Literal pathspecs: names come from upstream and must not be interpreted as globs or magic.
+    pathspec = ['--'] + [':(literal)' + p for p in paths] if paths else ['--', '.'] + list(EXPORT_EXCLUDES)
+    patch = git(repo, 'show', '--format=', '--patch', '--no-ext-diff', '--no-textconv', '--no-renames',
+                sha, *pathspec)
+    rows = numstat(repo, sha)
+    stat = ''.join('%6s %6s  %s\n' % r for r in rows)
+    body = patch[:max_bytes].decode('utf-8', 'replace')
+    note = ''
+    if len(patch) > max_bytes:
+        note = '\n[patch truncated: %d bytes omitted]\n' % (len(patch) - max_bytes)
+    scope = ('only the paths the trusted applier could not apply or had to leave out' if paths else
+             'package-lock.json, openwhispr-mobile/ and src/locales/ diffs omitted; see FILES')
+    text = ('%s\nFILES (added deleted path); binary shows "-":\n%s\nPATCH (%s):\n%s%s'
+            % (head, stat, scope, body, note))
+    return text, rows
+
+
+def cmd_export_upstream(args):
+    repo = open_repo(args.repo)
+    output = outside_repo(repo, args.output)
+    ctx = load_context(args.context)
+    verify_context_commits(repo, ctx)
+    shas = [c['sha'] for c in ctx['commits']]
+    focus = {}
+    if args.only_attention:
+        report = read_json(args.only_attention, 'apply report')
+        wanted = report.get('attention') if isinstance(report, dict) else None
+        if not isinstance(wanted, list) or not all(isinstance(s, str) for s in wanted):
+            fail('apply report has no attention list')
+        unknown = set(wanted) - set(shas)
+        if unknown:
+            fail('apply report names commits outside the context')
+        shas = [s for s in shas if s in set(wanted)]
+        for entry in report.get('commits', []):
+            if entry.get('sha') in wanted and entry.get('applied'):
+                focus[entry['sha']] = sorted(set(entry['conflicts']) | set(entry['guard_paths'])
+                                             | {p for p in entry['protected'] if needs_adaptation(p)})
+    if git_try(repo, 'cat-file', '-e', ctx['upstream_sha'] + '^{commit}').returncode:
+        fail('upstream objects are not present in the repository')
+    protected_tests = load_policy_tests(repo, ctx['base_sha'])
+    subjects = {c['sha']: c['subject'] for c in ctx['commits']}
+    output.mkdir(parents=True, exist_ok=True)
+    lines = ['# Upstream %s commits (%d)' % (ctx['release_tag'], len(shas)), '',
+             'One patch per commit: %s/<sha>.patch. Marks: [P]=protected path (never applied), '
+             '[T]=test file.' % output, '']
+    for number, sha in enumerate(shas, 1):
+        text, rows = export_commit(repo, sha, args.max_bytes, focus.get(sha))
+        (output / (sha + '.patch')).write_text(text, encoding='utf-8')
+        added = sum(int(r[0]) for r in rows if r[0].isdigit())
+        removed = sum(int(r[1]) for r in rows if r[1].isdigit())
+        lines.append('%d. %s %s' % (number, sha, subjects[sha]))
+        lines.append('   %d files, +%d -%d' % (len(rows), added, removed))
+        for ins, dele, path in rows[:40]:
+            mark = ('[P]' if protection_reason(path, protected_tests) else '') + ('[T]' if is_test_path(path) else '')
+            lines.append('   %s %s (+%s -%s)' % (mark or '   ', path, ins, dele))
+        if len(rows) > 40:
+            lines.append('   ... %d more files' % (len(rows) - 40))
+        lines.append('')
+    (output / 'digest.md').write_text('\n'.join(lines), encoding='utf-8')
+    print(json.dumps({'commits': len(shas), 'directory': str(output)}))
+
+
+def cmd_protected_paths(args):
+    repo = open_repo(args.repo)
+    output = outside_repo(repo, args.output)
+    as_sha(args.base, 'base')
+    protected_tests = load_policy_tests(repo, args.base)
+    tracked = [p for p in tree_entries(repo, args.base + '^{tree}')]
+    files = sorted({p for p in tracked if protection_reason(p, protected_tests)
+                    and not any(p.casefold().startswith(x) for x in PROTECTED_PREFIXES)}
+                   | {t for t in load_policy_tests(repo, args.base, fold=False) if not t.endswith('/')})
+    prefixes = sorted(PROTECTED_PREFIXES)
+    names = sorted({os.path.basename(p) for p in tracked if os.path.basename(p).casefold() in INSTRUCTION_NAMES})
+    known = ['FORK.md', 'CLAUDE.md', 'AGENTS.md', '.gitmodules', '.gitattributes', '.mcp.json']
+    fixed = sorted(k for k in PROTECTED_FILES if k not in ATTENTION_IGNORED_NAMES and k not in files)
+    deny = ['.git/**'] + sorted(set(files) | set(fixed)) + [p + '**' if p.endswith('/') else p + '/**' for p in prefixes]
+    deny += ['**/.claude/**', '**/.husky/**', '**/.githooks/**'] + ['**/' + n for n in sorted(set(names) | set(known))]
+    for rule in deny:
+        if not DENY_NAME.match(rule.replace('**', 'x').replace('*', 'x')):
+            fail('cannot express %r as a permission rule' % rule)
+    output.mkdir(parents=True, exist_ok=True)
+    text = ['Protected paths: the guard rejects any added, modified or deleted file below.', '']
+    text += ['  ' + p for p in sorted(set(files) | set(fixed))] + ['  ' + p + '**' for p in prefixes]
+    text += ['  (any file named ' + ', '.join(sorted(INSTRUCTION_NAMES)) + ')',
+             '  (anything inside ' + ', '.join(sorted(INSTRUCTION_DIRS)) + ')',
+             '  package.json: name and scripts ' + ', '.join(PINNED_SCRIPTS) + ' must stay identical',
+             '  existing test files may not be deleted; symlinks and submodules are not allowed', '']
+    (output / 'protected-paths.txt').write_text('\n'.join(text), encoding='utf-8')
+    (output / 'deny-rules.txt').write_text(','.join('Edit(/%s)' % r if not r.startswith('**') else 'Edit(%s)' % r
+                                                    for r in deny), encoding='utf-8')
+    print(json.dumps({'files': len(files), 'rules': len(deny)}))
+
+
 # ------------------------------------------------------------------- commands
 
 def fetch_latest_release():
@@ -574,6 +916,46 @@ def verify_context_commits(repo, ctx):
         fail('context commits do not match upstream history')
 
 
+def cmd_check_result(args):
+    repo = open_repo(args.repo)
+    ctx = load_context(args.context)
+    if not ctx['pending']:
+        fail('no upstream commits are pending')
+    require_head(repo, ctx['base_sha'])
+    selected, skipped = parse_result(args.result, ctx)
+    print(json.dumps({'selected': len(selected), 'skipped': len(skipped)}))
+
+
+def cmd_apply_selected(args):
+    repo = open_repo(args.repo)
+    report_path = outside_repo(repo, args.report)
+    ctx = load_context(args.context)
+    if not ctx['pending']:
+        fail('no upstream commits are pending')
+    base = ctx['base_sha']
+    require_head(repo, base)
+    if git_try(repo, 'cat-file', '-e', ctx['upstream_sha'] + '^{commit}').returncode:
+        fail('upstream objects are not present in the repository')
+    verify_context_commits(repo, ctx)
+    base_tree = git_text(repo, 'rev-parse', base + '^{tree}')
+    if worktree_tree(repo) != base_tree:
+        fail('checkout is not clean')
+    selected, skipped = parse_result(args.result, ctx)
+    plan = mechanical_plan(repo, ctx, selected)
+    materialize(repo, base_tree, plan['tree'])
+    # Track what upstream added even where the fork's ignore rules match it, so only files the
+    # editor creates later can count as ignored build output.
+    git(repo, 'read-tree', plan['tree'])
+    if guard_tree(repo, base) != plan['tree']:
+        fail('the work tree does not match the planned tree after applying')
+    plan['attention'] = attention_shas(plan)
+    plan['selected'], plan['skipped'] = len(selected), len(skipped)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(plan, indent=2) + '\n', encoding='utf-8')
+    print(json.dumps({'tree': plan['tree'], 'selected': len(selected), 'skipped': len(skipped),
+                      'attention': len(plan['attention'])}))
+
+
 def cmd_candidate(args):
     repo = open_repo(args.repo)
     patch_path = outside_repo(repo, args.patch)
@@ -584,6 +966,11 @@ def cmd_candidate(args):
     require_head(repo, base)
     verify_context_commits(repo, ctx)
     selected, skipped = parse_result(args.result, ctx)
+    check_git_metadata(repo)
+    # Recomputed from the object database, so nothing the editor could write affects it.
+    plan = mechanical_plan(repo, ctx, selected)
+    selected, skipped = parse_editor_result(args.editor_result, plan, attention_shas(plan), ctx,
+                                            selected, skipped)
     guard_tree(repo, base)  # nothing, including the state file, may be touched by the agent
     state = {'reviewed_upstream': ctx['upstream_sha'], 'release_tag': ctx['release_tag'],
              'base_sha': base, 'selected': selected, 'skipped': skipped}
@@ -685,6 +1072,25 @@ def build_parser():
     c.add_argument('--repo', required=True)
     c.add_argument('--output', required=True, help='context JSON path, outside the repo')
     c.add_argument('--base', help='expected HEAD; refuse if different')
+    c = sub.add_parser('export-upstream', help='write per-commit patches and a digest for the agents')
+    c.add_argument('--repo', required=True)
+    c.add_argument('--context', required=True)
+    c.add_argument('--output', required=True, help='directory outside the repo')
+    c.add_argument('--only-attention', help='apply report; export only the commits that need the editor')
+    c.add_argument('--max-bytes', type=int, default=80000)
+    c = sub.add_parser('check-result', help='validate the classification result against the context')
+    c.add_argument('--repo', required=True)
+    c.add_argument('--context', required=True)
+    c.add_argument('--result', required=True)
+    c = sub.add_parser('apply-selected', help='apply the selected commits with Git three-way merges')
+    c.add_argument('--repo', required=True)
+    c.add_argument('--context', required=True)
+    c.add_argument('--result', required=True, help='classification JSON')
+    c.add_argument('--report', required=True, help='apply report path, outside the repo')
+    c = sub.add_parser('protected-paths', help='write the protected path list and edit deny rules')
+    c.add_argument('--repo', required=True)
+    c.add_argument('--base', required=True)
+    c.add_argument('--output', required=True, help='directory outside the repo')
     c = sub.add_parser('guard', help='fail if the work tree differs from BASE in a forbidden way')
     c.add_argument('--repo', required=True)
     c.add_argument('--base', required=True)
@@ -693,6 +1099,7 @@ def build_parser():
     c.add_argument('--context', required=True)
     c.add_argument('--result', required=True, help='Claude structured output JSON')
     c.add_argument('--patch', required=True, help='patch output path, outside the repo')
+    c.add_argument('--editor-result', help='conflict-editor JSON; required exactly when commits need the editor')
     c = sub.add_parser('check-patch', help='apply a patch to a clean BASE checkout, guard it, print the tree id')
     c.add_argument('--repo', required=True)
     c.add_argument('--base', required=True)
@@ -708,7 +1115,9 @@ def build_parser():
     return p
 
 
-COMMANDS = {'prepare': cmd_prepare, 'guard': cmd_guard, 'candidate': cmd_candidate,
+COMMANDS = {'prepare': cmd_prepare, 'export-upstream': cmd_export_upstream,
+            'check-result': cmd_check_result, 'apply-selected': cmd_apply_selected,
+            'protected-paths': cmd_protected_paths, 'guard': cmd_guard, 'candidate': cmd_candidate,
             'check-patch': cmd_check_patch, 'publish': cmd_publish}
 
 
