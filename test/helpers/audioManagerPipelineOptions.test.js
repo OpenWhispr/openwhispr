@@ -152,8 +152,8 @@ test("combined cleanup options honor every eligibility guard and use the actual 
   assert.ok(calls[0].pipelineOptions);
 });
 
-// An Orukeet streaming start with Tone & Style on, its app classified only
-// when the test calls classify().
+// An Orukeet streaming start with Tone & Style on and the built-in cleanup
+// prompt, its app classified only when the test calls classify().
 async function loadTonedOrukeetStart(t, cachePrefix) {
   const { window, useSettingsStore, createManager } = await load(t, cachePrefix);
   useSettingsStore.setState({ ...good, toneStyleEnabled: true, customPrompts: { cleanup: "" } });
@@ -223,7 +223,10 @@ test("with a custom cleanup prompt, which takes no tone, a start and the next wa
   useSettingsStore.setState({ customPrompts: good.customPrompts });
 
   manager.beginToneStyleCapture();
-  assert.equal(await manager.startStreamingRecording(), true);
+  const starting = manager.startStreamingRecording();
+  await tick(20);
+  assert.equal(minted.length, 1);
+  assert.equal(await starting, true);
   assert.deepEqual(minted, [manager.getPipelineCleanupOptions(useSettingsStore.getState())]);
 
   const warmed = [];
