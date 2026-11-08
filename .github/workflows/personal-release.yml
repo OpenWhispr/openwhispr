@@ -185,7 +185,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          previous=$(gh api repos/SLOPTIMUS-PRIME/openwhispr/releases/latest --jq .target_commitish 2>/dev/null || printf '314e87b961022b0d3e14d2c93450de92d9977eea')
+          set -euo pipefail
+          previous=$(gh api repos/SLOPTIMUS-PRIME/openwhispr/releases/latest --jq .target_commitish 2>/dev/null) || previous=314e87b961022b0d3e14d2c93450de92d9977eea
+          [[ "$previous" =~ ^[0-9a-f]{40}$ ]] || { printf 'Invalid previous release commit\n'; exit 1; }
           git diff "$previous" HEAD > "$RUNNER_TEMP/release.diff"
           python - <<'PY'
           import json, os, pathlib
