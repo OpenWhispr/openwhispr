@@ -833,6 +833,16 @@ test("a reply reads as speaking from its first chunk sent, through a pause for t
   for (const next of pending.speak) next.resolve();
 });
 
+test("speech while a turn waits silently, on a card or working, keeps its usual turn end", async (t) => {
+  const { calls, act, events, startListening, say, lastTurn } = await mountVoiceCall(t);
+  await startListening();
+  await say("book a meeting with Sam");
+  await act(() => lastTurn().speech.onText("Which day suits you? "));
+
+  await act(() => events.emit({ type: "speech-start", sessionId: 7, at: 0 }));
+  assert.deepEqual(calls.held, [], "a short answer isn't cut at its first pause");
+});
+
 test("fillers don't count against what a reply may say aloud", async (t) => {
   const { calls, act, startListening, say, lastTurn } = await mountVoiceCall(t);
   await startListening();

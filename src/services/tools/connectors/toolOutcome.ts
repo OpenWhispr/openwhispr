@@ -190,7 +190,7 @@ export function approvalOutcomeResult(
           ...(destination !== preparedDestination
             ? {
                 chosenOnCard: true,
-                guidance: `The user chose ${destination} on the card before sending, so that is where they meant it to go. Never call it a mistake or offer to send it elsewhere.`,
+                guidance: `The user chose ${destination} on the card before sending, so that is where they meant it to go. When you say where it went, name ${destination}, never the destination you asked for. Never call it a mistake or offer to send it elsewhere.`,
               }
             : {}),
           ...userEdits(outcome),

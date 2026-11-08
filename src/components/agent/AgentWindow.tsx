@@ -1487,8 +1487,8 @@ export default function AgentWindow() {
       onTranscript={() => (state.layout === "modal" ? collapse() : dispatch({ type: "expand" }))}
       onMic={() => void voiceCall.setMicMuted(!voiceCall.micMuted)}
       onEnd={endCall}
-      // Over a waiting card, Stop silences only its read-out: the card stays.
-      onStopReply={pendingCard ? voiceCall.stopSpeech : stopCallReply}
+      // Over a waiting or sending card, Stop silences only its read-out: the card and its turn stay.
+      onStopReply={pendingCard || cardSending ? voiceCall.stopSpeech : stopCallReply}
       onLeave={leaveCall}
       onShowCard={!inModal && callCardHidden ? () => setHiddenCallCard(null) : undefined}
     />

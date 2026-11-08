@@ -277,12 +277,14 @@ export function useVoiceCall({
   );
 
   // Main hears of a hold, so a word or two said over the reply ends its turn at the first pause.
+  // Only over audio: a turn waiting silently (on a card, or working) keeps Smart Turn's ending.
   const holdForSpeech = useCallback(
     (held: boolean) => {
       if (heldForSpeechRef.current === held) return;
       heldForSpeechRef.current = held;
       const sessionId = sessionIdRef.current;
-      if (sessionId !== null) api?.holdReply(sessionId, held);
+      const audible = Boolean(playerRef.current?.isPlaying()) || pendingSpeaksRef.current > 0;
+      if (sessionId !== null && (!held || audible)) api?.holdReply(sessionId, held);
     },
     [api]
   );
