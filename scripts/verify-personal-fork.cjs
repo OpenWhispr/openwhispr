@@ -1292,8 +1292,11 @@ async function main() {
     const recorder = await findRecorder(session).catch(() => null);
     phase = "interactive";
     const { cleanupKey } = await runInteractive(panel, recorder);
-    const profileDirs = fs.readdirSync(dirs.config).filter((n) => /^OpenWhispr/.test(n));
-    const profileFiles = profileDirs.flatMap((n) => fs.readdirSync(path.join(dirs.config, n)));
+    const profileDirs = fs.readdirSync(dirs.config).filter((n) => /^(OpenWhispr|open-whispr)/.test(n));
+    const profileFiles = [
+      ...profileDirs.flatMap((n) => fs.readdirSync(path.join(dirs.config, n))),
+      ...fs.readdirSync(dirs.userData),
+    ];
     check(
       "isolation: app profile (Local Storage etc.) was created inside the throw-away XDG config",
       profileFiles.length > 0,

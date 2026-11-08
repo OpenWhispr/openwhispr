@@ -60,7 +60,11 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y xvfb xauth dbus-x11 libasound2t64 libgbm1 libnss3 libgtk-3-0 libsecret-1-0 libfuse2t64 libx11-dev libxtst-dev libatspi2.0-dev libglib2.0-dev libpipewire-0.3-dev pkg-config
-          npm ci
+          for attempt in 1 2 3; do
+            npm ci && break
+            [[ "$attempt" != 3 ]] || exit 1
+            sleep 10
+          done
           node node_modules/electron/install.js
           npm install --prefix "$RUNNER_TEMP/ui-tools" --ignore-scripts --no-audit --no-fund playwright-core@1.65.0
       - name: Check personal behavior and source
@@ -153,7 +157,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          previous=$(gh api repos/SLOPTIMUS-PRIME/openwhispr/releases/latest --jq .target_commitish 2>/dev/null || git rev-parse HEAD^)
+          previous=$(gh api repos/SLOPTIMUS-PRIME/openwhispr/releases/latest --jq .target_commitish 2>/dev/null || printf '314e87b961022b0d3e14d2c93450de92d9977eea')
           git diff "$previous" HEAD > "$RUNNER_TEMP/release.diff"
           python - <<'PY'
           import json, os, pathlib
