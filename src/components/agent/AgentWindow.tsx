@@ -1043,6 +1043,9 @@ export default function AgentWindow() {
     if (call && !call.stopped) {
       if (call.settings) {
         dispatch({ type: "callSettings", open: false });
+      } else if (cardSending) {
+        // As the white Stop does: only what is being said; the send and its outcome go on.
+        voiceCallRef.current.stopSpeech();
       } else if (voiceCallRef.current.speaking || busy) {
         // Esc stops the reply first, spoken or still being worked on; the next one ends the call.
         stopCallReply();
@@ -1075,6 +1078,7 @@ export default function AgentWindow() {
   }, [
     busy,
     cancelTurn,
+    cardSending,
     close,
     dispatch,
     dropTake,
@@ -1465,6 +1469,9 @@ export default function AgentWindow() {
     dispatch({ type: "leaveCall" });
   };
   const retryCall = () => {
+    // A download that finished after the call was left or ended starts nothing.
+    const call = stateRef.current.call;
+    if (!call || call.stopped) return;
     voiceCall.clearFailure();
     void voiceCall.start();
   };

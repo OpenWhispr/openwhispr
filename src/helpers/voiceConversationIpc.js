@@ -63,12 +63,17 @@ function registerVoiceConversationIpc({
         modelType: model.modelType,
       })),
       preferredParakeet,
-      isParakeetDownloaded: (name) => parakeetManager.isModelDownloaded(name),
+      // A model the organization's policy refuses would refuse every turn.
+      isParakeetDownloaded: (name) =>
+        parakeetManager.isModelDownloaded(name) &&
+        !parakeetManager.localModelPolicy?.failure("transcription", name),
       whisperModels: [
         preferredWhisper,
         ...WHISPER_PREFERENCE.filter((name) => Object.hasOwn(registryData.whisperModels, name)),
       ].filter(Boolean),
-      isWhisperDownloaded: (name) => whisperManager.isModelDownloaded(name),
+      isWhisperDownloaded: (name) =>
+        whisperManager.isModelDownloaded(name) &&
+        !whisperManager.localModelPolicy?.failure("transcription", name),
     });
 
   // One way out of a session, whoever ends it: the renderer's stop, a worker crash,
@@ -221,7 +226,6 @@ function registerVoiceConversationIpc({
       sampleRate: configuredSampleRate,
       // Named in the harness report.
       brainModel: typeof options.brainModel === "string" ? options.brainModel : null,
-      harness: !!options.harness,
     });
     const sessionId = starting.id;
     let loadMs = 0;
@@ -342,6 +346,8 @@ function registerVoiceConversationIpc({
 
   ipcMain.handle("voice-conversation:get-readiness", async (event, request = {}) => {
     if (!isFromCallWindow(event)) return { ready: false, reason: "language-unsupported" };
+    // The settled verdict, so readiness picks the model a turn will be allowed to use.
+    await parakeetManager.localModelPolicy?.resolve().catch(() => {});
     const brain = request.brain || {};
     let brainDownloaded = false;
     if (brain.mode === "local" && brain.model) {

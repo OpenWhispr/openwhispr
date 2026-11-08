@@ -843,6 +843,19 @@ test("speech while a turn waits silently, on a card or working, keeps its usual 
   assert.deepEqual(calls.held, [], "a short answer isn't cut at its first pause");
 });
 
+test("an answer said over a question's read-out keeps its usual turn end", async (t) => {
+  const { hook, calls, pending, state, act, events, startListening, say } = await mountVoiceCall(t);
+  await startListening();
+  state.holdSpeak = true;
+  await say("write a headline");
+  const question = { id: "tone", kind: "text", prompt: "Which tone do you want?" };
+  await act(() => hook.current.announce({ question }));
+
+  await act(() => events.emit({ type: "speech-start", sessionId: 7, at: 0 }));
+  assert.deepEqual(calls.held, [], 'its opening ("Well.") isn\'t cut at its first pause');
+  for (const next of pending.speak) next.resolve();
+});
+
 test("fillers don't count against what a reply may say aloud", async (t) => {
   const { calls, act, startListening, say, lastTurn } = await mountVoiceCall(t);
   await startListening();

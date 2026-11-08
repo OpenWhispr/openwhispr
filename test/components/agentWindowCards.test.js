@@ -1445,6 +1445,26 @@ test("in a call, Esc stops a running turn the call isn't speaking (a Regenerate)
   await view.waitForLayout("modal");
 });
 
+test("in a call, Esc while a card sends stops only speech: the send's turn goes on", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  await view.settle();
+  await view.chat({ messages: [user, finished] });
+  await React.act(async () => view.button("Start Voice Agent").click());
+  await view.chat({ busy: true, messages: [user, reply([slackCall], "Posting it.")] });
+  await view.askApproval("c5");
+  await sendCard(view, "c5");
+
+  await React.act(async () =>
+    view.happyWindow.document.dispatchEvent(
+      new view.happyWindow.KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+    )
+  );
+  assert.equal(globalThis.__chat.cancels, 0, "its outcome is still told");
+  assert.ok(view.button("End call"), "the call goes on");
+  await view.waitForLayout("modal");
+});
+
 test("Esc over selected text clears the selection and keeps the chat", async (t) => {
   const view = await mountWindow(t);
   await React.act(async () => view.main.handlers.open({ layout: "modal" }));

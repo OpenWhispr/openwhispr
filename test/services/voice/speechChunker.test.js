@@ -72,12 +72,14 @@ test("strips markdown, skips headings and drops chunks with nothing speakable", 
     "- **Design review** at `10:00`.\n",
     "• Open Settings → Profile.\n",
     "See [the notes](https://example.com/notes) or https://example.com/x for more.\n",
+    "Join at https://user:tok3n@meet.example.com:8443?pwd=Xy12ab today.\n",
     "---\n",
   ]);
   assert.deepEqual(out, [
     "Design review at 10:00.",
     "Open Settings, Profile.",
     "See the notes or example.com for more.",
+    "Join at meet.example.com today.",
   ]);
 });
 

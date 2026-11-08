@@ -88,15 +88,23 @@ const transcriptions = [];
 const whisperTranscriptions = [];
 const downloadedParakeet = new Set(["parakeet-tdt-0.6b-v3", "parakeet-unified-en-0.6b"]);
 const downloadedWhisper = new Set(["base"]);
+// Models the organization's local-model policy refuses.
+const blockedModels = new Set();
+const localModelPolicy = {
+  failure: (_scope, name) => (blockedModels.has(name) ? { code: "POLICY_MODEL_BLOCKED" } : null),
+  resolve: async () => {},
+};
 let callWindow = null;
 const voiceConversation = registerVoiceConversationIpc({
   parakeetManager: {
+    localModelPolicy,
     isModelDownloaded: (name) => downloadedParakeet.has(name),
     startServer: async (model) => void startedServers.push(model),
     transcribeLocalParakeet: (_wav, options) =>
       new Promise((resolve) => transcriptions.push({ resolve, options })),
   },
   whisperManager: {
+    localModelPolicy,
     isModelDownloaded: (name) => downloadedWhisper.has(name),
     startServer: async (model) => void startedServers.push(`whisper:${model}`),
     transcribeLocalWhisper: (_wav, options) =>
@@ -325,6 +333,34 @@ test("a language no downloaded model knows is refused before the worker loads", 
     );
   } finally {
     downloadedWhisper.add("base");
+  }
+});
+
+test("a model the organization blocks never hears a call, in Auto or a fixed language", async () => {
+  blockedModels.add("parakeet-tdt-0.6b-v3");
+  try {
+    callWindow = fakeRenderer();
+    const languages = await handlers.get("voice-conversation:languages")(
+      { sender: callWindow },
+      {}
+    );
+    assert.deepEqual(
+      Object.fromEntries(languages.map(({ language, engine }) => [language, engine])),
+      {
+        auto: "parakeet",
+        en: "parakeet",
+        hi: "whisper",
+        es: "whisper",
+        fr: "whisper",
+        de: "whisper",
+      }
+    );
+
+    await startSession({ language: "auto", preferredParakeet: "parakeet-tdt-0.6b-v3" });
+    assert.deepEqual(startedServers, ["parakeet-unified-en-0.6b"]);
+    await stop();
+  } finally {
+    blockedModels.clear();
   }
 });
 

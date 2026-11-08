@@ -20,8 +20,8 @@ export function toSpeakableText(text: string): string {
     text
       .replace(/^\s*([-*_])\1{2,}\s*$/gm, "")
       .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-      // A bare URL is read as its host, the same in every language.
-      .replace(/https?:\/\/(?:www\.)?([^/\s]+)\S*/g, "$1")
+      // A bare URL is read as its host, the same in every language: never a login, port or query.
+      .replace(/https?:\/\/(?:[^/\s@]*@)?(?:www\.)?([^/?#:\s]+)\S*/g, "$1")
       .replace(/`([^`]*)`/g, "$1")
       // A line that is only bold, with no sentence end ("**Inner Planets**"), is a heading.
       .replace(/^\s*(\*\*|__)[^*_\n]*[^*_.!?…।\s]\1\s*$/gm, "")

@@ -2366,7 +2366,6 @@ declare global {
           preferredWhisper?: string;
           /** The model that answers, for the harness report. */
           brainModel?: string;
-          harness?: boolean;
         }) => Promise<{
           sessionId: number;
           sampleRate: number;

@@ -178,6 +178,8 @@ export function useVoiceCall({
   const claimCheckRef = useRef<((text: string) => boolean) | undefined>(undefined);
   // Playback is paused while the user may be talking over the answer (see speech-start).
   const heldForSpeechRef = useRef(false);
+  // A card's question is being read out: what the user says over it is their answer.
+  const askingRef = useRef(false);
   const heardLanguageRef = useRef<SpokenLanguage | null>(null);
   const harnessRef = useRef(false);
   const lastActivityRef = useRef(0);
@@ -277,13 +279,16 @@ export function useVoiceCall({
   );
 
   // Main hears of a hold, so a word or two said over the reply ends its turn at the first pause.
-  // Only over audio: a turn waiting silently (on a card, or working) keeps Smart Turn's ending.
+  // Only over the reply's audio: a turn waiting silently (on a card, or working), or an
+  // answer said over a question's read-out, keeps Smart Turn's ending.
   const holdForSpeech = useCallback(
     (held: boolean) => {
       if (heldForSpeechRef.current === held) return;
       heldForSpeechRef.current = held;
       const sessionId = sessionIdRef.current;
-      const audible = Boolean(playerRef.current?.isPlaying()) || pendingSpeaksRef.current > 0;
+      const audible =
+        !askingRef.current &&
+        (Boolean(playerRef.current?.isPlaying()) || pendingSpeaksRef.current > 0);
       if (sessionId !== null && (!held || audible)) api?.holdReply(sessionId, held);
     },
     [api]
@@ -608,6 +613,7 @@ export function useVoiceCall({
       awaitsSend?: boolean;
     }) => {
       if (!utteranceRef.current) return;
+      askingRef.current = Boolean(question);
       const language = spokenLanguageFor(answerRef.current);
       if (!question) {
         speakChunk(onScreenLine(language, awaitsSend));
@@ -643,6 +649,7 @@ export function useVoiceCall({
         // The harness's scripted lines are separate requests, never answers to a card.
         if (!harnessRef.current && callbacksRef.current.answersCard(event.text)) {
           // The question needn't be heard out; its turn goes on speaking as it resumes.
+          askingRef.current = false;
           stopSpeech();
           return;
         }
@@ -685,6 +692,7 @@ export function useVoiceCall({
         answerRef.current = "";
         heldChunksRef.current = null;
         writesDraftRef.current = false;
+        askingRef.current = false;
         claimCheckRef.current = undefined;
         chunker.reset();
         heardLanguageRef.current = detectSpokenLanguage(text) ?? heardLanguageRef.current;
@@ -818,7 +826,6 @@ export function useVoiceCall({
           language,
           ...recognizer,
           brainModel: brainConfig.model || undefined,
-          harness,
         });
         sessionId = info.sessionId;
         if (isStale()) return abandon();

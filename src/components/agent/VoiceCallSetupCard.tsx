@@ -70,11 +70,9 @@ export function VoiceCallSetupCard({
       }
     );
   }, [downloading, missingBytes]);
-  // A card closed mid-download stops it: nothing would start the call afterwards.
-  useEffect(
-    () => () => void window.electronAPI?.voiceConversation?.cancelModelDownload().catch(() => {}),
-    []
-  );
+
+  const cancelDownload = () =>
+    void window.electronAPI?.voiceConversation?.cancelModelDownload().catch(() => {});
 
   const startDownload = () => {
     setDownloadFailed(false);
@@ -120,7 +118,11 @@ export function VoiceCallSetupCard({
         </p>
         <button
           type="button"
-          onClick={onClose}
+          // Closing stops the download; a card that only moves (a minimize) lets it go on.
+          onClick={() => {
+            cancelDownload();
+            onClose();
+          }}
           aria-label={t("agentWindow.actions.close")}
           title={t("agentWindow.actions.close")}
           className={ICON_BUTTON}
@@ -135,13 +137,7 @@ export function VoiceCallSetupCard({
               <span className="text-[13px] text-muted-foreground" aria-live="polite">
                 {t("agentWindow.call.setup.downloading", { percent: download.percent })}
               </span>
-              <button
-                type="button"
-                onClick={() =>
-                  void window.electronAPI?.voiceConversation?.cancelModelDownload().catch(() => {})
-                }
-                className={PILL_BUTTON}
-              >
+              <button type="button" onClick={cancelDownload} className={PILL_BUTTON}>
                 {t("agentWindow.call.setup.cancel")}
               </button>
             </>
