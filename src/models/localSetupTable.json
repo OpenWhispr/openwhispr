@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "basis": "Design §8 as tightened 2026-10-26 (Titan 7f688d9e3; Part A report, 'Tightening pass'), Macs keyed by chip (Titan f794efae2; Part A report, 'Macs by chip'). M = measured on Josh's M5 Pro, P = predicted. graphicsPackBytes are the llama.cpp b9763 Vulkan release asset sizes.",
+  "basis": "Design §8 as tightened 2026-10-26 (Titan 7f688d9e3; Part A report, 'Tightening pass'), Macs keyed by chip (Titan f794efae2; Part A report, 'Macs by chip'). M = measured on Josh's M5 Pro, P = predicted. graphicsPackBytes are the llama.cpp b12110 Vulkan release asset sizes.",
   "models": {
     "dictation": {
       "english": "parakeet-unified-en-0.6b",
@@ -27,8 +27,8 @@
     }
   },
   "graphicsPackBytes": {
-    "win32-x64": 38939043,
-    "linux-x64": 38540299
+    "win32-x64": 37661146,
+    "linux-x64": 35858360
   },
   "olderMacDictation": {
     "label": "slower",

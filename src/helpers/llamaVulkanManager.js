@@ -2,7 +2,7 @@ const GpuBinaryManager = require("./gpuBinaryManager");
 
 // Pinned to the same build as the bundled CPU binary (download-llama-server.js).
 // Overridable via LLAMA_CPP_VERSION so GPU and CPU stay on one tested llama.cpp.
-const LLAMA_CPP_TAG = process.env.LLAMA_CPP_VERSION || "b9763";
+const LLAMA_CPP_TAG = process.env.LLAMA_CPP_VERSION || "b12110";
 
 const BIN_SUBDIR = "llama-vulkan";
 
