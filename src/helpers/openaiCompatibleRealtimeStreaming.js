@@ -120,6 +120,11 @@ class OpenAICompatibleRealtimeStreaming extends OpenAIRealtimeStreaming {
         }
         const id = this._nameTurn(event.item_id);
         const unbound = this._turns.find((turn) => turn.kind === "vad" && !turn.id);
+        // While stopping, an id-less committed on a server that commits its
+        // silence-closed turns could answer that turn or the stop. It binds the
+        // turn, so a server that answers both settles on the stop's own
+        // transcript. If it answered both at once, stop ends at idle with the
+        // text kept, as it would had it been taken as the ack.
         if (!this._stop || (this._vadCommitShape && unbound)) {
           if (!this._stop) this._vadCommitShape = true;
           if (unbound) unbound.id = id;

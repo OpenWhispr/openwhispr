@@ -790,3 +790,43 @@ test("an event that shows no progress on a turn does not extend the stop wait", 
   assert.equal((await stop.stopped).text, "kept turn");
   await streaming.disconnect();
 });
+
+// A server that commits its silence-closed turns, where one is still unbound
+// when stop's commit goes out.
+async function stopWithUnboundCommittingTurn() {
+  const { streaming, socket } = await connectWith({ model: "whisper", apiKey: "" });
+  streaming.sendAudio(Buffer.alloc(4800));
+  emit(socket, { type: "input_audio_buffer.committed" });
+  emit(socket, completed("first turn"));
+  emit(socket, { type: "input_audio_buffer.speech_started" });
+  emit(socket, { type: "input_audio_buffer.speech_stopped" });
+  const stop = trackStop(streaming);
+  await tickImmediate();
+  return { streaming, socket, stop };
+}
+
+test("an id-less committed during stop binds an unbound turn, and stop's answer still settles", async () => {
+  const { socket, stop } = await stopWithUnboundCommittingTurn();
+  emit(socket, { type: "input_audio_buffer.committed" });
+  emit(socket, completed("closed on silence"));
+  await tickImmediate();
+  assert.equal(stop.settled, false, "the stop's own commit has not been answered");
+
+  emit(socket, { type: "input_audio_buffer.committed" });
+  emit(socket, completed("last turn"));
+  await tickImmediate();
+  assert.equal(stop.settled, true, "settles on the stop's transcript, not at idle");
+  assert.equal((await stop.stopped).text, "first turn closed on silence last turn");
+});
+
+test("one id-less committed for an unbound turn and stop keeps the text and ends at idle", async (t) => {
+  const { socket, stop } = await stopWithUnboundCommittingTurn();
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  emit(socket, { type: "input_audio_buffer.committed" });
+  emit(socket, completed("last turn"));
+  t.mock.timers.tick(4999);
+  await tickImmediate();
+  assert.equal(stop.settled, false);
+  t.mock.timers.tick(1);
+  assert.equal((await stop.stopped).text, "first turn last turn");
+});
