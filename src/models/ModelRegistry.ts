@@ -70,6 +70,10 @@ export interface CloudModelDefinition {
   supportsVision?: boolean;
   tokenParam?: "max_tokens" | "max_completion_tokens";
   supportsTemperature?: boolean;
+  /** OpenCode live-list routing: the native protocol this model speaks. */
+  protocol?: string;
+  /** OpenCode live-list routing: the inference base URL serving it. */
+  baseUrl?: string;
   reasoningEffort?: ReasoningEffortCapability;
   /** Lowest thinking setting the model accepts; the registry's data form of the table in gemini.ts. */
   thinkingFloor?: { level: "minimal" | "low" } | { budget: number };

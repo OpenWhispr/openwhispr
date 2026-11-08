@@ -222,4 +222,42 @@ test("each product reads its own seed list before the first fetch", async (t) =>
     ["glm-5.3", "deepseek-v4.1-flash", "kimi-k3", "minimax-m3"]
   );
   assert.equal(registry.getOpencodeCatalogModel("opencode-go", "kimi-k3"), undefined);
+  // The offline seed carries the route the transport dials, so a first run
+  // before any fetch already knows each model's protocol and base URL.
+  for (const providerId of ["opencode-go", "opencode-zen"]) {
+    for (const model of registry.getOpencodeCatalogModels(providerId)) {
+      assert.equal(
+        model.protocol,
+        "chat-completions",
+        `${providerId} seeds ${model.id} with a protocol`
+      );
+      assert.equal(
+        model.baseUrl,
+        "https://opencode.ai/inference/openai/v1",
+        `${providerId} seeds ${model.id} with a base URL`
+      );
+    }
+  }
+});
+
+test("a cached entry from an older build without a route still reads", async (t) => {
+  // Route-less entries resolve to Chat Completions on the shared inference
+  // base when the transport builds them (see the factory's missing-route
+  // test), so the cache must not drop them here.
+  installBrowserGlobals(t, {
+    initialStorage: {
+      ...markers,
+      "opencodeModels:opencode-go": JSON.stringify({
+        models: [deepseek],
+        fetchedAt: Date.now() - 1000,
+      }),
+    },
+  });
+  const vite = await createRendererServer(t);
+  const registry = await vite.ssrLoadModule("/models/ModelRegistry.ts");
+
+  const [model] = registry.getOpencodeCatalogModels("opencode-go");
+  assert.equal(model?.id, deepseek.id);
+  assert.equal(model?.protocol, undefined);
+  assert.equal(model?.baseUrl, undefined);
 });

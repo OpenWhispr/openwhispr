@@ -3,10 +3,13 @@ const assert = require("node:assert/strict");
 const Module = require("node:module");
 
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
+const factoryModulePath = require.resolve("../../src/helpers/opencodeLanguageModel");
 const originalLoad = Module._load;
 const handlers = new Map();
 const generateCalls = [];
 const openAiConfigs = [];
+const anthropicConfigs = [];
+const googleConfigs = [];
 let generateBehavior = async () => ({ text: "hello", finishReason: "stop" });
 let streamBehavior = null;
 let keys = { go: "sk-go-test", zen: "sk-zen-test" };
@@ -56,7 +59,7 @@ const electronStub = {
 
 Module._load = function loadWithMocks(request, parent, isMain) {
   if (request === "electron") return electronStub;
-  if (parent?.filename === handlersModulePath) {
+  if (parent?.filename === handlersModulePath || parent?.filename === factoryModulePath) {
     if (request === "./debugLogger") {
       return new Proxy({}, { get: () => () => {} });
     }
@@ -71,15 +74,48 @@ Module._load = function loadWithMocks(request, parent, isMain) {
     if (request === "@ai-sdk/openai") {
       return {
         createOpenAI: (config) => {
-          openAiConfigs.push(config);
-          return {
-            chat: (modelId) => ({
+          const seen = (constructor) => (modelId) => {
+            openAiConfigs.push([constructor, config, modelId]);
+            return {
+              kind: constructor,
               modelId,
               doStream: async (options) => {
-                if (streamBehavior) return streamBehavior({ modelId, options });
+                if (streamBehavior) return streamBehavior({ modelId, options, kind: constructor });
                 throw new Error("unexpected doStream");
               },
-            }),
+            };
+          };
+          return { chat: seen("chat"), responses: seen("responses") };
+        },
+      };
+    }
+    if (request === "@ai-sdk/anthropic") {
+      return {
+        createAnthropic: (config) => (modelId) => {
+          anthropicConfigs.push(config);
+          return {
+            kind: "messages",
+            modelId,
+            doStream: async (options) => {
+              if (streamBehavior) return streamBehavior({ modelId, options, kind: "messages" });
+              throw new Error("unexpected doStream");
+            },
+          };
+        },
+      };
+    }
+    if (request === "@ai-sdk/google") {
+      return {
+        createGoogleGenerativeAI: (config) => (modelId) => {
+          googleConfigs.push(config);
+          return {
+            kind: "generate-content",
+            modelId,
+            doStream: async (options) => {
+              if (streamBehavior)
+                return streamBehavior({ modelId, options, kind: "generate-content" });
+              throw new Error("unexpected doStream");
+            },
           };
         },
       };
@@ -203,6 +239,8 @@ test("the live model list refuses an unknown product before any request", async 
 test.beforeEach(() => {
   generateCalls.length = 0;
   openAiConfigs.length = 0;
+  anthropicConfigs.length = 0;
+  googleConfigs.length = 0;
   generateBehavior = async () => ({ text: "hello", finishReason: "stop" });
   streamBehavior = null;
   keys = { go: "sk-go-test", zen: "sk-zen-test" };
@@ -256,10 +294,11 @@ test("Go cleanup sends the session header, Zen does not", async () => {
     { systemPrompt: "Clean this.", maxTokens: 100, supportsTemperature: true }
   );
 
-  assert.equal(openAiConfigs[0].baseURL, "https://opencode.ai/zen/go/v1");
-  assert.match(openAiConfigs[0].headers["x-opencode-session"], /^[0-9a-f-]{36}$/i);
-  assert.equal(openAiConfigs[1].baseURL, "https://opencode.ai/zen/v1");
-  assert.deepEqual(openAiConfigs[1].headers, {});
+  assert.equal(openAiConfigs[0][0], "chat");
+  assert.equal(openAiConfigs[0][1].baseURL, "https://opencode.ai/inference/openai/v1");
+  assert.match(openAiConfigs[0][1].headers["x-opencode-session"], /^[0-9a-f-]{36}$/i);
+  assert.equal(openAiConfigs[1][1].baseURL, "https://opencode.ai/inference/openai/v1");
+  assert.deepEqual(openAiConfigs[1][1].headers, {});
 });
 
 test("a cleanup passes the registry's temperature fact and the caller's timeout", async () => {
@@ -359,7 +398,7 @@ test("streaming relays each part, then done, under the caller's session", async 
 
   assert.deepEqual(result, { success: true });
   assert.equal(call.modelId, "glm-5.3");
-  assert.equal(openAiConfigs[0].headers["x-opencode-session"], "turn-session");
+  assert.equal(openAiConfigs[0][1].headers["x-opencode-session"], "turn-session");
   assert.deepEqual(
     event.sender.sent.map(({ payload }) => payload),
     [
@@ -369,6 +408,132 @@ test("streaming relays each part, then done, under the caller's session", async 
       { streamId: "stream-1", done: true },
     ]
   );
+});
+
+test("a one-shot routes each protocol to its client under the caller's session", async () => {
+  const routes = [
+    {
+      protocol: "chat-completions",
+      baseUrl: "https://opencode.ai/inference/openai/v1",
+      modelId: "glm-5.3",
+    },
+    {
+      protocol: "responses",
+      baseUrl: "https://opencode.ai/inference/openai/v1",
+      modelId: "gpt-5.6-luna",
+    },
+    {
+      protocol: "messages",
+      baseUrl: "https://opencode.ai/inference/anthropic/v1",
+      modelId: "claude-haiku-5-5",
+    },
+    {
+      protocol: "generate-content",
+      baseUrl: "https://opencode.ai/inference/google/v1beta",
+      modelId: "gemini-4-argon",
+    },
+  ];
+  for (const { protocol, baseUrl, modelId } of routes) {
+    const result = await handlers.get("process-opencode-reasoning")(
+      { sender: sender(1) },
+      "opencode-go",
+      "hi",
+      modelId,
+      null,
+      { systemPrompt: "Clean this.", protocol, baseUrl }
+    );
+    assert.equal(result.success, true, `${protocol} succeeds`);
+  }
+
+  assert.deepEqual(
+    generateCalls.map((call) => call.model.kind),
+    ["chat", "responses", "messages", "generate-content"]
+  );
+  assert.deepEqual(
+    openAiConfigs.map(([constructor, config, modelId]) => [constructor, config.baseURL, modelId]),
+    [
+      ["chat", "https://opencode.ai/inference/openai/v1", "glm-5.3"],
+      ["responses", "https://opencode.ai/inference/openai/v1", "gpt-5.6-luna"],
+    ]
+  );
+  assert.equal(anthropicConfigs[0].baseURL, "https://opencode.ai/inference/anthropic/v1");
+  assert.equal(googleConfigs[0].baseURL, "https://opencode.ai/inference/google/v1beta");
+  // Go's session header rides on every protocol, not just Chat Completions.
+  for (const config of [
+    openAiConfigs[0][1],
+    openAiConfigs[1][1],
+    anthropicConfigs[0],
+    googleConfigs[0],
+  ]) {
+    assert.match(config.headers["x-opencode-session"], /^[0-9a-f-]{36}$/i);
+  }
+  assert.equal(anthropicConfigs[0].authToken, "sk-go-test");
+  assert.equal(googleConfigs[0].headers.Authorization, "Bearer sk-go-test");
+});
+
+test("a stream routes a non-chat protocol to its client under the turn's session", async () => {
+  const kinds = [];
+  streamBehavior = ({ kind }) => {
+    kinds.push(kind);
+    return { stream: streamOf([{ type: "text-delta", id: "t1", delta: "hi" }]) };
+  };
+  for (const [modelId, protocol, baseUrl] of [
+    ["gpt-5.6-luna", "responses", "https://opencode.ai/inference/openai/v1"],
+    ["claude-haiku-5-5", "messages", "https://opencode.ai/inference/anthropic/v1"],
+    ["gemini-4-argon", "generate-content", "https://opencode.ai/inference/google/v1beta"],
+  ]) {
+    const event = { sender: sender(7) };
+    const result = await handlers.get("opencode-stream-start")(event, {
+      streamId: `stream-${modelId}`,
+      sessionId: "turn-session",
+      provider: "opencode-go",
+      modelId,
+      config: { protocol, baseUrl },
+      options: { prompt: [{ role: "user", content: "hi" }] },
+    });
+    assert.deepEqual(result, { success: true }, `${protocol} streams`);
+    assert.deepEqual(
+      event.sender.sent.map(({ payload }) => payload),
+      [
+        { streamId: `stream-${modelId}`, part: { type: "text-delta", id: "t1", delta: "hi" } },
+        { streamId: `stream-${modelId}`, done: true },
+      ]
+    );
+  }
+
+  assert.deepEqual(kinds, ["responses", "messages", "generate-content"]);
+  assert.equal(openAiConfigs[0][1].headers["x-opencode-session"], "turn-session");
+  assert.equal(anthropicConfigs[0].headers["x-opencode-session"], "turn-session");
+  assert.equal(googleConfigs[0].headers["x-opencode-session"], "turn-session");
+});
+
+test("a renderer-supplied base URL outside opencode.ai is refused", async () => {
+  const oneShot = await handlers.get("process-opencode-reasoning")(
+    { sender: sender(1) },
+    "opencode-go",
+    "hi",
+    "glm-5.3",
+    null,
+    {
+      systemPrompt: "Clean this.",
+      protocol: "chat-completions",
+      baseUrl: "https://evil.example/v1",
+    }
+  );
+  assert.equal(oneShot.success, false);
+  assert.match(oneShot.error, /Refusing to send the OpenCode key/);
+
+  const event = { sender: sender(7) };
+  const streamed = await handlers.get("opencode-stream-start")(event, {
+    streamId: "stream-evil",
+    provider: "opencode-go",
+    modelId: "glm-5.3",
+    config: { protocol: "chat-completions", baseUrl: "https://evil.example/v1" },
+    options: { prompt: [] },
+  });
+  assert.equal(streamed.success, false);
+  assert.match(streamed.error, /Refusing to send the OpenCode key/);
+  assert.equal(generateCalls.length, 0);
 });
 
 test("streaming a model failure reports it once and stops", async () => {

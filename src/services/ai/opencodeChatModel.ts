@@ -3,6 +3,8 @@ import type {
   LanguageModelV3CallOptions,
   LanguageModelV3StreamPart,
 } from "@ai-sdk/provider";
+import { getOpencodeCatalogModel } from "../../models/ModelRegistry";
+import { resolveOpencodeModelRoute } from "../../config/opencodeModelPolicy.js";
 
 // OpenCode Go/Zen run entirely in main: opencode.ai answers no CORS preflight,
 // so a renderer fetch is blocked before it is sent. This LanguageModelV3 shim
@@ -44,6 +46,9 @@ export function createOpencodeChatModel(
   // One session per model instance (one chat turn): every tool step of the
   // turn then reads as the same conversation to OpenCode Go's router.
   const sessionId = crypto.randomUUID();
+  // The model's native protocol and inference base travel in the payload's
+  // config; main validates the base URL before attaching the key.
+  const route = resolveOpencodeModelRoute(getOpencodeCatalogModel(provider, modelId));
   return {
     specificationVersion: "v3",
     provider,
@@ -107,7 +112,7 @@ export function createOpencodeChatModel(
             sessionId,
             provider,
             modelId,
-            config: {},
+            config: { protocol: route.protocol, baseUrl: route.baseUrl },
             options: pickSerializableOptions(options),
           })
             .then((result) => {

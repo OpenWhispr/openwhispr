@@ -1,6 +1,7 @@
 import { registryData } from "./registryData.js";
 import { readCachedTinfoilModels } from "./tinfoilModelCache";
 import { readCachedOpencodeModels } from "./opencodeModelCache";
+import { defaultOpencodeBaseUrl } from "../config/opencodeModelPolicy.js";
 import type { CloudModelDefinition, CloudProviderData } from "./ModelRegistry";
 
 // A leaf shared with settings startup: the provider's live discovery can retire
@@ -33,6 +34,8 @@ const OPENCODE_SHELLS: OpencodeShell[] = [
           "Flagship GLM model for long-horizon coding, agents, and complex project delivery",
         tokenParam: "max_tokens",
         supportsTemperature: true,
+        protocol: "chat-completions",
+        baseUrl: defaultOpencodeBaseUrl("chat-completions"),
       },
       {
         id: "deepseek-v4.1-flash",
@@ -40,6 +43,8 @@ const OPENCODE_SHELLS: OpencodeShell[] = [
         description: "DeepSeek V4.1 Flash model for reasoning and agentic coding",
         tokenParam: "max_tokens",
         supportsTemperature: true,
+        protocol: "chat-completions",
+        baseUrl: defaultOpencodeBaseUrl("chat-completions"),
       },
       {
         id: "kimi-k2.7-code",
@@ -48,6 +53,8 @@ const OPENCODE_SHELLS: OpencodeShell[] = [
           "Coding-focused Kimi model, stronger on long-horizon repo work with less overthinking",
         tokenParam: "max_tokens",
         supportsTemperature: false,
+        protocol: "chat-completions",
+        baseUrl: defaultOpencodeBaseUrl("chat-completions"),
       },
       {
         id: "minimax-m3.1-flash",
@@ -56,6 +63,8 @@ const OPENCODE_SHELLS: OpencodeShell[] = [
           "Frontier multimodal coding model with 1M context window and tunable thinking depth",
         tokenParam: "max_tokens",
         supportsTemperature: true,
+        protocol: "chat-completions",
+        baseUrl: defaultOpencodeBaseUrl("chat-completions"),
       },
     ],
   },
@@ -71,6 +80,8 @@ const OPENCODE_SHELLS: OpencodeShell[] = [
           "Flagship GLM model for long-horizon coding, agents, and complex project delivery",
         tokenParam: "max_tokens",
         supportsTemperature: true,
+        protocol: "chat-completions",
+        baseUrl: defaultOpencodeBaseUrl("chat-completions"),
       },
       {
         id: "deepseek-v4.1-flash",
@@ -78,6 +89,8 @@ const OPENCODE_SHELLS: OpencodeShell[] = [
         description: "DeepSeek V4.1 Flash model for reasoning and agentic coding",
         tokenParam: "max_tokens",
         supportsTemperature: true,
+        protocol: "chat-completions",
+        baseUrl: defaultOpencodeBaseUrl("chat-completions"),
       },
       {
         id: "kimi-k3",
@@ -86,6 +99,8 @@ const OPENCODE_SHELLS: OpencodeShell[] = [
           "Multimodal Kimi model with 1M context and toggleable max-effort thinking for long-horizon agent work",
         tokenParam: "max_tokens",
         supportsTemperature: false,
+        protocol: "chat-completions",
+        baseUrl: defaultOpencodeBaseUrl("chat-completions"),
       },
       {
         id: "minimax-m3",
@@ -94,6 +109,8 @@ const OPENCODE_SHELLS: OpencodeShell[] = [
           "MiniMax multimodal model for long-context coding, perception, and agent planning",
         tokenParam: "max_tokens",
         supportsTemperature: true,
+        protocol: "chat-completions",
+        baseUrl: defaultOpencodeBaseUrl("chat-completions"),
       },
     ],
   },

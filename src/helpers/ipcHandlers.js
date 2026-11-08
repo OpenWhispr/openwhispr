@@ -6617,7 +6617,10 @@ class IPCHandlers {
     // OpenCode Go/Zen reasoning. Both run here because opencode.ai answers no
     // CORS preflight, so the renderer's fetch could not reach them; the AI SDK
     // client is built in main on net.fetch, the way the enterprise providers
-    // are. Go carries a per-conversation session header, Zen does not.
+    // are. Each model is served over its native protocol (Chat Completions,
+    // Responses, Messages, Generate Content) at its own inference base URL,
+    // which travels in the caller's config. Go carries a per-conversation
+    // session header on every protocol, Zen does not.
     ipcMain.handle(
       "process-opencode-reasoning",
       async (_event, providerId, text, modelId, _agentName, config) => {
@@ -6638,11 +6641,13 @@ class IPCHandlers {
           }
 
           const { generateText } = require("ai");
-          const { createOpenAI } = require("@ai-sdk/openai");
-          const client = createOpenAI({
+          const { createOpencodeLanguageModel } = require("./opencodeLanguageModel");
+          const model = createOpencodeLanguageModel({
+            protocol: config?.protocol,
+            baseUrl: config?.baseUrl,
             apiKey,
-            baseURL: provider.baseUrl,
-            headers: opencodeHeaders(provider.id),
+            modelId,
+            sessionHeaders: opencodeHeaders(provider.id),
             fetch: (url, init) => net.fetch(url, { ...init, useSessionCookies: false }),
           });
 
@@ -6650,7 +6655,7 @@ class IPCHandlers {
           // models default to sending it, which Chat Completions accepts.
           const useTemperature = config?.supportsTemperature !== false;
           const result = await generateText({
-            model: client.chat(modelId),
+            model,
             system: config?.systemPrompt || "",
             prompt: text,
             maxOutputTokens: config?.maxTokens || Math.max(100, Math.min(text.length * 2, 4096)),
@@ -6691,6 +6696,7 @@ class IPCHandlers {
     this.opencodeStreamAborts = new Map();
     ipcMain.handle("opencode-stream-start", async (event, payload) => {
       const { streamId, provider: providerId, modelId, options } = payload || {};
+      const route = payload?.config && typeof payload.config === "object" ? payload.config : {};
       const sessionId =
         typeof payload?.sessionId === "string" && payload.sessionId.trim()
           ? payload.sessionId.trim().slice(0, 128)
@@ -6721,14 +6727,15 @@ class IPCHandlers {
           });
         }
 
-        const { createOpenAI } = require("@ai-sdk/openai");
-        const client = createOpenAI({
+        const { createOpencodeLanguageModel } = require("./opencodeLanguageModel");
+        const model = createOpencodeLanguageModel({
+          protocol: route.protocol,
+          baseUrl: route.baseUrl,
           apiKey,
-          baseURL: provider.baseUrl,
-          headers: opencodeHeaders(provider.id, { sessionId }),
+          modelId,
+          sessionHeaders: opencodeHeaders(provider.id, { sessionId }),
           fetch: (url, init) => net.fetch(url, { ...init, useSessionCookies: false }),
         });
-        const model = client.chat(modelId);
         const { stream } = await model.doStream({
           ...options,
           abortSignal: abortController.signal,

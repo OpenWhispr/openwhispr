@@ -404,6 +404,31 @@ const MATRIX = [
     { max_tokens: MAX_TOKENS, temperature: 0, reasoning_effort: "low" },
   ],
 
+  // --- OpenCode (live-only providers never leak into other providers' shapes) ---
+  // The live lists carry glm-5.3 with a protocol and base URL, but getCloudModel
+  // skips live-only providers for these requests, so the shared registry and
+  // family facts decide the shape exactly as before the lists existed.
+  [
+    "opencode-go glm-5.3 keeps the shared shape, not the live list's (carve-out)",
+    "opencode-go",
+    "glm-5.3",
+    null,
+    AGENT,
+    { max_completion_tokens: MAX_TOKENS, reasoning_effort: "high" },
+  ],
+  [
+    "opencode-go glm-5.3 suppression floors at low like any other provider",
+    "opencode-go",
+    "glm-5.3",
+    null,
+    AGENT_NO_THINK,
+    {
+      max_completion_tokens: MAX_TOKENS,
+      reasoning_effort: "low",
+      chat_template_kwargs: { enable_thinking: false },
+    },
+  ],
+
   // --- Gemini through its OpenAI-compat endpoint (agent streaming route) ---
   [
     "gemini openai-compat: fallback config, no temperature param",

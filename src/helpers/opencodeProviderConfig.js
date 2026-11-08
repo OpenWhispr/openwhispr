@@ -1,8 +1,10 @@
 // OpenCode's two products share a host and a wire shape but not a
 // subscription. Go is a flat-rate plan served under /zen/go/v1 and requires a
 // per-conversation `x-opencode-session` header; Zen is pay-as-you-go under
-// /zen/v1 and ignores that header. Both speak Chat Completions, so one
-// transport covers them and only the base URL and the key differ.
+// /zen/v1 and ignores that header. Each model is served over its native
+// protocol (Chat Completions, Responses, Messages, Generate Content) at its
+// own inference base URL from the live list, so only the /models base URL
+// and the key differ here.
 //
 // This module is CommonJS because the main process owns every request:
 // opencode.ai answers no CORS preflight, so the renderer can't call it.

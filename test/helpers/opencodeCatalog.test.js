@@ -33,6 +33,15 @@ const FREE_PRICE = { text: { input: { price: 0 }, output: { price: 0 } } };
 const CHAT_COMPLETIONS = {
   "chat-completions": { base_url: "https://opencode.ai/inference/openai/v1" },
 };
+const RESPONSES = {
+  responses: { base_url: "https://opencode.ai/inference/openai/v1" },
+};
+const MESSAGES = {
+  messages: { base_url: "https://opencode.ai/inference/anthropic/v1" },
+};
+const GENERATE_CONTENT = {
+  "generate-content": { base_url: "https://opencode.ai/inference/google/v1beta" },
+};
 
 const GLM = {
   id: "glm-5.3",
@@ -51,23 +60,67 @@ const KIMI = {
   capabilities: { temperature: false, reasoning: { supported: true, toggle: true } },
 };
 
-test("keeps paid chat models that the Chat Completions transport can serve", async () => {
+test("keeps paid chat models on every native protocol with their route", async () => {
   const { getOpencodeModels } = loadCatalog();
   const models = await getOpencodeModels("opencode-go", {
     fetch: async () =>
       okResponse([
         GLM,
         KIMI,
-        { ...GLM, id: "gpt-5.6-luna", api: { responses: {} } },
-        { ...GLM, id: "claude-haiku-5-5", api: { messages: {} } },
-        { ...GLM, id: "gemini-4-argon", api: { "generate-content": {} } },
+        { ...GLM, id: "gpt-5.6-luna", api: RESPONSES },
+        { ...GLM, id: "claude-haiku-5-5", api: MESSAGES },
+        { ...GLM, id: "gemini-4-argon", api: GENERATE_CONTENT },
         { ...GLM, id: "flux-image", type: "image" },
       ]),
   });
 
   assert.deepEqual(
+    models.map((model) => [model.id, model.protocol, model.baseUrl]),
+    [
+      ["glm-5.3", "chat-completions", "https://opencode.ai/inference/openai/v1"],
+      ["kimi-k3", "chat-completions", "https://opencode.ai/inference/openai/v1"],
+      ["gpt-5.6-luna", "responses", "https://opencode.ai/inference/openai/v1"],
+      ["claude-haiku-5-5", "messages", "https://opencode.ai/inference/anthropic/v1"],
+      ["gemini-4-argon", "generate-content", "https://opencode.ai/inference/google/v1beta"],
+    ]
+  );
+});
+
+test("rejects entries with no known protocol, several, or only an unknown one", async () => {
+  const { getOpencodeModels } = loadCatalog();
+  const models = await getOpencodeModels("opencode-go", {
+    fetch: async () =>
+      okResponse([
+        GLM,
+        { ...GLM, id: "no-api", api: undefined },
+        { ...GLM, id: "empty-api", api: {} },
+        { ...GLM, id: "future-protocol", api: { "telepathy-v2": {} } },
+        { ...GLM, id: "two-protocols", api: { ...CHAT_COMPLETIONS, ...RESPONSES } },
+      ]),
+  });
+
+  assert.deepEqual(
     models.map((model) => model.id),
-    ["glm-5.3", "kimi-k3"]
+    ["glm-5.3"]
+  );
+});
+
+test("a protocol entry without a base URL falls back to the shared inference base", async () => {
+  const { getOpencodeModels } = loadCatalog();
+  const models = await getOpencodeModels("opencode-go", {
+    fetch: async () =>
+      okResponse([
+        { ...GLM, id: "no-base", api: { messages: {} } },
+        { ...GLM, id: "blank-base", api: { messages: { base_url: "" } } },
+      ]),
+  });
+
+  assert.deepEqual(
+    models.map((model) => [model.id, model.protocol, model.baseUrl]),
+    [
+      ["no-base", "messages", "https://opencode.ai/inference/anthropic/v1"],
+      ["blank-base", "messages", "https://opencode.ai/inference/anthropic/v1"],
+    ]
   );
 });
 

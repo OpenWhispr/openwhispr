@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **OpenCode Go and Zen as reasoning providers.** Use an OpenCode subscription for the AI agent, voice assistant and note actions: pick a model in AI Models settings with your OpenCode API key. The model list is fetched live from OpenCode so new models appear without an app update, with a built-in set covering you offline. If a model you picked is later removed, your selection moves to a replacement and says what changed.
+- **OpenCode Go and Zen as reasoning providers.** Use an OpenCode subscription for the AI agent, voice assistant and note actions: pick a model in AI Models settings with your OpenCode API key. The model list is fetched live from OpenCode so new models appear without an app update, with a built-in set covering you offline. Every paid model is served over its native protocol (Chat Completions, Responses, Messages, Generate Content), so Claude- and Gemini-based models are offered alongside GPT-style ones. If a model you picked is later removed, your selection moves to a replacement and says what changed.
 
 ### Dictionary
 

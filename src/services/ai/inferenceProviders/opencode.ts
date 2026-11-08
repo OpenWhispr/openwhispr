@@ -1,5 +1,6 @@
 import type { InferenceProvider } from "./types";
 import { getOpencodeCatalogModel } from "../../../models/ModelRegistry";
+import { resolveOpencodeModelRoute } from "../../../config/opencodeModelPolicy.js";
 import { wrapCleanupTranscript } from "../../../config/prompts";
 import { getLlmRequestTimeoutSeconds } from "../../../helpers/llmRequestTimeout.js";
 import logger from "../../../utils/logger";
@@ -27,8 +28,12 @@ function createOpencodeProvider(
       const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName, config.toneStyle);
       const userContent = config.systemPrompt ? text : wrapCleanupTranscript(text);
       // The live list states whether the model takes a temperature. A model that
-      // isn't in the list gets none.
-      const supportsTemperature = getOpencodeCatalogModel(id, model)?.supportsTemperature ?? false;
+      // isn't in the list gets none. The route (native protocol + inference
+      // base) travels beside it; main validates the base URL before attaching
+      // the key, and entries from an older build resolve to Chat Completions.
+      const catalogModel = getOpencodeCatalogModel(id, model);
+      const supportsTemperature = catalogModel?.supportsTemperature ?? false;
+      const route = resolveOpencodeModelRoute(catalogModel);
 
       const result = await window.electronAPI.processOpencodeReasoning(
         id,
@@ -39,6 +44,8 @@ function createOpencodeProvider(
           ...config,
           systemPrompt,
           supportsTemperature,
+          protocol: route.protocol,
+          baseUrl: route.baseUrl,
           // Note formatting gets the long deadline, like the enterprise path.
           timeoutMs: getLlmRequestTimeoutSeconds({ scope: config.inferenceScope }) * 1000,
         }
