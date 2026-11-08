@@ -3988,6 +3988,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return getSettings().customPrompts.cleanup || undefined;
   }
 
+  // A custom cleanup prompt takes no tone, as on the server, so only the
+  // built-in prompt depends on the app being dictated into.
+  cleanupTakesTone(settings) {
+    return settings.toneStyleEnabled && !this.getCustomPrompt();
+  }
+
   getKeyterms() {
     return getKeytermDictionaryWords(getSettings());
   }
@@ -5018,7 +5024,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       agentName: getAgentName() || "",
       ...getCloudLlmDictionaryFields(settings),
       customPrompt: this.getCustomPrompt(),
-      ...(settings.toneStyleEnabled
+      ...(this.cleanupTakesTone(settings)
         ? resolveDictationToneStyle(settings.toneStyles, appCategory)
         : {}),
       language: this.getCleanupLanguage(settings) || undefined,
@@ -5055,7 +5061,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               // Style). With no app known, a start mints no combined cleanup,
               // so neither does warmup.
               pipelineOptions:
-                settings.toneStyleEnabled && !this.lastToneAppCategory
+                this.cleanupTakesTone(settings) && !this.lastToneAppCategory
                   ? undefined
                   : this.getPipelineCleanupOptions(settings, {
                       voiceAgentRequested: false,
@@ -5512,7 +5518,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const pipelineSettings = getSettings();
       if (
         providerName === "orukeet" &&
-        pipelineSettings.toneStyleEnabled &&
+        this.cleanupTakesTone(pipelineSettings) &&
         this.getPipelineCleanupOptions(pipelineSettings)
       ) {
         heldFrames ??= [];
@@ -5529,7 +5535,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         return false;
       }
       this._activePipelineOptions =
-        pipelineSettings.toneStyleEnabled && !this.lastToneAppCategory
+        this.cleanupTakesTone(pipelineSettings) && !this.lastToneAppCategory
           ? undefined
           : this.getPipelineCleanupOptions(pipelineSettings, {
               appCategory: this.lastToneAppCategory,
