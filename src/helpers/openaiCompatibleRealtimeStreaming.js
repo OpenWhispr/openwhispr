@@ -100,10 +100,14 @@ class OpenAICompatibleRealtimeStreaming extends OpenAIRealtimeStreaming {
 
     let forwarded = event;
     switch (event.type) {
-      case "input_audio_buffer.speech_started":
-        if (event.item_id) this._startsById.set(event.item_id, Date.now());
-        else this._openTurn = { startedAt: Date.now() };
+      case "input_audio_buffer.speech_started": {
+        const startedAt = Date.now();
+        if (event.item_id) this._startsById.set(event.item_id, startedAt);
+        // The newest start is the open turn's, named or not, so a speech_stopped
+        // without an id never takes an older blip's start.
+        this._openTurn = { startedAt };
         break;
+      }
       // After stop's commit is answered, speech_stopped only closes the turn
       // that commit already took.
       case "input_audio_buffer.speech_stopped": {

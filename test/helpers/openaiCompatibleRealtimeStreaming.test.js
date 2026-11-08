@@ -859,3 +859,22 @@ for (const type of [
     await stop.stopped;
   });
 }
+
+test("a named turn start replaces an unended blip's for a speech_stopped without an id", async (t) => {
+  const { streaming, socket } = await connectWith({ model: "whisper", apiKey: "" });
+  const stamps = [];
+  streaming.onFinalTranscript = (_text, timestamp) => stamps.push(timestamp);
+  let now = 1000;
+  t.mock.method(Date, "now", () => now);
+
+  emit(socket, { type: "input_audio_buffer.speech_started" });
+  now = 5000;
+  emit(socket, { type: "input_audio_buffer.speech_started", item_id: "a" });
+  now = 6000;
+  emit(socket, { type: "input_audio_buffer.speech_stopped" });
+  now = 6500;
+  emit(socket, completed("turn a"));
+
+  assert.deepEqual(stamps, [5000]);
+  await streaming.disconnect();
+});
