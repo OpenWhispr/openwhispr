@@ -19,7 +19,13 @@ function makeAutoUpdater({ offline = false } = {}) {
     calls: 0,
     downloads: 0,
     listeners,
-    setFeedURL() {},
+    setFeedURL(feed) {
+      this.feed = feed;
+    },
+    installs: 0,
+    quitAndInstall() {
+      this.installs += 1;
+    },
     on(event, handler) {
       listeners[event] = handler;
     },
@@ -48,7 +54,11 @@ function createUpdateManager(autoUpdater) {
   delete require.cache[updaterModulePath];
   Module._load = function loadWithMocks(request, parent, isMain) {
     if (request === "electron-updater") return { autoUpdater };
-    if (request === "electron") return { autoUpdater: { on() {}, removeListener() {} } };
+    if (request === "electron")
+      return {
+        powerMonitor: { getSystemIdleTime: () => 90 },
+        autoUpdater: { on() {}, removeListener() {} },
+      };
     if (request === "child_process") return { execSync: () => "0" };
     return originalLoad.call(this, request, parent, isMain);
   };
@@ -236,4 +246,50 @@ test("a Linux AppImage is supported, but deb/rpm/tar.gz installs never touch the
   assert.match(result.message, /package manager/);
 
   packaged.cleanup();
+});
+
+test("personal AppImage installs only after current trusted activity becomes idle", async (t) => {
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  setPlatform("linux");
+  process.env.APPIMAGE = "/home/test/OpenWhispr-Personal.AppImage";
+  const updater = makeAutoUpdater();
+  const manager = createUpdateManager(updater);
+  assert.deepEqual(updater.feed, {
+    provider: "github",
+    owner: "SLOPTIMUS-PRIME",
+    repo: "openwhispr",
+    private: false,
+  });
+  assert.equal(updater.channel, "personal");
+  assert.equal(updater.allowDowngrade, false);
+  const win = {
+    isDestroyed: () => false,
+    isVisible: () => false,
+    webContents: { id: 42, send() {} },
+  };
+  const windows = { mainWindow: win, _dictationLifecycleState: "recording" };
+  manager.setWindowManager(windows);
+  manager.mainBusy = () => false;
+  manager.setAutoUpdatesEnabled(true);
+  updater.listeners["update-downloaded"]({ version: "1.11.0-personal.2" });
+  manager.reportActivity(999, false);
+  assert.equal(manager.activity.size, 0, "unknown senders cannot declare the app idle");
+  manager.reportActivity(42, false);
+  assert.equal((await manager.installUpdate()).success, false);
+  t.mock.timers.tick(10000);
+  assert.equal(updater.installs, 0);
+  windows._dictationLifecycleState = "idle";
+  manager.reportActivity(42, true);
+  t.mock.timers.tick(10000);
+  assert.equal(updater.installs, 0);
+  manager.reportActivity(42, false);
+  manager.setAutoUpdatesEnabled(false);
+  t.mock.timers.tick(10000);
+  assert.equal(updater.installs, 0);
+  manager.setAutoUpdatesEnabled(true);
+  t.mock.timers.tick(10000);
+  assert.equal(updater.installs, 1);
+  t.mock.timers.tick(10000);
+  assert.equal(updater.installs, 1, "installation cannot repeat");
+  manager.cleanup();
 });

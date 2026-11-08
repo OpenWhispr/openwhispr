@@ -26,7 +26,7 @@ References: [model variants](https://openrouter.ai/docs/guides/routing/model-var
 
 Use focused failing regressions before implementation, then run focused tests, typecheck, lint and renderer build. Exercise the actual modified app UI with isolated data and verify persistence of a full model ID such as `vendor/example:nitro` and Gemini Smart cleanup selection. Keep test records internal; do not ship extra verification bundles. Report any blocked or untested journey honestly.
 
-Keep personal-fork changes on `feat/byok-cleanup`; keep `main` available for tracking upstream. Nick authorizes committing and pushing verified fork work, and automatic conflict resolution and merging of upstream maintenance changes into the personal branch under the rules below. This does not authorize tags, releases, binary publication or automatic desktop installation by the maintenance workflow. Preserve MIT attribution.
+Keep personal-fork changes on `feat/byok-cleanup`; keep `main` available for tracking upstream and trusted workflow controllers. Nick authorizes committing and pushing verified fork work, and automatic conflict resolution and merging of upstream maintenance changes into the personal branch under the rules below. Nick additionally approved automatic verified package builds, personal GitHub releases, and in-app desktop updates. The upstream-maintenance workflow still changes source only; a separate personal-release workflow builds and checks the exact source before publishing. Preserve MIT attribution.
 
 ## Rules for automatic upstream maintenance
 
@@ -45,4 +45,8 @@ These rules authorize the intended workflow; this document alone does not enable
 
 ## Upstream automation and rollback
 
-Upstream workflows build main/develop, build mobile on main, publish desktop releases on version tags and update package registries after published releases. A feature branch is used to avoid release activation. Do not create tags or releases. Desktop packaging reuses the upstream 1.10.4 Electron/native runtime and dependencies while replacing application code and renderer assets with this checkout. The personal package must own the installed files, preserve the existing application data directory and use the fork's updater repository. Keep a private upstream package/file backup before removal, and verify the running fork after cutover.
+Stock release workflows remain disabled. The personal-release workflow may publish Linux x86_64 AppImages and update metadata to this fork only, after the protected behavior tests, typecheck, lint, build and packaged runtime checks succeed. Use the maintained Electron/native dependency versions, not a frozen upstream runtime. Do not publish a stale source revision or credentials.
+
+The Linux app checks this fork's `personal` update channel at startup and periodically, never the stock upstream releases. With Automatic updates enabled, it downloads a verified AppImage and restarts only when dictation, meetings, uploads and processing are idle, activity reports are current, the settings/control-panel window is hidden, and the computer has been idle for at least one minute. Manual restart also waits for recording/processing to finish. Disabling Automatic updates prevents unattended downloads and restarts; manual checks remain available. Invalid downloads must leave the running installation intact.
+
+Install the AppImage in Nick's writable application directory with a stable launcher, preserving the `OpenWhispr` application identity, user-data path and keyring namespace. The first migration from the system package is authorized; retain a private package and user-data backup and verify the running app after cutover. Updates must not require root or discard settings, credentials, history or notes.

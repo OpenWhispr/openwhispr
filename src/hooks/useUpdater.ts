@@ -189,7 +189,8 @@ export function useUpdater() {
     isInstallingRef.current = true;
 
     try {
-      await window.electronAPI.installUpdate();
+      const result = await window.electronAPI.installUpdate();
+      if (!result.success) throw new Error(result.message || "Update installation was deferred");
 
       // Settings raises its own "almost there" dialog when the restart stalls.
       setTimeout(() => {

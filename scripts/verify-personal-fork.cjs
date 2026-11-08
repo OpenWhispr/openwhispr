@@ -429,7 +429,7 @@ async function launchApp(playwright, ctxInfo, { seed }) {
   const logFile = path.join(root, `electron-${Date.now()}.log`);
   const out = fs.openSync(logFile, "a");
   const args = [
-    ".",
+    ...(process.env.OPENWHISPR_VERIFY_EXECUTABLE ? [] : ["."]),
     "--no-sandbox",
     "--disable-gpu",
     "--disable-dev-shm-usage",
@@ -1239,7 +1239,9 @@ async function main() {
     }
     let electronBin;
     try {
-      electronBin = require(path.join(REPO, "node_modules", "electron"));
+      electronBin =
+        process.env.OPENWHISPR_VERIFY_EXECUTABLE ||
+        require(path.join(REPO, "node_modules", "electron"));
       if (typeof electronBin !== "string" || !fs.existsSync(electronBin))
         throw new Error("electron binary missing (run npm ci)");
     } catch (e) {

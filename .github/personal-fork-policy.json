@@ -6,6 +6,10 @@
   "contract": "FORK.md",
   "requirements": [
     {
+      "id": "personal-desktop-updates",
+      "behavior": "Publish only checked personal Linux AppImages from the exact current fork source; update only from this fork's personal channel, preserve app data and credentials, honor Automatic updates, and never restart during recording, processing or stale activity reports."
+    },
+    {
       "id": "personal-account-free",
       "behavior": "No reachable OpenWhispr sign-in, subscription, billing, upgrade advertising or managed-cloud onboarding; no unnecessary account-service background requests."
     },
@@ -31,6 +35,8 @@
     }
   ],
   "protected_tests": [
+    "test/helpers/personalUpdatePolicy.test.js",
+    "test/helpers/updater.test.js",
     "test/components/forkManualModel.test.js",
     "test/components/openrouterOptions.test.js",
     "test/components/openrouterSttPicker.test.js",

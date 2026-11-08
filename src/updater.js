@@ -1,4 +1,5 @@
 const { autoUpdater } = require("electron-updater");
+const { canRestart } = require("./helpers/personalUpdatePolicy");
 
 // electron-updater can only replace an AppImage on Linux; deb, rpm and tar.gz
 // installs are updated by the package manager instead.
@@ -18,6 +19,9 @@ class UpdateManager {
     this.windowManager = null;
     // null until the renderer syncs the preference, so nothing downloads unasked.
     this.autoUpdatesEnabled = null;
+    this.activity = new Map();
+    this.mainBusy = () => true;
+    this.restartInterval = null;
 
     this.setupAutoUpdater();
   }
@@ -70,6 +74,11 @@ class UpdateManager {
 
     autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = true;
+    if (process.platform === "linux") {
+      autoUpdater.channel = "personal";
+      autoUpdater.allowPrerelease = true;
+      autoUpdater.allowDowngrade = false;
+    }
     autoUpdater.logger = console;
 
     this.setupEventHandlers();
@@ -125,6 +134,12 @@ class UpdateManager {
           };
         }
         this.notifyRenderers("update-downloaded", info);
+        if (process.platform === "linux" && isUpdaterSupported && !this.restartInterval) {
+          this.restartInterval = setInterval(() => {
+            if (this.readyToRestart()) this.installUpdate().catch(() => {});
+          }, 10000);
+          this.restartInterval.unref?.();
+        }
       },
     };
 
@@ -233,6 +248,39 @@ class UpdateManager {
     }
   }
 
+  reportActivity(senderId, busy) {
+    const { mainWindow, controlPanelWindow } = this.windowManager ?? {};
+    if (
+      [mainWindow, controlPanelWindow].some(
+        (w) => w && !w.isDestroyed() && w.webContents.id === senderId
+      )
+    ) {
+      this.activity.set(senderId, { busy: busy !== false, at: Date.now() });
+    }
+  }
+
+  readyToRestart(manual = false) {
+    if (!this.windowManager) return false;
+    const { mainWindow, controlPanelWindow } = this.windowManager;
+    const windows = [mainWindow, controlPanelWindow].filter((w) => w && !w.isDestroyed());
+    return canRestart({
+      enabled: manual || this.autoUpdatesEnabled,
+      downloaded: this.updateDownloaded,
+      idleSeconds: manual ? 60 : require("electron").powerMonitor.getSystemIdleTime(),
+      panelVisible: manual
+        ? false
+        : !!(
+            controlPanelWindow &&
+            !controlPanelWindow.isDestroyed() &&
+            controlPanelWindow.isVisible()
+          ),
+      dictationState: this.windowManager._dictationLifecycleState,
+      mainBusy: this.mainBusy(),
+      now: Date.now(),
+      renderers: windows.map((w) => this.activity.get(w.webContents.id)),
+    });
+  }
+
   async installUpdate() {
     try {
       if (process.env.NODE_ENV === "development") {
@@ -256,6 +304,9 @@ class UpdateManager {
         };
       }
 
+      if (process.platform === "linux" && !this.readyToRestart(true)) {
+        return { success: false, message: "Waiting for recording and processing to finish" };
+      }
       this.isInstalling = true;
       console.log("🔄 Installing update and restarting...");
 
@@ -352,6 +403,8 @@ class UpdateManager {
   }
 
   cleanup() {
+    if (this.restartInterval) clearInterval(this.restartInterval);
+    this.activity.clear();
     if (this.updateCheckInterval) {
       clearInterval(this.updateCheckInterval);
       this.updateCheckInterval = null;

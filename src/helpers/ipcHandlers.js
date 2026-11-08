@@ -11251,8 +11251,24 @@ class IPCHandlers {
     });
 
     ipcMain.handle("install-update", async () => {
-      return this.updateManager.installUpdate();
+      return await this.updateManager.installUpdate();
     });
+
+    ipcMain.on("personal-update-activity", (event, busy) => {
+      this.updateManager.reportActivity(event.sender.id, busy);
+    });
+    this.updateManager.mainBusy = () =>
+      Boolean(
+        meetingStartedAt ||
+        meetingTranscriptionStartInProgress ||
+        meetingTranscriptionPrepareInProgress ||
+        this._activeRecordingPipeline ||
+        this._onboardingDemoSession ||
+        this._agentStreamRequests.requestsBySender.size ||
+        this._cloudReasonRequests.requestsBySender.size ||
+        this._cloudTranscriptionRequests.requestsBySender.size ||
+        this._enterpriseReasoningRequests.requestsBySender.size
+      );
 
     ipcMain.handle("get-app-version", async () => {
       return this.updateManager.getAppVersion();
