@@ -1,4 +1,5 @@
 import { EnterpriseAudioSettings } from "./settings/EnterpriseAudioSettings";
+import { useRegistryVersion } from "../hooks/useRegistryVersion";
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { LocalOffInstalledModels } from "./settings/LocalOffInstalledModels";
@@ -41,6 +42,7 @@ import {
   Languages,
 } from "./icons";
 import { useAuth } from "../hooks/useAuth";
+import { resetForAccountChange as resetChatForAccountChange } from "../stores/chatTurnStore";
 import { AUTH_URL, signOut } from "../lib/auth";
 import { deleteAccount } from "../lib/accountDeletionRequest";
 import { executeAccountDeletion } from "../lib/accountDeletionFlow";
@@ -134,8 +136,10 @@ import {
 } from "../stores/noteStore.js";
 import { syncService } from "../services/SyncService.js";
 import { formatBytes } from "../utils/formatBytes";
+import { discardPendingLocalSetup } from "./onboarding/pendingLocalModels";
 import {
   clearMissingLocalModelSelections,
+  selectedLocalSpeechModelIds,
   TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
   TRANSCRIPTION_POLICY_PROVIDER_IDS,
   useSettingsStore,
@@ -159,6 +163,7 @@ import { requestSignIn } from "../utils/requestSignIn";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import WorkspaceGeneralSection from "./settings/WorkspaceGeneralSection";
 import WorkspacePeopleSection from "./settings/WorkspacePeopleSection";
+import WorkspaceTeamspacesSection from "./settings/WorkspaceTeamspacesSection";
 import WorkspaceDeveloperSection from "./settings/WorkspaceDeveloperSection";
 import type { SettingsSectionType } from "../lib/settingsNav";
 import { enterpriseTileCta, type EnterpriseTileCta } from "../lib/workspaceBilling";
@@ -181,6 +186,8 @@ interface SettingsPageProps {
   initialSubTab?: string;
   /** Opens the workspace picker in the Settings nav (owned by SettingsModal). */
   onChooseWorkspace?: () => void;
+  /** Takes the user to a teamspace in Notes (owned by the control panel, which closes Settings). */
+  onOpenTeamspace?: (localSpaceId: number) => void;
 }
 
 const UI_LANGUAGE_OPTIONS: import("./ui/LanguageSelector").LanguageOption[] = [
@@ -1151,7 +1158,9 @@ export default function SettingsPage({
   onNavigateToSection,
   initialSubTab,
   onChooseWorkspace,
+  onOpenTeamspace,
 }: SettingsPageProps) {
+  const registryVersion = useRegistryVersion();
   const { isCompact } = useSettingsLayout();
   const {
     confirmDialog,
@@ -1299,6 +1308,7 @@ export default function SettingsPage({
 
   const [currentVersion, setCurrentVersion] = useState<string>("");
   const [isRemovingModels, setIsRemovingModels] = useState(false);
+  const [retiredLocalModels, setRetiredLocalModels] = useState<Array<{ name: string }>>([]);
   const [cachePathHint, setCachePathHint] = useState(
     typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent)
       ? "%USERPROFILE%\\.cache\\openwhispr"
@@ -1558,6 +1568,22 @@ export default function SettingsPage({
 
   const platform = getCachedPlatform();
 
+  const [modelListUpdates, setModelListUpdates] = useState(true);
+  useEffect(() => {
+    window.electronAPI
+      ?.getModelRegistryUpdates?.()
+      .then(setModelListUpdates)
+      .catch(() => {});
+  }, []);
+  const updateModelListUpdates = async (enabled: boolean) => {
+    setModelListUpdates(enabled);
+    const result = await window.electronAPI?.setModelRegistryUpdates?.(enabled);
+    if (result && !result.success) {
+      setModelListUpdates(!enabled);
+      logger.error("Failed to save model list updates", { error: result.error }, "settings");
+    }
+  };
+
   const [autoStartEnabled, setAutoStartEnabled] = useState(false);
   const [autoStartNeedsApproval, setAutoStartNeedsApproval] = useState(false);
   const [autoStartLoading, setAutoStartLoading] = useState(true);
@@ -1729,6 +1755,37 @@ export default function SettingsPage({
     });
   };
 
+  const refreshRetiredLocalModels = useCallback(async () => {
+    setRetiredLocalModels(
+      (await window.electronAPI?.listRetiredLocalModels?.(selectedLocalSpeechModelIds())) ?? []
+    );
+  }, []);
+
+  useEffect(() => {
+    void refreshRetiredLocalModels().catch(() => {});
+  }, [refreshRetiredLocalModels, registryVersion]);
+
+  const handleRemoveRetiredModels = useCallback(() => {
+    showConfirmDialog({
+      title: t("settingsPage.developer.retiredModels.confirmTitle"),
+      description: t("settingsPage.developer.retiredModels.confirmDescription"),
+      confirmText: t("settingsPage.developer.removeModels.confirmText"),
+      variant: "destructive",
+      onConfirm: async () => {
+        const result = await window.electronAPI?.deleteRetiredLocalModels?.(
+          selectedLocalSpeechModelIds()
+        );
+        await refreshRetiredLocalModels();
+        if (!result?.success) {
+          showAlertDialog({
+            title: t("settingsPage.developer.removeModels.failedTitle"),
+            description: t("settingsPage.developer.retiredModels.failedDescription"),
+          });
+        }
+      },
+    });
+  }, [refreshRetiredLocalModels, showConfirmDialog, showAlertDialog, t]);
+
   const handleRemoveModels = useCallback(() => {
     if (isRemovingModels) return;
 
@@ -1759,6 +1816,7 @@ export default function SettingsPage({
           } else {
             // Every local model is gone, so no local selection can still resolve.
             clearMissingLocalModelSelections(() => false);
+            discardPendingLocalSetup();
             window.dispatchEvent(new Event("openwhispr-models-cleared"));
             showAlertDialog({
               title: t("settingsPage.developer.removeModels.successTitle"),
@@ -1957,6 +2015,8 @@ export default function SettingsPage({
       return;
     }
 
+    // A background answer must not write under an account whose data is about to go.
+    resetChatForAccountChange();
     setIsDeletingAccount(true);
     try {
       const result = await executeAccountDeletion({
@@ -3035,7 +3095,12 @@ export default function SettingsPage({
         );
 
       case "workspacePeople":
-        return <WorkspacePeopleSection initialSubTab={initialSubTab} />;
+        return (
+          <WorkspacePeopleSection initialSubTab={initialSubTab} onOpenTeamspace={onOpenTeamspace} />
+        );
+
+      case "workspaceTeamspaces":
+        return <WorkspaceTeamspacesSection onOpenTeamspace={onOpenTeamspace} />;
 
       case "workspaceDeveloper":
         return <WorkspaceDeveloperSection />;
@@ -4345,6 +4410,17 @@ EOF`,
                     <Toggle checked={telemetryEnabled} onChange={setTelemetryEnabled} />
                   </SettingsRow>
                 </SettingsPanelRow>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.privacy.modelListUpdates")}
+                    description={t("settingsPage.privacy.modelListUpdatesDescription")}
+                  >
+                    <Toggle
+                      checked={modelListUpdates}
+                      onChange={(enabled) => void updateModelListUpdates(enabled)}
+                    />
+                  </SettingsRow>
+                </SettingsPanelRow>
               </SettingsPanel>
             </div>
 
@@ -4819,6 +4895,20 @@ EOF`,
                       </div>
                     </SettingsRow>
                   </SettingsPanelRow>
+                  {retiredLocalModels.length > 0 && (
+                    <SettingsPanelRow>
+                      <SettingsRow
+                        label={t("settingsPage.developer.retiredModels.label")}
+                        description={t("settingsPage.developer.retiredModels.description", {
+                          models: retiredLocalModels.map(({ name }) => name).join(", "),
+                        })}
+                      >
+                        <Button variant="destructive" size="sm" onClick={handleRemoveRetiredModels}>
+                          {t("settingsPage.developer.retiredModels.remove")}
+                        </Button>
+                      </SettingsRow>
+                    </SettingsPanelRow>
+                  )}
                 </SettingsPanel>
 
                 <SettingsPanel>
@@ -4833,6 +4923,7 @@ EOF`,
                             title: t("settingsPage.developer.resetAll.title"),
                             description: t("settingsPage.developer.resetAll.description"),
                             onConfirm: async () => {
+                              resetChatForAccountChange();
                               try {
                                 try {
                                   await signOut();

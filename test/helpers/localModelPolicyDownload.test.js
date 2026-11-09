@@ -64,6 +64,15 @@ const modelManager = require("../../src/helpers/modelManagerBridge").default;
 const { createLocalModelPolicyGate } = require("../../src/helpers/localModelPolicyGate");
 const { getRequiredModelFiles } = require("../../src/helpers/parakeetModelInfo");
 const modelRegistryData = require("../../src/models/modelRegistryData.json");
+const { getRegistryVersion, replaceRegistryData } = require("../../src/models/registryData.js");
+
+// The managers read the live catalog, whose entries are frozen once applied.
+function pointCatalogAt(section, modelId, downloadUrl, expectedSizeBytes) {
+  const data = structuredClone(modelRegistryData);
+  Object.assign(data[section][modelId], { downloadUrl, expectedSizeBytes });
+  delete data[section][modelId].manifestUrl;
+  replaceRegistryData({ data, manifestVersion: getRegistryVersion() + 1 });
+}
 
 const WHISPER_MODEL = "base";
 const PARAKEET_MODEL = "parakeet-tdt-110m-en";
@@ -155,9 +164,7 @@ function whisperEngine() {
   const manager = new WhisperManager();
   const modelsDirectory = directory("whisper");
   manager.getModelsDir = () => modelsDirectory;
-  const entry = modelRegistryData.whisperModels[WHISPER_MODEL];
-  entry.downloadUrl = `${baseUrl}/whisper.bin`;
-  entry.expectedSizeBytes = WHISPER_BODY.length;
+  pointCatalogAt("whisperModels", WHISPER_MODEL, `${baseUrl}/whisper.bin`, WHISPER_BODY.length);
   const policy = allowingGate("transcription", WHISPER_MODEL);
   manager.localModelPolicy = policy.gate;
   return {
@@ -178,10 +185,12 @@ function parakeetEngine() {
   manager.getModelsDir = () => modelsDirectory;
   manager.serverManager.getModelsDir = () => modelsDirectory;
   manager.serverManager.isAvailable = () => false;
-  const entry = modelRegistryData.parakeetModels[PARAKEET_MODEL];
-  entry.downloadUrl = `${baseUrl}/parakeet.tar.bz2`;
-  entry.expectedSizeBytes = parakeetArchive.length;
-  delete entry.manifestUrl;
+  pointCatalogAt(
+    "parakeetModels",
+    PARAKEET_MODEL,
+    `${baseUrl}/parakeet.tar.bz2`,
+    parakeetArchive.length
+  );
   const policy = allowingGate("transcription", PARAKEET_MODEL);
   manager.localModelPolicy = policy.gate;
   return {

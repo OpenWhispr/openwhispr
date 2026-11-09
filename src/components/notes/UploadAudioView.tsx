@@ -1,3 +1,4 @@
+import { useRegistryVersion } from "../../hooks/useRegistryVersion";
 import { useState, useRef, useEffect, useId } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -48,6 +49,7 @@ import { describeProviderError } from "../../utils/describeProviderError";
 import {
   getAllReasoningModels,
   getBatchTranscriptionModel,
+  getTranscriptionProvider,
   getParakeetModelInfo,
   getTranscriptionProviders,
   isSherpaLocalProvider,
@@ -152,6 +154,7 @@ interface UploadAudioViewProps {
 }
 
 export default function UploadAudioView({ onNoteCreated, onOpenSettings }: UploadAudioViewProps) {
+  useRegistryVersion();
   const { t } = useTranslation();
   const [state, setState] = useState<UploadState>("idle");
   const [file, setFile] = useState<{
@@ -474,19 +477,24 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         }
         return;
       }
-      if (isSherpaLocalProvider(localTranscriptionProvider)) {
-        const r = await window.electronAPI.listParakeetModels?.();
-        if (!cancelled)
-          setProviderReady(
-            !!(r?.success && r.models.some((m: { downloaded?: boolean }) => m.downloaded))
-          );
-      } else {
-        const r = await window.electronAPI.listWhisperModels?.();
-        if (!cancelled)
-          setProviderReady(
-            !!(r?.success && r.models.some((m: { downloaded?: boolean }) => m.downloaded))
-          );
+      const sherpa = isSherpaLocalProvider(localTranscriptionProvider);
+      const r = sherpa
+        ? await window.electronAPI.listParakeetModels?.()
+        : await window.electronAPI.listWhisperModels?.();
+      let ready = !!(r?.success && r.models.some((m: { downloaded?: boolean }) => m.downloaded));
+      // The lists hold offered models only; a retired model still on disk keeps running.
+      const selected = sherpa
+        ? localTranscriptionProvider === "cohere"
+          ? cohereModel
+          : parakeetModel
+        : whisperModel;
+      if (!ready && selected) {
+        const status = sherpa
+          ? await window.electronAPI.checkParakeetModelStatus?.(selected)
+          : await window.electronAPI.checkModelStatus?.(selected);
+        ready = !!status?.downloaded;
       }
+      if (!cancelled) setProviderReady(ready);
     };
     checkProviderReady();
     return () => {
@@ -499,6 +507,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     remoteTranscriptionUrl,
     useLocalWhisper,
     localTranscriptionProvider,
+    whisperModel,
+    parakeetModel,
+    cohereModel,
     cloudTranscriptionProvider,
     cloudTranscriptionBaseUrl,
     openaiApiKey,
@@ -533,7 +544,13 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       cloudTranscriptionProvider === "custom"
         ? t("notes.upload.custom")
         : cloudTranscriptionProvider.charAt(0).toUpperCase() + cloudTranscriptionProvider.slice(1);
-    const model = getBatchTranscriptionModel(cloudTranscriptionProvider) ?? cloudTranscriptionModel;
+    // Same rule as the upload itself: the batch model replaces only a streaming selection.
+    const batchModel = getBatchTranscriptionModel(cloudTranscriptionProvider);
+    const selectedId = cloudTranscriptionModel?.trim();
+    const selected = getTranscriptionProvider(cloudTranscriptionProvider)?.models.find(
+      (option) => option.id === selectedId
+    );
+    const model = batchModel && (!selected || selected.streaming) ? batchModel : selectedId;
     return `${name} · ${model}`;
   };
 

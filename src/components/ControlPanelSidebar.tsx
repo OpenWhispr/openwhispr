@@ -20,6 +20,7 @@ const rowButtonClass =
 
 interface ControlPanelSidebarProps {
   activeView: ControlPanelView;
+  chatNeedsAttention?: boolean;
   onViewChange: (view: ControlPanelView) => void;
   onOpenSettings: () => void;
   onOpenReferrals?: () => void;
@@ -34,6 +35,7 @@ interface ControlPanelSidebarProps {
 
 export default function ControlPanelSidebar({
   activeView,
+  chatNeedsAttention = false,
   onViewChange,
   onOpenSettings,
   onOpenReferrals,
@@ -97,6 +99,14 @@ export default function ControlPanelSidebar({
               >
                 {item.label}
               </span>
+              {item.id === "chat" && chatNeedsAttention && (
+                <span
+                  role="status"
+                  aria-label={t("agentWindow.waitingForAnswer")}
+                  title={t("agentWindow.waitingForAnswer")}
+                  className="ms-auto size-1.5 shrink-0 rounded-full bg-primary"
+                />
+              )}
             </button>
           );
         })}
