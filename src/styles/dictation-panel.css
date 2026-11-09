@@ -1,5 +1,5 @@
 /* Dictation window feature styles: the voice pill, its identity morph, the
-   expanding assistant / live-transcript panels, and their motion. Imported by
+   expanding live-transcript panel, and their motion. Imported by
    index.css ahead of its own rules; nothing here shares selectors with the
    app-wide styles that remain there. */
 
@@ -41,19 +41,6 @@
     clip-path 280ms cubic-bezier(0.2, 0, 0, 1),
     opacity 140ms ease-out,
     transform 280ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-/* Agent close first fades its complex inner tree while the surface is still
-   geometrically stable. The following pill-to-surface contraction can then be
-   composited as a simple layer instead of repainting markdown, controls, and
-   shimmer descendants inside a changing clip on every frame. */
-.expanding-panel-surface[data-panel-mode="assistant"] > * {
-  transition: opacity 100ms ease-out;
-}
-
-.expanding-panel-surface[data-panel-mode="assistant"][data-panel-closing="true"] > * {
-  pointer-events: none;
-  opacity: 0;
 }
 
 /* Live Transcript stages its empty surface before buffered text becomes visible. */
@@ -171,67 +158,6 @@
 
 .voice-identity-final-agent {
   color: var(--color-agent-brand);
-}
-
-/* Agent response controls and the persistent pill share the footer anchor.
-   Right-origin sessions retreat right and grow leftward; left-origin sessions
-   mirror the same choreography without swapping DOM order mid-transition. */
-.assistant-response-actions,
-.assistant-pill-presence {
-  --assistant-footer-shift: 0.875rem;
-  --assistant-footer-origin: right center;
-  transform-origin: var(--assistant-footer-origin);
-}
-
-.assistant-response-actions[data-horizontal-direction="left"],
-.assistant-pill-presence[data-horizontal-direction="left"] {
-  --assistant-footer-shift: -0.875rem;
-  --assistant-footer-origin: left center;
-}
-
-.assistant-response-actions[data-assistant-footer-phase="actions-entering"] {
-  pointer-events: none;
-  animation: assistant-footer-enter var(--assistant-actions-entrance-duration, 220ms)
-    cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.assistant-response-actions[data-assistant-footer-phase="actions-exiting"] {
-  pointer-events: none;
-  animation: assistant-footer-retreat var(--assistant-actions-retreat-duration, 220ms)
-    cubic-bezier(0.4, 0, 1, 1) both;
-}
-
-.assistant-pill-presence[data-assistant-footer-phase="pill-entering"] {
-  animation: assistant-footer-enter var(--assistant-pill-entrance-duration, 180ms)
-    cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.assistant-pill-presence[data-assistant-footer-phase="pill-exiting"] {
-  pointer-events: none;
-  animation: assistant-footer-retreat var(--assistant-pill-retreat-duration, 180ms)
-    cubic-bezier(0.4, 0, 1, 1) both;
-}
-
-@keyframes assistant-footer-enter {
-  from {
-    opacity: 0;
-    transform: translateX(var(--assistant-footer-shift)) scale(0.68);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0) scale(1);
-  }
-}
-
-@keyframes assistant-footer-retreat {
-  from {
-    opacity: 1;
-    transform: translateX(0) scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: translateX(var(--assistant-footer-shift)) scale(0.68);
-  }
 }
 
 .voice-pill-control[data-agent-beam-active="true"] {
@@ -484,18 +410,6 @@
   transform: translateX(-50%);
 }
 
-.voice-pill-position-assistant-bottom-right {
-  bottom: 1.75rem;
-  left: calc(100% - 1.75rem);
-  transform: translateX(-100%);
-}
-
-.voice-pill-position-assistant-bottom-left {
-  bottom: 1.75rem;
-  left: 1.75rem;
-  transform: none;
-}
-
 .voice-pill-position-live-transcript-bottom-left {
   bottom: 1.625rem;
   left: 1.75rem;
@@ -539,109 +453,6 @@
   }
 }
 
-/* Let the retained answer recede before the surface sweep begins. The filter
-   transitions once and then stays still; only the lightweight sweep repeats. */
-.assistant-response-content {
-  opacity: 1;
-  filter: blur(0);
-  transition:
-    opacity 260ms ease-out,
-    filter 260ms ease-out;
-}
-
-.assistant-response-content-updating {
-  opacity: 0.42;
-  filter: blur(4px);
-  transition:
-    opacity 480ms ease-in-out,
-    filter 480ms ease-in-out;
-  will-change: opacity, filter;
-}
-
-.assistant-content-area-shimmer {
-  background: color-mix(in oklch, var(--color-surface-1) 58%, transparent);
-  animation: assistant-content-area-enter 260ms ease-out 220ms both;
-}
-
-.assistant-content-area-shimmer::after {
-  position: absolute;
-  inset-block: 0;
-  left: -60%;
-  width: 60%;
-  content: "";
-  background: linear-gradient(
-    100deg,
-    transparent 18%,
-    color-mix(in oklch, var(--color-surface-3) 44%, transparent) 50%,
-    transparent 82%
-  );
-  transform: translateX(0);
-  animation: assistant-content-area-sweep 2.1s cubic-bezier(0.4, 0, 0.2, 1) 440ms infinite both;
-  will-change: transform;
-}
-
-.assistant-tool-invocation {
-  animation: assistant-content-area-enter 180ms ease-out both;
-}
-
-.assistant-tool-invocation-status {
-  box-shadow:
-    inset 0 1px 0 color-mix(in oklch, var(--color-foreground) 5%, transparent),
-    var(--shadow-card);
-}
-
-.assistant-tool-invocation-pulse::after {
-  position: absolute;
-  inset: -4px;
-  border: 1px solid color-mix(in oklch, var(--color-agent-brand) 58%, transparent);
-  border-radius: inherit;
-  content: "";
-  animation: assistant-tool-invocation-pulse 1.8s ease-out infinite;
-}
-
-.assistant-tool-invocation-verb {
-  animation: assistant-tool-invocation-verb-enter 200ms cubic-bezier(0.2, 0, 0, 1) both;
-}
-
-@keyframes assistant-tool-invocation-pulse {
-  0% {
-    opacity: 0.7;
-    transform: scale(0.55);
-  }
-  70%,
-  100% {
-    opacity: 0;
-    transform: scale(1.15);
-  }
-}
-
-@keyframes assistant-tool-invocation-verb-enter {
-  from {
-    opacity: 0;
-    transform: translateY(3px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes assistant-content-area-enter {
-  from {
-    opacity: 0;
-  }
-}
-
-@keyframes assistant-content-area-sweep {
-  0% {
-    transform: translateX(0);
-  }
-  68%,
-  100% {
-    transform: translateX(270%);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .expanding-panel-surface {
     transition-duration: 1ms;
@@ -653,11 +464,6 @@
     transition-delay: 0ms !important;
   }
 
-  .assistant-response-actions,
-  .assistant-pill-presence {
-    animation-duration: 1ms !important;
-  }
-
   .processing-signal-glow[data-active="true"],
   .processing-signal-glow[data-active="true"]::before {
     animation: none;
@@ -667,28 +473,5 @@
     animation: none;
     color: var(--color-foreground);
     -webkit-text-fill-color: currentColor;
-  }
-
-  .assistant-content-area-shimmer::after {
-    animation: none;
-    opacity: 0;
-  }
-
-  .assistant-content-area-shimmer {
-    animation: none;
-  }
-
-  .assistant-tool-invocation,
-  .assistant-tool-invocation-verb,
-  .assistant-tool-invocation-pulse::after {
-    animation: none;
-  }
-
-  .assistant-response-content {
-    transition: opacity 1ms;
-  }
-
-  .assistant-response-content-updating {
-    filter: none;
   }
 }

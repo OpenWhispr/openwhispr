@@ -17,9 +17,16 @@ const INTERPOLATION = /\{\{\s*([\w.]+)/g;
 const ARABIC_PLURAL_CATEGORIES = ["zero", "one", "two", "few", "many", "other"];
 const ARABIC_PLURAL_BASES = [
   "settingsPage.workspace.members.description",
-  "settingsPage.workspace.teams.memberCount",
-  "settingsPage.workspace.teams.grantsAccessToSpaces",
-  "settingsPage.workspace.teams.deleteConfirmSpaceAccess",
+  "settingsPage.workspace.teamspaces.adminCount",
+  "settingsPage.workspace.teamspaces.form.createdInviteFailed",
+  "settingsPage.workspace.teams.form.createdInvitedMany",
+  "settingsPage.workspace.teams.form.createdCounts",
+  "settingsPage.workspace.teamspaces.picker.teamPeople",
+  "settingsPage.workspace.teamspaces.picker.teamChip",
+  "settingsPage.workspace.teamspaces.picker.teamHasAccess",
+  "settingsPage.workspace.teamspaces.addPeople.addingTitle",
+  "settingsPage.workspace.teamspaces.addPeople.failedTitle",
+  "settingsPage.workspace.teamspaces.addPeople.done",
   "settingsPage.workspace.people.invitations.pending",
   "settingsPage.workspace.people.selection.count",
   "settingsPage.workspace.people.invitations.resentMany",
@@ -55,7 +62,6 @@ const ARABIC_PLURAL_BASES = [
   "workspaces.invite.seatCostManyUnpriced",
   "notes.spaces.noteCount",
   "notes.spaces.invitedTo",
-  "notes.spaces.members.invitedMany",
   "notes.addToFolder.addCount",
   "notes.overview.meta.folders",
   "notes.overview.meta.members",
@@ -87,7 +93,6 @@ const ARABIC_PLURAL_BASES = [
 ];
 const ARABIC_NUMBER_NEUTRAL_TEMPLATES = {
   "workspaces.invite.seatUsage": "المقاعد المستخدمة: {{used}} من أصل {{seats}}",
-  "notes.spaces.members.addFailed": "عدد الأشخاص الذين تعذرت إضافتهم: {{failed}} من أصل {{total}}",
   "notes.upload.partialWarningCount":
     "عدد الأجزاء الصوتية التي تعذر تفريغها: {{failed}} من أصل {{total}}.",
   "settingsPage.account.planDescriptions.trial": "عدد الأيام المتبقية: {{days}} - تفريغ غير محدود",
@@ -133,6 +138,9 @@ function registryDescriptionKeys(node, out = []) {
   if (Array.isArray(node)) {
     for (const child of node) registryDescriptionKeys(child, out);
   } else if (node && typeof node === "object") {
+    // Retired models never reach a picker (registryData strips them), so their
+    // descriptions never render.
+    if (node.retired) return out;
     if (typeof node.descriptionKey === "string") out.push(node.descriptionKey);
     for (const child of Object.values(node)) registryDescriptionKeys(child, out);
   }
@@ -359,4 +367,40 @@ test("Arabic plural counts resolve the exact CLDR form without English fallback"
       );
     }
   }
+});
+
+// Teams used to be called groups. The paywall and the workspaces intro use the
+// verb ("group people into teams"), so they sit outside the check.
+const OLD_TEAM_NOUN = {
+  en: /\bgroups?\b/i,
+  es: /grupos?/i,
+  fr: /groupes?/i,
+  de: /gruppen?/i,
+  pt: /grupos?/i,
+  it: /grupp[oi]/i,
+  ru: /групп/i,
+  "zh-CN": /群组|组/,
+  "zh-TW": /群組/,
+  ja: /グループ/,
+  ar: /مجموع/,
+};
+const GROUP_FREE_PREFIXES = ["settingsPage.workspace.", "notes.spaces."];
+const GROUP_FREE_KEYS = [
+  "notes.structureIntro.teamSpace.description",
+  "workspaces.invite.roleDescription.admin",
+];
+const GROUP_VERB_PREFIXES = ["settingsPage.workspace.teams.paywall"];
+
+test("no workspace copy says group", () => {
+  const found = [];
+  for (const locale of Object.keys(OLD_TEAM_NOUN)) {
+    for (const [key, value] of flatten(load(locale, "translation"))) {
+      const inScope =
+        GROUP_FREE_KEYS.includes(key) ||
+        GROUP_FREE_PREFIXES.some((prefix) => key.startsWith(prefix));
+      if (!inScope || GROUP_VERB_PREFIXES.some((prefix) => key.startsWith(prefix))) continue;
+      if (OLD_TEAM_NOUN[locale].test(String(value))) found.push(`${locale}: ${key}`);
+    }
+  }
+  assert.deepEqual(found, []);
 });

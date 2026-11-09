@@ -4,12 +4,13 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const Module = require("node:module");
+const { deferred } = require("./harness/deferred");
 
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
 
 // Registers the real handler closures against a fake `this` (the scaffolding
-// from agentDictationPillIpc.test.js) with the bearer state under test control
+// from windowIpcSenders.test.js) with the bearer state under test control
 // and the binding file in a temporary userData directory, so the scope
 // handlers run against the real accountScopeBinding.
 const handlers = new Map();
@@ -62,6 +63,16 @@ const electronStub = {
 Module._load = function loadWithMocks(request, parent, isMain) {
   if (request === "electron") return electronStub;
   if (parent?.filename === handlersModulePath) {
+    // Keep every cleanup target inside this harness's temporary userData.
+    if (request === "os") return { ...os, homedir: () => userDataDirectory };
+    if (request === "./autoStart") return { setAutoStartEnabled() {} };
+    if (request === "./modelDirUtils") {
+      return { getModelsDirForService: () => path.join(userDataDirectory, "models") };
+    }
+    if (request === "./modelManagerBridge") {
+      return { default: { deleteAllModels: async () => {} } };
+    }
+    if (request === "./onnxWorkerClient") return { stop: async () => {} };
     if (request === "./tokenStore") {
       return {
         get: () => tokenState.token,
@@ -137,6 +148,7 @@ test.before(() => {
 
 test.after(() => {
   fakeThis.metaActivation?.dispose?.();
+  fakeThis.productEvents?.dispose?.();
   Module._load = originalLoad;
   fs.rmSync(userDataDirectory, { recursive: true, force: true });
 });
@@ -351,27 +363,35 @@ test("senderless audio policy uses the current bearer or a live app window's coo
   const windowWithCookie = (value, destroyed = false) => ({
     isDestroyed: () => destroyed,
     webContents: {
-      session: { cookies: { get: async () => (value ? [{ name: "session", value }] : []) } },
+      session: {
+        cookies: { get: async () => (value ? [{ name: "openwhispr.session_token", value }] : []) },
+      },
     },
   });
   const renderer = windowWithCookie("renderer-session");
   t.mock.method(electronStub.BrowserWindow, "fromWebContents", () => renderer);
   for (const [token, controlPanel, main, event, expected] of [
     ["cli-bearer", null, null, {}, { Authorization: "Bearer cli-bearer" }],
-    [null, windowWithCookie("control-session"), null, {}, { Cookie: "session=control-session" }],
+    [
+      null,
+      windowWithCookie("control-session"),
+      null,
+      {},
+      { Cookie: "openwhispr.session_token=control-session" },
+    ],
     [
       null,
       windowWithCookie("stale", true),
       windowWithCookie("main-session"),
       {},
-      { Cookie: "session=main-session" },
+      { Cookie: "openwhispr.session_token=main-session" },
     ],
     [
       null,
       windowWithCookie("control-session"),
       null,
       { sender: {} },
-      { Cookie: "session=renderer-session" },
+      { Cookie: "openwhispr.session_token=renderer-session" },
     ],
     [null, windowWithCookie(""), null, {}, null],
   ]) {
@@ -569,4 +589,91 @@ test("account deletion still deletes the note mirrors when the enterprise vault 
   const result = await handlers.get("delete-account-data")({}, "deleted-account", 90);
   assert.equal(result.success, true);
   assert.deepEqual(mirrored, [11, 12]);
+});
+
+test("a late product event binding cannot recreate the queue for an erased account", async (t) => {
+  const originalApiUrl = process.env.OPENWHISPR_API_URL;
+  const originalTokenState = tokenState;
+  t.after(() => {
+    delete connectorManager.disconnectAll;
+    delete databaseManager.deleteAccountData;
+    tokenState = originalTokenState;
+    if (originalApiUrl === undefined) delete process.env.OPENWHISPR_API_URL;
+    else process.env.OPENWHISPR_API_URL = originalApiUrl;
+  });
+  process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
+  connectorManager.disconnectAll = async () => {};
+  databaseManager.deleteAccountData = () => ({ deletedNoteIds: [] });
+  const started = deferred();
+  const response = deferred();
+  t.mock.method(electronStub.net, "fetch", async (url) => {
+    if (url.endsWith("/api/product-events/app-session")) {
+      started.resolve();
+      return response.promise;
+    }
+    return { ok: false, status: 401 };
+  });
+  tokenState = { token: "erase-bearer", generation: 93 };
+  await setScope("erased-account", 93);
+  const binding = handlers.get("product-events-record-app-session")(
+    {},
+    {
+      accountId: "erased-account",
+      authGeneration: 93,
+    }
+  );
+  await started.promise;
+
+  const erased = await handlers.get("delete-account-data")({}, "erased-account", 93);
+  response.resolve({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      binding_id: "8413c2f3-a18d-4a12-9fe4-8f912f301d78",
+      authenticated_at: new Date().toISOString(),
+    }),
+  });
+  await binding;
+
+  assert.equal(erased.success, true);
+  const state = JSON.parse(
+    fs.readFileSync(path.join(userDataDirectory, "product-events.json"), "utf8")
+  );
+  assert.ok(!state.events.some((event) => event.account_id === "erased-account"));
+});
+
+test("Reset App Data erases the product event store and interrupted writes", async (t) => {
+  const originalApiUrl = process.env.OPENWHISPR_API_URL;
+  const originalTokenState = tokenState;
+  const collector = fakeThis.productEvents;
+  t.after(() => {
+    collector.dispose();
+    delete connectorManager.revokeAllStored;
+    tokenState = originalTokenState;
+    if (originalApiUrl === undefined) delete process.env.OPENWHISPR_API_URL;
+    else process.env.OPENWHISPR_API_URL = originalApiUrl;
+  });
+  process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
+  connectorManager.revokeAllStored = async () => {};
+  t.mock.method(electronStub.net, "fetch", async () => ({ ok: false, status: 503 }));
+  tokenState = { token: "reset-bearer", generation: 94 };
+  await setScope("reset-account", 94);
+  await handlers.get("product-events-record-onboarding-completed")(
+    {},
+    {
+      setupMode: "local",
+      flowVersion: "desktop-onboarding-1",
+    }
+  );
+  await collector.flush();
+  const file = path.join(userDataDirectory, "product-events.json");
+  assert.ok(fs.existsSync(file));
+  fs.copyFileSync(file, `${file}.111.tmp`);
+
+  tokenState = { token: null, generation: 95 };
+  const result = await handlers.get("cleanup-app")({ sender: {} });
+
+  assert.equal(result.success, true);
+  assert.equal(fs.existsSync(file), false);
+  assert.equal(fs.existsSync(`${file}.111.tmp`), false);
 });

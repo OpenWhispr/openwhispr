@@ -12,6 +12,7 @@ import {
   MAX_INVITE_RECIPIENTS,
   inviteSummary,
   isRetryableFailure,
+  seatsWarningMessage,
   type InviteFlowEvent,
   type InviteFlowState,
   type InviteRecipient,
@@ -30,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { WorkspaceErrorBar } from "./WorkspaceErrorBar";
+import { CHIP_REMOVE_BUTTON, CHIP_TONE_DEFAULT, CHIP_TONE_ERROR } from "./recipientChipStyles";
 
 export interface InviteSuggestion {
   email: string;
@@ -209,22 +211,9 @@ export function InvitePeopleView({
   // Over the ceiling, its blocking bar already says how many to remove; a seats count beside it
   // would name a different number.
   if (summary.overSeats && !summary.overCeiling) {
-    const { available: count, excess } = summary.overSeats;
-    const askOwner = !canManageBilling && billingManager;
-    // With no seats left, removing the excess would mean removing everyone.
-    let message: string;
-    if (count === 0) {
-      message = askOwner
-        ? t("workspaces.invite.seatsNoneAskOwner", { owner: isolate(askOwner) })
-        : t("workspaces.invite.seatsNone");
-    } else {
-      message = askOwner
-        ? t("workspaces.invite.seatsLeftAskOwner", { count, excess, owner: isolate(askOwner) })
-        : t("workspaces.invite.seatsLeft", { count, excess });
-    }
     warningBars.push({
       key: "seats",
-      message,
+      message: seatsWarningMessage(t, summary.overSeats, canManageBilling, billingManager),
       action:
         canManageBilling && !sending
           ? { label: t("workspaces.invite.upgrade"), onClick: onUpgrade }
@@ -328,6 +317,7 @@ export function InvitePeopleView({
         <InviteDoneContent
           workspaceName={workspaceName}
           sent={state.sent}
+          attachedCount={state.attached.length}
           headline={sentHeadline}
           undelivered={undelivered}
           noEmailCount={summary.noEmailCount}
@@ -352,6 +342,11 @@ export function InvitePeopleView({
             {state.sent.length > 0 ? (
               <p role="status" className="text-xs font-medium text-foreground">
                 {sentHeadline}
+              </p>
+            ) : null}
+            {state.attached.length > 0 ? (
+              <p role="status" className="text-xs font-medium text-foreground">
+                {t("workspaces.invite.attachedBody", { count: state.attached.length })}
               </p>
             ) : null}
           </div>
@@ -593,9 +588,7 @@ function RecipientChip({
       title={error}
       className={cn(
         "inline-flex h-7 max-w-full items-center gap-0.5 rounded-full border ps-2.5 pe-0.5 text-xs",
-        error
-          ? "border-destructive/60 bg-destructive/5 text-destructive"
-          : "border-border/70 bg-surface-2 text-foreground"
+        error ? CHIP_TONE_ERROR : CHIP_TONE_DEFAULT
       )}
     >
       <bdi dir="ltr" className="truncate">
@@ -606,7 +599,7 @@ function RecipientChip({
         disabled={disabled}
         onClick={onRemove}
         aria-label={t("workspaces.invite.removeRecipient", { email: recipient.email })}
-        className="flex size-6 shrink-0 items-center justify-center rounded-full opacity-70 transition-colors hover:bg-foreground/10 hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none"
+        className={CHIP_REMOVE_BUTTON}
       >
         <X className="size-3" aria-hidden="true" />
       </button>
@@ -617,6 +610,7 @@ function RecipientChip({
 function InviteDoneContent({
   workspaceName,
   sent,
+  attachedCount,
   headline,
   undelivered,
   noEmailCount,
@@ -626,6 +620,7 @@ function InviteDoneContent({
 }: {
   workspaceName: string;
   sent: InviteFlowState["sent"];
+  attachedCount: number;
   headline: string;
   /** Every invitation exists, but no email reached anyone, so this is no success to confirm. */
   undelivered: boolean;
@@ -652,10 +647,14 @@ function InviteDoneContent({
           )}
         </div>
         <DialogTitle className="text-lg font-medium leading-snug tracking-normal">
-          {headline}
+          {sent.length === 0
+            ? t("workspaces.invite.attachedTitle", { count: attachedCount })
+            : headline}
         </DialogTitle>
         <DialogDescription className="text-sm leading-normal">
-          {undelivered ? (
+          {sent.length === 0 ? (
+            t("workspaces.invite.attachedBody", { count: attachedCount })
+          ) : undelivered ? (
             t("workspaces.invite.noEmail", { count: noEmailCount })
           ) : sent.length === 1 ? (
             <BidiInterpolatedText
@@ -673,6 +672,11 @@ function InviteDoneContent({
           )}
         </DialogDescription>
       </div>
+      {sent.length > 0 && attachedCount > 0 ? (
+        <p className="text-center text-xs text-muted-foreground">
+          {t("workspaces.invite.attachedBody", { count: attachedCount })}
+        </p>
+      ) : null}
       {noEmailCount > 0 && !undelivered ? (
         <WorkspaceErrorBar
           tone="warning"

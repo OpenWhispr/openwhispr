@@ -33,6 +33,8 @@ function rig(storage = memoryStorage(), { allowed: initiallyAllowed = true } = {
     batchCode: null as string | null,
     bindStatus: 200,
     bindingId: BINDING,
+    linkedAccounts: new Map<string, string>(),
+    legacyBatch: false,
     offline: false,
     defer: new Set<string>(),
     // Runs after the server answered, before the client reads the answer.
@@ -41,6 +43,7 @@ function rig(storage = memoryStorage(), { allowed: initiallyAllowed = true } = {
     hold: null as Promise<void> | null,
   };
   const request = async (path: string, body: unknown, cookie: string) => {
+    const batch = body as Call['body'];
     if (server.hold && path.endsWith('/batch')) {
       const hold = server.hold;
       server.hold = null;
@@ -48,7 +51,7 @@ function rig(storage = memoryStorage(), { allowed: initiallyAllowed = true } = {
     }
     calls.push({
       path,
-      body: structuredClone(body) as Call['body'],
+      body: structuredClone(batch),
       cookie,
       delivered: !server.offline,
     });
@@ -62,14 +65,27 @@ function rig(storage = memoryStorage(), { allowed: initiallyAllowed = true } = {
               body: { binding_id: server.bindingId, authenticated_at: AUTHENTICATED_AT },
             }
           : { status: server.bindStatus, body: { code: 'ANONYMOUS_SESSION' } };
+    } else if (
+      server.legacyBatch &&
+      ('expected_user_id' in batch || 'anonymous_source_user_id' in batch)
+    ) {
+      response = { status: 400, body: { code: 'INVALID_REQUEST' } };
     } else if (server.batchStatus !== 200) {
       response = { status: server.batchStatus, body: { code: server.batchCode } };
     } else {
-      const ids = ((body as Call['body']).events ?? []).map((event) => event.event_id);
-      response = {
-        status: 200,
-        body: { accepted: ids.filter((id) => !server.defer.has(id)) },
-      };
+      const origin = batch.anonymous_source_user_id;
+      const linkedAccount = typeof origin === 'string' ? server.linkedAccounts.get(origin) : null;
+      if (origin && linkedAccount !== cookie) {
+        response = linkedAccount
+          ? { status: 409, body: { code: 'PRODUCT_EVENTS_LINK_MISMATCH' } }
+          : { status: 503, body: { code: 'PRODUCT_EVENTS_LINK_PENDING' } };
+      } else {
+        const ids = (batch.events ?? []).map((event) => event.event_id);
+        response = {
+          status: 200,
+          body: { accepted: ids.filter((id) => !server.defer.has(id)) },
+        };
+      }
     }
     server.afterAnswer?.();
     return response;
@@ -77,7 +93,7 @@ function rig(storage = memoryStorage(), { allowed: initiallyAllowed = true } = {
   const events = createProductEvents({
     storage,
     getIdentity: () => identity,
-    isAllowed: () => allowed,
+    getConsent: () => allowed,
     request,
     os: 'ios',
     appVersion: '1.2.6',
@@ -123,10 +139,10 @@ function rig(storage = memoryStorage(), { allowed: initiallyAllowed = true } = {
 function memoryStorage() {
   const items = new Map<string, string>();
   return {
-    getItem: async (key: string) => items.get(key) ?? null,
-    setItem: async (key: string, value: string) => {
+    getItem: jest.fn(async (key: string) => items.get(key) ?? null),
+    setItem: jest.fn(async (key: string, value: string) => {
       items.set(key, value);
-    },
+    }),
     queued: () =>
       (
         JSON.parse(items.get('openwhispr_product_events') ?? '{"events":[]}') as {
@@ -134,6 +150,14 @@ function memoryStorage() {
         }
       ).events,
   };
+}
+
+function deferred(): { promise: Promise<void>; release: () => void } {
+  let release!: () => void;
+  const promise = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return { promise, release };
 }
 
 const COMPLETION = { mode: 'private' as const, replay: false, flowVersion: 'mobile-onboarding-3' };
@@ -233,10 +257,92 @@ describe('mobile product events', () => {
     r.advance(60 * 60_000);
 
     // Signing up from the anonymous session: the server links the two.
+    r.server.linkedAccounts.set(ANONYMOUS.userId, ACCOUNT.cookie);
     await r.signInAs(ACCOUNT);
 
     const onboarding = r.sentEvents().find((event) => event.event_name === 'onboarding_completed');
     expect(onboarding).toMatchObject({ occurred_at: '2026-11-04T08:00:05.000Z', cookie: 'c-a1' });
+    expect(r.queued()).toEqual([]);
+  });
+
+  it('keeps an anonymous completion queued until the API verifies its link to the uploader', async () => {
+    const r = rig();
+    await r.signInAs(ANONYMOUS);
+    r.server.offline = true;
+    await r.events.recordOnboardingCompleted(COMPLETION);
+    r.server.offline = false;
+
+    await r.signInAs(ACCOUNT);
+
+    const batches = r.batches().filter((call) => call.cookie === ACCOUNT.cookie);
+    expect(
+      batches.map((call) => ({
+        source: call.body.anonymous_source_user_id,
+        names: call.body.events?.map((event) => event.event_name),
+      })),
+    ).toEqual([
+      { source: undefined, names: ['app_session_authenticated'] },
+      { source: ANONYMOUS.userId, names: ['onboarding_completed'] },
+    ]);
+    expect(r.queued().map((event) => event.owner_user_id)).toEqual([ANONYMOUS.userId]);
+
+    r.server.linkedAccounts.set(ANONYMOUS.userId, ACCOUNT.cookie);
+    await r.events.flush();
+    expect(r.queued()).toEqual([]);
+  });
+
+  it('a rejected origin cannot starve another origin or settle its queued events', async () => {
+    const secondOrigin = { userId: 'anon-2', isAnonymous: true, cookie: 'c-anon-2' };
+    const r = rig();
+    for (const origin of [ANONYMOUS, secondOrigin]) {
+      await r.signInAs(origin);
+      r.server.offline = true;
+      await r.events.recordOnboardingCompleted(COMPLETION);
+      r.server.offline = false;
+      await r.signInAs(ACCOUNT);
+    }
+    r.server.linkedAccounts.set(ANONYMOUS.userId, OTHER.cookie);
+    r.server.linkedAccounts.set(secondOrigin.userId, ACCOUNT.cookie);
+    r.calls.length = 0;
+
+    await r.events.flush();
+    await r.events.flush();
+
+    expect(r.batches().map((call) => call.body.anonymous_source_user_id)).toEqual([
+      ANONYMOUS.userId,
+      secondOrigin.userId,
+    ]);
+    expect(r.queued().map((event) => event.owner_user_id)).toEqual([ANONYMOUS.userId]);
+  });
+
+  it('keeps both own and anonymous milestones when a legacy API rejects the guarded batches', async () => {
+    const r = rig();
+    await r.signInAs(ANONYMOUS);
+    r.server.offline = true;
+    await r.events.recordOnboardingCompleted(COMPLETION);
+    r.server.offline = false;
+    r.server.legacyBatch = true;
+    await r.signInAs(ACCOUNT);
+
+    expect(r.queued().map((event) => event.owner_user_id)).toEqual([
+      ANONYMOUS.userId,
+      ACCOUNT.userId,
+    ]);
+    expect(
+      r
+        .batches()
+        .filter((call) => call.cookie === ACCOUNT.cookie)
+        .map((call) => [call.body.expected_user_id, call.body.anonymous_source_user_id]),
+    ).toEqual([
+      [ACCOUNT.userId, undefined],
+      [ACCOUNT.userId, ANONYMOUS.userId],
+    ]);
+    expect(r.timers).toHaveLength(1);
+
+    r.server.legacyBatch = false;
+    r.server.linkedAccounts.set(ANONYMOUS.userId, ACCOUNT.cookie);
+    r.timers[0]();
+    await r.events.flush();
     expect(r.queued()).toEqual([]);
   });
 
@@ -384,6 +490,77 @@ describe('mobile product events', () => {
 
     expect(r.queued()).toEqual([]);
     expect(r.batches()).toEqual([]);
+  });
+
+  it('does not dispatch coverage after opting out while loading the queue', async () => {
+    const r = rig();
+    const reading = deferred();
+    const read = deferred();
+    r.storage.getItem.mockImplementationOnce(async () => {
+      reading.release();
+      await read.promise;
+      return null;
+    });
+    r.setIdentityQuietly(ANONYMOUS);
+
+    const flushing = r.events.flush();
+    await reading.promise;
+    const disabling = r.setUsageAnalytics(false);
+    read.release();
+    await Promise.all([flushing, disabling]);
+
+    expect(r.calls).toEqual([]);
+  });
+
+  it('does not dispatch a bind after opting out while saving the installation ID', async () => {
+    const r = rig();
+    const writing = deferred();
+    const write = deferred();
+    r.storage.setItem.mockImplementationOnce(async () => undefined);
+    r.storage.setItem.mockImplementationOnce(async () => {
+      writing.release();
+      await write.promise;
+    });
+
+    const observing = r.signInAs(ACCOUNT);
+    await writing.promise;
+    const disabling = r.setUsageAnalytics(false);
+    write.release();
+    await Promise.all([observing, disabling]);
+
+    expect(r.calls).toEqual([]);
+  });
+
+  it('binds the held session again after an answer was discarded during opt-out', async () => {
+    const r = rig();
+    r.server.afterAnswer = () => r.setUsageAnalyticsQuietly(false);
+    await r.signInAs(ACCOUNT);
+    await r.setUsageAnalytics(false);
+    expect(r.queued()).toEqual([]);
+
+    r.server.afterAnswer = null;
+    await r.setUsageAnalytics(true);
+
+    expect(r.calls.filter((call) => call.path.endsWith('/app-session'))).toHaveLength(2);
+    expect(r.sentEvents().map((event) => event.event_id)).toEqual([BINDING]);
+  });
+
+  it('purges an interrupted opt-out on launch before a later opt-in can replay its queue', async () => {
+    const storage = memoryStorage();
+    const first = rig(storage);
+    await first.signInAs(ACCOUNT);
+    first.server.offline = true;
+    await first.events.recordOnboardingCompleted(COMPLETION);
+    expect(first.queued()).toHaveLength(1);
+
+    const relaunched = rig(storage, { allowed: false });
+    await relaunched.events.observeConsent();
+    expect(relaunched.calls).toEqual([]);
+    expect(relaunched.queued()).toEqual([]);
+
+    await relaunched.setUsageAnalytics(true);
+    await relaunched.signInAs(ACCOUNT);
+    expect(relaunched.sentEvents()).toEqual([]);
   });
 
   it('a guest without a session records nothing', async () => {

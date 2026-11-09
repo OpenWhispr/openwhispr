@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useMemo, useCallback, type ComponentProps } from "react";
 import { useTranslation } from "react-i18next";
 import { useUiLocale } from "../../hooks/useUiLocale";
-import { usePolicySnapshot } from "../../hooks/usePolicy";
+import { usePolicySnapshot, useTranscriptionChoiceRefusal } from "../../hooks/usePolicy";
+import { openProviderSettings } from "../../utils/describeProviderError";
 import { meetingRecordingRefusal } from "../../stores/policyRules";
 import {
   Loader2,
@@ -291,6 +292,7 @@ export default function NoteEditor({
   const { t } = useTranslation();
   const locale = useUiLocale();
   const recordingRefusal = meetingRecordingRefusal(usePolicySnapshot());
+  const recordingChoiceRefusal = useTranscriptionChoiceRefusal("meeting");
   // An upload's transcription lives in its transcript, so until the user writes
   // notes it opens there rather than on an empty "Your notes".
   const opensOnTranscript =
@@ -1031,7 +1033,11 @@ export default function NoteEditor({
     clearNoteConflict(note.client_note_id);
     // With no save pending, the owner's external-update resync applies the
     // fresh copy to the visible editor buffer.
-    if (fresh) updateNoteInStore(fresh);
+    if (fresh) {
+      // The row may have adopted the cloud copy's key; nothing may wait under it.
+      clearNoteConflict(fresh.client_note_id);
+      updateNoteInStore(fresh);
+    }
   }, [conflict, note.client_note_id, note.folder_id, note.id, note.space_id, onCancelPendingSaves]);
 
   // Keep the local edits, overwriting the cloud revision the user just saw.
@@ -1369,7 +1375,10 @@ export default function NoteEditor({
                   isRecording={isRecording}
                   isProcessing={isProcessing}
                   disabled={!recordingAllowed}
-                  disabledReason={t(MEETING_RECORDING_REFUSAL_KEYS[recordingRefusal])}
+                  disabledReason={t(
+                    recordingChoiceRefusal?.messageKey ??
+                      MEETING_RECORDING_REFUSAL_KEYS[recordingRefusal]
+                  )}
                   onStart={onStartRecording}
                   onStop={onStopRecording}
                 />
@@ -1436,23 +1445,34 @@ export default function NoteEditor({
           </div>
         )}
 
-        {/* Only the org's meeting switch earns a banner; other restrictions just disable recording. */}
-        {canEditNote && !recordingAllowed && recordingRefusal === "disabled" && (
-          <div className="h-8 mt-2 shrink-0 border-y border-warning/20 bg-warning/8 dark:bg-warning/10">
-            <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "flex h-full items-center gap-2 px-5")}>
-              <AlertTriangle
-                aria-hidden="true"
-                className="w-3 h-3 shrink-0 text-amber-600 dark:text-warning"
-              />
-              <p
-                role="status"
-                className="text-[11px] text-amber-700 dark:text-warning/90 flex-1 truncate"
-              >
-                {t(MEETING_RECORDING_REFUSAL_KEYS.disabled)}
-              </p>
+        {/* The org's meeting switch and a refused local model earn a banner; other restrictions just disable recording. */}
+        {canEditNote &&
+          !recordingAllowed &&
+          (recordingRefusal === "disabled" || recordingChoiceRefusal) && (
+            <div className="h-8 mt-2 shrink-0 border-y border-warning/20 bg-warning/8 dark:bg-warning/10">
+              <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "flex h-full items-center gap-2 px-5")}>
+                <AlertTriangle
+                  aria-hidden="true"
+                  className="w-3 h-3 shrink-0 text-amber-600 dark:text-warning"
+                />
+                <p
+                  role="status"
+                  className="text-[11px] text-amber-700 dark:text-warning/90 flex-1 truncate"
+                >
+                  {t(recordingChoiceRefusal?.messageKey ?? MEETING_RECORDING_REFUSAL_KEYS.disabled)}
+                </p>
+                {recordingChoiceRefusal && (
+                  <button
+                    type="button"
+                    onClick={() => openProviderSettings("noteRecording")}
+                    className="shrink-0 rounded-sm text-[11px] font-medium text-amber-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 dark:text-warning/90"
+                  >
+                    {t("providerErrors.openSettings")}
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
         <div className="flex-1 relative min-h-0">
           <div ref={contentScrollRef} className="h-full overflow-y-auto">

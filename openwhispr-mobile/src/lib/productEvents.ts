@@ -54,9 +54,8 @@ interface State {
   generation: number;
   events: QueuedEvent[];
   /**
-   * Anonymous onboarding users and the account each signed straight into.
-   * That sign-in is what the server links, so their queued events may upload
-   * on the account's session; no other account ever sends them.
+   * Candidate destinations for queued anonymous onboarding. The API must
+   * verify the completed link before it can adopt an event.
    */
   links: Record<string, string>;
   acknowledgedBindings: string[];
@@ -77,17 +76,16 @@ export type ProductEventsRequest = (
   path: string,
   body: unknown,
   cookie: string,
+  signal: AbortSignal,
 ) => Promise<ProductEventsResponse>;
 
 interface Dependencies {
   storage: ProductEventsStorage;
   getIdentity: () => ProductEventsIdentity | null;
   /**
-   * The Usage Analytics switch ("app-session analytics"). While it is off
-   * nothing is recorded, bound, uploaded or reported, so the account reads as
-   * unobserved.
+   * The Usage Analytics switch, or null while its saved value is unknown.
    */
-  isAllowed: () => boolean;
+  getConsent: () => boolean | null;
   request: ProductEventsRequest;
   os: string;
   appVersion: string | null;
@@ -117,7 +115,7 @@ function asRecord(value: unknown): Record<string, unknown> {
 export function createProductEvents({
   storage,
   getIdentity,
-  isAllowed,
+  getConsent,
   request,
   os,
   appVersion,
@@ -132,7 +130,10 @@ export function createProductEvents({
   let retryPending = false;
   let retryAttempt = 0;
   let lastIdentity: ProductEventsIdentity | null = null;
-  let lastAllowed = isAllowed();
+  let lastConsent: boolean | null | undefined;
+  let consent = new AbortController();
+  let purgeNeeded = false;
+  let purging: Promise<void> | null = null;
   // Per process run: the sessions bound and the sessions whose coverage was reported.
   const boundSessions = new Set<string>();
   const reportedSessions = new Set<string>();
@@ -166,25 +167,30 @@ export function createProductEvents({
     return run;
   }
 
-  function enqueue(event: Omit<QueuedEvent, 'identity_generation'>): Promise<void> {
+  function enqueue(
+    event: Omit<QueuedEvent, 'identity_generation'>,
+    mayRecord: () => boolean,
+  ): Promise<boolean> {
     return withState((current) => {
+      if (!mayRecord()) return { result: false };
       if (
         current.events.some((queued) => queued.event_id === event.event_id) ||
         current.acknowledgedBindings.includes(event.event_id.toLowerCase())
       ) {
-        return { result: undefined };
+        return { result: true };
       }
       const events = [...current.events, { ...event, identity_generation: current.generation }];
       return {
         // Oldest first out when full.
         next: { ...current, events: events.slice(-MAX_QUEUED_EVENTS) },
-        result: undefined,
+        result: true,
       };
     });
   }
 
-  function installationId(): Promise<string> {
+  function installationId(mayInstall: () => boolean = () => true): Promise<string | null> {
     return withState((current) => {
+      if (!mayInstall()) return { result: null };
       if (current.installationId) return { result: current.installationId };
       const id = randomUUID();
       return { next: { ...current, installationId: id }, result: id };
@@ -193,6 +199,10 @@ export function createProductEvents({
 
   function stillCurrent(identity: ProductEventsIdentity): boolean {
     return identityKey(getIdentity()) === identityKey(identity);
+  }
+
+  function mayCollect(signal: AbortSignal): boolean {
+    return !signal.aborted && !purgeNeeded && getConsent() === true;
   }
 
   function scheduleRetry(): void {
@@ -215,13 +225,15 @@ export function createProductEvents({
     const next = getIdentity();
     if (identityKey(previous) === identityKey(next)) return;
     lastIdentity = next;
+    const signal = consent.signal;
     await withState((current) => {
       const links =
-        previous?.isAnonymous && next && !next.isAnonymous
+        mayCollect(signal) && previous?.isAnonymous && next && !next.isAnonymous
           ? { ...current.links, [previous.userId]: next.userId }
           : current.links;
       return { next: { ...current, generation: current.generation + 1, links }, result: undefined };
     });
+    if (!mayCollect(signal) || identityKey(next) !== identityKey(getIdentity())) return;
     if (next && !next.isAnonymous) await bindAppSession(next);
     else await flush();
   }
@@ -232,16 +244,32 @@ export function createProductEvents({
    * observed from then on.
    */
   async function observeConsent(): Promise<void> {
-    const allowed = isAllowed();
-    if (allowed === lastAllowed) return;
-    lastAllowed = allowed;
-    if (!allowed) {
-      await withState((current) => ({
-        next: current.events.length > 0 ? { ...current, events: [] } : undefined,
-        result: undefined,
-      }));
+    const allowed = getConsent();
+    if (allowed !== lastConsent) {
+      lastConsent = allowed;
+      consent.abort();
+      consent = new AbortController();
+      boundSessions.clear();
+      reportedSessions.clear();
+      if (allowed === false) purgeNeeded = true;
+    } else if (!purgeNeeded) {
       return;
     }
+    const signal = consent.signal;
+    if (purgeNeeded) {
+      purging ??= withState((current) => ({
+        next: { ...current, events: [], links: {} },
+        result: undefined,
+      }))
+        .then(() => {
+          purgeNeeded = false;
+        })
+        .finally(() => {
+          purging = null;
+        });
+      await purging;
+    }
+    if (!mayCollect(signal)) return;
     const identity = getIdentity();
     if (identity && !identity.isAnonymous) await bindAppSession(identity);
     else await flush();
@@ -255,50 +283,61 @@ export function createProductEvents({
    */
   async function bindAppSession(identity: ProductEventsIdentity): Promise<void> {
     // The binding itself is a server record, so it waits for the switch too.
-    if (!isAllowed()) return;
+    const signal = consent.signal;
+    const active = (): boolean => mayCollect(signal) && stillCurrent(identity);
+    if (!active()) return;
     const key = identityKey(identity) as string;
     if (boundSessions.has(key)) return flush();
     boundSessions.add(key);
-    let response: ProductEventsResponse | null = null;
+    let keepBound = false;
     try {
-      response = await request(
-        '/api/product-events/app-session',
-        {
-          surface: 'mobile',
-          os,
-          installation_id: await installationId(),
-          app_version: appVersion,
-        },
-        identity.cookie,
-      );
-    } catch {
-      response = null;
-    }
-    const body = asRecord(response?.body);
-    if (
-      response?.status !== 200 ||
-      typeof body.binding_id !== 'string' ||
-      typeof body.authenticated_at !== 'string'
-    ) {
-      // Refused (policy, unbindable) or unanswered: unobserved, never a client
-      // time. An outage may bind on the next change of session or relaunch.
-      if (!response || response.status >= 500) boundSessions.delete(key);
+      let response: ProductEventsResponse | null = null;
+      try {
+        const installation = await installationId(active);
+        if (!installation || !active()) return;
+        response = await request(
+          '/api/product-events/app-session',
+          {
+            surface: 'mobile',
+            os,
+            installation_id: installation,
+            app_version: appVersion,
+          },
+          identity.cookie,
+          signal,
+        );
+      } catch {
+        // A transport failure may bind on the next session change or relaunch.
+      }
+      if (!active()) return;
+      const body = asRecord(response?.body);
+      if (
+        response?.status === 200 &&
+        typeof body.binding_id === 'string' &&
+        typeof body.authenticated_at === 'string'
+      ) {
+        keepBound = await enqueue(
+          {
+            event_id: body.binding_id,
+            event_name: 'app_session_authenticated',
+            occurred_at: body.authenticated_at,
+            owner_user_id: identity.userId,
+            owner_is_anonymous: false,
+            app_version: appVersion,
+            flow_version: null,
+            properties: { binding_id: body.binding_id },
+            captured_at: new Date(now()).toISOString(),
+          },
+          active,
+        );
+      } else {
+        keepBound = response !== null && response.status < 500;
+      }
       return flush();
+    } finally {
+      // A newer consent epoch can already be binding this same session.
+      if (!keepBound && !signal.aborted) boundSessions.delete(key);
     }
-    if (!stillCurrent(identity) || !isAllowed()) return;
-    await enqueue({
-      // One binding is one event: relaunches resend the same id.
-      event_id: body.binding_id,
-      event_name: 'app_session_authenticated',
-      occurred_at: body.authenticated_at,
-      owner_user_id: identity.userId,
-      owner_is_anonymous: false,
-      app_version: appVersion,
-      flow_version: null,
-      properties: { binding_id: body.binding_id },
-      captured_at: new Date(now()).toISOString(),
-    });
-    return flush();
   }
 
   /**
@@ -317,20 +356,25 @@ export function createProductEvents({
     flowVersion: string;
   }): Promise<void> {
     const identity = getIdentity();
-    if (!identity || !isAllowed()) return;
+    const signal = consent.signal;
+    const active = (): boolean => mayCollect(signal);
+    if (!identity || !active()) return;
     const occurredAt = new Date(now()).toISOString();
-    await enqueue({
-      event_id: randomUUID(),
-      event_name: 'onboarding_completed',
-      occurred_at: occurredAt,
-      owner_user_id: identity.userId,
-      owner_is_anonymous: identity.isAnonymous,
-      app_version: appVersion,
-      flow_version: flowVersion,
-      properties: mode ? { replay, setup_mode: SETUP_MODES[mode] } : { replay },
-      captured_at: occurredAt,
-    });
-    await flush();
+    const queued = await enqueue(
+      {
+        event_id: randomUUID(),
+        event_name: 'onboarding_completed',
+        occurred_at: occurredAt,
+        owner_user_id: identity.userId,
+        owner_is_anonymous: identity.isAnonymous,
+        app_version: appVersion,
+        flow_version: flowVersion,
+        properties: mode ? { replay, setup_mode: SETUP_MODES[mode] } : { replay },
+        captured_at: occurredAt,
+      },
+      active,
+    );
+    if (queued && active()) await flush();
   }
 
   function flush(): Promise<void> {
@@ -351,103 +395,134 @@ export function createProductEvents({
 
   async function runPass(): Promise<void> {
     const identity = getIdentity();
-    if (!identity || !isAllowed()) return;
+    const signal = consent.signal;
+    if (!identity || !mayCollect(signal)) return;
+    const active = (): boolean => mayCollect(signal) && stillCurrent(identity);
     const key = identityKey(identity) as string;
     if (blockedSessions.has(key)) return;
 
-    const pending = await withState((current) => {
+    const batches = await withState((current) => {
       const cutoff = now() - MAX_EVENT_AGE_MS;
       const events = current.events.filter((event) => !(Date.parse(event.captured_at) < cutoff));
-      // This session's own events, and those of an anonymous user that signed
-      // straight into it. Another account's wait for that account.
-      const ours = events
-        .filter(
-          (event) =>
-            event.owner_user_id === identity.userId ||
-            (event.owner_is_anonymous && current.links[event.owner_user_id] === identity.userId),
-        )
-        .slice(0, BATCH_SIZE);
+      // Own events go first. Each candidate anonymous origin needs a separate
+      // request so the API can verify its link without blocking other origins.
+      const groups = new Map<string | null, QueuedEvent[]>([[null, []]]);
+      for (const event of events) {
+        const ownEvent = event.owner_user_id === identity.userId;
+        const candidateLink =
+          !identity.isAnonymous &&
+          event.owner_is_anonymous &&
+          current.links[event.owner_user_id] === identity.userId;
+        if (!ownEvent && !candidateLink) continue;
+        const origin = ownEvent ? null : event.owner_user_id;
+        const group = groups.get(origin) ?? [];
+        if (group.length < BATCH_SIZE) group.push(event);
+        groups.set(origin, group);
+      }
       return {
-        next: events.length === current.events.length ? undefined : { ...current, events },
-        result: ours,
+        next:
+          active() && events.length !== current.events.length ? { ...current, events } : undefined,
+        result: [...groups].filter(
+          ([, pending]) => pending.length > 0 || !reportedSessions.has(key),
+        ),
       };
     });
-    if (pending.length === 0 && reportedSessions.has(key)) return;
+    if (!active() || batches.length === 0) return;
+    const installation = await installationId(active);
+    if (!installation) return;
+    let retry = false;
+    let more = false;
 
-    const response = await request(
-      '/api/product-events/batch',
-      {
-        collector: {
-          surface: 'mobile',
-          os,
-          installation_id: await installationId(),
-          app_version: appVersion,
-          capabilities: PRODUCT_EVENT_CAPABILITIES,
-          sent_at: new Date(now()).toISOString(),
+    for (const [origin, pending] of batches) {
+      if (!active()) return;
+      const response = await request(
+        '/api/product-events/batch',
+        {
+          expected_user_id: identity.userId,
+          ...(origin ? { anonymous_source_user_id: origin } : {}),
+          collector: {
+            surface: 'mobile',
+            os,
+            installation_id: installation,
+            app_version: appVersion,
+            capabilities: PRODUCT_EVENT_CAPABILITIES,
+            sent_at: new Date(now()).toISOString(),
+          },
+          events: pending.map((event) => ({
+            event_id: event.event_id,
+            event_name: event.event_name,
+            schema_version: SCHEMA_VERSION,
+            occurred_at: event.occurred_at,
+            app_version: event.app_version,
+            flow_version: event.flow_version,
+            identity_generation: event.identity_generation,
+            properties: event.properties,
+          })),
         },
-        events: pending.map((event) => ({
-          event_id: event.event_id,
-          event_name: event.event_name,
-          schema_version: SCHEMA_VERSION,
-          occurred_at: event.occurred_at,
-          app_version: event.app_version,
-          flow_version: event.flow_version,
-          identity_generation: event.identity_generation,
-          properties: event.properties,
-        })),
-      },
-      identity.cookie,
-    );
-    // The answer is for a session the store may no longer hold; the next
-    // pass, under whichever session it holds now, settles the queue.
-    if (!stillCurrent(identity)) return;
+        identity.cookie,
+        signal,
+      ).catch(() => null);
+      if (!active()) return;
 
-    const body = asRecord(response.body);
-    if (response.status === 403 && String(body.code ?? '').startsWith('POLICY_')) {
-      // The organization keeps this account unobserved; what it queued is not
-      // collected later either.
-      blockedSessions.add(key);
-      const sent = new Set(pending.map((event) => event.event_id));
-      await withState((current) => ({
-        next: { ...current, events: current.events.filter((event) => !sent.has(event.event_id)) },
-        result: undefined,
-      }));
-      return;
-    }
-    // A dead session waits for the next one.
-    if (response.status === 401) return;
-    // Includes 503 PRODUCT_EVENTS_RETRY, sent when an identity link completed mid-upload.
-    if (response.status !== 200)
-      throw new Error(`Product events upload failed: ${response.status}`);
+      const body = asRecord(response?.body);
+      if (response?.status === 403 && String(body.code ?? '').startsWith('POLICY_')) {
+        blockedSessions.add(key);
+        const sent = new Set(pending.map((event) => event.event_id));
+        await withState((current) => ({
+          next: active()
+            ? { ...current, events: current.events.filter((event) => !sent.has(event.event_id)) }
+            : undefined,
+          result: undefined,
+        }));
+        return;
+      }
+      if (response?.status === 409 && origin && body.code === 'PRODUCT_EVENTS_LINK_MISMATCH') {
+        await withState((current) => {
+          if (!active() || current.links[origin] !== identity.userId) return { result: undefined };
+          // Preserve the original owner's queue. Retire only this routing hint.
+          const links = { ...current.links };
+          delete links[origin];
+          return { next: { ...current, links }, result: undefined };
+        });
+        continue;
+      }
+      if (response?.status === 401 || body.code === 'PRODUCT_EVENTS_ACCOUNT_CHANGED') return;
+      // An unavailable link or older API keeps its source queued. Give the
+      // other origins a chance in the same pass.
+      if (response?.status !== 200) {
+        retry = true;
+        continue;
+      }
 
-    retryAttempt = 0;
-    reportedSessions.add(key);
-    // Only accepted ids leave the queue. Deferred ones (an older API that
-    // doesn't know the event yet) and any id the answer leaves out stay,
-    // until accepted or too old, and go again with the next upload.
-    const accepted = new Set(
-      (Array.isArray(body.accepted) ? body.accepted : []).map((id) => String(id).toLowerCase()),
-    );
-    if (accepted.size > 0) {
-      const bindings = pending
-        .filter(
-          (event) =>
-            event.event_name === 'app_session_authenticated' &&
-            accepted.has(event.event_id.toLowerCase()),
-        )
-        .map((event) => event.event_id.toLowerCase());
-      await withState((current) => ({
-        next: {
-          ...current,
-          acknowledgedBindings: [...current.acknowledgedBindings, ...bindings].slice(
-            -MAX_ACKNOWLEDGED_BINDINGS,
-          ),
-          events: current.events.filter((event) => !accepted.has(event.event_id.toLowerCase())),
-        },
-        result: undefined,
-      }));
+      reportedSessions.add(key);
+      const accepted = new Set(
+        (Array.isArray(body.accepted) ? body.accepted : []).map((id) => String(id).toLowerCase()),
+      );
+      const acknowledged = pending.filter((event) => accepted.has(event.event_id.toLowerCase()));
+      if (acknowledged.length > 0) {
+        const ids = new Set(acknowledged.map((event) => event.event_id));
+        const bindings = acknowledged
+          .filter((event) => event.event_name === 'app_session_authenticated')
+          .map((event) => event.event_id.toLowerCase());
+        await withState((current) => ({
+          next: active()
+            ? {
+                ...current,
+                acknowledgedBindings: [...current.acknowledgedBindings, ...bindings].slice(
+                  -MAX_ACKNOWLEDGED_BINDINGS,
+                ),
+                events: current.events.filter((event) => !ids.has(event.event_id)),
+              }
+            : undefined,
+          result: undefined,
+        }));
+      }
+      if (pending.length === BATCH_SIZE && acknowledged.length === pending.length) more = true;
     }
-    if (pending.length === BATCH_SIZE && accepted.size === pending.length) await runPass();
+    if (!active()) return;
+    if (retry) scheduleRetry();
+    else retryAttempt = 0;
+    if (more) await runPass();
   }
 
   return {
@@ -488,10 +563,15 @@ export function initProductEvents(): void {
         ? { userId: user.id, isAnonymous: user.isAnonymous, cookie: sessionCookie }
         : null;
     },
-    isAllowed: () => isUsageAnalyticsAllowed(useConfigStore.getState().config),
-    request: async (path, body, cookie) => {
+    getConsent: () => {
+      const { config } = useConfigStore.getState();
+      return config === null ? null : isUsageAnalyticsAllowed(config);
+    },
+    request: async (path, body, cookie, signal) => {
       const response = await fetch(`${BASE_URL}${path}`, {
         method: 'POST',
+        credentials: 'omit',
+        signal,
         headers: {
           'Content-Type': 'application/json',
           ...getClientVersionHeader(),
@@ -510,9 +590,11 @@ export function initProductEvents(): void {
     instance.observeIdentity().catch(() => undefined);
   };
   useAuthStore.subscribe(observe);
-  useConfigStore.subscribe(() => {
+  const observeConsent = () => {
     instance.observeConsent().catch(() => undefined);
-  });
+  };
+  useConfigStore.subscribe(observeConsent);
+  observeConsent();
   observe();
 }
 
