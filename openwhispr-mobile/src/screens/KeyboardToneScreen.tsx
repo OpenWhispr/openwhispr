@@ -23,7 +23,7 @@ export default function KeyboardToneScreen() {
     (state) => resolveCustomPrompt(state.customPrompts.cleanup) !== undefined,
   );
   const notice = !applicable
-    ? 'Tone requires Cloud mode with Text Cleanup turned on. Your choice is saved and will apply once both are active.'
+    ? 'Tone requires Cloud mode with Text Cleanup turned on. Your choice is saved.'
     : hasCustomPrompt
       ? "You're using a custom cleanup prompt, so tone isn't applied to your dictations. Your choice is saved and will apply if you reset the prompt to the default."
       : null;

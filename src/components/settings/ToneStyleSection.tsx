@@ -78,7 +78,7 @@ export default function ToneStyleSection({ onOpenCleanupSettings }: ToneStyleSec
         </InfoBox>
       )}
 
-      {/* A custom cleanup prompt is applied as written, without a tone. */}
+      {/* A custom cleanup prompt takes no tone. */}
       {toneStyleEnabled && useCleanupModel && hasCustomCleanupPrompt && (
         <InfoBox variant="warning" className="mb-6 p-3">
           <p className="text-[13px] text-foreground">{t("toneStyle.settings.customPrompt")}</p>
