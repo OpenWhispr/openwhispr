@@ -1273,6 +1273,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     setupLayout()
     applyKeyboardHeight()
     refreshRecordButton()
+    letterLayout = KeyboardHandoffProvider.shared.letterLayout()
     buildKeyboardIfNeeded()
   }
 
@@ -1310,6 +1311,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   // textDidChange when the keyboard opens: shift and the return key follow the field here.
   override func viewWillAppear(_ animated: Bool) {
     super.viewWillAppear(animated)
+    // The extension can outlive a change made in the app, so the layout is read again.
+    let storedLayout = KeyboardHandoffProvider.shared.letterLayout()
+    if storedLayout != letterLayout {
+      letterLayout = storedLayout
+      if didBuildKeyboard { rebuildKeyboard() }
+    }
     noteFieldReport()
     syncShiftWithContextIfNeeded()
     refreshFieldAwareKeys()
@@ -2616,11 +2623,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     rebuildKeyboard()
   }
 
-  private static let letterRows: [[String]] = [
-    ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
-    ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
-    ["z", "x", "c", "v", "b", "n", "m"],
-  ]
+  /// The letter page's layout, mirrored from the app's Settings → Keyboard Layout. Read
+  /// before the first build and again whenever the keyboard appears.
+  private var letterLayout = KeyboardLetterLayout.english
   // (display, output): the quote keys show curly marks and insert straight ones, which
   // smartQuoteSubstitution turns into context-aware curly quotes.
   private static let numberRows: [[(display: String, output: String)]] = [
@@ -2662,10 +2667,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     keyboardRowsStack.addArrangedSubview(numbersRowsStack)
     keyboardRowsStack.addArrangedSubview(symbolsRowsStack)
 
-    let letters = Self.letterRows.map { row in row.map { (display: $0, output: $0) } }
-    addCharacterRow(letters[0], to: lettersRowsStack, registersLetters: true)
-    addCharacterRow(letters[1], to: lettersRowsStack, registersLetters: true)
-    addLettersThirdRow(letters[2], to: lettersRowsStack)
+    let letters = letterLayout.rows.map { row in row.map { (display: $0, output: $0) } }
+    let columns = letterLayout.columns
+    addCharacterRow(letters[0], to: lettersRowsStack, registersLetters: true, columns: columns)
+    addCharacterRow(letters[1], to: lettersRowsStack, registersLetters: true, columns: columns)
+    addLettersThirdRow(letters[2], to: lettersRowsStack, columns: columns)
     addMainBottomRow(to: keyboardRowsStack)
     refreshVisibleKeyboardMode()
     refreshShiftState()
@@ -2693,6 +2699,21 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     )
     constraint.priority = priority
     return constraint
+  }
+
+  /// A width of `count` keys and the gaps between them, on a page `columns` keys wide.
+  /// keyWidthGuide is a tenth of the rows less nine-tenths of a gap, so a key on an
+  /// eleven-column page (German QWERTZ) is (10 guide widths - 1 gap) / 11.
+  private func widthOfKeys(_ view: UIView, count: Int, columns: Int) -> NSLayoutConstraint {
+    let span = Self.keySpan(count: count, columns: columns)
+    return widthOfKeys(view, keys: span.keys, gaps: span.gaps)
+  }
+
+  /// `count` keys of a page `columns` keys wide, in guide widths and key gaps.
+  private static func keySpan(count: Int, columns: Int) -> (keys: CGFloat, gaps: CGFloat) {
+    let count = CGFloat(count)
+    let columns = CGFloat(columns)
+    return (10 * count / columns, count - 1 - count * (columns - 10) / columns)
   }
 
   /// A letter key's width at the current keyboard width, before layout has run.
@@ -2888,19 +2909,20 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     return rowContainer
   }
 
-  /// One row of equal character keys. Rows shorter than ten keys are centred, which
-  /// gives the A row Apple's half-key indent.
+  /// One row of equal character keys, on a page `columns` keys wide. Rows shorter than
+  /// the page are centred, which gives the A row Apple's half-key indent.
   private func addCharacterRow(
     _ keys: [(display: String, output: String)],
     to stack: UIStackView,
-    registersLetters: Bool = false
+    registersLetters: Bool = false,
+    columns: Int = 10
   ) {
     let rowContainer = addRowContainer(to: stack)
     let rowStack = makeKeyStack(keys, registersLetters: registersLetters)
     rowContainer.addSubview(rowStack)
     NSLayoutConstraint.activate([
       rowStack.centerXAnchor.constraint(equalTo: rowContainer.centerXAnchor),
-      widthOfKeys(rowStack, keys: CGFloat(keys.count), gaps: CGFloat(keys.count - 1)),
+      widthOfKeys(rowStack, count: keys.count, columns: columns),
       rowStack.topAnchor.constraint(equalTo: rowContainer.topAnchor),
       rowStack.bottomAnchor.constraint(equalTo: rowContainer.bottomAnchor),
     ])
@@ -2938,12 +2960,22 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     return stack
   }
 
-  private func addLettersThirdRow(_ keys: [(display: String, output: String)], to stack: UIStackView) {
+  private func addLettersThirdRow(
+    _ keys: [(display: String, output: String)],
+    to stack: UIStackView,
+    columns: Int
+  ) {
     let shift = makeKeyButton(display: nil, imageSystemName: "shift", role: .utility)
     shift.imageOffsetY = metrics.keycaps.edgeGlyphOffset
     shift.addTarget(self, action: #selector(handleShiftTapped), for: .touchUpInside)
     shiftButton = shift
-    addThirdRow(leadingKey: shift, keys: makeKeyStack(keys, registersLetters: true), to: stack)
+    addThirdRow(
+      leadingKey: shift,
+      keys: makeKeyStack(keys, registersLetters: true),
+      keyCount: keys.count,
+      columns: columns,
+      to: stack
+    )
   }
 
   private func addPunctuationThirdRow(pageKeyTitle: String, to stack: UIStackView) {
@@ -2957,13 +2989,25 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
     pageKey.addTarget(self, action: #selector(handlePageKeyTapped), for: .touchUpInside)
     addThirdRow(
-      leadingKey: pageKey, keys: makeKeyStack(Self.punctuationRow, registersLetters: false), to: stack
+      leadingKey: pageKey,
+      keys: makeKeyStack(Self.punctuationRow, registersLetters: false),
+      keyCount: 7,
+      columns: 10,
+      to: stack
     )
   }
 
-  /// Row 3 of every page: a function key at each edge and seven letter widths of keys
-  /// centred between them, so Z sits under S and the five symbol keys span Z…M.
-  private func addThirdRow(leadingKey: KeyButton, keys: UIStackView, to stack: UIStackView) {
+  /// Row 3 of every page: a function key at each edge and `keyCount` letter widths of
+  /// keys centred between them, so Z sits under S and the five symbol keys span Z…M.
+  /// On an eleven-column page the letters are narrower, and the function keys take the
+  /// room they leave, so the space between shift and Y stays the one beside Z in English.
+  private func addThirdRow(
+    leadingKey: KeyButton,
+    keys: UIStackView,
+    keyCount: Int,
+    columns: Int,
+    to stack: UIStackView
+  ) {
     let rowContainer = addRowContainer(to: stack)
 
     let backspace = makeKeyButton(display: nil, imageSystemName: "delete.left", role: .utility)
@@ -2977,6 +3021,13 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     longPress.minimumPressDuration = 0.35
     backspace.addGestureRecognizer(longPress)
 
+    // The room beside the centred keys, less what it is with seven keys on ten columns.
+    let span = Self.keySpan(count: keyCount, columns: columns)
+    let reference = Self.keySpan(count: 7, columns: 10)
+    let functionKeys = (
+      keys: metrics.functionKeys + (reference.keys - span.keys) / 2,
+      gaps: (reference.gaps - span.gaps) / 2
+    )
     for item in [leadingKey, keys, backspace] {
       rowContainer.addSubview(item)
       item.topAnchor.constraint(equalTo: rowContainer.topAnchor).isActive = true
@@ -2984,11 +3035,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
     NSLayoutConstraint.activate([
       leadingKey.leadingAnchor.constraint(equalTo: rowContainer.leadingAnchor),
-      widthOfKeys(leadingKey, keys: metrics.functionKeys),
+      widthOfKeys(leadingKey, keys: functionKeys.keys, gaps: functionKeys.gaps),
       backspace.trailingAnchor.constraint(equalTo: rowContainer.trailingAnchor),
-      widthOfKeys(backspace, keys: metrics.functionKeys),
+      widthOfKeys(backspace, keys: functionKeys.keys, gaps: functionKeys.gaps),
       keys.centerXAnchor.constraint(equalTo: rowContainer.centerXAnchor),
-      widthOfKeys(keys, keys: 7, gaps: 6),
+      widthOfKeys(keys, count: keyCount, columns: columns),
     ])
   }
 
@@ -4729,6 +4780,48 @@ private struct AgentResult {
   let updatedAtMs: Double?
 }
 
+/// The letter page's keys, chosen in the app (Settings → Keyboard Layout). The raw values are
+/// what the app writes to the App Group; keep them in step with KEYBOARD_LETTER_LAYOUTS in
+/// src/lib/keyboardLayout.ts. German and Swiss French follow the physical keyboards of their
+/// countries: QWERTZ with the umlauts, or with the accented letters that share those keys in
+/// Switzerland.
+enum KeyboardLetterLayout: String, CaseIterable {
+  case english = "en"
+  case german = "de"
+  case swissFrench = "fr_CH"
+
+  /// Anything unknown, including a value from a newer app, falls back to English.
+  init(storedValue: String?) {
+    self = storedValue.flatMap(Self.init(rawValue:)) ?? .english
+  }
+
+  var rows: [[String]] {
+    switch self {
+    case .english:
+      return [
+        ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
+        ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
+        ["z", "x", "c", "v", "b", "n", "m"],
+      ]
+    case .german:
+      return [
+        ["q", "w", "e", "r", "t", "z", "u", "i", "o", "p", "ü"],
+        ["a", "s", "d", "f", "g", "h", "j", "k", "l", "ö", "ä"],
+        ["y", "x", "c", "v", "b", "n", "m"],
+      ]
+    case .swissFrench:
+      return [
+        ["q", "w", "e", "r", "t", "z", "u", "i", "o", "p", "è"],
+        ["a", "s", "d", "f", "g", "h", "j", "k", "l", "é", "à"],
+        ["y", "x", "c", "v", "b", "n", "m"],
+      ]
+    }
+  }
+
+  /// Keys in the widest row: the page's key width is the row width over this.
+  var columns: Int { rows.map(\.count).max() ?? 10 }
+}
+
 private struct KeyboardHandoffProvider {
   static let shared = KeyboardHandoffProvider()
 
@@ -4780,6 +4873,7 @@ private struct KeyboardHandoffProvider {
   private let transcriptionErrorKey = "keyboard_transcription_error"
   private let transcriptionStatusUpdatedAtMsKey = "keyboard_transcription_status_updated_at_ms"
   private let dictationToneKey = "keyboard_dictation_tone"
+  private let letterLayoutKey = "keyboard_letter_layout"
   private let toneApplicableKey = "keyboard_tone_applicable"
   // Dictation-agent mirror keys (app-written, persist across launches) and the
   // one-shot request / result channels shared with the main app.
@@ -4889,6 +4983,11 @@ private struct KeyboardHandoffProvider {
       return "default"
     }
     return raw
+  }
+
+  /// English without Full Access, where the App Group can't be read.
+  func letterLayout() -> KeyboardLetterLayout {
+    KeyboardLetterLayout(storedValue: UserDefaults(suiteName: appGroupId)?.string(forKey: letterLayoutKey))
   }
 
   func setTone(_ tone: String) {

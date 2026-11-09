@@ -40,6 +40,7 @@ import { initSyncTriggers } from '@/sync/syncEngine';
 import { PermissionAlertMount } from '@/components/ui/PermissionAlert';
 import { startKeyboardToneSync } from '@/lib/keyboardToneSync';
 import { startKeyboardAgentSync } from '@/lib/keyboardAgentSync';
+import { startKeyboardLayoutSync } from '@/lib/keyboardLayoutSync';
 import { startKeyboardFullAccessProbe } from '@/lib/keyboardFullAccessProbe';
 import { OpenWhisprSuperwallProvider } from '@/components/superwall/OpenWhisprSuperwallProvider';
 import { eraseProviderCredentialsFromPreviousInstall } from '@/services/providers/ProviderCredentials';
@@ -103,6 +104,7 @@ function RootLayout() {
     let started = false;
     let stopTone: (() => void) | undefined;
     let stopAgent: (() => void) | undefined;
+    let stopLayout: (() => void) | undefined;
     let stopFullAccessProbe: (() => void) | undefined;
     // Waits for config to hydrate so the probe's Sentry events respect the
     // user's Usage Analytics preference rather than the pre-hydration default.
@@ -112,6 +114,7 @@ function RootLayout() {
         started = true;
         stopTone = startKeyboardToneSync();
         stopAgent = startKeyboardAgentSync();
+        stopLayout = startKeyboardLayoutSync();
         stopFullAccessProbe = startKeyboardFullAccessProbe();
       }
     };
@@ -122,6 +125,7 @@ function RootLayout() {
       unsubscribe();
       stopTone?.();
       stopAgent?.();
+      stopLayout?.();
       stopFullAccessProbe?.();
     };
   }, []);

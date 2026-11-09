@@ -9,6 +9,7 @@ import { useConfigStore } from '@/store/useConfigStore';
 import { useConfigToggle } from '@/hooks/useConfigToggle';
 import { DEFAULT_LANGUAGE, getLanguage } from '@/lib/languages';
 import { toneLabel, DEFAULT_KEYBOARD_TONE } from '@/lib/keyboardTone';
+import { letterLayoutLabel, DEFAULT_KEYBOARD_LETTER_LAYOUT } from '@/lib/keyboardLayout';
 import { getDictationAgentName } from '@/lib/dictationAgent';
 import { LiveActivity } from '../../modules/live-activity/src';
 
@@ -17,6 +18,7 @@ export default function PreferencesScreen() {
   const autoLearn = config?.autoLearnCorrections ?? true;
   const language = getLanguage(config?.preferredLanguage ?? DEFAULT_LANGUAGE);
   const keyboardTone = config?.keyboardTone ?? DEFAULT_KEYBOARD_TONE;
+  const letterLayout = config?.keyboardLetterLayout ?? DEFAULT_KEYBOARD_LETTER_LAYOUT;
   const agentName = config ? getDictationAgentName(config) : 'OpenWhispr';
   const handleToggleAutoLearn = useConfigToggle('autoLearnCorrections');
   const [dictationMode, setDictationMode] = useState(() => LiveActivity.isDictationModeEnabled());
@@ -73,6 +75,17 @@ export default function PreferencesScreen() {
           subtitle={toneLabel(keyboardTone)}
           onPress={() => router.push('/(account)/keyboard-tone')}
         />
+        {Platform.OS === 'ios' ? (
+          <SettingsRow
+            iconStyle="line"
+            icon="character.cursor.ibeam"
+            mdIcon="Languages"
+            title="Keyboard Layout"
+            description="The letter keys of the OpenWhispr keyboard"
+            subtitle={letterLayoutLabel(letterLayout)}
+            onPress={() => router.push('/(account)/keyboard-layout')}
+          />
+        ) : null}
         <SettingsRow
           iconStyle="line"
           icon="person.wave.2"
