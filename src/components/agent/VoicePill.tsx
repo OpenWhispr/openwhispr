@@ -18,7 +18,7 @@ export type VoiceCallStatus =
   | "stopped";
 
 /** The session slot: End the call, or (while it speaks) stop just the reply. */
-export type VoiceSessionControl = "end" | "stopReply";
+type VoiceSessionControl = "end" | "stopReply";
 
 const STATUS_LABELS: Record<VoiceCallStatus, string> = {
   starting: "agentWindow.call.status.starting",

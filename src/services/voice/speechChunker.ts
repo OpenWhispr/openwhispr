@@ -1,4 +1,4 @@
-export interface SpeechChunker {
+interface SpeechChunker {
   push: (delta: string) => string[];
   flush: () => string[];
   reset: () => void;

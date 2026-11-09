@@ -298,7 +298,7 @@ export function updateApprovalDraft(
         ? { fields: mergeFields(fields, patch.fields) }
         : {}),
       ...(patch.channel !== undefined && entry.preview.channel !== undefined
-        ? { channel: { id: patch.channel.id, label: patch.channel.label } }
+        ? { channel: patch.channel }
         : {}),
     },
   });

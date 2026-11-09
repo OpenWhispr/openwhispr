@@ -1591,11 +1591,11 @@ declare global {
       agentWindowSetLayout?: (request: {
         layout: AgentWindowLayout;
         focus: boolean;
-        /** standalone, and a call's modal (its transcript): the measured height. */
+        /** standalone only: the card's measured height. */
         contentHeight?: number;
         /** pill only: the wider pill that reads "Waiting for answer". */
         wide?: boolean;
-        /** A voice call's layouts: its taller pill, and its narrower transcript. */
+        /** A voice call's pill and the cards above it; its transcript is the typed modal. */
         call?: boolean;
       }) => Promise<boolean>;
       agentWindowHide?: () => Promise<boolean>;

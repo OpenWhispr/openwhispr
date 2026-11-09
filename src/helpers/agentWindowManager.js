@@ -159,7 +159,7 @@ class AgentWindowManager {
     this.layout = request.layout;
     this.call = call;
     this.contentHeight = standalone ? request.contentHeight : 0;
-    this.wide = request.layout === "pill" && !call && request.wide === true;
+    this.wide = request.layout === "pill" && request.wide === true;
     this._applyBounds();
     if (refocus) this._setKeyboardFocus(focus);
     return true;

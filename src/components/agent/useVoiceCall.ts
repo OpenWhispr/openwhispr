@@ -27,7 +27,7 @@ import type {
 import type { TurnSpeechObserver } from "../chat/chatTurnEngine";
 
 /** off → starting → active, and back to off when the call ends or fails to start. */
-export type VoiceCallSession = "off" | "starting" | "active";
+type VoiceCallSession = "off" | "starting" | "active";
 
 /** Why a call didn't start: a readiness refusal, or the microphone. */
 export type VoiceCallStartFailure =
@@ -157,8 +157,7 @@ export function useVoiceCall({
   const playerRef = useRef<PcmPlayer | null>(null);
   const [chunker] = useState(() => createSpeechChunker());
   const utteranceRef = useRef<string | null>(null);
-  // What the reply being worked on answers, and whether any of it was heard yet.
-  const requestTextRef = useRef("");
+  // Whether any of the reply being worked on was heard yet.
   const replyHeardRef = useRef(false);
   // When the user last started speaking, on main's clock (as a transcript's endedAt).
   const lastSpeechStartAtRef = useRef(0);
@@ -672,14 +671,13 @@ export function useVoiceCall({
             return;
           }
           if (!replyHeardRef.current && turnRef.current?.calledTools.length === 0) {
-            joinedRequest = `${requestTextRef.current} ${event.text}`;
+            joinedRequest = `${turnRef.current.transcript} ${event.text}`;
           }
           dropAnswer("barge-in");
         }
         const text = joinedRequest ?? event.text;
         const utteranceId = crypto.randomUUID();
         utteranceRef.current = utteranceId;
-        requestTextRef.current = text;
         replyHeardRef.current = false;
         // The user is talking again already: the reply waits on what they say.
         if (lastSpeechStartAtRef.current > event.endedAt) {

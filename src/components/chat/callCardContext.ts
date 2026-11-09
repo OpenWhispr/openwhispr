@@ -5,7 +5,7 @@ import { createContext, useContext } from "react";
  * transcript. There cards follow the call's designs; outside a call (null)
  * they keep the chat's.
  */
-export type CallCardPlacement = "compact" | "transcript" | null;
+type CallCardPlacement = "compact" | "transcript" | null;
 
 export const CallCardContext = createContext<CallCardPlacement>(null);
 

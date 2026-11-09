@@ -71,6 +71,7 @@ import { noteAttendeesContext, withoutAttendeesFence } from "../../utils/noteAtt
 import { FULL_TRANSCRIPT_MAX_TOKENS } from "../../utils/transcriptEvidence";
 import { createToolRegistry } from "../../services/tools";
 import { adaptToolsForVoice } from "../../services/voice/voiceToolPolicy";
+import type { SpokenLanguage } from "../../services/voice/types";
 import {
   createLookAtScreenTool,
   LOOK_AT_SCREEN_PROMPT,
@@ -385,7 +386,7 @@ export interface SendToAIOptions {
    * said over a turn still running, so that turn's request may be its start.
    */
   voice?: {
-    replyLanguage: string | null;
+    replyLanguage: SpokenLanguage | null;
     speech: TurnSpeechObserver;
     dryRunWrites?: boolean;
     interrupts?: boolean;
