@@ -50,7 +50,8 @@ export async function editSelectedText(
     provider: target.provider,
   });
   const local = provider === "local";
-  const marker = local ? "" : `__OPENWHISPR_SELECTION_COMPLETE_${crypto.randomUUID()}__`;
+  // Ends on the full nonce, as in audioManager: models can drop decorative closing underscores.
+  const marker = local ? "" : `__OPENWHISPR_SELECTION_COMPLETE_${crypto.randomUUID()}`;
   const dictionary = getDictionaryHintWords(settings);
   const toneSentence = settings.toneStyleEnabled
     ? selectionEditToneSentence(resolveDictationToneStyle(settings.toneStyles, appCategory ?? null))
