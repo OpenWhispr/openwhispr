@@ -99,6 +99,6 @@ test("selection completion nonce survives omitted decoration and stays strict", 
     );
     assert.equal(await run(manager, question), question);
     assert.ok(!manager.pendingSelectionEdit);
-    assert.ok(manager.pendingAssistantConversation.transcript.includes(selectedText));
+    assert.equal(manager.pendingAssistantConversation.selectedContext.text, selectedText);
   });
 });
