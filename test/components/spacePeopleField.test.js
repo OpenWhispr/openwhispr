@@ -35,7 +35,7 @@ const member = (userId, name, email = `${userId}@openronnie.com`) => ({
   image: null,
 });
 
-const group = (id, name, memberCount, emoji = null) => ({
+const team = (id, name, memberCount, emoji = null) => ({
   id,
   workspace_id: "w1",
   name,
@@ -52,7 +52,7 @@ const ROSTER = [
   member("saket", "Saket"),
   member("bob", "Bob", "bov@openronnie.com"),
 ];
-const GROUPS = [group("sales", "Sales", 5), group("design", "Design Team", 2, "🎨")];
+const TEAMS = [team("sales", "Sales", 5), team("design", "Design Team", 2, "🎨")];
 
 let createRoot;
 let happyWindow;
@@ -139,7 +139,7 @@ const selected = () => options().map((option) => option.getAttribute("aria-selec
 // The row the arrow keys are on, which the field names with aria-activedescendant.
 const highlighted = () =>
   options().findIndex((option) => option.id === input().getAttribute("aria-activedescendant"));
-// A picked row ends in a check; a member's or group's row has no other drawn icon.
+// A picked row ends in a check; a member's or team's row has no other drawn icon.
 const checked = () => options().map((option) => option.querySelector("svg") !== null);
 const chipTexts = () => chips().map(text);
 
@@ -195,10 +195,10 @@ async function mount(t, props = {}, { dialog = false, onDialogOpenChange = () =>
     const field = h(SpacePeopleField, {
       id: "people",
       roster: ROSTER,
-      groups: GROUPS,
+      teams: TEAMS,
       canInvite: true,
       inviteRoleChoice: false,
-      placeholder: "Names, emails, or groups",
+      placeholder: "Names, emails, or teams",
       ...props,
       picked,
       onChange: (next) => {
@@ -233,7 +233,7 @@ async function mount(t, props = {}, { dialog = false, onDialogOpenChange = () =>
   return { changes, lastChange };
 }
 
-test("focusing the empty field lists people and groups, with a group's count", async (t) => {
+test("focusing the empty field lists people and teams, with a team's count", async (t) => {
   await mount(t);
   assert.ok(listbox() === null, "closed until the field has focus");
   await focus(input());
@@ -273,10 +273,10 @@ test("picking adds a chip and clears the query", async (t) => {
   assert.deepEqual(selected(), ["false", "true", "false", "false", "false"]);
   assert.deepEqual(checked(), [false, true, false, false, false]);
 
-  // A group becomes a chip with its size.
+  // A team becomes a chip with its size.
   await click(options()[3]);
   assert.deepEqual(lastChange().at(-1), {
-    kind: "group",
+    kind: "team",
     teamId: "sales",
     label: "Sales",
     memberCount: 5,
@@ -300,14 +300,14 @@ test("picking a checked row removes its chip", async (t) => {
   assert.equal(input().value, "");
   assert.deepEqual(
     lastChange().map((recipient) => recipient.kind),
-    ["group"]
+    ["team"]
   );
   assert.deepEqual(chipTexts(), ["Sales · 5 people"]);
   assert.deepEqual(selected(), ["false", "false", "false", "true", "false"]);
   assert.deepEqual(checked(), [false, false, false, true, false]);
   assert.ok(listbox(), "the list stays open");
 
-  // So does Enter on the highlighted row; a group is taken out the same way.
+  // So does Enter on the highlighted row; a team is taken out the same way.
   await type(input(), "sal");
   await press(input(), "ArrowDown");
   assert.equal(highlighted(), 0, "Sales is the only row, and it is checked");
@@ -325,12 +325,12 @@ test("picking a checked row removes its chip", async (t) => {
   assert.equal(changes.length, 5);
 });
 
-test("chips show who they are: a name, a group's glyph, an address", async (t) => {
+test("chips show who they are: a name, a team's glyph, an address", async (t) => {
   await mount(t, {
     inviteRoleChoice: true,
     picked: [
-      { kind: "group", teamId: "design", label: "Design Team", memberCount: 2 },
-      { kind: "group", teamId: "sales", label: "Sales", memberCount: 5 },
+      { kind: "team", teamId: "design", label: "Design Team", memberCount: 2 },
+      { kind: "team", teamId: "sales", label: "Sales", memberCount: 5 },
       { kind: "email", email: "alex@example.com", role: "admin", valid: true },
     ],
   });
@@ -339,7 +339,7 @@ test("chips show who they are: a name, a group's glyph, an address", async (t) =
     "Sales · 5 people",
     "alex@example.com · Workspace Admin",
   ]);
-  // The group's own emoji, else its initial, and a mail glyph for an address.
+  // The team's own emoji, else its initial, and a mail glyph for an address.
   const glyphs = chips().map((chip) => chip.querySelector('[aria-hidden="true"]'));
   assert.equal(glyphs[0].textContent, "🎨");
   assert.equal(glyphs[1].textContent, "S");
@@ -363,7 +363,7 @@ test("a chip's × takes the person out again", async (t) => {
   const { lastChange } = await mount(t, {
     picked: [
       { kind: "member", userId: "saket", label: "Saket", email: "saket@openronnie.com" },
-      { kind: "group", teamId: "sales", label: "Sales", memberCount: 1 },
+      { kind: "team", teamId: "sales", label: "Sales", memberCount: 1 },
     ],
   });
   assert.deepEqual(chipTexts(), ["Saket", "Sales · 1 person"]);
@@ -371,7 +371,7 @@ test("a chip's × takes the person out again", async (t) => {
   assert.equal(readable(remove.getAttribute("aria-label")), "Remove Saket");
   await click(remove);
   assert.deepEqual(lastChange(), [
-    { kind: "group", teamId: "sales", label: "Sales", memberCount: 1 },
+    { kind: "team", teamId: "sales", label: "Sales", memberCount: 1 },
   ]);
   assert.deepEqual(chipTexts(), ["Sales · 1 person"]);
 });
@@ -393,7 +393,7 @@ test("arrow keys move over the rows that can be picked and Enter picks", async (
   assert.deepEqual(selected(), ["false", "false", "false", "false", "false"]);
 
   await press(input(), "Enter");
-  assert.equal(lastChange()[0].kind, "group");
+  assert.equal(lastChange()[0].kind, "team");
   assert.equal(lastChange()[0].teamId, "design");
   assert.deepEqual(selected(), ["false", "false", "false", "false", "true"]);
 });
@@ -401,7 +401,7 @@ test("arrow keys move over the rows that can be picked and Enter picks", async (
 test("someone with access shows disabled and can't be picked", async (t) => {
   const { changes } = await mount(t, {
     accessUserIds: new Set(["ethan"]),
-    accessGroupIds: new Set(["sales"]),
+    accessTeamIds: new Set(["sales"]),
   });
   await focus(input());
   assert.deepEqual(optionTexts(), [
@@ -426,7 +426,7 @@ test("an address with no match offers an invite only to those who can", async (t
   assert.equal(options().length, 0, "no row to invite");
   assert.equal(
     text(doc().querySelector('[role="status"]')),
-    "No people or groups found Try another name."
+    "No people or teams found Try another name."
   );
 });
 
@@ -510,7 +510,7 @@ test("no results tell the inviter they can enter an address, and others they can
   const status = doc().querySelector('[role="status"]');
   assert.equal(
     text(status),
-    "No people or groups found Try another name or enter a full email address."
+    "No people or teams found Try another name or enter a full email address."
   );
   assert.equal(input().getAttribute("aria-controls"), null);
 });
@@ -521,7 +521,7 @@ test("no results without the right to invite say only to try another name", asyn
   await type(input(), "Research");
   assert.equal(
     text(doc().querySelector('[role="status"]')),
-    "No people or groups found Try another name."
+    "No people or teams found Try another name."
   );
 });
 
@@ -648,16 +648,16 @@ test("pasting a list makes one chip each", async (t) => {
 test("a disabled field takes no input and no removals", async (t) => {
   await mount(t, {
     disabled: true,
-    picked: [{ kind: "group", teamId: "sales", label: "Sales", memberCount: 5 }],
+    picked: [{ kind: "team", teamId: "sales", label: "Sales", memberCount: 5 }],
   });
   assert.equal(input().disabled, true);
   assert.equal(chips()[0].querySelector("button").disabled, true);
 });
 
 test("the placeholder and id reach the input", async (t) => {
-  await mount(t, { id: "create-people", placeholder: "Names, emails, or groups" });
+  await mount(t, { id: "create-people", placeholder: "Names, emails, or teams" });
   assert.equal(input().id, "create-people");
-  assert.equal(input().getAttribute("placeholder"), "Names, emails, or groups");
+  assert.equal(input().getAttribute("placeholder"), "Names, emails, or teams");
 });
 
 // Resolves to whether the field kept the key from the browser's own handling of it.

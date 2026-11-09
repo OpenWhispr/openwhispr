@@ -425,7 +425,6 @@ test("model policy refresh stops only the active local meeting selection before 
   for (const activeModel of [null, "base"]) {
     const stopped = [];
     const context = {
-      isLocalModelPolicyRefusal,
       localServers: activeModel
         ? []
         : [["transcription", { stop: async () => {}, isRemote: false }, () => "small"]],
@@ -438,6 +437,7 @@ test("model policy refresh stops only the active local meeting selection before 
       },
       _stopMeetingForPolicy: (code) => stopped.push(code),
       debugLogger: { warn() {} },
+      isLocalModelPolicyRefusal,
     };
     vm.createContext(context);
     vm.runInContext(

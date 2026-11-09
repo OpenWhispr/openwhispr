@@ -35,6 +35,8 @@ interface RemoveMembersDialogProps {
   dispatch: (event: MemberRemovalEvent) => void;
   /** Everyone no longer in the workspace once the removal ran, so the tab can deselect them. */
   onRemoved: (removedIds: string[]) => void;
+  /** The selection also holds the owner, who isn't removed; the dialog says so. */
+  ownerKept?: boolean;
 }
 
 const memberName = (member: WorkspaceMember): string => member.name || member.email;
@@ -45,6 +47,7 @@ export function RemoveMembersDialog({
   state,
   dispatch,
   onRemoved,
+  ownerKept = false,
 }: RemoveMembersDialogProps): ReactElement | null {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -259,6 +262,11 @@ export function RemoveMembersDialog({
       busy={busy}
       onDismiss={() => dispatch({ type: "dismiss" })}
     >
+      {ownerKept ? (
+        <p className="text-center text-sm text-muted-foreground">
+          {t("workspaces.removeMembers.cannotRemoveOwner")}
+        </p>
+      ) : null}
       {transferring ? (
         <div className="flex flex-col gap-2">
           <span id={pickerLabelId} className="text-xs font-medium text-muted-foreground">

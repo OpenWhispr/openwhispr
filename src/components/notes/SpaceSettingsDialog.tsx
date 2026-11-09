@@ -1,15 +1,6 @@
-import { useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Loader2,
-  LogIn,
-  LogOut,
-  Settings,
-  Trash2,
-  UserCircle,
-  UserPlus,
-  type IconComponent,
-} from "../icons";
+import { Loader2, LogIn, LogOut, Settings, Trash2, UserCircle, UserPlus } from "../icons";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import { Popover, PopoverTrigger } from "../ui/popover";
 import { EmojiPickerContent } from "../ui/EmojiPicker";
@@ -27,24 +18,17 @@ import DeleteSpaceDialog from "./DeleteSpaceDialog";
 import { LeaveSpaceDialog } from "./LeaveSpaceDialog";
 import SpaceMembersPanel from "./SpaceMembersPanel";
 import { TileGlyph } from "./SpaceNameField";
+import { SettingRow } from "../workspace/SettingRow";
+import {
+  INLINE_FIELD_CLASS,
+  ROW_BUTTON_CLASS,
+  TAB_TRIGGER_CLASS,
+} from "../workspace/dialogButtons";
 import { isolate } from "../../utils/bidiIsolate";
 import type { SpaceItem } from "../../types/electron";
 
-const TAB_TRIGGER_CLASS = "h-6 gap-1.5 px-2.5 text-xs rounded-[5px]";
 const DESCRIPTION_MAX_LENGTH = 280;
 const NAME_MAX_LENGTH = 80;
-
-// The header's name and description read as plain text until focused, as in the frame, so an
-// admin's field only shows itself when it's in use. The padding is pulled back out with a
-// negative margin, so the text lines up with the tile above it.
-const INLINE_FIELD_CLASS =
-  "input-inline -mx-1.5 block w-[calc(100%+0.75rem)] min-w-0 resize-none rounded-md bg-transparent px-1.5 outline-none " +
-  "transition-colors hover:bg-foreground/5 focus:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring/15";
-
-const ROW_BUTTON_CLASS =
-  "inline-flex h-7 shrink-0 items-center justify-center rounded-full px-3 text-xs font-medium transition-colors " +
-  "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background " +
-  "disabled:pointer-events-none disabled:opacity-50";
 
 export type SpaceSettingsTab = "general" | "members";
 
@@ -605,31 +589,5 @@ function HeaderTile({ emoji, name, editable, onEmojiChange }: HeaderTileProps): 
         }}
       />
     </Popover>
-  );
-}
-
-interface SettingRowProps {
-  icon: IconComponent;
-  title: string;
-  body: string;
-  /** A reason the control can't be used, under the body. */
-  hint?: string;
-  children: ReactNode;
-}
-
-// One line of the General panel: what it is on the left, the control that changes it on the right.
-function SettingRow({ icon: Icon, title, body, hint, children }: SettingRowProps): ReactElement {
-  return (
-    <div className="flex items-center gap-3 px-3.5 py-3">
-      <div className="min-w-0 flex-1">
-        <p className="flex items-center gap-2 text-sm font-medium text-foreground">
-          <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <span className="truncate">{title}</span>
-        </p>
-        <p className="mt-0.5 ps-[22px] text-xs text-muted-foreground">{body}</p>
-        {hint && <p className="mt-0.5 ps-[22px] text-xs text-muted-foreground/70">{hint}</p>}
-      </div>
-      {children}
-    </div>
   );
 }

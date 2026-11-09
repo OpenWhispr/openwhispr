@@ -3,6 +3,17 @@ import { resolveMicDeviceSelection } from "./micDeviceSelection";
 
 export const MICROPHONE_SELECTION_MODES = ["system", "built-in", "specific"];
 
+// Every browser audio processing step off for recordings that are transcribed.
+// AGC off: Chromium's AGC on Windows mutates the system mic volume via WASAPI (#476).
+// Echo cancellation and noise suppression off to avoid latency and speech distortion.
+// Stereo recording required — mono WebM breaks silence detection on Linux/PipeWire (#472).
+export const TRANSCRIPTION_AUDIO_CONSTRAINTS = Object.freeze({
+  echoCancellation: false,
+  noiseSuppression: false,
+  autoGainControl: false,
+  channelCount: 2,
+});
+
 // Chromium lists the Windows default input twice ("default" and the
 // "communications" role alias) under the device's own label. They are aliases,
 // not candidates: matching them makes every Windows mic tie with itself.

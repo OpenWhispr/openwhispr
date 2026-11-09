@@ -56,6 +56,7 @@ import {
 } from "../models/modelLifecycle.js";
 import { getCloudModelProviders } from "../models/cloudModelCatalog";
 import { pickDefaultModelId } from "../models/providerDefaultModel";
+import { OPENROUTER_DEFAULT_MODEL } from "../utils/openRouterModels";
 // Both are leaves: tinfoilModelCache imports only a type from ModelRegistry and
 // the switch store only zustand and a type, so neither reopens the ModelRegistry
 // cycle.
@@ -63,7 +64,9 @@ import { readCachedTinfoilModels } from "../models/tinfoilModelCache";
 import { queueRetiredModelSwitch, recordRetiredModelSwitch } from "./retiredModelSwitchStore";
 import { MEETING_STREAMING_PROVIDER_IDS } from "../helpers/meetingTranscriptionRouting";
 import { STREAMING_ONLY_PROVIDERS } from "../helpers/transcriptionRoute";
+import { isUploadOnlyTranscriptionModel } from "../models/appTranscriptionProviders.js";
 import {
+  acceptsUnlistedTranscriptionModel,
   getTranscriptionSelection,
   isLocalModelAllowedByPolicy,
   isPolicyActionAllowed,
@@ -166,10 +169,13 @@ function transcriptionProviderModels(
   providerId: string,
   context: TranscriptionPolicyContext
 ): Array<{ id: string; streaming?: boolean }> {
-  const models =
+  const models: Array<{ id: string; streaming?: boolean }> =
     modelRegistryData.transcriptionProviders.find((provider) => provider.id === providerId)
       ?.models ?? [];
-  return context === "meeting" ? models.filter((model) => model.streaming) : models;
+  if (context === "meeting") return models.filter((model) => model.streaming);
+  if (context === "dictation")
+    return models.filter((model) => !isUploadOnlyTranscriptionModel(providerId, model.id));
+  return models;
 }
 
 function defaultTranscriptionModel(
@@ -193,6 +199,10 @@ function transcriptionModelBelongsToProvider(
   context: TranscriptionPolicyContext
 ): boolean {
   if (providerId === "custom") return Boolean(modelId);
+  if (context !== "upload" && isUploadOnlyTranscriptionModel(providerId, modelId)) return false;
+  // A stored vendor-prefixed OpenRouter id outlives its registry entry rather
+  // than being reset on the next tab switch.
+  if (acceptsUnlistedTranscriptionModel(providerId, modelId)) return true;
   return transcriptionProviderModels(providerId, context).some((model) => model.id === modelId);
 }
 
@@ -225,6 +235,7 @@ export function reasoningModelBelongsToProvider(providerId: string, modelId: str
 }
 
 function defaultLlmModel(mode: InferenceMode, providerId: string, bedrockRegion: string): string {
+  if (providerId === "openrouter") return OPENROUTER_DEFAULT_MODEL;
   const providers =
     mode === "local"
       ? modelRegistryData.localProviders
@@ -877,7 +888,7 @@ migrateLLMScopeKeys();
 
 // The Voice Assistant scope shipped unseeded — empty provider and model, mode
 // defaulting to cloud — while the assistant panel answered on the Chat scope.
-// The panel now answers on the Voice Assistant scope, so a profile that never
+// The assistant now answers on the Voice Assistant scope, so a profile that never
 // configured it (no onboarding fan-out or Settings edit wrote its mode,
 // provider or model) copies the Chat scope over once; otherwise a signed-in
 // profile whose Chat runs local or BYOK would have its spoken commands move to
@@ -2995,6 +3006,11 @@ if (isBrowser) {
 // model or the notes onboarding mode toggle sets cleanupMode and leaves that field stale.
 export const selectIsCloudCleanupMode = (state: SettingsState) =>
   state.isSignedIn && state.cleanupMode === "openwhispr" && state.cleanupCloudMode === "openwhispr";
+
+// The calendar tools read the shared provider-deduped events table, so any
+// connected provider enables them.
+export const selectCalendarConnected = (state: SettingsState) =>
+  state.gcalConnected || state.mcalConnected || state.appleCalendarConnected;
 
 export const selectEffectiveCleanupProvider = (state: SettingsState) =>
   selectIsCloudCleanupMode(state) ? "openwhispr" : state.cleanupProvider;

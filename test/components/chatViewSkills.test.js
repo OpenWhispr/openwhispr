@@ -14,6 +14,7 @@ const { SKILLS_MOCKS, ariaLabel, click, findAll, settle } = require("../lib/skil
 // so the chip is real and clickable.
 const MOCKS = {
   "/ui/useToast": `export const useToast = () => ({ toast: () => {} });`,
+  "/useInterruptedInteractions": `export function useInterruptedInteractions() {}`,
   "react-i18next": SKILLS_MOCKS["react-i18next"],
   ...SIGNED_OUT_AUTH_MOCK,
   "/chatTurnEngine": `

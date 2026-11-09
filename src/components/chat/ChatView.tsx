@@ -1,6 +1,8 @@
 import { useState, useCallback, useEffect, useMemo, useRef, lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { useMainChatSession } from "./useMainChatSession";
+import { useInterruptedInteractions } from "./useInterruptedInteractions";
+import type { SendToAIOptions } from "./chatTurnEngine";
 import {
   useChatTurnStore,
   dropChatConversation,
@@ -25,6 +27,8 @@ import { getCachedPlatform } from "../../utils/platform";
 import { observeChatComposerInset } from "./composerLayout";
 import { type AttachedSkill } from "./chatSkillMemory";
 import type { SkillChatRequest } from "../../types/skills";
+import { GitFork } from "../icons";
+import { unsentForkContext } from "../../utils/agentSelectionContext";
 
 const CommandSearch = lazy(() => import("../CommandSearch"));
 
@@ -57,6 +61,8 @@ export default function ChatView({
     openConversation,
     setSkills,
     sourceNote,
+    forkOrigin,
+    forkConversation,
   } = session;
   const activeConversationId = selection.kind === "conversation" ? selection.conversationId : null;
   const isNewChat = selection.kind === "new-chat";
@@ -72,8 +78,12 @@ export default function ChatView({
     hideAlertDialog,
   } = useDialogs();
   const handleSelectConversation = useCallback(
-    (id: number): Promise<void> => openConversation(id, "sidebar"),
-    [openConversation]
+    async (id: number): Promise<void> => {
+      if ((await openConversation(id, "sidebar")) === null) {
+        toast({ title: t("chat.openFailed"), variant: "destructive" });
+      }
+    },
+    [openConversation, t, toast]
   );
 
   const composerElementRef = useRef<HTMLDivElement | null>(null);
@@ -94,23 +104,64 @@ export default function ChatView({
     focusComposer();
   }, [handleNewChat, focusComposer]);
 
+  // A fork made from selected text sends it with its first request.
+  const forkContext = unsentForkContext(forkOrigin, session.messages);
+  const sendRequest = useCallback(
+    (text: string, options?: SendToAIOptions): Promise<boolean> =>
+      send(
+        text,
+        forkContext
+          ? { ...options, selectedContext: { text: forkContext, sourceMessageId: "" } }
+          : options
+      ),
+    [forkContext, send]
+  );
+  useInterruptedInteractions({ ...session, conversationId: activeConversationId }, sendRequest);
+
   const sendWithSkill = useCallback(
-    (text: string, skill: AttachedSkill | null): void => {
+    async (text: string, skill: AttachedSkill | null): Promise<void> => {
       const before = useChatTurnStore.getState();
+      const sent = await sendRequest(text, {
+        attachedSkill: skill?.ref,
+        allowSkillPick: !skillPickOff,
+        removedSkills,
+      });
+      if (sent) return;
+      const after = useChatTurnStore.getState();
+      // Nothing went out while the user stayed: the text goes back, and the user hears why.
       if (
-        !send(text, { attachedSkill: skill?.ref, allowSkillPick: !skillPickOff, removedSkills })
+        after.accountGeneration === before.accountGeneration &&
+        after.selectionRevision === before.selectionRevision
       ) {
-        const after = useChatTurnStore.getState();
-        if (
-          after.accountGeneration === before.accountGeneration &&
-          after.selectionRevision === before.selectionRevision
-        ) {
-          returnChatDraft(before.selection, text);
-        }
+        returnChatDraft(before.selection, text);
+        toast({ title: t("chat.sendNotStarted"), variant: "destructive" });
       }
     },
-    [send, skillPickOff, removedSkills]
+    [sendRequest, skillPickOff, removedSkills, t, toast]
   );
+
+  // Read through a ref, so the handler stays the same while a reply streams
+  // and every message's memo holds.
+  const messagesRef = useRef(session.messages);
+  messagesRef.current = session.messages;
+  const handleForkMessage = useCallback(
+    async (messageId: string) => {
+      const message = messagesRef.current.find((m) => m.id === messageId);
+      if (!message) return;
+      const forkId = await forkConversation(message);
+      if (forkId === false) return;
+      if (forkId === null) {
+        toast({ title: t("chat.forkFailed"), variant: "destructive" });
+        return;
+      }
+      setRefreshKey((k) => k + 1);
+    },
+    [forkConversation, t, toast]
+  );
+
+  const handleContinue = useCallback(() => {
+    void sendRequest(t("agentMode.turn.continueMessage"));
+  }, [sendRequest, t]);
 
   const removeSkill = useCallback((): void => {
     const { attached, pickOff, removed } = getChatSkills(useChatTurnStore.getState().selection);
@@ -279,6 +330,20 @@ export default function ChatView({
           </div>
           <div className="relative flex-1 min-w-80 min-h-0 flex flex-col">
             {sourceNote && <SourceNoteBar note={sourceNote} onOpen={openSourceNote} />}
+            {forkOrigin?.parentTitle && (
+              <div className="px-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => void handleSelectConversation(forkOrigin.parentConversationId)}
+                  className="mx-auto flex max-w-full items-center gap-1.5 rounded-full border border-border/60 px-2.5 py-1 text-[11px] text-muted-foreground hover:text-foreground hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+                >
+                  <GitFork size={11} className="shrink-0" />
+                  <span dir="auto" className="truncate">
+                    {t("chat.forkedFrom", { title: forkOrigin.parentTitle })}
+                  </span>
+                </button>
+              </div>
+            )}
             {session.error && (
               <div role="alert" className="px-5 py-3 text-sm text-muted-foreground">
                 {session.error}
@@ -290,6 +355,8 @@ export default function ChatView({
               </div>
             )}
             <ChatMessages
+              onForkMessage={handleForkMessage}
+              onContinue={handleContinue}
               messages={session.messages}
               leading={attachedSkill?.ref.builtin ? <CreatorOpening /> : undefined}
               emptyState={

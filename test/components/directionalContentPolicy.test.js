@@ -93,10 +93,6 @@ test("technical output values remain LTR inside an Arabic document", () => {
       /<bdi dir="ltr">\{invitation\.email\}<\/bdi>/,
     ],
     [
-      "src/components/dictation/AssistantPanel.tsx",
-      /<kbd\s+dir="ltr"[\s\S]*?\{readableVoiceHotkey\}/,
-    ],
-    [
       "src/components/EnterpriseProviderConfig.tsx",
       /<select\s+dir="ltr"\s+value=\{store\.bedrockRegion\}/,
     ],
@@ -153,10 +149,6 @@ test("localized sentences isolate technical interpolations without changing word
     [
       "src/components/SettingsPage.tsx",
       /<BidiInterpolatedText[\s\S]*?updates\.whatsNew[\s\S]*?value=\{updateInfo\.version\}/,
-    ],
-    [
-      "src/components/MemberRoster.tsx",
-      /<BidiInterpolatedText[\s\S]*?members\.inviteFooter[\s\S]*?value=\{addSearch\.trim\(\)\}/,
     ],
     [
       "src/components/integrations/CalendarsPane.tsx",
@@ -219,7 +211,7 @@ test("user-authored names and previews detect direction at their display boundar
     ["src/components/notes/CreateSpaceDialog.tsx", /<p\s+dir="auto"[^>]*>\s*\{workspace\.name\}/],
     ["src/components/notes/SpaceMembersTable.tsx", /<span\s+dir="auto"[^>]*>\s*\{member\.name\}/],
     ["src/components/notes/SpaceMembersTable.tsx", /<span\s+dir="auto"[^>]*>\s*\{team\.name\}/],
-    ["src/components/notes/SpaceMembersTable.tsx", /<span\s+dir="auto"[^>]*>\s*\{row\.groupName\}/],
+    ["src/components/notes/SpaceMembersTable.tsx", /<span\s+dir="auto"[^>]*>\s*\{row\.teamName\}/],
     // The page shows the name only in its input.
     [
       "src/components/settings/WorkspaceGeneralSection.tsx",

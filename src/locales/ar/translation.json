@@ -9,7 +9,8 @@
         "agentUnavailable": "المساعد غير متاح",
         "screenContextSkipped": "تم تخطي سياق الشاشة",
         "cloudLimitReached": "تم بلوغ الحد السحابي الأسبوعي",
-        "providerRateLimited": "تم تقييد المعدل من قبل المزود"
+        "providerRateLimited": "تم تقييد المعدل من قبل المزود",
+        "outOfCredits": "نفد الرصيد"
       },
       "fallback": {
         "title": "الوضع الاحتياطي",
@@ -40,6 +41,7 @@
         "offline": "أنت غير متصل بالإنترنت. يتطلب التفريغ السحابي اتصالًا بالإنترنت.",
         "dailyLimitReached": "لقد وصلت إلى حد التفريغ اليومي. حاول مرة أخرى غدًا أو قم بترقية خطتك.",
         "providerRateLimited": "قام مزود التفريغ بتقييد معدل الطلب. انتظر لحظة وحاول مرة أخرى.",
+        "openRouterOutOfCredits": "نفد رصيد حسابك على OpenRouter. اشحن رصيدك على openrouter.ai، ثم حاول مرة أخرى.",
         "chunkLoss": "أدت مشكلة في الشبكة إلى فقدان جزء كبير من التسجيل. أعد تفريغه من السجل.",
         "agentReasoningFailed": "لم يتمكن المساعد الصوتي من معالجة الأمر — تم إدراج النص المفرَّغ الخام بدلًا من ذلك.",
         "screenContextSkipped": "تعذر إرسال لقطة الشاشة، لذا تم تشغيل أمرك بدون سياق الشاشة.",
@@ -286,7 +288,15 @@
         "assemblyai_universal_3_5_pro": "أعلى دقة في الوقت الفعلي، 18 لغة",
         "assemblyai_universal_3_6_pro": "أعلى دقة في الوقت الفعلي، 32 لغة",
         "mistral_voxtral_mini_transcribe_3_0": "تفريغ سريع بأكثر من 50 لغة (معاينة)",
-        "mistral_voxtral_small_transcribe_3_0": "Voxtral الأكثر دقة، أكثر من 50 لغة (معاينة)"
+        "mistral_voxtral_small_transcribe_3_0": "Voxtral الأكثر دقة، أكثر من 50 لغة (معاينة)",
+        "openrouter_mistralai_voxtral_mini_transcribe_3_0": "تفريغ سريع ودقيق متعدد اللغات من Mistral",
+        "openrouter_nvidia_nemotron_3_5_transcribe": "تفريغ منخفض التكلفة من NVIDIA بـ 40 لغة",
+        "openrouter_deepgram_nova_3": "تفريغ سريع متعدد اللغات من Deepgram",
+        "openrouter_assemblyai_universal_3_6_pro": "أدق تفريغ من AssemblyAI",
+        "openrouter_elevenlabs_scribe_v2": "تفريغ دقيق من ElevenLabs بأكثر من 90 لغة",
+        "openrouter_mistralai_voxtral_small_transcribe_3_0": "نموذج التفريغ الأكبر متعدد اللغات من Mistral",
+        "openrouter_nvidia_parakeet_tdt_0_6b_v3": "تفريغ منخفض التكلفة من NVIDIA للغات الأوروبية",
+        "openrouter_nvidia_nemotron_3_5_asr_streaming_multilingual_0_6b": "أقل تفريغ متعدد اللغات تكلفةً من NVIDIA"
       },
       "cloud": {
         "openai_gpt_5_2": "نموذج استنتاج قوي",
@@ -824,7 +834,6 @@
     "approval": {
       "headers": {
         "default": "إرسال إلى {{destination}}",
-        "slackPost": "نشر في {{destination}}",
         "email": "بريد إلكتروني إلى {{destination}}",
         "issue": "إنشاء مشكلة في {{destination}}",
         "comment": "التعليق على {{destination}}"
@@ -832,8 +841,6 @@
       "identity": "بصفتك {{account}}",
       "identityWithWorkspace": "بصفتك {{account}} في {{workspace}}",
       "send": "إرسال",
-      "edit": "تعديل",
-      "doneEditing": "تم التعديل",
       "cancel": "إلغاء",
       "titleLabel": "العنوان",
       "bodyLabel": "الرسالة",
@@ -859,6 +866,10 @@
         "credential_save_failed": "تعذّر حفظ تسجيل الدخول إلى Slack على هذا الكمبيوتر. لم يُرسل شيء. حاول مرة أخرى.",
         "dm_failed": "تعذّر فتح الرسالة المباشرة إلى {{destination}}. لم يُرسل شيء.",
         "restricted": "{{destination}} للقراءة فقط أو مقيّدة بالنسبة لك.",
+        "thread_mismatch": "سلسلة الرسائل هذه في محادثة غير {{destination}}. لم يُرسل شيء.",
+        "invalid_thread": "هذا ليس رابطًا لرسالة في Slack. لم يُرسل شيء.",
+        "thread_closed": "لا يسمح Slack بالرد في سلسلة الرسائل هذه. لم يُرسل شيء.",
+        "thread_only": "لا تقبل {{destination}} إلا الردود في سلاسل الرسائل. لم يُرسل شيء.",
         "generic": "حدث خطأ ما. لم يُرسل شيء.",
         "github": {
           "reconnect_needed": "يلزم إعادة ربط GitHub من الإعدادات.",
@@ -919,7 +930,6 @@
         }
       },
       "email": {
-        "from": "من {{account}}",
         "toLabel": "إلى",
         "ccLabel": "نسخة",
         "subjectLabel": "الموضوع",
@@ -932,7 +942,8 @@
         "tooManyRecipients": "يمكن إرسال البريد الإلكتروني إلى {{max}} عنوانًا كحد أقصى، في حقلي إلى ونسخة معًا.",
         "subjectTooLong": "اجعل الموضوع {{max}} حرفًا أو أقل.",
         "bodyTooLong": "الرسالة طويلة جدًا بالنسبة إلى Gmail. اختصرها لإرسالها.",
-        "unknown": "تعذّر تأكيد الإرسال. تحقق من مجلد البريد المُرسل."
+        "unknown": "تعذّر تأكيد الإرسال. تحقق من مجلد البريد المُرسل.",
+        "fromLabel": "من"
       },
       "github": {
         "notes": {
@@ -976,7 +987,22 @@
         "notes": {
           "targetTitle": "على \"{{title}}\""
         }
-      }
+      },
+      "sentEarlier": "سبق أن حاولت هذا في هذه المحادثة. تحقّق مما إذا كان قد تم قبل إرساله مرة أخرى.",
+      "slack": {
+        "channelLabel": "القناة",
+        "asLabel": "بصفتك",
+        "destination": "{{workspace}} · {{destination}}",
+        "notes": {
+          "replyInThread": "رد في سلسلة الرسائل التي بدأت في {{started, datetime(dateStyle: medium; timeStyle: short)}}"
+        },
+        "sentOutsideThread": "تم الإرسال إلى {{destination}} كرسالة جديدة، وليس في سلسلة الرسائل."
+      },
+      "sentLabel": "تم الإرسال",
+      "identityChanged": "سيُرسل الآن بصفتك {{account}}. اضغط إرسال لإرساله.",
+      "connectToSend": "اربط {{name}} لإرسال هذا",
+      "edit": "تعديل",
+      "doneEditing": "تم التعديل"
     },
     "policyOff": "أوقفت مؤسستك تشغيل الموصلات.",
     "email": {
@@ -1025,7 +1051,8 @@
         "connectedBody": "يمكنك إغلاق هذا التبويب والعودة إلى OpenWhispr.",
         "failedTitle": "لم يتم توصيل Slack",
         "failedBody": "عد إلى OpenWhispr للمحاولة مرة أخرى."
-      }
+      },
+      "pickDestination": "أيّ «{{destination}}» تقصد؟"
     },
     "github": {
       "title": "GitHub",
@@ -1201,6 +1228,10 @@
         "credential_save_failed": "تعذّر حفظ تسجيل الدخول إلى Slack على هذا الكمبيوتر. لم يُرسل شيء.",
         "dm_failed": "تعذّر فتح الرسالة المباشرة. لم يُرسل شيء.",
         "restricted": "تلك القناة للقراءة فقط أو مقيّدة.",
+        "thread_mismatch": "سلسلة الرسائل هذه في محادثة أخرى. لم يُرسل شيء.",
+        "invalid_thread": "ليس رابطًا لرسالة في Slack.",
+        "thread_closed": "لا يسمح Slack بالرد في سلسلة الرسائل هذه.",
+        "thread_only": "لا تقبل هذه القناة إلا الردود في سلاسل الرسائل.",
         "generic": "لم ينجح ذلك.",
         "github": {
           "reconnect_needed": "يلزم إعادة ربط GitHub.",
@@ -1265,7 +1296,8 @@
       },
       "gmailDraftLimit": "يمكن تجهيز {{max}} رسائل بريد إلكتروني فقط لكل طلب.",
       "queryResults": "النتائج التي عُثر عليها: {{total}}",
-      "cardLimit": "يمكن تجهيز {{max}} بطاقات فقط لكل طلب."
+      "cardLimit": "يمكن تجهيز {{max}} بطاقات فقط لكل طلب.",
+      "alreadySent": "تم تنفيذه بالفعل لهذا الطلب"
     },
     "beta": "تجريبي",
     "upsell": "الموصلات متاحة في الخطط المدفوعة. قم بالترقية ليعمل المساعد في أدواتك.",
@@ -1746,7 +1778,7 @@
         "member": "عضو في مساحة العمل"
       },
       "roleDescription": {
-        "admin": "يدير الأعضاء والدعوات والمجموعات والإعدادات.",
+        "admin": "يدير الأعضاء والدعوات والفرق والإعدادات.",
         "member": "يمكنه عرض الملاحظات وتعديلها."
       },
       "errors": {
@@ -2199,6 +2231,7 @@
       },
       "locked": {
         "noWorkspace": "القواميس المشتركة متاحة ضمن خطة Business. شارك مصطلحات فريقك وأسماء المنتجات والاختصارات مع الجميع.",
+        "chooseWorkspace": "أنت في «شخصي». انتقل إلى مساحة عمل لاستخدام كلماتها المشتركة.",
         "upgradeAdmin": "القواميس المشتركة متاحة ضمن خطة Business. قم بترقية {{workspace}} ليحصل الجميع على الكلمات نفسها.",
         "upgradeMember": "القواميس المشتركة متاحة ضمن خطة Business. اطلب من أحد المسؤولين ترقية {{workspace}}.",
         "paused_zero": "تم إيقاف {{count}} كلمة مشتركة في {{workspace}} مؤقتًا. قم بالترقية إلى Business لاستخدامها في الإملاء مجددًا.",
@@ -2282,7 +2315,8 @@
       },
       "hiddenWord": "تم إخفاء \"{{word}}\" لك",
       "stillIn": "لا تزال \"{{word}}\" في {{list}}"
-    }
+    },
+    "openRouterIgnoredNotice": "لا يمرّر OpenRouter قاموسك إلى نماذج الكلام لديه، لذا لن تساعد هذه الكلمات في توجيه التفريغ ما دام محددًا للإملاء."
   },
   "promptStudio": {
     "common": {
@@ -2637,8 +2671,163 @@
       "update_skillName": "تحديث المهارة",
       "search_openwhispr_helpStatus": "جاري البحث في مساعدة OpenWhispr...",
       "read_openwhispr_helpStatus": "جاري قراءة مساعدة OpenWhispr...",
-      "get_openwhispr_contextStatus": "جاري قراءة إعدادات OpenWhispr..."
+      "get_openwhispr_contextStatus": "جاري قراءة إعدادات OpenWhispr...",
+      "ask_userName": "سؤال",
+      "ask_userStatus": "جارٍ سؤالك...",
+      "request_connectionName": "ربط",
+      "request_connectionStatus": "جارٍ طلب الربط...",
+      "request_accessName": "وصول",
+      "request_accessStatus": "جارٍ طلب الوصول...",
+      "look_at_screenName": "النظر إلى الشاشة",
+      "look_at_screenStatus": "جارٍ النظر إلى شاشتك...",
+      "look_at_screenSuccess": "تمت قراءة الشاشة.",
+      "look_at_screenFailed": "تعذرت قراءة الشاشة.",
+      "request_api_keyName": "مفتاح API",
+      "request_api_keyStatus": "جارٍ طلب مفتاح API...",
+      "open_settingsName": "الإعدادات",
+      "open_settingsStatus": "جارٍ توجيهك إلى الإعدادات..."
+    },
+    "turn": {
+      "reasoning": "الاستدلال",
+      "stopped": "تم الإيقاف",
+      "stepLimit": "توقف مؤقتًا بعد بلوغ الحد الأقصى للخطوات.",
+      "continue": "متابعة",
+      "continueMessage": "تابِع",
+      "failed": "تعذّر إكمال هذا الرد.",
+      "unbackedClaim": "لم يُنفَّذ: لم يجرِ تنفيذ ما يقول هذا الرد إنه فعله."
+    },
+    "interactions": {
+      "notNow": "ليس الآن",
+      "cancel": "إلغاء",
+      "questions": {
+        "recommended": "{{label}} (موصى به)",
+        "submit": "إرسال",
+        "placeholder": "اكتب إجابتك…",
+        "previous": "السؤال السابق",
+        "next": "السؤال التالي",
+        "position": "{{current}}/{{total}}",
+        "continue": "متابعة",
+        "typedAnswer": "إجابتك: {{answer}}"
+      },
+      "connection": {
+        "title": "ربط {{name}}",
+        "connect": "ربط {{name}}",
+        "connecting": "أكمل الربط في متصفحك…",
+        "failed": "تعذّر الربط. حاول مرة أخرى.",
+        "permissionDenied": "تم رفض الوصول إلى التقويم. اسمح به في إعدادات النظام ثم حاول مرة أخرى.",
+        "calendarTitle": "ربط تقويم",
+        "yes": "نعم",
+        "reasons": {
+          "gmail": "يمكنني إرسال البريد من حسابك في Gmail.",
+          "slack": "يمكنني نشر الرسالة في Slack نيابةً عنك.",
+          "linear": "يمكنني البحث عن مشكلات Linear وإنشاؤها نيابةً عنك.",
+          "github": "يمكنني البحث عن مشكلات GitHub وإنشاؤها نيابةً عنك.",
+          "calendar": "يمكنني التحقق من أوقات فراغك واقتراح مواعيد."
+        }
+      },
+      "access": {
+        "screen": "هل تسمح بالوصول إلى شاشتك؟",
+        "allow": "سماح",
+        "capturing": "جارٍ الالتقاط…"
+      },
+      "apiKey": {
+        "title": "أضف مفتاح API الخاص بـ {{provider}}",
+        "placeholder": "الصق أو اكتب هنا",
+        "save": "حفظ",
+        "label": "مفتاح API الخاص بـ {{provider}}",
+        "saved": "تم حفظ مفتاح {{provider}}"
+      },
+      "settings": {
+        "done": "انتهيت",
+        "technicalDetails": "التفاصيل التقنية",
+        "checking": "جارٍ التحقق…"
+      },
+      "status": {
+        "answered": "تمت الإجابة",
+        "connected": "تم ربط {{name}}",
+        "granted": "تمت مشاركة الشاشة",
+        "declined": "غير مسموح",
+        "saved": "تم حفظ مفتاح API",
+        "done": "تمت العودة من الإعدادات",
+        "cancelled": "تم التجاهل",
+        "notAnswered": "لم تتم الإجابة",
+        "invalid": "تعذّر عرض هذا السؤال"
+      },
+      "followUp": {
+        "connected": "لقد ربطت {{name}}.",
+        "granted": "سمحت بالوصول إلى شاشتي.",
+        "saved": "حفظت مفتاح API الخاص بـ {{provider}}.",
+        "done": "انتهيت من الإعدادات."
+      }
     }
+  },
+  "agentWindow": {
+    "title": "المساعد",
+    "actions": {
+      "expand": "توسيع",
+      "collapse": "تصغير",
+      "speak": "تحدّث",
+      "type": "اكتب",
+      "stop": "إيقاف",
+      "close": "إغلاق",
+      "regenerate": "إعادة الإنشاء",
+      "readAloud": "قراءة بصوت عالٍ",
+      "stopReading": "إيقاف القراءة"
+    },
+    "notices": {
+      "nothingHeard": "لم أسمع شيئًا",
+      "transcriptionFailed": "تعذّر التفريغ النصي",
+      "micUnavailable": "تعذّر فتح الميكروفون",
+      "regenerateFailed": "تعذّرت إعادة إنشاء الإجابة",
+      "dictationActive": "الإملاء يستخدم الميكروفون"
+    },
+    "composer": {
+      "placeholder": "أملِ سؤالك أو اكتبه…",
+      "followUpPlaceholder": "اطرح سؤال متابعة…",
+      "answerPlaceholder": "أجب هنا…",
+      "cardPlaceholder": "أجب في البطاقة أعلاه…"
+    },
+    "empty": {
+      "title": "كيف يمكنني المساعدة؟",
+      "description": "اكتب طلبك أدناه."
+    },
+    "selectedContext": {
+      "title": "السياق المحدد",
+      "remove": "إزالة السياق المحدد",
+      "fromAnswer": "من الإجابة: \"{{text}}\"",
+      "fromOtherApp": "من تطبيق آخر: \"{{text}}\""
+    },
+    "selectionHint": "حدّد نصًا للمتابعة أو التفريع",
+    "selectionToolbar": "النص المحدد",
+    "followUp": "متابعة",
+    "forkFromHere": "تفريع من هنا",
+    "chats": {
+      "title": "المحادثات",
+      "switch": "تبديل المحادثة",
+      "new": "محادثة جديدة",
+      "empty": "لا توجد محادثات بعد",
+      "untitled": "محادثة بلا عنوان",
+      "fork": "متفرعة"
+    },
+    "progress": {
+      "callingTools_zero": "استدعاء {{count}} أداة…",
+      "callingTools_one": "استدعاء أداة واحدة ({{count}})…",
+      "callingTools_two": "استدعاء أداتين ({{count}})…",
+      "callingTools_few": "استدعاء {{count}} أدوات…",
+      "callingTools_many": "استدعاء {{count}} أداة…",
+      "callingTools_other": "استدعاء {{count}} أداة…",
+      "checkingAnswers": "جارٍ التحقق من الإجابات…",
+      "reasoning": "جارٍ الاستدلال…",
+      "reasonedFor": "استدلّ لمدة {{duration}}",
+      "workedFor": "عمل لمدة {{duration}}",
+      "steps_zero": "{{count}} خطوة",
+      "steps_one": "خطوة واحدة ({{count}})",
+      "steps_two": "خطوتان ({{count}})",
+      "steps_few": "{{count}} خطوات",
+      "steps_many": "{{count}} خطوة",
+      "steps_other": "{{count}} خطوة"
+    },
+    "waitingForAnswer": "في انتظار الإجابة"
   },
   "noteEditor": {
     "saved": "تم الحفظ",
@@ -2734,7 +2923,6 @@
       "hotkeyToSpeak": "{{hotkey}} للتحدث",
       "recording": "جاري التسجيل...",
       "processing": "جاري المعالجة...",
-      "clickToSpeak": "انقر للتحدث",
       "waitingForMicrophone": "في انتظار الميكروفون…"
     },
     "buttons": {
@@ -2746,7 +2934,6 @@
       "startListening": "بدء الاستماع",
       "hideForNow": "إخفاء الآن",
       "askAssistant": "اسأل المساعد",
-      "busyRecording": "أنهِ التسجيل الحالي أولاً",
       "startMeetingRecording": "بدء تسجيل الاجتماع"
     }
   },
@@ -2821,8 +3008,8 @@
       "couldNotChangeEmoji": "تعذّر تغيير الرمز التعبيري",
       "deleteSpace": "حذف المساحة",
       "deleteHintLocal": "يحذف هذه المساحة نهائيًا مع مجلداتها وملاحظاتها على هذا الجهاز.",
-      "leaveConfirmDescription": "ستتم إزالتك من {{teams}} وستفقد الوصول إلى أي مساحات أخرى تفتحها تلك المجموعات.",
-      "stillViaGroups": "لا يزال بإمكانك الوصول إلى {{space}} عبر {{groups}}.",
+      "leaveConfirmDescription": "ستتم إزالتك من {{teams}} وستفقد الوصول إلى أي مساحات أخرى تفتحها تلك الفرق.",
+      "stillViaTeams": "لا يزال بإمكانك الوصول إلى {{space}} عبر {{teams}}.",
       "deleteConfirmTitle": "حذف المساحة؟",
       "deleteConfirmDescription": "سيؤدي هذا إلى حذف {{space}} بشكل دائم مع جميع مجلداتها وملاحظاتها على هذا الجهاز.",
       "deleteTypeName": "اكتب {{space}} للتأكيد",
@@ -2865,24 +3052,12 @@
       "conflictKeep": "متابعة التعديل",
       "editedBy": "تم التعديل بواسطة {{name}} · {{time}}",
       "members": {
-        "addPeople": "إضافة أشخاص",
-        "addedToTeam": "تمت إضافة {{name}} إلى {{team}}",
-        "removedFromTeam": "تمت إزالة {{name}} من {{team}}",
-        "stillViaGroups": "لا يزال {{name}} يملك الوصول عبر {{groups}}",
+        "stillViaTeams": "لا يزال {{name}} يملك الوصول عبر {{teams}}",
         "roleUpdated": "تم تحديث الدور",
-        "you": "أنت",
-        "addFailed": "عدد الأشخاص الذين تعذرت إضافتهم: {{failed}} من أصل {{total}}",
-        "searchPlaceholder": "البحث عن أشخاص…",
-        "noResults": "لم يتم العثور على أشخاص",
         "roleAdmin": "مسؤول",
         "roleMember": "عضو",
-        "roleAdminDescription": "يدير الأشخاص والإعدادات.",
-        "roleMemberDescription": "يمكنه عرض الملاحظات وتعديلها.",
-        "remove": "إزالة",
-        "removeConfirmDescription": "سيفقد هذا الشخص إمكانية الوصول إلى جميع الملاحظات في هذه المساحة.",
-        "inviteFooter": "دعوة {{email}} إلى مساحة العمل…",
         "empty": "لم تتم إضافة أحد بعد",
-        "roleFromGroup": "مشرف عبر {{group}}. غيّر ذلك هناك."
+        "roleFromTeam": "مشرف عبر {{team}}. غيّر ذلك هناك."
       },
       "invitedTo_zero": "ستنضم إلى {{count}} مساحات فريق",
       "invitedTo_one": "ستنضم إلى {{count}} مساحة فريق",
@@ -2897,7 +3072,7 @@
         "accessChanged": "تم تحديث صلاحية وصول {{team}}"
       },
       "teams": {
-        "loadError": "تعذر تحميل المجموعات."
+        "loadError": "تعذر تحميل الفرق."
       }
     },
     "structureIntro": {
@@ -2913,7 +3088,7 @@
       },
       "teamSpace": {
         "title": "مساحة الفريق",
-        "description": "منطقة مشتركة داخل مساحة العمل. أضف أشخاصًا أو مجموعات لمنحهم الوصول."
+        "description": "منطقة مشتركة داخل مساحة العمل. أضف أشخاصًا أو فرق لمنحهم الوصول."
       },
       "contents": "يمكن أن تحتوي كل مساحة على مجلدات وملاحظات.",
       "done": "فهمت",
@@ -3881,6 +4056,10 @@
         "description": "تتيح لك مساحات العمل التعاون مع زملائك ومشاركة الملاحظات.",
         "create": "إنشاء مساحة عمل"
       },
+      "personal": {
+        "title": "أنت في «شخصي»",
+        "description": "اختر مساحة عمل لإدارة إعداداتها."
+      },
       "loadError": {
         "title": "تعذر تحميل مساحات العمل",
         "description": "تحقق من اتصالك وحاول مرة أخرى.",
@@ -3891,7 +4070,8 @@
         "general": "عام",
         "members": "الأعضاء",
         "invitations": "الدعوات",
-        "teams": "المجموعات"
+        "guests": "الضيوف",
+        "teams": "الفرق"
       },
       "people": {
         "title": "الأشخاص",
@@ -3901,7 +4081,7 @@
         "addLabel": "دعوة أشخاص",
         "columns": {
           "name": "الاسم",
-          "team": "المجموعة",
+          "team": "الفريق",
           "role": "الدور",
           "email": "البريد الإلكتروني",
           "status": "الحالة",
@@ -3909,7 +4089,6 @@
         },
         "you": "أنت",
         "teamsNone": "لا شيء",
-        "teamsMore": "+{{count}}",
         "loading": {
           "title": "جارٍ تحميل الأعضاء…",
           "body": "سيظهر أعضاء مساحة العمل هنا."
@@ -3927,7 +4106,7 @@
         "roleMenuLabel": "تغيير دور {{name}}",
         "roleDescription": {
           "member": "يمكنه عرض الملاحظات وتعديلها.",
-          "admin": "يدير الأعضاء والدعوات والمجموعات والإعدادات."
+          "admin": "يدير الأعضاء والدعوات والفرق والإعدادات."
         },
         "roleFailed": "تعذّر تغيير دور {{name}}. تحقق من اتصالك وحاول مرة أخرى.",
         "roleNotAllowed": "لم يعد لديك إذن بتغيير الأدوار في {{workspace}}.",
@@ -4010,7 +4189,20 @@
           "selectAllInvitations": "تحديد كل الدعوات",
           "selectRow": "تحديد {{name}}",
           "remove": "إزالة",
-          "addToTeamspace": "إضافة إلى مساحة الفريق"
+          "addToTeamspace": "إضافة إلى مساحة الفريق",
+          "addToTeam": "إضافة إلى فريق",
+          "createTeam": "إنشاء فريق من المحددين"
+        },
+        "teamsCount_zero": "{{count}} فريق",
+        "teamsCount_one": "{{count}} فريق",
+        "teamsCount_two": "{{count}} فريقان",
+        "teamsCount_few": "{{count}} فرق",
+        "teamsCount_many": "{{count}} فريقًا",
+        "teamsCount_other": "{{count}} فريق",
+        "addMenu": {
+          "invite": "دعوة أشخاص",
+          "createTeam": "إنشاء فريق",
+          "label": "طرق أخرى للإضافة"
         }
       },
       "teamspaces": {
@@ -4030,7 +4222,7 @@
         "failedBody": "تحقق من اتصالك وحاول مرة أخرى.",
         "retry": "حاول مرة أخرى",
         "emptyTitle": "لا توجد مساحات فريق بعد",
-        "emptyBody": "مساحة الفريق هي منطقة مشتركة لملاحظات الفريق. أضف أشخاصًا أو مجموعات، ويمكن لكل من فيها القراءة والتعديل.",
+        "emptyBody": "مساحة الفريق هي منطقة مشتركة لملاحظات الفريق. أضف أشخاصًا أو فرق، ويمكن لكل من فيها القراءة والتعديل.",
         "emptyBodyMember": "لم ينشئ مسؤولو مساحة العمل أي مساحة فريق بعد.",
         "adminCount_zero": "{{count}} مسؤولين",
         "adminCount_one": "{{count}} مسؤول",
@@ -4058,7 +4250,7 @@
           "descriptionLabel": "الوصف",
           "people": "الأشخاص",
           "descriptionPlaceholder": "تسجيلات وملخصات لمكالمات المبيعات والدعم، ملاحظة واحدة لكل مكالمة.",
-          "peoplePlaceholder": "الأسماء أو البريد الإلكتروني أو المجموعات",
+          "peoplePlaceholder": "الأسماء أو البريد الإلكتروني أو الفرق",
           "defaultTitle": "مساحة فريق افتراضية",
           "defaultBody": "أضف أعضاء مساحة العمل الجدد تلقائيًا.",
           "openTitle": "مساحة فريق مفتوحة",
@@ -4076,36 +4268,36 @@
           "createdInviteFailed_other": "تم إنشاء {{space}}. تعذرت دعوة {{count}} شخص. ادعهم من «الأعضاء».",
           "inviteFailedWho": "لم تتم دعوتهم: {{names}}.",
           "copyAddresses": "نسخ العناوين",
-          "groupsGone": "لم يعد {{names}} متاحًا، لذا لم تتم إضافته."
+          "teamsGone": "لم يعد {{names}} متاحًا، لذا لم تتم إضافته."
         },
         "picker": {
-          "groupPeople_zero": "{{count}} أشخاص",
-          "groupPeople_one": "{{count}} شخص",
-          "groupPeople_two": "{{count}} شخصان",
-          "groupPeople_few": "{{count}} أشخاص",
-          "groupPeople_many": "{{count}} شخصًا",
-          "groupPeople_other": "{{count}} شخص",
-          "groupChip_zero": "{{name}} · {{count}} أشخاص",
-          "groupChip_one": "{{name}} · {{count}} شخص",
-          "groupChip_two": "{{name}} · {{count}} شخصان",
-          "groupChip_few": "{{name}} · {{count}} أشخاص",
-          "groupChip_many": "{{name}} · {{count}} شخصًا",
-          "groupChip_other": "{{name}} · {{count}} شخص",
+          "teamPeople_zero": "{{count}} أشخاص",
+          "teamPeople_one": "{{count}} شخص",
+          "teamPeople_two": "{{count}} شخصان",
+          "teamPeople_few": "{{count}} أشخاص",
+          "teamPeople_many": "{{count}} شخصًا",
+          "teamPeople_other": "{{count}} شخص",
+          "teamChip_zero": "{{name}} · {{count}} أشخاص",
+          "teamChip_one": "{{name}} · {{count}} شخص",
+          "teamChip_two": "{{name}} · {{count}} شخصان",
+          "teamChip_few": "{{name}} · {{count}} أشخاص",
+          "teamChip_many": "{{name}} · {{count}} شخصًا",
+          "teamChip_other": "{{name}} · {{count}} شخص",
           "emailChip": "{{email}} · {{role}}",
           "noMember": "لم يتم العثور على عضو",
           "inviteToWorkspace": "دعوة إلى مساحة العمل",
           "newToWorkspace": "جديد في مساحة العمل",
           "select": "اختيار",
-          "noResultsTitle": "لم يتم العثور على أشخاص أو مجموعات",
+          "noResultsTitle": "لم يتم العثور على أشخاص أو فرق",
           "noResultsBody": "جرّب اسمًا آخر أو أدخل عنوان بريد إلكتروني كاملًا.",
           "noResultsBodyNoInvite": "جرّب اسمًا آخر.",
           "hasAccess": "لديه صلاحية الوصول بالفعل",
-          "groupHasAccess_zero": "لديه صلاحية الوصول بالفعل · {{count}} أشخاص",
-          "groupHasAccess_one": "لديه صلاحية الوصول بالفعل · {{count}} شخص",
-          "groupHasAccess_two": "لديه صلاحية الوصول بالفعل · {{count}} شخصان",
-          "groupHasAccess_few": "لديه صلاحية الوصول بالفعل · {{count}} أشخاص",
-          "groupHasAccess_many": "لديه صلاحية الوصول بالفعل · {{count}} شخصًا",
-          "groupHasAccess_other": "لديه صلاحية الوصول بالفعل · {{count}} شخص"
+          "teamHasAccess_zero": "لديه صلاحية الوصول بالفعل · {{count}} أشخاص",
+          "teamHasAccess_one": "لديه صلاحية الوصول بالفعل · {{count}} شخص",
+          "teamHasAccess_two": "لديه صلاحية الوصول بالفعل · {{count}} شخصان",
+          "teamHasAccess_few": "لديه صلاحية الوصول بالفعل · {{count}} أشخاص",
+          "teamHasAccess_many": "لديه صلاحية الوصول بالفعل · {{count}} شخصًا",
+          "teamHasAccess_other": "لديه صلاحية الوصول بالفعل · {{count}} شخص"
         },
         "members": {
           "columnRole": "الدور في مساحة الفريق",
@@ -4113,30 +4305,30 @@
           "adding": "جارٍ الإضافة…",
           "retry": "حاول مرة أخرى",
           "invitationPending": "الدعوة قيد الانتظار",
-          "via": "عضو · عبر {{group}}",
-          "viaAdmin": "مسؤول · عبر {{group}}",
+          "via": "عضو · عبر {{team}}",
+          "viaAdmin": "مسؤول · عبر {{team}}",
           "roleMember": "عضو في مساحة الفريق",
           "roleMemberBody": "يمكنه عرض الملاحظات وتعديلها",
           "roleAdmin": "مسؤول مساحة الفريق",
-          "roleAdminBody": "يدير مساحة الفريق هذه والمجموعات المعيّنة لها.",
+          "roleAdminBody": "يدير مساحة الفريق هذه والفرق المعيّنة لها.",
           "removeItem": "إزالة من مساحة الفريق",
           "removeTitle": "هل تريد إزالة {{name}} من {{space}}؟",
-          "removeBody": "سيؤدي هذا إلى إنهاء عضوية {{name}} المباشرة. سيبقى الوصول عبر المجموعة. وسيظل في مساحة العمل.",
+          "removeBody": "سيؤدي هذا إلى إنهاء عضوية {{name}} المباشرة. سيبقى الوصول عبر الفريق. وسيظل في مساحة العمل.",
           "removeConfirm": "إزالة العضو",
           "removeFailedTitle": "تعذرت إزالة {{name}}",
           "removeFailedBody": "لم تتغير عضوية {{name}} في {{space}}. تحقق من اتصالك وحاول مرة أخرى.",
           "removed": "تمت إزالة عضوية {{name}} المباشرة في {{space}}.",
-          "removeGroupTitle": "هل تريد إزالة {{group}} من {{space}}؟",
-          "removeGroupBody_zero": "يفقد {{count}} أشخاص الوصول عبر هذه المجموعة. تبقى المجموعة في مساحة العمل.",
-          "removeGroupBody_one": "يفقد {{count}} شخص الوصول عبر هذه المجموعة. تبقى المجموعة في مساحة العمل.",
-          "removeGroupBody_two": "يفقد {{count}} شخصان الوصول عبر هذه المجموعة. تبقى المجموعة في مساحة العمل.",
-          "removeGroupBody_few": "يفقد {{count}} أشخاص الوصول عبر هذه المجموعة. تبقى المجموعة في مساحة العمل.",
-          "removeGroupBody_many": "يفقد {{count}} شخصًا الوصول عبر هذه المجموعة. تبقى المجموعة في مساحة العمل.",
-          "removeGroupBody_other": "يفقد {{count}} شخص الوصول عبر هذه المجموعة. تبقى المجموعة في مساحة العمل.",
-          "removeGroupBodyNoCount": "سيفقد أفراد هذه المجموعة الوصول عبرها. تبقى المجموعة في مساحة العمل.",
+          "removeTeamTitle": "هل تريد إزالة {{team}} من {{space}}؟",
+          "removeTeamBody_zero": "يفقد {{count}} أشخاص الوصول عبر هذا الفريق. يبقى الفريق في مساحة العمل.",
+          "removeTeamBody_one": "يفقد {{count}} شخص الوصول عبر هذا الفريق. يبقى الفريق في مساحة العمل.",
+          "removeTeamBody_two": "يفقد {{count}} شخصان الوصول عبر هذا الفريق. يبقى الفريق في مساحة العمل.",
+          "removeTeamBody_few": "يفقد {{count}} أشخاص الوصول عبر هذا الفريق. يبقى الفريق في مساحة العمل.",
+          "removeTeamBody_many": "يفقد {{count}} شخصًا الوصول عبر هذا الفريق. يبقى الفريق في مساحة العمل.",
+          "removeTeamBody_other": "يفقد {{count}} شخص الوصول عبر هذا الفريق. يبقى الفريق في مساحة العمل.",
+          "removeTeamBodyNoCount": "سيفقد أفراد هذا الفريق الوصول عبره. يبقى الفريق في مساحة العمل.",
           "stagedNew": "تتم دعوة الأشخاص الجدد عند إضافتهم. يبدأ الوصول إلى مساحة الفريق بعد قبولهم الدعوة.",
-          "stagedGroup": "سيرث جميع أعضاء {{group}} صلاحية وصول عضو إلى {{space}}.",
-          "stagedGroups": "سيرث جميع أعضاء هذه المجموعات صلاحية وصول عضو إلى {{space}}.",
+          "stagedTeam": "سيرث جميع أعضاء {{team}} صلاحية وصول عضو إلى {{space}}.",
+          "stagedTeams": "سيرث جميع أعضاء هذه الفرق صلاحية وصول عضو إلى {{space}}.",
           "invalid": "أدخل عنوان بريد إلكتروني صالحًا. يتم الاحتفاظ بالأشخاص الذين حددتهم.",
           "progressPeople": "جارٍ إضافة {{names}}…",
           "progressBoth_zero": "جارٍ إضافة {{names}} وإرسال {{count}} دعوات…",
@@ -4153,8 +4345,8 @@
           "progressInvites_other": "جارٍ إرسال {{count}} دعوة…",
           "resultAdded": "تمت إضافة {{names}}.",
           "resultInvited": "تم إرسال دعوة إلى مساحة العمل إلى {{names}}.",
-          "resultGroup": "تمت إضافة {{group}}. أصبح لأعضائها الآن صلاحية وصول عضو.",
-          "resultGroups": "تمت إضافة {{names}}. أصبح لأعضائها الآن صلاحية وصول عضو.",
+          "resultTeam": "تمت إضافة {{team}}. أصبح لأعضائه الآن صلاحية وصول عضو.",
+          "resultTeams": "تمت إضافة {{names}}. أصبح لأعضائها الآن صلاحية وصول عضو.",
           "failed": "تعذرت إضافة الأعضاء. تم الاحتفاظ باختياراتك. حاول مرة أخرى.",
           "partialAdded": "تمت إضافة {{names}}.",
           "partialAddedMany": "تمت إضافة {{names}}.",
@@ -4201,7 +4393,7 @@
           "deleteFailedBody": "لا تزال مساحة الفريق متاحة. تحقق من اتصالك وحاول مرة أخرى.",
           "deleted": "تم حذف {{space}}.",
           "restored": "تمت استعادة {{space}}",
-          "leaveBodyKeeps": "ستنتهي عضويتك المباشرة. سيبقى وصولك عبر {{groups}}.",
+          "leaveBodyKeeps": "ستنتهي عضويتك المباشرة. سيبقى وصولك عبر {{teams}}.",
           "leaveBodyLoses": "ستفقد الوصول إلى {{space}} وملاحظاتها.",
           "leaveBodyAdmins": "سيواصل مسؤول آخر إدارة مساحة الفريق هذه.",
           "deleteNotAllowed": "ليس لديك إذن لحذف {{space}}.",
@@ -4288,45 +4480,241 @@
         "errorTitle": "تعذر تحديث الطلب"
       },
       "teams": {
-        "title": "المجموعات",
-        "description": "مجموعات من أعضاء مساحة العمل يمكن منحها الوصول إلى مساحات الفريق معًا.",
-        "new": "مجموعة جديدة",
-        "empty": "لا توجد مجموعات بعد.",
-        "createFirst": "أنشئ مجموعتك الأولى",
-        "addMembersLabel": "إضافة أعضاء",
-        "createTitle": "إنشاء مجموعة",
-        "nameLabel": "اسم المجموعة",
-        "memberCount_zero": "{{count}} أعضاء",
-        "memberCount_one": "{{count}} عضو",
-        "memberCount_two": "{{count}} عضوان",
-        "memberCount_few": "{{count}} أعضاء",
-        "memberCount_many": "{{count}} عضوًا",
-        "memberCount_other": "{{count}} عضو",
-        "membersButton": "الأعضاء",
-        "grantsAccessToSpaces_zero": "يمنح الوصول إلى {{count}} مساحات",
-        "grantsAccessToSpaces_one": "يمنح الوصول إلى {{count}} مساحة",
-        "grantsAccessToSpaces_two": "يمنح الوصول إلى {{count}} مساحتين",
-        "grantsAccessToSpaces_few": "يمنح الوصول إلى {{count}} مساحات",
-        "grantsAccessToSpaces_many": "يمنح الوصول إلى {{count}} مساحةً",
-        "grantsAccessToSpaces_other": "يمنح الوصول إلى {{count}} مساحة",
-        "couldNotCreate": "تعذر إنشاء المجموعة",
-        "created": "تم إنشاء {{team}}",
-        "deleted": "تم حذف {{team}}",
-        "deleteConfirmTitle": "حذف {{team}}؟",
-        "deleteConfirmDescription": "هذا يؤرشف المجموعة. سيفقد أعضاؤها أي وصول منحته إياهم.",
-        "deleteConfirmSpaceAccess_zero": "تمنح هذه المجموعة الوصول إلى {{count}} مساحات. سيفقد أعضاؤها هذا الوصول.",
-        "deleteConfirmSpaceAccess_one": "تمنح هذه المجموعة الوصول إلى {{count}} مساحة. سيفقد أعضاؤها هذا الوصول.",
-        "deleteConfirmSpaceAccess_two": "تمنح هذه المجموعة الوصول إلى {{count}} مساحتين. سيفقد أعضاؤها هذا الوصول.",
-        "deleteConfirmSpaceAccess_few": "تمنح هذه المجموعة الوصول إلى {{count}} مساحات. سيفقد أعضاؤها هذا الوصول.",
-        "deleteConfirmSpaceAccess_many": "تمنح هذه المجموعة الوصول إلى {{count}} مساحةً. سيفقد أعضاؤها هذا الوصول.",
-        "deleteConfirmSpaceAccess_other": "تمنح هذه المجموعة الوصول إلى {{count}} مساحة. سيفقد أعضاؤها هذا الوصول.",
         "members": {
           "title": "أعضاء {{team}}",
-          "removeConfirm": "إزالة {{name}} من {{team}}؟",
-          "leave": "مغادرة المجموعة",
-          "leftTeam": "لقد غادرت {{team}}",
-          "leaveConfirm": "مغادرة {{team}}؟",
-          "leaveConfirmDescription": "ستفقد إمكانية الوصول إلى المساحات المخصصة لهذه المجموعة ما لم تكن مضافًا مباشرةً أو تضمك مجموعة أخرى."
+          "gone": "لم يعد {{team}} موجودًا.",
+          "columnName": "الاسم",
+          "columnRole": "الدور في الفريق",
+          "placeholder": "الأسماء أو البريد الإلكتروني",
+          "add": "إضافة أعضاء",
+          "adding": "جارٍ الإضافة…",
+          "inviteNote": "يتلقى الأشخاص الجدد دعوة إلى مساحة العمل عند إضافتهم.",
+          "roleMember": "عضو في الفريق",
+          "roleMemberBody": "يحصل على الوصول أينما أُضيف الفريق.",
+          "roleAdmin": "مسؤول الفريق",
+          "roleAdminBody": "يدير قائمة أعضاء هذا الفريق.",
+          "remove": "إزالة من الفريق",
+          "addingStatus_zero": "جارٍ إضافة {{names}} وإرسال {{count}} دعوة…",
+          "addingStatus_one": "جارٍ إضافة {{names}} وإرسال {{count}} دعوة…",
+          "addingStatus_two": "جارٍ إضافة {{names}} وإرسال {{count}} دعوة…",
+          "addingStatus_few": "جارٍ إضافة {{names}} وإرسال {{count}} دعوات…",
+          "addingStatus_many": "جارٍ إضافة {{names}} وإرسال {{count}} دعوة…",
+          "addingStatus_other": "جارٍ إضافة {{names}} وإرسال {{count}} دعوة…",
+          "addingOnly": "جارٍ إضافة {{names}}…",
+          "invitingOnly_zero": "جارٍ إرسال {{count}} دعوة…",
+          "invitingOnly_one": "جارٍ إرسال {{count}} دعوة…",
+          "invitingOnly_two": "جارٍ إرسال {{count}} دعوة…",
+          "invitingOnly_few": "جارٍ إرسال {{count}} دعوات…",
+          "invitingOnly_many": "جارٍ إرسال {{count}} دعوة…",
+          "invitingOnly_other": "جارٍ إرسال {{count}} دعوة…",
+          "addFailed": "تعذّر إكمال إضافة الأعضاء. حاول مرة أخرى.",
+          "added": "تمت إضافة {{names}}.",
+          "addedAndInvited": "تمت إضافة {{names}} ودعوة {{invited}}.",
+          "invited": "تمت دعوة {{invited}}.",
+          "pending": "دعوة معلّقة",
+          "pendingBody": "ينضم إلى الفريق بعد القبول · {{role}}",
+          "invitedPill": "مدعو",
+          "resend": "إعادة الإرسال",
+          "resent": "تمت إعادة إرسال الدعوة إلى {{email}}.",
+          "resendFailed": "تعذّرت إعادة إرسال الدعوة إلى {{email}}.",
+          "removeTitle": "إزالة {{name}} من {{team}}؟",
+          "removeBody": "سيفقد {{name}} الوصول الممنوح عبر هذا الفريق. سيبقى في مساحة العمل ويحتفظ بأي وصول ممنوح مباشرةً أو عبر فرق أخرى.",
+          "removeAction": "إزالة العضو",
+          "removeFailedTitle": "تعذرت إزالة {{name}}",
+          "removeFailedBody": "لا يزال {{name}} عضوًا في {{team}}. تحقق من اتصالك وحاول مرة أخرى.",
+          "removed": "تمت إزالة {{name}} من {{team}}.",
+          "roleFailed": "تعذّر تغيير دور {{name}}. حاول مرة أخرى.",
+          "memberGone": "لم يعد {{name}} ضمن {{team}}.",
+          "notAllowed": "لم يعد بإمكانك إدارة {{team}}.",
+          "invitedNoEmail": "تمت دعوة {{invited}}، لكن البريد لم يُرسل. استخدم «إعادة الإرسال» أدناه.",
+          "skippedInvited": "لم تتم الإضافة إلى {{team}}: {{names}}. توجد دعوة إلى مساحة العمل بالفعل."
+        },
+        "columns": {
+          "name": "الاسم",
+          "members": "الأعضاء",
+          "teamspaces": "مساحات الفريق"
+        },
+        "loadingTitle": "جارٍ تحميل الفرق…",
+        "loadingBody": "ستظهر هنا فرق مساحة عملك.",
+        "failedTitle": "تعذّر تحميل الفرق",
+        "failedBody": "تحقق من اتصالك وحاول مرة أخرى.",
+        "retry": "حاول مرة أخرى",
+        "emptyTitle": "لا توجد فرق بعد",
+        "emptyBody": "الفريق اختصار لإضافة عدة أشخاص دفعة واحدة. أضف فريقًا إلى مساحة فريق ليحصل كل من فيه على إمكانية الوصول.",
+        "emptyBodyMember": "لم ينشئ مسؤولو مساحة العمل أي فريق بعد.",
+        "create": "إنشاء فريق",
+        "spacesNone": "لا شيء",
+        "people_zero": "{{count}} شخص",
+        "people_one": "{{count}} شخص",
+        "people_two": "{{count}} شخصان",
+        "people_few": "{{count}} أشخاص",
+        "people_many": "{{count}} شخصًا",
+        "people_other": "{{count}} شخص",
+        "spaces_zero": "{{count}} مساحة فريق",
+        "spaces_one": "{{count}} مساحة فريق",
+        "spaces_two": "{{count}} مساحتا فريق",
+        "spaces_few": "{{count}} مساحات فريق",
+        "spaces_many": "{{count}} مساحة فريق",
+        "spaces_other": "{{count}} مساحة فريق",
+        "refreshFailed": "تعذّر تحديث الفرق. قد لا تكون هذه القائمة محدّثة.",
+        "cellMenuLabel": "{{team}}: {{value}}",
+        "paywall": {
+          "title": "الفرق متاحة في خطة Business",
+          "body": "مساحات الفريق مجانية. قم بالترقية لتجميع الأشخاص في فرق.",
+          "bodyAskOwner": "مساحات الفريق مجانية. اطلب من {{owner}} الترقية لتجميع الأشخاص في فرق.",
+          "bodyAskOwnerUnknown": "مساحات الفريق مجانية. اطلب من مالك مساحة العمل الترقية لتجميع الأشخاص في فرق.",
+          "upgrade": "الترقية إلى Business",
+          "notNow": "ليس الآن",
+          "lapsedTitle": "خطة مساحة العمل هذه غير نشطة",
+          "lapsedBody": "حدّث الفوترة لإنشاء فرق. تبقى فرقك الحالية تعمل.",
+          "lapsedBodyAskOwner": "اطلب من {{owner}} تحديث الفوترة لإنشاء فرق. تبقى فرقك الحالية تعمل.",
+          "lapsedBodyAskOwnerUnknown": "اطلب من مالك مساحة العمل تحديث الفوترة لإنشاء فرق. تبقى فرقك الحالية تعمل.",
+          "updateBilling": "تحديث الفوترة"
+        },
+        "form": {
+          "title": "إنشاء فريق",
+          "subtitle": "اختصار لإضافة عدة أشخاص دفعة واحدة.",
+          "name": "الاسم",
+          "namePlaceholder": "اسم الفريق",
+          "nameRequired": "أدخل اسم الفريق.",
+          "nameTaken": "يوجد فريق باسم {{name}} بالفعل.",
+          "people": "الأشخاص",
+          "peoplePlaceholder": "الأسماء أو عناوين البريد",
+          "adminNote": "ستتم إضافتك مشرفًا على الفريق. تُرسل الدعوات عند إنشاء الفريق.",
+          "adminNoteShort": "ستتم إضافتك مشرفًا على الفريق.",
+          "invalidEmail": "أدخل عنوان بريد إلكتروني صالحًا.",
+          "cancel": "إلغاء",
+          "submit": "إنشاء فريق",
+          "creating": "جارٍ الإنشاء…",
+          "retry": "حاول مرة أخرى",
+          "creatingStatus_zero": "جارٍ إنشاء {{team}} وإرسال {{count}} دعوة…",
+          "creatingStatus_one": "جارٍ إنشاء {{team}} وإرسال {{count}} دعوة…",
+          "creatingStatus_two": "جارٍ إنشاء {{team}} وإرسال {{count}} دعوة…",
+          "creatingStatus_few": "جارٍ إنشاء {{team}} وإرسال {{count}} دعوات…",
+          "creatingStatus_many": "جارٍ إنشاء {{team}} وإرسال {{count}} دعوة…",
+          "creatingStatus_other": "جارٍ إنشاء {{team}} وإرسال {{count}} دعوة…",
+          "failed": "تعذر إنشاء الفريق. تم الاحتفاظ بإدخالاتك.",
+          "created": "تم إنشاء {{team}}",
+          "createdAdded": "تم إنشاء {{team}}. تمت إضافة {{names}}.",
+          "createdInvited": "تم إنشاء {{team}}. تمت دعوة {{invited}}.",
+          "createdAddedInvited": "تم إنشاء {{team}}. تمت إضافة {{names}} ودعوة {{invited}}.",
+          "createdWithMembers_zero": "تم إنشاء {{team}} بـ {{count}} عضو",
+          "createdWithMembers_one": "تم إنشاء {{team}} بـ {{count}} عضو",
+          "createdWithMembers_two": "تم إنشاء {{team}} بـ {{count}} عضو",
+          "createdWithMembers_few": "تم إنشاء {{team}} بـ {{count}} أعضاء",
+          "createdWithMembers_many": "تم إنشاء {{team}} بـ {{count}} عضوًا",
+          "createdWithMembers_other": "تم إنشاء {{team}} بـ {{count}} عضو",
+          "createdInvitedMany_zero": "تم إنشاء {{team}} ودعوة {{count}} شخص",
+          "createdInvitedMany_one": "تم إنشاء {{team}} ودعوة {{count}} شخص",
+          "createdInvitedMany_two": "تم إنشاء {{team}} ودعوة {{count}} شخصين",
+          "createdInvitedMany_few": "تم إنشاء {{team}} ودعوة {{count}} أشخاص",
+          "createdInvitedMany_many": "تم إنشاء {{team}} ودعوة {{count}} شخصًا",
+          "createdInvitedMany_other": "تم إنشاء {{team}} ودعوة {{count}} شخص",
+          "createdCounts_zero": "تم إنشاء {{team}}. المضافون: {{added}}. المدعوون: {{count}}.",
+          "createdCounts_one": "تم إنشاء {{team}}. المضافون: {{added}}. المدعوون: {{count}}.",
+          "createdCounts_two": "تم إنشاء {{team}}. المضافون: {{added}}. المدعوون: {{count}}.",
+          "createdCounts_few": "تم إنشاء {{team}}. المضافون: {{added}}. المدعوون: {{count}}.",
+          "createdCounts_many": "تم إنشاء {{team}}. المضافون: {{added}}. المدعوون: {{count}}.",
+          "createdCounts_other": "تم إنشاء {{team}}. المضافون: {{added}}. المدعوون: {{count}}.",
+          "notAllowed": "ليس لديك إذن لإنشاء فرق في {{workspace}}.",
+          "ssoRequired": "سجّل الدخول باستخدام تسجيل الدخول الموحّد (SSO) الخاص بشركتك لإنشاء فرق في {{workspace}}.",
+          "createdSomeNotInvited_zero": "تم إنشاء {{team}}. تعذرت دعوة {{count}} شخص.",
+          "createdSomeNotInvited_one": "تم إنشاء {{team}}. تعذرت دعوة {{count}} شخص.",
+          "createdSomeNotInvited_two": "تم إنشاء {{team}}. تعذرت دعوة {{count}} شخص.",
+          "createdSomeNotInvited_few": "تم إنشاء {{team}}. تعذرت دعوة {{count}} أشخاص.",
+          "createdSomeNotInvited_many": "تم إنشاء {{team}}. تعذرت دعوة {{count}} شخصًا.",
+          "createdSomeNotInvited_other": "تم إنشاء {{team}}. تعذرت دعوة {{count}} شخص."
+        },
+        "dialog": {
+          "tabGeneral": "عام",
+          "tabMembers": "الأعضاء",
+          "tabSpaces": "مساحات الفريق",
+          "nameLabel": "اسم الفريق",
+          "renameFailed": "تعذّر تغيير اسم {{team}}. حاول مرة أخرى."
+        },
+        "spacesTab": {
+          "emptyTitle": "ليس في أي مساحة فريق بعد",
+          "emptyBody": "أضف هذا الفريق إلى مساحة فريق لمنح كل من فيه حق الوصول.",
+          "emptyAction": "إضافة إلى مساحة فريق",
+          "noSpacesTitle": "لا توجد مساحات فريق بعد",
+          "noSpacesBody": "مساحة الفريق منطقة مشتركة لملاحظات الفريق. أضف أشخاصًا أو فرقًا ليتمكن الجميع من القراءة والتحرير.",
+          "placeholder": "ابحث عن مساحات فريق لإضافتها",
+          "searchPlaceholder": "ابحث عن مساحات فريق",
+          "add": "إضافة مساحات فريق",
+          "adding": "جارٍ الإضافة…",
+          "selectedTitle_zero": "تم تحديد {{count}} مساحة فريق",
+          "selectedTitle_one": "تم تحديد {{count}} مساحة فريق",
+          "selectedTitle_two": "تم تحديد {{count}} مساحتي فريق",
+          "selectedTitle_few": "تم تحديد {{count}} مساحات فريق",
+          "selectedTitle_many": "تم تحديد {{count}} مساحة فريق",
+          "selectedTitle_other": "تم تحديد {{count}} مساحة فريق",
+          "selectedBody": "إضافة {{team}} إلى {{names}}.",
+          "noMatches": "لا توجد مساحات فريق مطابقة",
+          "createNew": "إنشاء مساحة فريق جديدة",
+          "failed": "تعذّرت إضافة {{team}}. تم الاحتفاظ بتحديداتك. حاول مرة أخرى.",
+          "added_zero": "تمت إضافة {{team}} إلى {{count}} مساحة فريق.",
+          "added_one": "تمت إضافة {{team}} إلى {{count}} مساحة فريق.",
+          "added_two": "تمت إضافة {{team}} إلى {{count}} مساحتي فريق.",
+          "added_few": "تمت إضافة {{team}} إلى {{count}} مساحات فريق.",
+          "added_many": "تمت إضافة {{team}} إلى {{count}} مساحة فريق.",
+          "added_other": "تمت إضافة {{team}} إلى {{count}} مساحة فريق.",
+          "addedPartly": "تمت إضافة {{team}} إلى {{added}}. تعذّرت إضافته إلى {{failed}}. حاول مرة أخرى.",
+          "gone": "تعذّرت إضافة {{team}}. لم يعد من الممكن العثور على {{names}}.",
+          "notAllowed": "لم يعد بإمكانك إدارة {{names}}."
+        },
+        "exit": {
+          "leaveTitle": "مغادرة الفريق",
+          "leaveBody": "غادر هذا الفريق.",
+          "leaveAction": "مغادرة الفريق",
+          "deleteTitle": "حذف الفريق",
+          "deleteBody": "أزل هذا الفريق للجميع.",
+          "deleteAction": "حذف الفريق",
+          "blockedTitle": "أضف مسؤولًا آخر أولًا",
+          "blockedBody": "أنت المسؤول الوحيد عن {{team}}. اجعل عضوًا آخر مسؤولًا قبل أن تغادر.",
+          "manageMembers": "إدارة الأعضاء",
+          "leaveConfirmTitle": "هل تريد مغادرة {{team}}؟",
+          "leaveConfirmBody": "ستتم إزالتك من هذا الفريق وستفقد الوصول الممنوح من خلاله. سيواصل مسؤول آخر إدارة الفريق.",
+          "leaveConfirmBodyNoOtherAdmin": "ستتم إزالتك من هذا الفريق وستفقد الوصول الممنوح من خلاله.",
+          "leaveFailedTitle": "تعذّرت مغادرة {{team}}",
+          "leaveFailedBody": "ما زلت عضوًا في هذا الفريق. تحقق من اتصالك وحاول مرة أخرى.",
+          "left": "غادرت {{team}}.",
+          "deleteConfirmTitle": "هل تريد حذف {{team}}؟",
+          "deleteConfirmBody": "ستتم إزالة الفريق للجميع. سينتهي الوصول الممنوح من خلال {{team}}. لن يتم حذف الأشخاص ومساحات الفريق والملاحظات.",
+          "deleted": "تم حذف {{team}}. لا يزال أعضاؤه ومساحات الفريق متاحة.",
+          "deleteFailedTitle": "تعذّر حذف {{team}}",
+          "deleteFailedBody": "لم يتغير الفريق ولا إعدادات الوصول الخاصة به. تحقق من اتصالك وحاول مرة أخرى.",
+          "deleteNotAllowed": "ليس لديك إذن لحذف {{team}}."
+        },
+        "managedByDirectory": "تتم إدارته بواسطة دليلك",
+        "addPeople": {
+          "someAdded": "{{team}} · أُضيف {{covered}} من {{total}} بالفعل",
+          "none": "لا توجد فرق بعد",
+          "noneAddable": "لا توجد فرق يمكنك الإضافة إليها",
+          "addingTitle_zero": "جارٍ إضافة {{count}} أشخاص…",
+          "addingTitle_one": "جارٍ إضافة {{count}} شخص…",
+          "addingTitle_two": "جارٍ إضافة {{count}} شخصين…",
+          "addingTitle_few": "جارٍ إضافة {{count}} أشخاص…",
+          "addingTitle_many": "جارٍ إضافة {{count}} شخصًا…",
+          "addingTitle_other": "جارٍ إضافة {{count}} شخص…",
+          "addingBody": "أبقِ هذه النافذة مفتوحة أثناء إضافتهم إلى {{team}}.",
+          "addingAction": "جارٍ الإضافة…",
+          "failedTitle_zero": "تعذرت إضافة {{count}} أشخاص",
+          "failedTitle_one": "تعذرت إضافة {{count}} شخص",
+          "failedTitle_two": "تعذرت إضافة {{count}} شخصين",
+          "failedTitle_few": "تعذرت إضافة {{count}} أشخاص",
+          "failedTitle_many": "تعذرت إضافة {{count}} شخصًا",
+          "failedTitle_other": "تعذرت إضافة {{count}} شخص",
+          "failedBody": "لم تتم إضافتهم إلى {{team}}. تم الاحتفاظ باختيارك.",
+          "done_zero": "تمت إضافة {{count}} أعضاء إلى {{team}}",
+          "done_one": "تمت إضافة {{count}} عضو إلى {{team}}",
+          "done_two": "تمت إضافة {{count}} عضوين إلى {{team}}",
+          "done_few": "تمت إضافة {{count}} أعضاء إلى {{team}}",
+          "done_many": "تمت إضافة {{count}} عضوًا إلى {{team}}",
+          "done_other": "تمت إضافة {{count}} عضو إلى {{team}}",
+          "someDone": "تمت إضافة {{added}} إلى {{team}}. {{already}} عضو بالفعل.",
+          "someDonePlural": "تمت إضافة {{added}} إلى {{team}}. {{already}} أعضاء بالفعل.",
+          "left": "غادر {{names}} مساحة العمل، لذلك لم تتم إضافة أحد.",
+          "allAlready": "هم موجودون بالفعل في {{team}}."
         }
       },
       "invites": {
@@ -4411,6 +4799,87 @@
         "title": "وحدة تحكم Enterprise",
         "description": "إدارة SSO والسياسات والأعضاء على الويب",
         "open": "فتح وحدة التحكم"
+      },
+      "guests": {
+        "columns": {
+          "name": "الاسم",
+          "access": "الوصول",
+          "actions": "الإجراءات"
+        },
+        "emptyTitle": "لا يوجد ضيوف بعد",
+        "emptyBody": "سيظهر هنا الأشخاص من خارج مساحة العمل هذه الذين يمكنهم عرض ملاحظاتك المشتركة.",
+        "loadingTitle": "جارٍ تحميل الضيوف…",
+        "loadingBody": "سيظهر ضيوف مساحة العمل هنا.",
+        "failedTitle": "تعذّر تحميل الضيوف",
+        "failedBody": "تحقق من اتصالك وحاول مرة أخرى.",
+        "noteCount_zero": "{{count}} ملاحظة",
+        "noteCount_one": "{{count}} ملاحظة",
+        "noteCount_two": "{{count}} ملاحظتان",
+        "noteCount_few": "{{count}} ملاحظات",
+        "noteCount_many": "{{count}} ملاحظة",
+        "noteCount_other": "{{count}} ملاحظة",
+        "notesTriggerLabel_zero": "{{count}} ملاحظة مشتركة مع {{name}}",
+        "notesTriggerLabel_one": "{{count}} ملاحظة مشتركة مع {{name}}",
+        "notesTriggerLabel_two": "{{count}} ملاحظتان مشتركتان مع {{name}}",
+        "notesTriggerLabel_few": "{{count}} ملاحظات مشتركة مع {{name}}",
+        "notesTriggerLabel_many": "{{count}} ملاحظة مشتركة مع {{name}}",
+        "notesTriggerLabel_other": "{{count}} ملاحظة مشتركة مع {{name}}",
+        "removeFromNote": "إزالة من {{note}}",
+        "removedFromNote": "تمت إزالة {{name}} من {{note}}",
+        "removeFromNoteFailed": "تعذّرت إزالة {{name}} من {{note}}. تحقق من اتصالك وحاول مرة أخرى.",
+        "menu": {
+          "label": "إجراءات {{name}}",
+          "invite": "دعوة إلى مساحة العمل",
+          "copyEmail": "نسخ البريد الإلكتروني",
+          "remove": "إزالة كضيف"
+        },
+        "invite": {
+          "title_zero": "دعوة {{count}} ضيف إلى {{workspace}}",
+          "title_one": "دعوة {{count}} ضيف إلى {{workspace}}",
+          "title_two": "دعوة {{count}} ضيف إلى {{workspace}}",
+          "title_few": "دعوة {{count}} ضيوف إلى {{workspace}}",
+          "title_many": "دعوة {{count}} ضيفًا إلى {{workspace}}",
+          "title_other": "دعوة {{count}} ضيف إلى {{workspace}}",
+          "description": "سيتلقون رابطًا عبر البريد الإلكتروني للانضمام إلى {{workspace}}.",
+          "sent_zero": "تم إرسال {{count}} دعوة للانضمام إلى {{workspace}}",
+          "sent_one": "تم إرسال {{count}} دعوة للانضمام إلى {{workspace}}",
+          "sent_two": "تم إرسال {{count}} دعوة للانضمام إلى {{workspace}}",
+          "sent_few": "تم إرسال {{count}} دعوات للانضمام إلى {{workspace}}",
+          "sent_many": "تم إرسال {{count}} دعوة للانضمام إلى {{workspace}}",
+          "sent_other": "تم إرسال {{count}} دعوة للانضمام إلى {{workspace}}"
+        },
+        "remove": {
+          "titleOne": "إزالة {{name}} من {{workspace}}؟",
+          "confirmOne": "إزالة الضيف",
+          "title_zero": "إزالة {{count}} ضيف من {{workspace}}؟",
+          "title_one": "إزالة {{count}} ضيف من {{workspace}}؟",
+          "title_two": "إزالة {{count}} ضيف من {{workspace}}؟",
+          "title_few": "إزالة {{count}} ضيوف من {{workspace}}؟",
+          "title_many": "إزالة {{count}} ضيفًا من {{workspace}}؟",
+          "title_other": "إزالة {{count}} ضيف من {{workspace}}؟",
+          "body": "سيفقدون الوصول إلى كل الملاحظات المشاركة معهم. يمكنك مشاركة الملاحظات معهم مجددًا في أي وقت.",
+          "linkShared": "قد يظل بإمكان الضيوف الوصول عبر المشاركة بالرابط أو النطاق.",
+          "confirm_zero": "إزالة {{count}} ضيف",
+          "confirm_one": "إزالة {{count}} ضيف",
+          "confirm_two": "إزالة {{count}} ضيف",
+          "confirm_few": "إزالة {{count}} ضيوف",
+          "confirm_many": "إزالة {{count}} ضيفًا",
+          "confirm_other": "إزالة {{count}} ضيف",
+          "removing": "جارٍ الإزالة…",
+          "limit": "حدد ما يصل إلى {{count}} ضيف لإزالتهم في كل مرة.",
+          "failed": "تعذّرت إزالة الضيوف. لم تتم إزالة أحد. تحقق من اتصالك وحاول مرة أخرى.",
+          "done_zero": "تمت إزالة {{count}} ضيف",
+          "done_one": "تمت إزالة {{count}} ضيف",
+          "done_two": "تمت إزالة {{count}} ضيف",
+          "done_few": "تمت إزالة {{count}} ضيوف",
+          "done_many": "تمت إزالة {{count}} ضيفًا",
+          "done_other": "تمت إزالة {{count}} ضيف"
+        },
+        "selection": {
+          "selectAll": "تحديد كل الضيوف",
+          "invite": "دعوة إلى مساحة العمل",
+          "remove": "إزالة كضيف"
+        }
       }
     },
     "unifiedBilling": {
@@ -4688,7 +5157,7 @@
       },
       "examplesTitle": "أمثلة",
       "helper": "اختر شيئًا قصيرًا وطبيعيًا لقوله بصوت عالٍ",
-      "howItWorksDescription": "عندما تقول \"يا {{agentName}}\" متبوعًا بتعليمات، يُستبدل النص المحدد بالنتيجة بأمان. عند تفعيل اللصق التلقائي، تُلصق الإجابة عند موضع المؤشر في حقل قابل للكتابة؛ وإلا فتُفتح في لوحة المساعد العائمة.",
+      "howItWorksDescription": "عندما تقول \"يا {{agentName}}\" متبوعًا بتعليمات، يُستبدل النص المحدد بالنتيجة بأمان. أما الطلبات الأخرى فتُفتح في نافذة المساعد.",
       "howItWorksTitle": "كيف يعمل",
       "instructionMode": "التعليمات",
       "placeholder": "على سبيل المثال Jarvis، Nova، Atlas...",
@@ -4860,7 +5329,7 @@
       },
       "voiceAgentHotkey": {
         "title": "مفتاح اختصار المساعد الصوتي",
-        "description": "انطق أمرًا وسيستخدم المساعد ملاحظاتك وتقويمك وأدوات الويب. ستُلصق إجابته عند موضع المؤشر في حقل قابل للكتابة، أو تستبدل النص المحدد، أو تُفتح في اللوحة العائمة."
+        "description": "انطق طلبًا وسيجيب المساعد في نافذته الخاصة مستخدمًا ملاحظاتك وتقويمك وأدوات الويب. يُرسل النص الذي تحدده مسبقًا معه كسياق."
       },
       "microphone": {
         "description": "حدد جهاز الإدخال الذي تريد استخدامه للإملاء",
@@ -6032,6 +6501,12 @@
       "meeting": "حضّرني لاجتماعي القادم",
       "sharedNotes": "أبرِز ملاحظاتي المشتركة"
     },
+    "fork": "تفريع",
+    "forked": "محادثة متفرعة",
+    "forkedFrom": "متفرعة من \"{{title}}\"",
+    "forkFailed": "تعذّر تفريع هذه المحادثة",
+    "sendNotStarted": "هذه المحادثة مشغولة. لم تُرسل رسالتك. حاول مجددًا عند انتهاء الطلب الحالي.",
+    "openFailed": "لم تعد هذه المحادثة متاحة.",
     "localModelDownloading": "لا يزال نموذج المساعد قيد التنزيل. ستعمل الدردشة عندما يصبح جاهزًا.",
     "localModelMissing": "اختر نموذجًا لـ«الدردشة» في الإعدادات للدردشة على هذا الجهاز."
   },
@@ -6081,28 +6556,6 @@
     "remove": "إزالة",
     "dismiss": "ليس الآن",
     "cancel": "إلغاء"
-  },
-  "assistant": {
-    "panel": {
-      "selectionHint": "حدد النص لتعديله باستخدام",
-      "selectedContext": "تمت إضافة النص المحدد",
-      "removeSelectedContext": "إزالة النص المحدد",
-      "newConversation": "محادثة جديدة",
-      "copyToClipboard": "النسخ إلى الحافظة",
-      "suggestions": {
-        "summarizeNotes": "لخّص ملاحظاتي الأخيرة",
-        "calendar": "ما هي المواعيد في التقويم الخاص بي؟",
-        "draft": "ساعدني في صياغة شيء ما"
-      }
-    },
-    "toolActivity": {
-      "verbs": {
-        "invoking": "جاري استدعاء",
-        "calling": "جاري تنفيذ",
-        "using": "جاري استخدام"
-      },
-      "toolFallback": "أداة"
-    }
   },
   "notesView": {
     "searchPlaceholder": "البحث في الملاحظات...",

@@ -977,7 +977,8 @@
         "agentUnavailable": "Помощник недоступен",
         "screenContextSkipped": "Контекст экрана пропущен",
         "cloudLimitReached": "Недельный облачный лимит достигнут",
-        "providerRateLimited": "Ограничение провайдера"
+        "providerRateLimited": "Ограничение провайдера",
+        "outOfCredits": "Кредиты закончились"
       },
       "fallback": {
         "title": "Резервный режим",
@@ -1008,6 +1009,7 @@
         "offline": "Вы офлайн. Облачная транскрипция требует подключения к интернету.",
         "dailyLimitReached": "Достигнут дневной лимит транскрипций. Попробуйте завтра или обновите тариф.",
         "providerRateLimited": "Ваш провайдер транскрипции ограничил запрос. Подождите немного и попробуйте снова.",
+        "openRouterOutOfCredits": "На вашем аккаунте OpenRouter закончились кредиты. Пополните баланс на openrouter.ai и попробуйте снова.",
         "chunkLoss": "Из-за проблемы с сетью потеряна значительная часть записи. Повторите расшифровку из истории.",
         "agentReasoningFailed": "Голосовой помощник не смог обработать команду — вместо этого вставлена необработанная расшифровка.",
         "screenContextSkipped": "Снимок экрана не удалось отправить, поэтому команда выполнена без контекста экрана.",
@@ -1918,7 +1920,7 @@
       },
       "examplesTitle": "Примеры",
       "helper": "Выберите что-то короткое и естественное для произношения",
-      "howItWorksDescription": "Когда вы говорите «Привет, {{agentName}}» и затем даёте инструкцию, выделенный текст безопасно заменяется результатом. Если автовставка включена и фокус находится в редактируемом поле, ответ вставляется в позицию курсора; иначе он открывается в плавающей панели ассистента.",
+      "howItWorksDescription": "Когда вы говорите «Привет, {{agentName}}» и затем даёте инструкцию, выделенный текст безопасно заменяется результатом. Остальные запросы открываются в окне ассистента.",
       "howItWorksTitle": "Как это работает",
       "instructionMode": "Инструкция",
       "placeholder": "например, Джарвис, Нова, Атлас...",
@@ -2090,7 +2092,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Горячая клавиша голосового помощника",
-        "description": "Скажите команду — помощник использует ваши заметки, календарь и веб-инструменты. Ответ вставляется в редактируемое поле с фокусом, заменяет выделенный текст или открывается в плавающей панели."
+        "description": "Скажите запрос — ассистент ответит в своём окне, используя ваши заметки, календарь и веб-инструменты. Текст, выделенный заранее, передаётся вместе с ним как контекст."
       },
       "microphone": {
         "description": "Выберите устройство ввода для диктовки",
@@ -2494,6 +2496,10 @@
         "description": "Рабочие пространства позволяют работать с командой и делиться заметками.",
         "create": "Создать рабочее пространство"
       },
+      "personal": {
+        "title": "Вы в разделе «Личное»",
+        "description": "Выберите рабочее пространство, чтобы управлять его настройками."
+      },
       "loadError": {
         "title": "Не удалось загрузить рабочие пространства",
         "description": "Проверьте подключение и попробуйте ещё раз.",
@@ -2504,7 +2510,8 @@
         "general": "Общие",
         "members": "Участники",
         "invitations": "Приглашения",
-        "teams": "Группы"
+        "guests": "Гости",
+        "teams": "Команды"
       },
       "people": {
         "title": "Люди",
@@ -2514,7 +2521,7 @@
         "addLabel": "Пригласить людей",
         "columns": {
           "name": "Имя",
-          "team": "Группа",
+          "team": "Команда",
           "role": "Роль",
           "email": "Эл. почта",
           "status": "Статус",
@@ -2522,7 +2529,6 @@
         },
         "you": "Вы",
         "teamsNone": "Нет",
-        "teamsMore": "+{{count}}",
         "loading": {
           "title": "Загрузка участников…",
           "body": "Здесь появятся участники рабочего пространства."
@@ -2540,7 +2546,7 @@
         "roleMenuLabel": "Изменить роль: {{name}}",
         "roleDescription": {
           "member": "Может просматривать и редактировать заметки.",
-          "admin": "Управляет участниками, приглашениями, группами и настройками."
+          "admin": "Управляет участниками, приглашениями, командами и настройками."
         },
         "roleFailed": "Не удалось изменить роль: {{name}}. Проверьте подключение и повторите попытку.",
         "roleNotAllowed": "У вас больше нет прав на изменение ролей в {{workspace}}.",
@@ -2605,7 +2611,18 @@
           "selectAllInvitations": "Выбрать все приглашения",
           "selectRow": "Выбрать {{name}}",
           "remove": "Удалить",
-          "addToTeamspace": "Добавить в teamspace"
+          "addToTeamspace": "Добавить в teamspace",
+          "addToTeam": "Добавить в команду",
+          "createTeam": "Создать команду из выбранных"
+        },
+        "teamsCount_one": "{{count}} команда",
+        "teamsCount_few": "{{count}} команды",
+        "teamsCount_many": "{{count}} команд",
+        "teamsCount_other": "{{count}} команды",
+        "addMenu": {
+          "invite": "Пригласить людей",
+          "createTeam": "Создать команду",
+          "label": "Другие способы добавить"
         }
       },
       "teamspaces": {
@@ -2625,7 +2642,7 @@
         "failedBody": "Проверьте подключение и повторите попытку.",
         "retry": "Повторить",
         "emptyTitle": "Пока нет teamspaces",
-        "emptyBody": "Teamspace — общая область для заметок команды. Добавьте людей или группы, и все участники смогут читать и редактировать.",
+        "emptyBody": "Teamspace — общая область для заметок команды. Добавьте людей или команды, и все участники смогут читать и редактировать.",
         "emptyBodyMember": "Администраторы вашего рабочего пространства ещё не создали ни одного.",
         "adminCount_one": "{{count}} администратор",
         "adminCount_few": "{{count}} администратора",
@@ -2651,7 +2668,7 @@
           "descriptionLabel": "Описание",
           "people": "Люди",
           "descriptionPlaceholder": "Записи и сводки звонков отдела продаж и поддержки, по одной заметке на звонок.",
-          "peoplePlaceholder": "Имена, адреса почты или группы",
+          "peoplePlaceholder": "Имена, адреса почты или команды",
           "defaultTitle": "Teamspace по умолчанию",
           "defaultBody": "Автоматически добавлять новых участников рабочего пространства.",
           "openTitle": "Открытый teamspace",
@@ -2667,30 +2684,30 @@
           "createdInviteFailed_other": "{{space}} создан. Не удалось пригласить {{count}} человека. Пригласите их в разделе «Участники».",
           "inviteFailedWho": "Не приглашены: {{names}}.",
           "copyAddresses": "Скопировать адреса",
-          "groupsGone": "{{names}} больше недоступно, поэтому не добавлено."
+          "teamsGone": "{{names}} больше недоступно, поэтому не добавлено."
         },
         "picker": {
-          "groupPeople_one": "{{count}} человек",
-          "groupPeople_few": "{{count}} человека",
-          "groupPeople_many": "{{count}} человек",
-          "groupPeople_other": "{{count}} человека",
-          "groupChip_one": "{{name}} · {{count}} человек",
-          "groupChip_few": "{{name}} · {{count}} человека",
-          "groupChip_many": "{{name}} · {{count}} человек",
-          "groupChip_other": "{{name}} · {{count}} человека",
+          "teamPeople_one": "{{count}} человек",
+          "teamPeople_few": "{{count}} человека",
+          "teamPeople_many": "{{count}} человек",
+          "teamPeople_other": "{{count}} человека",
+          "teamChip_one": "{{name}} · {{count}} человек",
+          "teamChip_few": "{{name}} · {{count}} человека",
+          "teamChip_many": "{{name}} · {{count}} человек",
+          "teamChip_other": "{{name}} · {{count}} человека",
           "emailChip": "{{email}} · {{role}}",
           "noMember": "Участник не найден",
           "inviteToWorkspace": "Пригласить в рабочее пространство",
           "newToWorkspace": "Новый в рабочем пространстве",
           "select": "Выбрать",
-          "noResultsTitle": "Люди и группы не найдены",
+          "noResultsTitle": "Люди и команды не найдены",
           "noResultsBody": "Попробуйте другое имя или введите адрес электронной почты полностью.",
           "noResultsBodyNoInvite": "Попробуйте другое имя.",
           "hasAccess": "Уже есть доступ",
-          "groupHasAccess_one": "Уже есть доступ · {{count}} человек",
-          "groupHasAccess_few": "Уже есть доступ · {{count}} человека",
-          "groupHasAccess_many": "Уже есть доступ · {{count}} человек",
-          "groupHasAccess_other": "Уже есть доступ · {{count}} человека"
+          "teamHasAccess_one": "Уже есть доступ · {{count}} человек",
+          "teamHasAccess_few": "Уже есть доступ · {{count}} человека",
+          "teamHasAccess_many": "Уже есть доступ · {{count}} человек",
+          "teamHasAccess_other": "Уже есть доступ · {{count}} человека"
         },
         "members": {
           "columnRole": "Роль в teamspace",
@@ -2698,28 +2715,28 @@
           "adding": "Добавление…",
           "retry": "Повторить",
           "invitationPending": "Приглашение ожидает ответа",
-          "via": "Участник · через {{group}}",
-          "viaAdmin": "Администратор · через {{group}}",
+          "via": "Участник · через {{team}}",
+          "viaAdmin": "Администратор · через {{team}}",
           "roleMember": "Участник teamspace",
           "roleMemberBody": "Может просматривать и редактировать заметки",
           "roleAdmin": "Администратор teamspace",
-          "roleAdminBody": "Управляет этим teamspace и назначенными ему группами.",
+          "roleAdminBody": "Управляет этим teamspace и назначенными ему командами.",
           "removeItem": "Убрать из teamspace",
           "removeTitle": "Убрать {{name}} из {{space}}?",
-          "removeBody": "Это завершит прямое участие {{name}}. Доступ через группу сохранится. Пользователь останется в рабочем пространстве.",
+          "removeBody": "Это завершит прямое участие {{name}}. Доступ через команду сохранится. Пользователь останется в рабочем пространстве.",
           "removeConfirm": "Убрать участника",
           "removeFailedTitle": "Не удалось убрать {{name}}",
           "removeFailedBody": "Участие {{name}} в {{space}} не изменилось. Проверьте подключение и повторите попытку.",
           "removed": "Прямое участие {{name}} в {{space}} прекращено.",
-          "removeGroupTitle": "Убрать {{group}} из {{space}}?",
-          "removeGroupBody_one": "Через эту группу доступ потеряет {{count}} человек. Сама группа останется в рабочем пространстве.",
-          "removeGroupBody_few": "Через эту группу доступ потеряют {{count}} человека. Сама группа останется в рабочем пространстве.",
-          "removeGroupBody_many": "Через эту группу доступ потеряют {{count}} человек. Сама группа останется в рабочем пространстве.",
-          "removeGroupBody_other": "Через эту группу доступ потеряют {{count}} человека. Сама группа останется в рабочем пространстве.",
-          "removeGroupBodyNoCount": "Участники группы потеряют доступ через неё. Сама группа останется в рабочем пространстве.",
+          "removeTeamTitle": "Убрать {{team}} из {{space}}?",
+          "removeTeamBody_one": "Через эту команду доступ потеряет {{count}} человек. Сама команда останется в рабочем пространстве.",
+          "removeTeamBody_few": "Через эту команду доступ потеряют {{count}} человека. Сама команда останется в рабочем пространстве.",
+          "removeTeamBody_many": "Через эту команду доступ потеряют {{count}} человек. Сама команда останется в рабочем пространстве.",
+          "removeTeamBody_other": "Через эту команду доступ потеряют {{count}} человека. Сама команда останется в рабочем пространстве.",
+          "removeTeamBodyNoCount": "Участники команды потеряют доступ через неё. Сама команда останется в рабочем пространстве.",
           "stagedNew": "Новых людей приглашают, когда вы их добавляете. Доступ к teamspace появится после принятия приглашения.",
-          "stagedGroup": "Все участники {{group}} получат доступ к {{space}} как участники.",
-          "stagedGroups": "Все участники этих групп получат доступ к {{space}} как участники.",
+          "stagedTeam": "Все участники {{team}} получат доступ к {{space}} как участники.",
+          "stagedTeams": "Все участники этих команд получат доступ к {{space}} как участники.",
           "invalid": "Введите действительный адрес почты. Выбранные люди сохранены.",
           "progressPeople": "Добавление: {{names}}…",
           "progressBoth_one": "Добавление: {{names}}; отправка приглашений: {{count}}…",
@@ -2732,8 +2749,8 @@
           "progressInvites_other": "Отправка приглашений: {{count}}…",
           "resultAdded": "Добавлено: {{names}}.",
           "resultInvited": "Приглашение в рабочее пространство отправлено: {{names}}.",
-          "resultGroup": "Добавлено: {{group}}. Теперь её участники имеют доступ как участники.",
-          "resultGroups": "Добавлено: {{names}}. Теперь их участники имеют доступ как участники.",
+          "resultTeam": "Добавлено: {{team}}. Теперь её участники имеют доступ как участники.",
+          "resultTeams": "Добавлено: {{names}}. Теперь их участники имеют доступ как участники.",
           "failed": "Не удалось добавить участников. Ваш выбор сохранён. Повторите попытку.",
           "partialAdded": "Добавлено: {{names}}.",
           "partialAddedMany": "Добавлено: {{names}}.",
@@ -2780,7 +2797,7 @@
           "deleteFailedBody": "Teamspace по-прежнему доступен. Проверьте подключение и повторите попытку.",
           "deleted": "{{space}} удалён.",
           "restored": "{{space}} восстановлен",
-          "leaveBodyKeeps": "Ваше прямое участие прекратится. Доступ через {{groups}} сохранится.",
+          "leaveBodyKeeps": "Ваше прямое участие прекратится. Доступ через {{teams}} сохранится.",
           "leaveBodyLoses": "Вы потеряете доступ к {{space}} и его заметкам.",
           "leaveBodyAdmins": "Этим Teamspace продолжит управлять другой администратор.",
           "deleteNotAllowed": "У вас нет прав на удаление {{space}}.",
@@ -2853,39 +2870,213 @@
         "errorTitle": "Не удалось обновить запрос"
       },
       "teams": {
-        "title": "Группы",
-        "description": "Группы участников рабочего пространства, которым можно сразу дать доступ к teamspaces.",
-        "new": "Новая группа",
-        "empty": "Групп пока нет.",
-        "createFirst": "Создайте первую группу",
-        "addMembersLabel": "Добавить участников",
-        "createTitle": "Создать группу",
-        "nameLabel": "Название группы",
-        "memberCount_one": "{{count}} участник",
-        "memberCount_few": "{{count}} участника",
-        "memberCount_many": "{{count}} участников",
-        "memberCount_other": "{{count}} участника",
-        "membersButton": "Участники",
-        "grantsAccessToSpaces_one": "Даёт доступ к {{count}} пространству",
-        "grantsAccessToSpaces_few": "Даёт доступ к {{count}} пространствам",
-        "grantsAccessToSpaces_many": "Даёт доступ к {{count}} пространствам",
-        "grantsAccessToSpaces_other": "Даёт доступ к {{count}} пространствам",
-        "couldNotCreate": "Не удалось создать группу",
-        "created": "{{team}} создана",
-        "deleted": "{{team}} удалена",
-        "deleteConfirmTitle": "Удалить {{team}}?",
-        "deleteConfirmDescription": "Группа будет архивирована. Её участники потеряют предоставленный ею доступ.",
-        "deleteConfirmSpaceAccess_one": "Эта группа даёт доступ к {{count}} пространству. Её участники потеряют этот доступ.",
-        "deleteConfirmSpaceAccess_few": "Эта группа даёт доступ к {{count}} пространствам. Её участники потеряют этот доступ.",
-        "deleteConfirmSpaceAccess_many": "Эта группа даёт доступ к {{count}} пространствам. Её участники потеряют этот доступ.",
-        "deleteConfirmSpaceAccess_other": "Эта группа даёт доступ к {{count}} пространствам. Её участники потеряют этот доступ.",
         "members": {
           "title": "Участники {{team}}",
-          "removeConfirm": "Убрать {{name}} из {{team}}?",
-          "leave": "Покинуть группу",
-          "leftTeam": "Вы покинули {{team}}",
-          "leaveConfirm": "Покинуть {{team}}?",
-          "leaveConfirmDescription": "Вы потеряете доступ к пространствам, к которым привязана эта группа, если вас не добавили напрямую и не включает другая группа."
+          "gone": "Команды {{team}} больше не существует.",
+          "columnName": "Имя",
+          "columnRole": "Роль в команде",
+          "placeholder": "Имена или адреса почты",
+          "add": "Добавить участников",
+          "adding": "Добавление…",
+          "inviteNote": "Новые люди получают приглашение в рабочее пространство, когда вы их добавляете.",
+          "roleMember": "Участник команды",
+          "roleMemberBody": "Получает доступ везде, куда добавлена команда.",
+          "roleAdmin": "Администратор команды",
+          "roleAdminBody": "Управляет составом этой команды.",
+          "remove": "Убрать из команды",
+          "addingStatus_one": "Добавление: {{names}}. Отправка {{count}} приглашения…",
+          "addingStatus_few": "Добавление: {{names}}. Отправка {{count}} приглашений…",
+          "addingStatus_many": "Добавление: {{names}}. Отправка {{count}} приглашений…",
+          "addingStatus_other": "Добавление: {{names}}. Отправка {{count}} приглашения…",
+          "addingOnly": "Добавление: {{names}}…",
+          "invitingOnly_one": "Отправка {{count}} приглашения…",
+          "invitingOnly_few": "Отправка {{count}} приглашений…",
+          "invitingOnly_many": "Отправка {{count}} приглашений…",
+          "invitingOnly_other": "Отправка {{count}} приглашения…",
+          "addFailed": "Не удалось завершить добавление участников. Повторите попытку.",
+          "added": "Добавлено: {{names}}.",
+          "addedAndInvited": "Добавлено: {{names}}. Приглашено: {{invited}}.",
+          "invited": "Приглашено: {{invited}}.",
+          "pending": "Ожидающее приглашение",
+          "pendingBody": "Присоединится к команде после принятия · {{role}}",
+          "invitedPill": "Приглашён",
+          "resend": "Отправить снова",
+          "resent": "Приглашение для {{email}} отправлено повторно.",
+          "resendFailed": "Не удалось повторно отправить приглашение для {{email}}.",
+          "removeTitle": "Убрать {{name}} из {{team}}?",
+          "removeBody": "{{name}} потеряет доступ, полученный через эту команду. Человек останется в рабочем пространстве и сохранит доступ, выданный напрямую или через другие команды.",
+          "removeAction": "Убрать участника",
+          "removeFailedTitle": "Не удалось убрать {{name}}",
+          "removeFailedBody": "{{name}} по-прежнему участник команды {{team}}. Проверьте подключение и повторите попытку.",
+          "removed": "{{name}} убран из {{team}}.",
+          "roleFailed": "Не удалось изменить роль {{name}}. Повторите попытку.",
+          "memberGone": "{{name}} больше не состоит в команде {{team}}.",
+          "notAllowed": "Вы больше не можете управлять командой {{team}}.",
+          "invitedNoEmail": "Приглашено: {{invited}}, но письмо не отправлено. Нажмите «Отправить снова» ниже.",
+          "skippedInvited": "Не добавлено в {{team}}: {{names}}. Приглашение в рабочее пространство уже существует."
+        },
+        "columns": {
+          "name": "Имя",
+          "members": "Участники",
+          "teamspaces": "Teamspaces"
+        },
+        "loadingTitle": "Загрузка команд…",
+        "loadingBody": "Здесь появятся команды вашего рабочего пространства.",
+        "failedTitle": "Не удалось загрузить команды",
+        "failedBody": "Проверьте подключение и повторите попытку.",
+        "retry": "Повторить",
+        "emptyTitle": "Пока нет команд",
+        "emptyBody": "Команда — это быстрый способ добавить сразу нескольких человек. Добавьте команду в teamspace, и все её участники получат доступ.",
+        "emptyBodyMember": "Администраторы вашего рабочего пространства ещё не создали ни одной.",
+        "create": "Создать команду",
+        "spacesNone": "Нет",
+        "people_one": "{{count}} человек",
+        "people_few": "{{count}} человека",
+        "people_many": "{{count}} человек",
+        "people_other": "{{count}} человека",
+        "spaces_one": "{{count}} teamspace",
+        "spaces_few": "{{count}} teamspace",
+        "spaces_many": "{{count}} teamspace",
+        "spaces_other": "{{count}} teamspace",
+        "refreshFailed": "Не удалось обновить команды. Список может быть устаревшим.",
+        "cellMenuLabel": "{{team}}: {{value}}",
+        "paywall": {
+          "title": "Команды доступны в тарифе Business",
+          "body": "Teamspace бесплатны. Перейдите на более высокий тариф, чтобы объединять людей в команды.",
+          "bodyAskOwner": "Teamspace бесплатны. Попросите {{owner}} перейти на более высокий тариф, чтобы объединять людей в команды.",
+          "bodyAskOwnerUnknown": "Teamspace бесплатны. Попросите владельца рабочего пространства перейти на более высокий тариф, чтобы объединять людей в команды.",
+          "upgrade": "Перейти на Business",
+          "notNow": "Не сейчас",
+          "lapsedTitle": "Тариф этого рабочего пространства неактивен",
+          "lapsedBody": "Обновите оплату, чтобы создавать команды. Существующие команды продолжают работать.",
+          "lapsedBodyAskOwner": "Попросите {{owner}} обновить оплату, чтобы создавать команды. Существующие команды продолжают работать.",
+          "lapsedBodyAskOwnerUnknown": "Попросите владельца рабочего пространства обновить оплату, чтобы создавать команды. Существующие команды продолжают работать.",
+          "updateBilling": "Обновить оплату"
+        },
+        "form": {
+          "title": "Создать команду",
+          "subtitle": "Быстрый способ добавить сразу несколько человек.",
+          "name": "Название",
+          "namePlaceholder": "Название команды",
+          "nameRequired": "Введите название команды.",
+          "nameTaken": "Команда с названием {{name}} уже существует.",
+          "people": "Люди",
+          "peoplePlaceholder": "Имена или адреса почты",
+          "adminNote": "Вы будете добавлены как администратор команды. Приглашения отправляются при создании команды.",
+          "adminNoteShort": "Вы будете добавлены как администратор команды.",
+          "invalidEmail": "Введите действительный адрес почты.",
+          "cancel": "Отмена",
+          "submit": "Создать команду",
+          "creating": "Создание…",
+          "retry": "Повторить",
+          "creatingStatus_one": "Создание {{team}} и отправка {{count}} приглашения…",
+          "creatingStatus_few": "Создание {{team}} и отправка {{count}} приглашений…",
+          "creatingStatus_many": "Создание {{team}} и отправка {{count}} приглашений…",
+          "creatingStatus_other": "Создание {{team}} и отправка {{count}} приглашения…",
+          "failed": "Не удалось создать команду. Ваши данные сохранены.",
+          "created": "Команда {{team}} создана",
+          "createdAdded": "Команда {{team}} создана. Добавлены: {{names}}.",
+          "createdInvited": "Команда {{team}} создана. Приглашены: {{invited}}.",
+          "createdAddedInvited": "Команда {{team}} создана. Добавлены: {{names}}. Приглашены: {{invited}}.",
+          "createdWithMembers_one": "Команда {{team}} создана, {{count}} участник",
+          "createdWithMembers_few": "Команда {{team}} создана, {{count}} участника",
+          "createdWithMembers_many": "Команда {{team}} создана, {{count}} участников",
+          "createdWithMembers_other": "Команда {{team}} создана, {{count}} участника",
+          "createdInvitedMany_one": "Команда {{team}} создана, приглашён {{count}} человек",
+          "createdInvitedMany_few": "Команда {{team}} создана, приглашено {{count}} человека",
+          "createdInvitedMany_many": "Команда {{team}} создана, приглашено {{count}} человек",
+          "createdInvitedMany_other": "Команда {{team}} создана, приглашено {{count}} человека",
+          "createdCounts_one": "Команда {{team}} создана. Добавлено: {{added}}. Приглашено: {{count}}.",
+          "createdCounts_few": "Команда {{team}} создана. Добавлено: {{added}}. Приглашено: {{count}}.",
+          "createdCounts_many": "Команда {{team}} создана. Добавлено: {{added}}. Приглашено: {{count}}.",
+          "createdCounts_other": "Команда {{team}} создана. Добавлено: {{added}}. Приглашено: {{count}}.",
+          "notAllowed": "У вас нет разрешения создавать команды в {{workspace}}.",
+          "ssoRequired": "Войдите через систему единого входа (SSO) вашей компании, чтобы создавать команды в {{workspace}}.",
+          "createdSomeNotInvited_one": "Команда {{team}} создана. Не удалось пригласить {{count}} человека.",
+          "createdSomeNotInvited_few": "Команда {{team}} создана. Не удалось пригласить {{count}} человек.",
+          "createdSomeNotInvited_many": "Команда {{team}} создана. Не удалось пригласить {{count}} человек.",
+          "createdSomeNotInvited_other": "Команда {{team}} создана. Не удалось пригласить {{count}} человека."
+        },
+        "dialog": {
+          "tabGeneral": "Основные",
+          "tabMembers": "Участники",
+          "tabSpaces": "Teamspace",
+          "nameLabel": "Название команды",
+          "renameFailed": "Не удалось переименовать {{team}}. Повторите попытку."
+        },
+        "spacesTab": {
+          "emptyTitle": "Пока не входит ни в один teamspace",
+          "emptyBody": "Добавьте эту команду в teamspace, чтобы дать доступ всем её участникам.",
+          "emptyAction": "Добавить в teamspace",
+          "noSpacesTitle": "Пока нет teamspace",
+          "noSpacesBody": "Teamspace — общее пространство для заметок команды. Добавьте людей или команды, и все смогут читать и редактировать.",
+          "placeholder": "Найти teamspace для добавления",
+          "searchPlaceholder": "Найти teamspace",
+          "add": "Добавить teamspace",
+          "adding": "Добавление…",
+          "selectedTitle_one": "Выбран {{count}} teamspace",
+          "selectedTitle_few": "Выбрано {{count}} teamspace",
+          "selectedTitle_many": "Выбрано {{count}} teamspace",
+          "selectedTitle_other": "Выбрано {{count}} teamspace",
+          "selectedBody": "Добавить команду {{team}} в: {{names}}.",
+          "noMatches": "Подходящих teamspace нет",
+          "createNew": "Создать новый teamspace",
+          "failed": "Не удалось добавить команду {{team}}. Ваш выбор сохранён. Повторите попытку.",
+          "added_one": "Команда {{team}} добавлена в {{count}} teamspace.",
+          "added_few": "Команда {{team}} добавлена в {{count}} teamspace.",
+          "added_many": "Команда {{team}} добавлена в {{count}} teamspace.",
+          "added_other": "Команда {{team}} добавлена в {{count}} teamspace.",
+          "addedPartly": "Команда {{team}} добавлена в: {{added}}. Не удалось добавить в: {{failed}}. Повторите попытку.",
+          "gone": "Не удалось добавить команду {{team}}. Не удалось найти: {{names}}.",
+          "notAllowed": "Вы больше не можете управлять: {{names}}."
+        },
+        "exit": {
+          "leaveTitle": "Покинуть команду",
+          "leaveBody": "Покинуть эту команду.",
+          "leaveAction": "Покинуть команду",
+          "deleteTitle": "Удалить команду",
+          "deleteBody": "Удалить эту команду для всех.",
+          "deleteAction": "Удалить команду",
+          "blockedTitle": "Сначала добавьте другого администратора",
+          "blockedBody": "Вы единственный администратор команды {{team}}. Назначьте администратором другого участника, прежде чем уйти.",
+          "manageMembers": "Управлять участниками",
+          "leaveConfirmTitle": "Покинуть {{team}}?",
+          "leaveConfirmBody": "Вы будете удалены из этой команды и потеряете доступ, полученный через неё. Другой администратор продолжит управлять командой.",
+          "leaveConfirmBodyNoOtherAdmin": "Вы будете удалены из этой команды и потеряете доступ, полученный через неё.",
+          "leaveFailedTitle": "Не удалось покинуть {{team}}",
+          "leaveFailedBody": "Вы по-прежнему участник этой команды. Проверьте подключение и повторите попытку.",
+          "left": "Вы покинули {{team}}.",
+          "deleteConfirmTitle": "Удалить {{team}}?",
+          "deleteConfirmBody": "Команда будет удалена для всех. Доступ, полученный через {{team}}, прекратится. Люди, Teamspace и заметки удалены не будут.",
+          "deleted": "Команда {{team}} удалена. Её участники и Teamspace по-прежнему доступны.",
+          "deleteFailedTitle": "Не удалось удалить {{team}}",
+          "deleteFailedBody": "Команда и её настройки доступа не изменены. Проверьте подключение и повторите попытку.",
+          "deleteNotAllowed": "У вас нет прав на удаление {{team}}."
+        },
+        "managedByDirectory": "Управляется вашим каталогом",
+        "addPeople": {
+          "someAdded": "{{team}} · уже добавлено: {{covered}} из {{total}}",
+          "none": "Команд пока нет",
+          "noneAddable": "Нет команд, в которые можно добавлять",
+          "addingTitle_one": "Добавление {{count}} человека…",
+          "addingTitle_few": "Добавление {{count}} человек…",
+          "addingTitle_many": "Добавление {{count}} человек…",
+          "addingTitle_other": "Добавление {{count}} человека…",
+          "addingBody": "Не закрывайте это окно, пока их добавляют в команду {{team}}.",
+          "addingAction": "Добавление…",
+          "failedTitle_one": "Не удалось добавить {{count}} человека",
+          "failedTitle_few": "Не удалось добавить {{count}} человека",
+          "failedTitle_many": "Не удалось добавить {{count}} человек",
+          "failedTitle_other": "Не удалось добавить {{count}} человека",
+          "failedBody": "Они не были добавлены в команду {{team}}. Ваш выбор сохранён.",
+          "done_one": "В команду {{team}} добавлен {{count}} участник",
+          "done_few": "В команду {{team}} добавлено {{count}} участника",
+          "done_many": "В команду {{team}} добавлено {{count}} участников",
+          "done_other": "В команду {{team}} добавлено {{count}} участника",
+          "someDone": "В команду {{team}} добавлено: {{added}}. {{already}} уже участник.",
+          "someDonePlural": "В команду {{team}} добавлено: {{added}}. {{already}} уже участники.",
+          "left": "{{names}} покинул рабочее пространство, поэтому никто не добавлен.",
+          "allAlready": "Они уже в команде {{team}}."
         }
       },
       "invites": {
@@ -2970,6 +3161,73 @@
         "title": "Консоль Enterprise",
         "description": "Управляйте SSO, политиками и участниками через веб",
         "open": "Открыть консоль"
+      },
+      "guests": {
+        "columns": {
+          "name": "Имя",
+          "access": "Доступ",
+          "actions": "Действия"
+        },
+        "emptyTitle": "Гостей пока нет",
+        "emptyBody": "Здесь появятся люди вне этого рабочего пространства, которые могут просматривать ваши общие заметки.",
+        "loadingTitle": "Загрузка гостей…",
+        "loadingBody": "Здесь появятся гости вашего рабочего пространства.",
+        "failedTitle": "Не удалось загрузить гостей",
+        "failedBody": "Проверьте подключение и повторите попытку.",
+        "noteCount_one": "{{count}} заметка",
+        "noteCount_few": "{{count}} заметки",
+        "noteCount_many": "{{count}} заметок",
+        "noteCount_other": "{{count}} заметки",
+        "notesTriggerLabel_one": "{{count}} заметка доступна {{name}}",
+        "notesTriggerLabel_few": "{{count}} заметки доступны {{name}}",
+        "notesTriggerLabel_many": "{{count}} заметок доступны {{name}}",
+        "notesTriggerLabel_other": "{{count}} заметки доступны {{name}}",
+        "removeFromNote": "Убрать из {{note}}",
+        "removedFromNote": "{{name}} убран из {{note}}",
+        "removeFromNoteFailed": "Не удалось убрать {{name}} из {{note}}. Проверьте подключение и повторите попытку.",
+        "menu": {
+          "label": "Действия для {{name}}",
+          "invite": "Пригласить в рабочее пространство",
+          "copyEmail": "Скопировать эл. почту",
+          "remove": "Удалить из гостей"
+        },
+        "invite": {
+          "title_one": "Пригласить {{count}} гостя в «{{workspace}}»",
+          "title_few": "Пригласить {{count}} гостя в «{{workspace}}»",
+          "title_many": "Пригласить {{count}} гостей в «{{workspace}}»",
+          "title_other": "Пригласить {{count}} гостя в «{{workspace}}»",
+          "description": "Они получат ссылку по эл. почте, чтобы присоединиться к «{{workspace}}».",
+          "sent_one": "Отправлено {{count}} приглашение в «{{workspace}}»",
+          "sent_few": "Отправлено {{count}} приглашения в «{{workspace}}»",
+          "sent_many": "Отправлено {{count}} приглашений в «{{workspace}}»",
+          "sent_other": "Отправлено {{count}} приглашения в «{{workspace}}»"
+        },
+        "remove": {
+          "titleOne": "Удалить гостя {{name}} из «{{workspace}}»?",
+          "confirmOne": "Удалить гостя",
+          "title_one": "Удалить {{count}} гостя из «{{workspace}}»?",
+          "title_few": "Удалить {{count}} гостя из «{{workspace}}»?",
+          "title_many": "Удалить {{count}} гостей из «{{workspace}}»?",
+          "title_other": "Удалить {{count}} гостя из «{{workspace}}»?",
+          "body": "Они потеряют доступ ко всем заметкам, которыми с ними поделились. Вы можете снова поделиться с ними заметками в любое время.",
+          "linkShared": "У гостей может сохраниться доступ через общую ссылку или общий доступ по домену.",
+          "confirm_one": "Удалить {{count}} гостя",
+          "confirm_few": "Удалить {{count}} гостя",
+          "confirm_many": "Удалить {{count}} гостей",
+          "confirm_other": "Удалить {{count}} гостя",
+          "removing": "Удаление…",
+          "limit": "Выберите не более {{count}} гостей для удаления за один раз.",
+          "failed": "Не удалось удалить гостей. Никто не был удалён. Проверьте подключение и повторите попытку.",
+          "done_one": "Удалён {{count}} гость",
+          "done_few": "Удалено {{count}} гостя",
+          "done_many": "Удалено {{count}} гостей",
+          "done_other": "Удалено {{count}} гостя"
+        },
+        "selection": {
+          "selectAll": "Выбрать всех гостей",
+          "invite": "Пригласить в рабочее пространство",
+          "remove": "Удалить из гостей"
+        }
       }
     },
     "enterpriseCheckout": {
@@ -3049,7 +3307,15 @@
         "assemblyai_universal_3_5_pro": "Максимальная точность в реальном времени, 18 языков",
         "assemblyai_universal_3_6_pro": "Максимальная точность в реальном времени, 32 языка",
         "mistral_voxtral_mini_transcribe_3_0": "Быстрая транскрипция на 50+ языках (предварительная версия)",
-        "mistral_voxtral_small_transcribe_3_0": "Самый точный Voxtral, 50+ языков (предварительная версия)"
+        "mistral_voxtral_small_transcribe_3_0": "Самый точный Voxtral, 50+ языков (предварительная версия)",
+        "openrouter_mistralai_voxtral_mini_transcribe_3_0": "Быстрая и точная многоязычная транскрипция от Mistral",
+        "openrouter_nvidia_nemotron_3_5_transcribe": "Недорогая транскрипция от NVIDIA на 40 языках",
+        "openrouter_deepgram_nova_3": "Быстрая многоязычная транскрипция Deepgram",
+        "openrouter_assemblyai_universal_3_6_pro": "Самая точная транскрипция от AssemblyAI",
+        "openrouter_elevenlabs_scribe_v2": "Точная транскрипция от ElevenLabs на 90+ языках",
+        "openrouter_mistralai_voxtral_small_transcribe_3_0": "Более крупная многоязычная модель транскрипции от Mistral",
+        "openrouter_nvidia_parakeet_tdt_0_6b_v3": "Недорогая транскрипция от NVIDIA для европейских языков",
+        "openrouter_nvidia_nemotron_3_5_asr_streaming_multilingual_0_6b": "Самая недорогая многоязычная транскрипция от NVIDIA"
       },
       "cloud": {
         "openai_gpt_5_2": "Сильная модель рассуждения",
@@ -3290,8 +3556,8 @@
       "couldNotChangeEmoji": "Не удалось изменить эмодзи",
       "deleteSpace": "Удалить пространство",
       "deleteHintLocal": "Безвозвратно удаляет это пространство вместе с папками и заметками на этом устройстве.",
-      "leaveConfirmDescription": "Вы будете удалены из {{teams}} и потеряете доступ к другим пространствам, которые открывают эти группы.",
-      "stillViaGroups": "У вас остаётся доступ к {{space}} через {{groups}}.",
+      "leaveConfirmDescription": "Вы будете удалены из {{teams}} и потеряете доступ к другим пространствам, которые открывают эти команды.",
+      "stillViaTeams": "У вас остаётся доступ к {{space}} через {{teams}}.",
       "deleteConfirmTitle": "Удалить пространство?",
       "deleteConfirmDescription": "Пространство {{space}} со всеми его папками и заметками будет безвозвратно удалено с этого устройства.",
       "deleteTypeName": "Введите {{space}} для подтверждения",
@@ -3332,24 +3598,12 @@
       "conflictKeep": "Продолжить редактирование",
       "editedBy": "Изменено: {{name}} · {{time}}",
       "members": {
-        "addPeople": "Добавить людей",
-        "addedToTeam": "{{name}} добавлен(а) в {{team}}",
-        "removedFromTeam": "{{name}} удалён(а) из {{team}}",
-        "stillViaGroups": "{{name}} по-прежнему имеет доступ через {{groups}}",
+        "stillViaTeams": "{{name}} по-прежнему имеет доступ через {{teams}}",
         "roleUpdated": "Роль обновлена",
-        "you": "Вы",
-        "addFailed": "Не удалось добавить {{failed}} из {{total}} участников",
-        "searchPlaceholder": "Поиск людей…",
-        "noResults": "Люди не найдены",
         "roleAdmin": "Администратор",
         "roleMember": "Участник",
-        "roleAdminDescription": "Управляет участниками и настройками.",
-        "roleMemberDescription": "Может просматривать и редактировать заметки.",
-        "remove": "Удалить",
-        "removeConfirmDescription": "Этот участник потеряет доступ ко всем заметкам этого пространства.",
-        "inviteFooter": "Пригласить {{email}} в рабочее пространство…",
         "empty": "Пока никто не добавлен",
-        "roleFromGroup": "Администратор через {{group}}. Измените это там."
+        "roleFromTeam": "Администратор через {{team}}. Измените это там."
       },
       "invitedTo_one": "Вы присоединитесь к {{count}} teamspace",
       "invitedTo_few": "Вы присоединитесь к {{count}} teamspaces",
@@ -3362,7 +3616,7 @@
         "accessChanged": "Доступ для {{team}} обновлён"
       },
       "teams": {
-        "loadError": "Не удалось загрузить группы."
+        "loadError": "Не удалось загрузить команды."
       }
     },
     "structureIntro": {
@@ -3378,7 +3632,7 @@
       },
       "teamSpace": {
         "title": "Teamspace",
-        "description": "Общая область внутри рабочего пространства. Добавьте людей или группы, чтобы дать им доступ."
+        "description": "Общая область внутри рабочего пространства. Добавьте людей или команды, чтобы дать им доступ."
       },
       "contents": "В каждом пространстве могут быть папки и заметки.",
       "done": "Понятно",
@@ -3920,6 +4174,7 @@
     "wordsReady_many": "{{count}} слов готово",
     "wordsReady_other": "{{count}} слова готово",
     "promptLimitNotice": "В вашем словаре {{chars}} символов. Модели Groq и Whisper читают только последние несколько сотен символов, поэтому там лучше работает более короткий список. Остальные модели получают список целиком.",
+    "openRouterIgnoredNotice": "OpenRouter не передаёт ваш словарь своим речевым моделям, поэтому, пока он выбран для диктовки, эти слова не влияют на распознавание.",
     "exportDictionary": "Экспортировать словарь",
     "exportFailed": "Не удалось экспортировать",
     "editWord": "Изменить {{word}}",
@@ -4101,6 +4356,7 @@
       },
       "locked": {
         "noWorkspace": "Общие словари входят в тариф Business. Делитесь со всеми жаргоном, названиями продуктов и аббревиатурами вашей команды.",
+        "chooseWorkspace": "Вы в разделе «Личное». Перейдите в рабочее пространство, чтобы пользоваться его общими словами.",
         "upgradeAdmin": "Общие словари входят в тариф Business. Переведите {{workspace}} на этот тариф, чтобы у всех были одни и те же слова.",
         "upgradeMember": "Общие словари входят в тариф Business. Попросите администратора перевести {{workspace}} на этот тариф.",
         "paused_one": "{{count}} общее слово в {{workspace}} приостановлено. Перейдите на Business, чтобы снова использовать его при диктовке.",
@@ -4376,6 +4632,12 @@
       "meeting": "Подготовь меня к следующей встрече",
       "sharedNotes": "Выдели мои общие заметки"
     },
+    "fork": "Ответвить",
+    "forked": "Ответвлённый чат",
+    "forkedFrom": "Ответвлено от «{{title}}»",
+    "forkFailed": "Не удалось ответвить чат",
+    "sendNotStarted": "Этот чат занят. Сообщение не отправлено. Повторите попытку после завершения текущего запроса.",
+    "openFailed": "Этот чат больше недоступен.",
     "localModelDownloading": "Модель ассистента ещё скачивается. Чат заработает, когда она будет готова.",
     "localModelMissing": "Выберите модель для «Чат» в Настройках, чтобы общаться в чате на этом устройстве."
   },
@@ -4460,7 +4722,6 @@
       "hotkeyToSpeak": "{{hotkey}} для записи",
       "recording": "Запись...",
       "processing": "Обработка...",
-      "clickToSpeak": "Нажмите для записи",
       "waitingForMicrophone": "Ожидание микрофона…"
     },
     "buttons": {
@@ -4472,7 +4733,6 @@
       "startListening": "Начать запись",
       "hideForNow": "Скрыть",
       "askAssistant": "Спросить помощника",
-      "busyRecording": "Сначала завершите текущую запись",
       "startMeetingRecording": "Начать запись встречи"
     }
   },
@@ -4575,30 +4835,159 @@
       "update_skillName": "Обновить навык",
       "search_openwhispr_helpStatus": "Поиск в справке OpenWhispr...",
       "read_openwhispr_helpStatus": "Чтение справки OpenWhispr...",
-      "get_openwhispr_contextStatus": "Чтение настроек OpenWhispr..."
+      "get_openwhispr_contextStatus": "Чтение настроек OpenWhispr...",
+      "ask_userName": "Вопрос",
+      "ask_userStatus": "Задаю вопрос...",
+      "request_connectionName": "Подключение",
+      "request_connectionStatus": "Запрашиваю подключение...",
+      "request_accessName": "Доступ",
+      "request_accessStatus": "Запрашиваю доступ...",
+      "look_at_screenName": "Посмотреть на экран",
+      "look_at_screenStatus": "Смотрю на ваш экран...",
+      "look_at_screenSuccess": "Экран прочитан.",
+      "look_at_screenFailed": "Не удалось прочитать экран.",
+      "request_api_keyName": "Ключ API",
+      "request_api_keyStatus": "Запрашиваю ключ API...",
+      "open_settingsName": "Настройки",
+      "open_settingsStatus": "Направляю в настройки..."
+    },
+    "turn": {
+      "reasoning": "Рассуждение",
+      "stopped": "Остановлено",
+      "stepLimit": "Приостановлено: достигнут предел шагов.",
+      "continue": "Продолжить",
+      "continueMessage": "Продолжай",
+      "failed": "Не удалось получить этот ответ.",
+      "unbackedClaim": "Не выполнено: то, что по словам этого ответа сделано, на самом деле не запускалось."
+    },
+    "interactions": {
+      "notNow": "Не сейчас",
+      "cancel": "Отмена",
+      "questions": {
+        "recommended": "{{label}} (рекомендуется)",
+        "submit": "Отправить",
+        "placeholder": "Введите ответ…",
+        "previous": "Предыдущий вопрос",
+        "next": "Следующий вопрос",
+        "position": "{{current}}/{{total}}",
+        "continue": "Продолжить",
+        "typedAnswer": "Ваш ответ: {{answer}}"
+      },
+      "connection": {
+        "title": "Подключить {{name}}",
+        "connect": "Подключить {{name}}",
+        "connecting": "Завершите подключение в браузере…",
+        "failed": "Не удалось подключиться. Попробуйте ещё раз.",
+        "permissionDenied": "Доступ к календарю запрещён. Разрешите его в Системных настройках и попробуйте снова.",
+        "calendarTitle": "Подключить календарь",
+        "yes": "Да",
+        "reasons": {
+          "gmail": "Я смогу отправить письмо из вашего Gmail.",
+          "slack": "Я смогу опубликовать сообщение в Slack за вас.",
+          "linear": "Я смогу находить и создавать задачи в Linear за вас.",
+          "github": "Я смогу находить и создавать issues в GitHub за вас.",
+          "calendar": "Я смогу проверить, когда вы свободны, и предложить время."
+        }
+      },
+      "access": {
+        "screen": "Разрешить доступ к экрану?",
+        "allow": "Разрешить",
+        "capturing": "Снимок…"
+      },
+      "apiKey": {
+        "title": "Добавьте ключ API {{provider}}",
+        "placeholder": "Вставьте или введите здесь",
+        "save": "Сохранить",
+        "label": "Ключ API {{provider}}",
+        "saved": "Ключ {{provider}} сохранён"
+      },
+      "settings": {
+        "done": "Готово",
+        "technicalDetails": "Технические подробности",
+        "checking": "Проверка…"
+      },
+      "status": {
+        "answered": "Ответ получен",
+        "connected": "{{name}} подключён",
+        "granted": "Экран предоставлен",
+        "declined": "Не разрешено",
+        "saved": "Ключ API сохранён",
+        "done": "Возврат из настроек",
+        "cancelled": "Отклонено",
+        "notAnswered": "Без ответа",
+        "invalid": "Не удалось показать вопрос"
+      },
+      "followUp": {
+        "connected": "Я подключил {{name}}.",
+        "granted": "Я разрешил доступ к экрану.",
+        "saved": "Я сохранил ключ API {{provider}}.",
+        "done": "Я закончил в настройках."
+      }
     }
   },
-  "assistant": {
-    "panel": {
-      "selectionHint": "Выберите текст для редактирования с помощью",
-      "selectedContext": "Выбранный текст добавлен",
-      "removeSelectedContext": "Удалить выбранный текст",
-      "newConversation": "Новый разговор",
-      "copyToClipboard": "Копировать в буфер обмена",
-      "suggestions": {
-        "summarizeNotes": "Подведи итог моих последних заметок",
-        "calendar": "Что у меня в календаре?",
-        "draft": "Помоги мне составить текст"
-      }
+  "agentWindow": {
+    "title": "Ассистент",
+    "actions": {
+      "expand": "Развернуть",
+      "collapse": "Свернуть",
+      "speak": "Говорить",
+      "type": "Печатать",
+      "stop": "Остановить",
+      "close": "Закрыть",
+      "regenerate": "Сгенерировать заново",
+      "readAloud": "Прочитать вслух",
+      "stopReading": "Остановить чтение"
     },
-    "toolActivity": {
-      "verbs": {
-        "invoking": "Вызов",
-        "calling": "Запуск",
-        "using": "Работа"
-      },
-      "toolFallback": "Инструмент"
-    }
+    "notices": {
+      "nothingHeard": "Ничего не расслышал",
+      "transcriptionFailed": "Не удалось расшифровать",
+      "micUnavailable": "Не удалось открыть микрофон",
+      "regenerateFailed": "Не удалось сгенерировать ответ заново",
+      "dictationActive": "Микрофон занят диктовкой"
+    },
+    "composer": {
+      "placeholder": "Продиктуйте или введите вопрос…",
+      "followUpPlaceholder": "Задайте уточняющий вопрос…",
+      "answerPlaceholder": "Ответьте здесь…",
+      "cardPlaceholder": "Ответьте в карточке выше…"
+    },
+    "empty": {
+      "title": "Чем могу помочь?",
+      "description": "Введите запрос ниже."
+    },
+    "selectedContext": {
+      "title": "Выбранный контекст",
+      "remove": "Убрать выбранный контекст",
+      "fromAnswer": "Из ответа: «{{text}}»",
+      "fromOtherApp": "Из другого приложения: «{{text}}»"
+    },
+    "selectionHint": "Выделите текст, чтобы уточнить или ответвить",
+    "selectionToolbar": "Выделенный текст",
+    "followUp": "Уточнить",
+    "forkFromHere": "Ответвить отсюда",
+    "chats": {
+      "title": "Чаты",
+      "switch": "Сменить чат",
+      "new": "Новый чат",
+      "empty": "Чатов пока нет",
+      "untitled": "Чат без названия",
+      "fork": "Ответвление"
+    },
+    "progress": {
+      "callingTools_one": "Вызываю {{count}} инструмент…",
+      "callingTools_few": "Вызываю {{count}} инструмента…",
+      "callingTools_many": "Вызываю {{count}} инструментов…",
+      "callingTools_other": "Вызываю {{count}} инструмента…",
+      "checkingAnswers": "Проверяю ответы…",
+      "reasoning": "Рассуждаю…",
+      "reasonedFor": "Рассуждал {{duration}}",
+      "workedFor": "Работал {{duration}}",
+      "steps_one": "{{count}} шаг",
+      "steps_few": "{{count}} шага",
+      "steps_many": "{{count}} шагов",
+      "steps_other": "{{count}} шага"
+    },
+    "waitingForAnswer": "Ожидание ответа"
   },
   "integrations": {
     "title": "Интеграции",
@@ -4721,7 +5110,6 @@
     "approval": {
       "headers": {
         "default": "Отправить в {{destination}}",
-        "slackPost": "Опубликовать в {{destination}}",
         "email": "Письмо для {{destination}}",
         "issue": "Создать задачу в {{destination}}",
         "comment": "Комментарий к {{destination}}"
@@ -4729,8 +5117,6 @@
       "identity": "От имени {{account}}",
       "identityWithWorkspace": "От имени {{account}} в {{workspace}}",
       "send": "Отправить",
-      "edit": "Изменить",
-      "doneEditing": "Готово",
       "cancel": "Отмена",
       "titleLabel": "Заголовок",
       "bodyLabel": "Сообщение",
@@ -4756,6 +5142,10 @@
         "credential_save_failed": "Не удалось сохранить вход в Slack на этом компьютере. Ничего не отправлено. Попробуйте снова.",
         "dm_failed": "Не удалось открыть личные сообщения с {{destination}}. Ничего не отправлено.",
         "restricted": "{{destination}} доступен вам только для чтения или ограничен.",
+        "thread_mismatch": "Эта ветка находится в другой беседе, а не в {{destination}}. Ничего не отправлено.",
+        "invalid_thread": "Это не ссылка на сообщение в Slack. Ничего не отправлено.",
+        "thread_closed": "Slack не разрешает отвечать в этой ветке. Ничего не отправлено.",
+        "thread_only": "В {{destination}} можно только отвечать в ветках. Ничего не отправлено.",
         "generic": "Что-то пошло не так. Ничего не отправлено.",
         "github": {
           "reconnect_needed": "GitHub нужно переподключить в настройках.",
@@ -4816,7 +5206,6 @@
         }
       },
       "email": {
-        "from": "От {{account}}",
         "toLabel": "Кому",
         "ccLabel": "Копия",
         "subjectLabel": "Тема",
@@ -4829,7 +5218,8 @@
         "tooManyRecipients": "Письмо можно отправить не более чем на {{max}} адресов в полях «Кому» и «Копия» вместе.",
         "subjectTooLong": "Тема должна быть не длиннее {{max}} символов.",
         "bodyTooLong": "Сообщение слишком длинное для Gmail. Сократите его, чтобы отправить.",
-        "unknown": "Не удалось подтвердить отправку. Проверьте папку «Отправленные»."
+        "unknown": "Не удалось подтвердить отправку. Проверьте папку «Отправленные».",
+        "fromLabel": "От"
       },
       "github": {
         "notes": {
@@ -4873,7 +5263,22 @@
         "notes": {
           "targetTitle": "К «{{title}}»"
         }
-      }
+      },
+      "sentEarlier": "Вы уже пытались сделать это в этом чате. Перед повторной отправкой проверьте, получилось ли это.",
+      "slack": {
+        "channelLabel": "Канал",
+        "asLabel": "От имени",
+        "destination": "{{workspace}} · {{destination}}",
+        "notes": {
+          "replyInThread": "Ответ в ветке, начатой {{started, datetime(dateStyle: medium; timeStyle: short)}}"
+        },
+        "sentOutsideThread": "Отправлено в {{destination}} новым сообщением, а не в ветку."
+      },
+      "sentLabel": "Отправлено",
+      "identityChanged": "Теперь будет отправлено от имени {{account}}. Нажмите «Отправить», чтобы отправить.",
+      "connectToSend": "Подключите {{name}}, чтобы отправить это",
+      "edit": "Изменить",
+      "doneEditing": "Готово"
     },
     "policyOff": "Ваша организация отключила коннекторы.",
     "email": {
@@ -4922,7 +5327,8 @@
         "connectedBody": "Вы можете закрыть эту вкладку и вернуться в OpenWhispr.",
         "failedTitle": "Slack не был подключён",
         "failedBody": "Вернитесь в OpenWhispr, чтобы попробовать снова."
-      }
+      },
+      "pickDestination": "Какой «{{destination}}» вы имели в виду?"
     },
     "github": {
       "title": "GitHub",
@@ -5098,6 +5504,10 @@
         "credential_save_failed": "Не удалось сохранить вход в Slack на этом компьютере. Ничего не отправлено.",
         "dm_failed": "Не удалось открыть личные сообщения. Ничего не отправлено.",
         "restricted": "Этот канал только для чтения или ограничен.",
+        "thread_mismatch": "Эта ветка находится в другой беседе. Ничего не отправлено.",
+        "invalid_thread": "Это не ссылка на сообщение в Slack.",
+        "thread_closed": "Slack не разрешает отвечать в этой ветке.",
+        "thread_only": "В этом канале можно только отвечать в ветках.",
         "generic": "Не получилось.",
         "github": {
           "reconnect_needed": "GitHub нужно переподключить.",
@@ -5162,7 +5572,8 @@
       },
       "gmailDraftLimit": "Лимит писем на один запрос: {{max}}.",
       "queryResults": "Найдено результатов: {{total}}",
-      "cardLimit": "Лимит карточек на один запрос: {{max}}."
+      "cardLimit": "Лимит карточек на один запрос: {{max}}.",
+      "alreadySent": "Уже сделано для этого запроса"
     },
     "beta": "Бета",
     "upsell": "Коннекторы входят в платные тарифы. Перейдите на платный тариф, чтобы ассистент работал в ваших инструментах.",
@@ -5751,7 +6162,7 @@
         "member": "Участник рабочего пространства"
       },
       "roleDescription": {
-        "admin": "Управляет участниками, приглашениями, группами и настройками.",
+        "admin": "Управляет участниками, приглашениями, командами и настройками.",
         "member": "Может просматривать и редактировать заметки."
       },
       "errors": {

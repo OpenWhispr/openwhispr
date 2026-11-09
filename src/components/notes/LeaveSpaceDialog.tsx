@@ -5,7 +5,7 @@ import { useToast } from "../ui/useToast";
 import { confirmActionReducer } from "../../lib/confirmActionFlow";
 import { formatList } from "../../lib/formatList";
 import { teamsUserCanLeave } from "../../lib/spacePermissions";
-import { classifySpaceError, rowActionErrorOf } from "../../lib/workspaceErrors";
+import { classifySpaceError, classifyTeamError, rowActionErrorOf } from "../../lib/workspaceErrors";
 import { leaveSpace, leaveTeam } from "../../services/spaceActions";
 import { isolate } from "../../utils/bidiIsolate";
 import type { SpaceItem } from "../../types/electron";
@@ -44,6 +44,8 @@ export function LeaveSpaceDialog({
   // Set when the row says this user is the only admin, or when the server says so on a leave.
   // It isn't a state of the reducer's, since it replaces the confirm and the failure alike.
   const [blocked, setBlocked] = useState(false);
+  // The team whose only admin this user is, when leaving through it was refused for that.
+  const [blockedTeam, setBlockedTeam] = useState<string | null>(null);
   const [wasOpen, setWasOpen] = useState(false);
 
   // Each opening starts over at the confirm (or the block, when the row already says so).
@@ -52,6 +54,7 @@ export function LeaveSpaceDialog({
     if (open) {
       dispatch({ type: "open", subject: space });
       setBlocked(soleAdmin === true);
+      setBlockedTeam(null);
     } else {
       dispatch({ type: "dismiss" });
     }
@@ -74,15 +77,22 @@ export function LeaveSpaceDialog({
     onOpenChange(false);
   };
 
-  // A direct grant is dropped on its own and access through groups is left where it is: groups
-  // are managed in the group. Leaving through groups is the way out only when they are the sole
+  // A direct grant is dropped on its own and access through teams is left where it is: teams
+  // are managed in the team. Leaving through teams is the way out only when they are the sole
   // grant.
   const leaveAll = async (): Promise<{ stillViaTeams: string[] }> => {
     if (direct) {
       const { still_via_teams } = await leaveSpace(space, userId);
       return { stillViaTeams: still_via_teams.map((team) => team.name) };
     }
-    for (const team of leaveTeams) await leaveTeam(team.id, userId);
+    for (const team of leaveTeams) {
+      try {
+        await leaveTeam(team.id, userId);
+      } catch (error) {
+        if (classifyTeamError(error).kind === "lastAdmin") setBlockedTeam(team.name);
+        throw error;
+      }
+    }
     return { stillViaTeams: [] };
   };
 
@@ -92,9 +102,9 @@ export function LeaveSpaceDialog({
       const { stillViaTeams } = await leaveAll();
       if (stillViaTeams.length > 0) {
         toast({
-          title: t("notes.spaces.stillViaGroups", {
+          title: t("notes.spaces.stillViaTeams", {
             space: name,
-            groups: formatList(i18n.language, stillViaTeams.map(isolate)),
+            teams: formatList(i18n.language, stillViaTeams.map(isolate)),
           }),
         });
         finish();
@@ -132,6 +142,20 @@ export function LeaveSpaceDialog({
     );
   }
 
+  // The way out is in the team's own settings, which this dialog can't open.
+  if (blockedTeam) {
+    return (
+      <WorkspaceActionDialog
+        open
+        icon="info"
+        title={t("settingsPage.workspace.teams.exit.blockedTitle")}
+        body={t("settingsPage.workspace.teams.exit.blockedBody", { team: isolate(blockedTeam) })}
+        primary={{ label: t("common.close"), onClick: dismiss, tone: "primary" }}
+        onDismiss={dismiss}
+      />
+    );
+  }
+
   if (state.kind === "failed") {
     // No connection to check and nothing to try again: this user can't do this any more.
     const ended = state.error.kind === "notAllowed" || state.error.kind === "ssoRequired";
@@ -163,18 +187,18 @@ export function LeaveSpaceDialog({
     );
   }
 
-  const groupNames = formatList(
+  const teamNames = formatList(
     i18n.language,
     leaveTeams.map((team) => isolate(team.name))
   );
-  // Leaving through a group names the groups; a direct grant says what stays, and what goes.
+  // Leaving through a team names the teams; a direct grant says what stays, and what goes.
   let body: string;
   if (!direct) {
-    body = t("notes.spaces.leaveConfirmDescription", { teams: groupNames });
+    body = t("notes.spaces.leaveConfirmDescription", { teams: teamNames });
   } else {
     body =
       leaveTeams.length > 0
-        ? t("settingsPage.workspace.teamspaces.exit.leaveBodyKeeps", { groups: groupNames })
+        ? t("settingsPage.workspace.teamspaces.exit.leaveBodyKeeps", { teams: teamNames })
         : t("settingsPage.workspace.teamspaces.exit.leaveBodyLoses", { space: name });
     if (space.my_direct_role === "admin" && otherAdmins) {
       body += ` ${t("settingsPage.workspace.teamspaces.exit.leaveBodyAdmins")}`;

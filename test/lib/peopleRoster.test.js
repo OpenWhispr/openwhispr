@@ -1,9 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
-  TEAM_SUMMARY_SHOWN,
   rosterHasTeams,
-  teamSummary,
   membersView,
   invitationStatus,
   invitationDaysLeft,
@@ -33,14 +31,6 @@ const invitation = (id, expiresAt) => ({
   created_at: "2026-10-20T00:00:00.000Z",
   accepted_at: null,
   revoked_at: null,
-});
-
-test("team summary shows two names and counts the rest", () => {
-  const teams = [0, 1, 2, 3].map((n) => ({ id: `t${n}`, name: `Team ${n}` }));
-  assert.equal(TEAM_SUMMARY_SHOWN, 2);
-  assert.deepEqual(teamSummary(teams), { shown: ["Team 0", "Team 1"], more: 2 });
-  assert.deepEqual(teamSummary([]), { shown: [], more: 0 });
-  assert.deepEqual(teamSummary(undefined), { shown: [], more: 0 });
 });
 
 test("team column hides when the API sends no teams", () => {

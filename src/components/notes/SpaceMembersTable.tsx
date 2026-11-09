@@ -24,11 +24,11 @@ export type SpaceMembersStatus = "loading" | "failed" | "ready";
 interface SpaceMembersTableProps {
   status: SpaceMembersStatus;
   rows: SpaceMemberRow[];
-  /** A group's emoji, from the workspace's groups; the teamspace's own refs carry none. */
-  groupEmoji: ReadonlyMap<string, string | null>;
+  /** A team's emoji, from the workspace's teams; the teamspace's own refs carry none. */
+  teamEmoji: ReadonlyMap<string, string | null>;
   /** Names the table for screen readers, which can't see the dialog's heading from inside it. */
   label: string;
-  /** Groups carry no flag of their own, so whether their access can be changed comes from here. */
+  /** Teams carry no flag of their own, so whether their access can be changed comes from here. */
   canManage: boolean;
   /** Rows with a change in flight. */
   pendingIds: ReadonlySet<string>;
@@ -40,7 +40,7 @@ interface SpaceMembersTableProps {
 export function SpaceMembersTable({
   status,
   rows,
-  groupEmoji,
+  teamEmoji,
   label,
   canManage,
   pendingIds,
@@ -83,7 +83,7 @@ export function SpaceMembersTable({
                 <MemberRow
                   key={row.id}
                   row={row}
-                  groupEmoji={groupEmoji}
+                  teamEmoji={teamEmoji}
                   canManage={canManage}
                   pending={pendingIds.has(row.id)}
                   onRoleChange={onRoleChange}
@@ -133,7 +133,7 @@ function TableMessage({
 
 interface MemberRowProps {
   row: SpaceMemberRow;
-  groupEmoji: ReadonlyMap<string, string | null>;
+  teamEmoji: ReadonlyMap<string, string | null>;
   canManage: boolean;
   pending: boolean;
   onRoleChange: (row: SpaceMemberRow, role: TeamRole) => void;
@@ -142,7 +142,7 @@ interface MemberRowProps {
 
 function MemberRow({
   row,
-  groupEmoji,
+  teamEmoji,
   canManage,
   pending,
   onRoleChange,
@@ -169,7 +169,7 @@ function MemberRow({
         secondary={
           row.kind === "inherited" ? (
             <>
-              <bdi dir="ltr">{member.email}</bdi> · <span dir="auto">{row.groupName}</span>
+              <bdi dir="ltr">{member.email}</bdi> · <span dir="auto">{row.teamName}</span>
             </>
           ) : member.name ? (
             <bdi dir="ltr">{member.email}</bdi>
@@ -193,7 +193,7 @@ function MemberRow({
             row.asAdmin
               ? "settingsPage.workspace.teamspaces.members.viaAdmin"
               : "settingsPage.workspace.teamspaces.members.via",
-            { group: isolate(row.groupName) }
+            { team: isolate(row.teamName) }
           )}
         </span>
       );
@@ -238,13 +238,13 @@ function MemberRow({
       <NameCell
         lead={
           <span className={cn(TILE, "rounded-sm [&>span]:text-xs")}>
-            <TileGlyph emoji={groupEmoji.get(team.id) ?? null} name={team.name} />
+            <TileGlyph emoji={teamEmoji.get(team.id) ?? null} name={team.name} />
           </span>
         }
         primary={<span dir="auto">{team.name}</span>}
         secondary={
           team.memberCount != null
-            ? t("settingsPage.workspace.teamspaces.picker.groupPeople", { count: team.memberCount })
+            ? t("settingsPage.workspace.teamspaces.picker.teamPeople", { count: team.memberCount })
             : null
         }
       />

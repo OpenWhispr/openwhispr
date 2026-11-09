@@ -13,12 +13,16 @@ const MOCKS = {
   "react-i18next": `
     const t = (key, options) => (options ? key + JSON.stringify(options) : key);
     export const useTranslation = () => ({ t, i18n: { language: "en", dir: () => "ltr" } });
+    export const initReactI18next = { type: "3rdParty", init() {} };
   `,
   "/hooks/useSettings": `
     export function useSettings() { return globalThis.__settings; }
   `,
   "/stores/settingsStore": `
     export const getSettings = () => globalThis.__settings;
+    // Local dictation always gets the dictionary, so the OpenRouter notice stays hidden.
+    export const selectPolicyEffectiveSettings = () => ({ useLocalWhisper: true });
+    export const useSettingsStore = (selector) => selector({});
   `,
   "/hooks/useWorkspace": `
     export function useWorkspace() {

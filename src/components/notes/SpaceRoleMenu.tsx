@@ -24,15 +24,6 @@ import type { TeamRole } from "../../types/electron";
 const ROLES: TeamRole[] = ["member", "admin"];
 
 const ROLE_ICON: Record<TeamRole, IconComponent> = { member: User, admin: ShieldCheck };
-const ROLE_LABEL_KEY: Record<TeamRole, string> = {
-  member: "settingsPage.workspace.teamspaces.members.roleMember",
-  admin: "settingsPage.workspace.teamspaces.members.roleAdmin",
-};
-const ROLE_BODY_KEY: Record<TeamRole, string> = {
-  member: "settingsPage.workspace.teamspaces.members.roleMemberBody",
-  admin: "settingsPage.workspace.teamspaces.members.roleAdminBody",
-};
-
 // Quiet trigger: reads as the cell's role text with a chevron, not as a button. The negative
 // margin keeps the text on the column header's edge.
 const TRIGGER_CLASS =
@@ -44,13 +35,30 @@ const ITEM_CLASS =
   "items-start gap-2.5 rounded-lg px-2.5 py-2 ps-2.5 pe-2.5 data-[state=checked]:bg-muted focus:bg-muted " +
   "[&>span:first-child]:hidden";
 
+/** Translation keys for the menu's wording; a team's menu says "team" where a teamspace's says "teamspace". */
+export interface SpaceRoleMenuCopy {
+  roleMember: string;
+  roleMemberBody: string;
+  roleAdmin: string;
+  roleAdminBody: string;
+  remove: string;
+}
+
+const SPACE_COPY: SpaceRoleMenuCopy = {
+  roleMember: "settingsPage.workspace.teamspaces.members.roleMember",
+  roleMemberBody: "settingsPage.workspace.teamspaces.members.roleMemberBody",
+  roleAdmin: "settingsPage.workspace.teamspaces.members.roleAdmin",
+  roleAdminBody: "settingsPage.workspace.teamspaces.members.roleAdminBody",
+  remove: "settingsPage.workspace.teamspaces.members.removeItem",
+};
+
 function isTeamRole(value: string): value is TeamRole {
   return value === "member" || value === "admin";
 }
 
 interface SpaceRoleMenuProps {
   role: TeamRole;
-  /** The person or group the menu acts on, for its accessible name. */
+  /** The person or team the menu acts on, for its accessible name. */
   subject: string;
   /** A change for this row is in flight. */
   pending: boolean;
@@ -58,14 +66,16 @@ interface SpaceRoleMenuProps {
   /** Left out for someone with no direct grant here, as there is nothing of theirs to remove. */
   onRemove?: () => void;
   /**
-   * The groups (already named for reading aloud) that make this person an admin. While there are
+   * The teams (already named for reading aloud) that make this person an admin. While there are
    * some, Member is not on offer: a direct Member role wouldn't lower them, and the row would go
    * on reading Admin.
    */
   adminThrough?: string;
+  /** Defaults to the teamspace wording. */
+  copy?: SpaceRoleMenuCopy;
 }
 
-// The role cell of a person or group the viewer manages: the two teamspace roles, then removal.
+// The role cell of a person or team the viewer manages: the two teamspace roles, then removal.
 // Roles here only ever affect this teamspace.
 export function SpaceRoleMenu({
   role,
@@ -74,8 +84,14 @@ export function SpaceRoleMenu({
   onRoleChange,
   onRemove,
   adminThrough,
+  copy = SPACE_COPY,
 }: SpaceRoleMenuProps): ReactElement {
   const { t } = useTranslation();
+  const labelKey: Record<TeamRole, string> = { member: copy.roleMember, admin: copy.roleAdmin };
+  const bodyKey: Record<TeamRole, string> = {
+    member: copy.roleMemberBody,
+    admin: copy.roleAdminBody,
+  };
 
   return (
     <DropdownMenu>
@@ -104,12 +120,12 @@ export function SpaceRoleMenu({
         >
           {ROLES.map((option) => {
             const Icon = ROLE_ICON[option];
-            const lockedByGroup = option === "member" && Boolean(adminThrough);
+            const lockedByTeam = option === "member" && Boolean(adminThrough);
             return (
               <DropdownMenuRadioItem
                 key={option}
                 value={option}
-                disabled={lockedByGroup}
+                disabled={lockedByTeam}
                 className={ITEM_CLASS}
               >
                 <Icon
@@ -117,13 +133,11 @@ export function SpaceRoleMenu({
                   aria-hidden="true"
                 />
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="text-sm font-medium text-foreground">
-                    {t(ROLE_LABEL_KEY[option])}
-                  </span>
+                  <span className="text-sm font-medium text-foreground">{t(labelKey[option])}</span>
                   <span className="text-xs text-muted-foreground">
-                    {lockedByGroup
-                      ? t("notes.spaces.members.roleFromGroup", { group: adminThrough })
-                      : t(ROLE_BODY_KEY[option])}
+                    {lockedByTeam
+                      ? t("notes.spaces.members.roleFromTeam", { team: adminThrough })
+                      : t(bodyKey[option])}
                   </span>
                 </span>
                 {option === role ? (
@@ -144,7 +158,7 @@ export function SpaceRoleMenu({
               onSelect={onRemove}
             >
               <Trash2 className="size-3.5 shrink-0" aria-hidden="true" />
-              {t("settingsPage.workspace.teamspaces.members.removeItem")}
+              {t(copy.remove)}
             </DropdownMenuItem>
           </>
         ) : null}

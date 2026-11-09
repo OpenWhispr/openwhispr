@@ -682,7 +682,7 @@ test("cancelling during local model setup stops before streaming begins", async 
   resolveServer({ success: true, port: 11434 });
 
   assert.deepEqual(await first, {
-    value: { type: "done", finishReason: "stop" },
+    value: { type: "done", finishReason: "abort" },
     done: false,
   });
   assert.equal((await stream.next()).done, true);
@@ -739,7 +739,7 @@ test("cancelling tool-ineligible local setup prevents raw streaming", async (t) 
   const chunks = firstResult.done ? [] : [firstResult.value];
   for await (const chunk of stream) chunks.push(chunk);
 
-  assert.deepEqual(chunks, [{ type: "done", finishReason: "stop" }]);
+  assert.deepEqual(chunks, [{ type: "done", finishReason: "abort" }]);
   assert.equal(fetchCalls, 0);
 });
 
@@ -1175,7 +1175,8 @@ test("cancelling a cloud agent stream aborts main and ends the local generator",
   streamOwner.abort();
 
   assert.deepEqual(bridge.cancelCalls, [requestId]);
-  assert.equal((await pending).done, true);
+  assert.deepEqual(await pending, { value: { type: "done", finishReason: "abort" }, done: false });
+  assert.equal((await stream.next()).done, true);
   assert.deepEqual(bridge.cleanupCounts, { chunk: 1, error: 1, end: 1 });
 });
 
@@ -1230,7 +1231,10 @@ test("cancelling a cloud agent stream drops chunks already queued locally", asyn
 
   streamOwner.abort();
 
-  assert.equal((await stream.next()).done, true);
+  assert.deepEqual(await stream.next(), {
+    value: { type: "done", finishReason: "abort" },
+    done: false,
+  });
   bridge.emitChunk({ requestId, chunk: { type: "content", text: "late" } });
   assert.equal((await stream.next()).done, true);
 });
@@ -1282,7 +1286,8 @@ test("cancelling during a cloud tool execution prevents results and later model 
   streamOwner.abort();
   resolveTool({ data: "created", displayText: "Created note" });
 
-  assert.equal((await pending).done, true);
+  assert.deepEqual(await pending, { value: { type: "done", finishReason: "abort" }, done: false });
+  assert.equal((await stream.next()).done, true);
   assert.equal(bridge.startCalls.length, 1);
 });
 

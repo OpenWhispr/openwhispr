@@ -46,7 +46,7 @@ async function mount(t) {
         onStopDictation: noopDispose,
         hideDictationPreview: async () => hidden.push(true),
         completeDictationPreview: async () => {},
-        dictationLifecycleStateChanged: () => {},
+        dictationLifecycleStateChanged: async () => true,
         openAccessibilitySettings: async () => {
           settingsCalls += 1;
           return { success: true };
@@ -71,7 +71,6 @@ async function mount(t) {
       shouldUseStreaming() { return false; }
       isSttConfigStale() { return false; }
       setVoiceAgentRequested(value) { this.voiceAgentRequested=value; }
-      setAssistantSelectionContext() {}
       setTranslationRequested() {}
       async startRecording() { this.starts+=1; return true; }
       async safePaste(text) { this.callbacks.onError({title:"Paste Error",code:"ACCESSIBILITY_PERMISSION_REQUIRED",clipboardCopied:true,transcript:text}); return { pasted:false }; }

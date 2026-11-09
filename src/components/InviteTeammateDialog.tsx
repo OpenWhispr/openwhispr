@@ -33,6 +33,10 @@ interface Props {
   /** Spaces the invitee is added to directly on accept. */
   spaceIds?: string[];
   initialEmail?: string;
+  /** Addresses that open as chips (the server's, e.g. guests). */
+  initialEmails?: string[];
+  /** Already-translated text that replaces the default title and description. */
+  heading?: { title: string; description: string };
   /** Addresses that can't be invited again; their chips are blocked before anything is sent. */
   knownEmails?: { members: string[]; invited: string[] };
 }
@@ -57,12 +61,14 @@ export default function InviteTeammateDialog({
   teamIds,
   spaceIds,
   initialEmail,
+  initialEmails,
+  heading,
   knownEmails,
 }: Props): ReactElement {
   const { t } = useTranslation();
   const attachInvited = Boolean(teamIds?.length || spaceIds?.length);
   const [state, setState] = useState<InviteFlowState>(() =>
-    createInviteFlow({ initialEmail, attachInvited })
+    createInviteFlow({ initialEmail, initialEmails, attachInvited })
   );
   const [wasOpen, setWasOpen] = useState(open);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -90,7 +96,7 @@ export default function InviteTeammateDialog({
   if (open !== wasOpen) {
     setWasOpen(open);
     if (open) {
-      setState(createInviteFlow({ initialEmail, attachInvited }));
+      setState(createInviteFlow({ initialEmail, initialEmails, attachInvited }));
       setContacts([]);
     }
   }
@@ -228,6 +234,7 @@ export default function InviteTeammateDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <InvitePeopleView
         workspaceName={workspaceName}
+        heading={heading}
         state={state}
         dispatch={dispatch}
         suggestions={suggestions}

@@ -48,13 +48,36 @@ test("two conversations answer independently and stop cannot release a newer tur
   streams[2].resolve("new one");
   streams[1].resolve("two answer");
   await until(() => Object.values(state().entries).every((entry) => !entry.running));
+  // The stopped turn keeps its reply, saved when it started; what came after Stop isn't in it.
   assert.deepEqual(
     writes
       .filter((write) => write.role === "assistant")
       .map((write) => write.content)
       .sort(),
-    ["new one", "two answer"]
+    ["", "new one", "two answer"]
   );
+});
+
+test("a turn gives its conversation back after the chat is dropped for deletion", async (t) => {
+  const owners = new Map();
+  const { store, send, streams } = await setupChatTurns(t, {
+    claimAgentConversation: async (id, owner) => {
+      const owned = !owners.has(id) || owners.get(id) === owner;
+      if (owned) owners.set(id, owner);
+      return { owned, conversation: { id, title: `Chat ${id}`, messages: [] } };
+    },
+    releaseAgentConversation: async (id, owner) => {
+      if (owners.get(id) === owner) owners.delete(id);
+    },
+  });
+  store.selectChat({ kind: "conversation", conversationId: 4 });
+  send();
+  await until(() => streams.length === 1);
+  assert.equal(owners.has(4), true);
+  // ChatView drops a chat before deleting it, and a delete that fails keeps the row.
+  store.dropChatConversation(4);
+  streams[0].resolve("late");
+  await until(() => !owners.has(4));
 });
 
 test("failed creations restore each question once after the newer New chat draft", async (t) => {
@@ -161,9 +184,9 @@ const STEP = { id: "c1", name: "email_draft", arguments: "{}" };
 const assistantOf = (fixture, id) =>
   fixture.state().entries[`conversation:${id}`].messages.find((m) => m.role === "assistant");
 
-test("Stop keeps the partial answer and its finished tool step on screen, unsaved", async (t) => {
+test("Stop keeps the partial answer and its finished tool step, saved as a stopped reply", async (t) => {
   const fixture = await setupChatTurns(t);
-  holdAfter(fixture, {
+  const release = holdAfter(fixture, {
     before: [
       TEXT,
       { type: "tool_calls", calls: [STEP] },
@@ -186,23 +209,57 @@ test("Stop keeps the partial answer and its finished tool step on screen, unsave
   assert.equal(kept.content, "partial answer");
   assert.equal(kept.isStreaming, false);
   assert.equal(kept.toolCalls[0].status, "completed");
+  release.resolve();
+  await until(() => state().entries["conversation:2"].settling === false);
   assert.deepEqual(
     writes.map((write) => write.role),
-    ["user"]
+    ["user", "assistant"]
   );
+  assert.equal(writes[1].content, "partial answer");
+  assert.equal(writes[1].metadata.turn.status, "stopped");
+  assert.equal(writes[1].metadata.toolCalls[0].status, "completed");
 });
 
-test("Stop before any text leaves no empty reply behind", async (t) => {
+test("Stop before any text keeps the stopped reply, as it is saved", async (t) => {
   const fixture = await setupChatTurns(t);
-  const { store, state, send, streams } = fixture;
+  const { store, state, send, streams, writes } = fixture;
   store.selectChat({ kind: "conversation", conversationId: 2 });
   send();
   await until(() => streams.length === 1);
   store.cancelChatTurn({ kind: "conversation", conversationId: 2 });
+  streams[0].resolve("too late");
+  await until(() => state().entries["conversation:2"].settling === false);
+  const [, reply] = state().entries["conversation:2"].messages;
+  assert.equal(reply.content, "");
+  assert.equal(reply.turn.status, "stopped");
+  // The reply's row was saved when the turn started; Stop completes it, never adds one.
   assert.deepEqual(
-    state().entries["conversation:2"].messages.map((m) => m.role),
-    ["user"]
+    writes.map((write) => [write.role, write.content, write.metadata?.turn?.status]),
+    [
+      ["user", "Question", undefined],
+      ["assistant", "", "stopped"],
+    ]
   );
+});
+
+test("Stop before the first text is shown keeps it, as the stopped reply saves it", async (t) => {
+  const fixture = await setupChatTurns(t);
+  const received = deferred();
+  const release = deferred();
+  fixture.reasoning.processTextStreamingAI.mock.mockImplementation(async function* () {
+    yield TEXT;
+    received.resolve();
+    await release.promise;
+  });
+  const { store, state, send, writes } = fixture;
+  store.selectChat({ kind: "conversation", conversationId: 2 });
+  send();
+  await received.promise;
+  store.cancelChatTurn({ kind: "conversation", conversationId: 2 });
+  release.resolve();
+  await until(() => state().entries["conversation:2"].settling === false);
+  assert.equal(writes[1].content, "partial answer");
+  assert.equal(assistantOf(fixture, 2)?.content, "partial answer");
 });
 
 test("a stopped turn settles before the view takes it, its unfinished tool still on the message", async (t) => {
@@ -210,7 +267,7 @@ test("a stopped turn settles before the view takes it, its unfinished tool still
   const release = holdAfter(fixture, {
     before: [TEXT, { type: "tool_calls", calls: [STEP] }],
   });
-  const { store, state, send, writes } = fixture;
+  const { store, state, send, writes, vite } = fixture;
   store.selectChat({ kind: "conversation", conversationId: 2 });
   send();
   await until(() => assistantOf(fixture, 2)?.toolCalls?.[0]?.status === "executing");
@@ -219,12 +276,17 @@ test("a stopped turn settles before the view takes it, its unfinished tool still
   release.resolve();
   await until(() => state().entries["conversation:2"].settling === false);
   // Its side effect may still land, so the next turn's history says the outcome isn't recorded.
-  assert.equal(assistantOf(fixture, 2).toolCalls[0].status, "executing");
+  const { toolTrace } = await vite.ssrLoadModule("/components/chat/historyMessages.ts");
+  assert.equal(assistantOf(fixture, 2).toolCalls[0].status, "stopped");
+  assert.equal(
+    toolTrace(assistantOf(fixture, 2).toolCalls),
+    "[Tools used: email_draft (outcome not recorded)]"
+  );
   assert.equal(assistantOf(fixture, 2).isStreaming, false);
   assert.equal(store.takeCompletedChatTurn(2).running, false);
   assert.deepEqual(
     writes.map((write) => write.role),
-    ["user"]
+    ["user", "assistant"]
   );
 });
 
