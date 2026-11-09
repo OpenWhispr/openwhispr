@@ -9,6 +9,7 @@ import {
   listRunnableLocalModels,
   registryData as modelRegistryData,
 } from "../models/registryData.js";
+import { isUploadOnlyTranscriptionModel } from "../models/appTranscriptionProviders.js";
 
 export type PolicyStatus = "idle" | "loading" | "managed" | "unmanaged" | "error";
 
@@ -850,15 +851,9 @@ export function acceptsUnlistedTranscriptionModel(providerId: string, modelId: s
   return providerId === "openrouter" && modelId.includes("/");
 }
 
-// A registry model only Audio Upload offers (Deepgram via OpenRouter drops the
-// dictionary). It is listed, so the unlisted pass-through above must not keep
-// it on a screen that leaves it out.
-export function isUploadOnlyTranscriptionModel(providerId: string, modelId: string): boolean {
-  const models: Array<{ id: string; uploadOnly?: boolean }> =
-    modelRegistryData.transcriptionProviders.find((provider) => provider.id === providerId)
-      ?.models ?? [];
-  return models.some((model) => model.id === modelId && model.uploadOnly);
-}
+// An upload-only model is listed, so the unlisted pass-through above must not
+// keep it on a screen that leaves it out.
+export { isUploadOnlyTranscriptionModel };
 
 export function reconcileCloudProviderSelection({
   selectedProvider,

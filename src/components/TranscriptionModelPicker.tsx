@@ -629,7 +629,7 @@ export default function TranscriptionModelPicker({
   // providers note recording can actually run — not every streaming provider.
   // Upload is always http-batch, and the realtime-only providers have no batch
   // route at all (transcriptionRoute fails them closed), so they are hidden there.
-  // Upload is also the only screen that offers uploadOnly models.
+  // Upload is also the only screen that offers upload-only models.
   const availableCloudProviders = useMemo(() => {
     if (streamingOnly) return getMeetingStreamingTranscriptionProviders();
     if (transcriptionContext !== "upload") return getDictationTranscriptionProviders();

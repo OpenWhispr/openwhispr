@@ -1,5 +1,7 @@
-import bundled from "./modelRegistryData.json" with { type: "json" };
+import bundledCatalog from "./modelRegistryData.json" with { type: "json" };
+import { withAppTranscriptionProviders } from "./appTranscriptionProviders.js";
 
+const bundled = withAppTranscriptionProviders(bundledCatalog);
 const PROVIDER_SECTIONS = [
   "cloudProviders",
   "enterpriseProviders",

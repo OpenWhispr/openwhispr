@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const registry = require("../../src/models/modelRegistryData.json");
+const { registryData: registry } = require("../../src/models/registryData.js");
 const load = () => import("../../src/helpers/transcriptionRoute.ts");
 
 // Every model the picker can write must survive a round trip through the resolver, or a user

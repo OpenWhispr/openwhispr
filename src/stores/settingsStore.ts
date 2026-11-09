@@ -168,12 +168,13 @@ const localLlmModelIds = new Set<string>(
 function transcriptionProviderModels(
   providerId: string,
   context: TranscriptionPolicyContext
-): Array<{ id: string; streaming?: boolean; uploadOnly?: boolean }> {
-  const models: Array<{ id: string; streaming?: boolean; uploadOnly?: boolean }> =
+): Array<{ id: string; streaming?: boolean }> {
+  const models: Array<{ id: string; streaming?: boolean }> =
     modelRegistryData.transcriptionProviders.find((provider) => provider.id === providerId)
       ?.models ?? [];
   if (context === "meeting") return models.filter((model) => model.streaming);
-  if (context === "dictation") return models.filter((model) => !model.uploadOnly);
+  if (context === "dictation")
+    return models.filter((model) => !isUploadOnlyTranscriptionModel(providerId, model.id));
   return models;
 }
 
