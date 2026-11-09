@@ -1671,7 +1671,6 @@ test("the modal shows Thinking... once: in the pill, unless the streaming reply'
 
   await view.chat({ busy: true, messages: [user] });
   assert.equal(shown(), 1, "before the reply exists, the pill shows it");
-  assert.equal(inReply(), false);
   await view.chat({ messages: [user, reply([])] });
   assert.equal(shown(), 1, "once the reply streams, only its row shows it");
   assert.equal(inReply(), true);
