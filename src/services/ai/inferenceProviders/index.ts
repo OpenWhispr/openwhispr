@@ -30,6 +30,6 @@ export const PROVIDER_REGISTRY: Readonly<Record<string, InferenceProvider>> = Ob
 export type { InferenceProvider, ProviderContext, ProviderCallParams } from "./types";
 
 // Whether a provider's AI-SDK client is wired to send image parts. Shared by
-// the dictation route and the assistant panel so both gate screenshots alike.
+// the dictation route and the agent window so both gate screenshots alike.
 export const providerSupportsImages = (providerId: string | undefined): boolean =>
   !!(providerId && PROVIDER_REGISTRY[providerId]?.supportsImages);

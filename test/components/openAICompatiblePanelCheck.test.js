@@ -272,3 +272,96 @@ test("a key OpenRouter refuses is never saved", async (t) => {
   await panel.unmount();
   assert.deepEqual(saved, []);
 });
+
+// Shaped like OpenRouter's /models entries.
+const HAIKU = "anthropic/claude-haiku-5.5";
+const MISTRAL = "mistralai/mistral-small-24b-instruct-2501";
+const openRouterCatalog = respond(200, {
+  data: [
+    { id: HAIKU, supported_parameters: ["tools"] },
+    { id: `${HAIKU}:batch`, supported_parameters: ["tools"] },
+    { id: MISTRAL, supported_parameters: [] },
+  ],
+});
+const openRouterListProps = async (t, modelNeeds, model = "", fetch = openRouterCatalog) => {
+  const panel = await mount(t, {
+    fetch,
+    overrides: {
+      provider: "openrouter",
+      baseUrl: "https://openrouter.ai/api/v1",
+      lockedBaseUrl: true,
+      apiKeyRequired: true,
+      apiKey: "sk-or-saved",
+      model,
+      modelNeeds,
+    },
+  });
+  await panel.wait(0);
+  return panel.find((node) => Array.isArray(node.props?.models))[0].props;
+};
+const openRouterList = async (...args) =>
+  (await openRouterListProps(...args)).models.map((option) => option.value);
+
+test("OpenRouter removes a saved model without tools after another model is selected", async (t) => {
+  const incompatibleModel = "openai/gpt-4.1";
+  const catalog = t.mock.fn(
+    respond(200, {
+      data: [
+        { id: incompatibleModel, supported_parameters: [] },
+        { id: HAIKU, supported_parameters: ["tools"] },
+      ],
+    })
+  );
+  const panel = await mount(t, {
+    fetch: catalog,
+    overrides: {
+      provider: "openrouter",
+      baseUrl: "https://openrouter.ai/api/v1",
+      lockedBaseUrl: true,
+      model: incompatibleModel,
+      modelNeeds: ["tools"],
+    },
+  });
+  await panel.wait(0);
+  const choices = () =>
+    panel
+      .find((node) => Array.isArray(node.props?.models))[0]
+      .props.models.map((option) => option.value);
+  assert.deepEqual(choices(), [incompatibleModel, HAIKU], "the saved pick stays visible");
+
+  await panel.setProps({ model: HAIKU });
+  assert.deepEqual(choices(), [HAIKU], "the former saved pick is no longer selectable");
+  assert.equal(catalog.mock.callCount(), 1, "selection changes reuse the loaded catalog");
+});
+
+test("OpenRouter lists only the tested models the scope's requests can use", async (t) => {
+  await t.test("text features skip batch variants and untested models", async (t) => {
+    const list = await openRouterListProps(t);
+    assert.deepEqual(
+      list.models.map((option) => option.value),
+      [HAIKU]
+    );
+    assert.ok(list.modelRanking.includes(HAIKU), "short lists keep provider grouping too");
+  });
+  await t.test("a saved pick stays listed, first, even when the scope can't use it", async (t) => {
+    assert.deepEqual(await openRouterList(t, ["tools"], MISTRAL), [MISTRAL, HAIKU]);
+  });
+  const { OPENROUTER_TEXT_MODELS, OPENROUTER_VISION_MODELS } =
+    await import("../../src/utils/openRouterModels.ts");
+  for (const [scope, needs, tested] of [
+    ["chat", ["tools"], OPENROUTER_TEXT_MODELS],
+    ["the vision model", ["tools", "image"], OPENROUTER_VISION_MODELS],
+  ]) {
+    await t.test(`${scope} gets its tested list, in its order`, async (t) => {
+      const reversedCatalog = respond(200, {
+        data: [...tested].reverse().map((id) => ({ id, supported_parameters: ["tools"] })),
+      });
+      const list = await openRouterListProps(t, needs, "", reversedCatalog);
+      assert.deepEqual(
+        list.models.map((option) => option.value),
+        tested
+      );
+      assert.deepEqual(list.modelRanking, tested, "the searchable list ranks provider groups too");
+    });
+  }
+});

@@ -25,7 +25,7 @@ const DEFAULT_MANAGED_PROVIDER = {
 
 const resolveModel = (provider, selectedModel) =>
   provider.models.find((model) => model.id === selectedModel)?.id ??
-  provider.models.find((model) => model.default)?.id ??
+  provider.models.find((model) => model.default || model.id === provider.defaultModel)?.id ??
   provider.models[0]?.id;
 
 export function resolveMeetingTranscriptionOptions({

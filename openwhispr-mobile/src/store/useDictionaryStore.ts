@@ -10,6 +10,8 @@ export interface DictionaryEntry {
   word: string;
   source: DictionarySource;
   addedAt: number | null;
+  // When the word was moved into a shared list; it stays a live personal word.
+  sharedAt: number | null;
 }
 
 interface DictionaryStore {
@@ -40,6 +42,7 @@ function rowToEntry(row: Row): DictionaryEntry {
     word: row.word,
     source: row.source,
     addedAt: parseStoredTimestamp(row.createdAt),
+    sharedAt: parseStoredTimestamp(row.sharedAt),
   };
 }
 
@@ -87,30 +90,29 @@ function findTombstoneByLowerWord(word: string): Row | null {
 function applyAddOne(word: string, source: DictionarySource): boolean {
   const active = findActiveByLowerWord(word);
   if (active) {
-    // Active row exists. Promote learned→manual if appropriate; otherwise no-op.
-    // Update casing in both branches so the user's latest input wins consistently.
-    if (active.source === 'learned' && source === 'manual') {
-      db.update(dictionaryEntries)
-        .set({
-          word,
-          source: 'manual',
-          pendingSync: 1,
-          updatedAt: sql`datetime('now')`,
-        })
-        .where(eq(dictionaryEntries.id, active.id))
-        .run();
-      return true;
-    }
-    if (active.word !== word) {
-      db.update(dictionaryEntries)
-        .set({ word, pendingSync: 1, updatedAt: sql`datetime('now')` })
-        .where(eq(dictionaryEntries.id, active.id))
-        .run();
-      return true;
-    }
-    return false;
+    // Active row exists. Promote learned→manual if appropriate, and update
+    // casing so the user's latest input wins. An explicit add of a word moved
+    // into a shared list takes it back into Personal (as desktop does); a
+    // learned one never does. Otherwise no-op.
+    const promote = active.source === 'learned' && source === 'manual';
+    const takeBack = source === 'manual' && active.sharedAt !== null;
+    if (!promote && !takeBack && active.word === word) return false;
+    db.update(dictionaryEntries)
+      .set({
+        word,
+        ...(promote ? { source: 'manual' as const } : {}),
+        ...(takeBack ? { sharedAt: null, sharedAtCleared: 1 } : {}),
+        pendingSync: 1,
+        updatedAt: sql`datetime('now')`,
+      })
+      .where(eq(dictionaryEntries.id, active.id))
+      .run();
+    return true;
   }
 
+  // A restored word is personal again (as desktop's restore), so the clear is
+  // pushed whatever shared_at the server last sent: it may have moved the word
+  // since.
   const tombstone = findTombstoneByLowerWord(word);
   if (tombstone) {
     const nextSource: DictionarySource =
@@ -120,6 +122,8 @@ function applyAddOne(word: string, source: DictionarySource): boolean {
         deletedAt: null,
         word,
         source: nextSource,
+        sharedAt: null,
+        sharedAtCleared: 1,
         pendingSync: 1,
         updatedAt: sql`datetime('now')`,
       })

@@ -6,6 +6,7 @@ import { cn } from "../lib/utils";
 import { blurBehindOverlays } from "./overlayBlur";
 import { InfoBox } from "./InfoBox";
 import { SettingsLayoutProvider } from "./useSettingsLayout";
+import { escapeClearsTarget } from "./escapeClears";
 import { useDismissGuard } from "./useDismissGuard";
 
 export interface SidebarItem<T extends string> {
@@ -32,6 +33,11 @@ interface SidebarModalProps<T extends string> {
   /** Rendered above the nav (hidden in compact mode), e.g. account identity. */
   header?: React.ReactNode;
   /**
+   * Rendered at the top of the narrow rail in compact mode, where `header` is hidden. It takes
+   * the same slot, so when both are the same component it keeps its state across the switch.
+   */
+  compactHeader?: React.ReactNode;
+  /**
    * Account-level notice, e.g. an organization-managed policy. Sits under the
    * header in the sidebar; when the sidebar is compact it collapses to an icon
    * badge beside the close button with `description` as its tooltip.
@@ -50,6 +56,7 @@ export default function SidebarModal<T extends string>({
   sidebarWidth = "w-52",
   version,
   header,
+  compactHeader,
   notice,
 }: SidebarModalProps<T>) {
   const { t } = useTranslation();
@@ -132,7 +139,9 @@ export default function SidebarModal<T extends string>({
             (e.currentTarget as HTMLElement).focus();
           }}
           onEscapeKeyDown={(e) => {
-            if (document.querySelector("[data-capturing]")) e.preventDefault();
+            if (document.querySelector("[data-capturing]") || escapeClearsTarget(e)) {
+              e.preventDefault();
+            }
           }}
           onInteractOutside={(e) => {
             // A dropdown open over this panel makes the panel inert, so the
@@ -143,7 +152,7 @@ export default function SidebarModal<T extends string>({
           className="fixed left-[50%] top-[50%] z-50 max-h-[85vh] w-[90vw] max-w-4xl translate-x-[-50%] translate-y-[-50%] rounded-xl p-0 overflow-hidden outline-none bg-background border border-border shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] dark:bg-surface-1 dark:border-border-subtle dark:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.05)] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-98 data-[state=open]:zoom-in-98"
         >
           <div className="relative h-full max-h-[85vh] overflow-hidden">
-            <div className="absolute end-4 top-4 z-10 flex items-center gap-2">
+            <div className="absolute end-4 top-4 z-20 flex items-center gap-2">
               {notice && isCompact && (
                 <InfoBox title={notice.description} className="rounded-md p-1.25 text-primary">
                   {notice.icon}
@@ -164,7 +173,11 @@ export default function SidebarModal<T extends string>({
                 className={`${actualSidebarWidth} shrink-0 border-e border-border/70 dark:border-border-subtle flex flex-col bg-surface-1 dark:bg-surface-0 transition-[width] duration-200 ease-out`}
               >
                 {/* Identity / custom header */}
-                {header && !isCompact && <div className="px-4 pt-5 pb-1">{header}</div>}
+                {(isCompact ? compactHeader : header) && (
+                  <div className={isCompact ? "flex justify-center px-1.5 pt-4" : "px-4 pt-5 pb-1"}>
+                    {isCompact ? compactHeader : header}
+                  </div>
+                )}
                 {notice && !isCompact && (
                   <div className="flex justify-center px-4 pb-1">
                     <span
@@ -182,7 +195,7 @@ export default function SidebarModal<T extends string>({
                 {/* Navigation */}
                 <nav
                   className={`relative flex-1 pb-2 overflow-y-auto ${
-                    isCompact ? "px-1.5 pt-4" : "px-2 pt-3"
+                    isCompact ? (compactHeader ? "px-1.5 pt-2" : "px-1.5 pt-4") : "px-2 pt-3"
                   }`}
                 >
                   {groupedItems.map((group, groupIndex) => (

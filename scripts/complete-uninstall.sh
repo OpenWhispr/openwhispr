@@ -30,17 +30,25 @@ remove_target "/Applications/OpenWhispr.app"
 echo "Purging Application Support data..."
 remove_target "$HOME/Library/Application Support/OpenWhispr"
 remove_target "$HOME/Library/Application Support/open-whispr"
-remove_target "$HOME/Library/Application Support/OpenWhispr-dev"
+remove_target "$HOME/Library/Application Support/OpenWhispr-development"
+remove_target "$HOME/Library/Application Support/OpenWhispr-staging"
 remove_target "$HOME/Library/Application Support/com.openwhispr"
 remove_target "$HOME/Library/Application Support/com.openwhispr.OpenWhispr"
+remove_target "$HOME/.openwhispr/cli-bridge.json"
 
 echo "Removing caches, logs, and saved state..."
 remove_target "$HOME/Library/Caches/open-whispr"
-remove_target "$HOME/Library/Caches/com.openwhispr.OpenWhispr"
-remove_target "$HOME/Library/Preferences/com.openwhispr.OpenWhispr.plist"
+remove_target "$HOME/Library/Caches/open-whispr-updater"
+# Current bundle ID first, then the ones older releases used
+for bundle_id in com.gizmolabs.openwhispr com.herotools.openwispr com.openwhispr.OpenWhispr; do
+  remove_target "$HOME/Library/Caches/$bundle_id"
+  remove_target "$HOME/Library/Caches/$bundle_id.ShipIt"
+  remove_target "$HOME/Library/HTTPStorages/$bundle_id"
+  remove_target "$HOME/Library/Preferences/$bundle_id.plist"
+  remove_target "$HOME/Library/Saved Application State/$bundle_id.savedState"
+done
 remove_target "$HOME/Library/Preferences/com.openwhispr.helper.plist"
 remove_target "$HOME/Library/Logs/OpenWhispr"
-remove_target "$HOME/Library/Saved Application State/com.openwhispr.OpenWhispr.savedState"
 
 echo "Cleaning temporary files..."
 shopt -s nullglob
@@ -52,11 +60,11 @@ for crash in "$HOME/Library/Application Support/CrashReporter"/OpenWhispr_*; do
 done
 shopt -u nullglob
 
-read -r -p "Remove downloaded Whisper models and caches (~/.cache/whisper, ~/Library/Application Support/whisper)? [y/N]: " wipe_models
+read -r -p "Remove downloaded models and the local search index (~/.cache/openwhispr, ~/.cache/whisper, ~/Library/Application Support/whisper)? [y/N]: " wipe_models
 if [[ "$wipe_models" =~ ^[Yy]$ ]]; then
+  remove_target "$HOME/.cache/openwhispr"
   remove_target "$HOME/.cache/whisper"
   remove_target "$HOME/Library/Application Support/whisper"
-  remove_target "$HOME/Library/Application Support/OpenWhispr/models"
 fi
 
 ENV_FILE="$PROJECT_ROOT/.env"
@@ -71,9 +79,9 @@ fi
 cat <<'EOF'
 macOS keeps microphone, screen recording, and accessibility approvals even after files are removed.
 Reset them if you want a truly fresh start:
-  tccutil reset Microphone com.openwhispr.app
-  tccutil reset Accessibility com.openwhispr.app
-  tccutil reset ScreenCapture com.openwhispr.app
+  tccutil reset Microphone com.gizmolabs.openwhispr
+  tccutil reset Accessibility com.gizmolabs.openwhispr
+  tccutil reset ScreenCapture com.gizmolabs.openwhispr
 
 Full uninstall complete. Reboot if you removed permissions, then reinstall or run npm scripts on a clean tree.
 EOF

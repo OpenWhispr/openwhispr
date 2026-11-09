@@ -371,7 +371,7 @@ test("the note chat labels speakers exactly as get_note does", async () => {
   const mappings = { speaker_1: "Priya", speaker_2: "You" };
   const { data } = await tool.execute({ id: 7 });
   const lines =
-    "Priya: Ship it Friday.\nNote taker: Agreed.\nNote taker: Mapped to me.\nSpeaker 1: In the room.";
+    "Priya: Ship it Friday.\nNote taker: Agreed.\nYou: Mapped to me.\nSpeaker 1: In the room.";
   assert.equal(data.transcript, lines);
   // A teammate's note: saved names apply, and the note taker isn't the user.
   assert.equal(
@@ -386,7 +386,7 @@ test("the note chat labels speakers exactly as get_note does", async () => {
   };
   assert.equal(
     noteChatTranscript(segments, mappings, owner),
-    `## Meeting Context\nThe user taking these notes ("Note taker" in the transcript) is Chad <chad@example.com>.\n\n${lines}`
+    `## Meeting Context\nThe note taker ("Note taker" in the transcript) is Chad <chad@example.com>.\n\n${lines}`
   );
   // Signed out, the user's own note still says the note taker is the user.
   assert.equal(
@@ -411,4 +411,71 @@ test("a longer match cut off at the end of a passage is found by the next call",
   ).data;
   assert.equal(second.transcript_match_found, true);
   assert.match(second.transcript, /a {5}b and more/);
+});
+
+test("note chat and retrieval keep appended recorders distinct from the owner", async () => {
+  const { readableTranscript } = await import("../../src/utils/transcriptEvidence.ts");
+  const raw = JSON.stringify([
+    { source: "mic", speaker: "you", text: "old" },
+    { source: "mic", speaker: "you", recorderName: "Bob", text: "new" },
+  ]);
+  assert.equal(readableTranscript(raw).text, "Note taker: old\nBob: new");
+});
+
+test("note chat and get_note distinguish the viewer's self mappings from recorder-relative corrections", async () => {
+  const tool = await getTool();
+  const { noteChatTranscript } = await import("../../src/utils/transcriptEvidence.ts");
+  const segments = [
+    { source: "mic", speaker: "you", text: "Original words" },
+    {
+      source: "mic",
+      speaker: "speaker_0",
+      speakerName: "You",
+      recorderName: "Alice Recorder",
+      text: "The viewer's commitment",
+    },
+    {
+      source: "mic",
+      speaker: "speaker_1",
+      speakerName: "You",
+      speakerLocked: true,
+      recorderName: "Alice Recorder",
+      text: "A recorder-relative correction",
+    },
+    {
+      source: "mic",
+      speaker: "speaker_2",
+      speakerName: "Carol",
+      speakerLocked: true,
+      recorderName: "Alice Recorder",
+      text: "A named correction",
+    },
+  ];
+  const mappings = { speaker_0: "You", speaker_1: "You", speaker_2: "You" };
+  stored.transcript = JSON.stringify(segments);
+  global.window.electronAPI.getSpeakerMappings = async () =>
+    Object.entries(mappings).map(([speaker_id, display_name]) => ({ speaker_id, display_name }));
+  const expected =
+    "Note taker: Original words\nYou: The viewer's commitment\nAlice Recorder: A recorder-relative correction\nCarol: A named correction";
+  const { data } = await tool.execute({ id: 7 });
+  assert.equal(data.transcript, expected);
+  assert.equal(
+    noteChatTranscript(segments, mappings, null),
+    `## Meeting Context\nSomeone other than the user took these notes ("Note taker" in the transcript).\n\n${expected}`
+  );
+  const mine = (await tool.execute({ id: 7, transcript_query: "You: The viewer" })).data;
+  assert.equal(mine.transcript_match_found, true);
+});
+
+test("malformed recorder metadata cannot block parsing, retrieval or direct note chat", async () => {
+  const { parseTranscriptSegments } = await import("../../src/utils/parseTranscriptSegments.ts");
+  const { readableTranscript, noteChatTranscript } =
+    await import("../../src/utils/transcriptEvidence.ts");
+  for (const recorderName of [42, { name: "Bob" }, ["Bob"], true, null]) {
+    const segments = [{ source: "mic", speaker: "you", text: "Still readable", recorderName }];
+    const raw = JSON.stringify(segments);
+    assert.equal(parseTranscriptSegments(raw)[0].recorderName, undefined);
+    assert.equal(readableTranscript(raw).text, "Note taker: Still readable");
+    assert.match(noteChatTranscript(segments, {}, null), /Note taker: Still readable$/);
+  }
 });

@@ -60,23 +60,37 @@ const EXPECTED_SHARED_FIELD_DIRECTIONS = {
   "src/components/AuthenticationStep.tsx": ["ltr", "auto", "ltr", "ltr", "ltr"],
   "src/components/CreateTeamDialog.tsx": ["auto"],
   "src/components/CreateWorkspaceDialog.tsx": ["auto"],
-  "src/components/DictionaryView.tsx": ["auto", "auto", "auto"],
+  "src/components/DictionaryView.tsx": ["auto"],
   "src/components/EnterpriseProviderConfig.tsx": ["ltr", "ltr", "ltr", "ltr", "ltr", "ltr"],
   "src/components/ForgotPasswordView.tsx": ["ltr"],
-  "src/components/InviteTeammateDialog.tsx": ["ltr"],
   "src/components/LeaderboardSection.tsx": ["ltr"],
   "src/components/SettingsPage.tsx": ["ltr", "ltr", "ltr", "ltr", "ltr", "ltr"],
   "src/components/SnippetsView.tsx": ["auto", "auto", "auto", "auto"],
+  // A typed answer in any script; an API key, always LTR.
+  "src/components/dictionary/DictionaryAddField.tsx": ["auto"],
+  "src/components/dictionary/DictionaryToolbar.tsx": ["auto"],
+  "src/components/dictionary/DictionaryWordList.tsx": ["auto"],
   "src/components/notes/ActionManagerDialog.tsx": ["auto", "auto", "auto"],
+  // A teamspace's description is prose in any script.
+  "src/components/notes/CreateSpaceDialog.tsx": ["auto"],
   "src/components/notes/DeleteSpaceDialog.tsx": ["auto"],
   "src/components/notes/FolderNotesPopover.tsx": ["auto"],
+  // Names, emails and teams typed in one field: a name may be in any script.
+  "src/components/notes/SpacePeopleField.tsx": ["auto"],
   "src/components/notes/UploadAudioView.tsx": ["auto"],
   "src/components/settings/DictationAgentSettings.tsx": ["auto"],
   "src/components/settings/EnterpriseAudioSettings.tsx": ["ltr"],
   "src/components/settings/EnterpriseCheckoutDialog.tsx": ["inherit"],
   "src/components/settings/ProfileSection.tsx": ["auto", "ltr", "ltr", "ltr"],
+  // Teamspace search: names in any script.
+  "src/components/settings/TeamSpacesPanel.tsx": ["auto"],
   "src/components/settings/WorkspaceDeveloperTab.tsx": ["auto"],
-  "src/components/settings/WorkspaceSection.tsx": ["auto"],
+  "src/components/settings/WorkspaceGeneralSection.tsx": ["auto"],
+  // Member search: names in any script.
+  "src/components/settings/WorkspaceMembersTab.tsx": ["auto"],
+  // A skill's name and the skills search accept text in any script.
+  "src/components/skills/CreateSkillScreen.tsx": ["auto"],
+  "src/components/skills/SkillSearchInput.tsx": ["auto"],
   "src/components/ui/ApiKeyInput.tsx": ["ltr"],
   "src/components/ui/CustomModelInput.tsx": ["ltr"],
   "src/components/ui/PromptStudio.tsx": ["auto", "auto"],
@@ -89,15 +103,22 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/CommandSearch.tsx": ["auto"],
   // Folder names and search accept user text in any script.
   "src/components/MeetingNotificationFolderPicker.tsx": ["auto", "auto"],
-  "src/components/MemberPickList.tsx": ["auto"],
   "src/components/ReferralDashboard.tsx": ["ltr"],
   "src/components/SettingsPage.tsx": ["inherit"],
+  // The agent's typed request: prose in any script.
+  "src/components/agent/AgentComposer.tsx": ["auto"],
+  // An answer card's title and message: prose in any script.
   "src/components/chat/ApprovalCard.tsx": ["auto", "auto"],
   "src/components/chat/ChatInput.tsx": ["auto"],
-  // To, Cc, Subject, Body: people's names and prose in any script.
-  "src/components/chat/EmailApprovalFields.tsx": ["auto", "auto", "auto", "auto"],
+  // To, Cc, Subject: people's names and prose in any script.
+  "src/components/chat/EmailApprovalFields.tsx": ["auto", "auto", "auto"],
   // Title and description, or a comment: prose in any script.
   "src/components/chat/IssueApprovalFields.tsx": ["auto", "auto"],
+  // An API key, always LTR; a typed answer in any script.
+  "src/components/chat/interactions/ApiKeyCard.tsx": ["ltr"],
+  "src/components/chat/interactions/QuestionsCard.tsx": ["auto"],
+  // A proposed skill's name and when it's used, and an update's description: prose.
+  "src/components/chat/SkillApprovalCard.tsx": ["auto", "auto", "auto", "auto", "auto", "auto"],
   "src/components/notes/ActionManagerDialog.tsx": ["auto", "auto"],
   "src/components/notes/AddNotesToFolderDialog.tsx": ["auto"],
   "src/components/notes/MeetingTranscriptChat.tsx": ["ltr", "auto"],
@@ -107,6 +128,8 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/notes/NotesOnboarding.tsx": ["auto", "auto", "auto"],
   "src/components/notes/ShareNoteDialog.tsx": ["auto"],
   "src/components/notes/SpaceNameField.tsx": ["auto"],
+  // A teamspace's name and description, edited in place in the settings header: prose in any script.
+  "src/components/notes/SpaceSettingsDialog.tsx": ["auto", "auto"],
   "src/components/notes/SpacesTree.tsx": ["auto", "auto", "auto", "auto"],
   "src/components/notes/UploadAudioView.tsx": ["ltr", "ltr", "inherit"],
   "src/components/onboarding/DemoStep.tsx": ["auto"],
@@ -114,8 +137,16 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/onboarding/UseCaseStep.tsx": ["auto"],
   "src/components/settings/ChatAgentSettings.tsx": ["auto"],
   "src/components/settings/ProfileSection.tsx": ["inherit"],
+  "src/components/settings/TeamSettingsDialog.tsx": ["auto"],
+  // Email addresses are Latin-script identifiers.
+  "src/components/workspace/InvitePeopleView.tsx": ["ltr"],
+  // A skill's description is prose; the file pickers are hidden.
+  "src/components/skills/CreateSkillScreen.tsx": ["auto", "inherit"],
+  "src/components/skills/UploadSkillsScreen.tsx": ["inherit"],
   "src/components/ui/EmojiPicker.tsx": ["auto"],
   "src/components/ui/LanguageSelector.tsx": ["auto"],
+  // A skill's instructions: Markdown prose in any script.
+  "src/components/ui/LineNumberedTextarea.tsx": ["auto"],
 };
 
 test("shared field primitives inherit unless a consumer declares its content direction", async (t) => {
@@ -173,8 +204,8 @@ test("representative prose, identity, secret, and rich-editor surfaces keep thei
     /<Input\s+dir="ltr"\s+\{\.\.\.inputProps\}/
   );
   assert.match(
-    source("src/components/DictionaryView.tsx"),
-    /<Input\s+dir="auto"\s+ref=\{addInputRef\}/
+    source("src/components/dictionary/DictionaryAddField.tsx"),
+    /<Input\s+dir="auto"\s+ref=\{inputRef\}/
   );
   assert.match(
     source("src/components/notes/UploadAudioView.tsx"),
