@@ -189,7 +189,7 @@ test("CUDA: resolves its exact asset from the pinned tag and installs binary + c
 });
 
 test("llama Vulkan: resolves asset by regex from the pinned tag", async () => {
-  state.release = makeRelease("llama-b12110-bin-ubuntu-vulkan-x64.tar.gz");
+  state.release = makeRelease("llama-b9763-bin-ubuntu-vulkan-x64.tar.gz");
   state.extractedFiles = { "llama-server": "binary", "libvulkan.so.1": "lib" };
 
   const manager = new LlamaVulkanManager();
