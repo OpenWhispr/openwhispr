@@ -13,19 +13,13 @@ const KEY = "settingsPage.workspace.guests.remove";
 const MAX_GUEST_REMOVAL = 500;
 
 interface RemoveGuestsDialogProps {
-  open: boolean;
   onOpenChange: (open: boolean) => void;
   workspace: Workspace;
   guests: WorkspaceGuest[];
   onRemoved: (result: GuestRemoval) => void;
 }
 
-export function RemoveGuestsDialog(props: RemoveGuestsDialogProps): ReactElement | null {
-  // Mounted per opening, so each one starts at the confirm step.
-  return props.open ? <RemoveGuestsDialogBody {...props} /> : null;
-}
-
-function RemoveGuestsDialogBody({
+export function RemoveGuestsDialog({
   onOpenChange,
   workspace,
   guests,

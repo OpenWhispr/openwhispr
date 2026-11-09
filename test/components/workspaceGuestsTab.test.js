@@ -340,7 +340,6 @@ test("remove asks first, then removes and reloads", async (t) => {
   assert.equal(globalThis.__removeProps, undefined);
   await React.act(async () => propsOf(item(`${KEY}.menu.remove`)).onSelect());
   const props = globalThis.__removeProps;
-  assert.equal(props.open, true);
   assert.deepEqual(
     props.guests.map((g) => g.email),
     ["jin@x.com"]
@@ -815,13 +814,6 @@ test("a × refused for SSO says to sign in with SSO", async (t) => {
 test("a × the server refused shows its reason", async (t) => {
   const toasts = await toastsAfter(t, "refused", "Not today");
   assert.equal(toasts[0].title, "Not today");
-});
-
-test("a × for a note that is gone reloads instead of toasting", async (t) => {
-  const toasts = await toastsAfter(t, "gone");
-  assert.equal(toasts.length, 0);
-  assert.equal(globalThis.__reloads, 1);
-  assert.deepEqual(globalThis.__droppedNotes, []);
 });
 
 test("a connection failure still blames the connection", async (t) => {

@@ -146,12 +146,11 @@ function WorkspaceGuestsBody({
       const failure = classifyRowActionError(caught);
       const workspaceName = isolate(workspace.name);
       if (
-        failure.kind === "gone" ||
-        (caught instanceof CloudApiError &&
-          caught.status === 404 &&
-          caught.message === "Note not found")
+        caught instanceof CloudApiError &&
+        caught.status === 404 &&
+        caught.message === "Note not found"
       ) {
-        // The note (or the guest's access) is already gone; the reload corrects the row.
+        // The note is already gone; the reload corrects the row.
         void reload();
         return false;
       }
@@ -220,7 +219,6 @@ function WorkspaceGuestsBody({
       ) : null}
       {removing ? (
         <RemoveGuestsDialog
-          open
           onOpenChange={(open) => {
             if (!open) setRemoving(null);
           }}

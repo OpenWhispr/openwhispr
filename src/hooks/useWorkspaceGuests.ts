@@ -57,7 +57,7 @@ export function useWorkspaceGuests(workspaceId: string): WorkspaceGuestsState {
     // nothing to show falls back to Failed.
     setSlot((previous) =>
       !guests && previous && previous.workspaceId === target && previous.guests
-        ? { ...previous, error }
+        ? previous
         : { workspaceId: target, guests, error }
     );
   }, []);

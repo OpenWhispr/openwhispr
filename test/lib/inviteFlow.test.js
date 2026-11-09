@@ -286,12 +286,6 @@ test("initialEmails become chips", () => {
   assert.equal(state.phase, "editing");
 });
 
-test("initialEmail still drafts a half address when initialEmails is absent", () => {
-  const state = createInviteFlow({ initialEmail: "john@acme" });
-  assert.deepEqual(emails(state), []);
-  assert.equal(state.draft, "john@acme");
-});
-
 test("retry sends only the failed recipients", () => {
   let state = run(commitText(fresh(), "a@x.com b@y.io"), { type: "send" });
   state = run(

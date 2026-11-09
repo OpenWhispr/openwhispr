@@ -138,11 +138,9 @@ test("a failed reload keeps the last list", async (t) => {
     state().guests.map((g) => g.email),
     ["a@x.com"]
   );
-  assert.deepEqual(state().error, { kind: "failed" });
 
   globalThis.__guestListImpl = async () => [guest("b@x.com")];
   await React.act(async () => state().reload());
-  assert.equal(state().error, null);
   assert.deepEqual(
     state().guests.map((g) => g.email),
     ["b@x.com"]

@@ -87,7 +87,6 @@ async function loadDialog(t) {
     await React.act(async () =>
       root.render(
         React.createElement(RemoveGuestsDialog, {
-          open: true,
           onOpenChange: (open) => openChanges.push(open),
           workspace: WORKSPACE,
           guests,
