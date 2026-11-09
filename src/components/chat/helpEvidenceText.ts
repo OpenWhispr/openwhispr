@@ -1,4 +1,5 @@
-import registry from "../../models/modelRegistryData.json";
+import bundledCatalog from "../../models/modelRegistryData.json";
+import { withAppTranscriptionProviders } from "../../models/appTranscriptionProviders.js";
 import type { TFunction } from "i18next";
 import { formatHotkeyListLabel } from "../../utils/hotkeys";
 import type { HelpEvidenceData } from "./helpEvidence";
@@ -58,6 +59,7 @@ const factValues: Record<string, string> = {
   providers: "settingsPage.aiModels.modes.providers",
 };
 
+const registry = withAppTranscriptionProviders(bundledCatalog);
 const providerNames = new Map(
   [
     ...registry.transcriptionProviders,

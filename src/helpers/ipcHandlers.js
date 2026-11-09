@@ -68,14 +68,12 @@ const {
   createConnectorAuthLookup,
 } = require("./connectors/connectorIpc");
 const { createNoteAttendeesLookup, searchContacts } = require("./connectors/contactSearch");
-// The renderer's ModelRegistry is not main-loadable; the raw registry data is
-// packaged, and the route resolver only needs {id, baseUrl} per provider.
-const transcriptionProviderBaseUrls = () =>
-  require("../models/modelRegistryData.json").transcriptionProviders;
+// The renderer's ModelRegistry is not main-loadable; the route resolver only
+// needs {id, baseUrl} per provider.
+const transcriptionProviderBaseUrls = () => modelRegistryData.transcriptionProviders;
 // Classified errors show the provider's display name; routes only carry its id.
 const transcriptionProviderName = (id) =>
-  require("../models/modelRegistryData.json").transcriptionProviders.find((p) => p.id === id)
-    ?.name || id;
+  modelRegistryData.transcriptionProviders.find((p) => p.id === id)?.name || id;
 // ipcMain.handle keeps only the message when a promise rejects, dropping custom
 // props — proxy handlers return the classified fields so the renderer can
 // rebuild the error.
