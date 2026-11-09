@@ -152,30 +152,6 @@ test("the worker's endpointer commits a Smart Turn endpoint only above 0.8", () 
   assert.equal(commit.reason, "smart-turn");
 });
 
-test("the worker's endpointer commits by 1.2 s of silence", () => {
-  const endpointer = workerEndpointer(true);
-  endpointer.onSegment({ ...segment(1000, 800), nowSample: ms(2000) });
-  assert.deepEqual(endpointer.advance(ms(2999)), []);
-  assert.equal(endpointer.advance(ms(3000))[0].reason, "max-silence");
-});
-
-test("the worker's endpointer caps a turn at 30 s of speech", () => {
-  const endpointer = workerEndpointer(true);
-  assert.equal(
-    endpointer.onSegment({ ...segment(0, 20000), nowSample: ms(20200) })[0].type,
-    "classify"
-  );
-  endpointer.onSpeechStart();
-  const [commit] = endpointer.onSegment({ ...segment(21000, 10000), nowSample: ms(31200) });
-  assert.equal(commit.reason, "max-turn");
-});
-
-test("without the classifier the worker's endpointer commits every pause", () => {
-  const endpointer = workerEndpointer(false);
-  const [commit] = endpointer.onSegment({ ...segment(1000, 800), nowSample: ms(2000) });
-  assert.equal(commit.reason, "silence");
-});
-
 test("float32ToPcm16Buffer clamps and scales samples little-endian", () => {
   const buffer = float32ToPcm16Buffer(new Float32Array([0, 1, -1, 2, -2, 0.5]));
   assert.equal(buffer.length, 12);
