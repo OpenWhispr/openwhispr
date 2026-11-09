@@ -2542,6 +2542,10 @@
         "description": "Los espacios de trabajo te permiten colaborar con compañeros y compartir notas.",
         "create": "Crear espacio de trabajo"
       },
+      "personal": {
+        "title": "Estás en Personal",
+        "description": "Elige un espacio de trabajo para gestionar su configuración."
+      },
       "loadError": {
         "title": "No se pudieron cargar los espacios de trabajo",
         "description": "Comprueba tu conexión e inténtalo de nuevo.",
@@ -4232,6 +4236,7 @@
       },
       "locked": {
         "noWorkspace": "Los diccionarios compartidos están incluidos en Business. Comparte con todos la jerga, los nombres de productos y las siglas de tu equipo.",
+        "chooseWorkspace": "Estás en Personal. Cambia a un espacio de trabajo para usar sus palabras compartidas.",
         "upgradeAdmin": "Los diccionarios compartidos están incluidos en Business. Mejora el plan de {{workspace}} para que todos tengan las mismas palabras.",
         "upgradeMember": "Los diccionarios compartidos están incluidos en Business. Pide a un administrador que mejore el plan de {{workspace}}.",
         "paused_one": "La {{count}} palabra compartida de {{workspace}} está en pausa. Cámbiate a Business para volver a usarla al dictar.",

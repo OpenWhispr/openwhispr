@@ -1751,6 +1751,10 @@
         "description": "Les espaces de travail vous permettent de collaborer et partager des notes.",
         "create": "Créer un espace"
       },
+      "personal": {
+        "title": "Vous êtes dans Personnel",
+        "description": "Choisissez un espace de travail pour gérer ses paramètres."
+      },
       "loadError": {
         "title": "Impossible de charger les espaces de travail",
         "description": "Vérifiez votre connexion et réessayez.",
@@ -4732,6 +4736,7 @@
       },
       "locked": {
         "noWorkspace": "Les dictionnaires partagés sont inclus dans Business. Partagez avec tout le monde le jargon, les noms de produits et les acronymes de votre équipe.",
+        "chooseWorkspace": "Vous êtes dans Personnel. Passez à un espace de travail pour utiliser ses mots partagés.",
         "upgradeAdmin": "Les dictionnaires partagés sont inclus dans Business. Passez {{workspace}} à un forfait supérieur pour que tout le monde ait les mêmes mots.",
         "upgradeMember": "Les dictionnaires partagés sont inclus dans Business. Demandez à un administrateur de faire passer {{workspace}} à un forfait supérieur.",
         "paused_one": "Le {{count}} mot partagé de {{workspace}} est en pause. Passez à Business pour l'utiliser à nouveau en dictée.",
