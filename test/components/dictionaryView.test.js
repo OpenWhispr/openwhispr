@@ -20,6 +20,9 @@ const MOCKS = {
   `,
   "/stores/settingsStore": `
     export const getSettings = () => globalThis.__settings;
+    // Local dictation always gets the dictionary, so the OpenRouter notice stays hidden.
+    export const selectPolicyEffectiveSettings = () => ({ useLocalWhisper: true });
+    export const useSettingsStore = (selector) => selector({});
   `,
   "/hooks/useWorkspace": `
     export function useWorkspace() {

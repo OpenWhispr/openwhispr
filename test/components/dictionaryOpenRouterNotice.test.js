@@ -40,7 +40,9 @@ async function mountDictionary(t) {
     mockModules: {
       "react-i18next": `
         const t = (key) => key;
-        export function useTranslation() { return { t }; }
+        export function useTranslation() {
+          return { t, i18n: { language: "en", dir: () => "ltr" } };
+        }
         export const initReactI18next = { type: "3rdParty", init() {} };
       `,
       "/hooks/useSettings": `
