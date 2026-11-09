@@ -11,7 +11,8 @@ const load = () => import("../../src/models/ModelRegistry.ts");
 
 test("the registry offers Deepgram via OpenRouter to Upload only", async () => {
   const { getTranscriptionProviders, getDictationTranscriptionProviders } = await load();
-  const { isUploadOnlyTranscriptionModel } = await import("../../src/stores/policyRules.ts");
+  const { isUploadOnlyTranscriptionModel } =
+    await import("../../src/models/appTranscriptionProviders.js");
   const ids = (providers) =>
     providers.find((provider) => provider.id === "openrouter").models.map((model) => model.id);
 

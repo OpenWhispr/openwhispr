@@ -851,10 +851,6 @@ export function acceptsUnlistedTranscriptionModel(providerId: string, modelId: s
   return providerId === "openrouter" && modelId.includes("/");
 }
 
-// An upload-only model is listed, so the unlisted pass-through above must not
-// keep it on a screen that leaves it out.
-export { isUploadOnlyTranscriptionModel };
-
 export function reconcileCloudProviderSelection({
   selectedProvider,
   selectedModel,
@@ -874,6 +870,8 @@ export function reconcileCloudProviderSelection({
     if (
       !selected.models?.length ||
       selected.models.some((model) => model.id === selectedModel) ||
+      // An upload-only model is listed, so the unlisted pass-through must not
+      // keep it on a screen that leaves it out.
       (acceptsUnlistedTranscriptionModel(selected.id, selectedModel) &&
         !isUploadOnlyTranscriptionModel(selected.id, selectedModel))
     ) {
