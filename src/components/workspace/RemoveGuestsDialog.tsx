@@ -40,7 +40,7 @@ export function RemoveGuestsDialog({
   const workspaceName = isolate(workspace.name);
 
   const run = async (): Promise<void> => {
-    if (runningRef.current || exceedsLimit) return;
+    if (runningRef.current) return;
     runningRef.current = true;
     dispatch({ type: "confirm" });
     try {

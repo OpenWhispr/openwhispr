@@ -80,21 +80,15 @@ export function useWorkspaceGuests(workspaceId: string): WorkspaceGuestsState {
     );
   }, []);
 
-  if (!slot)
-    return { status: "loading", guests: NO_GUESTS, error: null, reload, dropGuests, dropGuestNote };
-  if (slot.guests)
-    return {
-      status: "ready",
-      guests: slot.guests,
-      error: slot.error,
-      reload,
-      dropGuests,
-      dropGuestNote,
-    };
+  const status: WorkspaceGuestsState["status"] = !slot
+    ? "loading"
+    : slot.guests
+      ? "ready"
+      : "failed";
   return {
-    status: "failed",
-    guests: NO_GUESTS,
-    error: slot.error,
+    status,
+    guests: slot?.guests ?? NO_GUESTS,
+    error: slot?.error ?? null,
     reload,
     dropGuests,
     dropGuestNote,

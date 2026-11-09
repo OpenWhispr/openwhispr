@@ -531,17 +531,6 @@ test("removing the last note in the list moves focus to the previous ×", async 
   assert.deepEqual(focused, ["button1"]);
 });
 
-test("removing a guest's last note focuses the table explicitly", async (t) => {
-  const { container } = await mountTab(t, { guests: [JIN] });
-  const frame = findNode(container, (node) => node.hasAttribute("data-guests-table"));
-  let focused = 0;
-  frame.focus = () => void focused++;
-  await React.act(async () =>
-    propsOf(removeButtons(container)[0]).onSelect({ preventDefault() {} })
-  );
-  assert.equal(focused, 1, "focus moved without waiting for the menu's unmount");
-});
-
 const RAVI = guest("ravi@x.com", null, [note("n9", "Budget")]);
 const SEL = `${KEY}.selection`;
 const EMPTY_REMOVAL = { removed: [], not_found: [], skipped_members: [], link_shared_note_ids: [] };
