@@ -180,6 +180,7 @@ import {
   buildSelectionEditUserPrompt,
   buildLocalSelectionEditSystemPrompt,
   buildLocalSelectionEditUserPrompt,
+  createSelectionCompletionMarker,
   extractLocalSelectionEditReplacement,
   SELECTION_EDIT_RESPONSE_FORMAT,
   extractSelectionEditReplacement,
@@ -3169,9 +3170,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           );
       userPrompt = buildLocalSelectionEditUserPrompt(instruction, capture.text);
     } else {
-      // End on the full nonce: models can drop decorative closing underscores.
-      // The response parser still requires this exact marker at the end.
-      completionMarker = `__OPENWHISPR_SELECTION_COMPLETE_${crypto.randomUUID()}`;
+      completionMarker = createSelectionCompletionMarker();
       selectionConfig.systemPrompt = buildSelectionEditSystemPrompt(
         withToneSentence(config?.systemPrompt),
         completionMarker

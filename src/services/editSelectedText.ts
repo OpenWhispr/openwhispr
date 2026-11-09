@@ -9,6 +9,7 @@ import {
   buildLocalSelectionEditUserPrompt,
   buildSelectionEditSystemPrompt,
   buildSelectionEditUserPrompt,
+  createSelectionCompletionMarker,
   extractLocalSelectionEditReplacement,
   extractSelectionEditReplacement,
   isSelectionQuestionResponse,
@@ -50,8 +51,7 @@ export async function editSelectedText(
     provider: target.provider,
   });
   const local = provider === "local";
-  // Ends on the full nonce, as in audioManager: models can drop decorative closing underscores.
-  const marker = local ? "" : `__OPENWHISPR_SELECTION_COMPLETE_${crypto.randomUUID()}`;
+  const marker = local ? "" : createSelectionCompletionMarker();
   const dictionary = getDictionaryHintWords(settings);
   const toneSentence = settings.toneStyleEnabled
     ? selectionEditToneSentence(resolveDictationToneStyle(settings.toneStyles, appCategory ?? null))
