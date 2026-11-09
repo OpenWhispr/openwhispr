@@ -1663,8 +1663,6 @@ test("closing cancels the captured session while native replacement is still pen
 test("the modal shows Thinking... once: in the pill, unless the streaming reply's row shows it", async (t) => {
   const view = await mountWindow(t);
   const shown = () => view.host.textContent.split("Thinking...").length - 1;
-  const inReply = () =>
-    view.host.querySelector("[data-agent-message]")?.textContent.includes("Thinking...") ?? false;
   await React.act(async () => view.main.handlers.open({ layout: "modal" }));
   await React.act(async () => view.main.handlers.hotkey({ external: false }));
   await view.settle();
@@ -1673,7 +1671,10 @@ test("the modal shows Thinking... once: in the pill, unless the streaming reply'
   assert.equal(shown(), 1, "before the reply exists, the pill shows it");
   await view.chat({ messages: [user, reply([])] });
   assert.equal(shown(), 1, "once the reply streams, only its row shows it");
-  assert.equal(inReply(), true);
+  assert.equal(
+    view.host.querySelector("[data-agent-message]")?.textContent.includes("Thinking..."),
+    true
+  );
   assert.ok(view.button("Stop"));
 
   // A selection edit adds nothing to the conversation.
