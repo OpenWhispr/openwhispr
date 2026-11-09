@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const modelRegistry = require("../../src/models/modelRegistryData.json");
+const { bundledRegistryData: modelRegistry } = require("../../src/models/registryData.js");
 
 const SRC = path.join(__dirname, "../../src");
 const LOCALES = path.join(SRC, "locales");

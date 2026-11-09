@@ -27,7 +27,7 @@ import {
   isProviderAllowedByPolicy,
 } from "../../stores/policyRules";
 import {
-  getTranscriptionProviders,
+  getDictationTranscriptionProviders,
   modelRegistry,
   type CloudProviderData,
   type TranscriptionProviderData,
@@ -244,7 +244,7 @@ export function ByokProviderStep({
   const providers = useMemo(
     () =>
       filterByokProviderOptionsByPolicy<HostedProvider>(
-        assistant ? modelRegistry.getCloudProviders() : getTranscriptionProviders(),
+        assistant ? modelRegistry.getCloudProviders() : getDictationTranscriptionProviders(),
         scope,
         policy
       ),

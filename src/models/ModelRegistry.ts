@@ -6,6 +6,7 @@ import {
 import { isCloudCleanupMode, getSettings } from "../stores/settingsStore";
 import { isSelectableTinfoilModel } from "../config/retiredCloudModelPolicy.js";
 import { getCloudModelProviders, setTinfoilModelOverlay } from "./cloudModelCatalog";
+import { isUploadOnlyTranscriptionModel } from "./appTranscriptionProviders.js";
 import { pickDefaultModelId } from "./providerDefaultModel";
 import { filterMeetingStreamingProviders } from "../helpers/meetingTranscriptionRouting";
 import type { InferenceMode } from "../types/electron";
@@ -458,6 +459,15 @@ export function getStreamingTranscriptionProviders(): TranscriptionProviderData[
     .getTranscriptionProviders()
     .map((p) => ({ ...p, models: p.models.filter((m) => m.streaming) }))
     .filter((p) => p.models.length > 0);
+}
+
+// Dictation's list (the Settings picker's and onboarding's): Upload is the
+// only screen that offers upload-only models.
+export function getDictationTranscriptionProviders(): TranscriptionProviderData[] {
+  return modelRegistry.getTranscriptionProviders().map((p) => ({
+    ...p,
+    models: p.models.filter((m) => !isUploadOnlyTranscriptionModel(p.id, m.id)),
+  }));
 }
 
 // Streaming providers note recording can actually run (see
