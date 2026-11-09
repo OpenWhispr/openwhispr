@@ -468,23 +468,28 @@ test("registry exposes availability only for a connected calendar", async () => 
 });
 
 test("availability prompt context refreshes local time without rebuilding the registry", async (t) => {
-  const { getAgentSystemPrompt } = await import("../../src/config/prompts.ts");
-  const tools = ["get_calendar_availability"];
+  const { buildMessageContext, getAgentSystemPrompt } = await import("../../src/config/prompts.ts");
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   t.mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-08-25T10:00:00Z") });
 
-  const first = getAgentSystemPrompt(tools);
+  const prompt = getAgentSystemPrompt(["get_calendar_availability"]);
+  const first = buildMessageContext();
   t.mock.timers.tick(60_000);
-  const second = getAgentSystemPrompt(tools);
+  const second = buildMessageContext();
 
-  assert.match(first, /Use get_calendar_availability when the user asks when they are free/);
-  assert.match(first, /localized date, weekday, times, and duration as authoritative/);
-  assert.match(first, /broad multi-day request without daily-hour bounds/);
+  assert.match(prompt, /Use get_calendar_availability when the user asks when they are free/);
+  assert.match(prompt, /localized date, weekday, times, and duration as authoritative/);
+  assert.match(prompt, /broad multi-day request without daily-hour bounds/);
   assert.match(
     first,
-    /Current local date and time: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}\./
+    /Current local date and time: [A-Z][a-z]+day, \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}\./
   );
   assert.ok(first.includes(`IANA time zone: ${timeZone}.`));
   assert.notEqual(first, second);
-  assert.doesNotMatch(getAgentSystemPrompt(["get_calendar_events"]), /Current local date and time/);
+});
+
+test("every message carries today's weekday", async (t) => {
+  const { buildMessageContext } = await import("../../src/config/prompts.ts");
+  t.mock.timers.enable({ apis: ["Date"], now: new Date(2026, 7, 25, 12).getTime() });
+  assert.match(buildMessageContext(), /Current local date and time: Tuesday, 2026-08-25T/);
 });

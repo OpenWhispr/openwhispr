@@ -21,15 +21,26 @@ import {
   getAuthRequestContextServerSnapshot,
   getAuthRequestContextSnapshot,
   getBoundSessionGeneration,
+  getOfflineAccount,
+  getSessionAnsweredAt,
   getValidatedAuthGeneration,
   invalidateValidatedAuthContext,
   subscribeAuthRequestContext,
 } from "../lib/authRequestContext";
+import {
+  clearOfflineAccountProfile,
+  readOfflineAccountProfile,
+  writeOfflineAccountProfile,
+} from "../lib/offlineAccountProfile";
 import logger from "../utils/logger";
 import { useSettingsStore } from "../stores/settingsStore";
 import { usePolicyStore } from "../stores/policyStore";
 import { useEnterpriseIdentityStore } from "../stores/enterpriseIdentityStore";
 import { useLeaderboardParticipationStore } from "../stores/leaderboardParticipationStore";
+
+// The offline account whose cached policy and managed config were last loaded.
+// Every useAuth consumer presents it, but its caches load once.
+let hydratedOfflineAccount: string | null = null;
 
 const useStaticSession = () => ({
   data: null,
@@ -44,19 +55,23 @@ async function loadAccountDependencies() {
     { invalidateSpaceRoster },
     { resetForAccountChange },
     { useWorkspaceStore },
+    { resetForAccountChange: resetChatForAccountChange, prepareChatAccountScope },
   ] = await Promise.all([
     import("../services/SyncService.js"),
     import("../lib/spaceRosterCache"),
     import("../stores/noteStore"),
     import("../stores/workspaceStore"),
+    import("../stores/chatTurnStore"),
   ]);
 
   const resetRendererCaches = () => {
+    resetChatForAccountChange();
+    clearOfflineAccountProfile();
     invalidateSpaceRoster();
     resetForAccountChange();
     useWorkspaceStore.getState().resetForAccountChange();
   };
-  return { syncService, resetRendererCaches };
+  return { syncService, resetRendererCaches, prepareChatAccountScope };
 }
 
 async function refreshManagedEnterpriseIdentity(accountId: string, authGeneration: number) {
@@ -93,7 +108,13 @@ export function useAuth() {
   const resolvedUserId = sessionIsBound ? ambientUserId : null;
   const rawIsSignedIn = sessionIsBound && Boolean(ambientUser);
   const gracePeriodActive = sessionIsBound && !rawIsSignedIn && isWithinGracePeriod();
-  const sessionResolutionFailed = Boolean(sessionError) || (!isPending && !sessionIsBound);
+  // A bound session whose refetch failed keeps its binding, but only a new
+  // answer from the server may validate it again. Better Auth clears
+  // sessionError as soon as the next refetch starts, so this is the signal.
+  const sessionRefetchFailed =
+    sessionIsBound && authContext.refetchFailedGeneration === boundGeneration;
+  const sessionResolutionFailed =
+    Boolean(sessionError) || (!isPending && !sessionIsBound) || sessionRefetchFailed;
   const requiresReconciliation = sessionIsBound
     ? accountScopeRequiresReconciliation(resolvedUserId)
     : true;
@@ -110,20 +131,33 @@ export function useAuth() {
     ) ||
     !cloudContextReady;
   // A reconciled session whose refetch failed transiently keeps its binding but
-  // loses its validated lease. Keep presenting it instead of flashing to guest;
-  // sync stays fenced by getValidatedAuthGeneration() until a refetch succeeds.
+  // loses its validated lease. Keep presenting it (read-only) instead of
+  // flashing to guest until reconciliation validates the next server answer.
   const transientlyAuthenticated =
-    Boolean(sessionError) &&
-    rawIsSignedIn &&
-    !requiresReconciliation &&
-    !accountScopeHasMandatoryReconciliation();
+    !cloudContextReady && !requiresReconciliation && !accountScopeHasMandatoryReconciliation();
   const accountScopePresentable = !accountScopeBlocked || transientlyAuthenticated;
-  const isSignedIn = rawIsSignedIn && accountScopePresentable;
+  // With no session answer (an offline launch, or the auth server down), main's
+  // binding vouches for the bearer on disk, so the last validated account is
+  // presented read-only, and kept once the server answers until reconciliation
+  // validates the session. Nothing validates the generation meanwhile, so sync
+  // and cloud API calls stay fenced. Not gated on isPending: Better Auth sets
+  // it for every refetch while it holds no session.
+  const offlineCandidate = sessionIsBound && accountScopePresentable ? null : getOfflineAccount();
+  const offlineProfile =
+    offlineCandidate && !accountScopeRequiresReconciliation(offlineCandidate.userId)
+      ? readOfflineAccountProfile(offlineCandidate.userId)
+      : null;
+  const offlineAccount =
+    offlineCandidate && offlineProfile ? { ...offlineCandidate, profile: offlineProfile } : null;
+  const offlineUserId = offlineAccount?.userId ?? null;
+  const offlineGeneration = offlineAccount?.generation ?? null;
+  const isSignedIn = (rawIsSignedIn && accountScopePresentable) || offlineAccount != null;
+  const validatedUser = rawIsSignedIn && cloudContextReady ? ambientUser : null;
   // Loaded means the session settled: fully validated, or failed/signed-out
   // (presented as a guest). Resolution failure must not hold windows hostage —
   // dictation works without an account, and sync stays fenced by
   // hasValidatedAuthContext either way.
-  const isLoaded = !isPending && (sessionResolutionFailed || !accountScopeBlocked);
+  const isLoaded = isSignedIn || (!isPending && (sessionResolutionFailed || !accountScopeBlocked));
 
   useEffect(() => {
     if (!gracePeriodActive) return;
@@ -133,10 +167,24 @@ export function useAuth() {
     return () => window.clearTimeout(timer);
   }, [gracePeriodActive]);
 
+  // Saved when a session validates, stamped with the server's last answer (a
+  // reconciliation retry is no new answer), so its age bounds how long an
+  // offline device keeps presenting an account the server may have revoked.
+  // Later answers refresh it in authRequestContext.
   useEffect(() => {
-    if (!sessionError) return;
-    invalidateValidatedAuthContext();
-  }, [sessionError]);
+    const answeredAt = getSessionAnsweredAt();
+    if (validatedUser && answeredAt != null) writeOfflineAccountProfile(validatedUser, answeredAt);
+  }, [validatedUser]);
+
+  useEffect(() => {
+    if (!offlineUserId || offlineGeneration == null) return;
+    const key = `${offlineUserId}:${offlineGeneration}`;
+    if (hydratedOfflineAccount === key) return;
+    hydratedOfflineAccount = key;
+    // Main serves both from its caches for this account and credential.
+    void usePolicyStore.getState().fetchPolicy(offlineUserId, offlineGeneration);
+    void refreshManagedEnterpriseIdentity(offlineUserId, offlineGeneration);
+  }, [offlineUserId, offlineGeneration]);
 
   useEffect(() => {
     if (!sessionResolutionFailed || !resolvedUserId || boundGeneration == null) return;
@@ -161,7 +209,10 @@ export function useAuth() {
 
     let cancelled = false;
     const run = async () => {
-      const { syncService, resetRendererCaches } = await loadAccountDependencies();
+      const { syncService, resetRendererCaches, prepareChatAccountScope } =
+        await loadAccountDependencies();
+      if (getAuthRequestContextSnapshot().observedGeneration !== boundGeneration) return;
+      prepareChatAccountScope(resolvedUserId);
       const scopeResult = await window.electronAPI?.setActiveAccountScope?.(
         resolvedUserId,
         boundGeneration
@@ -247,7 +298,9 @@ export function useAuth() {
     isGracePeriodOnly: gracePeriodActive,
     isLoaded,
     session: sessionIsBound && accountScopePresentable ? ambientSession : null,
-    user: isSignedIn ? ambientUser : null,
+    user: offlineAccount ? offlineAccount.profile : isSignedIn ? ambientUser : null,
+    // Shown without a validated session: account changes and sync are paused.
+    isOfflineAccount: offlineAccount != null || transientlyAuthenticated,
     refetch,
   };
 }

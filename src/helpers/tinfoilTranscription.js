@@ -1,5 +1,5 @@
 const debugLogger = require("./debugLogger");
-const modelRegistryData = require("../models/modelRegistryData.json");
+const { registryData: modelRegistryData } = require("../models/registryData.js");
 const { tinfoilSecureFetch } = require("./tinfoilSecureClient");
 const {
   PROVIDER_ERROR_CODES,

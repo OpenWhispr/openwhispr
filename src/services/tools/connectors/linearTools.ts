@@ -159,10 +159,6 @@ export const linearSearchIssuesTool: ToolDefinition = {
     args: Record<string, unknown>,
     context?: ToolExecutionContext
   ): Promise<ToolResult> {
-    // A search is usually followed by a question for the user ("which team?",
-    // "which of these?"), and its answer is built from other people's text, so
-    // it stays in the panel whatever it finds, like find_contact.
-    context?.onHoldDelivery();
     const checked = searchArgs(args);
     if (isToolResult(checked)) return checked;
     if (needsReconnectNow("linear")) return linearReconnectResult();
@@ -203,9 +199,6 @@ export const linearCreateIssueTool: ToolDefinition = {
     args: Record<string, unknown>,
     context?: ToolExecutionContext
   ): Promise<ToolResult> {
-    // Every outcome keeps the turn off the caret: a card, a question back and
-    // a receipt all belong in the panel, never in the user's document.
-    context?.onHoldDelivery();
     const checked = createArgs(args);
     if (isToolResult(checked)) return checked;
     if (needsReconnectNow("linear")) return linearReconnectResult();
@@ -239,7 +232,6 @@ export const linearCommentTool: ToolDefinition = {
     args: Record<string, unknown>,
     context?: ToolExecutionContext
   ): Promise<ToolResult> {
-    context?.onHoldDelivery();
     const checked = commentArgs(args);
     if (isToolResult(checked)) return checked;
     if (needsReconnectNow("linear")) return linearReconnectResult();

@@ -1,3 +1,4 @@
+import { useRegistryVersion } from "../../hooks/useRegistryVersion";
 import { useState, useRef, useEffect, useId } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -48,6 +49,7 @@ import { describeProviderError } from "../../utils/describeProviderError";
 import {
   getAllReasoningModels,
   getBatchTranscriptionModel,
+  getTranscriptionProvider,
   getParakeetModelInfo,
   getTranscriptionProviders,
   isSherpaLocalProvider,
@@ -77,9 +79,18 @@ import { MAX_SPEAKER_COUNT } from "../../constants/speakerDetection.json";
 import BatchQueueView from "./BatchQueueView";
 import { generateNoteTitle } from "../../utils/generateTitle";
 import { getBaseLanguageCode } from "../../utils/languageSupport";
-import { isAudioFeatureAllowed, isTranscriptionContextAllowed } from "../../stores/policyRules";
+import {
+  isAudioFeatureAllowed,
+  isAudioFeatureDenied,
+  isTranscriptionContextAllowed,
+  transcriptionChoiceRefusal,
+} from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
-import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
+import {
+  usePolicySnapshot,
+  useTranscriptionChoiceRefusal,
+  useTranscriptionContextAllowed,
+} from "../../hooks/usePolicy";
 import {
   byokFileSizeLimit,
   resolveTranscriptionRoute,
@@ -147,6 +158,7 @@ interface UploadAudioViewProps {
 }
 
 export default function UploadAudioView({ onNoteCreated, onOpenSettings }: UploadAudioViewProps) {
+  useRegistryVersion();
   const { t } = useTranslation();
   const [state, setState] = useState<UploadState>("idle");
   const [file, setFile] = useState<{
@@ -311,6 +323,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     )
   );
   const uploadAllowedByPolicy = useTranscriptionContextAllowed("upload");
+  const uploadChoiceRefusal = useTranscriptionChoiceRefusal("upload");
   // The org's upload switch, which the banner explains and the inputs follow.
   const uploadFeatureAllowed = isAudioFeatureAllowed(policyState, "upload");
   const uploadRestrictionId = useId();
@@ -487,19 +500,24 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         }
         return;
       }
-      if (isSherpaLocalProvider(localTranscriptionProvider)) {
-        const r = await window.electronAPI.listParakeetModels?.();
-        if (!cancelled)
-          setProviderReady(
-            !!(r?.success && r.models.some((m: { downloaded?: boolean }) => m.downloaded))
-          );
-      } else {
-        const r = await window.electronAPI.listWhisperModels?.();
-        if (!cancelled)
-          setProviderReady(
-            !!(r?.success && r.models.some((m: { downloaded?: boolean }) => m.downloaded))
-          );
+      const sherpa = isSherpaLocalProvider(localTranscriptionProvider);
+      const r = sherpa
+        ? await window.electronAPI.listParakeetModels?.()
+        : await window.electronAPI.listWhisperModels?.();
+      let ready = !!(r?.success && r.models.some((m: { downloaded?: boolean }) => m.downloaded));
+      // The lists hold offered models only; a retired model still on disk keeps running.
+      const selected = sherpa
+        ? localTranscriptionProvider === "cohere"
+          ? cohereModel
+          : parakeetModel
+        : whisperModel;
+      if (!ready && selected) {
+        const status = sherpa
+          ? await window.electronAPI.checkParakeetModelStatus?.(selected)
+          : await window.electronAPI.checkModelStatus?.(selected);
+        ready = !!status?.downloaded;
       }
+      if (!cancelled) setProviderReady(ready);
     };
     checkProviderReady();
     return () => {
@@ -512,6 +530,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     remoteTranscriptionUrl,
     useLocalWhisper,
     localTranscriptionProvider,
+    whisperModel,
+    parakeetModel,
+    cohereModel,
     cloudTranscriptionProvider,
     cloudTranscriptionBaseUrl,
     openaiApiKey,
@@ -533,6 +554,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       return `${enterpriseProviderName(managed.provider)} · ${managed.model}`;
     if (isOpenWhisprCloud) return t("notes.upload.openwhisprCloud");
     if (useLocalWhisper) {
+      if (uploadChoiceRefusal) return t("models.policy.chooseModel");
       if (localTranscriptionProvider === "nvidia")
         return getParakeetModelInfo(parakeetModel)?.name ?? parakeetModel;
       if (localTranscriptionProvider === "cohere") return `Cohere · ${cohereModel || "default"}`;
@@ -546,7 +568,13 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       cloudTranscriptionProvider === "custom"
         ? t("notes.upload.custom")
         : cloudTranscriptionProvider.charAt(0).toUpperCase() + cloudTranscriptionProvider.slice(1);
-    const model = getBatchTranscriptionModel(cloudTranscriptionProvider) ?? cloudTranscriptionModel;
+    // Same rule as the upload itself: the batch model replaces only a streaming selection.
+    const batchModel = getBatchTranscriptionModel(cloudTranscriptionProvider);
+    const selectedId = cloudTranscriptionModel?.trim();
+    const selected = getTranscriptionProvider(cloudTranscriptionProvider)?.models.find(
+      (option) => option.id === selectedId
+    );
+    const model = batchModel && (!selected || selected.streaming) ? batchModel : selectedId;
     return `${name} · ${model}`;
   };
 
@@ -695,7 +723,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   };
   useEffect(() => {
     return usePolicyStore.subscribe((policy) => {
-      if (isAudioFeatureAllowed(policy, "upload")) return;
+      if (!isAudioFeatureDenied(policy, "upload")) return;
       const active = activeRequestIdRef.current || singleDownloadIdRef.current;
       runIdRef.current++;
       if (active) {
@@ -725,7 +753,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       !isManagedTranscriptionActive() &&
       !isTranscriptionContextAllowed(policy, getSettings(), "upload")
     ) {
-      setError(t("common.managedByOrg"));
+      const refusal = transcriptionChoiceRefusal(policy, getSettings(), "upload");
+      setError(t(refusal?.messageKey ?? "common.managedByOrg"));
+      setState("error");
       return;
     }
     const currentFile = file;
@@ -984,7 +1014,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       !isManagedTranscriptionActive() &&
       !isTranscriptionContextAllowed(policy, getSettings(), "upload")
     ) {
-      setSkippedNotice(t("common.managedByOrg"));
+      const refusal = transcriptionChoiceRefusal(policy, getSettings(), "upload");
+      setSkippedNotice(t(refusal?.messageKey ?? "common.managedByOrg"));
       return;
     }
     setSkippedNotice(null);
@@ -1053,7 +1084,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 py-8 shrink-0 my-auto")}
         style={{ animation: "float-up 0.4s ease-out" }}
       >
-        {!uploadFeatureAllowed && (
+        {(!uploadFeatureAllowed || (!uploadAllowedByPolicy && uploadChoiceRefusal)) && (
           <p
             id={uploadRestrictionId}
             role="status"
@@ -1063,7 +1094,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               aria-hidden="true"
               className="w-3.5 h-3.5 shrink-0 text-amber-600 dark:text-warning"
             />
-            {t(uploadRestrictionKey(policyState))}
+            {t(uploadChoiceRefusal?.messageKey ?? uploadRestrictionKey(policyState))}
           </p>
         )}
         {state === "idle" && providerReady === false && (
@@ -1325,7 +1356,17 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         )}
 
         {state === "error" && error && (
-          <ErrorView t={t} error={error} reset={reset} onRetry={handleRetry} />
+          <ErrorView
+            t={t}
+            error={error}
+            reset={reset}
+            onRetry={handleRetry}
+            onOpenSettings={
+              onOpenSettings && !uploadAllowedByPolicy && uploadChoiceRefusal
+                ? () => onOpenSettings("uploadTranscription")
+                : undefined
+            }
+          />
         )}
 
         {(state === "idle" || state === "selected") && (
@@ -1978,9 +2019,10 @@ interface ErrorViewProps {
   error: string;
   reset: () => void;
   onRetry: () => void;
+  onOpenSettings?: () => void;
 }
 
-function ErrorView({ t, error, reset, onRetry }: ErrorViewProps) {
+function ErrorView({ t, error, reset, onRetry, onOpenSettings }: ErrorViewProps) {
   return (
     <div className="flex flex-col gap-4" style={{ animation: "float-up 0.3s ease-out" }}>
       <div className="flex items-start gap-3 rounded-2xl border border-destructive/20 bg-destructive/5 p-4 dark:bg-destructive/10">
@@ -1996,9 +2038,15 @@ function ErrorView({ t, error, reset, onRetry }: ErrorViewProps) {
       </div>
 
       <div className="flex items-center justify-center gap-2">
-        <Button onClick={onRetry} className={PRIMARY_ACTION_CLASS}>
-          {t("notes.upload.retry")}
-        </Button>
+        {onOpenSettings ? (
+          <Button onClick={onOpenSettings} className={PRIMARY_ACTION_CLASS}>
+            {t("notes.upload.noProviderAction")}
+          </Button>
+        ) : (
+          <Button onClick={onRetry} className={PRIMARY_ACTION_CLASS}>
+            {t("notes.upload.retry")}
+          </Button>
+        )}
         <Button variant="ghost" onClick={reset} className={SECONDARY_ACTION_CLASS}>
           {t("notes.upload.startOver")}
         </Button>

@@ -1,6 +1,11 @@
+import { forgetHeldSpaces, isSpaceHeld } from "../lib/heldSpaceDeletes";
+import { forgetHeldTeams } from "../lib/heldTeamDeletes";
 import { create } from "zustand";
 import { syncService } from "../services/SyncService.js";
-import { resolveRendererCloudNoteCreateBatch } from "../services/noteCreateAck";
+import {
+  recordNoteCreateAttempts,
+  resolveRendererCloudNoteCreateBatch,
+} from "../services/noteCreateAck";
 import {
   createClearedAccountNoteState,
   invalidateKeyedLoadGenerations,
@@ -434,8 +439,9 @@ export async function loadSpaces(): Promise<SpaceItem[]> {
   const items = (await window.electronAPI.getSpaces?.()) ?? [];
   // A newer load may have resolved first.
   if (gen !== spacesLoadGeneration) return items;
-  useNoteStore.setState({ spaces: items });
-  return items;
+  const visible = items.filter((space) => !isSpaceHeld(space.id));
+  useNoteStore.setState({ spaces: visible });
+  return visible;
 }
 
 export async function loadFolders(): Promise<FolderItem[]> {
@@ -451,7 +457,11 @@ export async function loadFolders(): Promise<FolderItem[]> {
     if (c.folder_id != null) folderCounts[c.folder_id] = c.count;
     else if (c.space_id != null) spaceRootCounts[c.space_id] = c.count;
   });
-  useNoteStore.setState({ folders: items, folderCounts, spaceRootCounts });
+  useNoteStore.setState({
+    folders: items.filter((folder) => !isSpaceHeld(folder.space_id)),
+    folderCounts,
+    spaceRootCounts,
+  });
   return items;
 }
 
@@ -488,6 +498,9 @@ export function resetForAccountChange(): void {
   accountGeneration += 1;
   pendingFolderPreset = null;
   purgeDisplacedNote = null;
+  hiddenSpaces.clear();
+  forgetHeldSpaces();
+  forgetHeldTeams();
 
   invalidateKeyedLoadGenerations(containerLoadGenerations);
   containerLoadsInFlight.clear();
@@ -517,9 +530,15 @@ export async function loadContainerNotes(
       kind === "f"
         ? ((await window.electronAPI.getNotes(noteType, limit, id)) ?? [])
         : ((await window.electronAPI.getNotes(noteType, limit, null, id)) ?? []);
-    // A newer load for this container may have resolved first.
+    // Refreshing an older open note adds another async boundary; a newer
+    // load or account reset must supersede the entire result.
+    if (containerLoadGenerations.get(key) !== gen) return items;
+    const withOpen = await withOpenNote(key, items);
     if (containerLoadGenerations.get(key) === gen) {
-      applyContainers({ ...useNoteStore.getState().notesByContainer, [key]: items });
+      applyContainers({
+        ...useNoteStore.getState().notesByContainer,
+        [key]: withOpen,
+      });
     }
     return items;
   })();
@@ -529,6 +548,51 @@ export async function loadContainerNotes(
   } finally {
     if (containerLoadsInFlight.get(key) === load) containerLoadsInFlight.delete(key);
   }
+}
+
+// The open note can sit past its container's loaded page (ensureNoteLoaded, or
+// newer notes pushing it down); a reload must not close it.
+async function withOpenNote(key: string, items: NoteItem[]): Promise<NoteItem[]> {
+  const { activeNoteId, notesByContainer } = useNoteStore.getState();
+  if (activeNoteId == null || items.some((note) => note.id === activeNoteId)) return items;
+  const open = notesByContainer[key]?.find((note) => note.id === activeNoteId);
+  if (!open) return items;
+  const refreshed = await window.electronAPI.getNote(activeNoteId);
+  const state = useNoteStore.getState();
+  if (state.activeNoteId !== activeNoteId) return items;
+  const current = state.notesByContainer[key]?.find((note) => note.id === activeNoteId);
+  // IPC updates and deletions arriving during the lookup are newer than its snapshot.
+  const note = current === open ? refreshed : current;
+  return note && !note.deleted_at && noteContainerKey(note) === key ? [...items, note] : items;
+}
+
+/**
+ * Jump navigation opens a note by id, but the notes view only shows notes in
+ * the store, and containers load their newest page. A note past it is fetched
+ * and added to its container.
+ */
+export async function ensureNoteLoaded(id: number): Promise<void> {
+  if (getNoteFromStore(id)) return;
+  const accountGen = accountGeneration;
+  const note = await window.electronAPI.getNote(id);
+  if (accountGen !== accountGeneration || !note || note.deleted_at) return;
+  const key = noteContainerKey(note);
+  await ensureContainerLoaded(key);
+  if (accountGen !== accountGeneration) return;
+  const refreshed = await window.electronAPI.getNote(id);
+  if (
+    accountGen !== accountGeneration ||
+    !refreshed ||
+    refreshed.deleted_at ||
+    noteContainerKey(refreshed) !== key
+  )
+    return;
+  const state = useNoteStore.getState();
+  if (findNoteInState(state, id)) return;
+  applyContainers({
+    ...state.notesByContainer,
+    [key]: [...(state.notesByContainer[key] ?? []), refreshed],
+  });
 }
 
 export async function ensureContainerLoaded(key: string): Promise<NoteItem[]> {
@@ -665,9 +729,8 @@ export function addNote(note: NoteItem): void {
   const items = state.notesByContainer[key];
   // Not-yet-loaded containers pick the note up on their lazy load.
   if (!items) return;
-  const next = [note, ...items.filter((existing) => existing.id !== note.id)].slice(
-    0,
-    currentLimit
+  const next = [note, ...items.filter((existing) => existing.id !== note.id)].filter(
+    (existing, index) => index < currentLimit || existing.id === state.activeNoteId
   );
   applyContainers({ ...state.notesByContainer, [key]: next });
 }
@@ -693,7 +756,9 @@ export function updateNoteInStore(note: NoteItem): void {
   }
   const target = notesByContainer[targetKey];
   if (target && !target.some((existing) => existing.id === note.id)) {
-    notesByContainer[targetKey] = [note, ...target].slice(0, currentLimit);
+    notesByContainer[targetKey] = [note, ...target].filter(
+      (existing, index) => index < currentLimit || existing.id === state.activeNoteId
+    );
     changed = true;
   }
   if (changed) applyContainers(notesByContainer);
@@ -720,6 +785,14 @@ export function removeNote(id: number): void {
 let purgeDisplacedNote: { spaceId: number; title: string | null; at: number } | null = null;
 const PURGE_DISPLACED_NOTE_TTL_MS = 30_000;
 
+// What a held delete took out of state, for the real purge that follows: by then the store no
+// longer lists the space, and its cleanup still has to find everything that belonged to it.
+const hiddenSpaces = new Map<number, { cloudSpaceId: string | null; folderIds: number[] }>();
+
+export function getAccountGeneration(): number {
+  return accountGeneration;
+}
+
 export function readPurgeDisplacedNote(spaceId: number): { title: string | null } | null {
   const memo = purgeDisplacedNote;
   if (!memo || memo.spaceId !== spaceId || Date.now() - memo.at > PURGE_DISPLACED_NOTE_TTL_MS) {
@@ -729,13 +802,19 @@ export function readPurgeDisplacedNote(spaceId: number): { title: string | null 
   return { title: memo.title };
 }
 
-function handleSpacePurged(spaceId: number): void {
+// `holding`: a held delete, which may yet be undone. Only the view goes, so what isn't the view's
+// (unresolved conflicts, which gate the next push) stays until the purge is real.
+function handleSpacePurged(spaceId: number, { holding = false } = {}): void {
   const state = useNoteStore.getState();
-  const purgedCloudSpaceId = state.spaces.find((s) => s.id === spaceId)?.cloud_space_id ?? null;
+  const hidden = hiddenSpaces.get(spaceId);
+  if (!holding) hiddenSpaces.delete(spaceId);
+  const purgedCloudSpaceId =
+    state.spaces.find((s) => s.id === spaceId)?.cloud_space_id ?? hidden?.cloudSpaceId ?? null;
   const removedKeys = new Set<string>([spaceContainerKey(spaceId)]);
   state.folders.forEach((f) => {
     if (f.space_id === spaceId) removedKeys.add(folderContainerKey(f.id));
   });
+  hidden?.folderIds.forEach((id) => removedKeys.add(folderContainerKey(id)));
 
   const teardown = teardownNoteContainers(state, removedKeys);
   const folderCounts = { ...state.folderCounts };
@@ -759,13 +838,15 @@ function handleSpacePurged(spaceId: number): void {
   });
   const shareByCloudId = new Map(state.shareByCloudId);
   purgedCloudIds.forEach((id) => shareByCloudId.delete(id));
-  const noteConflicts = Object.fromEntries(
-    Object.entries(state.noteConflicts).filter(
-      ([clientId, cloudNote]) =>
-        !purgedClientIds.has(clientId) &&
-        (purgedCloudSpaceId == null || cloudNote.space_id !== purgedCloudSpaceId)
-    )
-  );
+  const noteConflicts = holding
+    ? state.noteConflicts
+    : Object.fromEntries(
+        Object.entries(state.noteConflicts).filter(
+          ([clientId, cloudNote]) =>
+            !purgedClientIds.has(clientId) &&
+            (purgedCloudSpaceId == null || cloudNote.space_id !== purgedCloudSpaceId)
+        )
+      );
   Object.keys(state.noteConflicts).forEach((clientId) => {
     if (!(clientId in noteConflicts)) removeNoteConflictId(clientId);
   });
@@ -785,7 +866,7 @@ function handleSpacePurged(spaceId: number): void {
     extra.activeNoteId = null;
     // Only synced rows are deleted by the purge; dirty rows relocate to
     // Personal and already announce themselves with a titled toast.
-    if (activeNote.sync_status === "synced" && activeNote.cloud_id) {
+    if (!holding && activeNote.sync_status === "synced" && activeNote.cloud_id) {
       purgeDisplacedNote = { spaceId, title: activeNote.title, at: Date.now() };
     }
   }
@@ -813,6 +894,54 @@ function handleSpacePurged(spaceId: number): void {
       void loadContainerNotes(privateRootKey);
     }
   }
+}
+
+/**
+ * Takes a space whose delete is being held out of the view, as its purge would, while its rows stay
+ * on this device. The result brings it back; `reopen` also returns to where the person was, unless
+ * they have since gone elsewhere.
+ */
+export function hideSpaceInView(spaceId: number): (reopen: boolean) => Promise<void> {
+  const before = useNoteStore.getState();
+  const { activeContext, expandedContainers } = before;
+  const openNote =
+    before.activeNoteId != null ? findNoteInState(before, before.activeNoteId) : null;
+  const noteToReopen = openNote?.space_id === spaceId ? openNote : null;
+  const contextToReopen = activeContext?.spaceId === spaceId ? activeContext : null;
+  const workspaceAtHide = useWorkspaceStore.getState().activeWorkspaceId;
+  hiddenSpaces.set(spaceId, {
+    cloudSpaceId: before.spaces.find((s) => s.id === spaceId)?.cloud_space_id ?? null,
+    folderIds: before.folders.filter((f) => f.space_id === spaceId).map((f) => f.id),
+  });
+  handleSpacePurged(spaceId, { holding: true });
+  const hiddenState = useNoteStore.getState();
+  const fallback = hiddenState.activeContext;
+  const expandedHere = [...expandedContainers].filter(
+    (key) => !hiddenState.expandedContainers.has(key)
+  );
+
+  return async (reopen) => {
+    hiddenSpaces.delete(spaceId);
+    await Promise.all([loadSpaces(), loadFolders()]);
+    if (!reopen) return;
+    const now = useNoteStore.getState();
+    const expanded = new Set([...now.expandedContainers, ...expandedHere]);
+    persistExpandedContainers(expanded);
+    useNoteStore.setState({ expandedContainers: expanded });
+    const stayed =
+      now.activeContext === fallback &&
+      useWorkspaceStore.getState().activeWorkspaceId === workspaceAtHide;
+    if (!stayed) return;
+    if (contextToReopen) setActiveContext(contextToReopen.spaceId, contextToReopen.folderId);
+    if (noteToReopen && now.activeNoteId == null) {
+      await ensureContainerLoaded(
+        noteToReopen.folder_id != null
+          ? folderContainerKey(noteToReopen.folder_id)
+          : spaceContainerKey(spaceId)
+      );
+      setActiveNoteId(noteToReopen.id);
+    }
+  };
 }
 
 export async function createFolder(
@@ -906,7 +1035,9 @@ export async function updateSpaceMeta(
 }
 
 /** Local purge (dev override); store cleanup happens via the space-purged broadcast. */
-export async function purgeSpace(id: number): Promise<{ success: boolean; error?: string }> {
+export async function purgeSpace(
+  id: number
+): Promise<{ success: boolean; error?: string; relocatedCount?: number }> {
   return (await window.electronAPI.purgeSpace?.(id)) ?? { success: false };
 }
 
@@ -1036,8 +1167,11 @@ export async function startMigration(): Promise<void> {
     if (gen !== migrationGeneration) return;
     const chunk = unsynced.slice(i, i + CHUNK_SIZE);
     try {
+      const recorded = await recordNoteCreateAttempts(chunk.map((n) => n.client_note_id));
+      const sendable = chunk.filter((n) => recorded.has(n.client_note_id));
+      if (sendable.length === 0) continue;
       const { created } = await NotesService.batchCreate(
-        chunk.map((n) => ({
+        sendable.map((n) => ({
           client_note_id: n.client_note_id,
           title: n.title,
           content: n.content,
@@ -1056,7 +1190,7 @@ export async function startMigration(): Promise<void> {
       // Still run every response through the atomic identity/snapshot guard so
       // a purged fork is untouched and its proven cloud orphan is cleaned up.
       await resolveRendererCloudNoteCreateBatch(
-        chunk,
+        sendable,
         created,
         (cloudId) => NotesService.delete(cloudId),
         // Migration POSTs intentionally omit transcript/diarization fields,

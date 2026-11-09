@@ -1,7 +1,6 @@
 {
   "platforms": ["ios"],
   "ios": {
-    "modules": ["BackgroundUploaderModule"],
-    "appDelegateSubscribers": ["BackgroundUploaderAppDelegate"]
+    "modules": ["BackgroundUploaderModule"]
   }
 }

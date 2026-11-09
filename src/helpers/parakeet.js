@@ -1,33 +1,53 @@
+const {
+  runLocalModelOperation,
+  isLocalModelPolicyRefusal,
+  assertLocalModelOperation,
+  localModelOperationSignal,
+  bindLocalModelDownload,
+} = require("./localModelPolicyGate");
 const fs = require("fs");
 const fsPromises = require("fs").promises;
 const path = require("path");
-const { pipeline } = require("stream/promises");
 const debugLogger = require("./debugLogger");
 const { runSystemTar } = require("./systemTar");
 const {
   downloadFile,
+  verifyFileSha256,
   fetchJson,
   createDownloadSignal,
   createDownloadInProgressError,
   cleanupStaleDownloads,
   checkDiskSpace,
 } = require("./downloadUtils");
+const { validateModelArchive, extractModelArchive } = require("./modelArchiveIntegrity");
 const ParakeetServerManager = require("./parakeetServer");
+const {
+  rememberInstalledModel,
+  forgetInstalledModels,
+  pruneInstalledModels,
+} = require("./installedModels");
 const { getModelsDirForService } = require("./modelDirUtils");
 const { assertParakeetSupported, getParakeetCapability } = require("./parakeetCapability");
 
-const modelRegistryData = require("../models/modelRegistryData.json");
+const {
+  registryData: modelRegistryData,
+  getRunnableSpeechModel,
+} = require("../models/registryData.js");
 const {
   getModelRuntime,
   getRequiredModelFiles,
   isSherpaLocalProvider,
 } = require("./parakeetModelInfo");
 
+// Room a download reserves: the archive plus its unpacked model while both exist.
+const PARAKEET_DISK_SPACE_FACTOR = 2.5;
+
 function getParakeetModelConfig(modelName) {
   const modelInfo = modelRegistryData.parakeetModels[modelName];
   if (!modelInfo) return null;
   return {
     url: modelInfo.downloadUrl,
+    sha256: modelInfo.sha256,
     manifestUrl: modelInfo.manifestUrl,
     size: modelInfo.expectedSizeBytes || modelInfo.sizeMb * 1_000_000,
     expectedSizeBytes: modelInfo.expectedSizeBytes,
@@ -53,8 +73,8 @@ class ParakeetManager {
   }
 
   validateModelName(modelName) {
-    const validModels = getValidModelNames();
-    if (!validModels.includes(modelName)) {
+    if (!getRunnableSpeechModel("parakeetModels", modelName)) {
+      const validModels = getValidModelNames();
       throw new Error(
         `Invalid Parakeet model: ${modelName}. Valid models: ${validModels.join(", ")}`
       );
@@ -82,6 +102,67 @@ class ParakeetManager {
     return 0;
   }
 
+  async _preWarmServer(settings) {
+    const { localTranscriptionProvider, parakeetModel, language } = settings;
+    const capability = getParakeetCapability();
+
+    if (
+      capability.supported &&
+      isSherpaLocalProvider(localTranscriptionProvider) &&
+      parakeetModel &&
+      getRunnableSpeechModel("parakeetModels", parakeetModel) &&
+      this.serverManager.isAvailable(getModelRuntime(parakeetModel))
+    ) {
+      if (this.serverManager.isModelDownloaded(parakeetModel)) {
+        debugLogger.info("Pre-warming parakeet server", { model: parakeetModel });
+
+        try {
+          const serverStartTime = Date.now();
+          await runLocalModelOperation(
+            this,
+            "transcription",
+            parakeetModel,
+            () => this.serverManager.startServer(parakeetModel, language),
+            { memoryOnly: true, onAbort: () => this.stopServer() }
+          );
+          debugLogger.info("Parakeet server pre-warmed successfully", {
+            model: parakeetModel,
+            startupTimeMs: Date.now() - serverStartTime,
+          });
+        } catch (err) {
+          debugLogger.warn("Parakeet server pre-warm failed (will start on first use)", {
+            error: err.message,
+            model: parakeetModel,
+          });
+          if (err.code === "POLICY_UNRESOLVABLE") {
+            this.localModelPolicy?.runOnceVerdictSettles(() => {
+              // A dictation in the meantime already started what it needs.
+              const { running, starting } = this.getServerStatus();
+              if (running || starting) return;
+              this._preWarmServer(settings).catch((error) => {
+                debugLogger.warn("Resumed parakeet pre-warm failed", { error: error.message });
+              });
+            });
+          }
+        }
+      } else {
+        debugLogger.debug("Skipping parakeet server pre-warm: model not downloaded", {
+          model: parakeetModel,
+        });
+      }
+    } else {
+      debugLogger.debug("Skipping parakeet server pre-warm", {
+        reason: !capability.supported
+          ? capability.message
+          : !isSherpaLocalProvider(localTranscriptionProvider)
+            ? "provider not sherpa-based"
+            : !parakeetModel
+              ? "no model selected"
+              : "server binary not available",
+      });
+    }
+  }
+
   async initializeAtStartup(settings = {}) {
     const startTime = Date.now();
 
@@ -92,47 +173,7 @@ class ParakeetManager {
 
       await this.logDependencyStatus();
 
-      const { localTranscriptionProvider, parakeetModel, language } = settings;
-      const capability = getParakeetCapability();
-
-      if (
-        capability.supported &&
-        isSherpaLocalProvider(localTranscriptionProvider) &&
-        parakeetModel &&
-        this.serverManager.isAvailable(getModelRuntime(parakeetModel))
-      ) {
-        if (this.serverManager.isModelDownloaded(parakeetModel)) {
-          debugLogger.info("Pre-warming parakeet server", { model: parakeetModel });
-
-          try {
-            const serverStartTime = Date.now();
-            await this.serverManager.startServer(parakeetModel, language);
-            debugLogger.info("Parakeet server pre-warmed successfully", {
-              model: parakeetModel,
-              startupTimeMs: Date.now() - serverStartTime,
-            });
-          } catch (err) {
-            debugLogger.warn("Parakeet server pre-warm failed (will start on first use)", {
-              error: err.message,
-              model: parakeetModel,
-            });
-          }
-        } else {
-          debugLogger.debug("Skipping parakeet server pre-warm: model not downloaded", {
-            model: parakeetModel,
-          });
-        }
-      } else {
-        debugLogger.debug("Skipping parakeet server pre-warm", {
-          reason: !capability.supported
-            ? capability.message
-            : !isSherpaLocalProvider(localTranscriptionProvider)
-              ? "provider not sherpa-based"
-              : !parakeetModel
-                ? "no model selected"
-                : "server binary not available",
-        });
-      }
+      await this._preWarmServer(settings);
     } catch (error) {
       debugLogger.warn("Parakeet initialization error", { error: error.message });
       this.isInitialized = true;
@@ -199,6 +240,22 @@ class ParakeetManager {
   }
 
   async startServer(modelName, language) {
+    try {
+      return await runLocalModelOperation(
+        this,
+        "transcription",
+        modelName,
+        () => this._policyAllowedStartServer(modelName, language),
+        { onAbort: () => this.stopServer() }
+      );
+    } catch (error) {
+      if (isLocalModelPolicyRefusal(error))
+        return { success: false, reason: error.message, code: error.code };
+      throw error;
+    }
+  }
+
+  async _policyAllowedStartServer(modelName, language) {
     this.validateModelName(modelName);
     const capability = getParakeetCapability();
     if (!capability.supported) {
@@ -220,18 +277,47 @@ class ParakeetManager {
   }
 
   async createOnlineStream(modelName, options = {}) {
+    return runLocalModelOperation(
+      this,
+      "transcription",
+      modelName,
+      () => this._policyAllowedCreateOnlineStream(modelName, options),
+      {}
+    );
+  }
+
+  async _policyAllowedCreateOnlineStream(modelName, options = {}) {
     this.validateModelName(modelName);
     assertParakeetSupported();
     const started = await this.serverManager.startServer(modelName);
     if (!started.success) {
-      throw new Error(started.reason || "Failed to start parakeet streaming server");
+      throw Object.assign(
+        new Error(started.reason || "Failed to start parakeet streaming server"),
+        { code: started.code }
+      );
     }
     return this.serverManager.createOnlineStream(options);
   }
 
   async transcribeLocalParakeet(audioBlob, options = {}) {
+    return runLocalModelOperation(
+      this,
+      "transcription",
+      options.model ?? "",
+      () =>
+        this._policyAllowedTranscribeLocalParakeet(audioBlob, {
+          ...options,
+          signal: localModelOperationSignal(this, options.signal),
+        }),
+      { onAbort: () => this.stopServer() }
+    );
+  }
+
+  async _policyAllowedTranscribeLocalParakeet(audioBlob, options = {}) {
     const model = options.model || "parakeet-tdt-0.6b-v3";
     assertParakeetSupported();
+    // An unknown model has no engine metadata; guessing one could run the wrong decoder.
+    this.validateModelName(model);
     const serverAvailable = this.serverManager.isAvailable(getModelRuntime(model));
 
     debugLogger.logSTTPipeline("transcribeLocalParakeet - start", {
@@ -323,14 +409,22 @@ class ParakeetManager {
   }
 
   async downloadParakeetModel(modelName, progressCallback = null) {
+    return runLocalModelOperation(this, "transcription", modelName, () =>
+      this._policyAllowedDownloadParakeetModel(modelName, progressCallback)
+    );
+  }
+
+  async _policyAllowedDownloadParakeetModel(modelName, progressCallback = null) {
     this.validateModelName(modelName);
     assertParakeetSupported();
     const modelConfig = getParakeetModelConfig(modelName);
+    if (!modelConfig) throw new Error(`Parakeet model "${modelName}" is retired.`);
 
     const modelPath = this.getModelPath(modelName);
     const modelsDir = this.getModelsDir();
 
     if (this.serverManager.isModelDownloaded(modelName)) {
+      rememberInstalledModel("parakeetModels", "", modelName);
       return { model: modelName, downloaded: true, path: modelPath, success: true };
     }
 
@@ -340,6 +434,7 @@ class ParakeetManager {
 
     const archivePath = path.join(modelsDir, `${modelName}.tar.bz2`);
     const { signal, abort } = createDownloadSignal();
+    const unbindPolicy = bindLocalModelDownload(this, abort);
     const downloadProcess = {
       abort,
       model: modelName,
@@ -349,14 +444,18 @@ class ParakeetManager {
       totalBytes: 0,
     };
     this.currentDownloadProcess = downloadProcess;
+    let archiveRejected = false;
 
     try {
       await fsPromises.mkdir(modelsDir, { recursive: true });
 
-      const spaceCheck = await checkDiskSpace(modelsDir, modelConfig.size * 2.5);
+      const spaceCheck = await checkDiskSpace(
+        modelsDir,
+        modelConfig.size * PARAKEET_DISK_SPACE_FACTOR
+      );
       if (!spaceCheck.ok) {
         throw new Error(
-          `Not enough disk space to download and extract model. Need ~${Math.round((modelConfig.size * 2.5) / 1_000_000)}MB, ` +
+          `Not enough disk space to download and extract model. Need ~${Math.round((modelConfig.size * PARAKEET_DISK_SPACE_FACTOR) / 1_000_000)}MB, ` +
             `only ${Math.round(spaceCheck.availableBytes / 1_000_000)}MB available.`
         );
       }
@@ -366,6 +465,7 @@ class ParakeetManager {
         const stats = await fsPromises.stat(archivePath);
         // A visibly truncated leftover would just fail extraction forever.
         if (stats.size >= modelConfig.size * 0.9) {
+          if (modelConfig.sha256) await verifyFileSha256(archivePath, modelConfig.sha256, signal);
           archiveReady = true;
           debugLogger.info("Reusing existing archive from previous attempt", {
             archivePath,
@@ -374,10 +474,13 @@ class ParakeetManager {
         } else if (stats.size > 0) {
           await fsPromises.unlink(archivePath).catch(() => {});
         }
-      } catch {}
+      } catch {
+        await fsPromises.unlink(archivePath).catch(() => {});
+      }
 
       if (!archiveReady) {
         await downloadFile(modelConfig.url, archivePath, {
+          expectedSha256: modelConfig.sha256,
           timeout: 600000,
           signal,
           onProgress: (downloadedBytes, totalBytes) => {
@@ -398,6 +501,28 @@ class ParakeetManager {
         });
       }
 
+      // Checking a large archive takes minutes; show its progress, still cancellable.
+      const archiveBytes = (await fsPromises.stat(archivePath)).size;
+      const verifying = (bytesRead) =>
+        progressCallback?.({
+          type: "verifying",
+          model: modelName,
+          percentage: Math.min(100, Math.round((bytesRead / archiveBytes) * 100)),
+        });
+      verifying(0);
+      try {
+        await validateModelArchive(
+          archivePath,
+          modelConfig.extractDir,
+          signal,
+          modelConfig.size,
+          verifying
+        );
+      } catch (validationError) {
+        if (!validationError.isAbort && !signal.aborted) archiveRejected = true;
+        throw validationError;
+      }
+      if (signal.aborted) throw Object.assign(new Error("Download cancelled"), { isAbort: true });
       downloadProcess.phase = "installing";
       downloadProcess.percentage = 100;
       if (progressCallback) {
@@ -407,9 +532,11 @@ class ParakeetManager {
       const MAX_EXTRACT_RETRIES = 2;
       for (let attempt = 1; attempt <= MAX_EXTRACT_RETRIES; attempt++) {
         try {
-          await this._extractModel(archivePath, modelName);
+          await this._extractModel(archivePath, modelName, modelConfig);
           break;
         } catch (extractError) {
+          // A revocation isn't a bad archive: no retry, and the finished file stays.
+          if (isLocalModelPolicyRefusal(extractError)) throw extractError;
           debugLogger.warn("Model extraction failed", {
             attempt,
             maxAttempts: MAX_EXTRACT_RETRIES,
@@ -427,6 +554,7 @@ class ParakeetManager {
       await fsPromises.unlink(archivePath).catch(() => {});
 
       if (progressCallback) {
+        assertLocalModelOperation(this);
         progressCallback({ type: "complete", model: modelName, percentage: 100 });
       }
 
@@ -457,16 +585,32 @@ class ParakeetManager {
         });
       }
 
+      rememberInstalledModel("parakeetModels", "", modelName);
       return { model: modelName, downloaded: true, path: modelPath, success: true };
-    } catch (error) {
-      if (error.isAbort) {
+    } catch (caught) {
+      let error = caught;
+      // A revocation reaches the transfer and the archive check as an abort.
+      if (error.isAbort || signal.aborted) {
+        try {
+          assertLocalModelOperation(this);
+        } catch (policyRefusal) {
+          if (isLocalModelPolicyRefusal(policyRefusal)) error = policyRefusal;
+        }
+      }
+      // A policy revocation says nothing about the archive, and it may be allowed again.
+      if (isLocalModelPolicyRefusal(error)) throw error;
+      if (error.isAbort || signal.aborted) {
         await fsPromises.unlink(archivePath).catch(() => {});
         throw Object.assign(new Error("Download interrupted by user"), {
           code: "DOWNLOAD_CANCELLED",
         });
       }
+      // A bad archive is never reused (extraction drops its own); one that never got that far,
+      // such as after a disk-space refusal, is kept for the next attempt.
+      if (archiveRejected) await fsPromises.unlink(archivePath).catch(() => {});
       throw error;
     } finally {
+      unbindPolicy();
       if (this.currentDownloadProcess === downloadProcess) {
         this.currentDownloadProcess = null;
       }
@@ -499,15 +643,17 @@ class ParakeetManager {
     );
   }
 
-  async _extractModel(archivePath, modelName) {
+  async _extractModel(archivePath, modelName, modelConfig = getParakeetModelConfig(modelName)) {
     const modelsDir = this.getModelsDir();
-    const modelConfig = getParakeetModelConfig(modelName);
     const extractDir = path.join(modelsDir, `temp-extract-${modelName}`);
 
     try {
+      if (modelConfig.sha256) await fsPromises.rm(extractDir, { recursive: true, force: true });
       await fsPromises.mkdir(extractDir, { recursive: true });
       debugLogger.info("Extracting parakeet archive", { archivePath, extractDir });
+      assertLocalModelOperation(this);
       await this._runTarExtract(archivePath, extractDir);
+      assertLocalModelOperation(this);
       debugLogger.info("Tar extraction completed", { extractDir });
 
       const extractedDir = path.join(extractDir, modelConfig.extractDir);
@@ -576,18 +722,23 @@ class ParakeetManager {
       await this._runSystemTar(archivePath, extractDir);
       return;
     } catch (err) {
+      assertLocalModelOperation(this);
       debugLogger.debug("System tar failed, falling back to JS extraction", {
         error: err.message,
       });
     }
 
-    const unbzip2 = require("unbzip2-stream");
-    const tar = require("tar");
-    await pipeline(fs.createReadStream(archivePath), unbzip2(), tar.x({ cwd: extractDir }));
+    try {
+      await extractModelArchive(archivePath, extractDir, localModelOperationSignal(this));
+    } catch (err) {
+      // A revoked lease ends the worker; report that, not a bad archive to retry.
+      assertLocalModelOperation(this);
+      throw err;
+    }
   }
 
   _runSystemTar(archivePath, extractDir) {
-    return runSystemTar(archivePath, extractDir);
+    return runSystemTar(archivePath, extractDir, { signal: localModelOperationSignal(this) });
   }
 
   async cancelDownload() {
@@ -656,6 +807,7 @@ class ParakeetManager {
         const freedBytes = this._getModelWeightsSize(modelPath);
 
         fs.rmSync(modelPath, { recursive: true, force: true });
+        forgetInstalledModels("parakeetModels", "", modelName);
 
         return {
           model: modelName,
@@ -695,6 +847,7 @@ class ParakeetManager {
         }
       }
 
+      pruneInstalledModels("parakeetModels", (id) => fs.existsSync(path.join(modelsDir, id)));
       return {
         success: true,
         deleted_count: deletedCount,
@@ -737,3 +890,4 @@ class ParakeetManager {
 }
 
 module.exports = ParakeetManager;
+module.exports.PARAKEET_DISK_SPACE_FACTOR = PARAKEET_DISK_SPACE_FACTOR;

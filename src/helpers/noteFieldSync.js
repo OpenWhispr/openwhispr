@@ -1,7 +1,7 @@
 export const NOTE_TEXT_FIELDS = ["content", "enhanced_content"];
 
 // What a summary clear removes along with the text. The template stays: it is
-// the note's choice, so "Generate AI Summary" reruns the same one.
+// the note's choice for regeneration. The summary callout uses the current default.
 export const SUMMARY_CLEARED_METADATA = ["enhancement_prompt", "enhanced_at_content_hash"];
 // Everything that travels with the summary text.
 export const SUMMARY_METADATA = [...SUMMARY_CLEARED_METADATA, "enhancement_template_id"];
