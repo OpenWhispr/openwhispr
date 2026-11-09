@@ -10,16 +10,16 @@ const {
 
 const ethan = { kind: "member", userId: "ethan", label: "Ethan", email: "ethan@openronnie.com" };
 const maya = { kind: "member", userId: "maya", label: "Maya", email: "maya@openronnie.com" };
-const sales = { kind: "group", teamId: "sales", label: "Sales", memberCount: 5 };
-const design = { kind: "group", teamId: "design", label: "Design Team", memberCount: 2 };
+const sales = { kind: "team", teamId: "sales", label: "Sales", memberCount: 5 };
+const design = { kind: "team", teamId: "design", label: "Design Team", memberCount: 2 };
 const alex = { kind: "email", email: "alex@example.com", role: "member", valid: true };
 const noor = { kind: "email", email: "noor@example.com", role: "admin", valid: true };
 
 const outcome = (overrides = {}) => ({
   addedMembers: [],
   failedMembers: [],
-  addedGroups: [],
-  failedGroups: [],
+  addedTeams: [],
+  failedTeams: [],
   invited: [],
   failedInvites: [],
   refusedInvites: [],
@@ -37,8 +37,8 @@ test("what stays staged is only what failed, in the order picked", () => {
     outcome({
       addedMembers: [ethan],
       failedMembers: [maya],
-      addedGroups: [sales],
-      failedGroups: [design],
+      addedTeams: [sales],
+      failedTeams: [design],
       invited: [noor],
       failedInvites: [alex],
     })
@@ -53,7 +53,7 @@ test("nothing stays when everything went", () => {
   assert.deepEqual(
     remainingAfter(
       picked,
-      outcome({ addedMembers: [ethan], addedGroups: [sales], invited: [alex] })
+      outcome({ addedMembers: [ethan], addedTeams: [sales], invited: [alex] })
     ),
     []
   );
@@ -95,7 +95,7 @@ test("some went and some failed is partial", () => {
     "partial"
   );
   assert.equal(
-    attemptSummary(outcome({ addedGroups: [sales], failedGroups: [design] })).kind,
+    attemptSummary(outcome({ addedTeams: [sales], failedTeams: [design] })).kind,
     "partial"
   );
   assert.equal(
@@ -165,7 +165,7 @@ test("a refused address stays staged only when a second try or a trim can get it
 test("Try again is offered only for what could go through as it stands", () => {
   assert.equal(canRetry(outcome()), false);
   assert.equal(canRetry(outcome({ failedMembers: [ethan] })), true);
-  assert.equal(canRetry(outcome({ failedGroups: [sales] })), true);
+  assert.equal(canRetry(outcome({ failedTeams: [sales] })), true);
   assert.equal(canRetry(outcome({ failedInvites: [alex] })), true);
   assert.equal(
     canRetry(outcome({ refusedInvites: [refused(alex, { kind: "rateLimited" })] })),

@@ -16,8 +16,8 @@ function makeHarness() {
   const deps = {
     teams: {
       remove: async (teamId) => calls.push(["team.remove", teamId]),
-      addMember: async (teamId, userId, role) =>
-        calls.push(["team.addMember", teamId, userId, role]),
+      setMemberRole: async (teamId, userId, role) =>
+        calls.push(["team.setMemberRole", teamId, userId, role]),
       removeMember: async (teamId, userId) => calls.push(["team.removeMember", teamId, userId]),
     },
     spaces: {
@@ -91,6 +91,7 @@ function makeHarness() {
     markSpacePurged: async (spaceId, reason) => calls.push(["guard", spaceId, reason]),
     releasePurgedSpace: async (spaceId) => calls.push(["releasePurgedSpace", spaceId]),
     invalidateSpaceRoster: (spaceId) => calls.push(["roster.invalidate", spaceId]),
+    refreshWorkspaceRoster: async (workspaceId) => calls.push(["people.refresh", workspaceId]),
   };
   return { calls, cloudSpace, localSpace, deps };
 }
@@ -339,19 +340,18 @@ test("team mutations refresh the full mirror and schedule sync only when needed"
   await actions.removeTeamMember("team-1", "user-1");
   await actions.setTeamMemberRole("team-1", "user-1", "admin");
   await actions.leaveTeam("team-1", "user-1");
-  await actions.deleteTeam("team-1");
 
   assert.equal(
     calls.filter(([name]) => name === "roster.invalidate").length,
-    7,
+    6,
     "every membership or assignment change invalidates before refreshing"
   );
-  assert.equal(calls.filter(([name]) => name === "mirror.upsert").length, 7);
-  assert.equal(calls.filter(([name]) => name === "local.load").length, 7);
+  assert.equal(calls.filter(([name]) => name === "mirror.upsert").length, 6);
+  assert.equal(calls.filter(([name]) => name === "local.load").length, 6);
   assert.equal(
     calls.filter(([name]) => name === "sync").length,
-    3,
-    "unassign, leave, and delete can revoke container access"
+    2,
+    "unassign and leave can revoke container access"
   );
   assert.ok(
     calls.some(
@@ -400,19 +400,40 @@ test("direct member mutations refresh the mirror and only leaving schedules sync
   );
 });
 
-test("addTeamMembers reports partial failures and still refreshes the mirror", async () => {
+test("a new assignment sends no access, so an existing one keeps its own", async () => {
   const { createSpaceActions } = await load();
   const { calls, deps } = makeHarness();
-  deps.teams.addMember = async (_teamId, userId) => {
-    if (userId === "bad-user") throw new Error("bad member");
+  const actions = createSpaceActions(deps);
+
+  await actions.assignTeamToSpaces("team-1", ["space-a", "space-b"]);
+
+  assert.deepEqual(
+    calls.filter(([name]) => name === "space.assignTeam"),
+    [
+      ["space.assignTeam", "space-a", "team-1", undefined],
+      ["space.assignTeam", "space-b", "team-1", undefined],
+    ]
+  );
+});
+
+test("assignTeamToSpaces tries every teamspace in order, reports the failures and refreshes once", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps } = makeHarness();
+  const boom = new Error("offline");
+  deps.spaces.assignTeam = async (spaceId, teamId) => {
+    calls.push(["space.assignTeam", spaceId, teamId]);
+    if (spaceId === "space-a") throw boom;
   };
   const actions = createSpaceActions(deps);
 
-  const { failures } = await actions.addTeamMembers("team-1", ["good-user", "bad-user"]);
+  const { failures } = await actions.assignTeamToSpaces("team-1", ["space-a", "space-b"]);
 
-  assert.equal(failures.length, 1);
-  assert.match(failures[0].message, /bad member/);
-  assert.ok(calls.some(([name]) => name === "mirror.upsert"));
+  assert.deepEqual(
+    calls.filter(([name]) => name === "space.assignTeam").map(([, spaceId]) => spaceId),
+    ["space-a", "space-b"]
+  );
+  assert.deepEqual(failures, [{ spaceId: "space-a", error: boom }]);
+  assert.equal(calls.filter(([name]) => name === "mirror.upsert").length, 1);
 });
 
 test("team assignment rejects local-only spaces before making a cloud request", async () => {
@@ -738,7 +759,6 @@ test("a write the server accepted isn't failed by a refresh that fails", async (
     leaveTeam: (actions) => actions.leaveTeam("team-1", "me"),
     removeTeamMember: (actions) => actions.removeTeamMember("team-1", "user-1"),
     setTeamMemberRole: (actions) => actions.setTeamMemberRole("team-1", "user-1", "admin"),
-    deleteTeam: (actions) => actions.deleteTeam("team-1"),
   };
   for (const [name, write] of Object.entries(writes)) {
     const { calls, deps, localSpace } = makeHarness();
@@ -1378,6 +1398,24 @@ test("a leave that fails any other way still throws, without touching the mirror
   assert.deepEqual(calls, []);
 });
 
+test("leaving a team that was deleted meanwhile says so, after the mirror catches up", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { calls, deps } = makeHarness();
+  deps.teams.removeMember = async () => {
+    throw new CloudApiError("Team not found", 404);
+  };
+
+  await assert.rejects(createSpaceActions(deps).leaveTeam("team-1", "me"), {
+    message: "Team not found",
+  });
+
+  assert.ok(
+    calls.some(([name]) => name === "space.mySpaces"),
+    "the mirror is still refreshed"
+  );
+});
+
 test("leaving a group the caller is already out of counts as left, and refreshes the mirror", async () => {
   const { createSpaceActions } = await load();
   const { CloudApiError } = await import("../../src/services/cloudApi.ts");
@@ -1443,4 +1481,491 @@ test("localSpaceIdFor gives null when a refreshed mirror still lacks the space",
 
   assert.equal(await actions.localSpaceIdFor("cloud-space-1"), null);
   assert.equal(calls.filter(([name]) => name === "space.mySpaces").length, 1);
+});
+
+// Teams: create with a lost answer, and the held delete.
+
+const ownTeam = (overrides = {}) => ({
+  id: "team-9",
+  workspace_id: "workspace-1",
+  name: "Sales",
+  my_role: "admin",
+  my_direct_role: "admin",
+  created_at: minutesAgo(1),
+  ...overrides,
+});
+
+function makeTeamHarness() {
+  const harness = makeHarness();
+  const { calls, deps } = harness;
+  deps.teams.list = async (workspaceId) => {
+    calls.push(["team.list", workspaceId]);
+    return [];
+  };
+  deps.teams.create = async (workspaceId, input) => {
+    calls.push(["team.create", workspaceId, input]);
+    return ownTeam();
+  };
+  deps.teams.update = async (teamId, updates) => {
+    calls.push(["team.update", teamId, updates]);
+    return ownTeam({ ...updates });
+  };
+  deps.teams.addMembers = async (teamId, userIds) => {
+    calls.push(["team.addMembers", teamId, userIds]);
+    return { added: userIds, already_members: [] };
+  };
+  deps.teamDeleteHold = {
+    hide: (teamId) => calls.push(["teamHold.hide", teamId]),
+    release: (teamId) => calls.push(["teamHold.release", teamId]),
+  };
+  return harness;
+}
+
+const teamInput = { name: "Sales", memberIds: ["u1"] };
+
+test("createTeam sends the founding members in one request", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps } = makeTeamHarness();
+
+  const team = await createSpaceActions(deps).createTeam("workspace-1", teamInput);
+
+  assert.equal(team.id, "team-9");
+  assert.deepEqual(calls[0], ["team.create", "workspace-1", { name: "Sales", member_ids: ["u1"] }]);
+  assert.equal(
+    namesOf(calls).includes("team.addMembers"),
+    false,
+    "a normal create adds nobody again"
+  );
+});
+
+test("a team recovered after a lost answer gets this try's people through the batch route", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { calls, deps } = makeTeamHarness();
+  deps.teams.create = async () => {
+    throw new CloudApiError("Cloud API request failed", 0);
+  };
+  deps.teams.list = async () => [ownTeam()];
+
+  const team = await createSpaceActions(deps).createTeam("workspace-1", {
+    name: "Sales",
+    memberIds: ["u1", "u2"],
+  });
+
+  assert.equal(team.id, "team-9");
+  assert.deepEqual(
+    calls.find(([name]) => name === "team.addMembers"),
+    ["team.addMembers", "team-9", ["u1", "u2"]]
+  );
+});
+
+test("a failed add on a recovered team throws, and the next try can recover it again", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { deps } = makeTeamHarness();
+  deps.teams.create = async () => {
+    throw new CloudApiError("Cloud API request failed", 0);
+  };
+  deps.teams.list = async () => [ownTeam()];
+  const failure = new Error("offline");
+  deps.teams.addMembers = async () => {
+    throw failure;
+  };
+  const actions = createSpaceActions(deps);
+  await assert.rejects(actions.createTeam("workspace-1", teamInput), (error) => error === failure);
+
+  // The name is now taken by the team the first try made.
+  deps.teams.create = async () => {
+    throw new CloudApiError("Taken", 409, "team_name_taken");
+  };
+  deps.teams.addMembers = async () => ({ added: ["u1"], already_members: [] });
+  const team = await actions.createTeam("workspace-1", teamInput);
+  assert.equal(team.id, "team-9");
+});
+
+test("repeated failed adds on a recovered team keep measuring from the first try", async (t) => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { deps } = makeTeamHarness();
+  t.mock.timers.enable({ apis: ["Date"], now: Date.now() });
+  const made = ownTeam();
+  deps.teams.create = async () => {
+    throw new CloudApiError("Cloud API request failed", 0);
+  };
+  deps.teams.list = async () => [made];
+  deps.teams.addMembers = async () => {
+    throw new Error("offline");
+  };
+  const actions = createSpaceActions(deps);
+  await assert.rejects(actions.createTeam("workspace-1", teamInput));
+
+  deps.teams.create = async () => {
+    throw new CloudApiError("Taken", 409, "team_name_taken");
+  };
+  // The team was made just before the first try. Marking each failure with its own time would put
+  // the second retry outside the lost-create window of that creation.
+  t.mock.timers.tick(5 * 60_000);
+  await assert.rejects(actions.createTeam("workspace-1", teamInput));
+  t.mock.timers.tick(5 * 60_000);
+  deps.teams.addMembers = async () => ({ added: ["u1"], already_members: [] });
+  const team = await actions.createTeam("workspace-1", teamInput);
+  assert.equal(team.id, "team-9");
+});
+
+test("a retried create that finds its own team reports success", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { deps } = makeTeamHarness();
+  const found = ownTeam();
+  deps.teams.create = async () => {
+    throw new CloudApiError("Cloud API request failed", 0);
+  };
+  deps.teams.list = async () => [ownTeam({ id: "team-1", name: "Other" }), found];
+
+  const team = await createSpaceActions(deps).createTeam("workspace-1", {
+    name: " sales ",
+    memberIds: [],
+  });
+
+  assert.equal(team, found);
+});
+
+test("after a lost answer, a same-name team that isn't the caller's own stays a refusal", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { calls, deps } = makeTeamHarness();
+  const lost = new CloudApiError("Cloud API request failed", 0);
+  deps.teams.create = async () => {
+    throw lost;
+  };
+  // An admin through the workspace, not through a row of their own: not the creator.
+  deps.teams.list = async () => {
+    calls.push(["team.list.read"]);
+    return [ownTeam({ my_direct_role: null, my_role: "admin" })];
+  };
+
+  await assert.rejects(
+    createSpaceActions(deps).createTeam("workspace-1", teamInput),
+    (error) => error === lost
+  );
+  assert.ok(namesOf(calls).includes("team.list.read"), "the lookup ran");
+});
+
+test("on an unsettled retry, a same-name team that isn't the caller's own stays a refusal", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { calls, deps } = makeTeamHarness();
+  const lost = new CloudApiError("Network error", 0);
+  deps.teams.create = async () => {
+    throw lost;
+  };
+  deps.teams.list = async () => {
+    throw new CloudApiError("Network error", 0);
+  };
+  const actions = createSpaceActions(deps);
+  await assert.rejects(actions.createTeam("workspace-1", teamInput), (error) => error === lost);
+
+  const taken = new CloudApiError("Taken", 409, "team_name_taken");
+  deps.teams.create = async () => {
+    throw taken;
+  };
+  deps.teams.list = async () => {
+    calls.push(["team.list.read"]);
+    return [ownTeam({ my_direct_role: null, my_role: "admin" })];
+  };
+  await assert.rejects(actions.createTeam("workspace-1", teamInput), (error) => error === taken);
+  assert.ok(namesOf(calls).includes("team.list.read"), "the lookup ran");
+});
+
+test("a lost answer next to an old team of the caller's doesn't adopt it", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { deps } = makeTeamHarness();
+  const lost = new CloudApiError("Cloud API request failed", 0);
+  deps.teams.create = async () => {
+    throw lost;
+  };
+  deps.teams.list = async () => [ownTeam({ created_at: minutesAgo(6) })];
+
+  await assert.rejects(
+    createSpaceActions(deps).createTeam("workspace-1", teamInput),
+    (error) => error === lost
+  );
+});
+
+test("a failed lookup leaves it unsettled, so the retry's taken name settles it", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { deps } = makeTeamHarness();
+  const lost = new CloudApiError("Network error", 0);
+  deps.teams.create = async () => {
+    throw lost;
+  };
+  deps.teams.list = async () => {
+    throw new CloudApiError("Network error", 0);
+  };
+  const actions = createSpaceActions(deps);
+  await assert.rejects(actions.createTeam("workspace-1", teamInput), (error) => error === lost);
+
+  deps.teams.create = async () => {
+    throw new CloudApiError("Taken", 409, "team_name_taken");
+  };
+  deps.teams.list = async () => [ownTeam()];
+  const team = await actions.createTeam("workspace-1", teamInput);
+
+  assert.equal(team.id, "team-9");
+});
+
+test("planRequired isn't treated as a lost answer", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { calls, deps } = makeTeamHarness();
+  const refusal = new CloudApiError("Upgrade", 403, "team_plan_required");
+  deps.teams.create = async () => {
+    throw refusal;
+  };
+
+  await assert.rejects(
+    createSpaceActions(deps).createTeam("workspace-1", teamInput),
+    (error) => error === refusal
+  );
+  assert.equal(namesOf(calls).includes("team.list"), false);
+});
+
+test("unsettled team and teamspace creates of one name don't settle each other", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { deps } = makeTeamHarness();
+  const lost = new CloudApiError("Network error", 0);
+  deps.spaces.create = async () => {
+    throw lost;
+  };
+  deps.spaces.mySpaces = async () => {
+    throw lost;
+  };
+  const actions = createSpaceActions(deps);
+  await assert.rejects(
+    actions.createSpace("workspace-1", { name: "Sales" }, { memberIds: [], teamIds: [] }),
+    (error) => error === lost
+  );
+
+  const taken = new CloudApiError("Taken", 409, "team_name_taken");
+  deps.teams.create = async () => {
+    throw taken;
+  };
+  deps.teams.list = async () => [ownTeam()];
+  await assert.rejects(actions.createTeam("workspace-1", teamInput), (error) => error === taken);
+});
+
+test("addPeopleToTeam returns the server's lists and refreshes the mirror", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps } = makeTeamHarness();
+
+  const result = await createSpaceActions(deps).addPeopleToTeam("team-9", ["u1", "u2"]);
+
+  assert.deepEqual(result, { added: ["u1", "u2"], already_members: [] });
+  assert.ok(namesOf(calls).includes("mirror.upsert"));
+});
+
+test("renameTeam sends the name and refreshes the mirror", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps } = makeTeamHarness();
+
+  const team = await createSpaceActions(deps).renameTeam("team-9", "Revenue");
+
+  assert.equal(team.name, "Revenue");
+  assert.deepEqual(calls[0], ["team.update", "team-9", { name: "Revenue" }]);
+  assert.ok(namesOf(calls).includes("mirror.upsert"));
+});
+
+test("a held team delete sends nothing until commit", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps } = makeTeamHarness();
+
+  createSpaceActions(deps).holdTeamDelete({ id: "team-9", name: "Sales" });
+
+  assert.deepEqual(calls, [["teamHold.hide", "team-9"]]);
+});
+
+test("Undo on a team delete sends nothing", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps } = makeTeamHarness();
+  const hold = createSpaceActions(deps).holdTeamDelete({ id: "team-9", name: "Sales" });
+
+  assert.equal(await hold.undo(), true);
+  assert.equal(await hold.commit(), null);
+  assert.equal(await hold.undo(), false);
+
+  assert.deepEqual(calls, [
+    ["teamHold.hide", "team-9"],
+    ["teamHold.release", "team-9"],
+  ]);
+});
+
+test("a committed team delete sends once, refreshes and syncs", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps } = makeTeamHarness();
+  const hold = createSpaceActions(deps).holdTeamDelete({ id: "team-9", name: "Sales" });
+
+  assert.deepEqual(await hold.commit(), { success: true });
+  assert.equal(await hold.undo(), false);
+
+  const order = namesOf(calls);
+  assert.equal(order.filter((name) => name === "team.remove").length, 1);
+  assert.ok(order.includes("mirror.upsert"));
+  assert.deepEqual(calls.at(-1), ["sync", "manual"]);
+  assert.equal(order.includes("teamHold.release"), false, "a deleted team stays out of the lists");
+});
+
+test("a committed team delete reads the workspace's people again, in the team's workspace", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps } = makeTeamHarness();
+  const hold = createSpaceActions(deps).holdTeamDelete({
+    id: "team-9",
+    name: "Sales",
+    workspace_id: "workspace-7",
+  });
+
+  assert.deepEqual(await hold.commit(), { success: true });
+
+  assert.deepEqual(
+    calls.filter(([name]) => name === "people.refresh"),
+    [["people.refresh", "workspace-7"]]
+  );
+});
+
+test("a failed people read after a team delete leaves the delete a success", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps } = makeTeamHarness();
+  deps.refreshWorkspaceRoster = async () => {
+    throw new Error("offline");
+  };
+  const hold = createSpaceActions(deps).holdTeamDelete({
+    id: "team-9",
+    name: "Sales",
+    workspace_id: "workspace-7",
+  });
+
+  assert.deepEqual(await hold.commit(), { success: true });
+  assert.deepEqual(calls.at(-1), ["sync", "manual"]);
+});
+
+test("neither an Undo nor a refused team delete reads the people again", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { calls, deps } = makeTeamHarness();
+  const team = { id: "team-9", name: "Sales", workspace_id: "workspace-7" };
+  const undone = createSpaceActions(deps).holdTeamDelete(team);
+  await undone.undo();
+  await undone.commit();
+  deps.teams.remove = async () => {
+    throw new CloudApiError("Nope", 403);
+  };
+  await createSpaceActions(deps).holdTeamDelete(team).commit();
+
+  assert.equal(namesOf(calls).includes("people.refresh"), false);
+});
+
+test("a team the server says is gone counts as deleted", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { calls, deps } = makeTeamHarness();
+  deps.teams.remove = async () => {
+    throw new CloudApiError("Team not found", 404);
+  };
+  const hold = createSpaceActions(deps).holdTeamDelete({ id: "team-9", name: "Sales" });
+
+  assert.deepEqual(await hold.commit(), { success: true });
+  assert.ok(namesOf(calls).includes("mirror.upsert"));
+  assert.equal(namesOf(calls).includes("teamHold.release"), false);
+});
+
+test("a bare 404 proves nothing: the row comes back and Try again is offered", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { calls, deps } = makeTeamHarness();
+  deps.teams.remove = async () => {
+    throw new CloudApiError("Not found", 404);
+  };
+  const hold = createSpaceActions(deps).holdTeamDelete({ id: "team-9", name: "Sales" });
+
+  const result = await hold.commit();
+
+  assert.equal(result.success, false);
+  assert.deepEqual(calls.at(-1), ["teamHold.release", "team-9"]);
+  assert.ok(hold.again());
+});
+
+test("a failed team delete returns the row and offers again", async () => {
+  const { createSpaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { calls, deps } = makeTeamHarness();
+  deps.teams.remove = async () => {
+    throw new CloudApiError("Nope", 403);
+  };
+  const hold = createSpaceActions(deps).holdTeamDelete({ id: "team-9", name: "Sales" });
+
+  const result = await hold.commit();
+
+  assert.equal(result.success, false);
+  assert.deepEqual(result.failure, { kind: "notAllowed" });
+  assert.deepEqual(calls.at(-1), ["teamHold.release", "team-9"]);
+
+  deps.teams.remove = async (teamId) => calls.push(["team.remove", teamId]);
+  const retry = hold.again();
+  assert.ok(retry);
+  assert.deepEqual(calls.at(-1), ["teamHold.hide", "team-9"]);
+  assert.equal((await retry.commit()).success, true);
+});
+
+test("another account's team hold sends nothing", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps } = makeTeamHarness();
+  let generation = 1;
+  deps.deleteHold.accountGeneration = () => generation;
+  const hold = createSpaceActions(deps).holdTeamDelete({ id: "team-9", name: "Sales" });
+  generation = 2;
+
+  assert.equal(await hold.commit(), null);
+  assert.equal(hold.again(), null);
+  assert.equal(namesOf(calls).includes("team.remove"), false);
+});
+
+test("leaving the page sends open team holds too", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps } = makeTeamHarness();
+  const actions = createSpaceActions(deps);
+  actions.holdTeamDelete({ id: "team-9", name: "Sales" });
+
+  actions.commitHeldDeletes();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(namesOf(calls).filter((name) => name === "team.remove").length, 1);
+});
+
+test("a second commit on a team hold sends nothing more", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps } = makeTeamHarness();
+  const hold = createSpaceActions(deps).holdTeamDelete({ id: "team-9", name: "Sales" });
+
+  await hold.commit();
+  assert.equal(await hold.commit(), null);
+
+  assert.equal(namesOf(calls).filter((name) => name === "team.remove").length, 1);
+});
+
+test("leaving the page sends a space hold and a team hold, one request each", async () => {
+  const { createSpaceActions } = await load();
+  const { calls, deps, localSpace } = makeTeamHarness();
+  const actions = createSpaceActions(deps);
+  actions.holdSpaceDelete(localSpace);
+  actions.holdTeamDelete({ id: "team-9", name: "Sales" });
+
+  actions.commitHeldDeletes();
+  await new Promise((resolve) => setImmediate(resolve));
+  actions.commitHeldDeletes();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(namesOf(calls).filter((name) => name === "space.remove").length, 1);
+  assert.equal(namesOf(calls).filter((name) => name === "team.remove").length, 1);
 });

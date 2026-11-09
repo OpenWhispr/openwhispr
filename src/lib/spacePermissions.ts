@@ -1,4 +1,4 @@
-import type { NoteItem, SpaceItem, SpaceTeamRef, TeamRole, Workspace } from "../types/electron";
+import type { NoteItem, SpaceItem, SpaceTeamRef, Workspace } from "../types/electron";
 import { spaceCan, workspaceCan } from "./capabilities.ts";
 
 type WorkspaceRef = Pick<Workspace, "role" | "capabilities">;
@@ -10,17 +10,6 @@ type WorkspaceRef = Pick<Workspace, "role" | "capabilities">;
  */
 export function teamsUserCanLeave(space: Pick<SpaceItem, "teams">): SpaceTeamRef[] {
   return space.teams.filter((team) => team.my_role != null);
-}
-
-/**
- * Whether the current user can edit a specific team's roster: an explicit
- * admin of that team, or anyone the workspace lets manage teams.
- */
-export function canManageTeamRoster(
-  teamMyRole: TeamRole | null | undefined,
-  workspace: WorkspaceRef | null | undefined
-): boolean {
-  return teamMyRole === "admin" || workspaceCan(workspace, "manage_teams");
 }
 
 /**

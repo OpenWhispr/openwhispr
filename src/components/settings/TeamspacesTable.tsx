@@ -15,12 +15,8 @@ import { cn } from "../lib/utils";
 import type { WorkspaceSpacesState } from "../../hooks/useWorkspaceSpaces";
 import type { SpaceAdminContact, WorkspaceSpace } from "../../types/electron";
 import { isolate } from "../../utils/bidiIsolate";
-import { HEADER_CELL, ROW_DIVIDER, TABLE_FRAME } from "./tableTokens";
+import { CONTACTS_TRIGGER, HEADER_CELL, NAME_TILE, ROW_DIVIDER, TABLE_FRAME } from "./tableTokens";
 
-const NAME_TILE =
-  "flex size-7 shrink-0 items-center justify-center rounded-sm bg-foreground/5 dark:bg-white/6";
-const CONTACTS_TRIGGER =
-  "inline-flex h-7 max-w-full items-center gap-1.5 rounded-md border border-border/70 px-2 text-xs text-foreground outline-none transition-colors hover:bg-foreground/5 focus-visible:ring-1 focus-visible:ring-primary/30 data-[state=open]:bg-foreground/5 dark:border-border-subtle/70 dark:hover:bg-white/5";
 const YOU_CHIP = "shrink-0 rounded px-1.5 py-px text-[10px] font-medium bg-primary/10 text-primary";
 
 export interface TeamspacesTableUser {

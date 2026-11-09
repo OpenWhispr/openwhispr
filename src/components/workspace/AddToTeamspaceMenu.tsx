@@ -1,4 +1,4 @@
-import { useReducer, useRef, useState, type ReactElement } from "react";
+import { useEffect, useReducer, useRef, useState, type ReactElement, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { useWorkspaceSpaces } from "../../hooks/useWorkspaceSpaces";
 import { confirmActionReducer } from "../../lib/confirmActionFlow";
@@ -13,17 +13,18 @@ import { addPeopleToSpace, localSpaceIdFor } from "../../services/spaceActions";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import type { Workspace, WorkspaceMember, WorkspaceSpace } from "../../types/electron";
 import { isolate } from "../../utils/bidiIsolate";
-import { ChevronDown, Plus } from "../icons";
+import { Building2 } from "../icons";
 import { TileGlyph } from "../notes/SpaceNameField";
-import { Button } from "../ui/button";
 import {
-  DropdownMenu,
   DropdownMenuCheckboxItem,
-  DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuTrigger,
+  DropdownMenuPortal,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
 } from "../ui/dropdown-menu";
 import { useToast } from "../ui/useToast";
+import { accessOf, dialogBoundaryOf } from "./AddToTeamList";
 import { WorkspaceActionDialog } from "./WorkspaceActionDialog";
 
 const NO_COVERAGE: ReadonlyMap<string, number> = new Map();
@@ -35,18 +36,23 @@ interface AddSubject {
   count: number;
 }
 
-interface AddToTeamspaceMenuProps {
+interface AddToTeamspaceProps {
   workspace: Workspace;
   people: WorkspaceMember[];
   /** The people were added, so the caller clears its selection. */
   onAdded: () => void;
   onOpenTeamspace?: (localSpaceId: number) => void;
+  /** What takes focus when a failed attempt's dialog is cancelled: the menu item that opened it is gone. */
+  returnFocusRef: RefObject<HTMLElement | null>;
 }
 
-// One box state for the row: nobody, some (a dash) or everyone selected already has access.
-function accessOf(covered: number, total: number): boolean | "indeterminate" {
-  if (total > 0 && covered >= total) return true;
-  return covered > 0 ? "indeterminate" : false;
+export interface AddToTeamspace {
+  /** The "Add to teamspace" submenu, for inside a menu's content. */
+  submenu: ReactElement;
+  /** The menu holding the submenu opened: the submenu's next opening reads coverage again. */
+  menuOpened: () => void;
+  /** Outside the menu, which unmounts its content on close and would take a running dialog with it. */
+  dialog: ReactElement | null;
 }
 
 // The line a failed attempt shows under its explanation. Only the server's own reason has one, and
@@ -61,16 +67,17 @@ function failureOf(error: unknown): RowActionError {
 }
 
 /**
- * The bar's "Add to teamspace": a menu of the workspace's teamspaces for the people selected on the
- * Members tab. Choosing one adds them at once (a dialog holds the screen while it runs); a failure
- * keeps the selection and offers Try again.
+ * "Add to teamspace", a submenu of the bar's menu: the workspace's teamspaces for the people
+ * selected on the Members tab. Choosing one adds them at once (a dialog holds the screen while it
+ * runs); a failure keeps the selection and offers Try again.
  */
-export function AddToTeamspaceMenu({
+export function useAddToTeamspace({
   workspace,
   people,
   onAdded,
   onOpenTeamspace,
-}: AddToTeamspaceMenuProps): ReactElement {
+  returnFocusRef,
+}: AddToTeamspaceProps): AddToTeamspace {
   const { t } = useTranslation();
   const { toast } = useToast();
   const refreshMembers = useWorkspaceStore((state) => state.refreshMembers);
@@ -81,7 +88,12 @@ export function AddToTeamspaceMenu({
   const coverageRequestRef = useRef(0);
   const [state, dispatch] = useReducer(confirmActionReducer<AddSubject>, { kind: "closed" });
   const inFlightRef = useRef(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [boundary, setBoundary] = useState<Element | null>(null);
+
+  // The same shape as Add to team: a failed dialog's Try again belongs to the workspace it failed in.
+  useEffect(() => {
+    dispatch({ type: "dismiss" });
+  }, [workspace.id]);
 
   async function readCoverage(userIds: string[]): Promise<void> {
     const request = ++coverageRequestRef.current;
@@ -97,9 +109,18 @@ export function AddToTeamspaceMenu({
     }
   }
 
+  // A submenu opens and closes as the pointer passes over it, so coverage is read once per opening
+  // of the menu holding it rather than blanking the boxes on every pass.
+  const coverageReadThisOpening = useRef(false);
+  function menuOpened(): void {
+    coverageReadThisOpening.current = false;
+  }
   function handleOpenChange(open: boolean): void {
     if (!open) return;
+    setBoundary(dialogBoundaryOf(returnFocusRef.current));
     setOpened(true);
+    if (coverageReadThisOpening.current) return;
+    coverageReadThisOpening.current = true;
     void readCoverage(people.map((person) => person.user_id));
   }
 
@@ -189,20 +210,21 @@ export function AddToTeamspaceMenu({
     dispatch({ type: "dismiss" });
     // The menu item that opened this is gone, so nothing hands focus back and it would drop to the
     // page; the frame lets the dialog finish closing first.
-    requestAnimationFrame(() => triggerRef.current?.focus());
+    requestAnimationFrame(() => returnFocusRef.current?.focus());
   };
 
-  return (
-    <>
-      <DropdownMenu onOpenChange={handleOpenChange}>
-        <DropdownMenuTrigger asChild>
-          <Button ref={triggerRef} type="button" variant="ghost" size="sm">
-            <Plus className="size-3.5" aria-hidden="true" />
-            {t("settingsPage.workspace.people.selection.addToTeamspace")}
-            <ChevronDown className="size-3 text-muted-foreground" aria-hidden="true" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent side="top" align="end" className="w-64 max-w-[calc(100vw-32px)]">
+  const submenu = (
+    <DropdownMenuSub onOpenChange={handleOpenChange}>
+      <DropdownMenuSubTrigger className="gap-2 rounded-lg px-2.5 py-2 focus:bg-muted data-[state=open]:bg-muted">
+        <Building2 className="size-3.5 text-muted-foreground" aria-hidden="true" />
+        {t("settingsPage.workspace.people.selection.addToTeamspace")}
+      </DropdownMenuSubTrigger>
+      <DropdownMenuPortal>
+        <DropdownMenuSubContent
+          sideOffset={6}
+          collisionBoundary={boundary ?? undefined}
+          className="w-64 max-w-[calc(100vw-32px)] rounded-xl p-1.5"
+        >
           {directory.status === "ready" && directory.spaces.length === 0 ? (
             <DropdownMenuItem disabled className="text-sm text-muted-foreground">
               {t("settingsPage.workspace.teamspaces.addPeople.none")}
@@ -255,54 +277,50 @@ export function AddToTeamspaceMenu({
               {t("settingsPage.workspace.teamspaces.addPeople.loading")}
             </p>
           )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      {subject ? (
-        <WorkspaceActionDialog
-          open
-          icon="info"
-          title={
-            failed
-              ? t("settingsPage.workspace.teamspaces.addPeople.failedTitle", {
-                  count: subject.count,
-                })
-              : t("settingsPage.workspace.teamspaces.addPeople.addingTitle", {
-                  count: subject.count,
-                })
-          }
-          body={
-            ended === "notAllowed"
-              ? t("settingsPage.workspace.teamspaces.members.notAllowed", { space: spaceName })
-              : ended === "ssoRequired"
-                ? t("workspaces.ssoRequired", { workspace: isolate(workspace.name) })
-                : failed
-                  ? t("settingsPage.workspace.teamspaces.addPeople.failedBody", {
-                      space: spaceName,
-                    })
-                  : t("settingsPage.workspace.teamspaces.addPeople.addingBody", {
-                      space: spaceName,
-                    })
-          }
-          error={
-            state.kind === "failed" && state.error.kind === "refused" ? state.error.message : null
-          }
-          primary={
-            ended
-              ? { label: t("common.close"), onClick: dismiss, tone: "primary" }
-              : {
-                  label: failed
-                    ? t("workspaces.exit.tryAgain")
-                    : t("settingsPage.workspace.teamspaces.addPeople.addingAction"),
-                  onClick: () => void addTo(subject.space),
-                  tone: "primary",
-                }
-          }
-          cancelLabel={ended ? undefined : t("common.cancel")}
-          busy={!failed}
-          onDismiss={dismiss}
-        />
-      ) : null}
-    </>
+        </DropdownMenuSubContent>
+      </DropdownMenuPortal>
+    </DropdownMenuSub>
   );
+
+  const dialog = subject ? (
+    <WorkspaceActionDialog
+      open
+      icon="info"
+      title={
+        failed
+          ? t("settingsPage.workspace.teamspaces.addPeople.failedTitle", {
+              count: subject.count,
+            })
+          : t("settingsPage.workspace.teamspaces.addPeople.addingTitle", {
+              count: subject.count,
+            })
+      }
+      body={
+        ended === "notAllowed"
+          ? t("settingsPage.workspace.teamspaces.members.notAllowed", { space: spaceName })
+          : ended === "ssoRequired"
+            ? t("workspaces.ssoRequired", { workspace: isolate(workspace.name) })
+            : failed
+              ? t("settingsPage.workspace.teamspaces.addPeople.failedBody", { space: spaceName })
+              : t("settingsPage.workspace.teamspaces.addPeople.addingBody", { space: spaceName })
+      }
+      error={state.kind === "failed" && state.error.kind === "refused" ? state.error.message : null}
+      primary={
+        ended
+          ? { label: t("common.close"), onClick: dismiss, tone: "primary" }
+          : {
+              label: failed
+                ? t("workspaces.exit.tryAgain")
+                : t("settingsPage.workspace.teamspaces.addPeople.addingAction"),
+              onClick: () => void addTo(subject.space),
+              tone: "primary",
+            }
+      }
+      cancelLabel={ended ? undefined : t("common.cancel")}
+      busy={!failed}
+      onDismiss={dismiss}
+    />
+  ) : null;
+
+  return { submenu, menuOpened, dialog };
 }

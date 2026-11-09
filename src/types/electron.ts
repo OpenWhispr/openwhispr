@@ -767,6 +767,9 @@ export interface WorkspaceCapabilities {
   delete_workspace: boolean;
   transfer_ownership: boolean;
   leave: boolean;
+  // The one plan gate a capability reflects: it tells a paywall from a missing permission.
+  // Absent from an older API or a cache written before it, which reads as allowed.
+  create_teams?: boolean;
 }
 
 export interface SpaceCapabilities {
@@ -891,6 +894,12 @@ export interface WorkspaceMember {
 
 export type TeamRole = "admin" | "member";
 
+export interface TeamCapabilities {
+  manage_members: boolean;
+  manage_settings: boolean;
+  leave: boolean;
+}
+
 export interface Team {
   id: string;
   workspace_id: string;
@@ -901,6 +910,22 @@ export interface Team {
   created_at: string;
   updated_at: string;
   member_count?: number;
+  // Everything below is absent from an older API.
+  directory_synced?: boolean;
+  my_role?: TeamRole | null;
+  my_direct_role?: TeamRole | null;
+  capabilities?: TeamCapabilities;
+  // The caller is the only admin, so leaving or stepping down is refused.
+  sole_admin?: boolean;
+  spaces?: { id: string; name: string; emoji: string | null; access: TeamRole }[];
+}
+
+export interface TeamInvitation {
+  id: string;
+  email: string;
+  workspace_role: "admin" | "member";
+  expires_at: string;
+  created_at: string;
 }
 
 export interface TeamMember {

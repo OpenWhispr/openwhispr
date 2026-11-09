@@ -7,7 +7,7 @@ import { WorkspaceErrorBar } from "../workspace/WorkspaceErrorBar";
 
 interface SpaceInviteSeatNoticeProps {
   workspaceId: string;
-  /** The new addresses staged in the teamspace's people field. */
+  /** The new addresses staged in the people field. */
   addressCount: number;
 }
 
