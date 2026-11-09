@@ -116,7 +116,7 @@ export default function CleanupPromptScreen() {
             <Text className="text-[13px] text-systemOrange">Long prompts slow down cleanup.</Text>
           ) : null}
           <Text className="text-[13px] text-secondaryLabel">
-            Used for every cleanup request. Language, dictionary, and tone instructions are added
+            Used for every cleanup request. Language and dictionary instructions are added
             automatically.
           </Text>
         </View>
