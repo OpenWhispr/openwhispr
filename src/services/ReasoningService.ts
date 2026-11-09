@@ -49,6 +49,7 @@ import {
 } from "./ai/thinkingSuppressionDialects";
 import { abortOnCancel, isRequestCancelled, requestCancelledError } from "./ai/requestCancellation";
 import { openCodeSessionHeaders } from "./ai/openCodeSession";
+import { openRouterHeaders } from "../helpers/openRouterHeaders";
 import { createStreamingThinkFilter } from "./ai/streamingThinkFilter";
 import { extractApiErrorMessage } from "./ai/apiErrorMessage";
 import {
@@ -463,6 +464,7 @@ class ReasoningService extends BaseReasoningService {
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
           ...openCodeHeaders,
+          ...openRouterHeaders(endpoint),
         };
         if (apiKey) {
           headers["Authorization"] = `Bearer ${apiKey}`;
@@ -819,6 +821,7 @@ class ReasoningService extends BaseReasoningService {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       ...openCodeSessionHeaders(endpoint),
+      ...openRouterHeaders(endpoint),
     };
     if (apiKey) {
       headers["Authorization"] = `Bearer ${apiKey}`;

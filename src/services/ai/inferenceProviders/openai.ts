@@ -29,6 +29,7 @@ import {
 import { extractApiErrorMessage } from "../apiErrorMessage";
 import { wrapCleanupTranscript } from "../../../config/prompts";
 import { openCodeSessionHeaders } from "../openCodeSession";
+import { openRouterHeaders } from "../../../helpers/openRouterHeaders";
 import {
   asProviderError,
   providerHttpError,
@@ -305,6 +306,7 @@ export const openaiProvider: InferenceProvider = {
                   "Content-Type": "application/json",
                   ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
                   ...openCodeHeaders,
+                  ...openRouterHeaders(endpoint),
                 },
                 body: JSON.stringify(requestBody),
                 signal: controller.signal,

@@ -294,6 +294,7 @@ const {
   createUploadSlots,
   withoutChunkAnalytics,
 } = require("./cloudChunkPolicy");
+const { openRouterHeaders } = require("./openRouterHeaders");
 const { isAudioPolicyRefusal } = require("./audioPolicyRefusals");
 
 // Chunk retries need their own connection pool: recovering a wedged chunk pool
@@ -8020,7 +8021,7 @@ class IPCHandlers {
             formData.append("model", route.model);
             if (route.language) formData.append("language", route.language);
           }
-          const headers = {};
+          const headers = openRouterHeaders(endpoint);
           if (provider === "mistral") {
             headers["x-api-key"] = apiKey;
           } else if (apiKey) {
@@ -12214,7 +12215,13 @@ class IPCHandlers {
                   ? { "api-key": apiKey }
                   : { Authorization: `Bearer ${apiKey}` }
               : undefined;
-            const data = await postMultipart(url, body, boundary, headers, { signal });
+            const data = await postMultipart(
+              url,
+              body,
+              boundary,
+              { ...headers, ...openRouterHeaders(transcriptionUrl) },
+              { signal }
+            );
 
             if (data.statusCode !== 200) {
               debugLogger.warn("BYOK file transcription failed", {
