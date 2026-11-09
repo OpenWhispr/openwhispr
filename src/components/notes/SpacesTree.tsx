@@ -42,7 +42,7 @@ import { useNoteDragAndDrop, type NoteMoveTarget } from "../../hooks/useNoteDrag
 import { useTeamSpacesCapability } from "../../hooks/useTeamSpacesCapability";
 import { useCanCreateTeamSpace } from "../../hooks/useCanCreateTeamSpace";
 import { useAuth } from "../../hooks/useAuth";
-import { useWorkspace } from "../../hooks/useWorkspace";
+import { useSpacesInWorkspaceScope, useWorkspace } from "../../hooks/useWorkspace";
 import SpaceSettingsDialog from "./SpaceSettingsDialog";
 import {
   canChangeSpaceNoteScope,
@@ -56,7 +56,6 @@ import {
   resolveNotePermission,
   sharedNoteBlocksDelete,
 } from "../../lib/notePermissions";
-import { spacesInWorkspaceScope } from "../../lib/workspaceSelection";
 import { localMutationErrorKey } from "../../lib/localMutationError";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { cn } from "../lib/utils";
@@ -1134,12 +1133,14 @@ export default function SpacesTree({
   const { isSignedIn, user } = useAuth();
   const teamCapability = useTeamSpacesCapability(isSignedIn);
   const canCreateTeamSpace = useCanCreateTeamSpace();
-  const { workspaces, active: activeWorkspace, loaded: workspacesLoaded } = useWorkspace();
+  const {
+    workspaces,
+    active: activeWorkspace,
+    loaded: workspacesLoaded,
+    personalSelected,
+  } = useWorkspace();
   // Other workspaces' teamspaces stay out of the tree until the user switches.
-  const spaces = useMemo(
-    () => spacesInWorkspaceScope(allSpaces, activeWorkspace?.id ?? null, workspaces),
-    [allSpaces, activeWorkspace?.id, workspaces]
-  );
+  const spaces = useSpacesInWorkspaceScope(allSpaces);
   const noteFilesEnabled = useSettingsStore((s) => s.noteFilesEnabled);
   const shareByCloudId = useShareCache();
 
@@ -2045,7 +2046,7 @@ export default function SpacesTree({
             </TreeChildren>
           )}
         </div>
-        {teamCapability && (
+        {teamCapability && !(personalSelected && teamSpaces.length === 0) && (
           <div role="none" className="group/section">
             <SectionHeader
               label={t("notes.spaces.teamSpaces")}

@@ -23,6 +23,7 @@ export const SORT_LABEL_KEYS: Record<SortKey, string> = {
 export type SharedAccessState =
   | "unavailable"
   | "noWorkspace"
+  | "chooseWorkspace"
   | "ssoRequired"
   | "noAccess"
   | "upgradeAdmin"
@@ -86,15 +87,17 @@ export function resolveSharedAccessState(input: {
   // False in a build without an account backend too, where no one can sign in.
   signedIn: boolean;
   workspace: Workspace | null;
+  // Personal is chosen over the listed workspaces, so their lists are a switch away, not a plan.
+  personalSelected: boolean;
   // The server's flag. It is set on every answer for a workspace without the
   // plan, so it only means "paused" when there are words to pause.
   serverPaused: boolean | null;
   hasWords: boolean;
 }): SharedAccessState {
-  const { status, signedIn, workspace, serverPaused, hasWords } = input;
+  const { status, signedIn, workspace, personalSelected, serverPaused, hasWords } = input;
   // Signed out there is no workspace to share with, so nothing to offer either.
   if (status === "unavailable" || !signedIn) return "unavailable";
-  if (!workspace) return "noWorkspace";
+  if (!workspace) return personalSelected ? "chooseWorkspace" : "noWorkspace";
   // Neither can be fixed from a plan, so they come before the plan checks.
   if (status === "ssoRequired") return "ssoRequired";
   if (status === "noAccess") return "noAccess";

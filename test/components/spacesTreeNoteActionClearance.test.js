@@ -79,8 +79,10 @@ async function renderTree(t, direction) {
       `,
       "/hooks/useTeamSpacesCapability": "export const useTeamSpacesCapability = () => true;",
       "/hooks/useAuth": "export const useAuth = () => ({ isSignedIn: false, user: null });",
-      "/hooks/useWorkspace":
-        "export const useWorkspace = () => ({ workspaces: [], loaded: true });",
+      "/hooks/useWorkspace": `
+        export const useWorkspace = () => ({ workspaces: [], loaded: true });
+        export const useSpacesInWorkspaceScope = (spaces) => spaces;
+      `,
       "/hooks/useCanCreateTeamSpace": "export const useCanCreateTeamSpace = () => false;",
       "/hooks/useDialogs": `
         export const useDialogs = () => ({
