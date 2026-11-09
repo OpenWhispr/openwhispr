@@ -2504,6 +2504,7 @@
         "general": "一般",
         "members": "メンバー",
         "invitations": "招待",
+        "guests": "ゲスト",
         "teams": "チーム"
       },
       "people": {
@@ -3082,6 +3083,59 @@
         "title": "Enterpriseコンソール",
         "description": "SSO、ポリシー、メンバーをウェブで管理",
         "open": "コンソールを開く"
+      },
+      "guests": {
+        "columns": {
+          "name": "名前",
+          "access": "アクセス",
+          "actions": "操作"
+        },
+        "emptyTitle": "ゲストはまだいません",
+        "emptyBody": "このワークスペース外で、共有ノートを閲覧できる人がここに表示されます。",
+        "loadingTitle": "ゲストを読み込み中…",
+        "loadingBody": "ワークスペースのゲストがここに表示されます。",
+        "failedTitle": "ゲストを読み込めませんでした",
+        "failedBody": "接続を確認して、もう一度お試しください。",
+        "noteCount_one": "{{count}} 件のノート",
+        "noteCount_other": "{{count}} 件のノート",
+        "notesTriggerLabel_one": "{{count}} 件のノートを {{name}} と共有中",
+        "notesTriggerLabel_other": "{{count}} 件のノートを {{name}} と共有中",
+        "removeFromNote": "{{note}} から削除",
+        "removedFromNote": "{{name}} を {{note}} から削除しました",
+        "removeFromNoteFailed": "{{name}} を {{note}} から削除できませんでした。接続を確認して、もう一度お試しください。",
+        "menu": {
+          "label": "{{name}} の操作",
+          "invite": "ワークスペースに招待",
+          "copyEmail": "メールアドレスをコピー",
+          "remove": "ゲストを削除"
+        },
+        "invite": {
+          "title_one": "{{count}} 人のゲストを {{workspace}} に招待",
+          "title_other": "{{count}} 人のゲストを {{workspace}} に招待",
+          "description": "{{workspace}} に参加するためのリンクがメールで届きます。",
+          "sent_one": "{{workspace}} への招待を {{count}} 件送信しました",
+          "sent_other": "{{workspace}} への招待を {{count}} 件送信しました"
+        },
+        "remove": {
+          "titleOne": "{{name}} を {{workspace}} から削除しますか？",
+          "confirmOne": "ゲストを削除",
+          "title_one": "{{count}} 人のゲストを {{workspace}} から削除しますか？",
+          "title_other": "{{count}} 人のゲストを {{workspace}} から削除しますか？",
+          "body": "共有されているすべてのノートにアクセスできなくなります。ノートはいつでも再共有できます。",
+          "linkShared": "ゲストはリンク共有やドメイン共有を通じて引き続きアクセスできる場合があります。",
+          "confirm_one": "{{count}} 人のゲストを削除",
+          "confirm_other": "{{count}} 人のゲストを削除",
+          "removing": "削除中…",
+          "limit": "一度に削除するゲストは{{count}}人まで選択できます。",
+          "failed": "ゲストを削除できませんでした。誰も削除されていません。接続を確認してもう一度お試しください。",
+          "done_one": "{{count}} 人のゲストを削除しました",
+          "done_other": "{{count}} 人のゲストを削除しました"
+        },
+        "selection": {
+          "selectAll": "すべてのゲストを選択",
+          "invite": "ワークスペースに招待",
+          "remove": "ゲストを削除"
+        }
       }
     },
     "enterpriseCheckout": {

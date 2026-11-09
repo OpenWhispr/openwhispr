@@ -2510,6 +2510,7 @@
         "general": "Общие",
         "members": "Участники",
         "invitations": "Приглашения",
+        "guests": "Гости",
         "teams": "Команды"
       },
       "people": {
@@ -3160,6 +3161,73 @@
         "title": "Консоль Enterprise",
         "description": "Управляйте SSO, политиками и участниками через веб",
         "open": "Открыть консоль"
+      },
+      "guests": {
+        "columns": {
+          "name": "Имя",
+          "access": "Доступ",
+          "actions": "Действия"
+        },
+        "emptyTitle": "Гостей пока нет",
+        "emptyBody": "Здесь появятся люди вне этого рабочего пространства, которые могут просматривать ваши общие заметки.",
+        "loadingTitle": "Загрузка гостей…",
+        "loadingBody": "Здесь появятся гости вашего рабочего пространства.",
+        "failedTitle": "Не удалось загрузить гостей",
+        "failedBody": "Проверьте подключение и повторите попытку.",
+        "noteCount_one": "{{count}} заметка",
+        "noteCount_few": "{{count}} заметки",
+        "noteCount_many": "{{count}} заметок",
+        "noteCount_other": "{{count}} заметки",
+        "notesTriggerLabel_one": "{{count}} заметка доступна {{name}}",
+        "notesTriggerLabel_few": "{{count}} заметки доступны {{name}}",
+        "notesTriggerLabel_many": "{{count}} заметок доступны {{name}}",
+        "notesTriggerLabel_other": "{{count}} заметки доступны {{name}}",
+        "removeFromNote": "Убрать из {{note}}",
+        "removedFromNote": "{{name}} убран из {{note}}",
+        "removeFromNoteFailed": "Не удалось убрать {{name}} из {{note}}. Проверьте подключение и повторите попытку.",
+        "menu": {
+          "label": "Действия для {{name}}",
+          "invite": "Пригласить в рабочее пространство",
+          "copyEmail": "Скопировать эл. почту",
+          "remove": "Удалить из гостей"
+        },
+        "invite": {
+          "title_one": "Пригласить {{count}} гостя в «{{workspace}}»",
+          "title_few": "Пригласить {{count}} гостя в «{{workspace}}»",
+          "title_many": "Пригласить {{count}} гостей в «{{workspace}}»",
+          "title_other": "Пригласить {{count}} гостя в «{{workspace}}»",
+          "description": "Они получат ссылку по эл. почте, чтобы присоединиться к «{{workspace}}».",
+          "sent_one": "Отправлено {{count}} приглашение в «{{workspace}}»",
+          "sent_few": "Отправлено {{count}} приглашения в «{{workspace}}»",
+          "sent_many": "Отправлено {{count}} приглашений в «{{workspace}}»",
+          "sent_other": "Отправлено {{count}} приглашения в «{{workspace}}»"
+        },
+        "remove": {
+          "titleOne": "Удалить гостя {{name}} из «{{workspace}}»?",
+          "confirmOne": "Удалить гостя",
+          "title_one": "Удалить {{count}} гостя из «{{workspace}}»?",
+          "title_few": "Удалить {{count}} гостя из «{{workspace}}»?",
+          "title_many": "Удалить {{count}} гостей из «{{workspace}}»?",
+          "title_other": "Удалить {{count}} гостя из «{{workspace}}»?",
+          "body": "Они потеряют доступ ко всем заметкам, которыми с ними поделились. Вы можете снова поделиться с ними заметками в любое время.",
+          "linkShared": "У гостей может сохраниться доступ через общую ссылку или общий доступ по домену.",
+          "confirm_one": "Удалить {{count}} гостя",
+          "confirm_few": "Удалить {{count}} гостя",
+          "confirm_many": "Удалить {{count}} гостей",
+          "confirm_other": "Удалить {{count}} гостя",
+          "removing": "Удаление…",
+          "limit": "Выберите не более {{count}} гостей для удаления за один раз.",
+          "failed": "Не удалось удалить гостей. Никто не был удалён. Проверьте подключение и повторите попытку.",
+          "done_one": "Удалён {{count}} гость",
+          "done_few": "Удалено {{count}} гостя",
+          "done_many": "Удалено {{count}} гостей",
+          "done_other": "Удалено {{count}} гостя"
+        },
+        "selection": {
+          "selectAll": "Выбрать всех гостей",
+          "invite": "Пригласить в рабочее пространство",
+          "remove": "Удалить из гостей"
+        }
       }
     },
     "enterpriseCheckout": {

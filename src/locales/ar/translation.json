@@ -4066,6 +4066,7 @@
         "general": "عام",
         "members": "الأعضاء",
         "invitations": "الدعوات",
+        "guests": "الضيوف",
         "teams": "الفرق"
       },
       "people": {
@@ -4794,6 +4795,87 @@
         "title": "وحدة تحكم Enterprise",
         "description": "إدارة SSO والسياسات والأعضاء على الويب",
         "open": "فتح وحدة التحكم"
+      },
+      "guests": {
+        "columns": {
+          "name": "الاسم",
+          "access": "الوصول",
+          "actions": "الإجراءات"
+        },
+        "emptyTitle": "لا يوجد ضيوف بعد",
+        "emptyBody": "سيظهر هنا الأشخاص من خارج مساحة العمل هذه الذين يمكنهم عرض ملاحظاتك المشتركة.",
+        "loadingTitle": "جارٍ تحميل الضيوف…",
+        "loadingBody": "سيظهر ضيوف مساحة العمل هنا.",
+        "failedTitle": "تعذّر تحميل الضيوف",
+        "failedBody": "تحقق من اتصالك وحاول مرة أخرى.",
+        "noteCount_zero": "{{count}} ملاحظة",
+        "noteCount_one": "{{count}} ملاحظة",
+        "noteCount_two": "{{count}} ملاحظتان",
+        "noteCount_few": "{{count}} ملاحظات",
+        "noteCount_many": "{{count}} ملاحظة",
+        "noteCount_other": "{{count}} ملاحظة",
+        "notesTriggerLabel_zero": "{{count}} ملاحظة مشتركة مع {{name}}",
+        "notesTriggerLabel_one": "{{count}} ملاحظة مشتركة مع {{name}}",
+        "notesTriggerLabel_two": "{{count}} ملاحظتان مشتركتان مع {{name}}",
+        "notesTriggerLabel_few": "{{count}} ملاحظات مشتركة مع {{name}}",
+        "notesTriggerLabel_many": "{{count}} ملاحظة مشتركة مع {{name}}",
+        "notesTriggerLabel_other": "{{count}} ملاحظة مشتركة مع {{name}}",
+        "removeFromNote": "إزالة من {{note}}",
+        "removedFromNote": "تمت إزالة {{name}} من {{note}}",
+        "removeFromNoteFailed": "تعذّرت إزالة {{name}} من {{note}}. تحقق من اتصالك وحاول مرة أخرى.",
+        "menu": {
+          "label": "إجراءات {{name}}",
+          "invite": "دعوة إلى مساحة العمل",
+          "copyEmail": "نسخ البريد الإلكتروني",
+          "remove": "إزالة كضيف"
+        },
+        "invite": {
+          "title_zero": "دعوة {{count}} ضيف إلى {{workspace}}",
+          "title_one": "دعوة {{count}} ضيف إلى {{workspace}}",
+          "title_two": "دعوة {{count}} ضيف إلى {{workspace}}",
+          "title_few": "دعوة {{count}} ضيوف إلى {{workspace}}",
+          "title_many": "دعوة {{count}} ضيفًا إلى {{workspace}}",
+          "title_other": "دعوة {{count}} ضيف إلى {{workspace}}",
+          "description": "سيتلقون رابطًا عبر البريد الإلكتروني للانضمام إلى {{workspace}}.",
+          "sent_zero": "تم إرسال {{count}} دعوة للانضمام إلى {{workspace}}",
+          "sent_one": "تم إرسال {{count}} دعوة للانضمام إلى {{workspace}}",
+          "sent_two": "تم إرسال {{count}} دعوة للانضمام إلى {{workspace}}",
+          "sent_few": "تم إرسال {{count}} دعوات للانضمام إلى {{workspace}}",
+          "sent_many": "تم إرسال {{count}} دعوة للانضمام إلى {{workspace}}",
+          "sent_other": "تم إرسال {{count}} دعوة للانضمام إلى {{workspace}}"
+        },
+        "remove": {
+          "titleOne": "إزالة {{name}} من {{workspace}}؟",
+          "confirmOne": "إزالة الضيف",
+          "title_zero": "إزالة {{count}} ضيف من {{workspace}}؟",
+          "title_one": "إزالة {{count}} ضيف من {{workspace}}؟",
+          "title_two": "إزالة {{count}} ضيف من {{workspace}}؟",
+          "title_few": "إزالة {{count}} ضيوف من {{workspace}}؟",
+          "title_many": "إزالة {{count}} ضيفًا من {{workspace}}؟",
+          "title_other": "إزالة {{count}} ضيف من {{workspace}}؟",
+          "body": "سيفقدون الوصول إلى كل الملاحظات المشاركة معهم. يمكنك مشاركة الملاحظات معهم مجددًا في أي وقت.",
+          "linkShared": "قد يظل بإمكان الضيوف الوصول عبر المشاركة بالرابط أو النطاق.",
+          "confirm_zero": "إزالة {{count}} ضيف",
+          "confirm_one": "إزالة {{count}} ضيف",
+          "confirm_two": "إزالة {{count}} ضيف",
+          "confirm_few": "إزالة {{count}} ضيوف",
+          "confirm_many": "إزالة {{count}} ضيفًا",
+          "confirm_other": "إزالة {{count}} ضيف",
+          "removing": "جارٍ الإزالة…",
+          "limit": "حدد ما يصل إلى {{count}} ضيف لإزالتهم في كل مرة.",
+          "failed": "تعذّرت إزالة الضيوف. لم تتم إزالة أحد. تحقق من اتصالك وحاول مرة أخرى.",
+          "done_zero": "تمت إزالة {{count}} ضيف",
+          "done_one": "تمت إزالة {{count}} ضيف",
+          "done_two": "تمت إزالة {{count}} ضيف",
+          "done_few": "تمت إزالة {{count}} ضيوف",
+          "done_many": "تمت إزالة {{count}} ضيفًا",
+          "done_other": "تمت إزالة {{count}} ضيف"
+        },
+        "selection": {
+          "selectAll": "تحديد كل الضيوف",
+          "invite": "دعوة إلى مساحة العمل",
+          "remove": "إزالة كضيف"
+        }
       }
     },
     "unifiedBilling": {
