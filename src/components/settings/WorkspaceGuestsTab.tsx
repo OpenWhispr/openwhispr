@@ -241,111 +241,115 @@ function WorkspaceGuestsBody({
   );
 
   const table = (
-    <div
-      ref={frameRef}
-      tabIndex={-1}
-      data-guests-table=""
-      className={cn(TABLE_FRAME, "outline-none")}
-    >
-      <table className="w-full table-fixed border-collapse">
-        <colgroup>
-          {canManage ? (
-            <>
-              <col className="w-10" />
-              <col className="w-[47%]" />
-              <col className="w-[33%]" />
-              <col className="w-[15%]" />
-            </>
-          ) : (
-            <>
-              <col className="w-[55%]" />
-              <col className="w-[45%]" />
-            </>
-          )}
-        </colgroup>
-        <thead>
-          <tr>
+    <div className="space-y-4">
+      <div
+        ref={frameRef}
+        tabIndex={-1}
+        data-guests-table=""
+        className={cn(TABLE_FRAME, "outline-none")}
+      >
+        <table className="w-full table-fixed border-collapse">
+          <colgroup>
             {canManage ? (
-              <th scope="col" className={cn(HEADER_CELL, "ps-4 pe-0 text-start")}>
-                <RowCheckbox
-                  label={t(`${KEY}.selection.selectAll`)}
-                  checked={headerChecked}
-                  className={ROW_CHECKBOX}
-                  onToggle={() =>
-                    setSelection((current) => setRows(current, emails, headerChecked !== true))
-                  }
-                />
+              <>
+                <col className="w-10" />
+                <col className="w-[47%]" />
+                <col className="w-[33%]" />
+                <col className="w-[15%]" />
+              </>
+            ) : (
+              <>
+                <col className="w-[55%]" />
+                <col className="w-[45%]" />
+              </>
+            )}
+          </colgroup>
+          <thead>
+            <tr>
+              {canManage ? (
+                <th scope="col" className={cn(HEADER_CELL, "ps-4 pe-0 text-start")}>
+                  <RowCheckbox
+                    label={t(`${KEY}.selection.selectAll`)}
+                    checked={headerChecked}
+                    className={ROW_CHECKBOX}
+                    onToggle={() =>
+                      setSelection((current) => setRows(current, emails, headerChecked !== true))
+                    }
+                  />
+                </th>
+              ) : null}
+              <th
+                scope="col"
+                className={cn(HEADER_CELL, canManage ? "ps-3" : "ps-4", "pe-3 text-start")}
+              >
+                {t(`${KEY}.columns.name`)}
               </th>
-            ) : null}
-            <th
-              scope="col"
-              className={cn(HEADER_CELL, canManage ? "ps-3" : "ps-4", "pe-3 text-start")}
-            >
-              {t(`${KEY}.columns.name`)}
-            </th>
-            <th scope="col" className={cn(HEADER_CELL, "ps-3 pe-4 text-start")}>
-              {t(`${KEY}.columns.access`)}
-            </th>
-            {canManage ? (
-              <th scope="col" className={cn(HEADER_CELL, "ps-3 pe-4 text-end")}>
-                {t(`${KEY}.columns.actions`)}
+              <th scope="col" className={cn(HEADER_CELL, "ps-3 pe-4 text-start")}>
+                {t(`${KEY}.columns.access`)}
               </th>
-            ) : null}
-          </tr>
-        </thead>
-        <tbody>
-          {status === "ready" ? (
-            guests.map((guest) => (
-              <GuestRow
-                key={guest.email}
-                guest={guest}
-                canManage={canManage}
-                selected={selection.has(guest.email)}
-                onToggle={() => setSelection((current) => toggleRow(current, guest.email))}
-                onRemoveFromNote={(noteId) => removeFromNote(guest, noteId)}
-                onTableFocus={focusList}
-                onInvite={() => setInviting([guest])}
-                onCopy={() => void copyEmail(guest)}
-                onRemove={() => setRemoving([guest])}
-              />
-            ))
-          ) : (
-            <tr className={ROW_DIVIDER}>
-              <td colSpan={columnCount} className="px-4 py-8 text-center">
-                {status === "failed" ? (
-                  <div>
-                    <p className="text-xs font-medium text-foreground">{t(`${KEY}.failedTitle`)}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {error?.kind === "ssoRequired"
-                        ? t("workspaces.ssoRequired", { workspace: isolate(workspace.name) })
-                        : t(`${KEY}.failedBody`)}
-                    </p>
-                    {error?.kind === "ssoRequired" ? null : (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="mt-3"
-                        onClick={() => void reload()}
-                      >
-                        {t("workspaces.exit.tryAgain")}
-                      </Button>
-                    )}
-                  </div>
-                ) : (
-                  <div role="status">
-                    <p className="text-xs font-medium text-foreground">
-                      {t(`${KEY}.loadingTitle`)}
-                    </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {t(`${KEY}.loadingBody`)}
-                    </p>
-                  </div>
-                )}
-              </td>
+              {canManage ? (
+                <th scope="col" className={cn(HEADER_CELL, "ps-3 pe-4 text-end")}>
+                  {t(`${KEY}.columns.actions`)}
+                </th>
+              ) : null}
             </tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {status === "ready" ? (
+              guests.map((guest) => (
+                <GuestRow
+                  key={guest.email}
+                  guest={guest}
+                  canManage={canManage}
+                  selected={selection.has(guest.email)}
+                  onToggle={() => setSelection((current) => toggleRow(current, guest.email))}
+                  onRemoveFromNote={(noteId) => removeFromNote(guest, noteId)}
+                  onTableFocus={focusList}
+                  onInvite={() => setInviting([guest])}
+                  onCopy={() => void copyEmail(guest)}
+                  onRemove={() => setRemoving([guest])}
+                />
+              ))
+            ) : (
+              <tr className={ROW_DIVIDER}>
+                <td colSpan={columnCount} className="px-4 py-8 text-center">
+                  {status === "failed" ? (
+                    <div>
+                      <p className="text-xs font-medium text-foreground">
+                        {t(`${KEY}.failedTitle`)}
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {error?.kind === "ssoRequired"
+                          ? t("workspaces.ssoRequired", { workspace: isolate(workspace.name) })
+                          : t(`${KEY}.failedBody`)}
+                      </p>
+                      {error?.kind === "ssoRequired" ? null : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-3"
+                          onClick={() => void reload()}
+                        >
+                          {t("workspaces.exit.tryAgain")}
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    <div role="status">
+                      <p className="text-xs font-medium text-foreground">
+                        {t(`${KEY}.loadingTitle`)}
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {t(`${KEY}.loadingBody`)}
+                      </p>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
       {canManage ? (
         <SelectionBar
           count={selectedGuests.length}

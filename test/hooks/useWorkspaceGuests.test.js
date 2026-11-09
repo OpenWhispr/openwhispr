@@ -171,6 +171,28 @@ test("dropGuests takes whole guests out and survives a failed reload", async (t)
   );
 });
 
+test("an older reload doesn't bring back a dropped guest after a newer reload fails", async (t) => {
+  const { mount, state } = await loadHook(t);
+  globalThis.__guestListImpl = async () => [guest("a@x.com"), guest("b@x.com")];
+  await mount("w1");
+
+  const older = deferred();
+  globalThis.__guestListImpl = () => older.promise;
+  await React.act(async () => void state().reload());
+  await React.act(async () => state().dropGuests(["a@x.com"]));
+  const newer = deferred();
+  globalThis.__guestListImpl = () => newer.promise;
+  await React.act(async () => void state().reload());
+
+  await React.act(async () => newer.reject(new Error("offline")));
+  await React.act(async () => older.resolve([guest("a@x.com"), guest("b@x.com")]));
+  assert.equal(state().status, "ready");
+  assert.deepEqual(
+    state().guests.map((g) => g.email),
+    ["b@x.com"]
+  );
+});
+
 test("dropGuestNote takes one note off a guest and drops a guest left with none", async (t) => {
   const { mount, state } = await loadHook(t);
   const withNotes = (email, ids) => ({
