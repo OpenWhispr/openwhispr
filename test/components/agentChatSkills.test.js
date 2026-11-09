@@ -46,10 +46,13 @@ async function mountChat(t, { messages } = {}) {
       `,
       "/chat/useChatMessageSender": `
         export function useChatMessageSender() { return async (text, options) => {
-          globalThis.__agentSkillCalls.sends.push({ text, options }); return true;
+          globalThis.__agentSkillCalls.sends.push({ text, options });
+          return globalThis.__agentSkillCalls.hold ?? true;
         }; }
       `,
-      "/chat/useInterruptedInteractions": `export function useInterruptedInteractions() {}`,
+      "/chat/useInterruptedInteractions": `export function useInterruptedInteractions(_host, send) {
+        globalThis.__agentSkillCalls.restoredSend = send;
+      }`,
     },
   });
   const [{ useAgentChat }, { AgentComposer }, { SkillChip }] = await Promise.all([
@@ -175,4 +178,21 @@ test("a first half stopped before its reply started is still replaced, never lef
     ["Prep my meeting with Dana"]
   );
   assert.equal(view.calls.sends.length, 0, "no second request is added");
+});
+
+test("a spoken turn waits for a restored card's answer to finish sending", async (t) => {
+  const view = await mountChat(t);
+  let release;
+  view.calls.hold = new Promise((resolve) => (release = resolve));
+  void view.calls.restoredSend("Thursday");
+  let settled = false;
+  void view
+    .chat()
+    .settled()
+    .then(() => (settled = true));
+  await settle();
+  assert.equal(settled, false, "the answer's send still holds the chat");
+  release(true);
+  await settle();
+  assert.equal(settled, true);
 });

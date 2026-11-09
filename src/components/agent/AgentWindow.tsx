@@ -996,7 +996,6 @@ export default function AgentWindow() {
     const current = stateRef.current;
     if (current.call?.stopped) dispatch({ type: "leaveCall" });
     if (!current.call || current.call.stopped) return false;
-    if (!current.visible) dispatch({ type: "show", layout: current.layout, input: current.input });
     return true;
   }, [dispatch]);
 

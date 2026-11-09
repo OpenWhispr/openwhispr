@@ -62,11 +62,26 @@ export function useAgentChat({
     createConversation,
     onSendingChange: setSubmissionInFlight,
   });
+  // The send in flight, so a spoken turn can wait for a stopped one to let go.
+  const inFlightRef = useRef<Promise<boolean> | null>(null);
+  const settled = useCallback(
+    (): Promise<void> => inFlightRef.current?.then(noop, noop) ?? Promise.resolve(),
+    []
+  );
+  const track = useCallback((sending: Promise<boolean>): Promise<boolean> => {
+    inFlightRef.current = sending;
+    void sending
+      .finally(() => {
+        if (inFlightRef.current === sending) inFlightRef.current = null;
+      })
+      .catch(noop);
+    return sending;
+  }, []);
   // An answer to a card left from an earlier turn goes on as a message of the app's.
   const sendWithSkill = useCallback(
     (text: string, options?: SendToAIOptions) =>
-      sendMessage(text, { ...options, ...skillSendOptions() }),
-    [sendMessage, skillSendOptions]
+      track(sendMessage(text, { ...options, ...skillSendOptions() })),
+    [sendMessage, skillSendOptions, track]
   );
   useInterruptedInteractions(persistence, sendWithSkill);
 
@@ -87,22 +102,6 @@ export function useAgentChat({
     setMessages,
   } = persistence;
 
-  // The send in flight, so a spoken turn can wait for a stopped one to let go.
-  const inFlightRef = useRef<Promise<boolean> | null>(null);
-  const settled = useCallback(
-    (): Promise<void> => inFlightRef.current?.then(noop, noop) ?? Promise.resolve(),
-    []
-  );
-  const track = useCallback((sending: Promise<boolean>): Promise<boolean> => {
-    inFlightRef.current = sending;
-    void sending
-      .finally(() => {
-        if (inFlightRef.current === sending) inFlightRef.current = null;
-      })
-      .catch(noop);
-    return sending;
-  }, []);
-
   // A message the user wrote. A fork starts with its parent's title; the first
   // one written in it names it, as a new chat's does, unless it was renamed.
   const send = useCallback(
@@ -118,9 +117,9 @@ export function useAgentChat({
           conversationTitle(text)
         );
       }
-      return track(sendWithSkill(text, options));
+      return sendWithSkill(text, options);
     },
-    [conversationId, forkOrigin, sendWithSkill, track]
+    [conversationId, forkOrigin, sendWithSkill]
   );
 
   // A spoken request a pause cut short, said whole. While its first half is
