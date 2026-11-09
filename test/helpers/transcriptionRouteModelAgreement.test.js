@@ -1,12 +1,10 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const registry = require("../../src/models/modelRegistryData.json");
+const { registryData: registry } = require("../../src/models/registryData.js");
 const load = () => import("../../src/helpers/transcriptionRoute.ts");
 
-// resolveByokModel validates by prefix so it can run in the packaged main process
-// without the registry, which means the two can silently drift apart. Every model
-// the picker can write must survive a round trip through the resolver, or a user
+// Every model the picker can write must survive a round trip through the resolver, or a user
 // who picks it has their choice replaced by the provider default at request time.
 //
 // Tinfoil is excluded: its batch model comes from the registry directly
@@ -21,6 +19,7 @@ const PREFIX_VALIDATED_PROVIDERS = [
   "deepgram",
   "assemblyai",
   "elevenlabs",
+  "openrouter",
 ];
 
 test("every shipping registry model survives resolveByokModel", async () => {
@@ -86,4 +85,15 @@ test("a model belonging to another provider degrades to the provider default", a
   assert.equal(resolveByokModel("deepgram", "whisper-1"), "nova-3");
   assert.equal(resolveByokModel("assemblyai", "nova-3"), "universal-3-6-pro");
   assert.equal(resolveByokModel("elevenlabs", "whisper-1"), "scribe_v2");
+});
+
+// OpenRouter brokers batch HTTP transcription only — it has no realtime socket.
+// A `streaming: true` slipped onto one of its models would put the meeting and
+// Note Recording scopes on a WebSocket that does not exist.
+test("no OpenRouter model advertises streaming", () => {
+  const provider = registry.transcriptionProviders.find((p) => p.id === "openrouter");
+  assert.ok(provider, "registry is missing the openrouter provider");
+  for (const model of provider.models) {
+    assert.equal(model.streaming, undefined, `${model.id} must stay batch-only`);
+  }
 });

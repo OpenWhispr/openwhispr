@@ -1,2 +1,10 @@
 dist/
 data/emoji/
+
+# Vendored byte-for-byte from OpenWhispr/model-registry; verified by model-registry:verify.
+models/registrySchema.cjs
+models/registryEnvelope.cjs
+models/registrySelection.js
+models/modelRegistryData.json
+models/registryMetadata.json
+models/registryBundle.json

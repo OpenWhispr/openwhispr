@@ -110,6 +110,10 @@ export interface ReasoningRequest {
   language?: string;
   locale?: string;
   customDictionary?: string[];
+  // Teammates' words (at most 200, 2,000 characters), kept apart from the
+  // personal customDictionary: the API and the prompts built here quote them as
+  // data. Omitted when empty, so a personal-only request is what it always was.
+  sharedDictionary?: string[];
   // Keyboard dictation tone. Sent only for keyboard cleanup with a non-default
   // tone; the API appends a matching instruction in cleanup mode.
   tone?: KeyboardTone;

@@ -2,6 +2,7 @@ import type { Workspace } from "../types/electron";
 import { workspaceCan } from "./capabilities.ts";
 
 const PAID_PLANS = new Set(["pro", "business", "enterprise"]);
+const SHARED_DICTIONARY_PLANS = new Set(["business", "enterprise"]);
 const ENTITLED_STATUSES = new Set(["active", "trialing"]);
 
 type WorkspaceBillingState = Pick<
@@ -26,6 +27,17 @@ export function hasActiveWorkspaceSubscription(
   workspace: Pick<WorkspaceBillingState, "plan" | "status">
 ): boolean {
   return PAID_PLANS.has(workspace.plan) && ENTITLED_STATUSES.has(workspace.status);
+}
+
+/** The shared team dictionary is a Business feature: Business or Enterprise, currently entitled. */
+export function hasSharedDictionaryPlan(
+  workspace: Pick<Workspace, "plan" | "status"> | null | undefined
+): boolean {
+  return Boolean(
+    workspace &&
+    SHARED_DICTIONARY_PLANS.has(workspace.plan) &&
+    ENTITLED_STATUSES.has(workspace.status)
+  );
 }
 
 /**

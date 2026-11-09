@@ -1,14 +1,25 @@
 const { i18nMain } = require("./i18nMain");
+const { isSpeakerLocked } = require("./speakerAssignmentPolicy");
 
 function resolveSpeaker(seg, speakerMappings) {
-  if (seg.speakerName && !seg.speakerIsPlaceholder) return seg.speakerName;
-  if (seg.speaker && speakerMappings[seg.speaker]) return speakerMappings[seg.speaker];
+  const mappedName =
+    seg.speaker && !(seg.speaker === "you" && seg.recorderName)
+      ? speakerMappings[seg.speaker]
+      : undefined;
+  if (mappedName && !(seg.speakerName && isSpeakerLocked(seg))) return mappedName;
+  if (seg.speakerName && !seg.speakerIsPlaceholder) {
+    const name = seg.speakerName.trim().toLowerCase();
+    const isSelfName =
+      name === "you" || name === i18nMain.t("transcript.speaker.you").toLowerCase();
+    return isSelfName && seg.recorderName ? seg.recorderName : seg.speakerName;
+  }
+  if (seg.speaker === "you" && seg.recorderName) return seg.recorderName;
   if (seg.speaker === "you") return i18nMain.t("transcript.speaker.you");
   if (seg.speaker) {
     const num = parseInt(seg.speaker.replace("speaker_", ""), 10);
     if (!isNaN(num)) return i18nMain.t("notes.speaker.label", { n: num + 1 });
   }
-  if (seg.source === "mic") return i18nMain.t("transcript.speaker.you");
+  if (seg.source === "mic") return seg.recorderName || i18nMain.t("transcript.speaker.you");
   if (seg.source === "system") return i18nMain.t("transcript.speaker.others");
   return i18nMain.t("notes.speaker.unknown");
 }
@@ -18,7 +29,13 @@ function resolveSpeaker(seg, speakerMappings) {
 // otherwise absorb the un-named one beside it.
 function speakerKey(seg) {
   const named = seg.speakerName && !seg.speakerIsPlaceholder ? seg.speakerName : "";
-  return [seg.speaker || "", named, seg.speaker ? "" : seg.source || ""].join("\u0000");
+  return [
+    seg.speaker || "",
+    named,
+    seg.speaker ? "" : seg.source || "",
+    seg.recorderName || "",
+    isSpeakerLocked(seg),
+  ].join("\u0000");
 }
 
 function parseNoteDate(createdAt) {

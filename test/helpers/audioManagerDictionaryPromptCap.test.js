@@ -13,7 +13,6 @@ async function loadAudioManager(t, opts) {
         getEffectiveSttLanguage: () => "auto",
         getTranscriptionModel: () => "whisper-1",
         getAPIKey: async () => "test-key",
-        getWhisperPrompt: () => null,
         getKeyterms: () => [],
         shouldStreamTranscription: () => false,
         isDictionaryEcho: () => false,
@@ -43,14 +42,19 @@ function capturePrompts(t) {
   return prompts;
 }
 
-// A ~100-term custom dictionary joined the way getCustomDictionaryPrompt does,
-// mirroring the 1633-char report in #CUS-49 (1633 -> 899 at maxChars 900).
-function buildLongDictionaryPrompt(count = 100) {
+// A ~100-term custom dictionary, mirroring the 1633-char report in #CUS-49
+// (1633 -> 899 at maxChars 900). The real getCustomDictionaryPrompt builds the
+// prompt from it, so the joined string is what an uncut request would carry.
+function buildLongDictionary(count = 100) {
   const words = [];
   for (let i = 0; i < count; i++) {
     words.push(`SpecializedTerm${String(i).padStart(3, "0")}`);
   }
-  return words.join(", ");
+  return words;
+}
+
+function buildLongDictionaryPrompt(count = 100) {
+  return buildLongDictionary(count).join(", ");
 }
 
 test("custom dictionary prompt caps follow the provider's real limit", async (t) => {
@@ -68,12 +72,12 @@ test("custom dictionary prompt caps follow the provider's real limit", async (t)
       useLocalWhisper: false,
       allowLocalFallback: false,
       cloudTranscriptionProvider: "openai",
+      customDictionary: buildLongDictionary(),
     });
     const prompts = capturePrompts(t);
     const manager = createManager({
       getTranscriptionModel: () => "gpt-4o-mini-transcribe",
       getTranscriptionEndpoint: () => "https://api.openai.com/v1/audio/transcriptions",
-      getWhisperPrompt: () => longPrompt,
     });
 
     const result = await manager.processWithOpenAIAPI(audioBlob, {});
@@ -91,12 +95,12 @@ test("custom dictionary prompt caps follow the provider's real limit", async (t)
       useLocalWhisper: false,
       allowLocalFallback: false,
       cloudTranscriptionProvider: "groq",
+      customDictionary: buildLongDictionary(),
     });
     const prompts = capturePrompts(t);
     const manager = createManager({
       getTranscriptionModel: () => "whisper-large-v3-turbo",
       getTranscriptionEndpoint: () => "https://api.groq.com/openai/v1/audio/transcriptions",
-      getWhisperPrompt: () => longPrompt,
     });
 
     await manager.processWithOpenAIAPI(audioBlob, {});
@@ -115,12 +119,12 @@ test("custom dictionary prompt caps follow the provider's real limit", async (t)
       useLocalWhisper: false,
       allowLocalFallback: false,
       cloudTranscriptionProvider: "openai",
+      customDictionary: buildLongDictionary(),
     });
     const prompts = capturePrompts(t);
     const manager = createManager({
       getTranscriptionModel: () => "whisper-1",
       getTranscriptionEndpoint: () => "https://api.openai.com/v1/audio/transcriptions",
-      getWhisperPrompt: () => longPrompt,
     });
 
     await manager.processWithOpenAIAPI(audioBlob, {});
@@ -140,6 +144,7 @@ test("custom dictionary prompt caps follow the provider's real limit", async (t)
         allowLocalFallback: false,
         cloudTranscriptionProvider: "custom",
         cloudTranscriptionBaseUrl: "https://stt.internal.example/v1",
+        customDictionary: buildLongDictionary(),
       });
       const prompts = capturePrompts(t);
       // Self-hosted and custom endpoints take whatever model name the user typed;
@@ -147,7 +152,6 @@ test("custom dictionary prompt caps follow the provider's real limit", async (t)
       const manager = createManager({
         getTranscriptionModel: () => "Systran/faster-distil-large-v3",
         getTranscriptionEndpoint: () => "https://stt.internal.example/v1/audio/transcriptions",
-        getWhisperPrompt: () => longPrompt,
       });
 
       await manager.processWithOpenAIAPI(audioBlob, {});
@@ -164,6 +168,7 @@ test("custom dictionary prompt caps follow the provider's real limit", async (t)
       useLocalWhisper: false,
       allowLocalFallback: false,
       cloudTranscriptionProvider: "openai",
+      customDictionary: buildLongDictionary(700),
     });
     const hugePrompt = buildLongDictionaryPrompt(700); // ~13k chars
     assert.ok(hugePrompt.length > 12000);
@@ -171,7 +176,6 @@ test("custom dictionary prompt caps follow the provider's real limit", async (t)
     const manager = createManager({
       getTranscriptionModel: () => "gpt-4o-transcribe",
       getTranscriptionEndpoint: () => "https://api.openai.com/v1/audio/transcriptions",
-      getWhisperPrompt: () => hugePrompt,
     });
 
     await manager.processWithOpenAIAPI(audioBlob, {});
