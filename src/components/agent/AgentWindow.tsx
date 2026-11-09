@@ -749,7 +749,8 @@ export default function AgentWindow() {
   }, [callSession, dispatch, listening, refuseIfRestricted, stopReading, transcribing, voiceCall]);
 
   // Sent from a card saying no model hears the call's language, the user picked
-  // another: the call starts again in it.
+  // another: the call starts again in it. Its settings close, so no later pick
+  // lands while it starts, before its session can hear of it.
   useEffect(
     () =>
       useSettingsStore.subscribe((settings, previous) => {
@@ -757,9 +758,10 @@ export default function AgentWindow() {
         if (settings.voiceCallLanguage === previous.voiceCallLanguage) return;
         if (reason !== "language-model-missing" && reason !== "language-unsupported") return;
         voiceCallRef.current.clearFailure();
+        dispatch({ type: "callSettings", open: false });
         void voiceCallRef.current.start();
       }),
-    []
+    [dispatch]
   );
 
   // End stops the call, what it is saying, and the turn it is running; the chat stays.

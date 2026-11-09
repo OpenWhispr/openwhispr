@@ -1595,7 +1595,9 @@ export function createChatTurnEngine(
             "reasoning"
           );
         }
-        if (restoresReplaced()) {
+        // A spoken request (a joined one) says why it failed; only a stop brings
+        // back the reply it replaced.
+        if (restoresReplaced() && (cancelled() || !speech)) {
           restoreReplaced();
           if (!cancelled()) options?.onReplaceFailed?.();
         } else if (cancelled()) {

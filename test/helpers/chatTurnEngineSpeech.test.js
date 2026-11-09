@@ -143,6 +143,31 @@ test("a stopped spoken request ends as stopped, and a failed one says why", asyn
   assert.equal(said[0], "text");
   assert.ok(said[1].length > 0, "the failure is spoken");
   assert.deepEqual(end, ["end", "error"]);
+
+  // Joined in place of a stopped reply, it fails or is stopped before any text.
+  // eslint-disable-next-line require-yield
+  t.mock.method(fixture.service, "processTextStreamingAI", async function* (...args) {
+    await new Promise((resolve) => {
+      release = resolve;
+      args[5].addEventListener("abort", resolve, { once: true });
+    });
+    throw new Error("socket hang up");
+  });
+  const sendJoined = async (stop) => {
+    release = undefined;
+    const joined = speechLog();
+    const replaceMessage = { id: "a1", role: "assistant", content: "" };
+    const sending = fixture.engine.send("hello", [], { voice: joined.voice, replaceMessage });
+    while (!release) await flush();
+    if (stop) fixture.engine.cancel({ explicit: true });
+    else release();
+    await sending;
+    return joined.events;
+  };
+  const joinFailed = await sendJoined(false);
+  assert.deepEqual(joinFailed.at(-1), ["end", "error"]);
+  assert.equal(joinFailed.at(-2)[0], "text", "a joined request's failure is spoken too");
+  assert.deepEqual(await sendJoined(true), [["end", "stopped"]], "a stop says nothing");
 });
 
 test("a withdrawn answer keeps the reply spoken before its step", async (t) => {
