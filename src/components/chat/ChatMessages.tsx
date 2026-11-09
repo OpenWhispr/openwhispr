@@ -14,6 +14,10 @@ interface ChatMessagesProps {
   scrollClassName?: string;
   /** Replies as plain text and the user's messages in a soft pill (the note chat, floating or docked). */
   plainBubbles?: boolean;
+  /** Offers Fork on saved replies. */
+  onForkMessage?: (messageId: string) => void;
+  /** Offered on the last reply when it stopped at the step limit. */
+  onContinue?: () => void;
 }
 
 export function ChatMessages({
@@ -24,6 +28,8 @@ export function ChatMessages({
   contentClassName,
   scrollClassName,
   plainBubbles = false,
+  onForkMessage,
+  onContinue,
 }: ChatMessagesProps) {
   // Follow the stream only while the user is at the bottom; scrolling up to
   // re-read must not be yanked back down by the next token.
@@ -64,7 +70,7 @@ export function ChatMessages({
           {leading}
           {messages
             .filter((msg) => msg.role !== "tool")
-            .map((msg) => (
+            .map((msg, index, visible) => (
               <ChatMessage
                 key={msg.id}
                 messageId={msg.id}
@@ -75,6 +81,10 @@ export function ChatMessages({
                 error={msg.error}
                 onOpenNote={onOpenNote}
                 plain={plainBubbles}
+                turn={msg.turn}
+                dbId={msg.dbId}
+                onFork={onForkMessage}
+                onContinue={index === visible.length - 1 ? onContinue : undefined}
               />
             ))}
         </div>

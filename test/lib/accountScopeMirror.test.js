@@ -167,6 +167,8 @@ test("a window without a session hydrates managed transcription from the main pr
   );
   assert.deepEqual(calls.policy, [["account-a", 1]]);
   assert.deepEqual(calls.config, [["account-a", "workspace-a", 1]]);
+  // Main's disk cache is what an offline launch falls back to.
+  assert.deepEqual(calls.clears, []);
 
   await t.test("a new credential generation re-resolves policy and identity", async () => {
     broadcast({ accountId: "account-a", authGeneration: 2 });
@@ -177,6 +179,7 @@ test("a window without a session hydrates managed transcription from the main pr
     assert.deepEqual(calls.policy.at(-1), ["account-a", 2]);
     assert.deepEqual(calls.config.at(-1), ["account-a", "workspace-a", 2]);
     assert.equal(managed.isManagedTranscriptionActive(), true);
+    assert.deepEqual(calls.clears, []);
   });
 
   await t.test("a cleared scope (sign-out) clears the mirrored identity at once", () => {
@@ -211,29 +214,33 @@ test("a scope validated after boot arrives by broadcast and the workspace by sto
   assert.deepEqual(calls.config, [["account-a", "workspace-a", 1]]);
 });
 
-test("the mirror names the scope it moves to, and nothing when the scope is gone", async (t) => {
+test("the mirror moves scopes through main's config lookup, and clears only a gone scope", async (t) => {
   const { managed, calls, broadcast, setActiveWorkspace } = await boot(t, {
     scope: { accountId: "account-a", authGeneration: 1 },
     activeWorkspaceId: "workspace-a",
   });
   await waitFor(() => managed.isManagedTranscriptionActive(), "managed transcription");
-  const moves = [{ next: { accountId: "account-a", workspaceId: "workspace-a" } }];
-  assert.deepEqual(calls.clears, moves);
+  // A move never clears: main's config lookup retires another scope's
+  // enterprise audio itself, and a clear would delete the cache an offline
+  // launch falls back to.
+  assert.deepEqual(calls.clears, []);
 
-  // A rotation names the same scope, so main keeps an enterprise meeting running.
+  // A rotation keeps the scope, so main keeps an enterprise meeting running.
   broadcast({ accountId: "account-a", authGeneration: 2 });
-  moves.push({ next: { accountId: "account-a", workspaceId: "workspace-a" } });
-  assert.deepEqual(calls.clears, moves);
-
+  await waitFor(() => calls.config.some(([, , generation]) => generation === 2), "rotation");
   setActiveWorkspace("workspace-b");
-  moves.push({ next: { accountId: "account-a", workspaceId: "workspace-b" } });
-  assert.deepEqual(calls.clears, moves);
+  await waitFor(() => calls.config.some(([, workspace]) => workspace === "workspace-b"), "move");
+  assert.deepEqual(calls.config, [
+    ["account-a", "workspace-a", 1],
+    ["account-a", "workspace-a", 2],
+    ["account-a", "workspace-b", 2],
+  ]);
+  assert.deepEqual(calls.clears, []);
 
   // An unresolved scope (a window booting mid-rotation, or a sign-out) names
   // nothing: main ends the work when it learns the account changed.
   broadcast(null);
-  moves.push(undefined);
-  assert.deepEqual(calls.clears, moves);
+  assert.deepEqual(calls.clears, [undefined]);
 });
 
 test("a broadcast that lands while the boot read is in flight is not overwritten by it", async (t) => {

@@ -205,13 +205,13 @@ test("persistent warning offers a scoped stop and does not leak into the next se
   await interrupt();
   const warning = globalThis.__interruptionToasts[0];
   assert.equal(warning.duration, 0);
-  assert.ok(warning.action);
-  await React.act(async () => warning.action.props.onClick());
+  assert.equal(warning.actions.length, 1);
+  await React.act(async () => warning.actions[0].onClick());
   assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
   await React.act(async () =>
     store.startRecording({ noteId: null, noteTitle: null, folderId: null, autoEndEligible: false })
   );
-  await React.act(async () => warning.action.props.onClick());
+  await React.act(async () => warning.actions[0].onClick());
   assert.equal(store.useMeetingRecordingStore.getState().isRecording, true);
   await render(false);
   await render(true);
@@ -237,11 +237,11 @@ test("latest pending event delivers once and cautious warnings do not offer stop
   await focus(true);
   assert.equal(globalThis.__interruptionToasts.length, 1);
   assert.equal(globalThis.__interruptionToasts[0].title, "Meeting audio has gone quiet");
-  assert.equal(globalThis.__interruptionToasts[0].action, undefined);
+  assert.equal(globalThis.__interruptionToasts[0].actions, undefined);
   await interrupt({ recovering: true });
   assert.deepEqual(globalThis.__interruptionDismissals, ["1"]);
   assert.equal(globalThis.__interruptionToasts[1].title, "Meeting audio interrupted");
-  assert.equal(globalThis.__interruptionToasts[1].action, undefined);
+  assert.equal(globalThis.__interruptionToasts[1].actions, undefined);
   assert.equal(globalThis.__interruptionToasts[1].duration, 8000);
 });
 

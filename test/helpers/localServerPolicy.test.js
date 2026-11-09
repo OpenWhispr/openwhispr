@@ -188,3 +188,52 @@ test("with no model loaded, the server stops only when nothing is needed", async
   assert.equal(shouldStopLocalServer({ models: [] }, null), true);
   assert.equal(shouldStopLocalServer({ models: ["qwen3-8b-q4_k_m"] }, null), false);
 });
+
+// --- launch pre-warm -----------------------------------------------------
+//
+// The server holds one model at a time. Pre-warming two different models at
+// launch would load one only to replace it with the other, leaving whichever
+// start ran second resident.
+
+test("launch pre-warms the cleanup model when both scopes run different local models", async () => {
+  const { resolvePrewarmModel } = await load();
+
+  assert.equal(
+    resolvePrewarmModel({
+      cleanupProvider: "local",
+      cleanupModel: "qwen3-8b-q4_k_m",
+      dictationAgentProvider: "local",
+      dictationAgentModel: "gemma-4-e4b-it-q4_k_m",
+    }),
+    "qwen3-8b-q4_k_m"
+  );
+});
+
+test("launch pre-warms the Voice Assistant model when only it runs locally", async () => {
+  const { resolvePrewarmModel } = await load();
+
+  assert.equal(
+    resolvePrewarmModel({
+      cleanupProvider: "openwhispr",
+      cleanupModel: "",
+      dictationAgentProvider: "local",
+      dictationAgentModel: "gemma-4-e4b-it-q4_k_m",
+    }),
+    "gemma-4-e4b-it-q4_k_m"
+  );
+});
+
+test("launch pre-warms nothing when no scope has a local model", async () => {
+  const { resolvePrewarmModel } = await load();
+
+  // A local provider without a model name has nothing to load.
+  assert.equal(
+    resolvePrewarmModel({
+      cleanupProvider: "local",
+      cleanupModel: "",
+      dictationAgentProvider: "openwhispr",
+      dictationAgentModel: "",
+    }),
+    ""
+  );
+});

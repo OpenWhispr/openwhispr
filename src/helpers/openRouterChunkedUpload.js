@@ -134,7 +134,9 @@ async function transcribeOpenRouterChunks({
     }
     if (failedChunks / totalChunks > CLOUD_CHUNK_MAX_LOSS_RATIO) throw stoppedBy ?? firstLoss;
     return {
-      text: assembleChunkTranscript(results, segmentSeconds, knownDuration),
+      text: assembleChunkTranscript(results, segmentSeconds, knownDuration, {
+        preserveWhitespace: true,
+      }),
       ...(failedChunks > 0
         ? { warning: `${failedChunks} of ${totalChunks} chunks failed`, failedChunks, totalChunks }
         : {}),
