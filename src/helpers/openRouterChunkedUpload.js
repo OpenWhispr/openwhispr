@@ -105,7 +105,9 @@ async function transcribeOpenRouterChunks({
       signal?.throwIfAborted();
       try {
         const { text } = await transcribeWithRetries(pieces[index]);
-        results[index] = text?.trim() ? { text } : SILENT_CHUNK;
+        // ElevenLabs Scribe answers a silent piece with "[pause]" instead of nothing.
+        const spokenText = text?.trim();
+        results[index] = spokenText && spokenText !== "[pause]" ? { text } : SILENT_CHUNK;
       } catch (err) {
         if (signal?.aborted) throw err;
         if (stopsUpload(err)) {
