@@ -113,6 +113,18 @@ async function mount(t, ids = ["n1", "n2"], firstLoad) {
   return { container, open, press, resolve, rerender, setGuests, pending, listCalls };
 }
 
+test("the × keeps its size: the menu item's padding would leave its icon zero wide", async (t) => {
+  const view = await mount(t, ["n1"]);
+  await view.open();
+  const remove = [...happyWindow.document.querySelectorAll('[role="menuitem"]')].find(
+    (item) => readable(item.getAttribute("aria-label") ?? "") === "Remove from n1"
+  );
+  assert.ok(remove, "the note's remove control exists");
+  const classes = remove.className.split(/\s+/);
+  assert.ok(classes.includes("size-5") && classes.includes("p-0"), remove.className);
+  assert.ok(!classes.includes("px-2.5") && !classes.includes("py-2"), remove.className);
+});
+
 test("a permission downgrade discards admin-only notes before a failed refresh", async (t) => {
   const view = await mount(t, ["restricted-note"]);
   await view.open();

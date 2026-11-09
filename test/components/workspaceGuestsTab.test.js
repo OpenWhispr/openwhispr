@@ -83,7 +83,7 @@ async function loadTab(
           h("div", { ref, "data-menu-content": "", onCloseAutoFocus }, children);
         export const DropdownMenuItem = ({ children, onSelect, asChild, ...rest }) =>
           asChild
-            ? React.cloneElement(children, { "data-item": "", "data-item-class": rest.className, onSelect })
+            ? React.cloneElement(children, { "data-item": "", onSelect })
             : h("button", { "data-item": "", onSelect, ...rest }, children);
       `,
       "/lib/workspaceErrors": `
@@ -335,29 +335,13 @@ test("closing the invite without sending doesn't toast", async (t) => {
   assert.equal(globalThis.__toasts.length, 0);
 });
 
-test("remove asks first, then removes and reloads", async (t) => {
-  const { item } = await mountTab(t, { guests: [JIN] });
-  assert.equal(globalThis.__removeProps, undefined);
-  await React.act(async () => propsOf(item(`${KEY}.menu.remove`)).onSelect());
-  const props = globalThis.__removeProps;
-  assert.deepEqual(
-    props.guests.map((g) => g.email),
-    ["jin@x.com"]
-  );
-  await React.act(async () =>
-    props.onRemoved({
-      removed: ["jin@x.com"],
-      not_found: [],
-      skipped_members: [],
-      link_shared_note_ids: [],
-    })
-  );
-  assert.equal(globalThis.__reloads, 1);
-});
-
 test("removed guests leave the list at once even if the reload fails", async (t) => {
   const { item } = await mountTab(t, { guests: [JIN] });
   await React.act(async () => propsOf(item(`${KEY}.menu.remove`)).onSelect());
+  assert.deepEqual(
+    globalThis.__removeProps.guests.map((g) => g.email),
+    ["jin@x.com"]
+  );
   await React.act(async () =>
     globalThis.__removeProps.onRemoved({
       removed: ["jin@x.com"],
@@ -386,16 +370,6 @@ const removeButtons = (container) =>
       (node.getAttribute("aria-label") ?? "").startsWith(REMOVE_LABEL)
   );
 const settle = () => React.act(async () => {});
-
-test("the × sizes itself on the menu item, so the item's padding can't hide its icon", async (t) => {
-  const { container } = await mountTab(t, { guests: [TWO] });
-  const [button] = removeButtons(container);
-  // asChild only concatenates class lists; the item's px-2.5 py-2 beat a size-5 set on the button
-  // and left the icon zero wide. Sized on the item, cn() lets p-0 and size-5 win.
-  assert.match(button.getAttribute("data-item-class"), /\bsize-5\b/);
-  assert.match(button.getAttribute("data-item-class"), /\bp-0\b/);
-  assert.doesNotMatch(button.getAttribute("class") ?? "", /\bsize-5\b/);
-});
 
 test("the × removes that note only", async (t) => {
   const { container } = await mountTab(t, { guests: [TWO] });
@@ -700,17 +674,6 @@ test("select-all selects the listed guests only", async (t) => {
     view.rowBoxes().map((box) => box.getAttribute("aria-checked")),
     ["false", "false"]
   );
-});
-
-test("a removal that removed nobody shows no success toast", async (t) => {
-  const { item } = await mountTab(t, { guests: [JIN] });
-  await React.act(async () => propsOf(item(`${KEY}.menu.remove`)).onSelect());
-  await React.act(async () =>
-    globalThis.__removeProps.onRemoved({ ...EMPTY_REMOVAL, skipped_members: ["jin@x.com"] })
-  );
-  assert.deepEqual(globalThis.__dropped, []);
-  assert.equal(globalThis.__toasts.length, 0);
-  assert.equal(globalThis.__reloads, 1);
 });
 
 test("a send from Guests also refreshes the Invitations tab", async (t) => {

@@ -14,10 +14,8 @@ export interface WorkspaceGuestsState {
   dropGuestNote: (email: string, noteId: string) => void;
 }
 
-// What the last answer for one workspace left behind; an answer is only ever kept under the
-// workspace id it was asked for.
+// What the last answer left behind.
 interface Slot {
-  workspaceId: string;
   guests: WorkspaceGuest[] | null;
   error: RowActionError | null;
 }
@@ -30,88 +28,65 @@ const NO_GUESTS: WorkspaceGuest[] = [];
  */
 export function useWorkspaceGuests(workspaceId: string): WorkspaceGuestsState {
   const [slot, setSlot] = useState<Slot | null>(null);
-  const currentWorkspaceRef = useRef(workspaceId);
   const latestRequestRef = useRef(0);
 
-  // Declared before the load effect so a workspace switch updates the ref before that load starts.
-  useEffect(() => {
-    currentWorkspaceRef.current = workspaceId;
-    return () => {
-      currentWorkspaceRef.current = "";
-    };
-  }, [workspaceId]);
-
-  const load = useCallback(async (target: string): Promise<void> => {
-    if (currentWorkspaceRef.current !== target) return;
+  const reload = useCallback(async (): Promise<void> => {
     const requestId = ++latestRequestRef.current;
     let guests: WorkspaceGuest[] | null = null;
     let error: RowActionError | null = null;
     try {
-      guests = await GuestsService.list(target);
+      guests = await GuestsService.list(workspaceId);
     } catch (caught) {
       error = classifyRowActionError(caught);
     }
-    // A switch, an unmount or a newer request makes this answer stale.
-    if (currentWorkspaceRef.current !== target || latestRequestRef.current !== requestId) return;
+    // A newer request makes this answer stale.
+    if (latestRequestRef.current !== requestId) return;
     // A reload that fails behind a list already on screen keeps that list; only a load with
     // nothing to show falls back to Failed.
+    setSlot((previous) => (!guests && previous?.guests ? previous : { guests, error }));
+  }, [workspaceId]);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  const dropGuests = useCallback((emails: string[]): void => {
+    const gone = new Set(emails.map((email) => email.toLowerCase()));
     setSlot((previous) =>
-      !guests && previous && previous.workspaceId === target && previous.guests
-        ? previous
-        : { workspaceId: target, guests, error }
+      previous?.guests
+        ? {
+            ...previous,
+            guests: previous.guests.filter((guest) => !gone.has(guest.email.toLowerCase())),
+          }
+        : previous
     );
   }, []);
 
-  useEffect(() => {
-    void load(workspaceId);
-  }, [workspaceId, load]);
+  const dropGuestNote = useCallback((email: string, noteId: string): void => {
+    const target = email.toLowerCase();
+    setSlot((previous) =>
+      previous?.guests
+        ? {
+            ...previous,
+            guests: previous.guests
+              .map((guest) =>
+                guest.email.toLowerCase() === target
+                  ? { ...guest, notes: guest.notes.filter((note) => note.id !== noteId) }
+                  : guest
+              )
+              .filter((guest) => guest.email.toLowerCase() !== target || guest.notes.length > 0),
+          }
+        : previous
+    );
+  }, []);
 
-  const reload = useCallback((): Promise<void> => load(workspaceId), [load, workspaceId]);
-
-  const dropGuests = useCallback(
-    (emails: string[]): void => {
-      const gone = new Set(emails.map((email) => email.toLowerCase()));
-      setSlot((previous) =>
-        previous && previous.workspaceId === workspaceId && previous.guests
-          ? {
-              ...previous,
-              guests: previous.guests.filter((guest) => !gone.has(guest.email.toLowerCase())),
-            }
-          : previous
-      );
-    },
-    [workspaceId]
-  );
-
-  const dropGuestNote = useCallback(
-    (email: string, noteId: string): void => {
-      const target = email.toLowerCase();
-      setSlot((previous) =>
-        previous && previous.workspaceId === workspaceId && previous.guests
-          ? {
-              ...previous,
-              guests: previous.guests
-                .map((guest) =>
-                  guest.email.toLowerCase() === target
-                    ? { ...guest, notes: guest.notes.filter((note) => note.id !== noteId) }
-                    : guest
-                )
-                .filter((guest) => guest.email.toLowerCase() !== target || guest.notes.length > 0),
-            }
-          : previous
-      );
-    },
-    [workspaceId]
-  );
-
-  const own = slot && slot.workspaceId === workspaceId ? slot : null;
-  if (!own)
+  if (!slot)
     return { status: "loading", guests: NO_GUESTS, error: null, reload, dropGuests, dropGuestNote };
-  if (own.guests)
+  if (slot.guests)
     return {
       status: "ready",
-      guests: own.guests,
-      error: own.error,
+      guests: slot.guests,
+      error: slot.error,
       reload,
       dropGuests,
       dropGuestNote,
@@ -119,7 +94,7 @@ export function useWorkspaceGuests(workspaceId: string): WorkspaceGuestsState {
   return {
     status: "failed",
     guests: NO_GUESTS,
-    error: own.error,
+    error: slot.error,
     reload,
     dropGuests,
     dropGuestNote,

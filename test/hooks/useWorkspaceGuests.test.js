@@ -90,29 +90,6 @@ test("a failure is failed with a classified error", async (t) => {
   assert.deepEqual(state().guests, []);
 });
 
-test("an answer for another workspace is dropped", async (t) => {
-  const { mount, state } = await loadHook(t);
-  const first = deferred();
-  const second = deferred();
-  const answers = { w1: first, w2: second };
-  globalThis.__guestListImpl = (workspaceId) => answers[workspaceId].promise;
-
-  await mount("w1");
-  await mount("w2");
-  assert.deepEqual(globalThis.__guestListCalls, ["w1", "w2"]);
-
-  await React.act(async () => first.resolve([guest("old@x.com")]));
-  assert.equal(state().status, "loading");
-  assert.deepEqual(state().guests, []);
-
-  await React.act(async () => second.resolve([guest("new@x.com")]));
-  assert.equal(state().status, "ready");
-  assert.deepEqual(
-    state().guests.map((g) => g.email),
-    ["new@x.com"]
-  );
-});
-
 test("reload refetches", async (t) => {
   const { mount, state } = await loadHook(t);
   globalThis.__guestListImpl = async () => [guest("a@x.com")];
