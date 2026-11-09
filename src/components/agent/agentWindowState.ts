@@ -290,9 +290,9 @@ export interface AgentPillControls {
 /**
  * The pill's controls for where it shows and what is happening. Expand only
  * exists outside the modal; the typing layout swaps Keyboard for Mic.
- * "Thinking…" covers transcribing and a reply with nothing to show yet; in the
- * modal that reply can already be stopped. Waiting for an answer, the pill
- * offers the keyboard (and Expand) to reach the card.
+ * "Thinking…" covers transcribing and, outside the modal, a reply with nothing
+ * to show yet. In the modal that reply can already be stopped. Waiting for an
+ * answer, the pill offers the keyboard (and Expand) to reach the card.
  */
 export function resolveAgentPillControls(
   placement: AgentPillPlacement,
@@ -317,7 +317,7 @@ export function resolveAgentPillControls(
     case "thinking":
       return controls(
         placement === "modal" ? ["keyboard", "stop", "close"] : ["keyboard", "close"],
-        { thinking: true }
+        { thinking: placement !== "modal" }
       );
     case "streaming":
       return controls([...expand, "keyboard", "stop", "close"]);

@@ -156,10 +156,10 @@ test("the pill's controls follow the reference states", async () => {
   assert.deepEqual(controls("compact", "idle").buttons, ["expand", "mic", "keyboard", "close"]);
 });
 
-test("in the modal a reply can be stopped before it has anything to show", async () => {
+test("the modal pill keeps Stop without duplicating the reply's thinking indicator", async () => {
   const { resolveAgentPillControls } = await load();
   const thinking = resolveAgentPillControls("modal", "thinking");
-  assert.equal(thinking.thinking, true);
+  assert.equal(thinking.thinking, false);
   assert.deepEqual(thinking.buttons, ["keyboard", "stop", "close"]);
 });
 
