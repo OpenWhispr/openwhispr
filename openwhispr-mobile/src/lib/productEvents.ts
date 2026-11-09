@@ -598,6 +598,12 @@ export function initProductEvents(): void {
   observe();
 }
 
+/** Called while the saved config is still opted out, before persisting an opt-in. */
+export async function prepareProductEventsOptIn(): Promise<void> {
+  initProductEvents();
+  await runtime?.observeConsent();
+}
+
 /** onboarding_completed, from useOnboardingStore.finish() once completion is persisted. */
 export function recordOnboardingCompleted(completion: {
   mode: ProcessingMode | null;
