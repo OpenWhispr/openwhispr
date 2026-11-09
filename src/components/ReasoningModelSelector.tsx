@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useRegistryVersion } from "../hooks/useRegistryVersion";
 import { useTranslation } from "react-i18next";
 import type {
   LlamaServerStatus,
@@ -9,7 +10,6 @@ import type {
 } from "../types/electron";
 import { Button } from "./ui/button";
 import { CircleAlert, Cloud, Lock, Zap } from "./icons";
-import ApiKeyInput from "./ui/ApiKeyInput";
 import ModelCardList from "./ui/ModelCardList";
 import LocalModelPicker, { type LocalProvider } from "./LocalModelPicker";
 import { ProviderTabs, type ProviderTabItem } from "./ui/ProviderTabs";
@@ -24,12 +24,20 @@ import {
 import { useTinfoilModels } from "../hooks/useTinfoilModels";
 import { getRemoteProviderIcon } from "../utils/providerIcons";
 import { GetApiKeyLink } from "./ui/GetApiKeyLink";
+import { ConnectionCheckAnnouncer } from "./ui/ConnectionCheckAnnouncer";
+import { ProviderCheckField } from "./ui/ProviderCheckField";
+import { usePanelVisible } from "./ui/usePanelVisible";
+import { useConnectionAutoCheck } from "../hooks/useConnectionAutoCheck";
+import { useCredentialDraft } from "../hooks/useCredentialDraft";
+import { useFocusHold } from "../hooks/useFocusHold";
+import { useTypingPause } from "../hooks/useTypingPause";
 import { getCachedPlatform } from "../utils/platform";
 import { useSettingsStore } from "../stores/settingsStore";
 import {
   filterByokProviderOptionsByPolicy,
   isModeAllowedByPolicy,
   isProviderAllowedByPolicy,
+  isLocalModelAllowedByPolicy,
   reconcileProviderSelection,
 } from "../stores/policyRules";
 import { usePolicySnapshot } from "../hooks/usePolicy";
@@ -344,6 +352,7 @@ export default function ReasoningModelSelector({
   setReasoningMode: setReasoningModeProp,
   mode,
 }: ReasoningModelSelectorProps) {
+  const registryVersion = useRegistryVersion();
   const { t } = useTranslation();
   const openaiApiKey = useSettingsStore((s) => s.openaiApiKey);
   const setOpenaiApiKey = useSettingsStore((s) => s.setOpenaiApiKey);
@@ -407,6 +416,76 @@ export default function ReasoningModelSelector({
       ? selectedMode
       : (modeTabs[0]?.id as "cloud" | "local" | undefined));
 
+  // One key per hosted provider, shared with every other panel. OpenRouter and Custom check
+  // themselves in OpenAICompatiblePanel.
+  const hostedKeys: Partial<
+    Record<string, { value: string; set: (key: string) => void; url: string }>
+  > = {
+    openai: {
+      value: openaiApiKey,
+      set: setOpenaiApiKey,
+      url: "https://platform.openai.com/api-keys",
+    },
+    anthropic: {
+      value: anthropicApiKey,
+      set: setAnthropicApiKey,
+      url: "https://console.anthropic.com/settings/keys",
+    },
+    gemini: {
+      value: geminiApiKey,
+      set: setGeminiApiKey,
+      url: "https://aistudio.google.com/app/api-keys",
+    },
+    groq: { value: groqApiKey, set: setGroqApiKey, url: "https://console.groq.com/keys" },
+    tinfoil: {
+      value: tinfoilApiKey,
+      set: setTinfoilApiKey,
+      url: "https://tinfoil.sh/inference?utm_source=referral&utm_campaign=openwhispr",
+    },
+    corti: {
+      value: cortiApiKey,
+      set: setCortiApiKey,
+      url: "https://www.corti.ai/?utm_source=referral&utm_campaign=openwhispr",
+    },
+  };
+  const hostedKey = hostedKeys[displayedCloudProvider];
+  const keyDraft = useCredentialDraft();
+  const typedKey = keyDraft.value(displayedCloudProvider, hostedKey?.value ?? "");
+  const visible = usePanelVisible();
+  const editing = useFocusHold();
+  // A tab that is only being browsed has no model of this panel's: the key alone is checked.
+  const checkedModel = localReasoningProvider === displayedCloudProvider ? reasoningModel : "";
+  const delayMs = useTypingPause({
+    typed: typedKey,
+    context: JSON.stringify([displayedCloudProvider, effectiveMode, visible, checkedModel]),
+    held: editing.held,
+  });
+  const check = useConnectionAutoCheck({
+    config: {
+      scope: "reasoning",
+      provider: displayedCloudProvider,
+      apiKey: typedKey,
+      model: checkedModel,
+    },
+    // A hidden panel is not ready to ask; a shown one asks again, and the main process answers
+    // a check it remembers at once.
+    ready:
+      effectiveMode === "cloud" &&
+      providerAllowed(displayedCloudProvider) &&
+      Boolean(typedKey.trim()) &&
+      visible,
+    delayMs,
+  });
+  const followKeyDraft = keyDraft.follow;
+  const refused = check.failure?.errorCode === "credentialsRejected";
+  useEffect(() => {
+    followKeyDraft({
+      phase: check.phase,
+      checked: { [displayedCloudProvider]: typedKey },
+      refused,
+    });
+  }, [check.phase, displayedCloudProvider, typedKey, refused, followKeyDraft]);
+
   const localProviders = useMemo<LocalProvider[]>(() => {
     return modelRegistry.getAllProviders().map((provider) => ({
       id: provider.id,
@@ -420,9 +499,11 @@ export default function ReasoningModelSelector({
         descriptionKey: model.descriptionKey,
         specUrl: model.hfRepo ? `https://huggingface.co/${model.hfRepo}` : undefined,
         recommended: model.recommended,
+        legacy: model.legacy,
       })),
     }));
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the catalog changes in place; its version is the signal
+  }, [registryVersion]);
 
   const openaiModelOptions = useMemo<CloudModelOption[]>(() => {
     const { icon, invertInDark } = getRemoteProviderIcon("openai");
@@ -434,7 +515,8 @@ export default function ReasoningModelSelector({
       icon,
       invertInDark,
     }));
-  }, [t]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the catalog changes in place; its version is the signal
+  }, [t, registryVersion]);
 
   const selectedCloudModels = useMemo<CloudModelOption[]>(() => {
     if (displayedCloudProvider === "openai") return openaiModelOptions;
@@ -457,18 +539,20 @@ export default function ReasoningModelSelector({
       icon: iconUrl,
       invertInDark,
     }));
-  }, [displayedCloudProvider, openaiModelOptions, tinfoilModels, t]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the catalog changes in place; its version is the signal
+  }, [displayedCloudProvider, openaiModelOptions, tinfoilModels, t, registryVersion]);
 
+  // Keyed by provider IDs, not the list, so a catalog update doesn't reset browsing.
+  const localProviderIds = localProviders.map((p) => p.id).join("\n");
   useEffect(() => {
-    const localProviderIds = localProviders.map((p) => p.id);
-    if (localProviderIds.includes(localReasoningProvider)) {
+    if (localProviderIds.split("\n").includes(localReasoningProvider)) {
       setSelectedMode("local");
       setSelectedLocalProvider(localReasoningProvider);
     } else if (CLOUD_PROVIDER_IDS.includes(localReasoningProvider)) {
       setSelectedMode("cloud");
       setSelectedCloudProvider(localReasoningProvider);
     }
-  }, [localProviders, localReasoningProvider]);
+  }, [localProviderIds, localReasoningProvider]);
 
   // A selection commits only on an explicit click: the model together with
   // the provider tab it was clicked under. Tab switching is pure browsing.
@@ -476,6 +560,12 @@ export default function ReasoningModelSelector({
   // (e.g. a download finishing while another tab is browsed) can never commit
   // a mismatched (provider, model) pair.
   const handleModelSelect = (modelId: string) => {
+    if (
+      effectiveMode === "local" &&
+      modelId &&
+      !isLocalModelAllowedByPolicy(policyState, "llm", modelId)
+    )
+      return;
     if (!modelId) {
       setReasoningModel("");
       return;
@@ -517,6 +607,7 @@ export default function ReasoningModelSelector({
 
   return (
     <div className="space-y-4">
+      <ConnectionCheckAnnouncer announcement={check.announcement} />
       {!mode && (
         <div className="space-y-2">
           {modeTabs.length > 0 ? (
@@ -568,6 +659,7 @@ export default function ReasoningModelSelector({
                     setLocalReasoningProvider(OPENROUTER_TAB);
                     setReasoningModel(m);
                   }}
+                  provider="openrouter"
                   lockedBaseUrl
                   apiKeyRequired
                   getKeyUrl={OPENROUTER_KEYS_URL}
@@ -588,93 +680,34 @@ export default function ReasoningModelSelector({
                 />
               ) : (
                 <>
-                  {displayedCloudProvider === "openai" && (
-                    <div className="space-y-2">
+                  {hostedKey && (
+                    <div className="space-y-2" onFocus={editing.onFocus} onBlur={editing.onBlur}>
+                      {displayedCloudProvider === "corti" && (
+                        <p className="text-xs text-muted-foreground">
+                          {t("reasoning.corti.euOnly")}
+                        </p>
+                      )}
                       <div className="flex items-baseline justify-between">
                         <h4 className="font-medium text-foreground">{t("common.apiKey")}</h4>
-                        <GetApiKeyLink url="https://platform.openai.com/api-keys" />
+                        <GetApiKeyLink url={hostedKey.url} />
                       </div>
-                      <ApiKeyInput
-                        apiKey={openaiApiKey}
-                        setApiKey={setOpenaiApiKey}
-                        label=""
-                        helpText=""
-                      />
-                    </div>
-                  )}
-
-                  {displayedCloudProvider === "anthropic" && (
-                    <div className="space-y-2">
-                      <div className="flex items-baseline justify-between">
-                        <h4 className="font-medium text-foreground">{t("common.apiKey")}</h4>
-                        <GetApiKeyLink url="https://console.anthropic.com/settings/keys" />
-                      </div>
-                      <ApiKeyInput
-                        apiKey={anthropicApiKey}
-                        setApiKey={setAnthropicApiKey}
-                        label=""
-                        helpText=""
-                      />
-                    </div>
-                  )}
-
-                  {displayedCloudProvider === "gemini" && (
-                    <div className="space-y-2">
-                      <div className="flex items-baseline justify-between">
-                        <h4 className="font-medium text-foreground">{t("common.apiKey")}</h4>
-                        <GetApiKeyLink url="https://aistudio.google.com/app/api-keys" />
-                      </div>
-                      <ApiKeyInput
-                        apiKey={geminiApiKey}
-                        setApiKey={setGeminiApiKey}
-                        label=""
-                        helpText=""
-                      />
-                    </div>
-                  )}
-
-                  {displayedCloudProvider === "groq" && (
-                    <div className="space-y-2">
-                      <div className="flex items-baseline justify-between">
-                        <h4 className="font-medium text-foreground">{t("common.apiKey")}</h4>
-                        <GetApiKeyLink url="https://console.groq.com/keys" />
-                      </div>
-                      <ApiKeyInput
-                        apiKey={groqApiKey}
-                        setApiKey={setGroqApiKey}
-                        label=""
-                        helpText=""
-                      />
-                    </div>
-                  )}
-
-                  {displayedCloudProvider === "tinfoil" && (
-                    <div className="space-y-2">
-                      <div className="flex items-baseline justify-between">
-                        <h4 className="font-medium text-foreground">{t("common.apiKey")}</h4>
-                        <GetApiKeyLink url="https://tinfoil.sh/inference?utm_source=referral&utm_campaign=openwhispr" />
-                      </div>
-                      <ApiKeyInput
-                        apiKey={tinfoilApiKey}
-                        setApiKey={setTinfoilApiKey}
-                        label=""
-                        helpText=""
-                      />
-                    </div>
-                  )}
-
-                  {displayedCloudProvider === "corti" && (
-                    <div className="space-y-2">
-                      <p className="text-xs text-muted-foreground">{t("reasoning.corti.euOnly")}</p>
-                      <div className="flex items-baseline justify-between">
-                        <h4 className="font-medium text-foreground">{t("common.apiKey")}</h4>
-                        <GetApiKeyLink url="https://www.corti.ai/?utm_source=referral&utm_campaign=openwhispr" />
-                      </div>
-                      <ApiKeyInput
-                        apiKey={cortiApiKey}
-                        setApiKey={setCortiApiKey}
-                        label=""
-                        helpText=""
+                      <ProviderCheckField
+                        aria-label={t("common.apiKey")}
+                        check={check}
+                        invalidOn="credentialsRejected"
+                        type="password"
+                        value={typedKey}
+                        onChange={(event) =>
+                          keyDraft.change(
+                            displayedCloudProvider,
+                            event.target.value.trim(),
+                            hostedKey.set
+                          )
+                        }
+                        onBlur={keyDraft.save}
+                        placeholder={t("apiKeyInput.placeholder")}
+                        autoComplete="off"
+                        spellCheck={false}
                       />
                     </div>
                   )}

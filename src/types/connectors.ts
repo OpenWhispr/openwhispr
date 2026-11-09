@@ -31,9 +31,20 @@ export interface ConnectorEdits {
   [field: string]: string | string[] | undefined;
 }
 
+/** A destination the user can pick when a name matched several (Slack's #channel or @username). */
+export interface ConnectorChoice {
+  label: string;
+  destination: string;
+}
+
 export type ConnectorPrepareResult =
   | { status: "ready"; actionId: string; preview: ConnectorPreview }
-  | { status: "needs_clarification"; message: string; candidates: string[] }
+  | {
+      status: "needs_clarification";
+      message: string;
+      candidates: string[];
+      choices?: ConnectorChoice[];
+    }
   | { status: "failed"; errorCode: string; message: string }
   | { status: "unavailable"; reason: string };
 
@@ -51,7 +62,13 @@ export type ConnectorQueryResult =
 // destinationLabel: who the action went to, when Send could change the
 // recipients (an edited email card). Absent means the prepared label stands.
 export type ConnectorCommitResult =
-  | { state: "sent"; url?: string; destinationLabel?: string; resultLabel?: string }
+  | {
+      state: "sent";
+      url?: string;
+      destinationLabel?: string;
+      resultLabel?: string;
+      outsideThread?: true;
+    }
   | { state: "failed"; errorCode: string; message: string }
   | { state: "unknown"; checkUrl?: string; errorCode?: string; destinationLabel?: string }
   | { state: "not_sent"; reason: string; retryable?: boolean };
@@ -85,11 +102,18 @@ export type ApprovalOutcome =
       destinationLabel?: string;
       /** What the send created, when the connector names it ("ENG-124"). */
       resultLabel?: string;
+      /** A reply meant for a thread that went out as a new message. */
+      outsideThread?: true;
     } & ApprovalEdits)
   | ({ state: "failed"; errorCode: string; message: string } & ApprovalEdits)
   | ({ state: "unknown"; checkUrl?: string; destinationLabel?: string } & ApprovalEdits)
-  | { state: "cancelled" }
-  | { state: "not_sent"; reason: string };
+  | ({ state: "cancelled" } & ApprovalEdits)
+  | ({
+      state: "not_sent";
+      reason: string;
+      /** Preparing it again (Retry, a reconnect) found it needs the user to say where. */
+      clarification?: Extract<ConnectorPrepareResult, { status: "needs_clarification" }>;
+    } & ApprovalEdits);
 
 export interface ConnectorStatus {
   id: string;

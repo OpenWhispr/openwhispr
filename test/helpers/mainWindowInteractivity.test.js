@@ -154,7 +154,9 @@ test("Linux native visibility reports hide, show, minimize and restore to the re
   const notifications = [];
   win.isVisible = () => visible;
   win.isMinimized = () => minimized;
-  win.webContents = { send: (...args) => notifications.push(args) };
+  win.webContents = Object.assign(new EventEmitter(), {
+    send: (...args) => notifications.push(args),
+  });
   try {
     WindowManager.prototype.registerMainWindowEvents.call({
       mainWindow: win,

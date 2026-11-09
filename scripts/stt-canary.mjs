@@ -30,18 +30,21 @@ import geminiTranscription from "../src/helpers/geminiTranscription.js";
 import geminiLive from "../src/helpers/geminiLiveStreaming.js";
 import AssemblyAiStreaming from "../src/helpers/assemblyAiStreaming.js";
 import DeepgramStreaming from "../src/helpers/deepgramStreaming.js";
-import modelRegistryData from "../src/models/modelRegistryData.json" with { type: "json" };
+import { loadCanaryCatalog } from "./lib/canary-catalog.mjs";
 
 const { fetchRealtimeTokenForProvider } = tokenProviders;
 const { pcm16ToWav } = audioUtils;
 const { transcribeWithGemini } = geminiTranscription;
 const { GeminiLiveStreaming } = geminiLive;
 
-// The registry's first model is what a fresh AssemblyAI selection dictates with
+// The provider's default is what a fresh AssemblyAI selection dictates with
 // (ModelRegistry.getDefaultTranscriptionModel), so that is the id to probe.
-const ASSEMBLYAI_DEFAULT_MODEL = modelRegistryData.transcriptionProviders.find(
+// Pass --published to probe the live signed catalog users receive.
+const modelRegistryData = await loadCanaryCatalog();
+const assemblyAi = modelRegistryData.transcriptionProviders.find(
   (provider) => provider.id === "assemblyai"
-).models[0].id;
+);
+const ASSEMBLYAI_DEFAULT_MODEL = assemblyAi.defaultModel ?? assemblyAi.models[0].id;
 
 const HANDSHAKE_TIMEOUT_MS = 15000;
 // Half a second of 16 kHz mono silence: enough for a provider to accept and

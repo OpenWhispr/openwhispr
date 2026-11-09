@@ -21,35 +21,52 @@ struct LiveActivityResolverTests {
     // A meeting wins over every keyboard/dictation combination.
     for keyboard in [false, true] {
       for dictation in [false, true] {
-        check(
-          LiveActivityResolver.resolve(
-            meeting: recording, keyboardRecording: keyboard, dictationMode: dictation, now: now)
-            == RecordingActivityContentState(
-              mode: .meeting, phase: .recording, startedAt: start, title: "Weekly sync"),
-          "recording meeting wins (keyboard=\(keyboard), dictation=\(dictation))")
-        check(
-          LiveActivityResolver.resolve(
-            meeting: processing, keyboardRecording: keyboard, dictationMode: dictation, now: now)
-            == RecordingActivityContentState(
-              mode: .meeting, phase: .processing, startedAt: start, recordedSeconds: 2530),
-          "processing meeting wins (keyboard=\(keyboard), dictation=\(dictation))")
+        for awake in [false, true] {
+          let flags = "keyboard=\(keyboard), dictation=\(dictation), awake=\(awake)"
+          check(
+            LiveActivityResolver.resolve(
+              meeting: recording, keyboardRecording: keyboard, dictationMode: dictation,
+              appAwake: awake, now: now)
+              == RecordingActivityContentState(
+                mode: .meeting, phase: .recording, startedAt: start, title: "Weekly sync"),
+            "recording meeting wins (\(flags))")
+          check(
+            LiveActivityResolver.resolve(
+              meeting: processing, keyboardRecording: keyboard, dictationMode: dictation,
+              appAwake: awake, now: now)
+              == RecordingActivityContentState(
+                mode: .meeting, phase: .processing, startedAt: start, recordedSeconds: 2530),
+            "processing meeting wins (\(flags))")
+        }
       }
     }
 
     // Without a meeting: keyboard recording > dictation idle > nothing.
     let keyboardOnly = RecordingActivityContentState(phase: .recording, startedAt: now)
     check(
-      LiveActivityResolver.resolve(meeting: nil, keyboardRecording: true, dictationMode: false, now: now)
+      LiveActivityResolver.resolve(meeting: nil, keyboardRecording: true, dictationMode: false, appAwake: true, now: now)
         == keyboardOnly, "keyboard recording without dictation mode")
     check(
-      LiveActivityResolver.resolve(meeting: nil, keyboardRecording: true, dictationMode: true, now: now)
+      LiveActivityResolver.resolve(meeting: nil, keyboardRecording: true, dictationMode: true, appAwake: true, now: now)
         == keyboardOnly, "keyboard recording with dictation mode")
     check(
-      LiveActivityResolver.resolve(meeting: nil, keyboardRecording: false, dictationMode: true, now: now)
+      LiveActivityResolver.resolve(meeting: nil, keyboardRecording: false, dictationMode: true, appAwake: true, now: now)
         == RecordingActivityContentState(phase: .idle, startedAt: now), "dictation idle")
     check(
-      LiveActivityResolver.resolve(meeting: nil, keyboardRecording: false, dictationMode: false, now: now)
+      LiveActivityResolver.resolve(meeting: nil, keyboardRecording: false, dictationMode: false, appAwake: true, now: now)
         == nil, "nothing to show ends the activity")
+
+    // Backgrounded without the warm mic, the app is about to suspend, and iOS can kill
+    // a suspended app without warning: the idle card must not outlive it.
+    check(
+      LiveActivityResolver.resolve(meeting: nil, keyboardRecording: false, dictationMode: true, appAwake: false, now: now)
+        == nil, "dictation idle ends once the app can suspend")
+    check(
+      LiveActivityResolver.resolve(meeting: nil, keyboardRecording: true, dictationMode: true, appAwake: false, now: now)
+        == keyboardOnly, "a keyboard recording keeps its card while backgrounded")
+    check(
+      LiveActivityResolver.resolve(meeting: nil, keyboardRecording: false, dictationMode: false, appAwake: false, now: now)
+        == nil, "nothing to show while backgrounded ends the activity")
 
     // Stale dates.
     let meetingState = RecordingActivityContentState(

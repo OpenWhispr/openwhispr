@@ -74,6 +74,67 @@ function dialLoopback(streaming, url) {
     buildRealUrl(options).replace("wss://api.deepgram.com/v1/listen", url);
 }
 
+test("live BYOK models keep their selection across warm sockets and reconnects", async (t) => {
+  const store = require("../../src/models/registryData.js");
+  const old = store.getRegistrySnapshot();
+  const next = structuredClone(old.data);
+  next.transcriptionProviders
+    .find((p) => p.id === "deepgram")
+    .models.push({
+      id: "registry-deepgram-new",
+      name: "New compatible model",
+      description: "Fixture",
+      streaming: true,
+    });
+  t.after(() =>
+    store.replaceRegistryData({ data: old.data, manifestVersion: old.manifestVersion + 5 })
+  );
+  store.replaceRegistryData({ data: next, manifestVersion: old.manifestVersion + 1 });
+  await withMetadataServer(async (url, connections) => {
+    const streaming = new DeepgramStreaming();
+    dialLoopback(streaming, url);
+    try {
+      await streaming.warmup({ token: "byok-key", mode: "byok", model: "nova-3", language: "en" });
+      await streaming.connect({
+        token: "byok-key",
+        mode: "byok",
+        model: "registry-deepgram-new",
+        language: "en",
+      });
+      assert.equal(connections.length, 2, "a different model cannot reuse the warm socket");
+      assert.match(connections[1], /model=registry-deepgram-new/);
+      assert.equal(streaming.currentModel, "registry-deepgram-new");
+      assert.equal(streaming.connectionOptions.model, "registry-deepgram-new");
+      // A catalog update mid-session must not switch a liveness reconnect's model.
+      store.replaceRegistryData({ data: old.data, manifestVersion: old.manifestVersion + 3 });
+      const reconnect = structuredClone(streaming.connectionOptions);
+      assert.equal(
+        new URL(streaming.buildWebSocketUrl(reconnect)).searchParams.get("model"),
+        "registry-deepgram-new"
+      );
+      store.replaceRegistryData({ data: next, manifestVersion: old.manifestVersion + 4 });
+    } finally {
+      streaming.cleanupAll();
+    }
+  });
+  const streaming = new DeepgramStreaming();
+  const modelFor = (options) =>
+    new URL(streaming.buildWebSocketUrl(options)).searchParams.get("model");
+  assert.equal(modelFor({ mode: "byok", model: "nova-3", language: "zh" }), "nova-2");
+  assert.equal(
+    modelFor({ mode: "byok", model: "registry-deepgram-new", language: "zh" }),
+    "registry-deepgram-new"
+  );
+  assert.equal(
+    modelFor({ mode: "openwhispr", model: "registry-deepgram-new", language: "en" }),
+    "nova-3"
+  );
+  assert.equal(
+    modelFor({ mode: "byok", model: "another-provider-model", language: "en" }),
+    "nova-3"
+  );
+});
+
 test("a warm connection opened for another language is not reused", async () => {
   await withMetadataServer(async (url, connections) => {
     const streaming = new DeepgramStreaming();
@@ -128,8 +189,24 @@ test("a warm connection opened for other keyterms is not reused", async () => {
   });
 });
 
+test("auto or no language asks Nova-3 for multilingual mode, not Deepgram's English default", () => {
+  const streaming = new DeepgramStreaming();
+  for (const language of ["auto", undefined]) {
+    const params = new URL(streaming.buildWebSocketUrl({ token: "t", language })).searchParams;
+    assert.equal(params.get("language"), "multi");
+    assert.equal(params.get("model"), "nova-3");
+  }
+});
+
+test("an explicit language is sent as is", () => {
+  const streaming = new DeepgramStreaming();
+  const params = new URL(streaming.buildWebSocketUrl({ token: "t", language: "bg" })).searchParams;
+  assert.equal(params.get("language"), "bg");
+  assert.equal(params.get("model"), "nova-3");
+});
+
 test("a warm connection is reused when the two option sets build the same URL", async () => {
-  // buildWebSocketUrl folds "auto" into no language and skips empty keyterms, so
+  // buildWebSocketUrl folds "auto" into multi and skips empty keyterms, so
   // the guard has to fold them the same way — otherwise every dictation cold
   // starts and the warm socket stops buying anything.
   await withMetadataServer(async (url, connections) => {
@@ -259,4 +336,50 @@ test("a re-warm whose options were dropped does not re-authenticate as managed",
 test("the authorization scheme is exported for the canary to reuse", () => {
   assert.equal(DeepgramStreaming.authorizationHeader("byok", "k"), "Token k");
   assert.equal(DeepgramStreaming.authorizationHeader("openwhispr", "k"), "Bearer k");
+});
+
+test("multilingual mode is only asked of the model known to have it", async () => {
+  const store = await import("../../src/models/registryData.js");
+  const seed = require("../../src/models/modelRegistryData.json");
+  const data = structuredClone(seed);
+  const deepgram = data.transcriptionProviders.find((provider) => provider.id === "deepgram");
+  deepgram.models.push({ ...deepgram.models[0], id: "nova-9", streaming: true });
+  store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1 });
+  const streaming = new DeepgramStreaming();
+  const params = (options) =>
+    new URL(streaming.buildWebSocketUrl({ mode: "byok", ...options })).searchParams;
+
+  assert.equal(params({ model: "nova-9", language: "auto" }).get("model"), "nova-9");
+  assert.equal(params({ model: "nova-9", language: "auto" }).has("language"), false);
+  assert.equal(params({ model: "nova-9", language: "de" }).get("language"), "de");
+  assert.equal(params({ model: "nova-3", language: "auto" }).get("language"), "multi");
+});
+
+test("a warm socket is compared by the model it actually opened on", async () => {
+  const store = await import("../../src/models/registryData.js");
+  const seed = require("../../src/models/modelRegistryData.json");
+  const withModel = (id) => {
+    const data = structuredClone(seed);
+    const deepgram = data.transcriptionProviders.find((provider) => provider.id === "deepgram");
+    if (id) deepgram.models.push({ ...deepgram.models[0], id, streaming: true });
+    store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1 });
+  };
+  const options = { token: "key", mode: "byok", model: "nova-late" };
+
+  await withMetadataServer(async (url, connections) => {
+    const streaming = new DeepgramStreaming();
+    dialLoopback(streaming, url);
+    try {
+      withModel(null);
+      await streaming.warmup(options);
+      assert.equal(connections.length, 1);
+      // The catalog learns the model after the socket opened on the default.
+      withModel("nova-late");
+      await streaming.connect(options);
+      assert.equal(connections.length, 2, "riding it would transcribe on the wrong model");
+    } finally {
+      await streaming.disconnect?.();
+      streaming.cleanupAll?.();
+    }
+  });
 });

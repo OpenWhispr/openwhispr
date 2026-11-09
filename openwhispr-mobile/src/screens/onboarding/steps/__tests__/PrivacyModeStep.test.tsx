@@ -15,7 +15,11 @@ jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: (selector: (state: unknown) => unknown) =>
     selector({ config: { inference: { cleanup: mockSavedCleanup } } }),
 }));
-let mockReadiness: { status: string } = { status: 'ready' };
+let mockUser: { id: string; isAnonymous: boolean } | null = null;
+jest.mock('@/store/useAuthStore', () => ({
+  useAuthStore: (selector: (state: unknown) => unknown) => selector({ user: mockUser }),
+}));
+let mockReadiness: { status: string; deviceLanguage?: string } = { status: 'ready' };
 jest.mock('@/lib/localReasoning', () => ({
   ...jest.requireActual('@/lib/localReasoning'),
   getLocalReasoningReadiness: async () => mockReadiness,
@@ -48,6 +52,7 @@ beforeEach(() => {
   mockSelectedMode = null;
   mockReadiness = { status: 'ready' };
   mockSavedCleanup = undefined;
+  mockUser = null;
   jest.mocked(chooseOnboardingMode).mockResolvedValue(undefined);
   mockCancelActiveDownloads.mockResolvedValue(undefined);
 });
@@ -58,14 +63,14 @@ async function renderStep(): Promise<ReturnType<typeof render>> {
   return screen;
 }
 const CLOUD = 'OpenWhispr Cloud';
-const LOCAL = 'Private Mode';
+const LOCAL = 'Local Mode';
 
 it('describes each mode in a few short lines', async () => {
   const screen = await renderStep();
   for (const text of [
     'Zero setup',
-    'Everything runs on your device. Nothing is ever uploaded.',
-    'Works fully offline',
+    'Dictation runs on your device and never leaves it.',
+    'Dictation works offline',
     'Faster transcription',
     'Higher quality',
     'Automatic cleanup & formatting',
@@ -101,6 +106,18 @@ describe('cleanup line', () => {
 
   it.each([
     [
+      { status: 'unsupportedLanguage', deviceLanguage: 'Polish (Poland)' },
+      "Apple Intelligence doesn't support Polish (Poland), your iPhone's language. Starts once that's changed in Settings.",
+    ],
+  ])('says cleanup starts once the language is changed (%o)', async (readiness, hint) => {
+    mockReadiness = readiness;
+    const screen = await renderStep();
+    expect(screen.getByText('Cleanup with Apple Intelligence')).toBeTruthy();
+    expect(screen.getByText(hint)).toBeTruthy();
+  });
+
+  it.each([
+    [
       'unsupportedDevice',
       'No cleanup on this iPhone',
       'Needs Apple Intelligence (iPhone 15 Pro or later). You’ll get the raw transcription.',
@@ -128,24 +145,26 @@ describe('cleanup line', () => {
     expect(screen.queryByText(/Apple Intelligence|iPhone/)).toBeNull();
   });
 
-  // A provider saved for cleanup keeps cleaning in Private mode, on any phone.
-  it.each(['ios', 'android'] as const)('names a saved cleanup provider (%s)', async (os) => {
-    Platform.OS = os;
-    mockReadiness = { status: 'unsupportedDevice' };
+  // A provider saved for cleanup keeps cleaning in Local Mode.
+  it('names a saved cleanup provider', async () => {
     mockSavedCleanup = { mode: 'providers' };
     const screen = await renderStep();
     expect(screen.getByText('Cleanup with your saved provider')).toBeTruthy();
-    expect(
-      screen.getByText('Your transcription is sent to the provider you chose in AI Models.'),
-    ).toBeTruthy();
-    expect(screen.queryByText(/Apple Intelligence|raw transcription/)).toBeNull();
+    expect(screen.queryByText(/Apple Intelligence/)).toBeNull();
   });
 
-  // Private mode never runs it, so the line is the one for this phone.
-  it('ignores a saved Cloud cleanup', async () => {
-    mockSavedCleanup = { mode: 'openwhispr' };
+  // Choosing Local here keeps cleanup on this iPhone (holdOnDeviceConfig), whatever the account
+  // and even over a saved Cloud cleanup.
+  it.each([
+    ['a signed-in account', { id: 'u', isAnonymous: false }, undefined],
+    ['an anonymous session', { id: 'a', isAnonymous: true }, undefined],
+    ['a saved Cloud cleanup', { id: 'u', isAnonymous: false }, { mode: 'openwhispr' }],
+  ])('cleans with Apple Intelligence for %s', async (_label, user, saved) => {
+    mockUser = user;
+    mockSavedCleanup = saved;
     const screen = await renderStep();
     expect(screen.getByText('Cleanup with Apple Intelligence')).toBeTruthy();
+    expect(screen.queryByText(/OpenWhispr Cloud cleanup|Cleanup with OpenWhispr Cloud/)).toBeNull();
   });
 
   // Neither says whether this iPhone can run it, so the card makes no claim.

@@ -184,14 +184,14 @@ describe('transcribeAndCleanup tone', () => {
   // Tones are a Cloud cleanup option, so a tone picked before Private mode never reaches its
   // cleanup, and On-Device cleanup never gets one.
   it.each([
-    ['a cleanup provider in Private mode', 'private', PROVIDER_ROUTE],
+    ['a cleanup provider in Local Mode', 'private', PROVIDER_ROUTE],
     [
-      'On-Device cleanup in Private mode',
+      'On-Device cleanup in Local Mode',
       'private',
       { mode: 'local' as const, scope: 'cleanup' as const },
     ],
     [
-      'On-Device cleanup outside Private mode',
+      'On-Device cleanup outside Local Mode',
       'cloud',
       { mode: 'local' as const, scope: 'cleanup' as const },
     ],
@@ -214,7 +214,7 @@ describe('transcribeAndCleanup tone', () => {
     );
   });
 
-  it('passes the tone to a cleanup provider outside Private mode', async () => {
+  it('passes the tone to a cleanup provider outside Local Mode', async () => {
     mockActiveMode = 'providers';
 
     await transcribeAndCleanup({

@@ -1,11 +1,8 @@
 import { AppState } from 'react-native';
 import type { KeyboardTone } from '@/types';
 import { DEFAULT_KEYBOARD_TONE } from '@/lib/keyboardTone';
-import {
-  getDictationAgentName,
-  isDictationAgentApplicable,
-  isDictationAgentEnabled,
-} from '@/lib/dictationAgent';
+import { cloudAccessFor, voiceAssistantCanRun } from '@/lib/aiWorkflows';
+import { getDictationAgentName, isDictationAgentEnabled } from '@/lib/dictationAgent';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { randomUUID } from '@/lib/uuid';
@@ -61,12 +58,22 @@ export interface KeyboardAgentResult extends KeyboardAgentResultInput {
   updatedAtMs: number;
 }
 
+// Required lazily: the auth store imports the composer, which imports this module.
+function authStore(): (typeof import('@/store/useAuthStore'))['useAuthStore'] {
+  return (require('@/store/useAuthStore') as typeof import('@/store/useAuthStore')).useAuthStore;
+}
+
 function writeAgentMirrorKeys(): void {
   const config = useConfigStore.getState().config;
   const mode = useProcessingModeStore.getState().activeMode;
 
   const enabled = isDictationAgentEnabled(config ?? { defaultMode: 'cloud' });
-  const applicable = isDictationAgentApplicable(mode, config ?? { defaultMode: 'cloud' });
+  // The keyboard dims the wand where it can't run, in any mode.
+  const applicable = voiceAssistantCanRun(
+    config,
+    mode,
+    cloudAccessFor(authStore().getState().user),
+  );
   const name = getDictationAgentName(config ?? { defaultMode: 'cloud' });
   const shareContext = config?.dictationAgentShareContext ?? false;
 
@@ -81,6 +88,7 @@ export function startKeyboardAgentSync(): () => void {
 
   const unsubConfig = useConfigStore.subscribe(writeAgentMirrorKeys);
   const unsubMode = useProcessingModeStore.subscribe(writeAgentMirrorKeys);
+  const unsubAuth = authStore().subscribe(writeAgentMirrorKeys);
   const appStateSub = AppState.addEventListener('change', (state) => {
     if (state === 'active') {
       writeAgentMirrorKeys();
@@ -90,6 +98,7 @@ export function startKeyboardAgentSync(): () => void {
   return () => {
     unsubConfig();
     unsubMode();
+    unsubAuth();
     appStateSub.remove();
   };
 }

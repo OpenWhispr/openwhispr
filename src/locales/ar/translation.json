@@ -1,12 +1,14 @@
 {
   "hooks": {
     "audioRecording": {
+      "cleanupSignedOut": "يستخدم تنظيف الذكاء الاصطناعي OpenWhispr Cloud، لكنك لم تسجّل الدخول.",
+      "cleanupUnconfigured": "تنظيف الذكاء الاصطناعي مفعّل، ولكن لم يُضبط نموذج للتنظيف.",
       "errorTitles": {
         "sessionExpired": "انتهت الجلسة",
         "offline": "أنت غير متصل بالإنترنت",
         "agentUnavailable": "المساعد غير متاح",
         "screenContextSkipped": "تم تخطي سياق الشاشة",
-        "dailyLimitReached": "تم الوصول إلى الحد اليومي",
+        "cloudLimitReached": "تم بلوغ الحد السحابي الأسبوعي",
         "providerRateLimited": "تم تقييد المعدل من قبل المزود"
       },
       "fallback": {
@@ -45,6 +47,9 @@
         "managedTranscriptionUnavailable": "التفريغ المُدار غير متاح حاليًا. أعد المحاولة بعد لحظات.",
         "managedRouteInvalid": "تعذر بدء التفريغ المُدار بسبب عدم تطابق في الإعدادات. أعد المحاولة أو اتصل بالمسؤول.",
         "managedAuthRejected": "رُفضت بيانات اعتماد التفريغ المُدار الخاصة بمؤسستك. اتصل بالمسؤول.",
+        "managedRequestRejected": "رفضت خدمة التفريغ في مؤسستك هذا الصوت (HTTP {{status}}). أعد المحاولة أو اتصل بالمسؤول.",
+        "managedResponseMalformed": "أرسلت خدمة التفريغ في مؤسستك ردًا تعذّر على OpenWhispr قراءته. أعد المحاولة أو اتصل بالمسؤول.",
+        "managedChunkTooLarge": "تعذّر تقسيم هذا الصوت إلى أجزاء صغيرة بما يكفي لخدمة التفريغ في مؤسستك. اتصل بالمسؤول.",
         "streamingOnlyProvider": "هذا المزود يدعم التفريغ المباشر فقط. اختر مزودًا آخر لرفع الملفات وإعادة المحاولة.",
         "providerKeyMissing": "لم يتم تعيين مفتاح API لمزود التفريغ الخاص بك. أضفه في الإعدادات ← تحويل الكلام إلى نص (Speech to Text).",
         "cleanupTruncated": "نفدت مساحة الإخراج لدى نموذج الذكاء الاصطناعي قبل أن يُكمل تنقيح إملائك.",
@@ -53,9 +58,9 @@
       },
       "translationFallback": {
         "unreachableTitle": "الترجمة غير متاحة",
-        "unreachableDescription": "تم لصق الإملاء الخاص بك بدون ترجمة. تحقق من إعدادات الترجمة.",
+        "unreachableDescription": "بقي إملاؤك بلغته الأصلية. تحقق من إعدادات الترجمة.",
         "failedTitle": "فشلت الترجمة",
-        "failedDescription": "تم لصق النص الأصلي. يمكنك المحاولة مرة أخرى من السجل."
+        "failedDescription": "بقي إملاؤك بلغته الأصلية. يمكنك إعادة المحاولة من السجل."
       },
       "selectionEditing": {
         "notAppliedTitle": "لم يتم تطبيق تعديل التحديد",
@@ -69,7 +74,9 @@
         "reasoningFailed": "لم يتمكن الذكاء الاصطناعي من إكمال تعديل التحديد. لم يتم تغيير نصك الأصلي.",
         "invalidResponse": "أعاد الذكاء الاصطناعي استجابة تحرير غير صالحة. لم يتم استبدال أي نص. حدد النص وحاول مرة أخرى.",
         "emptyResponse": "أعاد الذكاء الاصطناعي تعديلاً فارغاً. لم يتم استبدال أي نص. جرّب تعليمة أكثر تحديداً.",
-        "truncatedResponse": "توقف الذكاء الاصطناعي قبل إكمال التعديل. لم يتم استبدال أي نص. جرّب تحديد نص أقل."
+        "truncatedResponse": "توقف الذكاء الاصطناعي قبل إكمال التعديل. لم يتم استبدال أي نص. جرّب تحديد نص أقل.",
+        "wlCopyMissing": "أنشأ OpenWhispr التعديل، لكن على سطح المكتب هذا لا تستطيع تطبيقات Wayland قراءة النص الملصوق إلا عبر wl-copy. ثبّت wl-clipboard لتطبيق التعديلات.",
+        "wlCopyFailed": "أنشأ OpenWhispr التعديل، لكن تعذّر على wl-copy نسخه لتطبيقات Wayland، لذا لم يتم تطبيقه."
       },
       "pushForceStopped": {
         "title": "لم يتم لصق النص المفرَّغ",
@@ -88,12 +95,20 @@
         "manualPaste": "انسخ النص أدناه، ثم اضغط على {{shortcut}} للصقه.",
         "openSettings": "فتح الإعدادات",
         "copyToClipboard": "نسخ إلى الحافظة",
-        "copyFailed": "تعذّر النسخ"
+        "copyFailed": "تعذّر النسخ",
+        "copiedTitle": "تم النسخ، ولم يتم اللصق",
+        "copiedDescription": "النص موجود في الحافظة. يتطلب اللصق التلقائي إذن تسهيلات الاستخدام. اضغط على {{shortcut}} للصق يدويًا.",
+        "dontShowAgain": "عدم الإظهار مجددًا"
       },
       "pasteFailed": {
         "title": "تعذّر اللصق تلقائيًا"
       },
-      "interruptedRecordingRecovered": "تمت استعادته بعد إغلاق OpenWhispr قبل انتهاء هذا الإملاء."
+      "interruptedRecordingRecovered": "تمت استعادته بعد إغلاق OpenWhispr قبل انتهاء هذا الإملاء.",
+      "waylandClipboard": {
+        "title": "لم يتم لصق النص المفرَّغ",
+        "wlCopyMissing": "على سطح المكتب هذا، لا تستطيع تطبيقات Wayland قراءة النص الملصوق إلا عبر wl-copy. ثبّت wl-clipboard للصق الإملاء.",
+        "wlCopyFailed": "تعذّر على wl-copy نسخ النص لتطبيقات Wayland، لذا لم يتم لصقه. اضغط على إعادة المحاولة للمحاولة مرة أخرى."
+      }
     },
     "clipboard": {
       "pasteFailed": {
@@ -130,6 +145,7 @@
         "tlsError": "خطأ في الشهادة — قد تستخدم شبكتك فحص SSL الذي يحظر التنزيلات. حاول التنزيل من شبكة مختلفة.",
         "unknown": "خطأ غير معروف"
       },
+      "verifying": "جارٍ التحقق من {{model}}",
       "downloadFailed": {
         "title": "فشل التنزيل"
       },
@@ -223,6 +239,8 @@
   "models": {
     "learnMore": "اعرف المزيد",
     "noneAvailable": "لا توجد نماذج متاحة",
+    "legacy": "قديم",
+    "legacyHint": "لم يعد متاحًا. بعد التبديل إلى نموذج آخر لن يظهر مرة أخرى.",
     "descriptions": {
       "cohere": {
         "cohere_transcribe_03_2026": "أدق نموذج محلي للتعرف على الكلام (متوسط معدل خطأ الكلمة 5.42%، 14 لغة). بدون اكتشاف تلقائي للغة"
@@ -232,7 +250,8 @@
         "parakeet_unified_en_0_6b": "تعرف على الكلام باللغة الإنجليزية فقط بدقة رائدة (5.91% متوسط معدل خطأ الكلمة)",
         "nemotron_speech_streaming_en_0_6b": "تعرف على الكلام المتدفق باللغة الإنجليزية من NVIDIA Nemotron",
         "nemotron_3_5_asr_streaming_0_6b": "تعرف على الكلام المتدفق متعدد اللغات من NVIDIA Nemotron مع اكتشاف تلقائي للغة (15 لغة)",
-        "orukeet": "نسخة مضبوطة من Parakeet للتعرف على الكلام متعدد اللغات"
+        "orukeet": "نسخة مضبوطة من Parakeet للتعرف على الكلام متعدد اللغات",
+        "parakeet_tdt_110m_en": "تعرف خفيف على الكلام الإنجليزي مع علامات الترقيم للأجهزة محدودة القدرات"
       },
       "diarization": {
         "segmentation": "اكتشاف حدود الكلام للتعرف على المتحدثين",
@@ -244,7 +263,9 @@
         "small": "جودة أفضل، أبطأ",
         "medium": "جودة عالية",
         "large": "أفضل جودة، الأبطأ",
-        "turbo": "سريع بجودة جيدة"
+        "turbo": "سريع بجودة جيدة",
+        "large_q5": "Large بثلث حجم التنزيل",
+        "turbo_q5": "Turbo بثلث حجم التنزيل"
       },
       "transcription": {
         "openai_gpt_transcribe": "الأحدث والأكثر دقة في التفريغ",
@@ -262,7 +283,10 @@
         "deepgram_nova_3": "نموذج Deepgram الأكثر دقة في الوقت الفعلي",
         "assemblyai_universal_streaming_english": "نصوص مفرَّغة ثابتة في الوقت الفعلي، الإنجليزية",
         "assemblyai_universal_streaming_multilingual": "نصوص مفرَّغة ثابتة في الوقت الفعلي، متعددة اللغات",
-        "assemblyai_universal_3_5_pro": "أعلى دقة في الوقت الفعلي، 18 لغة"
+        "assemblyai_universal_3_5_pro": "أعلى دقة في الوقت الفعلي، 18 لغة",
+        "assemblyai_universal_3_6_pro": "أعلى دقة في الوقت الفعلي، 32 لغة",
+        "mistral_voxtral_mini_transcribe_3_0": "تفريغ سريع بأكثر من 50 لغة (معاينة)",
+        "mistral_voxtral_small_transcribe_3_0": "Voxtral الأكثر دقة، أكثر من 50 لغة (معاينة)"
       },
       "cloud": {
         "openai_gpt_5_2": "نموذج استنتاج قوي",
@@ -270,14 +294,16 @@
         "openai_gpt_5_nano": "فائق السرعة، زمن انتقال منخفض",
         "openai_gpt_4_1": "أساس قوي، سياق 1 مليون",
         "openai_gpt_4_1_mini": "نموذج GPT-4.1 أصغر",
-        "openai_gpt_4_1_nano": "GPT-4.1 بأقل زمن انتقال",
         "anthropic_claude_fable_5_1": "نموذج Anthropic الأكثر قدرة، فئة Mythos",
         "anthropic_claude_fable_5": "الرائد السابق من فئة Mythos",
+        "anthropic_claude_opus_5_5": "أحدث نموذج Opus للاستنتاج المعقد، سياق 1 مليون",
+        "anthropic_claude_sonnet_5_5": "أحدث Sonnet: سريع وقادر للعمل اليومي، سياق 1 مليون",
+        "anthropic_claude_haiku_5_5": "أسرع نموذج Claude وأقلّه تكلفة، سياق 1 مليون",
         "anthropic_claude_sonnet_5": "نموذج مساعد سريع وقادر بتكلفة أقل",
         "anthropic_claude_sonnet_4_6": "أداء متوازن",
         "anthropic_claude_sonnet_4_5": "جيل Sonnet السابق",
         "anthropic_claude_haiku_4_5": "سريع بذكاء يقترب من مستوى النماذج الرائدة",
-        "gemini_gemini_3_5_flash": "أحدث نموذج Gemini سريع وعالي القدرة",
+        "gemini_gemini_3_5_flash": "نموذج Gemini سريع وعالي القدرة",
         "gemini_gemini_3_5_flash_lite": "نموذج 3.5 الأسرع والأكثر فعالية من حيث التكلفة",
         "gemini_gemini_3_1_pro_preview": "نموذج رائد من الجيل التالي للاستنتاج المعقد",
         "gemini_gemini_3_1_flash_lite": "أداء من الدرجة الأولى بتكلفة منخفضة",
@@ -286,15 +312,14 @@
         "gemini_gemma_4_31b_it": "أكبر نموذج Gemma 4 من Google، نموذج كثيف بحجم 31B، سياق 256K",
         "gemini_gemma_4_26b_a4b_it": "نموذج Gemma 4 MoE من Google، بمعلمات نشطة 4B، سياق 256K",
         "groq_openai_gpt_oss_120b": "نموذج OpenAI مفتوح المصدر الرائد، 500 رمز/ثانية",
+        "groq_qwen_qwen3_8_27b": "نموذج Qwen سريع، 450 رمز/ثانية، سياق 131K",
         "groq_openai_gpt_oss_20b": "نموذج سريع مفتوح المصدر، 1000 رمز/ثانية",
-        "groq_compound": "نظام Groq المركب، 450 رمز/ثانية",
-        "groq_compound_mini": "نظام مركب سريع، زمن انتقال أقل بمقدار 3 أضعاف",
         "openai_gpt_6_astra": "نموذج OpenAI الأكثر قدرة للبرمجة والبحث",
         "openai_gpt_5_6_sol": "GPT-5.6 الرائد للبرمجة والبحوث المعقدة",
         "openai_gpt_5_6_terra": "GPT-5.6 متوازن للعمل اليومي",
         "openai_gpt_5_6_luna": "GPT-5.6 الأسرع والأقل تكلفة",
         "openai_gpt_5_5": "نموذج رائد للاستنتاج المعقد",
-        "anthropic_claude_opus_5": "نموذج Opus الأكثر قدرة، سياق 1 مليون",
+        "anthropic_claude_opus_5": "نموذج Opus الرائد السابق، سياق 1 مليون",
         "anthropic_claude_opus_4_8": "نموذج Opus قوي مضبوط من أجل الصدق والموثوقية",
         "anthropic_claude_opus_4_7": "نموذج Opus قوي",
         "anthropic_claude_opus_4_6": "جيل Opus السابق، سياق 1 مليون",
@@ -306,18 +331,29 @@
         "corti_corti_s1": "النموذج السريري الأكثر قدرة مع الاستنتاج",
         "corti_corti_s1_mini_instant": "نموذج رعاية صحية مدمج، الأسرع والأقل تكلفة",
         "corti_corti_s1_mini": "نموذج سريري مدمج مع استنتاج بنصف السعر",
-        "tinfoil_glm_5_3": "نموذج خاص للهندسة البرمجية بقدرات وكيلية في بيئات معزولة وآمنة، سياق 1M"
+        "tinfoil_glm_5_3": "نموذج خاص للهندسة البرمجية بقدرات وكيلية في بيئات معزولة وآمنة، سياق 1M",
+        "openai_gpt_6_1_sol": "قدرة قريبة من Astra للمحادثة والمهام الوكيلة بتكلفة أقل",
+        "openai_gpt_6_luna": "GPT-6 الأسرع والأقل تكلفة",
+        "gemini_gemini_3_6_flash": "نموذج Gemini سريع وعالي القدرة",
+        "gemini_gemini_3_8_flash": "نموذج Flash الأكثر قدرة",
+        "gemini_gemini_4_argon": "نموذج الاستنتاج الرائد من Google",
+        "tinfoil_kimi_k3": "نموذج Moonshot الرائد الخاص مع استنتاج أصلي ورؤية، سياق 256K",
+        "tinfoil_deepseek_v4_1_flash": "نموذج DeepSeek خاص وسريع مع استنتاج اختياري، سياق 1M"
       },
       "enterprise": {
         "bedrock_claude_fable_5": "نموذج Claude الأكثر قدرة. الأفضل لأصعب مهام المساعد.",
-        "bedrock_claude_haiku_4_5": "سريع ورخيص. خيار افتراضي رائع لتنظيف النص.",
-        "bedrock_claude_sonnet_5": "نموذج موثوق متوازن للاستخدام اليومي. أفضل خيار افتراضي لمهام المساعد.",
+        "bedrock_claude_haiku_4_5": "إصدار Haiku السابق. سريع ورخيص لتنظيف النص.",
+        "bedrock_claude_sonnet_5": "إصدار Sonnet السابق. سريع وقادر لمهام المساعد.",
         "bedrock_claude_opus_4_8": "أقصى درجات الذكاء. الأفضل لمهام المساعد المعقدة.",
         "bedrock_gpt_oss_120b": "نموذج OpenAI مفتوح الوزن. استنتاج قوي بتكلفة منخفضة.",
         "bedrock_deepseek_v3_2": "نموذج رائد مفتوح الوزن. قيمة رائعة لمهام المساعد.",
         "bedrock_qwen3_next_80b": "نموذج متناثر مفتوح الوزن. سريع ومتعدد اللغات.",
-        "vertex_gemini_2_5_flash": "نموذج متعدد الوسائط سريع عبر Vertex",
-        "vertex_gemini_2_5_pro": "استنتاج متقدم عبر Vertex"
+        "bedrock_claude_sonnet_5_5": "نموذج متوازن للاستخدام اليومي. أفضل خيار افتراضي لمهام المساعد.",
+        "bedrock_claude_haiku_5_5": "أسرع نموذج Claude. خيار افتراضي رائع لتنظيف النص.",
+        "bedrock_claude_opus_5_5": "أقصى درجات الذكاء. الأفضل لمهام المساعد المعقدة.",
+        "vertex_gemini_3_8_flash": "نموذج Flash الأكثر قدرة عبر Vertex",
+        "vertex_gemini_3_5_flash_lite": "النموذج الأسرع والأقل تكلفة عبر Vertex",
+        "vertex_gemini_4_argon": "نموذج الاستنتاج الرائد من Google عبر Vertex"
       },
       "local": {
         "qwen_qwen3_5_9b_q4_k_m": "نموذج هجين قوي",
@@ -354,7 +390,14 @@
         "liquidai_lfm2_5_8b_a1b_q4_k_m": "نموذج MoE من Liquid AI، جودة عالية مع معلمات نشطة 1.5B فقط",
         "liquidai_lfm2_2_6b_q4_k_m": "نموذج LFM2 متوازن لتنظيف بجودة أعلى",
         "liquidai_lfm2_5_350m_q8_0": "نموذج خفيف للغاية للتنظيف السريع للإملاء",
-        "liquidai_lfm2_5_230m_q8_0": "نموذج صغير جدًا، تنظيف فوري على الأجهزة المتواضعة"
+        "liquidai_lfm2_5_230m_q8_0": "نموذج صغير جدًا، تنظيف فوري على الأجهزة المتواضعة",
+        "qwen_qwen3_5_0_8b_q4_k_m": "نموذج Qwen3.5 صغير جدًا لأسرع تنظيف",
+        "qwen_qwen3_8_27b_q4_k_m": "نموذج Qwen الأكثر قدرة للأجهزة بذاكرة 32 GB",
+        "qwen_qwen3_6_35b_a3b_q4_k_m": "نموذج مزيج خبراء سريع، 3B معاملات نشطة",
+        "mistral_ministral_3_14b_instruct_2512_q4_k_m": "نموذج Mistral بحجم 14B مع استخدام الأدوات، سياق 256K",
+        "mistral_ministral_3_8b_instruct_2512_q4_k_m": "نموذج سريع بلا مرحلة تفكير للتنظيف والأدوات",
+        "mistral_ministral_3_3b_instruct_2512_q4_k_m": "صغير وسريع لتنظيف الإملاء",
+        "gemma_gemma_4_12b_it_qat_q4_0": "إصدار QAT الرسمي من Google، الأنسب للأجهزة بذاكرة 16 GB"
       }
     },
     "errors": {
@@ -362,6 +405,21 @@
       "contextTooLargeGeneric": "هذا أطول من أن يقرأه {{model}} على هذا الكمبيوتر. جرّب نموذجًا سحابيًا، أو نفّذ الإجراء على تحديد أقصر.",
       "localServerUnavailable": "تعذّر تشغيل {{model}} على هذا الكمبيوتر. حاول مرة أخرى، أو بدّل إلى نموذج سحابي.",
       "localModelBusy": "لا يزال النموذج المحلي يعالج طلبًا آخر. انتظر حتى ينتهي، ثم حاول مرة أخرى."
+    },
+    "policy": {
+      "guidance": "اعتمدت مؤسستك هذه النماذج. اختر النموذج المناسب لجهاز الكمبيوتر لديك.",
+      "notApproved": "غير معتمد من مؤسستك",
+      "noneSupported": "لم تعتمد مؤسستك أي نموذج محلي يدعمه إصدار التطبيق هذا. حدّث OpenWhispr أو تواصل مع المسؤول.",
+      "emptyIntersection": "لا يوجد نموذج محلي معتمد مشترك بين مساحات عملك. تواصل مع المسؤول.",
+      "modelBlocked": "اختر نموذجًا محليًا معتمدًا من مؤسستك.",
+      "modeBlocked": "عطّلت مؤسستك المعالجة المحلية.",
+      "unresolved": "تعذّر تحديد سياسة مساحة العمل. اتصل بالشبكة وحاول مجددًا.",
+      "versionBlocked": "حدّث OpenWhispr لاستخدام النماذج المعتمدة من مؤسستك.",
+      "updateRequired": "يلزم التحديث",
+      "unavailable": "غير متاح حاليًا",
+      "installedTitle": "النماذج المحلية المثبتة",
+      "installedHint": "عطّلت مؤسستك المعالجة المحلية، لذا لا يمكن تشغيل هذه النماذج. تبقى على جهازك حتى تحذفها.",
+      "chooseModel": "اختر نموذجًا محليًا"
     }
   },
   "reasoning": {
@@ -400,6 +458,21 @@
       "noSearchResults": "لا توجد نماذج تتطابق مع \"{{query}}\"",
       "selectModelHint": "لم يتم تحديد أي نموذج بعد — اختر واحدًا من القائمة أدناه.",
       "keyRequiredHint": "مفتاح API مطلوب للاستدلال — أضف واحدًا لاستخدام هذا المزود."
+    },
+    "effort": {
+      "title": "مستوى الاستدلال",
+      "description": "مقدار تفكير النموذج قبل أن يجيب.",
+      "descriptionWithDefault": "مقدار تفكير النموذج قبل أن يجيب. يستخدم الوضع التلقائي الإعداد الافتراضي للمزوّد ({{value}}).",
+      "auto": "تلقائي",
+      "options": {
+        "none": "بلا",
+        "minimal": "أدنى",
+        "low": "منخفض",
+        "medium": "متوسط",
+        "high": "مرتفع",
+        "xhigh": "مرتفع جدًا",
+        "max": "أقصى"
+      }
     },
     "getApiKey": "احصل على مفتاح API الخاص بك ←",
     "selectModel": "تحديد النموذج",
@@ -486,10 +559,21 @@
         "apikeyHelp": "مفتاح Vertex AI Express Mode API من Google AI Studio."
       }
     },
+    "modelRetiredTitle": "النموذج لم يعد متاحًا",
+    "modelRetiredByProvider": "أوقف {{provider}} النموذج {{from}}. تم التبديل إلى {{to}}.",
+    "modelUnavailableSwitched": "لم يعد {{from}} متاحًا من {{provider}}. تم التبديل إلى {{to}}.",
+    "localModelRetired": "لم يعد {{from}} متاحًا، لذا بدّلنا إلى {{to}}. إذا لم يكن قد نُزّل بعد، فنزّله من الإعدادات.",
+    "localModelRetiredChooseAnother": "لم يعد {{from}} متاحًا. اختر نموذجًا محليًا آخر من الإعدادات.",
+    "localModelRetiredKept": "تم إيقاف {{from}}. سيستمر في العمل لأنه مُنزَّل بالفعل، لكن لا يمكن تنزيله مرة أخرى. اختر نموذجًا محليًا آخر من الإعدادات.",
+    "groq": {
+      "modelRetired": "قام Groq بإيقاف {{from}}. تم التبديل إلى {{to}}."
+    },
     "tinfoil": {
-      "modelRetiredTitle": "النموذج لم يعد متاحًا",
       "modelRetired": "قام Tinfoil بإيقاف {{from}}. تم التبديل إلى {{to}}.",
       "refreshingModels": "جاري تحديث النماذج..."
+    },
+    "openai": {
+      "modelRetired": "قامت OpenAI بإيقاف {{from}}. تم التبديل إلى {{to}}."
     },
     "corti": {
       "euOnly": "نماذج Corti متوفرة فقط في منطقة الاتحاد الأوروبي."
@@ -514,7 +598,7 @@
       "availableButton": "التحديث متاح"
     },
     "limit": {
-      "weeklyTitle": "تم الوصول إلى الحد الأسبوعي",
+      "weeklyTitle": "تم بلوغ الحد السحابي الأسبوعي",
       "weeklyDescription": "تتم إعادة تعيين الحد الخاص بك على أساس متجدد. قم بالترقية إلى Pro أو استخدم مفتاح API الخاص بك للاستخدام غير المحدود."
     },
     "accessibilityMissing": {
@@ -563,12 +647,17 @@
       "retrying": "جاري إعادة التفريغ...",
       "retrySuccess": "تم تحديث التفريغ",
       "retryError": "فشلت إعادة التفريغ",
+      "retryErrors": {
+        "invalidResponse": "أعاد محرك التفريغ استجابة غير متوقعة. حاول مرة أخرى."
+      },
       "audioNotFound": "الملف الصوتي غير موجود أو انتهت صلاحيته",
       "noAiProcessing": "لم يتم تطبيق أي معالجة بالذكاء الاصطناعي على هذا النص المفرَّغ",
       "transcriptionFailed": "فشل التفريغ",
       "failedCtaSettings": "قم بإعداد مزود التفريغ الخاص بك",
       "failedCtaAndRetry": "ثم انقر فوق إعادة المحاولة",
       "failedCtaSettingsOnly": "قم بإعداد مزود التفريغ الخاص بك في الإعدادات",
+      "failedCtaAiSettings": "تحقق من نموذج المساعد الصوتي في الإعدادات",
+      "editFailedTranscriptKept": "لم يُطبَّق التعديل · تم الاحتفاظ بالنص المفرَّغ",
       "failedLimitReached": "تم الوصول إلى الحد اليومي",
       "failedOffline": "أنت غير متصل بالإنترنت",
       "rawTranscript": "النص المفرَّغ الخام",
@@ -718,6 +807,7 @@
       },
       "sections": {
         "connectors": "الموصلات",
+        "skills": "المهارات",
         "calendars": "التقويمات",
         "api": "مفاتيح API",
         "mcp": "خادم MCP",
@@ -734,7 +824,6 @@
     "approval": {
       "headers": {
         "default": "إرسال إلى {{destination}}",
-        "slackPost": "نشر في {{destination}}",
         "email": "بريد إلكتروني إلى {{destination}}",
         "issue": "إنشاء مشكلة في {{destination}}",
         "comment": "التعليق على {{destination}}"
@@ -742,8 +831,6 @@
       "identity": "بصفتك {{account}}",
       "identityWithWorkspace": "بصفتك {{account}} في {{workspace}}",
       "send": "إرسال",
-      "edit": "تعديل",
-      "doneEditing": "تم التعديل",
       "cancel": "إلغاء",
       "titleLabel": "العنوان",
       "bodyLabel": "الرسالة",
@@ -769,6 +856,10 @@
         "credential_save_failed": "تعذّر حفظ تسجيل الدخول إلى Slack على هذا الكمبيوتر. لم يُرسل شيء. حاول مرة أخرى.",
         "dm_failed": "تعذّر فتح الرسالة المباشرة إلى {{destination}}. لم يُرسل شيء.",
         "restricted": "{{destination}} للقراءة فقط أو مقيّدة بالنسبة لك.",
+        "thread_mismatch": "سلسلة الرسائل هذه في محادثة غير {{destination}}. لم يُرسل شيء.",
+        "invalid_thread": "هذا ليس رابطًا لرسالة في Slack. لم يُرسل شيء.",
+        "thread_closed": "لا يسمح Slack بالرد في سلسلة الرسائل هذه. لم يُرسل شيء.",
+        "thread_only": "لا تقبل {{destination}} إلا الردود في سلاسل الرسائل. لم يُرسل شيء.",
         "generic": "حدث خطأ ما. لم يُرسل شيء.",
         "github": {
           "reconnect_needed": "يلزم إعادة ربط GitHub من الإعدادات.",
@@ -829,7 +920,6 @@
         }
       },
       "email": {
-        "from": "من {{account}}",
         "toLabel": "إلى",
         "ccLabel": "نسخة",
         "subjectLabel": "الموضوع",
@@ -842,7 +932,8 @@
         "tooManyRecipients": "يمكن إرسال البريد الإلكتروني إلى {{max}} عنوانًا كحد أقصى، في حقلي إلى ونسخة معًا.",
         "subjectTooLong": "اجعل الموضوع {{max}} حرفًا أو أقل.",
         "bodyTooLong": "الرسالة طويلة جدًا بالنسبة إلى Gmail. اختصرها لإرسالها.",
-        "unknown": "تعذّر تأكيد الإرسال. تحقق من مجلد البريد المُرسل."
+        "unknown": "تعذّر تأكيد الإرسال. تحقق من مجلد البريد المُرسل.",
+        "fromLabel": "من"
       },
       "github": {
         "notes": {
@@ -886,7 +977,22 @@
         "notes": {
           "targetTitle": "على \"{{title}}\""
         }
-      }
+      },
+      "sentEarlier": "سبق أن حاولت هذا في هذه المحادثة. تحقّق مما إذا كان قد تم قبل إرساله مرة أخرى.",
+      "slack": {
+        "channelLabel": "القناة",
+        "asLabel": "بصفتك",
+        "destination": "{{workspace}} · {{destination}}",
+        "notes": {
+          "replyInThread": "رد في سلسلة الرسائل التي بدأت في {{started, datetime(dateStyle: medium; timeStyle: short)}}"
+        },
+        "sentOutsideThread": "تم الإرسال إلى {{destination}} كرسالة جديدة، وليس في سلسلة الرسائل."
+      },
+      "sentLabel": "تم الإرسال",
+      "identityChanged": "سيُرسل الآن بصفتك {{account}}. اضغط إرسال لإرساله.",
+      "connectToSend": "اربط {{name}} لإرسال هذا",
+      "edit": "تعديل",
+      "doneEditing": "تم التعديل"
     },
     "policyOff": "أوقفت مؤسستك تشغيل الموصلات.",
     "email": {
@@ -935,7 +1041,8 @@
         "connectedBody": "يمكنك إغلاق هذا التبويب والعودة إلى OpenWhispr.",
         "failedTitle": "لم يتم توصيل Slack",
         "failedBody": "عد إلى OpenWhispr للمحاولة مرة أخرى."
-      }
+      },
+      "pickDestination": "أيّ «{{destination}}» تقصد؟"
     },
     "github": {
       "title": "GitHub",
@@ -1111,6 +1218,10 @@
         "credential_save_failed": "تعذّر حفظ تسجيل الدخول إلى Slack على هذا الكمبيوتر. لم يُرسل شيء.",
         "dm_failed": "تعذّر فتح الرسالة المباشرة. لم يُرسل شيء.",
         "restricted": "تلك القناة للقراءة فقط أو مقيّدة.",
+        "thread_mismatch": "سلسلة الرسائل هذه في محادثة أخرى. لم يُرسل شيء.",
+        "invalid_thread": "ليس رابطًا لرسالة في Slack.",
+        "thread_closed": "لا يسمح Slack بالرد في سلسلة الرسائل هذه.",
+        "thread_only": "لا تقبل هذه القناة إلا الردود في سلاسل الرسائل.",
         "generic": "لم ينجح ذلك.",
         "github": {
           "reconnect_needed": "يلزم إعادة ربط GitHub.",
@@ -1175,11 +1286,253 @@
       },
       "gmailDraftLimit": "يمكن تجهيز {{max}} رسائل بريد إلكتروني فقط لكل طلب.",
       "queryResults": "النتائج التي عُثر عليها: {{total}}",
-      "cardLimit": "يمكن تجهيز {{max}} بطاقات فقط لكل طلب."
+      "cardLimit": "يمكن تجهيز {{max}} بطاقات فقط لكل طلب.",
+      "alreadySent": "تم تنفيذه بالفعل لهذا الطلب"
     },
     "beta": "تجريبي",
     "upsell": "الموصلات متاحة في الخطط المدفوعة. قم بالترقية ليعمل المساعد في أدواتك.",
     "locked": "متاح ضمن الخطط المدفوعة"
+  },
+  "skills": {
+    "pane": {
+      "description": "علّم المساعد طرق عملك مرة واحدة، وسيستخدمها كلما كانت مناسبة.",
+      "search": "البحث في المهارات",
+      "manage": "إدارة المهارات",
+      "add": "إضافة",
+      "addMenu": {
+        "createWithAssistant": "إنشاء مع المساعد",
+        "create": "إنشاء مهارة",
+        "upload": "رفع مهارة"
+      },
+      "installed": "المثبّتة",
+      "recommended": "الموصى بها",
+      "seeOne": "عرض {{first}}",
+      "seeTwo": "عرض {{first}} و{{second}}",
+      "seeMore_zero": "عرض {{first}} و{{second}} و{{count}} مهارة أخرى",
+      "seeMore_one": "عرض {{first}} و{{second}} و{{count}} مهارة أخرى",
+      "seeMore_two": "عرض {{first}} و{{second}} و{{count}} مهارتين أخريين",
+      "seeMore_few": "عرض {{first}} و{{second}} و{{count}} مهارات أخرى",
+      "seeMore_many": "عرض {{first}} و{{second}} و{{count}} مهارة أخرى",
+      "seeMore_other": "عرض {{first}} و{{second}} و{{count}} مهارة أخرى",
+      "noMatches": "لا توجد مهارات مثبّتة تطابق \"{{query}}\".",
+      "stateOn": "مفعّلة",
+      "stateOff": "متوقفة",
+      "stateNeedsFix": "تحتاج إلى إصلاح",
+      "off": "متوقفة",
+      "needsFix": "تحتاج إلى إصلاح",
+      "cardLabel": "{{name}}، {{state}}. فتح التفاصيل",
+      "addRecommended": "إضافة {{name}}",
+      "empty": {
+        "title": "لا توجد مهارات بعد",
+        "description": "أنشئ مهارة مع المساعد، أو ارفع مهارة لديك بالفعل.",
+        "descriptionNoAssistant": "ارفع مهارة لديك بالفعل، أو أنشئ مهارتك الخاصة."
+      }
+    },
+    "breadcrumb": {
+      "label": "مسار التنقل",
+      "root": "المهارات"
+    },
+    "detail": {
+      "skillLabel": "مهارة",
+      "toggle": "تفعيل {{name}} أو إيقافها",
+      "more": "مزيد من الخيارات لـ {{name}}",
+      "files": "الملفات",
+      "copyFile": "نسخ {{path}}",
+      "neverRun": "لا يشغّل OpenWhispr النصوص البرمجية أبدًا",
+      "uninstall": "إلغاء التثبيت",
+      "uninstallConfirm": "هل تريد إلغاء تثبيت {{name}}؟ ستُزال من هذا الكمبيوتر.",
+      "problem": "لا يمكن استخدام هذه المهارة حتى يتم إصلاحها: {{reason}}",
+      "tryNow": "جرّبها الآن"
+    },
+    "menu": {
+      "copyMarkdown": "نسخ Markdown",
+      "uninstall": "إلغاء التثبيت"
+    },
+    "toasts": {
+      "added": "تمت إضافة {{name}}",
+      "created": "تم إنشاء {{name}}",
+      "uploaded_zero": "تم رفع {{count}} مهارة",
+      "uploaded_one": "تم رفع {{count}} مهارة",
+      "uploaded_two": "تم رفع {{count}} مهارتين",
+      "uploaded_few": "تم رفع {{count}} مهارات",
+      "uploaded_many": "تم رفع {{count}} مهارة",
+      "uploaded_other": "تم رفع {{count}} مهارة",
+      "uninstalled": "تم إلغاء تثبيت {{name}}",
+      "removedFromComputer": "تمت إزالتها من هذا الكمبيوتر.",
+      "copiedMarkdown": "تم نسخ Markdown",
+      "copyFailed": "تعذّر النسخ",
+      "revealFailed": "تعذّر العثور على مجلد المهارة",
+      "writeFailed": "تعذّر حفظ المهارة",
+      "writeFailedNoSpace": "القرص ممتلئ.",
+      "writeFailedPermission": "لا يستطيع OpenWhispr الكتابة في مجلد المهارات الخاص به.",
+      "loadFailed": "تعذّرت قراءة مهاراتك"
+    },
+    "manage": {
+      "title": "إدارة المهارات",
+      "description": "فعّل المهارات أو أوقفها، أو أزل ما لا تستخدمه منها. تُحفظ كل مهارة على هذا الكمبيوتر.",
+      "noMatches": "لا توجد مهارات تطابق \"{{query}}\".",
+      "none": "لا توجد مهارات بعد."
+    },
+    "upload": {
+      "title": "رفع مهارة",
+      "description": "أضف مهارات أنشأتها في مكان آخر، مثل Claude أو Codex.",
+      "crumb": "رفع مهارة",
+      "drop": "اسحب ملفات المهارات إلى هنا، أو تصفّح",
+      "dropActive": "أفلت للإضافة",
+      "several": "يمكنك إضافة عدة مهارات دفعة واحدة.",
+      "ruleMd": "تحتاج ملفات ‎.md إلى اسم ووصف في أعلاها",
+      "ruleZip": "تحتاج ملفات ‎.zip و‎.skill إلى ملف SKILL.md بداخلها",
+      "fileCount_zero": "{{count}} ملف",
+      "fileCount_one": "{{count}} ملف",
+      "fileCount_two": "{{count}} ملفان",
+      "fileCount_few": "{{count}} ملفات",
+      "fileCount_many": "{{count}} ملفًا",
+      "fileCount_other": "{{count}} ملف",
+      "ready": "جاهزة",
+      "duplicate": "لديك هذه المهارة بالفعل",
+      "replace": "استبدال",
+      "willReplace": "ستحل محل مهارتك الحالية",
+      "willReplaceCopy": "سيُستخدم بدلًا من الملف الآخر",
+      "alsoInUpload": "ملف آخر في عملية الرفع هذه يحتوي على المهارة نفسها",
+      "skipped": "تم التخطي",
+      "undo": "تراجع",
+      "chooseFile": "اختر ملفًا للمتابعة.",
+      "submit": "رفع",
+      "submitCount_zero": "رفع {{count}} مهارة",
+      "submitCount_one": "رفع {{count}} مهارة",
+      "submitCount_two": "رفع {{count}} مهارتين",
+      "submitCount_few": "رفع {{count}} مهارات",
+      "submitCount_many": "رفع {{count}} مهارة",
+      "submitCount_other": "رفع {{count}} مهارة"
+    },
+    "create": {
+      "title": "إنشاء مهارة",
+      "description": "اكتبها بنفسك. يستخدمها المساعد كلما توافق طلبٌ مع الوصف.",
+      "crumb": "إنشاء مهارة",
+      "name": "الاسم",
+      "namePlaceholder": "تقرير الحالة الأسبوعي",
+      "nameMissing": "أضف اسمًا.",
+      "descriptionLabel": "الوصف",
+      "descriptionPlaceholder": "ما الذي تفعله ومتى تُستخدم. مثال: تكتب تحديثي الأسبوعي من ملاحظات هذا الأسبوع. استخدمها عندما أطلب تحديثًا أسبوعيًا.",
+      "descriptionHint": "يقرأ المساعد هذا ليقرر متى يستخدم المهارة.",
+      "descriptionMissing": "أضف وصفًا ليعرف المساعد متى يستخدمها.",
+      "instructions": "التعليمات",
+      "instructionsPlaceholder": "## متى تُستخدم\nعندما أطلب تحديثي الأسبوعي.\n\n## الخطوات\n1. اقرأ ملاحظات هذا الأسبوع.\n2. صنّفها إلى إنجازات وعوائق والأسبوع القادم.\n\n## صيغة الإخراج\nثلاث قوائم قصيرة.",
+      "instructionsMissing": "أضف التعليمات.",
+      "addFile": "إضافة ملف",
+      "filesTooLarge": "يمكن أن يصل الحجم الإجمالي لملفات المهارة إلى 25 ميغابايت كحد أقصى.",
+      "removeFile": "إزالة {{path}}",
+      "submit": "إنشاء",
+      "unsaved": "لديك تغييرات غير محفوظة",
+      "keepEditing": "متابعة التعديل",
+      "discard": "تجاهل",
+      "draftWithAssistant": "صياغة مع المساعد"
+    },
+    "problems": {
+      "missingName": "تحتاج إلى اسم في الأعلى",
+      "missingDescription": "تحتاج إلى وصف في الأعلى",
+      "frontmatterMissing": "تحتاج إلى اسم ووصف في الأعلى",
+      "frontmatterInvalid": "تتعذر قراءة التفاصيل في الأعلى",
+      "frontmatterNotMapping": "التفاصيل في الأعلى ليست بالصيغة المتوقعة",
+      "nameFormat": "يمكن أن يحتوي الاسم على أحرف إنجليزية صغيرة وأرقام وشرطات مفردة فقط",
+      "nameTooLong": "الاسم أطول من 64 حرفًا",
+      "descriptionTooLong": "يتجاوز الوصف الحد الأقصى لعدد الأحرف ({{max}})",
+      "descriptionAngleBrackets": "لا يمكن أن يحتوي الوصف على < أو >",
+      "noSkillFile": "لا يوجد ملف SKILL.md بداخله",
+      "multipleSkillFiles": "يوجد أكثر من ملف SKILL.md بداخله",
+      "skillFileTooDeep": "يجب أن يكون SKILL.md في المستوى الأعلى، أو داخل مجلد واحد",
+      "unsafePath": "يحتوي على اسم ملف أو مسار غير مسموح به",
+      "symlink": "يحتوي على رابط إلى ملف آخر، وهذا غير مسموح به",
+      "tooLarge": "حجمه أكبر من 25 ميغابايت",
+      "tooManyFiles": "يحتوي على أكثر من 500 ملف",
+      "unsupportedFile": "يمكن إضافة ملفات ‎.md و‎.zip و‎.skill فقط",
+      "unreadableArchive": "يتعذر فتح هذا الملف",
+      "nameMismatch": "الاسم داخل SKILL.md لا يطابق اسم مجلده",
+      "unreadable": "تتعذر قراءة ملفات المهارة",
+      "skillFileNotUtf8": "يجب حفظ SKILL.md كنص بترميز UTF-8",
+      "placeholder": "استبدل العنصر النائب [TODO: …‎] أولًا",
+      "nameTaken": "لديك بالفعل مهارة باسم {{name}}"
+    },
+    "warnings": {
+      "folderRenamed": "ستتم إعادة تسمية المجلد ليطابق اسم المهارة",
+      "reservedWord": "لا يمكن رفع الأسماء التي تحتوي على \"claude\" أو \"anthropic\" إلى Claude",
+      "longBody": "تتجاوز التعليمات 500 سطر، وقد يؤدي ذلك إلى إبطاء المساعد",
+      "longDescription": "يتجاوز الوصف 300 حرف؛ الأوصاف الأقصر تُختار بدقة أكبر",
+      "unknownKeys": "توجد تفاصيل إضافية في الأعلى يحتفظ بها OpenWhispr لكنه لا يستخدمها"
+    },
+    "recommended": {
+      "action-items-to-linear": {
+        "title": "المهام إلى Linear",
+        "description": "تستخرج المهام من الاجتماع وتُعدّ لها مسودات في Linear لأوافق عليها. استخدمها بعد الاجتماع عندما أطلب المهام."
+      },
+      "meeting-summary-to-slack": {
+        "title": "ملخص الاجتماع إلى Slack",
+        "description": "تكتب ملخصًا قصيرًا للاجتماع وتُعدّ مسودة له لقناة في Slack. استخدمها عندما أطلب مشاركة ملخص الاجتماع."
+      },
+      "one-on-one-prep": {
+        "title": "التحضير لاجتماع فردي",
+        "description": "تجمع ما تغيّر منذ آخر اجتماع فردي لي مع شخص ما. استخدمها عندما أطلب التحضير لاجتماع فردي."
+      },
+      "meeting-decisions": {
+        "title": "قرارات الاجتماعات",
+        "description": "تجد القرارات في ملاحظات اجتماعاتي، مع تاريخ كل قرار واجتماعه. استخدمها عندما أسأل عمّا قررناه."
+      }
+    },
+    "chat": {
+      "chipRemove": "إزالة {{name}} من هذه المحادثة",
+      "placeholderWith": "اسأل عن أي شيء — تستخدم هذه المحادثة {{name}}",
+      "usingSkill": "يتم استخدام المهارة · {{name}}",
+      "usingSkillFailed": "تعذّر استخدام المهارة · {{name}}",
+      "creatorName": "منشئ المهارات",
+      "creatorOpening": "ما الذي تفعله مرارًا وتكرارًا؟ احكِ لي عن آخر مرة، أو اختر ملاحظة لتبدأ منها.",
+      "draftPrompt": "ساعدني في إكمال هذه المهارة.\nالاسم: {{name}}\nالوصف: {{description}}",
+      "draftInstructions": "التعليمات حتى الآن:\n{{instructions}}",
+      "draftFiles": "الملفات التي أضفتها: {{files}}",
+      "noneYet": "(لا شيء بعد)"
+    },
+    "approval": {
+      "createHeader": "إنشاء مهارة",
+      "newSkill": "مهارة جديدة",
+      "replacesExisting": "لديك هذه المهارة بالفعل. الحفظ سيحدّثها.",
+      "replacesExistingTurnsOn": "لديك هذه المهارة بالفعل. الحفظ سيحدّثها ويفعّلها.",
+      "nameLabel": "اسم المهارة",
+      "descriptionLabel": "متى تُستخدم",
+      "seeFull": "عرض المهارة كاملة",
+      "save": "حفظ المهارة",
+      "saving": "جاري الحفظ…",
+      "saved": "تم الحفظ",
+      "openSkill": "فتح المهارة",
+      "skippedCreate": "تم التخطي. لم يُحفظ أي شيء.",
+      "updated": "تم التحديث",
+      "undo": "تراجع",
+      "undone": "تم التراجع. عادت المهارة كما كانت.",
+      "undoStale": "تعذّر التراجع. تغيّرت المهارة منذ ذلك الحين.",
+      "outdated": "لم يُحفظ. تغيّرت المهارة بعد إنشاء هذه البطاقة.",
+      "unchangedLines_zero": "⋯ {{count}} سطر دون تغيير",
+      "unchangedLines_one": "⋯ {{count}} سطر دون تغيير",
+      "unchangedLines_two": "⋯ {{count}} سطران دون تغيير",
+      "unchangedLines_few": "⋯ {{count}} أسطر دون تغيير",
+      "unchangedLines_many": "⋯ {{count}} سطرًا دون تغيير",
+      "unchangedLines_other": "⋯ {{count}} سطر دون تغيير",
+      "undoFailed": "تعذّر التراجع. حاول مرة أخرى.",
+      "failed": "تعذّر حفظ المهارة.",
+      "notSaved": "لم يُحفظ أي شيء.",
+      "updateHeader": "تحديث المهارة",
+      "removes": "سيُزال:",
+      "learnedFrom": "مستفادة من: {{title}} · {{date}}",
+      "today": "اليوم",
+      "seeChanges": "عرض التغييرات بالتفصيل",
+      "added": "أُضيف:",
+      "removed": "أُزيل:",
+      "update": "تحديث المهارة",
+      "skippedUpdate": "تم التخطي. لم تتغير المهارة."
+    },
+    "code": {
+      "paste": "لصق في التطبيق",
+      "pasteNote": "يلصق دون الضغط على Enter، لتختار أنت متى تشغّله.",
+      "pasted": "تم اللصق",
+      "pasteFailed": "تعذّر اللصق. النص موجود في الحافظة."
+    }
   },
   "auth": {
     "cloudNotConfigured": "السحابة غير مهيأة",
@@ -1259,16 +1612,18 @@
     },
     "welcomeSubtitle": "قوة صوتك. بشروطك.",
     "welcomeTitle": "مرحبًا بك في OpenWhispr",
-    "sessionExpired": "انتهت الجلسة. يرجى إعادة بدء عملية التسجيل."
+    "sessionExpired": "انتهت الجلسة. يرجى إعادة بدء عملية التسجيل.",
+    "unconfirmedSession": "تعذّر تأكيد تسجيل دخولك، لذلك لم يتم تغيير أي شيء. حاول مرة أخرى عندما يتمكن OpenWhispr من الوصول إلى خوادمه."
   },
   "workspaces": {
     "switcher": {
       "workspaces": "مساحات العمل",
-      "create": "إنشاء مساحة عمل…"
+      "add": "إضافة مساحة عمل",
+      "invitePeople": "دعوة أشخاص"
     },
     "create": {
       "title": "إنشاء مساحة عمل",
-      "description": "تجمع مساحة العمل أعضاء مؤسستك والفواتير معًا. أنشئ مساحات للفرق بداخلها للملاحظات المشتركة.",
+      "description": "تجمع مساحة العمل أعضاء مؤسستك والفواتير معًا. أنشئ بداخلها مساحات فريق للملاحظات المشتركة.",
       "nameLabel": "اسم مساحة العمل",
       "namePlaceholder": "شركة تجريبية",
       "submit": "إنشاء مساحة عمل",
@@ -1280,27 +1635,154 @@
       "description": "أنت الآن مالك {{name}}."
     },
     "invite": {
-      "title": "دعوة إلى {{workspace}}",
-      "description": "أضف زملاء العمل عبر البريد الإلكتروني. سيحصلون على رابط للانضمام.",
-      "emailLabel": "البريد الإلكتروني",
-      "emailPlaceholder": "الزميل@example.com",
-      "roleLabel": "الدور",
+      "title": "دعوة أشخاص",
+      "description": "سيتلقون رابطًا عبر البريد الإلكتروني للانضمام إلى {{workspace}}.",
+      "emailLabel": "عناوين البريد الإلكتروني",
+      "emailHint": "افصل بين العناوين بفواصل. سيحصل الجميع على الدور نفسه.",
+      "emailPlaceholder": "ابحث عن بريد إلكتروني",
+      "addMore": "إضافة المزيد…",
+      "removeRecipient": "إزالة {{email}}",
+      "suggestions": "اقتراحات",
+      "roleLabel": "الدور في مساحة العمل",
       "seatUsage": "المقاعد المستخدمة: {{used}} من أصل {{seats}}",
       "seatCost": "إذا تم القبول، سيتم إضافة مقعد إلى خطتك · التكلفة التقديرية التناسبية {{amount}}.",
-      "submit": "إرسال دعوة",
-      "submitting": "جاري الإرسال…",
-      "sentTitle": "تم إرسال الدعوة",
-      "sentDescription": "لقد أرسلنا دعوة إلى {{email}}.",
-      "sentNoEmailTitle": "تم إنشاء الدعوة، ولكن لم يتم إرسالها عبر البريد الإلكتروني",
-      "sentNoEmailDescription": "تمت دعوة {{email}}، ولكن تعذر تسليم البريد الإلكتروني. أعد إرساله لاحقًا أو شارك رابط الدعوة بطريقة أخرى.",
-      "errorTitle": "تعذر إرسال الدعوة",
+      "seatCostMany_zero": "إذا تم قبول الجميع، عدد المقاعد المضافة إلى خطتك: {{count}} · التكلفة التقديرية التناسبية {{amount}}.",
+      "seatCostMany_one": "إذا تم قبول الجميع، سيُضاف {{count}} مقعد إلى خطتك · التكلفة التقديرية التناسبية {{amount}}.",
+      "seatCostMany_two": "إذا تم قبول الجميع، عدد المقاعد المضافة إلى خطتك: {{count}} · التكلفة التقديرية التناسبية {{amount}}.",
+      "seatCostMany_few": "إذا تم قبول الجميع، ستُضاف {{count}} مقاعد إلى خطتك · التكلفة التقديرية التناسبية {{amount}}.",
+      "seatCostMany_many": "إذا تم قبول الجميع، سيُضاف {{count}} مقعدًا إلى خطتك · التكلفة التقديرية التناسبية {{amount}}.",
+      "seatCostMany_other": "إذا تم قبول الجميع، سيُضاف {{count}} مقعد إلى خطتك · التكلفة التقديرية التناسبية {{amount}}.",
+      "seatCostManyUnpriced_zero": "إذا تم قبول الجميع، عدد المقاعد المضافة إلى خطتك: {{count}}.",
+      "seatCostManyUnpriced_one": "إذا تم قبول الجميع، سيُضاف {{count}} مقعد إلى خطتك.",
+      "seatCostManyUnpriced_two": "إذا تم قبول الجميع، عدد المقاعد المضافة إلى خطتك: {{count}}.",
+      "seatCostManyUnpriced_few": "إذا تم قبول الجميع، ستُضاف {{count}} مقاعد إلى خطتك.",
+      "seatCostManyUnpriced_many": "إذا تم قبول الجميع، سيُضاف {{count}} مقعدًا إلى خطتك.",
+      "seatCostManyUnpriced_other": "إذا تم قبول الجميع، سيُضاف {{count}} مقعد إلى خطتك.",
+      "submitOne": "إرسال الدعوة",
+      "submit_zero": "إرسال الدعوات: {{count}}",
+      "submit_one": "إرسال {{count}} دعوة",
+      "submit_two": "إرسال الدعوات: {{count}}",
+      "submit_few": "إرسال {{count}} دعوات",
+      "submit_many": "إرسال {{count}} دعوة",
+      "submit_other": "إرسال {{count}} دعوة",
+      "submitting_zero": "جارٍ إرسال الدعوات ({{count}})…",
+      "submitting_one": "جارٍ إرسال الدعوات ({{count}})…",
+      "submitting_two": "جارٍ إرسال الدعوات ({{count}})…",
+      "submitting_few": "جارٍ إرسال الدعوات ({{count}})…",
+      "submitting_many": "جارٍ إرسال الدعوات ({{count}})…",
+      "submitting_other": "جارٍ إرسال الدعوات ({{count}})…",
+      "sentTitle_zero": "عدد الدعوات المرسلة: {{count}}",
+      "sentTitle_one": "تم إرسال {{count}} دعوة",
+      "sentTitle_two": "عدد الدعوات المرسلة: {{count}}",
+      "sentTitle_few": "تم إرسال {{count}} دعوات",
+      "sentTitle_many": "تم إرسال {{count}} دعوة",
+      "sentTitle_other": "تم إرسال {{count}} دعوة",
+      "attachedTitle_zero": "عدد الدعوات المحدَّثة: {{count}}",
+      "attachedTitle_one": "عدد الدعوات المحدَّثة: {{count}}",
+      "attachedTitle_two": "عدد الدعوات المحدَّثة: {{count}}",
+      "attachedTitle_few": "عدد الدعوات المحدَّثة: {{count}}",
+      "attachedTitle_many": "عدد الدعوات المحدَّثة: {{count}}",
+      "attachedTitle_other": "عدد الدعوات المحدَّثة: {{count}}",
+      "attachedBody_zero": "عدد العناوين التي لديها دعوة إلى مساحة العمل بالفعل: {{count}}. أُضيف هذا إلى دعواتها، ولم يُرسل بريد إلكتروني جديد.",
+      "attachedBody_one": "عدد العناوين التي لديها دعوة إلى مساحة العمل بالفعل: {{count}}. أُضيف هذا إلى دعواتها، ولم يُرسل بريد إلكتروني جديد.",
+      "attachedBody_two": "عدد العناوين التي لديها دعوة إلى مساحة العمل بالفعل: {{count}}. أُضيف هذا إلى دعواتها، ولم يُرسل بريد إلكتروني جديد.",
+      "attachedBody_few": "عدد العناوين التي لديها دعوة إلى مساحة العمل بالفعل: {{count}}. أُضيف هذا إلى دعواتها، ولم يُرسل بريد إلكتروني جديد.",
+      "attachedBody_many": "عدد العناوين التي لديها دعوة إلى مساحة العمل بالفعل: {{count}}. أُضيف هذا إلى دعواتها، ولم يُرسل بريد إلكتروني جديد.",
+      "attachedBody_other": "عدد العناوين التي لديها دعوة إلى مساحة العمل بالفعل: {{count}}. أُضيف هذا إلى دعواتها، ولم يُرسل بريد إلكتروني جديد.",
+      "createdTitle_zero": "عدد الدعوات التي تم إنشاؤها: {{count}}",
+      "createdTitle_one": "تم إنشاء {{count}} دعوة",
+      "createdTitle_two": "عدد الدعوات التي تم إنشاؤها: {{count}}",
+      "createdTitle_few": "تم إنشاء {{count}} دعوات",
+      "createdTitle_many": "تم إنشاء {{count}} دعوة",
+      "createdTitle_other": "تم إنشاء {{count}} دعوة",
+      "sentOne": "تمت دعوة {{email}} إلى {{workspace}}",
+      "sentMany_zero": "عدد الأشخاص الذين تمت دعوتهم إلى {{workspace}}: {{count}}",
+      "sentMany_one": "تمت دعوة {{count}} شخص إلى {{workspace}}",
+      "sentMany_two": "عدد الأشخاص الذين تمت دعوتهم إلى {{workspace}}: {{count}}",
+      "sentMany_few": "تمت دعوة {{count}} أشخاص إلى {{workspace}}",
+      "sentMany_many": "تمت دعوة {{count}} شخصًا إلى {{workspace}}",
+      "sentMany_other": "تمت دعوة {{count}} شخص إلى {{workspace}}",
+      "noEmail_zero": "عدد الدعوات التي تم إنشاؤها: {{count}}.",
+      "noEmail_one": "تم إنشاء {{count}} دعوة، لكن تعذر تسليم رسالتها الإلكترونية. أعد إرسالها من «الدعوات».",
+      "noEmail_two": "عدد الدعوات التي تم إنشاؤها وتعذر تسليم رسائلها الإلكترونية: {{count}}. أعد إرسالها من «الدعوات».",
+      "noEmail_few": "تم إنشاء {{count}} دعوات، لكن تعذر تسليم رسائلها الإلكترونية. أعد إرسالها من «الدعوات».",
+      "noEmail_many": "تم إنشاء {{count}} دعوة، لكن تعذر تسليم رسائلها الإلكترونية. أعد إرسالها من «الدعوات».",
+      "noEmail_other": "تم إنشاء {{count}} دعوة، لكن تعذر تسليم رسائلها الإلكترونية. أعد إرسالها من «الدعوات».",
+      "someFailed_zero": "عدد الدعوات التي تعذر إرسالها: {{count}}",
+      "someFailed_one": "تعذر إرسال {{count}} دعوة",
+      "someFailed_two": "عدد الدعوات التي تعذر إرسالها: {{count}}",
+      "someFailed_few": "تعذر إرسال {{count}} دعوات",
+      "someFailed_many": "تعذر إرسال {{count}} دعوة",
+      "someFailed_other": "تعذر إرسال {{count}} دعوة",
+      "tryResending": "إعادة محاولة الإرسال",
+      "tooMany": "الحد الأقصى لعدد الأشخاص الذين يمكنك دعوتهم في المرة الواحدة: {{count}}.",
+      "removeLast_zero": "إزالة آخر {{count}}",
+      "removeLast_one": "إزالة آخر {{count}}",
+      "removeLast_two": "إزالة آخر {{count}}",
+      "removeLast_few": "إزالة آخر {{count}}",
+      "removeLast_many": "إزالة آخر {{count}}",
+      "removeLast_other": "إزالة آخر {{count}}",
+      "seatsLeft_zero": "عدد المقاعد المتبقية: {{count}}. أزل {{excess}} أو قم بالترقية.",
+      "seatsLeft_one": "لم يتبقَّ سوى {{count}} مقعد. أزل {{excess}} أو قم بالترقية.",
+      "seatsLeft_two": "عدد المقاعد المتبقية: {{count}}. أزل {{excess}} أو قم بالترقية.",
+      "seatsLeft_few": "لم يتبقَّ سوى {{count}} مقاعد. أزل {{excess}} أو قم بالترقية.",
+      "seatsLeft_many": "لم يتبقَّ سوى {{count}} مقعدًا. أزل {{excess}} أو قم بالترقية.",
+      "seatsLeft_other": "لم يتبقَّ سوى {{count}} مقعد. أزل {{excess}} أو قم بالترقية.",
+      "seatsLeftAskOwner_zero": "عدد المقاعد المتبقية: {{count}}. أزل {{excess}} أو اطلب من {{owner}} إضافة مقاعد.",
+      "seatsLeftAskOwner_one": "لم يتبقَّ سوى {{count}} مقعد. أزل {{excess}} أو اطلب من {{owner}} إضافة مقاعد.",
+      "seatsLeftAskOwner_two": "عدد المقاعد المتبقية: {{count}}. أزل {{excess}} أو اطلب من {{owner}} إضافة مقاعد.",
+      "seatsLeftAskOwner_few": "لم يتبقَّ سوى {{count}} مقاعد. أزل {{excess}} أو اطلب من {{owner}} إضافة مقاعد.",
+      "seatsLeftAskOwner_many": "لم يتبقَّ سوى {{count}} مقعدًا. أزل {{excess}} أو اطلب من {{owner}} إضافة مقاعد.",
+      "seatsLeftAskOwner_other": "لم يتبقَّ سوى {{count}} مقعد. أزل {{excess}} أو اطلب من {{owner}} إضافة مقاعد.",
+      "seatsNone": "لم يتبقَّ أي مقعد. قم بالترقية لإضافة المزيد.",
+      "seatsNoneAskOwner": "لم يتبقَّ أي مقعد. اطلب من {{owner}} إضافة مقاعد.",
+      "upgrade": "ترقية",
+      "ceilingLeft_zero": "عدد الأشخاص الذين يمكنك دعوتهم أيضًا: {{count}}. أزل {{excess}} للمتابعة.",
+      "ceilingLeft_one": "يمكنك دعوة {{count}} شخص آخر. أزل {{excess}} للمتابعة.",
+      "ceilingLeft_two": "عدد الأشخاص الذين يمكنك دعوتهم أيضًا: {{count}}. أزل {{excess}} للمتابعة.",
+      "ceilingLeft_few": "يمكنك دعوة {{count}} أشخاص آخرين. أزل {{excess}} للمتابعة.",
+      "ceilingLeft_many": "يمكنك دعوة {{count}} شخصًا آخر. أزل {{excess}} للمتابعة.",
+      "ceilingLeft_other": "يمكنك دعوة {{count}} شخص آخر. أزل {{excess}} للمتابعة.",
+      "rateLimitedLeft_zero": "عدد الدعوات التي يمكن إرسالها الآن: {{count}}. أزل {{excess}} لإرسالها، أو حاول مرة أخرى لاحقًا.",
+      "rateLimitedLeft_one": "يمكن إرسال {{count}} دعوة أخرى فقط الآن. أزل {{excess}} لإرسالها، أو حاول مرة أخرى لاحقًا.",
+      "rateLimitedLeft_two": "عدد الدعوات التي يمكن إرسالها الآن: {{count}}. أزل {{excess}} لإرسالها، أو حاول مرة أخرى لاحقًا.",
+      "rateLimitedLeft_few": "يمكن إرسال {{count}} دعوات أخرى فقط الآن. أزل {{excess}} لإرسالها، أو حاول مرة أخرى لاحقًا.",
+      "rateLimitedLeft_many": "يمكن إرسال {{count}} دعوة أخرى فقط الآن. أزل {{excess}} لإرسالها، أو حاول مرة أخرى لاحقًا.",
+      "rateLimitedLeft_other": "يمكن إرسال {{count}} دعوة أخرى فقط الآن. أزل {{excess}} لإرسالها، أو حاول مرة أخرى لاحقًا.",
+      "rateLimitedDaily": "يمكن لمساحة العمل هذه إرسال ما يصل إلى {{limit}} دعوة في اليوم. أزل {{excess}} لإرسال الباقي الآن.",
+      "skippedMany_zero": "عدد العناوين التي تم تخطيها لأنها لأعضاء أو لمدعوين بالفعل: {{count}}.",
+      "skippedMany_one": "تم تخطي {{count}} عنوان: عضو بالفعل أو مدعو بالفعل.",
+      "skippedMany_two": "عدد العناوين التي تم تخطيها لأنها لأعضاء أو لمدعوين بالفعل: {{count}}.",
+      "skippedMany_few": "تم تخطي {{count}} عناوين: أعضاء بالفعل أو مدعوون بالفعل.",
+      "skippedMany_many": "تم تخطي {{count}} عنوانًا: أعضاء بالفعل أو مدعوون بالفعل.",
+      "skippedMany_other": "تم تخطي {{count}} عنوان: أعضاء بالفعل أو مدعوون بالفعل.",
+      "skippedNotAdded_zero": "عدد العناوين التي تم تخطيها ولم تتم إضافتها هنا: {{count}}. إنها لأعضاء أو لمدعوين بالفعل. أضف الأعضاء الحاليين من قائمة الأعضاء بدلاً من ذلك.",
+      "skippedNotAdded_one": "تم تخطي {{count}} عنوان ولم تتم إضافته هنا: عضو بالفعل أو مدعو بالفعل. أضف الأعضاء الحاليين من قائمة الأعضاء بدلاً من ذلك.",
+      "skippedNotAdded_two": "عدد العناوين التي تم تخطيها ولم تتم إضافتها هنا: {{count}}. إنها لأعضاء أو لمدعوين بالفعل. أضف الأعضاء الحاليين من قائمة الأعضاء بدلاً من ذلك.",
+      "skippedNotAdded_few": "تم تخطي {{count}} عناوين ولم تتم إضافتها هنا: أعضاء بالفعل أو مدعوون بالفعل. أضف الأعضاء الحاليين من قائمة الأعضاء بدلاً من ذلك.",
+      "skippedNotAdded_many": "تم تخطي {{count}} عنوانًا ولم تتم إضافتها هنا: أعضاء بالفعل أو مدعوون بالفعل. أضف الأعضاء الحاليين من قائمة الأعضاء بدلاً من ذلك.",
+      "skippedNotAdded_other": "تم تخطي {{count}} عنوان ولم تتم إضافتها هنا: أعضاء بالفعل أو مدعوون بالفعل. أضف الأعضاء الحاليين من قائمة الأعضاء بدلاً من ذلك.",
+      "done": "تم",
       "role": {
-        "admin": "مسؤول",
-        "member": "عضو"
+        "admin": "مسؤول مساحة العمل",
+        "member": "عضو في مساحة العمل"
       },
       "roleDescription": {
-        "admin": "يدير الأعضاء والفواتير",
-        "member": "يستخدم مساحة العمل"
+        "admin": "يدير الأعضاء والدعوات والمجموعات والإعدادات.",
+        "member": "يمكنه عرض الملاحظات وتعديلها."
+      },
+      "errors": {
+        "invalid": "{{email}} ليس بريدًا إلكترونيًا صالحًا",
+        "alreadyMember": "{{email}} عضو بالفعل، تم تخطيه",
+        "alreadyInvited": "{{email}} مدعو بالفعل، تم تخطيه. أعد إرسال الدعوة من «الدعوات».",
+        "seatLimit": "وصلت مساحة العمل هذه إلى الحد الأقصى للمقاعد.",
+        "directoryRequired": "عيّن {{email}} في موفر الهوية أولاً.",
+        "notAllowed": "لم يعد بإمكانك دعوة أشخاص إلى {{workspace}}.",
+        "ssoRequired": "سجّل الدخول باستخدام تسجيل الدخول الموحّد (SSO) الخاص بشركتك لدعوة أشخاص إلى {{workspace}}.",
+        "sessionExpired": "تعذرت دعوة {{email}}: انتهت صلاحية تسجيل دخولك أو تغيّر. سجّل الدخول مرة أخرى ثم أعد المحاولة.",
+        "rateLimited": "عدد الدعوات كبير جدًا الآن. حاول مرة أخرى لاحقًا.",
+        "requestFailed": "تعذرت دعوة {{email}}. تحقق من اتصالك وحاول مرة أخرى.",
+        "refused": "تعذرت دعوة {{email}}: {{reason}}"
       }
     },
     "join": {
@@ -1339,14 +1821,191 @@
       "errorTitle": "تعذر قبول الدعوة",
       "sentTo": "تم إرسال الدعوة إلى {{email}}",
       "wrongAccount": "تم إرسال هذه الدعوة إلى {{email}}. لقد سجلت الدخول كـ {{current}}."
+    },
+    "exit": {
+      "leave": {
+        "title": "مغادرة {{name}}؟",
+        "body": "ستفقد إمكانية الوصول إلى مساحة العمل هذه وفرقها ومساحات الفريق فيها. يمكن لمسؤول مساحة العمل دعوتك مرة أخرى.",
+        "failed": "تعذّرت مغادرة {{name}}. تحقق من اتصالك وحاول مرة أخرى."
+      },
+      "left": {
+        "title": "غادرت {{name}}"
+      },
+      "chooseAnother": "اختر مساحة عمل أخرى للمتابعة.",
+      "chooseWorkspace": "اختيار مساحة عمل",
+      "delete": {
+        "title": "حذف {{name}}؟",
+        "body": "سيؤدي هذا إلى حذف مساحة العمل وملاحظاتها وملفاتها وفرقها ومساحات الفريق فيها نهائيًا للجميع. لا يمكن التراجع عن ذلك."
+      },
+      "deleting": {
+        "title": "جارٍ حذف {{name}}…",
+        "body": "أبقِ هذه النافذة مفتوحة أثناء حذف مساحة العمل."
+      },
+      "deleteFailed": {
+        "title": "تعذّر حذف مساحة العمل",
+        "body": "{{name}} لا تزال متاحة. تحقق من اتصالك وحاول مرة أخرى."
+      },
+      "deleted": {
+        "title": "تم حذف {{name}}"
+      },
+      "tryAgain": "حاول مرة أخرى"
+    },
+    "removeMember": {
+      "title": "إزالة {{name}} من {{workspace}}؟",
+      "body": "سيفقد الوصول إلى كل مساحات الفريق والفرق في مساحة العمل هذه. يمكنك دعوته مرة أخرى في أي وقت.",
+      "confirm": "إزالة",
+      "removing": "جارٍ الإزالة…",
+      "failed": "تعذّر تأكيد إزالة {{name}}. تحقق من اتصالك وحاول مرة أخرى.",
+      "notAllowed": "لم يعد لديك إذن بإزالة أشخاص من {{workspace}}.",
+      "alreadyRemoved": "تمت إزالة {{name}} بالفعل"
+    },
+    "removeMembers": {
+      "title_zero": "إزالة {{count}} عضو من {{workspace}}؟",
+      "title_one": "إزالة {{count}} عضو من {{workspace}}؟",
+      "title_two": "إزالة الأعضاء من {{workspace}}: {{count}}؟",
+      "title_few": "إزالة {{count}} أعضاء من {{workspace}}؟",
+      "title_many": "إزالة {{count}} عضوًا من {{workspace}}؟",
+      "title_other": "إزالة {{count}} عضو من {{workspace}}؟",
+      "confirm_zero": "إزالة {{count}} عضو",
+      "confirm_one": "إزالة {{count}} عضو",
+      "confirm_two": "إزالة الأعضاء: {{count}}",
+      "confirm_few": "إزالة {{count}} أعضاء",
+      "confirm_many": "إزالة {{count}} عضوًا",
+      "confirm_other": "إزالة {{count}} عضو",
+      "checking": "جارٍ التحقق…",
+      "failed_zero": "عدد الأعضاء الذين تعذّر تأكيد إزالتهم: {{count}}. تحقق من اتصالك وحاول مرة أخرى.",
+      "failed_one": "تعذّر تأكيد إزالة {{count}} عضو. تحقق من اتصالك وحاول مرة أخرى.",
+      "failed_two": "عدد الأعضاء الذين تعذّر تأكيد إزالتهم: {{count}}. تحقق من اتصالك وحاول مرة أخرى.",
+      "failed_few": "تعذّر تأكيد إزالة {{count}} أعضاء. تحقق من اتصالك وحاول مرة أخرى.",
+      "failed_many": "تعذّر تأكيد إزالة {{count}} عضوًا. تحقق من اتصالك وحاول مرة أخرى.",
+      "failed_other": "تعذّر تأكيد إزالة {{count}} عضو. تحقق من اتصالك وحاول مرة أخرى.",
+      "body": "سيفقد هؤلاء الأشخاص الوصول إلى كل مساحات الفريق والفرق في مساحة العمل هذه. يمكنك دعوتهم مرة أخرى في أي وقت.",
+      "ownerOne": "يملك {{name}} ملاحظات أو مساحات فريق في مساحة العمل هذه.",
+      "owners_zero": "{{count}} منهم يملكون ملاحظات أو مساحات فريق.",
+      "owners_one": "{{count}} منهم يملك ملاحظات أو مساحات فريق.",
+      "owners_two": "عدد من يملكون منهم ملاحظات أو مساحات فريق: {{count}}.",
+      "owners_few": "{{count}} منهم يملكون ملاحظات أو مساحات فريق.",
+      "owners_many": "{{count}} منهم يملكون ملاحظات أو مساحات فريق.",
+      "owners_other": "{{count}} منهم يملكون ملاحظات أو مساحات فريق.",
+      "directoryManagedOne": "تم تعيين {{name}} من خلال موفر الهوية. أزله من هناك بدلاً من ذلك.",
+      "directoryManaged_zero": "{{count}} منهم معيّنون من خلال موفر الهوية. أزلهم من هناك بدلاً من ذلك.",
+      "directoryManaged_one": "{{count}} منهم معيّن من خلال موفر الهوية. أزله من هناك بدلاً من ذلك.",
+      "directoryManaged_two": "عدد المعيّنين منهم من خلال موفر الهوية: {{count}}. أزلهم من هناك بدلاً من ذلك.",
+      "directoryManaged_few": "{{count}} منهم معيّنون من خلال موفر الهوية. أزلهم من هناك بدلاً من ذلك.",
+      "directoryManaged_many": "{{count}} منهم معيّنون من خلال موفر الهوية. أزلهم من هناك بدلاً من ذلك.",
+      "directoryManaged_other": "{{count}} منهم معيّنون من خلال موفر الهوية. أزلهم من هناك بدلاً من ذلك.",
+      "directoryManagedOneOthers": "تم تعيين {{name}} من خلال موفر الهوية. أزله من هناك، أو ألغِ تحديده لإزالة الآخرين.",
+      "directoryManagedOthers_zero": "{{count}} منهم معيّنون من خلال موفر الهوية. أزلهم من هناك، أو ألغِ تحديدهم لإزالة الآخرين.",
+      "directoryManagedOthers_one": "{{count}} منهم معيّن من خلال موفر الهوية. أزله من هناك، أو ألغِ تحديده لإزالة الآخرين.",
+      "directoryManagedOthers_two": "عدد المعيّنين منهم من خلال موفر الهوية: {{count}}. أزلهم من هناك، أو ألغِ تحديدهم لإزالة الآخرين.",
+      "directoryManagedOthers_few": "{{count}} منهم معيّنون من خلال موفر الهوية. أزلهم من هناك، أو ألغِ تحديدهم لإزالة الآخرين.",
+      "directoryManagedOthers_many": "{{count}} منهم معيّنون من خلال موفر الهوية. أزلهم من هناك، أو ألغِ تحديدهم لإزالة الآخرين.",
+      "directoryManagedOthers_other": "{{count}} منهم معيّنون من خلال موفر الهوية. أزلهم من هناك، أو ألغِ تحديدهم لإزالة الآخرين.",
+      "transferLabel": "النقل إلى",
+      "transferBody": "ستنتقل ملاحظاتهم ومساحات الفريق التي يملكونها إلى المالك الجديد. سيفقدون الوصول إلى مساحة العمل هذه.",
+      "transferBodyLimited": "ستنتقل ملاحظاتهم ومساحات الفريق التي يملكونها إلى {{name}}، باستثناء الملاحظات الموجودة في مساحات فريق لا يمكن لـ {{name}} الوصول إليها، فستبقى هناك. سيفقدون الوصول إلى مساحة العمل هذه.",
+      "you": "{{name}} (أنت)",
+      "transferConfirm": "النقل والإزالة",
+      "transferring": "جارٍ النقل…",
+      "transferFailed": "تعذّر تأكيد النقل والإزالة. تحقق من اتصالك وحاول مرة أخرى.",
+      "invalidTarget": "لم يعد بإمكان {{name}} تلقي الملكية. اختر شخصًا آخر.",
+      "cannotRemoveOwner": "لا يمكن إزالة مالك مساحة العمل.",
+      "cannotRemoveSelf": "لا يمكنك إزالة نفسك. غادر مساحة العمل من «عام».",
+      "done_zero": "تمت إزالة {{count}} عضو",
+      "done_one": "تمت إزالة {{count}} عضو",
+      "done_two": "عدد الأعضاء الذين تمت إزالتهم: {{count}}",
+      "done_few": "تمت إزالة {{count}} أعضاء",
+      "done_many": "تمت إزالة {{count}} عضوًا",
+      "done_other": "تمت إزالة {{count}} عضو",
+      "transferDone_zero": "تم نقل ملاحظاتهم ومساحات الفريق التي يملكونها إلى {{name}} وإزالة {{count}} عضو.",
+      "transferDone_one": "تم نقل ملاحظاتهم ومساحات الفريق التي يملكونها إلى {{name}} وإزالة {{count}} عضو.",
+      "transferDone_two": "تم نقل ملاحظاتهم ومساحات الفريق التي يملكونها إلى {{name}}. عدد الأعضاء الذين تمت إزالتهم: {{count}}.",
+      "transferDone_few": "تم نقل ملاحظاتهم ومساحات الفريق التي يملكونها إلى {{name}} وإزالة {{count}} أعضاء.",
+      "transferDone_many": "تم نقل ملاحظاتهم ومساحات الفريق التي يملكونها إلى {{name}} وإزالة {{count}} عضوًا.",
+      "transferDone_other": "تم نقل ملاحظاتهم ومساحات الفريق التي يملكونها إلى {{name}} وإزالة {{count}} عضو.",
+      "transferPartial_zero": "عدد الملاحظات التي بقيت في مساحات فريق لا يمكن لـ {{name}} الوصول إليها: {{count}}. تم نقل كل ما عدا ذلك.",
+      "transferPartial_one": "بقيت {{count}} ملاحظة في مساحة فريق لا يمكن لـ {{name}} الوصول إليها. تم نقل كل ما عدا ذلك.",
+      "transferPartial_two": "عدد الملاحظات التي بقيت في مساحات فريق لا يمكن لـ {{name}} الوصول إليها: {{count}}. تم نقل كل ما عدا ذلك.",
+      "transferPartial_few": "بقيت {{count}} ملاحظات في مساحات فريق لا يمكن لـ {{name}} الوصول إليها. تم نقل كل ما عدا ذلك.",
+      "transferPartial_many": "بقيت {{count}} ملاحظة في مساحات فريق لا يمكن لـ {{name}} الوصول إليها. تم نقل كل ما عدا ذلك.",
+      "transferPartial_other": "بقيت {{count}} ملاحظة في مساحات فريق لا يمكن لـ {{name}} الوصول إليها. تم نقل كل ما عدا ذلك.",
+      "alreadyRemoved_zero": "تمت إزالة {{count}} عضو بالفعل",
+      "alreadyRemoved_one": "تمت إزالة {{count}} عضو بالفعل",
+      "alreadyRemoved_two": "عدد الأعضاء الذين تمت إزالتهم بالفعل: {{count}}",
+      "alreadyRemoved_few": "تمت إزالة {{count}} أعضاء بالفعل",
+      "alreadyRemoved_many": "تمت إزالة {{count}} عضوًا بالفعل",
+      "alreadyRemoved_other": "تمت إزالة {{count}} عضو بالفعل"
+    },
+    "cancelInvitation": {
+      "title": "هل تريد إلغاء الدعوة المرسلة إلى {{email}}؟",
+      "body": "لن يتمكن من الانضمام بهذه الدعوة. يحتفظ الأعضاء الحاليون بوصولهم.",
+      "keep": "الإبقاء على الدعوة",
+      "canceling": "جارٍ الإلغاء…",
+      "done": "تم إلغاء الدعوة",
+      "failed": "تعذّر إلغاء الدعوة. تحقق من اتصالك وحاول مرة أخرى.",
+      "notAllowed": "لم يعد لديك إذن بإلغاء الدعوات في {{workspace}}."
+    },
+    "cancelInvitations": {
+      "title_zero": "إلغاء {{count}} دعوة؟",
+      "title_one": "إلغاء {{count}} دعوة؟",
+      "title_two": "إلغاء الدعوات: {{count}}؟",
+      "title_few": "إلغاء {{count}} دعوات؟",
+      "title_many": "إلغاء {{count}} دعوة؟",
+      "title_other": "إلغاء {{count}} دعوة؟",
+      "body": "لن يتمكنوا من الانضمام بهذه الدعوات. يحتفظ الأعضاء الحاليون بوصولهم.",
+      "keep": "الإبقاء على الدعوات",
+      "confirm": "إلغاء الدعوات",
+      "done_zero": "تم إلغاء {{count}} دعوة.",
+      "done_one": "تم إلغاء {{count}} دعوة.",
+      "done_two": "عدد الدعوات الملغاة: {{count}}.",
+      "done_few": "تم إلغاء {{count}} دعوات.",
+      "done_many": "تم إلغاء {{count}} دعوة.",
+      "done_other": "تم إلغاء {{count}} دعوة.",
+      "partial_zero": "تعذّر إلغاء {{count}} دعوة. تحقق من اتصالك وحاول مرة أخرى.",
+      "partial_one": "تعذّر إلغاء {{count}} دعوة. تحقق من اتصالك وحاول مرة أخرى.",
+      "partial_two": "عدد الدعوات التي تعذّر إلغاؤها: {{count}}. تحقق من اتصالك وحاول مرة أخرى.",
+      "partial_few": "تعذّر إلغاء {{count}} دعوات. تحقق من اتصالك وحاول مرة أخرى.",
+      "partial_many": "تعذّر إلغاء {{count}} دعوة. تحقق من اتصالك وحاول مرة أخرى.",
+      "partial_other": "تعذّر إلغاء {{count}} دعوة. تحقق من اتصالك وحاول مرة أخرى."
+    },
+    "ssoRequired": "سجّل الدخول باستخدام تسجيل الدخول الموحّد (SSO) الخاص بشركتك لإدارة الأشخاص في {{workspace}}.",
+    "transfer": {
+      "title": "اختر مالكًا جديدًا",
+      "body": "اختر أحد أعضاء مساحة العمل الحاليين. ستصبح مسؤولًا بعد النقل.",
+      "newOwner": "المالك الجديد",
+      "placeholder": "اختر عضوًا في مساحة العمل",
+      "candidate": "{{name}} · {{role}}",
+      "confirmTitle": "هل تريد نقل الملكية إلى {{name}}؟",
+      "confirmBody": "سيصبح {{name}} مالك {{workspace}}. وستصبح أنت مسؤولًا.",
+      "submit": "نقل الملكية",
+      "transferringTitle": "جارٍ نقل الملكية…",
+      "transferringBody": "أبقِ هذه النافذة مفتوحة. ستتغير الملكية عند اكتمال النقل.",
+      "transferring": "جارٍ النقل…",
+      "failed": "تعذّر نقل الملكية. ما زلت المالك. حاول مرة أخرى.",
+      "noCandidates": "ادعُ شخصًا إلى {{workspace}} قبل نقل الملكية.",
+      "done": "تم نقل ملكية مساحة العمل إلى {{name}}. أصبحت الآن مسؤولًا."
+    },
+    "intro": {
+      "workspace": {
+        "title": "مساحة العمل هي مقرّك الأساسي",
+        "body": "يعمل الجميع في شركتك هنا. تبقى ملاحظاتك الخاصة خاصة إلى أن تشاركها."
+      },
+      "teamspaces": {
+        "title": "شارك الملاحظات في مساحات الفريق",
+        "body": "داخل مساحة العمل، أنشئ مساحة فريق لمشروع أو موضوع، مثل مكالمات العملاء. يمكن لكل من تضيفه قراءة ملاحظاتها وتعديلها."
+      },
+      "teams": {
+        "title": "أضف فريقًا كاملًا دفعة واحدة",
+        "body": "اجمع الأشخاص في فريق، مثل المبيعات، ثم أضف الفريق إلى أي مساحة فريق بخطوة واحدة."
+      },
+      "getStarted": "ابدأ",
+      "progress": "الخطوة {{current}} من {{total}}"
     }
   },
   "dictionary": {
     "clearTitle": "مسح القاموس؟",
     "clearDescription": "سيؤدي هذا إلى إزالة جميع الكلمات من قاموسك المخصص. لا يمكن التراجع عن هذا الإجراء.",
     "addWord": "إضافة كلمة",
-    "addPlaceholder": "أضف كلمات مفصولة بفواصل — OpenWhispr، Supabase، John Snow، ARR",
-    "removeWord": "إزالة {{word}}",
     "clearAll": "مسح الكل",
     "add": "إضافة",
     "importWords": "استيراد كلمات",
@@ -1358,8 +2017,6 @@
     "wordsReady_few": "{{count}} كلمات جاهزة",
     "wordsReady_many": "{{count}} كلمةً جاهزة",
     "wordsReady_other": "{{count}} كلمة جاهزة",
-    "import": "استيراد",
-    "yourDictionary": "قاموسك",
     "exportDictionary": "تصدير القاموس",
     "exportFailed": "فشل التصدير",
     "editWord": "تعديل {{word}}",
@@ -1393,8 +2050,261 @@
     "emptyTitle": "أضف كلمات إلى قاموسك",
     "emptyDescription": "أضف الكلمات التي يجب أن يكتبها {{agentName}} بشكل صحيح دائمًا: الأسماء، الأدوات، الاختصارات.",
     "addFirstWord": "أضف كلمتك الأولى",
+    "importList": "استيراد قائمة",
+    "importMenu": "استيراد",
+    "importFromDragon": "استيراد من Dragon",
+    "dragonImport": {
+      "title": "استيراد من Dragon",
+      "found_zero": "تم العثور على {{count}} كلمات في {{fileName}}.",
+      "found_one": "تم العثور على {{count}} كلمة في {{fileName}}.",
+      "found_two": "تم العثور على {{count}} كلمتين في {{fileName}}.",
+      "found_few": "تم العثور على {{count}} كلمات في {{fileName}}.",
+      "found_many": "تم العثور على {{count}} كلمة في {{fileName}}.",
+      "found_other": "تم العثور على {{count}} كلمة في {{fileName}}.",
+      "alreadyPresent": "موجودة بالفعل في قاموسك، لذا تم تخطيها: {{count}}.",
+      "nothingNew": "كل كلمة في هذا الملف موجودة بالفعل في قاموسك.",
+      "unreadable": "أسطر تعذّرت قراءتها، لذا تم تخطيها: {{count}}.",
+      "tooLong": "كلمات تتجاوز {{max}} حرفًا، لذا تم تخطيها: {{count}}.",
+      "overLimit": "يتسع قاموسك لـ {{max}} كلمة كحد أقصى، لذا لم يتم استيراد: {{count}}.",
+      "propertiesIgnored": "لا يتم استيراد خصائص التنسيق من Dragon.",
+      "confirm_zero": "استيراد {{count}} كلمات",
+      "confirm_one": "استيراد {{count}} كلمة",
+      "confirm_two": "استيراد {{count}} كلمتين",
+      "confirm_few": "استيراد {{count}} كلمات",
+      "confirm_many": "استيراد {{count}} كلمة",
+      "confirm_other": "استيراد {{count}} كلمة",
+      "done_zero": "تم استيراد {{count}} كلمات من Dragon",
+      "done_one": "تم استيراد {{count}} كلمة من Dragon",
+      "done_two": "تم استيراد {{count}} كلمتين من Dragon",
+      "done_few": "تم استيراد {{count}} كلمات من Dragon",
+      "done_many": "تم استيراد {{count}} كلمة من Dragon",
+      "done_other": "تم استيراد {{count}} كلمة من Dragon",
+      "failedTitle": "فشل الاستيراد",
+      "error": {
+        "emptyFile": "لم يتم العثور على كلمات في هذا الملف.",
+        "unsupportedXml": "لا يبدو هذا الملف تصديرًا من Dragon لنظام Windows. في Dragon، اختر Vocabulary → Export custom word and phrase list واحفظه بصيغة TXT.",
+        "fileTooLarge": "هذا الملف أكبر من أن يكون قائمة كلمات Dragon.",
+        "generic": "تعذّرت قراءة هذا الملف."
+      }
+    },
     "agentDefault": "تمت الإضافة افتراضيًا",
-    "promptLimitNotice": "عدد أحرف قاموسك: {{chars}}. لا تقرأ نماذج Groq وWhisper سوى بضع مئات من الأحرف الأخيرة منه، لذا تعمل القوائم الأقصر بشكل أفضل معها. أما النماذج الأخرى فتحصل على القائمة كاملة."
+    "promptLimitNotice": "عدد أحرف قاموسك: {{chars}}. لا تقرأ نماذج Groq وWhisper سوى بضع مئات من الأحرف الأخيرة منه، لذا تعمل القوائم الأقصر بشكل أفضل معها. أما النماذج الأخرى فتحصل على القائمة كاملة.",
+    "shared": {
+      "allWords": "كل الكلمات",
+      "personal": "شخصية",
+      "group": "مشتركة",
+      "allShared": "الكل",
+      "everyoneAt": "الجميع في {{workspace}}",
+      "hidden": "مخفية",
+      "add": {
+        "placeholder": "أضف كلمات مفصولة بفواصل",
+        "to": "إلى {{list}}",
+        "chooseList": "اختر القائمة التي تريد الإضافة إليها",
+        "hiddenForYou": "مخفية عنك في {{list}}",
+        "notAdded_zero": "لم تتم إضافة {{count}} كلمة: {{words}}",
+        "notAdded_one": "لم تتم إضافة كلمة واحدة ({{count}}): {{words}}",
+        "notAdded_two": "لم تتم إضافة كلمتين ({{count}}): {{words}}",
+        "notAdded_few": "لم تتم إضافة {{count}} كلمات: {{words}}",
+        "notAdded_many": "لم تتم إضافة {{count}} كلمةً: {{words}}",
+        "notAdded_other": "لم تتم إضافة {{count}} كلمة: {{words}}"
+      },
+      "alreadyIn": "موجودة بالفعل في {{list}}",
+      "importTo": "استيراد إلى {{list}}",
+      "actions": {
+        "share": "مشاركة",
+        "edit": "تعديل",
+        "delete": "حذف",
+        "hide": "إخفاء عني",
+        "deleteForEveryone": "حذف للجميع",
+        "unhide": "إظهار",
+        "shareWord": "مشاركة {{word}}",
+        "deleteWord": "حذف {{word}}",
+        "hideWord": "إخفاء {{word}} عني",
+        "deleteForEveryoneWord": "حذف {{word}} للجميع",
+        "unhideWord": "إظهار {{word}}"
+      },
+      "attribution": {
+        "you": "أنت",
+        "former": "عضو سابق"
+      },
+      "toolbar": {
+        "search": "بحث",
+        "searchPlaceholder": "ابحث في هذه القائمة",
+        "closeSearch": "إغلاق البحث",
+        "sort": "ترتيب",
+        "sync": "مزامنة الآن",
+        "syncedAgo": "تمت المزامنة قبل {{time}}",
+        "syncedJustNow": "تمت المزامنة للتو",
+        "notSynced": "لم تتم المزامنة بعد"
+      },
+      "sort": {
+        "az": "أ–ي",
+        "za": "ي–أ",
+        "newest": "الأحدث أولًا",
+        "oldest": "الأقدم أولًا"
+      },
+      "memberCount_zero": "{{count}} عضو",
+      "memberCount_one": "عضو واحد ({{count}})",
+      "memberCount_two": "عضوان ({{count}})",
+      "memberCount_few": "{{count}} أعضاء",
+      "memberCount_many": "{{count}} عضوًا",
+      "memberCount_other": "{{count}} عضو",
+      "emptyList": "لا توجد كلمات في {{list}} بعد",
+      "allHiddenList": "جميع الكلمات في {{list}} مخفية عنك",
+      "noMatches": "لا توجد كلمات تطابق «{{query}}»",
+      "deletedForEveryone": "تم حذف «{{word}}» للجميع",
+      "undo": "تراجع",
+      "errors": {
+        "generic": "تعذّر تحديث {{list}}. حاول مرة أخرى.",
+        "listFull": "{{list}} ممتلئة",
+        "planRequired": "تتطلب القواميس المشتركة خطة Business، لذا لم يتم تغيير {{list}}",
+        "ssoRequired": "سجّل الدخول باستخدام SSO الخاص بشركتك لتغيير {{list}}",
+        "notMember": "لم يعد بإمكانك الوصول إلى {{list}}",
+        "invalid": "لا تقبل {{list}} إلا مصطلحات قصيرة: حتى 64 حرفًا و6 كلمات، من دون فواصل أو علامات ترقيم الجمل أو رموز مثل < > { } [ ] ` |",
+        "recentlyDeleted": "تم حذف هذه الكلمة للتو من {{list}}. أضفها مجددًا بدلًا من ذلك."
+      },
+      "deleteOneTitle": "هل تريد حذف «{{word}}»؟",
+      "deleteDescription": "ينطبق ذلك على الجميع في {{list}}.",
+      "deleteManyTitle_zero": "هل تريد حذف {{count}} كلمة؟",
+      "deleteManyTitle_one": "هل تريد حذف كلمة واحدة ({{count}})؟",
+      "deleteManyTitle_two": "هل تريد حذف كلمتين ({{count}})؟",
+      "deleteManyTitle_few": "هل تريد حذف {{count}} كلمات؟",
+      "deleteManyTitle_many": "هل تريد حذف {{count}} كلمةً؟",
+      "deleteManyTitle_other": "هل تريد حذف {{count}} كلمة؟",
+      "deletedManyForEveryone_zero": "تم حذف {{count}} كلمة للجميع",
+      "deletedManyForEveryone_one": "تم حذف كلمة واحدة ({{count}}) للجميع",
+      "deletedManyForEveryone_two": "تم حذف كلمتين ({{count}}) للجميع",
+      "deletedManyForEveryone_few": "تم حذف {{count}} كلمات للجميع",
+      "deletedManyForEveryone_many": "تم حذف {{count}} كلمةً للجميع",
+      "deletedManyForEveryone_other": "تم حذف {{count}} كلمة للجميع",
+      "deletedPersonalMany_zero": "تم حذف {{count}} كلمة",
+      "deletedPersonalMany_one": "تم حذف كلمة واحدة ({{count}})",
+      "deletedPersonalMany_two": "تم حذف كلمتين ({{count}})",
+      "deletedPersonalMany_few": "تم حذف {{count}} كلمات",
+      "deletedPersonalMany_many": "تم حذف {{count}} كلمةً",
+      "deletedPersonalMany_other": "تم حذف {{count}} كلمة",
+      "selection": {
+        "count_zero": "المحدد: {{count}}",
+        "count_one": "المحدد: {{count}}",
+        "count_two": "المحدد: {{count}}",
+        "count_few": "المحدد: {{count}}",
+        "count_many": "المحدد: {{count}}",
+        "count_other": "المحدد: {{count}}",
+        "selectAll": "تحديد الكل ({{total}})",
+        "shareWith": "مشاركة مع…",
+        "clear": "إلغاء التحديد",
+        "selectWord": "تحديد {{word}}",
+        "label": "الكلمات المحددة"
+      },
+      "share": {
+        "titleOne": "مشاركة \"{{word}}\" مع",
+        "titleMany_zero": "مشاركة {{count}} كلمة مع",
+        "titleMany_one": "مشاركة كلمة واحدة ({{count}}) مع",
+        "titleMany_two": "مشاركة كلمتين ({{count}}) مع",
+        "titleMany_few": "مشاركة {{count}} كلمات مع",
+        "titleMany_many": "مشاركة {{count}} كلمةً مع",
+        "titleMany_other": "مشاركة {{count}} كلمة مع",
+        "alreadyShared": "تمت مشاركتها",
+        "movesOutOne": "يزيلها من القائمة الشخصية",
+        "movesOutMany": "يزيلها من القائمة الشخصية",
+        "partial_zero": "الكلمات التي تمت مشاركتها: {{moved}} من أصل {{total}}. الكلمات التي لم تتم مشاركتها: {{count}}.",
+        "partial_one": "الكلمات التي تمت مشاركتها: {{moved}} من أصل {{total}}. الكلمات التي لم تتم مشاركتها: {{count}}.",
+        "partial_two": "الكلمات التي تمت مشاركتها: {{moved}} من أصل {{total}}. الكلمات التي لم تتم مشاركتها: {{count}}.",
+        "partial_few": "الكلمات التي تمت مشاركتها: {{moved}} من أصل {{total}}. الكلمات التي لم تتم مشاركتها: {{count}}.",
+        "partial_many": "الكلمات التي تمت مشاركتها: {{moved}} من أصل {{total}}. الكلمات التي لم تتم مشاركتها: {{count}}.",
+        "partial_other": "الكلمات التي تمت مشاركتها: {{moved}} من أصل {{total}}. الكلمات التي لم تتم مشاركتها: {{count}}.",
+        "reasons": {
+          "personalChanged": "تغيّرت كلمة على جهاز آخر. حاول مرة أخرى.",
+          "network": "تحقق من اتصالك وحاول مرة أخرى.",
+          "aListFull": "إحدى القوائم ممتلئة"
+        }
+      },
+      "locked": {
+        "noWorkspace": "القواميس المشتركة متاحة ضمن خطة Business. شارك مصطلحات فريقك وأسماء المنتجات والاختصارات مع الجميع.",
+        "upgradeAdmin": "القواميس المشتركة متاحة ضمن خطة Business. قم بترقية {{workspace}} ليحصل الجميع على الكلمات نفسها.",
+        "upgradeMember": "القواميس المشتركة متاحة ضمن خطة Business. اطلب من أحد المسؤولين ترقية {{workspace}}.",
+        "paused_zero": "تم إيقاف {{count}} كلمة مشتركة في {{workspace}} مؤقتًا. قم بالترقية إلى Business لاستخدامها في الإملاء مجددًا.",
+        "paused_one": "تم إيقاف كلمة مشتركة واحدة ({{count}}) في {{workspace}} مؤقتًا. قم بالترقية إلى Business لاستخدامها في الإملاء مجددًا.",
+        "paused_two": "تم إيقاف كلمتين مشتركتين ({{count}}) في {{workspace}} مؤقتًا. قم بالترقية إلى Business لاستخدامهما في الإملاء مجددًا.",
+        "paused_few": "تم إيقاف {{count}} كلمات مشتركة في {{workspace}} مؤقتًا. قم بالترقية إلى Business لاستخدامها في الإملاء مجددًا.",
+        "paused_many": "تم إيقاف {{count}} كلمةً مشتركةً في {{workspace}} مؤقتًا. قم بالترقية إلى Business لاستخدامها في الإملاء مجددًا.",
+        "paused_other": "تم إيقاف {{count}} كلمة مشتركة في {{workspace}} مؤقتًا. قم بالترقية إلى Business لاستخدامها في الإملاء مجددًا.",
+        "workspaceTitle": "الجميع في مساحة العمل الخاصة بك",
+        "workspaceDescription": "كلمات للشركة بأكملها",
+        "spaceTitle": "قائمة لكل مساحة",
+        "spaceDescription": "كلمات يحتاجها فريق واحد فقط",
+        "wordCount_zero": "{{count}} كلمة",
+        "wordCount_one": "كلمة واحدة ({{count}})",
+        "wordCount_two": "كلمتان ({{count}})",
+        "wordCount_few": "{{count}} كلمات",
+        "wordCount_many": "{{count}} كلمةً",
+        "wordCount_other": "{{count}} كلمة",
+        "lockLabel": "متاح ضمن خطة Business",
+        "ssoRequired": "تتطلب {{workspace}} تسجيل الدخول عبر SSO الخاص بالشركة. سجّل الخروج ثم سجّل الدخول باستخدام SSO لاستخدام كلماتها المشتركة.",
+        "noAccess": "لم يعد بإمكانك الوصول إلى الكلمات المشتركة في {{workspace}}. تواصل مع أحد المسؤولين إذا كنت تعتقد أن هذا خطأ.",
+        "pausedMember_zero": "تم إيقاف {{count}} كلمة مشتركة في {{workspace}} مؤقتًا. اطلب من أحد المسؤولين أو المالك الترقية إلى Business لاستخدامها في الإملاء مجددًا.",
+        "pausedMember_one": "تم إيقاف كلمة مشتركة واحدة ({{count}}) في {{workspace}} مؤقتًا. اطلب من أحد المسؤولين أو المالك الترقية إلى Business لاستخدامها في الإملاء مجددًا.",
+        "pausedMember_two": "تم إيقاف كلمتين مشتركتين ({{count}}) في {{workspace}} مؤقتًا. اطلب من أحد المسؤولين أو المالك الترقية إلى Business لاستخدامهما في الإملاء مجددًا.",
+        "pausedMember_few": "تم إيقاف {{count}} كلمات مشتركة في {{workspace}} مؤقتًا. اطلب من أحد المسؤولين أو المالك الترقية إلى Business لاستخدامها في الإملاء مجددًا.",
+        "pausedMember_many": "تم إيقاف {{count}} كلمةً مشتركةً في {{workspace}} مؤقتًا. اطلب من أحد المسؤولين أو المالك الترقية إلى Business لاستخدامها في الإملاء مجددًا.",
+        "pausedMember_other": "تم إيقاف {{count}} كلمة مشتركة في {{workspace}} مؤقتًا. اطلب من أحد المسؤولين أو المالك الترقية إلى Business لاستخدامها في الإملاء مجددًا."
+      },
+      "empty": {
+        "body": "أضف المصطلحات التي يستخدمها هذا الفريق، أو شارك بعضها من قائمتك الشخصية. سيحصل عليها الجميع في {{list}} ({{count}}).",
+        "import": "استيراد قائمة",
+        "shareFromPersonal": "مشاركة من القائمة الشخصية"
+      },
+      "arrival": {
+        "title_zero": "كلمات الفريق المُضافة: {{count}}",
+        "title_one": "كلمات الفريق المُضافة: {{count}}",
+        "title_two": "كلمات الفريق المُضافة: {{count}}",
+        "title_few": "كلمات الفريق المُضافة: {{count}}",
+        "title_many": "كلمات الفريق المُضافة: {{count}}",
+        "title_other": "كلمات الفريق المُضافة: {{count}}",
+        "description": "تُطبَّق الكلمات المشتركة في {{workspace}} الآن على الإملاء وملاحظات الاجتماعات لديك.",
+        "descriptionNoWorkspace": "تُطبَّق الكلمات المشتركة لفريقك الآن على الإملاء وملاحظات الاجتماعات لديك.",
+        "viewWords": "عرض الكلمات"
+      },
+      "lockedEntry": "مقفلة",
+      "notTermLike": "لا تقبل القوائم المشتركة إلا مصطلحات قصيرة: حتى 64 حرفًا و6 كلمات، من دون فواصل أو علامات ترقيم الجمل أو رموز مثل < > { } [ ] ` | أو أحرف مخفية",
+      "notUsed": "غير مستخدمة في الإملاء",
+      "notUsedTooltip": "لا يستخدم الإملاء الكلمات المشتركة التي تزيد على 64 حرفًا أو 6 كلمات، أو التي تحتوي على فواصل أو علامات ترقيم الجمل أو رموز مثل < > { } [ ] ` | أو أحرف مخفية",
+      "badgeMore": "{{list}} +{{extra}}",
+      "skipped_zero": "تم استبعاد {{count}} كلمة: {{words}}",
+      "skipped_one": "تم استبعاد كلمة واحدة ({{count}}): {{words}}",
+      "skipped_two": "تم استبعاد كلمتين ({{count}}): {{words}}",
+      "skipped_few": "تم استبعاد {{count}} كلمات: {{words}}",
+      "skipped_many": "تم استبعاد {{count}} كلمةً: {{words}}",
+      "skipped_other": "تم استبعاد {{count}} كلمة: {{words}}",
+      "partial": {
+        "add_zero": "الكلمات التي أُضيفت إلى {{list}}: {{applied}} من أصل {{total}}. الكلمات التي لم تُضف: {{count}}.",
+        "add_one": "الكلمات التي أُضيفت إلى {{list}}: {{applied}} من أصل {{total}}. الكلمات التي لم تُضف: {{count}}.",
+        "add_two": "الكلمات التي أُضيفت إلى {{list}}: {{applied}} من أصل {{total}}. الكلمات التي لم تُضف: {{count}}.",
+        "add_few": "الكلمات التي أُضيفت إلى {{list}}: {{applied}} من أصل {{total}}. الكلمات التي لم تُضف: {{count}}.",
+        "add_many": "الكلمات التي أُضيفت إلى {{list}}: {{applied}} من أصل {{total}}. الكلمات التي لم تُضف: {{count}}.",
+        "add_other": "الكلمات التي أُضيفت إلى {{list}}: {{applied}} من أصل {{total}}. الكلمات التي لم تُضف: {{count}}.",
+        "hide_zero": "الكلمات التي أُخفيت لك: {{applied}} من أصل {{total}}. الكلمات التي لم تُخفَ: {{count}}.",
+        "hide_one": "الكلمات التي أُخفيت لك: {{applied}} من أصل {{total}}. الكلمات التي لم تُخفَ: {{count}}.",
+        "hide_two": "الكلمات التي أُخفيت لك: {{applied}} من أصل {{total}}. الكلمات التي لم تُخفَ: {{count}}.",
+        "hide_few": "الكلمات التي أُخفيت لك: {{applied}} من أصل {{total}}. الكلمات التي لم تُخفَ: {{count}}.",
+        "hide_many": "الكلمات التي أُخفيت لك: {{applied}} من أصل {{total}}. الكلمات التي لم تُخفَ: {{count}}.",
+        "hide_other": "الكلمات التي أُخفيت لك: {{applied}} من أصل {{total}}. الكلمات التي لم تُخفَ: {{count}}.",
+        "unhide_zero": "الكلمات التي أُعيد إظهارها: {{applied}} من أصل {{total}}. الكلمات التي لا تزال مخفية: {{count}}.",
+        "unhide_one": "الكلمات التي أُعيد إظهارها: {{applied}} من أصل {{total}}. الكلمات التي لا تزال مخفية: {{count}}.",
+        "unhide_two": "الكلمات التي أُعيد إظهارها: {{applied}} من أصل {{total}}. الكلمات التي لا تزال مخفية: {{count}}.",
+        "unhide_few": "الكلمات التي أُعيد إظهارها: {{applied}} من أصل {{total}}. الكلمات التي لا تزال مخفية: {{count}}.",
+        "unhide_many": "الكلمات التي أُعيد إظهارها: {{applied}} من أصل {{total}}. الكلمات التي لا تزال مخفية: {{count}}.",
+        "unhide_other": "الكلمات التي أُعيد إظهارها: {{applied}} من أصل {{total}}. الكلمات التي لا تزال مخفية: {{count}}.",
+        "delete_zero": "الكلمات التي حُذفت للجميع: {{applied}} من أصل {{total}}. الكلمات التي لم تُحذف: {{count}}.",
+        "delete_one": "الكلمات التي حُذفت للجميع: {{applied}} من أصل {{total}}. الكلمات التي لم تُحذف: {{count}}.",
+        "delete_two": "الكلمات التي حُذفت للجميع: {{applied}} من أصل {{total}}. الكلمات التي لم تُحذف: {{count}}.",
+        "delete_few": "الكلمات التي حُذفت للجميع: {{applied}} من أصل {{total}}. الكلمات التي لم تُحذف: {{count}}.",
+        "delete_many": "الكلمات التي حُذفت للجميع: {{applied}} من أصل {{total}}. الكلمات التي لم تُحذف: {{count}}.",
+        "delete_other": "الكلمات التي حُذفت للجميع: {{applied}} من أصل {{total}}. الكلمات التي لم تُحذف: {{count}}."
+      },
+      "hiddenWord": "تم إخفاء \"{{word}}\" لك",
+      "stillIn": "لا تزال \"{{word}}\" في {{list}}"
+    }
   },
   "promptStudio": {
     "common": {
@@ -1665,18 +2575,6 @@
       "permissionDescription": "يتطلب macOS إذن تسجيل الشاشة لالتقاط شاشتك.",
       "relaunchHint": "تم منح إذن تسجيل الشاشة أثناء تشغيل OpenWhispr. قم بإنهاء OpenWhispr وإعادة فتحه لبدء التقاط لقطات الشاشة."
     },
-    "modes": {
-      "openwhispr": "OpenWhispr Cloud",
-      "openwhisprDesc": "استخدم المساعد المُدار بواسطة OpenWhispr — لا حاجة لمفتاح API.",
-      "providers": "إحضار مفتاحك الخاص",
-      "providersDesc": "اتصل بـ OpenAI أو Anthropic أو Gemini أو Groq باستخدام مفتاح API الخاص بك.",
-      "local": "محلي",
-      "localDesc": "قم بتشغيل LLM محلي على جهازك — خاص بالكامل.",
-      "selfHosted": "مستضاف ذاتيًا",
-      "selfHostedDesc": "اتصل بنقطة نهاية مستضافة ذاتيًا ومتوافقة مع OpenAI.",
-      "enterprise": "للمؤسسات",
-      "enterpriseDesc": "استخدم AWS Bedrock أو Azure OpenAI أو Google Vertex."
-    },
     "prompt": {
       "title": "مطالبة المساعد",
       "description": "مطالبة النظام المستخدمة عند اكتشاف كلمة التفعيل. إذا تُركت فارغة، تُستخدم المطالبة الافتراضية المدمجة."
@@ -1686,19 +2584,7 @@
     "settings": {
       "systemPrompt": "مطالبة النظام",
       "systemPromptDescription": "تعليمات مخصصة للمساعد",
-      "systemPromptPlaceholder": "أدخل مطالبة النظام المخصصة...",
-      "modes": {
-        "openwhispr": "OpenWhispr Cloud",
-        "providers": "مزودو الخدمات السحابية",
-        "local": "محلي",
-        "selfHosted": "مستضاف ذاتيًا",
-        "enterprise": "للمؤسسات",
-        "openwhisprDesc": "دقة موثوقة. لا يتطلب أي إعداد.",
-        "providersDesc": "أحضر مفتاح API الخاص بك.",
-        "localDesc": "نماذج على الجهاز. خاصة بالكامل.",
-        "selfHostedDesc": "الخادم الخاص بك على شبكتك.",
-        "enterpriseDesc": "استخدم الحساب السحابي لمؤسستك (AWS، Azure، GCP)."
-      }
+      "systemPromptPlaceholder": "أدخل مطالبة النظام المخصصة..."
     },
     "chat": {
       "errorPrefix": "خطأ",
@@ -1758,6 +2644,9 @@
       "get_noteStatus": "جاري قراءة الملاحظة...",
       "create_noteStatus": "جاري إنشاء الملاحظة...",
       "update_noteStatus": "جاري تحديث الملاحظة...",
+      "load_skillStatus": "جاري تحميل المهارة…",
+      "propose_skillStatus": "جاري تجهيز المهارة…",
+      "update_skillStatus": "جاري تجهيز التغيير…",
       "copiedToClipboard": "تم النسخ إلى حافظتك",
       "openNote": "فتح الملاحظة",
       "unknownTool": "أداة غير معروفة: {{name}}",
@@ -1765,10 +2654,168 @@
       "search_openwhispr_helpName": "البحث في مساعدة OpenWhispr",
       "read_openwhispr_helpName": "قراءة مساعدة OpenWhispr",
       "get_openwhispr_contextName": "قراءة إعدادات OpenWhispr",
+      "load_skillName": "تحميل مهارة",
+      "propose_skillName": "اقتراح مهارة",
+      "update_skillName": "تحديث المهارة",
       "search_openwhispr_helpStatus": "جاري البحث في مساعدة OpenWhispr...",
       "read_openwhispr_helpStatus": "جاري قراءة مساعدة OpenWhispr...",
-      "get_openwhispr_contextStatus": "جاري قراءة إعدادات OpenWhispr..."
+      "get_openwhispr_contextStatus": "جاري قراءة إعدادات OpenWhispr...",
+      "ask_userName": "سؤال",
+      "ask_userStatus": "جارٍ سؤالك...",
+      "request_connectionName": "ربط",
+      "request_connectionStatus": "جارٍ طلب الربط...",
+      "request_accessName": "وصول",
+      "request_accessStatus": "جارٍ طلب الوصول...",
+      "look_at_screenName": "النظر إلى الشاشة",
+      "look_at_screenStatus": "جارٍ النظر إلى شاشتك...",
+      "look_at_screenSuccess": "تمت قراءة الشاشة.",
+      "look_at_screenFailed": "تعذرت قراءة الشاشة.",
+      "request_api_keyName": "مفتاح API",
+      "request_api_keyStatus": "جارٍ طلب مفتاح API...",
+      "open_settingsName": "الإعدادات",
+      "open_settingsStatus": "جارٍ توجيهك إلى الإعدادات..."
+    },
+    "turn": {
+      "reasoning": "الاستدلال",
+      "stopped": "تم الإيقاف",
+      "stepLimit": "توقف مؤقتًا بعد بلوغ الحد الأقصى للخطوات.",
+      "continue": "متابعة",
+      "continueMessage": "تابِع",
+      "failed": "تعذّر إكمال هذا الرد.",
+      "unbackedClaim": "لم يُنفَّذ: لم يجرِ تنفيذ ما يقول هذا الرد إنه فعله."
+    },
+    "interactions": {
+      "notNow": "ليس الآن",
+      "cancel": "إلغاء",
+      "questions": {
+        "recommended": "{{label}} (موصى به)",
+        "submit": "إرسال",
+        "placeholder": "اكتب إجابتك…",
+        "previous": "السؤال السابق",
+        "next": "السؤال التالي",
+        "position": "{{current}}/{{total}}",
+        "continue": "متابعة",
+        "typedAnswer": "إجابتك: {{answer}}"
+      },
+      "connection": {
+        "title": "ربط {{name}}",
+        "connect": "ربط {{name}}",
+        "connecting": "أكمل الربط في متصفحك…",
+        "failed": "تعذّر الربط. حاول مرة أخرى.",
+        "permissionDenied": "تم رفض الوصول إلى التقويم. اسمح به في إعدادات النظام ثم حاول مرة أخرى.",
+        "calendarTitle": "ربط تقويم",
+        "yes": "نعم",
+        "reasons": {
+          "gmail": "يمكنني إرسال البريد من حسابك في Gmail.",
+          "slack": "يمكنني نشر الرسالة في Slack نيابةً عنك.",
+          "linear": "يمكنني البحث عن مشكلات Linear وإنشاؤها نيابةً عنك.",
+          "github": "يمكنني البحث عن مشكلات GitHub وإنشاؤها نيابةً عنك.",
+          "calendar": "يمكنني التحقق من أوقات فراغك واقتراح مواعيد."
+        }
+      },
+      "access": {
+        "screen": "هل تسمح بالوصول إلى شاشتك؟",
+        "allow": "سماح",
+        "capturing": "جارٍ الالتقاط…"
+      },
+      "apiKey": {
+        "title": "أضف مفتاح API الخاص بـ {{provider}}",
+        "placeholder": "الصق أو اكتب هنا",
+        "save": "حفظ",
+        "label": "مفتاح API الخاص بـ {{provider}}",
+        "saved": "تم حفظ مفتاح {{provider}}"
+      },
+      "settings": {
+        "done": "انتهيت",
+        "technicalDetails": "التفاصيل التقنية",
+        "checking": "جارٍ التحقق…"
+      },
+      "status": {
+        "answered": "تمت الإجابة",
+        "connected": "تم ربط {{name}}",
+        "granted": "تمت مشاركة الشاشة",
+        "declined": "غير مسموح",
+        "saved": "تم حفظ مفتاح API",
+        "done": "تمت العودة من الإعدادات",
+        "cancelled": "تم التجاهل",
+        "notAnswered": "لم تتم الإجابة",
+        "invalid": "تعذّر عرض هذا السؤال"
+      },
+      "followUp": {
+        "connected": "لقد ربطت {{name}}.",
+        "granted": "سمحت بالوصول إلى شاشتي.",
+        "saved": "حفظت مفتاح API الخاص بـ {{provider}}.",
+        "done": "انتهيت من الإعدادات."
+      }
     }
+  },
+  "agentWindow": {
+    "title": "المساعد",
+    "actions": {
+      "expand": "توسيع",
+      "collapse": "تصغير",
+      "speak": "تحدّث",
+      "type": "اكتب",
+      "stop": "إيقاف",
+      "close": "إغلاق",
+      "regenerate": "إعادة الإنشاء",
+      "readAloud": "قراءة بصوت عالٍ",
+      "stopReading": "إيقاف القراءة"
+    },
+    "notices": {
+      "nothingHeard": "لم أسمع شيئًا",
+      "transcriptionFailed": "تعذّر التفريغ النصي",
+      "micUnavailable": "تعذّر فتح الميكروفون",
+      "regenerateFailed": "تعذّرت إعادة إنشاء الإجابة",
+      "dictationActive": "الإملاء يستخدم الميكروفون"
+    },
+    "composer": {
+      "placeholder": "أملِ سؤالك أو اكتبه…",
+      "followUpPlaceholder": "اطرح سؤال متابعة…",
+      "answerPlaceholder": "أجب هنا…",
+      "cardPlaceholder": "أجب في البطاقة أعلاه…"
+    },
+    "empty": {
+      "title": "كيف يمكنني المساعدة؟",
+      "description": "اكتب طلبك أدناه."
+    },
+    "selectedContext": {
+      "title": "السياق المحدد",
+      "remove": "إزالة السياق المحدد",
+      "fromAnswer": "من الإجابة: \"{{text}}\"",
+      "fromOtherApp": "من تطبيق آخر: \"{{text}}\""
+    },
+    "selectionHint": "حدّد نصًا للمتابعة أو التفريع",
+    "selectionToolbar": "النص المحدد",
+    "followUp": "متابعة",
+    "forkFromHere": "تفريع من هنا",
+    "chats": {
+      "title": "المحادثات",
+      "switch": "تبديل المحادثة",
+      "new": "محادثة جديدة",
+      "empty": "لا توجد محادثات بعد",
+      "untitled": "محادثة بلا عنوان",
+      "fork": "متفرعة"
+    },
+    "progress": {
+      "callingTools_zero": "استدعاء {{count}} أداة…",
+      "callingTools_one": "استدعاء أداة واحدة ({{count}})…",
+      "callingTools_two": "استدعاء أداتين ({{count}})…",
+      "callingTools_few": "استدعاء {{count}} أدوات…",
+      "callingTools_many": "استدعاء {{count}} أداة…",
+      "callingTools_other": "استدعاء {{count}} أداة…",
+      "checkingAnswers": "جارٍ التحقق من الإجابات…",
+      "reasoning": "جارٍ الاستدلال…",
+      "reasonedFor": "استدلّ لمدة {{duration}}",
+      "workedFor": "عمل لمدة {{duration}}",
+      "steps_zero": "{{count}} خطوة",
+      "steps_one": "خطوة واحدة ({{count}})",
+      "steps_two": "خطوتان ({{count}})",
+      "steps_few": "{{count}} خطوات",
+      "steps_many": "{{count}} خطوة",
+      "steps_other": "{{count}} خطوة"
+    },
+    "waitingForAnswer": "في انتظار الإجابة"
   },
   "noteEditor": {
     "saved": "تم الحفظ",
@@ -1864,7 +2911,6 @@
       "hotkeyToSpeak": "{{hotkey}} للتحدث",
       "recording": "جاري التسجيل...",
       "processing": "جاري المعالجة...",
-      "clickToSpeak": "انقر للتحدث",
       "waitingForMicrophone": "في انتظار الميكروفون…"
     },
     "buttons": {
@@ -1876,7 +2922,6 @@
       "startListening": "بدء الاستماع",
       "hideForNow": "إخفاء الآن",
       "askAssistant": "اسأل المساعد",
-      "busyRecording": "أنهِ التسجيل الحالي أولاً",
       "startMeetingRecording": "بدء تسجيل الاجتماع"
     }
   },
@@ -1944,34 +2989,17 @@
       "personal": "شخصي",
       "privateTooltip": "أنت فقط من يمكنه رؤية مساحتك الشخصية",
       "newSpace": "مساحة فريق جديدة",
-      "newSpaceInWorkspace": "مساحة فريق جديدة في {{workspace}}",
-      "createTitle": "إنشاء مساحة فريق",
-      "createDescription": "منطقة مشتركة داخل مساحة عمل للأشخاص والمجموعات الذين تضيفهم.",
       "nameAndIconLabel": "الاسم والأيقونة",
-      "create": "إنشاء",
-      "couldNotCreate": "تعذر إنشاء المساحة",
-      "created": "تم إنشاء {{space}}",
       "changeEmoji": "تغيير الرمز التعبيري",
       "settings": "الإعدادات",
-      "settingsTitle": "إعدادات المساحة",
       "couldNotRename": "تعذر إعادة تسمية المساحة",
       "couldNotChangeEmoji": "تعذّر تغيير الرمز التعبيري",
       "deleteSpace": "حذف المساحة",
-      "deleteHintTeam": "يزيل هذه المساحة للجميع. تبقى مجموعاتها كما هي.",
       "deleteHintLocal": "يحذف هذه المساحة نهائيًا مع مجلداتها وملاحظاتها على هذا الجهاز.",
-      "leaveTitle": "مغادرة المساحة",
-      "leaveDescription": "ستبقى ملاحظاتك متاحة للأعضاء الآخرين.",
-      "leave": "مغادرة المساحة",
-      "leaveConfirmTitle": "مغادرة {{space}}؟",
       "leaveConfirmDescription": "ستتم إزالتك من {{teams}} وستفقد الوصول إلى أي مساحات أخرى تفتحها تلك المجموعات.",
-      "leaveDirectDescription": "ستفقد إمكانية الوصول إلى هذه المساحة.",
-      "leaveKeepsGroupAccess": "ستحتفظ بالوصول عبر {{groups}}.",
-      "left": "غادرت {{space}}",
       "stillViaGroups": "لا يزال بإمكانك الوصول إلى {{space}} عبر {{groups}}.",
-      "couldNotLeave": "تعذّرت مغادرة المساحة",
       "deleteConfirmTitle": "حذف المساحة؟",
       "deleteConfirmDescription": "سيؤدي هذا إلى حذف {{space}} بشكل دائم مع جميع مجلداتها وملاحظاتها على هذا الجهاز.",
-      "deleteConfirmTeamDescription": "سيؤدي هذا إلى حذف {{space}} للجميع. ستبقى مجموعاتها، ولكن سيفقد الأعضاء إمكانية الوصول إلى جميع مجلداتها وملاحظاتها.",
       "deleteTypeName": "اكتب {{space}} للتأكيد",
       "couldNotDelete": "تعذر حذف المساحة",
       "deleted": "تم حذف {{space}}",
@@ -2026,15 +3054,10 @@
         "roleAdminDescription": "يدير الأشخاص والإعدادات.",
         "roleMemberDescription": "يمكنه عرض الملاحظات وتعديلها.",
         "remove": "إزالة",
-        "removeConfirm": "إزالة {{name}} من {{space}}؟",
         "removeConfirmDescription": "سيفقد هذا الشخص إمكانية الوصول إلى جميع الملاحظات في هذه المساحة.",
-        "removeKeepsGroupAccess": "سيحتفظون بالوصول عبر {{groups}}.",
         "inviteFooter": "دعوة {{email}} إلى مساحة العمل…",
         "empty": "لم تتم إضافة أحد بعد",
-        "viaGroup": "عبر {{group}}",
-        "managedByGroup": "تمت الإضافة عبر {{group}}. أزل العضو من هناك.",
-        "roleFromGroup": "مشرف عبر {{group}}. غيّر ذلك هناك.",
-        "invited": "تم إرسال الدعوة إلى {{email}}"
+        "roleFromGroup": "مشرف عبر {{group}}. غيّر ذلك هناك."
       },
       "invitedTo_zero": "ستنضم إلى {{count}} مساحات فريق",
       "invitedTo_one": "ستنضم إلى {{count}} مساحة فريق",
@@ -2045,27 +3068,11 @@
       "invitedToSpaces": "ستنضم إلى {{spaces}}",
       "teamsMembers": {
         "title": "أعضاء {{space}}",
-        "noTeams": "لا توجد مجموعات لديها وصول إلى هذه المساحة بعد.",
-        "addTeamLabel": "إضافة مجموعة إلى هذه المساحة",
-        "chooseTeam": "اختيار مجموعة…",
-        "teamAdded": "تمت إضافة {{team}} إلى {{space}}",
         "teamRemoved": "تمت إزالة {{team}} من {{space}}",
-        "removeTeamFromSpace": "إزالة من المساحة",
-        "removeTeamConfirm": "إزالة {{team}} من {{space}}؟",
-        "removeTeamConfirmDescription": "سيفقد أعضاؤها إمكانية الوصول إلى هذه المساحة ما لم يكونوا مضافين مباشرةً أو تشملهم مجموعة أخرى.",
-        "accessLabel": "صلاحية الوصول إلى المساحة",
-        "accessAdmin": "مسؤول",
-        "accessMember": "عضو",
-        "accessChanged": "تم تحديث صلاحية وصول {{team}}",
-        "accessHint": "يدير مسؤولو {{team}} هذه المساحة فقط عندما يتم تعيين وصولها إلى مسؤول (Admin)."
+        "accessChanged": "تم تحديث صلاحية وصول {{team}}"
       },
       "teams": {
-        "newTeam": "مجموعة جديدة",
         "loadError": "تعذر تحميل المجموعات."
-      },
-      "groups": {
-        "title": "المجموعات التي لديها وصول",
-        "optional": "المجموعات (اختياري)"
       }
     },
     "structureIntro": {
@@ -2077,7 +3084,7 @@
       },
       "workspace": {
         "title": "مساحة العمل",
-        "description": "هنا يُدار أعضاء مساحة عملك وأدوارهم ومساحات الفرق فيها."
+        "description": "هنا يُدار أعضاء مساحة عملك وأدوارهم ومساحات الفريق فيها."
       },
       "teamSpace": {
         "title": "مساحة الفريق",
@@ -2140,6 +3147,7 @@
       "transcriptEmptyDescription": "ابدأ التسجيل وسيظهر هنا كل ما يُقال.",
       "startRecording": "بدء التسجيل",
       "generateSummary": "إنشاء ملخص بالذكاء الاصطناعي",
+      "generateWithTemplate": "إنشاء باستخدام {{template}}",
       "startWriting": "ابدأ الكتابة...",
       "staleIndicator": "تم تغيير المحتوى منذ التحسين",
       "live": "مباشر",
@@ -2185,6 +3193,25 @@
       "addPlaceholder": "إضافة حاضرين...",
       "typeEmail": "اكتب بريدًا إلكترونيًا لإضافته...",
       "me": "(أنا)"
+    },
+    "eventLink": {
+      "selectEvent": "اختيار حدث من التقويم",
+      "searchPlaceholder": "البحث عن حدث…",
+      "back": "رجوع",
+      "removeEvent": "إزالة حدث التقويم",
+      "allDay": "طوال اليوم",
+      "noEventsOnDay": "لا توجد أحداث في هذا اليوم",
+      "searchOtherDays": "ابحث للعثور على أحداث من أيام أخرى",
+      "outsideWindow": "يمكن ربط أحداث آخر {{days}} أيام فقط",
+      "noResults": "لا توجد أحداث مطابقة",
+      "noCalendar": "اربط تقويمًا من «التكاملات» لربط الأحداث",
+      "loadFailed": "تعذّر تحميل أحداث التقويم",
+      "join": "انضمام",
+      "calendar": "التقويم",
+      "openInGoogle": "فتح في Google Calendar",
+      "openInOutlook": "فتح في Outlook",
+      "linkedEvent": "حدث التقويم",
+      "unavailable": "هذا الحدث غير موجود في تقاويمك على هذا الجهاز"
     },
     "upload": {
       "title": "رفع ملف صوتي",
@@ -2268,7 +3295,8 @@
       "urlYoutubeBlocked": "يحظر YouTube التنزيلات من شبكتك مؤقتًا. حاول مرة أخرى بعد قليل.",
       "customEndpointInvalid": "نقطة نهاية التفريغ المخصصة غير مهيأة أو غير صالحة. قم بتحديثها في الإعدادات.",
       "streamingOnlyProvider": "هذا المزود يدعم التفريغ المباشر فقط. اختر مزودًا آخر لرفع الملفات وإعادة المحاولة.",
-      "diarizationWarning": "تعذر تطبيق تحديد المتحدثين. حُفظ النص المفرَّغ دون تسميات المتحدثين."
+      "diarizationWarning": "تعذر تطبيق تحديد المتحدثين. حُفظ النص المفرَّغ دون تسميات المتحدثين.",
+      "disabledByOrg": "تم تعطيل رفع الملفات الصوتية بواسطة مؤسستك."
     },
     "meeting": {
       "title": "ملاحظات الاجتماع",
@@ -2295,7 +3323,11 @@
       "systemAudioQuiet": {
         "title": "خفت صوت الاجتماع",
         "description": "لم يُسمع أي شخص منذ بضع دقائق. إذا كانت المكالمة لا تزال جارية، فتحقق من جهاز إخراج الصوت."
-      }
+      },
+      "recordingDisabledByOrg": "تم تعطيل تسجيل الاجتماعات بواسطة مؤسستك.",
+      "stoppedAccountChanged": "توقف التسجيل لأنك سجّلت الخروج أو بدّلت الحساب.",
+      "stoppedPolicyUnresolved": "توقف التسجيل لأنه تعذّر التحقق من إعدادات مؤسستك.",
+      "stoppedWorkspaceChanged": "توقف التسجيل لأنك بدّلت مساحة العمل."
     },
     "meetingPill": {
       "returnToNote": "العودة إلى التسجيل",
@@ -2416,6 +3448,9 @@
         "actionFailed": "فشل الإجراء",
         "noEndpoint": "لم يتم تعيين عنوان URL لخادم مستضاف ذاتيًا. قم بتكوين واحد في الإعدادات.",
         "outputTruncated": "نفدت المساحة لدى نموذج الذكاء الاصطناعي قبل أن ينتهي، لذا بقيت الملاحظة كما هي.",
+        "outputSpentThinking": "استهلك نموذج الذكاء الاصطناعي كامل حد المخرجات في التفكير ولم يكتب أي ملاحظات، لذا بقيت الملاحظة كما هي. فعّل \"تعطيل مخرجات التفكير\" أو اختر نموذجًا يفكر أقل في الإعدادات ← النموذج اللغوي ← تنسيق الملاحظات، ثم حاول مرة أخرى.",
+        "outputSpentThinkingDisabled": "استهلك نموذج الذكاء الاصطناعي كامل حد المخرجات في التفكير ولم يكتب أي ملاحظات، رغم تفعيل \"تعطيل مخرجات التفكير\"، لذا بقيت الملاحظة كما هي. اختر نموذجًا آخر في الإعدادات ← النموذج اللغوي ← تنسيق الملاحظات.",
+        "outputSpentThinkingOtherModel": "استهلك نموذج الذكاء الاصطناعي كامل حد المخرجات في التفكير ولم يكتب أي ملاحظات، لذا بقيت الملاحظة كما هي. اختر نموذجًا يفكر أقل في الإعدادات ← النموذج اللغوي ← تنسيق الملاحظات.",
         "nothingToSummarize": "لا يوجد في هذه الملاحظة ما يمكن تلخيصه بعد، لذا بقي الملخص بالذكاء الاصطناعي كما هو.",
         "saveFailed": "تعذّر الحفظ. تأكد من أن لا شيء أطول من اللازم ثم حاول مرة أخرى."
       },
@@ -2429,6 +3464,11 @@
       "applied": "تم تحديث الملخص بالذكاء الاصطناعي باستخدام {{name}}"
     },
     "templates": {
+      "defaultLabel": "قالب الملخص الافتراضي",
+      "defaultHint": "استخدم هذا القالب لزر الملخص بعد الاجتماع.",
+      "defaultBadge": "افتراضي",
+      "saveBeforeDefault": "احفظ هذا القالب لتعيينه كقالب افتراضي.",
+      "defaultSaveFailed": "تعذّر تحديث القالب الافتراضي. حاول مرة أخرى.",
       "tab": "القوالب",
       "managerTitle": "القوالب والإجراءات",
       "manage": "إدارة القوالب...",
@@ -2483,6 +3523,7 @@
     },
     "speaker": {
       "you": "أنت",
+      "noteTaker": "كاتب الملاحظات",
       "them": "الطرف الآخر",
       "unknown": "متحدث غير معروف",
       "label": "المتحدث {{n}}",
@@ -2492,6 +3533,7 @@
       "typeNamePlaceholder": "اكتب اسمًا",
       "nameOrEmailPlaceholder": "اكتب اسمًا أو بريدًا إلكترونيًا",
       "knownSpeakers": "متحدثون معروفون",
+      "thisIsMe": "هذا أنا",
       "meetingAttendees": "حاضرو الاجتماع",
       "createNewPrefix": "إنشاء",
       "addContact": "إضافة جهة اتصال",
@@ -2572,6 +3614,16 @@
       "applied": "حدّث المساعد «{{title}}»",
       "changed": "تغيّرت هذه الملاحظة بعد تعديل المساعد. لم يعد التراجع متاحًا.",
       "failed": "تعذّر التراجع عن التعديل. حاول مرة أخرى."
+    },
+    "folderMore": {
+      "more": "{{count}} أخرى",
+      "search": "البحث في {{count}} ملاحظات في {{folder}}",
+      "newest": "الأحدث أولاً",
+      "openFolder": "فتح المجلد",
+      "empty": "لا توجد ملاحظات مطابقة",
+      "loading": "جارٍ تحميل الملاحظات…",
+      "retry": "تعذر تحميل الملاحظات. حاول مجدداً",
+      "results": "{{count}} من {{total}} ملاحظات"
     }
   },
   "onboarding": {
@@ -2700,45 +3752,21 @@
           }
         },
         "byok": {
-          "title": "مزود API",
+          "title": "إحضار مفتاحك الخاص",
           "description": "استخدم مفتاح API الخاص بك."
         },
         "local": {
           "title": "على جهازك",
-          "description": "تفريغ محلي خاص بدون إنترنت. يتطلب مساحة خالية تبلغ {{minimumSpace}} جيجابايت على الأقل.",
+          "description": "تفريغ محلي خاص بدون إنترنت. يتطلب مساحة خالية تبلغ {{minimumSpace}} غيغابايت على الأقل.",
           "badge": "مجاني",
           "download": "تنزيل النماذج",
           "features": {
             "device": "يعمل على جهازك",
             "offline": "يعمل بدون إنترنت بعد الإعداد",
-            "models": "اختر نماذج للإملاء والمساعد",
+            "setup": "إعداد مخصّص لهذا الحاسوب",
             "free": "مجاني للاستخدام إلى الأبد"
           }
         },
-        "warnings": {
-          "byok": {
-            "title": "يتعامل مزودك مع بياناتك",
-            "description": "ستضيف بيانات اعتماد لمزودي الإملاء والمساعد بشكل منفصل. تطبق سياسات التسعير والاحتفاظ بالبيانات الخاصة بالمزود.",
-            "continue": "إعداد مزود API",
-            "steps": {
-              "1": "اختر مزودين للإملاء والمساعد",
-              "2": "أضف بيانات الاعتماد باستخدام التخزين الآمن",
-              "3": "اختبر كل اتصال قبل التفعيل"
-            }
-          },
-          "local": {
-            "title": "يتطلب الإعداد المحلي بضع خطوات إضافية",
-            "description": "تحتفظ المعالجة المحلية بكلامك على هذا الجهاز، ولكنها تتطلب إعدادًا لمرة واحدة ومساحة خالية تبلغ {{minimumSpace}} جيجابايت على الأقل.",
-            "continue": "الإعداد محليًا",
-            "steps": {
-              "1": "اختر محرك تفريغ",
-              "2": "قم بتكوين أو تنزيل نموذج، حوالي {{modelSize}}",
-              "3": "انتظر التثبيت والتفعيل"
-            }
-          }
-        },
-        "useCloud": "استخدم السحابة بدلًا من ذلك",
-        "continueSetup": "متابعة الإعداد",
         "showMore": "إظهار المزيد من الخيارات",
         "moreOptions": {
           "title": "اختر إعداد API الخاص بك",
@@ -2769,15 +3797,14 @@
         "optional": "اختياري",
         "modelId": "معرف النموذج",
         "modelIdPlaceholder": "اكتب معرف النموذج الخاص بك",
-        "testConnection": "اختبار الاتصال",
         "proceed": "متابعة",
         "clinical": "للتفريغ السريري",
         "clientId": "معرف العميل (Client ID)",
         "clientSecret": "سر العميل (Client Secret)",
-        "runTest": "إجراء الاختبار",
         "testing": "جاري الاختبار...",
         "connected": "متصل",
         "connectionFailed": "تعذر التحقق من الاتصال.",
+        "unverified": "تعذر التحقق: {{reason}}",
         "errors": {
           "endpointRequired": "أدخل عنوان URL لنقطة النهاية قبل الاختبار.",
           "invalidUrl": "يجب أن تكون نقطة النهاية عنوان URL صالحًا لـ HTTP أو HTTPS.",
@@ -2786,6 +3813,7 @@
           "apiKeyRequired": "أضف مفتاح API قبل الاختبار.",
           "credentialsRejected": "رفض المزود بيانات الاعتماد هذه.",
           "endpointNotFound": "لا توفر نقطة النهاية قائمة نماذج متوافقة مع OpenAI.",
+          "transcriptionEndpointNotFound": "لا يستقبل هذا العنوان طلبات التفريغ الصوتي.",
           "modelNotFound": "النموذج المحدد غير متوفر من هذا المزود.",
           "providerStatus": "أعاد المزود رمز الحالة {{status}}.",
           "timeout": "انتهت مهلة اختبار الاتصال.",
@@ -2793,20 +3821,80 @@
         }
       },
       "local": {
-        "title": "إعداد النماذج المحلية",
-        "description": "اختر النماذج التي تريد تشغيلها على جهازك.",
-        "descriptionLineOne": "اختر النماذج التي تريد",
-        "descriptionLineTwo": "تشغيلها على جهازك.",
-        "providerLabel": "المزود",
-        "download": "تنزيل",
         "downloadingShort": "جاري التنزيل",
-        "selected": "محدد",
-        "use": "استخدام",
         "downloadInProgress": "التنزيل قيد التقدم",
         "cancelDownload": "إلغاء تنزيل {{model}}",
         "downloads": "تنزيلات النماذج",
         "downloading": "جاري التنزيل... {{progress}}%",
+        "verifying": "جارٍ التحقق",
         "installing": "جاري التثبيت"
+      },
+      "localSetup": {
+        "title": "نوصي بهذه الإعدادات",
+        "subtitle": "اخترناها لجهاز {{computer}} وللغة {{language}}. تعمل هذه النماذج على هذا الجهاز.",
+        "subtitleOrganizationText": "اخترناها لجهاز {{computer}} وللغة {{language}}. يعمل الإملاء على هذا الجهاز، أما الدردشة والملاحظات الذكية فتستخدم الخدمة التي اختارتها مؤسستك.",
+        "computer": {
+          "chip": "الشريحة",
+          "processor": "المعالج",
+          "memory": "الذاكرة",
+          "graphics": "الرسومات",
+          "builtIn": "مدمجة في الشريحة",
+          "memoryValue": "{{gb}} غيغابايت",
+          "mac": "Mac",
+          "windowsLaptop": "حاسوب Windows محمول",
+          "windowsDesktop": "حاسوب Windows مكتبي",
+          "linuxLaptop": "حاسوب Linux محمول",
+          "linuxDesktop": "حاسوب Linux مكتبي"
+        },
+        "rows": {
+          "dictation": "الإملاء",
+          "cleanup": "التنظيف",
+          "assistant": "المساعد"
+        },
+        "description": {
+          "dictation": "يحوّل صوتك إلى نص في أي تطبيق",
+          "cleanup": "يزيل كلمات الحشو ويصحح القواعد",
+          "assistant": "يجيب عن الأسئلة وينفّذ طلباتك"
+        },
+        "badge": {
+          "optional": "اختياري",
+          "cloud": "يُنصح بالسحابة"
+        },
+        "line": {
+          "requiredByOrganization": "مطلوب من مؤسستك",
+          "organizationModelsUnrunnable": "لا يعمل أي من النماذج التي وافقت عليها مؤسستك على هذا الكمبيوتر",
+          "offToFit": "متوقف ليتسع في المساحة الحرة على هذا الحاسوب",
+          "failed": "تعذّر التنزيل. تحقّق من اتصالك وأعد المحاولة"
+        },
+        "unavailable": {
+          "notEnoughMemory": "الذاكرة غير كافية",
+          "exceedsMemory": "يتجاوز حدود ذاكرة هذا الحاسوب",
+          "memoryUnread": "تعذّر التحقق من الذاكرة",
+          "organization": "غير متاح على هذا الكمبيوتر",
+          "memoryMac": "يحتاج {{model}} إلى {{needed}} غيغابايت من الذاكرة، وفي جهاز Mac هذا {{have}} غيغابايت",
+          "memoryComputer": "يحتاج {{model}} إلى {{needed}} غيغابايت من الذاكرة، وفي هذا الحاسوب {{have}} غيغابايت",
+          "memoryUnreadLine": "يحتاج {{model}} إلى {{needed}} غيغابايت من الذاكرة. إذا كان في هذا الحاسوب هذا القدر، يمكنك تشغيله لاحقًا من الإعدادات"
+        },
+        "button": {
+          "download": "تنزيل النماذج",
+          "downloading": "جارٍ التنزيل",
+          "proceed": "متابعة",
+          "noSpace": "المساحة الحرة غير كافية"
+        },
+        "retry": "إعادة المحاولة",
+        "retryRow": "إعادة محاولة {{row}}",
+        "downloaded": "تم التنزيل",
+        "foot": {
+          "default": "يمكنك تغيير أي من هذه الإعدادات لاحقًا من الإعدادات.",
+          "dictationFailed": "يجب تنزيل الإملاء قبل المتابعة. أعد المحاولة أعلاه، أو ارجع واختر إعدادًا آخر.",
+          "dictationUnavailable": "لا يمكن تشغيل الإملاء على هذا الكمبيوتر بالنماذج التي وافقت عليها مؤسستك. ارجع واختر إعدادًا آخر.",
+          "finishesInBackground": "يستمر تنزيل الباقي بعد المتابعة، ويُشغَّل عندما يصبح جاهزًا.",
+          "failedStaysOff": "ما لم يُنزَّل يبقى متوقفًا. يمكنك إضافته لاحقًا من الإعدادات.",
+          "needsMac": "يتطلب هذا {{needed}} غيغابايت، وفي جهاز Mac هذا {{free}} غيغابايت حرة.",
+          "needsComputer": "يتطلب هذا {{needed}} غيغابايت، وفي هذا الحاسوب {{free}} غيغابايت حرة.",
+          "noSpaceMac": "يحتاج الإملاء إلى {{needed}} غيغابايت حرة، وفي جهاز Mac هذا {{free}} غيغابايت. حرّر بعض المساحة للمتابعة.",
+          "noSpaceComputer": "يحتاج الإملاء إلى {{needed}} غيغابايت حرة، وفي هذا الحاسوب {{free}} غيغابايت. حرّر بعض المساحة للمتابعة."
+        }
       }
     },
     "steps": {
@@ -2940,7 +4028,8 @@
       "queued": "في قائمة الانتظار",
       "failed": {
         "title": "لم يكتمل التنزيل",
-        "description": "تحقق من اتصالك والمساحة الخالية على القرص، ثم أعد المحاولة. إذا استمر الفشل، فاتصل بالمسؤول."
+        "description": "تحقق من اتصالك والمساحة الخالية على القرص، ثم أعد المحاولة. إذا استمر الفشل، فاتصل بالمسؤول.",
+        "notApproved": "لا توافق مؤسستك على هذا النموذج. يمكنك المتابعة بدونه."
       }
     },
     "permissionGuide": {
@@ -2972,11 +4061,358 @@
         "description": "تحقق من اتصالك وحاول مرة أخرى.",
         "retry": "إعادة المحاولة"
       },
+      "staleList": "تعذر الوصول إلى OpenWhispr. يتم عرض مساحات العمل كما كانت في آخر مرة كنت متصلاً فيها.",
       "tab": {
         "general": "عام",
         "members": "الأعضاء",
-        "teams": "المجموعات",
-        "developer": "للمطورين"
+        "invitations": "الدعوات",
+        "teams": "المجموعات"
+      },
+      "people": {
+        "title": "الأشخاص",
+        "description": "أدر الأشخاص في مساحة العمل وأدوارهم.",
+        "subtitleView": "الأشخاص في مساحة العمل وأدوارهم.",
+        "add": "إضافة",
+        "addLabel": "دعوة أشخاص",
+        "columns": {
+          "name": "الاسم",
+          "team": "المجموعة",
+          "role": "الدور",
+          "email": "البريد الإلكتروني",
+          "status": "الحالة",
+          "actions": "الإجراءات"
+        },
+        "you": "أنت",
+        "teamsNone": "لا شيء",
+        "teamsMore": "+{{count}}",
+        "loading": {
+          "title": "جارٍ تحميل الأعضاء…",
+          "body": "سيظهر أعضاء مساحة العمل هنا."
+        },
+        "failed": {
+          "title": "تعذّر تحميل الأعضاء",
+          "body": "تحقق من اتصالك وحاول مرة أخرى."
+        },
+        "search": {
+          "placeholder": "البحث عن الأعضاء",
+          "clear": "مسح البحث",
+          "noResultsTitle": "لا يوجد أعضاء يطابقون «{{query}}»",
+          "noResultsBody": "تحقق من الإملاء أو ابحث بعنوان البريد الإلكتروني."
+        },
+        "roleMenuLabel": "تغيير دور {{name}}",
+        "roleDescription": {
+          "member": "يمكنه عرض الملاحظات وتعديلها.",
+          "admin": "يدير الأعضاء والدعوات والمجموعات والإعدادات."
+        },
+        "roleFailed": "تعذّر تغيير دور {{name}}. تحقق من اتصالك وحاول مرة أخرى.",
+        "roleNotAllowed": "لم يعد لديك إذن بتغيير الأدوار في {{workspace}}.",
+        "invitations": {
+          "loading": "جارٍ تحميل الدعوات…",
+          "failedTitle": "تعذّر تحميل الدعوات",
+          "emptyTitle": "لا توجد دعوات",
+          "emptyBody": "تظهر الدعوات الجديدة هنا إلى أن يتم قبولها.",
+          "pending_zero": "معلّقة · تنتهي صلاحيتها خلال {{count}} أيام",
+          "pending_one": "معلّقة · تنتهي صلاحيتها خلال {{count}} يوم",
+          "pending_two": "معلّقة · عدد الأيام حتى انتهاء صلاحيتها: {{count}}",
+          "pending_few": "معلّقة · تنتهي صلاحيتها خلال {{count}} أيام",
+          "pending_many": "معلّقة · تنتهي صلاحيتها خلال {{count}} يومًا",
+          "pending_other": "معلّقة · تنتهي صلاحيتها خلال {{count}} يوم",
+          "expired": "منتهية الصلاحية",
+          "resend": "إعادة إرسال الدعوة",
+          "cancel": "إلغاء الدعوة",
+          "resendFailed": "تعذّرت إعادة إرسال الدعوة إلى {{email}}. ألغِها وادعُ الشخص مرة أخرى.",
+          "resendNotAllowed": "لم يعد لديك إذن بإعادة إرسال الدعوات في {{workspace}}.",
+          "noLongerPending": "لم تعد الدعوة المرسلة إلى {{email}} معلّقة",
+          "noLongerPendingMany_zero": "لم تعد {{count}} دعوة معلّقة.",
+          "noLongerPendingMany_one": "لم تعد {{count}} دعوة معلّقة.",
+          "noLongerPendingMany_two": "عدد الدعوات التي لم تعد معلّقة: {{count}}.",
+          "noLongerPendingMany_few": "لم تعد {{count}} دعوات معلّقة.",
+          "noLongerPendingMany_many": "لم تعد {{count}} دعوة معلّقة.",
+          "noLongerPendingMany_other": "لم تعد {{count}} دعوة معلّقة.",
+          "refreshFailed": "تعذّر تحديث الدعوات. قد لا تكون هذه القائمة محدّثة.",
+          "cancelSelected": "إلغاء الدعوات",
+          "resendSelected": "إعادة إرسال الدعوات",
+          "resendingSelected": "جارٍ إعادة الإرسال…",
+          "resentMany_zero": "تمت إعادة إرسال {{count}} دعوة.",
+          "resentMany_one": "تمت إعادة إرسال {{count}} دعوة.",
+          "resentMany_two": "عدد الدعوات المعاد إرسالها: {{count}}.",
+          "resentMany_few": "تمت إعادة إرسال {{count}} دعوات.",
+          "resentMany_many": "تمت إعادة إرسال {{count}} دعوة.",
+          "resentMany_other": "تمت إعادة إرسال {{count}} دعوة.",
+          "resentPartial_zero": "أُعيد إرسال {{count}} دعوة.",
+          "resentPartial_one": "أُعيد إرسال {{count}} دعوة.",
+          "resentPartial_two": "عدد الدعوات المعاد إرسالها: {{count}}.",
+          "resentPartial_few": "أُعيد إرسال {{count}} دعوات.",
+          "resentPartial_many": "أُعيد إرسال {{count}} دعوة.",
+          "resentPartial_other": "أُعيد إرسال {{count}} دعوة.",
+          "resendFailedOne": "تعذّر إرسال دعوة {{email}}. أعد المحاولة من الإجراءات.",
+          "resendFailedSome_zero": "تعذّر إرسال {{count}} دعوة. أعد المحاولة من الإجراءات.",
+          "resendFailedSome_one": "تعذّر إرسال {{count}} دعوة. أعد المحاولة من الإجراءات.",
+          "resendFailedSome_two": "عدد الدعوات التي تعذّر إرسالها: {{count}}. أعد المحاولة من الإجراءات.",
+          "resendFailedSome_few": "تعذّر إرسال {{count}} دعوات. أعد المحاولة من الإجراءات.",
+          "resendFailedSome_many": "تعذّر إرسال {{count}} دعوة. أعد المحاولة من الإجراءات.",
+          "resendFailedSome_other": "تعذّر إرسال {{count}} دعوة. أعد المحاولة من الإجراءات.",
+          "resendFailedAll_zero": "تعذّرت إعادة إرسال {{count}} دعوة. تحقق من اتصالك وحاول مرة أخرى.",
+          "resendFailedAll_one": "تعذّرت إعادة إرسال {{count}} دعوة. تحقق من اتصالك وحاول مرة أخرى.",
+          "resendFailedAll_two": "عدد الدعوات التي تعذّرت إعادة إرسالها: {{count}}. تحقق من اتصالك وحاول مرة أخرى.",
+          "resendFailedAll_few": "تعذّرت إعادة إرسال {{count}} دعوات. تحقق من اتصالك وحاول مرة أخرى.",
+          "resendFailedAll_many": "تعذّرت إعادة إرسال {{count}} دعوة. تحقق من اتصالك وحاول مرة أخرى.",
+          "resendFailedAll_other": "تعذّرت إعادة إرسال {{count}} دعوة. تحقق من اتصالك وحاول مرة أخرى.",
+          "resentNoEmailOne": "تم تحديث دعوة {{email}}، لكن تعذّر تسليم البريد الإلكتروني ولم يعد الرابط القديم يعمل. أعد إرسالها للمحاولة مرة أخرى.",
+          "resentNoEmailMany_zero": "عدد الدعوات التي تم تحديثها دون تسليم بريدها الإلكتروني: {{count}}. لم تعد الروابط القديمة تعمل. لا تزال محددة لتتمكن من إعادة إرسالها.",
+          "resentNoEmailMany_one": "تم تحديث {{count}} دعوة، لكن تعذّر تسليم البريد الإلكتروني ولم يعد الرابط القديم يعمل. لا تزال محددة لتتمكن من إعادة إرسالها.",
+          "resentNoEmailMany_two": "عدد الدعوات التي تم تحديثها دون تسليم بريدها الإلكتروني: {{count}}. لم تعد الروابط القديمة تعمل. لا تزال محددة لتتمكن من إعادة إرسالها.",
+          "resentNoEmailMany_few": "تم تحديث {{count}} دعوات، لكن تعذّر تسليم رسائل البريد الإلكتروني ولم تعد الروابط القديمة تعمل. لا تزال محددة لتتمكن من إعادة إرسالها.",
+          "resentNoEmailMany_many": "تم تحديث {{count}} دعوة، لكن تعذّر تسليم رسائل البريد الإلكتروني ولم تعد الروابط القديمة تعمل. لا تزال محددة لتتمكن من إعادة إرسالها.",
+          "resentNoEmailMany_other": "تم تحديث {{count}} دعوة، لكن تعذّر تسليم رسائل البريد الإلكتروني ولم تعد الروابط القديمة تعمل. لا تزال محددة لتتمكن من إعادة إرسالها.",
+          "resendUnrenewable_zero": "عدد الدعوات منتهية الصلاحية التي تعذّر تجديدها: {{count}}. ألغها وادعُ هؤلاء الأشخاص مرة أخرى.",
+          "resendUnrenewable_one": "تعذّر تجديد {{count}} دعوة منتهية الصلاحية. ألغها وادعُ الشخص مرة أخرى.",
+          "resendUnrenewable_two": "عدد الدعوات منتهية الصلاحية التي تعذّر تجديدها: {{count}}. ألغها وادعُ هؤلاء الأشخاص مرة أخرى.",
+          "resendUnrenewable_few": "تعذّر تجديد {{count}} دعوات منتهية الصلاحية. ألغها وادعُ هؤلاء الأشخاص مرة أخرى.",
+          "resendUnrenewable_many": "تعذّر تجديد {{count}} دعوة منتهية الصلاحية. ألغها وادعُ هؤلاء الأشخاص مرة أخرى.",
+          "resendUnrenewable_other": "تعذّر تجديد {{count}} دعوة منتهية الصلاحية. ألغها وادعُ هؤلاء الأشخاص مرة أخرى."
+        },
+        "selection": {
+          "count_zero": "المحدد: {{count}}",
+          "count_one": "المحدد: {{count}}",
+          "count_two": "المحدد: {{count}}",
+          "count_few": "المحدد: {{count}}",
+          "count_many": "المحدد: {{count}}",
+          "count_other": "المحدد: {{count}}",
+          "clear": "إلغاء التحديد",
+          "label": "الأشخاص المحددون",
+          "selectAllMembers": "تحديد كل الأعضاء",
+          "selectAllInvitations": "تحديد كل الدعوات",
+          "selectRow": "تحديد {{name}}",
+          "remove": "إزالة",
+          "addToTeamspace": "إضافة إلى مساحة الفريق"
+        }
+      },
+      "teamspaces": {
+        "title": "مساحات الفريق",
+        "subtitleManage": "أدر مساحات الفريق في مساحة العمل هذه.",
+        "subtitleView": "مساحات الفريق في مساحة العمل هذه.",
+        "create": "إنشاء مساحة فريق",
+        "columns": {
+          "name": "الاسم",
+          "admins": "المسؤولون",
+          "actions": "الإجراءات",
+          "members": "الأعضاء"
+        },
+        "loadingTitle": "جارٍ تحميل مساحات الفريق…",
+        "loadingBody": "ستظهر هنا مساحات الفريق في مساحة عملك.",
+        "failedTitle": "تعذّر تحميل مساحات الفريق",
+        "failedBody": "تحقق من اتصالك وحاول مرة أخرى.",
+        "retry": "حاول مرة أخرى",
+        "emptyTitle": "لا توجد مساحات فريق بعد",
+        "emptyBody": "مساحة الفريق هي منطقة مشتركة لملاحظات الفريق. أضف أشخاصًا أو مجموعات، ويمكن لكل من فيها القراءة والتعديل.",
+        "emptyBodyMember": "لم ينشئ مسؤولو مساحة العمل أي مساحة فريق بعد.",
+        "adminCount_zero": "{{count}} مسؤولين",
+        "adminCount_one": "{{count}} مسؤول",
+        "adminCount_two": "{{count}} مسؤولان",
+        "adminCount_few": "{{count}} مسؤولين",
+        "adminCount_many": "{{count}} مسؤولًا",
+        "adminCount_other": "{{count}} مسؤول",
+        "noAdmins": "مسؤولو مساحة العمل",
+        "you": "أنت",
+        "join": "انضمام",
+        "joining": "جارٍ الانضمام…",
+        "joined": "انضممت إلى {{space}}",
+        "joinFailed": "تعذّر الانضمام إلى {{space}}. حاول مرة أخرى.",
+        "joinClosed": "{{space}} لم تعد تقبل أعضاء جددًا. اطلب من أحد المسؤولين إضافتك.",
+        "openTeamspace": "فتح مساحة الفريق",
+        "rowMenu": {
+          "label": "إجراءات {{name}}",
+          "settings": "الإعدادات",
+          "delete": "حذف مساحة الفريق"
+        },
+        "form": {
+          "title": "إنشاء مساحة فريق",
+          "description": "منطقة مشتركة لملاحظات الفريق. يمكن لكل من تضيفه القراءة والتعديل.",
+          "nameAndIcon": "الاسم والأيقونة",
+          "descriptionLabel": "الوصف",
+          "people": "الأشخاص",
+          "descriptionPlaceholder": "تسجيلات وملخصات لمكالمات المبيعات والدعم، ملاحظة واحدة لكل مكالمة.",
+          "peoplePlaceholder": "الأسماء أو البريد الإلكتروني أو المجموعات",
+          "defaultTitle": "مساحة فريق افتراضية",
+          "defaultBody": "أضف أعضاء مساحة العمل الجدد تلقائيًا.",
+          "openTitle": "مساحة فريق مفتوحة",
+          "openBody": "اسمح لأعضاء مساحة العمل بالانضمام.",
+          "invalidEmail": "بريد إلكتروني غير صالح",
+          "nameTaken": "توجد مساحة فريق باسم {{name}} بالفعل",
+          "failed": "تعذر إنشاء مساحة الفريق. تم حفظ بياناتك. حاول مرة أخرى.",
+          "creating": "جارٍ الإنشاء",
+          "created": "تم إنشاء {{space}}",
+          "createdInviteFailed_zero": "تم إنشاء {{space}}. تعذرت دعوة {{count}} أشخاص. ادعهم من «الأعضاء».",
+          "createdInviteFailed_one": "تم إنشاء {{space}}. تعذرت دعوة {{count}} شخص. ادعه من «الأعضاء».",
+          "createdInviteFailed_two": "تم إنشاء {{space}}. تعذرت دعوة {{count}} شخصين. ادعهما من «الأعضاء».",
+          "createdInviteFailed_few": "تم إنشاء {{space}}. تعذرت دعوة {{count}} أشخاص. ادعهم من «الأعضاء».",
+          "createdInviteFailed_many": "تم إنشاء {{space}}. تعذرت دعوة {{count}} شخصًا. ادعهم من «الأعضاء».",
+          "createdInviteFailed_other": "تم إنشاء {{space}}. تعذرت دعوة {{count}} شخص. ادعهم من «الأعضاء».",
+          "inviteFailedWho": "لم تتم دعوتهم: {{names}}.",
+          "copyAddresses": "نسخ العناوين",
+          "groupsGone": "لم يعد {{names}} متاحًا، لذا لم تتم إضافته."
+        },
+        "picker": {
+          "groupPeople_zero": "{{count}} أشخاص",
+          "groupPeople_one": "{{count}} شخص",
+          "groupPeople_two": "{{count}} شخصان",
+          "groupPeople_few": "{{count}} أشخاص",
+          "groupPeople_many": "{{count}} شخصًا",
+          "groupPeople_other": "{{count}} شخص",
+          "groupChip_zero": "{{name}} · {{count}} أشخاص",
+          "groupChip_one": "{{name}} · {{count}} شخص",
+          "groupChip_two": "{{name}} · {{count}} شخصان",
+          "groupChip_few": "{{name}} · {{count}} أشخاص",
+          "groupChip_many": "{{name}} · {{count}} شخصًا",
+          "groupChip_other": "{{name}} · {{count}} شخص",
+          "emailChip": "{{email}} · {{role}}",
+          "noMember": "لم يتم العثور على عضو",
+          "inviteToWorkspace": "دعوة إلى مساحة العمل",
+          "newToWorkspace": "جديد في مساحة العمل",
+          "select": "اختيار",
+          "noResultsTitle": "لم يتم العثور على أشخاص أو مجموعات",
+          "noResultsBody": "جرّب اسمًا آخر أو أدخل عنوان بريد إلكتروني كاملًا.",
+          "noResultsBodyNoInvite": "جرّب اسمًا آخر.",
+          "hasAccess": "لديه صلاحية الوصول بالفعل",
+          "groupHasAccess_zero": "لديه صلاحية الوصول بالفعل · {{count}} أشخاص",
+          "groupHasAccess_one": "لديه صلاحية الوصول بالفعل · {{count}} شخص",
+          "groupHasAccess_two": "لديه صلاحية الوصول بالفعل · {{count}} شخصان",
+          "groupHasAccess_few": "لديه صلاحية الوصول بالفعل · {{count}} أشخاص",
+          "groupHasAccess_many": "لديه صلاحية الوصول بالفعل · {{count}} شخصًا",
+          "groupHasAccess_other": "لديه صلاحية الوصول بالفعل · {{count}} شخص"
+        },
+        "members": {
+          "columnRole": "الدور في مساحة الفريق",
+          "add": "إضافة أعضاء",
+          "adding": "جارٍ الإضافة…",
+          "retry": "حاول مرة أخرى",
+          "invitationPending": "الدعوة قيد الانتظار",
+          "via": "عضو · عبر {{group}}",
+          "viaAdmin": "مسؤول · عبر {{group}}",
+          "roleMember": "عضو في مساحة الفريق",
+          "roleMemberBody": "يمكنه عرض الملاحظات وتعديلها",
+          "roleAdmin": "مسؤول مساحة الفريق",
+          "roleAdminBody": "يدير مساحة الفريق هذه والمجموعات المعيّنة لها.",
+          "removeItem": "إزالة من مساحة الفريق",
+          "removeTitle": "هل تريد إزالة {{name}} من {{space}}؟",
+          "removeBody": "سيؤدي هذا إلى إنهاء عضوية {{name}} المباشرة. سيبقى الوصول عبر المجموعة. وسيظل في مساحة العمل.",
+          "removeConfirm": "إزالة العضو",
+          "removeFailedTitle": "تعذرت إزالة {{name}}",
+          "removeFailedBody": "لم تتغير عضوية {{name}} في {{space}}. تحقق من اتصالك وحاول مرة أخرى.",
+          "removed": "تمت إزالة عضوية {{name}} المباشرة في {{space}}.",
+          "removeGroupTitle": "هل تريد إزالة {{group}} من {{space}}؟",
+          "removeGroupBody_zero": "يفقد {{count}} أشخاص الوصول عبر هذه المجموعة. تبقى المجموعة في مساحة العمل.",
+          "removeGroupBody_one": "يفقد {{count}} شخص الوصول عبر هذه المجموعة. تبقى المجموعة في مساحة العمل.",
+          "removeGroupBody_two": "يفقد {{count}} شخصان الوصول عبر هذه المجموعة. تبقى المجموعة في مساحة العمل.",
+          "removeGroupBody_few": "يفقد {{count}} أشخاص الوصول عبر هذه المجموعة. تبقى المجموعة في مساحة العمل.",
+          "removeGroupBody_many": "يفقد {{count}} شخصًا الوصول عبر هذه المجموعة. تبقى المجموعة في مساحة العمل.",
+          "removeGroupBody_other": "يفقد {{count}} شخص الوصول عبر هذه المجموعة. تبقى المجموعة في مساحة العمل.",
+          "removeGroupBodyNoCount": "سيفقد أفراد هذه المجموعة الوصول عبرها. تبقى المجموعة في مساحة العمل.",
+          "stagedNew": "تتم دعوة الأشخاص الجدد عند إضافتهم. يبدأ الوصول إلى مساحة الفريق بعد قبولهم الدعوة.",
+          "stagedGroup": "سيرث جميع أعضاء {{group}} صلاحية وصول عضو إلى {{space}}.",
+          "stagedGroups": "سيرث جميع أعضاء هذه المجموعات صلاحية وصول عضو إلى {{space}}.",
+          "invalid": "أدخل عنوان بريد إلكتروني صالحًا. يتم الاحتفاظ بالأشخاص الذين حددتهم.",
+          "progressPeople": "جارٍ إضافة {{names}}…",
+          "progressBoth_zero": "جارٍ إضافة {{names}} وإرسال {{count}} دعوات…",
+          "progressBoth_one": "جارٍ إضافة {{names}} وإرسال {{count}} دعوة…",
+          "progressBoth_two": "جارٍ إضافة {{names}} وإرسال {{count}} دعوتين…",
+          "progressBoth_few": "جارٍ إضافة {{names}} وإرسال {{count}} دعوات…",
+          "progressBoth_many": "جارٍ إضافة {{names}} وإرسال {{count}} دعوة…",
+          "progressBoth_other": "جارٍ إضافة {{names}} وإرسال {{count}} دعوة…",
+          "progressInvites_zero": "جارٍ إرسال {{count}} دعوات…",
+          "progressInvites_one": "جارٍ إرسال {{count}} دعوة…",
+          "progressInvites_two": "جارٍ إرسال {{count}} دعوتين…",
+          "progressInvites_few": "جارٍ إرسال {{count}} دعوات…",
+          "progressInvites_many": "جارٍ إرسال {{count}} دعوة…",
+          "progressInvites_other": "جارٍ إرسال {{count}} دعوة…",
+          "resultAdded": "تمت إضافة {{names}}.",
+          "resultInvited": "تم إرسال دعوة إلى مساحة العمل إلى {{names}}.",
+          "resultGroup": "تمت إضافة {{group}}. أصبح لأعضائها الآن صلاحية وصول عضو.",
+          "resultGroups": "تمت إضافة {{names}}. أصبح لأعضائها الآن صلاحية وصول عضو.",
+          "failed": "تعذرت إضافة الأعضاء. تم الاحتفاظ باختياراتك. حاول مرة أخرى.",
+          "partialAdded": "تمت إضافة {{names}}.",
+          "partialAddedMany": "تمت إضافة {{names}}.",
+          "partialInviteFailed": "تعذر إرسال الدعوة إلى {{names}}. حاول مرة أخرى.",
+          "partialInviteFailedMany": "تعذر إرسال الدعوات إلى {{names}}. حاول مرة أخرى.",
+          "partialAddFailed": "تعذرت إضافة {{names}}. حاول مرة أخرى.",
+          "partialLeft": "غادروا مساحة العمل، لذا لم تتم إضافتهم: {{names}}.",
+          "notAllowed": "لم يعد لديك إذن بإدارة أعضاء {{space}}.",
+          "notInvited": "لم تتم دعوة {{names}}.",
+          "notInvitedMany": "لم تتم دعوة {{names}}.",
+          "skippedInvited": "لدى {{names}} دعوة إلى مساحة العمل بالفعل، لذلك لم تتم إضافته إلى مساحة الفريق هذه.",
+          "skippedInvitedMany": "لدى {{names}} دعوات إلى مساحة العمل بالفعل، لذلك لم تتم إضافتهم إلى مساحة الفريق هذه.",
+          "removeBodyPlain": "سيفقد {{name}} الوصول إلى مساحة الفريق هذه وملاحظاتها. وسيظل في مساحة العمل.",
+          "invitationPendingAdmin": "الدعوة قيد الانتظار · مسؤول مساحة العمل",
+          "resultInvitedNoEmail": "تم إنشاء دعوات لـ {{names}}، لكن تعذر تسليم البريد الإلكتروني. أعد إرساله من «الدعوات».",
+          "resultInvitedPending": "لدى {{names}} دعوة إلى مساحة العمل بالفعل، لذا أُضيفت مساحة الفريق هذه إليها. لم يُرسل بريد إلكتروني جديد، ويبقى دور مساحة العمل في تلك الدعوة كما هو.",
+          "stepDownTitle": "هل تريد التنحي عن دور مسؤول {{space}}؟",
+          "stepDownBody": "لن تتمكن من إدارة مساحة الفريق هذه أو أعضائها. لا يمكن إلا لمسؤول آخر إعادتك مسؤولاً.",
+          "stepDownConfirm": "تنحَّ"
+        },
+        "settings": {
+          "leaveTitle": "مغادرة مساحة الفريق",
+          "leaveBody": "غادر مساحة الفريق هذه.",
+          "leaveAction": "مغادرة مساحة الفريق",
+          "deleteTitle": "حذف مساحة الفريق",
+          "deleteBody": "أزل مساحة الفريق هذه للجميع.",
+          "deleteAction": "حذف مساحة الفريق",
+          "flagsFailed": "تعذّر تحميل هذه الإعدادات.",
+          "flagSaveFailed": "تعذّر الحفظ. حاول مرة أخرى.",
+          "deleteDefaultAdminOnly": "يمكن لمسؤولي مساحة العمل فقط حذف مساحة الفريق الافتراضية.",
+          "defaultAdminOnly": "يمكن لمسؤولي مساحة العمل فقط تغيير هذا."
+        },
+        "exit": {
+          "blockedTitle": "أضف مسؤولًا آخر أولًا",
+          "blockedBody": "أنت المسؤول الوحيد في {{space}}. اجعل عضوًا آخر مسؤولًا قبل أن تغادر.",
+          "blockedAction": "إدارة الأعضاء",
+          "leaveTitle": "هل تريد مغادرة {{space}}؟",
+          "leaveFailedTitle": "تعذّرت مغادرة {{space}}",
+          "leaveFailedBody": "لم تتغير عضويتك. تحقق من اتصالك وحاول مرة أخرى.",
+          "left": "غادرت {{space}}.",
+          "deleteTitle": "هل تريد حذف {{space}}؟",
+          "deleteBody": "سيؤدي هذا إلى إزالة {{space}} من مساحة العمل للجميع.",
+          "deleteFailedTitle": "تعذّر حذف {{space}}",
+          "deleteFailedBody": "لا تزال مساحة الفريق متاحة. تحقق من اتصالك وحاول مرة أخرى.",
+          "deleted": "تم حذف {{space}}.",
+          "restored": "تمت استعادة {{space}}",
+          "leaveBodyKeeps": "ستنتهي عضويتك المباشرة. سيبقى وصولك عبر {{groups}}.",
+          "leaveBodyLoses": "ستفقد الوصول إلى {{space}} وملاحظاتها.",
+          "leaveBodyAdmins": "سيواصل مسؤول آخر إدارة مساحة الفريق هذه.",
+          "deleteNotAllowed": "ليس لديك إذن لحذف {{space}}.",
+          "movedToPersonal_zero": "تم نقل {{count}} ملاحظة غير متزامنة إلى مساحتك الشخصية.",
+          "movedToPersonal_one": "تم نقل ملاحظة غير متزامنة واحدة ({{count}}) إلى مساحتك الشخصية.",
+          "movedToPersonal_two": "تم نقل ملاحظتين غير متزامنتين ({{count}}) إلى مساحتك الشخصية.",
+          "movedToPersonal_few": "تم نقل {{count}} ملاحظات غير متزامنة إلى مساحتك الشخصية.",
+          "movedToPersonal_many": "تم نقل {{count}} ملاحظة غير متزامنة إلى مساحتك الشخصية.",
+          "movedToPersonal_other": "تم نقل {{count}} ملاحظة غير متزامنة إلى مساحتك الشخصية."
+        },
+        "addPeople": {
+          "loading": "جارٍ تحميل مساحات الفريق…",
+          "failed": "تعذّر تحميل مساحات الفريق",
+          "none": "لا توجد مساحات فريق بعد",
+          "addingTitle_zero": "جارٍ إضافة {{count}} أشخاص…",
+          "addingTitle_one": "جارٍ إضافة {{count}} شخص…",
+          "addingTitle_two": "جارٍ إضافة {{count}} شخصين…",
+          "addingTitle_few": "جارٍ إضافة {{count}} أشخاص…",
+          "addingTitle_many": "جارٍ إضافة {{count}} شخصًا…",
+          "addingTitle_other": "جارٍ إضافة {{count}} شخص…",
+          "addingBody": "أبقِ هذه النافذة مفتوحة أثناء إضافتهم إلى {{space}}.",
+          "addingAction": "جارٍ الإضافة…",
+          "failedTitle_zero": "تعذرت إضافة {{count}} أشخاص",
+          "failedTitle_one": "تعذرت إضافة {{count}} شخص",
+          "failedTitle_two": "تعذرت إضافة {{count}} شخصين",
+          "failedTitle_few": "تعذرت إضافة {{count}} أشخاص",
+          "failedTitle_many": "تعذرت إضافة {{count}} شخصًا",
+          "failedTitle_other": "تعذرت إضافة {{count}} شخص",
+          "failedBody": "لم تتم إضافتهم إلى {{space}}. تم الاحتفاظ باختيارك. تحقق من اتصالك وحاول مرة أخرى.",
+          "done_zero": "تمت إضافة {{count}} أشخاص إلى {{space}}",
+          "done_one": "تمت إضافة {{count}} شخص إلى {{space}}",
+          "done_two": "تمت إضافة {{count}} شخصين إلى {{space}}",
+          "done_few": "تمت إضافة {{count}} أشخاص إلى {{space}}",
+          "done_many": "تمت إضافة {{count}} شخصًا إلى {{space}}",
+          "done_other": "تمت إضافة {{count}} شخص إلى {{space}}"
+        }
       },
       "role": {
         "owner": "مالك",
@@ -2984,27 +4420,27 @@
         "member": "عضو"
       },
       "general": {
+        "title": "عام",
+        "subtitleManage": "أدر اسم مساحة العمل وأيقوناتها والمزيد",
+        "subtitleView": "اسم مساحة العمل وأيقونتها.",
         "nameLabel": "اسم مساحة العمل",
+        "nameHint": "يمكن أن يصل اسم مساحة العمل إلى 65 حرفًا",
+        "iconLabel": "أيقونة مساحة العمل",
+        "iconHint": "تظهر هذه الأيقونة في الشريط الجانبي والإشعارات.",
+        "roleLabel": "دورك",
         "saved": "تم تحديث مساحة العمل",
+        "ownerTitle": "مالك مساحة العمل",
+        "ownerDescription": "انقل الملكية إلى عضو آخر في مساحة العمل.",
         "dangerTitle": "حذف مساحة العمل",
-        "dangerDescription": "سيتم حذف جميع الملاحظات المشتركة والمجلدات وعمليات التكامل. لا يمكن التراجع عن هذا الإجراء.",
+        "dangerDescription": "احذف مساحة العمل هذه نهائيًا، بما في ذلك جميع الملاحظات والملفات.",
         "delete": "حذف مساحة العمل",
-        "confirmTitle": "حذف {{name}}؟",
-        "confirmDescription": "هذا يلغي الاشتراك ويزيل جميع بيانات مساحة العمل بشكل دائم.",
         "deleting": "جاري الحذف…",
-        "deleted": "تم حذف مساحة العمل",
         "leaveTitle": "مغادرة مساحة العمل",
-        "leaveDescription": "ستفقد إمكانية الوصول إلى مساحة العمل هذه وملاحظاتها المشتركة.",
+        "leaveDescription": "أزل نفسك من مساحة العمل هذه. ستفقد إمكانية الوصول إلى مساحات الفريق فيها.",
         "leave": "مغادرة مساحة العمل",
-        "leaving": "جاري المغادرة…",
-        "leaveConfirm": {
-          "title": "مغادرة {{name}}؟",
-          "description": "ستفقد إمكانية الوصول على الفور. يمكن لمسؤول دعوتك مرة أخرى."
-        },
-        "left": "لقد غادرت {{name}}"
+        "leaving": "جاري المغادرة…"
       },
       "members": {
-        "title": "الأعضاء",
         "description": "المقاعد المستخدمة: {{count}} من أصل {{seats}}.",
         "description_zero": "المقاعد المستخدمة: {{count}} من أصل {{seats}}.",
         "description_one": "المقاعد المستخدمة: {{count}} من أصل {{seats}}.",
@@ -3012,23 +4448,11 @@
         "description_few": "المقاعد المستخدمة: {{count}} من أصل {{seats}}.",
         "description_many": "المقاعد المستخدمة: {{count}} من أصل {{seats}}.",
         "description_other": "المقاعد المستخدمة: {{count}} من أصل {{seats}}.",
-        "invite": "دعوة",
-        "empty": "لا يوجد أعضاء بعد.",
         "loadError": "تعذر تحميل الأعضاء.",
         "roleUpdated": "تم تحديث الدور",
         "removed": "تمت إزالة {{name}}",
-        "promote": "تعيين كمسؤول",
-        "demote": "تعيين كعضو",
         "transferOwnership": "نقل الملكية",
-        "remove": "إزالة من مساحة العمل",
-        "removeConfirm": {
-          "title": "إزالة هذا العضو؟",
-          "description": "سيفقد {{name}} إمكانية الوصول إلى {{workspace}} على الفور."
-        },
-        "transferConfirm": {
-          "title": "نقل الملكية؟",
-          "description": "سيصبح {{name}} مالك {{workspace}}. سيتغير دورك إلى مسؤول ويمكن للمالك الجديد فقط إعادته."
-        }
+        "remove": "إزالة من مساحة العمل"
       },
       "joinRequests": {
         "title": "طلبات الانضمام",
@@ -3081,26 +4505,9 @@
         }
       },
       "invites": {
-        "title": "الدعوات المعلقة",
-        "expiresIn_zero": "تنتهي صلاحيتها خلال {{count}} أيام",
-        "expiresIn_one": "تنتهي صلاحيتها خلال {{count}} يوم",
-        "expiresIn_two": "تنتهي صلاحيتها خلال {{count}} يومين",
-        "expiresIn_few": "تنتهي صلاحيتها خلال {{count}} أيام",
-        "expiresIn_many": "تنتهي صلاحيتها خلال {{count}} يومًا",
-        "expiresIn_other": "تنتهي صلاحيتها خلال {{count}} يوم",
-        "expired": "منتهية الصلاحية",
-        "loadError": "تعذر تحميل الدعوات.",
-        "resend": "إعادة الإرسال",
         "resending": "جاري إعادة الإرسال…",
-        "revoke": "إبطال الدعوة",
         "resent": "تمت إعادة إرسال الدعوة",
-        "resentNoEmail": "تم تحديث الدعوة، لكن تعذر تسليم البريد الإلكتروني.",
-        "revoked": "تم إبطال الدعوة",
-        "revokeFailed": "تعذر إبطال الدعوة",
-        "revokeConfirm": {
-          "title": "إبطال هذه الدعوة؟",
-          "description": "سيتوقف رابط الدعوة لـ {{email}} عن العمل."
-        }
+        "resentNoEmail": "تم تحديث الدعوة، لكن تعذر تسليم البريد الإلكتروني."
       },
       "billing": {
         "plan": "الخطة",
@@ -3214,7 +4621,7 @@
     "account": {
       "badges": {
         "free": "مجاني",
-        "limitReached": "تم بلوغ الحد الأقصى",
+        "limitReached": "تم بلوغ الحد السحابي",
         "pastDue": "متأخر الدفع",
         "pro": "Pro",
         "business": "Business",
@@ -3245,14 +4652,19 @@
       "notSignedIn": "لم يتم تسجيل الدخول",
       "notSignedInDescription": "أنشئ حسابًا للوصول إلى الميزات المميزة.",
       "offline": "غير متصل بالإنترنت",
+      "offlineAccount": {
+        "title": "يتم عرض آخر تسجيل دخول",
+        "description": "تتوقف المزامنة وتغييرات الحساب مؤقتًا حتى يتمكن OpenWhispr من الوصول إلى خوادمه."
+      },
       "pastDue": {
         "description": "أنت على الخطة المجانية في الوقت الحالي. قم بتحديث طريقة الدفع الخاصة بك للعودة إلى Pro.",
         "title": "لم نتمكن من معالجة دفعتك"
       },
       "planDescriptions": {
-        "freeUsage": "{{used}} من {{limit}} كلمة هذا الأسبوع",
+        "freeUsage": "{{used}} من {{limit}} كلمة في OpenWhispr Cloud هذا الأسبوع",
+        "byokUnlimited": "يبقى استخدام مفاتيح API الخاصة بك والنماذج المحلية غير محدود.",
         "nextBilling": "الفوترة القادمة: {{date}}",
-        "pastDue": "{{used}} من {{limit}} كلمة مجانية هذا الأسبوع - قم بتحديث الدفع لاستعادة Pro",
+        "pastDue": "{{used}} من {{limit}} كلمة في OpenWhispr Cloud هذا الأسبوع - قم بتحديث الدفع لاستعادة Pro",
         "trial": "عدد الأيام المتبقية: {{days}} - تفريغ غير محدود",
         "unlimited": "غير محدود",
         "accessUntil": "الوصول حتى {{date}}",
@@ -3362,6 +4774,8 @@
       },
       "rollingWeeklyLimit": "حد أسبوعي متجدد",
       "signOut": {
+        "endMeetingDescription": "يؤدي تسجيل الخروج إلى إيقاف تسجيل الاجتماع الجاري. يبقى ما تم تسجيله حتى الآن في ملاحظته.",
+        "endMeetingTitle": "إنهاء تسجيل الاجتماع؟",
         "failedDescription": "حدث خطأ أثناء تسجيل الخروج. يرجى المحاولة مرة أخرى.",
         "failedTitle": "تعذر تسجيل الخروج",
         "signOut": "تسجيل الخروج",
@@ -3370,8 +4784,8 @@
       "title": "الحساب",
       "toasts": {
         "approachingLimit": {
-          "description": "لقد استخدمت {{used}} من أصل {{limit}} كلمة مجانية هذا الأسبوع. قم بالترقية إلى Pro للاستخدام غير المحدود.",
-          "title": "الاقتراب من الحد الأسبوعي"
+          "description": "استخدمت {{used}} من {{limit}} كلمة في OpenWhispr Cloud هذا الأسبوع. قم بالترقية إلى Pro للاستخدام غير المحدود.",
+          "title": "الاقتراب من الحد السحابي للكلمات"
         }
       },
       "trialCta": {
@@ -3449,7 +4863,7 @@
       },
       "examplesTitle": "أمثلة",
       "helper": "اختر شيئًا قصيرًا وطبيعيًا لقوله بصوت عالٍ",
-      "howItWorksDescription": "عندما تقول \"يا {{agentName}}\" متبوعًا بتعليمات، يُستبدل النص المحدد بالنتيجة بأمان. عند تفعيل اللصق التلقائي، تُلصق الإجابة عند موضع المؤشر في حقل قابل للكتابة؛ وإلا فتُفتح في لوحة المساعد العائمة.",
+      "howItWorksDescription": "عندما تقول \"يا {{agentName}}\" متبوعًا بتعليمات، يُستبدل النص المحدد بالنتيجة بأمان. أما الطلبات الأخرى فتُفتح في نافذة المساعد.",
       "howItWorksTitle": "كيف يعمل",
       "instructionMode": "التعليمات",
       "placeholder": "على سبيل المثال Jarvis، Nova، Atlas...",
@@ -3469,12 +4883,12 @@
       "enableTextCleanupDescription": "استخدم الذكاء الاصطناعي لإزالة كلمات الحشو، وإصلاح القواعد، وتنسيق علامات الترقيم",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
-        "providers": "مزودو الخدمات السحابية",
+        "providers": "إحضار مفتاحك الخاص",
         "local": "محلي",
         "selfHosted": "مستضاف ذاتيًا",
         "enterprise": "مؤسسي",
         "openwhisprDesc": "دقة موثوقة. لا حاجة للإعداد.",
-        "providersDesc": "أحضر مفتاح API الخاص بك.",
+        "providersDesc": "استخدم مفتاح API الخاص بك للاتصال بمزود LLM المفضل لديك.",
         "localDesc": "نماذج على الجهاز. خاصة بالكامل.",
         "selfHostedDesc": "خادمك الخاص على شبكتك.",
         "enterpriseDesc": "استخدم الحساب السحابي لمؤسستك (AWS، Azure، GCP)."
@@ -3492,7 +4906,7 @@
           "title": "تم التبديل إلى الإعداد المخصص"
         },
         "switchedProviders": {
-          "title": "مزودو الخدمات السحابية",
+          "title": "إحضار مفتاحك الخاص",
           "description": "استخدام مفاتيح API الخاصة بك."
         },
         "switchedLocal": {
@@ -3524,6 +4938,14 @@
       "dataManagementTitle": "إدارة البيانات",
       "modelCache": "ذاكرة التخزين المؤقت للنماذج",
       "open": "فتح",
+      "retiredModels": {
+        "label": "النماذج المتوقفة",
+        "description": "لم تعد هذه النماذج متاحة لكنها ما زالت على القرص: {{models}}.",
+        "remove": "إزالة",
+        "confirmTitle": "هل تريد إزالة النماذج المتوقفة؟",
+        "confirmDescription": "يؤدي هذا إلى حذف ملفات النماذج التي لم يعد الكتالوج يوفرها. تبقى النماذج الأخرى التي تم تنزيلها.",
+        "failedDescription": "تعذرت إزالة بعض الملفات. ربما لا يزال أحد النماذج قيد الاستخدام؛ أعد تشغيل التطبيق وحاول مرة أخرى."
+      },
       "removeModels": {
         "confirmText": "حذف النماذج",
         "description": "يؤدي هذا إلى حذف جميع نماذج Whisper المخزنة مؤقتًا محليًا ({{path}}) وتحرير مساحة القرص. يمكنك تنزيلها مرة أخرى من منتقي النماذج.",
@@ -3596,10 +5018,10 @@
         "resetToDefault": "إعادة التعيين إلى {{hotkey}}",
         "title": "مفتاح اختصار الإملاء",
         "linuxPttPermissionTitle": "يتطلب وضع «اضغط مع الاستمرار للتحدث» إعدادًا إضافيًا",
-        "linuxPttPermissionDescription": "قم بتشغيل هذا الأمر وتسجيل الخروج/الدخول: sudo usermod -aG input $USER",
+        "linuxPttPermissionDescription": "شغّل هذا الأمر، ثم سجّل الخروج من حساب مستخدم Linux الخاص بك وسجّل الدخول مجددًا: sudo usermod -aG input $USER",
         "linuxPttSetupTitle": "يتطلب وضع «اضغط مع الاستمرار للتحدث» إعدادًا",
         "linuxPttSetupDescription": "يحتاج المستخدم الخاص بك إلى الوصول إلى أجهزة إدخال لوحة المفاتيح.",
-        "linuxPttSetupNote": "بعد تشغيل الأمر، قم بتسجيل الخروج وتسجيل الدخول مرة أخرى.",
+        "linuxPttSetupNote": "بعد تشغيل الأمر، سجّل الخروج من حساب مستخدم Linux الخاص بك، ثم سجّل الدخول مجددًا.",
         "hyprlandConfigWriteWarningTitle": "لن يتم حفظ اختصارات Hyprland بشكل دائم",
         "hyprlandConfigWriteWarningDescription": "لا يمكن لـ OpenWhispr الكتابة إلى {{path}}، لذلك لن تبقى الاختصارات بعد إعادة تحميل تكوين Hyprland. تأكد من وجود الملف وقابليته للكتابة.",
         "hyprlandUnbindDescription": "في Hyprland، يستحوذ OpenWhispr على الاختصار المحدد. سيتم فك أي ارتباط Hyprland موجود يستخدم مجموعة المفاتيح نفسها عندما يسجل OpenWhispr اختصاره."
@@ -3613,7 +5035,7 @@
       },
       "voiceAgentHotkey": {
         "title": "مفتاح اختصار المساعد الصوتي",
-        "description": "انطق أمرًا وسيستخدم المساعد ملاحظاتك وتقويمك وأدوات الويب. ستُلصق إجابته عند موضع المؤشر في حقل قابل للكتابة، أو تستبدل النص المحدد، أو تُفتح في اللوحة العائمة."
+        "description": "انطق طلبًا وسيجيب المساعد في نافذته الخاصة مستخدمًا ملاحظاتك وتقويمك وأدوات الويب. يُرسل النص الذي تحدده مسبقًا معه كسياق."
       },
       "microphone": {
         "description": "حدد جهاز الإدخال الذي تريد استخدامه للإملاء",
@@ -3717,11 +5139,11 @@
             "step1Desc": "ابدأ ydotoold وقم بتمكينه ليعمل في كل عملية تسجيل دخول.",
             "step2Title": "التحقق من أنه قيد التشغيل"
           },
-          "xclip": {
-            "step1Title": "تثبيت xclip"
+          "wlCopy": {
+            "step1Title": "تثبيت wl-clipboard",
+            "step2Title": "التحقق من التثبيت"
           }
         },
-        "xclipDesc": "أداة الحافظة للصق في KDE Wayland (xclip أو xsel)",
         "nixos": {
           "intro": "أنت تستخدم NixOS. يتطلب اللصق التلقائي الوصول إلى ydotool و /dev/uinput، والذي يمنحه NixOS بشكل تصريحي.",
           "detected": "تم الكشف عنه",
@@ -3730,7 +5152,8 @@
           "flakeTitle": "التثبيت عبر flake الخاص بنا؟",
           "flakeDesc": "إذا قمت بتثبيت OpenWhispr من flake، فسيقوم programs.openwhispr.enable بتفعيل ydotool ووحدة uinput وعضويات المجموعة نيابة عنك.",
           "rebuildNote": "قم بتشغيل sudo nixos-rebuild switch، ثم قم بتسجيل الخروج وتسجيل الدخول مرة أخرى حتى يسري تغيير المجموعة وقاعدة /dev/uinput. استبدل <you> باسم المستخدم الخاص بك."
-        }
+        },
+        "wlCopyDesc": "أداة الحافظة التي تقرأ منها تطبيقات Wayland النص الملصوق على سطح المكتب هذا"
       },
       "updates": {
         "automaticUpdates": "التحديثات التلقائية",
@@ -3824,6 +5247,8 @@
       "title": "الخصوصية",
       "usageAnalytics": "تحليلات الاستخدام",
       "usageAnalyticsDescription": "ساعدنا في تحسين OpenWhispr من خلال مشاركة مقاييس الأداء المجهولة. لا نرسل أبدًا محتوى التفريغ — فقط بيانات التوقيت والأخطاء.",
+      "modelListUpdates": "تحديثات قائمة النماذج",
+      "modelListUpdatesDescription": "يتحقق كل 15 دقيقة من قائمة نماذج OpenWhispr العامة على GitHub بحثًا عن النماذج الجديدة والمتوقفة. تسري التغييرات بالكامل بعد إعادة التشغيل.",
       "audioRetention": "الاحتفاظ بالصوت",
       "audioRetentionDescription": "تخزين صوت الإملاء محليًا لإعادة التفريغ والتنزيل. يتم حذف الملفات تلقائيًا بعد فترة الاحتفاظ. لا يتم تخزين صوت الاجتماعات أبدًا.",
       "audioRetentionDisabled": "معطل",
@@ -3891,7 +5316,7 @@
       "selfHostedStreamingNote": "يتطلب خادمًا يدعم التفريغ المتدفق."
     },
     "llms": {
-      "title": "نماذج اللغة",
+      "title": "النموذج اللغوي",
       "description": "تكوين النماذج للتنظيف وتنسيق الملاحظات والدردشة",
       "tabs": {
         "dictationCleanup": "تنظيف الإملاء",
@@ -4181,6 +5606,8 @@
       "mouseButtonOnlyMac": "اختصارات أزرار الماوس مدعومة حاليًا على نظام macOS فقط.",
       "alreadyRegistered": "\"{{hotkey}}\" مسجل بالفعل بواسطة تطبيق آخر.",
       "osReserved": "قد يكون \"{{hotkey}}\" محجوزًا بواسطة بيئة سطح المكتب لديك.",
+      "keyNotInKeymap": "لا يمكن لـ GNOME استخدام \"{{hotkey}}\" مع تخطيط لوحة المفاتيح الحالي. اختر مفتاحًا آخر.",
+      "keyReservedByGnome": "يستخدم GNOME بالفعل \"{{hotkey}}\" لأحد اختصاراته الخاصة. اختر مفتاحًا آخر.",
       "rightModifierNeedsListener": "لا يمكن استخدام \"{{hotkey}}\" على سطح المكتب هذا، إذ تحتاج اختصاراته إلى مفتاح عادي. أضف مفتاحًا، مثل Control+Alt+Space.",
       "holdNeedsReleaseKey": "يحتاج الضغط المستمر للتحدث إلى مفتاح يمكن لـ macOS أن يرصد تحريره: Globe، أو مفتاح جانبي أيمن مثل Option الأيمن، أو اختصار مع مفتاح تعديل. أما النقر فيعمل مع أي مفتاح.",
       "holdNeedsRegularKey": "لاستخدام «استمرار الضغط»، أضف مفتاحًا عاديًا إلى الاختصار، مثل Control+Alt+Space. لا يستطيع سطح المكتب لديك رصد الضغط المستمر على مفاتيح التعديل وحدها.",
@@ -4202,7 +5629,7 @@
   },
   "upgradePrompt": {
     "paymentFailed": "لم نتمكن من معالجة دفعتك",
-    "weeklyLimit": "لقد وصلت إلى حدك الأسبوعي",
+    "weeklyLimit": "لقد وصلت إلى حدك السحابي الأسبوعي",
     "pastDueDescription": "أنت الآن على الخطة المجانية — لا تقلق، ما زلت تحصل على {{limit}} كلمة في الأسبوع.\nقم بتحديث طريقة الدفع للعودة إلى خطة Pro غير المحدودة.",
     "limitDescription": "تم استخدام {{used}} من {{limit}} كلمة.\nتم حفظ نصك المفرَّغ ولصقه.",
     "updatePayment": "تحديث طريقة الدفع",
@@ -4226,7 +5653,6 @@
   },
   "common": {
     "continue": "متابعة",
-    "add": "إضافة",
     "retry": "إعادة المحاولة",
     "back": "رجوع",
     "next": "التالي",
@@ -4267,11 +5693,13 @@
     "skip": "تخطي",
     "policyAiProcessingRestricted": "معالجة الذكاء الاصطناعي مقيدة من قبل مؤسستك.",
     "policyAgentRestricted": "استخدام مساعد الذكاء الاصطناعي مقيد من قبل مؤسستك.",
+    "policyAccountChanged": "تغيّر حسابك، لذلك تم إيقاف هذه الإجابة.",
     "policyTranscriptionRestricted": "التفريغ الصوتي مقيد من قبل مؤسستك.",
     "policyUnresolved": "لم يتم تحميل إعدادات مؤسستك بعد. حاول مرة أخرى بعد قليل.",
     "logout": "تسجيل الخروج",
     "managedConfigLoading": "جارٍ التحقق من الإعداد المُدار لمؤسستك. أعد المحاولة بعد لحظات.",
     "managedConfigUnavailable": "الوصول المُدار للمؤسسة غير متاح. سجّل الدخول مرة أخرى أو اتصل بالمسؤول.",
+    "managedConfigAmbiguous": "إعداد مؤسستك المُدار غير متسق. اتصل بالمسؤول.",
     "managedPolicyConflict": "الوصول المُدار محظور بموجب سياسة مساحة العمل الخاصة بك. اتصل بالمسؤول.",
     "resizePanel": "تغيير حجم اللوحة"
   },
@@ -4484,14 +5912,16 @@
     "withoutToolPrefix": "بدون هذه الأداة، سيقوم OpenWhispr بنسخ النص إلى الحافظة الخاصة بك. يمكنك بعد ذلك اللصق يدويًا باستخدام Ctrl+V.",
     "wtypeCosmicTerminalsDescription": "على COSMIC، لا تستقبل الطرفيات مثل Warp النص الملصق إلا عبر wtype. أما التطبيقات الأخرى فيعمل فيها اللصق بدونه.",
     "wtypeFallbackDescription": "يُعد wtype الطريقة المفضلة للصق التلقائي في مركب wlroots هذا. يتوفر بديل آخر، ولكنه قد يكون أقل موثوقية.",
-    "xwaylandAppsOnly": "اللصق التلقائي يعمل مع تطبيقات XWayland فقط"
+    "xwaylandAppsOnly": "اللصق التلقائي يعمل مع تطبيقات XWayland فقط",
+    "wlClipboardTitle": "ثبّت wl-clipboard للصق في تطبيقات Wayland",
+    "wlClipboardDescription": "على سطح المكتب هذا، لا تستطيع تطبيقات Wayland قراءة النص الذي ينسخه OpenWhispr إلا عبر wl-copy. للصق الإملاء فيها، ثبّت wl-clipboard:"
   },
   "settingsModal": {
     "managedByOrg": "تتم إدارة بعض الإعدادات بواسطة مؤسستك.",
     "managedAccount": "حساب مُدار",
     "groups": {
       "account": "الحساب",
-      "app": "التطبيق",
+      "workspace": "مساحة العمل",
       "aiModels": "نماذج الذكاء الاصطناعي",
       "system": "النظام"
     },
@@ -4502,11 +5932,23 @@
       },
       "plansBilling": {
         "description": "الخطط والاستخدام والفواتير",
-        "label": "الخطط والفواتير"
+        "label": "الخطة والفواتير"
       },
-      "workspace": {
-        "description": "الأعضاء، مساحات الفريق ومفاتيح API",
-        "label": "مساحة العمل"
+      "workspaceGeneral": {
+        "label": "عام",
+        "description": "اسم مساحة العمل وأيقونتها"
+      },
+      "workspacePeople": {
+        "label": "الأشخاص",
+        "description": "الأعضاء والفرق"
+      },
+      "workspaceTeamspaces": {
+        "label": "مساحات الفريق",
+        "description": "ملاحظات مشتركة"
+      },
+      "workspaceDeveloper": {
+        "label": "للمطورين",
+        "description": "مفاتيح API لمساحة العمل"
       },
       "general": {
         "description": "المظهر والأصوات وبدء التشغيل",
@@ -4516,13 +5958,17 @@
         "description": "اختصارات الإملاء والتفعيل",
         "label": "اختصارات لوحة المفاتيح"
       },
+      "toneStyle": {
+        "label": "النبرة والأسلوب",
+        "description": "كيف يكتب التنظيف في كل تطبيق"
+      },
       "speechToText": {
         "description": "محركات الإملاء وتسجيل الملاحظات",
         "label": "تحويل الكلام إلى نص"
       },
       "llms": {
         "description": "نماذج الدردشة والتنظيف والملخصات",
-        "label": "النماذج اللغوية"
+        "label": "النموذج اللغوي"
       },
       "privacyData": {
         "description": "الخصوصية والأذونات والتحليلات",
@@ -4541,11 +5987,10 @@
     "upload": "رفع",
     "dictionary": "القاموس",
     "referral": "احصل على شهر مجاني",
-    "inviteTeam": "ادعُ فريقك",
     "settings": "الإعدادات",
     "support": "الدعم",
-    "limitReached": "تم الوصول إلى الحد الأسبوعي",
-    "limitReachedDescription": "قم بالترقية إلى Pro للحصول على تفريغ صوتي غير محدود.",
+    "limitReached": "تم بلوغ الحد السحابي الأسبوعي",
+    "limitReachedDescription": "قم بالترقية إلى Pro أو استخدم مفتاح API الخاص بك للاستخدام غير المحدود.",
     "viewPlans": "عرض الخطط",
     "upgradeTitle": "الترقية إلى Pro",
     "upgradeDescription": "تفريغ صوتي غير محدود، أكثر دقة، وأسرع.",
@@ -4555,7 +6000,7 @@
     "learnMore": "معرفة المزيد",
     "integrations": "التكاملات",
     "defaultUser": "مستخدم",
-    "notSignedIn": "لم يتم تسجيل الدخول",
+    "accountMenu": "الحساب: {{name}}",
     "chat": "الدردشة",
     "collapse": "طي الشريط الجانبي",
     "expand": "توسيع الشريط الجانبي",
@@ -4724,6 +6169,10 @@
     }
   },
   "chat": {
+    "answering": "جارٍ الرد…",
+    "conversationCreateFailed": "تعذّر بدء المحادثة. أُعيد سؤالك إلى محادثة جديدة.",
+    "messageSaveFailed": "تعذّر حفظ هذه الرسالة. يُرجى المحاولة مرة أخرى.",
+    "conversationLoadFailed": "تعذّر تحميل هذه المحادثة. يُرجى المحاولة مرة أخرى.",
     "newChat": "محادثة جديدة",
     "search": "البحث في المحادثات...",
     "archived": "مؤرشفة",
@@ -4746,11 +6195,26 @@
     "searchTitle": "البحث في المحادثات",
     "searchDescription": "البحث في جميع محادثاتك",
     "inputPlaceholder": "اسأل عن أي شيء...",
+    "sourceNote": {
+      "from": "من",
+      "open": "فتح الملاحظة",
+      "deleted": "تم حذف هذه الملاحظة",
+      "deletedShort": "محذوفة",
+      "askAbout": "اسأل عن {{title}}..."
+    },
     "starters": {
       "todos": "اعرض مهامي الأخيرة",
       "meeting": "حضّرني لاجتماعي القادم",
       "sharedNotes": "أبرِز ملاحظاتي المشتركة"
-    }
+    },
+    "fork": "تفريع",
+    "forked": "محادثة متفرعة",
+    "forkedFrom": "متفرعة من \"{{title}}\"",
+    "forkFailed": "تعذّر تفريع هذه المحادثة",
+    "sendNotStarted": "هذه المحادثة مشغولة. لم تُرسل رسالتك. حاول مجددًا عند انتهاء الطلب الحالي.",
+    "openFailed": "لم تعد هذه المحادثة متاحة.",
+    "localModelDownloading": "لا يزال نموذج المساعد قيد التنزيل. ستعمل الدردشة عندما يصبح جاهزًا.",
+    "localModelMissing": "اختر نموذجًا لـ«الدردشة» في الإعدادات للدردشة على هذا الجهاز."
   },
   "support": {
     "documentation": "الوثائق",
@@ -4781,6 +6245,12 @@
     "active": "تسريع GPU نشط",
     "ready": "تسريع GPU جاهز",
     "activating": "جاري تفعيل GPU...",
+    "activeBackend": "تسريع {{backend}} نشط",
+    "readyBackend": "تسريع {{backend}} جاهز",
+    "activatingBackend": "جاري تفعيل {{backend}}...",
+    "enableBackend": "تفعيل {{backend}}",
+    "cudaDescription": "تسريع CUDA لوحدات معالجة الرسومات NVIDIA المدعومة. يتطلب تعريف NVIDIA حديثًا ومتوافقًا.",
+    "vulkanDescription": "تسريع Vulkan لوحدات معالجة الرسومات المتوافقة من AMD وIntel وNVIDIA.",
     "activationFailed": "تسريع GPU غير متاح",
     "activationFailedDescription": "انتقل OpenWhispr إلى استخدام وحدة المعالجة المركزية (CPU) للتفريغ الصوتي.",
     "reasoningActivationFailedDescription": "انتقل OpenWhispr إلى استخدام وحدة المعالجة المركزية (CPU) للمعالجة.",
@@ -4792,28 +6262,6 @@
     "remove": "إزالة",
     "dismiss": "ليس الآن",
     "cancel": "إلغاء"
-  },
-  "assistant": {
-    "panel": {
-      "selectionHint": "حدد النص لتعديله باستخدام",
-      "selectedContext": "تمت إضافة النص المحدد",
-      "removeSelectedContext": "إزالة النص المحدد",
-      "newConversation": "محادثة جديدة",
-      "copyToClipboard": "النسخ إلى الحافظة",
-      "suggestions": {
-        "summarizeNotes": "لخّص ملاحظاتي الأخيرة",
-        "calendar": "ما هي المواعيد في التقويم الخاص بي؟",
-        "draft": "ساعدني في صياغة شيء ما"
-      }
-    },
-    "toolActivity": {
-      "verbs": {
-        "invoking": "جاري استدعاء",
-        "calling": "جاري تنفيذ",
-        "using": "جاري استخدام"
-      },
-      "toolFallback": "أداة"
-    }
   },
   "notesView": {
     "searchPlaceholder": "البحث في الملاحظات...",
@@ -4927,6 +6375,7 @@
     },
     "start": "تدوين الملاحظات",
     "join": "انضمام وتفريغ صوتي",
+    "joinOnly": "الانضمام إلى الاجتماع",
     "folders": {
       "choose": "اختيار مجلد الاجتماع",
       "search": "البحث عن مجلدات",
@@ -4959,7 +6408,9 @@
         "CREATE_FAILED": "تعذر الإكمال. حاول مجددًا.",
         "LINKED_NOTE_CHANGED": "راجع الموقع، ثم انضم مجددًا.",
         "NOTE_UNAVAILABLE": "هذه الملاحظة غير متاحة. أعد المحاولة دون إنشاء بديل.",
-        "START_FAILED": "تعذر الإكمال. حاول مجددًا."
+        "START_FAILED": "تعذر الإكمال. حاول مجددًا.",
+        "POLICY_MEETING_RECORDING_DISABLED": "تم تعطيل تسجيل الاجتماعات بواسطة مؤسستك.",
+        "POLICY_UNRESOLVABLE": "لم يتم تحميل إعدادات مؤسستك بعد. حاول مرة أخرى بعد قليل."
       }
     }
   },
@@ -4978,7 +6429,7 @@
     "unreachable": "تعذّر الوصول إلى {{provider}}. تحقق من اتصالك.",
     "noResponse": "تعذّر الحصول على رد من {{provider}}. تحقق من مفتاح API واتصالك.",
     "unknown": "أعاد {{provider}} خطأ غير متوقع.",
-    "keyMissing": "لا يوجد مفتاح API مضبوط لـ {{provider}}. أضفه في الإعدادات ← النماذج اللغوية.",
+    "keyMissing": "لا يوجد مفتاح API مضبوط لـ {{provider}}. أضفه في الإعدادات ← النموذج اللغوي.",
     "selfHosted": {
       "authFailed": "رفض خادمك مفتاح API.",
       "accessDenied": "رفض خادمك الوصول. قد لا يشمل المفتاح هذا النموذج.",
@@ -5004,6 +6455,91 @@
     "details": {
       "provider": "المزوّد",
       "requestId": "معرّف الطلب"
+    }
+  },
+  "toneStyle": {
+    "title": "النبرة والأسلوب",
+    "description": "اضبط نبرتك وأسلوبك في التطبيقات المختلفة.",
+    "turnOnAndSetUp": "تشغيل وإعداد",
+    "categories": {
+      "personal": {
+        "title": "الرسائل الشخصية",
+        "inline": "رسائلك الشخصية",
+        "question": "كيف تكتب\n{{category}}؟"
+      },
+      "work": {
+        "title": "رسائل العمل",
+        "inline": "رسائل العمل",
+        "question": "كيف تكتب\n{{category}}؟"
+      },
+      "email": {
+        "title": "البريد الإلكتروني",
+        "inline": "رسائل بريدك الإلكتروني",
+        "question": "كيف تكتب\n{{category}}؟"
+      },
+      "other": {
+        "title": "تطبيقات أخرى",
+        "inline": "في التطبيقات الأخرى",
+        "question": "كيف تكتب\n{{category}}؟"
+      }
+    },
+    "tones": {
+      "formal": "رسمي",
+      "casual": "عفوي",
+      "very_casual": "عفوي جدًا",
+      "excited": "متحمس!"
+    },
+    "samples": {
+      "personal": {
+        "formal": "مرحبًا، هل أنت متاح هذا المساء؟ كنت أفكر أن نحتسي القهوة نحو السادسة. أخبرني.",
+        "casual": "مرحبًا، فاضي الليلة؟ أفكر بقهوة على الساعة 6 تقريبًا، قلّي",
+        "very_casual": "هلا فاضي الليلة؟ قهوة ع 6؟ قلي"
+      },
+      "work": {
+        "sender": "جيمي",
+        "time": "6:20 م",
+        "formal": "مرحبًا، هل يمكنك إرسال العرض التقديمي قبل المكالمة؟ يبدو أن أرقام الشريحة 3 قديمة. لا داعي للعجلة.",
+        "casual": "مرحبًا، ممكن ترسل العرض قبل المكالمة؟ أظن أرقام الشريحة 3 قديمة، مش مستعجل.",
+        "excited": "مرحبًا! ممكن ترسل لي العرض قبل المكالمة؟ متأكد تقريبًا أن أرقام الشريحة 3 قديمة، بدون عجلة!"
+      },
+      "email": {
+        "to": "إلى سارة",
+        "formal": "مرحبًا سارة،\n\nشكرًا لوقتك اليوم. سأرسل العرض المحدَّث بحلول يوم الخميس. يُرجى إعلامي إن احتجتِ إلى أي شيء قبل ذلك.\n\nمع خالص التحية",
+        "casual": "أهلًا سارة،\n\nشكرًا على اليوم. سأرسل العرض المحدَّث يوم الخميس، أخبريني إن احتجتِ شيئًا قبلها.\n\nشكرًا",
+        "excited": "أهلًا سارة،\n\nشكرًا جزيلًا على وقتك اليوم! سأرسل العرض المحدَّث بحلول الخميس. أخبريني إن احتجتِ أي شيء قبلها!\n\nشكرًا"
+      },
+      "other": {
+        "formal": "ملاحظات المكالمة: أعجبتهم صفحة الأسعار ويرغبون في تهيئة أقصر. المتابعة معهم الأسبوع القادم.",
+        "casual": "ملاحظات المكالمة: صفحة الأسعار عجبتهم، يبغون تهيئة أقصر. متابعة الأسبوع الجاي",
+        "excited": "ملاحظات المكالمة: صفحة الأسعار عجبتهم جدًا! يبغون تهيئة أقصر. متابعة الأسبوع الجاي!"
+      }
+    },
+    "setup": {
+      "introTitle": "اجعل OpenWhispr\nيكتب كما تتحدث",
+      "introDescription": "اضبط نبرتك وأسلوبك في التطبيقات المختلفة.",
+      "personalize": "لنبدأ التخصيص",
+      "cleanupOffTitle": "علّم OpenWhispr\nأسلوبك",
+      "cleanupOffDescription": "شغّل تنظيف النص، ثم اضبط نبرتك وأسلوبك في التطبيقات المختلفة.",
+      "stepDescription": "اختر المثال الأقرب إلى أسلوبك.",
+      "progress": "الخطوة {{current}} من {{total}}",
+      "finish": "إنهاء"
+    },
+    "banner": {
+      "title": "علّم OpenWhispr كيف تكتب",
+      "description": "اضبط النبرة التي تفضلها للعمل والأصدقاء وكل ما بينهما.",
+      "start": "ابدأ الآن",
+      "cleanupOffTitle": "علّم OpenWhispr أسلوبك",
+      "cleanupOffDescription": "شغّل تنظيف النص واختر نبرة للرسائل والبريد الإلكتروني وكل ما عداها.",
+      "notNow": "ليس الآن",
+      "decoration": "كلماتك يجب أن تشبهك، مهما كان ما تكتبه ولمن تكتبه."
+    },
+    "settings": {
+      "saveChanges": "حفظ التغييرات",
+      "saved": "تم حفظ النبرة والأسلوب",
+      "cleanupOff": "تنظيف النص متوقف، لذلك لا تُطبَّق هذه النبرات على إملائك. لكن المساعد والمحادثات لا يزالان يستخدمانها.",
+      "turnOnCleanup": "تشغيل تنظيف النص",
+      "enabled": "النبرات والأصوات مفعّلة",
+      "enabledDescription": "يستخدم تنظيف النص والمساعد والمحادثات نبرتك لكل نوع من التطبيقات. عند الإيقاف، تُستخدم النبرة القياسية."
     }
   },
   "productHelp": {
@@ -5055,5 +6591,51 @@
     "permissionDenied": "مرفوض",
     "permissionRestricted": "مقيّد",
     "permissionNotDetermined": "لم يُطلب"
+  },
+  "enterprise": {
+    "audio": {
+      "title": "إعداد صوت المؤسسة",
+      "description": "اضبط بيانات الاعتماد على هذا الجهاز واختبر اتصال الصوت الخاص بمؤسستك.",
+      "provider": "مزود الصوت",
+      "gateway": "بوابة الصوت",
+      "provisioned": "تم إعداد بيانات الاعتماد",
+      "credentialMissing": "بيانات الاعتماد مطلوبة",
+      "proxyCredentialFormat": "للوكيل، أدخل JSON يحتوي على username وpassword. للصوت، أدخل مفتاح API.",
+      "probeConsent": "أسمح باختبارات صوتية قصيرة قد تترتب عليها رسوم لدى المزود.",
+      "testBatch": "اختبار نسخ ملف صوتي",
+      "testRealtime": "اختبار اتصال الاجتماع",
+      "testPassed": "نجح اختبار الاتصال وأُبلغ المسؤول بالنتيجة.",
+      "testFailed": "فشل اختبار الاتصال.",
+      "setupFailed": "فشل الإعداد. تحقق من تسجيل الدخول والصلاحيات والشبكة.",
+      "saved": "حُفظت بيانات الاعتماد على هذا الجهاز.",
+      "operationUnavailable": "لم تضبط مؤسستك هذه العملية الصوتية.",
+      "certificateUnavailable": "حزمة شهادات المؤسسة غير متاحة.",
+      "partialUpload": "فشلت {{count}} مقاطع صوتية؛ النسخ غير مكتمل.",
+      "importBootstrap": "استيراد إعداد المؤسسة",
+      "importedBootstrap": "تم استيراد بيانات الاعتماد.",
+      "bootstrapNotFound": "لم يُعثر على ملف الإعداد.",
+      "checks": {
+        "authRejected": "رفض موفّر الصوت بيانات اعتماد هذا الجهاز. تحقق من المفتاح المُعدّ أو إعداد الهوية.",
+        "tlsFailed": "تعذّر التحقق من الاتصال الآمن. تحقق من شهادات مؤسستك.",
+        "proxyFailed": "فشل الاتصال عبر الوكيل الخاص بمؤسستك. تحقق من إعدادات الوكيل وبيانات اعتماده.",
+        "timeout": "لم يستجب موفّر الصوت في الوقت المحدد. تحقق من الشبكة أو الشبكة الافتراضية الخاصة (VPN).",
+        "credentialMissing": "لم يتم إعداد بيانات اعتماد يحتاجها هذا الاتصال على هذا الجهاز.",
+        "configChanged": "غيّرت مؤسستك إعداد الصوت هذا. أعد فتح الإعداد وحاول مرة أخرى.",
+        "protocolFailed": "ردّ موفّر الصوت بتنسيق لا يدعمه OpenWhispr. تحقق من النشر والبروتوكول.",
+        "networkFailed": "تعذّر الوصول إلى موفّر الصوت. تحقق من الشبكة والشبكة الافتراضية الخاصة (VPN) وخادم DNS.",
+        "secureStorageUnavailable": "لا يتوفر على هذا الجهاز تخزين آمن لبيانات الاعتماد. على Linux، ثبّت سلسلة مفاتيح (مثل GNOME Keyring أو KWallet) وافتح قفلها، ثم حاول مرة أخرى."
+      },
+      "errors": {
+        "ssoRequired": "تتطلب مؤسستك تسجيل الدخول الموحّد (SSO) الخاص بالشركة. سجّل الدخول عبر SSO وحاول مرة أخرى.",
+        "enterpriseRequired": "يتطلب الصوت المؤسسي خطة Enterprise نشطة لمساحة العمل هذه.",
+        "signInRequired": "انتهت صلاحية جلستك. سجّل الدخول مرة أخرى وأعد المحاولة.",
+        "accessDenied": "لا يمكن لحسابك إعداد الصوت لمساحة العمل هذه. تأكد من أنك عضو فيها وأنك في مساحة العمل الصحيحة.",
+        "rateLimited": "طلبات اختبار كثيرة جدًا. انتظر بضع دقائق وحاول مرة أخرى."
+      },
+      "bootstrapNotProtected": "يجب أن يكون ملف التهيئة مملوكًا لك وقابلًا للقراءة لك وحدك. اطلب من قسم تقنية المعلومات إعادة تسليمه.",
+      "bootstrapUnreadable": "لا يستطيع OpenWhispr قراءة ملف التهيئة. اطلب من قسم تقنية المعلومات جعله قابلًا للقراءة لحسابك.",
+      "bootstrapMismatch": "ملف التهيئة لا يطابق حسابك أو مساحة العمل هذه أو بيانات الاعتماد المُعدّة لها.",
+      "testLinkOtherWorkspace": "رابط الاختبار هذا لمساحة عمل أخرى. انتقل إلى مساحة العمل تلك وافتح الرابط مرة أخرى."
+    }
   }
 }

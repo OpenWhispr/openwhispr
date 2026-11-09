@@ -56,85 +56,6 @@ test("a standalone command banks a panel directive and returns the transcript", 
   assert.equal(modelCalls.length, 0, "the dictation-agent model must not run");
 });
 
-test("a verified caret banks targeted response delivery when auto-paste is enabled", async (t) => {
-  const { createManager } = await loadAudioManagerHarness(t, {
-    cachePrefix: "openwhispr-assistant-caret-delivery-",
-    settingsKey: "__assistantCaretDeliverySettings",
-    settings: { autoPasteEnabled: true },
-    mockModules: {
-      "/services/ReasoningService": 'export default { processText: async () => "" };',
-    },
-  });
-  const { manager, modelCalls } = managerWithCapture(createManager, {
-    status: "editable",
-    sessionId: "caret-session",
-  });
-
-  const result = await manager.processAgentCommand("draft a reply", "gpt", "Aria", {
-    selectionEditReachable: true,
-  });
-
-  assert.equal(result, "draft a reply");
-  assert.deepEqual(manager.pendingAssistantConversation, {
-    transcript: "draft a reply",
-    screenContext: null,
-    deliverySessionId: "caret-session",
-    deliveryAcceptsMarkdown: false,
-  });
-  assert.equal(modelCalls.length, 0, "caret delivery must retain the chat Agent route");
-});
-
-test("a caret in a markdown-friendly app carries that verdict with the session id", async (t) => {
-  const { createManager } = await loadAudioManagerHarness(t, {
-    cachePrefix: "openwhispr-assistant-caret-markdown-",
-    settingsKey: "__assistantCaretMarkdownSettings",
-    settings: { autoPasteEnabled: true },
-    mockModules: {
-      "/services/ReasoningService": 'export default { processText: async () => "" };',
-    },
-  });
-  const { manager } = managerWithCapture(createManager, {
-    status: "editable",
-    sessionId: "caret-session",
-    acceptsMarkdown: true,
-  });
-
-  await manager.processAgentCommand("draft a reply", "gpt", "Aria", {
-    selectionEditReachable: true,
-  });
-
-  assert.deepEqual(manager.pendingAssistantConversation, {
-    transcript: "draft a reply",
-    screenContext: null,
-    deliverySessionId: "caret-session",
-    deliveryAcceptsMarkdown: true,
-  });
-});
-
-test("a verified caret stays panel-first when auto-paste is disabled", async (t) => {
-  const { createManager } = await loadAudioManagerHarness(t, {
-    cachePrefix: "openwhispr-assistant-caret-panel-",
-    settingsKey: "__assistantCaretPanelSettings",
-    settings: { autoPasteEnabled: false },
-    mockModules: {
-      "/services/ReasoningService": 'export default { processText: async () => "" };',
-    },
-  });
-  const { manager } = managerWithCapture(createManager, {
-    status: "editable",
-    sessionId: "caret-session",
-  });
-
-  await manager.processAgentCommand("draft a reply", "gpt", "Aria", {
-    selectionEditReachable: true,
-  });
-
-  assert.deepEqual(manager.pendingAssistantConversation, {
-    transcript: "draft a reply",
-    screenContext: null,
-  });
-});
-
 test("a wake-word command is banked without the address", async (t) => {
   const { createManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-assistant-wakeword-",
@@ -205,43 +126,7 @@ test("an attached screenshot still reaches the panel through the raw carry", asy
   assert.equal(manager.pendingAssistantConversation.screenContext, screenshot);
 });
 
-test("an Agent-panel selection stays on the panel route without touching external selection editing", async (t) => {
-  const { createManager } = await loadAudioManager(t, {
-    cachePrefix: "openwhispr-assistant-internal-selection-",
-    settingsKey: "__assistantInternalSelectionSettings",
-  });
-  let externalCaptureCalls = 0;
-  const manager = createManager({
-    isProcessing: true,
-    consumeSelectionCapture: async () => {
-      externalCaptureCalls += 1;
-      throw new Error("external selection should not be read");
-    },
-  });
-  manager.setAssistantSelectionContext({
-    text: "the selected Agent response",
-    sourceMessageId: "assistant-1",
-  });
-
-  const result = await manager.processAgentCommand("make this friendlier", "gpt", "Aria", {
-    selectionEditReachable: true,
-  });
-
-  assert.equal(result, "make this friendlier");
-  assert.deepEqual(manager.pendingAssistantConversation, {
-    transcript: "make this friendlier",
-    screenContext: null,
-    selectedContext: {
-      text: "the selected Agent response",
-      sourceMessageId: "assistant-1",
-    },
-  });
-  assert.equal(externalCaptureCalls, 0);
-  assert.equal(manager.assistantSelectionContext, null, "the context must be one-shot");
-  assert.ok(!manager.pendingSelectionEdit, "no in-place replacement session may be armed");
-});
-
-test("a selection without a reachable dictation agent routes to the panel with the selection quoted", async (t) => {
+test("a selection without a reachable dictation agent goes to the assistant as selected context", async (t) => {
   const { createManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-assistant-sel-unreachable-",
     settingsKey: "__assistantSelUnreachableSettings",
@@ -254,10 +139,12 @@ test("a selection without a reachable dictation agent routes to the panel with t
   });
 
   assert.equal(result, "make this shorter");
-  assert.equal(
-    manager.pendingAssistantConversation.transcript,
-    'make this shorter\n\n"the selected paragraph"'
-  );
+  assert.equal(manager.pendingAssistantConversation.transcript, "make this shorter");
+  assert.deepEqual(manager.pendingAssistantConversation.selectedContext, {
+    text: "the selected paragraph",
+    sourceMessageId: "",
+    source: "external",
+  });
   assert.equal(modelCalls.length, 0);
   assert.ok(!manager.pendingSelectionEdit, "no in-place replacement session may be armed");
 });
@@ -342,7 +229,7 @@ test("a selection with the dictation agent reachable keeps the in-place edit pat
 // "Explain this" over highlighted text asks for an answer, not an edit: the
 // editor's question verdict must open the panel with the selection quoted and
 // never arm the replacement that would paste the answer over the selection.
-test("a question about a selection goes to the panel instead of replacing it", async (t) => {
+test("a question about a selection goes to the assistant instead of replacing it", async (t) => {
   const { createManager } = await loadAudioManagerHarness(t, {
     cachePrefix: "openwhispr-assistant-sel-question-",
     settingsKey: "__assistantSelQuestionSettings",
@@ -383,8 +270,9 @@ test("a question about a selection goes to the panel instead of replacing it", a
     assert.equal(modelCalls.length, 1, provider);
     assert.ok(!manager.pendingSelectionEdit, `${provider}: no replacement may be armed`);
     assert.deepEqual(manager.pendingAssistantConversation, {
-      transcript: 'explain this\n\n"the selected paragraph"',
+      transcript: "explain this",
       screenContext: screenshot,
+      selectedContext: { text: "the selected paragraph", sourceMessageId: "", source: "external" },
     });
   }
 });
@@ -414,4 +302,68 @@ test("a question verdict arriving after cancellation banks nothing", async (t) =
   );
   assert.equal(manager.pendingAssistantConversation, null);
   assert.ok(!manager.pendingSelectionEdit);
+});
+
+// Tone & Style: the app captured at recording start only shapes a rewrite of
+// the selection; an answer goes to the agent window, never typed into that app.
+const TONE_SETTINGS = {
+  autoPasteEnabled: true,
+  toneStyleEnabled: true,
+  toneStyles: { personal: "very_casual", work: "casual", email: "formal", other: "formal" },
+};
+
+test("a command answered in the agent window never waits on the app's style", async (t) => {
+  const { createManager } = await loadAudioManagerHarness(t, {
+    cachePrefix: "openwhispr-assistant-panel-tone-",
+    settingsKey: "__assistantPanelToneSettings",
+    settings: TONE_SETTINGS,
+    mockModules: {
+      "/services/ReasoningService": 'export default { processText: async () => "" };',
+    },
+  });
+  const { manager } = managerWithCapture(createManager, null);
+  const appCapture = Promise.resolve("work");
+  manager.toneStylePromise = appCapture;
+
+  await manager.processAgentCommand("what's on my calendar", "gpt", "Aria", {
+    selectionEditReachable: true,
+  });
+
+  assert.equal(manager.pendingAssistantConversation.transcript, "what's on my calendar");
+  assert.equal(manager.toneStylePromise, appCapture, "only a selection rewrite reads it");
+});
+
+test("a selection edit asks for the selection's app style only on a rewrite", async (t) => {
+  const { createManager } = await loadAudioManagerHarness(t, {
+    cachePrefix: "openwhispr-assistant-sel-tone-",
+    settingsKey: "__assistantSelToneSettings",
+    settings: TONE_SETTINGS,
+    mockModules: {
+      "/services/ReasoningService": 'export default { processText: async () => "" };',
+    },
+  });
+  const capture = { status: "selected", text: "the selected paragraph", sessionId: "s1" };
+  const { manager, modelCalls } = managerWithCapture(createManager, capture);
+  manager.toneStylePromise = Promise.resolve("email");
+
+  try {
+    await manager.processAgentCommand("rewrite this", "gpt", "Aria", {
+      selectionEditReachable: true,
+      systemPrompt: "base prompt",
+      textOnlySystemPrompt: "base prompt",
+    });
+  } catch {
+    // The mocked result has no completion marker; only the request matters here.
+  }
+
+  const { systemPrompt, textOnlySystemPrompt } = modelCalls[0][3];
+  for (const prompt of [systemPrompt, textOnlySystemPrompt]) {
+    assert.match(
+      prompt,
+      /^base prompt\n\nIf the instruction asks you to rewrite, reword or draft the text and names no tone, write it in the user's email style: formal and polished\./
+    );
+    // IDEs count as "other", so a rewrite there may be code the tone must not touch.
+    assert.match(prompt, /code and commands, with their strings and comments, are never restyled/);
+    assert.ok(prompt.indexOf("If the instruction asks") < prompt.indexOf("SELECTION EDITING MODE"));
+  }
 });

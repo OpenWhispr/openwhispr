@@ -201,7 +201,25 @@ public class AppleLLMModule: Module {
       payload["status"] = "unavailable"
     }
 
+    // Apple Intelligence runs in only some of the languages an iPhone can be set to, and its
+    // availability has no reason for that, so the iPhone's language is checked beside it. The name
+    // is in English, like the app's own text. Siri's language can't be read without the Siri
+    // entitlement (INPreferences throws), so a mismatch with it is left to the message.
+    let language = Locale(identifier: Locale.preferredLanguages.first ?? Locale.current.identifier)
+    payload["deviceLanguage"] = englishName(of: language)
+    // The list is read from the model, so an empty one says nothing about the language. A region
+    // the model doesn't list (English (India)) can still run, so the language alone decides.
+    if !model.supportedLanguages.isEmpty {
+      let languageOnly = language.language.languageCode.map { Locale(identifier: $0.identifier) }
+      payload["localeSupported"] =
+        model.supportsLocale(language) || languageOnly.map { model.supportsLocale($0) } ?? false
+    }
+
     return payload
+  }
+
+  private static func englishName(of locale: Locale) -> String {
+    Locale(identifier: "en").localizedString(forIdentifier: locale.identifier) ?? locale.identifier
   }
 
   @available(iOS 26.0, *)
@@ -248,16 +266,57 @@ public class AppleLLMModule: Module {
       return
     }
 
+    #if compiler(>=6.4)
+    // iOS 27 deprecates GenerationError for these types. Swift 6.4 is the first compiler with
+    // the iOS 27 SDK.
+    if #available(iOS 27.0, *) {
+      if error is GeneratedContent.ParsingError {
+        promise.reject("APPLE_LLM_OUTPUT_LIMIT", error.localizedDescription)
+        return
+      }
+      if let modelError = error as? LanguageModelError {
+        switch modelError {
+        case .contextSizeExceeded(_):
+          promise.reject("APPLE_LLM_CONTEXT_LIMIT", modelError.localizedDescription)
+        case .guardrailViolation(_), .refusal(_):
+          promise.reject("APPLE_LLM_GUARDRAIL", modelError.localizedDescription)
+        case .rateLimited(_):
+          promise.reject("APPLE_LLM_RATE_LIMITED", modelError.localizedDescription)
+        case .unsupportedLanguageOrLocale(_):
+          promise.reject("APPLE_LLM_UNSUPPORTED_LANGUAGE", modelError.localizedDescription)
+        default:
+          promise.reject("APPLE_LLM_FAILED", modelError.localizedDescription)
+        }
+        return
+      }
+      // GenerationError's assetsUnavailable and concurrentRequests moved to these two types.
+      if error is SystemLanguageModel.Error {
+        promise.reject("APPLE_LLM_UNAVAILABLE", error.localizedDescription)
+        return
+      }
+      if let sessionError = error as? LanguageModelSession.Error, sessionError == .concurrentRequests {
+        promise.reject("APPLE_LLM_RATE_LIMITED", sessionError.localizedDescription)
+        return
+      }
+    }
+    #endif
+
     if let generationError = error as? LanguageModelSession.GenerationError {
       switch generationError {
       case .guardrailViolation(_), .refusal(_, _):
         promise.reject("APPLE_LLM_GUARDRAIL", generationError.localizedDescription)
       case .exceededContextWindowSize(_):
         promise.reject("APPLE_LLM_CONTEXT_LIMIT", generationError.localizedDescription)
+      case .decodingFailure(_):
+        // Structured output that can't be decoded, most often because maximumResponseTokens cut it
+        // off. JS treats it as an output limit and retries on smaller input.
+        promise.reject("APPLE_LLM_OUTPUT_LIMIT", generationError.localizedDescription)
       case .rateLimited(_), .concurrentRequests(_):
         promise.reject("APPLE_LLM_RATE_LIMITED", generationError.localizedDescription)
-      case .assetsUnavailable(_), .unsupportedLanguageOrLocale(_):
+      case .assetsUnavailable(_):
         promise.reject("APPLE_LLM_UNAVAILABLE", generationError.localizedDescription)
+      case .unsupportedLanguageOrLocale(_):
+        promise.reject("APPLE_LLM_UNSUPPORTED_LANGUAGE", generationError.localizedDescription)
       default:
         promise.reject("APPLE_LLM_FAILED", generationError.localizedDescription)
       }

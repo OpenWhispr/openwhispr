@@ -6,7 +6,7 @@ const flush = () => new Promise((resolve) => setImmediate(resolve));
 const contentEvent = (content) =>
   `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`;
 
-async function startStream(t, provider, { holdHeaders = false } = {}) {
+async function startStream(t, provider, { holdHeaders = false, status = 200 } = {}) {
   // Restore real timers before Vite's server-close hook runs.
   t.after(() => t.mock.timers.reset());
   installBrowserGlobals(t, {
@@ -31,7 +31,10 @@ async function startStream(t, provider, { holdHeaders = false } = {}) {
       controller = streamController;
     },
   });
-  const response = new Response(body, { headers: { "content-type": "text/event-stream" } });
+  const response = new Response(body, {
+    status,
+    headers: { "content-type": "text/event-stream" },
+  });
   t.mock.method(globalThis, "fetch", async (_url, init) => {
     signal = init.signal;
     const pendingHeaders = new Promise((resolve, reject) => {
@@ -51,6 +54,7 @@ async function startStream(t, provider, { holdHeaders = false } = {}) {
     return pendingHeaders;
   });
 
+  const streamOwner = new AbortController();
   const chunks = [];
   // Exercise the no-tools Chat path that delegates to raw streaming.
   const outcome = (async () => {
@@ -61,7 +65,9 @@ async function startStream(t, provider, { holdHeaders = false } = {}) {
       {
         systemPrompt: "Answer the user.",
         ...(provider === "lan" ? { lanUrl: "http://127.0.0.1:11434/v1" } : {}),
-      }
+      },
+      undefined,
+      streamOwner.signal
     )) {
       chunks.push(chunk);
     }
@@ -78,6 +84,7 @@ async function startStream(t, provider, { holdHeaders = false } = {}) {
   await flush();
   return {
     service,
+    cancel: () => streamOwner.abort(),
     signal,
     body,
     chunks,
@@ -177,7 +184,15 @@ test("a local model that never sends bytes still times out after the startup all
 test("cancelling a raw stream ends normally", async (t) => {
   const stream = await startStream(t, "local");
   await stream.send(contentEvent("Partial answer"));
-  stream.service.cancelActiveStream();
+  stream.cancel();
   assert.equal((await stream.outcome).error, undefined);
   assert.equal(stream.body.locked, false);
+});
+
+test("an error response whose body stalls still times out", async (t) => {
+  const stream = await startStream(t, "local", { status: 500 });
+  t.mock.timers.tick(599_999);
+  assert.equal(stream.signal.aborted, false);
+  t.mock.timers.tick(1);
+  assert.equal((await stream.outcome).error.message, "Streaming request timed out");
 });

@@ -20,7 +20,23 @@ const ARABIC_PLURAL_BASES = [
   "settingsPage.workspace.teams.memberCount",
   "settingsPage.workspace.teams.grantsAccessToSpaces",
   "settingsPage.workspace.teams.deleteConfirmSpaceAccess",
-  "settingsPage.workspace.invites.expiresIn",
+  "settingsPage.workspace.teamspaces.adminCount",
+  "settingsPage.workspace.teamspaces.form.createdInviteFailed",
+  "settingsPage.workspace.teamspaces.picker.groupPeople",
+  "settingsPage.workspace.teamspaces.picker.groupChip",
+  "settingsPage.workspace.teamspaces.picker.groupHasAccess",
+  "settingsPage.workspace.teamspaces.addPeople.addingTitle",
+  "settingsPage.workspace.teamspaces.addPeople.failedTitle",
+  "settingsPage.workspace.teamspaces.addPeople.done",
+  "settingsPage.workspace.people.invitations.pending",
+  "settingsPage.workspace.people.selection.count",
+  "settingsPage.workspace.people.invitations.resentMany",
+  "settingsPage.workspace.people.invitations.resentPartial",
+  "settingsPage.workspace.people.invitations.resendFailedSome",
+  "settingsPage.workspace.people.invitations.resendFailedAll",
+  "workspaces.cancelInvitations.title",
+  "workspaces.cancelInvitations.done",
+  "workspaces.cancelInvitations.partial",
   "settingsPage.unifiedBilling.seatUpdated",
   "settingsPage.unifiedBilling.confirmSeats.description",
   "settingsPage.privacy.retentionDays",
@@ -29,17 +45,52 @@ const ARABIC_PLURAL_BASES = [
   "settingsPage.privacy.minutesAgo",
   "settingsPage.enterpriseCheckout.seatsHint",
   "workspaces.join.memberCount",
+  "workspaces.invite.submit",
+  "workspaces.invite.submitting",
+  "workspaces.invite.sentTitle",
+  "workspaces.invite.sentMany",
+  "workspaces.invite.noEmail",
+  "workspaces.invite.someFailed",
+  "workspaces.invite.seatsLeft",
+  "workspaces.invite.seatsLeftAskOwner",
+  "workspaces.invite.ceilingLeft",
+  "workspaces.invite.skippedMany",
+  "workspaces.invite.skippedNotAdded",
+  "workspaces.invite.removeLast",
+  "workspaces.invite.createdTitle",
+  "workspaces.invite.rateLimitedLeft",
+  "workspaces.invite.seatCostMany",
+  "workspaces.invite.seatCostManyUnpriced",
   "notes.spaces.noteCount",
   "notes.spaces.invitedTo",
   "notes.addToFolder.addCount",
   "notes.overview.meta.folders",
   "notes.overview.meta.members",
   "dictionary.wordsReady",
+  "dictionary.dragonImport.found",
+  "dictionary.dragonImport.confirm",
+  "dictionary.dragonImport.done",
+  "dictionary.shared.memberCount",
+  "dictionary.shared.deleteManyTitle",
+  "dictionary.shared.deletedManyForEveryone",
+  "dictionary.shared.selection.count",
+  "dictionary.shared.share.titleMany",
+  "dictionary.shared.share.partial",
+  "dictionary.shared.deletedPersonalMany",
+  "dictionary.shared.locked.paused",
+  "dictionary.shared.locked.pausedMember",
+  "dictionary.shared.skipped",
+  "dictionary.shared.locked.wordCount",
+  "dictionary.shared.arrival.title",
   "insights.days",
   "insights.longestStreak",
   "insights.dayTooltip",
   "insights.claimDescription",
   "insights.enableDescription",
+  "skills.pane.seeMore",
+  "skills.toasts.uploaded",
+  "skills.upload.fileCount",
+  "skills.upload.submitCount",
 ];
 const ARABIC_NUMBER_NEUTRAL_TEMPLATES = {
   "workspaces.invite.seatUsage": "المقاعد المستخدمة: {{used}} من أصل {{seats}}",
@@ -89,6 +140,9 @@ function registryDescriptionKeys(node, out = []) {
   if (Array.isArray(node)) {
     for (const child of node) registryDescriptionKeys(child, out);
   } else if (node && typeof node === "object") {
+    // Retired models never reach a picker (registryData strips them), so their
+    // descriptions never render.
+    if (node.retired) return out;
     if (typeof node.descriptionKey === "string") out.push(node.descriptionKey);
     for (const child of Object.values(node)) registryDescriptionKeys(child, out);
   }
@@ -153,28 +207,82 @@ test("every en key is present in every other language", () => {
   }
 });
 
-test("interpolation variables match en in every language", () => {
-  // Compares names, not repeat counts — word order can make a translation
-  // reference the same variable a different number of times.
-  const variables = (value) =>
-    typeof value === "string"
-      ? [...new Set([...value.matchAll(INTERPOLATION)].map((m) => m[1]))].sort()
-      : [];
+// Compares names, not repeat counts — word order can make a translation reference the same
+// variable a different number of times.
+const variables = (value) =>
+  typeof value === "string"
+    ? [...new Set([...value.matchAll(INTERPOLATION)].map((m) => m[1]))].sort()
+    : [];
 
+// A plural form may use any variable from any of en's forms of the same message, since a
+// language's `one` can cover more than 1 (Russian 21, 31, …) where en's `one` drops the number;
+// it may also leave one out (Arabic's `two` spells the number). Every other key matches en
+// exactly.
+function interpolationMismatches(en, translated) {
+  const pluralVariables = new Map();
+  for (const [key, value] of en) {
+    if (!PLURAL_SUFFIX.test(key)) continue;
+    const base = stripPlural(key);
+    const names = pluralVariables.get(base) ?? new Set();
+    for (const name of variables(value)) names.add(name);
+    pluralVariables.set(base, names);
+  }
+
+  const mismatches = [];
+  for (const [key, value] of translated) {
+    const allowed = PLURAL_SUFFIX.test(key) ? pluralVariables.get(stripPlural(key)) : undefined;
+    if (allowed) {
+      const unknown = variables(value).filter((name) => !allowed.has(name));
+      if (unknown.length > 0) mismatches.push(`${key} uses {{${unknown.join("}}, {{")}}}`);
+    } else if (en.has(key) && variables(value).join() !== variables(en.get(key)).join()) {
+      mismatches.push(`${key} has different {{variables}} than en`);
+    }
+  }
+  return mismatches;
+}
+
+test("interpolation variables match en in every language", () => {
   for (const namespace of NAMESPACES) {
     const en = flatten(load("en", namespace));
     for (const lang of languages) {
       if (lang === "en") continue;
-      for (const [key, value] of flatten(load(lang, namespace))) {
-        if (!en.has(key)) continue;
-        assert.deepEqual(
-          variables(value),
-          variables(en.get(key)),
-          `${lang}/${namespace} ${key} has different {{variables}} than en`
-        );
-      }
+      assert.deepEqual(
+        interpolationMismatches(en, flatten(load(lang, namespace))),
+        [],
+        `${lang}/${namespace}`
+      );
     }
   }
+});
+
+test("a plural form may use a variable from another of en's forms, but not a new one", () => {
+  const en = new Map([
+    ["invite.submit_one", "Send invite"],
+    ["invite.submit_other", "Send {{count}} invites"],
+    ["invite.title", "Invite {{name}}"],
+  ]);
+
+  assert.deepEqual(
+    interpolationMismatches(
+      en,
+      new Map([
+        ["invite.submit_one", "Отправить {{count}} приглашение"],
+        ["invite.submit_two", "إرسال دعوتين"],
+        ["invite.title", "Пригласить {{name}}"],
+      ])
+    ),
+    []
+  );
+  assert.deepEqual(
+    interpolationMismatches(
+      en,
+      new Map([
+        ["invite.submit_one", "Отправить {{total}} приглашение"],
+        ["invite.title", "Пригласить"],
+      ])
+    ),
+    ["invite.submit_one uses {{total}}", "invite.title has different {{variables}} than en"]
+  );
 });
 
 test("every messageKey literal resolves in en", () => {
@@ -204,6 +312,26 @@ test("Arabic defines every CLDR plural category for each counted message", () =>
         `ar/translation is missing ${base}_${category}`
       );
     }
+  }
+});
+
+// CLDR gives es, fr, it and pt a "many" form (1,000,000 and up) and ru "few"
+// and "many"; without them i18next returns the raw key. Checked for the
+// Dictionary page's strings, which all count words or members.
+test("the dictionary's counted strings define every plural form they need", () => {
+  const needed = { es: ["many"], fr: ["many"], it: ["many"], pt: ["many"], ru: ["few", "many"] };
+  const bases = [...flatten(load("en", "translation")).keys()]
+    .filter((key) => key.startsWith("dictionary.") && key.endsWith("_other"))
+    .map(stripPlural);
+  assert.ok(bases.length > 0);
+  for (const [lang, categories] of Object.entries(needed)) {
+    const translated = flatten(load(lang, "translation"));
+    const missing = bases.flatMap((base) =>
+      categories
+        .map((category) => `${base}_${category}`)
+        .filter((key) => typeof translated.get(key) !== "string")
+    );
+    assert.deepEqual(missing, [], `${lang}/translation is missing:\n${missing.join("\n")}`);
   }
 });
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, X, KeyRound } from "../icons";
 import { Input } from "./input";
+import { maskKey } from "../../utils/maskKey";
 import logger from "../../utils/logger";
 
 interface ApiKeyInputProps {
@@ -13,11 +14,6 @@ interface ApiKeyInputProps {
   ariaLabel?: string;
   helpText?: React.ReactNode;
   variant?: "default" | "purple";
-}
-
-function maskKey(key: string): string {
-  if (key.length <= 8) return "••••••••";
-  return key.slice(0, 3) + "..." + key.slice(-4);
 }
 
 export default function ApiKeyInput({

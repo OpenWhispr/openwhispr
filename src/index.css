@@ -1,8 +1,13 @@
 @import "tailwindcss";
-/* Dictation window feature styles (voice pill, assistant/live-transcript panels). */
+/* Dictation window feature styles (voice pill, live transcript panel). */
 @import "./styles/dictation-panel.css";
+/* The assistant's own window (pill, composer, modal). */
+@import "./styles/agent-window.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
+/* Inside the assistant's own window, whose chat cards are a step larger than
+   the same cards in the Control Panel and note chats. */
+@custom-variant agent (&:where(.agent-window *));
 
 @theme {
   /* OpenWhispr Theme — registers color tokens with Tailwind v4.
@@ -93,6 +98,8 @@
   --color-brand-highlight: #c0a77d;
   --color-brand-link: #2e3659;
   --color-pattern: #e7e5e4;
+
+  --shadow-modal: 0 24px 48px -12px oklch(0 0 0 / 0.18);
 
   /* Model picker premium effects (light mode) */
   --shadow-metallic-light: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 1px 3px rgba(0, 0, 0, 0.08);
@@ -359,6 +366,7 @@ body:has(.onboarding-canvas) {
   --onboarding-link: var(--color-link);
   --onboarding-danger: #ef4444;
   --onboarding-success: #22c55e;
+  --onboarding-success-foreground: #0a0a0a;
   /* Keycap. The cap is lit from above, so it needs its own top/bottom pair rather
      than reusing the surface tokens: in dark it has to sit *above* the page fill
      while still reading as a physical key. */
@@ -403,6 +411,7 @@ body.dark:has(.onboarding-canvas) {
   --onboarding-inverse-text: #0a0a0a;
   --onboarding-danger: #f87171;
   --onboarding-success: #4ade80;
+  --onboarding-success-foreground: #0a0a0a;
   --onboarding-keycap-top: #3a3a3a;
   --onboarding-keycap-bottom: #262626;
   --onboarding-keycap-bevel: #4d4d4d;
@@ -916,18 +925,21 @@ h1 {
   background-color: var(--onboarding-surface-secondary) !important;
 }
 
+/* The shared credential field (ui/ProviderCheckField.tsx). Outside onboarding these names
+   are unset, so each falls back to the app theme: the mapping .onboarding-embedded-auth
+   gives the control panel's sign-in dialog. Onboarding defines them, so it keeps its own. */
 .onboarding-provider-input,
 .onboarding-provider-input:hover,
 .onboarding-provider-input:focus-visible,
 .onboarding-provider-input:disabled {
-  border-color: var(--onboarding-control-border) !important;
-  background-color: var(--onboarding-surface-secondary) !important;
-  color: var(--onboarding-text-primary) !important;
+  border-color: var(--onboarding-control-border, var(--color-border)) !important;
+  background-color: var(--onboarding-surface-secondary, var(--color-muted)) !important;
+  color: var(--onboarding-text-primary, var(--color-foreground)) !important;
   opacity: 1 !important;
 }
 
 .onboarding-provider-input::placeholder {
-  color: var(--onboarding-text-secondary) !important;
+  color: var(--onboarding-text-secondary, var(--color-muted-foreground)) !important;
 }
 
 .onboarding-provider-icon-monochrome {
@@ -1121,16 +1133,6 @@ a:hover {
   filter: invert(1);
 }
 
-/* Toast — opaque dark HUD surface, same in light & dark mode */
-.toast-surface {
-  background: oklch(0.15 0.006 260);
-  border: 1px solid oklch(0.25 0.006 260);
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.04),
-    0 8px 24px -4px oklch(0 0 0 / 0.5),
-    0 2px 8px -2px oklch(0 0 0 / 0.3);
-}
-
 /* Enter from the physical outer edge of the direction-aware toast stack. */
 .toast-enter {
   --toast-enter-x: 1rem;
@@ -1165,15 +1167,6 @@ a:hover {
   }
   to {
     width: 0%;
-  }
-}
-
-@keyframes toast-border-progress {
-  from {
-    stroke-dashoffset: 0;
-  }
-  to {
-    stroke-dashoffset: 1;
   }
 }
 

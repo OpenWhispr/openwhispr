@@ -107,6 +107,79 @@ test("maps Azure failures to coded errors", async () => {
   }
 });
 
+test("managed HTTP failures expose status and codes without reading provider diagnostics", async () => {
+  const { ipcErrorFields } = require("../../src/helpers/ipcErrorFields");
+  const marker = "provider-private-diagnostic-marker";
+  for (const provider of ["azure", "openai-compatible"]) {
+    for (const [status, code] of [
+      [400, "MANAGED_REQUEST_REJECTED"],
+      [401, "MANAGED_AUTH_REJECTED"],
+      [403, "MANAGED_AUTH_REJECTED"],
+      [429, "PROVIDER_RATE_LIMITED"],
+      [503, "SERVER_ERROR"],
+    ]) {
+      let bodyRead = false;
+      const response = {
+        ok: false,
+        status,
+        text: async () => {
+          bodyRead = true;
+          return marker;
+        },
+      };
+      const run = executor({
+        fetch: async () => response,
+        ...(provider === "openai-compatible"
+          ? {
+              resolve: async () => ({
+                model: "gateway-speech",
+                enterprise: {
+                  audioProfile: {
+                    endpoint: "https://gateway.test/transcribe",
+                    section: {},
+                    request: async () => response,
+                  },
+                },
+              }),
+            }
+          : {}),
+      });
+      await assert.rejects(run({}, { ...route, provider }, input), (error) => {
+        assert.equal(error.code, code);
+        assert.equal(error.status, status);
+        assert.equal(error.message, `Enterprise transcription error: ${status}`);
+        assert.equal(JSON.stringify(ipcErrorFields(error)).includes(marker), false);
+        // Every status reaches the user as a translated sentence, never the raw message.
+        assert.match(error.messageKey, /^hooks\.audioRecording\.errorDescriptions\./);
+        if ([401, 403].includes(status))
+          assert.equal(
+            error.messageKey,
+            "hooks.audioRecording.errorDescriptions.managedAuthRejected"
+          );
+        if (status === 400) assert.deepEqual(error.messageParams, { status: 400 });
+        return true;
+      });
+      assert.equal(bodyRead, false);
+    }
+  }
+});
+
+test("malformed successful responses do not expose the provider body in parse errors", async () => {
+  const { ipcErrorFields } = require("../../src/helpers/ipcErrorFields");
+  const marker = "provider-private-diagnostic-marker";
+  const run = executor({ fetch: async () => new Response(marker) });
+  await assert.rejects(run({}, route, input), (error) => {
+    assert.equal(error.message, "Managed transcription response was malformed");
+    assert.equal(error.code, "MANAGED_RESPONSE_MALFORMED");
+    assert.equal(
+      error.messageKey,
+      "hooks.audioRecording.errorDescriptions.managedResponseMalformed"
+    );
+    assert.equal(JSON.stringify(ipcErrorFields(error)).includes(marker), false);
+    return true;
+  });
+});
+
 test("rejects routes that are not a managed transcription route", async () => {
   const run = executor({ fetch: async () => new Response("{}", { status: 200 }) });
   await assert.rejects(
@@ -125,9 +198,66 @@ test("propagates MANAGED_CONFIG_CHANGED from runtime revalidation", async () => 
   await assert.rejects(run({}, route, input), (error) => error.code === "MANAGED_CONFIG_CHANGED");
 });
 
+test(
+  "cancellation during per-chunk runtime validation does not wait or send audio",
+  { timeout: 1000 },
+  async (t) => {
+    let release;
+    let sent = 0;
+    const run = executor({
+      resolve: () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+      fetch: async () => {
+        sent++;
+        return new Response('{"text":"late"}');
+      },
+    });
+    t.after(() => release?.(runtime()));
+    const controller = new AbortController();
+    const pending = run({}, route, { ...input, signal: controller.signal });
+    await new Promise(setImmediate);
+    controller.abort();
+    await assert.rejects(pending, { name: "AbortError" });
+    release(runtime());
+    await new Promise(setImmediate);
+    assert.equal(sent, 0);
+  }
+);
+
 test("an empty transcript is reported as no speech", async () => {
   const run = executor({
     fetch: async () => new Response(JSON.stringify({ text: "  " }), { status: 200 }),
   });
   await assert.rejects(run({}, route, input), (error) => error.code === "NO_SPEECH_DETECTED");
+});
+
+test("Azure profiles on Electron's network keep the legacy request deadline", async () => {
+  for (const systemNetwork of [true, false]) {
+    const signals = [];
+    const run = createManagedTranscriptionExecutor({
+      resolveEnterpriseRuntime: async () => ({
+        model: "gpt-4o-transcribe",
+        enterprise: {
+          audioProfile: {
+            endpoint: "https://acme.services.ai.azure.com/transcribe",
+            section: {},
+            systemNetwork,
+            request: async ({ signal }) => {
+              signals.push(signal);
+              return new Response(JSON.stringify({ text: "hallo" }));
+            },
+          },
+        },
+      }),
+      buildUrl,
+      timeoutMs: 20,
+    });
+    assert.equal(await run({}, route, input), "hallo");
+    if (systemNetwork) {
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      assert.equal(signals[0].reason?.name, "TimeoutError");
+    } else assert.equal(signals[0], undefined);
+  }
 });

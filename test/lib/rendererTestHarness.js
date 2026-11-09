@@ -4,6 +4,20 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
+// t.after for teardowns that close over a test's modules. node:test keeps every
+// finished test and hook reachable for the life of the file (its testResources
+// map is only pruned when they are garbage-collected, which the map prevents),
+// so a hook's closure would pin everything it captures; this one lets go of
+// the teardown once it has run.
+function addTeardown(t, teardown) {
+  let pending = teardown;
+  t.after(() => {
+    const run = pending;
+    pending = null;
+    return run();
+  });
+}
+
 function installBrowserGlobals(t, { initialStorage = {}, window: windowProps = {} } = {}) {
   const originalWindow = globalThis.window;
   const originalLocalStorage = globalThis.localStorage;
@@ -247,9 +261,22 @@ async function createRendererServer(
     ],
     server: { middlewareMode: true },
   });
-  t.after(async () => {
-    await vite.close();
-    fs.rmSync(cacheDir, { recursive: true, force: true });
+  addTeardown(t, async () => {
+    try {
+      await vite.close();
+    } finally {
+      // A closed server is never freed: Vite 8's native resolve plugin
+      // (rolldown) holds its JS callbacks through V8 global handles, and they
+      // reach the server. Emptying its module graphs drops the module nodes,
+      // which on Vite 8.1.4 frees ~50 MB per server, so a file can still
+      // create one per test.
+      for (const environment of Object.values(vite.environments)) {
+        for (const value of Object.values(environment.moduleGraph ?? {})) {
+          if (value instanceof Map || value instanceof Set) value.clear();
+        }
+      }
+      fs.rmSync(cacheDir, { recursive: true, force: true });
+    }
   });
   return vite;
 }
@@ -322,17 +349,68 @@ function installMicCaptureGlobals(t) {
   });
 }
 
+// A real DOM (happy-dom) on the globals React DOM and the components read,
+// for tests that click, type and press keys. Restored after the test.
+async function installHappyDom(t) {
+  const { Window } = await import("happy-dom");
+  const happyWindow = new Window();
+  const fromWindow = [
+    "document",
+    "Node",
+    "Element",
+    "HTMLElement",
+    "Event",
+    "KeyboardEvent",
+    "ResizeObserver",
+    "requestAnimationFrame",
+    "cancelAnimationFrame",
+  ];
+  const names = ["window", ...fromWindow, "localStorage", "IS_REACT_ACT_ENVIRONMENT"];
+  const originals = names.map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)]);
+  const define = (name, value) =>
+    Object.defineProperty(globalThis, name, { value, configurable: true, writable: true });
+  define("window", happyWindow);
+  for (const name of fromWindow) {
+    const value = happyWindow[name];
+    define(
+      name,
+      typeof value === "function" && name.endsWith("AnimationFrame")
+        ? value.bind(happyWindow)
+        : value
+    );
+  }
+  define("localStorage", happyWindow.localStorage);
+  define("IS_REACT_ACT_ENVIRONMENT", true);
+  addTeardown(t, async () => {
+    for (const [name, descriptor] of originals) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+      else delete globalThis[name];
+    }
+    await happyWindow.happyDOM.close();
+  });
+  return happyWindow;
+}
+
 // The real useAuth loads the auth client, whose session work outlives a test's
 // browser globals; hooks that only read the user get a signed-out stand-in.
 const SIGNED_OUT_AUTH_MOCK = {
   "/hooks/useAuth": `export const useAuth = () => ({ isLoaded: true, isSignedIn: false, user: null });`,
 };
 
+// The chat adds the app's context (the time, matching library notes) to the
+// end of the user's message; this is what the user wrote.
+function userTextOf(content) {
+  return content.split("\n\nContext from the app for this message")[0];
+}
+
 module.exports = {
   SIGNED_OUT_AUTH_MOCK,
+  addTeardown,
   createRendererServer,
   installBrowserGlobals,
+  installHappyDom,
   installHookDom,
   installHostDom,
   installMicCaptureGlobals,
+  userTextOf,
 };

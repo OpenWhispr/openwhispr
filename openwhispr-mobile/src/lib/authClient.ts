@@ -111,8 +111,8 @@ function mapUser(raw: RawUser | null | undefined): AuthUser | null {
   };
 }
 
-function currentCookie(): string | null {
-  return client.getCookie() || null;
+async function currentCookie(): Promise<string | null> {
+  return (await client.getCookie()) || null;
 }
 
 export async function getStoredSession(): Promise<string | null> {
@@ -136,7 +136,7 @@ export async function signInWithEmail(email: string, password: string): Promise<
   if (error) {
     return { user: null, sessionCookie: null, error: error.message ?? 'Sign in failed' };
   }
-  return { user: mapUser(data?.user), sessionCookie: currentCookie(), error: null };
+  return { user: mapUser(data?.user), sessionCookie: await currentCookie(), error: null };
 }
 
 export async function signUpWithEmail(
@@ -152,7 +152,7 @@ export async function signUpWithEmail(
   if (error) {
     return { user: null, sessionCookie: null, error: error.message ?? 'Sign up failed' };
   }
-  return { user: mapUser(data?.user), sessionCookie: currentCookie(), error: null };
+  return { user: mapUser(data?.user), sessionCookie: await currentCookie(), error: null };
 }
 
 /**
@@ -171,12 +171,17 @@ export async function signInAnonymously(): Promise<AnonymousAuthResult> {
       status: error.status || null,
     };
   }
-  return { user: mapUser(data?.user), sessionCookie: currentCookie(), error: null, status: null };
+  return {
+    user: mapUser(data?.user),
+    sessionCookie: await currentCookie(),
+    error: null,
+    status: null,
+  };
 }
 
 export async function signOut(): Promise<void> {
   try {
-    await client.signOut();
+    await client.signOut({});
   } catch {
     /* empty */
   }
@@ -199,11 +204,11 @@ async function socialSignIn(provider: 'google' | 'apple' | 'microsoft'): Promise
   if (error) {
     return { success: false, sessionCookie: null, error: error.message ?? 'OAuth failed' };
   }
-  return { success: true, sessionCookie: currentCookie(), error: null };
+  return { success: true, sessionCookie: await currentCookie(), error: null };
 }
 
 export async function deleteAccount(): Promise<void> {
-  const cookie = currentCookie();
+  const cookie = await currentCookie();
   if (!cookie) {
     throw new Error('Not authenticated');
   }

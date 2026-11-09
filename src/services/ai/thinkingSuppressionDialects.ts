@@ -1,3 +1,4 @@
+import { getRegistryData } from "../../models/registryData.js";
 import { getModelFamilyConstraints } from "./modelFamilyConstraints";
 import { matchesHost } from "../../utils/urlUtils";
 
@@ -29,6 +30,23 @@ export function detectEndpointDialect(baseUrl: string | null | undefined): Endpo
   return null;
 }
 
+// The floor a catalog entry declares for itself, for Gemini's native thinking config. It
+// lets a model added through the registry work without an app release.
+export function geminiCatalogThinkingFloor(
+  model: string
+):
+  | { thinkingLevel: "minimal" | "low"; includeThoughts: false }
+  | { thinkingBudget: number; includeThoughts: false }
+  | undefined {
+  const floor = getRegistryData()
+    .cloudProviders.find((provider) => provider.id === "gemini")
+    ?.models.find((entry) => entry.id === model)?.thinkingFloor;
+  if (!floor) return undefined;
+  return "level" in floor
+    ? { thinkingLevel: floor.level, includeThoughts: false }
+    : { thinkingBudget: floor.budget, includeThoughts: false };
+}
+
 export function suppressThinking(
   requestBody: Record<string, unknown>,
   providerKey: string,
@@ -37,7 +55,14 @@ export function suppressThinking(
   const family = getModelFamilyConstraints(model);
 
   if (providerKey === "gemini") {
-    requestBody.reasoning_effort = "minimal";
+    const floor = geminiCatalogThinkingFloor(model);
+    // This dialect has no budget field. "low" is its smallest effort that a model with a
+    // budget floor accepts.
+    requestBody.reasoning_effort = floor
+      ? "thinkingLevel" in floor
+        ? floor.thinkingLevel
+        : "low"
+      : (family?.reasoningEffort?.suppressValue ?? "minimal");
     return;
   }
 

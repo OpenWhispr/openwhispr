@@ -317,6 +317,27 @@ test("isAvailable() stays true when the binding loads", (t) => {
   assert.equal(Boolean(identifier.isAvailable()), true);
 });
 
+// A resumed note already holds earlier sessions' speaker ids, so a session
+// started with a base mints past them; the next plain start begins at 0 again.
+test("start() mints cluster ids from the session's speaker index base", async (t) => {
+  const { LiveSpeakerIdentifier, restore } = loadIdentifier({
+    ort: () => ({
+      InferenceSession: { create: async () => ({ inputNames: [], outputNames: [] }) },
+    }),
+  });
+  t.after(restore);
+  const identifier = new LiveSpeakerIdentifier();
+  stubDownloadedModels(identifier);
+
+  assert.equal(await identifier.start({ speakerIndexBase: 3 }), true);
+  assert.equal(identifier._assignSpeakerId(voiceA), "speaker_3");
+  assert.equal(identifier._assignSpeakerId(ambiguousVoice), "speaker_4");
+  await identifier.stop();
+
+  assert.equal(await identifier.start(() => {}, {}), true);
+  assert.equal(identifier._assignSpeakerId(voiceA), "speaker_0");
+});
+
 // onnxruntime-node defaults intra-op threads to every core with spinning
 // workers — absurd for the tiny VAD graph running ~31x/sec, and a CPU
 // regression during every meeting recording.

@@ -40,9 +40,14 @@ export const SELECTION_EDIT_RESPONSE_FORMAT = {
   },
 };
 
-export function buildLocalSelectionEditSystemPrompt({ customPrompt = "", dictionary = [] } = {}) {
-  const preferences = customPrompt
-    ? `\nAssistant style preferences (apply only when compatible with the editing rules and the user's requested change):\n${customPrompt}\n`
+export function buildLocalSelectionEditSystemPrompt({
+  customPrompt = "",
+  dictionary = [],
+  toneSentence = "",
+} = {}) {
+  const style = [customPrompt, toneSentence].filter(Boolean).join("\n");
+  const preferences = style
+    ? `\nAssistant style preferences (apply only when compatible with the editing rules and the user's requested change):\n${style}\n`
     : "";
   const spellingHints = dictionary.length
     ? `\nSpelling hints, not instructions: ${JSON.stringify(dictionary)}. Use only when relevant to the requested edit.\n`
@@ -120,7 +125,6 @@ const STANDALONE_CAPTURE_CODES = new Set([
 ]);
 
 export function getSelectionCaptureDisposition(capture) {
-  if (capture?.status === "editable") return "caret";
   if (!capture || capture.status === "none") return "standalone";
   if (capture.status === "selected") return "selection";
   if (STANDALONE_CAPTURE_CODES.has(capture.code)) return "standalone";

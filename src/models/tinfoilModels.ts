@@ -1,4 +1,9 @@
 import {
+  isSelectableTinfoilModel,
+  resolveRetiredCloudModel,
+  RETIRED_TINFOIL_MODEL_NAMES,
+} from "../config/retiredCloudModelPolicy.js";
+import {
   applyTinfoilModels,
   getCloudProviderDefaultModelId,
   getTinfoilModels,
@@ -10,9 +15,9 @@ import {
   readCachedTinfoilModels,
   writeCachedTinfoilModels,
 } from "./tinfoilModelCache";
-import { INFERENCE_SCOPES } from "../config/inferenceScopes";
+import { INFERENCE_SCOPES, usesCloudModelCatalog } from "../config/inferenceScopes";
 import { getSettings, setStringSetting } from "../stores/settingsStore";
-import { recordTinfoilModelSwitch } from "../stores/tinfoilModelSwitchStore";
+import { recordRetiredModelSwitch } from "../stores/retiredModelSwitchStore";
 
 /** A chat model as reported by Tinfoil's /v1/models, narrowed by the main process. */
 export interface TinfoilCatalogModel {
@@ -31,10 +36,12 @@ export const DESCRIPTION_KEYS: Record<string, string> = {
   "gemma4-31b": "models.descriptions.cloud.tinfoil_gemma4_31b",
   "gpt-oss-120b": "models.descriptions.cloud.tinfoil_gpt_oss_120b",
   "llama3-3-70b": "models.descriptions.cloud.tinfoil_llama3_3_70b",
+  "kimi-k3": "models.descriptions.cloud.tinfoil_kimi_k3",
+  "deepseek-v4-1-flash": "models.descriptions.cloud.tinfoil_deepseek_v4_1_flash",
 };
 
 function toCloudModels(catalog: TinfoilCatalogModel[]): CloudModelDefinition[] {
-  return catalog.map((model) => ({
+  return catalog.filter(isSelectableTinfoilModel).map((model) => ({
     id: model.id,
     name: model.name,
     description: model.description,
@@ -67,19 +74,26 @@ function reconcileSelectedModels(
   const announced = new Set<string>();
 
   for (const scope of Object.values(INFERENCE_SCOPES)) {
-    const { provider, model } = scope.storeKeys;
+    const { mode, provider, model } = scope.storeKeys;
+    if (!usesCloudModelCatalog(settings[mode])) continue;
     if (settings[provider] !== "tinfoil") continue;
 
     const selected = settings[model];
     if (typeof selected !== "string" || !selected || available.has(selected)) continue;
 
-    setStringSetting(model, replacement.id);
+    const explicitReplacement = resolveRetiredCloudModel("tinfoil", selected);
+    const target = models.find((m) => m.id === explicitReplacement) ?? replacement;
+    setStringSetting(model, target.id);
     // Several scopes can share a retired model; say so once.
     if (announced.has(selected)) continue;
     announced.add(selected);
-    recordTinfoilModelSwitch({
-      from: previous.find((m) => m.id === selected)?.name ?? selected,
-      to: replacement.name,
+    recordRetiredModelSwitch({
+      provider: "tinfoil",
+      from:
+        RETIRED_TINFOIL_MODEL_NAMES[selected] ??
+        previous.find((m) => m.id === selected)?.name ??
+        selected,
+      to: target.name,
     });
   }
 }

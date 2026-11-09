@@ -15,6 +15,8 @@ export type ExternalSharingMode = "allowed" | "domain_only" | "disabled";
 export interface OrgPolicy {
   version: number;
   transcription: {
+    /** Absent/null is unrestricted; an empty intersection permits no local model. */
+    allowedLocalModels?: string[] | null;
     allowedModes: InferenceMode[];
     /**
      * Registry provider ids plus "custom". Validated shape-only so a provider
@@ -26,6 +28,7 @@ export interface OrgPolicy {
     allowedEnterpriseProviders?: string[];
   };
   llm: {
+    allowedLocalModels?: string[] | null;
     allowedModes: InferenceMode[];
     /** Registry provider ids plus "custom" and "openrouter"; same forward-compat rule as transcription. */
     allowedByokProviders: string[];
@@ -34,6 +37,8 @@ export interface OrgPolicy {
   features: {
     agentEnabled: boolean;
     webSearchEnabled: boolean;
+    meetingRecordingEnabled?: boolean;
+    audioUploadEnabled?: boolean;
     /** Absent on servers that predate the field; absent means allowed. */
     screenContextEnabled?: boolean;
     /**
@@ -42,11 +47,14 @@ export interface OrgPolicy {
      */
     connectorsEnabled?: boolean;
     /**
-     * Server-only Mem0 agent-memory gate, enforced by the API on
-     * `/api/agent/stream`; the app never reads it. Absent on older servers.
+     * Retired agent-memory gate: the API stopped using it when it removed
+     * assistant memory (openwhispr-api#243), but older API versions may still
+     * send it. The app ignores it.
      */
     memoryEnabled?: boolean;
   };
+  /** Absent on older servers; absent means automatic. Unknown strings suppress auto-start. */
+  meetings?: { transcriptionStart?: string };
   sharing: {
     externalLinkSharing: ExternalSharingMode;
   };

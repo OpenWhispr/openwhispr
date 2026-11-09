@@ -33,7 +33,7 @@ export function getRecordingErrorTitle(error: RecordingError, t: TFunction): str
     return t("hooks.audioRecording.errorTitles.screenContextSkipped");
   }
   if (error.code === "LIMIT_REACHED")
-    return t("hooks.audioRecording.errorTitles.dailyLimitReached");
+    return t("hooks.audioRecording.errorTitles.cloudLimitReached");
   if (error.code === "PROVIDER_RATE_LIMITED")
     return t("hooks.audioRecording.errorTitles.providerRateLimited");
   if (error.code?.startsWith("PROVIDER_")) {

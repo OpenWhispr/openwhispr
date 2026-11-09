@@ -3,6 +3,7 @@ const { app } = require("electron");
 const debugLogger = require("./debugLogger");
 const { resolveBundledBinary } = require("./binaryResolver");
 const { extractMeetingUrl } = require("./meetingJoinUrl");
+const { CALENDAR_LOOKBACK_MS } = require("./calendarCacheWindow");
 const { broadcastToWindows } = require("./windowBroadcast");
 const { FOCUS_SYNC_THROTTLE_MS } = require("./calendarSyncInterval");
 
@@ -45,16 +46,33 @@ class AppleCalendarManager {
 
   // User-initiated: spawns the helper with --request so the TCC prompt shows.
   // Resolves after the first snapshot lands (success) or access is denied.
-  connect() {
+  connect({ signal } = {}) {
     if (process.platform !== "darwin") {
       return Promise.resolve({ success: false, reason: "unsupported" });
     }
+    if (signal?.aborted) return Promise.resolve({ success: false, reason: "cancelled" });
+    this._pendingConnect?.cancel();
     this._restartAttempts = 0;
     return new Promise((resolve) => {
-      this._pendingConnect = { resolve, awaitingSnapshot: false };
+      const cancel = () => {
+        if (this._pendingConnect !== pending) return;
+        this._pendingConnect = null;
+        this.stop();
+        pending.resolve({ success: false, reason: "cancelled" });
+      };
+      const pending = {
+        resolve: (result) => {
+          signal?.removeEventListener("abort", cancel);
+          resolve(result);
+        },
+        cancel,
+        awaitingSnapshot: false,
+      };
+      this._pendingConnect = pending;
+      signal?.addEventListener("abort", cancel, { once: true });
       if (!this._spawnHelper(true)) {
         this._pendingConnect = null;
-        resolve({ success: false, reason: "helper-missing" });
+        pending.resolve({ success: false, reason: "helper-missing" });
       }
     });
   }
@@ -106,6 +124,14 @@ class AppleCalendarManager {
     }
   }
 
+  _helperArgs(requestAccess) {
+    return [
+      "--lookback-seconds",
+      String(CALENDAR_LOOKBACK_MS / 1000),
+      ...(requestAccess ? ["--request"] : []),
+    ];
+  }
+
   _spawnHelper(requestAccess) {
     if (this._restartTimer) {
       clearTimeout(this._restartTimer);
@@ -120,7 +146,7 @@ class AppleCalendarManager {
     }
 
     let command = binaryPath;
-    let args = requestAccess ? ["--request"] : [];
+    let args = this._helperArgs(requestAccess);
     if (!app.isPackaged) {
       // A terminal-launched dev app makes the terminal the helper's TCC
       // "responsible process", and its missing calendar usage strings abort
@@ -149,6 +175,7 @@ class AppleCalendarManager {
 
       let buffer = "";
       child.stdout.on("data", (data) => {
+        if (this._helperProcess !== child) return;
         buffer += data.toString();
         let newlineIdx;
         while ((newlineIdx = buffer.indexOf("\n")) !== -1) {

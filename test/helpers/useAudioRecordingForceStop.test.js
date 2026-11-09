@@ -11,22 +11,23 @@ const {
 const FAKE_AUDIO_MANAGER_SOURCE = `
 export default class FakeAudioManager {
   constructor() {
+    this.state = {};
     this.voiceAgentRequested = false;
     this.translationRequested = false;
     this.sttConfig = {};
     globalThis.__forceStopAudioManager = this;
   }
   getState() {
-    return {};
+    return this.state;
   }
   setCallbacks(callbacks) {
     this.callbacks = callbacks;
   }
   setVoiceAgentRequested() {}
-  setAssistantSelectionContext() {}
   setTranslationRequested() {}
   startRecording() {
     globalThis.__forceStopStarts += 1;
+    this.state.isRecording = true;
     return Promise.resolve(true);
   }
   complete(result) {
@@ -35,6 +36,9 @@ export default class FakeAudioManager {
   async safePaste(text, options) {
     globalThis.__forceStopPastes.push({ text, options });
     return globalThis.__forceStopPasteOutcome;
+  }
+  markCleanupNoticeShown(failure) {
+    globalThis.__forceStopShownNotices.push(failure);
   }
   saveTranscription() {
     return Promise.resolve(true);
@@ -117,7 +121,10 @@ async function mountHarness(
           forceStopListener = callback;
           return () => {};
         },
-        dictationLifecycleStateChanged: (state) => lifecycle.push(state),
+        dictationLifecycleStateChanged: async (state) => {
+          lifecycle.push(state);
+          return true;
+        },
         completeDictationPreview: NOOP,
         hideDictationPreview: () => {
           previewHides += 1;
@@ -149,6 +156,7 @@ async function mountHarness(
   globalThis.__forceStopPastes = [];
   globalThis.__forceStopPasteOutcome = pasteOutcome;
   globalThis.__forceStopStarts = 0;
+  globalThis.__forceStopShownNotices = [];
 
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-audio-recording-force-stop-",
@@ -162,6 +170,8 @@ async function mountHarness(
     },
   });
   const { useAudioRecording } = await vite.ssrLoadModule("/hooks/useAudioRecording.js");
+  const { useCleanupFailureStore } = await vite.ssrLoadModule("/stores/cleanupFailureStore.ts");
+  useCleanupFailureStore.setState({ pending: 0, lastFailure: null });
 
   const api = {};
   // Stable like the app's ToastProvider callback: a new identity per render
@@ -188,6 +198,8 @@ async function mountHarness(
     dismissals,
     previewHides: () => previewHides,
     recordingStarts: () => globalThis.__forceStopStarts,
+    cleanupReports: () => useCleanupFailureStore.getState().pending,
+    shownNotices: () => globalThis.__forceStopShownNotices,
     setRecording: async (isRecording) => {
       await React.act(async () =>
         globalThis.__forceStopAudioManager.callbacks.onStateChange({
@@ -280,6 +292,30 @@ test("a paste held back for still-held modifiers keeps the transcript", async (t
     "the pill must carry the transcript so it stays recoverable"
   );
 });
+
+// No Wayland clipboard written on wlroots, Hyprland or niri (#2621): Wayland apps
+// can't read the clipboard copy either, so the pill says why and Retry pastes again.
+for (const [reason, descriptionKey] of [
+  ["wl-copy-missing", "wlCopyMissing"],
+  ["wl-copy-failed", "wlCopyFailed"],
+]) {
+  test(`a paste held back for ${reason} keeps the transcript and retries the paste`, async (t) => {
+    const harness = await mountHarness(t, { pasteOutcome: { pasted: false, reason } });
+
+    await harness.complete();
+
+    const [toast] = errorToasts(harness);
+    assert.ok(toast, "the transcript is surfaced, not dropped");
+    assert.equal(toast.title, "hooks.audioRecording.waylandClipboard.title");
+    assert.equal(toast.description, `hooks.audioRecording.waylandClipboard.${descriptionKey}`);
+
+    globalThis.__forceStopPasteOutcome = { pasted: true };
+    await React.act(async () => retryAction(toast).onClick());
+
+    assert.equal(harness.pastes.length, 2);
+    assert.equal(harness.recordingStarts(), 0);
+  });
+}
 
 // A macOS clipboard-only fallback (accessibility skipped) is also "not pasted",
 // but it is expected and carries no reason, so it must stay silent.
@@ -420,6 +456,27 @@ test("a paste held back after the next recording started keeps the transcript qu
   assert.deepEqual(errorToasts(harness), []);
   assert.equal(harness.previewHides(), hidesBefore, "the live preview is left alone");
   assert.equal(harness.lifecycle.at(-1), "recording");
+});
+
+test("a paste held back behind the next recording reports no cleanup failure", async (t) => {
+  const paste = deferredPaste();
+  const harness = await mountHarness(t, { pasteOutcome: paste.outcome });
+  localStorage.setItem("onboardingCompleted", "true");
+  const cleanupFailure = {
+    message: "AI cleanup is on, but no cleanup model is set up.",
+    messageKey: "hooks.audioRecording.cleanupUnconfigured",
+    settingsTarget: "llms",
+    setupKey: "unconfigured",
+  };
+  await harness.complete({ cleanupFailure }, { detach: true });
+
+  await harness.startRecording();
+  await harness.setRecording(true);
+  await paste.settle({ pasted: false, reason: "modifiers-held" });
+  await harness.flush();
+
+  assert.equal(harness.cleanupReports(), 0, "the new recording owns the window");
+  assert.deepEqual(harness.shownNotices(), [], "the warning stays unspent");
 });
 
 // Retry shows no progress while the paste waits on held keys, so a second click

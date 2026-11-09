@@ -7,7 +7,7 @@ const ts = require("typescript");
 
 // Signing out clears main's account scope the moment the token is cleared, so
 // a live meeting's note is out of reach from then on: neither its later saves
-// nor the reload's beforeunload flush can write it. Settings' Sign out and the
+// nor the reload's beforeunload flush can write it. Sign out (useSignOut) and the
 // invitation's account switch end the meeting first, and the stop writes the
 // final transcript. (Account deletion deletes the note, so it has nothing to save.)
 // Exercise the actual callbacks without loading their components.
@@ -61,6 +61,7 @@ function createContext(calls) {
     },
     window: { location: { reload: () => calls.push("reloaded") } },
     setIsSigningOut: () => {},
+    resetChatForAccountChange: () => calls.push("chat reset"),
     logger: { error: (message) => calls.push(`error: ${message}`) },
     showAlertDialog: () => calls.push("alert"),
     t: (key) => key,
@@ -69,16 +70,49 @@ function createContext(calls) {
   };
 }
 
-test("Settings sign-out ends a live meeting before the account scope is cleared", async () => {
+test("sign-out ends a live meeting before the account scope is cleared", async () => {
   const calls = [];
-  const handleSignOut = vm.runInNewContext(
-    `${extractFunction("../../src/components/SettingsPage.tsx", "handleSignOut")}\nhandleSignOut;`,
+  const performSignOut = vm.runInNewContext(
+    `${extractFunction("../../src/hooks/useSignOut.ts", "performSignOut")}\nperformSignOut;`,
     createContext(calls)
   );
 
-  await handleSignOut();
+  await performSignOut();
 
-  assert.deepEqual(calls, ["meeting stopped", "team spaces purged", "signed out", "reloaded"]);
+  assert.deepEqual(calls, [
+    "chat reset",
+    "meeting stopped",
+    "team spaces purged",
+    "signed out",
+    "reloaded",
+  ]);
+});
+
+test("sign-out asks first only when it would end a meeting recording", () => {
+  const requestSignOutWhile = (isRecording) => {
+    const calls = [];
+    const requestSignOut = vm.runInNewContext(
+      `${extractFunction("../../src/hooks/useSignOut.ts", "requestSignOut")}\nrequestSignOut;`,
+      {
+        useMeetingRecordingStore: { getState: () => ({ isRecording }) },
+        performSignOut: async () => calls.push("signed out"),
+        showConfirmDialog: (options) => {
+          assert.equal(options.cancelText, "Abbrechen");
+          calls.push(`asked: ${options.title}`);
+          options.onConfirm();
+        },
+        t: (key) => (key === "common.cancel" ? "Abbrechen" : key),
+      }
+    );
+    requestSignOut();
+    return calls;
+  };
+
+  assert.deepEqual(requestSignOutWhile(false), ["signed out"]);
+  assert.deepEqual(requestSignOutWhile(true), [
+    "asked: settingsPage.account.signOut.endMeetingTitle",
+    "signed out",
+  ]);
 });
 
 test("switching account from an invitation ends a live meeting before signing out", async () => {
@@ -94,6 +128,7 @@ test("switching account from an invitation ends a live meeting before signing ou
   await handleSwitchAccount();
 
   assert.deepEqual(calls, [
+    "chat reset",
     "invitation kept",
     "meeting stopped",
     "team spaces purged",

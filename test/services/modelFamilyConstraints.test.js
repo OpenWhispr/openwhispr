@@ -21,7 +21,11 @@ test("unknown, empty, and missing ids resolve to no constraints", async () => {
 test("gpt-oss has no reasoning off switch: suppress and cleanup both floor at low", async () => {
   const { getModelFamilyConstraints } = await load();
   const effort = getModelFamilyConstraints("gpt-oss-120b")?.reasoningEffort;
-  assert.deepEqual(effort, { suppressValue: "low", cleanupValue: "low" });
+  assert.deepEqual(effort, {
+    suppressValue: "low",
+    cleanupValue: "low",
+    options: ["low", "medium", "high"],
+  });
 });
 
 test("glm-5.3 always reasons: suppress floors at low, high stands in for the server's max", async () => {
@@ -29,6 +33,7 @@ test("glm-5.3 always reasons: suppress floors at low, high stands in for the ser
   assert.deepEqual(getModelFamilyConstraints("glm-5.3")?.reasoningEffort, {
     suppressValue: "low",
     defaultValue: "high",
+    options: ["low", "high"],
   });
   assert.equal(getModelFamilyConstraints("glm-5.3-flash")?.family, "glm-5.3");
   assert.equal(getModelFamilyConstraints("glm-5-3")?.family, "glm-5.3");
