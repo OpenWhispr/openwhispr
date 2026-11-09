@@ -501,8 +501,8 @@ function AccessCell({
   // The note whose × takes focus once the removed one is gone from the list.
   const focusAfterRef = useRef<{ removed: string; next: string | undefined } | null>(null);
 
-  // The × that held focus unmounts with its note; without this focus falls to <body> and the
-  // menu stops answering arrow keys and Escape.
+  // The × that held focus unmounts with its note; this moves focus to the neighbouring note's ×
+  // rather than wherever the menu would put it.
   useEffect(() => {
     const pending = focusAfterRef.current;
     if (!pending || guest.notes.some((note) => note.id === pending.removed)) return;

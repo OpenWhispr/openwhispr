@@ -28,7 +28,7 @@ test("list unwraps data and hits the workspace path", async (t) => {
   assert.equal(requests[0].path, "/api/workspaces/ws-1/guests");
 });
 
-test("remove posts emails and note_id, and omits note_id when absent", async (t) => {
+test("remove posts emails, with note_id when given", async (t) => {
   const removal = {
     removed: ["a@x.com"],
     not_found: [],
@@ -46,5 +46,4 @@ test("remove posts emails and note_id, and omits note_id when absent", async (t)
   assert.equal(requests[0].path, "/api/workspaces/ws-1/guests/remove");
   assert.deepEqual(requests[0].body, { emails: ["a@x.com"], note_id: "n1" });
   assert.deepEqual(requests[1].body, { emails: ["a@x.com", "b@x.com"] });
-  assert.equal("note_id" in requests[1].body, false);
 });

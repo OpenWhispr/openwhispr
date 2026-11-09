@@ -20,8 +20,6 @@ interface Slot {
   error: RowActionError | null;
 }
 
-const NO_GUESTS: WorkspaceGuest[] = [];
-
 /**
  * The live guest list for one workspace. Guests have no local mirror, so the tab reads the
  * server when it mounts and again after each action; there is no polling.
@@ -86,7 +84,7 @@ export function useWorkspaceGuests(workspaceId: string): WorkspaceGuestsState {
       : "failed";
   return {
     status,
-    guests: slot?.guests ?? NO_GUESTS,
+    guests: slot?.guests ?? [],
     error: slot?.error ?? null,
     reload,
     dropGuests,

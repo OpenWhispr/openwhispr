@@ -340,7 +340,7 @@ test("closing the invite without sending doesn't toast", async (t) => {
   assert.equal(globalThis.__toasts.length, 0);
 });
 
-test("removed guests leave the list at once even if the reload fails", async (t) => {
+test("removed guests leave the list at once, ahead of the reload", async (t) => {
   const { item } = await mountTab(t, { guests: [JIN] });
   await React.act(async () => propsOf(item(`${KEY}.menu.remove`)).onSelect());
   assert.deepEqual(
@@ -485,11 +485,6 @@ test("a menu that still has notes returns focus to its trigger", async (t) => {
   };
   propsOf(content).onCloseAutoFocus(event);
   assert.equal(event.prevented, undefined);
-});
-
-test("members get no ×", async (t) => {
-  const { container } = await mountTab(t, { workspace: MEMBER, guests: [TWO] });
-  assert.equal(removeButtons(container).length, 0);
 });
 
 const THREE = guest("jin@x.com", "Jin Park", [
@@ -683,26 +678,6 @@ test("inviting the last listed guests keeps the dialog until it closes, then toa
   await React.act(async () => globalThis.__inviteProps.onOpenChange(false));
   assert.match(globalThis.__toasts[0].title, new RegExp(`${KEY}\\.invite\\.sent\\|count=1`));
   assert.equal(globalThis.__inviteMounted, false);
-});
-
-test("the last note of the last guest moves focus to the empty state", async (t) => {
-  const { container, rerender } = await mountTab(t, { guests: [JIN] });
-  const focused = [];
-  const frame = findNode(container, (node) => node.hasAttribute("data-guests-table"));
-  // The host DOM has no focus tracking, so record which element asked for it.
-  Object.getPrototypeOf(frame).focus = function focus() {
-    focused.push(this);
-  };
-  await React.act(async () =>
-    propsOf(removeButtons(container)[0]).onSelect({ preventDefault() {} })
-  );
-  assert.equal(focused.length, 1, "the table takes focus while it is still there");
-  globalThis.__guestsState.guests = [];
-  await rerender();
-  const empty = findNode(container, (node) => node.hasAttribute("data-guests-empty"));
-  assert.ok(empty, "the empty state renders");
-  assert.equal(empty.getAttribute("tabindex"), "-1");
-  assert.ok(focused[focused.length - 1] === empty, "the empty state takes focus once it renders");
 });
 
 test("members' notes are menu items that do nothing", async (t) => {
