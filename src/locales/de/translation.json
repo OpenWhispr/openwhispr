@@ -1751,6 +1751,10 @@
         "description": "Workspaces ermöglichen die Zusammenarbeit und das Teilen von Notizen.",
         "create": "Workspace erstellen"
       },
+      "personal": {
+        "title": "Du bist in „Persönlich“",
+        "description": "Wähle einen Workspace aus, um seine Einstellungen zu verwalten."
+      },
       "loadError": {
         "title": "Workspaces konnten nicht geladen werden",
         "description": "Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
@@ -4724,6 +4728,7 @@
       },
       "locked": {
         "noWorkspace": "Geteilte Wörterbücher sind in Business enthalten. Teile Fachbegriffe, Produktnamen und Abkürzungen deines Teams mit allen.",
+        "chooseWorkspace": "Du bist in „Persönlich“. Wechsle zu einem Workspace, um seine geteilten Wörter zu nutzen.",
         "upgradeAdmin": "Geteilte Wörterbücher sind in Business enthalten. Upgrade {{workspace}}, damit alle dieselben Wörter bekommen.",
         "upgradeMember": "Geteilte Wörterbücher sind in Business enthalten. Bitte einen Admin, {{workspace}} upzugraden.",
         "paused_one": "Das {{count}} geteilte Wort von {{workspace}} ist pausiert. Upgrade auf Business, um es wieder beim Diktieren zu nutzen.",
