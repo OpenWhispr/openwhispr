@@ -13,7 +13,9 @@ import {
   subscribeAppsFlyerAttribution,
 } from '@/lib/appsflyer';
 
-export function createRevenueCatClient(observerMode: boolean) {
+export function createRevenueCatClient(observerMode: boolean, androidAttribution = false) {
+  const attributionEnabled = (): boolean =>
+    Platform.OS === 'ios' || (Platform.OS === 'android' && androidAttribution);
   let configured = false;
   // The billing user this session logged the SDK in as, and the one the app
   // currently wants. They differ while a sign-out or account switch is pending.
@@ -161,7 +163,7 @@ export function createRevenueCatClient(observerMode: boolean) {
   async function syncRevenueAttribution({
     beforePost = false,
   }: { beforePost?: boolean } = {}): Promise<void> {
-    if (Platform.OS !== 'ios') return;
+    if (!attributionEnabled()) return;
     try {
       await applyRevenueAttribution(beforePost);
     } catch (error) {
@@ -196,7 +198,7 @@ export function createRevenueCatClient(observerMode: boolean) {
   // logIn and logOut push the departing user's attributes before switching, so
   // the clear needs no push of its own. It never blocks the switch.
   async function clearDepartingLink(nextUserId: string | null): Promise<void> {
-    if (Platform.OS !== 'ios') return;
+    if (!attributionEnabled()) return;
     try {
       const departingUserId = await Purchases.getAppUserID();
       if (departingUserId === nextUserId || !(await wasLinkedFromThisDevice(departingUserId))) {
@@ -261,7 +263,7 @@ export function createRevenueCatClient(observerMode: boolean) {
       });
       if (__DEV__) Purchases.setLogLevel(LOG_LEVEL.INFO);
       configured = true;
-      if (Platform.OS === 'ios') {
+      if (attributionEnabled()) {
         const refresh = (): void => {
           withIdentity(syncRevenueAttribution).catch((error) => {
             reportRevenueCatError('sync-attribution', error);
@@ -375,7 +377,29 @@ export function createRevenueCatClient(observerMode: boolean) {
     return next;
   }
 
+  // Android holds this queue through the store interaction, including attribution
+  // writes. A pending logout/account switch invalidates linking immediately.
+  async function withRevenueCatUser<T>(
+    userId: string,
+    operation: () => Promise<T>,
+    checkIdentity?: () => void,
+  ): Promise<T> {
+    checkIdentity?.();
+    requestedUserId = userId;
+    return enqueueBilling(async () => {
+      checkIdentity?.();
+      configureRevenueCat();
+      if (!configured) throw new Error('Store billing is not configured in this build.');
+      await logInWithAttribution(userId);
+      checkIdentity?.();
+      await syncRevenueAttribution({ beforePost: true });
+      checkIdentity?.();
+      return operation();
+    });
+  }
+
   return {
+    withRevenueCatUser,
     configureRevenueCat,
     identifyRevenueCatUser,
     resetRevenueCatUser,
