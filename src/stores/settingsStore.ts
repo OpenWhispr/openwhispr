@@ -64,9 +64,9 @@ import { readCachedTinfoilModels } from "../models/tinfoilModelCache";
 import { queueRetiredModelSwitch, recordRetiredModelSwitch } from "./retiredModelSwitchStore";
 import { MEETING_STREAMING_PROVIDER_IDS } from "../helpers/meetingTranscriptionRouting";
 import { STREAMING_ONLY_PROVIDERS } from "../helpers/transcriptionRoute";
+import { isUploadOnlyTranscriptionModel } from "../models/appTranscriptionProviders.js";
 import {
   acceptsUnlistedTranscriptionModel,
-  isUploadOnlyTranscriptionModel,
   getTranscriptionSelection,
   isLocalModelAllowedByPolicy,
   isPolicyActionAllowed,
