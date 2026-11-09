@@ -843,7 +843,8 @@ export default function AgentWindow() {
     layout: state.layout,
     focus: surfaceFocus,
     ...(standalone ? { contentHeight: cardHeight } : {}),
-    call: state.call !== null,
+    // The call's transcript is the typed modal, so only its compact layouts are sized as a call.
+    call: state.call !== null && state.layout !== "modal",
     // Only the pill that reads "Waiting for answer", or a notice, needs the wider window.
     wide:
       state.layout === "pill" &&

@@ -59,7 +59,7 @@ test("a dictation pill lifts the dock only while it is in the dock's lower 40%",
   }
 });
 
-test("a call's layouts: its taller pill, cards above it, and the typed chat's modal", () => {
+test("a call's layouts: its taller pill and cards above it", () => {
   const workArea = { x: 0, y: 0, width: 1512, height: 944 };
   const anchor = { centerX: 756, bottom: 940 };
   const size = (layout, contentHeight) => {
@@ -75,5 +75,4 @@ test("a call's layouts: its taller pill, cards above it, and the typed chat's mo
   assert.deepEqual(size("pill"), [256, 81]);
   assert.deepEqual(size("standalone", 182), [466, 182 + 12 + 65 + 16]);
   assert.deepEqual(size("standalone", 900), [466, 520 + 12 + 65 + 16], "a long answer's reference");
-  assert.deepEqual(size("modal", 900), [480 + 16, 520 + 16]);
 });

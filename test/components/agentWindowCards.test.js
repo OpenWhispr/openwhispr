@@ -1443,6 +1443,7 @@ test("in a call, Esc stops a running turn the call isn't speaking (a Regenerate)
   assert.equal(globalThis.__chat.cancels, 1);
   assert.ok(view.button("End call"), "the call goes on");
   await view.waitForLayout("modal");
+  assert.ok(!view.main.layouts.at(-1).call, "a call in the modal isn't resized as one");
 });
 
 test("in a call, Esc while a card sends stops only speech: the send's turn goes on", async (t) => {

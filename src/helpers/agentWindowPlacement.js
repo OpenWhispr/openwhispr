@@ -43,7 +43,6 @@ function callLayoutSize(layout, contentHeight) {
       CALL_CARD_WIDTH
     );
   }
-  if (layout === "modal") return AGENT_LAYOUT_SIZES.modal;
   return {
     width: CALL_PILL.width + 2 * SHADOW_MARGIN,
     height: CALL_PILL.height + 2 * SHADOW_MARGIN,
