@@ -39,6 +39,8 @@ const APP_TRANSCRIPTION_PROVIDERS = [
 
 // Models only Audio Upload offers. The catalog has no field for this, so it lives here,
 // by provider. OpenRouter forwards no dictionary to Deepgram, and dictation relies on it.
+// Adding a model users may already have saved for dictation also needs a saved-selection
+// migration, since Retry sends the stored id as-is.
 const UPLOAD_ONLY_MODELS = new Map([["openrouter", ["deepgram/nova-3"]]]);
 
 export function withAppTranscriptionProviders(catalog) {
