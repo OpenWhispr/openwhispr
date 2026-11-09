@@ -180,6 +180,7 @@ import {
   buildSelectionEditUserPrompt,
   buildLocalSelectionEditSystemPrompt,
   buildLocalSelectionEditUserPrompt,
+  createSelectionCompletionMarker,
   extractLocalSelectionEditReplacement,
   SELECTION_EDIT_RESPONSE_FORMAT,
   extractSelectionEditReplacement,
@@ -3169,7 +3170,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           );
       userPrompt = buildLocalSelectionEditUserPrompt(instruction, capture.text);
     } else {
-      completionMarker = `__OPENWHISPR_SELECTION_COMPLETE_${crypto.randomUUID()}__`;
+      completionMarker = createSelectionCompletionMarker();
       selectionConfig.systemPrompt = buildSelectionEditSystemPrompt(
         withToneSentence(config?.systemPrompt),
         completionMarker

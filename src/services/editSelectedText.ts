@@ -9,6 +9,7 @@ import {
   buildLocalSelectionEditUserPrompt,
   buildSelectionEditSystemPrompt,
   buildSelectionEditUserPrompt,
+  createSelectionCompletionMarker,
   extractLocalSelectionEditReplacement,
   extractSelectionEditReplacement,
   isSelectionQuestionResponse,
@@ -50,7 +51,7 @@ export async function editSelectedText(
     provider: target.provider,
   });
   const local = provider === "local";
-  const marker = local ? "" : `__OPENWHISPR_SELECTION_COMPLETE_${crypto.randomUUID()}__`;
+  const marker = local ? "" : createSelectionCompletionMarker();
   const dictionary = getDictionaryHintWords(settings);
   const toneSentence = settings.toneStyleEnabled
     ? selectionEditToneSentence(resolveDictationToneStyle(settings.toneStyles, appCategory ?? null))
