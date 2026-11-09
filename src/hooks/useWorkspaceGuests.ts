@@ -51,30 +51,29 @@ export function useWorkspaceGuests(workspaceId: string): WorkspaceGuestsState {
   }, [reload]);
 
   const dropGuests = useCallback((emails: string[]): void => {
-    const gone = new Set(emails.map((email) => email.toLowerCase()));
+    const gone = new Set(emails);
     setSlot((previous) =>
       previous?.guests
         ? {
             ...previous,
-            guests: previous.guests.filter((guest) => !gone.has(guest.email.toLowerCase())),
+            guests: previous.guests.filter((guest) => !gone.has(guest.email)),
           }
         : previous
     );
   }, []);
 
   const dropGuestNote = useCallback((email: string, noteId: string): void => {
-    const target = email.toLowerCase();
     setSlot((previous) =>
       previous?.guests
         ? {
             ...previous,
             guests: previous.guests
               .map((guest) =>
-                guest.email.toLowerCase() === target
+                guest.email === email
                   ? { ...guest, notes: guest.notes.filter((note) => note.id !== noteId) }
                   : guest
               )
-              .filter((guest) => guest.email.toLowerCase() !== target || guest.notes.length > 0),
+              .filter((guest) => guest.email !== email || guest.notes.length > 0),
           }
         : previous
     );

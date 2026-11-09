@@ -45,13 +45,12 @@ import { CONTACTS_TRIGGER, HEADER_CELL, ROW_DIVIDER, TABLE_FRAME } from "./table
 const KEY = "settingsPage.workspace.guests";
 const HEADER_CHECKED = { none: false, some: "mixed", all: true } as const;
 // A bigger target than the box, without moving it.
-const ROW_CHECKBOX =
-  "-m-1 p-1 focus-visible:ring-primary/50 disabled:opacity-50 disabled:cursor-default!";
+const ROW_CHECKBOX = "-m-1 p-1 focus-visible:ring-primary/50";
 
 interface Props {
   workspace: Workspace;
   /** Called after an invite from this tab, so the Invitations tab reads the new rows. */
-  onInvitationsChanged?: () => void;
+  onInvitationsChanged: () => void;
 }
 
 export default function WorkspaceGuestsTab(props: Props): React.ReactElement {
@@ -73,7 +72,7 @@ function WorkspaceGuestsBody({
 }: Props & { canManage: boolean }): React.ReactElement {
   const { t } = useTranslation();
   const { toast } = useToast();
-  // The parent body is keyed per workspace, so the hook only ever sees one id here.
+  // This body is keyed per workspace, so the hook only ever sees one id here.
   const { status, guests, error, reload, dropGuests, dropGuestNote } = useWorkspaceGuests(
     workspace.id
   );
@@ -91,8 +90,8 @@ function WorkspaceGuestsBody({
     setSelection((current) => keepRows(current, emails));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [emailKey]);
-  // Invitations sent since the invite dialog opened, for the toast when it closes.
-  const sentRef = useRef(0);
+  // Addresses invited since the invite dialog opened, for the toast when it closes.
+  const sentRef = useRef<string[]>([]);
   const columnCount = canManage ? 4 : 2;
   const frameRef = useRef<HTMLDivElement>(null);
   const emptyRef = useRef<HTMLDivElement>(null);
@@ -116,19 +115,18 @@ function WorkspaceGuestsBody({
   };
 
   // Ends one guest's access to one note. Resolves true when the server removed it.
-  const removeFromNote = async (guest: WorkspaceGuest, noteId: string): Promise<boolean> => {
-    const target = guest.notes.find((note) => note.id === noteId);
-    const names = {
-      name: isolate(guestDisplayName(guest)),
-      note: isolate(target?.title?.trim() ? target.title : t("notes.list.untitled")),
-    };
+  const removeFromNote = async (
+    guest: WorkspaceGuest,
+    noteId: string,
+    title: string
+  ): Promise<boolean> => {
+    const names = { name: isolate(guestDisplayName(guest)), note: isolate(title) };
     try {
       const result = await GuestsService.remove(workspace.id, {
         emails: [guest.email],
         note_id: noteId,
       });
-      const email = guest.email.toLowerCase();
-      if (!result.removed.some((removed) => removed.toLowerCase() === email)) {
+      if (!result.removed.includes(guest.email)) {
         // Already gone or a member by now: the reload corrects the row without a false success.
         void reload();
         return false;
@@ -143,8 +141,6 @@ function WorkspaceGuestsBody({
       void reload();
       return true;
     } catch (caught) {
-      const failure = classifyRowActionError(caught);
-      const workspaceName = isolate(workspace.name);
       if (
         caught instanceof CloudApiError &&
         caught.status === 404 &&
@@ -154,6 +150,8 @@ function WorkspaceGuestsBody({
         void reload();
         return false;
       }
+      const failure = classifyRowActionError(caught);
+      const workspaceName = isolate(workspace.name);
       let title = t(`${KEY}.removeFromNoteFailed`, names);
       if (failure.kind === "refused") title = failure.message;
       else if (failure.kind === "notAllowed") {
@@ -175,20 +173,19 @@ function WorkspaceGuestsBody({
     }
   };
 
-  const closeInvite = (open: boolean): void => {
-    if (open) return;
-    if (sentRef.current > 0) {
+  const closeInvite = (): void => {
+    const invited = sentRef.current;
+    if (invited.length > 0) {
       toast({
         title: t(`${KEY}.invite.sent`, {
-          count: sentRef.current,
+          count: invited.length,
           workspace: isolate(workspace.name),
         }),
       });
       // Invited guests move to Invitations, so those are no longer there to act on.
-      const invited = (inviting ?? []).map((guest) => guest.email);
       setSelection((current) => setRows(current, invited, false));
     }
-    sentRef.current = 0;
+    sentRef.current = [];
     setInviting(null);
   };
 
@@ -209,25 +206,22 @@ function WorkspaceGuestsBody({
             description: t(`${KEY}.invite.description`, { workspace: isolate(workspace.name) }),
           }}
           onInvited={(emails) => {
-            sentRef.current += emails.length;
+            sentRef.current.push(...emails);
           }}
           onInvitationsChanged={() => {
             void reload();
-            onInvitationsChanged?.();
+            onInvitationsChanged();
           }}
         />
       ) : null}
       {removing ? (
         <RemoveGuestsDialog
-          onOpenChange={(open) => {
-            if (!open) setRemoving(null);
-          }}
+          onOpenChange={() => setRemoving(null)}
           workspace={workspace}
           guests={removing}
           onRemoved={(result) => {
-            // Shown gone at once: the reload below can fail and would leave them listed. With
-            // nobody removed (all joined meanwhile) only the reload has anything to correct.
-            if (result.removed.length > 0) dropGuests(result.removed);
+            // Shown gone at once: the reload below can fail and would leave them listed.
+            dropGuests(result.removed);
             // A row's menu acts on one guest; the rest of the selection stays.
             const handled = removing.map((guest) => guest.email);
             setSelection((current) => setRows(current, handled, false));
@@ -301,7 +295,7 @@ function WorkspaceGuestsBody({
                   canManage={canManage}
                   selected={selection.has(guest.email)}
                   onToggle={() => setSelection((current) => toggleRow(current, guest.email))}
-                  onRemoveFromNote={(noteId) => removeFromNote(guest, noteId)}
+                  onRemoveFromNote={(noteId, title) => removeFromNote(guest, noteId, title)}
                   onTableFocus={focusList}
                   onInvite={() => setInviting([guest])}
                   onCopy={() => void copyEmail(guest)}
@@ -408,7 +402,7 @@ interface GuestRowProps {
   canManage: boolean;
   selected: boolean;
   onToggle: () => void;
-  onRemoveFromNote: (noteId: string) => Promise<boolean>;
+  onRemoveFromNote: (noteId: string, title: string) => Promise<boolean>;
   onTableFocus: () => void;
   onInvite: () => void;
   onCopy: () => void;
@@ -433,7 +427,7 @@ function GuestRow({
       {canManage ? (
         <td className="ps-4 pe-0">
           <RowCheckbox
-            label={t(`settingsPage.workspace.people.selection.selectRow`, {
+            label={t("settingsPage.workspace.people.selection.selectRow", {
               name: isolate(guestDisplayName(guest)),
             })}
             checked={selected}
@@ -517,7 +511,7 @@ function AccessCell({
     (button ?? contentRef.current)?.focus();
   }, [guest.notes]);
 
-  const removeNote = async (noteId: string): Promise<void> => {
+  const removeNote = async (noteId: string, title: string): Promise<void> => {
     if (sendingRef.current.has(noteId)) return;
     sendingRef.current.add(noteId);
     setSending(new Set(sendingRef.current));
@@ -528,7 +522,7 @@ function AccessCell({
     const neighbour = guest.notes[index + 1] ?? guest.notes[index - 1];
     // Set before the request: the list can lose the note before the answer is read here.
     focusAfterRef.current = emptying ? null : { removed: noteId, next: neighbour?.id };
-    const removed = await onRemoveFromNote(noteId);
+    const removed = await onRemoveFromNote(noteId, title);
     sendingRef.current.delete(noteId);
     setSending(new Set(sendingRef.current));
     if (!removed) {
@@ -601,7 +595,7 @@ function AccessCell({
                 onSelect={(event) => {
                   // Keep the menu open: the other notes are still listed.
                   event.preventDefault();
-                  void removeNote(note.id);
+                  void removeNote(note.id, title);
                 }}
               >
                 <button

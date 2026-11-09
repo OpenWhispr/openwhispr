@@ -239,7 +239,7 @@ test("the Access menu lists titles, untitled ones as Untitled", async (t) => {
   assert.match(markup, new RegExp(`${KEY}\\.notesTriggerLabel\\|count=3,name=`));
 });
 
-test("a 404 from an older API shows Failed", async (t) => {
+test("a failed load shows Failed", async (t) => {
   const { Tab, workspace } = await loadTab(t, { status: "failed" });
   const markup = render(Tab, workspace);
   assert.match(markup, new RegExp(`${KEY}\\.failedTitle`));
@@ -319,10 +319,15 @@ test("invite opens the dialog with the guest's address and the guest heading", a
 });
 
 test("a send reloads the list and closing toasts the sent count", async (t) => {
-  const { item } = await mountTab(t, { guests: [JIN] });
+  let refreshed = 0;
+  const { item } = await mountTab(t, {
+    guests: [JIN],
+    props: { onInvitationsChanged: () => void refreshed++ },
+  });
   await React.act(async () => propsOf(item(`${KEY}.menu.invite`)).onSelect());
   await React.act(async () => globalThis.__inviteProps.onInvitationsChanged());
   assert.equal(globalThis.__reloads, 1);
+  assert.equal(refreshed, 1);
   await React.act(async () => globalThis.__inviteProps.onInvited(["jin@x.com"]));
   await React.act(async () => globalThis.__inviteProps.onOpenChange(false));
   assert.match(globalThis.__toasts[0].title, new RegExp(`${KEY}\\.invite\\.sent\\|count=1`));
@@ -369,7 +374,6 @@ const removeButtons = (container) =>
       node.hasAttribute("data-item") &&
       (node.getAttribute("aria-label") ?? "").startsWith(REMOVE_LABEL)
   );
-const settle = () => React.act(async () => {});
 
 test("the × removes that note only", async (t) => {
   const { container } = await mountTab(t, { guests: [TWO] });
@@ -663,18 +667,6 @@ test("select-all selects the listed guests only", async (t) => {
     view.rowBoxes().map((box) => box.getAttribute("aria-checked")),
     ["false", "false"]
   );
-});
-
-test("a send from Guests also refreshes the Invitations tab", async (t) => {
-  let refreshed = 0;
-  const { item } = await mountTab(t, {
-    guests: [JIN],
-    props: { onInvitationsChanged: () => void refreshed++ },
-  });
-  await React.act(async () => propsOf(item(`${KEY}.menu.invite`)).onSelect());
-  await React.act(async () => globalThis.__inviteProps.onInvitationsChanged());
-  assert.equal(globalThis.__reloads, 1);
-  assert.equal(refreshed, 1);
 });
 
 test("inviting the last listed guests keeps the dialog until it closes, then toasts", async (t) => {

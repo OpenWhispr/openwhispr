@@ -52,7 +52,6 @@ export function RemoveGuestsDialog({
       if (result.removed.length > 0) {
         toast({ title: t(`${KEY}.done`, { count: result.removed.length }) });
       }
-      dispatch({ type: "succeeded" });
       onRemoved(result);
       onOpenChange(false);
     } catch (caught) {
@@ -73,10 +72,7 @@ export function RemoveGuestsDialog({
     }
   };
 
-  const dismiss = (): void => {
-    dispatch({ type: "dismiss" });
-    onOpenChange(false);
-  };
+  const dismiss = (): void => onOpenChange(false);
   const mayRetry =
     state.kind !== "failed" ||
     (state.error.kind !== "notAllowed" && state.error.kind !== "ssoRequired");

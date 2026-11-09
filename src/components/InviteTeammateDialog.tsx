@@ -33,7 +33,7 @@ interface Props {
   /** Spaces the invitee is added to directly on accept. */
   spaceIds?: string[];
   initialEmail?: string;
-  /** Addresses that open as chips (the server's, e.g. guests); prefer this to `initialEmail`. */
+  /** Addresses that open as chips (the server's, e.g. guests). */
   initialEmails?: string[];
   /** Already-translated text that replaces the default title and description. */
   heading?: { title: string; description: string };

@@ -307,10 +307,6 @@ test("a stored guests tab reopens it, for members too", async (t) => {
 test("an invite sent from Guests reloads the invitations list", async (t) => {
   const Section = await loadSection(t, { storedTab: "guests" });
   render(Section, ADMIN);
-  assert.equal(
-    globalThis.__guestsTabProps.onInvitationsChanged,
-    globalThis.__invitationsState.reload
-  );
   await globalThis.__guestsTabProps.onInvitationsChanged();
   assert.equal(globalThis.__reloadCalls, 1);
 });

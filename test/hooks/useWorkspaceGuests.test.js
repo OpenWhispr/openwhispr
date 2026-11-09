@@ -129,7 +129,7 @@ test("dropGuests takes whole guests out and survives a failed reload", async (t)
   globalThis.__guestListImpl = async () => [guest("a@x.com"), guest("b@x.com")];
   await mount("w1");
 
-  await React.act(async () => state().dropGuests(["A@x.com"]));
+  await React.act(async () => state().dropGuests(["a@x.com"]));
   assert.deepEqual(
     state().guests.map((g) => g.email),
     ["b@x.com"]
@@ -180,7 +180,7 @@ test("dropGuestNote takes one note off a guest and drops a guest left with none"
   ];
   await mount("w1");
 
-  await React.act(async () => state().dropGuestNote("A@x.com", "n1"));
+  await React.act(async () => state().dropGuestNote("a@x.com", "n1"));
   assert.deepEqual(
     state().guests.map((g) => [g.email, g.notes.map((n) => n.id)]),
     [

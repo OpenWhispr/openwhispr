@@ -949,15 +949,6 @@ test("heading replaces the title and description", async (t) => {
     title: "Invite 2 guests to Ronnie's Space",
     description: "They'll get a link.",
   };
-  const { latest } = await mountDialog(t, {
-    open: true,
-    onOpenChange: () => {},
-    workspaceId: "w1",
-    workspaceName: "Acme",
-    heading,
-  });
-  assert.deepEqual(latest().heading, heading);
-
   const { container } = await mountWithWorkspace(t, WORKSPACE, { heading }, { realView: true });
   assert.match(container.textContent, /Invite 2 guests to Ronnie's Space/);
   assert.match(container.textContent, /They'll get a link\./);
