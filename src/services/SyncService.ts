@@ -1,6 +1,7 @@
 import {
   hasUnrevisionedNoteClear,
   hasNoteRevision,
+  isStaleNoteConflict,
   noteAwaitsCloudResolution,
 } from "../helpers/noteFieldSync.js";
 import type {
@@ -36,7 +37,7 @@ import {
   writeTeamSpacesCapability,
 } from "../lib/teamSpacesCapability";
 import { readIsSubscribed, subscribeIsSubscribed } from "../lib/subscriptionFlag";
-import { readNoteConflictIds } from "../lib/noteConflictRegistry";
+import { readNoteConflictIds, readNoteConflicts } from "../lib/noteConflictRegistry";
 import { pendingLeaderboardLeaveDeservesPriority } from "../lib/pendingLeaderboardLeave";
 import { hasSharedDictionaryPlan } from "../lib/workspaceBilling";
 import {
@@ -169,6 +170,12 @@ const TEAM_SPACES_MAX_RETRY_MS = AUTO_SYNC_INTERVAL_MS;
 // Web Lock name serializing syncAll() across windows (each renderer has its
 // own SyncService instance, but localStorage and the local DB are shared).
 const SYNC_ALL_LOCK = "openwhispr-sync-all";
+// Web Lock prefix, per local note id, held from reading a note to recording
+// the server's answer. The debounced push runs outside SYNC_ALL_LOCK, so while
+// a meeting records into a note it and a sync pass would otherwise PATCH it at
+// once from the same base revision, and the server refuses whichever lands
+// second (409).
+const NOTE_PUSH_LOCK_PREFIX = "openwhispr-note-push:";
 // localStorage keys gating what a pass may sync; a change in another window
 // means sync may have just become possible (sign-in, subscription, backup
 // enabled, Insights opt-in).
@@ -1133,12 +1140,19 @@ export class SyncService {
   }
 
   private async pushNote(id: number): Promise<void> {
+    const denied = await this.withNotePushLock(id, () => this.pushNoteLocked(id));
+    // Its restoring pull waits on note locks, so it runs once this one is free.
+    if (denied) await this.restoreDeniedRows("note");
+  }
+
+  // Returns true when the server refused the edit and denied rows need restoring.
+  private async pushNoteLocked(id: number): Promise<boolean> {
     const note = await window.electronAPI.getNote?.(id);
-    if (!note) return;
-    if (readNoteConflictIds().has(note.client_note_id)) {
+    if (!note) return false;
+    if (!(await this.settleOwnNoteConflict(note))) {
       // An unresolved conflict: the editor's debounced push would auto-resolve
       // it as local-wins (or 409-spam) before the user chose Keep or Refresh.
-      return;
+      return false;
     }
     // Until a pass shows the server has no revisions, a clear on a row without
     // a revision waits for the full pass that resolves it.
@@ -1146,7 +1160,7 @@ export class SyncService {
       // Only a full pass resolves it; stay throttled so typing in the note
       // doesn't start one per debounced push.
       this.requestSyncAll("interval");
-      return;
+      return false;
     }
 
     const { localToCloud, blockedFolderIds } = await this.buildLocalToCloudFolderMap();
@@ -1155,11 +1169,11 @@ export class SyncService {
       // 409'd on a name conflict): the server would reject this note's
       // folder_id as out of scope. Stay pending; the note retries after the
       // folder settles.
-      return;
+      return false;
     }
     const ctx = await this.buildSpaceContext();
     const scope = this.resolvePushScope("note", note, ctx);
-    if (!scope) return;
+    if (!scope) return false;
     const cloudFolderId = note.folder_id ? (localToCloud.get(note.folder_id) ?? null) : null;
 
     try {
@@ -1189,16 +1203,15 @@ export class SyncService {
         // asks the user to Refresh or Keep; no requestSyncAll echo.
         const cloudNote = conflictCloudNote(err);
         if (cloudNote) await this.surfaceNoteConflict(note.client_note_id, cloudNote);
-        return;
+        return false;
       }
       if (isPermissionDenialError(err)) {
         await this.handleDeniedNoteUpdate(note, ctx);
-        await this.restoreDeniedRows("note");
-        return;
+        return true;
       }
       if (isSpaceAccessError(err)) {
         await this.handleRevokedNotePush(note, ctx);
-        return;
+        return false;
       }
       if (isHttpStatus(err, 404) && note.cloud_id) {
         // Defer to a full pass, whose pull disambiguates and applies the
@@ -1206,13 +1219,14 @@ export class SyncService {
         // single push runs outside SYNC_ALL_LOCK, so it must not touch the
         // 404 counts; marking 'error' re-queues the row for that pass.
         await window.electronAPI.markNoteSyncError?.(note.id);
-        return;
+        return false;
       }
       throw err;
     }
     // A push into a team must reach teammates fast; a pull may also carry
     // their concurrent edits back (throttled like other ambient triggers).
     if (scope.space_id) this.requestSyncAll("team-push");
+    return false;
   }
 
   // Single-note create shared by the debounced push and the batch-create
@@ -1754,6 +1768,41 @@ export class SyncService {
     this.emitSyncUiEvent("note-conflict", { clientNoteId, cloudNote });
   }
 
+  // A pull found a newer cloud copy over unpushed local edits. A push of the
+  // note may still be waiting for its answer, which can show that copy was this
+  // device's own write, so decide only once any such push has settled.
+  private async surfacePulledNoteConflict(local: NoteItem, cloudNote: CloudNote): Promise<void> {
+    await this.withNotePushLock(local.id, async () => {
+      const current = await window.electronAPI.getNote?.(local.id);
+      if (current && isStaleNoteConflict(current, cloudNote)) return;
+      await this.surfaceNoteConflict(local.client_note_id, cloudNote);
+    });
+  }
+
+  // Settles a conflict the note's own base already covers (isStaleNoteConflict),
+  // which also frees notes earlier releases parked after racing themselves.
+  // Returns whether the note may push.
+  private async settleOwnNoteConflict(note: NoteItem): Promise<boolean> {
+    const conflict = readNoteConflicts()[note.client_note_id];
+    if (!conflict) return true;
+    if (!isStaleNoteConflict(note, conflict)) return false;
+    await this.settleNoteConflict(note.client_note_id);
+    return true;
+  }
+
+  // Web Locks aren't re-entrant: nothing run under a note's lock may ask for
+  // it again, and a pull (which takes note locks) never runs under one.
+  private withNotePushLock<T>(localId: number, task: () => Promise<T>): Promise<T> {
+    return navigator.locks.request(`${NOTE_PUSH_LOCK_PREFIX}${localId}`, task);
+  }
+
+  // Taken in id order, so two holders of overlapping sets can't deadlock.
+  private withNotePushLocks<T>(localIds: number[], task: () => Promise<T>): Promise<T> {
+    const [first, ...rest] = [...new Set(localIds)].sort((a, b) => a - b);
+    if (first === undefined) return task();
+    return this.withNotePushLock(first, () => this.withNotePushLocks(rest, task));
+  }
+
   private async settleNoteConflict(clientNoteId: string): Promise<void> {
     const { clearNoteConflict } = await import("../stores/noteStore.js");
     clearNoteConflict(clientNoteId);
@@ -2235,6 +2284,15 @@ export class SyncService {
 
   private async pushPendingNotes(teamOnly = false): Promise<void> {
     let pending = (await window.electronAPI.getPendingNotes?.(teamOnly ? "team" : undefined)) ?? [];
+    // A conflict this device's own write left behind is no conflict: settle it
+    // first, so the note pushes in this pass (see isStaleNoteConflict).
+    const conflicts = readNoteConflicts();
+    for (const note of pending) {
+      const conflict = conflicts[note.client_note_id];
+      if (conflict && isStaleNoteConflict(note, conflict)) {
+        await this.settleNoteConflict(note.client_note_id);
+      }
+    }
     const conflicted = readNoteConflictIds();
     // A surfaced conflict already holds its cloud copy; only rows still
     // awaiting one need the snapshot pull, as an unchanged cloud row may be
@@ -2288,91 +2346,135 @@ export class SyncService {
     const fresh = pushable.filter(({ note }) => !note.cloud_id);
 
     let denied = false;
-    for (const { note, scope } of migration) {
-      try {
-        // Carry the full content: a pending row may hold edits that never
-        // reached the server (offline debounced pushes fail silently), and
-        // this PATCH marks the row synced — settling it without content
-        // would strand the edit locally and hand the next pull a stale-but-
-        // newer cloud copy to overwrite it with.
-        const cloudFolderId = note.folder_id ? (localToCloud.get(note.folder_id) ?? null) : null;
-        const cloud = await NotesService.update(note.cloud_id!, {
-          client_note_id: note.client_note_id,
-          ...this.notePushPayload(note, cloudFolderId, scope),
-        });
-        // Settle only if the row wasn't edited while the PATCH was in flight.
-        await window.electronAPI.markNoteSyncedIfUnchanged?.(
-          note.id,
-          note,
-          note.cloud_id!,
-          cloud.updated_at,
-          cloud.user_id ?? null,
-          cloud.revision ?? null,
-          cloud
-        );
-        this.clear404(NOTE_UPDATE_404_KEY, note.client_note_id);
-      } catch (err) {
-        if (isAuthContextError(err)) throw err;
-        if (isNoteVersionConflictError(err)) {
-          // Stays pending (not error): unpushed local work awaiting the
-          // user's Keep/Refresh choice; the registry gate above skips the
-          // row on later passes so the 409 doesn't repeat. A 409 also proves
-          // the note is still accessible, so reset any prior 404 streak.
-          const cloudNote = conflictCloudNote(err);
-          if (cloudNote) await this.surfaceNoteConflict(note.client_note_id, cloudNote);
+    for (const { note: queued } of migration) {
+      await this.withNotePushLock(queued.id, async () => {
+        // A debounced push may have sent the note while this pass waited for
+        // its lock: read it again, so the PATCH carries the base it left.
+        const note = await window.electronAPI.getNote?.(queued.id);
+        const scope = note ? this.stillPushable(note, queued, blockedFolderIds, ctx) : null;
+        if (!note || !scope) return;
+        try {
+          // Carry the full content: a pending row may hold edits that never
+          // reached the server (offline debounced pushes fail silently), and
+          // this PATCH marks the row synced — settling it without content
+          // would strand the edit locally and hand the next pull a stale-but-
+          // newer cloud copy to overwrite it with.
+          const cloudFolderId = note.folder_id ? (localToCloud.get(note.folder_id) ?? null) : null;
+          const cloud = await NotesService.update(note.cloud_id!, {
+            client_note_id: note.client_note_id,
+            ...this.notePushPayload(note, cloudFolderId, scope),
+          });
+          // Settle only if the row wasn't edited while the PATCH was in flight.
+          await window.electronAPI.markNoteSyncedIfUnchanged?.(
+            note.id,
+            note,
+            note.cloud_id!,
+            cloud.updated_at,
+            cloud.user_id ?? null,
+            cloud.revision ?? null,
+            cloud
+          );
           this.clear404(NOTE_UPDATE_404_KEY, note.client_note_id);
-        } else if (isPermissionDenialError(err)) {
-          await this.handleDeniedNoteUpdate(note, ctx);
-          denied = true;
-        } else if (isSpaceAccessError(err)) {
-          await this.handleRevokedNotePush(note, ctx);
-          this.clear404(NOTE_UPDATE_404_KEY, note.client_note_id);
-        } else if (isHttpStatus(err, 404)) {
-          await this.handleNoteUpdate404(note, ctx);
-        } else {
-          await window.electronAPI.markNoteSyncError?.(note.id);
+        } catch (err) {
+          if (isAuthContextError(err)) throw err;
+          if (isNoteVersionConflictError(err)) {
+            // Stays pending (not error): unpushed local work awaiting the
+            // user's Keep/Refresh choice; the registry gate above skips the
+            // row on later passes so the 409 doesn't repeat. A 409 also proves
+            // the note is still accessible, so reset any prior 404 streak.
+            const cloudNote = conflictCloudNote(err);
+            if (cloudNote) await this.surfaceNoteConflict(note.client_note_id, cloudNote);
+            this.clear404(NOTE_UPDATE_404_KEY, note.client_note_id);
+          } else if (isPermissionDenialError(err)) {
+            await this.handleDeniedNoteUpdate(note, ctx);
+            denied = true;
+          } else if (isSpaceAccessError(err)) {
+            await this.handleRevokedNotePush(note, ctx);
+            this.clear404(NOTE_UPDATE_404_KEY, note.client_note_id);
+          } else if (isHttpStatus(err, 404)) {
+            await this.handleNoteUpdate404(note, ctx);
+          } else {
+            await window.electronAPI.markNoteSyncError?.(note.id);
+          }
         }
-      }
+      });
     }
     if (denied) await this.restoreDeniedRows("note");
 
     for (let i = 0; i < fresh.length; i += BATCH_SIZE) {
       const batch = fresh.slice(i, i + BATCH_SIZE);
-      const recorded = await recordNoteCreateAttempts(batch.map(({ note }) => note.client_note_id));
-      const chunk = batch.filter(({ note }) => recorded.has(note.client_note_id));
-      if (chunk.length === 0) continue;
-      try {
-        const { created } = await NotesService.batchCreate(
-          chunk.map(({ note: n, scope }) => ({
-            client_note_id: n.client_note_id,
-            ...buildNoteCreatePayload(
-              n,
-              n.folder_id ? (localToCloud.get(n.folder_id) ?? null) : null
-            ),
-            created_at: n.created_at,
-            ...scope,
-          }))
-        );
-        for (const cloud of created) {
-          const local = chunk.find(({ note }) => note.client_note_id === cloud.client_note_id);
-          if (local) await this.acknowledgeCloudNoteCreate(local.note, cloud);
-        }
-      } catch (err) {
-        if (isAuthContextError(err)) throw err;
-        if (isSpaceAccessError(err) || isPermissionDenialError(err)) {
-          // A typed rejection can't be attributed to a row from the batch
-          // response; create individually so one rejected note settles
-          // terminally without stranding (or relocating) the rest.
-          for (const { note, scope } of chunk) {
-            await this.pushFreshNote(note, scope, localToCloud, ctx);
+      await this.withNotePushLocks(
+        batch.map(({ note }) => note.id),
+        async () => {
+          // A debounced push may have created some of these meanwhile. They
+          // hold a cloud id now, and their later text goes out as an update.
+          const unsent: Array<{ note: NoteItem; scope: PushScopeFields }> = [];
+          for (const { note: queued } of batch) {
+            const note = await window.electronAPI.getNote?.(queued.id);
+            const scope = note ? this.stillPushable(note, queued, blockedFolderIds, ctx) : null;
+            if (note && scope) unsent.push({ note, scope });
           }
-        } else {
-          for (const { note } of chunk) {
-            await window.electronAPI.markNoteSyncError?.(note.id);
+          const recorded = await recordNoteCreateAttempts(
+            unsent.map(({ note }) => note.client_note_id)
+          );
+          const chunk = unsent.filter(({ note }) => recorded.has(note.client_note_id));
+          if (chunk.length === 0) return;
+          try {
+            const { created } = await NotesService.batchCreate(
+              chunk.map(({ note: n, scope }) => ({
+                client_note_id: n.client_note_id,
+                ...buildNoteCreatePayload(
+                  n,
+                  n.folder_id ? (localToCloud.get(n.folder_id) ?? null) : null
+                ),
+                created_at: n.created_at,
+                ...scope,
+              }))
+            );
+            for (const cloud of created) {
+              const local = chunk.find(({ note }) => note.client_note_id === cloud.client_note_id);
+              if (local) await this.acknowledgeCloudNoteCreate(local.note, cloud);
+            }
+          } catch (err) {
+            if (isAuthContextError(err)) throw err;
+            if (isSpaceAccessError(err) || isPermissionDenialError(err)) {
+              // A typed rejection can't be attributed to a row from the batch
+              // response; create individually so one rejected note settles
+              // terminally without stranding (or relocating) the rest.
+              for (const { note, scope } of chunk) {
+                await this.pushFreshNote(note, scope, localToCloud, ctx);
+              }
+            } else {
+              for (const { note } of chunk) {
+                await window.electronAPI.markNoteSyncError?.(note.id);
+              }
+            }
           }
         }
-      }
+      );
     }
+  }
+
+  // The scope to push a queued note in, read again under its push lock, or
+  // null once this push no longer applies: sent meanwhile, deleted, parked
+  // behind a conflict or create, or still behind its folder's own change.
+  private stillPushable(
+    note: NoteItem,
+    queued: NoteItem,
+    blockedFolderIds: Set<number>,
+    ctx: SpaceSyncContext
+  ): PushScopeFields | null {
+    if (note.deleted_at || note.sync_status === "synced" || note.cloud_id !== queued.cloud_id) {
+      return null;
+    }
+    if (
+      readNoteConflictIds().has(note.client_note_id) ||
+      noteAwaitsCloudResolution(note, this.noteRevisionsKnown !== false)
+    ) {
+      return null;
+    }
+    if (note.folder_id && blockedFolderIds.has(note.folder_id)) return null;
+    return this.resolvePushScope("note", note, ctx);
   }
 
   // A cloud copy only exists through prior consent (backup or sync-and-share),
@@ -2514,7 +2616,7 @@ export class SyncService {
                 } else if (isCloudNoteNewer(cloudNote, local)) {
                   // 'error' rows carry unpushed work just like 'pending' ones.
                   if (local.sync_status !== "synced") {
-                    await this.surfaceNoteConflict(local.client_note_id, cloudNote);
+                    await this.surfacePulledNoteConflict(local, cloudNote);
                   } else if (cloudNote.folder_id && !cloudToLocal.has(cloudNote.folder_id)) {
                     // Filing to the fallback would stick (the advanced cursor
                     // never re-pulls this row) — park until the folder arrives.
@@ -2626,7 +2728,7 @@ export class SyncService {
                 // A newer cloud copy over unpushed local edits ('pending' or
                 // 'error'): surface the conflict to the editor banner instead
                 // of silently dropping the local edit (plan §7.3).
-                await this.surfaceNoteConflict(local.client_note_id, cloudNote);
+                await this.surfacePulledNoteConflict(local, cloudNote);
                 continue;
               }
               if (cloudNote.folder_id && !cloudToLocal.has(cloudNote.folder_id)) {
