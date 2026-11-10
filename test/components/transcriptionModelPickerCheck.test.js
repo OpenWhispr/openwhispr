@@ -638,11 +638,13 @@ test("a browsed tab says the saved provider stays in use until a model is picked
   await panel.selectTab("deepgram");
   await panel.selectModel("nova-3");
   assert.equal(panel.state().meetingCloudTranscriptionProvider, "deepgram");
+  await panel.setProps({ selectedCloudProvider: "deepgram", selectedCloudModel: "nova-3" });
   assert.equal(hint(panel), undefined, "a picked model saves the tab");
 });
 
 test("a saved provider this picker doesn't offer is not named", async (t) => {
-  // Dictation's batch provider, which Note Recording falls back to but can't stream.
+  // A batch provider the legacy settings copy carried over from dictation, which Note
+  // Recording can't stream.
   const panel = await mount(t, {
     overrides: {
       transcriptionContext: "meeting",
