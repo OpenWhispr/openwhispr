@@ -65,3 +65,28 @@ test("a part the model empties (filler only) is left out of the joined text", as
   );
   assert.equal(result, "First. Third.");
 });
+
+test("S1-mini's answers go through the wider output check, part by part", async () => {
+  const { getCleanupPromptProfile, runProfiledCleanup } = await load();
+  const profile = getCleanupPromptProfile("s1-mini-q4_k_m", dictation);
+  const raw = "um so can you uh send me the report by friday";
+  await assert.rejects(
+    runProfiledCleanup(profile, raw, () => Promise.resolve("")),
+    { code: "CLEANUP_OUTPUT_INVALID" }
+  );
+  await assert.rejects(
+    runProfiledCleanup(profile, raw, () => Promise.resolve(`${raw} `.repeat(4))),
+    { code: "CLEANUP_OUTPUT_INVALID" }
+  );
+  assert.equal(await runProfiledCleanup(profile, "um uh", () => Promise.resolve("")), "");
+
+  const answers = ["First part is fine.", ""];
+  await assert.rejects(
+    runProfiledCleanup(
+      { ...profile, maxChunkWords: 6 },
+      "first part is fine. second part has real words too.",
+      () => Promise.resolve(answers.shift())
+    ),
+    { code: "CLEANUP_OUTPUT_INVALID" }
+  );
+});
