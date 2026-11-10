@@ -171,6 +171,7 @@ const {
   selectRacingMicEntryIndices,
   partitionOverlappingPendingMicFinals,
 } = require("./meetingMicHoldback");
+const { fragmentFilterLanguages, isWrongScriptFragment } = require("./meetingFragmentFilter");
 const {
   computeChunkStats,
   resolveMicChunkAction,
@@ -8436,6 +8437,13 @@ class IPCHandlers {
       streaming.onFinalTranscript = (text, timestamp) => {
         const segments = streaming.completedSegments;
         const latestSegment = segments.length > 0 ? segments[segments.length - 1] : text;
+        if (
+          isWrongScriptFragment(latestSegment, fragmentFilterLanguages(meetingConnectionOptions))
+        ) {
+          debugLogger.debug("Dropping wrong-script meeting fragment", { source });
+          send("meeting-transcription-segment", { text: "", source, type: "partial" });
+          return;
+        }
         let micSuppression = null;
         if (source === "mic") {
           micSuppression = shouldSuppressMicTranscriptSegment(timestamp, Date.now());
@@ -9587,6 +9595,10 @@ class IPCHandlers {
 
         if (result?.success && result.text?.trim()) {
           const text = result.text.trim();
+          if (isWrongScriptFragment(text, fragmentFilterLanguages(meetingConnectionOptions))) {
+            debugLogger.debug("Dropping wrong-script local meeting fragment", { source });
+            return;
+          }
           const segTimestamp = Date.now();
           let micSuppression = null;
           if (source === "mic") {
@@ -9966,13 +9978,9 @@ class IPCHandlers {
     };
 
     const disconnectMeetingStreaming = async ({ flushPending = false } = {}) => {
-      const results = await Promise.all([
-        this._meetingMicStreaming
-          ? this._meetingMicStreaming.disconnect().catch(() => ({ text: "" }))
-          : Promise.resolve({ text: "" }),
-        this._meetingSystemStreaming
-          ? this._meetingSystemStreaming.disconnect().catch(() => ({ text: "" }))
-          : Promise.resolve({ text: "" }),
+      await Promise.all([
+        this._meetingMicStreaming?.disconnect().catch(() => {}),
+        this._meetingSystemStreaming?.disconnect().catch(() => {}),
       ]);
 
       if (flushPending) {
@@ -9980,7 +9988,6 @@ class IPCHandlers {
       }
 
       resetMeetingStreamingState();
-      return results;
     };
 
     const clearMeetingSystemAudioSilenceTimer = () => {
@@ -10919,7 +10926,7 @@ class IPCHandlers {
           return { success: true, transcript, diarizationSessionId };
         }
 
-        const results = await disconnectMeetingStreaming({ flushPending: true });
+        await disconnectMeetingStreaming({ flushPending: true });
         const {
           diarizationPcmPath,
           diarizationSegments,
@@ -10927,9 +10934,9 @@ class IPCHandlers {
           diarizationStartedAt,
           diarizedSource,
         } = await captureMeetingDiarizationState();
-        const transcript =
-          buildOrderedTranscriptText(diarizationSegments) ||
-          [results[0]?.text, results[1]?.text].filter(Boolean).join(" ");
+        // An empty accepted transcript is intentional when every final was filtered.
+        // Provider accumulators still contain those rejected rows.
+        const transcript = buildOrderedTranscriptText(diarizationSegments);
 
         const sessionSpeakerConfigSnapshot = this.activeMeetingSpeakerConfig;
         const noteIdSnapshot = meetingNoteId;

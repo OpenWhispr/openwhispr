@@ -196,6 +196,7 @@ const getMeetingTranscriptionOptions = () => {
       managedContext: managed.context,
       enterpriseIdentity,
       language: getBaseLanguageCode(getSettings().preferredLanguage),
+      spokenLanguages: getSettings().spokenLanguages,
     };
   const state = getSettings();
   const resolved = selectResolvedMeetingTranscription(state);
@@ -221,6 +222,7 @@ const getMeetingTranscriptionOptions = () => {
     ...(state.policyBlockedLocalScopes?.includes("meeting") ? { localModel: "" } : {}),
     enterpriseIdentity,
     enterpriseSetupMode: state.enterpriseTranscriptionSetupMode,
+    spokenLanguages: state.spokenLanguages,
   };
 };
 
