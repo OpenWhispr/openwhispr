@@ -75,10 +75,10 @@ test("a last row stamped just before the recording starts still covers its words
   const manager = new DiarizationManager();
 
   const merged = manager.mergeWithTranscript(
-    [systemSegment(-0.5, "hello there everyone how are you")],
+    [systemSegment(-0.5, "hello there everyone how are you all doing this morning")],
     [
-      { start: -2, end: -0.4, speaker: "speaker_0" },
-      { start: 0.2, end: 3, speaker: "speaker_1" },
+      { start: -2, end: 1, speaker: "speaker_0" },
+      { start: 1, end: 4, speaker: "speaker_1" },
     ]
   );
 
