@@ -509,12 +509,16 @@ class DiarizationManager {
 
       if (seg.source === diarizedSource && seg.timestamp != null) {
         const segStart = seg.timestamp;
-        const spokenEnd = segStart + spokenSeconds(seg.text);
         const nextStart = nextTimestampAt(index, diarizedSource);
-        // Stretching a row to the next one would hand the pause after it, and
-        // whoever filled it, to the row; the busiest speaker won most rows that way.
-        const segEnd =
-          nextStart != null && nextStart > segStart ? Math.min(nextStart, spokenEnd) : spokenEnd;
+        // Completion times and audio-range starts aren't speech onsets; retain
+        // their original matching window until speech-aligned bounds are available.
+        let segEnd = nextStart ?? segStart + 2.5;
+        if (seg.timestampIsSpeechStart !== false) {
+          const spokenEnd = segStart + spokenSeconds(seg.text);
+          // Exclude the pause after an onset-timed row from speaker matching.
+          segEnd =
+            nextStart != null && nextStart > segStart ? Math.min(nextStart, spokenEnd) : spokenEnd;
+        }
         const midpoint = segStart + (segEnd - segStart) / 2;
         let overlapSpeaker = null;
         let nearestSpeaker = null;
