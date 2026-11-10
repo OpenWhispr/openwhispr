@@ -42,9 +42,6 @@ export function subscribeToAnalyticsRefresh(
   let refreshRunning = false;
   let trailingLocalRefreshRequested = false;
   let trailingRemoteRefreshRequested = false;
-  // A view hidden in the tray would otherwise read the account summary after
-  // every dictation. The change waits for the window to show instead.
-  let changedWhileHidden = false;
   const runRefresh = async (remoteOnly = false): Promise<void> => {
     if (disposed || (remoteOnly && window.document.visibilityState !== "visible")) {
       return;
@@ -74,10 +71,6 @@ export function subscribeToAnalyticsRefresh(
     }
   };
   const requestLocalRefresh = (): void => {
-    if (cloudInsightsActive && window.document.visibilityState !== "visible") {
-      changedWhileHidden = true;
-      return;
-    }
     void runRefresh();
   };
   const requestRemoteRefresh = (): void => {
@@ -106,12 +99,7 @@ export function subscribeToAnalyticsRefresh(
     if (remoteRefreshTimeoutId !== null) window.clearTimeout(remoteRefreshTimeoutId);
     remoteRefreshTimeoutId = window.setTimeout(() => {
       remoteRefreshTimeoutId = null;
-      if (changedWhileHidden) {
-        changedWhileHidden = false;
-        void runRefresh();
-      } else {
-        requestRemoteRefresh();
-      }
+      requestRemoteRefresh();
     }, ANALYTICS_REMOTE_REFRESH_DEBOUNCE_MS);
   };
 

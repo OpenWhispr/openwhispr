@@ -739,10 +739,9 @@ test("analytics drops remote-only trailing work when the view becomes hidden", a
   dispose();
 });
 
-// Insights hidden in the tray still hears every dictation. Reading the account
-// summary for each one is cloud work nobody sees, so the change waits for the
-// window, and only a check for other devices' changes is told nothing changed.
-test("analytics refresh holds a hidden view's local change until the window shows", async (t) => {
+// Your usage may wait out a fresh summary only on a check for other devices'
+// changes, so the refresh is told which kind it is.
+test("analytics refresh tells a local change apart from a check for remote changes", async (t) => {
   const documentListeners = new Map();
   const timeouts = new Map();
   let nextTimeoutId = 1;
@@ -788,15 +787,8 @@ test("analytics refresh holds a hidden view's local change until the window show
   assert.deepEqual(refreshes, [true], "the mounted view loads everything");
   await Promise.resolve();
 
-  fakeDocument.visibilityState = "hidden";
   localChangeListener();
-  localChangeListener();
-  assert.deepEqual(refreshes, [true], "a hidden view reads nothing for a dictation");
-
-  fakeDocument.visibilityState = "visible";
-  documentListeners.get("visibilitychange")();
-  runDebounced();
-  assert.deepEqual(refreshes, [true, true], "showing the window loads the held change once");
+  assert.deepEqual(refreshes, [true, true], "a dictation loads everything");
   await Promise.resolve();
 
   documentListeners.get("visibilitychange")();
