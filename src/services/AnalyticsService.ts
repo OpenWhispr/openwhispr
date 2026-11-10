@@ -357,8 +357,15 @@ function isAnalyticsSummary(value: unknown): value is AnalyticsSummary {
   );
 }
 
+/**
+ * `allow` lets the API answer from a copy a few minutes old, for a check on
+ * other devices' changes. `refresh` reads the database and updates that copy.
+ */
+export type AccountSummaryCache = "allow" | "refresh";
+
 export async function getAccountAnalyticsSummary(
-  accountId: string | null = null
+  accountId: string | null = null,
+  cache: AccountSummaryCache = "refresh"
 ): Promise<AnalyticsSummary> {
   const requestHistoryBackfill = Boolean(
     accountId && !requestedHistoryBackfillAccounts.has(accountId)
@@ -368,6 +375,7 @@ export async function getAccountAnalyticsSummary(
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
   });
   if (requestHistoryBackfill) params.set("backfill", "true");
+  params.set("cache", cache);
 
   let summary: unknown;
   try {

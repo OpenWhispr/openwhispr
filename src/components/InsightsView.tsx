@@ -14,6 +14,7 @@ import {
 import {
   getAccountAnalyticsSummary,
   subscribeToAnalyticsRefresh,
+  type AccountSummaryCache,
 } from "../services/AnalyticsService";
 import { syncService } from "../services/SyncService";
 import { buildAnalyticsActivityDays } from "../helpers/analytics";
@@ -391,49 +392,52 @@ function YourUsage({
   // batch and leave the winner reading a summary the other has not finished.
   const requestIdRef = useRef(0);
 
-  const load = useCallback(async () => {
-    const requestId = ++requestIdRef.current;
-    setLoading(true);
-    setSyncError(false);
+  const load = useCallback(
+    async (cache: AccountSummaryCache = "refresh") => {
+      const requestId = ++requestIdRef.current;
+      setLoading(true);
+      setSyncError(false);
 
-    // The device read stands on its own. Folding it into the same catch as the
-    // cloud fetch meant a failed local read fell through to a summary of
-    // zeros — under a confident "On this device", with no error anywhere — and
-    // told the user their history was empty.
-    let local: AnalyticsSummary;
-    try {
-      local = await window.electronAPI.getAnalyticsSummary();
-    } catch (error) {
-      if (requestId !== requestIdRef.current) return;
-      console.error("Reading local Insights failed:", error);
-      setLoadFailed(true);
-      setLoading(false);
-      return;
-    }
-    if (requestId !== requestIdRef.current) return;
-    setLoadFailed(false);
-
-    try {
-      if (isLoaded && syncActive) {
-        if (!(await syncService.syncAnalyticsNow())) {
-          throw new Error("Insights uploads are not enabled for this account");
-        }
-        const account = await getAccountAnalyticsSummary(accountId);
+      // The device read stands on its own. Folding it into the same catch as the
+      // cloud fetch meant a failed local read fell through to a summary of
+      // zeros — under a confident "On this device", with no error anywhere — and
+      // told the user their history was empty.
+      let local: AnalyticsSummary;
+      try {
+        local = await window.electronAPI.getAnalyticsSummary();
+      } catch (error) {
         if (requestId !== requestIdRef.current) return;
-        if (accountId) cacheInsightsSummary(accountId, account);
-        setSummary(account);
-      } else {
-        setSummary(local);
+        console.error("Reading local Insights failed:", error);
+        setLoadFailed(true);
+        setLoading(false);
+        return;
       }
-    } catch {
       if (requestId !== requestIdRef.current) return;
-      // Real device data, and the pill says the cloud is the part that failed.
-      setSummary(local);
-      setSyncError(true);
-    } finally {
-      if (requestId === requestIdRef.current) setLoading(false);
-    }
-  }, [accountId, isLoaded, syncActive]);
+      setLoadFailed(false);
+
+      try {
+        if (isLoaded && syncActive) {
+          if (!(await syncService.syncAnalyticsNow())) {
+            throw new Error("Insights uploads are not enabled for this account");
+          }
+          const account = await getAccountAnalyticsSummary(accountId, cache);
+          if (requestId !== requestIdRef.current) return;
+          if (accountId) cacheInsightsSummary(accountId, account);
+          setSummary(account);
+        } else {
+          setSummary(local);
+        }
+      } catch {
+        if (requestId !== requestIdRef.current) return;
+        // Real device data, and the pill says the cloud is the part that failed.
+        setSummary(local);
+        setSyncError(true);
+      } finally {
+        if (requestId === requestIdRef.current) setLoading(false);
+      }
+    },
+    [accountId, isLoaded, syncActive]
+  );
 
   useEffect(
     () =>
@@ -441,7 +445,8 @@ function YourUsage({
         // A check for other devices' changes can wait out a summary this fresh.
         if (!dataChanged && accountId && isInsightFresh(readCachedInsightsSummary(accountId)))
           return;
-        return load();
+        // Only a check may be answered from the API's copy; a change needs the database.
+        return load(dataChanged ? "refresh" : "allow");
       }, syncActive),
     [accountId, load, syncActive]
   );

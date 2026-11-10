@@ -65,4 +65,8 @@ test("Your usage skips only a check for remote changes while its summary is fres
     "a dictation always reloads; focus and the interval wait out a fresh summary"
   );
   assert.ok(view.includes("if (accountId) cacheInsightsSummary(accountId, account);"));
+  assert.ok(
+    view.includes('return load(dataChanged ? "refresh" : "allow");'),
+    "only a check may be answered from the API's copy"
+  );
 });
