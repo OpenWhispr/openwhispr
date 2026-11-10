@@ -4623,6 +4623,7 @@
     "wordsReady_other": "{{count}} words ready",
     "promptLimitNotice": "Your dictionary is {{chars}} characters. Groq and Whisper models read only the last few hundred characters of it, so a shorter list works better there. Other models get the full list.",
     "openRouterIgnoredNotice": "OpenRouter doesn't pass your dictionary to its speech models, so these words won't guide transcription while it's selected for dictation.",
+    "localModelIgnoredNotice": "{{model}} can't use your dictionary, so these words won't guide transcription while it's selected for dictation. AI cleanup still applies them when it's on.",
     "exportDictionary": "Export dictionary",
     "exportFailed": "Export failed",
     "editWord": "Edit {{word}}",

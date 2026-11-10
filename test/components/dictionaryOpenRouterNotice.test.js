@@ -10,6 +10,7 @@ const {
 } = require("../lib/rendererTestHarness");
 
 const IGNORED_NOTICE = "dictionary.openRouterIgnoredNotice";
+const LOCAL_NOTICE = "dictionary.localModelIgnoredNotice";
 const LIMIT_NOTICE = "dictionary.promptLimitNotice";
 const LONG_DICTIONARY = Array.from({ length: 60 }, (_, i) => `SpecializedTerm${i}`);
 
@@ -115,11 +116,14 @@ async function mountDictionary(t) {
         transcriptionMode: "providers",
         remoteTranscriptionUrl: "",
         cloudTranscriptionBaseUrl: "",
+        localTranscriptionProvider: "whisper",
         ...dictation,
       });
       rerender();
     });
-    return textsOf(tree).filter((text) => text === IGNORED_NOTICE || text === LIMIT_NOTICE);
+    return textsOf(tree).filter((text) =>
+      [IGNORED_NOTICE, LOCAL_NOTICE, LIMIT_NOTICE].includes(text)
+    );
   };
   const setEnterprise = (state) =>
     React.act(async () => useEnterpriseIdentityStore.setState(state));
@@ -180,4 +184,36 @@ test("the Dictionary says when OpenRouter won't pass its words on", async (t) =>
   });
   t.after(() => setEnterprise({ status: "idle", config: null }));
   assert.deepEqual(await notices(OPENROUTER_TAB), [], "managed workspace");
+});
+
+test("the Dictionary says when the local model can't use its words", async (t) => {
+  const { notices } = await mountDictionary(t);
+  const parakeet = (parakeetModel) => ({
+    useLocalWhisper: true,
+    localTranscriptionProvider: "nvidia",
+    parakeetModel,
+  });
+
+  assert.deepEqual(
+    await notices({
+      useLocalWhisper: true,
+      localTranscriptionProvider: "cohere",
+      cohereModel: "cohere-transcribe-03-2026",
+    }),
+    [LOCAL_NOTICE],
+    "Cohere Transcribe"
+  );
+  assert.deepEqual(await notices(parakeet("parakeet-tdt-0.6b-v3")), [LOCAL_NOTICE], "Parakeet");
+  assert.deepEqual(
+    await notices(parakeet("nemotron-speech-streaming-en-0.6b")),
+    [LOCAL_NOTICE],
+    "Nemotron"
+  );
+  assert.deepEqual(await notices(parakeet("orukeet-v0.1.0")), [], "Orukeet takes hotwords");
+  assert.deepEqual(await notices({ useLocalWhisper: true }), [], "local Whisper takes a prompt");
+  assert.deepEqual(
+    await notices({ ...parakeet("parakeet-tdt-0.6b-v3"), useLocalWhisper: false, ...OPENAI }),
+    [],
+    "cloud dictation"
+  );
 });
