@@ -66,13 +66,17 @@ jobs:
 
   build-linux:
     needs: tests
-    # The 26.04 runner's amd64v3 loader cannot run the older-CPU checks, and its
-    # glibc would raise the minimum for everything compiled in this job.
-    runs-on: ubuntu-24.04
+    # SQLite is compiled here and links the runner's glibc: on 24.04 or later it
+    # needs GLIBC_2.38 and the app no longer starts on Ubuntu 22.04 (#3114). The
+    # 26.04 runner's amd64v3 loader also cannot run the older-CPU checks.
+    runs-on: ubuntu-22.04
     env:
       # SQLite is loaded before windows open, including on CPUs without AVX2 (#3038).
       CFLAGS: "-march=x86-64 -mtune=generic -mno-avx -mno-avx2"
       CXXFLAGS: "-march=x86-64 -mtune=generic -mno-avx -mno-avx2"
+      # gcc 11 and 12 on this runner reject Electron 43's V8 headers; clang 15 ships with it.
+      CC: clang-15
+      CXX: clang++-15
       OPENWHISPR_VERIFY_SQLITE_BASELINE: "1"
     steps:
       - uses: actions/checkout@v7
@@ -133,7 +137,7 @@ jobs:
       - name: Install Linux build and packaging dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y rpm libx11-dev libxtst-dev libatspi2.0-dev libglib2.0-dev libpipewire-0.3-dev pkg-config qemu-user libgtk-3-0t64 libnss3 libasound2t64
+          sudo apt-get install -y rpm libx11-dev libxtst-dev libatspi2.0-dev libglib2.0-dev libpipewire-0.3-dev pkg-config qemu-user libgtk-3-0 libnss3 libasound2
 
       - name: Create runtime env
         run: |
