@@ -74,6 +74,8 @@ test("a row written without spaces is measured by its words", () => {
 test("a last row stamped just before the recording starts still covers its words", () => {
   const manager = new DiarizationManager();
 
+  // Ten words take about 4 s and reach well into speaker_1; a fixed 2.5 s
+  // window would end at 2 s and pick speaker_0.
   const merged = manager.mergeWithTranscript(
     [systemSegment(-0.5, "hello there everyone how are you all doing this morning")],
     [
