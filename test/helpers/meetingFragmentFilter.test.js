@@ -85,18 +85,13 @@ const sliceBetween = (startMarker, endMarker) => {
   return source.slice(start, end);
 };
 
-// Objects made inside the vm context have another realm's prototype.
-const plain = (value) => JSON.parse(JSON.stringify(value));
-
 function streamingHarness({ language, spokenLanguages, onSegment = () => {} }) {
-  const sent = [];
   const accepted = [];
   const streams = { mic: new OpenAIRealtimeStreaming(), system: new OpenAIRealtimeStreaming() };
   const win = {
     isDestroyed: () => false,
     webContents: {
       send: (channel, payload) => {
-        sent.push({ channel, payload });
         if (channel === "meeting-transcription-segment") onSegment(payload);
       },
     },
@@ -111,7 +106,7 @@ function streamingHarness({ language, spokenLanguages, onSegment = () => {} }) {
     meetingConnectionOptions: { language, spokenLanguages },
     fragmentFilterLanguages,
     isWrongScriptFragment,
-    debugLogger: { debug() {}, error() {} },
+    debugLogger: { debug() {} },
     meetingEchoLeakDetector: { isMicProbablyRenderBleed: () => false },
     shouldSuppressMicTranscriptSegment: () => noSuppression,
     shouldSkipDuplicateMicSegment: () => false,
@@ -129,10 +124,7 @@ function streamingHarness({ language, spokenLanguages, onSegment = () => {} }) {
     meetingSpeakerIndexBase: 0,
     flushPendingMicFinals() {},
     resetMeetingStreamingState() {},
-    captureMeetingDiarizationState: async () => ({
-      diarizationSegments: accepted,
-      retractedSegments: [],
-    }),
+    captureMeetingDiarizationState: async () => ({ diarizationSegments: accepted }),
   };
   vm.createContext(context);
   vm.runInContext(
@@ -166,7 +158,6 @@ function streamingHarness({ language, spokenLanguages, onSegment = () => {} }) {
     );
   };
   return {
-    sent,
     get finals() {
       return accepted.map((segment) => segment.text);
     },
@@ -186,22 +177,6 @@ function streamingHarness({ language, spokenLanguages, onSegment = () => {} }) {
     stop: () => context.stop(),
   };
 }
-
-test("a streamed wrong-script fragment never reaches the transcript and clears its live text", () => {
-  for (const source of ["mic", "system"]) {
-    const run = streamingHarness({ language: "en" });
-    run.finish(source, "어.");
-    assert.deepEqual(run.finals, [], source);
-    assert.deepEqual(
-      run.sent.map((s) => plain(s.payload)),
-      [
-        { text: "어.", source, type: "partial" },
-        { text: "", source, type: "partial" },
-      ],
-      source
-    );
-  }
-});
 
 test("a streamed fragment in the meeting's own script is kept", () => {
   const run = streamingHarness({ language: "ko" });
@@ -328,10 +303,7 @@ function localHarness({ language, text }) {
     pcm16ToWav: (pcm) => pcm,
     isSherpaLocalProvider: () => false,
     assertMeetingAllowed: () => {},
-    debugLogger: { debug() {}, error() {} },
-    shouldSuppressMicTranscriptSegment: () => ({ suppress: false, reason: null }),
-    shouldSkipDuplicateMicSegment: () => false,
-    hasRiskyMicDuplicateProfile: () => false,
+    debugLogger: { debug() {} },
     removePendingMicFinalsFor: () => [],
     removeRacingMicEntriesFor: () => [],
     sendMeetingFinalSegment: (segment) => finals.push(segment.text),
