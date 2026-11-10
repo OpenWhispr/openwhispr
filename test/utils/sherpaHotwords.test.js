@@ -37,12 +37,12 @@ test("a word starting with ':' never reaches sherpa, which reads it as a score",
   ]);
 });
 
-test("hotwords collapse whitespace, drop case duplicates and skip non-strings", async () => {
+test("hotwords collapse whitespace and drop case duplicates", async () => {
   const { buildSherpaHotwords } = await load();
-  assert.deepEqual(
-    buildSherpaHotwords(["  Open\tWhispr  ", "openwhispr", "", 7, null, "OpenWhispr"]),
-    ["Open Whispr", "openwhispr"]
-  );
+  assert.deepEqual(buildSherpaHotwords(["  Open\tWhispr  ", "openwhispr", "", "OpenWhispr"]), [
+    "Open Whispr",
+    "openwhispr",
+  ]);
   assert.deepEqual(buildSherpaHotwords([]), []);
 });
 

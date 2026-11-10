@@ -322,7 +322,7 @@ export default function DictionaryView({ onUpgrade }: DictionaryViewProps): Reac
   const localSherpaModel = useSettingsStore((settings) => {
     const s = selectPolicyEffectiveSettings(settings, policyState);
     if (!s.useLocalWhisper) return null;
-    if (s.localTranscriptionProvider === "nvidia") return s.parakeetModel || null;
+    if (s.localTranscriptionProvider === "nvidia") return s.parakeetModel || "parakeet-tdt-0.6b-v3";
     if (s.localTranscriptionProvider === "cohere") return s.cohereModel || null;
     return null;
   });

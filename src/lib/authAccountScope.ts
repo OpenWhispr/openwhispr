@@ -80,7 +80,7 @@ export function readStoredAccountScopeUserId(): string | null {
   return storage()?.getItem(ACCOUNT_SCOPE_USER_KEY) ?? null;
 }
 
-function writePreviousUserId(userId: string | null): void {
+function writeStoredAccountScopeUserId(userId: string | null): void {
   const target = storage();
   if (!target) return;
   if (userId) target.setItem(ACCOUNT_SCOPE_USER_KEY, userId);
@@ -161,7 +161,7 @@ async function applyReconcile(
   const action = getAccountScopeAction(userId);
   if (action === "none") return;
   if (action === "remember-user") {
-    writePreviousUserId(userId);
+    writeStoredAccountScopeUserId(userId);
     markScopeValidated();
     storage()?.setItem("isSignedIn", userId ? "true" : "false");
     notify();
@@ -182,7 +182,7 @@ async function applyReconcile(
   try {
     if (action === "purge") await callbacks.purge();
     else await callbacks.verify();
-    writePreviousUserId(userId);
+    writeStoredAccountScopeUserId(userId);
     markScopeValidated();
     const target = storage();
     target?.setItem("isSignedIn", userId ? "true" : "false");

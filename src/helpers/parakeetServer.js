@@ -22,7 +22,7 @@ const {
   getRequiredModelFiles,
   resolveModelLanguage,
 } = require("./parakeetModelInfo");
-const { getSherpaHotwordsScore, buildSherpaHotwords } = require("../utils/sherpaHotwords.js");
+const { getSherpaHotwordsScore, buildSherpaHotwords } = require("../utils/sherpaHotwords");
 
 const SAMPLE_RATE = 16000;
 const BYTES_PER_SAMPLE = 4; // float32
@@ -176,8 +176,7 @@ class ParakeetServerManager {
   }
 
   async _policyAllowedTranscribe(audioBuffer, options = {}) {
-    // signal is optional; only cancellable uploads pass one. Aborting stops
-    // scheduling further segments — the in-flight one finishes server-side.
+    // Aborting stops scheduling further segments — the in-flight one finishes server-side.
     const { modelName = "parakeet-tdt-0.6b-v3", language, signal } = options;
     const throwIfAborted = () => {
       if (signal?.aborted) throw createAbortError("Parakeet transcription cancelled");

@@ -22,7 +22,6 @@ export function buildSherpaHotwords(dictionary) {
   const seen = new Set();
   const hotwords = [];
   for (const entry of dictionary) {
-    if (typeof entry !== "string") continue;
     for (const term of entry.split(/[,\r\n]+/)) {
       const hotword = term
         .split(/\s+/)

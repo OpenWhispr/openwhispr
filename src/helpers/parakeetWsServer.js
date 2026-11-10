@@ -202,7 +202,6 @@ class ParakeetWsServer {
         this.starting?.stopSignal === stopSignal &&
         this.starting.modelName === modelName &&
         this.starting.modelDir === modelDir &&
-        this.starting.runtime === runtime &&
         this.starting.language === language &&
         this.starting.hotwordsKey === hotwordsKey
       ) {
@@ -217,7 +216,6 @@ class ParakeetWsServer {
       this.ready &&
       this.modelName === modelName &&
       this.modelDir === modelDir &&
-      this.modelRuntime === runtime &&
       this.language === language
     ) {
       if (this.hotwordsKey === hotwordsKey) return;
@@ -227,7 +225,7 @@ class ParakeetWsServer {
       if (this.activeTranscriptions.size > ownReservation) return false;
     }
 
-    this.starting = { modelName, modelDir, runtime, language, hotwordsKey, stopSignal };
+    this.starting = { modelName, modelDir, language, hotwordsKey, stopSignal };
     // Assigned before any await so concurrent callers can never double-spawn.
     this.startupPromise = (async () => {
       try {
@@ -398,7 +396,11 @@ class ParakeetWsServer {
       stopSignal.throwIfAborted();
     } finally {
       // sherpa loads the words once. Remove the directory even if writing or spawning failed.
-      if (hotwordsDir) fs.rmSync(hotwordsDir, { recursive: true, force: true, maxRetries: 2 });
+      if (hotwordsDir) {
+        await fs.promises
+          .rm(hotwordsDir, { recursive: true, force: true, maxRetries: 2 })
+          .catch(() => {});
+      }
     }
     this._startHealthCheck();
 

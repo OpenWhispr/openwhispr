@@ -4225,7 +4225,7 @@ declare global {
       /** Sends capped prompt hints for auto-learn and eligible shared hints for local hotwords. */
       setSharedDictionaryHints?: (
         promptHints: SharedHintWords,
-        hotwordHints?: ScopedSharedHintWords
+        hotwordHints: ScopedSharedHintWords
       ) => Promise<void>;
 
       getPendingSnippets?: () => Promise<SnippetEntryItem[]>;

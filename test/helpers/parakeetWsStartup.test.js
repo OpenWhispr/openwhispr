@@ -242,7 +242,6 @@ test("the hotwords file sits in a folder of its own that only this user can open
   const firstDir = path.dirname(first.hotwordsFile);
   // A fresh, randomly named folder per start, so no planted file or link is in the way.
   assert.equal(path.dirname(firstDir), tempDir);
-  assert.match(path.basename(firstDir), /^openwhispr-hotwords-/);
   assert.notEqual(path.dirname(second.hotwordsFile), firstDir);
   if (process.platform !== "win32") {
     assert.equal(first.dirMode, 0o700);

@@ -3999,7 +3999,7 @@
     "promptLimitNotice": "辞書は現在{{chars}}文字です。GroqとWhisperのモデルはその末尾の数百文字しか読み取らないため、リストは短いほうが効果的です。その他のモデルには全リストが送信されます。",
     "openRouterIgnoredNotice": "OpenRouterは辞書を音声モデルに渡さないため、ディクテーションでOpenRouterを選択している間は、これらの単語は文字起こしに反映されません。",
     "localModelIgnoredNotice": "{{model}}は辞書を使用できないため、ディクテーションで選択している間は、これらの単語は文字起こしに反映されません。AIクリーンアップがオンの場合は、引き続き適用されます。",
-    "localModelHotwordsLimitNotice": "{{model}}は文字起こしのヒントとして辞書の項目を最大{{limit}}件使用します。個人の項目が優先され、次にTeamspace、最後にワークスペースの項目が使われます。",
+    "localModelHotwordsLimitNotice": "{{model}}は文字起こしのヒントとして辞書の単語を最大{{limit}}個使用します。個人の単語が優先されます。",
     "exportDictionary": "辞書をエクスポート",
     "exportFailed": "エクスポートに失敗しました",
     "editWord": "{{word}} を編集",
