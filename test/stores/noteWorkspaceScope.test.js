@@ -23,9 +23,17 @@ const notes = [
   { id: 400, space_id: 4, folder_id: 40, title: "B private note" },
 ];
 
-async function fixture(t, { workspaceState = {} } = {}) {
-  const liveSpaces = [...spaces];
-  const liveFolders = [...folders];
+async function fixture(
+  t,
+  {
+    workspaceState = {},
+    spaces: initialSpaces = spaces,
+    folders: initialFolders = folders,
+    notes: allNotes = notes,
+  } = {}
+) {
+  const liveSpaces = [...initialSpaces];
+  const liveFolders = [...initialFolders];
   // While held, space reads wait until the test answers them, in any order.
   let heldSpaceReads = null;
   installBrowserGlobals(t, { initialStorage: { activeWorkspaceId: "a" } });
@@ -37,7 +45,7 @@ async function fixture(t, { workspaceState = {} } = {}) {
     getFolders: async () => [...liveFolders],
     getFolderNoteCounts: async () => [],
     getNotes: async (_type, _limit, folderId, spaceId) =>
-      notes.filter((note) =>
+      allNotes.filter((note) =>
         folderId != null
           ? note.folder_id === folderId
           : note.space_id === spaceId && note.folder_id == null
@@ -247,6 +255,102 @@ test("a Private that arrives after the user went elsewhere doesn't move them", a
     f.store.getSpacesValue().some((s) => s.id === 5),
     true
   );
+});
+
+// The first launch after the update: the account's notes are in the pending Private (9), the
+// default A has its own (1), and the saved workspace B has none yet.
+const withPending = {
+  spaces: [
+    { id: 9, kind: "private", workspace_id: null, name: "Personal" },
+    ...spaces.filter((s) => s.id !== 4),
+  ],
+  folders: [{ id: 90, space_id: 9, name: "Personal", is_default: 1 }, ...folders],
+  notes: [{ id: 900, space_id: 9, folder_id: 90, title: "Pending note" }, ...notes],
+};
+const listedAB = [
+  { id: "a", name: "A", role: "member", is_default: true },
+  { id: "b", name: "B", role: "member", is_default: false },
+];
+
+test("the first list answer keeps the saved workspace and closes the note the tree picked", async (t) => {
+  const f = await fixture(t, {
+    ...withPending,
+    workspaceState: {
+      workspaces: [],
+      loaded: false,
+      activeWorkspaceId: "b",
+      defaultWorkspaceId: null,
+      listAccountId: null,
+    },
+  });
+  await f.settle();
+  // Before the list, the pending Private shows and the tree opened its first note.
+  assert.deepEqual(f.context(), { folderId: 90, noteId: 900 });
+
+  f.listAnswers({
+    workspaces: listedAB,
+    loaded: true,
+    activeWorkspaceId: "b",
+    defaultWorkspaceId: "a",
+    listAccountId: "account-1",
+  });
+  await f.settle();
+  assert.equal(f.activeWorkspaceId(), "b", "the saved workspace stays active");
+  assert.deepEqual(f.context(), { folderId: null, noteId: null });
+
+  // B's Private arrives once main hears the workspace.
+  f.putSpace({ id: 4, kind: "private", workspace_id: "b", name: "Personal" });
+  f.putFolder({ id: 40, space_id: 4, name: "Personal", is_default: 1 });
+  await f.publishScope();
+  await f.settle();
+  assert.deepEqual(f.context(), { folderId: 40, noteId: null });
+  assert.equal(f.activeWorkspaceId(), "b");
+});
+
+test("opening a pending private note from search in another workspace enters the default", async (t) => {
+  const f = await fixture(t, {
+    ...withPending,
+    workspaceState: { workspaces: listedAB, activeWorkspaceId: "b", defaultWorkspaceId: "a" },
+  });
+  await f.settle();
+  // CommandSearch picks the result: its folder, then the note.
+  f.store.setActiveFolderId(90);
+  assert.equal(f.activeWorkspaceId(), "a");
+  await f.settle();
+  f.store.setActiveNoteId(900);
+  assert.deepEqual(f.context(), { folderId: 90, noteId: 900 });
+  assert.equal(f.activeWorkspaceId(), "a");
+});
+
+test("a list refresh changes nothing while a note is open", async (t) => {
+  const f = await fixture(t, {
+    workspaceState: { workspaces: listedAB, activeWorkspaceId: "b", defaultWorkspaceId: "a" },
+  });
+  await f.settle();
+  f.store.setActiveFolderId(40);
+  await f.settle();
+  f.store.setActiveNoteId(400);
+  assert.deepEqual(f.context(), { folderId: 40, noteId: 400 });
+
+  f.listAnswers({ workspaces: listedAB.map((w) => ({ ...w })) });
+  await f.settle();
+  assert.deepEqual(f.context(), { folderId: 40, noteId: 400 });
+  assert.equal(f.activeWorkspaceId(), "b");
+});
+
+test("a workspace that arrives still takes the user to the teamspace they opened", async (t) => {
+  // An invitation link opens a teamspace of a workspace the list doesn't hold yet.
+  const f = await fixture(t, { workspaceState: { workspaces: listedAB } });
+  await f.settle();
+  f.putSpace({ id: 8, kind: "team", workspace_id: "d", name: "Invited" });
+  await f.store.loadSpaces();
+  f.store.setActiveContext(8, null);
+  await f.settle();
+  assert.equal(f.activeWorkspaceId(), "a");
+
+  f.listAnswers({ workspaces: [...listedAB, { id: "d", name: "D", role: "member" }] });
+  await f.settle();
+  assert.equal(f.activeWorkspaceId(), "d");
 });
 
 test("before the workspace list answers, the saved workspace's own Private opens", async (t) => {

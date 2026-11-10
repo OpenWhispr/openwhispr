@@ -22,6 +22,7 @@ import { findDefaultFolder } from "../components/notes/shared";
 import {
   activePrivateSpace,
   decideNoteWorkspaceScope,
+  isSpaceInWorkspaceScope,
   spacesInWorkspaceScope,
   type NoteWorkspaceScopeReason,
 } from "../lib/workspaceSelection";
@@ -132,6 +133,17 @@ let awaitingOpenedContext: ActiveContext | null = null;
 // was open. Whichever read brings it lands the view there, unless the user
 // opened a container first.
 let landOnActivePrivate = false;
+// What the tree opened itself rather than the user: the note it selected first
+// and the container it landed on. Neither ever takes the user to another
+// workspace: a list answer that hides one closes it, like a switch.
+let pickedNoteId: number | null = null;
+let pickedContext: ActiveContext | null = null;
+
+function pickNote(id: number): void {
+  pickedNoteId = id;
+  setActiveNoteId(id);
+}
+
 function reconcileWorkspaceScope(trigger: NoteWorkspaceScopeReason): void {
   if (applyingWorkspaceScope) return;
   const state = useNoteStore.getState();
@@ -149,6 +161,17 @@ function reconcileWorkspaceScope(trigger: NoteWorkspaceScopeReason): void {
   if (contextSpace && awaitingOpenedContext === state.activeContext) {
     awaitingOpenedContext = null;
     reason = "navigated";
+  }
+  if (reason === "navigated") {
+    // Whichever would take the user away (the note when it's hidden) must be
+    // one they opened.
+    const noteHidden =
+      noteSpace != null &&
+      !isSpaceInWorkspaceScope(noteSpace, activeWorkspaceId, workspaces, defaultWorkspaceId);
+    const picked = noteHidden
+      ? state.activeNoteId === pickedNoteId
+      : state.activeContext != null && state.activeContext === pickedContext;
+    if (picked) reason = "dataChanged";
   }
   const decision = decideNoteWorkspaceScope({
     reason,
@@ -181,6 +204,7 @@ function reconcileWorkspaceScope(trigger: NoteWorkspaceScopeReason): void {
         useNoteStore.setState({ activeContext: null, notes: [] });
       }
     }
+    if (decision.context !== "keep") pickedContext = useNoteStore.getState().activeContext;
   } finally {
     applyingWorkspaceScope = false;
   }
@@ -202,6 +226,7 @@ function landOnArrivedPrivate(): void {
   try {
     setActiveContext(context.spaceId, context.folderId);
     revealContainer(context.spaceId, context.folderId);
+    pickedContext = useNoteStore.getState().activeContext;
   } finally {
     applyingWorkspaceScope = false;
   }
@@ -211,6 +236,8 @@ useNoteStore.subscribe((state, previous) => {
   // What reconciling itself opens is never the user's navigation.
   if (state.activeNoteId !== previous.activeNoteId) {
     awaitingOpenedNoteId = applyingWorkspaceScope ? null : state.activeNoteId;
+    // Another note opened: the picked one, opened again later, is the user's.
+    if (state.activeNoteId !== pickedNoteId) pickedNoteId = null;
   }
   if (state.activeContext !== previous.activeContext) {
     awaitingOpenedContext = applyingWorkspaceScope ? null : state.activeContext;
@@ -563,6 +590,8 @@ export function resetForAccountChange(): void {
   pendingFolderPreset = null;
   purgeDisplacedNote = null;
   landOnActivePrivate = false;
+  pickedNoteId = null;
+  pickedContext = null;
   // The next account's first scope reads the spaces again, even one that names
   // the same workspaces (the same account signing back in).
   publishedScopeKey = null;
@@ -753,6 +782,7 @@ export async function initializeNotesTree(): Promise<void> {
       context = presetContext;
     } else {
       context = defaultContext(spaces, folders);
+      pickedContext = context;
     }
     if (!context) return;
 
@@ -773,7 +803,7 @@ export async function initializeNotesTree(): Promise<void> {
       if (validKeys.has(key)) void ensureContainerLoaded(key);
     });
     if (getActiveNoteIdValue() == null && notes.length > 0) {
-      setActiveNoteId(notes[0].id);
+      pickNote(notes[0].id);
     }
   } finally {
     if (gen === treeLoadGeneration) {
@@ -955,6 +985,7 @@ function handleSpacePurged(spaceId: number, { holding = false } = {}): void {
   if (state.activeContext?.spaceId === spaceId) {
     fallbackContext = defaultContext(extra.spaces ?? [], state.folders);
     extra.activeContext = fallbackContext;
+    pickedContext = fallbackContext;
     extra.notes = fallbackContext
       ? (teardown.notesByContainer[contextContainerKey(fallbackContext)] ?? [])
       : [];
@@ -1066,11 +1097,12 @@ export async function deleteFolder(id: number): Promise<{ success: boolean; erro
     const spaceFolders = folders.filter((f) => f.space_id === folder.space_id);
     const fallback = findDefaultFolder(spaceFolders) ?? spaceFolders[0];
     setActiveContext(folder.space_id, fallback?.id ?? null);
+    pickedContext = useNoteStore.getState().activeContext;
     if (getActiveNoteIdValue() == null) {
       const notes = await ensureContainerLoaded(
         fallback ? folderContainerKey(fallback.id) : spaceContainerKey(folder.space_id)
       );
-      if (notes.length > 0) setActiveNoteId(notes[0].id);
+      if (notes.length > 0) pickNote(notes[0].id);
     }
   }
   syncService.requestSyncAll("manual");
