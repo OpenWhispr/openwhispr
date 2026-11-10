@@ -102,7 +102,11 @@ export function decideNoteWorkspaceScope(input: {
     // whichever moved into another workspace takes the user there; the note
     // wins when both did.
     const target = noteHidden ? noteSpace : contextSpace;
-    const workspaceId = target?.workspace_id;
+    // The pending Private is the default workspace's until main binds it.
+    const workspaceId =
+      target?.kind === "private" && target.workspace_id == null
+        ? defaultWorkspaceId
+        : target?.workspace_id;
     // A Private whose workspace the list no longer holds is on its way to the default's: entering
     // that workspace would leave the switcher on nothing it lists.
     if (workspaceId && (workspaces.length === 0 || isListedWorkspace(workspaceId, workspaces))) {

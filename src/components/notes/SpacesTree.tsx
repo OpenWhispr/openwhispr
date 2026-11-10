@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Check,
@@ -43,7 +43,7 @@ import { useTeamSpacesCapability } from "../../hooks/useTeamSpacesCapability";
 import { useCanCreateTeamSpace } from "../../hooks/useCanCreateTeamSpace";
 import { useAuth } from "../../hooks/useAuth";
 import { useSpacesInWorkspaceScope, useWorkspace } from "../../hooks/useWorkspace";
-import { activePrivateSpace } from "../../lib/workspaceSelection";
+import { privateSectionFolders, privateSectionSpaces } from "../../lib/privateSection";
 import SpaceSettingsDialog from "./SpaceSettingsDialog";
 import {
   canChangeSpaceNoteScope,
@@ -93,6 +93,27 @@ import {
   getSpacesValue,
   useShareCache,
 } from "../../stores/noteStore";
+
+// A folder row's notes: those of every folder it stands for (one, except in the
+// Private section; see privateSectionFolders).
+function folderRowNotes(
+  members: FolderItem[],
+  notesByContainer: Record<string, NoteItem[]>,
+  folderCounts: Record<number, number>,
+  activeNote: NoteItem | null
+): { notes: NoteItem[]; hiddenCount: number; total: number; count: number } {
+  const loaded = (folder: FolderItem): NoteItem[] | undefined =>
+    notesByContainer[folderContainerKey(folder.id)];
+  const notes = members.flatMap((folder) => loaded(folder) ?? []);
+  const total = members.reduce(
+    (sum, folder) => sum + (folderCounts[folder.id] ?? loaded(folder)?.length ?? 0),
+    0
+  );
+  const count = members.reduce((sum, folder) => sum + (folderCounts[folder.id] ?? 0), 0);
+  const activeFolderId =
+    members.find((folder) => folder.id === activeNote?.folder_id)?.id ?? members[0].id;
+  return { ...sidebarFolderNotes(notes, activeNote, activeFolderId, total), total, count };
+}
 
 const FOLDER_INPUT_CLASS =
   "w-full h-6 bg-foreground/5 dark:bg-white/5 rounded px-2 text-xs text-foreground outline-none border border-primary/30 focus:border-primary/50";
@@ -1156,16 +1177,43 @@ export default function SpacesTree({
 
   const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
 
-  const privateSpaces = useMemo(() => spaces.filter((s) => s.kind === "private"), [spaces]);
-  const privateSpace = useMemo(
-    () => activePrivateSpace(privateSpaces) ?? undefined,
-    [privateSpaces]
+  // One Private section stands for every Private in scope: the workspace's own
+  // and, until main binds it into the default's, the pending one. Its header,
+  // expansion and drops are the first's; folders of one name are one row.
+  const privateSpaces = useMemo(() => privateSectionSpaces(spaces), [spaces]);
+  const privateSpace: SpaceItem | undefined = privateSpaces[0];
+  const privateFolderGroups = useMemo(
+    () => privateSectionFolders(privateSpaces, folders),
+    [privateSpaces, folders]
+  );
+  const privateRootNotes = useMemo(
+    () => privateSpaces.flatMap((space) => notesByContainer[spaceContainerKey(space.id)] ?? []),
+    [privateSpaces, notesByContainer]
   );
   const privateSectionExpanded = privateSpace
     ? expanded.has(spaceContainerKey(privateSpace.id))
     : false;
   const teamSpaces = useMemo(() => spaces.filter((s) => s.kind === "team"), [spaces]);
-  const visibleSpaces = teamCapability ? spaces : privateSpaces;
+  // The section is one destination too: its first Private.
+  const visibleSpaces = useMemo(
+    () => spaces.filter((s) => (s.kind === "private" ? s === privateSpace : teamCapability)),
+    [spaces, privateSpace, teamCapability]
+  );
+
+  // The rows show the other Private's notes and those of the folders it shares
+  // by name, but open with their own keys: load those containers with them.
+  useEffect(() => {
+    if (!privateSectionExpanded) return;
+    for (const space of privateSpaces.slice(1)) {
+      setContainerExpanded(spaceContainerKey(space.id), true);
+    }
+    for (const { folder, members } of privateFolderGroups) {
+      if (!expanded.has(folderContainerKey(folder.id))) continue;
+      for (const member of members.slice(1)) {
+        setContainerExpanded(folderContainerKey(member.id), true);
+      }
+    }
+  }, [privateSectionExpanded, privateSpaces, privateFolderGroups, expanded]);
   const spacesById = useMemo(() => new Map(spaces.map((space) => [space.id, space])), [spaces]);
   // Valid move destinations per source space (the source itself stays listed —
   // menus render it as the disabled "current" row).
@@ -1448,43 +1496,39 @@ export default function SpacesTree({
 
   const visibleRows = useMemo<TreeRow[]>(() => {
     const rows: TreeRow[] = [];
-    const pushPrivateSpace = (space: SpaceItem) => {
-      const spaceKey = spaceContainerKey(space.id);
-      if (!expanded.has(spaceKey)) return;
-      folders
-        .filter((f) => f.space_id === space.id)
-        .forEach((folder) => {
-          const folderKey = folderContainerKey(folder.id);
-          rows.push({ type: "folder", key: folderKey, folder, level: 1 });
-          if (expanded.has(folderKey)) {
-            const folderNotes = notesByContainer[folderKey] ?? [];
-            const { notes: shownNotes, hiddenCount } = sidebarFolderNotes(
-              folderNotes,
-              activeNote,
-              folder.id,
-              folderCounts[folder.id] ?? folderNotes.length
-            );
-            shownNotes.forEach((note) => {
-              rows.push({
-                type: "note",
-                key: `n:${note.id}`,
-                note,
-                parentKey: folderKey,
-                level: 2,
-              });
+    const pushPrivateSection = () => {
+      if (!privateSpace || !expanded.has(spaceContainerKey(privateSpace.id))) return;
+      privateFolderGroups.forEach(({ folder, members }) => {
+        const folderKey = folderContainerKey(folder.id);
+        rows.push({ type: "folder", key: folderKey, folder, level: 1 });
+        if (expanded.has(folderKey)) {
+          const { notes: shownNotes, hiddenCount } = folderRowNotes(
+            members,
+            notesByContainer,
+            folderCounts,
+            activeNote
+          );
+          shownNotes.forEach((note) => {
+            rows.push({
+              type: "note",
+              key: `n:${note.id}`,
+              note,
+              parentKey: folderKey,
+              level: 2,
             });
-            if (hiddenCount > 0) {
-              rows.push({
-                type: "more",
-                key: `more:${folder.id}`,
-                folder,
-                parentKey: folderKey,
-                level: 2,
-              });
-            }
+          });
+          if (hiddenCount > 0) {
+            rows.push({
+              type: "more",
+              key: `more:${folder.id}`,
+              folder,
+              parentKey: folderKey,
+              level: 2,
+            });
           }
-        });
-      (notesByContainer[spaceKey] ?? []).forEach((note) => {
+        }
+      });
+      privateRootNotes.forEach((note) => {
         rows.push({ type: "note", key: `n:${note.id}`, note, level: 1 });
       });
     };
@@ -1529,11 +1573,13 @@ export default function SpacesTree({
         rows.push({ type: "note", key: `n:${note.id}`, note, parentKey: spaceKey, level: 2 });
       });
     };
-    privateSpaces.forEach(pushPrivateSpace);
+    pushPrivateSection();
     if (teamCapability) teamSpaces.forEach(pushSpace);
     return rows;
   }, [
-    privateSpaces,
+    privateSpace,
+    privateFolderGroups,
+    privateRootNotes,
     teamSpaces,
     folders,
     notesByContainer,
@@ -1781,18 +1827,21 @@ export default function SpacesTree({
     />
   );
 
-  const renderFolder = (folder: FolderItem, parentKey?: string, level: 1 | 2 = 2) => {
+  const renderFolder = (
+    folder: FolderItem,
+    parentKey?: string,
+    level: 1 | 2 = 2,
+    members: FolderItem[] = [folder]
+  ) => {
     const folderKey = folderContainerKey(folder.id);
     const isExpanded = expanded.has(folderKey);
     const isRenaming = renamingFolderId === folder.id;
-    const folderNotes = notesByContainer[folderKey] ?? [];
-    const total = folderCounts[folder.id] ?? folderNotes.length;
-    const { notes: shownNotes, hiddenCount } = sidebarFolderNotes(
-      folderNotes,
-      activeNote,
-      folder.id,
-      total
-    );
+    const {
+      notes: shownNotes,
+      hiddenCount,
+      total,
+      count,
+    } = folderRowNotes(members, notesByContainer, folderCounts, activeNote);
 
     if (isRenaming) {
       return (
@@ -1828,8 +1877,10 @@ export default function SpacesTree({
           level={level}
           spaces={moveTargetsBySpace.get(folder.space_id) ?? []}
           isExpanded={isExpanded}
-          isActive={activeNoteId == null && activeContext?.folderId === folder.id}
-          count={folderCounts[folder.id] ?? 0}
+          isActive={
+            activeNoteId == null && members.some((member) => member.id === activeContext?.folderId)
+          }
+          count={count}
           isDragOver={dragState.dragOverKey === folderKey}
           isDropSuccess={dragState.dropSuccessKey === folderKey}
           dropHandlers={dropTargetHandlers({
@@ -1860,6 +1911,7 @@ export default function SpacesTree({
             {hiddenCount > 0 && (
               <FolderNotesPopover
                 folder={folder}
+                folderIds={members.map((member) => member.id)}
                 total={total}
                 hiddenCount={hiddenCount}
                 activeNoteId={activeNoteId}
@@ -1895,11 +1947,16 @@ export default function SpacesTree({
       rootNotes === undefined;
     const showEmptySpace =
       space.kind === "team" && spaceFolders.length === 0 && rootNotes?.length === 0;
+    // Flattened, this is the Private section: every Private it stands for.
+    const folderRows = flattened
+      ? privateFolderGroups
+      : spaceFolders.map((folder) => ({ folder, members: [folder] }));
+    const shownRootNotes = flattened ? privateRootNotes : (rootNotes ?? []);
 
     return (
       <div className="space-y-px">
-        {spaceFolders.map((folder) =>
-          flattened ? renderFolder(folder, undefined, 1) : renderFolder(folder, spaceKey)
+        {folderRows.map(({ folder, members }) =>
+          flattened ? renderFolder(folder, undefined, 1, members) : renderFolder(folder, spaceKey)
         )}
         {creatingFolderSpaceId === space.id && (
           <div className={cn(flattened ? "ps-2" : "ps-[14px]", "pe-2")}>
@@ -1925,7 +1982,7 @@ export default function SpacesTree({
             />
           </div>
         )}
-        {(rootNotes ?? []).map((note) =>
+        {shownRootNotes.map((note) =>
           flattened ? renderNote(note, 1, undefined, "ps-[30px]") : renderNote(note, 2, spaceKey)
         )}
         {showSkeletons && <SkeletonRows />}

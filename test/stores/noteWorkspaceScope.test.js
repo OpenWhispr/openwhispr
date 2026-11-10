@@ -26,9 +26,14 @@ const notes = [
 async function fixture(t, { workspaceState = {} } = {}) {
   const liveSpaces = [...spaces];
   const liveFolders = [...folders];
+  // While held, space reads wait until the test answers them, in any order.
+  let heldSpaceReads = null;
   installBrowserGlobals(t, { initialStorage: { activeWorkspaceId: "a" } });
   globalThis.window.electronAPI = {
-    getSpaces: async () => [...liveSpaces],
+    getSpaces: () =>
+      heldSpaceReads
+        ? new Promise((resolve) => heldSpaceReads.push(() => resolve([...liveSpaces])))
+        : Promise.resolve([...liveSpaces]),
     getFolders: async () => [...liveFolders],
     getFolderNoteCounts: async () => [],
     getNotes: async (_type, _limit, folderId, spaceId) =>
@@ -81,6 +86,12 @@ async function fixture(t, { workspaceState = {} } = {}) {
     settle,
     activeWorkspaceId: () => useWorkspaceStore.getState().activeWorkspaceId,
     switchTo: (id) => useWorkspaceStore.getState().setActiveWorkspaceId(id),
+    // What a successful list read does: the workspaces and both choices at once.
+    listAnswers: (state) => useWorkspaceStore.setState(state),
+    holdSpaceReads: () => {
+      heldSpaceReads = [];
+      return heldSpaceReads;
+    },
     // What the scope bridge does after every switch: main hears the workspace.
     publishScope: () => workspaceStore.publishWorkspaceScope(),
     putSpace: (space) => {
@@ -154,6 +165,67 @@ test("a workspace without a Private yet lands on it once main makes it", async (
   await f.settle();
   assert.deepEqual(f.context(), { folderId: 50, noteId: null });
   assert.equal(f.activeWorkspaceId(), "c");
+});
+
+test("signing in lands on the Private once the list names the workspace", async (t) => {
+  // The tree loads before the first list: no workspace yet, so no bound Private shows.
+  const f = await fixture(t, {
+    workspaceState: {
+      workspaces: [],
+      loaded: false,
+      activeWorkspaceId: null,
+      defaultWorkspaceId: null,
+      listAccountId: null,
+    },
+  });
+  await f.settle();
+  assert.deepEqual(f.context(), { folderId: null, noteId: null });
+
+  f.listAnswers({
+    workspaces: [
+      { id: "a", name: "A", role: "member", is_default: true },
+      { id: "b", name: "B", role: "member", is_default: false },
+    ],
+    loaded: true,
+    activeWorkspaceId: "a",
+    defaultWorkspaceId: "a",
+    listAccountId: "account-1",
+  });
+  await f.settle();
+  assert.deepEqual(f.context(), { folderId: 10, noteId: null });
+});
+
+test("switching back before a new workspace's Private arrives lands on the old one", async (t) => {
+  const f = await fixture(t);
+  await f.settle();
+  f.switchTo("c");
+  assert.deepEqual(f.context(), { folderId: null, noteId: null });
+  f.switchTo("a");
+  assert.deepEqual(f.context(), { folderId: 10, noteId: null });
+  await f.publishScope();
+  await f.settle();
+  assert.deepEqual(f.context(), { folderId: 10, noteId: null });
+});
+
+test("the Private lands from whichever space read brings it", async (t) => {
+  const f = await fixture(t);
+  await f.settle();
+  f.switchTo("c");
+  f.putSpace({ id: 5, kind: "private", workspace_id: "c", name: "Personal" });
+  f.putFolder({ id: 50, space_id: 5, name: "Personal", is_default: 1 });
+  const reads = f.holdSpaceReads();
+  await f.publishScope();
+  await f.settle();
+  // Another read starts before the scope's own one answers, so that one is dropped as stale.
+  const other = f.store.loadSpaces();
+  await f.settle();
+  assert.equal(reads.length, 2);
+  reads[0]();
+  await f.settle();
+  reads[1]();
+  await other;
+  await f.settle();
+  assert.deepEqual(f.context(), { folderId: 50, noteId: null });
 });
 
 test("a Private that arrives after the user went elsewhere doesn't move them", async (t) => {

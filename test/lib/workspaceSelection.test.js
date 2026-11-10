@@ -206,6 +206,18 @@ test("decideNoteWorkspaceScope: a private note of a workspace no longer listed n
   });
 });
 
+test("decideNoteWorkspaceScope: opening a pending private note from another workspace enters the default", () => {
+  // The pending Private is the default workspace's until main binds it.
+  assert.deepEqual(decide({ reason: "navigated", activeWorkspaceId: "b", noteSpace: pending }), {
+    kind: "enterWorkspace",
+    workspaceId: "a",
+  });
+  assert.deepEqual(decide({ reason: "navigated", activeWorkspaceId: "b", contextSpace: pending }), {
+    kind: "enterWorkspace",
+    workspaceId: "a",
+  });
+});
+
 test("decideNoteWorkspaceScope: data changing under the open note never switches", () => {
   // A sync or an undone move put the open private note into B's teamspace.
   assert.deepEqual(

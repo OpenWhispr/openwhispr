@@ -27,9 +27,12 @@ const passThrough = `
   const Pass = React.forwardRef(({ children }, _ref) => React.createElement("div", null, children));
 `;
 
-// Opens command search with main holding `spaces` and `notes`, and returns its text and the
-// space lists the note queries named.
-async function openSearch(t, { spaces, notes }) {
+const otherActive = { activeWorkspaceId: "other", defaultWorkspaceId: "acme" };
+
+// Opens command search with main holding `spaces` and `notes` and the workspace store choosing
+// `workspaceState`, and returns its text, its scope choices and the space lists the note queries
+// named.
+async function openSearch(t, { spaces, notes, workspaceState = otherActive }) {
   let root;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
@@ -68,7 +71,7 @@ async function openSearch(t, { spaces, notes }) {
         export const DropdownMenu = Pass;
         export const DropdownMenuTrigger = Pass;
         export const DropdownMenuContent = Pass;
-        export const DropdownMenuItem = Pass;
+        export const DropdownMenuItem = ({ children }) => React.createElement("li", null, children);
         export const DropdownMenuSeparator = () => null;
       `,
       "/ui/useDismissGuard": `
@@ -82,8 +85,7 @@ async function openSearch(t, { spaces, notes }) {
             { id: "acme", name: "Acme", role: "member", is_default: true },
             { id: "other", name: "Other", role: "member", is_default: false },
           ],
-          activeWorkspaceId: "other",
-          defaultWorkspaceId: "acme",
+          ...${JSON.stringify(workspaceState)},
           loaded: true,
           error: false,
           refresh: async () => {},
@@ -102,7 +104,13 @@ async function openSearch(t, { spaces, notes }) {
   await React.act(async () => {
     for (let i = 0; i < 3; i++) await new Promise(setImmediate);
   });
-  return { text: textOf(container), queriedSpaceIds };
+  const scopeChoices = [];
+  const collect = (node) => {
+    if (node.nodeName === "LI") scopeChoices.push(textOf(node));
+    (node.childNodes ?? []).forEach(collect);
+  };
+  collect(container);
+  return { text: textOf(container), scopeChoices, queriedSpaceIds };
 }
 
 test("command search lists only the active workspace's notes", async (t) => {
@@ -137,4 +145,25 @@ test("command search never asks for notes unscoped, even with nothing to hide", 
   assert.match(text, /Other private/);
   assert.doesNotMatch(text, /Unlisted private/);
   for (const ids of queriedSpaceIds) assert.deepEqual(ids, [3]);
+});
+
+test("command search offers the Private once while the pending one shows beside the workspace's own", async (t) => {
+  // The default workspace isn't known yet, so the pending Private shows in this workspace too.
+  const { text, scopeChoices } = await openSearch(t, {
+    spaces: [
+      { id: 3, kind: "private", workspace_id: "other", name: "Personal" },
+      { id: 9, kind: "private", workspace_id: null, name: "Personal" },
+      { id: 4, kind: "team", workspace_id: "other", name: "Other team" },
+    ],
+    notes: [note(3, "Other private", 3), note(9, "Pending private", 9), note(4, "Other plan", 4)],
+    workspaceState: { activeWorkspaceId: "other", defaultWorkspaceId: null },
+  });
+  assert.deepEqual(scopeChoices, [
+    "commandSearch.allSpaces",
+    "notes.spaces.personal",
+    "Other team",
+  ]);
+  assert.match(text, /Other private/);
+  assert.match(text, /Pending private/);
+  assert.match(text, /Other plan/);
 });

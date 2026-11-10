@@ -126,10 +126,11 @@ let applyingWorkspaceScope = false;
 // switch cancels that.
 let awaitingOpenedNoteId: number | null = null;
 let awaitingOpenedContext: ActiveContext | null = null;
-// Set when the view left a container for the active workspace's Private before
-// that Private was in the store (a workspace this device hasn't opened yet: main
-// makes it once it hears the workspace). The view lands there when it arrives,
-// unless the user opened a container first.
+// Set while the view has no container and waits for the active workspace's
+// Private: one not in the store yet (a workspace this device hasn't opened:
+// main makes it once it hears the workspace), or a switch made while nothing
+// was open. Whichever read brings it lands the view there, unless the user
+// opened a container first.
 let landOnActivePrivate = false;
 function reconcileWorkspaceScope(trigger: NoteWorkspaceScopeReason): void {
   if (applyingWorkspaceScope) return;
@@ -187,8 +188,10 @@ function reconcileWorkspaceScope(trigger: NoteWorkspaceScopeReason): void {
 
 /** Lands the view on the active workspace's Private once it's in the store, if it's still waiting. */
 function landOnArrivedPrivate(): void {
-  if (!landOnActivePrivate) return;
+  if (!landOnActivePrivate || applyingWorkspaceScope) return;
   const state = useNoteStore.getState();
+  // Until the tree has loaded, initializeNotesTree picks the context itself.
+  if (state.isTreeLoading) return;
   if (state.activeContext != null) {
     landOnActivePrivate = false;
     return;
@@ -223,13 +226,19 @@ useNoteStore.subscribe((state, previous) => {
   ) {
     reconcileWorkspaceScope("dataChanged");
   }
+  if (state.spaces !== previous.spaces || state.folders !== previous.folders) {
+    landOnArrivedPrivate();
+  }
 });
 useWorkspaceStore.subscribe((state, previous) => {
   if (state.activeWorkspaceId !== previous.activeWorkspaceId) {
     awaitingOpenedNoteId = null;
     awaitingOpenedContext = null;
-    landOnActivePrivate = false;
     reconcileWorkspaceScope("workspaceSwitched");
+    // With nothing open (the first list after signing in, a switch away from a
+    // workspace whose Private hadn't arrived), the view lands on this
+    // workspace's Private, or waits for it.
+    landOnActivePrivate = true;
   } else if (state.workspaces !== previous.workspaces) {
     // A workspace that just arrived (an accepted invitation) can claim the
     // space the user already opened.
@@ -238,6 +247,7 @@ useWorkspaceStore.subscribe((state, previous) => {
     // The pending Private shows in the default workspace alone once that's known.
     reconcileWorkspaceScope("dataChanged");
   }
+  landOnArrivedPrivate();
 });
 
 // Main makes the active workspace's Private when it next reads the spaces after
@@ -250,11 +260,11 @@ onWorkspaceScopePublished(({ accountId, activeWorkspaceId, defaultWorkspaceId })
   if (key === publishedScopeKey) return;
   publishedScopeKey = key;
   if (!hasBoundIpcListeners) return;
-  const gen = accountGeneration;
-  void Promise.all([loadSpaces(), loadFolders()])
-    .then(() => {
-      if (gen === accountGeneration) landOnArrivedPrivate();
-    })
+  // Folders first, so the Private lands on its default folder when the spaces
+  // bring it (see landOnActivePrivate).
+  void loadFolders()
+    .catch(() => [])
+    .then(() => loadSpaces())
     .catch(() => {
       // The next read (any sync event, the next scope) brings the Private in.
     });
@@ -766,7 +776,11 @@ export async function initializeNotesTree(): Promise<void> {
       setActiveNoteId(notes[0].id);
     }
   } finally {
-    if (gen === treeLoadGeneration) useNoteStore.setState({ isTreeLoading: false });
+    if (gen === treeLoadGeneration) {
+      useNoteStore.setState({ isTreeLoading: false });
+      // A read during the load may have brought the Private this load lacked.
+      landOnArrivedPrivate();
+    }
   }
 }
 
