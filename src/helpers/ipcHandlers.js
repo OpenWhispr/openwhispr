@@ -1471,7 +1471,8 @@ class IPCHandlers {
   }
 
   _getDictionaryHotwords() {
-    const personal = this._getPersonalDictionarySafe();
+    // Newest personal words first, so the hotword cap drops the oldest.
+    const personal = this._getPersonalDictionarySafe().reverse();
     const hints = this._dictionaryHotwordHints;
     if (!hints || hints.accountId !== this.databaseManager.activeAccountId) return personal;
     const { space, workspace, suppressedPersonal } = hints;
@@ -2568,6 +2569,7 @@ class IPCHandlers {
       // post-dedupe truth, never a caller-supplied payload.
       const words = this.databaseManager.getDictionary();
       broadcastToWindows("dictionary-updated", words);
+      this.parakeetManager.refreshHotwordsSoon();
       return { success: true };
     });
 

@@ -157,6 +157,7 @@ function hotwordsServer({
   });
   if (withBpeVocab) fs.writeFileSync(path.join(modelDir, "bpe.vocab"), "▁s\t-1.0\n");
   const spawns = [];
+  const warnings = [];
   const appProcess = { platform, arch: process.arch, env: process.env };
   const mocks = {
     fs: fileSystem,
@@ -180,7 +181,12 @@ function hotwordsServer({
         return child;
       },
     },
-    "./debugLogger": { debug() {}, info() {}, warn() {}, error() {} },
+    "./debugLogger": {
+      debug() {},
+      info() {},
+      warn: (message) => warnings.push(message),
+      error() {},
+    },
     "./sidecarPidFile": { write() {}, clear() {} },
     "./safeTempDir": { getSafeTempDir: () => tempDir },
     "../utils/serverUtils": {
@@ -205,7 +211,7 @@ function hotwordsServer({
   server._startHealthCheck = () => {};
   server._warmUp = async () => {};
   const start = (hotwords) => server.start("orukeet-v0.1.0", modelDir, "offline", null, hotwords);
-  return { server, spawns, start, modelDir, tempDir };
+  return { server, spawns, warnings, start, modelDir, tempDir };
 }
 
 test("dictionary hotwords switch Orukeet to beam search with the words as a file", async (t) => {
@@ -245,10 +251,11 @@ test("the hotwords file sits in a folder of its own that only this user can open
 });
 
 test("a model directory without bpe.vocab starts without hotwords", async (t) => {
-  const { spawns, start } = hotwordsServer({ withBpeVocab: false, testContext: t });
+  const { spawns, warnings, start } = hotwordsServer({ withBpeVocab: false, testContext: t });
   await start(ORUKEET_HOTWORDS);
   assert.ok(!spawns[0].args.some((arg) => arg.startsWith("--hotwords")));
   assert.ok(!spawns[0].args.includes("--decoding-method=modified_beam_search"));
+  assert.deepEqual(warnings, ["parakeet-ws model has no bpe.vocab; starting without hotwords"]);
 });
 
 test("the same dictionary keeps the server, a changed one restarts it", async (t) => {
@@ -418,12 +425,14 @@ test("a refresh waiting on policy cannot restart a stopped server", async (t) =>
 });
 
 test("a partial hotwords write is deleted before the unbiased fallback", async (t) => {
+  let wroteHotwords = false;
   const { spawns, start, tempDir } = hotwordsServer({
     platform: "linux",
     testContext: t,
     fileSystem: {
       ...fs,
       writeFileSync(file, content, options) {
+        wroteHotwords = true;
         fs.writeFileSync(file, content.slice(0, 2), options);
         throw Object.assign(new Error("no space on device"), { code: "ENOSPC" });
       },
@@ -431,6 +440,7 @@ test("a partial hotwords write is deleted before the unbiased fallback", async (
   });
   await start(ORUKEET_HOTWORDS);
 
+  assert.equal(wroteHotwords, true);
   assert.equal(spawns.length, 1);
   assert.equal(spawns[0].hotwordsFile, undefined);
   assert.deepEqual(fs.readdirSync(tempDir), []);

@@ -63,8 +63,12 @@ function createBridge(t) {
   }
 
   broadcasts.length = 0;
-  const bridge = new CliBridge({ databaseManager: db });
-  return { bridge, db, broadcasts };
+  let hotwordRefreshes = 0;
+  const bridge = new CliBridge({
+    databaseManager: db,
+    parakeetManager: { refreshHotwordsSoon: () => hotwordRefreshes++ },
+  });
+  return { bridge, db, broadcasts, hotwordRefreshes: () => hotwordRefreshes };
 }
 
 test("GET /v1/dictionary/list returns the stored words", (t) => {
@@ -105,7 +109,7 @@ test("POST /v1/dictionary/update removes only the named words", (t) => {
   assert.deepEqual(ctx.db.getDictionary(), ["OpenWhispr", "Bob"]);
 });
 
-test("POST /v1/dictionary/update broadcasts the new list to renderers", async (t) => {
+test("POST /v1/dictionary/update broadcasts the new list and reloads Orukeet's hotwords", async (t) => {
   // The route defers its broadcast with setImmediate, and the synchronous tests
   // above never yield to the event loop, so their broadcasts are still queued
   // here. Let them land before createBridge resets the recorder, or they are
@@ -123,6 +127,7 @@ test("POST /v1/dictionary/update broadcasts the new list to renderers", async (t
   assert.equal(ctx.broadcasts.length, 1);
   assert.equal(ctx.broadcasts[0].channel, "dictionary-updated");
   assert.deepEqual(ctx.broadcasts[0].payload, ["OpenWhispr", "Alice"]);
+  assert.equal(ctx.hotwordRefreshes(), 1);
 });
 
 test("POST /v1/dictionary/update rejects a non-array field", (t) => {

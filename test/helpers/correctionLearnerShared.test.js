@@ -190,7 +190,7 @@ function setupOrukeet(t, accountId = "first-account") {
   const ipc = new Ctor({
     databaseManager,
     parakeetManager,
-    windowManager: { retireMeetingNotificationScope() {} },
+    windowManager: { retireMeetingNotificationScope() {}, showDictationPanel() {} },
   });
   return {
     ipc,
@@ -259,11 +259,12 @@ test("Orukeet keeps eligible shared words after the Whisper prompt fills", async
   };
   store.getState().setSharedDictionaryHints(selectSharedHintWords(snapshot), WORKSPACE);
   assert.deepEqual(ipc._getDictionarySafe(), personal);
-  assert.deepEqual(hotwords(), [...personal, "AsterSpace", "AmberWorkspace"]);
+  // Newest personal words first, so the hotword cap drops the oldest.
+  assert.deepEqual(hotwords(), [...personal.toReversed(), "AsterSpace", "AmberWorkspace"]);
 
   snapshot.meta.paused = true;
   store.getState().setSharedDictionaryHints(selectSharedHintWords(snapshot), WORKSPACE);
-  assert.deepEqual(hotwords(), personal);
+  assert.deepEqual(hotwords(), personal.toReversed());
 });
 
 test("Orukeet removes a hidden moved fallback even when prompt hints are unchanged", async (t) => {
@@ -273,7 +274,7 @@ test("Orukeet removes a hidden moved fallback even when prompt hints are unchang
     "INSERT INTO custom_dictionary (word, shared_at) VALUES ('Qdrant', '2026-10-01'), ('SQLiteOnly', NULL)"
   );
   store.setState({ customDictionary: ["Qdrant"] });
-  assert.deepEqual(hotwords(), ["Qdrant", "SQLiteOnly"]);
+  assert.deepEqual(hotwords(), ["SQLiteOnly", "Qdrant"]);
 
   const snapshot = {
     meta: { paused: false, scopes: [{ space_id: null }] },
@@ -292,7 +293,7 @@ test("Orukeet removes a hidden moved fallback even when prompt hints are unchang
       selectSharedHintWords(snapshot, databaseManager.getMovedDictionaryWords()),
       WORKSPACE
     );
-  assert.deepEqual(hotwords(), ["Qdrant", "SQLiteOnly"]);
+  assert.deepEqual(hotwords(), ["SQLiteOnly", "Qdrant"]);
 });
 
 test("legacy prompt hints do not retain a previous Orukeet payload", async (t) => {
@@ -422,4 +423,35 @@ test("initial account verification republishes a fresh shared hint snapshot", as
   await reconcileAccountScope("first-account", { verify: async () => {}, purge: async () => {} });
   await new Promise(setImmediate);
   assert.deepEqual(hotwords(), ["VerifiedName"]);
+});
+
+test("every dictionary write reloads Orukeet's hotwords in the background", async (t) => {
+  const { ipc, databaseManager } = setupOrukeet(t);
+  const refresh = t.mock.method(ipc.parakeetManager, "refreshHotwordsSoon", () => {});
+  t.mock.method(databaseManager, "setDictionary", () => ({ success: true }));
+  t.mock.method(databaseManager, "applyDictionaryChanges", () => ({ success: true }));
+  const writes = {
+    set: () => handlers.get("db-set-dictionary")({}, ["Qdrant"]),
+    apply: () => handlers.get("db-apply-dictionary-changes")({}, { add: ["Qdrant"] }),
+    undo: () => handlers.get("undo-learned-corrections")({}, ["Qdrant"]),
+    sync: () => handlers.get("db-broadcast-dictionary-updated")(),
+    hints: () =>
+      setHints(
+        { space: [], workspace: [] },
+        { space: [], workspace: [], accountId: "first-account" }
+      ),
+    autoLearn: () => {
+      ipc._autoLearnLatestData = {
+        originalText: "We store vectors in Quadrant now",
+        newFieldValue: "We store vectors in Qdrant now",
+      };
+      ipc._processCorrections();
+    },
+  };
+
+  for (const [name, write] of Object.entries(writes)) {
+    const before = refresh.mock.callCount();
+    await write();
+    assert.equal(refresh.mock.callCount(), before + 1, name);
+  }
 });

@@ -512,6 +512,7 @@ class CliBridge {
         const result = db.applyDictionaryChanges({ add, remove });
         const words = db.getDictionary();
         setImmediate(() => broadcastToWindows("dictionary-updated", words));
+        ipc.parakeetManager.refreshHotwordsSoon();
         return { data: { words, added: result.added, removed: result.removed } };
       }),
       exact("GET", "/v1/snippets/list", () => {
