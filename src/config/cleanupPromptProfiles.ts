@@ -1,3 +1,4 @@
+import { assertPlausibleCleanupOutput } from "../utils/cleanupOutput";
 import { splitAtSentenceEnds } from "../utils/splitAtSentenceEnds";
 
 /**
@@ -13,6 +14,8 @@ export interface CleanupPromptProfile {
   temperature: number;
   /** Longer dictations are cleaned in parts of at most this many words. */
   maxChunkWords: number;
+  /** Throws when a part's answer should not replace what was said. */
+  validateOutput?: (transcript: string, output: string) => void;
 }
 
 export interface CleanupProfileRequest {
@@ -33,6 +36,7 @@ const S1_MINI: CleanupPromptProfile = {
     `[Styling: semi-formal] [Structure: prose] [Context: general]\n${transcript}`,
   temperature: 0,
   maxChunkWords: 600,
+  validateOutput: assertPlausibleCleanupOutput,
 };
 
 const PROFILES: Record<string, CleanupPromptProfile> = {
@@ -56,7 +60,8 @@ export function getCleanupPromptProfile(
 
 /**
  * Cleans the transcript one part at a time, in order, and joins the answers.
- * A part the model returns empty (it was all filler) is left out.
+ * A part the model returns empty (it was all filler) is left out. A part that
+ * fails the profile's output check fails the whole cleanup.
  */
 export async function runProfiledCleanup(
   profile: CleanupPromptProfile,
@@ -66,6 +71,7 @@ export async function runProfiledCleanup(
   const cleaned: string[] = [];
   for (const part of splitAtSentenceEnds(transcript, profile.maxChunkWords)) {
     const output = (await runPart(profile.buildUserContent(part))).trim();
+    profile.validateOutput?.(part, output);
     if (output) cleaned.push(output);
   }
   return cleaned.join(" ");
