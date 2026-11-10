@@ -251,7 +251,7 @@ function relaunchFromVersion5(t, db) {
   const sqlite = db.db;
   sqlite.exec("DROP INDEX IF EXISTS idx_spaces_private_identity");
   sqlite.exec("DROP INDEX IF EXISTS idx_spaces_private_default");
-  for (const column of ["account_id", "is_default"]) {
+  for (const column of ["account_id", "is_default_private"]) {
     if (sqlite.pragma("table_info('spaces')").some((existing) => existing.name === column)) {
       sqlite.exec(`ALTER TABLE spaces DROP COLUMN ${column}`);
     }
@@ -2762,6 +2762,9 @@ test("bindDefaultPrivateSpace merges into an existing row for that workspace", (
   const w1 = db.getPrivateSpaceId();
   assert.notEqual(w1, pending);
   const w1Meeting = db.saveNote("After", "", "meeting").note;
+  const w1PersonalBefore = db.db
+    .prepare("SELECT id FROM folders WHERE space_id = ? AND name = 'Personal' AND is_default = 1")
+    .get(w1).id;
   const w1Projects = db.createFolder("Projects").folder;
   const before = noteRow(db.db, pendingMeeting.id);
 
@@ -2787,10 +2790,9 @@ test("bindDefaultPrivateSpace merges into an existing row for that workspace", (
     { name: "Meetings", is_default: 1, space_id: w1 }
   );
   assert.equal(db.getMeetingsFolder().id, w1Meeting.folder_id);
-  const w1Personal = db.db
-    .prepare("SELECT id FROM folders WHERE space_id = ? AND name = 'Personal' AND is_default = 1")
-    .get(w1).id;
-  assert.equal(noteRow(db.db, pendingIdea.id).folder_id, w1Personal);
+  // The cloud-linked Personal survives and takes the place of w1's unlinked one.
+  assert.equal(folderRow(db.db, w1PersonalBefore), undefined, "the unlinked default goes");
+  assert.equal(noteRow(db.db, pendingIdea.id).folder_id, pendingIdea.folder_id);
   const cloudPersonal = folderRow(db.db, pendingIdea.folder_id);
   assert.deepEqual(
     {
@@ -2799,8 +2801,14 @@ test("bindDefaultPrivateSpace merges into an existing row for that workspace", (
       space_id: cloudPersonal.space_id,
       cloud_id: cloudPersonal.cloud_id,
     },
-    { name: "Personal (2)", is_default: 0, space_id: w1, cloud_id: "cloud-personal" }
+    { name: "Personal", is_default: 1, space_id: w1, cloud_id: "cloud-personal" }
   );
+  assert.deepEqual(accountFolderNames(db.db, "a"), [
+    "Meetings",
+    "Personal",
+    "Projects",
+    "Projects (2)",
+  ]);
   // Other folders keep the " (2)" rename.
   assert.equal(folderRow(db.db, pendingProjects.id).name, "Projects (2)");
   assert.equal(folderRow(db.db, pendingProjects.id).space_id, w1);
@@ -3220,5 +3228,121 @@ test("a new default workspace takes the default; the old one keeps its Private",
   signIn(db, "a");
   assert.equal(db.getDefaultPrivateSpaceId(), w2);
   assert.equal(db.getPrivateSpaceId(), w2);
+  assert.equal(pendingRowId(db.db, "a"), undefined);
+});
+
+// A pending row and a row for w1 made because the active workspace was known
+// before the default.
+function pendingAndW1(db) {
+  signIn(db, "a", { activeWorkspaceId: null, defaultWorkspaceId: null });
+  const pending = db.getPrivateSpaceId();
+  db.setActiveWorkspaceScope({ activeWorkspaceId: "w1", defaultWorkspaceId: null });
+  const w1 = db.getPrivateSpaceId();
+  return { pending, w1 };
+}
+
+test("a cloud-linked default folder survives the merge and takes in the target's notes", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  const { pending, w1 } = pendingAndW1(db);
+  const linkedNote = db.saveNote("Pending idea", "", "personal", null, null, null, pending).note;
+  const linked = folderRow(db.db, linkedNote.folder_id);
+  db.db
+    .prepare("UPDATE folders SET cloud_id = 'cloud-personal', sync_status = 'synced' WHERE id = ?")
+    .run(linked.id);
+  const unlinkedNote = db.saveNote("W1 idea", "", "personal", null, null, null, w1).note;
+  const unlinked = unlinkedNote.folder_id;
+  const chat = seedChat(db.db, {
+    title: "W1 chat",
+    accountId: "a",
+    spaceId: w1,
+    folderId: unlinked,
+  });
+
+  db.bindDefaultPrivateSpace("w1");
+
+  assert.equal(folderRow(db.db, unlinked), undefined, "the unlinked default is retired");
+  const survivor = folderRow(db.db, linked.id);
+  assert.deepEqual(
+    {
+      name: survivor.name,
+      is_default: survivor.is_default,
+      space_id: survivor.space_id,
+      account_id: survivor.account_id,
+      cloud_id: survivor.cloud_id,
+      client_folder_id: survivor.client_folder_id,
+      sync_status: survivor.sync_status,
+    },
+    {
+      name: "Personal",
+      is_default: 1,
+      space_id: w1,
+      account_id: "a",
+      cloud_id: "cloud-personal",
+      client_folder_id: linked.client_folder_id,
+      sync_status: "synced",
+    }
+  );
+  for (const id of [linkedNote.id, unlinkedNote.id]) {
+    assert.deepEqual(
+      { space_id: noteRow(db.db, id).space_id, folder_id: noteRow(db.db, id).folder_id },
+      { space_id: w1, folder_id: linked.id }
+    );
+  }
+  assert.deepEqual(chatRow(db.db, chat), { space_id: w1, folder_id: linked.id, account_id: "a" });
+  assert.equal(db.saveNote("Next idea", "").note.folder_id, linked.id);
+  assert.deepEqual(accountFolderNames(db.db, "a"), ["Meetings", "Personal"]);
+  assertEveryRowInItsFolderSpace(db.db);
+});
+
+test("a default folder folds into a same-named folder the user made in the target", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  const { pending, w1 } = pendingAndW1(db);
+  const pendingMeeting = db.saveNote(
+    "Pending meeting",
+    "",
+    "meeting",
+    null,
+    null,
+    null,
+    pending
+  ).note;
+  const userMeetings = db.createFolder("Meetings", w1).folder;
+  assert.equal(userMeetings.is_default, 0);
+
+  db.bindDefaultPrivateSpace("w1");
+
+  assert.equal(folderRow(db.db, pendingMeeting.folder_id), undefined);
+  assert.equal(noteRow(db.db, pendingMeeting.id).folder_id, userMeetings.id);
+  assert.equal(noteRow(db.db, pendingMeeting.id).space_id, w1);
+  assert.equal(db.getMeetingsFolder().id, userMeetings.id);
+  assert.deepEqual(accountFolderNames(db.db, "a"), ["Meetings", "Personal"]);
+});
+
+test("a known default workspace without a row yet wins over the account's earlier default", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signInAsRendererDoes(db, "a", "w1");
+  const w1 = db.getDefaultPrivateSpaceId();
+
+  // The default moved to w2, and the scope arrived before the bind.
+  db.setActiveWorkspaceScope({ activeWorkspaceId: "w2", defaultWorkspaceId: "w2" });
+  assert.notEqual(db.getPrivateSpaceId("w2"), w1);
+  assert.notEqual(db.getPrivateSpaceId(), w1);
+  const note = db.saveNote("During the switch", "", "meeting").note;
+  assert.notEqual(note.space_id, w1);
+
+  db.bindDefaultPrivateSpace("w2");
+
+  const w2 = db.getDefaultPrivateSpaceId();
+  assert.equal(noteRow(db.db, note.id).space_id, w2);
+  assert.deepEqual(spaceIdentity(db.db, w2), {
+    kind: "private",
+    account_id: "a",
+    workspace_id: "w2",
+    deleted_at: null,
+  });
+  assert.equal(spaceIdentity(db.db, w1).workspace_id, "w1");
   assert.equal(pendingRowId(db.db, "a"), undefined);
 });
