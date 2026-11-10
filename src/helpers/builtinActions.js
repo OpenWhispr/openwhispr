@@ -133,12 +133,15 @@ const NON_SUBSTANTIVE_NOTES_INSTRUCTIONS_1_10_2 = `For material with no substant
 export const NOTHING_TO_SUMMARIZE = "NOTHING_TO_SUMMARIZE";
 
 // Omitting every unsupported section can otherwise produce a blank completion.
+// Shipped in 1.10.3; kept as is so a row still holding that default upgrades.
+const NON_SUBSTANTIVE_NOTES_INSTRUCTIONS_1_10_3 = `For material with no substantive discussion or notes (for example, only greetings, filler, or recording checks), reply with exactly ${NOTHING_TO_SUMMARIZE} and nothing else. This rule overrides the section structure and bullet counts above: do not return an empty response or invent topics, decisions, or action items. Consider both the transcript and any manual notes before applying this rule.`;
+
 // A model that reasons first reads "substantive" as work-related and declines a
 // personal conversation, so the last sentence says it is not.
-const NON_SUBSTANTIVE_NOTES_INSTRUCTIONS = `For material with no substantive discussion or notes (for example, only greetings, filler, or recording checks), reply with exactly ${NOTHING_TO_SUMMARIZE} and nothing else. This rule overrides the section structure and bullet counts above: do not return an empty response or invent topics, decisions, or action items. Consider both the transcript and any manual notes before applying this rule. Substantive discussion does not have to be about work: a personal, informal, or off-topic conversation, or one without decisions or action items, still gets notes.`;
+const NON_SUBSTANTIVE_NOTES_INSTRUCTIONS = `${NON_SUBSTANTIVE_NOTES_INSTRUCTIONS_1_10_3} Substantive discussion does not have to be about work: a personal, informal, or off-topic conversation, or one without decisions or action items, still gets notes.`;
 
 const GENERATE_NOTES_PROMPT_1_10_2 = `${GENERATE_NOTES_PROMPT_1_10_1}\n\n${NON_SUBSTANTIVE_NOTES_INSTRUCTIONS_1_10_2}`;
-const GENERATE_NOTES_PROMPT_1_10_3 = `${GENERATE_NOTES_PROMPT_1_10_1}\n\n${NON_SUBSTANTIVE_NOTES_INSTRUCTIONS}`;
+const GENERATE_NOTES_PROMPT_1_10_3 = `${GENERATE_NOTES_PROMPT_1_10_1}\n\n${NON_SUBSTANTIVE_NOTES_INSTRUCTIONS_1_10_3}`;
 // The last flat Detailed Notes prompt; a row still holding it moves to sections.
 const DETAILED_NOTES_PROMPT_1_10_2 = `${DETAILED_NOTES_PROMPT_1_10_1}\n\n${NON_SUBSTANTIVE_NOTES_INSTRUCTIONS_1_10_2}`;
 
