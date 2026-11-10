@@ -8,16 +8,27 @@ import {
   handleAuthRequestSuccess,
   observeAuthTokenStateEvent,
   prepareAuthRequest,
+  sessionAwaitsVerdict,
+  subscribeAuthRequestContext,
 } from "./authRequestContext";
+import { clearOfflineAccountProfile } from "./offlineAccountProfile";
 
 export const AUTH_URL = import.meta.env.VITE_AUTH_URL || "https://auth.openwhispr.com";
+// Recorded by the API as the origin of an account created here; sent only when
+// Electron names the platform, so an unknown one stays unknown.
+const REGISTRATION_OS: string | undefined = (
+  { darwin: "macos", win32: "windows", linux: "linux" } as Record<string, string>
+)[window.electronAPI?.getPlatform?.() ?? ""];
 export const authClient = createAuthClient({
   baseURL: AUTH_URL,
   plugins: [ssoClient()],
   fetchOptions: {
     credentials: "omit",
     customFetchImpl: authContextFetch,
-    headers: { "x-openwhispr-source": "desktop" },
+    headers: {
+      "x-openwhispr-source": "desktop",
+      ...(REGISTRATION_OS ? { "x-openwhispr-os": REGISTRATION_OS } : {}),
+    },
     onRequest: prepareAuthRequest,
     onResponse: handleAuthRequestResponse,
     onSuccess: handleAuthRequestSuccess,
@@ -37,6 +48,38 @@ window.electronAPI?.onAuthTokenStateChanged?.((state) => {
     authClient.$store.notify("$sessionSignal");
   }, 0);
 });
+
+// Better Auth refetches the session only when the window becomes visible or
+// the OS reports `online`. Neither fires when the auth server recovers while
+// the network stayed up, so an account shown without a validated credential
+// (offline, or after a failed refetch) would keep sync and account actions
+// fenced until a restart. Ask again on focus and once a minute until a verdict.
+// A request still in flight is left to finish: starting another cancels it, so
+// a slow server would never get to answer.
+const SESSION_VERDICT_RETRY_MS = 60_000;
+let stopSessionVerdictRetry: (() => void) | null = null;
+
+function syncSessionVerdictRetry(): void {
+  const waiting = sessionAwaitsVerdict();
+  if (waiting === (stopSessionVerdictRetry != null)) return;
+  if (!waiting) {
+    stopSessionVerdictRetry?.();
+    stopSessionVerdictRetry = null;
+    return;
+  }
+  const retry = (): void => {
+    if (!authClient.$store.atoms.session.value?.isRefetching) {
+      authClient.$store.notify("$sessionSignal");
+    }
+  };
+  window.addEventListener("focus", retry);
+  const timer = setInterval(retry, SESSION_VERDICT_RETRY_MS);
+  stopSessionVerdictRetry = () => {
+    clearInterval(timer);
+    window.removeEventListener("focus", retry);
+  };
+}
+subscribeAuthRequestContext(syncSessionVerdictRetry);
 
 export type SocialProvider = "google" | "microsoft" | "apple";
 
@@ -109,6 +152,8 @@ function markSignedOutState(): void {
   const storage = getLocalStorageSafe();
   storage?.setItem("isSignedIn", "false");
   clearLastSignInTime();
+  // A sign-out while offline never reaches reconciliation's purge.
+  clearOfflineAccountProfile();
 }
 
 export function updateLastSignInTime(): void {
@@ -190,6 +235,8 @@ export async function signInWithSocial(provider: SocialProvider): Promise<{ erro
       const protocol = (await window.electronAPI?.getOAuthProtocol?.()) || "openwhispr";
       const url = new URL(`${AUTH_URL}/api/desktop-signin/${provider}`);
       url.searchParams.set("callbackURL", `${DESKTOP_OAUTH_CALLBACK_URL}?protocol=${protocol}`);
+      // The browser carries none of the app's headers to the shim.
+      if (REGISTRATION_OS) url.searchParams.set("os", REGISTRATION_OS);
       openExternalLink(url.toString());
       return {};
     }

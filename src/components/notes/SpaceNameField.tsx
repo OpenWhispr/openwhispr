@@ -26,7 +26,8 @@ function initialOf(name: string): string | null {
   return null;
 }
 
-function TileGlyph({ emoji, name }: { emoji: string | null; name: string }) {
+// Also the tile in the Settings Teamspaces table, so a row and this field draw a teamspace alike.
+export function TileGlyph({ emoji, name }: { emoji: string | null; name: string }) {
   if (emoji) return <span className="font-emoji text-lg leading-none">{emoji}</span>;
   const initial = initialOf(name);
   if (initial) return <span className="text-sm font-medium text-foreground/70">{initial}</span>;
@@ -42,6 +43,9 @@ interface SpaceNameFieldProps {
   /** Presents the current values without editing affordances. */
   readOnly?: boolean;
   autoFocus?: boolean;
+  /** Marks the name as the field a form error is about, with `describedBy` naming that error. */
+  invalid?: boolean;
+  describedBy?: string;
   inputRef?: Ref<HTMLInputElement>;
   onBlur?: () => void;
   onEnter?: () => void;
@@ -57,6 +61,8 @@ export default function SpaceNameField({
   onEmojiChange,
   readOnly = false,
   autoFocus,
+  invalid = false,
+  describedBy,
   inputRef,
   onBlur,
   onEnter,
@@ -65,7 +71,14 @@ export default function SpaceNameField({
   const [pickerOpen, setPickerOpen] = useState(false);
 
   return (
-    <div className={cn(FIELD_CLASS, !readOnly && FIELD_EDITABLE_CLASS)}>
+    <div
+      className={cn(
+        FIELD_CLASS,
+        !readOnly && FIELD_EDITABLE_CLASS,
+        invalid &&
+          "border-destructive focus-within:border-destructive focus-within:ring-destructive/20"
+      )}
+    >
       {readOnly ? (
         <span className={TILE_CLASS} aria-hidden="true">
           <TileGlyph emoji={emoji} name={name} />
@@ -99,6 +112,8 @@ export default function SpaceNameField({
         ref={inputRef}
         autoFocus={autoFocus}
         maxLength={80}
+        aria-invalid={invalid || undefined}
+        aria-describedby={describedBy}
         readOnly={readOnly}
         tabIndex={readOnly ? -1 : undefined}
         onChange={(event) => onNameChange(event.target.value)}

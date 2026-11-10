@@ -1,3 +1,8 @@
+const {
+  runLocalModelOperation,
+  assertLocalModelOperation,
+  localModelOperationSignal,
+} = require("./localModelPolicyGate");
 const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
@@ -21,8 +26,17 @@ const HEALTH_CHECK_TIMEOUT_MS = 2000;
 const STARTUP_POLL_INTERVAL_MS = 500;
 const HEALTH_CHECK_FAILURE_THRESHOLD = 3;
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+// A restart waits this long for an answer in progress, unless the caller says otherwise.
+const DEFAULT_BUSY_WAIT_MS = 60000;
+const BUSY_WAIT_POLL_MS = 200;
+const MIN_SLOTS_READ_MS = 250;
+// How long a caller told "ready" has to get its request to the server. /slots
+// reads idle until then, and streaming chat connects from the renderer.
+const HANDOFF_GRACE_MS = 1000;
+const SLOTS_UNANSWERED = Symbol("slots-unanswered");
 const DEFAULT_CONTEXT_SIZE = 4096;
 const PREFLIGHT_TIMEOUT_MS = 10000;
+const SLOT_POLL_INTERVAL_MS = 1000;
 
 /**
  * llama-server reports a prompt that overflows the context as a 400 whose body
@@ -37,6 +51,31 @@ function withContextSize(args, contextSize) {
   const copy = [...args];
   copy[index + 1] = String(contextSize);
   return copy;
+}
+
+// Whether a server started with `server`'s settings can take `request` without
+// a restart: the same model and drafter, and a context at least as large. The context
+// only grows, so a short request never shrinks a window a long one opened.
+function servesRequest(server, request) {
+  return (
+    server.modelPath === request.modelPath &&
+    server.draftModelPath === request.draftModelPath &&
+    request.contextSize <= (server.contextSize || 0)
+  );
+}
+
+function modelBusyError() {
+  return Object.assign(new Error("The local model is still working on another request."), {
+    code: "LOCAL_MODEL_BUSY",
+  });
+}
+
+function cancelledError() {
+  return Object.assign(new Error("cancelled"), { code: "LOCAL_MODEL_CANCELLED" });
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function buildResponseError(statusCode, body) {
@@ -88,6 +127,14 @@ class LlamaServerManager {
     // one just paid to open. See #2142.
     this.contextSize = null;
     this.startupPromise = null;
+    // What the in-flight startup was asked for, so start() can tell whether
+    // joining it would serve another caller's request.
+    this.startingRequest = null;
+    this.stopPromise = null;
+    this.deferredStop = null;
+    this.handoffUntil = 0;
+    // Counts handoffs, so a /slots read can tell one happened while it was out.
+    this.handoffs = 0;
     this.healthCheckInterval = null;
     this.healthCheckFailures = 0;
     this.cachedServerBinaryPaths = null;
@@ -174,39 +221,145 @@ class LlamaServerManager {
   }
 
   async start(modelPath, options = {}) {
-    if (this.startupPromise) return this.startupPromise;
+    return runLocalModelOperation(
+      this,
+      "llm",
+      this.localModelIdForPath?.(modelPath),
+      // A revoked model ends its own wait through the lease's signal. The start
+      // may be waiting behind another model's answer, so the server is stopped
+      // only when it is, or is becoming, the revoked model.
+      () =>
+        this._policyAllowedStart(modelPath, {
+          ...options,
+          signal: localModelOperationSignal(this, options.signal),
+        }),
+      { onAbort: () => this.stopIfServing(modelPath) }
+    );
+  }
 
-    // A change in drafter presence for the same model must still restart the
-    // server so the new speculative-decoding flags take effect.
-    const requestedDraftPath = options.draftModelPath || null;
-    const requestedContextSize = options.contextSize || DEFAULT_CONTEXT_SIZE;
-    if (
-      this.ready &&
-      this.modelPath === modelPath &&
-      this.draftModelPath === requestedDraftPath &&
-      requestedContextSize <= (this.contextSize || 0)
-    ) {
-      // Streaming chat reaches the port directly and never goes through
-      // inference(), so asking for the running server is its only activity.
-      this.resetIdleTimer();
-      return;
+  stopIfServing(modelPath) {
+    if (this.modelPath === modelPath || this.startingRequest?.modelPath === modelPath) {
+      return this.stop();
+    }
+  }
+
+  _handOff() {
+    this.handoffUntil = Date.now() + HANDOFF_GRACE_MS;
+    this.handoffs += 1;
+  }
+
+  async _policyAllowedStart(modelPath, options = {}) {
+    if (this.stopPromise) await this.stopPromise;
+
+    const request = {
+      modelPath,
+      // A change in drafter presence for the same model must still restart the
+      // server so the new speculative-decoding flags take effect.
+      draftModelPath: options.draftModelPath || null,
+      contextSize: options.contextSize || DEFAULT_CONTEXT_SIZE,
+    };
+
+    const busyDeadline = Date.now() + (options.busyWaitMs ?? DEFAULT_BUSY_WAIT_MS);
+    // A caller that gives up during the wait must not still swap the model in.
+    const { signal } = options;
+
+    for (;;) {
+      if (signal?.aborted) throw cancelledError();
+      // Serialize with any in-flight startup; join it only when it will serve
+      // this request. Callers record the model they asked for as loaded once
+      // this resolves, so it must never resolve on a startup for another one.
+      while (this.startupPromise) {
+        if (servesRequest(this.startingRequest, request)) {
+          this.cancelDeferredStop();
+          return this.startupPromise;
+        }
+        await this._waitFor(
+          this.startupPromise.catch(() => {}),
+          { deadline: busyDeadline, signal }
+        );
+      }
+
+      if (this.ready && servesRequest(this, request)) {
+        // Streaming chat reaches the port directly and never goes through
+        // inference(), so asking for the running server is its only activity.
+        this.cancelDeferredStop();
+        this.resetIdleTimer();
+        this._handOff();
+        return;
+      }
+
+      // A server that failed its health check has no answer left to protect.
+      if (!this.process || !this.ready) break;
+
+      // Restarting kills whatever the server is generating. The wait stays out
+      // of startupPromise so the running model keeps serving meanwhile.
+      const server = this.process;
+      const busy = await this._waitFor(this._isBusy(busyDeadline - Date.now()), { signal });
+      if (this.startupPromise || this.process !== server) continue;
+      if (!busy) break;
+      const remaining = busyDeadline - Date.now();
+      if (remaining <= 0) throw modelBusyError();
+      await this._waitFor(sleep(Math.min(remaining, BUSY_WAIT_POLL_MS)), { signal });
     }
 
-    if (this.process) {
-      await this.stop();
-    }
+    this.startingRequest = request;
+    // Assigned before any await so waiters woken by the same startup cannot
+    // both spawn.
+    this.startupPromise = (async () => {
+      try {
+        if (this.process) await this.stop();
+        // Residency may have been turned off while the old server stopped.
+        this.clearIdleTimer();
+        await this._doStart(modelPath, options);
+        // The ladder may have stepped the context down to get a GPU rung to
+        // start; record what loaded, not what was asked for.
+        this.contextSize = this.activeContextSize ?? request.contextSize;
+        this._handOff();
+      } finally {
+        this.startupPromise = null;
+        this.startingRequest = null;
+      }
+    })();
+    return this.startupPromise;
+  }
 
-    // Residency may have been turned off while the old server stopped.
-    this.clearIdleTimer();
-    this.startupPromise = this._doStart(modelPath, options);
+  // Settles with the promise, unless the deadline passes first (busy) or the
+  // caller gives up (cancelled).
+  async _waitFor(promise, { deadline = Infinity, signal } = {}) {
+    if (signal?.aborted) throw cancelledError();
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw modelBusyError();
+    let timer;
+    let onAbort;
+    const interrupted = new Promise((_, reject) => {
+      if (remaining !== Infinity) timer = setTimeout(() => reject(modelBusyError()), remaining);
+      onAbort = () => reject(cancelledError());
+      signal?.addEventListener("abort", onAbort, { once: true });
+    });
     try {
-      await this.startupPromise;
-      // The ladder may have stepped the context down to get a GPU rung to
-      // start; record what loaded, not what was asked for.
-      this.contextSize = this.activeContextSize ?? requestedContextSize;
+      return await Promise.race([promise, interrupted]);
     } finally {
-      this.startupPromise = null;
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
     }
+  }
+
+  // Whether a restart now would cut off work. A failed read says nothing, so it
+  // can't hold a restart up; but llama-server answers /slots between batches, so
+  // one that goes unanswered is usually still evaluating a long prompt.
+  async _isBusy(budgetMs) {
+    if (this.activeRequest || Date.now() < this.handoffUntil) return true;
+    const handoffs = this.handoffs;
+    const slots = await this._requestJson(
+      "/slots",
+      null,
+      Math.min(PREFLIGHT_TIMEOUT_MS, Math.max(MIN_SLOTS_READ_MS, budgetMs)),
+      SLOTS_UNANSWERED
+    );
+    // Work handed out while the read was out is newer than its answer.
+    if (this.activeRequest || this.handoffs !== handoffs) return true;
+    if (slots === SLOTS_UNANSWERED) return true;
+    return Array.isArray(slots) && slots.some((slot) => slot.is_processing);
   }
 
   _buildBaseArgs(modelPath, port, options = {}) {
@@ -424,14 +577,16 @@ class LlamaServerManager {
     return new Promise((resolve, reject) => {
       debugLogger.debug("Spawning llama-server", { binary: binaryPath, port: this.port, args });
 
-      this.process = spawn(binaryPath, args, {
+      assertLocalModelOperation(this);
+      const child = spawn(binaryPath, args, {
         stdio: ["ignore", "pipe", "pipe"],
         windowsHide: true,
         cwd: getSafeTempDir(),
         env,
         detached: process.platform !== "win32",
       });
-      sidecarPidFile.write("llama", this.process.pid);
+      this.process = child;
+      sidecarPidFile.write("llama", child.pid);
 
       let stderrBuffer = "";
       let exitCode = null;
@@ -444,25 +599,28 @@ class LlamaServerManager {
         fn();
       };
 
-      this.process.stdout.on("data", (data) => {
+      child.stdout.on("data", (data) => {
         debugLogger.debug("llama-server stdout", { data: data.toString().trim() });
       });
 
-      this.process.stderr.on("data", (data) => {
+      child.stderr.on("data", (data) => {
         stderrBuffer += data.toString();
         debugLogger.debug("llama-server stderr", { data: data.toString().trim() });
       });
 
-      this.process.on("error", (error) => {
+      child.on("error", (error) => {
         debugLogger.error("llama-server process error", { error: error.message });
-        this.ready = false;
+        if (this.process === child) this.ready = false;
         settle(() => reject(new Error(`Failed to spawn llama-server: ${error.message}`)));
       });
 
-      this.process.on("close", (code, signal) => {
+      child.on("close", (code, signal) => {
         exitCode = code;
         exitSignal = signal;
         debugLogger.debug("llama-server process exited", { code, signal });
+        // A SIGKILLed server can exit after stop() moved on and the next one
+        // spawned; losing that one's handle would orphan it.
+        if (this.process && this.process !== child) return;
         this.ready = false;
         this.process = null;
         this.stopHealthCheck();
@@ -629,9 +787,9 @@ class LlamaServerManager {
     const timer = setTimeout(async () => {
       // Streaming chat talks to the port directly, so only the server knows
       // whether an answer that outlived the timeout is still being generated.
-      const slots = await this._requestJson("/slots");
+      const busy = await this._slotsBusy();
       if (this.idleTimer !== timer) return;
-      if (Array.isArray(slots) && slots.some((slot) => slot.is_processing)) {
+      if (busy) {
         this.resetIdleTimer();
         return;
       }
@@ -644,6 +802,34 @@ class LlamaServerManager {
     // Freeing an idle server is housekeeping; it must never hold the process open.
     timer.unref();
     this.idleTimer = timer;
+  }
+
+  async _slotsBusy() {
+    const slots = await this._requestJson("/slots");
+    return Array.isArray(slots) && slots.some((slot) => slot.is_processing);
+  }
+
+  /** Waits for active answers; settings-driven stops can be cancelled by reuse. */
+  async stopWhenIdle({ cancelOnReuse = true } = {}) {
+    const request = {};
+    if (cancelOnReuse) this.deferredStop = request;
+    await this.startupPromise?.catch(() => {});
+    const server = this.process;
+    const isCurrent = () =>
+      this.process === server && (!cancelOnReuse || this.deferredStop === request);
+    while (server && isCurrent()) {
+      if (!(await this._slotsBusy())) break;
+      if (!isCurrent()) break;
+      await new Promise((resolve) => setTimeout(resolve, SLOT_POLL_INTERVAL_MS).unref?.());
+    }
+    if (!isCurrent()) return false;
+    if (cancelOnReuse) this.deferredStop = null;
+    await this.stop();
+    return true;
+  }
+
+  cancelDeferredStop() {
+    this.deferredStop = null;
   }
 
   clearIdleTimer() {
@@ -660,7 +846,7 @@ class LlamaServerManager {
    * make a decision more precise, so a broken one must degrade to the estimate
    * and never fail the user's request.
    */
-  _requestJson(path, body = null, timeoutMs = PREFLIGHT_TIMEOUT_MS) {
+  _requestJson(path, body = null, timeoutMs = PREFLIGHT_TIMEOUT_MS, onTimeout = null) {
     return new Promise((resolve) => {
       const payload = body === null ? null : JSON.stringify(body);
       const req = http.request(
@@ -695,8 +881,8 @@ class LlamaServerManager {
 
       req.on("error", () => resolve(null));
       req.on("timeout", () => {
+        resolve(onTimeout);
         req.destroy();
-        resolve(null);
       });
       if (payload) req.write(payload);
       req.end();
@@ -704,9 +890,8 @@ class LlamaServerManager {
   }
 
   /**
-   * The context window actually in force, which is not always what we asked
-   * for: a concurrent caller can join an in-flight start that used a smaller
-   * size. Returns null when it cannot be read.
+   * The context window actually in force, which the GPU startup ladder may
+   * reduce below the requested size. Returns null when it cannot be read.
    */
   async usableContextSize() {
     if (!this.ready || !this.process) return null;
@@ -730,17 +915,35 @@ class LlamaServerManager {
       payload.chat_template_kwargs = { enable_thinking: false };
     }
 
+    assertLocalModelOperation(this);
     const templated = await this._requestJson("/apply-template", payload);
     if (typeof templated?.prompt !== "string") return null;
 
+    assertLocalModelOperation(this);
     const tokenized = await this._requestJson("/tokenize", { content: templated.prompt });
     return Array.isArray(tokenized?.tokens) ? tokenized.tokens.length : null;
   }
 
   async inference(messages, options = {}) {
+    // Nothing to authorize once stopped, which clears the model: that's the
+    // ordinary not-running error, not a refusal of a model nobody named.
+    if (!this.ready || !this.process) return this._policyAllowedInference(messages, options);
+    return runLocalModelOperation(
+      this,
+      "llm",
+      this.localModelIdForPath?.(this.modelPath),
+      () => this._policyAllowedInference(messages, options),
+      { onAbort: () => this.cancelInference() }
+    );
+  }
+
+  async _policyAllowedInference(messages, options = {}) {
     if (!this.ready || !this.process) {
       throw new Error("llama-server is not running");
     }
+    // cancelInference() only reaches a request already sent; one cancelled on
+    // the way here is never sent.
+    if (options.signal?.aborted) throw cancelledError();
 
     this.clearIdleTimer();
 
@@ -861,6 +1064,18 @@ class LlamaServerManager {
   }
 
   async stop() {
+    if (this.stopPromise) return this.stopPromise;
+    this.stopPromise = this._stop();
+    try {
+      await this.stopPromise;
+    } finally {
+      this.stopPromise = null;
+    }
+  }
+
+  async _stop() {
+    this.ready = false;
+    this.cancelDeferredStop();
     this.clearIdleTimer();
     this.stopHealthCheck();
 
