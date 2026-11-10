@@ -198,6 +198,7 @@ test("Windows nudges the pill's size on every show so button presses reach it ag
       win.isVisible = () => true;
       win.isMinimized = () => false;
       win.getBounds = () => ({ ...bounds });
+      win.getMinimumSize = () => [bounds.width, bounds.height];
       win.setBounds = (next) => setBounds.push(next);
       win.webContents = Object.assign(new EventEmitter(), { send: () => undefined });
       const manager = Object.assign(Object.create(WindowManager.prototype), {
@@ -217,3 +218,96 @@ test("Windows nudges the pill's size on every show so button presses reach it ag
     Object.defineProperty(process, "platform", original);
   }
 });
+
+for (const { scaleFactor, size, nativeBounds } of [
+  {
+    scaleFactor: 1.25,
+    size: [208, 120],
+    nativeBounds: { x: 126, y: 126, width: 260, height: 150 },
+  },
+  { scaleFactor: 1.5, size: [208, 120], nativeBounds: { x: 152, y: 152, width: 312, height: 180 } },
+  {
+    scaleFactor: 1.75,
+    size: [208, 120],
+    nativeBounds: { x: 177, y: 177, width: 364, height: 210 },
+  },
+  {
+    scaleFactor: 1.25,
+    size: [333, 137],
+    nativeBounds: { x: -126, y: -126, width: 417, height: 172 },
+  },
+  {
+    scaleFactor: 1.5,
+    size: [333, 137],
+    nativeBounds: { x: -152, y: -152, width: 500, height: 206 },
+  },
+  {
+    scaleFactor: 1.75,
+    size: [333, 137],
+    nativeBounds: { x: -177, y: -177, width: 583, height: 240 },
+  },
+]) {
+  test(`Windows preserves native bounds over repeated shows at ${scaleFactor * 100}% (${size.join("x")})`, () => {
+    const original = Object.getOwnPropertyDescriptor(process, "platform");
+    Object.defineProperty(process, "platform", { value: "win32", configurable: true });
+    try {
+      let currentNativeBounds = { ...nativeBounds };
+      let minimumSize = [...size];
+      const resizedBounds = [];
+      const roundPoint = (value) => Math.sign(value) * Math.round(Math.abs(value));
+      const inverseScale = Math.fround(1 / scaleFactor);
+      const win = new EventEmitter();
+      win.isDestroyed = () => false;
+      win.isVisible = () => true;
+      win.isMinimized = () => false;
+      // ScreenWin rounds the origin but encloses both screen-space edges for
+      // size. Fixed-size HWND constraints instead retain the requested DIP size.
+      win.getBounds = () => {
+        const { x, y, width, height } = currentNativeBounds;
+        return {
+          x: roundPoint(Math.fround(x * inverseScale)),
+          y: roundPoint(Math.fround(y * inverseScale)),
+          width:
+            Math.ceil(Math.fround((x + width) * inverseScale)) -
+            Math.floor(Math.fround(x * inverseScale)),
+          height:
+            Math.ceil(Math.fround((y + height) * inverseScale)) -
+            Math.floor(Math.fround(y * inverseScale)),
+        };
+      };
+      win.getMinimumSize = () => [...minimumSize];
+      win.setBounds = ({ x, y, width, height }) => {
+        minimumSize = [width, height];
+        currentNativeBounds = {
+          x: roundPoint(x * scaleFactor),
+          y: roundPoint(y * scaleFactor),
+          width: Math.ceil(width * scaleFactor),
+          height: Math.ceil(height * scaleFactor),
+        };
+        resizedBounds.push(currentNativeBounds);
+      };
+      win.webContents = Object.assign(new EventEmitter(), { send: () => undefined });
+      const manager = Object.assign(Object.create(WindowManager.prototype), {
+        mainWindow: win,
+        enforceMainWindowOnTop: () => {},
+      });
+      manager.registerMainWindowEvents();
+      win.emit("ready-to-show");
+
+      for (let cycle = 0; cycle < 10; cycle++) {
+        win.emit("hide");
+        win.emit("show");
+        assert.deepEqual(currentNativeBounds, nativeBounds, `show ${cycle + 1}`);
+        assert.ok(
+          Math.ceil(Math.fround(resizedBounds.at(-2).width * inverseScale)) >
+            Math.ceil(Math.fround(nativeBounds.width * inverseScale)),
+          "nudge changes the renderer's DIP width"
+        );
+        assert.deepEqual(minimumSize, size);
+      }
+      assert.equal(resizedBounds.length, 20);
+    } finally {
+      Object.defineProperty(process, "platform", original);
+    }
+  });
+}

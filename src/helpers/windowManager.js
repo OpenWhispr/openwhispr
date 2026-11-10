@@ -1656,8 +1656,13 @@ class WindowManager {
     const win = this.mainWindow;
     if (!win || win.isDestroyed()) return;
     const bounds = win.getBounds();
+    // Electron stores the non-resizable pill's requested size in its constraints.
+    // Reading the size from getBounds() instead rounds screen edges outward at
+    // fractional DPI, so restoring that size would grow the window on each show.
+    const [width, height] = win.getMinimumSize();
+    // Nudge past the rounded bounds so the renderer's DIP size also changes.
     win.setBounds({ ...bounds, width: bounds.width + 1 });
-    win.setBounds(bounds);
+    win.setBounds({ ...bounds, width, height });
   }
 
   showDictationPanel(options = {}) {
