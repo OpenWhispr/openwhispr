@@ -861,10 +861,14 @@ export class SyncService {
         if (value !== null) ownerCursors[key] = value;
       }
       localStorage.setItem(`${SYNC_CURSOR_SAVED_PREFIX}${owner}`, JSON.stringify(ownerCursors));
-      const savedKey = `${SYNC_CURSOR_SAVED_PREFIX}${accountId}`;
+    }
+    const savedKey = `${SYNC_CURSOR_SAVED_PREFIX}${accountId}`;
+    const savedState = localStorage.getItem(savedKey);
+    // Deleting the cursor owner leaves other accounts' saved state intact.
+    if (owner !== null || savedState !== null) {
       let saved: Record<string, unknown> = {};
       try {
-        saved = JSON.parse(localStorage.getItem(savedKey) ?? "{}") ?? {};
+        saved = JSON.parse(savedState ?? "{}") ?? {};
       } catch {
         // A corrupt entry only costs this account a cursor-less pull.
       }

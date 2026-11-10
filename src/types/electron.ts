@@ -1972,10 +1972,10 @@ declare global {
       ) => Promise<{ success: boolean; stale?: boolean }>;
       /** Writes the cached list only into a database that has never held one. */
       seedDictionary?: (words: string[]) => Promise<{ success: boolean; seeded: boolean }>;
-      applyDictionaryChanges?: (changes: {
-        add?: string[];
-        remove?: string[];
-      }) => Promise<{ success: boolean; added: number; removed: number }>;
+      applyDictionaryChanges?: (
+        changes: { add?: string[]; remove?: string[] },
+        listsAccountId?: string | null
+      ) => Promise<{ success: boolean; added: number; removed: number; stale?: boolean }>;
       onDictionaryUpdated?: (callback: (words: string[]) => void) => () => void;
       getSnippets?: () => Promise<Array<{ trigger: string; replacement: string }>>;
       setSnippets?: (

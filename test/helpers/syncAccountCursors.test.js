@@ -18,9 +18,11 @@ const {
 } = require("./harness/browserGlobals.js");
 const { createElectronApi } = require("./harness/electronApiBridge.js");
 const { createAccountCloud } = require("./harness/fakeCloud.js");
+const { createSyncDevice } = require("./harness/syncDevice.js");
 const { SyncService } = require("../../src/services/SyncService.ts");
 const { cloudPostForAuthGeneration } = require("../../src/services/cloudApi.ts");
 const { getValidatedAuthGeneration } = require("../../src/lib/authRequestContext.ts");
+const { executeAccountDeletion } = require("../../src/lib/accountDeletionFlow.ts");
 
 const daysAgo = (days) => new Date(Date.now() - days * 86400000).toISOString();
 
@@ -722,6 +724,60 @@ test("forgetting an account leaves no cursor or claim keyed by it", async (t) =>
   const accountB = await signInAs(t, db, createAccountCloud(), "account-b");
   await accountB.syncAll(true);
   assert.deepEqual(namesAccountA(), [], "the next account's claim files nothing under it");
+});
+
+test("deleting the active account preserves the returning account's remote deletes", async (t) => {
+  const device = createSyncDevice(t);
+  if (!device) return;
+  const { db, service } = device;
+  const cloudB = createAccountCloud();
+  const seeded = seedHistory(cloudB, "b", daysAgo(5));
+
+  await device.signIn("account-b", cloudB);
+  await service.syncAll(true);
+  assert.deepEqual(visible(db), {
+    words: ["bWord"],
+    snippets: ["btrig"],
+    chats: ["b chat"],
+    dictations: ["b dictation"],
+  });
+  device.signOut();
+  await device.signIn("account-a", createAccountCloud());
+  await service.syncAll(true);
+
+  // B's phone deletes these while this device is signed in as A.
+  cloudB.setClock(() => new Date(Date.now() + 1000).toISOString());
+  cloudB.deleteConversation(seeded.chat.id);
+  cloudB.deleteTranscription(seeded.dictation.id);
+  await cloudB.request({
+    method: "DELETE",
+    path: "/api/dictionary/delete",
+    body: { id: seeded.word.id },
+  });
+  await cloudB.request({
+    method: "DELETE",
+    path: "/api/snippets/delete",
+    body: { id: seeded.snippet.id },
+  });
+
+  const result = await executeAccountDeletion({
+    eraseDeviceData: false,
+    dependencies: {
+      deleteRemoteAccount: async () => {},
+      deleteLocalAccountData: async () => {
+        db.deleteAccountData("account-a");
+        service.forgetAccount("account-a");
+      },
+      clearWorkspaceSessionState: () => service.purgeTeamSpacesForSignOut(),
+      signOut: async () => device.signOut(),
+      eraseDeviceData: async () => assert.fail("Other accounts' data must be retained"),
+    },
+  });
+  assert.deepEqual(result.localCleanupFailures, []);
+
+  await device.signIn("account-b", cloudB);
+  await service.syncAll(true);
+  assert.deepEqual(visible(db), { words: [], snippets: [], chats: [], dictations: [] });
 });
 
 test("a dictionary rename onto a word the account owns merges instead of wedging the pull", (t) => {

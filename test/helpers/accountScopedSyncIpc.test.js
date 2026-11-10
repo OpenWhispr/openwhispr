@@ -909,3 +909,44 @@ test("signing in on a device nobody else used claims the rows from before attrib
     "account-a"
   );
 });
+
+test("a queued dictionary delta from another account is refused", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  db.applyDictionaryChanges({ add: ["SharedProduct", "A's word"] });
+  db.setActiveAccountId("account-b");
+  db.applyDictionaryChanges({ add: ["SharedProduct", "B's word"] });
+
+  const result = await invoke(
+    "db-apply-dictionary-changes",
+    { remove: ["SharedProduct"], add: ["A's renamed word"] },
+    "account-a"
+  );
+
+  assert.equal(result.stale, true);
+  assert.deepEqual(db.getDictionary().sort(), ["B's word", "SharedProduct"]);
+  db.setActiveAccountId("account-a");
+  assert.deepEqual(db.getDictionary().sort(), ["A's word", "SharedProduct"]);
+});
+
+test("dictionary deltas remain editable signed out and across a same-account token rotation", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  await invoke("set-active-account-scope", "account-a", tokenState.generation);
+  db.applyDictionaryChanges({ add: ["Original"] });
+  tokenState = { token: "token-a-rotated", generation: tokenState.generation + 1 };
+  handleAuthTokenChange(tokenState);
+
+  assert.equal(
+    (await invoke("db-apply-dictionary-changes", { add: ["Rotated"] }, "account-a")).success,
+    true
+  );
+  tokenState = { token: null, generation: tokenState.generation + 1 };
+  handleAuthTokenChange(tokenState);
+  assert.equal(
+    (await invoke("db-apply-dictionary-changes", { remove: ["Original"] }, null)).success,
+    true
+  );
+  assert.deepEqual(db.getDictionary(), ["Rotated"]);
+});

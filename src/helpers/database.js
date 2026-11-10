@@ -3167,9 +3167,6 @@ class DatabaseManager {
       tombstone: this.db.prepare(
         "UPDATE custom_dictionary SET deleted_at = datetime('now'), updated_at = datetime('now'), sync_status = 'pending', account_id = COALESCE(account_id, ?) WHERE id = ? AND deleted_at IS NULL"
       ),
-      hardDelete: this.db.prepare(
-        "DELETE FROM custom_dictionary WHERE id = ? AND cloud_id IS NULL"
-      ),
       restore: this.db.prepare(
         "UPDATE custom_dictionary SET deleted_at = NULL, shared_at = NULL, shared_at_dirty = 1, fallback_retired = 0, source = CASE WHEN source = 'learned' AND ? = 'manual' THEN 'manual' ELSE source END, word = ?, updated_at = datetime('now'), sync_status = 'pending' WHERE id = ?"
       ),
@@ -3212,7 +3209,7 @@ class DatabaseManager {
     const scope = this._ownedRowScope("custom_dictionary");
     const rows = this.db
       .prepare(
-        `SELECT id, word, source, deleted_at, shared_at FROM custom_dictionary WHERE ${scope.sql}`
+        `SELECT id, word, source, deleted_at, shared_at, cloud_id, account_id FROM custom_dictionary WHERE ${scope.sql}`
       )
       .all(...scope.params);
     return { rows, byLower: new Map(rows.map((r) => [r.word.toLowerCase(), r])) };
@@ -3244,9 +3241,12 @@ class DatabaseManager {
   // next push tells the server about the deletion.
   _deleteDictionaryRow(stmts, existing) {
     if (!existing || existing.deleted_at) return false;
-    this._dropHiddenDuplicates("custom_dictionary", existing.word);
-    const hardResult = stmts.hardDelete.run(existing.id);
-    if (hardResult.changes === 0) stmts.tombstone.run(this.activeAccountId, existing.id);
+    if (existing.cloud_id) {
+      this._dropHiddenDuplicates("custom_dictionary", existing.word);
+      stmts.tombstone.run(this.activeAccountId, existing.id);
+    } else {
+      this._hardDeleteKeyedRow("custom_dictionary", existing.id, existing);
+    }
     return true;
   }
 
@@ -4212,7 +4212,6 @@ class DatabaseManager {
       const tombstone = this.db.prepare(
         "UPDATE snippets SET deleted_at = datetime('now'), updated_at = datetime('now'), sync_status = 'pending', account_id = COALESCE(account_id, ?) WHERE id = ? AND deleted_at IS NULL"
       );
-      const hardDelete = this.db.prepare("DELETE FROM snippets WHERE id = ? AND cloud_id IS NULL");
       const restore = this.db.prepare(
         "UPDATE snippets SET deleted_at = NULL, trigger = ?, replacement = ?, updated_at = datetime('now'), sync_status = 'pending' WHERE id = ?"
       );
@@ -4227,9 +4226,12 @@ class DatabaseManager {
         for (const existing of existingRows) {
           if (incomingLower.has(existing.trigger.toLowerCase())) continue;
           if (existing.deleted_at) continue;
-          this._dropHiddenDuplicates("snippets", existing.trigger);
-          const hardResult = hardDelete.run(existing.id);
-          if (hardResult.changes === 0) tombstone.run(this.activeAccountId, existing.id);
+          if (existing.cloud_id) {
+            this._dropHiddenDuplicates("snippets", existing.trigger);
+            tombstone.run(this.activeAccountId, existing.id);
+          } else {
+            this._hardDeleteKeyedRow("snippets", existing.id, existing);
+          }
         }
 
         for (const snippet of cleaned) {

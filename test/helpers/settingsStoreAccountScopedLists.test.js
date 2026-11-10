@@ -135,7 +135,7 @@ test("a window whose first seed loses the race takes the list the other window s
 // credential binding as signed out while main's database still scopes rows to
 // the same account. Its lists belong to that account, so its whole-list saves
 // name it, and the same-account re-scope changes nothing.
-async function loadSettingsWindow(t, { electronAPI, cachePrefix, initialStorage }) {
+async function loadSettingsWindow(t, { electronAPI, cachePrefix, initialStorage, mockModules }) {
   const globals = installBrowserGlobals(t, {
     initialStorage,
     window: {
@@ -148,7 +148,7 @@ async function loadSettingsWindow(t, { electronAPI, cachePrefix, initialStorage 
       },
     },
   });
-  const vite = await createRendererServer(t, { cachePrefix });
+  const vite = await createRendererServer(t, { cachePrefix, mockModules });
   const store = await vite.ssrLoadModule("/stores/settingsStore.ts");
   try {
     await store.initializeSettings();
@@ -158,7 +158,7 @@ async function loadSettingsWindow(t, { electronAPI, cachePrefix, initialStorage 
   }
   // The scope read runs after startup's own reads.
   await new Promise((resolve) => setImmediate(resolve));
-  return { ...globals, store };
+  return { ...globals, store, vite };
 }
 
 test("a window started between a token rotation and the re-scope saves its lists as that account's", async (t) => {
@@ -266,4 +266,133 @@ test("a whole-list save main refuses as another account's takes what SQLite hold
   assert.deepEqual(state.snippets, stored.snippets);
   assert.deepEqual(JSON.parse(storage.getItem("customDictionary")), stored.dictionary);
   assert.deepEqual(JSON.parse(storage.getItem("snippets")), stored.snippets);
+});
+
+test("dictionary deltas carry the database account through token rotation and sign-out", async (t) => {
+  const owners = [];
+  let onDatabaseScope;
+  const { store } = await loadSettingsWindow(t, {
+    cachePrefix: "openwhispr-settings-delta-owner-",
+    electronAPI: {
+      getActiveAccountScope: async () => null,
+      getDatabaseAccountScope: async () => ({
+        accountId: "account-a",
+        visibleAccountId: "account-a",
+      }),
+      onDatabaseAccountScopeChanged: (callback) => {
+        onDatabaseScope = callback;
+        return () => {};
+      },
+      getDictionary: async () => ["OpenWhispr"],
+      getSnippets: async () => [],
+      applyDictionaryChanges: (_changes, owner) => {
+        owners.push(owner);
+        return new Promise(() => {});
+      },
+    },
+  });
+
+  store.useSettingsStore.getState().updateCustomDictionary({ add: ["First"] });
+  onDatabaseScope({ accountId: "account-a", visibleAccountId: "account-a" });
+  store.useSettingsStore.getState().updateCustomDictionary({ add: ["Rotated"] });
+  onDatabaseScope({ accountId: null, visibleAccountId: "account-a" });
+  store.useSettingsStore.getState().updateCustomDictionary({ add: ["SignedOut"] });
+
+  assert.deepEqual(owners, ["account-a", "account-a", null]);
+});
+
+for (const pending of ["write", "read"]) {
+  test(`a dictionary delta's late ${pending} cannot restore the departed account's words`, async (t) => {
+    let onDatabaseScope;
+    let finishWrite;
+    let finishRead;
+    const { store, storage, vite } = await loadSettingsWindow(t, {
+      cachePrefix: `openwhispr-settings-delta-late-${pending}-`,
+      mockModules: {
+        "/services/SyncService.js": `
+          export const syncs = [];
+          export const syncService = {
+            canSync: () => true,
+            syncDictionaryNow: () => syncs.push("dictionary"),
+          };
+        `,
+      },
+      electronAPI: {
+        getDatabaseAccountScope: async () => ({
+          accountId: "account-a",
+          visibleAccountId: "account-a",
+        }),
+        onDatabaseAccountScopeChanged: (callback) => {
+          onDatabaseScope = callback;
+          return () => {};
+        },
+        getDictionary: async () => ["OpenWhispr", "A's word"],
+        getSnippets: async () => [],
+        applyDictionaryChanges: () => new Promise((resolve) => (finishWrite = resolve)),
+      },
+    });
+    const { syncs } = await vite.ssrLoadModule("/services/SyncService.js");
+    const settle = () => new Promise((resolve) => setImmediate(resolve));
+    globalThis.window.electronAPI.getDictionary = () =>
+      new Promise((resolve) => (finishRead = resolve));
+
+    store.useSettingsStore.getState().updateCustomDictionary({ add: ["A's new word"] });
+    if (pending === "read") {
+      finishWrite({ success: true, added: 1, removed: 0 });
+      await settle();
+      assert.equal(typeof finishRead, "function");
+    }
+    onDatabaseScope({ accountId: "account-b", visibleAccountId: "account-b" });
+    store.useSettingsStore.getState().applyCustomDictionaryFromExternal(["B's word"]);
+    if (pending === "write") {
+      finishWrite({ success: true, added: 1, removed: 0 });
+      await settle();
+    }
+    finishRead?.(["OpenWhispr", "A's word", "A's new word"]);
+    await settle();
+    await settle();
+
+    assert.deepEqual(store.useSettingsStore.getState().customDictionary, ["B's word"]);
+    assert.deepEqual(JSON.parse(storage.getItem("customDictionary")), ["B's word"]);
+    assert.deepEqual(syncs, [], "a departed account's edit cannot start the next account's sync");
+  });
+}
+
+test("a refused dictionary delta restores the stored list without starting a sync", async (t) => {
+  const { store, storage, vite } = await loadSettingsWindow(t, {
+    cachePrefix: "openwhispr-settings-delta-refused-",
+    mockModules: {
+      "/services/SyncService.js": `
+        export const syncs = [];
+        export const syncService = {
+          canSync: () => true,
+          syncDictionaryNow: () => syncs.push("dictionary"),
+        };
+      `,
+    },
+    electronAPI: {
+      getDatabaseAccountScope: async () => ({
+        accountId: "account-a",
+        visibleAccountId: "account-a",
+      }),
+      getDictionary: async () => ["OpenWhispr", "A's word"],
+      getSnippets: async () => [],
+      applyDictionaryChanges: async () => ({
+        success: false,
+        stale: true,
+        added: 0,
+        removed: 0,
+      }),
+    },
+  });
+  const { syncs } = await vite.ssrLoadModule("/services/SyncService.js");
+  globalThis.window.electronAPI.getDictionary = async () => ["B's word"];
+
+  store.useSettingsStore.getState().updateCustomDictionary({ add: ["A's edit"] });
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(store.useSettingsStore.getState().customDictionary, ["B's word"]);
+  assert.deepEqual(JSON.parse(storage.getItem("customDictionary")), ["B's word"]);
+  assert.deepEqual(syncs, []);
 });

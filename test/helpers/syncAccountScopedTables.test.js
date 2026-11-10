@@ -705,6 +705,99 @@ test("a word or snippet the account removes stays removed, with no signed-out co
   assert.deepEqual(db.getDictionary(), [], "the signed-out copy went with the account's word");
 });
 
+for (const signedOut of [false, true]) {
+  test(`removing a word or snippet after a 404 keeps its legacy twin hidden ${signedOut ? "signed out" : "signed in"}`, async (t) => {
+    const db = setup(t);
+    if (!db) return;
+    if (!signedOut) markDeviceShared(db);
+    db.db
+      .prepare(
+        `INSERT INTO custom_dictionary (word, client_dict_id, cloud_id, sync_status, legacy_unattributed)
+         VALUES ('Same', 'legacy-word', 'legacy-cloud-word', 'synced', 1)`
+      )
+      .run();
+    db.db
+      .prepare(
+        `INSERT INTO snippets (trigger, replacement, client_snippet_id, cloud_id, sync_status, legacy_unattributed)
+         VALUES ('addr', 'Legacy address', 'legacy-snippet', 'legacy-cloud-snippet', 'synced', 1)`
+      )
+      .run();
+    const cloudA = createAccountCloud();
+    const createdAt = new Date(Date.now() - 3 * 86_400_000).toISOString();
+    const word = cloudA.seedDictionaryEntry({
+      word: "Same",
+      client_dict_id: "a-word",
+      created_at: createdAt,
+      updated_at: createdAt,
+    });
+    const snippet = cloudA.seedSnippet({
+      trigger: "addr",
+      replacement: "A's address",
+      client_snippet_id: "a-snippet",
+      created_at: createdAt,
+      updated_at: createdAt,
+    });
+    const accountA = await signInAs(t, db, cloudA, "account-a");
+    await accountA.syncAll(true);
+    assert.deepEqual(db.getDictionary(), ["Same"]);
+    assert.deepEqual(db.getSnippets(), [{ trigger: "addr", replacement: "A's address" }]);
+
+    // Another device deleted these yesterday. Today's local edits survive the
+    // old cloud tombstones and their PATCH 404s queue recreation next pass.
+    cloudA.setClock(() => new Date(Date.now() - 86_400_000).toISOString());
+    await cloudA.request({
+      method: "DELETE",
+      path: "/api/dictionary/delete",
+      body: { id: word.id },
+    });
+    await cloudA.request({
+      method: "DELETE",
+      path: "/api/snippets/delete",
+      body: { id: snippet.id },
+    });
+    db.applyDictionaryChanges({ add: ["SAME"] });
+    db.setSnippets([{ trigger: "addr", replacement: "A's edited address" }]);
+    await accountA.syncAll(true);
+    assert.equal(db.getPendingDictionary()[0]?.cloud_id, null);
+    assert.equal(db.getPendingSnippets()[0]?.cloud_id, null);
+    assert.equal(cloudA.logFor("/api/dictionary/update").length, 1);
+    assert.equal(cloudA.logFor("/api/snippets/update").length, 1);
+
+    // A sole account keeps its rows visible and editable after signing out.
+    if (signedOut) db.setActiveAccountId(null);
+    assert.deepEqual(db.applyDictionaryChanges({ remove: ["SAME"] }), {
+      success: true,
+      added: 0,
+      removed: 1,
+    });
+    assert.equal(db.setSnippets([]).success, true);
+    assert.deepEqual(
+      { words: db.getDictionary(), snippets: db.getSnippets() },
+      { words: [], snippets: [] },
+      "removing the owned rows must not reveal their cloud-linked legacy twins"
+    );
+    db.setActiveAccountId("account-a");
+    assert.deepEqual(db.getPendingDictionary(), []);
+    assert.deepEqual(db.getPendingSnippets(), []);
+    assert.deepEqual(db.getPendingDictionaryDeletes(), []);
+    assert.deepEqual(db.getPendingSnippetDeletes(), []);
+    await accountA.syncAll(true);
+    assert.deepEqual(db.getDictionary(), []);
+    assert.deepEqual(db.getSnippets(), []);
+
+    // The tombstone only hides the legacy copy for A; nobody proved that the
+    // legacy copy belongs to A, so another account must still have it.
+    db.setActiveAccountId("account-b");
+    assert.deepEqual(db.getDictionary(), ["Same"]);
+    assert.deepEqual(db.getSnippets(), [{ trigger: "addr", replacement: "Legacy address" }]);
+    db.setActiveAccountId("account-a");
+    assert.equal(db.applyDictionaryChanges({ add: ["Same"] }).added, 1);
+    db.setSnippets([{ trigger: "addr", replacement: "A's restored address" }]);
+    assert.deepEqual(db.getDictionary(), ["Same"], "A can explicitly re-add the deleted word");
+    assert.deepEqual(db.getSnippets(), [{ trigger: "addr", replacement: "A's restored address" }]);
+  });
+}
+
 for (const switchDuring of ["fetch", "json"]) {
   test(`a chat created during an account switch in ${switchDuring} stays with its sender`, async (t) => {
     const db = setup(t);

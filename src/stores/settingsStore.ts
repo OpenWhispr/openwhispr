@@ -376,13 +376,12 @@ function sharedWordsReachingPrompt(settings: PromptDictionarySettings): SharedHi
 let lastSentSharedHints: string | null = null;
 // The signed-in account this window's dictionary and snippets were loaded
 // under, as main's database has it; undefined until first read. Main refuses a
-// whole-list save from any other.
+// personal-list edit from any other.
 let listsAccountId: string | null | undefined;
 
-// A whole-list save main refused as another account's: the window shows an
-// edit SQLite never stored, so it takes what SQLite holds. A read that
-// outlives another account change is dropped: that change's broadcast already
-// brought the lists, and adopting this one would put them under the wrong owner.
+// SQLite owns the list after a write or refusal. A read that outlives an
+// account change is dropped: that change's broadcast already brought the
+// lists, and adopting this one would put them under the wrong owner.
 async function adoptStoredDictionary(): Promise<void> {
   const owner = listsAccountId;
   const stored = await window.electronAPI?.getDictionary?.();
@@ -2389,6 +2388,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   },
 
   updateCustomDictionary: ({ add = [], remove = [] }) => {
+    const owner = listsAccountId;
     const removeLower = new Set(remove.map((w) => w.toLowerCase()));
     const addLower = new Set(add.map((w) => w.toLowerCase()));
     // Optimistic so the UI updates immediately; the stored list replaces it below.
@@ -2406,18 +2406,19 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (!api) return;
     // Older preloads have no delta channel; fall back rather than drop the edit.
     const written = api.applyDictionaryChanges
-      ? api.applyDictionaryChanges({ add, remove })
-      : api.setDictionary(optimistic, listsAccountId);
+      ? api.applyDictionaryChanges({ add, remove }, owner)
+      : api.setDictionary(optimistic, owner);
 
     written
-      .then(async () => {
-        // SQLite owns ordering, casing and dedupe — adopt what it stored.
-        const stored = await api.getDictionary?.();
-        if (stored) {
-          if (isBrowser) localStorage.setItem("customDictionary", JSON.stringify(stored));
-          set({ customDictionary: stored });
+      .then(async (result) => {
+        if (result?.stale) {
+          await adoptStoredDictionary();
+          return;
         }
-        syncAfterLocalWrite("syncDictionaryNow");
+        if (listsAccountId !== owner) return;
+        // SQLite owns ordering, casing and dedupe — adopt what it stored.
+        await adoptStoredDictionary();
+        if (listsAccountId === owner) syncAfterLocalWrite("syncDictionaryNow");
       })
       .catch((err) => {
         logger.warn(

@@ -276,3 +276,15 @@ test("prepare-dictation calls back without the Electron event", () => {
   assert.deepEqual(received, [[]]);
   assert.equal(listeners.has("prepare-dictation"), false);
 });
+
+test("dictionary deltas forward their account owner, including the signed-out scope", async () => {
+  const { api, invocations } = loadPreloadApi();
+
+  await api.applyDictionaryChanges({ add: ["Word"] }, "account-a");
+  await api.applyDictionaryChanges({ remove: ["Word"] }, null);
+
+  assert.deepEqual(invocations, [
+    ["db-apply-dictionary-changes", { add: ["Word"] }, "account-a"],
+    ["db-apply-dictionary-changes", { remove: ["Word"] }, null],
+  ]);
+});

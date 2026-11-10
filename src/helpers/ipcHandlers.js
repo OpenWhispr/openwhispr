@@ -2442,13 +2442,16 @@ class IPCHandlers {
       return this.databaseManager.seedDictionary(words);
     });
 
-    ipcMain.handle("db-apply-dictionary-changes", async (_event, changes) => {
+    ipcMain.handle("db-apply-dictionary-changes", async (_event, changes, listsAccountId) => {
       const { add, remove } = changes ?? {};
       if (add !== undefined && !Array.isArray(add)) {
         throw new Error("add must be an array");
       }
       if (remove !== undefined && !Array.isArray(remove)) {
         throw new Error("remove must be an array");
+      }
+      if (isListFromOtherAccount(listsAccountId)) {
+        return { success: false, added: 0, removed: 0, stale: true };
       }
       return this.databaseManager.applyDictionaryChanges({ add, remove });
     });
