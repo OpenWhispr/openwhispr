@@ -86,6 +86,7 @@ import {
   transcriptionChoiceRefusal,
 } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
+import { onWorkspaceScopePublished } from "../../stores/workspaceStore";
 import {
   usePolicySnapshot,
   useTranscriptionChoiceRefusal,
@@ -437,27 +438,37 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   useEffect(() => {
     // Uploads and URL downloads are a personal flow: scope the folder list
     // (and the by-name "Videos" destination lookup) to the active workspace's
-    // Private so a same-named team folder can never capture them.
-    let cancelled = false;
+    // Private so a same-named team folder can never capture them. Read again
+    // each time main takes a new workspace scope (a switch), keeping a picked
+    // folder while that Private still has it.
+    let unmounted = false;
+    let latestLoad = 0;
     const loadFolders = async () => {
+      const load = ++latestLoad;
       try {
         const spaceId = (await window.electronAPI.getPrivateSpaceId?.()) ?? null;
         const items = (await window.electronAPI.getFolders?.(spaceId)) ?? [];
-        if (cancelled) return;
+        if (unmounted || load !== latestLoad) return;
         setPrivateSpaceId(spaceId);
         setFolders(items);
         const personal = findDefaultFolder(items);
-        if (personal) {
-          setSelectedFolderId(String(personal.id));
-          setBatchFolderId(String(personal.id));
-        }
+        const keepOrDefault = (current: string): string =>
+          items.some((folder) => String(folder.id) === current)
+            ? current
+            : personal
+              ? String(personal.id)
+              : "";
+        setSelectedFolderId(keepOrDefault);
+        setBatchFolderId(keepOrDefault);
       } catch (error) {
-        if (!cancelled) console.error("Failed to load upload folders:", error);
+        if (!unmounted) console.error("Failed to load upload folders:", error);
       }
     };
     void loadFolders();
+    const stopReloading = onWorkspaceScopePublished(() => void loadFolders());
     return () => {
-      cancelled = true;
+      unmounted = true;
+      stopReloading();
     };
   }, []);
 

@@ -13,7 +13,7 @@ import AddNotesToFolderDialog from "./AddNotesToFolderDialog";
 import { useActionProcessing } from "../../hooks/useActionProcessing";
 import { useResizableWidth } from "../../hooks/useResizableWidth";
 import type { NoteMoveTarget } from "../../hooks/useNoteDragAndDrop";
-import type { ActionItem, ActionKind, NoteItem } from "../../types/electron";
+import type { ActionItem, ActionKind, NoteItem, NoteMutationResult } from "../../types/electron";
 import { buildNoteRunInput } from "../../helpers/templatePrompts";
 import {
   useSettingsStore,
@@ -642,14 +642,15 @@ export default function PersonalNotesView({
     [cancelPendingSaves]
   );
 
+  // Answers with main's result: the tree tells a refused move (success false) from a done one.
   const handleMoveNote = useCallback(
-    async (noteId: number, target: NoteMoveTarget) => {
+    async (noteId: number, target: NoteMoveTarget): Promise<NoteMutationResult> => {
       const result = await window.electronAPI.updateNote(noteId, {
         folder_id: target.folderId,
         space_id: target.spaceId,
       });
       // A refused move leaves the open note where it is.
-      if (noteId !== activeNoteId || result?.success === false) return;
+      if (noteId !== activeNoteId || result?.success === false) return result;
       // The view follows the open note within the workspace. Moved to another workspace's
       // Private, the note closes: following it there would switch workspace.
       const { activeWorkspaceId, workspaces, defaultWorkspaceId } = useWorkspaceStore.getState();
@@ -663,6 +664,7 @@ export default function PersonalNotesView({
       } else {
         setActiveNoteId(null);
       }
+      return result;
     },
     [activeNoteId]
   );

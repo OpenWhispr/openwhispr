@@ -1,5 +1,5 @@
 import type { FolderItem, SpaceItem } from "../types/electron";
-import { MEETINGS_FOLDER_NAME } from "../components/notes/shared.ts";
+import { MEETINGS_FOLDER_NAME } from "./defaultFolderNames.ts";
 import { activePrivateSpace } from "./workspaceSelection.ts";
 
 type SectionSpace = Pick<SpaceItem, "id" | "kind" | "workspace_id">;

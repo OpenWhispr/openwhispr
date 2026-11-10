@@ -37,7 +37,7 @@ interface UseNoteDragAndDropOptions {
    * the cross-space veto rejected — the drop would otherwise die silently
    * (no highlight, no dialog), which reads as a broken drag.
    */
-  onCrossSpaceVeto?: (note: DraggedNoteInfo) => void;
+  onCrossSpaceVeto?: (note: DraggedNoteInfo, target: NoteMoveTarget) => void;
   /** Fired after hovering a target for 500ms mid-drag (auto-expand collapsed containers). */
   onHoverTarget?: (key: string) => void;
   /**
@@ -190,7 +190,7 @@ export function useNoteDragAndDrop({
             const to = note ? landing(note) : null;
             if (note && to && crossSpaceVetoed(note, to) && !vetoNotifiedRef.current) {
               vetoNotifiedRef.current = true;
-              onCrossSpaceVeto?.(note);
+              onCrossSpaceVeto?.(note, to);
             }
             return;
           }

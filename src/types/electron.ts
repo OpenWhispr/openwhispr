@@ -743,6 +743,16 @@ export interface SpaceItem {
   updated_at: string;
 }
 
+// Why main refused a move: a teamspace note or folder the cloud already has stays there (D31).
+export type MoveRefusalCode = "team_row_synced";
+
+export interface NoteMutationResult {
+  success: boolean;
+  note?: NoteItem;
+  error?: string;
+  code?: MoveRefusalCode;
+}
+
 export interface WorkspaceScope {
   activeWorkspaceId: string | null;
   defaultWorkspaceId: string | null;
@@ -2103,7 +2113,7 @@ declare global {
           left_team?: number;
         },
         options?: { undoable: true; expected: NoteItem; turn?: string }
-      ) => Promise<{ success: boolean; note?: NoteItem; error?: string }>;
+      ) => Promise<NoteMutationResult>;
       getNoteUndos: () => Promise<Array<{ token: string; noteId: number; title: string }>>;
       claimNoteUndo: (token: string) => Promise<boolean>;
       undoNoteUpdate: (
@@ -2153,7 +2163,13 @@ declare global {
       moveFolderToSpace: (
         id: number,
         spaceId: number
-      ) => Promise<{ success: boolean; folder?: FolderItem; notes?: NoteItem[]; error?: string }>;
+      ) => Promise<{
+        success: boolean;
+        folder?: FolderItem;
+        notes?: NoteItem[];
+        error?: string;
+        code?: MoveRefusalCode;
+      }>;
       getFolderNoteCounts: () => Promise<
         Array<{ space_id: number; folder_id: number | null; count: number }>
       >;

@@ -44,7 +44,19 @@ const WORKSPACES = [
   { id: "b", name: "Beta Corp", role: "member" },
 ];
 
-async function mountTree(t) {
+// Mounts the tree over a live fixture: tests change `state.notes`, `state.folders` and the queued
+// move answers between actions, as main and sync would.
+async function mountTree(
+  t,
+  {
+    spaces = SPACES,
+    folders = FOLDERS,
+    notes = NOTES,
+    expanded = ["space:1", "space:2", "folder:10", "folder:20"],
+    inScopeIds = [1, 2],
+    defaultWorkspaceId = "a",
+  } = {}
+) {
   let root;
   const original = {};
   let dom;
@@ -93,7 +105,20 @@ async function mountTree(t) {
   );
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
-  const state = { calls: [], toasts: [], dialogs: [], opened: [], moves: [] };
+  const state = {
+    calls: [],
+    toasts: [],
+    dialogs: [],
+    opened: [],
+    moves: [],
+    folderMoves: [],
+    // What onMoveNote and moveFolderToSpace answer next; empty means success.
+    moveResults: [],
+    folderMoveResults: [],
+    spaces: structuredClone(spaces),
+    folders: structuredClone(folders),
+    notes: structuredClone(notes),
+  };
   globalThis.__tree = state;
   globalThis.window.electronAPI = {
     getPrivateSpaceId: async (workspaceId) => {
@@ -112,27 +137,29 @@ async function mountTree(t) {
     mockModules: {
       "react-i18next": `import en from '/locales/en/translation.json';const t=(key,values={})=>{let s=key.split('.').reduce((v,k)=>v?.[k],en)??key;return String(s).replace(/{{(\\w+)}}/g,(_,k)=>values[k]??'');};export const useTranslation=()=>({t,i18n:{language:'en',dir:()=>'ltr'}});`,
       "/stores/noteStore": `
-        const spaces = ${JSON.stringify(SPACES)};
-        const folders = ${JSON.stringify(FOLDERS)};
-        const notes = ${JSON.stringify(NOTES)};
+        const s = () => globalThis.__tree;
         export const folderContainerKey = (id) => "folder:" + id;
         export const spaceContainerKey = (id) => "space:" + id;
-        export const useSpaces = () => spaces;
-        export const useFolders = () => folders;
-        export const useFolderCounts = () => ({ 10: 1, 20: 1 });
+        export const useSpaces = () => s().spaces;
+        export const useFolders = () => s().folders;
+        export const useFolderCounts = () => Object.fromEntries(
+          s().folders.map((f) => [f.id, s().notes.filter((n) => n.folder_id === f.id).length])
+        );
         export const useSpaceRootCounts = () => ({});
-        export const useNotesByContainer = () => ({
-          "space:1": [], "space:2": [], "folder:10": [notes[0]], "folder:20": [notes[1]],
-        });
-        export const useExpandedContainers = () => new Set(["space:1", "space:2", "folder:10", "folder:20"]);
+        export const useNotesByContainer = () => Object.fromEntries([
+          ...s().spaces.map((sp) => ["space:" + sp.id,
+            s().notes.filter((n) => n.space_id === sp.id && n.folder_id == null)]),
+          ...s().folders.map((f) => ["folder:" + f.id, s().notes.filter((n) => n.folder_id === f.id)]),
+        ]);
+        export const useExpandedContainers = () => new Set(${JSON.stringify(expanded)});
         export const useActiveContext = () => null;
         export const useActiveNoteId = () => null;
         export const useActiveNote = () => null;
         export const useIsTreeLoading = () => false;
         export const useShareCache = () => new Map();
-        export const getNoteFromStore = (id) => notes.find((note) => note.id === id) ?? null;
-        export const getFoldersValue = () => folders;
-        export const getSpacesValue = () => spaces;
+        export const getNoteFromStore = (id) => s().notes.find((note) => note.id === id) ?? null;
+        export const getFoldersValue = () => s().folders;
+        export const getSpacesValue = () => s().spaces;
         export const setActiveContext = () => {};
         export const setActiveNoteId = () => {};
         export const setContainerExpanded = () => {};
@@ -142,7 +169,14 @@ async function mountTree(t) {
         export const createFolder = async () => ({ success: true });
         export const renameFolder = async () => ({ success: true });
         export const deleteFolder = async () => ({ success: true });
-        export const moveFolderToSpace = async () => ({ success: true });
+        export const moveFolderToSpace = async (folderId, spaceId) => {
+          s().folderMoves.push([folderId, spaceId]);
+          const refused = s().folderMoveResults.shift();
+          if (refused) return refused;
+          const folder = s().folders.find((f) => f.id === folderId);
+          if (folder) folder.space_id = spaceId;
+          return { success: true };
+        };
       `,
       "/hooks/useTeamSpacesCapability": "export const useTeamSpacesCapability = () => true;",
       "/hooks/useAuth":
@@ -150,10 +184,11 @@ async function mountTree(t) {
       "/hooks/useWorkspace": `
         const workspaces = ${JSON.stringify(WORKSPACES)};
         export const useWorkspace = () => ({
-          workspaces, active: workspaces[0], loaded: true, defaultWorkspaceId: "a",
+          workspaces, active: workspaces[0], loaded: true,
+          defaultWorkspaceId: ${JSON.stringify(defaultWorkspaceId)},
         });
         export const useSpacesInWorkspaceScope = (spaces) =>
-          spaces.filter((space) => space.workspace_id === "a");
+          spaces.filter((space) => ${JSON.stringify(inScopeIds)}.includes(space.id));
       `,
       "/hooks/useCanCreateTeamSpace": "export const useCanCreateTeamSpace = () => false;",
       "/hooks/useDialogs": `
@@ -214,7 +249,10 @@ async function mountTree(t) {
     root.render(
       React.createElement(SpacesTree, {
         onDeleteNote: () => {},
-        onMoveNote: async (noteId, target) => state.moves.push([noteId, target]),
+        onMoveNote: async (noteId, target) => {
+          state.moves.push([noteId, target]);
+          return state.moveResults.shift();
+        },
         onCreateFolderAndMove: () => {},
         onNewNote: () => {},
       })
@@ -223,6 +261,10 @@ async function mountTree(t) {
 
   const settle = () => React.act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
   const noteRow = (title) => container.querySelector(`[role="treeitem"][title="${title}"]`);
+  const menuItem = (title, label) =>
+    [...noteRow(title).querySelectorAll('[role="menuitem"]')].find(
+      (candidate) => candidate.textContent.trim() === label
+    );
   const menuItems = (title) =>
     [...noteRow(title).querySelectorAll('[role="menuitem"]')].map((item) =>
       item.textContent.trim()
@@ -259,7 +301,32 @@ async function mountTree(t) {
     }
     await settle();
   };
-  return { state, container, noteRow, menuItems, choose, drag, settle };
+  // Runs the latest toast's action labelled `label` (Undo, Open).
+  const runToastAction = async (label) => {
+    const action = state.toasts
+      .filter((toast) => toast.actions)
+      .at(-1)
+      ?.actions.find((candidate) => candidate.label === label);
+    assert.ok(action, `the toast offers ${label}`);
+    await React.act(async () => action.onClick());
+    await settle();
+  };
+  const confirmLastDialog = async () => {
+    await React.act(async () => state.dialogs.at(-1).onConfirm());
+    await settle();
+  };
+  return {
+    state,
+    container,
+    noteRow,
+    menuItem,
+    menuItems,
+    choose,
+    drag,
+    settle,
+    runToastAction,
+    confirmLastDialog,
+  };
 }
 
 test("a team note copies to Private, and the toast's Open opens the copy", async (t) => {
@@ -330,4 +397,142 @@ test("a team note dropped on Private asks to copy it, then copies", async (t) =>
   assert.deepEqual(tree.state.calls, [["copyNoteToSpace", 202, 1, null]]);
   assert.deepEqual(tree.state.moves, []);
   assert.equal(tree.state.toasts.at(-1).title, "Copied to Private");
+});
+
+const ALREADY_IN_ALPHA = "“Plan” is already in Alpha. Use Copy to Private to keep a private copy.";
+
+// Moves "Plan" (Private › Plans) into Alpha › Specs through its menu, confirming the question.
+async function movePlanIntoAlpha(tree) {
+  await tree.choose("Plan", "Specs");
+  assert.equal(tree.state.dialogs.at(-1).title, "Move to Alpha?");
+  await tree.confirmLastDialog();
+  assert.deepEqual(tree.state.moves.at(-1), [101, { spaceId: 2, folderId: 20 }]);
+  assert.equal(tree.state.toasts.at(-1).title, "Moved “Plan” to Specs");
+}
+
+test("Undo after the note reached the teamspace says why instead of moving it", async (t) => {
+  const tree = await mountTree(t);
+  await movePlanIntoAlpha(tree);
+
+  // The team pass ran (2 s after the move): the note is Alpha's in the cloud now.
+  Object.assign(tree.state.notes[0], { space_id: 2, folder_id: 20, cloud_id: "cloud-101" });
+  await tree.runToastAction("Undo");
+  assert.equal(tree.state.moves.length, 1, "no move back out of the teamspace");
+  assert.equal(tree.state.toasts.at(-1).title, ALREADY_IN_ALPHA);
+});
+
+test("a move main refuses never says Moved, and gives main's reason", async (t) => {
+  const tree = await mountTree(t);
+  await movePlanIntoAlpha(tree);
+
+  // This window hasn't seen the upload yet; main has, and refuses the Undo (D31).
+  Object.assign(tree.state.notes[0], { space_id: 2, folder_id: 20 });
+  tree.state.moveResults.push({ success: false, code: "team_row_synced", error: "x" });
+  const toastsBefore = tree.state.toasts.length;
+  await tree.runToastAction("Undo");
+  assert.equal(tree.state.moves.length, 2, "the Undo reached main");
+  const after = tree.state.toasts.slice(toastsBefore);
+  assert.deepEqual(
+    after.map((toast) => toast.title),
+    [ALREADY_IN_ALPHA]
+  );
+
+  // Any other refusal: a failure with its reason, and no Undo to offer.
+  Object.assign(tree.state.notes[0], { space_id: 1, folder_id: 10, cloud_id: null });
+  tree.state.moveResults.push({ success: false, error: "Space not found" });
+  await tree.choose("Plan", "Specs");
+  await tree.confirmLastDialog();
+  const refused = tree.state.toasts.at(-1);
+  assert.equal(refused.title, "Couldn't move note");
+  assert.equal(refused.description, "That space could not be found.");
+  assert.equal(refused.actions, undefined);
+});
+
+test("folder Undo is refused for a folder that reached the teamspace, saying why", async (t) => {
+  const tree = await mountTree(t);
+  await tree.choose("Plans", "Alpha");
+  assert.equal(tree.state.dialogs.at(-1).title, "Move to Alpha?");
+  await tree.confirmLastDialog();
+  assert.deepEqual(tree.state.folderMoves, [[10, 2]]);
+  assert.equal(tree.state.toasts.at(-1).title, "Moved “Plans” to Alpha");
+
+  // Main refuses the way back once the folder or a note in it is in the cloud (D31).
+  tree.state.folderMoveResults.push({ success: false, code: "team_row_synced", error: "x" });
+  await tree.runToastAction("Undo");
+  assert.deepEqual(tree.state.folderMoves, [
+    [10, 2],
+    [10, 1],
+  ]);
+  assert.equal(
+    tree.state.toasts.at(-1).title,
+    "“Plans” is already in Alpha. Use Copy to Private on its notes to keep private copies."
+  );
+});
+
+// The default workspace's own Private (1), the pending one (9) until main binds it, and Alpha.
+const MERGED_SPACES = [
+  SPACES[0],
+  { id: 9, kind: "private", workspace_id: null, account_id: "acc", name: "Personal" },
+  SPACES[1],
+];
+
+test("a folder of either Private shows the Private section as its place, never a destination", async (t) => {
+  const tree = await mountTree(t, {
+    spaces: MERGED_SPACES,
+    folders: [...FOLDERS, { id: 91, space_id: 9, name: "Ideas", is_default: 0 }],
+    inScopeIds: [1, 9, 2],
+  });
+  for (const folder of ["Ideas", "Plans"]) {
+    const ownSection = tree.menuItem(folder, "Personal");
+    assert.ok(ownSection, `${folder} lists the Private section`);
+    assert.equal(ownSection.disabled, true, `${folder} is already there`);
+    assert.equal(tree.menuItem(folder, "Alpha").disabled, false);
+  }
+  await tree.choose("Ideas", "Personal");
+  assert.deepEqual(
+    tree.state.folderMoves,
+    [],
+    "moving between the section's Privates does nothing"
+  );
+  assert.deepEqual(tree.state.dialogs, []);
+});
+
+test("while the default workspace is unknown, a note doesn't cross the Private section's Privates", async (t) => {
+  const pendingNote = { id: 900, space_id: 9, folder_id: null, title: "Pending note" };
+  const tree = await mountTree(t, {
+    spaces: MERGED_SPACES.slice(0, 2),
+    folders: [FOLDERS[0]],
+    notes: [NOTES[0], pendingNote],
+    inScopeIds: [1, 9],
+    expanded: ["space:1", "folder:10"],
+    defaultWorkspaceId: null,
+  });
+  const loading = "Your workspaces are still loading. Try again in a moment.";
+
+  // "Plans" is only the workspace's own Private's; the pending one may be another workspace's.
+  await tree.choose("Pending note", "Plans");
+  assert.equal(tree.state.toasts.at(-1).title, loading);
+  await tree.drag(tree.noteRow("Pending note"), tree.noteRow("Plans"));
+  assert.equal(tree.state.toasts.at(-1).title, loading);
+  assert.deepEqual(tree.state.moves, []);
+  assert.deepEqual(tree.state.dialogs, []);
+});
+
+test("a private note dropped on a teamspace of no workspace says why it can't go there", async (t) => {
+  const legacy = { id: 6, kind: "team", workspace_id: null, name: "Legacy", teams: [] };
+  const tree = await mountTree(t, {
+    spaces: [SPACES[0], legacy],
+    folders: [FOLDERS[0]],
+    notes: [NOTES[0]],
+    inScopeIds: [1, 6],
+    expanded: ["space:1", "folder:10"],
+  });
+
+  await tree.drag(tree.noteRow("Plan"), tree.noteRow("Legacy"));
+  assert.equal(
+    tree.state.toasts.at(-1).title,
+    "Notes can't move into Legacy: it isn't part of a workspace."
+  );
+  assert.deepEqual(tree.state.moves, []);
+  assert.deepEqual(tree.state.dialogs, []);
 });

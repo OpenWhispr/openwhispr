@@ -1503,16 +1503,14 @@ test("merging preserves a pending team retraction even with distinct text", (t) 
     space_id: teamSpace,
     sync_status: "pending",
   });
-  // Undoing a Personal-to-Team move must retract the original cloud note,
-  // including when text changed too: a detached copy cannot do that.
-  assert.equal(
-    db.updateNote(pending, {
-      space_id: db.getPrivateSpaceId(),
-      folder_id: null,
-      content: "Private edit",
-    }).success,
-    true
-  );
+  // A pending retraction as builds before D31 left it: a team note moved to
+  // Private with its cloud copy, its text changed too. A move can't make one
+  // now; a detached copy still could not retract it.
+  db.db
+    .prepare(
+      "UPDATE notes SET space_id = ?, folder_id = NULL, left_team = 1, sync_status = 'pending', content = 'Private edit' WHERE id = ?"
+    )
+    .run(db.getPrivateSpaceId(), pending);
   const snapshot = db.getNote(pending);
   assert.equal(snapshot.left_team, 1);
 

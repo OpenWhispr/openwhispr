@@ -109,6 +109,8 @@ test("create_note without a space goes to the active workspace's Private", async
     cachePrefix: "openwhispr-create-note-tool-",
     mockModules: {
       "/SyncService.js": "export const syncService = { debouncedPush() {} };",
+      "/stores/workspaceStore": 'export const readActiveWorkspaceId = () => "a";',
+      "/i18n": "export default { t: (key) => key };",
     },
   });
   const { createNoteTool } = await vite.ssrLoadModule("/services/tools/createNoteTool.ts");
@@ -118,4 +120,53 @@ test("create_note without a space goes to the active workspace's Private", async
   // saveNote(title, content, type, sourceFile, duration, folderId, spaceId)
   assert.equal(saved[0][5], null);
   assert.equal(saved[0][6], 1);
+});
+
+test("create_note files into a teamspace of the active workspace only", async (t) => {
+  const { createRendererServer } = require("../lib/rendererTestHarness");
+  const saved = [];
+  Object.assign(global.window.electronAPI, {
+    getSpaces: async () => [
+      { id: 4, name: "Personal", kind: "private", workspace_id: "b" },
+      { id: 1, name: "Personal", kind: "private", workspace_id: "a" },
+      { id: 2, name: "Alpha", kind: "team", workspace_id: "a" },
+      { id: 3, name: "Beta", kind: "team", workspace_id: "b" },
+      { id: 6, name: "Legacy", kind: "team", workspace_id: null },
+    ],
+    getPrivateSpaceId: async (workspaceId) => (workspaceId == null ? 1 : null),
+    saveNote: async (...args) => {
+      saved.push(args);
+      return { success: true, note: { id: 7, title: args[0] } };
+    },
+  });
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-create-note-tool-scope-",
+    mockModules: {
+      "/SyncService.js": "export const syncService = { debouncedPush() {} };",
+      "/stores/workspaceStore": 'export const readActiveWorkspaceId = () => "a";',
+      "/i18n": `export default {
+        t: (key) => (key === "meetingNotification.folders.private" ? "Privé" : key),
+      };`,
+    },
+  });
+  const { createNoteTool } = await vite.ssrLoadModule("/services/tools/createNoteTool.ts");
+  const create = (space) => createNoteTool.execute({ title: "Plan", content: "Ship it", space });
+  const savedSpaceId = () => saved.at(-1)[6];
+
+  // Another workspace's teamspace is unknown here: the note would sync there.
+  const beta = await create("Beta");
+  assert.equal(beta.success, false);
+  assert.match(beta.displayText, /^Space "Beta" not found\. Available spaces: Alpha, Legacy$/);
+  assert.equal(saved.length, 0);
+
+  assert.equal((await create("alpha")).success, true);
+  assert.equal(savedSpaceId(), 2);
+  assert.equal((await create("Legacy")).success, true);
+  assert.equal(savedSpaceId(), 6);
+
+  // Every name for Private is the active workspace's Private.
+  for (const name of ["Personal", "private", "Privé"]) {
+    assert.equal((await create(name)).success, true, name);
+    assert.equal(savedSpaceId(), 1, name);
+  }
 });

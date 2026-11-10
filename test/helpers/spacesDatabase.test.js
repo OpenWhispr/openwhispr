@@ -1393,74 +1393,100 @@ test("setSpaceSyncStatus flips a space's sync_status", (t) => {
   assert.equal(db.setSpaceSyncStatus(99999, "synced").success, false);
 });
 
-test("team→private moves set left_team so retractions stay in the team queue", (t) => {
+// D31: a team row the cloud already holds never becomes private by a move. Copy to Private
+// makes a private copy instead.
+test("a synced team note moved to private is refused", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const privateId = db.getPrivateSpaceId();
+  const privateFolder = db.createFolder("Ideas", privateId).folder;
+  const team = createTestTeamSpace(db, { name: "Sales" }).space;
+  const note = db.saveNote("Comp review", "body", "personal", null, null, null, team.id).note;
+  db.markNoteSynced(note.id, "cloud-note-1");
+  const before = db.getNote(note.id);
+
+  const bySpace = db.updateNote(note.id, { space_id: privateId, folder_id: null });
+  assert.equal(bySpace.success, false);
+  assert.equal(bySpace.code, "team_row_synced");
+  // A private folder takes the note to its space (D2): refused the same way.
+  const byFolder = db.updateNote(note.id, { folder_id: privateFolder.id });
+  assert.equal(byFolder.success, false);
+  assert.equal(byFolder.code, "team_row_synced");
+
+  assert.deepEqual(db.getNote(note.id), before, "nothing about the note changed");
+  assert.ok(!db.getPendingNotes("team").some((n) => n.id === note.id));
+});
+
+test("an unsynced team note still moves to private", (t) => {
   const db = createDb(t);
   if (!db) return;
   const privateId = db.getPrivateSpaceId();
   const team = createTestTeamSpace(db, { name: "Sales" }).space;
+  const local = db.saveNote("Local", "body", "personal", null, null, null, team.id).note;
 
-  const note = db.saveNote("Comp review", "body", "personal", null, null, null, team.id).note;
-  db.markNoteSynced(note.id, "cloud-note-1");
-  db.updateNote(note.id, { space_id: privateId, folder_id: null });
+  const moved = db.updateNote(local.id, { space_id: privateId, folder_id: null });
+  assert.equal(moved.success, true);
+  assert.equal(moved.note.space_id, privateId);
+  assert.equal(moved.note.left_team, 0, "no server copy to retract");
+  assert.ok(!db.getPendingNotes("team").some((n) => n.id === local.id));
+});
 
-  const moved = db.getNote(note.id);
-  assert.equal(moved.space_id, privateId);
-  assert.equal(moved.left_team, 1);
-  assert.equal(moved.sync_status, "pending");
-  assert.ok(
-    db.getPendingNotes("team").some((n) => n.id === note.id),
-    "the retraction must push even in the backup-off team-only pass"
-  );
+test("a fork of a synced team note still lands in private", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const privateId = db.getPrivateSpaceId();
+  const team = createTestTeamSpace(db, { name: "Sales" }).space;
+  const note = db.saveNote("Stub", "body", "personal", null, null, null, team.id).note;
+  db.markNoteSynced(note.id, "cloud-note-2");
 
-  db.markNoteSynced(note.id, "cloud-note-1");
-  assert.equal(db.getNote(note.id).left_team, 0, "settling clears the flag");
-
-  // Identity forks null the cloud_id — nothing to retract, no flag.
-  const forked = db.saveNote("Stub", "body", "personal", null, null, null, team.id).note;
-  db.markNoteSynced(forked.id, "cloud-note-2");
-  db.updateNote(forked.id, {
+  // A fork drops the cloud link in the same write, so the row leaves no cloud identity behind.
+  const forked = db.updateNote(note.id, {
     space_id: privateId,
     folder_id: null,
     client_note_id: "forked-client-id",
     cloud_id: null,
   });
-  assert.equal(db.getNote(forked.id).left_team, 0);
-
-  // Never-synced rows have no server copy to retract.
-  const local = db.saveNote("Local", "body", "personal", null, null, null, team.id).note;
-  db.updateNote(local.id, { space_id: privateId, folder_id: null });
-  assert.equal(db.getNote(local.id).left_team, 0);
-  assert.ok(!db.getPendingNotes("team").some((n) => n.id === local.id));
+  assert.equal(forked.success, true);
+  assert.equal(forked.note.space_id, privateId);
+  assert.equal(forked.note.cloud_id, null);
+  assert.equal(forked.note.left_team, 0);
 });
 
-test("moveFolderToSpace team→private flags the folder and its cloud-backed notes", (t) => {
+test("a synced team folder, or one holding a synced note, moved to private is refused", (t) => {
   const db = createDb(t);
   if (!db) return;
   const privateId = db.getPrivateSpaceId();
   const team = createTestTeamSpace(db, { name: "Growth" }).space;
-  const folder = db.createFolder("Campaigns", team.id).folder;
-  db.markFolderSynced(folder.id, "cloud-folder-1");
-  const cloudNote = db.saveNote("Plan", "body", "personal", null, null, folder.id).note;
+  const folderRow = (id) => db.db.prepare("SELECT * FROM folders WHERE id = ?").get(id);
+
+  const synced = db.createFolder("Campaigns", team.id).folder;
+  db.markFolderSynced(synced.id, "cloud-folder-1");
+  const syncedBefore = folderRow(synced.id);
+  const refused = db.moveFolderToSpace(synced.id, privateId);
+  assert.equal(refused.success, false);
+  assert.equal(refused.code, "team_row_synced");
+  assert.deepEqual(folderRow(synced.id), syncedBefore);
+
+  // A folder the cloud doesn't hold yet, but one of its notes it does.
+  const holding = db.createFolder("Launch", team.id).folder;
+  const cloudNote = db.saveNote("Plan", "body", "personal", null, null, holding.id).note;
   db.markNoteSynced(cloudNote.id, "cloud-note-1");
-  const localNote = db.saveNote("Draft", "body", "personal", null, null, folder.id).note;
+  const localNote = db.saveNote("Draft", "body", "personal", null, null, holding.id).note;
+  const holdingRefused = db.moveFolderToSpace(holding.id, privateId);
+  assert.equal(holdingRefused.success, false);
+  assert.equal(holdingRefused.code, "team_row_synced");
+  assert.equal(folderRow(holding.id).space_id, team.id);
+  assert.equal(db.getNote(cloudNote.id).space_id, team.id);
+  assert.equal(db.getNote(localNote.id).space_id, team.id);
 
-  assert.ok(db.moveFolderToSpace(folder.id, privateId).success);
-  const movedFolder = db.db.prepare("SELECT * FROM folders WHERE id = ?").get(folder.id);
-  assert.equal(movedFolder.left_team, 1);
-  assert.equal(db.getNote(cloudNote.id).left_team, 1);
-  assert.equal(db.getNote(localNote.id).left_team, 0);
-  assert.ok(db.getPendingFolders("team").some((f) => f.id === folder.id));
-  assert.ok(db.getPendingNotes("team").some((n) => n.id === cloudNote.id));
-  assert.ok(!db.getPendingNotes("team").some((n) => n.id === localNote.id));
-
-  // Moving back into a team clears the flags: the team queue covers the rows
-  // by their space kind again.
-  assert.ok(db.moveFolderToSpace(folder.id, team.id).success);
-  assert.equal(
-    db.db.prepare("SELECT left_team FROM folders WHERE id = ?").get(folder.id).left_team,
-    0
-  );
-  assert.equal(db.getNote(cloudNote.id).left_team, 0);
+  // Nothing of it in the cloud yet: the folder and its notes move.
+  const local = db.createFolder("Drafts", team.id).folder;
+  const draft = db.saveNote("Sketch", "body", "personal", null, null, local.id).note;
+  assert.ok(db.moveFolderToSpace(local.id, privateId).success);
+  assert.equal(folderRow(local.id).space_id, privateId);
+  assert.equal(folderRow(local.id).left_team, 0);
+  assert.equal(db.getNote(draft.id).space_id, privateId);
+  assert.ok(!db.getPendingFolders("team").some((f) => f.id === local.id));
 });
 
 test("markNoteSyncedIfUnchanged settles an exact identity and push snapshot", (t) => {

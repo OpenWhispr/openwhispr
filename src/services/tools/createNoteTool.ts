@@ -1,6 +1,33 @@
 import type { ToolDefinition, ToolResult } from "./ToolRegistry";
 import { resolveFolderId, resolveSpace } from "./utils";
 import { syncService } from "../SyncService.js";
+import { readActiveWorkspaceId } from "../../stores/workspaceStore";
+import i18n from "../../i18n";
+import type { SpaceItem } from "../../types/electron";
+
+// The teamspaces a note may be filed into: the active workspace's and those linked to no
+// workspace, never another workspace's, where the note would sync. The saved active workspace is
+// what every window shares, with or without a loaded workspace list.
+function teamspacesInScope(spaces: SpaceItem[]): SpaceItem[] {
+  const activeWorkspaceId = readActiveWorkspaceId();
+  return spaces.filter(
+    (space) =>
+      space.kind === "team" &&
+      (activeWorkspaceId == null ||
+        space.workspace_id == null ||
+        space.workspace_id === activeWorkspaceId)
+  );
+}
+
+// "Personal" (the name older builds gave it), "Private" or the UI language's name for it.
+function namesPrivate(spaceName: string): boolean {
+  const name = spaceName.trim().toLowerCase();
+  return (
+    name === "personal" ||
+    name === "private" ||
+    name === i18n.t("meetingNotification.folders.private").toLowerCase()
+  );
+}
 
 export const createNoteTool: ToolDefinition = {
   name: "create_note",
@@ -41,17 +68,17 @@ export const createNoteTool: ToolDefinition = {
 
     try {
       let spaceId: number | null = null;
-      if (spaceName) {
+      if (spaceName && !namesPrivate(spaceName)) {
         const spaces = (await window.electronAPI.getSpaces?.()) ?? [];
-        const resolved = resolveSpace(spaces, spaceName);
+        const resolved = resolveSpace(teamspacesInScope(spaces), spaceName);
         if (resolved.error) {
           return { success: false, data: null, displayText: resolved.error };
         }
         spaceId = resolved.space.id;
       } else {
-        // No space argument means the active workspace's Private: folder
-        // resolution must never match a team folder, or the note would silently
-        // inherit the team audience (D2 derives space from folder).
+        // No space argument, or Private by name, means the active workspace's
+        // Private: folder resolution must never match a team folder, or the note
+        // would silently inherit the team audience (D2 derives space from folder).
         spaceId = (await window.electronAPI.getPrivateSpaceId?.()) ?? null;
       }
 

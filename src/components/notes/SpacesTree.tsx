@@ -73,7 +73,14 @@ import CreateSpaceDialog from "./CreateSpaceDialog";
 import DeleteSpaceDialog from "./DeleteSpaceDialog";
 import { treeHorizontalIntent, treeRowActionClearanceStyle } from "./treeDirection";
 import { defaultFolderDisplayName } from "./shared";
-import type { FolderItem, NoteItem, SpaceItem, Workspace } from "../../types/electron";
+import type {
+  FolderItem,
+  MoveRefusalCode,
+  NoteItem,
+  NoteMutationResult,
+  SpaceItem,
+  Workspace,
+} from "../../types/electron";
 import {
   folderContainerKey,
   spaceContainerKey,
@@ -191,7 +198,8 @@ export interface RowA11yProps {
 
 interface SpacesTreeProps {
   onDeleteNote: (id: number) => void;
-  onMoveNote: (noteId: number, target: NoteMoveTarget) => Promise<void>;
+  /** Moves the note; a result with `success: false` is a move main refused. */
+  onMoveNote: (noteId: number, target: NoteMoveTarget) => Promise<NoteMutationResult | void>;
   onCreateFolderAndMove: (noteId: number, folderName: string) => void;
   onNewNote: (spaceId: number, folderId: number | null) => void;
   onShowStructureIntro?: () => void;
@@ -1395,6 +1403,68 @@ export default function SpacesTree({
     return action ? { action, from, to } : null;
   };
 
+  // Until the default workspace is known, the Private section's pending Private may be another
+  // workspace's than the one shown, so a move between the section's two Privates could cross
+  // workspaces.
+  const crossesUnknownWorkspace = (fromSpaceId: number, toSpaceId: number): boolean =>
+    defaultWorkspaceId == null &&
+    fromSpaceId !== toSpaceId &&
+    inPrivateSection(fromSpaceId) &&
+    inPrivateSection(toSpaceId);
+
+  // Why a note can't go to a space, or null when it can: a move it may make, or a copy into
+  // Private. Menus leave out what can't happen; drops and stale menu picks show the reason.
+  const noteTransferRefusal = (note: NoteItem, toSpaceId: number): string | null => {
+    if (note.space_id === toSpaceId) return null;
+    if (crossesUnknownWorkspace(note.space_id, toSpaceId)) {
+      return t("notes.spaces.workspacesLoading");
+    }
+    const all = getSpacesValue();
+    const from = all.find((space) => space.id === note.space_id);
+    const to = all.find((space) => space.id === toSpaceId);
+    if (!from || !to) return t("notes.spaces.couldNotMoveNote");
+    const action = spaceTransferAction(from, to, { defaultWorkspaceId });
+    // A copy leaves the team's note as it is: whoever can read it may copy it.
+    if (action === "copy") return null;
+    if (action === "move") {
+      return canMoveNote(note) && canChangeNoteScope(note)
+        ? null
+        : t("notes.spaces.cantMoveTeammate");
+    }
+    if (from.kind === "team") return t("notes.spaces.cantMoveOut");
+    if (to.workspace_id == null) return t("notes.spaces.cantMoveIntoLegacy", { space: to.name });
+    if (from.workspace_id == null && defaultWorkspaceId == null) {
+      return t("notes.spaces.workspacesLoading");
+    }
+    return t("notes.spaces.couldNotMoveNote");
+  };
+
+  // A move main refused, and why (D30): a note or folder the cloud already has stays in its
+  // teamspace, and Copy to Private keeps a private copy instead.
+  const toastMoveRefusal = (
+    kind: "note" | "folder",
+    name: string,
+    fromSpaceId: number | null,
+    refusal: { code?: MoveRefusalCode; error?: string }
+  ): void => {
+    const space = getSpacesValue().find((s) => s.id === fromSpaceId);
+    if (refusal.code === "team_row_synced" && space) {
+      toast({
+        title:
+          kind === "note"
+            ? t("notes.spaces.noteAlreadyInTeam", { title: name, space: space.name })
+            : t("notes.spaces.folderAlreadyInTeam", { name, space: space.name }),
+        duration: 8000,
+      });
+      return;
+    }
+    toast({
+      title: t(kind === "note" ? "notes.spaces.couldNotMoveNote" : "notes.spaces.couldNotMove"),
+      description: t(localMutationErrorKey(refusal.error)),
+      variant: "destructive",
+    });
+  };
+
   const requestDeleteNote = (note: NoteItem): void => {
     if (!canDeleteNote(note)) return;
     onDeleteNote(note.id);
@@ -1466,17 +1536,17 @@ export default function SpacesTree({
   };
 
   const moveNoteSafely = async (noteId: number, target: NoteMoveTarget): Promise<boolean> => {
+    const note = getNoteFromStore(noteId);
+    let result: NoteMutationResult | null;
     try {
-      await onMoveNote(noteId, target);
-      return true;
+      result = (await onMoveNote(noteId, target)) || null;
     } catch (err: unknown) {
-      toast({
-        title: t("notes.spaces.couldNotMoveNote"),
-        description: t(localMutationErrorKey(err instanceof Error ? err.message : undefined)),
-        variant: "destructive",
-      });
-      return false;
+      result = { success: false, error: err instanceof Error ? err.message : undefined };
     }
+    if (!result || result.success !== false) return true;
+    const title = note?.title || t("notes.list.untitled");
+    toastMoveRefusal("note", title, note?.space_id ?? null, result);
+    return false;
   };
 
   // The 8s undo window outlives the tree snapshot: the restore target may
@@ -1495,17 +1565,22 @@ export default function SpacesTree({
     // Undo restores across spaces outside the normal one-way policy, but it
     // must not bypass move/scope permissions after a role or ACL change.
     const current = getNoteFromStore(noteId);
-    // Nor make a team note private while it keeps its cloud identity (D8): back out of a
-    // teamspace only while the note has no cloud copy yet.
-    const leavesTeamWithCloudCopy =
-      !!current?.cloud_id &&
+    // Nor make a team note private while it keeps its cloud identity (D31): back out of a
+    // teamspace only while the note has no cloud copy yet. The push runs 2 s after the move, so
+    // within the Undo window this is the common case, and the toast says why.
+    if (
+      current?.cloud_id &&
       prevSpace.kind === "private" &&
-      getSpacesValue().find((s) => s.id === current.space_id)?.kind === "team";
+      getSpacesValue().find((s) => s.id === current.space_id)?.kind === "team"
+    ) {
+      toastMoveRefusal("note", current.title || title, current.space_id, {
+        code: "team_row_synced",
+      });
+      return;
+    }
     if (
       current &&
-      (!canMoveNote(current) ||
-        (current.space_id !== prev.spaceId && !canChangeNoteScope(current)) ||
-        leavesTeamWithCloudCopy)
+      (!canMoveNote(current) || (current.space_id !== prev.spaceId && !canChangeNoteScope(current)))
     ) {
       toast({ title: t("notes.spaces.couldNotMoveNote"), variant: "destructive" });
       return;
@@ -1586,8 +1661,13 @@ export default function SpacesTree({
       if (note.folder_id !== target.folderId) void commitMoveNote(noteId, target);
       return;
     }
+    const refusal = noteTransferRefusal(note, target.spaceId);
+    if (refusal) {
+      toast({ title: refusal, duration: 4000 });
+      return;
+    }
+    // A copy is never a menu move: Copy to Private is its own item.
     if (transferBetween(note.space_id, target.spaceId)?.action !== "move") return;
-    if (!canChangeNoteScope(note)) return;
     confirmTransfer(
       note.space_id,
       target.spaceId,
@@ -1620,38 +1700,36 @@ export default function SpacesTree({
     );
   };
 
+  // Moves the folder as it now stands (its name and space) and says why when main refuses.
   const moveFolderSafely = async (
-    folderId: number,
+    folder: FolderItem,
     spaceId: number
-  ): Promise<{ success: boolean; error?: string }> => {
-    const result = await moveFolderToSpace(folderId, spaceId).catch((err: unknown) => ({
-      success: false,
-      error: (err as Error).message,
-    }));
-    if (!result.success) {
-      toast({
-        title: t("notes.spaces.couldNotMove"),
-        description: t(localMutationErrorKey(result.error)),
-        variant: "destructive",
-      });
-    }
+  ): Promise<{ success: boolean; error?: string; code?: MoveRefusalCode }> => {
+    const result = await moveFolderToSpace(folder.id, spaceId).catch(
+      (err: unknown): { success: boolean; error?: string; code?: MoveRefusalCode } => ({
+        success: false,
+        error: (err as Error).message,
+      })
+    );
+    if (!result.success) toastMoveRefusal("folder", folder.name, folder.space_id, result);
     return result;
   };
 
   const commitMoveFolder = async (folder: FolderItem, space: SpaceItem): Promise<void> => {
     const prevSpaceId = folder.space_id;
-    const result = await moveFolderSafely(folder.id, space.id);
+    const result = await moveFolderSafely(folder, space.id);
     if (!result.success) return;
     revealContainer(space.id, null);
     showUndoToast(folder.name, spaceDisplayName(space, t), () => {
       // Undo is a folder move like any other: after a role change it must
       // not bypass the destructive-folder-action rules in the new space.
+      // Main refuses it once the folder or a note in it reached the cloud (D31).
       const current = getFoldersValue().find((f) => f.id === folder.id);
       if (!current || !canManageFolderDestructive(current)) {
         toast({ title: t("notes.spaces.couldNotMove"), variant: "destructive" });
         return;
       }
-      void moveFolderSafely(folder.id, prevSpaceId);
+      void moveFolderSafely(current, prevSpaceId);
     });
   };
 
@@ -1672,24 +1750,15 @@ export default function SpacesTree({
       confirmTransfer(note.spaceId, target.spaceId, false, commit);
     },
     canCrossSpaceDrop: (note, target) => {
-      const action = transferBetween(note.spaceId, target.spaceId)?.action;
       const stored = getNoteFromStore(note.id);
-      if (!action || !stored) return false;
-      // A copy leaves the team's note as it is: whoever can read it may copy it.
-      return action === "copy" || (canMoveNote(stored) && canChangeNoteScope(stored));
+      return !!stored && noteTransferRefusal(stored, target.spaceId) == null;
     },
-    onCrossSpaceVeto: (note) => {
+    onCrossSpaceVeto: (note, target) => {
       const stored = getNoteFromStore(note.id);
-      const scopeDenied = !!stored && !canChangeNoteScope(stored);
-      const fromTeam = spacesById.get(note.spaceId)?.kind === "team";
       toast({
-        title: t(
-          scopeDenied
-            ? "notes.spaces.cantMoveTeammate"
-            : fromTeam
-              ? "notes.spaces.cantMoveOut"
-              : "notes.spaces.couldNotMoveNote"
-        ),
+        title:
+          (stored && noteTransferRefusal(stored, target.spaceId)) ??
+          t("notes.spaces.couldNotMoveNote"),
         duration: 4000,
       });
     },

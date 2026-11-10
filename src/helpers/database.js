@@ -242,6 +242,17 @@ const LEGACY_SHARED_PRIVATE_NOTE_SQL =
   "(s.kind = 'private' AND n.is_shared = 1 AND n.cloud_id IS NOT NULL)";
 
 // The default folders a private space gets the first time a note needs one.
+// D31: a team row the cloud already holds never becomes private by a move, which would keep its
+// cloud identity in a Private. Copy to Private makes a private copy instead. Forks drop the cloud
+// link in the same write and aren't moves.
+function teamRowSyncedRefusal() {
+  return {
+    success: false,
+    code: "team_row_synced",
+    error: "A teamspace note or folder the cloud already has can't move to Private",
+  };
+}
+
 const PRIVATE_DEFAULT_FOLDERS = [
   { name: "Personal", sortOrder: 0 },
   { name: "Meetings", sortOrder: 1 },
@@ -5169,10 +5180,10 @@ class DatabaseManager {
           return { success: false, error: "Space not found" };
         }
         updates.account_id = this._accountIdForSpace(updates.space_id);
-        // D6: a cloud-backed note leaving a team must keep pushing until the
-        // scope retraction lands, even when cloud backup is off (left_team
-        // keeps it in the team-only pending queue). Identity forks null the
-        // cloud_id — nothing to retract, so they never set the flag.
+        // A team note the cloud holds never moves to a Private (D31). Identity
+        // forks null the cloud_id in the same write, so they still land there;
+        // a note whose create is still in flight has no cloud_id yet and moves,
+        // its acknowledgement detaching it (_leftTeamDuringPush).
         const current = this.db
           .prepare(
             "SELECT n.space_id, n.cloud_id, s.kind AS space_kind FROM notes n LEFT JOIN spaces s ON s.id = n.space_id WHERE n.id = ?"
@@ -5193,7 +5204,7 @@ class DatabaseManager {
             }
             localMove = onlyMoves;
           } else if (current.space_kind === "team" && newKind === "private" && keepsCloudId) {
-            updates = { ...updates, left_team: 1 };
+            return teamRowSyncedRefusal();
           } else if (newKind === "team") {
             updates = { ...updates, left_team: 0 };
           }
@@ -5665,9 +5676,16 @@ class DatabaseManager {
       if (localMove && !this._ownPrivateSpaces(folder.space_id, spaceId)) {
         return { success: false, error: "Space not found" };
       }
-      // D6: cloud-backed rows leaving a team must keep pushing their scope
-      // retraction even in the backup-off team-only pass (left_team).
-      const leftTeam = oldKind === "team" && space.kind === "private" ? 1 : 0;
+      // A team folder the cloud holds, or one holding a note it holds, stays
+      // in its teamspace (D31).
+      if (oldKind === "team" && space.kind === "private") {
+        const syncedNote = this.db
+          .prepare(
+            "SELECT 1 FROM notes WHERE folder_id = ? AND deleted_at IS NULL AND cloud_id IS NOT NULL LIMIT 1"
+          )
+          .get(id);
+        if (folder.cloud_id || syncedNote) return teamRowSyncedRefusal();
+      }
       const nextAccountId = this._accountIdForSpace(spaceId);
       const notes = this.db.transaction(() => {
         if (localMove) {
@@ -5680,16 +5698,18 @@ class DatabaseManager {
             )
             .run(spaceId, nextAccountId, id, folder.space_id);
         } else {
+          // Nothing that reaches here leaves a team with a cloud copy (D31), so
+          // no row keeps a pending retraction (left_team).
           this.db
             .prepare(
-              "UPDATE folders SET space_id = ?, account_id = ?, sync_status = 'pending', updated_at = datetime('now'), left_team = ? WHERE id = ?"
+              "UPDATE folders SET space_id = ?, account_id = ?, sync_status = 'pending', updated_at = datetime('now'), left_team = 0 WHERE id = ?"
             )
-            .run(spaceId, nextAccountId, leftTeam && folder.cloud_id ? 1 : 0, id);
+            .run(spaceId, nextAccountId, id);
           this.db
             .prepare(
-              "UPDATE notes SET space_id = ?, account_id = ?, sync_status = 'pending', updated_at = datetime('now'), left_team = (CASE WHEN ? = 1 AND cloud_id IS NOT NULL THEN 1 ELSE 0 END) WHERE folder_id = ? AND deleted_at IS NULL"
+              "UPDATE notes SET space_id = ?, account_id = ?, sync_status = 'pending', updated_at = datetime('now'), left_team = 0 WHERE folder_id = ? AND deleted_at IS NULL"
             )
-            .run(spaceId, nextAccountId, leftTeam, id);
+            .run(spaceId, nextAccountId, id);
         }
         this.db
           .prepare("UPDATE agent_conversations SET space_id = ? WHERE folder_id = ?")

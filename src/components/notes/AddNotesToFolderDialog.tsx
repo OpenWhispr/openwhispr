@@ -6,8 +6,11 @@ import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { cn } from "../lib/utils";
 import { formatDateGroup } from "../../utils/dateFormatting";
-import { useSpaces } from "../../stores/noteStore";
-import { useSpacesInWorkspaceScope } from "../../hooks/useWorkspace";
+import { useFolders, useShareCache, useSpaces } from "../../stores/noteStore";
+import { useSpacesInWorkspaceScope, useWorkspace } from "../../hooks/useWorkspace";
+import { useAuth } from "../../hooks/useAuth";
+import { canChangeSpaceNoteScope, spaceTransferAction } from "../../lib/spacePermissions";
+import { canOrganizeNote, resolveNotePermission } from "../../lib/notePermissions";
 import type { NoteItem } from "../../types/electron";
 
 interface AddNotesToFolderDialogProps {
@@ -51,6 +54,10 @@ export default function AddNotesToFolderDialog({
   const spaces = useSpaces();
   const visibleSpaces = useSpacesInWorkspaceScope(spaces);
   const visibleSpaceIds = useMemo(() => visibleSpaces.map((s) => s.id), [visibleSpaces]);
+  const folders = useFolders();
+  const shareByCloudId = useShareCache();
+  const { user } = useAuth();
+  const { workspaces, defaultWorkspaceId } = useWorkspace();
 
   useEffect(() => {
     if (!open) return;
@@ -63,10 +70,43 @@ export default function AddNotesToFolderDialog({
     window.electronAPI.getNotes(null, 500, null, null, visibleSpaceIds).then(setAllNotes);
   }, [open, visibleSpaceIds]);
 
-  const availableNotes = useMemo(
-    () => allNotes.filter((n) => n.folder_id !== targetFolderId),
-    [allNotes, targetFolderId]
-  );
+  // Adding a note moves it into the folder's space, so it follows the tree's move rules: a note
+  // from that space, or one spaceTransferAction lets move there that the user may move. A team
+  // note never becomes private this way (Copy to Private makes a private copy); main refuses a
+  // synced one anyway.
+  const availableNotes = useMemo(() => {
+    const targetSpaceId = folders.find((f) => f.id === targetFolderId)?.space_id;
+    const to = spaces.find((s) => s.id === targetSpaceId);
+    if (!to) return [];
+    return allNotes.filter((note) => {
+      if (note.folder_id === targetFolderId) return false;
+      const from = spaces.find((s) => s.id === note.space_id);
+      if (!from) return false;
+      const isTeamNote = from.kind === "team";
+      const entry = note.cloud_id ? shareByCloudId.get(note.cloud_id) : null;
+      const permission = resolveNotePermission({
+        cachedPermission: entry?.access?.my_permission,
+        aclState: entry ? "loaded" : "unavailable",
+        isTeamNote,
+      });
+      if (!canOrganizeNote(permission, { isTeamNote, hasCloudCopy: !!note.cloud_id })) {
+        return false;
+      }
+      if (from.id === to.id) return true;
+      if (spaceTransferAction(from, to, { defaultWorkspaceId }) !== "move") return false;
+      const workspace = workspaces.find((w) => w.id === from.workspace_id) ?? null;
+      return canChangeSpaceNoteScope(note, from, user?.id ?? null, workspace);
+    });
+  }, [
+    allNotes,
+    targetFolderId,
+    folders,
+    spaces,
+    shareByCloudId,
+    defaultWorkspaceId,
+    workspaces,
+    user?.id,
+  ]);
 
   const filteredNotes = useMemo(() => {
     if (!search.trim()) return availableNotes;

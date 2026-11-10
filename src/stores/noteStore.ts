@@ -31,6 +31,7 @@ import { readTeamSpacesCapability } from "../lib/teamSpacesCapability";
 import type { CloudNote } from "../services/NotesService.js";
 import type {
   FolderItem,
+  MoveRefusalCode,
   NoteAccessState,
   NoteItem,
   NoteShareInvitation,
@@ -1113,7 +1114,7 @@ export async function deleteFolder(id: number): Promise<{ success: boolean; erro
 export async function moveFolderToSpace(
   folderId: number,
   spaceId: number
-): Promise<{ success: boolean; folder?: FolderItem; error?: string }> {
+): Promise<{ success: boolean; folder?: FolderItem; error?: string; code?: MoveRefusalCode }> {
   const result = await window.electronAPI.moveFolderToSpace(folderId, spaceId);
   if (!result.success) return result;
 
