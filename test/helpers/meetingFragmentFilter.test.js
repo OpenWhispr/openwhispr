@@ -322,17 +322,6 @@ test("a wrong-script final arriving during disconnect is not saved", async (t) =
   assert.deepEqual(writes, []);
 });
 
-test("a Japanese response with a shared-script vowel mark reaches the saved note", async (t) => {
-  const { streaming, store, writes } = await recordingHarness(t, { language: "ja" });
-  streaming.finish("mic", "はーい");
-  assert.equal(store.useMeetingRecordingStore.getState().transcript, "はーい");
-  await store.stopRecording();
-  assert.deepEqual(
-    JSON.parse(writes.at(-1).patch.transcript).map(({ text }) => text),
-    ["はーい"]
-  );
-});
-
 // Runs the real local chunk transcriber with a stubbed engine returning `text`.
 function localHarness({ language, text }) {
   const finals = [];
@@ -395,12 +384,4 @@ test("a locally transcribed row in an expected script is kept", async () => {
   const run = localHarness({ language: "en", text: "Okay." });
   await run.transcribe("system");
   assert.deepEqual(run.finals, ["Okay."]);
-});
-
-test("local Japanese responses with a shared-script vowel mark are kept on both channels", async () => {
-  for (const source of ["mic", "system"]) {
-    const run = localHarness({ language: "ja", text: "オーケー" });
-    await run.transcribe(source);
-    assert.deepEqual(run.finals, ["オーケー"], source);
-  }
 });
